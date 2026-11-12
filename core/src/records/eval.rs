@@ -731,7 +731,7 @@ impl Rec<'_> {
     }
     fn thaw(&self) -> Option<&[RecordId]> {
         match &self.b().kind {
-            Kind::Thaw(v) if !self.held => Some(v),
+            Kind::Thaw { ids: v, .. } if !self.held => Some(v),
             _ => None,
         }
     }
@@ -1546,9 +1546,9 @@ impl<'e, 'a> Epoch<'e, 'a> {
                             && (!self.is_recovery(k) || self.has(a, POWER_REMOVE_ADMINS))
                     })
             }
-            Kind::Thaw(_) => self.has(a, POWER_THAW) && self.has(a, POWER_REMOVE_ADMINS),
+            Kind::Thaw { .. } => self.has(a, POWER_THAW) && self.has(a, POWER_REMOVE_ADMINS),
             Kind::Claim { seen, .. } => self.has(a, POWER_TAKEOVER) && body::seen_of(seen, &self.cur) >= 1,
-            Kind::Hubs(_) => self.has(a, POWER_HUB),
+            Kind::Hubs { .. } => self.has(a, POWER_HUB),
             // Any admin sets how long incoming copies stay live.
             Kind::Copies { .. } => true,
             _ => false,
@@ -2286,13 +2286,13 @@ impl<'e, 'a> Epoch<'e, 'a> {
             c.signers.dedup();
         }
         s.conflicts.sort_by(|a, b| (a.kind, a.records.first()).cmp(&(b.kind, b.records.first())));
-        if let Some(best) = self.best(|k| matches!(k, Kind::Hubs(_)))
-            && let Kind::Hubs(h) = &self.r(best).b().kind
+        if let Some(best) = self.best(|k| matches!(k, Kind::Hubs { .. }))
+            && let Kind::Hubs { hubs: h, .. } = &self.r(best).b().kind
         {
             s.hubs = h.iter().filter(|d| s.device(d).is_some_and(|d| d.rights & RIGHT_HUB != 0)).copied().collect();
         }
         if let Some(best) = self.best(|k| matches!(k, Kind::Copies { .. }))
-            && let Kind::Copies { incoming_ms } = &self.r(best).b().kind
+            && let Kind::Copies { incoming_ms, .. } = &self.r(best).b().kind
         {
             s.incoming_ms = Some(*incoming_ms);
         }

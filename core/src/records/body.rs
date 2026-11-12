@@ -156,7 +156,11 @@ pub enum Kind {
     Device(Device),
     Revoke(Removal),
     Freeze(Removal),
-    Thaw(Vec<RecordId>),
+    /// A thaw lists what it saw of the frozen keys: only that comes back.
+    Thaw {
+        ids: Vec<RecordId>,
+        seen: Vec<Seen>,
+    },
     Claim {
         root: Key,
         seen: Vec<Seen>,
@@ -165,12 +169,16 @@ pub enum Kind {
     Settings(Settings),
     Copies {
         incoming_ms: u64,
+        seen: Vec<Seen>,
     },
     Checkpoint {
         heads: Vec<Head>,
         keep: Vec<RecordId>,
     },
-    Hubs(Vec<DeviceId>),
+    Hubs {
+        hubs: Vec<DeviceId>,
+        seen: Vec<Seen>,
+    },
     Recovery {
         admin: Key,
     },
@@ -264,6 +272,9 @@ pub struct Device {
     /// it counts, and once a root set it, it stays for the device's ID (a
     /// reset leaf has a new key).
     pub guarded: bool,
+    /// Field 26: when a root's record takes the admin key away or names
+    /// another, what the old key signed up to these heads still counts.
+    pub seen: Vec<Seen>,
 }
 
 impl Device {
@@ -285,6 +296,7 @@ impl Device {
             holds_root: false,
             replaces: None,
             guarded: false,
+            seen: Vec::new(),
         }
     }
 
@@ -322,13 +334,13 @@ impl Kind {
             Kind::Device(_) => TYPE_DEVICE,
             Kind::Revoke(_) => TYPE_REVOKE,
             Kind::Freeze(_) => TYPE_FREEZE,
-            Kind::Thaw(_) => TYPE_THAW,
+            Kind::Thaw { .. } => TYPE_THAW,
             Kind::Claim { .. } => TYPE_CLAIM,
             Kind::Resolve(_) => TYPE_RESOLVE,
             Kind::Settings(_) => TYPE_SETTINGS,
             Kind::Copies { .. } => TYPE_COPIES,
             Kind::Checkpoint { .. } => TYPE_CHECKPOINT,
-            Kind::Hubs(_) => TYPE_HUBS,
+            Kind::Hubs { .. } => TYPE_HUBS,
             Kind::Recovery { .. } => TYPE_RECOVERY,
             Kind::Handover { .. } => TYPE_HANDOVER,
             Kind::Unknown(t) => *t,
@@ -378,6 +390,15 @@ fn seen_set(seen: &[Seen]) -> bool {
     seen.windows(2).all(|w| matches!(w, [a, b] if a.key < b.key))
 }
 
+/// Checks a `seen` list: a set by key hash, at most MAX_SEEN entries,
+/// each seq ≥ 1.
+fn check_seen(seen: &[Seen], t: &'static str) -> Result<(), Rule> {
+    if !seen_set(seen) || seen.len() > super::MAX_SEEN || seen.iter().any(|s| s.seq == 0 || s.seq > MAX_SEQ) {
+        return Err(field(t, "seen"));
+    }
+    Ok(())
+}
+
 /// A device name or an endpoint: no control character.
 fn plain_text(s: &str) -> bool {
     !s.chars().any(|c| matches!(c, '\u{0}'..='\u{1f}' | '\u{7f}'..='\u{9f}'))
@@ -413,30 +434,26 @@ impl Body {
                 if r.keys.is_empty() || r.keys.len() > MAX_KEYS || !strictly_sorted(&r.keys) {
                     return Err(field(t, "keys"));
                 }
-                if !seen_set(&r.seen)
-                    || r.seen.len() > super::MAX_SEEN
-                    || r.seen.iter().any(|s| s.seq == 0 || s.seq > MAX_SEQ)
-                {
-                    return Err(field(t, "seen"));
-                }
+                check_seen(&r.seen, t)?;
             }
-            Kind::Thaw(ids) | Kind::Resolve(ids) => {
+            Kind::Thaw { ids, .. } | Kind::Resolve(ids) => {
                 if ids.is_empty() || ids.len() > MAX_KEYS || !strictly_sorted(ids) {
                     return Err(field(t, "records"));
+                }
+                if let Kind::Thaw { seen, .. } = &self.kind {
+                    check_seen(seen, t)?;
                 }
             }
             Kind::Claim { root, seen } => {
                 held |= signer_key(root, t, "root")?;
-                if !seen_set(seen) || seen.len() > super::MAX_SEEN || seen.iter().any(|s| s.seq == 0 || s.seq > MAX_SEQ)
-                {
-                    return Err(field(t, "seen"));
-                }
+                check_seen(seen, t)?;
             }
             Kind::Settings(s) => held |= check_settings(s)?,
-            Kind::Copies { incoming_ms } => {
+            Kind::Copies { incoming_ms, seen } => {
                 if !(MIN_INCOMING_MS..=MAX_INCOMING_MS).contains(incoming_ms) {
                     return Err(field(t, "incoming_ms"));
                 }
+                check_seen(seen, t)?;
             }
             Kind::Checkpoint { heads, keep } => {
                 let keys: Vec<KeyHash> = heads.iter().map(|h| h.key).collect();
@@ -447,13 +464,14 @@ impl Body {
                     return Err(field(t, "keep"));
                 }
             }
-            Kind::Hubs(hubs) => {
+            Kind::Hubs { hubs, seen } => {
                 let mut sorted = hubs.clone();
                 sorted.sort();
                 sorted.dedup();
                 if hubs.is_empty() || hubs.len() > MAX_HUBS || sorted.len() != hubs.len() {
                     return Err(field(t, "hubs"));
                 }
+                check_seen(seen, t)?;
             }
             Kind::Recovery { admin } => held |= signer_key(admin, t, "admin")?,
             Kind::Handover { .. } => {}
@@ -497,13 +515,20 @@ impl Body {
                 m.push((10, Value::Array(r.keys.iter().map(|k| Value::Bytes(&k.0)).collect())));
                 m.push((11, seen(&r.seen)));
             }
-            Kind::Thaw(v) | Kind::Resolve(v) => m.push((10, ids(v))),
+            Kind::Thaw { ids: v, seen: s } => {
+                m.push((10, ids(v)));
+                m.push((11, seen(s)));
+            }
+            Kind::Resolve(v) => m.push((10, ids(v))),
             Kind::Claim { root, seen: s } => {
                 m.push((10, root.to_value()));
                 m.push((11, seen(s)));
             }
             Kind::Settings(s) => encode_settings(&mut m, s),
-            Kind::Copies { incoming_ms } => m.push((10, Value::Uint(*incoming_ms))),
+            Kind::Copies { incoming_ms, seen: s } => {
+                m.push((10, Value::Uint(*incoming_ms)));
+                m.push((11, seen(s)));
+            }
             Kind::Checkpoint { heads, keep } => {
                 let heads = heads
                     .iter()
@@ -513,7 +538,10 @@ impl Body {
                     m.push((11, ids(keep)));
                 }
             }
-            Kind::Hubs(h) => m.push((10, Value::Array(h.iter().map(|d| Value::Bytes(&d.0)).collect()))),
+            Kind::Hubs { hubs, seen: s } => {
+                m.push((10, Value::Array(hubs.iter().map(|d| Value::Bytes(&d.0)).collect())));
+                m.push((11, seen(s)));
+            }
             Kind::Recovery { admin } => m.push((10, admin.to_value())),
             Kind::Handover { admin } => m.push((10, Value::Bytes(&admin.0))),
             Kind::Unknown(_) => {}
@@ -558,14 +586,21 @@ impl Body {
             }
             TYPE_THAW | TYPE_RESOLVE => {
                 let ids = r.need_list(10, f("records"), |v| v.as_bytes().and_then(RecordId::from_slice))?;
-                (if type_number == TYPE_THAW { Kind::Thaw(ids) } else { Kind::Resolve(ids) }, &[10], &[])
+                if type_number == TYPE_THAW {
+                    (Kind::Thaw { ids, seen: read_seen(&r, f("seen"))? }, &[10, 11], &[])
+                } else {
+                    (Kind::Resolve(ids), &[10], &[])
+                }
             }
             TYPE_CLAIM => {
                 let root = Key::read(r.need(10, f("root"))?)?;
                 (Kind::Claim { root, seen: read_seen(&r, f("seen"))? }, &[10, 11], &[])
             }
             TYPE_SETTINGS => (Kind::Settings(read_settings(&r)?), &[10, 11, 12, 14, 15], &[13]),
-            TYPE_COPIES => (Kind::Copies { incoming_ms: r.need_uint(10, f("incoming_ms"))? }, &[10], &[]),
+            TYPE_COPIES => {
+                let incoming_ms = r.need_uint(10, f("incoming_ms"))?;
+                (Kind::Copies { incoming_ms, seen: read_seen(&r, f("seen"))? }, &[10, 11], &[])
+            }
             TYPE_CHECKPOINT => {
                 let heads = r.need_list(10, f("heads"), |v| match v.as_array() {
                     Some([Value::Bytes(k), Value::Uint(seq), Value::Bytes(id)]) => {
@@ -578,7 +613,7 @@ impl Body {
             }
             TYPE_HUBS => {
                 let hubs = r.need_list(10, f("hubs"), |v| v.as_bytes().and_then(DeviceId::from_slice))?;
-                (Kind::Hubs(hubs), &[10], &[])
+                (Kind::Hubs { hubs, seen: read_seen(&r, f("seen"))? }, &[10, 11], &[])
             }
             TYPE_RECOVERY => (Kind::Recovery { admin: Key::read(r.need(10, f("admin"))?)? }, &[10], &[]),
             TYPE_HANDOVER => {
@@ -683,13 +718,17 @@ impl<'v, 'a> Read<'v, 'a> {
     }
 }
 
-fn read_seen(r: &Read<'_, '_>, rule: Rule) -> Result<Vec<Seen>, Rule> {
-    r.need_list(11, rule, |v| match v.as_array() {
+fn seen_entry_of(v: &Value<'_>) -> Option<Seen> {
+    match v.as_array() {
         Some([Value::Bytes(k), Value::Uint(seq), Value::Bytes(id)]) => {
             Some(Seen { key: KeyHash::from_slice(k)?, seq: *seq, id: RecordId::from_slice(id)? })
         }
         _ => None,
-    })
+    }
+}
+
+fn read_seen(r: &Read<'_, '_>, rule: Rule) -> Result<Vec<Seen>, Rule> {
+    r.need_list(11, rule, seen_entry_of)
 }
 
 fn read_device(r: &Read<'_, '_>) -> Result<Device, Rule> {
@@ -721,6 +760,7 @@ fn read_device(r: &Read<'_, '_>) -> Result<Device, Rule> {
         holds_root: r.flag(23, f("holds_root"))?,
         replaces,
         guarded: r.flag(25, f("guarded"))?,
+        seen: r.opt_list(26, f("seen"), seen_entry_of)?,
     })
 }
 
@@ -756,7 +796,7 @@ pub(crate) const COMMON_FIELDS: [u16; 6] = [1, 2, 3, 4, 5, 6];
 
 /// A device record's own fields; with COMMON_FIELDS they are the format's
 /// `DEVICE_FIELDS` (a test holds the two lists equal).
-pub(crate) const DEVICE_OWN: &[u16] = &[10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25];
+pub(crate) const DEVICE_OWN: &[u16] = &[10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26];
 
 fn check_device(d: &Device) -> Result<bool, Rule> {
     let t = "device";
@@ -800,6 +840,7 @@ fn check_device(d: &Device) -> Result<bool, Rule> {
     if d.guarded && d.role != ROLE_LEAF {
         return Err(field(t, "guarded"));
     }
+    check_seen(&d.seen, t)?;
     Ok(held)
 }
 
@@ -834,6 +875,9 @@ fn encode_device<'a>(m: &mut Vec<(u16, Value<'a>)>, d: &'a Device) {
     }
     if d.guarded {
         m.push((25, Value::Uint(1)));
+    }
+    if !d.seen.is_empty() {
+        m.push((26, seen(&d.seen)));
     }
 }
 

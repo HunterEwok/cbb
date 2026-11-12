@@ -743,8 +743,9 @@ fn the_admin_ceiling() {
     let mut g = G::new();
     let (pa, a) = (k("phone a"), k("admin a"));
     g.admin(&pa, &a, POWER_ADMIT);
-    let rs: Vec<Record> =
-        (0..MAX_ADMIN_RECORDS as u64 + 4).map(|i| g.rec(&a, Kind::Copies { incoming_ms: 5_000 + i })).collect();
+    let rs: Vec<Record> = (0..MAX_ADMIN_RECORDS as u64 + 4)
+        .map(|i| g.rec(&a, Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] }))
+        .collect();
     let s = g.state();
     let counted = rs.iter().filter(|r| s.counting.contains(&r.id())).count();
     assert_eq!(counted, MAX_ADMIN_RECORDS);
@@ -876,13 +877,13 @@ fn a_full_root_checkpoints_and_goes_on() {
     let root = k("root");
     let laptop = g.device(&root, &k("laptop"), "laptop", |_| {});
     for i in 1..MAX_ROOT_RECORDS as u64 {
-        g.root_rec(Kind::Copies { incoming_ms: 5_000 + i });
+        g.root_rec(Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] });
     }
     let mut set = RecordSet::new(g.root.key.clone());
     set.insert_all(g.recs.clone());
     assert_eq!(set.len(), MAX_ROOT_RECORDS);
     // Full: the root's next ordinary record finds no room.
-    let late = Record::sign(g.body(&root, Kind::Copies { incoming_ms: 9_999 }), &root).unwrap();
+    let late = Record::sign(g.body(&root, Kind::Copies { incoming_ms: 9_999, seen: vec![] }), &root).unwrap();
     assert_eq!(set.insert(late), Ok(Added::NoRoom));
     let (seq, id) = g.heads[&root.hash];
     let cp = g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep: vec![laptop.id()] });
@@ -1071,7 +1072,7 @@ fn a_dropped_claim_takes_its_root_along() {
     // X's own records at seq 1, more than its 256 units.
     let forks: Vec<Record> = (0..300)
         .map(|i| {
-            let b = Body { seq: 1, prev: None, ..g.body(&x, Kind::Copies { incoming_ms: 5_000 + i }) };
+            let b = Body { seq: 1, prev: None, ..g.body(&x, Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] }) };
             Record::sign(b, &x).unwrap()
         })
         .collect();
@@ -1134,7 +1135,7 @@ fn a_removal_signed_again_keeps_what_it_saw() {
     let rm = removal(&[t.hash], g.seen());
     let first = g.rec(&s_, Kind::Revoke(rm.clone()));
     // S's key signs seq 1 twice: none of its records counts, T goes on.
-    let twin_body = Body { seq: 1, prev: None, ..g.body(&s_, Kind::Copies { incoming_ms: 6_000 }) };
+    let twin_body = Body { seq: 1, prev: None, ..g.body(&s_, Kind::Copies { incoming_ms: 6_000, seen: vec![] }) };
     let twin = g.push(Record::sign(twin_body, &s_).unwrap());
     let later: Vec<Record> = (2..5).map(|i| g.device(&t, &k(&format!("d{i}")), "d", |_| {})).collect();
     let s = g.state();
@@ -1260,8 +1261,8 @@ fn who_may_command() {
     assert!(s.may_command(&g.root.hash) && s.may_command(&a.hash) && s.may_command(&c.hash));
     assert!(!s.may_command(&k("stranger").hash));
     // Two histories of c.
-    g.rec(&c, Kind::Copies { incoming_ms: 6_000 });
-    let twin = Body { seq: 1, prev: None, ..g.body(&c, Kind::Copies { incoming_ms: 7_000 }) };
+    g.rec(&c, Kind::Copies { incoming_ms: 6_000, seen: vec![] });
+    let twin = Body { seq: 1, prev: None, ..g.body(&c, Kind::Copies { incoming_ms: 7_000, seen: vec![] }) };
     g.push(Record::sign(twin, &c).unwrap());
     let s = g.state();
     assert!(s.two_histories(&c.hash) && !s.may_command(&c.hash) && s.may_command(&a.hash));
@@ -1290,10 +1291,10 @@ fn a_huge_time_changes_nothing() {
         g.device(&k("root"), &k("hub2"), "hub2", |d| d.rights |= RIGHT_HUB);
         let (h1, h2) = (k("hub").key.device_id(), k("hub2").key.device_id());
         for (by, kind) in [
-            (&a, Kind::Hubs(vec![h1.min(h2), h1.max(h2)])),
-            (&b, Kind::Hubs(vec![h1.min(h2)])),
-            (&a, Kind::Copies { incoming_ms: 5_000 }),
-            (&b, Kind::Copies { incoming_ms: 3_600_000 }),
+            (&a, Kind::Hubs { hubs: vec![h1.min(h2), h1.max(h2)], seen: vec![] }),
+            (&b, Kind::Hubs { hubs: vec![h1.min(h2)], seen: vec![] }),
+            (&a, Kind::Copies { incoming_ms: 5_000, seen: vec![] }),
+            (&b, Kind::Copies { incoming_ms: 3_600_000, seen: vec![] }),
         ] {
             let mut body = g.body(by, kind);
             if by.hash == b.hash {
@@ -1317,7 +1318,7 @@ fn the_recovery_key_only_claims() {
     let mut g = G::new();
     let rk = k("recovery");
     g.root_rec(Kind::Recovery { admin: rk.key.clone() });
-    let copies = g.rec(&rk, Kind::Copies { incoming_ms: 3_600_000 });
+    let copies = g.rec(&rk, Kind::Copies { incoming_ms: 3_600_000, seen: vec![] });
     let s = g.state();
     assert!(!s.counting.contains(&copies.id()) && s.incoming_ms.is_none());
     let seen = g.seen();
@@ -1440,10 +1441,11 @@ fn a_full_set_keeps_the_roots_removals() {
     let rv_e = g.rec(&admins[0], Kind::Revoke(removal(&[k("e").hash], g.seen())));
     for a in &admins {
         for i in g.heads.get(&a.hash).map_or(0, |h| h.0)..300 {
-            g.rec(a, Kind::Copies { incoming_ms: 5_000 + i });
+            g.rec(a, Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] });
         }
     }
-    let below: Vec<Record> = (0..300).map(|i| g.root_rec(Kind::Copies { incoming_ms: 5_000 + i })).collect();
+    let below: Vec<Record> =
+        (0..300).map(|i| g.root_rec(Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] })).collect();
     let rv_d = g.root_rec(Kind::Revoke(removal(&[d.hash], g.seen())));
     let resolve = g.root_rec(Kind::Resolve(vec![rv_e.id()]));
     let mut set = RecordSet::new(g.root.key.clone());
@@ -1469,7 +1471,7 @@ fn a_roots_removal_counts_by_itself_and_nothing_above_it() {
     g.device(&root, &k("d"), "d", |_| {});
     g.device(&root, &k("x"), "x", |_| {});
     let third = g.device(&root, &k("y"), "y", |_| {});
-    g.root_rec(Kind::Copies { incoming_ms: 6_000 });
+    g.root_rec(Kind::Copies { incoming_ms: 6_000, seen: vec![] });
     let rv = g.root_rec(Kind::Revoke(removal(&[k("d").hash], g.seen())));
     let sixth = g.device(&root, &k("z"), "z", |_| {});
     let held = BTreeMap::new();
@@ -1509,7 +1511,7 @@ fn a_full_set_keeps_the_same_records_in_any_order() {
     }
     for (i, a) in admins.iter().enumerate() {
         for j in 0..(200 + 10 * i) {
-            g.rec(a, Kind::Copies { incoming_ms: 5_000 + j as u64 });
+            g.rec(a, Kind::Copies { incoming_ms: 5_000 + j as u64, seen: vec![] });
         }
     }
     let mut want = RecordSet::new(g.root.key.clone());
@@ -1542,15 +1544,15 @@ fn pool() -> (Key, Vec<Record>) {
     let seen = g.seen();
     g.rec(&a, Kind::Revoke(removal(&[k("r1").hash], seen.clone())));
     let f = g.rec(&b, Kind::Freeze(removal(&[a.hash], seen.clone())));
-    g.rec(&c, Kind::Thaw(vec![f.id()]));
+    g.rec(&c, Kind::Thaw { ids: vec![f.id()], seen: vec![] });
     g.rec(&a, Kind::Claim { root: k("na").key.clone(), seen: seen.clone() });
     g.rec(&c, Kind::Claim { root: k("nc").key.clone(), seen });
     // A second history of b at its last seq.
-    let mut twin = g.body(&b, Kind::Copies { incoming_ms: 9_000 });
+    let mut twin = g.body(&b, Kind::Copies { incoming_ms: 9_000, seen: vec![] });
     twin.seq -= 1;
     twin.prev = g.recs.iter().find(|r| r.body().signer == b.hash && r.body().seq == twin.seq - 1).map(|r| r.id());
     g.push(Record::sign(twin, &b).unwrap());
-    g.rec(&b, Kind::Hubs(vec![k("r0").key.device_id()]));
+    g.rec(&b, Kind::Hubs { hubs: vec![k("r0").key.device_id()], seen: vec![] });
     let mut held = g.body(&root, Kind::Unknown(77));
     held.held = true;
     let bytes = held.encode();
@@ -1776,7 +1778,8 @@ fn a_record_counts_the_same_in_every_envelope() {
     g.device(&k("root"), &k("laptop"), "laptop", |_| {});
     let base = g.recs.clone();
     let second = [7u8; 32];
-    let plain: &'static [u8] = Box::leak(g.body(&a, Kind::Copies { incoming_ms: 60_000 }).encode().into_boxed_slice());
+    let plain: &'static [u8] =
+        Box::leak(g.body(&a, Kind::Copies { incoming_ms: 60_000, seen: vec![] }).encode().into_boxed_slice());
     let mut entries = crate::format::decode(plain).unwrap().as_map().unwrap().to_vec();
     entries.push((8, crate::format::cbor::Value::Bytes(&second)));
     let bytes = crate::format::cbor::Value::Map(entries).encode();
@@ -2147,7 +2150,7 @@ fn an_admin_key_named_by_a_claim_teaches_nothing_in_any_order() {
         d.admin = Some(x.key.clone());
         d.powers = POWER_ADMIT;
     });
-    let xr = g.rec(&x, Kind::Copies { incoming_ms: 60_000 });
+    let xr = g.rec(&x, Kind::Copies { incoming_ms: 60_000, seen: vec![] });
     let mut m1 = RecordSet::new(g.root.key.clone());
     for r in [&ra, &c, &d, &xr, &rn] {
         let _ = m1.insert(r.clone());
@@ -2202,7 +2205,7 @@ mod differential {
                 1 => Kind::Revoke(removal(&[target.hash], g.seen())),
                 2 => Kind::Freeze(removal(&[signers[1 + usize::from(arg) % 2].hash], g.seen())),
                 3 => match g.recs.iter().rev().find(|r| matches!(r.body().kind, Kind::Freeze(_))) {
-                    Some(f) => Kind::Thaw(vec![f.id()]),
+                    Some(f) => Kind::Thaw { ids: vec![f.id()], seen: vec![] },
                     None => continue,
                 },
                 4 => match g.recs.get(usize::from(arg) % g.recs.len().max(1)) {
@@ -2339,7 +2342,11 @@ fn only_a_live_admin_s_two_histories_stop_the_secrets() {
         (0..2)
             .map(|i| {
                 Record::sign(
-                    Body { seq: 1, prev: None, ..g.body(by, Kind::Copies { incoming_ms: MIN_INCOMING_MS + i }) },
+                    Body {
+                        seq: 1,
+                        prev: None,
+                        ..g.body(by, Kind::Copies { incoming_ms: MIN_INCOMING_MS + i, seen: vec![] })
+                    },
                     by,
                 )
                 .unwrap()
@@ -2386,7 +2393,7 @@ fn many_removals_of_one_key_evaluate_quickly() {
         g.admin(p, a, all);
     }
     for i in 0..250 {
-        g.rec(&v, Kind::Copies { incoming_ms: MIN_INCOMING_MS + i });
+        g.rec(&v, Kind::Copies { incoming_ms: MIN_INCOMING_MS + i, seen: vec![] });
     }
     let (seq, id) = g.heads[&v.hash];
     for (_, a) in &admins {
@@ -2410,14 +2417,15 @@ fn a_second_signer_costs_nine_units() {
     let g = G::new();
     let a = k("admin a");
     let second = [7u8; 32];
-    let plain: &'static [u8] = Box::leak(g.body(&a, Kind::Copies { incoming_ms: 60_000 }).encode().into_boxed_slice());
+    let plain: &'static [u8] =
+        Box::leak(g.body(&a, Kind::Copies { incoming_ms: 60_000, seen: vec![] }).encode().into_boxed_slice());
     let mut entries = crate::format::decode(plain).unwrap().as_map().unwrap().to_vec();
     entries.push((8, crate::format::cbor::Value::Bytes(&second)));
     let bytes = crate::format::cbor::Value::Map(entries).encode();
     let sig = key::sign_es256(&a, LABEL_RECORD, &bytes).unwrap();
     let max = crate::format::envelope::MAX_SIG2;
     let r = Record::decode(&crate::format::envelope::write(&bytes, &sig, Some(&vec![0x55u8; max]))).unwrap();
-    let plain = Record::sign(g.body(&a, Kind::Copies { incoming_ms: 60_000 }), &a).unwrap();
+    let plain = Record::sign(g.body(&a, Kind::Copies { incoming_ms: 60_000, seen: vec![] }), &a).unwrap();
     let units = |r: &Record| keep::units(r.size(), false);
     assert_eq!(units(&r), units(&plain) + 9);
     assert!(r.size() >= r.envelope().len());
@@ -2445,12 +2453,12 @@ fn a_removed_admin_s_hubs_and_copies_are_left_out() {
     let (h1, h2) = (k("hub 1"), k("hub 2"));
     g.device(&k("root"), &h1, "hub 1", |d| d.rights |= RIGHT_HUB);
     g.device(&k("root"), &h2, "hub 2", |d| d.rights |= RIGHT_HUB);
-    g.rec(&lo, Kind::Hubs(vec![h1.key.device_id()]));
-    g.rec(&lo, Kind::Copies { incoming_ms: MIN_INCOMING_MS });
+    g.rec(&lo, Kind::Hubs { hubs: vec![h1.key.device_id()], seen: vec![] });
+    g.rec(&lo, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
     let seen = g.seen();
     g.rec(&p, Kind::Revoke(removal(&[lo.hash, plo.hash], seen)));
-    g.rec(&hi, Kind::Hubs(vec![h2.key.device_id()]));
-    g.rec(&hi, Kind::Copies { incoming_ms: 600_000 });
+    g.rec(&hi, Kind::Hubs { hubs: vec![h2.key.device_id()], seen: vec![] });
+    g.rec(&hi, Kind::Copies { incoming_ms: 600_000, seen: vec![] });
     let s = g.state();
     assert!(s.revoked.contains(&lo.hash));
     assert_eq!(s.hubs, vec![h2.key.device_id()]);
@@ -2530,7 +2538,11 @@ fn a_counted_takeover_outlives_its_record() {
     let more: Vec<Record> = (0..4000u64)
         .map(|i| {
             Record::sign(
-                Body { seq: 1, prev: None, ..g.body(&rk, Kind::Copies { incoming_ms: MIN_INCOMING_MS + i }) },
+                Body {
+                    seq: 1,
+                    prev: None,
+                    ..g.body(&rk, Kind::Copies { incoming_ms: MIN_INCOMING_MS + i, seen: vec![] })
+                },
                 &rk,
             )
             .unwrap()
