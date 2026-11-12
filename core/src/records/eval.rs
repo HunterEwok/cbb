@@ -1132,6 +1132,8 @@ struct Epoch<'e, 'a> {
     admitted: BTreeMap<DeviceId, usize>,
     /// The first records of admins that admitted one device differently.
     undecided_admits: BTreeSet<usize>,
+    /// The first records of admins for a device several admins admitted.
+    contested: BTreeSet<usize>,
     label: Vec<Label>,
     why: Vec<Option<super::eval::Why>>,
     revoked: BTreeSet<KeyHash>,
@@ -1169,6 +1171,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
             recovery: None,
             admitted: BTreeMap::new(),
             undecided_admits: BTreeSet::new(),
+            contested: BTreeSet::new(),
             label: vec![Label::Unlabelled; n],
             why: vec![None; n],
             revoked: BTreeSet::new(),
@@ -1201,8 +1204,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
         }
         ep.find_admins();
         ep.find_pairs();
-        ep.find_admitted();
-        ep.do_label();
+        ep.admit_and_label();
         ep.collect();
         ep
     }
@@ -1557,7 +1559,8 @@ impl<'e, 'a> Epoch<'e, 'a> {
     /// that keep within base rights, each admin's first, the one with the
     /// smallest ID. Every
     /// other admin record for the device needs manage (rule 3).
-    fn find_admitted(&mut self) {
+    fn find_admitted(&mut self, not_counting: &BTreeSet<usize>) {
+        self.contested.clear();
         let mut admitted = BTreeMap::new();
         let mut admit_conflicts = Vec::new();
         for (d, rs) in &self.e.devices {
@@ -1572,6 +1575,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
                     r.admin()
                         && self.counted[i]
                         && !self.capped[i]
+                        && !not_counting.contains(&i)
                         && self.has(&r.b().signer, POWER_ADMIT)
                         && r.dev().is_some_and(|dv| self.admin_device_ok(&r.b().signer, dv))
                 })
@@ -1583,6 +1587,9 @@ impl<'e, 'a> Epoch<'e, 'a> {
                 !best.iter().any(|&j| self.r(j).b().signer == b.signer && self.r(j).b().seq < b.seq)
             });
             let firsts: Vec<usize> = firsts.collect();
+            if firsts.len() > 1 {
+                self.contested.extend(firsts.iter().copied());
+            }
             // Two admins admitting one device differently: neither counts
             // until a root records it, so that no admin wins by its
             // record's ID (owner's call pending; see the PR).
@@ -1605,6 +1612,30 @@ impl<'e, 'a> Epoch<'e, 'a> {
             self.conflicts.push(c);
         }
         self.admitted = admitted;
+    }
+
+    /// Finds the admitted devices and labels the admins' records. A first
+    /// record that does not count stands in the way of none that does:
+    /// when several admins' first records admit one device, the records
+    /// are labelled once as they are, and those a removal, a freeze or a
+    /// new admin key cut are left out of the admits before the labelling
+    /// that counts.
+    fn admit_and_label(&mut self) {
+        let base = self.conflicts.len();
+        self.find_admitted(&BTreeSet::new());
+        if !self.contested.is_empty() {
+            self.undecided_admits.clear();
+            self.do_label();
+            let out: BTreeSet<usize> = core::mem::take(&mut self.contested)
+                .into_iter()
+                .filter(|&i| self.label[i] == Label::Out && matches!(self.why[i], Some(Why::Cut | Why::Removed)))
+                .collect();
+            self.label.fill(Label::Unlabelled);
+            self.why.fill(None);
+            self.conflicts.truncate(base);
+            self.find_admitted(&out);
+        }
+        self.do_label();
     }
 
     /// Reports whether an admin may sign record i.
@@ -2042,13 +2073,17 @@ impl<'e, 'a> Epoch<'e, 'a> {
         }
         let keys = self.with_pair(&c.claimant);
         let claim = self.e.by_id.get(&c.claim).copied();
-        // Only the current root's records within the cut.
+        // The roots' records that count on the path, the current root's
+        // within the claim's cut: an admin an earlier root named within
+        // its own cut keeps its powers under the roots after it, unless
+        // a later root's record about its device says otherwise, as the
+        // evaluation has it.
         let at_cut = |i: usize| {
             let r = self.r(i);
-            !r.held && r.b().signer == c.cut.key && self.e.within(&c.cut, i)
+            self.root_record(i) && (r.b().signer != c.cut.key || self.e.within(&c.cut, i))
         };
-        // The claimant's powers: from the newest root record within the
-        // cut that names it, or the recovery record's takeover.
+        // The claimant's powers: from the newest root record on the path
+        // that names it, or the newest recovery record's takeover.
         let mut named: Option<usize> = None;
         for &i in self.e.devices.values().flatten() {
             if at_cut(i)
@@ -2059,7 +2094,9 @@ impl<'e, 'a> Epoch<'e, 'a> {
             }
         }
         let recovery = self.all().filter(|&i| at_cut(i)).filter_map(|i| match &self.r(i).b().kind {
-            Kind::Recovery { admin } => Some((self.r(i).b().seq, admin.hash())),
+            Kind::Recovery { admin } => {
+                Some((self.on_path.get(&self.r(i).b().signer).copied(), self.r(i).b().seq, admin.hash()))
+            }
             _ => None,
         });
         // A newer root record of that device within the cut that names
@@ -2076,7 +2113,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
         });
         let named = named.filter(|_| !taken);
         let powers = named.and_then(|i| self.r(i).dev()).map_or(0, |d| d.powers)
-            | recovery.max().filter(|(_, a)| *a == c.claimant).map_or(0, |_| POWER_TAKEOVER);
+            | recovery.max().filter(|(_, _, a)| *a == c.claimant).map_or(0, |_| POWER_TAKEOVER);
         // A removal of the claimant the claim saw: a root's within the
         // cut, or an admin's that is in.
         let removed = self.all().any(|i| {
