@@ -414,3 +414,100 @@ fn the_vectors_are_what_the_readers_say() {
         }
     }
 }
+
+fn call(op: &str, args: serde_json::Value) -> serde_json::Value {
+    let req = serde_json::json!({ "abi": crate::api::ABI, "op": op, "args": args });
+    serde_json::from_slice(&crate::api::call(&serde_json::to_vec(&req).unwrap())).unwrap()
+}
+
+fn b64(b: &[u8]) -> String {
+    use base64::Engine as _;
+    base64::engine::general_purpose::STANDARD.encode(b)
+}
+
+/// The phone's calls: a push key, the registration's frame, the limits,
+/// and a body opened as a notification extension opens it, with only the
+/// push keys, its copy-opening secrets and the origins the app saved.
+#[test]
+fn the_phone_registers_and_opens_a_body_through_the_core_api() {
+    let key = call("push_key", serde_json::Value::Null);
+    let pk_b64 = key["ok"]["key"].as_str().unwrap().to_string();
+    assert_eq!(pk_b64.len(), 44);
+    let limits = call("push_limits", serde_json::json!({ "env": ENV_APNS }));
+    assert_eq!(limits["ok"]["body"], MAX_BODY);
+    assert_eq!(limits["ok"]["token"], MAX_TOKEN);
+    assert_eq!(call("push_limits", serde_json::json!({ "env": 77 }))["ok"]["known"], false);
+
+    let reg = call(
+        "push_registration",
+        serde_json::json!({ "seq": 2, "kinds": 3, "env": ENV_APNS, "token": b64(&[5; 32]), "key": b64(&PK) }),
+    );
+    let frame = {
+        use base64::Engine as _;
+        base64::engine::general_purpose::STANDARD.decode(reg["ok"]["frame"].as_str().unwrap()).unwrap()
+    };
+    let r = Registration::read(&read_frame(&frame)).unwrap();
+    assert_eq!((r.seq, r.kinds, r.on.as_ref().unwrap().env), (2, 3, ENV_APNS));
+    let off = call("push_registration", serde_json::json!({ "seq": 3, "kinds": 0 }));
+    assert!(off["ok"]["frame"].is_string(), "{off}");
+    let up = call(
+        "push_registration",
+        serde_json::json!({ "seq": 4, "kinds": 1, "env": ENV_UNIFIEDPUSH,
+            "unifiedpush": { "url": "http://up.example/x", "p256dh": b64(&[4; 65]), "auth": b64(&[1; 16]) },
+            "key": b64(&PK) }),
+    );
+    assert_eq!(up["error"]["name"], "push", "a plain-HTTP endpoint is refused: {up}");
+    let bad = call("push_registration", serde_json::json!({ "seq": 4, "kinds": 1, "env": 1, "token": b64(&[1]) }));
+    assert_eq!(bad["error"]["code"], 18);
+
+    // A copy from computer0, sealed into a body by a member.
+    let (g, _, stores, statements) = world(3);
+    let state = g.state();
+    let refs: Vec<&_> = statements.iter().collect();
+    let sealing = sealing(&state, &refs);
+    let phone = k("phone").key.device_id();
+    let origin = k("computer0");
+    let text = Content::text("the code is 4711", false);
+    let rs = copies::readers(&state, &sealing, &text, &origin.key.device_id(), &[], None);
+    let made = Made { id: [5; 16], time: Timestamp { wall: (T0 + 5) as i64, logical: 0 }, blob: None };
+    let copy = copies::seal(&origin, &rs, &made, &text).unwrap();
+    let v = cbor::decode(&copy).unwrap();
+    let c = copies::check(&v, &state).unwrap();
+    let body = copy_body(&c.copy, &c.readers, &phone, made.id, origin.key.device_id().0);
+    let sealed = seal(&PK, 2, ENV_APNS, &body, &NONCE).unwrap();
+    let epoch = c.readers.iter().find(|(d, _)| *d == phone).unwrap().1;
+    let secret = crate::keystore::KeyStore::sealing(&stores["phone"], epoch).unwrap();
+    let od = state.device(&origin.key.device_id()).unwrap();
+    let origins = serde_json::json!([{ "key": b64(&od.key.encode()), "rights": od.rights }]);
+    let args = |origins: &serde_json::Value, keys: serde_json::Value| {
+        serde_json::json!({ "keys": keys, "body": b64(&sealed), "me": b64(&phone.0), "origins": origins,
+            "sealing": [{ "epoch": epoch, "secret": b64(&secret) }] })
+    };
+    let old = serde_json::json!({ "key": b64(&[1; 32]), "seq": 1 });
+    let current = serde_json::json!({ "key": b64(&PK), "seq": 2 });
+    let got = call("push_open", args(&origins, serde_json::json!([old, current])));
+    let ok = &got["ok"];
+    assert_eq!(ok["kind"], "copy", "{got}");
+    assert_eq!(ok["text"], "the code is 4711");
+    assert_eq!(
+        (ok["type"].as_str(), ok["secret"].as_bool(), ok["key_index"].as_u64()),
+        (Some("text"), Some(false), Some(1))
+    );
+    // Without the origin in the saved records the text never shows.
+    let got = call("push_open", args(&serde_json::json!([]), serde_json::json!([current])));
+    assert_eq!(got["ok"]["kind"], "hint", "{got}");
+    assert!(got["ok"].get("text").is_none());
+    // A halted group opens nothing: a hint that the copy waits.
+    let mut halted = args(&origins, serde_json::json!([current]));
+    halted["halted"] = true.into();
+    let got = call("push_open", halted);
+    assert_eq!(got["ok"]["kind"], "waits", "{got}");
+    // No key opens it: code 18.
+    let got = call("push_open", args(&origins, serde_json::json!([old])));
+    assert_eq!(got["error"]["name"], "push", "{got}");
+    // An event is a hint with its number.
+    let ev = Body::Event { id: [8; 16], event: EVENT_ROOT, device: None, time_ms: Some(T0) };
+    let sealed_ev = seal(&PK, 2, ENV_APNS, &ev, &NONCE).unwrap();
+    let got = call("push_open", serde_json::json!({ "keys": [current], "body": b64(&sealed_ev), "me": b64(&phone.0) }));
+    assert_eq!((got["ok"]["kind"].as_str(), got["ok"]["event"].as_u64()), (Some("event"), Some(EVENT_ROOT)), "{got}");
+}

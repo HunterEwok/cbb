@@ -344,6 +344,10 @@ the core's.
 | `bug_allow` | `state`, `always` | `{"state"}`: the user allowed a report, and maybe always |
 | `bug_sent` | `state`, `fingerprint`, `version`, `post`, `ok`, `fixed_in` (what the server answered, optional), `now_ms` | `{"state"}`: the report went (`ok`), or it waits to be sent again |
 | `bug_pending` | `state`, `now_ms` | `{"queue", "state"}`: the reports waiting (`[{fingerprint, version, post, at_ms}]`), without those older than seven days |
+| `push_key` | none | `{"key"}`: a new push key, 32 random bytes, base64: one per group, kept where the notification extension reads it (see "Push") |
+| `push_limits` | `env` (the platform, as the env registry numbers it) | `{"known", "body", "token", "kinds"}`: whether this core knows the platform, the size of its sealed bodies, the longest token, the bits of `kinds` it defines; the apps hold no number of the format |
+| `push_registration` | `seq` (higher than the last one sent), `kinds` (0 turns push off), and with `kinds` ≠ 0 `env`, `key` (the push key, base64) and either `token` (base64, as the platform gave it) or `unifiedpush` (`{url, p256dh, auth}`, the last two base64) | `{"frame"}`: message `push` (t 28) as a frame, base64, for every member connection of the group; code 18 when a field breaks its row (a UnifiedPush endpoint that is not `https`, a key not 32 bytes) |
+| `push_open` | `keys` (`[{key, seq}]`: the group's push keys the phone holds, the current one first), `body` (base64, the sealed body as the notification carries it), `me` (the phone's device ID), `origins` (`[{key, rights, frozen}]`: the devices the app last saved, each member key as the records encode it, base64), `sealing` (`[{epoch, secret}]`: the phone's copy-opening secrets), `too_old`, `halted` (booleans, false when left out) | `{"kind", "key_index", ...}`: `copy` with `id`, `origin`, `type` (`text`, `media`, `files` or `other`), `secret`, `ttl_ms` and `text` once the origin, its signature and `commit` hold; `waits` with `id` and `origin` when the copy did not fit or does not open here; `event` with `id`, `event`, `device`, `time_ms`; `hint` for anything else. Only `copy` states a fact; the rest the app shows as "open the app". Code 18 when no key opens the body |
 
 The arguments of `evaluate` are a case of `testdata/interop/v2-records.json` as it is.
 
@@ -370,6 +374,27 @@ The numbers and names never change meaning; new codes are added at the end of th
 | 15 | `command` | a command is refused: its signer, its target, its time or its limits |
 | 16 | `signed` | a signed body that is not a record (a command, a server credential, a release file or a manifest) is refused: its size, form or a field |
 | 17 | `copy` | a copy is refused or cannot be sealed: its origin, its signature or a field, or it does not open with the device's key |
+| 18 | `push` | a push registration cannot be made from its fields, or a push body does not open with any of the phone's push keys |
+
+## Push
+
+A phone whose app is closed hears of a copy or an event through its platform's push service
+(format section 20.4, `cbb_core::push`). The phone draws a push key per group (`push_key`),
+sends the group its token, platform and key in message `push` (`push_registration`), and opens
+each body that arrives with `push_open`. Its notification extension calls only `push_open`,
+holding the push keys, the copy-opening secrets and the origins the app last saved, in a
+keychain group of its own: never the member key, which signs (the store `push_open` builds
+refuses to sign or keep a key). The text of a notification comes from the app's translations,
+never from a string in the body; only a `copy` answer carries text, and the apps never show a
+secret's text on a notification.
+
+On the members the sender is `member/src/pusher.rs`, and the project's push service is
+`cbb-push` (`member/src/pushd`). The member's sync calls only the sender's seam, written at the
+head of `pusher.rs`: `registration` (message `push` arrived from the device itself),
+`connected` and `left` (a peer's member connection opened or closed), `forget` (a device removed
+or frozen), `copy` (with the copy's readers and `cbb_core::push::copy_body` for each),
+`event`, and the traits `Faces` (the push service's address, pin, server key and credentials
+of the group's face) and `Saved` (where the registrations are kept).
 
 ## Panics
 

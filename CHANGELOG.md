@@ -13,8 +13,10 @@ All notable changes to cbb are documented in this file. The format follows
   copy whose origin the phone checks, or a hint that something waits), the `once` tag that
   lets the push service drop a repeat, and the messages between a member and the project's
   push service (`cbb-push/1`), which sees tokens, times and one size, never a group or
-  content (`cbb_core::push`, vectors in `testdata/format/push.json`). The service and the
-  apps follow.
+  content (`cbb_core::push`, vectors in `testdata/format/push.json`). The push service
+  `cbb-push` (APNs first, `packaging/linux/cbb-push.service`), the member's sender, and the
+  phones' calls `push_key`, `push_limits`, `push_registration` and `push_open` (error code 18,
+  `push`). The apps follow.
 - The Rust core wipes the secrets it holds when it lets them go, prints none in `Debug` or
   an error, and compares every mark and confirmation tag in constant time; the C library
   wipes each answer as it is given back (docs/core-api.md, "Secrets"). Timing tests of the
