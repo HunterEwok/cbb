@@ -56,6 +56,7 @@ for f in $files; do
 	apps/silica/*) silica=true ;;
 	site/* | docs/* | *.md | LICENSE) site=true ;;
 	.github/workflows/codeql-swift.yml) swift=true ;;
+	.github/go-test-race.sh) core=true ;; # the macOS job's Go tests
 	.github/*) ;; # other workflows, templates and settings: no job of ci.yml reads them
 	*) all=true ;;
 	esac

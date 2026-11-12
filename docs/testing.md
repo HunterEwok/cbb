@@ -29,7 +29,11 @@ request is up to date with main, whose run tested those files when they last cha
 ## Unit tests
 
 - Go tests run with the race detector on Linux x86-64, Linux ARM64 and macOS, under QEMU
-  for big-endian 32-bit MIPS, and on FreeBSD.
+  for big-endian 32-bit MIPS, and on FreeBSD. Under it on macOS gVisor's network stack, which
+  the tunnel's, VLESS's and the forwarder's tests carry packets through, is about a hundred
+  times slower than without it, so the macOS job runs those packages one at a time, after the
+  others (`.github/go-test-race.sh`), and a change to Go is tested that way on a Mac before
+  it is pushed: Linux does not show that slowness.
 - Time comes from the caller (`now time.Time`), so a test sets the clock; lifetimes and
   renewals are tested at their edges without waiting.
 - The TPM code runs against swtpm (`internal/tpmkey`), the ei protocol against a test EIS

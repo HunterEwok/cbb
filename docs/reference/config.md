@@ -89,6 +89,7 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_TEST_AVAHI` | Go tests of mDNS | Runs the tests that need avahi-daemon. |
 | `CBB_TEST_MDNS_USERS` | Go tests of mDNS | Runs the test of mDNS for other users' sessions, which needs root. |
 | `CBB_TEST_UINPUT` | Go tests of the uinput helper | `1` makes a missing `/dev/uinput` a failure instead of a skip. |
+| `CBB_RACE_CPU` | `.github/go-test-race.sh` | The `-cpu` of the packages whose tests use gVisor's network stack, which run one at a time; unset in CI, where they get the runner's cores. A Mac sets fewer, such as `2`, since its cores are faster than the runner's. |
 | `CBB_TEST_CLIPBOARD` | Go tests of the Windows clipboard | `1` allows the tests to overwrite the clipboard. |
 | `CBB_UI_BROWSER` | Go tests of the tray app's window | The Chrome, Chromium or Edge to run the window in; without it the test looks in the usual places, and skips without a browser outside CI. |
 | `CBB_UPDATE_SCREENSHOTS` | Go tests of the tray app's window | Set (to anything), `TestWindow/screenshots` writes its pictures to `apps/desktop/testdata/screenshots` instead of comparing with them, after a change to the window. |

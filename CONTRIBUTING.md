@@ -117,6 +117,7 @@ pipx run typos==1.51.1         # spelling of the English text (_typos.toml)
 npx --yes @biomejs/biome@2.6.2 ci   # the tray app's HTML, CSS and JavaScript (biome.json)
 pipx run reuse==6.2.0 lint     # every file's copyright and license (REUSE.toml)
 go test -race ./...
+sh .github/go-test-race.sh /tmp/cover.out   # on a Mac too, as the macOS job runs them (CBB_RACE_CPU=2: fewer cores)
 go build -o /dev/null ./cmd/...
 GOOS=linux GOARCH=arm GOARM=6 go build -o /dev/null ./cmd/cbb-helper   # Raspberry Pi Zero W
 GOOS=freebsd go vet ./...                                         # FreeBSD (the freebsd job runs the tests)
