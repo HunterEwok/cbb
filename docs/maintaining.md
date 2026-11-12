@@ -351,16 +351,17 @@ maintainer's private runbook, outside the repository.
 
 A report to `abuse@cbb.tools` about the forwarder or the relay gets the answer decided in
 advance ([the servers' budget](relay-budget.md#abuse-reports)): when it carries the tag of a
-group, add the tag with the date to `refused-groups` next to the forwarder's key on cbb.tools,
-readable by the service, and the forwarder drops the group within ten seconds (the relay in
-Rust does not read the list yet):
+group, add the tag with the date to `refused-groups` next to the forwarder's key and next to
+the relay's key on cbb.tools, readable by each service, and both drop the group within ten
+seconds:
 
 ```sh
 echo "TAG  # 2026-11-09, report of DATE" | sudo tee -a /var/lib/cbb-forward/refused-groups
+echo "TAG  # 2026-11-09, report of DATE" | sudo tee -a /var/lib/cbb-relay/refused-groups
 ```
 
 A line that is not a tag keeps the list as it was and is logged
-(`journalctl -u cbb-forward`); taking the line out lets the group back. Answer the reporter that the group is refused; the servers have nothing else to
+(`journalctl -u cbb-forward`, `journalctl -u cbb-relay`); taking the line out lets the group back. Answer the reporter that the group is refused; the servers have nothing else to
 give, no logs, addresses or content. A report without a tag gets that answer too, with a
 request for the tag. A report about a source that loads the servers on purpose is the
 firewall's, at the level of its network or provider, as the terms say. A vulnerability is

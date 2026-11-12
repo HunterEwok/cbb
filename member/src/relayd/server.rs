@@ -48,6 +48,9 @@ pub const REQUEST_CAPS: Caps = Caps { address: 32, network: 64, wide: 64, provid
 pub const MAX_REQUESTS_ONE: usize = 16;
 pub const MAX_REQUESTS_GROUP: usize = 32;
 
+/// How often the list of refused groups is read again.
+pub const REFUSED_EVERY: Duration = Duration::from_secs(10);
+
 /// How long a registration may take; the first line of a connection in a
 /// tunnel (a device sends it as soon as the connection is open, so five
 /// seconds leave room for a phone on a slow link that loses a packet or
@@ -81,6 +84,10 @@ pub struct Config {
     pub log: Log,
     /// Also log the tunnel's own messages, without their addresses.
     pub verbose: bool,
+    /// The groups the operator refuses after an abuse report
+    /// (docs/relay-budget.md, "Abuse reports"), read again when the file
+    /// changes; None refuses none.
+    pub refused: Option<Arc<super::refused::List>>,
 }
 
 /// What a group's devices share: its joined connections, its requests being
@@ -277,7 +284,7 @@ impl Relay {
             hub_log,
         )?;
         *inner.hub.lock().map_err(|_| Error::msg("relay: broken"))? = Some(hub);
-        let accept = vec![
+        let mut accept = vec![
             spawn({
                 let inner = inner.clone();
                 move || inner.accept_registrations(tcp)
@@ -287,6 +294,21 @@ impl Relay {
                 move || inner.accept_streams(streams)
             })?,
         ];
+        if inner.cfg.refused.is_some() {
+            accept.push(spawn({
+                let inner = inner.clone();
+                move || {
+                    let mut last = Instant::now();
+                    while !inner.stopping() {
+                        std::thread::sleep(Duration::from_millis(100));
+                        if last.elapsed() >= REFUSED_EVERY {
+                            last = Instant::now();
+                            inner.reload_refused();
+                        }
+                    }
+                }
+            })?);
+        }
         Ok(Relay { inner, addr: local, accept })
     }
 
@@ -407,6 +429,30 @@ impl Inner {
         (self.cfg.log)(line);
     }
 
+    /// Reads the list of refused groups again when its file changed, and
+    /// drops the devices of the groups now on it. The list changes before
+    /// the relay's lock is taken, and admit_locked asks it under that lock,
+    /// so a registration that passed the list just before is either
+    /// dropped here or refused when it is added.
+    pub fn reload_refused(&self) {
+        let Some(list) = &self.cfg.refused else { return };
+        match list.reload() {
+            Ok(true) => {}
+            Ok(false) => return,
+            Err(e) => {
+                self.log(&format!("cbb relay: the list of refused groups, kept as it was: {e}"));
+                return;
+            }
+        }
+        self.log(&format!("cbb relay: the list of refused groups has {} now", list.len()));
+        let mut st = self.lock();
+        let gone: Vec<Arc<Member>> =
+            st.groups.iter().filter(|(tag, _)| list.refused(tag)).flat_map(|(_, g)| g.values().cloned()).collect();
+        for m in gone {
+            self.drop_locked(&mut st, &m);
+        }
+    }
+
     /// Counts a registration being set up from the address from; false
     /// when there are too many, from there or in all.
     pub fn take_slot(&self, from: Option<IpAddr>) -> bool {
@@ -467,6 +513,9 @@ impl Inner {
         m: &Member,
         leaving: Option<&dyn Fn(&Member) -> bool>,
     ) -> std::result::Result<(), String> {
+        if self.cfg.refused.as_ref().is_some_and(|l| l.refused(&m.tag)) {
+            return Err(super::refused::MESSAGE.into());
+        }
         if st.by_addr.values().any(|o| o.key == m.key && (o.tag != m.tag || o.device != m.device)) {
             return Err("another device registered that WireGuard key".into());
         }

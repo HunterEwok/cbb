@@ -204,8 +204,8 @@ Reports go to `abuse@cbb.tools` (the [terms](https://cbb.tools/terms.html), "Rep
 changes"). The servers see no content, keep no logs and hold no names, so the one answer
 decided in advance is to refuse the group the report names, by its tag, and nothing broader:
 
-- `cbb forward` reads a list of refused groups (the relay in Rust does not yet), `refused-groups` next to
-  its key (or the file of `-refused`; `-refused none` reads none), one group tag of 16 hex
+- `cbb forward` and `cbb relay` read a list of refused groups, `refused-groups` next to
+  their key (or the file of `-refused`; `-refused none` reads none), one group tag of 16 hex
   characters a line, as `cbb status` shows it; `#` begins a comment, and anything after a
   tag on its line is skipped, such as the date of the report. A line `period TAG` names a
   period's tag, for a group that registers with credentials (protocol.md, section 18).
@@ -222,8 +222,11 @@ decided in advance is to refuse the group the report names, by its tag, and noth
   groups that ask for that.
 - The tags on the list and the reports stay with the maintainer, never in the repository.
 
-Tested by `TestRefusedGroups` (forwarder) and the
-package's own tests (`internal/refused`).
+Tested by `TestRefusedGroups` (forwarder), `refused_groups` (relay, `member/src/relayd/tests.rs`)
+and the lists' own tests (`internal/refused`, `member/src/relayd/refused.rs`). A file that is
+missing at one reading and again at the next empties the list; missing once, as when an editor
+moves it aside to save it, keeps the list as it was. A registration that passed the list just
+before it changed is refused when it is added, or dropped with the others.
 
 ## Tests
 

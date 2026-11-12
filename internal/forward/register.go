@@ -456,6 +456,13 @@ func (f *Forwarder) register(raw net.Conn) (*reg, error) {
 		vlessAns = &vlessAnswer{Transport: tunnel.TransportXHTTP, Port: v.XHTTP.Port, ServerName: v.XHTTP.Host, Path: v.XHTTP.Path + "/" + r.vlessPath}
 	}
 	f.mu.Lock()
+	// The list may have changed since it was asked: reloadRefused changes
+	// it before it takes f.mu, so this registration is either refused
+	// here or dropped by it.
+	if f.refused.Refused(tag) {
+		f.mu.Unlock()
+		return refuse(refused.Message)
+	}
 	if o := f.regs[tag]; o != old {
 		// Another registration of the group came meanwhile; this one
 		// holds the records of the one it checked against only.

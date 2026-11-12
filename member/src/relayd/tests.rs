@@ -26,6 +26,10 @@ use super::server::{
 };
 
 fn relay(open: bool, limits: Limits) -> Relay {
+    relay_with(open, limits, None)
+}
+
+fn relay_with(open: bool, limits: Limits, refused: Option<Arc<super::refused::List>>) -> Relay {
     let groups = if open { Vec::new() } else { vec!["0123456789abcdef".into()] };
     Relay::start(Config {
         listen: SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
@@ -35,6 +39,7 @@ fn relay(open: bool, limits: Limits) -> Relay {
         limits,
         log: Arc::new(|_| {}),
         verbose: false,
+        refused,
     })
     .unwrap()
 }
@@ -588,4 +593,53 @@ fn records_verified_once() {
         held,
         "a record that does not verify was paid for"
     );
+}
+
+/// A group on the operator's list cannot register, one put on it is
+/// dropped, one taken off registers again, and the others go on all the
+/// while; a broken list keeps the one before (Go's TestRefusedGroups for
+/// the forwarder; docs/relay-budget.md, "Abuse reports").
+#[test]
+fn refused_groups() {
+    let (a, b, c) = ("0123456789abcdef", "fedcba9876543210", "00112233445566ff");
+    let dir = std::env::temp_dir().join(format!("cbb-relay-refused-{}", certs::random_id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("refused-groups");
+    let write = |s: &str, age: u64| {
+        std::fs::write(&path, s).unwrap();
+        let t = std::time::SystemTime::now() - Duration::from_secs(age);
+        std::fs::File::options().write(true).open(&path).unwrap().set_modified(t).unwrap();
+    };
+    write(&format!("# reported 2026-11-09\n{a}\nperiod {c}\n"), 180);
+    let list = Arc::new(super::refused::List::load(&path).unwrap());
+    let r = relay_with(true, Limits::default(), Some(list));
+    let inner = r.inner();
+
+    assert_eq!(fake_member(inner, a, v4(10, 0, 0, 1)).err().as_deref(), Some(super::refused::MESSAGE));
+    assert_eq!(
+        fake_member(inner, &format!("period {c}"), v4(10, 0, 0, 1)).err().as_deref(),
+        Some(super::refused::MESSAGE),
+        "a refused period"
+    );
+    assert!(fake_member(inner, c, v4(10, 0, 0, 1)).is_ok(), "a group tag is not its period's");
+    let mb = fake_member(inner, b, v4(10, 0, 0, 2)).unwrap();
+    assert!(inner.lock().groups.contains_key(b));
+
+    // Put on the list, B goes; A, taken off it, comes back.
+    write(&format!("{b}\n"), 120);
+    inner.reload_refused();
+    {
+        let st = inner.lock();
+        assert!(!st.groups.contains_key(b) && st.members.get(&mb.id).is_none_or(|ms| ms.dropped));
+        assert!(st.groups.contains_key(c), "a group not on the list was dropped");
+    }
+    assert!(fake_member(inner, a, v4(10, 0, 0, 1)).is_ok(), "a group taken off the list");
+
+    // A broken list keeps the one before.
+    write("not a tag\n", 60);
+    inner.reload_refused();
+    assert_eq!(fake_member(inner, b, v4(10, 0, 0, 2)).err().as_deref(), Some(super::refused::MESSAGE));
+    assert!(inner.lock().groups.contains_key(a), "a broken list dropped a group not on the list before");
+    drop(r);
+    let _ = std::fs::remove_dir_all(dir);
 }
