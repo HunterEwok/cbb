@@ -320,6 +320,12 @@ impl RecordSet {
             // A head's first checkpoint: the head may apply now.
             self.rechain();
         }
+        if self.trusted.is_empty() && self.records.contains_key(&id) && self.may_count(&id) {
+            // A counting checkpoint compacts at once: what it leaves out
+            // takes no room and is not held from the moment it counts, so
+            // a member is in one state whenever it compacts.
+            self.settle();
+        }
         Ok(if self.records.contains_key(&id) { Added::Stored } else { Added::NoRoom })
     }
 
@@ -584,8 +590,12 @@ impl RecordSet {
         self.trim_early();
         if !now.is_empty() {
             self.trusted = now.iter().map(Record::id).collect();
+            let ids: Vec<RecordId> = now.iter().map(Record::id).collect();
             self.insert_all(now);
             self.trusted.clear();
+            if ids.iter().any(|id| self.may_count(id)) {
+                self.settle();
+            }
         }
     }
 
@@ -1070,6 +1080,37 @@ impl RecordSet {
     /// ask the peers for it.
     pub fn missing_list(&self) -> Option<[u8; 32]> {
         self.waiting
+    }
+
+    /// Whether the record id may make a root's checkpoint the set has not
+    /// compacted by count: it is such a checkpoint, a record it names, or
+    /// a record of its key below it.
+    fn may_count(&self, id: &RecordId) -> bool {
+        let Some(r) = self.get(id) else { return false };
+        let (signer, seq) = (r.body().signer, r.body().seq);
+        self.records.values().any(|e| {
+            let b = e.record.body();
+            let Kind::Checkpoint { heads, keep } = &b.kind else { return false };
+            if e.role != Role::Root {
+                return false;
+            }
+            let anchors = eval::anchors_of(heads, keep);
+            if self.checkpoints.iter().any(|(h, a)| h == heads && *a == anchors) {
+                return false;
+            }
+            e.record.id() == *id || anchors.contains(id) || b.signer == signer && seq < b.seq
+        })
+    }
+
+    /// Compacts by the set's own state until nothing more goes.
+    fn settle(&mut self) {
+        for _ in 0..4 {
+            let st = self.state();
+            let before = self.checkpoints.clone();
+            if self.compact(&st) == 0 && self.checkpoints == before {
+                break;
+            }
+        }
     }
 
     /// Drops what the counting checkpoints of state leave out: a root's

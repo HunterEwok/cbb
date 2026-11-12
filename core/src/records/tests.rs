@@ -776,7 +776,8 @@ fn a_checkpoint_frees_room() {
     set.insert_all(g.recs.clone());
     let before = set.state();
     assert_eq!(before.checkpoint, Some(cp.id()));
-    assert_eq!(set.compact(&before), 1);
+    // The checkpoint compacted the set as it came.
+    assert_eq!(set.compact(&before), 0);
     assert!(!set.contains(&ds[0].id()) && set.contains(&rv.id()));
     let after = set.state();
     assert_eq!(after.devices, before.devices);
@@ -801,10 +802,13 @@ fn a_full_root_checkpoints_and_goes_on() {
     assert_eq!(set.insert(late), Ok(Added::NoRoom));
     let (seq, id) = g.heads[&root.hash];
     let cp = g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep: vec![laptop.id()] });
+    let held = set.len();
     assert_eq!(set.insert(cp.clone()), Ok(Added::Stored));
     let state = set.state();
     assert_eq!(state.checkpoint, Some(cp.id()));
-    assert!(set.compact(&state) > 1000);
+    // It compacted the set as it came.
+    assert!(held - set.len() > 1000);
+    assert_eq!(set.compact(&state), 0);
     let next = g.device(&root, &k("phone"), "phone", |_| {});
     assert_eq!(set.insert(next.clone()), Ok(Added::Stored));
     let s = set.state();
@@ -1109,8 +1113,7 @@ fn a_removed_devices_id_stays_taken() {
     g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep: vec![] });
     let mut set = set_of(&g.root.key.clone());
     set.insert_all(g.recs.clone());
-    let st = set.state();
-    assert!(set.compact(&st) > 0 && !set.contains(&rec.id()));
+    assert!(!set.contains(&rec.id()));
     assert!(set.state().id_taken(&old.key.device_id()));
 }
 
@@ -1729,6 +1732,21 @@ mod differential {
             (&whole.roots, &whole.devices, &whole.revoked, &whole.stop)
         );
         assert_eq!(st.changes, whole.changes);
+        // A member that never asks to compact is in the same state: a
+        // counting checkpoint compacts as it comes.
+        let mut plain = set_of(&g.root.key);
+        for _ in 0..12 {
+            let before = plain.digest();
+            plain.insert_all(order.iter().cloned());
+            for l in &g.lists {
+                let _ = plain.insert_list(l);
+            }
+            if plain.digest() == before {
+                break;
+            }
+        }
+        assert_eq!(plain.digest(), m.digest());
+        assert_eq!(plain.state(), st);
         // One round with every list last: the records of a root whose
         // recovery record waited for its list were kept aside and taken
         // when it came, so the set ends the same.

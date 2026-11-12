@@ -130,10 +130,12 @@ impl Group {
     }
 
     /// A checkpoint of the signer: every key's head so far, keeping every
-    /// record that counts in state.
+    /// record that counts in state but checkpoints (as the model's).
     fn checkpoint(&mut self, by: &str, state: &State) -> Record {
         let heads = self.heads.iter().map(|(k, (s, id))| Head { key: *k, seq: *s, id: *id }).collect();
-        let keep = state.counting.iter().copied().collect();
+        let checkpoints: Vec<RecordId> =
+            self.recs.iter().filter(|r| matches!(r.body().kind, Kind::Checkpoint { .. })).map(|r| r.id()).collect();
+        let keep = state.counting.iter().copied().filter(|id| !checkpoints.contains(id)).collect();
         self.sign(by, Kind::Checkpoint { heads, keep })
     }
 
@@ -708,4 +710,41 @@ fn any_order_gives_one_state() {
         assert_eq!(s.digest(), sets[0].digest());
         assert_eq!(s.state(), sets[0].state());
     }
+}
+
+/// compactedAgree's trace, by the room: two members take the same records,
+/// one compacts on the new root's newest checkpoint and one does not; the
+/// newest checkpoint prunes an older one of the same root, and a counting
+/// checkpoint compacts as it comes. As the new root fills its room, both
+/// keep the same records and have the same state.
+#[test]
+fn compacting_on_the_roots_checkpoint_changes_nothing() {
+    let mut g = Group::new();
+    g.change("NK");
+    let s = g.member(&g.all()).state();
+    let older = g.checkpoint("NK", &s);
+    for _ in 0..900 {
+        g.sign("NK", Kind::Copies { incoming_ms: 5_000, seen: vec![] });
+    }
+    let s = g.member(&g.all()).state();
+    let newest = g.checkpoint("NK", &s);
+    let mut a = g.member(&g.all());
+    let mut b = g.member(&g.all());
+    let st = a.state();
+    assert_eq!(st.checkpoint, Some(newest.id()));
+    a.compact(&st);
+    // The newest checkpoint compacted both when it came: compacting again
+    // changes nothing.
+    assert!(!a.contains(&older.id()) && !b.contains(&older.id()), "the checkpoint compacts as it counts");
+    assert_eq!(a.digest(), b.digest());
+    let mut dropped = 0;
+    for i in 0..400 {
+        let r = g.sign("NK", Kind::Copies { incoming_ms: 5_000, seen: vec![] });
+        a.insert(r.clone()).unwrap();
+        b.insert(r.clone()).unwrap();
+        assert_eq!(a.contains(&r.id()), b.contains(&r.id()), "record {i} after the checkpoint");
+        assert_eq!(a.state(), b.state(), "state after record {i}");
+        dropped += usize::from(!a.contains(&r.id()));
+    }
+    assert!(dropped > 0, "the room filled");
 }

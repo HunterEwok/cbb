@@ -431,13 +431,14 @@ fn members_that_did_and_did_not_compact_end_equal() {
     assert!(!has(&want, &k("lamp")) && has(&want, &k("bulb")));
     let new: Vec<Record> = g.recs[old.len()..].to_vec();
     for order in 0..2 {
-        // One member compacted under the old checkpoint, one did not.
+        // One member compacted under the old checkpoint, one did not
+        // ask: the checkpoint compacted both as it came.
         let mut compacted = set_of(&g.root.key);
         sync_all(&mut compacted, &old, &[]);
         assert!(compacted.get(&pruned.id()).is_none());
         let mut plain = set_of(&g.root.key);
         plain.insert_all(old.clone());
-        assert!(plain.get(&pruned.id()).is_some());
+        assert!(plain.get(&pruned.id()).is_none());
         let mut rest = new.clone();
         if order == 1 {
             rest.reverse();
