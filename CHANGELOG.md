@@ -26,6 +26,12 @@ All notable changes to cbb are documented in this file. The format follows
   flash store and in the service's state files, must come back whole and act on nothing
   twice (docs/testing.md, "Power loss"). The service removes the temporary files a write cut
   short left behind, once they are an hour old.
+- A simulation of a whole group in one process (`core/src/sim`): 3 to 12 members on a network
+  that drops, duplicates, reorders and splits, with crashes, moved clocks, changes of root, forks
+  and members off for days, all from one seed; after the network goes quiet every member must
+  hold the same records and show each copy once, and a removed member must open nothing sealed
+  after its removal. A failure prints a one-line replay; the nightly run takes a thousand fresh
+  seeds (docs/testing.md, "The simulation").
 - Recovery drills that run by themselves (`tools/e2e/drills.sh`): the root lost and taken back
   with the recovery key, a new phone restoring the group, a device restored from yesterday's
   backup getting back in, a removed device restored from an older backup staying out.

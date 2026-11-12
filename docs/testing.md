@@ -124,6 +124,34 @@ what it has not saved.
   the lists of the changes of root, the command counters, the freshness marks) join the same cut at
   every step through the whole service.
 
+## The simulation
+
+`core/src/sim` runs a whole group in one process: 3 to 12 members on a network and clocks the
+test plays, every choice drawn from one seed, so that a failure replays from its seed alone.
+
+- The network delivers, drops, duplicates, delays and reorders messages, splits the members into
+  two sides and heals; a member crashes, also in the middle of taking a message, and restarts
+  from what it wrote; clocks move by up to two minutes either way. Outside actions: copies,
+  admissions, removals, freezes and thaws, admins made, checkpoints, a change of root by the
+  recovery key on any member, two such changes at one seq (a fork), and a member off while days
+  pass, its keys changing on its return.
+- During the run: no member shows a copy as new twice; a removed member opens no copy sealed
+  after every other member had saved its removal (until a change of root brings it back); a
+  member that holds both heads of a fork is halted.
+- Then the network goes quiet: healed, every member back with the world's clock, every pair
+  synced until nothing changes. Every member of the group holds the same records; a removed
+  member has learned its removal; each member restarted from what it wrote has the records and
+  the state it saved. Unless the group is halted, two members in turn send a last copy, newer than
+  any: it is sealed to every reader of the group and shown as new by each of them.
+- The members speak through `sim/exchange.rs`, the glue that stands in for the member protocol's
+  sync; wave 5 puts the core's sans-I/O connection in its place, and with it the check that
+  connections settle.
+- `cargo test -p cbb-core --lib sim::` runs 16 seeds of 300 steps; `SIM_SEEDS`, `SIM_FIRST` and
+  `SIM_STEPS` change that, `SIM_SEED` runs one, and `SIM_ALL=1` lists every failing seed rather
+  than stopping at the first. A failure is cut down to the fewest steps that still fail and
+  prints its replay, `SIM_SEED=… SIM_STEPS=… cargo test -p cbb-core --lib sim::`. The nightly run
+  takes a thousand seeds from a fresh start.
+
 ## Recovery drills
 
 What a person does after a loss, played on whole members by `sh tools/e2e/drills.sh`: the root
