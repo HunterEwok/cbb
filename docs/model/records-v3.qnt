@@ -889,13 +889,18 @@ module records_v3 {
 
   // --- Guided steps ------------------------------------------------------------------------
 
-  // The recovery key, on its member, changes the root to a key not yet on the path, at the end
-  // of the chain it follows.
+  // The recovery key, on its member, changes the root to a key its state does not know, at the
+  // end of the chain it follows: the honest writer refuses a key that signed or was named
+  // (brief v2, section 4). A head naming a known key comes only from signRecover (the
+  // recovery key used by hand).
+  pure def knownTo(s: Store, t: Key, db: Id -> Record): bool =
+    recsOf(s.got, db).exists(r => r.signer == t or (r.kind == "admin" and r.target == t) or r.target == t)
   action signChange = nondet t = Set("NA", "NK").oneOf() {
     val ch = chainState(st.get("k"), db)
     all {
       not(ch.stop),
       not(onList(views.get("k").path, t)),
+      not(knownTo(st.get("k"), t, db)),
       signChain(RECOVERY, "recover", t, ch.ids.length() + 1, "honest"),
     }
   }
@@ -1565,7 +1570,8 @@ module records_v3 {
       .then(give("m", 7))
       .expect(views.get("m").devices.contains(DEVICE) and promises)
 
-  // The same with the honest list: the admin record is listed, and counts.
+  // The same with the writer's full list, by hand (the honest writer refuses a known key): the
+  // admin record is listed, and counts.
   run adminNamedRootListedTest =
     init
       .then(sign(ROOT, "admin", "NA", "phone", 0, false, false, 1))
@@ -1577,4 +1583,13 @@ module records_v3 {
       .then(give("m", 4)).then(give("m", 5)).then(give("m", 6)).then(give("m", 7))
       .expect(views.get("m").path == [ROOT, "NA"] and views.get("m").devices.contains(DEVICE)
         and views.get("m").checkpoint == 7 and promises)
+
+  // The honest writer cannot name a key its state knows: with NA named as an admin, the only
+  // change it can make is to NK.
+  run honestRefusesKnownKeyTest =
+    init
+      .then(sign(ROOT, "admin", "NA", "phone", 0, false, false, 1))
+      .then(give("k", 4))
+      .then(signChange)
+      .expect(views.get("k").path == [ROOT, "NK"] and promises)
 }
