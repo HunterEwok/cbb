@@ -1678,21 +1678,23 @@ jobs:
           #
           # XCTest can also connect and then fail to launch the app itself:
           # "Failed to launch <XCUIApplicationImpl ...>: Timed out while
-          # launching application via Xcode", seen on the first launch on a
+          # launching application via Xcode", or "Failed to get background
+          # assertion for target app", seen on the first launch on a
           # simulator fresh from its data migration while the later tests
           # launched it at once. When every failed test failed only so, those
           # tests (and only they) run again on the simulator booted again; a
           # failed assertion is never run again.
+          launch="Failed to launch <XCUIApplicationImpl|Failed to get background assertion for target app"
           failed_tests() {
             sed -nE "s/^Test Case '-\[([A-Za-z0-9_]+)\.([A-Za-z0-9_]+) ([A-Za-z0-9_]+)\]' failed .*/\1\/\2\/\3/p" "$1" | sort -u
           }
           launch_failed() {
-            sed -nE "s/.*: error: -\[([A-Za-z0-9_]+)\.([A-Za-z0-9_]+) ([A-Za-z0-9_]+)\] : Failed to launch <XCUIApplicationImpl.*/\1\/\2\/\3/p" "$1" | sort -u
+            sed -nE "s/.*: error: -\[([A-Za-z0-9_]+)\.([A-Za-z0-9_]+) ([A-Za-z0-9_]+)\] : ($launch).*/\1\/\2\/\3/p" "$1" | sort -u
           }
           only_launches() {
             failed=$(failed_tests "$1")
             [ -n "$failed" ] && [ "$failed" = "$(launch_failed "$1")" ] &&
-              ! grep -E ": error: " "$1" | grep -qv ": Failed to launch <XCUIApplicationImpl"
+              ! grep -E ": error: " "$1" | grep -qvE ": ($launch)"
           }
           test_on() {
             log="${RUNNER_TEMP:-/tmp}/test-$1.log"
