@@ -8,7 +8,8 @@
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::vec::Vec;
 
-use super::eval::{self, Checked, Keys, Role, State, Why};
+use super::body::Seen;
+use super::eval::{self, Checked, ClaimState, Keys, Role, State, Why};
 use super::key::{Key, KeyHash, RecordId};
 use super::{Kind, Record, Rule, keep};
 
@@ -53,6 +54,14 @@ pub struct RecordSet {
     /// The roots after the first that the member's evaluation put on the
     /// path (`compact`): they have a root's room.
     promoted: BTreeSet<KeyHash>,
+    /// The claims the member has counted: final here (`Input::counted`).
+    counted: BTreeSet<RecordId>,
+    /// The takeovers' cuts of the roots before the promoted ones (`compact`):
+    /// such a root keeps nothing off its cut.
+    cuts: BTreeMap<KeyHash, Seen>,
+    /// A record off a cut came after the cuts were known: its root still
+    /// signs, and this member and that root disagree about the owner.
+    split: bool,
     records: BTreeMap<RecordId, Entry>,
     bytes: usize,
 }
@@ -67,6 +76,9 @@ impl RecordSet {
             units: BTreeMap::new(),
             cut: keep::Cut::default(),
             promoted: BTreeSet::new(),
+            counted: BTreeSet::new(),
+            cuts: BTreeMap::new(),
+            split: false,
             records: BTreeMap::new(),
             bytes: 0,
         }
@@ -123,7 +135,18 @@ impl RecordSet {
         let Some((key, role)) = self.keys.signer(&r.body().signer) else { return Err(Refused::UnknownSigner) };
         let held = r.verify(key).map_err(Refused::Broken)?;
         let signer = r.body().signer;
-        if self.cut.past(&eval::item(&r, role)) {
+        if let Some(cut) = self.cuts.get(&signer) {
+            let cuts = BTreeMap::from([(signer, *cut)]);
+            let mine = self.records.values().map(|e| &e.record).filter(|x| x.body().signer == signer);
+            if eval::off_cuts(&cuts, mine.chain([&r])).contains(&id) {
+                // Its root signed it off the chain the takeover saw; one
+                // that would have cancelled a counted claim tells the
+                // member that it and that root disagree about the owner.
+                self.split |= self.cancels_counted(&r);
+                return Ok(Added::NoRoom);
+            }
+        }
+        if self.cut.past(&eval::item_cut(&r, role, &self.cuts)) {
             // Its key dropped a record before it: it would not be kept.
             return Ok(Added::NoRoom);
         }
@@ -177,7 +200,12 @@ impl RecordSet {
     /// changes nothing, so the set is the same whatever order the records
     /// came in.
     fn cut(&mut self) {
-        let items: Vec<keep::Item> = self.records.values().map(|e| eval::item(&e.record, self.role_of(e))).collect();
+        let off = eval::off_cuts(&self.cuts, self.records.values().map(|e| &e.record));
+        for id in &off {
+            self.remove(id);
+        }
+        let items: Vec<keep::Item> =
+            self.records.values().map(|e| eval::item_cut(&e.record, self.role_of(e), &self.cuts)).collect();
         let ceilings: BTreeMap<KeyHash, Option<u64>> =
             items.iter().map(|it| (it.signer, self.ceiling(&it.signer))).collect();
         let (kept, cut) = keep::keep_after(&items, |k| ceilings.get(k).copied().flatten(), &self.cut);
@@ -198,6 +226,48 @@ impl RecordSet {
             .collect();
         let (promoted, first) = (&self.promoted, self.root.hash());
         self.keys.retain_roots(|h| *h == first || named.contains(h) || promoted.contains(h));
+    }
+
+    /// Reports whether r would cancel a claim the member counted: a
+    /// resolve that names it, or a revoke of its signer.
+    fn cancels_counted(&self, r: &Record) -> bool {
+        match &r.body().kind {
+            Kind::Resolve(ids) => ids.iter().any(|id| self.counted.contains(id)),
+            Kind::Revoke(rm) => self
+                .counted
+                .iter()
+                .filter_map(|id| self.records.get(id))
+                .any(|e| rm.keys.binary_search(&e.record.body().signer).is_ok()),
+            _ => false,
+        }
+    }
+
+    /// Learns the keys again from the stored records for the roots the
+    /// member promoted, and drops the records whose signer it no longer
+    /// knows.
+    fn relearn(&mut self) {
+        let mut keys = Keys::trusting(&self.root, &self.promoted);
+        loop {
+            let mut learned = false;
+            for e in self.records.values() {
+                if let Some((_, role)) = keys.signer(&e.record.body().signer) {
+                    learned |= keys.learn(e.record.body(), role, e.held);
+                }
+            }
+            if !learned {
+                break;
+            }
+        }
+        let unknown: Vec<RecordId> = self
+            .records
+            .values()
+            .filter(|e| keys.signer(&e.record.body().signer).is_none())
+            .map(|e| e.record.id())
+            .collect();
+        self.keys = keys;
+        for id in &unknown {
+            self.remove(id);
+        }
     }
 
     /// Reports whether a record of signer just stored may change what the
@@ -264,7 +334,30 @@ impl RecordSet {
     /// The group's state. held_ms is how long the device has held each
     /// claim (rule 7).
     pub fn state(&self, held_ms: &BTreeMap<RecordId, u64>) -> State {
-        eval::evaluate_checked(&self.root, self.checked(), BTreeMap::new(), held_ms, &self.promoted)
+        let mut state = eval::evaluate_checked(
+            &self.root,
+            self.checked(),
+            BTreeMap::new(),
+            held_ms,
+            &self.counted,
+            &self.promoted,
+            &self.cuts,
+        );
+        state.owner_split |= self.split;
+        state
+    }
+
+    /// The claims the member has counted, which its caller keeps across
+    /// restarts and hands a joiner with the claims' ages.
+    pub fn counted(&self) -> &BTreeSet<RecordId> {
+        &self.counted
+    }
+
+    /// Takes claims as counted: those the caller kept from before a
+    /// restart, or those its admitter counted. A counted claim stays
+    /// counted.
+    pub fn remember_counted(&mut self, ids: impl IntoIterator<Item = RecordId>) {
+        self.counted.extend(ids);
     }
 
     /// Drops what the counting checkpoint of state leaves out: a root's
@@ -276,9 +369,13 @@ impl RecordSet {
     /// in sync. A member where the takeover does not count yet keeps only
     /// 16 units of the new root's records until it does.
     pub fn compact(&mut self, state: &State) -> usize {
+        self.counted.extend(state.claims.iter().filter(|c| c.state == ClaimState::Effective).map(|c| c.record));
         let promoted: BTreeSet<KeyHash> = state.roots.iter().skip(1).copied().collect();
-        if promoted != self.promoted {
+        let cuts: BTreeMap<KeyHash, Seen> = state.cuts.iter().map(|c| (c.key, *c)).collect();
+        if promoted != self.promoted || cuts != self.cuts {
             self.promoted = promoted;
+            self.cuts = cuts;
+            self.relearn();
             self.cut = keep::Cut::default();
             self.cut();
         }
@@ -294,9 +391,11 @@ impl RecordSet {
         for id in &drop {
             self.remove(id);
         }
-        // The checkpoint starts the count again.
+        // The checkpoint starts the count again; a key whose naming record
+        // it left out is not known any more, nor kept.
         if !drop.is_empty() {
             self.cut = keep::Cut::default();
+            self.relearn();
         }
         drop.len()
     }
@@ -305,7 +404,7 @@ impl RecordSet {
     /// records that name its signer's key, so that a receiver that takes
     /// them one by one knows every signer (section 4.9).
     pub fn in_dependency_order(&self) -> Vec<&Record> {
-        let mut keys = Keys::new(&self.root);
+        let mut keys = Keys::trusting(&self.root, &self.promoted);
         let mut out = Vec::with_capacity(self.records.len());
         let mut left: Vec<&Entry> = self.records.values().collect();
         left.sort_by_key(|e| eval::order_key(e.record.body(), &e.record.id()));

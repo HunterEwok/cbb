@@ -181,12 +181,15 @@ pub enum Kind {
     Unknown(u64),
 }
 
-/// `[key hash, seq]` of a revoke, freeze or claim: how many of each
-/// signer's records the author held.
+/// `[key hash, seq ≥ 1, record ID]` of a revoke, freeze or claim: the
+/// head of each signer's chain the author held. A record of that signer
+/// at or below seq is seen only when it is on the chain ending at id; a
+/// signer not listed was seen at 0.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Seen {
     pub key: KeyHash,
     pub seq: u64,
+    pub id: RecordId,
 }
 
 /// `[key hash, seq, record ID]` of a checkpoint.
@@ -219,8 +222,10 @@ impl Removal {
             .iter()
             .filter(|c| self.keys.binary_search(&c.key).is_err())
             .copied()
-            .chain(self.keys.iter().map(|k| Seen { key: *k, seq: self.seen_of(k).min(seen_of(current, k)) }))
-            .filter(|s| s.seq != 0)
+            .chain(self.keys.iter().filter_map(|k| match (seen_entry(&self.seen, k), seen_entry(current, k)) {
+                (Some(a), Some(b)) => Some(if a.seq <= b.seq { a } else { b }),
+                _ => None,
+            }))
             .collect();
         seen.sort_by_key(|s| s.key);
         Removal { keys: self.keys.clone(), seen }
@@ -228,7 +233,12 @@ impl Removal {
 }
 
 pub fn seen_of(seen: &[Seen], signer: &KeyHash) -> u64 {
-    seen.binary_search_by(|s| s.key.cmp(signer)).ok().and_then(|i| seen.get(i)).map_or(0, |s| s.seq)
+    seen_entry(seen, signer).map_or(0, |s| s.seq)
+}
+
+/// The entry of seen for signer.
+pub fn seen_entry(seen: &[Seen], signer: &KeyHash) -> Option<Seen> {
+    seen.binary_search_by(|s| s.key.cmp(signer)).ok().and_then(|i| seen.get(i)).copied()
 }
 
 /// The fields of a device record (section 4.1).
@@ -403,7 +413,10 @@ impl Body {
                 if r.keys.is_empty() || r.keys.len() > MAX_KEYS || !strictly_sorted(&r.keys) {
                     return Err(field(t, "keys"));
                 }
-                if !seen_set(&r.seen) || r.seen.len() > super::MAX_SEEN || r.seen.iter().any(|s| s.seq > MAX_SEQ) {
+                if !seen_set(&r.seen)
+                    || r.seen.len() > super::MAX_SEEN
+                    || r.seen.iter().any(|s| s.seq == 0 || s.seq > MAX_SEQ)
+                {
                     return Err(field(t, "seen"));
                 }
             }
@@ -414,7 +427,8 @@ impl Body {
             }
             Kind::Claim { root, seen } => {
                 held |= signer_key(root, t, "root")?;
-                if !seen_set(seen) || seen.len() > super::MAX_SEEN || seen.iter().any(|s| s.seq > MAX_SEQ) {
+                if !seen_set(seen) || seen.len() > super::MAX_SEEN || seen.iter().any(|s| s.seq == 0 || s.seq > MAX_SEQ)
+                {
                     return Err(field(t, "seen"));
                 }
             }
@@ -596,7 +610,11 @@ impl Body {
 }
 
 fn seen(s: &[Seen]) -> Value<'_> {
-    Value::Array(s.iter().map(|s| Value::Array(vec![Value::Bytes(&s.key.0), Value::Uint(s.seq)])).collect())
+    Value::Array(
+        s.iter()
+            .map(|s| Value::Array(vec![Value::Bytes(&s.key.0), Value::Uint(s.seq), Value::Bytes(&s.id.0)]))
+            .collect(),
+    )
 }
 
 fn ids(v: &[RecordId]) -> Value<'_> {
@@ -669,7 +687,9 @@ impl<'v, 'a> Read<'v, 'a> {
 
 fn read_seen(r: &Read<'_, '_>, rule: Rule) -> Result<Vec<Seen>, Rule> {
     r.need_list(11, rule, |v| match v.as_array() {
-        Some([Value::Bytes(k), Value::Uint(seq)]) => Some(Seen { key: KeyHash::from_slice(k)?, seq: *seq }),
+        Some([Value::Bytes(k), Value::Uint(seq), Value::Bytes(id)]) => {
+            Some(Seen { key: KeyHash::from_slice(k)?, seq: *seq, id: RecordId::from_slice(id)? })
+        }
         _ => None,
     })
 }
@@ -712,13 +732,17 @@ fn read_settings(r: &Read<'_, '_>) -> Result<Settings, Rule> {
         None => None,
         Some(_) => Some(r.opt_uint(10, DEFAULT_DELAY_MS, f("takeover_delay_ms"))?),
     };
-    let key_level = match r.opt_uint(11, LEVEL_HARDWARE, f("key_level"))? {
-        LEVEL_HARDWARE => 0,
-        n => n,
+    // Absent is the default, which the type keeps as 0; a written 0 is
+    // outside both rows.
+    let key_level = match (r.get(11), r.opt_uint(11, LEVEL_HARDWARE, f("key_level"))?) {
+        (Some(_), 0) => return Err(f("key_level")),
+        (_, LEVEL_HARDWARE) => 0,
+        (_, n) => n,
     };
-    let min_rules = match r.opt_uint(12, 1, f("min_rules"))? {
-        1 => 0,
-        n => n,
+    let min_rules = match (r.get(12), r.opt_uint(12, 1, f("min_rules"))?) {
+        (Some(_), 0) => return Err(f("min_rules")),
+        (_, 1) => 0,
+        (_, n) => n,
     };
     let servers = r.opt_list(15, f("servers"), |v| match v.as_array() {
         Some([Value::Uint(kind), Value::Text(endpoint), key]) => {

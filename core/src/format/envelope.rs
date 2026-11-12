@@ -17,6 +17,10 @@ use super::{Rule, sha256, sig};
 pub const FIELD_SIGNER: u16 = 3;
 /// The body's field naming a second signer (room only in 0.6).
 pub const FIELD_SIGNER2: u16 = 8;
+/// The largest second signature: room for a later algorithm's, a
+/// post-quantum one among them. Its length is not fixed at 64, and it is
+/// outside the record's ID, so a record's size is counted from its body.
+pub const MAX_SIG2: usize = 4096;
 
 /// An envelope read and checked for its form: the profile on the envelope
 /// and the body, its shape, and the body a map. The signature is checked by
@@ -43,9 +47,10 @@ impl<'a> Envelope<'a> {
     /// of section 13 are on the body; the envelope adds a few bytes and the
     /// signatures).
     pub fn parse_limited(b: &'a [u8], max_body: usize) -> Result<Self, Rule> {
-        // A body of max bytes takes at most a 9-byte head; the signatures
-        // are 64 bytes each with their heads; the array head is one byte.
-        if b.len() > max_body.saturating_add(1 + 9 + 2 * 66) {
+        // A body of max bytes takes at most a 9-byte head; the signature is
+        // 64 bytes with its head, a second one at most MAX_SIG2 with its
+        // 3-byte head; the array head is one byte.
+        if b.len() > max_body.saturating_add(1 + 9 + 66 + 3 + MAX_SIG2) {
             return Err(Rule::ENV_SIZE);
         }
         let e = Self::parse(b)?;
@@ -69,6 +74,9 @@ impl<'a> Envelope<'a> {
         }
         if map.get(FIELD_SIGNER2).is_some() != sig2.is_some() {
             return Err(Rule::ENV_SHAPE);
+        }
+        if sig2.is_some_and(|s| s.len() > MAX_SIG2) {
+            return Err(Rule::ENV_SIG2);
         }
         Ok(Envelope { body, sig, sig2, map })
     }
