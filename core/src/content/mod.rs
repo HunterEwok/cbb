@@ -21,6 +21,8 @@ use crate::format::cbor::{self, Value};
 use crate::format::copy::{read_content, write_content};
 use crate::media;
 
+mod nfc;
+
 /// Text.
 pub const TYPE_TEXT: u64 = 1;
 /// Clipboard media: images, formatted text.
@@ -239,19 +241,40 @@ fn bidi(c: char) -> bool {
     matches!(c, '\u{61c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
 }
 
-/// Whether a character only joins the one before it in a decomposed form
-/// (NFD): combining marks, Hangul jamo and the kana voicing marks. A name
-/// holding one is not in NFC, or may be written differently by another
-/// system; a sender writes names in NFC.
-fn joining(c: char) -> bool {
-    matches!(c,
-        '\u{300}'..='\u{36f}'
-        | '\u{1100}'..='\u{11ff}'
-        | '\u{1ab0}'..='\u{1aff}'
-        | '\u{1dc0}'..='\u{1dff}'
-        | '\u{20d0}'..='\u{20ff}'
-        | '\u{3099}'..='\u{309a}'
-        | '\u{fe20}'..='\u{fe2f}')
+/// Whether NFC would leave a path as it is: no code point NFC changes
+/// alone (NFC_Quick_Check No), and none that composes with the one before
+/// it. A sender writes names in NFC; marks with nothing to compose with
+/// (Hindi vowel signs, Arabic harakat, Hebrew niqqud) stay.
+fn nfc(path: &str) -> bool {
+    use core::cmp::Ordering;
+    let changed = |c: u32| {
+        nfc::NO
+            .binary_search_by(|(lo, hi)| {
+                if *hi < c {
+                    Ordering::Less
+                } else if *lo > c {
+                    Ordering::Greater
+                } else {
+                    Ordering::Equal
+                }
+            })
+            .is_ok()
+    };
+    let composes = |a: u32, b: u32| {
+        let lv = (0x1100..=0x1112).contains(&a) && (0x1161..=0x1175).contains(&b);
+        let lvt = (0xac00..=0xd7a3).contains(&a)
+            && a.wrapping_sub(0xac00).is_multiple_of(28)
+            && (0x11a8..=0x11c2).contains(&b);
+        lv || lvt || nfc::PAIRS.binary_search(&(a, b)).is_ok()
+    };
+    let mut prev = None;
+    for c in path.chars().map(u32::from) {
+        if changed(c) || prev.is_some_and(|p| composes(p, c)) {
+            return false;
+        }
+        prev = Some(c);
+    }
+    true
 }
 
 /// A path as systems that ignore case compare it: each character in lower
@@ -263,12 +286,12 @@ fn fold(path: &str) -> String {
 /// The rules of 0.6 on the names of files, over today's: no device name of
 /// Windows (`media::device`: CON, PRN, AUX, NUL, CONIN$, CONOUT$, COM and
 /// LPT with a digit or a superscript, with or without an extension), no
-/// bidirectional control, no character of a decomposed form, and no two
+/// bidirectional control, nothing NFC would change, and no two
 /// paths that are one when case is ignored, nor a path inside a file so.
 fn names_ok(m: &media::Manifest) -> bool {
     let mut seen = alloc::collections::BTreeMap::new();
     for p in &m.parts {
-        if p.path.split('/').any(media::device) || p.path.chars().any(|c| bidi(c) || joining(c)) {
+        if p.path.split('/').any(media::device) || p.path.chars().any(bidi) || !nfc(&p.path) {
             return false;
         }
         if seen.insert(fold(&p.path), p.dir).is_some() {

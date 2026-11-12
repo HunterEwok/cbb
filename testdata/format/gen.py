@@ -15,6 +15,7 @@ import hmac
 import json
 import os
 import sys
+import unicodedata
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -2043,10 +2044,65 @@ def _bidi(c):
     return o in (0x61C, 0x200E, 0x200F) or 0x202A <= o <= 0x202E or 0x2066 <= o <= 0x2069
 
 
-def _joining(c):
-    o = ord(c)
-    return any(a <= o <= z for a, z in ((0x300, 0x36F), (0x1100, 0x11FF), (0x1AB0, 0x1AFF), (0x1DC0, 0x1DFF),
-                                        (0x20D0, 0x20FF), (0x3099, 0x309A), (0xFE20, 0xFE2F)))
+def _nfc_ok(path):
+    """No character NFC would change: none whose NFC_Quick_Check is No,
+    and none that composes with the character before it."""
+    prev = ""
+    for c in path:
+        if unicodedata.normalize("NFC", c) != c:
+            return False
+        if prev and len(unicodedata.normalize("NFC", prev + c)) == 1:
+            return False
+        prev = c
+    return True
+
+
+def nfc_tables():
+    """The tables of the NFC check, from this Python's Unicode data: the
+    ranges of code points NFC changes alone (NFC_Quick_Check No), and the
+    pairs that compose to one code point (Hangul aside, which composes by
+    rule)."""
+    no = []
+    for c in range(0x110000):
+        if 0xD800 <= c <= 0xDFFF or unicodedata.normalize("NFC", chr(c)) == chr(c):
+            continue
+        if no and no[-1][1] == c - 1:
+            no[-1][1] = c
+        else:
+            no.append([c, c])
+    pairs = []
+    for c in range(0x110000):
+        if 0xD800 <= c <= 0xDFFF or 0xAC00 <= c <= 0xD7A3:
+            continue
+        d = unicodedata.decomposition(chr(c))
+        if not d or d.startswith("<"):
+            continue
+        p = [int(x, 16) for x in d.split()]
+        if len(p) == 2 and unicodedata.normalize("NFC", chr(c)) == chr(c):
+            pairs.append((p[0], p[1]))
+    return no, sorted(pairs)
+
+
+NFC_HEAD = ("Written by testdata/format/gen.py from Unicode %s: the code points NFC changes\n"
+            "alone (NFC_Quick_Check No), and the pairs that compose to one code point\n"
+            "(Hangul composes by rule). Do not edit.")
+
+
+def write_nfc(outdir):
+    no, pairs = nfc_tables()
+    head = NFC_HEAD % unicodedata.unidata_version
+    lic = "SPDX-License-Identifier: AGPL-3.0-only\nCopyright (C) 2026 HunterEwok\n"
+    rows = lambda items, f, per: "\n".join("    " + " ".join(f(x) for x in items[i:i + per]) for i in range(0, len(items), per))
+    rs = ("".join("// " + l + "\n" for l in lic.splitlines()) + "\n" + "".join("//! " + l + "\n" for l in head.splitlines())
+          + "\n#[rustfmt::skip]\npub(crate) static NO: &[(u32, u32)] = &[\n" + rows(no, lambda r: "(0x%X, 0x%X)," % tuple(r), 6) + "\n];\n"
+          + "\n#[rustfmt::skip]\npub(crate) static PAIRS: &[(u32, u32)] = &[\n" + rows(pairs, lambda r: "(0x%X, 0x%X)," % r, 6) + "\n];\n")
+    go = ("".join("// " + l + "\n" for l in lic.splitlines()) + "\n" + "".join("// " + l + "\n" for l in head.splitlines())
+          + "\npackage main\n\nvar nfcNo = [][2]rune{\n" + rows(no, lambda r: "{0x%X, 0x%X}," % tuple(r), 6).replace("    ", "\t") + "\n}\n"
+          + "\nvar nfcPairs = [][2]rune{\n" + rows(pairs, lambda r: "{0x%X, 0x%X}," % r, 6).replace("    ", "\t") + "\n}\n")
+    with open(os.path.join(outdir, "..", "..", "core", "src", "content", "nfc.rs"), "w") as f:
+        f.write(rs)
+    with open(os.path.join(outdir, "check", "nfc.go"), "w") as f:
+        f.write(go)
 
 
 def names_ok(m):
@@ -2056,7 +2112,7 @@ def names_ok(m):
     kind = {}
     for p in m[2]:
         path = p[2]
-        if any(_device(n) for n in path.split("/")) or any(_bidi(c) or _joining(c) for c in path):
+        if any(_device(n) for n in path.split("/")) or any(_bidi(c) for c in path) or not _nfc_ok(path):
             return False
         key = "".join((c.lower() or c)[0] for c in path)
         if key in kind:
@@ -2381,13 +2437,18 @@ def wave4_vectors():
         ("files with names one but for case", {0: 3, 6: {1: 10, 2: [{2: "Notes.txt", 4: 5, 5: sha(b"a")}, {2: "notes.TXT", 4: 5, 5: sha(b"b")}]}}),
         ("files with names one but for case beyond ASCII", {0: 3, 6: {1: 10, 2: [{2: "\u00c9T\u00c9", 4: 5, 5: sha(b"a")}, {2: "\u00e9t\u00e9", 4: 5, 5: sha(b"b")}]}}),
         ("files with a file inside a file but for case", {0: 3, 6: {1: 10, 2: [{2: "Read", 4: 5, 5: sha(b"a")}, {2: "read/me", 4: 5, 5: sha(b"b")}]}}),
-        ("files with a name not in NFC", {0: 3, 6: {1: 5, 2: [{2: "cafe\u0301.txt", 4: 5, 5: sha(b"a")}]}}),
-        ("files with a name of Hangul jamo", {0: 3, 6: {1: 5, 2: [{2: "\u1112\u1161\u11ab", 4: 5, 5: sha(b"a")}]}}),
+        ("files with an e and a combining acute", {0: 3, 6: {1: 5, 2: [{2: "cafe\u0301.txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with a decomposed Hangul syllable", {0: 3, 6: {1: 5, 2: [{2: "\u1112\u1161\u11ab", 4: 5, 5: sha(b"a")}]}}),
         ("files with a name of a kana and its voicing mark", {0: 3, 6: {1: 5, 2: [{2: "\u304b\u3099", 4: 5, 5: sha(b"a")}]}}),
         ("files with a name that reads backwards", {0: 3, 6: {1: 5, 2: [{2: "photo\u202egpj.exe", 4: 5, 5: sha(b"a")}]}}),
         ("files with an isolate in a name", {0: 3, 6: {1: 5, 2: [{2: "a\u2067b", 4: 5, 5: sha(b"a")}]}}),
         ("files with a right-to-left mark in a name", {0: 3, 6: {1: 5, 2: [{2: "a\u200fb", 4: 5, 5: sha(b"a")}]}}),
         ("files with names in NFC and in other scripts", {0: 3, 6: {1: 15, 2: [{2: "caf\u00e9.txt", 4: 5, 5: sha(b"a")}, {2: "\ud55c\uae00", 4: 5, 5: sha(b"b")}, {2: "\u05e9\u05dc\u05d5\u05dd.txt", 4: 5, 5: sha(b"c")}]}}),
+        ("files with a Hindi name", {0: 3, 6: {1: 5, 2: [{2: "\u0939\u093f\u0928\u094d\u0926\u0940.txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with an Arabic name with harakat", {0: 3, 6: {1: 5, 2: [{2: "\u0643\u064e\u062a\u064e\u0628\u064e.txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with a Hebrew name with niqqud", {0: 3, 6: {1: 5, 2: [{2: "\u05e9\u05b8\u05c1\u05dc\u05d5\u05b9\u05dd.txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with a combining mark nothing composes with", {0: 3, 6: {1: 5, 2: [{2: "q\u0301.txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with a precomposed character NFC replaces", {0: 3, 6: {1: 5, 2: [{2: "\u212b.txt", 4: 5, 5: sha(b"a")}]}}),
         ("files named like a device but longer", {0: 3, 6: {1: 10, 2: [{2: "COM10", 4: 5, 5: sha(b"a")}, {2: "console.log", 4: 5, 5: sha(b"b")}]}}),
         ("files of more than 1 GiB", {0: 3, 6: {1: (1 << 30) + 1, 2: [{2: "big", 4: (1 << 30) + 1, 5: sha(b"a")}]}}),
     ]
@@ -2541,6 +2602,7 @@ def wave4_vectors():
 def main():
     outdir = sys.argv[1]
     os.makedirs(outdir, exist_ok=True)
+    write_nfc(outdir)
     rt, rr = record_vectors()
     st, sr = statement_vectors()
     ct, cr = command_vectors()

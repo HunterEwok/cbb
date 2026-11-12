@@ -120,7 +120,18 @@ fn rows_and_rows_between_fields() {
         let m = media::Manifest { size: parts.len() as i64, parts };
         Content { kind: TYPE_FILES, manifest: Some(m), ..Content::default() }.check()
     };
-    for ok in [&["a.txt", "b.txt"][..], &["caf\u{e9}.txt"], &["COM10.txt"], &["CONSOLE"], &["\u{d55c}.txt"]] {
+    for ok in [
+        &["a.txt", "b.txt"][..],
+        &["caf\u{e9}.txt"],
+        &["COM10.txt"],
+        &["CONSOLE"],
+        &["\u{d55c}.txt"],
+        &["\u{939}\u{93f}\u{928}\u{94d}\u{926}\u{940}"],
+        &["\u{643}\u{64e}\u{62a}\u{64e}"],
+        &["\u{5e9}\u{5b8}\u{5c1}\u{5dc}"],
+        &["q\u{301}"],
+        &["\u{1100}\u{1100}"],
+    ] {
         assert_eq!(named(ok), Ok(()), "{ok:?}");
     }
     for bad in [
@@ -138,6 +149,8 @@ fn rows_and_rows_between_fields() {
         &["A.txt", "a.txt"],
         &["\u{c9}t\u{e9}.txt", "\u{e9}t\u{e9}.txt"],
         &["cafe\u{301}.txt"],
+        &["\u{212b}"],
+        &["\u{ac00}\u{11a8}"],
         &["\u{1112}\u{1161}\u{11ab}.txt"],
         &["\u{304b}\u{3099}.txt"],
         &["a\u{202e}txt.exe"],

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"crypto/elliptic"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -376,21 +377,40 @@ func bidiRune(r rune) bool {
 	return r == 0x61c || r == 0x200e || r == 0x200f || (r >= 0x202a && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069)
 }
 
-// joiningRune only joins the one before it in a decomposed form: combining
-// marks, Hangul jamo, the kana voicing marks.
-func joiningRune(r rune) bool {
-	for _, x := range [][2]rune{{0x300, 0x36f}, {0x1100, 0x11ff}, {0x1ab0, 0x1aff}, {0x1dc0, 0x1dff},
-		{0x20d0, 0x20ff}, {0x3099, 0x309a}, {0xfe20, 0xfe2f}} {
-		if r >= x[0] && r <= x[1] {
+// nfcKeeps is true when NFC leaves path as it is: no code point NFC
+// changes alone (NFC_Quick_Check No, nfcNo), and none that composes with
+// the one before it (nfcPairs, Hangul by rule).
+func nfcKeeps(path string) bool {
+	changed := func(c rune) bool {
+		i := sort.Search(len(nfcNo), func(i int) bool { return nfcNo[i][1] >= c })
+		return i < len(nfcNo) && nfcNo[i][0] <= c
+	}
+	composes := func(a, b rune) bool {
+		if a >= 0x1100 && a <= 0x1112 && b >= 0x1161 && b <= 0x1175 {
 			return true
 		}
+		if a >= 0xac00 && a <= 0xd7a3 && (a-0xac00)%28 == 0 && b >= 0x11a8 && b <= 0x11c2 {
+			return true
+		}
+		i := sort.Search(len(nfcPairs), func(i int) bool {
+			p := nfcPairs[i]
+			return p[0] > a || (p[0] == a && p[1] >= b)
+		})
+		return i < len(nfcPairs) && nfcPairs[i] == [2]rune{a, b}
 	}
-	return false
+	prev := rune(-1)
+	for _, c := range path {
+		if changed(c) || (prev >= 0 && composes(prev, c)) {
+			return false
+		}
+		prev = c
+	}
+	return true
 }
 
 // namesOK is 0.6's rules on the names of files over today's: no device
-// name of Windows in any name, no bidirectional control, no character of
-// a decomposed form, and no two paths one when each character is lowered,
+// name of Windows in any name, no bidirectional control, nothing NFC
+// would change, and no two paths one when each character is lowered,
 // nor a path inside a file so.
 func (m *manifest) namesOK() bool {
 	kind := map[string]bool{}
@@ -400,9 +420,12 @@ func (m *manifest) namesOK() bool {
 				return false
 			}
 		}
+		if !nfcKeeps(p.path) {
+			return false
+		}
 		var b strings.Builder
 		for _, r := range p.path {
-			if bidiRune(r) || joiningRune(r) {
+			if bidiRune(r) {
 				return false
 			}
 			b.WriteRune(unicode.ToLower(r))
