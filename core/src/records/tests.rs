@@ -2328,3 +2328,40 @@ fn an_admin_key_first_named_by_a_claim_gets_its_room() {
     let (s1, s2) = (m1.state(&BTreeMap::new()), m2.state(&BTreeMap::new()));
     assert!(s1.revoked.contains(&w.hash) && s2.revoked.contains(&w.hash));
 }
+
+/// Two records at one seq stop the secrets only for a live admin of the
+/// epoch: not for a removed admin, nor for a key that only a void claim
+/// names.
+#[test]
+fn only_a_live_admin_s_two_histories_stop_the_secrets() {
+    let twins = |g: &G, by: &K| -> Vec<Record> {
+        (0..2)
+            .map(|i| Record::sign(Body { seq: 1, prev: None, ..g.body(by, Kind::Copies { incoming_ms: MIN_INCOMING_MS + i }) }, by).unwrap())
+            .collect()
+    };
+    let (pw, w) = (k("watch"), k("admin w"));
+    let watch = POWER_REMOVE | POWER_FREEZE;
+    let mut g = G::new();
+    g.admin(&pw, &w, watch);
+    let seen = g.seen();
+    g.root_rec(Kind::Revoke(removal(&[w.hash, pw.hash], seen)));
+    let two = twins(&g, &w);
+    g.recs.extend(two);
+    let s = g.state();
+    assert!(s.revoked.contains(&w.hash));
+    assert_eq!(s.stop, Stop::None);
+    let mut g = G::new();
+    g.admin(&pw, &w, watch);
+    let x = k("nobody");
+    let seen = g.seen();
+    g.rec(&w, Kind::Claim { root: x.key.clone(), seen });
+    let two = twins(&g, &x);
+    g.recs.extend(two);
+    assert_eq!(g.state().stop, Stop::None);
+    // A live admin's two histories still do.
+    let mut g = G::new();
+    g.admin(&pw, &w, watch);
+    let two = twins(&g, &w);
+    g.recs.extend(two);
+    assert_eq!(g.state().stop, Stop::Secrets);
+}

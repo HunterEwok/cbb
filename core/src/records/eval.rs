@@ -1687,6 +1687,11 @@ impl<'e, 'a> Epoch<'e, 'a> {
         }
         let forked: Vec<(KeyHash, u64)> = self.forked.iter().map(|(k, v)| (*k, *v)).collect();
         for (signer, seq) in forked {
+            // Only a root on the path or a live admin of this epoch: the
+            // two histories of another key decide nothing.
+            if !self.on_path.contains_key(&signer) && !self.live_admin(&signer) {
+                continue;
+            }
             let records =
                 self.of(&signer).iter().filter(|&&i| self.r(i).b().seq == seq).map(|&i| self.r(i).id).collect();
             self.conflicts.push(Conflict { kind: ConflictKind::TwoHistories, records, signers: vec![signer] });
@@ -1694,6 +1699,11 @@ impl<'e, 'a> Epoch<'e, 'a> {
                 self.stop_full = true;
             }
         }
+    }
+
+    /// Reports whether k is an admin key of this epoch that is not removed.
+    fn live_admin(&self, k: &KeyHash) -> bool {
+        self.admins.contains_key(k) && !self.revoked.contains(k)
     }
 
     /// The admin removals and freezes that count and name the admin key k
@@ -2080,7 +2090,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
         let mut s = State { roots: self.path.clone(), ..State::default() };
         s.named = self.e.devices.keys().copied().collect();
         let id_conflicts = self.id_conflicts();
-        let forked_admin = self.forked.keys().any(|k| !self.on_path.contains_key(k));
+        let forked_admin = self.forked.keys().any(|k| !self.on_path.contains_key(k) && self.live_admin(k));
         for (id, rs) in &self.e.devices {
             if let Some(cs) = id_conflicts.get(id) {
                 let mut c = Conflict { kind: ConflictKind::Ids, records: Vec::new(), signers: Vec::new() };
