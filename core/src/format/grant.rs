@@ -164,9 +164,27 @@ impl Granted<'_> {
 /// The admin key of the root's record in field 3, if it makes that key an
 /// admin with `admit`: a `device` record (type 1) the root signed, with its
 /// `admin` Key (20) and the admit bit in its `powers` (21).
-fn admin_key(record: &Envelope<'_>, root: &[u8]) -> Result<[u8; 65], Rule> {
+fn admin_key(record: &Envelope<'_>, root: &[u8], group: &GroupId) -> Result<[u8; 65], Rule> {
     record.verify(root, sig::LABEL_RECORD).map_err(|_| RULE_ADMIN)?;
     let m = &record.map;
+    // Read as a record (section 4.1): a device record of this group with
+    // the fields of 0.6 only, which a reader would apply, not hold.
+    let fields = m.as_map().ok_or(RULE_ADMIN)?;
+    if record.sig2.is_some() || fields.iter().any(|(k, _)| *k < 256 && !ADMIN_RECORD_FIELDS.contains(k)) {
+        return Err(RULE_ADMIN);
+    }
+    let seq_ok = m.get(4).and_then(Value::as_uint).is_some_and(|n| (1..1 << 31).contains(&n));
+    let prev_ok = match m.get(5) {
+        None => m.get(4).and_then(Value::as_uint) == Some(1),
+        Some(p) => p.as_bytes().is_some_and(|b| b.len() == 32),
+    };
+    let in_group = m.get(2).and_then(Value::as_bytes) == Some(group.0.as_slice());
+    let named = m.get(11).and_then(Value::as_text).is_some_and(super::name_ok);
+    let role_ok = m.get(12).and_then(Value::as_uint).is_some_and(|r| (1..=4).contains(&r));
+    let member = m.get(10).map(Key::from_value).transpose().map_err(|_| RULE_ADMIN)?.ok_or(RULE_ADMIN)?;
+    if !(seq_ok && prev_ok && in_group && named && role_ok && member.alg == Alg::Es256) || member.check().is_err() {
+        return Err(RULE_ADMIN);
+    }
     let root_hash = Key::new(Alg::Es256, root).hash();
     let by_root = m.get(3).and_then(Value::as_bytes).and_then(KeyHash::from_slice) == Some(root_hash);
     let device = m.get(1).and_then(Value::as_uint) == Some(1);
@@ -177,6 +195,11 @@ fn admin_key(record: &Envelope<'_>, root: &[u8]) -> Result<[u8; 65], Rule> {
     }
     key.public.try_into().map_err(|_| RULE_ADMIN)
 }
+
+/// The fields below 256 a device record of 0.6 may carry (sections 3.2
+/// and 4.1): the common ones without `expires_ms` and `signer2`, and the
+/// device's own without `accepts` (15, gone).
+const ADMIN_RECORD_FIELDS: [u16; 20] = [1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24];
 
 /// The commanders of a grant body: at most eight ES256 Keys, sorted by key
 /// hash, each once.
@@ -278,7 +301,7 @@ pub fn read<'a>(
         match kept {
             None => {
                 let record = Envelope::from_value(msg.get(FIELD_ADMIN).ok_or(RULE_ADMIN)?)?;
-                let key = admin_key(&record, root)?;
+                let key = admin_key(&record, root, group)?;
                 if Key::new(Alg::Es256, &key).hash() != signer {
                     return Err(RULE_ADMIN);
                 }
@@ -315,9 +338,8 @@ pub fn read<'a>(
     };
     let readers = list(FIELD_READERS, RULE_READERS)?;
     let reader_ok = |r: &Value<'_>| match r.as_array() {
-        Some([Value::Bytes(id), k]) => {
-            id.len() == 16 && Key::from_value(k).is_ok_and(|k| k.alg == Alg::Es256 && k.check().is_ok())
-        }
+        Some([Value::Bytes(id), k]) => Key::from_value(k)
+            .is_ok_and(|k| k.alg == Alg::Es256 && k.check().is_ok() && k.device_id().0.as_slice() == *id),
         _ => false,
     };
     if readers.len() > MAX_READERS || !is_set(readers) || !readers.iter().all(reader_ok) {

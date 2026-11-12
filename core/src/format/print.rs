@@ -72,7 +72,7 @@ fn json_string(s: &mut String, t: &str) {
             '\t' => s.push_str("\\t"),
             '\u{8}' => s.push_str("\\b"),
             '\u{c}' => s.push_str("\\f"),
-            c if u32::from(c) < 0x20 => s.push_str(&format!("\\u{:04x}", u32::from(c))),
+            c if super::is_hidden(c) => s.push_str(&format!("\\u{:04x}", u32::from(c))),
             c => s.push(c),
         }
     }

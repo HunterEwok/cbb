@@ -174,6 +174,32 @@ fn credentials() {
 }
 
 #[test]
+fn names_refuse_what_a_list_cannot_show() {
+    let r = load("records.json");
+    let mut refused = 0;
+    for t in r["refuse"].as_array().unwrap() {
+        if s(t, "rule") != "records/device/name" {
+            continue;
+        }
+        let b = unhex(s(t, "envelope"));
+        let e = Envelope::parse(&b).unwrap();
+        assert!(!super::name_ok(e.map.get(11).and_then(Value::as_text).unwrap_or("")), "{}", s(t, "name"));
+        refused += 1;
+    }
+    assert_eq!(refused, 7);
+    for t in r["take"].as_array().unwrap() {
+        let b = unhex(s(t, "envelope"));
+        let e = Envelope::parse(&b).unwrap();
+        if let Some(n) = e.map.get(11).and_then(Value::as_text).filter(|_| e.map.get(1) == Some(&Value::Uint(1))) {
+            assert!(super::name_ok(n), "{}", s(t, "name"));
+        }
+    }
+    let shown = print::diag(&Value::Text("a\u{9b}b\u{2028}c\u{202e}d\u{2069}e\u{7f}"));
+    assert_eq!(shown, "\"a\\u009bb\\u2028c\\u202ed\\u2069e\\u007f\"");
+    assert!(super::name_ok("Laptop \u{1F4BB}"));
+}
+
+#[test]
 fn keys_of_the_wrong_size_or_off_the_curve() {
     let r = load("records.json");
     let st = load("statements.json");

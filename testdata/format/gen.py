@@ -491,6 +491,12 @@ def record_vectors():
     m = dict(lap_m)
     m[11] = "Lap\ntop"
     bad_body("control character in a name", "records/device/name", m)
+    for what, ch in [("a C1 control", "\u009b"), ("a line separator", "\u2028"),
+                     ("a paragraph separator", "\u2029"), ("a right-to-left override", "\u202e"),
+                     ("a bidi isolate", "\u2066")]:
+        m = dict(lap_m)
+        m[11] = "Lap" + ch + "top"
+        bad_body("name with " + what, "records/device/name", m)
     m = dict(lap_m)
     m[10] = [ES256, LAPTOP.pub[:33]]
     bad_body("member key of 33 bytes", "keys/es256", m)
@@ -733,6 +739,24 @@ def grant_vectors(admin_record):
         message(enc([gb2, ROOT.sign(LABELS["grant"], gb2), ADMIN.sign(LABELS["grant"], gb2)])), L)
     _, genv, _ = signed({**kettle, 4: 2}, ADMIN)
     bad("admin's first grant without the root's record", "grants/admin", message(genv), K)
+    root_bad("a reader under another device's ID", "grants/readers",
+             {**g, 13: [[TABLET.id16, LAPTOP.key]]})
+    # the root's record in a first grant is read as a record: a device
+    # record of this group with the fields of 0.6 only
+    rec_body = dec(dec(admin_record)[0])
+    _, genv, _ = signed({**kettle, 4: 2}, ADMIN)
+
+    def record_bad(name, fields, raw=None):
+        renv = raw if raw is not None else envelope("record", ROOT, fields)[0]
+        bad(name, "grants/admin", message(genv, renv), K)
+
+    record_bad("admin's record with a critical field from a later version", {**rec_body, 99: 1})
+    record_bad("admin's record of another type", {**rec_body, 1: 7})
+    record_bad("admin's record of another group", {**rec_body, 2: ROOT2.id16})
+    record_bad("admin's record without a name", {k: v for k, v in rec_body.items() if k != 11})
+    rb2 = enc({**rec_body, 8: ADMIN.hash})
+    record_bad("admin's record naming a second signer", None,
+               enc([rb2, ROOT.sign(LABELS["record"], rb2), ADMIN.sign(LABELS["record"], rb2)]))
     _, genv, _ = signed({**kettle, 4: 2, 18: sha(b"some grant")}, ADMIN)
     bad("admin's first grant naming a grant it replaces", "grants/replaces", message(genv, admin_record), K)
     for name, rule, field, val in [
@@ -973,6 +997,8 @@ def copy_vector():
                 ("origin of 15 bytes", "copy/shape", {**full, 1: enc({**hdr, 2: LAPTOP.id16[:15]})}),
                 ("time [0, 0]", "copy/shape", {**full, 1: enc({**hdr, 3: [0, 0]})}),
                 ("readers that are numbers", "copy/readers", {**full, 1: enc({**hdr, 4: [1, 2, 3]})}),
+                ("an outer field the format does not name", "form/critical", {**full, 7: 1}),
+                ("outer field 200", "form/critical", {**full, 200: b"x"}),
             ]
         ],
         "refuse_readers": [
