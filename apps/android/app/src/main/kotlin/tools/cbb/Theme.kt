@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -146,7 +147,11 @@ fun AppTheme(color: String, appearance: Appearance, content: @Composable () -> U
         }
     }
     CompositionLocalProvider(LocalPalette provides palette) {
-        MaterialTheme(colorScheme = scheme, content = content)
+        // MaterialTheme alone leaves a text without a colour black, which a
+        // Surface would set: every screen's own text colour is the palette's.
+        MaterialTheme(colorScheme = scheme) {
+            CompositionLocalProvider(LocalContentColor provides palette.text, content = content)
+        }
     }
 }
 
