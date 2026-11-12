@@ -537,7 +537,7 @@
     <string name="share_unknown_app">应用</string>
     <string name="signature_n">签名 %1$d</string>
     <string name="signature_of">签名 %1$d/%2$d</string>
-    <string name="source">源代码和许可证（AGPL-3.0）</string>
+    <string name="source">源代码和许可证 (AGPL-3.0)</string>
     <string name="sync">同步</string>
     <string name="sync_off">同步已关闭</string>
     <string name="sync_off_until">同步关闭至 %1$s</string>
