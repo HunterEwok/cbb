@@ -126,7 +126,7 @@ func startHubWith(t *testing.T, f *Forwarder, pin string, clients []tunnel.Peer,
 	if err != nil {
 		t.Fatal(err)
 	}
-	h, err := tunnel.StartHub(tunnel.HubConfig{PrivateKey: key, Addr: addr, Peers: clients, Obfuscation: obf, Logf: t.Logf})
+	h, err := tunnel.StartHub(tunnel.HubConfig{PrivateKey: key, Addr: addr, Peers: clients, Obfuscation: obf, Logf: tlog(t), Verbose: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,6 +142,7 @@ func startHubWith(t *testing.T, f *Forwarder, pin string, clients []tunnel.Peer,
 		}
 		Register(ctx, HubConfig{Link: link, Key: key, Obfuscation: obf, VLESSID: hc.VLESSID, VLESS: hc.VLESS,
 			Cert: func() tls.Certificate { return cert }, Authority: rootAuthority(ca), Send: h.Send, Report: func(r Report) {
+				tlog(t)("report %+v", r)
 				select {
 				case hs.reports <- r:
 				default:
@@ -206,7 +207,7 @@ func roundTrip(t *testing.T, f *Forwarder, hs *hubSide, key tunnel.Key, peer tun
 func roundTripTo(t *testing.T, ep netip.AddrPort, hs *hubSide, key tunnel.Key, peer tunnel.Peer) error {
 	t.Helper()
 	c, err := tunnel.StartClient(tunnel.ClientConfig{PrivateKey: key, PresharedKey: peer.PresharedKey, Addr: peer.Addr,
-		HubPublicKey: hs.key.Public(), HubAddr: hs.addr, Endpoint: ep, Obfuscation: hs.obf, Logf: t.Logf})
+		HubPublicKey: hs.key.Public(), HubAddr: hs.addr, Endpoint: ep, Obfuscation: hs.obf, Logf: tlog(t), Verbose: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +224,9 @@ func roundTripTo(t *testing.T, ep netip.AddrPort, hs *hubSide, key tunnel.Key, p
 	// runner 10 s left room for just one retry.
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	tlog(t)("dialing")
 	conn, err := c.Dial(ctx)
+	tlog(t)("dialed: %v", err)
 	if err != nil {
 		return err
 	}
@@ -244,6 +247,7 @@ func roundTripTo(t *testing.T, ep netip.AddrPort, hs *hubSide, key tunnel.Key, p
 	}
 	buf := make([]byte, 9)
 	conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	tlog(t)("accepted, reading")
 	if _, err := io.ReadFull(conn, buf); err != nil {
 		return err
 	}
@@ -1393,4 +1397,10 @@ func TestHubRegistersAgainWhenNoHelloComes(t *testing.T) {
 // that need VLESS on but send nothing through it.
 func testXHTTP() *XHTTPConfig {
 	return &XHTTPConfig{Host: "example.com", Port: 443, Path: "/test-xhttp-path"}
+}
+
+var tlogStart = time.Now()
+
+func tlog(t *testing.T) func(string, ...any) {
+	return func(f string, a ...any) { t.Logf("%7.3f "+f, append([]any{time.Since(tlogStart).Seconds()}, a...)...) }
 }

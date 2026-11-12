@@ -1,0 +1,67 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 HunterEwok
+
+# An experiment on the macOS runner, never merged: why TestHubOverXHTTP
+# misses its waits there under -race. Runs on a push to its own branch.
+name: experiment
+
+on:
+  push:
+    branches: [claude/project-thread-d0k7v9]
+
+permissions:
+  contents: read
+
+jobs:
+  hubxhttp:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: the machine
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          {
+            sw_vers
+            sysctl hw.ncpu hw.physicalcpu hw.logicalcpu hw.memsize machdep.cpu.brand_string || true
+            sysctl net.inet.udp.recvspace net.inet.udp.maxdgram kern.ipc.maxsockbuf kern.clockrate || true
+            uptime
+            top -l 1 -n 10 -o cpu
+          } 2>&1 | tee "$RUNNER_TEMP/out/machine.txt"
+      - name: build the test binaries
+        run: |
+          go test -c -o "$RUNNER_TEMP/fwd.test" ./internal/forward
+          go test -race -c -o "$RUNNER_TEMP/fwd-race.test" ./internal/forward
+      - name: runs
+        working-directory: internal/forward
+        run: |
+          out=$RUNNER_TEMP/out
+          one() { # name binary env...
+            name=$1; bin=$2; shift 2
+            start=$(date +%s)
+            if env "$@" "$bin" -test.run '^TestHubOverXHTTP$' -test.v -test.count=1 -test.timeout 5m >"$out/$name.log" 2>&1; then r=PASS; else r=FAIL; fi
+            echo "$name $r $(( $(date +%s) - start ))s" | tee -a "$out/summary.txt"
+          }
+          for i in 1 2 3; do one "plain-$i" "$RUNNER_TEMP/fwd.test"; done
+          for i in 1 2 3 4 5 6 7 8; do one "race-$i" "$RUNNER_TEMP/fwd-race.test"; done
+          for p in 1 2 3 4 6; do one "race-procs$p" "$RUNNER_TEMP/fwd-race.test" GOMAXPROCS=$p; done
+          "$RUNNER_TEMP/fwd-race.test" -test.run '^TestHubOverXHTTP$' -test.v -test.count=1 -test.cpuprofile "$out/race.pprof" >"$out/race-profile.log" 2>&1 || true
+          go tool pprof -top -cum "$RUNNER_TEMP/fwd-race.test" "$out/race.pprof" 2>/dev/null | head -60 >"$out/race-profile-cum.txt" || true
+          go tool pprof -top "$RUNNER_TEMP/fwd-race.test" "$out/race.pprof" 2>/dev/null | head -60 >"$out/race-profile-flat.txt" || true
+          go tool pprof -peek 'Sleeper|Waker\).Assert' "$RUNNER_TEMP/fwd-race.test" "$out/race.pprof" 2>/dev/null | head -150 >"$out/race-profile-peek.txt" || true
+          "$RUNNER_TEMP/fwd.test" -test.run '^TestHubOverXHTTP$' -test.count=1 -test.cpuprofile "$out/plain.pprof" >/dev/null 2>&1 || true
+          go tool pprof -top -cum "$RUNNER_TEMP/fwd.test" "$out/plain.pprof" 2>/dev/null | head -40 >"$out/plain-profile-cum.txt" || true
+          cat "$out/summary.txt"
+      - name: the logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: hubxhttp
+          path: ${{ runner.temp }}/out
+          retention-days: 7
