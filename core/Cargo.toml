@@ -33,30 +33,34 @@ fuzzing = []
 benchtime = []
 
 [dependencies]
-aes-gcm = { version = "0.11", default-features = false, features = ["aes"], optional = true }
+aes-gcm = { version = "0.11", default-features = false, features = ["aes", "zeroize"], optional = true }
 base64 = { version = "0.23", default-features = false, features = ["alloc"] }
-chacha20 = { version = "0.10", default-features = false, features = ["rng"] }
+chacha20 = { version = "0.10", default-features = false, features = ["rng", "zeroize"] }
 # copy: a copy and its blob are sealed with ChaCha20-Poly1305.
 # web: RSA verification on crypto-bigint's modular arithmetic.
 crypto-bigint = { version = "0.7.6", default-features = false, features = ["alloc"], optional = true }
-chacha20poly1305 = { version = "0.11", default-features = false, features = ["alloc"] }
+chacha20poly1305 = { version = "0.11", default-features = false, features = ["alloc", "zeroize"] }
 der = { version = "0.8", default-features = false, features = ["alloc", "oid"] }
 getrandom = { version = "0.4", default-features = false }
 hkdf = { version = "0.13", default-features = false }
-hmac = { version = "0.13", default-features = false }
+hmac = { version = "0.13", default-features = false, features = ["zeroize"] }
 # seal: HPKE with X-Wing (ML-KEM-768 and X25519), HKDF-SHA256 and ChaCha20-Poly1305.
 hpke = { version = "0.15.1", default-features = false, features = ["alloc", "mlkem", "x25519", "chacha", "hkdfsha2"] }
 # tls: the ML-KEM half of the hybrid key exchange X25519MLKEM768.
-ml-kem = { version = "0.3.3", default-features = false, optional = true }
+ml-kem = { version = "0.3.3", default-features = false, features = ["zeroize"], optional = true }
 p256 = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "ecdsa", "pkcs8"] }
 p384 = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "ecdsa"], optional = true }
 rustls = { version = "0.23.46", default-features = false, optional = true }
 serde = { version = "1", default-features = false, features = ["alloc", "derive"] }
 serde_json = { version = "1", default-features = false, features = ["alloc"] }
 sha2 = { version = "0.11", default-features = false }
+# Secrets are compared in constant time (subtle) and wiped when dropped
+# (zeroize); both are no_std and already in the tree through RustCrypto.
+subtle = { version = "2.6", default-features = false }
 spin = { version = "0.12", default-features = false, features = ["mutex", "spin_mutex"] }
-x25519-dalek = { version = "3", default-features = false, features = ["static_secrets"] }
+x25519-dalek = { version = "3", default-features = false, features = ["static_secrets", "zeroize"] }
 x509-cert = { version = "0.3", default-features = false, features = ["hazmat"] }
+zeroize = { version = "1.8", default-features = false, features = ["alloc", "serde"] }
 
 [dev-dependencies]
 # Property tests (tests/props.rs): random inputs against the parsers and the

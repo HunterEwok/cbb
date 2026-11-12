@@ -27,6 +27,7 @@ use alloc::vec::Vec;
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use zeroize::Zeroize;
 
 use crate::format::{Alg, Rule, Value, cbor};
 use crate::records::State;
@@ -103,7 +104,7 @@ impl Profile {
 }
 
 /// An invitation.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Invitation {
     /// The one-time ID, which the joiner's Info names (`invite`).
     pub id: [u8; 16],
@@ -111,6 +112,29 @@ pub struct Invitation {
     pub secret: [u8; SECRET],
     pub paths: Vec<Path>,
     pub profile: Profile,
+}
+
+impl Drop for Invitation {
+    fn drop(&mut self) {
+        self.secret.zeroize();
+    }
+}
+
+impl Drop for JoinerCode {
+    fn drop(&mut self) {
+        self.nonce.zeroize();
+    }
+}
+
+impl core::fmt::Debug for Invitation {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Invitation")
+            .field("id", &self.id)
+            .field("secret", &crate::secret::Redacted(self.secret.len()))
+            .field("paths", &self.paths)
+            .field("profile", &self.profile)
+            .finish()
+    }
 }
 
 impl Invitation {
@@ -187,7 +211,7 @@ impl Invitation {
         };
         let id: [u8; 16] = bytes_n(1, 16)?.try_into().map_err(|_| RULE_SHAPE)?;
         let secret: [u8; SECRET] = bytes_n(2, SECRET)?.try_into().map_err(|_| RULE_SHAPE)?;
-        if id == [0; 16] || secret == [0; SECRET] {
+        if id == [0; 16] || crate::secret::ct_eq(&secret, &[0; SECRET]) {
             return Err(RULE_SHAPE);
         }
         let arr = v.get(3).and_then(Value::as_array).ok_or(RULE_PATH)?;
@@ -598,7 +622,7 @@ impl Open {
             self.attempt = None;
             return Err(PairError::Closed);
         };
-        if code_commitment(joiner_nonce) != commitment {
+        if !crate::secret::ct_eq(&code_commitment(joiner_nonce), &commitment) {
             self.attempt = None;
             return Err(PairError::WrongCode);
         }

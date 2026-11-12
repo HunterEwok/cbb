@@ -11,6 +11,7 @@ use alloc::vec::Vec;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use zeroize::Zeroizing;
 
 use super::{Code, Refusal, bad_args, json, refuse};
 use crate::certs::b64;
@@ -93,8 +94,8 @@ fn seal_command(a: SealArgs) -> core::result::Result<Vec<u8>, Refusal> {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct PublicArgs {
-    #[serde(with = "b64")]
-    secret: Vec<u8>,
+    #[serde(with = "b64::secret")]
+    secret: Zeroizing<Vec<u8>>,
 }
 
 /// `seal_public`: the public key for sealed messages of `secret` (32
