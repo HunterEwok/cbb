@@ -1357,3 +1357,41 @@ fn leaving_a_halt_carries_nothing_over() {
     assert_eq!(back.state(), never.state());
     assert!(has(&back.state(), &k("phone 2")));
 }
+
+/// A full set names more IDs than its rooms hold: besides 4096 records in
+/// the rooms it holds the recovery chain and what a waiting root signed,
+/// kept aside. A message that names every ID the set holds (`have`,
+/// `records`) must allow for them.
+#[test]
+fn a_full_set_names_more_ids_than_its_rooms_hold() {
+    let mut g = base();
+    let root = k("root");
+    let admins: Vec<K> = (0..12).map(|i| k(&format!("admin {i}"))).collect();
+    for (i, a) in admins.iter().enumerate() {
+        g.admin(&k(&format!("admin device {i}")), a, POWER_ADMIT | POWER_MANAGE);
+    }
+    for a in &admins {
+        for _ in 0..MAX_ADMIN_RECORDS {
+            g.rec(a, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
+        }
+    }
+    while g.heads[&root.hash].0 < MAX_ROOT_RECORDS as u64 {
+        g.root_rec(Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
+    }
+    let from = g.recs.clone();
+    let mut m = set_of(&g.root.key);
+    m.insert_all(from.iter().cloned());
+    assert_eq!(m.len(), crate::records::MAX_RECORDS);
+    let w = write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
+    m.insert(w.record.clone()).unwrap();
+    let n1 = k("n1");
+    for r in &w.first {
+        assert_eq!(m.insert(r.clone()), Ok(Added::Waiting));
+    }
+    for _ in 0..64 {
+        let r = g.rec(&n1, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
+        assert_eq!(m.insert(r), Ok(Added::Waiting));
+    }
+    let n = m.ids().count();
+    assert!(n > crate::format::cbor::MAX_COUNT, "{n}");
+}
