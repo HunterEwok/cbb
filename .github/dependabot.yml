@@ -83,7 +83,8 @@ updates:
         versions: ["0.8.x"]
       # libc 0.2.190 and 0.2.191 drop SYSPROTO_CONTROL and UTUN_OPT_IFNAME on iOS, which nix
       # (GotaTun's utun) needs, so the phones' Rust library does not build for the iPhone. Only
-      # those versions are skipped; CI's phone core (ios) job tells whether a newer one has them.
+      # those versions are skipped; CI's phone kit (macos-latest) job, which builds the
+      # iPhone's libraries with the latest Rust, tells whether a newer one has them.
       - dependency-name: "libc"
         versions: [">= 0.2.190, <= 0.2.191"]
     groups:

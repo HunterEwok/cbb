@@ -121,8 +121,8 @@ environment secret**.
   (`go run ./tools/tokens -check`), shellcheck on every shell script, the spelling of the
   English text (typos), the tray app's HTML, CSS and JavaScript (Biome), and every file's
   copyright and license (`reuse lint`);
-- **test**: `go test -race` on Linux x86-64, Linux ARM64, macOS and Windows, each with its
-  own files' coverage;
+- **test**: `go test -race` on Linux x86-64, Linux ARM64 and Windows, each with its own
+  files' coverage (macOS's runs in `test and build (macOS), homebrew`);
 - **go coverage**: Go's tests across packages with `-coverpkg`, the desktop clipboards, the
   uinput keyboard, mDNS beside avahi and the e2e built with `-cover`;
 - **coverage**: the coverage of every part that ran, in the run's summary, held to
@@ -139,12 +139,14 @@ environment secret**.
   client under Xvfb, against wl-clipboard and xclip;
 - **packaging**: `systemd-analyze verify` and `security` for the unit, and the desktop
   entry;
-- **build (macOS), homebrew**: the macOS release archives, then the formula written by
-  `packaging/homebrew/formula.sh`, installed with Homebrew on the same machine;
+- **test and build (macOS), homebrew**: `go test -race` on macOS, the macOS release
+  archives, then the formula written by `packaging/homebrew/formula.sh`, installed with
+  Homebrew, one after the other on one machine;
 - **windows installer**: `install.ps1`, the service, the agent and `uninstall.ps1` on
   windows-latest;
 - **phone kit**: CBBKit's tests on Linux and macOS, and its cross tests with the Go
   code (pairing over plain TCP on Linux; pairing and a member connection over TLS on macOS);
+  the macOS job also builds the iPhone's libraries with the latest Rust (the phone core);
 - **iPhone app**: the Xcode project from XcodeGen, built and tested without signing on an
   iPhone and an iPad simulator, one job for each, at the same time;
 - **Android kit**: the Kotlin kit's tests and its cross tests with the Go code and the
@@ -403,7 +405,7 @@ the one tap for all of the owner's formulae; CBB's is `Formula/cbb.rb`, and user
 pre-release) is published, `.github/workflows/published.yml` checks its signed files and writes the formula with
 `packaging/homebrew/formula.sh` from the release's `SHA256SUMS` and pushes it to the tap's
 `main`. The formula installs the release archives as they are, so it needs no Apple signing,
-and CI's `build (macOS), homebrew` job installs one with it on macOS on every pull request.
+and CI's `test and build (macOS), homebrew` job installs one with it on macOS on every pull request.
 
 Setting it up, once:
 

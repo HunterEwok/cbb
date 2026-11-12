@@ -202,7 +202,8 @@ The group rules of records `v:2` (docs/records-v2.md) reach the phones from the 
 functions of `ffi/include/cbb_core.h`, which the Swift kit links as its module `CCbbCore`
 and the Kotlin kit calls through JNA (`Core.swift`, `Core.kt`). Its `bind.sh` builds the
 libraries; the Android app's `bindCore` task and the Kotlin kit's tests build them
-themselves, and the `phone core` jobs build them with the latest Rust:
+themselves, and CI builds them with the latest Rust (`phone core (android)`, and the
+`phone kit (macos-latest)` job for the iPhone's):
 
 ```sh
 cargo test -p cbb-ffi

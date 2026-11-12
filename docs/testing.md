@@ -130,13 +130,14 @@ and the Kotlin kit's tests (`Android kit`) beside the Android apps' build (`Andr
 
 The account runs at most 5 macOS jobs at a time, so the macOS jobs do no more than they must:
 the iPhone app's jobs build only the simulator's Rust library for the runner's processor
-(`ffi/bind.sh ios-sim`; `phone core (ios)` builds all three), they do not run for a change
-that touches only Go (`iosapp` in `.github/ci-changes.sh`; the kit's interop tests still
-do), and Homebrew's formula is tested in the job that builds the macOS archives
-(`build (macOS), homebrew`).
+(`ffi/bind.sh ios-sim`; the phone kit's macOS job builds all three with the latest Rust),
+they do not run for a change that touches only Go (`iosapp` in `.github/ci-changes.sh`; the
+kit's interop tests still do), and jobs shorter than the iPhone app's share a machine: macOS's
+`go test`, the macOS archives and Homebrew's formula (`test and build (macOS), homebrew`),
+and the phone kit with the iPhone's libraries.
 
 The jobs that build the most Rust on the way to their tests (the iPhone app, the phone kit
-on macOS, the phone core and the service tests' build) keep their build in the Actions cache
+on macOS, the Android phone core and the service tests' build) keep their build in the Actions cache
 (`.github/actions/rust-cache`). A pull request saves its own and its later runs take it, so
 they compile only the crates it changed; another pull request never reads it, and the release
 and F-Droid builds build from nothing.

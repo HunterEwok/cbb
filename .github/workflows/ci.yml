@@ -117,7 +117,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+        # macOS's go test runs in the job build (macOS): macOS runners are few.
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     env:
@@ -344,16 +345,18 @@ jobs:
           if-no-files-found: error
           retention-days: 1
   buildmac:
-    name: build (macOS), homebrew
+    name: test and build (macOS), homebrew
     needs: changes
-    if: needs.changes.outputs.core == 'true'
-    # The Mac's pasteboard agent needs cgo, so the macOS targets are built on macOS.
-    # Homebrew's formula and the installers are tested on the same machine
-    # after the build: macOS runners are few (docs/testing.md, "Running tests
-    # in parallel").
+    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.tools == 'true'
+    # go test on macOS as the test job runs it on the other systems, then the
+    # macOS targets, built on macOS since the Mac's pasteboard agent needs cgo,
+    # then Homebrew's formula and the installers, one after the other on one
+    # machine: macOS runners are few (docs/testing.md, "Running tests in
+    # parallel").
     runs-on: macos-latest
-    timeout-minutes: 40
+    timeout-minutes: 50
     env:
+      CORE: ${{ needs.changes.outputs.core }}
       HOMEBREW_NO_AUTO_UPDATE: "1"
       HOMEBREW_NO_ANALYTICS: "1"
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
@@ -365,17 +368,29 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false # nothing to download; leaves the shared cache key to the check job
+      - name: go test
+        # The service's tests take close to go test's default 10 minutes
+        # under -race on the macOS runner, so the package has 20.
+        run: go test -race -timeout 20m -coverprofile=cover-go-macos-latest.out ./...
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-go-macos-latest
+          path: cover-go-macos-latest.out
+          retention-days: 7
       - name: cbb, the Go programs beside it and the release archives, as at a release
+        if: env.CORE == 'true'
         env:
           CGO_ENABLED: "1"
         run: sh .github/build-targets.sh "$RUNNER_TEMP" darwin/arm64/vet darwin/amd64
       - name: the agent's helper has the pasteboard
+        if: env.CORE == 'true'
         # Without cgo the agent would start and fail; the helper must link AppKit.
         run: |
           for a in arm64 amd64; do
             otool -L "$RUNNER_TEMP/darwin-$a/cbb-helper" | grep -q AppKit.framework
           done
       - name: the programs run under the hardened runtime, as a release signs them (ad hoc here)
+        if: env.CORE == 'true'
         run: |
           for a in arm64 amd64; do
             for f in cbb cbb-helper cbb-forward cbb-relay; do
@@ -384,6 +399,7 @@ jobs:
           done
           "$RUNNER_TEMP/darwin-arm64/cbb" version
       - name: the formula installs a release archive
+        if: env.CORE == 'true'
         run: |
           # The archive as the release workflow makes it; the formula wants the
           # other three too, so they are copies of it.
@@ -411,6 +427,7 @@ jobs:
           brew test local/test/cbb
           "$(brew --prefix)/bin/cbb" version | grep -q '^cbb 0.0.1 '
       - name: install.sh --in-place runs a root-owned copy of Homebrew's binary, and uninstall.sh removes it all
+        if: env.CORE == 'true'
         run: |
           opt="$(brew --prefix)/opt/cbb"
           share="$opt/share/cbb/packaging/macos"
@@ -457,6 +474,7 @@ jobs:
           fi
           brew uninstall cbb
       - name: get.sh installs a release archive on a Mac and refuses a changed one
+        if: env.CORE == 'true'
         run: |
           rel="$RUNNER_TEMP/release"
           daemon=tools.cbb
@@ -491,6 +509,7 @@ jobs:
               exit 1
             fi
           done
+
   mips:
     name: test (linux/mips under qemu)
     needs: changes
@@ -1499,27 +1518,32 @@ jobs:
   kit:
     name: phone kit (${{ matrix.os }})
     needs: changes
-    if: needs.changes.outputs.ios == 'true'
+    # The macOS job also builds the phones' libraries with the latest Rust
+    # (phone core), when the Rust changes: macOS runners are few.
+    if: needs.changes.outputs.ios == 'true' || needs.changes.outputs.rust == 'true'
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 35
+    timeout-minutes: 50
+    env:
+      KIT: ${{ needs.changes.outputs.ios }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: the Rust build from this pull request's cache
-        if: runner.os == 'macOS'
+        if: env.KIT == 'true' && runner.os == 'macOS'
         uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
         with:
           name: kit
       - name: the Rust core, which the kit links
+        if: env.KIT == 'true'
         # Built on the runner: the Swift container has no Rust.
         run: sh ffi/bind.sh host "$RUNNER_TEMP/core"
       - name: swift test (in the Swift container on Linux)
-        if: runner.os == 'Linux'
+        if: env.KIT == 'true' && runner.os == 'Linux'
         run: |
           mkdir interop-out
           docker run --rm -v "$PWD:/src" -v "$RUNNER_TEMP/core:/core" -w /src/apps/ios/CBBKit -e CBB_INTEROP_OUT=/src/interop-out swift:6.2-noble sh -euc '
@@ -1527,12 +1551,12 @@ jobs:
             swift build -c release --product cbb-interop --static-swift-stdlib -Xlinker -L/core
             cp "$(swift build -c release --show-bin-path)/cbb-interop" /src/cbb-interop'
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        if: runner.os == 'Linux'
+        if: env.KIT == 'true' && runner.os == 'Linux'
         with:
           go-version-file: go.mod
           cache: false
       - name: the core and Go read what the Swift phone wrote
-        if: runner.os == 'Linux'
+        if: env.KIT == 'true' && runner.os == 'Linux'
         run: |
           # swift test just wrote testdata/interop/swift-member.json, and to
           # interop-out the records it signed, a certificate it renewed and
@@ -1540,7 +1564,7 @@ jobs:
           cargo test --locked -p cbb-core --lib vectors::swift_member_frames
           CBB_INTEROP_OUT="$PWD/interop-out" go test ./internal/group -run 'TestSwiftRecords|TestSwiftRenewal|TestSwiftAdmin|TestSwiftRoot|TestSwiftComputerAdmin|TestSwiftCommand' -v
       - name: swift test
-        if: runner.os == 'macOS'
+        if: env.KIT == 'true' && runner.os == 'macOS'
         working-directory: apps/ios/CBBKit
         run: |
           swift test --enable-code-coverage -Xlinker -L"$RUNNER_TEMP/core"
@@ -1548,12 +1572,12 @@ jobs:
           swift build --product cbb-interop -Xlinker -L"$RUNNER_TEMP/core"
           cp "$(swift build --show-bin-path)/cbb-interop" "$GITHUB_WORKSPACE/cbb-interop"
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        if: runner.os == 'macOS'
+        if: env.KIT == 'true' && runner.os == 'macOS'
         with:
           go-version-file: go.mod
           cache: false
       - name: the Swift phone pairs both ways with the computers' cbb and syncs with it over TLS
-        if: runner.os == 'macOS'
+        if: env.KIT == 'true' && runner.os == 'macOS'
         run: |
           # The computer is the Rust cbb, with cbb-helper beside it.
           cargo build --locked --release -p cbb-member
@@ -1566,17 +1590,26 @@ jobs:
           security set-keychain-settings ci.keychain
           CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_SWIFT_INTEROP_TLS="$PWD/cbb-interop" go test -timeout 5m ./internal/service -run 'TestSwift' -v
       - name: the Rust build into this pull request's cache
-        if: runner.os == 'macOS'
+        if: env.KIT == 'true' && runner.os == 'macOS'
         uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
         with:
           name: kit
           save: "true"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: runner.os == 'macOS'
+        if: env.KIT == 'true' && runner.os == 'macOS'
         with:
           name: coverage-swift-kit
           path: coverage-swift-kit.json
           retention-days: 7
+      - name: the phone core, the iPhone's libraries with the latest Rust
+        # The apps' jobs build them with the Rust the apps pin; this follows
+        # the latest. Last, so the kit's steps keep the runner's Rust.
+        if: needs.changes.outputs.rust == 'true' && runner.os == 'macOS'
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          sh ffi/bind.sh ios "$RUNNER_TEMP/phonecore"
+          find "$RUNNER_TEMP/phonecore" -maxdepth 3 | sort
 
   app:
     name: iPhone app (${{ matrix.device }})
@@ -2999,14 +3032,13 @@ jobs:
     name: phone core (${{ matrix.target }})
     needs: changes
     if: needs.changes.outputs.rust == 'true'
+    # The iPhone's libraries are built in the phone kit's macOS job.
     strategy:
       fail-fast: false
       matrix:
         include:
           - target: android
             os: ubuntu-latest
-          - target: ios
-            os: macos-latest
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     steps:
