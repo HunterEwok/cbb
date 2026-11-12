@@ -727,6 +727,7 @@ def grant_vectors(admin_record):
     bad("guarded grant signed by an admin", "grants/guarded", message(genv, admin_record), L)
     root_bad("lifetime in an ordinary grant", "grants/life",
              {**{k: v for k, v in g.items() if k != 15}, 11: 86400000})
+    root_bad("guarded with the value 2", "grants/guarded-value", {**g, 15: 2})
     root_bad("guarded lifetime 0", "grants/life", {**g, 11: 0})
     root_bad("guarded lifetime over 40 days", "grants/life", {**g, 11: 3456000001})
     root_bad("guarded lifetime as text", "grants/life", {**g, 11: "forever"})
@@ -1016,6 +1017,19 @@ def copy_vector():
             {"name": name, "rule": "copy/readers", "copy": enc({**full, 1: enc({**hdr, 4: rs})}).hex()}
             for name, rs in [("readers out of order", list(reversed(readers))),
                              ("a reader twice", [readers[0], [readers[0][0], 3], readers[2]])]
+        ],
+        "refuse_commit": [
+            {"name": "a copy key that does not match its commit", "rule": "copy/commit",
+             "K": hkdf(K, b"", b"another key").hex()},
+        ],
+        "refuse_contents": [
+            {"name": name, "rule": "copy/content-pad", "content": b.hex()}
+            for name, b in [
+                ("a pad one byte longer than its step", enc({**content, 1: content[1] + b"\x00"})),
+                ("a content short of its step without a pad", enc({0: 1, 5: "a" * 1015})),
+                ("a pad of text", enc({**{k: v for k, v in content.items() if k != 1}, 1: "0" * len(content[1])})),
+                ("a pad of ones", enc({**content, 1: b"\x01" * len(content[1])})),
+            ]
         ],
         "content_plaintext": enc(content).hex(), "content_diag": diag({k: v for k, v in content.items() if k != 1}) + " with pad to 1024",
         "frame": frame({0: 2, 2: full}).hex(),

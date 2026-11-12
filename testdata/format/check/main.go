@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/hkdf"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
@@ -477,6 +478,9 @@ func main() {
 						if typ != 1 || !bytes.Equal(gr, group) || !bytes.Equal(lf, leaf) {
 							return nil, errors.New("grants/shape")
 						}
+						if gv, ok := pre[uint64(15)]; ok && gv != uint64(1) {
+							return nil, errors.New("grants/guarded-value")
+						}
 					}
 				}
 			}
@@ -785,6 +789,50 @@ func main() {
 		again, err := padded(cm, contentStep)
 		if err != nil || !bytes.Equal(again, unhex(c["content_plaintext"])) {
 			fail("copy content: not the one padding (%v)", err)
+		}
+	}
+	// refused: a copy key whose commitment is not the header's, and
+	// contents not padded to their one step
+	var rc struct {
+		Commit []struct {
+			Name string `json:"name"`
+			Rule string `json:"rule"`
+			K    string `json:"K"`
+		} `json:"refuse_commit"`
+		Contents []struct {
+			Name    string `json:"name"`
+			Rule    string `json:"rule"`
+			Content string `json:"content"`
+		} `json:"refuse_contents"`
+	}
+	load(dir, "copy.json", &rc)
+	if len(rc.Commit) == 0 || len(rc.Contents) == 0 {
+		fail("copy: no refused commit or content")
+	}
+	for _, r := range rc.Commit {
+		cv, _ := strict(unhex(c["copy"]))
+		hv, _ := strict(cv.(map[any]any)[uint64(1)].([]byte))
+		have, _ := hv.(map[any]any)[uint64(6)].([]byte)
+		ck := hkdfSHA256(unhex(r.K), nil, []byte("cbb copy commit v2"))
+		if r.Rule != "copy/commit" || bytes.Equal(ck, have) {
+			fail("copy %s: its commit holds", r.Name)
+		}
+		if !bytes.Equal(hkdfSHA256(unhex(c["K"]), nil, []byte("cbb copy commit v2")), have) {
+			fail("copy: the header's commit is not its key's")
+		}
+	}
+	for _, r := range rc.Contents {
+		b := unhex(r.Content)
+		v, err := strict(b)
+		if err != nil {
+			fail("copy content %s: %v", r.Name, err)
+			continue
+		}
+		cm := v.(map[any]any)
+		delete(cm, uint64(1))
+		again, err := padded(cm, contentStep)
+		if r.Rule != "copy/content-pad" || (err == nil && bytes.Equal(again, b)) {
+			fail("copy content %s: its padding holds", r.Name)
 		}
 	}
 	var edges struct {
@@ -1358,4 +1406,12 @@ func keyAlg(k []any) (uint64, bool) {
 	}
 	a, ok := k[0].(uint64)
 	return a, ok
+}
+
+// hkdfSHA256 gives 32 bytes of HKDF-SHA256 (an empty salt is 32 zero
+// bytes, as RFC 5869 says).
+func hkdfSHA256(ikm, salt, info []byte) []byte {
+	k, err := hkdf.Key(sha256.New, ikm, salt, string(info), 32)
+	must(err)
+	return k
 }

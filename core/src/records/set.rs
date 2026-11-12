@@ -128,6 +128,21 @@ impl RecordSet {
     /// the set knows, its fields and its signature, all before it takes a
     /// place; then the set is cut back to its ceilings.
     pub fn insert(&mut self, r: Record) -> Result<Added, Refused> {
+        let id = r.id();
+        let added = self.insert_only(r);
+        if matches!(added, Ok(Added::Stored)) && !self.pending.is_empty() {
+            // A claim the records do not prove yet waits for more.
+            let _ = self.read_pending(false);
+            if !self.records.contains_key(&id) {
+                return Ok(Added::NoRoom);
+            }
+        }
+        added
+    }
+
+    /// insert without reading the waiting counted claims, which insert_all
+    /// reads once a round.
+    fn insert_only(&mut self, r: Record) -> Result<Added, Refused> {
         if r.body().group != self.root.device_id() {
             return Err(Refused::Group);
         }
@@ -138,8 +153,11 @@ impl RecordSet {
             return Ok(Added::Known);
         }
         let Some((key, role)) = self.keys.signer(&r.body().signer) else { return Err(Refused::UnknownSigner) };
-        let held = r.verify(key).map_err(Refused::Broken)?;
+        let key = key.clone();
         let signer = r.body().signer;
+        // What the set would not keep is turned away before its signature
+        // is verified: a record offered again after the set dropped it
+        // costs no verification, and none of these steps stores it.
         if self.checkpoints.iter().any(|(heads, anchors)| eval::pruned_by(&r, heads, anchors)) {
             // A counting checkpoint left it out.
             return Ok(Added::NoRoom);
@@ -153,12 +171,15 @@ impl RecordSet {
             }
         }
         if self.ceiling(&signer).is_some() {
+            // It depends on the key alone: one with room of its own has
+            // no place where it stopped without.
             self.cut.forget_future(&signer);
         }
         if self.cut.past(&eval::item_cut(&r, role, &self.cuts)) {
             // Its key dropped a record before it: it would not be kept.
             return Ok(Added::NoRoom);
         }
+        let held = r.verify(&key).map_err(Refused::Broken)?;
         self.keys.learn(r.body(), role, held);
         let units = self.units.entry(signer).or_default();
         *units = units.saturating_add(eval::item(&r, role).units);
@@ -167,10 +188,6 @@ impl RecordSet {
         if self.needs_cut(&signer) {
             self.cut();
         }
-        if !self.pending.is_empty() {
-            // A claim the records do not prove yet waits for more.
-            let _ = self.read_pending(false);
-        }
         Ok(if self.records.contains_key(&id) { Added::Stored } else { Added::NoRoom })
     }
 
@@ -178,33 +195,50 @@ impl RecordSet {
     /// from another of them are tried again until none is left that can be
     /// taken. It returns how many were stored and the refusals.
     pub fn insert_all(&mut self, records: impl IntoIterator<Item = Record>) -> (usize, Vec<(RecordId, Refused)>) {
-        let mut todo: Vec<Record> = records.into_iter().collect();
         let mut stored = 0usize;
         let mut refused = Vec::new();
-        loop {
-            let mut waiting = Vec::new();
-            let mut progress = false;
-            for r in todo {
-                if r.body().group == self.root.device_id() && self.keys.signer(&r.body().signer).is_none() {
-                    waiting.push(r);
-                    continue;
-                }
-                let id = r.id();
-                match self.insert(r) {
-                    Ok(Added::Stored) => {
-                        stored = stored.saturating_add(1);
-                        progress = true;
-                    }
-                    Ok(_) => {}
-                    Err(e) => refused.push((id, e)),
-                }
-            }
-            if !progress || waiting.is_empty() {
-                refused.extend(waiting.iter().map(|r| (r.id(), Refused::UnknownSigner)));
-                return (stored, refused);
-            }
-            todo = waiting;
+        // Only the records that wait for their signer are held aside; the
+        // others go straight in.
+        let mut waiting = Vec::new();
+        let mut progress = self.insert_each(records, &mut waiting, &mut stored, &mut refused);
+        while progress && !waiting.is_empty() {
+            let todo = core::mem::take(&mut waiting);
+            progress = self.insert_each(todo, &mut waiting, &mut stored, &mut refused);
         }
+        refused.extend(waiting.iter().map(|r| (r.id(), Refused::UnknownSigner)));
+        (stored, refused)
+    }
+
+    /// One round of insert_all: whether it stored any.
+    fn insert_each(
+        &mut self,
+        records: impl IntoIterator<Item = Record>,
+        waiting: &mut Vec<Record>,
+        stored: &mut usize,
+        refused: &mut Vec<(RecordId, Refused)>,
+    ) -> bool {
+        let mut progress = false;
+        for r in records {
+            if r.body().group == self.root.device_id() && self.keys.signer(&r.body().signer).is_none() {
+                waiting.push(r);
+                continue;
+            }
+            let id = r.id();
+            match self.insert_only(r) {
+                Ok(Added::Stored) => {
+                    *stored = stored.saturating_add(1);
+                    progress = true;
+                }
+                Ok(_) => {}
+                Err(e) => refused.push((id, e)),
+            }
+        }
+        if progress && !self.pending.is_empty() {
+            // The waiting counted claims are read once a round, not once a
+            // record; one read may teach a root's key the next round needs.
+            let _ = self.read_pending(false);
+        }
+        progress
     }
 
     /// Drops the records the set does not keep (`keep`): each key within
@@ -430,9 +464,11 @@ impl RecordSet {
         if more.is_empty() {
             return Ok(());
         }
-        let records: Vec<Record> = self.records.values().map(|e| e.record.clone()).collect();
+        // The set verified each record when it took it.
+        let records: Vec<&Record> = self.records.values().map(|e| &e.record).collect();
+        let mut sigs = eval::Sigs::verified(self.records.values().map(|e| e.held));
         for c in more {
-            if !eval::proven(&self.root, &records, &self.counted, &c) {
+            if !eval::proven(&self.root, &records, &mut sigs, &self.counted, &c) {
                 if strict {
                     self.pending.clear();
                 }

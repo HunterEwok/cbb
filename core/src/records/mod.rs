@@ -271,9 +271,17 @@ impl Record {
             return Err(Rule::new("records/size"));
         }
         let held = self.body.check()?;
+        #[cfg(test)]
+        VERIFIED.with(|n| n.set(n.get().saturating_add(1)));
         key::verify_es256(key, LABEL_RECORD, &self.bytes, &self.sig)?;
         Ok(held)
     }
+}
+
+#[cfg(test)]
+std::thread_local! {
+    /// The signatures this thread verified, for the tests that count them.
+    pub(crate) static VERIFIED: core::cell::Cell<usize> = const { core::cell::Cell::new(0) };
 }
 
 /// The set digest: SHA-256 over the label, a zero byte and the sorted IDs.
