@@ -54,7 +54,10 @@ const UNDER_LOAD: usize = 512;
 /// are kept for initiations from the address a client last spoke from, so
 /// that strangers who spend the rest hold up no client that rekeys.
 const DH_CAPS: Caps = Caps { address: 0, network: 32, wide: 128, provider: 512, all: 1536 };
-const DH_KNOWN: usize = 512;
+/// The part kept for clients' addresses, shared by address and network: a
+/// client rekeys once in two minutes, so 4 a second is plenty for one
+/// address, even one many clients share.
+const DH_KNOWN: Caps = Caps { address: 4, network: 32, wide: 0, provider: 0, all: 512 };
 
 /// How long a connection a client opens may wait for the hub's answer to
 /// be acknowledged, and a client's opening that no socket took be counted.
@@ -79,6 +82,8 @@ pub struct Limits {
     pub floor: usize,
     pub opening_per_client: usize,
     pub openings: Caps,
+    /// The connections past the floors, being opened or open, by source.
+    pub sources: Caps,
 }
 
 /// A device's hub: its clients each open one or two connections, and a
@@ -89,6 +94,7 @@ pub const DEVICE_LIMITS: Limits = Limits {
     floor: 2,
     opening_per_client: 4,
     openings: Caps { address: 0, network: 0, wide: 0, provider: 0, all: 256 },
+    sources: Caps { address: 0, network: 0, wide: 0, provider: 0, all: 0 },
 };
 
 /// Whether ip, a packet from a client, opens a connection to the member
@@ -235,6 +241,8 @@ impl Hub {
             charges: HashMap::new(),
             half: HashMap::new(),
             openings: Count::new(limits.openings),
+            by_source: Count::new(limits.sources),
+            sources: HashMap::new(),
             opening: HashMap::new(),
             owners: HashMap::new(),
             owned: HashSet::new(),
@@ -343,18 +351,18 @@ type Conn = (Ipv6Addr, u16);
 struct Second {
     began: Instant,
     dh: Count,
-    known_dh: usize,
+    known_dh: Count,
     known: HashSet<std::net::IpAddr>,
 }
 
 impl Second {
     fn new(known: HashSet<std::net::IpAddr>) -> Second {
-        Second { began: Instant::now(), dh: Count::new(DH_CAPS), known_dh: 0, known }
+        Second { began: Instant::now(), dh: Count::new(DH_CAPS), known_dh: Count::new(DH_KNOWN), known }
     }
 
     /// The Diffie-Hellmans spent this second.
     fn spent(&self) -> usize {
-        self.dh.held(None, Level::All) + self.known_dh
+        self.dh.held(None, Level::All) + self.known_dh.held(None, Level::All)
     }
 
     /// Whether an address a client last spoke from sent it.
@@ -366,8 +374,7 @@ impl Second {
     /// its source's shares, or to the part kept for clients' addresses
     /// when from is one; false when neither has room.
     fn admit(&mut self, from: std::net::IpAddr) -> bool {
-        if self.is_known(from) && self.known_dh < DH_KNOWN {
-            self.known_dh += 1;
+        if self.is_known(from) && self.known_dh.take(Some(from), 1) {
             return true;
         }
         self.dh.take(Some(from), 1)
@@ -417,6 +424,10 @@ struct Pump {
     charges: HashMap<Conn, Charge>,
     half: HashMap<Ipv6Addr, usize>,
     openings: Count,
+    /// The connections past the floors, by source; and each client's
+    /// source, by its tunnel address.
+    by_source: Count,
+    sources: HashMap<Ipv6Addr, Option<std::net::IpAddr>>,
     /// The openings counted that no socket took yet, since when.
     opening: HashMap<Conn, Instant>,
     /// The connection each socket that took one holds, and those
@@ -468,6 +479,7 @@ impl Pump {
             let awg = self.obf.clone().map(|o| crate::awg::Awg::new(o, &p.key, self.public.as_bytes()));
             self.peers.insert(k, PeerState { peer: p, tunn, endpoint: None, awg });
         }
+        self.sources = self.peers.values().map(|s| (s.peer.addr, s.peer.source)).collect();
         if gone > 0 {
             self.cut_off();
             (self.log)(&format!("cbb: the hub cut off {gone} client(s)"));
@@ -722,10 +734,11 @@ impl Pump {
         {
             return false;
         }
-        let source = self.peers.values().find(|s| s.peer.addr == c.0).and_then(|s| s.peer.source);
+        let source = self.sources.get(&c.0).copied().flatten();
         if floor {
             self.floors += 1;
-        } else if self.openings.take(source, 1) {
+        } else if self.by_source.full(source, 1).is_none() && self.openings.take(source, 1) {
+            self.by_source.add(source, 1);
             self.total += 1;
         } else {
             return false;
@@ -768,6 +781,7 @@ impl Pump {
         if ch.floor {
             self.floors = self.floors.saturating_sub(1);
         } else {
+            self.by_source.remove(ch.source, 1);
             self.total = self.total.saturating_sub(1);
         }
     }
@@ -926,6 +940,7 @@ impl Pump {
                 down: Vec::new(),
                 local_eof: false,
                 done: false,
+                closed_at: None,
             });
         }
         self.listening = still;
@@ -1024,12 +1039,21 @@ mod tests {
 
     /// A hub with n clients, and a link of each client to it.
     fn hub_and_links(n: usize, port: u16, limits: Limits) -> (Hub, PublicKey, Vec<crate::tunnel::Link>) {
+        hub_and_links_from(&vec![None; n], port, limits)
+    }
+
+    /// A hub with a client from each of sources, and a link of each.
+    fn hub_and_links_from(
+        sources: &[Option<std::net::IpAddr>],
+        port: u16,
+        limits: Limits,
+    ) -> (Hub, PublicKey, Vec<crate::tunnel::Link>) {
         let hub_key = crate::certs::random_bytes::<32>();
         let hub_pub = PublicKey::from(&StaticSecret::from(hub_key));
         let own = crate::tunnel::addr("00112233445566778899aabbccddeeff").unwrap();
         let mut peers = Vec::new();
         let mut clients = Vec::new();
-        for i in 0..n {
+        for (i, source) in sources.iter().enumerate() {
             let k = crate::certs::random_bytes::<32>();
             let psk = crate::certs::random_bytes::<32>();
             let addr = crate::tunnel::addr(&format!("{:02x}112233445566778899aabbccddee00", i + 0x10)).unwrap();
@@ -1038,7 +1062,7 @@ mod tests {
                 psk,
                 addr,
                 until: None,
-                source: None,
+                source: *source,
             });
             clients.push((k, psk, addr));
         }
@@ -1309,13 +1333,15 @@ mod tests {
 
     /// The Diffie-Hellmans on initiations are shared by source: the
     /// networks of one wide network take its share and no more, strangers
-    /// of many providers take what is left in all, and a client that
-    /// rekeys from its address still gets through.
+    /// of many providers take what is left in all, and clients that rekey
+    /// from their addresses still get through, none taking more than its
+    /// address's share of the part kept for them.
     #[test]
     fn handshakes_are_shared_by_source() {
         use std::net::IpAddr;
-        let client: IpAddr = "2001:db8:ffff::1".parse().unwrap();
-        let mut s = Second::new([client].into_iter().collect());
+        let clients: Vec<IpAddr> =
+            (0..200u16).map(|i| IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 0xff00 + i, 0, 0, 0, 0, 1))).collect();
+        let mut s = Second::new(clients.iter().copied().collect());
         let mut got = 0;
         for n in 0..256u16 {
             for _ in 0..DH_CAPS.network + 1 {
@@ -1331,10 +1357,12 @@ mod tests {
             }
         }
         assert_eq!(s.dh.held(None, Level::All), DH_CAPS.all, "strangers in all");
-        for i in 0..DH_KNOWN {
-            assert!(s.admit(client), "a client's rekey {i} found no room");
+        for i in 0..DH_KNOWN.address {
+            assert!(s.admit(clients[0]), "a client's rekey {i} found no room");
         }
-        assert!(!s.admit(client));
+        assert!(!s.admit(clients[0]), "one address took more than its share of the part kept for clients");
+        let got: usize = clients[1..].iter().map(|c| usize::from(s.admit(*c))).sum();
+        assert_eq!(got, clients.len() - 1, "the other clients' rekeys");
         // IPv4: a /16 is its own provider.
         let mut s = Second::new(HashSet::new());
         let got: usize = (0..=255u8)
@@ -1435,6 +1463,7 @@ mod tests {
             floor: 2,
             opening_per_client: 4,
             openings: Caps { address: 0, network: 0, wide: 8, provider: 0, all: 16 },
+            sources: Caps::default(),
         };
         let hub = Hub::start_at(
             &hub_key,
@@ -1494,5 +1523,81 @@ mod tests {
         }
         stop.store(true, Ordering::SeqCst);
         flood.join().unwrap();
+    }
+
+    /// A client that keeps its half of a connection open after the app
+    /// ended it, acknowledging and answering the keep-alives but never
+    /// closing, holds it only a few seconds: then the hub cuts it, and the
+    /// client's share is free again.
+    #[test]
+    fn a_closed_connection_is_not_held_open() {
+        let ln = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = ln.local_addr().unwrap().port();
+        let took = Arc::new(AtomicUsize::new(0));
+        let n = took.clone();
+        // The app ends every connection at once.
+        std::thread::spawn(move || {
+            for c in ln.incoming() {
+                drop(c);
+                n.fetch_add(1, Ordering::SeqCst);
+            }
+        });
+        let limits = Limits { bridges: 64, per_client: 4, floor: 0, ..DEVICE_LIMITS };
+        let (_hub, _, links) = hub_and_links(1, port, limits);
+        // The client reads the end and keeps its own half open.
+        let mut held = Vec::new();
+        for _ in 0..4 {
+            let mut c = TcpStream::connect(links[0].local()).unwrap();
+            c.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+            assert!(matches!(c.read(&mut [0u8; 1]), Ok(0)), "the app's end did not come");
+            held.push(c);
+        }
+        assert_eq!(took.load(Ordering::SeqCst), 4);
+        let start = Instant::now();
+        let mut more = Vec::new();
+        while took.load(Ordering::SeqCst) == 4 {
+            assert!(
+                start.elapsed() < crate::tunnel::CLOSE_WAIT + Duration::from_secs(10),
+                "connections the client never closed held its share"
+            );
+            let c = TcpStream::connect(links[0].local()).unwrap();
+            more.push(c);
+            std::thread::sleep(Duration::from_millis(500));
+        }
+        assert!(start.elapsed() >= Duration::from_secs(2), "the client's share was not full");
+    }
+
+    /// The connections past the floors are shared by the source each
+    /// client came from: the clients of one wide network hold its share,
+    /// and a client of another still gets its own.
+    #[test]
+    fn open_connections_are_shared_by_source() {
+        let (port, took) = target();
+        let ip = |w: u16, h: u16| Some(std::net::IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, w, h, 0, 0, 0, 1)));
+        let limits = Limits {
+            bridges: 64,
+            per_client: 16,
+            floor: 2,
+            opening_per_client: 4,
+            openings: Caps::default(),
+            sources: Caps { address: 0, network: 0, wide: 12, provider: 0, all: 0 },
+        };
+        let (_hub, _, links) = hub_and_links_from(&[ip(1, 1), ip(1, 2), ip(1, 3), ip(2, 1)], port, limits);
+        let mut held = Vec::new();
+        for l in &links[..3] {
+            for _ in 0..16 {
+                match reach(l, Duration::from_secs(2)) {
+                    Ok(c) => held.push(c),
+                    Err(_) => break,
+                }
+            }
+        }
+        assert_eq!(held.len(), 3 * 2 + 12, "the clients of one wide network: their floors and its share");
+        for i in 0..14 {
+            let c = reach(&links[3], Duration::from_secs(10));
+            assert!(c.is_ok(), "connection {} of another source's client did not get through: {c:?}", i + 1);
+            held.push(c.unwrap());
+        }
+        assert_eq!(took.load(Ordering::SeqCst), held.len());
     }
 }

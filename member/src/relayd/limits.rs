@@ -45,6 +45,40 @@ pub struct Limits {
     pub streams: usize,
 }
 
+/// The open files the relay keeps besides its tunnel's connections and the
+/// devices' registrations: setups, the listeners, the log; and the fewest
+/// tunnel connections it is sized down to.
+const FILES_BESIDES: u64 = 512;
+const MIN_STREAMS: usize = 64;
+
+/// Raises the process's soft limit of open files to its hard limit, and
+/// returns the limit it has then, None where it cannot tell.
+#[cfg(unix)]
+pub fn raise_files() -> Option<u64> {
+    let mut r = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+    // SAFETY: getrlimit and setrlimit only read and write r.
+    unsafe {
+        if libc::getrlimit(libc::RLIMIT_NOFILE, &mut r) != 0 {
+            return None;
+        }
+        if r.rlim_cur < r.rlim_max {
+            let want = libc::rlimit { rlim_cur: r.rlim_max, rlim_max: r.rlim_max };
+            if libc::setrlimit(libc::RLIMIT_NOFILE, &want) == 0 {
+                r.rlim_cur = r.rlim_max;
+            }
+        }
+    }
+    // rlim_t is u64 on Linux and macOS, i64 on FreeBSD.
+    #[allow(clippy::unnecessary_cast)]
+    Some(r.rlim_cur as u64)
+}
+
+/// Windows has no such limit for sockets.
+#[cfg(not(unix))]
+pub fn raise_files() -> Option<u64> {
+    None
+}
+
 /// An open relay's limits: enough for clipboards, which are small, and for
 /// a few thousand groups on a small server.
 pub const DEFAULT_OPEN: Limits = Limits {
@@ -74,6 +108,28 @@ impl Limits {
             record_bytes: or(self.record_bytes, d.record_bytes),
             streams: or(self.streams, d.streams),
         }
+    }
+
+    /// The open files these limits need at most: each connection through
+    /// the tunnel costs three (the hub's dial, the accepted end and its
+    /// clone), for the watches, the calls, the requests and the openings
+    /// and each device's floor of two; each device its registration's
+    /// connection; and some for setups and the rest.
+    pub fn files(&self) -> u64 {
+        let l = self.with_defaults();
+        let devices = l.devices() as u64;
+        let tunnel = (l.streams + super::server::REQUEST_CAPS.all + l.opening_caps().all) as u64 + 2 * devices;
+        3 * tunnel + devices + FILES_BESIDES
+    }
+
+    /// These limits within files open files: the tunnel's connections, and
+    /// the devices with them, made fewer when it allows fewer.
+    pub fn fit_files(self, files: u64) -> Limits {
+        let mut l = self.with_defaults();
+        while l.streams > MIN_STREAMS && l.files() > files {
+            l.streams = (l.streams * 7 / 8).max(MIN_STREAMS);
+        }
+        l
     }
 
     /// The devices an open relay registers at once: each keeps a watch.
@@ -208,6 +264,22 @@ mod tests {
         assert_eq!((l.groups, l.byte_rate, l.per_address), (3, 10.0, DEFAULT_OPEN.per_address));
         let c = DEFAULT_OPEN.record_caps();
         assert_eq!((c.network, c.wide, c.provider, c.all), (1 << 20, 4 << 20, 16 << 20, 128 << 20));
+    }
+
+    /// The limits fit the open files the relay may have, and the default
+    /// ones fit what its unit allows.
+    #[test]
+    fn limits_fit_the_open_files() {
+        let d = Limits::default();
+        assert!(d.files() <= 65_536, "the defaults need {} open files", d.files());
+        assert_eq!(d.fit_files(65_536), DEFAULT_OPEN);
+        let small = d.fit_files(4096);
+        assert!(small.files() <= 4096, "{} open files for {} connections", small.files(), small.streams);
+        assert!(small.streams >= MIN_STREAMS && small.streams < DEFAULT_OPEN.streams);
+        let n = raise_files();
+        if cfg!(unix) {
+            assert!(n.is_some_and(|n| n > 0));
+        }
     }
 
     #[test]

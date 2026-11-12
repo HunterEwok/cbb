@@ -1588,10 +1588,13 @@ All notable changes to cbb are documented in this file. The format follows
   at once and 8 for each client, half-open ones included, and the relay's tunnel holds the
   devices' watches, their calls by group and by the address, network and provider each end
   registered from, and connections being opened by the same sources; every client keeps its
-  first two connections whatever the others hold (docs/relay-budget.md). A hub checks a
+  first two connections whatever the others hold, and a connection the app ended is cut when
+  the client takes nothing of it for 10 s (docs/relay-budget.md). The relay raises its limit
+  of open files at start, holds no more tunnel connections than it allows and logs both;
+  its unit and the server compose file allow 65536. A hub checks a
   handshake's `mac1` before its key exchange, asks for a cookie when many key exchanges come
   at once, and shares them each second by network, wide network and provider, with a part
-  kept for its clients' rekeys. A relay gives a registration's setup and each request one
+  kept for its clients' rekeys, shared by address and network. A relay gives a registration's setup and each request one
   deadline for the whole exchange. AmneziaWG junk stays within the settings' bounds.
 - A phone that is the group's hub registers with its forwarder by the period's hubs'
   credential once that lists its server key, as a computer's hub does (`cbb_tunnel_hub_credentials`),

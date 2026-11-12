@@ -161,6 +161,31 @@ pub fn command(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) 
         Ok(l) => l,
         Err(e) => return fail(stderr, e),
     };
+    // Each connection through the tunnel costs open files: the relay takes
+    // as many as its system lets it, and holds no more connections than
+    // they allow.
+    let limits = match super::limits::raise_files() {
+        Some(files) => {
+            let fit = limits.fit_files(files);
+            if fit.streams < limits.with_defaults().streams {
+                log(&format!(
+                    "cbb relay: {files} open files allowed, too few for {} tunnel connections: it holds {} (raise LimitNOFILE)",
+                    limits.with_defaults().streams,
+                    fit.streams
+                ));
+            } else {
+                log(&format!("cbb relay: {files} open files allowed, {} tunnel connections", fit.streams));
+            }
+            if fit.files() > files {
+                log(&format!(
+                    "cbb relay: {files} open files allowed, fewer than the {} it needs at least",
+                    fit.files()
+                ));
+            }
+            fit
+        }
+        None => limits,
+    };
     // A list that cannot be read stops the relay: it never starts without
     // the list its operator gave it.
     let refused = match super::refused::List::open(&f.refused, &f.key) {

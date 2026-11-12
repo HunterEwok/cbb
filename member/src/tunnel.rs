@@ -1023,7 +1023,15 @@ pub(crate) struct Bridge {
     pub(crate) down: Vec<u8>,
     pub(crate) local_eof: bool,
     pub(crate) done: bool,
+    /// Since when the local side has ended and the client has taken
+    /// nothing more: the client takes the rest and closes its half within
+    /// CLOSE_WAIT, or the connection is cut.
+    pub(crate) closed_at: Option<Instant>,
 }
+
+/// How long a client may take nothing of a connection the local side
+/// ended, nor close its half.
+pub(crate) const CLOSE_WAIT: Duration = Duration::from_secs(10);
 
 struct Pump {
     tunn: Tunn,
@@ -1264,6 +1272,7 @@ impl Pump {
                 down: Vec::new(),
                 local_eof: false,
                 done: false,
+                closed_at: None,
             });
         }
     }
@@ -1383,9 +1392,20 @@ pub(crate) fn move_bytes(b: &mut Bridge, s: &mut tcp::Socket, buf: &mut [u8]) ->
     {
         b.up.drain(..n);
         busy |= n > 0;
+        if n > 0 && b.closed_at.is_some() {
+            b.closed_at = Some(Instant::now());
+        }
+    }
+    if b.local_eof {
+        b.closed_at.get_or_insert_with(Instant::now);
     }
     if b.local_eof && b.up.is_empty() && s.may_send() {
         s.close();
+    }
+    // A client that keeps its half open, acknowledging and answering the
+    // keep-alives but never closing, holds the connection no longer.
+    if b.closed_at.is_some_and(|t| t.elapsed() >= CLOSE_WAIT) {
+        b.done = true;
     }
     // The hub to local.
     if b.down.len() < TCP_BUFFER

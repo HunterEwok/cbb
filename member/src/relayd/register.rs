@@ -133,11 +133,18 @@ impl Inner {
 
     /// Takes the devices' TLS connections.
     pub(super) fn accept_registrations(self: Arc<Self>, ln: TcpListener) {
+        let mut failed = super::server::AcceptErrors::default();
         for conn in ln.incoming() {
             if self.stopping() {
                 return;
             }
-            let Ok(conn) = conn else { continue };
+            let conn = match conn {
+                Ok(c) => c,
+                Err(e) => {
+                    failed.note(&self.cfg.log, "devices' connections", &e);
+                    continue;
+                }
+            };
             let from = addr_of(&conn);
             if !self.take_slot(from) {
                 let _ = conn.shutdown(Shutdown::Both);

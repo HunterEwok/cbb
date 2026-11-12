@@ -53,6 +53,55 @@ pub const SETUP_CAPS: Caps = Caps { address: 16, network: 64, wide: 128, provide
 pub const REQUEST_CAPS: Caps = Caps { address: 32, network: 64, wide: 64, provider: 128, all: 256 };
 /// Requests being read of one device and of one group.
 pub const MAX_REQUESTS_ONE: usize = 16;
+/// The limits of the relay's hub: room for every device's watch and calls,
+/// the requests being read and the connections being opened; each device's
+/// first two whatever the others hold; and past them, by the source each
+/// device registered from, an address 1/32 of the room, a network 1/16, a
+/// wide network 1/4 and a provider 1/2, more than its watches, calls and
+/// requests may take.
+pub(super) fn hub_limits(l: &Limits) -> crate::hub::Limits {
+    let l = l.with_defaults();
+    let bridges = l.streams + REQUEST_CAPS.all + l.opening_caps().all;
+    crate::hub::Limits {
+        bridges,
+        per_client: STREAMS_ONE,
+        floor: 2,
+        opening_per_client: 4,
+        openings: l.opening_caps(),
+        sources: Caps {
+            address: bridges / 32,
+            network: bridges / 16,
+            wide: bridges / 4,
+            provider: bridges / 2,
+            all: 0,
+        },
+    }
+}
+
+/// A listener's errors: one that lasts, such as too many open files, is
+/// waited out a moment each time and logged once a minute, so that the
+/// thread that accepts neither spins nor fills the log.
+#[derive(Default)]
+pub(super) struct AcceptErrors {
+    logged: Option<Instant>,
+    since: usize,
+}
+
+impl AcceptErrors {
+    pub(super) fn note(&mut self, log: &Arc<dyn Fn(&str) + Send + Sync>, what: &str, e: &std::io::Error) {
+        self.since += 1;
+        if self.logged.is_none_or(|t| t.elapsed() >= Duration::from_secs(60)) {
+            log(&format!("cbb relay: cannot accept {what} ({} times): {e}", self.since));
+            (self.logged, self.since) = (Some(Instant::now()), 0);
+        }
+        std::thread::sleep(ACCEPT_BACKOFF);
+    }
+}
+
+/// How long the relay waits after a listener's error before it accepts
+/// again.
+pub(super) const ACCEPT_BACKOFF: Duration = Duration::from_millis(50);
+
 /// How long a connection to the relay's loopback port waits for the hub
 /// to note its tunnel address, and how many wait at once.
 const STREAM_ADDR_WAIT: Duration = Duration::from_millis(100);
@@ -301,18 +350,7 @@ impl Relay {
             Vec::new(),
             SocketAddr::new(local.ip(), local.port()),
             Arc::new(move |_| Some(streams_port)),
-            {
-                // Room for every device's watch and calls, the requests
-                // being read and the connections being opened.
-                let l = inner.cfg.limits.with_defaults();
-                crate::hub::Limits {
-                    bridges: l.streams + REQUEST_CAPS.all + l.opening_caps().all,
-                    per_client: STREAMS_ONE,
-                    floor: 2,
-                    opening_per_client: 4,
-                    openings: l.opening_caps(),
-                }
-            },
+            hub_limits(&inner.cfg.limits),
             hub_log,
         )?;
         *inner.hub.lock().map_err(|_| Error::msg("relay: broken"))? = Some(hub);
@@ -757,6 +795,7 @@ impl Inner {
         // since when: the hub notes it as soon as its connection is made,
         // so a connection waits a moment, without holding up the others.
         let mut waiting: VecDeque<(TcpStream, u16, Instant)> = VecDeque::new();
+        let mut failed = AcceptErrors::default();
         while !self.stopping() {
             let mut busy = false;
             match ln.accept() {
@@ -770,7 +809,7 @@ impl Inner {
                     waiting.push_back((c, from.port(), Instant::now()));
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
-                Err(_) => continue,
+                Err(e) => failed.note(&self.cfg.log, "its tunnel's connections", &e),
             }
             // The tunnel address names the device: the port is on the
             // loopback, where every local user may connect, and a
