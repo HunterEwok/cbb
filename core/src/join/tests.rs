@@ -70,7 +70,7 @@ impl G {
         let mut d = Device::new(phone.key.clone(), "phone", ROLE_PHONE);
         d.rights = RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS;
         d.holds_root = true;
-        g.rec_root(Kind::Device(d));
+        g.rec_root(Kind::device(d));
         let laptop = k("laptop");
         let mut d = Device::new(laptop.key.clone(), "laptop", ROLE_MEMBER);
         d.rights = RIGHT_READ | RIGHT_SEND;
@@ -78,7 +78,7 @@ impl G {
         let (p, c) = AdminKind::Computer.grants();
         d.powers = p;
         d.commands = c;
-        g.rec_root(Kind::Device(d));
+        g.rec_root(Kind::device(d));
         g
     }
 
@@ -389,7 +389,7 @@ fn an_offered_admin_key_is_new() {
     let (p, c) = AdminKind::Phone.grants();
     d.powers = p;
     d.commands = c;
-    g.rec_root(Kind::Device(d));
+    g.rec_root(Kind::device(d));
     let seen = g.seen();
     g.rec_root(Kind::Revoke(Removal { keys: vec![k("old phone").hash, k("old phone admin").hash], seen }));
     let st = g.state();
@@ -472,7 +472,7 @@ fn a_removed_device_does_not_come_back_with_its_key() {
     let tv = k("tv");
     let mut d = Device::new(tv.key.clone(), "tv", ROLE_MEMBER);
     d.rights = RIGHT_READ;
-    g.rec_root(Kind::Device(d));
+    g.rec_root(Kind::device(d));
     let seen = g.seen();
     g.rec_root(Kind::Revoke(Removal { keys: vec![tv.hash], seen }));
     let st = g.state();
@@ -520,9 +520,9 @@ fn admit(g: &mut G, by_admin: bool, joiner: &K, name: &str) -> Welcome {
     )
     .unwrap();
     if by_admin {
-        g.rec(&k("laptop admin"), Kind::Device(d));
+        g.rec(&k("laptop admin"), Kind::device(d));
     } else {
-        g.rec_root(Kind::Device(d));
+        g.rec_root(Kind::device(d));
     }
     let set = g.set();
     let st = set.state(&BTreeMap::new());
@@ -616,7 +616,7 @@ fn the_joiner_checks_its_welcome() {
     let (p, c) = AdminKind::Phone.grants();
     d.powers = p;
     d.commands = c;
-    g.rec_root(Kind::Device(d));
+    g.rec_root(Kind::device(d));
     let st = g.state();
     let own = st.device_by_key(&k("phone 2").hash).cloned();
     let slate = k("slate");
@@ -630,7 +630,7 @@ fn the_joiner_checks_its_welcome() {
         Choice { rights: RIGHT_READ | RIGHT_SEND, ..Choice::default() },
     )
     .unwrap();
-    g.rec(&k("phone 2 admin"), Kind::Device(d));
+    g.rec(&k("phone 2 admin"), Kind::device(d));
     let seen = g.seen();
     let claim = g.rec(&k("phone 2 admin"), Kind::Claim { root: k("phone 2 root").key.clone(), seen });
     let set = g.set();
@@ -664,11 +664,11 @@ fn the_joiner_checks_its_welcome() {
     d.powers = p;
     d.commands = c;
     d.holds_root = true;
-    g.rec(&k("phone 2 root"), Kind::Device(d));
+    g.rec(&k("phone 2 root"), Kind::device(d));
     let mut d = Device::new(bulb.key.clone(), "bulb", ROLE_LEAF);
     d.guarded = true;
     d.rights = RIGHT_READ;
-    g.rec(&k("phone 2 root"), Kind::Device(d));
+    g.rec(&k("phone 2 root"), Kind::device(d));
     let mut set = RecordSet::new(g.root.key.clone());
     set.insert_all(g.recs.iter().cloned());
     let st = set.state(&held);
@@ -886,11 +886,11 @@ fn a_request_waits_for_an_admin() {
     let mut d = Device::new(hub.key.clone(), "hub", ROLE_MEMBER);
     d.rights = RIGHT_READ | RIGHT_SEND | RIGHT_HUB;
     d.caps = CAP_HUB;
-    g.rec_root(Kind::Device(d));
+    g.rec_root(Kind::device(d));
     let tv = k("tv");
     let mut d = Device::new(tv.key.clone(), "tv", ROLE_MEMBER);
     d.rights = RIGHT_READ | RIGHT_SEND;
-    g.rec_root(Kind::Device(d));
+    g.rec_root(Kind::device(d));
     let st = g.state();
     let id = |x: &K| st.device_by_key(&x.hash).unwrap().id;
 
@@ -995,7 +995,7 @@ fn an_intro_is_checked_only_when_it_ends_in_its_sender() {
     for i in 0..200 {
         let mut d = Device::new(k(&format!("device {i}")).key.clone(), "d", ROLE_MEMBER);
         d.rights = RIGHT_READ;
-        g.rec_root(Kind::Device(d));
+        g.rec_root(Kind::device(d));
     }
     let set = g.set();
     let me = fhash(&k("phone"));
