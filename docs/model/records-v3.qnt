@@ -429,20 +429,36 @@ module records_v3 {
     // the path the set holds now, not the one it last cut by.
     // A head takes its first checkpoint along if the set got it before; a first checkpoint goes
     // beside the chain once its head is held. Either may apply the change.
-    if (isChain(r))
-      applyChain({ ...s, chain: s.chain.union(Set(r.id)).union(idsOf(recsOf(s.got, db).filter(c => namesFirst(r, c)))) }, db)
+    if (isChain(r)) applyChain({ ...s, chain: s.chain.union(Set(r.id)) }, db)
     else {
-      val isFirst = recsOf(s.got, db).exists(h => namesFirst(h, r))
-      storeOne(if (isFirst) applyChain({ ...s, chain: s.chain.union(Set(r.id)) }, db) else s, r, db)
+      val isFirst = recsOf(s.chain, db).exists(h => namesFirst(h, r))
+      storeOne(if (isFirst) applyChain(s, db) else s, r, db)
     }
+  }
+  // A head that may extend the set's chain: it follows the chain's records below its seq and
+  // names a key no root before it was (a head that is not valid keeps no checkpoint aside).
+  pure def validHead(s: Store, h: Record, db: Id -> Record): bool = {
+    val ch = chainState(s, db)
+    val below = h.seq - 1
+    below <= ch.ids.length() and ch.ids.slice(0, below) == h.line.slice(0, below)
+      and validAt(h, pathCutsOf(ch.recs.slice(0, below))._1)
   }
   pure def storeOne(s: Store, r: Record, db: Id -> Record): Store =
     if (s.recs.contains(r.id) or past(s.cut, r, last(keptPath(s, db)), orderOf(s, db)) or not(storable(s, r, db))) s
     else recut({ ...s, recs: s.recs.union(Set(r.id)) }, db)
   // The set cuts by the path its chain gives; the records of a root the change made, which the
   // set got while the change waited, it takes now (format 20.3, records of a waiting root).
+  // The first checkpoints of the held heads that may extend the chain go beside it; each
+  // head the chain takes may let the next one in.
+  pure def gather(s: Store, db: Id -> Record): Store = {
+    val heads = recsOf(s.chain, db).filter(h => isChain(h) and validHead(s, h, db))
+    val firsts = idsOf(recsOf(s.got, db).filter(c => heads.exists(h => namesFirst(h, c))))
+    { ...s, chain: s.chain.union(firsts) }
+  }
+  // The chain applies whole: the set cuts once, by the path of every head it can take now.
   pure def applyChain(s: Store, db: Id -> Record): Store = {
-    val s2 = pathed({ ...s, recs: s.recs.exclude(s.chain) }, db)
+    val s1 = range(0, MAXCHAIN).foldl(s, (x, j) => gather(x, db))
+    val s2 = pathed({ ...s1, recs: s1.recs.exclude(s1.chain) }, db)
     val fresh = recsOf(s2.got, db).filter(x => not(isChain(x)) and onList(s2.path, x.signer) and not(onList(s.path, x.signer)))
     toList(idsOf(fresh)).foldl(s2, (x, i) => storeOne(x, db.get(i), db))
   }
@@ -1249,6 +1265,18 @@ module records_v3 {
       .then(signChain(RECOVERY, "recover", ROOT, 1, "honest"))
       .then(give("m", 4))
       .expect(views.get("m").path == [ROOT] and not(views.get("m").stop) and promises)
+
+  // A head that is not valid (it names the current root) keeps nothing aside: the root's
+  // checkpoint it names stays in the rooms like the root's other records, on every member,
+  // whether or not it holds the head.
+  run invalidHeadKeepsNothingAsideTest =
+    init
+      .then(signChain(RECOVERY, "recover", ROOT, 1, "honest"))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .then(give("m", 5)).then(give("m", 6)).then(give("m", 7))
+      .then(syncAll)
+      .expect(MEMBERS.forall(x => views.get(x).path == [ROOT] and st.get(x).chain == Set(4)) and promises)
 
   // A device the root removed does not come back by a new record for its key.
   run removedDeviceStaysOutTest =
