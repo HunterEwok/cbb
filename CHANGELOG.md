@@ -19,8 +19,12 @@ All notable changes to cbb are documented in this file. The format follows
   in the background as a continuous task (docs/apps.md, "HarmonyOS"). Its watch app
   (`apps/harmony/wearable`, HarmonyOS 5 watches) shows the devices, sync, Everywhere and
   the latest events through the phone over Wear Engine, and turns sync and Everywhere on or
-  off (docs/apps.md, "HarmonyOS watches"). `cbb_member_manage` signs a remote paste
-  (`paste`, `paste_off`) for the apps that sign through the core. The
+  off (docs/apps.md, "HarmonyOS watches"). The phone can be the group's hub or meet the
+  group at a blind relay, and the root phone signs the periods of the group's server keys.
+  `cbb_member_manage` signs a remote paste (`paste`, `paste_off`) and a period of the
+  server keys (`period`) for the apps that sign through the core, and `cbb_member_servers`
+  makes the phone member serve the group's servers itself (the ops `hub`, `hub_off`,
+  `relay`, `servers`). The
   protocol names its system `harmonyos`, a phone's system like `ios`, `android`, `aurora`
   and `sailfish` (docs/protocol.md, section 6), and a bug report may name it as its app.
   `ffi/bind.sh harmony` builds the core for it with OpenHarmony's native SDK

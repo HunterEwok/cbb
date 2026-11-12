@@ -9,7 +9,10 @@
 //! at home (`listen`), and in the background it pauses. Away from home it
 //! reaches the group's hub through the same tunnel as cbb
 //! (`crate::away`, in a build with the feature `tunnel`), once the user
-//! turns sync away from home on.
+//! turns sync away from home on. With `serve_servers` (the apps that sign
+//! through the core) the member does the rest as the service does: the
+//! group's server credentials, the phone as one of the group's hubs with
+//! its forwarder, and the blind relay.
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -132,7 +135,15 @@ pub struct Member {
     admin_cas: Mutex<std::collections::BTreeMap<String, crate::takeover::AdminCaSent>>,
     /// The user's order of the tiles (crate::view).
     tiles: crate::view::Tiles,
+    /// The group's server credentials once serve_servers ran.
+    servers: Arc<std::sync::OnceLock<Arc<crate::credentials::Credentials>>>,
+    /// What gets the messages the member does not take itself: the app's.
+    app_messages: Arc<RwLock<Option<OnMessage>>>,
 }
+
+/// How often the server credentials are looked at when nothing changed,
+/// as the service's credential_check.
+const CREDENTIAL_CHECK: Duration = Duration::from_secs(12 * 3600);
 
 /// What a member port a phone opens is for.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -241,6 +252,28 @@ impl Member {
             let (away, node) = (away.clone(), node.clone());
             std::thread::spawn(move || away.run(node));
         }
+        // The credentials and what the group's hubs share go to the member
+        // itself once it serves the servers, the rest to the app.
+        let servers: Arc<std::sync::OnceLock<Arc<crate::credentials::Credentials>>> = Arc::default();
+        let app_messages: Arc<RwLock<Option<OnMessage>>> = Arc::default();
+        {
+            let (servers, app, away, n) = (servers.clone(), app_messages.clone(), away.clone(), Arc::downgrade(&node));
+            node.on_message(Box::new(move |from, m| {
+                if let (Some(creds), Some(node)) = (servers.get(), n.upgrade()) {
+                    if let (Some(v), "credentials") = (m.credentials.as_ref(), m.kind.as_str()) {
+                        creds.received(&node, from, v);
+                        return;
+                    }
+                    if let (Some(v), "hubs") = (m.hubs.as_ref(), m.kind.as_str()) {
+                        away.hubs_shared(&node, from, &node.chain_of(from), v);
+                        return;
+                    }
+                }
+                if let Some(f) = app.read().unwrap().as_ref() {
+                    f(from, m);
+                }
+            }));
+        }
         Ok(Member {
             node,
             dialers: Dialers::default(),
@@ -253,7 +286,136 @@ impl Member {
             admin_cas: Mutex::new(std::collections::BTreeMap::new()),
             tiles: crate::view::Tiles::new(&state_dir),
             state_dir,
+            servers,
+            app_messages,
         })
+    }
+
+    /// Makes the member do what the service does for the servers, for an
+    /// app that signs through the core: it keeps the group's server
+    /// credentials (docs/protocol.md, section 18) with its keys for the
+    /// servers where the app holds them, takes and passes on those its
+    /// peers send, and brings them up to date when the records or the
+    /// credentials change and twice a day; as one of the group's hubs it
+    /// admits the tunnel keys the hellos offer and takes what the other hubs
+    /// share. Once per member.
+    pub fn serve_servers(&self, held: Arc<dyn crate::credentials::HeldKeys>) -> Result<()> {
+        if self.servers.get().is_some() {
+            return Ok(());
+        }
+        let creds = crate::credentials::Credentials::load_held(&self.state_dir, &self.node, held, self.log.clone());
+        self.away.set_credentials(creds.clone());
+        if self.servers.set(creds.clone()).is_err() {
+            return Ok(());
+        }
+        {
+            let (away, n, creds) = (self.away.clone(), Arc::downgrade(&self.node), creds.clone());
+            self.node.on_hello(Box::new(move |from, peer, chain| match n.upgrade() {
+                Some(node) => {
+                    let mut out = away.hello(&node, from, peer, chain);
+                    out.extend(creds.message());
+                    out
+                }
+                None => Vec::new(),
+            }));
+        }
+        {
+            let away = self.away.clone();
+            self.node.on_guest(Box::new(move |node, from, chain, g| away.guest_message(node, from, chain, g)));
+        }
+        let (away, node) = (self.away.clone(), self.node.clone());
+        std::thread::spawn(move || {
+            let (mut seen, mut at) = ((String::new(), usize::MAX), std::time::Instant::now());
+            while !node.is_closed() {
+                let now = (node.records().lock().unwrap().digest(), creds.changes());
+                if now != seen || at.elapsed() >= CREDENTIAL_CHECK {
+                    creds.refresh(&node);
+                    seen = (node.records().lock().unwrap().digest(), creds.changes());
+                    at = std::time::Instant::now();
+                }
+                // A hub drops the clients the records now refuse, and every
+                // member the offers of devices that may no longer be hubs.
+                away.prune(&node);
+                node.records_nap(Duration::from_secs(30));
+            }
+        });
+        Ok(())
+    }
+
+    fn credentials(&self) -> Result<&Arc<crate::credentials::Credentials>> {
+        self.servers.get().ok_or_else(|| Error::msg("the member does not serve the servers"))
+    }
+
+    /// Whether this phone holds the root and the next period of the
+    /// server credentials waits for the app to sign it (sign_period).
+    pub fn period_due(&self) -> bool {
+        self.servers.get().is_some_and(|c| c.period_due())
+    }
+
+    /// Signs the next period of the server credentials with the root key
+    /// the app hands in for this call, after asking the user, when one is
+    /// due.
+    pub fn sign_period(&self, key: Arc<dyn cbb_core::identity::ExternalKey>) -> Result<()> {
+        self.credentials()?.sign_period(&self.node, key)
+    }
+
+    /// Makes this phone one of the group's hubs (docs/protocol.md, section
+    /// 11), reached away from home through the forwarder at forwarder
+    /// (`host:port`), whose key's pin is key, or `default` for the
+    /// project's; with AmneziaWG unless obfuscate_off, and VLESS at the
+    /// forwarder unless vless_off. Sync away from home goes on with it.
+    /// Only the group's root or an admin is a hub.
+    pub fn hub_on(&self, forwarder: &str, key: &str, obfuscate_off: bool, vless_off: bool) -> Result<()> {
+        self.credentials()?;
+        let me = self.node.identity().id.to_string();
+        if !self.node.records().lock().unwrap().may_host(&me) {
+            return Err(Error::msg(
+                "only the group's root or an admin can be its hub, since the members take the hub's offer from them only",
+            ));
+        }
+        let h = crate::control::Header {
+            name: "hub".into(),
+            forwarder: resolve(forwarder)?,
+            forwarder_key: key.to_string(),
+            obfuscate_off,
+            vless_off,
+            consent: true,
+            ..Default::default()
+        };
+        self.node.set_tunnel_key(Some(self.away.make_hub(&h)?));
+        self.away.serve_if_first(&self.node);
+        // The members connected get the hub's offer without connecting
+        // again (docs/protocol.md, section 4, "Presence").
+        self.node.announce(true);
+        Ok(())
+    }
+
+    /// Makes this phone, a hub, stop being one; without anyway it refuses
+    /// while the group has no other hub. Sync away from home stays on.
+    pub fn hub_off(&self, anyway: bool) -> Result<()> {
+        self.away.stop_hub(&self.node, anyway)
+    }
+
+    /// Meets the group at the blind relay at relay (`host:port`), whose
+    /// key's pin is key, or `default` for the project's, in place of the
+    /// group's hubs, once the user read what a relay learns
+    /// (docs/protocol.md, section 14); with relay empty it leaves the relay
+    /// and turns sync away from home on again with new keys.
+    pub fn relay(&self, relay: &str, key: &str) -> Result<()> {
+        self.credentials()?;
+        if relay.is_empty() {
+            self.away_off()?;
+            return self.away_on();
+        }
+        let h = crate::control::Header {
+            name: "relay".into(),
+            relay: resolve(relay)?,
+            relay_key: key.to_string(),
+            consent: true,
+            ..Default::default()
+        };
+        self.node.set_tunnel_key(Some(self.away.meet_at(&self.node, &h)?));
+        Ok(())
     }
 
     /// The tiles to draw for devices, the group's devices as the app's
@@ -563,9 +725,10 @@ impl Member {
     }
 
     /// Sets what gets the admin, hubs, credentials and evidence messages
-    /// peers send.
+    /// peers send; once the member serves the servers it takes the hubs
+    /// and credentials messages itself.
     pub fn on_message(&self, f: OnMessage) {
-        self.node.on_message(f);
+        *self.app_messages.write().unwrap() = Some(f);
     }
 
     /// Sets what gets each peer once its hello is taken: an admin's app
@@ -1029,6 +1192,24 @@ fn sync_of(mode: &str) -> String {
         _ => "",
     }
     .to_string()
+}
+
+/// A server's address as the hub and the relay take it, `ip:port`, from
+/// `host:port`, its name looked up now, IPv4 first; empty stays empty.
+fn resolve(s: &str) -> Result<String> {
+    use std::net::ToSocketAddrs as _;
+    let s = s.trim();
+    if s.is_empty() || s.parse::<SocketAddr>().is_ok() {
+        return Ok(s.to_string());
+    }
+    let addrs: Vec<SocketAddr> =
+        s.to_socket_addrs().map_err(|e| Error::with(format!("cannot look up {s}"), e))?.collect();
+    addrs
+        .iter()
+        .find(|a| a.is_ipv4())
+        .or(addrs.first())
+        .map(SocketAddr::to_string)
+        .ok_or_else(|| Error::msg(format!("{s} has no address")))
 }
 
 #[cfg(test)]

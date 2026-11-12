@@ -39,7 +39,9 @@
 //! code> it restores the group as a new phone (cbb_restore), asking each
 //! -peer, prints "Restored <device> <group tag>" or "RESTORE FAILED
 //! <message>", and runs the member, the admin key standing for the new root
-//! key, which "MANAGE" signs root_ca with.
+//! key, which "MANAGE" signs root_ca with. "SERVERS" makes the member serve
+//! the servers (cbb_member_servers) with software keys for them, answered
+//! "SERVERS <answer as JSON>".
 //!
 //!   phone-on-linux -addr 127.0.0.1:8764 -name phone -dir /tmp/p -peer 127.0.0.1:8765
 
@@ -53,7 +55,7 @@ use cbb_ffi::{
     cbb_admit_dial, cbb_admit_feed, cbb_admit_free, cbb_admit_new, cbb_free, cbb_group_new, cbb_invite_answer,
     cbb_invite_free, cbb_invite_new, cbb_invite_next, cbb_join_accept, cbb_join_answered, cbb_join_feed,
     cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin, cbb_member_call, cbb_member_manage,
-    cbb_member_start, cbb_restore,
+    cbb_member_servers, cbb_member_start, cbb_restore,
 };
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner;
@@ -75,6 +77,56 @@ unsafe extern "C" fn sign(ctx: *mut core::ffi::c_void, digest: *const u8, sig: *
         sig_len.write(b.len());
     }
     0
+}
+
+/// The keys for the servers, by name, as the app's KeyStore keeps them.
+static SERVER_KEYS: std::sync::Mutex<Vec<(String, SigningKey)>> = std::sync::Mutex::new(Vec::new());
+
+/// The callback of the keys for the servers (cbb_member_servers).
+unsafe extern "C" fn server_keys(
+    _: *mut core::ffi::c_void,
+    op: i32,
+    name: *const u8,
+    name_len: usize,
+    digest: *const u8,
+    out: *mut u8,
+    out_len: *mut usize,
+) -> i32 {
+    // SAFETY: the library gives name_len bytes at name, 32 at digest when
+    // it signs, and 72 bytes of room at out.
+    unsafe {
+        let name = String::from_utf8_lossy(std::slice::from_raw_parts(name, name_len)).into_owned();
+        let mut keys = SERVER_KEYS.lock().unwrap();
+        let write = |b: &[u8]| {
+            std::ptr::copy_nonoverlapping(b.as_ptr(), out, b.len());
+            out_len.write(b.len());
+        };
+        match op {
+            0 => i32::from(!keys.iter().any(|(n, _)| *n == name)),
+            1 => {
+                if !keys.iter().any(|(n, _)| *n == name) {
+                    let seed = u8::try_from(keys.len() + 20).unwrap_or(250);
+                    keys.push((name.clone(), SigningKey::from_slice(&[seed; 32]).expect("a valid scalar")));
+                }
+                let k = &keys.iter().find(|(n, _)| *n == name).expect("made above").1;
+                write(k.verifying_key().to_sec1_point(false).as_bytes());
+                0
+            }
+            2 => {
+                let Some((_, k)) = keys.iter().find(|(n, _)| *n == name) else { return 1 };
+                let d = std::slice::from_raw_parts(digest, 32);
+                let Ok(s): Result<p256::ecdsa::Signature, _> = k.sign_prehash(d) else { return 1 };
+                write(s.to_der().as_bytes());
+                0
+            }
+            3 => {
+                let kept: Vec<&str> = name.split('\n').collect();
+                keys.retain(|(n, _)| kept.contains(&n.as_str()));
+                0
+            }
+            _ => 1,
+        }
+    }
 }
 
 /// Takes an answer of the library as JSON.
@@ -349,6 +401,13 @@ fn run_member(
         } else if line == "DEVICES" {
             let a = call(serde_json::json!({ "op": "devices" }).to_string());
             println!("DEVICES {}", a["ok"]["devices"]);
+        } else if line == "SERVERS" {
+            let mut n = 0usize;
+            // SAFETY: m runs; the callback needs no context.
+            println!(
+                "SERVERS {}",
+                take(unsafe { cbb_member_servers(m, server_keys, std::ptr::null_mut(), &mut n) }, n)
+            );
         } else if let Some(req) = line.strip_prefix("CALL ") {
             println!("ANSWER {}", call(req.to_string()));
         } else if line == "MUTED" || line == "SYNC ON" || line.starts_with("SYNC OFF ") {

@@ -462,6 +462,32 @@ pub unsafe extern "C" fn cbb_member_call(
     to_c(guard::answer(|| m.call(req)), answer_len)
 }
 
+/// Makes the member keep the group's server credentials and serve as one
+/// of the group's hubs or meet it at a blind relay, as the service does
+/// (src/member.rs, servers), with the app's keys for the servers behind
+/// `keys` (member::KeysFn), which must work with `ctx` from any thread for
+/// the rest of the process. The answer is `{"ok"}` or `{"error"}`.
+///
+/// # Safety
+///
+/// `m` must be a member of `cbb_member_start`, not stopped, and
+/// `answer_len` writable.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_member_servers(
+    m: *const member::Member,
+    keys: member::KeysFn,
+    ctx: *mut core::ffi::c_void,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    // SAFETY: as the function's contract says.
+    let Some(m) = (unsafe { m.as_ref() }) else { return core::ptr::null_mut() };
+    if answer_len.is_null() {
+        return core::ptr::null_mut();
+    }
+    to_c(guard::answer(|| m.servers(keys, ctx as usize)), answer_len)
+}
+
 /// Signs an admin's change to a device of the group, or a command for it
 /// (src/member.rs, manage): `request` is `{"action", "device", "name",
 /// "for_ms", "public", "admin_ca", "timeout_ms"}` and `sign` with `ctx`

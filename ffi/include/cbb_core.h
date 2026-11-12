@@ -115,6 +115,27 @@ cbb_member *cbb_member_start(const uint8_t *request, size_t len, cbb_sign_fn sig
  */
 uint8_t *cbb_member_call(const cbb_member *m, const uint8_t *request, size_t len, size_t *answer_len);
 /*
+ * The app's keys for the servers (docs/protocol.md, section 18), by name
+ * ("server TAG" or "period TAG"): op 0 answers 0 when the app holds the key
+ * name, 1 writes its public point (SEC1, 65 bytes) to out, making the key
+ * first, 2 writes its signature (DER) of the 32-byte digest to out, 3 drops
+ * every key but those name lists, one a line. out has room for 72 bytes and
+ * out_len gets how many it holds; any answer but 0 is a failure. ctx must
+ * stay valid, and the callback callable from any thread, for the rest of
+ * the process.
+ */
+typedef int32_t (*cbb_keys_fn)(void *ctx, int32_t op, const uint8_t *name, size_t name_len, const uint8_t *digest,
+                               uint8_t *out, size_t *out_len);
+/*
+ * Makes the member do what the service does for the servers: it keeps the
+ * group's server credentials with its keys for them behind keys, signs its
+ * server key and, on the root, the hubs' and members' credentials and the
+ * period the app hands the root key for (cbb_member_manage, period); it may
+ * then be one of the group's hubs (the ops hub, hub_off) or meet the group at
+ * a blind relay (relay). The answer is {"ok"} or {"error"}.
+ */
+uint8_t *cbb_member_servers(const cbb_member *m, cbb_keys_fn keys, void *ctx, size_t *answer_len);
+/*
  * Stops the member. It stays valid for the rest of the process: another
  * thread may still call it, and a call after the stop answers that the
  * member stopped; stopping it again does nothing.
@@ -142,7 +163,10 @@ void cbb_member_stop(cbb_member *m);
  * {"state":"effective","cert"} once it made the phone the root.
  * recover_with_sheet with "sheet" (the recovery sheet's QR code) and
  * "root_ca" claims the group for a phone that restored it (cbb_restore): the
- * sheet's key signs the claim, sign is not called.
+ * sheet's key signs the claim, sign is not called. period, on the root of a
+ * member that serves the servers (cbb_member_servers), signs the next period
+ * of the server credentials with the root key, when one is due, and answers
+ * {"period_due"}.
  */
 uint8_t *cbb_member_manage(const cbb_member *m, const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx,
                            size_t *answer_len);

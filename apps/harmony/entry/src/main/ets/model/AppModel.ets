@@ -30,6 +30,11 @@ import { Shared } from '../common/Share';
 // minute after the member starts, once it reached its peers, is plenty.
 const RENEW_EVERY_MS: number = 6 * 3600 * 1000;
 const RENEW_FIRST_MS: number = 60 * 1000;
+// The project's forwarder, its key's pin given as 'default' (docs/protocol.md, section 13).
+export const PROJECT_FORWARDER: string = 'cbb.tools:8764';
+export const PROJECT_KEY: string = 'default';
+// What the core says when the hub to stop is the group's only one.
+const ONLY_HUB: string = 'no other hub';
 // A waiting claim is looked at every minute, and first once the member had
 // time to reach its peers.
 const CLAIM_EVERY_MS: number = 60 * 1000;
@@ -227,6 +232,7 @@ export class AppModel {
         this.renew();
       }, RENEW_FIRST_MS);
     }
+    await this.restoreServers();
     if (m.member.claim !== undefined && m.member.claim.length > 0) {
       this.startClaimTimer();
       setTimeout(() => {
@@ -509,6 +515,104 @@ export class AppModel {
     const a = await this.runManage('renew', '', {} as Record<string, Object>, undefined, true);
     if (a !== undefined && (a.renewed ?? 0) > 0) {
       Errors.log(`renew: renewed ${a.renewed} member certificates`);
+    }
+    // The root key signs the next period of the group's server keys
+    // (docs/protocol.md, section 18) when it is due.
+    if (this.isRoot() && this.member.periodDue) {
+      if (await this.runManage('period', '', {} as Record<string, Object>, undefined, true) !== undefined) {
+        Errors.log('servers: signed the next period of the server keys');
+        this.member.periodDue = false;
+      }
+    }
+  }
+
+  // This phone as the group's hub and its blind relay, as the user set
+  // them; the core keeps neither, so they are set again each time the
+  // member starts.
+  hubWanted(): boolean {
+    return this.prefs !== undefined && this.prefs.getSync('hub_on', false) as boolean;
+  }
+
+  hubForwarder(): string {
+    return this.prefs !== undefined ? this.prefs.getSync('hub_forwarder', '') as string : '';
+  }
+
+  hubKey(): string {
+    return this.prefs !== undefined ? this.prefs.getSync('hub_key', '') as string : '';
+  }
+
+  hubDisguise(): string {
+    return this.prefs !== undefined ? this.prefs.getSync('hub_disguise', 'plain') as string : 'plain';
+  }
+
+  relayAddress(): string {
+    return this.prefs !== undefined ? this.prefs.getSync('relay', '') as string : '';
+  }
+
+  relayKey(): string {
+    return this.prefs !== undefined ? this.prefs.getSync('relay_key', '') as string : '';
+  }
+
+  // Makes this phone a hub of the group, through the forwarder at
+  // forwarder with key (both empty for the project's), or stops it being
+  // one (anyway: also when it is the group's only hub). Shows why not,
+  // except that it is the only hub, which it answers for the user to decide.
+  async setHub(on: boolean, forwarder: string, key: string, disguise: string, anyway: boolean): Promise<Failure | undefined> {
+    const own = forwarder.length > 0;
+    const failure = await this.member.setHub(on, own ? forwarder : PROJECT_FORWARDER, own ? key : PROJECT_KEY, disguise, anyway);
+    if (failure !== undefined) {
+      if (on || anyway || !failure.details.includes(ONLY_HUB)) {
+        this.show(Errors.shown(failure));
+      }
+      return failure;
+    }
+    this.prefs?.putSync('hub_on', on);
+    if (on) {
+      this.prefs?.putSync('hub_forwarder', forwarder);
+      this.prefs?.putSync('hub_key', key);
+      this.prefs?.putSync('hub_disguise', disguise);
+    }
+    this.prefs?.flush();
+    this.show('');
+    return undefined;
+  }
+
+  // Whether a failure of setHub is that this phone is the group's only hub.
+  onlyHub(failure: Failure | undefined): boolean {
+    return failure !== undefined && failure.details.includes(ONLY_HUB);
+  }
+
+  // Meets the group at the blind relay at relay with key, or leaves it
+  // with both empty. Shows why not.
+  async setRelay(relay: string, key: string): Promise<boolean> {
+    const failure = await this.member.setRelay(relay, key);
+    if (failure !== undefined) {
+      this.show(Errors.shown(failure));
+      return false;
+    }
+    this.prefs?.putSync('relay', relay);
+    this.prefs?.putSync('relay_key', key);
+    this.prefs?.flush();
+    this.show('');
+    return true;
+  }
+
+  private async restoreServers(): Promise<void> {
+    if (this.hubWanted() && this.isAdmin()) {
+      const forwarder = this.hubForwarder();
+      const own = forwarder.length > 0;
+      const failure = await this.member.setHub(true, own ? forwarder : PROJECT_FORWARDER, own ? this.hubKey() : PROJECT_KEY,
+        this.hubDisguise(), false);
+      if (failure !== undefined) {
+        Errors.log(`servers: the hub did not start again: ${failure.message} (${failure.details})`);
+      }
+    }
+    const relay = this.relayAddress();
+    if (relay.length > 0) {
+      const failure = await this.member.setRelay(relay, this.relayKey());
+      if (failure !== undefined) {
+        Errors.log(`servers: the relay was not met again: ${failure.message} (${failure.details})`);
+      }
     }
   }
 

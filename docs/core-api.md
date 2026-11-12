@@ -88,6 +88,17 @@ and its copies through the callback and presents itself as a phone (role `phone`
 `hardware`, or `file` when the request's `key_store` says so); it dials the members mDNS finds
 (`mdns`, on by default) and those the app hands in. `cbb_member_stop` stops it.
 
+`cbb_member_servers` makes the member serve the group's servers itself, for an app that does
+not run them on its own (the Harmony app; the iPhone and Android apps do it in their kits): it
+keeps the group's server credentials (protocol.md, section 18) in `credentials.json`, takes the
+`credentials` and `hubs` messages in place of the app, refreshes them when the records change and
+every 12 hours, and runs the phone as a hub or at the blind relay (the ops `hub`, `hub_off`,
+`relay` and `servers`). Its server and period keys are the app's, through a `cbb_keys_fn`
+callback named `server TAG` or `period TAG`: op 0 answers whether the key is there, op 1 makes
+it if needed and gives its uncompressed P-256 point, op 2 signs a SHA-256 digest (DER), op 3
+keeps only the keys the request lists, one name a line; it returns 0, or a code the member
+names in its error.
+
 `cbb_member_call` asks it everything else, a request `{"op", "args"}` and its answer `{"ok"}`
 or `{"error"}` as `cbb_call`'s. `fetch`, `command` and `wait` wait for the network, so the app
 calls them off its main thread. A copy is `{id, origin, age_ms, kind, via, text, media,
@@ -139,6 +150,9 @@ after the header, and an operation that answers more than once marks the last an
 | `why` | phone | `away` (optional: where a tunnel the app runs itself stands, `{hub, standby, hub_device, through, hidden, relay, relay_connected, forwarder, forwarder_registered, entries_stale, error}`; without it the member's own) | `{"why"}`: why the phone does not sync (`cbb_core::why`, docs/apps.md "Why it does not sync"), `[{code, level, until_ms?, device?, devices?, value?, detail?}]`, the reason that stops the most first; empty when everything syncs |
 | `away`, `away_status` | phone | `on` for `away` | `{"away"}`: sync away from home turned on (new tunnel keys, which the hellos offer the group's hubs) or off (the keys and the hubs' offers forgotten), and where it stands, as `cbb global` shows it on the lite member (`hub_device`, `endpoints`, `through`, `error`, `detail`), or null while it is off; only in a library built with the feature `tunnel`, otherwise `away` with `on` answers an error |
 | `joined_by_invite` | phone | `invite`: the invitation's text the phone joined by | `{"away"}`: sync away from home turned on as `away` does, and the member offers its tunnel key to the hub through the invitation's guest tunnel until the hub answers, after a restart too, for up to a day (the Aurora app; the iPhone and Android apps do it with their own tunnels and the tunnel's `guest_start`); only with the feature `tunnel` |
+| `servers` | phone | none | `{"period_due"}`: whether the group's server keys need a period the root key signs (protocol.md, section 18), after `cbb_member_servers`; the app of a root phone then signs it with `cbb_member_manage`'s `period` |
+| `hub`, `hub_off` | phone | `forwarder` (`host:port`), `key` (its pin, `default` for the project's), `obfuscate_off`, `vless_off` for `hub`; `anyway` for `hub_off` | `{"away"}`, as `away_status` gives it, with `hub` and `forwarder` `{endpoint, registered, error, detail}`: this phone, the root or an admin, is one of the group's hubs with the member's own WireGuard (`member/src/away/serve.rs`), registered with the forwarder, or stops being one; `hub_off` refuses while the group has no other hub unless `anyway` (protocol.md, section 11, "Stopping a hub"); only after `cbb_member_servers` and with the feature `tunnel` (the Harmony app; the iPhone and Android apps run their own hub through `cbb_tunnel`) |
+| `relay` | phone | `relay` (`host:port`, empty to leave it), `key` (its pin, `default` for the project's) | `{"away"}` with `relay` `{endpoint, connected, online, error, detail}`: the phone meets the group at the blind relay in place of a hub, registered with the group's server credentials (protocol.md, sections 14 and 18), once the app showed what a relay learns; leaving it turns sync away from home on again with new keys; only after `cbb_member_servers` and with the feature `tunnel` |
 | `add_records` | phone | `records`: those the app's root or admin key signed | `{}`: kept and sent to every peer |
 | `command` | phone | `command` (a record envelope), `timeout_ms` (10 s by default) | `{"result"}`: sent to its receiver, or to the group's hubs connected, which pass it on (protocol.md, section 15) |
 | `send_cert`, `send_admin_ca`, `send_tunnel` | phone | `to`, and `cert` with `issuer`, `ca`, or `offer` | `{"sent"}` |
@@ -234,7 +248,7 @@ answers. As the root it makes a connected computer an admin (`make_admin`: an ad
 admin key its hello offers, its device record again, and the admin message), and as any admin it
 renews (`renew`) every member certificate that is due, each connected member's, sent to it, and the
 phone's own, as the phone kits do when a peer connects; as the current root, also each connected
-admin's CA from an earlier root, as after a takeover. It takes the group over as the computers'
+admin's CA from an earlier root, as after a takeover. As the root, after `cbb_member_servers`, it signs the next period of the group's server credentials (`period`, protocol.md section 18) with the root key the request's `public` names, and answers `{"period_due"}`. It takes the group over as the computers'
 service does (`cbb_core::takeover`): `root_ca` makes a root CA for a new key of the phone (on
 Aurora its admin key), which the app keeps before the claim; `take_over` (from the lost root
 `device`), `take_handed_over` (the root handed the group to this admin) or `recover` (signed with

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 // Settings: the language, the error details, the notifications, the
-// advanced settings with the lab, the root's settings of the group (how long a claim waits, which keys an admin
+// advanced settings with the lab, this phone as the hub or at a relay, the root's settings of the group (how long a claim waits, which keys an admin
 // may keep), leaving the group, and what this app and its core are.
 
 import { router } from '@kit.ArkUI';
@@ -174,6 +174,17 @@ struct Settings {
 
         if (app.membership !== undefined) {
           this.section(t('settings_group'))
+          if (app.member.running) {
+            Row() {
+              Text($r('app.string.hub_title')).fontColor($r('app.color.text')).layoutWeight(1)
+              Text(app.member.hubOn ? t('hub_switch') : app.member.relayAt.length > 0 ? t('relay_title') : '')
+                .fontSize(13).fontColor($r('app.color.secondary'))
+            }
+            .width('100%')
+            .onClick(() => {
+              router.pushUrl({ url: 'pages/Hub' });
+            })
+          }
           if (app.isRoot() && app.member.running) {
             Row() {
               Text($r('app.string.settings_delay')).fontColor($r('app.color.text')).layoutWeight(1)

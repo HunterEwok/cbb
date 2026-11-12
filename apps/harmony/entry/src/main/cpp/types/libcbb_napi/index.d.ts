@@ -36,6 +36,7 @@ export const qrRead: (gray: ArrayBuffer, width: number, height: number, stride: 
 export const memberStart: (request: string, onEvent: (event: string) => void) => Promise<Made>;
 export const memberCall: (member: Handle, request: string) => Promise<string>;
 export const memberManage: (member: Handle, request: string, which: Which) => Promise<string>;
+export const memberServers: (member: Handle, index: string) => Promise<string>;
 export const memberStop: (member: Handle) => Promise<void>;
 
 export const joinNew: (request: string, admin: boolean) => Promise<Made>;

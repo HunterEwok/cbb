@@ -57,4 +57,16 @@ bool sign(Which which, const uint8_t *digest, std::vector<uint8_t> *der, Failure
 int32_t signMember(void *ctx, const uint8_t *digest, uint8_t *sig, size_t *sigLen);
 int32_t signAdmin(void *ctx, const uint8_t *digest, uint8_t *sig, size_t *sigLen);
 
+// The keys for the servers (docs/protocol.md, section 18), by the name the
+// core gives them ("server TAG", "period TAG"): P-256 keys in HUKS that sign
+// without asking, since they sign in the background, as the iPhone keeps
+// them in its Secure Enclave. The file at path lists those made, so that the
+// keys of an earlier period go; forget deletes them too.
+void setServerIndex(const std::string &path);
+
+// The core's callback for them (cbb_member_servers's keys_fn): op 0 has, 1
+// the public key, made first, 2 sign, 3 keep only the names listed.
+int32_t serverKeys(void *ctx, int32_t op, const uint8_t *name, size_t nameLen, const uint8_t *digest, uint8_t *out,
+                   size_t *outLen);
+
 } // namespace keys

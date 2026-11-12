@@ -37,6 +37,104 @@ use crate::join::{AppKey, SignFn, answer};
 /// Gets an event as JSON bytes, on one of the member's threads.
 pub use crate::join::EventFn;
 
+/// The app's keys for the servers (cbb_member_servers): op HAS answers 0
+/// when the app holds the key name, PUBLIC writes its public point (SEC1,
+/// 65 bytes) to out, making the key first when there is none, SIGN writes
+/// the key's signature (DER) of the 32-byte digest to out, and KEEP drops
+/// every key but those name lists, one a line; out has room for 72 bytes,
+/// and out_len gets how many it holds. Any other answer than 0 is a
+/// failure.
+pub type KeysFn = unsafe extern "C" fn(
+    ctx: *mut core::ffi::c_void,
+    op: i32,
+    name: *const u8,
+    name_len: usize,
+    digest: *const u8,
+    out: *mut u8,
+    out_len: *mut usize,
+) -> i32;
+
+const KEYS_HAS: i32 = 0;
+const KEYS_PUBLIC: i32 = 1;
+const KEYS_SIGN: i32 = 2;
+const KEYS_KEEP: i32 = 3;
+
+/// The app's keys for the servers behind its callback.
+#[derive(Clone, Copy)]
+struct AppKeys {
+    f: KeysFn,
+    ctx: usize,
+}
+
+impl AppKeys {
+    /// Calls the app with op for the key name; the bytes it wrote, or its
+    /// answer when it is not 0.
+    fn call(&self, op: i32, name: &str, digest: Option<&[u8; 32]>) -> core::result::Result<Vec<u8>, i32> {
+        let mut out = [0u8; 72];
+        let mut n = 0usize;
+        // SAFETY: the app gave a callback valid for the rest of the process
+        // that reads name_len bytes at name, 32 at digest when it is not
+        // null, and writes at most 72 bytes at out.
+        let rc = unsafe {
+            (self.f)(
+                self.ctx as *mut core::ffi::c_void,
+                op,
+                name.as_ptr(),
+                name.len(),
+                digest.map_or(core::ptr::null(), |d| d.as_ptr()),
+                out.as_mut_ptr(),
+                &mut n,
+            )
+        };
+        if rc != 0 {
+            return Err(rc);
+        }
+        Ok(out.get(..n).unwrap_or_default().to_vec())
+    }
+}
+
+/// One key for the servers that the app holds.
+struct HeldKey {
+    keys: AppKeys,
+    name: String,
+    public: Vec<u8>,
+}
+
+impl cbb_core::identity::ExternalKey for HeldKey {
+    fn public(&self) -> Vec<u8> {
+        self.public.clone()
+    }
+
+    fn sign_digest(&self, digest: &[u8; 32]) -> Result<Vec<u8>> {
+        match self.keys.call(KEYS_SIGN, &self.name, Some(digest)) {
+            Ok(sig) if !sig.is_empty() => Ok(sig),
+            Ok(_) | Err(_) => Err(Error::msg(format!("the app's key {} did not sign", self.name))),
+        }
+    }
+}
+
+impl cbb_member::credentials::HeldKeys for AppKeys {
+    fn has(&self, name: &str) -> bool {
+        self.call(KEYS_HAS, name, None).is_ok()
+    }
+
+    fn get(&self, name: &str) -> Result<Arc<dyn cbb_core::identity::ExternalKey>> {
+        let public = self
+            .call(KEYS_PUBLIC, name, None)
+            .map_err(|rc| Error::msg(format!("the app gave no key {name} (code {rc})")))?;
+        if public.len() != 65 || public.first() != Some(&4) {
+            return Err(Error::msg(format!("the app's key {name} is not a P-256 key")));
+        }
+        Ok(Arc::new(HeldKey { keys: *self, name: name.to_string(), public }))
+    }
+
+    fn keep(&self, names: &[String]) -> Result<()> {
+        self.call(KEYS_KEEP, &names.join("\n"), None)
+            .map(|_| ())
+            .map_err(|rc| Error::msg(format!("the app did not drop the keys of an earlier period (code {rc})")))
+    }
+}
+
 #[derive(Deserialize)]
 struct StartArgs {
     /// The app's data directory: records.json, the clock's mark, the entries.
@@ -775,6 +873,25 @@ impl Member {
                 Ok(json!({ "away": n.away_status() }))
             }
             "away_status" => Ok(json!({ "away": n.away_status() })),
+            // Once the member serves the servers (cbb_member_servers): this
+            // phone as one of the group's hubs, or not; the blind relay; and
+            // whether the root's next period waits for the app.
+            "hub" => {
+                let s = |k: &str| arg(&a, k).as_str().unwrap_or_default().to_string();
+                let b = |k: &str| arg(&a, k).as_bool().unwrap_or(false);
+                n.hub_on(&s("forwarder"), &s("key"), b("obfuscate_off"), b("vless_off"))?;
+                Ok(json!({ "away": n.away_status() }))
+            }
+            "hub_off" => {
+                n.hub_off(arg(&a, "anyway").as_bool().unwrap_or(false))?;
+                Ok(json!({ "away": n.away_status() }))
+            }
+            "relay" => {
+                let s = |k: &str| arg(&a, k).as_str().unwrap_or_default().to_string();
+                n.relay(&s("relay"), &s("key"))?;
+                Ok(json!({ "away": n.away_status() }))
+            }
+            "servers" => Ok(json!({ "period_due": n.period_due() })),
             // The phone joined by a remote invitation and stored its
             // identity: sync away from home goes on, and the member offers
             // its tunnel key to the hub through the invitation's guest
@@ -861,6 +978,19 @@ impl Member {
         serde_json::to_value(self.node.muted()).unwrap_or_default()
     }
 
+    /// Makes the member serve the servers (phone::Member::serve_servers)
+    /// with the app's keys for them behind keys, which must work with ctx
+    /// for the rest of the process.
+    pub fn servers(&self, keys: KeysFn, ctx: usize) -> Vec<u8> {
+        answer((|| -> Result<Value> {
+            if self.stopped.load(Ordering::SeqCst) {
+                return Err(Error::msg("the member stopped"));
+            }
+            self.node.serve_servers(Arc::new(AppKeys { f: keys, ctx }))?;
+            Ok(json!({}))
+        })())
+    }
+
     /// Stops the member once; calls answer that it stopped from then on.
     pub fn stop(&self) {
         if !self.stopped.swap(true, Ordering::SeqCst) {
@@ -915,6 +1045,12 @@ impl Member {
                     let s = Signer { ca: &root, key: &key, me: &me };
                     let cert = self.node.finish_takeover(&s, &own)?;
                     return Ok(json!({ "state": "effective", "cert": b64(&cert) }));
+                }
+                // The next period of the server credentials, on the root,
+                // with the root key the app unlocked after asking.
+                "period" => {
+                    self.node.sign_period(Arc::new(AppKey { public: a.public.clone(), sign, ctx }))?;
+                    return Ok(json!({ "period_due": self.node.period_due() }));
                 }
                 // A new phone that restored the group (cbb_restore) claims
                 // it with the recovery key from the sheet, which signs the

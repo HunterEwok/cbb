@@ -987,6 +987,14 @@ settings, why it does not sync and the lab.
   signs the paste command (`cbb_member_manage`, `paste`). As a target, HarmonyOS lets no app
   put keys into another app, so the phone types an admin's paste on its Bluetooth keyboard,
   as Aurora does.
+- **Away from home**: as on the iPhone and Android, the phone reaches the group's hub, and in a
+  group without a computer the root or an admin phone is the hub itself (Settings, "This phone
+  as the hub"), registered with the project's forwarder or the user's own, its tunnel hidden for
+  strict networks (AmneziaWG, VLESS); a group without a hub meets at a blind relay once the
+  user read what it learns. The core runs both (`cbb_member_servers`, docs/core-api.md), with
+  the server and period keys in HUKS; the root phone signs the next period of the group's
+  server credentials (docs/protocol.md, section 18) with the root key when it renews the
+  certificates, after the face, fingerprint or PIN.
 - **The lab's Bluetooth keyboard**: the app serves HID over GATT (`@ohos.bluetooth.ble`, a
   GATT server and its advertising) with the core's report map and reports, as Aurora does
   through BlueZ; a TV, a tablet or a computer pairs with the phone, which the system confirms,

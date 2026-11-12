@@ -139,12 +139,30 @@ interface Sends {
   sends?: boolean;
 }
 
+interface Server {
+  endpoint?: string;
+  registered?: boolean;
+  connected?: boolean;
+  online?: string[];
+  error?: string;
+  detail?: string;
+}
+
 interface Away {
   keys_in_file?: boolean;
   hub_device?: string;
   through?: boolean;
   error?: string;
   detail?: string;
+  // This phone is one of the group's hubs, with its forwarder; or it meets
+  // the group at a blind relay.
+  hub?: boolean;
+  forwarder?: Server;
+  relay?: Server;
+}
+
+interface Servers {
+  period_due?: boolean;
 }
 
 interface AwayAnswer {
@@ -243,6 +261,20 @@ export class Member {
   @Trace awayStatus: string = 'off';
   @Trace awayHub: string = '';
   @Trace awayError: string = '';
+  // The phone as one of the group's hubs (docs/apps.md, "The phone as the
+  // hub"): on, where its forwarder stands ("off", "home", "registering",
+  // "registered", "failed") and why it failed.
+  @Trace hubOn: boolean = false;
+  @Trace hubStatus: string = 'off';
+  @Trace hubError: string = '';
+  // The blind relay the phone meets the group at, "" for none, and whether
+  // the link is up.
+  @Trace relayAt: string = '';
+  @Trace relayConnected: boolean = false;
+  @Trace relayOnline: number = 0;
+  @Trace relayError: string = '';
+  // The root's next period of the server credentials waits for the user.
+  @Trace periodDue: boolean = false;
 
   // An admin renewed the certificate, or a takeover made a new root.
   onIdentity: (cert: string, issuer: string, roots: string[]) => void = () => {};
@@ -344,6 +376,12 @@ export class Member {
     this.timer = setInterval(() => {
       this.poll();
     }, POLL_MS);
+    // The server credentials, the hub and the relay (cbb_member_servers),
+    // with the keys for the servers in HUKS.
+    const servers = read<Object>(await cbb.memberServers(made.handle, `${dir}/server-keys.txt`), 'member');
+    if (servers.failure !== undefined) {
+      Errors.log(`member: the server credentials: ${servers.failure.message} (${servers.failure.details})`);
+    }
     await this.pollMuted();
     await this.pollDevices();
   }
@@ -368,6 +406,7 @@ export class Member {
     this.muted = false;
     this.fetching = false;
     this.readAway(undefined);
+    this.periodDue = false;
     Errors.log('member: stopped');
   }
 
@@ -623,6 +662,45 @@ export class Member {
     await this.pollMuted();
     await this.pollDevices();
     await this.pollAway();
+    const s = await this.call<Servers>('servers');
+    const due = s.ok?.period_due === true;
+    if (due !== this.periodDue) {
+      this.periodDue = due;
+    }
+  }
+
+  // Makes this phone one of the group's hubs, reached away from home
+  // through the forwarder at forwarder whose key's pin is key ('default'
+  // for the project's), hidden as disguise says ('plain' WireGuard,
+  // 'obfuscate' AmneziaWG, 'vless' AmneziaWG with VLESS at the forwarder);
+  // or stops it being one. Answers why it failed.
+  async setHub(on: boolean, forwarder: string, key: string, disguise: string, anyway: boolean): Promise<Failure | undefined> {
+    const a = on
+      ? await this.call<AwayAnswer>('hub', {
+        'forwarder': forwarder,
+        'key': key,
+        'obfuscate_off': disguise === 'plain',
+        'vless_off': disguise !== 'vless'
+      } as Record<string, Object>)
+      : await this.call<AwayAnswer>('hub_off', { 'anyway': anyway } as Record<string, Object>);
+    if (a.ok === undefined) {
+      return a.failure;
+    }
+    Errors.log(on ? `member: this phone is a hub of the group, through ${forwarder}` : 'member: this phone is no hub any more');
+    this.readAway(a.ok.away);
+    return undefined;
+  }
+
+  // Meets the group at the blind relay at relay whose key's pin is key
+  // ('default' for the project's), or leaves it with relay empty.
+  async setRelay(relay: string, key: string): Promise<Failure | undefined> {
+    const a = await this.call<AwayAnswer>('relay', { 'relay': relay, 'key': key } as Record<string, Object>);
+    if (a.ok === undefined) {
+      return a.failure;
+    }
+    Errors.log(relay.length > 0 ? `member: meets the group at the relay ${relay}` : 'member: left the relay');
+    this.readAway(a.ok.away);
+    return undefined;
   }
 
   private async pollMuted(): Promise<void> {
@@ -697,6 +775,31 @@ export class Member {
     }
     if (hubName !== this.awayHub) {
       this.awayHub = hubName;
+    }
+    const hubOn = away?.hub === true;
+    const fw = away?.forwarder;
+    let hubStatus = 'off';
+    if (hubOn) {
+      hubStatus = fw === undefined ? 'home' : fw.registered === true ? 'registered' :
+        (fw.error ?? '').length > 0 ? 'failed' : 'registering';
+    }
+    const hubError = hubStatus === 'failed' ? Errors.shown(new Failure(fw?.error ?? '', fw?.detail ?? '')) : '';
+    if (hubOn !== this.hubOn || hubStatus !== this.hubStatus || hubError !== this.hubError) {
+      this.hubOn = hubOn;
+      this.hubStatus = hubStatus;
+      this.hubError = hubError;
+    }
+    const r = away?.relay;
+    const relayAt = r?.endpoint ?? '';
+    const relayConnected = r?.connected === true;
+    const relayOnline = r?.online?.length ?? 0;
+    const relayError = (r?.error ?? '').length > 0 ? Errors.shown(new Failure(r?.error ?? '', r?.detail ?? '')) : '';
+    if (relayAt !== this.relayAt || relayConnected !== this.relayConnected || relayOnline !== this.relayOnline ||
+      relayError !== this.relayError) {
+      this.relayAt = relayAt;
+      this.relayConnected = relayConnected;
+      this.relayOnline = relayOnline;
+      this.relayError = relayError;
     }
   }
 
