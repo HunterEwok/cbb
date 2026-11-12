@@ -434,6 +434,9 @@ const PAIR_USE: &str =
 
 fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     let mut name = host_name();
+    // -name and -caps as given, which a join through the running service
+    // takes in place of its own.
+    let (mut given_name, mut given_caps) = (None, None);
     // The service's own port, which its firewall rule opens (OpenWrt's
     // init script passes the one in /etc/config/cbb); out of a group the
     // service does not listen on it, so the phone finds cbb pair there.
@@ -447,8 +450,14 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     while i < args.len() {
         let next = || args.get(i + 1).cloned().ok_or_else(|| Error::msg(tr!("{} needs a value", args[i])));
         match flag(&args[i]) {
-            Some("caps") if !for_next => caps = parse_caps(&next()?)?,
-            Some("name") => name = next()?,
+            Some("caps") if !for_next => {
+                caps = parse_caps(&next()?)?;
+                given_caps = Some(caps.clone());
+            }
+            Some("name") => {
+                name = next()?;
+                given_name = Some(name.clone());
+            }
             Some("port") => port = next()?.parse().context("the port is a number")?,
             Some("addr") => addrs.push(next()?),
             // -code [address:port], as Go's: the code from standard input,
@@ -479,10 +488,12 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
         Some(path) => Some(std::sync::Mutex::new(Some(open_app_file(path)?))),
         None => None,
     };
-    if invite.is_none() && code_addr.as_deref() == Some("") {
-        // As Go's joinWithCode: the service joins, by the window that mDNS
-        // finds, and keeps the identity it gets. With an address, cbb joins
-        // itself, into its state folder, before its service starts.
+    // As Go's joinWithCode: the service joins, by the window that mDNS finds
+    // or at the address given, and keeps the identity it gets, with its own
+    // -name and -caps unless cbb pair gives them. With an address and no
+    // service running, cbb joins itself, into its state folder, before its
+    // service starts.
+    if invite.is_none() && code_addr.as_ref().is_some_and(|a| a.is_empty() || service_answers(g)) {
         use std::io::IsTerminal;
         if std::io::stdin().is_terminal() {
             print!("{}", tr!("Pairing code: "));
@@ -491,7 +502,14 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
         let mut line = String::new();
         std::io::stdin().read_line(&mut line).context("cannot read the code")?;
         let code = pair::normalize_code(line.trim())?;
-        let h = control::Header { op: "join".into(), code, ..Default::default() };
+        let h = control::Header {
+            op: "join".into(),
+            code,
+            address: code_addr.unwrap_or_default(),
+            name: given_name.unwrap_or_default(),
+            caps: given_caps,
+            ..Default::default()
+        };
         request(g, &control::Message::new(h, Vec::new()))?;
         println!("{}", tr!("Joined the group."));
         return Ok(());
@@ -937,6 +955,12 @@ fn hint(systemd: bool, systemctl: &str) -> String {
 }
 
 /// The member port of the running service, None when none answers.
+/// Whether a service answers on the control socket.
+fn service_answers(g: &Global) -> bool {
+    request(g, &control::Message::new(control::Header { op: "status".into(), ..Default::default() }, Vec::new()))
+        .is_ok()
+}
+
 fn service_port(g: &Global) -> Option<u16> {
     let m =
         request(g, &control::Message::new(control::Header { op: "status".into(), ..Default::default() }, Vec::new()))

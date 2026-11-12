@@ -366,7 +366,10 @@ phones' `member/src/node.rs` and `member/src/phone.rs`.
   30 s, the higher one dials it as well, since a firewall may keep the other from reaching
   it. Of two connections between the same two members, the one the lower device ID dialed
   stays: a member MUST refuse a new connection when the one the lower ID dialed is up and the
-  new one is not that, and otherwise the new one replaces the old.
+  new one is not that, and otherwise the new one replaces the old. The side that dialed
+  applies the same rule to its new connection, so the two keep the same one. A member does
+  not dial a member it is connected to; one given only an address (`-peer`) learns which
+  member is there from its first connection.
 - A member without `dials` (TXT `r=listen`) dials no one; every member with `dials` that
   finds it dials it, whatever the device IDs. It accepts the members and the phones.
 - A phone app MUST dial every found member with a matching `g`. Phones accept nothing and
