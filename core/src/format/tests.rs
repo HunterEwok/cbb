@@ -759,3 +759,65 @@ fn every_signature_has_one_form() {
         }
     }
 }
+
+/// The root's record of the admin that signs a first grant is read by the
+/// record reader itself: a body that reader refuses is no admin's record
+/// for a grant either.
+#[test]
+fn the_admins_record_of_a_grant_is_read_as_a_record() {
+    use p256::ecdsa::SigningKey;
+    let sk = |name: &str| SigningKey::from_slice(&super::sha256(&[name.as_bytes()])).unwrap();
+    let point = |name: &str| sig::public_point(&sk(name));
+    let (root, admin_p, member_p) = (point("root"), point("admin"), point("member"));
+    let root_hash = Key::new(Alg::Es256, &root).hash().0;
+    let group = Key::new(Alg::Es256, &root).device_id().0;
+    let leaf = Key::new(Alg::Es256, &point("lamp")).device_id().0;
+    let (admin, member) = (Key::new(Alg::Es256, &admin_p), Key::new(Alg::Es256, &member_p));
+    let admin_hash = admin.hash().0;
+    let record = |change: Option<(u16, Value<'static>)>| {
+        let mut m: Vec<(u16, Value)> = vec![
+            (1, Value::Uint(1)),
+            (2, Value::Bytes(&group)),
+            (3, Value::Bytes(&root_hash)),
+            (4, Value::Uint(1)),
+            (6, Value::Uint(1)),
+            (10, member.to_value()),
+            (11, Value::Text("phone")),
+            (12, Value::Uint(1)),
+            (13, Value::Uint(3)),
+            (20, admin.to_value()),
+            (21, Value::Uint(1)),
+        ];
+        if let Some((k, v)) = change {
+            m.retain(|(f, _)| *f != k);
+            m.push((k, v));
+            m.sort_by_key(|(f, _)| *f);
+        }
+        envelope::sign(&sk("root"), sig::LABEL_RECORD, &Value::Map(m).encode())
+    };
+    let grant_of = |rec: &[u8]| {
+        let body = Value::Map(vec![
+            (1, Value::Uint(1)),
+            (2, Value::Bytes(&group)),
+            (3, Value::Bytes(&admin_hash)),
+            (4, Value::Uint(1)),
+            (10, Value::Bytes(&leaf)),
+            (12, Value::Array(vec![admin.to_value()])),
+        ])
+        .encode();
+        let env = envelope::sign(&sk("admin"), sig::LABEL_GRANT, &body);
+        let mut e = cbor::Encoder::new();
+        e.map(2).uint(2).raw(&env).uint(3).raw(rec);
+        let msg = e.finish();
+        let v = cbor::decode(&msg).unwrap();
+        grant::read(&v, &root, &DeviceId(leaf), &DeviceId(group), None).map(|_| ()).map_err(Rule::name)
+    };
+    assert_eq!(grant_of(&record(None)), Ok(()));
+    for change in
+        [(13, Value::Text("all")), (21, Value::Uint(1 | 1 << 40)), (22, Value::Text("x")), (26, Value::Uint(7))]
+    {
+        let rec = record(Some(change.clone()));
+        assert!(crate::records::Record::decode(&rec).is_err(), "{change:?}");
+        assert_eq!(grant_of(&rec), Err("grants/admin"), "{change:?}");
+    }
+}

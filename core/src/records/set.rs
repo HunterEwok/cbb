@@ -185,6 +185,16 @@ impl RecordSet {
         *units = units.saturating_add(eval::item(&r, role).units);
         self.bytes = self.bytes.saturating_add(r.size());
         self.records.insert(id, Entry { record: r, role, held });
+        if let Some(cut) = self.cuts.get(&signer) {
+            // A record of a cut root may show more of the chain the
+            // takeover saw: what is now off it goes, as on a member that
+            // took the records in another order.
+            let cuts = BTreeMap::from([(signer, *cut)]);
+            let mine = self.records.values().map(|e| &e.record).filter(|x| x.body().signer == signer);
+            for off in eval::off_cuts(&cuts, mine) {
+                self.remove(&off);
+            }
+        }
         if self.needs_cut(&signer) {
             self.cut();
         }
@@ -381,15 +391,8 @@ impl RecordSet {
     /// The group's state. held_ms is how long the device has held each
     /// claim (rule 7).
     pub fn state(&self, held_ms: &BTreeMap<RecordId, u64>) -> State {
-        eval::evaluate_checked(
-            &self.root,
-            self.checked(),
-            BTreeMap::new(),
-            held_ms,
-            &self.counted,
-            &self.promoted,
-            &self.cuts,
-        )
+        let by = eval::Compacted { promoted: &self.promoted, cuts: &self.cuts, proven: &self.checkpoints };
+        eval::evaluate_checked(&self.root, self.checked(), BTreeMap::new(), held_ms, &self.counted, &by)
     }
 
     /// The claims the member has counted, which its caller keeps across
@@ -424,7 +427,10 @@ impl RecordSet {
     }
 
     /// Takes counted claims with what their path needs, as the caller kept
-    /// them.
+    /// them. Nothing is checked: it is for the device's own store only,
+    /// what this set's `counted_claims` gave before a restart. Claims from
+    /// anyone else, an admitter's among them, go through
+    /// `remember_counted`.
     pub fn remember_counted_claims(&mut self, claims: impl IntoIterator<Item = Counted>) {
         for c in claims {
             if !self.counted.iter().any(|x| x.claim == c.claim) {

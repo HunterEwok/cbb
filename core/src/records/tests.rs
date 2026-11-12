@@ -3082,3 +3082,240 @@ fn a_second_takeover_is_proved_as_it_is_evaluated() {
     assert_eq!(set.counted(), vec![first.id(), second.id()]);
     assert_eq!(set.state(&held).roots, vec![g.root.hash, nk.hash, na.hash]);
 }
+
+const ALL_POWERS: u64 = POWER_ADMIT | POWER_MANAGE | POWER_REMOVE | POWER_REMOVE_ADMINS | POWER_FREEZE | POWER_TAKEOVER;
+
+/// Gives the set the records, then compacts until it settles.
+fn sync_all(m: &mut RecordSet, recs: &[Record], held: &BTreeMap<RecordId, u64>) {
+    m.insert_all(recs.iter().cloned());
+    for _ in 0..4 {
+        let st = m.state(held);
+        m.compact(&st);
+    }
+}
+
+fn state_of_claim(s: &State, id: RecordId) -> Option<ClaimState> {
+    s.claims.iter().find(|c| c.record == id).map(|c| c.state)
+}
+
+/// A checkpoint counts only where the member holds every record it keeps,
+/// each on its key's chain: one that keeps a record nobody was given, or
+/// two records at one seq, prunes nothing, and such a record handed in
+/// after a takeover changes nothing.
+#[test]
+fn a_checkpoint_counts_only_with_what_it_keeps_on_its_chain() {
+    for twin_too in [false, true] {
+        let mut g = G::new();
+        let (pa, a, n) = (k("phone a"), k("admin a"), k("new root"));
+        let root = k("root");
+        let r1 = g.admin(&pa, &a, ALL_POWERS);
+        let r2 = g.device(&root, &k("laptop"), "laptop", |_| {});
+        let r3 = g.device(&root, &k("tablet"), "tablet", |_| {});
+        // A record at seq 4 that is signed and not given to anyone.
+        let other = {
+            let kind = Kind::Revoke(removal(&[a.hash, pa.hash, k("laptop").hash, k("tablet").hash], vec![]));
+            Record::sign(g.body(&root, kind), &root).unwrap()
+        };
+        let r4 = g.root_rec(Kind::Copies { incoming_ms: 5_001, seen: vec![] });
+        let r5 = g.device(&root, &k("tv"), "tv", |_| {});
+        let mut keep = vec![r1.id(), r2.id(), r3.id(), other.id()];
+        if twin_too {
+            keep.push(r4.id());
+        }
+        keep.sort();
+        let cp = g.root_rec(Kind::Checkpoint { heads: vec![Head { key: g.root.hash, seq: 5, id: r5.id() }], keep });
+        g.device(&root, &k("printer"), "printer", |_| {});
+        let none = BTreeMap::new();
+        let mut m = RecordSet::new(g.root.key.clone());
+        sync_all(&mut m, &g.recs, &none);
+        let s = m.state(&none);
+        assert_ne!(s.checkpoint, Some(cp.id()));
+        assert!(m.contains(&r4.id()));
+        assert_ne!(g.state().checkpoint, Some(cp.id()));
+        // The takeover, then the record nobody had.
+        let seen = g.seen();
+        let claim = g.rec(&a, Kind::Claim { root: n.key.clone(), seen });
+        let np = g.device(&n, &k("new phone"), "new phone", |d| d.holds_root = true);
+        let held = BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]);
+        sync_all(&mut m, &[claim.clone(), np.clone()], &held);
+        let before = m.state(&held);
+        assert_eq!((before.roots.len(), before.devices.len()), (2, 6));
+        let _ = m.insert(other.clone());
+        sync_all(&mut m, &[], &held);
+        let s = m.state(&held);
+        assert!(!s.counting.contains(&other.id()));
+        assert_eq!((s.roots.len(), s.devices.len(), s.stop), (2, 6, Stop::None));
+        // The same for a device that counted the claim and holds them all.
+        let mut all = g.recs.clone();
+        all.push(other.clone());
+        let counted = Counted::chain(&g.root.hash, &[claim.id()], |id| all.iter().find(|r| r.id() == *id));
+        let e = evaluate(&Input { root: &g.root.key, records: &all, held_ms: &held, counted: &counted });
+        assert_eq!((e.roots.len(), e.devices.len()), (2, 6));
+    }
+}
+
+/// A checkpoint names its own key's head below itself.
+#[test]
+fn a_checkpoints_own_head_is_below_it() {
+    let mut g = G::new();
+    let root = k("root");
+    g.device(&root, &k("laptop"), "laptop", |_| {});
+    let (seq, id) = g.heads[&root.hash];
+    let body = g.body(&root, Kind::Checkpoint { heads: vec![Head { key: root.hash, seq: seq + 1, id }], keep: vec![] });
+    assert!(Record::sign(body, &root).is_err());
+    let ok = g.body(&root, Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep: vec![] });
+    assert!(Record::sign(ok, &root).is_ok());
+}
+
+/// An admin's device record whose member key is the new root of a claim
+/// that did not see it does not count, and does not make the claim void:
+/// whatever the admin, the claim takes effect after the delay.
+#[test]
+fn another_admins_later_record_leaves_a_claims_key_alone() {
+    for powers in [POWER_REMOVE | POWER_FREEZE, POWER_ADMIT | POWER_MANAGE] {
+        let mut g = G::new();
+        let (pa, a, px, x, n) = (k("phone a"), k("admin a"), k("device x"), k("admin x"), k("new root"));
+        g.admin(&pa, &a, ALL_POWERS);
+        g.admin(&px, &x, powers);
+        let seen = g.seen();
+        let claim = g.rec(&a, Kind::Claim { root: n.key.clone(), seen });
+        let later = g.device(&x, &n, "x", |_| {});
+        let held = BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]);
+        let s = state_of(&g.root.key, &g.recs, &held);
+        assert!(!s.counting.contains(&later.id()));
+        assert_eq!(state_of_claim(&s, claim.id()), Some(ClaimState::Effective));
+        assert_eq!(s.roots, vec![g.root.hash, n.hash]);
+        let mut m = RecordSet::new(g.root.key.clone());
+        sync_all(&mut m, &g.recs, &held);
+        assert_eq!(m.state(&held).roots, vec![g.root.hash, n.hash]);
+    }
+    // A root's record with that member key still makes it void.
+    let mut g = G::new();
+    let (pa, a, n) = (k("phone a"), k("admin a"), k("new root"));
+    g.admin(&pa, &a, ALL_POWERS);
+    let seen = g.seen();
+    let claim = g.rec(&a, Kind::Claim { root: n.key.clone(), seen });
+    g.device(&k("root"), &n, "n", |_| {});
+    let held = BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]);
+    assert_eq!(state_of_claim(&state_of(&g.root.key, &g.recs, &held), claim.id()), Some(ClaimState::Void));
+}
+
+/// A root's record that takes the admin key from the claimant's device,
+/// having seen the claim, cancels it, as a removal does.
+#[test]
+fn taking_the_claimants_admin_key_cancels_its_claim() {
+    let mut g = G::new();
+    let (pa, a, n) = (k("phone a"), k("admin a"), k("new root"));
+    g.admin(&pa, &a, ALL_POWERS);
+    let seen = g.seen();
+    let claim = g.rec(&a, Kind::Claim { root: n.key.clone(), seen });
+    let seen = g.seen();
+    g.device(&k("root"), &pa, "phone a", |d| d.seen = seen);
+    let held = BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]);
+    let s = state_of(&g.root.key, &g.recs, &held);
+    assert_eq!(state_of_claim(&s, claim.id()), Some(ClaimState::Cancelled));
+    assert_eq!(s.roots, vec![g.root.hash]);
+}
+
+/// A member told of counted claims proves each in its own epoch: a claim
+/// after a handover, which needs no delay, is taken, and so is the one
+/// after it.
+#[test]
+fn a_counted_handover_is_proved_in_its_epoch() {
+    let mut g = G::new();
+    let (pa, a, pb, b, n1, n2) = (k("phone a"), k("admin a"), k("phone b"), k("admin b"), k("root n1"), k("root n2"));
+    g.admin(&pa, &a, ALL_POWERS);
+    g.root_rec(Kind::Handover { admin: a.hash });
+    let seen = g.seen();
+    let c1 = g.rec(&a, Kind::Claim { root: n1.key.clone(), seen });
+    g.device(&n1, &k("phone n1"), "n1", |d| d.holds_root = true);
+    g.device(&n1, &pb, "phone b", |d| {
+        d.admin = Some(b.key.clone());
+        d.powers = ALL_POWERS;
+    });
+    let seen = g.seen();
+    let c2 = g.rec(&b, Kind::Claim { root: n2.key.clone(), seen });
+    g.device(&n2, &k("phone n2"), "n2", |d| d.holds_root = true);
+    let mut joiner = RecordSet::new(g.root.key.clone());
+    assert_eq!(joiner.remember_counted([c1.id(), c2.id()]), Ok(()));
+    joiner.insert_all(g.recs.iter().cloned());
+    joiner.insert_all(g.recs.iter().cloned());
+    assert_eq!(joiner.counted(), vec![c1.id(), c2.id()]);
+    assert_eq!(joiner.state(&BTreeMap::new()).roots, vec![g.root.hash, n1.hash, n2.hash]);
+    // Records first, then the claims.
+    let mut late = RecordSet::new(g.root.key.clone());
+    late.insert_all(g.recs.iter().cloned());
+    assert_eq!(late.remember_counted([c1.id()]), Ok(()));
+}
+
+/// What the evaluation of a claim's epoch voids is not taken as counted:
+/// a claim whose claimant the root removed before it, one whose new key is
+/// a member key of the group. A resolve is not asked: a late one, made
+/// after the takeover counted, does not undo it.
+#[test]
+fn only_a_claim_that_stands_is_taken_as_counted() {
+    let try_it = |g: &G, claim: &Record| {
+        let mut m = RecordSet::new(g.root.key.clone());
+        m.insert_all(g.recs.iter().cloned());
+        m.remember_counted([claim.id()])
+    };
+    let (pa, a, n) = (k("phone a"), k("admin a"), k("new root"));
+    // Resolved by the root: taken, as decided for a counted claim.
+    let mut g = G::new();
+    g.admin(&pa, &a, ALL_POWERS);
+    let seen = g.seen();
+    let claim = g.rec(&a, Kind::Claim { root: n.key.clone(), seen });
+    g.root_rec(Kind::Resolve(vec![claim.id()]));
+    assert_eq!(try_it(&g, &claim), Ok(()));
+    // Its claimant removed by the root, after what the claim saw.
+    let mut g = G::new();
+    g.admin(&pa, &a, ALL_POWERS);
+    let seen = g.seen();
+    g.root_rec(Kind::Revoke(removal(&[a.hash, pa.hash], g.seen())));
+    let claim = g.rec(&a, Kind::Claim { root: n.key.clone(), seen });
+    assert_eq!(try_it(&g, &claim), Err(claim.id()));
+    // A new key that is a device's member key.
+    let mut g = G::new();
+    g.admin(&pa, &a, ALL_POWERS);
+    g.device(&k("root"), &k("laptop"), "laptop", |_| {});
+    let seen = g.seen();
+    let claim = g.rec(&a, Kind::Claim { root: k("laptop").key.clone(), seen });
+    assert_eq!(try_it(&g, &claim), Err(claim.id()));
+    // The same claim with a fresh key and nothing against it is taken.
+    let mut g = G::new();
+    g.admin(&pa, &a, ALL_POWERS);
+    let seen = g.seen();
+    let claim = g.rec(&a, Kind::Claim { root: n.key.clone(), seen });
+    assert_eq!(try_it(&g, &claim), Ok(()));
+}
+
+/// A cut root's record stored before the chain the takeover saw showed
+/// goes once that chain shows it is off: the set is the one a member
+/// that took the records in another order keeps.
+#[test]
+fn a_record_off_a_cut_goes_once_the_chain_shows() {
+    let mut g = G::new();
+    let (pa, a, n) = (k("phone a"), k("admin a"), k("new root"));
+    let root = k("root");
+    g.admin(&pa, &a, ALL_POWERS);
+    let twin = Record::sign(g.body(&root, Kind::Copies { incoming_ms: 5_001, seen: vec![] }), &root).unwrap();
+    let r2 = g.root_rec(Kind::Copies { incoming_ms: 5_002, seen: vec![] });
+    let r3 = g.device(&root, &k("laptop"), "laptop", |_| {});
+    let seen = g.seen();
+    let claim = g.rec(&a, Kind::Claim { root: n.key.clone(), seen });
+    let counted = Counted::chain(&g.root.hash, &[claim.id()], |id| g.recs.iter().find(|r| r.id() == *id));
+    assert_eq!(counted.len(), 1);
+    let held = BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]);
+    let early: Vec<Record> = g.recs.iter().filter(|r| r.id() != r2.id() && r.id() != r3.id()).cloned().collect();
+    let mut m1 = RecordSet::new(g.root.key.clone());
+    m1.remember_counted_claims(counted.clone());
+    m1.insert_all(early.iter().cloned().chain([twin.clone()]));
+    assert!(m1.contains(&twin.id()));
+    m1.insert_all([r2.clone(), r3.clone()]);
+    let mut m2 = RecordSet::new(g.root.key.clone());
+    m2.remember_counted_claims(counted);
+    m2.insert_all(g.recs.iter().cloned().chain([twin.clone()]));
+    assert!(!m1.contains(&twin.id()));
+    assert_eq!(m1.digest(), m2.digest());
+    assert_eq!(m1.state(&held), m2.state(&held));
+}
