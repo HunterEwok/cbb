@@ -1609,7 +1609,7 @@ All notable changes to cbb are documented in this file. The format follows
   text reaches the log in debug builds only. The core's C functions all stop a panic, and
   `cbb_qr_read` refuses a frame size that overflows before it reads the frame.
 - The Aurora app's admin PIN is at least six digits and none easy to guess (repeats, runs,
-  short patterns, common keypad and year PINs), checked as it is typed and by the key store;
+  short patterns, palindromes, dates, common keypad PINs), checked as it is typed and by the key store;
   a PIN set before still works. The admin token itself says whether its SO PIN was made
   random, and the tries left come from its flags, so clearing the app's data neither stops
   the PIN working nor shows a full seven tries.

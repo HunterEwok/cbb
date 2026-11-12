@@ -842,9 +842,12 @@ for Face ID (D-94, docs/protocol.md section 3):
   group, which makes the admin key the member's hellos offer the root for its "Make an
   admin" (docs/protocol.md, section 10, "Admins"); the first time it sets the PIN (typed
   twice): at least six digits, and none easy to guess (`src/pinrule.h`: no repeats, runs or
-  short patterns such as 111111, 123456, 121212 or 112233, nor common keypad and year PINs;
-  `tests/pinrule_test.cpp` checks it). A PIN set before this rule still opens the key; a new or
-  changed one must pass it. A user who cancels it joins as a member whose hellos offer
+  short patterns such as 111111, 123456, 121212 or 112233, no five equal digits, two simple
+  pieces (111222, 123400), palindromes, counting pairs (131415), dates (DDMMYY, MMDDYY,
+  YYMMDD and their eight-digit forms) nor common keypad PINs: about one six-digit PIN in ten;
+  `tests/pinrule_test.cpp` checks it). A PIN set before this rule still opens the key, and a
+  token stopped halfway through its first PIN is finished with that PIN; a new or changed one
+  must pass it. A user who cancels it joins as a member whose hellos offer
   no key, and Settings' "Get ready to be an admin" makes it later. Then adding a device, an action on a device's
   page, the root's decision on an alert, the takeover and its finish. The app hands the PIN
   to the TEE and wipes it at once; the token then stays logged in for five minutes (as the iPhone app trusts one Face ID) after its

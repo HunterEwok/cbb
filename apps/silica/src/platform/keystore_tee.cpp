@@ -316,14 +316,20 @@ public:
     }
 
     // As SO with pin: sets a random SO PIN, kept nowhere, so that nothing
-    // can unlock or reset the user PIN.
-    CK_RV randomizeSo(const QByteArray &pin)
+    // can unlock or reset the user PIN. *notSo tells that the token refused
+    // pin as the SO PIN (wrong, of a length it does not take, or locked by
+    // such tries): the SO PIN is not the user PIN, so it was made random
+    // before.
+    CK_RV randomizeSo(const QByteArray &pin, bool *notSo)
     {
+        *notSo = false;
         QByteArray so = randomPin();
         if (so.isEmpty())
             return CKR_GENERAL_ERROR;
         CK_RV rv = login(CKU_SO, pin);
-        if (rv == CKR_OK)
+        if (rv == CKR_PIN_INCORRECT || rv == CKR_PIN_LEN_RANGE || rv == CKR_PIN_INVALID || rv == CKR_PIN_LOCKED)
+            *notSo = true;
+        else if (rv == CKR_OK)
             rv = m_f->C_SetPIN(m_session, bytes(pin), CK_ULONG(pin.size()), bytes(so), CK_ULONG(so.size()));
         logout();
         wipe(&so);
@@ -768,7 +774,10 @@ PinResult enterAdminPin(const QByteArray &pin, PinStatus *after, Failure *failur
         return PinResult::Failed;
     }
     CK_RV rv = CKR_OK;
-    if (!(info.flags & CKF_USER_PIN_INITIALIZED) && !passesRule(pin))
+    // A new PIN, for a token not made yet, passes the rule; a token made
+    // halfway (stopped before its user PIN) is finished with the PIN it
+    // already has as its SO PIN, which may be one from before the rule.
+    if (!(info.flags & CKF_TOKEN_INITIALIZED) && !passesRule(pin))
         return pinTooSimple(failure, after);
     if (!(info.flags & CKF_TOKEN_INITIALIZED)) {
         // The first PIN: the token starts with it as its SO PIN too, so a
@@ -813,8 +822,11 @@ PinResult enterAdminPin(const QByteArray &pin, PinStatus *after, Failure *failur
         // again; one that still is the user PIN is made random now, and
         // until that works the admin key is not used.
         token.logout();
-        rv = token.randomizeSo(pin);
-        if (rv == CKR_OK || rv == CKR_PIN_INCORRECT || rv == CKR_PIN_LOCKED)
+        bool notSo = false;
+        rv = token.randomizeSo(pin, &notSo);
+        // Any other answer fails this action, with the code in the
+        // details; the next action asks the token again, never a loop.
+        if (rv == CKR_OK || notSo)
             settings.setValue(soRandomKey, true);
         else
             return pinFailed(failure, after, QStringLiteral("the SO PIN did not change: %1").arg(hex(rv)));
@@ -860,8 +872,11 @@ PinResult changeAdminPin(const QByteArray &old, const QByteArray &pin, PinStatus
         // As in enterAdminPin: the SO PIN is made random, or found random,
         // with the PIN it may still share, before that PIN changes.
         token.logout();
-        rv = token.randomizeSo(old);
-        if (rv == CKR_OK || rv == CKR_PIN_INCORRECT || rv == CKR_PIN_LOCKED)
+        bool notSo = false;
+        rv = token.randomizeSo(old, &notSo);
+        // Any other answer fails this action, with the code in the
+        // details; the next action asks the token again, never a loop.
+        if (rv == CKR_OK || notSo)
             settings.setValue(soRandomKey, true);
         else
             return pinFailed(failure, after, QStringLiteral("the SO PIN did not change: %1").arg(hex(rv)));
