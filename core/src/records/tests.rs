@@ -2809,3 +2809,43 @@ fn a_root_s_removal_outlasts_a_twin_at_its_seq() {
     assert!(s.conflicts.iter().any(|c| c.kind == ConflictKind::TwoHistories && c.signers == vec![root.hash]));
     assert!(s.device(&k("tablet").key.device_id()).is_some());
 }
+
+/// A root's removals never fall out of its room: its own checkpoints,
+/// however large, come after them in its order.
+#[test]
+fn a_root_s_checkpoints_never_push_out_its_removals() {
+    let mut g = G::new();
+    let root = k("root");
+    let mut removed = Vec::new();
+    for i in 0..20 {
+        let d = k(&format!("device {i}"));
+        g.device(&root, &d, "device", |_| {});
+        let seen = g.seen();
+        removed.push((d.hash, g.root_rec(Kind::Revoke(removal(&[d.hash], seen)))));
+    }
+    let mut set = RecordSet::new(g.root.key.clone());
+    set.insert_all(g.recs.iter().cloned());
+    for i in 0..9u8 {
+        let keep: Vec<RecordId> = (0..1900u32)
+            .map(|j| {
+                let mut id = [i; 32];
+                id[..4].copy_from_slice(&j.to_be_bytes());
+                RecordId(id)
+            })
+            .collect();
+        let body = Body {
+            seq: 1000 + u64::from(i),
+            prev: Some(RecordId([7; 32])),
+            ..g.body(
+                &root,
+                Kind::Checkpoint { heads: vec![Head { key: root.hash, seq: 1, id: RecordId([8; 32]) }], keep },
+            )
+        };
+        let r = Record::sign(body, &root).unwrap();
+        set.insert(r.clone()).ok();
+        g.recs.push(r);
+    }
+    assert!(removed.iter().all(|(_, r)| set.contains(&r.id())));
+    let s = g.state();
+    assert!(removed.iter().all(|(d, r)| s.counting.contains(&r.id()) && s.revoked.contains(d)));
+}

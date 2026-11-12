@@ -10,11 +10,14 @@
 //! it brings a new root key, and 16 paid ahead for that root's records.
 //! 4096 units hold at most 4096 records and 2 MiB.
 //!
-//! Each key's records are taken in its own order: its checkpoints first,
-//! the newest first, so that a key at its ceiling can still checkpoint and
-//! free room; then a root's removals and resolves, by seq, so that a full
-//! set never drops them; then the rest by seq, then ID (records of one seq
-//! with other IDs count against the same ceiling). At level s a
+//! Each key's records are taken in its own order: a root's removals,
+//! freezes and resolves first, by seq, so that nothing of the root's
+//! drops them, its checkpoints included; then its checkpoints, the newest
+//! first, so that a key at its ceiling can still checkpoint and free room;
+//! then the rest by seq, then ID (records of one seq with other IDs count
+//! against the same ceiling). The order is each record's own, never what
+//! else the set holds, so that a set that drops records as they come keeps
+//! what one that saw them all at once keeps. At level s a
 //! key keeps the longest start of that order within min(s, its ceiling)
 //! units. A key's demand at s is min(s, its ceiling, all its units); s is
 //! the highest level at which the demands fit in 4096 units. So a key whose
@@ -58,10 +61,9 @@ pub struct Item {
     pub seq: u64,
     pub id: RecordId,
     pub units: u64,
-    /// A checkpoint: it comes first in its key's order.
+    /// A checkpoint: it comes after a root's removals, before the rest.
     pub checkpoint: bool,
-    /// A root's revoke, freeze or resolve: it comes after the checkpoints,
-    /// before the rest.
+    /// A root's revoke, freeze or resolve: it comes first.
     pub early: bool,
     /// A claim: the root it names.
     pub names: Option<KeyHash>,
@@ -71,14 +73,14 @@ pub struct Item {
 pub type Pos = (u8, u64, RecordId);
 
 impl Item {
-    /// Its place in its key's order: checkpoints first, the newest first;
-    /// then a root's removals and resolves by seq; then the rest by seq
+    /// Its place in its key's order: a root's removals and resolves first,
+    /// by seq; then checkpoints, the newest first; then the rest by seq
     /// and ID.
     pub fn pos(&self) -> Pos {
-        if self.checkpoint {
-            (0, u64::MAX.saturating_sub(self.seq), self.id)
-        } else if self.early {
-            (1, self.seq, self.id)
+        if self.early {
+            (0, self.seq, self.id)
+        } else if self.checkpoint {
+            (1, u64::MAX.saturating_sub(self.seq), self.id)
         } else {
             (2, self.seq, self.id)
         }
