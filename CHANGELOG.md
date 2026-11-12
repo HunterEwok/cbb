@@ -2236,6 +2236,10 @@ All notable changes to cbb are documented in this file. The format follows
   remote paste: its pages read a device's ID from a field the core's list does not have. An
   Aurora phone refuses a paste of pictures or files, which its Bluetooth keyboard cannot type,
   in place of typing the copy's ID.
+- A Rust `cbb` that started looking for its group by mDNS just after another device asked a
+  member for its TXT record could find that member without one, take it for another group's
+  and never dial it. It now asks the members for their records again, a little later each
+  time, until that member's TXT comes.
 - Quotation marks in a few texts: the Android app showed a backslash before them in Arabic,
   Spanish, Hebrew, Hindi and Swahili, and dropped them in English; the Mac app showed the
   backslash in the same languages on its pairing screen.

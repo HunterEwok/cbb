@@ -101,3 +101,8 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Network
 p256 = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "ecdsa", "pkcs8"] }
 # The properties of the service's copies: their order, the clock, the rule.
 proptest = { version = "1", default-features = false, features = ["std"] }
+
+# Asks for a TXT record from port 5353 in discovery's tests; mdns-sd already
+# brings it.
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+socket2 = "0.6.5"
