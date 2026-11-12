@@ -36,7 +36,11 @@ fn write(g: &mut G, from: &[Record], new_root: &K, member: &K, remove: &[KeyHash
 /// A head at seq of the recovery key naming root, with prev and list as
 /// given, whatever the chain holds.
 fn head_at(g: &G, seq: u64, prev: Option<RecordId>, root: &K, list: [u8; 32]) -> Record {
-    let body = Body { seq, prev, ..g.body(&k("recovery"), Kind::Recovery { root: root.key.clone(), list, from: 0 }) };
+    let body = Body {
+        seq,
+        prev,
+        ..g.body(&k("recovery"), Kind::Recovery { root: root.key.clone(), list, from: 0, first: RecordId([0xf1; 32]) })
+    };
     Record::sign(body, &k("recovery")).unwrap()
 }
 
@@ -105,9 +109,12 @@ fn a_head_the_device_cannot_read_stops_it_until_it_is_updated() {
     let mut g = base();
     let list = g.listing();
     g.change(&k("n1"), &list);
-    let later = raw(&g, &k("recovery"), Kind::Recovery { root: k("n2").key.clone(), list: [5; 32], from: 0 }, |m| {
-        m.push((99, crate::format::cbor::Value::Uint(1)))
-    })
+    let later = raw(
+        &g,
+        &k("recovery"),
+        Kind::Recovery { root: k("n2").key.clone(), list: [5; 32], from: 0, first: RecordId([0xf1; 32]) },
+        |m| m.push((99, crate::format::cbor::Value::Uint(1))),
+    )
     .unwrap();
     assert!(later.body().held);
     g.push(later);
@@ -267,7 +274,8 @@ fn lists_naming_nothing_everything_or_ids_nobody_holds() {
     let mut g = base();
     let junk = vec![0xff, 0x00, 0x01];
     let h = list_hash(&junk);
-    g.rec(&k("recovery"), Kind::Recovery { root: k("n1").key.clone(), list: h, from: 0 });
+    let first = g.first_checkpoint(&k("n1"), &[]);
+    g.rec(&k("recovery"), Kind::Recovery { root: k("n1").key.clone(), list: h, from: 0, first });
     g.lists.push(junk.clone());
     let s = g.state();
     assert_eq!(s.roots.len(), 2);
@@ -321,7 +329,10 @@ fn at_most_sixteen_heads() {
     let body = Body {
         seq: 17,
         prev: Some(tip),
-        ..g.body(&k("recovery"), Kind::Recovery { root: k("n17").key, list: [1; 32], from: 0 })
+        ..g.body(
+            &k("recovery"),
+            Kind::Recovery { root: k("n17").key, list: [1; 32], from: 0, first: RecordId([0xf1; 32]) },
+        )
     };
     assert!(Record::sign(body.clone(), &k("recovery")).is_err());
     let set = set_with(&g.root.key, &g.recs, &g.lists);
@@ -365,18 +376,25 @@ fn a_head_names_where_the_new_roots_records_start() {
     list.push(kept.id());
     g.change_from(&k("admin a"), &list, seq + 1);
     let after = g.device(&k("admin a"), &k("kettle"), "kettle", |_| {});
-    assert_eq!(after.body().seq, seq + 1);
+    // From on: its first checkpoint at from, then its own records.
+    assert_eq!(after.body().seq, seq + 2);
     let s = members_agree(&g);
     assert_eq!(s.roots.last(), Some(&k("admin a").hash));
     assert!(!has(&s, &k("lamp")), "below from, not listed");
     assert!(has(&s, &k("bulb")), "below from, listed");
     assert!(has(&s, &k("kettle")), "from on, the root's own");
     // Written as 0 it is the default, and refused; above a seq, refused.
-    let r = raw(&g, &k("recovery"), Kind::Recovery { root: k("n9").key.clone(), list: [1; 32], from: 0 }, |m| {
-        m.push((12, crate::format::cbor::Value::Uint(0)))
-    });
+    let r = raw(
+        &g,
+        &k("recovery"),
+        Kind::Recovery { root: k("n9").key.clone(), list: [1; 32], from: 0, first: RecordId([0xf1; 32]) },
+        |m| m.push((12, crate::format::cbor::Value::Uint(0))),
+    );
     assert_eq!(r.map(|_| ()).unwrap_err(), Rule::new("form/default"));
-    let body = g.body(&k("recovery"), Kind::Recovery { root: k("n9").key.clone(), list: [1; 32], from: MAX_SEQ + 1 });
+    let body = g.body(
+        &k("recovery"),
+        Kind::Recovery { root: k("n9").key.clone(), list: [1; 32], from: MAX_SEQ + 1, first: RecordId([0xf1; 32]) },
+    );
     assert!(body.check().unwrap_err().is("records/recovery/from"));
 }
 
@@ -767,9 +785,12 @@ fn the_writer_waits_for_every_change_it_holds() {
     assert_eq!(refused(&g, &g.lists), None);
     // A head this device cannot read.
     let mut g = base();
-    let held = raw(&g, &k("recovery"), Kind::Recovery { root: k("n1").key.clone(), list: [5; 32], from: 0 }, |m| {
-        m.push((99, crate::format::cbor::Value::Uint(1)))
-    })
+    let held = raw(
+        &g,
+        &k("recovery"),
+        Kind::Recovery { root: k("n1").key.clone(), list: [5; 32], from: 0, first: RecordId([0xf1; 32]) },
+        |m| m.push((99, crate::format::cbor::Value::Uint(1))),
+    )
     .unwrap();
     assert!(held.body().held);
     g.push(held);
@@ -1024,4 +1045,33 @@ fn a_dropped_removal_brings_no_admin_admission_back() {
     let mut all = g.recs.clone();
     all.push(admitted);
     assert!(!has(&set_with(&g.root.key, &all, &g.lists).state(), &x));
+}
+
+/// A head applies only once the member holds its list and the new root's
+/// first checkpoint it names: with the head and the list alone the old
+/// root stays, the old phone with it, and the member asks for the
+/// checkpoint; when the first records come, the change applies at once.
+#[test]
+fn a_head_waits_for_the_new_roots_first_checkpoint() {
+    let mut g = base();
+    let from = g.recs.clone();
+    let w = write(&mut g, &from, &k("n1"), &k("new phone"), &[k("old phone").hash]);
+    let cp = w.first.last().unwrap().clone();
+    assert!(matches!(&w.record.body().kind, Kind::Recovery { first, .. } if *first == cp.id()));
+    let mut m = set_of(&g.root.key);
+    sync_all(&mut m, &from, &[]);
+    m.insert(w.record.clone()).unwrap();
+    m.insert_list(&w.list.encode()).unwrap();
+    let s = m.state();
+    assert_eq!(s.roots, vec![k("root").hash]);
+    assert_eq!(s.first_missing, Some(cp.id()));
+    assert!(m.missing(&s).contains(&cp.id()));
+    assert!(has(&s, &k("old phone")) && !has(&s, &k("new phone")));
+    for r in &w.first {
+        let _ = m.insert(r.clone());
+    }
+    let s = m.state();
+    assert_eq!(s.roots, vec![k("root").hash, k("n1").hash]);
+    assert_eq!(s.first_missing, None);
+    assert!(has(&s, &k("new phone")) && !has(&s, &k("old phone")));
 }

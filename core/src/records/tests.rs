@@ -78,14 +78,29 @@ impl G {
         self.change_from(new_root, list, 0)
     }
 
-    /// The same, the new root's records starting at seq from.
+    /// The same, the new root's records starting at seq from. The new
+    /// root signs its first checkpoint first, which the head names: it
+    /// keeps the whole list and names a head of a key that is no new root
+    /// (the first root's, else the recovery key's), so it narrows nothing.
     fn change_from(&mut self, new_root: &K, list: &[RecordId], from: u64) -> Record {
         let mut ids = list.to_vec();
         ids.sort();
         ids.dedup();
         let list = List(ids);
         self.lists.push(list.encode());
-        self.rec(&k("recovery"), Kind::Recovery { root: new_root.key.clone(), list: list.hash(), from })
+        let first = self.first_checkpoint(new_root, &list.0);
+        self.rec(&k("recovery"), Kind::Recovery { root: new_root.key.clone(), list: list.hash(), from, first })
+    }
+
+    /// The first checkpoint of new_root a head names (`change_from`).
+    fn first_checkpoint(&mut self, new_root: &K, keep: &[RecordId]) -> RecordId {
+        let other = [self.root.hash, k("recovery").hash]
+            .into_iter()
+            .chain(self.heads.keys().copied())
+            .find(|key| *key != new_root.hash && self.heads.contains_key(key))
+            .expect("a key with a record");
+        let (seq, id) = self.heads[&other];
+        self.rec(new_root, Kind::Checkpoint { heads: vec![Head { key: other, seq, id }], keep: keep.to_vec() }).id()
     }
 
     /// The IDs of the records of the roots on the path that count now,
@@ -841,7 +856,7 @@ fn limits_hold_for_any_signer() {
     let quiet = g.recs.clone();
     for i in 0..4 {
         let r = k(&format!("x root {i}"));
-        g.rec(&x, Kind::Recovery { root: r.key.clone(), list: [0; 32], from: 0 });
+        g.rec(&x, Kind::Recovery { root: r.key.clone(), list: [0; 32], from: 0, first: RecordId([0xf1; 32]) });
         for j in 0..400 {
             g.device(&r, &k(&format!("x{i} {j}")), "flood", |_| {});
         }
@@ -1020,8 +1035,12 @@ fn who_may_command() {
     // Two recovery records at one seq: a full stop for good; nobody
     // commands, the root neither.
     let r = k("recovery");
-    let one = g.body(&r, Kind::Recovery { root: k("nb").key.clone(), list: [1; 32], from: 0 });
-    let two = Body { kind: Kind::Recovery { root: k("nd").key.clone(), list: [2; 32], from: 0 }, ..one.clone() };
+    let one =
+        g.body(&r, Kind::Recovery { root: k("nb").key.clone(), list: [1; 32], from: 0, first: RecordId([0xf1; 32]) });
+    let two = Body {
+        kind: Kind::Recovery { root: k("nd").key.clone(), list: [2; 32], from: 0, first: RecordId([0xf1; 32]) },
+        ..one.clone()
+    };
     g.push(Record::sign(one, &r).unwrap());
     g.push(Record::sign(two, &r).unwrap());
     let s = g.state();
@@ -1137,8 +1156,10 @@ fn the_three_kinds_of_admin() {
     let seen = g.seen();
     let removal = g.rec(&h, Kind::Revoke(removal(&[laptop.hash], seen)));
     // No admin takes the group over, a phone's included (rule 33).
-    let by_a = g.rec(&a, Kind::Recovery { root: k("na").key.clone(), list: [0; 32], from: 0 });
-    let by_s = g.rec(&s_, Kind::Recovery { root: k("ns").key.clone(), list: [0; 32], from: 0 });
+    let by_a =
+        g.rec(&a, Kind::Recovery { root: k("na").key.clone(), list: [0; 32], from: 0, first: RecordId([0xf1; 32]) });
+    let by_s =
+        g.rec(&s_, Kind::Recovery { root: k("ns").key.clone(), list: [0; 32], from: 0, first: RecordId([0xf1; 32]) });
     let st = g.state();
     assert!(!st.counting.contains(&by_helper.id()) && st.counting.contains(&by_admin.id()));
     assert!(st.counting.contains(&removal.id()));
@@ -1607,8 +1628,15 @@ mod differential {
                     if arg % 7 == 6 && g.heads.contains_key(&k("recovery").hash) {
                         // A second head at the recovery key's last seq.
                         let rec = k("recovery");
-                        let mut twin =
-                            g.body(&rec, Kind::Recovery { root: new_root.key.clone(), list: [arg; 32], from: 0 });
+                        let mut twin = g.body(
+                            &rec,
+                            Kind::Recovery {
+                                root: new_root.key.clone(),
+                                list: [arg; 32],
+                                from: 0,
+                                first: RecordId([0xf1; 32]),
+                            },
+                        );
                         twin.seq -= 1;
                         twin.prev = g
                             .recs
@@ -1710,9 +1738,14 @@ mod differential {
             let _ = late.insert_list(l);
         }
         // A halted set took nothing but the recovery records before the
-        // lists came; it asks for what the list names, as a member does.
-        if late.state().halted() {
+        // lists came, and a head waits for its first checkpoint: the set
+        // asks again for what it misses, round by round, as a member does.
+        for _ in 0..4 {
+            let before = late.digest();
             late.insert_all(order.iter().cloned());
+            if late.digest() == before {
+                break;
+            }
         }
         for _ in 0..2 {
             let s = late.state();
