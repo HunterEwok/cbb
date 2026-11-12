@@ -70,6 +70,11 @@ pub struct Item {
     /// from the head the claim saw downward, so that what is kept is the
     /// top of its chain, never a part in the middle.
     pub down: bool,
+    /// For a record of a cut root (down), its part of the line: 1 from
+    /// the head down to the newest checkpoint on it, 2 what that
+    /// checkpoint names, 3 the rest of the line. The root's removals and
+    /// resolves come before all three.
+    pub tier: u8,
     /// A claim: the root it names.
     pub names: Option<KeyHash>,
 }
@@ -80,10 +85,11 @@ pub type Pos = (u8, u64, RecordId);
 impl Item {
     /// Its place in its key's order: a root's removals and resolves first,
     /// by seq; then checkpoints, the newest first; then the rest by seq
-    /// and ID.
+    /// and ID. A cut root's other records follow its line (`tier`), each
+    /// part from the newest down.
     pub fn pos(&self) -> Pos {
-        if self.down {
-            (0, u64::MAX.saturating_sub(self.seq), self.id)
+        if self.down && !self.early {
+            (self.tier.max(1), u64::MAX.saturating_sub(self.seq), self.id)
         } else if self.early {
             (0, self.seq, self.id)
         } else if self.checkpoint {
@@ -301,6 +307,7 @@ mod tests {
             checkpoint: false,
             early: false,
             down: false,
+            tier: 0,
             names: None,
         }
     }

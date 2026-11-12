@@ -2292,6 +2292,164 @@ mod differential {
         m
     }
 
+    /// A claim whose old root's line a newer checkpoint of that root
+    /// pruned on one member, before the claim came, counts there as on a
+    /// member that took the records in the order they were made.
+    #[test]
+    fn a_claim_counts_where_a_newer_checkpoint_pruned_its_line() {
+        let steps = [
+            (0, 5, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (1, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (1, 0, 0),
+            (0, 4, 2),
+            (3, 0, 0),
+            (0, 2, 90),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (1, 0, 0),
+            (2, 0, 0),
+            (0, 0, 0),
+            (2, 5, 0),
+            (4, 0, 0),
+            (0, 0, 0),
+            (0, 3, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 4, 155),
+            (0, 8, 163),
+        ];
+        let (g, recs) = build(&steps);
+        let held: BTreeMap<RecordId, u64> = recs
+            .iter()
+            .filter(|r| matches!(r.body().kind, Kind::Claim { .. }))
+            .map(|r| (r.id(), DEFAULT_DELAY_MS))
+            .collect();
+        let whole = evaluate(&Input { root: &g.root.key, records: &recs, held_ms: &held, counted: &[] });
+        assert_eq!(whole.roots.len(), 2);
+        for (order, every) in [(recs.clone(), 5), (shuffle(&recs, 17_255_029_705_063_971_860), 7)] {
+            let m = fill(&g.root.key, &order, &held, every);
+            assert_eq!(m.state(&held).roots, whole.roots);
+        }
+    }
+
+    /// A newer checkpoint of a root whose line a claim waits for does not
+    /// count while the claim waits: the claim cuts it off once it counts,
+    /// so the line it would prune stays to be held.
+    #[test]
+    fn a_checkpoint_above_a_waiting_claims_head_waits() {
+        let steps = [
+            (3, 6, 132),
+            (3, 0, 84),
+            (0, 0, 25),
+            (1, 3, 0),
+            (1, 5, 20),
+            (1, 4, 10),
+            (0, 3, 0),
+            (0, 0, 0),
+            (1, 4, 168),
+            (0, 0, 2),
+            (2, 1, 104),
+            (0, 0, 0),
+            (0, 0, 0),
+            (1, 5, 31),
+            (3, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (3, 8, 49),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+        ];
+        let (g, recs) = build(&steps);
+        let held: BTreeMap<RecordId, u64> = recs
+            .iter()
+            .filter(|r| matches!(r.body().kind, Kind::Claim { .. }))
+            .map(|r| (r.id(), DEFAULT_DELAY_MS))
+            .collect();
+        let whole = evaluate(&Input { root: &g.root.key, records: &recs, held_ms: &held, counted: &[] });
+        assert_eq!(whole.roots.len(), 3);
+        for (order, every) in [(recs.clone(), 1), (shuffle(&recs, 15_461_929_454), 3)] {
+            let m = fill(&g.root.key, &order, &held, every);
+            let st = m.state(&held);
+            assert_eq!((&st.roots, &st.devices), (&whole.roots, &whole.devices));
+        }
+    }
+
+    /// A checkpoint a set pruned by before a claim came stays counted:
+    /// the claim's line it pruned does not hold it back, and the set's
+    /// state is that of all the records.
+    #[test]
+    fn a_checkpoint_a_set_pruned_by_stays_under_a_waiting_claim() {
+        let steps = [(1, 5, 44), (2, 2, 223), (1, 3, 0), (3, 2, 1), (2, 5, 125), (3, 0, 0), (3, 8, 68), (0, 0, 0)];
+        let (g, recs) = build(&steps);
+        let held: BTreeMap<RecordId, u64> = recs
+            .iter()
+            .filter(|r| matches!(r.body().kind, Kind::Claim { .. }))
+            .map(|r| (r.id(), DEFAULT_DELAY_MS))
+            .collect();
+        for (order, every) in [(recs.clone(), 1), (shuffle(&recs, 0), 3)] {
+            let m = fill(&g.root.key, &order, &held, every);
+            let st = m.state(&held);
+            let whole =
+                evaluate(&Input { root: &g.root.key, records: &recs, held_ms: &held, counted: m.counted_claims() });
+            assert_eq!((&st.roots, &st.devices, &st.claims), (&whole.roots, &whole.devices, &whole.claims));
+        }
+    }
+
+    /// A claim that becomes ready after its root's newer checkpoint
+    /// pruned the head it saw: the set's state is that of the records it
+    /// keeps.
+    #[test]
+    fn a_claim_ready_after_a_checkpoint_pruned_its_head() {
+        let steps = [
+            (1, 5, 92),
+            (0, 0, 30),
+            (1, 4, 28),
+            (0, 1, 31),
+            (0, 2, 47),
+            (0, 0, 0),
+            (1, 2, 151),
+            (3, 2, 32),
+            (1, 5, 83),
+            (3, 0, 0),
+            (3, 8, 19),
+        ];
+        let (g, recs) = build(&steps);
+        let held: BTreeMap<RecordId, u64> = recs
+            .iter()
+            .filter(|r| matches!(r.body().kind, Kind::Claim { .. }))
+            .map(|r| (r.id(), DEFAULT_DELAY_MS))
+            .collect();
+        for (order, every) in [(recs.clone(), 1), (shuffle(&recs, 0), 3)] {
+            let m = fill(&g.root.key, &order, &held, every);
+            let kept: Vec<Record> = m.ids().map(|id| m.get(id).unwrap().clone()).collect();
+            let want =
+                evaluate(&Input { root: &g.root.key, records: &kept, held_ms: &held, counted: m.counted_claims() });
+            let whole =
+                evaluate(&Input { root: &g.root.key, records: &recs, held_ms: &held, counted: m.counted_claims() });
+            let st = m.state(&held);
+            assert_eq!(st, want);
+            assert_eq!((&st.roots, &st.devices), (&whole.roots, &whole.devices));
+        }
+    }
+
     proptest! {
         #![proptest_config(ProptestConfig { cases: 96, failure_persistence: None, ..ProptestConfig::default() })]
 
@@ -3323,4 +3481,120 @@ fn a_record_off_a_cut_goes_once_the_chain_shows() {
     assert!(!m1.contains(&twin.id()));
     assert_eq!(m1.digest(), m2.digest());
     assert_eq!(m1.state(&held), m2.state(&held));
+}
+
+/// The line of a root a takeover cut runs from the head the claim saw
+/// down by prev: a twin off it changes nothing, and the newest checkpoint
+/// on it still counts.
+#[test]
+fn a_twin_off_a_cut_roots_line_changes_nothing() {
+    let mut g = G::new();
+    let (pa, a, n) = (k("phone a"), k("admin a"), k("new root"));
+    let root = k("root");
+    let r1 = g.admin(&pa, &a, ALL_POWERS);
+    let r2 = g.device(&root, &k("laptop"), "laptop", |_| {});
+    let twin = Record::sign(g.body(&root, Kind::Copies { incoming_ms: 5_001, seen: vec![] }), &root).unwrap();
+    let r3 = g.device(&root, &k("tablet"), "tablet", |_| {});
+    let r4 = g.device(&root, &k("tv"), "tv", |_| {});
+    let mut keep = vec![r1.id(), r2.id(), r3.id()];
+    keep.sort();
+    let cp = g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq: 4, id: r4.id() }], keep });
+    let seen = g.seen();
+    let claim = g.rec(&a, Kind::Claim { root: n.key.clone(), seen });
+    g.device(&n, &k("new phone"), "new phone", |d| d.holds_root = true);
+    let held = BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]);
+    let counted = Counted::chain(&g.root.hash, &[claim.id()], |id| g.recs.iter().find(|r| r.id() == *id));
+    let mut all = g.recs.clone();
+    all.push(twin.clone());
+    let with = evaluate(&Input { root: &g.root.key, records: &all, held_ms: &held, counted: &counted });
+    let without = evaluate(&Input { root: &g.root.key, records: &g.recs, held_ms: &held, counted: &counted });
+    assert_eq!(with, without);
+    assert_eq!(with.checkpoint, Some(cp.id()));
+    assert_eq!((with.roots.len(), with.devices.len(), with.stop), (2, 5, Stop::None));
+    let mut m = RecordSet::new(g.root.key.clone());
+    m.remember_counted_claims(counted);
+    sync_all(&mut m, &all, &held);
+    assert!(!m.contains(&twin.id()));
+    assert_eq!(m.state(&held).devices.len(), 5);
+}
+
+/// A claim takes effect only once the old root's line, from the head the
+/// claim saw down to its first record or a checkpoint that counts, is
+/// held whole; until then it waits.
+#[test]
+fn a_claim_waits_for_the_old_roots_line() {
+    let mut g = G::new();
+    let (pa, a, n) = (k("phone a"), k("admin a"), k("new root"));
+    let root = k("root");
+    g.admin(&pa, &a, ALL_POWERS);
+    let r2 = g.root_rec(Kind::Revoke(removal(&[k("stranger").hash], g.seen())));
+    g.device(&root, &k("laptop"), "laptop", |_| {});
+    let seen = g.seen();
+    let claim = g.rec(&a, Kind::Claim { root: n.key.clone(), seen });
+    let held = BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]);
+    let gap: Vec<Record> = g.recs.iter().filter(|r| r.id() != r2.id()).cloned().collect();
+    let s = state_of(&g.root.key, &gap, &held);
+    assert_eq!(state_of_claim(&s, claim.id()), Some(ClaimState::Pending));
+    assert_eq!(s.roots, vec![g.root.hash]);
+    let s = state_of(&g.root.key, &g.recs, &held);
+    assert_eq!(state_of_claim(&s, claim.id()), Some(ClaimState::Effective));
+}
+
+/// A checkpoint never prunes a root's removal, and a root's removals are
+/// kept first when its room binds, a claimed root's among them.
+#[test]
+fn a_roots_removals_stay() {
+    let mut g = G::new();
+    let root = k("root");
+    g.device(&root, &k("x"), "x", |_| {});
+    let rm = g.root_rec(Kind::Revoke(removal(&[k("x").hash], g.seen())));
+    let r3 = g.device(&root, &k("laptop"), "laptop", |_| {});
+    g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq: 3, id: r3.id() }], keep: vec![] });
+    let none = BTreeMap::new();
+    let mut m = RecordSet::new(g.root.key.clone());
+    sync_all(&mut m, &g.recs, &none);
+    assert!(m.contains(&rm.id()));
+    assert!(m.state(&none).revoked.contains(&k("x").hash));
+    // A claimed root at its room: its removal is the record it keeps first.
+    let mut g = G::new();
+    let (pa, a, n) = (k("phone a"), k("admin a"), k("new root"));
+    g.admin(&pa, &a, ALL_POWERS);
+    g.device(&root, &k("c"), "c", |_| {});
+    let seen = g.seen();
+    g.rec(&a, Kind::Claim { root: n.key.clone(), seen });
+    for i in 0..40 {
+        g.device(&n, &k(&format!("n{i}")), "n", |_| {});
+    }
+    let rm = g.rec(&n, Kind::Revoke(removal(&[k("c").hash], g.seen())));
+    let mut m = RecordSet::new(g.root.key.clone());
+    sync_all(&mut m, &g.recs, &none);
+    assert!(m.contains(&rm.id()));
+}
+
+/// A cut root's records are kept, as room allows, in the order of its
+/// line: its removals first, then the line from the head the claim saw
+/// down to the newest checkpoint on it, then what that checkpoint names,
+/// then the rest of the line.
+#[test]
+fn a_cut_roots_line_is_kept_in_its_order() {
+    let mut g = G::new();
+    let root = k("root");
+    let r1 = g.device(&root, &k("a"), "a", |_| {});
+    let r2 = g.device(&root, &k("b"), "b", |_| {});
+    let r3 = g.device(&root, &k("c"), "c", |_| {});
+    let r4 = g.device(&root, &k("d"), "d", |_| {});
+    let cp =
+        g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq: 4, id: r4.id() }], keep: vec![r2.id()] });
+    let rm = g.root_rec(Kind::Revoke(removal(&[k("x").hash], g.seen())));
+    let r7 = g.device(&root, &k("e"), "e", |_| {});
+    let cuts = BTreeMap::from([(root.hash, Seen { key: root.hash, seq: 7, id: r7.id() })]);
+    let lines = eval::lines(&cuts, g.recs.iter());
+    let items: Vec<keep::Item> = g.recs.iter().map(|r| eval::item_cut(r, eval::Role::Root, &lines)).collect();
+    let want = [rm.id(), r7.id(), cp.id(), r4.id(), r2.id(), r3.id(), r1.id()];
+    let mut units = 0;
+    for (n, id) in want.iter().enumerate() {
+        units += items.iter().find(|it| it.id == *id).unwrap().units;
+        let kept = keep::keep(&items, |_| Some(units));
+        assert_eq!(kept, want[..=n].iter().copied().collect::<std::collections::BTreeSet<_>>(), "room for {}", n + 1);
+    }
 }
