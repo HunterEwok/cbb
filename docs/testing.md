@@ -104,6 +104,26 @@ Rules that live for days are walked with a moved clock, never waited for.
   goes stale after 35 days of running time and obeys nobody until it has a new one; a wall
   clock set back by days during each of them.
 
+## Power loss
+
+A save cut short must leave the old state or the new one, and a member must never act on
+what it has not saved.
+
+- `core/src/powerloss.rs` runs a member's life (records, a removal, commands sent twice,
+  copies with a secret sent twice, a takeover held for its delay) through the two-slot store
+  of a device with only flash (`crate::store`), and cuts every save after each of its bytes,
+  the rest of the slot erased or stale. After each cut it starts again from the flash, is
+  sent again what it was handling, and must end as a member never cut: the state reads, is
+  the one before or after the save, no command runs twice or is lost, no copy is written
+  twice, and a takeover it reported counted stays counted.
+- The Rust service writes its state files through `files::write_atomic` (a new temporary
+  file, sync, rename). Its tests cut that write at every byte and step, as a process that
+  dies and as an error of the system, and find the old file or the new one; the temporary
+  file a crash leaves is swept at the next start once an hour old (`files::sweep`).
+- When the service moves to the 0.6 core, its saves of the core's state (the counted claims
+  with their held times, the command counters, the freshness marks) join the same cut at
+  every step through the whole service.
+
 ## Bench scenarios
 
 Unit and CI tests cannot show that a copy on an iPhone reaches a Windows PC through a café's

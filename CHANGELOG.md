@@ -22,6 +22,10 @@ All notable changes to cbb are documented in this file. The format follows
   clock already was (`CBB_TEST_AHEAD_FILE`'s second number, `testClock.run`); every read of
   the wall clock in the service goes through `uptime::wall_ms()`, which `tools/repocheck`
   enforces (docs/testing.md, "Time").
+- Power loss in tests: a member's saved state cut at every byte of every save, through the
+  flash store and in the service's state files, must come back whole and act on nothing
+  twice (docs/testing.md, "Power loss"). The service removes the temporary files a write cut
+  short left behind, once they are an hour old.
 - The apps are tested in all eight languages and for every reader (docs/testing.md, "The
   apps' languages, accessibility and screenshots"): the tray app, Android, the iPhone and the
   Mac in zh, en, es, ru, ar, sw, he and hi, Arabic and Hebrew from right to left; every text

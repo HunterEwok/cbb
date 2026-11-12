@@ -381,6 +381,8 @@ pub fn run(cfg: Config) -> Result<()> {
     }
     // Parts of copies on their way when the service last stopped.
     let _ = std::fs::remove_dir_all(cfg.state_dir.join("tmp"));
+    // What a write cut short by a crash or a power cut left behind.
+    crate::files::sweep(&cfg.state_dir);
     let only = crate::interfaces::only();
     if !only.is_empty() {
         log(&format!("cbb: the member port and mDNS work only on {} (CBB_INTERFACES)", only.join(", ")));
