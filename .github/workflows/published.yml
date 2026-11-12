@@ -126,6 +126,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
+          set -o pipefail
           rel="$RUNNER_TEMP/release"
           gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir "$rel"
           for _ in $(seq 30); do
@@ -137,6 +138,13 @@ jobs:
             sleep 20
           done
           go run ./tools/release-sign verify "$rel" | tee "$RUNNER_TEMP/verify.txt"
+          version=${GITHUB_REF_NAME#v}
+          # The signed manifest is of this tag's version, not another release's.
+          signed=$(head -n 1 "$RUNNER_TEMP/verify.txt" | cut -d ' ' -f 1)
+          if [ "$signed" != "$version" ]; then
+            echo "::error::the signed release.json is of $signed, the tag is $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
           want=$(sed -n 's/^docker //p' "$RUNNER_TEMP/verify.txt")
           if [ -z "$want" ]; then
             echo "::warning::the manifest names no Docker image; nothing is tagged"
@@ -146,10 +154,21 @@ jobs:
           ghcr.io/hunterewok/cbb@sha256:*) ;;
           *) echo "::error::the manifest names $want, not the project's image" >&2; exit 1 ;;
           esac
-          version=${GITHUB_REF_NAME#v}
-          set -- -t "${want%@*}:$version"
-          [ "$PRERELEASE" = true ] || set -- "$@" -t "${want%@*}:latest"
+          image=${want%@*}
           printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          set -- -t "$image:$version"
+          # latest only moves forward: a maintenance release of an older line
+          # gets its version, not latest.
+          if [ "$PRERELEASE" != true ]; then
+            current=$(docker buildx imagetools inspect "$image:latest" --format '{{json .Image}}' 2>/dev/null |
+              jq -r 'if has("config") then .config.Labels["org.opencontainers.image.version"] else ([.[]][0].config.Labels["org.opencontainers.image.version"]) end // empty' 2>/dev/null || true)
+            newest=$(printf '%s\n%s\n' "$current" "$version" | sed '/^$/d' | sort -V | tail -n 1)
+            if [ -z "$current" ] || { [ "$newest" = "$version" ] && [ "$current" != "$version" ]; }; then
+              set -- "$@" -t "$image:latest"
+            else
+              echo "latest stays at $current, newer than $version"
+            fi
+          fi
           docker buildx imagetools create "$@" "$want"
           echo "tagged $want as $*"
 
@@ -178,6 +197,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -o pipefail
           rel="$RUNNER_TEMP/release"
           gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir "$rel"
           # Releases, pre-releases too, go to the one channel, stable.

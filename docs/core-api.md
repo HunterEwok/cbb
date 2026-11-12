@@ -397,10 +397,11 @@ which shows the report as it would go. After the user allowed twice, the dialog 
 system, the device's model and architecture, the day, and CBB's own log, at most 300 lines of
 400 bytes, the oldest going first until the report fits in 160 KiB. Every field and line is
 filtered: addresses (IPv4, IPv6, MAC, also inside a word such as `peer=...` or a URL), host
-names of the home network (`.local`, `.lan` and the like), e-mail addresses, long numbers
+names of the home network (`.local`, `.lan`, `.box` and the like), e-mail addresses, long numbers
 (codes), long hex (device ids, fingerprints), base64 that looks random (keys, secrets,
-invitations), the value of a name in `key=value` (`ssid=`, `host=`, `device=`, `user=` and the
-like), every word in a script other than Latin (the programs log in English, so such a word is
+invitations), the value of a name's field in `key=value`, `key:value` or `key: value` (`ssid`,
+`host`, `peer`, `server`, `device`, `user` and the like), an address after any key
+(`addr:...`), every word in a script other than Latin (the programs log in English, so such a word is
 the user's), the user's name in home folders and every word of `names`, in any case and as a
 host name (`Office PC` also as `office-pc`), are replaced. A panic's details keep only the kind
 of its message as the standard library words it (`index out of bounds`, `called
@@ -430,8 +431,11 @@ loopback port. It checks that the body is a sealed report, keeps it in a folder 
 the break, and answers `fixed_in` from the robot's `fixed.json`. At most 20 reports of one break
 and version are kept each day; the rest are answered as taken and dropped, so that no app sends
 them again. Past 5000 reports in a day, or 2 GiB kept in all, it answers 503, and the apps keep
-their reports and send them later. A day's reports are removed after 30 days. nginx allows each
-IPv4 address and each IPv6 /64 six reports a minute. The robot opens the reports elsewhere with its secret:
+their reports and send them later. One IPv4 address or IPv6 /64 has at most 100 reports kept a
+day and one IPv6 /48 at most 500, past which it answers 503 too, so no one source fills the day;
+nginx hands cbb-bug the prefix in a header, which it counts in memory for the day and never
+writes. A day's reports are removed after 30 days. nginx allows each IPv4 address and each
+IPv6 /64 six reports a minute. The robot opens the reports elsewhere with its secret:
 `cbb-bug keygen SECRET` makes the key once (the secret stays on the robot's computer, the public
 key goes into `cbb_core::bug::ROBOT_KEY_B64`), and `cbb-bug read SECRET FOLDER...` opens the
 reports copied from the server.

@@ -14,8 +14,12 @@
 //! version are kept each day, and further ones are answered as taken and
 //! dropped, so that an app never sends them again; past `PER_DAY` reports
 //! in a day or `MAX_TOTAL` bytes in all it answers 503, so that the apps
-//! keep theirs and send them later; and a day's reports go after
-//! `KEEP_DAYS`.
+//! keep theirs and send them later; one source takes at most its share of
+//! the day (`PER_SOURCE` for an IPv4 address or an IPv6 /64, `PER_WIDE`
+//! for an IPv6 /48), past which it answers 503 too, so that no one source
+//! fills the day; and a day's reports go after `KEEP_DAYS`. The source is
+//! the prefix nginx names in `X-CBB-Source` and `X-CBB-Source-Wide`; it is
+//! counted in memory for the day only, never written or logged.
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -36,6 +40,12 @@ pub const MAX_BODY: usize = 2 * bug::MAX_POST;
 pub const PER_BREAK: usize = 20;
 /// The reports kept in a day, in all.
 pub const PER_DAY: usize = 5000;
+/// The reports one IPv4 address or IPv6 /64 may have kept in a day.
+pub const PER_SOURCE: usize = PER_DAY / 50;
+/// The reports one IPv6 /48 may have kept in a day.
+pub const PER_WIDE: usize = PER_DAY / 10;
+/// The longest source name taken from nginx.
+const MAX_SOURCE: usize = 64;
 /// The bytes of reports kept in all; past them it takes no more.
 pub const MAX_TOTAL: u64 = 2 << 30;
 /// The days a day's reports are kept.
@@ -55,6 +65,16 @@ struct Day {
     breaks: HashMap<String, usize>,
     /// The bytes of every report kept, of all days.
     total: u64,
+    /// The reports kept today from each source, by its prefix.
+    sources: HashMap<String, usize>,
+}
+
+/// Where a request came from, as nginx names it: an IPv4 address or an
+/// IPv6 /64, and an IPv4 address or an IPv6 /48; empty when not named.
+#[derive(Default, Debug, PartialEq)]
+pub struct Source {
+    pub narrow: String,
+    pub wide: String,
 }
 
 /// The receiver: where it keeps the reports, and today's counts.
@@ -154,12 +174,17 @@ impl Receiver {
         let total = bytes(&self.dir);
         let breaks = files_in_each(&self.dir.join(today));
         let all = breaks.values().sum();
-        Day { day: today.to_string(), all, breaks, total }
+        Day { day: today.to_string(), all, breaks, total, sources: HashMap::new() }
     }
 
     /// Takes a posted body at now_ms: keeps it when the day's counts allow,
     /// and answers.
     pub fn take(&self, body: &[u8], now_ms: i64) -> Answer {
+        self.take_from(body, now_ms, &Source::default())
+    }
+
+    /// take, counting the report against the shares of from.
+    pub fn take_from(&self, body: &[u8], now_ms: i64, from: &Source) -> Answer {
         use base64::Engine as _;
         if body.len() > MAX_BODY {
             return Answer::error(413, "the report is too large");
@@ -192,6 +217,17 @@ impl Receiver {
             if d.all >= PER_DAY || d.total.saturating_add(body.len() as u64) > MAX_TOTAL {
                 return Answer::error(503, "no more reports are taken now");
             }
+            let narrow = (!from.narrow.is_empty()).then(|| format!("n {}", from.narrow));
+            let wide = (!from.wide.is_empty() && from.wide != from.narrow).then(|| format!("w {}", from.wide));
+            let over = |k: &Option<String>, max: usize| {
+                k.as_ref().is_some_and(|k| d.sources.get(k).copied().unwrap_or(0) >= max)
+            };
+            if over(&narrow, PER_SOURCE) || over(&wide, PER_WIDE) {
+                return Answer::error(503, "no more reports are taken from here today");
+            }
+            for k in [narrow, wide].into_iter().flatten() {
+                *d.sources.entry(k).or_insert(0) += 1;
+            }
             d.all += 1;
             d.total = d.total.saturating_add(body.len() as u64);
             d.breaks.insert(key.clone(), seen + 1);
@@ -217,7 +253,7 @@ impl Receiver {
         stream.set_write_timeout(Some(TIMEOUT)).context("a connection")?;
         let mut r = BufReader::new(stream.try_clone().context("a connection")?);
         let answer = match read_request(&mut r) {
-            Ok((method, body)) if method == "POST" => self.take(&body, crate::uptime::wall_ms()),
+            Ok((method, body, from)) if method == "POST" => self.take_from(&body, crate::uptime::wall_ms(), &from),
             Ok(_) => Answer::error(405, "post a report"),
             Err(e) => {
                 let status = if e.to_string().contains("too large") { 413 } else { 400 };
@@ -230,7 +266,12 @@ impl Receiver {
 
 /// Reads a request's method and body: the head at most MAX_HEAD bytes, the
 /// body as long as its Content-Length and at most MAX_BODY.
-fn read_request(r: &mut impl BufRead) -> Result<(String, Vec<u8>)> {
+/// Whether s is a source as nginx names it: an address or a prefix.
+fn source_ok(s: &str) -> bool {
+    s.len() <= MAX_SOURCE && s.bytes().all(|b| b.is_ascii_hexdigit() || b == b'.' || b == b':')
+}
+
+fn read_request(r: &mut impl BufRead) -> Result<(String, Vec<u8>, Source)> {
     let mut head = 0usize;
     let mut line = String::new();
     let mut next = |r: &mut dyn BufRead, line: &mut String| -> Result<()> {
@@ -245,6 +286,7 @@ fn read_request(r: &mut impl BufRead) -> Result<(String, Vec<u8>)> {
     next(r, &mut line)?;
     let method = line.split(' ').next().unwrap_or_default().to_string();
     let mut len: Option<usize> = None;
+    let mut from = Source::default();
     loop {
         next(r, &mut line)?;
         let l = line.trim_end();
@@ -254,6 +296,10 @@ fn read_request(r: &mut impl BufRead) -> Result<(String, Vec<u8>)> {
         if let Some((k, v)) = l.split_once(':') {
             if k.trim().eq_ignore_ascii_case("content-length") {
                 len = Some(v.trim().parse().map_err(|_| Error::msg("the content length does not read"))?);
+            } else if k.trim().eq_ignore_ascii_case("x-cbb-source") && source_ok(v.trim()) {
+                from.narrow = v.trim().to_string();
+            } else if k.trim().eq_ignore_ascii_case("x-cbb-source-wide") && source_ok(v.trim()) {
+                from.wide = v.trim().to_string();
             } else if k.trim().eq_ignore_ascii_case("transfer-encoding") {
                 return Err(Error::msg("a request without a content length"));
             }
@@ -265,7 +311,7 @@ fn read_request(r: &mut impl BufRead) -> Result<(String, Vec<u8>)> {
     }
     let mut body = vec![0; len];
     r.read_exact(&mut body).context("the request is cut short")?;
-    Ok((method, body))
+    Ok((method, body, from))
 }
 
 fn write_answer(mut w: impl Write, a: &Answer) -> Result<()> {
@@ -509,10 +555,34 @@ mod tests {
             d.total = MAX_TOTAL;
         }
         assert_eq!(rx.take(&post("1123456789abcdef", "0.6.0"), day).status, 503);
+        {
+            let mut d = rx.day.lock().unwrap();
+            d.total = 0;
+        }
+        // One source takes at most its share of the day, and others still go.
+        let fp = |i: usize| format!("{:016x}", 0x2000_0000_0000_0000u64 + i as u64);
+        let home = Source { narrow: "2001:db8:1:2".into(), wide: "2001:db8:1".into() };
+        for i in 0..PER_SOURCE {
+            assert_eq!(rx.take_from(&post(&fp(i), "0.6.0"), day, &home).status, 200);
+        }
+        assert_eq!(rx.take_from(&post(&fp(PER_SOURCE), "0.6.0"), day, &home).status, 503);
+        // The rest of its /48 up to the wider share.
+        let mut n = PER_SOURCE;
+        for k in 0.. {
+            let next = Source { narrow: format!("2001:db8:1:{k:x}0"), wide: "2001:db8:1".into() };
+            let a = rx.take_from(&post(&fp(1000 + k), "0.6.0"), day, &next);
+            if a.status == 503 {
+                break;
+            }
+            n += 1;
+        }
+        assert_eq!(n, PER_WIDE, "a /48 takes its share and no more");
+        let other = Source { narrow: "198.51.100.7".into(), wide: "198.51.100.7".into() };
+        assert_eq!(rx.take_from(&post(&fp(9999), "0.6.0"), day, &other).status, 200);
         // A new receiver on the same day counts what the folder holds.
         let again = Receiver::new(&tmp).unwrap();
         let d = again.new_day(&bug::day(day), day);
-        assert_eq!(d.all, 1);
+        assert_eq!(d.all, 1 + PER_WIDE + 1);
         assert_eq!(d.breaks.get("0123456789abcdef-0.6.0"), Some(&1));
         assert!(d.total > 0);
         let _ = std::fs::remove_dir_all(&tmp);
@@ -567,8 +637,20 @@ mod tests {
             &body,
         ]
         .concat();
-        let (m, b) = read_request(&mut &req[..]).unwrap();
-        assert_eq!((m.as_str(), b), ("POST", body));
+        let (m, b, from) = read_request(&mut &req[..]).unwrap();
+        assert_eq!((m.as_str(), b), ("POST", body.clone()));
+        assert_eq!(from, Source::default());
+        let req = [
+            format!(
+                "POST / HTTP/1.1\r\nX-CBB-Source: 2001:db8:1:2\r\nX-CBB-Source-Wide: 2001:db8:1\r\nContent-Length: {}\r\n\r\n",
+                body.len()
+            )
+            .as_bytes(),
+            &body,
+        ]
+        .concat();
+        let (_, _, from) = read_request(&mut &req[..]).unwrap();
+        assert_eq!(from, Source { narrow: "2001:db8:1:2".into(), wide: "2001:db8:1".into() });
         let big = format!("POST / HTTP/1.1\r\nContent-Length: {}\r\n\r\n", MAX_BODY + 1);
         assert!(read_request(&mut big.as_bytes()).unwrap_err().to_string().contains("too large"));
         let long = format!("GET / HTTP/1.1\r\nX: {}\r\n\r\n", "a".repeat(MAX_HEAD));

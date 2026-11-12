@@ -334,8 +334,6 @@ const LISTS_TIME: Duration = Duration::from_secs(60);
 /// The longest a download may take.
 const FETCH_TIME: Duration = Duration::from_secs(30 * 60);
 
-/// Copies what child writes to path, at most max bytes, and stops it when
-/// it writes more or takes longer than FETCH_TIME.
 /// Whether this system's wget knows --https-only (GNU wget 1.17 and later).
 fn wget_https_only() -> bool {
     Command::new("wget")
@@ -346,6 +344,8 @@ fn wget_https_only() -> bool {
         .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).contains("--https-only"))
 }
 
+/// Copies what child writes to path, at most max bytes, and stops it when
+/// it writes more or takes longer than FETCH_TIME.
 fn fetch_with(tool: &str, url: &str, mut child: std::process::Child, path: &Path, max: u64) -> Result<()> {
     use std::io::Read;
     let mut out = child.stdout.take().expect("piped");

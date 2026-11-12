@@ -1588,8 +1588,8 @@ All notable changes to cbb are documented in this file. The format follows
   reports filter more (addresses and host names inside a word, names in any case and as host
   names, words in other scripts) and send a panic's kind and place without the values in its
   message; `bug.cbb.tools` keeps 30 days of reports, answers 503 when full so the apps send
-  later, and limits each IPv6 /64; the Docker image gets its version and `latest` only after
-  the release is signed with the offline key, and `release-sign publish` takes the image only
+  later, gives each IPv6 /64 and /48 a share of the day and limits each /64's rate; the Docker image gets its version, and `latest` only for a
+  newer release, after the release is signed with the offline key, and `release-sign publish` takes the image only
   with the release workflow's attestation; OpenWrt's init script writes the interface list to
   `/var/run/cbb.interfaces`; `get.ps1` downloads into a folder only administrators may change;
   a kept revocation list of Android attestations still counts after a restart once it ran out;

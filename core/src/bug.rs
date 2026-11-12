@@ -149,12 +149,28 @@ const PART_SPLIT: [char; 2] = ['=', '/'];
 
 /// The keys of `key=value` whose value is a name that may not leave the
 /// device.
-const NAME_KEYS: [&str; 11] =
-    ["ssid", "bssid", "essid", "wifi", "network", "host", "hostname", "device", "name", "user", "username"];
+const NAME_KEYS: [&str; 13] = [
+    "ssid", "bssid", "essid", "wifi", "network", "host", "hostname", "device", "name", "user", "username", "peer",
+    "server",
+];
 
 /// The endings of the home network's host names, which often carry the
 /// owner's name (`dens-macbook.local`).
-const LOCAL_HOSTS: [&str; 6] = [".local", ".lan", ".home", ".internal", ".home.arpa", ".localdomain"];
+const LOCAL_HOSTS: [&str; 13] = [
+    ".local",
+    ".lan",
+    ".home",
+    ".internal",
+    ".home.arpa",
+    ".localdomain",
+    ".box",
+    ".router",
+    ".intranet",
+    ".corp",
+    ".private",
+    ".localhost",
+    ".domain",
+];
 
 /// A host name of the home network, with a port or not.
 fn local_host(w: &str) -> bool {
@@ -218,12 +234,24 @@ fn redact_word(w: &str) -> Option<String> {
     if let Some(p) = redact_whole(w) {
         return Some(p.to_string());
     }
-    // A name in `key=value`: a network's, a host's, a device's or a user's.
-    if let Some((key, value)) = w.split_once('=')
-        && !value.is_empty()
-        && NAME_KEYS.contains(&key.to_ascii_lowercase().as_str())
+    // A name in `key=value` or `key:value`: a network's, a host's, a peer's,
+    // a device's or a user's.
+    for sep in ['=', ':'] {
+        if let Some((key, value)) = w.split_once(sep)
+            && !value.is_empty()
+            && name_key(key)
+        {
+            let p = redact_place(value.trim_end_matches(['.', ','])).unwrap_or("<name>");
+            return Some(alloc::format!("{key}{sep}{p}"));
+        }
+    }
+    // An address after another key: `addr:10.0.0.2:7300`.
+    if let Some((key, value)) = w.split_once(':')
+        && key.bytes().all(|b| b.is_ascii_alphabetic() || b == b'_')
+        && key.bytes().any(|b| !b.is_ascii_hexdigit())
+        && let Some(p) = redact_place(value.trim_end_matches(['.', ',']))
     {
-        return Some(alloc::format!("{key}=<name>"));
+        return Some(alloc::format!("{key}:{p}"));
     }
     // An address or a host name inside a word: `peer=...`, a URL.
     if !w.contains(PART_SPLIT) {
@@ -426,25 +454,68 @@ pub fn redact(line: &str, names: &[String]) -> String {
     s = redact_homes(&s);
     let mut out = String::new();
     let mut word = String::new();
-    let flush = |word: &mut String, out: &mut String| {
-        if !word.is_empty() {
+    // Whether the word before was a field of a name, `host:` or `peer=`,
+    // with only spaces since: the next word is its value.
+    let mut field = false;
+    // Whether the word before was a name's key alone, `server` in
+    // `server = name`.
+    let mut key = false;
+    let mut flush = |word: &mut String, out: &mut String, field: &mut bool| {
+        if word.is_empty() {
+            return;
+        }
+        if (word == "=" || word == ":") && (key || *field) {
+            out.push_str(word);
+            word.clear();
+            *field = true;
+            key = false;
+            return;
+        }
+        key = name_key(word);
+        let value = core::mem::take(field);
+        if value && !word.bytes().all(|b| b.is_ascii_digit()) {
+            out.push_str("<name>");
+        } else {
             match redact_word(word) {
                 Some(r) => out.push_str(&r),
                 None => out.push_str(word),
             }
-            word.clear();
         }
+        *field = name_field(word);
+        word.clear();
     };
     for c in s.chars() {
         if word_char(c) {
             word.push(c);
         } else {
-            flush(&mut word, &mut out);
+            let was = !word.is_empty();
+            flush(&mut word, &mut out, &mut field);
+            if !(c == ' ' || (was && c == ':')) {
+                field = false;
+            }
+            if c == ':' && was {
+                // `host: name`: the colon ends the field's word.
+                field = field || out.rsplit([' ', '\t']).next().is_some_and(name_key);
+            }
             out.push(if c.is_control() { ' ' } else { c });
         }
     }
-    flush(&mut word, &mut out);
+    flush(&mut word, &mut out, &mut field);
     out
+}
+
+/// Whether w is a field whose value is a name: `host:` or `peer=` with
+/// nothing after it.
+fn name_field(w: &str) -> bool {
+    match w.strip_suffix([':', '=']) {
+        Some(key) => name_key(key),
+        None => false,
+    }
+}
+
+/// Whether key names a name (NAME_KEYS), in any case.
+fn name_key(key: &str) -> bool {
+    NAME_KEYS.contains(&key.to_ascii_lowercase().as_str())
 }
 
 /// Where a panic's details say it broke: the `file:line:col` after the
@@ -793,6 +864,13 @@ mod tests {
             ("OFFICE PC dialed", "OFFICE PC"),
             ("office-pc.local answered", "office-pc"),
             ("den-s-macbook dialed", "den-s-macbook"),
+            ("peer:192.168.1.5:7300 closed", "192.168.1.5"),
+            ("addr:10.0.0.9 refused", "10.0.0.9"),
+            ("peer:dimas-macbook closed", "dimas-macbook"),
+            ("host: dimas-macbook answered", "dimas-macbook"),
+            ("server = nas-of-den down", "nas-of-den"),
+            ("Peer: kitchen-pi dialed", "kitchen-pi"),
+            ("router fritz.box answered", "fritz.box"),
         ] {
             let out = redact(line, &names);
             assert!(!out.contains(gone), "{gone} left in {out}");
@@ -801,6 +879,11 @@ mod tests {
         assert_eq!(redact("dial https://192.168.1.5:7300/x", &[]), "dial https://<address>/x");
         // Paths, files and the program's words stay readable.
         assert_eq!(redact("wrote state/bug.json, kept=3", &[]), "wrote state/bug.json, kept=3");
+        assert_eq!(redact("host: dimas-macbook answered", &[]), "host: <name> answered");
+        assert_eq!(redact("peer:10.0.0.2:7300 closed", &[]), "peer:<address> closed");
+        assert_eq!(redact("addr:10.0.0.2:7300 closed", &[]), "addr:<address> closed");
+        assert_eq!(redact("retry: 3 times, sync: off", &[]), "retry: 3 times, sync: off");
+        assert_eq!(redact("name: 42", &[]), "name: 42");
         assert_eq!(redact("at member/src/sync.rs:120:9", &[]), "at member/src/sync.rs:120:9");
 
         let mut i = input();

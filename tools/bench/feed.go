@@ -274,8 +274,20 @@ func (fd *feed) toDevice(ctx context.Context, d *Device, dir string) (string, er
 	if _, err := docker(ctx, "cp", dir, d.Container+":"+at); err != nil {
 		return "", err
 	}
-	_, err := docker(ctx, "cp", fd.roots, d.Container+":/feed/roots.pem")
-	return at, err
+	return at, fd.rootsTo(ctx, d)
+}
+
+// rootsTo copies the roots to /feed/roots.pem on d, root's and closed to
+// others' writing, as cbb takes CBB_RELEASE_ROOTS only from such a file.
+func (fd *feed) rootsTo(ctx context.Context, d *Device) error {
+	if _, err := Run(ctx, d, "mkdir -p /feed", ""); err != nil {
+		return err
+	}
+	if _, err := docker(ctx, "cp", fd.roots, d.Container+":/feed/roots.pem"); err != nil {
+		return err
+	}
+	_, err := Run(ctx, d, "chown 0:0 /feed/roots.pem && chmod 0644 /feed/roots.pem", "")
+	return err
 }
 
 // feedEnv is the environment that points cbb update and get.sh at the
