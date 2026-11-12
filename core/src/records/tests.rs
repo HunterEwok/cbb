@@ -2306,7 +2306,8 @@ fn an_admin_key_first_named_by_a_claim_gets_its_room() {
     let seen = g.seen();
     let rm = g.rec(&b, Kind::Revoke(removal(&[w.hash, pw.hash], seen)));
     b_recs.push(rm.clone());
-    let claim = g.rec(&w, Kind::Claim { root: b.key.clone(), seen: vec![Seen { key: g.root.hash, seq: 1, id: w_rec.id() }] });
+    let claim =
+        g.rec(&w, Kind::Claim { root: b.key.clone(), seen: vec![Seen { key: g.root.hash, seq: 1, id: w_rec.id() }] });
     let mut m1 = RecordSet::new(g.root.key.clone());
     m1.insert_all(g.recs.iter().cloned());
     let mut m2 = RecordSet::new(g.root.key.clone());
@@ -2336,7 +2337,13 @@ fn an_admin_key_first_named_by_a_claim_gets_its_room() {
 fn only_a_live_admin_s_two_histories_stop_the_secrets() {
     let twins = |g: &G, by: &K| -> Vec<Record> {
         (0..2)
-            .map(|i| Record::sign(Body { seq: 1, prev: None, ..g.body(by, Kind::Copies { incoming_ms: MIN_INCOMING_MS + i }) }, by).unwrap())
+            .map(|i| {
+                Record::sign(
+                    Body { seq: 1, prev: None, ..g.body(by, Kind::Copies { incoming_ms: MIN_INCOMING_MS + i }) },
+                    by,
+                )
+                .unwrap()
+            })
             .collect()
     };
     let (pw, w) = (k("watch"), k("admin w"));
@@ -2521,7 +2528,13 @@ fn a_counted_takeover_outlives_its_record() {
     }
     assert_eq!(m.counted(), vec![claim.id()]);
     let more: Vec<Record> = (0..4000u64)
-        .map(|i| Record::sign(Body { seq: 1, prev: None, ..g.body(&rk, Kind::Copies { incoming_ms: MIN_INCOMING_MS + i }) }, &rk).unwrap())
+        .map(|i| {
+            Record::sign(
+                Body { seq: 1, prev: None, ..g.body(&rk, Kind::Copies { incoming_ms: MIN_INCOMING_MS + i }) },
+                &rk,
+            )
+            .unwrap()
+        })
         .filter(|r| r.id() < claim.id())
         .collect();
     m.insert_all(more.iter().cloned());
@@ -2540,4 +2553,25 @@ fn a_counted_takeover_outlives_its_record() {
     let kept: Vec<Record> = m.ids().map(|id| m.get(id).unwrap().clone()).collect();
     let s = evaluate(&Input { root: &g.root.key, records: &kept, held_ms: &held, counted: m.counted_claims() });
     assert_eq!(s.roots, vec![g.root.hash, n.hash]);
+}
+
+/// A counted claim still needs what no later record changes: a claimant
+/// with the takeover power under its root, not removed in what it saw.
+#[test]
+fn a_counted_claim_keeps_the_checks_nothing_later_changes() {
+    let (pw, w, pa, a) = (k("watch"), k("admin w"), k("phone a"), k("admin a"));
+    let mut g = G::new();
+    g.admin(&pw, &w, POWER_REMOVE | POWER_FREEZE);
+    let seen = g.seen();
+    let claim = g.rec(&w, Kind::Claim { root: k("other root").key.clone(), seen });
+    let held = BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]);
+    assert_eq!(counted_state(&g, &held, &[claim.id()]).roots.len(), 1);
+    let mut g = G::new();
+    g.admin(&pa, &a, POWER_ADMIT | POWER_TAKEOVER);
+    let seen = g.seen();
+    g.root_rec(Kind::Revoke(removal(&[a.hash, pa.hash], seen)));
+    let seen = g.seen();
+    let claim = g.rec(&a, Kind::Claim { root: k("other root").key.clone(), seen });
+    let held = BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]);
+    assert_eq!(counted_state(&g, &held, &[claim.id()]).roots.len(), 1);
 }

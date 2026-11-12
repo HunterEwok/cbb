@@ -12,9 +12,9 @@
 //! record, the limits, and no clock in any rule.
 
 use alloc::collections::{BTreeMap, BTreeSet};
-use core::cell::RefCell;
 use alloc::vec;
 use alloc::vec::Vec;
+use core::cell::RefCell;
 
 use super::body::{
     self, Body, Device, Head, Kind, POWER_ADMIT, POWER_FREEZE, POWER_HUB, POWER_MANAGE, POWER_REMOVE,
@@ -72,7 +72,11 @@ impl Counted {
     /// The counted claims of ids, in order, from their records: each under
     /// the root the one before it named, the first under the group's
     /// root. It stops at the first one it cannot read.
-    pub fn chain<'r>(group_root: &KeyHash, ids: &[RecordId], get: impl Fn(&RecordId) -> Option<&'r Record>) -> Vec<Counted> {
+    pub fn chain<'r>(
+        group_root: &KeyHash,
+        ids: &[RecordId],
+        get: impl Fn(&RecordId) -> Option<&'r Record>,
+    ) -> Vec<Counted> {
         let mut out: Vec<Counted> = Vec::new();
         for id in ids {
             let under = out.last().map_or(*group_root, |c| c.root.hash());
@@ -593,9 +597,18 @@ pub(crate) fn ceiling_of(
 /// changes: a root after the first that is on the path has a root's room
 /// and teaches admin keys, and an old root keeps nothing off its cut.
 pub fn evaluate(input: &Input) -> State {
-    let mut promoted: BTreeSet<KeyHash> = BTreeSet::new();
-    let mut cuts: BTreeMap<KeyHash, Seen> = BTreeMap::new();
+    // A member that counted claims has compacted with their roots and
+    // cuts already.
+    let mut promoted: BTreeSet<KeyHash> = input.counted.iter().map(|c| c.root.hash()).collect();
+    let mut cuts: BTreeMap<KeyHash, Seen> = input.counted.iter().map(|c| (c.cut.key, c.cut)).collect();
     let mut split = false;
+    if !input.counted.is_empty() {
+        // What the records said before it compacted.
+        let (checked, failed) = check_all(input.root, &BTreeSet::new(), input.counted, input.records);
+        let none = BTreeMap::new();
+        split = evaluate_checked(input.root, checked, failed, input.held_ms, input.counted, &BTreeSet::new(), &none)
+            .owner_split;
+    }
     let mut n = 0usize;
     loop {
         let (checked, failed) = check_all(input.root, &promoted, input.counted, input.records);
@@ -1868,9 +1881,53 @@ impl<'e, 'a> Epoch<'e, 'a> {
     /// root and the current root's cut when one takes effect.
     /// Takes claim c, which the device counted, as in effect, whether or
     /// not the set still holds its record; the other claims of this epoch
-    /// are left out.
+    /// are left out. None when the claim could never have counted here.
     fn decide_counted(&mut self, c: &Counted) -> Option<KeyHash> {
         let root = c.root.hash();
+        // What no later record changes: the claimant had the takeover
+        // power under this root, and the new key is not void by itself.
+        let gid = DeviceId::of(&root);
+        let keys = self.with_pair(&c.claimant);
+        let claim = self.e.by_id.get(&c.claim).copied();
+        // Only the current root's records within the cut: its later
+        // records, checkpoints among them, change nothing here.
+        let at_cut = |i: usize| {
+            let r = self.r(i);
+            !r.held && r.b().signer == c.cut.key && self.e.within(&c.cut, i)
+        };
+        // The claimant's powers: from the newest root record within the
+        // cut that names it, or the recovery record's takeover.
+        let mut named: Option<usize> = None;
+        for &i in self.e.devices.values().flatten() {
+            if at_cut(i)
+                && self.r(i).dev().and_then(|d| d.admin.as_ref()).is_some_and(|a| a.hash() == c.claimant)
+                && named.is_none_or(|old| self.newer(i, old))
+            {
+                named = Some(i);
+            }
+        }
+        let recovery = self.all().filter(|&i| at_cut(i)).filter_map(|i| match &self.r(i).b().kind {
+            Kind::Recovery { admin } => Some((self.r(i).b().seq, admin.hash())),
+            _ => None,
+        });
+        let powers = named.and_then(|i| self.r(i).dev()).map_or(0, |d| d.powers)
+            | recovery.max().filter(|(_, a)| *a == c.claimant).map_or(0, |_| POWER_TAKEOVER);
+        // A removal of the claimant it saw: a root's within the cut, or an
+        // admin's the claim's record lists.
+        let removed = self.all().any(|i| {
+            let r = self.r(i);
+            r.is_revoke()
+                && r.removal().is_some_and(|rm| keys.iter().any(|k| rm.keys.binary_search(k).is_ok()))
+                && (at_cut(i) || r.admin() && self.label[i] == Label::In && claim.is_some_and(|c| self.e.saw(c, i)))
+        });
+        if powers & POWER_TAKEOVER == 0
+            || removed
+            || root == c.claimant
+            || self.on_path.contains_key(&root)
+            || self.path.iter().any(|p| DeviceId::of(p) == gid)
+        {
+            return None;
+        }
         self.claims.push(Claim {
             record: c.claim,
             claimant: c.claimant,

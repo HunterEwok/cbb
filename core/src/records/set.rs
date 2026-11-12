@@ -237,8 +237,7 @@ impl RecordSet {
             .collect();
         let (promoted, first) = (&self.promoted, self.root.hash());
         let counted: BTreeSet<KeyHash> = self.counted.iter().map(|c| c.root.hash()).collect();
-        self.keys
-            .retain_roots(|h| *h == first || named.contains(h) || promoted.contains(h) || counted.contains(h));
+        self.keys.retain_roots(|h| *h == first || named.contains(h) || promoted.contains(h) || counted.contains(h));
     }
 
     /// Reports whether r would cancel a claim the member counted: a
@@ -399,11 +398,9 @@ impl RecordSet {
     /// Reads the waiting counted claims whose records are here, in order.
     fn read_pending(&mut self) {
         let group = self.root.hash();
-        let more = eval::Counted::chain(
-            &self.counted.last().map_or(group, |c| c.root.hash()),
-            &self.pending,
-            |id| self.records.get(id).map(|e| &e.record),
-        );
+        let more = eval::Counted::chain(&self.counted.last().map_or(group, |c| c.root.hash()), &self.pending, |id| {
+            self.records.get(id).map(|e| &e.record)
+        });
         if more.is_empty() {
             return;
         }
@@ -427,13 +424,12 @@ impl RecordSet {
         // that already holds an earlier path's keeps it.
         let mut along: Vec<Counted> = Vec::new();
         for (under, next) in state.roots.iter().zip(state.roots.iter().skip(1)) {
-            let found = state
-                .claims
-                .iter()
-                .find(|c| c.state == ClaimState::Effective && c.root == *next)
-                .and_then(|c| match self.counted.get(along.len()) {
-                    Some(old) if old.claim == c.record => Some(old.clone()),
-                    _ => self.records.get(&c.record).and_then(|e| Counted::of(&e.record, under)),
+            let found =
+                state.claims.iter().find(|c| c.state == ClaimState::Effective && c.root == *next).and_then(|c| {
+                    match self.counted.get(along.len()) {
+                        Some(old) if old.claim == c.record => Some(old.clone()),
+                        _ => self.records.get(&c.record).and_then(|e| Counted::of(&e.record, under)),
+                    }
                 });
             match found {
                 Some(c) => along.push(c),

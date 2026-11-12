@@ -549,9 +549,7 @@ impl Body {
         let time_ms = r.opt_uint(6, 0, Rule::new("records/time_ms"))?;
         let f = |name: &'static str| field(t, name);
         let (kind, own, gone): (Kind, &[u16], &[u16]) = match type_number {
-            TYPE_DEVICE => {
-                (Kind::Device(read_device(&r)?), DEVICE_OWN, &[15])
-            }
+            TYPE_DEVICE => (Kind::Device(read_device(&r)?), DEVICE_OWN, &[15]),
             TYPE_REVOKE | TYPE_FREEZE => {
                 let keys = r.need_list(10, f("keys"), |v| v.as_bytes().and_then(KeyHash::from_slice))?;
                 let seen = read_seen(&r, f("seen"))?;
