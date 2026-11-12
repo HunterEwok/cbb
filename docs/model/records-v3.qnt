@@ -33,6 +33,9 @@
 //     every member holds every recovery record, all of them or none are stopped.
 // 12. A removed key gains nothing: of a removed key, only records that every counted removal
 //     of it saw count (a removed phone admin turned thief included).
+// 13. After a change of root, two members that hold the same recovery chain, were offered the
+//     same records and hold the new root's first checkpoint are in one state, whether or not
+//     either compacted on a checkpoint of the replaced root.
 //
 // (Promise 4, a claim's delay, is gone with the delay.)
 //
@@ -41,7 +44,8 @@
 // key of a device names both. C2 is another admin key for C's device: a root's newer record
 // of a device that names another key, or none, takes the old key's powers, and of what the old
 // key signed only what that record saw counts. A thaw revives only what it saw of the frozen
-// key's records. D is a device the admins and roots admit and remove; NA and NK are new roots;
+// key's records. D is a device the admins and roots admit and remove; NA and NK are new roots
+// (NA may first be an admin key a root names, of the device dN);
 // X is an admin key a root may name. K is the group's recovery key, fixed when the group was
 // made and never replaced. Any key may stay silent,
 // act as a thief (pretend it held none of the other admins' records), or sign a second record
@@ -65,7 +69,11 @@
 // good. The newest record's list is the whole truth about every earlier root: lists do not add
 // up. The device that becomes the root writes the list: every record of the roots so far that
 // it counts, every root's removal it holds, and the heads the current root's counting
-// checkpoint named. The owner's "who stays" is removals the new root signs. The recovery
+// checkpoint named. A record also carries from: the seq at which the new root's records
+// start (1 for a fresh key); of a key that signed before, as an admin, a record below from
+// counts only if listed. With the head, before it is released, the writer signs the new
+// root's first checkpoint: the heads the list anchors, keeping what the writer counts under
+// the new root. The owner's "who stays" is removals the new root signs. The recovery
 // records are outside the rooms; no checkpoint prunes them; no root's or admin's record
 // touches the recovery key. Guarded leaves are not in the model.
 //
@@ -83,8 +91,8 @@
 //	quint run --backend=typescript --invariant=promises --max-steps=25 --max-samples=500 docs/model/records-v3.qnt
 //
 // with --invariant set to oneState, removedStayOut, oneChainOneState, stopRootOnly, fairRoom,
-// followsRecovery, pathGrows, newcomerTakes, oldRootListed, twinStops or removedGainsNothing
-// for one promise. The typescript backend takes a few traces a second here, so a long run takes
+// followsRecovery, pathGrows, newcomerTakes, oldRootListed, twinStops, removedGainsNothing or
+// compactedAgree for one promise. The typescript backend takes a few traces a second here, so a long run takes
 // many samples and several seeds. --step=guided weights the steps towards changes of root one
 // after another, thieves and compaction, and --witnesses secondTakeover compactedGap counts the
 // traces that reach them.
@@ -166,8 +174,8 @@ module records_v3 {
   pure val MEMBERS = Set("r", "a", "c", "k", "m")
   // The device (its member key) of each admin key: C2 is a second admin key the root may name
   // for C's device in place of C.
-  pure val DEV = Map("A" -> "dA", "C" -> "dC", "C2" -> "dC", "W" -> "dW", "X" -> "dX")
-  pure val DEVS = Set("dA", "dC", "dW", "dX")
+  pure val DEV = Map("A" -> "dA", "C" -> "dC", "C2" -> "dC", "W" -> "dW", "X" -> "dX", "NA" -> "dN")
+  pure val DEVS = Set("dA", "dC", "dW", "dX", "dN")
 
   pure val ROOM = 14
   pure val ROOTC = 8
@@ -230,9 +238,18 @@ module records_v3 {
   // a (a revoke, freeze, thaw or a root's device record) saw t: t is on the chain of the head
   // a held of t's key.
   pure def sawIn(a: Record, t: Record, ids: Set[Id], anchors: Set[Id]): bool = onChain(lineOf(a.seen, t.signer), t.id, ids, anchors)
-  // r's key is not replaced, or r is on the list the recovery record kept of r's key.
+  // The current root's entry in cuts, when the newest recovery record names a key that signed
+  // before as an admin: its `from` as a negative first item, then the list. Of that key, a
+  // record below `from` counts only when listed.
+  pure def floored(l: List[Id]): bool = l.length() > 0 and l[0] < 0
+  pure def floorOf(l: List[Id]): int = if (floored(l)) 0 - l[0] else 0
+  // k is a replaced root: it keeps only what the newest list names.
+  pure def replaced(cuts: Key -> List[Id], k: Key): bool = cuts.keys().contains(k) and not(floored(cuts.get(k)))
+  // r's key is not replaced, or r is on the list the recovery record kept of r's key; of the
+  // current root, r is at or above `from`, or listed.
   pure def within(cuts: Key -> List[Id], r: Record): bool =
     not(cuts.keys().contains(r.signer)) or inLine(cuts.get(r.signer), r.id)
+      or (floored(cuts.get(r.signer)) and r.seq >= floorOf(cuts.get(r.signer)))
   // A set of IDs as a list, in ID order.
   pure def toList(s: Set[Id]): List[Id] = range(1, MAXREC + 6).select(i => s.contains(i))
 
@@ -280,7 +297,11 @@ module records_v3 {
   pure def pathCutsOf(l: List[Record]): (List[Key], Key -> List[Id]) = {
     val path = l.foldl([ROOT], (p, c) => p.append(c.target))
     val list = if (l.length() == 0) [] else toList(l[l.length() - 1].keep)
-    (path, path.indices().filter(i => i + 1 < path.length()).map(i => path[i]).mapBy(k => list))
+    val from = if (l.length() == 0) 0 else l[l.length() - 1].targetRec
+    val olds = path.indices().filter(i => i + 1 < path.length()).map(i => path[i]).mapBy(k => list)
+    // The newest record's from: the seq at which the new root's records start; a key that
+    // signed before (as an admin) keeps below it only what the list names.
+    (path, if (from > 1) olds.put(last(path), [0 - from].concat(list)) else olds)
   }
   pure def pathCuts(ch: Chain): (List[Key], Key -> List[Id]) = pathCutsOf(ch.recs)
 
@@ -368,7 +389,7 @@ module records_v3 {
     not(isChain(r))
       and (admins.contains(r.signer) or onList(path, r.signer))
       and within(cuts, r)
-      and (s.checkpoint == 0 or cuts.keys().contains(db.get(s.checkpoint).signer) or not(prunedBy(db.get(s.checkpoint), r)))
+      and (s.checkpoint == 0 or replaced(cuts, db.get(s.checkpoint).signer) or not(prunedBy(db.get(s.checkpoint), r)))
   }
 
   // What a set keeps of items: of those within the lists, what the rooms keep.
@@ -432,10 +453,11 @@ module records_v3 {
     // makes nothing above it whole.
     pure def early(r: Record): bool = onPath(r) and (r.kind == "revoke" or r.kind == "freeze" or r.kind == "resolve")
     // A whole chain: every record of its line is here, or down to an anchor; a replaced root's
-    // listed record counts by the list.
+    // listed record counts by the list; of a current root with a from, its line from there.
     pure def whole(r: Record): bool = {
       val top = r.line.indices().fold(-1, (m, j) => if (anchors.contains(r.line[j])) j else m)
-      early(r) or cuts.keys().contains(r.signer) or r.line.indices().forall(i => i <= top or ids.contains(r.line[i]))
+      val low = if (cuts.keys().contains(r.signer)) floorOf(cuts.get(r.signer)) - 2 else -1
+      early(r) or replaced(cuts, r.signer) or r.line.indices().forall(i => i <= max2(top, low) or ids.contains(r.line[i]))
     }
     // The resolves of every root on the path; a root's removal is final.
     val voids = rs.filter(r => onPath(r) and r.kind == "resolve" and whole(r)).map(r => r.targetRec)
@@ -726,11 +748,17 @@ module records_v3 {
   // The recovery key k (or a thief holding it) signs a recovery record at seq `at` of the
   // chain its member follows (at its end, or at a seq that chain already has: a twin). The
   // list: "honest" is what the core writes on the device that becomes the root (every record
-  // of the roots so far that it counts, every root's removal it holds, and the heads the
-  // current root's counting checkpoint named, not that checkpoint itself); "literal" is the
-  // same with only the current root's counted records (the first wording of brief v2); "none"
-  // lists nothing; "all" lists every record those roots ever signed. The owner's
-  // "who stays" is removals the new root signs after.
+  // of the roots so far that it counts, the new root key's own records that count when it was
+  // an admin, every root's removal it holds, and the heads the current root's counting
+  // checkpoint named, not that checkpoint itself); "literal" is the same with only the current
+  // root's counted records (the first wording of brief v2); "none" lists nothing; "all" lists
+  // every record those roots ever signed. The owner's "who stays" is removals the new root
+  // signs after. The record's from (targetRec) is the seq at which the new root's records
+  // start: 1 for a fresh key, after its last record for a key that signed as an admin.
+  // "honest" also signs the new root's first checkpoint, before the head is released: the
+  // heads the list anchors (the replaced root's counting checkpoint's), keeping what the
+  // writer counts under the new root. "nocp" is "honest" without that checkpoint; "from1" is
+  // "honest" with from 1 (the key's admin records taken as a root's).
   action signChain(k: Key, kind: str, target: Key, at: int, mode: str): bool = {
     val h = HOLDER.get(k)
     val s = st.get(h)
@@ -739,30 +767,39 @@ module records_v3 {
     val base = ch.ids.slice(0, at - 1)
     val before = pathCutsOf(ch.recs.slice(0, at - 1))._1
     val cur = last(before)
-    val held = recsOf(s.recs, db).filter(r => onList(before, r.signer))
-    val cp = if (v.checkpoint != 0 and db.get(v.checkpoint).signer == cur)
-      db.get(v.checkpoint).heads.keys().filter(k => db.get(v.checkpoint).heads.get(k).length() > 0)
-        .map(k => lastId(db.get(v.checkpoint).heads.get(k))).filter(i => onList(before, db.get(i).signer)) else Set()
+    val held = recsOf(s.recs, db).filter(r => onList(before, r.signer) or r.signer == target)
+    val oldCp = if (v.checkpoint != 0 and db.get(v.checkpoint).signer == cur) db.get(v.checkpoint) else NONEREC
+    val cp = oldCp.heads.keys().filter(k => oldCp.heads.get(k).length() > 0)
+      .map(k => lastId(oldCp.heads.get(k))).filter(i => onList(before, db.get(i).signer))
     val honest = idsOf(held.filter(r => (v.counting.contains(r.id) and r.kind != "checkpoint") or rootRemoval(r))).union(cp)
-    val keep = if (mode == "honest") honest
+    val keep = if (mode == "honest" or mode == "nocp" or mode == "from1") honest
       else if (mode == "literal") honest.filter(i => db.get(i).signer == cur or rootRemoval(db.get(i)) or cp.contains(i))
       else if (mode == "none") Set()
       else db.keys().filter(i => onList(before, db.get(i).signer))
-    val r = rec(nextId, k, base.append(nextId), kind, target, "", 0, Map(), Map(), keep, 0)
+    val own = headLine(db.keys().map(i => db.get(i)), target)
+    val from = if (mode == "from1") 1 else own.length() + 1
+    val r = rec(nextId, k, base.append(nextId), kind, target, "", from, Map(), Map(), keep, 0)
     val db2 = db.put(nextId, r)
+    val s1 = insertInto(s, r, db2)
+    val withCp = mode == "honest" or mode == "from1"
+    // The new root's first checkpoint: what the writer counts once the head applies.
+    val v1 = finish(s1, db2)._2
+    val c = rec(nextId + 1, target, own.append(nextId + 1), "checkpoint", "", "", 0, oldCp.heads, oldCp.heads,
+      v1.counting.filter(i => db2.get(i).kind != "checkpoint"), 2)
+    val db3 = if (withCp) db2.put(nextId + 1, c) else db2
     all {
       RKEYS.contains(k),
       at >= 1,
       at <= ch.ids.length() + 1,
-      nextId <= FIRST + MAXREC,
-      commit(db2, nextId + 1, h, insertInto(s, r, db2)),
+      nextId + 1 <= FIRST + MAXREC,
+      commit(db3, if (withCp) nextId + 2 else nextId + 1, h, if (withCp) insertInto(pathed(s1, db3), c, db3) else s1),
     }
   }
 
   action signDevice = nondet k = Set(ROOT, PHONE, COMPUTER, "NA", "NK", MINTED).oneOf() nondet f = Set(true, false).oneOf()
     sign(k, "device", DEVICE, "", 0, false, f, 1)
   // A root (or a thief) names an admin; a root may name again one it removed.
-  action signAdmin = nondet k = Set(ROOT, PHONE, "NA", "NK").oneOf() nondet a = Set(PHONE, COMPUTER, "C2", WATCH, MINTED).oneOf()
+  action signAdmin = nondet k = Set(ROOT, PHONE, "NA", "NK").oneOf() nondet a = Set(PHONE, COMPUTER, "C2", WATCH, MINTED, "NA").oneOf()
     nondet kit = Set("phone", "computer", "watch").oneOf() sign(k, "admin", a, kit, 0, false, false, 1)
   // A root takes the admin key off a device: a device record about it, with no admin key.
   action signDemote = nondet k = ROOT_KEYS.oneOf() nondet d = Set("dA", "dC", "dW").oneOf()
@@ -807,7 +844,7 @@ module records_v3 {
   // Any recovery record at any place: a new root (or a key that was one, which is not
   // valid), any list.
   action signRecover = nondet t = Set("NA", "NK", ROOT).oneOf()
-    nondet mode = Set("honest", "literal", "none", "all").oneOf() nondet at = Set(1, 2, 3).oneOf()
+    nondet mode = Set("honest", "literal", "none", "all", "nocp", "from1").oneOf() nondet at = Set(1, 2, 3).oneOf()
     signChain(RECOVERY, "recover", t, at, mode)
 
   // A newcomer: m starts again from what admitter x hands it, the recovery chain and its
@@ -1049,9 +1086,36 @@ module records_v3 {
       if (rm.signer == r.signer) r.seq < rm.seq else inLine(lineOf(rm.seen, r.signer), r.id)))
   })
 
+  // 13. After a change of root, two members that hold the same recovery chain, were offered
+  // the same records and hold the new root's first checkpoint are in one state, whether or not
+  // either compacted on a checkpoint of the replaced root.
+  def firstCheckpointHeld(m: str): bool = {
+    val s = st.get(m)
+    val ch = chainState(s, db)
+    ch.recs.length() > 0 and {
+      val tip = ch.recs[ch.recs.length() - 1]
+      recsOf(s.got, db).exists(r => r.signer == tip.target and r.kind == "checkpoint" and r.seq == max2(tip.targetRec, 1))
+    }
+  }
+  val compactedAgree = MEMBERS.forall(m1 => MEMBERS.forall(m2 => {
+    val s1 = st.get(m1)
+    val s2 = st.get(m2)
+    (s1.chain == s2.chain and s1.got == s2.got and not(chainState(s1, db).stop) and firstCheckpointHeld(m1)
+      and saturated(m1) and saturated(m2)) implies views.get(m1) == views.get(m2)
+  }))
+
+  // Promise 13 was tried: two members that agree in what it asks for, one compacted on a
+  // replaced root's checkpoint and the other not.
+  val agreeTried = MEMBERS.exists(m1 => MEMBERS.exists(m2 => {
+    val s1 = st.get(m1)
+    val s2 = st.get(m2)
+    s1.chain == s2.chain and s1.got == s2.got and firstCheckpointHeld(m1) and s1.checkpoint != 0
+      and s2.checkpoint == 0 and saturated(m1) and saturated(m2)
+  }))
+
   val promises = and {
     oneState, removedStayOut, oneChainOneState, stopRootOnly, fairRoom, followsRecovery, pathGrows, newcomerTakes,
-    oldRootListed, twinStops, removedGainsNothing,
+    oldRootListed, twinStops, removedGainsNothing, compactedAgree,
   }
 
   // --- Scenarios ---------------------------------------------------------------------------
@@ -1187,15 +1251,16 @@ module records_v3 {
       .then(recoverAs(RECOVERY, "NK"))
       .then(give("m", 4))
       .then(give("m", 5))
+      .then(give("m", 6))
       .expect(views.get("m").path == [ROOT, "NK"] and views.get("m").devices.contains(DEVICE))
       .then(signAs(ROOT, "revoke", DEVICE, 0))
       .then(sign(ROOT, "admin", MINTED, "phone", 0, false, false, 1))
       .then(sign(ROOT, "revoke", DEVICE, "", 0, false, true, 1))
-      .then(give("m", 6))
       .then(give("m", 7))
       .then(give("m", 8))
+      .then(give("m", 9))
       .expect(views.get("m").devices.contains(DEVICE) and not(views.get("m").admins.keys().contains(MINTED))
-        and st.get("m").recs.intersect(Set(6, 7, 8)) == Set() and promises)
+        and st.get("m").recs.intersect(Set(7, 8, 9)) == Set() and promises)
 
   // A removal by the old root that the recovery key's member did not hold is not on the list:
   // after the change it counts no more, and the device returns (rule 33, point 6, against
@@ -1213,7 +1278,8 @@ module records_v3 {
       .expect(views.get("c").path == [ROOT, "NK"] and views.get("c").devices.contains(DEVICE) and promises)
 
   // A key a root not yet on the path names teaches nothing: its records are not kept until
-  // the recovery record makes that root the root.
+  // the recovery record makes that root the root, and what that root signed before the
+  // record's from stays out unless listed; what it signs from there counts.
   run mintedKeyTest =
     init
       .then(sign("NA", "admin", MINTED, "computer", 0, false, false, 1))
@@ -1222,11 +1288,19 @@ module records_v3 {
       .then(give("m", 5))
       .expect(not(st.get("m").recs.contains(5)) and not(views.get("m").devices.contains(DEVICE)))
       .then(signChain(RECOVERY, "recover", "NA", 1, "honest"))
+      .expect(db.get(6).targetRec == 2)
       .then(give("m", 6))
+      .then(give("m", 7))
       .then(give("m", 4))
       .then(give("m", 5))
-      .expect(views.get("m").path == [ROOT, "NA"] and views.get("m").admins.keys().contains(MINTED)
-        and views.get("m").devices.contains(DEVICE) and promises)
+      .expect(views.get("m").path == [ROOT, "NA"] and not(views.get("m").admins.keys().contains(MINTED))
+        and not(views.get("m").devices.contains(DEVICE)) and promises)
+      .then(give("a", 6))
+      .then(give("a", 7))
+      .then(sign("NA", "admin", MINTED, "computer", 0, false, false, 1))
+      .then(give("m", 8))
+      .then(give("m", 5))
+      .expect(views.get("m").admins.keys().contains(MINTED) and views.get("m").devices.contains(DEVICE) and promises)
 
   // The root's checkpoint gives the state on a member that compacted on it.
   run checkpointTest =
@@ -1271,12 +1345,15 @@ module records_v3 {
       .then(recoverAs(RECOVERY, "NK"))
       .then(signAs("NK", "device", DEVICE, 0))
       .then(recoverAs(RECOVERY, "NA"))
-      .then(give("m", 5))
       .then(give("m", 6))
+      .then(give("m", 7))
+      .then(give("m", 8))
       .expect(views.get("m").path == [ROOT] and not(views.get("m").devices.contains(DEVICE)))
       .then(give("m", 4))
       .then(give("m", 5))
-      .expect(views.get("m").path == [ROOT, "NK", "NA"] and views.get("m").cuts == Map(ROOT -> [1, 2, 3, 5], "NK" -> [1, 2, 3, 5])
+      .then(give("m", 6))
+      .then(give("m", 8))
+      .expect(views.get("m").path == [ROOT, "NK", "NA"] and views.get("m").cuts == Map(ROOT -> [1, 2, 3, 6], "NK" -> [1, 2, 3, 6])
         and views.get("m").devices.contains(DEVICE) and promises)
 
   // Two recovery records at one seq: every member that holds both comes to a full stop, and
@@ -1287,7 +1364,7 @@ module records_v3 {
       .then(signChain(RECOVERY, "recover", "NA", 1, "honest"))
       .then(give("m", 4))
       .expect(views.get("m").path == [ROOT, "NK"])
-      .then(give("m", 5))
+      .then(give("m", 6))
       .expect(views.get("m").stop and views.get("m").commanders == Set())
       .then(syncAll)
       .expect(MEMBERS.forall(x => views.get(x).stop and views.get(x).commanders == Set()) and promises)
@@ -1313,9 +1390,10 @@ module records_v3 {
       .then(syncAll)
       .then(recoverAs(RECOVERY, "NK"))
       .then(signAs(ROOT, "revoke", DEVICE, 0))
-      .then(give("m", 6))
+      .then(give("m", 7))
       .expect(not(views.get("m").devices.contains(DEVICE)))
       .then(give("m", 5))
+      .then(give("m", 6))
       .expect(views.get("m").path == [ROOT, "NK"] and views.get("m").devices.contains(DEVICE) and promises)
 
   // The owner unticks the computer admin: the new root signs its removal in the same act. The
@@ -1329,6 +1407,7 @@ module records_v3 {
       .then(give("m", 4))
       .then(give("m", 5))
       .then(give("m", 6))
+      .then(give("m", 7))
       .expect(views.get("m").path == [ROOT, "NK"] and views.get("m").admins.keys() == Set(PHONE)
         and views.get("m").revoked.contains(WATCH) and promises)
 
@@ -1341,6 +1420,7 @@ module records_v3 {
       .then(signChain(RECOVERY, "recover", "NA", 2, "literal"))
       .then(give("m", 4))
       .then(give("m", 5))
+      .then(give("m", 6))
       .expect(views.get("m").path == [ROOT, "NK", "NA"] and views.get("m").admins.keys() == Set() and promises)
 
   // A fork may be two records of which one is not valid (it names an earlier root): any two
@@ -1436,4 +1516,65 @@ module records_v3 {
       .then(recoverAs(RECOVERY, "NA"))
       .then(welcomeFrom("k"))
       .expect(views.get("m").path == [ROOT, "NK", "NA"] and welcomed == [ROOT, "NK", "NA"] and promises)
+
+  // A member that compacted on the replaced root's checkpoint and one that did not end in one
+  // state after the change: the new root's first checkpoint, signed with the head, prunes again
+  // what the old one pruned (A's removal the root resolved).
+  run compactedChangeTest =
+    init
+      .then(signAs(ROOT, "device", DEVICE, 0))
+      .then(give("a", 4))
+      .then(signAs(PHONE, "revoke", DEVICE, 0))
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 1))
+      .then(give("r", 5))
+      .then(give("r", 6))
+      .then(signAs(ROOT, "resolve", "", 5))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .then(give("m", 4)).then(give("m", 5)).then(give("m", 6)).then(give("m", 7)).then(give("m", 8))
+      .then(give("c", 4)).then(give("c", 5)).then(give("c", 6)).then(give("c", 7)).then(give("c", 8))
+      .then(give("k", 4)).then(give("k", 5)).then(give("k", 6)).then(give("k", 7)).then(give("k", 8))
+      .then(compactAt("m"))
+      .expect(views.get("m").checkpoint == 8 and not(st.get("m").recs.contains(5)) and st.get("c").recs.contains(5))
+      .then(recoverAs(RECOVERY, "NK"))
+      .expect(db.get(10).signer == "NK" and db.get(10).kind == "checkpoint" and db.get(10).seq == 1)
+      .then(give("m", 9)).then(give("m", 10)).then(give("m", 5))
+      .then(give("c", 9)).then(give("c", 10))
+      .expect(views.get("m").path == [ROOT, "NK"] and views.get("m") == views.get("c") and views.get("m").checkpoint == 10
+        and views.get("m").devices.contains(DEVICE) and promises)
+      .then(compactAt("m"))
+      .then(compactAt("c"))
+      .expect(st.get("m").recs == st.get("c").recs and views.get("m") == views.get("c") and promises)
+
+  // An admin key named as the root: what it signed as an admin below the head's from counts
+  // only if listed; what it signs from there counts as the root's.
+  run adminNamedRootTest =
+    init
+      .then(sign(ROOT, "admin", "NA", "phone", 0, false, false, 1))
+      .then(give("a", 4))
+      .then(signAs("NA", "device", DEVICE, 0))
+      .then(give("k", 4))
+      .then(give("k", 5))
+      .expect(views.get("k").devices.contains(DEVICE) and views.get("k").admins.keys().contains("NA"))
+      .then(signChain(RECOVERY, "recover", "NA", 1, "literal"))
+      .expect(db.get(6).targetRec == 2)
+      .then(give("m", 4)).then(give("m", 5)).then(give("m", 6))
+      .expect(views.get("m").path == [ROOT, "NA"] and views.get("m").cuts.get("NA")[0] == -2
+        and not(views.get("m").devices.contains(DEVICE)) and promises)
+      .then(give("a", 6))
+      .then(signAs("NA", "device", DEVICE, 0))
+      .then(give("m", 7))
+      .expect(views.get("m").devices.contains(DEVICE) and promises)
+
+  // The same with the honest list: the admin record is listed, and counts.
+  run adminNamedRootListedTest =
+    init
+      .then(sign(ROOT, "admin", "NA", "phone", 0, false, false, 1))
+      .then(give("a", 4))
+      .then(signAs("NA", "device", DEVICE, 0))
+      .then(give("k", 4))
+      .then(give("k", 5))
+      .then(recoverAs(RECOVERY, "NA"))
+      .then(give("m", 4)).then(give("m", 5)).then(give("m", 6)).then(give("m", 7))
+      .expect(views.get("m").path == [ROOT, "NA"] and views.get("m").devices.contains(DEVICE)
+        and views.get("m").checkpoint == 7 and promises)
 }
