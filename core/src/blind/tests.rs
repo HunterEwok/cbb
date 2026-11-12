@@ -152,15 +152,59 @@ fn a_server_card() {
 fn each_server_its_own_face() {
     let mut faces = BTreeMap::new();
     for (i, s) in ["server a", "server b", "server c"].iter().enumerate() {
-        faces.insert(Key::new(Alg::Es256, &k(s).public()).hash(), alias::new_face(k(&format!("period {i}")).public()));
+        faces.insert(
+            Key::new(Alg::Es256, &k(s).public()).hash(),
+            alias::new_face(k(&format!("period {i}")).public(), &[7; 32]),
+        );
     }
     assert!(alias::distinct(&faces));
     let first = faces.values().next().unwrap().clone();
-    faces.insert(
+    let mut again = faces.clone();
+    again.insert(Key::new(Alg::Es256, &k("server d").public()).hash(), Face { tag: [9; 16], ..first.clone() });
+    assert!(!alias::distinct(&again), "a period key shown to two servers links them");
+    let mut same_server_key = faces.clone();
+    same_server_key.insert(
         Key::new(Alg::Es256, &k("server d").public()).hash(),
-        Face { tag: [9; 16], period_key: first.period_key },
+        Face { tag: [9; 16], period_key: k("period d").public(), server_key: first.server_key.clone() },
     );
-    assert!(!alias::distinct(&faces), "a period key shown to two servers links them");
+    assert!(!alias::distinct(&same_server_key), "a server key shown to two servers links them");
+
+    // The device's server key: stable for a face, another for another face
+    // or another device.
+    let (d1, p1) = alias::server_key(&[7; 32], &[1; 16]);
+    assert_eq!(alias::server_key(&[7; 32], &[1; 16]), (d1, p1.clone()));
+    assert_ne!(alias::server_key(&[7; 32], &[2; 16]).1, p1);
+    assert_ne!(alias::server_key(&[8; 32], &[1; 16]).1, p1);
+    assert_eq!(p1.len(), 65);
+
+    // Two servers' hubs credentials, each signed by its own period key: with
+    // the hub's server key per face they share no hash; with one server key
+    // for both, they link.
+    let hubs_for = |period: &str, tag: [u8; 16], hub_key: &[u8]| -> Credential {
+        let real = Key::new(Alg::Es256, hub_key).hash().0;
+        let hubs = credential::pad(&[real], credential::LENGTHS_HUBS).unwrap();
+        let admins = credential::pad(&[], credential::LENGTHS_ADMINS).unwrap();
+        let pk = k(period).public();
+        let body = crate::format::Value::Map(vec![
+            (1, crate::format::Value::Uint(credential::TYPE_HUBS)),
+            (2, crate::format::Value::Bytes(&tag)),
+            (3, crate::format::Value::Array(vec![crate::format::Value::Uint(1), crate::format::Value::Bytes(&pk)])),
+            (4, crate::format::Value::Uint(1)),
+            (7, crate::format::Value::Uint(1_900_000_000_000)),
+            (12, crate::format::Value::Array(hubs.iter().map(|h| crate::format::Value::Bytes(h)).collect())),
+            (13, crate::format::Value::Array(admins.iter().map(|h| crate::format::Value::Bytes(h)).collect())),
+        ])
+        .encode();
+        let sig = crate::records::key::sign_es256(&k(period), crate::format::sig::LABEL_CREDENTIAL, &body).unwrap();
+        Credential::read(&crate::format::envelope::write(&body, &sig, None)).unwrap()
+    };
+    let (ta, tb) = ([1u8; 16], [2u8; 16]);
+    let a = hubs_for("period a", ta, &alias::server_key(&[7; 32], &ta).1);
+    let b = hubs_for("period b", tb, &alias::server_key(&[7; 32], &tb).1);
+    assert!(!alias::linkable(&a, &b));
+    let one = alias::server_key(&[7; 32], &ta).1;
+    let b_same = hubs_for("period b", tb, &one);
+    assert!(alias::linkable(&a, &b_same), "one server key in both lists links them");
 
     let v = load("credentials.json");
     let creds: Vec<Credential> = v["take"]
