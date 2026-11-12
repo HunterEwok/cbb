@@ -515,7 +515,7 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   the second; Cancel removes the first file, and cbb ends the invitation.
 
 Each release carries it in `cbb-X.Y.Z.pkg` with the service, signed with the Developer ID and
-notarized (docs/maintaining.md, "Signing for macOS"). CI's `Mac app` job builds it and runs
+notarized (docs/maintaining.md, "Signing for macOS"). CI's `test and build (macOS), homebrew, Mac app` job builds it and runs
 its tests, signed ad hoc, and installs and removes the package. It runs on a real Mac when built with a
 developer's own team (`apps/ios/device.sh`): the devices, the menu bar and remote paste to it
 from the iPhone, at home and away from home.

@@ -139,7 +139,8 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
 - `apps/macos`: the Mac app (SwiftUI, XcodeGen) over the service's control socket
   (`Control.swift`), admin actions through `cbb` with administrator privileges (`Admin.swift`),
   the Mac's remote paste target (`PasteTarget.swift`: a paste-only watch, Cmd+V or Unicode key
-  events), the iPhone app's `Theme` shared; CI's `Mac app` job.
+  events), the iPhone app's `Theme` shared; CI's `test and build (macOS), homebrew, Mac app`
+  job tests it.
 - `testdata/arrangement`: the vectors of the tiles' order and collections (docs/apps.md), read by `apps/desktop/arrange.go`, the Kotlin kit's `Arrangement.kt` and the Swift kit's `Arrangement.swift`.
 - `apps/desktop`: the tray app for Linux and Windows (Go module of its own, Wails 3 beta,
   GTK 4/WebKitGTK; `desk.go` over `internal/control`, `admin_*.go` run cbb through pkexec or

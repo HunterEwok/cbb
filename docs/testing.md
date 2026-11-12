@@ -16,7 +16,7 @@ real devices, and which level answers which question. The commands are in
 | Cross tests | two implementations talk over a real connection | Go tests that start the Swift or Kotlin `cbb-interop`, or the lite member | every push, in CI |
 | Service tests | several members, with their real services, in one process or as programs | `internal/service`, `member/tests` | every push, in CI |
 | System tests | the built program on a real system: containers, sockets, a desktop, an installer | the `e2e`, `mdns with avahi`, `desktop clipboards`, `packaging`, `windows installer`, `OpenWrt`, `freebsd` jobs | every push, in CI |
-| App builds and tests | the apps build and their unit tests pass on simulators and runners | the `iPhone app`, `Mac app`, `tray app`, `Android app` jobs | every push, in CI |
+| App builds and tests | the apps build and their unit tests pass on simulators and runners | the `iPhone app`, `tray app`, `Android app` jobs and the Mac app's part of `test and build (macOS), homebrew, Mac app` | every push, in CI |
 | Bench scenarios | real devices pass real copies over real networks | the [test bench](testbench.md), its [catalogue](testbench-catalogue.md) | before each release |
 
 A change is not done before the levels it touches pass locally (CONTRIBUTING lists the
@@ -133,8 +133,12 @@ the iPhone app's jobs build only the simulator's Rust library for the runner's p
 (`ffi/bind.sh ios-sim`; the phone kit's macOS job builds all three with the latest Rust),
 they do not run for a change that touches only Go (`iosapp` in `.github/ci-changes.sh`; the
 kit's interop tests still do), and jobs shorter than the iPhone app's share a machine: macOS's
-`go test`, the macOS archives and Homebrew's formula (`test and build (macOS), homebrew`),
-and the phone kit with the iPhone's libraries.
+`go test`, the macOS archives, Homebrew's formula and the Mac app
+(`test and build (macOS), homebrew, Mac app`), and the phone kit with the iPhone's libraries.
+So the iPhone and the iPad, the longest, start at once, each booting its simulator while its
+Rust builds. The iPhone app's CodeQL analysis (`codeql-swift.yml`, about half an hour, built
+for the runner's processor only) runs on a pull request after them, from `ci.yml`, not beside
+them.
 
 The jobs that build the most Rust on the way to their tests (the iPhone app, the phone kit
 on macOS, the Android phone core and the service tests' build) keep their build in the Actions cache

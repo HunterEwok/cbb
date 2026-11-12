@@ -9,7 +9,7 @@
 # certificate in the secrets, the signed Windows programs, and with the
 # feed's key, the OpenWrt apk feed.
 # It makes a draft release, only after the iPhone app's CodeQL analysis
-# (codeql-swift.yml) passes on the tag, which takes about 45 minutes. The
+# (codeql-swift.yml) passes on the tag, which takes about half an hour. The
 # maintainer signs and publishes it with release-sign publish; published.yml
 # then updates the Homebrew tap.
 name: release

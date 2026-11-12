@@ -30,6 +30,7 @@ jobs:
       rust: ${{ steps.parts.outputs.rust }}
       ios: ${{ steps.parts.outputs.ios }}
       iosapp: ${{ steps.parts.outputs.iosapp }}
+      swift: ${{ steps.parts.outputs.swift }}
       macos: ${{ steps.parts.outputs.macos }}
       desktop: ${{ steps.parts.outputs.desktop }}
       android: ${{ steps.parts.outputs.android }}
@@ -345,18 +346,22 @@ jobs:
           if-no-files-found: error
           retention-days: 1
   buildmac:
-    name: test and build (macOS), homebrew
+    name: test and build (macOS), homebrew, Mac app
     needs: changes
-    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.tools == 'true'
+    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.tools == 'true' || needs.changes.outputs.macos == 'true'
     # go test on macOS as the test job runs it on the other systems, then the
     # macOS targets, built on macOS since the Mac's pasteboard agent needs cgo,
-    # then Homebrew's formula and the installers, one after the other on one
-    # machine: macOS runners are few (docs/testing.md, "Running tests in
-    # parallel").
+    # then Homebrew's formula and the installers, then the Mac app and its
+    # .pkg, one after the other on one machine: macOS runners are few, and so
+    # the iPhone app's jobs, the longest, start at once (docs/testing.md,
+    # "Running tests in parallel"). Each installer is removed, and checked to
+    # be gone, before the next one installs.
     runs-on: macos-latest
-    timeout-minutes: 50
+    timeout-minutes: 75
     env:
+      GO: ${{ needs.changes.outputs.core == 'true' || needs.changes.outputs.tools == 'true' }}
       CORE: ${{ needs.changes.outputs.core }}
+      MACOS: ${{ needs.changes.outputs.macos }}
       HOMEBREW_NO_AUTO_UPDATE: "1"
       HOMEBREW_NO_ANALYTICS: "1"
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
@@ -369,10 +374,12 @@ jobs:
           go-version-file: go.mod
           cache: false # nothing to download; leaves the shared cache key to the check job
       - name: go test
+        if: env.GO == 'true'
         # The service's tests take close to go test's default 10 minutes
         # under -race on the macOS runner, so the package has 20.
         run: go test -race -timeout 20m -coverprofile=cover-go-macos-latest.out ./...
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: env.GO == 'true'
         with:
           name: coverage-go-macos-latest
           path: cover-go-macos-latest.out
@@ -509,6 +516,79 @@ jobs:
               exit 1
             fi
           done
+      # The Mac app, the last: what the installers above left was checked to be gone.
+      - name: generate the Xcode project
+        if: env.MACOS == 'true'
+        working-directory: apps/macos
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: build and test, signed ad hoc
+        if: env.MACOS == 'true'
+        working-directory: apps/macos
+        run: |
+          set -o pipefail
+          xcodebuild test -project CBBMac.xcodeproj -scheme CBBMac -destination 'platform=macOS' \
+            -resultBundlePath "$RUNNER_TEMP/mac.xcresult" \
+            CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= | tail -n 200
+      # The windows' pictures in every language (ReadersUITests), to look at
+      # what the accessibility audit found.
+      - name: the windows' pictures
+        if: always() && env.MACOS == 'true'
+        run: xcrun xcresulttool export attachments --path "$RUNNER_TEMP/mac.xcresult" --output-path "$RUNNER_TEMP/mac-windows" || true
+      - name: the English window in the log
+        if: failure() && env.MACOS == 'true'
+        run: python3 .github/pictures.py "$RUNNER_TEMP/mac-windows" -en
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always() && env.MACOS == 'true'
+        with:
+          name: mac-windows
+          path: ${{ runner.temp }}/mac-windows
+          retention-days: 7
+          if-no-files-found: ignore
+      - name: the .pkg installs the app and the service, and uninstall.sh removes them
+        if: env.MACOS == 'true'
+        # As the release builds it (release.yml, "the Mac app and the .pkg"),
+        # signed ad hoc and the package unsigned.
+        run: |
+          set -o pipefail
+          (cd apps/macos && xcodebuild build -project CBBMac.xcodeproj -scheme CBBMac -configuration Release \
+            -destination 'generic/platform=macOS' -derivedDataPath "$RUNNER_TEMP/derived" \
+            ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO | tail -n 50)
+          app="$RUNNER_TEMP/derived/Build/Products/Release/CBB.app"
+          sh packaging/macos/sign.sh - "$app"
+          rustup toolchain install stable --profile minimal --target aarch64-apple-darwin,x86_64-apple-darwin
+          for a in arm64 amd64; do
+            t=aarch64-apple-darwin
+            [ "$a" = arm64 ] || t=x86_64-apple-darwin
+            cargo +stable build --locked --release -p cbb-member --target "$t"
+            cp "target/$t/release/cbb" "$RUNNER_TEMP/cbb-$a"
+            CGO_ENABLED=1 GOARCH=$a go build -trimpath -o "$RUNNER_TEMP/cbb-helper-$a" ./cmd/cbb-helper
+            sh packaging/macos/sign.sh - "$RUNNER_TEMP/cbb-$a"
+            sh packaging/macos/sign.sh - "$RUNNER_TEMP/cbb-helper-$a"
+          done
+          lipo -create "$RUNNER_TEMP/cbb-arm64" "$RUNNER_TEMP/cbb-amd64" -output "$RUNNER_TEMP/cbb"
+          lipo -create "$RUNNER_TEMP/cbb-helper-arm64" "$RUNNER_TEMP/cbb-helper-amd64" -output "$RUNNER_TEMP/cbb-helper"
+          sh packaging/macos/pkg.sh 0.0.1 "$RUNNER_TEMP/cbb" "$app" "$RUNNER_TEMP/cbb-0.0.1.pkg"
+          sudo installer -pkg "$RUNNER_TEMP/cbb-0.0.1.pkg" -target / -verboseR
+          [ -x /Applications/CBB.app/Contents/MacOS/CBB ]
+          pkgutil --pkg-info tools.cbb.pkg
+          for _ in $(seq 20); do sudo /usr/local/bin/cbb status && break; sleep 0.5; done
+          sudo /usr/local/bin/cbb status | grep -q 'Not in a group'
+          [ ! -e "/Library/Application Support/cbb-package" ]
+          # The service's folder is the _cbb account's alone.
+          [ -x /usr/local/bin/cbb-helper ] && sudo test -x "/Library/Application Support/cbb/bin/cbb-helper"
+          sudo sh /usr/local/share/cbb/uninstall.sh --purge
+          for f in /Applications/CBB.app /usr/local/bin/cbb /usr/local/bin/cbb-helper "/Library/Application Support/cbb" /Library/LaunchDaemons/tools.cbb.plist; do
+            if [ -e "$f" ]; then
+              echo "uninstall.sh left $f" >&2
+              exit 1
+            fi
+          done
+          if pkgutil --pkg-info tools.cbb.pkg >/dev/null 2>&1; then
+            echo "uninstall.sh left the package's receipt" >&2
+            exit 1
+          fi
 
   mips:
     name: test (linux/mips under qemu)
@@ -1632,6 +1712,20 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: the simulator boots while Rust builds
+        # A fresh runner's first boot spends minutes migrating its data; started
+        # here, the boot runs beside the Rust build, and test_on below finds the
+        # simulator up.
+        env:
+          DEVICE: ${{ matrix.device }}
+        run: |
+          # The first available iPhone or iPad simulator: the app is universal.
+          device=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          print(next(d["udid"] for runtime, ds in devices.items() if "iOS" in runtime for d in ds if d["name"].startswith(sys.argv[1])))' "$DEVICE")
+          echo "SIMULATOR=$device" >>"$GITHUB_ENV"
+          xcrun simctl boot "$device" || true
       - name: the Rust build from this pull request's cache
         uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
         with:
@@ -1653,18 +1747,9 @@ jobs:
           xcodegen generate
       - name: build and test on the simulator, signed ad hoc
         working-directory: apps/ios
-        env:
-          DEVICE: ${{ matrix.device }}
         run: |
           set -o pipefail
-          # The first available iPhone and iPad simulators: the app is universal.
-          pick() {
-            xcrun simctl list devices available -j | python3 -c '
-          import json, sys
-          devices = json.load(sys.stdin)["devices"]
-          print(next(d["udid"] for runtime, ds in devices.items() if "iOS" in runtime for d in ds if d["name"].startswith(sys.argv[1])))' "$1"
-          }
-          device=$(pick "$DEVICE")
+          device=$SIMULATOR
           # Ad hoc signing needs no Apple account, and without a signature the
           # simulator gives the app no keychain (-34018), which its TLS tests use.
           sign=(CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=)
@@ -1787,90 +1872,18 @@ jobs:
           path: ${{ runner.temp }}/ios-screens
           retention-days: 7
           if-no-files-found: ignore
-  macapp:
-    name: Mac app
-    needs: changes
-    if: needs.changes.outputs.macos == 'true'
-    runs-on: macos-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: generate the Xcode project
-        working-directory: apps/macos
-        run: |
-          brew install xcodegen
-          xcodegen generate
-      - name: build and test, signed ad hoc
-        working-directory: apps/macos
-        run: |
-          set -o pipefail
-          xcodebuild test -project CBBMac.xcodeproj -scheme CBBMac -destination 'platform=macOS' \
-            -resultBundlePath "$RUNNER_TEMP/mac.xcresult" \
-            CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= | tail -n 200
-      # The windows' pictures in every language (ReadersUITests), to look at
-      # what the accessibility audit found.
-      - name: the windows' pictures
-        if: always()
-        run: xcrun xcresulttool export attachments --path "$RUNNER_TEMP/mac.xcresult" --output-path "$RUNNER_TEMP/mac-windows" || true
-      - name: the English window in the log
-        if: failure()
-        run: python3 .github/pictures.py "$RUNNER_TEMP/mac-windows" -en
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
-        with:
-          name: mac-windows
-          path: ${{ runner.temp }}/mac-windows
-          retention-days: 7
-          if-no-files-found: ignore
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: false
-      - name: the .pkg installs the app and the service, and uninstall.sh removes them
-        # As the release builds it (release.yml, "the Mac app and the .pkg"),
-        # signed ad hoc and the package unsigned.
-        run: |
-          set -o pipefail
-          (cd apps/macos && xcodebuild build -project CBBMac.xcodeproj -scheme CBBMac -configuration Release \
-            -destination 'generic/platform=macOS' -derivedDataPath "$RUNNER_TEMP/derived" \
-            ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO | tail -n 50)
-          app="$RUNNER_TEMP/derived/Build/Products/Release/CBB.app"
-          sh packaging/macos/sign.sh - "$app"
-          rustup toolchain install stable --profile minimal --target aarch64-apple-darwin,x86_64-apple-darwin
-          for a in arm64 amd64; do
-            t=aarch64-apple-darwin
-            [ "$a" = arm64 ] || t=x86_64-apple-darwin
-            cargo +stable build --locked --release -p cbb-member --target "$t"
-            cp "target/$t/release/cbb" "$RUNNER_TEMP/cbb-$a"
-            CGO_ENABLED=1 GOARCH=$a go build -trimpath -o "$RUNNER_TEMP/cbb-helper-$a" ./cmd/cbb-helper
-            sh packaging/macos/sign.sh - "$RUNNER_TEMP/cbb-$a"
-            sh packaging/macos/sign.sh - "$RUNNER_TEMP/cbb-helper-$a"
-          done
-          lipo -create "$RUNNER_TEMP/cbb-arm64" "$RUNNER_TEMP/cbb-amd64" -output "$RUNNER_TEMP/cbb"
-          lipo -create "$RUNNER_TEMP/cbb-helper-arm64" "$RUNNER_TEMP/cbb-helper-amd64" -output "$RUNNER_TEMP/cbb-helper"
-          sh packaging/macos/pkg.sh 0.0.1 "$RUNNER_TEMP/cbb" "$app" "$RUNNER_TEMP/cbb-0.0.1.pkg"
-          sudo installer -pkg "$RUNNER_TEMP/cbb-0.0.1.pkg" -target / -verboseR
-          [ -x /Applications/CBB.app/Contents/MacOS/CBB ]
-          pkgutil --pkg-info tools.cbb.pkg
-          for _ in $(seq 20); do sudo /usr/local/bin/cbb status && break; sleep 0.5; done
-          sudo /usr/local/bin/cbb status | grep -q 'Not in a group'
-          [ ! -e "/Library/Application Support/cbb-package" ]
-          # The service's folder is the _cbb account's alone.
-          [ -x /usr/local/bin/cbb-helper ] && sudo test -x "/Library/Application Support/cbb/bin/cbb-helper"
-          sudo sh /usr/local/share/cbb/uninstall.sh --purge
-          for f in /Applications/CBB.app /usr/local/bin/cbb /usr/local/bin/cbb-helper "/Library/Application Support/cbb" /Library/LaunchDaemons/tools.cbb.plist; do
-            if [ -e "$f" ]; then
-              echo "uninstall.sh left $f" >&2
-              exit 1
-            fi
-          done
-          if pkgutil --pkg-info tools.cbb.pkg >/dev/null 2>&1; then
-            echo "uninstall.sh left the package's receipt" >&2
-            exit 1
-          fi
-
+  codeql-swift:
+    # The iPhone app's CodeQL analysis, which takes a macOS runner for about half
+    # an hour, starts when the iPhone app's jobs are done, so they need not
+    # wait for it; it is not in ci-ok, and its results show under Security →
+    # Code scanning (codeql-swift.yml).
+    needs: [changes, app]
+    if: ${{ !cancelled() && needs.changes.outputs.swift == 'true' }}
+    uses: ./.github/workflows/codeql-swift.yml # zizmor: ignore[self-repository]
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
   trayapp:
     name: tray app (${{ matrix.os }})
     needs: changes
@@ -3281,7 +3294,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, windows, kit, app, macapp, trayapp, androidkit, android, androidemu, fdroid, phonecore, service-build, service, service-coverage, rustcheck, rust, rustmips, esp32, zxnext, silica, advisories, docker, differential, model]
+    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, windows, kit, app, trayapp, androidkit, android, androidemu, fdroid, phonecore, service-build, service, service-coverage, rustcheck, rust, rustmips, esp32, zxnext, silica, advisories, docker, differential, model]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

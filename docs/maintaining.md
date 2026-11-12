@@ -32,8 +32,9 @@ a checked box means the setting is in place.
 - [x] **Secret scanning** and **Push protection**.
 - [ ] **CodeQL** default setup off: the workflows `.github/workflows/codeql.yml` (advanced
   setup) scan GitHub Actions, Go, Rust and Kotlin on every pull request, and
-  `codeql-swift.yml` scans the iPhone app and its kit when `apps/ios` changes, weekly, by
-  hand and before each release. GitHub rejects their results while the default setup is on.
+  `codeql-swift.yml` scans the iPhone app and its kit when `apps/ios` changes (on a pull
+  request called from `ci.yml` once the iPhone app's jobs are done), weekly, by hand and
+  before each release. GitHub rejects their results while the default setup is on.
   The default setup cannot build the Kotlin app and builds only the kit, not the iPhone app.
   OpenSSF Scorecard (`.github/workflows/scorecard.yml`) puts its findings there as well,
   weekly and on each push to `main`, and publishes the score for the README's badge.
@@ -122,7 +123,7 @@ environment secret**.
   English text (typos), the tray app's HTML, CSS and JavaScript (Biome), and every file's
   copyright and license (`reuse lint`);
 - **test**: `go test -race` on Linux x86-64, Linux ARM64 and Windows, each with its own
-  files' coverage (macOS's runs in `test and build (macOS), homebrew`);
+  files' coverage (macOS's runs in `test and build (macOS), homebrew, Mac app`);
 - **go coverage**: Go's tests across packages with `-coverpkg`, the desktop clipboards, the
   uinput keyboard, mDNS beside avahi and the e2e built with `-cover`;
 - **coverage**: the coverage of every part that ran, in the run's summary, held to
@@ -139,9 +140,9 @@ environment secret**.
   client under Xvfb, against wl-clipboard and xclip;
 - **packaging**: `systemd-analyze verify` and `security` for the unit, and the desktop
   entry;
-- **test and build (macOS), homebrew**: `go test -race` on macOS, the macOS release
-  archives, then the formula written by `packaging/homebrew/formula.sh`, installed with
-  Homebrew, one after the other on one machine;
+- **test and build (macOS), homebrew, Mac app**: `go test -race` on macOS, the macOS
+  release archives, then the formula written by `packaging/homebrew/formula.sh`, installed
+  with Homebrew, then the Mac app's tests and its `.pkg`, one after the other on one machine;
 - **windows installer**: `install.ps1`, the service, the agent and `uninstall.ps1` on
   windows-latest;
 - **phone kit**: CBBKit's tests on Linux and macOS, and its cross tests with the Go
@@ -194,7 +195,7 @@ Rules for workflows:
 - Built by CI from a tag, never on a laptop: push a tag `vX.Y.Z` on main
   (`git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`), and
   `.github/workflows/release.yml` builds the archives, `SHA256SUMS` and the attestations and,
-  once the iPhone app's CodeQL analysis passes on the tag (about 45 minutes),
+  once the iPhone app's CodeQL analysis passes on the tag (about half an hour),
   makes a draft release, with notes generated from the merged pull requests. The maintainer
   signs and publishes it on their Mac with `release-sign publish` ("Signed releases" below).
   A tag `vX.Y.Z-rc.N` makes a pre-release, which `releases/latest` and so `get.sh` skip;
@@ -405,7 +406,7 @@ the one tap for all of the owner's formulae; CBB's is `Formula/cbb.rb`, and user
 pre-release) is published, `.github/workflows/published.yml` checks its signed files and writes the formula with
 `packaging/homebrew/formula.sh` from the release's `SHA256SUMS` and pushes it to the tap's
 `main`. The formula installs the release archives as they are, so it needs no Apple signing,
-and CI's `test and build (macOS), homebrew` job installs one with it on macOS on every pull request.
+and CI's `test and build (macOS), homebrew, Mac app` job installs one with it on macOS on every pull request.
 
 Setting it up, once:
 
@@ -583,7 +584,7 @@ package signed with the **Developer ID Installer** certificate (`packaging/macos
 notarized in turn, its ticket stapled. The package puts the app in `/Applications` and runs
 `install.sh` for the user signed in at the screen; without a terminal it keeps the answers
 given before about the firewall and automatic updates and asks nothing. Without the secrets
-the release has no `.pkg`. CI's `Mac app` job builds one unsigned, installs it with
+the release has no `.pkg`. CI's `test and build (macOS), homebrew, Mac app` job builds one unsigned, installs it with
 `installer`, and removes it with `uninstall.sh`.
 
 The iPhone app goes to TestFlight from the same environment (the job "the iPhone app, to

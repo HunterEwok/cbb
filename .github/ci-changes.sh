@@ -22,6 +22,7 @@ tools=false    # Go tools under tools/, tested by the test job
 rust=false     # cbb in Rust, the core and the firmware
 ios=false      # the Swift kit, the iPhone and Watch apps
 iosapp=false   # the iPhone and Watch apps' build and UI tests, which read no Go
+swift=false    # the iPhone app's CodeQL analysis (codeql-swift.yml), for the app's own files
 macos=false    # the Mac app, which shares the iPhone app's theme
 desktop=false  # the tray app
 android=false  # the Kotlin kit, the Android and Wear OS apps, the F-Droid build
@@ -47,13 +48,14 @@ for f in $files; do
 	# The computers' cbb, which the kits' interop tests run as the computer.
 	member/* | ring-shim/*) rust=true; ios=true; android=true ;;
 	embassy/* | esp32/* | .cargo/* | deny.toml | rustfmt.toml) rust=true ;;
-	apps/ios/*) ios=true; macos=true ;;
+	apps/ios/*) ios=true; swift=true; macos=true ;;
 	apps/macos/*) macos=true ;;
 	apps/desktop/*) desktop=true ;;
 	apps/android/*) android=true ;;
 	apps/zxnext/*) zxnext=true ;;
 	apps/silica/*) silica=true ;;
 	site/* | docs/* | *.md | LICENSE) site=true ;;
+	.github/workflows/codeql-swift.yml) swift=true ;;
 	.github/*) ;; # other workflows, templates and settings: no job of ci.yml reads them
 	*) all=true ;;
 	esac
@@ -71,7 +73,7 @@ iosapp=$ios
 [ "$design" = false ] || { ios=true; iosapp=true; macos=true; desktop=true; android=true; silica=true; site=true; }
 
 if [ "$all" = true ]; then
-	core=true tools=true rust=true ios=true iosapp=true macos=true desktop=true android=true zxnext=true silica=true design=true site=true
+	core=true tools=true rust=true ios=true iosapp=true swift=true macos=true desktop=true android=true zxnext=true silica=true design=true site=true
 fi
-printf 'core=%s\ntools=%s\nrust=%s\nios=%s\niosapp=%s\nmacos=%s\ndesktop=%s\nandroid=%s\nzxnext=%s\nsilica=%s\ndesign=%s\nsite=%s\n' \
-	"$core" "$tools" "$rust" "$ios" "$iosapp" "$macos" "$desktop" "$android" "$zxnext" "$silica" "$design" "$site"
+printf 'core=%s\ntools=%s\nrust=%s\nios=%s\niosapp=%s\nswift=%s\nmacos=%s\ndesktop=%s\nandroid=%s\nzxnext=%s\nsilica=%s\ndesign=%s\nsite=%s\n' \
+	"$core" "$tools" "$rust" "$ios" "$iosapp" "$swift" "$macos" "$desktop" "$android" "$zxnext" "$silica" "$design" "$site"
