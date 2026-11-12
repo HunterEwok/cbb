@@ -7586,7 +7586,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "屏蔽 VPN 的网络（AmneziaWG）"
+            "value": "屏蔽 VPN 的网络 (AmneziaWG)"
           }
         }
       }
@@ -7632,7 +7632,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "只允许网页通行的网络（VLESS）"
+            "value": "只允许网页通行的网络 (VLESS)"
           }
         }
       }
@@ -10852,7 +10852,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "源代码和许可证（AGPL-3.0）"
+            "value": "源代码和许可证 (AGPL-3.0)"
           }
         }
       }
