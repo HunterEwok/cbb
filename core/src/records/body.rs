@@ -185,11 +185,15 @@ pub enum Kind {
         seen: Vec<Seen>,
     },
     /// A change of root, signed by the group's recovery key (rule 33):
-    /// the new root, and the hash of the list of earlier roots' records
-    /// that stay (`List`), which rides beside the record.
+    /// the new root, the hash of the list of earlier roots' records that
+    /// stay (`List`), which rides beside the record, and `from`, the seq at
+    /// which the new root's own records start: 0 (absent) for a fresh key;
+    /// for a key that signed before (an admin's), its records below `from`
+    /// count only if the list names them.
     Recovery {
         root: Key,
         list: [u8; 32],
+        from: u64,
     },
     /// A type of a later version: held.
     Unknown(u64),
@@ -481,7 +485,7 @@ impl Body {
                 }
                 check_seen(seen, t)?;
             }
-            Kind::Recovery { root, .. } => {
+            Kind::Recovery { root, from, .. } => {
                 held |= signer_key(root, t, "root")?;
                 // A root that is the recovery key ends the ranks.
                 if root.hash() == self.signer {
@@ -489,6 +493,9 @@ impl Body {
                 }
                 if self.seq > MAX_RECOVERY {
                     return Err(field(t, "seq"));
+                }
+                if *from > MAX_SEQ {
+                    return Err(field(t, "from"));
                 }
             }
             Kind::Unknown(n) => {
@@ -554,9 +561,12 @@ impl Body {
                 m.push((10, Value::Array(hubs.iter().map(|d| Value::Bytes(&d.0)).collect())));
                 m.push((11, seen(s)));
             }
-            Kind::Recovery { root, list } => {
+            Kind::Recovery { root, list, from } => {
                 m.push((10, root.to_value()));
                 m.push((11, Value::Bytes(list)));
+                if *from != 0 {
+                    m.push((12, Value::Uint(*from)));
+                }
             }
             Kind::Unknown(_) => {}
         }
@@ -628,7 +638,8 @@ impl Body {
             TYPE_RECOVERY => {
                 let root = Key::read(r.need(10, f("root"))?)?;
                 let list = r.need(11, f("list"))?.as_bytes().and_then(|b| <[u8; 32]>::try_from(b).ok());
-                (Kind::Recovery { root, list: list.ok_or(f("list"))? }, &[10, 11], &[])
+                let from = r.opt_uint(12, 0, f("from"))?;
+                (Kind::Recovery { root, list: list.ok_or(f("list"))?, from }, &[10, 11, 12], &[])
             }
             n if RETIRED_TYPES.contains(&n) => return Err(Rule::new("records/retired")),
             n => (Kind::Unknown(n), &[], &[]),

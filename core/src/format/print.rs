@@ -104,7 +104,7 @@ pub enum Kind {
 
 const COMMON: [&str; 9] = ["", "type", "group", "signer", "number", "prev", "time_ms", "expires_ms", "signer2"];
 
-const RECORD_TYPES: [&str; 13] = [
+const RECORD_TYPES: [&str; 14] = [
     "",
     "device",
     "revoke",
@@ -118,6 +118,7 @@ const RECORD_TYPES: [&str; 13] = [
     "hubs",
     "recovery",
     "handover",
+    "recovery_head",
 ];
 
 const MESSAGES: [&str; 26] = [
@@ -196,6 +197,7 @@ fn record_field(typ: u64, k: u16) -> Option<&'static str> {
         9 => ["heads", "keep"].get(i).copied(),
         10 => ["hubs", "seen"].get(i).copied(),
         11 | 12 => ["admin"].get(i).copied(),
+        13 => ["root", "list", "from"].get(i).copied(),
         _ => None,
     }
 }

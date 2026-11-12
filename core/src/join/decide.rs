@@ -96,8 +96,12 @@ pub struct Choice {
 
 /// Whether the device with member key `admitter` may sign a first record as
 /// `signer`: a root signs as the root; an admin's device is in the records,
-/// not frozen, with an admin key that has `admit`.
+/// not frozen, with an admin key that has `admit`. Nobody admits while the
+/// group is halted.
 pub fn may_admit(state: &State, admitter: &KeyHash, signer: Signer, root_key: &KeyHash) -> bool {
+    if state.halted() {
+        return false;
+    }
     match signer {
         Signer::Root => state.is_root(root_key) && !state.two_histories(root_key),
         Signer::Admin => state.device_by_key(admitter).is_some_and(|d| {

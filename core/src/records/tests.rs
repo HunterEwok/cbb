@@ -73,12 +73,17 @@ impl G {
 
     /// A change of root to new_root by the recovery key, with list.
     fn change(&mut self, new_root: &K, list: &[RecordId]) -> Record {
+        self.change_from(new_root, list, 0)
+    }
+
+    /// The same, the new root's records starting at seq from.
+    fn change_from(&mut self, new_root: &K, list: &[RecordId], from: u64) -> Record {
         let mut ids = list.to_vec();
         ids.sort();
         ids.dedup();
         let list = List(ids);
         self.lists.push(list.encode());
-        self.rec(&k("recovery"), Kind::Recovery { root: new_root.key.clone(), list: list.hash() })
+        self.rec(&k("recovery"), Kind::Recovery { root: new_root.key.clone(), list: list.hash(), from })
     }
 
     /// The IDs of the records of the roots on the path that count now,
@@ -834,7 +839,7 @@ fn limits_hold_for_any_signer() {
     let quiet = g.recs.clone();
     for i in 0..4 {
         let r = k(&format!("x root {i}"));
-        g.rec(&x, Kind::Recovery { root: r.key.clone(), list: [0; 32] });
+        g.rec(&x, Kind::Recovery { root: r.key.clone(), list: [0; 32], from: 0 });
         for j in 0..400 {
             g.device(&r, &k(&format!("x{i} {j}")), "flood", |_| {});
         }
@@ -987,7 +992,7 @@ fn any_os_number_is_taken() {
 
 /// What a command's receiver asks of the state: a key with two histories,
 /// a removed or frozen admin, and every admin during a full stop sign no
-/// command; the root does.
+/// command; the root does, but for a fork, where nobody does.
 #[test]
 fn who_may_command() {
     let mut g = G::new();
@@ -1010,17 +1015,17 @@ fn who_may_command() {
     let seen = g.seen();
     g.rec(&b, Kind::Freeze(removal(&[a.hash], seen)));
     assert!(!g.state().may_command(&a.hash));
-    // Two recovery records at one seq: a full stop for good; only the
-    // root commands.
+    // Two recovery records at one seq: a full stop for good; nobody
+    // commands, the root neither.
     let r = k("recovery");
-    let one = g.body(&r, Kind::Recovery { root: k("nb").key.clone(), list: [1; 32] });
-    let two = Body { kind: Kind::Recovery { root: k("nd").key.clone(), list: [2; 32] }, ..one.clone() };
+    let one = g.body(&r, Kind::Recovery { root: k("nb").key.clone(), list: [1; 32], from: 0 });
+    let two = Body { kind: Kind::Recovery { root: k("nd").key.clone(), list: [2; 32], from: 0 }, ..one.clone() };
     g.push(Record::sign(one, &r).unwrap());
     g.push(Record::sign(two, &r).unwrap());
     let s = g.state();
     assert_eq!(s.stop, Stop::Full);
     assert!(s.conflicts.iter().any(|c| c.kind == ConflictKind::Fork));
-    assert!(s.may_command(&g.root.hash) && !s.may_command(&b.hash));
+    assert!(s.halted() && !s.may_command(&g.root.hash) && !s.may_command(&b.hash));
 }
 
 /// A huge time field changes no order and no result: time is for display.
@@ -1130,8 +1135,8 @@ fn the_three_kinds_of_admin() {
     let seen = g.seen();
     let removal = g.rec(&h, Kind::Revoke(removal(&[laptop.hash], seen)));
     // No admin takes the group over, a phone's included (rule 33).
-    let by_a = g.rec(&a, Kind::Recovery { root: k("na").key.clone(), list: [0; 32] });
-    let by_s = g.rec(&s_, Kind::Recovery { root: k("ns").key.clone(), list: [0; 32] });
+    let by_a = g.rec(&a, Kind::Recovery { root: k("na").key.clone(), list: [0; 32], from: 0 });
+    let by_s = g.rec(&s_, Kind::Recovery { root: k("ns").key.clone(), list: [0; 32], from: 0 });
     let st = g.state();
     assert!(!st.counting.contains(&by_helper.id()) && st.counting.contains(&by_admin.id()));
     assert!(st.counting.contains(&removal.id()));
@@ -1600,7 +1605,8 @@ mod differential {
                     if arg % 7 == 6 && g.heads.contains_key(&k("recovery").hash) {
                         // A second head at the recovery key's last seq.
                         let rec = k("recovery");
-                        let mut twin = g.body(&rec, Kind::Recovery { root: new_root.key.clone(), list: [arg; 32] });
+                        let mut twin =
+                            g.body(&rec, Kind::Recovery { root: new_root.key.clone(), list: [arg; 32], from: 0 });
                         twin.seq -= 1;
                         twin.prev = g
                             .recs
