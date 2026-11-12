@@ -473,10 +473,15 @@ fn an_ipv4_client_pays_as_its_own_address() {
     assert_eq!(payer_addr("2001:db8:1:2:3:4:5:6".parse().unwrap()), "2001:db8:1:2::".parse::<IpAddr>().unwrap());
     // On a dual-stack listener the kernel hands an IPv4 client over as
     // ::ffff:a.b.c.d; its payer is the IPv4 address. Where the machine has
-    // no IPv6 socket, there is nothing to check.
-    let Ok(l) = TcpListener::bind("[::]:0") else { return };
+    // no IPv6 socket, there is nothing to check, unless CBB_REQUIRE_IPV6
+    // says the machine has one (the stands that run this check on purpose).
+    let skip = |why: &str| {
+        assert!(std::env::var_os("CBB_REQUIRE_IPV6").is_none(), "CBB_REQUIRE_IPV6 is set, but {why}");
+        eprintln!("an_ipv4_client_pays_as_its_own_address: skipped, {why}");
+    };
+    let Ok(l) = TcpListener::bind("[::]:0") else { return skip("no IPv6 socket") };
     let port = l.local_addr().unwrap().port();
-    let Ok(_c) = TcpStream::connect(("127.0.0.1", port)) else { return };
+    let Ok(_c) = TcpStream::connect(("127.0.0.1", port)) else { return skip("the IPv6 socket takes no IPv4 client") };
     let (_, from) = l.accept().unwrap();
     assert_eq!(payer_addr(from.ip()), "127.0.0.1".parse::<IpAddr>().unwrap(), "seen as {from}");
 }
