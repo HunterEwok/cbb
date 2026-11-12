@@ -1395,3 +1395,83 @@ fn a_full_set_names_more_ids_than_its_rooms_hold() {
     let n = m.ids().count();
     assert!(n > crate::format::cbor::MAX_COUNT, "{n}");
 }
+
+/// A group of 250 admin keys, each of which has signed.
+fn many_admins() -> (G, Vec<K>) {
+    let mut g = base();
+    let admins: Vec<K> = (0..250).map(|i| k(&format!("admin {i}"))).collect();
+    for (i, a) in admins.iter().enumerate() {
+        g.admin(&k(&format!("admin device {i}")), a, POWER_ADMIT | POWER_MANAGE);
+        g.rec(a, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
+    }
+    (g, admins)
+}
+
+/// The removals of a writer's change name in `seen` only the keys they
+/// concern, the removed keys and their admin or member key: removing a
+/// plain device names none and weighs one unit, removing an admin's
+/// device names its admin key, and removing 256 keys of a group of 250
+/// admin keys fits, in as many records as their bodies need.
+#[test]
+fn removals_name_only_the_keys_they_concern() {
+    let (g, admins) = many_admins();
+    let set = set_with(&g.root.key, &g.recs, &g.lists);
+    let st = set.state();
+    let removals = |remove: &[KeyHash]| -> Vec<Removal> {
+        let w = set.write_change(&st, &k("recovery"), &k("n1"), phone(&k("new phone")), remove, false, 0).unwrap();
+        w.first
+            .iter()
+            .filter_map(|r| match &r.body().kind {
+                Kind::Revoke(rm) => {
+                    assert!(r.body_bytes().len() <= crate::records::MAX_BODY);
+                    if rm.seen.is_empty() && rm.keys.len() == 1 {
+                        assert_eq!(crate::records::keep::units(r.size()), 1);
+                    }
+                    Some(rm.clone())
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    let plain = removals(&[k("laptop").hash]);
+    assert_eq!(plain.len(), 1);
+    assert!(plain[0].seen.is_empty());
+    let one = removals(&[k("admin device 7").hash]);
+    assert_eq!(one.len(), 1);
+    assert_eq!(one[0].seen.iter().map(|s| s.key).collect::<Vec<_>>(), vec![admins[7].hash]);
+    let mut many: Vec<KeyHash> = (0..250).map(|i| k(&format!("admin device {i}")).hash).collect();
+    many.extend([k("laptop").hash, k("tv").hash]);
+    many.extend((0..4).map(|i| k(&format!("stranger {i}")).hash));
+    assert_eq!(many.len(), 256);
+    let all = removals(&many);
+    assert!(all.len() > 1);
+    let mut named: Vec<KeyHash> = all.iter().flat_map(|rm| rm.keys.iter().copied()).collect();
+    named.sort();
+    many.sort();
+    assert_eq!(named, many);
+}
+
+/// A key a removal does not name is untouched: two members that held
+/// different heads of an admin key when the change was written, and then
+/// take the same records, end the same, and that key's newest record
+/// counts.
+#[test]
+fn a_key_a_removal_does_not_name_is_untouched() {
+    let (mut g, admins) = many_admins();
+    let x = &admins[3];
+    let from = g.recs.clone();
+    let later = g.rec(x, Kind::Copies { incoming_ms: MIN_INCOMING_MS + 1, seen: vec![] });
+    let w = write(&mut g, &from, &k("n1"), &k("new phone"), &[k("laptop").hash]);
+    let mut a = set_of(&g.root.key);
+    sync_all(&mut a, &g.recs, &g.lists);
+    let mut b = set_of(&g.root.key);
+    let mut rev = g.recs.clone();
+    rev.reverse();
+    sync_all(&mut b, &rev, &g.lists);
+    assert_eq!(a.digest(), b.digest());
+    let s = a.state();
+    assert_eq!(s, b.state());
+    assert!(s.counting.contains(&later.id()));
+    assert!(!has(&s, &k("laptop")) && has(&s, &k("new phone")));
+    let _ = w;
+}
