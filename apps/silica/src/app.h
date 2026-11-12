@@ -241,6 +241,9 @@ public:
     Q_INVOKABLE void cancelPin();
     // Changes the PIN; pinChanged tells how it went.
     Q_INVOKABLE void changePin(const QString &old, const QString &pin);
+    // Whether a PIN the user chooses passes the rule (pinrule.h): true when
+    // it does, so the dialogs take it.
+    Q_INVOKABLE bool pinAllowed(const QString &pin) const;
     QString adminPin() const { return m_adminPin; }
 
 signals:

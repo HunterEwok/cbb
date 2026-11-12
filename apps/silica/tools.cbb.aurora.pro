@@ -59,6 +59,7 @@ HEADERS += \
     src/member.h \
     src/membership.h \
     src/platform/keystore.h \
+    src/pinrule.h \
     src/platform/osinfo.h \
     src/platform/shell.h
 

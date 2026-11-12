@@ -268,6 +268,10 @@
 <context>
     <name>ChangePinDialog</name>
     <message>
+        <source>At least six digits, and not an easy one such as 123456 or 111111.</source>
+        <translation>कम से कम छह अंक, और 123456 या 111111 जैसा आसान नहीं।</translation>
+    </message>
+    <message>
         <source>Change</source>
         <translation>बदलें</translation>
     </message>
@@ -511,6 +515,10 @@
     <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
         <translation>कोड के पते पर किसी दूसरे डिवाइस ने जवाब दिया। कोड फिर से स्कैन करें।</translation>
+    </message>
+    <message>
+        <source>Choose a PIN of at least six digits that is not easy to guess.</source>
+        <translation>कम से कम छह अंकों का ऐसा PIN चुनें जिसका अनुमान लगाना आसान न हो।</translation>
     </message>
     <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
@@ -1298,8 +1306,12 @@
         <translation>एडमिन PIN</translation>
     </message>
     <message>
-        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
-        <translation>CBB का अपना PIN, कम से कम चार अंक। फ़ोन का अनलॉक कोड इस्तेमाल न करें। फ़ोन का सुरक्षित तत्व हर एडमिन कार्य से पहले इसे जाँचता है; सात गलत PIN एडमिन कुंजी को हमेशा के लिए लॉक कर देते हैं, और कोई इसे अनलॉक नहीं कर सकता।</translation>
+        <source>At least six digits, and not an easy one such as 123456 or 111111.</source>
+        <translation>कम से कम छह अंक, और 123456 या 111111 जैसा आसान नहीं।</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least six digits and not an easy one such as 123456. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>CBB का अपना PIN, कम से कम छह अंक और 123456 जैसा आसान नहीं। फ़ोन का अनलॉक कोड इस्तेमाल न करें। फ़ोन का सुरक्षित तत्व हर एडमिन कार्य से पहले इसे जाँचता है; सात गलत PIN एडमिन कुंजी को हमेशा के लिए लॉक कर देते हैं, और कोई इसे अनलॉक नहीं कर सकता।</translation>
     </message>
     <message>
         <source>Choose the admin PIN</source>
@@ -1336,6 +1348,10 @@
     <message>
         <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
         <translation>गलत PIN। एक प्रयास बचा है: अगला गलत PIN एडमिन कुंजी को हमेशा के लिए लॉक कर देगा।</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Some tries are used up; seven wrong PINs lock the admin key for good.</source>
+        <translation>गलत PIN। कुछ प्रयास पहले ही खर्च हो चुके हैं; सात गलत PIN एडमिन कुंजी को हमेशा के लिए लॉक कर देते हैं।</translation>
     </message>
     <message>
         <source>Wrong PIN. Tries left: %1.</source>
@@ -1660,6 +1676,10 @@
     <message>
         <source>Version</source>
         <translation>संस्करण</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Some tries are used up; seven wrong PINs lock the admin key for good.</source>
+        <translation>गलत PIN। कुछ प्रयास पहले ही खर्च हो चुके हैं; सात गलत PIN एडमिन कुंजी को हमेशा के लिए लॉक कर देते हैं।</translation>
     </message>
     <message>
         <source>Wrong PIN. Tries left: %1.</source>

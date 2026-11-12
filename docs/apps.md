@@ -834,12 +834,17 @@ for Face ID (D-94, docs/protocol.md section 3):
   member key. The root or admin key sits in a
   second token of the app, the TEE's slot "APP", which the app initializes itself
   (`src/platform/keystore_tee.cpp`): its user PIN is the user's, its SO PIN starts as the same
-  PIN and becomes a random one, kept nowhere, once the PIN has been entered right. Another app
+  PIN and becomes a random one, kept nowhere, once the PIN has been entered right. Whether it
+  did is the token's to say, not the app's settings, which can be cleared while the token
+  stays: an SO PIN that no longer matches the user PIN counts as random. Another app
   sees neither token.
 - **When it asks.** Before the admin key is made or signs: making a group, or joining a
   group, which makes the admin key the member's hellos offer the root for its "Make an
   admin" (docs/protocol.md, section 10, "Admins"); the first time it sets the PIN (typed
-  twice, at least four digits). A user who cancels it joins as a member whose hellos offer
+  twice): at least six digits, and none easy to guess (`src/pinrule.h`: no repeats, runs or
+  short patterns such as 111111, 123456, 121212 or 112233, nor common keypad and year PINs;
+  `tests/pinrule_test.cpp` checks it). A PIN set before this rule still opens the key; a new or
+  changed one must pass it. A user who cancels it joins as a member whose hellos offer
   no key, and Settings' "Get ready to be an admin" makes it later. Then adding a device, an action on a device's
   page, the root's decision on an alert, the takeover and its finish. The app hands the PIN
   to the TEE and wipes it at once; the token then stays logged in for five minutes (as the iPhone app trusts one Face ID) after its
@@ -847,7 +852,9 @@ for Face ID (D-94, docs/protocol.md section 3):
   certificates go only while it is logged in. The dialog asks not to reuse the phone's unlock
   code. Settings change it ("Change the
   admin PIN"), after the current one.
-- **Wrong PINs.** The TEE counts them; the dialog says how many of the seven tries are left.
+- **Wrong PINs.** The TEE counts them; the dialog says how many of the seven tries are left,
+  from the token's flags (a wrong PIN tried, one try left) and the app's count between them;
+  when the app's count was lost, it says that some tries are used up, never a full seven.
   The seventh locks the token for good: nothing unlocks it, the phone stays in its group as a
   member, Settings say so, and an admin phone again needs CBB installed afresh and joined as a
   new device. A lost root is taken over by an admin phone or with the recovery key.

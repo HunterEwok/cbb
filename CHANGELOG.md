@@ -1608,6 +1608,11 @@ All notable changes to cbb are documented in this file. The format follows
   its hub made for the invitation (docs/protocol.md, section 12). Aurora: the join QR code's
   text reaches the log in debug builds only. The core's C functions all stop a panic, and
   `cbb_qr_read` refuses a frame size that overflows before it reads the frame.
+- The Aurora app's admin PIN is at least six digits and none easy to guess (repeats, runs,
+  short patterns, common keypad and year PINs), checked as it is typed and by the key store;
+  a PIN set before still works. The admin token itself says whether its SO PIN was made
+  random, and the tries left come from its flags, so clearing the app's data neither stops
+  the PIN working nor shows a full seven tries.
 - A phone joins a group with one button, "Join a group", on the iPhone and Android: it always
   joins as a member, and "Join as an admin" is gone. The root makes it an admin later from the
   phone's device page ("Make it an admin"), on a root phone, in the Mac app and the tray, and

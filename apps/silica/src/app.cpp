@@ -5,6 +5,7 @@
 
 #include "core.h"
 #include "errors.h"
+#include "pinrule.h"
 #include "platform/keystore.h"
 
 #include <cbb_core.h>
@@ -1296,6 +1297,11 @@ void App::cancelPin()
         cancel();
 }
 
+bool App::pinAllowed(const QString &pin) const
+{
+    return PinRule::check(pin.toStdString()) == PinRule::Verdict::Ok;
+}
+
 void App::changePin(const QString &old, const QString &pin)
 {
     auto *thread = new PinThread;
@@ -1313,7 +1319,8 @@ void App::changePin(const QString &old, const QString &pin)
             show(Errors::shown(failure));
         if (result == KeyStore::PinResult::Right)
             Errors::log(QStringLiteral("pin: changed"));
-        emit pinChanged(result == KeyStore::PinResult::Right, result == KeyStore::PinResult::Locked, status.triesLeft);
+        emit pinChanged(result == KeyStore::PinResult::Right, result == KeyStore::PinResult::Locked,
+                        result == KeyStore::PinResult::Wrong ? status.triesLeft : -1);
     });
     thread->start();
 }

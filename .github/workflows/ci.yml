@@ -2699,6 +2699,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: the admin PIN's rule (apps/silica/tests/pinrule_test.cpp)
+        run: |
+          c++ -std=c++17 -Wall -Wextra -Werror apps/silica/tests/pinrule_test.cpp -o "$RUNNER_TEMP/pinrule_test"
+          "$RUNNER_TEMP/pinrule_test"
       - name: room for the Platform SDK
         # The SDK takes about 10 GB; the runner's preinstalled toolchains
         # that this job does not use make room for it.

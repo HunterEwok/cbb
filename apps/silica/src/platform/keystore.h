@@ -71,7 +71,7 @@ struct PinStatus
     PinState state = PinState::Failed;
     bool fewLeft = false;  // a wrong PIN was tried since the last right one
     bool lastTry = false;  // one more wrong PIN locks the token
-    int triesLeft = 0;     // as far as the app counted, of seven
+    int triesLeft = 0;     // of seven, from the token's flags and the app's count; 0: some used, how many unknown
     Failure failure;       // set when Failed
 };
 

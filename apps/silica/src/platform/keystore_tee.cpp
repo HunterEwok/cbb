@@ -3,6 +3,8 @@
 
 #include "keystore.h"
 
+#include "../pinrule.h"
+
 #include "pkcs11.h"
 #include "qcainit.h"
 
@@ -498,8 +500,36 @@ PinStatus statusOf(const CK_TOKEN_INFO &info)
         s.state = PinState::Set;
     s.fewLeft = info.flags & CKF_USER_PIN_COUNT_LOW;
     s.lastTry = info.flags & CKF_USER_PIN_FINAL_TRY;
-    s.triesLeft = s.lastTry ? 1 : qMax(1, pinTries - QSettings().value(wrongKey).toInt());
+    // The token says whether a wrong PIN was tried and whether one try is
+    // left; the app's own count only fills in between, and only while it
+    // agrees with the token: after the app's data was cleared it is gone,
+    // so the number is unknown (0) rather than a full seven.
+    const int counted = QSettings().value(wrongKey).toInt();
+    if (s.lastTry)
+        s.triesLeft = 1;
+    else if (!s.fewLeft)
+        s.triesLeft = pinTries;
+    else if (counted > 0)
+        s.triesLeft = qBound(2, pinTries - counted, pinTries - 1);
+    else
+        s.triesLeft = 0;
     return s;
+}
+
+// A PIN the user chooses that the rule (pinrule.h) refuses; the dialogs
+// check it first, so this is only the store's own guard.
+PinResult pinTooSimple(Failure *failure, PinStatus *after)
+{
+    *failure = {QCoreApplication::translate("Errors", "Choose a PIN of at least six digits that is not easy to guess."),
+                QStringLiteral("tee: the new PIN does not pass the PIN rule")};
+    after->state = PinState::Failed;
+    after->failure = *failure;
+    return PinResult::Failed;
+}
+
+bool passesRule(const QByteArray &pin)
+{
+    return PinRule::check(pin.toStdString()) == PinRule::Verdict::Ok;
 }
 
 PinResult pinFailed(Failure *failure, PinStatus *after, const QString &why)
@@ -722,6 +752,8 @@ PinStatus adminPin()
 
 PinResult enterAdminPin(const QByteArray &pin, PinStatus *after, Failure *failure)
 {
+    // A PIN set before the rule (pinrule.h) still opens the key; a new one
+    // must pass it, below.
     if (pin.size() < 4 || pin.size() > 128)
         return pinFailed(failure, after, QStringLiteral("a PIN of %1 bytes").arg(pin.size()));
     QSettings settings;
@@ -736,6 +768,8 @@ PinResult enterAdminPin(const QByteArray &pin, PinStatus *after, Failure *failur
         return PinResult::Failed;
     }
     CK_RV rv = CKR_OK;
+    if (!(info.flags & CKF_USER_PIN_INITIALIZED) && !passesRule(pin))
+        return pinTooSimple(failure, after);
     if (!(info.flags & CKF_TOKEN_INITIALIZED)) {
         // The first PIN: the token starts with it as its SO PIN too, so a
         // stop halfway leaves a token the same PIN finishes.
@@ -772,9 +806,15 @@ PinResult enterAdminPin(const QByteArray &pin, PinStatus *after, Failure *failur
     settings.remove(wrongKey);
     if (!settings.value(soRandomKey).toBool()) {
         // The SO logs in alone: the user logs out for it and back in after.
+        // The note that the SO PIN is random lives in the app's settings,
+        // which can be cleared while the token stays: the token decides.
+        // An SO PIN that is not the user PIN (wrong, or locked by such
+        // tries) was made random already, so it is noted and never tried
+        // again; one that still is the user PIN is made random now, and
+        // until that works the admin key is not used.
         token.logout();
         rv = token.randomizeSo(pin);
-        if (rv == CKR_OK)
+        if (rv == CKR_OK || rv == CKR_PIN_INCORRECT || rv == CKR_PIN_LOCKED)
             settings.setValue(soRandomKey, true);
         else
             return pinFailed(failure, after, QStringLiteral("the SO PIN did not change: %1").arg(hex(rv)));
@@ -790,8 +830,8 @@ PinResult enterAdminPin(const QByteArray &pin, PinStatus *after, Failure *failur
 
 PinResult changeAdminPin(const QByteArray &old, const QByteArray &pin, PinStatus *after, Failure *failure)
 {
-    if (pin.size() < 4 || pin.size() > 128)
-        return pinFailed(failure, after, QStringLiteral("a new PIN of %1 bytes").arg(pin.size()));
+    if (!passesRule(pin))
+        return pinTooSimple(failure, after);
     QSettings settings;
     dropAdminPin();
     auto held = std::unique_ptr<Token>(new Token);
@@ -816,6 +856,19 @@ PinResult changeAdminPin(const QByteArray &old, const QByteArray &pin, PinStatus
     if (rv != CKR_OK)
         return pinFailed(failure, after, QStringLiteral("C_Login admin: %1").arg(hex(rv)));
     settings.remove(wrongKey);
+    if (!settings.value(soRandomKey).toBool()) {
+        // As in enterAdminPin: the SO PIN is made random, or found random,
+        // with the PIN it may still share, before that PIN changes.
+        token.logout();
+        rv = token.randomizeSo(old);
+        if (rv == CKR_OK || rv == CKR_PIN_INCORRECT || rv == CKR_PIN_LOCKED)
+            settings.setValue(soRandomKey, true);
+        else
+            return pinFailed(failure, after, QStringLiteral("the SO PIN did not change: %1").arg(hex(rv)));
+        rv = token.login(CKU_USER, old);
+        if (rv != CKR_OK)
+            return pinFailed(failure, after, QStringLiteral("C_Login admin after the SO: %1").arg(hex(rv)));
+    }
     rv = token.setUserPin(old, pin);
     if (rv != CKR_OK)
         return pinFailed(failure, after, QStringLiteral("C_SetPIN admin: %1").arg(hex(rv)));

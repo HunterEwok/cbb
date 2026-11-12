@@ -47,7 +47,7 @@ ApplicationWindow {
             askPin(fresh, -1)
         }
         onPinRefused: {
-            if (!locked && triesLeft > 0)
+            if (!locked && triesLeft >= 0)
                 askPin(false, triesLeft)
         }
     }
