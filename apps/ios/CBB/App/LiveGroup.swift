@@ -183,6 +183,11 @@ final class LiveGroup: GroupController {
             }
         }
         paths.start(queue: DispatchQueue(label: "cbb.paths"))
+        // The phone locked with the app in front: the keys sign without
+        // asking no more, as when the app goes to the background.
+        let authorization = authorization
+        NotificationCenter.default.addObserver(forName: UIApplication.protectedDataWillBecomeUnavailableNotification,
+                                               object: nil, queue: nil) { _ in authorization.end() }
     }
 
     /// The network of path as the hub remembers it (HubState.networkKey):

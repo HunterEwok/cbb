@@ -64,9 +64,8 @@ final class AppModelTests: XCTestCase {
         let said = await m.syncFromShortcut(wait: .seconds(1))
         XCTAssertEqual(said, String(localized: "Ready to paste, from \("Mac.lan").", bundle: .app))
         XCTAssertFalse(said.contains("hunter2"))
-        guard case .requiresAuthentication = SyncClipboardIntent.authenticationPolicy else {
-            return XCTFail("the shortcut runs on a locked phone")
-        }
+        XCTAssertTrue(String(describing: SyncClipboardIntent.authenticationPolicy).contains("requiresAuthentication"),
+                      "the shortcut runs on a locked phone")
     }
 
     /// The keys sign without asking only for the window after a Face ID

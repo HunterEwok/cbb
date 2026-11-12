@@ -167,9 +167,11 @@
                 android:resource="@xml/accessibility_copy" />
         </service>
 
+        <!-- Not exported: only the system sends these two broadcasts, and it reaches a receiver
+             that is not exported; no other app can start the member through it. -->
         <receiver
             android:name=".BootReceiver"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
