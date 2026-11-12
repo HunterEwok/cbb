@@ -66,7 +66,7 @@ impl Group {
             d.rights = RIGHT_READ | RIGHT_SEND;
             d.admin = Some(k(admin).key);
             (d.powers, d.commands) = kind.grants();
-            g.sign("R", Kind::Device(d));
+            g.sign("R", Kind::device(d));
         }
         g.sign("R", Kind::Recovery { admin: k("K").key });
         g
@@ -103,7 +103,7 @@ impl Group {
     fn device(&mut self, by: &str) -> Record {
         let mut d = Device::new(k("D").key, "D", ROLE_MEMBER);
         d.rights = RIGHT_READ | RIGHT_SEND;
-        self.sign(by, Kind::Device(d))
+        self.sign(by, Kind::device(d))
     }
 
     /// Member m: a set that took these records one by one, in this order.
@@ -237,7 +237,7 @@ impl Group {
         let n = self.recs.len();
         let mut d = Device::new(k(&format!("NK device {n}")).key, "NK device", ROLE_MEMBER);
         d.rights = RIGHT_READ | RIGHT_SEND;
-        self.sign("NK", Kind::Device(d))
+        self.sign("NK", Kind::device(d))
     }
 }
 
@@ -428,7 +428,7 @@ fn a_key_a_claimed_root_names_teaches_nothing() {
     d.rights = RIGHT_READ | RIGHT_SEND;
     d.admin = Some(k("X").key);
     (d.powers, d.commands) = AdminKind::Computer.grants();
-    g.sign("NA", Kind::Device(d));
+    g.sign("NA", Kind::device(d));
     let x = g.device("X");
     let m = g.member(&g.all());
     assert!(!m.contains(&x.id()));
@@ -499,7 +499,7 @@ impl Group {
             (d.powers, d.commands) = kind.grants();
         }
         d.seen = self.seen();
-        self.sign("R", Kind::Device(d))
+        self.sign("R", Kind::device(d))
     }
 }
 
