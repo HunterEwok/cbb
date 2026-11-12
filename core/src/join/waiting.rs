@@ -18,13 +18,17 @@
 //! - The holder takes `dismiss` only from a device that may admit.
 //! - The holder keeps a request until the invitation's guest path expires
 //!   (the expiry its admin gave with `guest`), and never more than a day; at
-//!   most 16 requests, one per invitation and key, and at most 2 of one
-//!   invitation (a third key is refused, so it cannot push out the first);
+//!   most 16 requests by guest paths, one per invitation and key, and at
+//!   most 2 of one invitation (a third key is refused, so it cannot push
+//!   out the first);
 //!   a second knock of the same counts as an attempt. The invitation is
 //!   the one of the guest path the joiner came by, as the holder knows it;
 //!   an Info that names another is refused. From the home network, where
-//!   no guest path tells it, one request per source address and at most 8
-//!   in all, the oldest giving way.
+//!   no guest path tells it, one request per source address and at most 32
+//!   in all, the oldest giving way. So a host on the home network can push
+//!   other requests from home out (requests the holder cannot tell apart
+//!   by invitation), and the joiner then asks again; home is the trusted
+//!   network, and an admin there admits directly.
 
 use alloc::vec::Vec;
 
@@ -38,14 +42,17 @@ use crate::records::body::RIGHT_HUB;
 
 /// The longest a holder keeps a request.
 pub const MAX_WAIT_MS: u64 = 86_400_000;
-/// The most requests a holder keeps.
+/// The most requests by guest paths a holder keeps.
 pub const MAX_REQUESTS: usize = 16;
 /// The most requests of one invitation: whoever holds one invitation
 /// cannot take the places of the others.
 pub const MAX_PER_INVITATION: usize = 2;
 /// The most requests from the home network, where no guest path tells the
 /// invitation: one per source address, the oldest giving way.
-pub const MAX_HOME: usize = 8;
+pub const MAX_HOME: usize = 32;
+/// The most requests in one `waiting` message: those by guest paths and
+/// those from home.
+pub const MAX_MESSAGE: usize = MAX_REQUESTS + MAX_HOME;
 
 /// How a joiner reached the holder.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -156,7 +163,7 @@ impl Held {
         }
         match came {
             Came::Path(_) => {
-                if self.requests.len() >= MAX_REQUESTS
+                if self.requests.iter().filter(|r| matches!(r.came, Came::Path(_))).count() >= MAX_REQUESTS
                     || self.requests.iter().filter(|r| r.came == came).count() >= MAX_PER_INVITATION
                 {
                     return false;
@@ -167,9 +174,7 @@ impl Held {
                 // oldest gives way.
                 self.requests.retain(|r| r.came != came);
                 let home = |r: &Request| matches!(r.came, Came::Home(_));
-                while self.requests.iter().filter(|r| home(r)).count() >= MAX_HOME
-                    || (self.requests.len() >= MAX_REQUESTS && self.requests.iter().any(home))
-                {
+                while self.requests.iter().filter(|r| home(r)).count() >= MAX_HOME {
                     let Some(i) = self
                         .requests
                         .iter()
@@ -181,9 +186,6 @@ impl Held {
                         break;
                     };
                     self.requests.remove(i);
-                }
-                if self.requests.len() >= MAX_REQUESTS {
-                    return false;
                 }
             }
         }

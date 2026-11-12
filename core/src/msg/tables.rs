@@ -276,7 +276,7 @@ pub static INFO_DEVICE: Table = Table { shape: "pair/info/device/shape", fields:
 /// while no admin was there.
 pub static WAITING: Table = Table {
     shape: "waiting/shape",
-    fields: &[f(2, "waiting/requests", Ty::Once { of: &Ty::Map(&REQUEST), max: 16 }, true)],
+    fields: &[f(2, "waiting/requests", Ty::Once { of: &Ty::Map(&REQUEST), max: 48 }, true)],
 };
 
 /// `dismiss` (t 27): from that admin to the holder: drop the requests of
