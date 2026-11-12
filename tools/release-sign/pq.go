@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/HunterEwok/cbb/internal/release"
@@ -70,6 +71,21 @@ var ageEncrypt = func(recipient, file string, data []byte) error {
 	return nil
 }
 
+// cutPaths splits IDENTITY:FILE at the colon between the two paths,
+// passing over the drive letter that starts the first on Windows
+// (C:\x.identity:C:\x.age); the second is taken whole.
+func cutPaths(arg string, windows bool) (string, string, bool) {
+	skip := 0
+	if windows && len(arg) >= 2 && arg[1] == ':' && ('a' <= arg[0]|0x20 && arg[0]|0x20 <= 'z') {
+		skip = 2
+	}
+	i := strings.IndexByte(arg[skip:], ':')
+	if i < 0 {
+		return "", "", false
+	}
+	return arg[:skip+i], arg[skip+i+1:], true
+}
+
 // pqOf returns the post-quantum half that goes with classical, from spec
 // (slh:FILE, a key in a file, or age:IDENTITY:FILE) or, when spec is
 // empty, from the encrypted file pqDir names for it.
@@ -81,7 +97,7 @@ func pqOf(classical crypto.Signer, spec string) (crypto.Signer, error) {
 	case "slh":
 		data, err = os.ReadFile(arg)
 	case "age":
-		identity, file, ok := strings.Cut(arg, ":")
+		identity, file, ok := cutPaths(arg, runtime.GOOS == "windows")
 		if !ok {
 			return nil, fmt.Errorf("%q is not age:IDENTITY:FILE", spec)
 		}

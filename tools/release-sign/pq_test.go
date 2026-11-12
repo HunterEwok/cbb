@@ -158,3 +158,21 @@ func TestPQNewForAServer(t *testing.T) {
 		t.Error("-out - without -public")
 	}
 }
+
+func TestCutPaths(t *testing.T) {
+	for _, c := range []struct {
+		arg, id, file string
+		windows, ok   bool
+	}{
+		{"/a/b.identity:/a/b.age", "/a/b.identity", "/a/b.age", false, true},
+		{`C:\a\b.identity:C:\a\b.age`, `C:\a\b.identity`, `C:\a\b.age`, true, true},
+		{`b.identity:d:\b.age`, "b.identity", `d:\b.age`, true, true},
+		{`C:\a\b.identity`, "", "", true, false},
+		{"b.identity", "", "", false, false},
+	} {
+		id, file, ok := cutPaths(c.arg, c.windows)
+		if id != c.id || file != c.file || ok != c.ok {
+			t.Errorf("cutPaths(%q, %v) = %q, %q, %v", c.arg, c.windows, id, file, ok)
+		}
+	}
+}
