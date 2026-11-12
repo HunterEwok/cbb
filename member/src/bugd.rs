@@ -478,4 +478,93 @@ mod tests {
         assert_eq!(size, MAX_BODY, "set client_max_body_size {MAX_BODY}; in packaging/linux/nginx-bug.conf");
         assert!(conf.contains("access_log off;"), "nginx keeps no client address for bug reports");
     }
+
+    /// One request a connection: a POST is taken, any other method, a head
+    /// that does not read, a body too large or without a length is
+    /// answered with its status.
+    #[test]
+    fn answers_each_connection() {
+        let tmp = std::env::temp_dir().join(format!("cbb-bugd-http-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let rx = Arc::new(Receiver::new(&tmp).unwrap());
+        let ln = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = ln.local_addr().unwrap();
+        let ask = |request: Vec<u8>| -> String {
+            let mut c = TcpStream::connect(addr).unwrap();
+            let (s, _) = ln.accept().unwrap();
+            let rx = rx.clone();
+            let t = std::thread::spawn(move || rx.serve_one(s));
+            c.write_all(&request).unwrap();
+            c.shutdown(std::net::Shutdown::Write).unwrap();
+            let mut out = String::new();
+            let _ = c.read_to_string(&mut out);
+            let _ = t.join().unwrap();
+            out
+        };
+        let body = post("0123456789abcdef", "0.6.0");
+        let mut req = format!("POST / HTTP/1.1\r\nHost: bug\r\nContent-Length: {}\r\n\r\n", body.len()).into_bytes();
+        req.extend_from_slice(&body);
+        let a = ask(req);
+        assert!(a.starts_with("HTTP/1.1 200 OK\r\n") && a.ends_with(r#"{"fixed_in":""}"#), "{a}");
+        assert!(ask(b"GET / HTTP/1.1\r\n\r\n".to_vec()).starts_with("HTTP/1.1 405 "));
+        for bad in [
+            b"POST / HTTP/1.1\r\nContent-Length: x\r\n\r\n".to_vec(),
+            b"POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n".to_vec(),
+            b"POST / HTTP/1.1\r\nContent-Length: 10\r\n\r\nshort".to_vec(),
+        ] {
+            let a = ask(bad.clone());
+            assert!(a.starts_with("HTTP/1.1 400 "), "{}: {a}", String::from_utf8_lossy(&bad[..bad.len().min(60)]));
+        }
+        let big = format!("POST / HTTP/1.1\r\nContent-Length: {}\r\n\r\n", MAX_BODY + 1).into_bytes();
+        assert!(ask(big).starts_with("HTTP/1.1 413 Payload Too Large"));
+        let long_head = format!("POST / HTTP/1.1\r\nX: {}\r\n\r\n", "a".repeat(MAX_HEAD)).into_bytes();
+        assert!(ask(long_head).starts_with("HTTP/1.1 413 "));
+        // A head cut short reads as one too large.
+        assert!(ask(b"POST / HTTP/1.1".to_vec()).starts_with("HTTP/1.1 413 "));
+        let mut out = Vec::new();
+        write_answer(&mut out, &Answer::error(503, "busy")).unwrap();
+        assert!(String::from_utf8(out).unwrap().starts_with("HTTP/1.1 503 Service Unavailable"));
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// cbb-bug's command line refuses what it does not take.
+    #[test]
+    fn its_command_line() {
+        let tmp = std::env::temp_dir().join(format!("cbb-bugd-cli-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        let run = |args: &[&str]| -> (i32, String) {
+            let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+            let mut err = Vec::new();
+            let code = command(&args, &mut err);
+            (code, String::from_utf8(err).unwrap())
+        };
+        let secret = tmp.join("robot.key");
+        let s = secret.to_str().unwrap();
+        assert_eq!(run(&["keygen", s]).0, 0);
+        assert_eq!(run(&["keygen", s]).0, 1);
+        assert_eq!(run(&["keygen"]).0, 2);
+        assert_eq!(run(&["read", s]).0, 2);
+        assert_eq!(run(&["read", s, tmp.to_str().unwrap()]).0, 0);
+        let none = tmp.join("none");
+        let (code, err) = run(&["read", none.to_str().unwrap(), tmp.to_str().unwrap()]);
+        assert!(code == 1 && err.contains("cannot read"), "{err}");
+        std::fs::write(tmp.join("bad.key"), "not base64!").unwrap();
+        assert_eq!(run(&["read", tmp.join("bad.key").to_str().unwrap(), tmp.to_str().unwrap()]).0, 1);
+        // A report that does not open is named, and the rest go on.
+        std::fs::write(tmp.join("x.json"), "{}").unwrap();
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+        assert_eq!(read(&secret, std::slice::from_ref(&tmp), &mut out, &mut err).unwrap(), 0);
+        assert!(String::from_utf8(err).unwrap().contains("x.json"));
+        assert_eq!(run(&["-listen", "nowhere"]).0, 2);
+        assert_eq!(run(&["-bogus", "1"]).0, 2);
+        assert_eq!(run(&["-dir"]).0, 2);
+        // A port taken already: serve fails at once.
+        let ln = TcpListener::bind("127.0.0.1:0").unwrap();
+        let taken = ln.local_addr().unwrap().to_string();
+        let (code, err) = run(&["-listen", &taken, "-dir", tmp.to_str().unwrap()]);
+        assert!(code == 1 && err.contains("cannot listen"), "{err}");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
 }
