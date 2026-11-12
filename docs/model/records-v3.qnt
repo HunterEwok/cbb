@@ -1010,7 +1010,9 @@ module records_v3 {
   }))
   // A removal some earlier change of the member's chain cut off: the sets dropped it then, and
   // a later list that names it again (a recovery key may list what nobody holds) cannot bring
-  // it back.
+  // it back while no member holds it. Once a member holds it and the newest list names it, it
+  // counts.
+  def heldByNone(r: Record): bool = MEMBERS.forall(n => not(st.get(n).recs.contains(r.id)))
   def cutEarlier(m: str, r: Record): bool = {
     val ch = chainState(st.get(m), db).recs
     ch.indices().exists(j => not(within(pathCutsOf(ch.slice(0, j + 1))._2, r)))
@@ -1021,7 +1023,7 @@ module records_v3 {
     // removes nothing).
     val removals = recsOf(st.get(m).got, db).filter(r => r.kind == "revoke" and onList(v.path, r.signer))
     v.stop or gone.get(m).forall(k =>
-      removals.filter(r => withPair(r.target).contains(k)).forall(r => cutOff(v, r) or cutEarlier(m, r))
+      removals.filter(r => withPair(r.target).contains(k)).forall(r => cutOff(v, r) or (cutEarlier(m, r) and heldByNone(r)))
         or (v.revoked.contains(k) and not(v.admins.keys().contains(k)) and not(v.devices.contains(k))))
   })
 
@@ -1444,6 +1446,30 @@ module records_v3 {
       .then(give("m", 7))
       .expect(views.get("m").path == [ROOT, "NK"] and views.get("m").admins.keys() == Set(PHONE)
         and views.get("m").revoked.contains(WATCH) and promises)
+
+  // The old root removes the phone admin on its own device, which has not yet got the change
+  // to NK; that change does not list the removal. A second head, to NA, lists it again. The
+  // old root's device takes both heads at once, keeps the removal (the newest list names it)
+  // and has A out; once sync has offered it again, every member has A out.
+  run relistedRemovalTest =
+    init
+      .then(signAs(ROOT, "revoke", PHONE, 0))
+      .then(recoverAs(RECOVERY, "NK"))
+      .then(signChain(RECOVERY, "recover", "NA", 2, "all"))
+      .expect(not(db.get(5).keep.contains(4)) and db.get(7).keep.contains(4))
+      .then(give("r", 7))
+      .then(give("r", 5))
+      .then(give("r", 6))
+      .expect(views.get("r").path == [ROOT, "NK", "NA"] and views.get("r").revoked.contains(PHONE)
+        and not(views.get("r").admins.keys().contains(PHONE)) and promises)
+      .expect(views.get("m").admins.keys().contains(PHONE))
+      // One round of sync in ID order: a member that takes the removal before the first head
+      // drops it at that head and takes it again only in the next round.
+      .then(syncAll)
+      .expect(views.get("k").revoked.contains(PHONE) and promises)
+      .then(syncAll)
+      .expect(MEMBERS.forall(x => views.get(x).path == [ROOT, "NK", "NA"] and views.get(x).revoked.contains(PHONE)
+        and not(views.get(x).admins.keys().contains(PHONE))) and promises)
 
   // Why the list holds what the writer counts of every earlier root: a list of the replaced
   // root's records alone, at the second change, leaves the first root's records off the newest
