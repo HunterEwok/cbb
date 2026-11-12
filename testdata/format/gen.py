@@ -418,7 +418,7 @@ def record_vectors():
     add("recovery", ROOT, 11, {10: Signer("recovery").key})
     add("handover", ROOT, 12, {10: ADMIN.hash})
     add("checkpoint", ROOT, 9, {10: srt([[ADMIN.hash, 3, bytes.fromhex(take[-2]["id"])],
-                                         [ROOT.hash, 11, bytes.fromhex(take[-1]["id"])]]),
+                                         [ROOT.hash, 10, bytes.fromhex(take[-1]["id"])]]),
                                 11: srt([bytes.fromhex(take[0]["id"]), bytes.fromhex(take[1]["id"])])})
     add("device with an optional field from a later version", ROOT, 1,
         {10: Signer("tv").key, 11: "TV", 12: 1, 13: 0b0011},
@@ -571,6 +571,11 @@ def record_vectors():
         ("checkpoint heads out of order", "records/checkpoint/heads", 9, {10: [hb, ha]}),
         ("checkpoint heads with one key twice", "records/checkpoint/heads", 9, {10: [ha, [ha[0], 4, i2]]}),
         ("checkpoint keep out of order", "records/checkpoint/keep", 9, {10: [ha, hb], 11: [i2, i1]}),
+        # a checkpoint names heads before itself: its own key's below its seq
+        ("checkpoint naming its own key at its own seq", "records/checkpoint/own-head", 9,
+         {10: srt([[ADMIN.hash, 3, i1], [ROOT.hash, 90, i2]])}),
+        ("checkpoint naming its own key above its seq", "records/checkpoint/own-head", 9,
+         {10: srt([[ADMIN.hash, 3, i1], [ROOT.hash, 91, i2]])}),
         ("hubs with one device twice", "records/hubs/hubs", 10, {10: [LAPTOP.id16, LAPTOP.id16], 11: [sa]}),
         ("device seen out of order", "records/device/seen", 1, {**{k: lap_m[k] for k in (10, 11, 12)}, 26: [sb, sa]}),
         ("thaw seen out of order", "records/thaw/seen", 4, {10: [i1], 11: [sb, sa]}),

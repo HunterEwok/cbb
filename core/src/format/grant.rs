@@ -165,35 +165,26 @@ impl Granted<'_> {
 /// admin with `admit`: a `device` record (type 1) the root signed, with its
 /// `admin` Key (20) and the admit bit in its `powers` (21).
 fn admin_key(record: &Envelope<'_>, root: &[u8], group: &GroupId) -> Result<[u8; 65], Rule> {
+    use crate::records::{Body, Kind, key::ALG_ES256};
     record.verify(root, sig::LABEL_RECORD).map_err(|_| RULE_ADMIN)?;
-    let m = &record.map;
-    // Read as a record (section 4.1): a device record of this group with
-    // the fields of 0.6 only, which a reader would apply, not hold.
-    let fields = m.as_map().ok_or(RULE_ADMIN)?;
-    if record.sig2.is_some() || fields.iter().any(|(k, _)| *k < 256 && !super::DEVICE_FIELDS.contains(k)) {
+    // Read by the record reader itself (section 4.1): a device record of
+    // this group that a reader would apply, not hold.
+    if record.sig2.is_some() || record.body.len() > crate::records::MAX_BODY {
         return Err(RULE_ADMIN);
     }
-    let seq_ok = m.get(4).and_then(Value::as_uint).is_some_and(|n| (1..1 << 31).contains(&n));
-    let prev_ok = match m.get(5) {
-        None => m.get(4).and_then(Value::as_uint) == Some(1),
-        Some(p) => p.as_bytes().is_some_and(|b| b.len() == 32),
-    };
-    let in_group = m.get(2).and_then(Value::as_bytes) == Some(group.0.as_slice());
-    let named = m.get(11).and_then(Value::as_text).is_some_and(super::name_ok);
-    let role_ok = m.get(12).and_then(Value::as_uint).is_some_and(|r| (1..=4).contains(&r));
-    let member = m.get(10).map(Key::from_value).transpose().map_err(|_| RULE_ADMIN)?.ok_or(RULE_ADMIN)?;
-    if !(seq_ok && prev_ok && in_group && named && role_ok && member.alg == Alg::Es256) || member.check().is_err() {
+    let body = Body::from_value(&record.map).map_err(|_| RULE_ADMIN)?;
+    if body.check().map_err(|_| RULE_ADMIN)? || body.held {
         return Err(RULE_ADMIN);
     }
-    let root_hash = Key::new(Alg::Es256, root).hash();
-    let by_root = m.get(3).and_then(Value::as_bytes).and_then(KeyHash::from_slice) == Some(root_hash);
-    let device = m.get(1).and_then(Value::as_uint) == Some(1);
-    let admits = m.get(21).and_then(Value::as_uint).is_some_and(|p| p & 1 == 1);
-    let key = m.get(20).map(Key::from_value).transpose().map_err(|_| RULE_ADMIN)?.ok_or(RULE_ADMIN)?;
-    if !(by_root && device && admits && key.alg == Alg::Es256) || key.check().is_err() {
+    let Kind::Device(d) = &body.kind else { return Err(RULE_ADMIN) };
+    let by_root = body.signer == Key::new(Alg::Es256, root).hash();
+    let admits = d.powers & crate::records::body::POWER_ADMIT != 0;
+    let admin = d.admin.as_ref().ok_or(RULE_ADMIN)?;
+    let points = [&d.key, admin].iter().all(|k| k.alg == ALG_ES256 && Key::new(Alg::Es256, &k.public).check().is_ok());
+    if !(body.group == *group && by_root && admits && points) {
         return Err(RULE_ADMIN);
     }
-    key.public.try_into().map_err(|_| RULE_ADMIN)
+    admin.public.clone().try_into().map_err(|_| RULE_ADMIN)
 }
 
 /// The commanders of a grant body: at most eight ES256 Keys, sorted by key

@@ -292,6 +292,9 @@ func checkSigned(dir, file string, sk func(map[any]any) ([]byte, error)) {
 		if typ, _ := m[uint64(1)].(uint64); f.Label == "cbb record v3" && typ == 1 && !nameOK(m[uint64(11)]) {
 			fail("%s / %s: its name is refused", file, t.Name)
 		}
+		if typ, _ := m[uint64(1)].(uint64); f.Label == "cbb record v3" && typ == 9 && !ownHeadBefore(m) {
+			fail("%s / %s: it names its own key at or above its seq", file, t.Name)
+		}
 		if t.Body != "" && hex.EncodeToString(body) != t.Body {
 			fail("%s / %s: body differs", file, t.Name)
 		}
@@ -322,6 +325,14 @@ func checkSigned(dir, file string, sk func(map[any]any) ([]byte, error)) {
 	}
 	for _, r := range f.Refuse {
 		m, _, err := envelope(unhex(r.Envelope), f.Label, sk)
+		if r.Rule == "records/checkpoint/own-head" {
+			if err != nil || ownHeadBefore(m) {
+				fail("%s / %s: its heads hold", file, r.Name)
+			} else {
+				ok++
+			}
+			continue
+		}
 		if r.Rule == "records/device/name" {
 			// names: checked here by themselves, apart from the rules
 			if err != nil || nameOK(m[uint64(11)]) {
@@ -516,7 +527,7 @@ func main() {
 				return nil, errors.New("grants/admin")
 			}
 			kh, pub, err := keyHash(r[uint64(20)])
-			if err != nil || !bytes.Equal(kh, h) {
+			if err != nil || !bytes.Equal(kh, h) || !onCurve(pub) {
 				return nil, errors.New("grants/admin")
 			}
 			if p, _ := r[uint64(21)].(uint64); p&1 != 1 {
@@ -1235,7 +1246,17 @@ func adminRecord(r map[any]any, group []byte) bool {
 	k, _ := r[uint64(10)].([]any)
 	alg, _ := keyAlg(k)
 	return typ == 1 && bytes.Equal(g, group) && seq >= 1 && seq < 1<<31 && prevOK && nameOK(r[uint64(11)]) &&
-		role >= 1 && role <= 4 && err == nil && alg == 1 && len(pub) == 65
+		role >= 1 && role <= 4 && err == nil && alg == 1 && onCurve(pub)
+}
+
+// onCurve reports whether pub is an uncompressed P-256 point, as the Rust
+// reader checks a member key and an admin key.
+func onCurve(pub []byte) bool {
+	if len(pub) != 65 {
+		return false
+	}
+	x, _ := elliptic.Unmarshal(elliptic.P256(), pub) //nolint:staticcheck
+	return x != nil
 }
 
 func seenEntry(e any) bool {
@@ -1486,4 +1507,24 @@ func hkdfSHA256(ikm, salt, info []byte) []byte {
 	k, err := hkdf.Key(sha256.New, ikm, salt, string(info), 32)
 	must(err)
 	return k
+}
+
+// ownHeadBefore: a checkpoint names its own key's head, if at all, below
+// its own seq.
+func ownHeadBefore(m map[any]any) bool {
+	signer, _ := m[uint64(3)].([]byte)
+	seq, _ := m[uint64(4)].(uint64)
+	heads, _ := m[uint64(10)].([]any)
+	for _, h := range heads {
+		e, _ := h.([]any)
+		if len(e) != 3 {
+			continue
+		}
+		k, _ := e[0].([]byte)
+		n, _ := e[1].(uint64)
+		if bytes.Equal(k, signer) && n >= seq {
+			return false
+		}
+	}
+	return true
 }

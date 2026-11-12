@@ -21,7 +21,7 @@ use alloc::vec::Vec;
 
 use crate::format::{Alg, GroupId, Rule, Value, cbor};
 use crate::records::body::{Kind, POWER_ADMIT};
-use crate::records::eval::ClaimState;
+use crate::records::eval::{self, ClaimState};
 use crate::records::set::RecordSet;
 use crate::records::{Key, KeyHash, Record, RecordId, State};
 
@@ -253,30 +253,36 @@ impl Welcome {
         if self.counted.iter().chain(self.claim_ages.iter().map(|(id, _)| id)).any(|id| !claims.contains(id)) {
             return Err(Refusal::Damaged);
         }
-        let mut set = RecordSet::new(root);
+        let held: BTreeMap<RecordId, u64> =
+            if guarded { BTreeMap::new() } else { self.claim_ages.iter().copied().collect() };
+        // The counted claims go to the set before the records: a counted
+        // root's records then come with the room and keys it gives, and a
+        // later root's records are not refused. Each is checked once, when
+        // its record comes (its claimant held the takeover power and was
+        // not removed); one the records do not prove stays waiting.
+        let mut set = RecordSet::new(root.clone());
+        if set.remember_counted(self.counted.iter().copied()).is_err() {
+            return Err(Refusal::Takeover);
+        }
         set.insert_all(self.records.iter().cloned());
+        if set.counted_claims().iter().map(|c| c.claim).ne(self.counted.iter().copied()) {
+            return Err(Refusal::Takeover);
+        }
         // A guarded leaf takes no claim by the admitter's word, neither
         // counted nor by its age: only the root's own record of it counts,
         // and a takeover reaches it later, by its own clock.
-        let held: BTreeMap<RecordId, u64> =
-            if guarded { BTreeMap::new() } else { self.claim_ages.iter().copied().collect() };
         // A takeover the admitter counted is final for the joiner too, once
         // the Welcome's records and its own ages put it in effect: its
         // signer may take over, its key is not void, nobody cancelled it,
-        // and it waited the root's delay.
-        // The records check each counted claim once (its claimant held the
-        // takeover power and was not removed); the path with them must not
-        // part from the path the Welcome's records and ages give alone.
-        let plain = set.state(&held);
+        // and it waited the root's delay. The path with the counted claims
+        // must not part from the path the records and ages give alone.
+        let plain = eval::evaluate(&eval::Input { root: &root, records: &self.records, held_ms: &held, counted: &[] });
         if !self.counted.is_empty() {
             let stands =
                 |id: &RecordId| plain.claims.iter().any(|c| c.record == *id && c.state == ClaimState::Effective);
             if !self.counted.iter().all(stands) {
                 return Err(Refusal::Takeover);
             }
-        }
-        if set.remember_counted(self.counted.iter().copied()).is_err() {
-            return Err(Refusal::Takeover);
         }
         let state = set.state(&held);
         if state.disagrees(&plain.roots) {

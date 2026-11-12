@@ -681,6 +681,58 @@ fn the_joiner_checks_its_welcome() {
     assert!(aged.check(&group, &point(&k("phone 2")), &point(&bulb), true).is_err(), "a guarded leaf does not");
 }
 
+/// A phone admin under the root's handover, then one under its new root,
+/// took the group over: the joiner takes both counted claims from its
+/// Welcome, and the records of the last root come with them.
+#[test]
+fn the_joiner_takes_two_counted_takeovers() {
+    let mut g = G::new();
+    let phone_admin = |g: &mut G, by: &K, member: &K, name: &str, admin: &K, holds_root: bool| {
+        let mut d = Device::new(member.key.clone(), name, ROLE_PHONE);
+        d.rights = RIGHT_READ | RIGHT_SEND;
+        d.admin = Some(admin.key.clone());
+        let (p, c) = AdminKind::Phone.grants();
+        d.powers = p;
+        d.commands = c;
+        d.holds_root = holds_root;
+        g.rec(by, Kind::device(d));
+    };
+    let (a, b, n1, n2) = (k("admin a"), k("admin b"), k("root n1"), k("root n2"));
+    let root = k("root");
+    phone_admin(&mut g, &root, &k("phone a"), "phone a", &a, false);
+    g.rec_root(Kind::Handover { admin: a.hash });
+    let seen = g.seen();
+    let c1 = g.rec(&a, Kind::Claim { root: n1.key.clone(), seen });
+    phone_admin(&mut g, &n1, &k("phone b"), "phone b", &b, false);
+    let seen = g.seen();
+    let c2 = g.rec(&b, Kind::Claim { root: n2.key.clone(), seen });
+    phone_admin(&mut g, &n2, &k("phone b"), "phone b", &b, true);
+    let slate = k("slate");
+    let mut d = Device::new(slate.key.clone(), "slate", ROLE_MEMBER);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    g.rec(&n2, Kind::device(d));
+
+    // The admitter counted both, in order.
+    let held = BTreeMap::from([(c2.id(), DEFAULT_DELAY_MS)]);
+    let mut set = RecordSet::new(g.root.key.clone());
+    assert_eq!(set.remember_counted([c1.id(), c2.id()]), Ok(()));
+    let (_, refused) = set.insert_all(g.recs.iter().cloned());
+    assert!(refused.is_empty(), "{refused:?}");
+    let st = set.state(&held);
+    assert_eq!(st.roots, vec![g.root.hash, n1.hash, n2.hash]);
+    let w = Welcome::build(&set, &st, &k("phone b").hash, &slate.hash, &held, 1_793_000_000_000);
+    assert_eq!(w.counted, vec![c1.id(), c2.id()]);
+
+    let group = format::DeviceId(g.gid.0);
+    let back = Welcome::decode(&w.encode()).unwrap();
+    let r = back.check(&group, &point(&k("phone b")), &point(&slate), false);
+    let (mine, st, _) = r.unwrap_or_else(|e| panic!("{e:?}"));
+    assert_eq!(mine.counted(), vec![c1.id(), c2.id()]);
+    assert_eq!(mine.counted_claims().len(), 2);
+    assert_eq!(st.roots, vec![g.root.hash, n1.hash, n2.hash]);
+    assert_eq!(mine.len(), set.len(), "every record of the Welcome is kept");
+}
+
 #[test]
 fn an_intro_proves_a_new_device() {
     let mut g = G::new();
