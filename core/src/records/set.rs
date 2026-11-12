@@ -389,9 +389,28 @@ impl RecordSet {
                 self.counted.push(c);
             }
         }
+        self.keep_by(self.promoted.clone(), self.cuts.clone());
     }
 
     /// Reads the waiting counted claims whose records are here, in order.
+    /// Keeps by the roots promoted and the cuts, with those of the counted
+    /// claims always among them: a counted takeover's root has a root's
+    /// room and its old root keeps only its chain, whatever path a state
+    /// showed.
+    fn keep_by(&mut self, mut promoted: BTreeSet<KeyHash>, mut cuts: BTreeMap<KeyHash, Seen>) {
+        for c in &self.counted {
+            promoted.insert(c.root.hash());
+            cuts.insert(c.cut.key, c.cut);
+        }
+        if promoted != self.promoted || cuts != self.cuts {
+            self.promoted = promoted;
+            self.cuts = cuts;
+            self.relearn();
+            self.cut = keep::Cut::default();
+            self.cut();
+        }
+    }
+
     /// strict: a claim the records do not prove is refused, with the ones
     /// after it; otherwise it waits for more records.
     fn read_pending(&mut self, strict: bool) -> Result<(), RecordId> {
@@ -414,6 +433,7 @@ impl RecordSet {
             self.keys.add_root(&c.root);
             self.counted.push(c);
         }
+        self.keep_by(self.promoted.clone(), self.cuts.clone());
         Ok(())
     }
 
@@ -447,13 +467,7 @@ impl RecordSet {
         }
         let promoted: BTreeSet<KeyHash> = state.roots.iter().skip(1).copied().collect();
         let cuts: BTreeMap<KeyHash, Seen> = state.cuts.iter().map(|c| (c.key, *c)).collect();
-        if promoted != self.promoted || cuts != self.cuts {
-            self.promoted = promoted;
-            self.cuts = cuts;
-            self.relearn();
-            self.cut = keep::Cut::default();
-            self.cut();
-        }
+        self.keep_by(promoted, cuts);
         self.checkpoint = None;
         let Some(cp) = state.checkpoint else { return 0 };
         let Some(Kind::Checkpoint { heads, keep }) = self.get(&cp).map(|r| r.body().kind.clone()) else { return 0 };

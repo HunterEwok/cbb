@@ -2920,3 +2920,37 @@ fn a_root_s_removal_of_a_claimant_cancels_or_voids() {
         assert_eq!(case(key, true, true), Some(ClaimState::Effective));
     }
 }
+
+/// A set keeps by the claims it counted, before any compaction: kept
+/// from before a restart, a counted takeover gives its old root only its
+/// chain, so that root's later checkpoints push out nothing from before
+/// the cut.
+#[test]
+fn a_set_keeps_by_its_counted_claims() {
+    let (g, held, claim) = taken_over_group();
+    let root = k("root");
+    let mut set = RecordSet::new(g.root.key.clone());
+    set.insert_all(g.recs.iter().cloned());
+    assert_eq!(set.remember_counted([claim.id()]), Ok(()));
+    let history: Vec<RecordId> = g.recs.iter().filter(|r| r.body().signer == root.hash).map(Record::id).collect();
+    for i in 0..9u8 {
+        let keep: Vec<RecordId> = (0..1900u32)
+            .map(|j| {
+                let mut id = [i; 32];
+                id[..4].copy_from_slice(&j.to_be_bytes());
+                RecordId(id)
+            })
+            .collect();
+        let body = Body {
+            seq: 1000 + u64::from(i),
+            prev: Some(RecordId([7; 32])),
+            ..g.body(
+                &root,
+                Kind::Checkpoint { heads: vec![Head { key: root.hash, seq: 1, id: RecordId([8; 32]) }], keep },
+            )
+        };
+        assert_eq!(set.insert(Record::sign(body, &root).unwrap()), Ok(Added::NoRoom));
+    }
+    assert!(history.iter().all(|id| set.contains(id)));
+    assert_eq!(set.state(&held).roots, vec![g.root.hash, k("new root").hash]);
+}
