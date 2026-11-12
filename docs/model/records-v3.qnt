@@ -239,8 +239,10 @@ module records_v3 {
   // What a checkpoint keeps as anchors, and which records it prunes.
   pure def anchorsOf(c: Record): Set[Id] =
     c.heads.keys().filter(k => c.heads.get(k).length() > 0).map(k => lastId(c.heads.get(k))).union(c.keep)
+  // A checkpoint never prunes a root's removal (a root's removal is final).
+  pure def rootRemoval(r: Record): bool = r.kind == "revoke" and ROOT_KEYS.contains(r.signer)
   pure def prunedBy(c: Record, r: Record): bool =
-    c.heads.keys().contains(r.signer) and r.seq <= c.heads.get(r.signer).length() and not(anchorsOf(c).contains(r.id))
+    not(rootRemoval(r)) and c.heads.keys().contains(r.signer) and r.seq <= c.heads.get(r.signer).length() and not(anchorsOf(c).contains(r.id))
 
   // --- Keeping (rule 6) ------------------------------------------------------------------
 
@@ -256,7 +258,9 @@ module records_v3 {
   pure def pos(r: Record, cur: Key, ord: Order): int = {
     val cp = r.signer == cur and r.kind == "checkpoint"
     val early = ord.roots.contains(r.signer) and (r.kind == "revoke" or r.kind == "freeze" or r.kind == "resolve")
-    if (r.signer != cur and ord.cuts.keys().contains(r.signer)) {
+    // A root's or a claimed root's removal comes first on every set, its own included.
+    if (rootRemoval(r)) r.seq * 100 + hid(r.id)
+    else if (r.signer != cur and ord.cuts.keys().contains(r.signer)) {
       val l = ord.cuts.get(r.signer)
       // The line from the head the claim saw down to the checkpoint that vouches for the rest
       // comes first: without it nothing below shows; then what that checkpoint names; then
@@ -604,7 +608,16 @@ module records_v3 {
     val handovers = rs.filter(r => r.kind == "handover" and r.signer == cur and rootRec(r))
     val hand = handovers.filter(h => handovers.forall(o => o == h or h.seq > o.seq or (h.seq == o.seq and h.id < o.id)))
     pure def delayOf(c: Record): int = if (hand.exists(h => h.target == c.signer and saw(c, h))) 0 else DELAY
-    val ready = alone.filter(c => not(disputed(c)) and ins.contains(c) and not(rootFrozen(c.signer)) and heldOf(c) >= delayOf(c))
+    // A claim is taken only when the root's line walks from the head its seen names down to an
+    // anchor (the first record, a checkpoint's anchor, or a held checkpoint whose keep is all
+    // held) through records held; else it waits.
+    pure def walkable(c: Record): bool = {
+      val l = lineOf(c.seen, cur)
+      l.indices().exists(j => (j == 0 or anchors.contains(l[j]) or rs.exists(x => x.id == l[j] and x.kind == "checkpoint" and x.keep.forall(i => ids.contains(i))))
+        and l.indices().forall(i => i < j or ids.contains(l[i]) or anchors.contains(l[i])))
+    }
+    val ready = alone.filter(c => not(disputed(c)) and ins.contains(c) and not(rootFrozen(c.signer)) and heldOf(c) >= delayOf(c)
+      and walkable(c))
     val full = path.length() >= MAXPATH
     val effective = if (full) Set() else ready
     val claims = idsOf(here).mapBy(i =>
