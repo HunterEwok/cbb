@@ -139,7 +139,9 @@ type statusVector struct {
 // taken (docs/protocol.md, section 16, "Two signatures").
 type envelope struct {
 	Name    string `json:"name"`
-	Release string `json:"release"`
+	// Release is the release.json's bytes as they come, in base64: some
+	// are not UTF-8.
+	Release []byte `json:"release"`
 	OK      bool   `json:"ok"`
 }
 
@@ -418,11 +420,11 @@ func makeVectors(t *testing.T) vectors {
 	}
 	both := sig(0) + "," + sig(1)
 	env := func(name, raw string, ok bool) {
-		v.Envelopes = append(v.Envelopes, envelope{name, raw, ok})
+		v.Envelopes = append(v.Envelopes, envelope{name, []byte(raw), ok})
 	}
 	env("as signed", `{"body":"`+body+`","sigs":[`+both+`]}`, true)
-	env("with a member of a later version", `{"body":"`+body+`","sigs":[`+both+`],"later":{"a":[1]}}`, true)
-	env("with a signature of a later algorithm with a member of its own", `{"body":"`+body+`","sigs":[`+both+`,{"alg":9,"key":"CQ==","sig":"Bw==","later":true}]}`, true)
+	env("with a member of a later version", `{"body":"`+body+`","sigs":[`+both+`],"later":{"a":[1]}}`, false)
+	env("with a signature of a later algorithm with a member of its own", `{"body":"`+body+`","sigs":[`+both+`,{"alg":9,"key":"CQ==","sig":"Bw==","later":true}]}`, false)
 	env("with its body named in capitals", `{"Body":"`+body+`","sigs":[`+both+`]}`, false)
 	env("with its body twice", `{"body":"`+body+`","body":"`+body+`","sigs":[`+both+`]}`, false)
 	env("with its body broken across lines", `{"body":"`+body[:4]+`\n`+body[4:]+`","sigs":[`+both+`]}`, false)
@@ -437,9 +439,32 @@ func makeVectors(t *testing.T) vectors {
 	env("with a signature whose alg is named in capitals", `{"body":"`+body+`","sigs":[`+both+`,{"Alg":9,"key":"CQ==","sig":"Bw=="}]}`, false)
 	env("with a signature whose key is null", `{"body":"`+body+`","sigs":[`+both+`,{"alg":9,"key":null,"sig":"Bw=="}]}`, false)
 	env("with a signature whose alg is given twice", `{"body":"`+body+`","sigs":[{"alg":1,"alg":1,"key":"`+base64.StdEncoding.EncodeToString(rel.Sigs[0].Key)+`","sig":"`+base64.StdEncoding.EncodeToString(rel.Sigs[0].Sig)+`"},`+sig(1)+`]}`, false)
-	env("with a member of a later version whose name escapes a whole surrogate pair", `{"body":"`+body+`","sigs":[`+both+`],"later\ud83d\ude00":1}`, true)
+	env("with a member of a later version whose name escapes a whole surrogate pair", `{"body":"`+body+`","sigs":[`+both+`],"later\ud83d\ude00":1}`, false)
 	env("with a member whose name escapes half a surrogate pair", `{"body":"`+body+`","sigs":[`+both+`],"bod\ud800":1}`, false)
 	env("with a signature with a member whose name escapes half a surrogate pair", `{"body":"`+body+`","sigs":[`+both+`,{"alg":9,"key":"CQ==","sig":"Bw==","\udc00":1}]}`, false)
+	env("with a member of a later version given twice", `{"body":"`+body+`","sigs":[`+both+`],"later":1,"later":1}`, false)
+	env("with a signature with a member of a later version given twice", `{"body":"`+body+`","sigs":[`+sig(0)[:len(sig(0))-1]+`,"later":1,"later":1},`+sig(1)+`]}`, false)
+	env("with a signature of a later algorithm with a member of its own given twice", `{"body":"`+body+`","sigs":[`+both+`,{"alg":9,"key":"CQ==","sig":"Bw==","later":1,"later":1}]}`, false)
+	env("with a member of a later version nested 17 deep, the file's object counted", `{"body":"`+body+`","sigs":[`+both+`],"later":`+strings.Repeat("[", 16)+strings.Repeat("]", 16)+`}`, false)
+	env("with a member of a later version nested 18 deep, the file's object counted", `{"body":"`+body+`","sigs":[`+both+`],"later":`+strings.Repeat("[", 17)+strings.Repeat("]", 17)+`}`, false)
+	env("with a member of a later version nested 10001 deep", `{"body":"`+body+`","sigs":[`+both+`],"later":`+strings.Repeat("[", 10000)+strings.Repeat("]", 10000)+`}`, false)
+	env("with a member of a later version whose name is not UTF-8", `{"body":"`+body+`","sigs":[`+both+`],"lat`+"\xff"+`er":1}`, false)
+	env("with a member of a later version whose value is not UTF-8", `{"body":"`+body+`","sigs":[`+both+`],"later":"`+"\xff"+`"}`, false)
+	env("with a member of a later version named in capitals", `{"body":"`+body+`","sigs":[`+both+`],"Later":1}`, false)
+	env("with a member of a later version that is null", `{"body":"`+body+`","sigs":[`+both+`],"later":null}`, false)
+	env("with a member of a later version that is a fraction", `{"body":"`+body+`","sigs":[`+both+`],"later":1.5}`, false)
+	env("with its body null", `{"body":null,"sigs":[`+both+`]}`, false)
+	env("with spaces between its members", `{ "body" : "`+body+`" , "sigs" : [ `+sig(0)+` , `+sig(1)+` ] }`, false)
+	env("with the members of a signature in another order", `{"sigs":[{"sig":"`+base64.StdEncoding.EncodeToString(rel.Sigs[0].Sig)+`","key":"`+base64.StdEncoding.EncodeToString(rel.Sigs[0].Key)+`","alg":1},`+sig(1)+`],"body":"`+body+`"}`, false)
+	env("with a signature of a later algorithm", `{"body":"`+body+`","sigs":[`+both+`,{"alg":9,"key":"CQ==","sig":"Bw=="}]}`, true)
+	env("with sigs before body", `{"sigs":[`+both+`],"body":"`+body+`"}`, false)
+	env("with the body's first character written as an escape", `{"body":"\u00`+fmt.Sprintf("%02x", body[0])+body[1:]+`","sigs":[`+both+`]}`, false)
+	env("with a line break after it", `{"body":"`+body+`","sigs":[`+both+`]}`+"\n", true)
+	env("with spaces and a line break before it", " \n"+`{"body":"`+body+`","sigs":[`+both+`]}`, true)
+	env("with a byte order mark", "\xef\xbb\xbf"+`{"body":"`+body+`","sigs":[`+both+`]}`, false)
+	env("with a second object after it", `{"body":"`+body+`","sigs":[`+both+`]}{}`, false)
+	env("inside a list", `[{"body":"`+body+`","sigs":[`+both+`]}]`, false)
+	env("with a comma before its closing brace", `{"body":"`+body+`","sigs":[`+both+`],}`, false)
 	env("with a signature that is not an object", `{"body":"`+body+`","sigs":[`+both+`,[9]]}`, false)
 
 	revoked := []string{"0", "1f", "9a", "c35a2e1e3b46b5a1", "15b3d8b2f3a0e3e3cc1d2a4e1f0b7c9d"}
@@ -504,7 +529,7 @@ func TestReleaseVectors(t *testing.T) {
 		t.Fatal(err)
 	}
 	var v vectors
-	if err := json.Unmarshal(data, &v); err != nil {
+	if err := json.Unmarshal(compacted(t, data), &v); err != nil {
 		t.Fatal(err)
 	}
 	if len(v.Vectors) != 53 || len(v.Status) != 18 {
@@ -515,15 +540,15 @@ func TestReleaseVectors(t *testing.T) {
 		t.Fatal(err)
 	}
 	var env envelopesFile
-	if err := json.Unmarshal(envData, &env); err != nil {
+	if err := json.Unmarshal(compacted(t, envData), &env); err != nil {
 		t.Fatal(err)
 	}
-	if len(env.Envelopes) != 21 {
+	if len(env.Envelopes) != 44 {
 		t.Fatalf("%d envelopes", len(env.Envelopes))
 	}
 	for _, c := range env.Envelopes {
 		var rel File
-		err := json.Unmarshal([]byte(c.Release), &rel)
+		err := json.Unmarshal(c.Release, &rel)
 		if err == nil {
 			_, _, err = Check(env.Keys, env.Channel, rel, env.Roots, env.Name, time.UnixMilli(env.NowMS), Seen{})
 		}
@@ -958,7 +983,7 @@ func TestEntriesVectors(t *testing.T) {
 		t.Fatal(err)
 	}
 	var v entriesVectors
-	if err := json.Unmarshal(data, &v); err != nil {
+	if err := json.Unmarshal(compacted(t, data), &v); err != nil {
 		t.Fatal(err)
 	}
 	if len(v.Vectors) != 14 {
@@ -1062,4 +1087,15 @@ func TestLowS(t *testing.T) {
 			t.Fatal("the low S refused or the high S taken")
 		}
 	}
+}
+
+// compacted returns a vectors file without the whitespace it is indented
+// with: a release file is read in its canonical form, which an indented
+// file inside the vectors is not.
+func compacted(t *testing.T, data []byte) []byte {
+	var b bytes.Buffer
+	if err := json.Compact(&b, data); err != nil {
+		t.Fatal(err)
+	}
+	return b.Bytes()
 }

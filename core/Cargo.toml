@@ -48,7 +48,7 @@ p256 = { version = "0.14", default-features = false, features = ["alloc", "arith
 p384 = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "ecdsa"], optional = true }
 rustls = { version = "0.23.46", default-features = false, optional = true }
 serde = { version = "1", default-features = false, features = ["alloc", "derive"] }
-serde_json = { version = "1", default-features = false, features = ["alloc"] }
+serde_json = { version = "1", default-features = false, features = ["alloc", "raw_value"] }
 sha2 = { version = "0.11", default-features = false }
 # slhdsa: SLH-DSA-SHA2-128s verification, the post-quantum half of the
 # release files' signatures and of the recovery key (one verifier).

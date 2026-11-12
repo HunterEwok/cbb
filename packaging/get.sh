@@ -332,6 +332,14 @@ roots_list() {
 	'
 }
 
+# one_b64 IN OUT decodes the base64 in IN into OUT and tells whether it
+# is in its one form: standard, padded, no stray bits, so that it encodes
+# back to itself.
+one_b64() {
+	openssl base64 -d -A <"$1" >"$2" 2>/dev/null || return 1
+	[ "$(openssl base64 -A <"$2")" = "$(cat "$1")" ]
+}
+
 # small FILE tells whether FILE is no larger than a release file may be,
 # 1 MiB.
 small() { [ "$(wc -c <"$1" | tr -d ' ')" -le 1048576 ]; }
@@ -366,16 +374,30 @@ low_s() {
 opened() {
 	f=$1 kind=$2 list=$3
 	shift 3
-	field body "$f" | openssl base64 -d -A >"$tmp/$kind.body" 2>/dev/null || return 1
-	# Each signature read whole, in the form the signer writes; one that
-	# does not read so refuses the file, as it does in every reader.
 	small "$f" || return 1
-	grep -oE '\{"alg":[0-9]+,"key":"[A-Za-z0-9+/=]*","sig":"[A-Za-z0-9+/=]*"\}' "$f" >"$tmp/$kind.sigs" || return 1
-	[ "$(wc -l <"$tmp/$kind.sigs")" -eq "$(grep -o '"alg":' "$f" | wc -l)" ] || return 1
-	# At most 8 signatures, each of an algorithm 1 to 2^31-1, and a body
-	# of 256 KiB at most, as every reader takes.
+	# The file whole, as the signer writes it and every reader takes it
+	# (docs/protocol.md, section 16, "Two signatures"): whitespace around
+	# it, then the envelope in its canonical form, with only body and sigs,
+	# and in each of 1 to 8 signatures only alg, key and sig; any other
+	# shape refuses the file.
+	sed -e 's/^[ 	\r]*//' -e 's/[ 	\r]*$//' "$f" | grep -v '^$' >"$tmp/$kind.line" || return 1
+	[ "$(wc -l <"$tmp/$kind.line")" -eq 1 ] || return 1
+	b64='[A-Za-z0-9+/]*={0,2}'
+	sig="\\{\"alg\":[1-9][0-9]*,\"key\":\"$b64\",\"sig\":\"$b64\"\\}"
+	grep -qE "^\\{\"body\":\"$b64\",\"sigs\":\\[$sig(,$sig)*\\]\\}\$" "$tmp/$kind.line" || return 1
+	grep -oE "$sig" "$tmp/$kind.line" >"$tmp/$kind.sigs" || return 1
 	[ "$(wc -l <"$tmp/$kind.sigs")" -le 8 ] || return 1
+	# Each algorithm 1 to 2^31-1, base64 in its one form, and a body of
+	# 256 KiB at most.
 	sed 's/^{"alg":\([0-9]*\),.*/\1/' "$tmp/$kind.sigs" | algs_valid || return 1
+	field body "$tmp/$kind.line" >"$tmp/$kind.b64"
+	one_b64 "$tmp/$kind.b64" "$tmp/$kind.body" || return 1
+	while read -r line; do
+		for m in key sig; do
+			printf '%s\n' "$line" | sed -n "s/.*\"$m\":\"\([^\"]*\)\".*/\1/p" >"$tmp/$kind.b64"
+			one_b64 "$tmp/$kind.b64" "$tmp/$kind.bin" || return 1
+		done
+	done <"$tmp/$kind.sigs"
 	[ "$(wc -c <"$tmp/$kind.body" | tr -d ' ')" -le 262144 ] || return 1
 	# A key is its halves under one use and name, one of each algorithm:
 	# two of one algorithm there would make one key of two.

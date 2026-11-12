@@ -54,11 +54,48 @@ const MAX_KEYS: usize = 64;
 /// for each algorithm of REQUIRED by the halves of one key, and any of
 /// algorithms a later version adds (docs/protocol.md, section 16, "Two
 /// signatures").
-#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Clone, Serialize, PartialEq, Debug)]
 pub struct File {
     #[serde(with = "b64")]
     pub body: Vec<u8>,
     pub sigs: Vec<Sig>,
+}
+
+impl File {
+    /// Reads a file from its bytes as they came, as every reader reads
+    /// them (docs/protocol.md, section 16, "Two signatures"): no larger
+    /// than MAX_FILE, whitespace around it passed over, the envelope in
+    /// the canonical form of signed bodies as the signer writes it, with
+    /// the members body and sigs and, in each signature, alg, key and sig.
+    pub fn parse(b: &[u8]) -> Result<File> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Raw {
+            #[serde(with = "b64")]
+            body: Vec<u8>,
+            sigs: Vec<Sig>,
+        }
+        if b.len() > MAX_FILE {
+            return Err(Error::msg("the file is too large"));
+        }
+        let space = |c: &u8| matches!(c, b' ' | b'\t' | b'\n' | b'\r');
+        let start = b.iter().position(|c| !space(c)).unwrap_or(b.len());
+        let end = b.iter().rposition(|c| !space(c)).map_or(start, |i| i + 1);
+        let b = &b[start..end];
+        crate::strict::check_canonical(b, &["body", "sigs"]).map_err(|e| Error::msg(format!("the file: {e}")))?;
+        let r: Raw = serde_json::from_slice(b).map_err(|e| Error::msg(format!("the file: {e}")))?;
+        Ok(File { body: r.body, sigs: r.sigs })
+    }
+}
+
+/// A file inside other JSON is read from its own bytes, as File::parse
+/// reads them.
+impl<'de> Deserialize<'de> for File {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> core::result::Result<Self, D::Error> {
+        use serde::de::Error as _;
+        let raw = alloc::boxed::Box::<serde_json::value::RawValue>::deserialize(d)?;
+        File::parse(raw.get().as_bytes()).map_err(|e| D::Error::custom(e.for_log()))
+    }
 }
 
 /// One signature of a file. Every reader reads it alike (docs/protocol.md,
@@ -80,6 +117,7 @@ impl<'de> Deserialize<'de> for Sig {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> core::result::Result<Self, D::Error> {
         use serde::de::Error as _;
         #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
         struct Raw {
             alg: i64,
             key: String,
@@ -1063,3 +1101,4 @@ mod tests {
         assert!(parse_roots(&ROOTS_PEM.replace("Name: root-2", "Name: root-1")).is_err());
     }
 }
+

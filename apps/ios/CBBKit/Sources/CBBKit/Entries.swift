@@ -26,7 +26,8 @@ public final class EntriesFile: @unchecked Sendable {
     /// Reads the file again: the phone's member in the core keeps the
     /// entry points the computers send there and passes them on.
     public func reload() {
-        guard let data = try? Data(contentsOf: url), let set = try? JSONDecoder().decode(Releases.EntriesSet.self, from: data) else { return }
+        guard let data = try? Data(contentsOf: url) else { return }
+        let set = Releases.EntriesSet(data)
         do {
             let (e, seen) = try Releases.checkEntries(set, roots: roots, nowMS: nowMS, seen: Releases.Seen())
             lock.withLock { held = (set, e, seen) }
@@ -66,7 +67,7 @@ public final class EntriesFile: @unchecked Sendable {
         do {
             let (e, seen) = try Releases.checkEntries(set, roots: roots, nowMS: nowMS, seen: live?.seen ?? Releases.Seen())
             if let h = live, seen.keys_seq == h.seen.keys_seq, e.seq <= h.entries.seq { return }
-            try JSONEncoder().encode(set).write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            try set.data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
             held = (set, e, seen)
         } catch {
             log("dropped the entry points a peer sent: \(error)")

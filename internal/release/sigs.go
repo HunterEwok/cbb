@@ -20,8 +20,8 @@ import (
 	"math/big"
 	"reflect"
 	"sort"
+	"slices"
 	"strconv"
-	"unicode/utf8"
 	"unsafe"
 
 	"github.com/HunterEwok/cbb/internal/strict"
@@ -80,19 +80,25 @@ type Sig struct {
 }
 
 // The envelope is read alike by every reader (docs/protocol.md, section
-// 16, "Two signatures"): its members by their exact names, none twice,
-// others passed over; the body, and each signature's key and sig, in
-// base64's one form; each signature's alg an integer from 1 to MaxAlg.
-// A signature of an algorithm this version does not know is then passed
-// over; one of another shape refuses the file.
+// 16, "Two signatures"): in the canonical form of signed bodies, as the
+// signer writes it, with the members body and sigs and, in each
+// signature, alg, key and sig, no others; base64 in its one form; alg an
+// integer from 1 to MaxAlg. A signature of an algorithm this version does
+// not know is then passed over; any other shape refuses the file.
 
 func (f *File) UnmarshalJSON(b []byte) error {
+	if len(b) > MaxFile {
+		return errors.New("release: the file is too large")
+	}
+	if err := strict.CheckCanonical(b, "body", "sigs"); err != nil {
+		return fmt.Errorf("release: the file: %w", err)
+	}
 	m, err := members(b, "body", "sigs")
 	if err != nil {
 		return fmt.Errorf("release: the file: %w", err)
 	}
 	var out File
-	if out.Body, err = base64Member(m["body"], true); err != nil {
+	if out.Body, err = base64Member(m["body"]); err != nil {
 		return fmt.Errorf("release: the body: %w", err)
 	}
 	var raws []json.RawMessage
@@ -119,31 +125,27 @@ func (s *Sig) UnmarshalJSON(b []byte) error {
 		return errors.New("release: a signature's alg is not an algorithm number")
 	}
 	out := Sig{Alg: int(alg)}
-	if out.Key, err = base64Member(m["key"], false); err != nil {
+	if out.Key, err = base64Member(m["key"]); err != nil {
 		return fmt.Errorf("release: a signature's key: %w", err)
 	}
-	if out.Sig, err = base64Member(m["sig"], false); err != nil {
+	if out.Sig, err = base64Member(m["sig"]); err != nil {
 		return fmt.Errorf("release: a signature: %w", err)
 	}
 	*s = out
 	return nil
 }
 
-// members reads a JSON object's members by their exact names, refusing
-// one named twice; each of required must be there.
-func members(b []byte, required ...string) (map[string]json.RawMessage, error) {
+// members reads a JSON object's members, which are exactly those named
+// in names, each once.
+func members(b []byte, names ...string) (map[string]json.RawMessage, error) {
 	d := json.NewDecoder(bytes.NewReader(b))
 	if t, err := d.Token(); err != nil || t != json.Delim('{') {
 		return nil, errors.New("not a JSON object")
 	}
 	m := map[string]json.RawMessage{}
 	for d.More() {
-		at := d.InputOffset()
 		t, err := d.Token()
 		if err != nil {
-			return nil, err
-		}
-		if err := exactName(b[at:d.InputOffset()]); err != nil {
 			return nil, err
 		}
 		name, _ := t.(string)
@@ -154,12 +156,15 @@ func members(b []byte, required ...string) (map[string]json.RawMessage, error) {
 		if _, ok := m[name]; ok {
 			return nil, fmt.Errorf("%q twice", name)
 		}
+		if !slices.Contains(names, name) {
+			return nil, fmt.Errorf("a member %q", name)
+		}
 		m[name] = v
 	}
 	if _, err := d.Token(); err != nil {
 		return nil, err
 	}
-	for _, r := range required {
+	for _, r := range names {
 		if _, ok := m[r]; !ok {
 			return nil, fmt.Errorf("no %s", r)
 		}
@@ -167,73 +172,9 @@ func members(b []byte, required ...string) (map[string]json.RawMessage, error) {
 	return m, nil
 }
 
-// exactName refuses a member name that does not stand for one string of
-// Unicode as written: bytes that are not UTF-8, or a \u escape of half a
-// surrogate pair, which encoding/json reads as U+FFFD and the core
-// refuses. raw is the name as the decoder passed it, with what comes
-// before it.
-func exactName(raw []byte) error {
-	i := bytes.IndexByte(raw, '"')
-	if i < 0 {
-		return errors.New("a member without a name")
-	}
-	raw = raw[i:]
-	if !utf8.Valid(raw) {
-		return errors.New("a member name that is not UTF-8")
-	}
-	high := false
-	for i := 0; i < len(raw); i++ {
-		if raw[i] != '\\' {
-			if high {
-				return errors.New("a member name with half a surrogate pair")
-			}
-			continue
-		}
-		i++
-		if i >= len(raw) || raw[i] != 'u' {
-			if high {
-				return errors.New("a member name with half a surrogate pair")
-			}
-			continue
-		}
-		if i+4 >= len(raw) {
-			return errors.New("a member name cut short")
-		}
-		v, err := strconv.ParseUint(string(raw[i+1:i+5]), 16, 16)
-		if err != nil {
-			return errors.New("a member name with a bad escape")
-		}
-		i += 4
-		switch {
-		case v >= 0xD800 && v < 0xDC00:
-			if high {
-				return errors.New("a member name with half a surrogate pair")
-			}
-			high = true
-		case v >= 0xDC00 && v < 0xE000:
-			if !high {
-				return errors.New("a member name with half a surrogate pair")
-			}
-			high = false
-		default:
-			if high {
-				return errors.New("a member name with half a surrogate pair")
-			}
-		}
-	}
-	if high {
-		return errors.New("a member name with half a surrogate pair")
-	}
-	return nil
-}
-
-// base64Member reads a member that holds base64 in its one form; null,
-// where allowed, is empty.
-func base64Member(raw json.RawMessage, nullable bool) ([]byte, error) {
-	if raw == nil || string(raw) == "null" {
-		if nullable && raw != nil {
-			return nil, nil
-		}
+// base64Member reads a member that holds base64 in its one form.
+func base64Member(raw json.RawMessage) ([]byte, error) {
+	if raw == nil {
 		return nil, errors.New("missing")
 	}
 	var str string

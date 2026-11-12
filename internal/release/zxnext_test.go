@@ -97,7 +97,7 @@ func TestZXNextVectors(t *testing.T) {
 		t.Fatal(err)
 	}
 	var v zxnextVectors
-	if err := json.Unmarshal(data, &v); err != nil {
+	if err := json.Unmarshal(compacted(t, data), &v); err != nil {
 		t.Fatal(err)
 	}
 	if len(v.Vectors) != 18 {

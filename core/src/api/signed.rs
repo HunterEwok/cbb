@@ -107,19 +107,27 @@ fn seal_public(a: PublicArgs) -> core::result::Result<Vec<u8>, Refusal> {
     Ok(json(Value::Object(m)))
 }
 
-/// The release files of one check, as the device fetched them.
+/// The release files of one check, each as the device fetched it: its
+/// bytes in base64, read here as every reader reads them (File::parse),
+/// so that a caller decodes nothing of a release file.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ReleaseArgs {
-    keys: crate::release::File,
-    #[serde(default)]
-    channel: Option<crate::release::File>,
-    #[serde(default)]
-    release: Option<crate::release::File>,
-    #[serde(default)]
-    status: Option<crate::release::File>,
-    #[serde(default)]
-    entries: Option<crate::release::File>,
+    #[serde(default, with = "b64::opt")]
+    keys: Option<Vec<u8>>,
+    #[serde(default, with = "b64::opt")]
+    channel: Option<Vec<u8>>,
+    #[serde(default, with = "b64::opt")]
+    release: Option<Vec<u8>>,
+    #[serde(default, with = "b64::opt")]
+    status: Option<Vec<u8>>,
+    #[serde(default, with = "b64::opt")]
+    entries: Option<Vec<u8>>,
+    /// For `release_check_entries` in place of keys and entries: the
+    /// signed entry points as members pass them, `{"keys": keys.json,
+    /// "entries": entries.json}`, as received.
+    #[serde(default, with = "b64::opt")]
+    set: Option<Vec<u8>>,
     /// The channel's name, for `release_check`.
     #[serde(default)]
     name: String,
@@ -136,6 +144,34 @@ impl ReleaseArgs {
     fn roots(&self) -> Vec<crate::release::Key> {
         self.roots.clone().unwrap_or_else(crate::release::pinned_roots)
     }
+}
+
+/// Reads the file `what` of a check from its bytes; a file that does not
+/// read is refused as a file that does not verify.
+fn file(what: &str, b: &Option<Vec<u8>>) -> core::result::Result<crate::release::File, Refusal> {
+    let b = b.as_ref().ok_or_else(|| missing(what))?;
+    crate::release::File::parse(b).map_err(|e| refuse(Code::Signed, Error::msg(alloc::format!("{what}: {}", e.message()))))
+}
+
+/// Reads the signed entry points as members pass them: in the strict form
+/// of signed bodies, each file read from its own bytes.
+fn entries_set(b: &[u8]) -> core::result::Result<(crate::release::File, crate::release::File), Refusal> {
+    #[derive(Deserialize)]
+    struct Set {
+        keys: alloc::boxed::Box<serde_json::value::RawValue>,
+        entries: alloc::boxed::Box<serde_json::value::RawValue>,
+    }
+    let bad = |e: Error| refuse(Code::Signed, e);
+    if b.len() > 2 * crate::release::MAX_FILE + 64 {
+        return Err(bad(Error::msg("the entry points are too large")));
+    }
+    crate::strict::check(b, &["keys", "entries"]).map_err(bad)?;
+    let s: Set = serde_json::from_slice(b).map_err(|e| bad(Error::with("the entry points do not read", e)))?;
+    let read = |what: &str, r: &serde_json::value::RawValue| {
+        crate::release::File::parse(r.get().as_bytes())
+            .map_err(|e| bad(Error::msg(alloc::format!("{what}: {}", e.message()))))
+    };
+    Ok((read("keys", &s.keys)?, read("entries", &s.entries)?))
 }
 
 fn missing(what: &str) -> Refusal {
@@ -160,23 +196,48 @@ fn release_check(op: &str, a: ReleaseArgs) -> core::result::Result<Vec<u8>, Refu
     let signed = |e: Error| refuse(Code::Signed, e);
     match op {
         "release_check_status" => {
-            let status = a.status.as_ref().ok_or_else(|| missing("status"))?;
-            let (st, seen) = release::check_status(&a.keys, status, &roots, a.now_ms, &a.seen).map_err(signed)?;
+            let (keys, status) = (file("keys", &a.keys)?, file("status", &a.status)?);
+            let (st, seen) = release::check_status(&keys, &status, &roots, a.now_ms, &a.seen).map_err(signed)?;
             answer(st, seen)
         }
         "release_check_entries" => {
-            let entries = a.entries.as_ref().ok_or_else(|| missing("entries"))?;
-            let (e, seen) = release::check_entries(&a.keys, entries, &roots, a.now_ms, &a.seen).map_err(signed)?;
+            let (keys, entries) = match &a.set {
+                Some(set) if a.keys.is_none() && a.entries.is_none() => entries_set(set)?,
+                Some(_) => return Err(refuse(Code::Request, Error::msg("The request has a set and its files."))),
+                None => (file("keys", &a.keys)?, file("entries", &a.entries)?),
+            };
+            let (e, seen) = release::check_entries(&keys, &entries, &roots, a.now_ms, &a.seen).map_err(signed)?;
             answer(e, seen)
         }
         _ => {
-            let channel = a.channel.as_ref().ok_or_else(|| missing("channel"))?;
-            let rel = a.release.as_ref().ok_or_else(|| missing("release"))?;
+            let (keys, channel, rel) = (file("keys", &a.keys)?, file("channel", &a.channel)?, file("release", &a.release)?);
             let (r, seen) =
-                release::check(&a.keys, channel, rel, &roots, &a.name, a.now_ms, &a.seen).map_err(signed)?;
+                release::check(&keys, &channel, &rel, &roots, &a.name, a.now_ms, &a.seen).map_err(signed)?;
             answer(r, seen)
         }
     }
+}
+
+/// The arguments of `release_named`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NamedArgs {
+    #[serde(with = "b64")]
+    channel: Vec<u8>,
+}
+
+/// `release_named`: the release a channel file names, read before it is
+/// checked, so that a device knows which release.json to fetch; the
+/// channel file is read as every reader reads it, its signatures are not
+/// checked here (`release_check` then checks both files). `{"release":
+/// "X.Y.Z"}`.
+fn release_named(a: NamedArgs) -> core::result::Result<Vec<u8>, Refusal> {
+    let signed = |e: Error| refuse(Code::Signed, e);
+    let f = crate::release::File::parse(&a.channel).map_err(signed)?;
+    let c = crate::release::decode_channel(&f.body).map_err(signed)?;
+    let mut m = Map::new();
+    m.insert("release".into(), Value::String(c.release));
+    Ok(json(Value::Object(m)))
 }
 
 /// Runs a call over a signed body; None for an op that is not one.
@@ -185,6 +246,7 @@ pub(super) fn dispatch(op: &str, args: &Value) -> Option<core::result::Result<Ve
         "parse_body" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(parse_body),
         "seal_command" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(seal_command),
         "seal_public" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(seal_public),
+        "release_named" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(release_named),
         "release_check" | "release_check_status" | "release_check_entries" => {
             serde_json::from_value(args.clone()).map_err(bad_args).and_then(|a| release_check(op, a))
         }
@@ -374,7 +436,9 @@ mod tests {
         let vs = v["vectors"].as_array().unwrap();
         assert_eq!(vs.len(), 53);
         // Each case names its files by their index in files.
-        let file = |c: &Value, k: &str| v["files"][c[k].as_u64().unwrap() as usize].clone();
+        // Each file goes in as bytes, as a caller fetched it.
+        let raw = |f: &Value| Value::String(STANDARD.encode(f.to_string()));
+        let file = |c: &Value, k: &str| raw(&v["files"][c[k].as_u64().unwrap() as usize]);
         for c in vs {
             let mut args = serde_json::json!({"keys": file(c, "keys"), "channel": file(c, "channel"), "release": file(c, "release"),
                 "name": v["channel"], "now_ms": v["now_ms"], "seen": c["seen"]});
@@ -401,16 +465,48 @@ mod tests {
         }
         let e = vectors("go-entries.json");
         for c in e["vectors"].as_array().unwrap() {
-            let args = serde_json::json!({"keys": c["keys"], "entries": c["entries"], "roots": e["roots"],
-                "now_ms": e["now_ms"], "seen": c["seen"]});
-            let got = run("release_check_entries", args);
-            if c["ok"] == true {
-                assert_eq!(got["ok"]["value"]["seq"], c["seq"], "{}: {got}", c["name"]);
-                assert_eq!(got["ok"]["seen"]["entries_seq"], c["seq"], "{}", c["name"]);
-            } else {
+            // The two files apart, and as the set members pass.
+            let set = raw(&serde_json::json!({"keys": c["keys"], "entries": c["entries"]}));
+            for args in [
+                serde_json::json!({"keys": raw(&c["keys"]), "entries": raw(&c["entries"]), "roots": e["roots"],
+                    "now_ms": e["now_ms"], "seen": c["seen"]}),
+                serde_json::json!({"set": set, "roots": e["roots"], "now_ms": e["now_ms"], "seen": c["seen"]}),
+            ] {
+                let got = run("release_check_entries", args);
+                if c["ok"] == true {
+                    assert_eq!(got["ok"]["value"]["seq"], c["seq"], "{}: {got}", c["name"]);
+                    assert_eq!(got["ok"]["seen"]["entries_seq"], c["seq"], "{}", c["name"]);
+                } else {
+                    assert_eq!(got["error"]["name"], "signed", "{}: {got}", c["name"]);
+                }
+            }
+        }
+        // A set with a file twice, or with its files beside it, is refused.
+        let c = &e["vectors"][0];
+        let twice = format!(r#"{{"keys":{},"entries":{},"entries":{}}}"#, c["keys"], c["entries"], c["entries"]);
+        let got = run("release_check_entries", serde_json::json!({"set": STANDARD.encode(twice), "roots": e["roots"], "now_ms": e["now_ms"]}));
+        assert_eq!(got["error"]["name"], "signed", "{got}");
+        let set = raw(&serde_json::json!({"keys": c["keys"], "entries": c["entries"]}));
+        let got = run("release_check_entries", serde_json::json!({"set": set, "keys": raw(&c["keys"]), "roots": e["roots"], "now_ms": e["now_ms"]}));
+        assert_eq!(got["error"]["name"], "request", "{got}");
+        // Each envelope as it comes, through the entry point: the same
+        // answer as the File reader's.
+        let ev = vectors("go-release-envelopes.json");
+        for c in ev["envelopes"].as_array().unwrap() {
+            let args = serde_json::json!({"keys": raw(&ev["keys"]), "channel": raw(&ev["channel_file"]), "release": c["release"],
+                "name": ev["channel"], "roots": ev["roots"], "now_ms": ev["now_ms"]});
+            let got = run("release_check", args);
+            assert_eq!(got.get("ok").is_some(), c["ok"] == true, "{}: {got}", c["name"]);
+            if c["ok"] != true {
                 assert_eq!(got["error"]["name"], "signed", "{}: {got}", c["name"]);
             }
         }
+        // The release a channel file names, before it is checked.
+        let c = &vs[0];
+        let got = run("release_named", serde_json::json!({"channel": file(c, "channel")}));
+        assert_eq!(got["ok"]["release"], c["version"], "{got}");
+        let got = run("release_named", serde_json::json!({"channel": STANDARD.encode(br#"{"body":"e30=","sigs":[],"sigs":[]}"#)}));
+        assert_eq!(got["error"]["name"], "signed", "{got}");
         // A call without its file is a bad request, not a refused file.
         let c = &vs[0];
         let got = run("release_check", serde_json::json!({"keys": file(c, "keys"), "now_ms": 1}));

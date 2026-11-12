@@ -8,8 +8,8 @@ import XCTest
 final class EntriesTests: XCTestCase {
     struct C: Decodable {
         var name: String
-        var keys: Releases.File
-        var entries: Releases.File
+        var keys: RawFile
+        var entries: RawFile
     }
 
     struct V: Decodable {
@@ -26,7 +26,7 @@ final class EntriesTests: XCTestCase {
 
     private func set(_ v: V, _ name: String) -> Releases.EntriesSet {
         let c = v.vectors.first { $0.name == name }!
-        return .init(keys: c.keys, entries: c.entries)
+        return entriesSet(c.keys, c.entries)
     }
 
     final class Clock: @unchecked Sendable {
@@ -86,12 +86,15 @@ final class EntriesTests: XCTestCase {
         XCTAssertNil(again.current)
     }
 
-    /// The entries message and the hello's seqs go over the wire and come
-    /// back the same.
+    /// The hello's seqs go over the wire and come back the same; the
+    /// entries message is the core's, which reads the files, and the kit
+    /// passes it over.
     func testWire() throws {
         let s = set(try vectors(), "valid")
-        let m = try Member.encode(.entries(s))
-        XCTAssertEqual(try Member.decode(body: m.dropFirst(4)), .entries(s))
+        var body = Data(#"{"t":"entries","entries":"#.utf8)
+        body.append(s.data)
+        body.append(Data("}".utf8))
+        XCTAssertEqual(try Member.decode(body: body), .unknown("entries"))
         let hello = Member.Hello(wallMS: 1, entriesSeq: 5, entriesKeysSeq: 3)
         let h = try Member.encode(.hello(.phone, hello))
         XCTAssertEqual(try Member.decode(body: h.dropFirst(4)), .hello(.phone, hello))

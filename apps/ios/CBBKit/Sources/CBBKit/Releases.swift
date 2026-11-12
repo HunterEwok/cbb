@@ -26,23 +26,18 @@ public enum Releases {
         init(_ s: String) { description = s }
     }
 
-    /// One signature of a file: its algorithm (1 ES256, 4
-    /// SLH-DSA-SHA2-128s), SHA-256 of the signing half's
-    /// SubjectPublicKeyInfo, and the signature.
-    public struct Sig: Codable, Equatable, Sendable {
-        public var alg: UInt64
-        public var key: Data
-        public var sig: Data
-    }
+    /// A release file as it was fetched: the kit reads nothing of it, the
+    /// core reads its bytes as every reader does (docs/core-api.md,
+    /// "Release files").
+    public struct File: Encodable, Equatable, Sendable {
+        public let data: Data
 
-    /// The envelope of every release file: the body and its signatures, one
-    /// for each algorithm a device requires (section 16, "Two signatures").
-    public struct File: Codable, Equatable, Sendable {
-        public var body: Data
-        public var sigs: [Sig]
+        public init(_ data: Data) { self.data = data }
 
-        /// SHA-256 over the body, which names a release.json.
-        public var hash: Data { Data(SHA256.hash(data: body)) }
+        public func encode(to encoder: Encoder) throws {
+            var c = encoder.singleValueContainer()
+            try c.encode(data.base64EncodedString())
+        }
     }
 
     /// A root key's half, for tests and drills that sign with roots of
@@ -173,22 +168,28 @@ public enum Releases {
         public func forwarder(_ name: String) -> EntryForwarder? { forwarders.first { $0.name == name } }
     }
 
-    /// The signed entry points as members pass them: entries.json and the
-    /// keys.json whose key signed it.
-    public struct EntriesSet: Codable, Equatable, Sendable {
-        public var keys: File
-        public var entries: File
+    /// The signed entry points as members pass them, `{"keys": keys.json,
+    /// "entries": entries.json}`, as they were received or kept: the core
+    /// reads them.
+    public struct EntriesSet: Encodable, Equatable, Sendable {
+        public let data: Data
 
-        public init(keys: File, entries: File) { (self.keys, self.entries) = (keys, entries) }
+        public init(_ data: Data) { self.data = data }
+
+        public func encode(to encoder: Encoder) throws {
+            var c = encoder.singleValueContainer()
+            try c.encode(data.base64EncodedString())
+        }
     }
 
     /// The arguments of the core's release calls.
     struct Args: Encodable {
-        var keys: File
+        var keys: File? = nil
         var channel: File? = nil
         var release: File? = nil
         var status: File? = nil
         var entries: File? = nil
+        var set: EntriesSet? = nil
         var name: String? = nil
         var roots: [Key]?
         var now_ms: Int64
@@ -217,8 +218,7 @@ public enum Releases {
     /// that neither is older than seen. Returns the list and the Seen to
     /// keep.
     public static func checkEntries(_ set: EntriesSet, roots: [Key]? = nil, nowMS: Int64, seen: Seen) throws -> (Entries, Seen) {
-        try ask("release_check_entries", Args(keys: set.keys, entries: set.entries, roots: roots, now_ms: nowMS, seen: seen),
-                as: Entries.self)
+        try ask("release_check_entries", Args(set: set, roots: roots, now_ms: nowMS, seen: seen), as: Entries.self)
     }
 
     /// Checks a channel file and the release.json it names: keys.json under

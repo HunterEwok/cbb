@@ -28,9 +28,7 @@ actor AttestStatus {
         self.roots = roots
         guard let k = try? Data(contentsOf: dir.appendingPathComponent(Self.keysName)),
               let s = try? Data(contentsOf: dir.appendingPathComponent(Self.statusName)),
-              let keys = try? JSONDecoder().decode(Releases.File.self, from: k),
-              let status = try? JSONDecoder().decode(Releases.File.self, from: s),
-              let taken = try? Releases.checkStatus(keys: keys, status: status, roots: roots,
+              let taken = try? Releases.checkStatus(keys: Releases.File(k), status: Releases.File(s), roots: roots,
                                                     nowMS: Int64(Date().timeIntervalSince1970 * 1000), seen: Releases.Seen())
         else { return }
         revoked = Set(taken.0.android_revoked)
@@ -44,9 +42,7 @@ actor AttestStatus {
         do {
             let k = try await get(Self.keysName)
             let s = try await get(Self.statusName)
-            let keys = try JSONDecoder().decode(Releases.File.self, from: k)
-            let status = try JSONDecoder().decode(Releases.File.self, from: s)
-            let (st, next) = try Releases.checkStatus(keys: keys, status: status, roots: roots,
+            let (st, next) = try Releases.checkStatus(keys: Releases.File(k), status: Releases.File(s), roots: roots,
                                                       nowMS: Int64(Date().timeIntervalSince1970 * 1000), seen: seen)
             if next == seen { return }
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
