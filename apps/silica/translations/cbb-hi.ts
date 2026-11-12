@@ -27,14 +27,6 @@
         <translation>डिवाइस से जुड़ रहा है…</translation>
     </message>
     <message>
-        <source>For a phone that joins as an admin</source>
-        <translation>उस फ़ोन के लिए जो एडमिन के रूप में जुड़ता है</translation>
-    </message>
-    <message>
-        <source>Make it an admin</source>
-        <translation>इसे एडमिन बनाएँ</translation>
-    </message>
-    <message>
         <source>On the device to add, choose to join a group, then point the camera at the code it shows.</source>
         <translation>जिस डिवाइस को जोड़ना है उस पर समूह से जुड़ना चुनें, फिर कैमरे को उसके दिखाए कोड की ओर करें।</translation>
     </message>
@@ -124,6 +116,17 @@
     <message>
         <source>devices unknown here</source>
         <translation>यहाँ अज्ञात डिवाइस</translation>
+    </message>
+</context>
+<context>
+    <name>App</name>
+    <message>
+        <source>The clipboard holds no text.</source>
+        <translation>क्लिपबोर्ड में कोई टेक्स्ट नहीं है।</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>भेजने को कुछ नहीं: कोई फ़ाइल पढ़ी नहीं जा सकी।</translation>
     </message>
 </context>
 <context>
@@ -260,6 +263,29 @@
     <message>
         <source>Version %1 fixes this: update CBB.</source>
         <translation>संस्करण %1 में यह ठीक है: CBB अपडेट करें।</translation>
+    </message>
+</context>
+<context>
+    <name>ChangePinDialog</name>
+    <message>
+        <source>Change</source>
+        <translation>बदलें</translation>
+    </message>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>एडमिन PIN बदलें</translation>
+    </message>
+    <message>
+        <source>Current PIN</source>
+        <translation>मौजूदा PIN</translation>
+    </message>
+    <message>
+        <source>New PIN</source>
+        <translation>नया PIN</translation>
+    </message>
+    <message>
+        <source>The new PIN again</source>
+        <translation>नया PIN फिर से</translation>
     </message>
 </context>
 <context>
@@ -404,6 +430,10 @@
         <translation>%1 म्यूट किया जा रहा है</translation>
     </message>
     <message>
+        <source>Paste on it…</source>
+        <translation>उस पर पेस्ट करें…</translation>
+    </message>
+    <message>
         <source>Remove</source>
         <translation>हटाएँ</translation>
     </message>
@@ -473,7 +503,58 @@
     </message>
 </context>
 <context>
+    <name>DeviceTile</name>
+    <message>
+        <source>Mute for 15 minutes</source>
+        <translation>15 मिनट के लिए म्यूट करें</translation>
+    </message>
+    <message>
+        <source>Mute for 8 hours</source>
+        <translation>8 घंटे के लिए म्यूट करें</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>एक घंटे के लिए म्यूट करें</translation>
+    </message>
+    <message>
+        <source>Mute until unmuted</source>
+        <translation>म्यूट हटाने तक म्यूट करें</translation>
+    </message>
+    <message>
+        <source>Off for 15 minutes</source>
+        <translation>15 मिनट के लिए बंद</translation>
+    </message>
+    <message>
+        <source>Off for 8 hours</source>
+        <translation>8 घंटे के लिए बंद</translation>
+    </message>
+    <message>
+        <source>Off for an hour</source>
+        <translation>एक घंटे के लिए बंद</translation>
+    </message>
+    <message>
+        <source>Off until I turn it on</source>
+        <translation>जब तक मैं चालू न करूँ, बंद</translation>
+    </message>
+    <message>
+        <source>Turn sync off</source>
+        <translation>सिंक बंद करें</translation>
+    </message>
+    <message>
+        <source>Turn sync on</source>
+        <translation>सिंक चालू करें</translation>
+    </message>
+    <message>
+        <source>Unmute</source>
+        <translation>म्यूट हटाएँ</translation>
+    </message>
+</context>
+<context>
     <name>Errors</name>
+    <message>
+        <source>Adding a device needs the admin PIN.</source>
+        <translation>डिवाइस जोड़ने के लिए एडमिन PIN चाहिए।</translation>
+    </message>
     <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
         <translation>कोड के पते पर किसी दूसरे डिवाइस ने जवाब दिया। कोड फिर से स्कैन करें।</translation>
@@ -503,12 +584,20 @@
         <translation>रिकवरी शीट का QR कोड स्कैन करें: नए फ़ोन पर टाइप की गई कुंजी काफ़ी नहीं है।</translation>
     </message>
     <message>
+        <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
+        <translation>सात गलत PIN ने एडमिन कुंजी को हमेशा के लिए लॉक कर दिया; फ़ोन समूह में सदस्य के रूप में रहता है।</translation>
+    </message>
+    <message>
         <source>Something in CBB broke. It starts again.</source>
         <translation>CBB में कुछ टूट गया। यह फिर से शुरू हो रहा है।</translation>
     </message>
     <message>
         <source>That phone asks to be an admin. Only the group's root makes admins; on that phone, join without being an admin.</source>
         <translation>वह फ़ोन एडमिन बनना चाहता है। एडमिन केवल समूह का रूट बनाता है; उस फ़ोन पर एडमिन बने बिना जुड़ें।</translation>
+    </message>
+    <message>
+        <source>The admin PIN is needed first.</source>
+        <translation>पहले एडमिन PIN चाहिए।</translation>
     </message>
     <message>
         <source>The claim to restore the group became void.</source>
@@ -521,6 +610,10 @@
     <message>
         <source>The code did not match. Scan the code the other device shows now.</source>
         <translation>कोड मेल नहीं खाया। दूसरा डिवाइस अभी जो कोड दिखा रहा है उसे स्कैन करें।</translation>
+    </message>
+    <message>
+        <source>The device did not paste.</source>
+        <translation>डिवाइस ने पेस्ट नहीं किया।</translation>
     </message>
     <message>
         <source>The device did not take the command.</source>
@@ -547,8 +640,8 @@
         <translation>निमंत्रण की अवधि समाप्त हो गई है। नया माँगें।</translation>
     </message>
     <message>
-        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
-        <translation>दूसरे डिवाइस ने इस फ़ोन को एडमिन के रूप में स्वीकार नहीं किया। केवल समूह का रूट एडमिन बनाता है: वहाँ इसे एडमिन के रूप में स्वीकार करें (cbb pair -qr -admin), या एडमिन बने बिना जुड़ें।</translation>
+        <source>The other device did not admit this phone as an admin. Only the device that made the group makes admins: scan the code there, or join without being an admin.</source>
+        <translation>दूसरे डिवाइस ने इस फ़ोन को एडमिन के रूप में स्वीकार नहीं किया। केवल समूह बनाने वाला डिवाइस एडमिन बनाता है: वहाँ कोड स्कैन करें, या एडमिन बने बिना जुड़ें।</translation>
     </message>
     <message>
         <source>The other device did not join.</source>
@@ -635,6 +728,10 @@
         <translation>फ़ोन के सुरक्षित तत्व ने हस्ताक्षर नहीं किए।</translation>
     </message>
     <message>
+        <source>The phone's secure element did not take the PIN.</source>
+        <translation>फ़ोन के सुरक्षित तत्व ने PIN स्वीकार नहीं किया।</translation>
+    </message>
+    <message>
         <source>The phone's secure element holds a broken key.</source>
         <translation>फ़ोन के सुरक्षित तत्व में एक खराब कुंजी है।</translation>
     </message>
@@ -673,6 +770,10 @@
     <message>
         <source>This phone keeps no keys for apps.</source>
         <translation>यह फ़ोन ऐप्स के लिए कुंजियाँ नहीं रखता।</translation>
+    </message>
+    <message>
+        <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
+        <translation>इस फ़ोन की एडमिन कुंजी एडमिन PIN से पुरानी है। समूह छोड़ें और फिर से जुड़ें।</translation>
     </message>
 </context>
 <context>
@@ -807,10 +908,6 @@
         <translation>समूह में शामिल हों</translation>
     </message>
     <message>
-        <source>Join as an admin</source>
-        <translation>एडमिन के रूप में जुड़ें</translation>
-    </message>
-    <message>
         <source>Join with an invitation</source>
         <translation>निमंत्रण से जुड़ें</translation>
     </message>
@@ -825,10 +922,6 @@
     <message>
         <source>On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open.</source>
         <translation>समूह के किसी फ़ोन पर + दबाएँ और यह कोड स्कैन करें। समूह के किसी कंप्यूटर पर + दबाएँ और अंक टाइप करें। यह स्क्रीन खुली रखें।</translation>
-    </message>
-    <message>
-        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
-        <translation>समूह के रूट कंप्यूटर पर इस कोड से इस फ़ोन को एडमिन के रूप में स्वीकार करें: CBB ऐप में डिवाइस जोड़ें और इसे एडमिन के रूप में स्वीकार करना चुनें, या cbb pair -qr -admin चलाएँ। यह स्क्रीन खुली रखें।</translation>
     </message>
     <message>
         <source>The phone is in the group now.</source>
@@ -1017,10 +1110,6 @@
         <translation>समूह में शामिल हों</translation>
     </message>
     <message>
-        <source>Join a group as an admin</source>
-        <translation>एडमिन के रूप में समूह से जुड़ें</translation>
-    </message>
-    <message>
         <source>Join with an invitation</source>
         <translation>निमंत्रण से जुड़ें</translation>
     </message>
@@ -1029,8 +1118,8 @@
         <translation>फ़ोन खो गया?</translation>
     </message>
     <message>
-        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
-        <translation>दूसरे फ़ोन को एडमिन बनाएँ: उस पर “एडमिन के रूप में समूह से जुड़ें” टैप करें, फिर यहाँ “कोड स्कैन करें” से उसका कोड स्कैन करें। बंद करने के लिए टैप करें।</translation>
+        <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
+        <translation>दूसरे फ़ोन को एडमिन बनाएँ: उसे समूह में जोड़ें, फिर उसे यहाँ खोलें और “एडमिन बनाएँ” टैप करें। बंद करने के लिए टैप करें।</translation>
     </message>
     <message>
         <source>New collection…</source>
@@ -1140,6 +1229,10 @@
         <translation>एक वीडियो</translation>
     </message>
     <message>
+        <source>An admin muted this phone, so its copies stay on it.</source>
+        <translation>एक एडमिन ने इस फ़ोन को म्यूट किया, इसलिए इसकी कॉपी इसी पर रहती हैं।</translation>
+    </message>
+    <message>
         <source>An image</source>
         <translation>एक छवि</translation>
     </message>
@@ -1200,6 +1293,100 @@
     <message>
         <source>a file</source>
         <translation>एक फ़ाइल</translation>
+    </message>
+</context>
+<context>
+    <name>PastePage</name>
+    <message>
+        <source>A paste suits most apps; typing suits those that take no paste, and only up to 4 KB. Enter runs a command in a terminal, so the computer takes it only when its user allowed that. A secret leaves no trace in the computer's log or clipboard.</source>
+        <translation>पेस्ट ज़्यादातर ऐप के लिए ठीक है; टाइप करना उन ऐप के लिए जो पेस्ट नहीं लेते, और केवल 4 KB तक। Enter टर्मिनल में कमांड चला देता है, इसलिए कंप्यूटर इसे तभी लेता है जब उसके उपयोगकर्ता ने अनुमति दी हो। गोपनीय टेक्स्ट कंप्यूटर के लॉग या क्लिपबोर्ड में कोई निशान नहीं छोड़ता।</translation>
+    </message>
+    <message>
+        <source>A picture or files go to the group as a copy, and the computer pastes them where its focus is, as Ctrl+V would: into a chat, a document or a folder. Enter, if on, sends them in a chat.</source>
+        <translation>तस्वीर या फ़ाइलें ग्रुप में एक कॉपी के रूप में जाती हैं, और कंप्यूटर उन्हें वहाँ पेस्ट करता है जहाँ उसका फ़ोकस है, जैसे Ctrl+V करता: किसी चैट, दस्तावेज़ या फ़ोल्डर में। Enter, अगर चालू है, तो उन्हें चैट में भेज देता है।</translation>
+    </message>
+    <message>
+        <source>A secret</source>
+        <translation>एक गोपनीय टेक्स्ट</translation>
+    </message>
+    <message>
+        <source>It goes where %1's keyboard focus is, once its user turned remote paste on there. Left empty, Paste sends what the clipboard holds.</source>
+        <translation>यह वहाँ जाता है जहाँ %1 का कीबोर्ड फ़ोकस है, जब उसके उपयोगकर्ता ने वहाँ रिमोट पेस्ट चालू किया हो। खाली छोड़ने पर, पेस्ट वह भेजता है जो क्लिपबोर्ड में है।</translation>
+    </message>
+    <message>
+        <source>Paste</source>
+        <translation>पेस्ट करें</translation>
+    </message>
+    <message>
+        <source>Paste a picture or files…</source>
+        <translation>तस्वीर या फ़ाइलें पेस्ट करें…</translation>
+    </message>
+    <message>
+        <source>Paste on %1</source>
+        <translation>%1 पर पेस्ट करें</translation>
+    </message>
+    <message>
+        <source>Press Enter after it</source>
+        <translation>उसके बाद Enter दबाएँ</translation>
+    </message>
+    <message>
+        <source>Text</source>
+        <translation>टेक्स्ट</translation>
+    </message>
+    <message>
+        <source>Type it key by key</source>
+        <translation>इसे एक-एक कुंजी से टाइप करें</translation>
+    </message>
+</context>
+<context>
+    <name>PinDialog</name>
+    <message>
+        <source>Admin PIN</source>
+        <translation>एडमिन PIN</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>CBB का अपना PIN, कम से कम चार अंक। फ़ोन का अनलॉक कोड इस्तेमाल न करें। फ़ोन का सुरक्षित तत्व हर एडमिन कार्य से पहले इसे जाँचता है; सात गलत PIN एडमिन कुंजी को हमेशा के लिए लॉक कर देते हैं, और कोई इसे अनलॉक नहीं कर सकता।</translation>
+    </message>
+    <message>
+        <source>Choose the admin PIN</source>
+        <translation>एडमिन PIN चुनें</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>पुष्टि करें</translation>
+    </message>
+    <message>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <source>Set</source>
+        <translation>सेट करें</translation>
+    </message>
+    <message>
+        <source>The PIN again</source>
+        <translation>PIN फिर से</translation>
+    </message>
+    <message>
+        <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
+        <translation>फ़ोन का सुरक्षित तत्व PIN जाँचता है; सात गलत PIN एडमिन कुंजी को हमेशा के लिए लॉक कर देते हैं।</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin later. Cancel to join as a member only.</source>
+        <translation>एडमिन PIN से समूह का रूट बाद में इस फ़ोन को एडमिन बना सकता है। केवल सदस्य के रूप में जुड़ने के लिए रद्द करें।</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin.</source>
+        <translation>एडमिन PIN से समूह का रूट इस फ़ोन को एडमिन बना सकता है।</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
+        <translation>गलत PIN। एक प्रयास बचा है: अगला गलत PIN एडमिन कुंजी को हमेशा के लिए लॉक कर देगा।</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>गलत PIN। बचे प्रयास: %1।</translation>
     </message>
 </context>
 <context>
@@ -1362,6 +1549,10 @@
         <translation>फ़ोन के अनुसार</translation>
     </message>
     <message>
+        <source>Change the admin PIN</source>
+        <translation>एडमिन PIN बदलें</translation>
+    </message>
+    <message>
         <source>Checking…</source>
         <translation>जाँच हो रही है…</translation>
     </message>
@@ -1380,6 +1571,10 @@
     <message>
         <source>Devices join or leave</source>
         <translation>डिवाइस जुड़ते या हटते हैं</translation>
+    </message>
+    <message>
+        <source>Get ready to be an admin</source>
+        <translation>एडमिन बनने की तैयारी करें</translation>
     </message>
     <message>
         <source>Group</source>
@@ -1482,6 +1677,10 @@
         <translation>सेटिंग्स</translation>
     </message>
     <message>
+        <source>Seven wrong PINs locked the admin key for good. The phone stays in the group as a member; to be an admin again, reinstall CBB and join as a new device.</source>
+        <translation>सात गलत PIN ने एडमिन कुंजी को हमेशा के लिए लॉक कर दिया। फ़ोन समूह में सदस्य के रूप में रहता है; फिर से एडमिन बनने के लिए CBB दोबारा इंस्टॉल करें और नए डिवाइस के रूप में जुड़ें।</translation>
+    </message>
+    <message>
         <source>Show error details</source>
         <translation>त्रुटि का विवरण दिखाएँ</translation>
     </message>
@@ -1494,8 +1693,24 @@
         <translation>सिस्टम</translation>
     </message>
     <message>
+        <source>The admin PIN is changed.</source>
+        <translation>एडमिन PIN बदल दिया गया।</translation>
+    </message>
+    <message>
+        <source>The admin PIN is not changed.</source>
+        <translation>एडमिन PIN नहीं बदला।</translation>
+    </message>
+    <message>
+        <source>The group's root can make this phone an admin: on the root, open this phone and tap Make an admin.</source>
+        <translation>समूह का रूट इस फ़ोन को एडमिन बना सकता है: रूट पर इस फ़ोन को खोलें और “एडमिन बनाएँ” टैप करें।</translation>
+    </message>
+    <message>
         <source>Version</source>
         <translation>संस्करण</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>गलत PIN। बचे प्रयास: %1।</translation>
     </message>
 </context>
 <context>

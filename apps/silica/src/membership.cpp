@@ -69,6 +69,7 @@ Membership Membership::fromJoined(const QJsonObject &j)
     m.records = b64(j.value(QStringLiteral("records")));
     m.root = j.value(QStringLiteral("root")).toBool();
     m.claim = b64(j.value(QStringLiteral("claim")));
+    m.adminOffer = b64(j.value(QStringLiteral("admin_offer")));
     return m;
 }
 
@@ -120,6 +121,8 @@ bool Membership::saveIdentity(Failure *failure) const
         o.insert(QStringLiteral("root"), true);
     if (!claim.isEmpty())
         o.insert(QStringLiteral("claim"), b64(claim));
+    if (!adminOffer.isEmpty() && !isAdmin())
+        o.insert(QStringLiteral("admin_offer"), b64(adminOffer));
     return writeFile(QStringLiteral("member.json"), QJsonDocument(o).toJson(), failure);
 }
 

@@ -90,6 +90,7 @@ struct RecoverySheetView: View {
     let done: () -> Void
     @Environment(\.palette) private var palette
     @Environment(\.scenePhase) private var phase
+    @Environment(\.themeStyle) private var style
     @State private var pdf: URL?
     @State private var askingDone = false
     @State private var failure: String?
@@ -102,7 +103,7 @@ struct RecoverySheetView: View {
                         .multilineTextAlignment(.center)
                         .foregroundStyle(palette.textDim)
                     RecoveryPage(sheet: sheet, made: made)
-                        .clipShape(RoundedRectangle(cornerRadius: Tokens.radiusCard, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: style.radiusCard, style: .continuous))
                         .privacySensitive()
                     Button { print() } label: { Label { Text("Print") } icon: { Image(systemName: "printer") } }
                         .buttonStyle(GlassButtonStyle())

@@ -6,7 +6,9 @@ packages they import), copied from the module
 v0.2.20-0.20260724121833-457d920a1a7d (module checksum
 `h1:X/D+VZITnGJCaajBdcBTYQxcR93EcVRDjXLd/ytH/b4=`). `go.mod` at the repository root
 replaces the module with this copy. Only the packages the tunnel builds on some system are
-here, without their tests; `go.mod` is the module's own.
+here, without their tests. `go.mod` keeps the module's path but requires only what these
+packages import, at the versions the root module selects: the module's own list named older
+versions that never reach the build, and scanners that read every `go.mod` took them for ours.
 
 Three changes. In `device/timers.go`, a timer's function clears `timer.duration` before it
 releases `modifyingLock`, not after. Upstream clears it outside the lock, so `Del`, which
@@ -27,4 +29,5 @@ had none got a line that points to LICENSE. cbb release archives carry this noti
 
 To update it, copy the same packages of a newer version over these, without `_test.go`
 files, apply the change again unless upstream fixed it (then remove the copy and the
-`replace`), record the version and checksum here, and run the tests.
+`replace`), record the version and checksum here, keep `go.mod` to the imports at the
+root's versions, and run the tests.

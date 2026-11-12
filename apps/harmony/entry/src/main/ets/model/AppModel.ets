@@ -393,7 +393,7 @@ export class AppModel {
     // The computer waits 5 s for its target, and 5 ms more for each typed byte.
     const typed = method === 'type' ? new util.TextEncoder().encodeInto(text).length * 5 : 0;
     const a = await this.runManage('paste', device, {
-      'method': method, 'kind': secret ? 'secret' : 'text', 'text': text, 'enter': enter, 'timeout_ms': 10000 + typed
+      'mode': method, 'kind': secret ? 'secret' : 'text', 'text': text, 'enter': enter, 'timeout_ms': 10000 + typed
     } as Record<string, Object>);
     return a !== undefined;
   }
@@ -413,7 +413,7 @@ export class AppModel {
     }
     // The computer waits up to 20 s for the copy, then 8 s for its desktop.
     const a = await this.runManage('paste', device, {
-      'method': 'paste', 'kind': 'media', 'text': made.ok, 'enter': enter, 'timeout_ms': 35000
+      'mode': 'paste', 'kind': 'media', 'text': made.ok, 'enter': enter, 'timeout_ms': 35000
     } as Record<string, Object>);
     return a !== undefined;
   }

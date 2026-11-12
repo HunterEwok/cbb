@@ -115,7 +115,7 @@ final class AppModelTests: XCTestCase {
         func prepare() throws { prepared += 1 }
         var joinCode = JoinCode(code: "135790", addrs: ["192.168.1.30:50000"], fingerprint: "fp")
         var shown: [JoinCode] = []
-        func join(asAdmin: Bool, show: @escaping @MainActor (JoinCode) -> Void) async throws {
+        func join(show: @escaping @MainActor (JoinCode) -> Void) async throws {
             show(joinCode)
             shown.append(joinCode)
             hasGroup = true
@@ -348,20 +348,25 @@ final class AppModelTests: XCTestCase {
     }
 
     func testThemes() {
-        XCTAssertEqual(Tokens.colors.count, 10)
-        XCTAssertEqual(Appearance.system.palette("terminal", for: .dark), Tokens.colors[0].dark)
-        XCTAssertEqual(Appearance.system.palette("terminal", for: .light), Tokens.colors[0].light)
-        XCTAssertEqual(Appearance.dark.palette("amber", for: .light), AccentChoice.pair("amber").dark)
-        XCTAssertEqual(Appearance.light.palette("unknown", for: .dark), Tokens.colors[0].light)
-        XCTAssertEqual(Set(Appearance.allCases.map { $0.palette("ocean", for: .dark).dark }), [true, false])
+        XCTAssertEqual(Tokens.themes.count, 11)
+        XCTAssertEqual(Tokens.themes[0].name, "board")
+        let first = Tokens.themes[0]
+        XCTAssertEqual(Appearance.system.palette(first.name, for: .dark), first.dark)
+        XCTAssertEqual(Appearance.system.palette(first.name, for: .light), first.light)
+        XCTAssertEqual(Appearance.dark.palette("swiss", for: .light), ThemeChoice.theme("swiss").dark)
+        XCTAssertEqual(Appearance.light.palette("unknown", for: .dark), first.light)
+        XCTAssertEqual(Set(Appearance.allCases.map { $0.palette("precise", for: .dark).dark }), [true, false])
+        XCTAssertTrue(ThemeChoice.theme("glass").style.material.isGlass)
+        XCTAssertEqual(ThemeChoice.theme("swiss").style.radius(.card), 0)
+        XCTAssertEqual(ThemeChoice.theme("swiss").style.radius(.fixed(20)), 20)
     }
 
-    /// The one theme setting of the first versions is not read: the
-    /// colour and the appearance stay unset.
+    /// The colour of the first versions, kept under the same key, is no
+    /// theme's name: the default theme shows.
     func testThemeMigration() {
         let d = freshDefaults()
-        d.set("midnight", forKey: "theme")
-        XCTAssertNil(d.string(forKey: AccentChoice.key))
+        d.set("midnight", forKey: ThemeChoice.key)
+        XCTAssertEqual(ThemeChoice.theme(d.string(forKey: ThemeChoice.key) ?? "").name, Tokens.themes[0].name)
         XCTAssertNil(d.string(forKey: Appearance.key))
     }
 

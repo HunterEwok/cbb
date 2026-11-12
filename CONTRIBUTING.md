@@ -116,7 +116,7 @@ sh .github/shellcheck.sh       # every shell script
 pipx run typos==1.51.1         # spelling of the English text (_typos.toml)
 npx --yes @biomejs/biome@2.6.2 ci   # the tray app's HTML, CSS and JavaScript (biome.json)
 pipx run reuse==6.2.0 lint     # every file's copyright and license (REUSE.toml)
-go test -race ./...
+go test -race ./...           # on a Mac too before a push: a fault of one system's race build shows only there
 go build -o /dev/null ./cmd/...
 GOOS=linux GOARCH=arm GOARM=6 go build -o /dev/null ./cmd/cbb-helper   # Raspberry Pi Zero W
 GOOS=freebsd go vet ./...                                         # FreeBSD (the freebsd job runs the tests)
@@ -148,6 +148,13 @@ cargo build -p cbb-core --target riscv32imac-unknown-none-elf   # the core witho
 cargo deny --locked check licenses bans sources   # the crates' licenses and sources (deny.toml, CI's advisories job)
 cargo build --release && CBB_TEST_ALONE=$PWD/target/release/cbb \
   go test ./internal/service -run TestAloneMember   # joins by the phone, syncs with Go members, and through the hub's tunnel
+```
+
+Every test of `internal/service` at once, in parts that run in Docker containers side by side
+(docs/testing.md, "Running tests in parallel"; IMAGE has Go, Rust, swtpm, Xvfb and xclip):
+
+```sh
+sh tools/e2e/parallel.sh -n 6 IMAGE
 ```
 
 The Nano ESP32's network code on Linux (`embassy/`, root for the TAP interface):
@@ -195,7 +202,8 @@ The group rules of records `v:2` (docs/records-v2.md) reach the phones from the 
 functions of `ffi/include/cbb_core.h`, which the Swift kit links as its module `CCbbCore`
 and the Kotlin kit calls through JNA (`Core.swift`, `Core.kt`). Its `bind.sh` builds the
 libraries; the Android app's `bindCore` task and the Kotlin kit's tests build them
-themselves, and the `phone core` jobs build them with the latest Rust:
+themselves, and CI builds them with the latest Rust (`phone core (android)`, and the
+`phone kit (macos-latest)` job for the iPhone's):
 
 ```sh
 cargo test -p cbb-ffi
@@ -274,7 +282,7 @@ Cross tests between Go and Swift: Swift tests write vectors that Go reads, and t
 - The Kotlin kit does the same: `CBB_INTEROP_OUT=<dir> ./gradlew -p kit test` writes the
   same files, and `./gradlew -p kit interopScript` builds
   `kit/build/interop/cbb-interop`, which plays the Android phone in those three
-  Go tests on Linux too (TLS from Conscrypt; the `Android app` job runs them).
+  Go tests on Linux too (TLS from Conscrypt; the `Android kit` job runs them).
 
 The app (macOS with Xcode):
 

@@ -499,3 +499,33 @@ impl Drop for NoEcho {
         }
     }
 }
+
+#[cfg(all(test, any(target_os = "linux", target_os = "freebsd")))]
+mod tests {
+    /// cbb service -user gives up root for good: run in a copy of this
+    /// test's process, which becomes nobody and cannot become root again.
+    #[test]
+    fn gives_up_root() {
+        if std::env::var_os("CBB_TEST_RUN_AS").is_some() {
+            super::run_as("nobody").unwrap();
+            // SAFETY: plain system calls.
+            assert_ne!(unsafe { libc::getuid() }, 0);
+            assert_eq!(std::env::var("USER").as_deref(), Ok("nobody"));
+            assert!(super::run_as("nobody").unwrap_err().to_string().contains("needs root"));
+            return;
+        }
+        if !super::is_root() {
+            assert!(super::run_as("nobody").unwrap_err().to_string().contains("needs root"));
+            return;
+        }
+        assert!(super::run_as("no-such-user-of-cbb").unwrap_err().to_string().contains("no user"));
+        assert!(super::run_as("a\0b").is_err());
+        let out = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "sys::tests::gives_up_root", "--nocapture"])
+            .env("CBB_TEST_RUN_AS", "1")
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stdout));
+        assert!(String::from_utf8_lossy(&out.stdout).contains("1 passed"));
+    }
+}

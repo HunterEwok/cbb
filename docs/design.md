@@ -920,6 +920,56 @@ Its own user turns sync off ("Sync on and off"); for the whole group an admin mu
   root. The device says in its hello that it is muted and until when, so every devices list
   shows it.
 
+An admin computer mutes or unmutes itself on the control socket too, not only on the admin
+socket: it changes nothing for the rest of the group, so the Mac app and the tray app do it
+without asking anything. Any other device takes a confirmation ("Confirming admin actions").
+
+### Confirming admin actions
+
+What changes the group goes to the admin socket, which only root reaches (D-62), so the apps
+used to run `cbb` as the administrator and the system asked for the password on every
+action. Instead the user at the screen confirms an admin action with the system's own
+prompt, and the service checks that confirmation itself, never what the caller says
+(`member/src/confirm.rs`, D-97). Actions come in three tiers:
+
+- **This device itself** (muting or unmuting it, its own sync): no prompt.
+- **The group's everyday changes** (admitting, removing or renaming a device, making a hub,
+  muting another device, sync away from home): one confirmation lasts five minutes.
+- **What cannot be undone, or changes who holds the group** (making a group, leaving it,
+  taking it over, handing it on, recovering its root, making a device an admin, the key level
+  and the takeover delay): a confirmation each time. The service lists the everyday
+  operations by name (`confirm::KEPT`); any other, also one added later, is confirmed each
+  time.
+
+`cbb` run as a user of the service's group sends an admin request on the control socket when
+the admin socket is out of reach, and the service takes it once confirmed:
+
+- **macOS**: two rights in the authorization database, `tools.cbb.admin` (shared in the
+  session for 300 seconds) and `tools.cbb.admin.each` (each time), both for an administrator
+  of the Mac, which the service writes when it starts. `cbb` asks for the right, so macOS shows
+  its window with Touch ID, and sends the authorization's external form in the request's
+  `auth`; the service, as root, checks that it holds the right.
+- **Linux**: two polkit actions of the same names, `auth_admin_keep` and `auth_admin`, for
+  the active session only, which the service writes to `/usr/share/polkit-1/actions`. The
+  service runs `pkcheck` for the calling process, which the kernel names (its ID, start time
+  and user), so polkit's agent asks in the user's session, with the fingerprint where it is
+  set up.
+- **Windows**: Windows Hello. `cbb` makes the user's Windows Hello key once and registers its
+  public key with the service as the administrator, through the UAC prompt
+  (`confirm-keys.json` in the state folder, by the user's SID). For each confirmation the
+  service gives a challenge on the control socket (`confirm`), `cbb` signs it with the key,
+  which shows Windows Hello's prompt, and the service checks the signature for the user at
+  the other end, in an active session; it remembers that user's five minutes itself.
+
+Where nothing confirms (no polkit, a session without an agent, an SSH login, a user who may
+not), `cbb` exits with 77 and the apps run it as the administrator, as before; a cancelled
+prompt exits with 75 and the apps say nothing. What needs root itself still does: installing
+an update, and joining a group, where `cbb` writes the service's files. Any program of the
+user may start a confirmation, but only the system's prompt passes it, and within the five
+minutes only the everyday changes go through without one. The phones do the same with their
+own keys: on Android one fingerprint, face or PIN lets the admin key sign for five minutes,
+while the group's root key asks at each signature.
+
 The mute lasts across restarts (`mute.json` in the state directory) and ends by itself when
 its time has passed. A device that does not take the command, an older or a broken one, is
 removed instead. The member protocol is unchanged: a muted device's copies are not made, so
@@ -1822,17 +1872,18 @@ made, so two phones cannot share one CA key. Instead:
 - Every admin phone, the first one included, has an **admin CA** of its own: a key in its
   Secure Enclave or StrongBox, certified by the root as a CA with path length 0. Admin keys
   sign only when the user confirms with Face ID, Touch ID, the fingerprint or the passcode,
-  so a locked phone in a thief's hand signs nothing.
+  so a locked phone in a thief's hand signs nothing. Aurora OS gives an app none of these,
+  so its app asks for a PIN of its own, which the TEE checks and counts (D-94).
 - Each phone also has a separate member key and certificate, as every member has, for its
   everyday connections; that key needs no confirmation.
 - A member certificate comes from whichever admin admitted the device. Members present
   their certificate with the admin CA's certificate in the TLS handshake and check peers
   against the group root, so a certificate from any admin is valid everywhere.
-- Making a second phone an admin: the second phone joins as every device does (it scans the
-  first phone's QR code in "Add a device"), then the first phone offers "Make it an admin";
-  the second phone sends the public key of its new admin key, and the first phone signs its
-  admin CA certificate with the root key. From then on both are equal, with one exception:
-  only the root key can make further admins. If the root phone is lost, the remaining admin
+- Making a second phone an admin: the second phone joins as a member, as every device does
+  (the first phone scans its QR code in "Add a device"); its hellos offer the public key of
+  its admin key, and the first phone's "Make it an admin" signs its admin CA certificate with
+  the root key. There is one button to join, never one to join as an admin. From then on
+  both are equal, with one exception: only the root key can make further admins. If the root phone is lost, the remaining admin
   **becomes the root** (below).
 
 **The devices list.** Every admission produces a signed **device record**: the device ID,
@@ -1877,8 +1928,8 @@ an admin until the phone is removed; when two admins revoke each other, both los
 rights (the rule depends only on the set of records), and the user starts the group anew from
 the phone in hand.
 
-**A computer as admin.** The root phone can also make a computer of its group an admin, for
-a user who would rather admit and remove devices from a terminal. Every computer of a phone
+**A computer as admin.** The root phone can also make a computer of its group an admin, as it
+does a second phone, for a user who would rather admit and remove devices from a terminal. Every computer of a phone
 group keeps an admin key next to its identity and offers its public key in the member
 protocol; "Make it an admin" on the root phone certifies it as an admin CA and sends that to
 the computer. From then on the computer admits computers with `cbb pair`, removes

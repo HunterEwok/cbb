@@ -150,6 +150,10 @@ struct StartArgs {
     /// Where the key lives: `hardware` (the default) or `file`.
     #[serde(default = "hardware")]
     key_store: String,
+    /// The SubjectPublicKeyInfo of the phone's admin key, which its hellos
+    /// offer while it is no admin, for the root to make it one.
+    #[serde(with = "certs::b64::opt", default)]
+    admin_key: Option<Vec<u8>>,
     device: String,
     #[serde(with = "certs::b64")]
     public: Vec<u8>,
@@ -256,6 +260,12 @@ struct ToArgs {
 }
 
 #[derive(Deserialize)]
+struct OfferArgs {
+    #[serde(with = "certs::b64::opt", default)]
+    key: Option<Vec<u8>>,
+}
+
+#[derive(Deserialize)]
 struct CommandArgs {
     command: Record,
     #[serde(default = "ten_seconds")]
@@ -263,10 +273,10 @@ struct CommandArgs {
 }
 
 /// What cbb_member_manage does: `action` is remove, rename, thaw,
-/// make_admin (as the root, for a computer connected), mute, unmute,
-/// paste or paste_off, for `device`; renew, which renews every
-/// certificate due; or resolve, the root's decision on an alert, which
-/// voids its `records`.
+/// make_admin (as the root, for a phone or a computer connected), mute,
+/// unmute, paste, paste_off, actions_off, away_off, action or freeze, for
+/// `device`; renew, which renews every certificate due; or resolve, the
+/// root's decision on an alert, which voids its `records`.
 #[derive(Deserialize)]
 struct ManageArgs {
     action: String,
@@ -288,17 +298,16 @@ struct ManageArgs {
     /// With mute: how long, 0 for until an unmute.
     #[serde(default)]
     for_ms: i64,
-    /// With paste: `paste` (by the clipboard) or `type` (key by key).
-    #[serde(default)]
-    method: String,
-    /// With paste: `text`, `secret` (no trace in the device's log or
-    /// clipboard) or `media` (the group's copy of images or files whose ID
-    /// is `text`, made just before with copy_media).
-    #[serde(default)]
-    kind: String,
-    /// With paste: the text, or the media copy's ID.
+    /// With paste: the text, or with kind media the event ID of the
+    /// group's copy of images or files, which the phone made just before.
     #[serde(default)]
     text: String,
+    /// With paste: `paste` (the default) or `type`.
+    #[serde(default)]
+    mode: String,
+    /// With paste: `text` (the default), `secret` or `media`.
+    #[serde(default)]
+    kind: String,
     /// With paste: press Enter after it.
     #[serde(default)]
     enter: bool,
@@ -592,6 +601,7 @@ impl Member {
                 os_version: a.os_version,
                 version: a.version,
                 key_store: a.key_store,
+                admin_key: a.admin_key.unwrap_or_default(),
                 state_dir: PathBuf::from(a.dir),
                 peers,
                 mdns: a.mdns,
@@ -946,6 +956,20 @@ impl Member {
                 let ca = a.ca.ok_or_else(|| Error::msg("send_admin_ca needs the admin CA"))?;
                 Ok(json!({ "sent": n.send_admin_ca(&device(&a.to)?, &ca) }))
             }
+            // The admin key the hellos offer: the phone's while it is no
+            // admin, none once it is one.
+            "offer_admin_key" => {
+                let a: OfferArgs = args(a)?;
+                n.offer_admin_key(a.key);
+                done()
+            }
+            // The admin CA of the root's admin message, checked against the
+            // offered key, this phone and the current root.
+            "take_admin_ca" => {
+                let a: OfferArgs = args(a)?;
+                n.take_admin_ca(&a.key.ok_or_else(|| Error::msg("take_admin_ca needs the admin CA"))?)?;
+                done()
+            }
             "send_tunnel" => {
                 let a: ToArgs = args(a)?;
                 let offer = a.offer.ok_or_else(|| Error::msg("send_tunnel needs the offer"))?;
@@ -1188,6 +1212,8 @@ impl Member {
                 "unmute" => return order(Order::Unmute),
                 "sync_on" => return order(Order::Sync(true)),
                 "sync_off" => return order(Order::Sync(false)),
+                // Remote paste (docs/design.md, "Remote paste"): a text, or
+                // a copy of images or files the phone made just before.
                 "paste" => return order(paste_order(&a)?),
                 "paste_off" => return order(Order::PasteOff),
                 "actions_off" => return order(Order::ActionsOff),
@@ -1253,7 +1279,7 @@ impl Member {
 /// text cleaned of what may not go in (and refused when nothing is left),
 /// or a media copy's ID, which is pasted, never typed.
 fn paste_order(a: &ManageArgs) -> Result<Order> {
-    let mode = if a.method.is_empty() { "paste" } else { a.method.as_str() };
+    let mode = if a.mode.is_empty() { "paste" } else { a.mode.as_str() };
     if mode != "paste" && mode != "type" {
         return Err(Error::msg(format!("a paste is pasted or typed, not {mode:?}")));
     }
@@ -1306,7 +1332,7 @@ mod tests {
 
     fn request(method: &str, kind: &str, text: &str) -> ManageArgs {
         serde_json::from_value(json!({
-            "action": "paste", "device": "pc", "public": "", "method": method, "kind": kind, "text": text, "enter": true,
+            "action": "paste", "device": "pc", "public": "", "mode": method, "kind": kind, "text": text, "enter": true,
         }))
         .unwrap()
     }

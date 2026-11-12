@@ -256,23 +256,22 @@ func (w *window) describe(backend int) string {
 }
 
 // contrast (U15): every text of every view keeps WCAG AA contrast with
-// what is behind it, in each of the ten colours on the dark and the light
-// base.
+// what is behind it, in each theme, dark and light.
 func (w *window) contrast(t *testing.T) {
 	w.t = t
 	w.open("en")
-	var colors []string
-	w.eval(`import("./tokens.js").then((m) => m.colors.map((c) => c.name))`, &colors)
+	var themes []string
+	w.eval(`import("./tokens.js").then((m) => m.themes.map((c) => c.name))`, &themes)
 	for _, look := range []string{"dark", "light"} {
-		for _, c := range colors {
-			w.eval(fmt.Sprintf(`$click("#settings"); $click('[data-appearance="%s"]'); $click('[data-color="%s"]'); $click('#settings-dialog menu button')`, look, c), nil)
+		for _, c := range themes {
+			w.eval(fmt.Sprintf(`$click("#settings"); $click('[data-appearance="%s"]'); $click('[data-theme="%s"]'); $click('#settings-dialog menu button')`, look, c), nil)
 			w.wait(`!$q("#settings-dialog").open`)
 			w.views(t, func(view string) {
 				w.check(t, fmt.Sprintf("%s in %s, %s", c, look, view), `$lowContrast()`)
 			})
 		}
 	}
-	w.eval(`$click("#settings"); $click('[data-appearance="system"]'); $click('[data-color="terminal"]'); $click('#settings-dialog menu button')`, nil)
+	w.eval(fmt.Sprintf(`$click("#settings"); $click('[data-appearance="system"]'); $click('[data-theme="%s"]'); $click('#settings-dialog menu button')`, themes[0]), nil)
 }
 
 // largeText (U16): with the system's text at twice its size (Windows'

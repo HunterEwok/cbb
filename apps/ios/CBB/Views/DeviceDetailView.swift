@@ -71,7 +71,9 @@ struct DeviceDetailView: View {
                 Task { await model.makeAdmin(id) }
             } label: { Text("Make it an admin") }
         } message: {
-            if device?.keysInFile != false, model.keyLevel != Records.levelFiles {
+            if device?.role == "phone" {
+                Text("It can then add and remove devices, and take the group over if this phone is lost.")
+            } else if device?.keysInFile != false, model.keyLevel != Records.levelFiles {
                 Text("It can then add and remove devices with cbb pair and cbb remove. Its keys sit in a file on the computer: whoever copies that file can act as an admin until another admin removes it. Do this only for a computer you keep safe.")
                     + Text(verbatim: " ")
                     + Text("The group then lets keys in files be admins and hubs (Settings, Admin keys).")
@@ -201,7 +203,7 @@ struct DeviceDetailView: View {
             .tint(palette.accent)
             .disabled(!mayTurn || model.busy)
             .padding(Tokens.spacingMedium)
-            .glassTile(cornerRadius: Tokens.radiusCard)
+            .glassTile(.card)
         }
     }
 
@@ -210,8 +212,8 @@ struct DeviceDetailView: View {
     @ViewBuilder private func iconRow(_ d: AppModel.Computer) -> some View {
         if model.isAdmin {
             HStack(spacing: Tokens.spacingSmall) {
-                // Members and Android phones take pastes; iPhones cannot.
-                if !d.isSelf, d.role == "member" || (d.role == "phone" && d.os == "android") {
+                // Members and Android and Aurora phones take pastes; iPhones cannot.
+                if !d.isSelf, d.role == "member" || (d.role == "phone" && ["android", "aurora", "sailfish"].contains(d.os)) {
                     Button { pasting = true } label: { IconLabel(symbol: "keyboard", title: Text("Paste")) }
                         .buttonStyle(.plain)
                 }
@@ -284,7 +286,7 @@ struct DeviceDetailView: View {
             Divider().overlay(palette.line)
             row(Text("Device ID"), Text(verbatim: d.id).monospaced())
         }
-        .glassTile(cornerRadius: Tokens.radiusCard)
+        .glassTile(.card)
     }
 
     private func row(_ label: Text, _ value: Text) -> some View {
@@ -389,7 +391,7 @@ private struct IconLabel: View {
         }
         .frame(maxWidth: .infinity, minHeight: 64)
         .padding(.vertical, Tokens.spacingSmall)
-        .glassTile(cornerRadius: Tokens.radiusCard)
+        .glassTile(.card)
         .contentShape(Rectangle())
     }
 }

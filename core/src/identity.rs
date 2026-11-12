@@ -389,3 +389,260 @@ struct File {
     #[serde(with = "b64::list", default, skip_serializing_if = "Vec::is_empty")]
     roots: Vec<Vec<u8>>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::issue;
+
+    const NOW: i64 = 1_800_000_000;
+
+    fn signer(pkcs8: &[u8]) -> impl FnMut(&[u8]) -> Result<Vec<u8>> + '_ {
+        move |b: &[u8]| sign(pkcs8, b)
+    }
+
+    /// A group with a root, an admin CA under it and a device whose
+    /// certificate the root issued.
+    struct Group {
+        root_key: Vec<u8>,
+        root: Cert,
+        admin_key: Vec<u8>,
+        admin: Cert,
+        device: DeviceId,
+        key: Vec<u8>,
+    }
+
+    fn group() -> Group {
+        let root_key = new_key().unwrap();
+        let root = Cert::parse(&issue::root_ca(&public_key(&root_key).unwrap(), NOW, &mut signer(&root_key)).unwrap())
+            .unwrap();
+        let device = DeviceId::random();
+        let admin_key = new_key().unwrap();
+        let admin = Cert::parse(
+            &issue::admin_ca(&device, &public_key(&admin_key).unwrap(), &root, NOW, &mut signer(&root_key)).unwrap(),
+        )
+        .unwrap();
+        Group { root_key, root, admin_key, admin, device, key: new_key().unwrap() }
+    }
+
+    impl Group {
+        fn cert(&self, by: &Cert, by_key: &[u8], point: &[u8], now: i64) -> Vec<u8> {
+            issue::member(&self.device, point, by, now, &mut signer(by_key)).unwrap()
+        }
+
+        fn identity(&self) -> Identity {
+            let point = public_key(&self.key).unwrap();
+            Identity {
+                id: self.device.clone(),
+                key: self.key.clone(),
+                external: None,
+                cert: Cert::parse(&self.cert(&self.root, &self.root_key, &point, NOW)).unwrap(),
+                issuer: None,
+                group_ca: self.root.clone(),
+                roots: vec![],
+            }
+        }
+    }
+
+    /// A key the hardware holds, played by a key in memory.
+    struct Held(FileKey, HeldKey);
+
+    impl ExternalKey for Held {
+        fn public(&self) -> Vec<u8> {
+            self.0.public()
+        }
+        fn sign_digest(&self, digest: &[u8; 32]) -> Result<Vec<u8>> {
+            self.0.sign_digest(digest)
+        }
+        fn held(&self) -> Option<HeldKey> {
+            Some(self.1.clone())
+        }
+    }
+
+    /// A key that signs wrongly in the way its name says.
+    struct Broken(&'static str, FileKey);
+
+    impl ExternalKey for Broken {
+        fn public(&self) -> Vec<u8> {
+            match self.0 {
+                "not p-256" => vec![4; 10],
+                _ => self.1.public(),
+            }
+        }
+        fn sign_digest(&self, digest: &[u8; 32]) -> Result<Vec<u8>> {
+            match self.0 {
+                "not der" => Ok(vec![1, 2, 3]),
+                "another key" => FileKey::new(&new_key().unwrap())?.sign_digest(digest),
+                _ => self.1.sign_digest(digest),
+            }
+        }
+    }
+
+    #[test]
+    fn a_file_key_identity_round_trips() {
+        let g = group();
+        let id = g.identity();
+        id.check().unwrap();
+        assert_eq!(id.root().der, g.root.der);
+        assert_eq!(id.trusted().len(), 1);
+        assert_eq!(id.tag(), certs::tag(&g.root));
+        assert_eq!(id.chain(), vec![id.cert.der.clone()]);
+
+        let file = id.to_file().unwrap();
+        assert!(file.ends_with(b"\n"));
+        let back = Identity::from_file(&file).unwrap();
+        assert_eq!((back.id.as_str(), &back.key, &back.cert.der), (id.id.as_str(), &id.key, &id.cert.der));
+        let sig = back.sign(b"copy").unwrap();
+        let point = public_key(&g.key).unwrap();
+        let vk = p256::ecdsa::VerifyingKey::from_sec1_bytes(&point).unwrap();
+        use p256::ecdsa::signature::Verifier as _;
+        vk.verify(b"copy", &p256::ecdsa::Signature::from_der(&sig).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn a_held_key_is_named_in_the_file_and_opened_by_the_caller() {
+        let g = group();
+        for held in [HeldKey::Tpm(serde_json::json!({"blob": "AAEC"})), HeldKey::SecureEnclave(vec![9, 8, 7])] {
+            let mut id = g.identity();
+            id.key = Vec::new();
+            id.external = Some(Arc::new(Held(FileKey::new(&g.key).unwrap(), held.clone())));
+            id.check().unwrap();
+            let file = id.to_file().unwrap();
+            let text = core::str::from_utf8(&file).unwrap();
+            assert_eq!(text.contains("key_tpm"), matches!(held, HeldKey::Tpm(_)), "{text}");
+            assert_eq!(text.contains("key_se"), matches!(held, HeldKey::SecureEnclave(_)), "{text}");
+            assert!(!text.contains("\"key\""), "{text}");
+            let e = Identity::from_file(&file).err().unwrap();
+            assert!(e.to_string().contains("cbb-helper"), "{e}");
+            let key = g.key.clone();
+            let want = held.clone();
+            let back = Identity::from_file_with(&file, &move |h| {
+                assert_eq!(h, &want);
+                Ok(Arc::new(FileKey::new(&key)?) as Arc<dyn ExternalKey>)
+            })
+            .unwrap();
+            back.check().unwrap();
+            assert!(back.sign(b"x").is_ok());
+        }
+        // A key the file cannot name, such as a phone app's.
+        let mut id = g.identity();
+        id.key = Vec::new();
+        id.external = Some(Arc::new(FileKey::new(&g.key).unwrap()));
+        assert!(id.to_file().err().unwrap().to_string().contains("no identity file"));
+    }
+
+    #[test]
+    fn bad_files_are_refused() {
+        let g = group();
+        let file: serde_json::Value = serde_json::from_slice(&g.identity().to_file().unwrap()).unwrap();
+        let with = |k: &str, v: serde_json::Value| {
+            let mut f = file.clone();
+            f[k] = v;
+            serde_json::to_vec(&f).unwrap()
+        };
+        for (name, data, want) in [
+            ("not json", b"{".to_vec(), "not an identity file"),
+            ("another version", with("v", 2.into()), "unknown identity file version"),
+            ("a file key and a TPM's", with("key_tpm", serde_json::json!({})), "more than one place"),
+            ("a bad device", with("device", "x".into()), ""),
+            ("a cert of another key", with("key", serde_json::Value::String(b64e(&new_key().unwrap()))), "match"),
+        ] {
+            let e = Identity::from_file(&data).err().unwrap_or_else(|| panic!("{name}: taken"));
+            assert!(e.to_string().contains(want), "{name}: {e}");
+        }
+        let mut f = file.clone();
+        f.as_object_mut().unwrap().remove("key");
+        f["key_tpm"] = serde_json::json!({});
+        f["key_se"] = "AAAA".into();
+        assert!(Identity::from_file(&serde_json::to_vec(&f).unwrap()).is_err());
+    }
+
+    fn b64e(b: &[u8]) -> String {
+        use base64::Engine as _;
+        base64::engine::general_purpose::STANDARD.encode(b)
+    }
+
+    #[test]
+    fn identities_that_do_not_hold_together() {
+        let g = group();
+        let point = public_key(&g.key).unwrap();
+        let check = |f: &dyn Fn(&mut Identity)| {
+            let mut id = g.identity();
+            f(&mut id);
+            id.check().err().map(|e| e.to_string()).unwrap_or_default()
+        };
+        assert_eq!(check(&|_| {}), "");
+        assert!(check(&|id| id.key = new_key().unwrap()).contains("does not match the device key"));
+        assert!(check(&|id| id.id = DeviceId::random()).contains("does not name the device"));
+        let stranger = group();
+        assert!(
+            check(&|id| id.cert = Cert::parse(&stranger.cert(&stranger.root, &stranger.root_key, &point, NOW)).unwrap())
+                .contains("not from its CA")
+        );
+        // A certificate an admin CA issued, with and without that CA.
+        let by_admin = Cert::parse(&g.cert(&g.admin, &g.admin_key, &point, NOW)).unwrap();
+        assert_eq!(
+            check(&|id| {
+                id.cert = by_admin.clone();
+                id.issuer = Some(g.admin.clone());
+            }),
+            ""
+        );
+        assert!(check(&|id| id.cert = by_admin.clone()).contains("not from its CA"));
+        assert!(check(&|id| id.issuer = Some(stranger.admin.clone())).contains("not an admin CA"));
+        assert!(check(&|id| id.cert = g.admin.clone()).contains("is a CA"));
+        let mut id = g.identity();
+        id.issuer = Some(g.admin.clone());
+        id.cert = by_admin.clone();
+        assert_eq!(id.chain().len(), 2);
+    }
+
+    #[test]
+    fn renewed_certificates() {
+        let g = group();
+        let id = g.identity();
+        let point = public_key(&g.key).unwrap();
+        // Two years from now ends later than two years from a minute ago.
+        let later = g.cert(&g.root, &g.root_key, &point, NOW + 60);
+        let next = id.with_cert_from(&later, None).unwrap();
+        assert_eq!(next.cert.der, later);
+        let same = g.cert(&g.root, &g.root_key, &point, NOW);
+        assert!(id.with_cert_from(&same, None).err().unwrap().to_string().contains("does not end later"));
+        assert!(id.with_cert_from(b"junk", None).is_err());
+        let other = g.cert(&g.root, &g.root_key, &public_key(&new_key().unwrap()).unwrap(), NOW + 60);
+        assert!(id.with_cert_from(&other, None).is_err());
+
+        // From an admin CA, named with it; then back to the root.
+        let by_admin = g.cert(&g.admin, &g.admin_key, &point, NOW + 120);
+        let admin_issued = id.with_cert_from(&by_admin, Some(&g.admin.der)).unwrap();
+        assert_eq!(admin_issued.issuer.as_ref().map(|c| c.der.clone()), Some(g.admin.der.clone()));
+        assert!(id.with_cert_from(&by_admin, Some(b"junk")).is_err());
+        assert!(id.with_cert_from(&by_admin, None).is_err());
+        let from_root = g.cert(&g.root, &g.root_key, &point, NOW + 180);
+        let back = admin_issued.with_cert_from(&from_root, None).unwrap();
+        assert!(back.issuer.is_none());
+        // A takeover's certificate may end when the current one does.
+        let taken = id.with_cert_of_takeover(&same).unwrap();
+        assert!(taken.issuer.is_none());
+        assert!(id.with_cert_of_takeover(&other).is_err());
+    }
+
+    #[test]
+    fn external_keys_that_sign_wrongly() {
+        let key = new_key().unwrap();
+        let good = FileKey::new(&key).unwrap();
+        assert_eq!(good.public(), public_key(&key).unwrap());
+        assert!(good.held().is_none());
+        sign_external(&good, b"x").unwrap();
+        for (name, want) in
+            [("not p-256", "not a P-256 key"), ("not der", "not DER"), ("another key", "does not verify")]
+        {
+            let e = sign_external(&Broken(name, FileKey::new(&key).unwrap()), b"x").unwrap_err();
+            assert!(e.to_string().contains(want), "{name}: {e}");
+        }
+        assert!(FileKey::new(b"junk").is_err());
+        assert!(signing_key(b"junk").unwrap_err().to_string().contains("not a P-256 key"));
+        assert!(sign(b"junk", b"x").is_err());
+        assert!(public_key(b"junk").is_err());
+    }
+}

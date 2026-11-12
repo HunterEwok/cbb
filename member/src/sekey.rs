@@ -104,6 +104,10 @@ pub fn unseal_with(b: &[u8], load: Load<'_>) -> Result<Vec<u8>> {
         .map_err(|_| Error::msg("the sealed secret does not open"))
 }
 
+/// The dictionaries' callbacks, which confirm.rs shares so that both
+/// declare Core Foundation's functions alike.
+#[cfg(target_os = "macos")]
+pub(crate) use enclave::CFDictionaryCallBacks;
 #[cfg(target_os = "macos")]
 pub use enclave::{Key, available, seal, unseal};
 
@@ -132,7 +136,7 @@ mod enclave {
     type SecAccessControlRef = *const c_void;
 
     #[repr(C)]
-    struct CFDictionaryCallBacks([usize; 6]);
+    pub(crate) struct CFDictionaryCallBacks([usize; 6]);
 
     const K_CF_NUMBER_INT_TYPE: CFIndex = 9;
     const K_CF_STRING_ENCODING_UTF8: u32 = 0x0800_0100;

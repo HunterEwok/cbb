@@ -1,0 +1,69 @@
+# Keeps a job's Rust build (cargo's downloads and the target folder) in the
+# Actions cache, so a pull request compiles only the crates it changed and
+# not every dependency again.
+#
+# The Actions cache keeps what a run saves in the scope of its branch: a pull
+# request's later runs restore it, and no other pull request can, so no
+# branch can put a build into the cache of another. CI runs on pull requests
+# only, so each pull request warms its own cache on its first run and its
+# later pushes compile only what they changed. The key names the job's build,
+# the runner, rustc's version and a hash of Cargo.lock; a run saves only when
+# its pull request has no cache of that key yet. Cargo checks every crate it
+# takes from the cache as it checks one it built itself, so a stale cache
+# costs time and never changes a result. The release workflow and the
+# F-Droid build, which must build from nothing, do not use it.
+#
+# A job calls it twice: with save "false" before its first cargo command, and
+# with save "true" as its last step, on the same runner and toolchain.
+name: Rust build cache
+description: Restores a job's Rust build from the Actions cache, and saves it there.
+inputs:
+  name:
+    description: A name for this job's build in the cache key.
+    required: true
+  save:
+    description: '"true" saves the build when this branch has none for its key; "false" restores it.'
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - id: key
+      shell: bash
+      env:
+        NAME: ${{ inputs.name }}
+        LOCK: ${{ hashFiles('Cargo.lock') }}
+      run: |
+        rustc=$(rustc -V | cut -d' ' -f2)
+        echo "prefix=rust-$NAME-$RUNNER_OS-$RUNNER_ARCH-$rustc-" >>"$GITHUB_OUTPUT"
+        echo "key=rust-$NAME-$RUNNER_OS-$RUNNER_ARCH-$rustc-$LOCK" >>"$GITHUB_OUTPUT"
+    - if: inputs.save != 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          ~/.cargo/git/db
+          target
+        key: ${{ steps.key.outputs.key }}
+        # A pull request that changes Cargo.lock still takes the crates it keeps.
+        restore-keys: ${{ steps.key.outputs.prefix }}
+    - if: inputs.save == 'true'
+      id: saved
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          ~/.cargo/git/db
+          target
+        key: ${{ steps.key.outputs.key }}
+        lookup-only: true
+    - if: inputs.save == 'true' && steps.saved.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          ~/.cargo/git/db
+          target
+        key: ${{ steps.key.outputs.key }}

@@ -13,7 +13,7 @@ import "strings"
 // service (action: stop, start, restart), or "" where the bench has none.
 func serviceCmd(d *Device, action string) string {
 	switch d.OS {
-	case "linux", "linux-lite":
+	case "linux":
 		return "sudo -n systemctl " + action + " cbb"
 	case "openwrt":
 		return "/etc/init.d/cbb " + action

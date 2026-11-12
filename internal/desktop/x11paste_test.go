@@ -81,7 +81,15 @@ func TestX11Paste(t *testing.T) {
 	if err := b.Inject(ctx, "a secret", "paste", true, true); err != nil {
 		t.Fatal(err)
 	}
-	want := "pasted \u00e9 \u03b1\u03b2\u03b3\u20ac\ntyped Text: \u00e9 \u03b1\u03b2\u03b3\u20ac & ~|\na secret\n"
+	// Images and files go in through the clipboard the same way: here a
+	// text stands in for them.
+	if err := b.InjectMedia(ctx, func() error { return b.Write("as media", false) }, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.InjectMedia(ctx, func() error { return errors.New("no media") }, true); err == nil {
+		t.Error("pasted media it could not write")
+	}
+	want := "pasted \u00e9 \u03b1\u03b2\u03b3\u20ac\ntyped Text: \u00e9 \u03b1\u03b2\u03b3\u20ac & ~|\na secret\nas media\n"
 	var got []byte
 	for range 50 {
 		if got, _ = os.ReadFile(out); string(got) == want {
@@ -95,11 +103,21 @@ func TestX11Paste(t *testing.T) {
 	// The screen saver on refuses a paste.
 	xproto.ForceScreenSaver(b.x, xproto.ScreenSaverActive)
 	err = b.Inject(ctx, "not while locked", "paste", false, false)
+	merr := b.InjectMedia(ctx, func() error { return nil }, false)
 	xproto.ForceScreenSaver(b.x, xproto.ScreenSaverReset)
 	var r *connector.Refusal
 	if !errors.As(err, &r) {
 		t.Errorf("a paste with the screen saver on: %v", err)
 	}
+	if !errors.As(merr, &r) {
+		t.Errorf("media with the screen saver on: %v", merr)
+	}
+	// Under XWayland with no way to press keys, media is refused.
+	t.Setenv("WAYLAND_DISPLAY", "wayland-none")
+	if err := b.InjectMedia(ctx, func() error { return nil }, false); !errors.As(err, &r) {
+		t.Errorf("media under Wayland without keys: %v", err)
+	}
+	t.Setenv("WAYLAND_DISPLAY", "")
 	// Typing leaves the keyboard mapping as it was.
 	keys, err := b.keyboard()
 	if err != nil {

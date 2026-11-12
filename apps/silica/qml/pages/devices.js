@@ -40,6 +40,14 @@ function can(d, c) {
     return d.role === "member" && (d.caps || []).indexOf(c) >= 0
 }
 
+// Whether it takes a remote paste: a member, or a phone with Android,
+// Aurora OS or Sailfish OS (through its Bluetooth keyboard); an iPhone
+// takes none.
+function takesPaste(d) {
+    return !d.self && (d.role === "member"
+                       || (d.role === "phone" && ["android", "aurora", "sailfish"].indexOf(d.os) >= 0))
+}
+
 // Its kind, from its role and system.
 function kind(d) {
     if (d.role === "phone")

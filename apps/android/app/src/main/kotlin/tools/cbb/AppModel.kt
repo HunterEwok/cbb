@@ -11,6 +11,7 @@ import android.os.Looper
 import android.util.Log
 import androidx.annotation.StringRes
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import tools.cbb.kit.GroupAlert
@@ -140,7 +141,7 @@ class AppModel(private val app: Context) {
     var alerts by mutableStateOf<List<GroupAlert>>(emptyList())
         private set
 
-    var color by mutableStateOf(settings.color)
+    var theme by mutableStateOf(settings.theme)
         private set
     var appearance by mutableStateOf(settings.appearance)
         private set
@@ -269,9 +270,9 @@ class AppModel(private val app: Context) {
     private var answer: CompletableDeferred<Boolean>? = null
     private val main = Handler(Looper.getMainLooper())
 
-    fun choose(color: String) {
-        settings.color = color
-        this.color = color
+    fun choose(theme: String) {
+        settings.theme = theme
+        this.theme = theme
         WatchLink.update(app, this)
     }
 
@@ -352,14 +353,9 @@ class AppModel(private val app: Context) {
         }
     }
 
-    /** Whether the join screen asks to join as an admin, which only the group's root grants. */
-    var joinAsAdmin by mutableStateOf(false)
-        private set
-
-    /** Opens the screen that joins another device's group; with admin, as an admin. */
-    fun startJoining(admin: Boolean = false) {
+    /** Opens the screen that joins another device's group, always as a member. */
+    fun startJoining() {
         message = null
-        joinAsAdmin = admin
         joiningInvite = null
         phase = Phase.JOINING
     }
@@ -422,7 +418,6 @@ class AppModel(private val app: Context) {
         val p = pendingInvite ?: return
         pendingInvite = null
         message = null
-        joinAsAdmin = false
         joiningInvite = p
         phase = Phase.JOINING
     }
@@ -456,7 +451,7 @@ class AppModel(private val app: Context) {
      */
     suspend fun join() {
         try {
-            group.join(joinAsAdmin) { code -> joinCode = code }
+            group.join { code -> joinCode = code }
             update()
             phase = Phase.HOME
         } catch (e: CancellationException) {
@@ -974,6 +969,26 @@ class AppModel(private val app: Context) {
             describe(e)
         }
         update()
+    }
+
+    /** The mutes asked for and not yet answered, by device: the tile shows the new state at once and goes back only when it is refused. */
+    val pendingMute = mutableStateMapOf<String, Boolean>()
+
+    /** Whether a device's tile shows it muted: the answer still awaited, else its mute; for this phone, its sync turned off. */
+    fun shownMuted(d: LiveGroup.Device): Boolean =
+        pendingMute[d.id] ?: if (d.isSelf) d.syncOff != null else d.muted != null
+
+    /** Whether this phone may mute the device from its tile: its own sync always, another device only as an admin. */
+    fun mayMute(d: LiveGroup.Device): Boolean = d.isSelf || isAdmin
+
+    /** The button in a tile's corner: this phone's sync off or on, or another device muted for the group or unmuted. */
+    suspend fun muteFromTile(d: LiveGroup.Device, on: Boolean, forMS: Long = 0) {
+        pendingMute[d.id] = on
+        try {
+            if (d.isSelf) turnSync(!on, forMS) else setMuted(d.id, on, forMS)
+        } finally {
+            pendingMute.remove(d.id)
+        }
     }
 
     /** Until when this phone's sync is off; null while it syncs. */

@@ -257,7 +257,10 @@ its new device ID as the instance, its listening port in the SRV record and `v=1
 member publishes and browses with the `mdns-sd` crate (`member/src/discovery.rs`), which
 follows the same RFCs but not every detail below: it publishes the PTR, SRV, TXT and A/AAAA
 records of the table (the TXT with `r=listen` when it does not dial), with the addresses of its interfaces except
-loopback. The phones browse with the system's DNS-SD (iOS: `BonjourBrowser`, Android: NSD),
+loopback. A member it resolves without a TXT record (its responder sends a record it multicast
+within the last second no more) it neither dials nor drops: it browses again from a second
+daemon, whose first query carries no known answers, after 1.5 s and then every 5 s, doubled up
+to 60 s, until the TXT comes. The phones browse with the system's DNS-SD (iOS: `BonjourBrowser`, Android: NSD),
 resolve the members to their addresses and hand those to the member in the Rust core, which
 starts with its own mDNS off; a phone that is the hub publishes its home port the same way
 (`BonjourPublisher`, `NsdPublisher`).
@@ -1103,10 +1106,12 @@ in `admin` with the powers of an admin, `takeover` among them (the table in sect
 signs what"). The user chooses that the window makes an admin, never the joiner: any other
 window (a plain `cbb pair`, an invitation) refuses a joiner that offers `admin_key` after the key
 confirmation, with `{"error": "refused"}`, and so does an admin computer that is not the root. A
-phone that offers no admin key, such as the Aurora OS app unless the user asks to join as an
-admin, joins any admin's window as a member: the admin signs its `device` record with role
-`phone` and no `admin`, since a role gives no rights and only an admin key does (D-90). A phone that listens and shows its QR code ("The joiner listens" below)
-asks to be an admin the same way, and the root admits it as one with `cbb pair -qr -admin`. Before it certifies an
+phone that offers no admin key joins any admin's window as a member: the admin signs its
+`device` record with role `phone` and no `admin`, since a role gives no rights and only an
+admin key does (D-90). A phone that listens and shows its QR code
+("The joiner listens" below) offers none: the apps have one button to join, and the root makes
+the phone an admin later with the admin key its hellos offer (section 10, "Admins"). A joiner
+that does offer one is admitted as an admin only by the root with `cbb pair -qr -admin`. Before it certifies an
 admin key, the admitting side (the root computer, or an admin phone) checks `admin_proof` against
 `sid` of this connection, so that a key the joiner does not hold, or a proof made for another
 connection, never becomes an admin; the root computer also refuses a key its records name already
@@ -1210,13 +1215,33 @@ socket's and makes again at each start unless the system, the administrators or 
 it), with mode 0600: only root and the
 service's user (on Windows the system, administrators and the service's account) can
 connect. `CBB_ADMIN_SOCKET` overrides its path for clients. The control socket takes only
-`copy`, `paste`, `copy_media`, `copied_media`, `paste_media`, `config`, `status`, `devices`, `muted`, `sync` without `device`, `release`, `release_get`, `release_held`, `entries`, `entries_get`, `keys` (from root only) and `watch` (with
-the watcher's `copied`, `clipboard`, `injected` and `acted`) and refuses every other operation with an error; the admin socket takes them
-all, and MUST be the only way to them. So a program of a user in the group can use the clipboard but cannot admit, remove,
+`copy`, `paste`, `copy_media`, `copied_media`, `paste_media`, `config`, `status`, `devices`, `muted`, `sync` without `device`, `release`, `release_get`, `release_held`, `entries`, `entries_get`, `keys` (from root only), `confirm` and `watch` (with
+the watcher's `copied`, `clipboard`, `injected` and `acted`), and every other operation only once the user at the screen
+confirmed it with the system's prompt, which the service checks itself (below); the admin socket takes them
+all without one, and MUST be the only other way to them. So a program of a user in the group can use the clipboard but cannot admit, remove,
 rename, freeze or make admin a device, take over, or change sync away from home. `cbb` dials the socket each operation needs. The lite member does the same
 with its own two sockets, but its control socket takes fewer: no `copy_media`, `copied_media`,
 `paste_media`, `config`, `release`, `release_get`, `entries`, `entries_get` or `keys`, and of the watcher's reports no
 `acted`.
+
+An admin operation on the control socket carries `auth` in its `args` where the system needs
+it, and the service takes it only when the confirmation holds (docs/design.md, "Confirming admin
+actions"): on macOS `auth` is the base64 external form (32 bytes) of the caller's authorization,
+which must hold the right `tools.cbb.admin` for five minutes, or `tools.cbb.admin.each`. One
+confirmation covers the group's everyday changes for five minutes (`sync` of another device,
+`mute`, `unmute`, `rename`, `remove`, `freeze`, `thaw`, `resolve`, `incoming`, `pair`, `join`,
+`invite`, `network`, `away`, `hubs`, `paste_on`, `paste_receive`, `keyboard`, `remote`, the
+quick actions' operations, `release_file`, `release_want` and `update_way`); every other
+operation, such as `new`, `leave`, `take_over`, `recover`, `hand_over`, `key_level`,
+`takeover_delay` and `make_admin`, is confirmed each time, and `confirm_key` only on the admin
+socket. On Linux polkit
+must authorize the calling process for the action of the same name, and `auth` is empty; on
+Windows `auth` is `CHALLENGE.SIGNATURE`, both base64: the RSASSA-PKCS1-v1_5 SHA-256 signature,
+by the user's registered Windows Hello key, of `cbb confirm v1\n`, the operation, `\n` and the
+challenge's 32 bytes. `mute` and `unmute` of the device itself need no `auth`. A refusal says
+`the confirmation was cancelled` when the user cancelled the prompt, and `this computer cannot
+confirm the admin action for this user, so only the administrator may run it` when nothing
+confirms it.
 
 ### Framing
 
@@ -1334,7 +1359,10 @@ has a root of the same form, which the computer holds in a file (section 10, "Ad
   phone has an admin CA (section 10). Computers get member certificates; a computer holds a
   CA key only when the root phone makes it an admin (section 10, "Admins").
   A phone MUST ask for the user's presence (Face ID, the fingerprint or the passcode) before
-  it signs with the root or an admin key. A group CA has path length 1 (`checkCA`). A Welcome without CA keys makes a computer without them (section
+  it signs with the root or an admin key. Aurora OS lets no regular app ask the system for it,
+  so the Aurora app keeps its root or admin key in a token of its own in the TEE behind a PIN
+  the user chooses (at least four digits, apart from the phone's), which the TEE checks
+  before the key signs and which locks the key for good after seven wrong ones (D-94). A group CA has path length 1 (`checkCA`). A Welcome without CA keys makes a computer without them (section
   6).
 - **The app is a member.** It holds a member certificate of its own group with role
   `phone` and speaks the member protocol of section 4. It dials and never listens for
@@ -1404,10 +1432,19 @@ job checks it from 0.5.0.
 
 ### Admins
 
-Any member with the capability `admin` can be an admin, in a group a phone created and in one a computer created.
-Its admin key is in its TPM or a Mac's Secure Enclave (section 17) and otherwise a file next
-to its identity, so a thief with such a computer can act as an admin until another admin
-removes it.
+Any phone, and any member with the capability `admin`, can be an admin, in a group a phone
+created and in one a computer created. A member's admin key is in its TPM or a Mac's Secure
+Enclave (section 17) and otherwise a file next to its identity, so a thief with such a
+computer can act as an admin until another admin removes it. A phone's is in its hardware
+behind the owner's face, fingerprint or passcode (section 3).
+
+- A phone joins as a member (section 6) and offers no admin key while it joins. Once it is in
+  the group, a phone that is neither the root nor an admin makes its admin key (making it
+  asks the owner nothing; each signature does) and its hellos carry `admin_key`, its
+  SubjectPublicKeyInfo, as a member's do below. The root makes it an admin the same way, and
+  its `device` record keeps the role `phone` and the store its record named, with every power
+  (`powers` as an admin phone admitted as one). A phone without such a key, as a TV, offers
+  none and stays a member.
 
 - Every member with `admin` that is not the root makes a P-256 admin key when it starts in a group
   and keeps it in the identity file (`admin_key`,
@@ -1416,7 +1453,8 @@ removes it.
   SubjectPublicKeyInfo.
 - The root makes it an admin, the root phone with "Make it an admin" and the root computer
   with `cbb admin NAME`, after the user allows a computer whose keys sit in a file (section
-  17): it issues the member's admin CA for that key (the profile above, CN
+  17); it refuses a key the records already name for another device or a root, which would
+  give its holder a second device's admin CA. It issues the member's admin CA for that key (the profile above, CN
   `cbb admin <device ID>`), signs a `device` record for the member that names
   that admin CA in `admin`, and sends `{"t":"admin","admin_ca":...}` on its connection to
   the member. The member must be connected.
