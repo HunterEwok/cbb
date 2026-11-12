@@ -88,7 +88,7 @@ impl G {
         let mut d = Device::new(member.key.clone(), name, ROLE_MEMBER);
         d.rights = RIGHT_READ | RIGHT_SEND;
         f(&mut d);
-        self.rec(by, Kind::Device(d))
+        self.rec(by, Kind::device(d))
     }
 
     /// The root records the device of member as an admin with powers.
@@ -301,7 +301,7 @@ fn ordinary_and_guarded_leaves() {
     // The guard is a leaf's only.
     let mut d = Device::new(k("pc").key.clone(), "pc", ROLE_MEMBER);
     d.guarded = true;
-    let body = g.body(&k("root"), Kind::Device(d));
+    let body = g.body(&k("root"), Kind::device(d));
     assert!(body.check().unwrap_err().is("records/device/guarded"));
 }
 
@@ -687,7 +687,7 @@ fn competing_claims_stop_the_group_and_the_root_still_acts() {
 fn held_records_are_kept_not_applied() {
     let mut g = G::new();
     let laptop = k("laptop");
-    let mut body = g.body(&k("root"), Kind::Device(Device::new(laptop.key.clone(), "laptop", ROLE_MEMBER)));
+    let mut body = g.body(&k("root"), Kind::device(Device::new(laptop.key.clone(), "laptop", ROLE_MEMBER)));
     body.held = true;
     // The writer refuses a body it does not understand; a reader that got
     // one signed by a later version keeps it.
@@ -717,19 +717,19 @@ fn held_records_are_kept_not_applied() {
 #[test]
 fn newer_rules_stop_secrets_here() {
     let mut g = G::new();
-    g.root_rec(Kind::Settings(Settings { min_rules: 2, ..Settings::default() }));
+    g.root_rec(Kind::settings(Settings { min_rules: 2, ..Settings::default() }));
     let s = g.state();
     assert!(s.too_old);
     assert_eq!(s.settings.rules(), 2);
     let mut g = G::new();
-    g.root_rec(Kind::Settings(Settings { takeover_delay_ms: Some(0), ..Settings::default() }));
+    g.root_rec(Kind::settings(Settings { takeover_delay_ms: Some(0), ..Settings::default() }));
     let s = g.state();
     assert!(!s.too_old);
     assert_eq!(s.settings.delay_ms(), 0);
     // A field at its default is never written.
     let bad = Settings { min_rules: 1, ..Settings::default() };
     assert!(
-        Body { kind: Kind::Settings(bad), ..g.body(&k("root"), Kind::Unknown(1)) }
+        Body { kind: Kind::settings(bad), ..g.body(&k("root"), Kind::Unknown(1)) }
             .check()
             .unwrap_err()
             .is("records/settings/min_rules")
@@ -1756,10 +1756,10 @@ fn settings_take_only_the_values_of_their_rows() {
         (12, 1, "form/default"),
     ] {
         let r =
-            raw(&g, &root, Kind::Settings(plain.clone()), |m| m.push((field, crate::format::cbor::Value::Uint(value))));
+            raw(&g, &root, Kind::settings(plain.clone()), |m| m.push((field, crate::format::cbor::Value::Uint(value))));
         assert_eq!(r.map(|_| ()).unwrap_err().to_string(), rule, "{field} = {value}");
     }
-    let ok = raw(&g, &root, Kind::Settings(plain), |m| m.push((11, crate::format::cbor::Value::Uint(3)))).unwrap();
+    let ok = raw(&g, &root, Kind::settings(plain), |m| m.push((11, crate::format::cbor::Value::Uint(3)))).unwrap();
     assert_eq!(ok.body().encode(), ok.body_bytes());
 }
 
@@ -2009,7 +2009,7 @@ fn a_takeover_s_cut_holds_the_old_root_to_the_chain_it_saw() {
     let mut d = Device::new(other.key.clone(), "other", ROLE_PHONE);
     d.rights = RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS;
     d.holds_root = true;
-    let twin = Record::sign(Body { seq: 1, prev: None, ..g.body(&root, Kind::Device(d)) }, &root).unwrap();
+    let twin = Record::sign(Body { seq: 1, prev: None, ..g.body(&root, Kind::device(d)) }, &root).unwrap();
     let resolve =
         Record::sign(Body { seq: 2, prev: Some(twin.id()), ..g.body(&root, Kind::Resolve(vec![true_first])) }, &root)
             .unwrap();
@@ -2209,7 +2209,7 @@ mod differential {
                 0 => {
                     let mut d = Device::new(target.key.clone(), "dev", ROLE_MEMBER);
                     d.rights = RIGHT_READ | RIGHT_SEND;
-                    Kind::Device(d)
+                    Kind::device(d)
                 }
                 1 => Kind::Revoke(removal(&[target.hash], g.seen())),
                 2 => Kind::Freeze(removal(&[signers[1 + usize::from(arg) % 2].hash], g.seen())),
