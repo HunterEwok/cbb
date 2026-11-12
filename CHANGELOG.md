@@ -21,8 +21,10 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb-push` (APNs and UnifiedPush, `packaging/linux/cbb-push.service`), the member's sender, and the
   phones' calls `push_key`, `push_limits`, `push_registration` and `push_open` (error code 18,
   `push`). The iPhone and iPad app registers for push (a switch in Settings, on by default)
-  and opens each notification in an extension that holds only the push keys; a copy's text
-  shows with a Copy button, a secret never. Android, HarmonyOS and Aurora follow.
+  and opens each notification in an extension that holds what opens a body and a copy (the
+  push keys, the send key, the sealing secrets of the epochs in the group's window) and nothing
+  that signs a record; a copy's text shows with a Copy button, a secret never. It registers
+  again only when what it says changed. Android, HarmonyOS and Aurora follow.
 - The Rust core wipes the secrets it holds when it lets them go, prints none in `Debug` or
   an error, and compares every mark and confirmation tag in constant time; the C library
   wipes each answer as it is given back (docs/core-api.md, "Secrets"). Timing tests of the

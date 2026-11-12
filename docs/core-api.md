@@ -344,10 +344,10 @@ the core's.
 | `bug_allow` | `state`, `always` | `{"state"}`: the user allowed a report, and maybe always |
 | `bug_sent` | `state`, `fingerprint`, `version`, `post`, `ok`, `fixed_in` (what the server answered, optional), `now_ms` | `{"state"}`: the report went (`ok`), or it waits to be sent again |
 | `bug_pending` | `state`, `now_ms` | `{"queue", "state"}`: the reports waiting (`[{fingerprint, version, post, at_ms}]`), without those older than seven days |
-| `push_key` | none | `{"key", "send_key"}`: a new push key, 32 random bytes, and a new send key (P-256, PKCS #8), both base64: the push key one per group, kept where the notification extension reads it; the send key one per token, drawn again with each new token, kept by the app only (see "Push") |
+| `push_key` | none | `{"key", "send_key", "slot"}`, base64: a new push key (32 random bytes), send key (P-256, PKCS #8) and slot (16 random bytes). The push key and the slot are one per group, the push key drawn again after a membership change and the slot kept; the send key is one per token for every group, drawn again with each new token (see "Push") |
 | `push_limits` | `env` (the platform, as the env registry numbers it) | `{"known", "body", "token", "kinds"}`: whether this core knows the platform, the size of its sealed bodies, the longest token, the bits of `kinds` it defines; the apps hold no number of the format |
-| `push_registration` | `now_ms` (the phone's clock), `saved_seq` (the last seq the app saved, left out when none), `kinds` (0 turns push off), and with `kinds` ≠ 0 `env`, `key` (the push key, base64), `send_key` (the token's send key from `push_key`, base64) and either `token` (base64, as the platform gave it) or `unifiedpush` (`{url, p256dh, auth}`, the last two base64) | `{"frame", "seq"}`: message `push` (t 28) as a frame, base64, for every member connection of the group, signed with the send key, and its seq, max(`saved_seq` + 1, `now_ms`), which the app saves before it sends the frame, so that a phone restored from a backup still moves forward; code 18 when a field breaks its row (a UnifiedPush endpoint that is not `https` on port 443 with a DNS name, a key not 32 bytes) |
-| `push_open` | `keys` (`[{key, seq}]`: the group's push keys the phone holds, the current one first), `body` (base64, the sealed body as the notification carries it), `me` (the phone's device ID), `origins` (`[{key, rights, frozen}]`: the devices the app last saved, each member key as the records encode it, base64), `sealing` (`[{epoch, secret}]`: the phone's copy-opening secrets), `too_old`, `halted`, `hints_only` (booleans, false when left out: `halted` opens nothing, `hints_only` after an event of removal, a new root or a stop until the app has run), `now_ms` and `window_ms` (the extension's clock and how old a copy may be) | `{"kind", "key_index", ...}`: `copy` with `id`, `origin`, `type` (`text`, `media`, `files` or `other`), `secret`, `ttl_ms` and `text` once the origin, its signature and `commit` hold and the copy is within the window; `waits` with `id` and `origin` when the copy did not fit, does not open here or is older; `event` with `id`, `event`, `device`, `time_ms` for an event less than a day old; `hint` for anything else. Only `copy` states a fact; the rest the app shows as "open the app". The extension keeps the IDs it showed and shows none twice. Code 18 when no key opens the body |
+| `push_registration` | `now_ms` (the phone's clock), `saved_seq` (the last seq the app saved, left out when none), `kinds` (0 turns push off), and with `kinds` ≠ 0 `env`, `key` (the push key, base64), `send_key` (the token's send key from `push_key`, base64), `slot` (the group's, base64), `challenge` (the last one the push service sent for this send key, base64, left out when none) and either `token` (base64, as the platform gave it) or `unifiedpush` (`{url, p256dh, auth}`, the last two base64) | `{"frame", "seq", "key_hint"}`: message `push` (t 28) as a frame, base64, for every member connection of the group, signed with the send key; its seq, max(`saved_seq` + 1, `now_ms`), which the app saves before it sends the frame, so that a phone restored from a backup still moves forward; and with push on the send key's hint (the first 8 bytes of its hash, base64), which the push service puts beside each challenge. Code 18 when a field breaks its row (a UnifiedPush endpoint that is not `https` on port 443 with a DNS name, a key not 32 bytes, a slot or challenge not 16) |
+| `push_open` | `keys` (`[{key, seq}]`: the group's push keys the phone holds, the current one first), `body` (base64, the sealed body as the notification carries it), `me` (the phone's device ID), `origins` (`[{key, rights, frozen}]`: the devices the app last saved, each member key as the records encode it, base64), `sealing` (`[{epoch, secret}]`: the phone's sealing secrets of the epochs in the group's window), `too_old`, `halted`, `hints_only` (booleans, false when left out: `halted` opens nothing, `hints_only` after an event of removal, a new root or a stop until the app has applied it and drawn a new push key), `now_ms` and `window_ms` (the extension's clock and how old a copy may be) | `{"kind", "key_index", ...}`: `copy` with `id`, `origin`, `type` (`text`, `media`, `files` or `other`), `secret`, `ttl_ms` and `text` once the origin, its signature and `commit` hold and the copy is within the window; `waits` with `id` and `origin` when the copy did not fit, does not open here or is older; `event` with `id`, `event`, `device`, `time_ms` for an event less than a day old; `hint` for anything else. Only `copy` states a fact; the rest the app shows as "open the app". The extension keeps the IDs it showed and shows none twice. Code 18 when no key opens the body |
 
 The arguments of `evaluate` are a case of `testdata/interop/v2-records.json` as it is.
 
@@ -381,18 +381,30 @@ The numbers and names never change meaning; new codes are added at the end of th
 A phone whose app is closed hears of a copy or an event through its platform's push service
 (format section 20.4, `cbb_core::push`). The phone draws a push key per group (`push_key`),
 sends the group its token, platform and key in message `push` (`push_registration`), and opens
-each body that arrives with `push_open`. Its notification extension calls only `push_open`,
-holding the push keys, the copy-opening secrets and the origins the app last saved, in a
-keychain group of its own: never the member key, which signs (the store `push_open` builds
-refuses to sign or keep a key). The text of a notification comes from the app's translations,
-never from a string in the body; only a `copy` answer carries text, and the apps never show a
-secret's text on a notification.
+each body that arrives with `push_open`. Its notification extension calls only `push_open`. It
+holds, in a keychain group of its own (this device only, after the first unlock), what opens a
+body and a copy in it, and nothing that signs a record: the push keys, the send key (which signs
+only registrations to the push service), the phone's sealing secrets of the epochs still in the
+group's window, the origins and the window. Never the member key, an admin's or the root's key,
+the recovery secret or anything else that signs records: a copy in a body is sealed to the
+phone's own sealing key, so the extension needs that secret to show it, and nothing more (the
+store `push_open` builds refuses to sign or keep a key). The app writes the epoch secrets and the
+window on every rotation of its sealing key and removes the ones that left the window. The text
+of a notification comes from the app's translations, never from a string in the body; only a
+`copy` answer carries text, and the apps never show a secret's text on a notification.
 
-On the iPhone and iPad, `PushVault` (CBBKit) keeps each group's push keys, send key and last
-registration in the keychain access group `tools.cbb.push`, which the app and its notification
-extension (`apps/ios/NotificationService`) share and which holds no member key; `App/PushSetup.swift`
-asks iOS for the token and makes the registrations, and the extension opens each body with
-`push_open`. A copy's text gets the notification's Copy button.
+On the iPhone and iPad, `PushVault` (CBBKit) keeps this in the keychain access group
+`tools.cbb.push`, which the app and its notification extension (`apps/ios/NotificationService`)
+share; the member key goes to the app's first group, which the extension does not have.
+`App/PushSetup.swift` asks iOS for the token and makes the registrations: one sender (token,
+platform, send key, its hint, the last challenge) for every group, and per group the push keys,
+the slot and the last registration. A registration is made again only when what it says changed
+(the token, the switch, a challenge, a membership change) or a member sent `push-renew`, never
+because the app ran. A device gone or a new root draws a new push key, and the previous one is
+not kept, so a removed member's bodies open nothing; until then an event of a removal, a new root
+or a stop marks the group hints-only (`PushMarks`), and the mark is spent once the app has
+applied that change and drawn the new key. A copy's text gets the notification's Copy button;
+the test tool's row in Settings is in debug builds only.
 
 On the members the sender is `member/src/pusher.rs`, and the project's push service is
 `cbb-push` (`member/src/pushd`). The member's sync calls only the sender's seam, written at the
@@ -423,7 +435,8 @@ the first, `-new-state`):
   A send whose signature covers it, under that key, confirms that key: only the token's holder
   saw it. A replayed challenge, one made for another key or token, or one past its life confirms
   nothing. The app keeps a challenge only for its own token and its own key (the challenge
-  carries the first 8 bytes of the hash of the key it is for).
+  carries the first 8 bytes of the hash of the key it is for, which `push_registration` answers
+  as `key_hint`), and the extension keeps one only on the same terms.
 - Once a key is confirmed, only that key sends; another key is answered `stale` (7) and gets a
   challenge alone (a push with no body, within the token's budget for them), and takes the
   binding only by confirming it, never by time. A member that binds first so causes no refusal

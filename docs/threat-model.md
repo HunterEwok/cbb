@@ -91,6 +91,9 @@ of service, **E**levation of privilege.
 | 28 | members in between | I, T, S | a hub or another member that passes a copy on reads it, changes it, or makes a copy in another device's name | each copy sealed to its readers (X-Wing for each reader's key, ChaCha20-Poly1305 for the copy and its blob in segments) and signed by the origin's member key; every member checks the certificate and the signature before it passes a copy on, and no member takes a copy in the open; a hub may only pass copies on and read none (D-84) | `internal/clip`, `core/src/copy.rs` |
 | 29 | members in between | I | a member in between learns what the copies are | the kind, the text, file names and their number travel inside the seal; sizes show only in steps, an attachment only to 64 KiB; **accepted**: which device sent a copy, when and to which devices | `internal/clip` |
 | 30 | release | T | someone on the network changes the ZX Spectrum Next's files, which NextZXOS fetches over plain HTTP | each `CBB` installs only the overlay, driver and Pi `cbb` whose SHA-256 it carries; `.cbb update` takes a newer `CBB` only from `zxnext.json`, signed by a release key, which the Pi's `cbb` checks against its pinned roots and refuses for a release older than its own; **accepted**: the first `CBB`, which `.http` fetches, is as trustworthy as the network (residual risks) | `apps/zxnext/src/cbb.c`, `member/src/next.rs`, `internal/release/zxnext.go` |
+| 31 | internet | I | a push platform (APNs, FCM, a UnifiedPush server, Push Kit) or CBB's push service reads what reaches a closed app | each body sealed under the group's push key of the phone, all bodies one size, the notification's words from the app's translations; only the phone opens it; **accepted**: the platform and the service see when a phone is notified (residual risks) | `core/src/push.rs`, `member/src/pushd` |
+| 32 | device | I, E | a bug in the notification extension, which runs whenever a push arrives, gives its keys away | the extension's keychain group holds what opens a body and a copy (the push keys, the send key, the sealing secrets of the epochs in the group's window, the origins and the window) and nothing that signs a record: no member, admin or root key and no recovery secret, which stay in the app's own group; the app writes the epochs on every rotation and removes those that left the window | `apps/ios/CBBKit/Sources/CBBKit/PushVault.swift`, `apps/ios/NotificationService` |
+| 33 | internet | D, S | a stranger registers the phone's token first and so silences or impersonates the phone at the push service | the service binds a token to the key that answers its challenge, which only the token's holder receives; while no key is confirmed any key passes, so the phone's own sends are never refused; a challenge is bound to the token, the key and 14 days, and a replayed or foreign one confirms nothing | `member/src/pushd/binding.rs` |
 
 ## Residual risks
 
@@ -101,6 +104,8 @@ of service, **E**levation of privilege.
 - Keys in a file (Macs, Windows PCs and Linux computers without a TPM, the lite member) can be
   copied by whoever reads the disk; encrypt the disk and remove a lost device at once.
 - A blind relay and the project's forwarder see addresses and times of activity (threat 10).
+- A push platform and CBB's push service see when a phone is notified, and the platform which
+  app on which phone (threat 31); turn push off in the app's settings to avoid it.
 - On the ZX Spectrum Next, the first `.http -h cbb.tools -u /zxnext -f CBB` trusts the
   network it runs over: neither `.http` nor the ESP has TLS, and nothing on the Next can
   check the `CBB` it fetches. Whoever changes that download controls what the Next installs,
