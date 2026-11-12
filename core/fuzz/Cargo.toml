@@ -77,3 +77,45 @@ path = "fuzz_targets/format.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "records_decode"
+path = "fuzz_targets/records_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "join"
+path = "fuzz_targets/join.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "msg"
+path = "fuzz_targets/msg.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "content"
+path = "fuzz_targets/content.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "commands"
+path = "fuzz_targets/commands.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "beacon"
+path = "fuzz_targets/beacon.rs"
+test = false
+doc = false
+bench = false
