@@ -37,6 +37,8 @@
 //! 10. A takeover cuts the old root at the claim's `seen`: what that root
 //!     signs after it, removals included, does not count once the claim
 //!     does; a live root cancels the claim within the delay instead.
+//! 11. A device's member key and its admin key go together: a removal or
+//!     freeze that names one names both.
 //!
 //! The bytes are the format's (`crate::format`): a record is read from its
 //! envelope with [`Record::decode`] and written with [`Record::envelope`].

@@ -487,6 +487,38 @@ fn removals_follow_the_powers() {
 }
 
 #[test]
+fn a_device_s_two_keys_are_removed_together() {
+    let mut g = G::new();
+    let (pt, t) = (k("phone t"), k("admin t"));
+    g.admin(&pt, &t, POWER_ADMIT | POWER_TAKEOVER);
+    g.device(&k("root"), &k("laptop"), "laptop", |_| {});
+    let seen = g.seen();
+    g.root_rec(Kind::Revoke(removal(&[pt.hash], seen)));
+    let s = g.state();
+    assert!(s.revoked.contains(&pt.hash) && s.revoked.contains(&t.hash));
+    let admitted = g.device(&t, &k("other laptop"), "other laptop", |_| {});
+    let seen = g.seen();
+    let claim = g.rec(&t, Kind::Claim { root: k("other root").key.clone(), seen });
+    let s = state_of(&g.root.key, &g.recs, &BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]));
+    assert!(!s.counting.contains(&admitted.id()) && !s.counting.contains(&claim.id()));
+    assert!(s.device(&k("other laptop").key.device_id()).is_none());
+    assert_eq!(s.roots, vec![g.root.hash]);
+    // And the reverse: a removal by admin key removes the member key too.
+    let mut g = G::new();
+    g.admin(&pt, &t, POWER_ADMIT);
+    let seen = g.seen();
+    g.root_rec(Kind::Freeze(removal(&[t.hash], seen)));
+    let s = g.state();
+    assert!(s.device(&pt.key.device_id()).is_some_and(|d| d.frozen));
+    let mut g = G::new();
+    g.admin(&pt, &t, POWER_ADMIT);
+    let seen = g.seen();
+    g.root_rec(Kind::Revoke(removal(&[t.hash], seen)));
+    let s = g.state();
+    assert!(s.revoked.contains(&pt.hash) && s.device(&pt.key.device_id()).is_none());
+}
+
+#[test]
 fn a_claim_takes_effect_after_the_device_held_it() {
     let mut g = G::new();
     let (pa, a, laptop, n) = (k("phone a"), k("admin a"), k("laptop"), k("new root"));

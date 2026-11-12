@@ -1247,7 +1247,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
         let own = ra.b().signer == rb.b().signer;
         a != b
             && ra.removal().is_some_and(|rm| {
-                rm.keys.binary_search(&rb.b().signer).is_ok()
+                self.with_pair(&rb.b().signer).iter().any(|k| rm.keys.binary_search(k).is_ok())
                     && if own { rb.b().seq > ra.b().seq } else { rm.seen_of(&rb.b().signer) < rb.b().seq }
             })
     }
@@ -1433,6 +1433,17 @@ impl<'e, 'a> Epoch<'e, 'a> {
                 }
             }
         }
+        // A device's member key and its admin key go together.
+        let pairs: Vec<(KeyHash, KeyHash)> =
+            self.admins.keys().filter_map(|a| self.member_of_admin(a).map(|m| (*a, m))).collect();
+        for set in [&mut self.revoked, &mut self.frozen] {
+            for (a, m) in &pairs {
+                if set.contains(a) || set.contains(m) {
+                    set.insert(*a);
+                    set.insert(*m);
+                }
+            }
+        }
         let forked: Vec<(KeyHash, u64)> = self.forked.iter().map(|(k, v)| (*k, *v)).collect();
         for (signer, seq) in forked {
             let records =
@@ -1472,8 +1483,17 @@ impl<'e, 'a> Epoch<'e, 'a> {
             r.is_freeze()
                 && self.root_record(i)
                 && !thawed.contains(&r.id)
-                && r.removal().is_some_and(|rm| rm.keys.binary_search(k).is_ok())
+                && r.removal().is_some_and(|rm| self.with_pair(k).iter().any(|k| rm.keys.binary_search(k).is_ok()))
         })
+    }
+
+    /// k with the other key of its device: an admin key's member key, or
+    /// the admin key of the device whose member key k is.
+    fn with_pair(&self, k: &KeyHash) -> Vec<KeyHash> {
+        let mut keys = vec![*k];
+        keys.extend(self.member_of_admin(k));
+        keys.extend(self.admins.keys().filter(|a| self.member_of_admin(a).as_ref() == Some(k)).copied());
+        keys
     }
 
     fn claim(&self, i: usize, state: ClaimState) -> Claim {
