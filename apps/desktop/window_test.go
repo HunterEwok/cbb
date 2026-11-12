@@ -155,7 +155,7 @@ func callDesk(d *Desk, name string, body io.Reader) ([]byte, error) {
 // picture.
 func (w *window) open(lang string) *Desk {
 	d := &Desk{socket: w.svc.path, lang: lang, tr: translations(lang),
-		settings:     Settings{Color: "terminal", Appearance: "system", Layout: "tiles"},
+		settings:     Settings{Appearance: "system", Layout: "tiles"},
 		settingsPath: filepath.Join(w.dir, fmt.Sprintf("desktop-%d.json", w.desks.Add(1)))}
 	w.desk.Store(d)
 	// Each window starts from the group's order, as a fresh member would.
@@ -221,20 +221,20 @@ func (w *window) themes(t *testing.T) {
 	}
 
 	type pair struct{ Background, Accent string }
-	type color struct {
+	type theme struct {
 		Name        string
 		Dark, Light pair
 	}
-	var colors []color
-	w.eval(`import("./tokens.js").then((m) => m.colors)`, &colors)
-	if len(colors) != 10 {
-		t.Fatalf("Settings offers %d colours, not ten", len(colors))
+	var themes []theme
+	w.eval(`import("./tokens.js").then((m) => m.themes)`, &themes)
+	if len(themes) != 11 || themes[0].Name != "board" {
+		t.Fatalf("Settings offers %d themes, not eleven with the chalkboard first", len(themes))
 	}
 	w.eval(`$click("#settings")`, nil)
 	for _, look := range []string{"dark", "light"} {
 		w.eval(fmt.Sprintf(`$click('[data-appearance="%s"]')`, look), nil)
-		for _, c := range colors {
-			w.eval(fmt.Sprintf(`$click('[data-color="%s"]')`, c.Name), nil)
+		for _, c := range themes {
+			w.eval(fmt.Sprintf(`$click('[data-theme="%s"]')`, c.Name), nil)
 			want := c.Dark
 			if look == "light" {
 				want = c.Light
@@ -248,17 +248,17 @@ func (w *window) themes(t *testing.T) {
 		}
 	}
 	// System follows the system's choice.
-	w.eval(`$click('[data-appearance="system"]'); $click('[data-color="terminal"]')`, nil)
+	w.eval(fmt.Sprintf(`$click('[data-appearance="system"]'); $click('[data-theme=%q]')`, themes[0].Name), nil)
 	for _, look := range []string{"dark", "light"} {
 		w.page.call(t, "Emulation.setEmulatedMedia", map[string]any{"features": []map[string]string{{"name": "prefers-color-scheme", "value": look}}}, nil)
-		want := colors[0].Dark.Background
+		want := themes[0].Dark.Background
 		if look == "light" {
-			want = colors[0].Light.Background
+			want = themes[0].Light.Background
 		}
 		w.wait(fmt.Sprintf(`$css("--background") === %q`, strings.ToUpper(want)))
 	}
 	w.eval(`$click('#settings-dialog menu button')`, nil)
-	w.waitSettings(d, func(s Settings) bool { return s.Appearance == "system" && s.Color == "terminal" })
+	w.waitSettings(d, func(s Settings) bool { return s.Appearance == "system" && s.Theme == themes[0].Name })
 
 	w.eval(`$click('[data-layout="list"]')`, nil)
 	w.wait(`$all("#devices .list .row").length === 14`)
@@ -743,6 +743,21 @@ func (w *window) switches(t *testing.T) {
 	w.eval(`$click("#sync")`, nil)
 	w.wait(`$q("#sync").getAttribute("aria-pressed") === "true" && $q("#message").textContent.startsWith("Sync is on here")`)
 
+	// The button in the corner of this computer's tile is the house too.
+	w.eval(`$click('.mute-corner[data-mute="self"]')`, nil)
+	w.wait(`$q('.mute-corner[data-mute="self"]').getAttribute("aria-pressed") === "true" && $q('.tile[data-id="self"]').classList.contains("muted") && $q("#message").textContent.startsWith("Sync is off here")`)
+	if h := w.svc.lastSync(); h.On == nil || *h.On || h.ForMS != 0 {
+		t.Errorf("the tile's corner sent %+v", h)
+	}
+	w.eval(`$click('.mute-corner[data-mute="self"]')`, nil)
+	w.wait(`$q('.mute-corner[data-mute="self"]').getAttribute("aria-pressed") === "false" && $q("#message").textContent.startsWith("Sync is on here")`)
+	// On another device's tile, held, it asks how long the admin mutes it
+	// for the group, and opens no tile menu.
+	w.eval(`$q('.mute-corner[data-mute="mac"]').dispatchEvent(new MouseEvent("contextmenu", {bubbles: true, cancelable: true})); true`, nil)
+	w.wait(`$q("#mute-dialog").open && !$q("#tile-menu")?.open`)
+	w.eval(`$clickText("#mute-dialog .menu-items button", "For 15 minutes")`, nil)
+	w.wait(`$q("#message").textContent.startsWith("It is muted") && $all("#devices .tile").length === 14`)
+
 	// The globe asks first; Cancel runs nothing.
 	w.eval(`$click("#away")`, nil)
 	w.wait(`$q("#confirm").open && $q("#confirm-title").textContent === "Turn Everywhere on?"`)
@@ -755,8 +770,8 @@ func (w *window) switches(t *testing.T) {
 	ranMu.Lock()
 	got := ran
 	ranMu.Unlock()
-	if !reflect.DeepEqual(got, [][]string{{"global", "on"}}) {
-		t.Errorf("the globe ran %q", got)
+	if !reflect.DeepEqual(got, [][]string{{"mute", "-on", "mac", "-for", "900000ms"}, {"global", "on"}}) {
+		t.Errorf("the corner and the globe ran %q", got)
 	}
 }
 

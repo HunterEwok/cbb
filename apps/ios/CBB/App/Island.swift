@@ -13,8 +13,8 @@ enum Island {
     /// How long the result of a sync stays.
     static let flashFor: Duration = .seconds(4)
 
-    private static var color: String {
-        UserDefaults.standard.string(forKey: AccentChoice.key) ?? Tokens.colors[0].name
+    private static var theme: String {
+        UserDefaults.standard.string(forKey: ThemeChoice.key) ?? Tokens.themes[0].name
     }
 
     private static func running(_ kind: StatusActivity.Kind) -> Activity<StatusActivity>? {
@@ -26,12 +26,12 @@ enum Island {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         if let a = running(kind) {
             var state = a.content.state
-            guard state.line != line || state.color != color else { return }
-            (state.line, state.color) = (line, color)
+            guard state.line != line || state.theme != theme else { return }
+            (state.line, state.theme) = (line, theme)
             Task { await a.update(ActivityContent(state: state, staleDate: nil)) }
             return
         }
-        let state = StatusActivity.ContentState(kind: kind, line: line, since: .now, color: color)
+        let state = StatusActivity.ContentState(kind: kind, line: line, since: .now, theme: theme)
         do {
             _ = try Activity.request(attributes: StatusActivity(), content: ActivityContent(state: state, staleDate: nil))
         } catch {

@@ -72,9 +72,12 @@ internal object Readers {
     fun small(compose: ComposeContentTestRule): List<String> =
         compose.onAllNodes(hasClickAction()).fetchSemanticsNodes().filter { it.placed() }.mapNotNull { node ->
             val min = with(node.layoutInfo.density) { 48.dp.toPx() } - 1f
-            val b = node.touchBoundsInRoot
-            if (b.width < min || b.height < min) {
-                val dp = with(node.layoutInfo.density) { "${b.width.toDp().value.toInt()}×${b.height.toDp().value.toInt()} dp" }
+            // A control scrolled wholly out of the screen has no touch bounds
+            // left: its own size, without the touch padding, stands for them.
+            val t = node.touchBoundsInRoot
+            val (w, h) = if (t.isEmpty) node.size.width.toFloat() to node.size.height.toFloat() else t.width to t.height
+            if (w < min || h < min) {
+                val dp = with(node.layoutInfo.density) { "${w.toDp().value.toInt()}×${h.toDp().value.toInt()} dp" }
                 "\"${node.label()}\" is $dp to touch"
             } else null
         }

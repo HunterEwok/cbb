@@ -10,7 +10,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var model: MacModel
     @Environment(\.palette) private var palette
-    @AppStorage(AccentChoice.key) private var color = Tokens.colors[0].name
+    @AppStorage(ThemeChoice.key) private var theme = Tokens.themes[0].name
     @AppStorage(Appearance.key) private var appearance = Appearance.system.rawValue
     @AppStorage("ShowErrorDetails") private var errorDetails = MacModel.showsErrorDetails
     @AppStorage("AdvancedSettings") private var advanced = false
@@ -42,14 +42,14 @@ struct SettingsView: View {
                         .help(Text("Language"))
                 }
                 HStack(spacing: Tokens.spacingSmall) {
-                    ForEach(Tokens.colors, id: \.name) { pair in
-                        let p = (Appearance(rawValue: appearance) ?? .system).palette(pair.name, for: palette.dark ? .dark : .light)
-                        Circle().fill(p.accent).frame(width: 22, height: 22)
-                            .overlay(Circle().stroke(palette.text, lineWidth: pair.name == color ? 2 : 0).padding(-3))
-                            .onTapGesture { color = pair.name }
-                            .help(Text(AccentChoice.title(pair.name)))
-                            .accessibilityLabel(Text(AccentChoice.title(pair.name)))
-                            .accessibilityAddTraits(pair.name == color ? [.isButton, .isSelected] : .isButton)
+                    ForEach(Tokens.themes, id: \.name) { t in
+                        let p = (Appearance(rawValue: appearance) ?? .system).palette(t.name, for: palette.dark ? .dark : .light)
+                        ThemeSwatch(palette: p).frame(width: 22, height: 22)
+                            .overlay(Circle().stroke(palette.text, lineWidth: t.name == theme ? 2 : 0).padding(-3))
+                            .onTapGesture { theme = t.name }
+                            .help(Text(ThemeChoice.title(t.name)))
+                            .accessibilityLabel(Text(ThemeChoice.title(t.name)))
+                            .accessibilityAddTraits(t.name == theme ? [.isButton, .isSelected] : .isButton)
                     }
                 }
                 if language != AppLanguage.running {

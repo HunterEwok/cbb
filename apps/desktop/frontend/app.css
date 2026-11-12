@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
-/* The Glass design of the phone apps (docs/apps.md, Themes); app.js sets the
-   colours from tokens.js. */
+/* The themes of the phone apps (docs/apps.md, Themes); app.js sets the
+   colours and the shape of the chosen theme from tokens.js. Controls stay
+   the system's; a theme draws only the window's own surfaces. */
 
 * { box-sizing: border-box; }
 
@@ -15,6 +16,15 @@ html, body {
 }
 
 body { display: flex; flex-direction: column; }
+
+/* A theme with a grid draws it on the window, as on a drawing sheet. */
+html[data-grid="true"] body {
+  background:
+    linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 24px 24px,
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 24px 24px,
+    var(--background);
+}
+html:not([data-material="glass"]):not([data-material="liquid"]) #glow { display: none; }
 
 #glow {
   position: fixed;
@@ -115,7 +125,7 @@ main { flex: 1; display: flex; min-height: 0; }
 .row + .row, .line + .line { border-top: 1px solid var(--line); }
 .row .name { flex: 1; }
 
-.glyph { display: inline-grid; place-items: center; border-radius: 30%; background: var(--line); color: var(--text-dim); flex: none; }
+.glyph { display: inline-grid; place-items: center; border-radius: var(--radius-chip); background: var(--soft); color: var(--text-dim); flex: none; }
 .glyph.on { background: var(--soft); color: var(--accent); }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-dim); opacity: .5; flex: none; }
 .dot.on { background: var(--accent); opacity: 1; }
@@ -207,14 +217,14 @@ dialog p { white-space: pre-wrap; }
 dialog .switch { display: flex; margin: 8px 0; }
 .field.code { font-size: 28px; text-align: center; letter-spacing: .15em; margin: 8px 0; }
 p.code { font-size: 32px; font-weight: 700; letter-spacing: .15em; margin: 4px 0 12px; user-select: all; }
-#swatches button { width: 28px; height: 28px; border-radius: 50%; padding: 0; border: 2px solid transparent; }
+#swatches button { width: 28px; height: 28px; border-radius: var(--radius-chip); padding: 0; border: 2px solid var(--line); }
 #swatches button[aria-checked="true"] { border-color: var(--text); }
 
 /* The user's order and collections (docs/apps.md, "Collections and the order of the tiles"). */
 .cell { position: relative; display: flex; }
-.cell > .tile, .cell > .row { flex: 1; min-width: 0; }
+.cell > .tile, .cell > .row, .cell > .tile-box { flex: 1; min-width: 0; }
 .list > .cell + .cell, .list > .cell + .row, .list > .row + .cell { border-top: 1px solid var(--line); }
-.cell.over > .tile, .cell.over > .row { outline: 2px dashed var(--accent); }
+.cell.over > .tile, .cell.over > .row, .cell.over > .tile-box > .tile { outline: 2px dashed var(--accent); }
 .cell.dragging { opacity: .4; }
 .row.inside { padding-left: 40px; }
 .row.section { font-weight: 600; }
@@ -234,6 +244,24 @@ button.icon[aria-pressed="true"] { background: var(--soft); color: var(--accent)
 .check { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; }
 
 
+/* The mute button in a tile's corner (docs/apps.md, "Muting from the tile"):
+   a 26px face in a 40px target; muted, the face fills with the warning
+   colour and the tile's line turns dashed. */
+.tile-box { position: relative; display: flex; min-width: 0; }
+.tile-box > .tile { flex: 1; min-width: 0; }
+.tile.cornered .top { padding-inline-end: 30px; justify-content: flex-start; gap: 6px; }
+.tile.muted { border-style: dashed; border-color: var(--danger); }
+.danger-text { color: var(--danger); }
+.mute-corner {
+  position: absolute; top: 0; inset-inline-end: 0; width: 40px; height: 40px; padding: 0;
+  border: 0; background: transparent; color: var(--text-dim); display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.mute-corner > span {
+  width: 26px; height: 26px; box-sizing: border-box; display: flex; align-items: center; justify-content: center;
+  border: max(var(--stroke), 1px) solid var(--line); border-radius: var(--radius-chip);
+}
+.mute-corner.on > span { background: var(--danger); border-color: var(--danger); color: var(--on-accent); }
+.mute-corner:focus-visible { outline: 2px solid var(--accent); outline-offset: -5px; border-radius: var(--radius-chip); }
 /* Why it does not sync: the main reason large, a stop in the danger colour. */
 #why-list .why { padding: 6px 0; border-bottom: 1px solid var(--line); }
 #why-list .why.main > div:first-child { font-weight: 600; font-size: 1.1em; }

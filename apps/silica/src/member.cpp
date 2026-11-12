@@ -624,11 +624,15 @@ void Member::pollPeers()
     Failure failure;
     const QJsonObject a = call(m_member, QStringLiteral("peers"), QJsonObject(), &failure);
     QStringList names;
+    QStringList muted;
     for (const QJsonValue &p : a.value(QStringLiteral("peers")).toArray()) {
         const QJsonObject o = p.toObject();
         const QString name = o.value(QStringLiteral("name")).toString();
         names.append(name.isEmpty() ? o.value(QStringLiteral("device")).toString().left(8) : name);
+        if (o.value(QStringLiteral("muted")).toBool())
+            muted.append(o.value(QStringLiteral("device")).toString());
     }
+    m_mutedPeers = muted;
     if (names != m_peers) {
         m_peers = names;
         emit changed();
@@ -734,7 +738,13 @@ void Member::pollDevices()
         Errors::log(QStringLiteral("member: the devices: %1 (%2)").arg(failure.message, failure.details));
         return;
     }
-    const QVariantList devices = a.value(QStringLiteral("devices")).toArray().toVariantList();
+    QVariantList devices = a.value(QStringLiteral("devices")).toArray().toVariantList();
+    // A connected device's mute, as its hello says, for its tile's button.
+    for (QVariant &v : devices) {
+        QVariantMap d = v.toMap();
+        d.insert(QStringLiteral("muted"), m_mutedPeers.contains(d.value(QStringLiteral("device")).toString()));
+        v = d;
+    }
     const QJsonObject al = call(m_member, QStringLiteral("alerts"), QJsonObject(), &failure);
     const QVariantList alerts =
         failure.isNull() ? al.value(QStringLiteral("alerts")).toArray().toVariantList() : m_alerts;

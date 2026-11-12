@@ -96,6 +96,17 @@ they look, so both apps are built to the same plan.
    its row and its page. A phone takes both commands: muted, its copies stay on it, and Home
    says so until an admin unmutes it, an admin phone itself on its own page.
 
+   **Muting from the tile**: every tile has a small button in its corner (the end of the
+   line, so on the left in Arabic and Hebrew): a 28 pt face in a 44 pt target, while the rest
+   of the tile still opens the device. On this phone's own tile it is the house: a tap turns
+   sync off until turned on again, or on. On another device's tile it shows only on an admin
+   and mutes the device for the group, or unmutes it. A long press (a right click on a
+   computer) picks the time, as the house does. Muted, the button fills with the warning
+   colour and the tile's line turns dashed; the tile shows the new state at once and goes
+   back, with the error, only when the change is refused, so it never blinks or leaves the
+   list while the command goes out. The Mac, the tray app, Android and Aurora have the same
+   button (Aurora knows another device's mute while it is connected).
+
    **Images and files** (docs/design.md, "Images and files"): the button sends an image on
    the clipboard as PNG or JPEG (HEIC and other formats are converted) and fetches a
    computer's image whole before it writes it, an image by its hash: the same image twice is
@@ -161,7 +172,7 @@ they look, so both apps are built to the same plan.
    after which only the device's own user turns them on again. A phone that is not an admin shows the list without
    actions and says which phones are admins.
 5. **Settings**, the same on the iPhone, Android and Aurora: first the basic ones, the theme
-   (System, Dark or Light) as icons with the language in a row and the ten colours, without
+   (System, Dark or Light) as icons with the language in a row and the ten themes, without
    a heading, the notifications, the watch, the recovery key on the root, the switch
    "Advanced settings", the admin PIN on Aurora ("The admin PIN on Aurora" below), leaving
    the group, and about (seven taps on the version show the
@@ -539,7 +550,7 @@ service and its clipboard agent keep syncing without it.
   in the same three states, single-colour: on Windows a black and a white ICO, which the
   system switches with the taskbar's theme; on Linux a white PNG, black when the desktop
   portal says the user prefers a light look (`color-scheme`), read once at start.
-- **Settings**: the appearance and the language as icons and a list, the ten colours
+- **Settings**: the appearance and the language as icons and a list, the ten themes
   (`frontend/tokens.js`, which `go run ./tools/tokens` writes with the Swift and Kotlin
   tokens), "Open at sign-in" (on Linux an entry `cbb-tray.desktop` with `Hidden=true` in the
   user's autostart folder, on Windows the user's `StartupApproved\Run` value, as the Task
@@ -1085,19 +1096,33 @@ the app on real devices.
 
 ## Themes
 
-- Colours, type, spacing and corner radii are design tokens, defined once in
-  `apps/design/tokens.json` and generated into Swift and Kotlin, so both apps match.
-- One style, **Glass**, in ten colours: Terminal (the default, green), Midnight, Amber,
-  Ocean, Teal, Coral, Rose, Lime, Graphite and Ruby. Each colour has a dark and a light
-  palette; the theme is System (the system's light or dark mode), Dark or Light.
-- `tokens.json` holds each colour's accent for dark and light and the two neutral bases; the
-  generator mixes a little of the accent into the background and the surfaces, so adding a
-  colour is one line of data.
+- Eleven themes, each a full set of design tokens defined once in `apps/design/tokens.json` and
+  generated into Swift, Kotlin and JavaScript, so every app matches: **Chalkboard** (the
+  default, the look of the website: chalk on slate over felt in the dark, graphite on pale
+  slate over sand-coloured cloth in the light, walnut lines, a faint grid), **Blueprint** (a
+  drawing sheet, blue lines on white or a blueprint in the dark, IBM Plex),
+  **Precise**, **Glass** (the look of the first versions: a deep background, a glow of the
+  accent, glass tiles), **Soft**, **Swiss**, **Hardware**, **Art Deco**, **Liquid Glass**,
+  **Terminal** and **Retro**.
+- A theme is its style (the faces, the corners of buttons, cards, tiles and chips, the width
+  of its lines, its material: flat, glass, liquid or metal, whether large surfaces show a
+  grid, whether something off or waiting is dashed, whether small labels are in capitals)
+  and a palette for the dark and the light appearance. The appearance is System (the
+  system's light or dark mode), Dark or Light.
+- `tokens.json` names the default theme in one field, `default`; the generated files list it
+  first and every app starts with it, so changing the default is one word.
+- A theme draws only the app's own surfaces: the background, the tiles, the cards, the
+  lines, the type and the accent. The system's controls (switches, menus, sheets, the
+  keyboard, dialogs, Face ID) keep the system's look in every theme.
+- Glass and Liquid Glass use Liquid Glass from iOS 26 on Apple's systems; the flat themes
+  draw their surface with their line instead. Android has no Liquid Glass: its glass tiles
+  are the palette's glass colour with a hairline, over the same glow of the accent.
 - On Android 12 and later a further choice, **Wallpaper** (Material You), takes the colours
-  from the wallpaper through dynamic colour, in place of one of the ten.
-- Android has no Liquid Glass: its tiles and cards are the palette's glass colour with a
-  hairline, as the iPhone app draws them before iOS 26, over the same glow of the accent.
-- Contrast meets WCAG AA for text in every palette; the generator checks it.
+  from the wallpaper through dynamic colour, in the Precise theme's shape.
+- The watches and the Live Activity take only the theme's dark colours.
+- Contrast meets WCAG AA for text in every palette, 4.5:1 on the background and on a
+  surface, the dim text, the danger colour and the accent (badges and links) included; the
+  generator checks it.
 
 ## Layout of the repository
 

@@ -51,29 +51,30 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * The colour the user picks in Settings: one of Tokens.colors by its name,
- * Terminal by default, or Material You, the wallpaper's colours (Android 12
- * and later).
+ * The theme the user picks in Settings: one of Tokens.themes by its name,
+ * Blueprint by default, or Material You, the wallpaper's colours (Android 12
+ * and later) in the Precise theme's shape.
  */
-object ColorChoice {
+object ThemeChoice {
     const val MATERIAL = "material"
 
     /** The names this phone offers, Material You only where Android has the wallpaper's colours. */
-    val offered: List<String> get() = Tokens.colors.map { it.name } + if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) listOf(MATERIAL) else emptyList()
+    val offered: List<String> get() = Tokens.themes.map { it.name } + if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) listOf(MATERIAL) else emptyList()
 
     @StringRes
     fun title(name: String): Int = when (name) {
-        "midnight" -> R.string.color_midnight
-        "amber" -> R.string.color_amber
-        "ocean" -> R.string.color_ocean
-        "teal" -> R.string.color_teal
-        "coral" -> R.string.color_coral
-        "rose" -> R.string.color_rose
-        "lime" -> R.string.color_lime
-        "graphite" -> R.string.color_graphite
-        "ruby" -> R.string.color_ruby
+        "board" -> R.string.theme_board
+        "precise" -> R.string.theme_precise
+        "glass" -> R.string.theme_glass
+        "soft" -> R.string.theme_soft
+        "swiss" -> R.string.theme_swiss
+        "hardware" -> R.string.theme_hardware
+        "deco" -> R.string.theme_deco
+        "liquid" -> R.string.theme_liquid
+        "terminal" -> R.string.theme_terminal
+        "retro" -> R.string.theme_retro
         MATERIAL -> R.string.theme_material
-        else -> R.string.color_terminal
+        else -> R.string.theme_blueprint
     }
 }
 
@@ -89,7 +90,10 @@ enum class Appearance(val key: String, @StringRes val title: Int, val symbol: St
     }
 }
 
-val LocalPalette = staticCompositionLocalOf { Tokens.colors.first().dark }
+val LocalPalette = staticCompositionLocalOf { Tokens.themes.first().dark }
+
+/** The chosen theme's style: corners, lines, material. */
+val LocalStyle = staticCompositionLocalOf { Tokens.themes.first().style }
 
 /** The palette of a Material colour scheme, for Material You. */
 private fun ColorScheme.palette(dark: Boolean) = Palette(
@@ -97,6 +101,7 @@ private fun ColorScheme.palette(dark: Boolean) = Palette(
     background = background,
     surface = surfaceContainer,
     grid = outlineVariant.copy(alpha = 0.35f),
+    line = outlineVariant,
     text = onBackground,
     textDim = onSurfaceVariant,
     accent = primary,
@@ -123,13 +128,14 @@ private fun Palette.scheme(): ColorScheme {
         surfaceContainerHigh = surface,
         surfaceContainerHighest = surface,
         outline = textDim,
+        outlineVariant = line,
         error = danger,
     )
 }
 
-/** Applies the chosen colour and appearance to everything inside. */
+/** Applies the chosen theme and appearance to everything inside. */
 @Composable
-fun AppTheme(color: String, appearance: Appearance, content: @Composable () -> Unit) {
+fun AppTheme(theme: String, appearance: Appearance, content: @Composable () -> Unit) {
     val dark = when (appearance) {
         Appearance.SYSTEM -> isSystemInDarkTheme()
         Appearance.DARK -> true
@@ -137,16 +143,17 @@ fun AppTheme(color: String, appearance: Appearance, content: @Composable () -> U
     }
     val context = LocalContext.current
     val (palette, scheme) = when {
-        color == ColorChoice.MATERIAL && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+        theme == ThemeChoice.MATERIAL && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val s = if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
             s.palette(dark) to s
         }
         else -> {
-            val p = paletteNamed(color).let { if (dark) it.dark else it.light }
+            val p = themeNamed(theme).let { if (dark) it.dark else it.light }
             p to p.scheme()
         }
     }
-    CompositionLocalProvider(LocalPalette provides palette) {
+    val style = themeNamed(if (theme == ThemeChoice.MATERIAL) "precise" else theme).style
+    CompositionLocalProvider(LocalPalette provides palette, LocalStyle provides style) {
         // MaterialTheme alone leaves a text without a colour black, which a
         // Surface would set: every screen's own text colour is the palette's.
         MaterialTheme(colorScheme = scheme) {
@@ -155,14 +162,34 @@ fun AppTheme(color: String, appearance: Appearance, content: @Composable () -> U
     }
 }
 
-/** The background: the deep colour with a glow of the accent from the top. */
+/**
+ * The background: the theme's colour, with a grid as on a drawing sheet
+ * where the theme has one, or a glow of the accent from the top under glass.
+ */
 @Composable
 fun AppBackground(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
     val palette = LocalPalette.current
-    val radius = with(LocalDensity.current) { 520.dp.toPx() }
+    val style = LocalStyle.current
+    val density = LocalDensity.current
+    val radius = with(density) { 520.dp.toPx() }
+    val cell = with(density) { 24.dp.toPx() }
     Box(modifier.fillMaxSize().background(palette.background)) {
         Canvas(Modifier.fillMaxSize()) {
-            drawRect(Brush.radialGradient(listOf(palette.soft, Color.Transparent), center = Offset(size.width / 2, 0f), radius = radius))
+            if (style.grid) {
+                var x = 0f
+                while (x < size.width) {
+                    drawLine(palette.grid, Offset(x, 0f), Offset(x, size.height))
+                    x += cell
+                }
+                var y = 0f
+                while (y < size.height) {
+                    drawLine(palette.grid, Offset(0f, y), Offset(size.width, y))
+                    y += cell
+                }
+            }
+            if (style.material == Material.GLASS || style.material == Material.LIQUID) {
+                drawRect(Brush.radialGradient(listOf(palette.soft, Color.Transparent), center = Offset(size.width / 2, 0f), radius = radius))
+            }
         }
         content()
     }
@@ -178,14 +205,14 @@ fun AccentButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifie
         onClick = onClick,
         enabled = enabled,
         interactionSource = source,
-        shape = RoundedCornerShape(Tokens.radiusButton),
+        shape = RoundedCornerShape(LocalStyle.current.radiusButton),
         colors = ButtonDefaults.buttonColors(
             containerColor = palette.accent.copy(alpha = if (pressed) 0.8f else 1f),
             contentColor = palette.onAccent,
             disabledContainerColor = palette.accent.copy(alpha = 0.4f),
             disabledContentColor = palette.onAccent.copy(alpha = 0.5f),
         ),
-        modifier = modifier.focusRing(RoundedCornerShape(Tokens.radiusButton)).fillMaxWidth().heightIn(min = 64.dp),
+        modifier = modifier.focusRing(RoundedCornerShape(LocalStyle.current.radiusButton)).fillMaxWidth().heightIn(min = 64.dp),
     ) {
         Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
     }
@@ -198,22 +225,25 @@ fun QuietButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
-        shape = RoundedCornerShape(Tokens.radiusButton),
+        shape = RoundedCornerShape(LocalStyle.current.radiusButton),
         colors = ButtonDefaults.outlinedButtonColors(containerColor = palette.surface.copy(alpha = 0.85f), contentColor = palette.accent),
         border = null,
         contentPadding = PaddingValues(horizontal = Tokens.spacingMedium, vertical = Tokens.spacingSmall),
-        modifier = modifier.focusRing(RoundedCornerShape(Tokens.radiusButton)).fillMaxWidth().heightIn(min = 52.dp),
+        modifier = modifier.focusRing(RoundedCornerShape(LocalStyle.current.radiusButton)).fillMaxWidth().heightIn(min = 52.dp),
     ) {
         Text(text, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
     }
 }
 
-/** A card on glass: the palette's glass with a hairline, as the iPhone app draws it before Liquid Glass. */
+/** A card: glass in the glass themes, the theme's surface in the others, with the theme's line around it. */
 @Composable
-fun Modifier.card(radius: Dp = Tokens.radiusCard): Modifier {
+fun Modifier.card(radius: Dp = LocalStyle.current.radiusCard): Modifier {
     val palette = LocalPalette.current
+    val style = LocalStyle.current
     val shape = RoundedCornerShape(radius)
-    return clip(shape).background(palette.glass).border(1.dp, palette.line, shape)
+    val fill = if (style.material == Material.GLASS || style.material == Material.LIQUID) palette.glass else palette.surface
+    val clipped = clip(shape).background(fill)
+    return if (style.stroke > 0.dp) clipped.border(style.stroke, palette.line, shape) else clipped
 }
 
 /**
@@ -222,7 +252,7 @@ fun Modifier.card(radius: Dp = Tokens.radiusCard): Modifier {
  * clickable it rings.
  */
 @Composable
-fun Modifier.focusRing(shape: Shape = RoundedCornerShape(Tokens.radiusCard)): Modifier {
+fun Modifier.focusRing(shape: Shape = RoundedCornerShape(LocalStyle.current.radiusCard)): Modifier {
     var focused by remember { mutableStateOf(false) }
     val color = LocalPalette.current.accent
     return onFocusChanged { focused = it.hasFocus }.then(if (focused) Modifier.border(3.dp, color, shape) else Modifier)
@@ -230,4 +260,4 @@ fun Modifier.focusRing(shape: Shape = RoundedCornerShape(Tokens.radiusCard)): Mo
 
 /** A tile of the devices: a card with the tiles' rounder corners. */
 @Composable
-fun Modifier.glassTile(): Modifier = card(Tokens.radiusTile)
+fun Modifier.glassTile(): Modifier = card(LocalStyle.current.radiusTile)
