@@ -7,6 +7,14 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The forwarder refuses the groups their operator lists after an abuse report:
+  `refused-groups` next to the key (or `-refused FILE`), one group tag a line, read again
+  within ten seconds of a change; a listed group is refused at registration and its devices
+  already there are dropped, while every other group goes on. A broken list keeps the one
+  before. The terms of the public servers say so, in every language.
+- The monitor watches the traffic of cbb.tools: `cbb-traffic.timer` on the server publishes
+  the totals of the last 24 hours at `/status/traffic.json`, and the monitor fails past 1 TB
+  or when the file stops changing (docs/relay-budget.md, "Money and traffic").
 - "Why it does not sync" in the advanced settings of the iPhone, Android, Aurora, Mac and tray
   apps: one sentence on why this device does not sync and what to do, then the other reasons.
   The Rust core decides them (`cbb_core::why`, the core's call `why`, the phone member's `why`,
@@ -1572,6 +1580,10 @@ All notable changes to cbb are documented in this file. The format follows
 - The Mac app's Settings are a sheet on its window, as the tray app's dialog, instead of a
   window of their own; "Settings…" in the menu bar item and Command-comma open the window
   with them.
+- The README leads with what Copy Beyond Borders is in one sentence, sums up its status in
+  three lines (the full table moved to docs/parity.md, "On real devices") and lists what it
+  also does. The keyboards, the TV remotes, the Nano ESP32 and the ZX Spectrum Next are on
+  a page of their own, [the lab](docs/guide/lab.md): experiments, not what 1.0 promises.
 - Away from home, the computers that are the group's root or admins come before the phones in
   the order of hubs (D-96): a Mac or PC no longer keeps reaching for a phone whose app is
   closed while a computer could serve.
