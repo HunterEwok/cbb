@@ -478,7 +478,7 @@ fn project_relay_addrs(node: &Node, log: &dyn Fn(&str)) -> Vec<SocketAddr> {
 /// lookupIP: "host=ip" pairs separated by commas, for the tests only, since
 /// entries.json names a relay only by a host name.
 fn test_resolve(name: &str) -> Option<SocketAddr> {
-    let v = std::env::var("CBB_TEST_RESOLVE").ok()?;
+    let v = crate::testbuild::env("CBB_TEST_RESOLVE")?;
     let (host, port) = name.rsplit_once(':')?;
     let port: u16 = port.parse().ok()?;
     v.split(',').find_map(|pair| {

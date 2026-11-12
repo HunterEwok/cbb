@@ -43,9 +43,9 @@ default = ["tunnel"]
 windowless = []
 # The bench's time-scaled build (src/benchtime.rs), never a release's.
 benchtime = ["cbb-core/benchtime"]
-# testclock lets Go's service tests move the wall clock (CBB_TEST_AHEAD_FILE,
-# src/uptime.rs); never a release's, as benchtime (src/testbuild.rs).
-testclock = []
+# testhooks lets Go's service tests steer the service through their hooks
+# (CBB_TEST_*, src/testbuild.rs); never a release's, as benchtime.
+testhooks = []
 # fuzzing opens the service's readers of outside input to the cargo fuzz
 # targets in fuzz/ (src/fuzzing.rs).
 fuzzing = []

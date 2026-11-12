@@ -333,8 +333,7 @@ impl Attestations {
         if crate::update::release_roots().is_empty() || crate::helper::shared().is_none() {
             return;
         }
-        let every = std::env::var("CBB_TEST_STATUS_EVERY")
-            .ok()
+        let every = crate::testbuild::env("CBB_TEST_STATUS_EVERY")
             .and_then(|v| v.parse().ok())
             .map_or(Duration::from_secs(24 * 3600), Duration::from_millis);
         let a = self.clone();

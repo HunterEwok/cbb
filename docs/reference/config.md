@@ -9,6 +9,11 @@ Most settings are made by a command or an installer flag, which writes the setti
 for you. Edit the files by hand only where this page says so: `CBB_INTERFACES` has no
 option, so it is set by hand, and the installers and `cbb update` keep that line.
 
+The tests' hooks, every `CBB_TEST_*` variable and `CBB_TPM_SIMULATOR`, are read only by a
+build for tests: `cbb` built with the feature `testhooks` (or the bench's `benchtime`),
+`cbb-helper` built with the tag `testhooks`, and Go's test binaries. A release ignores them
+([maintaining](../maintaining.md), "Test builds").
+
 ## Settings files
 
 | File | Systems | Who writes it | What it holds |
@@ -42,9 +47,9 @@ A variable set in the environment wins over the same name in the settings file.
 | `CBB_SOCKET` | `cbb`, the lite member, the Mac app | Another control socket, for tests or a second instance. |
 | `CBB_ADMIN_SOCKET` | `cbb` | Another admin socket, the one for the commands that change the group; by default the admin socket next to the control socket. |
 | `CBB_STATE` | the lite member | Another state directory. |
-| `CBB_STANDBY_GRACE` | the lite member's `cbb service` | Seconds a hub that lost the hub above it tries the hubs above before it serves again, 60 by default; tests set it shorter. |
-| `CBB_UP_CHECK` | the lite member's `cbb service` | Seconds a device stays on a hub below the first before it tries the hubs above again, 300 by default; tests set it shorter. |
-| `CBB_HUB_KEY_AHEAD` | the lite member's `cbb service` | Seconds a hub's offers carry its key for a new period of the server credentials before it serves with it, three days by default; tests set it shorter. |
+| `CBB_TEST_STANDBY_GRACE` | the Rust service built with the feature `testhooks`, in the Go service's tests | Seconds a hub that lost the hub above it tries the hubs above before it serves again, in place of 60. Never set by hand. |
+| `CBB_TEST_UP_CHECK` | the Rust service built with the feature `testhooks`, in the Go service's tests | Seconds a device stays on a hub below the first before it tries the hubs above again, in place of 300. Never set by hand. |
+| `CBB_TEST_HUB_KEY_AHEAD` | the Rust service built with the feature `testhooks`, in the Go service's tests | Seconds a hub's offers carry its key for a new period of the server credentials before it serves with it, in place of three days. Never set by hand. |
 | `CBB_TEST_RESOLVE` | the lite member's `cbb service` | For tests only: `host=ip` pairs, separated by commas, that stand in for DNS when it looks up the project's relay by the names `entries.json` gives. |
 | `CBB_TEST_ELSEWHERE` | the lite member's `cbb service` | For tests only: a folder; while it holds a file named by the device's ID, the device neither publishes itself by mDNS nor dials the members it finds, as if on another network. |
 | `CBB_MDNS_TRACE` | the lite member's `cbb service` | For tests only: a file to which the service appends, by the time of day in UTC, every event its mDNS browsing sees and mdns-sd's debug log (packets sent and received, the cache); the service tests set it and log the file when a test fails. |
@@ -95,7 +100,7 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_TEST_SCALE` | the bench's time-scaled build | How many times faster long times run: 100000 by default, `1` for cases that move only the clock. |
 | `CBB_TEST_XHTTP_CA` | the bench's time-scaled build | A PEM file of a CA that the clients of VLESS over XHTTP trust beside the public ones, for the bench's web server in front of a forwarder (W46). Never in a release. |
 | `CBB_BENCH_SEED` | the bench's random walk (G40) | The walk's seed, which the run prints, to repeat a walk step by step. |
-| `CBB_TPM_SIMULATOR` | the service, in tests | A TPM simulator's command port (`host:port`, the platform port the next one) used in place of the TPM. |
+| `CBB_TPM_SIMULATOR` | `cbb-helper` built with the tag `testhooks`, and Go's tests | A TPM simulator's command port (`host:port`, the platform port the next one) used in place of the TPM. Never set by hand. |
 | `CBB_TPM_REQUIRED` | Go tests of the TPM | Makes a missing `swtpm` a failure instead of a skip, as in CI. |
 | `CBB_SE_TEST` | Go tests on a Mac | `1` lets the tests of `internal/sekey` make keys in the Mac's Secure Enclave; without it no test key goes there. |
 | `CBB_E2E_COVERDIR` | `tools/e2e/e2e.sh` | A directory where a `cbb` built with `-cover` writes its coverage, as `GOCOVERDIR` in every container (CI's coverage, [testing](../testing.md#coverage)). |
@@ -116,8 +121,8 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_INTEROP_OUT` | the Swift and Kotlin kits' tests, Go's interop tests | A directory where the kits write fresh interop vectors and Go reads them; without it Go reads `testdata/interop`. |
 | `CBB_VERDICTS` | the verdict tests of all four implementations (`TestVerdicts`, `command::verdicts`, `VerdictTest`, `VerdictTests`) | A corpus of `tools/difffuzz gen` to write the verdicts on ([differential fuzzing](../differential.md)); without it each runs on a small corpus of its own. |
 | `CBB_VERDICTS_OUT` | the same tests | The file the verdicts go to, one line per case. |
-| `CBB_TEST_AHEAD_FILE` | the Rust service built with the feature `testclock`, in the Go service's tests | A file holding the milliseconds the service's wall clock is moved by, read each time; the tests write it to move the clock while the service runs (as the Go service's settings for tests). A release's build does not read it. Never set by hand. |
-| `CBB_RELEASE_BUILD` | building `cbb`, in the release workflow | Set to `1` by the release workflow: a build with a feature for tests only (`benchtime`, `testclock`, `fuzzing`) then does not compile (docs/maintaining.md, "Releases"). |
+| `CBB_TEST_AHEAD_FILE` | the Rust service built with the feature `testhooks`, in the Go service's tests | A file holding the milliseconds the service's wall clock is moved by, read each time; the tests write it to move the clock while the service runs (as the Go service's settings for tests). A release's build does not read it. Never set by hand. |
+| `CBB_RELEASE_BUILD` | building `cbb`, in the release workflow | Set to `1` by the release workflow: a build with a feature for tests only (`benchtime`, `testhooks`, `fuzzing`) then does not compile (docs/maintaining.md, "Releases"). |
 | `CBB_TEST_RENEW_EVERY` | the Rust service, in the Go service's tests | How often, in milliseconds, the root and the admins look for certificates due for renewal, in place of twice a day. Never set by hand. |
 | `CBB_TEST_ATTEST_ROOTS` | `cbb-helper`, in the service's tests | A PEM file of the public keys (or certificates) of the roots an Android key attestation must chain to, in place of Google's; read at each check. Never set by hand. |
 | `CBB_TEST_TPM_ROOTS` | `cbb-helper`, in the service's tests | A PEM file of the TPM makers' roots an EK certificate must chain to, in place of the built-in ones. Never set by hand. |

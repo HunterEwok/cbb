@@ -276,6 +276,43 @@ func check(name string, data []byte, listed map[string]bool) []string {
 	if !generated && !hasHeader(data) {
 		problems = append(problems, fmt.Sprintf("%s:1: missing license header; start the file with\n\t%s\n\t// Copyright (C) <year> HunterEwok", name, spdxLine))
 	}
+	return append(problems, testHookProblems(name, data)...)
+}
+
+// The tests' hooks (CBB_TEST_*) are read only through the guards that keep
+// them out of a release (docs/maintaining.md, "Test builds"): Rust's
+// member/src/testbuild.rs and Go's internal/testhook, or a Go file built only
+// for the bench (the tag benchtime).
+var (
+	rustHookRead = regexp.MustCompile(`env::var(_os)?\(\s*"CBB_TEST_`)
+	goHookRead   = regexp.MustCompile(`os\.(Getenv|LookupEnv)\(\s*"CBB_TEST_`)
+	benchOnly    = regexp.MustCompile(`(?m)^//go:build .*\bbenchtime\b`)
+)
+
+// testHookProblems reports a program's own code that reads a test hook
+// around those guards; tests, test data and tools may read them as they like.
+func testHookProblems(name string, data []byte) []string {
+	var re *regexp.Regexp
+	switch {
+	case strings.HasSuffix(name, ".rs") && (strings.HasPrefix(name, "member/src/") || strings.HasPrefix(name, "core/src/") || strings.HasPrefix(name, "ffi/src/")):
+		if name == "member/src/testbuild.rs" {
+			return nil
+		}
+		re = rustHookRead
+	case strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go") && (strings.HasPrefix(name, "cmd/") || strings.HasPrefix(name, "internal/")):
+		if strings.HasPrefix(name, "internal/testhook/") || strings.Contains(name, "/testdata/") || benchOnly.Match(data) {
+			return nil
+		}
+		re = goHookRead
+	default:
+		return nil
+	}
+	var problems []string
+	for i, line := range strings.Split(string(data), "\n") {
+		if re.MatchString(line) {
+			problems = append(problems, fmt.Sprintf("%s:%d: reads a test hook directly; read it through the guard (member/src/testbuild.rs's env, internal/testhook), which a release build ignores", name, i+1))
+		}
+	}
 	return problems
 }
 

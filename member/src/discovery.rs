@@ -208,7 +208,7 @@ fn instance(fullname: &str) -> String {
 /// neither publishes itself nor dials what browsing finds, as the Go
 /// service's tests' hidden members.
 fn elsewhere(me: &DeviceId) -> bool {
-    std::env::var_os("CBB_TEST_ELSEWHERE").is_some_and(|d| std::path::Path::new(&d).join(me.as_str()).exists())
+    crate::testbuild::env_os("CBB_TEST_ELSEWHERE").is_some_and(|d| std::path::Path::new(&d).join(me.as_str()).exists())
 }
 
 const MAX_WAIT: Duration = Duration::from_secs(30);
@@ -222,7 +222,7 @@ const FALLBACK: Duration = Duration::from_secs(30);
 /// port, so that only their fallback dials connect.
 fn test_fallback() -> Option<Duration> {
     static AFTER: std::sync::OnceLock<Option<Duration>> = std::sync::OnceLock::new();
-    *AFTER.get_or_init(|| std::env::var("CBB_TEST_FALLBACK").ok()?.parse().ok().map(Duration::from_millis))
+    *AFTER.get_or_init(|| crate::testbuild::env("CBB_TEST_FALLBACK")?.parse().ok().map(Duration::from_millis))
 }
 /// At most this many connections may be in their TLS handshake at once.
 const MAX_HANDSHAKES: usize = 16;

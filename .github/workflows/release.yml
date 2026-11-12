@@ -126,9 +126,11 @@ jobs:
               go build -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/$p$exe" "./cmd/$p"
               # -trimpath leaves -ldflags out of the build info, so the tag itself is looked for.
               grep -aqF -- "$GITHUB_REF_NAME" "$RUNNER_TEMP/$p$exe"
-              # Never the bench's time-scaled build (internal/benchtime).
-              if go version -m "$RUNNER_TEMP/$p$exe" | grep -qE -- '-tags=.*benchtime'; then
-                echo "::error::$p is the time-scaled build for tests only" >&2
+              # Never a build for tests: the bench's time-scaled one
+              # (internal/benchtime) or one that reads the tests' hooks
+              # (internal/testhook).
+              if go version -m "$RUNNER_TEMP/$p$exe" | grep -qE -- '-tags=.*(benchtime|testhooks)'; then
+                echo "::error::$p is a build for tests only" >&2
                 exit 1
               fi
             done

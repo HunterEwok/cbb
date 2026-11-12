@@ -887,7 +887,7 @@ impl Link {
         let mut endpoints = if vless_only { Vec::new() } else { hub.endpoints.clone() };
         // In tests, CBB_TEST_DEAD_UDP stands for a network that lets no UDP
         // through: the hub's addresses become one that never answers.
-        if let Some(dead) = std::env::var("CBB_TEST_DEAD_UDP").ok().and_then(|v| v.parse::<SocketAddr>().ok()) {
+        if let Some(dead) = crate::testbuild::env("CBB_TEST_DEAD_UDP").and_then(|v| v.parse::<SocketAddr>().ok()) {
             endpoints.iter_mut().for_each(|e| *e = dead);
         }
         let vless_at = vless.as_ref().map(|v| v.addr());

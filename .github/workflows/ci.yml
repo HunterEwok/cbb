@@ -1539,9 +1539,10 @@ jobs:
       - name: the Swift phone pairs both ways with the computers' cbb and syncs with it over TLS
         if: runner.os == 'macOS'
         run: |
-          # The computer is the Rust cbb, with cbb-helper beside it.
-          cargo build --locked --release -p cbb-member
-          go build -o target/release/cbb-helper ./cmd/cbb-helper
+          # The computer is the Rust cbb, with cbb-helper beside it, both
+          # built for tests (testhooks: the tests' hooks, never a release's).
+          cargo build --locked --release -p cbb-member --features testhooks
+          go build -tags testhooks -o target/release/cbb-helper ./cmd/cbb-helper
           # A throwaway keychain for the tool's identity, unlocked and the default.
           security create-keychain -p ci ci.keychain
           security list-keychains -d user -s ci.keychain
@@ -1882,10 +1883,11 @@ jobs:
         run: |
           (cd apps/android && ./gradlew --no-daemon -p kit interopScript)
           tool="$PWD/apps/android/kit/build/interop/cbb-interop"
-          # The computer is the Rust cbb, with cbb-helper beside it.
+          # The computer is the Rust cbb, with cbb-helper beside it, both
+          # built for tests (testhooks: the tests' hooks, never a release's).
           rustup toolchain install stable --profile minimal
-          cargo +stable build --locked --release -p cbb-member
-          go build -o target/release/cbb-helper ./cmd/cbb-helper
+          cargo +stable build --locked --release -p cbb-member --features testhooks
+          go build -tags testhooks -o target/release/cbb-helper ./cmd/cbb-helper
           CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_SWIFT_INTEROP_TLS="$tool" go test -timeout 5m ./internal/service -run 'TestSwift' -v
       - name: the NDK the core is built with
         working-directory: apps/android
@@ -2149,11 +2151,11 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: the computers' cbb, and cbb-helper beside it
+      - name: the computers' cbb, and cbb-helper beside it, built for tests (testhooks)
         run: |
           rustup toolchain install stable --profile minimal
-          cargo +stable build --locked --release -p cbb-member
-          go build -o target/release/cbb-helper ./cmd/cbb-helper
+          cargo +stable build --locked --release -p cbb-member --features testhooks
+          go build -tags testhooks -o target/release/cbb-helper ./cmd/cbb-helper
       - name: the MIPS builds under qemu with computers, all but sync away from home
         # The hubs' and the invitations' tests need the tunnel, which the
         # MIPS build leaves out.
@@ -2204,10 +2206,10 @@ jobs:
         run: cargo test --locked --release -p cbb-member
       - name: the Rust cbb, cbb-helper beside it, and the phone's member on Linux
         run: |
-          # testclock: the tests below move the service's wall clock (never a release's build).
-          cargo build --locked --release -p cbb-member --features testclock
+          # testhooks: the tests below steer both through their hooks, CBB_TEST_* (never a release's build).
+          cargo build --locked --release -p cbb-member --features testhooks
           cargo build --locked --release -p cbb-ffi --features member,tunnel --example phone-on-linux
-          CGO_ENABLED=0 go build -trimpath -o target/release/cbb-helper ./cmd/cbb-helper
+          CGO_ENABLED=0 go build -tags testhooks -trimpath -o target/release/cbb-helper ./cmd/cbb-helper
       - name: go test ./internal/service and the desktop connector with every Linux member a Rust cbb
         run: |
           Xvfb :5 -screen 0 640x480x24 >"$RUNNER_TEMP/xvfb.log" 2>&1 &
@@ -2264,7 +2266,7 @@ jobs:
         run: |
           cargo clippy --locked --workspace --all-targets -- -D warnings
           cargo clippy --locked -p cbb-member --features benchtime --all-targets -- -D warnings # the bench's time-scaled build
-          cargo clippy --locked -p cbb-member --features testclock --all-targets -- -D warnings # the test clock of Go's service tests
+          cargo clippy --locked -p cbb-member --features testhooks --all-targets -- -D warnings # the hooks of Go's service tests
           cargo clippy --locked -p cbb-embassy --features host --all-targets -- -D warnings
           cargo clippy --locked -p cbb-ffi --features member --all-targets -- -D warnings
           cargo clippy --locked -p cbb-ffi --features member,tunnel --all-targets -- -D warnings
@@ -2436,8 +2438,10 @@ jobs:
           sudo ip tuntap add name tap0 mode tap user "$USER"
           sudo ip addr add 192.168.69.1/24 dev tap0
           sudo ip link set tap0 up
-          # The computer it joins is a cbb, with cbb-helper beside it.
-          go build -o target/release/cbb-helper ./cmd/cbb-helper
+          # The computer it joins is a cbb, with cbb-helper beside it, both
+          # built for tests (testhooks).
+          cargo build --locked --release -p cbb-member --features testhooks
+          go build -tags testhooks -o target/release/cbb-helper ./cmd/cbb-helper
           CBB_ESP32_ON_LINUX="$PWD/target/release/esp32-on-linux" CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" \
             go test -race ./internal/service -run TestEmbassyJoiner -v
       - name: the phones' Rust tunnel and hub through ffi/ work with the Go hub and clients (WireGuard, AmneziaWG, VLESS with XHTTP)

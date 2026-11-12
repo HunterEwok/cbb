@@ -275,7 +275,7 @@ ends, the Go service described below is still the computers' member.
   starts or stops serving or admits a client; it takes the clients and the offer another hub
   shares, and a device that stopped being a hub tells the computers and the possible hubs
   so. The run loop serves only while no hub above answers: starting, it tries them once;
-  having lost the hub above, for a minute (`CBB_STANDBY_GRACE` in tests); while it serves,
+  having lost the hub above, for a minute (`CBB_TEST_STANDBY_GRACE` in tests); while it serves,
   every 15 minutes, and when a hub above shares that it serves, after passing that hub's
   offer on to its clients and waiting for those in its tunnel to leave (`TestAloneHubs`). Hub
   commands (`away/movehub.rs`, Go's `movehub.go` and `stophub.go`) go through the core's

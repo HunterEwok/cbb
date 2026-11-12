@@ -32,7 +32,7 @@ func TestAloneAgent(t *testing.T) {
 		t.Skip("set CBB_TEST_X11 with an X server in DISPLAY and xclip installed")
 	}
 	helper := filepath.Join(t.TempDir(), "cbb-helper")
-	if out, err := exec.Command("go", "build", "-o", helper, "github.com/HunterEwok/cbb/cmd/cbb-helper").CombinedOutput(); err != nil {
+	if out, err := exec.Command("go", "build", "-tags", "testhooks", "-o", helper, "github.com/HunterEwok/cbb/cmd/cbb-helper").CombinedOutput(); err != nil {
 		t.Fatalf("go build cbb-helper: %v\n%s", err, out)
 	}
 	var h hub

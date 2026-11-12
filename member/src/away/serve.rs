@@ -702,12 +702,11 @@ fn forwarder_problem(detail: &str) -> String {
 
 /// How long before the hub serves with its key for a new period its offers
 /// give its clients that key, as Go's hubKeyAhead: three days, or
-/// CBB_HUB_KEY_AHEAD seconds, which tests set shorter.
+/// CBB_TEST_HUB_KEY_AHEAD seconds, which tests set shorter.
 fn hub_key_ahead() -> Duration {
     static AHEAD: std::sync::OnceLock<Duration> = std::sync::OnceLock::new();
     *AHEAD.get_or_init(|| {
-        let s = std::env::var("CBB_HUB_KEY_AHEAD")
-            .ok()
+        let s = crate::testbuild::env("CBB_TEST_HUB_KEY_AHEAD")
             .and_then(|v| v.parse().ok())
             .unwrap_or(cbb_core::benchtime::d(3 * 24 * 3600) as u64);
         Duration::from_secs(s)

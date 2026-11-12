@@ -124,8 +124,8 @@ network or a container with one of its own):
 ```sh
 eval "$(cargo llvm-cov show-env --sh)"
 cargo llvm-cov clean --workspace
-cargo test --release -p cbb-member && cargo build --release -p cbb-member --features testclock
-CGO_ENABLED=0 go build -o target/release/cbb-helper ./cmd/cbb-helper
+cargo test --release -p cbb-member && cargo build --release -p cbb-member --features testhooks
+CGO_ENABLED=0 go build -tags testhooks -o target/release/cbb-helper ./cmd/cbb-helper
 CBB_TEST_RUST_SERVICE=$PWD/target/release/cbb CBB_TEST_ALONE=$PWD/target/release/cbb go test ./internal/service
 cargo llvm-cov report --release --json --summary-only --output-path service.json
 go run ./tools/coverage -llvm rust-service=service.json -floor tools/coverage/floor.json

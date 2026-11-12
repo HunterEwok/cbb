@@ -16,13 +16,14 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"os"
 	"sync"
 	"testing"
 
 	"github.com/google/go-tpm/tpm2"
 	"github.com/google/go-tpm/tpm2/transport"
 	"github.com/google/go-tpm/tpm2/transport/tcp"
+
+	"github.com/HunterEwok/cbb/internal/testhook"
 )
 
 // Device is the kernel's resource manager, which every program shares;
@@ -30,7 +31,8 @@ import (
 const Device = "/dev/tpmrm0"
 
 // simEnv names a TPM simulator's command port (host:port, the platform
-// port the next one) that tests use in place of Device.
+// port the next one) that tests use in place of Device; a test hook, which
+// only a build for tests reads (internal/testhook).
 const simEnv = "CBB_TPM_SIMULATOR"
 
 // ErrNoTPM is returned by Open on a machine without a TPM the service may
@@ -56,7 +58,7 @@ type TPM struct {
 // never go into the machine's own TPM, which a Windows runner or a
 // developer's computer may let them use.
 func Open() (*TPM, error) {
-	if addr := os.Getenv(simEnv); addr != "" {
+	if addr := testhook.Getenv(simEnv); addr != "" {
 		return openSimulator(addr)
 	}
 	if testing.Testing() {
