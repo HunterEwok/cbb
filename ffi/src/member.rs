@@ -1281,7 +1281,7 @@ impl Member {
 fn paste_order(a: &ManageArgs) -> Result<Order> {
     let mode = if a.mode.is_empty() { "paste" } else { a.mode.as_str() };
     if mode != "paste" && mode != "type" {
-        return Err(Error::msg(format!("a paste is pasted or typed, not {mode:?}")));
+        return Err(Error::msg(format!("a paste command's way {mode:?} is not paste or type")));
     }
     let kind = if a.kind.is_empty() { "text" } else { a.kind.as_str() };
     let text = match kind {
