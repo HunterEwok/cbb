@@ -21,7 +21,7 @@ use crate::certs::b64;
 use crate::content::{TYPE_FILES, TYPE_MEDIA, TYPE_TEXT};
 use crate::copies::{self, Opened, OriginMap};
 use crate::error::Error;
-use crate::format::{cbor, frame};
+use crate::format::cbor;
 use crate::keystore::{Epoch, KeyStore};
 use crate::push::{self, Body, On, Registration, UnifiedPush};
 use crate::records::eval::State;
@@ -31,7 +31,7 @@ use crate::records::key::{DeviceId, Key};
 pub(super) fn dispatch(op: &str, args: &Value) -> Option<Result<Vec<u8>, Refusal>> {
     let parse = |a: &Value| a.clone();
     Some(match op {
-        "push_key" => Ok(new_key()),
+        "push_key" => new_key(),
         "push_limits" => serde_json::from_value(parse(args)).map_err(bad_args).map(limits),
         "push_registration" => serde_json::from_value(parse(args)).map_err(bad_args).and_then(registration),
         "push_open" => serde_json::from_value(parse(args)).map_err(bad_args).and_then(open),
@@ -43,13 +43,17 @@ fn refused(e: impl core::fmt::Display, message: &str) -> Refusal {
     refuse(Code::Push, Error::msg(e.to_string()).context(message.to_string()))
 }
 
-/// `push_key`: a new push key, 32 random bytes. The phone draws one per
-/// group and a new one whenever it registers again after a removal.
-fn new_key() -> Vec<u8> {
+/// `push_key`: a new push key, 32 random bytes, and a new send key (P-256,
+/// PKCS #8). The phone draws a push key per group and a new one whenever
+/// it registers again after a membership change; a send key with each new
+/// token.
+fn new_key() -> Result<Vec<u8>, Refusal> {
     let key = Zeroizing::new(crate::certs::random_bytes::<32>());
+    let send = Zeroizing::new(crate::identity::new_key().map_err(|e| refuse(Code::Push, e))?);
     let mut m = Map::new();
     m.insert("key".into(), b64_value(&key[..]));
-    json(Value::Object(m))
+    m.insert("send_key".into(), b64_value(&send[..]));
+    Ok(json(Value::Object(m)))
 }
 
 #[derive(Deserialize)]
@@ -81,7 +85,10 @@ struct UpArgs {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RegistrationArgs {
-    seq: u64,
+    /// The number of the last registration the phone saved, if any.
+    #[serde(default)]
+    saved_seq: Option<u64>,
+    now_ms: u64,
     kinds: u64,
     #[serde(default)]
     env: Option<u64>,
@@ -91,12 +98,17 @@ struct RegistrationArgs {
     unifiedpush: Option<UpArgs>,
     #[serde(default, with = "b64::secret::opt")]
     key: Option<Zeroizing<Vec<u8>>>,
+    /// The send key, PKCS #8.
+    #[serde(default, with = "b64::secret::opt")]
+    send_key: Option<Zeroizing<Vec<u8>>>,
 }
 
 /// `push_registration`: the frame of message `push` (t 28) the phone sends
-/// over each member connection of the group; `kinds` 0 turns push off.
+/// over each member connection of the group, and its number, which the
+/// phone saves; `kinds` 0 turns push off.
 fn registration(a: RegistrationArgs) -> Result<Vec<u8>, Refusal> {
     const BAD: &str = "The push registration cannot be made.";
+    let seq = push::next_seq(a.saved_seq, a.now_ms);
     let on = if a.kinds == 0 {
         None
     } else {
@@ -120,14 +132,18 @@ fn registration(a: RegistrationArgs) -> Result<Vec<u8>, Refusal> {
             .as_ref()
             .and_then(|k| k.as_slice().try_into().ok())
             .ok_or_else(|| refused("the push key is not 32 bytes", BAD))?;
-        Some(On { token, env, key: Zeroizing::new(key) })
+        let pkcs8 = a.send_key.as_ref().ok_or_else(|| refused("the send key is missing", BAD))?;
+        let signer = crate::identity::signing_key(pkcs8).map_err(|e| refused(e, BAD))?;
+        let public = signer.verifying_key().to_sec1_point(false).as_bytes().to_vec();
+        let sig = push::sign_send(&Pkcs8Signer(signer), env, &token, seq).map_err(|e| refused(e, BAD))?;
+        Some(On { token, env, key: Zeroizing::new(key), send_key: Key::es256(public), send_sig: sig.to_vec() })
     };
-    let frame = Registration { seq: a.seq, kinds: a.kinds, on }.write();
-    // The frame is checked as a member reads it.
-    let msg = frame::read(&frame, frame::LIMIT_MEMBER).map_err(|r| refused(r, BAD))?;
-    Registration::read(&msg.map).map_err(|r| refused(r, BAD))?;
+    // The writer gives no frame its reader would refuse.
+    let frame =
+        Registration { seq, kinds: a.kinds, on }.write().ok_or_else(|| refused("a field breaks its row", BAD))?;
     let mut m = Map::new();
     m.insert("frame".into(), b64_value(&frame));
+    m.insert("seq".into(), Value::from(seq));
     Ok(json(Value::Object(m)))
 }
 
@@ -175,6 +191,34 @@ struct OpenArgs {
     too_old: bool,
     #[serde(default)]
     halted: bool,
+    /// The phone heard of a membership change (event 2, 4 or 6) since its
+    /// last registration: a copy is shown only as a hint.
+    #[serde(default)]
+    hints_only: bool,
+    /// The phone's clock, and the group's window for an incoming copy: an
+    /// older copy is a hint, an event older than a day the neutral hint.
+    #[serde(default)]
+    now_ms: Option<u64>,
+    #[serde(default)]
+    window_ms: Option<u64>,
+}
+
+/// How old an event may be and still be named.
+const EVENT_AGE_MS: u64 = 86_400_000;
+
+/// The send key in a file, as the phone keeps it.
+struct Pkcs8Signer(p256::ecdsa::SigningKey);
+
+impl crate::identity::ExternalKey for Pkcs8Signer {
+    fn public(&self) -> Vec<u8> {
+        self.0.verifying_key().to_sec1_point(false).as_bytes().to_vec()
+    }
+    fn sign_digest(&self, digest: &[u8; 32]) -> crate::error::Result<Vec<u8>> {
+        use p256::ecdsa::signature::hazmat::PrehashSigner as _;
+        let sig: p256::ecdsa::Signature =
+            self.0.sign_prehash(digest).map_err(|_| Error::msg("The send key cannot sign."))?;
+        Ok(sig.to_der().as_bytes().to_vec())
+    }
 }
 
 /// The copy-opening secrets an extension holds; it signs nothing.
@@ -234,6 +278,9 @@ fn open(a: OpenArgs) -> Result<Vec<u8>, Refusal> {
             m.insert("id".into(), b64_value(&id));
             m.insert("origin".into(), b64_value(&origin));
         }
+        Body::Event { time_ms: Some(t), .. } if a.now_ms.is_some_and(|now| now.saturating_sub(t) > EVENT_AGE_MS) => {
+            m.insert("kind".into(), Value::from("hint"));
+        }
         Body::Event { id, event, device, time_ms } => {
             m.insert("kind".into(), Value::from("event"));
             m.insert("id".into(), b64_value(&id));
@@ -283,7 +330,13 @@ fn copy(a: &OpenArgs, me: &DeviceId, reduced: &[u8], m: &mut Map<alloc::string::
     };
     m.insert("id".into(), b64_value(&checked.id));
     m.insert("origin".into(), b64_value(&checked.origin.0));
-    let content = if a.halted { None } else { copies::open(&checked, me, &store, &state).ok() };
+    let wall = u64::try_from(checked.time.wall).unwrap_or(0);
+    let stale = match (a.now_ms, a.window_ms) {
+        (Some(now), Some(window)) => now.saturating_sub(wall) > window,
+        _ => false,
+    };
+    let content =
+        if a.halted || a.hints_only || stale { None } else { copies::open(&checked, me, &store, &state).ok() };
     match content {
         Some(Opened::Content { content, .. }) if !content.unknown => {
             m.insert("kind".into(), Value::from("copy"));

@@ -18,7 +18,7 @@ import (
 )
 
 // The vectors of push (push.json, format section 20.4): registrations,
-// sealed bodies, `once`, UnifiedPush tokens and the push service's
+// sealed bodies, send keys' signatures, UnifiedPush tokens and the push service's
 // messages. Each verdict is this file's own reading: the AEAD and the keys
 // by Go's crypto, the fields by the tables the file gives, the padding and
 // the rules between fields below.
@@ -43,11 +43,15 @@ type pushFile struct {
 		Seq     uint64 `json:"seq"`
 		Sealed  string `json:"sealed"`
 	} `json:"bodies"`
-	Once []struct {
-		Key  string `json:"key"`
-		ID   string `json:"id"`
-		Once string `json:"once"`
-	} `json:"once"`
+	Sends []struct {
+		Name    string `json:"name"`
+		Verdict string `json:"verdict"`
+		Key     string `json:"key"`
+		Sig     string `json:"sig"`
+		Env     uint64 `json:"env"`
+		Token   string `json:"token"`
+		Seq     uint64 `json:"seq"`
+	} `json:"sends"`
 	UnifiedPush []struct {
 		Name    string `json:"name"`
 		Verdict string `json:"verdict"`
@@ -147,19 +151,50 @@ func pushDerive(pk []byte, info string) []byte {
 	return k
 }
 
+func pushAD(labels map[string]string, seq uint64) []byte {
+	ad := append([]byte(labels["ad"]), 0)
+	return binary.BigEndian.AppendUint64(ad, seq)
+}
+
 func pushOpen(labels map[string]string, pk []byte, seq uint64, sealed []byte) string {
-	if len(sealed) < 28 || len(sealed) > 2972 {
+	// Only a size of the registry opens.
+	if len(sealed) != 2972 {
 		return "pushbody/size"
 	}
 	aead, err := chacha20poly1305.New(pushDerive(pk, labels["body"]))
 	must(err)
-	ad := append([]byte(labels["ad"]), 0)
-	ad = binary.BigEndian.AppendUint64(ad, seq)
+	ad := pushAD(labels, seq)
 	plain, err := aead.Open(nil, sealed[:12], sealed[12:], ad)
 	if err != nil {
 		return "pushbody/open"
 	}
+	// The nonce is derived from the plaintext: every honest sender of one
+	// body makes the same bytes.
+	mac := hmac.New(sha256.New, pushDerive(pk, labels["nonce"]))
+	mac.Write(ad)
+	mac.Write(plain)
+	if !bytes.Equal(mac.Sum(nil)[:12], sealed[:12]) {
+		return "pushbody/nonce"
+	}
 	return pushBodyVerdict(plain)
+}
+
+// pushSendVerdict checks the send key's signature over [env, token, seq]
+// as the service does: good, held (an algorithm 0.6 does not know) or the
+// rule.
+func pushSendVerdict(label string, keyEnc, sig []byte, env uint64, token []byte, seq uint64) string {
+	k, err := strict(keyEnc)
+	if err != nil || !tyOK("signer 1..4096", k) {
+		return "push/send-sig"
+	}
+	key := k.([]any)
+	if key[0].(uint64) != 1 {
+		return "held"
+	}
+	if es256(key[1].([]byte), label, []byte(encOf([]any{env, token, seq})), sig) != nil {
+		return "push/send-sig"
+	}
+	return "good"
 }
 
 func pushRegistration(m any) string {
@@ -168,7 +203,7 @@ func pushRegistration(m any) string {
 	}
 	mm := m.(map[any]any)
 	n := 0
-	for _, k := range []uint64{2, 3, 4} {
+	for _, k := range []uint64{2, 3, 4, 7, 8} {
 		if _, there := mm[k]; there {
 			n++
 		}
@@ -177,7 +212,10 @@ func pushRegistration(m any) string {
 	switch {
 	case kinds == 0 && n == 0:
 		return "off"
-	case kinds != 0 && n == 3:
+	case kinds != 0 && n == 5:
+		if bytes.Equal(mm[uint64(4)].([]byte), make([]byte, 32)) {
+			return "push/key"
+		}
 		return "on"
 	}
 	return "push/shape"
@@ -299,11 +337,10 @@ func checkPush(dir string) {
 		}
 		count++
 	}
-	for _, o := range f.Once {
-		mac := hmac.New(sha256.New, pushDerive(unhex(o.Key), f.Labels["once"]))
-		mac.Write(unhex(o.ID))
-		if !bytes.Equal(mac.Sum(nil)[:16], unhex(o.Once)) {
-			fail("push once %s", o.ID)
+	for _, x := range f.Sends {
+		got := pushSendVerdict(f.Labels["send"], unhex(x.Key), unhex(x.Sig), x.Env, unhex(x.Token), x.Seq)
+		if got != x.Verdict {
+			fail("push send key %s: %q, want %q", x.Name, got, x.Verdict)
 		}
 		count++
 	}

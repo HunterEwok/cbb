@@ -1695,13 +1695,25 @@ def ty_ok(ty, v):
         return isinstance(v, str) and addr_ok(v)
     if w[0] == "key":
         return key_ok(v, int(w[1]))
+    if w[0] == "signer":
+        # A key where a signature key is wanted: ES256 checked, a key
+        # exchange's algorithm refused, an unknown one held.
+        if not (isinstance(v, list) and len(v) == 2 and isinstance(v[0], int) and not isinstance(v[0], bool)
+                and isinstance(v[1], bytes) and 1 <= len(v[1]) <= int(w[1].split("..")[1])):
+            return False
+        if v[0] == ES256:
+            return key_ok(v, ES256)
+        return v[0] not in (0, XWING, X25519)
     if w[0] == "envelope":
         if not (isinstance(v, list) and len(v) in (2, 3) and all(isinstance(x, bytes) for x in v)):
             return False
         try:
-            return isinstance(dec(v[0]), dict)
+            body = dec(v[0])
         except Exception:
             return False
+        # A second signature goes with `signer2` (key 8) and only with it
+        # (section 3.1), at most 4096 bytes.
+        return isinstance(body, dict) and (8 in body) == (len(v) == 3) and (len(v) == 2 or len(v[2]) <= 4096)
     if w[0] in ("array", "once", "set"):
         n = int(w[1].split("..")[1])
         inner = w[2][len("of "):]

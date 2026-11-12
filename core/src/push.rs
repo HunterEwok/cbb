@@ -3,9 +3,8 @@
 
 //! Push to a phone whose app is closed (format section 20.4, roadmap item
 //! 57): the phone's registration (member message `push`, t 28), the body a
-//! member seals to that phone, the `once` tag that lets the project's push
-//! service drop a repeat, and the messages between a member and that
-//! service (t 100–104, ALPN `cbb-push/1`).
+//! member seals to that phone, and the messages between a member and the
+//! project's push service (t 100–104, ALPN `cbb-push/1`).
 //!
 //! - A phone tells each member it is connected to, for each group apart, the
 //!   token of its platform's push service, the platform (`env`) and a push
@@ -18,9 +17,18 @@
 //!   whose origin's signature the phone checks before it shows anything; or
 //!   a hint that a copy waits; or a hint of a group event. Hints are shown
 //!   as "open the app", never as facts.
-//! - `once` is a keyed hash of the copy's or event's ID under a key derived
-//!   from the push key: the same from every member that sends one copy,
-//!   meaningless to the service.
+//! - Every honest sender of one body makes the same bytes: the nonce is
+//!   derived from the plaintext, a copy is reduced with age 0 and an event
+//!   carries its record's own time. The service drops a repeat by the bytes,
+//!   and the phone's extension shows nothing it already showed.
+//! - With each token the phone draws a send key; each registration carries
+//!   its signature over the platform, the token and the registration's
+//!   number. The service keeps the newest number per token and refuses an
+//!   older one: a member removed since the phone registered again holds
+//!   only older ones (until the first send under the new number, an old one
+//!   passes, and its bodies do not open under the new push key). A member
+//!   present at a token's very first registration could bind it first; the
+//!   way out is a new token, or 30 days without a send under that binding.
 //!
 //! The service sees its own face's period tag and the server keys' hashes
 //! (the blind credentials of section 8), tokens, times and one size per
@@ -43,6 +51,7 @@ use crate::format::cbor::head_len;
 use crate::format::cbor::{self, Value};
 use crate::format::frame;
 use crate::msg::{Field, Table, Ty, check_map};
+use crate::records::key::Key;
 
 // ------------------------------------------------------------- numbers
 
@@ -89,6 +98,18 @@ pub const SENT_GONE: u64 = 2;
 pub const SENT_BUDGET: u64 = 3;
 pub const SENT_FAILED: u64 = 4;
 pub const SENT_REPEAT: u64 = 5;
+/// The send key's algorithm is one the service does not take.
+pub const SENT_KEY: u64 = 6;
+/// The send key, its signature or the registration's number does not hold
+/// for this token: the registration is an old one.
+pub const SENT_STALE: u64 = 7;
+
+/// The longest wait a service asks of a sender: a day.
+pub const MAX_RETRY_MS: u64 = 86_400_000;
+/// The longest send key's public part and signature a service may take
+/// later (the format's bound of a second signature).
+pub const MAX_SEND_KEY: usize = crate::format::envelope::MAX_SIG2;
+pub const MAX_SEND_SIG: usize = crate::format::envelope::MAX_SIG2;
 
 /// The nonce and the tag around a body's plaintext.
 pub const NONCE_LEN: usize = 12;
@@ -139,6 +160,8 @@ pub static PUSH: Table = Table {
         f(4, "push/key", Ty::Bytes(32), false),
         f(5, "push/seq", SEQ, true),
         f(6, "push/kinds", Ty::Uint { min: 0, max: u32::MAX as u64 }, true),
+        f(7, "push/send-key", Ty::Signer(MAX_SEND_KEY), false),
+        f(8, "push/send-sig", Ty::BytesUpTo(MAX_SEND_SIG), false),
     ],
 };
 
@@ -170,9 +193,12 @@ pub static SEND: Table = Table {
         f(2, "push/send/n", N, true),
         f(3, "push/send/token", TOKEN, true),
         f(4, "push/send/env", ENV, true),
-        f(5, "push/send/once", Ty::Bytes(16), true),
+        // 5 was `once`: reserved, never used again.
         f(6, "push/send/body", Ty::BytesUpTo(MAX_BODY), true),
         f(7, "push/send/ttl", Ty::Uint { min: 1, max: 4 }, false),
+        f(8, "push/send/key", Ty::Signer(MAX_SEND_KEY), true),
+        f(9, "push/send/sig", Ty::BytesUpTo(MAX_SEND_SIG), true),
+        f(10, "push/send/seq", SEQ, true),
     ],
 };
 /// `push/sent` (t 103).
@@ -181,7 +207,7 @@ pub static SENT_TABLE: Table = Table {
     fields: &[
         f(2, "push/sent/n", N, true),
         f(3, "push/sent/status", STATUS, true),
-        f(4, "push/sent/retry_ms", Ty::Uint { min: 1, max: (1 << 63) - 1 }, false),
+        f(4, "push/sent/retry_ms", Ty::Uint { min: 1, max: MAX_RETRY_MS }, false),
     ],
 };
 /// `push/error` (t 104).
@@ -219,6 +245,9 @@ pub fn of(t: u64) -> Option<&'static Table> {
 }
 
 pub const RULE_PUSH_SHAPE: Rule = Rule::field("push/shape");
+pub const RULE_PUSH_KEY: Rule = Rule::field("push/key");
+/// The send key's signature does not hold.
+pub const RULE_SEND_SIG: Rule = Rule::field("push/send-sig");
 pub const RULE_BODY_SHAPE: Rule = Rule::field("pushbody/shape");
 pub const RULE_BODY_PAD: Rule = Rule::field("pushbody/pad");
 pub const RULE_BODY_OPEN: Rule = Rule::field("pushbody/open");
@@ -233,9 +262,11 @@ pub const RULE_UP_KEY: Rule = Rule::field("push-up/p256dh");
 #[derive(Clone, PartialEq, Eq)]
 pub struct Registration {
     pub seq: u64,
-    /// The bits the phone asks for; 0 is push off. Unknown bits are kept.
+    /// The bits the phone asks for; 0 is push off. Unknown bits are kept
+    /// and never read.
     pub kinds: u64,
-    /// With `kinds` ≠ 0: the token, the platform, the push key.
+    /// With `kinds` ≠ 0: the token, the platform, the push key and the send
+    /// key's signature.
     pub on: Option<On>,
 }
 
@@ -245,6 +276,11 @@ pub struct On {
     pub token: Vec<u8>,
     pub env: u64,
     pub key: Zeroizing<[u8; 32]>,
+    /// The phone's send key for this token, as the format writes a key. A
+    /// member keeps one of an algorithm it does not know and passes it on.
+    pub send_key: Key,
+    /// Its signature over [`send_message`].
+    pub send_sig: Vec<u8>,
 }
 
 impl core::fmt::Debug for Registration {
@@ -258,27 +294,81 @@ impl core::fmt::Debug for Registration {
     }
 }
 
+/// What the send key signs, under the label `cbb push send v1`: the
+/// platform, the token and the registration's number.
+pub fn send_message(env: u64, token: &[u8], seq: u64) -> Vec<u8> {
+    Value::Array(alloc::vec![Value::Uint(env), Value::Bytes(token), Value::Uint(seq)]).encode()
+}
+
+const LABEL_SEND: &str = "cbb push send v1";
+
+/// What checking a send key's signature found.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum SendCheck {
+    /// ES256, and the signature holds.
+    Good,
+    /// An algorithm this version does not know: a member keeps it, the
+    /// service answers [`SENT_KEY`].
+    Unknown,
+}
+
+/// Checks the send key's signature over (env, token, seq).
+pub fn check_send(key: &Key, sig: &[u8], env: u64, token: &[u8], seq: u64) -> Result<SendCheck, Rule> {
+    match key.check_signer().map_err(|_| RULE_SEND_SIG)? {
+        crate::records::key::KeyCheck::Unknown => Ok(SendCheck::Unknown),
+        crate::records::key::KeyCheck::Good => {
+            crate::records::key::verify_es256(key, LABEL_SEND, &send_message(env, token, seq), sig)
+                .map_err(|_| RULE_SEND_SIG)?;
+            Ok(SendCheck::Good)
+        }
+    }
+}
+
+/// Signs (env, token, seq) with the phone's send key.
+pub fn sign_send(
+    key: &dyn crate::identity::ExternalKey,
+    env: u64,
+    token: &[u8],
+    seq: u64,
+) -> crate::error::Result<[u8; 64]> {
+    crate::records::key::sign_es256(key, LABEL_SEND, &send_message(env, token, seq))
+}
+
+/// The number a phone gives its next registration: one more than the one
+/// it saved, and never less than its clock in milliseconds, so a phone
+/// restored from a backup with an older number still moves forward at the
+/// service.
+pub fn next_seq(saved: Option<u64>, now_ms: u64) -> u64 {
+    saved.map_or(1, |s| s.saturating_add(1)).max(now_ms).clamp(1, 1 << 53)
+}
+
 impl Registration {
-    /// Reads message `push` (its map, `t` 28).
+    /// Reads message `push` (its map, `t` 28). A member does not check the
+    /// send key's signature: the service does.
     pub fn read(m: &Value<'_>) -> Result<Registration, Rule> {
         check_map(&PUSH, m)?;
         let uint = |n| m.get(n).and_then(Value::as_uint);
+        let bytes = |n| m.get(n).and_then(Value::as_bytes);
         let seq = uint(5).ok_or(RULE_PUSH_SHAPE)?;
         let kinds = uint(6).ok_or(RULE_PUSH_SHAPE)?;
-        let (token, env, key) = (m.get(2).and_then(Value::as_bytes), uint(3), m.get(4).and_then(Value::as_bytes));
-        let on = match (kinds, token, env, key) {
-            (0, None, None, None) => None,
-            (k, Some(token), Some(env), Some(key)) if k != 0 => {
+        let on = match (kinds, bytes(2), uint(3), bytes(4), m.get(7), bytes(8)) {
+            (0, None, None, None, None, None) => None,
+            (k, Some(token), Some(env), Some(key), Some(send_key), Some(send_sig)) if k != 0 => {
                 let key: [u8; 32] = key.try_into().map_err(|_| RULE_PUSH_SHAPE)?;
-                Some(On { token: token.to_vec(), env, key: Zeroizing::new(key) })
+                // A key of zeros is no key a phone drew.
+                if key == [0; 32] {
+                    return Err(RULE_PUSH_KEY);
+                }
+                let send_key = Key::read(send_key).map_err(|_| RULE_PUSH_SHAPE)?;
+                Some(On { token: token.to_vec(), env, key: Zeroizing::new(key), send_key, send_sig: send_sig.to_vec() })
             }
             _ => return Err(RULE_PUSH_SHAPE),
         };
         Ok(Registration { seq, kinds, on })
     }
 
-    /// The frame of message `push`.
-    pub fn write(&self) -> Vec<u8> {
+    /// The frame of message `push`; None for one its reader refuses.
+    pub fn write(&self) -> Option<Vec<u8>> {
         let mut m = alloc::vec![(frame::FIELD_T, Value::Uint(T_PUSH))];
         if let Some(on) = &self.on {
             m.push((2, Value::Bytes(&on.token)));
@@ -287,7 +377,13 @@ impl Registration {
         }
         m.push((5, Value::Uint(self.seq)));
         m.push((6, Value::Uint(self.kinds)));
-        frame::write(&Value::Map(m))
+        if let Some(on) = &self.on {
+            m.push((7, on.send_key.to_value()));
+            m.push((8, Value::Bytes(&on.send_sig)));
+        }
+        let f = frame::write(&Value::Map(m));
+        let back = frame::read(&f, frame::LIMIT_MEMBER).ok().and_then(|msg| Registration::read(&msg.map).ok());
+        (back.as_ref() == Some(self)).then_some(f)
     }
 
     /// Whether the phone asks for pushes of kind bit `kind`.
@@ -300,6 +396,13 @@ impl Registration {
     pub fn replaced_by(&self, newer: &Registration) -> bool {
         newer.seq > self.seq
     }
+}
+
+/// Who may register: the device itself over its own member connection, and
+/// only a phone or a computer, never a leaf or a watch (they never get a
+/// push, and a leaf has no app to wake).
+pub fn may_register(role: u64) -> bool {
+    role == crate::records::body::ROLE_PHONE || role == crate::records::body::ROLE_MEMBER
 }
 
 /// A UnifiedPush token: the endpoint and RFC 8291's keys.
@@ -376,7 +479,7 @@ pub fn up_url(url: &str) -> bool {
 // ----------------------------------------------------------------- keys
 
 const LABEL_BODY: &str = "cbb push body v1";
-const LABEL_ONCE: &str = "cbb push once v1";
+const LABEL_NONCE: &str = "cbb push nonce v1";
 const LABEL_AD: &str = "cbb push v1";
 
 fn derive(pk: &[u8; 32], info: &str) -> Zeroizing<[u8; 32]> {
@@ -386,14 +489,17 @@ fn derive(pk: &[u8; 32], info: &str) -> Zeroizing<[u8; 32]> {
     out
 }
 
-/// `once`: the first 16 bytes of HMAC-SHA256(once key, id), id the copy's
-/// or the event's 16-byte ID.
-pub fn once(pk: &[u8; 32], id: &[u8; 16]) -> [u8; 16] {
-    let k = derive(pk, LABEL_ONCE);
-    let mut out = [0u8; 16];
+/// The nonce of a body: the first 12 bytes of HMAC-SHA256(nonce key,
+/// associated data ‖ plaintext). One plaintext under one key and number
+/// always gives the same nonce, two plaintexts two nonces: every honest
+/// sender of a body makes the same bytes, and no nonce serves twice.
+fn nonce_for(pk: &[u8; 32], ad: &[u8], plain: &[u8]) -> [u8; NONCE_LEN] {
+    let k = derive(pk, LABEL_NONCE);
+    let mut out = [0u8; NONCE_LEN];
     // HMAC takes a key of any length, so this never fails.
     if let Ok(mut mac) = <Hmac<Sha256> as hmac::KeyInit>::new_from_slice(&k[..]) {
-        mac.update(id);
+        mac.update(ad);
+        mac.update(plain);
         let full = mac.finalize().into_bytes();
         for (o, b) in out.iter_mut().zip(full.iter()) {
             *o = *b;
@@ -472,18 +578,22 @@ impl Body {
     }
 
     /// The plaintext padded to exactly `len` bytes.
+    /// None as well for a body its reader would refuse or read otherwise
+    /// (an empty copy, a known kind written as [`Body::Unknown`]).
     fn padded(&self, len: usize) -> Option<Vec<u8>> {
         let entries = self.entries();
         let base = Value::Map(entries.clone()).encode();
-        if base.len() == len {
-            return Some(base);
-        }
-        let plen = pad_for(base.len(), entries.len(), len)?;
-        let zeros = alloc::vec![0u8; plen];
-        let mut all = entries;
-        // `pad` is key 1: after key 0, before the rest.
-        all.insert(1, (1, Value::Bytes(&zeros)));
-        Some(Value::Map(all).encode())
+        let out = if base.len() == len {
+            base
+        } else {
+            let plen = pad_for(base.len(), entries.len(), len)?;
+            let zeros = alloc::vec![0u8; plen];
+            let mut all = entries;
+            // `pad` is key 1: after key 0, before the rest.
+            all.insert(1, (1, Value::Bytes(&zeros)));
+            Value::Map(all).encode()
+        };
+        (Body::read(&out).as_ref() == Ok(self)).then_some(out)
     }
 
     /// Reads a plaintext opened from a body of any size: a map in the
@@ -540,65 +650,72 @@ impl Body {
     }
 }
 
-/// Seals a body for env's platform under the push key: nonce ‖
-/// ChaCha20-Poly1305. `nonce` is 12 fresh random bytes from the caller.
+/// Seals a body for env's platform under the push key of registration
+/// `seq`: nonce ‖ ChaCha20-Poly1305, the nonce derived from the plaintext.
 /// None when the env has no size this version knows or the body does not
 /// fit.
-pub fn seal(pk: &[u8; 32], seq: u64, env: u64, body: &Body, nonce: &[u8; NONCE_LEN]) -> Option<Vec<u8>> {
+pub fn seal(pk: &[u8; 32], seq: u64, env: u64, body: &Body) -> Option<Vec<u8>> {
     let len = body_len(env)?;
-    let mut plain = Zeroizing::new(body.plaintext()?);
     // Every size of the registry is MAX_BODY today; a smaller row would
     // pad to its own plaintext size.
     if len != MAX_BODY {
         return None;
     }
+    let plain = Zeroizing::new(body.plaintext()?);
     let k = derive(pk, LABEL_BODY);
     let aead = ChaCha20Poly1305::new_from_slice(&k[..]).ok()?;
     let ad = associated(seq);
-    let ct = aead.encrypt(&Nonce::from(*nonce), Payload { msg: &plain, aad: &ad }).ok()?;
-    plain.iter_mut().for_each(|b| *b = 0);
+    let nonce = nonce_for(pk, &ad, &plain);
+    let ct = aead.encrypt(&Nonce::from(nonce), Payload { msg: &plain, aad: &ad }).ok()?;
     let mut out = Vec::with_capacity(len);
-    out.extend_from_slice(nonce);
+    out.extend_from_slice(&nonce);
     out.extend_from_slice(&ct);
     (out.len() == len).then_some(out)
 }
 
-/// Opens a body of any size from 28 bytes under the push key of
+/// Opens a body of a size of the registry under the push key of
 /// registration `seq`; the AEAD decides.
 pub fn open(pk: &[u8; 32], seq: u64, sealed: &[u8]) -> Result<Body, Rule> {
-    if sealed.len() < MIN_BODY || sealed.len() > MAX_BODY {
+    if sealed.len() != MAX_BODY {
         return Err(RULE_BODY_SIZE);
     }
     let (nonce, ct) = sealed.split_at(NONCE_LEN);
     let nonce: [u8; NONCE_LEN] = nonce.try_into().map_err(|_| RULE_BODY_SIZE)?;
-    let nonce = &nonce;
     let k = derive(pk, LABEL_BODY);
     let aead = ChaCha20Poly1305::new_from_slice(&k[..]).map_err(|_| RULE_BODY_OPEN)?;
     let ad = associated(seq);
     let plain =
-        Zeroizing::new(aead.decrypt(&Nonce::from(*nonce), Payload { msg: ct, aad: &ad }).map_err(|_| RULE_BODY_OPEN)?);
+        Zeroizing::new(aead.decrypt(&Nonce::from(nonce), Payload { msg: ct, aad: &ad }).map_err(|_| RULE_BODY_OPEN)?);
     Body::read(&plain)
 }
 
-/// The body for copy `copy` (its wire form) to `phone`: the reduced copy
-/// when it fits with the payload whole, else the hint that it waits.
+/// The body for copy `copy` (its wire form) to `phone`: None when the copy
+/// is not sealed to the phone (it learns nothing of it); else the reduced
+/// copy with age 0 when it fits with the payload whole, else the hint that
+/// it waits. Three sizes of a reduced copy cannot be padded exactly and
+/// wait too: the phone sees a hint, the service only the body's one size.
 pub fn copy_body(
     copy: &crate::format::copy::Copy<'_>,
     readers: &[(crate::records::key::DeviceId, u64)],
     phone: &crate::records::key::DeviceId,
     id: [u8; 16],
     origin: [u8; 16],
-) -> Body {
-    if copy.payload.is_some()
-        && let Ok(reduced) = crate::copies::reduce(copy, readers, phone)
+) -> Option<Body> {
+    if !readers.iter().any(|(d, _)| d == phone) {
+        return None;
+    }
+    let mut same = copy.clone();
+    same.age_ms = 0;
+    if same.payload.is_some()
+        && let Ok(reduced) = crate::copies::reduce(&same, readers, phone)
         && cbor::decode(&reduced).is_ok_and(|v| v.get(crate::format::copy::FIELD_PAYLOAD).is_some())
     {
         let body = Body::Copy(reduced);
         if body.plaintext().is_some() {
-            return body;
+            return Some(body);
         }
     }
-    Body::Waits { id, origin }
+    Some(Body::Waits { id, origin })
 }
 
 // ---------------------------------------------------- service messages
@@ -609,9 +726,13 @@ pub struct Send<'a> {
     pub n: u64,
     pub token: &'a [u8],
     pub env: u64,
-    pub once: [u8; 16],
     pub body: &'a [u8],
     pub ttl: Option<u64>,
+    /// The registration's send key, its signature and its number, as the
+    /// phone gave them.
+    pub key: Key,
+    pub sig: &'a [u8],
+    pub seq: u64,
 }
 
 impl<'a> Send<'a> {
@@ -623,26 +744,32 @@ impl<'a> Send<'a> {
             n: m.get(2).and_then(Value::as_uint).ok_or(bad)?,
             token: m.get(3).and_then(Value::as_bytes).ok_or(bad)?,
             env: m.get(4).and_then(Value::as_uint).ok_or(bad)?,
-            once: m.get(5).and_then(Value::as_bytes).and_then(|b| b.try_into().ok()).ok_or(bad)?,
             body: m.get(6).and_then(Value::as_bytes).ok_or(bad)?,
             ttl: m.get(7).and_then(Value::as_uint),
+            key: m.get(8).map(Key::read).ok_or(bad)?.map_err(|_| bad)?,
+            sig: m.get(9).and_then(Value::as_bytes).ok_or(bad)?,
+            seq: m.get(10).and_then(Value::as_uint).ok_or(bad)?,
         })
     }
 
-    /// Its frame.
-    pub fn write(&self) -> Vec<u8> {
+    /// Its frame; None for one its reader refuses.
+    pub fn write(&self) -> Option<Vec<u8>> {
         let mut m = alloc::vec![
             (frame::FIELD_T, Value::Uint(T_SEND)),
             (2, Value::Uint(self.n)),
             (3, Value::Bytes(self.token)),
             (4, Value::Uint(self.env)),
-            (5, Value::Bytes(&self.once)),
             (6, Value::Bytes(self.body)),
         ];
         if let Some(t) = self.ttl {
             m.push((7, Value::Uint(t)));
         }
-        frame::write(&Value::Map(m))
+        m.push((8, self.key.to_value()));
+        m.push((9, Value::Bytes(self.sig)));
+        m.push((10, Value::Uint(self.seq)));
+        let f = frame::write(&Value::Map(m));
+        let msg = frame::read(&f, MAX_SERVICE_FRAME).ok()?;
+        (Send::read(&msg.map).ok().as_ref() == Some(self)).then_some(f)
     }
 
     /// Whether the body has its env's size. The service answers a body of
@@ -652,10 +779,20 @@ impl<'a> Send<'a> {
     }
 }
 
-/// `push/hello`'s frame.
+/// The largest frame between a member and the push service: a send with
+/// the longest token, send key and signature fits.
+pub const MAX_SERVICE_FRAME: usize = 16_384;
+
+/// `push/hello`'s frame: one or two credentials, as its table says.
 pub fn hello(credentials: &[&[u8]]) -> Result<Vec<u8>, Rule> {
+    if credentials.is_empty() || credentials.len() > 2 {
+        return Err(Rule::field("push/hello/credentials"));
+    }
     let items: Result<Vec<Value<'_>>, Rule> = credentials.iter().map(|c| cbor::decode(c)).collect();
-    Ok(frame::write(&Value::Map(alloc::vec![(frame::FIELD_T, Value::Uint(T_HELLO)), (2, Value::Array(items?))])))
+    let f = frame::write(&Value::Map(alloc::vec![(frame::FIELD_T, Value::Uint(T_HELLO)), (2, Value::Array(items?))]));
+    let msg = frame::read(&f, MAX_SERVICE_FRAME)?;
+    check_map(&HELLO, &msg.map)?;
+    Ok(f)
 }
 
 /// `push/ready`'s frame.
@@ -663,20 +800,44 @@ pub fn ready(left: u64) -> Vec<u8> {
     frame::write(&Value::Map(alloc::vec![(frame::FIELD_T, Value::Uint(T_READY)), (2, Value::Uint(left))]))
 }
 
-/// `push/sent`'s frame.
+/// `push/sent`'s frame. `retry_ms` goes only with the statuses that carry
+/// it ([`SENT_BUDGET`], [`SENT_FAILED`]), at most [`MAX_RETRY_MS`].
 pub fn sent(n: u64, status: u64, retry_ms: Option<u64>) -> Vec<u8> {
     let mut m = alloc::vec![(frame::FIELD_T, Value::Uint(T_SENT)), (2, Value::Uint(n)), (3, Value::Uint(status))];
-    if let Some(r) = retry_ms {
-        m.push((4, Value::Uint(r)));
+    if let Some(r) = retry_ms.filter(|_| matches!(status, SENT_BUDGET | SENT_FAILED)) {
+        m.push((4, Value::Uint(r.clamp(1, MAX_RETRY_MS))));
     }
     frame::write(&Value::Map(m))
+}
+
+/// `push/sent` as a sender reads it.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Sent {
+    pub n: u64,
+    /// The status as the sender acts on it ([`status`]).
+    pub status: u64,
+    /// How long to wait, only with the statuses that carry it.
+    pub retry_ms: Option<u64>,
+}
+
+impl Sent {
+    pub fn read(m: &Value<'_>) -> Result<Sent, Rule> {
+        check_map(&SENT_TABLE, m)?;
+        let bad = Rule::field("push/sent/shape");
+        let st = status(m.get(3).and_then(Value::as_uint).ok_or(bad)?);
+        Ok(Sent {
+            n: m.get(2).and_then(Value::as_uint).ok_or(bad)?,
+            status: st,
+            retry_ms: m.get(4).and_then(Value::as_uint).filter(|_| matches!(st, SENT_BUDGET | SENT_FAILED)),
+        })
+    }
 }
 
 /// What a sender does with a status: a status this version does not know
 /// is "failed, try later" (E-1).
 pub fn status(s: u64) -> u64 {
     match s {
-        SENT | SENT_GONE | SENT_BUDGET | SENT_REPEAT => s,
+        SENT | SENT_GONE | SENT_BUDGET | SENT_REPEAT | SENT_KEY | SENT_STALE => s,
         _ => SENT_FAILED,
     }
 }

@@ -100,6 +100,27 @@ func tyOK(ty string, v any) bool {
 			return len(pub) == 32
 		}
 		return true
+	case "signer":
+		// A key where a signature key is wanted: ES256 checked, a key
+		// exchange's algorithm refused, an unknown one held.
+		a, ok := v.([]any)
+		if !ok || len(a) != 2 {
+			return false
+		}
+		alg, ok1 := a[0].(uint64)
+		pub, ok2 := a[1].([]byte)
+		_, hi := upTo(w[1])
+		if !ok1 || !ok2 || len(pub) == 0 || uint64(len(pub)) > hi {
+			return false
+		}
+		switch alg {
+		case 1:
+			x, _ := elliptic.Unmarshal(elliptic.P256(), pub) //nolint:staticcheck
+			return x != nil
+		case 0, 2, 3:
+			return false
+		}
+		return true
 	case "envelope":
 		a, ok := v.([]any)
 		if !ok || (len(a) != 2 && len(a) != 3) {
@@ -114,8 +135,14 @@ func tyOK(ty string, v any) bool {
 		if err != nil {
 			return false
 		}
-		_, ok = body.(map[any]any)
-		return ok
+		bm, ok := body.(map[any]any)
+		if !ok {
+			return false
+		}
+		// A second signature goes with signer2 (key 8) and only with it
+		// (section 3.1), at most 4096 bytes.
+		_, signer2 := bm[uint64(8)]
+		return signer2 == (len(a) == 3) && (len(a) == 2 || len(a[2].([]byte)) <= 4096)
 	case "array", "once", "set":
 		_, hi := upTo(w[1])
 		inner := strings.TrimPrefix(w[2], "of ")
