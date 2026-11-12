@@ -320,12 +320,18 @@ impl Record {
         m
     }
 
+    /// Whether mark is the record's mark under local, compared in constant
+    /// time (hmac's own verify).
+    pub(crate) fn mark_holds(&self, local: &[u8; 32], mark: &Mark) -> bool {
+        self.marker(local).verify_slice(mark).is_ok()
+    }
+
     /// verify for a record from the device's own store: with its mark under
     /// local, the checks without the signature; with a missing or wrong
     /// mark, verify.
     pub(crate) fn verify_marked(&self, key: &Key, mark: Option<(&[u8; 32], &Mark)>) -> Result<bool, Rule> {
         match mark {
-            Some((local, mark)) if self.marker(local).verify_slice(mark).is_ok() => {
+            Some((local, mark)) if self.mark_holds(local, mark) => {
                 if self.bytes.len() > self.max_body() {
                     return Err(Rule::new("records/size"));
                 }

@@ -64,7 +64,7 @@ pub unsafe extern "C" fn cbb_call(request: *const u8, len: usize, answer_len: *m
         // SAFETY: the caller gives len readable bytes at request, not null.
         unsafe { core::slice::from_raw_parts(request, len) }
     };
-    let answer = guard::answer(|| cbb_core::api::call(req)).into_boxed_slice();
+    let answer = boxed(guard::answer(|| cbb_core::api::call(req)));
     // SAFETY: the caller gives a writable size_t at answer_len, not null.
     unsafe { answer_len.write(answer.len()) };
     Box::into_raw(answer).cast::<u8>()
@@ -83,7 +83,22 @@ pub unsafe extern "C" fn cbb_free(answer: *mut u8, len: usize) {
         return;
     }
     // SAFETY: answer and len are a boxed slice cbb_call let go of.
-    drop(unsafe { Box::from_raw(core::ptr::slice_from_raw_parts_mut(answer, len)) });
+    let mut answer = unsafe { Box::from_raw(core::ptr::slice_from_raw_parts_mut(answer, len)) };
+    // An answer may hold a secret (a new key, a copy's key and text): it is
+    // wiped before its memory goes back.
+    cbb_core::secret::Zeroize::zeroize(&mut answer[..]);
+}
+
+/// An answer as the boxed slice C gets, of its exact length: a Vec with
+/// room to spare is copied, and the bytes it leaves behind wiped, so that
+/// shrinking it leaves no copy of a secret in freed memory.
+fn boxed(mut answer: Vec<u8>) -> Box<[u8]> {
+    if answer.len() == answer.capacity() {
+        return answer.into_boxed_slice();
+    }
+    let out: Box<[u8]> = answer.as_slice().into();
+    cbb_core::secret::Zeroize::zeroize(&mut answer);
+    out
 }
 
 pub mod guard;
@@ -148,7 +163,7 @@ fn to_c(answer: Vec<u8>, answer_len: *mut usize) -> *mut u8 {
     if answer_len.is_null() {
         return core::ptr::null_mut();
     }
-    let answer = answer.into_boxed_slice();
+    let answer = boxed(answer);
     // SAFETY: the caller gives a writable size_t at answer_len, not null.
     unsafe { answer_len.write(answer.len()) };
     Box::into_raw(answer).cast::<u8>()

@@ -127,7 +127,7 @@ impl RecordSet {
     /// does not hold, so that a store whose recovery key was changed is
     /// not taken.
     pub fn pinned(root: Key, recovery: Key, local: &[u8; 32], mark: &Mark) -> Option<RecordSet> {
-        (super::pin_mark(local, &root, &recovery) == *mark).then(|| RecordSet::new(root, recovery))
+        crate::secret::ct_eq(&super::pin_mark(local, &root, &recovery), mark).then(|| RecordSet::new(root, recovery))
     }
 
     pub fn root(&self) -> &Key {
