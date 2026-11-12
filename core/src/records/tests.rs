@@ -2365,3 +2365,33 @@ fn only_a_live_admin_s_two_histories_stop_the_secrets() {
     g.recs.extend(two);
     assert_eq!(g.state().stop, Stop::Secrets);
 }
+
+/// Removals that list one key's head walk its chain once: a set of about
+/// a thousand records within the ceilings evaluates quickly.
+#[test]
+fn many_removals_of_one_key_evaluate_quickly() {
+    let mut g = G::new();
+    let all = POWER_ADMIT | POWER_REMOVE | POWER_REMOVE_ADMINS | POWER_TAKEOVER;
+    let (pv, v) = (k("phone v"), k("admin v"));
+    g.admin(&pv, &v, all);
+    let admins: Vec<(K, K)> = (0..3).map(|i| (k(&format!("phone {i}")), k(&format!("admin {i}")))).collect();
+    for (p, a) in &admins {
+        g.admin(p, a, all);
+    }
+    for i in 0..250 {
+        g.rec(&v, Kind::Copies { incoming_ms: MIN_INCOMING_MS + i });
+    }
+    let (seq, id) = g.heads[&v.hash];
+    for (_, a) in &admins {
+        for _ in 0..250 {
+            let seen = vec![Seen { key: v.hash, seq, id }];
+            g.rec(a, Kind::Revoke(removal(&[k("nobody").hash, v.hash], seen)));
+        }
+    }
+    let t = Instant::now();
+    let s = g.state();
+    let took = t.elapsed();
+    assert!(s.revoked.contains(&v.hash));
+    eprintln!("evaluate took {took:?}");
+    assert!(took.as_secs_f64() < 4.0, "evaluate took {took:?}");
+}

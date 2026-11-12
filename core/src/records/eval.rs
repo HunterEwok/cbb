@@ -12,6 +12,7 @@
 //! record, the limits, and no clock in any rule.
 
 use alloc::collections::{BTreeMap, BTreeSet};
+use core::cell::RefCell;
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -703,6 +704,8 @@ struct Evaluation<'a> {
     by_sig: BTreeMap<KeyHash, Vec<usize>>,
     /// Each record's position, by its ID.
     by_id: BTreeMap<RecordId, usize>,
+    /// The chains walked from listed heads, by head (`on_chain`).
+    chains: RefCell<BTreeMap<RecordId, BTreeMap<u64, RecordId>>>,
     devices: BTreeMap<DeviceId, Vec<usize>>,
     /// Device records over MAX_DEVICES; of the same length as recs.
     capped_devices: Vec<bool>,
@@ -739,6 +742,7 @@ impl<'a> Evaluation<'a> {
             recs: Vec::with_capacity(checked.len()),
             by_sig: BTreeMap::new(),
             by_id: BTreeMap::new(),
+            chains: RefCell::new(BTreeMap::new()),
             devices: BTreeMap::new(),
             capped_devices: Vec::new(),
         };
@@ -773,22 +777,31 @@ impl<'a> Evaluation<'a> {
     /// below a checkpoint's anchor), t is on it only when it is an anchor.
     fn on_chain(&self, head: &RecordId, t: usize) -> bool {
         let Some(tr) = self.recs.get(t) else { return false };
-        let (signer, ts) = (tr.b().signer, tr.b().seq);
-        let mut at = self.by_id.get(head).copied();
-        loop {
-            let Some(r) = at.and_then(|i| self.recs.get(i)) else { return self.anchors.contains(&tr.id) };
-            if r.b().signer != signer || r.b().seq < ts {
-                return false;
-            }
-            if r.b().seq == ts {
-                return r.id == tr.id;
-            }
-            let next = r.b().prev.as_ref().and_then(|p| self.by_id.get(p)).copied();
-            if next.and_then(|i| self.recs.get(i)).is_some_and(|p| p.b().seq >= r.b().seq) {
-                return false;
-            }
-            at = next;
+        let mut chains = self.chains.borrow_mut();
+        let chain = chains.entry(*head).or_insert_with(|| self.walk(head));
+        match chain.get(&tr.b().seq) {
+            Some(id) => *id == tr.id,
+            // Below where the walk stopped, only an anchor.
+            None => chain.first_key_value().is_none_or(|(low, _)| tr.b().seq < *low) && self.anchors.contains(&tr.id),
         }
+    }
+
+    /// The chain that ends at head, by seq, as far as the records show it:
+    /// each step to its prev, one signer, the seq going down.
+    fn walk(&self, head: &RecordId) -> BTreeMap<u64, RecordId> {
+        let mut chain = BTreeMap::new();
+        let mut at = self.by_id.get(head).copied();
+        let mut signer = None;
+        while let Some(r) = at.and_then(|i| self.recs.get(i)) {
+            let b = r.b();
+            if signer.is_some_and(|s| s != b.signer) || chain.first_key_value().is_some_and(|(s, _)| b.seq >= *s) {
+                break;
+            }
+            signer = Some(b.signer);
+            chain.insert(b.seq, r.id);
+            at = b.prev.as_ref().and_then(|p| self.by_id.get(p)).copied();
+        }
+        chain
     }
 
     /// Reports whether record t is within cut (one signer's seen head):
@@ -992,6 +1005,8 @@ struct Epoch<'e, 'a> {
     settings: Settings,
     /// The device counted a claim that the records alone now dispute.
     split: bool,
+    /// The other key of each admin's device (`with_pair`).
+    pairs: BTreeMap<KeyHash, Vec<KeyHash>>,
 }
 
 #[allow(clippy::indexing_slicing, reason = "positions come from the records' own Vec")]
@@ -1024,6 +1039,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
             pending: None,
             settings: Settings::default(),
             split: false,
+            pairs: BTreeMap::new(),
         };
         // Roots on the path first: their ceilings do not depend on the
         // settings, which are a root's record.
@@ -1044,6 +1060,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
             ep.chain(s);
         }
         ep.find_admins();
+        ep.find_pairs();
         ep.find_admitted();
         ep.do_label();
         ep.collect();
@@ -1742,9 +1759,22 @@ impl<'e, 'a> Epoch<'e, 'a> {
     /// the admin key of the device whose member key k is.
     fn with_pair(&self, k: &KeyHash) -> Vec<KeyHash> {
         let mut keys = vec![*k];
-        keys.extend(self.member_of_admin(k));
-        keys.extend(self.admins.keys().filter(|a| self.member_of_admin(a).as_ref() == Some(k)).copied());
+        if let Some(p) = self.pairs.get(k) {
+            keys.extend(p.iter().copied());
+        }
         keys
+    }
+
+    /// Each admin key with its device's member key, both ways.
+    fn find_pairs(&mut self) {
+        let mut pairs: BTreeMap<KeyHash, Vec<KeyHash>> = BTreeMap::new();
+        for a in self.admins.keys() {
+            if let Some(m) = self.member_of_admin(a) {
+                pairs.entry(*a).or_default().push(m);
+                pairs.entry(m).or_default().push(*a);
+            }
+        }
+        self.pairs = pairs;
     }
 
     fn claim(&self, i: usize, state: ClaimState) -> Claim {
