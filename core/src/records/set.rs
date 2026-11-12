@@ -55,7 +55,7 @@ pub struct RecordSet {
     /// path (`compact`): they have a root's room.
     promoted: BTreeSet<KeyHash>,
     /// The claims the member has counted: final here (`Input::counted`).
-    counted: BTreeSet<RecordId>,
+    counted: Vec<RecordId>,
     /// The takeovers' cuts of the roots before the promoted ones (`compact`):
     /// such a root keeps nothing off its cut.
     cuts: BTreeMap<KeyHash, Seen>,
@@ -76,7 +76,7 @@ impl RecordSet {
             units: BTreeMap::new(),
             cut: keep::Cut::default(),
             promoted: BTreeSet::new(),
-            counted: BTreeSet::new(),
+            counted: Vec::new(),
             cuts: BTreeMap::new(),
             split: false,
             records: BTreeMap::new(),
@@ -352,15 +352,19 @@ impl RecordSet {
 
     /// The claims the member has counted, which its caller keeps across
     /// restarts and hands a joiner with the claims' ages.
-    pub fn counted(&self) -> &BTreeSet<RecordId> {
+    pub fn counted(&self) -> &[RecordId] {
         &self.counted
     }
 
-    /// Takes claims as counted: those the caller kept from before a
-    /// restart, or those its admitter counted. A counted claim stays
-    /// counted.
+    /// Takes claims as counted, in the order they were counted: those the
+    /// caller kept from before a restart, or those its admitter counted.
+    /// A counted claim stays counted, in its place.
     pub fn remember_counted(&mut self, ids: impl IntoIterator<Item = RecordId>) {
-        self.counted.extend(ids);
+        for id in ids {
+            if !self.counted.contains(&id) {
+                self.counted.push(id);
+            }
+        }
     }
 
     /// Drops what the counting checkpoint of state leaves out: a root's
@@ -372,7 +376,18 @@ impl RecordSet {
     /// in sync. A member where the takeover does not count yet keeps only
     /// 16 units of the new root's records until it does.
     pub fn compact(&mut self, state: &State) -> usize {
-        self.counted.extend(state.claims.iter().filter(|c| c.state == ClaimState::Effective).map(|c| c.record));
+        // The claims that took effect, in the order of the path; a list
+        // that already holds an earlier path's keeps it.
+        let mut along: Vec<RecordId> = Vec::new();
+        for next in state.roots.iter().skip(1) {
+            match state.claims.iter().find(|c| c.state == ClaimState::Effective && c.root == *next) {
+                Some(c) => along.push(c.record),
+                None => break,
+            }
+        }
+        if along.len() > self.counted.len() && along.starts_with(&self.counted) {
+            self.counted = along;
+        }
         let promoted: BTreeSet<KeyHash> = state.roots.iter().skip(1).copied().collect();
         let cuts: BTreeMap<KeyHash, Seen> = state.cuts.iter().map(|c| (c.key, *c)).collect();
         if promoted != self.promoted || cuts != self.cuts {

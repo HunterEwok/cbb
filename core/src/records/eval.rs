@@ -36,10 +36,11 @@ pub struct Input<'a> {
     /// it counted while running, kept across restarts by the caller. A
     /// claim missing here has been held for no time (rule 7).
     pub held_ms: &'a BTreeMap<RecordId, u64>,
-    /// The claims this device has counted, by record ID, kept across
-    /// restarts by the caller (`RecordSet::counted`): such a claim is
-    /// final here, whatever records come later.
-    pub counted: &'a BTreeSet<RecordId>,
+    /// The claims this device has counted, by record ID, in the order it
+    /// counted them (the n-th under the n-th root of its path), kept
+    /// across restarts by the caller (`RecordSet::counted`): such a claim
+    /// is final here, whatever records come later.
+    pub counted: &'a [RecordId],
 }
 
 /// Why a record of the set does not count.
@@ -566,7 +567,7 @@ pub(crate) fn evaluate_checked(
     checked: Vec<Checked<'_>>,
     failed: BTreeMap<RecordId, Why>,
     held_ms: &BTreeMap<RecordId, u64>,
-    counted: &BTreeSet<RecordId>,
+    counted: &[RecordId],
     promoted: &BTreeSet<KeyHash>,
     cuts: &BTreeMap<KeyHash, Seen>,
 ) -> State {
@@ -880,7 +881,7 @@ impl<'a> Evaluation<'a> {
     /// root's records above the claim's cut do not count, the claim takes
     /// effect without being decided again, and other claims of that epoch
     /// are left out.
-    fn run(&self, held_ms: &BTreeMap<RecordId, u64>, counted: &BTreeSet<RecordId>) -> Epoch<'_, 'a> {
+    fn run(&self, held_ms: &BTreeMap<RecordId, u64>, counted: &[RecordId]) -> Epoch<'_, 'a> {
         let mut path = vec![self.group_root];
         let mut cuts = BTreeMap::new();
         let mut earlier = Vec::new();
@@ -937,30 +938,21 @@ impl<'a> Evaluation<'a> {
         }
     }
 
-    /// The claim the device counted under the last root of path: an
-    /// admin's claim it counted that saw that root, whose root is not on
-    /// the path yet, and that saw no other such claim; of several, the
-    /// smallest ID.
-    fn counted_claim(&self, path: &[KeyHash], counted: &BTreeSet<RecordId>) -> Option<(usize, Cut)> {
-        if counted.is_empty() || path.len() >= MAX_PATH {
+    /// The claim the device counted under the last root of path: the
+    /// counted claim at the path's place in the list, an admin's claim
+    /// that saw that root and whose root is not on the path yet.
+    fn counted_claim(&self, path: &[KeyHash], counted: &[RecordId]) -> Option<(usize, Cut)> {
+        if path.len() >= MAX_PATH {
             return None;
         }
         let cur = *path.last()?;
-        let cands: Vec<usize> = (0..self.recs.len())
-            .filter(|&i| {
-                let r = &self.recs[i];
-                r.admin()
-                    && counted.contains(&r.id)
-                    && r.seen_of(&cur) > 0
-                    && r.claim().is_some_and(|(k, _)| !path.contains(&k.hash()))
-            })
-            .collect();
-        cands
-            .iter()
-            .copied()
-            .filter(|&c| !cands.iter().any(|&o| o != c && self.saw(c, o)))
-            .min_by_key(|&c| self.recs[c].id)
-            .and_then(|c| Some((c, self.recs[c].seen_entry(&cur)?)))
+        let id = counted.get(path.len().checked_sub(1)?)?;
+        let c = *self.by_id.get(id)?;
+        let r = &self.recs[c];
+        if !r.admin() || r.claim().is_none_or(|(k, _)| path.contains(&k.hash())) {
+            return None;
+        }
+        Some((c, r.seen_entry(&cur)?))
     }
 }
 

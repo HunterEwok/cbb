@@ -5,7 +5,7 @@
 //! the limits, claims and the stop, held records, the keys statement, and
 //! one state for one set in any order.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::time::Instant;
 
 use p256::ecdsa::SigningKey;
@@ -116,7 +116,7 @@ impl G {
 }
 
 fn state_of(root: &Key, recs: &[Record], held: &BTreeMap<RecordId, u64>) -> State {
-    evaluate(&Input { root, records: recs, held_ms: held, counted: &BTreeSet::new() })
+    evaluate(&Input { root, records: recs, held_ms: held, counted: &[] })
 }
 
 fn removal(keys: &[KeyHash], seen: Vec<Seen>) -> Removal {
@@ -1831,8 +1831,7 @@ fn taken_over_group() -> (G, BTreeMap<RecordId, u64>, Record) {
 }
 
 fn counted_state(g: &G, held: &BTreeMap<RecordId, u64>, counted: &[RecordId]) -> State {
-    let counted: BTreeSet<RecordId> = counted.iter().copied().collect();
-    evaluate(&Input { root: &g.root.key, records: &g.recs, held_ms: held, counted: &counted })
+    evaluate(&Input { root: &g.root.key, records: &g.recs, held_ms: held, counted })
 }
 
 /// A takeover the device counted stays: the old root's later resolve of
@@ -2448,4 +2447,51 @@ fn a_removed_admin_s_hubs_and_copies_are_left_out() {
     assert!(s.revoked.contains(&lo.hash));
     assert_eq!(s.hubs, vec![h2.key.device_id()]);
     assert_eq!(s.incoming_ms, Some(600_000));
+}
+
+/// Counted claims are taken in the order they were counted, each under
+/// the root it follows: a second claim with a small ID and a short seen
+/// never skips the root between.
+#[test]
+fn counted_claims_follow_the_path_in_order() {
+    let (mut g, mut held, claim) = taken_over_group();
+    let (t, n) = (k("admin t"), k("new root"));
+    let first = g.seen_at(&g.root.hash, 1);
+    let (n_seq, n_id) = g.heads[&n.hash];
+    let mut seen = vec![first, Seen { key: n.hash, seq: n_seq, id: n_id }];
+    seen.sort_by_key(|s| s.key);
+    let mut second = None;
+    for i in 0..10_000 {
+        let n2 = k(&format!("next root {i}"));
+        let r = Record::sign(g.body(&t, Kind::Claim { root: n2.key.clone(), seen: seen.clone() }), &t).unwrap();
+        if r.id() < claim.id() {
+            second = Some((r, n2));
+            break;
+        }
+    }
+    let (c2, n2) = second.unwrap();
+    g.push(c2.clone());
+    held.insert(c2.id(), DEFAULT_DELAY_MS);
+    let s1 = counted_state(&g, &held, &[claim.id()]);
+    assert_eq!(s1.roots, vec![g.root.hash, n.hash, n2.hash]);
+    let s2 = counted_state(&g, &held, &[claim.id(), c2.id()]);
+    assert_eq!(s2.roots, vec![g.root.hash, n.hash, n2.hash]);
+    assert!(s2.revoked.contains(&k("gone").hash));
+    // A set that compacts as it goes keeps the root between.
+    let mut m = RecordSet::new(g.root.key.clone());
+    m.insert_all(g.recs[..g.recs.len() - 1].iter().cloned());
+    for _ in 0..2 {
+        let st = m.state(&held);
+        m.compact(&st);
+    }
+    let _ = m.insert(c2.clone());
+    for _ in 0..3 {
+        let st = m.state(&held);
+        assert!(st.roots.contains(&n.hash));
+        m.compact(&st);
+    }
+    assert_eq!(m.counted(), &[claim.id(), c2.id()]);
+    let st = m.state(&held);
+    assert_eq!(st.roots, vec![g.root.hash, n.hash, n2.hash]);
+    assert!(st.revoked.contains(&k("gone").hash));
 }
