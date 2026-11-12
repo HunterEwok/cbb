@@ -6,7 +6,7 @@ use super::*;
 fn ex(n: u64) -> Psk {
     let mut b = [0u8; 32];
     b[..8].copy_from_slice(&n.to_be_bytes());
-    psk(&b)
+    psk(&b, true).unwrap()
 }
 
 /// The device tries its keys in order against what the hub accepts; the
@@ -37,6 +37,11 @@ fn one_key_per_hub() {
     assert_eq!(read(&message(&k, &c)), Ok((k, c)));
     assert!(read(&message(&[0; 32], &c)).is_err());
     assert_ne!(ex(1).key, ex(1).confirm, "the tag does not give the key away");
+    // The hub's own key toward forwarders: one per face.
+    let f = hub_key_for_face(&secret, &[1; 16]);
+    assert_eq!(f, hub_key_for_face(&secret, &[1; 16]));
+    assert_ne!(f.1, hub_key_for_face(&secret, &[2; 16]).1);
+    assert_ne!(f.1, key_for(&secret, &DeviceId([1; 16])).1);
 }
 
 #[test]
@@ -54,11 +59,47 @@ fn a_switch_needs_both_ends() {
     assert!(!d.confirmed(&ex(9).confirm));
     assert!(h.tunnel(ex(3), &ex(9).confirm).is_none());
 
-    // The next connection completes the switch, and the hub drops the keys
-    // of connections before it.
+    // The next connection completes the switch; the hub keeps the keys of
+    // connections before it.
     connect(&mut d, &mut h, 3);
     assert_eq!(handshake(&mut d, &mut h), Some(ex(3).key));
-    assert_eq!(h.accepts(), vec![ex(3).key]);
+    assert_eq!(h.accepts().first(), Some(&ex(3).key));
+    assert!(h.accepts().contains(&ex(1).key));
+
+    // Only a connection with the hybrid key exchange gives a key.
+    assert_eq!(psk(&[1; 32], false), None);
+    #[cfg(feature = "tls")]
+    {
+        assert!(hybrid(Some(rustls::NamedGroup::X25519MLKEM768)));
+        assert!(!hybrid(Some(rustls::NamedGroup::X25519)));
+        assert!(!hybrid(None));
+    }
+}
+
+#[test]
+fn a_device_back_from_an_older_state_still_gets_in() {
+    let (mut d, mut h) = (DeviceSide::default(), HubSide::default());
+    connect(&mut d, &mut h, 1);
+    assert!(handshake(&mut d, &mut h).is_some());
+    // Last night's backup; then a connection at home and a trip.
+    let backup = d.clone();
+    connect(&mut d, &mut h, 2);
+    assert_eq!(handshake(&mut d, &mut h), Some(ex(2).key));
+    let mut d = backup;
+    assert_eq!(handshake(&mut d, &mut h), Some(ex(1).key), "the restored device still gets in");
+
+    // A device that never made a handshake: four confirmations lost, then
+    // four `tunnel` messages lost.
+    let (mut d, mut h) = (DeviceSide::default(), HubSide::default());
+    for n in 1..=4 {
+        let p = ex(n);
+        let tag = d.connected(p);
+        assert!(h.tunnel(p, &tag).is_some());
+    }
+    for n in 5..=8 {
+        d.connected(ex(n));
+    }
+    assert!(handshake(&mut d, &mut h).is_some());
 }
 
 #[test]
