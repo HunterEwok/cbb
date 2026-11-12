@@ -11,7 +11,8 @@
 # the host's: let the home network reach TCP 8764 (CBB_PORT) and UDP 5353.
 services:
   cbb:
-    image: ghcr.io/hunterewok/cbb:latest # pin a release by its digest
+    # latest is only ever a signed release; pin one by its digest (README.md).
+    image: ghcr.io/hunterewok/cbb:latest
     container_name: cbb
     restart: unless-stopped
     network_mode: host

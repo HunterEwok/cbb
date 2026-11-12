@@ -10,9 +10,12 @@
 //! report: the robot opens them elsewhere with its secret.
 //!
 //! The robot's safeguards: a body larger than twice the largest report an
-//! app builds is refused, at most `PER_BREAK` reports of one break and
-//! version and `PER_DAY` in all are kept each day, and further ones are
-//! answered as taken and dropped, so that an app never sends them again.
+//! app builds is refused; at most `PER_BREAK` reports of one break and
+//! version are kept each day, and further ones are answered as taken and
+//! dropped, so that an app never sends them again; past `PER_DAY` reports
+//! in a day or `MAX_TOTAL` bytes in all it answers 503, so that the apps
+//! keep theirs and send them later; and a day's reports go after
+//! `KEEP_DAYS`.
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -33,6 +36,10 @@ pub const MAX_BODY: usize = 2 * bug::MAX_POST;
 pub const PER_BREAK: usize = 20;
 /// The reports kept in a day, in all.
 pub const PER_DAY: usize = 5000;
+/// The bytes of reports kept in all; past them it takes no more.
+pub const MAX_TOTAL: u64 = 2 << 30;
+/// The days a day's reports are kept.
+pub const KEEP_DAYS: i64 = 30;
 /// The connections served at once.
 const CONNECTIONS: usize = 64;
 /// How long a connection may take.
@@ -46,6 +53,8 @@ struct Day {
     day: String,
     all: usize,
     breaks: HashMap<String, usize>,
+    /// The bytes of every report kept, of all days.
+    total: u64,
 }
 
 /// The receiver: where it keeps the reports, and today's counts.
@@ -70,7 +79,45 @@ impl Answer {
 /// Whether s is a version as the apps name theirs: digits, letters, dots,
 /// pluses and dashes.
 fn version_ok(s: &str) -> bool {
-    !s.is_empty() && s.len() <= 64 && s.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'+' | b'-'))
+    !s.is_empty()
+        && s.len() <= 64
+        && s.bytes().next().is_some_and(|b| b.is_ascii_alphanumeric())
+        && !s.contains("..")
+        && s.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'+' | b'-'))
+}
+
+/// Whether name is a day's folder, `YYYY-MM-DD`.
+fn day_folder(name: &str) -> bool {
+    name.len() == 10
+        && name.bytes().enumerate().all(|(i, b)| if i == 4 || i == 7 { b == b'-' } else { b.is_ascii_digit() })
+}
+
+/// The bytes of the files under dir.
+fn bytes(dir: &Path) -> u64 {
+    let mut total = 0u64;
+    for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let Ok(meta) = std::fs::symlink_metadata(e.path()) else { continue };
+        total = total.saturating_add(if meta.is_dir() { bytes(&e.path()) } else { meta.len() });
+    }
+    total
+}
+
+/// How many files each folder in dir holds, by its name.
+fn files_in_each(dir: &Path) -> HashMap<String, usize> {
+    let mut out = HashMap::new();
+    for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        if !e.file_type().is_ok_and(|t| t.is_dir()) {
+            continue;
+        }
+        let n = std::fs::read_dir(e.path())
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|f| f.file_type().is_ok_and(|t| t.is_file()))
+            .count();
+        out.insert(e.file_name().to_string_lossy().into_owned(), n);
+    }
+    out
 }
 
 impl Receiver {
@@ -88,6 +135,25 @@ impl Receiver {
             .and_then(|m| m.get(fingerprint).cloned())
             .filter(|v| version_ok(v))
             .unwrap_or_default()
+    }
+
+    /// The counts at the start of today, or at the receiver's start on a
+    /// day: the days older than KEEP_DAYS removed, the bytes of the rest,
+    /// and today's reports as its folder holds them.
+    fn new_day(&self, today: &str, now_ms: i64) -> Day {
+        let oldest = bug::day(now_ms.saturating_sub(KEEP_DAYS.saturating_mul(86_400_000)));
+        for e in std::fs::read_dir(&self.dir).into_iter().flatten().flatten() {
+            let name = e.file_name().to_string_lossy().into_owned();
+            if day_folder(&name) && name < oldest {
+                if let Err(err) = std::fs::remove_dir_all(e.path()) {
+                    eprintln!("cbb-bug: cannot remove the old reports in {}: {err}", e.path().display());
+                }
+            }
+        }
+        let total = bytes(&self.dir);
+        let breaks = files_in_each(&self.dir.join(today));
+        let all = breaks.values().sum();
+        Day { day: today.to_string(), all, breaks, total }
     }
 
     /// Takes a posted body at now_ms: keeps it when the day's counts allow,
@@ -116,13 +182,17 @@ impl Receiver {
         let n = {
             let mut d = self.day.lock().unwrap();
             if d.day != today {
-                *d = Day { day: today.clone(), ..Day::default() };
+                *d = self.new_day(&today, now_ms);
             }
             let seen = d.breaks.get(&key).copied().unwrap_or(0);
-            if d.all >= PER_DAY || seen >= PER_BREAK {
+            if seen >= PER_BREAK {
                 return answer;
             }
+            if d.all >= PER_DAY || d.total.saturating_add(body.len() as u64) > MAX_TOTAL {
+                return Answer::error(503, "no more reports are taken now");
+            }
             d.all += 1;
+            d.total = d.total.saturating_add(body.len() as u64);
             d.breaks.insert(key.clone(), seen + 1);
             seen
         };
@@ -404,6 +474,47 @@ mod tests {
             assert_eq!(rx.take(&bad, day).status, 400, "{}", String::from_utf8_lossy(&bad));
         }
         assert_eq!(rx.take(&vec![b' '; MAX_BODY + 1], day).status, 413);
+        for bad in [".", "..", "-1", "0.6..1"] {
+            assert_eq!(rx.take(&post("0123456789abcdef", bad), day).status, 400, "{bad}");
+        }
+    }
+
+    /// Past the day's count or the bytes in all it answers 503, so that the
+    /// apps keep their reports; a restart keeps the day's count; old days go.
+    #[test]
+    fn full_store_asks_to_send_later() {
+        let tmp = std::env::temp_dir().join(format!("cbb-bugd-full-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let day = 1_762_646_400_000;
+        let rx = Receiver::new(&tmp).unwrap();
+        // A day older than KEEP_DAYS, and one within.
+        let old = tmp.join(bug::day(day - (KEEP_DAYS + 1) * 86_400_000)).join("0123456789abcdef-0.5.0");
+        let recent = tmp.join(bug::day(day - 86_400_000)).join("0123456789abcdef-0.5.0");
+        for d in [&old, &recent] {
+            std::fs::create_dir_all(d).unwrap();
+            std::fs::write(d.join("00-1.json"), "x").unwrap();
+        }
+        assert_eq!(rx.take(&post("0123456789abcdef", "0.6.0"), day).status, 200);
+        assert!(!old.exists(), "a day older than KEEP_DAYS stays");
+        assert!(recent.exists());
+        {
+            let mut d = rx.day.lock().unwrap();
+            d.all = PER_DAY;
+        }
+        assert_eq!(rx.take(&post("1123456789abcdef", "0.6.0"), day).status, 503);
+        {
+            let mut d = rx.day.lock().unwrap();
+            d.all = 0;
+            d.total = MAX_TOTAL;
+        }
+        assert_eq!(rx.take(&post("1123456789abcdef", "0.6.0"), day).status, 503);
+        // A new receiver on the same day counts what the folder holds.
+        let again = Receiver::new(&tmp).unwrap();
+        let d = again.new_day(&bug::day(day), day);
+        assert_eq!(d.all, 1);
+        assert_eq!(d.breaks.get("0123456789abcdef-0.6.0"), Some(&1));
+        assert!(d.total > 0);
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[test]

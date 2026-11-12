@@ -1736,7 +1736,7 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
         let healthy = |v: &str, within: Duration| update::wait_healthy(&status, v, within);
         let work =
             if root { work.clone() } else { std::env::temp_dir().join(format!("cbb-update-{}", std::process::id())) };
-        let _ = std::fs::create_dir_all(&work);
+        update::work_dir(&work)?;
         let link = ServiceLink(g);
         let u = update::Updater {
             work: work.clone(),

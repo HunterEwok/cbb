@@ -108,6 +108,46 @@ fn mkdir_private(dir: &Path) -> Result<()> {
     crate::sys::mkdir_private(dir)
 }
 
+/// Makes the updater's work folder dir (or one inside it) for this user
+/// alone, and trusts a folder that is already there only when it is a
+/// folder, not a link, this user's and closed to everyone else; any other
+/// is removed and made again. The work folder can be in a folder others
+/// may write to (/tmp on OpenWrt, the temporary folder of a check), and
+/// what the updater unpacks there is run.
+pub fn work_dir(dir: &Path) -> Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+        if let Some(parent) = dir.parent().filter(|p| !p.as_os_str().is_empty()) {
+            if fs::symlink_metadata(parent).is_err() {
+                fs::create_dir_all(parent).context(format!("cannot make {}", parent.display()))?;
+            }
+        }
+        let make = || fs::DirBuilder::new().mode(0o700).create(dir);
+        match make() {
+            Ok(()) => return Ok(()),
+            Err(e) if e.kind() != ErrorKind::AlreadyExists => {
+                return Err(Error::with(format!("cannot make {}", dir.display()), e));
+            }
+            Err(_) => {}
+        }
+        let meta = fs::symlink_metadata(dir).context(format!("cannot read {}", dir.display()))?;
+        // SAFETY: geteuid has no preconditions.
+        let me = unsafe { libc::geteuid() };
+        if meta.is_dir() && meta.uid() == me && meta.mode() & 0o077 == 0 {
+            return Ok(());
+        }
+        // remove_dir_all does not follow links inside the folder.
+        let gone = if meta.is_dir() { fs::remove_dir_all(dir) } else { fs::remove_file(dir) };
+        gone.context(format!("cannot remove {}, which is not this program's own", dir.display()))?;
+        make().context(format!("cannot make {}", dir.display()))
+    }
+    #[cfg(not(unix))]
+    {
+        mkdir_private(dir)
+    }
+}
+
 /// Reports whether a timer should check now.
 pub fn due(st: &State, now_ms: i64) -> bool {
     st.auto == Some(true) && now_ms - st.checked_ms >= CHECK_EVERY_MS
@@ -402,7 +442,7 @@ impl Updater<'_> {
             return Err(Error::msg(NO_ROOTS));
         }
         let roots: Vec<&[u8]> = self.roots.iter().map(Vec::as_slice).collect();
-        mkdir_private(&self.work)?;
+        work_dir(&self.work)?;
         let mut errs = Vec::new();
         for (i, src) in self.sources.iter().enumerate() {
             let files = (|| -> Result<(File, File, File)> {
@@ -493,7 +533,7 @@ impl Updater<'_> {
         for name in g.want() {
             let Some(a) = r.files.iter().find(|a| a.name == name) else { continue };
             let file = self.work.join(format!(".group-{name}"));
-            let res = mkdir_private(&self.work)
+            let res = work_dir(&self.work)
                 .and_then(|()| src.fetch_to(&a.name, &r.version, &file, MAX_ARCHIVE.min(a.size.max(0) as u64)))
                 .and_then(|()| r.check_file(&a.name, &fs::read(&file).context("cannot read the downloaded archive")?));
             match res {
@@ -525,10 +565,10 @@ impl Updater<'_> {
             .iter()
             .find(|b| matches!(b.name.rsplit('/').next(), Some("cbb" | "cbb.exe")))
             .ok_or_else(|| Error::msg(format!("release.json lists no cbb in {}", asset.name)))?;
-        mkdir_private(&self.work)?;
+        work_dir(&self.work)?;
         let new = self.work.join("new");
         let _ = fs::remove_dir_all(&new);
-        mkdir_private(&new)?;
+        work_dir(&new)?;
         (self.log)(&format!("Downloading {} ({})...", asset.name, r.version));
         let file = self.work.join(&asset.name);
         let max = MAX_ARCHIVE.min(asset.size.max(0) as u64);
@@ -577,7 +617,7 @@ impl Updater<'_> {
         // installer finds those beside cbb when it puts them back.
         let prev = self.work.join("previous");
         let _ = fs::remove_dir_all(&prev);
-        mkdir_private(&prev)?;
+        work_dir(&prev)?;
         let mut saved = PathBuf::new();
         for (i, p) in self.programs.iter().enumerate() {
             let name = if i == 0 {
@@ -1265,5 +1305,40 @@ mod tests {
         assert_eq!(read_roots(&dir.join("r.pem")).unwrap(), vec![der]);
         fs::write(dir.join("e.pem"), "nothing").unwrap();
         assert!(read_roots(&dir.join("e.pem")).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn work_dir_trusts_only_its_own_closed_folder() {
+        use std::os::unix::fs::PermissionsExt;
+        let base = tmp("workdir");
+        let work = base.join("w");
+        // A new folder is closed to others.
+        work_dir(&work).unwrap();
+        assert_eq!(fs::metadata(&work).unwrap().permissions().mode() & 0o777, 0o700);
+        // Its own closed folder stays as it is.
+        fs::write(work.join("kept"), "x").unwrap();
+        work_dir(&work).unwrap();
+        assert!(work.join("kept").exists());
+        // A folder others may write to is made again, empty.
+        fs::set_permissions(&work, fs::Permissions::from_mode(0o777)).unwrap();
+        work_dir(&work).unwrap();
+        assert!(!work.join("kept").exists());
+        assert_eq!(fs::metadata(&work).unwrap().permissions().mode() & 0o777, 0o700);
+        // A link is replaced by a folder, and what it led to is left alone.
+        let elsewhere = base.join("elsewhere");
+        fs::create_dir(&elsewhere).unwrap();
+        fs::write(elsewhere.join("theirs"), "x").unwrap();
+        fs::remove_dir_all(&work).unwrap();
+        std::os::unix::fs::symlink(&elsewhere, &work).unwrap();
+        work_dir(&work).unwrap();
+        assert!(fs::symlink_metadata(&work).unwrap().is_dir());
+        assert!(elsewhere.join("theirs").exists());
+        // A file in its place is replaced too.
+        fs::remove_dir_all(&work).unwrap();
+        fs::write(&work, "x").unwrap();
+        work_dir(&work).unwrap();
+        assert!(work.is_dir());
+        let _ = fs::remove_dir_all(&base);
     }
 }
