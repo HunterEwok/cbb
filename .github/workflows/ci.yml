@@ -1580,8 +1580,10 @@ jobs:
     # The libraries and the build take about 15 minutes, and a slow runner
     # can spend 5 minutes booting a simulator for each of the retries
     # below: 45 minutes cut off a run whose tests had passed on the iPhone
-    # while the iPad's first try was being retried.
-    timeout-minutes: 75
+    # while the iPad's first try was being retried. The languages' and
+    # accessibility's UI tests (ReadersUITests) launch the app eighteen
+    # times on each simulator.
+    timeout-minutes: 95
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1651,11 +1653,13 @@ jobs:
               for second in $(seq 300); do kill -0 "$boot" 2>/dev/null || break; sleep 1; done
               kill "$boot" 2>/dev/null || true
               wait "$boot" || true
+              rm -rf "$RUNNER_TEMP/ios-$1.xcresult"
               xcodebuild test-without-building -project CBB.xcodeproj -scheme CBB -destination "id=$1" \
+                -resultBundlePath "$RUNNER_TEMP/ios-$1.xcresult" \
                 "${sign[@]}" "${only[@]}" >"$log" 2>&1 &
               pid=$!
               killed=
-              for second in $(seq 600); do
+              for second in $(seq 1200); do
                 kill -0 "$pid" 2>/dev/null || break
                 if [ "$second" -ge 150 ] && ! grep -q "^Test Suite " "$log"; then killed=1; break; fi
                 sleep 1
@@ -1683,7 +1687,7 @@ jobs:
                 # long before the tail: show those lines first.
                 grep -E "error: |^Test Case .* failed" "$log" || true
                 tail -n 100 "$log"
-                [ -n "$killed" ] && echo "::error::the tests on $1 did not finish in 10 minutes"
+                [ -n "$killed" ] && echo "::error::the tests on $1 did not finish in 20 minutes"
                 return "$status"
               fi
               tail -n 30 "$log"
@@ -1701,6 +1705,26 @@ jobs:
             "${sign[@]}" | tail -n 50
           test_on "$iphone"
           test_on "$ipad"
+      # The screens' pictures in every language (ReadersUITests), to look at
+      # what the accessibility audit found; the English ones also go into
+      # the log as small JPEGs when the tests fail.
+      - name: the screens' pictures
+        if: always()
+        run: |
+          for r in "$RUNNER_TEMP"/ios-*.xcresult; do
+            [ -d "$r" ] || continue
+            xcrun xcresulttool export attachments --path "$r" --output-path "$RUNNER_TEMP/ios-screens/$(basename "$r" .xcresult)" || true
+          done
+      - name: the English screens in the log
+        if: failure()
+        run: python3 .github/pictures.py "$RUNNER_TEMP/ios-screens" -en failed-
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: ios-screens
+          path: ${{ runner.temp }}/ios-screens
+          retention-days: 7
+          if-no-files-found: ignore
   macapp:
     name: Mac app
     needs: changes
@@ -1721,7 +1745,23 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild test -project CBBMac.xcodeproj -scheme CBBMac -destination 'platform=macOS' \
+            -resultBundlePath "$RUNNER_TEMP/mac.xcresult" \
             CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= | tail -n 200
+      # The windows' pictures in every language (ReadersUITests), to look at
+      # what the accessibility audit found.
+      - name: the windows' pictures
+        if: always()
+        run: xcrun xcresulttool export attachments --path "$RUNNER_TEMP/mac.xcresult" --output-path "$RUNNER_TEMP/mac-windows" || true
+      - name: the English window in the log
+        if: failure()
+        run: python3 .github/pictures.py "$RUNNER_TEMP/mac-windows" -en
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: mac-windows
+          path: ${{ runner.temp }}/mac-windows
+          retention-days: 7
+          if-no-files-found: ignore
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -1812,7 +1852,9 @@ jobs:
           printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' | sudo tee /etc/apt/apt.conf.d/80-retries >/dev/null
           mkdir -p ~/apt-archives/partial
           sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends -o Dir::Cache::Archives="$HOME/apt-archives" libgtk-4-dev libwebkitgtk-6.0-dev
+          # The Noto fonts the window's screenshots are drawn in (screenshot_test.go).
+          sudo apt-get install -y -q --no-install-recommends -o Dir::Cache::Archives="$HOME/apt-archives" libgtk-4-dev libwebkitgtk-6.0-dev \
+            fonts-noto-core fonts-noto-mono fonts-droid-fallback
       - name: tidy the package cache
         if: always() && runner.os == 'Linux' && steps.gtk.outcome != 'skipped'
         run: |
@@ -1829,9 +1871,19 @@ jobs:
         if: runner.os == 'Linux'
         run: go mod tidy -diff
       - name: vet and test
+        env:
+          CBB_SCREENSHOT_OUT: ${{ runner.temp }}/screenshots
         run: |
           go vet ./...
           go test ./...
+      # The new pictures and their differences when a screenshot does not match.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure() && runner.os == 'Linux'
+        with:
+          name: tray-screenshots
+          path: ${{ runner.temp }}/screenshots
+          if-no-files-found: ignore
+          retention-days: 7
       - name: build
         shell: bash
         run: |
@@ -1922,9 +1974,19 @@ jobs:
         # The runner image has the Android SDK; Gradle fetches a missing platform. The app
         # has two builds, full and fdroid (docs/apps.md, "F-Droid").
         run: |
+          # verifyRoborazziFullDebug is the full build's unit tests with the
+          # screenshots compared with app/src/test/screenshots (ScreenshotTest).
           ./gradlew --no-daemon :app:assembleDebug :app:assembleRelease \
-            :app:testFullDebugUnitTest :app:testFdroidDebugUnitTest :app:lintFullDebug :app:lintFdroidDebug \
+            :app:verifyRoborazziFullDebug :app:testFdroidDebugUnitTest :app:lintFullDebug :app:lintFdroidDebug \
             :shared:testDebugUnitTest :shared:lintDebug :wear:assembleDebug :wear:assembleRelease :wear:lintDebug
+      # The new pictures and their differences when a screenshot does not match.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: android-screenshots
+          path: apps/android/app/build/outputs/roborazzi
+          if-no-files-found: ignore
+          retention-days: 7
       - name: the Android apps' software bill of materials, as the release makes it (tools/sbom)
         working-directory: apps/android
         run: |
@@ -2203,6 +2265,8 @@ jobs:
     if: needs.changes.outputs.core == 'true' || needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      COVERPKG: ./cmd/...,./internal/...
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -2235,7 +2299,13 @@ jobs:
         run: |
           cargo build --locked --release -p cbb-member
           cargo build --locked --release -p cbb-ffi --features member,tunnel --example phone-on-linux
-          CGO_ENABLED=0 go build -trimpath -o target/release/cbb-helper ./cmd/cbb-helper
+          # Built with -cover, for the Go coverage (docs/testing.md,
+          # "Coverage"): cbb hands its helper only the environment it needs,
+          # so a script in the helper's place gives it GOCOVERDIR.
+          CGO_ENABLED=0 go build -trimpath -cover -coverpkg="$COVERPKG" -o target/release/cbb-helper.cover ./cmd/cbb-helper
+          mkdir -p "$RUNNER_TEMP/helper-cover"
+          printf '#!/bin/sh\nGOCOVERDIR=%s exec %s "$@"\n' "$RUNNER_TEMP/helper-cover" "$PWD/target/release/cbb-helper.cover" >target/release/cbb-helper
+          chmod 755 target/release/cbb-helper
       - name: go test ./internal/service and the desktop connector with every Linux member a Rust cbb
         run: |
           Xvfb :5 -screen 0 640x480x24 >"$RUNNER_TEMP/xvfb.log" 2>&1 &
@@ -2243,18 +2313,31 @@ jobs:
           DISPLAY=:5 CBB_TEST_X11=1 \
             CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_TEST_ALONE="$PWD/target/release/cbb" \
             CBB_PHONE_ON_LINUX="$PWD/target/release/examples/phone-on-linux" \
-            go test -timeout 45m ./internal/service -v
+            go test -timeout 45m -coverpkg="$COVERPKG" -coverprofile=cover-go-service.out ./internal/service -v
           # One package at a time, so that -v streams each test's lines as
           # it runs and a test that hangs is named by the timeout's
           # goroutine dump before the job's own limit.
           DISPLAY=:5 CBB_TEST_X11=1 \
             CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_TEST_ALONE="$PWD/target/release/cbb" \
-            go test -timeout 5m ./internal/connector -v
+            go test -timeout 5m -coverpkg="$COVERPKG" -coverprofile=cover-go-connector.out ./internal/connector -v
       - name: a device of the previous release works in one group with this build (from 0.6 on; skips until 0.6.0 is out)
         run: |
           prev=$(sh tools/e2e/previous.sh "$RUNNER_TEMP/previous")
           CBB_PREVIOUS="$prev" CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_TEST_ALONE="$PWD/target/release/cbb" \
             go test -timeout 5m ./internal/service -run '^TestPreviousRelease$' -v
+      - name: the cbb-helpers' coverage
+        if: always()
+        run: |
+          if [ -n "$(ls -A "$RUNNER_TEMP/helper-cover" 2>/dev/null)" ]; then
+            go tool covdata textfmt -i "$RUNNER_TEMP/helper-cover" -o cover-go-helper.out
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: coverage-go-service
+          path: cover-go-*.out
+          retention-days: 7
+          if-no-files-found: ignore
       - name: the Rust service's coverage, from its own tests and Go's
         if: success() || failure()
         run: cargo llvm-cov report --release --json --summary-only --output-path "$GITHUB_WORKSPACE/coverage-rust-service.json"
