@@ -1105,6 +1105,7 @@ mod tests {
             os_version: "5".into(),
             version: "0.6.0".into(),
             key_store: "hardware".into(),
+            admin_key: Vec::new(),
             state_dir: state_dir.clone(),
             peers: Vec::new(),
             mdns: false,
