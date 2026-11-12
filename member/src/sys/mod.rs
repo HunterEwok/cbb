@@ -22,6 +22,8 @@ mod acl_windows;
 #[cfg(windows)]
 pub use acl_windows::listen as listen_windows;
 #[cfg(windows)]
+pub use acl_windows::owner_only;
+#[cfg(windows)]
 pub mod service_windows;
 
 /// Whether the process runs as root, or on Windows as an administrator or

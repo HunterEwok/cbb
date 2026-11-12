@@ -1487,6 +1487,10 @@ impl Admin<'_> {
     /// the core (cbb_core::admit), and records the device once its Welcome
     /// is out. With admins, on the root only, a phone that offers an admin
     /// key becomes an admin. It returns the device's name.
+    ///
+    /// It dials at most the QR code's four addresses, and stops at the
+    /// first attempt that showed the device this member's CPace message:
+    /// that attempt tried the code, which serves one guess only.
     pub fn admit_by_qr(&self, code: &str, addrs: &[String], fingerprint: &str, admins: bool) -> Result<String> {
         let code = cbb_core::pair::normalize_code(code)?;
         if fingerprint.is_empty() {
@@ -1495,9 +1499,11 @@ impl Admin<'_> {
         let admitter = self.admitter(admins)?;
         let end = Instant::now() + PAIR_LIFETIME;
         let mut tried = Vec::new();
-        for addr in addrs {
-            match self.admit_at(&admitter, &code, addr, fingerprint, end) {
+        for addr in addrs.iter().take(cbb_core::pair::MAX_ADDRS) {
+            let mut started = false;
+            match self.admit_at(&admitter, &code, addr, fingerprint, end, &mut started) {
                 Ok(name) => return Ok(name),
+                Err(e) if started => return Err(e.context("could not admit the device that shows the QR code")),
                 Err(e) => tried.push(format!("{addr}: {}", e.for_log())),
             }
         }
@@ -1511,6 +1517,7 @@ impl Admin<'_> {
         addr: &str,
         fingerprint: &str,
         end: Instant,
+        started: &mut bool,
     ) -> Result<String> {
         let to: SocketAddr = addr.parse().map_err(|_| Error::msg("not an address and port"))?;
         if !crate::pair::home_address(to.ip()) {
@@ -1524,6 +1531,7 @@ impl Admin<'_> {
         let mut buf = vec![0u8; 16 << 10];
         loop {
             let step = adm.feed(&input, uptime::wall_ms());
+            *started |= adm.started();
             if !step.send.is_empty() {
                 sock.write_all(&step.send).context("cannot send to the device")?;
             }

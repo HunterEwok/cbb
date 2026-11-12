@@ -40,8 +40,9 @@ object PairingMember {
      * fingerprint; sessionID is the TLS exporter's output. issue makes the
      * welcome for the joiner's device ID, public key and description; it is
      * called only after the joiner proved it knows the code. taken reports
-     * whether the joiner's device ID is in the group already; such a joiner
-     * is refused before the exchange, as a device picks its own ID. With
+     * whether the joiner's device ID is in the group already, which every
+     * caller must answer; such a joiner is refused before the exchange, as a
+     * device picks its own ID. With
      * invitation, the device dialed this phone: code is unused, the device
      * confirms the secret first, and the admin confirms the device.
      */
@@ -52,7 +53,7 @@ object PairingMember {
         joinerCert: ByteArray,
         sessionID: ByteArray,
         memberAD: Pairing.MemberAD,
-        taken: (String) -> Boolean = { false },
+        taken: (String) -> Boolean,
         invitation: Invitation? = null,
         issue: (String, ByteArray, Pairing.Info) -> Pairing.Welcome,
     ): Admitted {

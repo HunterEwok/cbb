@@ -2197,6 +2197,20 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- Pairing and the member port hold up better on a busy home network: the member port
+  limits connections in their handshake per device as well as in all, and closes one that
+  sends nothing for 3 s; a pairing connection with no window open is answered after one small
+  frame; a pairing window counts only attempts that tried a code against its three, and
+  attempts from one device's addresses as one; a device that listens to join takes no more
+  attempts from a device whose attempts keep ending without a code (on the Nano ESP32 too);
+  `cbb pair` with the six digits alone admits only when one device waits to join, and stops at
+  its first attempt; a device that joins by an invitation joins only the group the invitation
+  names (computers and phones); a connection that carries records only takes small frames;
+  commands run a few at a time per connection; and the mDNS cache stays small, with the
+  addresses of a connected member kept as they are (docs/protocol.md, sections 4, 6 and 12).
+- A pairing code is drawn so that every code is as likely as any other; an admin key at
+  pairing must be new to the group's device keys, roots and recovery key too; an admission
+  whose Welcome cannot be sent adds no device record.
 - Quotation marks in a few texts: the Android app showed a backslash before them in Arabic,
   Spanish, Hebrew, Hindi and Swahili, and dropped them in English; the Mac app showed the
   backslash in the same languages on its pairing screen.

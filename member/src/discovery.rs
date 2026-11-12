@@ -12,8 +12,8 @@
 
 use std::collections::HashMap;
 use std::io::Write as _;
-use std::net::{IpAddr, SocketAddr, SocketAddrV6, TcpListener};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::net::{IpAddr, SocketAddr, SocketAddrV6, TcpListener, TcpStream};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -88,6 +88,21 @@ pub fn announce_joiner(id: &DeviceId, port: u16, fingerprint: &str) -> Option<An
         .ok()?
         .enable_addr_auto();
     daemon.register(info).ok()?;
+    // A joiner waits for minutes: a daemon whose cache another device
+    // floods stops announcing it, and the QR code still works.
+    let watched = daemon.clone();
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(CACHE_CHECK);
+            let Ok(rx) = watched.get_metrics() else { return };
+            let Ok(m) = rx.recv_timeout(Duration::from_secs(1)) else { return };
+            let n: i64 = sum_cached(&m);
+            if n > MAX_CACHED {
+                let _ = watched.shutdown();
+                return;
+            }
+        }
+    });
     Some(Announcement(daemon))
 }
 
@@ -125,20 +140,35 @@ pub fn find_pairing(wait: Duration) -> crate::error::Result<Vec<SocketAddr>> {
     }
 }
 
-/// The devices that announce that they wait to join (TXT `j=1` with their
-/// certificate's fingerprint `f`, docs/protocol.md section 3), with their
-/// addresses, for cbb pair with a code alone, as Go's findJoiners.
-pub fn find_joiners(wait: Duration) -> crate::error::Result<Vec<(Vec<SocketAddr>, String)>> {
+/// The device that announces that it waits to join (TXT `j=1` with its
+/// certificate's fingerprint `f`, docs/protocol.md section 3), with its
+/// addresses, for cbb pair with a code alone, as Go's findJoiners. More
+/// than one is refused, as find_pairing refuses more than one window: the
+/// code serves one device, and each other one would be one more guess.
+pub fn find_joiner(wait: Duration) -> crate::error::Result<(Vec<SocketAddr>, String)> {
     let waiting = browse_txt(wait, |info| {
         let fp = info.get_property_val_str("f").filter(|f| !f.is_empty())?;
         (info.get_property_val_str("j") == Some("1")).then(|| fp.to_string())
     })?;
-    if waiting.is_empty() {
-        return Err(crate::error::Error::msg(
+    the_one_joiner(waiting.into_values().collect())
+}
+
+/// The one device of those that wait to join, its addresses cut to a QR
+/// code's.
+fn the_one_joiner(mut waiting: Vec<(Vec<SocketAddr>, String)>) -> crate::error::Result<(Vec<SocketAddr>, String)> {
+    match waiting.len() {
+        0 => Err(crate::error::Error::msg(
             "no device that waits to join was found; on the new device, choose to join a group (cbb pair there) and type the code it shows",
-        ));
+        )),
+        1 => {
+            let (mut addrs, fp) = waiting.remove(0);
+            addrs.truncate(cbb_core::pair::MAX_ADDRS);
+            Ok((addrs, fp))
+        }
+        n => Err(crate::error::Error::msg(format!(
+            "{n} devices wait to join on the network; scan the QR code that the new device shows, or give its address"
+        ))),
     }
-    Ok(waiting.into_values().collect())
 }
 
 /// The addresses of the members of the group tag that browsing finds, one
@@ -169,8 +199,15 @@ fn browse_txt<T>(
     let mut found = std::collections::BTreeMap::new();
     let mut deadline = std::time::Instant::now() + wait;
     let mut settled = false;
+    let mut checked = std::time::Instant::now();
     while let Some(left) = deadline.checked_duration_since(std::time::Instant::now()) {
-        let Ok(ev) = rx.recv_timeout(left) else { break };
+        if checked.elapsed() >= CACHE_CHECK {
+            checked = std::time::Instant::now();
+            if flooded(&daemon) {
+                break;
+            }
+        }
+        let Ok(ev) = rx.recv_timeout(left.min(CACHE_CHECK)) else { continue };
         trace(&format!("pairing browse: {ev:?}"));
         let mdns_sd::ServiceEvent::ServiceResolved(info) = ev else { continue };
         let Some(v) = pick(&info) else { continue };
@@ -178,7 +215,11 @@ fn browse_txt<T>(
         if addrs.is_empty() {
             continue;
         }
-        found.insert(instance(&info.fullname), (addrs, v));
+        let name = instance(&info.fullname);
+        if found.len() >= MAX_FOUND && !found.contains_key(&name) {
+            continue;
+        }
+        found.insert(name, (addrs, v));
         if !settled {
             settled = true;
             deadline = std::time::Instant::now() + PAIRING_SETTLE;
@@ -226,6 +267,64 @@ fn test_fallback() -> Option<Duration> {
 }
 /// At most this many connections may be in their TLS handshake at once.
 const MAX_HANDSHAKES: usize = 16;
+/// At most this many of them from one source (crate::pair::source), other
+/// than the loopback address, which the tunnels' and relays' ports share.
+const MAX_HANDSHAKES_PER_SOURCE: usize = 4;
+/// How long a connection from another device has to start its TLS
+/// handshake: a member sends its client hello as soon as it connects.
+const HELLO_TIMEOUT: Duration = Duration::from_secs(3);
+
+/// The connections in their handshake, in all and by source.
+#[derive(Default)]
+struct Handshakes {
+    all: usize,
+    by_source: HashMap<IpAddr, usize>,
+}
+
+impl Handshakes {
+    /// Takes a slot for a connection from ip, if one is free.
+    fn take(&mut self, ip: IpAddr) -> bool {
+        if self.all >= MAX_HANDSHAKES {
+            return false;
+        }
+        if !ip.to_canonical().is_loopback() {
+            let n = self.by_source.entry(crate::pair::source(ip)).or_default();
+            if *n >= MAX_HANDSHAKES_PER_SOURCE {
+                return false;
+            }
+            *n += 1;
+        }
+        self.all += 1;
+        true
+    }
+
+    /// Gives back the slot of a connection from ip.
+    fn give(&mut self, ip: IpAddr) {
+        self.all = self.all.saturating_sub(1);
+        if !ip.to_canonical().is_loopback() {
+            let k = crate::pair::source(ip);
+            if let Some(n) = self.by_source.get_mut(&k) {
+                *n -= 1;
+                if *n == 0 {
+                    self.by_source.remove(&k);
+                }
+            }
+        }
+    }
+}
+
+/// Whether a connection from another device starts its TLS handshake
+/// within HELLO_TIMEOUT; a loopback one has the handshake's whole time,
+/// since it may come from far through a tunnel or a relay.
+fn hello_comes(sock: &TcpStream, from: IpAddr) -> bool {
+    if from.to_canonical().is_loopback() {
+        return true;
+    }
+    if sock.set_read_timeout(Some(HELLO_TIMEOUT)).is_err() {
+        return false;
+    }
+    matches!(sock.peek(&mut [0u8; 1]), Ok(n) if n > 0)
+}
 /// The members found by browsing that are dialed at once, as Go's mDNS
 /// cache reports at most.
 const MAX_FOUND: usize = 64;
@@ -398,7 +497,7 @@ pub fn listen_until(
         }
     };
     let port = ln.local_addr().map(|a| a.port()).unwrap_or(port);
-    let busy = Arc::new(AtomicUsize::new(0));
+    let busy = Arc::new(Mutex::new(Handshakes::default()));
     std::thread::spawn(move || {
         for conn in ln.incoming() {
             if node.is_closed() || stop.load(Ordering::SeqCst) {
@@ -406,8 +505,7 @@ pub fn listen_until(
             }
             let Ok(sock) = conn else { continue };
             let Ok(addr) = sock.peer_addr() else { continue };
-            if !home_address(addr.ip()) || !interfaces::arrived(&sock) || busy.load(Ordering::SeqCst) >= MAX_HANDSHAKES
-            {
+            if !home_address(addr.ip()) || !interfaces::arrived(&sock) {
                 continue; // dropping the socket closes it
             }
             if let Ok(local) = sock.local_addr()
@@ -419,15 +517,21 @@ pub fn listen_until(
                 ));
                 continue;
             }
-            busy.fetch_add(1, Ordering::SeqCst);
+            if !busy.lock().unwrap().take(addr.ip()) {
+                continue;
+            }
             let (node, busy, log, admit) = (node.clone(), busy.clone(), log.clone(), admit.clone());
             std::thread::spawn(move || {
                 let mut slot = Some(busy);
                 let mut release = || {
                     if let Some(b) = slot.take() {
-                        b.fetch_sub(1, Ordering::SeqCst);
+                        b.lock().unwrap().give(addr.ip());
                     }
                 };
+                if !hello_comes(&sock, addr.ip()) {
+                    release();
+                    return;
+                }
                 let res = node.accept_checked(sock, addr, &mut release, admit.as_ref());
                 release();
                 if let Err(e) = res {
@@ -567,6 +671,32 @@ pub fn start_as_phone(node: Arc<Node>, tag: String, log: Arc<dyn Fn(&str) + Send
     });
 }
 
+/// The most records an mDNS daemon of the service may cache. mdns-sd
+/// bounds its cache by nothing but the senders' TTLs, so any device on the
+/// network could grow it without end; past this many, the daemon is
+/// replaced by a new one, whose cache is empty, as Go's responder kept at
+/// most 1024 entries.
+const MAX_CACHED: i64 = 1024;
+/// How often the cache's size is checked.
+const CACHE_CHECK: Duration = Duration::from_secs(2);
+
+/// How many records the daemon caches, and the timers it keeps for them;
+/// None when it does not answer.
+fn cached(daemon: &mdns_sd::ServiceDaemon) -> Option<i64> {
+    let m = daemon.get_metrics().ok()?.recv_timeout(Duration::from_secs(1)).ok()?;
+    Some(sum_cached(&m))
+}
+
+/// The records and timers among an mDNS daemon's metrics.
+fn sum_cached(m: &mdns_sd::Metrics) -> i64 {
+    m.iter().filter(|(k, _)| k.starts_with("cached-") || k.as_str() == "timer").map(|(_, v)| *v).sum()
+}
+
+/// Whether the daemon caches more than MAX_CACHED records.
+fn flooded(daemon: &mdns_sd::ServiceDaemon) -> bool {
+    cached(daemon).is_some_and(|n| n > MAX_CACHED)
+}
+
 fn browse(
     node: Arc<Node>,
     tag: &str,
@@ -575,10 +705,56 @@ fn browse(
     log: &(dyn Fn(&str) + Send + Sync),
 ) -> Result<(), mdns_sd::Error> {
     let preopened = PREOPENED.lock().unwrap_or_else(|e| e.into_inner()).take();
-    let daemon = match preopened {
+    let mut daemon = match preopened {
         Some(d) => d,
         None => mdns_sd::ServiceDaemon::new()?,
     };
+    // The members found, whose dial loops outlive a daemon that is replaced.
+    let mut found: HashMap<DeviceId, Addrs> = HashMap::new();
+    let mut said = false;
+    loop {
+        if !browse_with(&node, tag, port, as_phone, log, &daemon, &mut found)? {
+            let _ = daemon.shutdown();
+            return Ok(());
+        }
+        if !said {
+            log(&format!(
+                "cbb: the mDNS cache holds more than {MAX_CACHED} records, which another device on the network sends; \
+                 it starts again empty (said once)"
+            ));
+            said = true;
+        }
+        let _ = daemon.shutdown();
+        loop {
+            if node.is_closed() {
+                return Ok(());
+            }
+            match mdns_sd::ServiceDaemon::new() {
+                Ok(d) => {
+                    daemon = d;
+                    break;
+                }
+                Err(e) => {
+                    log(&format!("cbb: cannot start mDNS again: {e}; trying again in 10 s"));
+                    node.nap(Duration::from_secs(10));
+                }
+            }
+        }
+    }
+}
+
+/// Publishes and browses with daemon until the node closes (false) or the
+/// daemon's cache is flooded (true), which the caller answers with a new
+/// daemon.
+fn browse_with(
+    node: &Arc<Node>,
+    tag: &str,
+    port: Option<u16>,
+    as_phone: bool,
+    log: &(dyn Fn(&str) + Send + Sync),
+    daemon: &mdns_sd::ServiceDaemon,
+    found: &mut HashMap<DeviceId, Addrs>,
+) -> Result<bool, mdns_sd::Error> {
     // As Go's responder: no loopback interfaces.
     let _ = daemon.disable_interface(vec![mdns_sd::IfKind::LoopbackV4, mdns_sd::IfKind::LoopbackV6]);
     // On a router, only the devices of the interface list.
@@ -681,12 +857,18 @@ fn browse(
     publish(window, &at)?;
     let mut checked = Instant::now();
     let mut published = Instant::now();
+    let mut cache_checked = Instant::now();
     let events = daemon.browse(SERVICE)?;
-    let mut found: HashMap<DeviceId, Addrs> = HashMap::new();
     loop {
         let ev = events.recv_timeout(Duration::from_secs(1));
         if node.is_closed() {
             break;
+        }
+        if cache_checked.elapsed() >= CACHE_CHECK {
+            cache_checked = Instant::now();
+            if flooded(daemon) {
+                return Ok(true);
+            }
         }
         let away = elsewhere(&me);
         if away && !found.is_empty() {
@@ -757,6 +939,22 @@ fn browse(
                 } else {
                     addrs
                 };
+                // Anyone on the network can announce the group's tag, so
+                // the members dialed are bounded, as in Go; a device the
+                // records name takes the place of one they do not.
+                if !found.contains_key(&id) && found.len() >= MAX_FOUND {
+                    let rs = node.records();
+                    let known = rs.lock().unwrap().known();
+                    let unknown = found.keys().find(|k| known.binary_search(&k.to_string()).is_err()).cloned();
+                    match unknown {
+                        Some(k) if known.binary_search(&id.to_string()).is_ok() => {
+                            if let Some(a) = found.remove(&k) {
+                                *a.lock().unwrap() = None;
+                            }
+                        }
+                        _ => continue,
+                    }
+                }
                 match found.get(&id) {
                     Some(cur) => {
                         node.found(&id, true);
@@ -765,15 +963,19 @@ fn browse(
                         // the answer came on, which another interface's scope
                         // can make unreachable); its dial loop, maybe backing
                         // off after failing those, tries the new ones at once.
+                        // Anyone may answer for the member's name, so the new
+                        // addresses join those known rather than replace them,
+                        // and a connected member's stay as they are.
+                        if node.connected(&id) {
+                            continue;
+                        }
                         let mut cur = cur.lock().unwrap();
-                        if cur.as_ref() != Some(&addrs) {
-                            *cur = Some(addrs);
+                        let merged = merge_addrs(&addrs, cur.as_deref().unwrap_or_default());
+                        if cur.as_ref() != Some(&merged) {
+                            *cur = Some(merged);
                             node.kick();
                         }
                     }
-                    // Anyone on the network can announce the group's tag, so
-                    // the members dialed are bounded, as in Go.
-                    None if found.len() >= MAX_FOUND => continue,
                     None => {
                         node.found(&id, true);
                         log(&format!("cbb: found {id} at {}", addrs[0]));
@@ -785,7 +987,9 @@ fn browse(
                 }
             }
             mdns_sd::ServiceEvent::ServiceRemoved(_, fullname) => {
-                if let Some(id) = instance_id(&fullname) {
+                // Anyone may say goodbye for a member: while its connection
+                // is up, that is ignored.
+                if let Some(id) = instance_id(&fullname).filter(|id| !node.connected(id)) {
                     node.found(&id, false);
                     if let Some(cur) = found.remove(&id) {
                         *cur.lock().unwrap() = None;
@@ -795,8 +999,23 @@ fn browse(
             _ => {}
         }
     }
-    let _ = daemon.shutdown();
-    Ok(())
+    Ok(false)
+}
+
+/// The most addresses kept for one member found by mDNS.
+const MAX_ADDRS: usize = 8;
+
+/// The addresses of a member resolved again: the new ones first, then
+/// those known before, at most MAX_ADDRS.
+fn merge_addrs(new: &[SocketAddr], known: &[SocketAddr]) -> Vec<SocketAddr> {
+    let mut out: Vec<SocketAddr> = Vec::new();
+    for a in new.iter().chain(known) {
+        if !out.contains(a) {
+            out.push(*a);
+        }
+    }
+    out.truncate(MAX_ADDRS);
+    out
 }
 
 /// Reports whether a TXT `r` value names a member that does not dial,
@@ -871,6 +1090,63 @@ fn order(addrs: impl Iterator<Item = SocketAddr>) -> Vec<SocketAddr> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A code alone admits only when one device waits: two would give a
+    /// device that only pretends to wait a guess at the code.
+    #[test]
+    fn a_code_alone_needs_one_waiting_device() {
+        let addr = |i: u8| SocketAddr::from(([192, 168, 1, i], 8764));
+        assert!(the_one_joiner(Vec::new()).is_err());
+        let many: Vec<SocketAddr> = (1..=9).map(addr).collect();
+        let (addrs, fp) = the_one_joiner(vec![(many, "f1".into())]).unwrap();
+        assert_eq!((addrs.len(), fp.as_str()), (cbb_core::pair::MAX_ADDRS, "f1"));
+        let two = vec![(vec![addr(1)], "f1".to_string()), (vec![addr(2)], "f2".to_string())];
+        let e = the_one_joiner(two).unwrap_err();
+        assert!(e.message().contains("2 devices wait to join"), "{e:?}");
+    }
+
+    /// One source holds at most MAX_HANDSHAKES_PER_SOURCE of the
+    /// handshake slots, so idle connections from one device leave the
+    /// others room; loopback connections only count in all.
+    #[test]
+    fn handshakes_by_source() {
+        let mut h = Handshakes::default();
+        let a: IpAddr = "192.168.1.7".parse().unwrap();
+        let a6: IpAddr = "fd00:1:2:3::1".parse().unwrap();
+        for _ in 0..MAX_HANDSHAKES_PER_SOURCE {
+            assert!(h.take(a));
+            assert!(h.take(a6));
+        }
+        assert!(!h.take(a));
+        // Another address of the same IPv6 /64 is the same source.
+        assert!(!h.take("fd00:1:2:3::99".parse().unwrap()));
+        h.give(a);
+        assert!(h.take(a));
+        let lo: IpAddr = "127.0.0.1".parse().unwrap();
+        while h.take(lo) {}
+        assert_eq!(h.all, MAX_HANDSHAKES);
+        assert!(!h.take("192.168.1.8".parse().unwrap()));
+        for _ in 0..MAX_HANDSHAKES_PER_SOURCE {
+            h.give(a6);
+        }
+        assert!(!h.by_source.contains_key(&crate::pair::source(a6)));
+        assert!(h.take("192.168.1.8".parse().unwrap()));
+    }
+
+    /// A connection that sends nothing gives its slot back after
+    /// HELLO_TIMEOUT, not after the handshake's whole time.
+    #[test]
+    fn a_silent_connection_is_closed_soon() {
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let _silent = TcpStream::connect(l.local_addr().unwrap()).unwrap();
+        let (sock, _) = l.accept().unwrap();
+        let other: IpAddr = "192.168.1.7".parse().unwrap();
+        let t = Instant::now();
+        assert!(!hello_comes(&sock, other));
+        assert!(t.elapsed() < HELLO_TIMEOUT + Duration::from_secs(2));
+        // From the loopback address it waits for the handshake instead.
+        assert!(hello_comes(&sock, "127.0.0.1".parse().unwrap()));
+    }
 
     /// A link-local address of this device's own is dialed through the
     /// interface that has it, whichever interface mDNS heard it on; another

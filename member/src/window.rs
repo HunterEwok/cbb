@@ -3,9 +3,9 @@
 
 //! A pairing window on an admin (cbb pair): a six-digit code a joining
 //! device dials the member port with, as Go's pair.Window
-//! (docs/protocol.md, section 6). One attempt runs at a time, three that
-//! fail close the window, and it closes after LIFETIME or once it admitted
-//! a device. Sending the Welcome is the point of no return: the device
+//! (docs/protocol.md, section 6). One attempt runs at a time, three wrong
+//! codes close the window, and it closes after LIFETIME or once it
+//! admitted a device. Sending the Welcome is the point of no return: the device
 //! counts as admitted from then on, whatever it answers.
 
 use std::collections::HashMap;
@@ -28,12 +28,16 @@ pub const LIFETIME: Duration = Duration::from_secs(300);
 /// How long one attempt may take.
 const ATTEMPT_TIMEOUT: Duration = Duration::from_secs(30);
 /// How long the joiner has for its first message once it holds the
-/// window's one attempt.
+/// window's one attempt, and for its tag once it has the member's CPace
+/// message.
 const FIRST_TIMEOUT: Duration = Duration::from_secs(10);
-/// How many attempts from one address may end before they count; the
-/// window refuses that address as busy afterwards.
+/// How many attempts from one source (crate::pair::source) may end without
+/// a guess; the window refuses that source as busy afterwards.
 const MAX_IDLE: u32 = 5;
-/// How long a refused joiner has for its first message.
+/// How many sources the window counts one by one; the others share one
+/// count.
+const MAX_SOURCES: usize = 1024;
+/// How long a refused joiner has, in all, for its first message.
 const REFUSE_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// The device a window admitted.
@@ -58,6 +62,21 @@ struct State {
     running: Option<TcpStream>,
     /// How the window ended, once it has.
     end: Option<std::result::Result<Joined, Refusal>>,
+}
+
+impl State {
+    /// The source an attempt from addr counts against: its address, or its
+    /// IPv6 /64; once MAX_SOURCES are counted, a new one shares one count
+    /// with every other new one, so that a device that changes its address
+    /// cannot keep the window busy either.
+    fn source(&self, addr: IpAddr) -> IpAddr {
+        let key = crate::pair::source(addr);
+        if self.idle.contains_key(&key) || self.idle.len() < MAX_SOURCES {
+            key
+        } else {
+            IpAddr::V6(std::net::Ipv6Addr::UNSPECIFIED)
+        }
+    }
 }
 
 /// Asked whether to admit a device that proved it knows a remote
@@ -160,6 +179,7 @@ impl Window {
     /// Starts an attempt from addr, or says why the window takes none.
     fn acquire(&self, sock: &TcpStream, addr: IpAddr) -> std::result::Result<(), Refusal> {
         let mut st = self.state.lock().unwrap();
+        let addr = st.source(addr);
         if st.end.is_none() && !st.busy && uptime::now() >= st.expires {
             st.end = Some(Err(Refusal::Expired));
             self.changed.notify_all();
@@ -189,10 +209,11 @@ impl Window {
     }
 
     /// Ends an attempt that admitted no device; failed tells whether it
-    /// counts. One that does not still counts against its address, so that
-    /// one device cannot keep the window busy.
+    /// tried a guess, which counts. One that did not still counts against
+    /// its source, so that one device cannot keep the window busy.
     fn release(&self, failed: bool, addr: IpAddr) {
         let mut st = self.state.lock().unwrap();
+        let addr = st.source(addr);
         st.busy = false;
         st.running = None;
         if std::mem::take(&mut st.committed) && st.closing && st.end.is_none() {
@@ -203,7 +224,7 @@ impl Window {
             if st.failures >= MAX_FAILURES && st.end.is_none() {
                 st.end = Some(Err(Refusal::TooMany));
             }
-        } else if st.end.is_none() && st.idle.len() < 1024 {
+        } else if st.end.is_none() {
             *st.idle.entry(addr).or_default() += 1;
         }
         if st.end.is_none() && uptime::now() >= st.expires {
@@ -271,13 +292,17 @@ impl Window {
                 Err(e)
             }
             (Ok(_), None) => {
-                self.release(adm.started(), addr.ip());
+                self.release(false, addr.ip());
                 Err(Error::msg("the pairing ended early"))
             }
             (Err(e), None) => {
-                // A window closed under the attempt is not the joiner's doing.
+                // Only a tag that did not verify, or a device its admin
+                // declined, tried a guess: a joiner that went quiet or broke
+                // off learned nothing about the code. A window closed under
+                // the attempt is not the joiner's doing.
                 let closed = matches!(self.state.lock().unwrap().end, Some(Err(Refusal::Closed)));
-                self.release(adm.started() && !closed, addr.ip());
+                let guessed = matches!(Refusal::in_error(&e), Some(Refusal::WrongCode | Refusal::Declined));
+                self.release(guessed && !closed, addr.ip());
                 Err(e)
             }
         }
@@ -295,6 +320,10 @@ impl Window {
         let wait = if self.secret.is_some() { CONFIRM_WAIT } else { Duration::ZERO };
         let end = Instant::now() + ATTEMPT_TIMEOUT + wait;
         let first = Instant::now() + FIRST_TIMEOUT;
+        // When the joiner's tag is due: FIRST_TIMEOUT after the member's
+        // CPace message, until the tag came.
+        let mut tag_by: Option<Instant> = None;
+        let mut tagged = false;
         let mut sock = sock;
         let mut input: Vec<u8> = Vec::new();
         let mut buf = vec![0u8; 16 << 10];
@@ -313,6 +342,9 @@ impl Window {
                     ));
                 }
                 step = adm.answer(yes, uptime::wall_ms());
+            }
+            if matches!(step.outcome, Outcome::Admitted(_) | Outcome::Confirm(_)) {
+                tagged = true;
             }
             match step.outcome {
                 Outcome::Pending => {}
@@ -343,9 +375,17 @@ impl Window {
             if !step.send.is_empty() {
                 sock.write_all(&step.send).context("cannot send to the device")?;
             }
-            // The joiner's first message comes soon, or it gives up the
-            // window's one attempt.
-            let by = if adm.started() { end } else { end.min(first) };
+            // The joiner's first message comes soon, and its tag soon after
+            // the member's CPace message, or it gives up the window's one
+            // attempt.
+            if adm.started() && tag_by.is_none() {
+                tag_by = Some(Instant::now() + FIRST_TIMEOUT);
+            }
+            let by = match tag_by {
+                None => end.min(first),
+                Some(t) if !tagged => end.min(t),
+                Some(_) => end,
+            };
             let left = by.saturating_duration_since(Instant::now());
             if left.is_zero() {
                 return Err(Error::msg("the device did not finish pairing in time"));
@@ -362,9 +402,10 @@ impl Window {
 
 /// Answers a joiner's first frame with why no window takes its attempt,
 /// and closes the connection; the joiner sees why, not a broken
-/// connection.
+/// connection. It waits REFUSE_TIMEOUT in all for that frame, and keeps
+/// no more of it than a pairing frame may hold.
 pub fn refuse(sock: TcpStream, mut session: tls::Session, why: Refusal) {
-    let _ = sock.set_read_timeout(Some(REFUSE_TIMEOUT));
+    let end = Instant::now() + REFUSE_TIMEOUT;
     let mut s = &sock;
     let (mut plain, mut buf, mut got) = (Vec::new(), vec![0u8; 16 << 10], [0u8; 4096]);
     loop {
@@ -374,10 +415,21 @@ pub fn refuse(sock: TcpStream, mut session: tls::Session, why: Refusal) {
                 break;
             }
             plain.extend_from_slice(&got[..n]);
+            if plain.len() > 4 + cbb_core::pair::MAX_FRAME {
+                return;
+            }
         }
-        let whole = plain.get(..4).map(|h| u32::from_be_bytes([h[0], h[1], h[2], h[3]]) as usize + 4);
-        if whole.is_some_and(|w| plain.len() >= w) {
-            break;
+        if let Some(h) = plain.get(..4) {
+            let Ok(n) = cbb_core::wire::frame_len([h[0], h[1], h[2], h[3]], cbb_core::pair::MAX_FRAME) else {
+                return;
+            };
+            if plain.len() >= n + 4 {
+                break;
+            }
+        }
+        let left = end.saturating_duration_since(Instant::now());
+        if left.is_zero() || sock.set_read_timeout(Some(left)).is_err() {
+            return;
         }
         match s.read(&mut buf) {
             Ok(n) if n > 0 => {
@@ -528,6 +580,69 @@ mod tests {
         assert_eq!(w.wait(&|| true).map(|j| j.name).ok(), Some("phone".to_string()));
         assert_eq!(w.acquire(&s, ip(1)), Err(Refusal::Closed));
         assert!(!w.commit());
+    }
+
+    /// Attempts that tried no code count against their source, an IPv6
+    /// /64 as one, and past MAX_SOURCES sources the new ones share one
+    /// count, so that changing addresses does not keep the window busy.
+    #[test]
+    fn idle_attempts_count_by_source() {
+        let w = Window::open(admitter(), "123456").unwrap();
+        let (s, _peer) = sock();
+        let v6 = |n: u16| IpAddr::V6(std::net::Ipv6Addr::new(0xfd00, 0, 0, 1, 0, 0, 0, n));
+        for n in 0..MAX_IDLE as u16 {
+            assert_eq!(w.acquire(&s, v6(n)), Ok(()));
+            w.release(false, v6(n));
+        }
+        assert_eq!(w.acquire(&s, v6(999)), Err(Refusal::Busy));
+        assert_eq!(ends(&w), None);
+
+        let w = Window::open(admitter(), "123456").unwrap();
+        for i in 0..MAX_SOURCES as u32 {
+            w.state.lock().unwrap().idle.insert(IpAddr::V4(Ipv4Addr::from(0x0a00_0000 + i)), 1);
+        }
+        for i in 0..MAX_IDLE {
+            let a = IpAddr::V4(Ipv4Addr::from(0x0b00_0000 + i));
+            assert_eq!(w.acquire(&s, a), Ok(()));
+            w.release(false, a);
+        }
+        assert_eq!(w.acquire(&s, ip(200)), Ok(()), "a source counted before");
+        w.release(false, ip(200));
+        assert_eq!(w.acquire(&s, IpAddr::V4(Ipv4Addr::new(172, 16, 0, 1))), Err(Refusal::Busy));
+        assert_eq!(w.state.lock().unwrap().idle.len(), MAX_SOURCES + 1);
+    }
+
+    /// A stranger that dials the member port with no window open, and
+    /// sends a first frame larger than any pairing frame, is answered at
+    /// once and keeps nothing of what it sends.
+    #[test]
+    fn a_refused_joiner_cannot_send_a_large_frame() {
+        let a = admitter();
+        let ident = a.identity.clone();
+        let l = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let addr = l.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (sock, _) = l.accept().unwrap();
+            sock.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+            let (cfg, _) = tls::member_or_pair_server(&ident, Arc::new(|_| None), &tls::clock()).unwrap();
+            let mut session = tls::Session::server(Arc::new(cfg)).unwrap();
+            tls::handshake(&mut session, &sock, "handshake").unwrap();
+            let t = Instant::now();
+            refuse(sock, session, Refusal::Closed);
+            t.elapsed()
+        });
+        let j = crate::pair::Joiner::new("stranger").unwrap();
+        let (cfg, _) = tls::pair_client(&j.cert, &j.key, &tls::clock()).unwrap();
+        let session = tls::Session::client(Arc::new(cfg), tls::server_name(None)).unwrap();
+        let sock = TcpStream::connect(addr).unwrap();
+        let mut tc = tls::Stream::new(session, sock);
+        tls::handshake(&mut tc.session, &tc.sock, "handshake").unwrap();
+        let mut big = 0xffff_fff0u32.to_be_bytes().to_vec();
+        big.resize(4 + (128 << 10), 0);
+        let _ = tc.write_all(&big);
+        let _ = tc.flush();
+        let took = server.join().unwrap();
+        assert!(took < Duration::from_secs(5), "{took:?}");
     }
 
     #[test]

@@ -418,6 +418,12 @@ phones' `member/src/node.rs` and `member/src/phone.rs`.
 - The member port takes TLS only. A ClientHello that offers `cbb-pair/2` gets the pairing
   configuration (section 6), whether or not a window is open; any other the member
   configuration, and a connection that does not negotiate `cbb/3` is closed.
+- The member port takes at most 16 connections at once in their handshake or in a pairing
+  attempt, at most 4 of them from one source (an IPv4 address or an IPv6 /64; loopback
+  connections, which the tunnels' and relays' ports share, count only in all). A
+  connection from another device that sends nothing for 3 s is closed. With no window open,
+  a pairing connection gets its refusal after a first frame of at most 64 KiB, within 10 s
+  in all.
 
 ### Framing
 
@@ -965,12 +971,15 @@ machine could read it. While it is open
 the member publishes `p=1`. The window lives 5 minutes (counting sleep); an attempt that has
 started may finish after that. One attempt at a time; another gets `busy`. The window MUST
 close after a success or after the third failed attempt (`too-many`), so that a guesser gets
-at most three online guesses per code. An attempt fails (counts)
-when it fails after the member sent its CPace message; errors before that (bad AD, bad
-certificate, a dropped connection) do not count. Each attempt has 30 s on both sides, and
-the joiner's first message must arrive within 10 s of the TLS handshake. After 5 attempts
-from one IP address that ended before they counted, the window answers that address `busy`,
-so that one device on the network cannot hold the window for its whole life.
+at most three online guesses per code. An attempt fails (counts) when the joiner's tag Ta
+does not verify (`wrong-code`) or its admin declines the device; an attempt that ends
+without a tag (bad AD, a bad certificate, a dropped connection, a joiner that goes quiet
+after the member's CPace message) tested no guess and does not count. Each attempt has 30 s
+on both sides; the joiner's first message must arrive within 10 s of the TLS handshake, and
+its tag within 10 s of the member's CPace message. After 5 attempts from one source that
+ended without counting, the window answers that source `busy`, so that one device on the
+network cannot hold the window for its whole life. A source is an IPv4 address or the /64
+of an IPv6 address; past 1024 sources, the new ones share one count.
 
 A window for a remote invitation (design.md, "Joining from another network") differs:
 
@@ -1150,11 +1159,16 @@ the QR code dials the computer, and nothing is announced:
 - While it listens the joiner announces itself by mDNS (section 3: TXT `j=1` and `f`, its
   fingerprint), so that a computer of the group admits it by the six digits alone, which the
   user types from the joiner's screen, where a phone scans the QR code. The computer browses
-  for such devices for up to 10 s, then dials each with the code, the addresses and `f` taking
-  the place of the QR code's, until one joins; at another device that waits, the code fails
-  as a wrong one there. The announcement is not authenticated, and needs not be: CPace gives
-  a device that does not know the code one guess per attempt and nothing to test guesses
-  with offline, and the code admits only the device the user sees.
+  for such devices for up to 10 s and MUST refuse when more than one announces itself, as a
+  joiner refuses more than one window: each other announcement would be one more guess at
+  the code. It then dials the one with the code, its addresses (at most 4) and `f` taking
+  the place of the QR code's, and MUST stop at the first attempt in which it sent its CPace
+  message, as that attempt tried the code. The announcement is not authenticated, and needs
+  not be: CPace gives a device that does not know the code one guess per attempt and nothing
+  to test guesses with offline, and the code admits only the device the user sees.
+- A joiner that listens takes one attempt at a time; a member must start the TLS handshake
+  within 5 s of connecting, and after 5 attempts from one source that ended without a wrong
+  code the joiner takes no more from it.
 - A phone joins a phone group the same way (CBBKit's `PairingJoiner`): it listens
   while its "Join a group" screen is open, shows this QR code, and an admin phone scans it
   and dials. The phone makes its admin key before it listens and sends it in ADa; the root
@@ -2070,7 +2084,9 @@ beyond) and check the same bytes.
   was not connected gets it on its next connection with any member: a peer whose own key
   (its certificate's) the records revoke or freeze passes the TLS check, and its connection
   carries records only; the member sends its records when the digests in the hellos differ,
-  takes nothing from the peer, and closes the connection after them and a `bye`. Either side
+  takes nothing from the peer, and closes the connection after them and a `bye`. On a
+  connection that carries records only, a frame MUST NOT exceed 2 MiB, the hello's
+  included. Either side
   dials such a peer again as after a failure (1 s, doubling to 30 s), so that a removed
   device costs one handshake now and then. A member
   that learns that its own key is revoked logs that it was removed from the group, and its
@@ -2529,7 +2545,10 @@ and joins only once the user accepts; declining sends nothing.
 2. It pairs as in section 6 with the secret as the password. The window MUST take no other
    password, MUST give no CA keys, and before it makes the certificate MUST ask the hub's
    admin to confirm the device, with its name, system, device ID and key fingerprint; the device
-   shows the same fingerprint. The admin has 5 minutes; a no sends `declined`.
+   shows the same fingerprint. The admin has 5 minutes; a no sends `declined`. The device
+   MUST check that ADb's `group` is the invitation's `g` before it sends its tag, and so that
+   the Welcome's group CA is that group's: whoever else holds the secret cannot bring the
+   device into another group.
 3. Once it has its certificate, the device turns sync away from home on (the user
    consented before the join) and makes a member connection to the hub through the guest
    tunnel. Its hello carries its own tunnel key, which the hub admits (section 11) and
@@ -3133,7 +3152,9 @@ it) or `failed` (it took it and could not carry it out), and `reason` says why f
 two. The reason is a peer's text: a member that shows it, or passes it to a program, first
 turns each control character (C0, DEL, C1) into a space and cuts it to 256 bytes at a
 character boundary. A `hub` command's `done` carries `tunnel`, the new hub's offer. A member without
-commands ignores the message, so the sender gives up after 10 s (20 s for `hub`).
+commands ignores the message, so the sender gives up after 10 s (20 s for `hub`). A member
+carries out at most 4 commands of one connection at once and takes at most 32 from it in
+10 s; it answers the others `refused` at once, without reading them.
 
 Each computer and lite member keeps a secret for sealed messages in `seal.json` next to its
 identity (sealed by the TPM where a computer has one, as the WireGuard key) and offers its public key in its hello

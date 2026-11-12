@@ -310,8 +310,10 @@ impl Away {
         // The guest goes at its expiry unless its window admitted a device.
         let (me, left) = (self.clone(), Duration::from_millis(u64::try_from(g.expires_ms - now).unwrap_or(0)));
         std::thread::spawn(move || {
-            let until = Instant::now() + left;
-            while Instant::now() < until {
+            // On the clock that counts sleep, as the window's: a hub that
+            // slept does not keep the guest past the invitation.
+            let until = crate::uptime::now() + left;
+            while crate::uptime::now() < until {
                 std::thread::sleep(Duration::from_secs(1));
                 if me.guests.lock().unwrap().get(&addr).is_none_or(|g| g.admitted.is_some()) {
                     return;
@@ -471,7 +473,7 @@ pub fn join_invite(
         crate::files::write_atomic(&dir.join(GUEST_FILE), text.as_bytes(), 0o600)?;
         save(id, rs, ts)
     };
-    crate::pair::join_secret(joiner, sock, &inv.secret, &save_all).map_err(|e| {
+    crate::pair::join_secret(joiner, sock, &inv.secret, &inv.group, &save_all).map_err(|e| {
         if link.answered() {
             e
         } else {

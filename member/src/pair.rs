@@ -30,6 +30,55 @@ const ATTEMPT_TIMEOUT: Duration = Duration::from_secs(30);
 const CLOSE_WAIT: Duration = Duration::from_secs(3);
 /// How long a listening join waits.
 pub const LIFETIME: Duration = Duration::from_secs(5 * 60);
+/// How long a member that dialed a listening joiner has to start the TLS
+/// handshake.
+const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
+/// How many attempts from one source may end without a wrong code before
+/// a listening joiner takes none from it.
+const MAX_IDLE: u32 = 5;
+/// How many sources a listening joiner counts one by one; the others share
+/// one count.
+const MAX_SOURCES: usize = 1024;
+
+/// The source a connection from ip counts against, for the limits of a
+/// pairing window, a listening joiner and the member port: an IPv4
+/// address, or the /64 of an IPv6 address, which a device may change
+/// within it at will.
+pub fn source(ip: IpAddr) -> IpAddr {
+    match ip.to_canonical() {
+        IpAddr::V4(a) => IpAddr::V4(a),
+        IpAddr::V6(a) => {
+            let s = a.segments();
+            IpAddr::V6(std::net::Ipv6Addr::new(s[0], s[1], s[2], s[3], 0, 0, 0, 0))
+        }
+    }
+}
+
+/// The attempts of each source that ended without a wrong code, which a
+/// listening joiner counts so that no device on the network can hold it
+/// for its whole wait.
+#[derive(Default)]
+struct Idle(std::collections::HashMap<IpAddr, u32>);
+
+impl Idle {
+    fn key(&self, ip: IpAddr) -> IpAddr {
+        let k = source(ip);
+        if self.0.contains_key(&k) || self.0.len() < MAX_SOURCES {
+            k
+        } else {
+            IpAddr::V6(std::net::Ipv6Addr::UNSPECIFIED)
+        }
+    }
+
+    fn spent(&self, ip: IpAddr) -> bool {
+        self.0.get(&self.key(ip)).is_some_and(|n| *n >= MAX_IDLE)
+    }
+
+    fn count(&mut self, ip: IpAddr) {
+        let k = self.key(ip);
+        *self.0.entry(k).or_default() += 1;
+    }
+}
 
 /// Runs the joining side over a connection a member dialed to this joiner,
 /// which showed its QR code. The member confirms first, so a device that
@@ -51,9 +100,10 @@ pub fn join(j: &Joiner, sock: TcpStream, code: &str, save: &SaveRef<'_>) -> Resu
 
 /// Runs the joining side over a connection to the pairing window of a
 /// remote invitation, with its secret, as Go's JoinSecret: the window's
-/// admin confirms the device, which may take up to CONFIRM_WAIT.
-pub fn join_secret(j: &Joiner, sock: TcpStream, secret: &[u8], save: &SaveRef<'_>) -> Result<Identity> {
-    dial(j, sock, Password::Secret(secret), save)
+/// admin confirms the device, which may take up to CONFIRM_WAIT. group is
+/// the invitation's group tag; a member of another group is refused.
+pub fn join_secret(j: &Joiner, sock: TcpStream, secret: &[u8], group: &str, save: &SaveRef<'_>) -> Result<Identity> {
+    dial(j, sock, Password::Secret(secret, group), save)
 }
 
 /// How long a remote invitation's admin may take to confirm the device, as
@@ -65,7 +115,7 @@ pub const CONFIRM_WAIT: Duration = Duration::from_secs(300);
 #[derive(Clone, Copy)]
 enum Password<'a> {
     Code(&'a str),
-    Secret(&'a [u8]),
+    Secret(&'a [u8], &'a str),
 }
 
 fn dial(j: &Joiner, sock: TcpStream, password: Password, save: &SaveRef<'_>) -> Result<Identity> {
@@ -131,7 +181,7 @@ fn exchange(
     };
     let (mut ex, first) = match password {
         Password::Code(code) => j.start(code, member_der, sid, member_first)?,
-        Password::Secret(secret) => j.start_secret(secret, member_der, sid)?,
+        Password::Secret(secret, group) => j.start_secret(secret, group, member_der, sid)?,
     };
     send(tc, &first)?;
     let confirm = match ex.reply(&wire::read_frame(tc, MAX_FRAME)?) {
@@ -144,7 +194,7 @@ fn exchange(
         }
     };
     send(tc, &confirm)?;
-    if let Password::Secret(_) = password {
+    if let Password::Secret(..) = password {
         // The admin is asked now.
         tc.sock.set_read_timeout(Some(ATTEMPT_TIMEOUT + CONFIRM_WAIT)).context("the connection broke")?;
     }
@@ -196,7 +246,9 @@ pub fn qr_addresses(port: u16) -> Vec<String> {
 /// Listens for a member that dials this joiner, for up to LIFETIME. It
 /// calls shown with the QR code's text once it listens, takes one attempt
 /// at a time, gives up after the third wrong code, and returns the new
-/// identity, which save stored.
+/// identity, which save stored. A source whose attempts ended MAX_IDLE
+/// times without a wrong code gets no more, and a member must start the
+/// handshake within HELLO_TIMEOUT.
 #[allow(clippy::too_many_arguments)]
 pub fn listen(
     joiner: &Joiner,
@@ -221,6 +273,7 @@ pub fn listen(
     ln.set_nonblocking(true).context("cannot listen")?;
     let end = Instant::now() + wait;
     let mut failures = 0;
+    let mut idle = Idle::default();
     while Instant::now() < end {
         let (sock, from) = match ln.accept() {
             Ok(c) => c,
@@ -230,19 +283,25 @@ pub fn listen(
             }
             Err(e) => return Err(Error::with("cannot accept a connection", e)),
         };
-        if !home_address(from.ip()) || !crate::interfaces::arrived(&sock) {
+        if !home_address(from.ip()) || !crate::interfaces::arrived(&sock) || idle.spent(from.ip()) {
             continue;
         }
         let _ = sock.set_nonblocking(false);
+        if !hello_comes(&sock) {
+            idle.count(from.ip());
+            continue;
+        }
         match accept(joiner, sock, code, save) {
             Ok(id) => return Ok(id),
             Err(e) => {
                 log(&format!("cbb: a pairing attempt from {from} failed: {}", e.for_log()));
-                if e.details().contains(Refusal::WrongCode.message()) {
+                if Refusal::is_wrong_code(&e) {
                     failures += 1;
                     if failures >= MAX_FAILURES {
                         return Err(Error::with(format!("pair: {}", Refusal::TooMany), Refusal::TooMany));
                     }
+                } else {
+                    idle.count(from.ip());
                 }
             }
         }
@@ -250,9 +309,69 @@ pub fn listen(
     Err(Error::msg("no device joined this one in time; run join again"))
 }
 
+/// Whether the peer sends something within HELLO_TIMEOUT, as a member
+/// that dialed starts its TLS handshake at once.
+fn hello_comes(sock: &TcpStream) -> bool {
+    if sock.set_read_timeout(Some(HELLO_TIMEOUT)).is_err() {
+        return false;
+    }
+    matches!(sock.peek(&mut [0u8; 1]), Ok(n) if n > 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sources() {
+        let a: IpAddr = "192.168.1.5".parse().unwrap();
+        assert_eq!(source(a), a);
+        assert_eq!(source("::ffff:192.168.1.5".parse().unwrap()), a);
+        let b: IpAddr = "fd00:1:2:3:aaaa:bbbb:cccc:dddd".parse().unwrap();
+        assert_eq!(source(b), "fd00:1:2:3::".parse::<IpAddr>().unwrap());
+        assert_eq!(source("fd00:1:2:3::9".parse().unwrap()), source(b));
+        assert_ne!(source("fd00:1:2:4::9".parse().unwrap()), source(b));
+    }
+
+    #[test]
+    fn a_listening_joiner_counts_attempts_that_tried_no_code() {
+        let mut idle = Idle::default();
+        let a: IpAddr = "fd00::1".parse().unwrap();
+        for _ in 0..MAX_IDLE {
+            assert!(!idle.spent(a));
+            idle.count(a);
+        }
+        assert!(idle.spent(a));
+        // Another address in the same /64 is the same device.
+        assert!(idle.spent("fd00::2".parse().unwrap()));
+        assert!(!idle.spent("192.168.1.9".parse().unwrap()));
+        // Past MAX_SOURCES, new sources share one count.
+        let mut idle = Idle::default();
+        for i in 0..MAX_SOURCES as u32 {
+            idle.count(IpAddr::V4(std::net::Ipv4Addr::from(0x0a00_0000 + i)));
+        }
+        for i in 0..MAX_IDLE {
+            idle.count(IpAddr::V4(std::net::Ipv4Addr::from(0x0b00_0000 + i)));
+        }
+        assert!(idle.spent("172.16.0.1".parse().unwrap()));
+        assert!(!idle.spent("10.0.0.1".parse().unwrap()));
+    }
+
+    /// A host that connects to a listening joiner and stays silent does
+    /// not hold it: the joiner closes it after HELLO_TIMEOUT.
+    #[test]
+    fn a_silent_connection_is_closed_soon() {
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let _silent = TcpStream::connect(l.local_addr().unwrap()).unwrap();
+        let (sock, _) = l.accept().unwrap();
+        let t = Instant::now();
+        assert!(!hello_comes(&sock));
+        assert!(t.elapsed() < HELLO_TIMEOUT + Duration::from_secs(2));
+        let mut talking = TcpStream::connect(l.local_addr().unwrap()).unwrap();
+        talking.write_all(b"x").unwrap();
+        let (sock, _) = l.accept().unwrap();
+        assert!(hello_comes(&sock));
+    }
     use crate::certs::Cert;
 
     #[test]
