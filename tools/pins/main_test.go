@@ -127,3 +127,21 @@ func TestCopiesPins(t *testing.T) {
 		}
 	}
 }
+
+// TestXrayPin checks that the Xray-core pin reads the tag from go.mod's
+// comment, not the commit beside it.
+func TestXrayPin(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "go.mod")
+	line := "require (\n\tgithub.com/xtls/xray-core v1.260327.1-0.20261031132019-a4a3dff5b20c // v26.10.31\n)\n"
+	if err := os.WriteFile(p, []byte(line), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f, err := scan(xrayRe, []string{p})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f) != 1 || f["26.10.31"] == nil {
+		t.Fatalf("scan = %v, want 26.10.31", f)
+	}
+}
