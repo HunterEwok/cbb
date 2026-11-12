@@ -388,6 +388,12 @@ refuses to sign or keep a key). The text of a notification comes from the app's 
 never from a string in the body; only a `copy` answer carries text, and the apps never show a
 secret's text on a notification.
 
+On the iPhone and iPad, `PushVault` (CBBKit) keeps each group's push keys, send key and last
+registration in the keychain access group `tools.cbb.push`, which the app and its notification
+extension (`apps/ios/NotificationService`) share and which holds no member key; `App/PushSetup.swift`
+asks iOS for the token and makes the registrations, and the extension opens each body with
+`push_open`. A copy's text gets the notification's Copy button.
+
 On the members the sender is `member/src/pusher.rs`, and the project's push service is
 `cbb-push` (`member/src/pushd`). The member's sync calls only the sender's seam, written at the
 head of `pusher.rs`: `registration` (message `push` arrived from the device itself),

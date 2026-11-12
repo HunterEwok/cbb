@@ -29,9 +29,10 @@ pub const PRODUCTION: &str = "api.push.apple.com";
 pub const SANDBOX: &str = "api.sandbox.push.apple.com";
 /// The app's bundle ID, the topic of its notifications.
 pub const TOPIC: &str = "tools.cbb";
-/// The localization key of the text shown when the extension cannot run
-/// (the app's translations hold it).
-pub const LOC_KEY: &str = "push.new";
+/// The localization key of the text shown when the extension cannot run:
+/// the English text, which is the key of the app's String Catalog
+/// (apps/l10n, place `ios`), so every language has it.
+pub const LOC_KEY: &str = "Something new in your group. Open the app.";
 /// How long a provider token is used.
 const TOKEN_LIFE: Duration = Duration::from_secs(40 * 60);
 const TIMEOUT: Duration = Duration::from_secs(15);

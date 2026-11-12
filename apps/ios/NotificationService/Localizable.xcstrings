@@ -1,0 +1,466 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "A copy is waiting. Open the app.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هناك نسخ بانتظارك. افتح التطبيق."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hay una copia esperando. Abre la app."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "העתקה ממתינה. פתחו את האפליקציה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एक कॉपी इंतज़ार में है। ऐप खोलें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Копия ждёт. Откройте приложение."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nakala inasubiri. Fungua programu."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有复制内容在等待。请打开应用。"
+          }
+        }
+      }
+    },
+    "A device is waiting to join your group. Open the app.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جهاز ينتظر الانضمام إلى مجموعتك. افتح التطبيق."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un dispositivo espera unirse a tu grupo. Abre la app."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מכשיר ממתין להצטרף לקבוצה שלך. פתחו את האפליקציה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एक डिवाइस आपके समूह में जुड़ने का इंतज़ार कर रहा है। ऐप खोलें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устройство ждёт, чтобы войти в вашу группу. Откройте приложение."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kifaa kinasubiri kujiunga na kikundi chako. Fungua programu."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有设备正在等待加入你的群组。请打开应用。"
+          }
+        }
+      }
+    },
+    "A device joined your group. Open the app to see it.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انضم جهاز إلى مجموعتك. افتح التطبيق لرؤيته."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un dispositivo se unió a tu grupo. Abre la app para verlo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מכשיר הצטרף לקבוצה שלך. פתחו את האפליקציה כדי לראות אותו."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "आपके समूह में एक डिवाइस जुड़ा। देखने के लिए ऐप खोलें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В вашу группу добавлено устройство. Откройте приложение, чтобы увидеть его."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kifaa kimejiunga na kikundi chako. Fungua programu kukiona."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有设备加入了你的群组。请打开应用查看。"
+          }
+        }
+      }
+    },
+    "A device was removed from your group. Open the app to check.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أُزيل جهاز من مجموعتك. افتح التطبيق للتحقق."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se quitó un dispositivo de tu grupo. Abre la app para comprobarlo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מכשיר הוסר מהקבוצה שלך. פתחו את האפליקציה כדי לבדוק."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "आपके समूह से एक डिवाइस हटाया गया। जाँचने के लिए ऐप खोलें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Из вашей группы удалено устройство. Откройте приложение, чтобы проверить."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kifaa kimeondolewa kwenye kikundi chako. Fungua programu kuhakikisha."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有设备被移出你的群组。请打开应用核实。"
+          }
+        }
+      }
+    },
+    "A secret was copied. Open the app to see it.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم نسخ سرّ. افتح التطبيق لرؤيته."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se copió un secreto. Abre la app para verlo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הועתק סוד. פתחו את האפליקציה כדי לראות אותו."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एक गोपनीय चीज़ कॉपी हुई। देखने के लिए ऐप खोलें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Скопирован секрет. Откройте приложение, чтобы увидеть его."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Siri imenakiliwa. Fungua programu kuiona."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制了一项机密内容。请打开应用查看。"
+          }
+        }
+      }
+    },
+    "New copy": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نسخ جديد"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nueva copia"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "העתקה חדשה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "नई कॉपी"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Новая копия"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nakala mpya"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新的复制内容"
+          }
+        }
+      }
+    },
+    "Something new in your group. Open the app.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هناك جديد في مجموعتك. افتح التطبيق."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hay algo nuevo en tu grupo. Abre la app."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "יש משהו חדש בקבוצה שלך. פתחו את האפליקציה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "आपके समूह में कुछ नया है। ऐप खोलें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В вашей группе что-то новое. Откройте приложение."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kuna jambo jipya katika kikundi chako. Fungua programu."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你的群组有新内容。请打开应用。"
+          }
+        }
+      }
+    },
+    "This device's record changed. Open the app to check.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تغيّر سجل هذا الجهاز. افتح التطبيق للتحقق."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambió el registro de este dispositivo. Abre la app para comprobarlo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הרשומה של מכשיר זה השתנתה. פתחו את האפליקציה כדי לבדוק."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "इस डिवाइस का रिकॉर्ड बदल गया। जाँचने के लिए ऐप खोलें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Запись этого устройства изменилась. Откройте приложение, чтобы проверить."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rekodi ya kifaa hiki imebadilika. Fungua programu kuhakikisha."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此设备的记录已更改。请打开应用核实。"
+          }
+        }
+      }
+    },
+    "Your group stopped. Open the app to check.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "توقفت مجموعتك. افتح التطبيق للتحقق."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu grupo se detuvo. Abre la app para comprobarlo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הקבוצה שלך נעצרה. פתחו את האפליקציה כדי לבדוק."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "आपका समूह रुक गया। जाँचने के लिए ऐप खोलें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ваша группа остановлена. Откройте приложение, чтобы проверить."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kikundi chako kimesimama. Fungua programu kuhakikisha."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你的群组已停止。请打开应用核实。"
+          }
+        }
+      }
+    },
+    "Your group's root changed. Open the app to check.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تغيّر جذر مجموعتك. افتح التطبيق للتحقق."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambió la raíz de tu grupo. Abre la app para comprobarlo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "השורש של הקבוצה שלך השתנה. פתחו את האפליקציה כדי לבדוק."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "आपके समूह का रूट बदल गया। जाँचने के लिए ऐप खोलें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "У вашей группы сменился корень. Откройте приложение, чтобы проверить."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mzizi wa kikundi chako umebadilika. Fungua programu kuhakikisha."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你的群组的根设备已更改。请打开应用核实。"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

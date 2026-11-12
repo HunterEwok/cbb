@@ -28,6 +28,17 @@
 //! - [`Saved`]: where the registrations are kept across a restart, in the
 //!   group's section of the member's state.
 //!
+//! **Required test when wave 5 wires the seam** (an e2e test of
+//! internal/service with `phone-on-linux`, never skipped): a phone
+//! registers over its member connection; it disconnects; a computer of the
+//! group makes a copy and applies a removal; a cbb-push with a fake platform
+//! receives one body per event, from the origin or a hub, and none while the
+//! phone is connected; the body opens with `push_open` under the phone's
+//! registration; after the phone registers again with a higher seq, a send
+//! under the old one is answered `stale`. Until then, the phone side is
+//! tried on a real iPhone with the test tool in src/pushd/tests.rs
+//! (`live_push_to_a_phone`).
+//!
 //! Who sends: the copy's origin, once while it runs, and every device with
 //! the `hub` right that received it. Every one of them makes the same
 //! bytes (the copy reduced with age 0, the nonce derived from the

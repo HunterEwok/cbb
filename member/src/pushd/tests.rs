@@ -455,6 +455,51 @@ fn live_apple_sandbox_answers_without_a_token() {
     assert!(String::from_utf8_lossy(&a.body).contains("reason"));
 }
 
+/// The test tool for a real phone (never in a release): it says hello to
+/// a running cbb-push as a group of its own, seals an event or a "copy
+/// waits" body to the phone's registration and sends it, so APNs, the
+/// notification extension and `push_open` are tried on the device before
+/// the member's sync sends real ones. The registration is the frame the
+/// app's test row copies (Settings, with the launch argument
+/// `-PushTestTools YES`). Run by hand:
+/// `CBB_PUSH_LIVE_ADDR=host:8767 CBB_PUSH_LIVE_PIN=<base64> CBB_PUSH_LIVE_REG=<base64 frame>
+/// [CBB_PUSH_LIVE_KIND=event|waits] cargo test -p cbb-member pushd::tests::live_push -- --ignored --nocapture`.
+#[test]
+#[ignore = "sends to a real phone through a running cbb-push"]
+fn live_push_to_a_phone() {
+    use base64::Engine as _;
+    use base64::engine::general_purpose::STANDARD;
+    let env = |k: &str| std::env::var(k).unwrap_or_else(|_| panic!("set {k}"));
+    let addr = std::net::ToSocketAddrs::to_socket_addrs(&env("CBB_PUSH_LIVE_ADDR")).unwrap().next().unwrap();
+    let pin: [u8; 32] = STANDARD.decode(env("CBB_PUSH_LIVE_PIN")).unwrap().try_into().unwrap();
+    let frame = STANDARD.decode(env("CBB_PUSH_LIVE_REG")).unwrap();
+    let r = push::Registration::read(&frame::read(&frame, 1 << 16).unwrap().map).unwrap();
+    let on = r.on.as_ref().expect("the registration has push off");
+    let id: [u8; 16] = cbb_core::certs::random_bytes();
+    let body = match std::env::var("CBB_PUSH_LIVE_KIND").as_deref() {
+        Ok("waits") => push::Body::Waits { id, origin: [1; 16] },
+        _ => push::Body::Event { id, event: push::EVENT_JOINED, device: None, time_ms: Some(now_ms()) },
+    };
+    let sealed = push::seal(&on.key, r.seq, on.env, &body).unwrap();
+    let tag: [u8; 16] = cbb_core::certs::random_bytes();
+    let (key, creds) = member(tag, 1, &format!("live {}", STANDARD.encode(tag)), 1, true);
+    let mut c = Client::connect(addr, pin, key, &refs(&creds)).unwrap();
+    let sent = c
+        .send(push::Send {
+            n: 0,
+            token: &on.token,
+            env: on.env,
+            body: &sealed,
+            ttl: Some(2),
+            key: on.send_key.clone(),
+            sig: &on.send_sig,
+            seq: r.seq,
+        })
+        .unwrap();
+    std::eprintln!("status {} retry {:?}", sent.status, sent.retry_ms);
+    assert_eq!(sent.status, push::SENT);
+}
+
 // ------------------------------------------------------------ the sender
 
 use crate::pusher::{self, Face, Faces, Role, Saved};

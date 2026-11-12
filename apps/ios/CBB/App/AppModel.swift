@@ -354,6 +354,7 @@ final class AppModel: ObservableObject {
         didSet {
             loadTiles()
             SyncSwitch.publish(group.hasGroup ? syncOff == nil : nil)
+            PushSetup.shared.group(tag: group.groupTag, me: devices.first(where: \.isSelf)?.id)
         }
     }
     /// The devices and collections, this phone among them, in the user's

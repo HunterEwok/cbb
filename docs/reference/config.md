@@ -109,7 +109,11 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_REPO` | `tools/e2e/previous.sh` | The repository on GitHub whose releases it reads, `HunterEwok/cbb` by default. |
 | `CBB_WEEKLY_SCENARIO` | `tools/bench/weekly.sh` | Limits the weekly fleet run to these scenarios (`-scenario`); all of them when unset. |
 | `CBB_TEST_RUST_RELAY` | Go tests of the relay | The Rust `cbb-relay` binary, which the tests of `internal/relay`, `internal/tunnel` and `internal/service` run as the blind relay; without it they take the `cbb-relay` beside the `cbb` of `CBB_TEST_ALONE` or `CBB_TEST_RUST_SERVICE`, and skip when there is none. |
+| `CBB_PUSH_LIVE_ADDR` | the push service's tests, by hand | The address of a running cbb-push that the ignored test `live_push_to_a_phone` sends a body to a real phone through. |
+| `CBB_PUSH_LIVE_KIND` | the same test | `event` (the default) or `waits`: which body it seals. |
+| `CBB_PUSH_LIVE_PIN` | the same test | The pin of that cbb-push's key, base64, as it logs it. |
 | `CBB_PUSH_LIVE_ROOTS` | the push service's tests, by hand | The CA certificates the ignored test that reaches Apple's sandbox checks it with. |
+| `CBB_PUSH_LIVE_REG` | the same test | The phone's push registration, base64, as the app's test row copies it (launch argument `-PushTestTools YES`). |
 | `CBB_RELAY_LIMITS` | `cbb-relay`, in tests | An open relay's limits as a JSON object of its fields (`groups`, `per_address`, `per_network`, `per_wide`, `per_provider`, `byte_rate`, `group_record_bytes`, `record_bytes`); the Go tests set it. |
 | `CBB_RELAY_STATS_MS` | `cbb-relay`, in tests | Logs the counts of groups and devices every so many milliseconds, which the Go tests read. |
 | `CBB_TEST_RUST_SERVICE` | Go tests of the service | The Rust service's binary: the tests that start a Linux member with the default configuration run it in place of the Go service, finding their peers by mDNS. |
