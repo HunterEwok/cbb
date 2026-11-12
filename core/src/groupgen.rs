@@ -10,12 +10,13 @@
 //! phone admins that admit devices and remove some of them, settings and
 //! copies records that fill each key's room, root checkpoints that keep the
 //! live devices and leave out the removed ones and the older fill (gaps in
-//! what they keep), and up to two takeovers, each claim held for the full
-//! delay so that it counts. [`sizes`] names the sets the tests measure:
-//! about 5, 100 and 1000 records, and [`ceilings`], the set at the format's
-//! ceilings (the 4096 units of room filled, 256 devices, the root at its
-//! 1024 units and admins at their 256, two takeovers, checkpoints with
-//! gaps). Fills stop short of each ceiling, so every record counts.
+//! what they keep), and up to two changes of root by the recovery key
+//! (rule 33), each written by `RecordSet::write_change` as a device does.
+//! [`sizes`] names the sets the tests measure: about 5, 100 and 1000
+//! records, and [`ceilings`], the set at the format's ceilings (the 4096
+//! units of room filled, 256 devices, the root at its 1024 units and admins
+//! at their 256, two changes of root, checkpoints with gaps). Fills stop
+//! short of each ceiling, so every record counts.
 //!
 //! The same spec gives the same records, byte for byte: keys come from
 //! names with the seed in them, and ECDSA signs deterministically
@@ -25,7 +26,7 @@
 //! records), so it counts with plain arithmetic.
 #![allow(clippy::arithmetic_side_effects)]
 
-use alloc::collections::{BTreeMap, BTreeSet};
+use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -39,7 +40,7 @@ use crate::records::body::*;
 use crate::records::eval::{Input, State, evaluate};
 use crate::records::set::RecordSet;
 use crate::records::{
-    Body, GroupId, Key, KeyHash, MAX_ADMIN_RECORDS, MAX_DEVICES, MAX_ROOT_RECORDS, Record, RecordId, keep,
+    Body, GroupId, Key, KeyHash, MAX_ADMIN_RECORDS, MAX_DEVICES, MAX_ROOT_RECORDS, Record, RecordId, group_id, keep,
 };
 
 /// A key made from a name.
@@ -92,7 +93,7 @@ pub struct Spec {
     pub admin_fill: usize,
     /// Root checkpoints, spread over the fill.
     pub checkpoints: usize,
-    /// Takeovers, 0, 1 or 2.
+    /// Changes of root by the recovery key, 0, 1 or 2.
     pub takeovers: usize,
 }
 
@@ -102,13 +103,13 @@ pub struct Group {
     pub spec: Spec,
     /// The group's first root key.
     pub root: Key,
+    /// The group's recovery key.
+    pub recovery: Key,
     /// The records, each after the records that name its signer.
     pub records: Vec<Record>,
-    /// How long the device has held each claim: the full delay.
-    pub held_ms: BTreeMap<RecordId, u64>,
-    /// The claims counted, none: the evaluation counts them from held_ms.
-    pub counted: BTreeSet<RecordId>,
-    /// The roots the takeovers put on the path, in order.
+    /// The lists the changes of root carry, as their bytes.
+    pub lists: Vec<Vec<u8>>,
+    /// The roots the changes put on the path, in order.
     pub new_roots: Vec<KeyHash>,
     /// The devices removed.
     pub removed: Vec<KeyHash>,
@@ -116,7 +117,7 @@ pub struct Group {
 
 impl Group {
     pub fn gid(&self) -> GroupId {
-        self.root.device_id()
+        group_id(&self.root, &self.recovery)
     }
 
     /// The bytes of the records' envelopes.
@@ -126,28 +127,36 @@ impl Group {
 
     /// The units the records take before any is dropped.
     pub fn units(&self) -> u64 {
-        self.records.iter().map(|r| keep::units(r.envelope().len(), matches!(r.body().kind, Kind::Claim { .. }))).sum()
+        self.records.iter().map(|r| keep::units(r.envelope().len())).sum()
     }
 
     /// The state of all the records at once.
     pub fn evaluate(&self) -> State {
-        evaluate(&Input { root: &self.root, records: &self.records, held_ms: &self.held_ms, counted: &self.counted })
+        evaluate(&Input { root: &self.root, recovery: &self.recovery, records: &self.records, lists: &self.lists })
     }
 
     /// The records in a member's set, as a member that took them one by
-    /// one and compacted at each takeover and checkpoint keeps them.
+    /// one and compacted at each change of root and checkpoint keeps them.
     pub fn set(&self) -> (RecordSet, State) {
-        let mut set = RecordSet::new(self.root.clone());
-        // A takeover gives the new root its room only once the set has
-        // compacted on it; then the records dropped before come again.
+        let mut set = RecordSet::new(self.root.clone(), self.recovery.clone());
+        // A change of root gives the new root its room only once the set
+        // has compacted on it; then the records dropped before come again.
         for _ in 0..=self.spec.takeovers + 1 {
-            set.insert_all(self.records.iter().cloned());
-            let state = set.state(&self.held_ms);
+            self.feed(&mut set);
+            let state = set.state();
             set.compact(&state);
         }
-        set.insert_all(self.records.iter().cloned());
-        let state = set.state(&self.held_ms);
+        self.feed(&mut set);
+        let state = set.state();
         (set, state)
+    }
+
+    fn feed(&self, set: &mut RecordSet) {
+        set.insert_all(self.records.iter().cloned());
+        for l in &self.lists {
+            // A list whose head the set does not hold yet comes again.
+            let _ = set.insert_list(l);
+        }
     }
 }
 
@@ -173,11 +182,18 @@ impl Builder {
         #[allow(clippy::unwrap_used)]
         let r = Record::sign(body, by).unwrap();
         self.heads.insert(by.hash, (seq, r.id()));
-        let u = keep::units(r.envelope().len(), matches!(r.body().kind, Kind::Claim { .. }));
-        *self.units.entry(by.hash).or_insert(0) += u;
-        self.total += u;
-        self.records.push(r.clone());
+        self.push(r.clone());
         r
+    }
+
+    /// Takes a record signed elsewhere (a change of root's), in order.
+    fn push(&mut self, r: Record) {
+        let b = r.body();
+        self.heads.insert(b.signer, (b.seq, r.id()));
+        let u = keep::units(r.envelope().len());
+        *self.units.entry(b.signer).or_insert(0) += u;
+        self.total += u;
+        self.records.push(r);
     }
 
     fn seen(&self) -> Vec<Seen> {
@@ -203,7 +219,7 @@ impl Builder {
         let mut d = Device::new(m.key.clone(), &shown, role);
         d.rights = RIGHT_READ | RIGHT_SEND;
         f(&mut d);
-        let r = self.rec(by, Kind::Device(d));
+        let r = self.rec(by, Kind::device(d));
         (m, r)
     }
 
@@ -211,9 +227,9 @@ impl Builder {
         let incoming_ms = MIN_INCOMING_MS + (self.next() % (MAX_INCOMING_MS - MIN_INCOMING_MS));
         if root && i % 4 == 3 {
             let s = Settings { shared: i % 8 == 3, ..Settings::default() };
-            self.rec(by, Kind::Settings(s));
+            self.rec(by, Kind::settings(s));
         } else {
-            self.rec(by, Kind::Copies { incoming_ms });
+            self.rec(by, Kind::Copies { incoming_ms, seen: Vec::new() });
         }
     }
 }
@@ -221,7 +237,8 @@ impl Builder {
 /// Builds the group of spec.
 pub fn build(spec: Spec) -> Group {
     let root = key(spec.seed, "root");
-    let gid = root.key.device_id();
+    let recovery = key(spec.seed, "recovery");
+    let gid = group_id(&root.key, &recovery.key);
     let mut b = Builder {
         seed: spec.seed,
         gid,
@@ -233,9 +250,9 @@ pub fn build(spec: Spec) -> Group {
     };
     let devices = spec.devices.min(MAX_DEVICES);
     let takeovers = spec.takeovers.min(2);
-    // Devices the takeovers' new roots record: the phone that holds the
-    // root and the next takeover's admin.
-    let late = takeovers * 2;
+    // Devices the changes of root record: the phone that holds the new
+    // root.
+    let late = takeovers;
     let admins = spec.admins.min(devices.saturating_sub(late));
     let removed_count = (admins * spec.removals).min(devices.saturating_sub(late + admins));
     let by_root = devices.saturating_sub(late + admins + removed_count);
@@ -308,54 +325,53 @@ pub fn build(spec: Spec) -> Group {
             b.rec(a, Kind::Revoke(Removal { keys: alloc::vec![h], seen }));
             removed.push(h);
         }
-        // An admin fills up to its ceiling, the first one leaving room for
-        // its claim, and all of them leaving the set room for the
-        // takeovers' records, so that the set holds at most its 4096 units
-        // and everything counts.
-        // A claim's seen names every signer: about 80 bytes each.
-        let claim_units = ((admins + 8) * 80).div_ceil(keep::UNIT) as u64 + keep::CLAIM_EXTRA;
-        let claim = if i == 0 && takeovers > 0 { claim_units } else { 0 };
-        let end = takeovers as u64 * (claim_units + 4) + 8;
+        // An admin fills up to its ceiling, all of them leaving the set room
+        // for the changes of root's records (the new root's phone, a copy of
+        // the settings, the head), so that the set holds at most its 4096
+        // units and everything counts.
+        let end = takeovers as u64 * 12 + 8;
         for j in 0..spec.admin_fill {
             let mine = b.units.get(&a.hash).copied().unwrap_or(0);
-            if mine + 1 + claim > MAX_ADMIN_RECORDS as u64 || b.total + 1 + end > keep::ROOM {
+            if mine + 1 > MAX_ADMIN_RECORDS as u64 || b.total + 1 + end > keep::ROOM {
                 break;
             }
             b.fill(a, j, false);
         }
     }
 
-    // The takeovers: an admin claims for a new root, the claim is held for
-    // the delay, the new root records the phone that holds it and, for the
-    // next takeover, an admin.
-    let mut held_ms = BTreeMap::new();
+    // The changes of root: the recovery key makes a new root, which
+    // records the phone that holds it, as a device writes the change; a
+    // later change removes the phone that held the root before, as the
+    // owner does with a lost phone.
+    let mut lists: Vec<Vec<u8>> = Vec::new();
     let mut new_roots = Vec::new();
-    let mut claimer = (!admin_keys.is_empty()).then(|| key(spec.seed, "admin 0"));
+    let mut holder: Option<KeyHash> = None;
     for t in 0..takeovers {
-        let Some(a) = claimer.take() else { break };
         let n = key(spec.seed, &format!("new root {t}"));
-        let seen = b.seen();
-        let c = b.rec(&a, Kind::Claim { root: n.key.clone(), seen });
-        held_ms.insert(c.id(), DEFAULT_DELAY_MS);
-        b.device(&n, &format!("new root phone {t}"), |d| {
-            d.role = ROLE_PHONE;
-            d.rights = RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS;
-            d.holds_root = true;
-        });
-        let next = key(spec.seed, &format!("late admin {t}"));
-        let nkey = next.key.clone();
-        b.device(&n, &format!("late admin phone {t}"), |d| {
-            d.role = ROLE_PHONE;
-            d.rights = RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS;
-            d.admin = Some(nkey);
-            d.powers = powers;
-            d.commands = commands;
-        });
+        let phone = key(spec.seed, &format!("new root phone {t}"));
+        let mut d = Device::new(phone.key.clone(), &format!("new root phone {t}"), ROLE_PHONE);
+        d.rights = RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS;
+        let mut set = RecordSet::new(root.key.clone(), recovery.key.clone());
+        set.insert_all(b.records.iter().cloned());
+        for l in &lists {
+            let _ = set.insert_list(l);
+        }
+        let state = set.state();
+        // A change written from a valid group never fails.
+        let lost: Vec<KeyHash> = holder.take().into_iter().collect();
+        #[allow(clippy::unwrap_used)]
+        let w = set.write_change(&state, &recovery, &n, d, &lost, false, 0).unwrap();
+        removed.extend(lost);
+        holder = Some(phone.hash);
+        for r in w.first {
+            b.push(r);
+        }
+        b.push(w.record);
+        lists.push(w.list.encode().to_vec());
         new_roots.push(n.hash);
-        claimer = Some(next);
     }
 
-    Group { spec, root: root.key, records: b.records, held_ms, counted: BTreeSet::new(), new_roots, removed }
+    Group { spec, root: root.key, recovery: recovery.key, records: b.records, lists, new_roots, removed }
 }
 
 /// A root checkpoint at the root's head that keeps the live devices'
@@ -400,7 +416,7 @@ pub fn sizes(seed: u64) -> [Spec; 3] {
 
 /// The set at the format's ceilings: 256 devices, 12 phone admins at
 /// their 256 units with many removals, the root at its 1024, two
-/// takeovers and checkpoints with gaps; within a few units of the set's
+/// changes of root and checkpoints with gaps; within a few units of the set's
 /// 4096 and inside them, so that every record still counts.
 pub fn ceilings(seed: u64) -> Spec {
     Spec {
@@ -429,7 +445,21 @@ mod tests {
         for h in &g.removed {
             assert!(s.revoked.contains(h), "{spec:?}");
         }
-        assert!(s.ignored.is_empty(), "{spec:?}: {:?}", s.ignored);
+        // Every record counts, except, after a change of root, an earlier
+        // root's settings, copies and checkpoints that something newer
+        // replaced, and the device record of a phone the change removed:
+        // the change's list carries only what counts (rule 33).
+        let old: Vec<&KeyHash> = s.roots.iter().rev().skip(1).collect();
+        for i in &s.ignored {
+            let r = g.records.iter().find(|r| r.id() == i.record).expect("an ignored record is the group's");
+            let replaced = match &r.body().kind {
+                Kind::Settings(_) | Kind::Copies { .. } | Kind::Checkpoint { .. } => true,
+                // The phone a later change removed.
+                Kind::Device(d) => g.removed.contains(&d.key.hash()),
+                _ => false,
+            };
+            assert!(old.contains(&&r.body().signer) && replaced, "{spec:?}: {i:?}");
+        }
         if spec.takeovers > 0 {
             assert!(s.root_device.is_some());
         }

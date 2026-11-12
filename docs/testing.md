@@ -83,13 +83,13 @@ becomes a vector here.
 
 Rules that live for days are walked with a moved clock, never waited for.
 
-- The core reads no clock: it takes the time a device held a claim, its own clock for the
-  keys and a leaf's running time as inputs. `core/src/longrules.rs` plays the caller hour by
-  hour and day by day: a takeover's 72 hours of running time (a member that was off counts
-  only the hours it ran; a restart keeps the held time and the counted claim; a root cancels
-  within the delay; a clock set back changes nothing), the weekly change of the sealing keys
-  with a device that sleeps three weeks and asks for its copies to be sealed again, and a
-  guarded leaf's 35-day grant on its running time.
+- The core reads no clock: it takes its own clock for the keys and a leaf's running time as
+  inputs. `core/src/longrules.rs` plays the caller hour by hour and day by day: the weekly
+  change of the sealing keys with a device that sleeps three weeks and asks for its copies to
+  be sealed again, a clock set back by weeks that does not stop that change, a guarded
+  leaf's 35-day grant on its running time, and a change of root by the recovery key (rule 33),
+  which counts at once whatever the clock says, survives a restart, and leaves the old root's
+  later records, at any date, without effect.
 - The Rust service has one wall clock, `uptime::wall_ms()`, and one clock of running time,
   `uptime::now()`; `tools/repocheck` refuses a read of the system's wall clock anywhere else
   in `member/src` but the few files that decide no rule. The tests move both through the file
@@ -97,9 +97,8 @@ Rules that live for days are walked with a moved clock, never waited for.
   `testClock.run` moves both as if the machine had run that much longer
   (`internal/service/time_test.go`). The Go helper reads no clock.
 - When the service moves to the 0.6 core (wave 5), `internal/service/time_test.go` gains the
-  core's rules through the whole service: a takeover counted after 72 hours of running time
-  and not before, with a member off for a day and one restarted in the middle; the old root's
-  cancel at 71 hours and its late cancel after the count; the weekly key change with a member
+  core's rules through the whole service: a change of root by the recovery key with a member
+  off at the time and one restarted in the middle; the weekly key change with a member
   that slept through two changes and gets its copies sealed again; a guarded leaf whose grant
   goes stale after 35 days of running time and obeys nobody until it has a new one; a wall
   clock set back by days during each of them.
@@ -110,18 +109,19 @@ A save cut short must leave the old state or the new one, and a member must neve
 what it has not saved.
 
 - `core/src/powerloss.rs` runs a member's life (records, a removal, commands sent twice,
-  copies with a secret sent twice, a takeover held for its delay) through the two-slot store
+  copies with a secret sent twice, a change of root by the recovery key with its list) through
+  the two-slot store
   of a device with only flash (`crate::store`), and cuts every save after each of its bytes,
   the rest of the slot erased or stale. After each cut it starts again from the flash, is
   sent again what it was handling, and must end as a member never cut: the state reads, is
   the one before or after the save, no command runs twice or is lost, no copy is written
-  twice, and a takeover it reported counted stays counted.
+  twice, and a change of root it reported stays.
 - The Rust service writes its state files through `files::write_atomic` (a new temporary
   file, sync, rename). Its tests cut that write at every byte and step, as a process that
   dies and as an error of the system, and find the old file or the new one; the temporary
   file a crash leaves is swept at the next start once an hour old (`files::sweep`).
-- When the service moves to the 0.6 core, its saves of the core's state (the counted claims
-  with their held times, the command counters, the freshness marks) join the same cut at
+- When the service moves to the 0.6 core, its saves of the core's state (the records with
+  the lists of the changes of root, the command counters, the freshness marks) join the same cut at
   every step through the whole service.
 
 ## Recovery drills

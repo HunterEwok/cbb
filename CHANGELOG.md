@@ -13,12 +13,12 @@ All notable changes to cbb are documented in this file. The format follows
   counts a format break, at most one before 1.0 (`tools/formatfreeze`).
 - A generator of groups of records v3 from a fixed seed (`cbb_core::groupgen`, feature
   `testkit`): about 5, 100 and 1000 records, and a group at the format's ceilings (the set's
-  4096 units filled, 256 devices, the root and the admins at their ceilings, two takeovers,
+  4096 units filled, 256 devices, the root and the admins at their ceilings, two changes of root,
   checkpoints with gaps). `core/tests/ceilings.rs` measures the evaluation and a member's set
   on them, in time and in peak memory, against a budget.
 - Time in tests: the core's rules of days walked with a moved clock (`core/src/longrules.rs`:
-  a takeover's 72 hours, the weekly key change with a sleeping device, a guarded leaf's 35
-  days, a clock set back), and the Rust service's running time moved by the tests as its wall
+  the weekly key change with a sleeping device, a guarded leaf's 35 days, a clock set back, a
+  change of root by the recovery key that waits for no clock), and the Rust service's running time moved by the tests as its wall
   clock already was (`CBB_TEST_AHEAD_FILE`'s second number, `testClock.run`); every read of
   the wall clock in the service goes through `uptime::wall_ms()`, which `tools/repocheck`
   enforces (docs/testing.md, "Time").
