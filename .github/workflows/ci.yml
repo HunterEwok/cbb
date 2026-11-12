@@ -283,7 +283,7 @@ jobs:
           [ -f cov/coverage-rust-service.json ] && set -- "$@" -llvm rust-service=cov/coverage-rust-service.json
           [ -f cov/coverage-swift-kit.json ] && set -- "$@" -llvm swift-kit=cov/coverage-swift-kit.json
           [ -f cov/jacocoTestReport.xml ] && set -- "$@" -jacoco kotlin-kit=cov/jacocoTestReport.xml
-          go run ./tools/coverage -floor tools/coverage/floor.json -target 90 -summary "$GITHUB_STEP_SUMMARY" "$@"
+          go run ./tools/coverage -floor tools/coverage/floor.json -target 90 -branch-target 80 -core-branch-target 90 -summary "$GITHUB_STEP_SUMMARY" "$@"
 
   build:
     name: build (${{ matrix.systems }})

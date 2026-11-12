@@ -2,7 +2,7 @@
 # fresh seed and more cases than a pull request's run, the native fuzz
 # targets of the readers of network input (docs/differential.md),
 # mutation testing of the records' code (docs/testing.md, "Mutation
-# testing"), and the members' tests run many times over, to find the ones
+# testing"), the Rust core's branch coverage, and the members' tests run many times over, to find the ones
 # that fail only now and then (docs/testing.md, "Unstable tests"). It only
 # reads the repository; a failure prints the cases, which become vectors of
 # testdata/interop.
@@ -324,6 +324,36 @@ jobs:
           bin="$PWD/target/x86_64-unknown-linux-gnu/release"
           CGO_ENABLED=0 go build -trimpath -o "$bin/cbb-helper" ./cmd/cbb-helper
           CBB_TEST_RUST_SERVICE="$bin/cbb" CBB_TEST_ALONE="$bin/cbb" go test -timeout 60m ./internal/service
+
+  # The Rust core's branches, which only a nightly compiler counts
+  # (docs/testing.md, "Coverage"): the row rust-core/branches of the table,
+  # held to its floor in tools/coverage/floor.json.
+  rust-core-branches:
+    name: rust core, branch coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: the nightly toolchain and cargo-llvm-cov
+        run: |
+          rustup toolchain install nightly --profile minimal --component llvm-tools-preview
+          cargo install --locked cargo-llvm-cov@0.9.1
+      - name: the core's tests, counting branches
+        run: cargo +nightly llvm-cov --locked --branch -p cbb-core --features std,tls,web --json --summary-only --output-path coverage-rust-branches.json
+      - name: the table
+        run: go run ./tools/coverage -floor tools/coverage/floor.json -target 90 -branch-target 80 -core-branch-target 90 -summary "$GITHUB_STEP_SUMMARY" -llvm rust-core=coverage-rust-branches.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: success() || failure()
+        with:
+          name: coverage-rust-branches
+          path: coverage-rust-branches.json
+          if-no-files-found: ignore
 
   # A test that fails one run in ten never shows on a pull request's single run
   # until it blocks one. Each test of the members runs ten times here, against

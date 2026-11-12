@@ -90,12 +90,19 @@ run yet is skipped with its reason and stays on the list.
 
 ## Coverage
 
-CI measures how much of the code the tests run, part by part, and its `coverage` job prints
-the table in the run's summary. `tools/coverage` adds the reports up and fails when a part
-falls more than one point below its floor in `tools/coverage/floor.json`. The project aims
-at 90% in every part (`-target 90`): a part below that is marked in the table and gets a
-warning, without failing the run, and the tests are written up to 90 again before it reaches
-its floor of 85.
+CI measures how much of the code the tests run, part by part and by kind, and its `coverage`
+job prints the table, coverage by kind, in the run's summary. `tools/coverage` adds the
+reports up and fails when a row falls more than one point below its floor in
+`tools/coverage/floor.json`. The project aims at 90% of the lines in every part
+(`-target 90`): a part below that is marked in the table and gets a warning, without failing
+the run, and the tests are written up to 90 again before it reaches its floor of 85.
+
+Branches are rows of their own (`PART/branches` in the table and in `floor.json`) where the
+report counts them: JaCoCo for the Kotlin kit, llvm-cov for the Swift kit, and for the Rust
+core the nightly `rust core, branch coverage` job, since only a nightly compiler counts Rust's
+branches. Go counts statements only. The aim is 80% of the branches (`-branch-target 80`),
+90% in a core (`-core-branch-target 90`), where each branch is a decision to take or refuse;
+a branch row's floor is its first measure, and it only rises.
 
 | Part | What counts | Measured by |
 |---|---|---|
@@ -107,7 +114,7 @@ its floor of 85.
 | `swift-kit` | lines of the Swift kit's `Sources` | `swift test --enable-code-coverage` in the `phone kit (macos-latest)` job |
 | `kotlin-kit` | lines of the Kotlin kit | JaCoCo in the `Android app` job |
 
-The aim is 90% in every part. The Go packages of the `service tests on the Rust cbb` job run as test binaries built with `-cover`, beside a `cbb-helper` built with `-cover`, and their profile (`cover-go-service.out`) counts in `go` too.
+The Go packages of the `service tests on the Rust cbb` job run as test binaries built with `-cover`, beside a `cbb-helper` built with `-cover`, and their profile (`cover-go-service.out`) counts in `go` too.
 A number is a hint, not the goal: a test that runs a line without checking what it did
 raises it and proves nothing.
 
