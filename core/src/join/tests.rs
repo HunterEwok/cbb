@@ -111,7 +111,7 @@ impl G {
     }
 
     fn seen(&self) -> Vec<Seen> {
-        self.heads.iter().map(|(k, (s, _))| Seen { key: *k, seq: *s }).collect()
+        self.heads.iter().map(|(k, (s, id))| Seen { key: *k, seq: *s, id: *id }).collect()
     }
 }
 
@@ -345,6 +345,9 @@ fn the_joiner_checks_its_welcome() {
     counted.counted = vec![RecordId([2; 32]), RecordId([1; 32])];
     let back = Welcome::decode(&counted.encode()).unwrap();
     assert_eq!(back.counted, vec![RecordId([1; 32]), RecordId([2; 32])], "written sorted");
+    // The joiner takes the admitter's counted claims as its own.
+    let (set, _, _) = back.check(&group, &point(&k("phone")), &point(&tab)).unwrap();
+    assert!(set.counted().contains(&RecordId([1; 32])) && set.counted().contains(&RecordId([2; 32])));
     // The encoding's parts read back.
     let (root, envs, ages, time) = Welcome::parts(&w.encode()).unwrap();
     assert_eq!(root, g.root.key.public);

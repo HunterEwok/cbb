@@ -112,7 +112,7 @@ impl Welcome {
             time_ms,
             grant: None,
             credentials: Vec::new(),
-            counted: Vec::new(),
+            counted: set.counted().iter().copied().collect(),
         }
     }
 
@@ -236,6 +236,8 @@ impl Welcome {
         }
         let mut set = RecordSet::new(root);
         set.insert_all(self.records.iter().cloned());
+        // A takeover the admitter counted is final for the joiner too.
+        set.remember_counted(self.counted.iter().copied());
         let held: BTreeMap<RecordId, u64> = self.claim_ages.iter().copied().collect();
         let state = set.state(&held);
         let own_key = Key::es256(own.to_vec());
