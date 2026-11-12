@@ -164,8 +164,9 @@ impl<'a> Copy<'a> {
     /// Reads a copy from its value: the header a map in the profile,
     /// exactly one of the payload and its hash, the wraps whole or hashed.
     pub fn from_value(v: &Value<'a>) -> Result<Self, Rule> {
-        if v.as_map().is_none() {
-            return Err(RULE_SHAPE);
+        let outer = v.as_map().ok_or(RULE_SHAPE)?;
+        if outer.iter().any(|(k, _)| *k < 256 && !(FIELD_HDR..=FIELD_SIG).contains(k)) {
+            return Err(Rule::FORM_CRITICAL);
         }
         let hdr = v.get(FIELD_HDR).and_then(Value::as_bytes).ok_or(RULE_SHAPE)?;
         let header = cbor::decode(hdr)?;

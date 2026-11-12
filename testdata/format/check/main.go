@@ -287,6 +287,9 @@ func checkSigned(dir, file string, sk func(map[any]any) ([]byte, error)) {
 			fail("%s / %s: %v", file, t.Name, err)
 			continue
 		}
+		if typ, _ := m[uint64(1)].(uint64); f.Label == "cbb record v3" && typ == 1 && !nameOK(m[uint64(11)]) {
+			fail("%s / %s: its name is refused", file, t.Name)
+		}
 		if t.Body != "" && hex.EncodeToString(body) != t.Body {
 			fail("%s / %s: body differs", file, t.Name)
 		}
@@ -316,7 +319,16 @@ func checkSigned(dir, file string, sk func(map[any]any) ([]byte, error)) {
 		ok++
 	}
 	for _, r := range f.Refuse {
-		_, _, err := envelope(unhex(r.Envelope), f.Label, sk)
+		m, _, err := envelope(unhex(r.Envelope), f.Label, sk)
+		if r.Rule == "records/device/name" {
+			// names: checked here by themselves, apart from the rules
+			if err != nil || nameOK(m[uint64(11)]) {
+				fail("%s / %s: its name holds", file, r.Name)
+			} else {
+				ok++
+			}
+			continue
+		}
 		if formatRule(r.Rule) {
 			if err == nil {
 				fail("%s / %s: taken, want refused (%s)", file, r.Name, r.Rule)
@@ -495,7 +507,7 @@ func main() {
 				return nil, err
 			}
 			r, _, err := envelope(rb, "cbb record v3", bySignerHash)
-			if err != nil || hex.EncodeToString(r[uint64(3)].([]byte)) != rootHash {
+			if err != nil || hex.EncodeToString(r[uint64(3)].([]byte)) != rootHash || !adminRecord(r, group) {
 				return nil, errors.New("grants/admin")
 			}
 			kh, pub, err := keyHash(r[uint64(20)])
@@ -978,6 +990,10 @@ func grantSets(body map[any]any) error {
 		if alg, _ := keyAlg(k); len(id) != 16 || alg != 1 || len(pub) != 65 {
 			return errors.New("grants/readers")
 		}
+		// a reader's ID is its key's: the key hash's first 16 bytes
+		if h, _, err := keyHash(k); err != nil || !bytes.Equal(h[:16], id) {
+			return errors.New("grants/readers")
+		}
 	}
 	if v, ok := body[uint64(14)]; ok {
 		if ns, ok = v.([]any); !ok {
@@ -1037,6 +1053,55 @@ func recordSets(m map[any]any) (int, bool) {
 	return n, ok
 }
 
+// hidden tells a character a list must not show as it is: C0, DEL, C1,
+// U+2028, U+2029 and the bidi controls.
+func hidden(r rune) bool {
+	return r <= 0x1f || (r >= 0x7f && r <= 0x9f) || (r >= 0x2028 && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069)
+}
+
+// nameOK: a device's name, 1 to 64 bytes, no hidden character.
+func nameOK(v any) bool {
+	n, ok := v.(string)
+	if !ok || len(n) < 1 || len(n) > 64 {
+		return false
+	}
+	for _, r := range n {
+		if hidden(r) {
+			return false
+		}
+	}
+	return true
+}
+
+// adminRecord reads the root's record in a first grant as a record: a
+// device record of this group, with the fields of 0.6 only (a reader
+// applies it, not holds it), a seq, a name, a role and a member key.
+func adminRecord(r map[any]any, group []byte) bool {
+	allowed := map[uint64]bool{}
+	for _, f := range []uint64{1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24} {
+		allowed[f] = true
+	}
+	for k := range r {
+		if n, ok := k.(uint64); ok && n < 256 && !allowed[n] {
+			return false
+		}
+	}
+	typ, _ := r[uint64(1)].(uint64)
+	g, _ := r[uint64(2)].([]byte)
+	seq, _ := r[uint64(4)].(uint64)
+	role, _ := r[uint64(12)].(uint64)
+	prev, hasPrev := r[uint64(5)]
+	prevOK := !hasPrev && seq == 1
+	if p, ok := prev.([]byte); hasPrev && ok && len(p) == 32 {
+		prevOK = true
+	}
+	_, pub, err := keyHash(r[uint64(10)])
+	k, _ := r[uint64(10)].([]any)
+	alg, _ := keyAlg(k)
+	return typ == 1 && bytes.Equal(g, group) && seq >= 1 && seq < 1<<31 && prevOK && nameOK(r[uint64(11)]) &&
+		role >= 1 && role <= 4 && err == nil && alg == 1 && len(pub) == 65
+}
+
 func seenEntry(e any) bool {
 	t, ok := e.([]any)
 	if !ok || len(t) != 3 {
@@ -1058,6 +1123,11 @@ func copyRule(c []byte) string {
 	m, ok := v.(map[any]any)
 	if !ok {
 		return "copy/shape"
+	}
+	for k := range m {
+		if n, ok := k.(uint64); ok && n < 256 && (n < 1 || n > 6) {
+			return "form/critical"
+		}
 	}
 	hb, ok := m[uint64(1)].([]byte)
 	if !ok {
