@@ -534,9 +534,13 @@ module records_v3 {
     // a, a removal or freeze, cuts off b: it names a key of b's signer's device and did not
     // see b; of its own signer's key, it cuts off only what that key signs after it. A thaw of
     // a freeze leaves cut off what the freeze cut off and the thaw did not see (decision 20 (c)).
+    // A record a thawed key signs counts when its seen lists the thaw (rule 31).
+    pure def thawedFor(f: Record, b: Record): bool = rs.exists(t => t.kind == "thaw" and t.targetRec == f.id
+      and (onPath(t) or (isAdmin(t) and has(t.signer, "thaw") and has(t.signer, "removeAdmins"))) and saw(b, t))
     pure def cutsOffRm(a: Record, b: Record): bool =
       (a.kind == "revoke" or a.kind == "freeze") and a != b and withPair(a.target).contains(b.signer)
         and (if (a.signer == b.signer) b.seq > a.seq else not(saw(a, b)))
+        and not(a.kind == "freeze" and thawedFor(a, b))
     pure def cutsOff(a: Record, b: Record): bool =
       if (a.kind == "thaw") rs.exists(f => f.id == a.targetRec and f.kind == "freeze" and cutsOffRm(f, b)) and not(saw(a, b))
       else cutsOffRm(a, b)
@@ -572,12 +576,11 @@ module records_v3 {
     val currentAdmins = adm.keys().filter(a => current(a) and not(revoked.contains(a)))
     // The claims under this root.
     // A removal that saw the new root's records disputes nothing (decision 20).
-    pure def sawNewRoot(r: Record, c: Record): bool = lineOf(r.seen, c.target).length() > 0
     // A root's removal of the claimant, or its record of the claimant's device that takes the
     // claimant's admin key (a demotion, or another key), cancels a claim it saw (decision 20).
     pure def cancelled(c: Record): bool = rs.exists(r => r.signer == cur and rootRec(r)
       and ((r.kind == "resolve" and r.targetRec == c.id)
-        or (r.kind == "revoke" and withPair(r.target).contains(c.signer) and saw(r, c) and not(sawNewRoot(r, c)))
+        or (r.kind == "revoke" and withPair(r.target).contains(c.signer) and saw(r, c))
         or (replacers(c.signer).contains(r) and saw(r, c))))
     // A claim is void by its new key's use only for a use the claim saw or a root on the path
     // signed: a record signed by that key, or one that names it as a device's key.
@@ -600,7 +603,9 @@ module records_v3 {
     val kept = one.exclude(seenRemoved)
     val later = kept.filter(c => kept.exists(o => o != c and saw(c, o)))
     val first = kept.exclude(later)
-    pure def disputed(c: Record): bool = removalsOf(c.signer).exists(rm => not(saw(c, rm)) and not(sawNewRoot(rm, c)))
+    // Any removal of the claimant within the delay stops the takeover, whatever it saw of the
+    // new key's records (rule 30).
+    pure def disputed(c: Record): bool = removalsOf(c.signer).exists(rm => not(saw(c, rm)))
     pure def heldOf(c: Record): int = if (held.keys().contains(c.id)) held.get(c.id) else 0
     val voidIds = idsOf(voided.union(again).union(seenRemoved).union(later))
     val competing = first.size() > 1
@@ -881,6 +886,17 @@ module records_v3 {
     nondet p = Set(true, false).oneOf() sign(k, "revoke", t, "", 0, p, false, 1)
   action signFreeze = nondet k = Set(ROOT, PHONE, COMPUTER, WATCH, "NA").oneOf() nondet t = Set(COMPUTER, WATCH, RECOVERY, "dW", PHONE).oneOf()
     nondet p = Set(true, false).oneOf() sign(k, "freeze", t, "", 0, p, false, 1)
+  // A key whose freeze its member holds a thaw of signs again, listing the thaw (rule 31).
+  action signAfterThaw = nondet i = db.keys().oneOf() all {
+    db.get(i).kind == "thaw",
+    db.keys().contains(db.get(i).targetRec),
+    val k = db.get(db.get(i).targetRec).target
+    all {
+      Set(COMPUTER, WATCH, PHONE).contains(k),
+      st.get(HOLDER.get(k)).recs.contains(i),
+      sign(k, "device", DEVICE, "", 0, false, false, 1),
+    },
+  }
   action signThaw = nondet k = Set(ROOT, PHONE, "NA").oneOf() nondet i = db.keys().oneOf() all {
     db.get(i).kind == "freeze",
     sign(k, "thaw", "", "", i, false, false, 1),
@@ -992,7 +1008,7 @@ module records_v3 {
 
   action step = any {
     signDevice, signDemote, signAdmin, signRevoke, signFreeze, signThaw, signResolve, signClaim, signCheckpoint, signCopies,
-    signUseKey, signHidden, signCheckpointNaming, signHandover, welcomeNewcomer,
+    signUseKey, signAfterThaw, signHidden, signCheckpointNaming, signHandover, welcomeNewcomer,
     deliver, deliver, deliver, deliver, tick, compact,
   }
 
@@ -1051,7 +1067,7 @@ module records_v3 {
   action guided = any {
     step, signTakeover, signTakeover, signTakeover, signNewRoot, signNewRoot, signNewRoot, signCopies, signCheckpoint,
     broadcast, broadcastNewest, broadcastNewest, broadcastNewest, broadcastNewest, deliver,
-    tickAll, tickAll, tickAll, tickAll, compact, compact, syncAll, syncAll, welcomeNewcomer, signHandover, signHidden, signCheckpointNaming,
+    tickAll, tickAll, tickAll, tickAll, compact, compact, syncAll, syncAll, signThaw, signAfterThaw, welcomeNewcomer, signHandover, signHidden, signCheckpointNaming,
   }
 
   // Witnesses of a run (quint run --witnesses): how many traces reach these.
@@ -1491,6 +1507,20 @@ module records_v3 {
       .then(give("m", 7))
       .expect(not(views.get("m").frozen.contains(COMPUTER)) and not(views.get("m").devices.contains(DEVICE)) and promises)
 
+  // Rule 31: what the thawed key signs after the thaw, listing it in seen, counts.
+  run thawedAdminWorksTest =
+    init
+      .then(signAs(PHONE, "freeze", COMPUTER, 0))
+      .then(give("r", 5))
+      .then(signAs(ROOT, "thaw", "", 5))
+      .then(give("c", 5))
+      .then(give("c", 6))
+      .then(signAs(COMPUTER, "device", DEVICE, 0))
+      .then(give("m", 5))
+      .then(give("m", 6))
+      .then(give("m", 7))
+      .expect(not(views.get("m").frozen.contains(COMPUTER)) and views.get("m").devices.contains(DEVICE) and promises)
+
   run thawSeenTest =
     init
       .then(signAs(PHONE, "freeze", COMPUTER, 0))
@@ -1523,8 +1553,9 @@ module records_v3 {
       .expect(views.get("m").path == [ROOT, "NK"] and views.get("c").path == [ROOT]
         and claimState("c", 5) == "cancelled" and promises)
 
-  // A removal of the claimant that saw the new root's records disputes nothing: a member off
-  // during the delay counts the claim all the same.
+  // A removal of the claimant cancels the claim even when it saw the new root's records
+  // (rule 30): a member off during the delay that gets the claim and the removal together sees
+  // the claim cancelled.
   run claimantRemovedAfterNewRootTest =
     init
       .then(signAs(RECOVERY, "claim", "NK", 0))
@@ -1537,7 +1568,7 @@ module records_v3 {
       .then(give("c", 7))
       .then(tickAt("c"))
       .then(tickAt("c"))
-      .expect(views.get("c").path == [ROOT, "NK"] and claimState("c", 5) == "effective" and promises)
+      .expect(views.get("c").path == [ROOT] and claimState("c", 5) == "cancelled" and promises)
   // After a takeover counts, other keys fill the room and push out the old root's records: it
   // keeps them from the head the claim saw downward, and the takeover stays, since a counted
   // claim is checked once, when counted (decision 22).
