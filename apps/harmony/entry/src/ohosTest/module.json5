@@ -1,0 +1,13 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 HunterEwok
+// The app's tests on a phone or the emulator (hvigorw onDeviceTest, or
+// DevEco Studio's Run on ohosTest).
+{
+  "module": {
+    "name": "entry_test",
+    "type": "feature",
+    "deviceTypes": ["phone", "tablet"],
+    "deliveryWithInstall": true,
+    "installationFree": false
+  }
+}
