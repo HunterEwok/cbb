@@ -530,6 +530,7 @@ fn guest_link(inv: &Invitation, log: Arc<dyn Fn(&str) + Send + Sync>) -> Result<
         next: Vec::new(),
         obfuscation,
         vless: inv.vless.as_ref().map(cbb_core::invite::Vless::to_json),
+        ..Default::default()
     };
     let own = hub::guest_addr(&crate::tunnel::key32(&crate::tunnel::public_of(&inv.guest_key))?);
     let peer = crate::tunnel::addr(&inv.hub).ok_or_else(|| Error::msg("the invitation names no hub"))?;

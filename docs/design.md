@@ -1684,8 +1684,9 @@ relay, or a hub.
    speaks it unless the user switches it off (`cbb global hub -no-obfuscate -no-vless`, or the hub's setting
    in the apps: `cbb global hub -keep` on the computers, the phone hub's own on the phones). `cbb` and the phones'
    tunnel run on amneziawg-go always; without settings it is plain WireGuard on the wire.
-   - The hub makes the group's settings once, at random, and keeps them while obfuscation
-     stays on: 3 to 8 junk packets of 40 to 600 bytes before each handshake, 16 to 64 random
+   - The hub makes the group's settings at random and keeps them for a period of the
+     group's server credentials, while obfuscation stays on, then the next ones it gave its
+     clients ahead of time (protocol.md, section 11, "The hub's key"): 3 to 8 junk packets of 40 to 600 bytes before each handshake, 16 to 64 random
      bytes in front of each handshake message and 16 to 32 in front of each data message,
      each message type drawn from its own random range instead of WireGuard's 1 to 4, and a
      header protection key that encrypts the rest of each header (the session indices
@@ -1897,7 +1898,8 @@ when the root changes; the root certificate. Decided:
   count of devices shows only roughly.
 - **Rotating keys and pseudonyms.** Each device's server key and the tag the servers see
   change with each period, so a server cannot link a device or a group across periods; the
-  hub's WireGuard key changes with them.
+  hub's WireGuard key, its AmneziaWG settings and its VLESS user ID change with them, all at
+  once.
 - **No logs.** The forwarder and the relay on `cbb.tools` keep no logs and no addresses on
   disk, with a hardened systemd unit; a bench case checks it, and the docs say what the
   hosting provider still sees and that a system VPN hides the user's address.

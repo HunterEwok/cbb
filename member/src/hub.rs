@@ -1089,6 +1089,7 @@ mod tests {
                     next: Vec::new(),
                     obfuscation: None,
                     vless: None,
+                    ..Default::default()
                 };
                 let st = crate::tunnel::State::with_key(k).unwrap();
                 crate::tunnel::Link::start_at(&st, &h, *addr, own, Arc::new(|_| {})).unwrap()
@@ -1319,6 +1320,7 @@ mod tests {
             next: Vec::new(),
             obfuscation: None,
             vless: None,
+            ..Default::default()
         };
         let link =
             crate::tunnel::Link::start_at(&crate::tunnel::State::with_key(&kb).unwrap(), &h, b, own, Arc::new(|_| {}))
@@ -1511,6 +1513,7 @@ mod tests {
             next: Vec::new(),
             obfuscation: None,
             vless: None,
+            ..Default::default()
         };
         let link =
             crate::tunnel::Link::start_at(&crate::tunnel::State::with_key(&kb).unwrap(), &h, b, own, Arc::new(|_| {}))

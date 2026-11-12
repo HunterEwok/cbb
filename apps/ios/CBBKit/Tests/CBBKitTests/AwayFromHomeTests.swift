@@ -45,6 +45,33 @@ final class AwayFromHomeTests: XCTestCase {
         XCTAssertEqual(tried.map(\.device), [hub, hub])
         XCTAssertEqual(tried[1].offer.hubKey, next.nextKey)
         XCTAssertNil(tried[1].offer.nextKey)
+        // With the obfuscation and the way over VLESS that go with the next
+        // key, which the try with that key takes; without them, the same.
+        var both = tunneled
+        both.obfuscation = hidden.obfuscation
+        both.nextKey = next.nextKey
+        var nextObf = hidden.obfuscation!
+        nextObf.jc = 5
+        both.nextObfuscation = nextObf
+        both.nextVLESS = Member.VLESS(endpoint: "203.0.113.9:443", serverName: "cbb.tools",
+                                      path: "/banMEJvnYJJap8S/mefvDB5qwj9eeFnyKOOk4A", id: "0b6e7f10-2a3b-4c5d-9e8f-112233445566")
+        let withBoth = off.with(hub, offer: both)
+        XCTAssertEqual(AwayState.decode(try withBoth.encoded()), withBoth)
+        let triedBoth = AwayFromHome.hubsToTry([hub], withBoth)
+        XCTAssertEqual(triedBoth[0].offer.obfuscation, hidden.obfuscation)
+        XCTAssertEqual(triedBoth[0].offer.vless, tunneled.vless)
+        XCTAssertEqual(triedBoth[1].offer.obfuscation, nextObf)
+        XCTAssertEqual(triedBoth[1].offer.vless, both.nextVLESS)
+        XCTAssertNil(triedBoth[1].offer.nextVLESS)
+        var older = both
+        older.nextVLESS = nil
+        XCTAssertEqual(AwayFromHome.hubsToTry([hub], off.with(hub, offer: older))[1].offer.vless, tunneled.vless)
+        var alone = both
+        alone.nextKey = nil
+        XCTAssertFalse(alone.isValid)
+        alone = both
+        alone.vless = nil
+        XCTAssertFalse(alone.isValid)
         // A short key, a short preshared key and a bad offer are not states.
         XCTAssertNil(AwayState.decode(try AwayState(key: Data(count: 31)).encoded()))
         XCTAssertNil(AwayState.decode(try AwayState(key: key, psk: Data(count: 31)).encoded()))

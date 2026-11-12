@@ -361,6 +361,7 @@ fn once(cfg: &Arc<Config>, events: &Arc<dyn Events>, stop: &Arc<AtomicBool>) -> 
         next: Vec::new(),
         obfuscation: None,
         vless: None,
+        ..Default::default()
     };
     let log = {
         let events = events.clone();

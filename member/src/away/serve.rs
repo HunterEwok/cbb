@@ -359,7 +359,22 @@ impl Away {
             send: hub.sender(),
             credential: self.credentials.lock().unwrap().clone().map(|c| {
                 let n = Arc::downgrade(node);
-                let f: forward::CredentialFn = Arc::new(move || c.hub(&*n.upgrade()?));
+                // While the hub serves with its key for an earlier period it
+                // stays registered under that period, with the credential it
+                // last had for it, so that the forwarder never sees a new
+                // period with the keys and settings of the one before
+                // (docs/protocol.md, section 11, "The hub's key").
+                let (serving_for, held) = (st.serving_for.clone(), Mutex::new(None));
+                let f: forward::CredentialFn = Arc::new(move || {
+                    let n = n.upgrade()?;
+                    if serving_for.is_empty() || c.period_tag(&n).as_deref() == Some(serving_for.as_str()) {
+                        let now = c.hub(&n);
+                        held.lock().unwrap().clone_from(&now);
+                        return now;
+                    }
+                    // A hub that started meanwhile holds none: the new period's.
+                    held.lock().unwrap().clone().or_else(|| c.hub(&n))
+                });
                 f
             }),
             ways: Default::default(),
@@ -429,12 +444,12 @@ impl Away {
         node.reconnect();
     }
 
-    /// Gives the hub a new WireGuard key for its clients in each period of
-    /// the group's server credentials (docs/protocol.md, section 11, "The
-    /// hub's key"), as Go's rotateHubKey: when a period starts, the next
-    /// key, which its offers carry from then on, and hub_key_ahead later
-    /// that key in place of the old one, with which the hub starts again
-    /// and registers again on its forwarder.
+    /// Gives the hub a new WireGuard key, AmneziaWG settings and VLESS user
+    /// ID for its clients in each period of the group's server credentials
+    /// (docs/protocol.md, section 11, "The hub's key"): the next ones, which
+    /// its offers carry ahead of time, take over when a new period comes
+    /// (at least hub_key_ahead after they were made), and the hub starts
+    /// again with them and registers again on its forwarder.
     pub(super) fn rotate_hub_key(&self, node: &Node) {
         let creds = self.credentials.lock().unwrap().clone();
         let period = creds.and_then(|c| c.period_tag(node)).unwrap_or_default();
@@ -456,7 +471,7 @@ impl Away {
         // a state on disk never names a key the hub does not serve with yet;
         // a hub that stops in between switches again at its next check.
         if switched && self.serving.lock().unwrap().is_some() {
-            (self.log)("cbb: the hub serves with its key for the new period from now on");
+            (self.log)("cbb: the hub serves with its key and settings for the new period from now on");
             self.stop_serving();
         }
         if let Err(e) = next.save(&self.dir) {
@@ -577,6 +592,8 @@ pub(super) fn own_offer(st: &State, psk: &[u8]) -> Option<TunnelOffer> {
         obfuscation: st.obfuscation.clone(),
         vless: st.forwarder.as_ref().filter(|f| !f.vless_id.is_empty()).and_then(|f| f.vless.clone()),
         next_key: st.next_public(),
+        next_obfuscation: st.next_obfuscation(),
+        next_vless: st.next_vless(),
         ..Default::default()
     })
 }
@@ -589,6 +606,8 @@ pub(super) fn offer_of(h: &crate::tunnel::Hub) -> TunnelOffer {
         obfuscation: h.obfuscation.clone(),
         vless: h.vless.clone(),
         next_key: h.next.clone(),
+        next_obfuscation: h.next_obfuscation.clone(),
+        next_vless: h.next_vless.clone(),
         ..Default::default()
     }
 }
@@ -700,9 +719,9 @@ fn forwarder_problem(detail: &str) -> String {
     }
 }
 
-/// How long before the hub serves with its key for a new period its offers
-/// give its clients that key, as Go's hubKeyAhead: three days, or
-/// CBB_HUB_KEY_AHEAD seconds, which tests set shorter.
+/// How long the hub's offers give its clients its next key and settings at
+/// the least before it serves with them: three days, or CBB_HUB_KEY_AHEAD
+/// seconds, which tests set shorter.
 fn hub_key_ahead() -> Duration {
     static AHEAD: std::sync::OnceLock<Duration> = std::sync::OnceLock::new();
     *AHEAD.get_or_init(|| {

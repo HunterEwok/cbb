@@ -405,27 +405,42 @@ object Member {
          * 11, "The hub's key"); null for none.
          */
         val nextKey: ByteArray? = null,
+        /**
+         * The obfuscation settings and the way over VLESS, as JSON text, the
+         * hub serves with together with nextKey; null for the same as now.
+         */
+        val nextObfuscation: String? = null,
+        val nextVless: String? = null,
     ) {
         /**
-         * Whether it is an offer a tunnel can take, as Go checks one: keys of 32
-         * bytes that are not all zeros, at most 8 endpoints, each with a port
-         * that is not 0.
+         * Whether it is an offer a tunnel can take, as the Rust member checks
+         * one: keys of 32 bytes that are not all zeros, at most 8 endpoints,
+         * each with a port that is not 0, and settings for the next key only
+         * with that key and beside the present ones.
          */
         val isValid: Boolean get() =
             hubKey.size == 32 && psk.size == 32 && endpoints.size <= 8 && (nextKey == null || nextKey.size == 32) &&
-                hubKey.any { it != 0.toByte() } && psk.any { it != 0.toByte() } && endpoints.all(::hasPort)
+                hubKey.any { it != 0.toByte() } && psk.any { it != 0.toByte() } && endpoints.all(::hasPort) &&
+                (nextObfuscation == null || nextKey != null && obfuscation != null) &&
+                (nextVless == null || nextKey != null && vless != null)
 
         /** The same offer with another preshared key and hub, and moved set. */
         fun with(psk: ByteArray, hub: String?, moved: Boolean = false): TunnelOffer =
-            TunnelOffer(hubKey, psk, endpoints, obfuscation, vless, hub, moved, nextKey)
+            TunnelOffer(hubKey, psk, endpoints, obfuscation, vless, hub, moved, nextKey, nextObfuscation, nextVless)
 
-        /** The offer with the next key as the hub's key, or null without one. */
-        fun withNextKey(): TunnelOffer? = nextKey?.let { TunnelOffer(it, psk, endpoints, obfuscation, vless, hub, moved) }
+        /**
+         * The offer as the hub serves it with its next key: that key, with the
+         * obfuscation settings and the way over VLESS that go with it, or the
+         * present ones from a hub that gives none; null without one.
+         */
+        fun withNextKey(): TunnelOffer? =
+            nextKey?.let { TunnelOffer(it, psk, endpoints, nextObfuscation ?: obfuscation, nextVless ?: vless, hub, moved) }
 
         override fun equals(other: Any?): Boolean =
             other is TunnelOffer && hubKey.contentEquals(other.hubKey) && psk.contentEquals(other.psk) && endpoints == other.endpoints &&
                 obfuscation == other.obfuscation && vless == other.vless && hub == other.hub && moved == other.moved &&
-                (nextKey ?: ByteArray(0)).contentEquals(other.nextKey ?: ByteArray(0))
+                (nextKey ?: ByteArray(0)).contentEquals(other.nextKey ?: ByteArray(0)) &&
+                nextObfuscation == other.nextObfuscation && nextVless == other.nextVless
 
         override fun hashCode(): Int = hubKey.contentHashCode()
 
@@ -438,6 +453,8 @@ object Member {
             "hub" to Wire.str(hub),
             "moved" to if (moved) JsonPrimitive(true) else null,
             "next_key" to nextKey?.let { Wire.bytes(it) },
+            "next_obfuscation" to nextObfuscation?.let { Json.parseToJsonElement(it) },
+            "next_vless" to nextVless?.let { Json.parseToJsonElement(it) },
         )
 
         companion object {
@@ -452,6 +469,8 @@ object Member {
                 o.optString("hub"),
                 o.optBool("moved") ?: false,
                 o.optBytes("next_key")?.takeIf { it.isNotEmpty() },
+                o.optObject("next_obfuscation")?.toString(),
+                o.optObject("next_vless")?.toString(),
             )
         }
     }

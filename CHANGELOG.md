@@ -1546,12 +1546,15 @@ All notable changes to cbb are documented in this file. The format follows
   period key in the Secure Enclave or the Keystore. Once the members' credential lists a
   phone's server key, the phone registers with a relay by the credentials too, under its
   pseudonym (`cbb_tunnel_relay_credentials`).
-- The hub takes a new WireGuard key for its clients with each period of the server
-  credentials (docs/protocol.md, section 11, "The hub's key"): its offers give the next key
-  three days ahead, then it serves with it and registers again with its forwarder, so the
-  forwarder cannot link the group's traffic from one month to the next by the hub's key. Go
-  members, the lite member and both phone apps try a hub with its next key too, so one that
-  was away when the hub moved on still reaches it.
+- The hub takes a new WireGuard key, new AmneziaWG settings and a new VLESS user ID for its
+  clients with each period of the server credentials (docs/protocol.md, section 11, "The
+  hub's key"): its offers always give the next ones ahead of time, and when a new period
+  comes the hub serves with them at once and registers again with its forwarder under it,
+  staying under the old period until then, so the forwarder cannot link the group's traffic
+  from one month to the next by any of them. The forwarder makes a group's XHTTP path from
+  its VLESS user ID, so the hub knows the next path too. The lite member and both phone
+  apps try a hub with its next key and settings too, so one that was away when the hub
+  moved on still reaches it.
 - The test bench resets a Windows device itself: `uninstall.ps1 -Purge`, a check that it left
   nothing, and `install.ps1` from the build's zip, so a Windows VM needs no snapshot.
 - FreeBSD: release archives for amd64 and arm64, `get.sh` and an installer with an rc.d

@@ -64,7 +64,7 @@ pub(crate) fn set_tcp_timeouts(sock: &mut tcp::Socket) {
 /// tries the next: counted from when it started there, last heard the hub or
 /// began a rekey, so a rekey, which WireGuard starts once a session is two
 /// minutes old, does not leave an endpoint that works.
-const ENDPOINT_WAIT: Duration = Duration::from_secs(10);
+pub(crate) const ENDPOINT_WAIT: Duration = Duration::from_secs(10);
 const MAX_ENDPOINTS: usize = 8;
 pub(crate) const TCP_BUFFER: usize = 64 << 10;
 /// The connections through the tunnel's local port at once; this member
@@ -147,6 +147,14 @@ pub struct State {
     pub next_for: String,
     #[serde(default, skip_serializing_if = "is_zero_i64")]
     pub next_at_ms: i64,
+    /// On a hub, the AmneziaWG settings and the VLESS user ID it serves
+    /// with together with the next key, which its offers give its clients
+    /// ahead of time (docs/protocol.md, section 11, "The hub's key"); none
+    /// while it has no obfuscation or no VLESS.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_obfuscation: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub next_vless_id: String,
     /// The keys the sealed blobs hold: key, serving and next.
     #[serde(skip)]
     sealed_for: [Vec<u8>; 3],
@@ -215,7 +223,7 @@ mod b64_list {
 }
 
 /// The offer of one of the group's hubs, as this member keeps it.
-#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
 pub struct Hub {
     pub device: String,
     #[serde(with = "b64")]
@@ -236,6 +244,12 @@ pub struct Hub {
     /// gave it (src/vless.rs reads it).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vless: Option<serde_json::Value>,
+    /// The AmneziaWG settings and the way over VLESS the hub serves with
+    /// together with `next`; none for the same as now.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_obfuscation: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_vless: Option<serde_json::Value>,
 }
 
 /// The hubs that VLESS reached last, which try it first the next time
@@ -274,6 +288,21 @@ impl Hub {
     /// VLESS.
     pub fn reachable(&self) -> bool {
         !self.endpoints.is_empty() || self.vless.is_some()
+    }
+
+    /// The offer as the hub serves it with its next key: that key, and the
+    /// AmneziaWG settings and the way over VLESS that go with it, or the
+    /// present ones from a hub that gives none.
+    pub fn with_next(&self) -> Hub {
+        Hub {
+            key: self.next.clone(),
+            next: Vec::new(),
+            obfuscation: self.next_obfuscation.clone().or_else(|| self.obfuscation.clone()),
+            vless: self.next_vless.clone().or_else(|| self.vless.clone()),
+            next_obfuscation: None,
+            next_vless: None,
+            ..self.clone()
+        }
     }
 }
 
@@ -372,6 +401,8 @@ impl State {
             next_se: None,
             next_for: String::new(),
             next_at_ms: 0,
+            next_obfuscation: None,
+            next_vless_id: String::new(),
             sealed_for: Default::default(),
         }
     }
@@ -467,7 +498,7 @@ impl State {
         for h in hubs {
             out.push(h.clone());
             if !h.next.is_empty() {
-                out.push(Hub { key: h.next.clone(), next: Vec::new(), ..h.clone() });
+                out.push(h.with_next());
             }
         }
         out
@@ -684,35 +715,83 @@ impl State {
     }
 
     /// Brings the hub's key for its clients up to the period tagged period
-    /// (docs/protocol.md, section 11, "The hub's key"), as Go's
-    /// State.Rotate: a period it has no key for yet gets the next key, which
-    /// the hub serves with from now_ms + ahead_ms on, and once that time
-    /// came the next key is the one it serves with. It returns whether the
-    /// state must be saved and the offers given again, and whether the hub
-    /// must start again with the new key.
+    /// (docs/protocol.md, section 11, "The hub's key"). The hub always holds
+    /// the next key, with the AmneziaWG settings and the VLESS user ID that
+    /// go with it, which its offers give its clients ahead of time; it
+    /// serves with them as soon as a period it serves with no key for has
+    /// come, once ahead_ms have passed since it made them, so that the
+    /// forwarder sees each period with keys and settings of its own. It
+    /// returns whether the state must be saved and the offers given again,
+    /// and whether the hub must start again with the new key; until the
+    /// first period, and in a group without server credentials, it serves
+    /// with the key its hello offers.
     pub fn rotate(&mut self, period: &str, now_ms: i64, ahead_ms: i64) -> Result<(bool, bool)> {
-        if !self.is_hub {
+        if !self.is_hub || period.is_empty() {
             return Ok((false, false));
         }
         let (mut changed, mut switched) = (false, false);
-        if !self.next.is_empty() && now_ms >= self.next_at_ms {
+        if !self.next.is_empty() && period != self.serving_for && now_ms >= self.next_at_ms {
             self.serving = std::mem::take(&mut self.next);
             self.serving_tpm = self.next_tpm.take();
             self.serving_se = self.next_se.take();
             self.sealed_for[1] = std::mem::take(&mut self.sealed_for[2]);
-            self.serving_for = std::mem::take(&mut self.next_for);
+            self.serving_for = period.to_string();
+            self.next_for.clear();
             self.next_at_ms = 0;
+            if self.obfuscation.is_some()
+                && let Some(o) = self.next_obfuscation.take()
+            {
+                self.obfuscation = Some(o);
+            }
+            if let Some(f) = self.forwarder.as_mut().filter(|f| !f.vless_id.is_empty())
+                && !self.next_vless_id.is_empty()
+            {
+                f.vless_id = std::mem::take(&mut self.next_vless_id);
+                // The way the forwarder's answer gives for the new ID, which
+                // the clients already hold; the answer replaces it if not.
+                f.vless = f.vless.as_ref().and_then(|v| cbb_core::vless::with_id(v, &f.vless_id));
+            }
             (changed, switched) = (true, true);
         }
-        if period.is_empty() || period == self.serving_for || period == self.next_for {
-            return Ok((changed, switched));
+        if self.next.is_empty() {
+            self.next = random_key().map_err(|e| e.context("making the hub's key for the next period"))?;
+            (self.next_tpm, self.next_se) = (None, None);
+            self.sealed_for[2] = Vec::new();
+            self.next_for = period.to_string();
+            self.next_at_ms = now_ms.saturating_add(ahead_ms);
+            (self.next_obfuscation, self.next_vless_id) = (None, String::new());
+            changed = true;
         }
-        self.next = random_key().map_err(|e| e.context("making the hub's key for the new period"))?;
-        (self.next_tpm, self.next_se) = (None, None);
-        self.sealed_for[2] = Vec::new();
-        self.next_for = period.to_string();
-        self.next_at_ms = now_ms.saturating_add(ahead_ms);
-        Ok((true, switched))
+        // The next settings follow the hub's: made when it hides its tunnel
+        // or has VLESS, dropped when it no longer does.
+        if self.obfuscation.is_some() != self.next_obfuscation.is_some() {
+            self.next_obfuscation = match self.obfuscation {
+                Some(_) => Some(new_obfuscation().map_err(|e| e.context("making the hub's next obfuscation"))?),
+                None => None,
+            };
+            changed = true;
+        }
+        let vless = self.forwarder.as_ref().is_some_and(|f| !f.vless_id.is_empty());
+        if vless == self.next_vless_id.is_empty() {
+            self.next_vless_id = if vless { new_vless_id() } else { String::new() };
+            changed = true;
+        }
+        Ok((changed, switched))
+    }
+
+    /// The hub's VLESS settings for its next key, which its offers carry
+    /// beside next_key; None without VLESS or before the forwarder answered.
+    pub fn next_vless(&self) -> Option<serde_json::Value> {
+        if self.next.is_empty() || self.next_vless_id.is_empty() {
+            return None;
+        }
+        let f = self.forwarder.as_ref().filter(|f| !f.vless_id.is_empty())?;
+        cbb_core::vless::with_id(f.vless.as_ref()?, &self.next_vless_id)
+    }
+
+    /// The hub's AmneziaWG settings for its next key; None without them.
+    pub fn next_obfuscation(&self) -> Option<serde_json::Value> {
+        self.next_obfuscation.clone().filter(|_| !self.next.is_empty() && self.obfuscation.is_some())
     }
 
     /// Forgets the hub's keys for the server credentials' periods, once
@@ -724,6 +803,7 @@ impl State {
         self.serving_for.clear();
         self.next_for.clear();
         self.next_at_ms = 0;
+        (self.next_obfuscation, self.next_vless_id) = (None, String::new());
     }
 
     /// Forgets the clients keep refuses and returns their devices.
@@ -805,6 +885,21 @@ pub fn hub_from_offer(from: &DeviceId, o: &TunnelOffer) -> Result<Hub> {
     if let Some(v) = &o.obfuscation {
         crate::awg::Obfuscation::from_offer(v)?;
     }
+    if o.next_key.is_empty() && (o.next_obfuscation.is_some() || o.next_vless.is_some()) {
+        return Err(Error::msg("the hub's offer has settings for its next key without the key"));
+    }
+    if let Some(v) = &o.next_vless {
+        if o.vless.is_none() {
+            return Err(Error::msg("the hub's offer has VLESS for its next key alone"));
+        }
+        crate::vless::check_offer(v)?;
+    }
+    if let Some(v) = &o.next_obfuscation {
+        if o.obfuscation.is_none() {
+            return Err(Error::msg("the hub's offer has obfuscation for its next key alone"));
+        }
+        crate::awg::Obfuscation::from_offer(v)?;
+    }
     if o.hub_key.len() != 32 || o.psk.len() != 32 || !o.next_key.is_empty() && o.next_key.len() != 32 {
         return Err(Error::msg("the hub's offer does not have 32-byte keys"));
     }
@@ -832,6 +927,8 @@ pub fn hub_from_offer(from: &DeviceId, o: &TunnelOffer) -> Result<Hub> {
         next: o.next_key.clone(),
         obfuscation: o.obfuscation.clone(),
         vless: o.vless.clone(),
+        next_obfuscation: o.next_obfuscation.clone(),
+        next_vless: o.next_vless.clone(),
     })
 }
 
@@ -1527,6 +1624,7 @@ mod tests {
             next: vec![],
             obfuscation: None,
             vless: None,
+            ..Default::default()
         };
         // A rekey once the session is a little older than the wait at an
         // endpoint, which a link counted from its start counts as gone.
@@ -1623,6 +1721,7 @@ mod tests {
             next: Vec::new(),
             obfuscation: None,
             vless: None,
+            ..Default::default()
         };
         let mut st = State::new("g").unwrap();
         st.hubs = vec![hub("pi", true), hub("stranger", true), hub("phone", true), hub("mac", false)];
@@ -1644,16 +1743,71 @@ mod tests {
         let mut st = State::new("g").unwrap();
         assert_eq!(st.rotate("p1", 0, 10).unwrap(), (false, false), "no hub, no keys");
         st.is_hub = true;
-        assert_eq!(st.rotate("", 0, 10).unwrap(), (false, false));
+        assert_eq!(st.rotate("", 0, 10).unwrap(), (false, false), "no period");
         assert_eq!(st.rotate("p1", 0, 10).unwrap(), (true, false));
         let next = st.next_public();
-        assert!(next.len() == 32 && st.next_for == "p1" && st.serving.is_empty());
+        assert!(
+            next.len() == 32 && st.serving.is_empty() && st.next_obfuscation.is_none() && st.next_vless_id.is_empty()
+        );
         assert_eq!(st.rotate("p1", 5, 10).unwrap(), (false, false), "not yet");
+        assert_eq!(st.rotate("p1", 10, 10).unwrap(), (true, true), "the first period, once the clients had time");
+        assert_eq!((public_of(&st.serving), st.serving_for.as_str()), (next.clone(), "p1"));
+        let next = st.next_public();
+        assert!(next.len() == 32 && st.next_at_ms == 20, "the next key comes at once");
+        assert_eq!(st.rotate("p1", 40, 10).unwrap(), (false, false), "the same period");
+        assert_eq!(st.rotate("p2", 40, 10).unwrap(), (true, true), "a new period switches at once");
+        assert_eq!((public_of(&st.serving), st.serving_for.as_str(), st.next_at_ms), (next, "p2", 50));
+        assert_eq!(st.rotate("p3", 45, 10).unwrap(), (false, false), "a next key the clients had no time for");
+        assert_eq!(st.rotate("p3", 50, 10).unwrap(), (true, true));
+    }
+
+    /// The obfuscation and the VLESS user ID change with the key, and the
+    /// offers give the next ones beside the next key.
+    #[test]
+    fn rotates_the_hubs_settings() {
+        let mut st = State::new("g").unwrap();
+        st.is_hub = true;
+        st.obfuscation = Some(new_obfuscation().unwrap());
+        let vless = serde_json::json!({
+            "transport": "xhttp",
+            "endpoint": "192.0.2.7:443",
+            "server_name": "cbb.example.org",
+            "path": "/AbC-12_xyz0123456/a-group-of-its-own",
+            "id": "6f1c2b9e-3d4a-4f5b-8c7d-0e1f2a3b4c5d",
+        });
+        st.forwarder = Some(Forwarder {
+            endpoint: "192.0.2.7:8764".parse().unwrap(),
+            pin: String::new(),
+            vless_id: "6f1c2b9e-3d4a-4f5b-8c7d-0e1f2a3b4c5d".into(),
+            vless: Some(vless.clone()),
+            project: false,
+        });
+        assert_eq!(st.rotate("p1", 0, 10).unwrap(), (true, false));
+        let (obf, id) = (st.next_obfuscation().unwrap(), st.next_vless_id.clone());
+        assert!(Some(&obf) != st.obfuscation.as_ref() && cbb_core::vless::parse_id(&id).is_ok());
+        let nv = st.next_vless().unwrap();
+        assert_eq!(
+            (nv["id"].as_str(), nv["path"].as_str()),
+            (Some(id.as_str()), Some(format!("/AbC-12_xyz0123456/{}", cbb_core::vless::group_path(&id)).as_str()))
+        );
         assert_eq!(st.rotate("p1", 10, 10).unwrap(), (true, true));
-        assert_eq!((public_of(&st.serving), st.serving_for.as_str(), st.next.is_empty()), (next, "p1", true));
-        assert_eq!(st.rotate("p1", 20, 10).unwrap(), (false, false));
-        assert_eq!(st.rotate("p2", 20, 10).unwrap(), (true, false));
-        assert_eq!((st.next_for.as_str(), st.next_at_ms, st.serving_for.as_str()), ("p2", 30, "p1"));
+        let f = st.forwarder.as_ref().unwrap();
+        assert_eq!(
+            (st.obfuscation.as_ref(), f.vless_id.as_str(), f.vless.as_ref()),
+            (Some(&obf), id.as_str(), Some(&nv))
+        );
+        assert!(
+            st.next_obfuscation().is_some_and(|o| o != obf) && !st.next_vless_id.is_empty() && st.next_vless_id != id
+        );
+        // Turned off, the next ones go too; the forwarder without VLESS too.
+        st.obfuscation = None;
+        st.forwarder.as_mut().unwrap().vless_id.clear();
+        assert_eq!(st.rotate("p1", 11, 10).unwrap(), (true, false));
+        assert!(st.next_obfuscation.is_none() && st.next_vless_id.is_empty() && st.next_vless().is_none());
+        assert_eq!(st.rotate("p2", 30, 10).unwrap(), (true, true));
+        assert!(st.obfuscation.is_none() && st.forwarder.as_ref().unwrap().vless_id.is_empty());
+        st.clear_periods();
+        assert!(st.next.is_empty() && st.serving_for.is_empty());
     }
 
     #[test]
@@ -1757,6 +1911,37 @@ mod tests {
         assert!(tried[1].next.is_empty());
         let bad = r#"{"hub_key":"AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=","psk":"AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=","next_key":"AQE="}"#;
         assert!(hub_from_offer(&id, &serde_json::from_str(bad).unwrap()).is_err());
+        // With the obfuscation and the way over VLESS that go with the next
+        // key, which the try with that key takes; without them, the same.
+        let vless = |id: &str| {
+            serde_json::json!({"transport": "xhttp", "endpoint": "192.0.2.7:443", "server_name": "cbb.example.org",
+                "path": format!("/AbC-12_xyz0123456/{}", cbb_core::vless::group_path(id)), "id": id})
+        };
+        let (o1, o2) = (new_obfuscation().unwrap(), new_obfuscation().unwrap());
+        let (v1, v2) = (vless("6f1c2b9e-3d4a-4f5b-8c7d-0e1f2a3b4c5d"), vless("0b6e7f10-2a3b-4c5d-9e8f-112233445566"));
+        let mut o: TunnelOffer = serde_json::from_str(next).unwrap();
+        (o.obfuscation, o.vless, o.next_obfuscation, o.next_vless) =
+            (Some(o1.clone()), Some(v1.clone()), Some(o2.clone()), Some(v2.clone()));
+        let wire = serde_json::to_value(&o).unwrap();
+        assert_eq!((&wire["next_obfuscation"], &wire["next_vless"]), (&o2, &v2));
+        st.hubs = vec![hub_from_offer(&id, &o).unwrap()];
+        let tried = st.hubs_to_try(&[id.to_string()]);
+        assert_eq!((tried[0].obfuscation.as_ref(), tried[0].vless.as_ref()), (Some(&o1), Some(&v1)));
+        assert_eq!((tried[1].obfuscation.as_ref(), tried[1].vless.as_ref()), (Some(&o2), Some(&v2)));
+        assert!(tried[1].next_obfuscation.is_none() && tried[1].next_vless.is_none());
+        let mut half = o.clone();
+        half.next_vless = None;
+        st.hubs = vec![hub_from_offer(&id, &half).unwrap()];
+        assert_eq!(st.hubs_to_try(&[id.to_string()])[1].vless.as_ref(), Some(&v1), "an older hub's");
+        for bad in [
+            TunnelOffer { next_key: Vec::new(), ..o.clone() },
+            TunnelOffer { obfuscation: None, ..o.clone() },
+            TunnelOffer { vless: None, ..o.clone() },
+            TunnelOffer { next_vless: Some(serde_json::json!({"transport": "grpc"})), ..o.clone() },
+            TunnelOffer { next_obfuscation: Some(serde_json::json!({"jc": 99})), ..o.clone() },
+        ] {
+            assert!(hub_from_offer(&id, &bad).is_err(), "{bad:?}");
+        }
         // Keys of zeros and a port 0, which Go refuses too.
         let zero = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
         for bad in [
@@ -1858,6 +2043,7 @@ mod tests {
             next: vec![],
             obfuscation: None,
             vless: None,
+            ..Default::default()
         };
         let link = Link::start(&st, &hub, &me, Arc::new(|_: &str| {})).unwrap();
         link.set_endpoint(other.local_addr().unwrap());
@@ -1904,6 +2090,7 @@ mod tests {
             next: vec![],
             obfuscation: None,
             vless: None,
+            ..Default::default()
         };
         let link = Link::start(&st, &hub, &me, Arc::new(|_: &str| {})).unwrap();
         let (own, peer) = (addr(me.as_str()).unwrap(), addr(hub_dev).unwrap());

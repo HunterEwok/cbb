@@ -54,6 +54,24 @@ class AwayFromHomeTest {
         assertEquals(listOf(hub, hub), tried.map { it.first })
         assertArrayEquals(ByteArray(32) { 7 }, tried[1].second.hubKey)
         assertNull(tried[1].second.nextKey)
+        // With the obfuscation and the way over VLESS that go with the next key,
+        // which the try with that key takes; without them, the same.
+        val withBoth = Member.TunnelOffer(
+            offer.hubKey, offer.psk, offer.endpoints, """{"jc":4}""", """{"id":"a"}""", nextKey = ByteArray(32) { 7 },
+            nextObfuscation = """{"jc":5}""", nextVless = """{"id":"b"}""",
+        )
+        val both2 = AwayState(key).withOffer(hub, withBoth)
+        assertEquals(withBoth, AwayState.decode(both2.encode())!!.offer(hub))
+        val triedBoth = AwayFromHome.hubsToTry(listOf(hub), both2)
+        assertEquals(listOf("""{"jc":4}""", """{"id":"a"}"""), listOf(triedBoth[0].second.obfuscation, triedBoth[0].second.vless))
+        assertEquals(listOf("""{"jc":5}""", """{"id":"b"}"""), listOf(triedBoth[1].second.obfuscation, triedBoth[1].second.vless))
+        assertNull(triedBoth[1].second.nextVless)
+        val older = Member.TunnelOffer(offer.hubKey, offer.psk, offer.endpoints, """{"jc":4}""", """{"id":"a"}""", nextKey = ByteArray(32) { 7 })
+        assertEquals("""{"id":"a"}""", AwayFromHome.hubsToTry(listOf(hub), AwayState(key).withOffer(hub, older))[1].second.vless)
+        assertFalse(Member.TunnelOffer(offer.hubKey, offer.psk, offer.endpoints, """{"jc":4}""", nextObfuscation = """{"jc":5}""").isValid)
+        assertFalse(
+            Member.TunnelOffer(offer.hubKey, offer.psk, offer.endpoints, nextKey = ByteArray(32) { 7 }, nextVless = """{"id":"b"}""").isValid,
+        )
 
         // Another version, a cut file, a longer one and a bad offer are not states.
         val b = both.encode()

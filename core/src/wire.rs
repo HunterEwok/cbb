@@ -481,6 +481,14 @@ pub struct TunnelOffer {
     /// tries after `hub_key` (section 11, "The hub's key"); empty for none.
     #[serde(with = "b64", default, skip_serializing_if = "Vec::is_empty")]
     pub next_key: Vec<u8>,
+    /// The AmneziaWG settings the hub serves with together with `next_key`
+    /// (section 11, "The hub's key"); absent for the same as `obfuscation`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_obfuscation: Option<Value>,
+    /// The way to the hub's forwarder over VLESS with `next_key`: a new
+    /// user ID and the path made for it; absent for the same as `vless`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_vless: Option<Value>,
 }
 
 /// The roles a peer may claim.

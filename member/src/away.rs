@@ -473,7 +473,13 @@ impl Away {
                     }
                 }
                 if started.len() > 1 {
-                    let until = Instant::now() + KEYS_WAIT;
+                    // Each link goes through its ways in turn, so the one
+                    // that answers may answer only at its last way: over
+                    // VLESS after the hub's addresses, for one.
+                    let ways = tries.iter().map(|h| h.endpoints.len() + usize::from(h.vless.is_some())).max().unwrap_or(1);
+                    let until = Instant::now()
+                        + KEYS_WAIT
+                        + crate::tunnel::ENDPOINT_WAIT.saturating_mul(u32::try_from(ways.saturating_sub(1)).unwrap_or(u32::MAX));
                     while Instant::now() < until && !started.iter().any(|(_, l)| l.answered()) {
                         std::thread::sleep(Duration::from_millis(50));
                     }
