@@ -219,12 +219,29 @@ pub fn check_map(table: &Table, v: &Value<'_>) -> Result<(), Rule> {
             Some(x) => check_ty(f, x)?,
         }
     }
-    // The rules between fields of a map: AmneziaWG's junk sizes, and one
-    // age per claim in a Welcome (the claims' IDs rise).
+    // The rules between fields of a map: AmneziaWG's junk sizes, an
+    // offer's endpoint keys, and one age per claim in a Welcome (the
+    // claims' IDs rise).
     if core::ptr::eq(table, &tables::OBFUSCATION)
         && v.get(2).and_then(Value::as_uint) > v.get(3).and_then(Value::as_uint)
     {
         return Err(Rule::field("obfuscation/jmax"));
+    }
+    // An offer's endpoint keys each name one of its endpoints, once.
+    if core::ptr::eq(table, &tables::OFFER)
+        && let Some(keys) = v.get(9).and_then(Value::as_array)
+    {
+        let eps = v.get(2).and_then(Value::as_array).unwrap_or(&[]);
+        let named: alloc::vec::Vec<Option<&Value<'_>>> = keys.iter().map(|k| k.get(1)).collect();
+        let mut seen: alloc::vec::Vec<alloc::vec::Vec<u8>> = alloc::vec::Vec::new();
+        for n in named {
+            let Some(n) = n else { return Err(Rule::field("offer/endpoint-keys")) };
+            let e = n.encode();
+            if !eps.iter().any(|x| x.encode() == e) || seen.contains(&e) {
+                return Err(Rule::field("offer/endpoint-keys"));
+            }
+            seen.push(e);
+        }
     }
     if core::ptr::eq(table, &tables::WELCOME)
         && let Some(a) = v.get(3).and_then(Value::as_array)

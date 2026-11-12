@@ -23,7 +23,8 @@
 //!   a second knock of the same counts as an attempt. The invitation is
 //!   the one of the guest path the joiner came by, as the holder knows it;
 //!   an Info that names another is refused. From the home network, where
-//!   no guest path tells it, at most 2 requests in all.
+//!   no guest path tells it, one request per source address and at most 8
+//!   in all, the oldest giving way.
 
 use alloc::vec::Vec;
 
@@ -42,9 +43,20 @@ pub const MAX_REQUESTS: usize = 16;
 /// The most requests of one invitation: whoever holds one invitation
 /// cannot take the places of the others.
 pub const MAX_PER_INVITATION: usize = 2;
-/// The most requests whose invitation only the joiner names (from the home
-/// network, where no guest path tells it).
-pub const MAX_UNVOUCHED: usize = 2;
+/// The most requests from the home network, where no guest path tells the
+/// invitation: one per source address, the oldest giving way.
+pub const MAX_HOME: usize = 8;
+
+/// How a joiner reached the holder.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Came {
+    /// By a guest or bypass path: the invitation of that path, as the
+    /// holder knows it (the `guest` message that opened the path), not as
+    /// the joiner names it.
+    Path([u8; 16]),
+    /// From the home network, from this source address.
+    Home(core::net::IpAddr),
+}
 
 pub const RULE_WAITING: Rule = Rule::field("waiting/requests");
 pub const RULE_DISMISS: Rule = Rule::field("dismiss/invite");
@@ -62,9 +74,9 @@ pub struct Request {
     /// When the holder drops it.
     pub until_ms: u64,
     pub attempts: u8,
-    /// The holder knows the invitation from the guest path the joiner came
-    /// by, not only from the joiner's word.
-    pub vouched: bool,
+    /// How it came: by a path (the holder knows the invitation) or from
+    /// home (only the joiner names it).
+    pub came: Came,
 }
 
 /// One request, as an admin reads it.
@@ -118,41 +130,62 @@ pub struct Held {
 }
 
 impl Held {
-    /// A joiner knocked at `now_ms` from `network`. `path` is the
-    /// invitation of the guest path it came by, as the holder knows it (the
-    /// `guest` message that opened the path), not as the joiner names it;
-    /// None from the home network, where no guest path tells the
-    /// invitation. `expires_ms` is when that path ends. Returns whether the
-    /// request is kept.
+    /// A joiner knocked at `now_ms` from `network`, by the way `came`.
+    /// `expires_ms` is when that way ends. Returns whether the request is
+    /// kept.
     pub fn knock(
         &mut self,
         key: &[u8],
         info: Info,
         network: Network,
-        path: Option<[u8; 16]>,
+        came: Came,
         now_ms: u64,
         expires_ms: u64,
     ) -> bool {
         self.drop_old(now_ms);
         let Some(invite) = info.invite else { return false };
-        if path.is_some_and(|p| p != invite) || now_ms >= expires_ms {
+        if matches!(came, Came::Path(p) if p != invite) || now_ms >= expires_ms {
             return false;
         }
         if let Some(r) = self.requests.iter_mut().find(|r| r.invite == invite && r.key == key) {
             r.attempts = r.attempts.saturating_add(1);
             r.info = info;
             r.network = network;
+            r.came = came;
             return true;
         }
-        let full = self.requests.len() >= MAX_REQUESTS
-            || match path {
-                Some(_) => {
-                    self.requests.iter().filter(|r| r.vouched && r.invite == invite).count() >= MAX_PER_INVITATION
+        match came {
+            Came::Path(_) => {
+                if self.requests.len() >= MAX_REQUESTS
+                    || self.requests.iter().filter(|r| r.came == came).count() >= MAX_PER_INVITATION
+                {
+                    return false;
                 }
-                None => self.requests.iter().filter(|r| !r.vouched).count() >= MAX_UNVOUCHED,
-            };
-        if full {
-            return false;
+            }
+            Came::Home(_) => {
+                // One place per source address, MAX_HOME in all: the
+                // oldest gives way.
+                self.requests.retain(|r| r.came != came);
+                let home = |r: &Request| matches!(r.came, Came::Home(_));
+                while self.requests.iter().filter(|r| home(r)).count() >= MAX_HOME
+                    || (self.requests.len() >= MAX_REQUESTS && self.requests.iter().any(home))
+                {
+                    let Some(i) = self
+                        .requests
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, r)| home(r))
+                        .min_by_key(|(_, r)| r.since_ms)
+                        .map(|(i, _)| i)
+                    else {
+                        break;
+                    };
+                    self.requests.remove(i);
+                }
+                if self.requests.len() >= MAX_REQUESTS {
+                    return false;
+                }
+            }
         }
         let until_ms = expires_ms.min(now_ms.saturating_add(MAX_WAIT_MS));
         self.requests.push(Request {
@@ -163,7 +196,7 @@ impl Held {
             since_ms: now_ms,
             until_ms,
             attempts: 1,
-            vouched: path.is_some(),
+            came,
         });
         true
     }

@@ -212,19 +212,55 @@ fn the_short_code_opens_its_commitment() {
         invitation: Invitation::new(Vec::new(), Profile::small_device()),
         name: "kettle".into(),
         created_ms: 1,
-        expires_ms: 10,
+        expires_ms: 10_000_000,
         used: false,
         failures: 0,
         allowed_key: None,
+        attempt: None,
     };
-    let (nj, nm, e) = ([7; 32], [8; 32], [9; 32]);
-    let c = invitation::code_commitment(&nj);
-    // The member shows what the joiner shows once the nonce opens.
-    assert_eq!(open.short_code(&e, &c, &nj, &nm), Ok(invitation::short_code(&e, &nj, &nm)));
+    let e = [9u8; 32];
+    // One attempt to the end: both ends show one code, and the Welcome
+    // takes back the count.
+    assert_eq!(open.begin(Network::Home, 100), Ok(()));
+    let (joiner, c) = invitation::JoinerCode::new();
+    let nm = open.reply(c, 110).unwrap();
+    assert_eq!(open.failures, 1, "counted once the member replied");
+    let (code, nj) = joiner.open(&e, &nm);
+    assert_eq!(code.len(), 6);
+    assert_eq!(open.short_code(&e, &nj, 120), Ok(code.clone()));
+    open.end(true);
     assert_eq!(open.failures, 0);
-    // Another nonce than the committed one ends the pairing as a failed attempt.
-    assert_eq!(open.short_code(&e, &c, &[6; 32], &nm), Err(PairError::WrongCode));
+
+    // Each session draws new nonces at both ends.
+    assert_eq!(open.begin(Network::Home, 200), Ok(()));
+    let (joiner2, c2) = invitation::JoinerCode::new();
+    assert_ne!(c2, c);
+    let nm2 = open.reply(c2, 210).unwrap();
+    assert_ne!(nm2, nm);
+    // A second attempt while one is in progress: busy.
+    assert_eq!(open.begin(Network::Home, 220), Err(PairError::Busy));
+    // Walking away after the reply counts as a failed attempt.
+    let (_, nj2) = joiner2.open(&e, &nm2);
+    open.end(false);
     assert_eq!(open.failures, 1);
+    assert_ne!(nj2, nj);
+
+    // Another nonce than the committed one ends the attempt, counted.
+    assert_eq!(open.begin(Network::Home, 300), Ok(()));
+    let (_, c3) = invitation::JoinerCode::new();
+    open.reply(c3, 310).unwrap();
+    assert_eq!(open.short_code(&e, &nj, 320), Err(PairError::WrongCode));
+    assert_eq!(open.failures, 2);
+    assert!(open.attempt.is_none());
+
+    // An attempt that runs out of time frees the invitation; its count stays.
+    assert_eq!(open.begin(Network::Home, 400), Ok(()));
+    let (_, c4) = invitation::JoinerCode::new();
+    open.reply(c4, 410).unwrap();
+    assert_eq!(open.begin(Network::Home, 400 + invitation::ATTEMPT_MS - 1), Err(PairError::Busy));
+    assert_eq!(open.begin(Network::Home, 400 + invitation::ATTEMPT_MS), Err(PairError::TooMany));
+    assert_eq!(open.failures, invitation::MAX_FAILURES);
+
     // The first message commits to the nonce, the answer and the confirmation carry the nonces.
     for (t, rule) in [(64, "pair/start/commitment"), (65, "pair/reply/nonce"), (66, "pair/confirm/nonce")] {
         let table = crate::msg::tables::of(t).unwrap();
@@ -409,36 +445,47 @@ fn the_joiner_checks_its_welcome() {
     let tv = k("tv");
     let w = admit(&mut g, true, &tv, "tv");
     let group = format::DeviceId(g.gid.0);
-    let (_, st, _) = w.check(&group, &point(&k("laptop")), &point(&tv)).unwrap();
+    let (_, st, _) = w.check(&group, &point(&k("laptop")), &point(&tv), false).unwrap();
     assert!(st.device_by_key(&tv.hash).is_some());
 
     // Another group.
     assert_eq!(
-        w.check(&format::DeviceId([9; 16]), &point(&k("laptop")), &point(&tv)).err(),
+        w.check(&format::DeviceId([9; 16]), &point(&k("laptop")), &point(&tv), false).err(),
         Some(welcome::Refusal::OtherGroup)
     );
     // Not my record.
-    assert_eq!(w.check(&group, &point(&k("laptop")), &point(&k("someone"))).err(), Some(welcome::Refusal::NotAdmitted));
+    assert_eq!(
+        w.check(&group, &point(&k("laptop")), &point(&k("someone")), false).err(),
+        Some(welcome::Refusal::NotAdmitted)
+    );
     // An admitter other than the one who signed: the root phone did not sign this record.
-    assert_eq!(w.check(&group, &point(&k("phone")), &point(&tv)).err(), Some(welcome::Refusal::NotAdmitter));
+    assert_eq!(w.check(&group, &point(&k("phone")), &point(&tv), false).err(), Some(welcome::Refusal::NotAdmitter));
     // A stranger in the middle.
-    assert_eq!(w.check(&group, &point(&k("stranger")), &point(&tv)).err(), Some(welcome::Refusal::NotAdmitter));
+    assert_eq!(w.check(&group, &point(&k("stranger")), &point(&tv), false).err(), Some(welcome::Refusal::NotAdmitter));
 
     // A Welcome without the admitter's own record proves nothing.
     let mut cut = w.clone();
     cut.records.retain(|r| !matches!(&r.body().kind, Kind::Device(d) if d.key.hash() == k("laptop").hash));
-    assert!(cut.check(&group, &point(&k("laptop")), &point(&tv)).is_err());
+    assert!(cut.check(&group, &point(&k("laptop")), &point(&tv), false).is_err());
 
     // The root's path comes from the records: a Welcome under another root is another group.
     let mut other = w.clone();
     other.root = k("root 2").key.public.clone();
-    assert_eq!(other.check(&group, &point(&k("laptop")), &point(&tv)).err(), Some(welcome::Refusal::OtherGroup));
+    assert_eq!(other.check(&group, &point(&k("laptop")), &point(&tv), false).err(), Some(welcome::Refusal::OtherGroup));
 
     // By the root phone.
     let tab = k("tablet");
     let w = admit(&mut g, false, &tab, "tablet");
-    assert!(w.check(&group, &point(&k("phone")), &point(&tab)).is_ok());
-    assert_eq!(w.check(&group, &point(&k("laptop")), &point(&tab)).err(), Some(welcome::Refusal::NotAdmitter));
+    assert!(w.check(&group, &point(&k("phone")), &point(&tab), false).is_ok());
+    // A guarded leaf takes the root's own record only, not an admin's.
+    assert!(w.check(&group, &point(&k("phone")), &point(&tab), true).is_ok());
+    let by_admin = admit(&mut g, true, &k("lamp"), "lamp");
+    assert_eq!(
+        by_admin.check(&group, &point(&k("laptop")), &point(&k("lamp")), true).err(),
+        Some(welcome::Refusal::NotAdmitter)
+    );
+    assert!(by_admin.check(&group, &point(&k("laptop")), &point(&k("lamp")), false).is_ok());
+    assert_eq!(w.check(&group, &point(&k("laptop")), &point(&tab), false).err(), Some(welcome::Refusal::NotAdmitter));
 
     // The encoding reads back, with the claims the admitter counted.
     assert_eq!(Welcome::decode(&w.encode()).unwrap(), w);
@@ -453,10 +500,10 @@ fn the_joiner_checks_its_welcome() {
     assert!(ages.is_empty());
     assert_eq!(time, 1_793_000_000_000);
     // Counted claims and claim ages name only claims among the Welcome's records.
-    assert_eq!(back.check(&group, &point(&k("phone")), &point(&tab)).err(), Some(welcome::Refusal::Damaged));
+    assert_eq!(back.check(&group, &point(&k("phone")), &point(&tab), false).err(), Some(welcome::Refusal::Damaged));
     let mut aged = w.clone();
     aged.claim_ages = vec![(RecordId([1; 32]), 5)];
-    assert_eq!(aged.check(&group, &point(&k("phone")), &point(&tab)).err(), Some(welcome::Refusal::Damaged));
+    assert_eq!(aged.check(&group, &point(&k("phone")), &point(&tab), false).err(), Some(welcome::Refusal::Damaged));
     // A computer admin may not take the group over: the laptop admits a
     // pad, then claims the group, and its counted claim does not stand.
     let pad = k("pad");
@@ -468,7 +515,7 @@ fn the_joiner_checks_its_welcome() {
     let mut w = Welcome::build(&set, &st, &k("laptop").hash, &pad.hash, &BTreeMap::new(), 1_793_000_000_000);
     w.counted = vec![claim.id()];
     let back = Welcome::decode(&w.encode()).unwrap();
-    assert_eq!(back.check(&group, &point(&k("laptop")), &point(&pad)).err(), Some(welcome::Refusal::Takeover));
+    assert_eq!(back.check(&group, &point(&k("laptop")), &point(&pad), false).err(), Some(welcome::Refusal::Takeover));
 
     // The joiner takes the counted claims of an admitter that may take over
     // as its own: a second phone admits a slate, then claims the group.
@@ -497,11 +544,24 @@ fn the_joiner_checks_its_welcome() {
     let claim = g.rec(&k("phone 2 admin"), Kind::Claim { root: k("phone 2 root").key.clone(), seen });
     let set = g.set();
     let st = set.state(&BTreeMap::new());
+    // A claim that has not waited the root's delay by the Welcome's own
+    // ages is not taken as counted.
     let mut w = Welcome::build(&set, &st, &k("phone 2").hash, &slate.hash, &BTreeMap::new(), 1_793_000_000_000);
     w.counted = vec![claim.id()];
     let back = Welcome::decode(&w.encode()).unwrap();
-    let (set, _, _) = back.check(&group, &point(&k("phone 2")), &point(&slate)).unwrap();
+    assert_eq!(
+        back.check(&group, &point(&k("phone 2")), &point(&slate), false).err(),
+        Some(welcome::Refusal::Takeover)
+    );
+    // Once it waited, it is.
+    let held = BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]);
+    let mut w = Welcome::build(&set, &st, &k("phone 2").hash, &slate.hash, &held, 1_793_000_000_000);
+    w.counted = vec![claim.id()];
+    let back = Welcome::decode(&w.encode()).unwrap();
+    let (set, _, _) = back.check(&group, &point(&k("phone 2")), &point(&slate), false).unwrap();
     assert!(set.counted().contains(&claim.id()));
+    // A guarded leaf takes no claim its admitter counted.
+    assert_eq!(back.check(&group, &point(&k("phone 2")), &point(&slate), true).err(), Some(welcome::Refusal::Takeover));
 }
 
 #[test]
@@ -647,6 +707,7 @@ fn an_open_invitation() {
         used: false,
         failures: 0,
         allowed_key: None,
+        attempt: None,
     };
     assert_eq!(open.may_use(Network::Guest, 2000), Ok(()));
     assert_eq!(open.may_use(Network::Guest, 5000), Err(PairError::Expired), "the admitter checks the expiry");
@@ -672,16 +733,6 @@ fn an_open_invitation() {
     open.allowed_key = Some(fhash(&k("board")));
     assert_eq!(open.key_allowed(&fhash(&k("board"))), Some(true));
     assert_eq!(open.key_allowed(&fhash(&k("other board"))), Some(false));
-
-    // The short code: the same on both ends of one session, another for
-    // another session or either end's nonce.
-    let (nj, nm) = ([1; 32], [2; 32]);
-    let code = invitation::short_code(&[5; 32], &nj, &nm);
-    assert_eq!(code.len(), 6);
-    assert_eq!(code, invitation::short_code(&[5; 32], &nj, &nm));
-    assert_ne!(code, invitation::short_code(&[6; 32], &nj, &nm));
-    assert_ne!(code, invitation::short_code(&[5; 32], &[3; 32], &nm));
-    assert_ne!(code, invitation::short_code(&[5; 32], &nj, &[3; 32]));
 
     // The decision screen.
     let g = G::new();
@@ -742,16 +793,37 @@ fn a_request_waits_for_an_admin() {
     ask.invite = Some(inv);
     let mut held = Held::default();
     let (t0, day) = (1_000_000u64, waiting::MAX_WAIT_MS);
-    assert!(held.knock(&point(&joiner), ask.clone(), Network::Guest, Some(inv), t0, t0 + 3 * day));
-    assert!(held.knock(&point(&joiner), ask.clone(), Network::Guest, Some(inv), t0 + 60_000, t0 + 3 * day));
+    assert!(held.knock(&point(&joiner), ask.clone(), Network::Guest, waiting::Came::Path(inv), t0, t0 + 3 * day));
+    assert!(held.knock(
+        &point(&joiner),
+        ask.clone(),
+        Network::Guest,
+        waiting::Came::Path(inv),
+        t0 + 60_000,
+        t0 + 3 * day
+    ));
     assert_eq!(held.requests.len(), 1);
     assert_eq!(held.requests[0].attempts, 2);
     assert!(
-        !held.knock(&point(&joiner), info("no invite", ROLE_MEMBER), Network::Guest, Some(inv), t0, t0 + day),
+        !held.knock(
+            &point(&joiner),
+            info("no invite", ROLE_MEMBER),
+            Network::Guest,
+            waiting::Came::Path(inv),
+            t0,
+            t0 + day
+        ),
         "no invitation named"
     );
     assert!(
-        !Held::default().knock(&point(&k("late")), ask.clone(), Network::Guest, Some(inv), t0 + day, t0 + day),
+        !Held::default().knock(
+            &point(&k("late")),
+            ask.clone(),
+            Network::Guest,
+            waiting::Came::Path(inv),
+            t0 + day,
+            t0 + day
+        ),
         "past the guest path's expiry"
     );
 
@@ -767,14 +839,14 @@ fn a_request_waits_for_an_admin() {
     // At most a day, even when the guest path is good for longer.
     assert!(held.message(t0 + day).is_none(), "dropped after a day");
     // And not past the guest path.
-    assert!(held.knock(&point(&joiner), ask.clone(), Network::Guest, Some(inv), t0, t0 + 1000));
+    assert!(held.knock(&point(&joiner), ask.clone(), Network::Guest, waiting::Came::Path(inv), t0, t0 + 1000));
     assert!(held.message(t0 + 1000).is_none());
 
     // At most 16.
     for i in 0..20u8 {
         let mut a = ask.clone();
         a.invite = Some([i; 16]);
-        let kept = held.knock(&point(&joiner), a, Network::Bypass, Some([i; 16]), t0, t0 + day);
+        let kept = held.knock(&point(&joiner), a, Network::Bypass, waiting::Came::Path([i; 16]), t0, t0 + day);
         assert_eq!(kept, usize::from(i) < waiting::MAX_REQUESTS);
     }
 
@@ -783,8 +855,8 @@ fn a_request_waits_for_an_admin() {
     let mut a = ask.clone();
     a.invite = Some([1; 16]);
     held.requests.retain(|r| r.invite != [1; 16] && r.invite != [2; 16]);
-    assert!(held.knock(&point(&joiner), a.clone(), Network::Guest, Some([1; 16]), t0, t0 + day));
-    assert!(held.knock(&point(&other), a, Network::Guest, Some([1; 16]), t0, t0 + day));
+    assert!(held.knock(&point(&joiner), a.clone(), Network::Guest, waiting::Came::Path([1; 16]), t0, t0 + day));
+    assert!(held.knock(&point(&other), a, Network::Guest, waiting::Came::Path([1; 16]), t0, t0 + day));
     let (i, key) = waiting::read_dismiss(&waiting::dismiss_message(&[1; 16], Some(&fhash(&other)))).unwrap();
     held.dismiss(&i, key.as_ref());
     assert_eq!(held.requests.iter().filter(|r| r.invite == [1; 16]).count(), 1);
@@ -794,7 +866,7 @@ fn a_request_waits_for_an_admin() {
 
     // A request whose Info names another invitation than its own is refused.
     let mut h2 = Held::default();
-    assert!(h2.knock(&point(&joiner), ask.clone(), Network::Guest, Some(inv), t0, t0 + day));
+    assert!(h2.knock(&point(&joiner), ask.clone(), Network::Guest, waiting::Came::Path(inv), t0, t0 + day));
     h2.requests[0].invite = [6; 16];
     assert_eq!(waiting::read(&h2.message(t0).unwrap()), Err(waiting::RULE_WAITING));
 }
@@ -837,7 +909,7 @@ fn an_intro_is_checked_only_when_it_ends_in_its_sender() {
         assert!(lim.allow(ip("192.0.2.1"), 0));
     }
     assert!(!lim.allow(ip("192.0.2.1"), 1));
-    assert!(lim.allow(ip("192.0.3.1"), 1), "another network");
+    assert!(lim.allow(ip("192.0.2.2"), 1), "another address");
     assert!(lim.allow(ip("192.0.2.1"), intro::WINDOW_MS), "the next window");
 }
 
@@ -846,15 +918,21 @@ fn one_host_cannot_keep_intros_out() {
     use core::net::IpAddr;
     let ip = |t: &str| t.parse::<IpAddr>().unwrap();
     let mut lim = intro::Limiter::default();
-    // One host with a whole /64 counts as one network.
-    for i in 0..300u32 {
-        let a = alloc::format!("2001:db8:0:1::{i:x}");
-        assert_eq!(lim.allow(ip(&a), 0), i < intro::MAX_PER_WINDOW, "{a}");
+    // One host spends its own share, not its home's.
+    for _ in 0..intro::MAX_PER_WINDOW {
+        assert!(lim.allow(ip("192.168.1.7"), 0));
+        assert!(lim.allow(ip("2001:db8:0:1::7"), 0));
     }
+    assert!(!lim.allow(ip("192.168.1.7"), 0));
+    assert!(lim.allow(ip("192.168.1.8"), 0), "another device of the same home");
+    assert!(lim.allow(ip("2001:db8:0:1::8"), 0), "the same over IPv6");
+    // A host with a whole /64 spends the network's higher share, no more.
+    let mut lim = intro::Limiter::default();
+    let taken = (0..300u32).filter(|i| lim.allow(ip(&alloc::format!("2001:db8:0:1::{i:x}")), 0)).count();
+    assert_eq!(taken, usize::try_from(intro::MAX_PER_NETWORK).unwrap());
     // A full table gives way to a newcomer.
     for i in 0..intro::MAX_ADDRESSES {
-        let a = alloc::format!("2001:db8:{i:x}::1");
-        assert!(lim.allow(ip(&a), 1));
+        assert!(lim.allow(ip(&alloc::format!("2001:db8:{i:x}::1")), 1));
     }
     assert!(lim.allow(ip("2001:db9::5"), 2), "a new device's intro still checked");
 }
@@ -957,7 +1035,8 @@ fn one_invitation_takes_few_waiting_places() {
     for i in 0..waiting::MAX_REQUESTS {
         let mut a = info("x", ROLE_MEMBER);
         a.invite = Some([5; 16]);
-        let kept = held.knock(&point(&k(&format!("fresh {i}"))), a, Network::Guest, Some([5; 16]), t0, exp);
+        let kept =
+            held.knock(&point(&k(&format!("fresh {i}"))), a, Network::Guest, waiting::Came::Path([5; 16]), t0, exp);
         assert_eq!(kept, i < waiting::MAX_PER_INVITATION);
     }
     let mut real = info("kitchen tablet", ROLE_MEMBER);
@@ -967,17 +1046,44 @@ fn one_invitation_takes_few_waiting_places() {
     for i in 0..waiting::MAX_REQUESTS {
         let mut a = info("x", ROLE_MEMBER);
         a.invite = Some([u8::try_from(i).unwrap().wrapping_add(100); 16]);
-        assert!(!held.knock(&point(&k(&format!("named {i}"))), a, Network::Guest, Some([5; 16]), t0, exp));
+        assert!(!held.knock(
+            &point(&k(&format!("named {i}"))),
+            a,
+            Network::Guest,
+            waiting::Came::Path([5; 16]),
+            t0,
+            exp
+        ));
     }
-    // From home, where no guest path tells the invitation, a few in all.
-    for i in 0..waiting::MAX_REQUESTS {
+    // From home, where no guest path tells the invitation: one place per
+    // source address, a few in all, the oldest giving way.
+    let at = |n: u8| waiting::Came::Home(core::net::IpAddr::from([192, 168, 1, n]));
+    for i in 0..4u8 {
         let mut a = info("x", ROLE_MEMBER);
-        a.invite = Some([u8::try_from(i).unwrap().wrapping_add(100); 16]);
-        let kept = held.knock(&point(&k(&format!("home {i}"))), a, Network::Home, None, t0, exp);
-        assert_eq!(kept, i < waiting::MAX_UNVOUCHED);
+        a.invite = Some([i.wrapping_add(100); 16]);
+        assert!(held.knock(&point(&k(&format!("home {i}"))), a, Network::Home, at(7), t0 + u64::from(i), exp));
     }
+    let home = |h: &Held| h.requests.iter().filter(|r| matches!(r.came, waiting::Came::Home(_))).count();
+    assert_eq!(home(&held), 1, "one host at home holds one place");
+    for n in 0..20u8 {
+        let mut a = info("x", ROLE_MEMBER);
+        a.invite = Some([n.wrapping_add(150); 16]);
+        assert!(held.knock(
+            &point(&k(&format!("host {n}"))),
+            a,
+            Network::Home,
+            at(20 + n),
+            t0 + 10 + u64::from(n),
+            exp
+        ));
+    }
+    assert_eq!(home(&held), waiting::MAX_HOME);
+    let mut late = info("kitchen speaker", ROLE_MEMBER);
+    late.invite = Some([7; 16]);
+    assert!(held.knock(&point(&k("speaker")), late, Network::Home, at(99), t0 + 100, exp), "the newest gets a place");
+    assert!(held.requests.iter().any(|r| r.key == point(&k("speaker")).to_vec()));
     assert!(
-        held.knock(&point(&k("real tablet")), real, Network::Guest, Some([6; 16]), t0 + 1, exp),
+        held.knock(&point(&k("real tablet")), real, Network::Guest, waiting::Came::Path([6; 16]), t0 + 1, exp),
         "another invitation still has room"
     );
 }

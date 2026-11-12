@@ -8,8 +8,8 @@
 //! it from its own server secret and the face's tag ([`server_key`]), so
 //! the lists of key hashes two servers see share nothing either. Each face
 //! counts its credentials' versions from a random start and has an expiry
-//! of its own (the day the period ends, plus a random part of a day), so
-//! neither links two faces. What a server sees of one group is then
+//! of its own (a random part of a day before the period ends, never after
+//! it), so neither links two faces. What a server sees of one group is then
 //! unlinked from what another server sees of it, but for timing and
 //! addresses.
 
@@ -44,11 +44,15 @@ impl Face {
     }
 }
 
-/// A face's expiry for a period that ends at `ends_ms`: the end of that
-/// day, plus a random part of the next.
-pub fn expiry(ends_ms: u64) -> u64 {
-    let day_end = ends_ms.div_ceil(DAY_MS).saturating_mul(DAY_MS);
-    day_end.saturating_add(u64::from_be_bytes(crate::certs::random_bytes::<8>()) % DAY_MS)
+/// A face's expiry for a period from `starts_ms` to `ends_ms`: within the
+/// period, a random part of a day (at most the period's length) before its
+/// end, so two faces of one period differ and none outlives the period.
+pub fn expiry(starts_ms: u64, ends_ms: u64) -> u64 {
+    let span = ends_ms.saturating_sub(starts_ms).min(DAY_MS);
+    if span == 0 {
+        return ends_ms;
+    }
+    ends_ms.saturating_sub(u64::from_be_bytes(crate::certs::random_bytes::<8>()).checked_rem(span).unwrap_or(0))
 }
 
 /// HKDF's info for a server key, the face's tag and a counter after it.
@@ -111,13 +115,13 @@ pub fn distinct(faces: &BTreeMap<KeyHash, Face>) -> bool {
         && all_differ(faces.values().map(|f| f.expires_ms).collect())
 }
 
-/// A new face for a period that ends at `ends_ms`: a random tag; the
-/// caller makes a new period key and gives its point; this device's server
-/// key is derived for the tag; the versions start at a random number below
-/// 2^32, the expiry is the face's own ([`expiry`]).
-pub fn new_face(period_key: Vec<u8>, server_secret: &[u8; 32], ends_ms: u64) -> Face {
+/// A new face for a period from `starts_ms` to `ends_ms`: a random tag;
+/// the caller makes a new period key and gives its point; this device's
+/// server key is derived for the tag; the versions start at a random number
+/// below 2^32, the expiry is the face's own ([`expiry`]).
+pub fn new_face(period_key: Vec<u8>, server_secret: &[u8; 32], starts_ms: u64, ends_ms: u64) -> Face {
     let tag = crate::certs::random_bytes();
     let (_, server_key) = server_key(server_secret, &tag);
     let start = u64::from(u32::from_be_bytes(crate::certs::random_bytes::<4>())).saturating_add(1);
-    Face { tag, period_key, server_key, version: start, expires_ms: expiry(ends_ms) }
+    Face { tag, period_key, server_key, version: start, expires_ms: expiry(starts_ms, ends_ms) }
 }

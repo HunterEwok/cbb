@@ -71,9 +71,10 @@ pub enum Refusal {
     NotAdmitter,
     /// The Welcome is damaged.
     Damaged,
-    /// A takeover the admitter counted does not stand in the Welcome's own
-    /// records (its signer may not take over, its key is void, it was
-    /// cancelled), or counting it puts the joiner at odds with them.
+    /// A takeover the admitter counted is not in effect by the Welcome's own
+    /// records and ages (its signer may not take over, its key is void, it
+    /// was cancelled, it has not waited the root's delay), or counting it
+    /// puts the joiner at odds with them.
     Takeover,
 }
 
@@ -226,11 +227,15 @@ impl Welcome {
     /// (`ADb` 1), `admitter` the key the TLS handshake proved, `own` the
     /// joiner's member key. Returns the joiner's record set, its state and
     /// the claims' held times, which it keeps as its own (A-69).
+    ///
+    /// `guarded`: the joiner is a guarded leaf (A-50). It takes only a record
+    /// the root signed itself, and no claim its admitter counted.
     pub fn check(
         &self,
         group: &GroupId,
         admitter: &[u8; 65],
         own: &[u8; 65],
+        guarded: bool,
     ) -> Result<(RecordSet, State, BTreeMap<RecordId, u64>), Refusal> {
         let root = Key::es256(self.root.clone());
         if root.check().is_err() {
@@ -238,6 +243,9 @@ impl Welcome {
         }
         if root.device_id().0 != group.0 {
             return Err(Refusal::OtherGroup);
+        }
+        if guarded && !self.counted.is_empty() {
+            return Err(Refusal::Takeover);
         }
         // The counted claims and the claim ages name only claims among the
         // Welcome's records.
@@ -250,16 +258,13 @@ impl Welcome {
         set.insert_all(self.records.iter().cloned());
         let held: BTreeMap<RecordId, u64> = self.claim_ages.iter().copied().collect();
         // A takeover the admitter counted is final for the joiner too, once
-        // the records leave it at least waiting: its signer may take over,
-        // its key is not void, nobody cancelled it.
+        // the Welcome's records and its own ages put it in effect: its
+        // signer may take over, its key is not void, nobody cancelled it,
+        // and it waited the root's delay.
         if !self.counted.is_empty() {
             let plain = set.state(&held);
-            let stands = |id: &RecordId| {
-                plain
-                    .claims
-                    .iter()
-                    .any(|c| c.record == *id && matches!(c.state, ClaimState::Pending | ClaimState::Effective))
-            };
+            let stands =
+                |id: &RecordId| plain.claims.iter().any(|c| c.record == *id && c.state == ClaimState::Effective);
             if !self.counted.iter().all(stands) {
                 return Err(Refusal::Takeover);
             }
@@ -290,7 +295,7 @@ impl Welcome {
         }
         let by_root = state.is_root(&signer) && state.root_device == Some(adm.id);
         let by_admin = adm.admin == Some(signer) && adm.powers & POWER_ADMIT != 0;
-        if !(by_root || by_admin) {
+        if !(by_root || by_admin) || (guarded && !by_root) {
             return Err(Refusal::NotAdmitter);
         }
         Ok((set, state, held))

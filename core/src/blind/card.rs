@@ -169,13 +169,19 @@ impl Card {
     }
 }
 
-/// `host:port`: an IP address with its port (an `addr`), or a DNS name
-/// (lower-case letters, digits, hyphens and dots, at most 253 bytes, its
-/// last label neither all digits nor starting with `0x`, so no resolver
-/// reads it as a number) with its port.
+/// `host:port`: an IP address with its port (an `addr`, not loopback, link
+/// local or multicast), or a DNS name (lower-case letters, digits, hyphens
+/// and dots, at most 253 bytes, no label starting or ending with a hyphen,
+/// its last label neither all digits nor starting with `0x`, so no resolver
+/// reads it as a number, nor `localhost`) with its port.
 fn valid_endpoint(t: &str) -> bool {
-    if t.parse::<core::net::SocketAddr>().is_ok() {
-        return crate::msg::valid_addr(t);
+    if let Ok(a) = t.parse::<core::net::SocketAddr>() {
+        let ip = a.ip();
+        let local = match ip {
+            core::net::IpAddr::V4(v4) => v4.is_loopback() || v4.is_link_local() || v4.is_multicast(),
+            core::net::IpAddr::V6(v6) => v6.is_loopback() || v6.is_unicast_link_local() || v6.is_multicast(),
+        };
+        return !local && crate::msg::valid_addr(t);
     }
     let Some((host, port)) = t.rsplit_once(':') else { return false };
     let last = host.rsplit('.').next().unwrap_or_default();
@@ -185,10 +191,12 @@ fn valid_endpoint(t: &str) -> bool {
         && host.len() <= 253
         && !last.bytes().all(|b| b.is_ascii_digit())
         && !last.starts_with("0x")
+        && last != "localhost"
         && host.split('.').all(|l| {
             !l.is_empty()
                 && l.len() <= 63
                 && l.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
                 && !l.starts_with('-')
+                && !l.ends_with('-')
         })
 }
