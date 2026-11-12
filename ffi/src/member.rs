@@ -165,9 +165,10 @@ struct CommandArgs {
 }
 
 /// What cbb_member_manage does: `action` is remove, rename, thaw,
-/// make_admin (as the root, for a computer connected), mute or unmute, for
-/// `device`; renew, which renews every certificate due; or resolve, the
-/// root's decision on an alert, which voids its `records`.
+/// make_admin (as the root, for a computer connected), mute, unmute,
+/// paste or paste_off, for `device`; renew, which renews every
+/// certificate due; or resolve, the root's decision on an alert, which
+/// voids its `records`.
 #[derive(Deserialize)]
 struct ManageArgs {
     action: String,
@@ -189,6 +190,20 @@ struct ManageArgs {
     /// With mute: how long, 0 for until an unmute.
     #[serde(default)]
     for_ms: i64,
+    /// With paste: `paste` (by the clipboard) or `type` (key by key).
+    #[serde(default)]
+    method: String,
+    /// With paste: `text`, `secret` (no trace in the device's log or
+    /// clipboard) or `media` (the group's copy of images or files whose ID
+    /// is `text`, made just before with copy_media).
+    #[serde(default)]
+    kind: String,
+    /// With paste: the text, or the media copy's ID.
+    #[serde(default)]
+    text: String,
+    /// With paste: press Enter after it.
+    #[serde(default)]
+    enter: bool,
     /// The public point of the key that signs, SEC1 uncompressed: the
     /// phone's admin key, or the root's key when it holds the root.
     #[serde(with = "certs::b64")]
@@ -996,6 +1011,8 @@ impl Member {
                 "unmute" => return order(Order::Unmute),
                 "sync_on" => return order(Order::Sync(true)),
                 "sync_off" => return order(Order::Sync(false)),
+                "paste" => return order(paste_order(&a)?),
+                "paste_off" => return order(Order::PasteOff),
                 other => return Err(Error::msg(format!("there is no action {other:?}"))),
             }
             Ok(json!({}))
@@ -1012,6 +1029,27 @@ impl Member {
     pub fn invite(&self, request: &[u8], sign: SignFn, ctx: usize) -> (Option<crate::invite::Invite>, Vec<u8>) {
         crate::invite::Invite::new(self.node.clone(), request, sign, ctx)
     }
+}
+
+/// The paste order of a manage request, as `cbb paste -on` makes it: a
+/// text cleaned of what may not go in (and refused when nothing is left),
+/// or a media copy's ID, which is pasted, never typed.
+fn paste_order(a: &ManageArgs) -> Result<Order> {
+    let mode = if a.method.is_empty() { "paste" } else { a.method.as_str() };
+    if mode != "paste" && mode != "type" {
+        return Err(Error::msg(format!("a paste is pasted or typed, not {mode:?}")));
+    }
+    let kind = if a.kind.is_empty() { "text" } else { a.kind.as_str() };
+    let text = match kind {
+        "text" | "secret" => phone::clean_paste(&a.text),
+        "media" if mode == "paste" => a.text.clone(),
+        "media" => return Err(Error::msg("images and files are pasted, not typed")),
+        other => return Err(Error::msg(format!("a paste is a text, a secret or media, not {other:?}"))),
+    };
+    if text.is_empty() {
+        return Err(Error::msg("nothing to paste: the text is empty or only control characters"));
+    }
+    Ok(Order::Paste { mode: mode.into(), kind: kind.into(), text, enter: a.enter })
 }
 
 /// Every device of the group as the app shows it: the same devices, in the
@@ -1042,4 +1080,38 @@ fn devices_of(n: &cbb_member::phone::Member) -> Vec<cbb_member::control::Device>
             ..Default::default()
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn request(method: &str, kind: &str, text: &str) -> ManageArgs {
+        serde_json::from_value(json!({
+            "action": "paste", "device": "pc", "public": "", "method": method, "kind": kind, "text": text, "enter": true,
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn paste_orders() {
+        let o = paste_order(&request("", "", "ls\u{1b}[2J\r\n")).unwrap();
+        assert!(
+            matches!(&o, Order::Paste { mode, kind, text, enter: true } if mode == "paste" && kind == "text" && text == "ls\n"),
+            "a text is cleaned"
+        );
+        let o = paste_order(&request("type", "secret", "pin")).unwrap();
+        assert!(matches!(&o, Order::Paste { mode, kind, .. } if mode == "type" && kind == "secret"));
+        let o = paste_order(&request("paste", "media", "copy-id")).unwrap();
+        assert!(matches!(&o, Order::Paste { kind, text, .. } if kind == "media" && text == "copy-id"));
+        for (method, kind, text) in [
+            ("type", "media", "copy-id"),
+            ("say", "text", "hi"),
+            ("paste", "file", "hi"),
+            ("paste", "text", "\u{7}\u{1b}[0m"),
+            ("paste", "media", ""),
+        ] {
+            assert!(paste_order(&request(method, kind, text)).is_err(), "{method} {kind} {text:?} is refused");
+        }
+    }
 }

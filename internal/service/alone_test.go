@@ -2084,7 +2084,7 @@ func TestFFIPhoneRemoves(t *testing.T) {
 		joinedIdentity(t, s, admitted)
 		return s, admitted
 	}
-	pc, _ := admit("pc")
+	pc, pcID := admit("pc")
 	second, id := admit("second")
 	call := func(req string) string {
 		fmt.Fprintln(in, "CALL "+req)
@@ -2098,6 +2098,18 @@ func TestFFIPhoneRemoves(t *testing.T) {
 	manage := func(req string) string {
 		fmt.Fprintln(in, "MANAGE "+req)
 		return next("MANAGED ")
+	}
+	// A remote paste the root phone signs (the HarmonyOS and Aurora apps'
+	// paste): the computer refuses it while its user has not turned remote
+	// paste on, and takes the order to turn it off.
+	if got := manage(`{"action":"paste","device":"` + pcID + `","method":"type","text":"hello","enter":true}`); !strings.Contains(got, `"status":"refused"`) || !strings.Contains(got, "remote paste is off") {
+		t.Fatalf("a paste on a computer with remote paste off: %s", got)
+	}
+	if got := manage(`{"action":"paste","device":"` + pcID + `","text":"\u001b[2J"}`); !strings.Contains(got, "nothing to paste") {
+		t.Fatalf("a paste of only control characters: %s", got)
+	}
+	if got := manage(`{"action":"paste_off","device":"` + pcID + `"}`); !strings.Contains(got, `"status":"done"`) {
+		t.Fatalf("turning remote paste off on the computer: %s", got)
 	}
 	if got := manage(`{"action":"rename","device":"` + id + `","name":"bench-second"}`); got != `{"ok":{}}` {
 		t.Fatalf("renaming the computer: %s", got)

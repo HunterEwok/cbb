@@ -34,6 +34,9 @@ use crate::error::{Error, Result};
 pub use crate::inviter::Invite;
 use crate::node::{KeepIdentity, Node, OnCommand, OnMessage, OnPeer, OnTunnel, Peer, Presence, WriteReq};
 use crate::records::{Record, Records, Stored as _};
+/// A remote paste's text as it may go in, as the computers clean it, for
+/// the paste commands the phone signs.
+pub use crate::remotepaste::clean as clean_paste;
 pub use crate::window::{CONFIRM_WAIT, Confirm, Joined};
 use crate::{discovery, mute, service, uptime};
 use cbb_core::media::Part;

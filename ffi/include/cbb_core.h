@@ -125,9 +125,11 @@ void cbb_member_stop(cbb_member *m);
  * the key public names (the phone's admin key, or the root's key with no
  * admin_ca) through sign, called during this call only (src/member.rs,
  * manage): request is {"action","device","name","for_ms","allow_file_key",
- * "records","public","admin_ca","timeout_ms"}, action remove, rename, thaw,
- * make_admin (the root, for a computer connected), mute, unmute, sync_on,
- * sync_off (the device's house, a mode command), renew (every
+ * "records","public","admin_ca","timeout_ms","method","kind","text","enter"},
+ * action remove, rename, thaw, make_admin (the root, for a computer
+ * connected), mute, unmute, sync_on, sync_off (the device's house, a mode
+ * command), paste (method paste or type, kind text, secret or media: text is
+ * then a copy_media copy's ID), paste_off, renew (every
  * member certificate due, and as the root every admin CA from an earlier root;
  * no device) or resolve (the root voids the records an alert of the member's
  * alerts op names); the answer {}, {"result"} for a command, or {"renewed":

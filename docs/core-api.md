@@ -225,7 +225,10 @@ device, its admin key among them; not the phone itself, nor the root's phone, wh
 over instead), a new name (a device record like its newest; an admin renames only a device the
 root did not record, since a root's record beats an admin's), a thaw of a frozen admin, which
 the member adds to its records and sends to the group, or a mute, an unmute or a turn of the
-device's sync (`sync_on`, `sync_off`: a `mode` command, shared or own), a command sealed
+device's sync (`sync_on`, `sync_off`: a `mode` command, shared or own), a remote paste
+(`paste`: `method` `paste` or `type`, `kind` `text`, `secret` or `media`, `text` cleaned as
+`cbb paste -on` cleans it, or the ID of the media copy `copy_media` made just before, and
+`enter`) or `paste_off`, a command sealed
 to the device's key when its record names one, which the member sends and whose result it
 answers. As the root it makes a connected computer an admin (`make_admin`: an admin CA for the
 admin key its hello offers, its device record again, and the admin message), and as any admin it
