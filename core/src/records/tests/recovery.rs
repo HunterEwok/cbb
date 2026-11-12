@@ -35,7 +35,7 @@ fn write(g: &mut G, from: &[Record], new_root: &K, member: &K, remove: &[KeyHash
 /// A head at seq of the recovery key naming root, with prev and list as
 /// given, whatever the chain holds.
 fn head_at(g: &G, seq: u64, prev: Option<RecordId>, root: &K, list: [u8; 32]) -> Record {
-    let body = Body { seq, prev, ..g.body(&k("recovery"), Kind::Recovery { root: root.key.clone(), list }) };
+    let body = Body { seq, prev, ..g.body(&k("recovery"), Kind::Recovery { root: root.key.clone(), list, from: 0 }) };
     Record::sign(body, &k("recovery")).unwrap()
 }
 
@@ -104,7 +104,7 @@ fn a_head_the_device_cannot_read_stops_it_until_it_is_updated() {
     let mut g = base();
     let list = g.listing();
     g.change(&k("n1"), &list);
-    let later = raw(&g, &k("recovery"), Kind::Recovery { root: k("n2").key.clone(), list: [5; 32] }, |m| {
+    let later = raw(&g, &k("recovery"), Kind::Recovery { root: k("n2").key.clone(), list: [5; 32], from: 0 }, |m| {
         m.push((99, crate::format::cbor::Value::Uint(1)))
     })
     .unwrap();
@@ -266,7 +266,7 @@ fn lists_naming_nothing_everything_or_ids_nobody_holds() {
     let mut g = base();
     let junk = vec![0xff, 0x00, 0x01];
     let h = list_hash(&junk);
-    g.rec(&k("recovery"), Kind::Recovery { root: k("n1").key.clone(), list: h });
+    g.rec(&k("recovery"), Kind::Recovery { root: k("n1").key.clone(), list: h, from: 0 });
     g.lists.push(junk.clone());
     let s = g.state();
     assert_eq!(s.roots.len(), 2);
@@ -320,7 +320,7 @@ fn at_most_sixteen_heads() {
     let body = Body {
         seq: 17,
         prev: Some(tip),
-        ..g.body(&k("recovery"), Kind::Recovery { root: k("n17").key, list: [1; 32] })
+        ..g.body(&k("recovery"), Kind::Recovery { root: k("n17").key, list: [1; 32], from: 0 })
     };
     assert!(Record::sign(body.clone(), &k("recovery")).is_err());
     let set = set_with(&g.root.key, &g.recs, &g.lists);
@@ -350,7 +350,90 @@ fn an_admin_key_named_as_the_root() {
     assert!(s.may_command(&k("admin a").hash));
 }
 
-/// The new root's first checkpoint closes the list: a listed record that
+/// A head that names a key that signed before carries `from`, the seq its
+/// records as the root start at: its records below it count only if the
+/// list names them, those from it on count as the root's.
+#[test]
+fn a_head_names_where_the_new_roots_records_start() {
+    let mut g = base();
+    g.admin(&k("phone a"), &k("admin a"), POWER_ADMIT);
+    g.device(&k("admin a"), &k("lamp"), "lamp", |_| {});
+    let kept = g.device(&k("admin a"), &k("bulb"), "bulb", |_| {});
+    let (seq, _) = g.heads[&k("admin a").hash];
+    let mut list = g.listing();
+    list.push(kept.id());
+    g.change_from(&k("admin a"), &list, seq + 1);
+    let after = g.device(&k("admin a"), &k("kettle"), "kettle", |_| {});
+    assert_eq!(after.body().seq, seq + 1);
+    let s = members_agree(&g);
+    assert_eq!(s.roots.last(), Some(&k("admin a").hash));
+    assert!(!has(&s, &k("lamp")), "below from, not listed");
+    assert!(has(&s, &k("bulb")), "below from, listed");
+    assert!(has(&s, &k("kettle")), "from on, the root's own");
+    // Written as 0 it is the default, and refused; above a seq, refused.
+    let r = raw(&g, &k("recovery"), Kind::Recovery { root: k("n9").key.clone(), list: [1; 32], from: 0 }, |m| {
+        m.push((12, crate::format::cbor::Value::Uint(0)))
+    });
+    assert_eq!(r.map(|_| ()).unwrap_err(), Rule::new("form/default"));
+    let body = g.body(&k("recovery"), Kind::Recovery { root: k("n9").key.clone(), list: [1; 32], from: MAX_SEQ + 1 });
+    assert!(body.check().unwrap_err().is("records/recovery/from"));
+}
+
+/// The writer signs the new root's first checkpoint with the head, so the
+/// old root's checkpoint's pruning never lapses: a member that compacted
+/// under the old checkpoint and one that did not end equal, in both
+/// orders the records come.
+#[test]
+fn members_that_did_and_did_not_compact_end_equal() {
+    let mut g = base();
+    g.admin(&k("phone a"), &k("admin a"), POWER_ADMIT);
+    let pruned = g.device(&k("admin a"), &k("lamp"), "lamp", |_| {});
+    let stays = g.device(&k("admin a"), &k("bulb"), "bulb", |_| {});
+    let a = k("admin a");
+    let (aseq, aid) = g.heads[&a.hash];
+    let root = k("root");
+    let (rseq, rid) = g.heads[&root.hash];
+    let mut keep: Vec<RecordId> =
+        g.recs.iter().filter(|r| r.body().signer == root.hash && r.id() != rid).map(Record::id).collect();
+    keep.retain(|id| *id != stays.id());
+    keep.push(stays.id());
+    keep.sort();
+    let mut heads = vec![Head { key: a.hash, seq: aseq, id: aid }, Head { key: root.hash, seq: rseq, id: rid }];
+    heads.sort();
+    g.root_rec(Kind::Checkpoint { heads, keep });
+    let before = g.state();
+    assert!(!has(&before, &k("lamp")) && has(&before, &k("bulb")));
+    let old = g.recs.clone();
+    let w = write(&mut g, &old, &k("n1"), &k("new phone"), &[]);
+    assert!(
+        matches!(&w.first.last().unwrap().body().kind, Kind::Checkpoint { heads, .. } if heads.iter().any(|h| h.key == a.hash))
+    );
+    let want = g.state();
+    assert!(!has(&want, &k("lamp")) && has(&want, &k("bulb")));
+    let new: Vec<Record> = g.recs[old.len()..].to_vec();
+    for order in 0..2 {
+        // One member compacted under the old checkpoint, one did not.
+        let mut compacted = set_of(&g.root.key);
+        sync_all(&mut compacted, &old, &[]);
+        assert!(compacted.get(&pruned.id()).is_none());
+        let mut plain = set_of(&g.root.key);
+        plain.insert_all(old.clone());
+        assert!(plain.get(&pruned.id()).is_some());
+        let mut rest = new.clone();
+        if order == 1 {
+            rest.reverse();
+        }
+        for m in [&mut compacted, &mut plain] {
+            sync_all(m, &rest, &g.lists);
+        }
+        let strip = |s: &State| State { ignored: Vec::new(), ..s.clone() };
+        assert_eq!(strip(&compacted.state()), strip(&want), "order {order}");
+        assert_eq!(strip(&plain.state()), strip(&want), "order {order}");
+        assert_eq!(compacted.digest(), plain.digest(), "order {order}");
+    }
+}
+
+/// A checkpoint of the new root closes the list: a listed record that
 /// arrives after it does not count, and nobody asks for it.
 #[test]
 fn the_new_roots_first_checkpoint_closes_the_list() {
@@ -504,4 +587,23 @@ fn the_retired_types_and_power_refuse() {
         Kind::device(d)
     });
     assert!(body.check().unwrap_err().is("records/device/powers"));
+}
+
+/// A fetch proof has its own label: the recovery key's signature for a
+/// fetch does not make a head, nor a head's signature a fetch proof.
+#[test]
+fn a_fetch_proof_and_a_head_are_not_one_signature() {
+    let g = base();
+    let head = head_at(&g, 1, None, &k("root 2"), List(g.listing()).hash());
+    let body = head.body_bytes().to_vec();
+    let fetch = crate::records::sign_fetch(&k("recovery"), &body).unwrap();
+    assert_eq!(crate::records::verify_fetch(&rk(), &body, &fetch), Ok(()));
+    // The fetch signature on the head's body is not the head.
+    let forged = Record::decode(&crate::format::envelope::write(&body, &fetch, None)).unwrap();
+    assert!(forged.verify(&rk()).is_err());
+    let mut set = set_of(&g.root.key);
+    assert!(set.insert(forged).is_err());
+    // The head's signature is no fetch proof.
+    assert!(crate::records::verify_fetch(&rk(), &body, head.sig()).is_err());
+    assert!(head.verify(&rk()).is_ok());
 }

@@ -313,6 +313,13 @@ fn a_device_that_slept_through_a_key_change_gets_the_copy_sealed_again() {
     let ask = |who: &str, epoch| Ask { asker: w.id(who), epoch, leaves: &[], now_ms: Some(T0), group_ttl_ms: DAY };
     assert_eq!(reseal(&w.phone, &mut kept, &state, &s, &ask("watch", 1)).err(), Some(RULE_RESEAL_READER));
     assert_eq!(reseal(&w.phone, &mut kept, &state, &s, &ask("laptop", 2)).err(), Some(RULE_RESEAL_EPOCH));
+    // A halted group (a recovery record this device cannot read, as for
+    // a fork) seals nothing again, seals to nobody and opens nothing.
+    let mut halted = state.clone();
+    halted.update_needed = true;
+    assert_eq!(reseal(&w.phone, &mut kept, &halted, &s, &ask("laptop", 3)).err(), Some(RULE_RESEAL_HALTED));
+    assert!(readers(&halted, &s, &content, &w.id("phone"), &[], None).is_empty());
+    assert_eq!(open(&c, &w.id("laptop"), &w.stores["laptop"], &halted).unwrap(), Opened::Halted);
     let again = reseal(&w.phone, &mut kept, &state, &s, &ask("laptop", 3)).unwrap();
     let v = cbor::decode(&again).unwrap();
     let c2 = check(&v, &state).unwrap();

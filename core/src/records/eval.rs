@@ -44,12 +44,12 @@ pub struct Input<'a> {
 pub struct Cut {
     /// The roots before the current one, in the order of the path.
     pub roots: Vec<KeyHash>,
-    /// The current root, and the highest seq of its records the list
-    /// names: a key that signed as an admin before the chain made it the
-    /// root keeps of those records only what the list names; 0 for a new
-    /// key.
+    /// The current root, and the seq its records as the root start at
+    /// (the record's `from`): a key that signed as an admin before the
+    /// chain made it the root keeps of its records below it only what the
+    /// list names; 0 for a new key.
     pub current: KeyHash,
-    pub floor: u64,
+    pub from: u64,
     /// The recovery record.
     pub record: RecordId,
     /// The hash of its list.
@@ -62,7 +62,7 @@ pub struct Cut {
 impl Cut {
     /// Whether the cut covers a record of signer at seq.
     pub fn covers(&self, signer: &KeyHash, seq: u64) -> bool {
-        self.roots.contains(signer) || *signer == self.current && seq <= self.floor
+        self.roots.contains(signer) || *signer == self.current && seq < self.from
     }
 
     /// Whether r, of a cut root, is listed.
@@ -147,7 +147,8 @@ pub enum Stop {
     /// A conflict between admins, or a root with two histories: the group
     /// stops until a root resolves it, and a root's own records still
     /// count (rule 8). Two records at one step of the recovery chain: the
-    /// group stops for good (rule 33).
+    /// group stops for good and nothing acts, the root neither
+    /// ([`State::halted`], rule 33).
     Full,
 }
 
@@ -306,12 +307,25 @@ impl State {
         self.changes.iter().filter(|c| c.state == ChangeState::Effective).map(|c| c.record).collect()
     }
 
+    /// Reports whether the group is halted on this device (rule 33): it
+    /// holds two recovery records at one seq, the proof of a fork, and is
+    /// stopped for good; or a recovery record it cannot read, and is
+    /// stopped until it is updated. Nothing in the state acts then: no root
+    /// or admin commands, no device is admitted, no copy is sealed or
+    /// opened. The state stays readable, so the owner sees the devices when
+    /// making the next group, and the device still passes the recovery
+    /// records on.
+    pub fn halted(&self) -> bool {
+        self.update_needed || self.conflicts.iter().any(|c| c.kind == ConflictKind::Fork)
+    }
+
     /// Reports whether a command signed by key k may be carried out: the
     /// current root's, unless it has two histories; an admin's that is
     /// neither removed nor frozen, while the group is not stopped and the
-    /// key has one history. Nothing else signs commands.
+    /// key has one history. Nothing else signs commands, and no key does
+    /// while the group is halted.
     pub fn may_command(&self, k: &KeyHash) -> bool {
-        if self.two_histories(k) || self.revoked.contains(k) {
+        if self.halted() || self.two_histories(k) || self.revoked.contains(k) {
             return false;
         }
         if self.is_root(k) {
@@ -571,11 +585,11 @@ impl Chain {
 }
 
 /// A cut by each key it covers: the roots before the current one, and the
-/// current one when it keeps a floor.
+/// current one when its records start above seq 1.
 pub(crate) fn cuts_of(cut: Option<&Cut>) -> BTreeMap<KeyHash, Cut> {
     let mut out = BTreeMap::new();
     if let Some(c) = cut {
-        for k in c.roots.iter().chain((c.floor > 0).then_some(&c.current)) {
+        for k in c.roots.iter().chain((c.from > 1).then_some(&c.current)) {
             out.insert(*k, c.clone());
         }
     }
@@ -600,10 +614,8 @@ pub(crate) fn chain<'r>(
     lists: &BTreeMap<[u8; 32], &List>,
 ) -> Chain {
     let mut by: BTreeMap<u64, Vec<&Record>> = BTreeMap::new();
-    let mut signed: BTreeMap<RecordId, (KeyHash, u64)> = BTreeMap::new();
     let mut out = Chain::default();
     for (r, role) in records {
-        signed.insert(r.id(), (r.body().signer, r.body().seq));
         if chain_kind(r, role) {
             by.entry(r.body().seq).or_default().push(r);
         }
@@ -626,14 +638,14 @@ pub(crate) fn chain<'r>(
     // The valid records, in order, by their bytes and their predecessors.
     let mut path = vec![*group_root];
     let mut tip: Option<RecordId> = None;
-    let mut valid: Vec<(&Record, &Key, &[u8; 32])> = Vec::new();
+    let mut valid: Vec<(&Record, &Key, &[u8; 32], u64)> = Vec::new();
     for seq in 1..=MAX_RECOVERY {
         let Some([r]) = by.get(&seq).map(Vec::as_slice) else { break };
         if r.body().held {
             out.unreadable = true;
             break;
         }
-        let Kind::Recovery { root, list } = &r.body().kind else { break };
+        let Kind::Recovery { root, list, from } = &r.body().kind else { break };
         if r.body().prev != tip {
             break;
         }
@@ -644,33 +656,33 @@ pub(crate) fn chain<'r>(
         }
         path.push(h);
         tip = Some(r.id());
-        valid.push((r, root, list));
+        valid.push((r, root, list, *from));
     }
     // They apply up to the newest whose list the device holds: the newest
     // list is the whole truth about every root before it, so the lists of
     // the records before it are not needed. Past it the chain waits for
     // the newest record's list.
-    let applied = valid.iter().rposition(|(_, _, list)| lists.contains_key(*list)).map_or(0, |i| i.saturating_add(1));
+    let applied =
+        valid.iter().rposition(|(_, _, list, _)| lists.contains_key(*list)).map_or(0, |i| i.saturating_add(1));
     if applied < valid.len() {
-        out.waiting = valid.last().map(|(_, _, list)| **list);
+        out.waiting = valid.last().map(|(_, _, list, _)| **list);
     }
     let mut path = vec![*group_root];
-    let mut last: Option<(&Record, &[u8; 32], &List)> = None;
-    for (r, root, list) in valid.iter().take(applied) {
+    let mut last: Option<(&Record, &[u8; 32], &List, u64)> = None;
+    for (r, root, list, from) in valid.iter().take(applied) {
         let h = root.hash();
         out.changes.push(Change { record: r.id(), seq: r.body().seq, root: h, state: ChangeState::Effective });
         out.records.insert(r.id());
         out.steps.push((r.id(), (*root).clone()));
         path.push(h);
-        last = lists.get(*list).map(|l| (*r, *list, *l));
+        last = lists.get(*list).map(|l| (*r, *list, *l, *from));
     }
-    if let Some((r, list, l)) = last {
+    if let Some((r, list, l, from)) = last {
         let current = *path.last().unwrap_or(group_root);
-        let floor = l.0.iter().filter_map(|id| signed.get(id)).filter(|(k, _)| *k == current).map(|(_, s)| *s).max();
         out.cut = Some(Cut {
             roots: path.iter().take(path.len().saturating_sub(1)).copied().collect(),
             current,
-            floor: floor.unwrap_or(0),
+            from,
             record: r.id(),
             list: *list,
             keep: l.0.iter().copied().collect(),

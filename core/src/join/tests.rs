@@ -127,7 +127,7 @@ impl G {
         let set = self.set();
         let list = set.change_list(&set.state());
         self.lists.push(list.encode());
-        self.rec(&k("recovery"), Kind::Recovery { root: new_root.key.clone(), list: list.hash() })
+        self.rec(&k("recovery"), Kind::Recovery { root: new_root.key.clone(), list: list.hash(), from: 0 })
     }
 
     fn seen(&self) -> Vec<Seen> {
@@ -692,7 +692,7 @@ fn the_joiner_sees_a_fork_in_its_welcome() {
             seq: 1,
             prev: None,
             time_ms: 0,
-            kind: Kind::Recovery { root: k("root n9").key.clone(), list: [7; 32] },
+            kind: Kind::Recovery { root: k("root n9").key.clone(), list: [7; 32], from: 0 },
             held: false,
         };
         Record::sign(body, &k("recovery")).unwrap()

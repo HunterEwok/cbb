@@ -18,6 +18,12 @@
 //! A later admin grant also names the grant it replaces (field 18, the
 //! SHA-256 of the kept grant's body), so an older one held back is never
 //! taken after a newer one.
+//!
+//! Every grant names the recovery seq it was made under (field 19): the
+//! seq of the newest recovery head (records rule 33) its signer held,
+//! absent before any change of root. A leaf takes a grant only of the
+//! recovery seq it knows as the newest, and never goes back to a lower one;
+//! a change starts its counters and commanders afresh.
 
 use alloc::vec::Vec;
 
@@ -51,6 +57,12 @@ pub const FIELD_ROOT_COUNTER: u16 = 17;
 /// An admin grant's field of the grant it replaces: the SHA-256 of the
 /// body of the leaf's kept grant (every admin grant but the first).
 pub const FIELD_REPLACES: u16 = 18;
+/// The grant's field of the recovery seq it was made under (absent: 0,
+/// before any change of root).
+pub const FIELD_RECOVERY: u16 = 19;
+/// The highest recovery seq (a group's recovery key signs at most 16
+/// heads).
+pub const MAX_RECOVERY: u64 = 16;
 /// The grant's field of its type (1).
 pub const FIELD_TYPE: u16 = 1;
 /// The grant's field of its group.
@@ -59,7 +71,7 @@ pub const FIELD_GROUP: u16 = 2;
 pub const FIELD_LEAF: u16 = 10;
 /// The fields of a grant below the optional zone (256): any other is a
 /// critical field this version does not know, and `signer2` (8) is one.
-pub const FIELDS: [u16; 14] = [1, 2, 3, 4, 6, 10, 11, 12, 13, 14, 15, 16, 17, 18];
+pub const FIELDS: [u16; 15] = [1, 2, 3, 4, 6, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
 /// The longest lifetime of a guarded grant: 40 days.
 pub const MAX_LIFE_MS: u64 = 3_456_000_000;
 /// The most readers of a leaf.
@@ -101,6 +113,11 @@ pub const RULE_COUNTER: Rule = Rule::field("grants/counter");
 /// as the one it replaces, or a root grant or a first grant that names one.
 pub const RULE_REPLACES: Rule = Rule::field("grants/replaces");
 
+/// A grant made under another recovery seq than the newest the leaf knows,
+/// one above 16, or a leaf asked to read grants under a recovery seq below
+/// the one it kept.
+pub const RULE_RECOVERY: Rule = Rule::field("grants/recovery");
+
 /// A commander: its key hash and its uncompressed point.
 pub type Commander = (KeyHash, [u8; 65]);
 
@@ -118,6 +135,8 @@ pub struct Kept {
     pub commanders: Vec<Commander>,
     /// The SHA-256 of the current grant's body.
     pub grant_hash: [u8; 32],
+    /// The recovery seq the current grant was made under.
+    pub recovery: u64,
 }
 
 impl Kept {
@@ -145,18 +164,23 @@ pub struct Granted<'a> {
     pub counter: u64,
     /// Its commanders.
     pub commanders: Vec<Commander>,
+    /// The recovery seq it was made under.
+    pub recovery: u64,
 }
 
 impl Granted<'_> {
     /// The leaf's state once it takes this grant.
     pub fn keep(&self, before: Option<&Kept>) -> Kept {
-        let b = before.cloned().unwrap_or_default();
+        // A change of root starts the counters afresh; guarded stays.
+        let b = before.filter(|k| k.recovery == self.recovery).cloned().unwrap_or_default();
+        let guarded = before.is_some_and(|k| k.guarded);
         Kept {
-            guarded: b.guarded || self.guarded,
+            guarded: guarded || self.guarded,
             root_counter: if self.by_root { self.counter } else { b.root_counter },
             admin_counter: if self.by_root { 0 } else { self.counter },
             commanders: self.commanders.clone(),
             grant_hash: sha256(&[self.grant.body]),
+            recovery: self.recovery,
         }
     }
 }
@@ -214,8 +238,13 @@ fn commanders(map: &Value<'_>) -> Result<Vec<Commander>, Rule> {
 
 /// Reads a grant from the map of message `grant` (or the Welcome's `grant`)
 /// for the leaf `leaf` of group `group` that keeps `kept` (None before its
-/// first grant): field 2 the grant envelope, 3 the root's record of the
-/// admin that signed a first grant.
+/// first grant) and knows `recovery` as the newest recovery seq (0 before
+/// any change of root), whose root `root` is then: field 2 the grant
+/// envelope, 3 the root's record of the admin that signed a first grant.
+///
+/// The grant must name `recovery` (field 19), and `recovery` must not be
+/// below the kept grant's. A kept grant of a lower recovery seq counts as
+/// none, but a guarded leaf stays guarded.
 ///
 /// The grant must be of type 1, for this group and this leaf, with no
 /// critical field this version does not know (`signer2` among them). A root
@@ -234,6 +263,7 @@ pub fn read<'a>(
     leaf: &DeviceId,
     group: &GroupId,
     kept: Option<&Kept>,
+    recovery: u64,
 ) -> Result<Granted<'a>, Rule> {
     let grant = Envelope::from_value(msg.get(FIELD_GRANT).ok_or(Rule::GRANTS_SHAPE)?)?;
     if grant.body.len() > MAX_GRANT {
@@ -250,6 +280,16 @@ pub fn read<'a>(
     {
         return Err(Rule::GRANTS_SHAPE);
     }
+    let made_after = match map.get(FIELD_RECOVERY) {
+        None => 0,
+        Some(Value::Uint(0)) => return Err(Rule::FORM_DEFAULT),
+        Some(v) => v.as_uint().ok_or(Rule::GRANTS_SHAPE)?,
+    };
+    if made_after != recovery || recovery > MAX_RECOVERY || kept.is_some_and(|k| k.recovery > recovery) {
+        return Err(RULE_RECOVERY);
+    }
+    let was_guarded = kept.is_some_and(|k| k.guarded);
+    let kept = kept.filter(|k| k.recovery == recovery);
     let signer = grant.signer().and_then(Value::as_bytes).and_then(KeyHash::from_slice).ok_or(Rule::GRANTS_SHAPE)?;
     let counter = map.get(FIELD_COUNTER).and_then(Value::as_uint).ok_or(Rule::GRANTS_SHAPE)?;
     let guarded = match map.get(FIELD_GUARDED) {
@@ -257,7 +297,6 @@ pub fn read<'a>(
         Some(Value::Uint(1)) => true,
         Some(_) => return Err(Rule::field("grants/guarded-value")),
     };
-    let was_guarded = kept.is_some_and(|k| k.guarded);
     let by_root = signer == Key::new(Alg::Es256, root).hash();
     let made_under = match map.get(FIELD_ROOT_COUNTER) {
         None => 0,
@@ -336,7 +375,7 @@ pub fn read<'a>(
     if neighbors.len() > MAX_NEIGHBORS || !is_set(neighbors) || !neighbors.iter().all(neighbor_ok) {
         return Err(RULE_NEIGHBORS);
     }
-    Ok(Granted { grant, admin, by_root, guarded, counter, commanders })
+    Ok(Granted { grant, admin, by_root, guarded, counter, commanders, recovery })
 }
 
 /// A copy to a leaf from a device its grant does not let send it copies.

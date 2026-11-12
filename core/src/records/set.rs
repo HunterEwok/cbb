@@ -608,8 +608,9 @@ impl RecordSet {
     /// records, all signed before the head is released and sent with it:
     /// its device record (device, with holds_root); a settings record that
     /// copies the old root's; a hubs record that copies the counting one
-    /// unless drop_hubs; and a removal of the keys the owner unticked
-    /// (remove: "who stays" is made of removals). Then the recovery record
+    /// unless drop_hubs; a removal of the keys the owner unticked (remove:
+    /// "who stays" is made of removals); and its first checkpoint. Then the
+    /// recovery record
     /// at the seq after the chain's tip, naming new_root and the list's
     /// hash. It refuses a group stopped for good, a 17th record, a key that
     /// is not the group's recovery key, and a new root key the state
@@ -675,13 +676,48 @@ impl RecordSet {
         if !keys.is_empty() {
             first.push(sign(Kind::Revoke(super::body::Removal { keys, seen: Vec::new() }))?);
         }
+        // The new root's first checkpoint, signed now so that the pruning
+        // of the old root's counting checkpoint never lapses: the heads it
+        // named of keys that are no roots, and its own head; it keeps the
+        // whole list, what the old checkpoint kept of those keys, and the
+        // new root's records before it. It closes the list without
+        // narrowing it.
+        let path: BTreeSet<&KeyHash> = state.roots.iter().collect();
+        let cur = state.roots.last();
+        let mut heads: BTreeMap<KeyHash, super::body::Head> = BTreeMap::new();
+        let mut keep: BTreeSet<RecordId> = list.0.iter().copied().collect();
+        for cp in &state.checkpoints {
+            let Some(r) = self.get(cp) else { continue };
+            let Kind::Checkpoint { heads: hs, keep: kept } = &r.body().kind else { continue };
+            if Some(&r.body().signer) != cur {
+                continue;
+            }
+            for hd in hs.iter().filter(|hd| !path.contains(&hd.key)) {
+                let e = heads.entry(hd.key).or_insert(*hd);
+                if hd.seq > e.seq {
+                    *e = *hd;
+                }
+            }
+            keep.extend(
+                kept.iter()
+                    .copied()
+                    .filter(|id| self.get(id).is_some_and(|x| !path.contains(&x.body().signer)) && self.contains(id)),
+            );
+        }
+        let mut own = first.iter().map(Record::id).collect::<Vec<_>>();
+        let own_head = own.pop();
+        keep.extend(own);
+        if let (Some(id), Some(last)) = (own_head, first.last()) {
+            heads.insert(h, super::body::Head { key: h, seq: last.body().seq, id });
+        }
+        first.push(sign(Kind::Checkpoint { heads: heads.into_values().collect(), keep: keep.into_iter().collect() })?);
         let body = Body {
             group: self.group,
             signer: self.recovery.hash(),
             seq,
             prev: tip.last().copied(),
             time_ms,
-            kind: Kind::Recovery { root: root_key, list: list.hash() },
+            kind: Kind::Recovery { root: root_key, list: list.hash(), from: 0 },
             held: false,
         };
         let record = Record::sign(body, recovery)?;
