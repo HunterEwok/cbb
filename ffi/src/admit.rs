@@ -15,7 +15,7 @@ use cbb_core::admit::{Admission, Admitter, Outcome};
 use cbb_core::certs::{self, Cert};
 use cbb_core::error::{Error, Result};
 use cbb_core::pair;
-use cbb_lite::phone::Member as Node;
+use cbb_member::phone::Member as Node;
 use serde::{Deserialize, Serialize};
 
 use crate::join::{AppKey, SignFn, answer, clock, wall_ms};

@@ -58,13 +58,6 @@ func sessionID() string {
 	return "auto"
 }
 
-// Locked reports whether logind marks the session id locked; false
-// without logind or an id.
-func Locked(id string) bool {
-	locked, _ := State(id)
-	return locked
-}
-
 // State reports whether logind marks the session id locked, and whether
 // it told at all: known is false without logind or an id, when loginctl
 // fails, and when it gives no LockedHint of yes or no.
@@ -108,21 +101,6 @@ func ActiveSession(seat string) string {
 		return ""
 	}
 	return strings.TrimSpace(out)
-}
-
-// Sessions returns the IDs of logind's sessions.
-func Sessions() ([]string, error) {
-	out, err := loginctl("list-sessions", "--no-legend")
-	if err != nil {
-		return nil, err
-	}
-	var ids []string
-	for line := range strings.Lines(out) {
-		if f := strings.Fields(line); len(f) > 0 {
-			ids = append(ids, f[0])
-		}
-	}
-	return ids, nil
 }
 
 func loginctl(args ...string) (string, error) {

@@ -245,8 +245,18 @@ func (a *awayGroup) another(ctx context.Context, r *Report, suite string, n int,
 }
 
 // hubCmd is cbb global hub at the public address pub, with the forwarder
-// pinned by key.
+// pinned by key and the flags more; without any, a hub with plain
+// WireGuard (-no-obfuscate -no-vless), which the cases start from.
 func (a *awayGroup) hubCmd(pub, key string, more ...string) string {
+	if len(more) == 0 {
+		more = []string{"-no-obfuscate", "-no-vless"}
+	}
+	return a.hubCmdWith(pub, key, more...)
+}
+
+// hubCmdWith is hubCmd with exactly the flags more: without any, a hub as
+// cbb sets it by default, with AmneziaWG and VLESS.
+func (a *awayGroup) hubCmdWith(pub, key string, more ...string) string {
 	return strings.Join(append([]string{"cbb global hub -firewall no -forwarder", fwdPublic + ":8764", "-forwarder-key", key}, append(more, pub+":8764")...), " ")
 }
 

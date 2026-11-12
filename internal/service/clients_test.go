@@ -18,15 +18,15 @@ import (
 	"github.com/HunterEwok/cbb/internal/control"
 )
 
-// TestLiteClients: the Go command line and the desktop's clipboard agent
+// TestAloneClients: the Go command line and the desktop's clipboard agent
 // work against the Rust service as against the Go one: cbb status, config,
 // copy and paste of texts and files, and an agent whose clipboard takes
-// images (docs/design.md, "The service and its helper"). CBB_LITE names
+// images (docs/design.md, "The service and its helper"). CBB_TEST_ALONE names
 // the Rust member's binary.
-func TestLiteClients(t *testing.T) {
-	bin := os.Getenv("CBB_LITE")
+func TestAloneClients(t *testing.T) {
+	bin := os.Getenv("CBB_TEST_ALONE")
 	if bin == "" {
-		t.Skip("CBB_LITE is not set")
+		t.Skip("CBB_TEST_ALONE is not set")
 	}
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
@@ -34,18 +34,18 @@ func TestLiteClients(t *testing.T) {
 	cli := cbbCLI(t)
 	var h hub
 	pi := startService(t, &h, "pi")
-	dir := joinLite(t, bin, pi)
-	lite := startLite(t, bin, dir, "-no-mdns", "-peer", pi.addr())
+	dir := joinAlone(t, bin, pi)
+	small := startAlone(t, bin, dir, "-no-mdns", "-peer", pi.addr())
 	waitFor(t, "the Rust member connected", func() bool {
-		st, err := lite.do(t, control.Header{Op: control.OpStatus}, "")
+		st, err := small.do(t, control.Header{Op: control.OpStatus}, "")
 		return err == nil && st.Status != nil && len(st.Status.Peers) == 1
 	})
-	if _, err := lite.do(t, control.Header{Op: control.OpSync, Name: "on"}, ""); err != nil {
+	if _, err := small.do(t, control.Header{Op: control.OpSync, On: control.Bool(true)}, ""); err != nil {
 		t.Fatal(err)
 	}
 	run := func(stdin string, args ...string) (string, error) {
 		t.Helper()
-		return runCLI(cli, lite.socket, stdin, args...)
+		return runCLI(cli, small.socket, stdin, args...)
 	}
 	must := func(stdin string, args ...string) string {
 		t.Helper()
@@ -108,7 +108,7 @@ func TestLiteClients(t *testing.T) {
 	b := &agentBoard{changes: make(chan connector.Item, 4), writes: make(chan connector.Item, 4)}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- connector.Run(ctx, connector.Config{Socket: lite.socket, Board: b, Logf: t.Logf}) }()
+	go func() { done <- connector.Run(ctx, connector.Config{Socket: small.socket, Board: b, Logf: t.Logf}) }()
 	t.Cleanup(func() { cancel(); <-done })
 	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "to the agent"); err != nil {
 		t.Fatal(err)

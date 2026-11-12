@@ -48,7 +48,7 @@ Page {
     }
 
     function act(action, collection) {
-        var id = page.item.kind === "device" ? page.item.device.device : ""
+        var id = page.item.kind === "device" ? page.item.device.id : ""
         switch (action) {
         case "start": case "earlier": case "later": case "end":
             apply(Arrange.move(page.level, page.index, action))

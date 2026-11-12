@@ -28,7 +28,7 @@ use crate::relay::{self, Relay, Report};
 use crate::tunnel::{Forwarder, State};
 
 /// What stands for the project's relay in cbb global relay, and its
-/// address, as Go's relay.Project and relay.ProjectHost.
+/// address.
 pub(super) const PROJECT_KEY: &str = "default";
 const PROJECT_HOST: &str = "cbb.tools:8765";
 /// The pins of the project's relay's key this release knows; keys.json may
@@ -487,7 +487,7 @@ fn test_resolve(name: &str) -> Option<SocketAddr> {
     })
 }
 
-/// A relay's pin, 32 bytes of base64, as Go's relay.CheckPin.
+/// A relay's pin, 32 bytes of base64.
 fn pin_of(pin: &str) -> Result<[u8; 32]> {
     use base64::Engine as _;
     let e = base64::engine::general_purpose::STANDARD;

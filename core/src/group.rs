@@ -704,12 +704,14 @@ impl Records {
     /// The devices that may be the group's hubs, in the order in which they
     /// serve, as Go's HubOrder (docs/protocol.md, section 11, "Several
     /// hubs"): the main hubs of the hubs table first, in its order, then
-    /// the others: the phones, then the rest, and in each part the root's
-    /// own device first, then by device ID.
+    /// the others: the computers that are the root or admins, then the
+    /// phones, then the devices that only pass copies on, and in each part
+    /// the root's own device first, then by device ID.
     pub fn hub_order(&self) -> Vec<String> {
         let root = self.root_member().filter(|(_, k)| !self.revoked(k)).map(|(id, _)| id);
-        // Phones, then the computers that are the root or admins, then the
-        // devices that only pass copies on.
+        // The computers that are the root or admins, which stay on, then
+        // the phones, hubs only while their app is open, then the devices
+        // that only pass copies on.
         let mut hubs: Vec<(u8, bool, String)> = self
             .devices()
             .into_iter()
@@ -719,9 +721,9 @@ impl Records {
             .map(|d| {
                 let is_root = root.as_deref() == Some(d.id.as_str());
                 let part = if d.role == "phone" {
-                    0
-                } else if is_root || d.may(authority::POWER_HUB) {
                     1
+                } else if is_root || d.may(authority::POWER_HUB) {
+                    0
                 } else {
                     2
                 };

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! cbb-relay's command line, as Go's relay.Command: cbb relay hands its
+//! cbb-relay's command line: cbb relay hands its
 //! arguments to it, and its systemd unit runs it under a user of its own,
 //! apart from cbb and the keys of cbb-helper.
 

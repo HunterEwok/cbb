@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The signed list of the project's entry points (docs/protocol.md, section
-//! 16, "Entry points"). The lite member is no hub and reaches no forwarder
+//! 16, "Entry points"). A member that is no hub reaches no forwarder
 //! itself, so it only takes the list from its peers, keeps the newest that
 //! checks out and passes it on, as the full members do.
 

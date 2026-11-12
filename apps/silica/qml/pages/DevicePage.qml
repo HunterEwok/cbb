@@ -19,7 +19,7 @@ Page {
         onDevicesChanged: {
             var all = app.member.devices
             for (var i = 0; i < all.length; i++) {
-                if (all[i].device === page.device.device) {
+                if (all[i].id === page.device.id) {
                     page.device = all[i]
                     return
                 }
@@ -35,7 +35,7 @@ Page {
     Connections {
         target: app
         onManaged: {
-            if (ok && action === "remove" && device === page.device.device)
+            if (ok && action === "remove" && device === page.device.id)
                 pageStack.pop()
         }
     }
@@ -52,13 +52,13 @@ Page {
                 visible: page.acts && page.device.root && !app.root && app.claimState === ""
                 text: qsTr("Take the group over")
                 onClicked: remorse.execute(qsTr("Taking the group over from %1").arg(Devices.name(page.device)),
-                                           function() { app.takeOver(page.device.device) })
+                                           function() { app.takeOver(page.device.id) })
             }
             MenuItem {
                 visible: page.acts && !page.device.root
                 text: qsTr("Remove")
                 onClicked: remorse.execute(qsTr("Removing %1").arg(Devices.name(page.device)),
-                                           function() { app.manage("remove", page.device.device) })
+                                           function() { app.manage("remove", page.device.id) })
             }
             MenuItem {
                 // The admin key comes from the computer's hello.
@@ -66,7 +66,7 @@ Page {
                          && page.device.online
                 text: qsTr("Make an admin")
                 onClicked: remorse.execute(qsTr("Making %1 an admin").arg(Devices.name(page.device)),
-                                           function() { app.manage("make_admin", page.device.device) })
+                                           function() { app.manage("make_admin", page.device.id) })
             }
             MenuItem {
                 // The root lets an admin's claim take effect at once (cbb_core::root).
@@ -80,24 +80,24 @@ Page {
                 visible: page.acts && page.device.frozen
                 text: qsTr("Unfreeze")
                 onClicked: remorse.execute(qsTr("Unfreezing %1").arg(Devices.name(page.device)),
-                                           function() { app.manage("thaw", page.device.device) })
+                                           function() { app.manage("thaw", page.device.id) })
             }
             MenuItem {
                 visible: page.acts
                 text: qsTr("Unmute")
-                onClicked: app.manage("unmute", page.device.device)
+                onClicked: app.manage("unmute", page.device.id)
             }
             MenuItem {
                 visible: page.acts
                 text: qsTr("Mute until unmuted")
                 onClicked: remorse.execute(qsTr("Muting %1").arg(Devices.name(page.device)),
-                                           function() { app.manage("mute", page.device.device, "", 0) })
+                                           function() { app.manage("mute", page.device.id, "", 0) })
             }
             MenuItem {
                 visible: page.acts
                 text: qsTr("Mute for an hour")
                 onClicked: remorse.execute(qsTr("Muting %1").arg(Devices.name(page.device)),
-                                           function() { app.manage("mute", page.device.device, "", 60) })
+                                           function() { app.manage("mute", page.device.id, "", 60) })
             }
             MenuItem {
                 visible: app.admin && app.member.running
@@ -127,17 +127,17 @@ Page {
             // The house (docs/apps.md, Devices): this phone's sync, or for an
             // admin another device's, through a mode command it signs.
             TextSwitch {
-                visible: page.device.self ? app.member.running : page.acts && page.device.sync !== ""
+                visible: page.device.self ? app.member.running : page.acts && page.device.mode !== ""
                 text: qsTr("Sync")
                 description: page.device.self ? (app.member.paused ? qsTr("Sync is off") : qsTr("Sync is on"))
-                                              : (page.device.sync === "on" ? qsTr("Sync is on") : qsTr("Sync is off"))
+                                              : (page.device.mode === "shared" ? qsTr("Sync is on") : qsTr("Sync is off"))
                 automaticCheck: false
-                checked: page.device.self ? !app.member.paused : page.device.sync === "on"
+                checked: page.device.self ? !app.member.paused : page.device.mode === "shared"
                 onClicked: {
                     if (page.device.self)
                         app.member.paused ? app.member.resume() : app.member.pause(0)
                     else
-                        app.manage(checked ? "sync_off" : "sync_on", page.device.device)
+                        app.manage(checked ? "sync_off" : "sync_on", page.device.id)
                 }
             }
 
@@ -174,7 +174,7 @@ Page {
                             label: qsTr("MAC address")
                             value: page.device.mac || ""
                         }
-                        DetailItem { label: qsTr("Device ID"); value: page.device.device }
+                        DetailItem { label: qsTr("Device ID"); value: page.device.id }
                     }
                 }
             }

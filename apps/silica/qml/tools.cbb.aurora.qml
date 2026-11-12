@@ -19,4 +19,16 @@ ApplicationWindow {
     // systems lack; a missing one leaves the rest of the app working.
     Loader { source: "system/Notifier.qml" }
     Loader { source: "system/ShareTarget.qml" }
+
+    // The bug report's question (Bugs), when the member broke in release mode.
+    Connections {
+        target: app.bugs
+        onChanged: {
+            if (!app.bugs.asking)
+                return
+            var d = pageStack.push(Qt.resolvedUrl("pages/BugDialog.qml"))
+            d.accepted.connect(function() { app.bugs.allow(d.always) })
+            d.rejected.connect(function() { app.bugs.cancel() })
+        }
+    }
 }

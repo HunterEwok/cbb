@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The lite member's way to the group's hub over VLESS with XHTTP
+//! cbb's way to the group's hub over VLESS with XHTTP
 //! (docs/protocol.md, section 11, "VLESS"), for networks that block
 //! WireGuard and AmneziaWG: HTTPS to the forwarder's own site, whose web
 //! server passes the offer's path to the forwarder. As internal/vless's

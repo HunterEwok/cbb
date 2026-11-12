@@ -91,25 +91,21 @@ fn registers_and_says_hello() {
     assert!(logs.lock().unwrap().is_empty(), "{:?}", logs.lock().unwrap());
 }
 
-/// A forwarder's answers that end the registration: a refusal, no mask,
-/// no VLESS settings for a hub that asked; and a forwarder of another
-/// key. Each is reported and logged.
+/// A forwarder's answers that end the registration: a refusal, no mask;
+/// and a forwarder of another key. Each is reported and logged. A
+/// forwarder without VLESS registers a hub that asked for UDP alone.
 #[test]
 fn refusals() {
     use base64::Engine;
     let mask = base64::engine::general_purpose::STANDARD.encode(MASK);
-    let cases: Vec<(fake::AnswerFn, bool, &str)> = vec![
-        (Arc::new(|_: &Value| serde_json::json!({"error": "not today"})), false, "refused the registration: not today"),
-        (Arc::new(|_: &Value| serde_json::json!({"id": 1})), false, "no key for the hellos' mask"),
-        (Arc::new(move |_: &Value| serde_json::json!({"id": 1, "mask": mask})), true, "it gave no VLESS settings"),
+    let cases: Vec<(fake::AnswerFn, &str)> = vec![
+        (Arc::new(|_: &Value| serde_json::json!({"error": "not today"})), "refused the registration: not today"),
+        (Arc::new(|_: &Value| serde_json::json!({"id": 1})), "no key for the hellos' mask"),
     ];
-    for (answer, vless, want) in cases {
+    for (answer, want) in cases {
         let g = Group::new(1);
         let f = Forwarder::start(answer, None);
-        let (mut cfg, _) = config(&g, f.addr, vec![f.pin]);
-        if vless {
-            cfg.vless_id = Some("6f1c2b9e-3d4a-4f5b-8c7d-0e1f2a3b4c5d".into());
-        }
+        let (cfg, _) = config(&g, f.addr, vec![f.pin]);
         let report = Arc::new(Mutex::new(Report { seen: Some("kept".into()), ..Report::default() }));
         let (logs, log) = logger();
         let r = Registration::start(cfg, report.clone(), log);
@@ -127,6 +123,16 @@ fn refusals() {
         assert!(logs.lock().unwrap().iter().any(|l| l.contains(want)));
         drop(r);
     }
+    let g = Group::new(1);
+    let f = Forwarder::start(Arc::new(move |_: &Value| serde_json::json!({"id": 1, "mask": mask})), None);
+    let (mut cfg, _) = config(&g, f.addr, vec![f.pin]);
+    cfg.vless_id = Some("6f1c2b9e-3d4a-4f5b-8c7d-0e1f2a3b4c5d".into());
+    let report = Arc::new(Mutex::new(Report::default()));
+    let r = Registration::start(cfg, report.clone(), Arc::new(|_| {}));
+    assert!(wait_for(Duration::from_secs(20), || report.lock().unwrap().registered), "{:?}", report.lock().unwrap());
+    let rep = report.lock().unwrap().clone();
+    assert!(rep.vless.is_none() && rep.error.is_none(), "UDP alone: {rep:?}");
+    drop(r);
     let g = Group::new(1);
     let f = Forwarder::start(fake::welcome(), None);
     let (cfg, _) = config(&g, f.addr, vec![[1; 32]]);

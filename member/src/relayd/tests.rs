@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The tests of Go's internal/relay that look inside a relay, on this one:
-//! the budget of an open relay counted at each payer, the registrations of
-//! devices with no connection, and the records verified once. The tests
-//! that check a relay from outside run in Go against cbb-relay
-//! (internal/relay, CBB_TEST_RUST_RELAY).
+//! The relay's tests that look inside it: the budget of an open relay
+//! counted at each payer, the registrations of devices with no connection,
+//! and the records verified once. The tests that check it from outside run
+//! in Go against cbb-relay, with Go's side of a device (internal/relay,
+//! CBB_TEST_RUST_RELAY).
 
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
 use std::sync::Arc;

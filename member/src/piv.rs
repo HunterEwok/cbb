@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 //! Signing with the group's recovery key on a YubiKey, or another card with
-//! the PIV application (NIST SP 800-73-4), as Go's internal/piv does: the
+//! the PIV application (NIST SP 800-73-4), as the phone kits' Piv does: the
 //! root phone made the key in a free retired slot (82 to 95), where it never
 //! leaves the card, and stored the key's admin CA as the slot's certificate
 //! (docs/protocol.md, section 10, "The recovery key"). The YubiKey may be in

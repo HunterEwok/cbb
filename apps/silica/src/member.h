@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-// The phone as a member of its group: the lite member's node in the app's
+// The phone as a member of its group: the Rust member's node in the app's
 // process (ffi's cbb_member_*, docs/core-api.md), with the key in the
 // key store. It dials the members it finds, puts what they send into the
 // clipboard, and sends what the user copied when the app comes to the
@@ -39,6 +39,10 @@ class Member : public QObject
     // What the group's records stop and what ends it (docs/core-api.md, the
     // member's alerts): maps with kind, names, devices, records, left_ms, count.
     Q_PROPERTY(QVariantList alerts READ alerts NOTIFY devicesChanged)
+    // Why the phone does not sync (cbb_core::why, docs/apps.md "Why it does
+    // not sync"): maps with code, level, until_ms, device, devices, value and
+    // detail, the reason that stops the most first.
+    Q_PROPERTY(QVariantList why READ why NOTIFY devicesChanged)
     // The root's settings as the group's records hold them (the member's
     // root_view op, cbb_core::root::view): delay_ms, key_level, recovery,
     // handed_to.
@@ -75,7 +79,10 @@ public:
     // The names of the members connected now.
     QStringList peers() const { return m_peers; }
     QVariantList devices() const { return m_devices; }
+    // The member's recent log lines, oldest first, for a bug report.
+    QStringList recentLog() const { return m_recentLog; }
     QVariantList alerts() const { return m_alerts; }
+    QVariantList why() const { return m_why; }
     QVariantMap rootView() const { return m_rootView; }
     // What the clipboard got or sent last, shortened, for the main page.
     QString last() const { return m_last; }
@@ -129,10 +136,18 @@ signals:
     // and opened (the member's check_command answer, with the event's
     // token): the receiver carries it out and answers.
     void commandArrived(const QJsonObject &checked);
+    // Something in the member broke (docs/core-api.md, "Panics"): details
+    // say what and where. The app shows it and starts the member again.
+    void panicked(const QString &details);
 
 public:
     // Brings the devices up to date now, as after an admin's change.
     void pollDevices();
+    // The device tiles as the member keeps them (docs/apps.md, "What the
+    // member shows"), with the user's change op applied and kept first
+    // (null for none): {tiles, online, others, custom}; empty with failure
+    // set when there is no member or the change does not fit.
+    QJsonObject view(const QJsonValue &op, Failure *failure) const;
     // Answers the command of the token: done, refused or failed, and why
     // (in English: the sender's log shows it).
     void answer(double token, const QString &status, const QString &reason);
@@ -164,7 +179,9 @@ private:
     QTimer m_peerTimer;
     QStringList m_peers;
     QVariantList m_devices;
+    QStringList m_recentLog;
     QVariantList m_alerts;
+    QVariantList m_why;
     QVariantMap m_rootView;
     QString m_last;
     QString m_error;

@@ -199,7 +199,7 @@ func mutate(rng *rand.Rand, v any, depth int) any {
 // changes the group.
 var controlSeeds = []map[string]any{
 	{"op": "status"}, {"op": "devices"}, {"op": "paste"}, {"op": "watch"},
-	{"op": "copy", "len": 5}, {"op": "copy_media", "len": 10, "type": "image/png"},
+	{"op": "copy", "len": 5}, {"op": "copy_media", "len": 10, "args": map[string]any{"type": "image/png"}},
 	{"op": "config"}, {"op": "clipboard"}, {"op": "frobnicate"},
 }
 

@@ -7,7 +7,7 @@
 
 // How an operation names the item.
 function ref(item) {
-    return item.kind === "device" ? { device: item.device.device } : { collection: item.id }
+    return item.kind === "device" ? { device: item.device.id } : { collection: item.id }
 }
 
 // A collection's devices as items of its level.

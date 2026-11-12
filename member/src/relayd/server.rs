@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The running relay, as Go's relay.Relay: the registrations' TCP port, the
+//! The running relay: the registrations' TCP port, the
 //! WireGuard hub on the UDP port of the same number, and the connections the
 //! devices open through their tunnels to the relay's member port, which it
 //! joins two by two within one group. Each member registers with its member

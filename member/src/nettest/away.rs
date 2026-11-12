@@ -415,7 +415,6 @@ fn a_hub_registers_with_its_forwarder() {
     let h = Header {
         forwarder: f.addr.to_string(),
         forwarder_key: pin.clone(),
-        vless: true,
         port: i64::from(free_udp_port()),
         ..hub_header(0)
     };
@@ -454,7 +453,7 @@ fn a_hub_registers_with_its_forwarder() {
     let h = Header {
         forwarder: no.addr.to_string(),
         forwarder_key: base64::engine::general_purpose::STANDARD.encode(no.pin),
-        vless: false,
+        vless_off: true,
         ..h
     };
     away.make_hub(&h).unwrap();
@@ -484,7 +483,14 @@ fn hub_requests_refused() {
     refused(Header { consent: false, ..hub_header(1) }, "turn it on first");
     refused(Header { keep: true, ..hub_header(1) }, "not a hub yet");
     refused(Header { addrs: Vec::new(), ..hub_header(1) }, "an address away from home or a forwarder");
-    refused(Header { vless: true, ..hub_header(1) }, "VLESS goes to a forwarder");
+    let some_pin = {
+        use base64::Engine;
+        base64::engine::general_purpose::STANDARD.encode([7u8; 32])
+    };
+    refused(
+        Header { obfuscate_off: true, forwarder: "127.0.0.1:9".into(), forwarder_key: some_pin, ..hub_header(1) },
+        "plain WireGuard goes with no VLESS",
+    );
     refused(Header { addrs: vec!["nowhere".into()], ..hub_header(1) }, "");
     refused(Header { forwarder: "nowhere".into(), forwarder_key: "x".into(), ..hub_header(1) }, "");
     assert!(away.stop_hub(&a.node, false).is_err(), "no hub");
@@ -492,10 +498,9 @@ fn hub_requests_refused() {
     away.make_hub(&hub_header(free_udp_port())).unwrap();
     let e = away.stop_hub(&a.node, false).unwrap_err().to_string();
     assert!(e.contains("no other hub"), "{e}");
-    // Obfuscated, and set again keeping its address and port.
-    let o = away.make_hub(&Header { obfuscate: true, ..hub_header(free_udp_port()) }).unwrap();
-    let again =
-        away.make_hub(&Header { keep: true, addrs: Vec::new(), port: 0, obfuscate: true, ..hub_header(0) }).unwrap();
+    // Obfuscated by default, and set again keeping its address and port.
+    let o = away.make_hub(&hub_header(free_udp_port())).unwrap();
+    let again = away.make_hub(&Header { keep: true, addrs: Vec::new(), port: 0, ..hub_header(0) }).unwrap();
     assert_eq!(o, again, "the same keys");
     let st = away.st.lock().unwrap().clone().unwrap();
     assert!(st.obfuscation.is_some() && !st.endpoints.is_empty() && st.listen_port != 0);
