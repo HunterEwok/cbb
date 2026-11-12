@@ -223,12 +223,12 @@ struct HomeView: View {
                 Text("View")
             }
             .pickerStyle(.inline)
-            if model.arrangement != nil {
+            if model.group.hasGroup {
                 Button { arrange.on.toggle() } label: {
                     Label { arrange.on ? Text("Done arranging") : Text("Arrange devices") } icon: { Image(systemName: "square.grid.3x3.square") }
                 }
                 .disabled(searching)
-                if model.arrangement?.items.isEmpty == false {
+                if model.customOrder {
                     Button { model.arrange(.reset) } label: {
                         Label { Text("Back to the group's order") } icon: { Image(systemName: "arrow.counterclockwise") }
                     }

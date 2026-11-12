@@ -27,8 +27,7 @@ the firmer limit, as it does not depend on what a network looks like.
 
 ## OpenWrt
 
-OpenWrt 25.12 or later. The full member needs about 25 MB of storage and 256 MB of RAM; on
-a smaller router install the lite member (`get.sh --lite`), which on MIPS has no sync away
+OpenWrt 25.12 or later. A router runs `cbb` without its helper; on MIPS it has no sync away
 from home yet ([roadmap](../roadmap.md), item 37).
 
 What the installer sets up:
@@ -49,7 +48,6 @@ The settings, applied with `/etc/init.d/cbb reload`:
 | `port` | `8764` | the member port |
 | `list zone` | `lan` | the firewall zones the service works in; `wan`, and PPPoE, WireGuard and tunnel devices never count |
 | `wait_ntp` | `1` | start only once NTP has set the clock; `0` for a router whose clock keeps running while it is off |
-| `memlimit` | `64MiB` | a soft limit for the service's memory (`GOMEMLIMIT`) |
 
 **The firewall.** The service's firewall rules come and go with it, through procd;
 `/etc/config/firewall` is never changed. A zone other than `lan` gets two rules while the

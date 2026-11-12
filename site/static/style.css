@@ -1,215 +1,168 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 /* The fonts: see fonts/README.md. */
-@font-face { font-family: "Forum"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/forum-400-cyrillic.woff2) format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
-@font-face { font-family: "Forum"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/forum-400-latin-ext.woff2) format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
-@font-face { font-family: "Forum"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/forum-400-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 400 600; font-display: swap; src: url(fonts/ibm-plex-sans-cyrillic.woff2) format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 400 600; font-display: swap; src: url(fonts/ibm-plex-sans-latin-ext.woff2) format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 400 600; font-display: swap; src: url(fonts/ibm-plex-sans-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "IBM Plex Sans Arabic"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/ibm-plex-sans-arabic-400-arabic.woff2) format("woff2"); unicode-range: U+0600-06FF, U+0750-077F, U+0870-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC7, U+10EC9-10EEE, U+10EF0-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1; }
+@font-face { font-family: "IBM Plex Sans Arabic"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/ibm-plex-sans-arabic-600-arabic.woff2) format("woff2"); unicode-range: U+0600-06FF, U+0750-077F, U+0870-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC7, U+10EC9-10EEE, U+10EF0-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1; }
+@font-face { font-family: "IBM Plex Sans Hebrew"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/ibm-plex-sans-hebrew-400-hebrew.woff2) format("woff2"); unicode-range: U+0307-0308, U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F; }
+@font-face { font-family: "IBM Plex Sans Hebrew"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/ibm-plex-sans-hebrew-600-hebrew.woff2) format("woff2"); unicode-range: U+0307-0308, U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F; }
+@font-face { font-family: "IBM Plex Sans Devanagari"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/ibm-plex-sans-devanagari-400-devanagari.woff2) format("woff2"); unicode-range: U+0900-097F, U+1CD0-1CF4, U+1CF7-1CF9, U+200C-200D, U+20A8, U+20B9, U+20F0, U+25CC, U+A830-A839, U+A8E0-A8FF, U+11B00-11B0A; }
+@font-face { font-family: "IBM Plex Sans Devanagari"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/ibm-plex-sans-devanagari-600-devanagari.woff2) format("woff2"); unicode-range: U+0900-097F, U+1CD0-1CF4, U+1CF7-1CF9, U+200C-200D, U+20A8, U+20B9, U+20F0, U+25CC, U+A830-A839, U+A8E0-A8FF, U+11B00-11B0A; }
 @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/ibm-plex-mono-400-cyrillic.woff2) format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
 @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/ibm-plex-mono-400-latin-ext.woff2) format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
 @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/ibm-plex-mono-400-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/ibm-plex-mono-500-cyrillic.woff2) format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
 @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/ibm-plex-mono-500-latin-ext.woff2) format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
 @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/ibm-plex-mono-500-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family: "Jost"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/jost-400-cyrillic.woff2) format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
-@font-face { font-family: "Jost"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/jost-400-latin-ext.woff2) format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
-@font-face { font-family: "Jost"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/jost-400-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family: "Jost"; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/jost-400-cyrillic.woff2) format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
-@font-face { font-family: "Jost"; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/jost-400-latin-ext.woff2) format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
-@font-face { font-family: "Jost"; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/jost-400-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family: "Jost"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/jost-400-cyrillic.woff2) format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
-@font-face { font-family: "Jost"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/jost-400-latin-ext.woff2) format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
-@font-face { font-family: "Jost"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/jost-400-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family: "Caveat"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/caveat-600-cyrillic.woff2) format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
-@font-face { font-family: "Caveat"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/caveat-600-latin-ext.woff2) format("woff2"); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
-@font-face { font-family: "Caveat"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/caveat-600-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 
-/* Art deco: gold lines and glass panes on wool felt, like the cloth of a
-   billiard table; the pictures and the tables are chalk on school boards
-   in polished wooden frames. Every colour is a token, and the components
-   take them from the tokens. The dark theme is the default; the light one
-   follows the system, or the reader's choice in the header (site.js sets
-   data-theme on <html>). */
+/* The blueprint, the look of the apps too: a white sheet with blue lines in
+   the light theme, and a blueprint in the dark one, both on a fine grid.
+   The pictures are line drawings with numbered callouts, the sections are
+   sheets and the pictures figures. A solid line means on or working, a
+   dashed one off or waiting; corner marks show the element that is active.
+   Every colour is a token, and the components take them from the tokens.
+   The dark theme is the default; the light one follows the system, or the
+   reader's choice in the header (site.js sets data-theme on <html>). The
+   words "Fig." and "Sheet" come from the page (--fig and --sheet on <html>),
+   in its language. */
 
 :root {
-  --f-display: "Forum", "Didot", Georgia, serif;
-  --f-body: "Jost", "Futura", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Arabic", "Noto Sans Hebrew", "Noto Sans Devanagari", "PingFang SC", "Microsoft YaHei", sans-serif;
-  --f-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --f-hand: "Caveat", "Segoe Print", "Bradley Hand", cursive;
-  --bg: #0B1A20;
-  --felt: url(felt.jpg);
-  --glow: rgba(60, 110, 120, .16);
-  --vignette: rgba(0, 0, 0, .45);
-  --raised: rgba(241, 234, 216, .045);
-  --menu: #0C1E25;
-  --text: #F1EAD8;
-  --dim: #A8B9B9;
-  --accent: #D8B46A;
-  --on-accent: #1A1206;
-  --line: rgba(216, 180, 106, .32);
-  --grid: rgba(216, 180, 106, .07);
-  --code: #0F252D;
-  --shadow: 0 18px 40px -20px rgba(0, 0, 0, .8);
-  --gold: linear-gradient(180deg, #F6DC9C, #D2A552 55%, #B4863A);
-  --gold-text: linear-gradient(180deg, #F6DC9C, #C99A45 60%, #F1D48A);
-  /* The board: black slate, a faint grid, and chalk in white and yellow,
-     in a frame of old walnut. */
-  --wood-h: url(wood-h.jpg);
-  --wood-v: url(wood-v.jpg);
-  --frame-shadow: 0 28px 46px -22px rgba(0, 0, 0, .95), 0 4px 10px rgba(0, 0, 0, .55);
-  --slate: #141514;
-  --slate-grid: rgba(255, 255, 255, .045);
-  --slate-shadow: inset 0 3px 6px rgba(0, 0, 0, .8), inset 0 0 0 1px rgba(0, 0, 0, .7);
-  --chalk: #F2F0EA;
-  --chalk-words: #ECE9E1;
-  --chalk-yellow: #EFD38E;
-  --chalk-rule: rgba(242, 240, 234, .45);
-  --chalk-strong: rgba(242, 240, 234, .85);
-  --chalk-faint: rgba(242, 240, 234, .6);
-  --pulse: #FFF2C8;
+  --f-body: "IBM Plex Sans", "IBM Plex Sans Arabic", "IBM Plex Sans Hebrew", "IBM Plex Sans Devanagari", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --f-mono: "IBM Plex Mono", "IBM Plex Sans Arabic", "IBM Plex Sans Hebrew", "IBM Plex Sans Devanagari", "Noto Sans SC", "PingFang SC", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --bg: #0B2545;
+  --surface: #0D2A4F;
+  --menu: #0D2A4F;
+  --text: #E6F0FF;
+  --dim: #9DB8DA;
+  --accent: #7FD1FF;
+  --on-accent: #0B2545;
+  --line: rgba(127, 209, 255, .42);
+  --line-soft: rgba(127, 209, 255, .2);
+  --grid: rgba(127, 209, 255, .08);
+  --grid-major: rgba(127, 209, 255, .13);
+  --soft: rgba(127, 209, 255, .1);
+  --code: rgba(127, 209, 255, .07);
+  --shadow: 0 18px 40px -24px rgba(0, 0, 0, .7);
   color-scheme: dark;
 }
-
-/* The light theme: sand-coloured cloth, pale oak frames, and boards of
-   light grey slate written on in graphite and red-brown chalk. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --bg: #DCD3C1;
-    --felt: url(felt-light.jpg);
-    --glow: rgba(255, 252, 240, .55);
-    --vignette: rgba(110, 85, 45, .2);
-    --raised: rgba(255, 251, 242, .5);
-    --menu: #EFE8DA;
-    --text: #2A251E;
-    --dim: #574F43;
-    --accent: #6E4D10;
-    --on-accent: #1A1206;
-    --line: rgba(110, 77, 16, .32);
-    --grid: rgba(110, 77, 16, .08);
-    --code: #ECE4D4;
-    --shadow: 0 18px 40px -22px rgba(70, 50, 20, .45);
-    --gold-text: linear-gradient(180deg, #A67A26, #7D5814 60%, #9C7022);
-    --wood-h: url(oak-h.jpg);
-    --wood-v: url(oak-v.jpg);
-    --frame-shadow: 0 24px 40px -22px rgba(70, 50, 20, .55), 0 3px 8px rgba(70, 50, 20, .25);
-    --slate: #ECE8DF;
-    --slate-grid: rgba(60, 52, 40, .07);
-    --slate-shadow: inset 0 2px 5px rgba(70, 50, 20, .25), inset 0 0 0 1px rgba(70, 50, 20, .2);
-    --chalk: #3A3530;
-    --chalk-words: #3A3530;
-    --chalk-yellow: #94491A;
-    --chalk-rule: rgba(58, 53, 48, .4);
-    --chalk-strong: rgba(58, 53, 48, .75);
-    --chalk-faint: rgba(58, 53, 48, .5);
-    --pulse: #C8621E;
+    --bg: #F7FAFF;
+    --surface: #FFFFFF;
+    --menu: #FFFFFF;
+    --text: #0B2545;
+    --dim: #3E5A80;
+    --accent: #0B5CAD;
+    --on-accent: #FFFFFF;
+    --line: rgba(11, 92, 173, .38);
+    --line-soft: rgba(11, 92, 173, .18);
+    --grid: rgba(11, 92, 173, .07);
+    --grid-major: rgba(11, 92, 173, .11);
+    --soft: rgba(11, 92, 173, .07);
+    --code: rgba(11, 92, 173, .05);
+    --shadow: 0 18px 40px -26px rgba(11, 37, 69, .35);
     color-scheme: light;
   }
 }
 :root[data-theme="light"] {
-  --bg: #DCD3C1;
-  --felt: url(felt-light.jpg);
-  --glow: rgba(255, 252, 240, .55);
-  --vignette: rgba(110, 85, 45, .2);
-  --raised: rgba(255, 251, 242, .5);
-  --menu: #EFE8DA;
-  --text: #2A251E;
-  --dim: #574F43;
-  --accent: #6E4D10;
-  --on-accent: #1A1206;
-  --line: rgba(110, 77, 16, .32);
-  --grid: rgba(110, 77, 16, .08);
-  --code: #ECE4D4;
-  --shadow: 0 18px 40px -22px rgba(70, 50, 20, .45);
-  --gold-text: linear-gradient(180deg, #A67A26, #7D5814 60%, #9C7022);
-  --wood-h: url(oak-h.jpg);
-  --wood-v: url(oak-v.jpg);
-  --frame-shadow: 0 24px 40px -22px rgba(70, 50, 20, .55), 0 3px 8px rgba(70, 50, 20, .25);
-  --slate: #ECE8DF;
-  --slate-grid: rgba(60, 52, 40, .07);
-  --slate-shadow: inset 0 2px 5px rgba(70, 50, 20, .25), inset 0 0 0 1px rgba(70, 50, 20, .2);
-  --chalk: #3A3530;
-  --chalk-words: #3A3530;
-  --chalk-yellow: #94491A;
-  --chalk-rule: rgba(58, 53, 48, .4);
-  --chalk-strong: rgba(58, 53, 48, .75);
-  --chalk-faint: rgba(58, 53, 48, .5);
-  --pulse: #C8621E;
+  --bg: #F7FAFF;
+  --surface: #FFFFFF;
+  --menu: #FFFFFF;
+  --text: #0B2545;
+  --dim: #3E5A80;
+  --accent: #0B5CAD;
+  --on-accent: #FFFFFF;
+  --line: rgba(11, 92, 173, .38);
+  --line-soft: rgba(11, 92, 173, .18);
+  --grid: rgba(11, 92, 173, .07);
+  --grid-major: rgba(11, 92, 173, .11);
+  --soft: rgba(11, 92, 173, .07);
+  --code: rgba(11, 92, 173, .05);
+  --shadow: 0 18px 40px -26px rgba(11, 37, 69, .35);
   color-scheme: light;
 }
 
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; scroll-padding-top: 80px; }
-/* The felt: a tile of wool under a soft light from above that falls off
-   towards the edges. */
+/* The sheet: a fine grid of 32 pixels, and every fifth line a little
+   stronger. */
 body {
   margin: 0;
   color: var(--text);
   font: 17px/1.6 var(--f-body);
   overflow-x: clip;
+  counter-reset: sheet fig;
   background-color: var(--bg);
-  background-image: radial-gradient(60rem 40rem at 50% 8%, var(--glow), transparent 70%), radial-gradient(120% 90% at 50% 40%, transparent 55%, var(--vignette)), var(--felt);
-  background-size: auto, auto, 256px 256px;
+  background-image:
+    linear-gradient(var(--grid-major) 1px, transparent 1px), linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
+    linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 160px 160px, 160px 160px, 32px 32px, 32px 32px;
+  background-position: -1px -1px;
 }
 a { color: var(--accent); text-underline-offset: 3px; }
 code, pre { font-family: var(--f-mono); font-size: .88em; }
-code { background: var(--code); padding: .1em .4em; border-radius: 5px; direction: ltr; unicode-bidi: isolate; white-space: nowrap; display: inline-block; max-width: 100%; overflow-x: auto; vertical-align: bottom; }
-pre { background: var(--code); padding: 12px 14px; border-radius: 8px; overflow-x: auto; direction: ltr; text-align: left; white-space: pre; }
+code { background: var(--code); padding: .1em .4em; border-radius: 3px; direction: ltr; unicode-bidi: isolate; white-space: nowrap; display: inline-block; max-width: 100%; overflow-x: auto; vertical-align: bottom; }
+pre { background: var(--code); border: 1px solid var(--line-soft); padding: 12px 14px; border-radius: 3px; overflow-x: auto; direction: ltr; text-align: left; white-space: pre; }
 pre code { background: none; padding: 0; white-space: pre; display: block; max-width: none; overflow: visible; } /* keeps the lines of a command */
 /* A command is shown whole: a long one wraps on the screen, and is still
    one line when copied. */
 .card pre, .card pre code { white-space: pre-wrap; overflow-wrap: anywhere; }
 pre { position: relative; }
 pre:has(.copy) { padding-inline-end: 84px; }
-.copy { position: absolute; top: 8px; inset-inline-end: 8px; min-height: 32px; padding: 4px 10px; font: 500 12px/1 var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); background: transparent; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+.copy { position: absolute; top: 8px; inset-inline-end: 8px; min-height: 32px; padding: 4px 10px; font: 500 12px/1 var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); background: var(--surface); border: 1px solid var(--line); border-radius: 3px; cursor: pointer; }
 .copy:hover { border-color: var(--accent); }
-h1, h2, h3 { font-family: var(--f-display); line-height: 1.1; text-wrap: balance; font-weight: 400; text-transform: uppercase; letter-spacing: .05em; }
-h1 { font-size: clamp(34px, 4.4vw, 60px); margin: 0 0 20px; letter-spacing: .04em; }
-h2 { font-size: clamp(28px, 3.2vw, 38px); margin: 88px 0 18px; text-align: center; color: var(--accent); }
-h2::after { content: ""; display: block; width: 120px; height: 7px; margin: 16px auto 0; border-block: 1px solid var(--accent); }
-h3 { font-size: 20px; margin: 0 0 8px; }
+h1, h2, h3 { line-height: 1.12; text-wrap: balance; font-weight: 600; }
+h1 { font-size: clamp(34px, 4.2vw, 54px); margin: 0 0 20px; letter-spacing: -.025em; line-height: 1.04; }
+/* Each section is a sheet: its number in small capitals over the heading,
+   on a rule across the column. */
+h2 { font-size: clamp(28px, 3vw, 38px); margin: 96px 0 20px; letter-spacing: -.015em; counter-increment: sheet; }
+h2::before { content: var(--sheet, "Sheet") " " counter(sheet, decimal-leading-zero); display: block; margin-bottom: 14px; padding-top: 10px; border-top: 1px solid var(--line); font: 500 12px/1 var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+h3 { font-size: 19px; margin: 0 0 8px; letter-spacing: -.005em; }
+.label { margin: 0 0 18px; font: 500 12px/1.3 var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
 
 .wrap { max-width: 1160px; margin: 0 auto; padding-inline: max(20px, env(safe-area-inset-left, 0px)) max(20px, env(safe-area-inset-right, 0px)); }
 .dim { color: var(--dim); }
 .lead { font-size: clamp(18px, 1.7vw, 20px); color: var(--dim); }
-/* No word left alone on the last line of centred text: it is balanced
-   across its lines. Text set to the left fills each line as usual. */
 /* In the narrow columns of the cards long words break with a hyphen, so
    no line ends far short of the edge. */
 .card p, .card li, .steps li { hyphens: auto; -webkit-hyphens: auto; hyphenate-limit-chars: 10 4 4; }
-.lead, .intro, .final p, .hero .platforms, .facts span, .steps.boards li { text-wrap: balance; }
+.lead, .intro, .final p, .facts span, .steps.boards li { text-wrap: pretty; }
 [hidden] { display: none !important; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .sprites { position: absolute; width: 0; height: 0; overflow: hidden; }
 
 /* The header. */
-.top { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 82%, transparent); border-bottom: 1px solid var(--line); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
-.bar { display: flex; align-items: center; gap: 14px; min-height: 66px; }
-.brand { display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; font: 400 20px/1 var(--f-display); text-transform: uppercase; letter-spacing: .12em; }
+.top { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 86%, transparent); border-bottom: 1px solid var(--line); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.bar { display: flex; align-items: center; gap: 14px; min-height: 64px; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; font: 600 18px/1 var(--f-body); letter-spacing: -.005em; }
 .brand img { display: block; }
-nav { display: flex; gap: 4px; margin-inline-start: auto; }
-nav a { color: var(--dim); text-decoration: none; font-weight: 500; padding: 8px 12px; border-radius: 8px; white-space: nowrap; text-transform: uppercase; letter-spacing: .14em; font-size: 13.5px; }
+nav { display: flex; gap: 2px; margin-inline-start: auto; }
+nav a { color: var(--dim); text-decoration: none; font-weight: 500; padding: 8px 12px; border-radius: 3px; white-space: nowrap; font-size: 15px; }
 nav a:hover { color: var(--text); }
-nav a[aria-current] { color: var(--accent); }
+nav a[aria-current] { color: var(--accent); box-shadow: inset 0 -2px var(--accent); }
 
 .langs { position: relative; }
 .langs summary {
   display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 4px 12px; cursor: pointer; list-style: none;
-  font: 500 14px/1 var(--f-mono); color: var(--text); background: transparent; border: 1px solid var(--line); border-radius: 8px;
+  font: 500 14px/1 var(--f-mono); color: var(--text); background: transparent; border: 1px solid var(--line); border-radius: 3px;
 }
 .langs summary::-webkit-details-marker { display: none; }
-.globe { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; color: var(--dim); }
+.globe { font: 500 14px/1 var(--f-mono); color: var(--accent); }
 .langs ul {
   position: absolute; inset-inline-end: 0; top: calc(100% + 8px); margin: 0; padding: 6px; list-style: none; min-width: 190px; z-index: 20;
-  background: var(--menu); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow);
+  background: var(--menu); border: 1px solid var(--line); border-radius: 3px; box-shadow: var(--shadow);
 }
-.langs li a { display: block; padding: 10px 12px; border-radius: 6px; color: var(--text); text-decoration: none; }
-.langs li a:hover { background: var(--grid); }
+.langs li a { display: block; padding: 10px 12px; border-radius: 3px; color: var(--text); text-decoration: none; }
+.langs li a:hover { background: var(--soft); }
 .langs li a[aria-current] { color: var(--accent); font-weight: 600; }
 
 /* The theme button: it shows the theme chosen now, and each press moves to
    the next of "as the system", light and dark. site.js shows it. */
-.theme { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; color: var(--dim); background: transparent; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.theme { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; color: var(--dim); background: transparent; border: 1px solid var(--line); border-radius: 3px; cursor: pointer; }
 .theme[hidden] { display: none; }
 .theme:hover { color: var(--text); }
-.theme svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.theme svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: square; stroke-linejoin: miter; }
 .theme .t-auto path { fill: currentColor; }
 .theme g { display: none; }
 .theme[data-choice="auto"] .t-auto, .theme[data-choice="light"] .t-light, .theme[data-choice="dark"] .t-dark { display: inline; }
@@ -222,135 +175,151 @@ nav a[aria-current] { color: var(--accent); }
   :root:not([data-theme="dark"]) .brand .on-dark { display: none; }
 }
 
-/* A school board: black slate with a faint grid, in a frame of old,
-   well-kept walnut whose four rails meet in mitred corners; a rounded,
-   waxed moulding catches the light from the upper left. */
-.frame { --f: 26px; position: relative; padding: var(--f); border-radius: 4px; box-shadow: var(--frame-shadow); }
-.rail { position: absolute; display: block; background-repeat: repeat; }
-.rail::after { content: ""; position: absolute; inset: 0; }
-.rail.t, .rail.b { left: 0; right: 0; height: var(--f); background-image: var(--wood-h); background-size: auto 150px; }
-.rail.l, .rail.r { top: 0; bottom: 0; width: var(--f); background-image: var(--wood-v); background-size: 150px auto; }
-.rail.t { top: 0; clip-path: polygon(0 0, 100% 0, calc(100% - var(--f)) 100%, var(--f) 100%); background-position: -120px -20px; }
-.rail.b { bottom: 0; clip-path: polygon(var(--f) 0, calc(100% - var(--f)) 0, 100% 100%, 0 100%); background-position: -640px -70px; }
-.rail.l { left: 0; clip-path: polygon(0 0, 100% var(--f), 100% calc(100% - var(--f)), 0 100%); background-position: -40px -300px; }
-.rail.r { right: 0; clip-path: polygon(0 var(--f), 100% 0, 100% 100%, 0 calc(100% - var(--f))); background-position: -90px -900px; }
-.rail.t::after { background: linear-gradient(180deg, rgba(0, 0, 0, .35), rgba(255, 226, 180, .32) 22%, rgba(255, 226, 180, .1) 45%, rgba(0, 0, 0, .15) 75%, rgba(0, 0, 0, .55)); }
-.rail.b::after { background: linear-gradient(180deg, rgba(0, 0, 0, .55), rgba(255, 226, 180, .22) 25%, rgba(255, 226, 180, .06) 50%, rgba(0, 0, 0, .25) 80%, rgba(0, 0, 0, .6)); }
-.rail.l::after { background: linear-gradient(90deg, rgba(0, 0, 0, .3), rgba(255, 226, 180, .28) 22%, rgba(255, 226, 180, .08) 45%, rgba(0, 0, 0, .18) 75%, rgba(0, 0, 0, .55)); }
-.rail.r::after { background: linear-gradient(90deg, rgba(0, 0, 0, .55), rgba(255, 226, 180, .16) 25%, rgba(0, 0, 0, .05) 50%, rgba(0, 0, 0, .3) 80%, rgba(0, 0, 0, .65)); }
+/* Corner marks: four small right angles at the corners of an element, the
+   mark of what is active. A drawing sheet always has them; a card shows
+   them when it is the reader's own or under the pointer. */
+/* The chalkboard look's drawings and rails (board.css shows them). */
+.hand, .rail { display: none; }
+.corner { position: absolute; width: 12px; height: 12px; pointer-events: none; border: 0 solid var(--accent); }
+.corner.tl { top: -1px; left: -1px; border-top-width: 2px; border-left-width: 2px; }
+.corner.tr { top: -1px; right: -1px; border-top-width: 2px; border-right-width: 2px; }
+.corner.bl { bottom: -1px; left: -1px; border-bottom-width: 2px; border-left-width: 2px; }
+.corner.br { bottom: -1px; right: -1px; border-bottom-width: 2px; border-right-width: 2px; }
+
+/* A drawing sheet: the picture on its own fine grid, inside a thin frame
+   with corner marks, and its figure number in the top corner. */
+.frame { position: relative; border: 1px solid var(--line); border-radius: 3px; background: var(--surface); counter-increment: fig; }
+.frame::before { content: var(--fig, "Fig.") " " counter(fig); position: absolute; top: 10px; inset-inline-start: 12px; z-index: 1; font: 500 11px/1 var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+.frame.board-table, .frame.install-board { counter-increment: none; }
+.frame.board-table::before, .frame.install-board::before { content: none; }
 .surface {
-  position: relative; background-color: var(--slate);
-  background-image: linear-gradient(var(--slate-grid) 1px, transparent 1px), linear-gradient(90deg, var(--slate-grid) 1px, transparent 1px);
-  background-size: 28px 28px; background-position: -1px -1px;
-  box-shadow: var(--slate-shadow);
+  position: relative; border-radius: 3px;
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px; background-position: -1px -1px;
 }
 .surface > svg { display: block; width: 100%; height: auto; }
 
-/* Chalk: solid lines with a hand's wobble (drawn by chalk.js), a soft edge
-   and a little dust (the filters in layout.html). The filter is on the
-   still lines and on the moving parts apart (chalk.js), so a part that moves
-   is filtered again alone. */
-.chalk > g { filter: url(#chalk); }
-.chalk .w, .chalk .y { fill: none; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
-.chalk .w { stroke: var(--chalk); }
-.chalk .y { stroke: var(--chalk-yellow); }
-.words { filter: url(#chalk-words); }
-.words text { font: 600 25px var(--f-hand); fill: var(--chalk-words); letter-spacing: .02em; }
-.words text.y { fill: var(--chalk-yellow); }
-.words text.long { font-size: 20px; }
-.words text.longer { font-size: 17px; }
+/* The lines of a drawing (chalk.js draws them once, straight): the devices
+   in the ink of the text, what matters in the accent, every line one width
+   at any size. */
+.chalk .w, .chalk .y { fill: none; stroke-width: 1.6; stroke-linecap: square; stroke-linejoin: miter; vector-effect: non-scaling-stroke; }
+.chalk .w { stroke: var(--text); }
+.chalk .y { stroke: var(--accent); }
+.words text { font: 500 15px var(--f-mono); fill: var(--dim); letter-spacing: .08em; text-transform: uppercase; }
+.words text.y { fill: var(--accent); }
+.words text.long { font-size: 13px; }
+.words text.longer { font-size: 12px; }
+/* A numbered callout: a circle with its number, and a leader to what it
+   points at; the list under the figure says what each one means. */
+.callout path { fill: none; stroke: var(--accent); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.callout circle { fill: var(--surface); stroke: var(--accent); stroke-width: 1.4; vector-effect: non-scaling-stroke; }
+.callout text { font: 500 13px var(--f-mono); fill: var(--accent); text-anchor: middle; }
 
-/* A table written in chalk: the words by hand, the rules drawn with a
-   chalk line. The chalk is on each cell, not on the table, so a cell that
-   appears or moves is filtered again alone and its fading in costs the
-   browser nothing more. */
-.board-table .surface { padding: 22px 26px 26px; overflow-x: auto; }
-.chalk-table { width: 100%; border-collapse: collapse; font: 600 24px/1.25 var(--f-hand); color: var(--chalk-words); }
-.chalk-table th, .chalk-table td { padding: 12px 16px; text-align: start; vertical-align: middle; filter: url(#chalk-words); }
-.chalk-table thead th { color: var(--chalk-yellow); border-bottom: 2.5px solid var(--chalk-strong); font-weight: 600; }
-.chalk-table tbody tr + tr > * { border-top: 2px solid var(--chalk-rule); }
-.chalk-table tr > * + * { border-inline-start: 2px solid var(--chalk-rule); }
+/* A table on a drawing: ruled in thin lines, its heads in small capitals,
+   our own row shaded. */
+.board-table .surface { padding: 14px 18px 18px; overflow-x: auto; background-image: none; }
+.chalk-table { width: 100%; border-collapse: collapse; font: 400 16px/1.35 var(--f-body); color: var(--text); }
+.chalk-table th, .chalk-table td { padding: 12px 14px; text-align: start; vertical-align: middle; }
+.chalk-table thead th { font: 500 11.5px/1.3 var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); border-bottom: 1px solid var(--line); }
+.chalk-table tbody tr + tr > * { border-top: 1px solid var(--line-soft); }
+.chalk-table tr > * + * { border-inline-start: 1px solid var(--line-soft); }
 .chalk-table thead td { border: 0; }
-.chalk-table tbody th { font-size: 26px; font-weight: 600; }
+.chalk-table tbody th { font-weight: 600; }
 .compare td, .compare thead th { text-align: center; }
 .chalk-table.centred th, .chalk-table.centred td { text-align: center; }
-.compare tr.us th { color: var(--chalk-yellow); }
-.compare td.systems { font-size: 20px; line-height: 1.15; }
-/* The apps compared: their names, then five columns of one width. */
-@media (min-width: 700px) { .compare.apps { table-layout: fixed; } .compare.apps col.name { width: 22%; } .compare.apps thead th { font-size: 21px; hyphens: auto; } }
-.mark { display: inline-block; width: 30px; height: 30px; vertical-align: middle; fill: none; stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; }
-.mark.yes { stroke: var(--chalk-yellow); }
-.mark.no { stroke: var(--chalk-faint); }
+.compare tr.us > * { background: var(--soft); }
+.compare tr.us th { color: var(--accent); }
+.compare td.systems { font: 400 13px/1.3 var(--f-mono); color: var(--dim); }
+/* The apps compared: their names, then seven columns of one width. */
+@media (min-width: 700px) { .compare.apps { table-layout: fixed; } .compare.apps col.name { width: 22%; } .compare.apps thead th { hyphens: auto; } }
+.mark { display: inline-block; width: 24px; height: 24px; vertical-align: middle; fill: none; stroke-width: 2; stroke-linecap: square; stroke-linejoin: miter; }
+.mark.yes { stroke: var(--accent); }
+.mark.no { stroke: var(--dim); stroke-width: 1.5; stroke-dasharray: 3 3; }
 
-/* The hero: the title, then the board with the picture. */
-.hero { padding: 48px 0 24px; text-align: center; }
-.hero h1 { font-size: clamp(36px, 5vw, 64px); }
-.hero h1 span { background: var(--gold-text); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.hero .lead { margin: 0 auto; font-size: clamp(17px, 1.6vw, 20px); line-height: 1.65; }
-.hero-board { max-width: 880px; margin: 34px auto 0; }
-.platforms { color: var(--dim); font: 500 13px/1.4 var(--f-mono); letter-spacing: .22em; text-transform: uppercase; margin: 26px 0 0; }
-.hero .actions { justify-content: center; }
+/* The hero: the words on one side, figure 1 on the other; one under the
+   other on a narrow screen. */
+.hero { padding: 56px 0 24px; }
+.hero-grid { display: grid; gap: 40px 56px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); align-items: center; }
+.hero-text { min-width: 0; }
+.hero h1 span { color: var(--accent); }
+.hero .lead { margin: 0; line-height: 1.6; }
+.hero-fig { margin: 0; min-width: 0; }
+.hero-board .surface { padding: 28px 10px 4px; }
+.platforms { color: var(--dim); font: 500 12.5px/1.4 var(--f-mono); letter-spacing: .14em; text-transform: uppercase; margin: 26px 0 0; }
+.themes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 16px 0 0; font-size: 13.5px; color: var(--dim); }
+.themes span { margin-inline-end: 4px; }
+.themes i { display: block; width: 16px; height: 16px; background: var(--c); border: 1px solid var(--line); }
+.themes i:first-of-type { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--accent); }
+.callouts { list-style: none; counter-reset: callout; margin: 14px 0 0; padding: 0; display: grid; gap: 10px 24px; grid-template-columns: repeat(3, minmax(0, 1fr)); font-size: 14.5px; line-height: 1.4; color: var(--dim); }
+.callouts li { counter-increment: callout; display: flex; gap: 10px; align-items: flex-start; }
+.callouts li::before { content: counter(callout); flex: none; display: grid; place-items: center; width: 22px; height: 22px; border: 1.4px solid var(--accent); border-radius: 50%; font: 500 12px/1 var(--f-mono); color: var(--accent); }
+@media (max-width: 1000px) {
+  .hero-grid { grid-template-columns: 1fr; }
+  .callouts { grid-template-columns: 1fr; }
+}
 
-/* Buttons. */
+/* Buttons: the main one filled with the accent, the other drawn in a dashed
+   line, as in the apps. */
 .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 30px; }
 .button {
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 50px; padding: 10px 24px;
-  text-decoration: none; color: var(--accent); border: 1px solid var(--accent); background: transparent;
-  text-transform: uppercase; letter-spacing: .14em; font-weight: 500; font-size: 15px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 50px; padding: 10px 22px;
+  text-decoration: none; color: var(--text); border: 1px dashed var(--line); border-radius: 3px; background: transparent;
+  font-weight: 500; font-size: 16px;
 }
-.button.accent {
-  color: var(--on-accent); border: 0; background: var(--gold); padding-inline: 32px;
-  clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 12px 100%, 0 50%);
-}
+.button:hover { border-color: var(--accent); border-style: solid; }
+.button.accent { color: var(--on-accent); border: 1px solid var(--accent); background: var(--accent); font-weight: 600; padding-inline: 24px; }
 .button.go::after { content: "→"; display: inline-block; }
 [dir="rtl"] .button.go::after { content: "←"; }
 /* Arabic and Hebrew: letter spacing breaks Arabic's joined letters and reads oddly in Hebrew,
    and code stays left to right inside a right-to-left line. */
-[dir="rtl"] :is(h1, h2, h3, nav a, .brand, .platforms, .facts strong, .button, .copy) { letter-spacing: 0; }
+[dir="rtl"] :is(h1, h2, h3, h2::before, nav a, .brand, .platforms, .label, .button, .copy, .badge) { letter-spacing: 0; }
 [dir="rtl"] code, [dir="rtl"] pre { direction: ltr; unicode-bidi: isolate; }
-.button:focus-visible, a:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+/* The small capitals of the labels are spaced out in Latin and Cyrillic
+   letters only: Arabic, Hebrew, Hindi and Chinese are set as written, in
+   the Plex face of their script. */
+:is(:lang(ar), :lang(he), :lang(hi), :lang(zh)) :is(.label, .platforms, .badge, .words text, .callout text, .chalk-table thead th, .copy, .servers td) { letter-spacing: 0; }
+:is(:lang(ar), :lang(he), :lang(hi), :lang(zh)) :is(h2, .frame)::before { letter-spacing: 0; }
+.button:focus-visible, a:focus-visible, summary:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 .skip { position: absolute; inset-inline-start: 16px; top: -100px; z-index: 30; }
-.skip:focus { top: 8px; background: var(--menu); padding: 10px 14px; border-radius: 8px; }
+.skip:focus { top: 8px; background: var(--menu); padding: 10px 14px; border-radius: 3px; }
 
-/* Raised surfaces: glass panes with cut corners and a gold bar. */
-.card, .facts div, .note, .steps li {
-  background: var(--raised); border: 1px solid var(--line); position: relative;
-  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-  clip-path: polygon(14px 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%, 0 14px);
-}
-/* A pane that holds a living board is tinted instead of blurred: a blur
-   behind it would be worked out again on every frame the chalk moves. */
-.steps.boards li, .groups .card {
-  -webkit-backdrop-filter: none; backdrop-filter: none;
-  background: linear-gradient(var(--raised), var(--raised)), color-mix(in srgb, var(--bg) 62%, transparent);
-}
-.card::before, .facts div::before {
-  content: ""; position: absolute; left: 50%; top: 0; width: 44px; height: 2px; margin-left: -22px; background: var(--accent);
-}
+/* Raised surfaces: white sheets, or blueprint ones, in a thin frame. */
+.card, .facts div, .note, .steps li { background: var(--surface); border: 1px solid var(--line); border-radius: 3px; position: relative; }
+/* The corner marks of a card: two, drawn by the card itself, at the top of
+   its start and the bottom of its end. */
+.card::before, .card::after, .facts div::before, .facts div::after { content: ""; position: absolute; width: 12px; height: 12px; border: 0 solid var(--accent); opacity: 0; transition: opacity .2s; pointer-events: none; }
+.card::before, .facts div::before { top: -1px; inset-inline-start: -1px; border-top-width: 2px; border-inline-start-width: 2px; }
+.card::after, .facts div::after { bottom: -1px; inset-inline-end: -1px; border-bottom-width: 2px; border-inline-end-width: 2px; }
+.card:hover::before, .card:hover::after, .facts div:hover::before, .facts div:hover::after, .card.mine::before, .card.mine::after { opacity: 1; }
 
-.facts { display: grid; gap: 14px; grid-template-columns: repeat(4, 1fr); margin-top: 22px; }
-.facts div { padding: 24px 20px 18px; display: grid; justify-items: center; text-align: center; }
-.facts .ico { width: 34px; height: 34px; margin-bottom: 8px; fill: none; stroke: var(--accent); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; overflow: visible; }
-.facts strong { display: block; font: 400 18px/1.25 var(--f-display); text-transform: uppercase; letter-spacing: .06em; color: var(--accent); }
-.facts span { color: var(--dim); font-size: 14.5px; line-height: 1.35; }
+.facts { display: grid; gap: 14px; grid-template-columns: repeat(4, 1fr); margin-top: 28px; }
+.facts div { padding: 20px 20px 18px; display: grid; justify-items: start; align-content: start; }
+.facts .ico { width: 28px; height: 28px; margin-bottom: 12px; fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linecap: square; stroke-linejoin: miter; overflow: visible; }
+.facts strong { display: block; font: 600 17px/1.25 var(--f-body); color: var(--text); }
+.facts span { color: var(--dim); font-size: 14.5px; line-height: 1.4; }
 
-.faq details { border-bottom: 1px solid var(--line); }
-.faq summary { cursor: pointer; padding: 16px 20px; font-weight: 600; min-height: 44px; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+.faq { border-top: 1px solid var(--line); }
+.faq details { border-bottom: 1px solid var(--line-soft); }
+.faq summary { cursor: pointer; padding: 16px 4px; font-weight: 600; min-height: 44px; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
 .faq summary::-webkit-details-marker { display: none; }
-.faq summary::after { content: "+"; color: var(--accent); font: 400 24px/1 var(--f-mono); transition: transform .2s; }
+.faq summary::after { content: "+"; color: var(--accent); font: 400 22px/1 var(--f-mono); transition: transform .2s; }
 .faq details[open] summary::after { transform: rotate(45deg); }
-.faq details p { margin: 0; padding: 0 20px 18px; color: var(--dim); }
+.faq details p { margin: 0; padding: 0 4px 18px; color: var(--dim); max-width: 72ch; }
 
-/* The closing call: a gold-framed pane. */
-.final { margin-top: 88px; text-align: center; padding: 12px 36px 40px; border: 1px solid var(--accent); background: var(--raised); outline: 1px solid var(--line); outline-offset: 6px; }
-.final h2 { margin-top: 28px; }
-.final h2::after { display: none; }
+/* The closing call: a sheet with its corner marks, its heading without a
+   sheet number. */
+.final { position: relative; margin-top: 96px; text-align: center; padding: 8px 36px 40px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface); }
+.final::before, .final::after { content: ""; position: absolute; width: 14px; height: 14px; border: 0 solid var(--accent); }
+.final::before { top: -1px; inset-inline-start: -1px; border-top-width: 2px; border-inline-start-width: 2px; }
+.final::after { bottom: -1px; inset-inline-end: -1px; border-bottom-width: 2px; border-inline-end-width: 2px; }
+.final h2 { margin-top: 32px; counter-increment: none; }
+.final h2::before { display: none; }
 .final .actions { justify-content: center; }
 
 .oops { text-align: center; padding-bottom: 40px; }
 .oops .actions { justify-content: center; }
-.oops .code { font: 400 96px/1 var(--f-display); color: var(--accent); margin: 32px 0 8px; }
+.oops .code { font: 500 96px/1 var(--f-mono); color: var(--accent); margin: 32px 0 8px; }
 
 .dock { display: none; }
 
@@ -365,102 +334,99 @@ nav a[aria-current] { color: var(--accent); }
 .cards.computers { grid-template-columns: repeat(2, 1fr); }
 @media (max-width: 960px) { .cards.computers { grid-template-columns: 1fr; } }
 
-/* The commands for computers, written on one board: each system a part of
-   it, headed in chalk, the commands boxed in a chalk line. */
+/* The commands for computers, on one sheet: each system a part of it, the
+   reader's own first. */
 .install-board { margin: 0 0 18px; }
-.install-board .surface { padding: 26px 30px 30px; }
-.install-board .os + .os { border-top: 2px solid var(--chalk-rule); margin-top: 26px; padding-top: 22px; }
-.install-board h3 { font: 600 32px/1.2 var(--f-hand); text-transform: none; letter-spacing: .01em; color: var(--chalk-yellow); filter: url(#chalk-words); margin: 0 0 6px; }
-.install-board p { color: var(--chalk-words); }
-.install-board pre { background: transparent; border: 2px solid var(--chalk-rule); border-radius: 6px; color: var(--chalk-words); }
+.install-board .surface { padding: 24px 28px 28px; background-image: none; }
+.install-board .os + .os { border-top: 1px solid var(--line-soft); margin-top: 24px; padding-top: 22px; }
+.install-board h3 { font-size: 20px; margin: 0 0 6px; }
+.install-board p { color: var(--dim); }
 .install-board pre, .install-board pre code { white-space: pre-wrap; overflow-wrap: anywhere; }
-.install-board .copy { color: var(--chalk-yellow); border-color: var(--chalk-rule); background: var(--slate); }
-.install-board .copy:hover { border-color: var(--chalk-yellow); }
-.card.mine { border-color: var(--accent); outline: 1px solid var(--line); outline-offset: 4px; }
+.card.mine { border-color: var(--accent); }
 .card .mine-badge, .install-board .mine-badge { display: none; }
 .card.mine .mine-badge, .install-board .os.mine .mine-badge { display: inline-block; }
 @media (max-width: 960px) { .cards.four, .facts { grid-template-columns: repeat(2, 1fr); } }
 .cards.two { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
-.card { padding: 24px; min-width: 0; }
+.card { padding: 22px 24px 24px; min-width: 0; }
 .card p { margin: 0 0 10px; color: var(--dim); }
 .card h3 + p { margin-top: 4px; }
 .card ul { padding-inline-start: 20px; margin: 12px 0 0; }
 .card li { margin-bottom: 8px; }
 .card li::marker { color: var(--accent); }
 .badge {
-  display: inline-block; font: 500 12px/1 var(--f-mono); letter-spacing: .2em; text-transform: uppercase; color: var(--on-accent);
-  background: linear-gradient(180deg, #F6DC9C, #C99A45); padding: 7px 12px; margin: 0 0 12px;
+  display: inline-block; font: 500 11.5px/1 var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 2px; padding: 6px 9px; margin: 0 0 12px;
 }
-.card .badge { margin: 0 0 12px; color: var(--on-accent); }
-/* The two groups share their rows, so both boards hang at the same height
+.card .badge { margin: 0 0 12px; }
+/* The two groups share their rows, so both drawings hang at the same height
    whether or not a card carries a badge. */
 .groups { grid-template-columns: 1fr 1fr; }
 .groups .card { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 0; align-content: start; }
 .groups .card header { align-self: end; }
-.groups .frame { --f: 16px; margin: 16px 0 22px; }
-.note { border-inline-start: 3px solid var(--accent); padding: 16px 20px; margin-top: 20px; }
+.groups .frame { margin: 16px 0 22px; }
+.groups .frame .surface { padding-top: 20px; }
+.note { border-inline-start: 2px solid var(--accent); padding: 16px 20px; margin-top: 20px; }
 
+/* The steps: each number in a circle, like the callouts of a drawing. */
 .steps { padding: 0; list-style: none; counter-reset: step; display: grid; gap: 14px; }
-.steps li { counter-increment: step; position: relative; padding: 18px 20px 18px 70px; }
-[dir="rtl"] .steps li { padding: 18px 70px 18px 20px; }
+.steps li { counter-increment: step; position: relative; padding: 18px 20px 18px 66px; }
+[dir="rtl"] .steps li { padding: 18px 66px 18px 20px; }
 .steps li::before {
-  content: counter(step); position: absolute; inset-inline-start: 18px; top: 13px; width: 40px; height: 40px;
-  display: grid; place-items: center; font: 400 18px/1 var(--f-display); color: var(--on-accent);
-  background: var(--gold); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  content: counter(step); position: absolute; inset-inline-start: 20px; top: 16px; width: 30px; height: 30px;
+  display: grid; place-items: center; font: 500 14px/1 var(--f-mono); color: var(--accent);
+  border: 1.4px solid var(--accent); border-radius: 50%; background: var(--surface);
 }
-/* The steps with a small board each: three in a row, one under another on
+/* The steps with a small drawing each: three in a row, one under another on
    a phone. */
 .steps.boards { grid-template-columns: repeat(3, 1fr); gap: 16px; }
-.steps.boards li { padding: 18px 20px 20px; text-align: center; }
-.steps.boards li::before { position: static; margin: 0 auto 12px; }
+.steps.boards li { padding: 18px 20px 20px; }
+.steps.boards li::before { position: static; margin: 0 0 12px; }
 [dir="rtl"] .steps.boards li { padding: 18px 20px 20px; }
-.steps.boards .frame { --f: 12px; margin: 0 0 14px; }
+.steps.boards .frame { margin: 0 0 14px; }
+.steps.boards .frame .surface { padding-top: 16px; }
 .steps.boards strong { display: block; margin-bottom: 4px; }
 @media (max-width: 860px) { .steps.boards { grid-template-columns: 1fr; } }
-/* A mark between yes and no, with what it means in a note under the table. */
 /* The download page: the reader's own system first, marked. */
-.pick { justify-content: center; }
+.pick { justify-content: flex-start; }
 
 /* A page's title, its lead and its closing block are centred with the
    headings, and the text under them spans the width. */
-.page { padding-top: 48px; }
+.page { padding-top: 56px; }
 .page ul { padding-inline-start: 22px; }
-.page > h1, .page > .lead, .page > .lead + .dim { text-align: center; margin-inline: auto; }
+.page > h1, .page > .lead, .page > .lead + .dim { max-width: 46rem; }
 
-.foot { margin-top: 96px; padding: 32px 0 44px; border-top: 1px solid var(--line); color: var(--dim); font-size: 15px; }
+.foot { margin-top: 96px; padding: 28px 0 44px; border-top: 1px solid var(--line); color: var(--dim); font-size: 15px; }
 .foot a { color: var(--dim); }
 
 @media (max-width: 760px) {
-  .frame, .groups .frame { --f: 12px; }
   .groups { grid-template-columns: 1fr; }
   .groups .card { grid-row: auto; grid-template-rows: none; }
-  .chalk .w, .chalk .y { stroke-width: 4.2; }
-  .board-table .surface { padding: 10px; }
-  .chalk-table { font-size: 18px; }
-  .chalk-table thead th { font-size: 16px; hyphens: auto; }
-  .chalk-table tbody th { font-size: 18px; }
-  .chalk-table th, .chalk-table td { padding: 7px 5px; }
-  .compare td { padding: 7px 2px; }
+  .board-table .surface { padding: 8px; }
+  .chalk-table { font-size: 15px; }
+  .chalk-table thead th { font-size: 10.5px; hyphens: auto; }
+  .chalk-table th, .chalk-table td { padding: 8px 5px; }
+  .compare td { padding: 8px 2px; }
   /* The apps' table keeps its eight columns on a phone: the heads run
      upwards, and the cells shrink. */
   .compare.apps { table-layout: fixed; }
   .compare.apps col.name { width: 27%; }
-  .compare.apps thead th { writing-mode: vertical-rl; transform: rotate(180deg); text-align: start; vertical-align: bottom; padding: 6px 0; font-size: 15px; hyphens: none; }
-  .compare.apps tbody th { font-size: 14px; padding: 6px 3px; hyphens: auto; }
+  .compare.apps thead th { writing-mode: vertical-rl; transform: rotate(180deg); text-align: start; vertical-align: bottom; padding: 6px 0; hyphens: none; }
+  .compare.apps tbody th { font-size: 13px; padding: 6px 3px; hyphens: auto; }
   .compare.apps td { padding: 6px 0; }
   .compare.apps .mark { width: 18px; height: 18px; }
-  .compare td.systems { font-size: 11px; line-height: 1.2; }
-  .mark { width: 22px; height: 22px; }
+  .compare td.systems { font-size: 10px; line-height: 1.25; }
+  .mark { width: 20px; height: 20px; }
   /* The servers' table is a list on a phone: each server with its three
      answers under it. */
   .servers thead { display: none; }
   .servers tr, .servers th, .servers td { display: block; }
-  .servers tbody tr + tr { border-top: 2px solid var(--chalk-rule); }
-  .chalk-table.servers tbody tr + tr > *, .chalk-table.servers tr > * + * { border: 0; }
-  .servers tbody th { padding-top: 12px; color: var(--chalk-yellow); font-size: 22px; }
+  .servers tbody tr + tr { border-top: 1px solid var(--line); }
+  .servers tbody th { padding-top: 12px; color: var(--accent); font-size: 17px; }
   .servers td { padding: 2px 5px 8px; }
   .chalk-table.servers th, .chalk-table.servers td { text-align: start; }
-  .servers td::before { content: attr(data-label); display: block; font-size: 15px; color: var(--dim); }
+  .chalk-table.servers tr > * + * { border-inline-start: 0; }
+  .chalk-table.servers tbody tr > * { border-top: 0; }
+  .servers td::before { content: attr(data-label); display: block; font: 500 11px/1.4 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
 }
 
 /* Phones: one column, the menu in a row of its own that scrolls sideways,
@@ -470,70 +436,72 @@ nav a[aria-current] { color: var(--accent); }
   body { font-size: 16px; padding-bottom: 84px; }
   .wrap { padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); }
   .bar { flex-wrap: wrap; gap: 8px 10px; min-height: 56px; padding-top: 6px; }
-  .brand { font-size: 15px; gap: 8px; letter-spacing: .06em; }
+  .brand { font-size: 15px; gap: 8px; }
   .brand img { width: 28px; height: 28px; }
   .lname { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   nav { order: 3; margin: 0 -16px; padding: 0 12px 8px; gap: 2px; overflow-x: auto; scrollbar-width: none; width: calc(100% + 32px); }
   nav::-webkit-scrollbar { display: none; }
-  nav a { padding: 6px 10px; font-size: 13px; }
+  nav a { padding: 6px 10px; font-size: 14px; }
   /* A blurred header would hold the fixed sheet inside itself, so here it
      is opaque instead. */
   .top { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--bg); }
   .langs { margin-inline-start: auto; }
   .langs summary { min-height: 40px; padding: 4px 10px; }
-  .langs ul { position: fixed; inset: auto 12px calc(12px + env(safe-area-inset-bottom)); top: auto; border-radius: 14px; padding: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
+  .langs ul { position: fixed; inset: auto 12px calc(12px + env(safe-area-inset-bottom)); top: auto; padding: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
   .langs li a { padding: 14px; text-align: center; }
   /* A tap outside the sheet closes it: the dimmed page is the summary. */
   .langs[open] summary::after { content: ""; position: fixed; inset: 0; z-index: 15; background: rgba(0, 0, 0, .4); cursor: default; }
   .dock {
     display: block; position: fixed; inset-inline: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 9; margin: 0; padding: 8px;
-    background: color-mix(in srgb, var(--bg) 70%, transparent); border: 1px solid var(--line); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+    background: color-mix(in srgb, var(--bg) 80%, transparent); border: 1px solid var(--line); border-radius: 3px; -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
   }
   .dock .button { width: 100%; }
   .hero { padding-top: 32px; }
   .hero .actions .accent { display: none; }
   .hero .actions .button { flex: 1; }
+  .themes span { flex-basis: 100%; }
   .facts, .cards.four, .cards.pairs, .cards.two { grid-template-columns: 1fr; }
   .facts { grid-template-columns: 1fr 1fr; }
   .facts div { padding: 16px; }
   .card { padding: 20px; }
-  h2 { margin-top: 60px; }
-  .final { padding: 6px 18px 28px; }
-  .steps li { padding: 16px 16px 16px 62px; }
-  [dir="rtl"] .steps li { padding: 16px 62px 16px 16px; }
-  .steps li::before { inset-inline-start: 14px; }
+  h2 { margin-top: 64px; }
+  .final { padding: 4px 18px 28px; }
+  .steps li { padding: 16px 16px 16px 60px; }
+  [dir="rtl"] .steps li { padding: 16px 60px 16px 16px; }
+  .steps li::before { inset-inline-start: 16px; }
 }
 
-/* Motion: short, and none for those who ask for less. Every line is
-   written in about a second; the easing starts and ends softly. */
+/* Motion: short, and none for those who ask for less. Every line is drawn
+   in about a second, as a pen would; the easing starts and ends softly. */
 @media (prefers-reduced-motion: no-preference) {
-  .hero .wrap > * { animation: rise .5s cubic-bezier(.2, .7, .2, 1) both; }
-  .hero .lead { animation-delay: .06s; }
-  .hero-board { animation-delay: .11s; }
-  .hero .platforms { animation-delay: .17s; }
-  .hero .actions { animation-delay: .21s; }
-  .card, .facts div, .steps li { transition: transform .3s cubic-bezier(.2, .7, .2, 1); }
-  .card:hover, .facts div:hover, .steps li:hover { transform: translateY(-3px); }
-  .button { transition: filter .2s, transform .2s; }
-  .button:hover { filter: brightness(1.07); transform: translateY(-1px); }
+  .hero-text > *, .hero-fig { animation: rise .5s cubic-bezier(.2, .7, .2, 1) both; }
+  .hero h1 { animation-delay: .04s; }
+  .hero .lead { animation-delay: .08s; }
+  .hero .actions { animation-delay: .12s; }
+  .hero .platforms, .hero .themes { animation-delay: .16s; }
+  .hero-fig { animation-delay: .1s; }
+  .card, .facts div, .steps li { transition: transform .3s cubic-bezier(.2, .7, .2, 1), border-color .2s; }
+  .card:hover, .facts div:hover { transform: translateY(-2px); }
+  .button { transition: background-color .2s, border-color .2s, transform .2s; }
+  .button:hover { transform: translateY(-1px); }
   .button.go::after { transition: transform .2s ease-out; }
   .button.go:hover::after { transform: translateX(4px); }
   [dir="rtl"] .button.go:hover::after { transform: translateX(-4px); }
-  /* The hero's chalk is drawn in: the devices, then the key, then the
-     line that joins them, then the words. */
+  /* Figure 1 is drawn in: the devices, then the key, then the line that
+     joins them, then the words and the callouts. */
   .hero-board .chalk path { stroke-dasharray: 1; animation: draw 1s cubic-bezier(.45, .05, .3, 1) .2s both; }
   .hero-board .chalk .y { animation-delay: .65s; }
   .hero-board .chalk .link { animation-delay: 1.1s; animation-duration: .55s; }
-  .hero-board .words { animation: chalk-in .45s cubic-bezier(.3, 0, .2, 1) 1.45s both; }
-  /* The other boards draw their chalk once, the first time they come
-     into view, in about a second (site.js marks them); without the
-     script they are simply there. */
+  .hero-board :is(.words, .callout) { animation: fade-in .45s cubic-bezier(.3, 0, .2, 1) 1.45s both; }
+  /* The other drawings are drawn once, the first time they come into view,
+     in about a second (site.js marks them); without the script they are
+     simply there. */
   .draw .frame:not(.hero-board) .chalk path { stroke-dasharray: 1; stroke-dashoffset: 1; }
   .draw .frame:not(.hero-board) .words { opacity: 0; }
   .draw .frame.drawn .chalk path { animation: draw .65s cubic-bezier(.45, .05, .3, 1) both; }
   .draw .frame.drawn .chalk .y { animation-delay: .3s; }
   .draw .frame.drawn .chalk .link { animation-delay: .65s; animation-duration: .3s; }
-  .draw .frame.drawn .words { animation: chalk-in .3s cubic-bezier(.3, 0, .2, 1) .75s both; }
+  .draw .frame.drawn .words { animation: fade-in .3s cubic-bezier(.3, 0, .2, 1) .75s both; }
   /* A picture of the documentation is drawn in the same way: its boxes
      appear, its lines are drawn (tools/site gives the paths pathLength 1,
      which browsers honour on paths only), then the words. */
@@ -541,32 +509,32 @@ nav a[aria-current] { color: var(--accent); }
   .draw .diagram:not(.drawn) svg :is(rect, line, text) { opacity: 0; }
   .draw .diagram:not(.drawn) svg :is(.badge, .lbl-bg, .a-home, .a-pair, .a-tunnel, .a-e2e) { opacity: 0; }
   .draw .diagram.drawn svg path { animation: draw .8s cubic-bezier(.45, .05, .3, 1) .15s both; }
-  .draw .diagram.drawn svg :is(rect, line) { animation: chalk-in .3s cubic-bezier(.3, 0, .2, 1) both; }
+  .draw .diagram.drawn svg :is(rect, line) { animation: fade-in .3s cubic-bezier(.3, 0, .2, 1) both; }
   .draw .diagram.drawn svg :is(.e-home, .e-e2e, .e-pair, .e-tunnel) { animation-delay: .4s; }
-  .draw .diagram.drawn svg :is(text, .badge, .lbl-bg, .a-home, .a-pair, .a-tunnel, .a-e2e) { animation: chalk-in .35s cubic-bezier(.3, 0, .2, 1) .9s both; }
-  /* A table is written in the same way: its head, then row after row,
-     in about a second. Each cell fades in on its own, under its own chalk. */
+  .draw .diagram.drawn svg :is(text, .badge, .lbl-bg, .a-home, .a-pair, .a-tunnel, .a-e2e) { animation: fade-in .35s cubic-bezier(.3, 0, .2, 1) .9s both; }
+  /* A table is filled in the same way: its head, then row after row, in
+     about a second. */
   .draw .board-table:not(.drawn) tr > * { opacity: 0; }
-  .draw .board-table.drawn tr > * { animation: chalk-in .3s cubic-bezier(.3, 0, .2, 1) both; }
+  .draw .board-table.drawn tr > * { animation: fade-in .3s cubic-bezier(.3, 0, .2, 1) both; }
   .draw .board-table.drawn tbody tr:nth-child(1) > * { animation-delay: .18s; }
   .draw .board-table.drawn tbody tr:nth-child(2) > * { animation-delay: .32s; }
   .draw .board-table.drawn tbody tr:nth-child(3) > * { animation-delay: .46s; }
   .draw .board-table.drawn tbody tr:nth-child(4) > * { animation-delay: .6s; }
   .draw .board-table.drawn tbody tr:nth-child(5) > * { animation-delay: .74s; }
   .draw .board-table.drawn tbody tr:nth-child(n + 6) > * { animation-delay: .8s; }
-  /* The download board: each system's part, line after line. */
+  /* The download sheet: each system's part, line after line. */
   .draw .install-board:not(.drawn) .os > * { opacity: 0; }
-  .draw .install-board.drawn .os > * { animation: chalk-in .3s cubic-bezier(.3, 0, .2, 1) both; }
+  .draw .install-board.drawn .os > * { animation: fade-in .3s cubic-bezier(.3, 0, .2, 1) both; }
   .draw .install-board.drawn .os > :nth-child(2) { animation-delay: .1s; }
   .draw .install-board.drawn .os > :nth-child(3) { animation-delay: .2s; }
   .draw .install-board.drawn .os > :nth-child(4) { animation-delay: .3s; }
   .draw .install-board.drawn .os > :nth-child(n + 5) { animation-delay: .4s; }
   .draw .install-board.drawn .os + .os > * { animation-delay: .5s; }
   .draw .install-board.drawn .os + .os > :nth-child(n + 3) { animation-delay: .6s; }
-  /* Living chalk: a little later, a board keeps moving now and then, as
-     if its chalk came alive (site.js marks it alive once it is drawn).
-     The main board: a spark runs along the wire to the phone and back. */
-  .pulse { fill: none; stroke: var(--pulse); stroke-width: 7; stroke-linecap: round; stroke-dasharray: .07 3; stroke-dashoffset: .07; filter: drop-shadow(0 0 4px var(--pulse)); }
+  /* A little later a drawing moves now and then (site.js marks it alive
+     once it is drawn). Figure 1: a copy runs along the line to the phone
+     and back. */
+  .pulse { fill: none; stroke: var(--accent); stroke-width: 6; stroke-linecap: square; stroke-dasharray: .03 3; stroke-dashoffset: .03; }
   .alive .pulse.p1 { animation: pulse-1 14s linear infinite; }
   .alive .pulse.p2 { animation: pulse-2 14s linear infinite; }
   /* Step 1: the arrow bobs, and the download bar fills. */
@@ -579,16 +547,13 @@ nav a[aria-current] { color: var(--accent); }
   /* Step 3: the camera's brackets close on the code, then a check. */
   .draw .frame.drawn.alive .brackets { transform-box: view-box; transform-origin: 166px 70px; animation: focus 8s ease-in-out infinite; }
   .draw .frame.drawn.alive .chalk .brackets ~ .check { animation: tick3 8s linear infinite; }
-  /* The groups: the links are gone over again, one after another. */
+  /* The groups: the links are drawn again, one after another. */
   .draw .frame.drawn.alive .chalk .link.r0 { animation: redraw 12s linear infinite; }
   .draw .frame.drawn.alive .chalk .link.r1 { animation: redraw 12s linear 3s infinite; }
   .draw .frame.drawn.alive .chalk .link.r2 { animation: redraw 12s linear 6s infinite; }
   .draw .frame.drawn.alive .chalk .link.r3 { animation: redraw 12s linear 9s infinite; }
-  /* The tables: now and then our row is underlined, and its checks are
-     gone over again, one after another. */
-  .alive .compare tr.us th { position: relative; }
-  .alive .compare tr.us th::after { content: ""; position: absolute; inset-inline: 14px 26px; bottom: 6px; height: 3px; border-radius: 2px; background: var(--chalk-yellow); transform: scaleX(0); transform-origin: left; animation: under 10s ease-in-out infinite; }
-  [dir="rtl"] .alive .compare tr.us th::after { transform-origin: right; }
+  /* The table: now and then the checks of our row are drawn again, one
+     after another. */
   .alive .compare tr.us .mark.yes { stroke-dasharray: 30; animation: retick 10s linear infinite; }
   .alive .compare tr.us td:nth-child(3) .mark { animation-delay: .4s; }
   .alive .compare tr.us td:nth-child(4) .mark { animation-delay: .8s; }
@@ -596,14 +561,14 @@ nav a[aria-current] { color: var(--accent); }
   .alive .compare tr.us td:nth-child(6) .mark { animation-delay: 1.6s; }
   .alive .compare tr.us td:nth-child(7) .mark { animation-delay: 2s; }
   .alive .compare tr.us td:nth-child(8) .mark { animation-delay: 2.4s; }
-  /* The commands: a chalk cursor after each, blinking now and then. */
-  .alive.install-board pre code::after { content: "_"; color: var(--chalk-yellow); font-weight: 600; margin-inline-start: .2em; animation: blink 6s ease-in-out infinite; }
+  /* The commands: a cursor after each, blinking now and then. */
+  .alive.install-board pre code::after { content: "_"; color: var(--accent); font-weight: 600; margin-inline-start: .2em; animation: blink 6s ease-in-out infinite; }
   @supports (animation-timeline: view()) {
     .reveal { animation: rise linear both; animation-timeline: view(); animation-range: entry 0% entry 35%; }
   }
 }
-@keyframes pulse-1 { 0% { stroke-dashoffset: .07; } 6%, 58% { stroke-dashoffset: -1; } 64%, 100% { stroke-dashoffset: .07; } }
-@keyframes pulse-2 { 0%, 6% { stroke-dashoffset: .07; } 14%, 50% { stroke-dashoffset: -1; } 58%, 100% { stroke-dashoffset: .07; } }
+@keyframes pulse-1 { 0% { stroke-dashoffset: .03; } 6%, 58% { stroke-dashoffset: -1; } 64%, 100% { stroke-dashoffset: .03; } }
+@keyframes pulse-2 { 0%, 6% { stroke-dashoffset: .03; } 14%, 50% { stroke-dashoffset: -1; } 58%, 100% { stroke-dashoffset: .03; } }
 @keyframes bob { 0%, 48%, 100% { transform: none; } 12%, 36% { transform: translateY(4px); } 24% { transform: none; } }
 @keyframes fill { 0% { stroke-dashoffset: 1; opacity: 1; animation-timing-function: ease-in-out; } 60% { stroke-dashoffset: 0; } 88% { stroke-dashoffset: 0; opacity: 1; } 96% { opacity: 0; } 100% { stroke-dashoffset: 1; opacity: 0; } }
 @keyframes type { 0%, 4% { stroke-dashoffset: 1; opacity: 1; animation-timing-function: ease-in-out; } 30% { stroke-dashoffset: 0; } 90% { stroke-dashoffset: 0; opacity: 1; } 97% { opacity: 0; } 100% { stroke-dashoffset: 1; opacity: 0; } }
@@ -612,10 +577,9 @@ nav a[aria-current] { color: var(--accent); }
 @keyframes focus { 0% { transform: scale(1.4); opacity: .3; } 30%, 88% { transform: none; opacity: 1; } 100% { transform: scale(1.4); opacity: .3; } }
 @keyframes tick3 { 0%, 34% { stroke-dashoffset: 1; opacity: 1; } 44% { stroke-dashoffset: 0; } 86% { stroke-dashoffset: 0; opacity: 1; } 94% { opacity: 0; } 100% { stroke-dashoffset: 1; opacity: 0; } }
 @keyframes redraw { 0% { stroke-dashoffset: 0; } 3% { stroke-dashoffset: -1; } 4% { stroke-dashoffset: 1; } 12%, 100% { stroke-dashoffset: 0; } }
-@keyframes under { 0%, 10% { transform: scaleX(0); opacity: 1; } 30%, 80% { transform: none; opacity: 1; } 92%, 100% { transform: none; opacity: 0; } }
 @keyframes retick { 0%, 31% { stroke-dashoffset: 0; opacity: 1; } 34% { stroke-dashoffset: 0; opacity: 0; } 35% { stroke-dashoffset: 30; opacity: 1; } 43%, 100% { stroke-dashoffset: 0; } }
 @keyframes draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
-@keyframes chalk-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
 
 .soon { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding-block: 40px; }
@@ -623,80 +587,72 @@ nav a[aria-current] { color: var(--accent); }
 .soon h1 { margin-top: 20px; }
 .soon p { margin: 6px 0; }
 
-/* Paper: the text in black on white, the boards kept, nothing to press. */
+/* Paper: the light sheet without its grid, nothing to press. */
 @media print {
-  :root { --bg: #FFF; --felt: none; --glow: transparent; --vignette: transparent; --raised: transparent; --text: #000; --dim: #333; --accent: #6B4A10; --line: #999; --code: #F2F2F2; }
+  :root { --bg: #FFF; --surface: #FFF; --text: #000; --dim: #333; --accent: #0B5CAD; --line: #888; --line-soft: #BBB; --grid: transparent; --grid-major: transparent; --soft: #EEF4FB; --code: #F2F2F2; color-scheme: light; }
   body { background: #FFF; padding: 0; }
   .top, .skip, .dock, .theme, .actions, .foot { display: none; }
-  .card, .facts div, .note, .steps li { -webkit-backdrop-filter: none; backdrop-filter: none; break-inside: avoid; }
-  .frame { box-shadow: none; break-inside: avoid; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-  .reveal, .hero .wrap > * { animation: none; }
+  .card, .facts div, .note, .steps li, .frame { break-inside: avoid; }
+  .reveal, .hero-text > *, .hero-fig { animation: none; }
   h2 { margin-top: 36px; }
   a[href^="http"]::after { content: " (" attr(href) ")"; font-size: .8em; color: var(--dim); word-break: break-all; }
 }
 
 /* The documentation (/docs/, tools/site/docs.go): the pages of docs/ as
    they read on GitHub, in the site's colours, for long reading: a narrow
-   column, headings to the left, plain ruled tables that scroll on a phone. */
-.doc { max-width: 880px; line-height: 1.6; }
-.doc > h1 { text-align: start; font-size: clamp(30px, 3.6vw, 46px); }
+   column, plain ruled tables that scroll on a phone. Its headings are not
+   sheets. */
+.doc { max-width: 880px; line-height: 1.65; }
+.doc > h1 { font-size: clamp(30px, 3.6vw, 44px); }
 .doc h1, .doc h2, .doc h3, .doc h4, .doc h5, .doc h6 { text-wrap: wrap; }
-.doc h2, .doc h3, .doc h4, .doc h5, .doc h6 { text-align: start; color: var(--accent); margin: 40px 0 12px; scroll-margin-top: 80px; }
-.doc h2 { font-size: clamp(24px, 2.6vw, 30px); }
-.doc h2::after { display: none; }
-.doc h3 { font-size: 22px; }
-.doc h4, .doc h5, .doc h6 { font-family: var(--f-body); font-size: 18px; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--text); }
-.doc .crumb { margin: 0 0 8px; font-size: 15px; }
-.doc .docnote { margin: 16px 0; padding: 8px 16px; border-inline-start: 3px solid var(--accent); background: var(--raised); }
+.doc h2, .doc h3, .doc h4, .doc h5, .doc h6 { margin: 40px 0 12px; scroll-margin-top: 80px; counter-increment: none; }
+.doc h2 { font-size: clamp(23px, 2.5vw, 28px); padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.doc h2::before { display: none; }
+.doc h3 { font-size: 20px; }
+.doc h4, .doc h5, .doc h6 { font-size: 17px; }
+.doc .crumb { margin: 0 0 8px; font: 500 12px/1.4 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; }
+.doc .docnote { margin: 16px 0; padding: 8px 16px; border-inline-start: 2px solid var(--accent); background: var(--surface); }
 .doc .docfoot { font-size: 15px; color: var(--dim); }
 .doc pre, .doc code { direction: ltr; unicode-bidi: isolate; }
 .doc ol { padding-inline-start: 26px; }
 .doc li + li { margin-top: 4px; }
 .tablewrap { overflow-x: auto; margin: 16px 0; }
-.doc table { border-collapse: collapse; font-size: 15px; min-width: 100%; }
+.doc table { border-collapse: collapse; font-size: 15px; min-width: 100%; background: var(--surface); }
 /* Inside a table the code wraps like the words around it, so that the columns are
    sized by what is in them and not by the widest unbreakable piece. */
 .doc td code, .doc th code { display: inline; white-space: normal; overflow-wrap: break-word; max-width: none; overflow: visible; }
-.doc th, .doc td { border: 1px solid var(--line); padding: 6px 10px; text-align: start; vertical-align: top; }
-.doc th { background: var(--raised); font-weight: 600; }
-.doc td code, .doc th code { white-space: normal; display: inline; }
-.doc img { max-width: 100%; height: auto; background: #fff; border-radius: 8px; }
-.doc blockquote { margin: 16px 0; padding: 4px 16px; border-inline-start: 3px solid var(--accent); color: var(--dim); }
+.doc th, .doc td { border: 1px solid var(--line-soft); padding: 7px 10px; text-align: start; vertical-align: top; }
+.doc th { font: 500 12px/1.4 var(--f-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--dim); border-bottom-color: var(--line); }
+.doc img { max-width: 100%; height: auto; background: #fff; border-radius: 3px; }
+.doc blockquote { margin: 16px 0; padding: 4px 16px; border-inline-start: 2px solid var(--accent); color: var(--dim); }
 .doc hr { border: 0; border-top: 1px solid var(--line); margin: 32px 0; }
 
 /* The pictures of the documentation: the SVG files are drawn for GitHub, in
-   their own colours; here they are chalk on a board, like every other picture
-   of the site. Their own style element is dropped by tools/site, so these are
-   the only rules. No animation: they are shown drawn. */
-.diagram { --f: 14px; margin: 1.6em 0; }
-.diagram .surface { padding: 12px; }
-.diagram svg { filter: url(#chalk); }
+   their own colours; here they are line drawings on a sheet, like every
+   other picture of the site. Their own style element is dropped by
+   tools/site, so these are the only rules. */
+.diagram { margin: 1.6em 0; }
+.diagram .surface { padding: 30px 12px 12px; }
 .diagram .bg { fill: none; }
-/* The picture's rectangles are named like the site's own panes (.card, .note, .badge): none of their cut corners, glass or padding applies to them. */
-.diagram :is(.card, .note, .badge) { clip-path: none; -webkit-backdrop-filter: none; backdrop-filter: none; padding: 0; margin: 0; border: 0; }
-.diagram .zone { fill: none; stroke: var(--chalk-rule); stroke-width: 2; }
-.diagram .card { fill: none; stroke: var(--chalk); stroke-width: 3; }
-.diagram .card.key, .diagram .card.srv { stroke: var(--chalk-yellow); }
-.diagram text { font-family: var(--f-hand); font-weight: 600; fill: var(--chalk-words); }
-.diagram .zone-t { fill: var(--chalk-yellow); font-size: 17px; letter-spacing: .02em; }
-.diagram .t { font-size: 17px; }
-.diagram .s { font-size: 15px; fill: var(--chalk-faint); }
-.diagram .lbl { font-size: 14px; }
-.diagram .note { font-size: 16px; font-style: normal; fill: var(--chalk-faint); }
-.diagram .lbl.tunnel, .diagram .lbl.pair { fill: var(--chalk-yellow); }
-.diagram .ic { fill: none; stroke: var(--chalk); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
-.diagram .key .ic, .diagram .ic.key { stroke: var(--chalk-yellow); }
-.diagram .badge { fill: var(--chalk-yellow); }
-.diagram .badge-t { fill: var(--slate); font-size: 12px; letter-spacing: .04em; }
-.diagram .lbl-bg { fill: var(--slate); stroke: var(--chalk-rule); stroke-width: 1.5; }
-.diagram .e-home, .diagram .e-e2e { fill: none; stroke: var(--chalk-strong); stroke-width: 3; stroke-linecap: round; }
-.diagram .e-home { stroke-dasharray: none; }
-.diagram .e-tunnel, .diagram .e-pair { fill: none; stroke: var(--chalk-yellow); stroke-width: 3.6; stroke-linecap: round; }
-.diagram .e-e2e { stroke-width: 3.4; }
-.diagram .a-home, .diagram .a-e2e { fill: var(--chalk-strong); }
-.diagram .a-tunnel, .diagram .a-pair { fill: var(--chalk-yellow); }
-/* The hand font has no Chinese, Arabic, Hebrew or Hindi letters: the pictures use the body font there, whose widths the diagrams are laid out for. */
-:is([lang="zh"], [lang="ar"], [lang="he"], [lang="hi"]) .diagram text { font-family: var(--f-body); }
-:is([lang="zh"], [lang="ar"], [lang="he"], [lang="hi"]) .diagram .lbl { font-size: 12px; font-weight: 500; }
-:is([lang="zh"], [lang="ar"], [lang="he"], [lang="hi"]) .diagram .t { font-size: 15px; }
-:is([lang="zh"], [lang="ar"], [lang="he"], [lang="hi"]) .diagram .s { font-size: 12px; }
+/* The picture's rectangles are named like the site's own panes (.card, .note, .badge): none of their borders, padding or corner marks applies to them. */
+.diagram :is(.card, .note, .badge) { padding: 0; margin: 0; border: 0; border-radius: 0; background: none; }
+.diagram :is(.card, .note, .badge)::before, .diagram :is(.card, .note, .badge)::after { content: none; }
+.diagram .zone { fill: none; stroke: var(--line); stroke-width: 1; stroke-dasharray: 4 4; }
+.diagram .card { fill: var(--surface); stroke: var(--text); stroke-width: 1.4; }
+.diagram .card.key, .diagram .card.srv { stroke: var(--accent); }
+.diagram text { font-family: var(--f-body); fill: var(--text); }
+.diagram .zone-t { fill: var(--accent); font: 500 12px var(--f-mono); letter-spacing: .1em; text-transform: uppercase; }
+.diagram .t { font-size: 15px; font-weight: 600; }
+.diagram .s { font-size: 13px; fill: var(--dim); }
+.diagram .lbl { font: 500 11.5px var(--f-mono); fill: var(--dim); }
+.diagram .note { font-size: 14px; font-style: normal; fill: var(--dim); }
+.diagram .lbl.tunnel, .diagram .lbl.pair { fill: var(--accent); }
+.diagram .ic { fill: none; stroke: var(--text); stroke-width: 1.5; stroke-linecap: square; stroke-linejoin: miter; }
+.diagram .key .ic, .diagram .ic.key { stroke: var(--accent); }
+.diagram .badge { fill: var(--accent); }
+.diagram .badge-t { fill: var(--on-accent); font: 500 11px var(--f-mono); letter-spacing: .06em; }
+.diagram .lbl-bg { fill: var(--surface); stroke: var(--line-soft); stroke-width: 1; }
+.diagram .e-home, .diagram .e-e2e { fill: none; stroke: var(--text); stroke-width: 1.4; }
+.diagram .e-tunnel, .diagram .e-pair { fill: none; stroke: var(--accent); stroke-width: 1.6; }
+.diagram .a-home, .diagram .a-e2e { fill: var(--text); }
+.diagram .a-tunnel, .diagram .a-pair { fill: var(--accent); }

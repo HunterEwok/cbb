@@ -263,3 +263,7 @@ button.icon[aria-pressed="true"] { background: var(--soft); color: var(--accent)
 .mute-corner.on > span { background: var(--danger); border-color: var(--danger); color: var(--on-accent); }
 .mute-corner:focus-visible { outline: none; }
 .mute-corner:focus-visible > span { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Why it does not sync: the main reason large, a stop in the danger colour. */
+#why-list .why { padding: 6px 0; border-bottom: 1px solid var(--line); }
+#why-list .why.main > div:first-child { font-weight: 600; font-size: 1.1em; }
+#why-list .why.stop > div:first-child { color: var(--danger); }

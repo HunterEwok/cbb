@@ -9,7 +9,7 @@ import kotlinx.serialization.json.JsonPrimitive
 /**
  * Typing a text as a Bluetooth keyboard (docs/roadmap.md, item 25): the
  * keys of a layout and the HID boot keyboard's reports that press them,
- * as the lite member's cbb_core::keyboard has them for the Nano ESP32.
+ * as the Rust core's cbb_core::keyboard has them for the Nano ESP32.
  * Both are checked against testdata/interop/keyboard.json.
  *
  * A keyboard sends the position of a key, not a character: the host's

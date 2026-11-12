@@ -219,7 +219,7 @@ struct ArrangeActions: ViewModifier {
                 .accessibilityAction(named: Text("Move to start")) { moves.toStart() }
                 .accessibilityAction(named: Text("Move to end")) { moves.toEnd() }
                 .accessibilityAction(named: Text("Take out of collection")) {
-                    if case .device(let id) = ref, model.collection(holding: id) != nil { _ = model.arrange(.out(device: id)) }
+                    if case .device(let id) = ref, model.collection(holding: id) != nil { model.arrange(.out(device: id)) }
                 }
         } else {
             content
@@ -244,7 +244,7 @@ struct TileDrop: DropDelegate {
         if case .device = d, case .collection = target { return }
         guard let from = level.firstIndex(of: d), let to = level.firstIndex(of: target) else { return }
         withAnimation(.smooth) {
-            _ = model.arrange(.move(d, before: from < to ? (to + 1 < level.count ? level[to + 1] : nil) : target))
+            model.arrange(.move(d, before: from < to ? (to + 1 < level.count ? level[to + 1] : nil) : target))
         }
     }
 
@@ -252,7 +252,7 @@ struct TileDrop: DropDelegate {
 
     func performDrop(info: DropInfo) -> Bool {
         if case .device(let id) = arrange.dragging, case .collection(let c) = target {
-            withAnimation(.smooth) { _ = model.arrange(.into(device: id, collection: c)) }
+            withAnimation(.smooth) { model.arrange(.into(device: id, collection: c)) }
         }
         arrange.dragging = nil
         return true

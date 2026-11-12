@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The front end for the ZX Spectrum Next (docs/roadmap.md, item 14).
-//! On the Accelerated Next, the lite member runs on the Raspberry Pi wired to the
+//! On the Accelerated Next, cbb runs on the Raspberry Pi wired to the
 //! Next's second UART, and the Next's `.cbb` dot command types `cbb next
 //! ...` at NextPi's shell on that UART. These commands answer in frames the
 //! Z80 can read without a parser: lines end in CR, texts are in the Spectrum
@@ -438,7 +438,7 @@ pub(crate) fn latest_image(g: &Global) -> Result<(String, Vec<u8>)> {
     let mut w = conn.try_clone().context("cannot reach the service")?;
     control::write(
         &mut w,
-        &control::Message::new(control::Header { op: "paste-media".into(), ..Default::default() }, Vec::new()),
+        &control::Message::new(control::Header { op: "paste_media".into(), ..Default::default() }, Vec::new()),
     )?;
     let mut r = control::Reader::new(conn);
     let mut next = || -> Result<control::Message> {

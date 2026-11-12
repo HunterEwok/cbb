@@ -18,6 +18,7 @@ For anyone with a phone or a computer, in plain words.
 | [Images, files and formatted text](guide/images-and-files.md) | what goes where, the sizes, saving received files |
 | [Remote paste](guide/remote-paste.md) | an admin puts a text into the focused app on another device |
 | [Keyboards and TVs](guide/keyboards-and-tvs.md) | type into a TV, tablet, console or computer as a Bluetooth or USB keyboard, or as the TV's remote |
+| [The lab](guide/lab.md) | the experiments: keyboards, TV remotes, the Arduino Nano ESP32 and the ZX Spectrum Next |
 | [Quick actions](guide/quick-actions.md) | lock, sleep or restart a device from a phone or another computer |
 | [Privacy](guide/privacy.md) | who outside the group sees what: networks, servers, updates, stores |
 | [Keys and attestation](guide/keys.md) | where each device keeps its keys, how devices prove it, the three levels |
@@ -75,7 +76,7 @@ for security reviewers.
 | [Contributing](../CONTRIBUTING.md) | conventions, building and testing every part |
 | [Your own build](own-build.md) | what ties a build to this project's releases, and how to use your own keys and addresses |
 | [Security audit](security-audit.md) | the plan of the security audit |
-| [The servers' budget](relay-budget.md) | what strangers can make the open relay and the forwarder hold, who pays, and what a genuine group keeps |
+| [The servers' budget](relay-budget.md) | what strangers can make the open relay and the forwarder hold, who pays, what a genuine group keeps, the server's money and traffic, and the answer to an abuse report |
 
 ## For maintainers
 

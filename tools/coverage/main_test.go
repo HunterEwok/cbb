@@ -84,11 +84,11 @@ func TestLLVMAndJaCoCo(t *testing.T) {
 <report name="kit"><package name="p"><sourcefile name="A.kt"><counter type="LINE" missed="1" covered="1"/></sourcefile>
 <counter type="LINE" missed="1" covered="1"/></package><counter type="INSTRUCTION" missed="5" covered="5"/><counter type="LINE" missed="3" covered="7"/></report>`)
 	var out strings.Builder
-	err := run(nil, []string{"rust-core=" + llvm, "rust-lite=" + llvm}, []string{"kotlin-kit=" + jacoco}, "", 1, "", &out)
+	err := run(nil, []string{"rust-core=" + llvm, "rust-member=" + llvm}, []string{"kotlin-kit=" + jacoco}, "", 1, "", &out)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"| rust-core | 9 | 10 | 90.0 |", "| rust-lite | 1 | 4 | 25.0 |", "| kotlin-kit | 7 | 10 | 70.0 |"} {
+	for _, want := range []string{"| rust-core | 9 | 10 | 90.0 |", "| rust-member | 1 | 4 | 25.0 |", "| kotlin-kit | 7 | 10 | 70.0 |"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("no %q in\n%s", want, out.String())
 		}

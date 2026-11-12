@@ -69,15 +69,6 @@ class Settings(context: Context) {
         get() = DeviceLayout.of(prefs.getString("deviceLayoutWide", null), DeviceLayout.ORBIT)
         set(v) = prefs.edit().putString("deviceLayoutWide", v.key).apply()
 
-    /**
-     * The user's order of the device tiles and their collections, as the
-     * kit's Arrangement writes it; null until the user changes something.
-     * Kept on this phone only, never sent to the group.
-     */
-    var deviceArrangement: String?
-        get() = prefs.getString("device_arrangement", null)
-        set(v) = prefs.edit().putString("device_arrangement", v).apply()
-
     var language: LanguageChoice
         get() = LanguageChoice.of(prefs.getString("language", null))
         set(v) = prefs.edit().putString("language", v.key).apply()
@@ -120,6 +111,11 @@ class Settings(context: Context) {
     var keepsPhoneHub: Boolean
         get() = prefs.getBoolean("keepsPhoneHub", false)
         set(v) = prefs.edit().putBoolean("keepsPhoneHub", v).apply()
+
+    /** The bug reports' state as the core keeps it (docs/core-api.md, "Bug reports"). */
+    var bugState: String?
+        get() = prefs.getString("bugState", null)
+        set(v) = prefs.edit().putString("bugState", v).apply()
 
     /** Whether seven taps on the version showed the error details switch in Settings. */
     var errorDetailsSwitch: Boolean

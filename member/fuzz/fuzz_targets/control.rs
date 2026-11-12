@@ -3,4 +3,4 @@
 
 #![no_main]
 
-libfuzzer_sys::fuzz_target!(|data: &[u8]| cbb_lite::fuzzing::control(data));
+libfuzzer_sys::fuzz_target!(|data: &[u8]| cbb_member::fuzzing::control(data));

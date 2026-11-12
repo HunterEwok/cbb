@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The lite member's end of the group's WireGuard tunnel (docs/protocol.md,
+//! cbb's end of the group's WireGuard tunnel (docs/protocol.md,
 //! section 11): its key and the hub's offer in tunnel.json, and the link to
 //! the hub. The link runs GotaTun's WireGuard over a UDP socket and
 //! smoltcp's TCP inside it, in one thread, and opens a port on the loopback
@@ -1854,7 +1854,7 @@ mod tests {
     }
 
     /// The hub, or anyone holding its key, sends TCP and UDP through the
-    /// tunnel to the lite member's address on any port, to other addresses
+    /// tunnel to the member's address on any port, to other addresses
     /// and as IPv4: nothing is accepted, nothing answered but a reset, and
     /// nothing reaches the computer the member runs on. The member's end
     /// only dials the hub's member port and forwards nothing.
@@ -1899,15 +1899,15 @@ mod tests {
             IndexTable::from_os_rng(),
             limiter.clone(),
         );
-        let mut lite: Option<SocketAddr> = None;
+        let mut member: Option<SocketAddr> = None;
         // Takes what the member sends: answers the handshake and returns
         // the IP packets that came through the tunnel.
-        let take = |tunn: &mut Tunn, lite: &mut Option<SocketAddr>, until: Instant| -> Vec<Vec<u8>> {
+        let take = |tunn: &mut Tunn, member: &mut Option<SocketAddr>, until: Instant| -> Vec<Vec<u8>> {
             let mut got = Vec::new();
             let mut buf = [0u8; 2048];
             while Instant::now() < until {
                 let Ok((n, from)) = sock.recv_from(&mut buf) else { continue };
-                *lite = Some(from);
+                *member = Some(from);
                 let Ok(wg) = limiter.verify_packet(from, Packet::from_bytes(BytesMut::from(&buf[..n]))) else {
                     continue;
                 };
@@ -1925,10 +1925,10 @@ mod tests {
         // session the hub's to send in.
         let deadline = Instant::now() + Duration::from_secs(10);
         while !(tunn.has_active_session() && link.answered()) && Instant::now() < deadline {
-            take(&mut tunn, &mut lite, Instant::now() + Duration::from_millis(300));
+            take(&mut tunn, &mut member, Instant::now() + Duration::from_millis(300));
         }
         assert!(tunn.has_active_session(), "no session with the member");
-        let to = lite.unwrap();
+        let to = member.unwrap();
 
         let v4 = {
             // An IPv4 header to the computer's own TCP port.
@@ -1954,7 +1954,7 @@ mod tests {
             }
         }
         let mut resets = 0;
-        for ip in take(&mut tunn, &mut lite, Instant::now() + Duration::from_secs(3)) {
+        for ip in take(&mut tunn, &mut member, Instant::now() + Duration::from_secs(3)) {
             if ip.len() >= 54 && ip[6] == 6 {
                 resets += usize::from(ip[40 + 13] & 0x04 != 0);
                 // A reset may come back, never a SYN-ACK.

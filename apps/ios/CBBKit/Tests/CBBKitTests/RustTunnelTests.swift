@@ -55,6 +55,34 @@ final class RustTunnelTests: XCTestCase {
         XCTAssertThrowsError(try RustHubTunnels().start(privateKey: Data(count: 32), device: hubID, memberPort: 0, obfuscation: "", clients: ""))
     }
 
+    /// A hub with obfuscation registers with a forwarder by its address,
+    /// again in place of the first, and refuses a name for one; its
+    /// records and the project's ways change while it runs.
+    func testHubRegisters() throws {
+        let hubs = RustHubTunnels()
+        let obfuscation = try hubs.newObfuscation()
+        XCTAssertEqual(obfuscation.headerProtectionKey.count, 32)
+        let vlessID = try hubs.newVLESSID()
+        XCTAssertEqual(vlessID.count, 36, vlessID)
+        let member = try XCTUnwrap(loopbackListener())
+        defer { close(member.fd) }
+        let hub = try hubs.start(privateKey: try hubs.newKey(), device: hubID, memberPort: member.port,
+                                 obfuscation: try obfuscation.jsonText(), clients: "")
+        defer { hub.close() }
+        let root = SoftwareSigner(), key = SoftwareSigner()
+        let groupCA = try GroupCertificates.groupCA(signer: root, now: Date(), pathLength: 1)
+        let leaf = try GroupCertificates.member(device: hubID, publicKey: key.publicKeyDER, ca: groupCA, caSigner: root, now: Date())
+        let pin = Data(repeating: 3, count: 32).base64EncodedString()
+        let sign: @Sendable (Data) throws -> Data = { try key.signature(digest: $0) }
+        XCTAssertThrowsError(try hub.register(endpoint: "cbb.tools:8764", pin: pin, chain: [leaf, groupCA], sign: sign, records: "", vlessID: ""))
+        XCTAssertThrowsError(try hub.register(endpoint: "127.0.0.1:9", pin: pin, chain: [], sign: sign, records: "", vlessID: ""))
+        try hub.register(endpoint: "127.0.0.1:9", pin: pin, chain: [leaf, groupCA], sign: sign, records: "[]", vlessID: vlessID)
+        try hub.register(endpoint: "127.0.0.1:9", pin: pin, chain: [leaf, groupCA], sign: sign, records: "", vlessID: "")
+        try hub.setRecords("[]")
+        try hub.setProjectWays("[]")
+        XCTAssertThrowsError(try hub.setRecords("{"))
+    }
+
     func testRelayReportsWhyItIsNotConnected() throws {
         final class Events: RelayLinkEvents, @unchecked Sendable {
             let lock = NSLock()
@@ -79,6 +107,10 @@ final class RustTunnelTests: XCTestCase {
         let report = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(first.utf8)) as? [String: Any])
         XCTAssertNil(report["type"], "the kit gets the report as the hub gave it")
         XCTAssertNotNil(report["error"] as? String, first)
+        // Its records and credentials change while it runs.
+        try link.setRecords("[]")
+        try link.setCredentials(serverKey: key.publicKeyDER, sign: { try key.signature(digest: $0) }, creds: "", roots: "", names: "")
+        try link.setCredentials(serverKey: key.publicKeyDER, sign: { try key.signature(digest: $0) }, creds: "", roots: "[]", names: "{}")
     }
 }
 

@@ -166,6 +166,65 @@ not name it), the registrations over VLESS share at most an eighth of the setup 
 that they never keep out a hub that registers directly; all of them together are bounded by
 1024.
 
+## Money and traffic
+
+The project's forwarder and relay run on one rented server at `cbb.tools`, beside the
+website and the mirror of the releases. Its price is fixed by the month and does not grow
+with traffic: the plan includes its traffic, and none of the caps above is there to save
+money. What traffic can cost is speed: the provider slows a server whose
+traffic stays very high for a day (for the current plan, a throttle to 200 Mbit/s when the
+average of 24 hours passes about 2 TB; the plan's terms are the reference), and that would
+slow every group on it, and the website and the mirror with them.
+
+So the budget in money is the server's monthly price, and the budget in traffic is a share
+of that threshold, watched from outside:
+
+- `cbb-traffic.timer` on the server (site/README.md, "The server", step 8) samples the
+  network interface every 15 minutes and publishes the totals of the last 24 hours, and
+  nothing about a group, a device or an address, at `https://cbb.tools/status/traffic.json`;
+- the `monitor` workflow (docs/maintaining.md, "Watching cbb.tools") fails, which mails the
+  maintainer, when those 24 hours pass 1 TB, half of the threshold, or when the file is more
+  than two hours old.
+
+What the maintainer does when the check fails, in this order, none of which limits who may
+use the servers:
+
+1. Look whether it is one source: the provider's panel and the firewall's counters show
+   it, and the terms let a source that loads the servers on purpose be refused at the level
+   of its network or provider ([terms](https://cbb.tools/terms.html), "What is not allowed").
+2. Otherwise it is growth: a second server for the forwarder or the relay, which devices
+   learn from the signed entry points without a release (roadmap, item 56), or a plan with
+   a higher threshold. The money for it comes from the project's funding (roadmap, item 54).
+3. Never a cap per group in bytes in place of these: the per-group rates above already keep
+   one group from slowing another, and a cap on all would refuse the groups already there.
+
+## Abuse reports
+
+Reports go to `abuse@cbb.tools` (the [terms](https://cbb.tools/terms.html), "Reports and
+changes"). The servers see no content, keep no logs and hold no names, so the one answer
+decided in advance is to refuse the group the report names, by its tag, and nothing broader:
+
+- `cbb forward` reads a list of refused groups (the relay in Rust does not yet), `refused-groups` next to
+  its key (or the file of `-refused`; `-refused none` reads none), one group tag of 16 hex
+  characters a line, as `cbb status` shows it; `#` begins a comment, and anything after a
+  tag on its line is skipped, such as the date of the report. A line `period TAG` names a
+  period's tag, for a group that registers with credentials (protocol.md, section 18).
+- They read it again within ten seconds of a change, without a restart. A group on it is
+  refused at registration with a message that names the operator's terms, and its devices
+  already registered are dropped; every other group goes on as before. A file that cannot be
+  read or has a line that is not a tag keeps the list as it was, and the server logs that;
+  at the start, it stops the server, so a typo never lets a refused group back in silently.
+- Taking a tag off the list lets the group register again at once.
+- The servers never learn which group a report is about by themselves: a report has to
+  carry the tag, which only a device of that group shows. A group that registers with
+  credentials shows the servers a new period tag every period, by design, so it can be
+  refused only until its period ends; this is the price of the servers not knowing the
+  groups that ask for that.
+- The tags on the list and the reports stay with the maintainer, never in the repository.
+
+Tested by `TestRefusedGroups` (forwarder) and the
+package's own tests (`internal/refused`).
+
 ## Tests
 
 The guarantees above are tested, in Go:

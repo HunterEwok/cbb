@@ -74,6 +74,11 @@ struct SettingsView: View {
             }
             .listRowBackground(palette.surface)
             if advanced {
+                Section {
+                    NavigationLink { WhyScreen() } label: { Text("Why it does not sync") }
+                        .accessibilityIdentifier("why")
+                }
+                .listRowBackground(palette.surface)
                 if let hub = model.hub {
                     hubSection(hub)
                     if !hub.computers.isEmpty {
@@ -283,12 +288,16 @@ struct SettingsView: View {
                     Text("Save the forwarder")
                 }
                 .disabled(switching || (forwarderAddress == ownForwarder(hub)?.endpoint ?? "" && forwarderKey == ownForwarder(hub)?.pin ?? ""))
-                Picker(selection: Binding(get: { hub.disguise }, set: { if $0 != hub.disguise { disguiseTo = $0 } })) {
-                    ForEach(HubOnPhone.Disguise.allCases, id: \.self) { Text(verbatim: Self.disguiseName($0)).tag($0) }
-                } label: {
-                    Text("Tunnel disguise")
+                // Strict networks: AmneziaWG for networks that block VPNs,
+                // and VLESS over it for those that let only the web through.
+                Toggle(isOn: Binding(get: { hub.disguise != .plain }, set: { disguiseTo = $0 ? .obfuscate : .plain })) {
+                    Text("Networks that block VPNs (AmneziaWG)")
                 }
                 .disabled(switching)
+                Toggle(isOn: Binding(get: { hub.disguise == .vless }, set: { disguiseTo = $0 ? .vless : .obfuscate })) {
+                    Text("Networks that let only the web through (VLESS)")
+                }
+                .disabled(switching || hub.disguise == .plain)
                 TipView(SettingTip.disguise)
             }
             if let note = model.hubNote {
@@ -315,15 +324,6 @@ struct SettingsView: View {
             Button(role: .cancel) {} label: { Text("Cancel") }
         } message: {
             Text("Your devices get the new settings the next time they meet this hub at home; until then they do not reach it away from home.")
-        }
-    }
-
-    /// The names of the ways the tunnel hides, the protocols' own.
-    static func disguiseName(_ d: HubOnPhone.Disguise) -> String {
-        switch d {
-        case .plain: "WireGuard"
-        case .obfuscate: "AmneziaWG"
-        case .vless: "VLESS"
         }
     }
 
@@ -574,8 +574,8 @@ struct SettingTip: Tip {
 
     static let hub = SettingTip(id: "hub", title: Text("The phone as the hub"),
         message: Text("While the app is open, the other devices at home connect to this phone, and with a forwarder from afar too. The forwarder passes only encrypted packets."))
-    static let disguise = SettingTip(id: "disguise", title: Text("Tunnel disguise"),
-        message: Text("For networks that block WireGuard. VLESS needs a forwarder that takes it."))
+    static let disguise = SettingTip(id: "disguise", title: Text("Strict networks"),
+        message: Text("For networks that block VPNs or let only the web through; the second needs a connection server that takes VLESS."))
     static let relay = SettingTip(id: "relay", title: Text("Blind relay"),
         message: Text("For a group without a hub: the devices meet at a relay. It cannot read the clipboard, but it sees which devices are online and talk to each other."))
     static let copyLifetime = SettingTip(id: "copyLifetime", title: Text("Copy lifetime"),
@@ -584,4 +584,29 @@ struct SettingTip: Tip {
         message: Text("Which devices may be admins and hubs. Keys in hardware never leave the device; a key in a file can be copied."))
     static let watch = SettingTip(id: "watch", title: Text("The watch as an admin"),
         message: Text("It can freeze an admin computer and turn remote paste and quick actions off. Open CBB on the watch first."))
+}
+
+/// "Why it does not sync" (docs/apps.md): the core's reasons for this
+/// phone, asked again every two seconds while the screen is open.
+struct WhyScreen: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.palette) private var palette
+    @AppStorage("ShowErrorDetails") private var errorDetails = AppModel.showsErrorDetails
+    @State private var reasons: [WhyReason]?
+
+    var body: some View {
+        Form {
+            WhyList(reasons: reasons, details: errorDetails)
+                .listRowBackground(palette.surface)
+        }
+        .scrollContentBackground(.hidden)
+        .background(AppBackground())
+        .navigationTitle(Text("Why it does not sync"))
+        .task {
+            while !Task.isCancelled {
+                reasons = await model.why()
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
+    }
 }

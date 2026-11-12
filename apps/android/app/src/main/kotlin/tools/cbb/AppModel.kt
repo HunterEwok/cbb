@@ -5,6 +5,7 @@ package tools.cbb
 
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -15,6 +16,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import tools.cbb.kit.GroupAlert
 import tools.cbb.kit.Arrangement
+import tools.cbb.kit.BugReports
 import tools.cbb.kit.Core
 import tools.cbb.kit.Content
 import tools.cbb.kit.CopyKeys
@@ -65,16 +67,28 @@ class AppModel(private val app: Context) {
         g.keyboard.apply()
     }
 
+    /**
+     * Bug reports (docs/core-api.md, "Bug reports"): in debug mode a break
+     * shows whole in the message and the log, and nothing is asked; in
+     * release mode [bug] holds the report to ask about ("Oops, something
+     * broke"), which the user allows or cancels.
+     */
+    val bugs = BugReports({ settings.bugState }, { settings.bugState = it }, ::postBug)
+    var bug by mutableStateOf<BugReports.Offer?>(null)
+        private set
+
     var phase by mutableStateOf(if (group.hasGroup) Phase.HOME else Phase.START)
         private set
     private var listed by mutableStateOf(group.devices)
 
     /**
-     * The user's order of the tiles and their collections (docs/apps.md,
-     * "Collections and the order of the tiles"): null until the group's tag
-     * is known.
+     * The devices and collections, this phone among them, in the user's
+     * order as the member keeps it (docs/apps.md, "What the member shows"),
+     * and whether the user changed it.
      */
-    var arrangement by mutableStateOf<Arrangement?>(null)
+    var arranged by mutableStateOf<List<Arranged>>(emptyList())
+        private set
+    var customOrder by mutableStateOf(false)
         private set
 
     /** Every device of the group, this phone included, in the group's order. */
@@ -82,11 +96,14 @@ class AppModel(private val app: Context) {
         get() = listed
         private set(v) {
             listed = v
-            loadArrangement()
+            loadTiles()
         }
 
     init {
-        loadArrangement()
+        loadTiles()
+        group.onPanic = { details, log -> broke("panic", 5, "panic", details, log) }
+        // Reports that waited for the network go now.
+        Thread({ runCatching { bugs.resend() }.onFailure { Log.w(TAG, "sending the waiting bug reports", it) } }, "bugs").start()
         // A command from an admin changes this phone's mode on the node's thread.
         group.onModeChanged = {
             Handler(Looper.getMainLooper()).post { devices = group.devices }
@@ -1219,22 +1236,6 @@ class AppModel(private val app: Context) {
         }
     }
 
-    /** This phone's own ID: first in the arrangement until the user moves it. */
-    private val selfId: String? get() = devices.firstOrNull { it.isSelf }?.id
-
-    /** The devices and collections, this phone among them, in the user's order: the group's order, this phone first, until the user changes it. */
-    val arranged: List<Arranged>
-        get() {
-            val a = arrangement ?: return devices.sortedByDescending { it.isSelf }.map { Arranged.Device(it) }
-            val byId = devices.associateBy { it.id }
-            return a.view(devices.map { it.id }, selfId).mapNotNull { item ->
-                when (item) {
-                    is Arrangement.Item.Device -> byId[item.id]?.let { Arranged.Device(it) }
-                    is Arrangement.Item.Collection -> Arranged.Collection(item, item.devices.mapNotNull { byId[it] })
-                }
-            }
-        }
-
     /** The collection with the ID, as Home shows it. */
     fun collection(id: String): Arranged.Collection? =
         arranged.firstNotNullOfOrNull { (it as? Arranged.Collection)?.takeIf { c -> c.collection.id == id } }
@@ -1247,39 +1248,38 @@ class AppModel(private val app: Context) {
     fun collectionHolding(device: String): Arrangement.Item.Collection? =
         arranged.firstNotNullOfOrNull { (it as? Arranged.Collection)?.collection?.takeIf { c -> device in c.devices } }
 
-    /**
-     * Reads the group's arrangement once its tag is known, and drops the
-     * devices that left once the list is whole: the group loaded, this
-     * phone in it. Until the user changes something nothing is stored.
-     */
-    private fun loadArrangement() {
-        val tag = group.groupTag ?: run {
-            arrangement = null
+    /** Draws the member's tiles for the devices the group lists: the group's order, this phone first, while no member answers. */
+    private fun loadTiles() {
+        val v = if (group.hasGroup) runCatching { group.view() }.getOrNull() else null
+        if (v == null) {
+            arranged = devices.sortedByDescending { it.isSelf }.map { Arranged.Device(it) }
+            customOrder = false
             return
         }
-        val stored = settings.deviceArrangement
-        val current = arrangement?.takeIf { it.group == tag }
-        // A copy: the state's own object never changes, so Compose sees each change.
-        val a = Arrangement.decode(current?.encode() ?: stored, tag)
-        if (selfId != null && stored != null) {
-            val before = a.encode()
-            a.prune(devices.map { it.id })
-            if (a.encode() != before) settings.deviceArrangement = a.encode()
-        }
-        if (current == null || current.encode() != a.encode()) arrangement = a
+        show(v)
     }
 
-    /** Makes a change to the arrangement and keeps it; one that does not fit leaves it as it was and says so. */
+    /** Shows the member's view: its tiles, each device as the group lists it. */
+    private fun show(v: Arrangement.View) {
+        val byId = devices.associateBy { it.id }
+        arranged = v.tiles.mapNotNull { item ->
+            when (item) {
+                is Arrangement.Item.Device -> byId[item.id]?.let { Arranged.Device(it) }
+                is Arrangement.Item.Collection -> Arranged.Collection(item, item.devices.mapNotNull { byId[it] })
+            }
+        }
+        customOrder = v.custom
+    }
+
+    /** Makes a change to the tiles, which the member keeps; one that does not fit leaves them as they were and says so. */
     fun arrange(op: Arrangement.Op): Boolean {
-        val a = arrangement?.let { Arrangement.decode(it.encode(), it.group) } ?: return false
-        try {
-            a.apply(op, devices.map { it.id }, selfId)
-        } catch (e: Arrangement.Refused) {
-            message = describe(e)
+        val v = try {
+            group.view(op) ?: return false
+        } catch (e: Exception) {
+            message = describe(e, R.string.error_arrangement)
             return false
         }
-        settings.deviceArrangement = a.encode()
-        arrangement = a
+        show(v)
         return true
     }
 
@@ -1290,8 +1290,8 @@ class AppModel(private val app: Context) {
         return collectionIds().firstOrNull { it !in before }
     }
 
-    private fun collectionIds(): List<String> =
-        arrangement?.items.orEmpty().mapNotNull { (it as? Arrangement.Item.Collection)?.id }
+    private fun collectionIds(): List<String> = arranged.mapNotNull { (it as? Arranged.Collection)?.collection?.id }
+
 
     /** The message for an error, with the error itself below it when details are on. The error is logged either way. */
     fun describe(e: Exception, @StringRes text: Int = summary(e), log: Boolean = true): Note {
@@ -1355,7 +1355,6 @@ class AppModel(private val app: Context) {
             is YubiKeyNfc.NoCard -> R.string.error_yubikey_none
             is Clipboard.Unreadable -> R.string.error_clipboard_unreadable
             is Content.TooLarge -> R.string.error_image_too_large
-            is Arrangement.Refused -> R.string.error_arrangement
             is Content.Unread -> R.string.error_copy_unread
             is CopyKeys.NoRecords -> R.string.error_copy_no_records
             is LiveGroup.Muted -> R.string.error_muted
@@ -1375,6 +1374,73 @@ class AppModel(private val app: Context) {
             is Authenticator.Cancelled -> R.string.error_not_authenticated
             is TLSTransport.Failure, is java.io.IOException -> R.string.error_unreachable
             else -> R.string.error_generic
+        }
+    }
+
+    /**
+     * Something broke: in debug mode the message shows it whole; in
+     * release mode the core's report is offered (asked, sent by itself
+     * when the user allowed always, or not made again).
+     */
+    private fun broke(kind: String, code: Int, name: String, details: String, log: List<String>) {
+        Log.e(TAG, "$kind: $details")
+        Thread({
+            val offer = runCatching {
+                bugs.offer(
+                    BugReports.Input(
+                        kind = kind, code = code, name = name,
+                        message = "Something in CBB broke, and it started again.",
+                        details = details, app = "android",
+                        version = ApkUpdate.versionName(app).orEmpty(),
+                        os = "android", osVersion = Build.VERSION.RELEASE.orEmpty(),
+                        model = Build.MODEL.orEmpty(), arch = Build.SUPPORTED_ABIS.firstOrNull().orEmpty(),
+                        log = log, names = group.devices.map { it.name },
+                    ),
+                )
+            }.onFailure { Log.w(TAG, "building a bug report", it) }.getOrNull()
+            Handler(Looper.getMainLooper()).post {
+                if (settings.showsErrorDetails) {
+                    message = Note(R.string.bug_broke_restarted, details, error = true)
+                    return@post
+                }
+                when (offer?.action) {
+                    "ask" -> bug = offer
+                    "send" -> Thread({ bugs.send(offer) }, "bugs").start()
+                    else -> message = Note(R.string.bug_broke_restarted, error = true)
+                }
+            }
+        }, "bugs").start()
+    }
+
+    /** The user allowed the report on screen, and maybe always; it goes in the background. */
+    fun allowBug(always: Boolean) {
+        val o = bug ?: return
+        bug = null
+        Thread({
+            bugs.allow(always)
+            bugs.send(o)
+        }, "bugs").start()
+    }
+
+    /** The user cancelled the report: nothing goes. */
+    fun cancelBug() {
+        bug = null
+    }
+
+    /** Posts a report's body; the server's answer, or an exception when it did not go. */
+    private fun postBug(url: String, body: ByteArray): String {
+        val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+        c.connectTimeout = 20_000
+        c.readTimeout = 20_000
+        c.requestMethod = "POST"
+        c.doOutput = true
+        c.setRequestProperty("Content-Type", "application/json")
+        try {
+            c.outputStream.use { it.write(body) }
+            if (c.responseCode != 200) error("$url: ${c.responseCode}")
+            return c.inputStream.use { it.readBytes().take(4096).toByteArray().decodeToString() }
+        } finally {
+            c.disconnect()
         }
     }
 }

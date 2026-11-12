@@ -173,8 +173,9 @@ they look, so both apps are built to the same plan.
    "Advanced settings", leaving the group, and about (seven taps on the version show the
    switch "Show error details", which puts the error itself under each error message; it is
    on in debug builds, and the launch argument or extra `ShowErrorDetails` sets it too).
-   The advanced ones: away from home (the hub, moving it to a computer, the tunnel disguise,
-   the blind relay) and, for admins, the group ("Copy lifetime", "Security level": root,
+   The advanced ones: why it does not sync (below), away from home (the hub, moving it to a
+   computer, "Strict networks": two switches, for networks that block VPNs (AmneziaWG) and for
+   networks that let only the web through (VLESS), the blind relay) and, for admins, the group ("Copy lifetime", "Security level": root,
    admins, hubs). No long text sits under an item: a hard one has a tip of a sentence or
    two, shown from the first launch until the user closes it (TipKit on the iPhone). Sync
    away from home is turned on by the globe on Home (docs/design.md, "Sync away from
@@ -239,6 +240,55 @@ suggests making a second phone an admin.
 
 Errors are one line in plain words with the next step ("Turn on the computer that holds
 the group", not a status code), never a dialog that must be dismissed.
+
+## Why it does not sync
+
+A screen in the advanced settings of every app (the iPhone, Android, Aurora, the Mac and the
+tray app) says in one sentence why this device does not sync and what to do, the reason that
+stops the most first and large, the others under it. The Rust core decides the reasons
+(`cbb_core::why`): from what the member knows about itself, its group and its link away from
+home it gives each a stable code, a level (stop: nothing syncs here; warn: some copies or
+devices do not; info) and its parameters, and the apps only say each code in their words;
+`testdata/why/vectors.json` holds the cases. A computer's status carries them, a phone's member
+answers `why` (docs/core-api.md), with where the phone's own hub, tunnel and relay stand, and
+`cbb status` prints the first that stops sync. With "Show error details" on, each reason also
+shows its code and the member's own words.
+
+| Code | Level | What it says |
+|---|---|---|
+| `not_in_group` | stop | the device is in no group |
+| `removed` | stop | the group removed it: leave, then join again |
+| `taken_over` | stop | an admin took the group over from this root |
+| `frozen` | stop | another admin froze this computer's admin key |
+| `cert_expired` | stop | its certificate ended: an admin at home renews it |
+| `stopped` | stop | the group's records stop the exchange until the root decides |
+| `sync_off` | stop | sync is off here, until a time or until turned on |
+| `away_off` | stop | no device of the group is on this network: turn on Everywhere |
+| `new_network` | stop | a computer has not met its group on this network (the apps' button "This is my home network", `sudo cbb network` in the command line) |
+| `no_hub` | stop | Everywhere is on, but the group has no hub |
+| `tunnel_blocked` | stop | the plain WireGuard tunnel to the hub does not get through: the network may block it |
+| `hub_unreachable` | stop | the hub does not answer, though its tunnel is disguised |
+| `relay_down` | stop | the blind relay does not answer |
+| `hub_waiting` | stop | this device is the hub and nobody connected yet |
+| `alone` | stop | connected, but no other device of the group is online |
+| `secrets_stopped` | warn | the group sends no secrets until the root decides |
+| `muted` | warn | an admin muted this device: its copies do not reach the group |
+| `forwarder_down`, `entries_stale` | warn | the hub's forwarder does not take it, or the list of entry points is out of date |
+| `newer` | warn | the group has records of a newer version: update |
+| `unreached` | warn | members at home cannot connect to this computer: its firewall |
+| `cert_ending` | warn | its certificate ends within 30 days |
+| `only_device` | info | the group's only device: add a phone or a computer |
+| `devices_offline`, `devices_sync_off`, `devices_muted` | info | which other devices are offline, have sync off or are muted |
+| `update` | info | a newer CBB is available |
+
+## The lab
+
+Some things work but are no promise of 1.0: the ZX Spectrum Next, the Arduino Nano ESP32, a
+computer as a TV's remote and a phone or a Linux computer as a Bluetooth keyboard. In the apps
+they sit in a "Lab" section at the end of the advanced settings (the Bluetooth keyboard on
+Android and Aurora; the others have no screen in the apps). The settings show only what most
+people need: the hub is chosen by itself, so making a device the hub, the hub's tunnel and its
+forwarder show only with the advanced settings on, on every app.
 
 ## Big screens
 
@@ -520,8 +570,8 @@ service and its clipboard agent keep syncing without it.
   dialog shows the QR code cbb writes into the file the app made and its six digits, which a
   computer of the group types, and Cancel removes the file. On Linux the file is written over
   without being created, so root never makes a file in `/tmp`.
-- Languages: English and those of `frontend/l10n/` (keyed by the English text; the Go side
-  reads them for the tray), the system's language unless Settings picks one.
+- Languages: English and those of `frontend/l10n/` (keyed by the English text, made from
+  `apps/l10n` by `tools/strings`; the Go side reads them for the tray), the system's language unless Settings picks one.
 
 CI's `tray app` jobs vet, test and build it on Linux and Windows. The release archives carry
 it: Windows' (`cbb-desktop.exe`, built without cgo beside `cbb.exe` and signed with it), whose
@@ -781,10 +831,9 @@ The user can put the device tiles in their own order and gather devices into
 which means a copied folder of files, nor "group", the sync group. The arrangement is a
 view setting like tiles, list or orbit:
 
-- **Kept on this installation only**, beside the app's other settings: `deviceArrangement`
-  in UserDefaults on the iPhone, the iPad and the Mac, `device_arrangement` in the
-  Android app's settings, `arrangement` in the tray app's `desktop.json`. It is never sent
-  to the group, the hub, the forwarder or the relay. The watches show their phone's.
+- **Kept on this device only**, by its member: `arrangement.json` in the state folder of
+  the computer's service or the phone's member. It is never sent to the group, the hub,
+  the forwarder or the relay. The watches show their phone's.
 - **One level.** A device is in at most one collection, and a collection holds devices
   only, as folders on a phone's home screen.
 - **This device** ("this phone", "this computer", "this Mac") is a tile as the others are:
@@ -793,11 +842,9 @@ view setting like tiles, list or orbit:
   watch's sections and the remote paste device picker. Actions on a whole collection may
   come later; a remote paste to several devices never.
 
-The model is the same in the places that hold it: `apps/desktop/arrange.go` (the
-tray app), the Kotlin kit's `Arrangement.kt` (Android) and the Swift kit's
-`Arrangement.swift` (iPhone, iPad, Mac) and the Rust core's `cbb_core::arrange` (the Aurora
-app, through the core's `arrange` call). All of them pass
-`testdata/arrangement/vectors.json`. It is stored as JSON:
+The model is the Rust core's `cbb_core::arrange`, checked against
+`testdata/arrangement/vectors.json`; the member keeps it (`member/src/view.rs`), and the apps
+only draw what it answers (see "What the member shows" below). It is stored as JSON:
 
 ```json
 {"v": 1, "group": "<group tag>", "items": [
@@ -833,7 +880,7 @@ The rules:
 The apps reach every change in an Arrange mode, with a menu path, VoiceOver and TalkBack
 actions and the keyboard for each drag.
 
-**On the iPhone and the iPad** (`Views/Arrange.swift`, the model in `AppModel`):
+**On the iPhone and the iPad** (`Views/Arrange.swift`, drawing the member's `view` in `AppModel`, which sends `arrange`):
 
 - Arrange mode starts from **Arrange devices** in the "…" menu or **Arrange** in a tile's
   menu (a long press), and ends with **Done**. In it a tap does not open a tile, tiles have
@@ -854,7 +901,7 @@ actions and the keyboard for each drag.
 - **Back to the group's order** in the "…" menu is *reset*.
 - The orbit on a big screen keeps the group's order for now.
 
-**On Android** (`Arrange.kt`, the model in `AppModel`, kept as `device_arrangement`):
+**On Android** (`Arrange.kt`, drawing the member's `view` in `AppModel`, which sends `arrange`):
 
 - Arrange mode starts from **Arrange devices** in the ⇅ menu beside the view button or
   **Arrange** in a tile's menu (a long press), and ends with **Done**. In it a tap does
@@ -868,9 +915,8 @@ actions and the keyboard for each drag.
 - The collection tile, the list's sections, the collection's page, the search and filters
   and **Back to the group's order** are the iPhone's. The orbit keeps the group's order.
 
-**In the tray app** (`frontend/app.js`, the model in `arrange.go` through `Desk.Arrange`,
-kept as `arrangement` in `desktop.json`, which the window's other settings never
-overwrite):
+**In the tray app** (`frontend/app.js`, drawing the service's `view`; `Desk.Arrange` sends
+`arrange`):
 
 - The ⇅ button beside the views turns Arrange mode on and off, and Escape ends it. In it
   a click does not open a tile, tiles and rows have a dashed outline and are dragged, a
@@ -883,15 +929,15 @@ overwrite):
   devices, Arrange mode for them and its menu. The search and filters come with more than
   12 devices. The orbit keeps the group's order.
 
-**In the Mac app** (`Views/Arrange.swift`, the model in `MacModel`, which builds the Swift
-kit's `Arrangement.swift` in; kept as `deviceArrangement` in its defaults): as on the
+**In the Mac app** (`Views/Arrange.swift`, drawing the service's `view` in `MacModel`, which
+sends `arrange`): as on the
 iPhone, with **Arrange devices** and **Back to the group's order** in the toolbar, each
 tile's menu on a right click, and Option with the arrow keys, Home or End moving the
 focused tile in Arrange mode.
 
 **In the Aurora app** (`qml/pages/DeviceItems.qml`, `ArrangePage.qml` and the collection's
-pages, the model in the core's `arrange` call through `App::arranged`, kept as
-`ui/arrangement` in its settings): a long press on a tile or a row opens a page with every
+pages, drawing the member's `view` through `App::arranged`, which sends `arrange`): a long
+press on a tile or a row opens a page with every
 change (Move to start, Move earlier, Move later, Move to end, Move to each collection, New
 collection…, Take out of collection, and on a collection Rename collection… and Ungroup).
 Among the tiles a long press then a drag carries the tile itself, lifted, as on the iPhone but
@@ -905,6 +951,19 @@ collection…** and **Back to the group's order**.
 of its collection (`collection` in WatchState), and the
 watch lists the devices in no collection under **Devices**, then a section for each
 collection. The watch does not change the arrangement.
+
+## What the member shows
+
+The apps draw the device tiles from one answer of their member, the same on the phones
+(`cbb_member_call`) and the computers (the control socket): `view` gives
+`{"tiles", "online", "others", "custom"}`, the tiles in the user's order with this device among them,
+each `{"device": {…}}` (a device as `devices` lists it) or
+`{"collection": {"id", "name", "devices": [{…}]}}`, and how many of the other devices are
+online, out of how many, and whether the user changed the order (`reset` undoes it). `arrange` takes the user's change (`{"op": "move", "item",
+"before"}`, `into`, `out`, `new`, `rename`, `ungroup` or `reset`, as rule 5 above names
+them), keeps it and answers as `view`; a change that does not fit is refused and changes
+nothing. Devices that left the group leave the arrangement when the member answers. No app
+keeps an order of its own or works one out.
 
 ## Releasing the Android app
 
@@ -970,8 +1029,16 @@ the app on real devices.
 ## Languages
 
 - Every user-facing string comes from the platform's catalog from the first screen on: a
-  String Catalog (`Localizable.xcstrings`) on iOS, `strings.xml` resources on Android. No
-  string literal in views.
+  String Catalog (`Localizable.xcstrings`) on iOS and the Mac, `strings.xml` resources on
+  Android, Qt's `.ts` files on Aurora, `frontend/l10n` in the tray app. No string literal in
+  views.
+- All of them are made from one source, `apps/l10n/<language>.json`, by `tools/strings`:
+  `en.json` lists each string once with the apps that show it (`"in"`), each other language's
+  file its translation under the same ID, so a text the apps share is translated once. A new
+  string goes into `en.json` and every language's file, then `go run ./tools/strings` writes
+  the catalogs; `tools/repocheck` fails when a catalog differs from what it makes, when a
+  translation is missing, or when a translation's format directives (`%@`, `%1$s`, `%1`)
+  are not the English text's.
 - English is the source language, translated into the languages of the website: Chinese
   (Simplified), Spanish, Russian, Arabic, Swahili, Hebrew and Hindi. Plurals, numbers and
   dates use the platform's formatters.

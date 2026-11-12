@@ -22,6 +22,7 @@ struct DeviceDetailView: View {
     @State private var pasting = false
     @State private var confirmingAction: String?
     @State private var turningOff = false
+    @AppStorage("AdvancedSettings") private var advanced = false
     @State private var hubbing = false
     @State private var more = false
 
@@ -237,8 +238,9 @@ struct DeviceDetailView: View {
             }
             // An admin member that may be a hub, or one the root makes an admin
             // first; this phone is the hub under Settings. A member that is no
-            // admin can be a hub that only passes the copies on.
-            if !d.isSelf, d.online, !d.throughHub, d.can("hub"), !d.frozen, !d.rootless, d.mayHub || d.canMakeAdmin || !d.admin {
+            // admin can be a hub that only passes the copies on. The hub is
+            // chosen by itself: making one is in the advanced settings.
+            if advanced, !d.isSelf, d.online, !d.throughHub, d.can("hub"), !d.frozen, !d.rootless, d.mayHub || d.canMakeAdmin || !d.admin {
                 Button { hubbing = true } label: { Label { Text("Make it a hub") } icon: { Image(systemName: "antenna.radiowaves.left.and.right") } }
             }
             if !d.isSelf {

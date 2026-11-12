@@ -4,7 +4,7 @@
 
 # The differential comparison of the four implementations
 # (docs/differential.md): a corpus from tools/difffuzz, the verdict test of
-# each of Go, the lite member's Rust core, the Kotlin kit and the Swift kit
+# each of Go, the Rust core, the Kotlin kit and the Swift kit
 # (Swift in its container, as the phone kit job runs it on Linux), then the
 # comparison, which fails on any case they read differently and writes
 # those cases to OUT/failures.jsonl.

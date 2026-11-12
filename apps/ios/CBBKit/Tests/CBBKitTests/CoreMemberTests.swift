@@ -173,6 +173,26 @@ final class CoreMemberTests: XCTestCase {
         }
     }
 
+    /// why says what the phone sees: sync off first, and the app's own
+    /// tunnel when it hands it in; a connected group with sync on has no
+    /// reason that stops.
+    func testSaysWhyItDoesNotSync() async throws {
+        let t = try CoreGroup(test: self)
+        let b = t.phones[1]
+        try await t.connect(1, to: 0)
+        try await b.until("b connected") { !(try b.member.peers().isEmpty) }
+        XCTAssertFalse(try b.member.why().contains { $0.level == "stop" })
+        try b.member.setSync(on: false)
+        XCTAssertEqual(try b.member.why().first?.code, "sync_off")
+        XCTAssertEqual(try b.member.view().warnings.first?.code, "sync_off", "the view carries the same reasons")
+        try b.member.setSync(on: true)
+        var away = WhyAway()
+        (away.hub, away.forwarder, away.error) = (true, true, "no answer")
+        let r = try b.member.why(away: away)
+        XCTAssertEqual(r.first { $0.code == "forwarder_down" }?.detail, "no answer", "\(r)")
+        XCTAssertTrue(try b.member.view(away: away).warnings.contains { $0.code == "forwarder_down" })
+    }
+
     /// Calls from other threads while the member stops answer or fail, and
     /// never reach freed memory: an event's handler that called the member
     /// as the app restarted it crashed the Android app.
@@ -250,6 +270,25 @@ final class CoreMemberTests: XCTestCase {
         XCTAssertThrowsError(try a.member.current()) { XCTAssertTrue($0 is CoreMember.Stopped) }
     }
 
+    /// The member keeps the tiles' order: a change shows in its view, and
+    /// one that does not fit throws and changes nothing.
+    func testKeepsTheTilesOrder() throws {
+        let t = try CoreGroup(test: self)
+        let m = t.phones[0].member
+        let v = try m.view()
+        XCTAssertFalse(v.custom)
+        let me = try XCTUnwrap(v.devices.first?.id)
+        let other = try XCTUnwrap(v.devices.dropFirst().first?.id)
+        let after = try m.view(.new(name: "Desk", devices: [other]))
+        XCTAssertTrue(after.custom)
+        guard case let .collection(id, name, ds) = try XCTUnwrap(after.tiles.last) else { return XCTFail("no collection") }
+        XCTAssertEqual(name, "Desk")
+        XCTAssertEqual(ds.map(\.id), [other])
+        XCTAssertThrowsError(try m.view(.rename(collection: id, name: String(repeating: "x", count: 65))))
+        XCTAssertEqual(try m.view(.move(.collection(id), before: .device(me))).tiles.count, after.tiles.count)
+        guard case .collection = try XCTUnwrap(m.view().tiles.first) else { return XCTFail("the collection did not move first") }
+    }
+
     func testRefusesABadStart() throws {
         let k = SoftwareSigner()
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("cbb-core-bad-\(UUID().uuidString)")
@@ -277,7 +316,45 @@ final class CoreMemberTests: XCTestCase {
         }
         XCTAssertEqual(c.event.id, "i")
         XCTAssertEqual(c.event.ageMS, 3)
+        guard case let .panic(details)? = e(#"{"type":"panic","details":"panic: boom at member/src/x.rs:1:2"}"#) else { return XCTFail() }
+        XCTAssertEqual(details, "panic: boom at member/src/x.rs:1:2")
         XCTAssertNil(e(#"{"type":"from the future"}"#))
         guard case .log? = e("not json") else { return XCTFail() }
+    }
+
+    /// The member's small calls: muting the phone and lifting it, a lost
+    /// member, no credentials to send; a peer's mute as the app shows it.
+    func testSmallCalls() async throws {
+        let t = try CoreGroup(test: self)
+        let (root, b) = (t.root, t.phones[1])
+        try await t.connect(1, to: 0)
+        try b.member.setMute(untilMS: Records.ms(Date()) + 60_000)
+        try b.member.setMute(untilMS: 0)
+        try b.member.setMute(untilMS: nil)
+        try b.member.lost("phone 0")
+        XCTAssertEqual(try root.member.sendCredentials([]), [])
+
+        let at = Date(timeIntervalSince1970: 1)
+        XCTAssertEqual(CoreMember.Peer(device: b.device, muted: true, mutedForMS: 1000).mutedUntilMS(now: at), 2000)
+        XCTAssertEqual(CoreMember.Peer(device: b.device, muted: true).mutedUntilMS(now: at), 0, "until an admin lifts it")
+        XCTAssertNil(CoreMember.Peer(device: b.device).mutedUntilMS(now: at))
+        XCTAssertFalse(CoreMember.Peer(device: b.device).servesMedia)
+        let c = CoreMember.Copy(id: "i", origin: b.device, text: "t")
+        XCTAssertEqual([c.text, c.key], ["t", ""])
+        XCTAssertFalse(c.unread)
+    }
+
+    /// An invitation needs the key of the CA the phone issues with and a
+    /// hub to open its guest tunnel on: a group of phones has none.
+    func testInvitingRefuses() async throws {
+        let t = try CoreGroup(test: self)
+        try await t.connect(1, to: 0)
+        let ca = t.ca
+        XCTAssertThrowsError(try CorePairing.Inviting(member: t.root.member, publicKey: SoftwareSigner().publicKeyDER, adminCA: nil,
+                                                      expires: 600) { try ca.signature(digest: $0) })
+        XCTAssertThrowsError(try CorePairing.Inviting(member: t.root.member, publicKey: ca.publicKeyDER, adminCA: nil,
+                                                      expires: 600) { try ca.signature(digest: $0) })
+        XCTAssertThrowsError(try CorePairing.Inviting(member: t.root.member, publicKey: ca.publicKeyDER, adminCA: nil, expires: 600,
+                                                      hub: "not a device") { try ca.signature(digest: $0) })
     }
 }

@@ -50,7 +50,7 @@ func TestHubsTable(t *testing.T) {
 		t.Fatalf("hubs without a table: %v", s.Hubs)
 	}
 
-	// A lite member and a device the group does not have are left out.
+	// A member without the cap hub and a device the group does not have are left out.
 	w.hubs("hubs by C", "C", 10, "E", "pi", "0123456789abcdef0123456789abcdef", "rootphone", "C")
 	w.wantHubs(w.evalAll(nil), "E", "rootphone", "C")
 

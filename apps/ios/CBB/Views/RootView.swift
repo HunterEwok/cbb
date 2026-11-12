@@ -27,5 +27,8 @@ struct RootView: View {
         .tint(palette.accent)
         .foregroundStyle(palette.text)
         .preferredColorScheme(appearance.scheme)
+        .sheet(item: Binding(get: { model.bug }, set: { if $0 == nil { model.cancelBug() } })) { offer in
+            BugView(offer: offer).environment(\.palette, palette)
+        }
     }
 }

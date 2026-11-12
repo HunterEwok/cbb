@@ -21,7 +21,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/HunterEwok/cbb/internal/core"
 	"github.com/HunterEwok/cbb/internal/hlc"
 	"github.com/HunterEwok/cbb/internal/seal"
 	"github.com/HunterEwok/cbb/internal/strict"
@@ -544,12 +543,8 @@ func (s *Sealed) Open(me string, secret []byte) (Content, []byte, error) {
 	return c, k, nil
 }
 
-// open opens the copy with the wrap i, which is for me: through the core
-// in a build that links it (sealedcore.go), with Go's code otherwise.
+// open opens the copy with the wrap i, which is for me.
 func (s *Sealed) open(i int, me string, secret []byte) (Content, []byte, error) {
-	if core.Linked() {
-		return openInCore(s, me, secret)
-	}
 	return s.openInGo(i, secret)
 }
 
@@ -608,20 +603,8 @@ func SealCopy(id, origin string, t hlc.Timestamp, cert, issuer []byte, readers [
 }
 
 // sealDraft seals a copy without signing it, and gives what its origin
-// signs: through the core in a build that links it, with Go's code
-// otherwise. The core's copy must give the same bytes to sign as Go reads
-// from it, or it is not sent.
+// signs.
 func sealDraft(id, origin string, t hlc.Timestamp, cert, issuer []byte, readers []Reader, c Content, blob *Blob, key []byte) (*Sealed, []byte, error) {
-	if core.Linked() {
-		s, toSign, err := sealInCore(id, origin, t, cert, issuer, readers, c, blob, key)
-		if err != nil {
-			return nil, nil, err
-		}
-		if !bytes.Equal(toSign, s.ToSign()) {
-			return nil, nil, errors.New("clip: the core's sealed copy does not read back as it was signed")
-		}
-		return s, toSign, nil
-	}
 	return sealInGo(id, origin, t, cert, issuer, readers, c, blob, key)
 }
 

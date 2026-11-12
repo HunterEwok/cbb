@@ -47,7 +47,7 @@ func (l *logLines) holding(t *testing.T, what ...string) {
 func TestNoLogs(t *testing.T) {
 	g := newGroup(t)
 	var logs logLines
-	_, link := startAny(t, Config{Groups: []string{group.Tag(g.Cert)}, Logf: logs.logf, Verbose: true})
+	_, link := startWith(t, Config{Groups: []string{group.Tag(g.Cert)}, Logf: logs.logf, Verbose: true})
 	a, b := newDevice(t, g), newDevice(t, g)
 	if a.id > b.id {
 		a, b = b, a

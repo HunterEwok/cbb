@@ -39,6 +39,11 @@ cargo_home=${CARGO_HOME:-$HOME/.cargo}
 command -v cargo >/dev/null || PATH=$cargo_home/bin:$PATH
 RUSTFLAGS="--remap-path-prefix=$root=/cbb --remap-path-prefix=$cargo_home=/cargo"
 export RUSTFLAGS
+# The apps' library unwinds a panic, which the C functions catch and answer
+# (docs/core-api.md, "Panics"); the computers' cbb aborts, and the system's
+# service manager starts it again.
+CARGO_PROFILE_RELEASE_PANIC=unwind
+export CARGO_PROFILE_RELEASE_PANIC
 
 case $target in
 ios)
