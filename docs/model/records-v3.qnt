@@ -141,6 +141,9 @@ module records_v3 {
     rootsCount: bool, // every whole record of the current root counts
     cuts: Key -> List[Id], // the line up to which each earlier root's records count
     checkpoint: Id, // the checkpoint the state comes from, or 0
+    // The lowest seq of the current root's head that a claim waiting only for its line names,
+    // or NONE.
+    lineWait: int,
   }
 
   pure val ROOT = "R"
@@ -430,7 +433,7 @@ module records_v3 {
 
   pure val NOVIEW: View = {
     path: [], counting: Set(), revoked: Set(), frozen: Set(), admins: Map(), stop: false, claims: Map(),
-    devices: Set(), commanders: Set(), rootsCount: true, cuts: Map(), checkpoint: 0,
+    devices: Set(), commanders: Set(), rootsCount: true, cuts: Map(), checkpoint: 0, lineWait: NONE,
   }
 
   // The evaluation under one path of roots, with the anchors of the checkpoint it prunes by.
@@ -614,10 +617,11 @@ module records_v3 {
     pure def walkable(c: Record): bool = {
       val l = lineOf(c.seen, cur)
       l.indices().exists(j => (j == 0 or anchors.contains(l[j]) or rs.exists(x => x.id == l[j] and x.kind == "checkpoint" and x.keep.forall(i => ids.contains(i))))
-        and l.indices().forall(i => i < j or ids.contains(l[i]) or anchors.contains(l[i])))
+        and l.indices().forall(i => i < j or ids.contains(l[i]) or l.indices().exists(h => h >= i and anchors.contains(l[h]))))
     }
-    val ready = alone.filter(c => not(disputed(c)) and ins.contains(c) and not(rootFrozen(c.signer)) and heldOf(c) >= delayOf(c)
-      and walkable(c))
+    val waitsOnly = alone.filter(c => not(disputed(c)) and ins.contains(c) and not(rootFrozen(c.signer)) and heldOf(c) >= delayOf(c))
+    val ready = waitsOnly.filter(c => walkable(c))
+    val lineWait = waitsOnly.exclude(ready).fold(NONE, (m, c) => min2(m, lineOf(c.seen, cur).length()))
     val full = path.length() >= MAXPATH
     val effective = if (full) Set() else ready
     val claims = idsOf(here).mapBy(i =>
@@ -644,6 +648,7 @@ module records_v3 {
         rootsCount: rs.filter(r => onPath(r) and r.signer == cur and counted(r)).forall(r => counts(r)),
         cuts: cuts,
         checkpoint: 0,
+        lineWait: lineWait,
       },
       next: effective.fold("", (k, c) => c.target),
       cut: effective.fold([], (n, c) => lineOf(c.seen, cur)),
@@ -694,8 +699,9 @@ module records_v3 {
 
   // The newest checkpoint of a root on the path, within its cut: the highest seq, then the
   // smallest ID; 0 when it has none.
-  pure def newestCheckpoint(rs: Set[Record], v: View, k: Key): Id = {
-    val cs = rs.filter(r => r.signer == k and r.kind == "checkpoint" and within(v.cuts, r))
+  pure def newestCheckpoint(rs: Set[Record], v: View, k: Key): Id = newestCheckpointTo(rs, v, k, NONE)
+  pure def newestCheckpointTo(rs: Set[Record], v: View, k: Key, top: int): Id = {
+    val cs = rs.filter(r => r.signer == k and r.kind == "checkpoint" and within(v.cuts, r) and r.seq <= top)
     cs.filter(c => cs.forall(o => o == c or c.seq > o.seq or (c.seq == o.seq and c.id < o.id))).fold(0, (m, c) => c.id)
   }
 
@@ -725,24 +731,28 @@ module records_v3 {
 
   // The state: the path roots' newest checkpoints within their cuts apply in the path's
   // order, each on what the ones before it pruned (decision 22, rule 12).
-  pure def fullEvaluate(rs: Set[Record], held: Id -> int, counted: List[Counted]): View = {
+  // While a claim waits only for its line, the current root's checkpoints above the head it
+  // names wait too, unless the set already pruned by one (prunedFor).
+  pure def fullEvaluate(rs: Set[Record], held: Id -> int, counted: List[Counted]): View = fullEvaluateP(rs, held, counted, false)
+  pure def fullEvaluateP(rs: Set[Record], held: Id -> int, counted: List[Counted], prunedFor: bool): View = {
     val plain = evaluate(rs, held, counted, Set())
     val p = plain.path
+    pure def top(i: int): int = if (i == p.length() - 1 and not(prunedFor)) plain.lineWait else NONE
     val a0 = (rs, Set(), { ...plain, checkpoint: 0 })
-    val a1 = applyCheckpoint(held, counted, newestCheckpoint(rs, plain, p[0]), a0)
-    val a2 = if (p.length() > 1) applyCheckpoint(held, counted, newestCheckpoint(a1._1, plain, p[1]), a1) else a1
-    val a3 = if (p.length() > 2) applyCheckpoint(held, counted, newestCheckpoint(a2._1, plain, p[2]), a2) else a2
+    val a1 = applyCheckpoint(held, counted, newestCheckpointTo(rs, plain, p[0], top(0)), a0)
+    val a2 = if (p.length() > 1) applyCheckpoint(held, counted, newestCheckpointTo(a1._1, plain, p[1], top(1)), a1) else a1
+    val a3 = if (p.length() > 2) applyCheckpoint(held, counted, newestCheckpointTo(a2._1, plain, p[2], top(2)), a2) else a2
     a3._3
   }
 
   // A member's state: its set evaluated (the evaluation keeps again what the set holds).
   pure def storeView(s: Store, db: Id -> Record): View =
-    fullEvaluate(recsOf(settle(s, recsOf(s.recs, db), NOCUT, db)._1, db), s.held, s.counted)
+    fullEvaluateP(recsOf(settle(s, recsOf(s.recs, db), NOCUT, db)._1, db), s.held, s.counted, s.checkpoint != 0)
 
   // What a member given every record of got at once keeps, and its state.
   pure def pureKept(s: Store, db: Id -> Record): Set[Id] =
     settle(s, recsOf(s.got, db).filter(r => storable(s, r, db)), NOCUT, db)._1
-  pure def pureView(s: Store, db: Id -> Record): View = fullEvaluate(recsOf(pureKept(s, db), db), s.held, s.counted)
+  pure def pureView(s: Store, db: Id -> Record): View = fullEvaluateP(recsOf(pureKept(s, db), db), s.held, s.counted, s.checkpoint != 0)
 
   // --- The system ------------------------------------------------------------------------
 
