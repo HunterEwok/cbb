@@ -174,6 +174,11 @@ fn registration(a: RegistrationArgs) -> Result<Vec<u8>, Refusal> {
     let mut m = Map::new();
     m.insert("frame".into(), b64_value(&frame));
     m.insert("seq".into(), Value::from(seq));
+    // The saved number was more than a day ahead of the clock: this one
+    // starts at the clock (the app may log it; members take it).
+    if a.saved_seq.is_some_and(|s| push::seq_was_ahead(s, a.now_ms)) {
+        m.insert("ahead".into(), Value::Bool(true));
+    }
     // The send key's hint, the first 8 bytes of its hash: the push service
     // puts it beside each challenge, so that the phone keeps only one sent
     // to its own key.

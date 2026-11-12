@@ -15,18 +15,26 @@
 //! - sends at most one message, reads at most 4 KiB of the answer, and
 //!   gives the whole send (the lookup included) 8 s, under the member's
 //!   own wait for the answer;
-//! - budgets per group and host (a name lowercased), and per address
-//!   dialed with a higher ceiling, so that neither a stranger's sends to a
-//!   distributor's host nor many names at one address starve the others; a
-//!   host that answered 429 waits as long as it asked.
+//! - budgets per group and host (a name lowercased); per group and
+//!   address dialed; and per address for every group together, which
+//!   refuses only the groups that already sent there most, so that neither
+//!   a stranger's sends to a distributor's host nor many names at one
+//!   address starve the others;
+//! - a host that answered 429 waits as long as it asked (at most a day),
+//!   for the group that asked only; the address waits for everyone only
+//!   when three groups were told so within ten minutes, and then at most
+//!   five minutes, so one name's answer never closes an address;
+//! - keeps its tables as the service keeps its own (`shares.rs`), each
+//!   group a share: when one is full, the group with the most entries
+//!   loses its oldest, and no one is refused for it.
 //!
 //! The message the phone decrypts is parts, each a kind (1 byte), a length
 //! (2 bytes, big-endian) and its bytes: kind 1 the body, kind 2 a
 //! challenge of the service (24 bytes: the value, then the hint of the
-//! send key it is for). The app reads the kinds it knows and skips the
-//! others, so a size of the registry may change.
+//! send key it is for), kind 3 padding in place of a part that is not
+//! there, so that every message has one size. The app reads the kinds it
+//! knows and skips the others, so a size of the registry may change.
 
-use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpStream, ToSocketAddrs};
 use std::sync::{Arc, Mutex};
@@ -40,6 +48,7 @@ use rustls::pki_types::ServerName;
 use rustls::{ClientConfig, ClientConnection, StreamOwned};
 use sha2::Sha256;
 
+use super::shares::{Payer, Shared};
 use super::{Delivery, Outcome, Platform};
 
 /// The record size the header names: one record holds the whole body.
@@ -48,16 +57,26 @@ const RS: u32 = 4096;
 const DEADLINE: Duration = Duration::from_secs(8);
 /// The most of an answer read.
 const MAX_ANSWER: usize = 4096;
-/// Sends an hour and the burst, per group and host, and per address
-/// dialed; entries held at most in each.
+/// Sends an hour and the burst: per group and host, per group and
+/// address, and per address for every group.
 const PER_TAG_HOST: (f64, f64) = (300.0, 30.0);
+const PER_TAG_ADDRESS: (f64, f64) = (300.0, 30.0);
 const PER_ADDRESS: (f64, f64) = (6000.0, 600.0);
-const HOSTS_MAX: usize = 65_536;
+/// Entries held at most in each table.
+const TABLE_MAX: usize = 65_536;
+/// How long an address waits for everyone at most, and how many groups'
+/// 429s within the window it takes.
+const ADDRESS_WAIT_MAX: Duration = Duration::from_secs(300);
+const ADDRESS_WAIT_GROUPS: usize = 3;
+const ADDRESS_WAIT_WINDOW: Duration = Duration::from_secs(600);
 /// The kinds of the message's parts.
 pub const PART_BODY: u8 = 1;
 pub const PART_CHALLENGE: u8 = 2;
+pub const PART_PADDING: u8 = 3;
 
-/// The message for the phone: its parts in kind order.
+/// The message for the phone: its parts in kind order, a part that is not
+/// there padded to its size, so a body, a body with a challenge and a
+/// challenge alone are all one size (the body is always the registry's).
 pub fn message(body: Option<&[u8]>, challenge: Option<&super::Challenge>) -> Vec<u8> {
     let mut out = Vec::new();
     let mut part = |kind: u8, b: &[u8]| {
@@ -65,11 +84,13 @@ pub fn message(body: Option<&[u8]>, challenge: Option<&super::Challenge>) -> Vec
         out.extend_from_slice(&(b.len() as u16).to_be_bytes());
         out.extend_from_slice(b);
     };
-    if let Some(b) = body {
-        part(PART_BODY, b);
+    match body {
+        Some(b) => part(PART_BODY, b),
+        None => part(PART_PADDING, &[0; cbb_core::push::MAX_BODY]),
     }
-    if let Some(c) = challenge {
-        part(PART_CHALLENGE, &c.bytes());
+    match challenge {
+        Some(c) => part(PART_CHALLENGE, &c.bytes()),
+        None => part(PART_PADDING, &[0; 24]),
     }
     out
 }
@@ -160,6 +181,35 @@ struct Bucket {
     at: Instant,
 }
 
+impl Bucket {
+    fn full((_, burst): (f64, f64), at: Instant) -> Bucket {
+        Bucket { left: burst, at }
+    }
+
+    /// What is left now.
+    fn fill(&mut self, (per_hour, burst): (f64, f64), now: Instant) -> f64 {
+        self.left = (self.left + now.saturating_duration_since(self.at).as_secs_f64() * per_hour / 3600.0).min(burst);
+        self.at = now;
+        self.left
+    }
+
+    /// Takes one; the wait when it is spent.
+    fn take(&mut self, rate: (f64, f64), now: Instant) -> Option<Duration> {
+        if self.fill(rate, now) >= 1.0 {
+            self.left -= 1.0;
+            None
+        } else {
+            Some(Duration::from_secs_f64(((1.0 - self.left) * 3600.0 / rate.0).max(1.0)))
+        }
+    }
+}
+
+/// An address's recent 429s: by which groups, and when.
+#[derive(Clone, Default)]
+struct Told {
+    by: Vec<(Payer, Instant)>,
+}
+
 /// How the service reaches an endpoint: TLS with the system's roots, or for
 /// the tests plain TCP to a loopback server.
 enum Dial {
@@ -179,37 +229,79 @@ pub struct UnifiedPush {
     budgets: Mutex<Budgets>,
 }
 
-/// The budgets: per (group, host), per address dialed, and the addresses a
-/// 429 told to wait.
-#[derive(Default)]
+/// The budgets and waits, each table shared by the groups (a group's tag
+/// is its share).
 struct Budgets {
-    hosts: HashMap<([u8; 32], String), Bucket>,
-    addresses: HashMap<IpAddr, Bucket>,
-    wait: HashMap<IpAddr, Instant>,
+    /// By (group, host).
+    hosts: Shared<Bucket>,
+    /// By (group, address).
+    shares: Shared<Bucket>,
+    /// By address, for every group.
+    addresses: Shared<Bucket>,
+    /// Until when a group leaves a host alone, by (group, host).
+    waits: Shared<Instant>,
+    /// Until when everyone leaves an address alone, by address.
+    closed: Shared<Instant>,
+    /// The recent 429s by address.
+    told: Shared<Told>,
 }
 
-/// Takes one from the bucket under k in m; the wait when it is spent.
-fn take<K: std::hash::Hash + Eq>(
-    m: &mut HashMap<K, Bucket>,
-    k: K,
-    (per_hour, burst): (f64, f64),
-    now: Instant,
-) -> Option<Duration> {
-    if !m.contains_key(&k) && m.len() >= HOSTS_MAX {
-        m.retain(|_, b| now.saturating_duration_since(b.at) < Duration::from_secs(3600));
-        if m.len() >= HOSTS_MAX {
-            return Some(Duration::from_secs(60));
+impl Default for Budgets {
+    fn default() -> Budgets {
+        Budgets {
+            hosts: Shared::new(TABLE_MAX),
+            shares: Shared::new(TABLE_MAX),
+            addresses: Shared::new(TABLE_MAX),
+            waits: Shared::new(TABLE_MAX),
+            closed: Shared::new(TABLE_MAX),
+            told: Shared::new(TABLE_MAX),
         }
     }
-    let b = m.entry(k).or_insert(Bucket { left: burst, at: now });
-    let rate = per_hour / 3600.0;
-    b.left = (b.left + now.saturating_duration_since(b.at).as_secs_f64() * rate).min(burst);
-    b.at = now;
-    if b.left >= 1.0 {
-        b.left -= 1.0;
-        None
-    } else {
-        Some(Duration::from_secs_f64(((1.0 - b.left) / rate).max(1.0)))
+}
+
+/// A table's key for what parts name.
+fn key(what: &[u8], parts: &[&[u8]]) -> [u8; 32] {
+    use sha2::Digest;
+    let mut h = Sha256::new();
+    h.update(what);
+    for p in parts {
+        h.update((p.len() as u32).to_be_bytes());
+        h.update(p);
+    }
+    h.finalize().into()
+}
+
+fn share(tag: &[u8; 32]) -> Payer {
+    let mut p = [0u8; 16];
+    p.copy_from_slice(&tag[..16]);
+    p
+}
+
+fn ip_bytes(ip: IpAddr) -> [u8; 16] {
+    match ip.to_canonical() {
+        IpAddr::V4(v4) => v4.to_ipv6_mapped().octets(),
+        IpAddr::V6(v6) => v6.octets(),
+    }
+}
+
+/// Takes one from the bucket under k, filed for payer if new; the wait.
+fn take(t: &mut Shared<Bucket>, k: [u8; 32], payer: Payer, rate: (f64, f64), now: Instant) -> Option<Duration> {
+    if t.get(&k).is_none() {
+        let hour = Duration::from_secs(3600);
+        t.insert(k, Bucket::full(rate, now), payer, |b| now.saturating_duration_since(b.at) >= hour);
+    }
+    t.get_mut(&k).and_then(|b| b.take(rate, now))
+}
+
+/// The wait left under k in t, if any.
+fn waiting(t: &mut Shared<Instant>, k: &[u8; 32], now: Instant) -> Option<Duration> {
+    match t.get(k).copied() {
+        Some(until) if until > now => Some(until - now),
+        Some(_) => {
+            t.remove(k);
+            None
+        }
+        None => None,
     }
 }
 
@@ -263,36 +355,69 @@ impl UnifiedPush {
         }
     }
 
-    /// Takes one send from the group's budget at host; the wait when it
-    /// is spent.
+    fn lock(&self) -> std::sync::MutexGuard<'_, Budgets> {
+        self.budgets.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Takes one send from the group's budget at host, unless a 429 told
+    /// the group to leave it alone; the wait.
     fn budget(&self, tag: &[u8; 32], host: &str) -> Option<Duration> {
-        let mut b = self.budgets.lock().unwrap_or_else(|e| e.into_inner());
-        take(&mut b.hosts, (*tag, host.to_ascii_lowercase()), PER_TAG_HOST, Instant::now())
-    }
-
-    /// Takes one send from the address's budget, unless a 429 told it to
-    /// wait; the wait.
-    fn address(&self, ip: IpAddr) -> Option<Duration> {
         let now = Instant::now();
-        let mut b = self.budgets.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(until) = b.wait.get(&ip).copied() {
-            if until > now {
-                return Some(until - now);
-            }
-            b.wait.remove(&ip);
+        let host = host.to_ascii_lowercase();
+        let k = key(b"host", &[tag, host.as_bytes()]);
+        let mut b = self.lock();
+        if let Some(w) = waiting(&mut b.waits, &k, now) {
+            return Some(w);
         }
-        take(&mut b.addresses, ip, PER_ADDRESS, now)
+        take(&mut b.hosts, k, share(tag), PER_TAG_HOST, now)
     }
 
-    /// The address asked to be left alone for d.
-    fn told_to_wait(&self, ip: IpAddr, d: Duration) {
-        let mut b = self.budgets.lock().unwrap_or_else(|e| e.into_inner());
-        if b.wait.len() >= HOSTS_MAX {
-            let now = Instant::now();
-            b.wait.retain(|_, u| *u > now);
+    /// Takes one send from the group's share of the address and from the
+    /// address's budget, unless the address is closed for everyone; the
+    /// wait. When the address's budget is spent, only the groups that sent
+    /// there most (half their share spent or more) wait for it.
+    fn address(&self, tag: &[u8; 32], ip: IpAddr) -> Option<Duration> {
+        let now = Instant::now();
+        let ipb = ip_bytes(ip);
+        let ka = key(b"address", &[&ipb]);
+        let ks = key(b"share", &[tag, &ipb]);
+        let payer = share(tag);
+        let mut b = self.lock();
+        if let Some(w) = waiting(&mut b.closed, &ka, now) {
+            return Some(w);
         }
-        if b.wait.len() < HOSTS_MAX {
-            b.wait.insert(ip, Instant::now() + d);
+        if let Some(w) = take(&mut b.shares, ks, payer, PER_TAG_ADDRESS, now) {
+            return Some(w);
+        }
+        let light = b.shares.get_mut(&ks).is_some_and(|s| s.fill(PER_TAG_ADDRESS, now) >= PER_TAG_ADDRESS.1 / 2.0);
+        match take(&mut b.addresses, ka, payer, PER_ADDRESS, now) {
+            Some(w) if !light => Some(w),
+            _ => None,
+        }
+    }
+
+    /// The host at ip answered the group 429 with wait d: the group leaves
+    /// the host alone that long; the address closes for everyone (five
+    /// minutes at most) once three groups were told so within ten minutes.
+    fn told_to_wait(&self, tag: &[u8; 32], host: &str, ip: IpAddr, d: Duration) {
+        let now = Instant::now();
+        let ipb = ip_bytes(ip);
+        let payer = share(tag);
+        let kw = key(b"host", &[tag, host.to_ascii_lowercase().as_bytes()]);
+        let ka = key(b"address", &[&ipb]);
+        let mut b = self.lock();
+        b.waits.insert(kw, now + d, payer, |u| *u <= now);
+        if b.told.get(&ka).is_none() {
+            b.told.insert(ka, Told::default(), payer, |t| {
+                t.by.iter().all(|(_, at)| now.saturating_duration_since(*at) >= ADDRESS_WAIT_WINDOW)
+            });
+        }
+        let Some(t) = b.told.get_mut(&ka) else { return };
+        t.by.retain(|(p, at)| *p != payer && now.saturating_duration_since(*at) < ADDRESS_WAIT_WINDOW);
+        t.by.push((payer, now));
+        if t.by.len() >= ADDRESS_WAIT_GROUPS {
+            t.by.clear();
+            b.closed.insert(ka, now + d.min(ADDRESS_WAIT_MAX), payer, |u| *u <= now);
         }
     }
 
@@ -396,7 +521,7 @@ impl Platform for UnifiedPush {
         // Resolved once: the address checked is the one connected to.
         let addrs = resolve_within(&self.resolve, &host, DEADLINE / 2);
         let Some(addr) = pick(addrs, &*self.allowed) else { return Outcome::NoPath };
-        if let Some(wait) = self.address(addr.ip()) {
+        if let Some(wait) = self.address(&d.tag, addr.ip()) {
             return Outcome::Later(wait);
         }
         let secret = p256::SecretKey::from_bytes(&cbb_core::certs::random_bytes::<32>().into());
@@ -413,7 +538,7 @@ impl Platform for UnifiedPush {
                 if let (Outcome::Later(wait), true) =
                     (&o, answer.starts_with(b"HTTP/1.1 429") || answer.starts_with(b"HTTP/1.0 429"))
                 {
-                    self.told_to_wait(addr.ip(), *wait);
+                    self.told_to_wait(&d.tag, &host, addr.ip(), *wait);
                 }
                 o
             }
@@ -579,7 +704,15 @@ mod tests {
         assert_eq!(&m[..6], &[PART_BODY, 0, 3, 9, 9, 9]);
         assert_eq!(&m[6..9], &[PART_CHALLENGE, 0, 24]);
         assert_eq!(&m[9..], &c.bytes());
-        assert_eq!(message(None, Some(&c))[0], PART_CHALLENGE);
+        // A part that is not there is padding of its size: one size for all.
+        let body = [9u8; cbb_core::push::MAX_BODY];
+        let full = message(Some(&body), Some(&c));
+        let alone = message(None, Some(&c));
+        let bare = message(Some(&body), None);
+        assert_eq!((alone.len(), bare.len()), (full.len(), full.len()));
+        assert_eq!(alone[0], PART_PADDING);
+        assert_eq!(&alone[alone.len() - 27..alone.len() - 24], &[PART_CHALLENGE, 0, 24]);
+        assert_eq!(bare[bare.len() - 27], PART_PADDING);
     }
 
     #[test]
@@ -615,16 +748,73 @@ mod tests {
     }
 
     #[test]
-    fn many_names_at_one_address_share_its_ceiling() {
+    fn one_group_never_spends_an_address_for_the_others() {
         let up = UnifiedPush::plain(|_| true, |_| vec![]);
         let ip: IpAddr = "93.184.216.34".parse().unwrap();
-        for _ in 0..PER_ADDRESS.1 as usize {
-            assert!(up.address(ip).is_none());
+        // One group's share of the address: its burst, then it waits.
+        for _ in 0..PER_TAG_ADDRESS.1 as usize {
+            assert!(up.address(&[1; 32], ip).is_none());
         }
-        assert!(up.address(ip).is_some());
-        // A 429 makes the address wait as long as it asked.
+        assert!(up.address(&[1; 32], ip).is_some());
+        // Enough groups to spend the address's budget for every group...
+        let groups = (PER_ADDRESS.1 / PER_TAG_ADDRESS.1) as u8;
+        for g in 2..2 + groups {
+            for _ in 0..PER_TAG_ADDRESS.1 as usize {
+                let _ = up.address(&[g; 32], ip);
+            }
+        }
+        // ...and a group that has not sent there still goes, while one that
+        // sent most waits.
+        assert!(up.address(&[200; 32], ip).is_none());
+        let mut heavy = [7u8; 32];
+        heavy[0] = 201;
+        for _ in 0..(PER_TAG_ADDRESS.1 / 2.0) as usize + 1 {
+            let _ = up.address(&heavy, ip);
+        }
+        assert!(up.address(&heavy, ip).is_some());
+    }
+
+    #[test]
+    fn one_names_429_closes_neither_the_address_nor_another_groups_host() {
+        let up = UnifiedPush::plain(|_| true, |_| vec![]);
+        let ip: IpAddr = "93.184.216.34".parse().unwrap();
+        // Another group's own name there answered 429 for a day.
+        up.told_to_wait(&[9; 32], "mine.example", ip, Duration::from_secs(86_400));
+        assert!(up.budget(&[9; 32], "MINE.example").is_some_and(|w| w > Duration::from_secs(86_000)));
+        // The phone's group, at its distributor's name at that address: goes.
+        assert!(up.budget(&[1; 32], "up.example.org").is_none());
+        assert!(up.address(&[1; 32], ip).is_none());
+        // Even at that same name, another group goes.
+        assert!(up.budget(&[2; 32], "mine.example").is_none());
+        // Three groups told within ten minutes close the address for
+        // everyone, for five minutes at most.
+        up.told_to_wait(&[10; 32], "a.example", ip, Duration::from_secs(86_400));
+        up.told_to_wait(&[11; 32], "b.example", ip, Duration::from_secs(86_400));
+        let w = up.address(&[1; 32], ip).expect("closed");
+        assert!(w <= ADDRESS_WAIT_MAX && w > ADDRESS_WAIT_MAX - Duration::from_secs(5), "{w:?}");
+        // One group told three times is one group.
         let other: IpAddr = "93.184.216.35".parse().unwrap();
-        up.told_to_wait(other, Duration::from_secs(99));
-        assert!(up.address(other).is_some_and(|w| w > Duration::from_secs(90)));
+        for _ in 0..3 {
+            up.told_to_wait(&[12; 32], "c.example", other, Duration::from_secs(86_400));
+        }
+        assert!(up.address(&[1; 32], other).is_none());
+    }
+
+    #[test]
+    fn full_tables_make_room_from_the_group_with_most_entries() {
+        let up = UnifiedPush::plain(|_| true, |_| vec![]);
+        // One group sends to as many names as the table holds, and to as
+        // many addresses.
+        for i in 0..TABLE_MAX as u32 {
+            assert!(up.budget(&[1; 32], &format!("n{i}.example")).is_none());
+            let ip = IpAddr::from(std::net::Ipv4Addr::from(0x5d00_0000 + i));
+            assert!(up.address(&[1; 32], ip).is_none());
+        }
+        // A group that has not sent in this hour goes, to a name and an
+        // address not among them.
+        assert!(up.budget(&[2; 32], "up.example.org").is_none());
+        assert!(up.address(&[2; 32], "203.0.113.200".parse().unwrap()).is_none());
+        let b = up.lock();
+        assert_eq!((b.hosts.len(), b.shares.len(), b.addresses.len()), (TABLE_MAX, TABLE_MAX, TABLE_MAX));
     }
 }

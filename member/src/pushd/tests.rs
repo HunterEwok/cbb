@@ -408,7 +408,7 @@ fn a_send_that_does_not_hold_is_refused_and_too_many_close_the_connection() {
 
 #[test]
 fn a_body_on_its_way_is_never_made_a_repeat() {
-    let w = world(Budgets::default());
+    let w = world(Budgets { unconfirmed: (3600.0, 100.0), unconfirmed_token: (3600.0, 100.0), ..Budgets::default() });
     *w.fake.delay.lock().unwrap() = Duration::from_millis(1500);
     let phone = send_key(3);
     let token = [7u8; 32];
@@ -567,7 +567,13 @@ fn a_member_the_credentials_leave_out_or_an_old_or_other_period_is_refused() {
 
 #[test]
 fn the_budgets_hold_per_token_and_per_tag() {
-    let w = world(Budgets { per_token: (3600.0, 2.0), per_tag: (3600.0, 4.0), ..Budgets::default() });
+    // The token's key is not confirmed: the group's unconfirmed budget.
+    let w = world(Budgets {
+        unconfirmed: (3600.0, 2.0),
+        unconfirmed_token: (3600.0, 100.0),
+        per_tag: (3600.0, 4.0),
+        ..Budgets::default()
+    });
     let (key, creds) = member([4; 16], 1, "period", 1, true);
     let mut c = Client::connect(w.service.addr(), w.pin, key, &refs(&creds)).unwrap();
     let phone = send_key(3);
@@ -993,4 +999,173 @@ fn the_sender_drops_a_token_the_platform_says_is_gone() {
     assert_eq!(kept.0.lock().unwrap().last(), Some(&(phone, false)));
     s.stop();
     w.service.stop();
+}
+
+fn conn(w: &World, tag: u8, secret: u8) -> Client {
+    let (key, creds) = member([tag; 16], secret, &format!("period {tag}"), 1, true);
+    Client::connect(w.service.addr(), w.pin, key, &refs(&creds)).unwrap()
+}
+
+/// The first 8 bytes of the hash of k's encoding: the hint a challenge
+/// for k carries.
+fn hint_of(k: &ServerKey) -> [u8; 8] {
+    let key = cbb_core::records::key::Key::es256(cbb_core::identity::ExternalKey::public(k));
+    key.hash().0[..8].try_into().unwrap()
+}
+
+/// The last challenge the platform carried to token for the key of h.
+fn challenge_for(w: &World, token: &[u8], h: [u8; 8]) -> Option<[u8; 16]> {
+    let got = w.fake.got.lock().unwrap();
+    got.iter().rev().filter(|g| g.token == token).filter_map(|g| g.challenge).find(|c| c.key == h).map(|c| c.value)
+}
+
+fn confirmed(w: &World, token: &[u8]) -> Option<bool> {
+    let tok = w.service.inner.keyed(b"token", &push::ENV_APNS.to_be_bytes(), token);
+    w.service.inner.lock().bindings.get(&tok).map(Binding::confirmed)
+}
+
+/// Whoever knows a token and holds a group of its own cannot hold the
+/// phone's confirmation off: challenges are not kept, so no number of
+/// other keys pushes the phone's out, and its sends spend its own group's
+/// budget toward the token, not the phone's.
+#[test]
+fn other_keys_never_hold_off_the_phones_confirmation() {
+    let w = world(Budgets::default());
+    let mut home = conn(&w, 1, 1);
+    let mut other = conn(&w, 2, 2);
+    let (phone, token) = (send_key(3), [7u8; 32]);
+    let t0 = now_seq(0);
+    assert_eq!(send(&mut home, &phone, push::ENV_APNS, &token, t0, &body(1)).status, push::SENT);
+    let ch = challenge_for(&w, &token, hint_of(&phone)).unwrap();
+    // Twenty sends under twenty keys of the other's own, from its group.
+    let mut passed = 0;
+    for i in 0..20u8 {
+        let r = send(&mut other, &send_key(100 + i), push::ENV_APNS, &token, t0, &body(50 + i));
+        passed += usize::from(r.status == push::SENT);
+    }
+    // Its group's own small rate toward an unconfirmed token: the burst.
+    assert_eq!(passed, Budgets::default().unconfirmed.1 as usize);
+    let r = S { challenge: Some(ch), ..s(&phone, push::ENV_APNS, &token, t0 + 1) }.send(&mut home, &body(2));
+    assert_eq!(r.status, push::SENT);
+    assert_eq!(confirmed(&w, &token), Some(true));
+    // From now the other's keys get stale, and the phone's group sends.
+    assert_eq!(send(&mut other, &send_key(99), push::ENV_APNS, &token, t0, &body(90)).status, push::SENT_STALE);
+    assert_eq!(send(&mut home, &phone, push::ENV_APNS, &token, t0 + 1, &body(3)).status, push::SENT);
+    w.service.stop();
+}
+
+/// While no key is confirmed, every group together may send the token a
+/// bounded number of bodies; past that a group's send carries only its
+/// challenge, alone, so the phone still confirms.
+#[test]
+fn one_ceiling_for_every_unconfirmed_group_and_the_challenge_still_goes() {
+    let w = world(Budgets { unconfirmed_token: (1.0, 3.0), ..Budgets::default() });
+    let token = [7u8; 32];
+    let t0 = now_seq(0);
+    for g in 0..3u8 {
+        let mut c = conn(&w, 10 + g, 10 + g);
+        assert_eq!(send(&mut c, &send_key(40 + g), push::ENV_APNS, &token, t0, &body(g)).status, push::SENT);
+    }
+    // A fourth group, the phone's: no body, its challenge alone.
+    let mut home = conn(&w, 1, 1);
+    let phone = send_key(3);
+    let r = send(&mut home, &phone, push::ENV_APNS, &token, t0, &body(9));
+    assert_eq!(r.status, push::SENT_BUDGET);
+    assert!(r.retry_ms.is_some());
+    let last = w.fake.got.lock().unwrap().last().cloned().unwrap();
+    assert!(last.body.is_none() && last.challenge.is_some_and(|c| c.key == hint_of(&phone)));
+    // The phone answers it: confirmed, and its group's send goes.
+    let ch = challenge_for(&w, &token, hint_of(&phone)).unwrap();
+    let r = S { challenge: Some(ch), ..s(&phone, push::ENV_APNS, &token, t0 + 1) }.send(&mut home, &body(10));
+    assert_eq!(r.status, push::SENT);
+    assert_eq!(confirmed(&w, &token), Some(true));
+    w.service.stop();
+}
+
+/// Once a key is confirmed, a stranger's asks spend its own group's
+/// budget for challenges: the phone's new key for the same token still
+/// gets its challenge.
+#[test]
+fn a_strangers_asks_do_not_spend_the_phones_challenges() {
+    let w = world(Budgets::default());
+    let mut home = conn(&w, 1, 1);
+    let mut other = conn(&w, 2, 2);
+    let (phone, token) = (send_key(3), [7u8; 32]);
+    let t0 = now_seq(0);
+    send(&mut home, &phone, push::ENV_APNS, &token, t0, &body(1));
+    confirm(&w, &mut home, &phone, &token, t0 + 1, 2);
+    // Six asks (a connection is closed after eight refusals): past its
+    // group's burst of challenges, the rest find its budget spent.
+    for i in 0..6u8 {
+        assert_eq!(
+            send(&mut other, &send_key(100 + i), push::ENV_APNS, &token, t0, &body(50 + i)).status,
+            push::SENT_STALE
+        );
+    }
+    let new = send_key(4);
+    assert_eq!(send(&mut home, &new, push::ENV_APNS, &token, t0 + 2, &body(3)).status, push::SENT_STALE);
+    let ch = challenge_for(&w, &token, hint_of(&new)).expect("the phone's new key got its challenge");
+    let r = S { challenge: Some(ch), ..s(&new, push::ENV_APNS, &token, t0 + 3) }.send(&mut home, &body(4));
+    assert_eq!(r.status, push::SENT);
+    w.service.stop();
+}
+
+/// Two sends to one token at once: each is judged again over the binding
+/// as it is when the platform answered, so the higher number stays and an
+/// older registration stays stale.
+#[test]
+fn two_sends_at_once_keep_the_higher_number() {
+    let w = world(Budgets::default());
+    let mut a = conn(&w, 1, 1);
+    let mut b = conn(&w, 1, 2);
+    let (phone, token) = (send_key(3), [7u8; 32]);
+    let (slot_a, slot_b) = ([1u8; 16], [2u8; 16]);
+    let t0 = now_seq(0);
+    send(&mut a, &phone, push::ENV_APNS, &token, t0, &body(1));
+    confirm(&w, &mut a, &phone, &token, t0 + 1, 2);
+    *w.fake.delay.lock().unwrap() = Duration::from_millis(400);
+    let (ra, rb) = std::thread::scope(|sc| {
+        let ha = sc.spawn(|| S { slot: slot_a, ..s(&phone, push::ENV_APNS, &token, t0 + 10) }.send(&mut a, &body(3)));
+        std::thread::sleep(Duration::from_millis(100));
+        let hb = sc.spawn(|| S { slot: slot_b, ..s(&phone, push::ENV_APNS, &token, t0 + 20) }.send(&mut b, &body(4)));
+        (ha.join().unwrap(), hb.join().unwrap())
+    });
+    *w.fake.delay.lock().unwrap() = Duration::ZERO;
+    assert_eq!((ra.status, rb.status), (push::SENT, push::SENT));
+    let tok = w.service.inner.keyed(b"token", &push::ENV_APNS.to_be_bytes(), &token);
+    let mut seqs: Vec<(u8, u64)> =
+        w.service.inner.lock().bindings.get(&tok).unwrap().slots.iter().map(|s| (s.slot[0], s.seq - t0)).collect();
+    seqs.sort();
+    assert_eq!(seqs, [(1, 10), (2, 20)]);
+    let r = S { slot: slot_a, ..s(&phone, push::ENV_APNS, &token, t0 + 1) }.send(&mut a, &body(5));
+    assert_eq!(r.status, push::SENT_STALE);
+    w.service.stop();
+}
+
+/// A journal write that fails part-way: the send is answered `failed`
+/// with a wait, never `sent`; the file is cut back, so the changes after
+/// it read back at the next start, and the snapshot keeps the one that
+/// failed.
+#[test]
+fn a_journal_write_that_fails_is_not_answered_sent() {
+    let dir = std::env::temp_dir().join(format!("cbb-push-torn-{}", cbb_core::certs::random_id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let state = dir.join("push.state");
+    let w = world_at(Budgets::default(), Some(state.clone()));
+    let mut c = conn(&w, 1, 1);
+    let t0 = now_seq(0);
+    assert_eq!(send(&mut c, &send_key(3), push::ENV_APNS, &[1; 32], t0, &body(1)).status, push::SENT);
+    w.service.inner.lock().journal.as_mut().unwrap().tear_at = Some(30);
+    let r = send(&mut c, &send_key(3), push::ENV_APNS, &[2; 32], t0, &body(2));
+    assert_eq!((r.status, r.retry_ms), (push::SENT_FAILED, Some(JOURNAL_WAIT_MS)));
+    w.service.inner.lock().journal.as_mut().unwrap().tear_at = None;
+    assert_eq!(send(&mut c, &send_key(3), push::ENV_APNS, &[3; 32], t0, &body(3)).status, push::SENT);
+    // A crash now: the journal reads, with every change answered `sent`.
+    let l = saved::load(&state, false).unwrap();
+    assert_eq!(l.bindings.len(), 2);
+    // A stop writes the snapshot, which keeps the one whose journal write
+    // failed too.
+    w.service.stop();
+    assert_eq!(saved::load(&state, false).unwrap().bindings.len(), 3);
+    let _ = std::fs::remove_dir_all(&dir);
 }

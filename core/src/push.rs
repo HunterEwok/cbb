@@ -389,9 +389,24 @@ pub fn sign_send(key: &dyn crate::identity::ExternalKey, s: &Signed<'_>) -> crat
 /// The number a phone gives its next registration: one more than the one
 /// it saved, and never less than its clock in milliseconds (a clock past
 /// [`MAX_CLOCK_MS`] read as that), so a phone restored from a backup with
-/// an older number still moves forward at the service.
+/// an older number still moves forward at the service. A saved number
+/// more than [`MAX_SEQ_AHEAD_MS`] ahead of the clock (saved while the
+/// clock was ahead) is one the service refuses, and so would be every one
+/// after it until the clock caught up: the next is the clock then
+/// ([`seq_was_ahead`]), which members take by [`Registration::replaced_by`].
 pub fn next_seq(saved: Option<u64>, now_ms: u64) -> u64 {
-    saved.map_or(1, |s| s.saturating_add(1)).max(now_ms.min(MAX_CLOCK_MS)).clamp(1, 1 << 53)
+    let now = now_ms.min(MAX_CLOCK_MS);
+    match saved {
+        Some(s) if seq_was_ahead(s, now) => now,
+        _ => saved.map_or(1, |s| s.saturating_add(1)).max(now),
+    }
+    .clamp(1, 1 << 53)
+}
+
+/// Whether a saved number is more than [`MAX_SEQ_AHEAD_MS`] ahead of the
+/// clock `now_ms`.
+pub fn seq_was_ahead(saved: u64, now_ms: u64) -> bool {
+    !seq_in_time(saved, now_ms.min(MAX_CLOCK_MS))
 }
 
 /// Whether the service takes `seq` at its clock `now_ms`: seq is a clock
@@ -466,10 +481,14 @@ impl Registration {
         self.on.is_some() && self.kinds & kind != 0
     }
 
-    /// Whether a member that holds `self` takes `newer` in its place: a
-    /// higher number only.
-    pub fn replaced_by(&self, newer: &Registration) -> bool {
+    /// Whether a member that holds `self` takes `newer` in its place, by
+    /// the member's clock `now_ms`: a higher number; or a lower one only
+    /// when both hold: the held number is more than a day ahead of the
+    /// clock (the service refuses it), and the newer one is within a day of
+    /// the clock either way (the phone's clock was set right again).
+    pub fn replaced_by(&self, newer: &Registration, now_ms: u64) -> bool {
         newer.seq > self.seq
+            || (self.seq > now_ms.saturating_add(MAX_SEQ_AHEAD_MS) && newer.seq.abs_diff(now_ms) <= MAX_SEQ_AHEAD_MS)
     }
 }
 

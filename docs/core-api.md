@@ -346,8 +346,8 @@ the core's.
 | `bug_pending` | `state`, `now_ms` | `{"queue", "state"}`: the reports waiting (`[{fingerprint, version, post, at_ms}]`), without those older than seven days |
 | `push_key` | none | `{"key", "send_key", "slot"}`, base64: a new push key (32 random bytes), send key (P-256, PKCS #8) and slot (16 random bytes). The push key and the slot are one per group, the push key drawn again after a membership change and the slot kept; the send key is one per token for every group, drawn again with each new token (see "Push") |
 | `push_limits` | `env` (the platform, as the env registry numbers it) | `{"known", "body", "token", "kinds"}`: whether this core knows the platform, the size of its sealed bodies, the longest token, the bits of `kinds` it defines; the apps hold no number of the format |
-| `push_registration` | `now_ms` (the phone's clock), `saved_seq` (the last seq the app saved, left out when none), `kinds` (0 turns push off), and with `kinds` ≠ 0 `env`, `key` (the push key, base64), `send_key` (the token's send key from `push_key`, base64), `slot` (the group's, base64), `challenge` (the last one the push service sent for this send key, base64, left out when none) and either `token` (base64, as the platform gave it) or `unifiedpush` (`{url, p256dh, auth}`, the last two base64) | `{"frame", "seq", "key_hint"}`: message `push` (t 28) as a frame, base64, for every member connection of the group, signed with the send key; its seq, max(`saved_seq` + 1, `now_ms`), which the app saves before it sends the frame, so that a phone restored from a backup still moves forward; and with push on the send key's hint (the first 8 bytes of its hash, base64), which the push service puts beside each challenge. Code 18 when a field breaks its row (a UnifiedPush endpoint that is not `https` on port 443 with a DNS name, a key not 32 bytes, a slot or challenge not 16) |
-| `push_open` | `keys` (`[{key, seq}]`: the group's push keys the phone holds, the current one first), `body` (base64, the sealed body as the notification carries it), `me` (the phone's device ID), `origins` (`[{key, rights, frozen}]`: the devices the app last saved, each member key as the records encode it, base64), `sealing` (`[{epoch, secret}]`: the phone's sealing secrets of the epochs in the group's window), `too_old`, `halted`, `hints_only` (booleans, false when left out: `halted` opens nothing, `hints_only` after an event of removal, a new root or a stop until the app has applied it and drawn a new push key), `now_ms` and `window_ms` (the extension's clock and how old a copy may be) | `{"kind", "key_index", ...}`: `copy` with `id`, `origin`, `type` (`text`, `media`, `files` or `other`), `secret`, `ttl_ms` and `text` once the origin, its signature and `commit` hold and the copy is within the window; `waits` with `id` and `origin` when the copy did not fit, does not open here or is older; `event` with `id`, `event`, `device`, `time_ms` for an event less than a day old; `hint` for anything else. Only `copy` states a fact; the rest the app shows as "open the app". The extension keeps the IDs it showed and shows none twice. Code 18 when no key opens the body |
+| `push_registration` | `now_ms` (the phone's clock), `saved_seq` (the last seq the app saved, left out when none), `kinds` (0 turns push off), and with `kinds` ≠ 0 `env`, `key` (the push key, base64), `send_key` (the token's send key from `push_key`, base64), `slot` (the group's, base64), `challenge` (the last one the push service sent for this send key, base64, left out when none) and either `token` (base64, as the platform gave it) or `unifiedpush` (`{url, p256dh, auth}`, the last two base64) | `{"frame", "seq", "key_hint"}`: message `push` (t 28) as a frame, base64, for every member connection of the group, signed with the send key; its seq, max(`saved_seq` + 1, `now_ms`), which the app saves before it sends the frame, so that a phone restored from a backup still moves forward, or `now_ms` when `saved_seq` is more than a day ahead of it (saved while the clock was ahead, which the service would refuse; the answer then also has `"ahead": true`, and members take the lower number by their own clock); and with push on the send key's hint (the first 8 bytes of its hash, base64), which the push service puts beside each challenge. Code 18 when a field breaks its row (a UnifiedPush endpoint that is not `https` on port 443 with a DNS name, a key not 32 bytes, a slot or challenge not 16) |
+| `push_open` | `keys` (`[{key, seq}]`: the group's push keys the phone holds, the current one first), `body` (base64, the sealed body as the notification carries it), `me` (the phone's device ID), `origins` (`[{key, rights, frozen}]`: the devices the app last saved, each member key as the records encode it, base64), `sealing` (`[{epoch, secret}]`: the phone's sealing secrets of the epochs in the group's window), `too_old`, `halted`, `hints_only` (booleans; one left out gives the neutral `hint`: `halted` opens nothing, `hints_only` after an event of removal, a new root or a stop until the app has applied it and drawn a new push key), `now_ms` and `window_ms` (the extension's clock and how old a copy may be) | `{"kind", "key_index", ...}`: `copy` with `id`, `origin`, `type` (`text`, `media`, `files` or `other`), `secret`, `ttl_ms` and `text` once the origin, its signature and `commit` hold and the copy is within the window; `waits` with `id` and `origin` when the copy did not fit, does not open here or is older; `event` with `id`, `event`, `device`, `time_ms` for an event less than a day old; `hint` for anything else. Only `copy` states a fact; the rest the app shows as "open the app". The extension keeps the IDs it showed and shows none twice. Code 18 when no key opens the body |
 
 The arguments of `evaluate` are a case of `testdata/interop/v2-records.json` as it is.
 
@@ -426,29 +426,39 @@ The phone keeps one send key per token, for all its groups, and draws a slot (16
 never the group's ID) per group; the send key signs [env, token, slot, seq], and the last
 challenge the service sent to the token when the phone has one. The service keeps, per token, a
 binding (`member/src/pushd/binding.rs`), across restarts (the state file and its journal, written
-before a send that changed a binding is answered; a missing state file stops a start that is not
-the first, `-new-state`):
+before a send that changed a binding is answered `sent`, a send whose change could not be written
+answered `failed` with a wait; a missing state file stops a start that is not the first,
+`-new-state`):
 
-- While no key is confirmed, a send under any key passes, and each key that shows up gets a
-  challenge, which travels to the token with the body (the phone's alert pushes carry it).
-- A challenge is bound to the token, to the key it was made for, and to 14 days; it serves once.
-  A send whose signature covers it, under that key, confirms that key: only the token's holder
-  saw it. A replayed challenge, one made for another key or token, or one past its life confirms
+- While no key is confirmed, a send under any key passes with the challenge for its key, which
+  travels to the token with the body (the phone's alert pushes carry it).
+- A challenge is not kept: the service computes it from its own secret, the token, the key, the
+  binding's generation and the 14-day period, and checks an answer by computing it again for this
+  period and the one before; so no number of other keys can push the phone's challenge out. A
+  send whose signature covers it, under that key, confirms that key: only the token's holder saw
+  it. A confirmation raises the generation, so every challenge made before it confirms nothing
+  more. A replayed challenge, one made for another key or token, or an older one confirms
   nothing. The app keeps a challenge only for its own token and its own key (the challenge
   carries the first 8 bytes of the hash of the key it is for, which `push_registration` answers
   as `key_hint`), and the extension keeps one only on the same terms.
 - Once a key is confirmed, only that key sends; another key is answered `stale` (7) and gets a
-  challenge alone (a push with no body, within the token's budget for them), and takes the
+  challenge alone (a push with no body, within its group's budget for them), and takes the
   binding only by confirming it, never by time. A member that binds first so causes no refusal
   of the phone's own sends, only the wait until the phone confirms.
 - The highest seq is kept per key and slot, so one group's registration never silences
-  another's; a seq more than a day ahead of the service's clock is refused.
+  another's; a seq more than a day ahead of the service's clock is refused. A member keeps the
+  highest seq a device registered with, and takes a lower one only when, by its own clock, the
+  one it holds is more than a day ahead and the newer one within a day
+  (`Registration::replaced_by`).
 
 A send key of an algorithm the service does not take is answered `key` (6), and the sender drops
 it; one answered `stale` is dropped too, and the phone is sent `push-renew` with the
 registration's slot at its next connection, so its app registers again. Until the first send
 under a new seq, the old seq passes, and its bodies open nothing. Every send costs its tag's
-budget, a refused one too, and the service closes a connection after eight refusals; the tables
+budget, a refused one too, and the service closes a connection after eight refusals. What goes
+to one token is budgeted per group: under the confirmed key; while no key is confirmed, a small
+rate per group and one ceiling for every group together, past which a group's send carries only
+its challenge, alone; and challenges alone. The tables
 everyone shares give each payer (an address, an IPv6 /64, an IPv4 client on an IPv6 socket read
 as its IPv4 address) a share, and when one is full the payer with the most entries loses its
 oldest entry, never everyone.
@@ -457,7 +467,8 @@ How the challenge reaches the app: APNs, the payload key `k` (24 bytes in base64
 then the key's 8 bytes), or alone in a background push (`content-available`, priority 5), which
 iOS may hold back, so a confirmation can wait for the next alert push; FCM and Push Kit, a data
 key `k`; UnifiedPush, the decrypted message is parts, each a kind (1 byte), a length (2 bytes)
-and its bytes (kind 1 the body, kind 2 the challenge), the app skipping kinds it does not know.
+and its bytes (kind 1 the body, kind 2 the challenge, kind 3 padding for a part that is not there,
+so every message is one size), the app skipping kinds it does not know.
 
 How the service sends: APNs over HTTP/2 with the team's ES256 key; FCM through the HTTP v1 API,
 the service account's RS256 assertion traded for an access token (kept until five minutes before

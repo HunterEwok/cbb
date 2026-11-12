@@ -181,7 +181,9 @@ impl Sender {
         }
         let Ok(r) = Registration::read(msg) else { return };
         let mut st = self.lock();
-        if st.regs.get(&(*group, *device)).is_some_and(|old| !old.replaced_by(&r)) {
+        let now =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64);
+        if st.regs.get(&(*group, *device)).is_some_and(|old| !old.replaced_by(&r, now)) {
             return;
         }
         if r.on.is_none() {

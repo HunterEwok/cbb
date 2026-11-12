@@ -55,7 +55,7 @@ fn a_registration_round_trips_and_push_off_carries_nothing() {
     let off = Registration { seq: 4, kinds: 0, on: None };
     let back = Registration::read(&read_frame(&off.write().unwrap())).unwrap();
     assert!(!back.wants(KIND_COPIES));
-    assert!(r.replaced_by(&back) && !back.replaced_by(&r));
+    assert!(r.replaced_by(&back, 0) && !back.replaced_by(&r, 0));
     // The push key is never printed.
     let printed = alloc::format!("{r:?}");
     assert!(!printed.contains("7, 7"), "{printed}");
@@ -175,6 +175,67 @@ fn the_send_key_signs_the_token_and_the_number_and_a_later_algorithm_is_held() {
     }
     let back = Registration::read(&read_frame(&held.write().unwrap())).unwrap();
     assert_eq!(back.on.unwrap().send_key, later);
+}
+
+/// A number saved while the phone's clock was ahead, then the clock set
+/// right: max(saved + 1, now) would stay ahead, and the service would
+/// refuse every registration until the clock caught up less a day. The
+/// next number is the clock instead, and the service takes it.
+#[test]
+fn a_number_saved_while_the_clock_was_ahead_starts_again_at_the_clock() {
+    let now = 1_800_000_000_000u64;
+    for days in [2u64, 30, 365] {
+        let saved = now + days * 86_400_000;
+        assert!(seq_was_ahead(saved, now));
+        let next = next_seq(Some(saved), now);
+        assert_eq!(next, now, "{days} days");
+        assert!(seq_in_time(next, now));
+        // From there on, one more each time.
+        assert_eq!(next_seq(Some(next), now), now + 1);
+    }
+    // Ahead by less than a day: the service took it; one more than it.
+    let saved = now + MAX_SEQ_AHEAD_MS;
+    assert!(!seq_was_ahead(saved, now));
+    assert_eq!(next_seq(Some(saved), now), saved + 1);
+}
+
+/// A member takes a lower number only when the one it holds is more than a
+/// day ahead of its clock and the newer one is within a day of it.
+#[test]
+fn a_lower_number_replaces_only_one_out_of_time() {
+    let reg = |seq| Registration { seq, kinds: 0, on: None };
+    let day = MAX_SEQ_AHEAD_MS;
+    let now = 1_800_000_000_000u64;
+    // A member with a right clock: the sender's clock jumped 30 days ahead
+    // and back. The member held the ahead one; the phone's next, at the
+    // clock, replaces it; one two days old does not.
+    let ahead = reg(now + 30 * day);
+    assert!(ahead.replaced_by(&reg(now), now));
+    assert!(ahead.replaced_by(&reg(now - day), now));
+    assert!(!ahead.replaced_by(&reg(now - 2 * day), now));
+    assert!(!ahead.replaced_by(&reg(now + 2 * day), now));
+    // Within a day ahead: a higher number only, as always.
+    let near = reg(now + day);
+    assert!(!near.replaced_by(&reg(now), now));
+    assert!(near.replaced_by(&reg(now + day + 1), now));
+
+    // A member whose own clock is a year behind: the phone's current
+    // registration (true time T) is "ahead" by that clock. An old
+    // registration from a year ago, replayed, is within a day of the
+    // member's clock, so the member takes it; it lasts only until the
+    // phone's true registration is seen again, which is higher and so
+    // replaces it. A replay of anything older is not taken.
+    let t = now;
+    let behind = t - 365 * day;
+    let current = reg(t);
+    let replayed = reg(behind + 1000);
+    assert!(current.replaced_by(&replayed, behind));
+    assert!(replayed.replaced_by(&current, behind));
+    assert!(replayed.replaced_by(&reg(t + 1), behind));
+    assert!(!current.replaced_by(&reg(behind - 2 * day), behind));
+    // The member's normal case, its clock behind: the phone's next number
+    // is higher, and taken.
+    assert!(current.replaced_by(&reg(t + 1), behind));
 }
 
 #[test]
@@ -708,6 +769,12 @@ fn the_phone_registers_and_opens_a_body_through_the_core_api() {
     let restored = call("push_registration", serde_json::json!({ "saved_seq": 1, "now_ms": T0, "kinds": 0 }));
     assert!(restored["ok"].get("key_hint").is_none(), "push off carries no hint");
     assert_eq!(restored["ok"]["seq"], T0);
+    assert!(restored["ok"].get("ahead").is_none());
+    // A number saved while the clock was 30 days ahead: the next one is the
+    // clock, and the answer says so.
+    let month = 30 * 86_400_000u64;
+    let back = call("push_registration", serde_json::json!({ "saved_seq": T0 + month, "now_ms": T0, "kinds": 0 }));
+    assert_eq!((back["ok"]["seq"].as_u64(), back["ok"]["ahead"].as_bool()), (Some(T0), Some(true)), "{back}");
     let up = call(
         "push_registration",
         serde_json::json!({ "now_ms": 0, "kinds": 1, "env": ENV_UNIFIEDPUSH,

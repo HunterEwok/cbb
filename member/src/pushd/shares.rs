@@ -4,7 +4,8 @@
 //! A table the service shares among everyone who sends to it, bounded so
 //! that no one payer (an address, an IPv6 /64) can fill it for the others:
 //! when it is full, the oldest entry of the payer with the most entries
-//! gives way. It never refuses everyone.
+//! gives way (one it may lose first, when it has one: an unconfirmed
+//! binding before a confirmed one). It never refuses everyone.
 
 use std::collections::{HashMap, VecDeque};
 
@@ -83,6 +84,19 @@ impl<V> Shared<V> {
     /// Files `v` under `k`: an entry already there keeps its payer; a new
     /// one in a full table first makes room (after `stale` had its say).
     pub(super) fn insert(&mut self, k: [u8; 32], v: V, payer: Payer, stale: impl Fn(&V) -> bool) {
+        self.insert_keeping(k, v, payer, stale, |_| false);
+    }
+
+    /// As `insert`, and when room is made the payer that gives way loses
+    /// an entry `keep` does not hold to before one it does.
+    pub(super) fn insert_keeping(
+        &mut self,
+        k: [u8; 32],
+        v: V,
+        payer: Payer,
+        stale: impl Fn(&V) -> bool,
+        keep: impl Fn(&V) -> bool,
+    ) {
         if let Some(e) = self.map.get_mut(&k) {
             e.v = v;
             return;
@@ -91,7 +105,7 @@ impl<V> Shared<V> {
             self.prune(stale);
         }
         while self.map.len() >= self.cap.max(1) {
-            if !self.evict_one() {
+            if !self.evict_one(&keep) {
                 break;
             }
         }
@@ -108,9 +122,19 @@ impl<V> Shared<V> {
         }
     }
 
-    /// Drops the oldest entry of the payer with the most entries.
-    fn evict_one(&mut self) -> bool {
+    /// Drops an entry of the payer with the most entries: its oldest that
+    /// `keep` does not hold to, else its oldest.
+    fn evict_one(&mut self, keep: &dyn Fn(&V) -> bool) -> bool {
         let Some(payer) = self.counts.iter().max_by_key(|(p, n)| (**n, **p)).map(|(p, _)| *p) else { return false };
+        let loose = self.order.get(&payer).and_then(|q| {
+            q.iter()
+                .find(|(k, s)| self.map.get(k).is_some_and(|e| e.serial == *s && e.payer == payer && !keep(&e.v)))
+                .map(|(k, _)| *k)
+        });
+        if let Some(k) = loose {
+            self.remove(&k);
+            return true;
+        }
         while let Some((k, s)) = self.order.get_mut(&payer).and_then(VecDeque::pop_front) {
             if self.map.get(&k).is_some_and(|e| e.serial == s && e.payer == payer) {
                 self.remove(&k);
@@ -169,5 +193,23 @@ mod tests {
         t.insert(k(3), 3, b, |_| false);
         t.insert(k(4), 4, b, |v| *v == 3);
         assert_eq!((t.get(&k(1)), t.get(&k(3)), t.get(&k(4))), (Some(&1), None, Some(&4)));
+    }
+
+    #[test]
+    fn the_payer_that_gives_way_loses_what_it_may_lose_first() {
+        let (home, other): (Payer, Payer) = ([1; 16], [2; 16]);
+        let mut t: Shared<bool> = Shared::new(8);
+        // The home's one confirmed entry, oldest of all.
+        t.insert_keeping(k(0), true, home, |_| false, |v| *v);
+        for i in 1..4 {
+            t.insert_keeping(k(i), true, other, |_| false, |v| *v);
+        }
+        // More from the home, unconfirmed, until it is the fullest payer.
+        for i in 10..20 {
+            t.insert_keeping(k(i), false, home, |_| false, |v| *v);
+        }
+        assert_eq!(t.get(&k(0)), Some(&true), "the confirmed entry stays while there are others to lose");
+        assert_eq!((1..4).filter(|i| t.get(&k(*i)).is_some()).count(), 3);
+        assert_eq!(t.len(), 8);
     }
 }
