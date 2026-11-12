@@ -257,7 +257,7 @@ final class CBBMacTests: XCTestCase {
     func testSettingsFit() throws {
         let model = MacModel(defaults: try XCTUnwrap(UserDefaults(suiteName: "cbb-mac-settings-test")))
         let version = "cbb v0.5.1-0.20261109114050-97499ee40fb3 darwin/arm64 with a longer tail"
-        model.show(status: Control.Status(device: "me", group: "g1", role: "member", version: version), devices: [])
+        model.show(status: Control.Status(device: "me", group: "g1", role: "member", version: version), view: Control.View())
         let host = NSHostingView(rootView: SettingsView().environmentObject(model).modifier(Themed()))
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 900), styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
