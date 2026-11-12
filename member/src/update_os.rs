@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! What cbb update does differently on each system, as Go's
-//! internal/update/platform.go and auto.go: the release's archive for this
+//! What cbb update does differently on each system: the release's archive for this
 //! device, the updater's folders, the programs an update replaces, the
 //! archive's installer, unpacking, the Windows programs' signer, and the
 //! daily timer on macOS (launchd), FreeBSD (cron) and Windows (a scheduled
@@ -43,26 +42,17 @@ fn arch() -> Option<&'static str> {
     })
 }
 
-/// The release's archive for this device, as packaging/archive.sh and
-/// member/packaging/archive.sh name them: cbb with its helper beside it
-/// updates from the archive of its system, cbb alone, the lite member,
-/// from the lite member's for Linux; None for a system the release does
+/// The release's archive for this device, as packaging/archive.sh names
+/// them: one for each system and architecture, which carries cbb, and its
+/// helper where the release builds one; None for a system the release does
 /// not build for.
-pub fn archive_name(program: &Path) -> Option<String> {
+pub fn archive_name() -> Option<String> {
     let arch = arch()?;
-    let helper = program.with_file_name(format!("{}{}", crate::helper::PROGRAM, std::env::consts::EXE_SUFFIX));
-    let os = match std::env::consts::OS {
-        "macos" => "darwin",
-        os @ ("linux" | "freebsd" | "windows") => os,
-        _ => return None,
-    };
-    if !helper.is_file() {
-        return (os == "linux")
-            .then(|| format!("cbb-lite-linux-{}.tar.gz", if arch == "armv7" { "armv6" } else { arch }));
-    }
-    Some(match os {
+    Some(match std::env::consts::OS {
+        "macos" => format!("cbb-darwin-{arch}.tar.gz"),
         "windows" => format!("cbb-windows-{arch}.zip"),
-        _ => format!("cbb-{os}-{arch}.tar.gz"),
+        os @ ("linux" | "freebsd") => format!("cbb-{os}-{arch}.tar.gz"),
+        _ => return None,
     })
 }
 
@@ -382,20 +372,15 @@ mod tests {
     }
 
     #[test]
-    fn archives_by_helper() {
+    fn archive_of_the_system() {
+        let name = archive_name().unwrap();
+        assert!(name.starts_with("cbb-") && !name.contains("lite"), "{name}");
         let dir = std::env::temp_dir().join(format!("cbb-update-os-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let cbb = dir.join(format!("cbb{}", std::env::consts::EXE_SUFFIX));
         fs::write(&cbb, b"").unwrap();
-        let alone = archive_name(&cbb);
+        assert_eq!(programs(&cbb).len(), 1);
         fs::write(dir.join(format!("cbb-helper{}", std::env::consts::EXE_SUFFIX)), b"").unwrap();
-        let full = archive_name(&cbb).unwrap();
-        assert!(full.starts_with("cbb-") && !full.contains("lite"), "{full}");
-        if cfg!(target_os = "linux") {
-            assert!(alone.unwrap().starts_with("cbb-lite-linux-"));
-        } else {
-            assert!(alone.is_none());
-        }
         assert_eq!(programs(&cbb).len(), if cfg!(windows) { 1 } else { 2 });
         fs::remove_dir_all(&dir).unwrap();
     }

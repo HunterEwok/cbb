@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 HunterEwok
+#
+# A sample every 15 minutes; tools/monitor fails when traffic.json is
+# older than two hours.
+
+[Unit]
+Description=Count the cbb.tools traffic every 15 minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=15min
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

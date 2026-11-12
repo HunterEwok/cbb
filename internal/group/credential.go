@@ -26,7 +26,6 @@ import (
 
 	"github.com/HunterEwok/cbb/internal/atomicfile"
 	"github.com/HunterEwok/cbb/internal/benchtime"
-	"github.com/HunterEwok/cbb/internal/core"
 )
 
 // PeriodLifetime is how long a period lasts, and PeriodRenew how old it may
@@ -391,16 +390,6 @@ func (c Credential) Open() (*CredentialBody, error) {
 // parseCredentialBody reads and checks a credential's body: its size, the
 // strict form of signed bodies, then its fields.
 func parseCredentialBody(data []byte) (*CredentialBody, error) {
-	if checked, err := core.CheckBody(core.KindCredential, data); checked {
-		if err != nil {
-			return nil, fmt.Errorf("group: a credential: %w", err)
-		}
-		var b CredentialBody
-		if err := json.Unmarshal(data, &b); err != nil {
-			return nil, errors.New("group: the credential does not decode")
-		}
-		return &b, nil
-	}
 	if len(data) > maxCredentialBody {
 		return nil, errors.New("group: the credential is too large")
 	}

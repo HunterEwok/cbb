@@ -18,7 +18,7 @@
   "Laptop": "Portátil",
   "Desktop": "Sobremesa",
   "Raspberry Pi": "Raspberry Pi",
-  "lite member": "miembro ligero",
+  "small device": "dispositivo pequeño",
   "with the app": "con la app",
   "direct, encrypted connections, found by mDNS": "conexiones directas y cifradas, halladas por mDNS",
   "No server in the middle: any device can be off, and the others go on syncing.": "Sin servidor en medio: cualquier dispositivo puede estar apagado y los demás siguen sincronizando.",

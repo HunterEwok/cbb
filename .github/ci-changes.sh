@@ -19,7 +19,7 @@ head=$2
 
 core=false     # the Go service: cmd, internal, packaging, the e2e scripts
 tools=false    # Go tools under tools/, tested by the test job
-lite=false     # the lite member and its firmware
+rust=false     # cbb in Rust, the core and the firmware
 ios=false      # the Swift kit, the iPhone and Watch apps
 macos=false    # the Mac app, which shares the iPhone app's theme
 desktop=false  # the tray app
@@ -42,10 +42,10 @@ for f in $files; do
 	tools/sbom/*) core=true; tools=true ;; # the packaging job and the Android job run it
 	tools/*) tools=true ;;
 	# The Rust core's rules, which the phone kits and the Aurora app link.
-	core/* | ffi/* | Cargo.toml | Cargo.lock) lite=true; ios=true; android=true; silica=true ;;
+	core/* | ffi/* | Cargo.toml | Cargo.lock) rust=true; ios=true; android=true; silica=true ;;
 	# The computers' cbb, which the kits' interop tests run as the computer.
-	member/* | ring-shim/*) lite=true; ios=true; android=true ;;
-	embassy/* | esp32/* | wasm/* | .cargo/* | deny.toml | rustfmt.toml) lite=true ;;
+	member/* | ring-shim/*) rust=true; ios=true; android=true ;;
+	embassy/* | esp32/* | .cargo/* | deny.toml | rustfmt.toml) rust=true ;;
 	apps/ios/*) ios=true; macos=true ;;
 	apps/macos/*) macos=true ;;
 	apps/desktop/*) desktop=true ;;
@@ -59,12 +59,12 @@ for f in $files; do
 done
 
 # The jobs of one part that also read another's files.
-[ "$core" = false ] || { ios=true; desktop=true; android=true; lite=true; }
-[ "$lite" = false ] || zxnext=true
+[ "$core" = false ] || { ios=true; desktop=true; android=true; rust=true; }
+[ "$rust" = false ] || zxnext=true
 [ "$design" = false ] || { ios=true; macos=true; desktop=true; android=true; silica=true; site=true; }
 
 if [ "$all" = true ]; then
-	core=true tools=true lite=true ios=true macos=true desktop=true android=true zxnext=true silica=true design=true site=true
+	core=true tools=true rust=true ios=true macos=true desktop=true android=true zxnext=true silica=true design=true site=true
 fi
-printf 'core=%s\ntools=%s\nlite=%s\nios=%s\nmacos=%s\ndesktop=%s\nandroid=%s\nzxnext=%s\nsilica=%s\ndesign=%s\nsite=%s\n' \
-	"$core" "$tools" "$lite" "$ios" "$macos" "$desktop" "$android" "$zxnext" "$silica" "$design" "$site"
+printf 'core=%s\ntools=%s\nrust=%s\nios=%s\nmacos=%s\ndesktop=%s\nandroid=%s\nzxnext=%s\nsilica=%s\ndesign=%s\nsite=%s\n' \
+	"$core" "$tools" "$rust" "$ios" "$macos" "$desktop" "$android" "$zxnext" "$silica" "$design" "$site"

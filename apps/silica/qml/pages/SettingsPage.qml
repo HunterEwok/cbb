@@ -5,9 +5,10 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 
 // Settings (docs/apps.md, "Screens", Settings): the language, the
-// notifications, the root's settings, leaving the group, and about the app; seven taps on the
-// version show the switch for the error details. Everywhere, sync away from
-// home, is the globe on Home.
+// notifications, the root's settings, leaving the group, and about the app;
+// seven taps on the version show the switch for the error details; the
+// advanced settings switch shows why the phone does not sync. Everywhere,
+// sync away from home, is the globe on Home.
 // The colours follow the phone's ambience, as every Silica app's do.
 Page {
     id: page
@@ -50,16 +51,6 @@ Page {
                 onClicked: app.errorDetails = !app.errorDetails
             }
 
-            SectionHeader { text: qsTr("Bluetooth keyboard") }
-            ValueButton {
-                label: qsTr("Act as a Bluetooth keyboard")
-                value: !app.keyboard.on ? qsTr("Off")
-                     : app.keyboard.state === "connected" ? qsTr("Connected")
-                     : app.keyboard.state === "failed" ? qsTr("Not working")
-                     : qsTr("On")
-                onClicked: pageStack.push(Qt.resolvedUrl("KeyboardPage.qml"))
-            }
-
             SectionHeader { text: qsTr("Notifications") }
 
             // One switch for each kind of the group's events (src/events.h),
@@ -80,6 +71,32 @@ Page {
                         checked = app.events.isOn(modelData.kind)
                     }
                 }
+            }
+
+            TextSwitch {
+                text: qsTr("Advanced settings")
+                automaticCheck: false
+                checked: app.advanced
+                onClicked: app.advanced = !app.advanced
+            }
+            WhySection {
+                visible: app.group !== "" && app.advanced
+            }
+
+            // The lab: what works but is no promise of 1.0 (docs/apps.md,
+            // "The lab").
+            SectionHeader {
+                visible: app.advanced
+                text: qsTr("Lab")
+            }
+            ValueButton {
+                visible: app.advanced
+                label: qsTr("Act as a Bluetooth keyboard")
+                value: !app.keyboard.on ? qsTr("Off")
+                     : app.keyboard.state === "connected" ? qsTr("Connected")
+                     : app.keyboard.state === "failed" ? qsTr("Not working")
+                     : qsTr("On")
+                onClicked: pageStack.push(Qt.resolvedUrl("KeyboardPage.qml"))
             }
 
             SectionHeader {

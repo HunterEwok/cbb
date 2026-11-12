@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The manifest of a media event: images or files (docs/protocol.md,
-//! section 4, "Media"). The lite member never fetches the content; it takes
+//! section 4, "Media"). The core never fetches the content; it takes
 //! the event, so that the group converges, and its plain-text alternative.
 //! It checks the manifest as Go's package clip does, since it passes the
 //! event on.

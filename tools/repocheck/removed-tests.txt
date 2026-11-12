@@ -335,3 +335,106 @@ internal/third_party/cpace/field_test.go TestFieldInvert D-88: Go no longer runs
 internal/third_party/cpace/field_test.go TestFieldChi D-88: Go no longer runs CPace since internal/pair left; the Rust core's translation is the one members run; core/src/third_party/cpace/field_tests.rs field_invert_chi_elligator2 tests the same
 internal/third_party/cpace/field_test.go TestFieldBytes D-88: Go no longer runs CPace since internal/pair left; the Rust core's translation is the one members run; core/src/third_party/cpace/field_tests.rs field_bytes tests the same
 internal/third_party/cpace/field_test.go TestElligator2 D-88: Go no longer runs CPace since internal/pair left; the Rust core's translation is the one members run; core/src/third_party/cpace/field_tests.rs field_invert_chi_elligator2 tests the same
+internal/clip/sealedcore_test.go TestCoreAndGoSealAlike D-93: it sealed through the core linked into Go, which Go programs no longer carry; core/src/copy/tests.rs and internal/clip check both against testdata/interop/copies-go.json
+internal/core/core_test.go TestVectors D-93: internal/core is gone; internal/group's checkV2Cases and the core's tests read the same vectors
+internal/core/core_test.go TestDo D-93: internal/core, the Go binding of the core, is gone
+internal/core/core_test.go TestConcurrent D-93: internal/core, the Go binding of the core, is gone
+internal/core/evaluate_test.go TestEvaluate D-93: internal/core is gone; internal/authority evaluates the same vectors itself
+internal/consolepaste/console_test.go TestConsole D-88: cbb paste-helper console is the Rust cbb's; member/src/pastehelper.rs console_gets_carriage_returns tests it
+internal/tmuxpaste/tmux_test.go TestTmux D-88: cbb paste-helper tmux is the Rust cbb's; member/src/pastehelper.rs types_into_tmux_literally and picks_the_pane_used_last test it
+internal/sysinfo/sysinfo_linux_test.go TestFormOf D-88: the Rust cbb describes its device itself (member/src/device.rs, os_release_names); no Go program asked internal/sysinfo
+internal/sysinfo/sysinfo_linux_test.go TestOSRelease D-88: the Rust cbb describes its device itself (member/src/device.rs, os_release_names); no Go program asked internal/sysinfo
+internal/sysinfo/sysinfo_test.go TestPickMAC D-88: the Rust cbb describes its device itself (member/src/device.rs); no Go program asked internal/sysinfo
+internal/sysinfo/sysinfo_test.go TestDevice D-88: the Rust cbb describes its device itself (member/src/device.rs); no Go program asked internal/sysinfo
+internal/uptime/uptime_test.go TestNowAdvances D-88: no Go program reads internal/uptime; member/src/uptime.rs now_advances and now_counts_like_the_monotonic_clock_awake test the clock cbb runs
+internal/uptime/uptime_test.go TestNowCountsLikeGoAwake D-88: no Go program reads internal/uptime; member/src/uptime.rs now_advances and now_counts_like_the_monotonic_clock_awake test the clock cbb runs
+internal/steamos/steamos_test.go TestIs D-88: cbb update and the firewall find the SteamOS layout in member/src/update_os.rs and hubport.rs; no Go program asked internal/steamos
+internal/update/platform_test.go TestHealthy D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/platform_test.go TestHealthyGivesUp D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/platform_test.go TestInstall D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/platform_test.go TestPrograms D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/platform_test.go TestArchiveName D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/platform_test.go TestMethodCommands D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/platform_test.go TestTimerHelpers D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestUpdate D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestFromGroup D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestRollback D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestRefused D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestNoRoots D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestMinFrom D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestPinned D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestHTTPSources D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestState D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestDetectMethod D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestInstallFailure D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestReleaseFromGroup D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestMirrorThrough D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/update_test.go TestFetchFor D-88: cbb update is the Rust cbb's; member/src/update.rs and update_os.rs test it
+internal/update/project_test.go TestProjectAddresses D-88: moved to internal/release/project_test.go, which compares the copies with member/src/update.rs
+internal/piv/piv_test.go TestSigns D-88: the YubiKey is the Rust cbb's; member/src/piv.rs signs, wrong_pin, finds_the_one_card, chains_long_commands and reads_tlvs test it
+internal/piv/piv_test.go TestWrongPIN D-88: the YubiKey is the Rust cbb's; member/src/piv.rs signs, wrong_pin, finds_the_one_card, chains_long_commands and reads_tlvs test it
+internal/piv/piv_test.go TestOtherKeyInSlot D-88: the YubiKey is the Rust cbb's; member/src/piv.rs signs, wrong_pin, finds_the_one_card, chains_long_commands and reads_tlvs test it
+internal/piv/piv_test.go TestFind D-88: the YubiKey is the Rust cbb's; member/src/piv.rs signs, wrong_pin, finds_the_one_card, chains_long_commands and reads_tlvs test it
+internal/piv/piv_test.go TestChaining D-88: the YubiKey is the Rust cbb's; member/src/piv.rs signs, wrong_pin, finds_the_one_card, chains_long_commands and reads_tlvs test it
+internal/piv/piv_test.go TestReadTLV D-88: the YubiKey is the Rust cbb's; member/src/piv.rs signs, wrong_pin, finds_the_one_card, chains_long_commands and reads_tlvs test it
+internal/service/clients_test.go TestLiteClients D-88: renamed TestAloneClients in internal/service/clients_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/entries_test.go TestLiteEntries D-88: renamed TestAloneEntries in internal/service/entries_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/helper_test.go TestLiteHelper D-88: renamed TestAloneHelper in internal/service/helper_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/helper_test.go TestLiteTPM D-88: renamed TestAloneTPM in internal/service/helper_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/leave_test.go TestLiteLeave D-88: renamed TestAloneLeave in internal/service/leave_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/lite_test.go TestLiteMember D-88: renamed TestAloneMember in internal/service/alone_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/lite_test.go TestLiteRemotePaste D-88: renamed TestAloneRemotePaste in internal/service/alone_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/lite_test.go TestLiteKeysGrant D-88: renamed TestAloneKeysGrant in internal/service/alone_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/lite_test.go TestLiteQuickActions D-88: renamed TestAloneQuickActions in internal/service/alone_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/lite_test.go TestLiteMemberAway D-88: renamed TestAloneMemberAway in internal/service/alone_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/lite_test.go TestLiteMemberAwayObfuscated D-88: renamed TestAloneMemberAwayObfuscated in internal/service/alone_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/lite_test.go TestLiteMemberAwayXHTTP D-88: renamed TestAloneMemberAwayXHTTP in internal/service/alone_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/lite_test.go TestLiteRootless D-88: renamed TestAloneRootless in internal/service/alone_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/liteadmin_test.go TestLiteAdminCommands D-88: renamed TestAloneAdminCommands in internal/service/aloneadmin_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/liteadmin_test.go TestLiteOwnActions D-88: renamed TestAloneOwnActions in internal/service/aloneadmin_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/liteagent_test.go TestLiteAgent D-88: renamed TestAloneAgent in internal/service/aloneagent_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/liteflags_test.go TestLiteServiceFlags D-88: renamed TestAloneServiceFlags in internal/service/aloneflags_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/liteinvite_test.go TestLiteInvite D-88: renamed TestAloneInvite in internal/service/aloneinvite_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/liteinvite_test.go TestLiteJoinInvite D-88: renamed TestAloneJoinInvite in internal/service/aloneinvite_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/liteperipheral_linux_test.go TestLitePeripherals D-88: renamed TestAlonePeripherals in internal/service/aloneperipheral_linux_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/literelease_test.go TestLiteRelease D-88: renamed TestAloneRelease in internal/service/alonerelease_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/literelease_test.go TestLiteReleaseArchives D-88: renamed TestAloneReleaseArchives in internal/service/alonerelease_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/literoot_test.go TestLiteRoot D-88: renamed TestAloneRoot in internal/service/aloneroot_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/literoot_test.go TestLiteRootWindow D-88: renamed TestAloneRootWindow in internal/service/aloneroot_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/literoot_test.go TestLiteTakeover D-88: renamed TestAloneTakeover in internal/service/aloneroot_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/literoot_test.go TestLiteRecovery D-88: renamed TestAloneRecovery in internal/service/aloneroot_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/literoot_test.go TestLiteHub D-88: renamed TestAloneHub in internal/service/aloneroot_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/literoot_test.go TestLiteHubs D-88: renamed TestAloneHubs in internal/service/aloneroot_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/literoot_test.go TestLiteHubCommands D-88: renamed TestAloneHubCommands in internal/service/aloneroot_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/literoot_test.go TestLiteHubForwarder D-88: renamed TestAloneHubForwarder in internal/service/aloneroot_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/literoot_test.go TestLiteHubCredential D-88: renamed TestAloneHubCredential in internal/service/aloneroot_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/literoot_test.go TestLiteForwardOnly D-88: renamed TestAloneForwardOnly in internal/service/aloneroot_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/literoot_test.go TestLiteHubVLESS D-88: renamed TestAloneHubVLESS in internal/service/aloneroot_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/literoot_test.go TestLiteNetwork D-88: renamed TestAloneNetwork in internal/service/aloneroot_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/literoot_test.go TestLiteRelay D-88: renamed TestAloneRelay in internal/service/aloneroot_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/literoot_test.go TestLiteRelayRoot D-88: renamed TestAloneRelayRoot in internal/service/aloneroot_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/service/literoot_test.go TestLiteRelayProject D-88: renamed TestAloneRelayProject in internal/service/aloneroot_test.go, since there is no lite member, only cbb, which these tests run alone (CBB_TEST_ALONE)
+internal/relay/budget_test.go TestRequestsBoundByWideNetwork D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs requests_bound_by_wide_network
+internal/relay/budget_test.go TestRegistrationsBoundByProvider D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs registrations_bound_by_provider
+internal/relay/budget_test.go TestOpenRelayBudgetProperty D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs open_relay_budget_property
+internal/relay/budget_test.go TestOpenRelayForgetsStrangers D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs open_relay_forgets_strangers
+internal/relay/command_test.go TestCommandKeys D-88: the relay's command is the Rust cbb-relay's; member/src/relayd/command.rs keys
+internal/relay/command_test.go TestPortOf D-88: the relay's command is the Rust cbb-relay's; member/src/relayd/command.rs ports_and_addresses
+internal/relay/cost_test.go TestRequestsBoundBySourceAndGroup D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs requests_bound_by_source_and_group
+internal/relay/cost_test.go TestRegisteredStrangersLeaveRequestSlots D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs requests_bound_by_source_and_group counts the requests by the source the devices registered from
+internal/relay/cost_test.go TestSetupsChargedPerSecond D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs setups_charged_per_second
+internal/relay/cost_test.go TestSetupsBoundByWideNetwork D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs setups_bound_by_wide_network
+internal/relay/cost_test.go TestAllowance D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs allowance
+internal/relay/cost_test.go TestRecordsVerifiedOnce D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs records_verified_once
+internal/relay/limits_test.go TestSetupsBoundByAddress D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs setups_bound_by_address
+internal/relay/limits_test.go TestRequestsBoundByDevice D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs requests_bound_by_device
+internal/relay/limits_test.go TestAddrOfWithoutAddress D-88: it checked a helper of the Go relay's server, which is gone
+internal/relay/member_test.go TestRelayNotesBounded D-88: it sent notes from the Go relay's server, which is gone; the devices' side is member/src/relay.rs, whose note takes no list longer than a group
+internal/relay/provider_test.go TestSetupsBoundByProvider D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs setups_bound_by_provider
+internal/relay/provider_test.go TestRequestsBoundByProvider D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs requests_bound_by_provider
+internal/relay/provider_test.go TestRecordCapsOfWideNetworkAndProvider D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs record_caps_of_wide_network_and_provider
+internal/relay/provider_test.go TestAllowanceBoundByProvider D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/tests.rs allowance_bound_by_provider
+internal/relay/relay_test.go TestRate D-88: the relay's server is the Rust cbb-relay only; member/src/relayd/limits.rs byte_rate_waits_for_its_tokens
+internal/relay/relay_test.go TestListen D-88: the relay's server is the Rust cbb-relay only; TestOpenRelay starts it with no group and with a bad tag
+internal/relay/relay_test.go TestKeys D-88: the relay's key file is the Rust cbb-relay's; member/src/relayd/keys.rs made_once_then_read, and every test of internal/relay hands it a file Go wrote
+member/src/update_os.rs archives_by_helper D-89: there is no lite archive any more, only one cbb-<system>-<arch> archive with or without cbb-helper beside cbb; renamed archive_of_the_system, which checks that name and the programs to replace

@@ -1,20 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! Keys, their hashes and IDs, and the one form of an ES256 signature
-//! (format-0.6 sections 2 and 3.1). They move to the format's codec
-//! (`crate::format::key`, `crate::format::sig`) once it is in the tree.
+//! Keys, their hashes and IDs, and ES256 signatures in the format's one
+//! form (format-0.6 sections 2 and 3.1), on the format's codec
+//! (`crate::format::key`, `crate::format::sig`). The records keep their keys
+//! owned; a key is written and hashed as the format writes it.
 
 use alloc::vec::Vec;
-use core::fmt;
 
-use p256::ecdsa::signature::hazmat::PrehashVerifier;
-use p256::ecdsa::{Signature, VerifyingKey};
+use p256::ecdsa::Signature;
 
 use super::Rule;
-use super::cbor;
 use crate::certs::sha256;
+use crate::format::cbor::Value;
+use crate::format::key::{self as fkey, Alg};
+use crate::format::sig;
 use crate::identity::ExternalKey;
+
+pub use crate::format::key::{DeviceId, GroupId, KeyHash};
 
 /// ES256: ECDSA P-256 with SHA-256; a 65-byte uncompressed point.
 pub const ALG_ES256: u64 = 1;
@@ -48,14 +51,30 @@ impl Key {
         Key { alg: ALG_ES256, public }
     }
 
+    /// The key a reader found in a body.
+    pub fn read(v: &Value<'_>) -> Result<Key, Rule> {
+        let k = fkey::Key::from_value(v)?;
+        Ok(Key { alg: k.alg.number(), public: k.public.to_vec() })
+    }
+
+    /// The format's view of the key.
+    fn format(&self) -> fkey::Key<'_> {
+        fkey::Key::new(Alg::from_number(self.alg), &self.public)
+    }
+
+    /// The key as a value of the profile.
+    pub fn to_value(&self) -> Value<'_> {
+        self.format().to_value()
+    }
+
     /// The key's encoding, the bytes its hash is taken over.
     pub fn encode(&self) -> Vec<u8> {
-        cbor::array([cbor::uint(self.alg), cbor::bytes(&self.public)])
+        self.format().encode()
     }
 
     /// SHA-256 over the key's encoding.
     pub fn hash(&self) -> KeyHash {
-        KeyHash(sha256(&self.encode()))
+        self.format().hash()
     }
 
     /// The first 16 bytes of the key's hash: a device ID, or, for a group's
@@ -68,22 +87,14 @@ impl Key {
     /// signature key that is not a point on the curve, `keys/xwing` and
     /// `keys/x25519` for a key of the wrong size.
     pub fn check(&self) -> Result<KeyCheck, Rule> {
-        match self.alg {
-            ALG_ES256 => {
-                if self.public.len() != 65
-                    || self.public.first() != Some(&4)
-                    || p256::PublicKey::from_sec1_bytes(&self.public).is_err()
-                {
-                    return Err(Rule::new("keys/es256"));
-                }
-                Ok(KeyCheck::Good)
-            }
-            ALG_XWING if self.public.len() != XWING_PUBLIC => Err(Rule::new("keys/xwing")),
-            ALG_X25519 if self.public.len() != 32 => Err(Rule::new("keys/x25519")),
-            ALG_XWING | ALG_X25519 => Ok(KeyCheck::Good),
-            0 => Err(Rule::new("keys/alg")),
-            _ => Ok(KeyCheck::Unknown),
+        if self.alg == 0 {
+            return Err(Rule::new("keys/alg"));
         }
+        self.format().check()?;
+        Ok(match Alg::from_number(self.alg) {
+            Alg::Unknown(_) => KeyCheck::Unknown,
+            _ => KeyCheck::Good,
+        })
     }
 
     /// Checks a key where a signature key is wanted: ES256 or, from a later
@@ -102,8 +113,8 @@ macro_rules! bytes_type {
         #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
         pub struct $name(pub [u8; $n]);
 
-        impl fmt::Debug for $name {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        impl core::fmt::Debug for $name {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 for b in self.0.iter().take(6) {
                     write!(f, "{b:02x}")?;
                 }
@@ -113,67 +124,61 @@ macro_rules! bytes_type {
     };
 }
 
-bytes_type!(KeyHash, 32);
 bytes_type!(RecordId, 32);
-bytes_type!(DeviceId, 16);
 
-/// A group's ID: the device ID of its first root key.
-pub type GroupId = DeviceId;
+impl RecordId {
+    /// An ID read from 32 bytes.
+    pub fn from_slice(b: &[u8]) -> Option<RecordId> {
+        b.try_into().ok().map(RecordId)
+    }
+}
+
+// The state starts from empty values; the format's types have no default
+// of their own.
+#[allow(clippy::derivable_impls, reason = "the type is the format's, which has no default")]
+impl Default for KeyHash {
+    fn default() -> KeyHash {
+        KeyHash([0; 32])
+    }
+}
+
+#[allow(clippy::derivable_impls, reason = "the type is the format's, which has no default")]
+impl Default for DeviceId {
+    fn default() -> DeviceId {
+        DeviceId([0; 16])
+    }
+}
 
 impl DeviceId {
     /// The first 16 bytes of a key hash.
     pub fn of(h: &KeyHash) -> DeviceId {
-        let mut id = [0u8; 16];
-        for (d, s) in id.iter_mut().zip(h.0.iter()) {
-            *d = *s;
-        }
         #[cfg(test)]
-        tests_hook::shorten(&mut id);
-        DeviceId(id)
+        {
+            let mut id = h.id();
+            tests_hook::shorten(&mut id.0);
+            id
+        }
+        #[cfg(not(test))]
+        h.id()
     }
 }
-
-/// The message a signature covers: `label ‖ 0x00 ‖ body`.
-pub fn signed_message(label: &str, body: &[u8]) -> Vec<u8> {
-    let mut m = Vec::with_capacity(label.len().saturating_add(1).saturating_add(body.len()));
-    m.extend_from_slice(label.as_bytes());
-    m.push(0);
-    m.extend_from_slice(body);
-    m
-}
-
-/// Half the order of P-256, big-endian: the largest low S.
-const HALF_N: [u8; 32] = [
-    0x7f, 0xff, 0xff, 0xff, 0x80, 0x00, 0x00, 0x00, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xde, 0x73, 0x7d,
-    0x56, 0xd3, 0x8b, 0xcf, 0x42, 0x79, 0xdc, 0xb5, 0xc5, 0x92, 0xa8, 0x7c, 0x50,
-];
 
 /// Checks an ES256 signature in the one form the format takes: 64 bytes
 /// `r ‖ s`, both in range, s low (`sig/size`, `sig/range`, `sig/low-s`,
 /// `sig/verify`).
-pub fn verify_es256(key: &Key, label: &str, body: &[u8], sig: &[u8]) -> Result<(), Rule> {
-    if sig.len() != 64 {
-        return Err(Rule::new("sig/size"));
-    }
-    let s = sig.get(32..).unwrap_or_default();
-    if s > HALF_N.as_slice() {
-        return Err(Rule::new("sig/low-s"));
-    }
-    // from_slice refuses r or s of zero or not below the order.
-    let Ok(signature) = Signature::from_slice(sig) else { return Err(Rule::new("sig/range")) };
+pub fn verify_es256(key: &Key, label: &str, body: &[u8], s: &[u8]) -> Result<(), Rule> {
+    sig::check_form(s)?;
     if key.alg != ALG_ES256 {
         return Err(Rule::new("sig/verify"));
     }
-    let Ok(vk) = VerifyingKey::from_sec1_bytes(&key.public) else { return Err(Rule::new("sig/verify")) };
-    let digest = sha256(&signed_message(label, body));
-    vk.verify_prehash(&digest, &signature).map_err(|_| Rule::new("sig/verify"))
+    Ok(sig::verify_es256(&key.public, label, body, s)?)
 }
 
 /// Signs body under label with key, which signs a SHA-256 digest in DER
 /// (a hardware key or a key in a file); the signature is turned into the
 /// format's 64 bytes with a low S.
 pub fn sign_es256(key: &dyn ExternalKey, label: &str, body: &[u8]) -> crate::error::Result<[u8; 64]> {
-    let digest = sha256(&signed_message(label, body));
+    let digest = sha256(&sig::message(label, body));
     let der = key.sign_digest(&digest)?;
     let sig = Signature::from_der(&der).map_err(|_| crate::error::Error::msg("the key's signature is not DER"))?;
     let sig = sig.normalize_s();

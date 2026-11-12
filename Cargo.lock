@@ -193,6 +193,7 @@ dependencies = [
  "crypto-bigint",
  "der",
  "getrandom 0.4.3",
+ "hkdf",
  "hmac 0.13.0",
  "hpke",
  "p256",
@@ -228,7 +229,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
  "cbb-core",
- "cbb-lite",
+ "cbb-member",
  "p256",
  "qrcode",
  "rqrr",
@@ -237,7 +238,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "cbb-lite"
+name = "cbb-member"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
@@ -265,14 +266,6 @@ dependencies = [
  "smoltcp",
  "windows-sys",
  "zune-jpeg",
-]
-
-[[package]]
-name = "cbb-wasm"
-version = "0.1.0"
-dependencies = [
- "cbb-core",
- "getrandom 0.4.3",
 ]
 
 [[package]]
@@ -2020,9 +2013,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "1.1.5"
+version = "1.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "891efababe418670775f199f0d233d84843c227a0949a883ce15b37c78d6629d"
+checksum = "e5e76742e5294153d4dde1207dbec5bdd81eef6fabdc0d2118babadabfd858aa"
 dependencies = [
  "bitflags 2.13.2",
  "errno",

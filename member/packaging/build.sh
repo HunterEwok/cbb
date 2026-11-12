@@ -54,6 +54,6 @@ else
 	rustup target add --toolchain "$toolchain" "$target" >&2
 fi
 # shellcheck disable=SC2086 # std and the features are one word or none
-cargo "+$toolchain" "$tool" --locked --release -p cbb-lite --target "$target" \
+cargo "+$toolchain" "$tool" --locked --release -p cbb-member --target "$target" \
 	${std} ${features:+--features "$features"} >&2
 echo "target/$target/release"

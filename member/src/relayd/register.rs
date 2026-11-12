@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! A device's registration with the relay, as Go's relay.register: TLS with
+//! A device's registration with the relay: TLS with
 //! its member certificate (or the certificate of its server key and the
 //! group's credentials), then the proof that it holds its WireGuard key,
 //! bound to this TLS session, as with the forwarder. The relay keeps the

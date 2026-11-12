@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# The cargo fuzz targets of the lite member's protocol core: the readers of
+# The cargo fuzz targets of the protocol core: the readers of
 # what comes from the network. Nightly CI runs them (.github/workflows/nightly.yml):
 #   cargo +nightly fuzz run record_body -- -max_total_time=60
 [package]
@@ -18,7 +18,7 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 cbb-core = { path = "..", features = ["std", "fuzzing"] }
 
-# Not a member of lite's workspace.
+# Not a member of the top workspace.
 [workspace]
 members = ["."]
 
@@ -67,6 +67,13 @@ bench = false
 [[bin]]
 name = "vless"
 path = "fuzz_targets/vless.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "format"
+path = "fuzz_targets/format.rs"
 test = false
 doc = false
 bench = false

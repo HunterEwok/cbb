@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 HunterEwok
 
-# Builds the lite member for 32-bit MIPS routers, without the tunnel:
+# Builds cbb for 32-bit MIPS routers, without the tunnel:
 #
 #   sh member/packaging/mips.sh mips|mipsel
 #

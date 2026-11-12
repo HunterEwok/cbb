@@ -403,7 +403,7 @@ final class RootTests: XCTestCase {
     /// state, as Go's internal/authority does.
     /// Runs the cases of testdata/interop/v2-records.json whose names start
     /// with one of the prefixes (all of them for nil) through the set: the
-    /// core gives each case's state, the same as Go and the lite member.
+    /// core gives each case's state, the same as Go and the Rust cbb.
     /// Answers how many cases ran.
     @discardableResult
     func v2Cases(_ prefixes: [String]? = nil, file: StaticString = #filePath, line: UInt = #line,

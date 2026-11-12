@@ -3,7 +3,7 @@
 
 //! The rule of incoming copies (docs/protocol.md, section 5, "Writing the
 //! member's own clipboard"): whether the group's current copy goes into a member's
-//! clipboard, and whether a mute or sync turned off holds. The lite member's engine
+//! clipboard, and whether a mute or sync turned off holds. The core's engine
 //! (crate::clip) asks it, and the Go service asks it through the core's
 //! `copy_verdict`, so that every member keeps one rule; the cases of
 //! testdata/interop/copy-verdicts.json pin it, and Go's own copy of it,
@@ -32,7 +32,7 @@ pub struct Incoming {
     #[serde(default)]
     pub has_media: bool,
     /// This member writes images and files to its clipboard (the Go
-    /// service does; the lite member takes only a copy's text).
+    /// service does; the core's engine takes only a copy's text).
     #[serde(default)]
     pub takes_media: bool,
     /// The clipboard already holds the copy's content.

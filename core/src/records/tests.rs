@@ -1103,6 +1103,41 @@ fn the_root_voids_an_admins_removal() {
     assert!(s.counting.contains(&d.id()) && s.device(&k("d").key.device_id()).is_some());
 }
 
+/// An old root's removal after a claim's seen does not survive the
+/// takeover: a root that does not cancel the claim within the delay loses
+/// what it signed after the seen, and the device counts again under the
+/// new root.
+#[test]
+fn an_old_roots_late_removal_ends_with_the_takeover() {
+    let mut g = G::new();
+    let (pa, a, laptop, n) = (k("phone a"), k("admin a"), k("laptop"), k("new root"));
+    g.admin(&pa, &a, POWER_TAKEOVER);
+    let ld = g.device(&k("root"), &laptop, "laptop", |_| {});
+    let seen = g.seen();
+    let c = g.rec(&a, Kind::Claim { root: n.key.clone(), seen });
+    let rv = g.root_rec(Kind::Revoke(removal(&[laptop.hash], g.seen())));
+    let s = g.state();
+    assert_eq!(s.claims[0].state, ClaimState::Pending);
+    assert!(s.revoked.contains(&laptop.hash));
+    let held = BTreeMap::from([(c.id(), DEFAULT_DELAY_MS)]);
+    let s = state_of(&g.root.key, &g.recs, &held);
+    assert_eq!(s.roots, vec![g.root.hash, n.hash]);
+    assert!(!s.counting.contains(&rv.id()) && !s.revoked.contains(&laptop.hash));
+    assert!(s.counting.contains(&ld.id()) && s.device(&laptop.key.device_id()).is_some());
+}
+
+/// Any os number is taken: 11 (harmonyos) and a later version's 12 are
+/// kept and count, never refused or held.
+#[test]
+fn any_os_number_is_taken() {
+    let mut g = G::new();
+    for (i, os) in [11u64, 12, 9_999].into_iter().enumerate() {
+        let r = g.device(&k("root"), &k(&format!("o{i}")), "o", |d| d.os = os);
+        let s = g.state();
+        assert!(s.counting.contains(&r.id()), "os {os}");
+    }
+}
+
 /// What a command's receiver asks of the state: a key with two histories,
 /// a removed or frozen admin, and every admin during a full stop sign no
 /// command; the root does.
@@ -1163,7 +1198,7 @@ fn a_huge_time_changes_nothing() {
         }
         g.state()
     };
-    let (plain, huge) = (build(0), build(u64::MAX));
+    let (plain, huge) = (build(0), build(crate::format::cbor::MAX_INT));
     assert_eq!(plain.hubs, huge.hubs);
     assert_eq!(plain.incoming_ms, huge.incoming_ms);
     assert_eq!(plain.devices, huge.devices);
@@ -1457,4 +1492,100 @@ mod props {
             prop_assert_eq!(strip(&stored), strip(&want));
         }
     }
+}
+
+mod vectors {
+    use std::path::PathBuf;
+
+    use serde_json::Value as Json;
+
+    use super::*;
+
+    fn unhex(s: &str) -> Vec<u8> {
+        (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+    }
+
+    fn records() -> Json {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/format/records.json");
+        serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
+    }
+
+    /// Every record the format's vectors take reads, held where they say
+    /// so, and writes back to the same bytes; every one they refuse is
+    /// refused by the rule they name, all but the signature and the group,
+    /// which the set checks.
+    #[test]
+    fn records_read_as_the_vectors_say() {
+        let v = records();
+        for t in v["take"].as_array().unwrap() {
+            let name = t["name"].as_str().unwrap();
+            let env = unhex(t["envelope"].as_str().unwrap());
+            let r = Record::decode(&env).unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert_eq!(r.id().0.to_vec(), unhex(t["id"].as_str().unwrap()), "{name}");
+            assert_eq!(r.envelope(), env, "{name}");
+            let held = r.body().check().unwrap();
+            assert_eq!(held, t["verdict"] == "hold", "{name}");
+            // A body writes back to its bytes, but for the optional fields
+            // a reader skips.
+            let optional =
+                crate::format::cbor::decode(r.body_bytes()).unwrap().as_map().unwrap().iter().any(|(k, _)| *k >= 256);
+            if !held && !optional {
+                assert_eq!(r.body().encode(), r.body_bytes(), "{name}");
+            }
+            if let Some(os) = t["os"].as_u64() {
+                assert!(matches!(&r.body().kind, Kind::Device(d) if d.os == os), "{name}");
+            }
+        }
+        let mut refused = 0;
+        for t in v["refuse"].as_array().unwrap() {
+            let (name, rule) = (t["name"].as_str().unwrap(), t["rule"].as_str().unwrap());
+            if rule == "sig/verify" || rule == "records/group" {
+                continue;
+            }
+            let env = unhex(t["envelope"].as_str().unwrap());
+            let got = Record::decode(&env).map(|_| ()).unwrap_err();
+            assert_eq!(got.to_string(), rule, "{name}");
+            refused += 1;
+        }
+        assert!(refused > 20);
+    }
+
+    /// Settings' field 13 (the working limit, gone) is refused on reading.
+    #[test]
+    fn settings_field_13_is_refused() {
+        let v = records();
+        let t = v["refuse"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["rule"] == "form/critical" && t["name"].as_str().unwrap().starts_with("settings"))
+            .unwrap();
+        let got = Record::decode(&unhex(t["envelope"].as_str().unwrap())).map(|_| ()).unwrap_err();
+        assert!(got.is("form/critical"));
+    }
+}
+
+/// A `seen` list names each key once, whatever the seqs.
+#[test]
+fn seen_names_each_key_once() {
+    let g = G::new();
+    let a = k("a").hash;
+    let twice = vec![Seen { key: a, seq: 2 }, Seen { key: a, seq: 3 }];
+    let body = g.body(&k("root"), Kind::Revoke(removal(&[a], twice.clone())));
+    assert!(body.check().unwrap_err().is("records/revoke/seen"));
+    let body = g.body(&k("root"), Kind::Claim { root: k("n").key.clone(), seen: twice });
+    assert!(body.check().unwrap_err().is("records/claim/seen"));
+}
+
+/// Every record the rules' tests make reads back from its envelope as the
+/// same record.
+#[test]
+fn records_read_back_from_their_envelopes() {
+    let (_, recs) = pool();
+    for r in &recs {
+        let back = Record::decode(&r.envelope()).unwrap();
+        assert_eq!(&back, r);
+    }
+    // Not a record: a broken envelope, a body that is not a map.
+    assert!(Record::decode(&[0x80]).unwrap_err().is("env/shape"));
 }

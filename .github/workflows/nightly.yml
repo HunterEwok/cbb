@@ -87,7 +87,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [record_body, command, credential, release, wire, vless, api]
+        target: [record_body, command, credential, release, wire, vless, api, format]
     defaults:
       run:
         working-directory: core/
@@ -198,12 +198,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        crate: [cbb-core, cbb-lite]
+        crate: [cbb-core, cbb-member]
         shard: [0, 1, 2, 3]
         include:
           - crate: cbb-core
             files: -f core/src/credential.rs -f core/src/seal.rs
-          - crate: cbb-lite
+          - crate: cbb-member
             files: -f member/src/control.rs -f member/src/window.rs
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -312,14 +312,14 @@ jobs:
           sudo apt-get install -y -q --no-install-recommends swtpm
       - name: the Rust tests
         run: |
-          cargo +nightly test --locked -Zbuild-std --target x86_64-unknown-linux-gnu -p cbb-lite
+          cargo +nightly test --locked -Zbuild-std --target x86_64-unknown-linux-gnu -p cbb-member
           cargo +nightly test --locked -Zbuild-std --target x86_64-unknown-linux-gnu -p cbb-ffi --features member,tunnel
       - name: Go's tests of the service against the cbb built with it
         run: |
-          cargo +nightly build --locked -Zbuild-std --target x86_64-unknown-linux-gnu --release -p cbb-lite
+          cargo +nightly build --locked -Zbuild-std --target x86_64-unknown-linux-gnu --release -p cbb-member
           bin="$PWD/target/x86_64-unknown-linux-gnu/release"
           CGO_ENABLED=0 go build -trimpath -o "$bin/cbb-helper" ./cmd/cbb-helper
-          CBB_TEST_RUST_SERVICE="$bin/cbb" CBB_LITE="$bin/cbb" go test -timeout 60m ./internal/service
+          CBB_TEST_RUST_SERVICE="$bin/cbb" CBB_TEST_ALONE="$bin/cbb" go test -timeout 60m ./internal/service
 
   # A test that fails one run in ten never shows on a pull request's single run
   # until it blocks one. Each test of the members runs ten times here, with the
@@ -345,14 +345,14 @@ jobs:
         if: matrix.member == 'rust'
         run: |
           rustup toolchain install stable --profile minimal && rustup default stable
-          cargo build --locked --release -p cbb-lite
+          cargo build --locked --release -p cbb-member
       - name: each test ten times
         env:
           MEMBER: ${{ matrix.member }}
         run: |
           if [ "$MEMBER" = rust ]; then
-            export CBB_LITE="$PWD/target/release/cbb"
-            set -- ./internal/service -run 'TestLite'
+            export CBB_TEST_ALONE="$PWD/target/release/cbb"
+            set -- ./internal/service -run 'TestAlone'
           else
             set -- ./internal/service ./internal/node ./internal/tunnel ./internal/pair
           fi

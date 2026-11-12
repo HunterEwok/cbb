@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! The lite member on the Arduino Nano ESP32. So far it keeps its settings
+//! cbb on the Arduino Nano ESP32. So far it keeps its settings
 //! in flash, joins the Wi-Fi network set on its console, joins a group by
 //! the phone, types as a USB keyboard on its USB port or as a Bluetooth LE
 //! keyboard, and runs a TLS 1.3 self-test on the protocol core; syncing

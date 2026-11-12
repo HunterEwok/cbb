@@ -151,7 +151,7 @@ Column {
         var item = items.level[from]
         var op = null
         if (into >= 0) {
-            op = { op: "into", device: item.device.device, collection: items.level[shown.get(into).idx].id }
+            op = { op: "into", device: item.device.id, collection: items.level[shown.get(into).idx].id }
         } else if (pos !== from) {
             op = pos + 1 < shown.count
                     ? { op: "move", item: Arrange.ref(item), before: Arrange.ref(items.level[shown.get(pos + 1).idx]) }

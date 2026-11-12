@@ -45,20 +45,17 @@ CBB is removed. Its keys stay in /var/db/cbb for a reinstall; --purge removes th
 --port needs a port number	--port necesita un número de puerto
 --home-cgnat needs on or off	--home-cgnat necesita on u off
 --auto-update needs on or off	--auto-update necesita on u off
-unknown option %s (known: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)	opción desconocida %s (conocidas: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)
+unknown option %s (known: --no-helper, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)	opción desconocida %s (conocidas: --no-helper, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)
 --rootless installs for your own user: run it without sudo: %s	--rootless instala para su propio usuario: ejecútelo sin sudo: %s
 --rootless is for Linux computers	--rootless es para ordenadores con Linux
 run it with sudo: %s	ejecútelo con sudo: %s
 no release for this MIPS system: it is not OpenWrt, which names its byte order	no hay versión para este sistema MIPS: no es OpenWrt, que indica su orden de bytes
 no release for the architecture %s	no hay versión para la arquitectura %s
-the lite member for MIPS has no sync away from home yet (roadmap item 37); the full member has it.	el miembro ligero para MIPS aún no sincroniza fuera de casa (punto 37 de la hoja de ruta); el miembro completo sí.
 --console is not for a router	--console no es para un router
 --uinput is not for a router	--uinput no es para un router
 --home-cgnat is not for a router	--home-cgnat no es para un router
---lite is for Linux; a Mac runs the full member	--lite es para Linux; un Mac usa el miembro completo
 --console is for Linux	--console es para Linux
 --uinput is for Linux	--uinput es para Linux
---lite is for Linux; FreeBSD runs the full member	--lite es para Linux; FreeBSD usa el miembro completo
 this installer is for Linux, macOS and FreeBSD; on Windows use get.ps1	este instalador es para Linux, macOS y FreeBSD; en Windows use get.ps1
 tar is required	se necesita tar
 sha256sum or shasum is required	se necesita sha256sum o shasum
@@ -106,7 +103,6 @@ no ufw or firewalld is active; nothing was added.	ni ufw ni firewalld están act
 %s needs root; a rootless install has no console or uinput helper	%s necesita root; una instalación sin root no tiene los ayudantes console ni uinput
 --rootless installs for your own user: run it without sudo. With sudo, install.sh without --rootless installs the system service, which is safer.	--rootless instala para su propio usuario: ejecútelo sin sudo. Con sudo, install.sh sin --rootless instala el servicio del sistema, que es más seguro.
 a rootless install runs as a systemd user unit, and this session has no systemd user manager; log in to a desktop or over ssh and run it again	una instalación sin root funciona como unidad de usuario de systemd, y esta sesión no tiene gestor de usuario de systemd; inicie sesión en un escritorio o por ssh y ejecútelo de nuevo
---home-cgnat is for the full member	--home-cgnat es para el miembro completo
 CBB is installed for the whole system here (%s), and one device runs one service; remove it first or keep it	CBB ya está instalado aquí para todo el sistema (%s), y un dispositivo ejecuta un solo servicio; quítelo primero o consérvelo
 the desktop agent did not start; it starts at your next login	el agente de escritorio no arrancó; arrancará en su próximo inicio de sesión
 CBB runs while you are logged in. To keep it running after you log out, an administrator runs: sudo loginctl enable-linger %s	CBB funciona mientras tenga la sesión iniciada. Para que siga funcionando al cerrarla, un administrador ejecuta: sudo loginctl enable-linger %s
@@ -116,12 +112,9 @@ Next: see member/README.md; in short, %s pair here, and scan its QR code with th
 Next: run %s pair and scan its QR code with the CBB app on your phone.	Siguiente: ejecute %s pair y escanee su código QR con la app CBB del teléfono.
 this archive has no install-rootless.sh, so it cannot install without root	este archivo no tiene install-rootless.sh, así que no puede instalar sin root
 systemd is required	se necesita systemd
-the full member is installed here, and the lite member cannot use its keys; remove it first: %s	aquí está instalado el miembro completo, y el miembro ligero no puede usar sus claves; quítelo primero: %s
-the lite member is installed here, and the full member cannot use its keys; remove it first: %s	aquí está instalado el miembro ligero, y el miembro completo no puede usar sus claves; quítelo primero: %s
 an account named cbb exists here and is not this service's (its comment is not "cbb service"); it would get the group's keys. Rename or remove it, then run install.sh again.	aquí existe una cuenta llamada cbb que no es la de este servicio (su comentario no es "cbb service"); recibiría las claves del grupo. Cámbiele el nombre o elimínela y ejecute install.sh de nuevo.
 a group named cbb exists here with members (%s), and no service account; they would reach the service. Rename or remove the group, then run install.sh again.	aquí existe un grupo llamado cbb con miembros (%s) y sin cuenta de servicio; esos miembros llegarían al servicio. Cambie el nombre del grupo o elimínelo y ejecute install.sh de nuevo.
 Not installed: the tray app, which needs GTK 4 and WebKitGTK 6.0 (Debian and Ubuntu: %s; Fedora: %s). Install them and run this again to add it.	No instalada: la app de la bandeja, que necesita GTK 4 y WebKitGTK 6.0 (Debian y Ubuntu: %s; Fedora: %s). Instálelos y ejecute esto de nuevo para añadirla.
---uinput is for the full member, which runs the desktop connector	--uinput es para el miembro completo, que ejecuta el conector de escritorio
 could not load the uinput module now; it loads at the next boot	no se pudo cargar ahora el módulo uinput; se cargará en el próximo arranque
 100.64.0.0/10 counts as the home network on this device (--home-cgnat on).	En este dispositivo, 100.64.0.0/10 cuenta como red de casa (--home-cgnat on).
 New member and admin keys of this device go into its TPM.	Las nuevas claves de miembro y de administrador de este dispositivo van a su TPM.
@@ -160,7 +153,6 @@ see logread -e cbb	vea logread -e cbb
 CBB is running on TCP port %s, on the lan zone. To remove it: sh /usr/share/cbb/uninstall.sh	CBB funciona en el puerto TCP %s, en la zona lan. Para quitarlo: sh /usr/share/cbb/uninstall.sh
 Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one.	La actualización asistida (ASU, owut) deja fuera los paquetes que no vienen de los repositorios de OpenWrt: instálelo de nuevo después de una.
 Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone.	Siguiente: ejecute su -s /bin/sh cbb -c 'cbb pair -name router' y escanee su código QR con la app CBB del teléfono.
-Next: run cbb pair and scan its QR code with the CBB app on your phone.	Siguiente: ejecute cbb pair y escanee su código QR con la app CBB del teléfono.
 CBB is removed. Its keys stay in /etc/cbb for a reinstall; --purge removes them.	CBB se quitó. Sus claves quedan en /etc/cbb para reinstalarlo; --purge las borra.
 This device is in no group yet, so it starts pairing now (--no-pair skips this).	Este dispositivo aún no está en ningún grupo, así que empieza el emparejamiento ahora (--no-pair lo omite).
 could not record how CBB was installed; cbb update takes it as get.sh	no se pudo guardar cómo se instaló CBB; cbb update lo tomará como get.sh
@@ -259,3 +251,7 @@ removing cbb from PATH	quitando cbb de PATH
 removing %s	quitando %s
 removing %s and the %s group	quitando %s y el grupo %s
 CBB is removed. Its keys stay in %s for a reinstall; -Purge removes them.	CBB se quitó. Sus claves quedan en %s para reinstalarlo; -Purge las borra.
+cbb for MIPS has no sync away from home yet (roadmap item 37).	cbb para MIPS aún no sincroniza fuera de casa (punto 37 de la hoja de ruta).
+--no-helper is for Linux	--no-helper es solo para Linux
+cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	aquí cbb funciona con su ayudante, que puede guardar sus claves; sin él cbb no puede usarlas. Elimínalo primero: %s
+--uinput needs cbb's helper, which runs the desktop connector	--uinput necesita el ayudante de cbb, que ejecuta el conector del escritorio

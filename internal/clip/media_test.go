@@ -226,7 +226,7 @@ type nameVector struct {
 	Clean string `json:"clean"`
 }
 
-// TestNameVectors checks testdata/interop/media-names.json, which the lite
+// TestNameVectors checks testdata/interop/media-names.json, which the Rust
 // core and both kits read too (go test -update writes it): the device names
 // of Windows that a manifest may hold are renamed when written and when a
 // sender cleans a name, never refused.

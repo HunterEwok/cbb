@@ -23,7 +23,7 @@ Column {
     function text(a) {
         switch (a.kind) {
         case "stopped": return qsTr("The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides.")
-        case "secrets_stopped": return qsTr("The group sends no secrets until its root decides.")
+        case "secrets_stopped": return qsTr("The group sends no secrets until its owner decides.")
         case "two_histories": return qsTr("%1 signed two histories with one key, as a stolen key or a restore from a backup would.").arg(who(a))
         case "admins": return qsTr("Admins removed or froze each other without seeing it: %1. The root removes one of them.").arg(who(a))
         case "claims": return qsTr("Two claims to take the group over: %1.").arg(who(a))

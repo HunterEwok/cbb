@@ -50,7 +50,7 @@
 <path class="e-home" d="M278.75,108.0 L278.75,150"/>
 <g class=""><rect class="card " x="377.75" y="56.0" width="150" height="52" rx="10"/><g transform="translate(389.75,68)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="427.75" y="87">डेस्कटॉप</text></g>
 <path class="e-home" d="M452.75,108.0 L452.75,150"/>
-<g class=""><rect class="card " x="551.75" y="50.0" width="156.5" height="64" rx="10"/><g transform="translate(563.75,68)" class="ic"><rect x="4" y="7" width="20" height="14" rx="1.5"/><rect x="9" y="11" width="6" height="6"/><line x1="7" y1="4" x2="7" y2="7"/><line x1="11" y1="4" x2="11" y2="7"/><line x1="15" y1="4" x2="15" y2="7"/><line x1="19" y1="4" x2="19" y2="7"/></g><text class="t" x="601.75" y="78">Raspberry Pi</text><text class="s" x="601.75" y="96">लाइट सदस्य</text></g>
+<g class=""><rect class="card " x="551.75" y="50.0" width="156.5" height="64" rx="10"/><g transform="translate(563.75,68)" class="ic"><rect x="4" y="7" width="20" height="14" rx="1.5"/><rect x="9" y="11" width="6" height="6"/><line x1="7" y1="4" x2="7" y2="7"/><line x1="11" y1="4" x2="11" y2="7"/><line x1="15" y1="4" x2="15" y2="7"/><line x1="19" y1="4" x2="19" y2="7"/></g><text class="t" x="601.75" y="78">Raspberry Pi</text><text class="s" x="601.75" y="96">छोटा डिवाइस</text></g>
 <path class="e-home" d="M630.0,114.0 L630.0,150"/>
 <path class="e-home" d="M104.75,150 L630.0,150"/>
 <text class="note" x="369.0" y="236" text-anchor="middle">बीच में कोई सर्वर नहीं: कोई भी डिवाइस बंद हो सकता है, बाकी सिंक करते रहते हैं।</text>

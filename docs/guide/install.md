@@ -26,8 +26,10 @@ first paste may press the keys. To skip the dialog, add `--uinput` (`... | sudo 
 presses the paste keys (Shift+Insert and Enter) for whoever uses the screen, never on a
 login or lock screen.
 
-Small devices that should only sync, such as a router or a Raspberry Pi Zero, can take the
-lighter [lite member](../../member/README.md) instead: `... | sudo sh -s -- --lite`.
+Small devices that should only sync, such as a router or a Raspberry Pi Zero, take the same
+installer and can leave out `cbb-helper`, which holds keys in a TPM and runs the desktop's
+clipboard and keys and Bluetooth: `... | sudo sh -s -- --no-helper`
+([cbb on small devices](../../member/README.md)). A router's archive (MIPS) has no helper anyway.
 
 ### Without sudo (rootless)
 
@@ -44,8 +46,8 @@ keys, so it can never be the group's root, an admin or the hub
 ([how it works](how-it-works.md#rootless-members)), and it has no firewall rules, no TPM and
 no `--console` or `--uinput`. To keep it running after you log out, an administrator runs
 `sudo loginctl enable-linger YOUR-USER` once. To remove it:
-`sh ~/.local/share/cbb/uninstall.sh`. The lite member installs this way too,
-with `--lite --rootless` ([lite member](../../member/README.md#without-sudo-rootless)).
+`sh ~/.local/share/cbb/uninstall.sh`. `--no-helper --rootless` leaves the helper out there too
+([without sudo](../../member/README.md#without-sudo-rootless)).
 
 ### SteamOS (Steam Deck)
 

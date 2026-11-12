@@ -9,10 +9,10 @@ use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 
 use super::Rule;
-use super::cbor::{self, Map};
 use super::eval::State;
 use super::key::{self, ALG_XWING, DeviceId, GroupId, Key, KeyHash, RecordId, XWING_PUBLIC};
 use crate::certs::sha256;
+use crate::format::cbor::Value;
 use crate::identity::ExternalKey;
 
 /// The label statements are signed under.
@@ -46,19 +46,20 @@ impl Body {
     }
 
     pub fn encode(&self) -> Vec<u8> {
-        let mut m = Map::new();
-        m.put(1, cbor::uint(1));
-        m.put(2, cbor::bytes(&self.group.0));
-        m.put(3, cbor::bytes(&self.signer.0));
-        m.put(4, cbor::uint(self.epoch));
+        let mut m: Vec<(u16, Value<'_>)> = alloc::vec![
+            (1, Value::Uint(1)),
+            (2, Value::Bytes(&self.group.0)),
+            (3, Value::Bytes(&self.signer.0)),
+            (4, Value::Uint(self.epoch)),
+        ];
         if self.time_ms != 0 {
-            m.put(6, cbor::uint(self.time_ms));
+            m.push((6, Value::Uint(self.time_ms)));
         }
-        m.put(10, self.seal.encode());
+        m.push((10, self.seal.to_value()));
         if self.held {
-            m.put(250, cbor::uint(1));
+            m.push((250, Value::Uint(1)));
         }
-        m.finish()
+        Value::Map(m).encode()
     }
 }
 

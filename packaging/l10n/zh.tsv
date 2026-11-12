@@ -45,20 +45,17 @@ CBB is removed. Its keys stay in /var/db/cbb for a reinstall; --purge removes th
 --port needs a port number	--port 需要端口号
 --home-cgnat needs on or off	--home-cgnat 需要 on 或 off
 --auto-update needs on or off	--auto-update 需要 on 或 off
-unknown option %s (known: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)	未知选项 %s（可用：--lite、--no-pair、--rootless、--console、--uinput、--port N、--home-cgnat on|off、--auto-update on|off、--express、--no-firewall）
+unknown option %s (known: --no-helper, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)	未知选项 %s（可用：--lite、--no-pair、--rootless、--console、--uinput、--port N、--home-cgnat on|off、--auto-update on|off、--express、--no-firewall）
 --rootless installs for your own user: run it without sudo: %s	--rootless 为你自己的用户安装：请不用 sudo 运行：%s
 --rootless is for Linux computers	--rootless 仅用于 Linux 电脑
 run it with sudo: %s	请用 sudo 运行：%s
 no release for this MIPS system: it is not OpenWrt, which names its byte order	没有适用于此 MIPS 系统的版本：它不是会注明字节序的 OpenWrt
 no release for the architecture %s	没有适用于架构 %s 的版本
-the lite member for MIPS has no sync away from home yet (roadmap item 37); the full member has it.	MIPS 版轻量成员还不支持离家同步（路线图第 37 项）；完整成员支持。
 --console is not for a router	--console 不适用于路由器
 --uinput is not for a router	--uinput 不适用于路由器
 --home-cgnat is not for a router	--home-cgnat 不适用于路由器
---lite is for Linux; a Mac runs the full member	--lite 仅用于 Linux；Mac 运行完整成员
 --console is for Linux	--console 仅用于 Linux
 --uinput is for Linux	--uinput 仅用于 Linux
---lite is for Linux; FreeBSD runs the full member	--lite 仅用于 Linux；FreeBSD 运行完整成员
 this installer is for Linux, macOS and FreeBSD; on Windows use get.ps1	此安装程序用于 Linux、macOS 和 FreeBSD；在 Windows 上请使用 get.ps1
 tar is required	需要 tar
 sha256sum or shasum is required	需要 sha256sum 或 shasum
@@ -106,7 +103,6 @@ no ufw or firewalld is active; nothing was added.	ufw 和 firewalld 都未启用
 %s needs root; a rootless install has no console or uinput helper	%s 需要 root；无 root 安装没有 console 和 uinput 助手
 --rootless installs for your own user: run it without sudo. With sudo, install.sh without --rootless installs the system service, which is safer.	--rootless 为你自己的用户安装：请不用 sudo 运行。使用 sudo 时，不带 --rootless 的 install.sh 会安装系统服务，这样更安全。
 a rootless install runs as a systemd user unit, and this session has no systemd user manager; log in to a desktop or over ssh and run it again	无 root 安装以 systemd 用户单元运行，而此会话没有 systemd 用户管理器；请登录桌面或通过 ssh 登录后再次运行
---home-cgnat is for the full member	--home-cgnat 仅用于完整成员
 CBB is installed for the whole system here (%s), and one device runs one service; remove it first or keep it	这里已为整个系统安装了 CBB（%s），一台设备只运行一个服务；请先卸载它，或保留它
 the desktop agent did not start; it starts at your next login	桌面代理未启动；它会在你下次登录时启动
 CBB runs while you are logged in. To keep it running after you log out, an administrator runs: sudo loginctl enable-linger %s	CBB 在你登录期间运行。要在注销后继续运行，请管理员执行：sudo loginctl enable-linger %s
@@ -116,12 +112,9 @@ Next: see member/README.md; in short, %s pair here, and scan its QR code with th
 Next: run %s pair and scan its QR code with the CBB app on your phone.	下一步：运行 %s pair，并用手机上的 CBB 应用扫描二维码。
 this archive has no install-rootless.sh, so it cannot install without root	此压缩包没有 install-rootless.sh，因此无法在没有 root 的情况下安装
 systemd is required	需要 systemd
-the full member is installed here, and the lite member cannot use its keys; remove it first: %s	这里已安装完整成员，轻量成员无法使用它的密钥；请先卸载它：%s
-the lite member is installed here, and the full member cannot use its keys; remove it first: %s	这里已安装轻量成员，完整成员无法使用它的密钥；请先卸载它：%s
 an account named cbb exists here and is not this service's (its comment is not "cbb service"); it would get the group's keys. Rename or remove it, then run install.sh again.	这里已有名为 cbb 的账户，且不属于本服务（其注释不是“cbb service”）；它会获得群组的密钥。请重命名或删除它，然后再次运行 install.sh。
 a group named cbb exists here with members (%s), and no service account; they would reach the service. Rename or remove the group, then run install.sh again.	这里已有名为 cbb 的用户组，其中有成员（%s），但没有服务账户；这些成员将能访问服务。请重命名或删除该用户组，然后再次运行 install.sh。
 Not installed: the tray app, which needs GTK 4 and WebKitGTK 6.0 (Debian and Ubuntu: %s; Fedora: %s). Install them and run this again to add it.	未安装：托盘应用，它需要 GTK 4 和 WebKitGTK 6.0（Debian 和 Ubuntu：%s；Fedora：%s）。安装它们后再次运行即可添加。
---uinput is for the full member, which runs the desktop connector	--uinput 仅用于运行桌面连接器的完整成员
 could not load the uinput module now; it loads at the next boot	现在无法加载 uinput 模块；它会在下次启动时加载
 100.64.0.0/10 counts as the home network on this device (--home-cgnat on).	在此设备上，100.64.0.0/10 算作家庭网络（--home-cgnat on）。
 New member and admin keys of this device go into its TPM.	此设备新的成员密钥和管理员密钥存放在其 TPM 中。
@@ -160,7 +153,6 @@ see logread -e cbb	请查看 logread -e cbb
 CBB is running on TCP port %s, on the lan zone. To remove it: sh /usr/share/cbb/uninstall.sh	CBB 正在 lan 区域的 TCP 端口 %s 上运行。卸载：sh /usr/share/cbb/uninstall.sh
 Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one.	attended sysupgrade（ASU、owut）不会保留 OpenWrt 软件源以外的软件包：升级后请重新安装。
 Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone.	下一步：运行 su -s /bin/sh cbb -c 'cbb pair -name router'，并用手机上的 CBB 应用扫描二维码。
-Next: run cbb pair and scan its QR code with the CBB app on your phone.	下一步：运行 cbb pair，并用手机上的 CBB 应用扫描二维码。
 CBB is removed. Its keys stay in /etc/cbb for a reinstall; --purge removes them.	CBB 已移除。其密钥保留在 /etc/cbb 中以便重新安装；--purge 会删除它们。
 This device is in no group yet, so it starts pairing now (--no-pair skips this).	此设备尚未加入群组，因此现在开始配对（--no-pair 可跳过）。
 could not record how CBB was installed; cbb update takes it as get.sh	无法记录 CBB 的安装方式；cbb update 将视为 get.sh
@@ -259,3 +251,7 @@ removing cbb from PATH	从 PATH 中移除 cbb
 removing %s	移除 %s
 removing %s and the %s group	移除 %s 和 %s 用户组
 CBB is removed. Its keys stay in %s for a reinstall; -Purge removes them.	CBB 已移除。其密钥保留在 %s 中以便重新安装；-Purge 会删除它们。
+cbb for MIPS has no sync away from home yet (roadmap item 37).	MIPS 版 cbb 暂不支持离家同步（路线图第 37 项）。
+--no-helper is for Linux	--no-helper 仅适用于 Linux
+cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	这里的 cbb 与其辅助程序一起运行，辅助程序可能保存着它的密钥；没有辅助程序，cbb 无法使用这些密钥。请先将其移除：%s
+--uinput needs cbb's helper, which runs the desktop connector	--uinput 需要 cbb 的辅助程序，桌面连接器在其中运行
