@@ -2395,3 +2395,23 @@ fn many_removals_of_one_key_evaluate_quickly() {
     eprintln!("evaluate took {took:?}");
     assert!(took.as_secs_f64() < 4.0, "evaluate took {took:?}");
 }
+
+/// A record whose body names a second signer is counted for the largest
+/// second signature: nine units more than without it.
+#[test]
+fn a_second_signer_costs_nine_units() {
+    let g = G::new();
+    let a = k("admin a");
+    let second = [7u8; 32];
+    let plain: &'static [u8] = Box::leak(g.body(&a, Kind::Copies { incoming_ms: 60_000 }).encode().into_boxed_slice());
+    let mut entries = crate::format::decode(plain).unwrap().as_map().unwrap().to_vec();
+    entries.push((8, crate::format::cbor::Value::Bytes(&second)));
+    let bytes = crate::format::cbor::Value::Map(entries).encode();
+    let sig = key::sign_es256(&a, LABEL_RECORD, &bytes).unwrap();
+    let max = crate::format::envelope::MAX_SIG2;
+    let r = Record::decode(&crate::format::envelope::write(&bytes, &sig, Some(&vec![0x55u8; max]))).unwrap();
+    let plain = Record::sign(g.body(&a, Kind::Copies { incoming_ms: 60_000 }), &a).unwrap();
+    let units = |r: &Record| keep::units(r.size(), false);
+    assert_eq!(units(&r), units(&plain) + 9);
+    assert!(r.size() >= r.envelope().len());
+}

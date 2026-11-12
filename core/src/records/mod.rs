@@ -57,10 +57,13 @@
 /// array head, the heads of body and sig, and the 64-byte signature.
 pub const ENVELOPE_ALLOWANCE: usize = 1 + 9 + 9 + 64;
 
-/// The bytes counted for a second signature, whatever its length: its head
-/// and 64 bytes. A body that names `signer2` is held in 0.6, so this only
-/// keeps such records from being counted as smaller than they are.
-pub const SIG2_ALLOWANCE: usize = 9 + 64;
+/// The bytes counted for a second signature, whatever its length: nine
+/// units, which hold the largest one the format takes
+/// (`format::envelope::MAX_SIG2`) with its head. The count still depends
+/// on the body alone.
+pub const SIG2_ALLOWANCE: usize = 9 * keep::UNIT;
+
+const _: () = assert!(SIG2_ALLOWANCE >= crate::format::envelope::MAX_SIG2 + 9);
 
 pub mod body;
 pub mod eval;
