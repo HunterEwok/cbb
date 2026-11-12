@@ -748,6 +748,7 @@ impl Rec<'_> {
         match &self.b().kind {
             Kind::Claim { seen, .. } => body::seen_entry(seen, k),
             Kind::Revoke(r) | Kind::Freeze(r) => body::seen_entry(&r.seen, k),
+            Kind::Thaw { seen, .. } => body::seen_entry(seen, k),
             _ => None,
         }
     }
@@ -1570,27 +1571,52 @@ impl<'e, 'a> Epoch<'e, 'a> {
     }
 
     fn thawed_by_root(&self) -> BTreeSet<RecordId> {
-        let mut t = BTreeSet::new();
+        self.root_thaws().into_keys().collect()
+    }
+
+    /// The freezes the thaws that count name, with those thaws: a root's
+    /// in this epoch, or an admin's that is in.
+    fn thaws_that_count(&self) -> BTreeMap<RecordId, Vec<usize>> {
+        self.thaws_where(|i| self.counts(i))
+    }
+
+    /// The freezes the root's thaws of this epoch name, with those thaws.
+    fn root_thaws(&self) -> BTreeMap<RecordId, Vec<usize>> {
+        self.thaws_where(|i| self.root_record(i))
+    }
+
+    fn thaws_where(&self, ok: impl Fn(usize) -> bool) -> BTreeMap<RecordId, Vec<usize>> {
+        let mut t: BTreeMap<RecordId, Vec<usize>> = BTreeMap::new();
         for i in self.all() {
             if let Some(ids) = self.r(i).thaw()
-                && self.root_record(i)
+                && ok(i)
             {
-                t.extend(ids.iter().copied());
+                for id in ids {
+                    t.entry(*id).or_default().push(i);
+                }
             }
         }
         t
     }
 
+    /// Reports whether one of thaws (of a freeze) saw record b: a thaw
+    /// brings back only what it saw of the frozen keys.
+    fn spared(&self, thaws: Option<&Vec<usize>>, b: usize) -> bool {
+        thaws.is_some_and(|ts| ts.iter().any(|&t| self.e.saw(t, b)))
+    }
+
     /// Gives every admin record its label: the grounded labelling of the
-    /// attacks of removals, freezes and thaws.
+    /// attacks of removals and freezes. A freeze's cut of a record is
+    /// lifted by a thaw of that freeze that saw the record and counts; what
+    /// no such thaw saw stays cut.
     fn do_label(&mut self) {
-        let thawed = self.thawed_by_root();
+        let root_thaws = self.root_thaws();
         let mut admin_recs = Vec::new();
         let mut root_acts = Vec::new();
         for i in self.all() {
             let r = self.r(i);
             if self.root_record(i) {
-                if r.is_revoke() || r.is_freeze() && !thawed.contains(&r.id) {
+                if r.is_revoke() || r.is_freeze() {
                     root_acts.push(i);
                 }
             } else if r.admin() && self.counted[i] && !r.held {
@@ -1607,15 +1633,14 @@ impl<'e, 'a> Epoch<'e, 'a> {
             if self.label[b] == Label::Out {
                 continue;
             }
-            if self.r(b).is_freeze() && thawed.contains(&self.r(b).id) || root_acts.iter().any(|&a| self.cuts_off(a, b))
-            {
+            if root_acts.iter().any(|&a| self.cuts_off(a, b) && !self.spared(root_thaws.get(&self.r(a).id), b)) {
                 self.label[b] = Label::Out;
                 self.why[b] = Some(Why::Cut);
             }
         }
         // Who attacks whom, by signer, so that this stays near linear: a
-        // record is attacked by the removals naming its signer and by the
-        // thaws naming it.
+        // record is attacked by the removals and freezes naming its signer;
+        // a freeze's attack is lifted by its thaws that saw the record.
         let mut removals_of: BTreeMap<KeyHash, Vec<usize>> = BTreeMap::new();
         let mut thaws_of: BTreeMap<RecordId, Vec<usize>> = BTreeMap::new();
         for &a in &admin_recs {
@@ -1633,7 +1658,8 @@ impl<'e, 'a> Epoch<'e, 'a> {
                 }
             }
         }
-        let mut attackers: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+        // Each attack with the thaws that lift it.
+        let mut attacks: BTreeMap<usize, Vec<(usize, Vec<usize>)>> = BTreeMap::new();
         for &b in &admin_recs {
             let rb = self.r(b);
             let mut by = Vec::new();
@@ -1641,18 +1667,28 @@ impl<'e, 'a> Epoch<'e, 'a> {
             // decide_claims sees it as a dispute.
             if rb.claim().is_none() {
                 for &a in removals_of.get(&rb.b().signer).map_or(&[][..], |v| v.as_slice()) {
-                    if self.cuts_off(a, b) {
-                        by.push(a);
+                    let ra = self.r(a);
+                    if !self.cuts_off(a, b) || ra.is_freeze() && self.spared(root_thaws.get(&ra.id), b) {
+                        continue;
                     }
+                    let lift: Vec<usize> = if ra.is_freeze() {
+                        thaws_of.get(&ra.id).into_iter().flatten().copied().filter(|&t| self.e.saw(t, b)).collect()
+                    } else {
+                        Vec::new()
+                    };
+                    by.push((a, lift));
                 }
             }
-            if rb.is_freeze() {
-                by.extend(thaws_of.get(&rb.id).into_iter().flatten().copied());
-            }
             if !by.is_empty() {
-                attackers.insert(b, by);
+                attacks.insert(b, by);
             }
         }
+        let attackers: BTreeMap<usize, Vec<usize>> = attacks
+            .iter()
+            .map(|(&b, by)| {
+                (b, by.iter().flat_map(|(a, lift)| core::iter::once(*a).chain(lift.iter().copied())).collect())
+            })
+            .collect();
         let mut changed = true;
         while changed {
             changed = false;
@@ -1661,14 +1697,16 @@ impl<'e, 'a> Epoch<'e, 'a> {
                     continue;
                 }
                 let mut all = true;
-                for &a in attackers.get(&b).map_or(&[][..], |v| v.as_slice()) {
-                    if self.label[a] == Label::In {
+                for (a, lift) in attacks.get(&b).map_or(&[][..], |v| v.as_slice()) {
+                    let lifted = lift.iter().any(|&t| self.label[t] == Label::In);
+                    let pending = lift.iter().any(|&t| self.label[t] != Label::Out);
+                    if self.label[*a] == Label::In && !pending {
                         self.label[b] = Label::Out;
                         self.why[b] = Some(Why::Removed);
                         changed = true;
                         break;
                     }
-                    if self.label[a] != Label::Out {
+                    if self.label[*a] != Label::Out && !lifted {
                         all = false;
                     }
                 }
@@ -1736,7 +1774,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
 
     /// Finds the revoked and frozen keys and the two histories.
     fn collect(&mut self) {
-        let thawed = self.thawed_by_root();
+        let thawed = self.thaws_that_count();
         for i in self.all() {
             if !self.counts(i) {
                 continue;
@@ -1745,7 +1783,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
             if let Some(rm) = r.removal() {
                 if r.is_revoke() {
                     self.revoked.extend(rm.keys.iter().copied());
-                } else if !thawed.contains(&r.id) {
+                } else if !thawed.contains_key(&r.id) {
                     self.frozen.extend(rm.keys.iter().copied());
                 }
             }
@@ -1789,11 +1827,13 @@ impl<'e, 'a> Epoch<'e, 'a> {
         if let Some(m) = self.member_of_admin(k) {
             keys.push(m);
         }
+        let thawed = self.thaws_that_count();
         self.all()
             .filter(|&i| {
                 let r = self.r(i);
                 r.admin()
                     && self.label[i] == Label::In
+                    && !(r.is_freeze() && thawed.contains_key(&r.id))
                     && r.removal().is_some_and(|rm| keys.iter().any(|key| rm.keys.binary_search(key).is_ok()))
             })
             .collect()

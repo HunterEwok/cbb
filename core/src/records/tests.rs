@@ -2587,3 +2587,44 @@ fn a_counted_claim_keeps_the_checks_nothing_later_changes() {
     let held = BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]);
     assert_eq!(counted_state(&g, &held, &[claim.id()]).roots.len(), 1);
 }
+
+/// A thaw brings back what it lists of the frozen key: a record the
+/// key signed that the thaw saw counts again; one it did not see, signed
+/// before the thaw or after it, stays cut. The same for a root's thaw.
+#[test]
+fn a_thaw_brings_back_only_what_it_lists() {
+    let both = |by_root: bool| {
+        let mut g = G::new();
+        let (pw, w, pp, p) = (k("watch"), k("admin w"), k("phone p"), k("admin p"));
+        g.admin(&pw, &w, POWER_REMOVE | POWER_FREEZE);
+        g.admin(&pp, &p, POWER_REMOVE_ADMINS | POWER_FREEZE | POWER_THAW);
+        g.device(&k("root"), &k("laptop"), "laptop", |_| {});
+        g.device(&k("root"), &k("tablet"), "tablet", |_| {});
+        let seen = g.seen();
+        let fr = if by_root {
+            g.root_rec(Kind::Freeze(removal(&[w.hash], seen)))
+        } else {
+            g.rec(&p, Kind::Freeze(removal(&[w.hash], seen)))
+        };
+        let seen = g.seen();
+        let listed = g.rec(&w, Kind::Revoke(removal(&[k("laptop").hash], seen)));
+        let at = g.seen_at(&w.hash, listed.body().seq);
+        let seen = g.seen();
+        let unlisted = g.rec(&w, Kind::Revoke(removal(&[k("tablet").hash], seen)));
+        let thaw = Kind::Thaw { ids: vec![fr.id()], seen: vec![at] };
+        if by_root {
+            g.root_rec(thaw);
+        } else {
+            g.rec(&p, thaw);
+        }
+        let seen = g.seen();
+        let after = g.rec(&w, Kind::Revoke(removal(&[k("laptop").hash], seen)));
+        let s = g.state();
+        assert!(s.counting.contains(&listed.id()) && s.revoked.contains(&k("laptop").hash), "root {by_root}");
+        assert!(!s.counting.contains(&unlisted.id()) && !s.revoked.contains(&k("tablet").hash), "root {by_root}");
+        assert!(!s.counting.contains(&after.id()), "root {by_root}");
+        assert!(s.device(&pw.key.device_id()).is_some_and(|d| !d.frozen), "root {by_root}");
+    };
+    both(false);
+    both(true);
+}
