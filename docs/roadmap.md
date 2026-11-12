@@ -145,9 +145,9 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
        canonical form that refuses unknown fields;
     2. the servers check only server credentials (section 18) and read no records; both stay
        open to every group;
-    3. one rules core, `cbb_core`, for the phones (through Swift and Kotlin bindings), the lite
-       member and the Go service (natively on Linux, as WebAssembly elsewhere), which keeps
-       its own rules only as a test oracle;
+    3. one rules core, `cbb_core`, for the phones (through Swift and Kotlin bindings) and the
+       Rust service `cbb`; the Go programs (`cbb-helper`, `cbb-forward`) keep their own rules,
+       held to the core's by the interop vectors and the differential run (D-93);
     4. no CA keys between devices, and a Welcome without one;
     5. features instead of versions in the hello;
     6. one form for each thing: one framing, one fingerprint, one encoding of bytes;
