@@ -2960,3 +2960,125 @@ fn a_set_keeps_by_its_counted_claims() {
     assert!(history.iter().all(|id| set.contains(id)));
     assert_eq!(set.state(&held).roots, vec![g.root.hash, k("new root").hash]);
 }
+
+/// The signatures this thread verifies while f runs.
+fn verified_by<T>(f: impl FnOnce() -> T) -> (T, usize) {
+    let before = super::VERIFIED.with(|n| n.get());
+    let out = f();
+    (out, super::VERIFIED.with(|n| n.get()) - before)
+}
+
+/// A record's signature is verified once: by evaluate however many
+/// passes its path takes, and by a set when the record enters it, never
+/// again by its state, its compaction, a record offered again or a
+/// counted claim read from what it holds.
+#[test]
+fn each_signature_is_verified_once() {
+    let (g, held, claim) = taken_over_group();
+    let (s, n) = verified_by(|| state_of(&g.root.key, &g.recs, &held));
+    assert_eq!(s.roots.len(), 2);
+    assert_eq!(n, g.recs.len());
+    // A set: each record once, when it enters.
+    let mut set = RecordSet::new(g.root.key.clone());
+    let (_, n) = verified_by(|| set.insert_all(g.recs.iter().cloned()));
+    assert_eq!(n, g.recs.len());
+    let (_, n) = verified_by(|| {
+        for _ in 0..3 {
+            let st = set.state(&held);
+            set.compact(&st);
+            set.insert_all(g.recs.iter().cloned());
+        }
+    });
+    assert_eq!(n, 0);
+    // A joiner told the counted claim reads it from the records it holds.
+    let mut joiner = RecordSet::new(g.root.key.clone());
+    let (_, n) = verified_by(|| {
+        joiner.insert_all(g.recs.iter().cloned());
+        assert_eq!(joiner.remember_counted([claim.id()]), Ok(()));
+        let st = joiner.state(&held);
+        joiner.compact(&st);
+    });
+    assert_eq!(n, g.recs.len());
+    assert_eq!(joiner.digest(), set.digest());
+}
+
+/// A set whose key is at its ceiling takes one more record for far less
+/// than an evaluation of all it holds: its signature, and a cut.
+#[test]
+fn one_more_record_costs_one_verification_at_most() {
+    let mut g = G::new();
+    let (p, a) = (k("phone a"), k("admin a"));
+    g.admin(&p, &a, POWER_ADMIT);
+    let mut set = RecordSet::new(g.root.key.clone());
+    set.insert_all(g.recs.iter().cloned());
+    // Past the admin key's ceiling: each record more makes the set cut.
+    for i in 0..keep::ceiling(false) + 40 {
+        let r = g.device(&a, &k(&format!("d{i}")), "d", |_| {});
+        set.insert(r).ok();
+    }
+    assert!(set.len() < g.recs.len());
+    // A record the set keeps: its signature, once.
+    let r = g.device(&k("root"), &k("one more"), "d", |_| {});
+    let (added, n) = verified_by(|| set.insert(r.clone()));
+    assert_eq!(added, Ok(Added::Stored));
+    assert_eq!(n, 1);
+    let (added, n) = verified_by(|| set.insert(r));
+    assert_eq!((added, n), (Ok(Added::Known), 0));
+    // One past where its key stopped: turned away before verifying.
+    let late = g.device(&a, &k("late"), "d", |_| {});
+    let (added, n) = verified_by(|| set.insert(late));
+    assert_eq!((added, n), (Ok(Added::NoRoom), 0));
+}
+
+/// A first record that does not count stands in the way of none that
+/// does: once the root named another admin key for a device, the old
+/// key's record for a new device does not count, and the new key's for
+/// that device admits it, in the evaluation and in a set.
+#[test]
+fn a_replaced_admin_key_does_not_block_the_new_one() {
+    let mut g = G::new();
+    let (pc, c, c2, d) = (k("computer c"), k("admin c"), k("admin c2"), k("device d"));
+    g.admin(&pc, &c, POWER_ADMIT | POWER_MANAGE);
+    let seen = g.seen();
+    g.device(&k("root"), &pc, "admin", |dv| {
+        dv.admin = Some(c2.key.clone());
+        dv.powers = POWER_ADMIT | POWER_MANAGE;
+        dv.seen = seen;
+    });
+    let old = g.device(&c, &d, "d", |_| {});
+    assert!(g.state().device_by_key(&d.hash).is_none());
+    let new = g.device(&c2, &d, "d", |_| {});
+    let s = g.state();
+    assert!(s.device_by_key(&d.hash).is_some());
+    assert!(s.counting.contains(&new.id()) && !s.counting.contains(&old.id()));
+    assert!(s.conflicts.is_empty());
+    let mut set = RecordSet::new(g.root.key.clone());
+    set.insert_all(g.recs.iter().cloned());
+    assert!(set.state(&BTreeMap::new()).device_by_key(&d.hash).is_some());
+}
+
+/// After a counted takeover, an admin the first root named claims the
+/// group from the new root, having seen its records: the evaluation and
+/// the check a member makes when it counts the claim agree.
+#[test]
+fn a_second_takeover_is_proved_as_it_is_evaluated() {
+    let mut g = G::new();
+    let all = POWER_ADMIT | POWER_MANAGE | POWER_REMOVE | POWER_TAKEOVER;
+    let (pt, t, pa, a, nk, na) = (k("phone t"), k("admin t"), k("phone a"), k("admin a"), k("root nk"), k("root na"));
+    g.admin(&pt, &t, all);
+    g.admin(&pa, &a, all);
+    let seen = g.seen();
+    let first = g.rec(&t, Kind::Claim { root: nk.key.clone(), seen });
+    g.device(&nk, &k("nk device"), "nk", |_| {});
+    let seen = g.seen();
+    let second = g.rec(&a, Kind::Claim { root: na.key.clone(), seen });
+    let held = BTreeMap::from([(first.id(), DEFAULT_DELAY_MS), (second.id(), DEFAULT_DELAY_MS)]);
+    let mut set = RecordSet::new(g.root.key.clone());
+    set.insert_all(g.recs.iter().cloned());
+    assert_eq!(set.remember_counted([first.id()]), Ok(()));
+    let s = set.state(&held);
+    assert_eq!(s.roots, vec![g.root.hash, nk.hash, na.hash]);
+    assert_eq!(set.remember_counted([second.id()]), Ok(()));
+    assert_eq!(set.counted(), vec![first.id(), second.id()]);
+    assert_eq!(set.state(&held).roots, vec![g.root.hash, nk.hash, na.hash]);
+}
