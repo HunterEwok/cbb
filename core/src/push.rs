@@ -97,8 +97,14 @@ pub const TAG_LEN: usize = 16;
 pub const MIN_BODY: usize = NONCE_LEN + TAG_LEN;
 /// The largest body any platform takes.
 pub const MAX_BODY: usize = 2972;
-/// The longest token (a UnifiedPush endpoint with its keys fits).
-pub const MAX_TOKEN: usize = 1024;
+/// The longest token: FCM states no maximum, and a UnifiedPush endpoint or
+/// a WNS channel is a URL. The longest send is on the 16384 step; an APNs
+/// or FCM token keeps it on the 4096 step.
+pub const MAX_TOKEN: usize = 4096;
+
+/// The longest UnifiedPush endpoint: its token, with the keys, within
+/// [`MAX_TOKEN`].
+pub const MAX_UP_URL: usize = 4000;
 
 /// The body's size for a platform: the env registry. 2972 bytes for every
 /// platform today: base64 of it in each service's wrapper stays under its
@@ -132,7 +138,7 @@ pub static PUSH: Table = Table {
         f(3, "push/env", ENV, false),
         f(4, "push/key", Ty::Bytes(32), false),
         f(5, "push/seq", SEQ, true),
-        f(6, "push/kinds", Ty::Uint { min: 0, max: 255 }, true),
+        f(6, "push/kinds", Ty::Uint { min: 0, max: u32::MAX as u64 }, true),
     ],
 };
 
@@ -141,7 +147,7 @@ pub static PUSH: Table = Table {
 pub static PUSH_UP: Table = Table {
     shape: "push-up/shape",
     fields: &[
-        f(1, "push-up/url", Ty::Text(900), true),
+        f(1, "push-up/url", Ty::Text(MAX_UP_URL), true),
         f(2, "push-up/p256dh", Ty::Bytes(65), true),
         f(3, "push-up/auth", Ty::Bytes(16), true),
     ],
@@ -218,6 +224,8 @@ pub const RULE_BODY_PAD: Rule = Rule::field("pushbody/pad");
 pub const RULE_BODY_OPEN: Rule = Rule::field("pushbody/open");
 pub const RULE_BODY_SIZE: Rule = Rule::field("pushbody/size");
 pub const RULE_UP_URL: Rule = Rule::field("push-up/url");
+/// `push-up/p256dh` is not an uncompressed point of P-256.
+pub const RULE_UP_KEY: Rule = Rule::field("push-up/p256dh");
 
 // --------------------------------------------------------- registration
 
@@ -309,10 +317,15 @@ impl<'a> UnifiedPush<'a> {
         let v = cbor::decode(token)?;
         check_map(&PUSH_UP, &v)?;
         let url = v.get(1).and_then(Value::as_text).ok_or(RULE_UP_URL)?;
-        if !url.starts_with("https://") || url.len() <= "https://".len() {
+        if !up_url(url) {
             return Err(RULE_UP_URL);
         }
-        let p256dh = v.get(2).and_then(Value::as_bytes).and_then(|b| b.try_into().ok()).ok_or(RULE_UP_URL)?;
+        let p256dh: &[u8; 65] =
+            v.get(2).and_then(Value::as_bytes).and_then(|b| b.try_into().ok()).ok_or(RULE_UP_KEY)?;
+        // RFC 8291's key: an uncompressed point of P-256.
+        if p256dh.first() != Some(&4) || p256::PublicKey::from_sec1_bytes(p256dh).is_err() {
+            return Err(RULE_UP_KEY);
+        }
         let auth = v.get(3).and_then(Value::as_bytes).and_then(|b| b.try_into().ok()).ok_or(RULE_UP_URL)?;
         Ok(UnifiedPush { url, p256dh, auth })
     }
@@ -326,6 +339,38 @@ impl<'a> UnifiedPush<'a> {
         ])
         .encode()
     }
+}
+
+/// Whether a UnifiedPush endpoint holds to the rows: printable ASCII,
+/// `https://`, no user, no fragment, a host name (never an address) of two
+/// labels at least, and port 443 when one is named. That the name
+/// leads only to public addresses the service checks on the address it
+/// connects to.
+pub fn up_url(url: &str) -> bool {
+    let Some(rest) = url.strip_prefix("https://") else { return false };
+    if !url.bytes().all(|b| (0x21..=0x7e).contains(&b)) || url.contains('#') {
+        return false;
+    }
+    let authority = rest.split(['/', '?']).next().unwrap_or("");
+    if authority.contains('@') {
+        return false;
+    }
+    let host = match authority.rsplit_once(':') {
+        Some((h, "443")) => h,
+        Some(_) => return false,
+        None => authority,
+    };
+    let labels: Vec<&str> = host.split('.').collect();
+    let label = |l: &&str| {
+        (1..=63).contains(&l.len())
+            && l.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+            && !l.starts_with('-')
+            && !l.ends_with('-')
+    };
+    host.len() <= 253
+        && labels.len() >= 2
+        && labels.iter().all(label)
+        && labels.last().is_some_and(|l| !l.bytes().all(|b| b.is_ascii_digit()))
 }
 
 // ----------------------------------------------------------------- keys
@@ -445,6 +490,13 @@ impl Body {
     /// profile with the one padding that brings it to its size.
     pub fn read(b: &[u8]) -> Result<Body, Rule> {
         let v = cbor::decode(b)?;
+        // A kind this version does not number is the neutral hint before
+        // any other field is read against the table.
+        match v.get(0).and_then(Value::as_uint) {
+            Some(k) if k > BODY_EVENT => return Ok(Body::Unknown(k)),
+            Some(BODY_COPY | BODY_WAITS | BODY_EVENT) => {}
+            _ => return Err(Rule::field("pushbody/kind")),
+        }
         check_map(&BODY, &v)?;
         if let Some(p) = v.get(1)
             && p.as_bytes().is_none_or(|z| z.iter().any(|x| *x != 0))

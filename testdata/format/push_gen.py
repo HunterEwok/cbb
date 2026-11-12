@@ -20,13 +20,16 @@ import json
 import os
 import sys
 
+from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gen  # noqa: E402
 from gen import Bad, check_map, dec, enc, frame, head  # noqa: E402
 
-TOKEN = "bytes 1..1024"
+TOKEN = "bytes 1..4096"
+MAX_UP_URL = 4000
 ENV = "uint 1..255"
 TABLES = {
     "push": [
@@ -34,10 +37,10 @@ TABLES = {
         (3, "push/env", ENV, False),
         (4, "push/key", "bytes 32", False),
         (5, "push/seq", "uint 1..9007199254740992", True),
-        (6, "push/kinds", "uint 0..255", True),
+        (6, "push/kinds", "uint 0..4294967295", True),
     ],
     "push-up": [
-        (1, "push-up/url", "text 1..900", True),
+        (1, "push-up/url", "text 1..4000", True),
         (2, "push-up/p256dh", "bytes 65", True),
         (3, "push-up/auth", "bytes 16", True),
     ],
@@ -115,6 +118,13 @@ def read_body(b):
         v = dec(b)
     except Bad as e:
         return e.rule
+    # A kind a later version numbers is the neutral hint before any other
+    # field is read against the table.
+    kind = v.get(0) if isinstance(v, dict) else None
+    if not isinstance(kind, int) or isinstance(kind, bool) or kind < 1:
+        return "pushbody/kind"
+    if kind > 3:
+        return "neutral"
     r = check_map("pushbody", v)
     if r:
         return r
@@ -167,9 +177,43 @@ def up_token(t):
     r = check_map("push-up", v)
     if r:
         return r
-    if not v[1].startswith("https://") or len(v[1]) <= len("https://"):
+    if not up_url(v[1]):
         return "push-up/url"
+    try:
+        if v[2][0] != 4:
+            raise ValueError
+        ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), v[2])
+    except ValueError:
+        return "push-up/p256dh"
     return "take"
+
+
+def point(label):
+    """An uncompressed point of P-256, from a fixed scalar."""
+    k = ec.derive_private_key(int.from_bytes(fake(label, 32), "big") % (2**255), ec.SECP256R1())
+    return k.public_key().public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
+
+
+def up_url(url):
+    """The endpoint's rows: printable ASCII, https, no user or fragment, a
+    host name of two labels at least (never an address), port 443."""
+    if not url.startswith("https://") or "#" in url or not all(0x21 <= ord(c) <= 0x7E for c in url):
+        return False
+    rest = url[len("https://"):]
+    authority = rest
+    for sep in "/?":
+        authority = authority.split(sep, 1)[0]
+    if "@" in authority:
+        return False
+    host = authority
+    if ":" in authority:
+        host, port = authority.rsplit(":", 1)
+        if port != "443":
+            return False
+    labels = host.split(".")
+    ok = lambda lab: (1 <= len(lab) <= 63 and all(c.isascii() and (c.isalnum() or c == "-") for c in lab)
+                      and not lab.startswith("-") and not lab.endswith("-"))
+    return len(host) <= 253 and len(labels) >= 2 and all(ok(lab) for lab in labels) and not labels[-1].isdigit()
 
 
 def main():
@@ -199,15 +243,16 @@ def main():
     reg("off", {5: 4, 6: 0})
     reg("a later platform's env is held", {**on, 3: 200}, "kept and handed on as it is (E-1)")
     reg("only a later version's kinds bit", {**on, 6: 64}, "asks for nothing a 0.6 sender sends")
-    reg("a token of 1024 bytes", {**on, 2: fake("long token", 1024)})
-    reg("a token of 1025 bytes", {**on, 2: fake("long token", 1025)})
+    reg("a later version's bit 31 beside copies", {**on, 6: (1 << 31) | 1}, "unknown bits are ignored")
+    reg("a token of 4096 bytes", {**on, 2: fake("long token", 4096)})
+    reg("a token of 4097 bytes", {**on, 2: fake("long token", 4097)})
     reg("off with a token", {2: token, 5: 4, 6: 0})
     reg("on without a key", {2: token, 3: 1, 5: 4, 6: 1})
     reg("on without an env", {2: token, 4: pk, 5: 4, 6: 1})
     reg("a key of 31 bytes", {**on, 4: pk[:31]})
     reg("seq 0", {**on, 5: 0})
     reg("seq over 2^53", {**on, 5: (1 << 53) + 1})
-    reg("kinds 256", {**on, 6: 256})
+    reg("kinds 2^32", {**on, 6: 1 << 32})
     reg("env 0", {**on, 3: 0})
     reg("env 256", {**on, 3: 256})
     reg("without seq", {2: token, 3: 1, 4: pk, 6: 1})
@@ -225,6 +270,7 @@ def main():
         ("the group stopped", {0: 3, 3: fake("record id 3", 16), 5: 6}),
         ("an event a later version numbers", {0: 3, 3: fake("record id 4", 16), 5: 99}),
         ("a kind a later version numbers, with a field of its own", {0: 4, 9: b"later"}),
+        ("a later kind whose field 3 is not 16 bytes", {0: 7, 3: b"short", 5: "text"}),
         ("a field 8 of a later version beside a known kind", {0: 2, 3: fake("copy id", 16), 4: fake("origin", 16), 8: 1}),
         ("a copy without the copy", {0: 1}),
         ("a hint without its id", {0: 2, 4: fake("origin", 16)}),
@@ -261,19 +307,32 @@ def main():
 
     # UnifiedPush tokens
     ups = []
-    up = {1: "https://up.example.org/" + "a" * 870, 2: fake("p256dh", 65), 3: fake("auth", 16)}
+    up = {1: "https://up.example.org/" + "a" * (MAX_UP_URL - 23), 2: point("p256dh"), 3: fake("auth", 16)}
     for name, t in [
         ("the longest endpoint", up),
         ("a short endpoint", {**up, 1: "https://ntfy.example.net/upAbc123"}),
+        ("port 443 named, and a query", {**up, 1: "https://up.example.org:443/x?t=1"}),
+        ("port 8443", {**up, 1: "https://up.example.org:8443/x"}),
+        ("a trailing dot", {**up, 1: "https://up.example.org./x"}),
+        ("a backslash", {**up, 1: "https://up.example.org\\@other.example/"}),
         ("http", {**up, 1: "http://up.example.org/x"}),
         ("https:// alone", {**up, 1: "https://"}),
-        ("an endpoint of 901 bytes", {**up, 1: "https://" + "a" * 893}),
+        ("an endpoint of 4001 bytes", {**up, 1: "https://up.example.org/" + "a" * (MAX_UP_URL - 22)}),
+        ("a single label", {**up, 1: "https://localhost/x"}),
+        ("an IPv4 address", {**up, 1: "https://10.0.0.1/x"}),
+        ("an IPv6 address", {**up, 1: "https://[::1]/x"}),
+        ("port 8080", {**up, 1: "https://up.example.org:8080/x"}),
+        ("a user", {**up, 1: "https://user@up.example.org/x"}),
+        ("a fragment", {**up, 1: "https://up.example.org/x#f"}),
+        ("a space", {**up, 1: "https://up.example.org/a b"}),
         ("a key of 64 bytes", {**up, 2: fake("p256dh", 64)}),
+        ("a key of 65 bytes not on the curve", {**up, 2: b"\x04" + fake("p256dh", 64)}),
+        ("a compressed key padded to 65 bytes", {**up, 2: b"\x02" + up[2][1:]}),
         ("without auth", {1: up[1], 2: up[2]}),
     ]:
         b = enc(t)
         ups.append({"name": name, "token": b.hex(), "length": len(b), "verdict": up_token(b)})
-    assert ups[0]["length"] <= 1024
+    assert ups[0]["length"] <= 4096
     out["unifiedpush"] = ups
 
     # the service's messages
@@ -290,7 +349,7 @@ def main():
 
     send = {0: 102, 2: 1, 3: token, 4: 1, 5: once(pk, fake("copy id", 16)), 6: body}
     msg("send to APNs", send, True)
-    msg("send with the longest token and a ttl", {**send, 2: 4294967295, 3: fake("long token", 1024), 4: 4, 7: 4}, True)
+    msg("send with the longest token and a ttl", {**send, 2: 4294967295, 3: fake("long token", 4096), 4: 4, 7: 4}, True)
     msg("send of a body not its env's size", {**send, 6: body[:100]}, False)
     msg("send to a later platform", {**send, 4: 200}, False)
     msg("send of a body over 2972", {**send, 6: bytes(MAX_BODY + 1)})
@@ -306,7 +365,8 @@ def main():
     msg("hello without credentials", {0: 100, 2: []})
     for m in msgs:
         if m["t"] == 102 and m.get("sized"):
-            assert m["length"] == 4096, m
+            # An APNs token keeps a send on the 4096 step, the longest on 16384.
+            assert m["length"] == (16384 if "longest" in m["name"] else 4096), m
     out["messages"] = msgs
 
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "push.json")

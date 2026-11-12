@@ -5,6 +5,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/ecdh"
 	"crypto/hkdf"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -86,6 +87,16 @@ func pushBodyVerdict(plain []byte) string {
 	v, err := strict(plain)
 	if err != nil {
 		return "cbor"
+	}
+	// A kind a later version numbers is the neutral hint before any other
+	// field is read against the table.
+	vm, isMap := v.(map[any]any)
+	k, isUint := vm[uint64(0)].(uint64)
+	if !isMap || !isUint || k < 1 {
+		return "pushbody/kind"
+	}
+	if k > 3 {
+		return "neutral"
 	}
 	if r := checkTable("pushbody", v); r != "" {
 		return r
@@ -180,11 +191,60 @@ func pushUpVerdict(t []byte) string {
 	if r := checkTable("push-up", v); r != "" {
 		return r
 	}
-	u := v.(map[any]any)[uint64(1)].(string)
-	if !strings.HasPrefix(u, "https://") || len(u) <= len("https://") {
+	if !pushUpURL(v.(map[any]any)[uint64(1)].(string)) {
 		return "push-up/url"
 	}
+	// RFC 8291's key: an uncompressed point of P-256.
+	if _, err := ecdh.P256().NewPublicKey(v.(map[any]any)[uint64(2)].([]byte)); err != nil {
+		return "push-up/p256dh"
+	}
 	return "take"
+}
+
+// pushUpURL reads an endpoint by the rows: printable ASCII, https, no user
+// or fragment, a host name of two labels at least that is no address, and
+// port 443 when one is named.
+func pushUpURL(u string) bool {
+	rest, ok := strings.CutPrefix(u, "https://")
+	if !ok || strings.Contains(u, "#") {
+		return false
+	}
+	for i := 0; i < len(u); i++ {
+		if u[i] < 0x21 || u[i] > 0x7e {
+			return false
+		}
+	}
+	authority := rest
+	if i := strings.IndexAny(rest, "/?"); i >= 0 {
+		authority = rest[:i]
+	}
+	if strings.Contains(authority, "@") {
+		return false
+	}
+	host := authority
+	if i := strings.LastIndexByte(authority, ':'); i >= 0 {
+		host = authority[:i]
+		if authority[i+1:] != "443" {
+			return false
+		}
+	}
+	labels := strings.Split(host, ".")
+	if len(host) > 253 || len(labels) < 2 {
+		return false
+	}
+	for _, l := range labels {
+		if len(l) < 1 || len(l) > 63 || l[0] == '-' || l[len(l)-1] == '-' {
+			return false
+		}
+		for i := 0; i < len(l); i++ {
+			c := l[i]
+			if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-') {
+				return false
+			}
+		}
+	}
+	last := labels[len(labels)-1]
+	return strings.Trim(last, "0123456789") != ""
 }
 
 func pushFrame(b []byte) (map[any]any, bool) {
@@ -252,7 +312,7 @@ func checkPush(dir string) {
 		if got := pushUpVerdict(t); !cborVerdict(got, u.Verdict) {
 			fail("push unifiedpush %s: %q, want %q", u.Name, got, u.Verdict)
 		}
-		if len(t) > 1024 {
+		if len(t) > 4096 {
 			fail("push unifiedpush %s: %d bytes", u.Name, len(t))
 		}
 		count++
@@ -283,8 +343,14 @@ func checkPush(dir string) {
 			if sized != *m.Sized {
 				fail("push message %s: sized %v, want %v", m.Name, sized, *m.Sized)
 			}
-			if sized && len(unhex(m.Frame))-4 != 4096 {
-				fail("push message %s: a send off the 4096 step", m.Name)
+			// An APNs token keeps a send on the 4096 step; the longest
+			// token, 4096 bytes, takes it to the 16384 step.
+			want := 4096
+			if len(mm[uint64(3)].([]byte)) > 1024 {
+				want = 16384
+			}
+			if sized && len(unhex(m.Frame))-4 != want {
+				fail("push message %s: a send off the %d step", m.Name, want)
 			}
 		}
 		count++

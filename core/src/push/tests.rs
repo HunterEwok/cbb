@@ -185,26 +185,71 @@ fn once_is_the_same_for_every_sender_and_differs_between_keys_and_copies() {
     assert_ne!(&a[..], &[1u8; 16][..]);
 }
 
+/// A point of P-256, uncompressed: the generator's.
+fn point() -> [u8; 65] {
+    use p256::elliptic_curve::sec1::ToSec1Point as _;
+    let p = p256::ProjectivePoint::GENERATOR.to_affine().to_sec1_point(false);
+    p.as_bytes().try_into().unwrap()
+}
+
 #[test]
 fn a_unifiedpush_token_holds_the_endpoint_and_the_keys_within_its_bound() {
-    let url = String::from("https://up.example.org/") + &"a".repeat(870);
-    let p256dh = [4u8; 65];
+    let url = String::from("https://up.example.org/") + &"a".repeat(MAX_UP_URL - 23);
+    let p256dh = point();
     let auth = [6u8; 16];
     let t = UnifiedPush { url: &url, p256dh: &p256dh, auth: &auth };
     let token = t.write();
     assert!(token.len() <= MAX_TOKEN, "{}", token.len());
     assert_eq!(UnifiedPush::read(&token).unwrap(), t);
-    let plain = UnifiedPush { url: "http://up.example.org/x", ..t.clone() }.write();
-    assert_eq!(UnifiedPush::read(&plain).err(), Some(RULE_UP_URL));
-    let bare = UnifiedPush { url: "https://", ..t.clone() }.write();
-    assert_eq!(UnifiedPush::read(&bare).err(), Some(RULE_UP_URL));
-    // The longest send stays on the 4096 step.
+    let longer = String::from("https://up.example.org/") + &"a".repeat(MAX_UP_URL - 22);
+    assert!(UnifiedPush::read(&UnifiedPush { url: &longer, ..t.clone() }.write()).is_err());
+    // The endpoint: https to a host name, port 443, no user.
+    for good in [
+        "https://ntfy.example.net/upAbc123",
+        "https://up.example.org:443/x?t=1",
+        "https://a-b.example.org:443",
+        "https://x.io",
+    ] {
+        assert!(up_url(good), "{good}");
+    }
+    for bad in [
+        "http://up.example.org/x",
+        "https://",
+        "https://localhost/x",
+        "https://10.0.0.1/x",
+        "https://192.168.1.2:443/x",
+        "https://[::1]/x",
+        "https://up.example.org:8080/x",
+        "https://up.example.org:8443/x",
+        "https://up.example.org./x",
+        "https://up.example.org:/x",
+        "https://user@up.example.org/x",
+        "https://up.example.org/x#frag",
+        "https://up.example.org/a b",
+        "https://-up.example.org/x",
+        "https://up..example.org/x",
+        "https://up.example.org\\@evil.example/x",
+    ] {
+        assert!(!up_url(bad), "{bad}");
+        let w = UnifiedPush { url: bad, ..t.clone() }.write();
+        assert_eq!(UnifiedPush::read(&w).err(), Some(RULE_UP_URL), "{bad}");
+    }
+    // p256dh must be a point of P-256, uncompressed.
+    let mut off = point();
+    off[64] ^= 1;
+    assert_eq!(UnifiedPush::read(&UnifiedPush { p256dh: &off, ..t.clone() }.write()).err(), Some(RULE_UP_KEY));
+    assert_eq!(UnifiedPush::read(&UnifiedPush { p256dh: &[4; 65], ..t.clone() }.write()).err(), Some(RULE_UP_KEY));
+    // A send with an APNs token stays on the 4096 step; the longest token
+    // takes it to the 16384 step.
     let body = vec![0u8; MAX_BODY];
+    let apns = [1u8; 32];
+    let s = Send { n: u32::MAX as u64, token: &apns, env: ENV_APNS, once: [3; 16], body: &body, ttl: Some(4) };
+    assert_eq!(s.write().len() - 4, 4096);
     let longest = vec![1u8; MAX_TOKEN];
     let s =
         Send { n: u32::MAX as u64, token: &longest, env: ENV_UNIFIEDPUSH, once: [3; 16], body: &body, ttl: Some(4) };
     let f = s.write();
-    assert_eq!(f.len() - 4, 4096);
+    assert_eq!(f.len() - 4, 16384);
     let v = read_frame(&f);
     let back = Send::read(&v).unwrap();
     assert_eq!(back, s);
