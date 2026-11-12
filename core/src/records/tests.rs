@@ -3238,8 +3238,13 @@ fn a_counted_handover_is_proved_in_its_epoch() {
     g.device(&n2, &k("phone n2"), "n2", |d| d.holds_root = true);
     let mut joiner = RecordSet::new(g.root.key.clone());
     assert_eq!(joiner.remember_counted([c1.id(), c2.id()]), Ok(()));
-    joiner.insert_all(g.recs.iter().cloned());
-    joiner.insert_all(g.recs.iter().cloned());
+    // One call takes them all: what waits for a key a counted claim
+    // teaches is taken again in it.
+    let mut rev = g.recs.clone();
+    rev.reverse();
+    let (_, refused) = joiner.insert_all(rev);
+    assert!(refused.is_empty(), "{refused:?}");
+    assert_eq!(joiner.counted_claims().len(), 2);
     assert_eq!(joiner.counted(), vec![c1.id(), c2.id()]);
     assert_eq!(joiner.state(&BTreeMap::new()).roots, vec![g.root.hash, n1.hash, n2.hash]);
     // Records first, then the claims.
