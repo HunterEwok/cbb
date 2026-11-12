@@ -1,0 +1,1184 @@
+{
+ "draft": "format-0.6-bytes.md, draft of 2026-11-11",
+ "tables": {
+  "pair/adb": [
+   {
+    "n": 1,
+    "rule": "pair/adb/group",
+    "type": "bytes 16",
+    "needed": true
+   },
+   {
+    "n": 2,
+    "rule": "pair/adb/device",
+    "type": "bytes 16",
+    "needed": true
+   },
+   {
+    "n": 3,
+    "rule": "pair/adb/name",
+    "type": "text 1..64",
+    "needed": true
+   }
+  ],
+  "pair/start": [
+   {
+    "n": 2,
+    "rule": "pair/start/ya",
+    "type": "bytes 1..256",
+    "needed": true
+   },
+   {
+    "n": 3,
+    "rule": "pair/start/ada",
+    "type": "bytes 1..16384",
+    "needed": true
+   }
+  ],
+  "pair/reply": [
+   {
+    "n": 2,
+    "rule": "pair/reply/yb",
+    "type": "bytes 1..256",
+    "needed": true
+   },
+   {
+    "n": 3,
+    "rule": "pair/reply/adb",
+    "type": "bytes 1..1024",
+    "needed": true
+   }
+  ],
+  "pair/confirm": [
+   {
+    "n": 2,
+    "rule": "pair/confirm/ta",
+    "type": "bytes 1..64",
+    "needed": true
+   }
+  ],
+  "pair/welcome": [
+   {
+    "n": 2,
+    "rule": "pair/welcome/tb",
+    "type": "bytes 1..64",
+    "needed": true
+   },
+   {
+    "n": 3,
+    "rule": "pair/welcome/welcome",
+    "type": "map welcome",
+    "needed": true
+   }
+  ],
+  "pair/done": [],
+  "pair/error": [
+   {
+    "n": 2,
+    "rule": "pair/error/code",
+    "type": "uint 1..255",
+    "needed": true
+   }
+  ],
+  "welcome": [
+   {
+    "n": 1,
+    "rule": "welcome/root",
+    "type": "key 1",
+    "needed": true
+   },
+   {
+    "n": 2,
+    "rule": "welcome/records",
+    "type": "array 1..4096 of envelope",
+    "needed": true
+   },
+   {
+    "n": 4,
+    "rule": "welcome/keys",
+    "type": "array 1..256 of envelope",
+    "needed": false
+   },
+   {
+    "n": 5,
+    "rule": "welcome/time",
+    "type": "uint 1..9223372036854775807",
+    "needed": true
+   },
+   {
+    "n": 7,
+    "rule": "welcome/credentials",
+    "type": "array 1..259 of envelope",
+    "needed": false
+   }
+  ],
+  "pair/info": [
+   {
+    "n": 1,
+    "rule": "pair/info/name",
+    "type": "text 1..64",
+    "needed": true
+   },
+   {
+    "n": 2,
+    "rule": "pair/info/os",
+    "type": "uint 1..4294967295",
+    "needed": false
+   },
+   {
+    "n": 3,
+    "rule": "pair/info/caps",
+    "type": "uint 1..7",
+    "needed": false
+   },
+   {
+    "n": 4,
+    "rule": "pair/info/role",
+    "type": "uint 1..4",
+    "needed": true
+   },
+   {
+    "n": 5,
+    "rule": "pair/info/admin",
+    "type": "key 1",
+    "needed": false
+   },
+   {
+    "n": 6,
+    "rule": "pair/info/admin-pop",
+    "type": "bytes 64",
+    "needed": false
+   },
+   {
+    "n": 7,
+    "rule": "pair/info/keys",
+    "type": "envelope",
+    "needed": false
+   },
+   {
+    "n": 9,
+    "rule": "pair/info/invite",
+    "type": "bytes 16",
+    "needed": false
+   }
+  ],
+  "invite": [
+   {
+    "n": 1,
+    "rule": "invite/shape",
+    "type": "bytes 16",
+    "needed": true
+   },
+   {
+    "n": 2,
+    "rule": "invite/shape",
+    "type": "bytes 32",
+    "needed": true
+   },
+   {
+    "n": 3,
+    "rule": "invite/path",
+    "type": "array 1..4 of map invite/path",
+    "needed": true
+   },
+   {
+    "n": 4,
+    "rule": "invite/profile",
+    "type": "map invite/profile",
+    "needed": true
+   }
+  ],
+  "invite/path": [
+   {
+    "n": 1,
+    "rule": "invite/path",
+    "type": "uint 1..3",
+    "needed": true
+   },
+   {
+    "n": 2,
+    "rule": "invite/path",
+    "type": "once 1..8 of addr",
+    "needed": false
+   },
+   {
+    "n": 3,
+    "rule": "invite/path",
+    "type": "key 3",
+    "needed": false
+   },
+   {
+    "n": 4,
+    "rule": "invite/path",
+    "type": "bytes 32",
+    "needed": false
+   },
+   {
+    "n": 5,
+    "rule": "invite/path",
+    "type": "bytes 32",
+    "needed": false
+   },
+   {
+    "n": 6,
+    "rule": "invite/obfuscation",
+    "type": "map obfuscation",
+    "needed": false
+   }
+  ],
+  "invite/profile": [
+   {
+    "n": 1,
+    "rule": "invite/profile",
+    "type": "uint 1..4",
+    "needed": true
+   },
+   {
+    "n": 2,
+    "rule": "invite/profile",
+    "type": "uint 1..15",
+    "needed": false
+   },
+   {
+    "n": 3,
+    "rule": "invite/profile",
+    "type": "flag",
+    "needed": false
+   },
+   {
+    "n": 4,
+    "rule": "invite/profile",
+    "type": "flag",
+    "needed": false
+   }
+  ],
+  "obfuscation": [
+   {
+    "n": 1,
+    "rule": "obfuscation/jc",
+    "type": "uint 1..128",
+    "needed": true
+   },
+   {
+    "n": 2,
+    "rule": "obfuscation/jmin",
+    "type": "uint 0..1280",
+    "needed": true
+   },
+   {
+    "n": 3,
+    "rule": "obfuscation/jmax",
+    "type": "uint 1..1280",
+    "needed": true
+   },
+   {
+    "n": 4,
+    "rule": "obfuscation/s",
+    "type": "array 1..4 of uint 0..64",
+    "needed": true
+   },
+   {
+    "n": 5,
+    "rule": "obfuscation/h",
+    "type": "array 1..4 of array 1..2 of uint 0..4294967295",
+    "needed": true
+   },
+   {
+    "n": 6,
+    "rule": "obfuscation/key",
+    "type": "bytes 32",
+    "needed": false
+   }
+  ],
+  "vless": [
+   {
+    "n": 1,
+    "rule": "vless/user",
+    "type": "bytes 16",
+    "needed": true
+   },
+   {
+    "n": 2,
+    "rule": "vless/port",
+    "type": "uint 1..65535",
+    "needed": false
+   },
+   {
+    "n": 3,
+    "rule": "vless/host",
+    "type": "text 1..253",
+    "needed": false
+   },
+   {
+    "n": 4,
+    "rule": "vless/path",
+    "type": "text 1..128",
+    "needed": false
+   }
+  ],
+  "offer": [
+   {
+    "n": 1,
+    "rule": "offer/hub-key",
+    "type": "key 3",
+    "needed": true
+   },
+   {
+    "n": 2,
+    "rule": "offer/endpoints",
+    "type": "once 1..8 of addr",
+    "needed": false
+   },
+   {
+    "n": 3,
+    "rule": "offer/obfuscation",
+    "type": "map obfuscation",
+    "needed": false
+   },
+   {
+    "n": 4,
+    "rule": "offer/vless",
+    "type": "map vless",
+    "needed": false
+   },
+   {
+    "n": 6,
+    "rule": "offer/moved",
+    "type": "flag",
+    "needed": false
+   },
+   {
+    "n": 7,
+    "rule": "offer/next-key",
+    "type": "key 3",
+    "needed": false
+   },
+   {
+    "n": 8,
+    "rule": "offer/confirm",
+    "type": "bytes 32",
+    "needed": false
+   }
+  ],
+  "tunnel": [
+   {
+    "n": 2,
+    "rule": "tunnel/key",
+    "type": "key 3",
+    "needed": true
+   },
+   {
+    "n": 3,
+    "rule": "tunnel/confirm",
+    "type": "bytes 32",
+    "needed": true
+   }
+  ],
+  "hubs": [
+   {
+    "n": 2,
+    "rule": "hubs/stopped",
+    "type": "flag",
+    "needed": false
+   },
+   {
+    "n": 3,
+    "rule": "hubs/serving",
+    "type": "flag",
+    "needed": false
+   }
+  ],
+  "guest": [
+   {
+    "n": 2,
+    "rule": "guest/op",
+    "type": "uint 1..7",
+    "needed": true
+   },
+   {
+    "n": 3,
+    "rule": "guest/key",
+    "type": "key 3",
+    "needed": true
+   },
+   {
+    "n": 4,
+    "rule": "guest/psk",
+    "type": "bytes 32",
+    "needed": false
+   },
+   {
+    "n": 5,
+    "rule": "guest/expires",
+    "type": "uint 1..9223372036854775807",
+    "needed": false
+   },
+   {
+    "n": 6,
+    "rule": "guest/offer",
+    "type": "map offer",
+    "needed": false
+   },
+   {
+    "n": 7,
+    "rule": "guest/reason",
+    "type": "text 1..256",
+    "needed": false
+   },
+   {
+    "n": 8,
+    "rule": "guest/conn",
+    "type": "uint 1..4294967295",
+    "needed": false
+   },
+   {
+    "n": 9,
+    "rule": "guest/data",
+    "type": "bytes 1..16384",
+    "needed": false
+   },
+   {
+    "n": 10,
+    "rule": "guest/device",
+    "type": "bytes 16",
+    "needed": false
+   },
+   {
+    "n": 11,
+    "rule": "guest/invite",
+    "type": "bytes 16",
+    "needed": false
+   }
+  ],
+  "waiting/request": [
+   {
+    "n": 1,
+    "rule": "waiting/request/invite",
+    "type": "bytes 16",
+    "needed": true
+   },
+   {
+    "n": 2,
+    "rule": "waiting/request/key",
+    "type": "key 1",
+    "needed": true
+   },
+   {
+    "n": 3,
+    "rule": "waiting/request/info",
+    "type": "map pair/info",
+    "needed": true
+   },
+   {
+    "n": 4,
+    "rule": "waiting/request/network",
+    "type": "uint 1..3",
+    "needed": true
+   },
+   {
+    "n": 5,
+    "rule": "waiting/request/held",
+    "type": "uint 1..86400000",
+    "needed": false
+   },
+   {
+    "n": 6,
+    "rule": "waiting/request/attempts",
+    "type": "uint 1..255",
+    "needed": true
+   }
+  ],
+  "waiting": [
+   {
+    "n": 2,
+    "rule": "waiting/requests",
+    "type": "once 1..16 of map waiting/request",
+    "needed": true
+   }
+  ],
+  "dismiss": [
+   {
+    "n": 2,
+    "rule": "dismiss/invite",
+    "type": "bytes 16",
+    "needed": true
+   },
+   {
+    "n": 3,
+    "rule": "dismiss/key",
+    "type": "bytes 32",
+    "needed": false
+   }
+  ],
+  "forward/challenge": [
+   {
+    "n": 2,
+    "rule": "forward/challenge/e",
+    "type": "bytes 32",
+    "needed": true
+   }
+  ],
+  "forward/register": [
+   {
+    "n": 2,
+    "rule": "forward/register/key",
+    "type": "key 3",
+    "needed": true
+   },
+   {
+    "n": 3,
+    "rule": "forward/register/proof",
+    "type": "bytes 32",
+    "needed": true
+   },
+   {
+    "n": 4,
+    "rule": "forward/register/obfuscation",
+    "type": "map obfuscation",
+    "needed": false
+   },
+   {
+    "n": 5,
+    "rule": "forward/register/vless",
+    "type": "bytes 16",
+    "needed": false
+   },
+   {
+    "n": 6,
+    "rule": "forward/register/credentials",
+    "type": "array 1..3 of envelope",
+    "needed": true
+   }
+  ],
+  "forward/registered": [
+   {
+    "n": 2,
+    "rule": "forward/registered/id",
+    "type": "uint 1..9223372036854775807",
+    "needed": true
+   },
+   {
+    "n": 3,
+    "rule": "forward/registered/mask",
+    "type": "bytes 32",
+    "needed": true
+   },
+   {
+    "n": 4,
+    "rule": "forward/registered/vless",
+    "type": "map vless",
+    "needed": false
+   }
+  ],
+  "server/error": [
+   {
+    "n": 2,
+    "rule": "server/error/reason",
+    "type": "text 1..256",
+    "needed": true
+   }
+  ],
+  "forward/seen": [
+   {
+    "n": 2,
+    "rule": "forward/seen/addr",
+    "type": "addr",
+    "needed": true
+   }
+  ],
+  "relay/challenge": [
+   {
+    "n": 2,
+    "rule": "relay/challenge/e",
+    "type": "bytes 32",
+    "needed": true
+   },
+   {
+    "n": 3,
+    "rule": "relay/challenge/root",
+    "type": "flag",
+    "needed": false
+   }
+  ],
+  "relay/register": [
+   {
+    "n": 2,
+    "rule": "relay/register/key",
+    "type": "key 3",
+    "needed": true
+   },
+   {
+    "n": 3,
+    "rule": "relay/register/proof",
+    "type": "bytes 32",
+    "needed": true
+   },
+   {
+    "n": 4,
+    "rule": "relay/register/credentials",
+    "type": "array 1..3 of envelope",
+    "needed": true
+   },
+   {
+    "n": 5,
+    "rule": "relay/register/root",
+    "type": "key 1",
+    "needed": false
+   }
+  ],
+  "relay/registered": [
+   {
+    "n": 2,
+    "rule": "relay/registered/key",
+    "type": "key 3",
+    "needed": true
+   },
+   {
+    "n": 3,
+    "rule": "relay/registered/psk",
+    "type": "bytes 32",
+    "needed": true
+   },
+   {
+    "n": 4,
+    "rule": "relay/registered/addr",
+    "type": "text 1..64",
+    "needed": true
+   }
+  ],
+  "relay/watch": [],
+  "relay/dial": [
+   {
+    "n": 2,
+    "rule": "relay/dial/name",
+    "type": "bytes 32",
+    "needed": true
+   }
+  ],
+  "relay/answer": [
+   {
+    "n": 2,
+    "rule": "relay/answer/ticket",
+    "type": "bytes 16",
+    "needed": true
+   }
+  ],
+  "relay/online": [
+   {
+    "n": 2,
+    "rule": "relay/online/names",
+    "type": "set 1..64 of bytes 32",
+    "needed": false
+   }
+  ],
+  "relay/call": [
+   {
+    "n": 2,
+    "rule": "relay/call/name",
+    "type": "bytes 32",
+    "needed": true
+   },
+   {
+    "n": 3,
+    "rule": "relay/call/ticket",
+    "type": "bytes 16",
+    "needed": true
+   }
+  ],
+  "relay/ok": [],
+  "result": [
+   {
+    "n": 2,
+    "rule": "result/id",
+    "type": "bytes 16",
+    "needed": true
+   },
+   {
+    "n": 3,
+    "rule": "result/by",
+    "type": "bytes 16",
+    "needed": true
+   },
+   {
+    "n": 4,
+    "rule": "result/status",
+    "type": "uint 1..3",
+    "needed": true
+   },
+   {
+    "n": 5,
+    "rule": "result/reason",
+    "type": "text 1..256",
+    "needed": false
+   },
+   {
+    "n": 6,
+    "rule": "result/tunnel",
+    "type": "map offer",
+    "needed": false
+   }
+  ]
+ },
+ "types": {
+  "10": "result",
+  "15": "tunnel",
+  "16": "hubs",
+  "17": "guest",
+  "26": "waiting",
+  "27": "dismiss",
+  "64": "pair/start",
+  "65": "pair/reply",
+  "66": "pair/confirm",
+  "67": "pair/welcome",
+  "68": "pair/done",
+  "69": "pair/error",
+  "80": "forward/challenge",
+  "81": "forward/register",
+  "82": "forward/registered",
+  "83": "server/error",
+  "84": "forward/seen",
+  "90": "relay/challenge",
+  "91": "relay/register",
+  "92": "relay/registered",
+  "93": "server/error",
+  "94": "relay/watch",
+  "95": "relay/dial",
+  "96": "relay/answer",
+  "97": "relay/online",
+  "98": "relay/call",
+  "99": "relay/ok"
+ },
+ "take": [
+  {
+   "name": "pair start",
+   "t": 64,
+   "message": "a3001840025820541845d84dbb13939265b406f6de5c4acf72683f06191af3f63927541c826d5b035827a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de0"
+  },
+  {
+   "name": "pair reply",
+   "t": 65,
+   "message": "a3001841025820d023d2a00bf35cfae4516e43f8f759e96eca5f246873a34fca49e3da4d6a6c6c035833a301506e6636fab2ee53735229de330d8b258c0250a07a039a5387421d2de006983c7bb11b036c45776f6b27732070686f6e65"
+  },
+  {
+   "name": "pair confirm",
+   "t": 66,
+   "message": "a200184202582043543103ef34fb91f0b0b863a4904a02d8b081dfe0b3a773a6db612fd53d072a"
+  },
+  {
+   "name": "pair welcome",
+   "t": 67,
+   "message": "a3001843025820971d254001bf8f289108ecbdd7f023861f5cb0c88c9bb4dd18a4d6bafd2fad8203a3018201584104fa7d13ba43710c1079849d0db69f3a7d0fdb01b0570982799c578cd2c0432ab18e2ed181f01ee83ce0072523689ea5a74225fa089a679e79bab7ceb193a9de3b02828258e9af010102506e6636fab2ee53735229de330d8b258c0358206e6636fab2ee53735229de330d8b258c6620bf6e078958b25f80d20aa64f026a0401061b000001a17720cde80a8201584104f269a765ba3fc8158d1ce085221d4341d9ae12754592ef96582b4d08d11348fa1be23a1bda57247f9c5be82a522f9b56a3fc1cd03e0872e277899dc20f29ab6b0b6550686f6e650c020d0f110412021482015841040b9e5110a460bd98b9ac83a8164d8eb15cbe1730b57901a36d15659eb372717f78cad22a453140f281f0b079e0c097af1966316f3e8c1c83c3892f1445ef79ae151901ff161903ff1701584099afb808b39f4609a8d46a6414b194c29e678206603771e0effea9fdb0b051ec417fef75a68d11858938d1bc1fa9f47325d741b45bb88fd37c37c1fbb5e64e958258bfad010102506e6636fab2ee53735229de330d8b258c0358206e6636fab2ee53735229de330d8b258c6620bf6e078958b25f80d20aa64f026a0402055820fd5ab2170413cf90d9e18fa58442ee64051d84b87592d23ebde1444ea497f8a6061b000001a17720d1d00a82015841047e1f6d804c1fbf4a07bb6f72b316493ab441fa31fb4b28dc6aadfa868060ebf635f7904f9420539f9fefd2d51ea705a9d043134db75bd316f627da1ee742d3680b664c6170746f700c010d071007110112025840253c484bb5f245605b2aa8940dc12db4bff6ba700924d2c1031a8dd894f4b69304956d326bebeb978c37f2e7335fd76fa02b7841ccb89ef2025b70352e11c3b8051b000001a17720ca00",
+   "note": "records: the first two of records.json"
+  },
+  {
+   "name": "pair done",
+   "t": 68,
+   "message": "a1001844"
+  },
+  {
+   "name": "pair error: taken",
+   "t": 69,
+   "message": "a20018450208"
+  },
+  {
+   "name": "result with the hub's offer",
+   "t": 10,
+   "message": "a5000a0250ade67290b9e89f0810f3ca21c62e93440350a07a039a5387421d2de006983c7bb11b040106a501820358202cb49c7dc031abe206e6f956708c642f7aeff2b15c3b87cc353708ab86c0dbdd0282713230332e302e3131332e353a3531383230735b323030313a6462383a3a355d3a353138323003a5010402182803184604840f1400000584821903e819044c821907d019083482190bb8190c1c82190fa019100404a10150255cea034733dfa08f05253a5c8c5ac30858209e9cfbf984fbfd2cb2266c3fe4fd241551d873ae36ad221a1a92ecd59c717e19"
+  },
+  {
+   "name": "tunnel",
+   "t": 15,
+   "message": "a3000f02820358203cfe853e6277cbbf8b48be08b96ba1cba5056aac200c09ad2324ab2dd9d38b6a0358209e9cfbf984fbfd2cb2266c3fe4fd241551d873ae36ad221a1a92ecd59c717e19"
+  },
+  {
+   "name": "hubs: serving",
+   "t": 16,
+   "message": "a200100301"
+  },
+  {
+   "name": "hubs: stopped",
+   "t": 16,
+   "message": "a200100201"
+  },
+  {
+   "name": "guest open",
+   "t": 17,
+   "message": "a6001102010382035820b0f960d8707f6aee3993a6175389b0130479eb9b5407b9753bddaf05c6c8305e045820a5336c2791f9d2f379d142df6eca661d5c83bb38f61003da1fd70c1e5a0f5e18051b000001a17c4726000b50272c9b26a15f54cb1c227c493c496de0"
+  },
+  {
+   "name": "guest opened",
+   "t": 17,
+   "message": "a4001102020382035820b0f960d8707f6aee3993a6175389b0130479eb9b5407b9753bddaf05c6c8305e06a501820358202cb49c7dc031abe206e6f956708c642f7aeff2b15c3b87cc353708ab86c0dbdd0282713230332e302e3131332e353a3531383230735b323030313a6462383a3a355d3a353138323003a5010402182803184604840f1400000584821903e819044c821907d019083482190bb8190c1c82190fa019100404a10150255cea034733dfa08f05253a5c8c5ac30858209e9cfbf984fbfd2cb2266c3fe4fd241551d873ae36ad221a1a92ecd59c717e19"
+  },
+  {
+   "name": "guest data",
+   "t": 17,
+   "message": "a5001102040382035820b0f960d8707f6aee3993a6175389b0130479eb9b5407b9753bddaf05c6c8305e080109420102"
+  },
+  {
+   "name": "guest admitted",
+   "t": 17,
+   "message": "a4001102060382035820b0f960d8707f6aee3993a6175389b0130479eb9b5407b9753bddaf05c6c8305e0a50e24e093cc7d75933e7903f5b7cc24fad"
+  },
+  {
+   "name": "waiting",
+   "t": 26,
+   "message": "a200181a0282a60150272c9b26a15f54cb1c227c493c496de0028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c00602a60150272c9b26a15f54cb1c227c493c496de0028201584104fc8b07f6c21a7d8d5bd7662121ff27d83a725f89e1970416f2e40587347dc0af4d11c3f486c4b2fba5658c9b6336f98715d276e75c2b563a662f4882687a799203a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c00601"
+  },
+  {
+   "name": "dismiss an invitation",
+   "t": 27,
+   "message": "a200181b0250272c9b26a15f54cb1c227c493c496de0"
+  },
+  {
+   "name": "dismiss one key",
+   "t": 27,
+   "message": "a300181b0250272c9b26a15f54cb1c227c493c496de0035820e24e093cc7d75933e7903f5b7cc24fadf94e9344ecca26030c959cdce75eacc0"
+  },
+  {
+   "name": "forwarder challenge",
+   "t": 80,
+   "message": "a20018500258208e3d0bb933f65c6a8b661b5a9e3f1c99591d549ba0cb765ab5daefe0cfbed21c"
+  },
+  {
+   "name": "forwarder register",
+   "t": 81,
+   "message": "a600185102820358202cb49c7dc031abe206e6f956708c642f7aeff2b15c3b87cc353708ab86c0dbdd03582075f156aa67b45ed067ac04ba2ab6902ef763f68bdf9e94340e88ffb789cfd4bf04a5010402182803184604840f1400000584821903e819044c821907d019083482190bb8190c1c82190fa01910040550255cea034733dfa08f05253a5c8c5ac306818258e9af010102506e6636fab2ee53735229de330d8b258c0358206e6636fab2ee53735229de330d8b258c6620bf6e078958b25f80d20aa64f026a0401061b000001a17720cde80a8201584104f269a765ba3fc8158d1ce085221d4341d9ae12754592ef96582b4d08d11348fa1be23a1bda57247f9c5be82a522f9b56a3fc1cd03e0872e277899dc20f29ab6b0b6550686f6e650c020d0f110412021482015841040b9e5110a460bd98b9ac83a8164d8eb15cbe1730b57901a36d15659eb372717f78cad22a453140f281f0b079e0c097af1966316f3e8c1c83c3892f1445ef79ae151901ff161903ff1701584099afb808b39f4609a8d46a6414b194c29e678206603771e0effea9fdb0b051ec417fef75a68d11858938d1bc1fa9f47325d741b45bb88fd37c37c1fbb5e64e95",
+   "note": "the credential is a placeholder envelope"
+  },
+  {
+   "name": "forwarder registered",
+   "t": 82,
+   "message": "a400185202070358206c7e348150a501360013dbb5dfc649a168cb8128a21b85b6bbec6dac285bfb3f04a20150255cea034733dfa08f05253a5c8c5ac3021901bb"
+  },
+  {
+   "name": "forwarder error",
+   "t": 83,
+   "message": "a2001853026d756e6b6e6f776e2067726f7570"
+  },
+  {
+   "name": "forwarder seen",
+   "t": 84,
+   "message": "a200185402723139382e35312e3130302e373a3430303030"
+  },
+  {
+   "name": "relay challenge",
+   "t": 90,
+   "message": "a300185a0258204d085e8f8285b5caa5cafe730a47a596c96027267ec5203b49627ad1350f3fa30301"
+  },
+  {
+   "name": "relay register",
+   "t": 91,
+   "message": "a500185b02820358203cfe853e6277cbbf8b48be08b96ba1cba5056aac200c09ad2324ab2dd9d38b6a035820d5029999b40f02ea9e0ded5b0e0e8df532292b556b4c50729ce6c7b8c0d08c5804818258e9af010102506e6636fab2ee53735229de330d8b258c0358206e6636fab2ee53735229de330d8b258c6620bf6e078958b25f80d20aa64f026a0401061b000001a17720cde80a8201584104f269a765ba3fc8158d1ce085221d4341d9ae12754592ef96582b4d08d11348fa1be23a1bda57247f9c5be82a522f9b56a3fc1cd03e0872e277899dc20f29ab6b0b6550686f6e650c020d0f110412021482015841040b9e5110a460bd98b9ac83a8164d8eb15cbe1730b57901a36d15659eb372717f78cad22a453140f281f0b079e0c097af1966316f3e8c1c83c3892f1445ef79ae151901ff161903ff1701584099afb808b39f4609a8d46a6414b194c29e678206603771e0effea9fdb0b051ec417fef75a68d11858938d1bc1fa9f47325d741b45bb88fd37c37c1fbb5e64e95058201584104fa7d13ba43710c1079849d0db69f3a7d0fdb01b0570982799c578cd2c0432ab18e2ed181f01ee83ce0072523689ea5a74225fa089a679e79bab7ceb193a9de3b"
+  },
+  {
+   "name": "relay registered",
+   "t": 92,
+   "message": "a400185c02820358202cb49c7dc031abe206e6f956708c642f7aeff2b15c3b87cc353708ab86c0dbdd035820b386298d5f2cd2b8e0991ff58b3b1c2b27121c1ef37dab3c120a8f2a68a159fc046931302e36342e302e32"
+  },
+  {
+   "name": "relay error",
+   "t": 93,
+   "message": "a200185d026f6e6f74206f6e20746865206c697374"
+  },
+  {
+   "name": "relay watch",
+   "t": 94,
+   "message": "a100185e"
+  },
+  {
+   "name": "relay dial",
+   "t": 95,
+   "message": "a200185f02582001fe91b6415045001a78a24aea9f5826bf1a440a41a5c40a172ef66da71de248"
+  },
+  {
+   "name": "relay answer",
+   "t": 96,
+   "message": "a20018600250e93d62d00f4c93b101fc24d5e45476c3"
+  },
+  {
+   "name": "relay online: names sorted",
+   "t": 97,
+   "message": "a20018610283582001fe91b6415045001a78a24aea9f5826bf1a440a41a5c40a172ef66da71de248582088326d0382e832423a72c5b71675d5092b700106610f39840bb6b2c69259fe0458209c18e9fd5c389ddaf8c3a6b961f9d246f795638f39583085793bca33a086f20c"
+  },
+  {
+   "name": "relay call",
+   "t": 98,
+   "message": "a300186202582088326d0382e832423a72c5b71675d5092b700106610f39840bb6b2c69259fe040350e93d62d00f4c93b101fc24d5e45476c3"
+  },
+  {
+   "name": "relay ok",
+   "t": 99,
+   "message": "a1001863"
+  },
+  {
+   "name": "a type this version does not number",
+   "t": 200,
+   "message": "a20018c80268616e797468696e67",
+   "note": "ignored, not refused"
+  },
+  {
+   "name": "an unknown field skipped",
+   "t": 15,
+   "message": "a4000f02820358203cfe853e6277cbbf8b48be08b96ba1cba5056aac200c09ad2324ab2dd9d38b6a0358209e9cfbf984fbfd2cb2266c3fe4fd241551d873ae36ad221a1a92ecd59c717e1919012c656c61746572"
+  }
+ ],
+ "refuse": [
+  {
+   "name": "tunnel without its confirmation",
+   "rule": "tunnel/confirm",
+   "message": "a2000f02820358203cfe853e6277cbbf8b48be08b96ba1cba5056aac200c09ad2324ab2dd9d38b6a"
+  },
+  {
+   "name": "tunnel with an ES256 key",
+   "rule": "tunnel/key",
+   "message": "a3000f0282015841047e1f6d804c1fbf4a07bb6f72b316493ab441fa31fb4b28dc6aadfa868060ebf635f7904f9420539f9fefd2d51ea705a9d043134db75bd316f627da1ee742d368035820d79ef439f348fdd87e192a31bd74234159465dd5d5c80991c29a8fc716c2aa61"
+  },
+  {
+   "name": "hubs: flag 2",
+   "rule": "hubs/stopped",
+   "message": "a200100202"
+  },
+  {
+   "name": "guest op 8",
+   "rule": "guest/op",
+   "message": "a3001102080382035820b0f960d8707f6aee3993a6175389b0130479eb9b5407b9753bddaf05c6c8305e"
+  },
+  {
+   "name": "pair error code 0",
+   "rule": "pair/error/code",
+   "message": "a20018450200"
+  },
+  {
+   "name": "relay online: names out of order",
+   "rule": "relay/online/names",
+   "message": "a2001861028358209c18e9fd5c389ddaf8c3a6b961f9d246f795638f39583085793bca33a086f20c582088326d0382e832423a72c5b71675d5092b700106610f39840bb6b2c69259fe04582001fe91b6415045001a78a24aea9f5826bf1a440a41a5c40a172ef66da71de248"
+  },
+  {
+   "name": "relay online: a name twice",
+   "rule": "relay/online/names",
+   "message": "a20018610282582001fe91b6415045001a78a24aea9f5826bf1a440a41a5c40a172ef66da71de248582001fe91b6415045001a78a24aea9f5826bf1a440a41a5c40a172ef66da71de248"
+  },
+  {
+   "name": "relay online: 65 names",
+   "rule": "relay/online/names",
+   "message": "a2001861029841582009dedaa4fa2841bf1c0ca169379de08dd4ce29fbbd23e005056d144f0c3c07fc582011f7237094b74306dd8405028d94f167b9000ca146fb4f67dac056b0f17eab8e58201e47e64d7afb9f8d440fa3eb45be361a07e076e8bede95f3d064a8c326b00b645820273f70deb61e1eaa18c3f578f2efaa0fdc15d21c95741f452fbe0e3fef20727a582029331d2b1689df555939e0307587bff7862c2cc37780a69375d2d583807c334358202babfbb45d3de22cdb0fd65a15b80fb3f55b74ed078b18f7f4cb4e91003de59658202d51b6c13b8e623b6bd9348d5d3eace5a4671b91a8bfe2a120c420a950c9de36582030500d4a88813188725fa64c7692a09a49f341ed014ecd579d914bc2bef12b1a582030bad0b35382750272c3e2fa88f7c29fa487b55e361f9df0bb2415776ae65605582034dd73e0ec824351511106eb14ef351d83d8b4e1f38de509a3e619767d5551eb58203510850df8f7522f6896d9f384ac66c5227d6565530952aa26fe4d786c0a90f158203ba9d71f30694d3ae713e0f30a2da1a1a03be861574f810ffc99c35d630c55bf58203d15dd9a5baebfdf3e49f5fc9a34f9c2e6a5358e170c1aec1b761ff5bf29da3058204068f801faf944d01e263dbb0cf08a49335fa3e101d15124311f1e46d977117d5820437ee45c08edaef2bed34434ab4a284acb1c3badef85ee6051f256ad0b51587058204506d595094e55025c68ac9ce9cfeac53c10fc07a009b9d894277348ac6ddb23582047099887a9052b387f6b22eb317082410a3e159fa0dc517eba87340674a7be5d5820474a138715bfad8d095c2d1d74e146edcaae382b90cfd85349ac4b2795a623ed58204831b5c12e16018d3ca15bec06dfb0100d9e58cc64c42120935ff6d9cc5e3e075820504ac71fc7e65eb1335b39a37cb09dfaf0e4fc3a0bb7ede2bd1f8911ed719e925820595d304ff1574bc5ddfaacfdc6c72975e030ff39dfad944d3eb28678e65358a058205a3cded45692b36fbbfd2ffe97d56a768432904f7c25aeed16d7b498946ccfda58205a9b572a18c377938248988fa91947f1b7e9a0782efd943c7a62661bfdb917f958205bb28513d719cf7e557c47e96ba4dc9a0f06ca444d7756ca1b2a7e9d28f7870b582062bd23887d477434ef0208f65d794cd956a04fed6d9c222eb070a905a5aea90b582064e6edf956d908207371a07b0d1dc6818a63670584d568d94ef2a6f27f45a20b582066a5f1e4adbfd702caf6c996897803ba50774ab8533268b416f0bdc0383566e4582066b62616f3b359c6b625fb9b6a319e3a9e75d30b82c6a6ef2d86f213d5ec4c015820671ada66c2b0b8c5875aa0ee91149b8f0cee3e7bd0195336641155b431b721f7582069dead34e305de6e371bdc9f01f0120697b4264da71db6e8e2facd790293209c582071352cadd1e367392611ed9d17afac30dde1d92ed219b4fba7286e51486f816e58207c133aaf441ca83e63a5e89aaf512b9c4a58ce0ab90e82cad4f41cc63aa577e658207da06db21ccbf8719f5066ad397f1bca8c10e9026037ce36da250b2530261cc758207f2c2932ed5d7442d78ad962839e0559a73e354d19c40c6f43bd3acd2ca19f8f5820815f2fd3ab4945c0d72f5497ed0cd2c3523281d303df9ece4e0f6de0d51528bc58208a7068469c59bd9c8a9610c568a36d386a858d730ba0dc9605061e4df47c786c58208a70ae396a3bb6d7a30c787433525d68f4a681b92f01b82541d65b1883e6b50158208cd5f1805a98fa0dc4f83b7218090bae8a836054f3d4f7bcb4d23cda4cbf423258209468cdba853662f8200a57863070c8674831ae1ea9c49d7497d7da2b3b3a4c2b58209e2f7350a8515ea397607bf7e5efc381ccaa6668b2d44068985e4d013946f8785820a543c85a573f1abf7c93150c6219c7de24fc0ff8f1c15c30ad82f90b12a9c5c15820a6442f5820a534ce9bc88e2db091abfdd58e635be6ed667241ecd4eb3f87dd155820a67e4fe6d8b8c1ccbedac268df3bb71f45daea7fe61fa5d6d3b92cb766b155915820a6e4856d069bffc3430df08c60de5196f5d8c79ab337e20b63c002fb35708cfa5820a7acc2acb7f6f89036bf164f983f9d4f3a3022ab5f36dff930a02b29a01290d95820a7c59c9d449478e08d67d7926a4be8cdaa61993e4c41335abc94eba896b6a58b5820b10ddfbebc3477b73961c06c35f081433e1c15665440cec4734f3f3a2ed29eb55820b43a901e68e1fd902c5dc78ea4ba4de4b55bff73365901fbd3bedf9c4e0ba9115820b55c66de7a137627a3af4ad4044ac97cd44ad5f17ef74044806b6acd71f3051c5820ba42849bc35e7b4a5247bc505f5747c82997bae3f6d22d218da0a91c794cba905820bd966cb980048abe928318d269384b913dc7e173570d7a6e4d276a1f5430c4a25820c0fdd8cb3808c4553f95ac845757dd3087fe32a572a3bab111969101515b8a375820c3f0aeeeefb5c4b9e34815480a0e465f84d97b1fa6c9c154979401bb1c67fc9e5820ca2909f6d08e8124ab01d92ac0e229b8a058fdb0ce155744d3cdbb9ef674be4d5820cc126f3c31d512413e1d0e78999341f34eb036855debdb0088f8d5b96722e0c75820d09255a94e57f6810c63b9828642b8d1c8b01cf82c0e59b4695c24ed2473d7545820d2ce9873c4bb9d8fc01baf35a283823df31d663ce9aa5a4f0c858f4a896de8c45820d52127da1017ffffb67917ac9b8c682db35bfa9ffb6bd829e1cd786488e8547f5820e5602b40b60be82f6c9714c1460d7d4d991ccdd43588dd1452a356ced13f552e5820ea143816d55f938a899b522f5fe634504c27dbd74599efe18cfc501b9b4295ef5820ec497a3c5b48f62fec2aaf6a4c255977fa09f4e8af6285ffd77262b1f97154295820ed001be4c0c0e914c86297ebd76e3a17318ae41e151db7b0fab99a73868099285820f567b6c71d353b130b979906485a68e95ff641e2d8197e9fe7a22c6b8f64b53b5820f7c5d2d016d70e6cb4fb1f92caedb490c3fd181302a5f2ad98e6d1a48ae9b34f5820ffb8a1f794b74bfc389fe1bc88c2ba98a85b59f17aef72b582bc6314b31e98a6"
+  },
+  {
+   "name": "waiting: a request twice",
+   "rule": "waiting/requests",
+   "message": "a200181a0282a60150272c9b26a15f54cb1c227c493c496de0028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c00602a60150272c9b26a15f54cb1c227c493c496de0028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c00602"
+  },
+  {
+   "name": "waiting: held over a day",
+   "rule": "waiting/requests",
+   "message": "a200181a0281a60150272c9b26a15f54cb1c227c493c496de0028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a05265c010602"
+  },
+  {
+   "name": "waiting: 17 requests",
+   "rule": "waiting/requests",
+   "message": "a200181a0291a60150272c9b26a15f54cb1c227c493c496de0028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c00601a60150272c9b26a15f54cb1c227c493c496de0028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c00602a60150272c9b26a15f54cb1c227c493c496de0028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c00603a60150272c9b26a15f54cb1c227c493c496de0028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c00604a60150272c9b26a15f54cb1c227c493c496de0028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c00605a60150272c9b26a15f54cb1c227c493c496de0028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c00606a60150272c9b26a15f54cb1c227c493c496de0028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c00607a60150272c9b26a15f54cb1c227c493c496de0028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c00608a60150272c9b26a15f54cb1c227c493c496de0028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c00609a60150272c9b26a15f54cb1c227c493c496de0028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c0060aa60150272c9b26a15f54cb1c227c493c496de0028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c0060ba60150272c9b26a15f54cb1c227c493c496de0028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c0060ca60150272c9b26a15f54cb1c227c493c496de0028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c0060da60150272c9b26a15f54cb1c227c493c496de0028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c0060ea60150272c9b26a15f54cb1c227c493c496de0028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c0060fa60150272c9b26a15f54cb1c227c493c496de0028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c00610a60150272c9b26a15f54cb1c227c493c496de0028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c00611"
+  },
+  {
+   "name": "result: an endpoint twice in the offer",
+   "rule": "result/tunnel",
+   "message": "a5000a0250ade67290b9e89f0810f3ca21c62e93440350a07a039a5387421d2de006983c7bb11b040106a501820358202cb49c7dc031abe206e6f956708c642f7aeff2b15c3b87cc353708ab86c0dbdd0282713230332e302e3131332e353a3531383230713230332e302e3131332e353a353138323003a5010402182803184604840f1400000584821903e819044c821907d019083482190bb8190c1c82190fa019100404a10150255cea034733dfa08f05253a5c8c5ac30858209e9cfbf984fbfd2cb2266c3fe4fd241551d873ae36ad221a1a92ecd59c717e19"
+  },
+  {
+   "name": "forwarder register: 4 credentials",
+   "rule": "forward/register/credentials",
+   "message": "a400185102820358202cb49c7dc031abe206e6f956708c642f7aeff2b15c3b87cc353708ab86c0dbdd03582059a0c953730d151dc6e0de6bd734441941f5465b89f5b4df3ad5981bbdb9c22306848258e9af010102506e6636fab2ee53735229de330d8b258c0358206e6636fab2ee53735229de330d8b258c6620bf6e078958b25f80d20aa64f026a0401061b000001a17720cde80a8201584104f269a765ba3fc8158d1ce085221d4341d9ae12754592ef96582b4d08d11348fa1be23a1bda57247f9c5be82a522f9b56a3fc1cd03e0872e277899dc20f29ab6b0b6550686f6e650c020d0f110412021482015841040b9e5110a460bd98b9ac83a8164d8eb15cbe1730b57901a36d15659eb372717f78cad22a453140f281f0b079e0c097af1966316f3e8c1c83c3892f1445ef79ae151901ff161903ff1701584099afb808b39f4609a8d46a6414b194c29e678206603771e0effea9fdb0b051ec417fef75a68d11858938d1bc1fa9f47325d741b45bb88fd37c37c1fbb5e64e958258e9af010102506e6636fab2ee53735229de330d8b258c0358206e6636fab2ee53735229de330d8b258c6620bf6e078958b25f80d20aa64f026a0401061b000001a17720cde80a8201584104f269a765ba3fc8158d1ce085221d4341d9ae12754592ef96582b4d08d11348fa1be23a1bda57247f9c5be82a522f9b56a3fc1cd03e0872e277899dc20f29ab6b0b6550686f6e650c020d0f110412021482015841040b9e5110a460bd98b9ac83a8164d8eb15cbe1730b57901a36d15659eb372717f78cad22a453140f281f0b079e0c097af1966316f3e8c1c83c3892f1445ef79ae151901ff161903ff1701584099afb808b39f4609a8d46a6414b194c29e678206603771e0effea9fdb0b051ec417fef75a68d11858938d1bc1fa9f47325d741b45bb88fd37c37c1fbb5e64e958258e9af010102506e6636fab2ee53735229de330d8b258c0358206e6636fab2ee53735229de330d8b258c6620bf6e078958b25f80d20aa64f026a0401061b000001a17720cde80a8201584104f269a765ba3fc8158d1ce085221d4341d9ae12754592ef96582b4d08d11348fa1be23a1bda57247f9c5be82a522f9b56a3fc1cd03e0872e277899dc20f29ab6b0b6550686f6e650c020d0f110412021482015841040b9e5110a460bd98b9ac83a8164d8eb15cbe1730b57901a36d15659eb372717f78cad22a453140f281f0b079e0c097af1966316f3e8c1c83c3892f1445ef79ae151901ff161903ff1701584099afb808b39f4609a8d46a6414b194c29e678206603771e0effea9fdb0b051ec417fef75a68d11858938d1bc1fa9f47325d741b45bb88fd37c37c1fbb5e64e958258e9af010102506e6636fab2ee53735229de330d8b258c0358206e6636fab2ee53735229de330d8b258c6620bf6e078958b25f80d20aa64f026a0401061b000001a17720cde80a8201584104f269a765ba3fc8158d1ce085221d4341d9ae12754592ef96582b4d08d11348fa1be23a1bda57247f9c5be82a522f9b56a3fc1cd03e0872e277899dc20f29ab6b0b6550686f6e650c020d0f110412021482015841040b9e5110a460bd98b9ac83a8164d8eb15cbe1730b57901a36d15659eb372717f78cad22a453140f281f0b079e0c097af1966316f3e8c1c83c3892f1445ef79ae151901ff161903ff1701584099afb808b39f4609a8d46a6414b194c29e678206603771e0effea9fdb0b051ec417fef75a68d11858938d1bc1fa9f47325d741b45bb88fd37c37c1fbb5e64e95"
+  },
+  {
+   "name": "forwarder seen: a host name",
+   "rule": "forward/seen/addr",
+   "message": "a2001854026d6578616d706c652e6f72673a31"
+  },
+  {
+   "name": "relay error: empty reason",
+   "rule": "server/error/reason",
+   "message": "a200185d0260"
+  }
+ ],
+ "maps": [
+  {
+   "name": "an offer",
+   "table": "offer",
+   "value": "a501820358202cb49c7dc031abe206e6f956708c642f7aeff2b15c3b87cc353708ab86c0dbdd0282713230332e302e3131332e353a3531383230735b323030313a6462383a3a355d3a353138323003a5010402182803184604840f1400000584821903e819044c821907d019083482190bb8190c1c82190fa019100404a10150255cea034733dfa08f05253a5c8c5ac30858209e9cfbf984fbfd2cb2266c3fe4fd241551d873ae36ad221a1a92ecd59c717e19"
+  },
+  {
+   "name": "an offer: endpoints in the hub's order",
+   "table": "offer",
+   "value": "a501820358202cb49c7dc031abe206e6f956708c642f7aeff2b15c3b87cc353708ab86c0dbdd0282735b323030313a6462383a3a355d3a3531383230713230332e302e3131332e353a353138323003a5010402182803184604840f1400000584821903e819044c821907d019083482190bb8190c1c82190fa019100404a10150255cea034733dfa08f05253a5c8c5ac30858209e9cfbf984fbfd2cb2266c3fe4fd241551d873ae36ad221a1a92ecd59c717e19"
+  },
+  {
+   "name": "an offer: an endpoint twice",
+   "table": "offer",
+   "value": "a501820358202cb49c7dc031abe206e6f956708c642f7aeff2b15c3b87cc353708ab86c0dbdd0282713230332e302e3131332e353a3531383230713230332e302e3131332e353a353138323003a5010402182803184604840f1400000584821903e819044c821907d019083482190bb8190c1c82190fa019100404a10150255cea034733dfa08f05253a5c8c5ac30858209e9cfbf984fbfd2cb2266c3fe4fd241551d873ae36ad221a1a92ecd59c717e19",
+   "rule": "offer/endpoints"
+  },
+  {
+   "name": "an offer: bad settings",
+   "table": "offer",
+   "value": "a501820358202cb49c7dc031abe206e6f956708c642f7aeff2b15c3b87cc353708ab86c0dbdd0282713230332e302e3131332e353a3531383230735b323030313a6462383a3a355d3a353138323003a501188102182803184604840f1400000584821903e819044c821907d019083482190bb8190c1c82190fa019100404a10150255cea034733dfa08f05253a5c8c5ac30858209e9cfbf984fbfd2cb2266c3fe4fd241551d873ae36ad221a1a92ecd59c717e19",
+   "rule": "offer/obfuscation"
+  },
+  {
+   "name": "the settings",
+   "table": "obfuscation",
+   "value": "a5010402182803184604840f1400000584821903e819044c821907d019083482190bb8190c1c82190fa0191004"
+  },
+  {
+   "name": "the settings: five sizes",
+   "table": "obfuscation",
+   "value": "a50104021828031846048501020304050584821903e819044c821907d019083482190bb8190c1c82190fa0191004",
+   "rule": "obfuscation/s"
+  },
+  {
+   "name": "ADb",
+   "table": "pair/adb",
+   "value": "a301506e6636fab2ee53735229de330d8b258c0250a07a039a5387421d2de006983c7bb11b036c45776f6b27732070686f6e65"
+  },
+  {
+   "name": "ADb without a name",
+   "table": "pair/adb",
+   "value": "a201506e6636fab2ee53735229de330d8b258c0250a07a039a5387421d2de006983c7bb11b",
+   "rule": "pair/adb/name"
+  },
+  {
+   "name": "a request",
+   "table": "waiting/request",
+   "value": "a60150272c9b26a15f54cb1c227c493c496de0028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c00602"
+  },
+  {
+   "name": "a Welcome",
+   "table": "welcome",
+   "value": "a3018201584104fa7d13ba43710c1079849d0db69f3a7d0fdb01b0570982799c578cd2c0432ab18e2ed181f01ee83ce0072523689ea5a74225fa089a679e79bab7ceb193a9de3b02828258e9af010102506e6636fab2ee53735229de330d8b258c0358206e6636fab2ee53735229de330d8b258c6620bf6e078958b25f80d20aa64f026a0401061b000001a17720cde80a8201584104f269a765ba3fc8158d1ce085221d4341d9ae12754592ef96582b4d08d11348fa1be23a1bda57247f9c5be82a522f9b56a3fc1cd03e0872e277899dc20f29ab6b0b6550686f6e650c020d0f110412021482015841040b9e5110a460bd98b9ac83a8164d8eb15cbe1730b57901a36d15659eb372717f78cad22a453140f281f0b079e0c097af1966316f3e8c1c83c3892f1445ef79ae151901ff161903ff1701584099afb808b39f4609a8d46a6414b194c29e678206603771e0effea9fdb0b051ec417fef75a68d11858938d1bc1fa9f47325d741b45bb88fd37c37c1fbb5e64e958258bfad010102506e6636fab2ee53735229de330d8b258c0358206e6636fab2ee53735229de330d8b258c6620bf6e078958b25f80d20aa64f026a0402055820fd5ab2170413cf90d9e18fa58442ee64051d84b87592d23ebde1444ea497f8a6061b000001a17720d1d00a82015841047e1f6d804c1fbf4a07bb6f72b316493ab441fa31fb4b28dc6aadfa868060ebf635f7904f9420539f9fefd2d51ea705a9d043134db75bd316f627da1ee742d3680b664c6170746f700c010d071007110112025840253c484bb5f245605b2aa8940dc12db4bff6ba700924d2c1031a8dd894f4b69304956d326bebeb978c37f2e7335fd76fa02b7841ccb89ef2025b70352e11c3b8051b000001a17720ca00"
+  },
+  {
+   "name": "a Welcome without its time",
+   "table": "welcome",
+   "value": "a2018201584104fa7d13ba43710c1079849d0db69f3a7d0fdb01b0570982799c578cd2c0432ab18e2ed181f01ee83ce0072523689ea5a74225fa089a679e79bab7ceb193a9de3b02828258e9af010102506e6636fab2ee53735229de330d8b258c0358206e6636fab2ee53735229de330d8b258c6620bf6e078958b25f80d20aa64f026a0401061b000001a17720cde80a8201584104f269a765ba3fc8158d1ce085221d4341d9ae12754592ef96582b4d08d11348fa1be23a1bda57247f9c5be82a522f9b56a3fc1cd03e0872e277899dc20f29ab6b0b6550686f6e650c020d0f110412021482015841040b9e5110a460bd98b9ac83a8164d8eb15cbe1730b57901a36d15659eb372717f78cad22a453140f281f0b079e0c097af1966316f3e8c1c83c3892f1445ef79ae151901ff161903ff1701584099afb808b39f4609a8d46a6414b194c29e678206603771e0effea9fdb0b051ec417fef75a68d11858938d1bc1fa9f47325d741b45bb88fd37c37c1fbb5e64e958258bfad010102506e6636fab2ee53735229de330d8b258c0358206e6636fab2ee53735229de330d8b258c6620bf6e078958b25f80d20aa64f026a0402055820fd5ab2170413cf90d9e18fa58442ee64051d84b87592d23ebde1444ea497f8a6061b000001a17720d1d00a82015841047e1f6d804c1fbf4a07bb6f72b316493ab441fa31fb4b28dc6aadfa868060ebf635f7904f9420539f9fefd2d51ea705a9d043134db75bd316f627da1ee742d3680b664c6170746f700c010d071007110112025840253c484bb5f245605b2aa8940dc12db4bff6ba700924d2c1031a8dd894f4b69304956d326bebeb978c37f2e7335fd76fa02b7841ccb89ef2025b70352e11c3b8",
+   "rule": "welcome/time"
+  }
+ ],
+ "invitations": {
+  "prefix": "cbb://join#",
+  "take": [
+   {
+    "name": "home and away, plain WireGuard",
+    "invitation": "a40150272c9b26a15f54cb1c227c493c496de0025820c67097c215087584c26984b0ec99e79a3c177fc01c84b664a29a87e91864e8490382a10101a501020281713230332e302e3131332e353a353138323003820358202cb49c7dc031abe206e6f956708c642f7aeff2b15c3b87cc353708ab86c0dbdd0458201797bf1ad26381718505733f08c509c54dd0fd2d39ff3319096e41a95c0b7f74055820a5336c2791f9d2f379d142df6eca661d5c83bb38f61003da1fd70c1e5a0f5e1804a201010203",
+    "text": "cbb://join#pAFQJyybJqFfVMscInxJPElt4AJYIMZwl8IVCHWEwmmEsOyZ55o8F3_AHIS2ZKKah-kYZOhJA4KhAQGlAQICgXEyMDMuMC4xMTMuNTo1MTgyMAOCA1ggLLScfcAxq-IG5vlWcIxkL3rv8rFcO4fMNTcIq4bA290EWCAXl78a0mOBcYUFcz8IxQnFTdD9LTn_MxkJbkGpXAt_dAVYIKUzbCeR-dLzedFC327KZh1cg7s49hAD2h_XDB5aD14YBKIBAQID"
+   },
+   {
+    "name": "home and away, a group with AmneziaWG",
+    "invitation": "a40150272c9b26a15f54cb1c227c493c496de0025820c67097c215087584c26984b0ec99e79a3c177fc01c84b664a29a87e91864e8490382a10101a601020281713230332e302e3131332e353a353138323003820358202cb49c7dc031abe206e6f956708c642f7aeff2b15c3b87cc353708ab86c0dbdd0458201797bf1ad26381718505733f08c509c54dd0fd2d39ff3319096e41a95c0b7f74055820a5336c2791f9d2f379d142df6eca661d5c83bb38f61003da1fd70c1e5a0f5e1806a5010402182803184604840f1400000584821903e819044c821907d019083482190bb8190c1c82190fa019100404a201010203",
+    "text": "cbb://join#pAFQJyybJqFfVMscInxJPElt4AJYIMZwl8IVCHWEwmmEsOyZ55o8F3_AHIS2ZKKah-kYZOhJA4KhAQGmAQICgXEyMDMuMC4xMTMuNTo1MTgyMAOCA1ggLLScfcAxq-IG5vlWcIxkL3rv8rFcO4fMNTcIq4bA290EWCAXl78a0mOBcYUFcz8IxQnFTdD9LTn_MxkJbkGpXAt_dAVYIKUzbCeR-dLzedFC327KZh1cg7s49hAD2h_XDB5aD14YBqUBBAIYKAMYRgSEDxQAAAWEghkD6BkETIIZB9AZCDSCGQu4GQwcghkPoBkQBASiAQECAw"
+   },
+   {
+    "name": "a small device: a leaf, home only",
+    "invitation": "a40150272c9b26a15f54cb1c227c493c496de0025820c67097c215087584c26984b0ec99e79a3c177fc01c84b664a29a87e91864e8490381a1010104a201040301",
+    "text": "cbb://join#pAFQJyybJqFfVMscInxJPElt4AJYIMZwl8IVCHWEwmmEsOyZ55o8F3_AHIS2ZKKah-kYZOhJA4GhAQEEogEEAwE"
+   }
+  ],
+  "refuse": [
+   {
+    "name": "settings on the home path",
+    "rule": "invite/obfuscation",
+    "invitation": "a40150272c9b26a15f54cb1c227c493c496de0025820c67097c215087584c26984b0ec99e79a3c177fc01c84b664a29a87e91864e8490382a2010106a5010402182803184604840f1400000584821903e819044c821907d019083482190bb8190c1c82190fa0191004a501020281713230332e302e3131332e353a353138323003820358202cb49c7dc031abe206e6f956708c642f7aeff2b15c3b87cc353708ab86c0dbdd0458201797bf1ad26381718505733f08c509c54dd0fd2d39ff3319096e41a95c0b7f74055820a5336c2791f9d2f379d142df6eca661d5c83bb38f61003da1fd70c1e5a0f5e1804a201010203",
+    "cross": "a rule between fields, which the invitation's reader adds to the tables"
+   },
+   {
+    "name": "settings out of shape",
+    "rule": "invite/path",
+    "invitation": "a40150272c9b26a15f54cb1c227c493c496de0025820c67097c215087584c26984b0ec99e79a3c177fc01c84b664a29a87e91864e8490382a10101a601020281713230332e302e3131332e353a353138323003820358202cb49c7dc031abe206e6f956708c642f7aeff2b15c3b87cc353708ab86c0dbdd0458201797bf1ad26381718505733f08c509c54dd0fd2d39ff3319096e41a95c0b7f74055820a5336c2791f9d2f379d142df6eca661d5c83bb38f61003da1fd70c1e5a0f5e1806a50104021828031907d004840f1400000584821903e819044c821907d019083482190bb8190c1c82190fa019100404a201010203"
+   },
+   {
+    "name": "jmin above jmax",
+    "rule": "invite/obfuscation",
+    "invitation": "a40150272c9b26a15f54cb1c227c493c496de0025820c67097c215087584c26984b0ec99e79a3c177fc01c84b664a29a87e91864e8490382a10101a601020281713230332e302e3131332e353a353138323003820358202cb49c7dc031abe206e6f956708c642f7aeff2b15c3b87cc353708ab86c0dbdd0458201797bf1ad26381718505733f08c509c54dd0fd2d39ff3319096e41a95c0b7f74055820a5336c2791f9d2f379d142df6eca661d5c83bb38f61003da1fd70c1e5a0f5e1806a5010402185003184604840f1400000584821903e819044c821907d019083482190bb8190c1c82190fa019100404a201010203",
+    "cross": "a rule between fields, which the invitation's reader adds to the tables"
+   },
+   {
+    "name": "an endpoint twice",
+    "rule": "invite/path",
+    "invitation": "a40150272c9b26a15f54cb1c227c493c496de0025820c67097c215087584c26984b0ec99e79a3c177fc01c84b664a29a87e91864e8490382a10101a501020282713230332e302e3131332e353a3531383230713230332e302e3131332e353a353138323003820358202cb49c7dc031abe206e6f956708c642f7aeff2b15c3b87cc353708ab86c0dbdd0458201797bf1ad26381718505733f08c509c54dd0fd2d39ff3319096e41a95c0b7f74055820a5336c2791f9d2f379d142df6eca661d5c83bb38f61003da1fd70c1e5a0f5e1804a201010203"
+   },
+   {
+    "name": "five paths",
+    "rule": "invite/path",
+    "invitation": "a40150272c9b26a15f54cb1c227c493c496de0025820c67097c215087584c26984b0ec99e79a3c177fc01c84b664a29a87e91864e8490385a10101a10101a10101a10101a1010104a201010203"
+   },
+   {
+    "name": "a guest path without the hub's key",
+    "rule": "invite/path",
+    "invitation": "a40150272c9b26a15f54cb1c227c493c496de0025820c67097c215087584c26984b0ec99e79a3c177fc01c84b664a29a87e91864e8490382a10101a401020281713230332e302e3131332e353a35313832300458201797bf1ad26381718505733f08c509c54dd0fd2d39ff3319096e41a95c0b7f74055820a5336c2791f9d2f379d142df6eca661d5c83bb38f61003da1fd70c1e5a0f5e1804a201010203",
+    "cross": "a rule between fields, which the invitation's reader adds to the tables"
+   },
+   {
+    "name": "home only with a guest path",
+    "rule": "invite/profile",
+    "invitation": "a40150272c9b26a15f54cb1c227c493c496de0025820c67097c215087584c26984b0ec99e79a3c177fc01c84b664a29a87e91864e8490382a10101a501020281713230332e302e3131332e353a353138323003820358202cb49c7dc031abe206e6f956708c642f7aeff2b15c3b87cc353708ab86c0dbdd0458201797bf1ad26381718505733f08c509c54dd0fd2d39ff3319096e41a95c0b7f74055820a5336c2791f9d2f379d142df6eca661d5c83bb38f61003da1fd70c1e5a0f5e1804a201010301",
+    "cross": "a rule between fields, which the invitation's reader adds to the tables"
+   },
+   {
+    "name": "guarded, not a leaf",
+    "rule": "invite/profile",
+    "invitation": "a40150272c9b26a15f54cb1c227c493c496de0025820c67097c215087584c26984b0ec99e79a3c177fc01c84b664a29a87e91864e8490382a10101a501020281713230332e302e3131332e353a353138323003820358202cb49c7dc031abe206e6f956708c642f7aeff2b15c3b87cc353708ab86c0dbdd0458201797bf1ad26381718505733f08c509c54dd0fd2d39ff3319096e41a95c0b7f74055820a5336c2791f9d2f379d142df6eca661d5c83bb38f61003da1fd70c1e5a0f5e1804a201010401",
+    "cross": "a rule between fields, which the invitation's reader adds to the tables"
+   },
+   {
+    "name": "rights 16",
+    "rule": "invite/profile",
+    "invitation": "a40150272c9b26a15f54cb1c227c493c496de0025820c67097c215087584c26984b0ec99e79a3c177fc01c84b664a29a87e91864e8490382a10101a501020281713230332e302e3131332e353a353138323003820358202cb49c7dc031abe206e6f956708c642f7aeff2b15c3b87cc353708ab86c0dbdd0458201797bf1ad26381718505733f08c509c54dd0fd2d39ff3319096e41a95c0b7f74055820a5336c2791f9d2f379d142df6eca661d5c83bb38f61003da1fd70c1e5a0f5e1804a201010210"
+   },
+   {
+    "name": "a short secret",
+    "rule": "invite/shape",
+    "invitation": "a40150272c9b26a15f54cb1c227c493c496de002509d1ad79533ff47fcea9a3a6250cc00770382a10101a501020281713230332e302e3131332e353a353138323003820358202cb49c7dc031abe206e6f956708c642f7aeff2b15c3b87cc353708ab86c0dbdd0458201797bf1ad26381718505733f08c509c54dd0fd2d39ff3319096e41a95c0b7f74055820a5336c2791f9d2f379d142df6eca661d5c83bb38f61003da1fd70c1e5a0f5e1804a201010203"
+   }
+  ]
+ },
+ "cards": {
+  "label": "cbb server card v1",
+  "take": [
+   {
+    "name": "one key",
+    "envelope": "8258dba9010103820158410450f314567c0e25a62b5f73408af66adb8baba6e5c59fc2cd82f83762dd55302f1efe217b05a603d1c8d728b71e90020e26beae88224d8f09538690cc968e6fa20401071b000001a8ced1f6000a756120666f7277617264657220696e204575726f70650b82736677642e6578616d706c652e6f72673a3434336d3139322e302e322e373a3434330c81820158410465d30c6060ab286dba0f41a7a3733e65aec733ed98d396c8ab4c2bac111cd4a816d3da95d7f241edb25c68f9aff0a15b08f96c021d06033654576d78490a980a0d010e055840cd2c8f7cbfe891b873f02c6849020f2a5a74fbb127a477d5a23ec49227cf0c80774daab112130d53a46bce5cf60460f38a52a70d9c2aeff188d5bb1c535531ad",
+    "id": "6293b5a7faa6ced1060e1a3b51e99946085390795cf4091b48bea3cb66292e6d"
+   },
+   {
+    "name": "two keys in the order of their encodings",
+    "envelope": "82590120a9010103820158410450f314567c0e25a62b5f73408af66adb8baba6e5c59fc2cd82f83762dd55302f1efe217b05a603d1c8d728b71e90020e26beae88224d8f09538690cc968e6fa20401071b000001a8ced1f6000a756120666f7277617264657220696e204575726f70650b82736677642e6578616d706c652e6f72673a3434336d3139322e302e322e373a3434330c82820158410465d30c6060ab286dba0f41a7a3733e65aec733ed98d396c8ab4c2bac111cd4a816d3da95d7f241edb25c68f9aff0a15b08f96c021d06033654576d78490a980a820158410476567ed25d6c8aae9c736c951ee4316c47456c277a992431904ec335759c2e7bba591277dbbd54bc0d3941171cf4df677f47d4b02fd88834110d537913dd28a70d010e055840bf8660c59368856762a33e500dd639277c6ad4efc467bdb45f0a84f7ef86257540586ea6edf2e8875ebac58ed95e1fd522d8aee0cbedc2656a4b05f78b532570",
+    "id": "e11a4bf8be43b4b69701f6861985f590b5d843abfa646b5d019ee0b5d408336b"
+   }
+  ],
+  "refuse": [
+   {
+    "name": "two keys out of order",
+    "rule": "card/keys",
+    "envelope": "82590120a9010103820158410450f314567c0e25a62b5f73408af66adb8baba6e5c59fc2cd82f83762dd55302f1efe217b05a603d1c8d728b71e90020e26beae88224d8f09538690cc968e6fa20401071b000001a8ced1f6000a756120666f7277617264657220696e204575726f70650b82736677642e6578616d706c652e6f72673a3434336d3139322e302e322e373a3434330c82820158410476567ed25d6c8aae9c736c951ee4316c47456c277a992431904ec335759c2e7bba591277dbbd54bc0d3941171cf4df677f47d4b02fd88834110d537913dd28a7820158410465d30c6060ab286dba0f41a7a3733e65aec733ed98d396c8ab4c2bac111cd4a816d3da95d7f241edb25c68f9aff0a15b08f96c021d06033654576d78490a980a0d010e055840f2168739ed0c07a802738fb596989952bf31a2cb46b9a433b5555a5380af06584431c745912d94e42aa44ffb7d637189ae8274df005ac092e535eecbedfdf870"
+   },
+   {
+    "name": "a key twice",
+    "rule": "card/keys",
+    "envelope": "82590120a9010103820158410450f314567c0e25a62b5f73408af66adb8baba6e5c59fc2cd82f83762dd55302f1efe217b05a603d1c8d728b71e90020e26beae88224d8f09538690cc968e6fa20401071b000001a8ced1f6000a756120666f7277617264657220696e204575726f70650b82736677642e6578616d706c652e6f72673a3434336d3139322e302e322e373a3434330c82820158410465d30c6060ab286dba0f41a7a3733e65aec733ed98d396c8ab4c2bac111cd4a816d3da95d7f241edb25c68f9aff0a15b08f96c021d06033654576d78490a980a820158410465d30c6060ab286dba0f41a7a3733e65aec733ed98d396c8ab4c2bac111cd4a816d3da95d7f241edb25c68f9aff0a15b08f96c021d06033654576d78490a980a0d010e055840da0580a9b8fe751dbd034fc5b268f4ffbaa5bb0436cb4a1bc5c2b7dcb2557e2a13a477c220d9e2cf09dac2b32cdde0b23846495e393da55b0fa8450454e609a8"
+   },
+   {
+    "name": "an endpoint twice",
+    "rule": "card/endpoints",
+    "envelope": "8258e1a9010103820158410450f314567c0e25a62b5f73408af66adb8baba6e5c59fc2cd82f83762dd55302f1efe217b05a603d1c8d728b71e90020e26beae88224d8f09538690cc968e6fa20401071b000001a8ced1f6000a756120666f7277617264657220696e204575726f70650b82736677642e6578616d706c652e6f72673a343433736677642e6578616d706c652e6f72673a3434330c81820158410465d30c6060ab286dba0f41a7a3733e65aec733ed98d396c8ab4c2bac111cd4a816d3da95d7f241edb25c68f9aff0a15b08f96c021d06033654576d78490a980a0d010e05584099104ef041db3177b5d506245634b6145978c8a9d372e45c9f81ae8f3c6bd74361a1390fa38ad1b42f60cc3d950f622760c45ea70ed67cc6ff8395d2808ed888"
+   },
+   {
+    "name": "kinds 4",
+    "rule": "card/kinds",
+    "envelope": "8258dba9010103820158410450f314567c0e25a62b5f73408af66adb8baba6e5c59fc2cd82f83762dd55302f1efe217b05a603d1c8d728b71e90020e26beae88224d8f09538690cc968e6fa20401071b000001a8ced1f6000a756120666f7277617264657220696e204575726f70650b82736677642e6578616d706c652e6f72673a3434336d3139322e302e322e373a3434330c81820158410465d30c6060ab286dba0f41a7a3733e65aec733ed98d396c8ab4c2bac111cd4a816d3da95d7f241edb25c68f9aff0a15b08f96c021d06033654576d78490a980a0d040e05584098165d399dff735e9798a9f6f5d4e47a81f605a63956318ef9a828b33ff7b8265e077c179336cdef296de5f2403a594b74863e79e404f09ba6e759fefdbf0059"
+   },
+   {
+    "name": "signed by another key than the operator it names",
+    "rule": "sig/verify",
+    "envelope": "8258dba9010103820158410450f314567c0e25a62b5f73408af66adb8baba6e5c59fc2cd82f83762dd55302f1efe217b05a603d1c8d728b71e90020e26beae88224d8f09538690cc968e6fa20401071b000001a8ced1f6000a756120666f7277617264657220696e204575726f70650b82736677642e6578616d706c652e6f72673a3434336d3139322e302e322e373a3434330c81820158410465d30c6060ab286dba0f41a7a3733e65aec733ed98d396c8ab4c2bac111cd4a816d3da95d7f241edb25c68f9aff0a15b08f96c021d06033654576d78490a980a0d010e0558406a9c91348c3897209caf1beb8b35d0897619415ed91aaa4af2bf2509daafad9a5580417199c759327f507467d10d5bb17621453077b14fc8fccbcfb774ed84ed"
+   }
+  ]
+ }
+}

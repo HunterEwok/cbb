@@ -400,15 +400,35 @@ fn an_intro_proves_a_new_device() {
     assert!(keys.is_none());
 }
 
+/// AmneziaWG settings: jc, jmin, jmax, the four sizes, the four header
+/// ranges.
+fn obfuscation_with(jc: u64, jmin: u64, jmax: u64) -> Vec<u8> {
+    use crate::format::Value::{Array, Map, Uint};
+    let h = |a: u64| Array(vec![Uint(a), Uint(a + 100)]);
+    Map(vec![
+        (1, Uint(jc)),
+        (2, Uint(jmin)),
+        (3, Uint(jmax)),
+        (4, Array(vec![Uint(15), Uint(20), Uint(0), Uint(0)])),
+        (5, Array(vec![h(1000), h(2000), h(3000), h(4000)])),
+    ])
+    .encode()
+}
+
+fn obfuscation() -> crate::msg::Obfuscation {
+    crate::msg::Obfuscation::decode(&obfuscation_with(4, 40, 70), "x").unwrap()
+}
+
 fn invitation() -> Invitation {
     Invitation::new(
         vec![
-            Path { kind: PathKind::Home, endpoints: vec![], hub_key: None, guest: None },
+            Path { kind: PathKind::Home, endpoints: vec![], hub_key: None, guest: None, obfuscation: None },
             Path {
                 kind: PathKind::Guest,
                 endpoints: vec!["192.0.2.1:51820".into()],
                 hub_key: Some([1; 32]),
                 guest: Some(([2; 32], [3; 32])),
+                obfuscation: None,
             },
         ],
         Profile { role: ROLE_MEMBER, rights: RIGHT_READ | RIGHT_SEND, home_only: false, guarded: false },
@@ -440,8 +460,22 @@ fn one_invitation_for_home_and_away() {
     let mut bad_ep = inv.clone();
     bad_ep.paths[1].endpoints = vec!["example.org".into()];
     assert_eq!(Invitation::decode(&bad_ep.encode()), Err(invitation::RULE_PATH));
+    let mut twice = inv.clone();
+    twice.paths[1].endpoints = vec!["192.0.2.1:51820".into(); 2];
+    assert_eq!(Invitation::decode(&twice.encode()), Err(invitation::RULE_PATH), "an endpoint twice");
+
+    // A group with AmneziaWG gives its settings on the guest path; never on
+    // the home path, and only in their shape.
+    let mut awg = inv.clone();
+    awg.paths[1].obfuscation = Some(obfuscation());
+    assert_eq!(Invitation::parse(&awg.text()).unwrap(), awg);
+    let mut home = inv.clone();
+    home.paths[0].obfuscation = Some(obfuscation());
+    assert_eq!(Invitation::decode(&home.encode()), Err(invitation::RULE_OBFUSCATION));
+    assert!(crate::msg::Obfuscation::decode(&obfuscation_with(300, 1, 2), "x").is_err(), "jc above 128");
+    assert!(crate::msg::Obfuscation::decode(&obfuscation_with(4, 9, 2), "x").is_err(), "jmin above jmax");
     let small = Invitation::new(
-        vec![Path { kind: PathKind::Home, endpoints: vec![], hub_key: None, guest: None }],
+        vec![Path { kind: PathKind::Home, endpoints: vec![], hub_key: None, guest: None, obfuscation: None }],
         Profile::small_device(),
     );
     assert_eq!(Invitation::parse(&small.text()).unwrap(), small);
@@ -514,4 +548,92 @@ fn pair_errors_round_trip() {
         assert_eq!(PairError::of(c).unwrap().code(), c);
     }
     assert_eq!(PairError::of(9), None);
+}
+
+#[test]
+fn a_request_waits_for_an_admin() {
+    use super::waiting::{self, Held};
+    let mut g = G::new();
+    let hub = k("hub");
+    let mut d = Device::new(hub.key.clone(), "hub", ROLE_MEMBER);
+    d.rights = RIGHT_READ | RIGHT_SEND | RIGHT_HUB;
+    d.caps = CAP_HUB;
+    g.rec_root(Kind::Device(d));
+    let tv = k("tv");
+    let mut d = Device::new(tv.key.clone(), "tv", ROLE_MEMBER);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    g.rec_root(Kind::Device(d));
+    let st = g.state();
+    let id = |x: &K| st.device_by_key(&x.hash).unwrap().id;
+
+    // Who holds for whom.
+    assert!(waiting::holder_may_send(&st, &id(&k("phone"))), "the root's device");
+    assert!(waiting::holder_may_send(&st, &id(&k("laptop"))), "an admin with admit");
+    assert!(!waiting::holder_may_send(&st, &id(&tv)), "a member that may not admit");
+    assert!(!waiting::holder_may_send(&st, &format::DeviceId([9; 16])), "a stranger");
+    assert!(waiting::admin_may_take(&st, &id(&hub)), "a hub");
+    assert!(!waiting::admin_may_take(&st, &id(&tv)), "a device that may not be a hub");
+
+    // The holder keeps one request per invitation and key.
+    let inv = [5u8; 16];
+    let joiner = k("joiner");
+    let mut ask = info("kitchen tablet", ROLE_MEMBER);
+    ask.invite = Some(inv);
+    let mut held = Held::default();
+    let (t0, day) = (1_000_000u64, waiting::MAX_WAIT_MS);
+    assert!(held.knock(&point(&joiner), ask.clone(), Network::Guest, t0, t0 + 3 * day));
+    assert!(held.knock(&point(&joiner), ask.clone(), Network::Guest, t0 + 60_000, t0 + 3 * day));
+    assert_eq!(held.requests.len(), 1);
+    assert_eq!(held.requests[0].attempts, 2);
+    assert!(
+        !held.knock(&point(&joiner), info("no invite", ROLE_MEMBER), Network::Guest, t0, t0 + day),
+        "no invitation named"
+    );
+    assert!(
+        !Held::default().knock(&point(&k("late")), ask.clone(), Network::Guest, t0 + day, t0 + day),
+        "past the guest path's expiry"
+    );
+
+    // The admin reads what waited and for how long.
+    let msg = held.message(t0 + 120_000).unwrap();
+    assert_eq!(crate::msg::check(&msg), Ok(crate::msg::tables::T_WAITING));
+    let seen = waiting::read(&msg).unwrap();
+    assert_eq!(seen.len(), 1);
+    assert_eq!((seen[0].waited_ms, seen[0].attempts, seen[0].network), (120_000, 2, Network::Guest));
+    assert_eq!(seen[0].info, ask);
+    assert_eq!(seen[0].key, point(&joiner).to_vec());
+
+    // At most a day, even when the guest path is good for longer.
+    assert!(held.message(t0 + day).is_none(), "dropped after a day");
+    // And not past the guest path.
+    assert!(held.knock(&point(&joiner), ask.clone(), Network::Guest, t0, t0 + 1000));
+    assert!(held.message(t0 + 1000).is_none());
+
+    // At most 16.
+    for i in 0..20u8 {
+        let mut a = ask.clone();
+        a.invite = Some([i; 16]);
+        let kept = held.knock(&point(&joiner), a, Network::Bypass, t0, t0 + day);
+        assert_eq!(kept, usize::from(i) < waiting::MAX_REQUESTS);
+    }
+
+    // The admin dismisses one key's request, then a whole invitation's.
+    let other = k("other");
+    let mut a = ask.clone();
+    a.invite = Some([1; 16]);
+    held.requests.retain(|r| r.invite != [1; 16] && r.invite != [2; 16]);
+    assert!(held.knock(&point(&joiner), a.clone(), Network::Guest, t0, t0 + day));
+    assert!(held.knock(&point(&other), a, Network::Guest, t0, t0 + day));
+    let (i, key) = waiting::read_dismiss(&waiting::dismiss_message(&[1; 16], Some(&fhash(&other)))).unwrap();
+    held.dismiss(&i, key.as_ref());
+    assert_eq!(held.requests.iter().filter(|r| r.invite == [1; 16]).count(), 1);
+    let (i, key) = waiting::read_dismiss(&waiting::dismiss_message(&[1; 16], None)).unwrap();
+    held.dismiss(&i, key.as_ref());
+    assert_eq!(held.requests.iter().filter(|r| r.invite == [1; 16]).count(), 0);
+
+    // A request whose Info names another invitation than its own is refused.
+    let mut h2 = Held::default();
+    assert!(h2.knock(&point(&joiner), ask.clone(), Network::Guest, t0, t0 + day));
+    h2.requests[0].invite = [6; 16];
+    assert_eq!(waiting::read(&h2.message(t0).unwrap()), Err(waiting::RULE_WAITING));
 }

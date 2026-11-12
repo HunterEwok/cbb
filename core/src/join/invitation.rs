@@ -50,6 +50,7 @@ pub const MAX_FAILURES: u32 = 3;
 pub const RULE_SHAPE: Rule = Rule::field("invite/shape");
 pub const RULE_PATH: Rule = Rule::field("invite/path");
 pub const RULE_PROFILE: Rule = Rule::field("invite/profile");
+pub const RULE_OBFUSCATION: Rule = Rule::field("invite/obfuscation");
 
 /// How a path reaches the group.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -73,6 +74,11 @@ pub struct Path {
     pub hub_key: Option<[u8; 32]>,
     /// The guest's one-time WireGuard private key and pre-shared key.
     pub guest: Option<([u8; 32], [u8; 32])>,
+    /// A group with AmneziaWG: its obfuscation settings, which the guest
+    /// needs before it can reach the hub (A-46: the one value of an
+    /// invitation that is not one-time; in 0.6 they change only by hand).
+    /// Only on a guest or bypass path.
+    pub obfuscation: Option<crate::msg::Obfuscation>,
 }
 
 /// What the invited device may be (A-42).
@@ -130,6 +136,9 @@ impl Invitation {
                     m.push((4, Value::Bytes(k)));
                     m.push((5, Value::Bytes(psk)));
                 }
+                if let Some(o) = p.obfuscation.as_ref().and_then(crate::msg::Obfuscation::value) {
+                    m.push((6, o));
+                }
                 Value::Map(m)
             })
             .collect();
@@ -172,6 +181,7 @@ impl Invitation {
     /// Reads the encoding and checks every field.
     pub fn decode(b: &[u8]) -> Result<Invitation, Rule> {
         let v = cbor::decode(b)?;
+        crate::msg::check_map(&crate::msg::tables::INVITE, &v)?;
         let bytes_n = |k: u16, n: usize| -> Result<Vec<u8>, Rule> {
             v.get(k).and_then(Value::as_bytes).filter(|b| b.len() == n).map(<[u8]>::to_vec).ok_or(RULE_SHAPE)
         };
@@ -195,7 +205,7 @@ impl Invitation {
             let mut endpoints = Vec::new();
             if let Some(e) = p.get(2) {
                 let e = e.as_array().ok_or(RULE_PATH)?;
-                if e.is_empty() || e.len() > MAX_ENDPOINTS {
+                if e.is_empty() || e.len() > MAX_ENDPOINTS || !crate::msg::each_once(e) {
                     return Err(RULE_PATH);
                 }
                 for x in e {
@@ -241,7 +251,12 @@ impl Invitation {
             if !ok {
                 return Err(RULE_PATH);
             }
-            paths.push(Path { kind, endpoints, hub_key, guest });
+            let obfuscation = match p.get(6) {
+                None => None,
+                Some(_) if kind == PathKind::Home => return Err(RULE_OBFUSCATION),
+                Some(o) => Some(crate::msg::Obfuscation::read(o, "invite/obfuscation")?),
+            };
+            paths.push(Path { kind, endpoints, hub_key, guest, obfuscation });
         }
         let pv = v.get(4).ok_or(RULE_PROFILE)?;
         let role = pv.get(1).and_then(Value::as_uint).filter(|r| (1..=4).contains(r)).ok_or(RULE_PROFILE)?;

@@ -853,6 +853,7 @@ func main() {
 	fmt.Printf("%-18s checked\n", "container.json")
 
 	checkSets(dir)
+	checkMessages(dir)
 	if bad > 0 {
 		fmt.Printf("%d failures\n", bad)
 		os.Exit(1)

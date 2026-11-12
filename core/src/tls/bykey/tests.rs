@@ -251,13 +251,9 @@ fn the_tunnel_key_comes_from_the_connection_with_each_hub() {
         cx.export(hubkey::EXPORTER_LABEL, &ctx, &mut a).unwrap();
         sx.export(hubkey::EXPORTER_LABEL, &ctx, &mut b).unwrap();
         assert_eq!(a, b, "both ends export one secret");
-        hubkey::psk(&a)
+        hubkey::psk(&a).key
     };
     let (p1, p1_again, p2) = (psk_with(&hub), psk_with(&hub), psk_with(&hub2));
     assert_ne!(p1, p1_again, "a new connection, a new key");
     assert_ne!(p1, p2, "each hub its own");
-
-    let (_, public) = hubkey::new_key();
-    assert_eq!(hubkey::read(&hubkey::message(&public)), Ok(public));
-    assert!(hubkey::read(&hubkey::message(&[0; 32])).is_err());
 }

@@ -791,6 +791,18 @@ def credential_vectors():
                           12: pad([SRVKEY.hash], 4), 13: pad([], 4)})
     cred("members", PERIOD, {1: 4, 2: tag, 3: PERIOD.key, 4: 1, 7: exp,
                              14: pad([SRVKEY.hash], 4)})
+    # Field 256 of a period, in the optional zone: room for the AmneziaWG
+    # settings to change with the period later. No 0.6 writer sets it; a
+    # reader checks its shape and does not apply it.
+    obf = {1: 4, 2: 40, 3: 70, 4: [15, 20, 0, 0], 5: [[1000, 1100], [2000, 2100], [3000, 3100], [4000, 4100]]}
+    cred("period with settings for later (field 256)", ROOT,
+         {1: 1, 2: GROUP, 3: ROOT.key, 4: 1, 7: exp, 10: tag, 11: PERIOD.key, 256: obf})
+    cred("period with an unknown optional field", ROOT,
+         {1: 1, 2: GROUP, 3: ROOT.key, 4: 1, 7: exp, 10: tag, 11: PERIOD.key, 300: "later"})
+    m = {1: 1, 2: GROUP, 3: ROOT.key, 4: 1, 7: exp, 10: tag, 11: PERIOD.key, 256: {**obf, 1: 0}}
+    env, _ = envelope("credential", ROOT, m)
+    refuse.append({"name": "period settings out of shape", "rule": "credentials/period/obfuscation",
+                   "verdict": "refuse", "envelope": env.hex()})
     m = {1: 4, 2: tag, 3: PERIOD.key, 4: 1, 7: exp, 14: pad([SRVKEY.hash], 3)}
     env, _ = envelope("credential", PERIOD, m)
     refuse.append({"name": "members list of 3 (not a padded length)", "rule": "credentials/members/members",
@@ -1124,6 +1136,473 @@ def keys_table():
             "note": "test keys only; private scalar = SHA-256('cbb test key ' + name) mod (n-1) + 1"}
 
 
+# ---------------------------------------------------------------- wave 3 messages
+#
+# The tables of the messages wave 3 numbers (format sections 9 and 11):
+# pairing, the invitation, the hub's offer, `tunnel`, `hubs`, `guest`, the
+# request that waits for an admin, the forwarder's and the relay's. The Rust
+# core's tables (core/src/msg/tables.rs) must equal these; the Go check
+# reads the vectors against them. Rows: number, rule, type, needed. A
+# reader skips a field its table does not list; a bad field inside a map
+# breaks the field that holds the map.
+
+TABLES = {
+    "pair/adb": [
+        (1, "pair/adb/group", "bytes 16", True),
+        (2, "pair/adb/device", "bytes 16", True),
+        (3, "pair/adb/name", "text 1..64", True),
+    ],
+    "pair/start": [
+        (2, "pair/start/ya", "bytes 1..256", True),
+        (3, "pair/start/ada", "bytes 1..16384", True),
+    ],
+    "pair/reply": [
+        (2, "pair/reply/yb", "bytes 1..256", True),
+        (3, "pair/reply/adb", "bytes 1..1024", True),
+    ],
+    "pair/confirm": [
+        (2, "pair/confirm/ta", "bytes 1..64", True),
+    ],
+    "pair/welcome": [
+        (2, "pair/welcome/tb", "bytes 1..64", True),
+        (3, "pair/welcome/welcome", "map welcome", True),
+    ],
+    "pair/done": [
+    ],
+    "pair/error": [
+        (2, "pair/error/code", "uint 1..255", True),
+    ],
+    "welcome": [
+        (1, "welcome/root", "key 1", True),
+        (2, "welcome/records", "array 1..4096 of envelope", True),
+        (4, "welcome/keys", "array 1..256 of envelope", False),
+        (5, "welcome/time", "uint 1..9223372036854775807", True),
+        (7, "welcome/credentials", "array 1..259 of envelope", False),
+    ],
+    "pair/info": [
+        (1, "pair/info/name", "text 1..64", True),
+        (2, "pair/info/os", "uint 1..4294967295", False),
+        (3, "pair/info/caps", "uint 1..7", False),
+        (4, "pair/info/role", "uint 1..4", True),
+        (5, "pair/info/admin", "key 1", False),
+        (6, "pair/info/admin-pop", "bytes 64", False),
+        (7, "pair/info/keys", "envelope", False),
+        (9, "pair/info/invite", "bytes 16", False),
+    ],
+    "invite": [
+        (1, "invite/shape", "bytes 16", True),
+        (2, "invite/shape", "bytes 32", True),
+        (3, "invite/path", "array 1..4 of map invite/path", True),
+        (4, "invite/profile", "map invite/profile", True),
+    ],
+    "invite/path": [
+        (1, "invite/path", "uint 1..3", True),
+        (2, "invite/path", "once 1..8 of addr", False),
+        (3, "invite/path", "key 3", False),
+        (4, "invite/path", "bytes 32", False),
+        (5, "invite/path", "bytes 32", False),
+        (6, "invite/obfuscation", "map obfuscation", False),
+    ],
+    "invite/profile": [
+        (1, "invite/profile", "uint 1..4", True),
+        (2, "invite/profile", "uint 1..15", False),
+        (3, "invite/profile", "flag", False),
+        (4, "invite/profile", "flag", False),
+    ],
+    "obfuscation": [
+        (1, "obfuscation/jc", "uint 1..128", True),
+        (2, "obfuscation/jmin", "uint 0..1280", True),
+        (3, "obfuscation/jmax", "uint 1..1280", True),
+        (4, "obfuscation/s", "array 1..4 of uint 0..64", True),
+        (5, "obfuscation/h", "array 1..4 of array 1..2 of uint 0..4294967295", True),
+        (6, "obfuscation/key", "bytes 32", False),
+    ],
+    "vless": [
+        (1, "vless/user", "bytes 16", True),
+        (2, "vless/port", "uint 1..65535", False),
+        (3, "vless/host", "text 1..253", False),
+        (4, "vless/path", "text 1..128", False),
+    ],
+    "offer": [
+        (1, "offer/hub-key", "key 3", True),
+        (2, "offer/endpoints", "once 1..8 of addr", False),
+        (3, "offer/obfuscation", "map obfuscation", False),
+        (4, "offer/vless", "map vless", False),
+        (6, "offer/moved", "flag", False),
+        (7, "offer/next-key", "key 3", False),
+        (8, "offer/confirm", "bytes 32", False),
+    ],
+    "tunnel": [
+        (2, "tunnel/key", "key 3", True),
+        (3, "tunnel/confirm", "bytes 32", True),
+    ],
+    "hubs": [
+        (2, "hubs/stopped", "flag", False),
+        (3, "hubs/serving", "flag", False),
+    ],
+    "guest": [
+        (2, "guest/op", "uint 1..7", True),
+        (3, "guest/key", "key 3", True),
+        (4, "guest/psk", "bytes 32", False),
+        (5, "guest/expires", "uint 1..9223372036854775807", False),
+        (6, "guest/offer", "map offer", False),
+        (7, "guest/reason", "text 1..256", False),
+        (8, "guest/conn", "uint 1..4294967295", False),
+        (9, "guest/data", "bytes 1..16384", False),
+        (10, "guest/device", "bytes 16", False),
+        (11, "guest/invite", "bytes 16", False),
+    ],
+    "waiting/request": [
+        (1, "waiting/request/invite", "bytes 16", True),
+        (2, "waiting/request/key", "key 1", True),
+        (3, "waiting/request/info", "map pair/info", True),
+        (4, "waiting/request/network", "uint 1..3", True),
+        (5, "waiting/request/held", "uint 1..86400000", False),
+        (6, "waiting/request/attempts", "uint 1..255", True),
+    ],
+    "waiting": [
+        (2, "waiting/requests", "once 1..16 of map waiting/request", True),
+    ],
+    "dismiss": [
+        (2, "dismiss/invite", "bytes 16", True),
+        (3, "dismiss/key", "bytes 32", False),
+    ],
+    "forward/challenge": [
+        (2, "forward/challenge/e", "bytes 32", True),
+    ],
+    "forward/register": [
+        (2, "forward/register/key", "key 3", True),
+        (3, "forward/register/proof", "bytes 32", True),
+        (4, "forward/register/obfuscation", "map obfuscation", False),
+        (5, "forward/register/vless", "bytes 16", False),
+        (6, "forward/register/credentials", "array 1..3 of envelope", True),
+    ],
+    "forward/registered": [
+        (2, "forward/registered/id", "uint 1..9223372036854775807", True),
+        (3, "forward/registered/mask", "bytes 32", True),
+        (4, "forward/registered/vless", "map vless", False),
+    ],
+    "server/error": [
+        (2, "server/error/reason", "text 1..256", True),
+    ],
+    "forward/seen": [
+        (2, "forward/seen/addr", "addr", True),
+    ],
+    "relay/challenge": [
+        (2, "relay/challenge/e", "bytes 32", True),
+        (3, "relay/challenge/root", "flag", False),
+    ],
+    "relay/register": [
+        (2, "relay/register/key", "key 3", True),
+        (3, "relay/register/proof", "bytes 32", True),
+        (4, "relay/register/credentials", "array 1..3 of envelope", True),
+        (5, "relay/register/root", "key 1", False),
+    ],
+    "relay/registered": [
+        (2, "relay/registered/key", "key 3", True),
+        (3, "relay/registered/psk", "bytes 32", True),
+        (4, "relay/registered/addr", "text 1..64", True),
+    ],
+    "relay/watch": [
+    ],
+    "relay/dial": [
+        (2, "relay/dial/name", "bytes 32", True),
+    ],
+    "relay/answer": [
+        (2, "relay/answer/ticket", "bytes 16", True),
+    ],
+    "relay/online": [
+        (2, "relay/online/names", "set 1..64 of bytes 32", False),
+    ],
+    "relay/call": [
+        (2, "relay/call/name", "bytes 32", True),
+        (3, "relay/call/ticket", "bytes 16", True),
+    ],
+    "relay/ok": [
+    ],
+    "result": [
+        (2, "result/id", "bytes 16", True),
+        (3, "result/by", "bytes 16", True),
+        (4, "result/status", "uint 1..3", True),
+        (5, "result/reason", "text 1..256", False),
+        (6, "result/tunnel", "map offer", False),
+    ],
+}
+
+MESSAGE_TYPES = {
+    10: "result", 15: "tunnel", 16: "hubs", 17: "guest", 26: "waiting", 27: "dismiss",
+    64: "pair/start", 65: "pair/reply", 66: "pair/confirm", 67: "pair/welcome", 68: "pair/done",
+    69: "pair/error", 80: "forward/challenge", 81: "forward/register", 82: "forward/registered",
+    83: "server/error", 84: "forward/seen", 90: "relay/challenge", 91: "relay/register",
+    92: "relay/registered", 93: "server/error", 94: "relay/watch", 95: "relay/dial", 96: "relay/answer",
+    97: "relay/online", 98: "relay/call", 99: "relay/ok",
+}
+
+
+def addr_ok(t):
+    import ipaddress
+    try:
+        if t.startswith("["):
+            host, sep, port = t[1:].partition("]:")
+            if not sep:
+                return False
+            ipaddress.IPv6Address(host)
+        else:
+            host, port = t.rsplit(":", 1)
+            ipaddress.IPv4Address(host)
+        return port.isdigit() and int(port) <= 65535
+    except ValueError:
+        return False
+
+
+def key_ok(v, alg):
+    if not (isinstance(v, list) and len(v) == 2 and v[0] == alg and isinstance(v[1], bytes)):
+        return False
+    if alg == ES256:
+        if len(v[1]) != 65 or v[1][0] != 4:
+            return False
+        try:
+            ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), v[1])
+            return True
+        except ValueError:
+            return False
+    return len(v[1]) == 32 if alg == X25519 else True
+
+
+def ty_ok(ty, v):
+    import unicodedata
+    w = ty.split(" ", 2)
+    if w[0] == "uint":
+        lo, hi = map(int, w[1].split(".."))
+        return isinstance(v, int) and lo <= v <= hi
+    if w[0] == "flag":
+        return v == 1
+    if w[0] == "bytes":
+        if not isinstance(v, bytes):
+            return False
+        if ".." in w[1]:
+            return 1 <= len(v) <= int(w[1].split("..")[1])
+        return len(v) == int(w[1])
+    if w[0] == "text":
+        return (isinstance(v, str) and 1 <= len(v.encode()) <= int(w[1].split("..")[1])
+                and not any(unicodedata.category(c) == "Cc" for c in v))
+    if w[0] == "addr":
+        return isinstance(v, str) and addr_ok(v)
+    if w[0] == "key":
+        return key_ok(v, int(w[1]))
+    if w[0] == "envelope":
+        if not (isinstance(v, list) and len(v) in (2, 3) and all(isinstance(x, bytes) for x in v)):
+            return False
+        try:
+            return isinstance(dec(v[0]), dict)
+        except Exception:
+            return False
+    if w[0] in ("array", "once", "set"):
+        n = int(w[1].split("..")[1])
+        inner = w[2][len("of "):]
+        if not (isinstance(v, list) and 1 <= len(v) <= n):
+            return False
+        es = [enc(x) for x in v]
+        if w[0] == "once" and len(set(es)) != len(es):
+            return False
+        if w[0] == "set" and any(a >= b for a, b in zip(es, es[1:])):
+            return False
+        return all(ty_ok(inner, x) for x in v)
+    if w[0] == "map":
+        return check_map(w[1], v) is None
+    raise ValueError(ty)
+
+
+def check_map(name, v):
+    """The rule v breaks against table name, or None."""
+    if not isinstance(v, dict):
+        return name + "/shape"
+    for n, rule, ty, needed in TABLES[name]:
+        if n not in v:
+            if needed:
+                return rule
+        elif not ty_ok(ty, v[n]):
+            return rule
+    return None
+
+
+def check_message(m):
+    t = m.get(0) if isinstance(m, dict) else None
+    if not isinstance(t, int):
+        return "frame/message"
+    return check_map(MESSAGE_TYPES[t], m) if t in MESSAGE_TYPES else None
+
+
+def wave3_vectors(records_take):
+    take, refuse, maps = [], [], []
+    wg = lambda label: [X25519, fake(label, 32)]
+    hub_key, dev_key, guest_key = wg("hub wg key"), wg("device wg key toward the hub"), wg("guest wg key")
+    obf = {1: 4, 2: 40, 3: 70, 4: [15, 20, 0, 0], 5: [[1000, 1100], [2000, 2100], [3000, 3100], [4000, 4100]]}
+    offer = {1: hub_key, 2: ["203.0.113.5:51820", "[2001:db8::5]:51820"], 3: obf,
+             4: {1: fake("vless user", 16)}, 8: fake("tunnel confirm", 32)}
+    info = {1: "kitchen tablet", 2: 3, 4: 1, 9: fake("invite id", 16)}
+    request = {1: fake("invite id", 16), 2: TABLET.key, 3: info, 4: 2, 5: 120000, 6: 2}
+    envs = [bytes.fromhex(r["envelope"]) for r in records_take[:2]]
+    welcome = {1: ROOT.key, 2: [dec(e) for e in envs], 5: T0}
+
+    def msg(name, m, note=None):
+        assert check_message(m) is None, (name, check_message(m))
+        e = {"name": name, "t": m[0], "message": enc(m).hex()}
+        if note:
+            e["note"] = note
+        take.append(e)
+
+    def bad(name, m, rule):
+        got = check_message(m)
+        assert got == rule, (name, got, rule)
+        refuse.append({"name": name, "rule": rule, "message": enc(m).hex()})
+
+    def mp(name, table, v, rule=None):
+        got = check_map(table, v)
+        assert got == rule, (name, got, rule)
+        e = {"name": name, "table": table, "value": enc(v).hex()}
+        if rule:
+            e["rule"] = rule
+        maps.append(e)
+
+    adb = {1: GROUP, 2: PHONE.id16, 3: "Ewok's phone"}
+    msg("pair start", {0: 64, 2: fake("cpace ya", 32), 3: enc(info)})
+    msg("pair reply", {0: 65, 2: fake("cpace yb", 32), 3: enc(adb)})
+    msg("pair confirm", {0: 66, 2: fake("cpace ta", 32)})
+    msg("pair welcome", {0: 67, 2: fake("cpace tb", 32), 3: welcome}, "records: the first two of records.json")
+    msg("pair done", {0: 68})
+    msg("pair error: taken", {0: 69, 2: 8})
+    msg("result with the hub's offer", {0: 10, 2: fake("command id", 16), 3: PHONE.id16, 4: 1, 6: offer})
+    msg("tunnel", {0: 15, 2: dev_key, 3: fake("tunnel confirm", 32)})
+    msg("hubs: serving", {0: 16, 3: 1})
+    msg("hubs: stopped", {0: 16, 2: 1})
+    msg("guest open", {0: 17, 2: 1, 3: guest_key, 4: fake("guest psk", 32), 5: T0 + 86400000,
+                       11: fake("invite id", 16)})
+    msg("guest opened", {0: 17, 2: 2, 3: guest_key, 6: offer})
+    msg("guest data", {0: 17, 2: 4, 3: guest_key, 8: 1, 9: b"\x01\x02"})
+    msg("guest admitted", {0: 17, 2: 6, 3: guest_key, 10: TABLET.id16})
+    msg("waiting", {0: 26, 2: [request, {**request, 2: STRANGER.key, 6: 1}]})
+    msg("dismiss an invitation", {0: 27, 2: fake("invite id", 16)})
+    msg("dismiss one key", {0: 27, 2: fake("invite id", 16), 3: TABLET.hash})
+    msg("forwarder challenge", {0: 80, 2: fake("fwd e", 32)})
+    msg("forwarder register", {0: 81, 2: hub_key, 3: fake("fwd proof", 32), 4: obf, 5: fake("vless user", 16),
+                               6: [dec(envs[0])]}, "the credential is a placeholder envelope")
+    msg("forwarder registered", {0: 82, 2: 7, 3: fake("fwd mask", 32), 4: {1: fake("vless user", 16), 2: 443}})
+    msg("forwarder error", {0: 83, 2: "unknown group"})
+    msg("forwarder seen", {0: 84, 2: "198.51.100.7:40000"})
+    msg("relay challenge", {0: 90, 2: fake("relay e", 32), 3: 1})
+    msg("relay register", {0: 91, 2: dev_key, 3: fake("relay proof", 32), 4: [dec(envs[0])], 5: ROOT.key})
+    msg("relay registered", {0: 92, 2: hub_key, 3: fake("relay psk", 32), 4: "10.64.0.2"})
+    msg("relay error", {0: 93, 2: "not on the list"})
+    msg("relay watch", {0: 94})
+    names = sorted([fake("name a", 32), fake("name b", 32), fake("name c", 32)])
+    msg("relay dial", {0: 95, 2: names[0]})
+    msg("relay answer", {0: 96, 2: fake("ticket", 16)})
+    msg("relay online: names sorted", {0: 97, 2: names})
+    msg("relay call", {0: 98, 2: names[1], 3: fake("ticket", 16)})
+    msg("relay ok", {0: 99})
+    msg("a type this version does not number", {0: 200, 2: "anything"}, "ignored, not refused")
+    msg("an unknown field skipped", {0: 15, 2: dev_key, 3: fake("tunnel confirm", 32), 300: "later"})
+
+    bad("tunnel without its confirmation", {0: 15, 2: dev_key}, "tunnel/confirm")
+    bad("tunnel with an ES256 key", {0: 15, 2: LAPTOP.key, 3: fake("c", 32)}, "tunnel/key")
+    bad("hubs: flag 2", {0: 16, 2: 2}, "hubs/stopped")
+    bad("guest op 8", {0: 17, 2: 8, 3: guest_key}, "guest/op")
+    bad("pair error code 0", {0: 69, 2: 0}, "pair/error/code")
+    bad("relay online: names out of order", {0: 97, 2: list(reversed(names))}, "relay/online/names")
+    bad("relay online: a name twice", {0: 97, 2: [names[0], names[0]]}, "relay/online/names")
+    bad("relay online: 65 names", {0: 97, 2: sorted(fake(f"n{i}", 32) for i in range(65))}, "relay/online/names")
+    bad("waiting: a request twice", {0: 26, 2: [request, request]}, "waiting/requests")
+    bad("waiting: held over a day", {0: 26, 2: [{**request, 5: 86400001}]}, "waiting/requests")
+    bad("waiting: 17 requests", {0: 26, 2: [{**request, 6: i + 1} for i in range(17)]}, "waiting/requests")
+    bad("result: an endpoint twice in the offer", {0: 10, 2: fake("command id", 16), 3: PHONE.id16, 4: 1,
+                                                   6: {**offer, 2: ["203.0.113.5:51820"] * 2}}, "result/tunnel")
+    bad("forwarder register: 4 credentials", {0: 81, 2: hub_key, 3: fake("p", 32), 6: [dec(envs[0])] * 4},
+        "forward/register/credentials")
+    bad("forwarder seen: a host name", {0: 84, 2: "example.org:1"}, "forward/seen/addr")
+    bad("relay error: empty reason", {0: 93, 2: ""}, "server/error/reason")
+
+    mp("an offer", "offer", offer)
+    mp("an offer: endpoints in the hub's order", "offer", {**offer, 2: list(reversed(offer[2]))})
+    mp("an offer: an endpoint twice", "offer", {**offer, 2: [offer[2][0]] * 2}, "offer/endpoints")
+    mp("an offer: bad settings", "offer", {**offer, 3: {**obf, 1: 129}}, "offer/obfuscation")
+    mp("the settings", "obfuscation", obf)
+    mp("the settings: five sizes", "obfuscation", {**obf, 4: [1, 2, 3, 4, 5]}, "obfuscation/s")
+    mp("ADb", "pair/adb", adb)
+    mp("ADb without a name", "pair/adb", {1: GROUP, 2: PHONE.id16}, "pair/adb/name")
+    mp("a request", "waiting/request", request)
+    mp("a Welcome", "welcome", welcome)
+    mp("a Welcome without its time", "welcome", {1: ROOT.key, 2: welcome[2]}, "welcome/time")
+    return take, refuse, maps
+
+
+def invitation_vectors():
+    take, refuse = [], []
+    home = {1: 1}
+    guest = {1: 2, 2: ["203.0.113.5:51820"], 3: [X25519, fake("hub wg key", 32)],
+             4: fake("guest wg private", 32), 5: fake("guest psk", 32)}
+    obf = {1: 4, 2: 40, 3: 70, 4: [15, 20, 0, 0], 5: [[1000, 1100], [2000, 2100], [3000, 3100], [4000, 4100]]}
+    prof = {1: 1, 2: 3}
+    base = {1: fake("invite id", 16), 2: fake("invite secret", 32), 3: [home, guest], 4: prof}
+
+    def ok(name, v, cross=False):
+        assert check_map("invite", v) is None, name
+        take.append({"name": name, "invitation": enc(v).hex(),
+                     "text": "cbb://join#" + __import__("base64").urlsafe_b64encode(enc(v)).decode().rstrip("=")})
+
+    def no(name, v, rule, cross=False):
+        got = check_map("invite", v)
+        assert cross or got == rule, (name, got)
+        e = {"name": name, "rule": rule, "invitation": enc(v).hex()}
+        if cross:
+            e["cross"] = "a rule between fields, which the invitation's reader adds to the tables"
+        refuse.append(e)
+
+    ok("home and away, plain WireGuard", base)
+    ok("home and away, a group with AmneziaWG", {**base, 3: [home, {**guest, 6: obf}]})
+    ok("a small device: a leaf, home only", {**base, 3: [home], 4: {1: 4, 3: 1}})
+    no("settings on the home path", {**base, 3: [{1: 1, 6: obf}, guest]}, "invite/obfuscation", cross=True)
+    no("settings out of shape", {**base, 3: [home, {**guest, 6: {**obf, 3: 2000}}]}, "invite/path")
+    no("jmin above jmax", {**base, 3: [home, {**guest, 6: {**obf, 2: 80}}]}, "invite/obfuscation", cross=True)
+    no("an endpoint twice", {**base, 3: [home, {**guest, 2: ["203.0.113.5:51820"] * 2}]}, "invite/path")
+    no("five paths", {**base, 3: [home] * 5}, "invite/path")
+    no("a guest path without the hub's key", {**base, 3: [home, {k: v for k, v in guest.items() if k != 3}]},
+       "invite/path", cross=True)
+    no("home only with a guest path", {**base, 4: {1: 1, 3: 1}}, "invite/profile", cross=True)
+    no("guarded, not a leaf", {**base, 4: {1: 1, 4: 1}}, "invite/profile", cross=True)
+    no("rights 16", {**base, 4: {1: 1, 2: 16}}, "invite/profile")
+    no("a short secret", {**base, 2: fake("s", 16)}, "invite/shape")
+    return take, refuse
+
+
+def card_vectors():
+    take, refuse = [], []
+    tls = sorted([Signer("server tls").pub, Signer("server tls 2").pub])
+
+    def card(kw=None):
+        m = {1: 1, 3: OPERATOR.key, 4: 1, 7: T0 + 365 * 86400000, 10: "a forwarder in Europe",
+             11: ["fwd.example.org:443", "192.0.2.7:443"], 12: [[ES256, tls[0]]], 13: 1, 14: 5}
+        m.update(kw or {})
+        return m
+
+    def ok(name, m):
+        env, body = envelope("card", OPERATOR, m)
+        take.append({"name": name, "envelope": env.hex(), "id": sha(body).hex()})
+
+    def no(name, m, rule, by=OPERATOR):
+        env, _ = envelope("card", by, m)
+        refuse.append({"name": name, "rule": rule, "envelope": env.hex()})
+
+    ok("one key", card())
+    ok("two keys in the order of their encodings", card({12: [[ES256, k] for k in tls]}))
+    no("two keys out of order", card({12: [[ES256, k] for k in reversed(tls)]}), "card/keys")
+    no("a key twice", card({12: [[ES256, tls[0]]] * 2}), "card/keys")
+    no("an endpoint twice", card({11: ["fwd.example.org:443"] * 2}), "card/endpoints")
+    no("kinds 4", card({13: 4}), "card/kinds")
+    no("signed by another key than the operator it names", card(), "sig/verify", by=STRANGER)
+    return take, refuse
+
+
 def main():
     outdir = sys.argv[1]
     os.makedirs(outdir, exist_ok=True)
@@ -1146,6 +1625,17 @@ def main():
                         "set_digest_of_records_take": digest},
         "copy.json": copy_vector(),
         "container.json": container_vector(),
+    }
+    wt, wr, wm = wave3_vectors(rt)
+    it, ir = invitation_vectors()
+    cdt, cdr = card_vectors()
+    files["messages3.json"] = {
+        "tables": {name: [{"n": n, "rule": r, "type": t, "needed": nd} for n, r, t, nd in rows]
+                   for name, rows in TABLES.items()},
+        "types": {str(t): name for t, name in MESSAGE_TYPES.items()},
+        "take": wt, "refuse": wr, "maps": wm,
+        "invitations": {"prefix": "cbb://join#", "take": it, "refuse": ir},
+        "cards": {"label": LABELS["card"], "take": cdt, "refuse": cdr},
     }
     # Each signature has one form: the high-S twin of a valid signature
     # (the same r, n - s) is refused for every kind.

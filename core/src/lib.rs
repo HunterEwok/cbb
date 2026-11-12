@@ -67,6 +67,7 @@ pub mod join;
 pub mod keyboard;
 pub mod manage;
 pub mod media;
+pub mod msg;
 pub mod pair;
 #[cfg(feature = "tls")]
 pub mod pair_session;

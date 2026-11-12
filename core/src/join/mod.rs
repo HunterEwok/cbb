@@ -18,6 +18,7 @@ pub mod decide;
 pub mod info;
 pub mod intro;
 pub mod invitation;
+pub mod waiting;
 pub mod welcome;
 
 #[cfg(test)]

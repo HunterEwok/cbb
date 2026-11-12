@@ -107,7 +107,7 @@ impl Card {
         let expires_ms = m.get(7).and_then(Value::as_uint).filter(|v| *v >= 1).ok_or(RULE_SHAPE)?;
         let name = m.get(10).and_then(Value::as_text).filter(|n| crate::join::info::valid_name(n)).ok_or(RULE_NAME)?;
         let eps = m.get(11).and_then(Value::as_array).ok_or(RULE_ENDPOINTS)?;
-        if eps.is_empty() || eps.len() > MAX_ENDPOINTS {
+        if eps.is_empty() || eps.len() > MAX_ENDPOINTS || !crate::msg::each_once(eps) {
             return Err(RULE_ENDPOINTS);
         }
         let mut endpoints = Vec::new();
@@ -116,7 +116,7 @@ impl Card {
             endpoints.push(t.to_string());
         }
         let ks = m.get(12).and_then(Value::as_array).ok_or(RULE_KEYS)?;
-        if ks.is_empty() || ks.len() > MAX_KEYS {
+        if ks.is_empty() || ks.len() > MAX_KEYS || !crate::msg::sorted(ks) {
             return Err(RULE_KEYS);
         }
         let mut keys = Vec::new();

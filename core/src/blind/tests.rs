@@ -98,8 +98,19 @@ fn card() -> Card {
     }
 }
 
+/// Two TLS keys in the order of their encodings: a card lists its keys as
+/// a set.
+fn two_keys() -> Vec<Vec<u8>> {
+    let mut ks = vec![k("server tls").public(), k("server tls 2").public()];
+    ks.sort();
+    ks
+}
+
 #[test]
 fn a_server_card() {
+    let mut two = card();
+    two.keys = two_keys();
+    assert_eq!(Card::read(&two.sign(&k("operator")).unwrap()).unwrap(), two);
     let c = card();
     let env = c.sign(&k("operator")).unwrap();
     let got = Card::read(&env).unwrap();
@@ -118,6 +129,9 @@ fn a_server_card() {
         (Box::new(|c: &mut Card| c.endpoints = vec!["a.example:443".into(); 9]), card::RULE_ENDPOINTS),
         (Box::new(|c: &mut Card| c.keys = vec![]), card::RULE_KEYS),
         (Box::new(|c: &mut Card| c.keys = vec![vec![4; 65]]), card::RULE_KEYS),
+        (Box::new(|c: &mut Card| c.endpoints = vec!["a.example:443".into(); 2]), card::RULE_ENDPOINTS),
+        (Box::new(|c: &mut Card| c.keys = two_keys().into_iter().rev().collect()), card::RULE_KEYS),
+        (Box::new(|c: &mut Card| c.keys = vec![two_keys()[0].clone(); 2]), card::RULE_KEYS),
         (Box::new(|c: &mut Card| c.kinds = 4), card::RULE_KINDS),
         (Box::new(|c: &mut Card| c.paths = 8), card::RULE_PATHS),
     ] {
