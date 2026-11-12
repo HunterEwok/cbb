@@ -3,8 +3,10 @@
 
 import labTest from './Lab.test';
 import modelTest from './Model.test';
+import watchTest from './Watch.test';
 
 export default function testsuite() {
   modelTest();
   labTest();
+  watchTest();
 }

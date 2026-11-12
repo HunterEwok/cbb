@@ -1,0 +1,21 @@
+{
+  "string": [
+    {"name": "away", "value": "随处"},
+    {"name": "away_at_home", "value": "在家：直接同步。"},
+    {"name": "away_connected", "value": "通过你的中心节点。"},
+    {"name": "away_connecting", "value": "正在连接中心节点…"},
+    {"name": "away_off", "value": "关"},
+    {"name": "away_waiting", "value": "正在等待中心节点。"},
+    {"name": "devices", "value": "设备"},
+    {"name": "latest", "value": "最新"},
+    {"name": "module_desc", "value": "在一台设备上复制，在另一台上粘贴。"},
+    {"name": "no_group", "value": "在手机上打开 CBB 以创建或加入群组。"},
+    {"name": "no_phone", "value": "手机未连接。请将它靠近，然后重试。"},
+    {"name": "offline", "value": "离线"},
+    {"name": "online", "value": "在线"},
+    {"name": "online_count", "value": "%2$d 台中 %1$d 台在线"},
+    {"name": "stale", "value": "以手机最后报告的为准。"},
+    {"name": "sync", "value": "同步"},
+    {"name": "watch_phone", "value": "这块手表的手机"}
+  ]
+}

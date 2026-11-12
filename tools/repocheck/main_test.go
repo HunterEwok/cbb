@@ -53,6 +53,7 @@ func TestCheck(t *testing.T) {
 		},
 		{name: "an Aurora app translation", file: "apps/silica/translations/cbb-ru.ts", content: "<translation>" + cyrillicWord + "</translation>\n"},
 		{name: "a HarmonyOS app translation", file: "apps/harmony/entry/src/main/resources/ru/element/string.json", content: "\"" + cyrillicWord + "\"\n"},
+		{name: "a HarmonyOS watch translation", file: "apps/harmony/wearable/src/main/resources/ru/element/string.json", content: "\"" + cyrillicWord + "\"\n"},
 		{
 			name: "the default HarmonyOS strings", file: "apps/harmony/entry/src/main/resources/base/element/string.json", content: "\"" + cyrillicWord + "\"\n",
 			want: []string{"string.json:1: Cyrillic letter"},

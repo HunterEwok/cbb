@@ -1,0 +1,21 @@
+{
+  "string": [
+    {"name": "away", "value": "בכל מקום"},
+    {"name": "away_at_home", "value": "בבית: מסנכרן ישירות."},
+    {"name": "away_connected", "value": "דרך הרכזת שלכם."},
+    {"name": "away_connecting", "value": "מתחבר לרכזת…"},
+    {"name": "away_off", "value": "כבוי"},
+    {"name": "away_waiting", "value": "ממתין לרכזת."},
+    {"name": "devices", "value": "מכשירים"},
+    {"name": "latest", "value": "האחרון"},
+    {"name": "module_desc", "value": "מעתיקים במכשיר אחד, מדביקים באחר."},
+    {"name": "no_group", "value": "פתחו את CBB בטלפון כדי ליצור קבוצה או להצטרף לאחת."},
+    {"name": "no_phone", "value": "הטלפון לא מחובר. קרבו אותו ונסו שוב."},
+    {"name": "offline", "value": "לא מחובר"},
+    {"name": "online", "value": "מחובר"},
+    {"name": "online_count", "value": "%1$d מתוך %2$d מחוברים"},
+    {"name": "stale", "value": "כפי שהטלפון אמר לאחרונה."},
+    {"name": "sync", "value": "סנכרון"},
+    {"name": "watch_phone", "value": "הטלפון של השעון הזה"}
+  ]
+}

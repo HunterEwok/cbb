@@ -1,0 +1,22 @@
+{
+  "string": [
+    {"name": "app_name", "value": "CBB"},
+    {"name": "away", "value": "Everywhere"},
+    {"name": "away_at_home", "value": "At home: syncing directly."},
+    {"name": "away_connected", "value": "Through your hub."},
+    {"name": "away_connecting", "value": "Connecting to the hub…"},
+    {"name": "away_off", "value": "Off"},
+    {"name": "away_waiting", "value": "Waiting for the hub."},
+    {"name": "devices", "value": "Devices"},
+    {"name": "latest", "value": "Latest"},
+    {"name": "module_desc", "value": "Copy on one device, paste on another."},
+    {"name": "no_group", "value": "Open CBB on the phone to make or join a group."},
+    {"name": "no_phone", "value": "The phone is not connected. Bring it closer, then try again."},
+    {"name": "offline", "value": "offline"},
+    {"name": "online", "value": "online"},
+    {"name": "online_count", "value": "%1$d of %2$d online"},
+    {"name": "stale", "value": "As the phone last said."},
+    {"name": "sync", "value": "Sync"},
+    {"name": "watch_phone", "value": "This watch's phone"}
+  ]
+}

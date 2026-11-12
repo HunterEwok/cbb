@@ -40,6 +40,12 @@
         ]
       }
     ],
+    // The watch's CBB, which Wear Engine lets this app talk to (common/Wear.ets);
+    // Wear Engine also wants the app's client_id from AppGallery Connect here,
+    // added with the signing config (docs/apps.md, "HarmonyOS watches").
+    "metadata": [
+      { "name": "wearEngineRemoteAppNameList", "value": "tools.cbb.harmony" }
+    ],
     "requestPermissions": [
       // The member's connections on the home network and to the hub.
       { "name": "ohos.permission.INTERNET" },

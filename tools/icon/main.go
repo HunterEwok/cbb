@@ -43,6 +43,7 @@ const (
 	androidIcon = "apps/android/shared/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png"
 	harmonyApp  = "apps/harmony/AppScope/resources/base/media/app_icon.png"
 	harmonyIcon = "apps/harmony/entry/src/main/resources/base/media/icon.png"
+	harmonyWear = "apps/harmony/wearable/src/main/resources/base/media/icon.png"
 )
 
 // The light theme's background, the icon's fill.
@@ -72,6 +73,8 @@ var icons = []iconSpec{
 	{"apps/design/icon/light.png", androidIcon, color.RGBA{}, 432, 0.5, false},
 	{"apps/design/icon/light.png", harmonyApp, paper, 1024, 0.78, false},
 	{"apps/design/icon/light.png", harmonyIcon, paper, 1024, 0.78, false},
+	// The HarmonyOS watch's circle, as the Apple Watch's.
+	{"apps/design/icon/light.png", harmonyWear, paper, 1024, 0.6, false},
 }
 
 // opaqueBounds is the smallest rectangle holding every pixel of img that is

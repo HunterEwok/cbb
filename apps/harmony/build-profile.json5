@@ -24,6 +24,12 @@
       "name": "entry",
       "srcPath": "./entry",
       "targets": [{ "name": "default", "applyToProducts": ["default"] }]
+    },
+    // The watch's module (docs/apps.md, "HarmonyOS watches").
+    {
+      "name": "wearable",
+      "srcPath": "./wearable",
+      "targets": [{ "name": "default", "applyToProducts": ["default"] }]
     }
   ]
 }

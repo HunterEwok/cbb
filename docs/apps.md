@@ -1014,6 +1014,32 @@ settings, why it does not sync and the lab.
 
 Not yet: a run on a phone.
 
+### HarmonyOS watches
+
+The watch app (`apps/harmony/wearable`, the module of the same project, for the watches with
+HarmonyOS 5 or later, such as the Huawei Watch 5) is the Apple Watch and Wear OS apps' twin:
+it works only through its phone, over Wear Engine's messages between the phone app and the
+watch app of the same name, and shows the same page in the dark palette: how many devices are
+online, the house (sync on the phone) and the globe (Everywhere) with where it stands, each
+device with its glyph and live dot by collection, the latest events.
+
+- The phone (`model/Watch.ets`) looks for a connected watch with the app every 30 seconds and
+  sends it the state (`common/WatchState.ets`: devices, away, sync, events; never the
+  clipboard) whenever it changes. A Wear Engine message carries about a kilobyte, so the
+  state that does not fit drops the events and then the last devices, and says how many it
+  left out.
+- The watch (`model/Link.ets`) asks for the state when it opens, keeps the last one it got,
+  and sends `sync` and `away` with on or off; the phone turns its sync or its Everywhere on or
+  off as Home's switches do, and the new state comes back. Without a phone in reach the watch
+  says so and shows the last state.
+- `common/WatchState.ets` and `common/Wear.ets`, the only caller of Wear Engine, are the
+  same file in both modules, which `check.sh` checks, with the stub of Wear Engine in `check/`.
+- Wear Engine needs the developer's access from Huawei, the app's client ID from AppGallery
+  Connect in `module.json5`, and the signing certificate's fingerprint in
+  `WatchState.FINGERPRINT`; all three come with the Huawei developer account.
+
+Not yet: a run on a watch, and the watch as an admin with the emergency actions.
+
 ## Releasing the Android app
 
 Each release carries `cbb-X.Y.Z.apk` and the Wear OS app,

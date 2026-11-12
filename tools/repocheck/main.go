@@ -214,7 +214,7 @@ var silicaTranslation = regexp.MustCompile(`^apps/silica/translations/cbb-[a-z]{
 
 // harmonyTranslation matches the strings of a language other than the
 // default one (resources/base) in the HarmonyOS app.
-var harmonyTranslation = regexp.MustCompile(`^apps/harmony/(entry/src/main|AppScope)/resources/[a-z]{2,3}(_[A-Za-z]+)?/element/string\.json$`)
+var harmonyTranslation = regexp.MustCompile(`^apps/harmony/(entry/src/main|wearable/src/main|AppScope)/resources/[a-z]{2,3}(_[A-Za-z]+)?/element/string\.json$`)
 
 // appsTranslation matches the apps' strings of a language other than
 // English (tools/strings).

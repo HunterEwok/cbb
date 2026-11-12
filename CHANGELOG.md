@@ -16,14 +16,17 @@ All notable changes to cbb are documented in this file. The format follows
   why it does not sync; it sends with the system's Paste button and the Share menu, pastes
   a text, pictures or files on another device as an admin, acts as a Bluetooth keyboard in
   the lab (HID over GATT), which also types an admin's remote paste, and the member runs on
-  in the background as a continuous task (docs/apps.md, "HarmonyOS"). `cbb_member_manage` signs a remote paste
+  in the background as a continuous task (docs/apps.md, "HarmonyOS"). Its watch app
+  (`apps/harmony/wearable`, HarmonyOS 5 watches) shows the devices, sync, Everywhere and
+  the latest events through the phone over Wear Engine, and turns sync and Everywhere on or
+  off (docs/apps.md, "HarmonyOS watches"). `cbb_member_manage` signs a remote paste
   (`paste`, `paste_off`) for the apps that sign through the core. The
   protocol names its system `harmonyos`, a phone's system like `ios`, `android`, `aurora`
   and `sailfish` (docs/protocol.md, section 6), and a bug report may name it as its app.
   `ffi/bind.sh harmony` builds the core for it with OpenHarmony's native SDK
   (`ffi/ohos-sdk.sh`); `apps/harmony/check.sh` compiles and lints its ArkTS with
-  OpenHarmony's compiler; `tools/strings` writes its strings from `apps/l10n` and
-  `tools/tokens` its colours. CI's `HarmonyOS app` job builds and links the native module and
+  OpenHarmony's compiler; `tools/strings` writes its strings from `apps/l10n`,
+  `tools/tokens` its colours and `tools/icon` its icons, the watch's too. CI's `HarmonyOS app` job builds and links the native module and
   runs the check.
 - The forwarder refuses the groups their operator lists after an abuse report:
   `refused-groups` next to the key (or `-refused FILE`), one group tag a line, read again

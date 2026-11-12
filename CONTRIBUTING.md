@@ -243,7 +243,8 @@ HarmonyOS command line tools, both of which need a Huawei developer account, as 
 signing it for a phone. `check.sh` compiles the ArkTS and runs the ArkTS linter with
 OpenHarmony's own compiler, which needs no account, so that a change to the app is checked
 before it reaches DevEco Studio. CI's `HarmonyOS app` job builds and links the native module,
-runs its host test and `check.sh`. The tests in `entry/src/ohosTest` (Hypium) run on a phone
+runs its host test and `check.sh`, which checks both modules, the phone's `entry` and the
+watch's `wearable`. The tests in `entry/src/ohosTest` (Hypium) run on a phone
 or the emulator.
 
 ```sh
@@ -337,7 +338,8 @@ Catalogs of the iPhone, Watch and Mac apps, Android's `res/values*/strings.xml`,
 `translations/cbb-<language>.ts`, the HarmonyOS app's `resources/*/element/string.json` and
 the tray's `frontend/l10n`. Edit only the source:
 `en.json` gives each string's ID (its English text) and the places that show it, such as
-`ios`, `mac`, `tray`, `aurora:MainPage`, `android:settings` or `harmony:settings_title`
+`ios`, `mac`, `tray`, `aurora:MainPage`, `android:settings`, `harmony:settings_title` or
+`harmony-wear:sync` (the HarmonyOS watch)
 ([tools/strings/catalog](tools/strings/catalog/catalog.go) lists them), and each language's
 file has its translation under that ID. Texts are plain; the tool escapes them for Android
 and Qt. When Xcode adds a new key to a catalog, move it into the source.

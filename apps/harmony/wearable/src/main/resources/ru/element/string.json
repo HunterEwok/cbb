@@ -1,0 +1,21 @@
+{
+  "string": [
+    {"name": "away", "value": "Везде"},
+    {"name": "away_at_home", "value": "Дома: синхронизация напрямую."},
+    {"name": "away_connected", "value": "Через ваш хаб."},
+    {"name": "away_connecting", "value": "Подключение к хабу…"},
+    {"name": "away_off", "value": "Выключено"},
+    {"name": "away_waiting", "value": "Ждём хаб."},
+    {"name": "devices", "value": "Устройства"},
+    {"name": "latest", "value": "Последнее"},
+    {"name": "module_desc", "value": "Копируйте на одном устройстве, вставляйте на другом."},
+    {"name": "no_group", "value": "Откройте CBB на телефоне, чтобы создать группу или войти в неё."},
+    {"name": "no_phone", "value": "Телефон не подключён. Поднесите его ближе и попробуйте снова."},
+    {"name": "offline", "value": "не в сети"},
+    {"name": "online", "value": "в сети"},
+    {"name": "online_count", "value": "%1$d из %2$d в сети"},
+    {"name": "stale", "value": "По последним данным с телефона."},
+    {"name": "sync", "value": "Синхронизация"},
+    {"name": "watch_phone", "value": "Телефон этих часов"}
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "string": [
+    {"name": "away", "value": "En todas partes"},
+    {"name": "away_at_home", "value": "En casa: sincronizando directamente."},
+    {"name": "away_connected", "value": "A través de tu hub."},
+    {"name": "away_connecting", "value": "Conectando con el hub…"},
+    {"name": "away_off", "value": "Desactivado"},
+    {"name": "away_waiting", "value": "Esperando al hub."},
+    {"name": "devices", "value": "Dispositivos"},
+    {"name": "latest", "value": "Lo último"},
+    {"name": "module_desc", "value": "Copia en un dispositivo, pega en otro."},
+    {"name": "no_group", "value": "Abre CBB en el teléfono para crear un grupo o unirte a uno."},
+    {"name": "no_phone", "value": "El teléfono no está conectado. Acércalo y vuelve a intentarlo."},
+    {"name": "offline", "value": "desconectado"},
+    {"name": "online", "value": "en línea"},
+    {"name": "online_count", "value": "%1$d de %2$d en línea"},
+    {"name": "stale", "value": "Según lo último que dijo el teléfono."},
+    {"name": "sync", "value": "Sincronizar"},
+    {"name": "watch_phone", "value": "El teléfono de este reloj"}
+  ]
+}

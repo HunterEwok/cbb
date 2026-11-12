@@ -1,0 +1,21 @@
+{
+  "string": [
+    {"name": "away", "value": "हर जगह"},
+    {"name": "away_at_home", "value": "घर पर: सीधे सिंक हो रहा है।"},
+    {"name": "away_connected", "value": "आपके हब के ज़रिए।"},
+    {"name": "away_connecting", "value": "हब से जुड़ रहा है…"},
+    {"name": "away_off", "value": "बंद"},
+    {"name": "away_waiting", "value": "हब का इंतज़ार।"},
+    {"name": "devices", "value": "डिवाइस"},
+    {"name": "latest", "value": "नवीनतम"},
+    {"name": "module_desc", "value": "एक डिवाइस पर कॉपी करें, दूसरे पर पेस्ट करें।"},
+    {"name": "no_group", "value": "समूह बनाने या उससे जुड़ने के लिए फ़ोन पर CBB खोलें।"},
+    {"name": "no_phone", "value": "फ़ोन जुड़ा नहीं है। उसे पास लाएँ, फिर दोबारा कोशिश करें।"},
+    {"name": "offline", "value": "ऑफ़लाइन"},
+    {"name": "online", "value": "ऑनलाइन"},
+    {"name": "online_count", "value": "%2$d में से %1$d ऑनलाइन"},
+    {"name": "stale", "value": "जैसा फ़ोन ने पिछली बार बताया।"},
+    {"name": "sync", "value": "सिंक"},
+    {"name": "watch_phone", "value": "इस घड़ी का फ़ोन"}
+  ]
+}

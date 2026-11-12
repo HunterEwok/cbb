@@ -1,0 +1,21 @@
+{
+  "string": [
+    {"name": "away", "value": "Kila mahali"},
+    {"name": "away_at_home", "value": "Nyumbani: inasawazisha moja kwa moja."},
+    {"name": "away_connected", "value": "Kupitia kitovu chako."},
+    {"name": "away_connecting", "value": "Inaunganisha na kitovu…"},
+    {"name": "away_off", "value": "Kimezimwa"},
+    {"name": "away_waiting", "value": "Inasubiri kitovu."},
+    {"name": "devices", "value": "Vifaa"},
+    {"name": "latest", "value": "Karibuni zaidi"},
+    {"name": "module_desc", "value": "Nakili kwenye kifaa kimoja, bandika kwenye kingine."},
+    {"name": "no_group", "value": "Fungua CBB kwenye simu ili kuunda kikundi au kujiunga nacho."},
+    {"name": "no_phone", "value": "Simu haijaunganishwa. Isogeze karibu, kisha ujaribu tena."},
+    {"name": "offline", "value": "nje ya mtandao"},
+    {"name": "online", "value": "mtandaoni"},
+    {"name": "online_count", "value": "%1$d kati ya %2$d mtandaoni"},
+    {"name": "stale", "value": "Kama simu ilivyosema mwisho."},
+    {"name": "sync", "value": "Sawazisha"},
+    {"name": "watch_phone", "value": "Simu ya saa hii"}
+  ]
+}

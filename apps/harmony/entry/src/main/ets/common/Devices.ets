@@ -57,6 +57,14 @@ export function kind(d: Device): string {
   return t('device_kind_computer');
 }
 
+// Its form, as the watch draws it: phone, watch, board or computer.
+export function form(d: Device): string {
+  if (d.role === 'phone' || d.role === 'watch') {
+    return d.role;
+  }
+  return d.os === 'none' ? 'board' : 'computer';
+}
+
 // A glyph for its tile.
 export function glyph(d: Device): string {
   if (d.role === 'phone') {

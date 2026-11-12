@@ -34,6 +34,8 @@ const (
 	// ones in the dark theme.
 	harmonyLight = "apps/harmony/entry/src/main/resources/base/element/color.json"
 	harmonyDark  = "apps/harmony/entry/src/main/resources/dark/element/color.json"
+	// The watch's, the dark ones only, as watches show.
+	harmonyWatch = "apps/harmony/wearable/src/main/resources/base/element/color.json"
 )
 
 // Palette is one theme's colours, "#RRGGBB", derived from a base and an
@@ -153,7 +155,7 @@ func main() {
 	for _, f := range []struct {
 		path string
 		out  []byte
-	}{{swiftFile, swift}, {kotlinFile, kotlin}, {jsFile, js}, {harmonyLight, light}, {harmonyDark, dark}} {
+	}{{swiftFile, swift}, {kotlinFile, kotlin}, {jsFile, js}, {harmonyLight, light}, {harmonyDark, dark}, {harmonyWatch, dark}} {
 		if *check {
 			have, _ := os.ReadFile(f.path)
 			if !bytes.Equal(have, f.out) {
