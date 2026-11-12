@@ -2960,3 +2960,72 @@ fn a_set_keeps_by_its_counted_claims() {
     assert!(history.iter().all(|id| set.contains(id)));
     assert_eq!(set.state(&held).roots, vec![g.root.hash, k("new root").hash]);
 }
+
+/// The signatures this thread verifies while f runs.
+fn verified_by<T>(f: impl FnOnce() -> T) -> (T, usize) {
+    let before = super::VERIFIED.with(|n| n.get());
+    let out = f();
+    (out, super::VERIFIED.with(|n| n.get()) - before)
+}
+
+/// A record's signature is verified once: by evaluate however many
+/// passes its path takes, and by a set when the record enters it, never
+/// again by its state, its compaction, a record offered again or a
+/// counted claim read from what it holds.
+#[test]
+fn each_signature_is_verified_once() {
+    let (g, held, claim) = taken_over_group();
+    let (s, n) = verified_by(|| state_of(&g.root.key, &g.recs, &held));
+    assert_eq!(s.roots.len(), 2);
+    assert_eq!(n, g.recs.len());
+    // A set: each record once, when it enters.
+    let mut set = RecordSet::new(g.root.key.clone());
+    let (_, n) = verified_by(|| set.insert_all(g.recs.iter().cloned()));
+    assert_eq!(n, g.recs.len());
+    let (_, n) = verified_by(|| {
+        for _ in 0..3 {
+            let st = set.state(&held);
+            set.compact(&st);
+            set.insert_all(g.recs.iter().cloned());
+        }
+    });
+    assert_eq!(n, 0);
+    // A joiner told the counted claim reads it from the records it holds.
+    let mut joiner = RecordSet::new(g.root.key.clone());
+    let (_, n) = verified_by(|| {
+        joiner.insert_all(g.recs.iter().cloned());
+        assert_eq!(joiner.remember_counted([claim.id()]), Ok(()));
+        let st = joiner.state(&held);
+        joiner.compact(&st);
+    });
+    assert_eq!(n, g.recs.len());
+    assert_eq!(joiner.digest(), set.digest());
+}
+
+/// A set whose key is at its ceiling takes one more record for far less
+/// than an evaluation of all it holds: its signature, and a cut.
+#[test]
+fn one_more_record_costs_one_verification_at_most() {
+    let mut g = G::new();
+    let (p, a) = (k("phone a"), k("admin a"));
+    g.admin(&p, &a, POWER_ADMIT);
+    let mut set = RecordSet::new(g.root.key.clone());
+    set.insert_all(g.recs.iter().cloned());
+    // Past the admin key's ceiling: each record more makes the set cut.
+    for i in 0..keep::ceiling(false) + 40 {
+        let r = g.device(&a, &k(&format!("d{i}")), "d", |_| {});
+        set.insert(r).ok();
+    }
+    assert!(set.len() < g.recs.len());
+    // A record the set keeps: its signature, once.
+    let r = g.device(&k("root"), &k("one more"), "d", |_| {});
+    let (added, n) = verified_by(|| set.insert(r.clone()));
+    assert_eq!(added, Ok(Added::Stored));
+    assert_eq!(n, 1);
+    let (added, n) = verified_by(|| set.insert(r));
+    assert_eq!((added, n), (Ok(Added::Known), 0));
+    // One past where its key stopped: turned away before verifying.
+    let late = g.device(&a, &k("late"), "d", |_| {});
+    let (added, n) = verified_by(|| set.insert(late));
+    assert_eq!((added, n), (Ok(Added::NoRoom), 0));
+}
