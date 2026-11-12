@@ -41,6 +41,17 @@ const DIAL_TIMEOUT: Duration = Duration::from_secs(5);
 /// The prefix of the guests' tunnel addresses (docs/protocol.md, section 12).
 const GUEST_PREFIX: [u8; 4] = [0xfd, 0x00, 0x0c, 0xbc];
 
+/// Handshake initiations a second, from all sources together, past which
+/// the hub is under load, as WireGuard has it: every initiation must then
+/// carry a cookie, which only a source that receives at its address can
+/// have, before the hub spends a Diffie-Hellman on it.
+const UNDER_LOAD: u32 = 128;
+/// The initiations a second the hub spends a Diffie-Hellman on: under load,
+/// for one IPv4 /24 or IPv6 /64, and in all. One takes about 50
+/// microseconds of the pump's thread, which carries every client's data.
+const DH_PER_NETWORK: u32 = 32;
+const DH_ALL: u32 = 2048;
+
 /// One client of the hub: its WireGuard public key, the preshared key the
 /// hub's offer gave it, its one tunnel address, and for a guest when it goes.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -145,6 +156,8 @@ impl Hub {
             secret,
             public,
             limiter: Arc::new(RateLimiter::new(&public, HANDSHAKE_RATE_LIMIT)),
+            strict: RateLimiter::new(&public, 0),
+            second: Second::default(),
             index: IndexTable::from_os_rng(),
             obf,
             listen_awg,
@@ -253,10 +266,48 @@ struct Listening {
     handle: SocketHandle,
 }
 
+/// What the hub counted of the handshake initiations in the current second.
+struct Second {
+    began: Instant,
+    initiations: u32,
+    dh: u32,
+    by_network: HashMap<[u8; 9], u32>,
+}
+
+impl Default for Second {
+    fn default() -> Second {
+        Second { began: Instant::now(), initiations: 0, dh: 0, by_network: HashMap::new() }
+    }
+}
+
+/// The IPv4 /24 or the IPv6 /64 of an address, as the key of its count.
+fn network_of(ip: std::net::IpAddr) -> [u8; 9] {
+    let mut k = [0u8; 9];
+    let v4 = match ip {
+        std::net::IpAddr::V4(a) => Some(a),
+        std::net::IpAddr::V6(a) => a.to_ipv4_mapped(),
+    };
+    match (v4, ip) {
+        (Some(a), _) => {
+            k[0] = 4;
+            k[1..4].copy_from_slice(&a.octets()[..3]);
+        }
+        (None, std::net::IpAddr::V6(a)) => {
+            k[0] = 6;
+            k[1..].copy_from_slice(&a.octets()[..8]);
+        }
+        (None, std::net::IpAddr::V4(_)) => {}
+    }
+    k
+}
+
 struct Pump {
     secret: StaticSecret,
     public: PublicKey,
     limiter: Arc<RateLimiter>,
+    /// The limiter under load, which asks every initiation for a cookie.
+    strict: RateLimiter,
+    second: Second,
     index: IndexTable,
     obf: Option<crate::awg::Obfuscation>,
     /// AmneziaWG for what comes in, before the client is known.
@@ -382,18 +433,61 @@ impl Pump {
         }
     }
 
-    /// Which client a message from the network is for: by the key in an
-    /// initiation, by the hub's session index in the rest.
+    /// Checks a handshake initiation from the network before the hub
+    /// spends a Diffie-Hellman on it, as WireGuard's DoS protection has it:
+    /// its mac1 under the hub's key; under load, from all sources together,
+    /// a cookie (mac2), which the hub sends to a source that has none; and
+    /// within what the hub spends a second, on a source's network under
+    /// load and in all. None drops it.
+    fn admit_initiation(&mut self, from: SocketAddr, wg: &[u8]) -> Option<Packet<gotatun::packet::WgHandshakeInit>> {
+        if self.second.began.elapsed() >= Duration::from_secs(1) {
+            self.second = Second::default();
+            self.limiter.try_reset_count();
+            self.strict.try_reset_count();
+        }
+        self.second.initiations = self.second.initiations.saturating_add(1);
+        // AmneziaWG checked mac1 itself and has no cookie replies: only the
+        // group's devices know the settings that reach the hub.
+        let under = self.second.initiations > UNDER_LOAD && self.listen_awg.is_none();
+        let limiter = if under { &self.strict } else { &*self.limiter };
+        let init = match limiter.verify_packet(from, Packet::from_bytes(BytesMut::from(wg))) {
+            Ok(WgKind::HandshakeInit(p)) => p,
+            Err(TunnResult::WriteToNetwork(p)) => {
+                // The cookie goes back to where the initiation came from,
+                // whoever sent it: it is the size of the initiation's mac
+                // and only a source that receives there can use it.
+                if self.listen_awg.is_none() {
+                    let _ = self.udp.send_to(Packet::from(p).as_ref(), from);
+                }
+                return None;
+            }
+            _ => return None,
+        };
+        if self.second.dh >= DH_ALL {
+            return None;
+        }
+        if under {
+            let n = self.second.by_network.entry(network_of(from.ip())).or_insert(0);
+            if *n >= DH_PER_NETWORK {
+                return None;
+            }
+            *n += 1;
+        }
+        self.second.dh += 1;
+        Some(init)
+    }
+
+    /// The client of an initiation the hub let through, by the key in it.
+    fn client_of_init(&self, init: &Packet<gotatun::packet::WgHandshakeInit>) -> Option<[u8; 32]> {
+        let half = parse_handshake_anon(&self.secret, &self.public, init).ok()?;
+        Some(half.peer_static_public).filter(|k| self.peers.contains_key(k))
+    }
+
+    /// Which client a message from the network other than an initiation is
+    /// for: by the hub's session index.
     fn client_of(&self, wg: &[u8]) -> Option<[u8; 32]> {
         let idx = |at: usize| wg.get(at..at + 4).and_then(|b| <[u8; 4]>::try_from(b).ok()).map(u32::from_le_bytes);
         match wg.first()? {
-            1 => {
-                let WgKind::HandshakeInit(init) = Packet::from_bytes(BytesMut::from(wg)).try_into_wg().ok()? else {
-                    return None;
-                };
-                let half = parse_handshake_anon(&self.secret, &self.public, &init).ok()?;
-                Some(half.peer_static_public).filter(|k| self.peers.contains_key(k))
-            }
             2 => self.by_index.get(&idx(8)?).copied(),
             3 | 4 => self.by_index.get(&idx(4)?).copied(),
             _ => None,
@@ -418,18 +512,27 @@ impl Pump {
                 },
                 None => data.to_vec(),
             };
-            let Some(key) = self.client_of(&wg) else { continue };
-            let packet = match self.limiter.verify_packet(from, Packet::from_bytes(BytesMut::from(&wg[..]))) {
-                Ok(p) => p,
-                Err(TunnResult::WriteToNetwork(p)) => {
-                    // A cookie reply under load, to where the message came from.
-                    if let Some(s) = self.peers.get_mut(&key) {
-                        s.endpoint.get_or_insert(from);
+            let (key, packet) = if wg.first() == Some(&1) {
+                // An initiation is checked, and paid for, before the hub
+                // spends a Diffie-Hellman on finding its client.
+                let Some(init) = self.admit_initiation(from, &wg) else { continue };
+                let Some(key) = self.client_of_init(&init) else { continue };
+                (key, WgKind::HandshakeInit(init))
+            } else {
+                let Some(key) = self.client_of(&wg) else { continue };
+                let packet = match self.limiter.verify_packet(from, Packet::from_bytes(BytesMut::from(&wg[..]))) {
+                    Ok(p) => p,
+                    Err(TunnResult::WriteToNetwork(p)) => {
+                        // A cookie reply under load, to where the message came from.
+                        if let Some(s) = self.peers.get_mut(&key) {
+                            s.endpoint.get_or_insert(from);
+                        }
+                        self.send(&key, Packet::from(p).as_ref());
+                        continue;
                     }
-                    self.send(&key, Packet::from(p).as_ref());
-                    continue;
-                }
-                Err(_) => continue,
+                    Err(_) => continue,
+                };
+                (key, packet)
             };
             let Some(s) = self.peers.get_mut(&key) else { continue };
             let result = s.tunn.handle_incoming_packet(packet);
@@ -618,5 +721,148 @@ mod tests {
         assert!(check_peers(&[p.clone(), p.clone()], own).is_err());
         assert!(check_peers(&[Peer { addr: own, ..p.clone() }], own).is_err());
         assert!(check_peers(&[Peer { key: [0; 32], ..p }], own).is_err());
+    }
+
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::atomic::AtomicUsize;
+
+    /// A loopback port that writes a byte to each connection and keeps it,
+    /// and how many it took.
+    fn target() -> (u16, Arc<AtomicUsize>) {
+        let ln = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = ln.local_addr().unwrap().port();
+        let took = Arc::new(AtomicUsize::new(0));
+        let n = took.clone();
+        std::thread::spawn(move || {
+            let mut keep = Vec::new();
+            for c in ln.incoming() {
+                let Ok(mut c) = c else { continue };
+                let _ = c.write_all(b"y");
+                n.fetch_add(1, Ordering::SeqCst);
+                keep.push(c);
+            }
+        });
+        (port, took)
+    }
+
+    /// A hub with n clients, and a link of each client to it.
+    fn hub_and_links(n: usize, port: u16) -> (Hub, PublicKey, Vec<crate::tunnel::Link>) {
+        let hub_key = crate::certs::random_bytes::<32>();
+        let hub_pub = PublicKey::from(&StaticSecret::from(hub_key));
+        let own = crate::tunnel::addr("00112233445566778899aabbccddeeff").unwrap();
+        let mut peers = Vec::new();
+        let mut clients = Vec::new();
+        for i in 0..n {
+            let k = crate::certs::random_bytes::<32>();
+            let psk = crate::certs::random_bytes::<32>();
+            let addr = crate::tunnel::addr(&format!("10112233445566778899aabb{i:08x}")).unwrap();
+            peers.push(Peer { key: *PublicKey::from(&StaticSecret::from(k)).as_bytes(), psk, addr, until: None });
+            clients.push((k, psk, addr));
+        }
+        let hub = Hub::start_at(
+            &hub_key,
+            own,
+            None,
+            peers,
+            "127.0.0.1:0".parse().unwrap(),
+            Arc::new(move |_| Some(port)),
+            Arc::new(|_| {}),
+        )
+        .unwrap();
+        let ep: SocketAddr = format!("127.0.0.1:{}", hub.udp_port()).parse().unwrap();
+        let links = clients
+            .iter()
+            .map(|(k, psk, addr)| {
+                let h = crate::tunnel::Hub {
+                    device: "hub".into(),
+                    key: hub_pub.as_bytes().to_vec(),
+                    psk: psk.to_vec(),
+                    endpoints: vec![ep],
+                    next: Vec::new(),
+                    obfuscation: None,
+                    vless: None,
+                };
+                let st = crate::tunnel::State::with_key(k).unwrap();
+                crate::tunnel::Link::start_at(&st, &h, *addr, own, Arc::new(|_| {})).unwrap()
+            })
+            .collect();
+        (hub, hub_pub, links)
+    }
+
+    /// Opens a connection through a link and waits for the target's byte.
+    fn reach(l: &crate::tunnel::Link, wait: Duration) -> std::io::Result<TcpStream> {
+        let mut c = TcpStream::connect(l.local())?;
+        c.set_read_timeout(Some(wait))?;
+        let mut b = [0u8; 1];
+        c.read_exact(&mut b)?;
+        Ok(c)
+    }
+
+    /// Initiations without a valid mac1 and initiations of strangers, sent
+    /// over and over, cost the hub no Diffie-Hellman it cannot afford: past
+    /// the load, the strangers are asked for a cookie, and a client of the
+    /// hub still gets through.
+    #[test]
+    fn initiations_are_checked_before_the_hub_pays_for_them() {
+        let (port, _) = target();
+        let (hub, hub_pub, links) = hub_and_links(1, port);
+        let ep: SocketAddr = format!("127.0.0.1:{}", hub.udp_port()).parse().unwrap();
+        // Strangers' initiations, valid but for keys the hub does not know.
+        let mut packets: Vec<Vec<u8>> = (0..32)
+            .map(|_| {
+                let mut t = Tunn::new(
+                    StaticSecret::from(crate::certs::random_bytes::<32>()),
+                    hub_pub,
+                    None,
+                    None,
+                    IndexTable::from_os_rng(),
+                    Arc::new(RateLimiter::new(&hub_pub, HANDSHAKE_RATE_LIMIT)),
+                );
+                let p: Packet = t.format_handshake_initiation(true).unwrap().into();
+                p.as_ref().to_vec()
+            })
+            .collect();
+        for i in 0..32u8 {
+            let mut g = vec![i; 148];
+            g[..4].copy_from_slice(&[1, 0, 0, 0]);
+            packets.push(g);
+        }
+        let stop = Arc::new(AtomicBool::new(false));
+        let cookies = Arc::new(AtomicUsize::new(0));
+        let sent = Arc::new(AtomicUsize::new(0));
+        let flood: Vec<_> = (0..2)
+            .map(|_| {
+                let (stop, cookies, sent, packets) = (stop.clone(), cookies.clone(), sent.clone(), packets.clone());
+                std::thread::spawn(move || {
+                    let u = UdpSocket::bind("127.0.0.1:0").unwrap();
+                    u.set_nonblocking(true).unwrap();
+                    let mut buf = [0u8; 256];
+                    while !stop.load(Ordering::SeqCst) {
+                        for p in &packets {
+                            let _ = u.send_to(p, ep);
+                        }
+                        sent.fetch_add(packets.len(), Ordering::Relaxed);
+                        while let Ok((n, _)) = u.recv_from(&mut buf) {
+                            if n == 64 && buf[0] == 3 {
+                                cookies.fetch_add(1, Ordering::Relaxed);
+                            }
+                        }
+                        std::thread::sleep(Duration::from_micros(200));
+                    }
+                })
+            })
+            .collect();
+        std::thread::sleep(Duration::from_millis(500));
+        let start = Instant::now();
+        let r = reach(&links[0], Duration::from_secs(25));
+        let took = start.elapsed();
+        stop.store(true, Ordering::SeqCst);
+        for f in flood {
+            f.join().unwrap();
+        }
+        assert!(r.is_ok(), "the client did not get through in {took:?}: {r:?}");
+        assert!(sent.load(Ordering::Relaxed) > 10_000, "the flood sent {}", sent.load(Ordering::Relaxed));
+        assert!(cookies.load(Ordering::Relaxed) > 0, "the hub asked no stranger for a cookie under load");
     }
 }
