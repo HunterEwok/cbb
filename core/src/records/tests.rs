@@ -2289,3 +2289,42 @@ mod differential {
         }
     }
 }
+
+/// A key a member first took for a claim's root, and then learned as an
+/// admin key, has an admin's room from then on: its later records are
+/// kept as on a member that saw them in the order they were made.
+#[test]
+fn an_admin_key_first_named_by_a_claim_gets_its_room() {
+    let mut g = G::new();
+    let (pw, w, pb, b) = (k("watch"), k("admin w"), k("phone b"), k("admin b"));
+    let w_rec = g.admin(&pw, &w, POWER_REMOVE | POWER_FREEZE | POWER_TAKEOVER);
+    let b_rec = g.admin(&pb, &b, POWER_ADMIT | POWER_REMOVE | POWER_REMOVE_ADMINS | POWER_TAKEOVER);
+    let mut b_recs = Vec::new();
+    for i in 0..20 {
+        b_recs.push(g.device(&b, &k(&format!("d{i}")), "d", |_| {}));
+    }
+    let seen = g.seen();
+    let rm = g.rec(&b, Kind::Revoke(removal(&[w.hash, pw.hash], seen)));
+    b_recs.push(rm.clone());
+    let claim = g.rec(&w, Kind::Claim { root: b.key.clone(), seen: vec![Seen { key: g.root.hash, seq: 1, id: w_rec.id() }] });
+    let mut m1 = RecordSet::new(g.root.key.clone());
+    m1.insert_all(g.recs.iter().cloned());
+    let mut m2 = RecordSet::new(g.root.key.clone());
+    let mut first: Vec<Record> = vec![w_rec.clone(), claim.clone()];
+    first.extend(b_recs.iter().cloned());
+    for r in first {
+        let _ = m2.insert(r);
+    }
+    let _ = m2.insert(b_rec.clone());
+    for _ in 0..3 {
+        for r in &g.recs {
+            let _ = m2.insert(r.clone());
+        }
+        let st = m2.state(&BTreeMap::new());
+        m2.compact(&st);
+    }
+    assert!(m2.contains(&rm.id()));
+    assert_eq!(m1.digest(), m2.digest());
+    let (s1, s2) = (m1.state(&BTreeMap::new()), m2.state(&BTreeMap::new()));
+    assert!(s1.revoked.contains(&w.hash) && s2.revoked.contains(&w.hash));
+}

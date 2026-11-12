@@ -146,6 +146,9 @@ impl RecordSet {
                 return Ok(Added::NoRoom);
             }
         }
+        if self.ceiling(&signer).is_some() {
+            self.cut.forget_future(&signer);
+        }
         if self.cut.past(&eval::item_cut(&r, role, &self.cuts)) {
             // Its key dropped a record before it: it would not be kept.
             return Ok(Added::NoRoom);

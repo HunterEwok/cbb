@@ -145,6 +145,12 @@ impl Cut {
         self.marks.get(&it.signer).is_some_and(|(m, _)| it.pos() >= *m)
             || self.future.get(&it.signer).is_some_and(|m| it.pos() >= *m)
     }
+
+    /// Forgets where a key stopped while it had no room of its own: it has
+    /// a ceiling now (an admin key, or a promoted root).
+    pub fn forget_future(&mut self, key: &KeyHash) {
+        self.future.remove(key);
+    }
 }
 
 /// The IDs of the records a set keeps. ceiling_of gives a key's ceiling
@@ -162,6 +168,14 @@ pub fn keep_after(
 ) -> (BTreeSet<RecordId>, Cut) {
     let mut by_key: BTreeMap<KeyHash, Vec<&Item>> = BTreeMap::new();
     let mut claimed: BTreeMap<KeyHash, Vec<&Item>> = BTreeMap::new();
+    // A key with a ceiling of its own no longer stops where it stopped as
+    // a claim's root.
+    let mut cut = cut.clone();
+    let owned: Vec<KeyHash> = cut.future.keys().filter(|k| ceiling_of(k).is_some()).copied().collect();
+    for k in &owned {
+        cut.forget_future(k);
+    }
+    let cut = &cut;
     for it in items {
         if cut.past(it) {
             continue;
