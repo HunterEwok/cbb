@@ -143,7 +143,7 @@ impl Content {
             TYPE_MEDIA | TYPE_FILES => {
                 let files = self.kind == TYPE_FILES;
                 let m = self.manifest.as_ref().ok_or(RULE_MANIFEST)?;
-                if m.files() != files || m.validate().is_err() {
+                if m.files() != files || m.validate().is_err() || (files && !names_ok(m)) {
                     return Err(RULE_MANIFEST);
                 }
                 if self.text.as_ref().is_some_and(|t| t.len() > media::MAX_ALT_TEXT) {
@@ -231,6 +231,51 @@ impl Content {
         c.check()?;
         Ok(c)
     }
+}
+
+/// Whether a character is a bidirectional control (Unicode's Bidi_Control:
+/// U+061C, U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069).
+fn bidi(c: char) -> bool {
+    matches!(c, '\u{61c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
+}
+
+/// Whether a character only joins the one before it in a decomposed form
+/// (NFD): combining marks, Hangul jamo and the kana voicing marks. A name
+/// holding one is not in NFC, or may be written differently by another
+/// system; a sender writes names in NFC.
+fn joining(c: char) -> bool {
+    matches!(c,
+        '\u{300}'..='\u{36f}'
+        | '\u{1100}'..='\u{11ff}'
+        | '\u{1ab0}'..='\u{1aff}'
+        | '\u{1dc0}'..='\u{1dff}'
+        | '\u{20d0}'..='\u{20ff}'
+        | '\u{3099}'..='\u{309a}'
+        | '\u{fe20}'..='\u{fe2f}')
+}
+
+/// A path as systems that ignore case compare it: each character in lower
+/// case (the first of its lower case when that is longer).
+fn fold(path: &str) -> String {
+    path.chars().map(|c| c.to_lowercase().next().unwrap_or(c)).collect()
+}
+
+/// The rules of 0.6 on the names of files, over today's: no device name of
+/// Windows (`media::device`: CON, PRN, AUX, NUL, CONIN$, CONOUT$, COM and
+/// LPT with a digit or a superscript, with or without an extension), no
+/// bidirectional control, no character of a decomposed form, and no two
+/// paths that are one when case is ignored, nor a path inside a file so.
+fn names_ok(m: &media::Manifest) -> bool {
+    let mut seen = alloc::collections::BTreeMap::new();
+    for p in &m.parts {
+        if p.path.split('/').any(media::device) || p.path.chars().any(|c| bidi(c) || joining(c)) {
+            return false;
+        }
+        if seen.insert(fold(&p.path), p.dir).is_some() {
+            return false;
+        }
+    }
+    seen.keys().all(|path| path.match_indices('/').all(|(i, _)| seen.get(&path[..i]) != Some(&false)))
 }
 
 /// The manifest's CBOR form: 1 `size`; 2 `parts`, 1 to 10 000 maps of

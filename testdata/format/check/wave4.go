@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -185,7 +186,7 @@ func contentVerdict(b []byte) string {
 			return "content/text"
 		}
 	case 2, 3:
-		if man == nil || man.files() != (t == 3) || man.validate() != "" {
+		if man == nil || man.files() != (t == 3) || man.validate() != "" || (t == 3 && !man.namesOK()) {
 			return "content/manifest"
 		}
 		if len(text) > 256<<10 {
@@ -367,6 +368,61 @@ func (m *manifest) validate() string {
 		}
 	}
 	return ""
+}
+
+// bidiRune is Unicode's Bidi_Control: U+061C, U+200E, U+200F, U+202A to
+// U+202E, U+2066 to U+2069.
+func bidiRune(r rune) bool {
+	return r == 0x61c || r == 0x200e || r == 0x200f || (r >= 0x202a && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069)
+}
+
+// joiningRune only joins the one before it in a decomposed form: combining
+// marks, Hangul jamo, the kana voicing marks.
+func joiningRune(r rune) bool {
+	for _, x := range [][2]rune{{0x300, 0x36f}, {0x1100, 0x11ff}, {0x1ab0, 0x1aff}, {0x1dc0, 0x1dff},
+		{0x20d0, 0x20ff}, {0x3099, 0x309a}, {0xfe20, 0xfe2f}} {
+		if r >= x[0] && r <= x[1] {
+			return true
+		}
+	}
+	return false
+}
+
+// namesOK is 0.6's rules on the names of files over today's: no device
+// name of Windows in any name, no bidirectional control, no character of
+// a decomposed form, and no two paths one when each character is lowered,
+// nor a path inside a file so.
+func (m *manifest) namesOK() bool {
+	kind := map[string]bool{}
+	for _, p := range m.parts {
+		for _, name := range strings.Split(p.path, "/") {
+			if device(name) {
+				return false
+			}
+		}
+		var b strings.Builder
+		for _, r := range p.path {
+			if bidiRune(r) || joiningRune(r) {
+				return false
+			}
+			b.WriteRune(unicode.ToLower(r))
+		}
+		key := b.String()
+		if _, there := kind[key]; there {
+			return false
+		}
+		kind[key] = p.dir
+	}
+	for key := range kind {
+		for i := 0; i < len(key); i++ {
+			if key[i] == '/' {
+				if dir, there := kind[key[:i]]; there && !dir {
+					return false
+				}
+			}
+		}
+	}
+	return true
 }
 
 // device is a device name of Windows before the first dot, the spaces

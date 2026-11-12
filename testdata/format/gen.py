@@ -2038,6 +2038,37 @@ def manifest_ok(m):
     return True
 
 
+def _bidi(c):
+    o = ord(c)
+    return o in (0x61C, 0x200E, 0x200F) or 0x202A <= o <= 0x202E or 0x2066 <= o <= 0x2069
+
+
+def _joining(c):
+    o = ord(c)
+    return any(a <= o <= z for a, z in ((0x300, 0x36F), (0x1100, 0x11FF), (0x1AB0, 0x1AFF), (0x1DC0, 0x1DFF),
+                                        (0x20D0, 0x20FF), (0x3099, 0x309A), (0xFE20, 0xFE2F)))
+
+
+def names_ok(m):
+    """0.6's rules on names of files: no device name of Windows, no
+    bidirectional control, no character of a decomposed form, no two paths
+    one when each character is lowered, nor a path inside a file so."""
+    kind = {}
+    for p in m[2]:
+        path = p[2]
+        if any(_device(n) for n in path.split("/")) or any(_bidi(c) or _joining(c) for c in path):
+            return False
+        key = "".join((c.lower() or c)[0] for c in path)
+        if key in kind:
+            return False
+        kind[key] = 3 in p
+    for key in kind:
+        for i, ch in enumerate(key):
+            if ch == "/" and kind.get(key[:i]) is False:
+                return False
+    return True
+
+
 def content_rule(b):
     """The verdict on a content as section 10.3 has it: "take", "keep" (a
     type, flag or critical field of a later version: passed on, never
@@ -2083,7 +2114,7 @@ def content_rule(b):
     if t == 1 and 5 not in c:
         return "content/text"
     if t in (2, 3):
-        if man is None or (2 in man[2][0]) != (t == 3) or not manifest_ok(man):
+        if man is None or (2 in man[2][0]) != (t == 3) or not manifest_ok(man) or (t == 3 and not names_ok(man)):
             return "content/manifest"
         if len(c.get(5, "").encode()) > 256 << 10:
             return "content/text"
@@ -2343,6 +2374,21 @@ def wave4_vectors():
         ("files with one path twice as written", {0: 3, 6: {1: 10, 2: [{2: "COM\u00b9", 4: 5, 5: sha(b"a")}, {2: "COM\u00b9_", 4: 5, 5: sha(b"b")}]}}),
         ("files with a file inside a file", {0: 3, 6: {1: 10, 2: [{2: "a", 4: 5, 5: sha(b"a")}, {2: "a/b", 4: 5, 5: sha(b"b")}]}}),
         ("files with a folder that has a size", {0: 3, 6: {1: 5, 2: [{2: "d", 3: 1, 4: 5}]}}),
+        ("files named as a device with a superscript", {0: 3, 6: {1: 5, 2: [{2: "lpt\u00b3.log", 4: 5, 5: sha(b"a")}]}}),
+        ("files named as a console device", {0: 3, 6: {1: 5, 2: [{2: "d/CONIN$", 4: 5, 5: sha(b"a")}]}}),
+        ("files named as COM0 with an extension", {0: 3, 6: {1: 5, 2: [{2: "com0.tar.gz", 4: 5, 5: sha(b"a")}]}}),
+        ("files named as a device before spaces", {0: 3, 6: {1: 5, 2: [{2: "NUL  .txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with names one but for case", {0: 3, 6: {1: 10, 2: [{2: "Notes.txt", 4: 5, 5: sha(b"a")}, {2: "notes.TXT", 4: 5, 5: sha(b"b")}]}}),
+        ("files with names one but for case beyond ASCII", {0: 3, 6: {1: 10, 2: [{2: "\u00c9T\u00c9", 4: 5, 5: sha(b"a")}, {2: "\u00e9t\u00e9", 4: 5, 5: sha(b"b")}]}}),
+        ("files with a file inside a file but for case", {0: 3, 6: {1: 10, 2: [{2: "Read", 4: 5, 5: sha(b"a")}, {2: "read/me", 4: 5, 5: sha(b"b")}]}}),
+        ("files with a name not in NFC", {0: 3, 6: {1: 5, 2: [{2: "cafe\u0301.txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with a name of Hangul jamo", {0: 3, 6: {1: 5, 2: [{2: "\u1112\u1161\u11ab", 4: 5, 5: sha(b"a")}]}}),
+        ("files with a name of a kana and its voicing mark", {0: 3, 6: {1: 5, 2: [{2: "\u304b\u3099", 4: 5, 5: sha(b"a")}]}}),
+        ("files with a name that reads backwards", {0: 3, 6: {1: 5, 2: [{2: "photo\u202egpj.exe", 4: 5, 5: sha(b"a")}]}}),
+        ("files with an isolate in a name", {0: 3, 6: {1: 5, 2: [{2: "a\u2067b", 4: 5, 5: sha(b"a")}]}}),
+        ("files with a right-to-left mark in a name", {0: 3, 6: {1: 5, 2: [{2: "a\u200fb", 4: 5, 5: sha(b"a")}]}}),
+        ("files with names in NFC and in other scripts", {0: 3, 6: {1: 15, 2: [{2: "caf\u00e9.txt", 4: 5, 5: sha(b"a")}, {2: "\ud55c\uae00", 4: 5, 5: sha(b"b")}, {2: "\u05e9\u05dc\u05d5\u05dd.txt", 4: 5, 5: sha(b"c")}]}}),
+        ("files named like a device but longer", {0: 3, 6: {1: 10, 2: [{2: "COM10", 4: 5, 5: sha(b"a")}, {2: "console.log", 4: 5, 5: sha(b"b")}]}}),
         ("files of more than 1 GiB", {0: 3, 6: {1: (1 << 30) + 1, 2: [{2: "big", 4: (1 << 30) + 1, 5: sha(b"a")}]}}),
     ]
     contents = []
