@@ -538,14 +538,15 @@ class PhoneGroup internal constructor(
     }
 
     /**
-     * Makes a computer an admin (section 10, "A computer as admin"): the
-     * root issues an admin CA for the admin key the computer's hello offered
-     * (a SubjectPublicKeyInfo) and signs its device record again, naming that
-     * CA. It returns the admin CA, for the admin message, and the record to
-     * send. Only the root makes admins. keyStore is where the computer's
-     * hello says its keys live; one that keeps them in a file becomes an
-     * admin only with allowFileKey, else it throws FileKey, and a rootless
-     * install never (Rootless).
+     * Makes a phone or a computer an admin (section 10, "Admins"): the root
+     * issues an admin CA for the admin key the device's hello offered (a
+     * SubjectPublicKeyInfo) and signs its device record again, naming that CA.
+     * It returns the admin CA, for the admin message, and the record to send.
+     * Only the root makes admins. A phone joined as a member and keeps its
+     * store; for a computer, keyStore is where its hello says its keys live;
+     * one that keeps them in a file becomes an admin only with allowFileKey,
+     * else it throws FileKey, and a rootless install never (Rootless). A key
+     * the group already names for another device or a root is refused.
      */
     fun makeAdmin(
         device: String,
@@ -557,10 +558,20 @@ class PhoneGroup internal constructor(
     ): Pair<ByteArray, Member.Record> {
         if (!isRoot) throw Failure("only the root makes admins")
         val d = devices.firstOrNull { it.id == device } ?: throw Failure("unknown device")
-        if (!d.can("admin")) throw Failure("not a member that may be an admin")
+        if (device == this.device || device == records.rootDevice) throw Failure("the group's root is more than an admin")
+        val phone = d.role == "phone"
+        if (!phone && !d.can("admin")) throw Failure("not a member that may be an admin")
         if (d.frozen) throw Failure("frozen: unfreeze it or remove it")
+        if (d.adminKey != null) throw Failure("an admin already")
+        val hash = Records.keyHash(adminKey)
+        val rootKeys = (listOf(groupCA) + roots).map { Records.keyHashOfCert(it) }
+        if (devices.any { o -> o.adminKey?.contentEquals(hash) == true || o.keys.any { it.contentEquals(hash) } } ||
+            rootKeys.any { it.contentEquals(hash) }
+        ) {
+            throw Failure("the admin key belongs to another key of the group")
+        }
         val proven = d.store == Records.PROVEN
-        val store = if (proven) d.store else Records.storeOf(keyStore, d.role)
+        val store = if (proven || phone) d.store else Records.storeOf(keyStore, d.role)
         if (store == Records.ROOTLESS || d.store == Records.ROOTLESS) throw Rootless()
         if (!Records.levelAllows(keyLevel, store, true)) throw BelowKeyLevel()
         if (store == Records.FILE && !allowFileKey) throw FileKey()
@@ -571,6 +582,23 @@ class PhoneGroup internal constructor(
         )
         computerAdmins[device] = ca
         return ca to r
+    }
+
+    /**
+     * Takes the admin CA the root sent in the admin message when it made
+     * this member phone an admin (section 10, "Admins"):
+     * it must name this phone, certify adminKey (the SubjectPublicKeyInfo
+     * its hellos offered) and come from the group's current root. The phone
+     * is an admin from then on.
+     */
+    fun takeAdminCA(ca: ByteArray, adminKey: ByteArray) {
+        if (isRoot || adminCA != null) throw Failure("an admin already")
+        val info = runCatching { CertificateInfo(ca) }.getOrNull()
+        val fromRoot = runCatching { GroupCertificates.checkAdminCA(ca, currentRoot) }.isSuccess
+        if (info == null || !info.publicKey.contentEquals(adminKey) || info.commonName != "cbb admin $device" || !fromRoot) {
+            throw Failure("the admin CA is not for this phone's admin key")
+        }
+        adminCA = ca
     }
 
     /**

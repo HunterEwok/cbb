@@ -288,6 +288,54 @@ class PhoneGroupTest {
         assertEquals(64, PhoneGroup.validName("\u0436".repeat(40)).toByteArray().size)
     }
 
+    /**
+     * A phone joins as a member, and the root makes it an admin later with the
+     * admin key its hello offers (protocol.md, section 10, "Admins"); the phone
+     * takes the admin CA only for its own key and device, from the current
+     * root.
+     */
+    @Test
+    fun makePhoneAdmin() {
+        val rootKey = SoftwareSigner()
+        val g = PhoneGroup.create(rootKey, SoftwareSigner().publicKeyDER, t0)
+        val phone = SyncEngine.newID()
+        val cert = GroupCertificates.member(phone, SoftwareSigner().publicKeyDER, g.groupCA, rootKey, t0)
+        g.record(phone, "Pixel", "phone", Records.keyHashOfCert(cert), rootKey, t0, os = "android", store = Records.HARDWARE)
+        val t1 = t0.plusSeconds(1)
+        assertFailsWith<PhoneGroup.Failure> { g.makeAdmin(g.device, SoftwareSigner().publicKeyDER, rootKey, t1) }
+        // The root's key is refused: it would hand the phone a second device's admin CA.
+        assertFailsWith<PhoneGroup.Failure> { g.makeAdmin(phone, rootKey.publicKeyDER, rootKey, t1) }
+        val adminKey = SoftwareSigner()
+        // The phone's store is its record's, whatever the hello says.
+        val (ca, r) = g.makeAdmin(phone, adminKey.publicKeyDER, rootKey, t1, keyStore = Records.FILE)
+        assertTrue(g.records.records.contains(r))
+        val d = g.devices.first { it.id == phone }
+        assertTrue(d.admin)
+        assertEquals("phone", d.role)
+        assertEquals(Records.HARDWARE, d.store)
+        assertEquals(Records.POWERS.toSet(), d.powers.toSet())
+        assertFailsWith<PhoneGroup.Failure> { g.makeAdmin(phone, SoftwareSigner().publicKeyDER, rootKey, t1) }
+
+        // The member phone's side.
+        val saved = kotlinx.serialization.json.Json.parseToJsonElement(String(g.toJson())) as kotlinx.serialization.json.JsonObject
+        val member = PhoneGroup.fromJson(
+            kotlinx.serialization.json.JsonObject(saved + ("device" to kotlinx.serialization.json.JsonPrimitive(phone))).toString().toByteArray(),
+        )
+        member.isRoot = false
+        member.adminCA = null
+        assertFailsWith<PhoneGroup.Failure>("another key") { member.takeAdminCA(ca, SoftwareSigner().publicKeyDER) }
+        val foreignRoot = SoftwareSigner()
+        val foreign = GroupCertificates.adminCA(phone, adminKey.publicKeyDER, PhoneGroup.create(foreignRoot, SoftwareSigner().publicKeyDER, t0).groupCA, foreignRoot)
+        assertFailsWith<PhoneGroup.Failure>("another root") { member.takeAdminCA(foreign, adminKey.publicKeyDER) }
+        val other = GroupCertificates.adminCA(SyncEngine.newID(), adminKey.publicKeyDER, g.groupCA, rootKey)
+        assertFailsWith<PhoneGroup.Failure>("another device") { member.takeAdminCA(other, adminKey.publicKeyDER) }
+        assertFalse(member.isAdmin)
+        member.takeAdminCA(ca, adminKey.publicKeyDER)
+        assertTrue(member.isAdmin)
+        assertContentEquals(ca, member.adminCA)
+        assertFailsWith<PhoneGroup.Failure> { member.takeAdminCA(ca, adminKey.publicKeyDER) }
+    }
+
     /** The key level decides who may be an admin; the root sets it, keeping the takeover delay, and never above its own key. */
     @Test
     fun keyLevel() {

@@ -266,9 +266,6 @@
     <string name="invite_share">مشاركة الدعوة</string>
     <string name="invite_title">دعوة جهاز بعيد</string>
     <string name="invite_too_many">أُغلقت الدعوة بعد ثلاث محاولات فاشلة. أنشئ دعوة جديدة.</string>
-    <string name="join_admin">الانضمام كمشرف</string>
-    <string name="join_admin_hint">على الهاتف الجذر للمجموعة، اضغط + وامسح هذا الرمز: الجذر وحده يضيف هاتفًا كمشرف. أبقِ هذه الشاشة مفتوحة.</string>
-    <string name="join_admin_title">الانضمام كمشرف</string>
     <string name="join_group">الانضمام إلى مجموعة</string>
     <string name="join_hint">على هاتف من المجموعة، اضغط + وامسح هذا الرمز. على حاسوب من المجموعة، اضغط + واكتب الأرقام. أبقِ هذه الشاشة مفتوحة.</string>
     <string name="join_hint_tv">على هاتفك، افتح CBB، واضغط + وامسح هذا الرمز. أبقِ هذه الشاشة مفتوحة.</string>
@@ -346,6 +343,7 @@
     <string name="make_admin_body">يمكنه بعد ذلك إضافة الأجهزة وإزالتها باستخدام cbb pair وcbb remove. مفاتيحه في ملف على الحاسوب: من ينسخ هذا الملف يمكنه التصرف كمشرف حتى يزيله مشرف آخر. افعل هذا فقط لحاسوب تحافظ على أمانه.</string>
     <string name="make_admin_files_body">تسمح المجموعة عندها للمفاتيح في الملفات بأن تكون مشرفين ومحاور (الإعدادات، مفاتيح المشرفين).</string>
     <string name="make_admin_hardware_body">يمكنه بعد ذلك إضافة الأجهزة وإزالتها باستخدام cbb pair وcbb remove. مفاتيحه في عتاده الذي لا يسمح بخروجها أبدًا.</string>
+    <string name="make_admin_phone_body">سيتمكن بعدها من إضافة الأجهزة وإزالتها، ومن تولّي المجموعة إذا ضاع هذا الهاتف.</string>
     <string name="make_admin_title">جعل %1$s مشرفًا؟</string>
     <string name="make_hub">جعله محورًا</string>
     <string name="make_hub_body">عندها تصل أجهزتك إلى المجموعة عبره عندما تكون بعيدة عن المنزل، عبر مُعيد توجيه المشروع على cbb.tools. يجب أن تكون المزامنة بعيدًا عن المنزل مفعّلة هناك مسبقًا؛ ولا يشغّلها إلا مستخدمه.</string>
@@ -424,7 +422,7 @@
     <string name="reason_incoming">تغيير مدة بقاء النسخة من جهاز آخر</string>
     <string name="reason_join">الانضمام إلى المجموعة كمشرف</string>
     <string name="reason_key_level">تغيير المفاتيح التي يمكن أن تكون مشرفة</string>
-    <string name="reason_make_admin">جعل حاسوب مشرفًا</string>
+    <string name="reason_make_admin">جعل جهاز مشرفًا</string>
     <string name="reason_make_hub">جعل حاسوب محورًا</string>
     <string name="reason_make_recovery">إنشاء مفتاح استرداد</string>
     <string name="reason_move_hub">نقل المحور إلى حاسوب</string>

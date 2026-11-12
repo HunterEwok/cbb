@@ -156,7 +156,7 @@ Commands:
   remove <name or ID>     Remove a device from the group.
   rename <name or ID> <new name>
                           Give a device of the group another name (on an admin).
-  admin <name or ID>      Make a computer an admin of the group (on the group's root).
+  admin <name or ID>      Make a phone or a computer an admin (on the group's root).
   takeover <name or ID>   Claim the group from its lost root computer (on an admin); it waits.
   takeover -delay <duration>
                           Set how long such a claim waits, 0s to 168h (on the root; 72h by default).

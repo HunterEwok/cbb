@@ -1103,10 +1103,12 @@ in `admin` with the powers of an admin, `takeover` among them (the table in sect
 signs what"). The user chooses that the window makes an admin, never the joiner: any other
 window (a plain `cbb pair`, an invitation) refuses a joiner that offers `admin_key` after the key
 confirmation, with `{"error": "refused"}`, and so does an admin computer that is not the root. A
-phone that offers no admin key, such as the Aurora OS app unless the user asks to join as an
-admin, joins any admin's window as a member: the admin signs its `device` record with role
-`phone` and no `admin`, since a role gives no rights and only an admin key does (D-90). A phone that listens and shows its QR code ("The joiner listens" below)
-asks to be an admin the same way, and the root admits it as one with `cbb pair -qr -admin`. Before it certifies an
+phone that offers no admin key joins any admin's window as a member: the admin signs its
+`device` record with role `phone` and no `admin`, since a role gives no rights and only an
+admin key does (D-90). A phone that listens and shows its QR code
+("The joiner listens" below) offers none: the apps have one button to join, and the root makes
+the phone an admin later with the admin key its hellos offer (section 10, "Admins"). A joiner
+that does offer one is admitted as an admin only by the root with `cbb pair -qr -admin`. Before it certifies an
 admin key, the admitting side (the root computer, or an admin phone) checks `admin_proof` against
 `sid` of this connection, so that a key the joiner does not hold, or a proof made for another
 connection, never becomes an admin; the root computer also refuses a key its records name already
@@ -1354,7 +1356,10 @@ has a root of the same form, which the computer holds in a file (section 10, "Ad
   phone has an admin CA (section 10). Computers get member certificates; a computer holds a
   CA key only when the root phone makes it an admin (section 10, "Admins").
   A phone MUST ask for the user's presence (Face ID, the fingerprint or the passcode) before
-  it signs with the root or an admin key. A group CA has path length 1 (`checkCA`). A Welcome without CA keys makes a computer without them (section
+  it signs with the root or an admin key. Aurora OS lets no regular app ask the system for it,
+  so the Aurora app keeps its root or admin key in a token of its own in the TEE behind a PIN
+  the user chooses (at least four digits, apart from the phone's), which the TEE checks
+  before the key signs and which locks the key for good after seven wrong ones (D-94). A group CA has path length 1 (`checkCA`). A Welcome without CA keys makes a computer without them (section
   6).
 - **The app is a member.** It holds a member certificate of its own group with role
   `phone` and speaks the member protocol of section 4. It dials and never listens for
@@ -1424,10 +1429,19 @@ job checks it from 0.5.0.
 
 ### Admins
 
-Any member with the capability `admin` can be an admin, in a group a phone created and in one a computer created.
-Its admin key is in its TPM or a Mac's Secure Enclave (section 17) and otherwise a file next
-to its identity, so a thief with such a computer can act as an admin until another admin
-removes it.
+Any phone, and any member with the capability `admin`, can be an admin, in a group a phone
+created and in one a computer created. A member's admin key is in its TPM or a Mac's Secure
+Enclave (section 17) and otherwise a file next to its identity, so a thief with such a
+computer can act as an admin until another admin removes it. A phone's is in its hardware
+behind the owner's face, fingerprint or passcode (section 3).
+
+- A phone joins as a member (section 6) and offers no admin key while it joins. Once it is in
+  the group, a phone that is neither the root nor an admin makes its admin key (making it
+  asks the owner nothing; each signature does) and its hellos carry `admin_key`, its
+  SubjectPublicKeyInfo, as a member's do below. The root makes it an admin the same way, and
+  its `device` record keeps the role `phone` and the store its record named, with every power
+  (`powers` as an admin phone admitted as one). A phone without such a key, as a TV, offers
+  none and stays a member.
 
 - Every member with `admin` that is not the root makes a P-256 admin key when it starts in a group
   and keeps it in the identity file (`admin_key`,
@@ -1436,7 +1450,8 @@ removes it.
   SubjectPublicKeyInfo.
 - The root makes it an admin, the root phone with "Make it an admin" and the root computer
   with `cbb admin NAME`, after the user allows a computer whose keys sit in a file (section
-  17): it issues the member's admin CA for that key (the profile above, CN
+  17); it refuses a key the records already name for another device or a root, which would
+  give its holder a second device's admin CA. It issues the member's admin CA for that key (the profile above, CN
   `cbb admin <device ID>`), signs a `device` record for the member that names
   that admin CA in `admin`, and sends `{"t":"admin","admin_ca":...}` on its connection to
   the member. The member must be connected.

@@ -94,6 +94,7 @@
   "If this device was not lost, remove %s from the group.": "Si este dispositivo no se perdió, quita %s del grupo.",
   "If this is your home network, mark it as home.": "Si es tu red de casa, márcala como la de casa.",
   "It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe.": "Entonces podrá añadir y quitar dispositivos con cbb pair y cbb remove. Su clave es un archivo en el ordenador, así que hazlo solo con un ordenador que mantengas seguro.",
+  "It can then add and remove devices. Its keys are in the phone's hardware, which never lets them out.": "Así podrá añadir y quitar dispositivos. Sus claves están en el hardware del teléfono, que nunca las deja salir.",
   "It is a hub now that only passes the copies on, and reads none of them.": "Ahora es un hub que solo reenvía las copias y no lee ninguna.",
   "It is a hub now.": "Ahora es un hub.",
   "It is an admin now.": "Ahora es administrador.",

@@ -13,7 +13,7 @@ Dialog {
     canAccept: !app.busy && field.text.trim().length > 0 && unescape(encodeURIComponent(field.text.trim())).length <= 64
                && !/[\u0000-\u001f\u007f-\u009f]/.test(field.text)
 
-    onAccepted: app.manage("rename", device.device, field.text.trim())
+    onAccepted: app.manage("rename", device.id, field.text.trim())
 
     Column {
         width: parent.width

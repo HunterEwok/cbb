@@ -185,6 +185,7 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
     /// rootless install, which is never an admin (D-79).
     public enum Failure: Error, Equatable {
         case cannotRemoveItself, unknownDevice, notAdmin, cannotRemoveRoot, notRoot, notAComputer, frozen, notFrozen, invalidName, fileKey, rootless
+        case alreadyAdmin, keyTaken, notThisAdminCA
         /// An admin, or the root's own device, reads the copies: it is no
         /// hub that only passes them on.
         case readsCopies
@@ -579,22 +580,32 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
         return try sign(b, caSigner: caSigner)
     }
 
-    /// Makes a computer an admin (section 10, "Admins"): the
-    /// root issues an admin CA for the admin key the computer's hello
-    /// offered (a SubjectPublicKeyInfo) and signs its device record again,
-    /// naming that CA. It returns the admin CA, for the admin message, and
-    /// the record to send. Only the root makes admins. keyStore is where
-    /// the computer's hello says its keys live; one that keeps them in a
-    /// file becomes an admin only with allowFileKey, else Failure.fileKey,
-    /// and a rootless install never (Failure.rootless).
+    /// Makes a phone or a computer an admin (section 10, "Admins"): the root
+    /// issues an admin CA for the admin key the device's hello offered (a
+    /// SubjectPublicKeyInfo) and signs its device record again, naming that CA.
+    /// It returns the admin CA, for the admin message, and the record to send.
+    /// Only the root makes admins. A phone joined as a member and keeps its
+    /// store; for a computer, keyStore is where its hello says its keys live;
+    /// one that keeps them in a file becomes an admin only with allowFileKey,
+    /// else Failure.fileKey, and a rootless install never (Failure.rootless). A
+    /// key the group already names for another device or a root is refused
+    /// (Failure.keyTaken).
     public mutating func makeAdmin(device: String, adminKey: Data, rootSigner: CertificateSigner, now: Date,
                                    keyStore: String? = nil, allowFileKey: Bool = false) throws -> (adminCA: Data, record: Member.Record) {
         guard isRoot else { throw Failure.notRoot }
         guard let d = devices.first(where: { $0.id == device }) else { throw Failure.unknownDevice }
-        guard d.can("admin") else { throw Failure.notAComputer }
+        guard device != self.device, device != records.rootDevice else { throw Failure.alreadyAdmin }
+        let phone = d.role == "phone"
+        guard phone || d.can("admin") else { throw Failure.notAComputer }
         guard !d.frozen else { throw Failure.frozen }
+        guard d.adminKey == nil else { throw Failure.alreadyAdmin }
+        let hash = Records.keyHash(spki: adminKey)
+        let rootKeys = ([groupCA] + roots).compactMap { try? Records.keyHash(cert: $0) }
+        guard !devices.contains(where: { $0.adminKey == hash || $0.keys.contains(hash) }), !rootKeys.contains(hash) else {
+            throw Failure.keyTaken
+        }
         let proven = d.store == Records.proven
-        let store = proven ? d.store : Records.store(keyStore, role: d.role)
+        let store = proven || phone ? d.store : Records.store(keyStore, role: d.role)
         guard store != Records.rootless, d.store != Records.rootless else { throw Failure.rootless }
         guard Records.levelAllows(keyLevel, store: store, consent: true) else { throw Failure.belowKeyLevel }
         guard store != Records.file || allowFileKey else { throw Failure.fileKey }
@@ -603,6 +614,18 @@ public struct PhoneGroup: Codable, Equatable, Sendable {
                            store: store, kind: proven ? d.kind : nil, proof: proven ? d.proof : nil, seal: d.seal, caSigner: rootSigner, now: now)
         computerAdmins[device] = ca
         return (ca, r)
+    }
+
+    /// Takes the admin CA the root sent in the admin message when it made this
+    /// member phone an admin (section 10, "Admins"): it must name this phone,
+    /// certify adminKey (the SubjectPublicKeyInfo its hellos offered) and come
+    /// from the group's current root, else Failure.notThisAdminCA. The phone is
+    /// an admin from then on.
+    public mutating func takeAdminCA(_ ca: Data, adminKey: Data) throws {
+        guard !isRoot, adminCA == nil else { throw Failure.alreadyAdmin }
+        guard let info = try? CertificateInfo(der: ca), info.publicKey == adminKey, info.commonName == "cbb admin " + device,
+              (try? GroupCertificates.checkAdminCA(ca, root: currentRoot)) != nil else { throw Failure.notThisAdminCA }
+        adminCA = ca
     }
 
     /// Makes a watch an admin (section 10, "Watches"): the root issues an

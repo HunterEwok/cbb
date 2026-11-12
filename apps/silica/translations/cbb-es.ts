@@ -27,14 +27,6 @@
         <translation>Conectando con el dispositivo…</translation>
     </message>
     <message>
-        <source>For a phone that joins as an admin</source>
-        <translation>Para un teléfono que se une como admin</translation>
-    </message>
-    <message>
-        <source>Make it an admin</source>
-        <translation>Hacerlo admin</translation>
-    </message>
-    <message>
         <source>On the device to add, choose to join a group, then point the camera at the code it shows.</source>
         <translation>En el dispositivo que quieres añadir, elige unirte a un grupo y apunta la cámara al código que muestre.</translation>
     </message>
@@ -124,6 +116,17 @@
     <message>
         <source>devices unknown here</source>
         <translation>dispositivos desconocidos aquí</translation>
+    </message>
+</context>
+<context>
+    <name>App</name>
+    <message>
+        <source>The clipboard holds no text.</source>
+        <translation>El portapapeles no contiene texto.</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>No hay nada que enviar: no se pudo leer ningún archivo.</translation>
     </message>
 </context>
 <context>
@@ -260,6 +263,29 @@
     <message>
         <source>Version %1 fixes this: update CBB.</source>
         <translation>La versión %1 lo corrige: actualiza CBB.</translation>
+    </message>
+</context>
+<context>
+    <name>ChangePinDialog</name>
+    <message>
+        <source>Change</source>
+        <translation>Cambiar</translation>
+    </message>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>Cambiar el PIN de administrador</translation>
+    </message>
+    <message>
+        <source>Current PIN</source>
+        <translation>PIN actual</translation>
+    </message>
+    <message>
+        <source>New PIN</source>
+        <translation>PIN nuevo</translation>
+    </message>
+    <message>
+        <source>The new PIN again</source>
+        <translation>El PIN nuevo otra vez</translation>
     </message>
 </context>
 <context>
@@ -404,6 +430,10 @@
         <translation>Silenciando %1</translation>
     </message>
     <message>
+        <source>Paste on it…</source>
+        <translation>Pegar en él…</translation>
+    </message>
+    <message>
         <source>Remove</source>
         <translation>Quitar</translation>
     </message>
@@ -475,6 +505,10 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>Adding a device needs the admin PIN.</source>
+        <translation>Añadir un dispositivo requiere el PIN de administrador.</translation>
+    </message>
+    <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
         <translation>Respondió otro dispositivo en la dirección del código. Escanea el código de nuevo.</translation>
     </message>
@@ -503,12 +537,20 @@
         <translation>Escanea el código QR de la hoja de recuperación: en un teléfono nuevo no basta con la clave escrita.</translation>
     </message>
     <message>
+        <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
+        <translation>Siete PIN incorrectos bloquearon la clave de administrador para siempre; el teléfono sigue en el grupo como miembro.</translation>
+    </message>
+    <message>
         <source>Something in CBB broke. It starts again.</source>
         <translation>Algo se rompió en CBB. Vuelve a empezar.</translation>
     </message>
     <message>
         <source>That phone asks to be an admin. Only the group's root makes admins; on that phone, join without being an admin.</source>
         <translation>Ese teléfono pide ser admin. Solo la raíz del grupo nombra admins; en ese teléfono, únete sin ser admin.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is needed first.</source>
+        <translation>Primero hace falta el PIN de administrador.</translation>
     </message>
     <message>
         <source>The claim to restore the group became void.</source>
@@ -521,6 +563,10 @@
     <message>
         <source>The code did not match. Scan the code the other device shows now.</source>
         <translation>El código no coincide. Escanea el código que muestra ahora el otro dispositivo.</translation>
+    </message>
+    <message>
+        <source>The device did not paste.</source>
+        <translation>El dispositivo no pegó.</translation>
     </message>
     <message>
         <source>The device did not take the command.</source>
@@ -547,8 +593,8 @@
         <translation>La invitación ha caducado. Pide una nueva.</translation>
     </message>
     <message>
-        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
-        <translation>El otro dispositivo no admitió este teléfono como administrador. Solo la raíz del grupo nombra administradores: allí, admítelo como administrador (cbb pair -qr -admin), o únete sin ser administrador.</translation>
+        <source>The other device did not admit this phone as an admin. Only the device that made the group makes admins: scan the code there, or join without being an admin.</source>
+        <translation>El otro dispositivo no admitió este teléfono como administrador. Solo el dispositivo que creó el grupo nombra administradores: escanea el código allí, o únete sin ser administrador.</translation>
     </message>
     <message>
         <source>The other device did not join.</source>
@@ -635,6 +681,10 @@
         <translation>El elemento seguro del teléfono no firmó.</translation>
     </message>
     <message>
+        <source>The phone's secure element did not take the PIN.</source>
+        <translation>El elemento seguro del teléfono no aceptó el PIN.</translation>
+    </message>
+    <message>
         <source>The phone's secure element holds a broken key.</source>
         <translation>El elemento seguro del teléfono guarda una clave dañada.</translation>
     </message>
@@ -673,6 +723,10 @@
     <message>
         <source>This phone keeps no keys for apps.</source>
         <translation>Este teléfono no guarda claves para las apps.</translation>
+    </message>
+    <message>
+        <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
+        <translation>La clave de administrador de este teléfono es anterior al PIN de administrador. Sal del grupo y vuelve a unirte.</translation>
     </message>
 </context>
 <context>
@@ -807,10 +861,6 @@
         <translation>Unirse a un grupo</translation>
     </message>
     <message>
-        <source>Join as an admin</source>
-        <translation>Unirse como administrador</translation>
-    </message>
-    <message>
         <source>Join with an invitation</source>
         <translation>Unirse con una invitación</translation>
     </message>
@@ -825,10 +875,6 @@
     <message>
         <source>On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open.</source>
         <translation>En un teléfono del grupo, toca + y escanea este código. En un ordenador del grupo, toca + y escribe los números. Mantén esta pantalla abierta.</translation>
-    </message>
-    <message>
-        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
-        <translation>En el ordenador raíz del grupo, admite este teléfono como administrador con este código: en la app CBB, añade un dispositivo y elige admitirlo como administrador, o ejecuta cbb pair -qr -admin. Mantén esta pantalla abierta.</translation>
     </message>
     <message>
         <source>The phone is in the group now.</source>
@@ -1017,10 +1063,6 @@
         <translation>Unirse a un grupo</translation>
     </message>
     <message>
-        <source>Join a group as an admin</source>
-        <translation>Unirse a un grupo como administrador</translation>
-    </message>
-    <message>
         <source>Join with an invitation</source>
         <translation>Unirse con una invitación</translation>
     </message>
@@ -1029,8 +1071,8 @@
         <translation>¿Perdiste el teléfono?</translation>
     </message>
     <message>
-        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
-        <translation>Haz administrador a un segundo teléfono: en él, toca Unirse a un grupo como administrador y escanea su código aquí con Escanear un código. Toca para cerrar.</translation>
+        <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
+        <translation>Haz administrador a un segundo teléfono: añádelo al grupo, ábrelo aquí y toca Hacer admin. Toca para cerrar.</translation>
     </message>
     <message>
         <source>New collection…</source>
@@ -1140,6 +1182,10 @@
         <translation>Un vídeo</translation>
     </message>
     <message>
+        <source>An admin muted this phone, so its copies stay on it.</source>
+        <translation>Un administrador silenció este teléfono, así que sus copias se quedan en él.</translation>
+    </message>
+    <message>
         <source>An image</source>
         <translation>Una imagen</translation>
     </message>
@@ -1200,6 +1246,100 @@
     <message>
         <source>a file</source>
         <translation>un archivo</translation>
+    </message>
+</context>
+<context>
+    <name>PastePage</name>
+    <message>
+        <source>A paste suits most apps; typing suits those that take no paste, and only up to 4 KB. Enter runs a command in a terminal, so the computer takes it only when its user allowed that. A secret leaves no trace in the computer's log or clipboard.</source>
+        <translation>Pegar sirve para la mayoría de las apps; escribir sirve para las que no aceptan pegar, y solo hasta 4 KB. Intro ejecuta una orden en una terminal, así que el ordenador lo acepta solo si su usuario lo permitió. Un secreto no deja rastro en el registro ni en el portapapeles del ordenador.</translation>
+    </message>
+    <message>
+        <source>A picture or files go to the group as a copy, and the computer pastes them where its focus is, as Ctrl+V would: into a chat, a document or a folder. Enter, if on, sends them in a chat.</source>
+        <translation>Una imagen o archivos van al grupo como una copia, y el ordenador los pega donde tiene el foco, como lo haría Ctrl+V: en un chat, un documento o una carpeta. Intro, si está activado, los envía en un chat.</translation>
+    </message>
+    <message>
+        <source>A secret</source>
+        <translation>Un secreto</translation>
+    </message>
+    <message>
+        <source>It goes where %1's keyboard focus is, once its user turned remote paste on there. Left empty, Paste sends what the clipboard holds.</source>
+        <translation>Va adonde esté el foco del teclado de %1, una vez que su usuario haya activado allí el pegado remoto. Si se deja vacío, Pegar envía lo que hay en el portapapeles.</translation>
+    </message>
+    <message>
+        <source>Paste</source>
+        <translation>Pegar</translation>
+    </message>
+    <message>
+        <source>Paste a picture or files…</source>
+        <translation>Pegar una imagen o archivos…</translation>
+    </message>
+    <message>
+        <source>Paste on %1</source>
+        <translation>Pegar en %1</translation>
+    </message>
+    <message>
+        <source>Press Enter after it</source>
+        <translation>Pulsar Intro después</translation>
+    </message>
+    <message>
+        <source>Text</source>
+        <translation>Texto</translation>
+    </message>
+    <message>
+        <source>Type it key by key</source>
+        <translation>Escribirlo tecla a tecla</translation>
+    </message>
+</context>
+<context>
+    <name>PinDialog</name>
+    <message>
+        <source>Admin PIN</source>
+        <translation>PIN de administrador</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>El PIN propio de CBB, de al menos cuatro cifras. No uses el código de desbloqueo del teléfono. El elemento seguro del teléfono lo comprueba antes de cada acción de administrador; siete PIN incorrectos bloquean la clave de administrador para siempre y nadie puede desbloquearla.</translation>
+    </message>
+    <message>
+        <source>Choose the admin PIN</source>
+        <translation>Elige el PIN de administrador</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>Confirmar</translation>
+    </message>
+    <message>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <source>Set</source>
+        <translation>Fijar</translation>
+    </message>
+    <message>
+        <source>The PIN again</source>
+        <translation>El PIN otra vez</translation>
+    </message>
+    <message>
+        <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
+        <translation>El elemento seguro del teléfono comprueba el PIN; siete PIN incorrectos bloquean la clave de administrador para siempre.</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin later. Cancel to join as a member only.</source>
+        <translation>Con el PIN de administrador, la raíz del grupo podrá hacer admin a este teléfono más adelante. Cancela para unirte solo como miembro.</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin.</source>
+        <translation>Con el PIN de administrador, la raíz del grupo puede hacer admin a este teléfono.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
+        <translation>PIN incorrecto. Queda un intento: el próximo PIN incorrecto bloquea la clave de administrador para siempre.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>PIN incorrecto. Intentos restantes: %1.</translation>
     </message>
 </context>
 <context>
@@ -1362,6 +1502,10 @@
         <translation>Como el teléfono</translation>
     </message>
     <message>
+        <source>Change the admin PIN</source>
+        <translation>Cambiar el PIN de administrador</translation>
+    </message>
+    <message>
         <source>Checking…</source>
         <translation>Comprobando…</translation>
     </message>
@@ -1380,6 +1524,10 @@
     <message>
         <source>Devices join or leave</source>
         <translation>Dispositivos que se unen o salen</translation>
+    </message>
+    <message>
+        <source>Get ready to be an admin</source>
+        <translation>Prepararse para ser admin</translation>
     </message>
     <message>
         <source>Group</source>
@@ -1482,6 +1630,10 @@
         <translation>Ajustes</translation>
     </message>
     <message>
+        <source>Seven wrong PINs locked the admin key for good. The phone stays in the group as a member; to be an admin again, reinstall CBB and join as a new device.</source>
+        <translation>Siete PIN incorrectos bloquearon la clave de administrador para siempre. El teléfono sigue en el grupo como miembro; para volver a ser administrador, reinstala CBB y únete como un dispositivo nuevo.</translation>
+    </message>
+    <message>
         <source>Show error details</source>
         <translation>Mostrar detalles de los errores</translation>
     </message>
@@ -1494,8 +1646,24 @@
         <translation>Sistema</translation>
     </message>
     <message>
+        <source>The admin PIN is changed.</source>
+        <translation>El PIN de administrador ha cambiado.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is not changed.</source>
+        <translation>El PIN de administrador no ha cambiado.</translation>
+    </message>
+    <message>
+        <source>The group's root can make this phone an admin: on the root, open this phone and tap Make an admin.</source>
+        <translation>La raíz del grupo puede hacer admin a este teléfono: en la raíz, abre este teléfono y toca Hacer admin.</translation>
+    </message>
+    <message>
         <source>Version</source>
         <translation>Versión</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>PIN incorrecto. Intentos restantes: %1.</translation>
     </message>
 </context>
 <context>

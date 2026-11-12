@@ -94,6 +94,7 @@
   "If this device was not lost, remove %s from the group.": "إن لم يكن هذا الجهاز مفقودًا، فأزل %s من المجموعة.",
   "If this is your home network, mark it as home.": "إن كانت هذه شبكة منزلك، فاجعلها شبكة المنزل.",
   "It can then add and remove devices with cbb pair and cbb remove. Its key is a file on the computer, so do this only for a computer you keep safe.": "يمكنه بعد ذلك إضافة الأجهزة وإزالتها باستخدام cbb pair وcbb remove. مفتاحه ملف على الحاسوب، لذا افعل هذا فقط لحاسوب تحافظ على أمانه.",
+  "It can then add and remove devices. Its keys are in the phone's hardware, which never lets them out.": "سيتمكن بعدها من إضافة الأجهزة وإزالتها. مفاتيحه في عتاد الهاتف، ولا تخرج منه أبدًا.",
   "It is a hub now that only passes the copies on, and reads none of them.": "أصبح الآن محورًا يمرّر النسخ فقط، ولا يقرأ أيًّا منها.",
   "It is a hub now.": "أصبح الآن محورًا.",
   "It is an admin now.": "أصبح الآن مشرفًا.",

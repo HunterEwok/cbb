@@ -930,7 +930,7 @@ What changes the group goes to the admin socket, which only root reaches (D-62),
 used to run `cbb` as the administrator and the system asked for the password on every
 action. Instead the user at the screen confirms an admin action with the system's own
 prompt, and the service checks that confirmation itself, never what the caller says
-(`member/src/confirm.rs`, D-95). Actions come in three tiers:
+(`member/src/confirm.rs`, D-97). Actions come in three tiers:
 
 - **This device itself** (muting or unmuting it, its own sync): no prompt.
 - **The group's everyday changes** (admitting, removing or renaming a device, making a hub,
@@ -1872,17 +1872,18 @@ made, so two phones cannot share one CA key. Instead:
 - Every admin phone, the first one included, has an **admin CA** of its own: a key in its
   Secure Enclave or StrongBox, certified by the root as a CA with path length 0. Admin keys
   sign only when the user confirms with Face ID, Touch ID, the fingerprint or the passcode,
-  so a locked phone in a thief's hand signs nothing.
+  so a locked phone in a thief's hand signs nothing. Aurora OS gives an app none of these,
+  so its app asks for a PIN of its own, which the TEE checks and counts (D-94).
 - Each phone also has a separate member key and certificate, as every member has, for its
   everyday connections; that key needs no confirmation.
 - A member certificate comes from whichever admin admitted the device. Members present
   their certificate with the admin CA's certificate in the TLS handshake and check peers
   against the group root, so a certificate from any admin is valid everywhere.
-- Making a second phone an admin: the second phone joins as every device does (it scans the
-  first phone's QR code in "Add a device"), then the first phone offers "Make it an admin";
-  the second phone sends the public key of its new admin key, and the first phone signs its
-  admin CA certificate with the root key. From then on both are equal, with one exception:
-  only the root key can make further admins. If the root phone is lost, the remaining admin
+- Making a second phone an admin: the second phone joins as a member, as every device does
+  (the first phone scans its QR code in "Add a device"); its hellos offer the public key of
+  its admin key, and the first phone's "Make it an admin" signs its admin CA certificate with
+  the root key. There is one button to join, never one to join as an admin. From then on
+  both are equal, with one exception: only the root key can make further admins. If the root phone is lost, the remaining admin
   **becomes the root** (below).
 
 **The devices list.** Every admission produces a signed **device record**: the device ID,
@@ -1927,8 +1928,8 @@ an admin until the phone is removed; when two admins revoke each other, both los
 rights (the rule depends only on the set of records), and the user starts the group anew from
 the phone in hand.
 
-**A computer as admin.** The root phone can also make a computer of its group an admin, for
-a user who would rather admit and remove devices from a terminal. Every computer of a phone
+**A computer as admin.** The root phone can also make a computer of its group an admin, as it
+does a second phone, for a user who would rather admit and remove devices from a terminal. Every computer of a phone
 group keeps an admin key next to its identity and offers its public key in the member
 protocol; "Make it an admin" on the root phone certifies it as an admin CA and sends that to
 the computer. From then on the computer admits computers with `cbb pair`, removes
