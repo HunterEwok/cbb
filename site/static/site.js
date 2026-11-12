@@ -2,7 +2,7 @@
 //
 // The site's script, deferred: theme.js has put the reader's theme on
 // <html> before the page was drawn. This wires the theme button, adds a
-// copy button to each command, draws the chalk of each board as it first
+// copy button to each command, draws the lines of each drawing as it first
 // comes into view and then lets it move a little now and then, and, on the
 // download page, points at the reader's own system. Without it the site
 // works as before: the theme follows the system, the drawings are simply
@@ -33,7 +33,7 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    var button = document.querySelector(".theme");
+    var button = document.querySelector(".theme:not(.look)");
     if (button) {
       var order = ["", "light", "dark"];
       var show = function (choice) {
@@ -51,6 +51,30 @@
         } catch (e) { /* a browser that keeps nothing still switches for this page */ }
         apply(next);
         show(next);
+      });
+    }
+
+    // The look: the blueprint, or the chalkboard, kept like the theme.
+    var looks = document.querySelector(".look");
+    var ink = document.getElementById("look-ink"), board = document.getElementById("look-board");
+    if (looks && ink && board) {
+      var showLook = function () {
+        var on = root.getAttribute("data-look") === "board" ? "board" : "ink";
+        var label = looks.getAttribute("data-" + on);
+        looks.setAttribute("aria-label", label);
+        looks.title = label;
+      };
+      showLook();
+      looks.hidden = false;
+      looks.addEventListener("click", function () {
+        var next = root.getAttribute("data-look") === "board" ? "" : "board";
+        try {
+          if (next) localStorage.setItem("cbb-look", next); else localStorage.removeItem("cbb-look");
+        } catch (e) { /* a browser that keeps nothing still switches for this page */ }
+        if (next) root.setAttribute("data-look", next); else root.removeAttribute("data-look");
+        board.media = next ? "all" : "not all";
+        ink.media = next ? "not all" : "all";
+        showLook();
       });
     }
 
@@ -72,21 +96,16 @@
       });
     }
 
-    // Each board but the first, drawing, table or commands, is written in
-    // chalk once, as it first comes into view.
+    // Each drawing but the first, table or commands is drawn once, as it
+    // first comes into view, and a little later moves now and then (the
+    // stylesheet says how). Not for those who ask for less motion.
     var lively = window.matchMedia && window.matchMedia("(prefers-reduced-motion: no-preference)").matches;
-    // Until when the chalk's grain holds still: while a board is being
-    // drawn and while the page scrolls, so that the browser does not filter
-    // every board again at the same time and the motion stays smooth.
-    var still = 0;
-    var hold = function (ms) { still = Math.max(still, Date.now() + ms); };
     if ("IntersectionObserver" in window) {
       var boards = new IntersectionObserver(function (seen) {
         seen.forEach(function (e) {
           if (e.isIntersecting) {
             e.target.classList.add("drawn");
             boards.unobserve(e.target);
-            hold(1100);
             if (lively) setTimeout(function (f) { f.classList.add("alive"); }, 1550, e.target);
           }
         });
@@ -96,36 +115,9 @@
       });
       root.classList.add("draw");
     }
-
-    // Then the chalk comes alive a little: each drawn board moves now and
-    // then (the stylesheet says how), and the chalk's grain shifts a few
-    // times a second while a board is on the screen, as in a hand-drawn
-    // film. Not for those who ask for less motion.
     if (lively) {
       var hero = document.querySelector(".hero-board");
       if (hero) setTimeout(function () { hero.classList.add("alive"); }, 2250);
-      hold(1700);
-      window.addEventListener("scroll", function () { hold(250); }, { passive: true });
-      var grain = document.querySelectorAll("#chalk feTurbulence, #chalk-words feTurbulence");
-      var warp = document.querySelector("#chalk feDisplacementMap");
-      var seen = 0, step = 0, shown = [];
-      if ("IntersectionObserver" in window) {
-        var watch = new IntersectionObserver(function (es) {
-          es.forEach(function (e) {
-            var i = shown.indexOf(e.target);
-            if (e.isIntersecting && i < 0) shown.push(e.target);
-            if (!e.isIntersecting && i >= 0) shown.splice(i, 1);
-          });
-          seen = shown.length;
-        });
-        document.querySelectorAll(".frame").forEach(function (f) { watch.observe(f); });
-      }
-      setInterval(function () {
-        if (!seen || document.hidden || Date.now() < still) return;
-        step = (step + 1) % 3;
-        grain.forEach(function (t, i) { t.setAttribute("seed", [3, 7, 11][step] + i * 18); });
-        if (warp) warp.setAttribute("scale", [1.4, 1.9, 1.6][step]);
-      }, 220);
     }
 
     // The download page: the reader's own system first, with its own button.
