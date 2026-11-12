@@ -37,7 +37,7 @@ github.com/HunterEwok/cbb/tools/bench/b.go:1.1,2.2 9 0
 github.com/HunterEwok/cbb/internal/desktop/x.go:1.1,2.2 4 1
 `)
 	var out strings.Builder
-	if err := run([]string{a, b}, nil, nil, "", 1, "", &out); err != nil {
+	if err := run([]string{a, b}, nil, nil, "", 1, 0, "", &out); err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{"| go | 5 | 10 | 50.0 |", "| internal/attest | 2 | 0.0 |", "| go-core | 1 | 4 | 25.0 |", "| internal/desktop | 4 | 100.0 |"} {
@@ -65,12 +65,43 @@ func TestFloor(t *testing.T) {
 	} {
 		floor := write(t, "floor.json", c.floor)
 		var out strings.Builder
-		err := run([]string{prof}, nil, nil, floor, 1, "", &out)
+		err := run([]string{prof}, nil, nil, floor, 1, 0, "", &out)
 		if (err != nil) != c.fail {
 			t.Errorf("floor %s: error %v, want failure %v", c.floor, err, c.fail)
 		}
 		if !strings.Contains(out.String(), c.say) {
 			t.Errorf("floor %s: no %q in\n%s", c.floor, c.say, out.String())
+		}
+	}
+}
+
+// With a target above the floors, a part between the two is marked and
+// warned of, and the run still passes; below the floor it fails as before.
+func TestTarget(t *testing.T) {
+	prof := write(t, "c.out", "mode: set\ngithub.com/HunterEwok/cbb/cmd/cbb/m.go:1.1,2.2 1 1\ngithub.com/HunterEwok/cbb/cmd/cbb/m.go:3.1,4.2 1 0\n")
+	for _, c := range []struct {
+		floor  string
+		target float64
+		fail   bool
+		say    []string
+	}{
+		{`{"go": 45}`, 90, false, []string{"| below the target of 90 |", "::warning title=coverage below the target::go 50.0% < 90%"}},
+		{`{"go": 45}`, 50, false, []string{"| ok |"}},
+		{`{"go": 60}`, 90, true, []string{"below the floor"}},
+	} {
+		floor := write(t, "floor.json", c.floor)
+		var out strings.Builder
+		err := run([]string{prof}, nil, nil, floor, 1, c.target, "", &out)
+		if (err != nil) != c.fail {
+			t.Errorf("floor %s, target %v: error %v, want failure %v", c.floor, c.target, err, c.fail)
+		}
+		for _, say := range c.say {
+			if !strings.Contains(out.String(), say) {
+				t.Errorf("floor %s, target %v: no %q in\n%s", c.floor, c.target, say, out.String())
+			}
+		}
+		if !c.fail && c.target <= 50 && strings.Contains(out.String(), "::warning") {
+			t.Errorf("a warning at the target:\n%s", out.String())
 		}
 	}
 }
@@ -84,7 +115,7 @@ func TestLLVMAndJaCoCo(t *testing.T) {
 <report name="kit"><package name="p"><sourcefile name="A.kt"><counter type="LINE" missed="1" covered="1"/></sourcefile>
 <counter type="LINE" missed="1" covered="1"/></package><counter type="INSTRUCTION" missed="5" covered="5"/><counter type="LINE" missed="3" covered="7"/></report>`)
 	var out strings.Builder
-	err := run(nil, []string{"rust-core=" + llvm, "rust-member=" + llvm}, []string{"kotlin-kit=" + jacoco}, "", 1, "", &out)
+	err := run(nil, []string{"rust-core=" + llvm, "rust-member=" + llvm}, []string{"kotlin-kit=" + jacoco}, "", 1, 0, "", &out)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,10 +124,10 @@ func TestLLVMAndJaCoCo(t *testing.T) {
 			t.Errorf("no %q in\n%s", want, out.String())
 		}
 	}
-	if err := run(nil, []string{"swift=" + llvm}, nil, "", 1, "", &out); err == nil {
+	if err := run(nil, []string{"swift=" + llvm}, nil, "", 1, 0, "", &out); err == nil {
 		t.Error("an unknown part taken")
 	}
-	if err := run(nil, []string{"swift-kit=" + llvm}, nil, "", 1, "", &out); err == nil {
+	if err := run(nil, []string{"swift-kit=" + llvm}, nil, "", 1, 0, "", &out); err == nil {
 		t.Error("an export with no file of the part taken")
 	}
 }

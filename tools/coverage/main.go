@@ -17,7 +17,11 @@
 // checked, as when CI skipped its jobs.
 //
 // It prints a Markdown table (for $GITHUB_STEP_SUMMARY with -summary) and
-// exits 1 when a part falls more than -slack points below its floor.
+// exits 1 when a part falls more than -slack points below its floor. With
+// -target, the coverage the project aims at above the floors, a part below
+// it is marked in the table and warned of (a GitHub annotation), without
+// failing: the floor is where CI stops, the target where the tests are
+// written up to again.
 // docs/testing.md, "Coverage", says what each part counts.
 package main
 
@@ -117,15 +121,16 @@ func main() {
 	flag.Var(&jacocoFiles, "jacoco", "PART=FILE, a JaCoCo XML report (repeatable)")
 	floorFile := flag.String("floor", "", "the floors, a JSON object of part to percent")
 	slack := flag.Float64("slack", 1, "how many points a part may fall below its floor")
+	target := flag.Float64("target", 0, "the coverage aimed at above the floors: a part below it is warned of, not failed")
 	summary := flag.String("summary", "", "also append the table to this file")
 	flag.Parse()
-	if err := run(goFiles, llvmFiles, jacocoFiles, *floorFile, *slack, *summary, os.Stdout); err != nil {
+	if err := run(goFiles, llvmFiles, jacocoFiles, *floorFile, *slack, *target, *summary, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, "coverage:", err)
 		os.Exit(1)
 	}
 }
 
-func run(goFiles, llvmFiles, jacocoFiles []string, floorFile string, slack float64, summary string, stdout io.Writer) error {
+func run(goFiles, llvmFiles, jacocoFiles []string, floorFile string, slack, target float64, summary string, stdout io.Writer) error {
 	parts := map[string]tally{}
 	var packages map[string]tally
 	if len(goFiles) > 0 {
@@ -174,8 +179,11 @@ func run(goFiles, llvmFiles, jacocoFiles []string, floorFile string, slack float
 			return fmt.Errorf("%s: %w", floorFile, err)
 		}
 	}
-	text, failed := report(parts, packages, floors, slack)
+	text, failed, short := report(parts, packages, floors, slack, target)
 	fmt.Fprint(stdout, text)
+	for _, s := range short {
+		fmt.Fprintf(stdout, "::warning title=coverage below the target::%s\n", s)
+	}
 	if summary != "" {
 		f, err := os.OpenFile(summary, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 		if err != nil {
@@ -359,10 +367,11 @@ func attr(e xml.StartElement, name string) string {
 }
 
 // report writes the table of parts and, for Go, of packages; failed names
-// the parts more than slack points below their floor.
-func report(parts, packages map[string]tally, floors map[string]float64, slack float64) (string, []string) {
+// the parts more than slack points below their floor, short those above it
+// but below target (when target is set).
+func report(parts, packages map[string]tally, floors map[string]float64, slack, target float64) (string, []string, []string) {
 	var b strings.Builder
-	var failed []string
+	var failed, short []string
 	b.WriteString("## Test coverage\n\n| Part | Covered | Of | % | Floor | |\n|---|---:|---:|---:|---:|---|\n")
 	names := make([]string, 0, len(parts))
 	for k := range parts {
@@ -388,6 +397,11 @@ func report(parts, packages map[string]tally, floors map[string]float64, slack f
 		case hasFloor && t.pct() < floor-slack:
 			verdict = "below the floor"
 			failed = append(failed, fmt.Sprintf("%s %.1f%% < %.1f%%", n, t.pct(), floor))
+		case target > 0 && t.pct() < target:
+			verdict = fmt.Sprintf("below the target of %.0f", target)
+			short = append(short, fmt.Sprintf("%s %.1f%% < %.0f%%", n, t.pct(), target))
+		case target > 0:
+			verdict = "ok"
 		case hasFloor && t.pct() >= floor+2:
 			verdict = fmt.Sprintf("raise the floor to %.1f", math.Floor(t.pct()*10)/10)
 		case hasFloor:
@@ -413,5 +427,5 @@ func report(parts, packages map[string]tally, floors map[string]float64, slack f
 		}
 		b.WriteString("\n</details>\n")
 	}
-	return b.String(), failed
+	return b.String(), failed, short
 }

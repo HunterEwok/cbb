@@ -92,8 +92,10 @@ run yet is skipped with its reason and stays on the list.
 
 CI measures how much of the code the tests run, part by part, and its `coverage` job prints
 the table in the run's summary. `tools/coverage` adds the reports up and fails when a part
-falls more than one point below its floor in `tools/coverage/floor.json`, so coverage can
-rise but not fall. When the table says "raise the floor", raise it in the same pull request.
+falls more than one point below its floor in `tools/coverage/floor.json`. The project aims
+at 90% in every part (`-target 90`): a part below that is marked in the table and gets a
+warning, without failing the run, and the tests are written up to 90 again before it reaches
+its floor of 85.
 
 | Part | What counts | Measured by |
 |---|---|---|
@@ -101,11 +103,11 @@ rise but not fall. When the table says "raise the floor", raise it in the same p
 | `go-core` | the same, in `internal/group`, `pair`, `node`, `clip` and `hlc` | as `go` |
 | `rust-core` | lines of `core/src`, without `third_party` | `cargo llvm-cov` in the `rust` job |
 | `rust-member` | lines of `member/src/`, by the Rust tests alone | as `rust-core` |
-| `rust-service` | lines of `member/src/`, by the Rust cbb's own tests and Go's tests of the service together (`internal/service` and the desktop connector, run against a `cbb` built with instrument-coverage) | `cargo llvm-cov` in the `service tests on the Rust cbb` job |
+| `rust-service` | lines of `member/src/`, by the Rust cbb's own tests and Go's tests of the service together (`internal/service`, the desktop connector, `internal/relay` and the phones' tunnel, run against a `cbb` built with instrument-coverage) | `cargo llvm-cov` in the `service tests on the Rust cbb` job |
 | `swift-kit` | lines of the Swift kit's `Sources` | `swift test --enable-code-coverage` in the `phone kit (macos-latest)` job |
 | `kotlin-kit` | lines of the Kotlin kit | JaCoCo in the `Android app` job |
 
-The aims are 80% for `go`, 85% to 90% for the protocol's core in each implementation, and 90% for `rust-service`.
+The aim is 90% in every part. The Go packages of the `service tests on the Rust cbb` job run as test binaries built with `-cover`, beside a `cbb-helper` built with `-cover`, and their profile (`cover-go-service.out`) counts in `go` too.
 A number is a hint, not the goal: a test that runs a line without checking what it did
 raises it and proves nothing.
 
