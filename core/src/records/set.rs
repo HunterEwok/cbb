@@ -8,9 +8,9 @@
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::vec::Vec;
 
+use super::body::Seen;
 use super::eval::{self, Checked, ClaimState, Keys, Role, State, Why};
 use super::key::{Key, KeyHash, RecordId};
-use super::body::Seen;
 use super::{Kind, Record, Rule, keep};
 
 /// What inserting a record did.
@@ -258,8 +258,12 @@ impl RecordSet {
                 break;
             }
         }
-        let unknown: Vec<RecordId> =
-            self.records.values().filter(|e| keys.signer(&e.record.body().signer).is_none()).map(|e| e.record.id()).collect();
+        let unknown: Vec<RecordId> = self
+            .records
+            .values()
+            .filter(|e| keys.signer(&e.record.body().signer).is_none())
+            .map(|e| e.record.id())
+            .collect();
         self.keys = keys;
         for id in &unknown {
             self.remove(id);

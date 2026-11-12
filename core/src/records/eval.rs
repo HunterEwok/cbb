@@ -945,11 +945,7 @@ impl<'a> Evaluation<'a> {
         cands
             .iter()
             .copied()
-            .filter(|&c| {
-                !cands.iter().any(|&o| {
-                    o != c && self.saw(c, o)
-                })
-            })
+            .filter(|&c| !cands.iter().any(|&o| o != c && self.saw(c, o)))
             .min_by_key(|&c| self.recs[c].id)
             .and_then(|c| Some((c, self.recs[c].seen_entry(&cur)?)))
     }

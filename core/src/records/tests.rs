@@ -572,7 +572,8 @@ fn only_who_may_remove_the_recovery_key_freezes_it() {
 fn what_a_root_resolved_stays_resolved_after_a_takeover() {
     let mut g = G::new();
     let all = POWER_ADMIT | POWER_REMOVE | POWER_REMOVE_ADMINS | POWER_TAKEOVER;
-    let (pa, a, pb, b, n, laptop) = (k("phone a"), k("admin a"), k("phone b"), k("admin b"), k("new root"), k("laptop"));
+    let (pa, a, pb, b, n, laptop) =
+        (k("phone a"), k("admin a"), k("phone b"), k("admin b"), k("new root"), k("laptop"));
     g.admin(&pa, &a, all);
     g.admin(&pb, &b, all);
     g.device(&k("root"), &laptop, "laptop", |_| {});
@@ -1783,9 +1784,11 @@ fn a_record_counts_the_same_in_every_envelope() {
     let two = |n: usize| Record::decode(&crate::format::envelope::write(&bytes, &sig, Some(&vec![0x55u8; n]))).unwrap();
     let max = crate::format::envelope::MAX_SIG2;
     let (short, long) = (two(1), two(max));
-    assert!(Record::decode(&crate::format::envelope::write(&bytes, &sig, Some(&vec![0x55u8; max + 1])))
-        .unwrap_err()
-        .is("env/sig2"));
+    assert!(
+        Record::decode(&crate::format::envelope::write(&bytes, &sig, Some(&vec![0x55u8; max + 1])))
+            .unwrap_err()
+            .is("env/sig2")
+    );
     assert_eq!(short.id(), long.id());
     assert_eq!(short.size(), long.size());
     assert_eq!(short.size(), bytes.len() + ENVELOPE_ALLOWANCE + SIG2_ALLOWANCE);
@@ -1961,7 +1964,10 @@ fn only_the_path_roots_checkpoints_are_tried() {
         let body = Body {
             seq: MAX_SEQ - i,
             prev: Some(RecordId([9; 32])),
-            ..g.body(&x, Kind::Checkpoint { heads: vec![Head { key: x.hash, seq: 1, id: RecordId([8; 32]) }], keep: vec![] })
+            ..g.body(
+                &x,
+                Kind::Checkpoint { heads: vec![Head { key: x.hash, seq: 1, id: RecordId([8; 32]) }], keep: vec![] },
+            )
         };
         more.push(Record::sign(body, &x).unwrap());
     }
@@ -1990,11 +1996,9 @@ fn a_takeover_s_cut_holds_the_old_root_to_the_chain_it_saw() {
     d.rights = RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS;
     d.holds_root = true;
     let twin = Record::sign(Body { seq: 1, prev: None, ..g.body(&root, Kind::Device(d)) }, &root).unwrap();
-    let resolve = Record::sign(
-        Body { seq: 2, prev: Some(twin.id()), ..g.body(&root, Kind::Resolve(vec![true_first])) },
-        &root,
-    )
-    .unwrap();
+    let resolve =
+        Record::sign(Body { seq: 2, prev: Some(twin.id()), ..g.body(&root, Kind::Resolve(vec![true_first])) }, &root)
+            .unwrap();
     g.recs.push(twin.clone());
     g.recs.push(resolve.clone());
     let s = counted_state(&g, &held, &[claim.id()]);
@@ -2020,11 +2024,9 @@ fn a_record_off_the_chain_a_removal_saw_is_cut_off() {
     g.root_rec(Kind::Revoke(removal(&[t.hash, pt.hash], seen)));
     let s = g.state();
     assert!(s.revoked.contains(&t.hash) && s.device(&k("d1").key.device_id()).is_some());
-    let again = Record::sign(
-        Body { seq: 1, prev: None, ..g.body(&t, Kind::Revoke(removal(&[k("d2").hash], vec![]))) },
-        &t,
-    )
-    .unwrap();
+    let again =
+        Record::sign(Body { seq: 1, prev: None, ..g.body(&t, Kind::Revoke(removal(&[k("d2").hash], vec![]))) }, &t)
+            .unwrap();
     g.recs.push(again.clone());
     let s = g.state();
     assert!(!s.counting.contains(&again.id()));
@@ -2057,7 +2059,10 @@ fn an_old_root_keeps_nothing_above_its_cut() {
         let body = Body {
             seq: 1000 + u64::from(i),
             prev: Some(RecordId([7; 32])),
-            ..g.body(&root, Kind::Checkpoint { heads: vec![Head { key: root.hash, seq: 1, id: RecordId([8; 32]) }], keep })
+            ..g.body(
+                &root,
+                Kind::Checkpoint { heads: vec![Head { key: root.hash, seq: 1, id: RecordId([8; 32]) }], keep },
+            )
         };
         more.push(Record::sign(body, &root).unwrap());
     }
@@ -2173,7 +2178,13 @@ mod differential {
     /// a claim's new root.
     fn build(steps: &[(u8, u8, u8)]) -> (G, Vec<Record>) {
         let mut g = G::new();
-        let all = POWER_ADMIT | POWER_MANAGE | POWER_REMOVE | POWER_REMOVE_ADMINS | POWER_FREEZE | POWER_THAW | POWER_TAKEOVER;
+        let all = POWER_ADMIT
+            | POWER_MANAGE
+            | POWER_REMOVE
+            | POWER_REMOVE_ADMINS
+            | POWER_FREEZE
+            | POWER_THAW
+            | POWER_TAKEOVER;
         let (pa, a, pb, b) = (k("phone a"), k("admin a"), k("phone b"), k("admin b"));
         g.admin(&pa, &a, all);
         g.admin(&pb, &b, POWER_ADMIT | POWER_REMOVE | POWER_FREEZE | POWER_TAKEOVER);

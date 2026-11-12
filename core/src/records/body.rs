@@ -222,11 +222,9 @@ impl Removal {
             .iter()
             .filter(|c| self.keys.binary_search(&c.key).is_err())
             .copied()
-            .chain(self.keys.iter().filter_map(|k| {
-                match (seen_entry(&self.seen, k), seen_entry(current, k)) {
-                    (Some(a), Some(b)) => Some(if a.seq <= b.seq { a } else { b }),
-                    _ => None,
-                }
+            .chain(self.keys.iter().filter_map(|k| match (seen_entry(&self.seen, k), seen_entry(current, k)) {
+                (Some(a), Some(b)) => Some(if a.seq <= b.seq { a } else { b }),
+                _ => None,
             }))
             .collect();
         seen.sort_by_key(|s| s.key);
@@ -415,7 +413,10 @@ impl Body {
                 if r.keys.is_empty() || r.keys.len() > MAX_KEYS || !strictly_sorted(&r.keys) {
                     return Err(field(t, "keys"));
                 }
-                if !seen_set(&r.seen) || r.seen.len() > super::MAX_SEEN || r.seen.iter().any(|s| s.seq == 0 || s.seq > MAX_SEQ) {
+                if !seen_set(&r.seen)
+                    || r.seen.len() > super::MAX_SEEN
+                    || r.seen.iter().any(|s| s.seq == 0 || s.seq > MAX_SEQ)
+                {
                     return Err(field(t, "seen"));
                 }
             }
@@ -426,7 +427,8 @@ impl Body {
             }
             Kind::Claim { root, seen } => {
                 held |= signer_key(root, t, "root")?;
-                if !seen_set(seen) || seen.len() > super::MAX_SEEN || seen.iter().any(|s| s.seq == 0 || s.seq > MAX_SEQ) {
+                if !seen_set(seen) || seen.len() > super::MAX_SEEN || seen.iter().any(|s| s.seq == 0 || s.seq > MAX_SEQ)
+                {
                     return Err(field(t, "seen"));
                 }
             }
@@ -609,7 +611,9 @@ impl Body {
 
 fn seen(s: &[Seen]) -> Value<'_> {
     Value::Array(
-        s.iter().map(|s| Value::Array(vec![Value::Bytes(&s.key.0), Value::Uint(s.seq), Value::Bytes(&s.id.0)])).collect(),
+        s.iter()
+            .map(|s| Value::Array(vec![Value::Bytes(&s.key.0), Value::Uint(s.seq), Value::Bytes(&s.id.0)]))
+            .collect(),
     )
 }
 
