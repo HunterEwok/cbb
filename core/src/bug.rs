@@ -336,8 +336,8 @@ fn replace_any_case(s: &str, what: &str, with: &str) -> String {
     let mut i = 0;
     while i < have.len() {
         let end = i.saturating_add(want.len());
-        let hit = !want.is_empty()
-            && have.get(i..end).is_some_and(|w| w.iter().zip(&want).all(|(&a, &b)| same_letter(a, b)));
+        let hit =
+            !want.is_empty() && have.get(i..end).is_some_and(|w| w.iter().zip(&want).all(|(&a, &b)| same_letter(a, b)));
         if hit {
             out.push_str(with);
             i = end;
@@ -366,11 +366,7 @@ pub fn panic_kind(what: &str) -> String {
         }
     }
     let kind = what.get(..end).unwrap_or_default().trim_end();
-    if STD_PANICS.iter().any(|p| kind.starts_with(p)) {
-        kind.to_string()
-    } else {
-        "a panic".to_string()
-    }
+    if STD_PANICS.iter().any(|p| kind.starts_with(p)) { kind.to_string() } else { "a panic".to_string() }
 }
 
 /// The beginnings of the standard library's panic messages.
