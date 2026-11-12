@@ -24,7 +24,7 @@ struct CollectionName {
     }
   }
 
-  save(): void {
+  async save(): Promise<void> {
     const name = this.name.trim();
     if (name.length === 0) {
       return;
@@ -32,7 +32,7 @@ struct CollectionName {
     const op: Record<string, Object> = this.collection.length === 0 ?
       { 'op': 'new', 'name': name, 'devices': this.device.length > 0 ? [this.device] : ([] as string[]) } :
       { 'op': 'rename', 'collection': this.collection, 'name': name };
-    if (app.arrange(op)) {
+    if (await app.arrange(op)) {
       router.back();
     }
   }

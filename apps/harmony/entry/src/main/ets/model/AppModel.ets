@@ -8,13 +8,15 @@
 
 import cbb from 'libcbb_napi.so';
 import { preferences } from '@kit.ArkData';
+import { deviceInfo } from '@kit.BasicServicesKit';
 import { call, read, Result } from '../core/Core';
 import { Errors, Failure } from '../core/Errors';
 import { ensure, forget } from '../core/Keys';
 import { Joined, Membership, sealSecret } from '../core/Membership';
-import { OS, phoneName, STORE } from '../core/Phone';
+import { OS, osVersion, phoneName, STORE } from '../core/Phone';
 import { t } from '../core/Text';
 import { Admit } from './Admit';
+import { Bugs } from './Bugs';
 import { Events } from './Events';
 import { Invite } from './Invite';
 import { Join } from './Join';
@@ -29,7 +31,6 @@ const RENEW_FIRST_MS: number = 60 * 1000;
 // time to reach its peers.
 const CLAIM_EVERY_MS: number = 60 * 1000;
 const CLAIM_FIRST_MS: number = 10 * 1000;
-const ARRANGEMENT_KEY: string = 'arrangement';
 
 interface SealKey {
   key: string;
@@ -63,26 +64,6 @@ export class Tile {
   id: string = '';
   name: string = '';
   devices: Device[] = [];
-}
-
-interface ViewCollection {
-  id: string;
-  name: string;
-  devices: string[];
-}
-
-interface ViewItem {
-  device?: string;
-  collection?: ViewCollection;
-}
-
-interface Stored {
-  items?: Object[];
-}
-
-interface Arranged {
-  view?: ViewItem[];
-  stored?: Stored;
 }
 
 // What the user reads when restoring failed: the core's refusals it knows
@@ -123,18 +104,21 @@ export class AppModel {
   @Trace arrangement: number = 0;
   @Trace deviceList: boolean = false;
   @Trace errorDetails: boolean = false;
+  // The switch for the advanced settings, as on the other phones.
+  @Trace advanced: boolean = false;
 
   readonly member: Member = new Member();
   readonly join: Join = new Join();
   readonly admit: Admit = new Admit();
   readonly invite: Invite = new Invite();
   readonly events: Events = new Events();
+  // The bug report the app asks about in release mode (docs/core-api.md, "Bug reports").
+  readonly bugs: Bugs = new Bugs();
 
   private dir: string = '';
   private prefs: preferences.Preferences | undefined = undefined;
   private renewTimer: number = -1;
   private claimTimer: number = -1;
-  private arrangeIds: string[] = [];
   // What was shared to the app before the member ran.
   private pending: Shared | undefined = undefined;
 
@@ -142,7 +126,13 @@ export class AppModel {
     this.dir = dir;
     this.prefs = prefs;
     this.events.init(prefs);
+    this.bugs.init(prefs);
+    // Reports that waited for the network go now.
+    setTimeout(() => {
+      this.bugs.resend();
+    }, 0);
     this.deviceList = prefs.getSync('device_list', false) as boolean;
+    this.advanced = prefs.getSync('advanced', false) as boolean;
     this.errorDetails = Errors.showDetails();
     const m = Membership.load(dir);
     if (m instanceof Membership) {
@@ -153,6 +143,11 @@ export class AppModel {
     }
     this.member.onDevices = (devices: Device[]) => {
       this.events.observe(devices);
+    };
+    // A member that broke stops and starts again; the user sees what
+    // broke, the details only in debug mode (Errors.shown).
+    this.member.onPanic = (details: string) => {
+      this.panicked(details);
     };
     this.member.onSaved = (folder: string, count: number) => {
       this.events.post(count === 1 ? t('notify_saved_one') : t('notify_saved', count));
@@ -729,7 +724,6 @@ export class AppModel {
     this.membership = undefined;
     this.claimState = '';
     this.events.forget();
-    this.prefs?.deleteSync(ARRANGEMENT_KEY);
     this.show('');
     // A phone that joined again with its old member key would share it with
     // its old device record, and removing that record revokes the key; the
@@ -750,6 +744,31 @@ export class AppModel {
     this.errorDetails = Errors.showDetails();
   }
 
+  setAdvanced(on: boolean): void {
+    this.advanced = on;
+    this.prefs?.putSync('advanced', on);
+    this.prefs?.flush();
+  }
+
+  // The member broke (docs/core-api.md, "Panics"): in release mode the app
+  // asks to send a report, in debug mode the error shows whole and nothing
+  // is asked; then the member starts again.
+  private panicked(details: string): void {
+    this.show(Errors.shown(new Failure(t('bug_broke_restarted'), details)));
+    if (!Errors.showDetails()) {
+      this.bugs.offer({
+        'kind': 'panic', 'code': 5, 'name': 'panic', 'message': 'Something in CBB broke, and it started again.',
+        'details': details, 'app': 'harmonyos', 'version': AppStorage.get<string>('version') ?? '', 'os': OS,
+        'os_version': osVersion(), 'model': deviceInfo.productModel, 'arch': deviceInfo.abiList,
+        'log': this.member.recentLog.slice(), 'names': this.member.devices.map((d: Device) => d.name)
+      } as Record<string, Object>);
+    }
+    setTimeout(async () => {
+      await this.stopMember();
+      await this.startMember();
+    }, 0);
+  }
+
   setDeviceList(on: boolean): void {
     this.deviceList = on;
     this.prefs?.putSync('device_list', on);
@@ -766,58 +785,21 @@ export class AppModel {
     this.prefs?.flush();
   }
 
+  // Whether the user changed the tiles' order (the member's view).
   hasArrangement(): boolean {
-    return this.prefs !== undefined && (this.prefs.getSync(ARRANGEMENT_KEY, '') as string).length > 0;
+    return this.member.view.custom === true;
   }
 
-  // The core's arrange call on ids with op: {view, stored}, the stored
-  // arrangement kept in the settings; undefined on a refusal, shown.
-  private callArrange(ids: string[], prune: boolean, op?: Object): Arranged | undefined {
-    const m = this.membership;
-    if (m === undefined || this.prefs === undefined) {
-      return undefined;
-    }
-    const text = this.prefs.getSync(ARRANGEMENT_KEY, '') as string;
-    const args: Record<string, Object> = { 'group': m.groupTag(), 'devices': ids, 'prune': prune, 'self': m.member.device };
-    if (text.length > 0) {
-      try {
-        args['stored'] = JSON.parse(text) as Object;
-      } catch (e) {
-        Errors.log(`arrange: the stored arrangement does not read: ${String(e)}`);
-      }
-    }
-    if (op !== undefined) {
-      args['op'] = op;
-    }
-    const a = call<Arranged>('arrange', args);
-    if (a.ok === undefined) {
-      this.show(Errors.shown(a.failure as Failure));
-      return undefined;
-    }
-    // Until the user changes something nothing is stored (docs/apps.md).
-    const next = a.ok.stored;
-    if (next === undefined || (next.items ?? []).length === 0) {
-      this.prefs.deleteSync(ARRANGEMENT_KEY);
-    } else if (JSON.stringify(next) !== text) {
-      this.prefs.putSync(ARRANGEMENT_KEY, JSON.stringify(next));
-    }
-    this.prefs.flush();
-    return a.ok;
-  }
-
-  // The member's devices in the user's order and collections (docs/apps.md,
-  // "Collections and the order of the tiles"); this phone first until the
-  // user moves it.
+  // The member's devices in the user's order and collections as the member
+  // keeps them (docs/apps.md, "What the member shows"); this phone first
+  // until the user moves it. Each device as the member's devices list it,
+  // or as the view gives it.
   arranged(devices: Device[]): Tile[] {
-    const ids = devices.map((d: Device) => d.device);
     const byId = new Map<string, Device>();
     devices.forEach((d: Device) => {
-      byId.set(d.device, d);
+      byId.set(d.id, d);
     });
-    this.arrangeIds = ids;
-    const self = this.membership?.member.device ?? '';
-    const a = this.callArrange(ids, ids.includes(self));
-    if (a === undefined) {
+    if (!this.member.viewed) {
       // The group's order, so the devices still show.
       return devices.map((d: Device) => {
         const tile = new Tile();
@@ -825,20 +807,17 @@ export class AppModel {
         return tile;
       });
     }
+    const device = (d: Device): Device => byId.get(d.id) ?? d;
     const view: Tile[] = [];
-    for (const item of a.view ?? []) {
+    for (const item of this.member.view.tiles) {
       const tile = new Tile();
       if (item.device !== undefined) {
-        const d = byId.get(item.device);
-        if (d === undefined) {
-          continue;
-        }
-        tile.device = d;
+        tile.device = device(item.device);
       } else if (item.collection !== undefined) {
         tile.kind = 'collection';
         tile.id = item.collection.id;
         tile.name = item.collection.name;
-        tile.devices = item.collection.devices.map((id: string) => byId.get(id)).filter((d: Device | undefined) => d !== undefined) as Device[];
+        tile.devices = item.collection.devices.map(device);
       } else {
         continue;
       }
@@ -847,12 +826,15 @@ export class AppModel {
     return view;
   }
 
-  // Applies a change of the arrangement, an operation of the core's arrange
-  // call ("move", "into", "out", "new", "rename", "ungroup", "reset").
-  arrange(op: Record<string, Object>): boolean {
-    const ok = this.callArrange(this.arrangeIds, false, op) !== undefined;
+  // Sends a change of the arrangement to the member, which keeps it
+  // ("move", "into", "out", "new", "rename", "ungroup", "reset").
+  async arrange(op: Record<string, Object>): Promise<boolean> {
+    const f = await this.member.arrange(op);
+    if (f !== undefined) {
+      this.show(Errors.shown(f));
+    }
     this.arrangement++;
-    return ok;
+    return f === undefined;
   }
 }
 

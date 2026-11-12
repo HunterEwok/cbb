@@ -1150,7 +1150,6 @@
   "The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides. [aurora:AlertsCard]": "समूह रुका हुआ है: जब तक समूह का रूट तय नहीं करता, इसके डिवाइस केवल अपने रिकॉर्ड बदलते हैं, क्लिपबोर्ड नहीं।",
   "The group is yours to take": "समूह आपके लेने के लिए तैयार है",
   "The group sends no secrets until its owner decides.": "जब तक स्वामी निर्णय न ले, समूह कोई रहस्य नहीं भेजता।",
-  "The group sends no secrets until its root decides.": "जब तक इसका रूट तय नहीं करता, समूह कोई रहस्य नहीं भेजता।",
   "The group then lets keys in files be admins and hubs (Settings, Admin keys).": "तब समूह फ़ाइलों में रखी कुंजियों को एडमिन और हब बनने देता है (सेटिंग्स, एडमिन कुंजियाँ)।",
   "The group was taken over": "समूह किसी और ने अपने हाथ में ले लिया",
   "The group's admin keys setting does not let this device's keys be an admin. Change it in Settings, Admin keys.": "समूह की एडमिन कुंजी सेटिंग इस डिवाइस की कुंजियों को एडमिन नहीं बनने देती। इसे सेटिंग्स, एडमिन कुंजियाँ में बदलें।",

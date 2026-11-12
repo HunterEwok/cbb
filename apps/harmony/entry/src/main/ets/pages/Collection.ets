@@ -57,10 +57,10 @@ struct Collection {
               .width('100%')
             }
             .onClick(() => {
-              router.pushUrl({ url: 'pages/Device', params: { 'device': d.device } as Record<string, Object> });
+              router.pushUrl({ url: 'pages/Device', params: { 'device': d.id } as Record<string, Object> });
             })
             .gesture(LongPressGesture().onAction(() => {
-              router.pushUrl({ url: 'pages/Arrange', params: { 'device': d.device } as Record<string, Object> });
+              router.pushUrl({ url: 'pages/Arrange', params: { 'device': d.id } as Record<string, Object> });
             }))
           }, (d: Device) => JSON.stringify(d))
         }

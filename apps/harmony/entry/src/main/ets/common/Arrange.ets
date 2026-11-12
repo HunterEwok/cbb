@@ -11,7 +11,7 @@ import { Tile } from '../model/AppModel';
 export function ref(tile: Tile): Record<string, Object> {
   const r: Record<string, Object> = {};
   if (tile.kind === 'device' && tile.device !== undefined) {
-    r['device'] = tile.device.device;
+    r['device'] = tile.device.id;
   } else {
     r['collection'] = tile.id;
   }

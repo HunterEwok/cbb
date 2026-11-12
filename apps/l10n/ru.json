@@ -1150,7 +1150,6 @@
   "The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides. [aurora:AlertsCard]": "Группа остановлена: её устройства обмениваются только записями, без буфера обмена, пока корень группы не решит.",
   "The group is yours to take": "Группу можно забрать",
   "The group sends no secrets until its owner decides.": "Группа не пересылает секреты, пока её владелец не решит.",
-  "The group sends no secrets until its root decides.": "Группа не отправляет секреты, пока её корень не решит.",
   "The group then lets keys in files be admins and hubs (Settings, Admin keys).": "Тогда группа разрешит ключи в файлах для админов и хабов (Настройки, «Ключи админов»).",
   "The group was taken over": "Группу забрали себе",
   "The group's admin keys setting does not let this device's keys be an admin. Change it in Settings, Admin keys.": "Настройка группы «Ключи админов» не позволяет ключам этого устройства быть админом. Измените её в Настройках, раздел «Ключи админов».",

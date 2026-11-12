@@ -51,12 +51,12 @@ struct Arrange {
       const tile = view[i];
       if (this.collection.length > 0 && tile.kind === 'collection' && tile.id === this.collection) {
         index = i;
-      } else if (this.device.length > 0 && tile.kind === 'device' && tile.device?.device === this.device) {
+      } else if (this.device.length > 0 && tile.kind === 'device' && tile.device?.id === this.device) {
         index = i;
       } else if (this.device.length > 0 && tile.kind === 'collection' &&
-        tile.devices.some((d: Device) => d.device === this.device)) {
+        tile.devices.some((d: Device) => d.id === this.device)) {
         level = tilesOf(tile);
-        index = level.findIndex((x: Tile) => x.device?.device === this.device);
+        index = level.findIndex((x: Tile) => x.device?.id === this.device);
         inCollection = tile.id;
       }
       if (index >= 0) {

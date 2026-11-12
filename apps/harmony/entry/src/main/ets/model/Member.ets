@@ -32,7 +32,7 @@ const IMAGE_TYPES: string[] = ['image/png', 'image/jpeg', 'image/gif'];
 
 // A device of the group, as the member's devices op lists it.
 export interface Device {
-  device: string;
+  id: string;
   name: string;
   role?: string;
   os?: string;
@@ -43,8 +43,8 @@ export interface Device {
   self?: boolean;
   listed?: boolean;
   caps?: string[];
-  // "on" or "off" for a device whose sync an admin turns, else "".
-  sync?: string;
+  // "shared" or "own" for a device whose sync an admin turns, else "".
+  mode?: string;
   version?: string;
   os_version?: string;
   mac?: string;
@@ -83,6 +83,48 @@ interface Devices {
 
 interface Alerts {
   alerts?: Alert[];
+}
+
+// Why the phone does not sync (cbb_core::why, docs/apps.md "Why it does not
+// sync"), the reason that stops the most first.
+export interface Why {
+  code: string;
+  level?: string; // stop, warn or info
+  until_ms?: number;
+  device?: string;
+  devices?: string[];
+  value?: string;
+  detail?: string;
+}
+
+interface Whys {
+  why?: Why[];
+}
+
+// A tile of the member's view (docs/apps.md, "What the member shows").
+export interface ViewCollection {
+  id: string;
+  name: string;
+  devices: Device[];
+}
+
+export interface ViewTile {
+  device?: Device;
+  collection?: ViewCollection;
+}
+
+// The device tiles as the member keeps them: in the user's order with this
+// device among them, how many of the others are online, and whether the
+// user changed the order.
+export interface View {
+  tiles: ViewTile[];
+  online?: number;
+  others?: number;
+  custom?: boolean;
+}
+
+interface Viewed {
+  view?: View;
 }
 
 interface Muted {
@@ -150,6 +192,7 @@ interface MemberEvent {
   from?: string;
   command?: Object;
   copy?: Copy;
+  details?: string;
 }
 
 interface Started {
@@ -164,6 +207,10 @@ export class Member {
   @Trace devices: Device[] = [];
   @Trace alerts: Alert[] = [];
   @Trace rootView: RootView = {};
+  @Trace why: Why[] = [];
+  // The tiles; viewed is false until the member gave them.
+  @Trace view: View = { tiles: [] };
+  @Trace viewed: boolean = false;
   // What the pasteboard got or sent last, shortened, for the main page.
   @Trace last: string = '';
   @Trace error: string = '';
@@ -191,6 +238,12 @@ export class Member {
   onSaved: (folder: string, count: number) => void = () => {};
   // The devices changed, for the notifications.
   onDevices: (devices: Device[]) => void = () => {};
+  // Something in the member broke (docs/core-api.md, "Panics"): details say
+  // what and where. The app shows it and starts the member again.
+  onPanic: (details: string) => void = () => {};
+
+  // The member's recent log lines, oldest first, for a bug report.
+  recentLog: string[] = [];
 
   private handle: Handle | null = null;
   private timer: number = -1;
@@ -289,6 +342,9 @@ export class Member {
     this.peers = [];
     this.devices = [];
     this.alerts = [];
+    this.why = [];
+    this.view = { tiles: [] };
+    this.viewed = false;
     this.paused = false;
     this.muted = false;
     this.fetching = false;
@@ -472,9 +528,15 @@ export class Member {
     }
     const devices = d.ok.devices ?? [];
     const al = await this.call<Alerts>('alerts');
+    const w = await this.call<Whys>('why');
     const rv = await this.call<RootView>('root_view');
     const alerts = al.ok !== undefined ? (al.ok.alerts ?? []) : this.alerts;
+    const why = w.ok !== undefined ? (w.ok.why ?? []) : this.why;
     const rootView = rv.ok !== undefined ? rv.ok : this.rootView;
+    await this.readView(await this.call<Viewed>('view'));
+    if (JSON.stringify(why) !== JSON.stringify(this.why)) {
+      this.why = why;
+    }
     if (JSON.stringify(devices) !== JSON.stringify(this.devices)) {
       this.devices = devices;
       this.onDevices(devices);
@@ -484,6 +546,32 @@ export class Member {
     }
     if (JSON.stringify(rootView) !== JSON.stringify(this.rootView)) {
       this.rootView = rootView;
+    }
+  }
+
+  // Sends the user's change of the tiles' order (docs/apps.md, "What the
+  // member shows": move, into, out, new, rename, ungroup or reset), which
+  // the member keeps; a change that does not fit is refused, in failure.
+  async arrange(op: Object): Promise<Failure | undefined> {
+    if (this.handle === null) {
+      return new Failure('no member runs', 'member: arrange without a member');
+    }
+    const a = await this.call<Viewed>('arrange', { 'arrange': op } as Record<string, Object>);
+    await this.readView(a);
+    return a.failure;
+  }
+
+  private async readView(a: Result<Viewed>): Promise<void> {
+    if (a.ok === undefined || a.ok.view === undefined) {
+      if (a.failure !== undefined) {
+        Errors.log(`member: the view: ${a.failure.message} (${a.failure.details})`);
+      }
+      return;
+    }
+    const v = a.ok.view;
+    if (!this.viewed || JSON.stringify(v) !== JSON.stringify(this.view)) {
+      this.view = v;
+      this.viewed = true;
     }
   }
 
@@ -544,7 +632,7 @@ export class Member {
     if (on) {
       let online = false;
       for (const d of this.devices) {
-        if (d.device === hub) {
+        if (d.id === hub) {
           hubName = d.name;
           online = d.online === true;
         }
@@ -587,6 +675,13 @@ export class Member {
     }
     if (e.type === 'log') {
       Errors.log(e.line ?? '');
+      this.recentLog.push(e.line ?? '');
+      if (this.recentLog.length > 300) {
+        this.recentLog.shift();
+      }
+    } else if (e.type === 'panic') {
+      Errors.log(`member: ${e.details ?? ''}`);
+      this.onPanic(e.details ?? '');
     } else if (e.type === 'write') {
       this.write(e.text ?? '', e.kind === 'secret', e.ttl_ms ?? 0);
     } else if (e.type === 'identity') {

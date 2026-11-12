@@ -1150,7 +1150,6 @@
   "The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides. [aurora:AlertsCard]": "Kikundi kimesimamishwa: vifaa vyake vinabadilishana rekodi zao tu, bila ubao wa kunakili, hadi mzizi wa kikundi uamue.",
   "The group is yours to take": "Kikundi ni chako kukichukua",
   "The group sends no secrets until its owner decides.": "Kikundi hakitumi siri zozote hadi mmiliki wake aamue.",
-  "The group sends no secrets until its root decides.": "Kikundi hakitumi siri hadi mzizi wake uamue.",
   "The group then lets keys in files be admins and hubs (Settings, Admin keys).": "Kisha kikundi huruhusu funguo zilizo kwenye faili kuwa wasimamizi na vitovu (Mipangilio, Funguo za msimamizi).",
   "The group was taken over": "Kikundi kimechukuliwa",
   "The group's admin keys setting does not let this device's keys be an admin. Change it in Settings, Admin keys.": "Mpangilio wa funguo za msimamizi wa kikundi hauruhusu funguo za kifaa hiki kuwa msimamizi. Ubadilishe katika Mipangilio, Funguo za msimamizi.",

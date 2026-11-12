@@ -14,6 +14,7 @@ import { t } from '../core/Text';
 import { app } from '../model/AppModel';
 import { EVENT_KINDS } from '../model/Events';
 import { BusyLine, ErrorText, PageTitle } from '../components/Common';
+import { WhySection } from '../components/WhySection';
 
 // The languages of the apps (docs/apps.md, Languages), '' for the phone's.
 const LANGUAGES: string[] = ['', 'en', 'zh-Hans', 'es', 'ru', 'ar', 'sw', 'he', 'hi'];
@@ -141,6 +142,13 @@ struct Settings {
             this.notify = next;
           })
         }, (kind: string) => kind)
+
+        this.switchRow(t('advanced_settings'), '', app.advanced, (on: boolean) => {
+          app.setAdvanced(on);
+        })
+        if (app.membership !== undefined && app.advanced) {
+          WhySection({ why: app.member.why, details: app.errorDetails })
+        }
 
         if (app.membership !== undefined) {
           this.section(t('settings_group'))

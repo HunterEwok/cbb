@@ -18,6 +18,7 @@ import { app, Tile } from '../model/AppModel';
 import { Admit } from '../model/Admit';
 import { isInvitation } from '../model/Invite';
 import { Alert, Device, Member } from '../model/Member';
+import { BugCard } from '../components/BugCard';
 import { BusyLine, ErrorText } from '../components/Common';
 
 const LOST_PHONE_TIP: string = 'tip_lost_phone';
@@ -46,7 +47,7 @@ struct Main {
     }
   }
 
-  @Monitor('member.devices')
+  @Monitor('member.devices', 'member.view')
   devicesChanged(): void {
     this.rearrange();
   }
@@ -171,13 +172,13 @@ struct Main {
     if (tile.kind === 'collection') {
       router.pushUrl({ url: 'pages/Collection', params: { 'collection': tile.id } as Record<string, Object> });
     } else if (tile.device !== undefined) {
-      router.pushUrl({ url: 'pages/Device', params: { 'device': tile.device.device } as Record<string, Object> });
+      router.pushUrl({ url: 'pages/Device', params: { 'device': tile.device.id } as Record<string, Object> });
     }
   }
 
   arrangeTile(tile: Tile): void {
     const params: Record<string, Object> = tile.kind === 'collection' ? { 'collection': tile.id } :
-      { 'device': tile.device?.device ?? '' };
+      { 'device': tile.device?.id ?? '' };
     router.pushUrl({ url: 'pages/Arrange', params: params });
   }
 
@@ -191,7 +192,6 @@ struct Main {
     if (app.hasArrangement()) {
       items.push({ value: t('main_reset_order'), action: () => {
         app.arrange({ 'op': 'reset' } as Record<string, Object>);
-        this.rearrange();
       } });
     }
     items.push({ value: app.deviceList ? t('main_show_tiles') : t('main_show_list'), action: () => {
@@ -393,6 +393,7 @@ struct Main {
               })
           }
 
+          BugCard({ bugs: app.bugs })
           ForEach(app.member.alerts, (a: Alert) => {
             this.alertCard(a);
           }, (a: Alert) => `${a.kind}:${(a.records ?? []).join(',')}`)

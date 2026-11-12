@@ -1150,7 +1150,6 @@
   "The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides. [aurora:AlertsCard]": "El grupo está detenido: sus dispositivos solo intercambian sus registros, sin portapapeles, hasta que decida la raíz del grupo.",
   "The group is yours to take": "El grupo es tuyo para tomarlo",
   "The group sends no secrets until its owner decides.": "El grupo no envía secretos hasta que su propietario decida.",
-  "The group sends no secrets until its root decides.": "El grupo no envía secretos hasta que decida su raíz.",
   "The group then lets keys in files be admins and hubs (Settings, Admin keys).": "Entonces el grupo permite que las claves en archivos sean administradores y hubs (Ajustes, Claves de administrador).",
   "The group was taken over": "El grupo fue tomado",
   "The group's admin keys setting does not let this device's keys be an admin. Change it in Settings, Admin keys.": "El ajuste de claves de administrador del grupo no permite que las claves de este dispositivo sean de administrador. Cámbialo en Ajustes, Claves de administrador.",

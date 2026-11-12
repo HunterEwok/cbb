@@ -123,6 +123,6 @@ export function line(d: Device): string {
 
 // Its name, or the start of its ID when it has none.
 export function nameOf(d: Device): string {
-  return d.name.length > 0 ? d.name : d.device.substring(0, 8);
+  return d.name.length > 0 ? d.name : d.id.substring(0, 8);
 }
 

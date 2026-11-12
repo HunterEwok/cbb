@@ -32,11 +32,11 @@ export interface GroupEvent {
 export function seenOf(devices: Device[]): Map<string, Seen> {
   const m = new Map<string, Seen>();
   for (const d of devices) {
-    if (d.self === true || d.device.length === 0 || m.has(d.device)) {
+    if (d.self === true || d.id.length === 0 || m.has(d.id)) {
       continue;
     }
     const s: Seen = { name: d.name, admin: d.admin === true, frozen: d.frozen === true, root: d.root === true };
-    m.set(d.device, s);
+    m.set(d.id, s);
   }
   return m;
 }

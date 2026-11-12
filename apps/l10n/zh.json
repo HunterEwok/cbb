@@ -1150,7 +1150,6 @@
   "The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides. [aurora:AlertsCard]": "群组已停止：在群组的根做出决定之前，其设备只交换记录，不交换剪贴板。",
   "The group is yours to take": "群组等你接管",
   "The group sends no secrets until its owner decides.": "在所有者做出决定之前，群组不会发送任何秘密。",
-  "The group sends no secrets until its root decides.": "在其根做出决定之前，群组不发送任何机密。",
   "The group then lets keys in files be admins and hubs (Settings, Admin keys).": "之后群组允许文件中的密钥成为管理员和中心节点（设置，管理员密钥）。",
   "The group was taken over": "群组已被接管",
   "The group's admin keys setting does not let this device's keys be an admin. Change it in Settings, Admin keys.": "群组的管理员密钥设置不允许此设备的密钥成为管理员。请在“设置”>“管理员密钥”中更改。",

@@ -1150,7 +1150,6 @@
   "The group is stopped: its devices exchange only their records, no clipboard, until the group's root decides. [aurora:AlertsCard]": "הקבוצה עצורה: המכשירים שלה מחליפים רק את הרשומות שלהם, בלי לוח העתקה, עד שהשורש של הקבוצה יחליט.",
   "The group is yours to take": "הקבוצה מחכה שתקבלו אותה",
   "The group sends no secrets until its owner decides.": "הקבוצה לא שולחת סודות עד שהבעלים שלה יחליטו.",
-  "The group sends no secrets until its root decides.": "הקבוצה לא שולחת סודות עד שהשורש שלה יחליט.",
   "The group then lets keys in files be admins and hubs (Settings, Admin keys).": "אז הקבוצה מאפשרת למפתחות בקבצים להיות מנהלים ורכזות (הגדרות, מפתחות מנהל).",
   "The group was taken over": "השתלטו על הקבוצה",
   "The group's admin keys setting does not let this device's keys be an admin. Change it in Settings, Admin keys.": "הגדרת מפתחות המנהל של הקבוצה לא מאפשרת למפתחות של המכשיר הזה להיות מנהל. שנו אותה בהגדרות, מפתחות מנהל.",

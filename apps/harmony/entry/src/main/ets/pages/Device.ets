@@ -27,7 +27,7 @@ struct Device {
   }
 
   device(): DeviceInfo | undefined {
-    return app.member.devices.find((d: DeviceInfo) => d.device === this.deviceId);
+    return app.member.devices.find((d: DeviceInfo) => d.id === this.deviceId);
   }
 
   // Whether this phone may act on the device: an admin, not on itself.
@@ -44,7 +44,7 @@ struct Device {
   }
 
   async remove(d: DeviceInfo): Promise<void> {
-    if (await app.manage('remove', d.device)) {
+    if (await app.manage('remove', d.id)) {
       router.back();
     }
   }
@@ -94,12 +94,12 @@ struct Device {
           // This phone's sync, or for an admin another device's, through a
           // mode command it signs.
           if ((this.device() as DeviceInfo).self === true ? app.member.running :
-            this.acts(this.device() as DeviceInfo) && ((this.device() as DeviceInfo).sync ?? '').length > 0) {
+            this.acts(this.device() as DeviceInfo) && ((this.device() as DeviceInfo).mode ?? '').length > 0) {
             Row() {
               Text($r('app.string.main_switch_sync')).fontColor($r('app.color.text')).layoutWeight(1)
               Toggle({
                 type: ToggleType.Switch,
-                isOn: (this.device() as DeviceInfo).self === true ? !app.member.paused : (this.device() as DeviceInfo).sync === 'on'
+                isOn: (this.device() as DeviceInfo).self === true ? !app.member.paused : (this.device() as DeviceInfo).mode === 'shared'
               })
                 .selectedColor($r('app.color.accent'))
                 .enabled(!app.busy)
@@ -112,7 +112,7 @@ struct Device {
                       app.member.pause(0);
                     }
                   } else {
-                    app.manage(on ? 'sync_on' : 'sync_off', d.device);
+                    app.manage(on ? 'sync_on' : 'sync_off', d.id);
                   }
                 })
             }
