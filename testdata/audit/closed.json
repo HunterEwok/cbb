@@ -1180,6 +1180,31 @@
   ]
  },
  {
+  "id": "cbb-audit-37",
+  "tests": [
+   {
+    "lang": "rust",
+    "file": "core/src/release.rs",
+    "name": "files_signed_ahead_of_the_clock"
+   }
+  ]
+ },
+ {
+  "id": "cbb-audit-43",
+  "tests": [
+   {
+    "lang": "go",
+    "file": "tools/repocheck/secrets_test.go",
+    "name": "TestReleaseSecretsInTheTree"
+   },
+   {
+    "lang": "go",
+    "file": "tools/repocheck/secrets_test.go",
+    "name": "TestReleaseSecrets"
+   }
+  ]
+ },
+ {
   "id": "cbb-audit-49",
   "tests": [
    {
@@ -3116,6 +3141,21 @@
     "lang": "rust",
     "file": "core/src/authority.rs",
     "name": "v2_vectors"
+   }
+  ]
+ },
+ {
+  "id": "cbb-audit-97",
+  "tests": [
+   {
+    "lang": "go",
+    "file": "internal/service/evidence_tpm_test.go",
+    "name": "TestRootInTPMCountsAsFiles"
+   },
+   {
+    "lang": "rust",
+    "file": "member/src/admin.rs",
+    "name": "a_group_made_here_keeps_its_root_key"
    }
   ]
  }
