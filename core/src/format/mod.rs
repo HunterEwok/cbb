@@ -155,3 +155,10 @@ pub fn is_hidden(c: char) -> bool {
 pub fn name_ok(name: &str) -> bool {
     (1..=64).contains(&name.len()) && !name.chars().any(is_hidden)
 }
+
+/// The fields below 256 a `device` record of 0.6 may carry (sections 3.2
+/// and 4.1): the common ones without `expires_ms` and `signer2`, and the
+/// device's own without `accepts` (15, gone). Any other field below 256
+/// makes a reader hold the record. The record reader and the admin's
+/// record in a grant both read this one list.
+pub const DEVICE_FIELDS: [u16; 21] = [1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25];
