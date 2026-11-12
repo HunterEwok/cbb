@@ -2191,6 +2191,10 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A Rust `cbb` that started looking for its group by mDNS just after another device asked a
+  member for its TXT record could find that member without one, take it for another group's
+  and never dial it. It now asks the members for their records again, a little later each
+  time, until that member's TXT comes.
 - Quotation marks in a few texts: the Android app showed a backslash before them in Arabic,
   Spanish, Hebrew, Hindi and Swahili, and dropped them in English; the Mac app showed the
   backslash in the same languages on its pairing screen.
