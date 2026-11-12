@@ -74,7 +74,7 @@ mod peripheral;
 pub mod phone;
 #[cfg(feature = "tunnel")]
 mod phone_attest;
-mod piv;
+pub mod piv;
 pub mod records;
 #[cfg(feature = "tunnel")]
 pub mod relay;

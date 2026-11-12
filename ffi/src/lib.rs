@@ -134,6 +134,8 @@ pub mod invite;
 pub mod join;
 #[cfg(feature = "member")]
 pub mod member;
+#[cfg(feature = "member")]
+pub mod piv;
 #[cfg(feature = "join")]
 pub mod qr;
 #[cfg(feature = "member")]
@@ -435,6 +437,32 @@ pub unsafe extern "C" fn cbb_restore(
     to_c(restore::restore(req, sign, ctx as usize), answer_len)
 }
 
+/// Runs one step with the group's recovery key on a YubiKey (src/piv.rs):
+/// `request` is `{"op", ...}` (make, put, issue or sign) and `transmit`
+/// with `ctx` carries each APDU to the card during this call only. Returns
+/// the answer, `{"ok"}` or `{"error"}`, with its length in `answer_len`.
+///
+/// # Safety
+///
+/// `request` must point to `len` readable bytes, `answer_len` must be
+/// writable, and `transmit` must be callable with `ctx` until it returns.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_piv(
+    request: *const u8,
+    len: usize,
+    transmit: piv::TransmitFn,
+    ctx: *mut core::ffi::c_void,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    if request.is_null() || answer_len.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    to_c(guard::answer(|| piv::run(req, transmit, ctx as usize)), answer_len)
+}
+
 /// Asks the member: `request` is `{"op", "args"}` (src/member.rs,
 /// docs/core-api.md, "The member"), the answer `{"ok"}` or `{"error"}`.
 /// It may block: `fetch`, `command` and `wait` wait for the network, so the
@@ -517,6 +545,35 @@ pub unsafe extern "C" fn cbb_member_manage(
     // SAFETY: the caller gives len readable bytes at request.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
     to_c(guard::answer(|| m.manage(req, sign, ctx as usize)), answer_len)
+}
+
+/// Signs a manage request as `cbb_member_manage` does, with a slot's key on
+/// the app's YubiKey (src/piv.rs): `request` adds `pin` and `slot` to
+/// manage's fields, `public` the slot's key point, and `transmit` with
+/// `ctx` carries each APDU to the card during this call only.
+///
+/// # Safety
+///
+/// As `cbb_member_manage`, with `transmit` callable with `ctx` until the
+/// call returns.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_member_manage_card(
+    m: *const member::Member,
+    request: *const u8,
+    len: usize,
+    transmit: piv::TransmitFn,
+    ctx: *mut core::ffi::c_void,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    // SAFETY: as the function's contract says.
+    let Some(m) = (unsafe { m.as_ref() }) else { return core::ptr::null_mut() };
+    if request.is_null() || answer_len.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    to_c(guard::answer(|| piv::manage(m, req, transmit, ctx as usize)), answer_len)
 }
 
 /// Starts admitting a device by its QR code, as an admin of the group

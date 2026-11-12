@@ -226,6 +226,7 @@ dependencies = [
 name = "cbb-ffi"
 version = "0.1.0"
 dependencies = [
+ "aes",
  "base64 0.23.1",
  "cbb-core",
  "cbb-member",
@@ -240,6 +241,7 @@ dependencies = [
 name = "cbb-member"
 version = "0.1.0"
 dependencies = [
+ "aes",
  "aes-gcm",
  "base64 0.23.1",
  "blake2 0.11.0",

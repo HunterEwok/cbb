@@ -179,8 +179,42 @@ uint8_t *cbb_member_manage(const cbb_member *m, const uint8_t *request, size_t l
  * the sheet's tag (or asks addrs, "host:port") and takes the records from a member on a connection that
  * carries records only, checked; the answer {"device","cert","issuer",
  * "group_ca","roots","records","addr"} is what the app starts its member with.
+ * In place of sheet, "card" is the keys cbb_piv's issue answers (the recovery
+ * keys on a YubiKey): it then browses for any group and tries each.
  */
 uint8_t *cbb_restore(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, size_t *answer_len);
+
+/*
+ * The app's YubiKey (src/piv.rs), only with the feature member: sends apdu
+ * (len bytes) to the card and writes its answer, the status word last, to
+ * out (at most out_cap bytes) and the length to out_len; returns 0, or
+ * another value when the card left.
+ */
+typedef int32_t (*cbb_transmit_fn)(void *ctx, const uint8_t *apdu, size_t len, uint8_t *out, size_t out_cap,
+                                   size_t *out_len);
+
+/*
+ * One step with the group's recovery key on a YubiKey (src/piv.rs): the core
+ * speaks PIV and transmit carries each APDU, during this call only. request
+ * is {"op",...}: "make" {"pin"} makes a key in a free retired slot and
+ * answers {"slot","key"} (its SubjectPublicKeyInfo, for manage's
+ * recovery_for); "put" {"slot","cert"} stores the admin CA; "issue"
+ * {"pin","public"} has each recovery key on the card issue a member
+ * certificate for public, {"keys":[{"slot","admin_ca","device","cert","public"}]}
+ * (public the slot's key point);
+ * "sign" {"pin","slot","public","digest"} answers {"sig"}, DER.
+ */
+uint8_t *cbb_piv(const uint8_t *request, size_t len, cbb_transmit_fn transmit, void *ctx, size_t *answer_len);
+
+/*
+ * Signs a manage request as cbb_member_manage does, with a slot's key on the
+ * app's YubiKey (src/piv.rs), as the recovery key claims the group
+ * (action recover): request adds "pin" and "slot" to manage's fields,
+ * public the slot's key point, and transmit carries each APDU to the card
+ * during this call only. When the card refused, the answer is its error.
+ */
+uint8_t *cbb_member_manage_card(const cbb_member *m, const uint8_t *request, size_t len, cbb_transmit_fn transmit,
+                                void *ctx, size_t *answer_len);
 
 /*
  * The texts of the QR codes in a grey camera frame (src/qr.rs), only with the

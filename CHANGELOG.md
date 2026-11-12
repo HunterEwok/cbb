@@ -23,7 +23,10 @@ All notable changes to cbb are documented in this file. The format follows
   group at a blind relay, and the root phone signs the periods of the group's server keys
   and records what the Android phones' attestations show, with Google's revocation list
   (`cbb_core::attest`, Android Key Attestation in the core, checked against Go's vectors;
-  the ops `attest_status`, `attest` and the manage action `attest`).
+  the ops `attest_status`, `attest` and the manage action `attest`). It puts the recovery key
+  on a YubiKey over NFC and restores the group with one, the core speaking PIV for it
+  (`cbb_piv`, `cbb_member_manage_card`, and `cbb_restore`'s `card`), as for any app without
+  a PIV of its own.
   `cbb_member_manage` signs a remote paste (`paste`, `paste_off`) and a period of the
   server keys (`period`) for the apps that sign through the core, and `cbb_member_servers`
   makes the phone member serve the group's servers itself (the ops `hub`, `hub_off`,

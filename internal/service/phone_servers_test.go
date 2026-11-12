@@ -25,12 +25,19 @@ import (
 // laptop and their device IDs.
 func rootPhoneWithLaptop(t *testing.T, h *hub) (next func(string) string, in io.Writer, dir string, laptop *testService, phoneID, laptopID string) {
 	t.Helper()
+	return rootPhoneWithLaptopArgs(t, h)
+}
+
+// rootPhoneWithLaptopArgs is rootPhoneWithLaptop with more arguments for
+// the phone.
+func rootPhoneWithLaptopArgs(t *testing.T, h *hub, args ...string) (next func(string) string, in io.Writer, dir string, laptop *testService, phoneID, laptopID string) {
+	t.Helper()
 	bin := os.Getenv("CBB_PHONE_ON_LINUX")
 	if bin == "" {
 		t.Skip("CBB_PHONE_ON_LINUX is not set")
 	}
 	dir = t.TempDir()
-	next, w := phoneOnLinux(t, bin, "-name", "root phone", "-new-group", "-dir", dir)
+	next, w := phoneOnLinux(t, bin, append([]string{"-name", "root phone", "-new-group", "-dir", dir}, args...)...)
 	phoneID = strings.Fields(next("Group "))[0]
 	laptop, qr := listeningJoin(t, h, "laptop")
 	fmt.Fprintln(w, "ADMIT "+qr)

@@ -4,7 +4,9 @@
 // Restoring the group from its recovery sheet on a new phone: the sheet's
 // QR code, scanned or pasted; the phone finds a device of the group on the
 // network, restores the group and claims it, and becomes its root once the
-// group's waiting time passes, unless the root cancels the claim.
+// group's waiting time passes, unless the root cancels the claim. In place
+// of the sheet, a YubiKey with the recovery key, held to the phone twice:
+// to find the group, and to sign the claim.
 
 import { common } from '@kit.AbilityKit';
 import { router } from '@kit.ArkUI';
@@ -21,6 +23,8 @@ const SHEET_PREFIX: string = 'cbb://recover?';
 struct Restore {
   @Local pasted: string = '';
   @Local hint: string = '';
+  @Local onCard: boolean = false;
+  @Local pin: string = '';
 
   aboutToAppear(): void {
     app.resetRestore();
@@ -49,6 +53,12 @@ struct Restore {
     if (app.isRoot()) {
       return t('restore_root');
     }
+    if (app.card === 'issue') {
+      return t('yubikey_hold');
+    }
+    if (app.card === 'claim') {
+      return t('yubikey_hold_again');
+    }
     if (state === 'restoring') {
       return t('restore_restoring');
     }
@@ -57,6 +67,9 @@ struct Restore {
     }
     if (state === 'claimed') {
       return app.claimLeftMs > 0 ? t('restore_claimed_left', Math.ceil(app.claimLeftMs / 3600000)) : t('restore_claimed');
+    }
+    if (this.onCard) {
+      return t('yubikey_restore_body');
     }
     return t('restore_lead');
   }
@@ -73,7 +86,29 @@ struct Restore {
           }
         } })
         Text(this.lead()).fontColor($r('app.color.text'))
-        if (app.restoreState === '' || app.restoreState === 'failed') {
+        if ((app.restoreState === '' || app.restoreState === 'failed') && this.onCard) {
+          TextInput({ placeholder: $r('app.string.yubikey_pin'), text: this.pin })
+            .type(InputType.NUMBER_PASSWORD)
+            .maxLength(8)
+            .enabled(app.card.length === 0)
+            .onChange((v: string) => {
+              this.pin = v;
+            })
+          Button($r('app.string.yubikey_go'), { type: ButtonType.Capsule })
+            .width('100%')
+            .enabled(!app.busy && app.card.length === 0 && this.pin.length >= 6)
+            .onClick(() => {
+              this.hint = '';
+              app.restoreWithYubiKey(getContext(this) as common.UIAbilityContext, this.pin);
+            })
+          Button($r('app.string.cancel'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+            .width('100%')
+            .enabled(app.card.length === 0)
+            .onClick(() => {
+              this.onCard = false;
+              this.pin = '';
+            })
+        } else if (app.restoreState === '' || app.restoreState === 'failed') {
           Button($r('app.string.scan'), { type: ButtonType.Capsule }).width('100%').enabled(!app.busy).onClick(() => {
             this.scan();
           })
@@ -87,6 +122,13 @@ struct Restore {
             .onClick(() => {
               this.take(this.pasted);
             })
+          Button($r('app.string.yubikey_restore'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+            .width('100%')
+            .enabled(!app.busy)
+            .onClick(() => {
+              this.hint = '';
+              this.onCard = true;
+            })
         }
         if (app.restoreState === 'claimed' || app.isRoot()) {
           Button($r('app.string.restore_open'), { type: ButtonType.Capsule }).width('100%').onClick(() => {
@@ -94,7 +136,7 @@ struct Restore {
             router.replaceUrl({ url: 'pages/Main' });
           })
         }
-        BusyLine({ busy: app.restoreState === 'restoring' || app.restoreState === 'claiming' })
+        BusyLine({ busy: app.restoreState === 'restoring' || app.restoreState === 'claiming' || app.card.length > 0 })
         ErrorText({ text: this.hint })
         ErrorText({ text: app.error })
       }

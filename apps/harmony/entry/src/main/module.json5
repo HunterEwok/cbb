@@ -53,6 +53,8 @@
       { "name": "ohos.permission.GET_WIFI_INFO" },
       // The member as a continuous task in the background.
       { "name": "ohos.permission.KEEP_BACKGROUND_RUNNING" },
+      // The YubiKey with the group's recovery key, over NFC (common/YubiKey.ets).
+      { "name": "ohos.permission.NFC_TAG" },
       // The face, fingerprint or PIN before each signature of the admin key.
       {
         "name": "ohos.permission.ACCESS_BIOMETRIC",

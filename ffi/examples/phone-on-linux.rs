@@ -41,7 +41,12 @@
 //! <message>", and runs the member, the admin key standing for the new root
 //! key, which "MANAGE" signs root_ca with. "SERVERS" makes the member serve
 //! the servers (cbb_member_servers) with software keys for them, answered
-//! "SERVERS <answer as JSON>".
+//! "SERVERS <answer as JSON>". With -card FILE a YubiKey kept in FILE
+//! stands for the one the app reads over NFC: "PIV <request as JSON>"
+//! (cbb_piv) is answered "PIV <answer as JSON>", "MANAGE_CARD <request>"
+//! signs with its key as "MANAGE" with the admin key, and -restore-card PIN
+//! restores with its recovery keys as -restore does with a sheet. -keys N
+//! gives a second phone keys of its own.
 //!
 //!   phone-on-linux -addr 127.0.0.1:8764 -name phone -dir /tmp/p -peer 127.0.0.1:8765
 
@@ -55,7 +60,7 @@ use cbb_ffi::{
     cbb_admit_dial, cbb_admit_feed, cbb_admit_free, cbb_admit_new, cbb_free, cbb_group_new, cbb_invite_answer,
     cbb_invite_free, cbb_invite_new, cbb_invite_next, cbb_join_accept, cbb_join_answered, cbb_join_feed,
     cbb_join_finish, cbb_join_free, cbb_join_new, cbb_join_new_admin, cbb_member_call, cbb_member_manage,
-    cbb_member_servers, cbb_member_start, cbb_restore,
+    cbb_member_manage_card, cbb_member_servers, cbb_member_start, cbb_piv, cbb_restore,
 };
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner;
@@ -147,11 +152,16 @@ fn main() -> ExitCode {
     let arg = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
     let addr = arg("-addr").unwrap_or_else(|| "127.0.0.1:8764".into());
     let name = arg("-name").unwrap_or_else(|| "phone".into());
-    let key = SigningKey::from_slice(&[7u8; 32]).expect("a valid scalar");
+    // -keys N gives a second phone keys of its own.
+    let keys: u8 = arg("-keys").and_then(|k| k.parse().ok()).unwrap_or(0);
+    if let Some(f) = arg("-card") {
+        card::set(&f);
+    }
+    let key = SigningKey::from_slice(&[7u8.wrapping_add(keys.wrapping_mul(2)); 32]).expect("a valid scalar");
     let public = key.verifying_key().to_sec1_point(false);
     let public_b64 = STANDARD.encode(public.as_bytes());
     let admin = args.iter().any(|a| a == "-admin");
-    let admin_key = SigningKey::from_slice(&[8u8; 32]).expect("a valid scalar");
+    let admin_key = SigningKey::from_slice(&[8u8.wrapping_add(keys.wrapping_mul(2)); 32]).expect("a valid scalar");
     let admin_public = STANDARD.encode(admin_key.verifying_key().to_sec1_point(false).as_bytes());
     // The secret for sealed messages, and its public key for the device
     // record, as the app has them.
@@ -195,11 +205,27 @@ fn main() -> ExitCode {
             None,
         );
     }
-    if let Some(sheet) = arg("-restore") {
-        let req = serde_json::json!({
+    // With -restore-card PIN the recovery keys on the -card YubiKey issue
+    // this phone's member certificates first (cbb_piv's issue).
+    let card_keys = match arg("-restore-card") {
+        Some(pin) => {
+            let got = card::piv(&serde_json::json!({"op": "issue", "pin": pin, "public": public_b64}));
+            if got["ok"].is_null() {
+                println!("RESTORE FAILED {}", got["error"]["message"].as_str().unwrap_or_default());
+                return ExitCode::FAILURE;
+            }
+            Some(got["ok"]["keys"].clone())
+        }
+        None => None,
+    };
+    if let Some(sheet) = arg("-restore").or(card_keys.as_ref().map(|_| String::new())) {
+        let mut req = serde_json::json!({
             "sheet": sheet, "public": public_b64, "name": name, "os": "aurora", "addrs": peers,
-        })
-        .to_string();
+        });
+        if let Some(k) = &card_keys {
+            req["card"] = k.clone();
+        }
+        let req = req.to_string();
         let mut n = 0usize;
         let ctx = &key as *const SigningKey as *mut _;
         // SAFETY: req and n live for the call, the key too.
@@ -419,6 +445,23 @@ fn run_member(
                 call(serde_json::json!({ "op": "sync", "args": args }).to_string())
             };
             println!("MUTED {} {}", a["ok"]["sync_off"], a["ok"]["muted"]);
+        } else if let Some(req) = line.strip_prefix("PIV ") {
+            let r: serde_json::Value = serde_json::from_str(req).unwrap_or_default();
+            println!("PIV {}", card::piv(&r));
+        } else if let Some(req) = line.strip_prefix("MANAGE_CARD ") {
+            // Signed with the key on the YubiKey (cbb_member_manage_card):
+            // the request names its slot, its key's point as public, and
+            // the PIN.
+            let mut n = 0usize;
+            // SAFETY: m runs; req and n live for the call; carry needs no
+            // context.
+            let got = take(
+                unsafe {
+                    cbb_member_manage_card(m, req.as_ptr(), req.len(), card::carry, std::ptr::null_mut(), &mut n)
+                },
+                n,
+            );
+            println!("MANAGED {got}");
         } else if let Some(req) = line.strip_prefix("MANAGE ") {
             match admin {
                 Some((k, public)) => println!("MANAGED {}", manage(m, k, public, &joined["admin_ca"], req)),
@@ -593,4 +636,216 @@ fn admit(m: *const cbb_ffi::member::Member, key: &SigningKey, public: &str, admi
     println!("ADMIT FAILED {last}");
     // SAFETY: a is freed once.
     unsafe { cbb_admit_free(a) };
+}
+
+/// A YubiKey with the PIV application kept in a file, for the tests: the
+/// retired slots' keys and certificates, the PIN 123456 and the factory
+/// AES-192 management key, as member/src/piv.rs's fake card in its tests.
+mod card {
+    use std::collections::BTreeMap;
+    use std::sync::Mutex;
+
+    use aes::cipher::{Array, BlockCipherEncrypt as _, KeyInit as _};
+    use base64::Engine as _;
+    use base64::engine::general_purpose::STANDARD;
+    use p256::ecdsa::SigningKey;
+    use p256::ecdsa::signature::hazmat::PrehashSigner as _;
+
+    const KEY: [u8; 24] = [1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8];
+
+    #[derive(Default)]
+    struct Session {
+        selected: bool,
+        verified: bool,
+        authed: bool,
+        witness: Option<[u8; 16]>,
+        chain: Vec<u8>,
+    }
+
+    static FILE: Mutex<Option<String>> = Mutex::new(None);
+    static SESSION: Mutex<Option<Session>> = Mutex::new(None);
+
+    pub fn set(f: &str) {
+        *FILE.lock().unwrap() = Some(f.to_string());
+    }
+
+    /// The slots in the file: slot → (key, certificate).
+    fn load() -> BTreeMap<u8, (Vec<u8>, Vec<u8>)> {
+        let f = FILE.lock().unwrap().clone().unwrap_or_default();
+        let v: serde_json::Value =
+            std::fs::read(&f).ok().and_then(|d| serde_json::from_slice(&d).ok()).unwrap_or_default();
+        let mut out = BTreeMap::new();
+        for (k, e) in v.as_object().into_iter().flatten() {
+            let b = |x: &serde_json::Value| STANDARD.decode(x.as_str().unwrap_or_default()).unwrap_or_default();
+            out.insert(k.parse().unwrap_or(0), (b(&e["key"]), b(&e["cert"])));
+        }
+        out
+    }
+
+    fn save(slots: &BTreeMap<u8, (Vec<u8>, Vec<u8>)>) {
+        let f = FILE.lock().unwrap().clone().unwrap_or_default();
+        let v: serde_json::Map<String, serde_json::Value> = slots
+            .iter()
+            .map(|(k, (key, cert))| {
+                (k.to_string(), serde_json::json!({"key": STANDARD.encode(key), "cert": STANDARD.encode(cert)}))
+            })
+            .collect();
+        let _ = std::fs::write(f, serde_json::Value::Object(v).to_string());
+    }
+
+    fn tlv(tag: u8, v: &[u8]) -> Vec<u8> {
+        let mut out = vec![tag];
+        match v.len() {
+            n if n < 0x80 => out.push(n as u8),
+            n if n < 0x100 => out.extend_from_slice(&[0x81, n as u8]),
+            n => out.extend_from_slice(&[0x82, (n >> 8) as u8, n as u8]),
+        }
+        out.extend_from_slice(v);
+        out
+    }
+
+    fn read(b: &[u8], tag: u8) -> Option<(&[u8], &[u8])> {
+        if b.len() < 2 || b[0] != tag {
+            return None;
+        }
+        let (n, i) = match b[1] {
+            0x81 => (usize::from(*b.get(2)?), 3),
+            0x82 => (usize::from(*b.get(2)?) << 8 | usize::from(*b.get(3)?), 4),
+            l => (usize::from(l), 2),
+        };
+        Some((b.get(i..i + n)?, b.get(i + n..)?))
+    }
+
+    fn encrypt(block: &[u8]) -> Vec<u8> {
+        let c = aes::Aes192::new_from_slice(&KEY).unwrap();
+        let mut b: Array<u8, _> = <[u8; 16]>::try_from(block).unwrap().into();
+        c.encrypt_block(&mut b);
+        b.to_vec()
+    }
+
+    fn sw(mut data: Vec<u8>, w: u16) -> Vec<u8> {
+        data.extend_from_slice(&w.to_be_bytes());
+        data
+    }
+
+    /// One APDU to the card.
+    fn transmit(apdu: &[u8]) -> Vec<u8> {
+        let mut guard = SESSION.lock().unwrap();
+        let s = guard.get_or_insert_with(Session::default);
+        let (cla, ins, _p1, p2) = (apdu[0], apdu[1], apdu[2], apdu[3]);
+        let data = if apdu.len() > 5 { apdu[5..5 + usize::from(apdu[4])].to_vec() } else { Vec::new() };
+        if cla & 0x10 != 0 {
+            s.chain.extend(data);
+            return sw(vec![], 0x9000);
+        }
+        let data = [std::mem::take(&mut s.chain), data].concat();
+        let mut slots = load();
+        match ins {
+            0xa4 => {
+                *s = Session { selected: true, ..Session::default() };
+                sw(vec![], 0x9000)
+            }
+            _ if !s.selected => sw(vec![], 0x6d00),
+            0xcb => match slots.get(&(0x82 + data[4] - 0x0d)) {
+                Some((_, cert)) if !cert.is_empty() => {
+                    sw(tlv(0x53, &[tlv(0x70, cert), tlv(0x71, &[0])].concat()), 0x9000)
+                }
+                _ => sw(vec![], 0x6a82),
+            },
+            0x20 => {
+                let mut want = [0xffu8; 8];
+                want[..6].copy_from_slice(b"123456");
+                s.verified = data == want;
+                sw(vec![], if s.verified { 0x9000 } else { 0x63c2 })
+            }
+            0xf7 if p2 == 0x9b => sw(tlv(0x01, &[0x0b]), 0x9000),
+            0xf7 => match slots.get(&p2) {
+                Some(_) => sw(tlv(0x01, &[0x11]), 0x9000),
+                None => sw(vec![], 0x6a82),
+            },
+            0x87 if p2 == 0x9b => {
+                let (outer, _) = read(&data, 0x7c).unwrap();
+                let (first, rest) = read(outer, 0x80).unwrap();
+                if first.is_empty() {
+                    let w = [0x5au8; 16];
+                    s.witness = Some(w);
+                    return sw(tlv(0x7c, &tlv(0x80, &encrypt(&w))), 0x9000);
+                }
+                if Some(first) != s.witness.as_ref().map(|w| &w[..]) {
+                    return sw(vec![], 0x6982);
+                }
+                let (challenge, _) = read(rest, 0x81).unwrap();
+                s.authed = true;
+                sw(tlv(0x7c, &tlv(0x82, &encrypt(challenge))), 0x9000)
+            }
+            0x87 => {
+                if !s.verified {
+                    return sw(vec![], 0x6982);
+                }
+                // The PIN before each signature.
+                s.verified = false;
+                let Some((key, _)) = slots.get(&p2) else { return sw(vec![], 0x6a82) };
+                let k = SigningKey::from_slice(key).unwrap();
+                let (outer, _) = read(&data, 0x7c).unwrap();
+                let (_, rest) = read(outer, 0x82).unwrap();
+                let (digest, _) = read(rest, 0x81).unwrap();
+                let sig: p256::ecdsa::Signature = k.sign_prehash(digest).unwrap();
+                sw(tlv(0x7c, &tlv(0x82, sig.to_der().as_bytes())), 0x9000)
+            }
+            0x47 => {
+                if !s.authed {
+                    return sw(vec![], 0x6982);
+                }
+                let k = SigningKey::from_slice(&[0x40 + p2 % 0x40; 32]).unwrap();
+                let point = k.verifying_key().to_sec1_point(false).as_bytes().to_vec();
+                slots.insert(p2, (k.to_bytes().to_vec(), Vec::new()));
+                save(&slots);
+                let mut out = vec![0x7f];
+                out.extend(tlv(0x49, &tlv(0x86, &point)));
+                sw(out, 0x9000)
+            }
+            0xdb => {
+                if !s.authed {
+                    return sw(vec![], 0x6982);
+                }
+                let (id, rest) = read(&data, 0x5c).unwrap();
+                let slot = 0x82 + id[2] - 0x0d;
+                let (obj, _) = read(rest, 0x53).unwrap();
+                let (der, _) = read(obj, 0x70).unwrap();
+                let Some(e) = slots.get_mut(&slot) else { return sw(vec![], 0x6a82) };
+                e.1 = der.to_vec();
+                save(&slots);
+                sw(vec![], 0x9000)
+            }
+            _ => sw(vec![], 0x6d00),
+        }
+    }
+
+    pub unsafe extern "C" fn carry(
+        _: *mut core::ffi::c_void,
+        apdu: *const u8,
+        len: usize,
+        out: *mut u8,
+        cap: usize,
+        out_len: *mut usize,
+    ) -> i32 {
+        // SAFETY: as cbb_core.h's cbb_transmit_fn says.
+        unsafe {
+            let r = transmit(std::slice::from_raw_parts(apdu, len));
+            if r.len() > cap {
+                return 1;
+            }
+            std::ptr::copy_nonoverlapping(r.as_ptr(), out, r.len());
+            out_len.write(r.len());
+        }
+        0
+    }
+
+    /// cbb_piv on the card.
+    pub fn piv(req: &serde_json::Value) -> serde_json::Value {
+        let req = req.to_string();
+        let mut n = 0usize;
+        // SAFETY: req and n live for the call; carry needs no context.
+        super::take(unsafe { super::cbb_piv(req.as_ptr(), req.len(), carry, std::ptr::null_mut(), &mut n) }, n)
+    }
 }

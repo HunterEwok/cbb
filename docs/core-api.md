@@ -286,6 +286,21 @@ manage then claims the group with `recover_with_sheet` (`sheet`, `root_ca`): the
 the claim in the core and is not kept, and `finish_takeover` goes on as for any claim.
 `TestFFIPhoneRestore` restores a computer's group whose root was lost.
 
+An app without a PIV of its own (the HarmonyOS app) keeps the recovery key on a YubiKey through
+the core (`ffi/src/piv.rs`, `cbb_member::piv`): `cbb_piv` runs one step of PIV and the app's
+`cbb_transmit_fn` carries each APDU to the card (over NFC, IsoDep), answered with its status
+word last. `make` (`pin`) checks the PIN, authenticates with the factory AES-192 management key
+and makes a key in the first free retired slot, `{"slot", "key"}` (its SubjectPublicKeyInfo,
+for manage's `recovery_for`); `put` (`slot`, `cert`) stores the admin CA the root signed as
+the slot's certificate; `issue` (`pin`, `public`) has each recovery key on the card issue a
+member certificate for the phone's member key, `{"keys": [{"slot", "admin_ca", "device",
+"cert", "public"}]}`, which `cbb_restore` takes as `card` in place of `sheet`, browsing then
+for any group; `sign` (`pin`, `slot`, `public`, `digest`) signs a digest. The claim
+(`recover`) is then signed by the card with `cbb_member_manage_card`: manage's request with the
+key's `pin`, `slot`, `admin_ca` and its point as `public`, the card's error answered when it
+refused. `TestFFIPhoneYubiKey` puts the key on a fake card in `phone-on-linux` and restores and
+claims a phone's group with it.
+
 An admin phone makes a remote invitation with `cbb_invite_new` (`ffi/src/invite.rs`): the
 request names the public point of the key it issues with and its admin CA (none on the root),
 how long the invitation is valid and optionally the hub; the member opens the guest tunnel on

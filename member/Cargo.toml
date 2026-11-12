@@ -73,6 +73,7 @@ zune-jpeg = { version = "0.5.15", default-features = false, features = ["std"] }
 # signatures and sealing secrets as Go's internal/sekey does.
 p256 = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "ecdsa", "ecdh"] }
 hkdf = "0.13"
+aes = "0.9"
 aes-gcm = { version = "0.11", default-features = false, features = ["aes", "alloc"] }
 # WireGuard for sync away from home: GotaTun's noise protocol, sans I/O, with
 # the ring stand-in below; smoltcp is the TCP inside the tunnel.

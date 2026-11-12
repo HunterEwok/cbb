@@ -11,8 +11,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use cbb_core::certs;
+use cbb_core::certs::{self, Cert};
 use cbb_core::error::{Error, Result};
+use cbb_member::restore::Restore;
 use serde::{Deserialize, Serialize};
 
 use crate::join::{AppKey, SignFn, answer};
@@ -22,8 +23,13 @@ const WAIT: Duration = Duration::from_secs(5);
 
 #[derive(Deserialize)]
 struct Args {
-    /// The recovery sheet's QR code.
+    /// The recovery sheet's QR code; or else card.
+    #[serde(default)]
     sheet: String,
+    /// The member certificates the recovery keys on a YubiKey issued this
+    /// phone, as `cbb_piv`'s `issue` answers them.
+    #[serde(default)]
+    card: Vec<CardKey>,
     /// This phone's member key point, SEC1 uncompressed.
     #[serde(with = "certs::b64")]
     public: Vec<u8>,
@@ -36,6 +42,15 @@ struct Args {
     addrs: Vec<String>,
     #[serde(default)]
     wait_ms: u64,
+}
+
+#[derive(Deserialize)]
+struct CardKey {
+    #[serde(with = "certs::b64")]
+    admin_ca: Vec<u8>,
+    device: String,
+    #[serde(with = "certs::b64")]
+    cert: Vec<u8>,
 }
 
 #[derive(Serialize)]
@@ -62,7 +77,8 @@ struct Answer {
     addr: String,
 }
 
-/// Restores the group of the request's sheet (Args), the member key's
+/// Restores the group of the request's sheet, or of the recovery keys on a
+/// YubiKey (Args), the member key's
 /// callback sign with ctx signing this phone's side of each handshake;
 /// blocks while it browses and fetches. The answer is Answer.
 pub(crate) fn restore(request: &[u8], sign: SignFn, ctx: usize) -> Vec<u8> {
@@ -73,7 +89,16 @@ pub(crate) fn restore(request: &[u8], sign: SignFn, ctx: usize) -> Vec<u8> {
         let wait = if a.wait_ms == 0 { WAIT } else { Duration::from_millis(a.wait_ms.min(60_000)) };
         let name = if a.name.trim().is_empty() { "Phone" } else { a.name.trim() };
         let addrs: Vec<std::net::SocketAddr> = a.addrs.iter().filter_map(|s| s.parse().ok()).collect();
-        let (r, g, addr) = cbb_member::restore::restore(&a.sheet, key, name, &a.os, &addrs, wait)?;
+        let (r, g, addr) = if a.card.is_empty() {
+            cbb_member::restore::restore(&a.sheet, key, name, &a.os, &addrs, wait)?
+        } else {
+            let mut tries = Vec::new();
+            for k in a.card {
+                let device = certs::DeviceId::parse(&k.device)?;
+                tries.push(Restore::with_card(Cert::parse(&k.admin_ca)?, device, k.cert));
+            }
+            cbb_member::restore::restore_with(tries, key, name, &a.os, &addrs, wait)?
+        };
         Ok(Answer {
             device: r.device.to_string(),
             cert: r.cert,

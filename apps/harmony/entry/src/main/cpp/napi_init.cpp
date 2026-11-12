@@ -270,10 +270,14 @@ void onEvent(void *ctx, const uint8_t *event, size_t len)
 // the auth token (an ArrayBuffer), set by setAuth.
 napi_threadsafe_function authFn = nullptr;
 
+// A question to one of the app's functions that take bytes and answer a
+// Promise of bytes: HUKS's challenge to the auth token, or an APDU to the
+// YubiKey's answer (setCard).
 struct AuthAsk {
     std::vector<uint8_t> challenge;
     std::promise<std::vector<uint8_t>> token;
     std::string why;
+    std::string what = "auth";
 };
 
 napi_value authSettled(napi_env env, napi_callback_info info, bool ok)
@@ -300,14 +304,14 @@ void callAuth(napi_env env, napi_value js, void *, void *data)
 {
     auto *ask = static_cast<AuthAsk *>(data);
     if (!env || !js) {
-        ask->why = "auth: the app is gone";
+        ask->why = ask->what + ": the app is gone";
         ask->token.set_value({});
         return;
     }
     napi_value arg = buffer(env, ask->challenge);
     napi_value promise = nullptr;
     if (napi_call_function(env, undefined(env), js, 1, &arg, &promise) != napi_ok) {
-        ask->why = "auth: the app's function threw";
+        ask->why = ask->what + ": the app's function threw";
         ask->token.set_value({});
         return;
     }
@@ -323,13 +327,40 @@ void callAuth(napi_env env, napi_value js, void *, void *data)
         &rejected);
     napi_value args[2] = {resolved, rejected};
     if (napi_call_function(env, promise, then, 2, args, nullptr) != napi_ok) {
-        ask->why = "auth: the app's function did not answer a Promise";
+        ask->why = ask->what + ": the app's function did not answer a Promise";
         ask->token.set_value({});
     }
 }
 
 // How long the user has to answer the face or fingerprint prompt.
-constexpr auto authTimeout = std::chrono::minutes(3);
+constexpr std::chrono::seconds authTimeout = std::chrono::minutes(3);
+
+// Asks the app's function fn on its main thread and waits for its answer,
+// at most timeout.
+std::vector<uint8_t> askApp(napi_threadsafe_function fn, const std::vector<uint8_t> &challenge, const std::string &what,
+                            std::chrono::seconds timeout, std::string *why)
+{
+    // The app's main thread answers through the Promise; ask stays alive
+    // until it did or the wait ended, and a late answer is then dropped by
+    // keeping ask for the rest of the process.
+    auto *ask = new AuthAsk;
+    ask->challenge = challenge;
+    ask->what = what;
+    std::future<std::vector<uint8_t>> token = ask->token.get_future();
+    if (napi_call_threadsafe_function(fn, ask, napi_tsfn_blocking) != napi_ok) {
+        delete ask;
+        *why = what + ": could not reach the app's main thread";
+        return {};
+    }
+    if (token.wait_for(timeout) != std::future_status::ready) {
+        *why = what + ": no answer in time";
+        return {};
+    }
+    std::vector<uint8_t> out = token.get();
+    *why = ask->why;
+    delete ask;
+    return out;
+}
 
 std::vector<uint8_t> askAuth(const std::vector<uint8_t> &challenge, std::string *why)
 {
@@ -337,25 +368,30 @@ std::vector<uint8_t> askAuth(const std::vector<uint8_t> &challenge, std::string 
         *why = "auth: the app set no function for the user's consent";
         return {};
     }
-    // The app's main thread answers through the Promise; ask stays alive
-    // until it did or the wait ended, and a late answer is then dropped by
-    // keeping ask for the rest of the process.
-    auto *ask = new AuthAsk;
-    ask->challenge = challenge;
-    std::future<std::vector<uint8_t>> token = ask->token.get_future();
-    if (napi_call_threadsafe_function(authFn, ask, napi_tsfn_blocking) != napi_ok) {
-        delete ask;
-        *why = "auth: could not reach the app's main thread";
-        return {};
-    }
-    if (token.wait_for(authTimeout) != std::future_status::ready) {
-        *why = "auth: the user did not answer in time";
-        return {};
-    }
-    std::vector<uint8_t> out = token.get();
-    *why = ask->why;
-    delete ask;
-    return out;
+    return askApp(authFn, challenge, "auth", authTimeout, why);
+}
+
+// ---- the YubiKey over NFC ----
+
+// The app's function that sends an APDU to the YubiKey on its IsoDep tag
+// and answers a Promise of the card's answer, its status word last (setCard).
+napi_threadsafe_function cardFn = nullptr;
+
+// How long one APDU may take, a signature with the user's touch included.
+constexpr auto cardTimeout = std::chrono::seconds(30);
+
+// The core's cbb_transmit_fn over the app's function; ctx is ignored.
+int32_t transmitCard(void *, const uint8_t *apdu, size_t len, uint8_t *out, size_t cap, size_t *outLen)
+{
+    if (!cardFn)
+        return 2;
+    std::string why;
+    const std::vector<uint8_t> a = askApp(cardFn, std::vector<uint8_t>(apdu, apdu + len), "card", cardTimeout, &why);
+    if (a.size() < 2 || a.size() > cap)
+        return 1;
+    std::memcpy(out, a.data(), a.size());
+    *outLen = a.size();
+    return 0;
 }
 
 // ---- the core ----
@@ -443,6 +479,30 @@ napi_value restore(napi_env env, napi_callback_info info)
     });
 }
 
+// setCard(fn: (apdu: ArrayBuffer) => Promise<ArrayBuffer>): void, the
+// YubiKey that piv and memberManageCard speak to.
+napi_value setCard(napi_env env, napi_callback_info info)
+{
+    Args a(env, info);
+    if (cardFn)
+        napi_release_threadsafe_function(cardFn, napi_tsfn_release);
+    napi_value name = str(env, "cbb-card");
+    napi_create_threadsafe_function(env, a.v[0], nullptr, name, 0, 1, nullptr, nullptr, nullptr, callAuth, &cardFn);
+    napi_unref_threadsafe_function(env, cardFn);
+    return undefined(env);
+}
+
+// piv(request: string): Promise<string>, cbb_piv on the app's YubiKey.
+napi_value piv(napi_env env, napi_callback_info info)
+{
+    Args a(env, info);
+    const std::string req = stringOf(env, a.v[0]);
+    return laterString(env, [req]() {
+        size_t len = 0;
+        return take(cbb_piv(reinterpret_cast<const uint8_t *>(req.data()), req.size(), transmitCard, nullptr, &len), len);
+    });
+}
+
 // qrRead(gray: ArrayBuffer, width, height, stride): string
 napi_value qrRead(napi_env env, napi_callback_info info)
 {
@@ -518,6 +578,22 @@ napi_value memberManage(napi_env env, napi_callback_info info)
             return errorAnswer({"", "member: no handle"});
         size_t len = 0;
         return take(cbb_member_manage(member->m, reinterpret_cast<const uint8_t *>(req.data()), req.size(), sign, nullptr, &len), len);
+    });
+}
+
+// memberManageCard(handle, request: string): Promise<string>, signed with
+// a slot's key on the app's YubiKey (cbb_member_manage_card).
+napi_value memberManageCard(napi_env env, napi_callback_info info)
+{
+    Args a(env, info);
+    Member *member = handleOf<Member>(env, a.v[0]);
+    const std::string req = stringOf(env, a.v[1]);
+    return laterString(env, [member, req]() {
+        if (!member)
+            return errorAnswer({"", "member: no handle"});
+        size_t len = 0;
+        return take(cbb_member_manage_card(member->m, reinterpret_cast<const uint8_t *>(req.data()), req.size(), transmitCard, nullptr, &len),
+                    len);
     });
 }
 
@@ -804,10 +880,13 @@ napi_value init(napi_env env, napi_value exports)
         {"keyForget", nullptr, keyForget, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"groupNew", nullptr, groupNew, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"restore", nullptr, restore, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"setCard", nullptr, setCard, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"piv", nullptr, piv, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"qrRead", nullptr, qrRead, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberStart", nullptr, memberStart, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberCall", nullptr, memberCall, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberManage", nullptr, memberManage, nullptr, nullptr, nullptr, napi_default, nullptr},
+        {"memberManageCard", nullptr, memberManageCard, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberServers", nullptr, memberServers, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"memberStop", nullptr, memberStop, nullptr, nullptr, nullptr, napi_default, nullptr},
         {"joinNew", nullptr, joinNew, nullptr, nullptr, nullptr, napi_default, nullptr},

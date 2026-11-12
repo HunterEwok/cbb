@@ -999,6 +999,12 @@ settings, why it does not sync and the lab.
   sends of its member key, with the revocation list the app fetches from the mirror once a
   day, and records whether its keys are proven in hardware (docs/protocol.md, section 17); the
   core checks it (`cbb_core::attest`) when the root key signs the certificates' renewals.
+- **YubiKey**: as on the iPhone and Android, the root puts the group's recovery key on a
+  YubiKey held to the back of the phone (firmware 5.7 or later with the factory management key
+  and a free retired PIV slot), and a new phone restores the group with it and its PIN, the card
+  held once to find the group and once to sign the claim. HarmonyOS has no PIV of its own, so
+  the core speaks it (`cbb_piv`, `cbb_member_manage_card`, docs/core-api.md) and the app only
+  carries each APDU to the card's IsoDep tag in NFC reader mode (`ohos.permission.NFC_TAG`).
 - **The lab's Bluetooth keyboard**: the app serves HID over GATT (`@ohos.bluetooth.ble`, a
   GATT server and its advertising) with the core's report map and reports, as Aurora does
   through BlueZ; a TV, a tablet or a computer pairs with the phone, which the system confirms,

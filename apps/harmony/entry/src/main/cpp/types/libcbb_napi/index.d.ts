@@ -31,11 +31,17 @@ export const keyForget: () => Promise<string>;
 
 export const groupNew: (request: string) => Promise<string>;
 export const restore: (request: string) => Promise<string>;
+// The YubiKey on the phone's NFC: the app's function sends an APDU to the
+// IsoDep tag and answers the card's answer, its status word last; piv runs a
+// step of cbb_piv on it.
+export const setCard: (transmit: (apdu: ArrayBuffer) => Promise<ArrayBuffer>) => void;
+export const piv: (request: string) => Promise<string>;
 export const qrRead: (gray: ArrayBuffer, width: number, height: number, stride: number) => string;
 
 export const memberStart: (request: string, onEvent: (event: string) => void) => Promise<Made>;
 export const memberCall: (member: Handle, request: string) => Promise<string>;
 export const memberManage: (member: Handle, request: string, which: Which) => Promise<string>;
+export const memberManageCard: (member: Handle, request: string) => Promise<string>;
 export const memberServers: (member: Handle, index: string) => Promise<string>;
 export const memberStop: (member: Handle) => Promise<void>;
 

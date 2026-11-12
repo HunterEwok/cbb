@@ -149,6 +149,13 @@ pub fn find_group(tag: &str, wait: Duration) -> crate::error::Result<Vec<Vec<Soc
     Ok(found.into_values().map(|(a, ())| a).collect())
 }
 
+/// The members of any group that browsing finds for up to wait, by
+/// device, for a restore with a card's recovery key, which names no group.
+pub fn find_any_group(wait: Duration) -> crate::error::Result<Vec<Vec<SocketAddr>>> {
+    let found = browse_txt(wait, |info| info.get_property_val_str("g").filter(|g| !g.is_empty()).map(|_| ()))?;
+    Ok(found.into_values().map(|(a, ())| a).collect())
+}
+
 /// Browses for up to wait for the members whose TXT pick takes, then a
 /// moment more for the others; by instance name, their addresses and what
 /// pick made of them.
