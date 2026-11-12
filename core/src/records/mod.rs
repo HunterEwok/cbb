@@ -90,6 +90,23 @@ use crate::identity::ExternalKey;
 /// The label records are signed under.
 pub const LABEL_RECORD: &str = "cbb record v3";
 
+/// The label the recovery key signs a fetch proof under (rule 33): what a
+/// writer that is not a member shows to fetch the group's records. Its own
+/// label, so that nothing signed for a fetch reads as a record and no
+/// record as a fetch proof; the fetch protocol itself is not built yet.
+pub const LABEL_RECOVERY_FETCH: &str = "cbb recovery fetch v3";
+
+/// The recovery key's signature over data under [`LABEL_RECOVERY_FETCH`].
+pub fn sign_fetch(recovery: &dyn ExternalKey, data: &[u8]) -> crate::error::Result<[u8; 64]> {
+    key::sign_es256(recovery, LABEL_RECOVERY_FETCH, data)
+}
+
+/// Checks a fetch proof: sig over data under [`LABEL_RECOVERY_FETCH`] by
+/// the recovery key.
+pub fn verify_fetch(recovery: &Key, data: &[u8], sig: &[u8]) -> Result<(), Rule> {
+    key::verify_es256(recovery, LABEL_RECOVERY_FETCH, data, sig)
+}
+
 /// The label of a record's mark (`Record::mark`).
 pub const LABEL_MARK: &str = "cbb record mark v3";
 
@@ -320,12 +337,18 @@ impl Record {
         m
     }
 
+    /// Whether mark is the record's mark under local, compared in constant
+    /// time (hmac's own verify).
+    pub(crate) fn mark_holds(&self, local: &[u8; 32], mark: &Mark) -> bool {
+        self.marker(local).verify_slice(mark).is_ok()
+    }
+
     /// verify for a record from the device's own store: with its mark under
     /// local, the checks without the signature; with a missing or wrong
     /// mark, verify.
     pub(crate) fn verify_marked(&self, key: &Key, mark: Option<(&[u8; 32], &Mark)>) -> Result<bool, Rule> {
         match mark {
-            Some((local, mark)) if self.marker(local).verify_slice(mark).is_ok() => {
+            Some((local, mark)) if self.mark_holds(local, mark) => {
                 if self.bytes.len() > self.max_body() {
                     return Err(Rule::new("records/size"));
                 }

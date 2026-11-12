@@ -82,8 +82,13 @@ pub(crate) fn pair(g: &Global, args: &[String]) -> Result<()> {
     let text = read_line(MAX_QR_TEXT)?;
     if let Ok(code) = cbb_core::pair::normalize_code(&text) {
         println!("Looking for the device that shows the code {} {}...", &code[..3], &code[3..]);
-        let m =
-            request(g, &Message::new(Header { op: "pair".into(), code, admins, ..Default::default() }, Vec::new()))?;
+        let m = request(
+            g,
+            &Message::new(
+                Header { op: "pair".into(), code: code.to_string(), admins, ..Default::default() },
+                Vec::new(),
+            ),
+        )?;
         println!("{} joined the group.", m.header.name);
         return Ok(());
     }

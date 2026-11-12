@@ -21,6 +21,7 @@ use crate::certs::sha256;
 use crate::identity::ExternalKey;
 
 /// A key made from a name, so that a test replays exactly.
+#[derive(Clone)]
 struct K {
     sk: SigningKey,
     key: Key,
@@ -56,6 +57,7 @@ fn set_of(root: &Key) -> RecordSet {
 
 /// Builds a group's records: each signer's next seq and prev, and the
 /// recovery records' lists.
+#[derive(Clone)]
 struct G {
     root: K,
     gid: GroupId,
@@ -73,12 +75,17 @@ impl G {
 
     /// A change of root to new_root by the recovery key, with list.
     fn change(&mut self, new_root: &K, list: &[RecordId]) -> Record {
+        self.change_from(new_root, list, 0)
+    }
+
+    /// The same, the new root's records starting at seq from.
+    fn change_from(&mut self, new_root: &K, list: &[RecordId], from: u64) -> Record {
         let mut ids = list.to_vec();
         ids.sort();
         ids.dedup();
         let list = List(ids);
         self.lists.push(list.encode());
-        self.rec(&k("recovery"), Kind::Recovery { root: new_root.key.clone(), list: list.hash() })
+        self.rec(&k("recovery"), Kind::Recovery { root: new_root.key.clone(), list: list.hash(), from })
     }
 
     /// The IDs of the records of the roots on the path that count now,
@@ -834,7 +841,7 @@ fn limits_hold_for_any_signer() {
     let quiet = g.recs.clone();
     for i in 0..4 {
         let r = k(&format!("x root {i}"));
-        g.rec(&x, Kind::Recovery { root: r.key.clone(), list: [0; 32] });
+        g.rec(&x, Kind::Recovery { root: r.key.clone(), list: [0; 32], from: 0 });
         for j in 0..400 {
             g.device(&r, &k(&format!("x{i} {j}")), "flood", |_| {});
         }
@@ -987,7 +994,7 @@ fn any_os_number_is_taken() {
 
 /// What a command's receiver asks of the state: a key with two histories,
 /// a removed or frozen admin, and every admin during a full stop sign no
-/// command; the root does.
+/// command; the root does, but for a fork, where nobody does.
 #[test]
 fn who_may_command() {
     let mut g = G::new();
@@ -1010,17 +1017,17 @@ fn who_may_command() {
     let seen = g.seen();
     g.rec(&b, Kind::Freeze(removal(&[a.hash], seen)));
     assert!(!g.state().may_command(&a.hash));
-    // Two recovery records at one seq: a full stop for good; only the
-    // root commands.
+    // Two recovery records at one seq: a full stop for good; nobody
+    // commands, the root neither.
     let r = k("recovery");
-    let one = g.body(&r, Kind::Recovery { root: k("nb").key.clone(), list: [1; 32] });
-    let two = Body { kind: Kind::Recovery { root: k("nd").key.clone(), list: [2; 32] }, ..one.clone() };
+    let one = g.body(&r, Kind::Recovery { root: k("nb").key.clone(), list: [1; 32], from: 0 });
+    let two = Body { kind: Kind::Recovery { root: k("nd").key.clone(), list: [2; 32], from: 0 }, ..one.clone() };
     g.push(Record::sign(one, &r).unwrap());
     g.push(Record::sign(two, &r).unwrap());
     let s = g.state();
     assert_eq!(s.stop, Stop::Full);
     assert!(s.conflicts.iter().any(|c| c.kind == ConflictKind::Fork));
-    assert!(s.may_command(&g.root.hash) && !s.may_command(&b.hash));
+    assert!(s.halted() && !s.may_command(&g.root.hash) && !s.may_command(&b.hash));
 }
 
 /// A huge time field changes no order and no result: time is for display.
@@ -1130,8 +1137,8 @@ fn the_three_kinds_of_admin() {
     let seen = g.seen();
     let removal = g.rec(&h, Kind::Revoke(removal(&[laptop.hash], seen)));
     // No admin takes the group over, a phone's included (rule 33).
-    let by_a = g.rec(&a, Kind::Recovery { root: k("na").key.clone(), list: [0; 32] });
-    let by_s = g.rec(&s_, Kind::Recovery { root: k("ns").key.clone(), list: [0; 32] });
+    let by_a = g.rec(&a, Kind::Recovery { root: k("na").key.clone(), list: [0; 32], from: 0 });
+    let by_s = g.rec(&s_, Kind::Recovery { root: k("ns").key.clone(), list: [0; 32], from: 0 });
     let st = g.state();
     assert!(!st.counting.contains(&by_helper.id()) && st.counting.contains(&by_admin.id()));
     assert!(st.counting.contains(&removal.id()));
@@ -1600,7 +1607,8 @@ mod differential {
                     if arg % 7 == 6 && g.heads.contains_key(&k("recovery").hash) {
                         // A second head at the recovery key's last seq.
                         let rec = k("recovery");
-                        let mut twin = g.body(&rec, Kind::Recovery { root: new_root.key.clone(), list: [arg; 32] });
+                        let mut twin =
+                            g.body(&rec, Kind::Recovery { root: new_root.key.clone(), list: [arg; 32], from: 0 });
                         twin.seq -= 1;
                         twin.prev = g
                             .recs
@@ -1693,6 +1701,29 @@ mod differential {
             (&whole.roots, &whole.devices, &whole.revoked, &whole.stop)
         );
         assert_eq!(st.changes, whole.changes);
+        // One round with every list last: the records of a root whose
+        // recovery record waited for its list were kept aside and taken
+        // when it came, so the set ends the same.
+        let mut late = set_of(&g.root.key);
+        late.insert_all(order.iter().cloned());
+        for l in &g.lists {
+            let _ = late.insert_list(l);
+        }
+        // A halted set took nothing but the recovery records before the
+        // lists came; it asks for what the list names, as a member does.
+        if late.state().halted() {
+            late.insert_all(order.iter().cloned());
+        }
+        for _ in 0..2 {
+            let s = late.state();
+            late.compact(&s);
+        }
+        let ls = late.state();
+        assert_eq!((ls.halted(), ls.fork), (st.halted(), st.fork));
+        assert_eq!(
+            (&ls.roots, &ls.devices, &ls.revoked, &ls.stop, &ls.changes),
+            (&st.roots, &st.devices, &st.revoked, &st.stop, &st.changes)
+        );
         m
     }
 
@@ -1783,6 +1814,138 @@ mod differential {
         let (g, recs) = build(&steps);
         agree(&g, &recs, 1, 0);
         agree(&g, &recs, 3, 0);
+    }
+
+    /// Every order of recs, never compacted or compacting every 1, 2 or 3
+    /// records, ends as evaluate of them all, with stop.
+    fn every_order(g: &G, recs: &[Record], stop: Stop) {
+        fn perms(items: &[Record]) -> Vec<Vec<Record>> {
+            if items.len() <= 1 {
+                return vec![items.to_vec()];
+            }
+            let mut out = Vec::new();
+            for i in 0..items.len() {
+                let mut rest = items.to_vec();
+                let first = rest.remove(i);
+                for mut p in perms(&rest) {
+                    p.insert(0, first.clone());
+                    out.push(p);
+                }
+            }
+            out
+        }
+        let whole = state_with(&g.root.key, recs, &g.lists);
+        assert_eq!(whole.stop, stop);
+        for order in perms(recs) {
+            let s = set_with(&g.root.key, &order, &g.lists).state();
+            assert_eq!(
+                (&s.devices, &s.stop, &s.counting),
+                (&whole.devices, &whole.stop, &whole.counting),
+                "never compacted"
+            );
+            for every in [1, 2, 3] {
+                let s = fill(&g.root.key, &order, &g.lists, every).state();
+                assert_eq!(
+                    (&s.roots, &s.devices, &s.revoked, &s.stop, &s.counting),
+                    (&whole.roots, &whole.devices, &whole.revoked, &whole.stop, &whole.counting),
+                    "every {every}"
+                );
+            }
+        }
+    }
+
+    /// Found by the fuzzer: the root signs two records at seq 1; its later
+    /// checkpoints chain from one and keep the other. The counting
+    /// checkpoint settles them: the one it keeps stays, the other goes
+    /// with the stop it made, in every order (the checkpoints and the
+    /// kept twin before the other included).
+    #[test]
+    fn agrees_on_two_records_of_the_root_at_one_seq_under_its_checkpoints() {
+        let mut g = G::new();
+        let root = k("root");
+        let dev = g.device(&root, &k("dev 5"), "dev", |_| {});
+        let twin = Record::sign(
+            Body { seq: 1, prev: None, ..g.body(&root, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] }) },
+            &root,
+        )
+        .unwrap();
+        g.recs.push(twin.clone());
+        let head = |g: &G| {
+            let (seq, id) = g.heads[&root.hash];
+            vec![Head { key: root.hash, seq, id }]
+        };
+        let h = head(&g);
+        let c2 = g.root_rec(Kind::Checkpoint { heads: h, keep: vec![] });
+        let mut later = Vec::new();
+        for _ in 0..2 {
+            let h = head(&g);
+            later.push(g.root_rec(Kind::Checkpoint { heads: h, keep: vec![twin.id()] }));
+        }
+        let recs = g.recs.clone();
+        every_order(&g, &recs, Stop::None);
+        let order = vec![later[0].clone(), twin.clone(), c2, dev.clone(), later[1].clone()];
+        let s = fill(&g.root.key, &order, &g.lists, 1).state();
+        assert_eq!(s.stop, Stop::None);
+        assert!(s.counting.contains(&twin.id()) && !s.counting.contains(&dev.id()));
+    }
+
+    /// Found by the fuzzer: two records of the root at seq 1, a device on
+    /// one of them, and a checkpoint above that keeps nothing below its
+    /// head: the twins are settled, the device counts, in every order.
+    #[test]
+    fn agrees_on_twins_a_checkpoint_prunes() {
+        let mut g = G::new();
+        let root = k("root");
+        let copies = |g: &G, i: u64| {
+            Record::sign(
+                Body {
+                    seq: 1,
+                    prev: None,
+                    ..g.body(&root, Kind::Copies { incoming_ms: MIN_INCOMING_MS + i, seen: vec![] })
+                },
+                &root,
+            )
+            .unwrap()
+        };
+        let (a, b) = (copies(&g, 0), copies(&g, 1));
+        g.push(a.clone());
+        g.recs.push(b);
+        let dev = g.device(&root, &k("dev 2"), "dev", |_| {});
+        assert_eq!(dev.body().prev, Some(a.id()));
+        let (seq, id) = g.heads[&root.hash];
+        g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep: vec![] });
+        let recs = g.recs.clone();
+        every_order(&g, &recs, Stop::None);
+        assert!(g.state().device_by_key(&k("dev 2").hash).is_some());
+    }
+
+    /// Found by the fuzzer: a second head's list names a checkpoint of the
+    /// root between (with its removal, the first head and an ID nobody
+    /// holds). That checkpoint is an anchor only: it prunes nothing and is
+    /// not the state's checkpoint, in the set and in evaluate alike.
+    #[test]
+    fn agrees_on_a_listed_checkpoint_of_an_earlier_root() {
+        let mut g = G::new();
+        let root = k("root");
+        let (na, nb) = (k("new root a"), k("new root b"));
+        let d0 = g.device(&root, &k("dev 0"), "dev", |_| {});
+        let phone = g.device(&nb, &k("phone a"), "phone", |d| {
+            d.role = ROLE_PHONE;
+            d.holds_root = true;
+        });
+        let rm = g.rec(&nb, Kind::Revoke(removal(&[k("dev 7").hash], vec![])));
+        let mut keep = vec![phone.id(), d0.id()];
+        keep.sort();
+        let cp = g.rec(&nb, Kind::Checkpoint { heads: vec![Head { key: nb.hash, seq: 2, id: rm.id() }], keep });
+        let h1 = g.change(&nb, &[d0.id()]);
+        g.change(&na, &[RecordId([0x5d; 32]), cp.id(), rm.id(), h1.id()]);
+        let recs = g.recs.clone();
+        for seed in 0..12u64 {
+            for every in [1, 2, 3] {
+                let m = agree(&g, &recs, every, seed.wrapping_mul(0x9e37_79b9_7f4a_7c15));
+                assert_eq!(m.state().checkpoint, None, "seed {seed}, every {every}");
+            }
+        }
     }
 
     /// A sequence once found by the property below: the set agrees with

@@ -44,12 +44,12 @@ pub struct Input<'a> {
 pub struct Cut {
     /// The roots before the current one, in the order of the path.
     pub roots: Vec<KeyHash>,
-    /// The current root, and the highest seq of its records the list
-    /// names: a key that signed as an admin before the chain made it the
-    /// root keeps of those records only what the list names; 0 for a new
-    /// key.
+    /// The current root, and the seq its records as the root start at
+    /// (the record's `from`): a key that signed as an admin before the
+    /// chain made it the root keeps of its records below it only what the
+    /// list names; 0 for a new key.
     pub current: KeyHash,
-    pub floor: u64,
+    pub from: u64,
     /// The recovery record.
     pub record: RecordId,
     /// The hash of its list.
@@ -62,7 +62,7 @@ pub struct Cut {
 impl Cut {
     /// Whether the cut covers a record of signer at seq.
     pub fn covers(&self, signer: &KeyHash, seq: u64) -> bool {
-        self.roots.contains(signer) || *signer == self.current && seq <= self.floor
+        self.roots.contains(signer) || *signer == self.current && seq < self.from
     }
 
     /// Whether r, of a cut root, is listed.
@@ -147,7 +147,8 @@ pub enum Stop {
     /// A conflict between admins, or a root with two histories: the group
     /// stops until a root resolves it, and a root's own records still
     /// count (rule 8). Two records at one step of the recovery chain: the
-    /// group stops for good (rule 33).
+    /// group stops for good and nothing acts, the root neither
+    /// ([`State::halted`], rule 33).
     Full,
 }
 
@@ -262,6 +263,9 @@ pub struct State {
     /// A recovery record this version cannot read: the device stops by
     /// itself until it is updated (not a fork, not final).
     pub update_needed: bool,
+    /// The lowest seq at which the set holds two recovery records, and
+    /// the two (the smaller ID first): the proof of a fork.
+    pub fork: Option<(u64, RecordId, RecordId)>,
 }
 
 impl State {
@@ -306,12 +310,34 @@ impl State {
         self.changes.iter().filter(|c| c.state == ChangeState::Effective).map(|c| c.record).collect()
     }
 
+    /// Reports whether the group is halted on this device (rule 33): it
+    /// holds two recovery records at one seq, the proof of a fork, and is
+    /// stopped for good; or a recovery record it cannot read, and is
+    /// stopped until it is updated. Nothing in the state acts then: no root
+    /// or admin commands, no device is admitted, no copy is sealed or
+    /// opened. The state stays readable, so the owner sees the devices when
+    /// making the next group, and the device still passes the recovery
+    /// records on.
+    ///
+    /// What a halted state shows is computed from the recovery chain below
+    /// the fork (or below the record it cannot read) and the records the
+    /// newest list applied there names, and nothing else: the roots of
+    /// that chain, and the devices and removals those listed records make.
+    /// The last root's records that list does not name do not show; after
+    /// a fork at seq 1 the state is the first root and the recovery chain
+    /// alone. So every member that holds the proof shows the same, however
+    /// its records came, and `fork` names the seq and the two records.
+    pub fn halted(&self) -> bool {
+        self.update_needed || self.conflicts.iter().any(|c| c.kind == ConflictKind::Fork)
+    }
+
     /// Reports whether a command signed by key k may be carried out: the
     /// current root's, unless it has two histories; an admin's that is
     /// neither removed nor frozen, while the group is not stopped and the
-    /// key has one history. Nothing else signs commands.
+    /// key has one history. Nothing else signs commands, and no key does
+    /// while the group is halted.
     pub fn may_command(&self, k: &KeyHash) -> bool {
-        if self.two_histories(k) || self.revoked.contains(k) {
+        if self.halted() || self.two_histories(k) || self.revoked.contains(k) {
             return false;
         }
         if self.is_root(k) {
@@ -540,6 +566,30 @@ pub(crate) fn chain_kept<'r>(checked: impl Iterator<Item = (&'r Record, Role)>) 
     by.into_values().flat_map(|ids| ids.into_iter().take(2)).collect()
 }
 
+/// The proof that a key has two histories: of each root's or admin key's
+/// lowest seq that holds two records, the two smallest IDs. Like the
+/// recovery chain's twins, they are kept outside the rooms. A counting
+/// checkpoint settles what is below it, twins included: twins it prunes
+/// go as any record it prunes, and the stop they made with them; twins it
+/// does not cover, and two checkpoints at one seq, stay a fork
+/// (`proof_stays`).
+pub(crate) fn proof_stays(proof: &BTreeSet<RecordId>, r: &Record) -> bool {
+    proof.contains(&r.id()) && matches!(r.body().kind, Kind::Checkpoint { .. })
+}
+
+pub(crate) fn fork_proof<'r>(checked: impl Iterator<Item = (&'r Record, Role)>) -> BTreeSet<RecordId> {
+    let mut by: BTreeMap<KeyHash, BTreeMap<u64, BTreeSet<RecordId>>> = BTreeMap::new();
+    for (r, role) in checked {
+        if matches!(role, Role::Root | Role::Admin) {
+            by.entry(r.body().signer).or_default().entry(r.body().seq).or_default().insert(r.id());
+        }
+    }
+    by.into_values()
+        .filter_map(|seqs| seqs.into_values().find(|ids| ids.len() > 1))
+        .flat_map(|ids| ids.into_iter().take(2))
+        .collect()
+}
+
 /// What the recovery chain comes to (rule 33): the roots it put on the
 /// path in order, the newest list's cut of the roots before the current
 /// one, and the records that stop the group for good.
@@ -551,6 +601,8 @@ pub(crate) struct Chain {
     pub changes: Vec<Change>,
     /// Two different records at one seq.
     pub fork: Vec<RecordId>,
+    /// The lowest such seq and its two records, the smaller ID first.
+    pub fork_at: Option<(u64, RecordId, RecordId)>,
     /// A record the device cannot read where the chain goes on.
     pub unreadable: bool,
     /// The list the next valid record waits for.
@@ -560,6 +612,12 @@ pub(crate) struct Chain {
 }
 
 impl Chain {
+    /// Whether the chain halts the group: a fork, or a record the device
+    /// cannot read.
+    pub fn halted(&self) -> bool {
+        !self.fork.is_empty() || self.unreadable
+    }
+
     pub fn promoted(&self) -> BTreeSet<KeyHash> {
         self.steps.iter().map(|(_, k)| k.hash()).collect()
     }
@@ -571,11 +629,11 @@ impl Chain {
 }
 
 /// A cut by each key it covers: the roots before the current one, and the
-/// current one when it keeps a floor.
+/// current one when its records start above seq 1.
 pub(crate) fn cuts_of(cut: Option<&Cut>) -> BTreeMap<KeyHash, Cut> {
     let mut out = BTreeMap::new();
     if let Some(c) = cut {
-        for k in c.roots.iter().chain((c.floor > 0).then_some(&c.current)) {
+        for k in c.roots.iter().chain((c.from > 1).then_some(&c.current)) {
             out.insert(*k, c.clone());
         }
     }
@@ -600,10 +658,8 @@ pub(crate) fn chain<'r>(
     lists: &BTreeMap<[u8; 32], &List>,
 ) -> Chain {
     let mut by: BTreeMap<u64, Vec<&Record>> = BTreeMap::new();
-    let mut signed: BTreeMap<RecordId, (KeyHash, u64)> = BTreeMap::new();
     let mut out = Chain::default();
     for (r, role) in records {
-        signed.insert(r.id(), (r.body().signer, r.body().seq));
         if chain_kind(r, role) {
             by.entry(r.body().seq).or_default().push(r);
         }
@@ -613,6 +669,11 @@ pub(crate) fn chain<'r>(
         rs.dedup_by_key(|r| r.id());
         // Two are the proof; a set keeps the two smallest IDs at a seq.
         rs.truncate(2);
+        if let [a, b] = rs.as_slice()
+            && out.fork_at.is_none()
+        {
+            out.fork_at = Some((a.body().seq, a.id(), b.id()));
+        }
         if rs.len() > 1 {
             out.fork.extend(rs.iter().map(|r| r.id()));
             for r in rs.iter() {
@@ -626,14 +687,14 @@ pub(crate) fn chain<'r>(
     // The valid records, in order, by their bytes and their predecessors.
     let mut path = vec![*group_root];
     let mut tip: Option<RecordId> = None;
-    let mut valid: Vec<(&Record, &Key, &[u8; 32])> = Vec::new();
+    let mut valid: Vec<(&Record, &Key, &[u8; 32], u64)> = Vec::new();
     for seq in 1..=MAX_RECOVERY {
         let Some([r]) = by.get(&seq).map(Vec::as_slice) else { break };
         if r.body().held {
             out.unreadable = true;
             break;
         }
-        let Kind::Recovery { root, list } = &r.body().kind else { break };
+        let Kind::Recovery { root, list, from } = &r.body().kind else { break };
         if r.body().prev != tip {
             break;
         }
@@ -644,33 +705,33 @@ pub(crate) fn chain<'r>(
         }
         path.push(h);
         tip = Some(r.id());
-        valid.push((r, root, list));
+        valid.push((r, root, list, *from));
     }
     // They apply up to the newest whose list the device holds: the newest
     // list is the whole truth about every root before it, so the lists of
     // the records before it are not needed. Past it the chain waits for
     // the newest record's list.
-    let applied = valid.iter().rposition(|(_, _, list)| lists.contains_key(*list)).map_or(0, |i| i.saturating_add(1));
+    let applied =
+        valid.iter().rposition(|(_, _, list, _)| lists.contains_key(*list)).map_or(0, |i| i.saturating_add(1));
     if applied < valid.len() {
-        out.waiting = valid.last().map(|(_, _, list)| **list);
+        out.waiting = valid.last().map(|(_, _, list, _)| **list);
     }
     let mut path = vec![*group_root];
-    let mut last: Option<(&Record, &[u8; 32], &List)> = None;
-    for (r, root, list) in valid.iter().take(applied) {
+    let mut last: Option<(&Record, &[u8; 32], &List, u64)> = None;
+    for (r, root, list, from) in valid.iter().take(applied) {
         let h = root.hash();
         out.changes.push(Change { record: r.id(), seq: r.body().seq, root: h, state: ChangeState::Effective });
         out.records.insert(r.id());
         out.steps.push((r.id(), (*root).clone()));
         path.push(h);
-        last = lists.get(*list).map(|l| (*r, *list, *l));
+        last = lists.get(*list).map(|l| (*r, *list, *l, *from));
     }
-    if let Some((r, list, l)) = last {
+    if let Some((r, list, l, from)) = last {
         let current = *path.last().unwrap_or(group_root);
-        let floor = l.0.iter().filter_map(|id| signed.get(id)).filter(|(k, _)| *k == current).map(|(_, s)| *s).max();
         out.cut = Some(Cut {
             roots: path.iter().take(path.len().saturating_sub(1)).copied().collect(),
             current,
-            floor: floor.unwrap_or(0),
+            from,
             record: r.id(),
             list: *list,
             keep: l.0.iter().copied().collect(),
@@ -695,10 +756,15 @@ pub(crate) fn kept_of(
 ) -> BTreeSet<RecordId> {
     let admins: BTreeSet<KeyHash> =
         checked.iter().filter(|c| c.role == Role::Admin).map(|c| c.r.body().signer).collect();
-    let items: Vec<super::keep::Item> =
-        checked.iter().filter(|c| c.role != Role::Recovery && !off_cut(cuts, c.r)).map(|c| item(c.r, c.role)).collect();
+    let proof = fork_proof(checked.iter().filter(|c| !off_cut(cuts, c.r)).map(|c| (c.r, c.role)));
+    let items: Vec<super::keep::Item> = checked
+        .iter()
+        .filter(|c| c.role != Role::Recovery && !off_cut(cuts, c.r) && !proof.contains(&c.r.id()))
+        .map(|c| item(c.r, c.role))
+        .collect();
     let mut kept = super::keep::keep(&items, |k| ceiling_of(group_root, promoted, &admins, k));
     kept.extend(chain_kept(checked.iter().map(|c| (c.r, c.role))));
+    kept.extend(proof);
     kept
 }
 
@@ -799,6 +865,17 @@ pub(crate) fn evaluate_checked(
 ) -> State {
     let group_root = root.hash();
     let chain = chain(&group_root, checked.iter().map(|c| (c.r, c.role)), lists);
+    // Halted: only the recovery chain and what the newest list applied
+    // below the fork names (State::halted).
+    let checked = if chain.halted() {
+        let listed = chain.cut.as_ref().map(|c| &c.keep);
+        checked
+            .into_iter()
+            .filter(|c| c.role == Role::Recovery || listed.is_some_and(|k| k.contains(&c.r.id())))
+            .collect()
+    } else {
+        checked
+    };
     let promoted = chain.promoted();
     let mut cuts = chain.cuts();
     let proven = by.proven;
@@ -814,9 +891,9 @@ pub(crate) fn evaluate_checked(
     let full = Evaluation::new(root, recovery, checked.clone(), failed.clone(), BTreeSet::new(), &promoted, &cuts);
     // The set a root's checkpoint prunes is evaluated as if the member had
     // dropped what it leaves out. The roots' checkpoints are taken in the
-    // order of the path, each the newest of its root (of a cut root only
-    // one the list names), as a member that compacted under each root in
-    // turn took them: one counts when it still counts in the set the ones
+    // order of the path, each the newest of its root (a cut root's,
+    // listed or not, is an anchor only and prunes nothing), as a member
+    // that compacted under each root in turn took them: one counts when it still counts in the set the ones
     // before it pruned. What the list names is never pruned.
     let plain = full.run(&chain, &cuts);
     let cur = plain.cur;
@@ -846,8 +923,12 @@ pub(crate) fn evaluate_checked(
                 .get(&r.body().signer)
                 .is_some_and(|cut| cut.covers(&r.body().signer, r.body().seq) && cut.keeps(&r.id()))
         };
-        let pruned: Vec<Checked> =
-            kept.iter().copied().filter(|c| listed(c.r) || !pruned_by(c.r, c.role, heads, &anchors)).collect();
+        let proof = fork_proof(kept.iter().map(|c| (c.r, c.role)));
+        let pruned: Vec<Checked> = kept
+            .iter()
+            .copied()
+            .filter(|c| listed(c.r) || proof_stays(&proof, c.r) || !pruned_by(c.r, c.role, heads, &anchors))
+            .collect();
         let known = still_known(root, recovery, pruned.clone());
         let e = Evaluation::new(root, recovery, known, failed.clone(), all.clone(), &promoted, &these);
         let ep = e.run(&chain, &these);
@@ -868,6 +949,7 @@ pub(crate) fn evaluate_checked(
     state.group = super::key::group_id(root, recovery);
     state.list_missing = chain.waiting;
     state.update_needed = chain.unreadable;
+    state.fork = chain.fork_at;
     if chain.unreadable {
         state.stop = Stop::Full;
     }
@@ -896,12 +978,19 @@ pub(crate) fn anchors_of(heads: &[Head], keep: &[RecordId]) -> BTreeSet<RecordId
 }
 
 /// Reports whether checkpoint cp may count on a member that holds the
-/// records get finds: it holds every record cp keeps; of a head key's
-/// named records (its head and those it keeps), none is above the head,
-/// no two share a seq, and each is on the key's chain as far as the held
-/// records show it: down from cp itself for cp's own key, down from the
-/// head for another key. So no ID can stand for a record nobody held, and
-/// two named twins show as a fork before anything is pruned.
+/// records get finds: it holds every record cp keeps, and of a head key's
+/// named records (its head and those it keeps) none is above the head and
+/// no two share a seq. So no ID can stand for a record nobody held.
+///
+/// A counting checkpoint settles what is below its heads, forks included:
+/// it may keep any record of a key below that key's head, whichever
+/// sibling its own chain ran through, and prunes the rest, twins with
+/// them. It is not asked whether a kept record is on the chain below a
+/// head: a member cannot always know that chain (it may have pruned it),
+/// and the answer would then depend on the order the records came in.
+/// Twins it does not cover, and two checkpoints at one seq, stay a fork
+/// with the proof kept outside the rooms (`proof_stays`). Only the root
+/// signs checkpoints.
 pub(crate) fn checkpoint_ok<'r>(cp: &'r Record, get: impl Fn(&RecordId) -> Option<&'r Record>) -> bool {
     let Kind::Checkpoint { heads, keep } = &cp.body().kind else { return false };
     let head_of = |k: &KeyHash| heads.binary_search_by(|h| h.key.cmp(k)).ok().and_then(|i| heads.get(i));
@@ -915,25 +1004,6 @@ pub(crate) fn checkpoint_ok<'r>(cp: &'r Record, get: impl Fn(&RecordId) -> Optio
         if let Some(h) = head_of(&b.signer)
             && (b.seq > h.seq || named.entry(b.signer).or_default().insert(b.seq, *id).is_some_and(|o| o != *id))
         {
-            return false;
-        }
-    }
-    for h in heads {
-        // The chain down, while the held records show it.
-        let start = if h.key == cp.body().signer { Some(cp) } else { get(&h.id) };
-        let mut chain: BTreeMap<u64, RecordId> = BTreeMap::new();
-        let mut at = start;
-        while let Some(r) = at {
-            let b = r.body();
-            if b.signer != h.key || chain.first_key_value().is_some_and(|(s, _)| b.seq.saturating_add(1) != *s) {
-                break;
-            }
-            chain.insert(b.seq, r.id());
-            at = b.prev.as_ref().and_then(&get);
-        }
-        let Some(low) = chain.first_key_value().map(|(s, _)| *s) else { continue };
-        let off = named.get(&h.key).into_iter().flatten().any(|(seq, id)| *seq >= low && chain.get(seq) != Some(id));
-        if off {
             return false;
         }
     }
@@ -1037,7 +1107,10 @@ impl<'a> Evaluation<'a> {
         let mut failed = failed;
         for c in &checked {
             if !kept.contains(&c.r.id()) {
-                fail(&mut failed, c.r.id(), Why::Limit);
+                // A record of a root the path left that the newest list
+                // does not name is cut, not over a ceiling.
+                let why = if off_cut(cuts, c.r) { Why::Cut } else { Why::Limit };
+                fail(&mut failed, c.r.id(), why);
             }
         }
         // The recovery keys' records are the chain's alone (`chain`).
@@ -1133,7 +1206,10 @@ impl<'a> Evaluation<'a> {
                 || r.role != Role::Root
                 || !matches!(b.kind, Kind::Checkpoint { .. })
                 || !path.contains(&b.signer)
-                || cuts.get(&b.signer).is_some_and(|c| !c.lets(r.r))
+                // A checkpoint of a root the path left (or of the current
+                // root below its `from`) is an anchor only, listed or not:
+                // the new root's first checkpoint is what prunes.
+                || cuts.get(&b.signer).is_some_and(|c| c.covers(&b.signer, b.seq))
             {
                 continue;
             }

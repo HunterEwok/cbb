@@ -432,6 +432,16 @@ def record_vectors():
         note="the list (lists[0]) rides beside it, taken from anyone by its hash")
     lists.append({"name": "the list of the first head", "bytes": list_bytes.hex(),
                   "hash": list_hash(list_bytes).hex(), "ids": len(listed)})
+    # a second head names an admin key as the root: field 12 `from` says
+    # where its records as the root start; below it they count only if
+    # listed (a fresh key leaves 12 out)
+    admin_from = chain[ADMIN.name][0] + 1
+    empty = enc([])
+    add("recovery head: an admin key becomes the root, its root records from seq %d" % admin_from, RECOVERY, 13,
+        {10: ADMIN.key, 11: list_hash(empty), 12: admin_from},
+        note="the admin's records below field 12 count only if listed; this list (lists[1]) is empty")
+    lists.append({"name": "the empty list of the second head", "bytes": empty.hex(),
+                  "hash": list_hash(empty).hex(), "ids": 0})
     add("device with an optional field from a later version", ROOT, 1,
         {10: Signer("tv").key, 11: "TV", 12: 1, 13: 0b0011},
         extra={300: "later"},
@@ -623,6 +633,10 @@ def record_vectors():
                rec(RECOVERY, 2, 13, {10: Signer("root 3").key}))
     bad_signed("recovery head with a list hash of 31 bytes", "records/recovery/list", RECOVERY,
                rec(RECOVERY, 2, 13, {10: Signer("root 3").key, 11: some[:31]}))
+    bad_signed("recovery head with from 0 written (a fresh key leaves it out)", "form/default", RECOVERY,
+               rec(RECOVERY, 2, 13, {10: Signer("root 3").key, 11: some, 12: 0}))
+    bad_signed("recovery head with from past the highest seq", "records/recovery/from", RECOVERY,
+               rec(RECOVERY, 2, 13, {10: Signer("root 3").key, 11: some, 12: 2**31}))
     return take, refuse, lists
 
 
@@ -721,8 +735,13 @@ def grant_vectors(admin_record):
     the grant it replaces (field 18), and the first comes from the admitter
     with the root's record of that admin key (message field 3). A guarded
     leaf takes grants from the root only and carries `guarded`. The leaf
-    keeps the root's counter and the admins' counter apart. Each vector
-    names the leaf that reads it (`leaf`); the group is the file's."""
+    keeps the root's counter and the admins' counter apart. Every grant
+    names the recovery seq it was made under (field 19, absent before any
+    change of root); a leaf takes only the newest it knows and never goes
+    back. Each vector names the leaf that reads it (`leaf`); the group is
+    the file's. A row with `recovery` is read by a leaf that knows that
+    recovery seq as the newest, whose root is then the key with the hash
+    `root` (else 0 and the file's root)."""
     take, refuse, sequences = [], [], []
     by_hash = lambda keys: sorted(keys, key=lambda k: sha(enc(k)))
 
@@ -750,6 +769,7 @@ def grant_vectors(admin_record):
     def bad(name, rule, msg, leaf):
         refuse.append({"name": name, "rule": rule, "verdict": "refuse", "leaf": leaf.hex(),
                        "message": enc(msg).hex()})
+        return refuse[-1]
 
     kettle = {1: 1, 2: GROUP, 10: BOARD.id16, 12: by_hash([ADMIN.key, ADMIN2.key]),
               13: [[LAPTOP.id16, LAPTOP.key]], 14: sorted([LAPTOP.hash, PHONE.hash]), 16: T0 + 9000}
@@ -789,6 +809,15 @@ def grant_vectors(admin_record):
     root_bad("grant with an unknown critical field", "form/critical", {**g, 200: 1})
     root_bad("grant with field 9", "form/critical", {**g, 9: 1})
     root_bad("root grant naming a grant it replaces", "grants/replaces", {**g, 18: sha(b"some grant")})
+    root_bad("grant with recovery seq 0 written", "form/default", {**g, 19: 0})
+    root_bad("grant made under a recovery seq the leaf does not know", "grants/recovery", {**g, 19: 1})
+    root_bad("grant with a recovery seq as text", "grants/shape", {**g, 19: "1"})
+    _, genv, _ = signed({**g, 19: 17}, ROOT2)
+    row = bad("grant made under recovery seq 17 (at most 16 heads)", "grants/recovery", message(genv), L)
+    row.update({"recovery": 17, "root": ROOT2.hash.hex()})
+    _, genv, _ = signed(g, ROOT)
+    row = bad("the old root's grant made before the change the leaf knows", "grants/recovery", message(genv), L)
+    row.update({"recovery": 1, "root": ROOT2.hash.hex()})
     g2 = {**g, 3: ROOT.hash, 8: ADMIN.hash}
     gb2 = enc(g2)
     bad("grant with a second signer", "form/critical",
@@ -836,14 +865,16 @@ def grant_vectors(admin_record):
             self.row = {"name": name, "leaf": leaf.hex(), "steps": []}
             sequences.append(self.row)
 
-        def step(self, name, g, signer, rule=None, admin=None, replaces="kept"):
+        def step(self, name, g, signer, rule=None, admin=None, replaces="kept", recovery=0, root=ROOT):
             g = dict(g)
-            if replaces == "kept" and signer is not ROOT and self.kept is not None:
+            if replaces == "kept" and signer is not root and self.kept is not None:
                 g[18] = sha(self.kept)
             elif isinstance(replaces, bytes):
                 g[18] = sha(replaces)
             _, genv, gbody = signed(g, signer)
             r = {"name": name, "message": enc(message(genv, admin)).hex(), "verdict": "refuse" if rule else "take"}
+            if recovery:
+                r.update({"recovery": recovery, "root": root.hash.hex()})
             if rule:
                 r["rule"] = rule
             else:
@@ -895,6 +926,25 @@ def grant_vectors(admin_record):
            "grants/replaces", replaces=None)
     q.step("that commander's grant made on the current grant, admin counter 4",
            {**kettle, 4: 4, 12: by_hash([ADMIN2.key, ADMIN3.key])}, ADMIN3)
+    # A change of root (records rule 33): the leaf learns the recovery
+    # head of seq 1, which makes root 2 the root. Grants made under seq 0
+    # no longer count; the counters and commanders start afresh.
+    q = Seq("ordinary kettle across a change of root", K)
+    q.step("first grant from the admitting admin, admin counter 1", {**kettle, 4: 1, 12: both}, ADMIN,
+           admin=admin_record)
+    q.step("root grant, root counter 3", {**kettle, 4: 3, 12: both}, ROOT)
+    old = q.step("grant from a commander made under root counter 3, admin counter 1",
+                 {**kettle, 4: 1, 12: both, 17: 3}, ADMIN2)
+    q.step("after the change, a commander's grant made before it", {**kettle, 4: 2, 12: both, 17: 3}, ADMIN2,
+           "grants/recovery", recovery=1, root=ROOT2)
+    q.step("after the change, the old root's grant", {**kettle, 4: 4, 12: both}, ROOT, "grants/recovery",
+           replaces=None, recovery=1, root=ROOT2)
+    q.step("the new root's grant made under recovery seq 1, root counter 1", {**kettle, 4: 1, 12: [ADMIN2.key],
+                                                                              19: 1}, ROOT2, recovery=1, root=ROOT2)
+    q.step("a commander's grant made under recovery seq 1 and root counter 1, admin counter 1",
+           {**kettle, 4: 1, 12: [ADMIN2.key], 17: 1, 19: 1}, ADMIN2, recovery=1, root=ROOT2)
+    q.step("the leaf asked to read under recovery seq 0 again", {**kettle, 4: 2, 12: [ADMIN2.key], 17: 3}, ADMIN2,
+           "grants/recovery", replaces=old)
     q = Seq("guarded lock", L)
     q.step("root grant, root counter 3", lock, ROOT)
     q.step("a commander of the lock signs it a grant", {**lock, 4: 4}, PHONE, "grants/guarded")

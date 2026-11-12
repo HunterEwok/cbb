@@ -445,10 +445,12 @@ func main() {
 			Message string `json:"message"`
 		} `json:"take"`
 		Refuse []struct {
-			Name    string `json:"name"`
-			Rule    string `json:"rule"`
-			Leaf    string `json:"leaf"`
-			Message string `json:"message"`
+			Name     string `json:"name"`
+			Rule     string `json:"rule"`
+			Leaf     string `json:"leaf"`
+			Message  string `json:"message"`
+			Recovery uint64 `json:"recovery"`
+			Root     string `json:"root"`
 		} `json:"refuse"`
 	}
 	load(dir, "grants.json", &g)
@@ -457,16 +459,27 @@ func main() {
 		rootC, adminC uint64
 		commanders    map[string][]byte // key hash in hex to point
 		grantHash     []byte            // SHA-256 of the kept grant's body
+		recovery      uint64            // the recovery seq the kept grant was made under
 	}
 	rootHash := mustHashOf("root", keys.Keys)
+	// rootOr is a row's root key hash, the file's root when it names none.
+	rootOr := func(h string) string {
+		if h == "" {
+			return rootHash
+		}
+		return h
+	}
 	// grant reads message grant for a leaf that keeps st (nil before its
-	// first grant) and returns what the leaf keeps after taking it.
+	// first grant) and knows recovery as the newest recovery seq, whose
+	// root has the key hash rootHash then, and returns what the leaf keeps
+	// after taking it. A kept grant of a lower recovery seq counts as
+	// none, but a guarded leaf stays guarded.
 	group := unhex(g.Group)
 	allowed := map[uint64]bool{1: true, 2: true, 3: true, 4: true, 6: true}
-	for k := uint64(10); k <= 18; k++ {
+	for k := uint64(10); k <= 19; k++ {
 		allowed[k] = true
 	}
-	grant := func(msg []byte, leaf []byte, st *leafState) (*leafState, error) {
+	grant := func(msg []byte, leaf []byte, st *leafState, recovery uint64, rootHash string) (*leafState, error) {
 		v, err := strict(msg)
 		if err != nil {
 			return nil, err
@@ -497,12 +510,30 @@ func main() {
 						if typ != 1 || !bytes.Equal(gr, group) || !bytes.Equal(lf, leaf) {
 							return nil, errors.New("grants/shape")
 						}
+						var madeAfter uint64
+						if rv, ok := pre[uint64(19)]; ok {
+							n, isInt := rv.(uint64)
+							switch {
+							case !isInt:
+								return nil, errors.New("grants/shape")
+							case n == 0:
+								return nil, errors.New("form/default")
+							}
+							madeAfter = n
+						}
+						if madeAfter != recovery || recovery > 16 || st != nil && st.recovery > recovery {
+							return nil, errors.New("grants/recovery")
+						}
 						if gv, ok := pre[uint64(15)]; ok && gv != uint64(1) {
 							return nil, errors.New("grants/guarded-value")
 						}
 					}
 				}
 			}
+		}
+		wasGuarded := st != nil && st.guarded
+		if st != nil && st.recovery != recovery {
+			st = nil
 		}
 		byRoot := false
 		signerKey := func(body map[any]any) ([]byte, error) {
@@ -511,7 +542,7 @@ func main() {
 				byRoot = true
 				return byHash[rootHash], nil
 			}
-			if _, g := body[uint64(15)]; g || (st != nil && st.guarded) {
+			if _, g := body[uint64(15)]; g || wasGuarded {
 				return nil, errors.New("grants/guarded")
 			}
 			if st != nil {
@@ -556,13 +587,12 @@ func main() {
 		if byRoot && named || !byRoot && madeUnder != rootC {
 			return nil, errors.New("grants/counter")
 		}
-		next := &leafState{guarded: guarded, commanders: map[string][]byte{}}
+		next := &leafState{guarded: guarded || wasGuarded, commanders: map[string][]byte{}, recovery: recovery}
+		if wasGuarded && !guarded {
+			return nil, errors.New("grants/guarded")
+		}
 		if st != nil {
-			next.guarded = next.guarded || st.guarded
 			next.rootC, next.adminC = st.rootC, st.adminC
-			if st.guarded && !guarded {
-				return nil, errors.New("grants/guarded")
-			}
 			if byRoot && counter <= st.rootC || !byRoot && counter <= st.adminC {
 				return nil, errors.New("grants/counter")
 			}
@@ -605,14 +635,14 @@ func main() {
 		return next, nil
 	}
 	for _, t := range g.Take {
-		if _, err := grant(unhex(t.Message), unhex(t.Leaf), nil); err != nil {
+		if _, err := grant(unhex(t.Message), unhex(t.Leaf), nil, 0, rootHash); err != nil {
 			fail("grants %s: %v", t.Name, err)
 		}
 	}
 	checkedRefuse := 0
 	for _, r := range g.Refuse {
 		checkedRefuse++
-		_, err := grant(unhex(r.Message), unhex(r.Leaf), nil)
+		_, err := grant(unhex(r.Message), unhex(r.Leaf), nil, r.Recovery, rootOr(r.Root))
 		switch {
 		case err == nil:
 			fail("grants %s: taken", r.Name)
@@ -626,10 +656,12 @@ func main() {
 			Name  string `json:"name"`
 			Leaf  string `json:"leaf"`
 			Steps []struct {
-				Name    string `json:"name"`
-				Message string `json:"message"`
-				Verdict string `json:"verdict"`
-				Rule    string `json:"rule"`
+				Name     string `json:"name"`
+				Message  string `json:"message"`
+				Verdict  string `json:"verdict"`
+				Rule     string `json:"rule"`
+				Recovery uint64 `json:"recovery"`
+				Root     string `json:"root"`
 			} `json:"steps"`
 		} `json:"sequences"`
 	}
@@ -637,7 +669,7 @@ func main() {
 	for _, q := range gq.Sequences {
 		var st *leafState
 		for _, t := range q.Steps {
-			next, err := grant(unhex(t.Message), unhex(q.Leaf), st)
+			next, err := grant(unhex(t.Message), unhex(q.Leaf), st, t.Recovery, rootOr(t.Root))
 			switch {
 			case err == nil && t.Verdict == "take":
 				st = next

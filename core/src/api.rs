@@ -26,6 +26,7 @@ use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::Sha256;
+use zeroize::Zeroizing;
 
 use crate::authority::{self, Body, Hash, Input, Record, SigCache, State};
 use crate::certs::{self, Cert, b64};
@@ -404,8 +405,8 @@ fn new_device_key() -> Result<Vec<u8>, Refusal> {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct SignDigestArgs {
-    #[serde(with = "b64")]
-    pkcs8: Vec<u8>,
+    #[serde(with = "b64::secret")]
+    pkcs8: Zeroizing<Vec<u8>>,
     #[serde(with = "b64")]
     digest: Vec<u8>,
 }
@@ -429,8 +430,8 @@ fn sign_digest(a: SignDigestArgs) -> Result<Vec<u8>, Refusal> {
 struct OpenCopyArgs {
     event: crate::copy::Sealed,
     me: String,
-    #[serde(with = "b64")]
-    secret: Vec<u8>,
+    #[serde(with = "b64::secret")]
+    secret: Zeroizing<Vec<u8>>,
 }
 
 /// `open_copy`: opens a copy with the reader's secret for sealed messages:
@@ -457,8 +458,8 @@ fn open_copy(a: OpenCopyArgs) -> Result<Vec<u8>, Refusal> {
 
 #[derive(Deserialize)]
 struct SegmentArgs {
-    #[serde(with = "b64")]
-    key: Vec<u8>,
+    #[serde(with = "b64::secret")]
+    key: Zeroizing<Vec<u8>>,
     index: u64,
     last: bool,
     #[serde(with = "b64")]
@@ -559,8 +560,8 @@ pub const MIN_SECRET: usize = 16;
 struct SavedArgs {
     #[serde(flatten)]
     eval: EvalArgs,
-    #[serde(with = "b64")]
-    secret: Vec<u8>,
+    #[serde(with = "b64::secret")]
+    secret: Zeroizing<Vec<u8>>,
     #[serde(default, with = "b64::opt")]
     saved: Option<Vec<u8>>,
 }
@@ -761,8 +762,8 @@ fn read_invite(a: InviteArgs) -> Result<Vec<u8>, Refusal> {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct SheetArgs {
-    #[serde(with = "b64")]
-    key: Vec<u8>,
+    #[serde(with = "b64::secret")]
+    key: Zeroizing<Vec<u8>>,
     #[serde(with = "b64")]
     cert: Vec<u8>,
     group: String,

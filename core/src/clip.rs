@@ -16,6 +16,7 @@ use core::time::Duration;
 use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
+use zeroize::Zeroize;
 
 use crate::certs::{is_id, random_bytes, random_id};
 use crate::copy::{Blob, KEY_SIZE, Sealed};
@@ -74,7 +75,7 @@ impl Via {
 
 /// One copy as the engine holds it: its header, and its content once this
 /// member opened it. It travels sealed (crate::copy::Sealed).
-#[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Event {
     #[serde(default)]
     pub id: String,
@@ -110,6 +111,25 @@ pub struct Event {
     /// names in the copy; the copy's `key` sealed it.
     #[serde(skip)]
     pub blob: Option<Blob>,
+}
+
+impl core::fmt::Debug for Event {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Event")
+            .field("id", &self.id)
+            .field("origin", &self.origin)
+            .field("via", &self.via)
+            .field("time", &self.time)
+            .field("age", &self.age)
+            .field("kind", &self.kind)
+            .field("text", &self.text)
+            .field("media", &self.media)
+            .field("sealed", &self.sealed)
+            .field("unread", &self.unread)
+            .field("key", &self.key.as_ref().map(|k| crate::secret::Redacted(k.len())))
+            .field("blob", &self.blob)
+            .finish()
+    }
 }
 
 impl Event {
@@ -338,6 +358,12 @@ pub struct Engine {
     key: [u8; 32],
     seal: Mutex<Option<SealFn>>,
     inner: Mutex<Inner>,
+}
+
+impl Drop for Engine {
+    fn drop(&mut self) {
+        self.key.zeroize();
+    }
 }
 
 /// Seals an event this member makes to the group's readers and signs it

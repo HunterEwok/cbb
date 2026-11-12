@@ -270,10 +270,16 @@ fn grants() {
     let g = load("grants.json");
     let group = DeviceId(unhex(s(&g, "group")).try_into().unwrap());
     let leaf_of = |t: &Json| DeviceId(unhex(s(t, "leaf")).try_into().unwrap());
+    // The recovery seq a row's leaf knows as the newest, and its root then.
+    let known = |t: &Json| match t["root"].as_str() {
+        None => (0, root.clone()),
+        Some(h) => (t["recovery"].as_u64().unwrap(), keys[h].clone()),
+    };
     for t in g["take"].as_array().unwrap() {
         let msg = unhex(s(t, "message"));
         let v = cbor::decode(&msg).unwrap();
-        let got = grant::read(&v, &root, &leaf_of(t), &group, None).unwrap_or_else(|r| panic!("{}: {r}", s(t, "name")));
+        let got =
+            grant::read(&v, &root, &leaf_of(t), &group, None, 0).unwrap_or_else(|r| panic!("{}: {r}", s(t, "name")));
         assert_eq!(got.guarded, s(t, "name").contains("guarded"));
         assert_eq!(got.admin.is_some(), s(t, "name").contains("admin"));
         assert_eq!(hex(got.grant.body), s(t, "grant"));
@@ -282,12 +288,13 @@ fn grants() {
         let fb = unhex(s(t, "frame"));
         let f = frame::read(&fb, frame::LIMIT_LEAF).unwrap();
         assert_eq!(f.t, 20);
-        grant::read(&f.map, &root, &leaf_of(t), &group, None).unwrap();
+        grant::read(&f.map, &root, &leaf_of(t), &group, None, 0).unwrap();
     }
     for t in g["refuse"].as_array().unwrap() {
         let mb = unhex(s(t, "message"));
         let v = cbor::decode(&mb).unwrap();
-        let got = grant::read(&v, &root, &leaf_of(t), &group, None);
+        let (recovery, root) = known(t);
+        let got = grant::read(&v, &root, &leaf_of(t), &group, None, recovery);
         assert_eq!(got.err().map(Rule::name), Some(s(t, "rule")), "{}", s(t, "name"));
     }
     for q in g["sequences"].as_array().unwrap() {
@@ -296,7 +303,8 @@ fn grants() {
             let name = format!("{}: {}", s(q, "name"), s(t, "name"));
             let mb = unhex(s(t, "message"));
             let v = cbor::decode(&mb).unwrap();
-            match grant::read(&v, &root, &leaf_of(q), &group, kept.as_ref()) {
+            let (recovery, root) = known(t);
+            match grant::read(&v, &root, &leaf_of(q), &group, kept.as_ref(), recovery) {
                 Ok(got) => {
                     assert_eq!(s(t, "verdict"), "take", "{name}");
                     kept = Some(got.keep(kept.as_ref()));
@@ -839,7 +847,7 @@ fn the_admins_record_of_a_grant_is_read_as_a_record() {
         e.map(2).uint(2).raw(&env).uint(3).raw(rec);
         let msg = e.finish();
         let v = cbor::decode(&msg).unwrap();
-        grant::read(&v, &root, &DeviceId(leaf), &DeviceId(group), None).map(|_| ()).map_err(Rule::name)
+        grant::read(&v, &root, &DeviceId(leaf), &DeviceId(group), None, 0).map(|_| ()).map_err(Rule::name)
     };
     assert_eq!(grant_of(&record(None)), Ok(()));
     for change in

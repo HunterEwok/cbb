@@ -130,10 +130,12 @@ impl Group {
     }
 
     /// A checkpoint of the signer: every key's head so far, keeping every
-    /// record that counts in state.
+    /// record that counts in state but checkpoints (as the model's).
     fn checkpoint(&mut self, by: &str, state: &State) -> Record {
         let heads = self.heads.iter().map(|(k, (s, id))| Head { key: *k, seq: *s, id: *id }).collect();
-        let keep = state.counting.iter().copied().collect();
+        let checkpoints: Vec<RecordId> =
+            self.recs.iter().filter(|r| matches!(r.body().kind, Kind::Checkpoint { .. })).map(|r| r.id()).collect();
+        let keep = state.counting.iter().copied().filter(|id| !checkpoints.contains(id)).collect();
         self.sign(by, Kind::Checkpoint { heads, keep })
     }
 
@@ -193,7 +195,7 @@ impl Group {
     /// the chain holds: for twins, old roots and edited lists.
     fn head_at(&mut self, seq: u64, root: &str, list: &List) -> Record {
         let prev = self.recs.iter().find(|r| r.body().signer == k("K").hash && r.body().seq + 1 == seq).map(|r| r.id());
-        let kind = Kind::Recovery { root: k(root).key, list: list.hash() };
+        let kind = Kind::Recovery { root: k(root).key, list: list.hash(), from: 0 };
         let body = Body { group: self.group(), signer: k("K").hash, seq, prev, time_ms: 0, kind, held: false };
         let r = Record::sign(body, &k("K")).unwrap();
         self.lists.push(list.encode());
@@ -516,6 +518,35 @@ fn two_heads_at_one_seq_stop_the_group_for_good() {
     assert_eq!(s.changes.iter().filter(|c| c.state == ChangeState::Competing).count(), 2);
 }
 
+/// After a fork nothing commands and nothing acts, at seq 1 (where the
+/// path before the fork ends at the first root) and at depth: no root, no
+/// admin, no admission; a record the old root signs after does not make
+/// it command. The state shows the chain below the fork and what the list
+/// applied there names: at depth the first root's listed devices, at seq 1
+/// the first root alone.
+#[test]
+fn after_a_fork_nobody_commands() {
+    use cbb_core::join::decide::{Signer, may_admit};
+    for depth in [1u64, 2] {
+        let mut g = Group::new();
+        let w = g.change("NK");
+        let list = if depth == 2 { g.change("NA").list } else { w.list };
+        g.head_at(depth, "X", &list);
+        let last = if depth == 2 { "NK" } else { "R" };
+        g.device(last);
+        let s = g.member(&g.all()).state();
+        assert!(stopped_for_good(&s) && s.halted(), "depth {depth}");
+        for n in ["R", "NK", "NA", "X", "A", "C", "W"] {
+            assert!(!s.may_command(&k(n).hash), "depth {depth}: {n} commands");
+        }
+        assert!(!may_admit(&s, &k(last).hash, Signer::Root, &k(last).hash), "depth {depth}");
+        assert!(!may_admit(&s, &k("A phone").hash, Signer::Admin, &k(last).hash), "depth {depth}");
+        let shown = has(&s, "A phone") && has(&s, "C computer") && has(&s, "W watch");
+        assert_eq!(shown, depth == 2, "depth {depth}");
+        assert!(!has(&s, "D"), "depth {depth}");
+    }
+}
+
 /// deepTwinStopsTest: after two changes, a head at seq 1 naming another
 /// root stops every member for good.
 #[test]
@@ -662,4 +693,37 @@ fn any_order_gives_one_state() {
         assert_eq!(s.digest(), sets[0].digest());
         assert_eq!(s.state(), sets[0].state());
     }
+}
+
+/// compactedAgree's trace, by the room: two members take the same records,
+/// one compacts on the new root's newest checkpoint and one does not; the
+/// newest checkpoint prunes an older one of the same root. As the new root
+/// fills its room, both keep the same records and have the same state.
+#[test]
+fn compacting_on_the_roots_checkpoint_changes_nothing() {
+    let mut g = Group::new();
+    g.change("NK");
+    let s = g.member(&g.all()).state();
+    let older = g.checkpoint("NK", &s);
+    for _ in 0..900 {
+        g.sign("NK", Kind::Copies { incoming_ms: 5_000, seen: vec![] });
+    }
+    let s = g.member(&g.all()).state();
+    let newest = g.checkpoint("NK", &s);
+    let mut a = g.member(&g.all());
+    let mut b = g.member(&g.all());
+    let st = a.state();
+    assert_eq!(st.checkpoint, Some(newest.id()));
+    a.compact(&st);
+    assert!(!a.contains(&older.id()) && b.contains(&older.id()), "only one member compacted");
+    let mut dropped = 0;
+    for i in 0..400 {
+        let r = g.sign("NK", Kind::Copies { incoming_ms: 5_000, seen: vec![] });
+        a.insert(r.clone()).unwrap();
+        b.insert(r.clone()).unwrap();
+        assert_eq!(a.contains(&r.id()), b.contains(&r.id()), "record {i} after the checkpoint");
+        assert_eq!(a.state(), b.state(), "state after record {i}");
+        dropped += usize::from(!a.contains(&r.id()));
+    }
+    assert!(dropped > 0, "the room filled");
 }
