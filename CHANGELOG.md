@@ -2221,6 +2221,10 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- An admin phone pastes pictures and files on a device again: the iPhone and Android kits
+  sign the paste command of kind `media` that names the group's copy, which they refused to
+  build before. The Aurora app refuses such a paste, which its keyboard cannot carry out,
+  instead of typing the copy's ID.
 - Quotation marks in a few texts: the Android app showed a backslash before them in Arabic,
   Spanish, Hebrew, Hindi and Swahili, and dropped them in English; the Mac app showed the
   backslash in the same languages on its pairing screen.

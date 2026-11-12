@@ -179,18 +179,25 @@ public enum Commands {
 
     /// A paste command for the device to: put text where its focus is, by
     /// method "paste" (the clipboard and the paste keys) or "type", then
-    /// press Enter when enter is set; kind is "text" or "secret". Signed as
-    /// mode.
+    /// press Enter when enter is set; kind is "text" or "secret", or
+    /// "media", whose text is the event ID of the group's copy of images or
+    /// files to paste, by method "paste" only. Signed as mode.
     public static func paste(to: String, text: String, method: String = "paste", enter: Bool = false, kind: String = "text",
                              group: String, by: String, now: Date, signer: CertificateSigner,
                              adminCA: Data? = nil, seal: Data? = nil, id: String = newID()) throws -> Member.Record {
         let limit = method == "paste" ? maxPasteText : method == "type" ? maxTypeText : 0
-        guard limit > 0, kind == "text" || kind == "secret", !text.isEmpty, text.utf8.count <= limit else { throw Failure.badPaste }
+        guard limit > 0, kind == "text" || kind == "secret" || kind == "media", !text.isEmpty, text.utf8.count <= limit else { throw Failure.badPaste }
+        // As the receiver checks: a paste of images or files names its copy and is not typed.
+        guard kind != "media" || (method == "paste" && isHex32(text)) else { throw Failure.badPaste }
         let ms = Records.ms(now)
         let body = Body(type: "paste", group: group, by: by, to: to, id: id, time_ms: ms, expires_ms: ms + lifetimeMS, mode: method,
                         enter: enter ? true : nil, kind: kind, text: text)
         return try sign(body, signer: signer, adminCA: adminCA, seal: seal)
     }
+
+    /// Whether s is 32 lowercase hexadecimal digits: a device, command or
+    /// event ID.
+    static func isHex32(_ s: String) -> Bool { s.utf8.count == 32 && s.allSatisfy { "0123456789abcdef".contains($0) } }
 
     /// A paste-off command for the device to: it turns remote paste off
     /// there. Signed as mode.
@@ -272,9 +279,8 @@ public enum Commands {
             throw refuse("the command is not valid")
         }
         guard b.type == "paste" || data.count <= maxBody else { throw refuse("the command is too large") }
-        func hex32(_ s: String) -> Bool { s.utf8.count == 32 && s.allSatisfy { "0123456789abcdef".contains($0) } }
         guard b.v == Commands.version else { throw refuse("unknown command version") }
-        guard hex32(b.id) else { throw refuse("the command has no valid ID") }
+        guard isHex32(b.id) else { throw refuse("the command has no valid ID") }
         // As in Go, an empty string is no paste and no action.
         guard b.type == "paste" || (b.enter != true && (b.kind ?? "").isEmpty && (b.text ?? "").isEmpty) else { throw refuse("a \(b.type) command carries a paste") }
         guard b.type == "action" || (b.action ?? "").isEmpty else { throw refuse("a \(b.type) command names an action") }
@@ -298,7 +304,7 @@ public enum Commands {
             if b.kind == "media" {
                 // Its text is the event ID of the group's copy of images or files it pastes.
                 guard b.mode == "paste" else { throw refuse("a paste command of images or files is not typed") }
-                guard hex32(b.text ?? "") else { throw refuse("a paste command of images or files names no copy") }
+                guard isHex32(b.text ?? "") else { throw refuse("a paste command of images or files names no copy") }
             } else {
                 guard b.kind == "text" || b.kind == "secret" else { throw refuse("a paste command's kind is not text, secret or media") }
             }
@@ -307,8 +313,8 @@ public enum Commands {
             guard n <= limit else { throw refuse("a paste command's text is longer than \(limit) bytes") }
         default: throw refuse("unknown command type \(b.type)")
         }
-        guard hex32(b.to) else { throw refuse("the command names no valid device") }
-        guard hex32(b.by) else { throw refuse("a command's by is not a device ID") }
+        guard isHex32(b.to) else { throw refuse("the command names no valid device") }
+        guard isHex32(b.by) else { throw refuse("a command's by is not a device ID") }
         // A time before 1970 is no signing time; from it the difference cannot overflow.
         guard b.time_ms >= 0, b.expires_ms > b.time_ms, b.expires_ms - b.time_ms <= lifetimeMS else { throw refuse("the command's lifetime is not valid") }
         return b
