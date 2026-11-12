@@ -240,6 +240,16 @@ impl RecordSet {
         let (promoted, first) = (&self.promoted, self.root.hash());
         let counted: BTreeSet<KeyHash> = self.counted.iter().map(|c| c.root.hash()).collect();
         self.keys.retain_roots(|h| *h == first || named.contains(h) || promoted.contains(h) || counted.contains(h));
+        // And the records that root's key signed.
+        let gone: Vec<RecordId> = self
+            .records
+            .values()
+            .filter(|e| self.keys.signer(&e.record.body().signer).is_none())
+            .map(|e| e.record.id())
+            .collect();
+        for id in &gone {
+            self.remove(id);
+        }
     }
 
     /// Learns the keys again from the stored records for the roots the

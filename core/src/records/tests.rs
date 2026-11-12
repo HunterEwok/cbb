@@ -2266,11 +2266,17 @@ mod differential {
     }
 
     /// Fills a set in order, compacting now and then, as a member does,
-    /// in three rounds of sync: a record whose signer it did not know yet
-    /// comes again.
+    /// in rounds of sync until one changes nothing: a record it could not
+    /// take yet comes again.
     fn fill(root: &Key, recs: &[Record], held: &BTreeMap<RecordId, u64>, every: usize) -> RecordSet {
         let mut m = RecordSet::new(root.clone());
-        for _ in 0..3 {
+        let mut last = None;
+        for _ in 0..12 {
+            let now = (m.digest(), m.counted());
+            if last.as_ref() == Some(&now) {
+                break;
+            }
+            last = Some(now);
             for (i, r) in recs.iter().enumerate() {
                 let _ = m.insert(r.clone());
                 if (i + 1) % every == 0 {
@@ -2278,10 +2284,10 @@ mod differential {
                     m.compact(&st);
                 }
             }
-        }
-        for _ in 0..2 {
-            let st = m.state(held);
-            m.compact(&st);
+            for _ in 0..2 {
+                let st = m.state(held);
+                m.compact(&st);
+            }
         }
         m
     }
