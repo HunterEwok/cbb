@@ -31,6 +31,9 @@ All notable changes to cbb are documented in this file. The format follows
   backup getting back in, a removed device restored from an older backup staying out.
 - A soak stand (`tools/soak/soak.sh`): a small group runs for weeks, its members killed at
   random moments, with one line a day of what arrived and what started whole.
+- A sheet of the dangerous screens (`CBB_DANGEROUS_SHEET`, docs/testing.md): every screen of the
+  tray app where a person decides something the group's safety depends on, in all eight
+  languages, as one HTML file to read before a release.
 - The apps are tested in all eight languages and for every reader (docs/testing.md, "The
   apps' languages, accessibility and screenshots"): the tray app, Android, the iPhone and the
   Mac in zh, en, es, ru, ar, sw, he and hi, Arabic and Hebrew from right to left; every text

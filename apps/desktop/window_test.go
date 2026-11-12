@@ -76,6 +76,7 @@ func TestWindow(t *testing.T) {
 	t.Run("switches", w.switches)
 	t.Run("add", w.add)
 	t.Run("join", w.joinGroup)
+	t.Run("dangerous screens", w.dangerous)
 }
 
 // window is the page under test and what stands around it.

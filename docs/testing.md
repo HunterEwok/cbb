@@ -202,6 +202,24 @@ The tray's references are CI's pictures: another build of Chrome smooths text di
 more than 0.3% of the pixels. When a run elsewhere draws them, compare them by eye and take
 the ones to commit from the `tray-screenshots` artifact of the failed CI job.
 
+### The dangerous screens
+
+`TestWindow/dangerous screens` (`apps/desktop/dangerous_test.go`) draws every screen of the tray
+app where a person decides something the group's safety depends on, in all eight languages, into
+one HTML file: the six digits a joining computer shows, an invitation's fingerprint to compare,
+removing a device, making a computer an admin, the takeover warning and the alerts of admins or
+claims that split the group, voiding a key's two histories, claiming the group with the recovery
+key, and a group taken over from this device. Each picture has its words under it, for a native
+speaker to quote. It is for a person to read before a release; nothing compares it. It runs only
+when asked:
+
+```sh
+cd apps/desktop && CBB_DANGEROUS_SHEET=/tmp/sheet go test -run 'TestWindow/dangerous' .
+```
+
+The phones' screens are not on it yet: Android's would come from Robolectric as the screenshots
+above, the iPhone's from `ReadersUITests` on a Mac.
+
 ## Coverage
 
 CI measures how much of the code the tests run, part by part, and its `coverage` job prints
