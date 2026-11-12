@@ -3386,6 +3386,18 @@ not verify refuses the file. So a later version can add an algorithm beside thes
 MUST keep signing with both while readers of 0.6 are in use. 0.5 reads no release files, so
 the envelope of `sig` and `key` that it never took is gone.
 
+A root is replaced only by a release. The programs pin the roots in their code (`roots.pem`,
+read by Go and the Rust core when they are built), so no file can add a root to a device
+that is running. The release that ships a new root, beside the root that stays, reaches a
+0.6 device like any other release: in a `keys.json` that the remaining pinned root signed
+with both of its halves. Only the program installed from that release trusts the new root.
+Until then the new root signs nothing that a device takes, and neither does a lost root once
+a release has dropped it. The vectors cover both cases: "a release key rotated by the second
+root" (the remaining root signs alone) and "keys.json signed by a key that is not a root" (a
+root that no release pins yet), with "keys.json signed by two roots, one half each" refused.
+A device therefore needs one of its pinned roots, with both halves, through every release
+until the new root reaches it. The two roots sit on separate YubiKeys for this reason.
+
 `get.sh` checks the ES256 signatures always and the SLH-DSA ones where its `openssl` does
 (OpenSSL 3.5 and later, tried with a key of its own first), and says which it checked;
 `get.ps1` checks the ES256 ones and says that PowerShell cannot check SLH-DSA. Both pass over
