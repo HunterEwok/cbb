@@ -24,7 +24,6 @@ import { Join } from './Join';
 import { Keyboard } from './Keyboard';
 import { Device, Member } from './Member';
 import { CheckedPaste, Paste, PasteAnswer } from './Paste';
-import { Shared } from '../common/Share';
 import { CardRun, cardFailure, withCard } from '../common/YubiKey';
 import { common } from '@kit.AbilityKit';
 
@@ -173,8 +172,6 @@ export class AppModel {
   private prefs: preferences.Preferences | undefined = undefined;
   private renewTimer: number = -1;
   private claimTimer: number = -1;
-  // What was shared to the app before the member ran.
-  private pending: Shared | undefined = undefined;
 
   init(dir: string, prefs: preferences.Preferences): void {
     this.dir = dir;
@@ -262,11 +259,6 @@ export class AppModel {
     if (!this.member.running) {
       return;
     }
-    const shared = this.pending;
-    this.pending = undefined;
-    if (shared !== undefined) {
-      await this.send(shared);
-    }
     if (this.renewTimer < 0) {
       this.renewTimer = setInterval(() => {
         this.renew();
@@ -281,24 +273,6 @@ export class AppModel {
       setTimeout(() => {
         this.finishTakeover();
       }, CLAIM_FIRST_MS);
-    }
-  }
-
-  // Sends what another app shared, now or once the member runs.
-  async share(shared: Shared): Promise<void> {
-    if (!this.member.running) {
-      this.pending = shared;
-      return;
-    }
-    await this.send(shared);
-  }
-
-  private async send(shared: Shared): Promise<void> {
-    if (shared.text.length > 0) {
-      await this.member.sendText(shared.text);
-    }
-    if (shared.files.length > 0) {
-      await this.member.sendFiles(shared.files, shared.types);
     }
   }
 

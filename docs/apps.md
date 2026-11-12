@@ -980,9 +980,14 @@ settings, why it does not sync and the lab.
   when its time ends unless the user copied something else), but reads the clipboard only
   when the user taps the system's Paste button (`PasteButton`) on Home, or with the
   restricted permission `ohos.permission.READ_PASTEBOARD`, which Huawei grants on request.
-  Sending is therefore a tap, as on the iPhone. Texts, images and files shared to CBB from
-  another app's Share menu go to the group too; a single image that arrives goes into the
-  clipboard, other images and files wait for the user to save them where they choose.
+  Sending is therefore a tap, as on the iPhone. **Share → CBB** from another app sends the
+  text, the link, or images and files (up to 50 MB together) without opening the app, as the
+  iPhone's share extension: a sheet in the share panel (`ShareExtensionAbility`,
+  `shareextability/`) starts the phone's member in a folder of its own beside the app's
+  (`model/OneShot.ets`), waits up to 8 seconds for a computer of the group, hands it the copy
+  (and for files up to a minute for the computers to fetch them), stops, and says how it went.
+  A single image that arrives goes into the clipboard, other images and files wait for the
+  user to save them where they choose.
 - **QR codes**: Scan Kit's scanner reads a computer's code and the recovery sheet; the
   phone's own code for joining is drawn from the core's modules.
 - **Remote paste**: an admin phone pastes on a computer or another phone from the device's

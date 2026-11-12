@@ -15,6 +15,7 @@
     "pages/CollectionName",
     "pages/Keyboard",
     "pages/Paste",
-    "pages/Hub"
+    "pages/Hub",
+    "pages/ShareSheet"
   ]
 }

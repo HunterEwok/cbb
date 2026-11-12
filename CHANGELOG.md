@@ -13,7 +13,8 @@ All notable changes to cbb are documented in this file. The format follows
   screens: a new group, joining by QR code, as an admin or by an invitation, restoring, Home
   with the tiles, the devices and the admin's actions, adding a device with Scan Kit,
   invitations, the recovery key and the takeover, the arrangement, the notifications, and
-  why it does not sync; it sends with the system's Paste button and the Share menu, pastes
+  why it does not sync; it sends with the system's Paste button and from the Share menu
+  without opening (a share extension, as on the iPhone), pastes
   a text, pictures or files on another device as an admin, acts as a Bluetooth keyboard in
   the lab (HID over GATT), which also types an admin's remote paste, and the member runs on
   in the background as a continuous task (docs/apps.md, "HarmonyOS"). Its watch app

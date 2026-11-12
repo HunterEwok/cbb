@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-// The app's one ability: it sets up the settings, the errors' mode, the
-// prompt of the admin key and the model, opens Start or Home, takes what
-// another app shares, and keeps the member running in the background as a
-// continuous task of the kind "multi-device connection", with the system's
+// The app's ability: it sets up the settings, the errors' mode, the prompt
+// of the admin key and the model, opens Start or Home, and keeps the member
+// running in the background as a continuous task of the kind "multi-device connection", with the system's
 // notification; where the system refuses that, a little longer, so that a
 // copy on its way arrives. The widget, the app's shortcuts and its intents
 // open it with an action (Glance.quick).
@@ -19,7 +18,6 @@ import { versionLine } from '../core/Core';
 import { setPrompt } from '../core/Keys';
 import { osVersion } from '../core/Phone';
 import { setResources, t } from '../core/Text';
-import { sharedOf } from '../common/Share';
 import { app } from '../model/AppModel';
 import { watch } from '../model/Watch';
 import { glance } from '../model/Glance';
@@ -45,12 +43,10 @@ export default class EntryAbility extends UIAbility {
     app.keyboard.init(prefs, this.context);
     watch.start(this.context);
     glance.start(this.context);
-    this.takeShared(want);
     this.takeAction(want);
   }
 
   onNewWant(want: Want, launchParam: AbilityConstant.LaunchParam): void {
-    this.takeShared(want);
     this.takeAction(want);
   }
 
@@ -146,16 +142,5 @@ export default class EntryAbility extends UIAbility {
       backgroundTaskManager.stopBackgroundRunning(this.context).catch(() => {});
     }
     app.stopMember();
-  }
-
-  private takeShared(want: Want): void {
-    sharedOf(want, this.context.cacheDir).then((shared) => {
-      if (shared !== undefined) {
-        Errors.log(`share: ${shared.text.length > 0 ? 'a text' : ''} ${shared.files.length} files`);
-        app.share(shared);
-      }
-    }).catch((e: Error) => {
-      app.show(Errors.shown(Errors.unexpected(t('error_share_in'), e)));
-    });
   }
 }
