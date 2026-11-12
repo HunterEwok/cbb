@@ -11,9 +11,11 @@ All notable changes to cbb are documented in this file. The format follows
   each member of each group (message `push`, a token of its platform's push service and a push
   key of its own per group), the body a member seals to it (one size per platform, a reduced
   copy whose origin the phone checks, or a hint that something waits; every sender of one
-  body makes the same bytes, so the push service drops a repeat), the send key a phone draws
-  with each token, whose signature binds the token at the push service so that only the
-  newest registration's senders get through, and the messages between a member and the
+  body makes the same bytes, so the push service drops a repeat), the one send key a phone
+  keeps per token and the slot it draws per group, whose signature the push service checks so
+  that only the newest registration of each group gets through and a token's key is confirmed
+  only by a challenge the platform carried to the phone, the message that asks a phone to
+  register again (`push-renew`), and the messages between a member and the
   project's push service (`cbb-push/1`), which sees tokens, times and one size, never a group
   or content (`cbb_core::push`, vectors in `testdata/format/push.json`). The push service
   `cbb-push` (APNs and UnifiedPush, `packaging/linux/cbb-push.service`), the member's sender, and the

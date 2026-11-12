@@ -397,19 +397,58 @@ asks iOS for the token and makes the registrations, and the extension opens each
 On the members the sender is `member/src/pusher.rs`, and the project's push service is
 `cbb-push` (`member/src/pushd`). The member's sync calls only the sender's seam, written at the
 head of `pusher.rs`: `registration` (message `push` arrived from the device itself),
-`connected` and `left` (a peer's member connection opened or closed), `forget` (a device removed
-or frozen), `copy` (with the copy's readers and `cbb_core::push::copy_body` for each),
+`connected` and `left` (a peer's member connection opened or closed), `renewals` (the
+`push-renew` messages, t 29, to send a peer whose connection opened: one per group where the
+service found its registration stale), `forget` (a device removed or frozen), `copy` (with the copy's readers and `cbb_core::push::copy_body` for each),
 `event`, and the traits `Faces` (the push service's address, pin, server key and credentials
 of the group's face) and `Saved` (where the registrations are kept).
 
 Every honest sender of one body makes the same bytes (the nonce is derived from the plaintext, a
 copy is reduced with age 0, an event carries its record's time), so the service drops a repeat by
-the bytes and a phone gets one notification. The service binds a token to the send key of its
-first accepted send and keeps the highest seq it accepted, across restarts: a send under another
-key or a lower seq is answered `stale` (7), one of a key algorithm it does not take `key` (6),
-and the sender drops both. The bounds of this: until the first send under the new seq, the old
-seq passes, and its bodies open nothing; a member present at a token's first registration can
-bind it first, and the way out is a new token or the 30 days after the binding's last send.
+the bytes and a phone gets one notification; a repeat with a longer life than the first passes
+once. What a send leaves (a repeat, a binding) is written only after the platform took the body,
+and a second send of a body still on its way is answered `failed` with a short wait, so a slow
+platform never loses a body. A repeat does not outlive a restart of the service.
+
+The phone keeps one send key per token, for all its groups, and draws a slot (16 random bytes,
+never the group's ID) per group; the send key signs [env, token, slot, seq], and the last
+challenge the service sent to the token when the phone has one. The service keeps, per token, a
+binding (`member/src/pushd/binding.rs`), across restarts (the state file and its journal, written
+before a send that changed a binding is answered; a missing state file stops a start that is not
+the first, `-new-state`):
+
+- While no key is confirmed, a send under any key passes, and each key that shows up gets a
+  challenge, which travels to the token with the body (the phone's alert pushes carry it).
+- A challenge is bound to the token, to the key it was made for, and to 14 days; it serves once.
+  A send whose signature covers it, under that key, confirms that key: only the token's holder
+  saw it. A replayed challenge, one made for another key or token, or one past its life confirms
+  nothing. The app keeps a challenge only for its own token and its own key (the challenge
+  carries the first 8 bytes of the hash of the key it is for).
+- Once a key is confirmed, only that key sends; another key is answered `stale` (7) and gets a
+  challenge alone (a push with no body, within the token's budget for them), and takes the
+  binding only by confirming it, never by time. A member that binds first so causes no refusal
+  of the phone's own sends, only the wait until the phone confirms.
+- The highest seq is kept per key and slot, so one group's registration never silences
+  another's; a seq more than a day ahead of the service's clock is refused.
+
+A send key of an algorithm the service does not take is answered `key` (6), and the sender drops
+it; one answered `stale` is dropped too, and the phone is sent `push-renew` with the
+registration's slot at its next connection, so its app registers again. Until the first send
+under a new seq, the old seq passes, and its bodies open nothing. Every send costs its tag's
+budget, a refused one too, and the service closes a connection after eight refusals; the tables
+everyone shares give each payer (an address, an IPv6 /64, an IPv4 client on an IPv6 socket read
+as its IPv4 address) a share, and when one is full the payer with the most entries loses its
+oldest entry, never everyone.
+
+How the challenge reaches the app: APNs, the payload key `k` (24 bytes in base64: the challenge,
+then the key's 8 bytes), or alone in a background push (`content-available`, priority 5), which
+iOS may hold back, so a confirmation can wait for the next alert push; FCM and Push Kit, a data
+key `k`; UnifiedPush, the decrypted message is parts, each a kind (1 byte), a length (2 bytes)
+and its bytes (kind 1 the body, kind 2 the challenge), the app skipping kinds it does not know.
+
+New events keep the shapes of the body's fields 3 to 7 (an ID of 16 bytes, an event number, a
+device ID of 16 bytes, a time in milliseconds), so that a phone of an older version reads a later
+event as the neutral hint and never refuses it.
 
 ## Panics
 

@@ -9,17 +9,19 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
 
 use super::apns::{Apns, Key};
 use super::{Budgets, Config, Platform, Service};
 use crate::error::{Error, Result};
 use crate::relayd::keys::Keys;
 
-const USAGE: &str = "usage: cbb-push [-listen ADDRESS] [-key FILE] [-state FILE] -apns-team ID [-apns-key FILE -apns-key-id ID] [-apns-sandbox-key FILE -apns-sandbox-key-id ID] [-roots FILE] [-show-key]
+const USAGE: &str = "usage: cbb-push [-listen ADDRESS] [-key FILE] [-state FILE] [-new-state] -apns-team ID [-apns-key FILE -apns-key-id ID] [-apns-sandbox-key FILE -apns-sandbox-key-id ID] [-roots FILE] [-show-key]
   -listen ADDRESS            the address to listen on, TCP (default :8767)
   -key FILE                  the service's TLS key, which members pin, made on the first run
-  -state FILE                where the tokens' bindings to their send keys are kept across restarts
+  -state FILE                where the tokens' bindings to their send keys are kept across restarts (and FILE.log)
+  -new-state                 the very first start: make the state file; without it a missing one stops the start
   -apns-team ID              the Apple team ID of the APNs keys
   -apns-key FILE             the team's APNs key for production (.p8): the iPhone and iPad apps of the stores and TestFlight
   -apns-key-id ID            its ID
@@ -32,6 +34,7 @@ struct Flags {
     listen: String,
     key: PathBuf,
     state: PathBuf,
+    new_state: bool,
     apns_team: String,
     apns: [(Option<PathBuf>, String); 2],
     roots: PathBuf,
@@ -47,6 +50,7 @@ fn parse(args: &[String]) -> std::result::Result<Flags, String> {
         listen: ":8767".into(),
         key: state_dir().join("push.pem"),
         state: state_dir().join("push.state"),
+        new_state: false,
         apns_team: String::new(),
         apns: [(None, String::new()), (None, String::new())],
         roots: PathBuf::from("/etc/ssl/certs/ca-certificates.crt"),
@@ -67,6 +71,7 @@ fn parse(args: &[String]) -> std::result::Result<Flags, String> {
             "listen" => f.listen = value()?,
             "key" => f.key = PathBuf::from(value()?),
             "state" => f.state = PathBuf::from(value()?),
+            "new-state" => f.new_state = inline.as_deref().is_none_or(|v| v == "true" || v == "1"),
             "apns-team" => f.apns_team = value()?,
             "apns-key" => f.apns[0].0 = Some(PathBuf::from(value()?)),
             "apns-key-id" => f.apns[0].1 = value()?,
@@ -108,6 +113,13 @@ fn platforms(f: &Flags) -> Result<HashMap<u64, Arc<dyn Platform>>> {
         out.insert(cbb_core::push::ENV_UNIFIEDPUSH, Arc::new(super::unifiedpush::UnifiedPush::new(roots(&f.roots)?)?));
     }
     Ok(out)
+}
+
+/// Set by SIGTERM or SIGINT: the service writes its bindings and stops.
+static STOP: AtomicBool = AtomicBool::new(false);
+
+extern "C" fn on_signal(_: libc::c_int) {
+    STOP.store(true, Ordering::SeqCst);
 }
 
 /// Runs the service until it is stopped, and returns the exit code.
@@ -157,21 +169,34 @@ pub fn command(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) 
         platforms,
         budgets: Budgets::default(),
         state: Some(f.state.clone()),
+        new_state: f.new_state,
         log: log.clone(),
     }) {
         Ok(s) => s,
         Err(e) => return fail(stderr, e),
     };
+    // SAFETY: the handler only stores to an atomic.
+    #[cfg(unix)]
+    unsafe {
+        libc::signal(libc::SIGTERM, on_signal as *const () as libc::sighandler_t);
+        libc::signal(libc::SIGINT, on_signal as *const () as libc::sighandler_t);
+        libc::signal(libc::SIGPIPE, libc::SIG_IGN);
+    }
     log(&format!("cbb-push: listening on TCP port {}; its key's pin: {pin}", service.addr().port()));
     let debug = std::env::var("CBB_DEBUG").is_ok_and(|v| v == "1");
-    loop {
-        std::thread::sleep(Duration::from_secs(60));
-        if debug {
+    let mut counted = Instant::now();
+    while !STOP.load(Ordering::SeqCst) {
+        std::thread::sleep(Duration::from_millis(200));
+        if debug && counted.elapsed() >= Duration::from_secs(60) {
+            counted = Instant::now();
             // Counts only: nothing about a group, a token or an address.
             let (tags, tokens, sent) = service.stats();
             log(&format!("cbb-push: {tags} groups, {tokens} tokens, {sent} sent"));
         }
     }
+    service.stop();
+    log("cbb-push: stopped; the bindings are written");
+    0
 }
 
 #[cfg(test)]

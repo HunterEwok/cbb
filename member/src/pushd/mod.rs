@@ -19,29 +19,45 @@
 //!   not sent again: several members sending one copy give one
 //!   notification.
 //! - Each send carries the phone's send key for the token, its signature
-//!   over (env, token, seq) and seq. The service binds a token to the first
-//!   send key it sees with it and keeps the highest seq it accepted: a send
-//!   under another key or a lower seq is answered `stale`, one of a key
-//!   algorithm it does not take `key`. A binding ends 30 days after its
-//!   last accepted send; a new token starts a new one.
+//!   over (env, token, slot, seq, and the service's challenge when the
+//!   registration has one), the slot and seq. The token's binding
+//!   (`binding.rs`) says whether it passes: a key is confirmed only by a
+//!   challenge the service sent to the token, and then only that key
+//!   sends; seq is kept per key and slot, one slot for each of the phone's
+//!   groups. A send it refuses is answered `stale`, one of a key algorithm
+//!   it does not take `key`.
+//! - What a send leaves (a binding, a repeat) is written only once the
+//!   platform took the body; a second send of a body still on its way is
+//!   answered `failed` with a short wait, so a slow platform never makes a
+//!   body a repeat that was not sent. A repeat with a later expiry than
+//!   the first passes once.
+//! - Every send costs its tag's budget, a refused one too, and a
+//!   connection is closed after a few refusals. The tables everyone shares
+//!   (repeats, bindings, the tokens' budgets) give each payer (an address,
+//!   an IPv6 /64) a share: when one is full, the payer with the most
+//!   entries loses its oldest, and no one is refused for it. Connections
+//!   are counted per payer too.
 //! - It sees its face's tag, server keys' hashes, tokens, times and one
 //!   size per platform. The tags, the budgets and the repeats stay in
-//!   memory; the bindings are kept in its state file (mode 0600) with the
-//!   secret of the keyed hashes they are filed under, so that a restart
-//!   keeps them, and hold no token, only its keyed hash, the send key's
-//!   hash, seq and a time. It logs counts, never a token, a tag or an
-//!   address.
+//!   memory (a repeat does not outlive a restart); the bindings are kept in
+//!   its state file and journal (mode 0600, `saved.rs`) with the secret of
+//!   the keyed hashes they are filed under, written before a send that
+//!   changed one is answered, and hold no token and no address. A missing
+//!   state file stops the start unless it is the first. It logs counts,
+//!   never a token, a tag or an address.
 
 pub mod apns;
+pub mod binding;
 pub mod command;
 pub mod h2;
 mod saved;
+mod shares;
 pub mod unifiedpush;
 
 #[cfg(test)]
 mod tests;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpListener, TcpStream};
 use std::path::PathBuf;
@@ -57,6 +73,10 @@ use hmac::{Hmac, KeyInit, Mac};
 use rustls::{ServerConnection, StreamOwned};
 use sha2::Sha256;
 
+pub use binding::Binding;
+use binding::{Ask, Verdict};
+use shares::{Payer, Shared};
+
 use crate::error::{Context, Error, Result};
 
 /// What a platform did with a body.
@@ -71,11 +91,43 @@ pub enum Outcome {
     NoPath,
 }
 
+/// A challenge for the token's holder: the value its next registration
+/// signs, and the first 8 bytes of the hash of the send key it was made
+/// for, so that the app keeps only one made for its own key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Challenge {
+    pub value: [u8; 16],
+    pub key: [u8; 8],
+}
+
+impl Challenge {
+    /// The 24 bytes the platforms carry.
+    pub fn bytes(&self) -> [u8; 24] {
+        let mut out = [0u8; 24];
+        out[..16].copy_from_slice(&self.value);
+        out[16..].copy_from_slice(&self.key);
+        out
+    }
+}
+
+/// What the service hands a platform: a body, a challenge, or both.
+#[derive(Debug, Clone, Copy)]
+pub struct Delivery<'a> {
+    pub env: u64,
+    pub token: &'a [u8],
+    pub body: Option<&'a [u8]>,
+    pub challenge: Option<Challenge>,
+    /// When the platform drops it if the phone is not reached (Unix
+    /// seconds).
+    pub expires_s: u64,
+    /// The keyed hash of the group's tag that asked, for the budgets a
+    /// platform keeps of its own.
+    pub tag: [u8; 32],
+}
+
 /// A platform's push service.
 pub trait Platform: Send + Sync {
-    /// Sends a body to a token of env, to be dropped by the platform after
-    /// `expires_s` (Unix seconds).
-    fn send(&self, env: u64, token: &[u8], body: &[u8], expires_s: u64) -> Outcome;
+    fn send(&self, d: &Delivery<'_>) -> Outcome;
 }
 
 /// The budgets (format section 20.4, P-4): sends an hour and the burst.
@@ -83,14 +135,25 @@ pub trait Platform: Send + Sync {
 pub struct Budgets {
     pub per_token: (f64, f64),
     pub per_tag: (f64, f64),
-    /// Connections at once, in all and from one address.
+    /// Challenges with no body to one token.
+    pub challenges: (f64, f64),
+    /// Connections at once, in all and from one payer, and of those from
+    /// one payer the ones that have not said hello yet.
     pub connections: usize,
     pub per_address: usize,
+    pub unready: usize,
 }
 
 impl Default for Budgets {
     fn default() -> Budgets {
-        Budgets { per_token: (120.0, 30.0), per_tag: (1200.0, 120.0), connections: 256, per_address: 16 }
+        Budgets {
+            per_token: (120.0, 30.0),
+            per_tag: (1200.0, 120.0),
+            challenges: (4.0, 2.0),
+            connections: 1024,
+            per_address: 16,
+            unready: 4,
+        }
     }
 }
 
@@ -104,24 +167,23 @@ pub struct Config {
     pub budgets: Budgets,
     /// The file the bindings are kept in; None keeps them in memory only.
     pub state: Option<PathBuf>,
+    /// The first start: the state file is made, not expected.
+    pub new_state: bool,
     pub log: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
 /// How long a body sent is remembered as a repeat, and how many at most.
 const REPEAT_FOR: Duration = Duration::from_secs(24 * 3600);
 const REPEATS_MAX: usize = 1 << 20;
-/// How long a token's binding to its send key outlives its last accepted
-/// send, and how many bindings are held at most.
-pub const BINDING_LIFE_MS: u64 = 30 * 24 * 3600 * 1000;
 const BINDINGS_MAX: usize = 1 << 20;
-/// How often changed bindings are written.
+/// How often a changed snapshot is written.
 const SAVE_EVERY: Duration = Duration::from_secs(5);
 /// Tags and token budgets kept at most. Anyone can make a period key and
 /// credentials of a tag of their own, so the table of first period keys is
 /// bounded three ways: an entry lives at most until its credentials expire
 /// (and never longer than `TAG_LIFE` unseen), at most `TAGS_MAX` entries
-/// are held (the one unseen the longest gives way), and one address (an
-/// IPv6 /64) brings at most `NEW_TAGS` new tags an hour.
+/// are held (the one unseen the longest gives way), and one payer brings at
+/// most `NEW_TAGS` new tags an hour.
 const TAGS_MAX: usize = 65_536;
 const TAG_LIFE: Duration = Duration::from_secs(31 * 24 * 3600);
 const NEW_TAGS: (f64, f64) = (16.0, 16.0);
@@ -129,6 +191,10 @@ const TOKENS_MAX: usize = 1 << 20;
 /// The hello within this, and at most this long between sends.
 const HELLO_WAIT: Duration = Duration::from_secs(10);
 const IDLE: Duration = Duration::from_secs(120);
+/// Refused sends on one connection before it is closed.
+const REFUSALS_MAX: u32 = 8;
+/// The wait a second send of a body still on its way is told.
+const IN_FLIGHT_WAIT_MS: u64 = 2000;
 /// The largest frame a member sends.
 const MAX_FRAME: usize = 16_384;
 
@@ -140,6 +206,10 @@ struct Bucket {
 }
 
 impl Bucket {
+    fn full(burst: f64, at: Instant) -> Bucket {
+        Bucket { left: burst, at }
+    }
+
     fn take(&mut self, (per_hour, burst): (f64, f64), now: Instant) -> std::result::Result<(), Duration> {
         let rate = per_hour / 3600.0;
         self.left = (self.left + now.saturating_duration_since(self.at).as_secs_f64() * rate).min(burst);
@@ -165,41 +235,39 @@ struct Period {
     expires_ms: u64,
 }
 
-/// A token's binding to the send key of its first accepted send.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Binding {
-    /// The hash of the send key's encoding.
-    pub key: [u8; 32],
-    /// The highest seq accepted.
-    pub seq: u64,
-    /// When a send was last accepted under it (Unix milliseconds).
-    pub used_ms: u64,
+/// A token's budgets: for sends, and for challenges with no body.
+#[derive(Clone, Copy, Debug)]
+struct TokenBudget {
+    send: Bucket,
+    challenge: Bucket,
 }
 
-/// Whether a send under `key` with `seq` at `now_ms` passes a token's
-/// binding, and the binding after it. A token with no binding, or whose
-/// binding was not used for [`BINDING_LIFE_MS`], is bound anew.
-pub fn bind(old: Option<&Binding>, key: [u8; 32], seq: u64, now_ms: u64) -> Option<Binding> {
-    match old {
-        Some(b) if now_ms.saturating_sub(b.used_ms) < BINDING_LIFE_MS => {
-            (b.key == key && seq >= b.seq).then_some(Binding { key, seq, used_ms: now_ms.max(b.used_ms) })
-        }
-        _ => Some(Binding { key, seq, used_ms: now_ms }),
-    }
+/// A body sent: when, how long the platform keeps it, and whether a
+/// longer life already passed once.
+#[derive(Clone, Copy, Debug)]
+struct Repeat {
+    at: Instant,
+    life_s: u64,
+    upgraded: bool,
 }
 
-#[derive(Default)]
 struct State {
     periods: HashMap<[u8; 32], Period>,
-    tokens: HashMap<[u8; 32], Bucket>,
-    repeats: HashMap<[u8; 32], Instant>,
-    bindings: HashMap<[u8; 32], Binding>,
-    /// The bindings changed since they were last written.
+    tokens: Shared<TokenBudget>,
+    repeats: Shared<Repeat>,
+    bindings: Shared<Binding>,
+    /// Bodies on their way to a platform.
+    in_flight: HashSet<[u8; 32]>,
+    /// The bindings changed since the snapshot was last written.
     dirty: bool,
+    /// The number of the last change to a binding.
+    ver: u64,
+    journal: Option<saved::Journal>,
     connections: usize,
-    per_address: HashMap<IpAddr, usize>,
-    /// New tags each address (its /64 for IPv6) may bring.
-    new_tags: HashMap<IpAddr, Bucket>,
+    per_payer: HashMap<Payer, usize>,
+    unready: HashMap<Payer, usize>,
+    /// New tags each payer may bring.
+    new_tags: HashMap<Payer, Bucket>,
 }
 
 struct Inner {
@@ -223,16 +291,50 @@ fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
 }
 
-/// The expiry of a body of `ttl` (the content's: one minute, ten minutes,
-/// one hour, one day), in Unix seconds.
-fn expires(ttl: Option<u64>) -> u64 {
-    let secs = match ttl {
+/// How long the platform keeps a body of `ttl` (the content's: one
+/// minute, ten minutes, one hour, one day), in seconds.
+fn life(ttl: Option<u64>) -> u64 {
+    match ttl {
         Some(1) => 60,
         Some(2) => 600,
         Some(4) => 86_400,
         _ => 3600,
-    };
-    now_ms() / 1000 + secs
+    }
+}
+
+/// Whose share an address uses: the address, or its /64 for IPv6, an IPv4
+/// client on an IPv6 socket read as the IPv4 address it is.
+pub fn payer_addr(ip: IpAddr) -> IpAddr {
+    match ip.to_canonical() {
+        IpAddr::V6(v6) => {
+            let mut o = v6.octets();
+            o[8..].fill(0);
+            IpAddr::from(o)
+        }
+        v4 => v4,
+    }
+}
+
+/// What a send asked the platform for, to finish once it answered.
+enum Plan {
+    Body { repeat: [u8; 32], upgrade: bool, then: Binding, challenge: Option<[u8; 16]> },
+    Challenge { then: Binding, value: [u8; 16] },
+}
+
+/// What one send came to: the status, the wait, and whether it counts as
+/// refused on its connection.
+struct Answer {
+    status: u64,
+    retry: Option<u64>,
+    refused: bool,
+}
+
+fn answer(status: u64, retry: Option<u64>) -> Answer {
+    Answer { status, retry, refused: false }
+}
+
+fn refused(status: u64) -> Answer {
+    Answer { status, retry: None, refused: true }
 }
 
 impl Inner {
@@ -249,6 +351,17 @@ impl Inner {
         m.finalize().into_bytes().into()
     }
 
+    fn payer(&self, ip: IpAddr) -> Payer {
+        let p = match payer_addr(ip) {
+            IpAddr::V4(v4) => v4.to_ipv6_mapped().octets(),
+            IpAddr::V6(v6) => v6.octets(),
+        };
+        let h = self.keyed(b"payer", &p, &[]);
+        let mut out = [0u8; 16];
+        out.copy_from_slice(&h[..16]);
+        out
+    }
+
     /// Checks a hello: the face's hubs' and members' credentials and the
     /// member's server key among the members. Returns the tag's keyed hash.
     fn hello(
@@ -256,7 +369,7 @@ impl Inner {
         creds: &[&[u8]],
         server_key: &[u8],
         now: u64,
-        from: IpAddr,
+        payer: Payer,
     ) -> std::result::Result<[u8; 32], &'static str> {
         let mut hubs = None;
         let mut members = None;
@@ -286,11 +399,10 @@ impl Inner {
         let mut st = self.lock();
         let at = Instant::now();
         if !st.periods.contains_key(&tag) {
-            let payer = payer(from);
             if !st.new_tags.contains_key(&payer) && st.new_tags.len() >= TAGS_MAX {
                 st.new_tags.retain(|_, b| at.saturating_duration_since(b.at) < Duration::from_secs(3600));
             }
-            let b = st.new_tags.entry(payer).or_insert(Bucket { left: NEW_TAGS.1, at });
+            let b = st.new_tags.entry(payer).or_insert(Bucket::full(NEW_TAGS.1, at));
             if b.take(NEW_TAGS, at).is_err() {
                 return Err("too many groups from this address; try later");
             }
@@ -309,7 +421,7 @@ impl Inner {
             key: hubs.signer.clone(),
             hubs_version: 0,
             members_version: 0,
-            budget: Bucket { left: burst, at },
+            budget: Bucket::full(burst, at),
             seen: at,
             expires_ms: 0,
         });
@@ -326,103 +438,224 @@ impl Inner {
         Ok(tag)
     }
 
-    /// Handles one `push/send`; returns the status and the wait.
-    fn send(&self, tag: &[u8; 32], s: &push::Send<'_>) -> (u64, Option<u64>) {
-        let Some(platform) = self.cfg.platforms.get(&s.env).cloned() else { return (push::SENT_FAILED, None) };
-        if !s.sized() {
-            return (push::SENT_FAILED, None);
+    /// Files a binding once the platform took what the send asked for,
+    /// and journals a change of key, slots or challenges before the send is
+    /// answered. A send that changed it in between is judged again over the
+    /// binding as it is now, with the challenge already delivered.
+    fn commit(
+        &self,
+        st: &mut State,
+        tok: [u8; 32],
+        payer: Payer,
+        ask: &Ask,
+        then: Binding,
+        delivered: Option<[u8; 16]>,
+    ) {
+        let now = now_ms();
+        let current = st.bindings.get(&tok).cloned();
+        let then = match current.as_ref() {
+            None if then.pending.is_empty() && then.slots.is_empty() => return,
+            Some(c) if c == &then => return,
+            _ => then,
+        };
+        let then = if current.is_none() || ask.challenge.is_some() || delivered.is_some() {
+            let mut draw = || delivered.unwrap_or_else(cbb_core::certs::random_bytes);
+            match binding::judge(current.as_ref(), ask, now, &mut draw) {
+                Verdict::Pass { then, .. } | Verdict::Challenge { then, .. } => then,
+                Verdict::Stale => return,
+            }
+        } else {
+            then
+        };
+        let meaningful =
+            current.as_ref().is_none_or(|c| c.key != then.key || c.slots != then.slots || c.pending != then.pending);
+        let payer = st.bindings.payer(&tok).unwrap_or(payer);
+        st.bindings.insert(tok, then.clone(), payer, |b| {
+            !b.confirmed() && now.saturating_sub(b.used_ms) > binding::UNCONFIRMED_LIFE_MS
+        });
+        st.dirty = true;
+        if meaningful {
+            st.ver += 1;
+            let c = saved::change(st.ver, &tok, &payer, Some(&then));
+            self.journal(st, &c);
         }
-        if s.env == push::ENV_UNIFIEDPUSH && push::UnifiedPush::read(s.token).is_err() {
-            return (push::SENT_FAILED, None);
+    }
+
+    fn journal(&self, st: &mut State, c: &[u8]) {
+        if let Some(j) = st.journal.as_mut()
+            && let Err(e) = j.append(c)
+        {
+            (self.cfg.log)(&format!("cbb-push: cannot keep a binding: {e}"));
         }
-        match push::check_send(&s.key, s.sig, s.env, s.token, s.seq) {
+    }
+
+    /// Handles one `push/send`.
+    fn send(&self, tag: &[u8; 32], payer: Payer, s: &push::Send<'_>) -> Answer {
+        let Some(platform) = self.cfg.platforms.get(&s.env).cloned() else { return refused(push::SENT_FAILED) };
+        let at = Instant::now();
+        let now = now_ms();
+        let budgets = self.cfg.budgets;
+        // Every send costs its tag's budget, before any check.
+        {
+            let mut st = self.lock();
+            let Some(p) = st.periods.get_mut(tag) else { return answer(push::SENT_FAILED, None) };
+            if p.expires_ms <= now {
+                // The credentials expired while connected: a new hello.
+                return answer(push::SENT_FAILED, Some(1000));
+            }
+            if let Err(wait) = p.budget.take(budgets.per_tag, at) {
+                return answer(push::SENT_BUDGET, Some(wait.as_millis() as u64));
+            }
+        }
+        if !s.sized() || (s.env == push::ENV_UNIFIEDPUSH && push::UnifiedPush::read(s.token).is_err()) {
+            return refused(push::SENT_FAILED);
+        }
+        match push::check_send(&s.key, s.sig, &s.signed()) {
             Ok(push::SendCheck::Good) => {}
-            Ok(push::SendCheck::Unknown) => return (push::SENT_KEY, None),
-            Err(_) => return (push::SENT_STALE, None),
+            Ok(push::SendCheck::Unknown) => return refused(push::SENT_KEY),
+            Err(_) => return refused(push::SENT_STALE),
         }
         let tok = self.keyed(b"token", &s.env.to_be_bytes(), s.token);
         let repeat = self.keyed(b"body", &tok, s.body);
         let key = s.key.hash().0;
-        let at = Instant::now();
-        let now = now_ms();
-        {
+        let ask = Ask { key, slot: s.slot, seq: s.seq, challenge: s.challenge };
+        let life_s = life(s.ttl);
+        let expires_s = now / 1000 + life_s;
+        let plan = {
             let mut st = self.lock();
-            let Some(binding) = bind(st.bindings.get(&tok), key, s.seq, now) else {
-                return (push::SENT_STALE, None);
+            if st.in_flight.contains(&repeat) {
+                return answer(push::SENT_FAILED, Some(IN_FLIGHT_WAIT_MS));
+            }
+            let mut upgrade = false;
+            if let Some(r) = st.repeats.get(&repeat)
+                && at.saturating_duration_since(r.at) < REPEAT_FOR
+            {
+                // Sent before; a longer life than that one passes once.
+                if life_s <= r.life_s || r.upgraded {
+                    return answer(push::SENT_REPEAT, None);
+                }
+                upgrade = true;
+            }
+            let mut draw = cbb_core::certs::random_bytes::<16>;
+            let verdict = binding::judge(st.bindings.get(&tok), &ask, now, &mut draw);
+            let fresh = TokenBudget {
+                send: Bucket::full(budgets.per_token.1, at),
+                challenge: Bucket::full(budgets.challenges.1, at),
             };
-            if st.repeats.get(&repeat).is_some_and(|t| at.saturating_duration_since(*t) < REPEAT_FOR) {
-                return (push::SENT_REPEAT, None);
+            if st.tokens.get(&tok).is_none() {
+                st.tokens
+                    .insert(tok, fresh, payer, |b| at.saturating_duration_since(b.send.at) > Duration::from_secs(3600));
             }
-            let budgets = self.cfg.budgets;
-            let Some(p) = st.periods.get_mut(tag) else { return (push::SENT_FAILED, None) };
-            if p.expires_ms <= now {
-                // The credentials expired while connected: a new hello.
-                return (push::SENT_FAILED, Some(1000));
-            }
-            if let Err(wait) = p.budget.take(budgets.per_tag, at) {
-                return (push::SENT_BUDGET, Some(wait.as_millis() as u64));
-            }
-            if !st.tokens.contains_key(&tok) && st.tokens.len() >= TOKENS_MAX {
-                st.tokens.retain(|_, b| at.saturating_duration_since(b.at) < Duration::from_secs(3600));
-            }
-            let b = st.tokens.entry(tok).or_insert(Bucket { left: budgets.per_token.1, at });
-            if let Err(wait) = b.take(budgets.per_token, at) {
-                return (push::SENT_BUDGET, Some(wait.as_millis() as u64));
-            }
-            if st.repeats.len() >= REPEATS_MAX {
-                st.repeats.retain(|_, t| at.saturating_duration_since(*t) < REPEAT_FOR);
-                if st.repeats.len() >= REPEATS_MAX {
-                    return (push::SENT_BUDGET, Some(60_000));
+            let Some(b) = st.tokens.get_mut(&tok) else { return answer(push::SENT_BUDGET, Some(60_000)) };
+            match verdict {
+                Verdict::Stale => return refused(push::SENT_STALE),
+                Verdict::Challenge { value, then } => {
+                    if b.challenge.take(budgets.challenges, at).is_err() {
+                        return refused(push::SENT_STALE);
+                    }
+                    Plan::Challenge { then, value }
+                }
+                Verdict::Pass { challenge, then } => {
+                    if let Err(wait) = b.send.take(budgets.per_token, at) {
+                        return answer(push::SENT_BUDGET, Some(wait.as_millis() as u64));
+                    }
+                    st.in_flight.insert(repeat);
+                    Plan::Body { repeat, upgrade, then, challenge }
                 }
             }
-            if !st.bindings.contains_key(&tok) && st.bindings.len() >= BINDINGS_MAX {
-                st.bindings.retain(|_, b| now.saturating_sub(b.used_ms) < BINDING_LIFE_MS);
-                if st.bindings.len() >= BINDINGS_MAX {
-                    return (push::SENT_BUDGET, Some(60_000));
+        };
+        let hint = |v: [u8; 16]| {
+            let mut k = [0u8; 8];
+            k.copy_from_slice(&key[..8]);
+            Challenge { value: v, key: k }
+        };
+        match plan {
+            Plan::Challenge { then, value } => {
+                let d = Delivery {
+                    env: s.env,
+                    token: s.token,
+                    body: None,
+                    challenge: Some(hint(value)),
+                    expires_s: now / 1000 + 86_400,
+                    tag: *tag,
+                };
+                if platform.send(&d) == Outcome::Sent {
+                    let mut st = self.lock();
+                    self.commit(&mut st, tok, payer, &ask, then, Some(value));
                 }
+                refused(push::SENT_STALE)
             }
-            st.repeats.insert(repeat, at);
-            if st.bindings.get(&tok) != Some(&binding) {
-                st.bindings.insert(tok, binding);
-                st.dirty = true;
-            }
-        }
-        match platform.send(s.env, s.token, s.body, expires(s.ttl)) {
-            Outcome::Sent => {
-                self.sent.fetch_add(1, Ordering::Relaxed);
-                (push::SENT, None)
-            }
-            Outcome::Gone => (push::SENT_GONE, None),
-            Outcome::Later(d) => {
-                // Not sent: the next sender may try.
-                self.lock().repeats.remove(&repeat);
-                (push::SENT_FAILED, Some(d.as_millis() as u64))
-            }
-            Outcome::NoPath => {
-                self.lock().repeats.remove(&repeat);
-                (push::SENT_FAILED, None)
+            Plan::Body { repeat, upgrade, then, challenge } => {
+                let d = Delivery {
+                    env: s.env,
+                    token: s.token,
+                    body: Some(s.body),
+                    challenge: challenge.map(hint),
+                    expires_s,
+                    tag: *tag,
+                };
+                let out = platform.send(&d);
+                let mut st = self.lock();
+                st.in_flight.remove(&repeat);
+                match out {
+                    Outcome::Sent => {
+                        self.sent.fetch_add(1, Ordering::Relaxed);
+                        let r = Repeat { at, life_s, upgraded: upgrade };
+                        st.repeats.insert(repeat, r, payer, |r| at.saturating_duration_since(r.at) >= REPEAT_FOR);
+                        self.commit(&mut st, tok, payer, &ask, then, challenge);
+                        answer(push::SENT, None)
+                    }
+                    Outcome::Gone => {
+                        if st.bindings.remove(&tok).is_some() {
+                            st.dirty = true;
+                            st.ver += 1;
+                            let c = saved::change(st.ver, &tok, &payer, None);
+                            self.journal(&mut st, &c);
+                        }
+                        answer(push::SENT_GONE, None)
+                    }
+                    Outcome::Later(d) => answer(push::SENT_FAILED, Some(d.as_millis() as u64)),
+                    Outcome::NoPath => answer(push::SENT_FAILED, None),
+                }
             }
         }
     }
 
-    /// Writes the bindings when they changed.
+    /// Writes the snapshot when the bindings changed, then starts the
+    /// journal anew with the changes made meanwhile.
     fn save(&self) {
         let Some(path) = &self.cfg.state else { return };
-        let bytes = {
+        let (bytes, at) = {
             let mut st = self.lock();
             if !st.dirty {
                 return;
             }
             st.dirty = false;
-            saved::write(&self.secret, &st.bindings)
+            let all: Vec<(&[u8; 32], &Binding, Payer)> = st.bindings.iter().collect();
+            let bytes = saved::snapshot(&self.secret, st.ver, &all);
+            (bytes, st.journal.as_ref().map_or(0, saved::Journal::len))
         };
         if let Err(e) = crate::files::write_atomic(path, &bytes, 0o600) {
             self.lock().dirty = true;
             (self.cfg.log)(&format!("cbb-push: cannot keep the bindings: {e}"));
+            return;
+        }
+        let mut st = self.lock();
+        let tail = match st.journal.as_ref().map(|j| j.since(at)) {
+            Some(Ok(t)) => t,
+            Some(Err(e)) => {
+                (self.cfg.log)(&format!("cbb-push: cannot read the journal: {e}"));
+                return;
+            }
+            None => Vec::new(),
+        };
+        match saved::Journal::start(path, &tail) {
+            Ok(j) => st.journal = Some(j),
+            Err(e) => (self.cfg.log)(&format!("cbb-push: cannot start the journal: {e}")),
         }
     }
 
-    fn serve(self: &Arc<Self>, tcp: TcpStream) -> Result<()> {
+    fn serve(self: &Arc<Self>, tcp: TcpStream, payer: Payer, hello: &mut bool) -> Result<()> {
         tcp.set_read_timeout(Some(HELLO_WAIT)).context("timeout")?;
         tcp.set_write_timeout(Some(HELLO_WAIT)).context("timeout")?;
         let conn = ServerConnection::new(self.tls.clone()).context("TLS")?;
@@ -446,14 +679,19 @@ impl Inner {
             _ => return write_frame(&mut s, &push::error("the first message is push/hello")),
         };
         let refs: Vec<&[u8]> = creds.iter().map(Vec::as_slice).collect();
-        let from = s.sock.peer_addr().map_or(IpAddr::from([0u8; 4]), |a| a.ip());
-        let tag = match self.hello(&refs, &key, now_ms(), from) {
+        let tag = match self.hello(&refs, &key, now_ms(), payer) {
             Ok(t) => t,
             Err(why) => return write_frame(&mut s, &push::error(why)),
         };
-        let left = self.lock().periods.get(&tag).map_or(0, |p| p.budget.left as u64);
+        let left = {
+            let mut st = self.lock();
+            unready_done(&mut st, payer);
+            *hello = true;
+            st.periods.get(&tag).map_or(0, |p| p.budget.left as u64)
+        };
         write_frame(&mut s, &push::ready(left))?;
         s.sock.set_read_timeout(Some(IDLE)).context("timeout")?;
+        let mut refusals = 0u32;
         while !self.stop.load(Ordering::Relaxed) {
             let Ok(f) = read_frame(&mut s) else { return Ok(()) };
             let Ok(m) = frame::read(&f, MAX_FRAME) else {
@@ -465,22 +703,27 @@ impl Inner {
             let Ok(send) = push::Send::read(&m.map) else {
                 return write_frame(&mut s, &push::error("push/send does not follow its table"));
             };
-            let (status, retry) = self.send(&tag, &send);
-            write_frame(&mut s, &push::sent(send.n, status, retry))?;
+            let a = self.send(&tag, payer, &send);
+            write_frame(&mut s, &push::sent(send.n, a.status, a.retry))?;
+            if a.refused {
+                refusals += 1;
+                if refusals >= REFUSALS_MAX {
+                    return write_frame(&mut s, &push::error("too many refused sends"));
+                }
+            }
         }
         Ok(())
     }
 }
 
-/// Who pays for a new tag: the address, or its /64 for IPv6.
-fn payer(ip: IpAddr) -> IpAddr {
-    match ip {
-        IpAddr::V6(v6) => {
-            let mut o = v6.octets();
-            o[8..].fill(0);
-            IpAddr::from(o)
+/// The connection said hello: it no longer counts among the payer's
+/// unready ones.
+fn unready_done(st: &mut State, payer: Payer) {
+    if let Some(n) = st.unready.get_mut(&payer) {
+        *n -= 1;
+        if *n == 0 {
+            st.unready.remove(&payer);
         }
-        v4 => v4,
     }
 }
 
@@ -502,28 +745,60 @@ impl Service {
     pub fn start(cfg: Config) -> Result<Service> {
         let clock: cbb_core::tls::Clock = Arc::new(crate::forward::SystemClock);
         let tls = cbb_core::tls::registration_server(&cfg.cert, &cfg.key, push::ALPN, &clock)?;
+        let loaded = match &cfg.state {
+            Some(path) => saved::load(path, cfg.new_state)?,
+            None => saved::Loaded { secret: cbb_core::certs::random_bytes(), ver: 0, bindings: HashMap::new() },
+        };
         let tcp = TcpListener::bind(cfg.listen).context(format!("cannot listen on {}", cfg.listen))?;
         let addr = tcp.local_addr().context("cannot listen")?;
-        let (secret, bindings) = match &cfg.state {
-            Some(path) => saved::load(path)?,
-            None => (cbb_core::certs::random_bytes(), HashMap::new()),
+        let now = now_ms();
+        let mut bindings = Shared::new(BINDINGS_MAX);
+        for (tok, (mut b, payer)) in loaded.bindings {
+            // A time written while the clock was ahead is read as now.
+            b.clamp(now);
+            bindings.insert(tok, b, payer, |_| false);
+        }
+        let state = State {
+            periods: HashMap::new(),
+            tokens: Shared::new(TOKENS_MAX),
+            repeats: Shared::new(REPEATS_MAX),
+            bindings,
+            in_flight: HashSet::new(),
+            dirty: cfg.state.is_some(),
+            ver: loaded.ver,
+            journal: None,
+            connections: 0,
+            per_payer: HashMap::new(),
+            unready: HashMap::new(),
+            new_tags: HashMap::new(),
         };
-        let fresh = cfg.state.as_ref().is_some_and(|p| !p.exists());
         let inner = Arc::new(Inner {
             cfg,
             tls: Arc::new(tls),
-            secret,
-            state: Mutex::new(State { bindings, dirty: fresh, ..State::default() }),
+            secret: loaded.secret,
+            state: Mutex::new(state),
             stop: AtomicBool::new(false),
             sent: AtomicU64::new(0),
         });
+        // The snapshot (with the secret) and a fresh journal before the
+        // first send.
+        if let Some(path) = &inner.cfg.state {
+            let bytes = {
+                let st = inner.lock();
+                let all: Vec<(&[u8; 32], &Binding, Payer)> = st.bindings.iter().collect();
+                saved::snapshot(&inner.secret, st.ver, &all)
+            };
+            crate::files::write_atomic(path, &bytes, 0o600)?;
+            let j = saved::Journal::start(path, &[])?;
+            let mut st = inner.lock();
+            st.journal = Some(j);
+            st.dirty = false;
+        }
         let accept = inner.clone();
         std::thread::Builder::new()
             .name("cbb-push accept".into())
             .spawn(move || accept.accept(tcp))
             .context("cannot start the service")?;
-        // The secret is written before the first binding is filed under it.
-        inner.save();
         let saver = inner.clone();
         std::thread::Builder::new()
             .name("cbb-push saver".into())
@@ -556,6 +831,7 @@ impl Service {
     pub fn stop(&self) {
         self.inner.stop.store(true, Ordering::Relaxed);
         let _ = TcpStream::connect(self.addr);
+        self.inner.lock().dirty = true;
         self.inner.save();
     }
 }
@@ -568,34 +844,42 @@ impl Inner {
             }
             let Ok(c) = c else { continue };
             let ip = c.peer_addr().map_or(IpAddr::from([0u8; 4]), |a| a.ip());
+            let payer = self.payer(ip);
             {
                 let mut st = self.lock();
                 let b = self.cfg.budgets;
-                let here = st.per_address.get(&ip).copied().unwrap_or(0);
-                if st.connections >= b.connections || here >= b.per_address {
+                let here = st.per_payer.get(&payer).copied().unwrap_or(0);
+                let waiting = st.unready.get(&payer).copied().unwrap_or(0);
+                if st.connections >= b.connections || here >= b.per_address || waiting >= b.unready {
                     continue;
                 }
                 st.connections += 1;
-                *st.per_address.entry(ip).or_default() += 1;
+                *st.per_payer.entry(payer).or_default() += 1;
+                *st.unready.entry(payer).or_default() += 1;
             }
             let me = self.clone();
-            let spawned = std::thread::Builder::new().name("cbb-push conn".into()).spawn(move || {
-                let _ = me.serve(c);
+            let release = move |me: &Inner, hello_done: bool| {
                 let mut st = me.lock();
                 st.connections -= 1;
-                if let Some(n) = st.per_address.get_mut(&ip) {
+                if let Some(n) = st.per_payer.get_mut(&payer) {
                     *n -= 1;
                     if *n == 0 {
-                        st.per_address.remove(&ip);
+                        st.per_payer.remove(&payer);
                     }
                 }
+                if !hello_done {
+                    unready_done(&mut st, payer);
+                }
+            };
+            let spawned = std::thread::Builder::new().name("cbb-push conn".into()).spawn(move || {
+                // serve takes the connection off the payer's unready ones
+                // once its hello passed; otherwise it is done here.
+                let mut hello = false;
+                let _ = me.serve(c, payer, &mut hello);
+                release(&me, hello);
             });
             if spawned.is_err() {
-                let mut st = self.lock();
-                st.connections -= 1;
-                if let Some(n) = st.per_address.get_mut(&ip) {
-                    *n -= 1;
-                }
+                release(&self, false);
             }
         }
     }

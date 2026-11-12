@@ -12,9 +12,19 @@
 //!   loopback, link-local or reserved address, however its DNS answers
 //!   later;
 //! - follows no redirect: an answer of 3xx is a failure;
-//! - sends at most one body of the registry's size, reads at most 4 KiB of
-//!   the answer, within 10 s;
-//! - budgets per host, beside per token and per tag.
+//! - sends at most one message, reads at most 4 KiB of the answer, and
+//!   gives the whole send (the lookup included) 8 s, under the member's
+//!   own wait for the answer;
+//! - budgets per group and host (a name lowercased), and per address
+//!   dialed with a higher ceiling, so that neither a stranger's sends to a
+//!   distributor's host nor many names at one address starve the others; a
+//!   host that answered 429 waits as long as it asked.
+//!
+//! The message the phone decrypts is parts, each a kind (1 byte), a length
+//! (2 bytes, big-endian) and its bytes: kind 1 the body, kind 2 a
+//! challenge of the service (24 bytes: the value, then the hint of the
+//! send key it is for). The app reads the kinds it knows and skips the
+//! others, so a size of the registry may change.
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -30,16 +40,39 @@ use rustls::pki_types::ServerName;
 use rustls::{ClientConfig, ClientConnection, StreamOwned};
 use sha2::Sha256;
 
-use super::{Outcome, Platform};
+use super::{Delivery, Outcome, Platform};
 
 /// The record size the header names: one record holds the whole body.
 const RS: u32 = 4096;
-const TIMEOUT: Duration = Duration::from_secs(10);
+/// The whole send, the lookup included.
+const DEADLINE: Duration = Duration::from_secs(8);
 /// The most of an answer read.
 const MAX_ANSWER: usize = 4096;
-/// Sends an hour to one host and the burst; hosts held at most.
-const PER_HOST: (f64, f64) = (300.0, 30.0);
+/// Sends an hour and the burst, per group and host, and per address
+/// dialed; entries held at most in each.
+const PER_TAG_HOST: (f64, f64) = (300.0, 30.0);
+const PER_ADDRESS: (f64, f64) = (6000.0, 600.0);
 const HOSTS_MAX: usize = 65_536;
+/// The kinds of the message's parts.
+pub const PART_BODY: u8 = 1;
+pub const PART_CHALLENGE: u8 = 2;
+
+/// The message for the phone: its parts in kind order.
+pub fn message(body: Option<&[u8]>, challenge: Option<&super::Challenge>) -> Vec<u8> {
+    let mut out = Vec::new();
+    let mut part = |kind: u8, b: &[u8]| {
+        out.push(kind);
+        out.extend_from_slice(&(b.len() as u16).to_be_bytes());
+        out.extend_from_slice(b);
+    };
+    if let Some(b) = body {
+        part(PART_BODY, b);
+    }
+    if let Some(c) = challenge {
+        part(PART_CHALLENGE, &c.bytes());
+    }
+    out
+}
 
 /// RFC 8291's encryption of `plain` to the phone's `ua_public` (65 bytes)
 /// and `auth`, with the sender's ephemeral key `as_secret` and `salt`: the
@@ -96,10 +129,13 @@ pub fn request(host: &str, path: &str, len: usize, ttl_s: u64) -> String {
 pub fn outcome(answer: &[u8]) -> Outcome {
     let text = String::from_utf8_lossy(answer);
     let mut lines = text.split("\r\n");
+    // Exactly three digits, then a space or the end of the line.
     let status = lines
         .next()
         .and_then(|l| l.strip_prefix("HTTP/1.1 ").or_else(|| l.strip_prefix("HTTP/1.0 ")))
+        .filter(|l| l.len() == 3 || l.as_bytes().get(3) == Some(&b' '))
         .and_then(|l| l.get(..3))
+        .filter(|s| s.bytes().all(|b| b.is_ascii_digit()))
         .and_then(|s| s.parse::<u16>().ok());
     let retry = lines
         .take_while(|l| !l.is_empty())
@@ -109,7 +145,7 @@ pub fn outcome(answer: &[u8]) -> Outcome {
         })
         .map(|s| Duration::from_secs(s.clamp(1, 86_400)));
     match status {
-        Some(200..=202) => Outcome::Sent,
+        Some(200..=299) => Outcome::Sent,
         Some(404 | 410) => Outcome::Gone,
         Some(429) => Outcome::Later(retry.unwrap_or(Duration::from_secs(60))),
         Some(500..=599) => Outcome::Later(retry.unwrap_or(Duration::from_secs(30))),
@@ -133,18 +169,69 @@ enum Dial {
 }
 
 /// How a host name becomes its addresses.
-type Resolve = Box<dyn Fn(&str) -> Vec<SocketAddr> + Send + Sync>;
+type Resolve = Arc<dyn Fn(&str) -> Vec<SocketAddr> + Send + Sync>;
 
 /// The UnifiedPush path.
 pub struct UnifiedPush {
     dial: Dial,
     allowed: Box<dyn Fn(IpAddr) -> bool + Send + Sync>,
     resolve: Resolve,
-    hosts: Mutex<HashMap<String, Bucket>>,
+    budgets: Mutex<Budgets>,
+}
+
+/// The budgets: per (group, host), per address dialed, and the addresses a
+/// 429 told to wait.
+#[derive(Default)]
+struct Budgets {
+    hosts: HashMap<([u8; 32], String), Bucket>,
+    addresses: HashMap<IpAddr, Bucket>,
+    wait: HashMap<IpAddr, Instant>,
+}
+
+/// Takes one from the bucket under k in m; the wait when it is spent.
+fn take<K: std::hash::Hash + Eq>(
+    m: &mut HashMap<K, Bucket>,
+    k: K,
+    (per_hour, burst): (f64, f64),
+    now: Instant,
+) -> Option<Duration> {
+    if !m.contains_key(&k) && m.len() >= HOSTS_MAX {
+        m.retain(|_, b| now.saturating_duration_since(b.at) < Duration::from_secs(3600));
+        if m.len() >= HOSTS_MAX {
+            return Some(Duration::from_secs(60));
+        }
+    }
+    let b = m.entry(k).or_insert(Bucket { left: burst, at: now });
+    let rate = per_hour / 3600.0;
+    b.left = (b.left + now.saturating_duration_since(b.at).as_secs_f64() * rate).min(burst);
+    b.at = now;
+    if b.left >= 1.0 {
+        b.left -= 1.0;
+        None
+    } else {
+        Some(Duration::from_secs_f64(((1.0 - b.left) / rate).max(1.0)))
+    }
 }
 
 fn system_resolve(host: &str) -> Vec<SocketAddr> {
     (host, 443).to_socket_addrs().map(|a| a.collect()).unwrap_or_default()
+}
+
+/// Looks host up within `limit`; nothing when the lookup takes longer
+/// (the system's resolver has no limit of ours, so it runs aside).
+fn resolve_within(resolve: &Resolve, host: &str, limit: Duration) -> Vec<SocketAddr> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let (r, h) = (resolve.clone(), host.to_string());
+    if std::thread::Builder::new()
+        .name("cbb-push lookup".into())
+        .spawn(move || {
+            let _ = tx.send(r(&h));
+        })
+        .is_err()
+    {
+        return Vec::new();
+    }
+    rx.recv_timeout(limit).unwrap_or_default()
 }
 
 impl UnifiedPush {
@@ -158,8 +245,8 @@ impl UnifiedPush {
         Ok(UnifiedPush {
             dial: Dial::Tls(Arc::new(cfg)),
             allowed: Box::new(cbb_core::blind::card::public_ip),
-            resolve: Box::new(system_resolve),
-            hosts: Mutex::new(HashMap::new()),
+            resolve: Arc::new(system_resolve),
+            budgets: Mutex::new(Budgets::default()),
         })
     }
 
@@ -171,46 +258,95 @@ impl UnifiedPush {
         UnifiedPush {
             dial: Dial::Plain,
             allowed: Box::new(allowed),
-            resolve: Box::new(resolve),
-            hosts: Mutex::new(HashMap::new()),
+            resolve: Arc::new(resolve),
+            budgets: Mutex::new(Budgets::default()),
         }
     }
 
-    /// Takes one send from host's budget; the wait when it is spent.
-    fn budget(&self, host: &str) -> Option<Duration> {
+    /// Takes one send from the group's budget at host; the wait when it
+    /// is spent.
+    fn budget(&self, tag: &[u8; 32], host: &str) -> Option<Duration> {
+        let mut b = self.budgets.lock().unwrap_or_else(|e| e.into_inner());
+        take(&mut b.hosts, (*tag, host.to_ascii_lowercase()), PER_TAG_HOST, Instant::now())
+    }
+
+    /// Takes one send from the address's budget, unless a 429 told it to
+    /// wait; the wait.
+    fn address(&self, ip: IpAddr) -> Option<Duration> {
         let now = Instant::now();
-        let mut hosts = self.hosts.lock().unwrap_or_else(|e| e.into_inner());
-        if !hosts.contains_key(host) && hosts.len() >= HOSTS_MAX {
-            hosts.retain(|_, b| now.saturating_duration_since(b.at) < Duration::from_secs(3600));
-            if hosts.len() >= HOSTS_MAX {
-                return Some(Duration::from_secs(60));
+        let mut b = self.budgets.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(until) = b.wait.get(&ip).copied() {
+            if until > now {
+                return Some(until - now);
             }
+            b.wait.remove(&ip);
         }
-        let b = hosts.entry(host.to_ascii_lowercase()).or_insert(Bucket { left: PER_HOST.1, at: now });
-        let rate = PER_HOST.0 / 3600.0;
-        b.left = (b.left + now.saturating_duration_since(b.at).as_secs_f64() * rate).min(PER_HOST.1);
-        b.at = now;
-        if b.left >= 1.0 {
-            b.left -= 1.0;
-            None
-        } else {
-            Some(Duration::from_secs_f64(((1.0 - b.left) / rate).max(1.0)))
+        take(&mut b.addresses, ip, PER_ADDRESS, now)
+    }
+
+    /// The address asked to be left alone for d.
+    fn told_to_wait(&self, ip: IpAddr, d: Duration) {
+        let mut b = self.budgets.lock().unwrap_or_else(|e| e.into_inner());
+        if b.wait.len() >= HOSTS_MAX {
+            let now = Instant::now();
+            b.wait.retain(|_, u| *u > now);
+        }
+        if b.wait.len() < HOSTS_MAX {
+            b.wait.insert(ip, Instant::now() + d);
         }
     }
 
-    fn post(&self, addr: SocketAddr, host: &str, head: &str, body: &[u8]) -> Option<Vec<u8>> {
-        let tcp = TcpStream::connect_timeout(&addr, TIMEOUT).ok()?;
-        tcp.set_read_timeout(Some(TIMEOUT)).ok()?;
-        tcp.set_write_timeout(Some(TIMEOUT)).ok()?;
+    fn post(&self, addr: SocketAddr, host: &str, head: &str, body: &[u8], until: Instant) -> Option<Vec<u8>> {
+        let left = until.checked_duration_since(Instant::now()).filter(|d| !d.is_zero())?;
+        let tcp = TcpStream::connect_timeout(&addr, left).ok()?;
         match &self.dial {
             Dial::Tls(cfg) => {
                 let name = ServerName::try_from(host.to_string()).ok()?;
                 let conn = ClientConnection::new(cfg.clone(), name).ok()?;
-                exchange(StreamOwned::new(conn, tcp), head, body)
+                exchange(Timed { s: StreamOwned::new(conn, tcp.try_clone().ok()?), tcp, until }, head, body)
             }
             #[cfg(test)]
-            Dial::Plain => exchange(tcp, head, body),
+            Dial::Plain => exchange(Timed { s: tcp.try_clone().ok()?, tcp, until }, head, body),
         }
+    }
+}
+
+/// A stream whose every read and write waits only for what is left of
+/// the send's deadline, so a peer that answers a byte at a time still ends
+/// at the deadline.
+struct Timed<S> {
+    s: S,
+    tcp: TcpStream,
+    until: Instant,
+}
+
+impl<S> Timed<S> {
+    fn arm(&self) -> std::io::Result<()> {
+        let left = self
+            .until
+            .checked_duration_since(Instant::now())
+            .filter(|d| !d.is_zero())
+            .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::TimedOut))?;
+        self.tcp.set_read_timeout(Some(left))?;
+        self.tcp.set_write_timeout(Some(left))
+    }
+}
+
+impl<S: Read> Read for Timed<S> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.arm()?;
+        self.s.read(buf)
+    }
+}
+
+impl<S: Write> Write for Timed<S> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.arm()?;
+        self.s.write(buf)
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.arm()?;
+        self.s.flush()
     }
 }
 
@@ -219,7 +355,17 @@ fn exchange(mut s: impl Read + Write, head: &str, body: &[u8]) -> Option<Vec<u8>
     s.write_all(body).ok()?;
     s.flush().ok()?;
     let mut answer = Vec::new();
-    let _ = s.take(MAX_ANSWER as u64).read_to_end(&mut answer);
+    let mut buf = [0u8; 1024];
+    while answer.len() < MAX_ANSWER {
+        match s.read(&mut buf) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => answer.extend_from_slice(&buf[..n.min(MAX_ANSWER - answer.len())]),
+        }
+        // The status line and the head are all that is read of it.
+        if answer.windows(4).any(|w| w == b"\r\n\r\n") {
+            break;
+        }
+    }
     (!answer.is_empty()).then_some(answer)
 }
 
@@ -236,26 +382,41 @@ fn split(url: &str) -> Option<(String, String)> {
 }
 
 impl Platform for UnifiedPush {
-    fn send(&self, env: u64, token: &[u8], body: &[u8], expires_s: u64) -> Outcome {
-        if env != cbb_core::push::ENV_UNIFIEDPUSH {
+    fn send(&self, d: &Delivery<'_>) -> Outcome {
+        let until = Instant::now() + DEADLINE;
+        if d.env != cbb_core::push::ENV_UNIFIEDPUSH || (d.body.is_none() && d.challenge.is_none()) {
             return Outcome::NoPath;
         }
-        let Ok(up) = cbb_core::push::UnifiedPush::read(token) else { return Outcome::NoPath };
+        let Ok(up) = cbb_core::push::UnifiedPush::read(d.token) else { return Outcome::NoPath };
         let Some((host, path)) = split(up.url) else { return Outcome::NoPath };
-        if let Some(wait) = self.budget(&host) {
+        let host = host.to_ascii_lowercase();
+        if let Some(wait) = self.budget(&d.tag, &host) {
             return Outcome::Later(wait);
         }
         // Resolved once: the address checked is the one connected to.
-        let Some(addr) = pick((self.resolve)(&host), &*self.allowed) else { return Outcome::NoPath };
+        let addrs = resolve_within(&self.resolve, &host, DEADLINE / 2);
+        let Some(addr) = pick(addrs, &*self.allowed) else { return Outcome::NoPath };
+        if let Some(wait) = self.address(addr.ip()) {
+            return Outcome::Later(wait);
+        }
         let secret = p256::SecretKey::from_bytes(&cbb_core::certs::random_bytes::<32>().into());
         let Ok(secret) = secret else { return Outcome::Later(Duration::from_secs(1)) };
-        let Some(sealed) = encrypt(body, up.p256dh, up.auth, &secret, &cbb_core::certs::random_bytes()) else {
+        let plain = message(d.body, d.challenge.as_ref());
+        let Some(sealed) = encrypt(&plain, up.p256dh, up.auth, &secret, &cbb_core::certs::random_bytes()) else {
             return Outcome::NoPath;
         };
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
-        let head = request(&host, &path, sealed.len(), expires_s.saturating_sub(now).max(1));
-        match self.post(addr, &host, &head, &sealed) {
-            Some(answer) => outcome(&answer),
+        let head = request(&host, &path, sealed.len(), d.expires_s.saturating_sub(now).max(1));
+        match self.post(addr, &host, &head, &sealed, until) {
+            Some(answer) => {
+                let o = outcome(&answer);
+                if let (Outcome::Later(wait), true) =
+                    (&o, answer.starts_with(b"HTTP/1.1 429") || answer.starts_with(b"HTTP/1.0 429"))
+                {
+                    self.told_to_wait(addr.ip(), *wait);
+                }
+                o
+            }
             None => Outcome::Later(Duration::from_secs(30)),
         }
     }
@@ -309,6 +470,12 @@ mod tests {
             "[fd00::1]:443",
             "[fe80::1]:443",
             "[::ffff:10.0.0.1]:443",
+            "[::127.0.0.1]:443",
+            "[::808:808]:443",
+            "[64:ff9b:1::a01:203]:443",
+            "[2001:0:4136:e378:8000:63bf:f5fe:fdfc]:443",
+            "192.0.0.8:443",
+            "198.18.0.1:443",
         ] {
             assert_eq!(pick([a(bad)], &public_ip), None, "{bad}");
         }
@@ -319,6 +486,11 @@ mod tests {
         assert_eq!(outcome(b"HTTP/1.1 429 Slow\r\nRetry-After: 120\r\n\r\n"), Outcome::Later(Duration::from_secs(120)));
         assert_eq!(outcome(b"HTTP/1.1 503 Busy\r\n\r\n"), Outcome::Later(Duration::from_secs(30)));
         assert_eq!(outcome(b"garbage"), Outcome::NoPath);
+        // The status is three digits and nothing more.
+        assert_eq!(outcome(b"HTTP/1.1 2000 odd\r\n\r\n"), Outcome::NoPath);
+        assert_eq!(outcome(b"HTTP/1.1 20x\r\n\r\n"), Outcome::NoPath);
+        assert_eq!(outcome(b"HTTP/1.1 204\r\n\r\n"), Outcome::Sent);
+        assert_eq!(outcome(b"HTTP/2 200\r\n\r\n"), Outcome::NoPath);
         assert_eq!(
             split("https://up.example.org:443/push/abc?x=1"),
             Some(("up.example.org".into(), "/push/abc?x=1".into()))
@@ -346,7 +518,7 @@ mod tests {
                     break;
                 }
                 n += k;
-                if n >= 3075 {
+                if n >= 3105 {
                     break;
                 }
             }
@@ -366,22 +538,93 @@ mod tests {
         let t = token("https://up.example.org/push/abc");
         let body = vec![3u8; cbb_core::push::MAX_BODY];
         let far = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() + 600;
-        assert_eq!(up.send(cbb_core::push::ENV_UNIFIEDPUSH, &t, &body, far), Outcome::Sent);
+        let d = |env, token: &'static [u8], tag: u8| Delivery {
+            env,
+            token,
+            body: None,
+            challenge: Some(super::super::Challenge { value: [5; 16], key: [6; 8] }),
+            expires_s: far,
+            tag: [tag; 32],
+        };
+        let t: &'static [u8] = Box::leak(t.into_boxed_slice());
+        let body: &'static [u8] = Box::leak(body.into_boxed_slice());
+        let with = |env, token, tag| Delivery { body: Some(body), ..d(env, token, tag) };
+        assert_eq!(up.send(&with(cbb_core::push::ENV_UNIFIEDPUSH, t, 1)), Outcome::Sent);
         let got = server.join().unwrap();
         let text = String::from_utf8_lossy(&got);
         assert!(text.starts_with("POST /push/abc HTTP/1.1\r\nHost: up.example.org\r\n"), "{text}");
-        assert!(text.contains("Content-Encoding: aes128gcm") && text.contains("Content-Length: 3075"));
+        // The body and the challenge, as parts: 86 + 3 + 2972 + 3 + 24 + 1 + 16.
+        assert!(text.contains("Content-Encoding: aes128gcm") && text.contains("Content-Length: 3105"), "{text}");
         assert_eq!(*resolved.lock().unwrap(), 1, "resolved once");
         // Not a global address: nothing is dialed.
         let up2 = UnifiedPush::plain(|_| false, move |_| vec![addr]);
-        assert_eq!(up2.send(cbb_core::push::ENV_UNIFIEDPUSH, &t, &body, far), Outcome::NoPath);
+        assert_eq!(up2.send(&with(cbb_core::push::ENV_UNIFIEDPUSH, t, 1)), Outcome::NoPath);
         // Another env, a broken token: no path.
-        assert_eq!(up.send(cbb_core::push::ENV_APNS, &t, &body, far), Outcome::NoPath);
-        assert_eq!(up.send(cbb_core::push::ENV_UNIFIEDPUSH, b"junk", &body, far), Outcome::NoPath);
-        // The host's burst of 30 is spent (one went above); the rest wait.
+        assert_eq!(up.send(&with(cbb_core::push::ENV_APNS, t, 1)), Outcome::NoPath);
+        assert_eq!(up.send(&with(cbb_core::push::ENV_UNIFIEDPUSH, b"junk", 1)), Outcome::NoPath);
+        // The group's burst of 30 at that host is spent (one went above),
+        // in any case of its name; the rest of its sends wait. Another
+        // group's are its own.
         for _ in 0..29 {
-            assert!(up.budget("up.example.org").is_none());
+            assert!(up.budget(&[1; 32], "UP.example.org").is_none());
         }
-        assert!(matches!(up.send(cbb_core::push::ENV_UNIFIEDPUSH, &t, &body, far), Outcome::Later(_)));
+        assert!(matches!(up.send(&with(cbb_core::push::ENV_UNIFIEDPUSH, t, 1)), Outcome::Later(_)));
+        assert!(up.budget(&[2; 32], "up.example.org").is_none());
+    }
+
+    #[test]
+    fn the_message_is_parts_of_a_kind_and_a_length() {
+        let c = super::super::Challenge { value: [5; 16], key: [6; 8] };
+        let m = message(Some(&[9; 3]), Some(&c));
+        assert_eq!(&m[..6], &[PART_BODY, 0, 3, 9, 9, 9]);
+        assert_eq!(&m[6..9], &[PART_CHALLENGE, 0, 24]);
+        assert_eq!(&m[9..], &c.bytes());
+        assert_eq!(message(None, Some(&c))[0], PART_CHALLENGE);
+    }
+
+    #[test]
+    fn a_send_ends_at_its_deadline_however_slowly_the_endpoint_answers() {
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = l.local_addr().unwrap();
+        std::thread::spawn(move || {
+            let (mut s, _) = l.accept().unwrap();
+            let mut got = vec![0u8; 8192];
+            let _ = s.read(&mut got);
+            // One byte every second, never the end of the head.
+            for _ in 0..60 {
+                if s.write_all(b"H").is_err() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_secs(1));
+            }
+        });
+        let up = UnifiedPush::plain(|ip| ip.is_loopback(), move |_| vec![addr]);
+        let t = token("https://up.example.org/push/abc");
+        let body = vec![3u8; cbb_core::push::MAX_BODY];
+        let d = Delivery {
+            env: cbb_core::push::ENV_UNIFIEDPUSH,
+            token: &t,
+            body: Some(&body),
+            challenge: None,
+            expires_s: u64::MAX / 2,
+            tag: [1; 32],
+        };
+        let started = Instant::now();
+        let _ = up.send(&d);
+        assert!(started.elapsed() < DEADLINE + Duration::from_secs(2), "{:?}", started.elapsed());
+    }
+
+    #[test]
+    fn many_names_at_one_address_share_its_ceiling() {
+        let up = UnifiedPush::plain(|_| true, |_| vec![]);
+        let ip: IpAddr = "93.184.216.34".parse().unwrap();
+        for _ in 0..PER_ADDRESS.1 as usize {
+            assert!(up.address(ip).is_none());
+        }
+        assert!(up.address(ip).is_some());
+        // A 429 makes the address wait as long as it asked.
+        let other: IpAddr = "93.184.216.35".parse().unwrap();
+        up.told_to_wait(other, Duration::from_secs(99));
+        assert!(up.address(other).is_some_and(|w| w > Duration::from_secs(90)));
     }
 }

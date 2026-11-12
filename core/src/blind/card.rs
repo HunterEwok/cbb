@@ -199,12 +199,15 @@ fn valid_endpoint(t: &str) -> bool {
 
 /// Whether an IPv4 address may stand in a card: none of this network
 /// (0/8), private (10/8, 172.16/12, 192.168/16), shared (100.64/10),
-/// loopback (127/8), link-local (169.254/16), multicast (224/4) or
-/// reserved (240/4).
+/// loopback (127/8), link-local (169.254/16), IETF protocol assignments
+/// (192.0.0/24), benchmarking (198.18/15), multicast (224/4) or reserved
+/// (240/4).
 fn public_v4(a: core::net::Ipv4Addr) -> bool {
-    let [x, y, ..] = a.octets();
+    let [x, y, z, _] = a.octets();
     !(x == 0
         || x == 10
+        || (x == 192 && y == 0 && z == 0)
+        || (x == 198 && (y == 18 || y == 19))
         || x == 127
         || x >= 224
         || (x == 172 && (16..32).contains(&y))
@@ -213,12 +216,14 @@ fn public_v4(a: core::net::Ipv4Addr) -> bool {
         || (x == 169 && y == 254))
 }
 
-/// Whether an address may stand in a card, which is for a public server:
-/// a public IPv4 address ([`public_v4`]), or an IPv6 address that is not
-/// loopback, unspecified, multicast, link-local, site-local (fec0::/10) or
-/// unique-local (fc00::/7), nor carries a refused IPv4 address in a
-/// mapped (::ffff:0:0/96), translated (::ffff:0:0:0/96), NAT64
-/// (64:ff9b::/96) or 6to4 (2002::/16) form.
+/// Whether an address may stand in a card, which is for a public server
+/// (and is the rule of the address the push service dials): a public IPv4
+/// address ([`public_v4`]), or an IPv6 address that is not loopback,
+/// unspecified, multicast, link-local, site-local (fec0::/10),
+/// unique-local (fc00::/7), IPv4-compatible (::/96), NAT64 of local use
+/// (64:ff9b:1::/48) or Teredo (2001::/32), nor carries a refused IPv4
+/// address in a mapped (::ffff:0:0/96), translated (::ffff:0:0:0/96),
+/// NAT64 (64:ff9b::/96) or 6to4 (2002::/16) form.
 pub fn public_ip(ip: core::net::IpAddr) -> bool {
     match ip {
         core::net::IpAddr::V4(v4) => public_v4(v4),
@@ -234,6 +239,9 @@ pub fn public_ip(ip: core::net::IpAddr) -> bool {
                 || (first & 0xffc0) == 0xfe80
                 || (first & 0xffc0) == 0xfec0
                 || (first & 0xfe00) == 0xfc00
+                || s.get(..6) == Some(&[0, 0, 0, 0, 0, 0][..])
+                || s.get(..3) == Some(&[0x64, 0xff9b, 1][..])
+                || s.get(..2) == Some(&[0x2001, 0][..])
                 || (s.get(..6) == Some(&[0, 0, 0, 0, 0, 0xffff][..]) && !embedded(o.get(12..).unwrap_or_default()))
                 || (s.get(..6) == Some(&[0, 0, 0, 0, 0xffff, 0][..]) && !embedded(o.get(12..).unwrap_or_default()))
                 || (s.get(..6) == Some(&[0x64, 0xff9b, 0, 0, 0, 0][..]) && !embedded(o.get(12..).unwrap_or_default()))

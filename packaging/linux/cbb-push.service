@@ -2,10 +2,13 @@
 # Copyright (C) 2026 HunterEwok
 
 # cbb-push, the project's push service on cbb.tools (format section 20.4): it passes
-# sealed bodies from the members of a group to a phone's platform (APNs), to wake an
-# app that is closed. It holds no group's keys and keeps nothing on disk but its own
-# TLS key; the platforms' keys are given to it read-only, and no log names a token,
-# a group or an address.
+# sealed bodies from the members of a group to a phone's platform (APNs, UnifiedPush),
+# to wake an app that is closed. It holds no group's keys and keeps on disk only its
+# own TLS key and its state (push.state and push.state.log: the tokens' bindings to
+# their send keys, under keyed hashes, no token and no address); the platforms' keys
+# are given to it read-only, and no log names a token, a group or an address. On the
+# very first start add -new-state to CBB_PUSH_FLAGS, and take it out again: without
+# it a missing state file stops the start, so a lost file is never a silent reset.
 [Unit]
 Description=CBB push service
 Documentation=https://github.com/HunterEwok/cbb/blob/main/docs/admin/self-hosting.md

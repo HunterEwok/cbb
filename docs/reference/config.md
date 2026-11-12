@@ -53,7 +53,7 @@ A variable set in the environment wins over the same name in the settings file.
 | `CBB_TEST_BLUEZ` | cbb-helper on Linux | For tests only: the D-Bus address of a test's BlueZ (`bluetest`), which the Bluetooth keyboard registers with instead of the system bus. |
 | `CBB_WRITE_MUTANTS` | the core's tests (`cargo test -p cbb-core`) | For development only: `1` writes `testdata/format/wave4-mutants.json` again from what the readers say, instead of failing when the file no longer matches them. |
 | `CBB_FORWARD_FLAGS` | `cbb-forward.service` | The flags of `cbb forward`, such as `-vless-xhttp vpn.example.org`. |
-| `CBB_PUSH_FLAGS` | `cbb-push.service` | The flags of the project's push service on cbb.tools: `-apns-team`, `-apns-key-id`, `-apns-sandbox-key-id` (the keys come from systemd's credentials). |
+| `CBB_PUSH_FLAGS` | `cbb-push.service` | The flags of the project's push service on cbb.tools: `-apns-team`, `-apns-key-id`, `-apns-sandbox-key-id` (the keys come from systemd's credentials), and `-new-state` on the very first start only (a missing state file stops any other start). |
 | `CBB_RELAY_FLAGS` | `cbb-relay.service` | The flags of `cbb relay`: `-group TAG` or `-open`. |
 | `CBB_TRAFFIC_IFACE` | `site/deploy/cbb-traffic.sh` on cbb.tools | The network interface whose traffic counts for [the servers' budget](../relay-budget.md#money-and-traffic); unset, the default route's. |
 | `CBB_TRAFFIC_OUT` | `site/deploy/cbb-traffic.sh` on cbb.tools | Where it writes the totals of the last 24 hours; `/srv/cbb.tools/status/traffic.json` by default. |

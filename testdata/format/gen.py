@@ -1614,9 +1614,10 @@ def addr_ok(t):
 
 
 def public_v4(a):
-    """Not this network, private, shared, loopback, link-local, multicast or reserved."""
-    x, y = a.packed[0], a.packed[1]
-    return not (x == 0 or x == 10 or x == 127 or x >= 224 or (x == 172 and 16 <= y < 32)
+    """Not this network, private, shared, loopback, link-local, IETF protocol assignments,
+    benchmarking, multicast or reserved."""
+    x, y, z = a.packed[0], a.packed[1], a.packed[2]
+    return not (x == 0 or x == 10 or (x == 192 and y == 0 and z == 0) or (x == 198 and y in (18, 19)) or x == 127 or x >= 224 or (x == 172 and 16 <= y < 32)
                 or (x == 192 and y == 168) or (x == 100 and 64 <= y < 128) or (x == 169 and y == 254))
 
 
@@ -1633,6 +1634,9 @@ def public_ip(a):
     if a.is_loopback or a.is_unspecified or a.is_multicast:
         return False
     if first & 0xffc0 in (0xfe80, 0xfec0) or first & 0xfe00 == 0xfc00:
+        return False
+    # IPv4-compatible, NAT64 of local use, Teredo.
+    if p[:12] == bytes(12) or p[:6] == b"\x00\x64\xff\x9b\x00\x01" or p[:4] == b"\x20\x01\x00\x00":
         return False
     if p[:12] == bytes(10) + b"\xff\xff" and not v4(p[12:]):
         return False
@@ -2012,7 +2016,8 @@ def card_vectors():
               "127.0.0.1:443", "[fe80::1]:443", "169.254.1.1:443", "[ff02::1]:443", "224.0.0.1:443",
               "0.0.0.0:443", "localhost:443", "a-.example.org:443", "10.1.2.3:443", "172.16.0.1:443",
               "192.168.1.1:443", "100.64.0.1:443", "0.1.2.3:443", "240.0.0.1:443", "[::ffff:0:7f00:1]:443",
-              "[::ffff:10.1.2.3]:443",
+              "[::ffff:10.1.2.3]:443", "[::808:808]:443", "[64:ff9b:1::808:808]:443",
+              "[2001:0:4136:e378:8000:63bf:f5fe:fdfc]:443", "192.0.0.8:443", "198.18.0.1:443", "198.19.255.1:443",
               "[64:ff9b::7f00:1]:443", "[2002:7f00:1::1]:443", "[fec0::1]:443", "[fd00::1]:443",
               "printer.local:443"]:
         no(f"an endpoint {e}", card({11: [e]}), "card/endpoints")

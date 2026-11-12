@@ -9,6 +9,10 @@
 //! the body, the body itself in base64 under `c`, and the fixed
 //! localization key of the text shown when the extension cannot run.
 //! No `apns-collapse-id`, which would let Apple join two notifications.
+//! A challenge of the service (24 bytes: the value and the hint of the
+//! send key it is for) rides in base64 under `k`; with no body it goes
+//! alone as a background push (`content-available`, priority 5), which
+//! wakes the app without showing anything.
 
 use std::net::{TcpStream, ToSocketAddrs};
 use std::sync::{Arc, Mutex};
@@ -21,7 +25,7 @@ use rustls::pki_types::ServerName;
 use rustls::{ClientConfig, ClientConnection, StreamOwned};
 
 use super::h2::{Answer, Conn};
-use super::{Outcome, Platform};
+use super::{Challenge, Delivery, Outcome, Platform};
 use crate::error::{Context, Error, Result};
 
 /// Apple's hosts.
@@ -32,10 +36,11 @@ pub const TOPIC: &str = "tools.cbb";
 /// The localization key of the text shown when the extension cannot run:
 /// the English text, which is the key of the app's String Catalog
 /// (apps/l10n, place `ios`), so every language has it.
-pub const LOC_KEY: &str = "Something new in your group. Open the app.";
+pub const LOC_KEY: &str = "New in your group. Open the app.";
 /// How long a provider token is used.
 const TOKEN_LIFE: Duration = Duration::from_secs(40 * 60);
-const TIMEOUT: Duration = Duration::from_secs(15);
+/// Under the member's own wait for an answer (`member/src/push.rs`).
+const TIMEOUT: Duration = Duration::from_secs(10);
 
 /// The team's key and names.
 pub struct Key {
@@ -67,9 +72,16 @@ impl Key {
     }
 }
 
-/// The request's payload for a body.
-pub fn payload(body: &[u8]) -> String {
-    format!(r#"{{"aps":{{"alert":{{"loc-key":"{LOC_KEY}"}},"mutable-content":1}},"c":"{}"}}"#, STANDARD.encode(body))
+/// The request's payload for a body, with the service's challenge when
+/// there is one.
+pub fn payload(body: &[u8], challenge: Option<&Challenge>) -> String {
+    let k = challenge.map(|c| format!(r#","k":"{}""#, STANDARD.encode(c.bytes()))).unwrap_or_default();
+    format!(r#"{{"aps":{{"alert":{{"loc-key":"{LOC_KEY}"}},"mutable-content":1}},"c":"{}"{k}}}"#, STANDARD.encode(body))
+}
+
+/// The payload of a challenge alone: a background push.
+pub fn background(c: &Challenge) -> String {
+    format!(r#"{{"aps":{{"content-available":1}},"k":"{}"}}"#, STANDARD.encode(c.bytes()))
 }
 
 /// What an answer from Apple means.
@@ -160,23 +172,27 @@ impl Apns {
 }
 
 impl Platform for Apns {
-    fn send(&self, env: u64, token: &[u8], body: &[u8], expires_s: u64) -> Outcome {
-        if env != self.env {
+    fn send(&self, d: &Delivery<'_>) -> Outcome {
+        if d.env != self.env {
             return Outcome::NoPath;
         }
         // A device token is hex in the path.
-        let hex: String = token.iter().map(|b| format!("{b:02x}")).collect();
+        let hex: String = d.token.iter().map(|b| format!("{b:02x}")).collect();
         let path = format!("/3/device/{hex}");
         let auth = format!("bearer {}", self.provider_token());
-        let exp = expires_s.to_string();
+        let exp = d.expires_s.to_string();
+        let (kind, priority, body) = match (d.body, d.challenge.as_ref()) {
+            (Some(b), c) => ("alert", "10", payload(b, c)),
+            (None, Some(c)) => ("background", "5", background(c)),
+            (None, None) => return Outcome::NoPath,
+        };
         let headers = [
             ("authorization", auth.as_str()),
-            ("apns-push-type", "alert"),
-            ("apns-priority", "10"),
+            ("apns-push-type", kind),
+            ("apns-priority", priority),
             ("apns-topic", TOPIC),
             ("apns-expiration", exp.as_str()),
         ];
-        let body = payload(body);
         let mut link = self.link.lock().unwrap_or_else(|e| e.into_inner());
         // One retry on a fresh connection when the kept one has closed.
         for _ in 0..2 {
@@ -223,9 +239,17 @@ mod tests {
 
     #[test]
     fn the_payload_fits_apples_limit_and_shows_nothing_of_the_body() {
-        let p = payload(&[0u8; cbb_core::push::MAX_BODY]);
+        let c = Challenge { value: [1; 16], key: [2; 8] };
+        let p = payload(&[0u8; cbb_core::push::MAX_BODY], Some(&c));
         assert!(p.len() <= 4096, "{}", p.len());
         assert!(p.contains(r#""mutable-content":1"#) && p.contains(LOC_KEY));
+        let v: serde_json::Value = serde_json::from_str(&p).unwrap();
+        assert_eq!(STANDARD.decode(v["k"].as_str().unwrap()).unwrap(), c.bytes());
+        assert!(serde_json::from_str::<serde_json::Value>(&payload(&[0; 4], None)).unwrap().get("k").is_none());
+        // A challenge alone wakes the app and shows nothing.
+        let v: serde_json::Value = serde_json::from_str(&background(&c)).unwrap();
+        assert_eq!(v["aps"]["content-available"], 1);
+        assert!(v["aps"].get("alert").is_none());
     }
 
     #[test]

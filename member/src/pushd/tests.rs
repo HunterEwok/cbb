@@ -2,11 +2,12 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The push service against a fake platform: a member with its face's
-//! credentials gets its bodies through once each, within the budgets, and
-//! only with the token's send key and a seq no lower than the highest seen,
+//! credentials gets its bodies through once each, within the budgets; a
+//! token's key is confirmed by the challenge the platform carried, and then
+//! only that key sends, with a seq per slot no lower than the highest seen,
 //! across a restart too; a member the credentials leave out, an older
-//! credential or another period key is refused. And the HTTP/2 client
-//! against a fake server.
+//! credential or another period key is refused; a body on its way is never
+//! made a repeat. And the HTTP/2 client against a fake server.
 
 use std::sync::Mutex;
 
@@ -20,17 +21,50 @@ use crate::push::{Client, ServerKey};
 use crate::relayd::keys::Keys;
 use cbb_core::format::Value;
 
+/// What the fake platform was handed.
+#[derive(Clone, Debug)]
+struct Got {
+    env: u64,
+    token: Vec<u8>,
+    /// The body's length; None for a challenge alone.
+    body: Option<usize>,
+    challenge: Option<Challenge>,
+    expires_s: u64,
+}
+
 /// A platform that keeps what it was given.
 #[derive(Default)]
 struct Fake {
-    got: Mutex<Vec<(u64, Vec<u8>, usize)>>,
+    got: Mutex<Vec<Got>>,
     answer: Mutex<Option<Outcome>>,
+    /// How long it takes to answer.
+    delay: Mutex<Duration>,
 }
 
 impl Platform for Fake {
-    fn send(&self, env: u64, token: &[u8], body: &[u8], _expires: u64) -> Outcome {
-        self.got.lock().unwrap().push((env, token.to_vec(), body.len()));
+    fn send(&self, d: &Delivery<'_>) -> Outcome {
+        let delay = *self.delay.lock().unwrap();
+        std::thread::sleep(delay);
+        self.got.lock().unwrap().push(Got {
+            env: d.env,
+            token: d.token.to_vec(),
+            body: d.body.map(<[u8]>::len),
+            challenge: d.challenge,
+            expires_s: d.expires_s,
+        });
         self.answer.lock().unwrap().clone().unwrap_or(Outcome::Sent)
+    }
+}
+
+impl Fake {
+    /// The bodies it was handed (challenges alone left out).
+    fn bodies(&self) -> usize {
+        self.got.lock().unwrap().iter().filter(|g| g.body.is_some()).count()
+    }
+
+    /// The last challenge it carried to token.
+    fn challenge(&self, token: &[u8]) -> Option<[u8; 16]> {
+        self.got.lock().unwrap().iter().rev().find(|g| g.token == token).and_then(|g| g.challenge).map(|c| c.value)
     }
 }
 
@@ -88,6 +122,7 @@ fn world_at(budgets: Budgets, state: Option<PathBuf>) -> World {
         key: keys.key.clone(),
         platforms,
         budgets,
+        new_state: state.as_ref().is_some_and(|p| !p.exists()),
         state,
         log: Arc::new(|_| {}),
     })
@@ -115,17 +150,77 @@ fn send_key(b: u8) -> ServerKey {
     ServerKey::from_scalar(&[b; 32]).unwrap()
 }
 
+/// The slot of the phone's registration in the tests' group.
+const SLOT: [u8; 16] = [1; 16];
+
 /// The send key's half of a registration: the key and its signature over
-/// (env, token, seq).
-fn signed(k: &ServerKey, env: u64, token: &[u8], seq: u64) -> (cbb_core::records::key::Key, Vec<u8>) {
-    let sig = push::sign_send(k, env, token, seq).unwrap();
+/// (env, token, slot, seq[, challenge]).
+fn signed_by(
+    k: &ServerKey,
+    env: u64,
+    token: &[u8],
+    slot: [u8; 16],
+    seq: u64,
+    challenge: Option<[u8; 16]>,
+) -> (cbb_core::records::key::Key, Vec<u8>) {
+    let s = push::Signed { env, token, slot: &slot, seq, challenge: challenge.as_ref() };
+    let sig = push::sign_send(k, &s).unwrap();
     (cbb_core::records::key::Key::es256(cbb_core::identity::ExternalKey::public(k)), sig.to_vec())
+}
+
+fn signed(k: &ServerKey, env: u64, token: &[u8], seq: u64) -> (cbb_core::records::key::Key, Vec<u8>) {
+    signed_by(k, env, token, SLOT, seq, None)
+}
+
+/// One send as a member makes it from a registration.
+struct S<'a> {
+    k: &'a ServerKey,
+    env: u64,
+    token: &'a [u8],
+    slot: [u8; 16],
+    seq: u64,
+    challenge: Option<[u8; 16]>,
+    ttl: Option<u64>,
+}
+
+impl S<'_> {
+    fn send(&self, c: &mut Client, body: &[u8]) -> push::Sent {
+        let (key, sig) = signed_by(self.k, self.env, self.token, self.slot, self.seq, self.challenge);
+        c.send(push::Send {
+            n: 0,
+            token: self.token,
+            env: self.env,
+            body,
+            ttl: self.ttl,
+            key,
+            sig: &sig,
+            seq: self.seq,
+            slot: self.slot,
+            challenge: self.challenge,
+        })
+        .unwrap()
+    }
+}
+
+fn s<'a>(k: &'a ServerKey, env: u64, token: &'a [u8], seq: u64) -> S<'a> {
+    S { k, env, token, slot: SLOT, seq, challenge: None, ttl: None }
 }
 
 /// Sends body to token of env under the phone's send key `k` and seq.
 fn send(c: &mut Client, k: &ServerKey, env: u64, token: &[u8], seq: u64, body: &[u8]) -> push::Sent {
-    let (key, sig) = signed(k, env, token, seq);
-    c.send(push::Send { n: 0, token, env, body, ttl: None, key, sig: &sig, seq }).unwrap()
+    s(k, env, token, seq).send(c, body)
+}
+
+/// The phone confirms its key for token: it sends over the challenge the
+/// platform carried with its last body.
+fn confirm(w: &World, c: &mut Client, k: &ServerKey, token: &[u8], seq: u64, b: u8) -> push::Sent {
+    let ch = w.fake.challenge(token).expect("no challenge reached the token");
+    S { challenge: Some(ch), ..s(k, push::ENV_APNS, token, seq) }.send(c, &body(b))
+}
+
+/// seq as a clock, as the phone numbers its registrations.
+fn now_seq(plus: u64) -> u64 {
+    now_ms() + plus
 }
 
 /// A body of the platform's size, its bytes from b.
@@ -146,7 +241,7 @@ fn a_listed_member_gets_each_copy_through_once() {
     let (key2, creds2) = member([1; 16], 2, "period", 5, true);
     let mut c2 = Client::connect(w.service.addr(), w.pin, key2, &refs(&creds2)).unwrap();
     assert_eq!(send(&mut c2, &phone, push::ENV_APNS, &token, 1, &body(0)).status, push::SENT_REPEAT);
-    assert_eq!(w.fake.got.lock().unwrap().len(), 1);
+    assert_eq!(w.fake.bodies(), 1);
     // The same body to another token is no repeat.
     assert_eq!(send(&mut c2, &send_key(4), push::ENV_APNS, &[8; 32], 1, &body(0)).status, push::SENT);
     // A body not of its env's size, and an env the service has no way to.
@@ -167,47 +262,112 @@ fn a_listed_member_gets_each_copy_through_once() {
 }
 
 #[test]
-fn a_send_needs_the_tokens_send_key_and_a_seq_no_lower_than_seen() {
+fn a_key_is_confirmed_by_its_challenge_and_then_only_it_sends() {
     let w = world(Budgets::default());
     let (key, creds) = member([5; 16], 1, "period", 1, true);
     let mut c = Client::connect(w.service.addr(), w.pin, key, &refs(&creds)).unwrap();
-    let (phone, other) = (send_key(3), send_key(4));
+    let (phone, stranger) = (send_key(3), send_key(4));
     let token = [7u8; 32];
-    assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, 10, &body(1)).status, push::SENT);
-    assert_eq!(w.service.bindings(), 1);
-    // Another key for the bound token: stale, whatever its seq.
-    assert_eq!(send(&mut c, &other, push::ENV_APNS, &token, 11, &body(2)).status, push::SENT_STALE);
-    // The phone registered again with seq 12: the old seq passes until the
-    // first send under the new one, then never again.
-    assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, 10, &body(3)).status, push::SENT);
-    assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, 12, &body(4)).status, push::SENT);
-    assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, 10, &body(5)).status, push::SENT_STALE);
-    assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, 12, &body(6)).status, push::SENT);
-    // A signature over another seq, token or env than the send's.
-    let (k, sig) = signed(&phone, push::ENV_APNS, &token, 13);
-    let r = c.send(push::Send {
-        n: 0,
-        token: &token,
-        env: push::ENV_APNS,
-        body: &body(7),
-        ttl: None,
-        key: k,
-        sig: &sig,
-        seq: 14,
-    });
-    assert_eq!(r.unwrap().status, push::SENT_STALE);
-    let (k, sig) = signed(&phone, push::ENV_APNS_SANDBOX, &token, 13);
-    let r = c.send(push::Send {
-        n: 0,
-        token: &token,
-        env: push::ENV_APNS,
-        body: &body(7),
-        ttl: None,
-        key: k,
-        sig: &sig,
-        seq: 13,
-    });
-    assert_eq!(r.unwrap().status, push::SENT_STALE);
+    let t0 = now_seq(0);
+    // A stranger who knows the token sends first, under its own key: it
+    // passes (nothing is confirmed), with a challenge for its key, which
+    // only the token's holder sees.
+    assert_eq!(send(&mut c, &stranger, push::ENV_APNS, &token, t0, &body(1)).status, push::SENT);
+    let for_stranger = w.fake.challenge(&token).unwrap();
+    // The phone's own key is never refused before it confirms.
+    assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, t0, &body(2)).status, push::SENT);
+    let for_phone = w.fake.challenge(&token).unwrap();
+    assert_ne!(for_stranger, for_phone);
+    // The stranger's challenge confirms nothing for the phone's key, nor
+    // a made-up one.
+    let wrong = S { challenge: Some(for_stranger), ..s(&phone, push::ENV_APNS, &token, t0) };
+    assert_eq!(wrong.send(&mut c, &body(3)).status, push::SENT);
+    assert_eq!(
+        w.service
+            .inner
+            .lock()
+            .bindings
+            .get(&w.service.inner.keyed(b"token", &push::ENV_APNS.to_be_bytes(), &token))
+            .map(Binding::confirmed),
+        Some(false)
+    );
+    // The phone registers again over its challenge: confirmed.
+    assert_eq!(confirm(&w, &mut c, &phone, &token, t0 + 1, 4).status, push::SENT);
+    // From now the stranger is refused, whatever its seq, and the platform
+    // carries a challenge for its key alone (no body); the phone's sends
+    // pass.
+    let bodies = w.fake.bodies();
+    assert_eq!(send(&mut c, &stranger, push::ENV_APNS, &token, t0 + 2, &body(5)).status, push::SENT_STALE);
+    assert_eq!(w.fake.bodies(), bodies);
+    assert!(w.fake.got.lock().unwrap().last().is_some_and(|g| g.body.is_none() && g.challenge.is_some()));
+    assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, t0 + 1, &body(6)).status, push::SENT);
+    // seq per slot: the phone registered again with a higher seq; the old
+    // one is stale after that, never before.
+    assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, t0 + 5, &body(7)).status, push::SENT);
+    assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, t0 + 1, &body(8)).status, push::SENT_STALE);
+    // A seq more than a day ahead of the service's clock: refused.
+    let ahead = t0 + push::MAX_SEQ_AHEAD_MS + 60_000;
+    assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, ahead, &body(9)).status, push::SENT_STALE);
+    w.service.stop();
+}
+
+#[test]
+fn a_phone_in_two_groups_gets_push_from_both() {
+    let w = world(Budgets::default());
+    let (ka, ca) = member([20; 16], 1, "period a", 1, true);
+    let (kb, cb) = member([21; 16], 1, "period b", 1, true);
+    let mut a = Client::connect(w.service.addr(), w.pin, ka, &refs(&ca)).unwrap();
+    let mut b = Client::connect(w.service.addr(), w.pin, kb, &refs(&cb)).unwrap();
+    let phone = send_key(3);
+    let token = [7u8; 32];
+    let (slot_a, slot_b) = ([1u8; 16], [2u8; 16]);
+    let t0 = now_seq(0);
+    let in_a = |seq, ch| S { slot: slot_a, challenge: ch, ..s(&phone, push::ENV_APNS, &token, seq) };
+    let in_b = |seq| S { slot: slot_b, ..s(&phone, push::ENV_APNS, &token, seq) };
+    assert_eq!(in_a(t0, None).send(&mut a, &body(1)).status, push::SENT);
+    let ch = w.fake.challenge(&token);
+    assert_eq!(in_a(t0 + 1, ch).send(&mut a, &body(2)).status, push::SENT);
+    // Group B's registration is five minutes newer; A's sends still pass,
+    // as many times as they come.
+    assert_eq!(in_b(t0 + 300_000).send(&mut b, &body(3)).status, push::SENT);
+    for i in 0..3 {
+        assert_eq!(in_a(t0 + 1, ch).send(&mut a, &body(10 + i)).status, push::SENT, "A's copy {i}");
+        assert_eq!(in_b(t0 + 300_000).send(&mut b, &body(20 + i)).status, push::SENT, "B's copy {i}");
+    }
+    // A registers again: A's old registration is stale, B untouched.
+    assert_eq!(in_a(t0 + 600_000, None).send(&mut a, &body(30)).status, push::SENT);
+    assert_eq!(in_a(t0 + 1, ch).send(&mut a, &body(31)).status, push::SENT_STALE);
+    assert_eq!(in_b(t0 + 300_000).send(&mut b, &body(32)).status, push::SENT);
+    w.service.stop();
+}
+
+#[test]
+fn a_send_that_does_not_hold_is_refused_and_too_many_close_the_connection() {
+    let w = world(Budgets::default());
+    let (key, creds) = member([5; 16], 1, "period", 1, true);
+    let mut c = Client::connect(w.service.addr(), w.pin, key, &refs(&creds)).unwrap();
+    let phone = send_key(3);
+    let token = [7u8; 32];
+    // A signature over another seq, slot, token or env than the send's.
+    let t0 = now_seq(0);
+    for (env, slot, seq) in
+        [(push::ENV_APNS, SLOT, t0 + 1), (push::ENV_APNS, [9; 16], t0), (push::ENV_APNS_SANDBOX, SLOT, t0)]
+    {
+        let (k, sig) = signed_by(&phone, env, &token, slot, seq, None);
+        let r = c.send(push::Send {
+            n: 0,
+            token: &token,
+            env: push::ENV_APNS,
+            body: &body(7),
+            ttl: None,
+            key: k,
+            sig: &sig,
+            seq: t0,
+            slot: SLOT,
+            challenge: None,
+        });
+        assert_eq!(r.unwrap().status, push::SENT_STALE);
+    }
     // A send key of an algorithm the service does not take.
     let unknown = cbb_core::records::key::Key { alg: 77, public: vec![1; 40] };
     let r = c.send(push::Send {
@@ -219,10 +379,106 @@ fn a_send_needs_the_tokens_send_key_and_a_seq_no_lower_than_seen() {
         key: unknown,
         sig: &[2; 64],
         seq: 1,
+        slot: SLOT,
+        challenge: None,
     });
     assert_eq!(r.unwrap().status, push::SENT_KEY);
-    assert_eq!(w.fake.got.lock().unwrap().len(), 4);
+    assert_eq!(w.fake.bodies(), 0);
+    // The eighth refusal is answered, and then the service closes the
+    // connection.
+    for _ in 0..4 {
+        assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, t0, &body(9)[..100]).status, push::SENT_FAILED);
+    }
+    let (k, sig) = signed(&phone, push::ENV_APNS, &token, 1);
+    let r = c.send(push::Send {
+        n: 0,
+        token: &token,
+        env: push::ENV_APNS,
+        body: &body(1),
+        ttl: None,
+        key: k,
+        sig: &sig,
+        seq: 2,
+        slot: SLOT,
+        challenge: None,
+    });
+    assert!(r.is_err(), "the connection stayed open: {r:?}");
     w.service.stop();
+}
+
+#[test]
+fn a_body_on_its_way_is_never_made_a_repeat() {
+    let w = world(Budgets::default());
+    *w.fake.delay.lock().unwrap() = Duration::from_millis(1500);
+    let phone = send_key(3);
+    let token = [7u8; 32];
+    let t0 = now_seq(0);
+    let (k1, c1) = member([5; 16], 1, "period", 1, true);
+    let (k2, c2) = member([5; 16], 2, "period", 1, true);
+    let addr = w.service.addr();
+    let pin = w.pin;
+    let first = std::thread::spawn(move || {
+        let mut c = Client::connect(addr, pin, k1, &refs(&c1)).unwrap();
+        send(&mut c, &send_key(3), push::ENV_APNS, &[7u8; 32], t0, &body(1))
+    });
+    std::thread::sleep(Duration::from_millis(500));
+    let mut c = Client::connect(addr, pin, k2, &refs(&c2)).unwrap();
+    // While the first is with the platform: try again shortly.
+    let r = send(&mut c, &phone, push::ENV_APNS, &token, t0, &body(1));
+    assert_eq!((r.status, r.retry_ms), (push::SENT_FAILED, Some(IN_FLIGHT_WAIT_MS)));
+    assert_eq!(first.join().unwrap().status, push::SENT);
+    // Taken: now it is a repeat.
+    assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, t0, &body(1)).status, push::SENT_REPEAT);
+    // A platform that said later: the next try is sent, not a repeat.
+    *w.fake.delay.lock().unwrap() = Duration::ZERO;
+    *w.fake.answer.lock().unwrap() = Some(Outcome::Later(Duration::from_secs(1)));
+    assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, t0, &body(2)).status, push::SENT_FAILED);
+    *w.fake.answer.lock().unwrap() = None;
+    assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, t0, &body(2)).status, push::SENT);
+    // A later expiry passes once; then it is a repeat.
+    let short = S { ttl: Some(1), ..s(&phone, push::ENV_APNS, &token, t0) };
+    let long = S { ttl: Some(4), ..s(&phone, push::ENV_APNS, &token, t0) };
+    assert_eq!(short.send(&mut c, &body(3)).status, push::SENT);
+    assert_eq!(long.send(&mut c, &body(3)).status, push::SENT);
+    assert_eq!(long.send(&mut c, &body(3)).status, push::SENT_REPEAT);
+    assert_eq!(short.send(&mut c, &body(3)).status, push::SENT_REPEAT);
+    let got = w.fake.got.lock().unwrap();
+    let last = got.iter().rev().take(2).map(|g| g.expires_s).collect::<Vec<_>>();
+    assert!(last[0] > last[1] + 80_000, "{last:?}");
+    drop(got);
+    w.service.stop();
+}
+
+#[test]
+fn a_gone_token_leaves_nothing_behind() {
+    let w = world(Budgets::default());
+    *w.fake.answer.lock().unwrap() = Some(Outcome::Gone);
+    let (key, creds) = member([5; 16], 1, "period", 1, true);
+    let mut c = Client::connect(w.service.addr(), w.pin, key, &refs(&creds)).unwrap();
+    for i in 0..20u8 {
+        assert_eq!(send(&mut c, &send_key(3), push::ENV_APNS, &[i; 32], now_seq(0), &body(i)).status, push::SENT_GONE);
+    }
+    let st = w.service.inner.lock();
+    assert_eq!((st.bindings.len(), st.repeats.len()), (0, 0));
+    drop(st);
+    w.service.stop();
+}
+
+#[test]
+fn an_ipv4_client_pays_as_its_own_address() {
+    let a: IpAddr = "::ffff:198.51.100.7".parse().unwrap();
+    let b: IpAddr = "::ffff:203.0.113.9".parse().unwrap();
+    assert_eq!(payer_addr(a), "198.51.100.7".parse::<IpAddr>().unwrap());
+    assert_ne!(payer_addr(a), payer_addr(b));
+    assert_eq!(payer_addr("2001:db8:1:2:3:4:5:6".parse().unwrap()), "2001:db8:1:2::".parse::<IpAddr>().unwrap());
+    // On a dual-stack listener the kernel hands an IPv4 client over as
+    // ::ffff:a.b.c.d; its payer is the IPv4 address. Where the machine has
+    // no IPv6 socket, there is nothing to check.
+    let Ok(l) = TcpListener::bind("[::]:0") else { return };
+    let port = l.local_addr().unwrap().port();
+    let Ok(_c) = TcpStream::connect(("127.0.0.1", port)) else { return };
+    let (_, from) = l.accept().unwrap();
+    assert_eq!(payer_addr(from.ip()), "127.0.0.1".parse::<IpAddr>().unwrap(), "seen as {from}");
 }
 
 #[test]
@@ -236,7 +492,14 @@ fn the_bindings_outlive_a_restart() {
         let w = world_at(Budgets::default(), Some(state.clone()));
         let (key, creds) = member([6; 16], 1, "period", 1, true);
         let mut c = Client::connect(w.service.addr(), w.pin, key, &refs(&creds)).unwrap();
-        assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, 20, &body(1)).status, push::SENT);
+        let t0 = now_seq(0);
+        assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, t0, &body(1)).status, push::SENT);
+        assert_eq!(confirm(&w, &mut c, &phone, &token, t0 + 20, 2).status, push::SENT);
+        // Journaled before it was answered: the files read it back now,
+        // without a stop (a crash right after the answer keeps it).
+        let l = saved::load(&state, false).unwrap();
+        let b = &l.bindings.values().next().unwrap().0;
+        assert!(b.confirmed() && b.slots[0].seq == t0 + 20, "{b:?}");
         w.service.stop();
     }
     use std::os::unix::fs::PermissionsExt;
@@ -245,41 +508,32 @@ fn the_bindings_outlive_a_restart() {
     assert_eq!(w.service.bindings(), 1);
     let (key, creds) = member([6; 16], 1, "period", 1, true);
     let mut c = Client::connect(w.service.addr(), w.pin, key, &refs(&creds)).unwrap();
-    assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, 19, &body(2)).status, push::SENT_STALE);
-    assert_eq!(send(&mut c, &send_key(4), push::ENV_APNS, &token, 30, &body(3)).status, push::SENT_STALE);
-    assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, 20, &body(4)).status, push::SENT);
+    let seq = saved::load(&state, false).unwrap().bindings.values().next().unwrap().0.slots[0].seq;
+    assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, seq - 1, &body(3)).status, push::SENT_STALE);
+    assert_eq!(send(&mut c, &send_key(4), push::ENV_APNS, &token, seq + 10, &body(4)).status, push::SENT_STALE);
+    assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, seq, &body(5)).status, push::SENT);
     w.service.stop();
+    let start = |state: &PathBuf, new_state: bool| {
+        let keys = Keys::new().unwrap();
+        Service::start(Config {
+            listen: "127.0.0.1:0".parse().unwrap(),
+            cert: keys.cert.clone(),
+            key: keys.key.clone(),
+            platforms: HashMap::new(),
+            budgets: Budgets::default(),
+            state: Some(state.clone()),
+            new_state,
+            log: Arc::new(|_| {}),
+        })
+    };
     // A state file that does not read stops the service from starting.
     std::fs::write(&state, b"something else").unwrap();
-    let keys = Keys::new().unwrap();
-    let e = Service::start(Config {
-        listen: "127.0.0.1:0".parse().unwrap(),
-        cert: keys.cert.clone(),
-        key: keys.key.clone(),
-        platforms: HashMap::new(),
-        budgets: Budgets::default(),
-        state: Some(state.clone()),
-        log: Arc::new(|_| {}),
-    });
-    assert!(e.is_err());
+    assert!(start(&state, false).is_err());
+    // A missing one too, unless this is the first start.
+    std::fs::remove_file(&state).unwrap();
+    let e = start(&state, false).err().unwrap();
+    assert!(e.to_string().contains("-new-state"), "{e}");
     let _ = std::fs::remove_dir_all(&dir);
-}
-
-#[test]
-fn a_binding_ends_thirty_days_after_its_last_send() {
-    let day = 24 * 3600 * 1000;
-    let b = bind(None, [1; 32], 5, 1000).unwrap();
-    assert_eq!(b, Binding { key: [1; 32], seq: 5, used_ms: 1000 });
-    assert_eq!(bind(Some(&b), [1; 32], 4, 2000), None);
-    assert_eq!(bind(Some(&b), [2; 32], 9, 2000), None);
-    assert_eq!(bind(Some(&b), [1; 32], 5, 2000), Some(Binding { key: [1; 32], seq: 5, used_ms: 2000 }));
-    assert_eq!(bind(Some(&b), [2; 32], 1, 1000 + 30 * day - 1), None);
-    assert_eq!(
-        bind(Some(&b), [2; 32], 1, 1000 + 30 * day),
-        Some(Binding { key: [2; 32], seq: 1, used_ms: 1000 + 30 * day })
-    );
-    // A clock that went back keeps the later time.
-    assert_eq!(bind(Some(&b), [1; 32], 6, 10).map(|b| b.used_ms), Some(1000));
 }
 
 #[test]
@@ -312,7 +566,8 @@ fn the_budgets_hold_per_token_and_per_tag() {
     let (key, creds) = member([4; 16], 1, "period", 1, true);
     let mut c = Client::connect(w.service.addr(), w.pin, key, &refs(&creds)).unwrap();
     let phone = send_key(3);
-    let status = |c: &mut Client, token: u8, b: u8| send(c, &phone, push::ENV_APNS, &[token; 32], 1, &body(b));
+    let t0 = now_seq(0);
+    let status = |c: &mut Client, token: u8, b: u8| send(c, &phone, push::ENV_APNS, &[token; 32], t0, &body(b));
     assert_eq!(status(&mut c, 1, 1).status, push::SENT);
     assert_eq!(status(&mut c, 1, 2).status, push::SENT);
     let r = status(&mut c, 1, 3);
@@ -445,7 +700,7 @@ fn live_apple_sandbox_answers_without_a_token() {
             host,
             &path,
             &[("apns-topic", apns::TOPIC), ("apns-push-type", "alert")],
-            apns::payload(&[0; 16]).as_bytes(),
+            apns::payload(&[0; 16], None).as_bytes(),
         )
         .unwrap();
     std::eprintln!("status {:?} body {}", a.status, String::from_utf8_lossy(&a.body));
@@ -494,6 +749,8 @@ fn live_push_to_a_phone() {
             key: on.send_key.clone(),
             sig: &on.send_sig,
             seq: r.seq,
+            slot: on.slot,
+            challenge: on.challenge,
         })
         .unwrap();
     std::eprintln!("status {} retry {:?}", sent.status, sent.retry_ms);
@@ -529,8 +786,12 @@ impl Saved for Kept {
 
 /// The phone's registration frame, signed with its send key `send_key(1)`.
 fn registration(seq: u64, kinds: u64, key: [u8; 32]) -> Vec<u8> {
+    registration_in(SLOT, seq, kinds, key)
+}
+
+fn registration_in(slot: [u8; 16], seq: u64, kinds: u64, key: [u8; 32]) -> Vec<u8> {
     let token = vec![5; 32];
-    let (send_key, send_sig) = signed(&send_key(1), push::ENV_APNS, &token, seq);
+    let (send_key, send_sig) = signed_by(&send_key(1), push::ENV_APNS, &token, slot, seq, None);
     push::Registration {
         seq,
         kinds,
@@ -540,6 +801,8 @@ fn registration(seq: u64, kinds: u64, key: [u8; 32]) -> Vec<u8> {
             key: zeroize::Zeroizing::new(key),
             send_key,
             send_sig,
+            slot,
+            challenge: None,
         }),
     }
     .write()
@@ -575,7 +838,8 @@ fn the_sender_wakes_a_phone_once_and_never_one_that_is_connected() {
     let (s, kept) = sender(&w, 50);
     let (g, phone, laptop) = (DeviceId([1; 16]), DeviceId([2; 16]), DeviceId([3; 16]));
     let pk = [8u8; 32];
-    let f = registration(1, push::KIND_COPIES | push::KIND_EVENTS, pk);
+    let t0 = now_seq(0);
+    let f = registration(t0, push::KIND_COPIES | push::KIND_EVENTS, pk);
     s.registration(&g, &phone, PHONE, &read_reg(&f));
     assert_eq!(s.held(), 1);
     assert_eq!(kept.0.lock().unwrap().as_slice(), &[(phone, true)]);
@@ -584,15 +848,15 @@ fn the_sender_wakes_a_phone_once_and_never_one_that_is_connected() {
     let id = [9u8; 16];
     let waits = |_: &DeviceId| Some(push::Body::Waits { id, origin: [3; 16] });
     s.copy(&g, Role::Origin, &[phone, laptop], None, &waits);
-    assert!(wait_for(|| w.fake.got.lock().unwrap().len() == 1), "nothing sent");
-    let (env, token, len) = w.fake.got.lock().unwrap()[0].clone();
-    assert_eq!((env, token, len), (push::ENV_APNS, vec![5; 32], push::MAX_BODY));
+    assert!(wait_for(|| w.fake.bodies() == 1), "nothing sent");
+    let g0 = w.fake.got.lock().unwrap()[0].clone();
+    assert_eq!((g0.env, g0.token, g0.body), (push::ENV_APNS, vec![5; 32], Some(push::MAX_BODY)));
     // A hub received the same copy and made the same body: the service
     // drops the repeat.
     s.copy(&g, Role::Hub, &[phone], None, &waits);
     assert!(wait_for(|| s.waiting() == 0));
     std::thread::sleep(Duration::from_millis(200));
-    assert_eq!(w.fake.got.lock().unwrap().len(), 1);
+    assert_eq!(w.fake.bodies(), 1);
     // The phone's app is open: nothing goes, and a body queued before it
     // connected is dropped.
     s.copy(&g, Role::Origin, &[phone], None, &|_| Some(push::Body::Unknown(9)));
@@ -608,14 +872,14 @@ fn the_sender_wakes_a_phone_once_and_never_one_that_is_connected() {
     assert_eq!(s.waiting(), 0);
     // An event: the phone hears of a removal.
     s.event(&g, &[13; 16], push::EVENT_REMOVED, Some(laptop), true, Some(1));
-    assert!(wait_for(|| w.fake.got.lock().unwrap().len() == 2));
+    assert!(wait_for(|| w.fake.bodies() == 2));
     // A device that does not send events sends none.
     s.event(&g, &[14; 16], push::EVENT_REMOVED, Some(laptop), false, Some(1));
     assert_eq!(s.waiting(), 0);
     // An older registration changes nothing; push off drops it.
-    s.registration(&g, &phone, PHONE, &read_reg(&registration(1, 0, pk)));
+    s.registration(&g, &phone, PHONE, &read_reg(&registration(t0, 0, pk)));
     assert_eq!(s.held(), 1);
-    s.registration(&g, &phone, PHONE, &read_reg(&registration(2, 0, pk)));
+    s.registration(&g, &phone, PHONE, &read_reg(&registration(t0 + 1, 0, pk)));
     assert_eq!(s.held(), 0);
     assert_eq!(kept.0.lock().unwrap().last(), Some(&(phone, false)));
     s.stop();
@@ -679,7 +943,15 @@ fn the_sender_drops_a_send_the_service_finds_stale() {
     let r = push::Registration {
         seq: 3,
         kinds: push::KIND_COPIES,
-        on: Some(push::On { token, env: push::ENV_APNS, key: zeroize::Zeroizing::new([8; 32]), send_key, send_sig }),
+        on: Some(push::On {
+            token,
+            env: push::ENV_APNS,
+            key: zeroize::Zeroizing::new([8; 32]),
+            send_key,
+            send_sig,
+            slot: SLOT,
+            challenge: None,
+        }),
     };
     s.registration(&g, &phone, PHONE, &read_reg(&r.write().unwrap()));
     s.copy(&g, Role::Origin, &[phone], None, &|_| Some(push::Body::Unknown(9)));
@@ -690,6 +962,13 @@ fn the_sender_drops_a_send_the_service_finds_stale() {
     assert_eq!(s.waiting(), 0);
     assert!(w.fake.got.lock().unwrap().is_empty());
     assert_eq!(s.held(), 1, "the registration is kept");
+    // The phone is asked to register again, once, when it next connects.
+    let renew = s.renewals(&phone);
+    assert_eq!(renew.len(), 1);
+    assert_eq!(renew[0].0, g);
+    let m = frame::read(&renew[0].1, 1 << 16).unwrap();
+    assert_eq!(push::read_renew(&m.map), Ok(SLOT));
+    assert!(s.renewals(&phone).is_empty());
     s.stop();
     w.service.stop();
 }
@@ -701,7 +980,7 @@ fn the_sender_drops_a_token_the_platform_says_is_gone() {
     let kept = Arc::new(Kept::default());
     let faces = Arc::new(OneFace { addr: w.service.addr(), pin: w.pin, tag: [51; 16] });
     let (g, phone) = (DeviceId([1; 16]), DeviceId([2; 16]));
-    let loaded = push::Registration::read(&read_reg(&registration(4, 1, [7; 32]))).unwrap();
+    let loaded = push::Registration::read(&read_reg(&registration(now_seq(0), 1, [7; 32]))).unwrap();
     let s = pusher::Sender::start(faces, kept.clone(), vec![(g, phone, loaded)], Arc::new(|_| {}));
     assert_eq!(s.held(), 1, "the saved registration is back after a restart");
     s.copy(&g, Role::Origin, &[phone], Some(1), &|_| Some(push::Body::Unknown(9)));

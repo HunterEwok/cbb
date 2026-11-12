@@ -17,6 +17,10 @@
 //! - [`Sender::forget`]: a device was removed or frozen;
 //! - [`Sender::connected`] and [`Sender::left`]: a peer's member connection
 //!   opened or closed;
+//! - [`Sender::renewals`]: when a peer's member connection opens, the
+//!   `push-renew` messages (t 29) to send it, one per group in which the
+//!   service found its registration stale, so that its app registers
+//!   again there;
 //! - [`Sender::copy`]: a copy was made here or received, with its readers
 //!   and how to make the body for one reader (`cbb_core::push::copy_body`,
 //!   None for a device the copy is not sealed to);
@@ -46,8 +50,11 @@
 //! hub, else the root's or an admin's device, each with the record's own
 //! time. Nobody sends to a phone it is connected to, and a sender waits two
 //! seconds after a copy, in case the phone connects meanwhile. A send the
-//! service answers `stale` (an older registration than one it saw) or
-//! `key` (a send key it does not take) is dropped, the registration kept.
+//! service answers `stale` (an older registration than one it saw, or a
+//! send key the token's confirmed binding does not take) is dropped, the
+//! registration kept, and the phone is asked to register again at its next
+//! connection; one answered `key` (a send key algorithm the service does
+//! not take) is dropped.
 
 use std::collections::{BTreeMap, HashMap};
 use std::net::SocketAddr;
@@ -112,6 +119,8 @@ struct Job {
     send_key: Key,
     send_sig: Vec<u8>,
     seq: u64,
+    slot: [u8; 16],
+    challenge: Option<[u8; 16]>,
     at: Instant,
     tries: u32,
 }
@@ -121,6 +130,9 @@ struct State {
     regs: BTreeMap<(GroupId, DeviceId), Registration>,
     connected: HashMap<DeviceId, usize>,
     jobs: Vec<Job>,
+    /// The registrations the service found stale, by their slot: the phone
+    /// is asked to register again.
+    renew: BTreeMap<(GroupId, DeviceId), [u8; 16]>,
     clients: HashMap<GroupId, Client>,
     stop: bool,
 }
@@ -181,6 +193,20 @@ impl Sender {
         }
         // A newer key: bodies sealed under the old one are not sent.
         st.jobs.retain(|j| !(j.group == *group && j.phone == *device));
+        st.renew.remove(&(*group, *device));
+    }
+
+    /// The `push-renew` frames for `device`, whose member connection just
+    /// opened: one for each group where the service found its registration
+    /// stale. Each is given once.
+    pub fn renewals(&self, device: &DeviceId) -> Vec<(GroupId, Vec<u8>)> {
+        let mut st = self.lock();
+        let due: Vec<(GroupId, [u8; 16])> =
+            st.renew.iter().filter(|((_, d), _)| d == device).map(|((g, _), s)| (*g, *s)).collect();
+        for (g, _) in &due {
+            st.renew.remove(&(*g, *device));
+        }
+        due.into_iter().map(|(g, s)| (g, push::renew(&s))).collect()
     }
 
     /// A device was removed or frozen: its registration goes.
@@ -188,6 +214,7 @@ impl Sender {
         let mut st = self.lock();
         st.regs.remove(&(*group, *device));
         st.jobs.retain(|j| !(j.group == *group && j.phone == *device));
+        st.renew.remove(&(*group, *device));
         self.inner.saved.save(group, device, None);
     }
 
@@ -231,6 +258,8 @@ impl Sender {
             send_key: on.send_key.clone(),
             send_sig: on.send_sig.clone(),
             seq: r.seq,
+            slot: on.slot,
+            challenge: on.challenge,
             at: Instant::now() + WAIT,
             tries: 0,
         };
@@ -344,6 +373,8 @@ impl Inner {
                     key: job.send_key.clone(),
                     sig: &job.send_sig,
                     seq: job.seq,
+                    slot: job.slot,
+                    challenge: job.challenge,
                 })
             });
             st = self.state.lock().unwrap_or_else(|e| e.into_inner());
@@ -354,10 +385,18 @@ impl Inner {
                     }
                     match sent.status {
                         // Sent, or a repeat of what another sender sent; or
-                        // a registration the service holds older than one
-                        // it saw, or a send key it does not take: trying
-                        // again changes nothing.
-                        push::SENT | push::SENT_REPEAT | push::SENT_STALE | push::SENT_KEY => None,
+                        // a send key it does not take: trying again
+                        // changes nothing.
+                        push::SENT | push::SENT_REPEAT | push::SENT_KEY => None,
+                        // An older registration than one the service saw:
+                        // the phone registers again when it next connects.
+                        push::SENT_STALE => {
+                            let key = (job.group, job.phone);
+                            if st.regs.get(&key).is_some_and(|r| r.seq == job.seq) {
+                                st.renew.insert(key, job.slot);
+                            }
+                            None
+                        }
                         push::SENT_GONE => {
                             // The app is gone from the phone: its token too.
                             let key = (job.group, job.phone);

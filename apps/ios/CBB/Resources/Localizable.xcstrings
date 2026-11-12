@@ -11642,6 +11642,52 @@
         }
       }
     },
+    "New in your group. Open the app.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هناك جديد في مجموعتك. افتح التطبيق."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hay algo nuevo en tu grupo. Abre la app."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "יש משהו חדש בקבוצה שלך. פתחו את האפליקציה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "आपके समूह में कुछ नया है। ऐप खोलें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В вашей группе что-то новое. Откройте приложение."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kuna jambo jipya katika kikundi chako. Fungua programu."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你的群组有新内容。请打开应用。"
+          }
+        }
+      }
+    },
     "No YubiKey was held to the phone. Try again.": {
       "localizations": {
         "ar": {
@@ -17940,52 +17986,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "CBB 出了点问题，已重新启动。"
-          }
-        }
-      }
-    },
-    "Something new in your group. Open the app.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "هناك جديد في مجموعتك. افتح التطبيق."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hay algo nuevo en tu grupo. Abre la app."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "יש משהו חדש בקבוצה שלך. פתחו את האפליקציה."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "आपके समूह में कुछ नया है। ऐप खोलें।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "В вашей группе что-то новое. Откройте приложение."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kuna jambo jipya katika kikundi chako. Fungua programu."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "你的群组有新内容。请打开应用。"
           }
         }
       }

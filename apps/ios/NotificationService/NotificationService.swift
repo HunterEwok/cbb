@@ -60,7 +60,7 @@ final class NotificationService: UNNotificationServiceExtension {
 
     static func neutral(_ c: UNMutableNotificationContent) {
         c.title = ""
-        c.body = String(localized: "Something new in your group. Open the app.")
+        c.body = String(localized: "New in your group. Open the app.")
         c.categoryIdentifier = ""
         c.userInfo = [:]
     }
@@ -103,7 +103,7 @@ final class NotificationService: UNNotificationServiceExtension {
         case 4: String(localized: "Your group's root changed. Open the app to check.")
         case 5: String(localized: "This device's record changed. Open the app to check.")
         case 6: String(localized: "Your group stopped. Open the app to check.")
-        default: String(localized: "Something new in your group. Open the app.")
+        default: String(localized: "New in your group. Open the app.")
         }
     }
 
