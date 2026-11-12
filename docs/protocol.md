@@ -419,8 +419,10 @@ phones' `member/src/node.rs` and `member/src/phone.rs`.
   configuration (section 6), whether or not a window is open; any other the member
   configuration, and a connection that does not negotiate `cbb/3` is closed.
 - The member port takes at most 16 connections at once in their handshake or in a pairing
-  attempt, at most 4 of them from one source (an IPv4 address or an IPv6 /64; loopback
-  connections, which the tunnels' and relays' ports share, count only in all). A
+  attempt, at most 4 of them from one source (an address, or the /64 of a global IPv6
+  address; every device of a home network shares its unique-local and link-local /64s, so
+  those count address by address; loopback connections, which the tunnels' and relays'
+  ports share, count only in all). A
   connection from another device that sends nothing for 3 s is closed. With no window open,
   a pairing connection gets its refusal after a first frame of at most 64 KiB, within 10 s
   in all.
@@ -976,10 +978,14 @@ does not verify (`wrong-code`) or its admin declines the device; an attempt that
 without a tag (bad AD, a bad certificate, a dropped connection, a joiner that goes quiet
 after the member's CPace message) tested no guess and does not count. Each attempt has 30 s
 on both sides; the joiner's first message must arrive within 10 s of the TLS handshake, and
-its tag within 10 s of the member's CPace message. After 5 attempts from one source that
-ended without counting, the window answers that source `busy`, so that one device on the
-network cannot hold the window for its whole life. A source is an IPv4 address or the /64
-of an IPv6 address; past 1024 sources, the new ones share one count.
+its tag within 10 s of the member's CPace message. A running attempt whose joiner has not
+sent its first message 2 s after it began ends when another joiner's attempt comes, which
+takes its place. After 5 attempts from one source that ended without counting, the window
+answers that source `busy`, so that one device on the network cannot hold the window for
+its whole life; a source whose failed attempts are one short of closing the window gets
+`busy` too, so that no one device closes it alone, while a user who mistypes once may try
+again. A source is as for the member port (section 4); loopback counts only in all, and
+past 1024 sources the new ones share one count.
 
 A window for a remote invitation (design.md, "Joining from another network") differs:
 
@@ -1167,8 +1173,10 @@ the QR code dials the computer, and nothing is announced:
   not be: CPace gives a device that does not know the code one guess per attempt and nothing
   to test guesses with offline, and the code admits only the device the user sees.
 - A joiner that listens takes one attempt at a time; a member must start the TLS handshake
-  within 5 s of connecting, and after 5 attempts from one source that ended without a wrong
-  code the joiner takes no more from it.
+  within 5 s of connecting and prove that it knows the code (its CPace message and tag)
+  within 10 s, a running attempt whose member has not proved it after 2 s ends when another
+  member connects, and after 5 attempts from one source (section 4) that ended without a
+  wrong code the joiner takes no more from it.
 - A phone joins a phone group the same way (CBBKit's `PairingJoiner`): it listens
   while its "Join a group" screen is open, shows this QR code, and an admin phone scans it
   and dials. The phone makes its admin key before it listens and sends it in ADa; the root

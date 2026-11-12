@@ -186,6 +186,70 @@ fn the_root_makes_a_phone_an_admin() {
     assert!(text(member_err).contains("another device"));
 }
 
+/// A new admin key is none of the keys the group has already: not a
+/// device's key, not a root's, not the recovery key.
+#[test]
+fn an_admin_key_is_new_to_the_group() {
+    let (mut admitter, mut rs) = root_group();
+    admitter.make_admins = true;
+    let phone_key = soft();
+    let joiner = Joiner::with_key("phone", "aurora", phone_key.clone()).unwrap();
+    let code = pair::new_code();
+    let mut joining = Attempt::listening(&joiner, &code, &clock()).unwrap();
+    let mut adm =
+        Admission::dial(admitter.clone(), GroupView::of(&rs), &code, &joiner.fingerprint(), &clock()).unwrap();
+    let (admitted, _, member_err, joiner_err, _) = run(&mut adm, &mut joining);
+    assert!(member_err.is_none() && joiner_err.is_none(), "{member_err:?} {joiner_err:?}");
+    let a = admitted.unwrap();
+    assert!(rs.add(&device_record(&rs, &admitter, &a, now_ms()).unwrap()).unwrap());
+
+    let view = GroupView::of(&rs);
+    assert!(view.admin_keys.contains(&Cert::parse(&a.cert).unwrap().key_hash()), "a device's key");
+    assert!(view.admin_keys.contains(&admitter.ca.key_hash()), "the root's key");
+    // The recovery key, as the records would name it.
+    let recovery = soft();
+    let now = now_ms() / 1000;
+    let rc = issue::member(&DeviceId::random(), &recovery.public(), &admitter.ca, now, &mut admitter.sign()).unwrap();
+    let mut with_recovery = view.clone();
+    with_recovery.admin_keys.insert(Cert::parse(&rc).unwrap().key_hash());
+
+    for (key, view) in [(phone_key, view.clone()), (admitter.ca_key.clone(), view), (recovery, with_recovery)] {
+        let again = Joiner::with_key("phone 2", "aurora", soft()).unwrap().offering_admin_key(key).unwrap();
+        let mut joining = Attempt::listening(&again, &code, &clock()).unwrap();
+        let mut adm = Admission::dial(admitter.clone(), view, &code, &again.fingerprint(), &clock()).unwrap();
+        let (admitted, joined, member_err, _, _) = run(&mut adm, &mut joining);
+        assert!(admitted.is_none() && joined.is_none());
+        assert!(text(member_err).contains("another device"));
+    }
+}
+
+/// A Welcome too large to send admits no device: the member reports it,
+/// and no Admitted comes for which a device record would be made.
+#[test]
+fn a_welcome_that_cannot_be_sent_admits_no_one() {
+    let (mut admitter, mut rs) = root_group();
+    let first = Joiner::new("first").unwrap();
+    let code = pair::new_code();
+    let mut joining = Attempt::listening(&first, &code, &clock()).unwrap();
+    let mut adm = Admission::dial(admitter.clone(), GroupView::of(&rs), &code, &first.fingerprint(), &clock()).unwrap();
+    let (admitted, ..) = run(&mut adm, &mut joining);
+    let record = device_record(&rs, &admitter, &admitted.unwrap(), now_ms()).unwrap();
+    assert!(rs.add(&record).unwrap());
+
+    // A group handed over keeps its records in the Welcome, which then
+    // cannot fit in a pairing frame.
+    admitter.identity.roots = vec![admitter.ca.clone()];
+    let mut view = GroupView::of(&rs);
+    let one = serde_json::to_vec(&record).unwrap().len();
+    view.records = vec![record; pair::MAX_FRAME / one + 1];
+    let joiner = Joiner::new("router").unwrap();
+    let mut joining = Attempt::listening(&joiner, &code, &clock()).unwrap();
+    let mut adm = Admission::dial(admitter, view, &code, &joiner.fingerprint(), &clock()).unwrap();
+    let (admitted, joined, member_err, _, _) = run(&mut adm, &mut joining);
+    assert!(admitted.is_none() && joined.is_none());
+    assert!(text(member_err).contains("do not fit in a Welcome"));
+}
+
 #[test]
 fn an_admin_admits_with_its_admin_ca() {
     let (root_admitter, _) = root_group();

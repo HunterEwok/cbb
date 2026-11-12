@@ -112,6 +112,15 @@ impl Commands {
         self.running = self.running.saturating_sub(1);
     }
 }
+
+/// A running command, which counts as done when dropped.
+struct Running<'a>(&'a Mutex<Commands>);
+
+impl Drop for Running<'_> {
+    fn drop(&mut self) {
+        self.0.lock().unwrap_or_else(|e| e.into_inner()).done();
+    }
+}
 /// The most peers whose release archive a member keeps.
 const MAX_ARCHIVES: usize = 256;
 /// How far ahead a fetch asks, and how long it waits for a chunk.
@@ -2172,9 +2181,11 @@ impl Node {
                             // its target.
                             let c = c.clone();
                             std::thread::spawn(move || {
+                                // Counted done even if the handler panics.
+                                let done = Running(&c.commands);
                                 let mut res = f(&c.id, &cmd);
                                 res.by = me.to_string();
-                                c.commands.lock().unwrap().done();
+                                drop(done);
                                 if !c.closed.load(Ordering::SeqCst) {
                                     let _ = c.tx.try_send(Out::Result(res));
                                 }
@@ -2901,8 +2912,8 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        COMMAND_PERIOD, COMMANDS_PER_PERIOD, Commands, MAX_COMMANDS, MAX_GETS, MAX_HOME, RECORDS_FRAME, queue_get,
-        read_any, remember_found,
+        COMMAND_PERIOD, COMMANDS_PER_PERIOD, Commands, MAX_COMMANDS, MAX_GETS, MAX_HOME, RECORDS_FRAME, Running,
+        queue_get, read_any, remember_found,
     };
     use crate::certs::DeviceId;
     use crate::wire;
@@ -2954,6 +2965,18 @@ mod tests {
         // The next period takes them again.
         c.take(t + COMMAND_PERIOD).unwrap();
         assert_eq!(c.taken, 1);
+
+        // A handler that panics still gives its place back.
+        let m = std::sync::Arc::new(std::sync::Mutex::new(Commands::new()));
+        m.lock().unwrap().take(t).unwrap();
+        let m2 = m.clone();
+        let res = std::thread::spawn(move || {
+            let _done = Running(&m2);
+            panic!("a handler that panics");
+        })
+        .join();
+        assert!(res.is_err());
+        assert_eq!(m.lock().unwrap().running, 0);
     }
 
     #[test]

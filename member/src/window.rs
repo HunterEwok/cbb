@@ -39,6 +39,10 @@ const MAX_IDLE: u32 = 5;
 const MAX_SOURCES: usize = 1024;
 /// How long a refused joiner has, in all, for its first message.
 const REFUSE_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long the running attempt keeps the window against a new one before
+/// its joiner's first message came: a joiner sends it right after the TLS
+/// handshake, so one that has not by then gives way to the next.
+const GIVE_WAY: Duration = Duration::from_secs(2);
 
 /// The device a window admitted.
 pub struct Joined {
@@ -58,6 +62,14 @@ struct State {
     closing: bool,
     failures: u32,
     idle: HashMap<IpAddr, u32>,
+    /// The guesses that failed, by source; no source closes the window
+    /// alone.
+    failed: HashMap<IpAddr, u32>,
+    /// The running attempt's number, when it started, and whether its
+    /// joiner's first message came.
+    attempt: u64,
+    started: Option<Instant>,
+    heard: bool,
     /// The running attempt's socket, which close shuts.
     running: Option<TcpStream>,
     /// How the window ended, once it has.
@@ -65,17 +77,32 @@ struct State {
 }
 
 impl State {
-    /// The source an attempt from addr counts against: its address, or its
-    /// IPv6 /64; once MAX_SOURCES are counted, a new one shares one count
+    /// The source an attempt from addr counts against (crate::pair::source);
+    /// once MAX_SOURCES are counted, a new one shares one count
     /// with every other new one, so that a device that changes its address
     /// cannot keep the window busy either.
     fn source(&self, addr: IpAddr) -> IpAddr {
         let key = crate::pair::source(addr);
-        if self.idle.contains_key(&key) || self.idle.len() < MAX_SOURCES {
+        if self.idle.contains_key(&key) || self.failed.contains_key(&key) || self.idle.len() < MAX_SOURCES {
             key
         } else {
             IpAddr::V6(std::net::Ipv6Addr::UNSPECIFIED)
         }
+    }
+
+    /// Whether the window takes no more attempts from source: those that
+    /// ended without a guess reached MAX_IDLE, or its failed guesses are
+    /// one short of closing the window. Loopback, which the tunnels' and
+    /// relays' ports share, counts only in all.
+    fn spent(&self, source: IpAddr) -> bool {
+        !source.is_loopback()
+            && (self.idle.get(&source).copied().unwrap_or(0) >= MAX_IDLE
+                || self.failed.get(&source).copied().unwrap_or(0) + 1 >= MAX_FAILURES)
+    }
+
+    /// Whether the running attempt gives way to a new one at now.
+    fn gives_way(&self, now: Instant) -> bool {
+        self.busy && !self.heard && !self.committed && self.started.is_some_and(|t| now.duration_since(t) >= GIVE_WAY)
     }
 }
 
@@ -176,8 +203,10 @@ impl Window {
         }
     }
 
-    /// Starts an attempt from addr, or says why the window takes none.
-    fn acquire(&self, sock: &TcpStream, addr: IpAddr) -> std::result::Result<(), Refusal> {
+    /// Starts an attempt from addr and returns its number, or says why the
+    /// window takes none. A running attempt whose joiner has sent nothing
+    /// for GIVE_WAY ends for it.
+    fn acquire(&self, sock: &TcpStream, addr: IpAddr) -> std::result::Result<u64, Refusal> {
         let mut st = self.state.lock().unwrap();
         let addr = st.source(addr);
         if st.end.is_none() && !st.busy && uptime::now() >= st.expires {
@@ -189,19 +218,37 @@ impl Window {
             Some(Err(why)) => return Err(*why),
             None => {}
         }
-        if st.busy || st.idle.get(&addr).copied().unwrap_or(0) >= MAX_IDLE {
+        if st.spent(addr) {
             return Err(Refusal::Busy);
         }
+        let now = Instant::now();
+        if st.busy && !st.gives_way(now) {
+            return Err(Refusal::Busy);
+        }
+        if let Some(s) = st.running.take() {
+            let _ = s.shutdown(Shutdown::Both);
+        }
+        st.attempt += 1;
         st.busy = true;
+        st.heard = false;
+        st.started = Some(now);
         st.running = sock.try_clone().ok();
-        Ok(())
+        Ok(st.attempt)
     }
 
-    /// Marks the running attempt as admitted, just before the Welcome goes
-    /// out, unless the window was closed meanwhile.
-    fn commit(&self) -> bool {
+    /// Notes that attempt's joiner sent its first message.
+    fn heard(&self, attempt: u64) {
         let mut st = self.state.lock().unwrap();
-        if st.end.is_some() {
+        if st.attempt == attempt {
+            st.heard = true;
+        }
+    }
+
+    /// Marks attempt as admitted, just before the Welcome goes out, unless
+    /// the window was closed meanwhile or another attempt took its place.
+    fn commit(&self, attempt: u64) -> bool {
+        let mut st = self.state.lock().unwrap();
+        if st.end.is_some() || st.attempt != attempt || !st.busy {
             return false;
         }
         st.committed = true;
@@ -211,16 +258,19 @@ impl Window {
     /// Ends an attempt that admitted no device; failed tells whether it
     /// tried a guess, which counts. One that did not still counts against
     /// its source, so that one device cannot keep the window busy.
-    fn release(&self, failed: bool, addr: IpAddr) {
+    fn release(&self, attempt: u64, failed: bool, addr: IpAddr) {
         let mut st = self.state.lock().unwrap();
         let addr = st.source(addr);
-        st.busy = false;
-        st.running = None;
-        if std::mem::take(&mut st.committed) && st.closing && st.end.is_none() {
-            st.end = Some(Err(Refusal::Closed));
+        if st.attempt == attempt && st.busy {
+            st.busy = false;
+            st.running = None;
+            if std::mem::take(&mut st.committed) && st.closing && st.end.is_none() {
+                st.end = Some(Err(Refusal::Closed));
+            }
         }
         if failed {
             st.failures += 1;
+            *st.failed.entry(addr).or_default() += 1;
             if st.failures >= MAX_FAILURES && st.end.is_none() {
                 st.end = Some(Err(Refusal::TooMany));
             }
@@ -253,10 +303,13 @@ impl Window {
         exporter: Arc<tls::Exporter>,
         addr: SocketAddr,
     ) -> Result<()> {
-        if let Err(why) = self.acquire(&sock, addr.ip()) {
-            refuse(sock, session, why);
-            return Err(Error::with(format!("pair: {}", why), why));
-        }
+        let id = match self.acquire(&sock, addr.ip()) {
+            Ok(id) => id,
+            Err(why) => {
+                refuse(sock, session, why);
+                return Err(Error::with(format!("pair: {}", why), why));
+            }
+        };
         let view = admit::GroupView::of(&node.records().lock().unwrap());
         // The identity the handshake just presented: a certificate renewed
         // since the window opened (an admin's, made one moments before)
@@ -271,12 +324,12 @@ impl Window {
         let mut adm = match res {
             Ok(a) => a,
             Err(e) => {
-                self.release(false, addr.ip());
+                self.release(id, false, addr.ip());
                 return Err(e);
             }
         };
         let mut name = None;
-        let res = self.attempt(node, &mut adm, &sock, &mut name);
+        let res = self.attempt(id, node, &mut adm, &sock, &mut name);
         let _ = sock.shutdown(Shutdown::Both);
         match (res, name) {
             (Ok(confirmed), Some((device, name))) => {
@@ -292,7 +345,7 @@ impl Window {
                 Err(e)
             }
             (Ok(_), None) => {
-                self.release(false, addr.ip());
+                self.release(id, false, addr.ip());
                 Err(Error::msg("the pairing ended early"))
             }
             (Err(e), None) => {
@@ -302,7 +355,7 @@ impl Window {
                 // the attempt is not the joiner's doing.
                 let closed = matches!(self.state.lock().unwrap().end, Some(Err(Refusal::Closed)));
                 let guessed = matches!(Refusal::in_error(&e), Some(Refusal::WrongCode | Refusal::Declined));
-                self.release(guessed && !closed, addr.ip());
+                self.release(id, guessed && !closed, addr.ip());
                 Err(e)
             }
         }
@@ -312,6 +365,7 @@ impl Window {
     /// whether the device confirmed that it stored its identity.
     fn attempt(
         &self,
+        id: u64,
         node: &Node,
         adm: &mut Admission,
         sock: &TcpStream,
@@ -350,7 +404,7 @@ impl Window {
                 Outcome::Pending => {}
                 Outcome::Confirm(_) => return Err(Error::msg("a window with a code asks no admin")),
                 Outcome::Admitted(a) => {
-                    if !self.commit() {
+                    if !self.commit(id) {
                         return Err(Error::with(format!("pair: {}", Refusal::Closed), Refusal::Closed));
                     }
                     // From here on the device counts as admitted: the
@@ -380,6 +434,7 @@ impl Window {
             // attempt.
             if adm.started() && tag_by.is_none() {
                 tag_by = Some(Instant::now() + FIRST_TIMEOUT);
+                self.heard(id);
             }
             let by = match tag_by {
                 None => end.min(first),
@@ -502,35 +557,70 @@ mod tests {
     fn one_attempt_at_a_time_and_few_from_one_address() {
         let w = Window::open(admitter(), "123456").unwrap();
         let (s, _peer) = sock();
-        assert_eq!(w.acquire(&s, ip(1)), Ok(()));
+        let a = w.acquire(&s, ip(1)).unwrap();
         assert!(w.state.lock().unwrap().running.is_some());
         assert_eq!(w.acquire(&s, ip(2)), Err(Refusal::Busy));
-        w.release(false, ip(1));
+        w.release(a, false, ip(1));
         assert!(w.state.lock().unwrap().running.is_none());
         // Attempts that end before they count still count against their
         // address, up to MAX_IDLE.
         for _ in 1..MAX_IDLE {
-            assert_eq!(w.acquire(&s, ip(1)), Ok(()));
-            w.release(false, ip(1));
+            let a = w.acquire(&s, ip(1)).unwrap();
+            w.release(a, false, ip(1));
         }
         assert_eq!(w.state.lock().unwrap().idle.get(&ip(1)), Some(&MAX_IDLE));
         assert_eq!(w.acquire(&s, ip(1)), Err(Refusal::Busy));
-        assert_eq!(w.acquire(&s, ip(2)), Ok(()));
-        w.release(false, ip(2));
+        let a = w.acquire(&s, ip(2)).unwrap();
+        w.release(a, false, ip(2));
         assert_eq!(ends(&w), None);
+    }
+
+    /// An attempt whose joiner sent nothing for GIVE_WAY ends for a new
+    /// one; one whose joiner did, or that is admitting its device, does
+    /// not.
+    #[test]
+    fn a_silent_attempt_gives_way() {
+        let w = Window::open(admitter(), "123456").unwrap();
+        let (s, mut peer) = sock();
+        let back = |w: &Window| w.state.lock().unwrap().started = Some(Instant::now() - GIVE_WAY);
+        let a = w.acquire(&s, ip(1)).unwrap();
+        assert_eq!(w.acquire(&s, ip(2)), Err(Refusal::Busy), "too soon");
+        back(&w);
+        let b = w.acquire(&s, ip(2)).unwrap();
+        // The silent one's socket is shut, and its end changes nothing of
+        // the new one's.
+        peer.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        assert_eq!(peer.read(&mut [0u8; 1]).unwrap(), 0);
+        assert!(!w.commit(a));
+        w.release(a, false, ip(1));
+        assert!(w.state.lock().unwrap().busy);
+        assert_eq!(w.state.lock().unwrap().idle.get(&ip(1)), Some(&1));
+
+        // Heard from: it keeps the window.
+        w.heard(b);
+        back(&w);
+        assert_eq!(w.acquire(&s, ip(3)), Err(Refusal::Busy));
+        w.release(b, false, ip(2));
+
+        // Admitting its device: it keeps the window.
+        let (s, _peer) = sock();
+        let c = w.acquire(&s, ip(4)).unwrap();
+        assert!(w.commit(c));
+        back(&w);
+        assert_eq!(w.acquire(&s, ip(5)), Err(Refusal::Busy));
     }
 
     #[test]
     fn failures_close_it() {
         let w = Window::open(admitter(), "123456").unwrap();
         let (s, _peer) = sock();
-        for _ in 1..MAX_FAILURES {
-            w.acquire(&s, ip(1)).unwrap();
-            w.release(true, ip(1));
+        for n in 1..MAX_FAILURES {
+            let a = w.acquire(&s, ip(n as u8)).unwrap();
+            w.release(a, true, ip(n as u8));
             assert_eq!(ends(&w), None);
         }
-        w.acquire(&s, ip(1)).unwrap();
-        w.release(true, ip(1));
+        let a = w.acquire(&s, ip(9)).unwrap();
+        w.release(a, true, ip(9));
         assert_eq!(ends(&w), Some(Err(Refusal::TooMany)));
         assert_eq!(w.acquire(&s, ip(3)), Err(Refusal::TooMany));
         assert!(w.wait(&|| false).is_err_and(|r| r == Refusal::TooMany));
@@ -538,40 +628,69 @@ mod tests {
         assert!(w.wait(&|| false).is_err_and(|r| r == Refusal::Closed));
     }
 
+    /// One source alone cannot close the window with its guesses: it may
+    /// guess until one guess short of that, and then gets busy, so that
+    /// the user may still mistype once and try again.
+    #[test]
+    fn one_source_does_not_close_it() {
+        let w = Window::open(admitter(), "123456").unwrap();
+        let (s, _peer) = sock();
+        for _ in 1..MAX_FAILURES {
+            let a = w.acquire(&s, ip(1)).unwrap();
+            w.release(a, true, ip(1));
+        }
+        assert_eq!(w.acquire(&s, ip(1)), Err(Refusal::Busy));
+        assert_eq!(ends(&w), None);
+        let a = w.acquire(&s, ip(2)).unwrap();
+        w.release(a, true, ip(2));
+        assert_eq!(ends(&w), Some(Err(Refusal::TooMany)));
+
+        // Loopback, shared by the tunnels and relays, counts only in all.
+        let w = Window::open(admitter(), "123456").unwrap();
+        let lo = IpAddr::V4(Ipv4Addr::LOCALHOST);
+        for _ in 1..MAX_FAILURES {
+            let a = w.acquire(&s, lo).unwrap();
+            w.release(a, true, lo);
+        }
+        let a = w.acquire(&s, lo).unwrap();
+        w.release(a, true, lo);
+        assert_eq!(ends(&w), Some(Err(Refusal::TooMany)));
+    }
+
     #[test]
     fn close_stops_an_attempt_unless_it_committed() {
         let w = Window::open(admitter(), "123456").unwrap();
         let (s, mut peer) = sock();
-        w.acquire(&s, ip(1)).unwrap();
+        let a = w.acquire(&s, ip(1)).unwrap();
         w.close();
         assert_eq!(ends(&w), Some(Err(Refusal::Closed)));
         // The running attempt's socket is shut.
         peer.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
         assert_eq!(peer.read(&mut [0u8; 1]).unwrap(), 0);
-        assert!(!w.commit(), "an attempt commits after close");
+        assert!(!w.commit(a), "an attempt commits after close");
         assert_eq!(w.acquire(&s, ip(2)), Err(Refusal::Closed));
 
         // Committed and not closed: a failure counts as one.
         let w = Window::open(admitter(), "123456").unwrap();
-        w.acquire(&s, ip(1)).unwrap();
-        assert!(w.commit());
-        w.release(true, ip(1));
+        let a = w.acquire(&s, ip(1)).unwrap();
+        assert!(w.commit(a));
+        w.release(a, true, ip(1));
         assert_eq!(ends(&w), None);
         assert!(!w.state.lock().unwrap().committed);
 
         // Committed: close waits for the attempt, and a failure then closes.
         let w = Window::open(admitter(), "123456").unwrap();
-        w.acquire(&s, ip(1)).unwrap();
-        assert!(w.commit());
+        let a = w.acquire(&s, ip(1)).unwrap();
+        assert!(w.commit(a));
         w.close();
         assert_eq!(ends(&w), None);
-        w.release(true, ip(1));
+        w.release(a, true, ip(1));
         assert_eq!(ends(&w), Some(Err(Refusal::Closed)));
 
         // Committed and closed, but admitted: the device counts.
         let w = Window::open(admitter(), "123456").unwrap();
-        w.acquire(&s, ip(1)).unwrap();
-        assert!(w.commit());
+        let a = w.acquire(&s, ip(1)).unwrap();
+        assert!(w.commit(a));
         w.close();
         w.succeed(joined());
         let st = w.state.lock().unwrap();
@@ -579,22 +698,31 @@ mod tests {
         drop(st);
         assert_eq!(w.wait(&|| true).map(|j| j.name).ok(), Some("phone".to_string()));
         assert_eq!(w.acquire(&s, ip(1)), Err(Refusal::Closed));
-        assert!(!w.commit());
+        assert!(!w.commit(a));
     }
 
-    /// Attempts that tried no code count against their source, an IPv6
-    /// /64 as one, and past MAX_SOURCES sources the new ones share one
+    /// Attempts that tried no code count against their source, a global
+    /// IPv6 /64 as one, and past MAX_SOURCES sources the new ones share one
     /// count, so that changing addresses does not keep the window busy.
+    /// The devices of one home network, which share its unique-local /64,
+    /// count one by one.
     #[test]
     fn idle_attempts_count_by_source() {
         let w = Window::open(admitter(), "123456").unwrap();
         let (s, _peer) = sock();
-        let v6 = |n: u16| IpAddr::V6(std::net::Ipv6Addr::new(0xfd00, 0, 0, 1, 0, 0, 0, n));
+        let v6 = |n: u16| IpAddr::V6(std::net::Ipv6Addr::new(0x2001, 0xdb8, 0, 1, 0, 0, 0, n));
         for n in 0..MAX_IDLE as u16 {
-            assert_eq!(w.acquire(&s, v6(n)), Ok(()));
-            w.release(false, v6(n));
+            let a = w.acquire(&s, v6(n)).unwrap();
+            w.release(a, false, v6(n));
         }
         assert_eq!(w.acquire(&s, v6(999)), Err(Refusal::Busy));
+        let ula = |n: u16| IpAddr::V6(std::net::Ipv6Addr::new(0xfd00, 0, 0, 1, 0, 0, 0, n));
+        for n in 0..MAX_IDLE as u16 {
+            let a = w.acquire(&s, ula(n)).unwrap();
+            w.release(a, false, ula(n));
+        }
+        let a = w.acquire(&s, ula(999)).unwrap();
+        w.release(a, false, ula(999));
         assert_eq!(ends(&w), None);
 
         let w = Window::open(admitter(), "123456").unwrap();
@@ -603,11 +731,11 @@ mod tests {
         }
         for i in 0..MAX_IDLE {
             let a = IpAddr::V4(Ipv4Addr::from(0x0b00_0000 + i));
-            assert_eq!(w.acquire(&s, a), Ok(()));
-            w.release(false, a);
+            let n = w.acquire(&s, a).unwrap();
+            w.release(n, false, a);
         }
-        assert_eq!(w.acquire(&s, ip(200)), Ok(()), "a source counted before");
-        w.release(false, ip(200));
+        let n = w.acquire(&s, ip(200)).expect("a source counted before");
+        w.release(n, false, ip(200));
         assert_eq!(w.acquire(&s, IpAddr::V4(Ipv4Addr::new(172, 16, 0, 1))), Err(Refusal::Busy));
         assert_eq!(w.state.lock().unwrap().idle.len(), MAX_SOURCES + 1);
     }
@@ -654,10 +782,10 @@ mod tests {
 
         // A running attempt may finish after it, and ends the window then.
         let w = Window::open(admitter(), "123456").unwrap();
-        w.acquire(&s, ip(1)).unwrap();
+        let a = w.acquire(&s, ip(1)).unwrap();
         w.state.lock().unwrap().expires = uptime::now();
         assert_eq!(ends(&w), None);
-        w.release(false, ip(1));
+        w.release(a, false, ip(1));
         assert_eq!(ends(&w), Some(Err(Refusal::Expired)));
 
         let w = Window::open(admitter(), "123456").unwrap();

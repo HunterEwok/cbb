@@ -210,7 +210,8 @@ impl GroupView {
         let devices = rs.devices();
         let mut keys: BTreeSet<KeyHash> = devices.iter().filter_map(|d| d.admin_key).collect();
         keys.extend(devices.iter().flat_map(|d| d.keys.iter().copied()));
-        keys.extend(rs.roots().iter().map(Cert::key_hash));
+        // Every root on the path, the group CA first.
+        keys.extend(rs.path_certs().iter().map(Cert::key_hash));
         keys.extend(rs.state().recovery.map(|h| h.0));
         GroupView {
             records: rs.all(),
