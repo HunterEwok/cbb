@@ -446,10 +446,28 @@ func (s *signing) keysFor(prev release.File, rs release.Signer) (release.File, e
 			k.Keys = nil
 		}
 	}
+	// A key that signs is dropped whole: the pin of either half drops both.
+	// A forwarder's or relay's pins are dropped one by one.
+	type signerOf struct{ name, use string }
+	useOf := func(key release.Key) string {
+		if key.Use == "" {
+			return release.UseRelease
+		}
+		return key.Use
+	}
+	pinned := func(key release.Key) bool {
+		pin := sha256.Sum256(key.Key)
+		return slices.Contains(s.drop, base64.StdEncoding.EncodeToString(pin[:]))
+	}
+	whole := map[signerOf]bool{}
+	for _, key := range k.Keys {
+		if u := useOf(key); u != release.UseForwarder && u != release.UseRelay && pinned(key) {
+			whole[signerOf{key.Name, u}] = true
+		}
+	}
 	kept := k.Keys[:0:0]
 	for _, key := range k.Keys {
-		pin := sha256.Sum256(key.Key)
-		if !slices.Contains(s.drop, key.Name) && !slices.Contains(s.drop, base64.StdEncoding.EncodeToString(pin[:])) {
+		if !slices.Contains(s.drop, key.Name) && !pinned(key) && !whole[signerOf{key.Name, useOf(key)}] {
 			kept = append(kept, key)
 		}
 	}
@@ -491,6 +509,15 @@ func (s *signing) keysFor(prev release.File, rs release.Signer) (release.File, e
 			m.Use = ""
 			if m.Name == "" {
 				m.Name = ownName
+			}
+		}
+		// A name and use is one key: another key's name is refused, so
+		// that no half of the two counts as the other's.
+		if u := useOf(m); u != release.UseForwarder && u != release.UseRelay {
+			for _, key := range next.Keys {
+				if key.Name == m.Name && useOf(key) == u && !holdsHalfOf(key, own, s.extra, m) {
+					return release.File{}, fmt.Errorf("keys.json %d has another key named %q (%s): drop it first (-drop %q) or give the new key another name", k.Seq, m.Name, u, m.Name)
+				}
 			}
 		}
 		next.Keys = append(next.Keys, m)
@@ -537,6 +564,20 @@ func signWith(s release.Signer, body any) (release.File, error) {
 		}
 	}
 	return release.Sign(json.RawMessage(data), s)
+}
+
+// holdsHalfOf reports whether key, listed under m's name, is a half the
+// run certifies, of another algorithm than m: the other half of m's key.
+func holdsHalfOf(key release.Key, own, extra []release.Key, m release.Key) bool {
+	if key.Alg == m.Alg {
+		return false
+	}
+	for _, w := range append(append([]release.Key{}, own...), extra...) {
+		if w.Alg == key.Alg && bytes.Equal(w.Key, key.Key) {
+			return true
+		}
+	}
+	return false
 }
 
 // nameTaken reports whether a key in keys has the name.

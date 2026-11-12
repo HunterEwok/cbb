@@ -447,16 +447,36 @@ func decodeKeys(data []byte) (Keys, error) {
 			return k, errors.New("release: a key's use is empty")
 		}
 	}
+	type half struct {
+		name, use string
+		alg       int
+	}
+	seen := map[half]bool{}
 	for _, key := range k.Keys {
 		if key.Name == "" || len(key.Name) > maxName {
 			return k, errors.New("release: a key has no valid name")
 		}
-		if key.Alg < 1 {
+		if key.Alg < 1 || key.Alg > MaxAlg {
 			return k, errors.New("release: a key names no algorithm")
 		}
 		if err := checkPublic(key.Alg, key.Key); err != nil {
 			return k, err
 		}
+		// A key that signs is its halves under one name and use, one of
+		// each algorithm: two halves of one algorithm there would make
+		// one key of two. Pins of forwarders and relays may repeat.
+		u := key.Use
+		if u == "" {
+			u = UseRelease
+		}
+		if u == UseForwarder || u == UseRelay {
+			continue
+		}
+		h := half{key.Name, u, key.Alg}
+		if seen[h] {
+			return k, fmt.Errorf("release: two keys named %q of use %s hold a half of algorithm %d", key.Name, u, key.Alg)
+		}
+		seen[h] = true
 	}
 	return k, nil
 }

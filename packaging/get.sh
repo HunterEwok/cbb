@@ -295,14 +295,16 @@ algorithms() {
 	checked=1
 	# The post-quantum half only where this openssl signs and checks it as
 	# the project does, with the context "cbb release v1": a round trip with
-	# a key of its own, so that an openssl that reads the options otherwise
-	# checks one signature rather than refusing every release.
+	# a key of its own, which another context must refuse, so that an
+	# openssl that reads the options otherwise checks one signature rather
+	# than refusing every release.
 	openssl list -signature-algorithms 2>/dev/null | grep -qi 'SLH-DSA-SHA2-128s' || return 0
 	printf 'cbb' >"$tmp/slh.msg"
 	openssl genpkey -algorithm SLH-DSA-SHA2-128s -out "$tmp/slh.key" 2>/dev/null &&
 		openssl pkey -in "$tmp/slh.key" -pubout -out "$tmp/slh.pub" 2>/dev/null &&
 		openssl pkeyutl -sign -rawin -inkey "$tmp/slh.key" -in "$tmp/slh.msg" -out "$tmp/slh.sig" -pkeyopt "context-string:cbb release v1" >/dev/null 2>&1 &&
 		slh_verify "$tmp/slh.pub" "$tmp/slh.sig" "$tmp/slh.msg" &&
+		! openssl pkeyutl -verify -pubin -inkey "$tmp/slh.pub" -rawin -in "$tmp/slh.msg" -sigfile "$tmp/slh.sig" -pkeyopt "context-string:cbb release v0" >/dev/null 2>&1 &&
 		checked="1 4"
 	rm -f "$tmp/slh.key" "$tmp/slh.pub" "$tmp/slh.sig" "$tmp/slh.msg"
 }
@@ -338,7 +340,13 @@ opened() {
 	f=$1 kind=$2 list=$3
 	shift 3
 	field body "$f" | openssl base64 -d -A >"$tmp/$kind.body" 2>/dev/null || return 1
+	# Each signature read whole, in the form the signer writes; one that
+	# does not read so refuses the file, as it does in every reader.
 	grep -oE '\{"alg":[0-9]+,"key":"[A-Za-z0-9+/=]*","sig":"[A-Za-z0-9+/=]*"\}' "$f" >"$tmp/$kind.sigs" || return 1
+	[ "$(wc -l <"$tmp/$kind.sigs")" -eq "$(grep -o '"alg":' "$f" | wc -l)" ] || return 1
+	# A key is its halves under one use and name, one of each algorithm:
+	# two of one algorithm there would make one key of two.
+	awk '{ n = $0; sub(/^[^ ]* [^ ]* [^ ]* /, "", n); if (seen[$1 " " $2 " " n]++) exit 1 }' "$list" || return 1
 	: >"$tmp/$kind.good"
 	n=0
 	while read -r alg use key name; do

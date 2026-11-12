@@ -253,3 +253,21 @@ func TestPinnedRootsComplete(t *testing.T) {
 		t.Fatalf("roots/roots.pem: %v", err)
 	}
 }
+
+// A root is its halves under one Name, one of each algorithm.
+func TestParseRootsOneHalfEach(t *testing.T) {
+	a, b := newSigner(t), newSigner(t)
+	pem := func(s signer, name string) []byte {
+		p, err := PublicPEM(s.key, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	if r, err := ParseRoots(append(pem(a, "root-1"), pem(b, "root-2")...)); err != nil || len(r) != 4 {
+		t.Fatalf("two roots: %d, %v", len(r), err)
+	}
+	if _, err := ParseRoots(append(pem(a, "root-1"), pem(b, "root-1")...)); err == nil {
+		t.Error("two roots under one Name were read")
+	}
+}

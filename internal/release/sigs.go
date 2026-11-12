@@ -11,12 +11,17 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"sort"
+	"strconv"
+	"unsafe"
 
+	"github.com/HunterEwok/cbb/internal/strict"
 	"github.com/cloudflare/circl/sign/slhdsa"
 )
 
@@ -36,6 +41,11 @@ const (
 // all by the halves of one key. There is no setting that changes them: a
 // file signed by fewer is refused.
 var Required = []int{AlgES256, AlgSLHDSA}
+
+// MaxAlg is the largest algorithm number keys.json may name, within an
+// int on every platform; a signature of a number outside the registry is
+// passed over.
+const MaxAlg = 1<<31 - 1
 
 // SLHContext is the context of every SLH-DSA signature on a release file,
 // so that one never stands for a signature of another kind.
@@ -64,6 +74,106 @@ type Sig struct {
 	Alg int    `json:"alg"`
 	Key []byte `json:"key"`
 	Sig []byte `json:"sig"`
+}
+
+// The envelope is read alike by every reader (docs/protocol.md, section
+// 16, "Two signatures"): its members by their exact names, none twice,
+// others passed over; the body, and each signature's key and sig, in
+// base64's one form; each signature's alg an integer from 1 to MaxAlg.
+// A signature of an algorithm this version does not know is then passed
+// over; one of another shape refuses the file.
+
+func (f *File) UnmarshalJSON(b []byte) error {
+	m, err := members(b, "body", "sigs")
+	if err != nil {
+		return fmt.Errorf("release: the file: %w", err)
+	}
+	var out File
+	if out.Body, err = base64Member(m["body"], true); err != nil {
+		return fmt.Errorf("release: the body: %w", err)
+	}
+	var raws []json.RawMessage
+	if string(m["sigs"]) == "null" || json.Unmarshal(m["sigs"], &raws) != nil {
+		return errors.New("release: sigs is not a list")
+	}
+	out.Sigs = make([]Sig, len(raws))
+	for i, r := range raws {
+		if err := out.Sigs[i].UnmarshalJSON(r); err != nil {
+			return err
+		}
+	}
+	*f = out
+	return nil
+}
+
+func (s *Sig) UnmarshalJSON(b []byte) error {
+	m, err := members(b, "alg", "key", "sig")
+	if err != nil {
+		return fmt.Errorf("release: a signature: %w", err)
+	}
+	alg, err := strconv.ParseInt(string(m["alg"]), 10, 64)
+	if err != nil || alg < 1 || alg > MaxAlg {
+		return errors.New("release: a signature's alg is not an algorithm number")
+	}
+	out := Sig{Alg: int(alg)}
+	if out.Key, err = base64Member(m["key"], false); err != nil {
+		return fmt.Errorf("release: a signature's key: %w", err)
+	}
+	if out.Sig, err = base64Member(m["sig"], false); err != nil {
+		return fmt.Errorf("release: a signature: %w", err)
+	}
+	*s = out
+	return nil
+}
+
+// members reads a JSON object's members by their exact names, refusing
+// one named twice; each of required must be there.
+func members(b []byte, required ...string) (map[string]json.RawMessage, error) {
+	d := json.NewDecoder(bytes.NewReader(b))
+	if t, err := d.Token(); err != nil || t != json.Delim('{') {
+		return nil, errors.New("not a JSON object")
+	}
+	m := map[string]json.RawMessage{}
+	for d.More() {
+		t, err := d.Token()
+		if err != nil {
+			return nil, err
+		}
+		name, _ := t.(string)
+		var v json.RawMessage
+		if err := d.Decode(&v); err != nil {
+			return nil, err
+		}
+		if _, ok := m[name]; ok {
+			return nil, fmt.Errorf("%q twice", name)
+		}
+		m[name] = v
+	}
+	if _, err := d.Token(); err != nil {
+		return nil, err
+	}
+	for _, r := range required {
+		if _, ok := m[r]; !ok {
+			return nil, fmt.Errorf("no %s", r)
+		}
+	}
+	return m, nil
+}
+
+// base64Member reads a member that holds base64 in its one form; null,
+// where allowed, is empty.
+func base64Member(raw json.RawMessage, nullable bool) ([]byte, error) {
+	if raw == nil || string(raw) == "null" {
+		if nullable && raw != nil {
+			return nil, nil
+		}
+		return nil, errors.New("missing")
+	}
+	var str string
+	if err := json.Unmarshal(raw, &str); err != nil {
+		return nil, err
+	}
+	return strict.DecodeBase64(str)
 }
 
 // Signer signs as one key: its halves, one for each algorithm of Required.
@@ -117,6 +227,22 @@ func (k *slhKey) Public() crypto.PublicKey { return k.sk.PublicKey() }
 
 func (k *slhKey) Sign(r io.Reader, msg []byte, _ crypto.SignerOpts) ([]byte, error) {
 	return slhdsa.SignRandomized(&k.sk, r, slhdsa.NewMessage(msg), SLHContext)
+}
+
+// ClearSLH overwrites the secret of an SLH-DSA key in memory, once its
+// signature is made: the key signs nothing after. circl keeps the secret
+// in fields of its own, reached here by name.
+func ClearSLH(s crypto.Signer) {
+	k, ok := s.(*slhKey)
+	if !ok {
+		return
+	}
+	v := reflect.ValueOf(&k.sk).Elem()
+	for _, name := range []string{"seed", "prfKey"} {
+		if f := v.FieldByName(name); f.IsValid() && f.Kind() == reflect.Slice {
+			clear(*(*[]byte)(unsafe.Pointer(f.UnsafeAddr())))
+		}
+	}
 }
 
 // PublicKeys returns the SubjectPublicKeyInfos of the signer's halves, by
@@ -451,6 +577,19 @@ func ReadHalves(data []byte) (map[int][]byte, error) {
 		return nil, errors.New("no PUBLIC KEY")
 	}
 	return out, nil
+}
+
+// ParsePublic reads the SubjectPublicKeyInfo of an SLH-DSA half as the
+// public key its private half gives.
+func ParsePublic(alg int, spki []byte) (crypto.PublicKey, error) {
+	if alg != AlgSLHDSA || checkPublic(alg, spki) != nil {
+		return nil, errors.New("release: not an SLH-DSA-SHA2-128s public key")
+	}
+	pk := slhdsa.PublicKey{ID: slhdsa.SHA2_128s}
+	if err := pk.UnmarshalBinary(spki[len(slhSPKIPrefix):]); err != nil {
+		return nil, errors.New("release: not an SLH-DSA-SHA2-128s public key")
+	}
+	return pk, nil
 }
 
 // ParseHalf reads the one private key a PEM text holds: a half of a key.

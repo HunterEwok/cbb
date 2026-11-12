@@ -10,8 +10,10 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -58,6 +60,7 @@ func ecFile(t *testing.T, dir string) string {
 // finds it and signs twice.
 func TestPQNew(t *testing.T) {
 	fakeAge(t)
+	asked := testPassphrase(t, "the owner's passphrase")
 	dir := t.TempDir()
 	t.Setenv("CBB_RELEASE_PQ_DIR", filepath.Join(dir, "pq"))
 	ec := ecFile(t, dir)
@@ -70,9 +73,17 @@ func TestPQNew(t *testing.T) {
 	if pqNew([]string{"-key", "file:" + ec, "-to", "age1yubikey1test", "-identity", id}) == nil {
 		t.Error("pq-new replaced a half that exists")
 	}
+	if *asked != 2 {
+		t.Errorf("pq-new asked for the passphrase %d times, not twice", *asked)
+	}
+	// Under the hardware's wrap, the half is sealed with the passphrase.
+	sealedFile, _ := os.ReadFile(filepath.Join(dir, "pq", must(pqName(must(classicalSigner("file:"+ec))))+".age"))
+	if _, inner, _ := bytes.Cut(sealedFile, []byte("\n")); !sealed(inner) || bytes.Contains(sealedFile, []byte("PRIVATE KEY")) {
+		t.Error("the half under the hardware's wrap is not sealed with the passphrase")
+	}
 	// The file alone is no key: it is encrypted.
 	entries, _ := os.ReadDir(filepath.Join(dir, "pq"))
-	if len(entries) != 2 {
+	if len(entries) != 3 {
 		t.Fatalf("pq holds %d files", len(entries))
 	}
 	// file:EC.pem alone holds one half; the PQ half comes from pq.
@@ -87,6 +98,35 @@ func TestPQNew(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The half is opened for each signature, not before: its public key
+	// is in HASH.pub.
+	opened := 0
+	prevD := ageDecrypt
+	ageDecrypt = func(identity, file string) ([]byte, error) { opened++; return prevD(identity, file) }
+	t.Cleanup(func() { ageDecrypt = prevD })
+	lazy, err := pqOf(c, "")
+	if err != nil || opened != 0 {
+		t.Fatalf("pqOf opened the half %d times (%v)", opened, err)
+	}
+	for i := range 2 {
+		if _, err := signWith(release.Signer{c, lazy}, release.Channel{V: 1, Type: release.TypeChannel, Channel: "stable", Seq: uint64(i + 1),
+			TimeMS: now().UnixMilli(), ExpiresMS: now().UnixMilli() + 86_400_000, Release: "0.6.0", ReleaseSHA256: strings.Repeat("ab", 32)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if opened != 2 {
+		t.Errorf("two signatures opened the half %d times", opened)
+	}
+	if *asked != 2 {
+		t.Errorf("the run asked for the passphrase again: %d", *asked)
+	}
+	// A new run with a wrong passphrase signs nothing, and says so.
+	cachedPassphrase = nil
+	readPassphrase = func(string) ([]byte, error) { return []byte("not the passphrase"), nil }
+	if _, err := signWith(release.Signer{c, lazy}, kb0()); !errors.Is(err, errPassphrase) {
+		t.Errorf("a wrong passphrase: %v", err)
+	}
+	readPassphrase = func(string) ([]byte, error) { return []byte("the owner's passphrase"), nil }
 	s := release.Signer{c, pq}
 	at := now().UnixMilli()
 	kb := release.Keys{V: 1, Type: release.TypeKeys, Seq: 1, TimeMS: at, ExpiresMS: at + 86_400_000, Keys: must(s.Keys("release", ""))}
@@ -116,8 +156,11 @@ func TestPQNew(t *testing.T) {
 	}
 	// Another hardware does not open it.
 	write(t, filepath.Join(dir, "pq", must(pqName(c))+".identity"), []byte("age1yubikey1other\n"))
-	if _, err := pqOf(c, ""); err == nil {
+	if _, err := openHalf(c, ""); err == nil {
 		t.Error("another identity opened the half")
+	}
+	if _, err := signWith(release.Signer{c, lazy}, kb); err == nil {
+		t.Error("a signature opened the half with another identity")
 	}
 }
 
@@ -157,6 +200,26 @@ func TestPQNewForAServer(t *testing.T) {
 	if pqNew([]string{"-key", "file:" + ec, "-out", "-"}) == nil {
 		t.Error("-out - without -public")
 	}
+	// Never to a terminal.
+	prev := isTerminal
+	isTerminal = func(*os.File) bool { return true }
+	err = pqNew([]string{"-key", "file:" + ec, "-out", "-", "-public", filepath.Join(dir, "p2.pem")})
+	isTerminal = prev
+	if err == nil {
+		t.Error("pq-new wrote the private half to a terminal")
+	}
+	// -out FILE: a new file only its owner reads.
+	half := filepath.Join(dir, "status-pq.pem")
+	call(t, pqNew, "-key", "file:"+ec, "-out", half, "-public", filepath.Join(dir, "status.pem"))
+	if st, err := os.Stat(half); err != nil || (runtime.GOOS != "windows" && st.Mode().Perm() != 0o600) {
+		t.Errorf("the half's file: %v, %v", st.Mode(), err)
+	}
+	if pqNew([]string{"-key", "file:" + ec, "-out", half, "-public", filepath.Join(dir, "status.pem")}) == nil {
+		t.Error("pq-new replaced a half's file")
+	}
+	if out := call(t, pqCheck, "-key", "file:"+ec+"+slh:"+half, "-public", filepath.Join(dir, "status.pem")); !bytes.Contains(out, []byte("both halves sign")) {
+		t.Errorf("pq-check printed %q", out)
+	}
 }
 
 func TestCutPaths(t *testing.T) {
@@ -174,5 +237,52 @@ func TestCutPaths(t *testing.T) {
 		if id != c.id || file != c.file || ok != c.ok {
 			t.Errorf("cutPaths(%q, %v) = %q, %q, %v", c.arg, c.windows, id, file, ok)
 		}
+	}
+}
+
+// testPassphrase answers the passphrase prompts with p, at a low scrypt
+// cost, and counts them.
+// kb0 is a channel body to sign in the tests.
+func kb0() release.Channel {
+	return release.Channel{V: 1, Type: release.TypeChannel, Channel: "stable", Seq: 1,
+		TimeMS: now().UnixMilli(), ExpiresMS: now().UnixMilli() + 86_400_000, Release: "0.6.0", ReleaseSHA256: strings.Repeat("ab", 32)}
+}
+
+func testPassphrase(t *testing.T, p string) *int {
+	asked := 0
+	prevRead, prevN := readPassphrase, sealLogN
+	readPassphrase = func(string) ([]byte, error) { asked++; return []byte(p), nil }
+	sealLogN = 10
+	cachedPassphrase = nil
+	t.Cleanup(func() { readPassphrase, sealLogN, cachedPassphrase = prevRead, prevN, nil })
+	return &asked
+}
+
+// The passphrase seal: what one passphrase seals, another does not open,
+// and the cost is read from the seal's line.
+func TestSeal(t *testing.T) {
+	testPassphrase(t, "a passphrase of the test")
+	box, err := seal([]byte("right passphrase"), []byte("the half"), "name")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.HasPrefix(box, []byte("cbb-pq-sealed v1 scrypt 10 8 1\n")) {
+		t.Fatalf("the seal starts %q", box[:40])
+	}
+	if out, err := unseal([]byte("right passphrase"), box, "name"); err != nil || string(out) != "the half" {
+		t.Fatalf("unseal: %q, %v", out, err)
+	}
+	if _, err := unseal([]byte("wrong passphrase"), box, "name"); !errors.Is(err, errPassphrase) {
+		t.Errorf("a wrong passphrase: %v", err)
+	}
+	if _, err := unseal([]byte("right passphrase"), box, "another key"); err == nil {
+		t.Error("the seal opened for another key")
+	}
+	raised := bytes.Replace(box, []byte("scrypt 10 "), []byte("scrypt 30 "), 1)
+	if _, err := unseal([]byte("right passphrase"), raised, "name"); err == nil || errors.Is(err, errPassphrase) {
+		t.Errorf("a cost out of range: %v", err)
+	}
+	if _, err := unseal([]byte("right passphrase"), box[:40], "name"); err == nil {
+		t.Error("a seal cut short opened")
 	}
 }

@@ -52,6 +52,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -592,7 +593,7 @@ func seHelper() (string, error) {
 
 // drillFaults are the faults drill -fault puts in keys.json, each a body
 // that every reader refuses (docs/protocol.md, section 16).
-var drillFaults = []string{"empty-use", "upper-case", "twice", "null", "no-time", "status-brace"}
+var drillFaults = []string{"empty-use", "upper-case", "twice", "null", "no-time", "status-brace", "same-name", "broken-pq", "no-pq"}
 
 // faultyKeys signs body, a valid keys.json body, with fault put in.
 func faultyKeys(body []byte, fault string, key release.Signer) (release.File, error) {
@@ -631,7 +632,7 @@ func drill(args []string) error {
 	version := fs.String("version", "0.0.1", "the release's version")
 	channelKey := fs.Bool("channel-key", false, "sign stable.json with a channel key, as the server renews it")
 	relChannel := fs.String("release-channel", "stable", "the channel release.json names, which stable.json names it under anyway, for the installers' tests")
-	fault := fs.String("fault", "", "a keys.json no reader takes, for the installers' tests: "+strings.Join(drillFaults, ", "))
+	fault := fs.String("fault", "", "a fault no reader takes, in keys.json or release.json, for the installers' tests: "+strings.Join(drillFaults, ", "))
 	fs.Parse(args)
 	if fs.NArg() != 2 {
 		return errors.New("drill needs the directory and the file for the roots")
@@ -682,11 +683,33 @@ func drill(args []string) error {
 			return err
 		}
 	}
-	keysFile, err := release.Sign(k, ks[0])
+	switch *fault {
+	case "same-name":
+		// Another key's halves under the release key's name, and
+		// release.json signed by one half of each.
+		k.Keys = append(k.Keys, halves(ks[3], "drill", "")...)
+		other, err := release.Sign(r, ks[3])
+		if err != nil {
+			return err
+		}
+		rel.Sigs = []release.Sig{rel.Sigs[0], other.Sigs[1]}
+	case "broken-pq":
+		rel.Sigs[1].Sig = append([]byte{}, rel.Sigs[1].Sig...)
+		rel.Sigs[1].Sig[100] ^= 1
+	case "no-pq":
+		rel.Sigs = rel.Sigs[:1]
+	}
+	var keysFile release.File
+	if *fault == "same-name" {
+		data, _ := json.Marshal(k)
+		keysFile, err = signRaw(data, ks[0])
+	} else {
+		keysFile, err = release.Sign(k, ks[0])
+	}
 	if err != nil {
 		return err
 	}
-	if *fault != "" && *fault != "status-brace" {
+	if *fault != "" && !slices.Contains([]string{"status-brace", "same-name", "broken-pq", "no-pq"}, *fault) {
 		if keysFile, err = faultyKeys(keysFile.Body, *fault, ks[0]); err != nil {
 			return err
 		}

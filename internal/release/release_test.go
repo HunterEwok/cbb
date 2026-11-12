@@ -5,11 +5,14 @@ package release
 
 import (
 	"bytes"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -125,12 +128,23 @@ type statusVector struct {
 	Revoked []string `json:"revoked,omitempty"`
 }
 
+// envelope is a release.json as it comes, its text in a string so that
+// no reader of the vectors file changes it, under the vectors' first
+// keys.json and channel file: whether the envelope is read, and the file
+// taken (docs/protocol.md, section 16, "Two signatures").
+type envelope struct {
+	Name    string `json:"name"`
+	Release string `json:"release"`
+	OK      bool   `json:"ok"`
+}
+
 type vectors struct {
-	Roots   []Key          `json:"roots"`
-	NowMS   int64          `json:"now_ms"`
-	Name    string         `json:"channel"`
-	Vectors []vector       `json:"vectors"`
-	Status  []statusVector `json:"status"`
+	Roots     []Key          `json:"roots"`
+	NowMS     int64          `json:"now_ms"`
+	Name      string         `json:"channel"`
+	Vectors   []vector       `json:"vectors"`
+	Status    []statusVector `json:"status"`
+	Envelopes []envelope     `json:"envelopes"`
 }
 
 // The file on disk lists each signed file once, in files, and its cases
@@ -158,6 +172,7 @@ type vectorsFile struct {
 		OK      bool     `json:"ok"`
 		Revoked []string `json:"revoked,omitempty"`
 	} `json:"status"`
+	Envelopes []envelope `json:"envelopes"`
 }
 
 // fileTable numbers files as vectorsFile lists them, each once.
@@ -204,6 +219,7 @@ func (v vectors) MarshalJSON() ([]byte, error) {
 		}{c.Name, t.add(c.Keys), t.add(c.Status), c.Seen, c.OK, c.Revoked})
 	}
 	out.Files = t.files
+	out.Envelopes = v.Envelopes
 	return json.Marshal(out)
 }
 
@@ -218,7 +234,7 @@ func (v *vectors) UnmarshalJSON(b []byte) error {
 		}
 		return in.Files[i]
 	}
-	*v = vectors{Roots: in.Roots, NowMS: in.NowMS, Name: in.Name}
+	*v = vectors{Roots: in.Roots, NowMS: in.NowMS, Name: in.Name, Envelopes: in.Envelopes}
 	for _, c := range in.Vectors {
 		v.Vectors = append(v.Vectors, vector{c.Name, file(c.Keys), file(c.Channel), file(c.Release), c.Seen, c.OK, c.Version})
 	}
@@ -348,6 +364,42 @@ func makeVectors(t *testing.T) vectors {
 	laterKey.Keys = append(laterKey.Keys, Key{Alg: 9, Key: bytes.Repeat([]byte{5}, 20000), Name: "release key 1"})
 	add("keys.json with a key of a later algorithm of 20000 bytes", sign(t, laterKey, root1), ch, rel, first, "0.6.0")
 	add("the channel signed by a channel key of another keys.json", keys, sign(t, channelBody("stable", 8, nowMS-1000, 30*day, rel, "0.6.0"), ck), rel, first, "")
+	sameName := keysBody(9, nowMS-1000, 90*day)
+	sameName.Keys = append(rk1.keys("release key 1", ""), rk2.keys("release key 1", "")...)
+	add("release.json signed by two keys under one name, one half each", sign(t, sameName, root1), ch, mixed(rel, relBy2, AlgSLHDSA), first, "")
+	spelled := keysBody(3, nowMS-day.Milliseconds(), 90*day)
+	spelled.Keys = rk1.keys("release key 1", "")
+	spelled.Keys[1].Use = UseRelease
+	add("release.json under a key whose halves spell the release use apart", sign(t, spelled, root1), ch, rel, first, "0.6.0")
+
+	// The envelope as it comes: rel's, its members spelled otherwise.
+	body := base64.StdEncoding.EncodeToString(rel.Body)
+	sig := func(i int) string {
+		g := rel.Sigs[i]
+		return fmt.Sprintf(`{"alg":%d,"key":"%s","sig":"%s"}`, g.Alg, base64.StdEncoding.EncodeToString(g.Key), base64.StdEncoding.EncodeToString(g.Sig))
+	}
+	both := sig(0) + "," + sig(1)
+	env := func(name, raw string, ok bool) {
+		v.Envelopes = append(v.Envelopes, envelope{name, raw, ok})
+	}
+	env("as signed", `{"body":"`+body+`","sigs":[`+both+`]}`, true)
+	env("with a member of a later version", `{"body":"`+body+`","sigs":[`+both+`],"later":{"a":[1]}}`, true)
+	env("with a signature of a later algorithm with a member of its own", `{"body":"`+body+`","sigs":[`+both+`,{"alg":9,"key":"CQ==","sig":"Bw==","later":true}]}`, true)
+	env("with its body named in capitals", `{"Body":"`+body+`","sigs":[`+both+`]}`, false)
+	env("with its body twice", `{"body":"`+body+`","body":"`+body+`","sigs":[`+both+`]}`, false)
+	env("with its body broken across lines", `{"body":"`+body[:4]+`\n`+body[4:]+`","sigs":[`+both+`]}`, false)
+	env("with sigs null", `{"body":"`+body+`","sigs":null}`, false)
+	env("with a signature of a later algorithm without a key", `{"body":"`+body+`","sigs":[`+both+`,{"alg":9,"sig":"Bw=="}]}`, false)
+	env("with a signature of a negative algorithm", `{"body":"`+body+`","sigs":[`+both+`,{"alg":-9,"key":"CQ==","sig":"Bw=="}]}`, false)
+	env("with a signature of algorithm 0", `{"body":"`+body+`","sigs":[`+both+`,{"alg":0,"key":"CQ==","sig":"Bw=="}]}`, false)
+	env("with a signature of algorithm 2147483648", `{"body":"`+body+`","sigs":[`+both+`,{"alg":2147483648,"key":"CQ==","sig":"Bw=="}]}`, false)
+	env("with a signature of algorithm 2147483647", `{"body":"`+body+`","sigs":[`+both+`,{"alg":2147483647,"key":"CQ==","sig":"Bw=="}]}`, true)
+	env("with a signature of algorithm 9.5", `{"body":"`+body+`","sigs":[`+both+`,{"alg":9.5,"key":"CQ==","sig":"Bw=="}]}`, false)
+	env("with a signature whose algorithm is a string", `{"body":"`+body+`","sigs":[`+both+`,{"alg":"9","key":"CQ==","sig":"Bw=="}]}`, false)
+	env("with a signature whose alg is named in capitals", `{"body":"`+body+`","sigs":[`+both+`,{"Alg":9,"key":"CQ==","sig":"Bw=="}]}`, false)
+	env("with a signature whose key is null", `{"body":"`+body+`","sigs":[`+both+`,{"alg":9,"key":null,"sig":"Bw=="}]}`, false)
+	env("with a signature whose alg is given twice", `{"body":"`+body+`","sigs":[{"alg":1,"alg":1,"key":"`+base64.StdEncoding.EncodeToString(rel.Sigs[0].Key)+`","sig":"`+base64.StdEncoding.EncodeToString(rel.Sigs[0].Sig)+`"},`+sig(1)+`]}`, false)
+	env("with a signature that is not an object", `{"body":"`+body+`","sigs":[`+both+`,[9]]}`, false)
 
 	revoked := []string{"0", "1f", "9a", "c35a2e1e3b46b5a1", "15b3d8b2f3a0e3e3cc1d2a4e1f0b7c9d"}
 	addStatus := func(name string, k, st File, seen Seen, ok bool) {
@@ -405,8 +457,18 @@ func TestReleaseVectors(t *testing.T) {
 	if err := json.Unmarshal(data, &v); err != nil {
 		t.Fatal(err)
 	}
-	if len(v.Vectors) != 47 || len(v.Status) != 18 {
-		t.Fatalf("the file has %d vectors and %d of the list", len(v.Vectors), len(v.Status))
+	if len(v.Vectors) != 49 || len(v.Status) != 18 || len(v.Envelopes) != 18 {
+		t.Fatalf("the file has %d vectors, %d of the list and %d envelopes", len(v.Vectors), len(v.Status), len(v.Envelopes))
+	}
+	for _, c := range v.Envelopes {
+		var rel File
+		err := json.Unmarshal([]byte(c.Release), &rel)
+		if err == nil {
+			_, _, err = Check(v.Vectors[0].Keys, v.Vectors[0].Channel, rel, v.Roots, v.Name, time.UnixMilli(v.NowMS), Seen{})
+		}
+		if (err == nil) != c.OK {
+			t.Errorf("envelope %s: %v, the file says ok %v", c.Name, err, c.OK)
+		}
 	}
 	for _, c := range v.Status {
 		st, seen, err := CheckStatus(c.Keys, c.Status, v.Roots, time.UnixMilli(v.NowMS), c.Seen)
@@ -850,5 +912,24 @@ func TestEntriesVectors(t *testing.T) {
 		if err == nil && (e.Seq != c.Seq || seen.EntriesSeq != c.Seq || seen.EntriesKeys != 3 || seen.KeysSeq != 3) {
 			t.Errorf("%s: seq %d, seen %+v", c.Name, e.Seq, seen)
 		}
+	}
+}
+
+// ClearSLH leaves an SLH-DSA key without its secret.
+func TestClearSLH(t *testing.T) {
+	k, err := GenerateSLH(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ClearSLH(k)
+	b, err := MarshalSLH(k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(b[:32], make([]byte, 32)) {
+		t.Errorf("the secret is still there: %x", b[:32])
+	}
+	if bytes.Equal(b[32:], make([]byte, 32)) {
+		t.Error("the public key went too")
 	}
 }

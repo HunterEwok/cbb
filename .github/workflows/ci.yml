@@ -859,6 +859,11 @@ jobs:
           rm "$rel/stable.json"
           refused "no stable.json"
           CBB_VERIFY=skip sudo --preserve-env=CBB_RELEASE_DIR,CBB_RELEASE_ROOTS,CBB_VERIFY sh packaging/get.sh --no-firewall | grep "Not checked" >/dev/null
+      - name: get.sh checks both signatures where openssl checks SLH-DSA (OpenSSL 3.5, Debian trixie)
+        run: |
+          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/release-sign" ./tools/release-sign
+          docker run --rm -v "$PWD:/src:ro" -v "$RUNNER_TEMP/release-sign:/usr/local/bin/release-sign:ro" -w /src \
+            debian:trixie sh .github/get-sh-pq.sh /usr/local/bin/release-sign
       - name: cbb update installs a newer signed release, puts the old one back, and sets the timer
         run: |
           # cbb and its helper of one version: a release cbb takes only a

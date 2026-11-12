@@ -558,7 +558,24 @@ fn go_release() {
     let name = v["channel"].as_str().unwrap();
     let now = v["now_ms"].as_i64().unwrap();
     let cases = v["vectors"].as_array().unwrap();
-    assert_eq!(cases.len(), 47);
+    assert_eq!(cases.len(), 49);
+    // A release.json as it comes, under the first case's keys.json and
+    // channel file: an envelope read otherwise than Go reads it refuses.
+    let envelopes = v["envelopes"].as_array().unwrap();
+    assert_eq!(envelopes.len(), 18);
+    let first = &cases[0];
+    let keys: File = serde_json::from_value(v["files"][first["keys"].as_u64().unwrap() as usize].clone()).unwrap();
+    let channel: File = serde_json::from_value(v["files"][first["channel"].as_u64().unwrap() as usize].clone()).unwrap();
+    for e in envelopes {
+        let label = e["name"].as_str().unwrap();
+        let taken = serde_json::from_str::<File>(e["release"].as_str().unwrap())
+            .map_err(|e| alloc::format!("{e}"))
+            .and_then(|r| {
+                release::check(&keys, &channel, &r, &roots, name, now, &Seen::default())
+                    .map_err(|e| alloc::string::String::from(e.message()))
+            });
+        assert_eq!(taken.is_ok(), e["ok"].as_bool().unwrap(), "envelope {label}: {:?}", taken.err());
+    }
     for c in cases {
         // Each case names its files by their index in files.
         let file =

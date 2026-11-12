@@ -372,7 +372,7 @@ mod tests {
         }
         let v = vectors("go-release.json");
         let vs = v["vectors"].as_array().unwrap();
-        assert_eq!(vs.len(), 47);
+        assert_eq!(vs.len(), 49);
         // Each case names its files by their index in files.
         let file = |c: &Value, k: &str| v["files"][c[k].as_u64().unwrap() as usize].clone();
         for c in vs {

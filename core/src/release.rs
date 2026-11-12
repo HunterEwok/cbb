@@ -42,6 +42,10 @@ pub const SLH_CONTEXT: &[u8] = b"cbb release v1";
 /// The use of a pinned root key.
 pub const USE_ROOT: &str = "root";
 
+/// The largest algorithm number a file may name, an int on every
+/// platform Go builds for.
+pub const MAX_ALG: u64 = (1 << 31) - 1;
+
 const MAX_SIGS: usize = 8;
 const MAX_SIG_BYTES: usize = 16 << 10;
 const MAX_KEYS: usize = 64;
@@ -57,8 +61,12 @@ pub struct File {
     pub sigs: Vec<Sig>,
 }
 
-/// One signature of a file.
-#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
+/// One signature of a file. Every reader reads it alike (docs/protocol.md,
+/// section 16, "Two signatures"): `alg` an integer from 1 to MAX_ALG,
+/// `key` and `sig` standard base64, other members passed over, none
+/// twice; a signature of an algorithm this version does not know is then
+/// passed over, one of another shape refuses the file.
+#[derive(Clone, Serialize, PartialEq, Debug)]
 pub struct Sig {
     pub alg: u64,
     /// SHA-256 of the signing half's SubjectPublicKeyInfo.
@@ -66,6 +74,25 @@ pub struct Sig {
     pub key: Vec<u8>,
     #[serde(with = "b64")]
     pub sig: Vec<u8>,
+}
+
+impl<'de> Deserialize<'de> for Sig {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> core::result::Result<Self, D::Error> {
+        use serde::de::Error as _;
+        #[derive(Deserialize)]
+        struct Raw {
+            alg: i64,
+            key: String,
+            sig: String,
+        }
+        let r = Raw::deserialize(d)?;
+        let alg = u64::try_from(r.alg)
+            .ok()
+            .filter(|a| (1..=MAX_ALG).contains(a))
+            .ok_or_else(|| D::Error::custom("a signature's alg is not an algorithm number"))?;
+        let b64 = |s: &str| b64::decode_str(s).ok_or_else(|| D::Error::custom("a signature is not base64"));
+        Ok(Sig { alg, key: b64(&r.key)?, sig: b64(&r.sig)? })
+    }
 }
 
 #[derive(Deserialize)]
@@ -288,7 +315,8 @@ impl File {
                 if !verify_half(s.alg, &k.key, &self.body, &s.sig) {
                     return Err(bad());
                 }
-                good.push((k.name.as_str(), k.usage.as_str(), s.alg));
+                // A release key's use is left out or spelled; it is one use.
+                good.push((k.name.as_str(), if k.usage.is_empty() { "release" } else { k.usage.as_str() }, s.alg));
             }
         }
         let signed = good.iter().any(|(name, usage, _)| {
@@ -513,11 +541,21 @@ pub(crate) fn decode_keys(body: &[u8]) -> Result<Keys> {
     if k.keys.is_empty() || k.keys.len() > MAX_KEYS {
         return Err(Error::msg("keys.json must hold 1 to 64 keys"));
     }
+    let mut halves = BTreeSet::new();
     for key in &k.keys {
         if key.name.is_empty() || key.name.len() > 64 {
             return Err(Error::msg("a key has no valid name"));
         }
+        if !(1..=MAX_ALG).contains(&key.alg) {
+            return Err(Error::msg("a key names no algorithm"));
+        }
         check_public(key.alg, &key.key)?;
+        // A key that signs is its halves under one name and use, one of
+        // each algorithm; pins of forwarders and relays may repeat.
+        let usage = if key.usage.is_empty() { "release" } else { key.usage.as_str() };
+        if usage != "forwarder" && usage != "relay" && !halves.insert((key.name.as_str(), usage, key.alg)) {
+            return Err(Error::msg("two keys of one name and use hold a half of one algorithm"));
+        }
     }
     // A key's use is left out for a release key, never written empty.
     #[derive(Deserialize)]
@@ -870,6 +908,9 @@ pub fn parse_roots(pem: &str) -> Result<Vec<Key>> {
                     .into_iter()
                     .find(|a| check_public(*a, &der).is_ok())
                     .ok_or_else(|| Error::msg("a root key of an unknown algorithm"))?;
+                if roots.iter().any(|r: &Key| r.name == name && r.alg == alg) {
+                    return Err(Error::msg("two roots of one Name hold a half of one algorithm"));
+                }
                 roots.push(Key { alg, key: der, name, usage: USE_ROOT.into() });
             }
             (l, Some((name, text, past))) => {
@@ -970,5 +1011,17 @@ pub mod testing {
                 ],
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A root is its halves under one Name, one of each algorithm.
+    #[test]
+    fn roots_one_half_each() {
+        assert_eq!(parse_roots(ROOTS_PEM).unwrap().len(), crate::release::pinned_roots().len());
+        assert!(parse_roots(&ROOTS_PEM.replace("Name: root-2", "Name: root-1")).is_err());
     }
 }

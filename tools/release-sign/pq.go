@@ -11,6 +11,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/HunterEwok/cbb/internal/release"
+	"golang.org/x/term"
 )
 
 // The post-quantum half of a key (docs/maintaining.md, "Two signatures")
@@ -88,8 +90,61 @@ func cutPaths(arg string, windows bool) (string, string, bool) {
 
 // pqOf returns the post-quantum half that goes with classical, from spec
 // (slh:FILE, a key in a file, or age:IDENTITY:FILE) or, when spec is
-// empty, from the encrypted file pqDir names for it.
+// empty, from the encrypted file pqDir names for it. The half is opened
+// for each signature and cleared after it (docs/maintaining.md, "Two
+// signatures"): the hardware asks once for each file signed. Its public
+// key comes from HASH.pub beside the encrypted file when pq-new wrote
+// one, otherwise from opening it once.
 func pqOf(classical crypto.Signer, spec string) (crypto.Signer, error) {
+	h := &pqHalf{open: func() (crypto.Signer, error) { return openHalf(classical, spec) }}
+	if spec == "" {
+		if name, err := pqName(classical); err == nil {
+			if data, err := os.ReadFile(filepath.Join(pqDir(), name+".pub")); err == nil {
+				halves, err := release.ReadHalves(data)
+				if err != nil || halves[release.AlgSLHDSA] == nil {
+					return nil, fmt.Errorf("%s.pub holds no SLH-DSA public key", name)
+				}
+				pub, err := release.ParsePublic(release.AlgSLHDSA, halves[release.AlgSLHDSA])
+				if err != nil {
+					return nil, err
+				}
+				h.pub = pub
+				return h, nil
+			}
+		}
+	}
+	k, err := h.open()
+	if err != nil {
+		return nil, err
+	}
+	h.pub = k.Public()
+	release.ClearSLH(k)
+	return h, nil
+}
+
+// pqHalf is a post-quantum half opened only to sign.
+type pqHalf struct {
+	pub  crypto.PublicKey
+	open func() (crypto.Signer, error)
+}
+
+func (h *pqHalf) Public() crypto.PublicKey { return h.pub }
+
+func (h *pqHalf) Sign(r io.Reader, msg []byte, opts crypto.SignerOpts) ([]byte, error) {
+	k, err := h.open()
+	if err != nil {
+		return nil, err
+	}
+	defer release.ClearSLH(k)
+	if eq, ok := k.Public().(interface{ Equal(crypto.PublicKey) bool }); !ok || !eq.Equal(h.pub) {
+		return nil, errors.New("the post-quantum half opened to another key")
+	}
+	return k.Sign(r, msg, opts)
+}
+
+// openHalf opens the post-quantum half of classical, as pqOf names it;
+// the caller clears it (release.ClearSLH).
+func openHalf(classical crypto.Signer, spec string) (crypto.Signer, error) {
 	var data []byte
 	var err error
 	kind, arg, _ := strings.Cut(spec, ":")
@@ -121,11 +176,35 @@ func pqOf(classical crypto.Signer, spec string) (crypto.Signer, error) {
 		return nil, err
 	}
 	defer clear(data)
+	// A half in hardware is sealed with the passphrase under the hardware's
+	// wrap (seal.go); a server's half in a file or credential is not.
+	if sealed(data) {
+		name, err := pqName(classical)
+		if err != nil {
+			return nil, err
+		}
+		p, err := passphrase()
+		if err != nil {
+			return nil, err
+		}
+		open, err := unseal(p, data, name)
+		if err != nil {
+			if errors.Is(err, errPassphrase) {
+				cachedPassphrase = nil
+			}
+			return nil, err
+		}
+		defer clear(open)
+		data = open
+	} else if kind != "slh" {
+		return nil, errors.New("the post-quantum half has no passphrase seal: make it again with release-sign pq-new")
+	}
 	h, err := release.ParseHalf(data)
 	if err != nil {
 		return nil, err
 	}
 	if alg, _, err := release.MarshalPublic(h.Public()); err != nil || alg != release.AlgSLHDSA {
+		release.ClearSLH(h)
 		return nil, errors.New("the post-quantum half is not an SLH-DSA-SHA2-128s key")
 	}
 	return h, nil
@@ -142,12 +221,20 @@ func pqNew(args []string) error {
 	key := fs.String("key", "", "the classical half: piv:SLOT, se:KEY or file:KEY.pem")
 	to := fs.String("to", "", "the age recipient of the hardware that holds the classical half (age1yubikey1..., age1se1...)")
 	identity := fs.String("identity", "", "the age identity file of that hardware")
-	out := fs.String("out", "", "- writes the half as PEM to the standard output instead, for a server's credential")
+	out := fs.String("out", "", "FILE writes the half as PEM to a new file only its owner reads, - to the standard output when it is a pipe (systemd-creds encrypt), for a key on a server")
 	public := fs.String("public", "", "where both halves' public keys go (PEM); the standard output by default")
 	name := fs.String("name", "", "the Name header of the public keys, for roots.pem")
 	fs.Parse(args)
 	if *key == "" || fs.NArg() != 0 || (*out == "") == (*to == "") || (*to != "" && *identity == "") {
-		return errors.New("pq-new needs -key and either -to with -identity or -out -")
+		return errors.New("pq-new needs -key and either -to with -identity or -out FILE (or -out - into a pipe)")
+	}
+	var pass []byte
+	if *to != "" {
+		// Asked first, before anything is made.
+		var err error
+		if pass, err = newPassphrase(); err != nil {
+			return err
+		}
 	}
 	classical, err := classicalSigner(*key)
 	if err != nil {
@@ -157,6 +244,7 @@ func pqNew(args []string) error {
 	if err != nil {
 		return err
 	}
+	defer release.ClearSLH(pq)
 	secret, err := release.MarshalSLHPEM(pq)
 	if err != nil {
 		return err
@@ -166,12 +254,32 @@ func pqNew(args []string) error {
 	if err != nil {
 		return err
 	}
-	if *out == "-" {
+	if *out != "" {
 		if *public == "" {
-			return errors.New("-out - needs -public for the public keys")
+			return errors.New("-out needs -public for the public keys")
 		}
-		if _, err := stdout.Write(secret); err != nil {
-			return err
+		if *out == "-" {
+			// Into a pipe, such as systemd-creds encrypt, never a terminal.
+			if isTerminal(os.Stdout) {
+				return errors.New("-out - writes the private half: pipe it (systemd-creds encrypt) or name a file")
+			}
+			if _, err := stdout.Write(secret); err != nil {
+				return err
+			}
+		} else {
+			// Readable only by its owner, created new.
+			f, err := os.OpenFile(*out, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+			if err != nil {
+				return err
+			}
+			if _, err := f.Write(secret); err != nil {
+				f.Close()
+				os.Remove(*out)
+				return err
+			}
+			if err := f.Close(); err != nil {
+				return err
+			}
 		}
 	} else {
 		n, err := pqName(classical)
@@ -193,18 +301,28 @@ func pqNew(args []string) error {
 		if err := os.WriteFile(filepath.Join(dir, n+".identity"), id, 0o600); err != nil {
 			return err
 		}
-		if err := ageEncrypt(*to, file, secret); err != nil {
+		box, err := seal(pass, secret, n)
+		if err != nil {
+			return err
+		}
+		if err := ageEncrypt(*to, file, box); err != nil {
 			return err
 		}
 		step("checking that the hardware opens it: touch it when it asks")
-		back, err := pqOf(classical, "")
+		back, err := openHalf(classical, "")
 		if err != nil {
 			os.Remove(file)
 			return fmt.Errorf("the encrypted half does not open, removed: %w", err)
 		}
-		if !back.Public().(interface{ Equal(crypto.PublicKey) bool }).Equal(pq.Public()) {
+		same := back.Public().(interface{ Equal(crypto.PublicKey) bool }).Equal(pq.Public())
+		release.ClearSLH(back)
+		if !same {
 			os.Remove(file)
 			return errors.New("the encrypted half opens to another key, removed")
+		}
+		// Its public key beside it, so that a signature opens it once.
+		if err := os.WriteFile(filepath.Join(dir, n+".pub"), pubs, 0o644); err != nil {
+			return err
 		}
 		step("the post-quantum half is in %s", file)
 	}
@@ -263,3 +381,7 @@ func pqCheck(args []string) error {
 	fmt.Fprintf(stdout, "both halves sign, and the signatures check out under %s\n", *public)
 	return nil
 }
+
+// isTerminal reports whether f is a terminal rather than a pipe or a file;
+// a variable for the tests.
+var isTerminal = func(f *os.File) bool { return term.IsTerminal(int(f.Fd())) }

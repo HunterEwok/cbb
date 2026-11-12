@@ -55,6 +55,11 @@ func ParseRoots(data []byte) ([]Key, error) {
 		if err != nil {
 			return nil, err
 		}
+		for _, r := range roots {
+			if r.Name == name && r.Alg == alg {
+				return nil, fmt.Errorf("two roots named %s hold a half of algorithm %d", name, alg)
+			}
+		}
 		roots = append(roots, Key{Alg: alg, Key: b.Bytes, Name: name, Use: UseRoot})
 	}
 }

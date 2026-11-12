@@ -205,8 +205,8 @@ func releaseKinds() []genKind {
 	}
 	keyList := func(n int) string {
 		var s []string
-		for range n {
-			s = append(s, key(""))
+		for i := range n {
+			s = append(s, `{"alg":1,"key":`+genP256+`,"name":"release key `+strconv.Itoa(i)+`"}`)
 		}
 		return "[" + strings.Join(s, ",") + "]"
 	}
@@ -218,6 +218,14 @@ func releaseKinds() []genKind {
 		ok("of an SLH-DSA half", `[`+key("")+`,{"alg":4,"key":`+genSLH+`,"name":"release key"}]`),
 		ok("of a key of a later algorithm", `[{"alg":9,"key":`+genB64(32, 7)+`,"name":"k"}]`),
 		bad("of 65", keyList(65)),
+		bad("of two halves of one algorithm under one name", `[`+key("")+`,`+key("")+`]`),
+		bad("of two halves of one algorithm under one name, one use left out", `[`+key("")+`,`+key(`,"use":"release"`)+`]`),
+		bad("of two status halves of one algorithm under one name", `[`+key(`,"use":"status"`)+`,`+key(`,"use":"status"`)+`]`),
+		ok("of one name under two uses", `[`+key("")+`,`+key(`,"use":"status"`)+`]`),
+		ok("of two forwarder pins under one name", `[`+key(`,"use":"forwarder"`)+`,`+key(`,"use":"forwarder"`)+`]`),
+		bad("of a negative algorithm", `[{"alg":-1,"key":`+genP256+`,"name":"k"}]`),
+		ok("of algorithm 2147483647", `[{"alg":2147483647,"key":"","name":"k"}]`),
+		bad("of algorithm 2147483648", `[{"alg":2147483648,"key":"","name":"k"}]`),
 		ok("of a key of a later algorithm of 8192 bytes", `[{"alg":9,"key":`+genB64(8192, 7)+`,"name":"k"}]`),
 		ok("of an empty key of a later algorithm", `[{"alg":9,"key":"","name":"k"}]`),
 		bad("of an empty use", `[`+key(`,"use":""`)+`]`),
