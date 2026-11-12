@@ -162,11 +162,14 @@ impl Intro {
         peer: &[u8; 65],
     ) -> Result<Vec<Record>, Refusal> {
         self.check_size()?;
-        let mut trial = RecordSet::new(set.root().clone());
-        let (_, refused) = trial.insert_all(set.in_dependency_order().into_iter().cloned());
-        if !refused.is_empty() {
-            return Err(Refusal::Broken);
+        // Before any work on the set: the records end in the record of the
+        // sender's key.
+        let ends_in_peer = matches!(self.records.last().map(|r| &r.body().kind), Some(Kind::Device(d)) if d.key.public.as_slice() == peer);
+        if !ends_in_peer {
+            return Err(Refusal::NotMember);
         }
+        // The set's records are verified already: a copy, not a new set.
+        let mut trial = set.clone();
         let mut new = Vec::new();
         for r in &self.records {
             match trial.insert(r.clone()) {
@@ -180,5 +183,39 @@ impl Intro {
             Standing::Member(_) => Ok(new),
             _ => Err(Refusal::NotMember),
         }
+    }
+}
+
+/// The most intros one address may send in a window.
+pub const MAX_PER_WINDOW: u32 = 4;
+/// The window.
+pub const WINDOW_MS: u64 = 60_000;
+/// The most addresses a [`Limiter`] tracks at once.
+pub const MAX_ADDRESSES: usize = 256;
+
+/// Counts intros per address, so that one address cannot make a member
+/// check intro after intro.
+#[derive(Clone, Default, Debug)]
+pub struct Limiter {
+    seen: BTreeMap<Vec<u8>, (u64, u32)>,
+}
+
+impl Limiter {
+    /// Whether an intro from `addr` (its IP address's bytes) at `now_ms` may
+    /// be checked; it counts it.
+    pub fn allow(&mut self, addr: &[u8], now_ms: u64) -> bool {
+        self.seen.retain(|_, (start, _)| now_ms.saturating_sub(*start) < WINDOW_MS);
+        if let Some((_, n)) = self.seen.get_mut(addr) {
+            if *n >= MAX_PER_WINDOW {
+                return false;
+            }
+            *n = n.saturating_add(1);
+            return true;
+        }
+        if self.seen.len() >= MAX_ADDRESSES {
+            return false;
+        }
+        self.seen.insert(addr.to_vec(), (now_ms, 1));
+        true
     }
 }

@@ -20,12 +20,14 @@
 //!   else is a file.
 
 use crate::records::body::{
-    AdminKind, Device, POWER_ADMIT, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND, ROLE_LEAF, STORE_FILE, STORE_PROVEN,
+    AdminKind, CAP_HUB, Device, POWER_ADMIT, RIGHT_HUB, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND, ROLE_LEAF, STORE_FILE,
+    STORE_PROVEN,
 };
 use crate::records::eval::DeviceState;
 use crate::records::{Key, KeyHash, State};
 
 use super::info::Info;
+use super::invitation::Profile;
 
 /// Why an admitter does not admit.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -39,6 +41,9 @@ pub enum Refusal {
     GuardedNeedsRoot,
     /// The joiner's key is not a P-256 key on the curve.
     BadKey,
+    /// The joiner asks for more than its invitation's profile: another
+    /// role, or a hub where the profile gives none.
+    AsksMore,
 }
 
 impl Refusal {
@@ -51,6 +56,7 @@ impl Refusal {
             Refusal::NotAdmitter => "this device may not admit devices to the group",
             Refusal::GuardedNeedsRoot => "only the group's main device admits a lock or another guarded device",
             Refusal::BadKey => "the joining device's key is damaged",
+            Refusal::AsksMore => "the joining device asks for more than its invitation allows",
         }
     }
 }
@@ -103,17 +109,28 @@ pub fn may_admit(state: &State, admitter: &KeyHash, signer: Signer, root_key: &K
 }
 
 /// The joiner's first record, as the admitter signs it; or why not.
-/// `own` is the admitter's own device (for an admin: whether it has
-/// secrets).
+/// `own` is the admitter's own device (an admin's is needed: whether it may
+/// admit, whether it has secrets). `profile` is that of the invitation the
+/// joiner came by: the record never gives more than it (A-42), and a
+/// guarded profile makes a guarded leaf, which only the root admits.
+#[allow(clippy::too_many_arguments, reason = "each is one input of the admission")]
 pub fn joiner_record(
     state: &State,
     signer: Signer,
     own: Option<&DeviceState>,
     joiner_key: &[u8; 65],
     info: &Info,
+    profile: &Profile,
     checked: Checked,
     choice: Choice,
 ) -> Result<Device, Refusal> {
+    let may = match signer {
+        Signer::Root => state.roots.last().is_some_and(|r| may_admit(state, r, Signer::Root, r)),
+        Signer::Admin => own.is_some_and(|o| may_admit(state, &o.key.hash(), Signer::Admin, &KeyHash([0; 32]))),
+    };
+    if !may {
+        return Err(Refusal::NotAdmitter);
+    }
     let key = Key::es256(joiner_key.to_vec());
     if key.check().is_err() {
         return Err(Refusal::BadKey);
@@ -121,7 +138,10 @@ pub fn joiner_record(
     if state.id_taken(&key.device_id()) || state.revoked.contains(&key.hash()) {
         return Err(Refusal::Taken);
     }
-    let guarded = choice.guarded && info.role == ROLE_LEAF;
+    if info.role != profile.role || (info.caps & CAP_HUB != 0 && profile.rights & RIGHT_HUB == 0) {
+        return Err(Refusal::AsksMore);
+    }
+    let guarded = (choice.guarded || profile.guarded) && info.role == ROLE_LEAF;
     if guarded && signer != Signer::Root {
         return Err(Refusal::GuardedNeedsRoot);
     }
@@ -139,10 +159,10 @@ pub fn joiner_record(
     match signer {
         Signer::Admin => {
             let secrets = own.is_some_and(|o| o.rights & RIGHT_SECRETS != 0);
-            d.rights = RIGHT_READ | RIGHT_SEND | if secrets { RIGHT_SECRETS } else { 0 };
+            d.rights = (RIGHT_READ | RIGHT_SEND | if secrets { RIGHT_SECRETS } else { 0 }) & profile.rights;
         }
         Signer::Root => {
-            d.rights = choice.rights;
+            d.rights = choice.rights & profile.rights;
             if let (Some(kind), Some(admin), true) = (choice.admin, info.admin_key(), checked.admin_pop) {
                 let (powers, commands) = kind.grants();
                 d.admin = Some(admin);

@@ -234,6 +234,13 @@ impl Welcome {
         if root.device_id().0 != group.0 {
             return Err(Refusal::OtherGroup);
         }
+        // The counted claims and the claim ages name only claims among the
+        // Welcome's records.
+        let claims: BTreeSet<RecordId> =
+            self.records.iter().filter(|r| matches!(r.body().kind, Kind::Claim { .. })).map(Record::id).collect();
+        if self.counted.iter().chain(self.claim_ages.iter().map(|(id, _)| id)).any(|id| !claims.contains(id)) {
+            return Err(Refusal::Damaged);
+        }
         let mut set = RecordSet::new(root);
         set.insert_all(self.records.iter().cloned());
         // A takeover the admitter counted is final for the joiner too.

@@ -37,6 +37,7 @@ pub enum Refused {
     Broken(Rule),
 }
 
+#[derive(Clone)]
 struct Entry {
     record: Record,
     role: Role,
@@ -44,6 +45,7 @@ struct Entry {
 }
 
 /// A member's record set.
+#[derive(Clone)]
 pub struct RecordSet {
     root: Key,
     keys: Keys,

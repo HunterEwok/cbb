@@ -17,8 +17,9 @@
 //! - An admin takes `waiting` only from a device the records let be a hub.
 //! - The holder keeps a request until the invitation's guest path expires
 //!   (the expiry its admin gave with `guest`), and never more than a day; at
-//!   most 16 requests, one per invitation and key; a second knock of the
-//!   same counts as an attempt.
+//!   most 16 requests, one per invitation and key, and at most 2 of one
+//!   invitation (a third key is refused, so it cannot push out the first);
+//!   a second knock of the same counts as an attempt.
 
 use alloc::vec::Vec;
 
@@ -34,6 +35,9 @@ use crate::records::body::RIGHT_HUB;
 pub const MAX_WAIT_MS: u64 = 86_400_000;
 /// The most requests a holder keeps.
 pub const MAX_REQUESTS: usize = 16;
+/// The most requests of one invitation: whoever holds one invitation
+/// cannot take the places of the others.
+pub const MAX_PER_INVITATION: usize = 2;
 
 pub const RULE_WAITING: Rule = Rule::field("waiting/requests");
 pub const RULE_DISMISS: Rule = Rule::field("dismiss/invite");
@@ -112,7 +116,9 @@ impl Held {
             r.network = network;
             return true;
         }
-        if self.requests.len() >= MAX_REQUESTS {
+        if self.requests.len() >= MAX_REQUESTS
+            || self.requests.iter().filter(|r| r.invite == invite).count() >= MAX_PER_INVITATION
+        {
             return false;
         }
         let until_ms = expires_ms.min(now_ms.saturating_add(MAX_WAIT_MS));

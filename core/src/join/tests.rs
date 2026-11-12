@@ -115,6 +115,26 @@ impl G {
     }
 }
 
+/// The joiner's record by an invitation whose profile allows its role and
+/// every right.
+fn joiner_record_any(
+    st: &State,
+    signer: Signer,
+    own: Option<&crate::records::eval::DeviceState>,
+    key: &[u8; 65],
+    info: &Info,
+    checked: Checked,
+    choice: Choice,
+) -> Result<Device, decide::Refusal> {
+    let profile = Profile {
+        role: info.role,
+        rights: RIGHT_READ | RIGHT_SEND | RIGHT_HUB | RIGHT_SECRETS,
+        home_only: false,
+        guarded: false,
+    };
+    decide::joiner_record(st, signer, own, key, info, &profile, checked, choice)
+}
+
 fn info(name: &str, role: u64) -> Info {
     Info::new(name, 1, role)
 }
@@ -168,6 +188,25 @@ fn info_rows() {
 }
 
 #[test]
+fn the_info_follows_its_table() {
+    use crate::format::{Rule, Value};
+    let info_of = |extra: (u16, Value<'_>)| {
+        let mut m = vec![(1, Value::Text("tv")), (4, Value::Uint(ROLE_MEMBER))];
+        m.push(extra);
+        m.sort_by_key(|(k, _)| *k);
+        Value::Map(m).encode()
+    };
+    // A field at its default is left out, not written.
+    assert_eq!(Info::decode(&info_of((2, Value::Uint(0)))), Err(Rule::field("pair/info/os")));
+    assert_eq!(Info::decode(&info_of((3, Value::Uint(0)))), Err(Rule::field("pair/info/caps")));
+    // Admin keys come as a signed envelope.
+    assert_eq!(Info::decode(&info_of((7, Value::Bytes(b"not an envelope")))), Err(Rule::field("pair/info/keys")));
+    assert_eq!(Info::decode(&info_of((9, Value::Bytes(&[1; 8])))), Err(Rule::field("pair/info/invite")));
+    // A field the table does not list is skipped.
+    assert!(Info::decode(&info_of((40, Value::Uint(7)))).is_ok());
+}
+
+#[test]
 fn who_admits_whom() {
     let g = G::new();
     let st = g.state();
@@ -182,7 +221,7 @@ fn who_admits_whom() {
     let mut ask = info("tv", ROLE_MEMBER);
     ask.caps = CAP_HUB;
     let wide = Choice { rights: RIGHT_READ | RIGHT_SEND | RIGHT_HUB | RIGHT_SECRETS, admin: None, guarded: false };
-    let d = decide::joiner_record(&st, Signer::Admin, laptop_dev.as_ref(), &point(&tv), &ask, Checked::default(), wide)
+    let d = joiner_record_any(&st, Signer::Admin, laptop_dev.as_ref(), &point(&tv), &ask, Checked::default(), wide)
         .unwrap();
     assert_eq!(d.rights, RIGHT_READ | RIGHT_SEND);
     assert_eq!(d.store, STORE_FILE, "no evidence: a file, whatever the device says");
@@ -192,7 +231,7 @@ fn who_admits_whom() {
     let lamp = k("lamp");
     let leaf = info("lamp", ROLE_LEAF);
     assert!(
-        decide::joiner_record(
+        joiner_record_any(
             &st,
             Signer::Admin,
             laptop_dev.as_ref(),
@@ -205,21 +244,11 @@ fn who_admits_whom() {
     );
     let guarded = Choice { guarded: true, ..Choice::default() };
     assert_eq!(
-        decide::joiner_record(
-            &st,
-            Signer::Admin,
-            laptop_dev.as_ref(),
-            &point(&lamp),
-            &leaf,
-            Checked::default(),
-            guarded
-        ),
+        joiner_record_any(&st, Signer::Admin, laptop_dev.as_ref(), &point(&lamp), &leaf, Checked::default(), guarded),
         Err(decide::Refusal::GuardedNeedsRoot)
     );
     assert!(
-        decide::joiner_record(&st, Signer::Root, None, &point(&lamp), &leaf, Checked::default(), guarded)
-            .unwrap()
-            .guarded
+        joiner_record_any(&st, Signer::Root, None, &point(&lamp), &leaf, Checked::default(), guarded).unwrap().guarded
     );
 
     // An admin key: only from the root, only with its proof, only as one of the three sets.
@@ -227,14 +256,14 @@ fn who_admits_whom() {
     let mut ph = info("phone 2", ROLE_PHONE);
     ph.admin = Some(k("phone 2 admin").key.public.clone());
     let make = Choice { rights: RIGHT_READ | RIGHT_SEND, admin: Some(AdminKind::Phone), guarded: false };
-    let none = decide::joiner_record(&st, Signer::Root, None, &point(&phone2), &ph, Checked::default(), make).unwrap();
+    let none = joiner_record_any(&st, Signer::Root, None, &point(&phone2), &ph, Checked::default(), make).unwrap();
     assert!(none.admin.is_none(), "no proof, no admin key");
     let proven = Checked { admin_pop: true, proof: Some(1) };
-    let d = decide::joiner_record(&st, Signer::Root, None, &point(&phone2), &ph, proven, make).unwrap();
+    let d = joiner_record_any(&st, Signer::Root, None, &point(&phone2), &ph, proven, make).unwrap();
     assert_eq!((d.powers, d.commands), AdminKind::Phone.grants());
     assert_eq!((d.store, d.proof), (STORE_PROVEN, 1));
     let by_admin =
-        decide::joiner_record(&st, Signer::Admin, laptop_dev.as_ref(), &point(&phone2), &ph, proven, make).unwrap();
+        joiner_record_any(&st, Signer::Admin, laptop_dev.as_ref(), &point(&phone2), &ph, proven, make).unwrap();
     assert!(by_admin.admin.is_none(), "an admin never gives an admin key");
 }
 
@@ -250,7 +279,7 @@ fn a_removed_device_does_not_come_back_with_its_key() {
     let st = g.state();
     assert!(st.device_by_key(&tv.hash).is_none());
     assert_eq!(
-        decide::joiner_record(
+        joiner_record_any(
             &st,
             Signer::Root,
             None,
@@ -263,7 +292,7 @@ fn a_removed_device_does_not_come_back_with_its_key() {
     );
     // With a new key it is a new device.
     assert!(
-        decide::joiner_record(
+        joiner_record_any(
             &st,
             Signer::Root,
             None,
@@ -281,7 +310,7 @@ fn admit(g: &mut G, by_admin: bool, joiner: &K, name: &str) -> Welcome {
     let laptop = k("laptop");
     let own = st.device_by_key(&laptop.hash).cloned();
     let signer = if by_admin { Signer::Admin } else { Signer::Root };
-    let d = decide::joiner_record(
+    let d = joiner_record_any(
         &st,
         signer,
         own.as_ref(),
@@ -345,15 +374,30 @@ fn the_joiner_checks_its_welcome() {
     counted.counted = vec![RecordId([2; 32]), RecordId([1; 32])];
     let back = Welcome::decode(&counted.encode()).unwrap();
     assert_eq!(back.counted, vec![RecordId([1; 32]), RecordId([2; 32])], "written sorted");
-    // The joiner takes the admitter's counted claims as its own.
-    let (set, _, _) = back.check(&group, &point(&k("phone")), &point(&tab)).unwrap();
-    assert!(set.counted().contains(&RecordId([1; 32])) && set.counted().contains(&RecordId([2; 32])));
     // The encoding's parts read back.
     let (root, envs, ages, time) = Welcome::parts(&w.encode()).unwrap();
     assert_eq!(root, g.root.key.public);
     assert_eq!(envs.len(), w.records.len());
     assert!(ages.is_empty());
     assert_eq!(time, 1_793_000_000_000);
+    // Counted claims and claim ages name only claims among the Welcome's records.
+    assert_eq!(back.check(&group, &point(&k("phone")), &point(&tab)).err(), Some(welcome::Refusal::Damaged));
+    let mut aged = w.clone();
+    aged.claim_ages = vec![(RecordId([1; 32]), 5)];
+    assert_eq!(aged.check(&group, &point(&k("phone")), &point(&tab)).err(), Some(welcome::Refusal::Damaged));
+    // The joiner takes the admitter's counted claims as its own: the laptop
+    // admits a pad, then claims the group; its takeover counts for the pad.
+    let pad = k("pad");
+    admit(&mut g, true, &pad, "pad");
+    let seen = g.seen();
+    let claim = g.rec(&k("laptop admin"), Kind::Claim { root: k("new root").key.clone(), seen });
+    let set = g.set();
+    let st = set.state(&BTreeMap::new());
+    let mut w = Welcome::build(&set, &st, &k("laptop").hash, &pad.hash, &BTreeMap::new(), 1_793_000_000_000);
+    w.counted = vec![claim.id()];
+    let back = Welcome::decode(&w.encode()).unwrap();
+    let (set, _, _) = back.check(&group, &point(&k("laptop")), &point(&pad)).unwrap();
+    assert!(set.counted().contains(&claim.id()));
 }
 
 #[test]
@@ -643,4 +687,153 @@ fn a_request_waits_for_an_admin() {
     assert!(h2.knock(&point(&joiner), ask.clone(), Network::Guest, t0, t0 + day));
     h2.requests[0].invite = [6; 16];
     assert_eq!(waiting::read(&h2.message(t0).unwrap()), Err(waiting::RULE_WAITING));
+}
+
+#[test]
+fn an_intro_is_checked_only_when_it_ends_in_its_sender() {
+    let mut g = G::new();
+    for i in 0..200 {
+        let mut d = Device::new(k(&format!("device {i}")).key.clone(), "d", ROLE_MEMBER);
+        d.rights = RIGHT_READ;
+        g.rec_root(Kind::Device(d));
+    }
+    let set = g.set();
+    let me = fhash(&k("phone"));
+    let stranger = k("stranger");
+    // An intro that does not end in the sender's record is refused before
+    // any work on the set: it costs far less than checking the set's records.
+    let empty = Intro::default();
+    let t = std::time::Instant::now();
+    for _ in 0..5 {
+        assert_eq!(empty.check(&set, &BTreeMap::new(), &me, &point(&stranger)), Err(intro::Refusal::NotMember));
+    }
+    let per_intro = t.elapsed() / 5;
+    let t = std::time::Instant::now();
+    for _ in 0..20 {
+        let mut s = RecordSet::new(g.root.key.clone());
+        let _ = s.insert(g.recs[1].clone());
+    }
+    let per_record = t.elapsed() / 20;
+    assert!(per_intro < per_record * 20, "{per_intro:?} for an intro, {per_record:?} for one record");
+    // Another device's record at the end: refused too.
+    let other = Intro { records: vec![g.recs[1].clone()], keys: None };
+    assert_eq!(other.check(&set, &BTreeMap::new(), &me, &point(&stranger)), Err(intro::Refusal::NotMember));
+
+    // At most a few intros per address in a window.
+    let mut lim = intro::Limiter::default();
+    for _ in 0..intro::MAX_PER_WINDOW {
+        assert!(lim.allow(&[192, 0, 2, 1], 0));
+    }
+    assert!(!lim.allow(&[192, 0, 2, 1], 1));
+    assert!(lim.allow(&[192, 0, 2, 2], 1), "another address");
+    assert!(lim.allow(&[192, 0, 2, 1], intro::WINDOW_MS), "the next window");
+}
+
+#[test]
+fn the_record_follows_the_invitation_profile() {
+    let g = G::new();
+    let st = g.state();
+    let laptop = st.device_by_key(&k("laptop").hash).cloned();
+    let phone = st.device_by_key(&k("phone").hash).cloned();
+    let kettle = info("kettle", ROLE_LEAF);
+    // A small device's invitation: a leaf with no rights, whoever admits.
+    let small = Profile::small_device();
+    let wide = Choice { rights: RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS, admin: None, guarded: false };
+    for (signer, own) in [(Signer::Admin, laptop.as_ref()), (Signer::Root, phone.as_ref())] {
+        let d =
+            decide::joiner_record(&st, signer, own, &point(&k("kettle")), &kettle, &small, Checked::default(), wide)
+                .unwrap();
+        assert_eq!(d.rights, 0, "{signer:?}");
+    }
+    // A guarded profile: a guarded leaf, which an admin may not admit.
+    let lock = Profile { guarded: true, ..small };
+    let li = info("lock", ROLE_LEAF);
+    assert_eq!(
+        decide::joiner_record(
+            &st,
+            Signer::Admin,
+            laptop.as_ref(),
+            &point(&k("lock")),
+            &li,
+            &lock,
+            Checked::default(),
+            Choice::default()
+        ),
+        Err(decide::Refusal::GuardedNeedsRoot)
+    );
+    let d = decide::joiner_record(
+        &st,
+        Signer::Root,
+        phone.as_ref(),
+        &point(&k("lock")),
+        &li,
+        &lock,
+        Checked::default(),
+        Choice::default(),
+    )
+    .unwrap();
+    assert!(d.guarded);
+    // Another role than the profile's, or a hub it does not give.
+    assert_eq!(
+        decide::joiner_record(
+            &st,
+            Signer::Admin,
+            laptop.as_ref(),
+            &point(&k("tv")),
+            &info("tv", ROLE_MEMBER),
+            &small,
+            Checked::default(),
+            Choice::default()
+        ),
+        Err(decide::Refusal::AsksMore)
+    );
+    let mut hub = info("tv", ROLE_MEMBER);
+    hub.caps = CAP_HUB;
+    let member = Profile { role: ROLE_MEMBER, rights: RIGHT_READ | RIGHT_SEND, home_only: false, guarded: false };
+    assert_eq!(
+        decide::joiner_record(
+            &st,
+            Signer::Admin,
+            laptop.as_ref(),
+            &point(&k("tv")),
+            &hub,
+            &member,
+            Checked::default(),
+            Choice::default()
+        ),
+        Err(decide::Refusal::AsksMore)
+    );
+    // The admission checks the admitter itself: a device without admit.
+    assert_eq!(
+        decide::joiner_record(
+            &st,
+            Signer::Admin,
+            None,
+            &point(&k("tv")),
+            &info("tv", ROLE_MEMBER),
+            &member,
+            Checked::default(),
+            Choice::default()
+        ),
+        Err(decide::Refusal::NotAdmitter)
+    );
+}
+
+#[test]
+fn one_invitation_takes_few_waiting_places() {
+    use super::waiting::{self, Held};
+    let mut held = Held::default();
+    let (t0, exp) = (1_000_000u64, 1_000_000u64 + waiting::MAX_WAIT_MS);
+    for i in 0..waiting::MAX_REQUESTS {
+        let mut a = info("x", ROLE_MEMBER);
+        a.invite = Some([5; 16]);
+        let kept = held.knock(&point(&k(&format!("fresh {i}"))), a, Network::Guest, t0, exp);
+        assert_eq!(kept, i < waiting::MAX_PER_INVITATION);
+    }
+    let mut real = info("kitchen tablet", ROLE_MEMBER);
+    real.invite = Some([6; 16]);
+    assert!(
+        held.knock(&point(&k("real tablet")), real, Network::Guest, t0 + 1, exp),
+        "another invitation still has room"
+    );
 }

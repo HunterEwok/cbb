@@ -110,9 +110,7 @@ impl Info {
     /// are skipped: messages are not signed and later versions add fields.
     pub fn decode(b: &[u8]) -> Result<Info, Rule> {
         let v = cbor::decode(b)?;
-        if v.as_map().is_none() {
-            return Err(RULE_SHAPE);
-        }
+        crate::msg::check_map(&crate::msg::tables::INFO, &v)?;
         let name = v.get(1).and_then(Value::as_text).ok_or(RULE_NAME)?;
         if !valid_name(name) {
             return Err(RULE_NAME);
