@@ -11,7 +11,7 @@ use alloc::vec::Vec;
 use super::body::{Head, Seen};
 use super::eval::{self, Checked, ClaimState, Counted, Keys, Role, State, Why};
 use super::key::{Key, KeyHash, RecordId};
-use super::{Kind, Record, Rule, keep};
+use super::{Kind, Mark, Record, Rule, keep};
 
 /// What inserting a record did.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -129,7 +129,7 @@ impl RecordSet {
     /// place; then the set is cut back to its ceilings.
     pub fn insert(&mut self, r: Record) -> Result<Added, Refused> {
         let id = r.id();
-        let added = self.insert_only(r);
+        let added = self.insert_only(r, None);
         if matches!(added, Ok(Added::Stored)) && !self.pending.is_empty() {
             // A claim the records do not prove yet waits for more.
             let _ = self.read_pending(false);
@@ -142,7 +142,7 @@ impl RecordSet {
 
     /// insert without reading the waiting counted claims, which insert_all
     /// reads once a round.
-    fn insert_only(&mut self, r: Record) -> Result<Added, Refused> {
+    fn insert_only(&mut self, r: Record, mark: Option<(&[u8; 32], &Mark)>) -> Result<Added, Refused> {
         if r.body().group != self.root.device_id() {
             return Err(Refused::Group);
         }
@@ -183,7 +183,7 @@ impl RecordSet {
             // Its key dropped a record before it: it would not be kept.
             return Ok(Added::NoRoom);
         }
-        let held = r.verify(&key).map_err(Refused::Broken)?;
+        let held = r.verify_marked(&key, mark).map_err(Refused::Broken)?;
         self.keys.learn(r.body(), role, held);
         let units = self.units.entry(signer).or_default();
         *units = units.saturating_add(eval::item(&r, role).units);
@@ -209,36 +209,66 @@ impl RecordSet {
     /// from another of them are tried again until none is left that can be
     /// taken. It returns how many were stored and the refusals.
     pub fn insert_all(&mut self, records: impl IntoIterator<Item = Record>) -> (usize, Vec<(RecordId, Refused)>) {
+        self.insert_all_marked(records.into_iter().map(|r| (r, None)), None)
+    }
+
+    /// insert_all for the records of the device's own store, each with the
+    /// mark it was saved with (`marked`): a record whose mark holds under
+    /// local is taken without verifying its signature; one with a missing
+    /// or wrong mark is verified as if new. Records from peers always go
+    /// through insert or insert_all.
+    pub fn load_marked(
+        &mut self,
+        local: &[u8; 32],
+        records: impl IntoIterator<Item = (Record, Option<Mark>)>,
+    ) -> (usize, Vec<(RecordId, Refused)>) {
+        self.insert_all_marked(records, Some(local))
+    }
+
+    /// The records to save in the device's own store, in dependency order,
+    /// each with its mark under local; saving them again marks the ones
+    /// load_marked verified by their signature.
+    pub fn marked(&self, local: &[u8; 32]) -> Vec<(&Record, Mark)> {
+        self.in_dependency_order().into_iter().map(|r| (r, r.mark(local))).collect()
+    }
+
+    fn insert_all_marked(
+        &mut self,
+        records: impl IntoIterator<Item = (Record, Option<Mark>)>,
+        local: Option<&[u8; 32]>,
+    ) -> (usize, Vec<(RecordId, Refused)>) {
         let mut stored = 0usize;
         let mut refused = Vec::new();
         // Only the records that wait for their signer are held aside; the
         // others go straight in.
         let mut waiting = Vec::new();
-        let mut progress = self.insert_each(records, &mut waiting, &mut stored, &mut refused);
+        let mut progress = self.insert_each(records, local, &mut waiting, &mut stored, &mut refused);
         while progress && !waiting.is_empty() {
             let todo = core::mem::take(&mut waiting);
-            progress = self.insert_each(todo, &mut waiting, &mut stored, &mut refused);
+            progress = self.insert_each(todo, local, &mut waiting, &mut stored, &mut refused);
         }
-        refused.extend(waiting.iter().map(|r| (r.id(), Refused::UnknownSigner)));
+        refused.extend(waiting.iter().map(|(r, _)| (r.id(), Refused::UnknownSigner)));
         (stored, refused)
     }
 
     /// One round of insert_all: whether it stored any.
     fn insert_each(
         &mut self,
-        records: impl IntoIterator<Item = Record>,
-        waiting: &mut Vec<Record>,
+        records: impl IntoIterator<Item = (Record, Option<Mark>)>,
+        local: Option<&[u8; 32]>,
+        waiting: &mut Vec<(Record, Option<Mark>)>,
         stored: &mut usize,
         refused: &mut Vec<(RecordId, Refused)>,
     ) -> bool {
         let mut progress = false;
-        for r in records {
+        for (r, mark) in records {
             if r.body().group == self.root.device_id() && self.keys.signer(&r.body().signer).is_none() {
-                waiting.push(r);
+                waiting.push((r, mark));
                 continue;
             }
             let id = r.id();
-            match self.insert_only(r) {
+            let with = local.zip(mark.as_ref());
+            match self.insert_only(r, with) {
                 Ok(Added::Stored) => {
                     *stored = stored.saturating_add(1);
                     progress = true;
