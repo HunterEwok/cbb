@@ -618,7 +618,10 @@ fn the_joiner_checks_its_welcome() {
     let pad = k("pad");
     admit(&mut g, true, &pad, "pad");
     let seen = g.seen();
-    let claim = g.rec(&k("laptop admin"), Kind::Claim { root: k("new root").key.clone(), seen });
+    let claim = g.rec(
+        &k("laptop admin"),
+        Kind::Claim { root: k("new root").key.clone(), keep: crate::records::keep_of(&g.recs, &seen), seen },
+    );
     let set = g.set();
     let st = set.state(&BTreeMap::new());
     let mut w = Welcome::build(&set, &st, &k("laptop").hash, &pad.hash, &BTreeMap::new(), 1_793_000_000_000);
@@ -653,7 +656,10 @@ fn the_joiner_checks_its_welcome() {
     .unwrap();
     g.rec(&k("phone 2 admin"), Kind::device(d));
     let seen = g.seen();
-    let claim = g.rec(&k("phone 2 admin"), Kind::Claim { root: k("phone 2 root").key.clone(), seen });
+    let claim = g.rec(
+        &k("phone 2 admin"),
+        Kind::Claim { root: k("phone 2 root").key.clone(), keep: crate::records::keep_of(&g.recs, &seen), seen },
+    );
     let set = g.set();
     let st = set.state(&BTreeMap::new());
     // A claim that has not waited the root's delay by the Welcome's own
@@ -729,10 +735,10 @@ fn the_joiner_takes_two_counted_takeovers() {
     phone_admin(&mut g, &root, &k("phone a"), "phone a", &a, false);
     g.rec_root(Kind::Handover { admin: a.hash });
     let seen = g.seen();
-    let c1 = g.rec(&a, Kind::Claim { root: n1.key.clone(), seen });
+    let c1 = g.rec(&a, Kind::Claim { root: n1.key.clone(), keep: crate::records::keep_of(&g.recs, &seen), seen });
     phone_admin(&mut g, &n1, &k("phone b"), "phone b", &b, false);
     let seen = g.seen();
-    let c2 = g.rec(&b, Kind::Claim { root: n2.key.clone(), seen });
+    let c2 = g.rec(&b, Kind::Claim { root: n2.key.clone(), keep: crate::records::keep_of(&g.recs, &seen), seen });
     phone_admin(&mut g, &n2, &k("phone b"), "phone b", &b, true);
     let slate = k("slate");
     let mut d = Device::new(slate.key.clone(), "slate", ROLE_MEMBER);
@@ -806,7 +812,7 @@ fn a_guarded_leaf_takes_the_new_root_from_its_code() {
     phone_admin(&mut g, &root, &k("phone a"), &a, false);
     g.rec_root(Kind::Handover { admin: a.hash });
     let seen = g.seen();
-    let c1 = g.rec(&a, Kind::Claim { root: n1.key.clone(), seen });
+    let c1 = g.rec(&a, Kind::Claim { root: n1.key.clone(), keep: crate::records::keep_of(&g.recs, &seen), seen });
     phone_admin(&mut g, &n1, &k("phone a"), &a, true);
     guarded_leaf(&mut g, &n1, &lock);
     let group = format::DeviceId(g.gid.0);
@@ -827,7 +833,7 @@ fn a_guarded_leaf_takes_the_new_root_from_its_code() {
     let (b, n2, lock2) = (k("admin b"), k("root n2"), k("lock 2"));
     phone_admin(&mut g, &n1, &k("phone b"), &b, false);
     let seen = g.seen();
-    let c2 = g.rec(&b, Kind::Claim { root: n2.key.clone(), seen });
+    let c2 = g.rec(&b, Kind::Claim { root: n2.key.clone(), keep: crate::records::keep_of(&g.recs, &seen), seen });
     phone_admin(&mut g, &n2, &k("phone b"), &b, true);
     guarded_leaf(&mut g, &n2, &lock2);
     let held = BTreeMap::from([(c2.id(), DEFAULT_DELAY_MS)]);

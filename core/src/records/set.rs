@@ -8,8 +8,8 @@
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::vec::Vec;
 
-use super::body::{Head, Seen};
-use super::eval::{self, Checked, ClaimState, Counted, Keys, Role, State, Why};
+use super::body::Head;
+use super::eval::{self, Checked, ClaimState, Counted, Cut, Keys, Role, State, Why};
 use super::key::{Key, KeyHash, RecordId};
 use super::{Kind, Mark, Record, Rule, keep};
 
@@ -63,8 +63,8 @@ pub struct RecordSet {
     /// yet; read in order as they come.
     pending: Vec<RecordId>,
     /// The takeovers' cuts of the roots before the promoted ones (`compact`):
-    /// such a root keeps nothing off its cut.
-    cuts: BTreeMap<KeyHash, Seen>,
+    /// such a root keeps only the records its counted claim lists.
+    cuts: BTreeMap<KeyHash, Cut>,
     /// The checkpoints that counted when the set last compacted: what
     /// they prune is not taken again.
     checkpoints: Vec<(Vec<Head>, BTreeSet<RecordId>)>,
@@ -164,26 +164,23 @@ impl RecordSet {
             // A counting checkpoint left it out.
             return Ok(Added::NoRoom);
         }
-        let lines = match self.cuts.get(&signer) {
-            Some(cut) => {
-                let cuts = BTreeMap::from([(signer, *cut)]);
-                let mine = self.records.values().map(|e| &e.record).filter(|x| x.body().signer == signer);
-                eval::lines(&cuts, mine.chain([&r]))
+        match self.cuts.get(&signer) {
+            // A root a takeover followed: only what the claim lists stays,
+            // outside the rooms.
+            Some(cut) if !cut.keeps(&id) => return Ok(Added::NoRoom),
+            Some(_) => {}
+            None => {
+                if self.ceiling(&signer).is_some() {
+                    // It depends on the key alone: one with room of its
+                    // own has no place where it stopped without.
+                    self.cut.forget_future(&signer);
+                }
+                if self.cut.past(&eval::item(&r, role)) {
+                    // Its key dropped a record before it: it would not be
+                    // kept.
+                    return Ok(Added::NoRoom);
+                }
             }
-            None => BTreeMap::new(),
-        };
-        if lines.get(&signer).is_some_and(|l| l.off(&r)) {
-            // Its root signed it off the chain the takeover saw.
-            return Ok(Added::NoRoom);
-        }
-        if self.ceiling(&signer).is_some() {
-            // It depends on the key alone: one with room of its own has
-            // no place where it stopped without.
-            self.cut.forget_future(&signer);
-        }
-        if self.cut.past(&eval::item_cut(&r, role, &lines)) {
-            // Its key dropped a record before it: it would not be kept.
-            return Ok(Added::NoRoom);
         }
         let held = r.verify_marked(&key, mark).map_err(Refused::Broken)?;
         self.keys.learn(r.body(), role, held);
@@ -191,16 +188,6 @@ impl RecordSet {
         *units = units.saturating_add(eval::item(&r, role).units);
         self.bytes = self.bytes.saturating_add(r.size());
         self.records.insert(id, Entry { record: r, role, held });
-        if let Some(cut) = self.cuts.get(&signer) {
-            // A record of a cut root may show more of the chain the
-            // takeover saw: what is now off it goes, as on a member that
-            // took the records in another order.
-            let cuts = BTreeMap::from([(signer, *cut)]);
-            let mine = self.records.values().map(|e| &e.record).filter(|x| x.body().signer == signer);
-            for off in eval::off_cuts(&cuts, mine) {
-                self.remove(&off);
-            }
-        }
         if self.needs_cut(&signer) {
             self.cut();
         }
@@ -297,14 +284,24 @@ impl RecordSet {
         for id in &off {
             self.remove(id);
         }
-        let lines = eval::lines(&self.cuts, self.records.values().map(|e| &e.record));
-        let items: Vec<keep::Item> =
-            self.records.values().map(|e| eval::item_cut(&e.record, self.role_of(e), &lines)).collect();
+        // What a counted claim lists of the root it followed is kept
+        // outside the rooms.
+        let items: Vec<keep::Item> = self
+            .records
+            .values()
+            .filter(|e| !self.cuts.contains_key(&e.record.body().signer))
+            .map(|e| eval::item(&e.record, self.role_of(e)))
+            .collect();
         let ceilings: BTreeMap<KeyHash, Option<u64>> =
             items.iter().map(|it| (it.signer, self.ceiling(&it.signer))).collect();
         let (kept, cut) = keep::keep_after(&items, |k| ceilings.get(k).copied().flatten(), &self.cut);
         self.cut = cut;
-        let drop: Vec<RecordId> = self.records.keys().filter(|id| !kept.contains(*id)).copied().collect();
+        let drop: Vec<RecordId> = self
+            .records
+            .iter()
+            .filter(|(id, e)| !kept.contains(*id) && !self.cuts.contains_key(&e.record.body().signer))
+            .map(|(id, _)| *id)
+            .collect();
         for id in drop {
             self.remove(&id);
         }
@@ -444,6 +441,13 @@ impl RecordSet {
         &self.counted
     }
 
+    /// The records a counted claim lists of the root it followed that
+    /// the set does not hold: a member fetches them from its peers as it
+    /// fetches any record it lacks.
+    pub fn missing(&self) -> Vec<RecordId> {
+        self.cuts.values().flat_map(|c| c.keep.iter()).filter(|id| !self.records.contains_key(*id)).copied().collect()
+    }
+
     /// Takes claims as counted, in the order they were counted: those the
     /// caller kept from before a restart, or those its admitter counted.
     /// Each is read from its record, under the root the one before it
@@ -451,8 +455,9 @@ impl RecordSet {
     /// counted claim stays counted, in its place.
     ///
     /// Each is checked once, when its record is read: the records must
-    /// prove that its claimant held the takeover power under that root
-    /// within its cut and was not removed. One they do not prove is
+    /// prove that its claimant held the takeover power under that root as
+    /// of its own seen and was not removed, and the claim must list what
+    /// the counted claim keeps. One they do not prove is
     /// refused with those after it, and its ID comes back.
     pub fn remember_counted(&mut self, ids: impl IntoIterator<Item = RecordId>) -> Result<(), RecordId> {
         for id in ids {
@@ -483,10 +488,10 @@ impl RecordSet {
     /// claims always among them: a counted takeover's root has a root's
     /// room and its old root keeps only its chain, whatever path a state
     /// showed.
-    fn keep_by(&mut self, mut promoted: BTreeSet<KeyHash>, mut cuts: BTreeMap<KeyHash, Seen>) {
+    fn keep_by(&mut self, mut promoted: BTreeSet<KeyHash>, mut cuts: BTreeMap<KeyHash, Cut>) {
         for c in &self.counted {
             promoted.insert(c.root.hash());
-            cuts.insert(c.cut.key, c.cut);
+            cuts.insert(c.cut.key, c.cut.clone());
         }
         if promoted != self.promoted || cuts != self.cuts {
             self.promoted = promoted;
@@ -554,7 +559,7 @@ impl RecordSet {
             self.counted = along;
         }
         let promoted: BTreeSet<KeyHash> = state.roots.iter().skip(1).copied().collect();
-        let cuts: BTreeMap<KeyHash, Seen> = state.cuts.iter().map(|c| (c.key, *c)).collect();
+        let cuts: BTreeMap<KeyHash, Cut> = state.cuts.iter().map(|c| (c.key, c.clone())).collect();
         self.keep_by(promoted, cuts);
         self.checkpoints = state
             .checkpoints

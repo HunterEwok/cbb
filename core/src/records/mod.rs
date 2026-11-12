@@ -113,7 +113,8 @@ pub const MAX_SEEN: usize = 1024;
 
 // The ceilings frozen in the format (section 13).
 
-/// A record body, and a checkpoint's.
+/// A record body, and a checkpoint's or a claim's (whose list of kept
+/// records may name 1024 IDs).
 pub const MAX_BODY: usize = 8 << 10;
 pub const MAX_CHECKPOINT_BODY: usize = 64 << 10;
 /// Records of one root key.
@@ -228,7 +229,11 @@ impl Record {
     pub fn decode(envelope: &[u8]) -> Result<Record, Rule> {
         let e = crate::format::Envelope::parse_limited(envelope, MAX_CHECKPOINT_BODY)?;
         let body = Body::from_value(&e.map)?;
-        let max = if matches!(body.kind, Kind::Checkpoint { .. }) { MAX_CHECKPOINT_BODY } else { MAX_BODY };
+        let max = if matches!(body.kind, Kind::Checkpoint { .. } | Kind::Claim { .. }) {
+            MAX_CHECKPOINT_BODY
+        } else {
+            MAX_BODY
+        };
         if e.body.len() > max {
             return Err(crate::format::Rule::ENV_SIZE.into());
         }
@@ -269,9 +274,13 @@ impl Record {
         self.bytes.len().saturating_add(rest)
     }
 
-    /// The ceiling on its body: a checkpoint's is larger.
+    /// The ceiling on its body: a checkpoint's or a claim's is larger.
     fn max_body(&self) -> usize {
-        if matches!(self.body.kind, Kind::Checkpoint { .. }) { MAX_CHECKPOINT_BODY } else { MAX_BODY }
+        if matches!(self.body.kind, Kind::Checkpoint { .. } | Kind::Claim { .. }) {
+            MAX_CHECKPOINT_BODY
+        } else {
+            MAX_BODY
+        }
     }
 
     /// Checks what can be checked without the set: the body's size and
@@ -339,4 +348,42 @@ pub fn digest<'a>(ids: impl IntoIterator<Item = &'a RecordId>) -> [u8; 32] {
         m.extend_from_slice(&id.0);
     }
     sha256(&m)
+}
+
+/// What a test's claim keeps of the roots it follows: every record but a
+/// checkpoint of a root key it saw, up to the seq it saw, sorted (rule
+/// 32). A key a device or recovery record names as an admin is no root.
+/// Past 1024 records, whole keys go in, those with fewer records first.
+#[cfg(test)]
+pub(crate) fn keep_of(records: &[Record], seen: &[body::Seen]) -> Vec<RecordId> {
+    use alloc::collections::{BTreeMap, BTreeSet};
+    let admins: BTreeSet<KeyHash> = records
+        .iter()
+        .filter_map(|r| match &r.body().kind {
+            Kind::Device(d) => d.admin.as_ref().map(Key::hash),
+            Kind::Recovery { admin } => Some(admin.hash()),
+            _ => None,
+        })
+        .collect();
+    let mut by_key: BTreeMap<KeyHash, BTreeSet<RecordId>> = BTreeMap::new();
+    for r in records {
+        let b = r.body();
+        if !admins.contains(&b.signer)
+            && !matches!(b.kind, Kind::Checkpoint { .. })
+            && b.seq <= body::seen_of(seen, &b.signer)
+        {
+            by_key.entry(b.signer).or_default().insert(r.id());
+        }
+    }
+    let mut keys: Vec<&BTreeSet<RecordId>> = by_key.values().collect();
+    keys.sort_by_key(|ids| ids.len());
+    let mut ids: Vec<RecordId> = Vec::new();
+    for k in keys {
+        if ids.len() + k.len() > MAX_ROOT_RECORDS {
+            break;
+        }
+        ids.extend(k.iter().copied());
+    }
+    ids.sort();
+    ids
 }

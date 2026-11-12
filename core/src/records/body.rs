@@ -11,7 +11,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use super::key::{DeviceId, GroupId, Key, KeyCheck, KeyHash, RecordId};
-use super::{MAX_SEQ, Rule};
+use super::{MAX_ROOT_RECORDS, MAX_SEQ, Rule};
 use crate::format::cbor::{MAX_INT, Value};
 
 /// Record types (section 4).
@@ -166,6 +166,9 @@ pub enum Kind {
     Claim {
         root: Key,
         seen: Vec<Seen>,
+        /// The records of the root it follows that stay once it counts,
+        /// by ID, sorted (rule 32): nothing else of that root counts then.
+        keep: Vec<RecordId>,
     },
     Resolve(Vec<RecordId>),
     Settings(Box<Settings>),
@@ -456,9 +459,12 @@ impl Body {
                     check_seen(seen, t)?;
                 }
             }
-            Kind::Claim { root, seen } => {
+            Kind::Claim { root, seen, keep } => {
                 held |= signer_key(root, t, "root")?;
                 check_seen(seen, t)?;
+                if keep.len() > MAX_ROOT_RECORDS || !strictly_sorted(keep) {
+                    return Err(field(t, "keep"));
+                }
             }
             Kind::Settings(s) => held |= check_settings(s)?,
             Kind::Copies { incoming_ms, seen } => {
@@ -536,9 +542,12 @@ impl Body {
                 m.push((11, seen(s)));
             }
             Kind::Resolve(v) => m.push((10, ids(v))),
-            Kind::Claim { root, seen: s } => {
+            Kind::Claim { root, seen: s, keep } => {
                 m.push((10, root.to_value()));
                 m.push((11, seen(s)));
+                if !keep.is_empty() {
+                    m.push((12, ids(keep)));
+                }
             }
             Kind::Settings(s) => encode_settings(&mut m, s),
             Kind::Copies { incoming_ms, seen: s } => {
@@ -610,7 +619,9 @@ impl Body {
             }
             TYPE_CLAIM => {
                 let root = Key::read(r.need(10, f("root"))?)?;
-                (Kind::Claim { root, seen: read_seen(&r, f("seen"))? }, &[10, 11], &[])
+                let seen = read_seen(&r, f("seen"))?;
+                let keep = r.opt_list(12, f("keep"), |v| v.as_bytes().and_then(RecordId::from_slice))?;
+                (Kind::Claim { root, seen, keep }, &[10, 11, 12], &[])
             }
             TYPE_SETTINGS => (Kind::settings(read_settings(&r)?), &[10, 11, 12, 14, 15], &[13]),
             TYPE_COPIES => {
