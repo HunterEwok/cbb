@@ -1141,7 +1141,10 @@ the QR code dials the computer, and nothing is announced:
   `cbb://join?code=<code>&addr=<host:port>&fp=<fingerprint>` (section 7): its
   addresses that mDNS would publish, IPv4 first, without link-local ones, at most four; and
   the fingerprint of its self-signed certificate's key (Conventions, "Fingerprints").
-- The member dials and is the TLS client. It presents its member certificate and MUST
+- The member dials the QR code's addresses in turn, and stops at the first attempt in
+  which it sent its CPace message (frame 2), which tried the code: when that attempt fails
+  afterwards, its admin scans the QR code again for another. It is the TLS client. It
+  presents its member certificate and MUST
   check that the server sent exactly one certificate whose fingerprint is `fp`, with a
   P-256 key and a device ID as CN. The joiner (server) requires any client certificate and
   checks it as in the other direction, through the exchange and the Welcome.
