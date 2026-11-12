@@ -24,14 +24,17 @@ public enum PushMarks {
             self.atMS = atMS
         }
 
-        /// Whether the change it tells of is still to be applied: a removed
-        /// device the app still lists, a new root the app does not know
-        /// yet, or else anything that came after the current push key.
+        /// Whether the change it tells of is still to be applied. Any mark
+        /// ends with a push key drawn after it (the app draws one when it
+        /// applies a removal or a new root); before that, a removal of a
+        /// device the app no longer lists, or a new root the app already
+        /// knows, was applied before the event came.
         public func inForce(_ g: PushVault.Group) -> Bool {
+            guard atMS > (g.keyDrawnMS ?? 0) else { return false }
             switch (event, device, g.members) {
             case let (2, d?, members?): return members.contains(d)
-            case let (4, d?, members?) where members.contains(d): return g.root != d
-            default: return atMS > (g.keyDrawnMS ?? 0)
+            case let (4, d?, _): return g.root != d
+            default: return true
             }
         }
     }

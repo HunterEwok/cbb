@@ -304,7 +304,10 @@ final class PushTests: XCTestCase {
         XCTAssertFalse(PushMarks.hintsOnly("g", g, in: defaults))
         PushMarks.mark("g", event: 4, device: gone, now: Date(timeIntervalSince1970: 9), in: defaults)
         XCTAssertTrue(PushMarks.hintsOnly("g", g, in: defaults))
+        // Applied: the new root and its new key, and the mark for the old
+        // root does not come back.
         g.root = gone
+        g.keyDrawnMS = 9_500
         XCTAssertFalse(PushMarks.hintsOnly("g", g, in: defaults))
         // A stop: until a key drawn after it.
         PushMarks.mark("g", event: 6, device: nil, now: Date(timeIntervalSince1970: 10), in: defaults)
