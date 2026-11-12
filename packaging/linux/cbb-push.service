@@ -2,7 +2,7 @@
 # Copyright (C) 2026 HunterEwok
 
 # cbb-push, the project's push service on cbb.tools (format section 20.4): it passes
-# sealed bodies from the members of a group to a phone's platform (APNs, UnifiedPush),
+# sealed bodies from the members of a group to a phone's platform (APNs, FCM, UnifiedPush),
 # to wake an app that is closed. It holds no group's keys and keeps on disk only its
 # own TLS key and its state (push.state and push.state.log: the tokens' bindings to
 # their send keys, under keyed hashes, no token and no address); the platforms' keys
@@ -17,7 +17,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-# The platforms' keys: /etc/cbb/push/apns.p8 and apns-sandbox.p8 (root:root 0600,
+# The platforms' keys: /etc/cbb/push/apns.p8, apns-sandbox.p8 and fcm.json (the Firebase
+# project's service account; root:root 0600,
 # given to the service by systemd's credentials, never readable by its user
 # otherwise), and in /etc/cbb/push.env
 # CBB_PUSH_FLAGS="-apns-team TEAM -apns-key-id KEYID -apns-sandbox-key-id KEYID".
@@ -25,7 +26,8 @@ Environment=CBB_PUSH_FLAGS=
 EnvironmentFile=-/etc/cbb/push.env
 LoadCredential=apns.p8:/etc/cbb/push/apns.p8
 LoadCredential=apns-sandbox.p8:/etc/cbb/push/apns-sandbox.p8
-ExecStart=/usr/local/bin/cbb-push -apns-key ${CREDENTIALS_DIRECTORY}/apns.p8 -apns-sandbox-key ${CREDENTIALS_DIRECTORY}/apns-sandbox.p8 $CBB_PUSH_FLAGS
+LoadCredential=fcm.json:/etc/cbb/push/fcm.json
+ExecStart=/usr/local/bin/cbb-push -apns-key ${CREDENTIALS_DIRECTORY}/apns.p8 -apns-sandbox-key ${CREDENTIALS_DIRECTORY}/apns-sandbox.p8 -fcm-account ${CREDENTIALS_DIRECTORY}/fcm.json $CBB_PUSH_FLAGS
 DynamicUser=yes
 StateDirectory=cbb-push
 StateDirectoryMode=0700

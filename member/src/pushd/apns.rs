@@ -14,17 +14,15 @@
 //! alone as a background push (`content-available`, priority 5), which
 //! wakes the app without showing anything.
 
-use std::net::{TcpStream, ToSocketAddrs};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
 use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
 use p256::ecdsa::{Signature, SigningKey, signature::Signer};
-use rustls::pki_types::ServerName;
-use rustls::{ClientConfig, ClientConnection, StreamOwned};
+use rustls::ClientConfig;
 
-use super::h2::{Answer, Conn};
+use super::h2::{Answer, Conn, Tls, dial};
 use super::{Challenge, Delivery, Outcome, Platform};
 use crate::error::{Context, Error, Result};
 
@@ -101,8 +99,6 @@ pub fn outcome(a: &Answer) -> Outcome {
     }
 }
 
-type Tls = StreamOwned<ClientConnection, TcpStream>;
-
 /// One host's connection and token.
 struct Link {
     host: &'static str,
@@ -149,25 +145,7 @@ impl Apns {
     }
 
     fn connect(&self, host: &'static str) -> Result<Conn<Tls>> {
-        let addr = (host, 443)
-            .to_socket_addrs()
-            .context(format!("cannot look up {host}"))?
-            .next()
-            .ok_or_else(|| Error::msg(format!("{host} has no address")))?;
-        let tcp = TcpStream::connect_timeout(&addr, TIMEOUT).context(format!("cannot reach {host}"))?;
-        let _ = tcp.set_nodelay(true);
-        tcp.set_read_timeout(Some(TIMEOUT)).context("cannot set a timeout")?;
-        tcp.set_write_timeout(Some(TIMEOUT)).context("cannot set a timeout")?;
-        let name = ServerName::try_from(host).map_err(|_| Error::msg("not a host name"))?;
-        let conn = ClientConnection::new(self.tls.clone(), name).context(format!("cannot start TLS to {host}"))?;
-        let mut tls = StreamOwned::new(conn, tcp);
-        while tls.conn.is_handshaking() {
-            tls.conn.complete_io(&mut tls.sock).context(format!("TLS to {host} failed"))?;
-        }
-        if tls.conn.alpn_protocol() != Some(b"h2") {
-            return Err(Error::msg(format!("{host} does not speak HTTP/2")));
-        }
-        Conn::start(tls)
+        dial(&self.tls, host, TIMEOUT)
     }
 }
 

@@ -18,13 +18,15 @@ All notable changes to cbb are documented in this file. The format follows
   register again (`push-renew`), and the messages between a member and the
   project's push service (`cbb-push/1`), which sees tokens, times and one size, never a group
   or content (`cbb_core::push`, vectors in `testdata/format/push.json`). The push service
-  `cbb-push` (APNs and UnifiedPush, `packaging/linux/cbb-push.service`), the member's sender, and the
+  `cbb-push` (APNs, FCM's HTTP v1 and UnifiedPush, `packaging/linux/cbb-push.service`), the member's sender, and the
   phones' calls `push_key`, `push_limits`, `push_registration` and `push_open` (error code 18,
   `push`). The iPhone and iPad app registers for push (a switch in Settings, on by default)
   and opens each notification in an extension that holds what opens a body and a copy (the
   push keys, the send key, the sealing secrets of the epochs in the group's window) and nothing
   that signs a record; a copy's text shows with a Copy button, a secret never. It registers
-  again only when what it says changed. Android, HarmonyOS and Aurora follow.
+  again only when what it says changed. The Android app does the same, its push vault sealed
+  under an Android Keystore key: the full build through FCM (Firebase's identifiers given at
+  build time), the F-Droid build through UnifiedPush. HarmonyOS and Aurora follow.
 - The Rust core wipes the secrets it holds when it lets them go, prints none in `Debug` or
   an error, and compares every mark and confirmation tag in constant time; the C library
   wipes each answer as it is given back (docs/core-api.md, "Secrets"). Timing tests of the

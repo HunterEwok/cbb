@@ -16,7 +16,41 @@
 
 use std::io::{Read, Write};
 
-use crate::error::{Error, Result};
+use std::net::{TcpStream, ToSocketAddrs};
+use std::sync::Arc;
+use std::time::Duration;
+
+use rustls::pki_types::ServerName;
+use rustls::{ClientConfig, ClientConnection, StreamOwned};
+
+use crate::error::{Context, Error, Result};
+
+/// A TLS connection to a platform's host.
+pub type Tls = StreamOwned<ClientConnection, TcpStream>;
+
+/// Dials `host` on port 443 with TLS that must agree on HTTP/2, and starts
+/// the HTTP/2 connection; every read and write waits at most `timeout`.
+pub fn dial(cfg: &Arc<ClientConfig>, host: &str, timeout: Duration) -> Result<Conn<Tls>> {
+    let addr = (host, 443)
+        .to_socket_addrs()
+        .context(format!("cannot look up {host}"))?
+        .next()
+        .ok_or_else(|| Error::msg(format!("{host} has no address")))?;
+    let tcp = TcpStream::connect_timeout(&addr, timeout).context(format!("cannot reach {host}"))?;
+    let _ = tcp.set_nodelay(true);
+    tcp.set_read_timeout(Some(timeout)).context("cannot set a timeout")?;
+    tcp.set_write_timeout(Some(timeout)).context("cannot set a timeout")?;
+    let name = ServerName::try_from(host.to_string()).map_err(|_| Error::msg("not a host name"))?;
+    let conn = ClientConnection::new(cfg.clone(), name).context(format!("cannot start TLS to {host}"))?;
+    let mut tls = StreamOwned::new(conn, tcp);
+    while tls.conn.is_handshaking() {
+        tls.conn.complete_io(&mut tls.sock).context(format!("TLS to {host} failed"))?;
+    }
+    if tls.conn.alpn_protocol() != Some(b"h2") {
+        return Err(Error::msg(format!("{host} does not speak HTTP/2")));
+    }
+    Conn::start(tls)
+}
 
 const PREFACE: &[u8] = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 

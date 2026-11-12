@@ -17,7 +17,7 @@ use super::{Budgets, Config, Platform, Service};
 use crate::error::{Error, Result};
 use crate::relayd::keys::Keys;
 
-const USAGE: &str = "usage: cbb-push [-listen ADDRESS] [-key FILE] [-state FILE] [-new-state] -apns-team ID [-apns-key FILE -apns-key-id ID] [-apns-sandbox-key FILE -apns-sandbox-key-id ID] [-roots FILE] [-show-key]
+const USAGE: &str = "usage: cbb-push [-listen ADDRESS] [-key FILE] [-state FILE] [-new-state] -apns-team ID [-apns-key FILE -apns-key-id ID] [-apns-sandbox-key FILE -apns-sandbox-key-id ID] [-fcm-account FILE] [-roots FILE] [-show-key]
   -listen ADDRESS            the address to listen on, TCP (default :8767)
   -key FILE                  the service's TLS key, which members pin, made on the first run
   -state FILE                where the tokens' bindings to their send keys are kept across restarts (and FILE.log)
@@ -27,6 +27,7 @@ const USAGE: &str = "usage: cbb-push [-listen ADDRESS] [-key FILE] [-state FILE]
   -apns-key-id ID            its ID
   -apns-sandbox-key FILE     the team's APNs key for the sandbox (.p8): development builds
   -apns-sandbox-key-id ID    its ID
+  -fcm-account FILE          the Firebase project's service account (its JSON file): the Android app's full build
   -roots FILE       the CA certificates the platforms' servers are checked with (default the system's)
   -show-key         print the pin of the service's key and stop";
 
@@ -37,6 +38,7 @@ struct Flags {
     new_state: bool,
     apns_team: String,
     apns: [(Option<PathBuf>, String); 2],
+    fcm: Option<PathBuf>,
     roots: PathBuf,
     show_key: bool,
 }
@@ -53,6 +55,7 @@ fn parse(args: &[String]) -> std::result::Result<Flags, String> {
         new_state: false,
         apns_team: String::new(),
         apns: [(None, String::new()), (None, String::new())],
+        fcm: None,
         roots: PathBuf::from("/etc/ssl/certs/ca-certificates.crt"),
         show_key: false,
     };
@@ -77,6 +80,7 @@ fn parse(args: &[String]) -> std::result::Result<Flags, String> {
             "apns-key-id" => f.apns[0].1 = value()?,
             "apns-sandbox-key" => f.apns[1].0 = Some(PathBuf::from(value()?)),
             "apns-sandbox-key-id" => f.apns[1].1 = value()?,
+            "fcm-account" => f.fcm = Some(PathBuf::from(value()?)),
             "roots" => f.roots = PathBuf::from(value()?),
             "show-key" => f.show_key = inline.as_deref().is_none_or(|v| v == "true" || v == "1"),
             "h" | "help" => return Err(USAGE.into()),
@@ -107,6 +111,11 @@ fn platforms(f: &Flags) -> Result<HashMap<u64, Arc<dyn Platform>>> {
         let pem = std::fs::read_to_string(p).map_err(|e| Error::with(format!("cannot read {}", p.display()), e))?;
         let key = Key::from_p8(&pem, &f.apns_team, id)?;
         out.insert(env, Arc::new(Apns::new(env, key, roots(&f.roots)?)?));
+    }
+    if let Some(p) = &f.fcm {
+        let json = std::fs::read_to_string(p).map_err(|e| Error::with(format!("cannot read {}", p.display()), e))?;
+        let account = super::fcm::Account::from_json(&json)?;
+        out.insert(cbb_core::push::ENV_FCM, Arc::new(super::fcm::Fcm::new(account, roots(&f.roots)?)?));
     }
     // UnifiedPush needs no key of ours: it posts to the phone's endpoint.
     if !out.is_empty() {
@@ -158,7 +167,9 @@ pub fn command(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) 
     if platforms.is_empty() {
         return fail(
             stderr,
-            Error::msg("no platform: give -apns-team with -apns-key and -apns-key-id, or the sandbox's"),
+            Error::msg(
+                "no platform: give -apns-team with -apns-key and -apns-key-id (or the sandbox's), or -fcm-account",
+            ),
         );
     }
     let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|line: &str| eprintln!("{line}"));
@@ -237,6 +248,11 @@ mod tests {
         ]);
         assert_eq!(code, 1);
         assert!(err.contains("APNs key"), "{err}");
+        let account = dir.join("fcm.json");
+        std::fs::write(&account, r#"{"project_id":"p","client_email":"e@x","private_key":"no"}"#).unwrap();
+        let (code, _, err) = run(&["-key", key, "-fcm-account", account.to_str().unwrap()]);
+        assert_eq!(code, 1);
+        assert!(err.contains("FCM account"), "{err}");
         assert_eq!(run(&["stray"]).0, 2);
         let _ = std::fs::remove_dir_all(&dir);
     }

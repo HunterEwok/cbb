@@ -459,6 +459,16 @@ iOS may hold back, so a confirmation can wait for the next alert push; FCM and P
 key `k`; UnifiedPush, the decrypted message is parts, each a kind (1 byte), a length (2 bytes)
 and its bytes (kind 1 the body, kind 2 the challenge), the app skipping kinds it does not know.
 
+How the service sends: APNs over HTTP/2 with the team's ES256 key; FCM through the HTTP v1 API,
+the service account's RS256 assertion traded for an access token (kept until five minutes before
+it ends), each push a data-only message, priority `HIGH` with a body and `NORMAL` for a challenge
+alone, its `ttl` the push's own and no collapse key; a token FCM calls `UNREGISTERED` or
+`SENDER_ID_MISMATCH` is dropped, a quota answer waits a minute. On Android the push vault is
+sealed under an Android Keystore key of its own (AES-256-GCM, kept out of backups); the full
+build takes FCM, whose Firebase identifiers come from the build's properties (`cbb.firebase.*`
+or `CBB_FIREBASE_*`) and never from a committed `google-services.json`, and without them it
+offers no push; the F-Droid build takes UnifiedPush through the distributor the user installed.
+
 New events keep the shapes of the body's fields 3 to 7 (an ID of 16 bytes, an event number, a
 device ID of 16 bytes, a time in milliseconds), so that a phone of an older version reads a later
 event as the neutral hint and never refuses it.

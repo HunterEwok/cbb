@@ -78,6 +78,10 @@ zune-jpeg = { version = "0.5.15", default-features = false, features = ["std"] }
 # signatures and sealing secrets as Go's internal/sekey does.
 p256 = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "ecdsa", "ecdh"] }
 hkdf = "0.13"
+# The push service's way to FCM (src/pushd/fcm.rs): a Google service
+# account's key is RSA, and its OAuth assertion RS256. Signing only, in
+# constant time on crypto-bigint, which the core already brings.
+rsa = { version = "0.10.0", default-features = false, features = ["std", "encoding", "pkcs1v15"] }
 aes-gcm = { version = "0.11", default-features = false, features = ["aes", "alloc"] }
 # WireGuard for sync away from home: GotaTun's noise protocol, sans I/O, with
 # the ring stand-in below; smoltcp is the TCP inside the tunnel.

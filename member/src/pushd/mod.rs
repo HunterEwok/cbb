@@ -49,6 +49,7 @@
 pub mod apns;
 pub mod binding;
 pub mod command;
+pub mod fcm;
 pub mod h2;
 mod saved;
 mod shares;
