@@ -8,7 +8,7 @@
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::vec::Vec;
 
-use super::body::Seen;
+use super::body::{Head, Seen};
 use super::eval::{self, Checked, ClaimState, Counted, Keys, Role, State, Why};
 use super::key::{Key, KeyHash, RecordId};
 use super::{Kind, Record, Rule, keep};
@@ -63,6 +63,9 @@ pub struct RecordSet {
     /// The takeovers' cuts of the roots before the promoted ones (`compact`):
     /// such a root keeps nothing off its cut.
     cuts: BTreeMap<KeyHash, Seen>,
+    /// The checkpoint that counted when the set last compacted: what it
+    /// prunes is not taken again.
+    checkpoint: Option<(Vec<Head>, BTreeSet<RecordId>)>,
     records: BTreeMap<RecordId, Entry>,
     bytes: usize,
 }
@@ -80,6 +83,7 @@ impl RecordSet {
             counted: Vec::new(),
             pending: Vec::new(),
             cuts: BTreeMap::new(),
+            checkpoint: None,
             records: BTreeMap::new(),
             bytes: 0,
         }
@@ -136,6 +140,10 @@ impl RecordSet {
         let Some((key, role)) = self.keys.signer(&r.body().signer) else { return Err(Refused::UnknownSigner) };
         let held = r.verify(key).map_err(Refused::Broken)?;
         let signer = r.body().signer;
+        if self.checkpoint.as_ref().is_some_and(|(heads, anchors)| eval::pruned_by(&r, heads, anchors)) {
+            // The counting checkpoint left it out.
+            return Ok(Added::NoRoom);
+        }
         if let Some(cut) = self.cuts.get(&signer) {
             let cuts = BTreeMap::from([(signer, *cut)]);
             let mine = self.records.values().map(|e| &e.record).filter(|x| x.body().signer == signer);
@@ -430,9 +438,11 @@ impl RecordSet {
             self.cut = keep::Cut::default();
             self.cut();
         }
+        self.checkpoint = None;
         let Some(cp) = state.checkpoint else { return 0 };
         let Some(Kind::Checkpoint { heads, keep }) = self.get(&cp).map(|r| r.body().kind.clone()) else { return 0 };
         let anchors = eval::anchors_of(&heads, &keep);
+        self.checkpoint = Some((heads.clone(), anchors.clone()));
         let drop: Vec<RecordId> = self
             .records
             .values()

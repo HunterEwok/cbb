@@ -545,8 +545,9 @@ pub(crate) fn item_cut(r: &Record, role: Role, cuts: &BTreeMap<KeyHash, Seen>) -
 
 /// The records off the cut of their signer: above the cut's seq, or at or
 /// below it and not on the chain that ends at the cut's ID, as far as the
-/// records show that chain (below a record the set does not hold, a
-/// record is kept).
+/// records show that chain. Below where the shown chain stops, only what
+/// the newest checkpoint on it names (its heads and keep) is kept; with no
+/// checkpoint there, a record is kept.
 pub(crate) fn off_cuts<'r>(
     cuts: &BTreeMap<KeyHash, Seen>,
     records: impl Iterator<Item = &'r Record> + Clone,
@@ -569,9 +570,17 @@ pub(crate) fn off_cuts<'r>(
             chain.insert(b.seq, r.id());
             at = b.prev;
         }
+        // The newest checkpoint of that chain: below the chain, only what
+        // it names stays.
+        let named: Option<BTreeSet<RecordId>> = chain.values().rev().find_map(|id| match &by_id.get(id)?.body().kind {
+            Kind::Checkpoint { heads, keep } => Some(anchors_of(heads, keep)),
+            _ => None,
+        });
+        let low = chain.first_key_value().map(|(s, _)| *s);
         for r in records.clone().filter(|r| r.body().signer == *signer) {
             let b = r.body();
-            if b.seq > cut.seq || chain.get(&b.seq).is_some_and(|id| *id != r.id()) {
+            let below = low.is_some_and(|low| b.seq < low) && named.as_ref().is_some_and(|n| !n.contains(&r.id()));
+            if b.seq > cut.seq || chain.get(&b.seq).is_some_and(|id| *id != r.id()) || below {
                 off.insert(r.id());
             }
         }

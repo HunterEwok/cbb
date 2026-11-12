@@ -2729,3 +2729,58 @@ fn a_removal_after_the_new_root_s_records_disputes_nothing() {
     let s = counted_state(&g, &held, &[]);
     assert_eq!(s.claims.iter().find(|c| c.record == claim.id()).map(|c| c.state), Some(ClaimState::Disputed));
 }
+
+/// Of a root a takeover cut, below the chain the records show, a member
+/// keeps only what the newest checkpoint on that chain names; and it does
+/// not take again what the counting checkpoint left out.
+#[test]
+fn below_a_cut_root_s_checkpoint_only_what_it_names_stays() {
+    let mut g = G::new();
+    let root = k("root");
+    let all = POWER_ADMIT | POWER_MANAGE | POWER_REMOVE | POWER_REMOVE_ADMINS | POWER_FREEZE | POWER_TAKEOVER;
+    let (pa, a, pt, t, n) = (k("phone a"), k("admin a"), k("phone t"), k("admin t"), k("new root"));
+    let r1 = g.admin(&pa, &a, all);
+    let r2 = g.admin(&pt, &t, all);
+    let r3 = g.device(&root, &k("laptop"), "laptop", |_| {});
+    let left_out = g.root_rec(Kind::Copies { incoming_ms: 60_000, seen: vec![] });
+    let r5 = g.device(&root, &k("tablet"), "tablet", |_| {});
+    let mut keep = vec![r1.id(), r2.id(), r3.id()];
+    keep.sort();
+    g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq: 5, id: r5.id() }], keep });
+    let seen = g.seen();
+    let claim = g.rec(&a, Kind::Claim { root: n.key.clone(), seen });
+    g.device(&n, &k("new phone"), "new phone", |d| d.holds_root = true);
+    let held = BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]);
+    let mut m = RecordSet::new(g.root.key.clone());
+    m.insert_all(g.recs.iter().cloned());
+    for _ in 0..2 {
+        let st = m.state(&held);
+        m.compact(&st);
+    }
+    let before = m.state(&held);
+    assert_eq!(before.roots.len(), 2);
+    assert!(before.checkpoint.is_some() && !m.contains(&left_out.id()));
+    // What the checkpoint left out is not taken again.
+    assert_eq!(m.insert(left_out.clone()), Ok(Added::NoRoom));
+    let low: Vec<Record> = (0..1300u64)
+        .map(|i| {
+            let kind = Kind::Copies { incoming_ms: MIN_INCOMING_MS + i, seen: vec![] };
+            Record::sign(Body { seq: 1, prev: None, ..g.body(&root, kind) }, &root).unwrap()
+        })
+        .collect();
+    let (stored, _) = m.insert_all(low.iter().cloned());
+    assert_eq!(stored, 0);
+    for _ in 0..2 {
+        let st = m.state(&held);
+        m.compact(&st);
+    }
+    let after = m.state(&held);
+    assert_eq!(after.roots, before.roots);
+    assert_eq!(after.devices, before.devices);
+    assert!(after.devices.iter().any(|d| d.admin == Some(t.hash)));
+    // The same from evaluate, for a device that counted the claim.
+    g.recs.extend(low);
+    let s = counted_state(&g, &held, &[claim.id()]);
+    assert_eq!(s.roots, before.roots);
+    assert_eq!(s.devices, before.devices);
+}
