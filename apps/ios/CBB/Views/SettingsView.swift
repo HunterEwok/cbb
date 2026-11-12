@@ -452,9 +452,12 @@ extension SettingsView {
 struct ColorSwatches: View {
     @Binding var selection: String
     @Environment(\.palette) private var palette
+    /// A swatch's least width, growing with the text size so that a
+    /// colour's name breaks between words, never inside one.
+    @ScaledMetric(relativeTo: .caption2) private var width: CGFloat = 64
 
     var body: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Tokens.spacingSmall), count: 5), spacing: Tokens.spacingMedium) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: width), spacing: Tokens.spacingSmall)], spacing: Tokens.spacingMedium) {
             ForEach(Tokens.colors, id: \.name) { pair in
                 let swatch = palette.dark ? pair.dark : pair.light
                 let chosen = pair.name == selection
@@ -470,7 +473,7 @@ struct ColorSwatches: View {
                             }
                             .padding(3)
                             .overlay(Circle().stroke(chosen ? swatch.accent : .clear, lineWidth: 2))
-                        Text(AccentChoice.title(pair.name)).font(.caption2).lineLimit(1).minimumScaleFactor(0.8)
+                        Text(AccentChoice.title(pair.name)).font(.caption2).multilineTextAlignment(.center)
                             .foregroundStyle(chosen ? palette.text : palette.textDim)
                     }
                     .frame(maxWidth: .infinity, minHeight: 44)
