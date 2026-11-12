@@ -114,6 +114,15 @@ a full run's `-v` output into the file:
 go run ./tools/shard -record tools/shard/service.txt <service-test.log
 ```
 
+On a computer with Docker, `tools/e2e/parallel.sh` runs the same parts at the same time, each
+in a container on a Docker network of its own, after one container has built the programs
+and the test binary; IMAGE is a Linux image with Go, Rust, swtpm, Xvfb and xclip:
+
+```sh
+sh tools/e2e/parallel.sh -n 6 IMAGE              # every test of internal/service
+sh tools/e2e/parallel.sh -run 'Takeover' IMAGE   # only those -run names
+```
+
 Other jobs run side by side the same way: the iPhone app's UI tests on an iPhone and an iPad
 simulator are two jobs, and the Rust workspace's checks and Raspberry Pi builds
 (`cbb (Rust), the checks and the Raspberry Pi builds`) run beside its tests (`cbb (Rust)`).
