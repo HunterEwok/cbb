@@ -563,6 +563,28 @@ fn only_who_may_remove_the_recovery_key_freezes_it() {
 }
 
 #[test]
+fn what_a_root_resolved_stays_resolved_after_a_takeover() {
+    let mut g = G::new();
+    let all = POWER_ADMIT | POWER_REMOVE | POWER_REMOVE_ADMINS | POWER_TAKEOVER;
+    let (pa, a, pb, b, n, laptop) = (k("phone a"), k("admin a"), k("phone b"), k("admin b"), k("new root"), k("laptop"));
+    g.admin(&pa, &a, all);
+    g.admin(&pb, &b, all);
+    g.device(&k("root"), &laptop, "laptop", |_| {});
+    let seen = g.seen();
+    let removal_by_b = g.rec(&b, Kind::Revoke(removal(&[laptop.hash], seen)));
+    let undo = g.root_rec(Kind::Resolve(vec![removal_by_b.id()]));
+    let s = g.state();
+    assert!(!s.revoked.contains(&laptop.hash) && s.counting.contains(&undo.id()));
+    let seen = g.seen();
+    let claim = g.rec(&a, Kind::Claim { root: n.key.clone(), seen });
+    let s = state_of(&g.root.key, &g.recs, &BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]));
+    assert_eq!(s.roots.len(), 2);
+    assert!(!s.counting.contains(&removal_by_b.id()));
+    assert!(!s.revoked.contains(&laptop.hash));
+    assert!(s.device(&laptop.key.device_id()).is_some());
+}
+
+#[test]
 fn a_claim_takes_effect_after_the_device_held_it() {
     let mut g = G::new();
     let (pa, a, laptop, n) = (k("phone a"), k("admin a"), k("laptop"), k("new root"));
