@@ -91,6 +91,7 @@ reviewers: the release tag is the maintainer's decision already.
 | Secret | What it is | Section |
 | --- | --- | --- |
 | `CBB_ANDROID_KEYSTORE_BASE64`, `CBB_ANDROID_KEYSTORE_PASSWORD`, `CBB_ANDROID_KEY_ALIAS`, `CBB_ANDROID_KEY_PASSWORD` | the Android release key | [Android signing key](#android-signing-key) |
+| `CBB_FIREBASE_APP_ID`, `CBB_FIREBASE_PROJECT_ID`, `CBB_FIREBASE_API_KEY`, `CBB_FIREBASE_SENDER_ID` | the Firebase app of the Android full build, for push | [Firebase for push](#firebase-for-push) |
 | `CBB_WINDOWS_CERT_BASE64`, `CBB_WINDOWS_CERT_PASSWORD` | the Windows code signing certificate | [Signing for Windows](#signing-for-windows) |
 | `CBB_APPLE_DEVID_APP_P12`, `CBB_APPLE_DEVID_APP_PASSWORD` | the Developer ID Application certificate and key | [Signing for macOS](#signing-for-macos) |
 | `CBB_APPLE_DEVID_INSTALLER_P12`, `CBB_APPLE_DEVID_INSTALLER_PASSWORD` | the Developer ID Installer certificate and key, for the `.pkg` | [Signing for macOS](#signing-for-macos) |
@@ -645,6 +646,22 @@ its own build of the tag matches it (below).
 To check the key without a release, run the release workflow by hand from `main` (Actions,
 "release", "Run workflow"): it builds everything, checks the APK's signature and keeps the
 files as the run's artifacts, and publishes nothing.
+
+## Firebase for push
+
+The Android full build receives push through Firebase Cloud Messaging; the F-Droid build uses
+UnifiedPush and needs nothing here. The project's Firebase project has one Android app,
+`tools.cbb`, with no Analytics. The build reads its four identifiers (the app ID, the project
+ID, the web API key restricted to the Firebase Installations and Cloud Messaging APIs and to
+the app's package and signing certificate, the sender ID) from the release environment's
+secrets `CBB_FIREBASE_*`, or locally from `-Pcbb.firebase.appId=…` and the like; the project
+never commits a `google-services.json`. Without them the full build works and offers no push.
+
+`cbb-push` on cbb.tools sends through the FCM HTTP v1 API with a service account of that
+project whose only role is *Firebase Cloud Messaging API Admin*: its JSON key lives in
+`/etc/cbb/push/fcm.json` (root, mode 0600), which the unit hands to the service as a
+credential (`packaging/linux/cbb-push.service`). To change the key, make a new one in the
+console, replace the file, restart `cbb-push`, then delete the old key in the console.
 
 ## Signing for Aurora OS
 
