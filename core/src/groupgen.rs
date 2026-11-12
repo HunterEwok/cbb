@@ -236,6 +236,12 @@ impl Builder {
 
 /// Builds the group of spec.
 pub fn build(spec: Spec) -> Group {
+    build_with(spec, true)
+}
+
+/// Builds the group of spec; a later change of root removes the phone
+/// that held the root before only when remove_holder is set.
+fn build_with(spec: Spec, remove_holder: bool) -> Group {
     let root = key(spec.seed, "root");
     let recovery = key(spec.seed, "recovery");
     let gid = group_id(&root.key, &recovery.key);
@@ -327,9 +333,9 @@ pub fn build(spec: Spec) -> Group {
         }
         // An admin fills up to its ceiling, all of them leaving the set room
         // for the changes of root's records (the new root's phone, a copy of
-        // the settings, the head), so that the set holds at most its 4096
+        // the settings, the writer's first checkpoint, the head), so that the set holds at most its 4096
         // units and everything counts.
-        let end = takeovers as u64 * 12 + 8;
+        let end = takeovers as u64 * 20 + 8;
         for j in 0..spec.admin_fill {
             let mine = b.units.get(&a.hash).copied().unwrap_or(0);
             if mine + 1 > MAX_ADMIN_RECORDS as u64 || b.total + 1 + end > keep::ROOM {
@@ -358,7 +364,7 @@ pub fn build(spec: Spec) -> Group {
         }
         let state = set.state();
         // A change written from a valid group never fails.
-        let lost: Vec<KeyHash> = holder.take().into_iter().collect();
+        let lost: Vec<KeyHash> = holder.take().into_iter().filter(|_| remove_holder).collect();
         #[allow(clippy::unwrap_used)]
         let w = set.write_change(&state, &recovery, &n, d, &lost, false, 0).unwrap();
         removed.extend(lost);
@@ -471,6 +477,20 @@ mod tests {
             let g = build(spec);
             check(&g, &g.evaluate());
         }
+    }
+
+    /// A second change of root that does not name the first new root's
+    /// phone in its removals must leave it a device: only the new root's
+    /// removal takes it out. Waiting for the records thread, which looks
+    /// for the limit that drops it today; run with `--ignored`.
+    #[test]
+    #[ignore = "the phone of the first new root drops after a second change; the records thread is on it"]
+    fn a_second_change_of_root_keeps_the_phone_it_does_not_remove() {
+        let spec = sizes(1)[2];
+        let g = build_with(spec, false);
+        let s = g.evaluate();
+        let phone = key(spec.seed, "new root phone 0").hash;
+        assert!(s.device_by_key(&phone).is_some(), "{:?}", s.ignored);
     }
 
     #[test]
