@@ -172,6 +172,9 @@ pub const MAX_DEVICES: usize = 256;
 pub const MAX_PATH: usize = 1 + body::MAX_RECOVERY as usize;
 /// Held records a state lists.
 pub const MAX_NEWER: usize = 16;
+/// Notices a set keeps of removals the newest list dropped, and of
+/// notices dismissed (`RecordSet::notices`).
+pub const MAX_NOTICES: usize = 256;
 
 /// Why an object is refused: the name of the rule it breaks, as the
 /// vectors cite it ("sig/low-s", "records/device/name").

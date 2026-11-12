@@ -11,7 +11,7 @@ use alloc::vec::Vec;
 use super::body::{Body, Head, List, Settings};
 use super::eval::{self, Checked, Cut, Keys, Role, State, Why};
 use super::key::{GroupId, Key, KeyHash, RecordId, group_id};
-use super::{Kind, Mark, Record, Rule, keep};
+use super::{Kind, MAX_NOTICES, Mark, Record, Rule, keep};
 use crate::identity::ExternalKey;
 
 /// What inserting a record did.
@@ -98,10 +98,16 @@ pub struct RecordSet {
     /// first, then the lowest seq, then the smallest ID. They count for
     /// nothing.
     early: BTreeMap<RecordId, Record>,
-    /// The keys a root's removal named that the newest list dropped: the
-    /// app tells "removed before, back now" and offers them to the new
-    /// root's device.
-    notices: BTreeSet<KeyHash>,
+    /// The removals of a root before the current one that the newest list
+    /// dropped, or that came after it: the app tells "removed before, back
+    /// now" and offers their keys to the new root's device. At most
+    /// MAX_NOTICES, the oldest going first (`notice_rank`); kept across
+    /// restarts by the app (`notice_records`, `keep_notices`).
+    notices: BTreeMap<RecordId, Record>,
+    /// The notices the device's user dismissed: not shown again, also when
+    /// the removal comes again. At most MAX_NOTICES, the smallest IDs going
+    /// first.
+    dismissed: BTreeSet<RecordId>,
     /// The checkpoints that counted when the set last compacted: what
     /// they prune is not taken again.
     checkpoints: Vec<(Vec<Head>, BTreeSet<RecordId>)>,
@@ -167,7 +173,8 @@ impl RecordSet {
             firsts: BTreeSet::new(),
             trusted: BTreeSet::new(),
             early: BTreeMap::new(),
-            notices: BTreeSet::new(),
+            notices: BTreeMap::new(),
+            dismissed: BTreeSet::new(),
             checkpoints: Vec::new(),
             records: BTreeMap::new(),
             bytes: 0,
@@ -283,9 +290,55 @@ impl RecordSet {
         self.lists.get(hash).map(|(b, _)| b.as_slice())
     }
 
-    /// The keys of the root's removals the newest list dropped.
-    pub fn notices(&self) -> &BTreeSet<KeyHash> {
-        &self.notices
+    /// The notices to show with state: each dropped removal with the keys
+    /// it names that state has not removed again, by record ID. A removal
+    /// whose keys are all removed again shows nothing.
+    pub fn notices(&self, state: &State) -> Vec<(RecordId, Vec<KeyHash>)> {
+        self.notices
+            .iter()
+            .filter(|(id, _)| !self.dismissed.contains(id))
+            .filter_map(|(id, r)| {
+                let Kind::Revoke(rm) = &r.body().kind else { return None };
+                let keys: Vec<KeyHash> = rm.keys.iter().copied().filter(|k| !state.revoked.contains(k)).collect();
+                (!keys.is_empty()).then_some((*id, keys))
+            })
+            .collect()
+    }
+
+    /// The removal records the notices keep, for the app to save.
+    pub fn notice_records(&self) -> impl Iterator<Item = &Record> {
+        self.notices.values()
+    }
+
+    /// The notices dismissed, for the app to save.
+    pub fn dismissed(&self) -> impl Iterator<Item = &RecordId> {
+        self.dismissed.iter()
+    }
+
+    /// Dismisses the notice of the removal id: it is not shown again.
+    pub fn dismiss(&mut self, id: &RecordId) {
+        self.notices.remove(id);
+        self.dismissed.insert(*id);
+        while self.dismissed.len() > MAX_NOTICES {
+            self.dismissed.pop_first();
+        }
+    }
+
+    /// Takes back what the app saved (`notice_records`, `dismissed`) after
+    /// the set was restored. A record becomes a notice again only if it
+    /// still is one: a removal of a root before the current one, its
+    /// signature valid, that the newest list does not name.
+    pub fn keep_notices(&mut self, records: &[Record], dismissed: &[RecordId]) {
+        for id in dismissed {
+            self.dismiss(id);
+        }
+        for r in records {
+            let Some((key, Role::Root)) = self.keys.signer(&r.body().signer) else { continue };
+            let key = key.clone();
+            if self.is_notice(r) && r.verify(&key).is_ok() {
+                self.notice(r.clone());
+            }
+        }
     }
 
     /// Checks a record and stores it: its group, its signer among the keys
@@ -343,7 +396,12 @@ impl RecordSet {
         }
         if !first && self.cuts.get(&signer).is_some_and(|cut| !cut.lets(&r)) {
             // A root before the current one: only what the newest list
-            // names may stay, within that root's room.
+            // names may stay, within that root's room. Its removal that
+            // comes after the change is a notice.
+            if role == Role::Root && self.is_notice(&r) && !self.notices.contains_key(&id) {
+                r.verify_marked(&key, mark).map_err(Refused::Broken)?;
+                self.notice(r);
+            }
             return Ok(Added::NoRoom);
         }
         // A record a held checkpoint names, which it may wait for to
@@ -719,12 +777,44 @@ impl RecordSet {
         let mut off = eval::off_cuts(&self.cuts, self.records.values().map(|e| &e.record));
         off.retain(|id| !self.firsts.contains(id));
         for id in &off {
-            if let Some(Kind::Revoke(rm)) = self.held(id).map(|r| &r.body().kind) {
-                let keys = rm.keys.clone();
-                self.notices.extend(keys);
+            if let Some(r) = self.held(id).filter(|r| self.is_notice(r)).cloned() {
+                self.notice(r);
             }
             self.remove(id);
         }
+    }
+
+    /// Whether r is a removal of a root before the current one that the
+    /// newest list does not name: what a notice keeps.
+    fn is_notice(&self, r: &Record) -> bool {
+        let b = r.body();
+        matches!(b.kind, Kind::Revoke(_))
+            && b.group == self.group
+            && self.cuts.get(&b.signer).is_some_and(|cut| cut.roots.contains(&b.signer) && !cut.lets(r))
+    }
+
+    /// Keeps r, a verified removal (`is_notice`), as a notice, unless
+    /// dismissed; past MAX_NOTICES the oldest goes.
+    fn notice(&mut self, r: Record) {
+        let id = r.id();
+        if self.dismissed.contains(&id) {
+            return;
+        }
+        self.notices.insert(id, r);
+        while self.notices.len() > MAX_NOTICES {
+            let oldest = self.notices.iter().min_by_key(|(id, r)| self.notice_rank(id, r)).map(|(id, _)| *id);
+            let Some(oldest) = oldest else { break };
+            self.notices.remove(&oldest);
+        }
+    }
+
+    /// A notice's age: its root's place on the path, then its seq; of two
+    /// alike the larger ID is older. The smallest goes first, so two
+    /// members with the same records keep the same notices.
+    fn notice_rank(&self, id: &RecordId, r: &Record) -> (usize, u64, core::cmp::Reverse<RecordId>) {
+        let b = r.body();
+        let place = self.cuts.values().next().and_then(|c| c.roots.iter().position(|k| *k == b.signer)).unwrap_or(0);
+        (place, b.seq, core::cmp::Reverse(*id))
     }
 
     /// Learns the keys again from the stored records, and drops the
