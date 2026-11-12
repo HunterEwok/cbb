@@ -308,6 +308,20 @@ pub struct Open {
     /// when CBB flashed it (A-43). A joiner with this key needs no other
     /// match; any other key is refused.
     pub allowed_key: Option<crate::format::KeyHash>,
+    /// The attempt in progress: one at a time.
+    pub attempt: Option<Attempt>,
+}
+
+/// The longest one attempt may take, at each end.
+pub const ATTEMPT_MS: u64 = 30_000;
+
+/// An attempt in progress on an open invitation, at the member.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Attempt {
+    pub since_ms: u64,
+    /// The joiner's commitment and the member's nonce, once the member
+    /// sent `pair/reply`.
+    pub replied: Option<([u8; 32], [u8; 32])>,
 }
 
 impl Open {
@@ -430,39 +444,104 @@ fn within_one(a: &[char], b: &[char]) -> bool {
 
 /// The short code both screens show, for a device with a screen and no
 /// camera (A-43): six digits from the pairing session's exporter and two
-/// nonces, one from each end. The joiner sends the hash of its nonce
-/// ([`code_commitment`]) in `pair/start`, the member answers with its own
-/// nonce in `pair/reply`, and the joiner opens its nonce in `pair/confirm`.
-/// Neither end can choose its part after it has seen the other's, so the
-/// codes of two sessions match by chance only (one in a million). The user
-/// answers "they match".
-pub fn short_code(exporter: &[u8], joiner_nonce: &[u8; 32], member_nonce: &[u8; 32]) -> String {
+/// nonces, one from each end, each new for the session and drawn by the
+/// core ([`JoinerCode::new`], [`Open::reply`]); no caller passes one in.
+/// The joiner sends the hash of its nonce in `pair/start`, the member
+/// answers with its own nonce in `pair/reply`, and the joiner opens its
+/// nonce in `pair/confirm`. Neither end can choose its part after it has
+/// seen the other's, so the codes of two sessions match by chance only
+/// (one in a million). Each attempt counts as failed once the member has
+/// sent `pair/reply`, unless it ends in a Welcome, and an invitation takes
+/// one attempt at a time: three attempts give three chances in a million.
+/// The user answers "they match".
+fn short_code(exporter: &[u8], joiner_nonce: &[u8; 32], member_nonce: &[u8; 32]) -> String {
     let h = crate::format::sha256(&[b"cbb short code v2\0", exporter, joiner_nonce, member_nonce]);
     let n = u32::from_be_bytes([h[0], h[1], h[2], h[3]]) % 1_000_000;
     alloc::format!("{n:06}")
 }
 
 /// The hash of the joiner's nonce that `pair/start` carries.
-pub fn code_commitment(joiner_nonce: &[u8; 32]) -> [u8; 32] {
+fn code_commitment(joiner_nonce: &[u8; 32]) -> [u8; 32] {
     crate::format::sha256(&[b"cbb short code commitment v1\0", joiner_nonce])
 }
 
+/// The joiner's side of the short code, for one session: its nonce, drawn
+/// here, used once.
+pub struct JoinerCode {
+    nonce: [u8; 32],
+}
+
+impl JoinerCode {
+    /// A new nonce for this session, and the commitment `pair/start`
+    /// carries.
+    pub fn new() -> (JoinerCode, [u8; 32]) {
+        let nonce = crate::certs::random_bytes();
+        let c = code_commitment(&nonce);
+        (JoinerCode { nonce }, c)
+    }
+
+    /// The code to show once `pair/reply` brought the member's nonce, and
+    /// the nonce that `pair/confirm` opens. It takes the side by value: a
+    /// nonce serves one session.
+    pub fn open(self, exporter: &[u8], member_nonce: &[u8; 32]) -> (String, [u8; 32]) {
+        (short_code(exporter, &self.nonce, member_nonce), self.nonce)
+    }
+}
+
 impl Open {
-    /// The member's short code once the joiner opened its nonce: the code,
-    /// or [`PairError::WrongCode`] when the nonce does not open the
-    /// commitment. A wrong opening ends the pairing and counts as a failed
-    /// attempt.
-    pub fn short_code(
-        &mut self,
-        exporter: &[u8],
-        commitment: &[u8; 32],
-        joiner_nonce: &[u8; 32],
-        member_nonce: &[u8; 32],
-    ) -> Result<String, PairError> {
-        if &code_commitment(joiner_nonce) != commitment {
-            self.failures = self.failures.saturating_add(1);
+    /// A joiner starts an attempt at `now_ms`: refused while another is in
+    /// progress ([`PairError::Busy`]), until it ends or its time
+    /// ([`ATTEMPT_MS`]) is over.
+    pub fn begin(&mut self, network: Network, now_ms: u64) -> Result<(), PairError> {
+        if let Some(a) = &self.attempt
+            && now_ms.saturating_sub(a.since_ms) < ATTEMPT_MS
+        {
+            return Err(PairError::Busy);
+        }
+        self.attempt = None;
+        self.may_use(network, now_ms)?;
+        self.attempt = Some(Attempt { since_ms: now_ms, replied: None });
+        Ok(())
+    }
+
+    /// The member answers `pair/start` with `pair/reply`: its own nonce,
+    /// new for this attempt, which it returns. From here the attempt counts
+    /// as failed unless it ends in a Welcome.
+    pub fn reply(&mut self, commitment: [u8; 32], now_ms: u64) -> Result<[u8; 32], PairError> {
+        let Some(a) =
+            self.attempt.as_mut().filter(|a| a.replied.is_none() && now_ms.saturating_sub(a.since_ms) < ATTEMPT_MS)
+        else {
+            return Err(PairError::Closed);
+        };
+        let nonce = crate::certs::random_bytes();
+        a.replied = Some((commitment, nonce));
+        self.failures = self.failures.saturating_add(1);
+        Ok(nonce)
+    }
+
+    /// The member's short code once the joiner opened its nonce in
+    /// `pair/confirm`; [`PairError::WrongCode`] when the nonce does not
+    /// open the commitment, which ends the attempt.
+    pub fn short_code(&mut self, exporter: &[u8], joiner_nonce: &[u8; 32], now_ms: u64) -> Result<String, PairError> {
+        let Some((commitment, nonce)) =
+            self.attempt.as_ref().filter(|a| now_ms.saturating_sub(a.since_ms) < ATTEMPT_MS).and_then(|a| a.replied)
+        else {
+            self.attempt = None;
+            return Err(PairError::Closed);
+        };
+        if code_commitment(joiner_nonce) != commitment {
+            self.attempt = None;
             return Err(PairError::WrongCode);
         }
-        Ok(short_code(exporter, joiner_nonce, member_nonce))
+        Ok(short_code(exporter, joiner_nonce, &nonce))
+    }
+
+    /// The attempt ended: `welcomed` when the joiner got its Welcome, which
+    /// takes back the failure counted at the reply.
+    pub fn end(&mut self, welcomed: bool) {
+        if welcomed && self.attempt.as_ref().is_some_and(|a| a.replied.is_some()) {
+            self.failures = self.failures.saturating_sub(1);
+        }
+        self.attempt = None;
     }
 }
