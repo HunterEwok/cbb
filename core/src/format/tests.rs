@@ -47,11 +47,17 @@ fn keys() -> HashMap<String, Vec<u8>> {
         assert_eq!(key.encode(), enc);
         assert_eq!(hex(&key.hash().0), s(row, "key_hash"), "{}", s(row, "name"));
         assert_eq!(hex(&key.device_id().0), s(row, "id16"));
-        if s(row, "name") == "root" {
-            assert_eq!(hex(&key.device_id().0), s(&k, "group_id"));
-        }
         out.insert(s(row, "key_hash").to_string(), key.public.to_vec());
     }
+    // The Group ID commits to the first root key and the recovery key
+    // (rule 33).
+    let point = |name: &str| {
+        let row = k["keys"].as_array().unwrap().iter().find(|r| r["name"] == name).unwrap();
+        let b = unhex(s(row, "key"));
+        let v = cbor::decode(&b).unwrap();
+        crate::records::Key::es256(Key::from_value(&v).unwrap().public.to_vec())
+    };
+    assert_eq!(hex(&crate::records::group_id(&point("root"), &point("recovery")).0), s(&k, "group_id"));
     out
 }
 
@@ -430,7 +436,6 @@ fn sets_keep_their_order() {
         let f = frame::read(&fb, frame::LIMIT_MEMBER).unwrap();
         let set = match f.t {
             6 | 18 => f.map.get(2),
-            67 => f.map.get(3).and_then(|w| w.get(3)),
             _ => None,
         };
         if let Some(a) = set {

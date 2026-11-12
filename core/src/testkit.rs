@@ -56,8 +56,12 @@ pub struct G {
 
 impl G {
     pub fn new() -> G {
-        let root = k("root");
-        G { gid: root.key.device_id(), set: RecordSet::new(root.key.clone()), heads: BTreeMap::new() }
+        let (root, recovery) = (k("root"), k("recovery"));
+        G {
+            gid: crate::records::group_id(&root.key, &recovery.key),
+            set: RecordSet::new(root.key.clone(), recovery.key.clone()),
+            heads: BTreeMap::new(),
+        }
     }
 
     pub fn rec(&mut self, by: &K, kind: Kind) -> Record {
@@ -135,7 +139,7 @@ impl G {
     }
 
     pub fn state(&self) -> State {
-        self.set.state(&BTreeMap::new())
+        self.set.state()
     }
 }
 

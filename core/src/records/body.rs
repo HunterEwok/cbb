@@ -19,14 +19,22 @@ pub const TYPE_DEVICE: u64 = 1;
 pub const TYPE_REVOKE: u64 = 2;
 pub const TYPE_FREEZE: u64 = 3;
 pub const TYPE_THAW: u64 = 4;
-pub const TYPE_CLAIM: u64 = 5;
 pub const TYPE_RESOLVE: u64 = 6;
 pub const TYPE_SETTINGS: u64 = 7;
 pub const TYPE_COPIES: u64 = 8;
 pub const TYPE_CHECKPOINT: u64 = 9;
 pub const TYPE_HUBS: u64 = 10;
-pub const TYPE_RECOVERY: u64 = 11;
-pub const TYPE_HANDOVER: u64 = 12;
+/// A change of root, signed by the group's recovery key (rule 33).
+pub const TYPE_RECOVERY: u64 = 13;
+
+/// Types of earlier drafts that 0.6 refuses (`records/retired`): 5, the
+/// claim that waited a delay; 11, a root's record naming a recovery admin
+/// key; 12, the root's handover to an admin. The root changes only by the
+/// recovery key (rule 33).
+pub const RETIRED_TYPES: &[u64] = &[5, 11, 12];
+
+/// The most recovery records a group ever has: a 17th is refused.
+pub const MAX_RECOVERY: u64 = 16;
 
 /// Roles of a device record.
 pub const ROLE_MEMBER: u64 = 1;
@@ -53,10 +61,11 @@ pub const POWER_REMOVE: u64 = 4;
 pub const POWER_REMOVE_ADMINS: u64 = 8;
 pub const POWER_FREEZE: u64 = 16;
 pub const POWER_THAW: u64 = 32;
-pub const POWER_TAKEOVER: u64 = 64;
+/// Bit 64 was the takeover power of earlier drafts: refused.
+pub const POWER_RETIRED: u64 = 64;
 pub const POWER_HUB: u64 = 128;
 pub const POWER_PERIODS: u64 = 256;
-const POWERS_ALL: u64 = 511;
+const POWERS_ALL: u64 = 511 & !POWER_RETIRED;
 
 /// Command types (format section 6); a device record's `commands` has bit
 /// (type − 1) for each type the admin may sign.
@@ -90,8 +99,8 @@ pub enum AdminKind {
     /// A computer: admits, manages, removes, freezes, sets the hubs; all
     /// commands.
     Computer,
-    /// A phone: all of a computer's, and removes admins, thaws and takes
-    /// the group over.
+    /// A phone: all of a computer's, and removes admins and thaws. No
+    /// admin takes the group over (rule 33).
     Phone,
 }
 
@@ -109,7 +118,7 @@ impl AdminKind {
                     | command_bit(COMMAND_ACTION),
             ),
             AdminKind::Computer => (ADMIN, ALL_COMMANDS),
-            AdminKind::Phone => (ADMIN | POWER_REMOVE_ADMINS | POWER_THAW | POWER_TAKEOVER, ALL_COMMANDS),
+            AdminKind::Phone => (ADMIN | POWER_REMOVE_ADMINS | POWER_THAW, ALL_COMMANDS),
         }
     }
 }
@@ -126,8 +135,6 @@ pub const LEVEL_HARDWARE: u64 = 2;
 pub const LEVEL_FILES: u64 = 3;
 
 /// The settings' defaults.
-pub const DEFAULT_DELAY_MS: u64 = 259_200_000;
-pub const MAX_DELAY_MS: u64 = 604_800_000;
 pub const MIN_INCOMING_MS: u64 = 5_000;
 pub const MAX_INCOMING_MS: u64 = 3_600_000;
 pub const MAX_KEYS: usize = 256;
@@ -163,13 +170,6 @@ pub enum Kind {
         ids: Vec<RecordId>,
         seen: Vec<Seen>,
     },
-    Claim {
-        root: Key,
-        seen: Vec<Seen>,
-        /// The records of the root it follows that stay once it counts,
-        /// by ID, sorted (rule 32): nothing else of that root counts then.
-        keep: Vec<RecordId>,
-    },
     Resolve(Vec<RecordId>),
     Settings(Box<Settings>),
     Copies {
@@ -184,17 +184,18 @@ pub enum Kind {
         hubs: Vec<DeviceId>,
         seen: Vec<Seen>,
     },
+    /// A change of root, signed by the group's recovery key (rule 33):
+    /// the new root, and the hash of the list of earlier roots' records
+    /// that stay (`List`), which rides beside the record.
     Recovery {
-        admin: Key,
-    },
-    Handover {
-        admin: KeyHash,
+        root: Key,
+        list: [u8; 32],
     },
     /// A type of a later version: held.
     Unknown(u64),
 }
 
-/// `[key hash, seq ≥ 1, record ID]` of a revoke, freeze or claim: the
+/// `[key hash, seq ≥ 1, record ID]` of a revoke or freeze, and others: the
 /// head of each signer's chain the author held. A record of that signer
 /// at or below seq is seen only when it is on the chain ending at id; a
 /// signer not listed was seen at 0.
@@ -315,7 +316,6 @@ impl Device {
 /// and left out of the encoding.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct Settings {
-    pub takeover_delay_ms: Option<u64>,
     pub key_level: u64,
     pub min_rules: u64,
     pub shared: bool,
@@ -350,14 +350,12 @@ impl Kind {
             Kind::Revoke(_) => TYPE_REVOKE,
             Kind::Freeze(_) => TYPE_FREEZE,
             Kind::Thaw { .. } => TYPE_THAW,
-            Kind::Claim { .. } => TYPE_CLAIM,
             Kind::Resolve(_) => TYPE_RESOLVE,
             Kind::Settings(_) => TYPE_SETTINGS,
             Kind::Copies { .. } => TYPE_COPIES,
             Kind::Checkpoint { .. } => TYPE_CHECKPOINT,
             Kind::Hubs { .. } => TYPE_HUBS,
             Kind::Recovery { .. } => TYPE_RECOVERY,
-            Kind::Handover { .. } => TYPE_HANDOVER,
             Kind::Unknown(t) => *t,
         }
     }
@@ -365,10 +363,7 @@ impl Kind {
     /// The types every version from 0.6 on must apply: they are written
     /// with the fields of 0.6 only (section 3.3).
     pub fn frozen_form(&self) -> bool {
-        matches!(
-            self,
-            Kind::Revoke(_) | Kind::Freeze(_) | Kind::Claim { .. } | Kind::Resolve(_) | Kind::Handover { .. }
-        )
+        matches!(self, Kind::Revoke(_) | Kind::Freeze(_) | Kind::Recovery { .. } | Kind::Resolve(_))
     }
 }
 
@@ -382,14 +377,12 @@ fn type_name(t: u64) -> &'static str {
         TYPE_REVOKE => "revoke",
         TYPE_FREEZE => "freeze",
         TYPE_THAW => "thaw",
-        TYPE_CLAIM => "claim",
         TYPE_RESOLVE => "resolve",
         TYPE_SETTINGS => "settings",
         TYPE_COPIES => "copies",
         TYPE_CHECKPOINT => "checkpoint",
         TYPE_HUBS => "hubs",
         TYPE_RECOVERY => "recovery",
-        TYPE_HANDOVER => "handover",
         _ => "unknown",
     }
 }
@@ -459,13 +452,6 @@ impl Body {
                     check_seen(seen, t)?;
                 }
             }
-            Kind::Claim { root, seen, keep } => {
-                held |= signer_key(root, t, "root")?;
-                check_seen(seen, t)?;
-                if keep.len() > MAX_ROOT_RECORDS || !strictly_sorted(keep) {
-                    return Err(field(t, "keep"));
-                }
-            }
             Kind::Settings(s) => held |= check_settings(s)?,
             Kind::Copies { incoming_ms, seen } => {
                 if !(MIN_INCOMING_MS..=MAX_INCOMING_MS).contains(incoming_ms) {
@@ -495,8 +481,16 @@ impl Body {
                 }
                 check_seen(seen, t)?;
             }
-            Kind::Recovery { admin } => held |= signer_key(admin, t, "admin")?,
-            Kind::Handover { .. } => {}
+            Kind::Recovery { root, .. } => {
+                held |= signer_key(root, t, "root")?;
+                // A root that is the recovery key ends the ranks.
+                if root.hash() == self.signer {
+                    return Err(field(t, "root"));
+                }
+                if self.seq > MAX_RECOVERY {
+                    return Err(field(t, "seq"));
+                }
+            }
             Kind::Unknown(n) => {
                 if *n == 0 {
                     return Err(Rule::new("records/type"));
@@ -542,13 +536,6 @@ impl Body {
                 m.push((11, seen(s)));
             }
             Kind::Resolve(v) => m.push((10, ids(v))),
-            Kind::Claim { root, seen: s, keep } => {
-                m.push((10, root.to_value()));
-                m.push((11, seen(s)));
-                if !keep.is_empty() {
-                    m.push((12, ids(keep)));
-                }
-            }
             Kind::Settings(s) => encode_settings(&mut m, s),
             Kind::Copies { incoming_ms, seen: s } => {
                 m.push((10, Value::Uint(*incoming_ms)));
@@ -567,8 +554,10 @@ impl Body {
                 m.push((10, Value::Array(hubs.iter().map(|d| Value::Bytes(&d.0)).collect())));
                 m.push((11, seen(s)));
             }
-            Kind::Recovery { admin } => m.push((10, admin.to_value())),
-            Kind::Handover { admin } => m.push((10, Value::Bytes(&admin.0))),
+            Kind::Recovery { root, list } => {
+                m.push((10, root.to_value()));
+                m.push((11, Value::Bytes(list)));
+            }
             Kind::Unknown(_) => {}
         }
         if self.held {
@@ -617,13 +606,7 @@ impl Body {
                     (Kind::Resolve(ids), &[10], &[])
                 }
             }
-            TYPE_CLAIM => {
-                let root = Key::read(r.need(10, f("root"))?)?;
-                let seen = read_seen(&r, f("seen"))?;
-                let keep = r.opt_list(12, f("keep"), |v| v.as_bytes().and_then(RecordId::from_slice))?;
-                (Kind::Claim { root, seen, keep }, &[10, 11, 12], &[])
-            }
-            TYPE_SETTINGS => (Kind::settings(read_settings(&r)?), &[10, 11, 12, 14, 15], &[13]),
+            TYPE_SETTINGS => (Kind::settings(read_settings(&r)?), &[11, 12, 14, 15], &[10, 13]),
             TYPE_COPIES => {
                 let incoming_ms = r.need_uint(10, f("incoming_ms"))?;
                 (Kind::Copies { incoming_ms, seen: read_seen(&r, f("seen"))? }, &[10, 11], &[])
@@ -642,12 +625,12 @@ impl Body {
                 let hubs = r.need_list(10, f("hubs"), |v| v.as_bytes().and_then(DeviceId::from_slice))?;
                 (Kind::Hubs { hubs, seen: read_seen(&r, f("seen"))? }, &[10, 11], &[])
             }
-            TYPE_RECOVERY => (Kind::Recovery { admin: Key::read(r.need(10, f("admin"))?)? }, &[10], &[]),
-            TYPE_HANDOVER => {
-                let admin = r.need(10, f("admin"))?;
-                let admin = admin.as_bytes().and_then(KeyHash::from_slice).ok_or(f("admin"))?;
-                (Kind::Handover { admin }, &[10], &[])
+            TYPE_RECOVERY => {
+                let root = Key::read(r.need(10, f("root"))?)?;
+                let list = r.need(11, f("list"))?.as_bytes().and_then(|b| <[u8; 32]>::try_from(b).ok());
+                (Kind::Recovery { root, list: list.ok_or(f("list"))? }, &[10, 11], &[])
             }
+            n if RETIRED_TYPES.contains(&n) => return Err(Rule::new("records/retired")),
             n => (Kind::Unknown(n), &[], &[]),
         };
         // The common fields of a record: type, group, signer, seq, prev,
@@ -793,10 +776,6 @@ fn read_device(r: &Read<'_, '_>) -> Result<Device, Rule> {
 
 fn read_settings(r: &Read<'_, '_>) -> Result<Settings, Rule> {
     let f = |name: &'static str| field("settings", name);
-    let takeover_delay_ms = match r.get(10) {
-        None => None,
-        Some(_) => Some(r.opt_uint(10, DEFAULT_DELAY_MS, f("takeover_delay_ms"))?),
-    };
     // Absent is the default, which the type keeps as 0; a written 0 is
     // outside both rows.
     let key_level = match (r.get(11), r.opt_uint(11, LEVEL_HARDWARE, f("key_level"))?) {
@@ -815,7 +794,7 @@ fn read_settings(r: &Read<'_, '_>) -> Result<Settings, Rule> {
         }
         _ => None,
     })?;
-    Ok(Settings { takeover_delay_ms, key_level, min_rules, shared: r.flag(14, f("shared"))?, servers })
+    Ok(Settings { key_level, min_rules, shared: r.flag(14, f("shared"))?, servers })
 }
 
 /// The fields every record has.
@@ -853,7 +832,7 @@ fn check_device(d: &Device) -> Result<bool, Rule> {
     match &d.admin {
         Some(a) => {
             held |= signer_key(a, t, "admin")?;
-            if d.powers > POWERS_ALL {
+            if d.powers & !POWERS_ALL != 0 {
                 return Err(field(t, "powers"));
             }
         }
@@ -910,9 +889,6 @@ fn encode_device<'a>(m: &mut Vec<(u16, Value<'a>)>, d: &'a Device) {
 
 fn check_settings(s: &Settings) -> Result<bool, Rule> {
     let t = "settings";
-    if s.takeover_delay_ms.is_some_and(|d| d > MAX_DELAY_MS || d == DEFAULT_DELAY_MS) {
-        return Err(field(t, "takeover_delay_ms"));
-    }
     if s.key_level > LEVEL_FILES || s.key_level == LEVEL_HARDWARE {
         return Err(field(t, "key_level"));
     }
@@ -934,9 +910,6 @@ fn check_settings(s: &Settings) -> Result<bool, Rule> {
 }
 
 fn encode_settings<'a>(m: &mut Vec<(u16, Value<'a>)>, s: &'a Settings) {
-    if let Some(d) = s.takeover_delay_ms {
-        m.push((10, Value::Uint(d)));
-    }
     if s.key_level != 0 {
         m.push((11, Value::Uint(s.key_level)));
     }
@@ -956,14 +929,66 @@ fn encode_settings<'a>(m: &mut Vec<(u16, Value<'a>)>, s: &'a Settings) {
 }
 
 impl Settings {
-    /// The takeover delay, its default when not set.
-    pub fn delay_ms(&self) -> u64 {
-        self.takeover_delay_ms.unwrap_or(DEFAULT_DELAY_MS)
-    }
     pub fn level(&self) -> u64 {
         if self.key_level == 0 { LEVEL_HARDWARE } else { self.key_level }
     }
     pub fn rules(&self) -> u64 {
         if self.min_rules == 0 { 1 } else { self.min_rules }
+    }
+}
+
+/// The label of a recovery list's hash.
+pub const LABEL_LIST: &str = "cbb recovery list v3";
+
+/// The hash a recovery record names its list by: SHA-256 over the label,
+/// a zero byte and the list's bytes as they travel.
+pub fn list_hash(bytes: &[u8]) -> [u8; 32] {
+    let mut m = Vec::new();
+    m.extend_from_slice(LABEL_LIST.as_bytes());
+    m.push(0);
+    m.extend_from_slice(bytes);
+    crate::certs::sha256(&m)
+}
+
+/// The list a recovery record names by its hash (rule 33): the IDs of the
+/// records of earlier roots that stay, sorted, each once. It rides beside
+/// the record, so that the record stays small; a list is taken only when
+/// a held recovery record names the hash of its bytes, and bytes with the
+/// right hash that do not read are the empty list on every member. The
+/// newest effective record's list is the whole truth about every earlier
+/// root.
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub struct List(pub Vec<RecordId>);
+
+impl List {
+    /// The list's bytes: an array of the IDs as byte strings.
+    pub fn encode(&self) -> Vec<u8> {
+        ids(&self.0).encode()
+    }
+
+    /// Reads a list from its bytes: the profile's encoding, at most
+    /// MAX_ROOT_RECORDS IDs, sorted strictly (`records/list`).
+    pub fn decode(b: &[u8]) -> Result<List, Rule> {
+        let bad = Rule::new("records/list");
+        let v = crate::format::cbor::decode(b).map_err(|_| bad)?;
+        let items = v.as_array().ok_or(bad)?;
+        let list: Vec<RecordId> =
+            items.iter().map(|i| i.as_bytes().and_then(RecordId::from_slice)).collect::<Option<_>>().ok_or(bad)?;
+        if list.len() > MAX_ROOT_RECORDS || !strictly_sorted(&list) {
+            return Err(bad);
+        }
+        Ok(List(list))
+    }
+
+    /// The list a recovery record naming hash gives for bytes: the list
+    /// they hold, or the empty list when they do not read. None when they
+    /// do not have that hash.
+    pub fn of(bytes: &[u8], hash: &[u8; 32]) -> Option<List> {
+        (list_hash(bytes) == *hash).then(|| List::decode(bytes).unwrap_or_default())
+    }
+
+    /// The hash of the list's bytes.
+    pub fn hash(&self) -> [u8; 32] {
+        list_hash(&self.encode())
     }
 }

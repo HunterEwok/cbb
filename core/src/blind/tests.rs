@@ -60,13 +60,16 @@ fn credentials_of_the_vectors() {
     assert_eq!(credential::check_chain(period, hubs, Some(members)), Ok(()));
     assert_eq!(credential::check_chain(period, members, None), Err(Chain::Hubs));
     assert_eq!(credential::check_chain(&read[1], hubs, None), Err(Chain::Period));
-    // A relay with a fixed list takes the period of a listed group by its root.
+    // A relay with a fixed list takes the period of a listed group by its
+    // first root and its recovery key.
     let root = period.signer.clone();
-    let gid = Key::new(Alg::Es256, &root).device_id().0;
-    assert!(period.period_of_listed_group(&root, &[gid]));
-    assert!(!period.period_of_listed_group(&root, &[[0; 16]]));
+    let recovery = unhex(v["recovery"].as_str().unwrap());
+    let gid = period.group;
+    assert!(period.period_of_listed_group(&root, &recovery, &[gid]));
+    assert!(!period.period_of_listed_group(&root, &root, &[gid]));
+    assert!(!period.period_of_listed_group(&root, &recovery, &[[0; 16]]));
     assert!(
-        !read[1].period_of_listed_group(&read[1].signer, &[read[1].group]),
+        !read[1].period_of_listed_group(&read[1].signer, &recovery, &[read[1].group]),
         "a device's server credential is no period"
     );
     assert!(period.live(period.expires_ms - 1) && !period.live(period.expires_ms));

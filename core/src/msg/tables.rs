@@ -71,12 +71,12 @@ pub static WELCOME: Table = Table {
     fields: &[
         f(1, "welcome/root", MEMBER_KEY, true),
         f(2, "welcome/records", Ty::Array { of: &ENV, max: 4096 }, true),
-        f(3, "welcome/claim-ages", Ty::Set { of: &Ty::Age, max: 4096 }, false),
         f(4, "welcome/keys", Ty::Array { of: &ENV, max: 256 }, false),
         f(5, "welcome/time", MS, true),
         f(6, "welcome/grant", Ty::Map(&GRANT), false),
         f(7, "welcome/credentials", Ty::Array { of: &ENV, max: 259 }, false),
-        f(8, "welcome/counted", Ty::Once { of: &B32, max: 16 }, false),
+        f(9, "welcome/recovery", MEMBER_KEY, true),
+        f(10, "welcome/list", Ty::BytesUpTo(4 + 34 * 1024), false),
     ],
 };
 

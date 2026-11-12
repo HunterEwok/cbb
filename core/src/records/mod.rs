@@ -22,34 +22,32 @@
 //! 4. The sealing key is in the device's own keys statement (`statement`).
 //! 5. Unknown critical fields hold a record (kept, passed on, not applied);
 //!    `min_rules` in the settings stops older devices from secrets.
-//! 6. The kept set and the state depend on the set and the claims the
-//!    device counted alone, never on the order they came in; its ceilings are the format's, with no working
-//!    limits under them. A claim pays ahead for its root's first records,
-//!    which have no room of their own.
-//! 7. No rule reads a clock: the takeover delay is the time the device
-//!    itself held a claim, which its caller keeps.
-//! 8. Two competing claims stop the group; a root's own records still
-//!    count during a stop, and only a root resolves it.
+//! 6. The kept set and the state depend on the set alone, never on the
+//!    order its records came in; its ceilings are the format's, with no
+//!    working limits under them.
+//! 7. No rule reads a clock.
+//! 8. A root's own records count during a stop, and only a root resolves
+//!    a conflict between admins.
 //! 9. A root's removal is final: a resolve never voids a revoke signed by
 //!    a root, and the device comes back only by a new admission with a new
 //!    key. A root's resolve may void an admin's revoke; the device then
 //!    counts again with its key and ID.
-//! 10. A takeover cuts the old root at the claim's `seen`: what that root
-//!     signs after it, removals included, does not count once the claim
-//!     does; a live root cancels the claim within the delay instead.
+//! 10. The root changes only by a takeover the group's recovery key
+//!     signs, at once: no delay, no cancel, no objection, and no admin
+//!     takes the group over (rule 33). The recovery chain, walked from the
+//!     recovery key the device was given with the group, gives the path of
+//!     roots before anything else; no root's or admin's record changes it,
+//!     whatever order the records came in.
 //! 11. A device's member key and its admin key go together: a removal or
 //!     freeze that names one names both.
-//! 12. A takeover the device has counted is final there: its old root's
-//!     records above the claim's cut do not count, nor does a later claim
-//!     of that root's epoch rival it. Whether a peer counts another owner
-//!     comes from the peers' paths of roots (`State::disagrees`), never
-//!     from records.
-//! 13. `seen` names each signer's head with its seq and record ID, and a
-//!     takeover's cut is the claim's entry for the old root: a record at
-//!     or below a seen seq counts as seen only on the chain ending at that
-//!     ID, and a cut root keeps only that chain: a member that promoted
-//!     its successor stores nothing of it off the cut, and its checkpoints
-//!     no longer come first in its order.
+//! 12. A recovery record hands the chain to the next recovery key, whose
+//!     records start again at seq 1; the key that handed over signs
+//!     nothing more that counts. Two records at one step of the chain stop
+//!     the group for good. Whether a peer counts another owner comes from
+//!     the peers' paths of roots (`State::disagrees`), never from records.
+//! 13. A takeover lists what stays of the root it follows (`keep`): those
+//!     records count by themselves, at once, with no chain below them; the
+//!     rest of that root counts nothing and is not stored.
 //!
 //! The bytes are the format's (`crate::format`): a record is read from its
 //! envelope with [`Record::decode`] and written with [`Record::envelope`].
@@ -81,9 +79,9 @@ use core::fmt;
 use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 
-pub use body::{Body, Kind};
-pub use eval::{Counted, Input, State, evaluate};
-pub use key::{DeviceId, GroupId, Key, KeyHash, RecordId};
+pub use body::{Body, Kind, List};
+pub use eval::{Input, State, evaluate};
+pub use key::{DeviceId, GroupId, Key, KeyHash, RecordId, group_id};
 pub use set::RecordSet;
 
 use crate::certs::sha256;
@@ -100,6 +98,25 @@ pub const LABEL_MARK: &str = "cbb record mark v3";
 /// the label, a zero byte and the record's envelope. Loading checks the
 /// mark instead of the signature (design-records-v3 section 7, rule 29).
 pub type Mark = [u8; 32];
+/// The label of the pinned keys' mark (`pin_mark`).
+pub const LABEL_PIN: &str = "cbb pin v3";
+
+/// The mark a device keeps beside the group's first root key and recovery
+/// key in its own store (rule 29): HMAC-SHA-256 under its own local key
+/// over the label, a zero byte and the two keys' encodings. A store whose
+/// pinned keys were changed does not load (`RecordSet::pinned`).
+#[allow(clippy::expect_used, reason = "HMAC takes a key of any length, so this never fails")]
+pub fn pin_mark(local: &[u8; 32], root: &Key, recovery: &Key) -> Mark {
+    let mut m = <Hmac<Sha256> as KeyInit>::new_from_slice(local).expect("HMAC takes a key of any length");
+    m.update(LABEL_PIN.as_bytes());
+    m.update(&[0]);
+    m.update(&root.encode());
+    m.update(&recovery.encode());
+    let mut out = [0u8; 32];
+    out.copy_from_slice(&m.finalize().into_bytes());
+    out
+}
+
 /// The label of the set digest.
 pub const LABEL_SET: &str = "cbb set v3";
 
@@ -113,24 +130,21 @@ pub const MAX_SEEN: usize = 1024;
 
 // The ceilings frozen in the format (section 13).
 
-/// A record body, and a checkpoint's or a claim's (whose list of kept
-/// records may name 1024 IDs).
+/// A record body, and a checkpoint's (whose list of kept records may name
+/// 1024 IDs). A recovery record is small: its list rides beside it.
 pub const MAX_BODY: usize = 8 << 10;
 pub const MAX_CHECKPOINT_BODY: usize = 64 << 10;
 /// Records of one root key.
 pub const MAX_ROOT_RECORDS: usize = 1024;
 /// Records of one admin key.
 pub const MAX_ADMIN_RECORDS: usize = 256;
-/// A claimant's records as the future root before its claim counts,
-/// counted in the claimant's own.
-pub const MAX_FUTURE_ROOT_RECORDS: usize = 16;
 /// Records in a set, and their bytes.
 pub const MAX_RECORDS: usize = 4096;
 pub const MAX_SET_BYTES: usize = 2 << 20;
 /// Devices with a device record.
 pub const MAX_DEVICES: usize = 256;
-/// Roots on the path: the first and 15 handovers.
-pub const MAX_PATH: usize = 16;
+/// Roots on the path: the first and one for each recovery record.
+pub const MAX_PATH: usize = 1 + body::MAX_RECOVERY as usize;
 /// Held records a state lists.
 pub const MAX_NEWER: usize = 16;
 
@@ -229,11 +243,7 @@ impl Record {
     pub fn decode(envelope: &[u8]) -> Result<Record, Rule> {
         let e = crate::format::Envelope::parse_limited(envelope, MAX_CHECKPOINT_BODY)?;
         let body = Body::from_value(&e.map)?;
-        let max = if matches!(body.kind, Kind::Checkpoint { .. } | Kind::Claim { .. }) {
-            MAX_CHECKPOINT_BODY
-        } else {
-            MAX_BODY
-        };
+        let max = if matches!(body.kind, Kind::Checkpoint { .. }) { MAX_CHECKPOINT_BODY } else { MAX_BODY };
         if e.body.len() > max {
             return Err(crate::format::Rule::ENV_SIZE.into());
         }
@@ -274,13 +284,9 @@ impl Record {
         self.bytes.len().saturating_add(rest)
     }
 
-    /// The ceiling on its body: a checkpoint's or a claim's is larger.
+    /// The ceiling on its body: a checkpoint's is larger.
     fn max_body(&self) -> usize {
-        if matches!(self.body.kind, Kind::Checkpoint { .. } | Kind::Claim { .. }) {
-            MAX_CHECKPOINT_BODY
-        } else {
-            MAX_BODY
-        }
+        if matches!(self.body.kind, Kind::Checkpoint { .. }) { MAX_CHECKPOINT_BODY } else { MAX_BODY }
     }
 
     /// Checks what can be checked without the set: the body's size and
@@ -348,42 +354,4 @@ pub fn digest<'a>(ids: impl IntoIterator<Item = &'a RecordId>) -> [u8; 32] {
         m.extend_from_slice(&id.0);
     }
     sha256(&m)
-}
-
-/// What a test's claim keeps of the roots it follows: every record but a
-/// checkpoint of a root key it saw, up to the seq it saw, sorted (rule
-/// 32). A key a device or recovery record names as an admin is no root.
-/// Past 1024 records, whole keys go in, those with fewer records first.
-#[cfg(test)]
-pub(crate) fn keep_of(records: &[Record], seen: &[body::Seen]) -> Vec<RecordId> {
-    use alloc::collections::{BTreeMap, BTreeSet};
-    let admins: BTreeSet<KeyHash> = records
-        .iter()
-        .filter_map(|r| match &r.body().kind {
-            Kind::Device(d) => d.admin.as_ref().map(Key::hash),
-            Kind::Recovery { admin } => Some(admin.hash()),
-            _ => None,
-        })
-        .collect();
-    let mut by_key: BTreeMap<KeyHash, BTreeSet<RecordId>> = BTreeMap::new();
-    for r in records {
-        let b = r.body();
-        if !admins.contains(&b.signer)
-            && !matches!(b.kind, Kind::Checkpoint { .. })
-            && b.seq <= body::seen_of(seen, &b.signer)
-        {
-            by_key.entry(b.signer).or_default().insert(r.id());
-        }
-    }
-    let mut keys: Vec<&BTreeSet<RecordId>> = by_key.values().collect();
-    keys.sort_by_key(|ids| ids.len());
-    let mut ids: Vec<RecordId> = Vec::new();
-    for k in keys {
-        if ids.len() + k.len() > MAX_ROOT_RECORDS {
-            break;
-        }
-        ids.extend(k.iter().copied());
-    }
-    ids.sort();
-    ids
 }

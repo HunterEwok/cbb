@@ -240,7 +240,9 @@ STRANGER = Signer("stranger")
 PERIOD = Signer("period key")
 SRVKEY = Signer("laptop server key")
 OPERATOR = Signer("server operator")
-GROUP = ROOT.id16
+RECOVERY = Signer("recovery")
+# The Group ID commits to the first root key and the recovery key (rule 33).
+GROUP = sha(b"cbb group v3\x00" + enc(ROOT.key) + enc(RECOVERY.key))[:16]
 T0 = 1793000000000  # 2026-10-26, display only
 
 LABELS = {
@@ -361,8 +363,13 @@ def rec(signer, seq, typ, fields, prev=None, time=None, extra=None):
     return m
 
 
+def list_hash(b):
+    """The hash a recovery head names its list by (rule 33)."""
+    return sha(b"cbb recovery list v3\x00" + b)
+
+
 def record_vectors():
-    take, refuse = [], []
+    take, refuse, lists = [], [], []
     chain = {}
 
     def seen_of(*signers):
@@ -397,14 +404,14 @@ def record_vectors():
 
     # device records
     add("root's own phone", ROOT, 1, {10: PHONE.key, 11: "Phone", 12: 2, 13: 0b1111,
-                                      17: 4, 18: 2, 20: ADMIN.key, 21: 0b111111111,
+                                      17: 4, 18: 2, 20: ADMIN.key, 21: 0b110111111,
                                       22: (1 << 10) - 1, 23: 1})
     lap_env, lap_body, lap_m = add("laptop admitted by the root", ROOT, 1,
                                    {10: LAPTOP.key, 11: "Laptop", 12: 1, 13: 0b0111, 16: 0b111, 17: 1, 18: 2})
     add("board admitted by an admin, base rights", ADMIN, 1,
         {10: BOARD.key, 11: "Kettle", 12: 4, 13: 0b0011, 17: 10},
         note="an ordinary leaf: any admin with admit admits it, and it obeys the group's admins")
-    add("settings", ROOT, 7, {10: 0, 14: 1,
+    add("settings", ROOT, 7, {14: 1,
                               15: [[1, "forward.cbb.tools:8764", OPERATOR.key]]})
     add("copies", ADMIN, 8, {10: 30000, 11: seen_of(ROOT)})
     # hubs keep the user's order (not sorted), each once
@@ -413,13 +420,18 @@ def record_vectors():
     add("freeze", ROOT, 3, {10: [ADMIN.hash], 11: seen_of(ADMIN, ROOT)})
     thaw_target = take[-1]["id"]
     add("thaw", ROOT, 4, {10: [bytes.fromhex(thaw_target)], 11: seen_of(ADMIN)})
-    add("claim", ADMIN, 5, {10: ROOT2.key, 11: seen_of(ADMIN, ROOT)})
     add("resolve", ROOT, 6, {10: [bytes.fromhex(take[-1]["id"])]})
-    add("recovery", ROOT, 11, {10: Signer("recovery").key})
-    add("handover", ROOT, 12, {10: ADMIN.hash})
-    add("checkpoint", ROOT, 9, {10: srt([[ADMIN.hash, 3, bytes.fromhex(take[-2]["id"])],
-                                         [ROOT.hash, 10, bytes.fromhex(take[-1]["id"])]]),
+    add("checkpoint", ROOT, 9, {10: srt([[ADMIN.hash, *chain[ADMIN.name]], [ROOT.hash, *chain[ROOT.name]]]),
                                 11: srt([bytes.fromhex(take[0]["id"]), bytes.fromhex(take[1]["id"])])})
+    # the change of root by the recovery key (rule 33): a small head that
+    # names its list by hash; the list rides beside it
+    listed = sorted(bytes.fromhex(t["id"]) for t in take if t["signer"] == ROOT.name)
+    list_bytes = enc(listed)
+    add("recovery head: the recovery key makes root 2 the root", RECOVERY, 13,
+        {10: ROOT2.key, 11: list_hash(list_bytes)},
+        note="the list (lists[0]) rides beside it, taken from anyone by its hash")
+    lists.append({"name": "the list of the first head", "bytes": list_bytes.hex(),
+                  "hash": list_hash(list_bytes).hex(), "ids": len(listed)})
     add("device with an optional field from a later version", ROOT, 1,
         {10: Signer("tv").key, 11: "TV", 12: 1, 13: 0b0011},
         extra={300: "later"},
@@ -430,10 +442,10 @@ def record_vectors():
         note="key 99 is unknown in the critical zone: keep, pass on, do not apply")
     add("record of a type from a later version", ROOT, 40, {10: b"\x01"}, verdict="hold",
         note="unknown type: keep, pass on, do not apply")
-    add("second signer named (room only in 0.6)", ROOT, 7, {10: 3600000},
+    add("second signer named (room only in 0.6)", ROOT, 7, {14: 1},
         verdict="hold", extra={8: ADMIN.hash},
         note="signer2 (key 8) with a three-element envelope; 0.6 checks the first signature, keeps the record and never applies it")
-    add("second signature of 3000 bytes (a later algorithm)", ROOT, 7, {10: 3600000},
+    add("second signature of 3000 bytes (a later algorithm)", ROOT, 7, {14: 1},
         verdict="hold", extra={8: ADMIN.hash}, sig2=fake("later signature", 3000),
         note="sig2 is not fixed at 64 bytes; up to 4096 it is kept, outside the ID; the size counts from the body")
 
@@ -479,7 +491,7 @@ def record_vectors():
     bad("one element", "env/shape", enc([lap_body]))
     bad("body as a map, not bytes", "env/shape", Raw(head(4, 2) + enc(lap_m) + enc(sig)).b)
     bad("trailing byte after the envelope", "cbor/trailing", enc([lap_body, sig]) + b"\x00")
-    m2 = rec(ROOT, 91, 7, {10: 3600000}, extra={8: ADMIN.hash})
+    m2 = rec(ROOT, 91, 7, {14: 1}, extra={8: ADMIN.hash})
     b2 = enc(m2)
     bad("second signature over 4096 bytes", "env/sig2",
         enc([b2, ROOT.sign(LABELS["record"], b2), fake("later signature", 4097)]))
@@ -585,7 +597,33 @@ def record_vectors():
         ("copies without its seen", "records/copies/seen", 8, {10: 30000}),
     ]:
         bad_body(name, rule, rec(ROOT, 90, typ, fields))
-    return take, refuse
+    # what rule 33 retired (format 0.6 freezes): the claim, the root's
+    # recovery record and the handover; the takeover power; settings'
+    # takeover delay
+    for name, typ, fields in [("claim (type 5, retired)", 5, {10: ROOT2.key, 11: [sa]}),
+                              ("root's recovery record (type 11, retired)", 11, {10: RECOVERY.key}),
+                              ("handover (type 12, retired)", 12, {10: ADMIN.hash})]:
+        bad_body(name, "records/retired", rec(ROOT, 90, typ, fields))
+    m = dict(lap_m)
+    m.update({20: ADMIN.key, 21: 64})
+    bad_body("admin with power bit 64 (takeover, retired)", "records/device/powers", m)
+    bad_body("settings field 10 (takeover delay, gone)", "form/critical",
+             {1: 7, 2: GROUP, 3: ROOT.hash, 4: 90, 6: T0, 10: 86400000})
+
+    def bad_signed(name, rule, signer, m):
+        body = enc(m)
+        bad(name, rule, enc([body, signer.sign(LABELS["record"], body)]))
+
+    some = list_hash(enc([]))
+    bad_signed("recovery head naming the recovery key as the root", "records/recovery/root", RECOVERY,
+               rec(RECOVERY, 2, 13, {10: RECOVERY.key, 11: some}))
+    bad_signed("recovery head at seq 17 (at most 16 for the group's life)", "records/recovery/seq", RECOVERY,
+               rec(RECOVERY, 17, 13, {10: Signer("root 17").key, 11: some}))
+    bad_signed("recovery head without its list", "records/recovery/list", RECOVERY,
+               rec(RECOVERY, 2, 13, {10: Signer("root 3").key}))
+    bad_signed("recovery head with a list hash of 31 bytes", "records/recovery/list", RECOVERY,
+               rec(RECOVERY, 2, 13, {10: Signer("root 3").key, 11: some[:31]}))
+    return take, refuse, lists
 
 
 def statement_vectors():
@@ -1086,8 +1124,8 @@ def message_vectors(records_take):
     add("welcome", {0: 67, 2: fake("Tb", 32), 3: {
         1: ROOT.key,
         2: [dec(bytes.fromhex(r["envelope"])) for r in records_take[:3]],
-        3: srt([[bytes.fromhex(records_take[9]["id"]), 3600000], [bytes.fromhex(records_take[10]["id"]), 60000]]),
-        5: T0 + 60000}})
+        5: T0 + 60000,
+        9: RECOVERY.key}})
     add("pairing error taken", {0: 69, 2: 8})
     add("have", {0: 6, 2: ids[:3]})
     add("reach", {0: 18, 2: srt([LAPTOP.id16, PHONE.id16, BOARD.id16])})
@@ -1115,15 +1153,10 @@ def message_vectors(records_take):
     # sets in messages (section 1): a message whose set is out of order or
     # holds a value twice is refused, with the field's rule
     a, b = ids[0], ids[1]
-    w = [bytes.fromhex(records_take[9]["id"]), 3600000]
-    w2 = [bytes.fromhex(records_take[10]["id"]), 60000]
-    wa, wb = srt([w, w2])
     fields = [
         ("have out of order", "messages/have", [2], {0: 6, 2: [b, a]}),
         ("have with one ID twice", "messages/have", [2], {0: 6, 2: [a, a]}),
         ("reach out of order", "messages/reach", [2], {0: 18, 2: list(reversed(srt([LAPTOP.id16, PHONE.id16])))}),
-        ("welcome claim_ages out of order", "pairing/welcome/claim_ages", [3, 3],
-         {0: 67, 2: fake("Tb", 32), 3: {1: ROOT.key, 3: [wb, wa], 5: T0 + 60000}}),
     ]
     field_bad = [{"name": n, "rule": r, "path": p, "message": enc(m).hex()} for n, r, p, m in fields]
     return v, bad, digest.hex(), field_bad
@@ -1261,10 +1294,11 @@ def container_vector():
 
 def keys_table():
     rows = []
-    for s in [ROOT, ROOT2, ADMIN, PHONE, LAPTOP, BOARD, LOCK, STRANGER, PERIOD, SRVKEY, OPERATOR]:
+    for s in [ROOT, ROOT2, ADMIN, PHONE, LAPTOP, BOARD, LOCK, STRANGER, PERIOD, SRVKEY, OPERATOR, RECOVERY]:
         rows.append({"name": s.name, "private_scalar": format(s.d, "064x"), "key": enc(s.key).hex(),
                      "key_hash": s.hash.hex(), "id16": s.id16.hex()})
     return {"group_id": GROUP.hex(), "keys": rows,
+            "group_id_of": "the first 16 bytes of SHA-256('cbb group v3' 0x00 key(root) key(recovery)) (rule 33)",
             "note": "test keys only; private scalar = SHA-256('cbb test key ' + name) mod (n-1) + 1"}
 
 
@@ -1310,12 +1344,12 @@ TABLES = {
     "welcome": [
         (1, "welcome/root", "key 1", True),
         (2, "welcome/records", "array 1..4096 of envelope", True),
-        (3, "welcome/claim-ages", "set 1..4096 of age", False),
         (4, "welcome/keys", "array 1..256 of envelope", False),
         (5, "welcome/time", "uint 1..9223372036854775807", True),
         (6, "welcome/grant", "map welcome/grant", False),
         (7, "welcome/credentials", "array 1..259 of envelope", False),
-        (8, "welcome/counted", "once 1..16 of bytes 32", False),
+        (9, "welcome/recovery", "key 1", True),
+        (10, "welcome/list", "bytes 1..34820", False),
     ],
     "welcome/grant": [
         (2, "welcome/grant", "envelope", True),
@@ -1619,9 +1653,6 @@ def ty_ok(ty, v):
         return all(ty_ok(inner, x) for x in v)
     if w[0] == "map":
         return check_map(w[1], v) is None
-    if w[0] == "age":
-        return (isinstance(v, list) and len(v) == 2 and isinstance(v[0], bytes) and len(v[0]) == 32
-                and isinstance(v[1], int))
     raise ValueError(ty)
 
 
@@ -1642,8 +1673,9 @@ def check_map(name, v):
         named = [k[1] for k in v[9]]
         if len(set(named)) != len(named) or any(n not in v.get(2, []) for n in named):
             return "offer/endpoint-keys"
-    if name == "welcome" and 3 in v and any(a[0] >= b[0] for a, b in zip(v[3], v[3][1:])):
-        return "welcome/claim-ages"
+    # Fields 3 (claim ages) and 8 (counted claims) of earlier drafts.
+    if name == "welcome" and (3 in v or 8 in v):
+        return "welcome/retired"
     return None
 
 
@@ -1664,7 +1696,7 @@ def wave3_vectors(records_take):
     info = {1: "kitchen tablet", 2: 3, 4: 1, 9: fake("invite id", 16)}
     request = {1: fake("invite id", 16), 2: TABLET.key, 3: info, 4: 2, 5: 120000, 6: 2}
     envs = [bytes.fromhex(r["envelope"]) for r in records_take[:2]]
-    welcome = {1: ROOT.key, 2: [dec(e) for e in envs], 5: T0}
+    welcome = {1: ROOT.key, 2: [dec(e) for e in envs], 5: T0, 9: RECOVERY.key}
 
     def msg(name, m, note=None):
         assert check_message(m) is None, (name, check_message(m))
@@ -1784,19 +1816,15 @@ def wave3_vectors(records_take):
     mp("a request", "waiting/request", request)
     mp("a Welcome", "welcome", welcome)
     mp("a Welcome without its time", "welcome", {1: ROOT.key, 2: welcome[2]}, "welcome/time")
+    mp("a Welcome without the recovery key", "welcome", {k: v for k, v in welcome.items() if k != 9},
+       "welcome/recovery")
+    lst = enc(sorted(bytes.fromhex(r["id"]) for r in records_take[:2]))
+    mp("a Welcome with the newest list", "welcome", {**welcome, 10: lst})
+    mp("a Welcome with an empty list", "welcome", {**welcome, 10: b""}, "welcome/list")
     claims = sorted([fake("claim a", 32), fake("claim b", 32)])
-    later = {**welcome, 3: [[claims[0], 3600000], [claims[1], 0]], 8: claims}
-    mp("a Welcome with claim ages and the claims the admitter counted", "welcome", later)
-    mp("a Welcome: claims counted in the admitter's order", "welcome", {**later, 8: list(reversed(claims))})
-    mp("a Welcome: a claim counted twice", "welcome", {**later, 8: [claims[0]] * 2}, "welcome/counted")
-    mp("a Welcome: 17 claims counted", "welcome", {**later, 8: sorted(fake(f"c{i}", 32) for i in range(17))},
-       "welcome/counted")
-    mp("a Welcome: claim ages out of order", "welcome", {**later, 3: list(reversed(later[3]))},
-       "welcome/claim-ages")
-    mp("a Welcome: two ages for one claim", "welcome", {**later, 3: [[claims[0], 1], [claims[0], 2]]},
-       "welcome/claim-ages")
-    mp("a Welcome: an age without its claim's ID", "welcome", {**later, 3: [[claims[0][:16], 1]]},
-       "welcome/claim-ages")
+    mp("a Welcome with claim ages (field 3, retired)", "welcome", {**welcome, 3: [[claims[0], 1]]},
+       "welcome/retired")
+    mp("a Welcome with counted claims (field 8, retired)", "welcome", {**welcome, 8: claims}, "welcome/retired")
     return take, refuse, maps
 
 
@@ -2654,7 +2682,7 @@ def main():
     outdir = sys.argv[1]
     os.makedirs(outdir, exist_ok=True)
     write_unicode(outdir)
-    rt, rr = record_vectors()
+    rt, rr, rl = record_vectors()
     st, sr = statement_vectors()
     ct, cr = command_vectors()
     gt, gr, gs, gq = grant_vectors(bytes.fromhex(rt[0]["envelope"]))
@@ -2663,11 +2691,12 @@ def main():
     files = {
         "profile.json": {"vectors": profile_vectors()},
         "keys.json": keys_table(),
-        "records.json": {"label": LABELS["record"], "take": rt, "refuse": rr},
+        "records.json": {"label": LABELS["record"], "take": rt, "refuse": rr, "lists": rl},
         "statements.json": {"label": LABELS["keys"], "take": st, "refuse": sr},
         "commands.json": {"label": LABELS["command"], "take": ct, "refuse": cr},
         "grants.json": {"label": LABELS["grant"], "group": GROUP.hex(), "take": gt, "refuse": gr, "copy_senders": gs, "sequences": gq},
-        "credentials.json": {"label": LABELS["credential"], "take": kt, "refuse": kr},
+        "credentials.json": {"label": LABELS["credential"], "take": kt, "refuse": kr,
+                             "recovery": RECOVERY.pub.hex()},
         "frames.json": {"grid": "64, 256, 1024, 4096, 16384, then multiples of 16384",
                         "take": mv, "refuse": mb, "refuse_fields": mf,
                         "set_digest_of_records_take": digest},

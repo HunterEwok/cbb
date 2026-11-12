@@ -323,7 +323,7 @@ impl Keys {
                         m.entry(k.hash()).or_insert_with(|| k.clone());
                     }
                 }
-                Kind::Claim { root, .. } => {
+                Kind::Recovery { root, .. } => {
                     m.entry(root.hash()).or_insert_with(|| root.clone());
                 }
                 _ => {}

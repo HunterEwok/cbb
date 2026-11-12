@@ -6,18 +6,16 @@
 //! included, can push another key's records out by making many of its own.
 //!
 //! The room is counted in units: a record takes one unit for each 512
-//! bytes it starts (2 MiB over 4096 records), and a claim 79 more: 63 since
-//! it brings a new root key, and 16 paid ahead for that root's records.
-//! 4096 units hold at most 4096 records and 2 MiB.
+//! bytes it starts (2 MiB over 4096 records). 4096 units hold at most 4096 records and 2 MiB.
 //!
 //! Each key's records are taken in its own order: a root's removals,
 //! freezes and resolves first, by seq, so that nothing of the root's
 //! drops them, its checkpoints included; then its checkpoints, the newest
 //! first, so that a key at its ceiling can still checkpoint and free room;
 //! then the rest by seq, then ID (records of one seq with other IDs count
-//! against the same ceiling). A root a counted claim followed is not
-//! kept here: what the claim lists of it stays outside the rooms (rule
-//! 32). The order is each record's own, never what
+//! against the same ceiling). Of a root a takeover followed only what the
+//! takeover lists is kept, within that root's ceiling (rule 32), and the
+//! recovery chain is kept outside the rooms (rule 33). The order is each record's own, never what
 //! else the set holds, so that a set that drops records as they come keeps
 //! what one that saw them all at once keeps. At level s a
 //! key keeps the longest start of that order within min(s, its ceiling)
@@ -28,10 +26,7 @@
 //!
 //! The ceilings: the group's first root's 1024 units, and a root the
 //! member's evaluation put on the path (`RecordSet::compact`) the same;
-//! an admin key's 256. The root a claim names has no room of its own: its
-//! records are kept, at most 16 units of them, while a kept claim names it,
-//! out of what the claim paid ahead. A claim that is dropped takes its
-//! root's records with it.
+//! an admin key's 256. Any other key has no room and keeps nothing.
 //!
 //! What is kept depends on the records alone, never on the order they came
 //! in. A member that drops records as they come remembers a little of what
@@ -49,12 +44,6 @@ use super::{MAX_ADMIN_RECORDS, MAX_RECORDS, MAX_ROOT_RECORDS, MAX_SET_BYTES};
 pub const UNIT: usize = MAX_SET_BYTES / MAX_RECORDS;
 /// The units of the whole set.
 pub const ROOM: u64 = MAX_RECORDS as u64;
-/// What a claim adds to its units: 63 for its new key, and 16 paid ahead
-/// for its root's records.
-pub const CLAIM_EXTRA: u64 = 63 + FUTURE;
-/// The units of a claimed root's records while its claim is all that
-/// names it.
-pub const FUTURE: u64 = super::MAX_FUTURE_ROOT_RECORDS as u64;
 
 /// One record as the keeping sees it.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -67,8 +56,6 @@ pub struct Item {
     pub checkpoint: bool,
     /// A root's revoke, freeze or resolve: it comes first.
     pub early: bool,
-    /// A claim: the root it names.
-    pub names: Option<KeyHash>,
 }
 
 /// A record's place in its key's order.
@@ -77,8 +64,8 @@ pub type Pos = (u8, u64, RecordId);
 impl Item {
     /// Its place in its key's order: a root's removals and resolves first,
     /// by seq; then checkpoints, the newest first; then the rest by seq
-    /// and ID. (A root a takeover cut keeps what its claim lists, outside
-    /// the rooms: `eval::kept_of`.)
+    /// and ID. (A root a takeover cut keeps only what the takeover lists:
+    /// `eval::kept_of`.)
     pub fn pos(&self) -> Pos {
         if self.early {
             (0, self.seq, self.id)
@@ -91,9 +78,8 @@ impl Item {
 }
 
 /// The units of a record of size bytes.
-pub fn units(size: usize, claim: bool) -> u64 {
-    let u = size.div_ceil(UNIT).max(1) as u64;
-    if claim { u.saturating_add(CLAIM_EXTRA) } else { u }
+pub fn units(size: usize) -> u64 {
+    size.div_ceil(UNIT).max(1) as u64
 }
 
 /// A key's ceiling in units: a root's on the path 1024, an admin key's
@@ -110,8 +96,6 @@ pub struct Cut {
     /// units of the records dropped from there: nothing after it is kept,
     /// and the units still count in the key's demand.
     marks: BTreeMap<KeyHash, (Pos, u64)>,
-    /// The same for the roots claims name, within their 16 units.
-    future: BTreeMap<KeyHash, Pos>,
 }
 
 /// The highest level: past it no ceiling binds.
@@ -119,14 +103,14 @@ const TOP: u64 = MAX_ROOT_RECORDS as u64;
 
 impl Default for Cut {
     fn default() -> Cut {
-        Cut { level: TOP, marks: BTreeMap::new(), future: BTreeMap::new() }
+        Cut { level: TOP, marks: BTreeMap::new() }
     }
 }
 
 impl Cut {
     /// Reports whether the set dropped nothing yet.
     pub fn is_empty(&self) -> bool {
-        self.marks.is_empty() && self.future.is_empty()
+        self.marks.is_empty()
     }
 
     /// The level the shares stand at.
@@ -148,18 +132,11 @@ impl Cut {
     /// dropped: it is not kept.
     pub fn past(&self, it: &Item) -> bool {
         self.marks.get(&it.signer).is_some_and(|(m, _)| it.pos() >= *m)
-            || self.future.get(&it.signer).is_some_and(|m| it.pos() >= *m)
-    }
-
-    /// Forgets where a key stopped while it had no room of its own: it has
-    /// a ceiling now (an admin key, or a promoted root).
-    pub fn forget_future(&mut self, key: &KeyHash) {
-        self.future.remove(key);
     }
 }
 
 /// The IDs of the records a set keeps. ceiling_of gives a key's ceiling
-/// when it has room of its own, None for a root only claims name.
+/// when it has room of its own, None for a key that keeps nothing.
 pub fn keep(items: &[Item], ceiling_of: impl Fn(&KeyHash) -> Option<u64>) -> BTreeSet<RecordId> {
     keep_after(items, ceiling_of, &Cut::default()).0
 }
@@ -172,23 +149,9 @@ pub fn keep_after(
     cut: &Cut,
 ) -> (BTreeSet<RecordId>, Cut) {
     let mut by_key: BTreeMap<KeyHash, Vec<&Item>> = BTreeMap::new();
-    let mut claimed: BTreeMap<KeyHash, Vec<&Item>> = BTreeMap::new();
-    // A key with a ceiling of its own no longer stops where it stopped as
-    // a claim's root.
-    let mut cut = cut.clone();
-    let owned: Vec<KeyHash> = cut.future.keys().filter(|k| ceiling_of(k).is_some()).copied().collect();
-    for k in &owned {
-        cut.forget_future(k);
-    }
-    let cut = &cut;
     for it in items {
-        if cut.past(it) {
-            continue;
-        }
-        if ceiling_of(&it.signer).is_some() {
+        if !cut.past(it) && ceiling_of(&it.signer).is_some() {
             by_key.entry(it.signer).or_default().push(it);
-        } else {
-            claimed.entry(it.signer).or_default().push(it);
         }
     }
     struct Key<'a> {
@@ -222,7 +185,7 @@ pub fn keep_after(
         lo
     };
     let mut kept = BTreeSet::new();
-    let mut next = Cut { level, marks: BTreeMap::new(), future: cut.future.clone() };
+    let mut next = Cut { level, marks: BTreeMap::new() };
     for k in &keys {
         let cap = level.min(k.ceiling);
         let mut used = 0u64;
@@ -253,27 +216,6 @@ pub fn keep_after(
     for (h, m) in &cut.marks {
         next.marks.entry(*h).or_insert(*m);
     }
-    // The roots that kept claims name: each its first 16 units, paid by
-    // the claims; a root no kept claim names keeps nothing.
-    let named: BTreeSet<KeyHash> = items.iter().filter(|it| kept.contains(&it.id)).filter_map(|it| it.names).collect();
-    for (hash, mut items) in claimed {
-        if !named.contains(&hash) {
-            continue;
-        }
-        items.sort_by_key(|it| it.pos());
-        items.dedup_by_key(|it| it.id);
-        let mut used = 0u64;
-        for it in items {
-            let u = used.saturating_add(it.units);
-            if u > FUTURE {
-                let m = next.future.entry(hash).or_insert(it.pos());
-                *m = (*m).min(it.pos());
-                break;
-            }
-            used = u;
-            kept.insert(it.id);
-        }
-    }
     (kept, next)
 }
 
@@ -293,15 +235,14 @@ mod tests {
             signer: KeyHash([signer; 32]),
             seq,
             id: RecordId(id),
-            units: units(size, false),
+            units: units(size),
             checkpoint: false,
             early: false,
-            names: None,
         }
     }
 
     /// Key 0 plays the group's first root.
-    /// Key 7 plays a root only claims name.
+    /// Key 7 plays a key with no room.
     fn ceil(k: &KeyHash) -> Option<u64> {
         (k.0[0] != 7).then(|| ceiling(k.0[0] == 0))
     }
@@ -361,10 +302,13 @@ mod tests {
         let mut items: Vec<Item> = (1..=300).map(|s| item(10, s, 0, 100)).collect();
         assert_eq!(keep(&items, ceil).len(), MAX_ADMIN_RECORDS);
         for it in items.iter_mut().take(10) {
-            it.units = units(100, true);
+            it.units = 80;
         }
-        // Three claims take 240 units; the fourth does not fit.
+        // Three big records take 240 units; the fourth does not fit.
         assert_eq!(keep(&items, ceil).len(), 3);
+        // A key with no room keeps nothing.
+        let none: Vec<Item> = (1..=3).map(|s| item(7, s, 0, 100)).collect();
+        assert!(keep(&none, ceil).is_empty());
     }
 
     /// A key at its ceiling still keeps its newest checkpoint.
@@ -393,14 +337,13 @@ mod tests {
             v.into_iter()
                 .map(|(k, s, n, b, c)| {
                     let mut it = item(k, s, n, b);
-                    // A checkpoint, or a claim naming key 7, is another
-                    // record: its own ID.
+                    // A checkpoint, or a root's removal, is another record:
+                    // its own ID.
                     if c == 0 {
                         it.checkpoint = true;
                         it.id.0[31] = 1;
-                    } else if c == 1 && k != 7 {
-                        it.names = Some(KeyHash([7; 32]));
-                        it.units = units(b, true);
+                    } else if c == 1 {
+                        it.early = true;
                         it.id.0[31] = 2;
                     }
                     it
@@ -410,8 +353,7 @@ mod tests {
     }
 
     /// What sync brings: a peer offers again every record the set dropped
-    /// without remembering it (a claimed root's, while no kept claim named
-    /// it), until nothing changes.
+    /// without remembering it, until nothing changes.
     fn synced(mut held: Vec<Item>, mut cut: Cut, all: &[Item]) -> Vec<Item> {
         loop {
             let ids: BTreeSet<RecordId> = held.iter().map(|it| it.id).collect();

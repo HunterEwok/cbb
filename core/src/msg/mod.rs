@@ -53,8 +53,6 @@ pub enum Ty {
     Set { of: &'static Ty, max: usize },
     /// A map of its own table.
     Map(&'static Table),
-    /// A claim's age in a Welcome: `[record ID (bytes 32), held_ms]`.
-    Age,
 }
 
 /// One field of a table.
@@ -136,10 +134,6 @@ fn check_ty(f: &Field, v: &Value<'_>) -> Result<(), Rule> {
                 check_ty(&inner, x)?;
             }
         }
-        Ty::Age => match v.as_array() {
-            Some([Value::Bytes(id), Value::Uint(ms)]) if id.len() == 32 && *ms < (1 << 63) => {}
-            _ => return Err(bad()),
-        },
         // A bad field inside breaks the field that holds the map.
         Ty::Map(t) => check_map(t, v).map_err(|_| bad())?,
     }
@@ -166,7 +160,6 @@ impl Ty {
             Ty::Once { of, max } => format!("once 1..{max} of {}", of.describe()),
             Ty::Set { of, max } => format!("set 1..{max} of {}", of.describe()),
             Ty::Map(t) => format!("map {}", t.name()),
-            Ty::Age => "age".into(),
         }
     }
 }
@@ -221,9 +214,8 @@ pub fn check_map(table: &Table, v: &Value<'_>) -> Result<(), Rule> {
             Some(x) => check_ty(f, x)?,
         }
     }
-    // The rules between fields of a map: AmneziaWG's junk sizes, an
-    // offer's endpoint keys, and one age per claim in a Welcome (the
-    // claims' IDs rise).
+    // The rules between fields of a map: AmneziaWG's junk sizes and an
+    // offer's endpoint keys.
     if core::ptr::eq(table, &tables::OBFUSCATION)
         && v.get(2).and_then(Value::as_uint) > v.get(3).and_then(Value::as_uint)
     {
@@ -245,15 +237,10 @@ pub fn check_map(table: &Table, v: &Value<'_>) -> Result<(), Rule> {
             seen.push(e);
         }
     }
-    if core::ptr::eq(table, &tables::WELCOME)
-        && let Some(a) = v.get(3).and_then(Value::as_array)
-    {
-        fn id<'a>(x: &Value<'a>) -> Option<&'a [u8]> {
-            x.as_array().and_then(|p| p.first()).and_then(Value::as_bytes)
-        }
-        if a.windows(2).any(|w| w.first().and_then(id) >= w.last().and_then(id)) {
-            return Err(Rule::field("welcome/claim-ages"));
-        }
+    // Fields 3 (claim ages) and 8 (counted claims) of earlier drafts are
+    // refused (rule 33).
+    if core::ptr::eq(table, &tables::WELCOME) && (v.get(3).is_some() || v.get(8).is_some()) {
+        return Err(Rule::field("welcome/retired"));
     }
     Ok(())
 }

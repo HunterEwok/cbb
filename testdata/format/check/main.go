@@ -229,6 +229,9 @@ func envelope(b []byte, label string, signerKey func(map[any]any) ([]byte, error
 	return m, body, nil
 }
 
+// keyOf holds each test key's encoding by its name.
+var keyOf = map[string][]byte{}
+
 func bySignerHash(m map[any]any) ([]byte, error) {
 	h, _ := m[uint64(3)].([]byte)
 	pub, ok := byHash[hex.EncodeToString(h)]
@@ -372,9 +375,13 @@ func main() {
 			fail("keys.json %s: hash", k.Name)
 		}
 		byHash[k.KeyHash] = pub
-		if k.Name == "root" && k.ID16 != keys.GroupID {
-			fail("group id is not the root key's id")
-		}
+		keyOf[k.Name] = unhex(k.Key)
+	}
+	// The Group ID commits to the first root key and the recovery key
+	// (rule 33).
+	gid := sha256.Sum256(append(append([]byte("cbb group v3\x00"), keyOf["root"]...), keyOf["recovery"]...))
+	if hex.EncodeToString(gid[:16]) != keys.GroupID {
+		fail("group id is not that of the root key and the recovery key")
 	}
 
 	var prof struct {
@@ -1431,10 +1438,6 @@ func checkSets(dir string) {
 		switch typ {
 		case 6, 18:
 			set = m[uint64(2)]
-		case 67:
-			if w, ok := m[uint64(3)].(map[any]any); ok {
-				set = w[uint64(3)]
-			}
 		}
 		if a, ok := set.([]any); ok && (len(a) < 2 || !sortedSet(a)) {
 			fail("frames %s: set out of order or short", t.Name)

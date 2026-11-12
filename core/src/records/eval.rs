@@ -17,92 +17,63 @@ use alloc::vec::Vec;
 use core::cell::RefCell;
 
 use super::body::{
-    self, Body, Device, Head, Kind, POWER_ADMIT, POWER_FREEZE, POWER_HUB, POWER_MANAGE, POWER_REMOVE,
-    POWER_REMOVE_ADMINS, POWER_TAKEOVER, POWER_THAW, RIGHT_HUB, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND, ROLE_LEAF,
+    self, Body, Device, Head, Kind, List, MAX_RECOVERY, POWER_ADMIT, POWER_FREEZE, POWER_HUB, POWER_MANAGE,
+    POWER_REMOVE, POWER_REMOVE_ADMINS, POWER_THAW, RIGHT_HUB, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND, ROLE_LEAF,
     ROLE_WATCH, Removal, Seen, Settings,
 };
 use super::key::{DeviceId, GroupId, Key, KeyHash, RecordId};
-use super::{
-    MAX_ADMIN_RECORDS, MAX_DEVICES, MAX_FUTURE_ROOT_RECORDS, MAX_NEWER, MAX_PATH, MAX_ROOT_RECORDS, MAX_SEQ,
-    RULES_VERSION, Record,
-};
+use super::{MAX_ADMIN_RECORDS, MAX_DEVICES, MAX_NEWER, MAX_ROOT_RECORDS, MAX_SEQ, RULES_VERSION, Record};
 
 /// What the evaluation takes.
 pub struct Input<'a> {
-    /// The group's first root key; the group ID is its device ID.
+    /// The group's first root key.
     pub root: &'a Key,
+    /// The group's recovery key, made with the group (rule 33); the Group
+    /// ID commits to both (`key::group_id`).
+    pub recovery: &'a Key,
     pub records: &'a [Record],
-    /// How long the device itself has held each claim, by record ID: time
-    /// it counted while running, kept across restarts by the caller. A
-    /// claim missing here has been held for no time (rule 7).
-    pub held_ms: &'a BTreeMap<RecordId, u64>,
-    /// The claims this device has counted, in the order it counted them
-    /// (the n-th under the n-th root of its path), kept across restarts by
-    /// the caller (`RecordSet::counted_claims`): such a claim is final
-    /// here, whatever records come later, and its record is not needed.
-    pub counted: &'a [Counted],
+    /// The recovery records' lists the device holds, as their bytes
+    /// (`List`).
+    pub lists: &'a [Vec<u8>],
 }
 
-/// A claim a device counted, with what its path needs of it, so that the
-/// claim's record need not be kept.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Counted {
-    pub claim: RecordId,
-    pub claimant: KeyHash,
-    /// The new root's key.
-    pub root: Key,
-    /// The root it follows and what of that root stays: the claim's list.
-    pub cut: Cut,
-}
-
-/// A takeover's cut of the root it follows (rule 32): of that root only
-/// the records the claim lists count, and are kept, once it counts.
+/// The newest recovery record's cut of every root before the current one
+/// (rules 32 and 33): of those roots only the records its list names
+/// count, and are kept; lists do not add up.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Cut {
-    /// The root the claim follows.
-    pub key: KeyHash,
-    /// The IDs of that root's records that stay.
+    /// The roots before the current one, in the order of the path.
+    pub roots: Vec<KeyHash>,
+    /// The current root, and the highest seq of its records the list
+    /// names: a key that signed as an admin before the chain made it the
+    /// root keeps of those records only what the list names; 0 for a new
+    /// key.
+    pub current: KeyHash,
+    pub floor: u64,
+    /// The recovery record.
+    pub record: RecordId,
+    /// The hash of its list.
+    pub list: [u8; 32],
+    /// The IDs that stay: its list, narrowed by the current root's first
+    /// checkpoint once one counts.
     pub keep: BTreeSet<RecordId>,
 }
 
 impl Cut {
-    /// Whether r, of the cut root, stays.
+    /// Whether the cut covers a record of signer at seq.
+    pub fn covers(&self, signer: &KeyHash, seq: u64) -> bool {
+        self.roots.contains(signer) || *signer == self.current && seq <= self.floor
+    }
+
+    /// Whether r, of a cut root, is listed.
     pub fn keeps(&self, r: &RecordId) -> bool {
         self.keep.contains(r)
     }
-}
 
-impl Counted {
-    /// The counted claim r, made under the root under.
-    pub fn of(r: &Record, under: &KeyHash) -> Option<Counted> {
-        match &r.body().kind {
-            Kind::Claim { root, seen, keep } if !r.body().held && body::seen_of(seen, under) >= 1 => Some(Counted {
-                claim: r.id(),
-                claimant: r.body().signer,
-                root: root.clone(),
-                cut: Cut { key: *under, keep: keep.iter().copied().collect() },
-            }),
-            _ => None,
-        }
-    }
-
-    /// The counted claims of ids, in order, from their records: each under
-    /// the root the one before it named, the first under the group's
-    /// root. It stops at the first one it cannot read.
-    pub fn chain<'r>(
-        group_root: &KeyHash,
-        ids: &[RecordId],
-        get: impl Fn(&RecordId) -> Option<&'r Record>,
-    ) -> Vec<Counted> {
-        let mut out: Vec<Counted> = Vec::new();
-        for id in ids {
-            let under = out.last().map_or(*group_root, |c| c.root.hash());
-            match get(id).and_then(|r| Counted::of(r, &under)) {
-                Some(c) => out.push(c),
-                None => break,
-            }
-        }
-        out
+    /// Whether r counts as far as the cut goes: it is not covered, or
+    /// listed.
+    pub fn lets(&self, r: &Record) -> bool {
+        !self.covers(&r.body().signer, r.body().seq) || self.keep.contains(&r.id())
     }
 }
 
@@ -121,7 +92,7 @@ pub enum Why {
     History,
     /// Its signer is no root on the path.
     NotRoot,
-    /// A root's removal, freeze or thaw cut it off, or a counted claim
+    /// A root's removal, freeze or thaw cut it off, or a takeover
     /// followed its root and does not list it.
     Cut,
     /// Its signer has no power for it.
@@ -173,9 +144,10 @@ pub enum Stop {
     None,
     /// An admin has two histories: no secrets are sealed.
     Secrets,
-    /// Competing claims, a conflict between admins, or a root with two
-    /// histories: the group stops until a root resolves it. A root's own
-    /// records still count (rule 8).
+    /// A conflict between admins, or a root with two histories: the group
+    /// stops until a root resolves it, and a root's own records still
+    /// count (rule 8). Two records at one step of the recovery chain: the
+    /// group stops for good (rule 33).
     Full,
 }
 
@@ -183,7 +155,9 @@ pub enum Stop {
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum ConflictKind {
     Admins,
-    Claims,
+    /// Two recovery records at one seq, or one the device cannot read: the
+    /// group stops for good (rule 33).
+    Fork,
     TwoHistories,
     /// Two admins admitted one device with different records.
     Admits,
@@ -198,24 +172,25 @@ pub struct Conflict {
     pub signers: Vec<KeyHash>,
 }
 
+/// What a recovery record came to (rule 33).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum ClaimState {
-    Pending,
+pub enum ChangeState {
+    /// It changed the root.
     Effective,
-    Cancelled,
+    /// Its new root is a root already on the path: it changes nothing,
+    /// and the chain ends before it.
     Void,
+    /// Another record stands at its seq: the group stops for good.
     Competing,
-    Disputed,
 }
 
+/// A recovery record of the chain.
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Claim {
+pub struct Change {
     pub record: RecordId,
-    pub claimant: KeyHash,
+    pub seq: u64,
     pub root: KeyHash,
-    pub state: ClaimState,
-    /// How much longer the device must hold it before it takes effect.
-    pub left_ms: u64,
+    pub state: ChangeState,
 }
 
 /// One device of the state.
@@ -251,7 +226,8 @@ pub struct State {
     pub root_device: Option<DeviceId>,
     pub devices: Vec<DeviceState>,
     pub revoked: Vec<KeyHash>,
-    pub claims: Vec<Claim>,
+    /// The recovery records, by seq.
+    pub changes: Vec<Change>,
     pub conflicts: Vec<Conflict>,
     pub stop: Stop,
     pub no_secrets_to: Vec<DeviceId>,
@@ -270,15 +246,22 @@ pub struct State {
     /// The settings ask for newer rules than these: no secrets here.
     pub too_old: bool,
     pub incoming_ms: Option<u64>,
-    pub recovery: Option<KeyHash>,
+    /// The group's recovery key.
+    pub recovery: KeyHash,
     /// The records that count.
     pub counting: BTreeSet<RecordId>,
     /// Every device ID a kept device record names, counting or not, a
     /// removed device's included: a new device never takes one.
     pub named: BTreeSet<DeviceId>,
-    /// The takeovers' cuts of the roots before the current one: each the
-    /// list of the root's records its claim keeps.
-    pub cuts: Vec<Cut>,
+    /// The newest recovery record's cut of the roots before the current
+    /// one.
+    pub cut: Option<Cut>,
+    /// The list of the next valid recovery record, which the device does
+    /// not hold yet: the change waits for it; ask the peers.
+    pub list_missing: Option<[u8; 32]>,
+    /// A recovery record this version cannot read: the device stops by
+    /// itself until it is updated (not a fork, not final).
+    pub update_needed: bool,
 }
 
 impl State {
@@ -307,14 +290,20 @@ impl State {
         self.named.contains(id)
     }
 
-    /// Reports whether a peer whose path of roots is peer disagrees with
-    /// this device about the owner: neither path starts with the other. A
-    /// peer whose path is shorter and leads to this one's has not counted
-    /// a takeover yet, and one whose path is longer has counted one more;
-    /// only two paths that part say that the two count different owners.
-    /// The paths come from the peers in sync, never from records.
-    pub fn disagrees(&self, peer: &[KeyHash]) -> bool {
-        !(self.roots.starts_with(peer) || peer.starts_with(&self.roots))
+    /// Reports whether a peer whose recovery chain is peer (its
+    /// `chain`) disagrees with this device about the owner: neither chain
+    /// starts with the other. A peer whose chain is shorter has not got
+    /// the newest record yet, and one whose is longer has one more; only
+    /// two chains that part say that the two count different owners, and
+    /// the records of both are a fork (rule 33).
+    pub fn disagrees(&self, peer: &[RecordId]) -> bool {
+        let mine = self.chain();
+        !(mine.starts_with(peer) || peer.starts_with(&mine))
+    }
+
+    /// The recovery records that moved the path, in order.
+    pub fn chain(&self) -> Vec<RecordId> {
+        self.changes.iter().filter(|c| c.state == ChangeState::Effective).map(|c| c.record).collect()
     }
 
     /// Reports whether a command signed by key k may be carried out: the
@@ -332,53 +321,49 @@ impl State {
     }
 }
 
-/// The signer of a record: a root key or an admin key.
+/// The signer of a record: the recovery key, a root key or an admin key.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Role {
     Root,
     Admin,
+    /// The group's recovery key: it signs recovery records, nothing else
+    /// (rule 33). It is never replaced.
+    Recovery,
 }
 
-/// The keys a set names: its first root, the new roots of admins'
-/// claims, and the admin keys of the device and recovery records of the
-/// first root and the roots the member promoted. A root that only a claim
-/// names teaches no key. A record is verified with the key of its signer;
-/// a signer the table does not know cannot be verified, and its record is
-/// not stored.
+/// The keys a set names: its first root and its recovery key, the new
+/// roots of the recovery records, and the admin keys of the device
+/// records of the roots. A record is verified with the
+/// key of its signer; a signer the table does not know cannot be
+/// verified, and its record is not stored.
 #[derive(Clone, Default, Debug)]
 pub struct Keys {
     keys: BTreeMap<KeyHash, Key>,
     roots: BTreeSet<KeyHash>,
     admins: BTreeSet<KeyHash>,
-    /// The roots whose records teach admin keys: the first and the
-    /// promoted ones.
-    trusted: BTreeSet<KeyHash>,
+    recovery: KeyHash,
 }
 
 impl Keys {
-    pub fn new(root: &Key) -> Keys {
-        Keys::trusting(root, &BTreeSet::new())
-    }
-
-    /// The table of a member that promoted roots after the first.
-    pub fn trusting(root: &Key, promoted: &BTreeSet<KeyHash>) -> Keys {
-        let mut k = Keys::default();
-        let h = root.hash();
-        k.keys.insert(h, root.clone());
-        k.roots.insert(h);
-        k.trusted.insert(h);
-        k.trusted.extend(promoted.iter().copied());
+    pub fn new(root: &Key, recovery: &Key) -> Keys {
+        let mut k = Keys { recovery: recovery.hash(), ..Keys::default() };
+        k.roots.insert(root.hash());
+        k.keys.insert(root.hash(), root.clone());
+        k.keys.insert(recovery.hash(), recovery.clone());
         k
     }
 
-    /// The signer's key and role. A key that is both an admin key and a
-    /// claim's new root is an admin's: such a claim is void.
+    /// The signer's key and role. The recovery key is one whatever else
+    /// names it, and a root one before an admin key: only the recovery key
+    /// names roots, so no root's record changes either (rule 33).
     pub fn signer(&self, h: &KeyHash) -> Option<(&Key, Role)> {
         let key = self.keys.get(h)?;
-        if self.admins.contains(h) {
-            Some((key, Role::Admin))
+        if self.recovery == *h {
+            Some((key, Role::Recovery))
         } else if self.roots.contains(h) {
             Some((key, Role::Root))
+        } else if self.admins.contains(h) {
+            Some((key, Role::Admin))
         } else {
             None
         }
@@ -390,42 +375,21 @@ impl Keys {
         if held {
             return false;
         }
-        let trusted = self.trusted.contains(&body.signer);
-        let (k, admin) = match (&body.kind, role) {
-            (Kind::Device(d), Role::Root) if trusted => match &d.admin {
-                Some(a) => (a, true),
+        let (k, set) = match (&body.kind, role) {
+            (Kind::Device(d), Role::Root) => match &d.admin {
+                Some(a) => (a, &mut self.admins),
                 None => return false,
             },
-            (Kind::Recovery { admin }, Role::Root) if trusted => (admin, true),
-            (Kind::Claim { root, .. }, Role::Admin) => (root, false),
+            (Kind::Recovery { root, .. }, Role::Recovery) => (root, &mut self.roots),
             _ => return false,
         };
         let h = k.hash();
         self.keys.entry(h).or_insert_with(|| k.clone());
-        if admin { self.admins.insert(h) } else { self.roots.insert(h) }
-    }
-
-    /// Knows k as a root: a counted claim's, whose record may be gone.
-    pub fn add_root(&mut self, k: &Key) {
-        let h = k.hash();
-        self.keys.entry(h).or_insert_with(|| k.clone());
-        self.roots.insert(h);
+        set.insert(h)
     }
 
     pub fn is_admin(&self, h: &KeyHash) -> bool {
-        self.admins.contains(h)
-    }
-
-    /// Forgets the roots of claims that keep does not hold: their claims
-    /// were dropped, and their records with them.
-    pub fn retain_roots(&mut self, keep: impl Fn(&KeyHash) -> bool) {
-        let gone: Vec<KeyHash> = self.roots.iter().filter(|h| !keep(h)).copied().collect();
-        for h in gone {
-            self.roots.remove(&h);
-            if !self.admins.contains(&h) {
-                self.keys.remove(&h);
-            }
-        }
+        self.admins.contains(h) && !self.roots.contains(h) && self.recovery != *h
     }
 }
 
@@ -445,13 +409,6 @@ impl Sigs {
     /// Nothing verified yet for n records.
     pub fn new(n: usize) -> Sigs {
         Sigs(alloc::vec![None; n])
-    }
-
-    /// Records a set verified when they entered it, with whether each is
-    /// held: a signer's key is the one its hash names, so the answer is
-    /// the same.
-    pub fn verified(held: impl Iterator<Item = bool>) -> Sigs {
-        Sigs(held.map(|h| Some(Some(h))).collect())
     }
 
     /// Whether record r, at place i, verifies under key: whether it is
@@ -476,16 +433,12 @@ impl Sigs {
 /// records' signatures already came to, by place in records.
 pub(crate) fn check_all<'a>(
     root: &Key,
-    promoted: &BTreeSet<KeyHash>,
-    counted: &[Counted],
+    recovery: &Key,
     records: &[&'a Record],
     sigs: &mut Sigs,
 ) -> (Vec<Checked<'a>>, BTreeMap<RecordId, Why>) {
-    let group = root.device_id();
-    let mut keys = Keys::trusting(root, promoted);
-    for c in counted {
-        keys.add_root(&c.root);
-    }
+    let group = super::key::group_id(root, recovery);
+    let mut keys = Keys::new(root, recovery);
     let mut failed = BTreeMap::new();
     let mut todo: Vec<(usize, &'a Record)> = Vec::new();
     for (i, &r) in records.iter().enumerate() {
@@ -524,8 +477,8 @@ pub(crate) fn check_all<'a>(
             fail(&mut failed, r.id(), Why::Signer);
         }
     }
-    // A key learned late may make an admin of a key first taken for a
-    // claim's root; roles are read again from the final table.
+    // A key learned late may change a role (a root over an admin key);
+    // roles are read again from the final table.
     let checked = done
         .into_values()
         .map(|mut c| {
@@ -555,29 +508,185 @@ pub(crate) fn order_key(b: &Body, id: &RecordId) -> (u64, KeyHash, RecordId) {
 
 /// The record as the keeping sees it (`keep`).
 pub(crate) fn item(r: &Record, role: Role) -> super::keep::Item {
-    let claim = matches!(r.body().kind, Kind::Claim { .. });
     let early = role == Role::Root && matches!(r.body().kind, Kind::Revoke(_) | Kind::Freeze(_) | Kind::Resolve(_));
     super::keep::Item {
         early,
         signer: r.body().signer,
         seq: r.body().seq,
         id: r.id(),
-        units: super::keep::units(r.size(), claim),
+        units: super::keep::units(r.size()),
         checkpoint: matches!(r.body().kind, Kind::Checkpoint { .. }),
-        names: match &r.body().kind {
-            Kind::Claim { root, .. } => Some(root.hash()),
-            _ => None,
-        },
     }
 }
 
-/// The records of checked the set keeps: each key within its ceiling, the
-/// set's room shared between keys. promoted are the roots the member's
-/// evaluation put on the path after the first: they have a root's room; a
-/// root only claims name has none of its own. cuts are the takeovers'
-/// cuts of the roots before them: of such a root, the records its claim
-/// lists stay, outside the rooms (a counted claim pins its list), and
-/// nothing else of it (rule 32).
+/// Reports whether r is the recovery key's: kept outside the rooms, never
+/// pruned (rule 33). Of its records at one seq the set keeps two, the
+/// proof of a fork.
+pub(crate) fn chain_kind(r: &Record, role: Role) -> bool {
+    role == Role::Recovery
+        && r.body().seq <= MAX_RECOVERY
+        && (r.body().held || matches!(r.body().kind, Kind::Recovery { .. }))
+}
+
+/// The recovery key's records checked keeps: of each seq the two with the
+/// smallest IDs.
+pub(crate) fn chain_kept<'r>(checked: impl Iterator<Item = (&'r Record, Role)>) -> BTreeSet<RecordId> {
+    let mut by: BTreeMap<u64, BTreeSet<RecordId>> = BTreeMap::new();
+    for (r, role) in checked {
+        if chain_kind(r, role) {
+            by.entry(r.body().seq).or_default().insert(r.id());
+        }
+    }
+    by.into_values().flat_map(|ids| ids.into_iter().take(2)).collect()
+}
+
+/// What the recovery chain comes to (rule 33): the roots it put on the
+/// path in order, the newest list's cut of the roots before the current
+/// one, and the records that stop the group for good.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct Chain {
+    /// (recovery record, new root), in order.
+    pub steps: Vec<(RecordId, Key)>,
+    pub cut: Option<Cut>,
+    pub changes: Vec<Change>,
+    /// Two different records at one seq.
+    pub fork: Vec<RecordId>,
+    /// A record the device cannot read where the chain goes on.
+    pub unreadable: bool,
+    /// The list the next valid record waits for.
+    pub waiting: Option<[u8; 32]>,
+    /// The chain's records that count.
+    pub records: BTreeSet<RecordId>,
+}
+
+impl Chain {
+    pub fn promoted(&self) -> BTreeSet<KeyHash> {
+        self.steps.iter().map(|(_, k)| k.hash()).collect()
+    }
+
+    /// The cut, by each key it covers.
+    pub fn cuts(&self) -> BTreeMap<KeyHash, Cut> {
+        cuts_of(self.cut.as_ref())
+    }
+}
+
+/// A cut by each key it covers: the roots before the current one, and the
+/// current one when it keeps a floor.
+pub(crate) fn cuts_of(cut: Option<&Cut>) -> BTreeMap<KeyHash, Cut> {
+    let mut out = BTreeMap::new();
+    if let Some(c) = cut {
+        for k in c.roots.iter().chain((c.floor > 0).then_some(&c.current)) {
+            out.insert(*k, c.clone());
+        }
+    }
+    out
+}
+
+/// Walks the recovery chain: the recovery key's records from seq 1. A
+/// record is valid by its own bytes and the records before it alone: its
+/// prev is the tip, and its root is new (neither the recovery key, which
+/// `Body::check` refuses, nor a root on the path); what its list holds
+/// never voids it. A valid record applies once the device holds its list,
+/// or a newer valid record's list (the newest list stands for all before
+/// it); until then the chain waits there. Two different records at one
+/// seq, at any depth, whether or not either is otherwise valid, stop the
+/// group for good: the two are the proof. A record the device cannot read
+/// (held) where the chain goes on stops that device until it is updated;
+/// that is not a fork. Any other record is ignored. Nothing but the
+/// recovery key's own records and their lists decides it.
+pub(crate) fn chain<'r>(
+    group_root: &KeyHash,
+    records: impl Iterator<Item = (&'r Record, Role)>,
+    lists: &BTreeMap<[u8; 32], &List>,
+) -> Chain {
+    let mut by: BTreeMap<u64, Vec<&Record>> = BTreeMap::new();
+    let mut signed: BTreeMap<RecordId, (KeyHash, u64)> = BTreeMap::new();
+    let mut out = Chain::default();
+    for (r, role) in records {
+        signed.insert(r.id(), (r.body().signer, r.body().seq));
+        if chain_kind(r, role) {
+            by.entry(r.body().seq).or_default().push(r);
+        }
+    }
+    for rs in by.values_mut() {
+        rs.sort_by_key(|r| r.id());
+        rs.dedup_by_key(|r| r.id());
+        // Two are the proof; a set keeps the two smallest IDs at a seq.
+        rs.truncate(2);
+        if rs.len() > 1 {
+            out.fork.extend(rs.iter().map(|r| r.id()));
+            for r in rs.iter() {
+                if let Kind::Recovery { root, .. } = &r.body().kind {
+                    let (record, seq, root) = (r.id(), r.body().seq, root.hash());
+                    out.changes.push(Change { record, seq, root, state: ChangeState::Competing });
+                }
+            }
+        }
+    }
+    // The valid records, in order, by their bytes and their predecessors.
+    let mut path = vec![*group_root];
+    let mut tip: Option<RecordId> = None;
+    let mut valid: Vec<(&Record, &Key, &[u8; 32])> = Vec::new();
+    for seq in 1..=MAX_RECOVERY {
+        let Some([r]) = by.get(&seq).map(Vec::as_slice) else { break };
+        if r.body().held {
+            out.unreadable = true;
+            break;
+        }
+        let Kind::Recovery { root, list } = &r.body().kind else { break };
+        if r.body().prev != tip {
+            break;
+        }
+        let h = root.hash();
+        if path.contains(&h) {
+            out.changes.push(Change { record: r.id(), seq, root: h, state: ChangeState::Void });
+            break;
+        }
+        path.push(h);
+        tip = Some(r.id());
+        valid.push((r, root, list));
+    }
+    // They apply up to the newest whose list the device holds: the newest
+    // list is the whole truth about every root before it, so the lists of
+    // the records before it are not needed. Past it the chain waits for
+    // the newest record's list.
+    let applied = valid.iter().rposition(|(_, _, list)| lists.contains_key(*list)).map_or(0, |i| i.saturating_add(1));
+    if applied < valid.len() {
+        out.waiting = valid.last().map(|(_, _, list)| **list);
+    }
+    let mut path = vec![*group_root];
+    let mut last: Option<(&Record, &[u8; 32], &List)> = None;
+    for (r, root, list) in valid.iter().take(applied) {
+        let h = root.hash();
+        out.changes.push(Change { record: r.id(), seq: r.body().seq, root: h, state: ChangeState::Effective });
+        out.records.insert(r.id());
+        out.steps.push((r.id(), (*root).clone()));
+        path.push(h);
+        last = lists.get(*list).map(|l| (*r, *list, *l));
+    }
+    if let Some((r, list, l)) = last {
+        let current = *path.last().unwrap_or(group_root);
+        let floor = l.0.iter().filter_map(|id| signed.get(id)).filter(|(k, _)| *k == current).map(|(_, s)| *s).max();
+        out.cut = Some(Cut {
+            roots: path.iter().take(path.len().saturating_sub(1)).copied().collect(),
+            current,
+            floor: floor.unwrap_or(0),
+            record: r.id(),
+            list: *list,
+            keep: l.0.iter().copied().collect(),
+        });
+    }
+    out.changes.sort_by_key(|c| (c.seq, c.record));
+    out
+}
+
+/// The records of checked the set keeps: the recovery chain's (rule 33),
+/// and each other key within its ceiling, the set's room shared between
+/// keys. promoted are the roots the chain put on the path after the
+/// first: they have a root's room; a root only a void takeover names has
+/// none. cuts are the takeovers' cuts of the roots before them: of such a
+/// root only the records its takeover lists may stay, within that root's
+/// own room (rule 32).
 pub(crate) fn kept_of(
     group_root: &KeyHash,
     promoted: &BTreeSet<KeyHash>,
@@ -586,18 +695,14 @@ pub(crate) fn kept_of(
 ) -> BTreeSet<RecordId> {
     let admins: BTreeSet<KeyHash> =
         checked.iter().filter(|c| c.role == Role::Admin).map(|c| c.r.body().signer).collect();
-    let mut kept: BTreeSet<RecordId> = checked
-        .iter()
-        .filter(|c| cuts.get(&c.r.body().signer).is_some_and(|cut| cut.keeps(&c.r.id())))
-        .map(|c| c.r.id())
-        .collect();
     let items: Vec<super::keep::Item> =
-        checked.iter().filter(|c| !cuts.contains_key(&c.r.body().signer)).map(|c| item(c.r, c.role)).collect();
-    kept.extend(super::keep::keep(&items, |k| ceiling_of(group_root, promoted, &admins, k)));
+        checked.iter().filter(|c| c.role != Role::Recovery && !off_cut(cuts, c.r)).map(|c| item(c.r, c.role)).collect();
+    let mut kept = super::keep::keep(&items, |k| ceiling_of(group_root, promoted, &admins, k));
+    kept.extend(chain_kept(checked.iter().map(|c| (c.r, c.role))));
     kept
 }
 
-/// The records of a root a takeover cut that its claim does not list.
+/// The records of a root a takeover cut that it does not list.
 pub(crate) fn off_cuts<'r>(
     cuts: &BTreeMap<KeyHash, Cut>,
     records: impl Iterator<Item = &'r Record>,
@@ -605,13 +710,14 @@ pub(crate) fn off_cuts<'r>(
     records.filter(|r| off_cut(cuts, r)).map(Record::id).collect()
 }
 
-/// Whether r is of a root a takeover cut and its claim does not list it.
+/// Whether r is of a root a takeover cut and the takeover does not list
+/// it.
 pub(crate) fn off_cut(cuts: &BTreeMap<KeyHash, Cut>, r: &Record) -> bool {
-    cuts.get(&r.body().signer).is_some_and(|cut| !cut.keeps(&r.id()))
+    cuts.get(&r.body().signer).is_some_and(|cut| !cut.lets(r))
 }
 
 /// A key's ceiling in the keeping: a root's on the path, an admin key's,
-/// or None for a root only claims name.
+/// or None for any other.
 pub(crate) fn ceiling_of(
     group_root: &KeyHash,
     promoted: &BTreeSet<KeyHash>,
@@ -628,48 +734,24 @@ pub(crate) fn ceiling_of(
 }
 
 /// Turns a record set into the group's state. Records that do not verify
-/// are dropped; the result depends only on the set, never on its order.
-///
-/// It evaluates as a member that has compacted until its path no longer
-/// changes: a root after the first that is on the path has a root's room
-/// and teaches admin keys, and an old root keeps nothing off its cut.
+/// are dropped; the result depends only on the set and the lists, never on
+/// their order. The recovery chain sets the path of roots (rule 33), and
+/// the rest is evaluated as a member that compacted by it.
 pub fn evaluate(input: &Input) -> State {
-    // A member that counted claims has compacted with their roots and
-    // cuts already.
-    let mut promoted: BTreeSet<KeyHash> = input.counted.iter().map(|c| c.root.hash()).collect();
-    let mut cuts: BTreeMap<KeyHash, Cut> = input.counted.iter().map(|c| (c.cut.key, c.cut.clone())).collect();
-    let mut n = 0usize;
-    // Each pass learns the keys again, but a signature is verified once.
     let records: Vec<&Record> = input.records.iter().collect();
     let mut sigs = Sigs::new(records.len());
-    loop {
-        let (checked, failed) = check_all(input.root, &promoted, input.counted, &records, &mut sigs);
-        let by = Compacted { promoted: &promoted, cuts: &cuts, proven: &[] };
-        let state = evaluate_checked(input.root, checked, failed, input.held_ms, input.counted, &by);
-        let p: BTreeSet<KeyHash> = state.roots.iter().skip(1).copied().collect();
-        let c: BTreeMap<KeyHash, Cut> = state.cuts.iter().map(|c| (c.key, c.clone())).collect();
-        n = n.saturating_add(1);
-        if (p == promoted && c == cuts) || n > MAX_PATH {
-            return state;
-        }
-        promoted = p;
-        cuts = c;
-    }
+    let (checked, failed) = check_all(input.root, input.recovery, &records, &mut sigs);
+    let lists: Vec<([u8; 32], List)> =
+        input.lists.iter().map(|b| (super::body::list_hash(b), List::decode(b).unwrap_or_default())).collect();
+    let lists: BTreeMap<[u8; 32], &List> = lists.iter().map(|(h, l)| (*h, l)).collect();
+    evaluate_checked(input.root, input.recovery, checked, failed, &lists, &Compacted { proven: &[] })
 }
 
 /// The records whose signer the others still name once a checkpoint
 /// pruned some: a key whose naming record it left out is not known, as on
 /// a member that dropped what it pruned.
-fn still_known<'a>(
-    root: &Key,
-    promoted: &BTreeSet<KeyHash>,
-    counted: &[Counted],
-    checked: Vec<Checked<'a>>,
-) -> Vec<Checked<'a>> {
-    let mut keys = Keys::trusting(root, promoted);
-    for c in counted {
-        keys.add_root(&c.root);
-    }
+fn still_known<'a>(root: &Key, recovery: &Key, checked: Vec<Checked<'a>>) -> Vec<Checked<'a>> {
+    let mut keys = Keys::new(root, recovery);
     loop {
         let mut learned = false;
         for c in &checked {
@@ -684,51 +766,61 @@ fn still_known<'a>(
     checked.into_iter().filter(|c| keys.signer(&c.r.body().signer).is_some()).collect()
 }
 
-/// Reports whether records prove claim c, taken as counted after the
-/// claims prefix (an admitter's, or ones kept from before a restart): the
-/// check a member makes once, when it takes a claim as counted. sigs
-/// holds what the records' signatures came to.
-pub(crate) fn proven(root: &Key, records: &[&Record], sigs: &mut Sigs, prefix: &[Counted], c: &Counted) -> bool {
-    let promoted: BTreeSet<KeyHash> = prefix.iter().map(|p| p.root.hash()).collect();
-    // The epoch as it stood before the claim counted: its root not cut
-    // yet, so that what it signed against the claim (a resolve, a
-    // removal of the claimant) is in view.
-    let cuts: BTreeMap<KeyHash, Cut> = prefix.iter().map(|p| (p.cut.key, p.cut.clone())).collect();
-    let (checked, failed) = check_all(root, &promoted, prefix, records, sigs);
-    let e = Evaluation::new(root, checked, failed, BTreeSet::new(), &promoted, &cuts, prefix);
-    // Only the claim's own epoch: a further claim decided there (one
-    // that needs no time) would move the path past it.
-    let ep = e.run_counted(prefix);
-    ep.proves(c)
-}
-
-/// What a member's compactions left it with: the roots promoted, the cuts,
-/// and the checkpoints it pruned by (`RecordSet`).
+/// What a member's compactions left it with: the checkpoints it pruned by
+/// (`RecordSet`).
 pub(crate) struct Compacted<'c> {
-    pub promoted: &'c BTreeSet<KeyHash>,
-    pub cuts: &'c BTreeMap<KeyHash, Cut>,
     pub proven: &'c [(Vec<Head>, BTreeSet<RecordId>)],
 }
 
+/// The cuts with the list narrowed to what the current root's checkpoint
+/// with anchors keeps: the new root's first checkpoint closes the list
+/// (rule 33).
+pub(crate) fn closed(cuts: &BTreeMap<KeyHash, Cut>, anchors: &BTreeSet<RecordId>) -> BTreeMap<KeyHash, Cut> {
+    cuts.iter()
+        .map(|(k, c)| {
+            let mut c = c.clone();
+            c.keep = c.keep.intersection(anchors).copied().collect();
+            (*k, c)
+        })
+        .collect()
+}
+
+/// The state of checked as a member that compacted by. The recovery
+/// chain gives the path and the cut before anything else: no root's or
+/// admin's record changes them (rule 33), and what the newest list names
+/// counts by itself at once (rule 32).
 pub(crate) fn evaluate_checked(
     root: &Key,
+    recovery: &Key,
     checked: Vec<Checked<'_>>,
     failed: BTreeMap<RecordId, Why>,
-    held_ms: &BTreeMap<RecordId, u64>,
-    counted: &[Counted],
+    lists: &BTreeMap<[u8; 32], &List>,
     by: &Compacted<'_>,
 ) -> State {
-    let (promoted, cuts, proven) = (by.promoted, by.cuts, by.proven);
     let group_root = root.hash();
-    let full = Evaluation::new(root, checked.clone(), failed.clone(), BTreeSet::new(), promoted, cuts, counted);
+    let chain = chain(&group_root, checked.iter().map(|c| (c.r, c.role)), lists);
+    let promoted = chain.promoted();
+    let mut cuts = chain.cuts();
+    let proven = by.proven;
+    // The recovery key's records off the chain: a twin, past its tip, or of
+    // a kind it does not sign.
+    let mut failed = failed;
+    for c in checked.iter().filter(|c| c.role == Role::Recovery) {
+        if !chain.records.contains(&c.r.id()) {
+            let why = if chain_kind(c.r, c.role) { Why::History } else { Why::Power };
+            fail(&mut failed, c.r.id(), why);
+        }
+    }
+    let full = Evaluation::new(root, recovery, checked.clone(), failed.clone(), BTreeSet::new(), &promoted, &cuts);
     // The set a root's checkpoint prunes is evaluated as if the member had
     // dropped what it leaves out. The roots' checkpoints are taken in the
-    // order of the path, each the newest of its root (a root a takeover
-    // cut has none that counts), as a
-    // member that compacted under each root in turn took them: one counts
-    // when it still counts in the set the ones before it pruned.
-    let plain = full.run(held_ms, counted);
-    let mut cands = full.checkpoints(&plain.path, &plain.cuts);
+    // order of the path, each the newest of its root (of a cut root only
+    // one the list names), as a member that compacted under each root in
+    // turn took them: one counts when it still counts in the set the ones
+    // before it pruned. What the list names is never pruned.
+    let plain = full.run(&chain, &cuts);
+    let cur = plain.cur;
+    let mut cands = full.checkpoints(&plain.path, &cuts);
     cands.sort_by_key(|&c| full.recs.get(c).map(|x| plain.on_path.get(&x.b().signer).copied().unwrap_or(0)));
     let mut kept: Vec<Checked> = checked.clone();
     let mut anchors_all: BTreeSet<RecordId> = BTreeSet::new();
@@ -746,12 +838,19 @@ pub(crate) fn evaluate_checked(
                 continue;
             }
         }
+        let these = if x.b().signer == cur && chain.cut.is_some() { closed(&cuts, &anchors) } else { cuts.clone() };
         let mut all = anchors_all.clone();
         all.extend(anchors.iter().copied());
-        let pruned: Vec<Checked> = kept.iter().copied().filter(|c| !pruned_by(c.r, c.role, heads, &anchors)).collect();
-        let known = still_known(root, promoted, counted, pruned.clone());
-        let e = Evaluation::new(root, known, failed.clone(), all.clone(), promoted, cuts, counted);
-        let ep = e.run(held_ms, counted);
+        let listed = |r: &Record| {
+            these
+                .get(&r.body().signer)
+                .is_some_and(|cut| cut.covers(&r.body().signer, r.body().seq) && cut.keeps(&r.id()))
+        };
+        let pruned: Vec<Checked> =
+            kept.iter().copied().filter(|c| listed(c.r) || !pruned_by(c.r, c.role, heads, &anchors)).collect();
+        let known = still_known(root, recovery, pruned.clone());
+        let e = Evaluation::new(root, recovery, known, failed.clone(), all.clone(), &promoted, &these);
+        let ep = e.run(&chain, &these);
         let Some(i) = e.recs.iter().position(|r| r.id == id) else { continue };
         if !ep.root_record(i) {
             continue;
@@ -763,9 +862,15 @@ pub(crate) fn evaluate_checked(
         best = Some(state);
         kept = pruned;
         anchors_all = all;
+        cuts = these;
     }
     let mut state = best.unwrap_or_else(|| plain.finish());
-    state.group = DeviceId::of(&group_root);
+    state.group = super::key::group_id(root, recovery);
+    state.list_missing = chain.waiting;
+    state.update_needed = chain.unreadable;
+    if chain.unreadable {
+        state.stop = Stop::Full;
+    }
     state
 }
 
@@ -774,8 +879,9 @@ pub(crate) fn evaluate_checked(
 /// head that is neither a head nor kept, and not a root's removal.
 pub(crate) fn pruned_by(r: &Record, role: Role, heads: &[Head], anchors: &BTreeSet<RecordId>) -> bool {
     let b = r.body();
-    if role == Role::Root && matches!(b.kind, Kind::Revoke(_)) {
-        // A root's removal is final: no checkpoint prunes it.
+    if role == Role::Root && matches!(b.kind, Kind::Revoke(_)) || role == Role::Recovery {
+        // A root's removal is final, and the recovery chain is never
+        // pruned: no checkpoint prunes them.
         return false;
     }
     heads
@@ -879,18 +985,8 @@ impl Rec<'_> {
             _ => None,
         }
     }
-    fn claim(&self) -> Option<(&Key, &[Seen])> {
-        match &self.b().kind {
-            Kind::Claim { root, seen, .. } if !self.held => Some((root, seen)),
-            _ => None,
-        }
-    }
-    fn seen_of(&self, k: &KeyHash) -> u64 {
-        self.seen_entry(k).map_or(0, |s| s.seq)
-    }
     fn seen_entry(&self, k: &KeyHash) -> Option<Seen> {
         match &self.b().kind {
-            Kind::Claim { seen, .. } => body::seen_entry(seen, k),
             Kind::Revoke(r) | Kind::Freeze(r) => body::seen_entry(&r.seen, k),
             Kind::Thaw { seen, .. } | Kind::Hubs { seen, .. } | Kind::Copies { seen, .. } => body::seen_entry(seen, k),
             Kind::Device(d) => body::seen_entry(&d.seen, k),
@@ -901,12 +997,11 @@ impl Rec<'_> {
 
 struct Evaluation<'a> {
     group_root: KeyHash,
+    recovery: KeyHash,
     /// The heads and keep of the checkpoint it prunes by, where a prev
     /// chain may end.
     anchors: BTreeSet<RecordId>,
     failed: BTreeMap<RecordId, Why>,
-    /// The new root of each claim, by its key hash.
-    claim_roots: BTreeMap<KeyHash, Key>,
     /// The verified records within the set's ceilings.
     recs: Vec<Rec<'a>>,
     by_sig: BTreeMap<KeyHash, Vec<usize>>,
@@ -926,16 +1021,16 @@ struct Evaluation<'a> {
 impl<'a> Evaluation<'a> {
     fn new(
         root: &Key,
+        recovery: &Key,
         mut checked: Vec<Checked<'a>>,
         failed: BTreeMap<RecordId, Why>,
         anchors: BTreeSet<RecordId>,
         promoted: &BTreeSet<KeyHash>,
         cuts: &BTreeMap<KeyHash, Cut>,
-        counted: &[Counted],
     ) -> Evaluation<'a> {
         let group_root = root.hash();
         let kept = kept_of(&group_root, promoted, cuts, &checked);
-        // What a claim keeps of the root it cut counts by itself, as a
+        // What a takeover keeps of the root it cut counts by itself, as a
         // checkpoint's anchor does: not by that root's chain.
         let mut anchors = anchors;
         anchors.extend(cuts.values().flat_map(|c| c.keep.iter().copied()));
@@ -945,13 +1040,14 @@ impl<'a> Evaluation<'a> {
                 fail(&mut failed, c.r.id(), Why::Limit);
             }
         }
-        checked.retain(|c| kept.contains(&c.r.id()));
+        // The recovery keys' records are the chain's alone (`chain`).
+        checked.retain(|c| kept.contains(&c.r.id()) && c.role != Role::Recovery);
         checked.sort_by_key(|c| order_key(c.r.body(), &c.r.id()));
         let mut e = Evaluation {
             group_root,
+            recovery: recovery.hash(),
             anchors,
             failed,
-            claim_roots: BTreeMap::new(),
             recs: Vec::with_capacity(checked.len()),
             by_sig: BTreeMap::new(),
             by_id: BTreeMap::new(),
@@ -965,19 +1061,12 @@ impl<'a> Evaluation<'a> {
                 Kind::Device(d) if !c.held => Some(d.id()),
                 _ => None,
             };
-            if let (Kind::Claim { root, .. }, Role::Admin, false) = (&b.kind, c.role, c.held) {
-                e.claim_roots.entry(root.hash()).or_insert_with(|| root.clone());
-            }
             e.by_sig.entry(b.signer).or_default().push(i);
             e.by_id.insert(c.r.id(), i);
             if let Some(d) = device {
                 e.devices.entry(d).or_default().push(i);
             }
             e.recs.push(Rec { r: c.r, id: c.r.id(), role: c.role, held: c.held, device });
-        }
-        // The roots of counted claims, whose records may be gone.
-        for c in counted {
-            e.claim_roots.entry(c.root.hash()).or_insert_with(|| c.root.clone());
         }
         // Over MAX_DEVICES: devices are taken in the order of their first
         // record (the records are in order_key order).
@@ -1034,8 +1123,8 @@ impl<'a> Evaluation<'a> {
     }
 
     /// The checkpoints the evaluation tries, by index: for each root on
-    /// the path that no takeover cut, its newest checkpoint (the highest
-    /// seq, then the smallest ID).
+    /// the path its newest checkpoint (the highest seq, then the smallest
+    /// ID); of a cut root it counts only when the list names it.
     fn checkpoints(&self, path: &[KeyHash], cuts: &BTreeMap<KeyHash, Cut>) -> Vec<usize> {
         let mut newest: BTreeMap<KeyHash, usize> = BTreeMap::new();
         for (i, r) in self.recs.iter().enumerate() {
@@ -1044,7 +1133,7 @@ impl<'a> Evaluation<'a> {
                 || r.role != Role::Root
                 || !matches!(b.kind, Kind::Checkpoint { .. })
                 || !path.contains(&b.signer)
-                || cuts.contains_key(&b.signer)
+                || cuts.get(&b.signer).is_some_and(|c| !c.lets(r.r))
             {
                 continue;
             }
@@ -1090,85 +1179,25 @@ impl<'a> Evaluation<'a> {
         rs.iter().copied().filter(|&i| early(i) || walk(&mut memo, i, step)).collect()
     }
 
-    /// Turns the evaluation into its last epoch, with the claims of the
-    /// roots before the current one.
-    ///
-    /// A claim the device has counted is final: of the root it followed
-    /// only the records it lists count, the claim takes
-    /// effect without being decided again, and other claims of that epoch
-    /// are left out.
-    fn run(&self, held_ms: &BTreeMap<RecordId, u64>, counted: &[Counted]) -> Epoch<'_, 'a> {
+    /// Turns the evaluation into the epoch of the path the recovery chain
+    /// gives (rule 33), with its takeovers. Two records at one step of the
+    /// chain stop the group in full.
+    fn run(&self, chain: &Chain, cuts: &BTreeMap<KeyHash, Cut>) -> Epoch<'_, 'a> {
         let mut path = vec![self.group_root];
-        let mut cuts = BTreeMap::new();
-        let mut earlier = Vec::new();
-        loop {
-            let cur = *path.last().unwrap_or(&KeyHash::default());
-            let step = match self.counted_claim(&path, counted) {
-                Some(c) => {
-                    cuts.insert(cur, c.cut.clone());
-                    let mut ep = Epoch::new(self, path.clone(), cuts.clone());
-                    let step = ep.decide_counted(c);
-                    earlier.append(&mut ep.claims);
-                    match step {
-                        Some(next) => Some(next),
-                        None => {
-                            cuts.remove(&cur);
-                            None
-                        }
-                    }
-                }
-                None => None,
-            };
-            if let Some(next) = step {
-                path.push(next);
-                continue;
-            }
-            let mut ep = Epoch::new(self, path.clone(), cuts.clone());
-            match ep.decide_claims(held_ms) {
-                Some((next, cut)) => {
-                    earlier.append(&mut ep.claims);
-                    cuts.insert(cur, cut);
-                    path.push(next);
-                }
-                None => {
-                    earlier.append(&mut ep.claims);
-                    ep.claims = earlier;
-                    return ep;
-                }
-            }
+        path.extend(chain.steps.iter().map(|(_, k)| k.hash()));
+        let mut ep = Epoch::new(self, path, cuts.clone());
+        ep.changes = chain.changes.clone();
+        ep.chain_records = chain.records.clone();
+        ep.recovery = self.recovery;
+        if !chain.fork.is_empty() {
+            ep.stop_full = true;
+            ep.conflicts.push(Conflict {
+                kind: ConflictKind::Fork,
+                records: chain.fork.clone(),
+                signers: vec![self.recovery],
+            });
         }
-    }
-
-    /// The epoch the counted claims lead to, with no other claim decided:
-    /// the one a claim counted after them is made in.
-    fn run_counted(&self, counted: &[Counted]) -> Epoch<'_, 'a> {
-        let mut path = vec![self.group_root];
-        let mut cuts = BTreeMap::new();
-        while let Some(c) = self.counted_claim(&path, counted) {
-            let cur = *path.last().unwrap_or(&KeyHash::default());
-            cuts.insert(cur, c.cut.clone());
-            let mut ep = Epoch::new(self, path.clone(), cuts.clone());
-            match ep.decide_counted(c) {
-                Some(next) => path.push(next),
-                None => {
-                    cuts.remove(&cur);
-                    return Epoch::new(self, path, cuts);
-                }
-            }
-        }
-        Epoch::new(self, path, cuts)
-    }
-
-    /// The claim the device counted under the last root of path: the
-    /// counted claim at the path's place in the list, made under that root,
-    /// whose root is not on the path yet.
-    fn counted_claim<'c>(&self, path: &[KeyHash], counted: &'c [Counted]) -> Option<&'c Counted> {
-        if path.len() >= MAX_PATH {
-            return None;
-        }
-        let cur = *path.last()?;
-        let c = counted.get(path.len().checked_sub(1)?)?;
-        (c.cut.key == cur && !path.contains(&c.root.hash())).then_some(c)
+        ep
     }
 }
 
@@ -1194,9 +1223,12 @@ struct Epoch<'e, 'a> {
     counted: Vec<bool>,
     forked: BTreeMap<KeyHash, u64>,
     /// Each admin key with the device record that names it and gives its
-    /// powers (or the recovery record).
+    /// powers.
     admins: BTreeMap<KeyHash, usize>,
-    recovery: Option<usize>,
+    /// The current recovery key (`Chain`).
+    recovery: KeyHash,
+    /// The recovery chain's records that count.
+    chain_records: BTreeSet<RecordId>,
     /// For each device an admin admitted, the one record that counts by
     /// the power to admit.
     admitted: BTreeMap<DeviceId, usize>,
@@ -1204,16 +1236,13 @@ struct Epoch<'e, 'a> {
     undecided_admits: BTreeSet<usize>,
     /// The first records of admins for a device several admins admitted.
     contested: BTreeSet<usize>,
-    /// The admins' claims by the new root each names.
-    claimed: BTreeMap<KeyHash, Vec<usize>>,
     label: Vec<Label>,
     why: Vec<Option<super::eval::Why>>,
     revoked: BTreeSet<KeyHash>,
     frozen: BTreeSet<KeyHash>,
     conflicts: Vec<Conflict>,
-    claims: Vec<Claim>,
+    changes: Vec<Change>,
     stop_full: bool,
-    pending: Option<KeyHash>,
     settings: Settings,
     /// The other key of each admin's device (`with_pair`).
     pairs: BTreeMap<KeyHash, Vec<KeyHash>>,
@@ -1240,19 +1269,18 @@ impl<'e, 'a> Epoch<'e, 'a> {
             counted: vec![false; n],
             forked: BTreeMap::new(),
             admins: BTreeMap::new(),
-            recovery: None,
+            recovery: KeyHash::default(),
+            chain_records: BTreeSet::new(),
             admitted: BTreeMap::new(),
             undecided_admits: BTreeSet::new(),
             contested: BTreeSet::new(),
-            claimed: BTreeMap::new(),
             label: vec![Label::Unlabelled; n],
             why: vec![None; n],
             revoked: BTreeSet::new(),
             frozen: BTreeSet::new(),
             conflicts: Vec::new(),
-            claims: Vec::new(),
+            changes: Vec::new(),
             stop_full: false,
-            pending: None,
             settings: Settings::default(),
             pairs: BTreeMap::new(),
             superseded: BTreeMap::new(),
@@ -1274,13 +1302,6 @@ impl<'e, 'a> Epoch<'e, 'a> {
         let others: Vec<KeyHash> = e.by_sig.keys().filter(|k| !ep.on_path.contains_key(*k)).copied().collect();
         for s in others {
             ep.chain(s);
-        }
-        for i in ep.all() {
-            if ep.r(i).admin()
-                && let Some((root, _)) = ep.r(i).claim()
-            {
-                ep.claimed.entry(root.hash()).or_default().push(i);
-            }
         }
         ep.find_admins();
         ep.find_pairs();
@@ -1322,64 +1343,23 @@ impl<'e, 'a> Epoch<'e, 'a> {
         }
     }
 
-    /// The ceilings of the admins and of the future roots: an admin's
-    /// records past the settings' admin limit; a future root's past 16,
-    /// counted in its claimant's own.
+    /// The admins' ceilings: an admin's records past the admin limit. A
+    /// key neither on the path nor an admin's counts nothing.
     fn cap_others(&mut self) {
         let limit = MAX_ADMIN_RECORDS;
-        let mut future_of: BTreeMap<KeyHash, Vec<KeyHash>> = BTreeMap::new();
-        let mut taken: BTreeSet<KeyHash> = BTreeSet::new();
         for (k, rs) in &self.e.by_sig {
-            if self.on_path.contains_key(k) || rs.first().is_none_or(|&i| self.r(i).admin()) {
+            if self.on_path.contains_key(k) {
                 continue;
             }
-            // A root not on the path: the root of claims; the first
-            // claimant in key order counts its records.
-            let mut claimants: Vec<KeyHash> = self
-                .all()
-                .filter(|&i| self.r(i).admin() && self.r(i).claim().is_some_and(|(root, _)| &root.hash() == k))
-                .map(|i| self.r(i).b().signer)
-                .collect();
-            claimants.sort();
-            match claimants.first() {
-                Some(c) if taken.insert(*k) => future_of.entry(*c).or_default().push(*k),
-                _ => {
-                    for &i in rs {
-                        self.capped[i] = true;
-                    }
-                }
-            }
-        }
-        let admins: Vec<KeyHash> = self
-            .e
-            .by_sig
-            .iter()
-            .filter(|(k, rs)| !self.on_path.contains_key(*k) && rs.first().is_some_and(|&i| self.r(i).admin()))
-            .map(|(k, _)| *k)
-            .collect();
-        for a in admins {
-            let own = self.in_order(&a);
-            let kept = own.len().min(limit);
-            for &i in own.get(kept..).unwrap_or_default() {
-                self.capped[i] = true;
-            }
-            let mut future: Vec<usize> =
-                future_of.get(&a).into_iter().flatten().flat_map(|k| self.in_order(k)).collect();
-            future.sort_by_key(|&i| (self.r(i).b().seq, self.r(i).b().signer, self.r(i).id));
-            let room = limit.saturating_sub(kept).min(MAX_FUTURE_ROOT_RECORDS);
-            for &i in future.get(room..).unwrap_or_default() {
-                self.capped[i] = true;
-            }
-        }
-        // Future roots whose claimant has no records here count nothing.
-        for (a, ks) in &future_of {
-            if self.e.by_sig.contains_key(a) {
-                continue;
-            }
-            for k in ks {
-                for &i in self.of(k) {
+            if rs.first().is_none_or(|&i| !self.r(i).admin()) {
+                for &i in rs {
                     self.capped[i] = true;
                 }
+                continue;
+            }
+            let own = self.in_order(k);
+            for &i in own.get(limit..).unwrap_or_default() {
+                self.capped[i] = true;
             }
         }
     }
@@ -1392,7 +1372,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
         if r.admin() || r.held || !self.counted[i] || self.capped[i] || !self.on_path.contains_key(&r.b().signer) {
             return false;
         }
-        self.cuts.get(&r.b().signer).is_none_or(|cut| cut.keeps(&r.id))
+        self.cuts.get(&r.b().signer).is_none_or(|cut| cut.lets(r.r))
     }
 
     /// The records the path's roots' resolve records name, of a root a
@@ -1412,7 +1392,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
             for &i in rs {
                 let r = self.r(i);
                 if let (Kind::Resolve(ids), Role::Root, false) = (&r.b().kind, r.role, r.held)
-                    && cut.is_none_or(|cut| cut.keeps(&r.id))
+                    && cut.is_none_or(|cut| cut.lets(r.r))
                     && wholes.contains(&i)
                 {
                     v.extend(ids.iter().copied().filter(|id| !final_.contains(id)));
@@ -1432,7 +1412,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
             .of(&signer)
             .iter()
             .copied()
-            .filter(|&i| !self.capped[i] && cut.is_none_or(|c| c.keeps(&self.r(i).id)))
+            .filter(|&i| !self.capped[i] && cut.is_none_or(|c| c.lets(self.r(i).r)))
             .collect();
         let by_id: BTreeMap<RecordId, usize> = rs.iter().map(|&i| (self.r(i).id, i)).collect();
         let mut by_seq: BTreeMap<u64, usize> = BTreeMap::new();
@@ -1494,8 +1474,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
     }
 
     /// The admin keys: the admin of a device record a root on the path
-    /// signed, with the powers of the newest such record; and the recovery
-    /// key, with takeover only.
+    /// signed, with the powers of the newest such record.
     fn find_admins(&mut self) {
         for rs in self.e.devices.values() {
             for &i in rs {
@@ -1539,28 +1518,10 @@ impl<'e, 'a> Epoch<'e, 'a> {
                 self.superseded.insert(a, by);
             }
         }
-        self.recovery = None;
-        let roots: Vec<KeyHash> = self.on_path.keys().copied().collect();
-        for signer in &roots {
-            for &i in self.of(signer) {
-                if matches!(self.r(i).b().kind, Kind::Recovery { .. })
-                    && self.root_record(i)
-                    && self.recovery.is_none_or(|old| self.newer(i, old))
-                {
-                    self.recovery = Some(i);
-                }
-            }
-        }
-        if let Some(i) = self.recovery
-            && let Kind::Recovery { admin } = &self.r(i).b().kind
-        {
-            self.admins.entry(admin.hash()).or_insert(i);
-        }
     }
 
     fn powers(&self, admin: &KeyHash) -> u64 {
         self.admins.get(admin).map_or(0, |&i| match &self.r(i).b().kind {
-            Kind::Recovery { .. } => POWER_TAKEOVER,
             Kind::Device(d) => d.powers,
             _ => 0,
         })
@@ -1568,11 +1529,6 @@ impl<'e, 'a> Epoch<'e, 'a> {
 
     fn has(&self, admin: &KeyHash, power: u64) -> bool {
         self.powers(admin) & power != 0
-    }
-
-    /// Reports whether k is the recovery key.
-    fn is_recovery(&self, k: &KeyHash) -> bool {
-        self.recovery.is_some_and(|i| matches!(&self.r(i).b().kind, Kind::Recovery { admin } if &admin.hash() == k))
     }
 
     /// The member key of the device whose record names admin key a.
@@ -1589,8 +1545,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
     /// Reports whether k is a root key or the member key of the root's own
     /// device.
     fn is_root(&self, k: &KeyHash) -> bool {
-        self.e.claim_roots.contains_key(k)
-            || k == &self.e.group_root
+        self.on_path.contains_key(k)
             || self.root_device().and_then(|d| self.r(d).dev()).is_some_and(|d| &d.key.hash() == k)
     }
 
@@ -1657,7 +1612,6 @@ impl<'e, 'a> Epoch<'e, 'a> {
                         && self.counted[i]
                         && !self.capped[i]
                         && !not_counting.contains(&i)
-                        && !self.unseen_by_claim(i)
                         && self.has(&r.b().signer, POWER_ADMIT)
                         && r.dev().is_some_and(|dv| self.admin_device_ok(&r.b().signer, dv))
                 })
@@ -1727,16 +1681,10 @@ impl<'e, 'a> Epoch<'e, 'a> {
         if r.held || !self.admins.contains_key(a) || self.capped[i] {
             return false;
         }
-        // The recovery key signs a claim and nothing else.
-        if self.admins.get(a).is_some_and(|&j| matches!(self.r(j).b().kind, Kind::Recovery { .. }))
-            && !matches!(r.b().kind, Kind::Claim { .. })
-        {
-            return false;
-        }
         match &r.b().kind {
             Kind::Device(d) => {
                 let Some(dev) = r.device else { return false };
-                if self.root_has(&dev) || !self.admin_device_ok(a, d) || self.unseen_by_claim(i) {
+                if self.root_has(&dev) || !self.admin_device_ok(a, d) {
                     // A device a root recorded is the root's to change.
                     return false;
                 }
@@ -1765,15 +1713,9 @@ impl<'e, 'a> Epoch<'e, 'a> {
             }),
             Kind::Freeze(rm) => {
                 self.has(a, POWER_FREEZE)
-                    && rm.keys.iter().all(|k| {
-                        self.admins.contains_key(k)
-                            && !self.has(k, POWER_REMOVE_ADMINS)
-                            // The recovery key is frozen only by those who may remove it.
-                            && (!self.is_recovery(k) || self.has(a, POWER_REMOVE_ADMINS))
-                    })
+                    && rm.keys.iter().all(|k| self.admins.contains_key(k) && !self.has(k, POWER_REMOVE_ADMINS))
             }
             Kind::Thaw { .. } => self.has(a, POWER_THAW) && self.has(a, POWER_REMOVE_ADMINS),
-            Kind::Claim { seen, .. } => self.has(a, POWER_TAKEOVER) && body::seen_of(seen, &self.cur) >= 1,
             Kind::Hubs { .. } => self.has(a, POWER_HUB),
             // Any admin sets how long incoming copies stay live.
             Kind::Copies { .. } => true,
@@ -1793,10 +1735,6 @@ impl<'e, 'a> Epoch<'e, 'a> {
                 self.with_pair(&rb.b().signer).iter().any(|k| rm.keys.binary_search(k).is_ok())
                     && if own { rb.b().seq > ra.b().seq } else { !self.e.saw(a, b) }
             })
-    }
-
-    fn thawed_by_root(&self) -> BTreeSet<RecordId> {
-        self.root_thaws().into_keys().collect()
     }
 
     /// The freezes the thaws that count name, with those thaws: a root's
@@ -1897,21 +1835,17 @@ impl<'e, 'a> Epoch<'e, 'a> {
         for &b in &admin_recs {
             let rb = self.r(b);
             let mut by = Vec::new();
-            // An admin's removal of a claimant does not cut its claim:
-            // decide_claims sees it as a dispute.
-            if rb.claim().is_none() {
-                for &a in removals_of.get(&rb.b().signer).map_or(&[][..], |v| v.as_slice()) {
-                    let ra = self.r(a);
-                    if !self.cuts_off(a, b) || ra.is_freeze() && self.spared(root_thaws.get(&ra.id), b) {
-                        continue;
-                    }
-                    let lift: Vec<usize> = if ra.is_freeze() {
-                        thaws_of.get(&ra.id).into_iter().flatten().copied().filter(|&t| self.lifts(t, b)).collect()
-                    } else {
-                        Vec::new()
-                    };
-                    by.push((a, lift));
+            for &a in removals_of.get(&rb.b().signer).map_or(&[][..], |v| v.as_slice()) {
+                let ra = self.r(a);
+                if !self.cuts_off(a, b) || ra.is_freeze() && self.spared(root_thaws.get(&ra.id), b) {
+                    continue;
                 }
+                let lift: Vec<usize> = if ra.is_freeze() {
+                    thaws_of.get(&ra.id).into_iter().flatten().copied().filter(|&t| self.lifts(t, b)).collect()
+                } else {
+                    Vec::new()
+                };
+                by.push((a, lift));
             }
             if !by.is_empty() {
                 attacks.insert(b, by);
@@ -2054,46 +1988,6 @@ impl<'e, 'a> Epoch<'e, 'a> {
         self.admins.contains_key(k) && !self.revoked.contains(k) && !self.superseded.contains_key(k)
     }
 
-    /// The admin removals and freezes that count and name the signer of
-    /// claim c or the member key of its device. A thawed freeze stays one
-    /// unless a thaw that counts lifts it for c (`lifts`).
-    fn removals(&self, c: usize) -> Vec<usize> {
-        let k = &self.r(c).b().signer;
-        let mut keys = vec![*k];
-        if let Some(m) = self.member_of_admin(k) {
-            keys.push(m);
-        }
-        let thawed = self.thaws_that_count();
-        self.all()
-            .filter(|&i| {
-                let r = self.r(i);
-                let lifted = r.is_freeze() && thawed.get(&r.id).is_some_and(|ts| ts.iter().any(|&t| self.lifts(t, c)));
-                // Who may object is fixed as of the claim's own seen: an
-                // admin with the takeover power then keeps the right
-                // whatever the claimant did to it later (rule 32).
-                r.admin()
-                    && (self.label[i] == Label::In || self.powers_at(c, &r.b().signer) & POWER_TAKEOVER != 0)
-                    && !lifted
-                    && r.removal().is_some_and(|rm| keys.iter().any(|key| rm.keys.binary_search(key).is_ok()))
-            })
-            .collect()
-    }
-
-    /// Reports whether a root's freeze, not thawed by a root, names k.
-    fn root_frozen(&self, k: &KeyHash) -> bool {
-        if !self.frozen.contains(k) {
-            return false;
-        }
-        let thawed = self.thawed_by_root();
-        self.all().any(|i| {
-            let r = self.r(i);
-            r.is_freeze()
-                && self.root_record(i)
-                && !thawed.contains(&r.id)
-                && r.removal().is_some_and(|rm| self.with_pair(k).iter().any(|k| rm.keys.binary_search(k).is_ok()))
-        })
-    }
-
     /// k with the other key of its device: an admin key's member key, or
     /// the admin key of the device whose member key k is.
     fn with_pair(&self, k: &KeyHash) -> Vec<KeyHash> {
@@ -2116,12 +2010,6 @@ impl<'e, 'a> Epoch<'e, 'a> {
         self.pairs = pairs;
     }
 
-    fn claim(&self, i: usize, state: ClaimState) -> Claim {
-        let r = self.r(i);
-        let root = r.claim().map(|(k, _)| k.hash()).unwrap_or_default();
-        Claim { record: r.id, claimant: r.b().signer, root, state, left_ms: 0 }
-    }
-
     /// The current root's newest record of a type that counts.
     fn newest_of_cur(&self, want: impl Fn(&Kind) -> bool) -> Option<usize> {
         let mut best: Option<usize> = None;
@@ -2139,348 +2027,6 @@ impl<'e, 'a> Epoch<'e, 'a> {
 
     fn settings_record(&self) -> Option<usize> {
         self.newest_of_cur(|k| matches!(k, Kind::Settings(_)))
-    }
-
-    fn handover(&self) -> Option<usize> {
-        self.newest_of_cur(|k| matches!(k, Kind::Handover { .. }))
-    }
-
-    /// Reports whether claim c's new root is void by its key: the
-    /// claimant's own, the first root, a root already on the path, a key
-    /// with the Group ID of one on the path, a key the set uses as an
-    /// admin key, or a member key of a device record a root on the path
-    /// signed or the claim saw. Another admin's later record cannot void
-    /// a claim this way: it does not count (`unseen_by_claim`).
-    fn void_root(&self, c: usize) -> bool {
-        let rc = self.r(c);
-        let Some((root, _)) = rc.claim() else { return true };
-        let root = root.hash();
-        let gid = DeviceId::of(&root);
-        root == rc.b().signer
-            || self.on_path.contains_key(&root)
-            || self.path.iter().any(|p| DeviceId::of(p) == gid)
-            || self.e.by_sig.get(&root).is_some_and(|rs| rs.iter().any(|&i| self.r(i).admin()))
-            || self.e.devices.values().flatten().any(|&i| {
-                self.r(i).dev().is_some_and(|d| d.key.hash() == root) && (self.root_record(i) || self.e.saw(c, i))
-            })
-    }
-
-    /// Reports whether admin device record i uses as its member key the
-    /// new root of a claim that did not see it: such a record does not
-    /// count, so that no admin voids another's claim after it was made.
-    fn unseen_by_claim(&self, i: usize) -> bool {
-        let Some(d) = self.r(i).dev() else { return false };
-        self.claimed.get(&d.key.hash()).is_some_and(|cs| cs.iter().any(|&c| !self.e.saw(c, i)))
-    }
-
-    /// Reports whether record i counts as of claim c's own seen: a root's
-    /// record on the path, the current root's only up to the seq the claim
-    /// saw of it.
-    fn at_seen(&self, c: usize, i: usize) -> bool {
-        let r = self.r(i);
-        self.root_record(i) && (r.b().signer != self.cur || r.b().seq <= self.r(c).seen_of(&self.cur))
-    }
-
-    /// The root records that give admin key k its powers as of claim c's
-    /// own seen (`at_seen`): the newest root record that names it, unless
-    /// a newer root record of that device the claim saw names another key
-    /// or none; and the newest recovery record, when it names k.
-    fn power_records(&self, c: usize, k: &KeyHash) -> (Option<usize>, Option<usize>) {
-        let mut named: Option<usize> = None;
-        for &i in self.e.devices.values().flatten() {
-            if self.at_seen(c, i)
-                && self.r(i).dev().and_then(|d| d.admin.as_ref()).is_some_and(|a| a.hash() == *k)
-                && named.is_none_or(|old| self.newer(i, old))
-            {
-                named = Some(i);
-            }
-        }
-        let taken = named.is_some_and(|n| {
-            let dev = self.r(n).device;
-            dev.and_then(|d| self.e.devices.get(&d)).into_iter().flatten().any(|&i| {
-                self.at_seen(c, i)
-                    && i != n
-                    && self.newer(i, n)
-                    && self.r(i).dev().and_then(|d| d.admin.as_ref()).is_none_or(|a| a.hash() != *k)
-            })
-        });
-        let recovery = self
-            .all()
-            .filter(|&i| self.at_seen(c, i))
-            .filter_map(|i| match &self.r(i).b().kind {
-                Kind::Recovery { admin } => {
-                    Some((self.on_path.get(&self.r(i).b().signer).copied(), self.r(i).b().seq, admin.hash(), i))
-                }
-                _ => None,
-            })
-            .max()
-            .filter(|(_, _, a, _)| a == k)
-            .map(|(_, _, _, i)| i);
-        (named.filter(|_| !taken), recovery)
-    }
-
-    /// The powers admin key k held as of claim c's own seen.
-    fn powers_at(&self, c: usize, k: &KeyHash) -> u64 {
-        let (named, recovery) = self.power_records(c, k);
-        named.and_then(|i| self.r(i).dev()).map_or(0, |d| d.powers) | recovery.map_or(0, |_| POWER_TAKEOVER)
-    }
-
-    /// Reports whether claim c's claimant held the takeover power as of
-    /// the claim's own seen by a root record the claim keeps: one of an
-    /// earlier root, or one of the current root that its list names, so
-    /// that what makes the claim count stays once it counts (rule 32).
-    fn claimant_holds(&self, c: usize) -> bool {
-        let rc = self.r(c);
-        let Kind::Claim { keep, .. } = &rc.b().kind else { return false };
-        let (named, recovery) = self.power_records(c, &rc.b().signer);
-        let named = named.filter(|&i| self.r(i).dev().is_some_and(|d| d.powers & POWER_TAKEOVER != 0));
-        [named, recovery]
-            .into_iter()
-            .flatten()
-            .any(|i| self.r(i).b().signer != self.cur || keep.binary_search(&self.r(i).id).is_ok())
-    }
-
-    /// Reports whether the records prove counted claim c under this
-    /// epoch's root: the claim is signed by an admin that held the
-    /// takeover power as of its own seen, it lists what the counted claim
-    /// keeps, and no removal of the claimant counted against it. Checked
-    /// once, when a member takes the claim as counted; nothing later asks
-    /// again.
-    fn proves(&self, c: &Counted) -> bool {
-        if self.cur != c.cut.key {
-            return false;
-        }
-        // What the evaluation of this epoch would void is not proved: a
-        // new key void by itself, or a claim a removal of its claimant cut.
-        // A cancel is not asked: the root's records cannot tell one made
-        // in time from one made after the takeover counted, which does not
-        // undo it.
-        let Some(claim) = self.e.by_id.get(&c.claim).copied() else { return false };
-        let rc = self.r(claim);
-        if rc.b().signer != c.claimant || self.void_root(claim) || self.label[claim] == Label::Out {
-            return false;
-        }
-        let listed = match &rc.b().kind {
-            Kind::Claim { keep, .. } => keep.iter().copied().eq(c.cut.keep.iter().copied()),
-            _ => false,
-        };
-        let keys = self.with_pair(&c.claimant);
-        // A removal of the claimant: a root's as of the claim's seen, or an
-        // admin's that is in and the claim saw.
-        let removed = self.all().any(|i| {
-            let r = self.r(i);
-            r.is_revoke()
-                && r.removal().is_some_and(|rm| keys.iter().any(|k| rm.keys.binary_search(k).is_ok()))
-                && (self.at_seen(claim, i) || r.admin() && self.label[i] == Label::In && self.e.saw(claim, i))
-        });
-        listed && self.claimant_holds(claim) && !removed
-    }
-
-    /// Takes claim c, which the device counted, as in effect, whether or
-    /// not the set still holds its record; the other claims of this epoch
-    /// are left out. What proved it was checked when it was counted
-    /// (`proves`) and is not asked again; only a new key void by itself
-    /// is refused.
-    fn decide_counted(&mut self, c: &Counted) -> Option<KeyHash> {
-        let root = c.root.hash();
-        let gid = DeviceId::of(&root);
-        if root == c.claimant || self.on_path.contains_key(&root) || self.path.iter().any(|p| DeviceId::of(p) == gid) {
-            return None;
-        }
-        self.claims.push(Claim {
-            record: c.claim,
-            claimant: c.claimant,
-            root,
-            state: ClaimState::Effective,
-            left_ms: 0,
-        });
-        Some(root)
-    }
-
-    /// The current root cancels a claim with a resolve of it, or with a
-    /// removal of its claimant (either key of the device) that saw the
-    /// claim, or with a record of the claimant's device that takes its
-    /// admin key and saw the claim, which works as a removal; one that
-    /// did not see it came before and voids it (below, as a removal). What
-    /// the removal saw of the claim's new root changes nothing: the
-    /// claimant writes those records, so they cannot show that the
-    /// takeover counted where the removal was written.
-    ///
-    /// A checkpoint of the current root that leaves out the record that
-    /// gives the claimant its power takes that power back, as a removal
-    /// does, whatever it saw: a member that compacted under it before the
-    /// claim came no longer holds that record (rule 32).
-    fn cancelled(&self, c: usize) -> bool {
-        let rc = self.r(c);
-        let keys = self.with_pair(&rc.b().signer);
-        let (named, recovery) = self.power_records(c, &rc.b().signer);
-        let power: Vec<usize> =
-            [named, recovery].into_iter().flatten().filter(|&p| self.r(p).b().signer == self.cur).collect();
-        let get = |x: &RecordId| self.e.by_id.get(x).map(|&j| self.r(j).r);
-        self.of(&self.cur).iter().any(|&i| {
-            let r = self.r(i);
-            self.root_record(i)
-                && match &r.b().kind {
-                    Kind::Resolve(ids) => ids.binary_search(&rc.id).is_ok(),
-                    Kind::Revoke(rm) => keys.iter().any(|k| rm.keys.binary_search(k).is_ok()) && self.e.saw(i, c),
-                    Kind::Device(_) => self.superseded.get(&rc.b().signer) == Some(&i) && self.e.saw(i, c),
-                    Kind::Checkpoint { heads, keep } => {
-                        let anchors = anchors_of(heads, keep);
-                        power.iter().any(|&p| pruned_by(self.r(p).r, Role::Root, heads, &anchors))
-                            && checkpoint_ok(r.r, get)
-                    }
-                    _ => false,
-                }
-        })
-    }
-
-    fn decide_claims(&mut self, held_ms: &BTreeMap<RecordId, u64>) -> Option<(KeyHash, Cut)> {
-        let mut delay = self.settings.delay_ms();
-        let mut live = Vec::new();
-        let mut decided = Vec::new();
-        for i in self.all() {
-            let c = self.r(i);
-            if c.claim().is_none() {
-                continue;
-            }
-            // A claim under this root: its claimant saw at least one of the
-            // root's records.
-            if !c.admin()
-                || c.seen_of(&self.cur) == 0
-                || !self.counted[i] && !self.voided.contains(&c.id)
-                || self.capped[i]
-            {
-                continue;
-            }
-            let state = if self.void_root(i) || !self.claimant_holds(i) {
-                // A claimant must hold the takeover power as of the claim's
-                // own seen by a record the claim keeps, or the claim is
-                // void.
-                Some(ClaimState::Void)
-            } else if self.cancelled(i) {
-                Some(ClaimState::Cancelled)
-            } else if self.label[i] == Label::Out {
-                Some(ClaimState::Void)
-            } else {
-                None
-            };
-            match state {
-                Some(s) => decided.push(self.claim(i, s)),
-                None => live.push(i),
-            }
-        }
-        self.claims.append(&mut decided);
-        // One claim for each admin key: of its live claims, its first.
-        live.sort_by_key(|&i| (self.r(i).b().signer, self.r(i).b().seq, self.r(i).id));
-        let mut one = Vec::new();
-        for (n, &c) in live.iter().enumerate() {
-            let again =
-                n > 0 && live.get(n.saturating_sub(1)).is_some_and(|&p| self.r(p).b().signer == self.r(c).b().signer);
-            if again {
-                let cl = self.claim(c, ClaimState::Void);
-                self.claims.push(cl);
-            } else {
-                one.push(c);
-            }
-        }
-        // An admin's removal or freeze of a claimant that the claimant had
-        // seen voids its claim; one it had not seen disputes it, whatever
-        // it saw of the claim's new root (the claimant writes those
-        // records). A member that came after a takeover counted takes it
-        // from a peer it trusts (`RecordSet::remember_counted`).
-        let mut disputes: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
-        let mut kept = Vec::new();
-        for &c in &one {
-            let mut void = false;
-            for r in self.removals(c) {
-                if self.e.saw(c, r) {
-                    void = true;
-                } else {
-                    disputes.entry(c).or_default().push(r);
-                }
-            }
-            if void {
-                let cl = self.claim(c, ClaimState::Void);
-                self.claims.push(cl);
-            } else {
-                kept.push(c);
-            }
-        }
-        // One claim at a time: a claim whose author held another live claim
-        // counts for nothing.
-        let mut first = Vec::new();
-        for &c in &kept {
-            let later = kept.iter().any(|&o| o != c && self.e.saw(c, o));
-            if later {
-                let cl = self.claim(c, ClaimState::Void);
-                self.claims.push(cl);
-            } else {
-                first.push(c);
-            }
-        }
-        if first.len() > 1 {
-            let mut conflict = Conflict { kind: ConflictKind::Claims, records: Vec::new(), signers: Vec::new() };
-            for &r in &first {
-                let cl = self.claim(r, ClaimState::Competing);
-                self.claims.push(cl);
-                conflict.records.push(self.r(r).id);
-                conflict.signers.push(self.r(r).b().signer);
-            }
-            self.conflicts.push(conflict);
-            self.stop_full = true;
-            return None;
-        }
-        let &c = first.first()?;
-        if let Some(ds) = disputes.get(&c) {
-            let cl = self.claim(c, ClaimState::Disputed);
-            self.claims.push(cl);
-            let mut conflict = Conflict {
-                kind: ConflictKind::Claims,
-                records: vec![self.r(c).id],
-                signers: vec![self.r(c).b().signer],
-            };
-            for &r in ds {
-                conflict.records.push(self.r(r).id);
-                if !conflict.signers.contains(&self.r(r).b().signer) {
-                    conflict.signers.push(self.r(r).b().signer);
-                }
-            }
-            self.conflicts.push(conflict);
-            self.stop_full = true;
-            return None;
-        }
-        let r = self.r(c);
-        let mut cl = self.claim(c, ClaimState::Pending);
-        if let Some(h) = self.handover()
-            && let Kind::Handover { admin } = &self.r(h).b().kind
-            && *admin == r.b().signer
-            && self.e.saw(c, h)
-        {
-            // The root handed the group to this admin: its claim, made after
-            // it held the handover, takes effect without the delay.
-            delay = 0;
-        }
-        let held = held_ms.get(&r.id).copied().unwrap_or(0);
-        let ready = self.label[c] == Label::In && !self.root_frozen(&r.b().signer) && held >= delay;
-        if !ready {
-            cl.left_ms = delay.saturating_sub(held);
-            self.claims.push(cl);
-            self.pending = Some(r.b().signer);
-            return None;
-        }
-        if self.path.len() >= MAX_PATH {
-            cl.state = ClaimState::Void;
-            self.claims.push(cl);
-            return None;
-        }
-        cl.state = ClaimState::Effective;
-        let next = cl.root;
-        self.claims.push(cl);
-        let keep = match &r.b().kind {
-            Kind::Claim { keep, .. } => keep.iter().copied().collect(),
-            _ => return None,
-        };
-        Some((next, Cut { key: self.cur, keep }))
     }
 
     /// The record of a type, one a root or an admin signs, that counts for
@@ -2655,13 +2201,6 @@ impl<'e, 'a> Epoch<'e, 'a> {
             if alone {
                 s.nothing_to.push(*id);
             }
-            if let Some(p) = self.pending
-                && rs.iter().any(|&i| {
-                    self.root_record(i) && self.r(i).dev().and_then(|d| d.admin.as_ref()).is_some_and(|a| a.hash() == p)
-                })
-            {
-                s.no_secrets_to.push(*id);
-            }
         }
         if let Some(d) = self.root_device()
             && let Some(dv) = self.r(d).dev()
@@ -2677,8 +2216,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
         // A checkpoint may prune a removed device's record; its removal
         // still names its key.
         s.named.extend(self.revoked.iter().map(DeviceId::of));
-        s.claims = self.claims.clone();
-        s.claims.sort_by_key(|c| c.record);
+        s.changes = self.changes.clone();
         s.conflicts.extend(self.conflicts.iter().cloned());
         for c in &mut s.conflicts {
             c.records.sort();
@@ -2698,14 +2236,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
         }
         s.settings = self.settings.clone();
         s.too_old = self.settings.rules() > RULES_VERSION;
-        if let Some(i) = self.recovery
-            && let Kind::Recovery { admin } = &self.r(i).b().kind
-        {
-            let a = admin.hash();
-            if self.admins.get(&a) == Some(&i) && !self.revoked.contains(&a) && !self.frozen.contains(&a) {
-                s.recovery = Some(a);
-            }
-        }
+        s.recovery = self.recovery;
         s.stop = if self.stop_full {
             Stop::Full
         } else if forked_admin {
@@ -2718,12 +2249,11 @@ impl<'e, 'a> Epoch<'e, 'a> {
             conflicted.extend(self.role_off(rs));
         }
         for i in self.all() {
-            let claim_effective =
-                self.claims.iter().any(|c| c.record == self.r(i).id && c.state == ClaimState::Effective);
-            if (self.counts(i) || claim_effective) && !conflicted.contains(&i) {
+            if self.counts(i) && !conflicted.contains(&i) {
                 s.counting.insert(self.r(i).id);
             }
         }
+        s.counting.extend(self.chain_records.iter().copied());
         s
     }
 
@@ -2756,8 +2286,8 @@ impl<'e, 'a> Epoch<'e, 'a> {
     /// The state, with the held records and those left out.
     fn finish(&self) -> State {
         let mut state = self.state();
-        state.cuts = self.cuts.values().cloned().collect();
-        let admins: BTreeSet<KeyHash> = state.devices.iter().filter_map(|d| d.admin).chain(state.recovery).collect();
+        state.cut = self.cuts.values().next().cloned();
+        let admins: BTreeSet<KeyHash> = state.devices.iter().filter_map(|d| d.admin).chain([state.recovery]).collect();
         let cur = state.roots.last().copied();
         let mut newer: BTreeSet<RecordId> = BTreeSet::new();
         for i in self.all() {

@@ -44,21 +44,20 @@ pub enum Refusal {
 }
 
 /// The records that lead from the group's first root to the device with
-/// member key `device`: every counting claim and handover (the root
+/// member key `device`: every recovery record the set holds (the root
 /// changes), the device's counting records, and for each admin key that
 /// signed one of them the counting record that named that key, up to the
 /// roots.
 pub fn chain(set: &RecordSet, state: &State, device: &KeyHash) -> BTreeSet<RecordId> {
-    let records: Vec<&Record> =
-        set.in_dependency_order().into_iter().filter(|r| state.counting.contains(&r.id())).collect();
-    let mut out: BTreeSet<RecordId> = BTreeSet::new();
+    let order = set.in_dependency_order();
+    // Every recovery record the set holds goes, a fork's two heads too: they
+    // live outside the rooms, and a newcomer sees the fork its admitter saw.
+    let mut out: BTreeSet<RecordId> =
+        order.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).map(|r| r.id()).collect();
+    let records: Vec<&Record> = order.into_iter().filter(|r| state.counting.contains(&r.id())).collect();
     let mut signers: Vec<KeyHash> = Vec::new();
     for r in records.iter() {
         match &r.body().kind {
-            Kind::Claim { .. } | Kind::Handover { .. } => {
-                out.insert(r.id());
-                signers.push(r.body().signer);
-            }
             Kind::Device(d) if &d.key.hash() == device => {
                 out.insert(r.id());
                 signers.push(r.body().signer);
@@ -157,7 +156,6 @@ impl Intro {
     pub fn check(
         &self,
         set: &RecordSet,
-        held_ms: &BTreeMap<RecordId, u64>,
         own: &crate::format::KeyHash,
         peer: &[u8; 65],
     ) -> Result<Vec<Record>, Refusal> {
@@ -178,7 +176,7 @@ impl Intro {
                 Ok(Added::NoRoom) | Err(_) => return Err(Refusal::Broken),
             }
         }
-        let state = trial.state(held_ms);
+        let state = trial.state();
         match standing(&state, own, peer) {
             Standing::Member(_) => Ok(new),
             _ => Err(Refusal::NotMember),
