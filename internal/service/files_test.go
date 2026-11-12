@@ -34,7 +34,3 @@ const (
 	joinTimeout      = 2 * time.Minute
 	handshakeTimeout = 10 * time.Second
 )
-
-// restartAfter is how long the Rust cbb waits before it connects again
-// after a mute or a restart (RESTART_AFTER in member/src/service.rs).
-const restartAfter = 500 * time.Millisecond

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! `cbb next link`: the lite member's network through the Next's ESP8266.
+//! `cbb next link`: cbb's network through the Next's ESP8266.
 //! It runs at NextPi's shell on the Pi's UART, where the Next's driver
 //! exchanges frames with it (frame.rs), and drives the ESP's AT commands
 //! (esp.rs) through those frames. A local TCP port stands for the peer: each
@@ -727,7 +727,7 @@ fn set_clock(secs: i64, log: &mut dyn FnMut(&str)) {
     if now.is_ok_and(|n| (n - secs).abs() <= CLOCK_SLACK) {
         return;
     }
-    // A phone (the lite library inside its app) never sets the clock.
+    // A phone (the library inside its app) never sets the clock.
     #[cfg(any(target_os = "ios", target_env = "ohos"))]
     let set = {
         let _ = secs;
@@ -1039,7 +1039,7 @@ pub fn run(g: &crate::Global, args: &[String]) -> Result<()> {
 /// again for a minute.
 fn set_paste(g: &crate::Global, on: bool, enter: bool, log: &mpsc::Sender<Msg>) {
     let h = crate::control::Header {
-        op: "paste-receive".into(),
+        op: "paste_receive".into(),
         name: if on { "on" } else { "off" }.into(),
         enter,
         ..Default::default()
@@ -1349,7 +1349,7 @@ mod tests {
         assert_eq!(&got, b"phone");
         let (id, use_, _) = link.readers.pop().unwrap();
         assert_eq!(id, 0);
-        link.handle(Msg::Local(id, use_, b"lite".to_vec()), now);
+        link.handle(Msg::Local(id, use_, b"ping".to_vec()), now);
         assert_eq!(sent(&link, &mut next, &mut at).0, "AT+CIPSEND=0,4\r\n");
     }
 

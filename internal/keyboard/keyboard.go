@@ -3,7 +3,7 @@
 
 // Package keyboard types a text as a Bluetooth keyboard (docs/roadmap.md,
 // item 25): the keys of a layout and the HID boot keyboard's reports that
-// press them, as the lite member's cbb_core::keyboard has them for the
+// press them, as the Rust core's cbb_core::keyboard has them for the
 // Nano ESP32 and the Android kit's Keyboard for the phone. All three are
 // checked against testdata/interop/keyboard.json.
 //

@@ -106,5 +106,5 @@ function line(d) {
 
 // Its name, or the start of its ID when it has none.
 function name(d) {
-    return d.name !== "" ? d.name : d.device.substring(0, 8)
+    return d.name !== "" ? d.name : d.id.substring(0, 8)
 }

@@ -132,7 +132,7 @@ func hubOverVLESS(ctx context.Context, r *Report, f *Fleet, timeout time.Duratio
 		if err := connected(ctx, c, wait); err != nil {
 			return fmt.Errorf("after the web server's CA: %w", err)
 		}
-		if err := succeeds(ctx, hub, a.hubCmd(hubPublic, a.fwdKey, "-vless"), "", "VLESS"); err != nil {
+		if err := succeeds(ctx, hub, a.hubCmdWith(hubPublic, a.fwdKey), "", "VLESS"); err != nil {
 			return err
 		}
 		// VLESS turns AmneziaWG on too: the client gets the new offer at
@@ -255,7 +255,7 @@ func hubOverXHTTP(ctx context.Context, r *Report, f *Fleet, timeout time.Duratio
 		if err := connected(ctx, c, wait); err != nil {
 			return fmt.Errorf("after the web server's CA: %w", err)
 		}
-		if err := succeeds(ctx, hub, a.hubCmd(hubPublic, a.fwdKey, "-vless"), "", "VLESS"); err != nil {
+		if err := succeeds(ctx, hub, a.hubCmdWith(hubPublic, a.fwdKey), "", "VLESS"); err != nil {
 			return err
 		}
 		if err := learnAtHome(ctx, f, a, c); err != nil {

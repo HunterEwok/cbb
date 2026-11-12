@@ -40,7 +40,7 @@ func TestCheck(t *testing.T) {
 		{name: "an ELF program", file: "forge", content: "\x7fELF\x02\x01\x01\x00", want: []string{"forge:1: a compiled program (ELF)"}},
 		{name: "a Mach-O program", file: "cbb", content: "\xcf\xfa\xed\xfe\x0c\x00\x00\x01", want: []string{"cbb:1: a compiled program (Mach-O)"}},
 		{name: "a universal Mach-O program", file: "cbb", content: "\xca\xfe\xba\xbe\x00\x00\x00\x02", want: []string{"cbb:1: a compiled program (Mach-O)"}},
-		{name: "a WebAssembly module", file: "internal/core/cbb_core.wasm", content: "\x00asm\x01\x00\x00\x00\x01", want: []string{"internal/core/cbb_core.wasm:1: a compiled program (WebAssembly)"}},
+		{name: "a WebAssembly module", file: "internal/x/module.wasm", content: "\x00asm\x01\x00\x00\x00\x01", want: []string{"internal/x/module.wasm:1: a compiled program (WebAssembly)"}},
 		{name: "a Java class", file: "A.class", content: "\xca\xfe\xba\xbe\x00\x00\x00\x41"},
 		{name: "a PE program", file: "cbb.exe", content: "MZ" + strings.Repeat("\x00", 0x3a) + "\x40\x00\x00\x00PE\x00\x00", want: []string{"cbb.exe:1: a compiled program (PE)"}},
 		{name: "text starting with MZ", file: "notes.txt", content: "MZ is a prefix\n"},

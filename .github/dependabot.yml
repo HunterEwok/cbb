@@ -5,7 +5,7 @@
 # gomod covers the Go modules. The tools in go.mod (staticcheck, govulncheck, actionlint) are
 # recorded as indirect requirements, which Dependabot skips by default, so they are allowed by
 # name (until https://github.com/dependabot/dependabot-core/issues/12050 is fixed).
-# cargo covers the lite member and the ESP32 firmware together: the firmware is its own
+# cargo covers cbb and the ESP32 firmware together: the firmware is its own
 # workspace with its own Cargo.lock but builds core/ and embassy/ by path, so every
 # update of their dependencies must change both lock files in one pull request (group-by
 # dependency-name), or the firmware's `cargo build --locked` fails. esp-hal and its crates are

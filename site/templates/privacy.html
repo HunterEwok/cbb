@@ -18,14 +18,14 @@
 
   <h2>{{t "What each server can see"}}</h2>
   <p>{{t "At home there is no server at all: the devices talk directly. Away from home, one of these joins them."}}</p>
-  <div class="frame board-table">{{template "rails"}}<div class="surface">
+  <div class="frame board-table">{{template "corners"}}<div class="surface">
   <table class="chalk-table servers centred">
     <thead><tr><td></td><th scope="col">{{t "Reads the clipboard"}}</th><th scope="col">{{t "Knows which of your devices talk, and when"}}</th><th scope="col">{{t "Whose it is"}}</th></tr></thead>
     <tbody>
-    <tr><th scope="row">{{t "Hub that reads the copies"}}</th><td data-label="{{t "Reads the clipboard"}}">{{t "yes: it is an admin of your group"}}</td><td data-label="{{t "Knows which of your devices talk, and when"}}">{{t "yes"}}</td><td data-label="{{t "Whose it is"}}">{{t "yours: a computer, or a phone while its app is open"}}</td></tr>
-    <tr><th scope="row">{{t "Hub that only passes copies on"}}</th><td data-label="{{t "Reads the clipboard"}}">{{t "no: the copies are sealed past it"}}</td><td data-label="{{t "Knows which of your devices talk, and when"}}">{{t "yes"}}</td><td data-label="{{t "Whose it is"}}">{{t "yours: any computer of the group, a Raspberry Pi say"}}</td></tr>
-    <tr><th scope="row">{{t "Forwarder"}}</th><td data-label="{{t "Reads the clipboard"}}">{{t "no"}}</td><td data-label="{{t "Knows which of your devices talk, and when"}}">{{t "no: it sees only the addresses, timing and sizes of the encrypted packets it passes to your hub"}}</td><td data-label="{{t "Whose it is"}}">{{t "yours; the project's at cbb.tools is not open yet"}}</td></tr>
-    <tr><th scope="row">{{t "Blind relay"}}</th><td data-label="{{t "Reads the clipboard"}}">{{t "no"}}</td><td data-label="{{t "Knows which of your devices talk, and when"}}">{{t "yes"}}</td><td data-label="{{t "Whose it is"}}">{{t "yours; the project's at cbb.tools is not open yet"}}</td></tr>
+    <tr><th scope="row">{{t "Base that reads the copies"}}</th><td data-label="{{t "Reads the clipboard"}}">{{t "yes: it is a trusted device of your group"}}</td><td data-label="{{t "Knows which of your devices talk, and when"}}">{{t "yes"}}</td><td data-label="{{t "Whose it is"}}">{{t "yours: a computer, or a phone while its app is open"}}</td></tr>
+    <tr><th scope="row">{{t "Base that only passes copies on"}}</th><td data-label="{{t "Reads the clipboard"}}">{{t "no: the copies are sealed past it"}}</td><td data-label="{{t "Knows which of your devices talk, and when"}}">{{t "yes"}}</td><td data-label="{{t "Whose it is"}}">{{t "yours: any computer of the group, a Raspberry Pi say"}}</td></tr>
+    <tr><th scope="row">{{t "Connection server"}}</th><td data-label="{{t "Reads the clipboard"}}">{{t "no"}}</td><td data-label="{{t "Knows which of your devices talk, and when"}}">{{t "no: it sees only the addresses, timing and sizes of the encrypted packets it passes to your base"}}</td><td data-label="{{t "Whose it is"}}">{{t "yours, or the project's at cbb.tools"}}</td></tr>
+    <tr><th scope="row">{{t "Backup server"}}</th><td data-label="{{t "Reads the clipboard"}}">{{t "no"}}</td><td data-label="{{t "Knows which of your devices talk, and when"}}">{{t "yes"}}</td><td data-label="{{t "Whose it is"}}">{{t "yours, or the project's at cbb.tools"}}</td></tr>
     </tbody>
   </table>
   </div></div>
@@ -34,8 +34,8 @@
   <h2 id="programs">{{t "What the programs send"}}</h2>
   <ul>
     <li>{{t "Updates, when you turn them on (the installers and the Android app ask): a computer or the Android app asks GitHub whether there is a new version and downloads it from there, or from %s when GitHub does not answer. They see your address and that you use Copy Beyond Borders, nothing about your group." (code "dl.cbb.tools")}}</li>
-    <li>{{t "Once a day the group's root may fetch from %s the signed copy of Google's list of revoked Android keys. It is the same file for everyone." (code "cbb.tools")}}</li>
-    <li>{{t "Nothing reports crashes or usage, and the logs stay on each device."}}</li>
+    <li>{{t "Once a day the group's owner may fetch from %s the signed copy of Google's list of revoked Android keys. It is the same file for everyone." (code "cbb.tools")}}</li>
+    <li>{{t "Nothing reports usage, and the logs stay on each device. After a crash the app asks whether to send a report. Only if you allow it does the report go, anonymously and over HTTPS, to %s, sealed so that only the project can read it. It never holds what you copied, keys, device names or addresses, and the server does not log your address." (code "bug.cbb.tools")}}</li>
     <li>{{t "If you install the app from the App Store, Google Play, F-Droid, Homebrew or winget, that store knows you installed it, under its own privacy policy."}}</li>
     <li>{{t "Everything anyone outside your group can see, and how to avoid it: %s." (link (printf "/%s/docs/guide/privacy.html" .Lang.Code) (t "who sees what"))}}</li>
   </ul>
@@ -51,7 +51,7 @@
   </ul>
 
   <h2 id="contact">{{t "Who is responsible"}}</h2>
-  <p>{{t "Copy Beyond Borders is an open-source project of its maintainer, %s; there is no company behind it, and nobody sells or shares data, since there is none to share. Questions about this policy: %s. Every change to this page is public in %s." (link "https://github.com/HunterEwok" "HunterEwok") (link "https://github.com/HunterEwok/cbb/issues" (t "a GitHub issue")) (link "https://github.com/HunterEwok/cbb/commits/main/site/templates/privacy.html" (t "its history"))}}</p>
+  <p>{{t "Copy Beyond Borders is an open-source project of its maintainer, %s, in the United Kingdom; there is no company behind it, and nobody sells or shares data, since there is none to share. Questions about this policy: %s. Every change to this page is public in %s." (link "https://github.com/HunterEwok" "HunterEwok") (link "https://github.com/HunterEwok/cbb/issues" (t "a GitHub issue")) (link "https://github.com/HunterEwok/cbb/commits/main/site/templates/privacy.html" (t "its history"))}}</p>
 
   <h2>{{t "Found a problem?"}}</h2>
   <p>{{t "Please report a vulnerability privately, as %s describes, and not in a public issue." (link "https://github.com/HunterEwok/cbb/blob/main/SECURITY.md" "SECURITY.md")}}</p>

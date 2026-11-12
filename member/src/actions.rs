@@ -413,8 +413,12 @@ pub struct Entry {
     pub reason: String,
 }
 
-/// Adds an entry to the log in dir, keeping the last LOG_SIZE.
+/// Adds an entry to the log in dir, keeping the last LOG_SIZE. The actions
+/// of several senders run at once, so the read and the write go under one
+/// lock, or one entry would overwrite another.
 pub fn append(dir: &Path, e: Entry) -> Result<()> {
+    static LOG: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _one = LOG.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let mut es = read_log(dir).unwrap_or_default();
     es.push(e);
     if es.len() > LOG_SIZE {

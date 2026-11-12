@@ -33,6 +33,8 @@ enum Control {
         /// own pause of receiving, and for how long, nil for until ended.
         var device: String?
         var forMS: Int64?
+        /// sync: on or off.
+        var on: Bool?
         /// A watch request: the app pastes images, files and formatted
         /// text too. paste-media: the copy of a remote paste, and its
         /// answers' parts.
@@ -42,8 +44,14 @@ enum Control {
         var value: String?
         var part: Part?
 
+        /// view and arrange (docs/apps.md, "What the member shows"): the
+        /// tiles to draw, and the user's change.
+        var view: View?
+        var arrange: Change?
+
         enum CodingKeys: String, CodingKey {
-            case op, kind, len, error, detail, done, name, status, devices, inject, seq, method, enter, refused, device
+            case op, kind, len, error, detail, done, name, status, devices, inject, seq, method, enter, refused, device, on
+            case view, arrange
             case images, files, html, value, part
             case pasteOnly = "paste_only"
             case forMS = "for_ms"
@@ -61,6 +69,43 @@ enum Control {
         var path: String?
         var dir: Bool?
         var size: Int64?
+    }
+
+    /// The member's tiles in the user's order (docs/apps.md, "What the
+    /// member shows"): each a device or a collection of devices.
+    struct View: Codable, Equatable {
+        struct Collection: Codable, Equatable {
+            var id: String
+            var name: String
+            var devices: [Device]?
+        }
+
+        struct Tile: Codable, Equatable {
+            var device: Device?
+            var collection: Collection?
+        }
+
+        var tiles: [Tile]?
+        var online: Int?
+        var others: Int?
+        var custom: Bool?
+    }
+
+    /// The user's change of the tiles, as arrange takes it
+    /// (cbb_core::arrange::Op).
+    struct Change: Codable, Equatable {
+        struct Ref: Codable, Equatable {
+            var device: String?
+            var collection: String?
+        }
+
+        var op: String
+        var item: Ref?
+        var before: Ref?
+        var device: String?
+        var collection: String?
+        var name: String?
+        var devices: [String]?
     }
 
     /// This device and its group, as cbb status shows them.
@@ -93,9 +138,16 @@ enum Control {
         /// The newest signed release the group passed around, when this Mac
         /// runs an older one.
         var update: String?
+        /// Why this Mac does not sync, the reason that stops the most first
+        /// (docs/apps.md, "Why it does not sync"); nil when everything
+        /// syncs.
+        var why: [WhyReason]?
+        /// The service broke and started again, and its bug report waits
+        /// for the user's answer (docs/core-api.md, "Bug reports").
+        var bug: Bool?
 
         enum CodingKeys: String, CodingKey {
-            case device, group, removed, role, os, away, version, mode, stop, claims, conflicts, newer, muted, update
+            case device, group, removed, role, os, away, version, mode, stop, claims, conflicts, newer, muted, update, why, bug
             case syncUntilMS = "sync_until_ms"
             case mutedUntilMS = "muted_until_ms"
         }
@@ -258,13 +310,55 @@ enum Control {
         guard payload.count <= maxPayload else { throw Failure.broken("the text is larger than 1 MiB") }
         var h = header
         h.len = payload.count
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .sortedKeys
-        var data = try encoder.encode(h)
+        var data = try envelope(JSONEncoder().encode(h))
         guard data.count <= maxHeader else { throw Failure.broken("header too long") }
         data.append(UInt8(ascii: "\n"))
         data.append(payload)
         return data
+    }
+
+    /// The fields of an answer that stand beside its ok, not in it.
+    static let answerFields = ["error", "detail", "details", "done", "len", "seq"]
+    /// The fields of a request or a message that stand beside its args.
+    static let requestFields = ["len", "seq"]
+
+    /// The header flat as Header encodes it, put as it goes on the wire: a
+    /// request or a watcher's message as {"op", "args", "len", "seq"}, an
+    /// answer as {"ok", "len", "seq", "done"} or {"error", "detail", "seq",
+    /// "done"}, the
+    /// envelope of cbb_member_call (docs/core-api.md, "Operations").
+    static func envelope(_ flat: Data) throws -> Data {
+        guard var fields = try JSONSerialization.jsonObject(with: flat) as? [String: Any] else {
+            throw Failure.broken("bad header")
+        }
+        let op = fields.removeValue(forKey: "op") as? String ?? ""
+        var out: [String: Any] = [:]
+        if op.isEmpty || op == "reply" {
+            for k in answerFields { if let v = fields.removeValue(forKey: k) { out[k] = v } }
+            if out["error"] == nil { out["ok"] = fields }
+        } else {
+            for k in requestFields { if let v = fields.removeValue(forKey: k) { out[k] = v } }
+            out["op"] = op
+            out["args"] = fields
+        }
+        return try JSONSerialization.data(withJSONObject: out, options: [.sortedKeys, .withoutEscapingSlashes])
+    }
+
+    /// The header flat, for Header to decode, that the envelope line carries.
+    static func unwrapEnvelope(_ line: Data) throws -> Data {
+        guard let outer = try JSONSerialization.jsonObject(with: line) as? [String: Any] else {
+            throw Failure.broken("bad header: not an object")
+        }
+        var fields: [String: Any]
+        if let op = outer["op"] {
+            fields = outer["args"] as? [String: Any] ?? [:]
+            fields["op"] = op
+        } else {
+            fields = outer["ok"] as? [String: Any] ?? [:]
+            fields["op"] = "reply"
+        }
+        for k in answerFields { if let v = outer[k] { fields[k] = v } }
+        return try JSONSerialization.data(withJSONObject: fields)
     }
 
     /// The first message in data, and how many bytes it took; nil while
@@ -276,7 +370,7 @@ enum Control {
         }
         let header: Header
         do {
-            header = try JSONDecoder().decode(Header.self, from: data[data.startIndex..<newline])
+            header = try JSONDecoder().decode(Header.self, from: unwrapEnvelope(Data(data[data.startIndex..<newline])))
         } catch {
             throw Failure.broken("bad header: \(error)")
         }

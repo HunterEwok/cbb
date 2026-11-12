@@ -188,17 +188,29 @@ func TestInvite(t *testing.T) {
 		t.Errorf("the deck is in group %q", st.Group)
 	}
 
-	// The invitation is used up: its guest tunnel went once the deck had
-	// its own, so a copy of it does not even reach the hub.
+	// The invitation is used up: the hub refuses a copy of it, and its
+	// guest tunnel goes once the deck's last connection through it ends,
+	// after which a copy does not even reach the hub.
 	other := startService(t, &h, "other")
-	o := other.dial(t)
-	defer o.Close()
-	o.SetDeadline(time.Now().Add(60 * time.Second))
-	if _, err := o.Do(&control.Message{Header: control.Header{Op: control.OpJoin, Invite: text, Consent: true}}); err != nil {
-		t.Fatal(err) // the fingerprint, before it tries
+	join := func() error {
+		o := other.dial(t)
+		defer o.Close()
+		o.SetDeadline(time.Now().Add(60 * time.Second))
+		if _, err := o.Do(&control.Message{Header: control.Header{Op: control.OpJoin, Invite: text, Consent: true}}); err != nil {
+			t.Fatal(err) // the fingerprint, before it tries
+		}
+		_, err := o.Receive()
+		return err
 	}
-	if _, err := o.Receive(); err == nil || !strings.Contains(err.Error(), "did not answer") {
-		t.Errorf("a used invitation: %v, want the hub not answering", err)
+	for deadline := time.Now().Add(90 * time.Second); ; {
+		err := join()
+		if err != nil && strings.Contains(err.Error(), "did not answer") {
+			break
+		}
+		if err == nil || !strings.Contains(err.Error(), "window is closed") || time.Now().After(deadline) {
+			t.Fatalf("a used invitation: %v, want the hub not answering", err)
+		}
+		time.Sleep(time.Second)
 	}
 	if st := other.status(t); st.Group != "" {
 		t.Errorf("another device joined with a used invitation: %+v", st)

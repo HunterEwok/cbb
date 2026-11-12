@@ -42,7 +42,7 @@ var is = sync.OnceValue(func() bool {
 })
 
 // sameFile tells whether a and b name one path once their links are
-// resolved, as the lite member's rootless::is compares them, so that a
+// resolved, as the Rust cbb's rootless::is compares them, so that a
 // linked ~/.local or ~/.local/bin still counts.
 func sameFile(a, b string) bool {
 	if p, err := filepath.EvalSymlinks(a); err == nil {

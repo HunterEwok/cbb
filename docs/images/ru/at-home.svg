@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!-- Drawn by tools/diagrams/diagrams.py; edit it there. -->
-<svg xmlns="http://www.w3.org/2000/svg" lang="ru" width="775" height="250" viewBox="0 0 775 250" role="img" aria-label="Дома каждое устройство общается с каждым другим напрямую">
+<svg xmlns="http://www.w3.org/2000/svg" lang="ru" width="782" height="250" viewBox="0 0 782 250" role="img" aria-label="Дома каждое устройство общается с каждым другим напрямую">
 <title>Дома каждое устройство общается с каждым другим напрямую</title>
 <style>
   .bg { fill: none; }
@@ -42,7 +42,7 @@
     .lbl-bg { fill: #0d1117; stroke: #3d444d; }
   }
 </style>
-<rect class="zone" x="10" y="10" width="755" height="200" rx="14"/>
+<rect class="zone" x="10" y="10" width="762" height="200" rx="14"/>
 <text class="zone-t" x="26" y="34">Домашняя сеть</text>
 <g class="key"><rect class="card key" x="29.76249999999999" y="50.0" width="152.3" height="64" rx="10"/><g transform="translate(41.76249999999999,68)" class="ic"><rect x="8" y="2" width="12" height="24" rx="2.5"/><line x1="12.5" y1="22.5" x2="15.5" y2="22.5"/></g><text class="t" x="79.76249999999999" y="78">Телефон</text><text class="s" x="79.76249999999999" y="96">с приложением</text><rect class="badge" x="127.6625" y="41.0" width="46.400000000000006" height="18" rx="9"/><text class="badge-t" x="150.8625" y="54.0" text-anchor="middle">КОРЕНЬ</text></g>
 <path class="e-home" d="M105.9125,114.0 L105.9125,150"/>
@@ -50,10 +50,10 @@
 <path class="e-home" d="M281.0625,108.0 L281.0625,150"/>
 <g class=""><rect class="card " x="380.0625" y="56.0" width="174.875" height="52" rx="10"/><g transform="translate(392.0625,68)" class="ic"><rect x="3" y="4" width="22" height="15" rx="1.5"/><line x1="14" y1="19" x2="14" y2="24"/><line x1="9" y1="24" x2="19" y2="24"/></g><text class="t" x="430.0625" y="87">Настольный ПК</text></g>
 <path class="e-home" d="M467.5,108.0 L467.5,150"/>
-<g class=""><rect class="card " x="578.9375" y="50.0" width="166.3" height="64" rx="10"/><g transform="translate(590.9375,68)" class="ic"><rect x="4" y="7" width="20" height="14" rx="1.5"/><rect x="9" y="11" width="6" height="6"/><line x1="7" y1="4" x2="7" y2="7"/><line x1="11" y1="4" x2="11" y2="7"/><line x1="15" y1="4" x2="15" y2="7"/><line x1="19" y1="4" x2="19" y2="7"/></g><text class="t" x="628.9375" y="78">Raspberry Pi</text><text class="s" x="628.9375" y="96">лёгкий участник</text></g>
-<path class="e-home" d="M662.0875,114.0 L662.0875,150"/>
-<path class="e-home" d="M105.9125,150 L662.0875,150"/>
-<text class="note" x="387.5" y="236" text-anchor="middle">Сервера посередине нет: любое устройство может быть выключено, остальные продолжают синхронизироваться.</text>
-<rect class="lbl-bg" x="139.1" y="161.0" width="496.9" height="22" rx="11.0"/>
-<text class="lbl home" x="387.5" y="176.0" text-anchor="middle">прямые зашифрованные соединения, устройства находят друг друга по mDNS</text>
+<g class=""><rect class="card " x="578.9375" y="50.0" width="173.3" height="64" rx="10"/><g transform="translate(590.9375,68)" class="ic"><rect x="4" y="7" width="20" height="14" rx="1.5"/><rect x="9" y="11" width="6" height="6"/><line x1="7" y1="4" x2="7" y2="7"/><line x1="11" y1="4" x2="11" y2="7"/><line x1="15" y1="4" x2="15" y2="7"/><line x1="19" y1="4" x2="19" y2="7"/></g><text class="t" x="628.9375" y="78">Raspberry Pi</text><text class="s" x="628.9375" y="96">малое устройство</text></g>
+<path class="e-home" d="M665.5875,114.0 L665.5875,150"/>
+<path class="e-home" d="M105.9125,150 L665.5875,150"/>
+<text class="note" x="391.0" y="236" text-anchor="middle">Сервера посередине нет: любое устройство может быть выключено, остальные продолжают синхронизироваться.</text>
+<rect class="lbl-bg" x="142.6" y="161.0" width="496.9" height="22" rx="11.0"/>
+<text class="lbl home" x="391.0" y="176.0" text-anchor="middle">прямые зашифрованные соединения, устройства находят друг друга по mDNS</text>
 </svg>

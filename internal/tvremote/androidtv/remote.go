@@ -225,9 +225,6 @@ func (r *Remote) Err() error {
 	return r.err
 }
 
-// Done is closed when the connection ends.
-func (r *Remote) Done() <-chan struct{} { return r.done }
-
 // Close ends the connection.
 func (r *Remote) Close() error {
 	err := r.conn.Close()

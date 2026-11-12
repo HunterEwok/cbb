@@ -24,7 +24,6 @@ import (
 
 	"github.com/HunterEwok/cbb/internal/atomicfile"
 	"github.com/HunterEwok/cbb/internal/authority"
-	"github.com/HunterEwok/cbb/internal/core"
 	"github.com/HunterEwok/cbb/internal/strict"
 )
 
@@ -375,14 +374,13 @@ type parsed struct {
 	r  Record
 }
 
-// State returns what the records say (docs/protocol.md, section 10, "The state"),
-// from the Rust core when the build links it.
+// State returns what the records say (docs/protocol.md, section 10, "The state").
 func (s *Records) State() *authority.State {
 	now := s.now()
 	if s.st != nil && (len(s.st.Claims) == 0 || now.Sub(s.at) < time.Second) {
 		return s.st
 	}
-	st, err := core.Evaluate(authority.Input{
+	st, err := authority.Evaluate(authority.Input{
 		GroupCA:   s.groupCA,
 		Group:     s.tag,
 		Records:   s.All(),
@@ -744,8 +742,9 @@ func (s *Records) MayHost(dev DeviceID) bool {
 // HubOrder returns the devices that may be the group's hubs, in the order
 // in which they serve (docs/protocol.md, section 11, "Several hubs"):
 // first the main hubs of the hubs table, in its order, then the others:
-// the phones, whose keys are in hardware, then the computers that are the
-// root or admins, then the devices that only pass copies on, and in each
+// the computers that are the root or admins, which stay on, then the
+// phones, hubs only while their app is open, then the devices that only
+// pass copies on, and in each
 // part the root's own device first, then by device ID.
 func (s *Records) HubOrder() []DeviceID {
 	root, key := s.RootMember()
@@ -754,7 +753,7 @@ func (s *Records) HubOrder() []DeviceID {
 	}
 	type hub struct {
 		id   DeviceID
-		part int // 0 a phone, 1 a trusted computer, 2 one that only passes copies on
+		part int // 0 a trusted computer, 1 a phone, 2 one that only passes copies on
 	}
 	var hubs []hub
 	for _, d := range s.Devices() {
@@ -762,9 +761,9 @@ func (s *Records) HubOrder() []DeviceID {
 		switch {
 		case !d.MayHub():
 		case (trusted || d.ForwardOnly) && d.Role == RolePhone:
-			hubs = append(hubs, hub{d.ID, 0})
-		case trusted:
 			hubs = append(hubs, hub{d.ID, 1})
+		case trusted:
+			hubs = append(hubs, hub{d.ID, 0})
 		case d.ForwardOnly:
 			hubs = append(hubs, hub{d.ID, 2})
 		}

@@ -64,7 +64,7 @@ pub unsafe extern "C" fn cbb_call(request: *const u8, len: usize, answer_len: *m
         // SAFETY: the caller gives len readable bytes at request, not null.
         unsafe { core::slice::from_raw_parts(request, len) }
     };
-    let answer = cbb_core::api::call(req).into_boxed_slice();
+    let answer = guard::answer(|| cbb_core::api::call(req)).into_boxed_slice();
     // SAFETY: the caller gives a writable size_t at answer_len, not null.
     unsafe { answer_len.write(answer.len()) };
     Box::into_raw(answer).cast::<u8>()
@@ -84,6 +84,46 @@ pub unsafe extern "C" fn cbb_free(answer: *mut u8, len: usize) {
     }
     // SAFETY: answer and len are a boxed slice cbb_call let go of.
     drop(unsafe { Box::from_raw(core::ptr::slice_from_raw_parts_mut(answer, len)) });
+}
+
+pub mod guard;
+
+/// The answer of the last panic this library caught, for a function that
+/// could only answer null (docs/core-api.md, "Panics"), given back with
+/// `cbb_free`; null when nothing panicked or `answer_len` is null.
+///
+/// # Safety
+///
+/// `answer_len` must be null or point to a writable `size_t`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_last_panic(answer_len: *mut usize) -> *mut u8 {
+    match guard::last_answer() {
+        Some(a) if !answer_len.is_null() => {
+            let a = a.into_boxed_slice();
+            // SAFETY: the caller gives a writable size_t at answer_len, not null.
+            unsafe { answer_len.write(a.len()) };
+            Box::into_raw(a).cast::<u8>()
+        }
+        _ => core::ptr::null_mut(),
+    }
+}
+
+/// Panics inside the guard and answers it, code 5, given back with
+/// `cbb_free`: the wrappers' tests check that a panic is an answer and the
+/// app goes on.
+///
+/// # Safety
+///
+/// `answer_len` must point to a writable `size_t`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_test_panic(answer_len: *mut usize) -> *mut u8 {
+    if answer_len.is_null() {
+        return core::ptr::null_mut();
+    }
+    let a = guard::test_panic().into_boxed_slice();
+    // SAFETY: the caller gives a writable size_t at answer_len, not null.
+    unsafe { answer_len.write(a.len()) };
+    Box::into_raw(a).cast::<u8>()
 }
 
 #[cfg(feature = "member")]
@@ -137,7 +177,7 @@ pub unsafe extern "C" fn cbb_qr_read(
     let len = stride.saturating_mul(height.saturating_sub(1)).saturating_add(width);
     // SAFETY: the caller gives that many readable bytes at gray.
     let frame = unsafe { core::slice::from_raw_parts(gray, len) };
-    to_c(qr::read(frame, width, height, stride), answer_len)
+    to_c(guard::answer(|| qr::read(frame, width, height, stride)), answer_len)
 }
 
 /// Makes a group with the app's root key (src/join.rs, new_group):
@@ -162,7 +202,7 @@ pub unsafe extern "C" fn cbb_group_new(
     }
     // SAFETY: the caller gives len readable bytes at request.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
-    to_c(join::new_group(req, sign, ctx as usize), answer_len)
+    to_c(guard::answer(|| join::new_group(req, sign, ctx as usize)), answer_len)
 }
 
 /// A joiner that listens with the app's key (src/join.rs): `request` is
@@ -189,7 +229,7 @@ pub unsafe extern "C" fn cbb_join_new(
     }
     // SAFETY: the caller gives len readable bytes at request.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
-    let (j, ans) = join::Join::new(req, sign, ctx as usize, None);
+    let (j, ans) = guard::or(|| (None, guard::panicked()), || join::Join::new(req, sign, ctx as usize, None));
     // SAFETY: the caller gives a writable pointer at answer.
     unsafe { answer.write(to_c(ans, answer_len)) };
     j.map_or(core::ptr::null_mut(), |j| Box::into_raw(Box::new(j)))
@@ -223,7 +263,10 @@ pub unsafe extern "C" fn cbb_join_new_admin(
     }
     // SAFETY: the caller gives len readable bytes at request.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
-    let (j, ans) = join::Join::new(req, sign, ctx as usize, Some((admin_sign, admin_ctx as usize)));
+    let (j, ans) = guard::or(
+        || (None, guard::panicked()),
+        || join::Join::new(req, sign, ctx as usize, Some((admin_sign, admin_ctx as usize))),
+    );
     // SAFETY: the caller gives a writable pointer at answer.
     unsafe { answer.write(to_c(ans, answer_len)) };
     j.map_or(core::ptr::null_mut(), |j| Box::into_raw(Box::new(j)))
@@ -240,7 +283,7 @@ pub unsafe extern "C" fn cbb_join_new_admin(
 pub unsafe extern "C" fn cbb_join_accept(j: *mut join::Join, answer_len: *mut usize) -> *mut u8 {
     // SAFETY: as the function's contract says.
     let Some(j) = (unsafe { j.as_mut() }) else { return core::ptr::null_mut() };
-    to_c(j.accept(), answer_len)
+    to_c(guard::answer(|| j.accept()), answer_len)
 }
 
 /// Passes the `len` bytes at `data` that arrived on the attempt's
@@ -271,7 +314,7 @@ pub unsafe extern "C" fn cbb_join_feed(
         // SAFETY: the caller gives len readable bytes at data.
         unsafe { core::slice::from_raw_parts(data, len) }
     };
-    to_c(j.feed(input, now_ms), answer_len)
+    to_c(guard::answer(|| j.feed(input, now_ms)), answer_len)
 }
 
 /// Ends a joined attempt: `saved` nonzero when the app stored the result.
@@ -284,7 +327,7 @@ pub unsafe extern "C" fn cbb_join_feed(
 pub unsafe extern "C" fn cbb_join_finish(j: *mut join::Join, saved: i32, answer_len: *mut usize) -> *mut u8 {
     // SAFETY: as the function's contract says.
     let Some(j) = (unsafe { j.as_mut() }) else { return core::ptr::null_mut() };
-    to_c(j.finish(saved != 0), answer_len)
+    to_c(guard::answer(|| j.finish(saved != 0)), answer_len)
 }
 
 /// Announces the joiner by mDNS while the app listens on `port`, until it
@@ -298,7 +341,7 @@ pub unsafe extern "C" fn cbb_join_finish(j: *mut join::Join, saved: i32, answer_
 pub unsafe extern "C" fn cbb_join_announce(j: *mut join::Join, port: u16) -> i32 {
     // SAFETY: as the function's contract says.
     let Some(j) = (unsafe { j.as_mut() }) else { return 0 };
-    i32::from(j.announce(port))
+    i32::from(guard::or(|| false, || j.announce(port)))
 }
 
 /// Whether the hub of the invitation the joiner joins by has answered
@@ -327,7 +370,7 @@ pub unsafe extern "C" fn cbb_join_answered(j: *const join::Join) -> i32 {
 pub unsafe extern "C" fn cbb_join_free(j: *mut join::Join) {
     if !j.is_null() {
         // SAFETY: j is a box cbb_join_new let go of.
-        drop(unsafe { Box::from_raw(j) });
+        guard::or(|| (), || drop(unsafe { Box::from_raw(j) }));
     }
 }
 
@@ -358,7 +401,7 @@ pub unsafe extern "C" fn cbb_member_start(
     }
     // SAFETY: the caller gives len readable bytes at request.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
-    let (m, ans) = member::Member::start(req, sign, event, ctx as usize);
+    let (m, ans) = guard::or(|| (None, guard::panicked()), || member::Member::start(req, sign, event, ctx as usize));
     // SAFETY: the caller gives a writable pointer at answer.
     unsafe { answer.write(to_c(ans, answer_len)) };
     m.map_or(core::ptr::null_mut(), |m| Box::into_raw(Box::new(m)))
@@ -416,7 +459,7 @@ pub unsafe extern "C" fn cbb_member_call(
     }
     // SAFETY: the caller gives len readable bytes at request.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
-    to_c(m.call(req), answer_len)
+    to_c(guard::answer(|| m.call(req)), answer_len)
 }
 
 /// Signs an admin's change to a device of the group, or a command for it
@@ -447,7 +490,7 @@ pub unsafe extern "C" fn cbb_member_manage(
     }
     // SAFETY: the caller gives len readable bytes at request.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
-    to_c(m.manage(req, sign, ctx as usize), answer_len)
+    to_c(guard::answer(|| m.manage(req, sign, ctx as usize)), answer_len)
 }
 
 /// Starts admitting a device by its QR code, as an admin of the group
@@ -479,7 +522,7 @@ pub unsafe extern "C" fn cbb_admit_new(
     let Some(m) = (unsafe { m.as_ref() }) else { return core::ptr::null_mut() };
     // SAFETY: the caller gives len readable bytes at request.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
-    let (a, ans) = m.admit(req, sign, ctx as usize);
+    let (a, ans) = guard::or(|| (None, guard::panicked()), || m.admit(req, sign, ctx as usize));
     // SAFETY: the caller gives a writable pointer at answer.
     unsafe { answer.write(to_c(ans, answer_len)) };
     a.map_or(core::ptr::null_mut(), |a| Box::into_raw(Box::new(a)))
@@ -498,7 +541,7 @@ pub unsafe extern "C" fn cbb_admit_new(
 pub unsafe extern "C" fn cbb_admit_dial(a: *mut admit::Admit, answer_len: *mut usize) -> *mut u8 {
     // SAFETY: as the function's contract says.
     let Some(a) = (unsafe { a.as_mut() }) else { return core::ptr::null_mut() };
-    to_c(a.dial(), answer_len)
+    to_c(guard::answer(|| a.dial()), answer_len)
 }
 
 /// Passes the `len` bytes at `data` that arrived on the connection; `now_ms`
@@ -531,7 +574,7 @@ pub unsafe extern "C" fn cbb_admit_feed(
         // SAFETY: the caller gives len readable bytes at data.
         unsafe { core::slice::from_raw_parts(data, len) }
     };
-    to_c(a.feed(input, now_ms), answer_len)
+    to_c(guard::answer(|| a.feed(input, now_ms)), answer_len)
 }
 
 /// Frees an admission; null does nothing.
@@ -544,7 +587,7 @@ pub unsafe extern "C" fn cbb_admit_feed(
 pub unsafe extern "C" fn cbb_admit_free(a: *mut admit::Admit) {
     if !a.is_null() {
         // SAFETY: a is a box cbb_admit_new let go of.
-        drop(unsafe { Box::from_raw(a) });
+        guard::or(|| (), || drop(unsafe { Box::from_raw(a) }));
     }
 }
 
@@ -657,7 +700,7 @@ pub unsafe extern "C" fn cbb_member_stop(m: *mut member::Member) {
     if !m.is_null() {
         // SAFETY: m is a box cbb_member_start let go of and nothing frees.
         let m = unsafe { &*m };
-        m.stop();
+        guard::or(|| (), || m.stop());
     }
 }
 
@@ -678,7 +721,7 @@ pub unsafe extern "C" fn cbb_tunnel(request: *const u8, len: usize, answer_len: 
     }
     // SAFETY: the caller gives len readable bytes at request, not null.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
-    to_c(tunnel::call(req), answer_len)
+    to_c(guard::answer(|| tunnel::call(req)), answer_len)
 }
 
 /// Registers a hub of `cbb_tunnel` with the group's forwarder (src/tunnel.rs
@@ -704,7 +747,7 @@ pub unsafe extern "C" fn cbb_tunnel_register(
     }
     // SAFETY: the caller gives len readable bytes at request, not null.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
-    to_c(tunnel::register(req, sign, ctx as usize), answer_len)
+    to_c(guard::answer(|| tunnel::register(req, sign, ctx as usize)), answer_len)
 }
 
 /// Links the phone to the group's blind relay (src/tunnel.rs tells the
@@ -731,7 +774,7 @@ pub unsafe extern "C" fn cbb_tunnel_relay(
     }
     // SAFETY: the caller gives len readable bytes at request, not null.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
-    to_c(tunnel::relay_start(req, sign, event, ctx as usize), answer_len)
+    to_c(guard::answer(|| tunnel::relay_start(req, sign, event, ctx as usize)), answer_len)
 }
 
 /// Makes a relay link of `cbb_tunnel_relay` register with the group's
@@ -757,7 +800,7 @@ pub unsafe extern "C" fn cbb_tunnel_relay_credentials(
     }
     // SAFETY: the caller gives len readable bytes at request, not null.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
-    to_c(tunnel::relay_credentials(req, sign, ctx as usize), answer_len)
+    to_c(guard::answer(|| tunnel::relay_credentials(req, sign, ctx as usize)), answer_len)
 }
 
 #[cfg(test)]

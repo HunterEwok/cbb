@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! What the lite member keeps for remote paste (docs/design.md, "Remote
+//! What cbb keeps for remote paste (docs/design.md, "Remote
 //! paste"), as the full member's internal/remotepaste, in the same files:
 //! the switches its own user sets, the cleaning of a text before it goes
 //! in, the limits per sender and the log of the last pastes.
@@ -167,8 +167,12 @@ pub struct Entry {
     pub reason: String,
 }
 
-/// Adds an entry to the log in dir, keeping the last LOG_SIZE.
+/// Adds an entry to the log in dir, keeping the last LOG_SIZE. The pastes
+/// of several senders run at once, so the read and the write go under one
+/// lock, or one entry would overwrite another.
 pub fn append(dir: &Path, e: Entry) -> Result<()> {
+    static LOG: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _one = LOG.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let mut es = read_log(dir).unwrap_or_default();
     es.push(e);
     if es.len() > LOG_SIZE {
@@ -248,6 +252,28 @@ mod tests {
         }
         let es = read_log(&dir).unwrap();
         assert_eq!((es.len(), es[0].time_ms), (LOG_SIZE, 5));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn keeps_every_entry_of_pastes_at_once() {
+        let dir = std::env::temp_dir().join(format!("cbb-remotepaste-at-once-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let threads: Vec<_> = (0..8)
+            .map(|i| {
+                let dir = dir.clone();
+                std::thread::spawn(move || {
+                    for j in 0..5 {
+                        let e = Entry { time_ms: i * 10 + j, result: "done".into(), ..Default::default() };
+                        append(&dir, e).unwrap();
+                    }
+                })
+            })
+            .collect();
+        for t in threads {
+            t.join().unwrap();
+        }
+        assert_eq!(read_log(&dir).unwrap().len(), 40);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

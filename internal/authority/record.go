@@ -5,7 +5,7 @@
 // records of version 2 (docs/records-v2.md): the record, its closed
 // canonical body, its signature, and the one rule that turns a set of
 // records into the group's state. It depends on no other part of the
-// service, so the lite member's Rust core and Go can be compared on the
+// service, so the Rust core and Go can be compared on the
 // same vectors.
 package authority
 

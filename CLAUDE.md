@@ -13,7 +13,9 @@ page by its reader, and CONTRIBUTING's "Documentation" says where a change is wr
 
 - Talk to the owner in **Russian**. Everything in the repository is **English**: code,
   comments, docs, commit messages, PRs. The only exception is the apps' translations
-  (`*.xcstrings`, Android `values-xx/strings.xml`, the command line's `member/l10n/*.json`);
+  (`apps/l10n/*.json`, from which `tools/strings` writes the `*.xcstrings`, Android
+  `values-xx/strings.xml`, Aurora's `.ts` and the tray's `l10n/*.json`; the command line's
+  `member/l10n/*.json`);
   `tools/repocheck` enforces it.
 - Work through a task list in order without stopping to ask; ask only when a decision is
   genuinely the owner's.
@@ -35,7 +37,7 @@ page by its reader, and CONTRIBUTING's "Documentation" says where a change is wr
 
 ## Build and test
 
-The commands for every part (Go, the lite member in Rust, the Android app, the phone kit, the
+The commands for every part (Go, the Rust `cbb`, the Android app, the phone kit, the
 cross tests between Go, Swift and Kotlin, the iPhone app) are in
 [CONTRIBUTING.md](CONTRIBUTING.md), "Development"; run the ones for what you changed before
 pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH` may be older.
@@ -54,8 +56,8 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
 - Remote paste targets, each a `connector.Target`: `internal/desktop/x11paste.go` (XTEST),
   `waylandpaste.go` (the virtual keyboard), `portal.go` (the RemoteDesktop portal on GNOME and KDE,
   keys through `internal/ei`, the ei protocol, with `ei/eitest` an EIS server for tests), `internal/uinput`
-  (`cbb paste-helper uinput`, the opt-in keys helper the desktop connector asks for Shift+Insert), `internal/tmuxpaste` (`cbb paste-helper tmux`),
-  `internal/consolepaste` (`cbb paste-helper console`, TIOCSTI); `internal/lockcheck` tells
+  (`cbb paste-helper uinput`, the opt-in keys helper the desktop connector asks for Shift+Insert), `member/src/pastehelper.rs` (`cbb paste-helper tmux` and
+  `console`, TIOCSTI); `internal/lockcheck` tells
   them a locked session.
 - `internal/keyboard`: the Bluetooth keyboards' layouts (the same as `cbb_core::keyboard` and the
   Android kit's `Keyboard`, all checked against `testdata/interop/keyboard.json`);
@@ -82,7 +84,7 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   forwarder, for networks that block WireGuard: the forwarder's side passes every packet to its
   own UDP port, the client's side is a local UDP port for WireGuard (docs/protocol.md,
   sections 11 and 13).
-- `ffi/src/tunnel.rs`: the phones' tunnel to the hub, the lite member's WireGuard in the app's
+- `ffi/src/tunnel.rs`: the phones' tunnel to the hub, the Rust member's WireGuard in the app's
   process (`cbb_tunnel`, `cbb_tunnel_register`, `cbb_tunnel_relay`,
   `cbb_tunnel_relay_credentials`, feature `tunnel`), wrapped by the kits' `RustTunnel`: the
   client, the phone as the group's hub (registered with the forwarder, inside VLESS when its TCP
@@ -102,9 +104,9 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   `TLSTransport` (pairing), `KeychainIdentity`, `SecKeySigner`, `AwayFromHome` (sync away from
   home through `RustTunnel`); `cbb-interop` plays the phone in Go tests.
 - The Rust workspace (`Cargo.toml` at the top, its crates beside `cmd/` and `internal/`): `member/` is
-  the lite member in Rust (its command is `cbb` too): joins by a QR code,
+  `cbb` in Rust, the service and command line on computers and small devices: joins by a QR code,
   a member like the others, whose capabilities (`-caps`: `admin`, `dials`, `hub`) say what it does (mDNS TXT `r=listen` without `dials`). Its protocol core is the crate `core/` (`cbb_core`: `certs`,
-  `command` (the commands' bodies), `authority` (records `v:2` and their evaluation, docs/protocol.md section 10), `group` (the set of records `v:2` a member keeps), `api` (the one entry point, docs/core-api.md), `clip`, `hlc`, `wire`, `pair`, `identity`, `store`, `keyboard` (the layouts' keys), `rule` (which incoming copies are written), `vless` (VLESS and XHTTP's bytes for the lite member's tunnel), CPace under `src/third_party`, the
+  `command` (the commands' bodies), `authority` (records `v:2` and their evaluation, docs/protocol.md section 10), `group` (the set of records `v:2` a member keeps), `api` (the one entry point, docs/core-api.md), `clip`, `hlc`, `wire`, `pair`, `identity`, `store`, `keyboard` (the layouts' keys), `rule` (which incoming copies are written), `vless` (VLESS and XHTTP's bytes for cbb's tunnel), CPace under `src/third_party`, the
   interop vectors, and with the `tls` feature `tls`: rustls unbuffered with a RustCrypto
   provider, the peer checks, a sans-I/O `Session`, the pairing exporter from the key log;
   with `web` also `tls::web`, RSA and P-384 for a public site's certificate):
@@ -130,9 +132,9 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   pseudo-random generator, never for a real chip).
 - `embassy/`: the firmware's network code on embassy-net without the chip (`pair.rs`,
   joining by the phone over TCP), no_std; with the feature `host` the program `esp32-on-linux`
-  runs it on Linux over a TAP interface, for `TestEmbassyJoiner` (CI's `lite` job).
+  runs it on Linux over a TAP interface, for `TestEmbassyJoiner` (CI's `rust` job).
 - `apps/zxnext`: `.cbb`, the dot command for the ZX Spectrum Next in C for z88dk (`frame.c`
-  parses the frames of the lite member's `cbb next`, `link.c` drives the UART to the Next's Pi; `make test`
+  parses the frames of `cbb next`, `link.c` drives the UART to the Next's Pi; `make test`
   runs the parser's tests on the host).
 - `apps/harmony`: the app for HarmonyOS 5 and later (in development), ArkTS and ArkUI around
   the Rust core through a Node-API module (`entry/src/main/cpp`: `napi_init.cpp` over
@@ -175,19 +177,19 @@ an admin phone removes a lost root phone by taking the group over with `root` re
 `CoreMember.finishTakeover`; both kits' `RecordSet` asks the Rust core);
 a computer of a phone group can be an admin: the root phone's "Make it an admin" certifies
 the admin key its hello offers (`PhoneGroup.makeAdmin`, the `admin` message; Go's
-`Identity.AdminKey`/`AdminCA`); the lite member for Linux (`member/`), with
-the interop vectors and an e2e test among Go members, not yet run on a real Pi; the
+`Identity.AdminKey`/`AdminCA`); `cbb` in Rust on computers and small devices (`member/`), with
+the interop vectors and e2e tests, not yet run on a real Pi; the
 Android app (`apps/android`) does what the iPhone app does, receives copies by itself in a
 foreground service and sends them with the accessibility service or one tap, and each
 release carries its signed APK (docs/apps.md); Homebrew (`hunterewok/tap`); sync away
-from home between computers and for the lite member on Linux, through a hub's WireGuard
-tunnel (`cbb global`; `TestLiteMemberAway`).
+from home between computers and for small devices on Linux, through a hub's WireGuard
+tunnel (`cbb global`; `TestAloneMemberAway`).
 
 Next steps, roughly in order:
 
 1. TestFlight (needs the Apple account), a signed macOS `.pkg`, a run of remote invitations
    on real phones (built on every device, docs/protocol.md section 12; e2e through
-   `phone-on-linux`), the lite member on the ESP32 (see docs/roadmap.md).
+   `phone-on-linux`), `cbb` on the ESP32 (see docs/roadmap.md).
 
 Windows (the service, the agent, the installers) passes CI on windows-latest and runs in a
 Windows 11 virtual machine (Arm), where the tray app and the agent's clipboard work; not yet
