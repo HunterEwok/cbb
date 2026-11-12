@@ -5,8 +5,13 @@ package group
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/x509"
+	"errors"
+	"io"
 	"slices"
 	"strings"
 	"testing"
@@ -407,5 +412,53 @@ func TestGoCredentialVectors(t *testing.T) {
 		if _, err := CheckPresented(b.Set, now); err == nil {
 			t.Errorf("%s: taken", b.Name)
 		}
+	}
+}
+
+// failingSigner is a signer whose key or signature fails.
+type failingSigner struct {
+	pub     crypto.PublicKey
+	signErr error
+}
+
+func (s failingSigner) Public() crypto.PublicKey { return s.pub }
+func (s failingSigner) Sign(io.Reader, []byte, crypto.SignerOpts) ([]byte, error) {
+	return nil, s.signErr
+}
+
+// A credential is not signed with a key that does not marshal, a signer
+// that fails, or a body that breaks the rules.
+func TestCredentialSigningRefusals(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Unix(1_800_000_000, 0)
+	notAKey := struct{}{}
+	if _, err := SignPeriod("0123456789abcdef", "0123456789abcdef", notAKey, 1, now, key); err == nil {
+		t.Error("a period with a key that does not marshal was signed")
+	}
+	p := &CredentialBody{Group: "0123456789abcdef", Tag: "0123456789abcdef", ExpiresMS: now.Add(time.Hour).UnixMilli()}
+	if _, err := SignServer(p, notAKey, 1, key); err == nil {
+		t.Error("a server key that does not marshal was signed")
+	}
+	good, err := SignPeriod("0123456789abcdef", "0123456789abcdef", &key.PublicKey, 1, now, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := good.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SignCredential(*body, failingSigner{pub: notAKey}); err == nil {
+		t.Error("a signer whose key does not marshal signed")
+	}
+	if _, err := SignCredential(*body, failingSigner{pub: &key.PublicKey, signErr: errors.New("no")}); err == nil {
+		t.Error("a signer that fails signed")
+	}
+	bad := *body
+	bad.Type = "nothing"
+	if _, err := SignCredential(bad, key); err == nil {
+		t.Error("a body of no type was signed")
 	}
 }
