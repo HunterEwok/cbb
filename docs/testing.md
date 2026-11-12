@@ -179,7 +179,8 @@ starts whole. Several stands run side by side, each with its own name, folder an
 
 Once a day a line goes to `soak.log`: copies sent and checked, arrived and missed, kills, whole
 and broken starts, the delivery time of the checked copies (p50, p95, max over the slowest
-member), the largest RSS and open files, and how each member's memory and open files moved. A
+member, and each member's p95, to tell which one was slow; the members are asked in turn, so
+each time includes the asking before it), the largest RSS and open files, and how each member's memory and open files moved. A
 single sample of RSS swings by megabytes as large copies come and go, so memory is judged by
 floors: after an hour's warm-up (again after each restart) a member's samples, one every ten
 minutes, go into windows of an hour, and a window's floor is its least RSS and open files.

@@ -228,7 +228,9 @@ whole() {
 }
 
 # Waits until every member pastes text, at most wait_max seconds; adds the
-# slowest member's delivery time to delivery.ms. Fails with the members
+# slowest member's delivery time to delivery.ms, and each member's, as it
+# was first seen there (the members are asked in turn, so a time includes
+# the asking before it), to delivery.members. Fails with the members
 # that did not get it.
 arrives() { # text, sent at (ms)
 	text=$1
@@ -243,7 +245,11 @@ arrives() { # text, sent at (ms)
 	while [ -n "$left" ] && [ "$(secs)" -le "$end" ]; do
 		still=
 		for m in $left; do
-			[ "$(cli "$m" paste 2>/dev/null)" = "$text" ] || still="$still $m"
+			if [ "$(cli "$m" paste 2>/dev/null)" = "$text" ]; then
+				echo "$m $(($(ms) - sent))" >>"$dir/delivery.members"
+			else
+				still="$still $m"
+			fi
 		done
 		left=$still
 		[ -z "$left" ] || sleep 0.2
@@ -274,7 +280,7 @@ file_arrives() { # file, sent at (ms)
 			mkdir -p "$out"
 			if cli "$m" paste -o "$out" >/dev/null 2>&1 && [ -f "$out/$base" ] &&
 				[ "$(sha256sum "$out/$base" | cut -d' ' -f1)" = "$want" ]; then
-				:
+				echo "$m $(($(ms) - $2))" >>"$dir/delivery.members"
 			else
 				still="$still $m"
 			fi
@@ -303,6 +309,19 @@ percentiles() { # p50 p95 max of delivery.ms
 			printf "delivery_ms_p50=%d delivery_ms_p95=%d delivery_ms_max=%d", p50, p95, a[NR] }'
 	else
 		echo "delivery_ms_p50=- delivery_ms_p95=- delivery_ms_max=-"
+	fi
+}
+
+# Each member's delivery time p95, for reading: which member was slow.
+by_member() {
+	if [ -s "$dir/delivery.members" ]; then
+		sort -k1,1n -k2,2n "$dir/delivery.members" | awk '
+			function out() { if (n) { i = int(n * 0.95 + 0.999); s = s (s == "" ? "" : ",") m ":" v[i] } }
+			$1 != m { out(); m = $1; n = 0 }
+			{ v[++n] = $2 }
+			END { out(); print "delivery_ms_p95_by_member=" s }'
+	else
+		echo "delivery_ms_p95_by_member=-"
 	fi
 }
 
@@ -499,7 +518,7 @@ loop() {
 			days=$((days + 1))
 			sample >"$dir/usage" # here, not in $(...): it counts for the verdict
 			say "soak day=$days copies=$copies checked=$checked arrived=$arrived missed=$missed kills=$kills" \
-				"whole=$whole_n broken=$broken $(percentiles) $(cat "$dir/usage")"
+				"whole=$whole_n broken=$broken $(percentiles) $(by_member) $(cat "$dir/usage")"
 			next_day=$(($(secs) + day))
 		fi
 		save_counts
@@ -525,9 +544,9 @@ verdict() {
 	[ "${p95:-0}" -le "$p95_max" ] || why="$why delivery_ms_p95=$p95>$p95_max"
 	head=$(sed -n '1s/^[^ ]* //p' "$log")
 	if [ -z "$why" ]; then
-		echo "$(now) soak verdict PASS copies=$copies checked=$checked kills=$kills whole=$whole $(percentiles) $raw | $head"
+		echo "$(now) soak verdict PASS copies=$copies checked=$checked kills=$kills whole=$whole $(percentiles) $(by_member) $raw | $head"
 	else
-		echo "$(now) soak verdict FAIL$why $raw | $head"
+		echo "$(now) soak verdict FAIL$why $(by_member) $raw | $head"
 	fi
 }
 
