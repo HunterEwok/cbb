@@ -25,31 +25,31 @@ fn renames_and_removes_a_device() {
     let g = group(&["root", "desk", "lap"]);
     let (root, desk, lap) = (&g[0], &g[1], &g[2]);
     // The answer names the device as it was.
-    let m = root.ok(true, json!({"op": "rename", "name": "desk", "new_name": "work"}));
+    let m = root.ok(true, json!({"op": "rename", "device": "desk", "name": "work"}));
     assert_eq!((m.s("name"), m.done()), ("desk", true));
     desk.wait("desk learns its new name", |_| desk.find("work").is_some());
     // The same name signs nothing and still answers.
-    let m = root.ok(true, json!({"op": "rename", "name": "WORK", "new_name": "work"}));
+    let m = root.ok(true, json!({"op": "rename", "device": "WORK", "name": "work"}));
     assert_eq!(m.s("name"), "work");
-    has(&root.err(true, json!({"op": "rename", "name": "work", "new_name": " "})), "1 to 64 characters");
-    has(&root.err(true, json!({"op": "rename", "name": "nobody", "new_name": "x"})), "no device \"nobody\"");
+    has(&root.err(true, json!({"op": "rename", "device": "work", "name": " "})), "1 to 64 characters");
+    has(&root.err(true, json!({"op": "rename", "device": "nobody", "name": "x"})), "no device \"nobody\"");
     // By its ID too.
     let lap_id = lap.device();
-    let m = root.ok(true, json!({"op": "rename", "name": lap_id, "new_name": "laptop"}));
+    let m = root.ok(true, json!({"op": "rename", "device": lap_id, "name": "laptop"}));
     assert_eq!(m.s("name"), "lap");
 
-    has(&root.err(true, json!({"op": "revoke", "name": "root"})), "cannot remove itself");
-    has(&root.err(true, json!({"op": "freeze", "name": "root"})), "cannot freeze or unfreeze itself");
-    has(&root.err(true, json!({"op": "freeze", "name": "work"})), "no admin computer");
-    has(&root.err(true, json!({"op": "thaw", "name": "work"})), "no admin computer");
+    has(&root.err(true, json!({"op": "remove", "device": "root"})), "cannot remove itself");
+    has(&root.err(true, json!({"op": "freeze", "device": "root"})), "cannot freeze or unfreeze itself");
+    has(&root.err(true, json!({"op": "freeze", "device": "work"})), "no admin computer");
+    has(&root.err(true, json!({"op": "thaw", "device": "work"})), "no admin computer");
     has(&root.err(true, json!({"op": "resolve"})), "no key of the group signed two histories");
 
-    let m = root.ok(true, json!({"op": "revoke", "name": "work"}));
+    let m = root.ok(true, json!({"op": "remove", "device": "work"}));
     assert_eq!(m.s("name"), "work");
     assert!(root.find("work").is_none(), "{:?}", root.devices());
     // The removed device learns it, over the records the root sends.
     desk.wait("desk learns it was removed", |st| st["removed"] == true);
-    has(&root.err(true, json!({"op": "revoke", "name": "work"})), "no device");
+    has(&root.err(true, json!({"op": "remove", "device": "work"})), "no device");
 }
 
 /// What a member that is no admin is refused, each with its reason.
@@ -58,23 +58,23 @@ fn a_member_is_no_admin() {
     let g = group(&["root", "desk"]);
     let desk = &g[1];
     let refused = [
-        (json!({"op": "rename", "name": "root", "new_name": "x"}), "only an admin can change the devices list"),
-        (json!({"op": "revoke", "name": "root"}), "only an admin can change the devices list"),
-        (json!({"op": "freeze", "name": "root"}), "only an admin can change the devices list"),
+        (json!({"op": "rename", "device": "root", "name": "x"}), "only an admin can change the devices list"),
+        (json!({"op": "remove", "device": "root"}), "only an admin can change the devices list"),
+        (json!({"op": "freeze", "device": "root"}), "only an admin can change the devices list"),
         (json!({"op": "resolve"}), "only an admin can change the devices list"),
-        (json!({"op": "admin", "name": "root"}), "only the group's root makes admins"),
-        (json!({"op": "key-level", "value": "files"}), "only the group's root sets the key level"),
-        (json!({"op": "takeover-delay", "value": "1h"}), "only the group's root sets how long a claim waits"),
+        (json!({"op": "make_admin", "device": "root"}), "only the group's root makes admins"),
+        (json!({"op": "key_level", "value": "files"}), "only the group's root sets the key level"),
+        (json!({"op": "takeover_delay", "value": "1h"}), "only the group's root sets how long a claim waits"),
         (json!({"op": "incoming", "value": "1m"}), "only the group's root or an admin sets"),
         (json!({"op": "hubs", "hubs": ["root"]}), "only the group's root or an admin that may be a hub"),
-        (json!({"op": "handover", "name": "root"}), "only the group's root hands the group over"),
-        (json!({"op": "takeover", "name": "root"}), "only an admin takes the group over"),
+        (json!({"op": "hand_over", "device": "root"}), "only the group's root hands the group over"),
+        (json!({"op": "take_over", "device": "root"}), "only an admin takes the group over"),
         (json!({"op": "mute", "device": "root"}), "only an admin mutes a device"),
         (json!({"op": "unmute", "device": "root"}), "only an admin mutes a device"),
-        (json!({"op": "sync", "name": "off", "device": "root"}), "only an admin turns another device's sync"),
-        (json!({"op": "action-on", "device": "root", "name": "lock"}), "only an admin pastes on another device"),
-        (json!({"op": "actions-off", "device": "root"}), "only an admin pastes on another device"),
-        (json!({"op": "paste-receive", "name": "off", "device": "root"}), "only an admin pastes on another device"),
+        (json!({"op": "sync", "on": false, "device": "root"}), "only an admin turns another device's sync"),
+        (json!({"op": "action_on", "device": "root", "name": "lock"}), "only an admin pastes on another device"),
+        (json!({"op": "actions_off", "device": "root"}), "only an admin pastes on another device"),
+        (json!({"op": "paste_receive", "name": "off", "device": "root"}), "only an admin pastes on another device"),
         (json!({"op": "away", "name": "off", "device": "root"}), "only an admin turns sync away from home off"),
         (json!({"op": "pair"}), "only the group's root or an admin adds devices"),
     ];
@@ -82,15 +82,15 @@ fn a_member_is_no_admin() {
         let e = desk.err(true, h.clone());
         assert!(e.contains(why), "{h}: {e:?} does not say {why:?}");
     }
-    let e = desk.err_with(true, json!({"op": "paste-on", "device": "root"}), b"hello");
+    let e = desk.err_with(true, json!({"op": "paste_on", "device": "root"}), b"hello");
     has(&e, "only an admin pastes on another device");
     // Its own things it does: its sync, its remote paste, its actions.
-    let st = desk.ok(false, json!({"op": "sync", "name": "off", "for_ms": 60_000})).h["status"].clone();
-    assert!(st["sync_until_ms"].as_i64().unwrap_or(0) > 0, "{st}");
-    desk.ok(false, json!({"op": "sync", "name": "on"}));
+    let st = desk.ok(false, json!({"op": "sync", "on": false, "for_ms": 60_000})).h;
+    assert!(st["sync_off"] == true && st["sync_off_ms"].as_i64().unwrap_or(0) > 0, "{st}");
+    desk.ok(false, json!({"op": "sync", "on": true}));
     assert!(!desk.state().join("sync.json").exists());
-    desk.ok(true, json!({"op": "paste-receive", "name": "off"}));
-    desk.ok(true, json!({"op": "actions-off"}));
+    desk.ok(true, json!({"op": "paste_receive", "name": "off"}));
+    desk.ok(true, json!({"op": "actions_off"}));
 }
 
 /// The root's group settings: the key level, the takeover delay, how long
@@ -99,16 +99,16 @@ fn a_member_is_no_admin() {
 fn the_roots_settings() {
     let g = group(&["root", "desk"]);
     let (root, desk) = (&g[0], &g[1]);
-    has(&root.err(true, json!({"op": "key-level", "value": "maybe"})), "proven, hardware or files");
+    has(&root.err(true, json!({"op": "key_level", "value": "maybe"})), "proven, hardware or files");
     // The root's own keys are in a file, below the level hardware.
-    assert!(!root.err(true, json!({"op": "key-level", "value": "hardware"})).is_empty());
-    let m = root.ok(true, json!({"op": "key-level", "value": "files"}));
+    assert!(!root.err(true, json!({"op": "key_level", "value": "hardware"})).is_empty());
+    let m = root.ok(true, json!({"op": "key_level", "value": "files"}));
     assert!(m.h["below"].as_array().is_none_or(Vec::is_empty), "{:?}", m.h);
     assert_eq!(root.status()["key_level"], "files");
 
-    has(&root.err(true, json!({"op": "takeover-delay", "value": "200h"})), "from 0s to 168h");
-    has(&root.err(true, json!({"op": "takeover-delay", "value": "soon"})), "from 0s to 168h");
-    root.ok(true, json!({"op": "takeover-delay", "value": "1h30m"}));
+    has(&root.err(true, json!({"op": "takeover_delay", "value": "200h"})), "from 0s to 168h");
+    has(&root.err(true, json!({"op": "takeover_delay", "value": "soon"})), "from 0s to 168h");
+    root.ok(true, json!({"op": "takeover_delay", "value": "1h30m"}));
 
     has(&root.err(true, json!({"op": "incoming", "value": "1s"})), "from 5s to 1h");
     has(&root.err(true, json!({"op": "incoming", "value": "2h"})), "from 5s to 1h");
@@ -129,12 +129,12 @@ fn makes_an_admin_and_hands_the_group_over() {
     let g = group(&["root", "desk", "lap"]);
     let (root, desk, lap) = (&g[0], &g[1], &g[2]);
     // Its keys are in a file: only with the user's consent.
-    has(&root.err(true, json!({"op": "admin", "name": "desk"})), "allow-file-key");
-    has(&root.err(true, json!({"op": "admin", "name": "root"})), "more than an admin");
-    has(&root.err(true, json!({"op": "handover", "name": "desk"})), "is no admin");
-    let m = root.ok(true, json!({"op": "admin", "name": "desk", "consent": true}));
+    has(&root.err(true, json!({"op": "make_admin", "device": "desk"})), "allow-file-key");
+    has(&root.err(true, json!({"op": "make_admin", "device": "root"})), "more than an admin");
+    has(&root.err(true, json!({"op": "hand_over", "device": "desk"})), "is no admin");
+    let m = root.ok(true, json!({"op": "make_admin", "device": "desk", "allow_file_key": true}));
     assert_eq!(m.s("name"), "desk");
-    has(&root.err(true, json!({"op": "admin", "name": "desk", "consent": true})), "already an admin");
+    has(&root.err(true, json!({"op": "make_admin", "device": "desk", "allow_file_key": true})), "already an admin");
     // The admin CA reaches it over its connection; then it signs.
     wait_for(
         "desk signs as an admin",
@@ -149,36 +149,36 @@ fn makes_an_admin_and_hands_the_group_over() {
     let pad = Svc::start("pad", &["-peer", &desk.addr()], &[]);
     assert_eq!(desk.admit(&pad, false), "pad");
     root.wait("the root learns of pad", |_| root.find("pad").is_some());
-    let m = desk.ok(true, json!({"op": "rename", "name": "pad", "new_name": "tablet"}));
+    let m = desk.ok(true, json!({"op": "rename", "device": "pad", "name": "tablet"}));
     assert_eq!(m.s("name"), "pad");
     root.wait("the root learns pad's new name", |_| root.find("tablet").is_some());
-    desk.ok(true, json!({"op": "revoke", "name": "tablet"}));
+    desk.ok(true, json!({"op": "remove", "device": "tablet"}));
     root.wait("the root learns pad left", |_| root.find("tablet").is_none());
     let _ = lap;
     // An admin computer does not rename the root's own device, remove
     // the root or take over a device that is not the root.
-    has(&desk.err(true, json!({"op": "rename", "name": "root", "new_name": "x"})), "only the group's root renames");
-    has(&desk.err(true, json!({"op": "revoke", "name": "root"})), "holds the group's root");
-    has(&desk.err(true, json!({"op": "takeover", "name": "lap"})), "not the group's root");
-    has(&desk.err(true, json!({"op": "admin", "name": "lap"})), "only the group's root makes admins");
-    has(&desk.err(true, json!({"op": "freeze", "name": "root"})), "which nobody freezes");
-    has(&desk.err(true, json!({"op": "handover", "name": "lap"})), "only the group's root hands");
+    has(&desk.err(true, json!({"op": "rename", "device": "root", "name": "x"})), "only the group's root renames");
+    has(&desk.err(true, json!({"op": "remove", "device": "root"})), "holds the group's root");
+    has(&desk.err(true, json!({"op": "take_over", "device": "lap"})), "not the group's root");
+    has(&desk.err(true, json!({"op": "make_admin", "device": "lap"})), "only the group's root makes admins");
+    has(&desk.err(true, json!({"op": "freeze", "device": "root"})), "which nobody freezes");
+    has(&desk.err(true, json!({"op": "hand_over", "device": "lap"})), "only the group's root hands");
 
     // Frozen, it signs nothing; the root unfreezes it.
-    let m = root.ok(true, json!({"op": "freeze", "name": "desk"}));
+    let m = root.ok(true, json!({"op": "freeze", "device": "desk"}));
     assert_eq!(m.s("name"), "desk");
-    has(&root.err(true, json!({"op": "freeze", "name": "desk"})), "frozen already");
+    has(&root.err(true, json!({"op": "freeze", "device": "desk"})), "frozen already");
     desk.wait("desk learns it is frozen", |st| st["frozen"] == true);
-    has(&desk.err(true, json!({"op": "rename", "name": "lap", "new_name": "x"})), "froze this computer's admin key");
+    has(&desk.err(true, json!({"op": "rename", "device": "lap", "name": "x"})), "froze this computer's admin key");
     has(&desk.err(true, json!({"op": "mute", "device": "lap"})), "froze this computer's admin key");
-    has(&desk.err(true, json!({"op": "action-on", "device": "lap", "name": "lock"})), "froze");
-    root.ok(true, json!({"op": "thaw", "name": "desk"}));
-    has(&root.err(true, json!({"op": "thaw", "name": "desk"})), "is not frozen");
+    has(&desk.err(true, json!({"op": "action_on", "device": "lap", "name": "lock"})), "froze");
+    root.ok(true, json!({"op": "thaw", "device": "desk"}));
+    has(&root.err(true, json!({"op": "thaw", "device": "desk"})), "is not frozen");
     desk.wait("desk learns it is unfrozen", |st| st["frozen"] != true);
 
     // Handed over, desk's claim takes effect at once: it is the root, and
     // its device record says so.
-    let m = root.ok(true, json!({"op": "handover", "name": "desk"}));
+    let m = root.ok(true, json!({"op": "hand_over", "device": "desk"}));
     assert_eq!(m.s("name"), "desk");
     // A claim counts as handed over only when made after the handover
     // reached the admin: a record the root signs after it shows it has.
@@ -186,7 +186,7 @@ fn makes_an_admin_and_hands_the_group_over() {
     desk.wait("desk holds the handover", |st| st["incoming_ms"] == 45_000);
     wait_for(
         "desk takes the group over",
-        || desk.ask(true, json!({"op": "takeover", "name": "root"}), b"").error().is_empty().then_some(()),
+        || desk.ask(true, json!({"op": "take_over", "device": "root"}), b"").error().is_empty().then_some(()),
         || desk.log(),
     );
     wait_for(
@@ -195,7 +195,7 @@ fn makes_an_admin_and_hands_the_group_over() {
         || desk.log(),
     );
     // As the root it makes admins, and the old root can no longer.
-    has(&desk.err(true, json!({"op": "takeover", "name": "desk"})), "root already");
+    has(&desk.err(true, json!({"op": "take_over", "device": "desk"})), "root already");
     root.wait("the old root learns desk took the group over", |st| st["taken_over_by"] == "desk");
 }
 
@@ -204,11 +204,11 @@ fn makes_an_admin_and_hands_the_group_over() {
 #[test]
 fn an_admin_takes_the_group_over() {
     let mut g = group(&["root", "desk", "lap"]);
-    g[0].ok(true, json!({"op": "takeover-delay", "value": "0s"}));
+    g[0].ok(true, json!({"op": "takeover_delay", "value": "0s"}));
     wait_for(
         "the root makes desk an admin",
         || {
-            g[0].ask(true, json!({"op": "admin", "name": "desk", "consent": true}), b"")
+            g[0].ask(true, json!({"op": "make_admin", "device": "desk", "allow_file_key": true}), b"")
                 .error()
                 .is_empty()
                 .then_some(())
@@ -217,7 +217,12 @@ fn an_admin_takes_the_group_over() {
     );
     wait_for(
         "the root makes lap an admin",
-        || g[0].ask(true, json!({"op": "admin", "name": "lap", "consent": true}), b"").error().is_empty().then_some(()),
+        || {
+            g[0].ask(true, json!({"op": "make_admin", "device": "lap", "allow_file_key": true}), b"")
+                .error()
+                .is_empty()
+                .then_some(())
+        },
         || g[0].log(),
     );
     let desk_id = g[1].device();
@@ -231,14 +236,14 @@ fn an_admin_takes_the_group_over() {
     );
     g[0].stop();
     let desk = &g[1];
-    let m = desk.ok(true, json!({"op": "takeover", "name": "root"}));
+    let m = desk.ok(true, json!({"op": "take_over", "device": "root"}));
     assert_eq!(m.s("name"), "root");
     wait_for(
         "desk becomes the root",
         || desk.devices().into_iter().find(|d| d["id"] == desk_id.as_str() && d["root"] == true),
         || desk.log(),
     );
-    has(&desk.err(true, json!({"op": "takeover", "name": "desk"})), "root already");
+    has(&desk.err(true, json!({"op": "take_over", "device": "desk"})), "root already");
     // The old root is no longer listed.
     assert!(desk.find("root").is_none(), "{:?}", desk.devices());
     // The other admin, which knew only the old root's address, meets the
@@ -271,40 +276,40 @@ fn commands_reach_a_member() {
     assert_eq!(root.status()["muted"], true);
     root.ok(true, json!({"op": "unmute", "device": "root"}));
 
-    has(&root.err(true, json!({"op": "sync", "name": "off", "device": "desk", "for_ms": 1000})), "with no time");
-    has(&root.err(true, json!({"op": "sync", "name": "on", "for_ms": 1000})), "only with cbb sync off");
-    assert!(!root.err(true, json!({"op": "sync", "name": "sideways"})).is_empty());
-    let m = root.ok(true, json!({"op": "sync", "name": "off", "device": "desk"}));
+    has(&root.err(true, json!({"op": "sync", "on": false, "device": "desk", "for_ms": 1000})), "with no time");
+    has(&root.err(true, json!({"op": "sync", "on": true, "for_ms": 1000})), "only with cbb sync off");
+    assert!(!root.err(true, json!({"op": "sync"})).is_empty());
+    let m = root.ok(true, json!({"op": "sync", "on": false, "device": "desk"}));
     assert_eq!(m.s("name"), "desk");
     let off = desk.state().join("sync.json");
     wait_for("desk's sync is off", || off.exists().then_some(()), || desk.log());
-    root.ok(true, json!({"op": "sync", "name": "on", "device": "desk"}));
+    root.ok(true, json!({"op": "sync", "on": true, "device": "desk"}));
     wait_for("desk's sync is on", || (!off.exists()).then_some(()), || desk.log());
     // -on naming this device turns its own sync.
-    root.ok(true, json!({"op": "sync", "name": "off", "device": "root", "for_ms": 0}));
-    root.ok(true, json!({"op": "sync", "name": "on"}));
+    root.ok(true, json!({"op": "sync", "on": false, "device": "root", "for_ms": 0}));
+    root.ok(true, json!({"op": "sync", "on": true}));
 
-    has(&root.err(true, json!({"op": "paste-receive", "name": "maybe"})), "on or off");
-    has(&root.err(true, json!({"op": "paste-receive", "name": "on", "device": "desk"})), "own user");
-    has(&root.err(true, json!({"op": "paste-receive", "name": "off", "enter": true})), "go with on");
-    root.ok(true, json!({"op": "paste-receive", "name": "off", "device": "desk"}));
-    root.ok(true, json!({"op": "paste-receive", "name": "off", "all": true}));
-    root.ok(true, json!({"op": "actions-off", "device": "desk"}));
-    root.ok(true, json!({"op": "actions-off", "all": true}));
-    root.ok(true, json!({"op": "actions-off", "device": "root"}));
+    has(&root.err(true, json!({"op": "paste_receive", "name": "maybe"})), "on or off");
+    has(&root.err(true, json!({"op": "paste_receive", "name": "on", "device": "desk"})), "own user");
+    has(&root.err(true, json!({"op": "paste_receive", "name": "off", "enter": true})), "go with on");
+    root.ok(true, json!({"op": "paste_receive", "name": "off", "device": "desk"}));
+    root.ok(true, json!({"op": "paste_receive", "name": "off", "all": true}));
+    root.ok(true, json!({"op": "actions_off", "device": "desk"}));
+    root.ok(true, json!({"op": "actions_off", "all": true}));
+    root.ok(true, json!({"op": "actions_off", "device": "root"}));
 
     // Remote paste is off on desk: refused there, with its reason.
-    let e = root.err_with(true, json!({"op": "paste-on", "device": "desk"}), b"hello");
+    let e = root.err_with(true, json!({"op": "paste_on", "device": "desk"}), b"hello");
     has(&e, "desk");
-    has(&root.err_with(true, json!({"op": "paste-on", "device": "desk"}), b"\x01\x02"), "nothing to paste");
-    has(&root.err_with(true, json!({"op": "paste-on", "device": "root"}), b"hi"), "for another device");
-    has(&root.err(true, json!({"op": "paste-on", "device": "desk", "kind": "media"})), "no images or files");
-    let e = root.err(true, json!({"op": "paste-on", "device": "desk", "kind": "media", "method": "type"}));
+    has(&root.err_with(true, json!({"op": "paste_on", "device": "desk"}), b"\x01\x02"), "nothing to paste");
+    has(&root.err_with(true, json!({"op": "paste_on", "device": "root"}), b"hi"), "for another device");
+    has(&root.err(true, json!({"op": "paste_on", "device": "desk", "kind": "media"})), "no images or files");
+    let e = root.err(true, json!({"op": "paste_on", "device": "desk", "kind": "media", "method": "type"}));
     has(&e, "pasted, not typed");
     // Quick actions are off on desk too.
-    has(&root.err(true, json!({"op": "action-on", "device": "desk", "name": "lock"})), "desk");
-    has(&root.err(true, json!({"op": "action-on", "device": "desk", "name": "no such!"})), "not an action's name");
-    has(&root.err(true, json!({"op": "action-on", "device": "root", "name": "lock"})), "runs on another device");
+    has(&root.err(true, json!({"op": "action_on", "device": "desk", "name": "lock"})), "desk");
+    has(&root.err(true, json!({"op": "action_on", "device": "desk", "name": "no such!"})), "not an action's name");
+    has(&root.err(true, json!({"op": "action_on", "device": "root", "name": "lock"})), "runs on another device");
     has(&root.err(true, json!({"op": "away", "name": "off", "device": "root"})), "-on names this device");
     root.ok(true, json!({"op": "away", "name": "off", "device": "desk"}));
 }
@@ -396,10 +401,10 @@ fn refuses_bad_admissions_and_recoveries() {
             .is_empty()
     );
     // The root claims nothing; a member has no recovery key to claim with.
-    has(&root.err_with(true, json!({"op": "recovery"}), b"words"), "root already");
-    let e = g[1].err_with(true, json!({"op": "recovery"}), b"not a recovery sheet");
+    has(&root.err_with(true, json!({"op": "recover"}), b"words"), "root already");
+    let e = g[1].err_with(true, json!({"op": "recover"}), b"not a recovery sheet");
     assert!(!e.is_empty());
-    let e = g[1].err_with(true, json!({"op": "recovery", "name": "yubikey"}), b"123456");
+    let e = g[1].err_with(true, json!({"op": "recover", "name": "yubikey"}), b"123456");
     assert!(!e.is_empty());
     // Stopped, desk cannot get its admin CA.
     g[1].stop();
@@ -409,7 +414,7 @@ fn refuses_bad_admissions_and_recoveries() {
         || root.status()["peers"].as_array().is_none_or(|p| p.is_empty()).then_some(()),
         || root.log(),
     );
-    has(&root.err(true, json!({"op": "admin", "name": "desk", "consent": true})), "is not connected");
+    has(&root.err(true, json!({"op": "make_admin", "device": "desk", "allow_file_key": true})), "is not connected");
     let _ = &mut g;
 }
 
@@ -426,7 +431,7 @@ fn leaves_the_group() {
     g[1].restart(&[], &[]);
     assert_eq!(g[1].status()["group"], serde_json::Value::Null);
     has(&g[1].err(true, json!({"op": "leave"})), "");
-    g[0].ok(true, json!({"op": "revoke", "name": "desk"}));
+    g[0].ok(true, json!({"op": "remove", "device": "desk"}));
     g[0].ok(true, json!({"op": "leave"}));
     g[0].wait_exit(Duration::from_secs(20));
     assert!(!g[0].state().join("identity.json").exists());

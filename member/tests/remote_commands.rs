@@ -69,40 +69,40 @@ fn runs_a_quick_action_on_a_member() {
     let g = group_with(&["root", "desk"], &[("CBB_TEST_ACTIONS", acts)]);
     let (root, desk) = (&g[0], &g[1]);
     // Off on desk: refused there.
-    has(&root.err(true, json!({"op": "action-on", "device": "desk", "name": "lock"})), "desk");
+    has(&root.err(true, json!({"op": "action_on", "device": "desk", "name": "lock"})), "desk");
     let on = |name: &str| {
-        let m = desk.ask(true, json!({"op": "action-set", "actions": [{"name": name, "on": true}]}), b"");
+        let m = desk.ask(true, json!({"op": "action_set", "actions": [{"name": name, "on": true}]}), b"");
         assert!(m.error().is_empty(), "{:?}", m.h);
     };
     on("lock");
-    root.ok(true, json!({"op": "action-on", "device": "desk", "name": "lock"}));
+    root.ok(true, json!({"op": "action_on", "device": "desk", "name": "lock"}));
     let ran = std::fs::read_to_string(dir.join("ran")).unwrap_or_default();
     assert_eq!(ran, "lock\n");
     // Too fast after it: one a second from one device.
-    let e = root.err(true, json!({"op": "action-on", "device": "desk", "name": "lock"}));
+    let e = root.err(true, json!({"op": "action_on", "device": "desk", "name": "lock"}));
     has(&e, "too many actions");
     std::thread::sleep(Duration::from_millis(1100));
     // The system refuses it.
     std::fs::write(dir.join("refuse-lock"), "the screen is locked already").unwrap();
-    has(&root.err(true, json!({"op": "action-on", "device": "desk", "name": "lock"})), "locked already");
+    has(&root.err(true, json!({"op": "action_on", "device": "desk", "name": "lock"})), "locked already");
     // Reboot is for admins with keys in hardware unless the user says
     // otherwise (D-71): the root's key is in a file.
     on("reboot");
     std::thread::sleep(Duration::from_millis(1100));
-    let e = root.err(true, json!({"op": "action-on", "device": "desk", "name": "reboot"}));
+    let e = root.err(true, json!({"op": "action_on", "device": "desk", "name": "reboot"}));
     assert!(!e.is_empty());
     // An action of desk's user's own runs in the session, through an agent.
     let m = desk.ask(
         true,
-        json!({"op": "action-set", "actions": [{"name": "backup", "on": true, "by": ["root"], "command": ["/bin/true"]}]}),
+        json!({"op": "action_set", "actions": [{"name": "backup", "on": true, "by": ["root"], "command": ["/bin/true"]}]}),
         b"",
     );
     assert!(m.error().is_empty(), "{:?}", m.h);
     std::thread::sleep(Duration::from_millis(1100));
-    has(&root.err(true, json!({"op": "action-on", "device": "desk", "name": "backup"})), "agent");
+    has(&root.err(true, json!({"op": "action_on", "device": "desk", "name": "backup"})), "agent");
     let got = watcher(desk, json!({"op": "watch", "act": true, "paste_only": true}), json!({"error": ""}));
     std::thread::sleep(Duration::from_millis(1100));
-    let m = root.ask(true, json!({"op": "action-on", "device": "desk", "name": "backup"}), b"");
+    let m = root.ask(true, json!({"op": "action_on", "device": "desk", "name": "backup"}), b"");
     if root_user() {
         assert!(m.error().is_empty(), "{:?}\n{}", m.h, desk.log());
         let act = got.recv_timeout(Duration::from_secs(10)).expect("the agent's act");
@@ -120,35 +120,35 @@ fn runs_a_quick_action_on_a_member() {
 fn pastes_on_a_member() {
     let g = group(&["root", "desk"]);
     let (root, desk) = (&g[0], &g[1]);
-    has(&root.err_with(true, json!({"op": "paste-on", "device": "desk"}), b"hi"), "remote paste is off");
-    desk.ok(true, json!({"op": "paste-receive", "name": "on"}));
+    has(&root.err_with(true, json!({"op": "paste_on", "device": "desk"}), b"hi"), "remote paste is off");
+    desk.ok(true, json!({"op": "paste_receive", "name": "on"}));
     // On, with nothing that pastes.
-    has(&root.err_with(true, json!({"op": "paste-on", "device": "desk"}), b"hi"), "nothing on this device can paste");
+    has(&root.err_with(true, json!({"op": "paste_on", "device": "desk"}), b"hi"), "nothing on this device can paste");
     std::thread::sleep(Duration::from_millis(1100));
-    has(&root.err_with(true, json!({"op": "paste-on", "device": "desk", "enter": true}), b"hi"), "without Enter");
+    has(&root.err_with(true, json!({"op": "paste_on", "device": "desk", "enter": true}), b"hi"), "without Enter");
     let got = watcher(desk, json!({"op": "watch", "inject": "tmux"}), json!({"error": ""}));
     std::thread::sleep(Duration::from_millis(1100));
-    let m = root.ask(true, json!({"op": "paste-on", "device": "desk"}), b"hello there");
+    let m = root.ask(true, json!({"op": "paste_on", "device": "desk"}), b"hello there");
     if root_user() {
         assert!(m.error().is_empty(), "{:?}\n{}", m.h, desk.log());
         let inj = got.recv_timeout(Duration::from_secs(10)).expect("the inject");
         assert_eq!((inj.s("op"), inj.payload.as_slice()), ("inject", &b"hello there"[..]));
         // Too fast after it.
-        has(&root.err_with(true, json!({"op": "paste-on", "device": "desk"}), b"again"), "too many pastes");
+        has(&root.err_with(true, json!({"op": "paste_on", "device": "desk"}), b"again"), "too many pastes");
         std::thread::sleep(Duration::from_millis(1100));
         // A line break needs Enter.
-        let e = root.err_with(true, json!({"op": "paste-on", "device": "desk"}), b"rm -rf x\nls");
+        let e = root.err_with(true, json!({"op": "paste_on", "device": "desk"}), b"rm -rf x\nls");
         assert!(!e.is_empty());
         std::thread::sleep(Duration::from_millis(1100));
         // Typed too.
-        let m = root.ask(true, json!({"op": "paste-on", "device": "desk", "method": "type"}), b"typed");
+        let m = root.ask(true, json!({"op": "paste_on", "device": "desk", "method": "type"}), b"typed");
         assert!(m.error().is_empty(), "{:?}", m.h);
         let inj = got.recv_timeout(Duration::from_secs(10)).expect("the typed inject");
         assert_eq!(inj.s("method"), "type");
         std::thread::sleep(Duration::from_millis(1100));
         // A secret, on a device that cannot tell who sits at its screen,
         // is refused; as root it is taken.
-        let m = root.ask(true, json!({"op": "paste-on", "device": "desk", "kind": "secret"}), b"pin");
+        let m = root.ask(true, json!({"op": "paste_on", "device": "desk", "kind": "secret"}), b"pin");
         assert!(m.error().is_empty(), "{:?}", m.h);
     }
     // A watcher that fails the paste: its error comes back.
@@ -158,13 +158,13 @@ fn pastes_on_a_member() {
         json!({"error": "the focused window takes no text", "refused": true}),
     );
     std::thread::sleep(Duration::from_millis(1100));
-    let m = root.ask(true, json!({"op": "paste-on", "device": "desk"}), b"to the desktop");
+    let m = root.ask(true, json!({"op": "paste_on", "device": "desk"}), b"to the desktop");
     if root_user() {
         // The desktop goes first and refuses; tmux then takes it.
         assert!(m.error().is_empty() || m.error().contains("focused window"), "{:?}", m.h);
     }
     // Turned off again by an admin's command.
-    root.ok(true, json!({"op": "paste-receive", "name": "off", "device": "desk"}));
+    root.ok(true, json!({"op": "paste_receive", "name": "off", "device": "desk"}));
     wait_for("desk's remote paste is off", || (desk.status()["paste"]["on"] != true).then_some(()), || desk.log());
     let log = std::fs::read_to_string(desk.state().join("paste-log.json")).unwrap_or_default();
     let _ = log;

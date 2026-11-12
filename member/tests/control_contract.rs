@@ -2,8 +2,8 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The control socket's contract (docs/protocol.md, section 8) on a real
-//! service: every operation gets one answer, op reply, done or with an
-//! error; the operations that change the group are taken only on the admin
+//! service: every operation gets answers in the envelope {"ok"} or
+//! {"error"}, the last done or an error; the operations that change the group are taken only on the admin
 //! socket; a broken or hostile client never stops the service, which still
 //! answers the next request.
 
@@ -21,55 +21,61 @@ use serde_json::{Value, json};
 /// Every operation the service takes, from the command line, the apps, the
 /// watchers, cbb update and the helpers (service.rs, serve and request).
 const OPS: &[&str] = &[
-    "action-on",
-    "action-remove",
-    "action-set",
-    "actions-off",
-    "admin",
+    "action_on",
+    "action_remove",
+    "action_set",
+    "actions_off",
+    "arrange",
     "away",
+    "bug",
+    "bug_allow",
+    "bug_cancel",
     "config",
-    "copied-media",
+    "copied_media",
     "copy",
-    "copy-media",
+    "copy_media",
     "devices",
     "entries",
-    "entries-get",
+    "entries_get",
     "freeze",
-    "handover",
+    "hand_over",
     "hubs",
     "incoming",
     "invite",
     "join",
-    "key-level",
+    "key_level",
     "keyboard",
     "keys",
     "leave",
+    "make_admin",
     "mute",
+    "muted",
     "network",
     "new",
     "pair",
     "paste",
-    "paste-media",
-    "paste-on",
-    "paste-receive",
-    "recovery",
+    "paste_media",
+    "paste_on",
+    "paste_receive",
+    "recover",
     "release",
-    "release-file",
-    "release-get",
-    "release-held",
-    "release-want",
+    "release_file",
+    "release_get",
+    "release_held",
+    "release_want",
     "remote",
+    "remove",
     "rename",
     "resolve",
-    "revoke",
     "status",
     "sync",
-    "takeover",
-    "takeover-delay",
+    "take_over",
+    "takeover_delay",
     "thaw",
     "unmute",
-    "update-way",
+    "update_way",
     "version",
+    "view",
     "watch",
 ];
 
@@ -78,34 +84,43 @@ const OPS: &[&str] = &[
 /// and entry points cbb update brings, and the uinput helper's keys
 /// (control.rs, is_admin). Every other operation needs the admin socket.
 const UNPRIVILEGED: &[&str] = &[
+    "arrange",
+    "bug",
+    "bug_allow",
+    "bug_cancel",
     "config",
-    "copied-media",
+    "copied_media",
     "copy",
-    "copy-media",
+    "copy_media",
     "devices",
     "entries",
-    "entries-get",
+    "entries_get",
     "keys",
+    "muted",
     "paste",
-    "paste-media",
+    "paste_media",
     "release",
-    "release-get",
-    "release-held",
+    "release_get",
+    "release_held",
     "status",
     "version",
+    "view",
     "watch",
 ];
 
-/// The operations that would stop the service, or wait for a peer or a
-/// client, so the sweeps leave them to their own tests.
-const SWEPT_APART: &[&str] = &["leave", "watch", "join", "pair", "invite", "copy-media", "copied-media"];
+/// The operations that would stop the service, wait for a peer or a
+/// client, or answer a bug report, so the sweeps leave them to their own
+/// tests.
+const SWEPT_APART: &[&str] =
+    &["leave", "watch", "join", "pair", "invite", "copy_media", "copied_media", "bug", "bug_allow", "bug_cancel"];
 
 fn has(e: &str, part: &str) {
     assert!(e.contains(part), "{e:?} does not say {part:?}");
 }
 
-/// Sends one request and checks the contract of its answers: each is op
-/// reply, and the last is done or carries an error.
+/// Sends one request and checks the contract of its answers: each is an
+/// answer's envelope (read checks it), and the last is done or carries an
+/// error.
 fn answer(svc: &Svc, admin: bool, h: Value) -> Msg {
     let all = svc.ask_all(admin, h.clone(), b"");
     let last = all.last().cloned().unwrap_or_else(|| panic!("no answer to {h}:\n{}", svc.log()));
@@ -133,8 +148,8 @@ fn the_admin_socket_guards_the_group() {
     }
     // Turning this device's own sync on or off changes nothing for the
     // group, so any user may; another device's is an admin's.
-    svc.ok(false, json!({"op": "sync", "name": "on"}));
-    has(&svc.err(false, json!({"op": "sync", "name": "on", "device": "x"})), "admin socket");
+    svc.ok(false, json!({"op": "sync", "on": true}));
+    has(&svc.err(false, json!({"op": "sync", "on": true, "device": "x"})), "admin socket");
     for op in SWEPT_APART.iter().filter(|op| !UNPRIVILEGED.contains(op)) {
         has(&svc.err(false, json!({"op": op})), "admin socket");
     }
@@ -180,9 +195,10 @@ fn every_operation_answers_in_a_group() {
         answer(&svc, true, json!({"op": op, "name": "x", "device": "nobody", "value": "?", "all": true}));
         assert!(svc.running(), "the service stopped after {op}:\n{}", svc.log());
     }
-    has(&svc.err(true, json!({"op": "no-such-op"})), "unknown operation \"no-such-op\"");
+    has(&svc.err(true, json!({"op": "no_such_op"})), "unknown operation \"no_such_op\"");
     has(&svc.err(false, json!({"op": ""})), "admin socket");
-    has(&svc.err(true, json!({})), "unknown operation \"\"");
+    // A header without op is an answer's envelope, which no client sends.
+    has(&svc.err(true, json!({})), "unknown operation \"reply\"");
     assert_eq!(svc.status()["role"], "member");
 }
 
@@ -268,9 +284,9 @@ fn copies_and_pastes_text() {
 fn copies_and_pastes_files() {
     let svc = Svc::start("desk", &[], &[]);
     svc.new_group();
-    has(&svc.err(false, json!({"op": "paste-media"})), "");
+    has(&svc.err(false, json!({"op": "paste_media"})), "");
     let copy = |alt: &[u8], parts: &[(Value, Vec<&[u8]>)], end: bool| -> Msg {
-        let (mut c, mut r) = svc.open(false, &json!({"op": "copy-media"}), alt);
+        let (mut c, mut r) = svc.open(false, &json!({"op": "copy_media"}), alt);
         for (p, data) in parts {
             send(&mut c, &json!({"op": "part", "part": p}), b"");
             for d in data {
@@ -287,7 +303,7 @@ fn copies_and_pastes_files() {
     let m = copy(b"a.txt", &[(file.clone(), vec![b"he", b"llo"])], true);
     assert!(m.error().is_empty(), "{:?}\n{}", m.h, svc.log());
     // paste-media gives the alternative, the part and its bytes.
-    let got = svc.ask_all(false, json!({"op": "paste-media"}), b"");
+    let got = svc.ask_all(false, json!({"op": "paste_media"}), b"");
     assert!(got.iter().all(|m| m.error().is_empty()), "{got:?}");
     assert_eq!(got[0].s("kind"), "media");
     assert_eq!(got[0].payload, b"a.txt");
@@ -306,7 +322,7 @@ fn copies_and_pastes_files() {
     has(copy(b"", &[(json!({"path": "b", "size": -1}), vec![])], true).error(), "without its description");
     has(copy(b"\xff", &[(file.clone(), vec![b"hello"])], true).error(), "not UTF-8");
     has(copy(b"", &[(json!({"path": "b", "size": 1_i64 << 40}), vec![])], true).error(), "larger than");
-    let (mut c, mut r) = svc.open(false, &json!({"op": "copy-media"}), b"");
+    let (mut c, mut r) = svc.open(false, &json!({"op": "copy_media"}), b"");
     send(&mut c, &json!({"op": "status"}), b"");
     has(read(&mut r).unwrap().error(), "expected a part");
     // The service still takes copies.
@@ -339,23 +355,23 @@ fn sets_the_largest_copy() {
 fn sets_the_quick_actions() {
     let svc = Svc::start("desk", &[], &[]);
     svc.new_group();
-    let set = |a: Value| svc.ask(true, json!({"op": "action-set", "actions": [a]}), b"");
+    let set = |a: Value| svc.ask(true, json!({"op": "action_set", "actions": [a]}), b"");
     let m = set(json!({"name": "lock", "on": true, "by": ["root"]}));
     assert!(m.error().is_empty(), "{:?}", m.h);
     let lock = m.h["status"]["actions"].as_array().unwrap().iter().find(|a| a["name"] == "lock").cloned().unwrap();
     assert_eq!(lock["on"], true, "{lock}");
     assert!(!set(json!({"name": "nothing-like-it", "on": true})).error().is_empty());
     assert!(!set(json!({"name": "lock", "on": true, "by": ["strangers"]})).error().is_empty());
-    has(svc.ask(true, json!({"op": "action-set", "actions": []}), b"").error(), "one quick action at a time");
+    has(svc.ask(true, json!({"op": "action_set", "actions": []}), b"").error(), "one quick action at a time");
     let m = set(json!({"name": "backup", "on": true, "command": ["/bin/true"]}));
     assert!(m.error().is_empty(), "{:?}", m.h);
     assert!(m.h["status"]["actions"].as_array().unwrap().iter().any(|a| a["name"] == "backup"));
     // Turned off, an own action keeps its command.
     assert!(set(json!({"name": "backup", "on": false})).error().is_empty());
-    svc.ok(true, json!({"op": "action-remove", "name": "backup"}));
-    has(&svc.err(true, json!({"op": "action-remove", "name": "backup"})), "no action of its user's own");
-    has(&svc.err(true, json!({"op": "action-remove", "name": "lock"})), "is a preset");
-    let m = svc.ok(true, json!({"op": "actions-off"}));
+    svc.ok(true, json!({"op": "action_remove", "name": "backup"}));
+    has(&svc.err(true, json!({"op": "action_remove", "name": "backup"})), "no action of its user's own");
+    has(&svc.err(true, json!({"op": "action_remove", "name": "lock"})), "is a preset");
+    let m = svc.ok(true, json!({"op": "actions_off"}));
     assert!(m.h["status"]["actions"].as_array().unwrap().iter().all(|a| a["on"] != true), "{:?}", m.h);
 }
 
@@ -364,11 +380,11 @@ fn sets_the_quick_actions() {
 fn sets_remote_paste() {
     let svc = Svc::start("desk", &[], &[]);
     svc.new_group();
-    let m = svc.ok(true, json!({"op": "paste-receive", "name": "on", "enter": true, "no_lock_check": true}));
+    let m = svc.ok(true, json!({"op": "paste_receive", "name": "on", "enter": true, "no_lock_check": true}));
     let p = m.h["status"]["paste"].clone();
     assert_eq!((p["on"].as_bool(), p["enter"].as_bool()), (Some(true), Some(true)), "{p}");
     assert_eq!(svc.status()["paste"]["on"], true);
-    let m = svc.ok(true, json!({"op": "paste-receive", "name": "off"}));
+    let m = svc.ok(true, json!({"op": "paste_receive", "name": "off"}));
     assert_eq!(m.h["status"]["paste"]["on"], false);
 }
 
@@ -378,20 +394,20 @@ fn sets_remote_paste() {
 fn releases_and_entry_points() {
     let svc = Svc::start("desk", &[], &[]);
     svc.new_group();
-    has(&svc.err(false, json!({"op": "entries-get"})), "no signed entry points");
-    has(&svc.err(false, json!({"op": "release-held"})), "no signed release");
+    has(&svc.err(false, json!({"op": "entries_get"})), "no signed entry points");
+    has(&svc.err(false, json!({"op": "release_held"})), "no signed release");
     has(&svc.err_with(false, json!({"op": "entries"}), b"not json"), "carries no entry points");
     has(&svc.err_with(false, json!({"op": "release"}), b"not json"), "carries no release");
     // Signed by nobody the device trusts: refused.
     assert!(!svc.err_with(false, json!({"op": "entries"}), b"{\"v\":1}").is_empty());
     assert!(!svc.err_with(false, json!({"op": "release"}), b"{\"v\":1}").is_empty());
     // Not a hub: it wants no archives; no way to update away from home.
-    let m = svc.ok(true, json!({"op": "release-want"}));
+    let m = svc.ok(true, json!({"op": "release_want"}));
     assert_eq!(m.payload, b"null");
-    let m = svc.ok(true, json!({"op": "update-way"}));
+    let m = svc.ok(true, json!({"op": "update_way"}));
     assert!(m.payload.is_empty(), "{:?}", String::from_utf8_lossy(&m.payload));
-    assert!(!svc.err(false, json!({"op": "release-get", "value": "00"})).is_empty());
-    assert!(!svc.err(true, json!({"op": "release-file"})).is_empty());
+    assert!(!svc.err(false, json!({"op": "release_get", "value": "00"})).is_empty());
+    assert!(!svc.err(true, json!({"op": "release_file"})).is_empty());
 }
 
 /// The Bluetooth keyboard and the TVs' remotes need cbb-helper: without it
@@ -462,8 +478,8 @@ fn a_damaged_group_file_takes_only_leave() {
 fn keeps_its_group_across_a_restart() {
     let mut svc = Svc::start("desk", &[], &[]);
     let made = svc.new_group();
-    svc.ok(true, json!({"op": "sync", "name": "off", "for_ms": 3_600_000}));
-    svc.ok(true, json!({"op": "paste-receive", "name": "on"}));
+    svc.ok(true, json!({"op": "sync", "on": false, "for_ms": 3_600_000}));
+    svc.ok(true, json!({"op": "paste_receive", "name": "on"}));
     svc.restart(&[], &[]);
     let st = svc.status();
     assert_eq!((&st["device"], &st["group"]), (&made["device"], &made["group"]));
@@ -485,6 +501,6 @@ fn keeps_its_group_across_a_restart() {
     assert!(!st.success());
     let mut err = String::new();
     std::io::Read::read_to_string(second.stderr.as_mut().unwrap(), &mut err).unwrap();
-    has(&err, "another lite member service runs");
+    has(&err, "another cbb service runs");
     assert_eq!(svc.status()["device"], made["device"]);
 }

@@ -299,7 +299,7 @@ fn keys_in_the_hardware() {
     assert_eq!(d["store"], "hardware", "{d}");
     wait_for(
         "the root makes desk an admin",
-        || svc.ask(true, json!({"op": "admin", "name": "desk"}), b"").error().is_empty().then_some(()),
+        || svc.ask(true, json!({"op": "make_admin", "device": "desk"}), b"").error().is_empty().then_some(()),
         || svc.log(),
     );
     wait_for(

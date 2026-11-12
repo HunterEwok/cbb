@@ -42,16 +42,63 @@ impl Msg {
     }
 }
 
-/// Writes one request: the header with its len, a newline, the payload.
+/// Writes one request: the test's flat header in the envelope
+/// `{"op", "args", "len", "seq"}`, a newline, the payload.
 pub fn send(conn: &mut UnixStream, h: &Value, payload: &[u8]) {
-    let mut h = h.clone();
-    if !payload.is_empty() {
-        h["len"] = json!(payload.len());
+    let mut args = h.as_object().cloned().unwrap_or_default();
+    let mut req = serde_json::Map::new();
+    if let Some(op) = args.remove("op") {
+        req.insert("op".into(), op);
     }
-    let mut buf = serde_json::to_vec(&h).unwrap();
+    if let Some(seq) = args.remove("seq") {
+        req.insert("seq".into(), seq);
+    }
+    if !payload.is_empty() {
+        req.insert("len".into(), json!(payload.len()));
+    }
+    req.insert("args".into(), Value::Object(args));
+    let mut buf = serde_json::to_vec(&Value::Object(req)).unwrap();
     buf.push(b'\n');
     buf.extend_from_slice(payload);
     conn.write_all(&buf).unwrap();
+}
+
+/// The fields an answer carries beside its `ok`.
+const ANSWER_FIELDS: [&str; 6] = ["error", "detail", "details", "done", "len", "seq"];
+
+/// The flat header of a message on the wire, checking its envelope: an
+/// answer is `{"ok": {...}}` or `{"error", "detail"}` with only the fields
+/// beside them, and comes out with op reply; a watcher's message is
+/// `{"op", "args"}`.
+fn flatten(v: Value) -> Value {
+    let Value::Object(mut outer) = v.clone() else { panic!("a header that is not an object: {v}") };
+    let mut flat = match outer.remove("op") {
+        Some(op) => {
+            let mut f = match outer.remove("args") {
+                Some(Value::Object(m)) => m,
+                None => serde_json::Map::new(),
+                Some(a) => panic!("args that are not an object: {a} in {v}"),
+            };
+            f.insert("op".into(), op);
+            f
+        }
+        None => {
+            let ok = outer.remove("ok");
+            assert!(ok.is_some() != outer.contains_key("error"), "an answer must have either ok or error: {v}");
+            let mut f = match ok {
+                Some(Value::Object(m)) => m,
+                None => serde_json::Map::new(),
+                Some(o) => panic!("ok that is not an object: {o} in {v}"),
+            };
+            f.insert("op".into(), json!("reply"));
+            f
+        }
+    };
+    for (k, val) in outer {
+        assert!(ANSWER_FIELDS.contains(&k.as_str()), "a field {k:?} outside the envelope's body: {v}");
+        flat.insert(k, val);
+    }
+    Value::Object(flat)
 }
 
 /// Reads one message, None at the end of the stream.
@@ -64,6 +111,7 @@ pub fn read(r: &mut BufReader<UnixStream>) -> Option<Msg> {
     let h: Value = serde_json::from_slice(&line).unwrap_or_else(|e| {
         panic!("the service sent a header that is not JSON ({e}): {:?}", String::from_utf8_lossy(&line))
     });
+    let h = flatten(h);
     let n = h["len"].as_u64().unwrap_or(0) as usize;
     let mut payload = vec![0; n];
     r.read_exact(&mut payload).expect("the payload the header promised");
@@ -184,7 +232,13 @@ impl Svc {
     pub fn ok_with(&self, admin: bool, h: Value, payload: &[u8]) -> Msg {
         let req = h.to_string();
         let m = self.ask(admin, h, payload);
-        assert!(m.error().is_empty(), "{req} failed: {} ({})\n{}", m.error(), m.s("details"), self.log());
+        assert!(
+            m.error().is_empty(),
+            "{req} failed: {} ({})\n{}",
+            m.error(),
+            m.h["detail"].as_str().or(m.h["details"].as_str()).unwrap_or(""),
+            self.log()
+        );
         assert_eq!(m.s("op"), "reply", "{req}: {:?}", m.h);
         m
     }
