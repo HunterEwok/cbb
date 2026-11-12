@@ -230,6 +230,7 @@ pub fn field_name(kind: Kind, typ: u64, k: u16) -> Option<&'static str> {
             }
             16 => Some("time_ms"),
             17 => Some("root_counter"),
+            18 => Some("replaces"),
             _ => None,
         },
         Kind::Credential => match k {
