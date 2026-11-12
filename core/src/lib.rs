@@ -72,6 +72,8 @@ pub mod issue;
 pub mod join;
 pub mod keyboard;
 pub mod keystore;
+#[cfg(test)]
+mod longrules;
 pub mod manage;
 pub mod media;
 pub mod msg;

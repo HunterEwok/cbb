@@ -1615,11 +1615,14 @@ func startRust(t *testing.T, bin string, s *testService) *testService {
 	return r
 }
 
-// testClock moves a service's wall clock through the file
-// CBB_TEST_AHEAD_FILE names, which the service reads each time, so that a
-// test can move it while the service runs.
+// testClock moves a service's clocks through the file CBB_TEST_AHEAD_FILE
+// names, which the service reads each time, so that a test can move them
+// while the service runs: the wall clock (the file's first number) and the
+// time since boot (its second), the one clock the service counts running
+// time on (member/src/uptime.rs; docs/testing.md, "Time").
 type testClock struct {
-	file string
+	file       string
+	ahead, ran time.Duration
 }
 
 func newTestClock(t *testing.T, ahead time.Duration) *testClock {
@@ -1629,10 +1632,30 @@ func newTestClock(t *testing.T, ahead time.Duration) *testClock {
 	return c
 }
 
-// set moves the clock to ahead of the real time.
+// set moves the wall clock to ahead of the real time, as when a person
+// sets it: the time since boot does not move.
 func (c *testClock) set(t *testing.T, ahead time.Duration) {
 	t.Helper()
-	if err := os.WriteFile(c.file, []byte(strconv.FormatInt(ahead.Milliseconds(), 10)), 0o644); err != nil {
+	c.ahead = ahead
+	c.write(t)
+}
+
+// run moves both clocks forward by d, as if the machine had run that much
+// longer: the way a test walks a rule of hours or days in seconds.
+func (c *testClock) run(t *testing.T, d time.Duration) {
+	t.Helper()
+	if d < 0 {
+		t.Fatalf("the running time does not go back (%v)", d)
+	}
+	c.ahead += d
+	c.ran += d
+	c.write(t)
+}
+
+func (c *testClock) write(t *testing.T) {
+	t.Helper()
+	text := strconv.FormatInt(c.ahead.Milliseconds(), 10) + " " + strconv.FormatInt(c.ran.Milliseconds(), 10)
+	if err := os.WriteFile(c.file, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }

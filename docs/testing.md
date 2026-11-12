@@ -79,6 +79,31 @@ becomes a vector here.
   in Docker containers: mDNS, pairing with codes, sync, a wrong code.
 - The installer jobs install, run and remove the service on each system they cover.
 
+## Time
+
+Rules that live for days are walked with a moved clock, never waited for.
+
+- The core reads no clock: it takes the time a device held a claim, its own clock for the
+  keys and a leaf's running time as inputs. `core/src/longrules.rs` plays the caller hour by
+  hour and day by day: a takeover's 72 hours of running time (a member that was off counts
+  only the hours it ran; a restart keeps the held time and the counted claim; a root cancels
+  within the delay; a clock set back changes nothing), the weekly change of the sealing keys
+  with a device that sleeps three weeks and asks for its copies to be sealed again, and a
+  guarded leaf's 35-day grant on its running time.
+- The Rust service has one wall clock, `uptime::wall_ms()`, and one clock of running time,
+  `uptime::now()`; `tools/repocheck` refuses a read of the system's wall clock anywhere else
+  in `member/src` but the few files that decide no rule. The tests move both through the file
+  `CBB_TEST_AHEAD_FILE` names: `testClock.set` moves the wall clock as a person sets it,
+  `testClock.run` moves both as if the machine had run that much longer
+  (`internal/service/time_test.go`). The Go helper reads no clock.
+- When the service moves to the 0.6 core (wave 5), `internal/service/time_test.go` gains the
+  core's rules through the whole service: a takeover counted after 72 hours of running time
+  and not before, with a member off for a day and one restarted in the middle; the old root's
+  cancel at 71 hours and its late cancel after the count; the weekly key change with a member
+  that slept through two changes and gets its copies sealed again; a guarded leaf whose grant
+  goes stale after 35 days of running time and obeys nobody until it has a new one; a wall
+  clock set back by days during each of them.
+
 ## Bench scenarios
 
 Unit and CI tests cannot show that a copy on an iPhone reaches a Windows PC through a café's

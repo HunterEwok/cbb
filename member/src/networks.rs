@@ -14,7 +14,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::net::IpAddr;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use cbb_core::certs::b64;
 use hmac::{Hmac, KeyInit, Mac};
@@ -255,7 +255,7 @@ impl Networks {
 
     fn add(&self, ifs: &[Interface]) -> bool {
         let mut inner = self.inner.lock().unwrap();
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);
+        let now = crate::uptime::wall_ms() / 1000;
         let mut added = false;
         for f in ifs {
             let (full, addrs) = self.ids(&mut inner, f);

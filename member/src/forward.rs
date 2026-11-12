@@ -20,7 +20,7 @@ use std::net::{SocketAddr, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use chacha20::ChaCha20;
 use chacha20::cipher::{KeyIvInit, StreamCipher};
@@ -268,7 +268,8 @@ pub(crate) struct SystemClock;
 
 impl rustls::time_provider::TimeProvider for SystemClock {
     fn current_time(&self) -> Option<UnixTime> {
-        SystemTime::now().duration_since(UNIX_EPOCH).ok().map(UnixTime::since_unix_epoch)
+        // The service's one wall clock, which the tests move.
+        u64::try_from(crate::uptime::wall_ms()).ok().map(|ms| UnixTime::since_unix_epoch(Duration::from_millis(ms)))
     }
 }
 
@@ -455,7 +456,7 @@ fn once(
             {
                 return Ok(true);
             }
-            let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(0);
+            let now = u64::try_from(crate::uptime::wall_ms()).unwrap_or(0).saturating_mul(1_000_000);
             counter = counter.saturating_add(1).max(now);
             (cfg.send)(hello_to, &hello(&mask, &hello_key, a.id, counter));
             next = Instant::now() + every;

@@ -116,6 +116,16 @@ impl G {
     pub fn state(&self) -> State {
         self.set.state(&BTreeMap::new())
     }
+
+    /// Each signer's head, as a removal or a claim names them.
+    pub fn seen(&self) -> Vec<Seen> {
+        self.heads.iter().map(|(k, (s, id))| Seen { key: *k, seq: *s, id: *id }).collect()
+    }
+
+    /// The set's records in the order a sender sends them.
+    pub fn records(&self) -> Vec<Record> {
+        self.set.in_dependency_order().into_iter().cloned().collect()
+    }
 }
 
 /// A device's key store with its first epoch made at T0.

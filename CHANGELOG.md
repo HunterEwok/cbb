@@ -16,6 +16,12 @@ All notable changes to cbb are documented in this file. The format follows
   4096 units filled, 256 devices, the root and the admins at their ceilings, two takeovers,
   checkpoints with gaps). `core/tests/ceilings.rs` measures the evaluation and a member's set
   on them, in time and in peak memory, against a budget.
+- Time in tests: the core's rules of days walked with a moved clock (`core/src/longrules.rs`:
+  a takeover's 72 hours, the weekly key change with a sleeping device, a guarded leaf's 35
+  days, a clock set back), and the Rust service's running time moved by the tests as its wall
+  clock already was (`CBB_TEST_AHEAD_FILE`'s second number, `testClock.run`); every read of
+  the wall clock in the service goes through `uptime::wall_ms()`, which `tools/repocheck`
+  enforces (docs/testing.md, "Time").
 - The apps are tested in all eight languages and for every reader (docs/testing.md, "The
   apps' languages, accessibility and screenshots"): the tray app, Android, the iPhone and the
   Mac in zh, en, es, ru, ar, sw, he and hi, Arabic and Hebrew from right to left; every text
