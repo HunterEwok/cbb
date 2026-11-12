@@ -34,10 +34,8 @@
 // 12. A removed key gains nothing: of a removed key, only records that every counted removal
 //     of it saw count (a removed phone admin turned thief included).
 // 13. After a change of root, two members that hold the same recovery chain, were offered the
-//     same records and hold the new root's first checkpoint are in one state, whether or not
-//     either compacted on a checkpoint of the replaced root or of the new root. (Not yet true
-//     of the core, nor of this model, when one compacted on the new root's own checkpoint and
-//     the room is full; compactedAgreeOldRootOnly is the weaker form checked meanwhile.)
+//     same records and hold the new root's first checkpoint are in one state. A counting
+//     checkpoint compacts as it comes, so neither keeps what it left out.
 //
 // (Promise 4, a claim's delay, is gone with the delay.)
 //
@@ -656,10 +654,15 @@ module records_v3 {
     recsOf(v.counting, db).filter(r => r.kind == "revoke" and onList(v.path, r.signer))
       .fold(Set(), (s, r) => s.union(withPair(r.target)))
 
-  // A set cut by its chain's path, and its state.
-  pure def finish(s2: Store, db2: Id -> Record): (Store, View) = {
+  // A set cut by its chain's path, and its state. A counting checkpoint compacts at once
+  // (there is no separate compacted state); taking it may make another count, so twice.
+  pure def settled(s2: Store, db2: Id -> Record): Store = {
     val s3 = pathed(s2, db2)
-    (s3, storeView(s3, db2))
+    compactStore(s3, storeView(s3, db2), db2)
+  }
+  pure def finish(s2: Store, db2: Id -> Record): (Store, View) = {
+    val s4 = settled(settled(s2, db2), db2)
+    (s4, storeView(s4, db2))
   }
 
   // Member m's set becomes s2.
@@ -1117,42 +1120,25 @@ module records_v3 {
       recsOf(s.got, db).exists(r => r.signer == tip.target and r.kind == "checkpoint" and r.seq == max2(tip.targetRec, 1))
     }
   }
-  // Compacted on nothing, or on a replaced root's checkpoint (not on the current root's own).
-  def notOnCurrent(m: str): bool = {
-    val s = st.get(m)
-    s.checkpoint == 0 or db.get(s.checkpoint).signer != last(keptPath(s, db))
-  }
   val compactedAgree = MEMBERS.forall(m1 => MEMBERS.forall(m2 => {
     val s1 = st.get(m1)
     val s2 = st.get(m2)
     (s1.chain == s2.chain and s1.got == s2.got and not(chainState(s1, db).stop) and firstCheckpointHeld(m1)
       and saturated(m1) and saturated(m2)) implies views.get(m1) == views.get(m2)
   }))
-  // 13w, weaker, while the core keeps more after compacting on the current root's checkpoint
-  // than before (core/tests/records_model.rs, compacting_on_the_roots_checkpoint_changes_nothing):
-  // promise 13 only for members that compacted on a replaced root's checkpoint or not at all.
-  val compactedAgreeOldRootOnly = MEMBERS.forall(m1 => MEMBERS.forall(m2 => {
-    val s1 = st.get(m1)
-    val s2 = st.get(m2)
-    (s1.chain == s2.chain and s1.got == s2.got and not(chainState(s1, db).stop) and firstCheckpointHeld(m1)
-      and notOnCurrent(m1) and notOnCurrent(m2) and saturated(m1) and saturated(m2)) implies views.get(m1) == views.get(m2)
-  }))
-
-  // Promise 13 was tried: two members that agree in what it asks for, one compacted on a
-  // replaced root's checkpoint and the other not.
+  // Promise 13 was tried: two members that agree in what it asks for, compacted on a
+  // checkpoint.
   val agreeTried = MEMBERS.exists(m1 => MEMBERS.exists(m2 => {
     val s1 = st.get(m1)
     val s2 = st.get(m2)
-    s1.chain == s2.chain and s1.got == s2.got and firstCheckpointHeld(m1) and s1.checkpoint != 0 and notOnCurrent(m1)
-      and s2.checkpoint == 0 and saturated(m1) and saturated(m2)
+    m1 != m2 and s1.chain == s2.chain and s1.got == s2.got and firstCheckpointHeld(m1) and s1.checkpoint != 0
+      and saturated(m1) and saturated(m2)
   }))
 
   val promises = and {
     oneState, removedStayOut, oneChainOneState, stopRootOnly, fairRoom, followsRecovery, pathGrows, newcomerTakes,
-    oldRootListed, twinStops, removedGainsNothing, compactedAgreeOldRootOnly,
+    oldRootListed, twinStops, removedGainsNothing, compactedAgree,
   }
-  // compactedAgree (promise 13 in full) is checked on its own until the core keeps the same
-  // records whether or not a member compacted on the current root's checkpoint.
 
   // --- Scenarios ---------------------------------------------------------------------------
 
@@ -1577,9 +1563,10 @@ module records_v3 {
       .then(welcomeFrom("k"))
       .expect(views.get("m").path == [ROOT, "NK", "NA"] and welcomed == [ROOT, "NK", "NA"] and promises)
 
-  // A member that compacted on the replaced root's checkpoint and one that did not end in one
-  // state after the change: the new root's first checkpoint, signed with the head, prunes again
-  // what the old one pruned (A's removal the root resolved).
+  // The replaced root's checkpoint compacts every member that takes it, at once (once that was
+  // one member compacting and the other not); after the change they end in one state: the new
+  // root's first checkpoint, signed with the head, prunes again what the old one pruned (A's
+  // removal the root resolved).
   run compactedChangeTest =
     init
       .then(signAs(ROOT, "device", DEVICE, 0))
@@ -1594,7 +1581,7 @@ module records_v3 {
       .then(give("c", 4)).then(give("c", 5)).then(give("c", 6)).then(give("c", 7)).then(give("c", 8))
       .then(give("k", 4)).then(give("k", 5)).then(give("k", 6)).then(give("k", 7)).then(give("k", 8))
       .then(compactAt("m"))
-      .expect(views.get("m").checkpoint == 8 and not(st.get("m").recs.contains(5)) and st.get("c").recs.contains(5))
+      .expect(views.get("m").checkpoint == 8 and not(st.get("m").recs.contains(5)) and not(st.get("c").recs.contains(5)))
       .then(recoverAs(RECOVERY, "NK"))
       .expect(db.get(10).signer == "NK" and db.get(10).kind == "checkpoint" and db.get(10).seq == 1)
       .then(give("m", 9)).then(give("m", 10)).then(give("m", 5))
