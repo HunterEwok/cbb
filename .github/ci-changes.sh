@@ -21,6 +21,7 @@ core=false     # the Go service: cmd, internal, packaging, the e2e scripts
 tools=false    # Go tools under tools/, tested by the test job
 rust=false     # cbb in Rust, the core and the firmware
 ios=false      # the Swift kit, the iPhone and Watch apps
+iosapp=false   # the iPhone and Watch apps' build and UI tests, which read no Go
 macos=false    # the Mac app, which shares the iPhone app's theme
 desktop=false  # the tray app
 android=false  # the Kotlin kit, the Android and Wear OS apps, the F-Droid build
@@ -58,13 +59,19 @@ for f in $files; do
 	esac
 done
 
+# The iPhone app's job reads the Swift kit, the apps and the Rust core, but
+# no Go: the kit's interop tests run the Go cbb-helper, the app's tests do not.
+# So a change to the Go service runs the kit's jobs and not the app's, which
+# take the most of the few macOS runners.
+iosapp=$ios
+
 # The jobs of one part that also read another's files.
 [ "$core" = false ] || { ios=true; desktop=true; android=true; rust=true; }
 [ "$rust" = false ] || zxnext=true
-[ "$design" = false ] || { ios=true; macos=true; desktop=true; android=true; silica=true; site=true; }
+[ "$design" = false ] || { ios=true; iosapp=true; macos=true; desktop=true; android=true; silica=true; site=true; }
 
 if [ "$all" = true ]; then
-	core=true tools=true rust=true ios=true macos=true desktop=true android=true zxnext=true silica=true design=true site=true
+	core=true tools=true rust=true ios=true iosapp=true macos=true desktop=true android=true zxnext=true silica=true design=true site=true
 fi
-printf 'core=%s\ntools=%s\nrust=%s\nios=%s\nmacos=%s\ndesktop=%s\nandroid=%s\nzxnext=%s\nsilica=%s\ndesign=%s\nsite=%s\n' \
-	"$core" "$tools" "$rust" "$ios" "$macos" "$desktop" "$android" "$zxnext" "$silica" "$design" "$site"
+printf 'core=%s\ntools=%s\nrust=%s\nios=%s\niosapp=%s\nmacos=%s\ndesktop=%s\nandroid=%s\nzxnext=%s\nsilica=%s\ndesign=%s\nsite=%s\n' \
+	"$core" "$tools" "$rust" "$ios" "$iosapp" "$macos" "$desktop" "$android" "$zxnext" "$silica" "$design" "$site"

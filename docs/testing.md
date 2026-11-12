@@ -124,8 +124,22 @@ sh tools/e2e/parallel.sh -run 'Takeover' IMAGE   # only those -run names
 ```
 
 Other jobs run side by side the same way: the iPhone app's UI tests on an iPhone and an iPad
-simulator are two jobs, and the Rust workspace's checks and Raspberry Pi builds
-(`cbb (Rust), the checks and the Raspberry Pi builds`) run beside its tests (`cbb (Rust)`).
+simulator are two jobs, the Rust workspace's checks and Raspberry Pi builds
+(`cbb (Rust), the checks and the Raspberry Pi builds`) run beside its tests (`cbb (Rust)`),
+and the Kotlin kit's tests (`Android kit`) beside the Android apps' build (`Android app`).
+
+The account runs at most 5 macOS jobs at a time, so the macOS jobs do no more than they must:
+the iPhone app's jobs build only the simulator's Rust library for the runner's processor
+(`ffi/bind.sh ios-sim`; `phone core (ios)` builds all three), they do not run for a change
+that touches only Go (`iosapp` in `.github/ci-changes.sh`; the kit's interop tests still
+do), and Homebrew's formula is tested in the job that builds the macOS archives
+(`build (macOS), homebrew`).
+
+The jobs that build the most Rust on the way to their tests (the iPhone app, the phone kit
+on macOS, the phone core and the service tests' build) keep their build in the Actions cache
+(`.github/actions/rust-cache`). A pull request saves its own and its later runs take it, so
+they compile only the crates it changed; another pull request never reads it, and the release
+and F-Droid builds build from nothing.
 
 ## Bench scenarios
 
@@ -225,7 +239,7 @@ Under the table are the hard gates, which have no floor and fail the job at once
 | `rust-member` | lines of `member/src/`, by the Rust tests alone | as `rust-core` |
 | `rust-service` | lines of `member/src/`, by the Rust cbb's own tests and Go's tests of the service together (`internal/service`, the desktop connector, `internal/relay` and the phones' tunnel, run against a `cbb` built with instrument-coverage) | `cargo llvm-cov` in the `service tests on the Rust cbb, the coverage` job, from the build's and every part's profiles |
 | `swift-kit` | lines of the Swift kit's `Sources` | `swift test --enable-code-coverage` in the `phone kit (macos-latest)` job |
-| `kotlin-kit` | lines of the Kotlin kit | JaCoCo in the `Android app` job |
+| `kotlin-kit` | lines of the Kotlin kit | JaCoCo in the `Android kit` job |
 
 The Go packages of the `service tests on the Rust cbb` jobs run as test binaries built with `-cover`, beside a `cbb-helper` built with `-cover`, and each part's profile (`cover-go-service-PART.out`) counts in `go` too.
 A number is a hint, not the goal: a test that runs a line without checking what it did

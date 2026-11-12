@@ -139,16 +139,17 @@ environment secret**.
   client under Xvfb, against wl-clipboard and xclip;
 - **packaging**: `systemd-analyze verify` and `security` for the unit, and the desktop
   entry;
-- **homebrew**: the formula written by `packaging/homebrew/formula.sh`, installed with
-  Homebrew on macOS;
+- **build (macOS), homebrew**: the macOS release archives, then the formula written by
+  `packaging/homebrew/formula.sh`, installed with Homebrew on the same machine;
 - **windows installer**: `install.ps1`, the service, the agent and `uninstall.ps1` on
   windows-latest;
 - **phone kit**: CBBKit's tests on Linux and macOS, and its cross tests with the Go
   code (pairing over plain TCP on Linux; pairing and a member connection over TLS on macOS);
 - **iPhone app**: the Xcode project from XcodeGen, built and tested without signing on an
   iPhone and an iPad simulator, one job for each, at the same time;
-- **Android app**: the Kotlin kit's tests and its cross tests with the Go code, and the app
-  built, unit-tested and linted;
+- **Android kit**: the Kotlin kit's tests and its cross tests with the Go code and the
+  computers' cbb;
+- **Android app**: the app and the Wear OS app built, unit-tested and linted;
 - **cbb (Rust), the checks and the Raspberry Pi builds**: `cargo check` on the oldest Rust,
   `cargo fmt`, `clippy` for each system, and the ARM64 and ARMv6 builds;
 - **cbb (Rust)**: the tests of the Rust workspace, the installers without the helper
@@ -402,7 +403,7 @@ the one tap for all of the owner's formulae; CBB's is `Formula/cbb.rb`, and user
 pre-release) is published, `.github/workflows/published.yml` checks its signed files and writes the formula with
 `packaging/homebrew/formula.sh` from the release's `SHA256SUMS` and pushes it to the tap's
 `main`. The formula installs the release archives as they are, so it needs no Apple signing,
-and CI's `homebrew` job installs one with it on macOS on every pull request.
+and CI's `build (macOS), homebrew` job installs one with it on macOS on every pull request.
 
 Setting it up, once:
 
