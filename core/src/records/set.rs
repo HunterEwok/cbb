@@ -690,12 +690,14 @@ impl RecordSet {
     }
 
     /// The list a change of root carries (rule 33), not edited: every
-    /// record of every root on the path that counts in state, every root's
-    /// removal the set holds, what the current list keeps that the set
-    /// holds (lists do not add up, so each carries all of it forward), and
-    /// the heads the current root's counting checkpoint names, as anchors
-    /// (not the checkpoint's own record). At most a root's room, the
-    /// removals first.
+    /// record of every root on the path that counts in state; every root's
+    /// removal the set holds that names a key some record the set holds
+    /// names (of the roots before the current one at most
+    /// `EARLIER_REMOVALS`, the later root's and the newest first); what the
+    /// current list keeps that the set holds (lists do not add up, so each
+    /// carries it forward, under the same rule for removals); and the
+    /// heads the current root's counting checkpoint names, as anchors. No
+    /// checkpoint record. At most a root's room, the removals first.
     pub fn change_list(&self, state: &State) -> List {
         let roots: BTreeSet<&KeyHash> = state.roots.iter().collect();
         let cur = state.roots.last();
@@ -709,8 +711,9 @@ impl RecordSet {
                 named.extend(d.admin.as_ref().map(Key::hash));
             }
         }
-        // The earlier roots' removals that name a named key: the later
-        // root's first, the newest by seq first, at most their share.
+        // A removal is listed only when it names a named key. The earlier
+        // roots' take at most their share: the later root's first, the
+        // newest by seq first.
         let at = |k: &KeyHash| state.roots.iter().position(|r| r == k).unwrap_or(0);
         let mut earlier: Vec<(usize, u64, RecordId)> = self
             .records
@@ -731,7 +734,7 @@ impl RecordSet {
             let counts = state.counting.contains(&e.record.id());
             match &b.kind {
                 Kind::Revoke(rm) => {
-                    if counts || rm.keys.iter().any(|k| named.contains(k)) {
+                    if rm.keys.iter().any(|k| named.contains(k)) {
                         out.insert(e.record.id());
                     }
                 }
