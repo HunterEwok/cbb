@@ -2305,9 +2305,18 @@ impl<'e, 'a> Epoch<'e, 'a> {
     /// the removal saw of the claim's new root changes nothing: the
     /// claimant writes those records, so they cannot show that the
     /// takeover counted where the removal was written.
+    ///
+    /// A checkpoint of the current root that leaves out the record that
+    /// gives the claimant its power takes that power back, as a removal
+    /// does, whatever it saw: a member that compacted under it before the
+    /// claim came no longer holds that record (rule 32).
     fn cancelled(&self, c: usize) -> bool {
         let rc = self.r(c);
         let keys = self.with_pair(&rc.b().signer);
+        let (named, recovery) = self.power_records(c, &rc.b().signer);
+        let power: Vec<usize> =
+            [named, recovery].into_iter().flatten().filter(|&p| self.r(p).b().signer == self.cur).collect();
+        let get = |x: &RecordId| self.e.by_id.get(x).map(|&j| self.r(j).r);
         self.of(&self.cur).iter().any(|&i| {
             let r = self.r(i);
             self.root_record(i)
@@ -2315,6 +2324,11 @@ impl<'e, 'a> Epoch<'e, 'a> {
                     Kind::Resolve(ids) => ids.binary_search(&rc.id).is_ok(),
                     Kind::Revoke(rm) => keys.iter().any(|k| rm.keys.binary_search(k).is_ok()) && self.e.saw(i, c),
                     Kind::Device(_) => self.superseded.get(&rc.b().signer) == Some(&i) && self.e.saw(i, c),
+                    Kind::Checkpoint { heads, keep } => {
+                        let anchors = anchors_of(heads, keep);
+                        power.iter().any(|&p| pruned_by(self.r(p).r, Role::Root, heads, &anchors))
+                            && checkpoint_ok(r.r, get)
+                    }
                     _ => false,
                 }
         })

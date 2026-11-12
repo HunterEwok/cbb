@@ -3912,3 +3912,138 @@ fn a_claim_keeps_the_record_that_gives_its_power() {
         }
     }
 }
+
+/// A checkpoint of the root that names the records it keeps, and so
+/// prunes the rest at or below its head.
+fn checkpoint_keeping(g: &mut G, keep: &[&Record]) -> Record {
+    let root = k("root");
+    let (seq, id) = g.heads[&root.hash];
+    let mut keep: Vec<RecordId> = keep.iter().map(|r| r.id()).collect();
+    keep.sort();
+    g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep })
+}
+
+/// The state of each member: evaluate over all records, and sets filled
+/// in both orders and compacted.
+fn members_agree(g: &G, held: &BTreeMap<RecordId, u64>) -> State {
+    let s = state_of(&g.root.key, &g.recs, held);
+    for order in 0..2 {
+        let mut recs = g.recs.clone();
+        if order == 1 {
+            recs.reverse();
+        }
+        let mut m = RecordSet::new(g.root.key.clone());
+        sync_all(&mut m, &recs, held);
+        let from_set = m.state(held);
+        assert_eq!(
+            (&from_set.roots, &from_set.devices, &from_set.claims),
+            (&s.roots, &s.devices, &s.claims),
+            "order {order}"
+        );
+    }
+    s
+}
+
+/// A claim made after the root's checkpoint left out the record that gave
+/// its claimant the power: the claimant's writer cannot list what no
+/// longer counts, and the claim is void on every member alike.
+#[test]
+fn a_claim_after_a_checkpoint_dropped_its_power_is_void() {
+    let (rk, n) = (k("recovery"), k("new root"));
+    let mut g = G::new();
+    let rec = g.root_rec(Kind::Recovery { admin: rk.key.clone() });
+    let laptop = g.device(&k("root"), &k("laptop"), "laptop", |_| {});
+    checkpoint_keeping(&mut g, &[&laptop]);
+    let s = state_of(&g.root.key, &g.recs, &BTreeMap::new());
+    assert!(!s.counting.contains(&rec.id()) && s.recovery.is_none());
+    // What counts for the writer: the root's records that count.
+    let seen = g.seen();
+    let keep: Vec<RecordId> = {
+        let mut ids: Vec<RecordId> = g
+            .recs
+            .iter()
+            .filter(|r| r.body().signer == g.root.hash && s.counting.contains(&r.id()))
+            .filter(|r| !matches!(r.body().kind, Kind::Checkpoint { .. }))
+            .map(Record::id)
+            .collect();
+        ids.sort();
+        ids
+    };
+    assert!(!keep.contains(&rec.id()));
+    let claim = g.rec(&rk, Kind::Claim { root: n.key.clone(), keep, seen });
+    let held = BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]);
+    let s = members_agree(&g, &held);
+    assert!(state_of_claim(&s, claim.id()).is_none_or(|c| c == ClaimState::Void));
+    assert_eq!(s.roots, vec![g.root.hash]);
+}
+
+/// A claim valid when made whose power record a later checkpoint of the
+/// old root leaves out before the delay ends: the root took the power
+/// back, as a removal of the claimant would, and the claim is void on
+/// every member, whichever it saw first.
+#[test]
+fn a_checkpoint_during_the_delay_that_drops_the_power_voids_the_claim() {
+    let (rk, n) = (k("recovery"), k("new root"));
+    let mut g = G::new();
+    g.root_rec(Kind::Recovery { admin: rk.key.clone() });
+    let laptop = g.device(&k("root"), &k("laptop"), "laptop", |_| {});
+    let seen = g.seen();
+    let claim = g.rec(&rk, Kind::Claim { root: n.key.clone(), keep: crate::records::keep_of(&g.recs, &seen), seen });
+    checkpoint_keeping(&mut g, &[&laptop]);
+    let held = BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]);
+    let s = members_agree(&g, &held);
+    assert!(state_of_claim(&s, claim.id()).is_none_or(|c| c != ClaimState::Effective));
+    assert_eq!(s.roots, vec![g.root.hash]);
+    // A member that compacted under the checkpoint before the claim came
+    // no longer knows the claimant, and ends the same.
+    let mut m = RecordSet::new(g.root.key.clone());
+    sync_all(&mut m, &g.recs.iter().filter(|r| r.id() != claim.id()).cloned().collect::<Vec<_>>(), &held);
+    assert_eq!(m.insert(claim.clone()), Err(Refused::UnknownSigner));
+    let late = m.state(&held);
+    assert_eq!((&late.roots, &late.devices), (&s.roots, &s.devices));
+}
+
+/// Once a claim counts, a later checkpoint of the old root that leaves
+/// out the claimant's power record changes nothing: that root keeps only
+/// what the claim lists, the power record among them. The member keeps
+/// the takeover across a reload of its marked store, and a newcomer
+/// admitted after it takes the same state.
+#[test]
+fn a_counted_claim_keeps_its_power_record_across_reload_and_welcome() {
+    let (rk, n) = (k("recovery"), k("new root"));
+    let mut g = G::new();
+    let rec = g.root_rec(Kind::Recovery { admin: rk.key.clone() });
+    let laptop = g.device(&k("root"), &k("laptop"), "laptop", |_| {});
+    let seen = g.seen();
+    let claim = g.rec(&rk, Kind::Claim { root: n.key.clone(), keep: crate::records::keep_of(&g.recs, &seen), seen });
+    let phone = g.device(&n, &k("new phone"), "new phone", |d| d.holds_root = true);
+    let held = BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]);
+    let mut m = RecordSet::new(g.root.key.clone());
+    sync_all(&mut m, &g.recs, &held);
+    assert_eq!(m.counted(), vec![claim.id()]);
+    // The old root's checkpoint after the takeover counted.
+    let cp = checkpoint_keeping(&mut g, &[&laptop]);
+    assert_eq!(m.insert(cp.clone()), Ok(Added::NoRoom));
+    sync_all(&mut m, &g.recs, &BTreeMap::new());
+    let s = m.state(&BTreeMap::new());
+    assert_eq!(s.roots, vec![g.root.hash, n.hash]);
+    assert!(m.contains(&rec.id()) && m.contains(&phone.id()) && !m.contains(&cp.id()));
+    // Reloaded from its marked store, with the counted claims it kept.
+    let local = [7u8; 32];
+    let saved: Vec<(Record, Option<Mark>)> =
+        m.marked(&local).into_iter().map(|(r, mk)| (r.clone(), Some(mk))).collect();
+    let mut again = RecordSet::new(g.root.key.clone());
+    again.remember_counted_claims(m.counted_claims().to_vec());
+    again.load_marked(&local, saved);
+    assert_eq!(again.state(&BTreeMap::new()), s);
+    assert_eq!(again.digest(), m.digest());
+    // A newcomer, as a Welcome admits it: the counted claims first, then
+    // the admitter's records; the checkpoint from another peer later.
+    let mut newcomer = RecordSet::new(g.root.key.clone());
+    assert_eq!(newcomer.remember_counted(m.counted()), Ok(()));
+    newcomer.insert_all(m.for_peer(&s, &k("new phone").hash).into_iter().cloned());
+    assert_eq!(newcomer.counted(), vec![claim.id()]);
+    assert_eq!(newcomer.insert(cp), Ok(Added::NoRoom));
+    assert_eq!(newcomer.state(&BTreeMap::new()), s);
+    assert_eq!(newcomer.digest(), m.digest());
+}
