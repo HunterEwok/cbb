@@ -198,7 +198,10 @@ Rules for workflows:
   `member/packaging/notices.sh`) and `packaging/`, with `cbb-helper` beside `cbb` on every
   architecture but MIPS.
 - Published with `SHA256SUMS` and a build provenance attestation
-  (`actions/attest-build-provenance`), which users can check with `gh attestation verify`.
+  (`actions/attest-build-provenance`), which users can check with `gh attestation verify`;
+  the release carries the same signed attestation as `provenance.intoto.jsonl`, which
+  `release-sign` leaves out of `release.json` (it describes the files, and no attestation
+  covers it).
 - What a release is built from: a software bill of materials in CycloneDX 1.6 JSON for each
   part, made by `tools/sbom` and listed in `SHA256SUMS` and the signed `release.json` like the
   other files:

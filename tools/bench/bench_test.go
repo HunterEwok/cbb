@@ -26,9 +26,10 @@ ssh = "user@desktop.lan"
 clipboard = "wayland"
 roles = ["member", "hub"]
 
-[device.lite]
-os = "linux-lite"
+[device.small]
+os = "linux"
 ssh = "user@pi.lan"
+peer = true
 
 [device.win]
 os = "windows"
@@ -48,7 +49,7 @@ kind = "openwrt"
 	if err != nil || len(ds) != 3 || ds[0].Name != "desktop" || !ds[0].Has("hub") {
 		t.Fatalf("Select = %v, %v", ds, err)
 	}
-	if ds[1].Clipboard != "none" || ds[2].VM.Snapshot != "clean" {
+	if ds[1].Clipboard != "none" || !ds[1].Peer || ds[0].Peer || ds[2].VM.Snapshot != "clean" {
 		t.Fatalf("defaults: %+v %+v", ds[1], ds[2].VM)
 	}
 	if _, err := inv.Select("desktop,nope"); err == nil {
@@ -67,6 +68,10 @@ kind = "openwrt"
 	os.WriteFile(path, []byte("[device.nas]\nos = \"docker\"\nssh = \"a@b\"\nclipboard = \"x11\"\n"), 0o600)
 	if _, err := LoadInventory(path); err == nil {
 		t.Fatal("a container with a desktop clipboard")
+	}
+	os.WriteFile(path, []byte("[device.x]\nos = \"darwin\"\nssh = \"a@b\"\npeer = true\n"), 0o600)
+	if _, err := LoadInventory(path); err == nil || !strings.Contains(err.Error(), "peer is only for os linux") {
+		t.Fatalf("peer on a Mac: %v", err)
 	}
 	os.WriteFile(path, []byte("[device.x]\nos = \"linux\"\nssh = \"a@b\"\ncontainer = \"c\"\n"), 0o600)
 	if _, err := LoadInventory(path); err == nil {
@@ -221,11 +226,10 @@ func TestContainer(t *testing.T) {
 
 func TestAdmin(t *testing.T) {
 	for os, want := range map[string]string{
-		"linux":      "sudo -n cbb",
-		"linux-lite": "sudo -n cbb",
-		"darwin":     "sudo -n cbb",
-		"windows":    `& "$env:ProgramFiles\cbb\cbb.exe"`,
-		"docker":     "docker exec -i c cbb",
+		"linux":   "sudo -n cbb",
+		"darwin":  "sudo -n cbb",
+		"windows": `& "$env:ProgramFiles\cbb\cbb.exe"`,
+		"docker":  "docker exec -i c cbb",
 	} {
 		if got := adminCmd(&Device{OS: os, Container: "c"}); got != want {
 			t.Errorf("adminCmd(%s) = %q, want %q", os, got, want)
@@ -292,7 +296,7 @@ func TestReset(t *testing.T) {
 	for _, c := range []struct{ os, machine, want string }{
 		{"linux", "x86_64", "cbb-linux-amd64.tar.gz"},
 		{"docker", "aarch64", "cbb-linux-arm64.tar.gz"},
-		{"linux-lite", "armv6l", "cbb-lite-linux-armv6.tar.gz"},
+		{"linux", "armv6l", "cbb-linux-armv6.tar.gz"},
 		{"darwin", "arm64", "cbb-darwin-arm64.tar.gz"},
 		{"windows", "ARM64", "cbb-windows-arm64.zip"},
 		{"windows", "AMD64", "cbb-windows-amd64.zip"},

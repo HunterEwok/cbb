@@ -107,6 +107,11 @@ All notable changes to cbb are documented in this file. The format follows
   Raspberry Pi Zero and as a router, its memory at rest and after 200 copies, its CPU at rest,
   the time a copy takes to arrive and its peak stay under fixed limits, each also a metric for
   `-baseline`.
+- A release carries its build provenance as `provenance.intoto.jsonl`, the same signed
+  attestation GitHub keeps, for checking a release without GitHub's API; `release-sign`
+  leaves it out of `release.json`, as it describes the files and no attestation covers it.
+- CI checks the Android build's `gradle-wrapper.jar` against the checksums of Gradle's own
+  releases (`gradle/actions/wrapper-validation`).
 - The blind relay is in Rust: `cbb-relay` is built with `cbb` from `member/src/relayd`, with
   the Go relay's flags, key file, wire format and an open relay's budget with the same limits
   and caps, and runs as its own systemd service as before. The Go relay's tests that check it
@@ -1628,6 +1633,12 @@ All notable changes to cbb are documented in this file. The format follows
   whose BPF maps fail on small boards, and the installer pairs at once, as on OpenWrt, which
   always runs `cbb` alone. `cbb update` takes the system's archive, `cbb version` no longer
   names a kind of member, and the crate is `cbb-member`.
+- The test bench follows the one archive: the inventory has no `linux-lite` any more, a small
+  board is `os = "linux"` (the example's device `small`), and `peer = true` marks a Linux device
+  in another subnet, which the bench tells the hub's address with `-peer` and which joins at the
+  address `cbb pair` prints. Every Linux device joins as the service's user; I1 runs
+  `get.sh --no-helper`; the hub moves and sync away from home skip only a container and a MIPS
+  build, which has no tunnel; the quick reset keeps the installer's drop-ins.
 - The tunnel's disguise on a hub is now "Strict networks", two switches in the tray, Mac,
   iPhone and Android apps: networks that block VPNs (AmneziaWG) and networks that let only the
   web through (VLESS, which needs the first).
@@ -2284,6 +2295,13 @@ All notable changes to cbb are documented in this file. The format follows
   lower device ID: it waited 30 s for them to dial it, which they cannot.
 - The Rust member cleans the reason of a command's result before it shows or passes it on,
   as the Go service did: control characters become spaces and it is cut to 256 bytes.
+- A release's `winget-manifest.zip` has its line in `SHA256SUMS`, which `release-sign verify`
+  and `mirror` ask of every file in `release.json`; it was written after the sums.
+- The copy of amneziawg-go requires only what its packages import, at the versions the root
+  module selects: the module's own `go.mod` named older versions that never reach the build,
+  and scanners that read every `go.mod` (OpenSSF Scorecard) took them for ours. The firmware's
+  OSV-Scanner exceptions sit beside `esp32/Cargo.lock`, where Scorecard's run reads them, and
+  the stale one for block-buffer, which no longer matches, is gone.
 - A member removed from the group while it was still answering the hello of the connection that
   removed it hears that it was removed: when its own writing failed first, as the other end hung
   up, it dropped the records it had already read, and every later connection was refused.

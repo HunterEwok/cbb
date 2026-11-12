@@ -130,11 +130,15 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false # nothing to download; leaves the shared cache key to the check job
+      - name: apt packages for the next step
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: swtpm
+          cache: swtpm
       - name: swtpm, a software TPM for the tests of keys in a TPM
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q swtpm
           echo CBB_TPM_REQUIRED=1 >>"$GITHUB_ENV"
       - name: go test
         # bash: PowerShell splits -coverprofile=cover-go.out at the dot. Each
@@ -185,9 +189,11 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: swtpm, sway, Xvfb and the clipboard tools
-        run: |
-          sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends swtpm sway wl-clipboard xvfb xclip xterm foot >/dev/null
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: swtpm sway wl-clipboard xvfb xclip xterm foot
+          cache: desktop-tests
+          no-recommends: "true"
       - name: go test across packages
         env:
           CBB_TPM_REQUIRED: "1"
@@ -384,9 +390,10 @@ jobs:
           go-version-file: go.mod
           cache: false # nothing to download; leaves the shared cache key to the check job
       - name: qemu for mips programs
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q qemu-user qemu-user-binfmt
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: qemu-user qemu-user-binfmt
+          cache: qemu-user
       - name: go test the network and the group under qemu-mips
         run: >-
           go test -timeout 20m -exec "$(command -v qemu-mips-static || command -v qemu-mips)" ./internal/clip ./internal/control ./internal/group
@@ -552,10 +559,13 @@ jobs:
         run: sh tools/e2e/openwrt.sh rootfs "$RUNNER_TEMP/release"
       - name: the apk feed, signed with a test key, installs and removes it
         run: sh tools/e2e/openwrt.sh feed "$RUNNER_TEMP/release"
+      - name: apt packages for the next step
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: qemu-system-x86 sshpass
+          cache: openwrt-vm
       - name: on OpenWrt booted in QEMU, the service, the hub's rule in fw4, the wait for NTP and get.sh --no-helper
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q qemu-system-x86 sshpass
           sudo chmod 666 /dev/kvm
           sh tools/e2e/openwrt.sh vm "$RUNNER_TEMP/release"
 
@@ -673,9 +683,11 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: install sway, Xvfb, xterm, foot and the clipboard tools
-        run: |
-          sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends sway wl-clipboard xvfb xclip xterm foot >/dev/null
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: sway wl-clipboard xvfb xclip xterm foot
+          cache: desktop-clipboards
+          no-recommends: "true"
       - name: Wayland data-control under headless sway, and X11 under Xvfb
         run: |
           go test -c -o "$RUNNER_TEMP/desktop.test" ./internal/desktop
@@ -794,9 +806,13 @@ jobs:
             echo "manifest.sh wrote a manifest without a checksum" >&2
             exit 1
           fi
+      - name: apt packages for the next step
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: desktop-file-utils
+          cache: desktop-entry
       - name: desktop entry
         run: |
-          sudo apt-get install -y -qq desktop-file-utils >/dev/null
           desktop-file-validate packaging/linux/cbb-desktop.desktop
       - name: get.sh installs a release archive and refuses a changed one
         run: |
@@ -1903,6 +1919,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: the Gradle wrapper's jar is one Gradle published
+        # gradlew runs gradle-wrapper.jar from the repository before anything
+        # else, so a changed jar would run in every build; this checks it
+        # against the checksums of Gradle's own releases.
+        uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
       - name: Gradle from the cache
         id: gradle
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -2182,12 +2203,16 @@ jobs:
         with:
           path: ${{ runner.temp }}/qemu
           key: qemu-${{ env.QEMU }}-mips-linux-user-${{ runner.os }}-${{ env.ImageOS }}
+      - name: apt packages for the next step
+        if: steps.qemu.outputs.cache-hit != 'true'
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: ninja-build libglib2.0-dev python3-venv
+          cache: qemu-build
       - name: qemu from its source
         if: steps.qemu.outputs.cache-hit != 'true'
         working-directory: ${{ runner.temp }}
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q ninja-build libglib2.0-dev python3-venv
           curl -fsSL --retry 3 -o qemu.tar.xz "https://download.qemu.org/qemu-$QEMU.tar.xz"
           echo "$QEMU_SHA256  qemu.tar.xz" | sha256sum -c -
           tar xJf qemu.tar.xz
@@ -2250,12 +2275,16 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      - name: apt packages for the next step
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: swtpm xvfb xclip
+          cache: rust-service
+          no-recommends: "true"
       - name: the Rust toolchain, swtpm for the keys in a TPM, and Xvfb for an X11 session's clipboard
         run: |
           rustup toolchain install stable --profile minimal --component llvm-tools-preview
           rustup default stable
-          sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends swtpm xvfb xclip
       # The service's coverage (rust-service, docs/testing.md "Coverage"):
       # every Rust program below is built with instrument-coverage, so the
       # Rust cbb's own tests and the Go tests that run it add up.
@@ -2328,12 +2357,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: apt packages for the next step
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: gcc-aarch64-linux-gnu libc6-dev-arm64-cross swtpm xvfb xclip
+          cache: lite
+          no-recommends: "true"
       - name: the Rust toolchain, a cross compiler for the Raspberry Pi, and swtpm for the key in a TPM
         run: |
           rustup toolchain install stable --profile minimal --component rustfmt,clippy,llvm-tools-preview --target aarch64-unknown-linux-gnu,arm-unknown-linux-musleabihf,x86_64-pc-windows-gnu,aarch64-apple-darwin,x86_64-unknown-freebsd
           rustup default stable
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross swtpm xvfb xclip
           echo CBB_TPM_REQUIRED=1 >>"$GITHUB_ENV"
       - name: cargo check on the oldest Rust the crates declare (rust-version)
         # Every crate of the workspace declares 1.95; the lock file must build there.
@@ -2593,11 +2626,14 @@ jobs:
           cargo +esp clippy --locked --release --features console-type -- -D warnings
           cargo +esp clippy --locked --release --no-default-features --features qemu -- -D warnings
           cargo +esp build --locked --release
+      - name: apt packages for the next step
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: libslirp0 libsdl2-2.0-0 libpixman-1-0
+          cache: esp-qemu
       - name: Espressif's QEMU and espflash
         working-directory: ${{ runner.temp }}
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q libslirp0 libsdl2-2.0-0 libpixman-1-0
           curl -fsSL --retry 3 -o qemu.tar.xz "https://github.com/espressif/qemu/releases/download/$ESP_QEMU/qemu-xtensa-softmmu-${ESP_QEMU//-/_}-x86_64-linux-gnu.tar.xz"
           echo "$ESP_QEMU_SHA256  qemu.tar.xz" | sha256sum -c -
           tar xf qemu.tar.xz
@@ -2629,12 +2665,16 @@ jobs:
         with:
           path: ${{ runner.temp }}/z88dk
           key: z88dk-${{ env.Z88DK }}-zxn-${{ runner.os }}
+      - name: apt packages for the next step
+        if: steps.z88dk.outputs.cache-hit != 'true'
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: flex libxml2-dev libgmp-dev libboost-dev texinfo dos2unix
+          cache: z88dk
       - name: z88dk from its source
         if: steps.z88dk.outputs.cache-hit != 'true'
         working-directory: ${{ runner.temp }}
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q flex libxml2-dev libgmp-dev libboost-dev texinfo dos2unix
           curl -fsSL --retry 3 -o z88dk.tgz "https://github.com/z88dk/z88dk/releases/download/v$Z88DK/z88dk-src-$Z88DK.tgz"
           echo "$Z88DK_SHA256  z88dk.tgz" | sha256sum -c -
           tar xzf z88dk.tgz
@@ -2708,13 +2748,16 @@ jobs:
         with:
           path: ${{ runner.temp }}/psdk/dl
           key: psdk-${{ matrix.system }}-${{ hashFiles('apps/silica/psdk.sh') }}
+      - name: apt packages for the next step
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: p7zip-full imagemagick gcc-arm-linux-gnueabihf libc6-dev-armhf-cross gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+          cache: silica
       - name: the RPMs, unsigned (apps/silica/ci.sh; the workflow aurora signs Aurora 5's)
         env:
           ARCHS: ${{ matrix.archs }}
           SYSTEM: ${{ matrix.system }}
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q p7zip-full imagemagick gcc-arm-linux-gnueabihf libc6-dev-armhf-cross gcc-aarch64-linux-gnu libc6-dev-arm64-cross
           rustup toolchain install stable --profile minimal
           rustup default stable
           apps/silica/ci.sh "$RUNNER_TEMP/psdk" "$ARCHS" "$RUNNER_TEMP/rpm"
@@ -2802,7 +2845,6 @@ jobs:
         # cbb's crates, the Android apps' libraries and the tray app's module.
         run: |
           go run github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.6.0 scan source \
-            --config .github/osv-scanner.toml \
             -L Cargo.lock -L esp32/Cargo.lock -L apps/desktop/go.mod \
             -L apps/android/app/gradle.lockfile -L apps/android/shared/gradle.lockfile \
             -L apps/android/wear/gradle.lockfile -L apps/android/kit/gradle.lockfile

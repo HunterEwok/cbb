@@ -572,9 +572,22 @@ jobs:
           out="$RUNNER_TEMP/winget"
           sh packaging/winget/manifest.sh "$GITHUB_REF_NAME" dist/SHA256SUMS "$out"
           (cd "$out" && zip -qX "$GITHUB_WORKSPACE/dist/winget-manifest.zip" ./*.yaml)
+          # Every file of release.json has a line in SHA256SUMS (release-sign
+          # verify and mirror check it), this one too.
+          (cd dist && sha256sum winget-manifest.zip >>SHA256SUMS)
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        id: provenance
         with:
           subject-path: dist/*
+      - name: the provenance as a file of the release
+        # The same signed attestation, on one line, for those who check a
+        # release without GitHub's API (and for OpenSSF Scorecard, which
+        # looks for *.intoto.jsonl among a release's files). It describes the
+        # files, so it is not one of them: release-sign leaves it out of
+        # release.json.
+        env:
+          BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+        run: jq -c . "$BUNDLE" >dist/provenance.intoto.jsonl
       - name: the draft
         env:
           GH_TOKEN: ${{ github.token }}
