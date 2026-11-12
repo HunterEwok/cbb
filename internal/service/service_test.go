@@ -1637,6 +1637,9 @@ var testClockBuilt = sync.OnceValues(func() (bool, error) {
 
 func newTestClock(t *testing.T, ahead time.Duration) *testClock {
 	t.Helper()
+	if rustService() == "" {
+		t.Skip("CBB_TEST_RUST_SERVICE is not set: the service's tests run the Rust cbb, with cbb-helper beside it")
+	}
 	if ok, err := testClockBuilt(); err != nil {
 		t.Fatalf("cbb version: %v", err)
 	} else if !ok {
