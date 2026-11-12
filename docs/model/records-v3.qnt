@@ -1008,11 +1008,20 @@ module records_v3 {
     val s2 = insertInto(st.get(m), db.get(i), db)
     s2.recs == st.get(m).recs and s2.chain == st.get(m).chain
   }))
+  // A removal some earlier change of the member's chain cut off: the sets dropped it then, and
+  // a later list that names it again (a recovery key may list what nobody holds) cannot bring
+  // it back.
+  def cutEarlier(m: str, r: Record): bool = {
+    val ch = chainState(st.get(m), db).recs
+    ch.indices().exists(j => not(within(pathCutsOf(ch.slice(0, j + 1))._2, r)))
+  }
   val removedStayOut = MEMBERS.forall(m => synced(m) implies {
     val v = views.get(m)
-    val removals = recsOf(st.get(m).got, db).filter(r => r.kind == "revoke" and ROOT_KEYS.contains(r.signer))
+    // Removals by the roots on the member's path (a key that is a root elsewhere, not here,
+    // removes nothing).
+    val removals = recsOf(st.get(m).got, db).filter(r => r.kind == "revoke" and onList(v.path, r.signer))
     v.stop or gone.get(m).forall(k =>
-      removals.filter(r => withPair(r.target).contains(k)).forall(r => cutOff(v, r))
+      removals.filter(r => withPair(r.target).contains(k)).forall(r => cutOff(v, r) or cutEarlier(m, r))
         or (v.revoked.contains(k) and not(v.admins.keys().contains(k)) and not(v.devices.contains(k))))
   })
 
