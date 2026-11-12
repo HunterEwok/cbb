@@ -38,14 +38,24 @@ pub static ADB: Table = Table {
 
 pub static PAIR_START: Table = Table {
     shape: "pair/start/shape",
-    fields: &[f(2, "pair/start/ya", Ty::BytesUpTo(256), true), f(3, "pair/start/ada", Ty::BytesUpTo(16384), true)],
+    fields: &[
+        f(2, "pair/start/ya", Ty::BytesUpTo(256), true),
+        f(3, "pair/start/ada", Ty::BytesUpTo(16384), true),
+        f(4, "pair/start/commitment", B32, true),
+    ],
 };
 pub static PAIR_REPLY: Table = Table {
     shape: "pair/reply/shape",
-    fields: &[f(2, "pair/reply/yb", Ty::BytesUpTo(256), true), f(3, "pair/reply/adb", Ty::BytesUpTo(1024), true)],
+    fields: &[
+        f(2, "pair/reply/yb", Ty::BytesUpTo(256), true),
+        f(3, "pair/reply/adb", Ty::BytesUpTo(1024), true),
+        f(4, "pair/reply/nonce", B32, true),
+    ],
 };
-pub static PAIR_CONFIRM: Table =
-    Table { shape: "pair/confirm/shape", fields: &[f(2, "pair/confirm/ta", Ty::BytesUpTo(64), true)] };
+pub static PAIR_CONFIRM: Table = Table {
+    shape: "pair/confirm/shape",
+    fields: &[f(2, "pair/confirm/ta", Ty::BytesUpTo(64), true), f(3, "pair/confirm/nonce", B32, true)],
+};
 pub static PAIR_WELCOME: Table = Table {
     shape: "pair/welcome/shape",
     fields: &[f(2, "pair/welcome/tb", Ty::BytesUpTo(64), true), f(3, "pair/welcome/welcome", Ty::Map(&WELCOME), true)],
@@ -243,9 +253,14 @@ pub static INFO: Table = Table {
         f(5, "pair/info/admin", MEMBER_KEY, false),
         f(6, "pair/info/admin-pop", Ty::Bytes(64), false),
         f(7, "pair/info/keys", ENV, false),
+        f(8, "pair/info/device", Ty::Map(&INFO_DEVICE), false),
         f(9, "pair/info/invite", ID16, false),
     ],
 };
+
+/// The hello's `device` map in an Info: a map; its fields are the hello's,
+/// read by the hello's reader.
+pub static INFO_DEVICE: Table = Table { shape: "pair/info/device/shape", fields: &[] };
 
 /// `waiting` (t 26): from the device that holds requests (a hub of the
 /// group, the one a joiner reached) to an admin that may admit: who knocked
@@ -371,6 +386,7 @@ pub static ALL: &[&Table] = &[
     &WELCOME,
     &GRANT,
     &INFO,
+    &INFO_DEVICE,
     &INVITE,
     &PATH,
     &PROFILE,

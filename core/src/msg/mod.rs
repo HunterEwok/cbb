@@ -175,19 +175,19 @@ impl Table {
     }
 }
 
-/// Reports whether t is an `addr`: `ip:port` or `[ipv6]:port`, no scope
-/// (zone), no IPv4-mapped IPv6 address, the port in its shortest digits. So
-/// one address has one spelling, and a `once` list cannot hold it twice.
+/// Reports whether t is an `addr`: `ip:port` or `[ipv6]:port` in its one
+/// canonical text (RFC 5952 for IPv6: lower case, the longest run of zero
+/// groups shortened, no leading zeros; the port in its shortest digits), no
+/// scope (zone), no IPv4-mapped IPv6 address, not the unspecified address,
+/// not port 0. So one address has one spelling, and a `once` list cannot
+/// hold it twice.
 pub fn valid_addr(t: &str) -> bool {
     let Ok(a) = t.parse::<core::net::SocketAddr>() else { return false };
-    let Some((_, port)) = t.rsplit_once(':') else { return false };
-    if port.len() > 1 && port.starts_with('0') {
-        return false;
-    }
-    match a {
+    let canonical = match a {
         core::net::SocketAddr::V4(_) => true,
-        core::net::SocketAddr::V6(v6) => !t.contains('%') && v6.scope_id() == 0 && v6.ip().to_ipv4_mapped().is_none(),
-    }
+        core::net::SocketAddr::V6(v6) => v6.scope_id() == 0 && v6.flowinfo() == 0 && v6.ip().to_ipv4_mapped().is_none(),
+    };
+    canonical && a.port() != 0 && !a.ip().is_unspecified() && alloc::format!("{a}") == t
 }
 
 /// Reports whether no two elements have one encoding.
