@@ -1597,11 +1597,17 @@ mod props {
             // The set refuses what it cannot verify; its state is that of
             // the records it kept.
             let kept: Vec<Record> = a.ids().map(|id| a.get(id).unwrap().clone()).collect();
-            let stored = state_of(&root, &kept, &held);
+            prop_assert_eq!(a.counted(), b.counted());
+            let stored = evaluate(&Input { root: &root, records: &kept, held_ms: &held, counted: a.counted() });
             prop_assert_eq!(&a.state(&held), &stored);
             prop_assert_eq!(&b.state(&held), &stored);
             let strip = |s: &State| State { ignored: Vec::new(), ..s.clone() };
-            prop_assert_eq!(strip(&stored), strip(&want));
+            // The claims the set counted are final for it, on its whole
+            // set too.
+            let sub: Vec<Record> = recs.iter().enumerate().filter(|(i, _)| *i != drop).map(|(_, r)| r.clone()).collect();
+            let whole = evaluate(&Input { root: &root, records: &sub, held_ms: &held, counted: a.counted() });
+            prop_assert_eq!(strip(&stored), strip(&whole));
+            prop_assert_eq!(strip(&stored).roots, want.roots);
         }
     }
 }
@@ -2061,10 +2067,214 @@ fn an_old_root_keeps_nothing_above_its_cut() {
     let after = m.state(&held);
     assert_eq!(after.roots, before.roots);
     assert_eq!(after.devices, before.devices);
-    assert!(after.owner_split);
+    // Checkpoints cancel nothing: no disagreement about the owner.
+    assert!(!after.owner_split);
     // The same from evaluate, for a device that counted the claim.
     g.recs.extend(more);
     let s = counted_state(&g, &held, &[claim.id()]);
     assert_eq!(s.roots, before.roots);
     assert_eq!(s.devices, before.devices);
+}
+
+/// A root that only a claim names teaches no admin key: the keys its
+/// device records name sign nothing a member keeps, so the root's own
+/// records keep their room.
+#[test]
+fn a_named_root_teaches_no_admin_key() {
+    let mut g = G::new();
+    let (pw, w) = (k("watch"), k("admin w"));
+    for i in 0..40 {
+        g.device(&k("root"), &k(&format!("device {i}")), "device", |_| {});
+    }
+    g.admin(&pw, &w, POWER_REMOVE | POWER_FREEZE | POWER_TAKEOVER);
+    let seen = g.seen();
+    g.root_rec(Kind::Revoke(removal(&[w.hash, pw.hash], seen)));
+    let honest = g.recs.clone();
+    let n = k("named root");
+    g.rec(&w, Kind::Claim { root: n.key.clone(), seen: Vec::new() });
+    let mut named = Vec::new();
+    for i in 0..16 {
+        let x = k(&format!("named x {i}"));
+        g.device(&n, &k("no device"), "x", |d| {
+            d.admin = Some(x.key.clone());
+            d.powers = POWER_ADMIT | POWER_TAKEOVER;
+        });
+        named.push(x);
+    }
+    for (i, x) in named.iter().enumerate() {
+        let keys: Vec<KeyHash> = (0..200u32)
+            .map(|j| {
+                let mut h = [0u8; 32];
+                h[..4].copy_from_slice(&j.to_be_bytes());
+                h[4] = i as u8;
+                KeyHash(h)
+            })
+            .collect();
+        g.rec(x, Kind::Freeze(Removal { keys, seen: Vec::new() }));
+        g.rec(x, Kind::Claim { root: k(&format!("named root {i}")).key.clone(), seen: Vec::new() });
+    }
+    let s = g.state();
+    assert_eq!(s.devices.len(), 40);
+    assert!(honest.iter().all(|r| s.counting.contains(&r.id())));
+    let mut m1 = RecordSet::new(g.root.key.clone());
+    m1.insert_all(g.recs.iter().cloned());
+    let mut m2 = RecordSet::new(g.root.key.clone());
+    m2.insert_all(g.recs.iter().rev().cloned());
+    for m in [&m1, &m2] {
+        assert!(honest.iter().all(|r| m.contains(&r.id())));
+        assert!(m.ids().all(|id| named.iter().all(|x| m.get(id).unwrap().body().signer != x.hash)));
+        assert_eq!(m.state(&BTreeMap::new()).devices.len(), 40);
+    }
+    assert_eq!(m1.digest(), m2.digest());
+}
+
+/// A key that is an admin key and a claim's root teaches nothing as a
+/// root, whichever record a member saw first: two members keep one set.
+#[test]
+fn an_admin_key_named_by_a_claim_teaches_nothing_in_any_order() {
+    let mut g = G::new();
+    let (pa, a, pn, n, x) = (k("phone a"), k("admin a"), k("phone n"), k("admin n"), k("other x"));
+    let watch = POWER_REMOVE | POWER_FREEZE | POWER_TAKEOVER;
+    let ra = g.admin(&pa, &a, watch);
+    let rn = g.admin(&pn, &n, watch);
+    let c = g.rec(&a, Kind::Claim { root: n.key.clone(), seen: Vec::new() });
+    let d = g.device(&n, &k("no device"), "x", |d| {
+        d.admin = Some(x.key.clone());
+        d.powers = POWER_ADMIT;
+    });
+    let xr = g.rec(&x, Kind::Copies { incoming_ms: 60_000 });
+    let mut m1 = RecordSet::new(g.root.key.clone());
+    for r in [&ra, &c, &d, &xr, &rn] {
+        let _ = m1.insert(r.clone());
+    }
+    let mut m2 = RecordSet::new(g.root.key.clone());
+    for r in [&ra, &rn, &c, &d, &xr] {
+        let _ = m2.insert(r.clone());
+    }
+    for _ in 0..3 {
+        let from1: Vec<Record> = m1.in_dependency_order().into_iter().cloned().collect();
+        let from2: Vec<Record> = m2.in_dependency_order().into_iter().cloned().collect();
+        m2.insert_all(from1);
+        m1.insert_all(from2);
+    }
+    assert_eq!(m1.digest(), m2.digest());
+    assert!(!m1.contains(&xr.id()) && !m2.contains(&xr.id()));
+    let s1 = state_of(&g.root.key, &[ra.clone(), c.clone(), d.clone(), xr.clone(), rn.clone()], &BTreeMap::new());
+    let s2 = state_of(&g.root.key, &[ra, rn, c, d, xr], &BTreeMap::new());
+    assert_eq!(s1, s2);
+}
+
+mod differential {
+    use super::*;
+    use proptest::prelude::*;
+
+    /// Builds records from a list of steps: devices, removals, freezes,
+    /// thaws, resolves, claims and checkpoints by the root, two admins and
+    /// a claim's new root.
+    fn build(steps: &[(u8, u8, u8)]) -> (G, Vec<Record>) {
+        let mut g = G::new();
+        let all = POWER_ADMIT | POWER_MANAGE | POWER_REMOVE | POWER_REMOVE_ADMINS | POWER_FREEZE | POWER_THAW | POWER_TAKEOVER;
+        let (pa, a, pb, b) = (k("phone a"), k("admin a"), k("phone b"), k("admin b"));
+        g.admin(&pa, &a, all);
+        g.admin(&pb, &b, POWER_ADMIT | POWER_REMOVE | POWER_FREEZE | POWER_TAKEOVER);
+        let signers = [k("root"), a, b, k("new root a"), k("new root b")];
+        let devices: Vec<K> = (0..6).map(|i| k(&format!("dev {i}"))).collect();
+        for &(who, op, arg) in steps {
+            let by = &signers[usize::from(who) % signers.len()];
+            let target = &devices[usize::from(arg) % devices.len()];
+            let kind = match op % 7 {
+                0 => {
+                    let mut d = Device::new(target.key.clone(), "dev", ROLE_MEMBER);
+                    d.rights = RIGHT_READ | RIGHT_SEND;
+                    Kind::Device(d)
+                }
+                1 => Kind::Revoke(removal(&[target.hash], g.seen())),
+                2 => Kind::Freeze(removal(&[signers[1 + usize::from(arg) % 2].hash], g.seen())),
+                3 => match g.recs.iter().rev().find(|r| matches!(r.body().kind, Kind::Freeze(_))) {
+                    Some(f) => Kind::Thaw(vec![f.id()]),
+                    None => continue,
+                },
+                4 => match g.recs.get(usize::from(arg) % g.recs.len().max(1)) {
+                    Some(r) => Kind::Resolve(vec![r.id()]),
+                    None => continue,
+                },
+                5 => Kind::Claim { root: signers[3 + usize::from(arg) % 2].key.clone(), seen: g.seen() },
+                _ => {
+                    let Some(&(seq, id)) = g.heads.get(&by.hash) else { continue };
+                    let mut keep: Vec<RecordId> = g
+                        .recs
+                        .iter()
+                        .filter(|r| r.body().signer == by.hash && r.body().seq < seq && r.id().0[0] % 2 == arg % 2)
+                        .map(Record::id)
+                        .collect();
+                    keep.sort();
+                    Kind::Checkpoint { heads: vec![Head { key: by.hash, seq, id }], keep }
+                }
+            };
+            if let Ok(r) = Record::sign(g.body(by, kind), by) {
+                g.push(r);
+            }
+        }
+        let recs = g.recs.clone();
+        (g, recs)
+    }
+
+    fn shuffle(recs: &[Record], seed: u64) -> Vec<Record> {
+        let mut out = recs.to_vec();
+        let mut s = seed;
+        for i in (1..out.len()).rev() {
+            s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            out.swap(i, (s >> 33) as usize % (i + 1));
+        }
+        out
+    }
+
+    /// Fills a set in order, compacting now and then, as a member does.
+    fn fill(root: &Key, recs: &[Record], held: &BTreeMap<RecordId, u64>, every: usize) -> RecordSet {
+        let mut m = RecordSet::new(root.clone());
+        for (i, r) in recs.iter().enumerate() {
+            let _ = m.insert(r.clone());
+            if (i + 1) % every == 0 {
+                let st = m.state(held);
+                m.compact(&st);
+            }
+        }
+        for _ in 0..2 {
+            let st = m.state(held);
+            m.compact(&st);
+        }
+        m
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig { cases: 48, failure_persistence: None, ..ProptestConfig::default() })]
+
+        /// A set's state is evaluate's state of the records it keeps and
+        /// the claims it counted, whatever the order and the compactions;
+        /// two sets that counted the same claims keep the same records.
+        #[test]
+        fn a_set_agrees_with_evaluate(
+            steps in prop::collection::vec((0u8..5, 0u8..7, any::<u8>()), 4..36),
+            seed in any::<u64>(),
+            every in 1usize..8,
+            held_ms in prop::sample::select(vec![0u64, DEFAULT_DELAY_MS]),
+        ) {
+            let (g, recs) = build(&steps);
+            let held: BTreeMap<RecordId, u64> =
+                recs.iter().filter(|r| matches!(r.body().kind, Kind::Claim { .. })).map(|r| (r.id(), held_ms)).collect();
+            let m1 = fill(&g.root.key, &recs, &held, every);
+            let m2 = fill(&g.root.key, &shuffle(&recs, seed), &held, every.saturating_add(2));
+            for m in [&m1, &m2] {
+                let kept: Vec<Record> = m.ids().map(|id| m.get(id).unwrap().clone()).collect();
+                let want = evaluate(&Input { root: &g.root.key, records: &kept, held_ms: &held, counted: m.counted() });
+                // A set also remembers a cancel it did not store.
+                let got = m.state(&held);
+                prop_assert!(got.owner_split || !want.owner_split);
+                prop_assert_eq!(&State { owner_split: false, ..got }, &State { owner_split: false, ..want });
+            }
+            if m1.counted() == m2.counted() {
+                prop_assert_eq!(m1.state(&held).roots, m2.state(&held).roots);
+            }
+        }
+    }
 }

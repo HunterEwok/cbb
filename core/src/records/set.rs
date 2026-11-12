@@ -139,8 +139,10 @@ impl RecordSet {
             let cuts = BTreeMap::from([(signer, *cut)]);
             let mine = self.records.values().map(|e| &e.record).filter(|x| x.body().signer == signer);
             if eval::off_cuts(&cuts, mine.chain([&r])).contains(&id) {
-                // Its root signed it off the chain the takeover saw.
-                self.split = true;
+                // Its root signed it off the chain the takeover saw; one
+                // that would have cancelled a counted claim tells the
+                // member that it and that root disagree about the owner.
+                self.split |= self.cancels_counted(&r);
                 return Ok(Added::NoRoom);
             }
         }
@@ -224,6 +226,44 @@ impl RecordSet {
             .collect();
         let (promoted, first) = (&self.promoted, self.root.hash());
         self.keys.retain_roots(|h| *h == first || named.contains(h) || promoted.contains(h));
+    }
+
+    /// Reports whether r would cancel a claim the member counted: a
+    /// resolve that names it, or a revoke of its signer.
+    fn cancels_counted(&self, r: &Record) -> bool {
+        match &r.body().kind {
+            Kind::Resolve(ids) => ids.iter().any(|id| self.counted.contains(id)),
+            Kind::Revoke(rm) => self
+                .counted
+                .iter()
+                .filter_map(|id| self.records.get(id))
+                .any(|e| rm.keys.binary_search(&e.record.body().signer).is_ok()),
+            _ => false,
+        }
+    }
+
+    /// Learns the keys again from the stored records for the roots the
+    /// member promoted, and drops the records whose signer it no longer
+    /// knows.
+    fn relearn(&mut self) {
+        let mut keys = Keys::trusting(&self.root, &self.promoted);
+        loop {
+            let mut learned = false;
+            for e in self.records.values() {
+                if let Some((_, role)) = keys.signer(&e.record.body().signer) {
+                    learned |= keys.learn(e.record.body(), role, e.held);
+                }
+            }
+            if !learned {
+                break;
+            }
+        }
+        let unknown: Vec<RecordId> =
+            self.records.values().filter(|e| keys.signer(&e.record.body().signer).is_none()).map(|e| e.record.id()).collect();
+        self.keys = keys;
+        for id in &unknown {
+            self.remove(id);
+        }
     }
 
     /// Reports whether a record of signer just stored may change what the
@@ -331,6 +371,7 @@ impl RecordSet {
         if promoted != self.promoted || cuts != self.cuts {
             self.promoted = promoted;
             self.cuts = cuts;
+            self.relearn();
             self.cut = keep::Cut::default();
             self.cut();
         }
@@ -346,9 +387,11 @@ impl RecordSet {
         for id in &drop {
             self.remove(id);
         }
-        // The checkpoint starts the count again.
+        // The checkpoint starts the count again; a key whose naming record
+        // it left out is not known any more, nor kept.
         if !drop.is_empty() {
             self.cut = keep::Cut::default();
+            self.relearn();
         }
         drop.len()
     }
@@ -357,7 +400,7 @@ impl RecordSet {
     /// records that name its signer's key, so that a receiver that takes
     /// them one by one knows every signer (section 4.9).
     pub fn in_dependency_order(&self) -> Vec<&Record> {
-        let mut keys = Keys::new(&self.root);
+        let mut keys = Keys::trusting(&self.root, &self.promoted);
         let mut out = Vec::with_capacity(self.records.len());
         let mut left: Vec<&Entry> = self.records.values().collect();
         left.sort_by_key(|e| eval::order_key(e.record.body(), &e.record.id()));

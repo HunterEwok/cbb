@@ -265,23 +265,35 @@ pub enum Role {
     Admin,
 }
 
-/// The keys a set names: its first root, the new roots of claims, and the
-/// admin keys of roots' device and recovery records. A record is verified
-/// with the key of its signer; a signer the table does not know cannot be
-/// verified, and its record is not stored.
+/// The keys a set names: its first root, the new roots of admins'
+/// claims, and the admin keys of the device and recovery records of the
+/// first root and the roots the member promoted. A root that only a claim
+/// names teaches no key. A record is verified with the key of its signer;
+/// a signer the table does not know cannot be verified, and its record is
+/// not stored.
 #[derive(Clone, Default, Debug)]
 pub struct Keys {
     keys: BTreeMap<KeyHash, Key>,
     roots: BTreeSet<KeyHash>,
     admins: BTreeSet<KeyHash>,
+    /// The roots whose records teach admin keys: the first and the
+    /// promoted ones.
+    trusted: BTreeSet<KeyHash>,
 }
 
 impl Keys {
     pub fn new(root: &Key) -> Keys {
+        Keys::trusting(root, &BTreeSet::new())
+    }
+
+    /// The table of a member that promoted roots after the first.
+    pub fn trusting(root: &Key, promoted: &BTreeSet<KeyHash>) -> Keys {
         let mut k = Keys::default();
         let h = root.hash();
         k.keys.insert(h, root.clone());
         k.roots.insert(h);
+        k.trusted.insert(h);
+        k.trusted.extend(promoted.iter().copied());
         k
     }
 
@@ -304,9 +316,10 @@ impl Keys {
         if held {
             return false;
         }
+        let trusted = self.trusted.contains(&body.signer);
         let (k, admin) = match (&body.kind, role) {
-            (Kind::Device(Device { admin: Some(a), .. }), Role::Root) => (a, true),
-            (Kind::Recovery { admin }, Role::Root) => (admin, true),
+            (Kind::Device(Device { admin: Some(a), .. }), Role::Root) if trusted => (a, true),
+            (Kind::Recovery { admin }, Role::Root) if trusted => (admin, true),
             (Kind::Claim { root, .. }, Role::Admin) => (root, false),
             _ => return false,
         };
@@ -343,9 +356,13 @@ pub(crate) struct Checked<'a> {
 /// Verifies every record of a set: the keys are learned until no record
 /// adds one, so the order of the set does not matter. It returns the
 /// records that verify and why the others do not.
-pub(crate) fn check_all<'a>(root: &Key, records: &'a [Record]) -> (Vec<Checked<'a>>, BTreeMap<RecordId, Why>) {
+pub(crate) fn check_all<'a>(
+    root: &Key,
+    promoted: &BTreeSet<KeyHash>,
+    records: &'a [Record],
+) -> (Vec<Checked<'a>>, BTreeMap<RecordId, Why>) {
     let group = root.device_id();
-    let mut keys = Keys::new(root);
+    let mut keys = Keys::trusting(root, promoted);
     let mut failed = BTreeMap::new();
     let mut todo: Vec<&Record> = Vec::new();
     for r in records {
@@ -517,23 +534,30 @@ pub(crate) fn ceiling_of(
 /// Turns a record set into the group's state. Records that do not verify
 /// are dropped; the result depends only on the set, never on its order.
 ///
-/// It evaluates as a member that has compacted: when a root after the
-/// first is on the path, that root has a root's room.
+/// It evaluates as a member that has compacted until its path no longer
+/// changes: a root after the first that is on the path has a root's room
+/// and teaches admin keys, and an old root keeps nothing off its cut.
 pub fn evaluate(input: &Input) -> State {
-    let (checked, failed) = check_all(input.root, input.records);
-    let (none, no_cuts) = (BTreeSet::new(), BTreeMap::new());
-    let first =
-        evaluate_checked(input.root, checked.clone(), failed.clone(), input.held_ms, input.counted, &none, &no_cuts);
-    let promoted: BTreeSet<KeyHash> = first.roots.iter().skip(1).copied().collect();
-    if promoted.is_empty() {
-        return first;
+    let mut promoted: BTreeSet<KeyHash> = BTreeSet::new();
+    let mut cuts: BTreeMap<KeyHash, Seen> = BTreeMap::new();
+    let mut split = false;
+    let mut n = 0usize;
+    loop {
+        let (checked, failed) = check_all(input.root, &promoted, input.records);
+        let mut state = evaluate_checked(input.root, checked, failed, input.held_ms, input.counted, &promoted, &cuts);
+        // What a member held before it compacted still tells it that the
+        // records dispute what it counted.
+        split |= state.owner_split;
+        let p: BTreeSet<KeyHash> = state.roots.iter().skip(1).copied().collect();
+        let c: BTreeMap<KeyHash, Seen> = state.cuts.iter().map(|c| (c.key, *c)).collect();
+        n = n.saturating_add(1);
+        if (p == promoted && c == cuts) || n > MAX_PATH {
+            state.owner_split = split;
+            return state;
+        }
+        promoted = p;
+        cuts = c;
     }
-    let cuts = first.cuts.iter().map(|c| (c.key, *c)).collect();
-    let mut state = evaluate_checked(input.root, checked, failed, input.held_ms, input.counted, &promoted, &cuts);
-    // A compacted member keeps nothing off the cuts; what it held there
-    // before still tells it that the records dispute what it counted.
-    state.owner_split |= first.owner_split;
-    state
 }
 
 pub(crate) fn evaluate_checked(
