@@ -957,31 +957,49 @@ keeps an order of its own or works one out.
 ## HarmonyOS
 
 The app for HarmonyOS 5 and later (`apps/harmony`, in development), the system without
-Android's layer, is the Aurora app's twin: its own interface around the Rust core, which
-does the protocol, the pairing, sync and the tunnel. ArkTS and ArkUI make the interface;
-`libcbb_napi.so` gives it each C function of `ffi/include/cbb_core.h`, the ones that block or
-sign on a worker thread with a Promise. Its system in the protocol is `harmonyos`.
+Android's layer, is the Aurora app's twin and ported from it: its own interface around the
+Rust core, which does the protocol, the pairing, sync, the member's view of the tiles and the
+tunnel. ArkTS and ArkUI make the interface; `libcbb_napi.so` gives it each C function of
+`ffi/include/cbb_core.h`, the ones that block or sign on a worker thread with a Promise. Its
+system in the protocol is `harmonyos`. It has the other phones' screens: Start (a new group,
+joining by the phone's QR code, as an admin, by an invitation, restoring), Home with the tiles
+or the list, a device's page with the admin's actions, adding a device by its QR code,
+invitations, the recovery key, the takeover, the arrangement and collections, and Settings
+with the error details, the notifications, the root's settings and, under the advanced
+settings, why it does not sync.
 
 - **Keys**: P-256 keys in HUKS, in the TEE (level "hardware"). The member key signs without
   asking; the admin key (the root's in a group the phone made) only after the user's face,
   fingerprint or PIN through User Authentication Kit, and the consent lasts half a minute, so
   that one action that signs several times (a new group signs three times) asks once.
-- **Clipboard**: the app writes an incoming copy freely, but reads the clipboard only when the
-  user taps the system's Paste button (`PasteButton`) or with the restricted permission
-  `ohos.permission.READ_PASTEBOARD`, which Huawei grants on request. Sending is therefore a
-  tap, as on the iPhone.
-- **Background**: the system freezes an app soon after it leaves the screen; a long-running
-  task of the type "multi-device connection" keeps the member running, with its notification,
-  if the store allows it, and otherwise the app syncs while it is open, as on the iPhone.
+- **Clipboard**: the app writes an incoming copy freely (a secret only on this device, cleared
+  when its time ends unless the user copied something else), but reads the clipboard only
+  when the user taps the system's Paste button (`PasteButton`) on Home, or with the
+  restricted permission `ohos.permission.READ_PASTEBOARD`, which Huawei grants on request.
+  Sending is therefore a tap, as on the iPhone. Texts, images and files shared to CBB from
+  another app's Share menu go to the group too; a single image that arrives goes into the
+  clipboard, other images and files wait for the user to save them where they choose.
+- **QR codes**: Scan Kit's scanner reads a computer's code and the recovery sheet; the
+  phone's own code for joining is drawn from the core's modules.
+- **Background**: the system freezes an app soon after it leaves the screen. While the member
+  runs, the app keeps it going as a continuous task of the kind "multi-device connection",
+  with the system's notification; where the system or the store refuses that, it asks for the
+  short delay the system grants, so that a copy on its way arrives, and syncs while it is open,
+  as on the iPhone.
+- **Notifications**: the group's events as on the other phones (joined, removed, an admin, a
+  takeover, frozen), each kind with its switch, and the received files.
+- **Errors**: the core's message, and in debug mode its details under it; the details switch
+  in Settings turns them on in a release build. A member that panics is started again, and in
+  release mode the app asks to send the bug report (docs/core-api.md, "Bug reports").
 - **Building and signing**: the core builds with OpenHarmony's free native SDK; the app needs
   DevEco Studio or the HarmonyOS command line tools, and a phone takes it only signed with a
-  profile from AppGallery Connect, so both need a Huawei developer account. DevEco Studio's
-  emulator runs on a Mac with Apple silicon, and Huawei offers its ready-made images only in
-  mainland China for now; elsewhere the app is tested on a phone with HarmonyOS 5 or later
-  (sold in China; the same models elsewhere run HarmonyOS 4, where the Android app works).
+  profile from AppGallery Connect, so both need a Huawei developer account. `check.sh` checks
+  the ArkTS with OpenHarmony's compiler and linter without one. DevEco Studio's emulator runs
+  on a Mac with Apple silicon, and Huawei offers its ready-made images only in mainland China
+  for now; elsewhere the app is tested on a phone with HarmonyOS 5 or later (sold in China;
+  the same models elsewhere run HarmonyOS 4, where the Android app works).
 
-The first version makes a new group. Joining, the devices, sync and the admin's actions
-follow in the order of the screens above, to the other phones' parity.
+Not yet: the lab (the Bluetooth keyboard and remote paste on the phone), and a run on a phone.
 
 ## Releasing the Android app
 

@@ -138,9 +138,14 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   runs the parser's tests on the host).
 - `apps/harmony`: the app for HarmonyOS 5 and later (in development), ArkTS and ArkUI around
   the Rust core through a Node-API module (`entry/src/main/cpp`: `napi_init.cpp` over
-  `cbb_core.h`, `keys.cpp` the keys in HUKS), as the Aurora app is Qt around it; its system
-  is `harmonyos`; `build.sh` and `ffi/bind.sh harmony` build the core with OpenHarmony's
-  native SDK (`ffi/ohos-sdk.sh`); CI's `HarmonyOS app` job.
+  `cbb_core.h`, `keys.cpp` the keys in HUKS), as the Aurora app is Qt around it and ported
+  from it; its system is `harmonyos`. In `entry/src/main/ets`: `core/` (the core's calls,
+  errors, keys, the membership's files), `model/` (`AppModel`, `Member`, `Join`, `Admit`,
+  `Invite`, `Events`, `Bugs`), `pages/` (the screens), `components/`, `common/` (the devices'
+  words, Scan Kit, sharing in); its strings come from `apps/l10n` (`harmony:NAME`), its colours
+  from `tools/tokens`; `build.sh` and `ffi/bind.sh harmony` build the core with OpenHarmony's
+  native SDK (`ffi/ohos-sdk.sh`), `check.sh` compiles and lints the ArkTS with OpenHarmony's
+  compiler (stubs of the HarmonyOS-only kits in `check/`); CI's `HarmonyOS app` job.
 - `apps/macos`: the Mac app (SwiftUI, XcodeGen) over the service's control socket
   (`Control.swift`), admin actions through `cbb` with administrator privileges (`Admin.swift`),
   the Mac's remote paste target (`PasteTarget.swift`: a paste-only watch, Cmd+V or Unicode key

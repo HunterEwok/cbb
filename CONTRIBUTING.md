@@ -240,12 +240,17 @@ C function of `ffi/include/cbb_core.h`; `keys.cpp`, the keys in HUKS). `build.sh
 core's static library with OpenHarmony's native SDK, which `ffi/ohos-sdk.sh` downloads (no
 account, about 2.5 GB); the app itself builds in DevEco Studio or with `hvigorw` from the
 HarmonyOS command line tools, both of which need a Huawei developer account, as does
-signing it for a phone. CI's `HarmonyOS app` job builds and links the native module and runs
-its host test.
+signing it for a phone. `check.sh` compiles the ArkTS and runs the ArkTS linter with
+OpenHarmony's own compiler, which needs no account, so that a change to the app is checked
+before it reaches DevEco Studio. CI's `HarmonyOS app` job builds and links the native module,
+runs its host test and `check.sh`. The tests in `entry/src/ohosTest` (Hypium) run on a phone
+or the emulator.
 
 ```sh
-apps/harmony/build.sh       # the core for arm64-v8a, into apps/harmony/build/ffi
-apps/harmony/build.sh hap   # also the app, with hvigorw on PATH and a signing config
+apps/harmony/build.sh             # the core for arm64-v8a, into apps/harmony/build/ffi
+apps/harmony/build.sh hap         # also the app, with hvigorw on PATH and a signing config
+sh ffi/ohos-sdk.sh ~/ohos-sdk ets # the SDK's native and ArkTS parts, once
+apps/harmony/check.sh ~/ohos-sdk  # the ArkTS through the compiler and the linter (Node.js, Python 3)
 ```
 
 The differential run of all four implementations (Go, Rust, JDK 17 and Docker for the Swift

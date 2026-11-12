@@ -9,11 +9,19 @@ All notable changes to cbb are documented in this file. The format follows
 ### Added
 - The app for HarmonyOS 5 and later (`apps/harmony`), in development: ArkTS around the same
   Rust core as the Aurora app, through a Node-API module (`libcbb_napi.so`), with the keys in
-  HUKS and the admin key behind the user's face, fingerprint or PIN. Its first version makes
-  a new group. The protocol names its system `harmonyos`, a phone's system like `ios`,
-  `android`, `aurora` and `sailfish` (docs/protocol.md, section 6). `ffi/bind.sh harmony`
-  builds the core for it with OpenHarmony's native SDK (`ffi/ohos-sdk.sh`), and CI's
-  `HarmonyOS app` job builds and links the native module.
+  HUKS and the admin key behind the user's face, fingerprint or PIN. It has the other phones'
+  screens: a new group, joining by QR code, as an admin or by an invitation, restoring, Home
+  with the tiles, the devices and the admin's actions, adding a device with Scan Kit,
+  invitations, the recovery key and the takeover, the arrangement, the notifications, and
+  why it does not sync; it sends with the system's Paste button and the Share menu, and the
+  member runs on in the background as a continuous task (docs/apps.md, "HarmonyOS"). The
+  protocol names its system `harmonyos`, a phone's system like `ios`, `android`, `aurora`
+  and `sailfish` (docs/protocol.md, section 6), and a bug report may name it as its app.
+  `ffi/bind.sh harmony` builds the core for it with OpenHarmony's native SDK
+  (`ffi/ohos-sdk.sh`); `apps/harmony/check.sh` compiles and lints its ArkTS with
+  OpenHarmony's compiler; `tools/strings` writes its strings from `apps/l10n` and
+  `tools/tokens` its colours. CI's `HarmonyOS app` job builds and links the native module and
+  runs the check.
 - The forwarder refuses the groups their operator lists after an abuse report:
   `refused-groups` next to the key (or `-refused FILE`), one group tag a line, read again
   within ten seconds of a change; a listed group is refused at registration and its devices

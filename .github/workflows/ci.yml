@@ -2647,24 +2647,29 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: OpenHarmony's native SDK from the cache
-        # About 2.6 GB unpacked; ffi/ohos-sdk.sh downloads it when the cache
-        # has none and checks it against its SHA-256.
+      - name: OpenHarmony's SDK from the cache
+        # Its native and ArkTS parts, about 3 GB unpacked; ffi/ohos-sdk.sh
+        # downloads it when the cache has none and checks it against its
+        # SHA-256.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ${{ runner.temp }}/ohos-sdk/native
-          key: ohos-sdk-${{ hashFiles('ffi/ohos-sdk.sh') }}
-      - name: the core's library, the native module and its tests
-        # The app itself (ArkTS) needs the HarmonyOS command line tools,
-        # which a Huawei developer account downloads; this job builds and
-        # links what it can without them: the Rust core for the phone
-        # (ffi/bind.sh harmony) and libcbb_napi.so over it, with -Werror.
+          path: |
+            ${{ runner.temp }}/ohos-sdk/native
+            ${{ runner.temp }}/ohos-sdk/ets
+            ${{ runner.temp }}/ohos-sdk/toolchains
+          key: ohos-sdk-ets-${{ hashFiles('ffi/ohos-sdk.sh') }}
+      - name: the core's library, the native module and its tests, the ArkTS
+        # The app itself needs the HarmonyOS command line tools, which a
+        # Huawei developer account downloads; this job builds and checks what
+        # it can without them: the Rust core for the phone (ffi/bind.sh
+        # harmony), libcbb_napi.so over it with -Werror, and the ArkTS
+        # through OpenHarmony's compiler and linter (apps/harmony/check.sh).
         run: |
           rustup toolchain install stable --profile minimal
           rustup default stable
           sudo apt-get update -q
           sudo apt-get install -y -q ninja-build
-          OHOS_NDK_HOME=$(sh ffi/ohos-sdk.sh "$RUNNER_TEMP/ohos-sdk" | tail -n 1)
+          OHOS_NDK_HOME=$(sh ffi/ohos-sdk.sh "$RUNNER_TEMP/ohos-sdk" ets | tail -n 1)
           export OHOS_NDK_HOME
           sh apps/harmony/build.sh
           cmake -S apps/harmony/entry/src/main/cpp -B "$RUNNER_TEMP/napi" -G Ninja \
@@ -2674,6 +2679,7 @@ jobs:
           c++ -std=c++17 -Wall -Wextra -Werror -I apps/harmony/entry/src/main/cpp \
             apps/harmony/entry/src/main/cpp/der.cpp apps/harmony/entry/src/test/cpp/der_test.cpp -o "$RUNNER_TEMP/der_test"
           "$RUNNER_TEMP/der_test"
+          sh apps/harmony/check.sh "$RUNNER_TEMP/ohos-sdk"
 
   phonecore:
     name: phone core (${{ matrix.target }})
