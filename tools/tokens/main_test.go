@@ -19,8 +19,8 @@ func TestTokensFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Count(string(swift), "        Theme(\n") != 10 || !strings.Contains(string(swift), "name: \"blueprint\",") {
-		t.Errorf("not ten themes, blueprint first, in\n%s", swift)
+	if strings.Count(string(swift), "        Theme(\n") != 11 || !strings.Contains(string(swift), "name: \"board\",") || strings.Index(string(swift), "\"board\"") > strings.Index(string(swift), "\"blueprint\"") {
+		t.Errorf("not eleven themes, board first, in\n%s", swift)
 	}
 	if !strings.Contains(string(swift), "material: .glass") || !strings.Contains(string(swift), "line: Color(rgb: 0x3E6E99)") {
 		t.Errorf("no style or line in\n%s", swift)

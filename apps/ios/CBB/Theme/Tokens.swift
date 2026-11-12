@@ -7,6 +7,38 @@ enum Tokens {
     /// The themes offered in Settings, the default first.
     static let themes: [Theme] = [
         Theme(
+            name: "board",
+            style: ThemeStyle(
+                display: "Forum", body: "Jost", mono: "IBM Plex Mono",
+                radiusButton: 6, radiusCard: 4, radiusTile: 4, radiusChip: 3,
+                stroke: 2, material: .flat, grid: true, dashedOff: true, upperLabels: true
+            ),
+            dark: Palette(
+                dark: true,
+                background: Color(rgb: 0x0B1A20),
+                surface: Color(rgb: 0x141514),
+                grid: Color(rgb: 0x15262C),
+                line: Color(rgb: 0x8E6A44),
+                text: Color(rgb: 0xF2F0EA),
+                textDim: Color(rgb: 0xA8B9B9),
+                accent: Color(rgb: 0xD8B46A),
+                onAccent: Color(rgb: 0x1A1206),
+                danger: Color(rgb: 0xFF9B8A)
+            ),
+            light: Palette(
+                dark: false,
+                background: Color(rgb: 0xDCD3C1),
+                surface: Color(rgb: 0xECE8DF),
+                grid: Color(rgb: 0xD2C8B4),
+                line: Color(rgb: 0x8A6740),
+                text: Color(rgb: 0x2A251E),
+                textDim: Color(rgb: 0x574F43),
+                accent: Color(rgb: 0x6E4D10),
+                onAccent: Color(rgb: 0xFFF8EA),
+                danger: Color(rgb: 0x9E2A1C)
+            )
+        ),
+        Theme(
             name: "blueprint",
             style: ThemeStyle(
                 display: "IBM Plex Sans", body: "IBM Plex Sans", mono: "IBM Plex Mono",

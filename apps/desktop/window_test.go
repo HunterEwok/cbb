@@ -212,8 +212,8 @@ func (w *window) themes(t *testing.T) {
 	}
 	var themes []theme
 	w.eval(`import("./tokens.js").then((m) => m.themes)`, &themes)
-	if len(themes) != 10 {
-		t.Fatalf("Settings offers %d themes, not ten", len(themes))
+	if len(themes) != 11 || themes[0].Name != "board" {
+		t.Fatalf("Settings offers %d themes, not eleven with the chalkboard first", len(themes))
 	}
 	w.eval(`$click("#settings")`, nil)
 	for _, look := range []string{"dark", "light"} {
@@ -233,7 +233,7 @@ func (w *window) themes(t *testing.T) {
 		}
 	}
 	// System follows the system's choice.
-	w.eval(`$click('[data-appearance="system"]'); $click('[data-theme="blueprint"]')`, nil)
+	w.eval(fmt.Sprintf(`$click('[data-appearance="system"]'); $click('[data-theme=%q]')`, themes[0].Name), nil)
 	for _, look := range []string{"dark", "light"} {
 		w.page.call(t, "Emulation.setEmulatedMedia", map[string]any{"features": []map[string]string{{"name": "prefers-color-scheme", "value": look}}}, nil)
 		want := themes[0].Dark.Background
@@ -243,7 +243,7 @@ func (w *window) themes(t *testing.T) {
 		w.wait(fmt.Sprintf(`$css("--background") === %q`, strings.ToUpper(want)))
 	}
 	w.eval(`$click('#settings-dialog menu button')`, nil)
-	w.waitSettings(d, func(s Settings) bool { return s.Appearance == "system" && s.Theme == "blueprint" })
+	w.waitSettings(d, func(s Settings) bool { return s.Appearance == "system" && s.Theme == themes[0].Name })
 
 	w.eval(`$click('[data-layout="list"]')`, nil)
 	w.wait(`$all("#devices .list .row").length === 14`)

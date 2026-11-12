@@ -1050,9 +1050,11 @@ the app on real devices.
 
 ## Themes
 
-- Ten themes, each a full set of design tokens defined once in `apps/design/tokens.json` and
-  generated into Swift, Kotlin and JavaScript, so every app matches: **Blueprint** (the
-  default: a drawing sheet, blue lines on white or a blueprint in the dark, IBM Plex),
+- Eleven themes, each a full set of design tokens defined once in `apps/design/tokens.json` and
+  generated into Swift, Kotlin and JavaScript, so every app matches: **Chalkboard** (the
+  default, the look of the website: chalk on slate over felt in the dark, graphite on pale
+  slate over sand-coloured cloth in the light, walnut lines, a faint grid), **Blueprint** (a
+  drawing sheet, blue lines on white or a blueprint in the dark, IBM Plex),
   **Precise**, **Glass** (the look of the first versions: a deep background, a glow of the
   accent, glass tiles), **Soft**, **Swiss**, **Hardware**, **Art Deco**, **Liquid Glass**,
   **Terminal** and **Retro**.

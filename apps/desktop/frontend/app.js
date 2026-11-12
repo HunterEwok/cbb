@@ -1012,7 +1012,7 @@ function languageName(l) {
 
 // The themes' names in Settings, as the phones have them.
 const themeTitles = {
-  blueprint: "Blueprint", precise: "Precise", glass: "Glass", soft: "Soft", swiss: "Swiss",
+  board: "Chalkboard", blueprint: "Blueprint", precise: "Precise", glass: "Glass", soft: "Soft", swiss: "Swiss",
   hardware: "Hardware", deco: "Art Deco", liquid: "Liquid Glass", terminal: "Terminal", retro: "Retro",
 };
 

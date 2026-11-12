@@ -96,6 +96,7 @@ enum ThemeChoice {
 
     static func title(_ name: String) -> LocalizedStringKey {
         switch name {
+        case "board": "Chalkboard"
         case "blueprint": "Blueprint"
         case "precise": "Precise"
         case "glass": "Glass"

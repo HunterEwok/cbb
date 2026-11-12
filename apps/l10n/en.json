@@ -244,6 +244,7 @@
   "Cancel the invitation": {"in": ["android:invite_cancel", "ios"]},
   "Cancel the reboot or shutdown": {"in": ["android:action_cancel", "ios"]},
   "Cancelling the claim": {"in": ["aurora:AlertsCard"]},
+  "Chalkboard": {"in": ["android:theme_board", "ios", "mac", "tray"]},
   "Change": {"in": ["android:hub_disguise_change", "ios", "mac", "tray"]},
   "Change a computer's sync mode": {"in": ["android:reason_set_mode", "ios"]},
   "Change how long a copy from another device lasts": {"in": ["android:reason_incoming", "ios"]},

@@ -538,6 +538,7 @@
     <string name="sync_turned_on">同步已开启。</string>
     <string name="tagline">这部手机和你的电脑共用一个剪贴板。</string>
     <string name="theme_blueprint">蓝图</string>
+    <string name="theme_board">黑板</string>
     <string name="theme_dark">深色</string>
     <string name="theme_deco">装饰艺术</string>
     <string name="theme_glass">玻璃</string>

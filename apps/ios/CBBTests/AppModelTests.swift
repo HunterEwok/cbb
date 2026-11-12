@@ -348,7 +348,8 @@ final class AppModelTests: XCTestCase {
     }
 
     func testThemes() {
-        XCTAssertEqual(Tokens.themes.count, 10)
+        XCTAssertEqual(Tokens.themes.count, 11)
+        XCTAssertEqual(Tokens.themes[0].name, "board")
         let first = Tokens.themes[0]
         XCTAssertEqual(Appearance.system.palette(first.name, for: .dark), first.dark)
         XCTAssertEqual(Appearance.system.palette(first.name, for: .light), first.light)

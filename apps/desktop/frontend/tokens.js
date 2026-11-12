@@ -4,6 +4,36 @@
 // The themes offered in Settings, the default first.
 export const themes = [
   {
+    name: "board",
+    style: {
+      display: "Forum", body: "Jost", mono: "IBM Plex Mono",
+      radiusButton: 6, radiusCard: 4, radiusTile: 4, radiusChip: 3,
+      stroke: 2, material: "flat", grid: true, dashedOff: true, upperLabels: true,
+    },
+    dark: {
+      background: "#0B1A20",
+      surface: "#141514",
+      grid: "#15262C",
+      line: "#8E6A44",
+      text: "#F2F0EA",
+      textDim: "#A8B9B9",
+      accent: "#D8B46A",
+      onAccent: "#1A1206",
+      danger: "#FF9B8A",
+    },
+    light: {
+      background: "#DCD3C1",
+      surface: "#ECE8DF",
+      grid: "#D2C8B4",
+      line: "#8A6740",
+      text: "#2A251E",
+      textDim: "#574F43",
+      accent: "#6E4D10",
+      onAccent: "#FFF8EA",
+      danger: "#9E2A1C",
+    },
+  },
+  {
     name: "blueprint",
     style: {
       display: "IBM Plex Sans", body: "IBM Plex Sans", mono: "IBM Plex Mono",

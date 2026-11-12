@@ -538,6 +538,7 @@
     <string name="sync_turned_on">Синхронизация включена.</string>
     <string name="tagline">Один буфер обмена для этого телефона и ваших компьютеров.</string>
     <string name="theme_blueprint">Чертёж</string>
+    <string name="theme_board">Доска</string>
     <string name="theme_dark">Тёмная</string>
     <string name="theme_deco">Ар-деко</string>
     <string name="theme_glass">Стекло</string>

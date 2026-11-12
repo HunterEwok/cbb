@@ -538,6 +538,7 @@
     <string name="sync_turned_on">La sincronización está activada.</string>
     <string name="tagline">Un solo portapapeles para este teléfono y tus ordenadores.</string>
     <string name="theme_blueprint">Plano</string>
+    <string name="theme_board">Pizarra</string>
     <string name="theme_dark">Oscuro</string>
     <string name="theme_deco">Art déco</string>
     <string name="theme_glass">Cristal</string>

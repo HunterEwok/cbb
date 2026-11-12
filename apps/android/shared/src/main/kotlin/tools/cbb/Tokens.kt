@@ -10,6 +10,38 @@ object Tokens {
     /** The themes offered in Settings, the default first. */
     val themes = listOf(
         Theme(
+            name = "board",
+            style = ThemeStyle(
+                display = "Forum", body = "Jost", mono = "IBM Plex Mono",
+                radiusButton = 6.dp, radiusCard = 4.dp, radiusTile = 4.dp, radiusChip = 3.dp,
+                stroke = 2.dp, material = Material.FLAT, grid = true, dashedOff = true, upperLabels = true,
+            ),
+            dark = Palette(
+                dark = true,
+                background = Color(0xFF0B1A20),
+                surface = Color(0xFF141514),
+                grid = Color(0xFF15262C),
+                line = Color(0xFF8E6A44),
+                text = Color(0xFFF2F0EA),
+                textDim = Color(0xFFA8B9B9),
+                accent = Color(0xFFD8B46A),
+                onAccent = Color(0xFF1A1206),
+                danger = Color(0xFFFF9B8A),
+            ),
+            light = Palette(
+                dark = false,
+                background = Color(0xFFDCD3C1),
+                surface = Color(0xFFECE8DF),
+                grid = Color(0xFFD2C8B4),
+                line = Color(0xFF8A6740),
+                text = Color(0xFF2A251E),
+                textDim = Color(0xFF574F43),
+                accent = Color(0xFF6E4D10),
+                onAccent = Color(0xFFFFF8EA),
+                danger = Color(0xFF9E2A1C),
+            ),
+        ),
+        Theme(
             name = "blueprint",
             style = ThemeStyle(
                 display = "IBM Plex Sans", body = "IBM Plex Sans", mono = "IBM Plex Mono",

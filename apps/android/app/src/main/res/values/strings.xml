@@ -542,6 +542,7 @@
     <string name="sync_turned_on">Sync is on.</string>
     <string name="tagline">One clipboard for this phone and your computers.</string>
     <string name="theme_blueprint">Blueprint</string>
+    <string name="theme_board">Chalkboard</string>
     <string name="theme_dark">Dark</string>
     <string name="theme_deco">Art Deco</string>
     <string name="theme_glass">Glass</string>

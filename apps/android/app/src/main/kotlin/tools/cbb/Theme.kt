@@ -63,6 +63,7 @@ object ThemeChoice {
 
     @StringRes
     fun title(name: String): Int = when (name) {
+        "board" -> R.string.theme_board
         "precise" -> R.string.theme_precise
         "glass" -> R.string.theme_glass
         "soft" -> R.string.theme_soft
