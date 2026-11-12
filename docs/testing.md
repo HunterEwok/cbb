@@ -183,7 +183,14 @@ member), the largest RSS and open files, the largest growth of a member's RSS ov
 (taken after an hour's warm-up, again after each restart) and the members whose open files moved.
 `soak.sh verdict` prints the pass or fail line so far, and `soak.sh stop` ends with it: PASS when
 no copy was missed, every start was whole, no member's RSS grew more than 1 MiB over its baseline
-without a restart, and every member's open files stayed at their baseline.
+without a restart, every member's open files stayed at their baseline, and the delivery
+time's p95 is at most 10 s. A checked copy that is not on every member within 60 s counts as
+missed, also when it was sent just after a kill: a restarted member is back and has it within a
+minute, or the run fails. These bounds follow the service's reconnect wait (5 s after a lost
+connection, `RECONNECT_WAIT` in `member/src/node.rs`) and the 15 s timeout of a silent peer;
+they are set again when the reconnect work (#539) changes either. A third profile, one service
+process in two groups (the family case), waits for wave 5, when one service holds several
+groups.
 
 A release candidate's build runs seven days on the shared bench's Raspberry Pi 4, the calm and
 the load stand side by side, before the release (a release condition), and goes on to thirty.

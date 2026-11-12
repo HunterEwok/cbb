@@ -43,9 +43,14 @@
 # without a restart, and the members whose open files left their baseline. A
 # missed copy or a broken start also writes a line "soak fault".
 #
-# The verdict: PASS when no copy was missed, every start was whole, no
-# member's RSS grew more than 1 MiB over its baseline without a restart, and
-# every member's open files stayed at their baseline; else FAIL with why.
+# The verdict: PASS when no copy was missed (a checked copy that is not on
+# every member within SOAK_WAIT, 60 s, is missed), the delivery time's p95 is
+# at most SOAK_P95_MAX_MS (10000 ms), every start was whole, no member's RSS
+# grew more than 1 MiB over its baseline without a restart, and every
+# member's open files stayed at their baseline; else FAIL with why.
+#
+# SOAK_PROFILE=family (one service process in two groups) is kept for wave
+# 5, when one service holds several groups.
 set -eu
 
 umask 022
@@ -62,6 +67,12 @@ calm)
 load)
 	members=${SOAK_MEMBERS:-8}
 	port0=${SOAK_PORT:-47640}
+	;;
+family)
+	# One service process in two groups, the family case: it waits for
+	# wave 5's several groups in one service.
+	echo "soak: the family profile waits for one service in several groups (wave 5)" >&2
+	exit 2
 	;;
 *)
 	echo "soak: SOAK_PROFILE is calm or load" >&2
@@ -80,6 +91,7 @@ file_every=${SOAK_FILE_EVERY:-1800}
 file_max=${SOAK_FILE_MAX:-67108864}
 wait_max=${SOAK_WAIT:-60}
 sample_every=${SOAK_SAMPLE:-600}
+p95_max=${SOAK_P95_MAX_MS:-10000}
 cbb=$dir/bin/cbb
 log=$dir/soak.log
 counts=$dir/counts
@@ -361,6 +373,9 @@ burst() {
 	b=1
 	last=
 	while [ "$b" -le "$burst_len" ]; do
+		# A kill comes before the copy of its turn, so that the copies after
+		# it measure how soon the restarted member gets them again.
+		[ "$b" -eq "$kill_at" ] && kill_one
 		from=$(rand 1 "$members")
 		label="soak $name burst $copies $(now)"
 		# One in ten at the limit of a text (1 MiB), the rest up to 4 KiB.
@@ -371,7 +386,6 @@ burst() {
 			copies=$((copies + 1))
 			last=$from
 		fi
-		[ "$b" -eq "$kill_at" ] && kill_one
 		b=$((b + 1))
 		sleep 1
 	done
@@ -454,6 +468,8 @@ verdict() {
 	[ "$broken" -eq 0 ] || why="$why broken=$broken"
 	[ "$max_grow" -le 1024 ] || why="$why rss_grow_kb=$max_grow"
 	[ "$fds_bad" -eq 0 ] || why="$why fds_moved_samples=$fds_bad"
+	p95=$(percentiles | sed -n 's/.*delivery_ms_p95=\([0-9]*\).*/\1/p')
+	[ "${p95:-0}" -le "$p95_max" ] || why="$why delivery_ms_p95=$p95>$p95_max"
 	head=$(sed -n '1s/^[^ ]* //p' "$log")
 	if [ -z "$why" ]; then
 		echo "$(now) soak verdict PASS copies=$copies checked=$checked kills=$kills whole=$whole $(percentiles) | $head"
