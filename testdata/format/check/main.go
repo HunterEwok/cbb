@@ -1018,13 +1018,16 @@ func recordSets(m map[any]any) (int, bool) {
 	typ, _ := m[uint64(1)].(uint64)
 	var sorted, once []uint64
 	switch typ {
-	case 2, 3, 9:
+	case 1:
+		sorted = []uint64{26}
+	case 2, 3, 4, 9:
 		sorted = []uint64{10, 11}
-	case 4, 6:
+	case 6:
 		sorted = []uint64{10}
-	case 5:
+	case 5, 8:
 		sorted = []uint64{11}
 	case 10:
+		sorted = []uint64{11}
 		once = []uint64{10}
 	}
 	n, ok := 0, true
@@ -1035,10 +1038,23 @@ func recordSets(m map[any]any) (int, bool) {
 		}
 		ok = ok && sortedSet(a)
 	}
-	// seen (field 11 of revoke, freeze and claim): every entry is
-	// [key hash, seq, record ID].
-	if typ == 2 || typ == 3 || typ == 5 {
-		a, _ := m[uint64(11)].([]any)
+	// seen: every entry is [key hash, seq >= 1, record ID]; device 26 and
+	// revoke, freeze and claim 11 optional, thaw, copies and hubs 11 required
+	seenField, required := uint64(0), false
+	switch typ {
+	case 1:
+		seenField = 26
+	case 2, 3, 5:
+		seenField = 11
+	case 4, 8, 10:
+		seenField, required = 11, true
+	}
+	if seenField != 0 {
+		v, present := m[seenField]
+		a, isArr := v.([]any)
+		if (required && !present) || (present && !isArr) {
+			ok = false
+		}
 		for _, e := range a {
 			ok = ok && seenEntry(e)
 		}
@@ -1078,7 +1094,7 @@ func nameOK(v any) bool {
 // applies it, not holds it), a seq, a name, a role and a member key.
 func adminRecord(r map[any]any, group []byte) bool {
 	allowed := map[uint64]bool{}
-	for _, f := range []uint64{1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25} {
+	for _, f := range []uint64{1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26} {
 		allowed[f] = true
 	}
 	for k := range r {
@@ -1238,7 +1254,8 @@ func checkSets(dir string) {
 		fail("records: only %d sets of two or more", twos)
 	}
 	setRule := map[string]bool{"records/revoke/keys": true, "records/revoke/seen": true, "records/thaw/records": true,
-		"records/checkpoint/heads": true, "records/checkpoint/keep": true, "records/hubs/hubs": true}
+		"records/checkpoint/heads": true, "records/checkpoint/keep": true, "records/hubs/hubs": true,
+		"records/device/seen": true, "records/thaw/seen": true, "records/hubs/seen": true, "records/copies/seen": true}
 	for _, t := range rs.Refuse {
 		if !setRule[t.Rule] {
 			continue

@@ -313,12 +313,22 @@ fn grants() {
 /// `hubs`, each device once in the user's order.
 fn record_sets(typ: u64) -> (&'static [u16], &'static [u16]) {
     match typ {
-        2 | 3 => (&[10, 11], &[]),
-        4 | 6 => (&[10], &[]),
-        5 => (&[11], &[]),
-        9 => (&[10, 11], &[]),
-        10 => (&[], &[10]),
+        1 => (&[26], &[]),
+        2 | 3 | 4 | 9 => (&[10, 11], &[]),
+        6 => (&[10], &[]),
+        5 | 8 => (&[11], &[]),
+        10 => (&[11], &[10]),
         _ => (&[], &[]),
+    }
+}
+
+/// The field of a record type's `seen`, and whether it is required.
+fn seen_field(typ: u64) -> Option<(u16, bool)> {
+    match typ {
+        1 => Some((26, false)),
+        2 | 3 | 5 => Some((11, false)),
+        4 | 8 | 10 => Some((11, true)),
+        _ => None,
     }
 }
 
@@ -328,9 +338,11 @@ fn record_sets_hold(m: &Value<'_>) -> bool {
     let typ = m.get(1).and_then(Value::as_uint).unwrap_or(0);
     let (sorted, once) = record_sets(typ);
     let arr = |f: u16| m.get(f).and_then(Value::as_array).unwrap_or(&[]);
-    // seen (removal, freeze, claim): [key hash, seq >= 1, record ID]
+    // seen: [key hash, seq >= 1, record ID]
     let seen_ok = |e: &Value<'_>| matches!(e.as_array(), Some([Value::Bytes(k), Value::Uint(s), Value::Bytes(id)]) if k.len() == 32 && *s >= 1 && id.len() == 32);
-    if matches!(typ, 2 | 3 | 5) && !arr(11).iter().all(seen_ok) {
+    if let Some((f, required)) = seen_field(typ)
+        && ((required && m.get(f).is_none()) || !arr(f).iter().all(seen_ok))
+    {
         return false;
     }
     sorted.iter().all(|f| cbor::is_set(arr(*f)))
@@ -364,13 +376,13 @@ fn sets_keep_their_order() {
         let typ = e.map.get(1).and_then(Value::as_uint).unwrap_or(0);
         let field = rule.rsplit('/').next().unwrap();
         let is_set_rule = ["keys", "seen", "records", "heads", "keep", "hubs"].contains(&field)
-            && (typ == 2 || typ == 4 || typ == 9 || typ == 10);
+            && matches!(typ, 1 | 2 | 4 | 8 | 9 | 10);
         if is_set_rule {
             assert!(!record_sets_hold(&e.map), "{}", s(t, "name"));
             refused += 1;
         }
     }
-    assert_eq!(refused, 11);
+    assert_eq!(refused, 17);
     let fr = load("frames.json");
     for t in fr["refuse_fields"].as_array().unwrap() {
         let b = unhex(s(t, "message"));
