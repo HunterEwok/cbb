@@ -68,9 +68,15 @@ pub fn install(dir: &Path) {
         let details = describe(info);
         let log: Vec<String> = RECENT.try_lock().map(|r| r.iter().cloned().collect()).unwrap_or_default();
         let body = json!({ "details": details, "log": log, "at_ms": crate::uptime::wall_ms() });
-        let _ = crate::files::write_atomic(&dir.join(PANIC_FILE), body.to_string().as_bytes(), 0o600);
+        write_panic(&dir, &body);
         earlier(info);
     }));
+}
+
+/// Writes panic.json in dir, for the service's user alone: its log lines
+/// are not filtered yet.
+fn write_panic(dir: &Path, body: &Value) {
+    let _ = crate::files::write_atomic(&dir.join(PANIC_FILE), body.to_string().as_bytes(), 0o600);
 }
 
 /// The computer's side of the bug reports, in the service's state folder.
@@ -293,6 +299,20 @@ fn wait(child: std::process::Child, time: Duration) -> Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The panic's file, with its unfiltered log, is the service user's
+    /// alone.
+    #[cfg(unix)]
+    #[test]
+    fn the_panic_file_is_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("cbb-panic-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        write_panic(&dir, &json!({"details": "panic: x", "log": ["a line"]}));
+        let mode = std::fs::metadata(dir.join(PANIC_FILE)).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn a_panic_waits_until_the_user_answers() {

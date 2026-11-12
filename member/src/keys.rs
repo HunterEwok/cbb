@@ -65,7 +65,7 @@ fn call(helper: &Helper, op: &str, req: &Wire) -> Result<Wire> {
 /// A secret sealed by the TPM or the Secure Enclave, as Go's state files
 /// keep it (keyseal.Blob): the blob in tpm or se, or the secret itself
 /// where secrets stay in files.
-#[derive(Serialize, Deserialize, Default, Clone, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Default, Clone, PartialEq)]
 pub struct Sealed {
     #[serde(with = "b64", default, skip_serializing_if = "Vec::is_empty")]
     pub secret: Vec<u8>,
@@ -73,6 +73,17 @@ pub struct Sealed {
     pub tpm: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub se: Option<serde_json::Value>,
+}
+
+/// Never the secret itself, should a Sealed be printed.
+impl std::fmt::Debug for Sealed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Sealed")
+            .field("secret", &format_args!("<{} bytes>", self.secret.len()))
+            .field("tpm", &self.tpm.is_some())
+            .field("se", &self.se.is_some())
+            .finish()
+    }
 }
 
 impl Sealed {
@@ -290,5 +301,19 @@ pub fn new_device_key() -> (Option<Arc<dyn ExternalKey>>, String) {
             }
         }
         Err(e) => (None, e.for_log()),
+    }
+}
+
+#[cfg(test)]
+mod sealed_tests {
+    use super::*;
+
+    /// A Sealed printed shows how long its secret is, never the secret.
+    #[test]
+    fn debug_keeps_the_secret() {
+        let s = Sealed { secret: b"very-secret-bytes".to_vec(), tpm: None, se: None };
+        let out = format!("{s:?}");
+        assert!(!out.contains("very") && !out.contains("118"), "{out}");
+        assert!(out.contains("<17 bytes>"), "{out}");
     }
 }

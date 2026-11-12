@@ -35,7 +35,7 @@ Page {
                 wrapMode: Text.Wrap
                 color: Theme.highlightColor
                 text: page.step === "preparing" || page.step === "opening" ? qsTr("Opening the invitation on the group's hub…")
-                    : page.shown ? qsTr("On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. It works once, until %1.")
+                    : page.shown ? qsTr("On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite - and paste its text. It works once, until %1.")
                                    .arg(Qt.formatTime(new Date(app.invite.expiresMs), Qt.DefaultLocaleShortDate))
                     : page.step === "done" ? qsTr("%1 joined the group; it appears in the list once it connects.").arg(app.invite.joined)
                     : ""

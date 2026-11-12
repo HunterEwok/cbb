@@ -116,6 +116,9 @@ extension PasteTarget {
                     } else {
                         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
                         guard FileManager.default.createFile(atPath: url.path, contents: nil) else { throw Control.Failure.broken("cannot write \(path)") }
+                        // From another device: Gatekeeper checks it before
+                        // it first opens, wherever it is pasted.
+                        try FetchedCopy.markDownloaded(url)
                         current = try FileHandle(forWritingTo: url)
                     }
                     if !path.contains("/") { copy.files.append(url) }
@@ -139,6 +142,26 @@ struct FetchedCopy {
     var text: String
     var data: [(String, Data)] = []
     var files: [URL] = []
+
+    /// The quarantine attribute of a file received at `time`, as cbb's and
+    /// Go's mark: the flags, the time in hexadecimal, the agent.
+    static func quarantine(at time: Date) -> String {
+        String(format: "0083;%llx;CBB;", UInt64(max(0, time.timeIntervalSince1970)))
+    }
+
+    /// Marks a file from another device as downloaded, so that Gatekeeper
+    /// checks it before it first opens; a volume without extended
+    /// attributes keeps it unmarked.
+    static func markDownloaded(_ url: URL, at time: Date = Date()) throws {
+        let value = quarantine(at: time)
+        let r = url.withUnsafeFileSystemRepresentation { path -> Int32 in
+            guard let path else { return -1 }
+            return value.withCString { setxattr(path, "com.apple.quarantine", $0, strlen($0), 0, 0) }
+        }
+        if r != 0 && errno != ENOTSUP {
+            throw Control.Failure.broken("cannot mark \(url.lastPathComponent) as downloaded: errno \(errno)")
+        }
+    }
 
     /// How long the files of a paste stay for the app that pasted them.
     static let keepFor: TimeInterval = 600

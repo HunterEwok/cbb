@@ -838,8 +838,8 @@
         <translation>Не этот</translation>
     </message>
     <message>
-        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. It works once, until %1.</source>
-        <translation>На новом телефоне откройте CBB, нажмите «Вступить по приглашению» и отсканируйте код. На компьютере выполните cbb pair -invite с его текстом. Приглашение работает один раз, до %1.</translation>
+        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite - and paste its text. It works once, until %1.</source>
+        <translation>На новом телефоне откройте CBB, нажмите «Вступить по приглашению» и отсканируйте код. На компьютере выполните cbb pair -invite - и вставьте его текст. Приглашение работает один раз, до %1.</translation>
     </message>
     <message>
         <source>Opening the invitation on the group's hub…</source>

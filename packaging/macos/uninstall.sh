@@ -66,6 +66,18 @@ done
 if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then
 	launchctl bootout "gui/$(id -u "$SUDO_USER")/$agent" 2>/dev/null || true
 fi
+# The rights cbb confirm-setup wrote.
+# (member/src/confirm.rs, system_rights: one right for each operation
+# confirmed each time).
+for right in tools.cbb.admin tools.cbb.admin.each \
+	tools.cbb.admin.each.new tools.cbb.admin.each.leave tools.cbb.admin.each.take_over \
+	tools.cbb.admin.each.recover tools.cbb.admin.each.hand_over tools.cbb.admin.each.key_level \
+	tools.cbb.admin.each.takeover_delay tools.cbb.admin.each.make_admin tools.cbb.admin.each.pair \
+	tools.cbb.admin.each.join tools.cbb.admin.each.invite tools.cbb.admin.each.away \
+	tools.cbb.admin.each.hubs tools.cbb.admin.each.paste_receive tools.cbb.admin.each.keyboard \
+	tools.cbb.admin.each.remote; do
+	security authorizationdb remove "$right" >/dev/null 2>&1 || true
+done
 rm -f "/Library/LaunchDaemons/$daemon.plist" "/Library/LaunchDaemons/$daemon.update.plist" "/Library/LaunchAgents/$agent.plist"
 rm -rf "/Library/Application Support/cbb-update" "/Library/Application Support/cbb-package"
 if [ -f /usr/local/bin/cbb ] && [ ! -L /usr/local/bin/cbb ]; then

@@ -838,8 +838,8 @@
         <translation>Si hiki</translation>
     </message>
     <message>
-        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. It works once, until %1.</source>
-        <translation>Kwenye simu mpya, fungua CBB, gusa Jiunge kwa mwaliko na uchanganue msimbo. Kwenye kompyuta, endesha cbb pair -invite ukitumia maandishi yake. Unafanya kazi mara moja, hadi %1.</translation>
+        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite - and paste its text. It works once, until %1.</source>
+        <translation>Kwenye simu mpya, fungua CBB, gusa Jiunge kwa mwaliko na uchanganue msimbo. Kwenye kompyuta, endesha cbb pair -invite - na ubandike maandishi yake. Unafanya kazi mara moja, hadi %1.</translation>
     </message>
     <message>
         <source>Opening the invitation on the group's hub…</source>

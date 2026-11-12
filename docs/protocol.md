@@ -1249,18 +1249,25 @@ with its own two sockets, but its control socket takes fewer: no `copy_media`, `
 An admin operation on the control socket carries `auth` in its `args` where the system needs
 it, and the service takes it only when the confirmation holds (docs/design.md, "Confirming admin
 actions"): on macOS `auth` is the base64 external form (32 bytes) of the caller's authorization,
-which must hold the right `tools.cbb.admin` for five minutes, or `tools.cbb.admin.each`. One
+which must hold the right `tools.cbb.admin` for five minutes, or for an operation confirmed
+each time `tools.cbb.admin.each.` and the operation (`tools.cbb.admin.each` for one not
+listed). One
 confirmation covers the group's everyday changes for five minutes (`sync` of another device,
-`mute`, `unmute`, `rename`, `remove`, `freeze`, `thaw`, `resolve`, `incoming`, `pair`, `join`,
-`invite`, `network`, `away`, `hubs`, `paste_on`, `paste_receive`, `keyboard`, `remote`, the
-quick actions' operations, `release_file`, `release_want` and `update_way`); every other
-operation, such as `new`, `leave`, `take_over`, `recover`, `hand_over`, `key_level`,
-`takeover_delay` and `make_admin`, is confirmed each time, and `confirm_key` only on the admin
-socket. On Linux polkit
+`mute`, `unmute`, `rename`, `remove`, `freeze`, `thaw`, `resolve`, `incoming`, `network`,
+`paste_on`, the quick actions' operations, `release_file`, `release_want` and `update_way`);
+every other operation, such as `new`, `leave`, `take_over`, `recover`, `hand_over`,
+`key_level`, `takeover_delay`, `make_admin`, `pair`, `join`, `invite`, `away`, `hubs`,
+`paste_receive`, `keyboard` and `remote`, is confirmed each time, and `confirm_key` only on
+the admin socket. On Linux polkit
 must authorize the calling process for the action of the same name, and `auth` is empty; on
-Windows `auth` is `CHALLENGE.SIGNATURE`, both base64: the RSASSA-PKCS1-v1_5 SHA-256 signature,
-by the user's registered Windows Hello key, of `cbb confirm v1\n`, the operation, `\n` and the
-challenge's 32 bytes. `mute` and `unmute` of the device itself need no `auth`. A refusal says
+Windows `auth` is `CHALLENGE.SIGNATURE`, both base64, the challenge from a `confirm` request
+whose `value` is the operation and whose `name` and `device` are the request's (the service
+shows that action in the user's session first): the RSASSA-PKCS1-v1_5 SHA-256 signature,
+by the user's registered Windows Hello key, of `cbb confirm v2\n`, the action as the prompt
+names it (`cbb`, the operation with `-` for `_`, then `name` and `device` when set, each after a
+space, without control characters and cut to 80 characters), `\n` and the challenge's 32 bytes.
+`mute` and `unmute` of the device itself, by the user at the screen, need no `auth` unless
+another admin muted it. A refusal says
 `the confirmation was cancelled` when the user cancelled the prompt, and `this computer cannot
 confirm the admin action for this user, so only the administrator may run it` when nothing
 confirms it.

@@ -925,8 +925,14 @@ Its own user turns sync off ("Sync on and off"); for the whole group an admin mu
   shows it.
 
 An admin computer mutes or unmutes itself on the control socket too, not only on the admin
-socket: it changes nothing for the rest of the group, so the Mac app and the tray app do it
-without asking anything. Any other device takes a confirmation ("Confirming admin actions").
+socket, for the user at its screen (root and the service's own user too): it changes nothing
+for the rest of the group, so the Mac app and the tray app do it without asking anything. The
+user must surely be at the screen: logind says so on Linux, the console's owner on a Mac, an
+active session on Windows; where nothing tells, it takes a confirmation. A mute that another
+admin set is not the device's own matter, to end or to set again: it takes a confirmation, as
+does muting or unmuting any other device ("Confirming admin actions"). `mute.json` keeps which
+device's admin set the mute, and muting again keeps it; one without it counts as another
+admin's.
 
 ### Confirming admin actions
 
@@ -937,33 +943,70 @@ prompt, and the service checks that confirmation itself, never what the caller s
 (`member/src/confirm.rs`, D-97). Actions come in three tiers:
 
 - **This device itself** (muting or unmuting it, its own sync): no prompt.
-- **The group's everyday changes** (admitting, removing or renaming a device, making a hub,
-  muting another device, sync away from home): one confirmation lasts five minutes.
-- **What cannot be undone, or changes who holds the group** (making a group, leaving it,
-  taking it over, handing it on, recovering its root, making a device an admin, the key level
-  and the takeover delay): a confirmation each time. The service lists the everyday
-  operations by name (`confirm::KEPT`); any other, also one added later, is confirmed each
-  time.
+- **The group's everyday changes** (removing or renaming a device, freezing an admin, muting
+  another device, sending remote pastes, the quick actions, updates): one confirmation lasts
+  five minutes. None of them lets a device in, sends copies anywhere new or lets anything type
+  on this computer.
+- **What cannot be undone, changes who holds the group, or lets another device in for good**
+  (making a group, leaving it, taking it over, handing it on, recovering its root, making a
+  device an admin, the key level and the takeover delay; admitting a device, by its code or
+  an invitation, joining a group, a hub and sync away from home; taking remote pastes, and
+  pairing a Bluetooth keyboard or a TV's remote): a confirmation each time.
+  The service lists the everyday operations by name (`confirm::KEPT`); any other, also one
+  added later, is confirmed each time.
+
+Each prompt says what it confirms: its text, then the action as `cbb` writes it, with its
+device (`cbb remove Laptop`), so that a prompt a program raised does not pass for the one the
+user expects. A user has one prompt at a time, and after a cancelled one the next waits 5
+seconds, doubling up to five minutes; on Windows at most six challenges a minute. The service
+logs every confirmed action with its user.
+
+Who shows the prompt differs. On Linux polkit's agent shows it, with the action the service
+names, and the service paces it. On Windows the service itself shows the action in the user's
+session (`WTSSendMessage`) before it gives the challenge, and paces the challenges; the
+Windows Hello key then signs that action, which the service derives from the request again, so
+a signature confirms no other action or device. On a Mac each operation confirmed each time
+has a right of its own (`tools.cbb.admin.each.make_admin` and so on), whose prompt, naming the
+action, the installer wrote as root, and the service checks the right of the operation it
+takes; the everyday changes share a right whose prompt `cbb` completes with the action, and a
+program of the user may raise that prompt with a text of its own. Whether a caller's text can
+take the place of a right's own prompt on a Mac waits for a run on a Mac. Everywhere, the
+system's prompt and the user's fingerprint, face or password are what confirm, never the text.
 
 `cbb` run as a user of the service's group sends an admin request on the control socket when
 the admin socket is out of reach, and the service takes it once confirmed:
 
-- **macOS**: two rights in the authorization database, `tools.cbb.admin` (shared in the
-  session for 300 seconds) and `tools.cbb.admin.each` (each time), both for an administrator
-  of the Mac, which the service writes when it starts. `cbb` asks for the right, so macOS shows
-  its window with Touch ID, and sends the authorization's external form in the request's
-  `auth`; the service, as root, checks that it holds the right.
+- **macOS**: rights in the authorization database, `tools.cbb.admin` (shared in the session
+  for 300 seconds), and each time `tools.cbb.admin.each` (an operation not listed) and one
+  `tools.cbb.admin.each.OPERATION` for each operation confirmed each time, all for an
+  administrator of the Mac, which the installer writes as root (`cbb confirm-setup`; the
+  service, as `_cbb`, cannot), and the uninstaller removes. `cbb` asks for the operation's
+  right, with the action in the prompt (`kAuthorizationEnvironmentPrompt`) only for the shared
+  ones, so macOS shows its window with Touch ID, and sends the
+  authorization's external form in the request's `auth`; the service checks that it holds the
+  right, without a prompt of its own, and refuses a right that is not in the database, which
+  the system's default rule would otherwise decide.
 - **Linux**: two polkit actions of the same names, `auth_admin_keep` and `auth_admin`, for
-  the active session only, which the service writes to `/usr/share/polkit-1/actions`. The
-  service runs `pkcheck` for the calling process, which the kernel names (its ID, start time
-  and user), so polkit's agent asks in the user's session, with the fingerprint where it is
-  set up.
+  the active session only, which the installer writes to `/usr/share/polkit-1/actions`
+  (`cbb confirm-setup`), owned by the service's user (`org.freedesktop.policykit.owner`), so
+  that polkit answers the service about another user's process. The service runs `pkcheck`
+  for the calling process: its ID and user from the kernel, and the start time `cbb` sends in
+  `auth`, which polkit checks against the process itself; a start time after the connection
+  came is refused, so a process that took the ID of one that connected and left is never asked
+  about, and the service reads nothing of other users' processes (its unit hides them). The
+  action goes to polkit's dialog as the detail `cbb_action`; polkit's agent asks in the user's
+  session, with the fingerprint where it is set up.
 - **Windows**: Windows Hello. `cbb` makes the user's Windows Hello key once and registers its
   public key with the service as the administrator, through the UAC prompt
   (`confirm-keys.json` in the state folder, by the user's SID). For each confirmation the
-  service gives a challenge on the control socket (`confirm`), `cbb` signs it with the key,
-  which shows Windows Hello's prompt, and the service checks the signature for the user at
-  the other end, in an active session; it remembers that user's five minutes itself.
+  service shows the action in the user's session with OK and Cancel (Windows Hello's prompt
+  cannot say it), then gives a challenge on the control socket (`confirm`), bound to that
+  action; `cbb` signs it with the key, which shows Windows Hello's prompt, and the service
+  checks the signature, for the same action, for the user
+  at the other end, in an active session; it remembers that user's five minutes itself. Only
+  a member of the PC's Administrators group registers a key, and at every confirmation the
+  service checks that the user still is one: a user taken out of it loses the key. The key is
+  an RSA key of 2048 bits or more; `cbb confirm-key -remove SID` removes one.
 
 Where nothing confirms (no polkit, a session without an agent, an SSH login, a user who may
 not), `cbb` exits with 77 and the apps run it as the administrator, as before; a cancelled
@@ -971,8 +1014,9 @@ prompt exits with 75 and the apps say nothing. What needs root itself still does
 an update, and joining a group, where `cbb` writes the service's files. Any program of the
 user may start a confirmation, but only the system's prompt passes it, and within the five
 minutes only the everyday changes go through without one. The phones do the same with their
-own keys: on Android one fingerprint, face or PIN lets the admin key sign for five minutes,
-while the group's root key asks at each signature.
+own keys: on Android the app's own prompt (fingerprint, face or PIN) lets the admin key sign
+for five minutes, never the screen unlock alone and never on a locked phone, while the
+group's root key asks at each signature.
 
 The mute lasts across restarts (`mute.json` in the state directory) and ends by itself when
 its time has passed. A device that does not take the command, an older or a broken one, is
@@ -2229,7 +2273,12 @@ action is defined on the member that runs it, and the button sends only its name
 - **The user's own**: added on the device itself, with a name and a command line,
   `cbb action add <name> -- <command>`, a program by its full path with fixed arguments and
   no shell, which must end within 15 seconds. The command takes no arguments from the network, so nothing a sender writes reaches a shell.
-  It runs as the desktop user. An action that needs root, like reboot, gets exactly that
+  It runs as the desktop user, and only as that user set it: `cbb action add`, run as the
+  user (under `sudo`, for the user who ran it), also writes the command to `own-actions.json`
+  in the cbb folder of the user's settings (`os.UserConfigDir`), and the agent runs a command
+  the service names only when that very command is there for the action. The service's
+  account, which cannot write the user's settings, so cannot make the user's session run a
+  command of its own. An action that needs root, like reboot, gets exactly that
   right only with the user's consent, after a prompt that lists what it grants, as the
   firewall prompt does; the installer adds nothing by itself (D-71):
   - on Linux the service's unit sets `NoNewPrivileges=yes`, so sudo cannot work for it: the

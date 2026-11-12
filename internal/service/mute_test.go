@@ -5,6 +5,8 @@ package service
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -142,6 +144,33 @@ func TestMute(t *testing.T) {
 	}
 	if a.status(t).Muted {
 		t.Fatal("alpha is still muted after unmuting itself on the control socket")
+	}
+	// A mute that another admin set (here one whose muter is unknown, as an
+	// older version saved it) is not alpha's own: on the control socket it
+	// is neither ended nor set again, which would make it alpha's; the
+	// admin socket ends it.
+	a.stop()
+	if err := os.WriteFile(filepath.Join(a.dir, "mute.json"), []byte(`{"mute":0}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a = restartService(t, &h, a)
+	if !a.status(t).Muted {
+		t.Fatal("alpha's saved mute did not last across a restart")
+	}
+	if err := plain(a, control.Header{Op: control.OpUnmute, Device: "alpha"}); err == nil || !strings.Contains(err.Error(), "administrator") {
+		t.Fatalf("the control socket ended another admin's mute: %v", err)
+	}
+	if err := plain(a, control.Header{Op: control.OpMute, Device: "alpha", ForMS: time.Hour.Milliseconds()}); err == nil || !strings.Contains(err.Error(), "administrator") {
+		t.Fatalf("the control socket muted again over another admin's mute: %v", err)
+	}
+	if !a.status(t).Muted {
+		t.Fatal("alpha is no longer muted")
+	}
+	if _, err := a.do(t, control.Header{Op: control.OpUnmute, Device: "alpha"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if a.status(t).Muted {
+		t.Fatal("alpha is still muted after the admin socket's unmute")
 	}
 
 	// cbb mute names a device; this device's own sync is cbb sync.

@@ -256,3 +256,5 @@ cbb for MIPS has no sync away from home yet (roadmap item 37).	у cbb для MIP
 --no-helper is for Linux	--no-helper только для Linux
 cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	здесь cbb работает со своим помощником, который может хранить его ключи; без помощника cbb не сможет ими пользоваться. Сначала удалите его: %s
 --uinput needs cbb's helper, which runs the desktop connector	--uinput требует помощника cbb, в котором работает коннектор рабочего стола
+the polkit actions that confirm admin actions were not written; the apps ask for the administrator's password instead	действия polkit для подтверждения админ-действий не записаны; приложения будут спрашивать пароль администратора
+the rights that confirm admin actions were not written; the Mac app asks for the administrator's password instead	права для подтверждения админ-действий не записаны; приложение для Mac будет спрашивать пароль администратора

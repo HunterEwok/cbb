@@ -161,7 +161,7 @@
   "Off": "Kimezimwa",
   "Offline: %s.": "Nje ya mtandao: %s.",
   "On": "Kimewashwa",
-  "On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. Show or send it only to the person who joins.": "Kwenye simu mpya, fungua CBB, gusa Jiunge kwa mwaliko na uchanganue msimbo. Kwenye kompyuta, endesha cbb pair -invite ukitumia maandishi yake. Uonyeshe au utume kwa anayejiunga pekee.",
+  "On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite - and paste its text. Show or send it only to the person who joins.": "Kwenye simu mpya, fungua CBB, gusa Jiunge kwa mwaliko na uchanganue msimbo. Kwenye kompyuta, endesha cbb pair -invite - na ubandike maandishi yake. Uonyeshe au utume kwa anayejiunga pekee.",
   "On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this window open.": "Kwenye simu ya kikundi, gusa + na uchanganue msimbo huu. Kwenye kompyuta ya kikundi, gusa + na uandike nambari. Acha dirisha hili wazi.",
   "On the new device, choose Join a group: it shows a QR code and six digits. A phone of the group scans the code; here, type the digits.": "Kwenye kifaa kipya, chagua Jiunge na kikundi: kinaonyesha msimbo wa QR na tarakimu sita. Simu ya kikundi huchanganua msimbo; hapa, andika tarakimu.",
   "Online": "Mtandaoni",

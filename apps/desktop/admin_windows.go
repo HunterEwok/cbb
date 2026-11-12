@@ -61,7 +61,11 @@ func runAdmin(args []string, input string, details bool) error {
 	}
 
 	script := psScript(cbbPath(), args, inPath, details, outPath)
-	code, err := elevate("powershell.exe", "-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand "+encodePS(script))
+	ps, err := powershellPath()
+	if err != nil {
+		return &adminError{msg: "Windows did not start cbb as the administrator.", detail: err.Error()}
+	}
+	code, err := elevate(ps, "-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand "+encodePS(script))
 	if errors.Is(err, windows.ERROR_CANCELLED) {
 		return errCancelled
 	}
@@ -173,4 +177,15 @@ func elevate(file, params string) (uint32, error) {
 		return 0, err
 	}
 	return code, nil
+}
+
+// powershellPath is Windows PowerShell in the system's own folder: the
+// elevated program is never looked up by its name, which would try the
+// current folder and App Paths first.
+func powershellPath() (string, error) {
+	sys, err := windows.GetSystemDirectory()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(sys, "WindowsPowerShell", "v1.0", "powershell.exe"), nil
 }

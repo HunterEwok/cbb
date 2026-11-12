@@ -838,8 +838,8 @@
         <translation>यह नहीं</translation>
     </message>
     <message>
-        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. It works once, until %1.</source>
-        <translation>नए फ़ोन पर CBB खोलें, निमंत्रण से जुड़ें पर टैप करें और कोड स्कैन करें। कंप्यूटर पर इसके पाठ के साथ cbb pair -invite चलाएँ। यह एक बार, %1 तक काम करता है।</translation>
+        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite - and paste its text. It works once, until %1.</source>
+        <translation>नए फ़ोन पर CBB खोलें, निमंत्रण से जुड़ें पर टैप करें और कोड स्कैन करें। कंप्यूटर पर cbb pair -invite - चलाएँ और इसका पाठ पेस्ट करें। यह एक बार, %1 तक काम करता है।</translation>
     </message>
     <message>
         <source>Opening the invitation on the group's hub…</source>

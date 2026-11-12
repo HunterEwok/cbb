@@ -191,6 +191,8 @@ struct Service {
     node: RwLock<Option<Arc<Node>>>,
     away: RwLock<Option<Arc<Away>>>,
     watchers: Mutex<Vec<Watcher>>,
+    /// The pace of each user's confirmation prompts (confirm.rs).
+    prompts: crate::confirm::Pace,
     /// The grants of the remote pastes handed to desktop sessions, for the
     /// uinput helper's keys, by their tokens.
     grants: Mutex<HashMap<String, Grant>>,
@@ -335,6 +337,7 @@ pub fn run(cfg: Config) -> Result<()> {
         node: RwLock::new(None),
         away: RwLock::new(None),
         watchers: Mutex::new(Vec::new()),
+        prompts: crate::confirm::Pace::new(),
         grants: Mutex::new(HashMap::new()),
         peripherals: Arc::new(crate::peripheral::Peripherals::new(&cfg.state_dir, &cfg.name)),
         next_watcher: AtomicUsize::new(0),
@@ -925,12 +928,18 @@ impl Service {
     /// until an admin lifts it), or ends its mute, saves it, and tells the
     /// members connected in a presence message, without connecting again.
     fn set_muted(&self, node: &Arc<Node>, on: bool, until: i64, by: &str) -> Result<()> {
+        self.set_muted_as(node, on, until, by, by)
+    }
+
+    /// set_muted, saving `saved` as the muter (mute::kept_by) while the
+    /// log names `by`.
+    fn set_muted_as(&self, node: &Arc<Node>, on: bool, until: i64, by: &str, saved: &str) -> Result<()> {
         if on {
             node.engine.set_mute(until);
         } else {
             node.engine.unmute();
         }
-        crate::mute::save(&self.state_dir, &node.engine)?;
+        crate::mute::save(&self.state_dir, &node.engine, saved)?;
         (self.log)(&match (on, until) {
             (false, _) => format!("cbb: {by} ended the mute: this device's copies reach the group again"),
             (true, 0) => format!("cbb: {by} muted this device until an admin unmutes it"),
@@ -954,23 +963,40 @@ impl Service {
         let until = crate::mute::until(h.for_ms)?;
         if self.admin(|a| a.mute(&h.device, on, h.for_ms))?.is_none() {
             let me = node.identity().id.to_string();
-            self.set_muted(&node, on, until, &me)?;
+            // Muting again keeps who muted it first, so another admin's mute
+            // never becomes this device's own to end.
+            let saved = if on {
+                crate::mute::kept_by(&crate::mute::by(&self.state_dir, &node.engine)?, &me)
+            } else {
+                me.clone()
+            };
+            self.set_muted_as(&node, on, until, &me, &saved)?;
         }
         Ok(())
     }
 
     /// Whether the request h only mutes or unmutes this device itself,
-    /// which the service also takes on its control socket: it changes
-    /// nothing for the rest of the group, and only an admin device may do it
-    /// (mute_op asks for the admin key), so the app turns its own device back
-    /// on without the administrator's password (docs/design.md, "Muting a
-    /// device").
-    fn own_device_op(&self, h: &Header) -> bool {
+    /// which the service also takes on its control socket from the user at
+    /// the screen (or root and the service's own user): it changes nothing
+    /// for the rest of the group, and only an admin device may do it
+    /// (mute_op asks for the admin key), so the app turns its own device
+    /// back on without the administrator's password (docs/design.md,
+    /// "Muting a device"). A mute another admin set is not the device's own
+    /// matter, to end or to set again: it goes through the confirmation, as
+    /// does any request when nothing tells that its user is at the screen.
+    fn own_device_op(&self, conn: &UnixStream, h: &Header) -> bool {
         if !control::is_own_device_op(&h.op) || h.device.is_empty() {
             return false;
         }
         let Ok(node) = self.node() else { return false };
-        crate::admin::find_device(&node, &h.device).is_ok_and(|d| d.id == node.identity().id.to_string())
+        let me = node.identity().id.to_string();
+        if !crate::admin::find_device(&node, &h.device).is_ok_and(|d| d.id == me) {
+            return false;
+        }
+        if peer::may_take(peer::uid(conn), DESKTOP, peer::at_screen_surely) != peer::Verdict::Allowed {
+            return false;
+        }
+        crate::mute::by(&self.state_dir, &node.engine).is_ok_and(|by| by.is_empty() || by == me)
     }
 
     /// The answer to sync and muted, as the phone's member gives it.
@@ -2102,6 +2128,9 @@ impl Service {
     }
 
     fn serve(&self, conn: UnixStream, admin: bool) {
+        // When the connection came, which a confirmation checks the calling
+        // process against (confirm::check).
+        let accepted = crate::confirm::clock();
         let mut out = match conn.try_clone() {
             Ok(c) => c,
             Err(_) => return,
@@ -2133,11 +2162,17 @@ impl Service {
             let _ = control::write(&mut out, &answer);
             return;
         }
-        if control::needs_admin(&m.header) && !admin && !self.own_device_op(&m.header) {
+        if control::needs_admin(&m.header) && !admin && !self.own_device_op(&out, &m.header) {
             // The user at the screen confirms it with the system's prompt
-            // instead (confirm.rs), where this system has one.
+            // instead (confirm.rs), where this system has one, one prompt
+            // of a user at a time.
+            let user = peer::uid(&out).map(|u| u.to_string()).unwrap_or_default();
             let res = if crate::confirm::supported() {
-                crate::confirm::check(&out, &m.header)
+                self.prompts.begin(&user, Instant::now()).and_then(|()| {
+                    let res = crate::confirm::check(&out, &m.header, accepted);
+                    self.prompts.end(&user, &res, Instant::now());
+                    res
+                })
             } else {
                 Err(Error::msg(format!(
                     "{:?} changes the group, so the service takes it only on its admin socket, which only the administrator reaches",
@@ -2145,7 +2180,10 @@ impl Service {
                 )))
             };
             match res {
-                Ok(()) => (self.log)(&format!("cbb: {} confirmed by the user at the screen", m.header.op)),
+                Ok(()) => (self.log)(&format!(
+                    "cbb: {} confirmed by the user {user} at the screen",
+                    crate::confirm::action(&m.header)
+                )),
                 Err(e) => {
                     let _ = control::write(&mut out, &control::failure(&e));
                     return;

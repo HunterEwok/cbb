@@ -119,7 +119,8 @@ rm -f /etc/systemd/system/cbb.service /etc/systemd/system/cbb-console.service \
 	/etc/systemd/user/cbb-agent.service \
 	/etc/profile.d/cbb-console.sh /usr/lib/sysusers.d/cbb.conf /usr/local/bin/cbb \
 	/etc/profile.d/cbb-path.sh /etc/sysusers.d/cbb.conf /etc/atomic-update.conf.d/cbb.conf \
-	/etc/polkit-1/rules.d/60-cbb.rules /etc/polkit-1/localauthority/50-local.d/cbb.pkla
+	/etc/polkit-1/rules.d/60-cbb.rules /etc/polkit-1/localauthority/50-local.d/cbb.pkla \
+	/usr/share/polkit-1/actions/tools.cbb.admin.policy
 if command -v systemctl >/dev/null 2>&1; then
 	systemctl daemon-reload || true
 fi

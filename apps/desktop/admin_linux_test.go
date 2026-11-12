@@ -105,3 +105,22 @@ func TestRunAsUser(t *testing.T) {
 		t.Fatal("needsRoot")
 	}
 }
+
+// pkexec comes from the system's folders, never from PATH.
+func TestPkexecFromTheSystem(t *testing.T) {
+	dir := t.TempDir()
+	fake := filepath.Join(dir, "pkexec")
+	if err := os.WriteFile(fake, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	if p, err := pkexecPath([]string{filepath.Join(dir, "none"), "/nonexistent/pkexec"}); err == nil {
+		t.Fatalf("found %s on PATH", p)
+	}
+	if p, err := pkexecPath([]string{"/nonexistent/pkexec", fake}); err != nil || p != fake {
+		t.Fatalf("%q, %v", p, err)
+	}
+	if pkexecPlaces[0] != "/usr/bin/pkexec" {
+		t.Errorf("places %v", pkexecPlaces)
+	}
+}

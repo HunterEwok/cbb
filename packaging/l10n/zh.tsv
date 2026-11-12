@@ -256,3 +256,5 @@ cbb for MIPS has no sync away from home yet (roadmap item 37).	MIPS 版 cbb 暂�
 --no-helper is for Linux	--no-helper 仅适用于 Linux
 cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	这里的 cbb 与其辅助程序一起运行，辅助程序可能保存着它的密钥；没有辅助程序，cbb 无法使用这些密钥。请先将其移除：%s
 --uinput needs cbb's helper, which runs the desktop connector	--uinput 需要 cbb 的辅助程序，桌面连接器在其中运行
+the polkit actions that confirm admin actions were not written; the apps ask for the administrator's password instead	未写入确认管理操作的 polkit 操作；应用将改为询问管理员密码
+the rights that confirm admin actions were not written; the Mac app asks for the administrator's password instead	未写入确认管理操作的权限；Mac 应用将改为询问管理员密码
