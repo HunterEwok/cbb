@@ -118,6 +118,20 @@ fn has(e: &str, part: &str) {
     assert!(e.contains(part), "{e:?} does not say {part:?}");
 }
 
+/// What the control socket answers a change of the group from a user it
+/// cannot confirm: where the system has a prompt (confirm.rs), that it
+/// cannot confirm the action for this user, as polkit refuses the tests'
+/// user on Linux; elsewhere, that only the admin socket takes it.
+const NOT_CONFIRMED: &str = "cannot confirm the admin action";
+
+fn refused(e: &str) -> bool {
+    e.contains("only on its admin socket") || e.contains(NOT_CONFIRMED)
+}
+
+fn has_refusal(e: &str) {
+    assert!(refused(e), "{e:?} is no refusal of a change of the group on the control socket");
+}
+
 /// Sends one request and checks the contract of its answers: each is an
 /// answer's envelope (read checks it), and the last is done or carries an
 /// error.
@@ -139,19 +153,22 @@ fn the_admin_socket_guards_the_group() {
     svc.new_group();
     for op in OPS.iter().filter(|op| !SWEPT_APART.contains(op)) {
         let m = answer(&svc, false, json!({"op": op}));
-        let refused = m.error().contains("only on its admin socket");
         // This device's own sync, without -on, any user turns.
         let free = UNPRIVILEGED.contains(op) || *op == "sync";
-        assert_eq!(refused, !free, "{op} on the control socket: {:?}", m.h);
+        assert_eq!(refused(m.error()), !free, "{op} on the control socket: {:?}", m.h);
         let m = answer(&svc, true, json!({"op": op}));
-        assert!(!m.error().contains("admin socket"), "{op} on the admin socket: {:?}", m.h);
+        assert!(
+            !m.error().contains("admin socket") && !m.error().contains(NOT_CONFIRMED),
+            "{op} on the admin socket: {:?}",
+            m.h
+        );
     }
     // Turning this device's own sync on or off changes nothing for the
     // group, so any user may; another device's is an admin's.
     svc.ok(false, json!({"op": "sync", "on": true}));
-    has(&svc.err(false, json!({"op": "sync", "on": true, "device": "x"})), "admin socket");
+    has_refusal(&svc.err(false, json!({"op": "sync", "on": true, "device": "x"})));
     for op in SWEPT_APART.iter().filter(|op| !UNPRIVILEGED.contains(op)) {
-        has(&svc.err(false, json!({"op": op})), "admin socket");
+        has_refusal(&svc.err(false, json!({"op": op})));
     }
 }
 
@@ -196,7 +213,7 @@ fn every_operation_answers_in_a_group() {
         assert!(svc.running(), "the service stopped after {op}:\n{}", svc.log());
     }
     has(&svc.err(true, json!({"op": "no_such_op"})), "unknown operation \"no_such_op\"");
-    has(&svc.err(false, json!({"op": ""})), "admin socket");
+    has_refusal(&svc.err(false, json!({"op": ""})));
     // A header without op is an answer's envelope, which no client sends.
     has(&svc.err(true, json!({})), "unknown operation \"reply\"");
     assert_eq!(svc.status()["role"], "member");
