@@ -1613,6 +1613,9 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The Mac app's Settings are a sheet on its window, as the tray app's dialog, instead of a
+  window of their own; "Settings…" in the menu bar item and Command-comma open the window
+  with them.
 - A phone joins a group with one button, "Join a group", on the iPhone and Android: it always
   joins as a member, and "Join as an admin" is gone. The root makes it an admin later from the
   phone's device page ("Make it an admin"), on a root phone, in the Mac app and the tray, and
@@ -1703,6 +1706,15 @@ All notable changes to cbb are documented in this file. The format follows
 - From 0.6 on, a device works in one group with devices of the release before it, and an
   update never breaks a group (D-92; docs/design.md, "Versions in one group"). SUPPORT.md says
   what keeps a group working if the maintainer is gone.
+- Admin actions no longer ask for the password every time (D-97). The user confirms them
+  with the system's own prompt, checked by the service: Touch ID or the password on a Mac,
+  polkit on Linux (with the fingerprint where it is set up), Windows Hello on Windows. One
+  confirmation lasts five minutes for the group's everyday changes; making, leaving, taking
+  over or handing on a group, and making a device an admin, ask each time; muting or unmuting
+  the computer itself asks nothing. `cbb` run without `sudo` does the same, and the apps fall
+  back to the administrator's prompt where nothing else confirms. On Android one fingerprint,
+  face or screen lock now lets a new admin key sign for five minutes; the group's root key,
+  and keys made before, keep asking for each signature.
 - The release archives for Linux, FreeBSD, macOS and Windows carry `cbb` in Rust, with the Go
   programs `cbb-helper`, `cbb-forward` and `cbb-relay` beside it; the routers' MIPS archives carry
   `cbb` alone. The installers put the servers beside `cbb`, and `cbbw.exe` is the Rust program
@@ -2272,6 +2284,10 @@ All notable changes to cbb are documented in this file. The format follows
   a moment: it tells its peers in a new `presence` message (docs/protocol.md, section 4,
   "Presence"). A device that refuses to let a phone join as an admin, or to admit while its
   admin key is frozen, now says so in its log as well as to the app.
+- The Mac app's Settings fit their width: the language menu, sized to fit with its label,
+  widened every row to some 600 points in a 460-point window and cut the rows' ends off on
+  both sides. A build's long version is one line cut in the middle, whole on hover; the tray
+  app's wraps instead of reaching past its dialog.
 - The tray window in Arabic and Hebrew sets the tiles, rows, menus and a card's values from
   the right, as it does the rest of the window.
 - The Ruby colour in the dark appearance is a shade lighter (#FF6681), so that its badges

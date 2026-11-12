@@ -87,6 +87,15 @@ pub fn own_sid() -> Option<String> {
     win::sid_of(None)
 }
 
+/// The SID of the user at the other end of s, and whether its process runs
+/// in an active session: at the console or over Remote Desktop.
+#[cfg(windows)]
+pub fn sid_at_screen(s: &UnixStream) -> Option<(String, bool)> {
+    let pid = s.peer_pid()?;
+    let session = win::session_of(pid)?;
+    Some((win::sid_of(Some(pid))?, win::active(session)))
+}
+
 /// Root and the service's own user, which take every target.
 #[cfg(unix)]
 pub fn privileged(uid: Who) -> bool {
