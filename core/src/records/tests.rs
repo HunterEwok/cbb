@@ -2785,3 +2785,57 @@ fn members_agree(g: &G) -> State {
 }
 
 mod recovery;
+
+/// A checkpoint and the head below it that fills its key's room: the
+/// checkpoint prunes before the room is judged, so a member that took the
+/// head first and one that took the checkpoint first hold the same.
+#[test]
+fn a_checkpoint_prunes_before_the_room_is_judged() {
+    let mut g = G::new();
+    let root = k("root");
+    let laptop = g.device(&root, &k("laptop"), "laptop", |_| {});
+    for i in 1..(MAX_ROOT_RECORDS as u64 - 1) {
+        g.root_rec(Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] });
+    }
+    let head = g.root_rec(Kind::Copies { incoming_ms: 9_999, seen: vec![] });
+    let (seq, id) = g.heads[&root.hash];
+    let cp = g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep: vec![laptop.id()] });
+    let before: Vec<Record> = g.recs[..g.recs.len() - 2].to_vec();
+    let mut sets = Vec::new();
+    for order in [[head.clone(), cp.clone()], [cp.clone(), head.clone()]] {
+        let mut set = set_of(&g.root.key.clone());
+        set.insert_all(before.clone());
+        assert_eq!(set.len(), MAX_ROOT_RECORDS - 1);
+        for r in order {
+            assert_eq!(set.insert(r), Ok(Added::Stored));
+        }
+        let s = set.state();
+        assert_eq!(s.checkpoint, Some(cp.id()));
+        assert!(set.contains(&head.id()) && s.counting.contains(&head.id()));
+        sets.push((set.digest(), s));
+    }
+    assert_eq!(sets[0], sets[1]);
+}
+
+/// A checkpoint that cannot count (it keeps an ID nobody holds) carries
+/// no record past its key's room: the record it names goes as any other.
+#[test]
+fn a_checkpoint_that_cannot_count_carries_nothing_past_the_room() {
+    let mut g = G::new();
+    let root = k("root");
+    g.device(&root, &k("laptop"), "laptop", |_| {});
+    for i in 1..MAX_ROOT_RECORDS as u64 {
+        g.root_rec(Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] });
+    }
+    let late = g.root_rec(Kind::Copies { incoming_ms: 9_999, seen: vec![] });
+    let (seq, id) = g.heads[&root.hash];
+    let mut keep = vec![late.id(), RecordId([0x5a; 32])];
+    keep.sort();
+    let cp = g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep });
+    let mut set = set_of(&g.root.key.clone());
+    set.insert_all(g.recs[..MAX_ROOT_RECORDS].to_vec());
+    assert_eq!(set.insert(cp.clone()), Ok(Added::Stored));
+    assert_eq!(set.insert(late.clone()), Ok(Added::NoRoom));
+    assert!(!set.contains(&late.id()));
+    assert_eq!(set.state().checkpoint, None);
+}

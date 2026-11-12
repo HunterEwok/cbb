@@ -346,7 +346,11 @@ impl RecordSet {
             // names may stay, within that root's room.
             return Ok(Added::NoRoom);
         }
-        if !twin && !first && self.cut.past(&eval::item(&r, role)) {
+        // A record a held checkpoint names, which it may wait for to
+        // count, is taken whatever the rooms say; they are judged after
+        // the checkpoint's pruning.
+        let wanted = self.wanted(&id);
+        if !twin && !first && !wanted && self.cut.past(&eval::item(&r, role)) {
             // Its key dropped a record before it: it would not be kept.
             return Ok(Added::NoRoom);
         }
@@ -360,6 +364,14 @@ impl RecordSet {
         *units = units.saturating_add(eval::item(&r, role).units);
         self.bytes = self.bytes.saturating_add(r.size());
         self.records.insert(id, Entry { record: r, role, held });
+        // A checkpoint that may count now, or a record it names, compacts
+        // before the rooms are judged: what it prunes takes no room, so
+        // what stays does not depend on the order the two came in. A
+        // record it named stays only if the rooms then hold it.
+        let early = self.trusted.is_empty() && (wanted || self.may_count(&id));
+        if early {
+            self.settle();
+        }
         if self.needs_cut(&signer) {
             self.cut();
         }
@@ -377,7 +389,7 @@ impl RecordSet {
                     .records
                     .values()
                     .any(|e| e.role == Role::Root && matches!(e.record.body().kind, Kind::Resolve(_))));
-        if self.trusted.is_empty() && self.records.contains_key(&id) && (unsettles || self.may_count(&id)) {
+        if self.trusted.is_empty() && self.records.contains_key(&id) && (unsettles || !early && self.may_count(&id)) {
             // A counting checkpoint compacts at once: what it leaves out
             // takes no room and is not held from the moment it counts, so
             // a member is in one state whenever it compacts.
@@ -1165,6 +1177,17 @@ impl RecordSet {
     /// Whether the record id may make a root's checkpoint the set has not
     /// compacted by count: it is such a checkpoint, a record it names, or
     /// a record of its key below it.
+    /// Whether a held root's checkpoint that does not count yet names id
+    /// (a head or a kept record).
+    fn wanted(&self, id: &RecordId) -> bool {
+        self.records.values().any(|e| {
+            let Kind::Checkpoint { heads, keep } = &e.record.body().kind else { return false };
+            e.role == Role::Root
+                && (heads.iter().any(|h| h.id == *id) || keep.contains(id))
+                && !self.checkpoints.iter().any(|(h, _)| h == heads)
+        })
+    }
+
     fn may_count(&self, id: &RecordId) -> bool {
         let Some(r) = self.held(id) else { return false };
         let (signer, seq) = (r.body().signer, r.body().seq);
