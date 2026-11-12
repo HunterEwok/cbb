@@ -21,6 +21,7 @@ use crate::certs::sha256;
 use crate::identity::ExternalKey;
 
 /// A key made from a name, so that a test replays exactly.
+#[derive(Clone)]
 struct K {
     sk: SigningKey,
     key: Key,
@@ -56,6 +57,7 @@ fn set_of(root: &Key) -> RecordSet {
 
 /// Builds a group's records: each signer's next seq and prev, and the
 /// recovery records' lists.
+#[derive(Clone)]
 struct G {
     root: K,
     gid: GroupId,

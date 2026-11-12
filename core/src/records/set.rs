@@ -76,9 +76,12 @@ pub struct RecordSet {
     /// The roots the held recovery records name that the path has not
     /// reached (their record waits for its list, or for the record before
     /// it), but for the two sides of a fork, by key hash.
-    early_roots: BTreeMap<KeyHash, Key>,
+    /// With each its key and the lowest recovery seq that names it.
+    early_roots: BTreeMap<KeyHash, (u64, Key)>,
     /// The records of those roots, verified, kept aside until the list
-    /// comes; each root's within its room. They count for nothing.
+    /// comes; all of them within one root's room, the lowest recovery seq
+    /// first, then the lowest seq, then the smallest ID. They count for
+    /// nothing.
     early: BTreeMap<RecordId, Record>,
     /// The keys a root's removal named that the newest list dropped: the
     /// app tells "removed before, back now" and offers them to the new
@@ -91,6 +94,20 @@ pub struct RecordSet {
     bytes: usize,
     /// How many rounds each missing record was asked for (`missing`).
     asked: BTreeMap<RecordId, u32>,
+}
+
+/// The most removals of the roots before the current one a list carries:
+/// a share of its 1024 IDs, so that the current root's records always have
+/// room.
+pub const EARLIER_REMOVALS: usize = 256;
+
+/// Why the writer does not write a change of root while the set holds a
+/// recovery record it has not applied.
+pub const CHANGE_WAITING: &str = "a change of root is waiting here: sync with the group, then try again";
+
+/// Whether k is a root on the state's path.
+fn path_has(state: &State, k: &KeyHash) -> bool {
+    state.roots.contains(k)
 }
 
 /// The rounds a member asks its peers for a missing record before it gives
@@ -272,27 +289,32 @@ impl RecordSet {
     /// does not depend on the order the records came in.
     fn insert_early(&mut self, r: Record) -> Result<Added, Refused> {
         let signer = r.body().signer;
-        let Some(key) = self.early_roots.get(&signer) else { return Err(Refused::UnknownSigner) };
+        let Some((_, key)) = self.early_roots.get(&signer) else { return Err(Refused::UnknownSigner) };
         let id = r.id();
         if self.early.contains_key(&id) {
             return Ok(Added::Known);
         }
         r.verify(key).map_err(Refused::Broken)?;
         self.early.insert(id, r);
-        let mut mine: Vec<&Record> = self.early.values().filter(|e| e.body().signer == signer).collect();
-        mine.sort_by_key(|e| (e.body().seq, e.id()));
+        self.trim_early();
+        Ok(if self.early.contains_key(&id) { Added::Waiting } else { Added::NoRoom })
+    }
+
+    /// Keeps the records set aside within one root's room in all, the
+    /// lowest recovery seq first, then the lowest seq, then the smallest
+    /// ID: what stays does not depend on the order they came in.
+    fn trim_early(&mut self) {
+        let rank = |r: &Record| self.early_roots.get(&r.body().signer).map_or(u64::MAX, |(s, _)| *s);
+        let mut all: Vec<(u64, u64, RecordId, u64)> =
+            self.early.values().map(|r| (rank(r), r.body().seq, r.id(), eval::item(r, Role::Root).units)).collect();
+        all.sort();
         let mut units = 0u64;
-        let mut over = Vec::new();
-        for e in mine {
-            units = units.saturating_add(eval::item(e, Role::Root).units);
+        for (_, _, id, u) in all {
+            units = units.saturating_add(u);
             if units > keep::ceiling(true) {
-                over.push(e.id());
+                self.early.remove(&id);
             }
         }
-        for o in &over {
-            self.early.remove(o);
-        }
-        Ok(if self.early.contains_key(&id) { Added::Waiting } else { Added::NoRoom })
     }
 
     /// A record of the recovery key: a recovery record, or one this
@@ -443,16 +465,18 @@ impl RecordSet {
         // The roots a held recovery record names that are not on the path
         // yet, but for one side of a fork: at most one per seq, 16 in all.
         let forked: BTreeSet<RecordId> = chain.fork.iter().copied().collect();
-        self.early_roots = self
-            .records
-            .values()
-            .filter(|e| e.role == Role::Recovery && !forked.contains(&e.record.id()))
-            .filter_map(|e| match &e.record.body().kind {
-                Kind::Recovery { root, .. } => Some((root.hash(), root.clone())),
-                _ => None,
-            })
-            .filter(|(h, _)| !chain.promoted().contains(h) && *h != self.root.hash())
-            .collect();
+        let mut early_roots: BTreeMap<KeyHash, (u64, Key)> = BTreeMap::new();
+        for e in self.records.values().filter(|e| e.role == Role::Recovery && !forked.contains(&e.record.id())) {
+            let Kind::Recovery { root, .. } = &e.record.body().kind else { continue };
+            let h = root.hash();
+            if chain.promoted().contains(&h) || h == self.root.hash() {
+                continue;
+            }
+            let seq = e.record.body().seq;
+            let slot = early_roots.entry(h).or_insert((seq, root.clone()));
+            slot.0 = slot.0.min(seq);
+        }
+        self.early_roots = early_roots;
         if let (Some(old), Some(new)) = (self.cuts.values().next(), cuts.values().next())
             && old.record == new.record
         {
@@ -470,6 +494,7 @@ impl RecordSet {
             .filter(|r| self.early_roots.contains_key(&r.body().signer))
             .map(|r| (r.id(), r))
             .collect();
+        self.trim_early();
         if !now.is_empty() {
             self.insert_all(now);
         }
@@ -646,12 +671,47 @@ impl RecordSet {
     pub fn change_list(&self, state: &State) -> List {
         let roots: BTreeSet<&KeyHash> = state.roots.iter().collect();
         let cur = state.roots.last();
-        let mut out: BTreeSet<RecordId> = BTreeSet::new();
-        for e in self.records.values().filter(|e| roots.contains(&e.record.body().signer) && !e.held) {
+        // The keys some record the set holds names: a removal of keys
+        // nobody names carries nothing.
+        let mut named: BTreeSet<KeyHash> = BTreeSet::new();
+        for e in self.records.values() {
+            named.insert(e.record.body().signer);
+            if let Kind::Device(d) = &e.record.body().kind {
+                named.insert(d.key.hash());
+                named.extend(d.admin.as_ref().map(Key::hash));
+            }
+        }
+        // The earlier roots' removals that name a named key: the later
+        // root's first, the newest by seq first, at most their share.
+        let at = |k: &KeyHash| state.roots.iter().position(|r| r == k).unwrap_or(0);
+        let mut earlier: Vec<(usize, u64, RecordId)> = self
+            .records
+            .values()
+            .filter(|e| roots.contains(&e.record.body().signer) && Some(&e.record.body().signer) != cur && !e.held)
+            .filter_map(|e| match &e.record.body().kind {
+                Kind::Revoke(rm) if rm.keys.iter().any(|k| named.contains(k)) => {
+                    Some((at(&e.record.body().signer), e.record.body().seq, e.record.id()))
+                }
+                _ => None,
+            })
+            .collect();
+        earlier.sort_by(|a, b| b.cmp(a));
+        let earlier: BTreeSet<RecordId> = earlier.into_iter().take(EARLIER_REMOVALS).map(|(_, _, id)| id).collect();
+        let mut out: BTreeSet<RecordId> = earlier.clone();
+        for e in self.records.values().filter(|e| Some(&e.record.body().signer) == cur && !e.held) {
             let b = e.record.body();
             let counts = state.counting.contains(&e.record.id());
-            if counts && !matches!(b.kind, Kind::Checkpoint { .. }) || matches!(b.kind, Kind::Revoke(_)) {
-                out.insert(e.record.id());
+            match &b.kind {
+                Kind::Revoke(rm) => {
+                    if counts || rm.keys.iter().any(|k| named.contains(k)) {
+                        out.insert(e.record.id());
+                    }
+                }
+                Kind::Checkpoint { .. } => {}
+                _ if counts => {
+                    out.insert(e.record.id());
+                }
+                _ => {}
             }
         }
         if let Some(cut) = &state.cut {
@@ -666,6 +726,17 @@ impl RecordSet {
             }
         }
         out.remove(&RecordId::default());
+        // A checkpoint is never listed: what it pruned, the new root's
+        // first checkpoint prunes again.
+        // An earlier root's removal is listed only within the share, even
+        // when an earlier list named it.
+        out.retain(|id| match self.get(id).map(|r| r.body()) {
+            Some(b) if matches!(b.kind, Kind::Checkpoint { .. }) => false,
+            Some(b) if matches!(b.kind, Kind::Revoke(_)) && roots.contains(&b.signer) && Some(&b.signer) != cur => {
+                earlier.contains(id)
+            }
+            _ => true,
+        });
         List(self.within_ceiling(out))
     }
 
@@ -718,10 +789,16 @@ impl RecordSet {
         time_ms: u64,
     ) -> crate::error::Result<Written> {
         use crate::error::Error;
-        if self.waiting.is_some() {
-            return Err(Error::msg(
-                "an earlier change of root is still waiting for its list: sync with the group, then try again",
-            ));
+        // Any recovery record the set holds and has not applied (one that
+        // waits for its list or for the record before it, one this device
+        // cannot read, a void one) means a change is on its way: writing
+        // now would sign a second record at its seq.
+        let applied: BTreeSet<RecordId> = state.chain().into_iter().collect();
+        let unapplied = self.waiting.is_some()
+            || state.update_needed
+            || self.records.values().any(|e| e.role == Role::Recovery && !applied.contains(&e.record.id()));
+        if unapplied {
+            return Err(Error::msg(CHANGE_WAITING));
         }
         if state.conflicts.iter().any(|c| c.kind == eval::ConflictKind::Fork) {
             return Err(Error::msg("the group is stopped for good: two recovery records at one seq"));
@@ -730,7 +807,10 @@ impl RecordSet {
             return Err(Error::msg("this is not the group's recovery key"));
         }
         let tip = state.chain();
-        let seq = (tip.len() as u64).saturating_add(1);
+        // One above the highest recovery seq the set holds, never only the
+        // applied chain's.
+        let held = self.records.values().filter(|e| e.role == Role::Recovery).map(|e| e.record.body().seq).max();
+        let seq = held.unwrap_or(0).max(tip.len() as u64).saturating_add(1);
         if seq > super::body::MAX_RECOVERY {
             return Err(Error::msg("the group has used all its changes of root"));
         }
@@ -742,6 +822,14 @@ impl RecordSet {
             || self.records.values().any(|e| e.record.body().signer == h);
         if known {
             return Err(Error::msg("the new root key must be a new key"));
+        }
+        let device_key = device.key.hash();
+        if state.revoked.contains(&device_key) {
+            return Err(Error::msg("this device was removed from the group: it joins again with a new key"));
+        }
+        let rank = |k: &KeyHash| *k == h || *k == device_key || *k == self.recovery.hash() || path_has(state, k);
+        if remove.iter().any(rank) {
+            return Err(Error::msg("the new root, its device, the recovery key and the roots cannot be removed"));
         }
         let list = self.change_list(state);
         let mut next = 1u64;
@@ -770,7 +858,13 @@ impl RecordSet {
         keys.sort();
         keys.dedup();
         if !keys.is_empty() {
-            first.push(sign(Kind::Revoke(super::body::Removal { keys, seen: Vec::new() }))?);
+            // What the writer saw of every key, as an ordinary removal
+            // carries: what the removed keys signed up to it still counts.
+            let seen = self.heads_seen();
+            if seen.is_empty() {
+                return Err(Error::msg("a removal needs the heads the writer holds"));
+            }
+            first.push(sign(Kind::Revoke(super::body::Removal { keys, seen }))?);
         }
         // The new root's first checkpoint, signed now so that the pruning
         // of the old root's counting checkpoint never lapses: the heads it
@@ -818,6 +912,24 @@ impl RecordSet {
         };
         let record = Record::sign(body, recovery)?;
         Ok(Written { record, list, first })
+    }
+
+    /// The heads the set holds of every key but the recovery key: of each
+    /// signer its highest seq (of two at one seq, the smaller ID), as a
+    /// removal's `seen`.
+    fn heads_seen(&self) -> Vec<super::body::Seen> {
+        let mut out: BTreeMap<KeyHash, super::body::Seen> = BTreeMap::new();
+        for e in self.records.values().filter(|e| e.role != Role::Recovery && !e.held) {
+            let b = e.record.body();
+            let s = super::body::Seen { key: b.signer, seq: b.seq, id: e.record.id() };
+            let better = out
+                .get(&b.signer)
+                .is_none_or(|o| (b.seq, core::cmp::Reverse(s.id)) > (o.seq, core::cmp::Reverse(o.id)));
+            if better {
+                out.insert(b.signer, s);
+            }
+        }
+        out.into_values().collect()
     }
 
     /// The records to ask the peers for in this round: those the newest
