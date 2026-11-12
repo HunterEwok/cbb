@@ -177,7 +177,14 @@ final class ReadersUITests: XCTestCase {
             audit(app, checks, "the Start screen in \(language)")
 
             settings.tap()
-            XCTAssertTrue(app.navigationBars[tr("Settings", language)].waitForExistence(timeout: 10), "\(language): Settings did not open")
+            // A loaded simulator can lose a tap, as StartUITests'
+            // openSettings allows for: one more tap when Settings has not
+            // opened.
+            let bar = app.navigationBars[tr("Settings", language)]
+            if !bar.waitForExistence(timeout: 10), settings.exists {
+                settings.tap()
+            }
+            XCTAssertTrue(bar.waitForExistence(timeout: 10), "\(language): Settings did not open")
             XCTAssertTrue(app.buttons[tr("Ocean", language)].exists, "\(language): the colours are not translated")
             picture("settings-\(language)")
             audit(app, checks, "Settings in \(language)")
