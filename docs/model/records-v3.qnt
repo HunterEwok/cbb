@@ -430,6 +430,8 @@ module records_v3 {
     // A head takes its first checkpoint along if the set got it before; a first checkpoint goes
     // beside the chain once its head is held. Either may apply the change.
     if (isChain(r)) applyChain({ ...s, chain: s.chain.union(Set(r.id)) }, db)
+    // A halted set (a fork of the recovery chain) takes recovery records only.
+    else if (chainState(s, db).stop) s
     else {
       val isFirst = recsOf(s.chain, db).exists(h => namesFirst(h, r))
       storeOne(if (isFirst) applyChain(s, db) else s, r, db)
@@ -644,15 +646,15 @@ module records_v3 {
       val pruned = acc._1.filter(r => not(prunedBy(cp, r)))
       val anchors = acc._2.union(anchorsOf(cp))
       val v = epoch(pruned, path, cuts, anchors)
-      // It counts only on a set that holds every record its keep names, each on its key's
-      // chain up to the checkpoint's head of that key: no ID in keep stands for a record
-      // nobody saw, and two named twins are a fork before anything is pruned.
+      // It counts only on a set that holds every record its keep names, none above its key's
+      // head and no two at one seq: no ID in keep stands for a record nobody saw. Below the
+      // heads it settles forks: it may keep a record of either sibling, and what it leaves
+      // out is pruned (format 20.3).
       val ids = idsOf(acc._1)
-      val whole = cp.keep.forall(i => ids.contains(i) and {
-        val r = acc._1.filter(x => x.id == i).fold(NONEREC, (a, x) => x)
-        not(cp.heads.keys().contains(r.signer)) or r.seq > cp.heads.get(r.signer).length()
-          or inLine(cp.heads.get(r.signer), i)
-      })
+      val kept = acc._1.filter(x => cp.keep.contains(x.id))
+      val whole = cp.keep.forall(i => ids.contains(i)) and kept.forall(r =>
+        (not(cp.heads.keys().contains(r.signer)) or r.seq <= cp.heads.get(r.signer).length())
+          and kept.forall(o => o == r or o.signer != r.signer or o.seq != r.seq))
       if (cp != NONEREC and whole and v.counting.contains(c)) (pruned, anchors, { ...v, checkpoint: c }) else acc
     }
 
@@ -1059,10 +1061,11 @@ module records_v3 {
     s.got.forall(i => insertInto(s, db.get(i), db).recs == s.recs)
   }
 
-  // 1. One set, one state.
+  // 1. One set, one state. (A halted set keeps what it had and takes recovery records only;
+  // what it shows then is promise 11's.)
   val oneState = MEMBERS.forall(m => {
     val s = st.get(m)
-    saturated(m) implies (s.recs == pureKept(s, db) and views.get(m) == pureView(s, db))
+    (saturated(m) and not(chainState(s, db).stop)) implies (s.recs == pureKept(s, db) and views.get(m) == pureView(s, db))
   })
 
   // 2. A key a root removed stays removed, unless a change of root left the removal off its
@@ -1278,6 +1281,21 @@ module records_v3 {
       .then(syncAll)
       .expect(MEMBERS.forall(x => views.get(x).path == [ROOT] and st.get(x).chain == Set(4)) and promises)
 
+  // The phone admin's key signs twice at one seq: a fork, and it commands nothing. The
+  // root's counting checkpoint settles what is below its heads: its head of that key is one
+  // sibling, the other is pruned, and the phone admin commands again.
+  run checkpointSettlesTwinsTest =
+    init
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 1))
+      .then(sign(PHONE, "copies", "", "", 0, false, true, 1))
+      .then(give("r", 4)).then(give("r", 5))
+      .expect(not(views.get("r").commanders.contains(PHONE)))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(db.get(6).heads.get(PHONE).length() == 1 and db.get(6).keep.intersect(Set(4, 5)) == Set())
+      .then(give("m", 4)).then(give("m", 5)).then(give("m", 6))
+      .expect(views.get("m").checkpoint == 6 and views.get("m").commanders.contains(PHONE)
+        and st.get("m").recs.contains(4) and not(st.get("m").recs.contains(5)) and promises)
+
   // A device the root removed does not come back by a new record for its key.
   run removedDeviceStaysOutTest =
     init
@@ -1490,6 +1508,17 @@ module records_v3 {
       .expect(views.get("m").stop and views.get("m").commanders == Set())
       .then(syncAll)
       .expect(MEMBERS.forall(x => views.get(x).stop and views.get(x).commanders == Set()) and promises)
+
+  // A halted set takes recovery records only: a record signed after the fork is not kept.
+  run haltedTakesChainOnlyTest =
+    init
+      .then(recoverAs(RECOVERY, "NK"))
+      .then(signChain(RECOVERY, "recover", "NA", 1, "honest"))
+      .then(syncAll)
+      .expect(MEMBERS.forall(x => views.get(x).stop))
+      .then(signAs("NK", "device", DEVICE, 0))
+      .then(give("m", nextId - 1))
+      .expect(not(st.get("m").recs.contains(nextId - 1)) and st.get("m").got.contains(nextId - 1) and promises)
 
   // A second record at a seq deep below the tip stops every member for good:
   // after two changes of root, a record at seq 1 names another root.
