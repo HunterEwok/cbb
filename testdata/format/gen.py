@@ -2046,12 +2046,15 @@ def _bidi(c):
 
 def _nfc_ok(path):
     """No character NFC would change: none whose NFC_Quick_Check is No,
-    and none that composes with the character before it."""
+    none that composes with the character before it, and no mark before
+    one of a lower combining class (the canonical order)."""
     prev = ""
     for c in path:
         if unicodedata.normalize("NFC", c) != c:
             return False
         if prev and len(unicodedata.normalize("NFC", prev + c)) == 1:
+            return False
+        if prev and 0 < unicodedata.combining(c) < unicodedata.combining(prev):
             return False
         prev = c
     return True
@@ -2080,25 +2083,36 @@ def nfc_tables():
         p = [int(x, 16) for x in d.split()]
         if len(p) == 2 and unicodedata.normalize("NFC", chr(c)) == chr(c):
             pairs.append((p[0], p[1]))
-    return no, sorted(pairs)
+    ccc = []
+    for c in range(0x110000):
+        k = unicodedata.combining(chr(c))
+        if not k:
+            continue
+        if ccc and ccc[-1][1] == c - 1 and ccc[-1][2] == k:
+            ccc[-1][1] = c
+        else:
+            ccc.append([c, c, k])
+    return no, sorted(pairs), ccc
 
 
 NFC_HEAD = ("Written by testdata/format/gen.py from Unicode %s: the code points NFC changes\n"
-            "alone (NFC_Quick_Check No), and the pairs that compose to one code point\n"
-            "(Hangul composes by rule). Do not edit.")
+            "alone (NFC_Quick_Check No), the pairs that compose to one code point\n"
+            "(Hangul composes by rule), and the non-zero combining classes. Do not edit.")
 
 
 def write_nfc(outdir):
-    no, pairs = nfc_tables()
+    no, pairs, ccc = nfc_tables()
     head = NFC_HEAD % unicodedata.unidata_version
     lic = "SPDX-License-Identifier: AGPL-3.0-only\nCopyright (C) 2026 HunterEwok\n"
     rows = lambda items, f, per: "\n".join("    " + " ".join(f(x) for x in items[i:i + per]) for i in range(0, len(items), per))
     rs = ("".join("// " + l + "\n" for l in lic.splitlines()) + "\n" + "".join("//! " + l + "\n" for l in head.splitlines())
           + "\n#[rustfmt::skip]\npub(crate) static NO: &[(u32, u32)] = &[\n" + rows(no, lambda r: "(0x%X, 0x%X)," % tuple(r), 6) + "\n];\n"
-          + "\n#[rustfmt::skip]\npub(crate) static PAIRS: &[(u32, u32)] = &[\n" + rows(pairs, lambda r: "(0x%X, 0x%X)," % r, 6) + "\n];\n")
+          + "\n#[rustfmt::skip]\npub(crate) static PAIRS: &[(u32, u32)] = &[\n" + rows(pairs, lambda r: "(0x%X, 0x%X)," % r, 6) + "\n];\n"
+          + "\n#[rustfmt::skip]\npub(crate) static CCC: &[(u32, u32, u8)] = &[\n" + rows(ccc, lambda r: "(0x%X, 0x%X, %d)," % tuple(r), 5) + "\n];\n")
     go = ("".join("// " + l + "\n" for l in lic.splitlines()) + "\n" + "".join("// " + l + "\n" for l in head.splitlines())
           + "\npackage main\n\nvar nfcNo = [][2]rune{\n" + rows(no, lambda r: "{0x%X, 0x%X}," % tuple(r), 6).replace("    ", "\t") + "\n}\n"
-          + "\nvar nfcPairs = [][2]rune{\n" + rows(pairs, lambda r: "{0x%X, 0x%X}," % r, 6).replace("    ", "\t") + "\n}\n")
+          + "\nvar nfcPairs = [][2]rune{\n" + rows(pairs, lambda r: "{0x%X, 0x%X}," % r, 6).replace("    ", "\t") + "\n}\n"
+          + "\nvar nfcCCC = [][3]rune{\n" + rows(ccc, lambda r: "{0x%X, 0x%X, %d}," % tuple(r), 5).replace("    ", "\t") + "\n}\n")
     with open(os.path.join(outdir, "..", "..", "core", "src", "content", "nfc.rs"), "w") as f:
         f.write(rs)
     with open(os.path.join(outdir, "check", "nfc.go"), "w") as f:
@@ -2448,6 +2462,8 @@ def wave4_vectors():
         ("files with an Arabic name with harakat", {0: 3, 6: {1: 5, 2: [{2: "\u0643\u064e\u062a\u064e\u0628\u064e.txt", 4: 5, 5: sha(b"a")}]}}),
         ("files with a Hebrew name with niqqud", {0: 3, 6: {1: 5, 2: [{2: "\u05e9\u05b8\u05c1\u05dc\u05d5\u05b9\u05dd.txt", 4: 5, 5: sha(b"a")}]}}),
         ("files with a combining mark nothing composes with", {0: 3, 6: {1: 5, 2: [{2: "q\u0301.txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with two marks out of canonical order", {0: 3, 6: {1: 5, 2: [{2: "q\u0301\u0323.txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with two marks in canonical order", {0: 3, 6: {1: 5, 2: [{2: "q\u0323\u0301.txt", 4: 5, 5: sha(b"a")}]}}),
         ("files with a precomposed character NFC replaces", {0: 3, 6: {1: 5, 2: [{2: "\u212b.txt", 4: 5, 5: sha(b"a")}]}}),
         ("files named like a device but longer", {0: 3, 6: {1: 10, 2: [{2: "COM10", 4: 5, 5: sha(b"a")}, {2: "console.log", 4: 5, 5: sha(b"b")}]}}),
         ("files of more than 1 GiB", {0: 3, 6: {1: (1 << 30) + 1, 2: [{2: "big", 4: (1 << 30) + 1, 5: sha(b"a")}]}}),

@@ -150,6 +150,7 @@ fn rows_and_rows_between_fields() {
         &["\u{c9}t\u{e9}.txt", "\u{e9}t\u{e9}.txt"],
         &["cafe\u{301}.txt"],
         &["\u{212b}"],
+        &["q\u{301}\u{323}"],
         &["\u{ac00}\u{11a8}"],
         &["\u{1112}\u{1161}\u{11ab}.txt"],
         &["\u{304b}\u{3099}.txt"],

@@ -378,8 +378,9 @@ func bidiRune(r rune) bool {
 }
 
 // nfcKeeps is true when NFC leaves path as it is: no code point NFC
-// changes alone (NFC_Quick_Check No, nfcNo), and none that composes with
-// the one before it (nfcPairs, Hangul by rule).
+// changes alone (NFC_Quick_Check No, nfcNo), none that composes with the
+// one before it (nfcPairs, Hangul by rule), and no mark before one of a
+// lower combining class (nfcCCC, the canonical order).
 func nfcKeeps(path string) bool {
 	changed := func(c rune) bool {
 		i := sort.Search(len(nfcNo), func(i int) bool { return nfcNo[i][1] >= c })
@@ -398,9 +399,19 @@ func nfcKeeps(path string) bool {
 		})
 		return i < len(nfcPairs) && nfcPairs[i] == [2]rune{a, b}
 	}
+	class := func(c rune) rune {
+		i := sort.Search(len(nfcCCC), func(i int) bool { return nfcCCC[i][1] >= c })
+		if i < len(nfcCCC) && nfcCCC[i][0] <= c {
+			return nfcCCC[i][2]
+		}
+		return 0
+	}
 	prev := rune(-1)
 	for _, c := range path {
 		if changed(c) || (prev >= 0 && composes(prev, c)) {
+			return false
+		}
+		if prev >= 0 && class(c) > 0 && class(c) < class(prev) {
 			return false
 		}
 		prev = c

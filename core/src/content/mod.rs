@@ -242,8 +242,9 @@ fn bidi(c: char) -> bool {
 }
 
 /// Whether NFC would leave a path as it is: no code point NFC changes
-/// alone (NFC_Quick_Check No), and none that composes with the one before
-/// it. A sender writes names in NFC; marks with nothing to compose with
+/// alone (NFC_Quick_Check No), none that composes with the one before it,
+/// and no mark before one of a lower combining class (the canonical
+/// order). A sender writes names in NFC; marks with nothing to compose with
 /// (Hindi vowel signs, Arabic harakat, Hebrew niqqud) stay.
 fn nfc(path: &str) -> bool {
     use core::cmp::Ordering;
@@ -267,9 +268,23 @@ fn nfc(path: &str) -> bool {
             && (0x11a8..=0x11c2).contains(&b);
         lv || lvt || nfc::PAIRS.binary_search(&(a, b)).is_ok()
     };
+    let class = |c: u32| {
+        nfc::CCC
+            .binary_search_by(|(lo, hi, _)| {
+                if *hi < c {
+                    Ordering::Less
+                } else if *lo > c {
+                    Ordering::Greater
+                } else {
+                    Ordering::Equal
+                }
+            })
+            .map_or(0, |i| nfc::CCC.get(i).map_or(0, |e| e.2))
+    };
     let mut prev = None;
     for c in path.chars().map(u32::from) {
-        if changed(c) || prev.is_some_and(|p| composes(p, c)) {
+        let out_of_order = prev.is_some_and(|p| (1..class(p)).contains(&class(c)));
+        if changed(c) || out_of_order || prev.is_some_and(|p| composes(p, c)) {
             return false;
         }
         prev = Some(c);
