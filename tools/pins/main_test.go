@@ -69,6 +69,38 @@ func TestPinsFound(t *testing.T) {
 	if f, err := scan(nightlyRe, paths); err != nil || len(f) == 0 {
 		t.Errorf("nightly Rust: no pin found (%v)", err)
 	}
+	for _, c := range commitPins {
+		if f, err := scan(c.re, paths); err != nil || len(f) != 1 {
+			t.Errorf("%s: pins found %v (%v), want one", c.name, f, err)
+		}
+	}
+}
+
+// TestCommitPin checks that a module's pin is read as its commit's time and
+// falls behind by age: gVisor's pin of January 2026 was too old by March.
+func TestCommitPin(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "go.mod")
+	line := "require (\n\tgvisor.dev/gvisor v0.0.0-20260122175437-89a5d21be8f0\n)\n"
+	if err := os.WriteFile(p, []byte(line), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f, err := scan(commitPins[0].re, []string{p})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f) != 1 || f["20260122175437"] == nil {
+		t.Fatalf("scan = %v, want 20260122175437", f)
+	}
+	if ok, age := commitFresh("20260122175437", time.Date(2026, 2, 20, 0, 0, 0, 0, time.UTC), 30); !ok || age != 28 {
+		t.Errorf("after 28 days: fresh %v, age %d", ok, age)
+	}
+	if ok, age := commitFresh("20260122175437", time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), 30); ok || age != 37 {
+		t.Errorf("after 37 days: fresh %v, age %d", ok, age)
+	}
+	if ok, _ := commitFresh("2026012217543x", time.Now(), 30); ok {
+		t.Error("a malformed time passed")
+	}
 }
 
 // TestXrayPin checks that the Xray-core pin reads the tag from go.mod's

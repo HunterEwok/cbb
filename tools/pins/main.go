@@ -6,10 +6,13 @@
 // actions, Go modules, crates, Gradle, npm and Swift packages): qemu, zig,
 // the ESP32 toolchain, z88dk, the cargo tools CI installs, the pinned
 // nightly Rust, Xray-core (whose tags are not versions Go modules accept,
-// so go.mod pins a tag's commit and names the tag in a comment) and so on. For each pin it asks the tool's own registry or
+// so go.mod pins a tag's commit and names the tag in a comment), the Go
+// modules that publish no tagged versions at all, such as gVisor, whose
+// commits Dependabot never proposes, and so on. For each pin it asks the tool's own registry or
 // release page for its latest stable version and prints one line; it
 // exits 1 when a pin is behind, when one tool is pinned at two versions,
-// or when the pinned nightly Rust is older than -nightly-days, so that the
+// or when the pinned nightly Rust or a module's pinned commit is older than
+// -nightly-days or -commit-days, so that the
 // weekly run of the pins workflow fails and mails the maintainer. As
 // Dependabot's cooldown, a version counts only once it has been out for
 // -cooldown days: a release that turns out bad is mostly withdrawn in its
@@ -17,7 +20,7 @@
 //
 // Usage:
 //
-//	go run ./tools/pins [-cooldown 7] [-nightly-days 60]
+//	go run ./tools/pins [-cooldown 7] [-nightly-days 60] [-commit-days 30]
 //
 // GH_TOKEN, when set, is sent to GitHub's API, whose limit without a
 // token is 60 requests an hour.
@@ -96,6 +99,19 @@ const xrayRepo = "XTLS/Xray-core"
 
 var xrayRe = regexp.MustCompile(`(?m)^\s+github\.com/xtls/xray-core v\S+-([0-9a-f]{12}) // v([0-9][0-9.]*)\s*$`)
 
+// commitPins are the Go modules that publish only commits, which go.mod
+// pins as pseudo-versions; the last group of each pattern is the commit's
+// time in the pseudo-version. A pin falls behind only by its age, since a
+// branch moves every day: gVisor's race build on ARM64 kept its network
+// stack from sleeping until a fix of August 2026, which a pin from January
+// went without for months.
+var commitPins = []struct {
+	name string
+	re   *regexp.Regexp
+}{
+	{"gVisor (go.mod)", regexp.MustCompile(`(?m)^\s+gvisor\.dev/gvisor v0\.0\.0-(\d{14})-[0-9a-f]{12}\b`)},
+}
+
 // nightlyRe finds a pinned nightly Rust.
 var nightlyRe = regexp.MustCompile(`nightly-(\d{4}-\d{2}-\d{2})`)
 
@@ -121,6 +137,7 @@ func scan(re *regexp.Regexp, paths []string) (found, error) {
 func main() {
 	nightlyDays := flag.Int("nightly-days", 60, "the oldest a pinned nightly Rust may be, in days")
 	cooldown := flag.Int("cooldown", 7, "the days a new version waits before a pin counts as behind")
+	commitDays := flag.Int("commit-days", 30, "the oldest a module's pinned commit may be, in days")
 	flag.Parse()
 	var paths []string
 	for _, g := range files {
@@ -198,9 +215,40 @@ func main() {
 			fmt.Printf("ok   nightly Rust: nightly-%s, %d days old\n", v, age)
 		}
 	}
+	for _, c := range commitPins {
+		f, err := scan(c.re, paths)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "pins:", err)
+			os.Exit(2)
+		}
+		if len(f) == 0 {
+			fmt.Printf("FAIL %s: no pin found; the pattern no longer matches the files\n", c.name)
+			bad = true
+		}
+		for _, v := range sortedKeys(f) {
+			ok, age := commitFresh(v, time.Now(), *commitDays)
+			if len(f) > 1 || !ok {
+				fmt.Printf("FAIL %s: the commit of %s is %d days old, of %d pinned (%s)\n", c.name, v, age, len(f), strings.Join(f[v], ", "))
+				bad = true
+			} else {
+				fmt.Printf("ok   %s: the commit of %s, %d days old\n", c.name, v, age)
+			}
+		}
+	}
 	if bad {
 		os.Exit(1)
 	}
+}
+
+// commitFresh reports whether a pseudo-version's commit time (UTC,
+// yyyymmddhhmmss) is at most days old at now, and its age in days.
+func commitFresh(stamp string, now time.Time, days int) (bool, int) {
+	t, err := time.Parse("20060102150405", stamp)
+	if err != nil {
+		return false, -1
+	}
+	age := int(now.Sub(t).Hours() / 24)
+	return age <= days, age
 }
 
 // choose picks due, the newest release published by cutoff, and the
