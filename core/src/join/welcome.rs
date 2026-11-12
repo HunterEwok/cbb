@@ -229,7 +229,8 @@ impl Welcome {
     /// the claims' held times, which it keeps as its own (A-69).
     ///
     /// `guarded`: the joiner is a guarded leaf (A-50). It takes only a record
-    /// the root signed itself, and no claim its admitter counted.
+    /// the root signed itself, and no claim by its admitter's word: none
+    /// counted, no claim's age.
     pub fn check(
         &self,
         group: &GroupId,
@@ -256,7 +257,11 @@ impl Welcome {
         }
         let mut set = RecordSet::new(root);
         set.insert_all(self.records.iter().cloned());
-        let held: BTreeMap<RecordId, u64> = self.claim_ages.iter().copied().collect();
+        // A guarded leaf takes no claim by the admitter's word, neither
+        // counted nor by its age: only the root's own record of it counts,
+        // and a takeover reaches it later, by its own clock.
+        let held: BTreeMap<RecordId, u64> =
+            if guarded { BTreeMap::new() } else { self.claim_ages.iter().copied().collect() };
         // A takeover the admitter counted is final for the joiner too, once
         // the Welcome's records and its own ages put it in effect: its
         // signer may take over, its key is not void, nobody cancelled it,
