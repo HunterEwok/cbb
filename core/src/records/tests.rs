@@ -3697,3 +3697,35 @@ fn a_thawed_admin_admits_again() {
     assert!(s.counting.contains(&admit.id()));
     assert!(s.device(&k("tv").key.device_id()).is_some());
 }
+
+/// A claim the frozen key signed in the frozen time stays void after a
+/// thaw that does not list it, whoever froze and thawed the key.
+#[test]
+fn a_claim_from_the_frozen_time_stays_void_after_the_thaw() {
+    for by_root in [false, true] {
+        let mut g = G::new();
+        let (rk, pp, p, n) = (k("recovery"), k("phone p"), k("admin p"), k("new root"));
+        g.root_rec(Kind::Recovery { admin: rk.key.clone() });
+        g.admin(&pp, &p, ALL_POWERS | POWER_THAW);
+        g.device(&k("root"), &k("laptop"), "laptop", |_| {});
+        let seen = g.seen();
+        let fr = if by_root {
+            g.root_rec(Kind::Freeze(removal(&[rk.hash], seen)))
+        } else {
+            g.rec(&p, Kind::Freeze(removal(&[rk.hash], seen)))
+        };
+        let seen = g.seen();
+        let claim = g.rec(&rk, Kind::Claim { root: n.key.clone(), seen });
+        let seen: Vec<Seen> = g.seen().into_iter().filter(|s| s.key != rk.hash).collect();
+        let thaw = Kind::Thaw { ids: vec![fr.id()], seen };
+        if by_root {
+            g.root_rec(thaw);
+        } else {
+            g.rec(&p, thaw);
+        }
+        let held = BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]);
+        let s = state_of(&g.root.key, &g.recs, &held);
+        assert_ne!(state_of_claim(&s, claim.id()), Some(ClaimState::Effective), "root {by_root}");
+        assert_eq!(s.roots, vec![g.root.hash], "root {by_root}");
+    }
+}

@@ -1135,7 +1135,8 @@ def container_vector():
     writers write the constant ECDSA signature r=1, s=1 (owner, section 12).
     Readers are tolerant of the signature's value but not of its form: a BIT
     STRING with no unused bits holding SEQUENCE { INTEGER r, INTEGER s }, each
-    integer 1 to 33 bytes, every length exact, the whole value at most 72
+    integer 1 to 33 bytes in DER (no needless zero in front, not negative),
+    every length exact, the whole value at most 72
     bytes; so a later writer may sign for real and old readers still read it."""
     def tlv(tag, body):
         n = len(body)
@@ -1234,6 +1235,8 @@ def container_vector():
         {"name": "three integers", "cert": cont(p, tlv(0x03, b"\x00" + tlv(0x30, tlv(0x02, b"\x01") * 3))).hex()},
         {"name": "empty integer", "cert": cont(p, sigbits(b"", b"\x01")).hex()},
         {"name": "integer of 34 bytes", "cert": cont(p, sigbits(b"\x00" * 2 + b"\xff" * 32, b"\x01")).hex()},
+        {"name": "integer with a needless zero in front", "cert": cont(p, sigbits(b"\x00\x01", b"\x01")).hex()},
+        {"name": "negative integer", "cert": cont(p, sigbits(b"\x01", b"\x80")).hex()},
         {"name": "not an integer", "cert": cont(p, tlv(0x03, b"\x00" + tlv(0x30, tlv(0x04, b"\x01") + tlv(0x02, b"\x01")))).hex()},
         {"name": "a byte after the integers", "cert": cont(p, tlv(0x03, b"\x00" + tlv(0x30, tlv(0x02, b"\x01") + tlv(0x02, b"\x01") + b"\x00"))).hex()},
         {"name": "a byte after the SEQUENCE", "cert": cont(p, tlv(0x03, b"\x00" + tlv(0x30, tlv(0x02, b"\x01") + tlv(0x02, b"\x01")) + b"\x00")).hex()},
@@ -1245,7 +1248,7 @@ def container_vector():
             assert r["cert"] != c.hex()
     return {
         "source": "the template task 2 tested on five TLS stacks (research-0.6/key-container/report-ru.md, sections 2 and 7)",
-        "reader": "the TBS byte for byte the template with the point and its serial; the point on the curve; ecdsa-with-SHA256; the signature a BIT STRING with no unused bits holding SEQUENCE { INTEGER, INTEGER }, each integer 1 to 33 bytes, every length exact, at most 72 bytes; its value is not read",
+        "reader": "the TBS byte for byte the template with the point and its serial; the point on the curve; ecdsa-with-SHA256; the signature a BIT STRING with no unused bits holding SEQUENCE { INTEGER, INTEGER }, each integer 1 to 33 bytes in DER (no needless zero in front, not negative), every length exact, at most 72 bytes; its value is not read",
         "tbs_template_hex": t[:10].hex() + "<16-byte serial>" + t[26:i].hex() + "<65-byte key>" + t[i + 65:].hex(),
         "key_offset_in_tbs": i,
         "tbs_length": len(t),

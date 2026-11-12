@@ -2137,9 +2137,11 @@ impl<'e, 'a> Epoch<'e, 'a> {
         self.admins.contains_key(k) && !self.revoked.contains(k) && !self.superseded.contains_key(k)
     }
 
-    /// The admin removals and freezes that count and name the admin key k
-    /// or the member key of its device.
-    fn removals(&self, k: &KeyHash) -> Vec<usize> {
+    /// The admin removals and freezes that count and name the signer of
+    /// claim c or the member key of its device. A thawed freeze stays one
+    /// unless a thaw that counts lifts it for c (`lifts`).
+    fn removals(&self, c: usize) -> Vec<usize> {
+        let k = &self.r(c).b().signer;
         let mut keys = vec![*k];
         if let Some(m) = self.member_of_admin(k) {
             keys.push(m);
@@ -2148,9 +2150,10 @@ impl<'e, 'a> Epoch<'e, 'a> {
         self.all()
             .filter(|&i| {
                 let r = self.r(i);
+                let lifted = r.is_freeze() && thawed.get(&r.id).is_some_and(|ts| ts.iter().any(|&t| self.lifts(t, c)));
                 r.admin()
                     && self.label[i] == Label::In
-                    && !(r.is_freeze() && thawed.contains_key(&r.id))
+                    && !lifted
                     && r.removal().is_some_and(|rm| keys.iter().any(|key| rm.keys.binary_search(key).is_ok()))
             })
             .collect()
@@ -2460,9 +2463,8 @@ impl<'e, 'a> Epoch<'e, 'a> {
         let mut disputes: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
         let mut kept = Vec::new();
         for &c in &one {
-            let cs = self.r(c).b().signer;
             let mut void = false;
-            for r in self.removals(&cs) {
+            for r in self.removals(c) {
                 if self.e.saw(c, r) {
                     void = true;
                 } else {

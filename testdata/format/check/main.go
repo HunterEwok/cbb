@@ -874,7 +874,7 @@ func main() {
 	fmt.Printf("%-18s checked\n", "copy.json")
 
 	// container: the TBS byte for byte with the key and its serial, the point on the curve;
-	// the signature in its form (SEQUENCE of two INTEGERs of 1 to 33 bytes, at most 72 bytes),
+	// the signature in its form (SEQUENCE of two DER INTEGERs of 1 to 33 bytes, at most 72 bytes),
 	// its value not read (section 12)
 	var ct struct {
 		Cert    string `json:"example_cert"`
@@ -906,6 +906,10 @@ func main() {
 		for _, i := range ints {
 			if i.Class != asn1.ClassUniversal || i.Tag != asn1.TagInteger || len(i.Bytes) < 1 || len(i.Bytes) > 33 {
 				return errors.New("signature integer")
+			}
+			// DER: not negative, and no zero in front it does not need.
+			if i.Bytes[0]&0x80 != 0 || len(i.Bytes) > 1 && i.Bytes[0] == 0 && i.Bytes[1]&0x80 == 0 {
+				return errors.New("signature integer not in DER")
 			}
 		}
 		return nil

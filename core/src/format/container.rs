@@ -90,7 +90,7 @@ pub const MAX_SIG: usize = 72;
 /// its point and that point's serial, the point on the curve, then
 /// ecdsa-with-SHA256 and the signature in its form (a BIT STRING with no
 /// unused bits holding SEQUENCE { INTEGER, INTEGER }, each integer 1 to 33
-/// bytes, every length exact, at most 72 bytes), whatever its value. Writers
+/// bytes in DER, every length exact, at most 72 bytes), whatever its value. Writers
 /// of 0.6 write the constant signature; a later one may sign for real, and
 /// this reader takes it. Returns the point.
 pub fn read(cert: &[u8]) -> Result<[u8; 65], Rule> {
@@ -130,12 +130,18 @@ pub fn read(cert: &[u8]) -> Result<[u8; 65], Rule> {
 
 /// Whether a signature value has the form of a DER ECDSA signature:
 /// SEQUENCE { INTEGER, INTEGER }, short lengths that are exact, each integer
-/// 1 to 33 bytes, at most [`MAX_SIG`] bytes in all.
+/// 1 to 33 bytes in DER (not negative, no needless zero in front), at most
+/// [`MAX_SIG`] bytes in all.
 fn well_formed(sig: &[u8]) -> bool {
     let integer = |b: &[u8]| -> Option<usize> {
         match b {
             [0x02, n, rest @ ..] if (1..=33).contains(n) && rest.len() >= usize::from(*n) => {
-                Some(usize::from(*n).saturating_add(2))
+                // DER: not negative, and no zero in front it does not need.
+                match rest {
+                    [first, ..] if first & 0x80 != 0 => None,
+                    [0, second, ..] if *n > 1 && second & 0x80 == 0 => None,
+                    _ => Some(usize::from(*n).saturating_add(2)),
+                }
             }
             _ => None,
         }
