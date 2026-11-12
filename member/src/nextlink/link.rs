@@ -1121,6 +1121,54 @@ mod tests {
     }
 
     #[test]
+    fn zones_peers_and_commands() {
+        assert_eq!(zone("+05:30").unwrap(), 5 * 3600 + 30 * 60);
+        assert_eq!(zone("-01:00").unwrap(), -3600);
+        for bad in ["05:30", "+5", "+15:00", "+01:60", "+a:00", "+01:b", ""] {
+            assert!(zone(bad).is_err(), "{bad}");
+        }
+        assert_eq!(host_port("[fd00::1]:8769").unwrap(), ("fd00::1".to_string(), 8769));
+        assert_eq!(host_port("pi.local:1").unwrap(), ("pi.local".to_string(), 1));
+        assert!(host_port("pi.local").is_err());
+        assert!(host_port("pi.local:x").is_err());
+        assert_eq!(command_args("cbb -debug next paste -max 3").unwrap(), ["-debug", "next", "paste", "-max", "3"]);
+        assert_eq!(command_args("cbb next image -mode lo").unwrap(), ["next", "image", "-mode", "lo"]);
+        for not in ["", "rm -rf /", "cbb status", "cbb next link", "cbb -debug"] {
+            assert!(command_args(not).is_none(), "{not}");
+        }
+        // 2026-11-12 03:04:06: the date and the time in MS-DOS's form.
+        let date: u16 = ((2026 - 1980) << 9) | (11 << 5) | 12;
+        let time: u16 = (3 << 11) | (4 << 5) | 3;
+        let mut r = date.to_le_bytes().to_vec();
+        r.extend(time.to_le_bytes());
+        assert_eq!(msdos_time(&r), Some(1_794_452_646));
+        assert_eq!(msdos_time(&r[..3]), None);
+        assert_eq!(msdos_time(&[0, 0, 0, 0]), None, "month 0");
+        // A clock within the slack is left alone.
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+        let mut logged = Vec::new();
+        set_clock(now, &mut |l| logged.push(l.to_string()));
+        assert!(logged.is_empty(), "{logged:?}");
+    }
+
+    #[test]
+    fn remote_pastes_become_keys() {
+        use crate::pastehelper::{Fail, Target};
+        let (tx, rx) = mpsc::channel();
+        let k = NextKeys(tx);
+        assert_eq!(k.name(), crate::service::NEXT);
+        assert!(k.images());
+        k.image();
+        assert!(matches!(rx.try_recv(), Ok(Msg::Image)));
+        k.inject("hi", "paste", true, false).unwrap();
+        let Ok(Msg::Keys(keys)) = rx.try_recv() else { panic!("no keys") };
+        assert_eq!(keys, b"hi\r");
+        assert!(matches!(k.inject("", "type", false, false), Err(Fail::Refused(_))));
+        drop(rx);
+        assert!(matches!(k.inject("x", "paste", false, false), Err(Fail::Failed(_))));
+    }
+
+    #[test]
     fn the_service_dials_the_links_ports() {
         assert_eq!(service_args(8769, None), ["service", "-peer", "127.0.0.1:8769"]);
         assert_eq!(
