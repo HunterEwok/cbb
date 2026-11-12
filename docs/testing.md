@@ -179,12 +179,17 @@ starts whole. Several stands run side by side, each with its own name, folder an
 
 Once a day a line goes to `soak.log`: copies sent and checked, arrived and missed, kills, whole
 and broken starts, the delivery time of the checked copies (p50, p95, max over the slowest
-member), the largest RSS and open files, the largest growth of a member's RSS over its baseline
-(taken after an hour's warm-up, again after each restart) and the members whose open files moved.
+member), the largest RSS and open files, and how each member's memory and open files moved. A
+single sample of RSS swings by megabytes as large copies come and go, so memory is judged by
+floors: after an hour's warm-up (again after each restart) a member's samples, one every ten
+minutes, go into windows of an hour, and a window's floor is its least RSS and open files.
 `soak.sh verdict` prints the pass or fail line so far, and `soak.sh stop` ends with it: PASS when
-no copy was missed, every start was whole, no member's RSS grew more than 1 MiB over its baseline
-without a restart, every member's open files stayed at their baseline, and the delivery
-time's p95 is at most 10 s. A checked copy that is not on every member within 60 s counts as
+no copy was missed, every start was whole, no member's RSS floor grew over its first window's by
+more than 1 MiB on the calm stand or 4 MiB on the loaded one, no member's RSS floor rose in three
+windows in a row, no member's floor of open files rose over its first window's, and the delivery
+time's p95 is at most 10 s. The bounds were fixed before any long run was measured: a run over
+them is a finding, not a reason to move them. Beside the verdict the single samples' numbers are
+printed as `raw_*`, for reading. A checked copy that is not on every member within 60 s counts as
 missed, also when it was sent just after a kill: a restarted member is back and has it within a
 minute, or the run fails. These bounds follow the service's reconnect wait (5 s after a lost
 connection, `RECONNECT_WAIT` in `member/src/node.rs`) and the 15 s timeout of a silent peer;

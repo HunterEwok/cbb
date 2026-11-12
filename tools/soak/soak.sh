@@ -33,21 +33,31 @@
 # SOAK_DAY (86400 s) is the time between lines of the log, SOAK_WARMUP
 # (3600 s) the time after a member's start before its memory and open files
 # are taken as its baseline, SOAK_SAMPLE (600 s) the time between samples of
-# them for the verdict.
+# them for the verdict, SOAK_WINDOW (6 samples, an hour) how many samples make
+# one window, whose floor (the least RSS and open files in it) is what the
+# verdict compares: a single sample swings by megabytes as large copies come
+# and go, a leak raises the floor. SOAK_GROW_MAX_KB bounds the floor's growth:
+# 1024 (1 MiB) for calm, 4096 (4 MiB) for load, fixed before any long run was
+# measured; a run over it is a finding, not a reason to move the number.
 #
 # A line of soak.log: the time, "soak", then key=value: day, copies sent,
 # checked, arrived on every member, missed, kills, starts after a kill whose
 # state read whole, broken ones, the delivery time of the checked copies in
 # ms (p50, p95, max: the slowest member of each), the members' largest RSS in
-# KiB and open files, the largest growth of a member's RSS over its baseline
-# without a restart, and the members whose open files left their baseline. A
+# KiB and open files, the largest growth of a member's RSS floor over its
+# first window's without a restart, and the members whose floor of open files
+# left the first window's. A
 # missed copy or a broken start also writes a line "soak fault".
 #
 # The verdict: PASS when no copy was missed (a checked copy that is not on
 # every member within SOAK_WAIT, 60 s, is missed), the delivery time's p95 is
 # at most SOAK_P95_MAX_MS (10000 ms), every start was whole, no member's RSS
-# grew more than 1 MiB over its baseline without a restart, and every
-# member's open files stayed at their baseline; else FAIL with why.
+# floor grew more than SOAK_GROW_MAX_KB over its first window's without a
+# restart, no member's RSS floor rose in three windows in a row, and no
+# member's floor of open files rose over the first window's; else FAIL with
+# why. Beside it the raw numbers of single samples (the growth of a member's
+# RSS over its first sample after warm-up, and the samples whose open files
+# differed from it) are printed as raw_*, for reading, not judged.
 #
 # SOAK_PROFILE=family (one service process in two groups) is kept for wave
 # 5, when one service holds several groups.
@@ -91,6 +101,10 @@ file_every=${SOAK_FILE_EVERY:-1800}
 file_max=${SOAK_FILE_MAX:-67108864}
 wait_max=${SOAK_WAIT:-60}
 sample_every=${SOAK_SAMPLE:-600}
+window=${SOAK_WINDOW:-6}
+grow_max_default=1024
+[ "$profile" = load ] && grow_max_default=4096
+grow_max=${SOAK_GROW_MAX_KB:-$grow_max_default}
 p95_max=${SOAK_P95_MAX_MS:-10000}
 cbb=$dir/bin/cbb
 log=$dir/soak.log
@@ -125,7 +139,7 @@ run_member() {
 		-port "$(port "$m")" -no-mdns $peers >>"$dir/m$m/service.log" 2>&1 &
 	echo $! >"$dir/m$m/pid"
 	secs >"$dir/m$m/since"
-	rm -f "$dir/m$m/base"
+	rm -f "$dir/m$m/base" "$dir/m$m/win" "$dir/m$m/last" "$dir/m$m/prev" "$dir/m$m/raw"
 }
 
 wait_ready() { # member
@@ -291,10 +305,13 @@ percentiles() { # p50 p95 max of delivery.ms
 	fi
 }
 
-# Each member's RSS and open files; after its warm-up the first sample is
-# its baseline, and growth is measured against it until it restarts.
+# Each member's RSS and open files. After its warm-up the samples go into
+# windows of SOAK_WINDOW; a window's floor is its least RSS and open files.
+# The first window's floor is the member's baseline, and each later window's
+# floor is compared with it until the member restarts; the comparison of the
+# last full window is what a sample reports.
 usage() {
-	rss=0 fds=0 grow=0 fds_moved=
+	rss=0 fds=0 grow=0 fds_moved= rises=0 raw_grow=0 raw_fds=
 	m=1
 	t=$(secs)
 	while [ "$m" -le "$members" ]; do
@@ -305,31 +322,64 @@ usage() {
 		[ "$r" -gt "$rss" ] && rss=$r
 		[ "$f" -gt "$fds" ] && fds=$f
 		if [ $((t - $(cat "$dir/m$m/since"))) -ge "$warmup" ] && [ "$r" -gt 0 ]; then
-			if [ ! -e "$dir/m$m/base" ]; then
-				echo "$r $f" >"$dir/m$m/base"
+			# raw: this sample against the first sample after warm-up
+			if [ ! -e "$dir/m$m/raw" ]; then
+				echo "$r $f" >"$dir/m$m/raw"
 			else
-				read -r r0 f0 <"$dir/m$m/base"
-				[ $((r - r0)) -gt "$grow" ] && grow=$((r - r0))
-				[ "$f" -eq "$f0" ] || fds_moved="$fds_moved$m,"
+				read -r r0 f0 <"$dir/m$m/raw"
+				[ $((r - r0)) -gt "$raw_grow" ] && raw_grow=$((r - r0))
+				[ "$f" -eq "$f0" ] || raw_fds="$raw_fds$m,"
+			fi
+			echo "$r $f" >>"$dir/m$m/win"
+			if [ "$(wc -l <"$dir/m$m/win")" -ge "$window" ]; then
+				floor=$(sort -n "$dir/m$m/win" | awk 'NR == 1 {r = $1} {if (f == "" || $2 < f) f = $2} END {print r, f}')
+				rm -f "$dir/m$m/win"
+				fr=${floor% *} ff=${floor#* }
+				if [ ! -e "$dir/m$m/base" ]; then
+					echo "$floor" >"$dir/m$m/base"
+					echo "$fr 0" >"$dir/m$m/prev"
+					echo "0 0 0" >"$dir/m$m/last"
+				else
+					read -r r0 f0 <"$dir/m$m/base"
+					read -r pr run <"$dir/m$m/prev"
+					if [ "$fr" -gt "$pr" ]; then run=$((run + 1)); else run=0; fi
+					echo "$fr $run" >"$dir/m$m/prev"
+					up=0
+					[ "$ff" -gt "$f0" ] && up=1
+					echo "$((fr - r0)) $up $run" >"$dir/m$m/last"
+				fi
+			fi
+			if [ -e "$dir/m$m/last" ]; then
+				read -r g up run <"$dir/m$m/last"
+				[ "$g" -gt "$grow" ] && grow=$g
+				[ "$up" -eq 0 ] || fds_moved="$fds_moved$m,"
+				[ "$run" -gt "$rises" ] && rises=$run
 			fi
 		fi
 		m=$((m + 1))
 	done
-	echo "rss_kb=$rss fds=$fds rss_grow_kb=$grow fds_moved=${fds_moved:-none}"
+	echo "rss_kb=$rss fds=$fds rss_grow_kb=$grow rss_rises=$rises fds_moved=${fds_moved:-none}" \
+		"raw_rss_grow_kb=$raw_grow raw_fds_moved=${raw_fds:-none}"
 }
 
 # usage, counted for the verdict: every sample, and every day's line, is one.
 sample() {
 	u=$(usage)
-	g=$(echo "$u" | sed -n 's/.*rss_grow_kb=\([0-9]*\).*/\1/p')
+	g=$(echo "$u" | sed -n 's/.* rss_grow_kb=\([0-9]*\).*/\1/p')
 	[ "${g:-0}" -le "$max_grow" ] || max_grow=$g
-	echo "$u" | grep -q 'fds_moved=none' || fds_bad=$((fds_bad + 1))
+	n=$(echo "$u" | sed -n 's/.*rss_rises=\([0-9]*\).*/\1/p')
+	[ "${n:-0}" -le "$max_rises" ] || max_rises=$n
+	g=$(echo "$u" | sed -n 's/.*raw_rss_grow_kb=\([0-9]*\).*/\1/p')
+	[ "${g:-0}" -le "$raw_grow" ] || raw_grow=$g
+	echo "$u" | grep -q 'raw_fds_moved=none' || raw_fds=$((raw_fds + 1))
+	echo "$u" | grep -q ' fds_moved=none' || fds_bad=$((fds_bad + 1))
 	echo "$u"
 }
 
 save_counts() {
 	echo "copies=$copies checked=$checked arrived=$arrived missed=$missed kills=$kills whole=$whole_n" \
-		"broken=$broken max_grow=$max_grow fds_bad=$fds_bad" >"$counts"
+		"broken=$broken max_grow=$max_grow max_rises=$max_rises fds_bad=$fds_bad" \
+		"raw_grow=$raw_grow raw_fds=$raw_fds" >"$counts"
 }
 
 kill_one() {
@@ -415,7 +465,7 @@ file_copy() {
 
 loop() {
 	confine
-	copies=0 checked=0 arrived=0 missed=0 kills=0 whole_n=0 broken=0 days=0 max_grow=0 fds_bad=0
+	copies=0 checked=0 arrived=0 missed=0 kills=0 whole_n=0 broken=0 days=0 max_grow=0 max_rises=0 fds_bad=0 raw_grow=0 raw_fds=0
 	t0=$(secs)
 	next_copy=$((t0 + copy_every))
 	next_kill=$((t0 + $(rand "$kill_min" "$kill_max")))
@@ -466,15 +516,17 @@ verdict() {
 	why=
 	[ "$missed" -eq 0 ] || why="$why missed=$missed"
 	[ "$broken" -eq 0 ] || why="$why broken=$broken"
-	[ "$max_grow" -le 1024 ] || why="$why rss_grow_kb=$max_grow"
+	[ "$max_grow" -le "$grow_max" ] || why="$why rss_grow_kb=$max_grow>$grow_max"
+	[ "${max_rises:-0}" -lt 3 ] || why="$why rss_rises=$max_rises"
 	[ "$fds_bad" -eq 0 ] || why="$why fds_moved_samples=$fds_bad"
+	raw="raw_rss_grow_kb=${raw_grow:-0} raw_fds_moved_samples=${raw_fds:-0}"
 	p95=$(percentiles | sed -n 's/.*delivery_ms_p95=\([0-9]*\).*/\1/p')
 	[ "${p95:-0}" -le "$p95_max" ] || why="$why delivery_ms_p95=$p95>$p95_max"
 	head=$(sed -n '1s/^[^ ]* //p' "$log")
 	if [ -z "$why" ]; then
-		echo "$(now) soak verdict PASS copies=$copies checked=$checked kills=$kills whole=$whole $(percentiles) | $head"
+		echo "$(now) soak verdict PASS copies=$copies checked=$checked kills=$kills whole=$whole $(percentiles) $raw | $head"
 	else
-		echo "$(now) soak verdict FAIL$why | $head"
+		echo "$(now) soak verdict FAIL$why $raw | $head"
 	fi
 }
 
