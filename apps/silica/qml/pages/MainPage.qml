@@ -3,11 +3,136 @@
 
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import "arrange.js" as Arrange
 
 Page {
     id: page
     // The devices in the user's order and collections (App::arranged).
     readonly property var view: app.arranged(app.member.devices, app.arrangement)
+
+    // A big screen (docs/apps.md, "Big screens"), by the page's width alone:
+    // the chosen device's card stands beside the tiles while both fit, and
+    // the sidebar with the devices' sections before them while it fits too
+    // (a tablet in landscape). Rights do not depend on it.
+    readonly property real unit: Theme.pixelRatio
+    readonly property bool home: app.group !== ""
+    readonly property bool beside: home && width >= 760 * unit
+    readonly property bool sidebar: home && width >= 1060 * unit
+    property var chosen: null
+    property string section: "all"   // "all", "attention" or "c:" and a collection's ID
+    readonly property var attention: app.member.devices.filter(function(d) { return d.frozen })
+    readonly property var sectionEntry: section.indexOf("c:") === 0 ? Arrange.find(view, section.substring(2)) : null
+    readonly property var level: section === "attention" ? Arrange.items(attention)
+                               : sectionEntry !== null ? Arrange.items(sectionEntry.devices) : view
+    function choose(d) { chosen = d }
+    function open(s) {
+        chosen = null
+        section = s
+    }
+    onBesideChanged: if (!beside) chosen = null
+    onSidebarChanged: if (!sidebar) section = "all"
+    // A section that a move or ungroup ended, or with nothing left to attend to.
+    onSectionEntryChanged: if (section.indexOf("c:") === 0 && sectionEntry === null) section = "all"
+    onAttentionChanged: if (section === "attention" && attention.length === 0) section = "all"
+    // The chosen device's newest entry, or none once it left the group.
+    Connections {
+        target: app.member
+        onDevicesChanged: {
+            if (page.chosen === null)
+                return
+            var all = app.member.devices
+            for (var i = 0; i < all.length; i++) {
+                if (all[i].id === page.chosen.id) {
+                    page.chosen = all[i]
+                    return
+                }
+            }
+            page.chosen = null
+        }
+    }
+
+    // The sidebar: the devices' sections, each with its count, and Settings.
+    SilicaFlickable {
+        id: side
+        visible: page.sidebar
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.left: parent.left
+        width: visible ? 300 * page.unit : 0
+        contentHeight: sideColumn.height
+
+        Column {
+            id: sideColumn
+            width: parent.width
+            PageHeader { title: "CBB" }
+            SectionHeader { text: qsTr("Devices") }
+            Repeater {
+                model: [{ key: "all", title: qsTr("All devices"), count: app.member.devices.length }]
+                       .concat(page.attention.length > 0 ? [{ key: "attention", title: qsTr("Needs attention"), count: page.attention.length }] : [])
+                       .concat(Arrange.collections(page.view).map(function(c) { return { key: "c:" + c.id, title: c.name, count: c.devices.length } }))
+                BackgroundItem {
+                    width: sideColumn.width
+                    highlighted: down || page.section === modelData.key
+                    onClicked: page.open(modelData.key)
+                    Label {
+                        x: Theme.horizontalPageMargin
+                        anchors.right: count.left
+                        anchors.rightMargin: Theme.paddingMedium
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: modelData.title
+                        color: modelData.key === "attention" ? Theme.errorColor : parent.highlighted ? Theme.highlightColor : Theme.primaryColor
+                        truncationMode: TruncationMode.Fade
+                    }
+                    Label {
+                        id: count
+                        anchors.right: parent.right
+                        anchors.rightMargin: Theme.horizontalPageMargin
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: modelData.count
+                        color: Theme.secondaryColor
+                    }
+                }
+            }
+            SectionHeader { text: qsTr("Settings") }
+            BackgroundItem {
+                width: sideColumn.width
+                onClicked: pageStack.push(Qt.resolvedUrl("SettingsPage.qml"))
+                Label {
+                    x: Theme.horizontalPageMargin
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: qsTr("Settings")
+                }
+            }
+        }
+        VerticalScrollDecorator {}
+    }
+    Rectangle {
+        visible: side.visible
+        anchors.left: side.right
+        width: 1
+        height: parent.height
+        color: Theme.rgba(Theme.primaryColor, 0.2)
+    }
+
+    // The chosen device's card, at the trailing edge.
+    DeviceCard {
+        id: card
+        visible: page.beside && page.chosen !== null
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.right: parent.right
+        width: visible ? 400 * page.unit : 0
+        device: page.chosen !== null ? page.chosen : ({ id: "" })
+        pane: true
+        onClosed: page.chosen = null
+    }
+    Rectangle {
+        visible: card.visible
+        anchors.right: card.left
+        width: 1
+        height: parent.height
+        color: Theme.rgba(Theme.primaryColor, 0.2)
+    }
 
     // Aurora lets an app read the clipboard only in the foreground: what the
     // user copied goes to the group when the app comes to the front.
@@ -22,7 +147,11 @@ Page {
     }
 
     SilicaFlickable {
-        anchors.fill: parent
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.left: side.right
+        anchors.right: card.left
+        clip: page.beside
         contentHeight: column.height
 
         PullDownMenu {
@@ -76,7 +205,9 @@ Page {
 
             PageHeader {
                 visible: app.group !== ""
-                title: "CBB"
+                title: page.section === "attention" ? qsTr("Needs attention")
+                     : page.sectionEntry !== null ? page.sectionEntry.name
+                     : page.sidebar ? qsTr("All devices") : "CBB"
             }
 
             // Start (docs/apps.md, Start): the name, then make a group or
@@ -280,8 +411,12 @@ Page {
                 text: qsTr("Devices")
             }
             DeviceItems {
-                level: page.view
+                level: page.level
                 view: page.view
+                inCollection: page.sectionEntry !== null ? page.sectionEntry.id : ""
+                choose: page.beside ? page.choose : null
+                chosen: page.chosen !== null ? page.chosen.id : ""
+                openCollection: page.sidebar ? page.open : null
             }
 
             BusyIndicator {

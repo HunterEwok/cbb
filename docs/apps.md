@@ -363,6 +363,17 @@ is in software gets the same big-screen layout with a computer's rights.
     main device, that it guards the group less well than a phone with both. A tablet that has
     both says on Start, as an iPad does, that the main device is best one always at hand.
 
+- **Aurora tablets** (and an Aurora phone turned on its side, which is as wide), in
+  `MainPage.qml` by the page's width in Silica's units (`Theme.pixelRatio`): from 760 the
+  chosen device's card (`DeviceCard.qml`, the same card `DevicePage.qml` shows as a page)
+  stands at the trailing edge, 400 wide, with Close in its header and its pull-down menu, and
+  the chosen tile is lit; from 1060 the sidebar stands before the tiles too: "All devices",
+  "Needs attention" while a device does, each collection with its count, and Settings, which
+  opens as a page, since Aurora's Settings are one short page. Narrower, it is the phone's
+  page. Aurora gives an app no fingerprint (its keys wait for the app's own PIN), so making a
+  group and restoring one always say that the device guards the group less well than a phone
+  with both. No keyboard shortcuts or drag and drop: Silica has neither.
+
   Android draws the device icons itself (`DeviceGlyph`), on the same 24-unit grid as the
   system's line icons.
 

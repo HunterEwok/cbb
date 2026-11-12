@@ -369,14 +369,11 @@
     </message>
 </context>
 <context>
-    <name>DeviceItems</name>
+    <name>DeviceCard</name>
     <message>
-        <source>%1 of %2 online</source>
-        <translation>%1 kati ya %2 mtandaoni</translation>
+        <source>Close</source>
+        <translation>Funga</translation>
     </message>
-</context>
-<context>
-    <name>DevicePage</name>
     <message>
         <source>Device ID</source>
         <translation>Kitambulisho cha kifaa</translation>
@@ -500,6 +497,13 @@
     <message>
         <source>Waiting, %1 h left</source>
         <translation>Inasubiri, zimebaki saa %1</translation>
+    </message>
+</context>
+<context>
+    <name>DeviceItems</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 kati ya %2 mtandaoni</translation>
     </message>
 </context>
 <context>
@@ -1011,6 +1015,10 @@
         <translation>%1 kati ya %2 mtandaoni</translation>
     </message>
     <message>
+        <source>All devices</source>
+        <translation>Vifaa vyote</translation>
+    </message>
+    <message>
         <source>An admin muted this phone until %1: its copies do not reach the group.</source>
         <translation>Msimamizi amenyamazisha simu hii hadi %1: nakala zake hazifiki kwenye kikundi.</translation>
     </message>
@@ -1073,6 +1081,10 @@
     <message>
         <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
         <translation>Fanya simu ya pili kuwa msimamizi: iongeze kwenye kikundi, kisha ifungue hapa na uguse Fanya msimamizi. Gusa ili kufunga.</translation>
+    </message>
+    <message>
+        <source>Needs attention</source>
+        <translation>Inahitaji uangalifu</translation>
     </message>
     <message>
         <source>New collection…</source>
@@ -1219,6 +1231,10 @@
     <message>
         <source>The group's root key is made in the phone's secure element and never leaves it.</source>
         <translation>Ufunguo wa mzizi wa kikundi unaundwa kwenye kipengele salama cha simu na hautoki humo kamwe.</translation>
+    </message>
+    <message>
+        <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
+        <translation>Kifaa hiki hakina chipu salama ya funguo au kihisi cha kuaminika cha alama ya kidole au uso: kama kifaa kikuu cha kikundi kinakilinda kikundi chini ya simu yenye vyote viwili.</translation>
     </message>
     <message>
         <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
@@ -1437,6 +1453,10 @@
     <message>
         <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
         <translation>Kikundi kimerejeshwa kwenye simu hii. Inakuwa mzizi wa kikundi muda wa kusubiri ukiisha, baada ya saa %1, isipokuwa mzizi ukighairi ombi.</translation>
+    </message>
+    <message>
+        <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
+        <translation>Kifaa hiki hakina chipu salama ya funguo au kihisi cha kuaminika cha alama ya kidole au uso: kama kifaa kikuu cha kikundi kinakilinda kikundi chini ya simu yenye vyote viwili.</translation>
     </message>
     <message>
         <source>This phone is the group's root now.</source>

@@ -21,6 +21,10 @@ All notable changes to cbb are documented in this file. The format follows
   the tiles sent to the group. It starts from 600 dp instead of 720. An Android device
   without its keys in secure hardware or without a strong fingerprint or face sensor says so
   before it makes a group, restores one or takes one handed over.
+- The Aurora app on a tablet, or a phone turned on its side, shows the chosen device's card
+  beside the tiles, and on the widest screens a sidebar with all devices, the ones that need
+  attention, each collection and Settings. Making or restoring a group on Aurora says that
+  its keys, behind the app's PIN and no fingerprint, guard the group less well than a phone's.
 - The Aurora app asks for a PIN of its own before its root or admin key signs, since Aurora OS
   gives an app neither its authentication service nor the fingerprint. The key moves to a
   second token of the app in the TEE, whose PIN the user chooses (at least four digits) and

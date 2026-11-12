@@ -11,6 +11,20 @@ import "devices.js" as Devices
 BackgroundItem {
     id: tile
     property var device
+    // On a big screen the main page chooses the device, whose card stands
+    // beside the tiles, and outlines its tile; elsewhere a tap opens its page.
+    property var choose: null
+    property bool chosen: false
+
+    highlighted: down || chosen
+    Rectangle {
+        visible: tile.chosen
+        anchors.fill: parent
+        color: "transparent"
+        radius: Theme.paddingSmall
+        border.width: 2
+        border.color: Theme.highlightColor
+    }
 
     height: words.y + nameLabel.height + 2 * systemLabel.height + Theme.paddingMedium
 
@@ -81,5 +95,5 @@ BackgroundItem {
         }
     }
 
-    onClicked: pageStack.push(Qt.resolvedUrl("DevicePage.qml"), { device: tile.device })
+    onClicked: tile.choose ? tile.choose(tile.device) : pageStack.push(Qt.resolvedUrl("DevicePage.qml"), { device: tile.device })
 }
