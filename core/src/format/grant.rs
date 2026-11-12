@@ -24,6 +24,11 @@
 //! absent before any change of root. A leaf takes a grant only of the
 //! recovery seq it knows as the newest, and never goes back to a lower one;
 //! a change starts its counters and commanders afresh.
+//!
+//! Two different records signed by the root the leaf keeps at one seq are
+//! a fork of that root (records rule 9): the leaf takes the pair from
+//! anyone ([`fork`]), stops obeying that root ([`Kept::fork`]) and takes no
+//! grant again until one made under a higher recovery seq.
 
 use alloc::vec::Vec;
 
@@ -118,6 +123,14 @@ pub const RULE_REPLACES: Rule = Rule::field("grants/replaces");
 /// the one it kept.
 pub const RULE_RECOVERY: Rule = Rule::field("grants/recovery");
 
+/// Two records that are not a fork of the leaf's root: not two different
+/// records of this group, both signed by that root at one seq.
+pub const RULE_FORK: Rule = Rule::field("grants/fork");
+
+/// A grant to a leaf that holds a fork of its root, made under the
+/// recovery seq it kept.
+pub const RULE_FORKED: Rule = Rule::field("grants/forked");
+
 /// A commander: its key hash and its uncompressed point.
 pub type Commander = (KeyHash, [u8; 65]);
 
@@ -137,9 +150,20 @@ pub struct Kept {
     pub grant_hash: [u8; 32],
     /// The recovery seq the current grant was made under.
     pub recovery: u64,
+    /// Whether the leaf holds a fork of the root under that recovery seq:
+    /// it then obeys nobody and takes no grant of that seq.
+    pub forked: bool,
 }
 
 impl Kept {
+    /// The leaf's state once it verified a fork of its root ([`fork`]):
+    /// its grant is over, as at a change of root; guarded stays, and so
+    /// does the recovery seq, so that only a grant made under a higher one
+    /// is taken again.
+    pub fn fork(&self) -> Kept {
+        Kept { guarded: self.guarded, recovery: self.recovery, forked: true, ..Kept::default() }
+    }
+
     /// The point of the commander with this key hash: the keys the leaf
     /// obeys, and for an ordinary leaf the keys that may sign its next
     /// grant.
@@ -181,6 +205,7 @@ impl Granted<'_> {
             commanders: self.commanders.clone(),
             grant_hash: sha256(&[self.grant.body]),
             recovery: self.recovery,
+            forked: false,
         }
     }
 }
@@ -288,6 +313,9 @@ pub fn read<'a>(
     if made_after != recovery || recovery > MAX_RECOVERY || kept.is_some_and(|k| k.recovery > recovery) {
         return Err(RULE_RECOVERY);
     }
+    if kept.is_some_and(|k| k.forked && k.recovery == recovery) {
+        return Err(RULE_FORKED);
+    }
     let was_guarded = kept.is_some_and(|k| k.guarded);
     let kept = kept.filter(|k| k.recovery == recovery);
     let signer = grant.signer().and_then(Value::as_bytes).and_then(KeyHash::from_slice).ok_or(Rule::GRANTS_SHAPE)?;
@@ -376,6 +404,35 @@ pub fn read<'a>(
         return Err(RULE_NEIGHBORS);
     }
     Ok(Granted { grant, admin, by_root, guarded, counter, commanders, recovery })
+}
+
+/// Checks the proof of a fork of the root `root` (its uncompressed point)
+/// that a leaf of group `group` is handed: two record envelopes `a` and `b`
+/// of this group, both signed by that root at one seq, with different
+/// bodies (two record IDs; one body under another signature is the same
+/// record). It gives that seq. A leaf takes it from anyone, before any
+/// check of who speaks, rate limited like a recovery head, and then keeps
+/// [`Kept::fork`].
+pub fn fork(a: &[u8], b: &[u8], root: &[u8], group: &GroupId) -> Result<u64, Rule> {
+    use crate::records::{Key as RecordKey, Record};
+    let key = RecordKey::es256(root.to_vec());
+    let signer = Key::new(Alg::Es256, root).hash();
+    let read = |env: &[u8]| -> Result<Record, Rule> {
+        let r = Record::decode(env).map_err(|_| RULE_FORK)?;
+        if r.body().group != *group || r.body().signer != signer {
+            return Err(RULE_FORK);
+        }
+        Ok(r)
+    };
+    let (a, b) = (read(a)?, read(b)?);
+    if a.body().seq != b.body().seq || a.id() == b.id() {
+        return Err(RULE_FORK);
+    }
+    // The signatures last: what is no pair costs no verification.
+    for r in [&a, &b] {
+        r.verify(&key).map_err(|_| RULE_FORK)?;
+    }
+    Ok(a.body().seq)
 }
 
 /// A copy to a leaf from a device its grant does not let send it copies.

@@ -3061,6 +3061,44 @@ fn the_roots_pair_halts_below_a_checkpoint() {
     assert!(want.checkpoint.is_none());
 }
 
+/// Old settled root records offered while one waits for its pair go
+/// first: the waiting one, at a higher seq, still makes the pair.
+#[test]
+fn older_settled_records_leave_a_waiting_one() {
+    let mut g = G::new();
+    let root = k("root");
+    g.device(&root, &k("laptop"), "laptop", |_| {});
+    let mut old = vec![];
+    for i in 0..9 {
+        let name = format!("old {i}");
+        old.push(g.device(&root, &k(&name), &name, |_| {}));
+        old.push(g.root_rec(Kind::Revoke(removal(&[k(&name).hash], g.seen()))));
+    }
+    let below = g.device(&root, &k("d"), "d", |_| {});
+    let x = g.root_rec(Kind::Revoke(removal(&[k("d").hash], g.seen())));
+    let mut d = Device::new(k("thief").key.clone(), "thief", ROLE_MEMBER);
+    d.rights = RIGHT_READ;
+    let twin =
+        Record::sign(Body { seq: x.body().seq, prev: Some(below.id()), ..g.body(&root, Kind::device(d)) }, &root)
+            .unwrap();
+    g.device(&root, &k("phone"), "phone", |_| {});
+    let line: Vec<Record> = g.recs.clone();
+    let cp = root_checkpoint(&mut g, &line);
+    // B counted the checkpoint first and holds none of them any more.
+    let gone: Vec<RecordId> = old.iter().chain([&x]).map(Record::id).collect();
+    let without: Vec<Record> = g.recs.iter().filter(|r| !gone.contains(&r.id())).cloned().collect();
+    let mut b = set_with(&g.root.key, &without, &g.lists);
+    assert!(b.state().checkpoints.contains(&cp.id()) && !b.contains(&x.id()));
+    assert!(old.iter().all(|r| !b.contains(&r.id())));
+    assert!(matches!(b.insert(twin.clone()), Ok(Added::Settled { .. })));
+    for r in &old {
+        assert!(matches!(b.insert(r.clone()), Ok(Added::Settled { .. })));
+    }
+    b.insert(x.clone()).unwrap();
+    assert_eq!(b.state().stop, Stop::Full);
+    assert!(b.contains(&twin.id()) && b.contains(&x.id()));
+}
+
 /// A second admission of a key the root removed, which the root never
 /// saw, brings the device back after the prune; the member that dropped
 /// the removal tells it, and a new admission by the root is not told.

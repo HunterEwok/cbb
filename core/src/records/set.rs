@@ -72,8 +72,10 @@ pub struct Base {
     pub before: BTreeSet<super::DeviceId>,
 }
 
-/// The settled root records a set keeps a while (`RecordSet::settled`).
+/// The settled root records a set keeps a while (`RecordSet::settled`):
+/// at most this many, and at most SETTLED_BYTES of their envelopes.
 const SETTLED_KEPT: usize = 16;
+const SETTLED_BYTES: usize = 256 << 10;
 
 /// A member's record set.
 #[derive(Clone)]
@@ -139,10 +141,11 @@ pub struct RecordSet {
     /// (`arrivals`, `keep_arrivals`).
     arrivals: BTreeMap<RecordId, (u64, Vec<KeyHash>)>,
     base: Option<Base>,
-    /// Root records a counting checkpoint settled, kept a while by key and
-    /// seq so that the other record at that seq makes the pair (a fork at
-    /// any depth); verified, at most SETTLED_KEPT, the lowest going first.
-    settled: BTreeMap<(KeyHash, u64), Record>,
+    /// Root records a counting checkpoint settled, kept a while by seq and
+    /// key so that the other record at that seq makes the pair (a fork at
+    /// any depth): verified, at most SETTLED_KEPT records and SETTLED_BYTES,
+    /// the lowest seq going first; local, never stored or sent.
+    settled: BTreeMap<(u64, KeyHash), Record>,
     /// The keys of root removals this set dropped at a checkpoint's prune,
     /// each with the order it came in, the root and that root's head in
     /// the checkpoint: a key that counts again other than by a newer
@@ -526,17 +529,19 @@ impl RecordSet {
             // A root's record a counting checkpoint settled: alone it is
             // refused, but two at one seq are a fork at any depth, so the
             // set keeps it a while to make the pair with the other.
-            let other = self.settled.get(&(signer, r.body().seq)).filter(|o| o.id() != id).cloned();
+            let at = (r.body().seq, signer);
+            let other = self.settled.get(&at).filter(|o| o.id() != id).cloned();
+            r.verify_marked(&key, mark).map_err(Refused::Broken)?;
             match other {
                 Some(o) => {
-                    r.verify_marked(&key, mark).map_err(Refused::Broken)?;
-                    self.settled.remove(&(signer, r.body().seq));
+                    self.settled.remove(&at);
                     self.store(o, role, false);
                 }
                 None => {
-                    r.verify_marked(&key, mark).map_err(Refused::Broken)?;
-                    self.settled.insert((signer, r.body().seq), r);
-                    while self.settled.len() > SETTLED_KEPT {
+                    self.settled.insert(at, r);
+                    while self.settled.len() > SETTLED_KEPT
+                        || self.settled.values().map(Record::size).sum::<usize>() > SETTLED_BYTES
+                    {
                         self.settled.pop_first();
                     }
                     return Ok(Added::Settled { head: self.settled_head(&signer) });
