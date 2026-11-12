@@ -16,7 +16,7 @@ All notable changes to cbb are documented in this file. The format follows
   newest registration's senders get through, and the messages between a member and the
   project's push service (`cbb-push/1`), which sees tokens, times and one size, never a group
   or content (`cbb_core::push`, vectors in `testdata/format/push.json`). The push service
-  `cbb-push` (APNs first, `packaging/linux/cbb-push.service`), the member's sender, and the
+  `cbb-push` (APNs and UnifiedPush, `packaging/linux/cbb-push.service`), the member's sender, and the
   phones' calls `push_key`, `push_limits`, `push_registration` and `push_open` (error code 18,
   `push`). The iPhone and iPad app registers for push (a switch in Settings, on by default)
   and opens each notification in an extension that holds only the push keys; a copy's text

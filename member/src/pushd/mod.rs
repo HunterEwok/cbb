@@ -4,8 +4,8 @@
 //! The project's push service (`cbb-push`, format section 20.4,
 //! `cbb_core::push`): members of a group ask it to wake a phone whose app
 //! is closed, and it passes a sealed body of one size to the phone's
-//! platform (APNs for the iPhone and the iPad; FCM, UnifiedPush and Push
-//! Kit follow). It holds the platforms' keys and none of a group's.
+//! platform (APNs for the iPhone and the iPad, UnifiedPush for Android
+//! without Play services; FCM and Push Kit follow). It holds the platforms' keys and none of a group's.
 //!
 //! - A member connects over TLS with ALPN `cbb-push/1` to the service's
 //!   pinned key, presenting the certificate of its server key for the
@@ -36,6 +36,7 @@ pub mod apns;
 pub mod command;
 pub mod h2;
 mod saved;
+pub mod unifiedpush;
 
 #[cfg(test)]
 mod tests;

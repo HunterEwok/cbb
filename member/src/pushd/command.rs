@@ -103,6 +103,10 @@ fn platforms(f: &Flags) -> Result<HashMap<u64, Arc<dyn Platform>>> {
         let key = Key::from_p8(&pem, &f.apns_team, id)?;
         out.insert(env, Arc::new(Apns::new(env, key, roots(&f.roots)?)?));
     }
+    // UnifiedPush needs no key of ours: it posts to the phone's endpoint.
+    if !out.is_empty() {
+        out.insert(cbb_core::push::ENV_UNIFIEDPUSH, Arc::new(super::unifiedpush::UnifiedPush::new(roots(&f.roots)?)?));
+    }
     Ok(out)
 }
 
