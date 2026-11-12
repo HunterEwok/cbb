@@ -234,6 +234,7 @@ BOARD = Signer("board member key")
 LOCK = Signer("lock member key")
 TABLET = Signer("tablet member key")
 ADMIN2 = Signer("admin key 2")
+ADMIN3 = Signer("admin key 3")
 STRANGER = Signer("stranger")
 PERIOD = Signer("period key")
 SRVKEY = Signer("laptop server key")
@@ -363,13 +364,19 @@ def record_vectors():
     take, refuse = [], []
     chain = {}
 
-    def add(name, signer, typ, fields, verdict="take", note=None, extra=None):
+    def seen_of(*signers):
+        """`seen` (section 4.2): each signer's head as the author holds it,
+        `[key hash, seq, record ID]`, a set."""
+        return srt([[x.hash, chain[x.name][0], chain[x.name][1]] for x in signers])
+
+    def add(name, signer, typ, fields, verdict="take", note=None, extra=None, sig2=None):
         seq = chain.get(signer.name, (0, None))[0] + 1
         prev = chain.get(signer.name, (0, None))[1]
         m = rec(signer, seq, typ, fields, prev=prev, extra=extra)
         env, body = envelope("record", signer, m)
         if 8 in m:  # room for a second signature: [body, sig, sig2]
-            env = enc([body, signer.sign(LABELS["record"], body), ADMIN.sign(LABELS["record"], body)])
+            env = enc([body, signer.sign(LABELS["record"], body),
+                       sig2 if sig2 is not None else ADMIN.sign(LABELS["record"], body)])
         rid = sha(body)
         if verdict == "take":
             chain[signer.name] = (seq, rid)
@@ -401,12 +408,11 @@ def record_vectors():
     add("copies", ADMIN, 8, {10: 30000})
     # hubs keep the user's order (not sorted), each once
     add("hubs", ROOT, 10, {10: sorted([LAPTOP.id16, PHONE.id16], reverse=True)})
-    add("revoke", ROOT, 2, {10: srt([STRANGER.hash, Signer("stranger 2").hash]),
-                            11: srt([[ADMIN.hash, 2], [ROOT.hash, 5]])})
-    add("freeze", ROOT, 3, {10: [ADMIN.hash], 11: srt([[ADMIN.hash, 2], [ROOT.hash, 6]])})
+    add("revoke", ROOT, 2, {10: srt([STRANGER.hash, Signer("stranger 2").hash]), 11: seen_of(ADMIN, ROOT)})
+    add("freeze", ROOT, 3, {10: [ADMIN.hash], 11: seen_of(ADMIN, ROOT)})
     thaw_target = take[-1]["id"]
     add("thaw", ROOT, 4, {10: [bytes.fromhex(thaw_target)]})
-    add("claim", ADMIN, 5, {10: ROOT2.key, 11: srt([[ADMIN.hash, 2], [ROOT.hash, 8]])})
+    add("claim", ADMIN, 5, {10: ROOT2.key, 11: seen_of(ADMIN, ROOT)})
     add("resolve", ROOT, 6, {10: [bytes.fromhex(take[-1]["id"])]})
     add("recovery", ROOT, 11, {10: Signer("recovery").key})
     add("handover", ROOT, 12, {10: ADMIN.hash})
@@ -426,6 +432,9 @@ def record_vectors():
     add("second signer named (room only in 0.6)", ROOT, 7, {10: 3600000},
         verdict="hold", extra={8: ADMIN.hash},
         note="signer2 (key 8) with a three-element envelope; 0.6 checks the first signature, keeps the record and never applies it")
+    add("second signature of 3000 bytes (a later algorithm)", ROOT, 7, {10: 3600000},
+        verdict="hold", extra={8: ADMIN.hash}, sig2=fake("later signature", 3000),
+        note="sig2 is not fixed at 64 bytes; up to 4096 it is kept, outside the ID; the size counts from the body")
 
     add("admin admits a desktop with secrets (its own device has them)", ADMIN, 1,
         {10: Signer("desktop member key").key, 11: "Desktop", 12: 1, 13: 0b1011, 17: 1, 18: 2},
@@ -464,6 +473,10 @@ def record_vectors():
     bad("one element", "env/shape", enc([lap_body]))
     bad("body as a map, not bytes", "env/shape", Raw(head(4, 2) + enc(lap_m) + enc(sig)).b)
     bad("trailing byte after the envelope", "cbor/trailing", enc([lap_body, sig]) + b"\x00")
+    m2 = rec(ROOT, 91, 7, {10: 3600000}, extra={8: ADMIN.hash})
+    b2 = enc(m2)
+    bad("second signature over 4096 bytes", "env/sig2",
+        enc([b2, ROOT.sign(LABELS["record"], b2), fake("later signature", 4097)]))
 
     def bad_body(name, rule, m=None, raw=None):
         body = raw if raw is not None else enc(m)
@@ -533,13 +546,15 @@ def record_vectors():
     # by its first element's), each value once; hubs each once, in order
     a, b = srt([STRANGER.hash, Signer("stranger 2").hash])
     i1, i2 = srt([bytes.fromhex(take[0]["id"]), bytes.fromhex(take[1]["id"])])
-    sa, sb = srt([[ADMIN.hash, 2], [ROOT.hash, 5]])
+    sa, sb = srt([[ADMIN.hash, 2, i1], [ROOT.hash, 5, i2]])
     ha, hb = srt([[ADMIN.hash, 3, i1], [ROOT.hash, 11, i2]])
     for name, rule, typ, fields in [
         ("revoke keys out of order", "records/revoke/keys", 2, {10: [b, a], 11: [sa, sb]}),
         ("revoke keys with one twice", "records/revoke/keys", 2, {10: [a, a], 11: [sa, sb]}),
         ("revoke seen out of order", "records/revoke/seen", 2, {10: [a], 11: [sb, sa]}),
-        ("revoke seen with one key twice", "records/revoke/seen", 2, {10: [a], 11: [sa, [sa[0], 3]]}),
+        ("revoke seen with one key twice", "records/revoke/seen", 2, {10: [a], 11: [sa, [sa[0], 3, i2]]}),
+        ("revoke seen entry without its record ID", "records/revoke/seen", 2, {10: [a], 11: [sa[:2], sb]}),
+        ("revoke seen entry at sequence 0", "records/revoke/seen", 2, {10: [a], 11: [[sa[0], 0, sa[2]], sb]}),
         ("thaw records out of order", "records/thaw/records", 4, {10: [i2, i1]}),
         ("checkpoint heads out of order", "records/checkpoint/heads", 9, {10: [hb, ha]}),
         ("checkpoint heads with one key twice", "records/checkpoint/heads", 9, {10: [ha, [ha[0], 4, i2]]}),
@@ -639,12 +654,14 @@ def command_vectors():
 
 def grant_vectors(admin_record):
     """Two kinds of leaf (design-small-device section 15). A grant is one
-    signed envelope (section 7) and lists the keys the leaf obeys
-    (`commanders`). The root signs any grant; for an ordinary leaf a
-    commander of its current grant signs one too, and the first comes from
-    the admitter with the root's record of that admin key (message field 3).
-    A guarded leaf takes grants from the root only and carries `guarded`.
-    The leaf keeps the root's counter and the admins' counter apart."""
+    signed envelope (section 7) for one leaf of one group, and lists the
+    keys the leaf obeys (`commanders`). The root signs any grant; for an
+    ordinary leaf a commander of its current grant signs one too, naming
+    the grant it replaces (field 18), and the first comes from the admitter
+    with the root's record of that admin key (message field 3). A guarded
+    leaf takes grants from the root only and carries `guarded`. The leaf
+    keeps the root's counter and the admins' counter apart. Each vector
+    names the leaf that reads it (`leaf`); the group is the file's."""
     take, refuse, sequences = [], [], []
     by_hash = lambda keys: sorted(keys, key=lambda k: sha(enc(k)))
 
@@ -664,95 +681,146 @@ def grant_vectors(admin_record):
     def ok(name, g, signer, admin=None):
         g, genv, gbody = signed(g, signer)
         msg = message(genv, admin)
-        take.append({"name": name, "verdict": "take", "grant_diag": diag(g), "grant": gbody.hex(),
-                     "envelope": genv.hex(), "message": enc(msg).hex(), "frame": frame(msg).hex()})
+        take.append({"name": name, "verdict": "take", "leaf": g[10].hex(), "grant_diag": diag(g),
+                     "grant": gbody.hex(), "envelope": genv.hex(), "message": enc(msg).hex(),
+                     "frame": frame(msg).hex()})
         return g
 
-    def bad(name, rule, msg):
-        refuse.append({"name": name, "rule": rule, "verdict": "refuse", "message": enc(msg).hex()})
+    def bad(name, rule, msg, leaf):
+        refuse.append({"name": name, "rule": rule, "verdict": "refuse", "leaf": leaf.hex(),
+                       "message": enc(msg).hex()})
 
     kettle = {1: 1, 2: GROUP, 10: BOARD.id16, 12: by_hash([ADMIN.key, ADMIN2.key]),
               13: [[LAPTOP.id16, LAPTOP.key]], 14: sorted([LAPTOP.hash, PHONE.hash]), 16: T0 + 9000}
-    ok("ordinary kettle, first grant signed by the admitting admin", {**kettle, **{4: 1}}, ADMIN,
+    ok("ordinary kettle, first grant signed by the admitting admin", {**kettle, 4: 1}, ADMIN,
        admin=admin_record)
     lock = {1: 1, 2: GROUP, 4: 3, 10: LOCK.id16, 12: by_hash([PHONE.key, LAPTOP.key]),
             13: sorted([[LAPTOP.id16, LAPTOP.key], [TABLET.id16, TABLET.key]], key=lambda a: a[0]),
             14: sorted([LAPTOP.hash, PHONE.hash]), 15: 1, 16: T0 + 9000}
     g = ok("guarded lock, grant signed by the root", lock, ROOT)
+    ok("guarded lock, lifetime of 40 days", {**lock, 11: 3456000000}, ROOT)
+    ok("guarded lock, an optional field from a later version", {**lock, 300: "later"}, ROOT)
+    L, K = LOCK.id16, BOARD.id16
+
+    def root_bad(name, rule, fields, leaf=L):
+        _, genv, _ = signed(fields, ROOT)
+        bad(name, rule, message(genv), leaf)
+
     _, genv, _ = signed(g, ADMIN)
-    bad("guarded grant signed by an admin", "grants/guarded", message(genv, admin_record))
-    _, genv, _ = signed({**{k: v for k, v in g.items() if k != 15}, **{11: 86400000}}, ROOT)
-    bad("lifetime in an ordinary grant", "grants/life", message(genv))
-    g9 = dict(g)
-    g9[12] = by_hash([Signer(f"c{i}").key for i in range(9)])
-    _, genv, _ = signed(g9, ROOT)
-    bad("nine commanders", "grants/commanders", message(genv))
-    g5 = dict(g)
-    g5[13] = sorted([[Signer(f"r{i}").id16, Signer(f"r{i}").key] for i in range(5)], key=lambda a: a[0])
-    _, genv, _ = signed(g5, ROOT)
-    bad("five readers", "grants/readers", message(genv))
-    _, genv, _ = signed({**kettle, **{4: 2}}, ADMIN)
-    bad("admin's first grant without the root's record", "grants/admin", message(genv))
+    bad("guarded grant signed by an admin", "grants/guarded", message(genv, admin_record), L)
+    root_bad("lifetime in an ordinary grant", "grants/life",
+             {**{k: v for k, v in g.items() if k != 15}, 11: 86400000})
+    root_bad("guarded lifetime 0", "grants/life", {**g, 11: 0})
+    root_bad("guarded lifetime over 40 days", "grants/life", {**g, 11: 3456000001})
+    root_bad("guarded lifetime as text", "grants/life", {**g, 11: "forever"})
+    root_bad("nine commanders", "grants/commanders", {**g, 12: by_hash([Signer(f"c{i}").key for i in range(9)])})
+    root_bad("five readers", "grants/readers",
+             {**g, 13: sorted([[Signer(f"r{i}").id16, Signer(f"r{i}").key] for i in range(5)], key=lambda a: a[0])})
+    root_bad("readers as a number", "grants/readers", {**g, 13: 5})
+    root_bad("a reader without its key", "grants/readers", {**g, 13: [[LAPTOP.id16]]})
+    root_bad("a reader with text for its key", "grants/readers", {**g, 13: [[LAPTOP.id16, "key"]]})
+    root_bad("neighbors as text", "grants/neighbors", {**g, 14: "peers"})
+    root_bad("a neighbour of 16 bytes", "grants/neighbors", {**g, 14: [LAPTOP.id16]})
+    root_bad("grant for another leaf", "grants/shape", {**g, 10: Signer("lamp member key").id16})
+    root_bad("grant for another group", "grants/shape", {**g, 2: ROOT2.id16})
+    root_bad("grant of another type", "grants/shape", {**g, 1: 2})
+    root_bad("grant with an unknown critical field", "form/critical", {**g, 200: 1})
+    root_bad("grant with field 9", "form/critical", {**g, 9: 1})
+    root_bad("root grant naming a grant it replaces", "grants/replaces", {**g, 18: sha(b"some grant")})
+    g2 = {**g, 3: ROOT.hash, 8: ADMIN.hash}
+    gb2 = enc(g2)
+    bad("grant with a second signer", "form/critical",
+        message(enc([gb2, ROOT.sign(LABELS["grant"], gb2), ADMIN.sign(LABELS["grant"], gb2)])), L)
+    _, genv, _ = signed({**kettle, 4: 2}, ADMIN)
+    bad("admin's first grant without the root's record", "grants/admin", message(genv), K)
+    _, genv, _ = signed({**kettle, 4: 2, 18: sha(b"some grant")}, ADMIN)
+    bad("admin's first grant naming a grant it replaces", "grants/replaces", message(genv, admin_record), K)
     for name, rule, field, val in [
         ("commanders out of order", "grants/commanders", 12, list(reversed(g[12]))),
         ("readers out of order", "grants/readers", 13, list(reversed(g[13]))),
         ("neighbors out of order", "grants/neighbors", 14, list(reversed(g[14]))),
         ("neighbors with one twice", "grants/neighbors", 14, [g[14][0], g[14][0]]),
     ]:
-        _, genv, _ = signed({**g, field: val}, ROOT)
-        bad(name, rule, message(genv))
-    bad("message without its grant", "grants/shape", {0: 20})
-    _, genv, gbody = signed({**kettle, **{4: 2}}, ROOT)
+        root_bad(name, rule, {**g, field: val})
+    bad("message without its grant", "grants/shape", {0: 20}, L)
+    _, genv, gbody = signed({**kettle, 4: 2}, ROOT)
     bad("grant signed by a key other than its signer's", "sig/verify",
-        message(enc([gbody, ADMIN.sign(LABELS["grant"], gbody)])))
+        message(enc([gbody, ADMIN.sign(LABELS["grant"], gbody)])), K)
 
     # Sequences: the grants one leaf receives in order, each checked against
-    # what the leaf kept from those it took before.
-    def step(name, g, signer, rule=None, admin=None):
-        _, genv, _ = signed(g, signer)
-        row = {"name": name, "message": enc(message(genv, admin)).hex(), "verdict": "refuse" if rule else "take"}
-        if rule:
-            row["rule"] = rule
-        return row
+    # what the leaf kept from those it took before. An admin grant after the
+    # first names the kept grant (field 18) unless the step says otherwise.
+    class Seq:
+        def __init__(self, name, leaf):
+            self.kept = None
+            self.row = {"name": name, "leaf": leaf.hex(), "steps": []}
+            sequences.append(self.row)
 
-    k1 = {**kettle, **{4: 1}}
-    k_a2 = {**kettle, **{4: 2, 12: [ADMIN2.key]}}
-    k_root1 = {**kettle, **{4: 1, 12: by_hash([ADMIN.key, ADMIN2.key])}}
-    k_root2 = {**kettle, **{4: 2, 12: [ADMIN2.key]}}
-    sequences.append({"name": "ordinary kettle", "steps": [
-        step("first grant from the admitting admin, admin counter 1", k1, ADMIN, admin=admin_record),
-        step("grant from a current commander drops the other admin, admin counter 2", k_a2, ADMIN2),
-        step("grant from an admin no longer among the commanders", {**kettle, **{4: 3}}, ADMIN,
-             "grants/signer", admin=admin_record),
-        step("same admin counter again from a commander", {**k_a2, **{16: T0 + 9001}}, ADMIN2, "grants/counter"),
-        step("root grant, root counter 1, below the admin counter 2", k_root1, ROOT),
-        step("root grant, root counter 2", k_root2, ROOT),
-        step("the old root grant replayed", k_root1, ROOT, "grants/counter"),
-        step("grant from a current commander made under root counter 2, admin counter 1",
-             {**k_a2, **{4: 1, 17: 2}}, ADMIN2),
-    ]})
+        def step(self, name, g, signer, rule=None, admin=None, replaces="kept"):
+            g = dict(g)
+            if replaces == "kept" and signer is not ROOT and self.kept is not None:
+                g[18] = sha(self.kept)
+            elif isinstance(replaces, bytes):
+                g[18] = sha(replaces)
+            _, genv, gbody = signed(g, signer)
+            r = {"name": name, "message": enc(message(genv, admin)).hex(), "verdict": "refuse" if rule else "take"}
+            if rule:
+                r["rule"] = rule
+            else:
+                self.kept = gbody
+            self.row["steps"].append(r)
+            return gbody
+
+    k1 = {**kettle, 4: 1}
+    k_a2 = {**kettle, 4: 2, 12: [ADMIN2.key]}
+    k_root1 = {**kettle, 4: 1, 12: by_hash([ADMIN.key, ADMIN2.key])}
+    k_root2 = {**kettle, 4: 2, 12: [ADMIN2.key]}
+    q = Seq("ordinary kettle", K)
+    q.step("first grant from the admitting admin, admin counter 1", k1, ADMIN, admin=admin_record)
+    q.step("grant from a current commander drops the other admin, admin counter 2", k_a2, ADMIN2)
+    q.step("grant from an admin no longer among the commanders", {**kettle, 4: 3}, ADMIN,
+           "grants/signer", admin=admin_record)
+    q.step("same admin counter again from a commander", {**k_a2, 16: T0 + 9001}, ADMIN2, "grants/counter")
+    q.step("root grant, root counter 1, below the admin counter 2", k_root1, ROOT)
+    q.step("root grant, root counter 2", k_root2, ROOT)
+    q.step("the old root grant replayed", k_root1, ROOT, "grants/counter")
+    q.step("grant from a current commander made under root counter 2, admin counter 1",
+           {**k_a2, 4: 1, 17: 2}, ADMIN2)
     # An admin grant names the root counter it was made under (field 17), so
     # one signed before a root grant never beats it, whatever its counter.
     both = by_hash([ADMIN.key, ADMIN2.key])
-    sequences.append({"name": "ordinary kettle, an admin grant held back past the root's", "steps": [
-        step("first grant from the admitting admin, admin counter 1", {**kettle, **{4: 1, 12: both}}, ADMIN,
-             admin=admin_record),
-        step("grant from a commander, admin counter 2", {**kettle, **{4: 2, 12: both}}, ADMIN2),
-        step("root grant without the removed admin, root counter 1", {**kettle, **{4: 1, 12: [ADMIN2.key]}}, ROOT),
-        step("a commander's grant at admin counter 3 made before the root grant, delivered late",
-             {**kettle, **{4: 3, 12: both}}, ADMIN2, "grants/counter"),
-        step("the same commander's grant made under root counter 1, admin counter 1",
-             {**kettle, **{4: 1, 12: [ADMIN2.key], 17: 1}}, ADMIN2),
-        step("a root grant that names a root counter", {**kettle, **{4: 2, 12: [ADMIN2.key], 17: 1}}, ROOT,
-             "grants/counter"),
-    ]})
-    sequences.append({"name": "guarded lock", "steps": [
-        step("root grant, root counter 3", lock, ROOT),
-        step("a commander of the lock signs it a grant", {**lock, **{4: 4}}, PHONE, "grants/guarded"),
-        step("root grant without guarded", {k: v for k, v in {**lock, **{4: 5}}.items() if k != 15}, ROOT,
-             "grants/guarded"),
-        step("root grant, root counter 6", {**lock, **{4: 6}}, ROOT),
-    ]})
+    q = Seq("ordinary kettle, an admin grant held back past the root's", K)
+    q.step("first grant from the admitting admin, admin counter 1", {**kettle, 4: 1, 12: both}, ADMIN,
+           admin=admin_record)
+    before_root = q.step("grant from a commander, admin counter 2", {**kettle, 4: 2, 12: both}, ADMIN2)
+    q.step("root grant without the removed admin, root counter 1", {**kettle, 4: 1, 12: [ADMIN2.key]}, ROOT)
+    q.step("a commander's grant at admin counter 3 made before the root grant, delivered late",
+           {**kettle, 4: 3, 12: both}, ADMIN2, "grants/counter", replaces=before_root)
+    q.step("the same commander's grant made under root counter 1, admin counter 1",
+           {**kettle, 4: 1, 12: [ADMIN2.key], 17: 1}, ADMIN2)
+    q.step("a root grant that names a root counter", {**kettle, 4: 2, 12: [ADMIN2.key], 17: 1}, ROOT,
+           "grants/counter")
+    # An admin grant names the grant it replaces (field 18), so an older
+    # admin grant held back is not taken after a newer one, whatever its
+    # counter.
+    three = by_hash([ADMIN.key, ADMIN2.key, ADMIN3.key])
+    q = Seq("ordinary kettle, an older admin grant held back", K)
+    first = q.step("first grant from the admitting admin, admin counter 1", {**kettle, 4: 1, 12: three}, ADMIN,
+                   admin=admin_record)
+    q.step("a commander drops an admin, admin counter 3", {**kettle, 4: 3, 12: by_hash([ADMIN2.key, ADMIN3.key])},
+           ADMIN2)
+    q.step("another commander's grant at admin counter 5 made on the first grant, delivered late",
+           {**kettle, 4: 5, 12: three}, ADMIN3, "grants/replaces", replaces=first)
+    q.step("a commander's grant that names no grant it replaces", {**kettle, 4: 6, 12: three}, ADMIN3,
+           "grants/replaces", replaces=None)
+    q.step("that commander's grant made on the current grant, admin counter 4",
+           {**kettle, 4: 4, 12: by_hash([ADMIN2.key, ADMIN3.key])}, ADMIN3)
+    q = Seq("guarded lock", L)
+    q.step("root grant, root counter 3", lock, ROOT)
+    q.step("a commander of the lock signs it a grant", {**lock, 4: 4}, PHONE, "grants/guarded")
+    q.step("root grant without guarded", {k: v for k, v in {**lock, 4: 5}.items() if k != 15}, ROOT,
+           "grants/guarded")
+    q.step("root grant, root counter 6", {**lock, 4: 6}, ROOT)
     # Who may send a leaf copies (owner 2026-11-11): an ordinary leaf takes
     # them from its readers, a guarded leaf only from its commanders.
     kettle, lock = take[0]["grant"], take[1]["grant"]
@@ -894,6 +962,19 @@ def copy_vector():
         "blob_key": hkdf(K, h, b"cbb copy blob v2").hex(),
         "W": W.hex(), "P": P.hex(), "sig": sig.hex(),
         "copy": enc(full).hex(), "reduced_copy_for_board": enc(reduced).hex(),
+        "refuse_copies": [
+            {"name": name, "rule": rule, "copy": enc(c).hex()}
+            for name, rule, c in [
+                ("three readers, no wraps", "copy/shape", {**full, 3: []}),
+                ("three readers, five wraps", "copy/shape", {**full, 3: wraps + wraps[:2]}),
+                ("reuse in the header", "copy/reuse", {**full, 1: enc({**hdr, 7: [sha(b"copy")[:16], 1]})}),
+                ("unknown critical field in the header", "form/critical", {**full, 1: enc({**hdr, 200: 1})}),
+                ("a header of readers only", "copy/shape", {**full, 1: enc({4: readers})}),
+                ("origin of 15 bytes", "copy/shape", {**full, 1: enc({**hdr, 2: LAPTOP.id16[:15]})}),
+                ("time [0, 0]", "copy/shape", {**full, 1: enc({**hdr, 3: [0, 0]})}),
+                ("readers that are numbers", "copy/readers", {**full, 1: enc({**hdr, 4: [1, 2, 3]})}),
+            ]
+        ],
         "refuse_readers": [
             {"name": name, "rule": "copy/readers", "copy": enc({**full, 1: enc({**hdr, 4: rs})}).hex()}
             for name, rs in [("readers out of order", list(reversed(readers))),
@@ -1081,7 +1162,7 @@ def main():
         "records.json": {"label": LABELS["record"], "take": rt, "refuse": rr},
         "statements.json": {"label": LABELS["keys"], "take": st, "refuse": sr},
         "commands.json": {"label": LABELS["command"], "take": ct, "refuse": cr},
-        "grants.json": {"label": LABELS["grant"], "take": gt, "refuse": gr, "copy_senders": gs, "sequences": gq},
+        "grants.json": {"label": LABELS["grant"], "group": GROUP.hex(), "take": gt, "refuse": gr, "copy_senders": gs, "sequences": gq},
         "credentials.json": {"label": LABELS["credential"], "take": kt, "refuse": kr},
         "frames.json": {"grid": "64, 256, 1024, 4096, 16384, then multiples of 16384",
                         "take": mv, "refuse": mb, "refuse_fields": mf,
@@ -1104,6 +1185,7 @@ def main():
     g = dec(bytes.fromhex(files["grants.json"]["take"][1]["message"]))
     g[2] = [g[2][0], twin(g[2][1])]
     files["grants.json"]["refuse"].append({"name": "high-S twin of the root's grant", "rule": "sig/low-s",
+                                           "leaf": files["grants.json"]["take"][1]["leaf"],
                                            "verdict": "refuse", "message": enc(g).hex()})
     c = dec(bytes.fromhex(files["copy.json"]["copy"]))
     c[6] = twin(c[6])

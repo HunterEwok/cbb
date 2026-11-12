@@ -15,13 +15,16 @@
 //! old root grant is never taken again. An admin grant names the root
 //! counter it was made under (field 17) and counts its own from 1 again
 //! after each root grant, so one made before a root grant never beats it.
+//! A later admin grant also names the grant it replaces (field 18, the
+//! SHA-256 of the kept grant's body), so an older one held back is never
+//! taken after a newer one.
 
 use alloc::vec::Vec;
 
 use super::cbor::{Value, is_set};
 use super::envelope::Envelope;
-use super::key::{Alg, DeviceId, Key, KeyHash};
-use super::{Rule, sig};
+use super::key::{Alg, DeviceId, GroupId, Key, KeyHash};
+use super::{Rule, sha256, sig};
 
 /// The largest grant body.
 pub const MAX_GRANT: usize = 2048;
@@ -45,6 +48,20 @@ pub const FIELD_GUARDED: u16 = 15;
 /// An admin grant's field of the root counter it was made under (absent:
 /// 0, before any root grant); a root grant has none.
 pub const FIELD_ROOT_COUNTER: u16 = 17;
+/// An admin grant's field of the grant it replaces: the SHA-256 of the
+/// body of the leaf's kept grant (every admin grant but the first).
+pub const FIELD_REPLACES: u16 = 18;
+/// The grant's field of its type (1).
+pub const FIELD_TYPE: u16 = 1;
+/// The grant's field of its group.
+pub const FIELD_GROUP: u16 = 2;
+/// The grant's field of its leaf's device ID.
+pub const FIELD_LEAF: u16 = 10;
+/// The fields of a grant below the optional zone (256): any other is a
+/// critical field this version does not know, and `signer2` (8) is one.
+pub const FIELDS: [u16; 14] = [1, 2, 3, 4, 6, 10, 11, 12, 13, 14, 15, 16, 17, 18];
+/// The longest lifetime of a guarded grant: 40 days.
+pub const MAX_LIFE_MS: u64 = 3_456_000_000;
 /// The most readers of a leaf.
 pub const MAX_READERS: usize = 4;
 /// The most commanders of a leaf.
@@ -53,7 +70,8 @@ pub const MAX_COMMANDERS: usize = 8;
 pub const FIELD_NEIGHBORS: u16 = 14;
 /// The most neighbours of a leaf.
 pub const MAX_NEIGHBORS: usize = 8;
-/// More than eight neighbours, or neighbours that are not a set.
+/// Neighbours that are not a list of at most eight key hashes (bytes 32)
+/// in a set.
 pub const RULE_NEIGHBORS: Rule = Rule::field("grants/neighbors");
 
 /// A guarded leaf's grant that a root did not sign, or a grant without
@@ -62,9 +80,11 @@ pub const RULE_GUARDED: Rule = Rule::field("grants/guarded");
 /// More than eight commanders, one that is not an ES256 Key, or commanders
 /// out of order.
 pub const RULE_COMMANDERS: Rule = Rule::field("grants/commanders");
-/// A lifetime in an ordinary leaf's grant.
+/// A lifetime in an ordinary leaf's grant, or a guarded grant's lifetime
+/// that is not an integer from 1 to 40 days.
 pub const RULE_LIFE: Rule = Rule::field("grants/life");
-/// More than four readers, or readers that are not a set.
+/// Readers that are not a list of at most four `[device ID, ES256 Key]` in
+/// a set.
 pub const RULE_READERS: Rule = Rule::field("grants/readers");
 /// An admin's first grant without the root's record of that admin key, or
 /// with one that does not make it an admin that admits.
@@ -76,6 +96,10 @@ pub const RULE_SIGNER: Rule = Rule::field("grants/signer");
 /// the admins'), an admin grant made under another root counter than the
 /// leaf's, or a root grant that names one.
 pub const RULE_COUNTER: Rule = Rule::field("grants/counter");
+
+/// An admin grant after the first that does not name the leaf's kept grant
+/// as the one it replaces, or a root grant or a first grant that names one.
+pub const RULE_REPLACES: Rule = Rule::field("grants/replaces");
 
 /// A commander: its key hash and its uncompressed point.
 pub type Commander = (KeyHash, [u8; 65]);
@@ -92,6 +116,8 @@ pub struct Kept {
     pub admin_counter: u64,
     /// The commanders of the current grant, sorted by key hash.
     pub commanders: Vec<Commander>,
+    /// The SHA-256 of the current grant's body.
+    pub grant_hash: [u8; 32],
 }
 
 impl Kept {
@@ -130,6 +156,7 @@ impl Granted<'_> {
             root_counter: if self.by_root { self.counter } else { b.root_counter },
             admin_counter: if self.by_root { 0 } else { self.counter },
             commanders: self.commanders.clone(),
+            grant_hash: sha256(&[self.grant.body]),
         }
     }
 }
@@ -177,23 +204,44 @@ fn commanders(map: &Value<'_>) -> Result<Vec<Commander>, Rule> {
 }
 
 /// Reads a grant from the map of message `grant` (or the Welcome's `grant`)
-/// for a leaf that keeps `kept` (None before its first grant): field 2 the
-/// grant envelope, 3 the root's record of the admin that signed a first
-/// grant. A root grant is checked with the root's uncompressed point and
-/// must be above the kept root counter. Any other grant is an ordinary
-/// leaf's: the first one signed by an admin key that the record in field 3
-/// makes an admin with `admit`, a later one by a commander of the kept
-/// grant, above the kept admin counter. Then the rules of the two kinds of
-/// leaf (design-small-device section 15): a lifetime only in a guarded
-/// grant; at most eight commanders and four readers. The grant's other
-/// fields are its reader's matter.
-pub fn read<'a>(msg: &Value<'a>, root: &[u8], kept: Option<&Kept>) -> Result<Granted<'a>, Rule> {
+/// for the leaf `leaf` of group `group` that keeps `kept` (None before its
+/// first grant): field 2 the grant envelope, 3 the root's record of the
+/// admin that signed a first grant.
+///
+/// The grant must be of type 1, for this group and this leaf, with no
+/// critical field this version does not know (`signer2` among them). A root
+/// grant is checked with the root's uncompressed point and must be above
+/// the kept root counter. Any other grant is an ordinary leaf's: the first
+/// one signed by an admin key that the record in field 3 makes an admin
+/// with `admit`; a later one by a commander of the kept grant, made under
+/// the kept root counter, above the kept admin counter, naming the kept
+/// grant as the one it replaces. Then the rules of the two kinds of leaf
+/// (design-small-device section 15): a lifetime only in a guarded grant and
+/// within 40 days; at most eight commanders, four readers
+/// `[device ID, Key]` and eight neighbours, each list a set.
+pub fn read<'a>(
+    msg: &Value<'a>,
+    root: &[u8],
+    leaf: &DeviceId,
+    group: &GroupId,
+    kept: Option<&Kept>,
+) -> Result<Granted<'a>, Rule> {
     let grant = Envelope::from_value(msg.get(FIELD_GRANT).ok_or(Rule::GRANTS_SHAPE)?)?;
     if grant.body.len() > MAX_GRANT {
         return Err(Rule::ENV_SIZE);
     }
-    let signer = grant.signer().and_then(Value::as_bytes).and_then(KeyHash::from_slice).ok_or(Rule::GRANTS_SHAPE)?;
     let map = &grant.map;
+    if map.as_map().unwrap_or(&[]).iter().any(|(k, _)| *k < 256 && !FIELDS.contains(k)) {
+        return Err(Rule::FORM_CRITICAL);
+    }
+    let bytes_of = |field| map.get(field).and_then(Value::as_bytes);
+    if map.get(FIELD_TYPE).and_then(Value::as_uint) != Some(1)
+        || bytes_of(FIELD_GROUP) != Some(group.0.as_slice())
+        || bytes_of(FIELD_LEAF) != Some(leaf.0.as_slice())
+    {
+        return Err(Rule::GRANTS_SHAPE);
+    }
+    let signer = grant.signer().and_then(Value::as_bytes).and_then(KeyHash::from_slice).ok_or(Rule::GRANTS_SHAPE)?;
     let counter = map.get(FIELD_COUNTER).and_then(Value::as_uint).ok_or(Rule::GRANTS_SHAPE)?;
     let guarded = match map.get(FIELD_GUARDED) {
         None => false,
@@ -207,11 +255,18 @@ pub fn read<'a>(msg: &Value<'a>, root: &[u8], kept: Option<&Kept>) -> Result<Gra
         Some(Value::Uint(0)) => return Err(Rule::FORM_DEFAULT),
         Some(v) => v.as_uint().ok_or(Rule::GRANTS_SHAPE)?,
     };
+    let replaces = match map.get(FIELD_REPLACES) {
+        None => None,
+        Some(v) => Some(v.as_bytes().filter(|b| b.len() == 32).ok_or(RULE_REPLACES)?),
+    };
     let mut admin = None;
     if by_root {
         grant.verify(root, sig::LABEL_GRANT)?;
         if map.get(FIELD_ROOT_COUNTER).is_some() || kept.is_some_and(|k| counter <= k.root_counter) {
             return Err(RULE_COUNTER);
+        }
+        if replaces.is_some() {
+            return Err(RULE_REPLACES);
         }
     } else {
         if guarded || was_guarded {
@@ -228,6 +283,9 @@ pub fn read<'a>(msg: &Value<'a>, root: &[u8], kept: Option<&Kept>) -> Result<Gra
                     return Err(RULE_ADMIN);
                 }
                 grant.verify(&key, sig::LABEL_GRANT)?;
+                if replaces.is_some() {
+                    return Err(RULE_REPLACES);
+                }
                 admin = Some(record);
             }
             Some(k) => {
@@ -236,21 +294,38 @@ pub fn read<'a>(msg: &Value<'a>, root: &[u8], kept: Option<&Kept>) -> Result<Gra
                 if counter <= k.admin_counter {
                     return Err(RULE_COUNTER);
                 }
+                if replaces != Some(k.grant_hash.as_slice()) {
+                    return Err(RULE_REPLACES);
+                }
             }
         }
     }
     if was_guarded && !guarded {
         return Err(RULE_GUARDED);
     }
-    if !guarded && map.get(FIELD_LIFE).is_some() {
-        return Err(RULE_LIFE);
+    match (guarded, map.get(FIELD_LIFE)) {
+        (_, None) => {}
+        (true, Some(Value::Uint(n))) if (1..=MAX_LIFE_MS).contains(n) => {}
+        _ => return Err(RULE_LIFE),
     }
     let commanders = commanders(map)?;
-    let set = |field, max| map.get(field).and_then(Value::as_array).is_some_and(|r| r.len() > max || !is_set(r));
-    if set(FIELD_READERS, MAX_READERS) {
+    let list = |field, rule| match map.get(field) {
+        None => Ok(&[][..]),
+        Some(v) => v.as_array().ok_or(rule),
+    };
+    let readers = list(FIELD_READERS, RULE_READERS)?;
+    let reader_ok = |r: &Value<'_>| match r.as_array() {
+        Some([Value::Bytes(id), k]) => {
+            id.len() == 16 && Key::from_value(k).is_ok_and(|k| k.alg == Alg::Es256 && k.check().is_ok())
+        }
+        _ => false,
+    };
+    if readers.len() > MAX_READERS || !is_set(readers) || !readers.iter().all(reader_ok) {
         return Err(RULE_READERS);
     }
-    if set(FIELD_NEIGHBORS, MAX_NEIGHBORS) {
+    let neighbors = list(FIELD_NEIGHBORS, RULE_NEIGHBORS)?;
+    let neighbor_ok = |n: &Value<'_>| n.as_bytes().is_some_and(|b| b.len() == 32);
+    if neighbors.len() > MAX_NEIGHBORS || !is_set(neighbors) || !neighbors.iter().all(neighbor_ok) {
         return Err(RULE_NEIGHBORS);
     }
     Ok(Granted { grant, admin, by_root, guarded, counter, commanders })
