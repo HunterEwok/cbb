@@ -427,8 +427,13 @@ def record_vectors():
     # names its list by hash; the list rides beside it
     listed = sorted(bytes.fromhex(t["id"]) for t in take if t["signer"] == ROOT.name)
     list_bytes = enc(listed)
+    # the new root's first checkpoint, signed before the head that names
+    # it (field 13): it keeps the whole list
+    _, first_body, _ = add("first checkpoint of root 2", ROOT2, 9,
+                           {10: [[ROOT.hash, *chain[ROOT.name]]], 11: listed},
+                           note="the head below names it; the head applies once its list and this are held")
     add("recovery head: the recovery key makes root 2 the root", RECOVERY, 13,
-        {10: ROOT2.key, 11: list_hash(list_bytes)},
+        {10: ROOT2.key, 11: list_hash(list_bytes), 13: sha(first_body)},
         note="the list (lists[0]) rides beside it, taken from anyone by its hash")
     lists.append({"name": "the list of the first head", "bytes": list_bytes.hex(),
                   "hash": list_hash(list_bytes).hex(), "ids": len(listed)})
@@ -437,8 +442,10 @@ def record_vectors():
     # listed (a fresh key leaves 12 out)
     admin_from = chain[ADMIN.name][0] + 1
     empty = enc([])
+    _, admin_first, _ = add("first checkpoint of the admin key as the root", ADMIN, 9,
+                            {10: [[ROOT.hash, *chain[ROOT.name]]]})
     add("recovery head: an admin key becomes the root, its root records from seq %d" % admin_from, RECOVERY, 13,
-        {10: ADMIN.key, 11: list_hash(empty), 12: admin_from},
+        {10: ADMIN.key, 11: list_hash(empty), 12: admin_from, 13: sha(admin_first)},
         note="the admin's records below field 12 count only if listed; this list (lists[1]) is empty")
     lists.append({"name": "the empty list of the second head", "bytes": empty.hex(),
                   "hash": list_hash(empty).hex(), "ids": 0})
@@ -625,18 +632,23 @@ def record_vectors():
         bad(name, rule, enc([body, signer.sign(LABELS["record"], body)]))
 
     some = list_hash(enc([]))
+    cp = sha(b"a first checkpoint")
     bad_signed("recovery head naming the recovery key as the root", "records/recovery/root", RECOVERY,
-               rec(RECOVERY, 2, 13, {10: RECOVERY.key, 11: some}))
+               rec(RECOVERY, 2, 13, {10: RECOVERY.key, 11: some, 13: cp}))
     bad_signed("recovery head at seq 17 (at most 16 for the group's life)", "records/recovery/seq", RECOVERY,
-               rec(RECOVERY, 17, 13, {10: Signer("root 17").key, 11: some}))
+               rec(RECOVERY, 17, 13, {10: Signer("root 17").key, 11: some, 13: cp}))
     bad_signed("recovery head without its list", "records/recovery/list", RECOVERY,
-               rec(RECOVERY, 2, 13, {10: Signer("root 3").key}))
+               rec(RECOVERY, 2, 13, {10: Signer("root 3").key, 13: cp}))
     bad_signed("recovery head with a list hash of 31 bytes", "records/recovery/list", RECOVERY,
-               rec(RECOVERY, 2, 13, {10: Signer("root 3").key, 11: some[:31]}))
+               rec(RECOVERY, 2, 13, {10: Signer("root 3").key, 11: some[:31], 13: cp}))
     bad_signed("recovery head with from 0 written (a fresh key leaves it out)", "form/default", RECOVERY,
-               rec(RECOVERY, 2, 13, {10: Signer("root 3").key, 11: some, 12: 0}))
+               rec(RECOVERY, 2, 13, {10: Signer("root 3").key, 11: some, 12: 0, 13: cp}))
     bad_signed("recovery head with from past the highest seq", "records/recovery/from", RECOVERY,
-               rec(RECOVERY, 2, 13, {10: Signer("root 3").key, 11: some, 12: 2**31}))
+               rec(RECOVERY, 2, 13, {10: Signer("root 3").key, 11: some, 12: 2**31, 13: cp}))
+    bad_signed("recovery head without the new root's first checkpoint", "records/recovery/first", RECOVERY,
+               rec(RECOVERY, 2, 13, {10: Signer("root 3").key, 11: some}))
+    bad_signed("recovery head with a first checkpoint ID of 31 bytes", "records/recovery/first", RECOVERY,
+               rec(RECOVERY, 2, 13, {10: Signer("root 3").key, 11: some, 13: cp[:31]}))
     return take, refuse, lists
 
 

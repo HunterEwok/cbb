@@ -190,10 +190,27 @@ impl Group {
 
     /// A head the recovery key signs at seq naming root, with prev the
     /// chain's record before it (or none) and the given list, whatever
-    /// the chain holds: for twins, old roots and edited lists.
+    /// the chain holds: for twins, old roots and edited lists. It names a
+    /// first checkpoint nobody signed, so it never applies by itself.
     fn head_at(&mut self, seq: u64, root: &str, list: &List) -> Record {
+        self.head_naming(seq, root, list, RecordId([0xf1; 32]))
+    }
+
+    /// The same, after root signs its first checkpoint (keeping the whole
+    /// list, naming the first root's head), which the head names: one
+    /// that applies. Returns the head and the checkpoint.
+    fn head_applying(&mut self, seq: u64, root: &str, list: &List) -> (Record, Record) {
+        let (rs, rid) = self.heads[&k("R").hash];
+        let first = self.sign(
+            root,
+            Kind::Checkpoint { heads: vec![Head { key: k("R").hash, seq: rs, id: rid }], keep: list.0.clone() },
+        );
+        (self.head_naming(seq, root, list, first.id()), first)
+    }
+
+    fn head_naming(&mut self, seq: u64, root: &str, list: &List, first: RecordId) -> Record {
         let prev = self.recs.iter().find(|r| r.body().signer == k("K").hash && r.body().seq + 1 == seq).map(|r| r.id());
-        let kind = Kind::Recovery { root: k(root).key, list: list.hash(), from: 0 };
+        let kind = Kind::Recovery { root: k(root).key, list: list.hash(), from: 0, first };
         let body = Body { group: self.group(), signer: k("K").hash, seq, prev, time_ms: 0, kind, held: false };
         let r = Record::sign(body, &k("K")).unwrap();
         self.lists.push(list.encode());
@@ -432,8 +449,8 @@ fn a_key_a_root_off_the_path_names_teaches_nothing() {
         ids.sort();
         ids
     });
-    let head = g.head_at(1, "NA", &list);
-    take(&mut m, &[&head, &named, &x], &g.lists);
+    let (head, first) = g.head_applying(1, "NA", &list);
+    take(&mut m, &[&head, &first, &named, &x], &g.lists);
     let s = m.state();
     assert_eq!(s.roots, roots(&["R", "NA"]));
     assert!(s.may_command(&k("X").hash) && has(&s, "D"));
@@ -611,7 +628,7 @@ fn a_list_of_the_replaced_root_alone_drops_the_first_roots_admins() {
     g.change("NK");
     let mut nk: Vec<RecordId> = g.recs.iter().filter(|r| r.body().signer == k("NK").hash).map(|r| r.id()).collect();
     nk.sort();
-    g.head_at(2, "NA", &List(nk));
+    g.head_applying(2, "NA", &List(nk));
     let s = g.member(&g.all()).state();
     assert_eq!(s.roots, roots(&["R", "NK", "NA"]));
     assert!(["A", "C", "W"].iter().all(|n| !s.may_command(&k(n).hash)));

@@ -127,7 +127,16 @@ impl G {
         let set = self.set();
         let list = set.change_list(&set.state());
         self.lists.push(list.encode());
-        self.rec(&k("recovery"), Kind::Recovery { root: new_root.key.clone(), list: list.hash(), from: 0 })
+        // The new root's first checkpoint, which the head names: it keeps
+        // the whole list and names the first root's head.
+        let (seq, id) = self.heads[&self.root.hash];
+        let first = self
+            .rec(
+                new_root,
+                Kind::Checkpoint { heads: vec![Head { key: self.root.hash, seq, id }], keep: list.0.clone() },
+            )
+            .id();
+        self.rec(&k("recovery"), Kind::Recovery { root: new_root.key.clone(), list: list.hash(), from: 0, first })
     }
 
     fn seen(&self) -> Vec<Seen> {
@@ -692,7 +701,12 @@ fn the_joiner_sees_a_fork_in_its_welcome() {
             seq: 1,
             prev: None,
             time_ms: 0,
-            kind: Kind::Recovery { root: k("root n9").key.clone(), list: [7; 32], from: 0 },
+            kind: Kind::Recovery {
+                root: k("root n9").key.clone(),
+                list: [7; 32],
+                from: 0,
+                first: RecordId([0xf1; 32]),
+            },
             held: false,
         };
         Record::sign(body, &k("recovery")).unwrap()
@@ -727,7 +741,7 @@ fn the_joiner_does_not_join_over_a_head_it_cannot_read() {
         seq: 1,
         prev: None,
         time_ms: 0,
-        kind: Kind::Recovery { root: k("root n1").key.clone(), list: [5; 32], from: 0 },
+        kind: Kind::Recovery { root: k("root n1").key.clone(), list: [5; 32], from: 0, first: RecordId([0xf1; 32]) },
         held: false,
     };
     let encoded = body.encode();

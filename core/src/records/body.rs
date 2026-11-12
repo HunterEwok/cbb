@@ -189,11 +189,15 @@ pub enum Kind {
     /// stay (`List`), which rides beside the record, and `from`, the seq at
     /// which the new root's own records start: 0 (absent) for a fresh key;
     /// for a key that signed before (an admin's), its records below `from`
-    /// count only if the list names them.
+    /// count only if the list names them. `first` (field 13) names the
+    /// new root's first checkpoint: the head applies only once the device
+    /// holds its list and that checkpoint, verified with `root`, so the
+    /// new root never shows without its phone and the owner's choice.
     Recovery {
         root: Key,
         list: [u8; 32],
         from: u64,
+        first: RecordId,
     },
     /// A type of a later version: held.
     Unknown(u64),
@@ -561,12 +565,13 @@ impl Body {
                 m.push((10, Value::Array(hubs.iter().map(|d| Value::Bytes(&d.0)).collect())));
                 m.push((11, seen(s)));
             }
-            Kind::Recovery { root, list, from } => {
+            Kind::Recovery { root, list, from, first } => {
                 m.push((10, root.to_value()));
                 m.push((11, Value::Bytes(list)));
                 if *from != 0 {
                     m.push((12, Value::Uint(*from)));
                 }
+                m.push((13, Value::Bytes(&first.0)));
             }
             Kind::Unknown(_) => {}
         }
@@ -639,7 +644,8 @@ impl Body {
                 let root = Key::read(r.need(10, f("root"))?)?;
                 let list = r.need(11, f("list"))?.as_bytes().and_then(|b| <[u8; 32]>::try_from(b).ok());
                 let from = r.opt_uint(12, 0, f("from"))?;
-                (Kind::Recovery { root, list: list.ok_or(f("list"))?, from }, &[10, 11, 12], &[])
+                let first = r.need(13, f("first"))?.as_bytes().and_then(RecordId::from_slice).ok_or(f("first"))?;
+                (Kind::Recovery { root, list: list.ok_or(f("list"))?, from, first }, &[10, 11, 12, 13], &[])
             }
             n if RETIRED_TYPES.contains(&n) => return Err(Rule::new("records/retired")),
             n => (Kind::Unknown(n), &[], &[]),

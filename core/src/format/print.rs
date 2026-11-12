@@ -197,7 +197,7 @@ fn record_field(typ: u64, k: u16) -> Option<&'static str> {
         9 => ["heads", "keep"].get(i).copied(),
         10 => ["hubs", "seen"].get(i).copied(),
         11 | 12 => ["admin"].get(i).copied(),
-        13 => ["root", "list", "from"].get(i).copied(),
+        13 => ["root", "list", "from", "first"].get(i).copied(),
         _ => None,
     }
 }
