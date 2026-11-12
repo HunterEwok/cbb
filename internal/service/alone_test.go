@@ -764,12 +764,24 @@ func phoneOnLinux(t *testing.T, bin string, args ...string) (next func(prefix st
 	if err := app.Start(); err != nil {
 		t.Fatal(err)
 	}
+	// The end of its input ends it, as an exit, so that a build with
+	// instrument-coverage writes what it ran; a kill if it does not.
+	exited := make(chan struct{})
 	t.Cleanup(func() {
 		stdin.Close()
-		app.Process.Kill()
-		app.Wait()
+		select {
+		case <-exited:
+		case <-time.After(5 * time.Second):
+			app.Process.Kill()
+			<-exited
+		}
 	})
 	lines := make(chan string, 64)
+	go func() {
+		// The process alone, not its pipes, which the scanner below reads.
+		app.Process.Wait()
+		close(exited)
+	}()
 	go func() {
 		sc := bufio.NewScanner(out)
 		for sc.Scan() {

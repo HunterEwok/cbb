@@ -2894,3 +2894,72 @@ fn next_image() {
     want("next image without a part", &r, 1, "CBBERR the copy's parts did not come as said", "");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// cbb global entries: the signed entry points shown, given as a string
+/// or a QR code, and taken from one.
+#[test]
+fn global_entries() {
+    const HELD: &[u8] = br#"{"entries":{"body":"eyJzZXEiOiAzLCAiZXhwaXJlc19tcyI6IDE4OTM0NTYwMDAwMDAsICJmb3J3YXJkZXJzIjogW3sibmFtZSI6ICJmdzEiLCAidmxlc3MiOiBbeyJzZXJ2ZXJfbmFtZSI6ICJzLmV4YW1wbGUiLCAicG9ydCI6IDQ0MywgInBhdGgiOiAiL3AifV19XX0="}}"#;
+    // The string of HELD, as export gives it.
+    let dir = tempdir("entries");
+    let r = run_in(&dir, &["global", "entries"], "", json!({}), HELD);
+    want("entries", &r, 0, "Signed entry points 3, valid until 2030-01-01", "");
+    assert!(r.stdout.contains("  the forwarder fw1\n    over VLESS: XHTTP at s.example, port 443, /p"), "{}", r.stdout);
+    let r = run_in(&dir, &["global", "entries", "export"], "", json!({}), HELD);
+    want("entries export", &r, 0, "cbb-entries:", "");
+    let s = r.stdout.trim().to_string();
+    let r = run_in(&dir, &["global", "entries", "export", "-qr"], "", json!({}), HELD);
+    assert_eq!(r.code, 0, "{}", r.stderr);
+    assert!(r.stdout.lines().count() > 10, "{}", r.stdout);
+    let r = run_in(&dir, &["global", "entries", "import", &s], "", json!({}), b"");
+    want("entries import", &r, 0, "The signed entry points check out", "");
+    let imported = r.sent.iter().find(|m| m.op() == "entries").expect("no entries request");
+    let v: Value = serde_json::from_slice(&imported.payload).unwrap();
+    assert_eq!(v, serde_json::from_slice::<Value>(HELD).unwrap());
+    for (bad, why) in [
+        ("entries:abc", "that is not a string of signed entry points"),
+        ("cbb-entries:!!!", "is damaged"),
+        ("cbb-entries:WzFd", "is damaged"), // [1], not an object
+    ] {
+        let r = run_in(&dir, &["global", "entries", "import", bad], "", json!({}), b"");
+        want(bad, &r, 1, "", why);
+    }
+    let r = run_in(&dir, &["global", "entries"], "", json!({}), b"not json");
+    want("entries undecodable", &r, 1, "", "do not decode");
+    let r = run_in(&dir, &["global", "entries"], "", json!({}), br#"{"entries":{"body":"e30="}}"#);
+    want("entries without fields", &r, 0, "Signed entry points 0", "");
+    let r = run_in(&dir, &["global", "entries", "nonsense"], "", json!({}), b"");
+    want("entries usage", &r, 2, "", "cbb global entries export");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// cbb update's settings in a rootless install, whose user owns the
+/// updater's folder: where updates come from, and what installed this copy.
+#[test]
+fn update_settings_rootless() {
+    let dir = tempdir("update-rootless");
+    let state = dir.join("xdg-state");
+    let env = [("CBB_ROOTLESS", "1"), ("XDG_STATE_HOME", state.to_str().unwrap())];
+    let run = |args: &[&str]| run_with(&dir, args, "", always(json!({}), b""), &env);
+    let r = run(&["update", "-mirror"]);
+    want("-mirror", &r, 0, "Updates come from GitHub, or https://dl.cbb.tools when GitHub does not answer.", "");
+    let r = run(&["update", "-mirror", "https://example.org/cbb/"]);
+    want("-mirror URL", &r, 0, "", "");
+    let r = run(&["update", "-mirror"]);
+    want("-mirror after", &r, 0, "Updates come from https://example.org/cbb.", "");
+    let r = run(&["update", "-mirror", "http://example.org/cbb"]);
+    want("-mirror http", &r, 1, "", "");
+    let r = run(&["update", "-mirror", "default"]);
+    want("-mirror default", &r, 0, "", "");
+    let r = run(&["update", "-mirror"]);
+    want("-mirror back", &r, 0, "Updates come from GitHub", "");
+    let r = run(&["update", "-auto"]);
+    want("-auto unset", &r, 0, "unset", "");
+    let r = run(&["update", "-installed-by", "brew"]);
+    want("-installed-by brew", &r, 0, "", "");
+    let r = run(&["update", "-auto", "on"]);
+    want("-auto on from brew", &r, 1, "", "this copy came from brew, which updates it");
+    let saved = std::fs::read_to_string(state.join("cbb-update/update.json")).unwrap();
+    assert!(saved.contains("\"brew\""), "{saved}");
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -9,6 +9,7 @@ use std::io::Write;
 use std::net::{Ipv6Addr, SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use super::keys::Keys;
@@ -164,7 +165,16 @@ pub fn command(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) 
     let every = std::env::var("CBB_RELAY_STATS_MS").ok().and_then(|v| v.parse::<u64>().ok()).filter(|n| *n > 0);
     let tick = Duration::from_millis(every.unwrap_or(1000));
     let mut ticks = 0u64;
-    while !relay.stopped() {
+    // SIGTERM and SIGINT end it as an exit, not a kill: systemd's stop
+    // returns at once, and a build with instrument-coverage writes what it
+    // ran (CI's coverage of the Go tests that run it).
+    #[cfg(unix)]
+    // SAFETY: the handler only stores to an atomic.
+    unsafe {
+        libc::signal(libc::SIGTERM, on_signal as *const () as libc::sighandler_t);
+        libc::signal(libc::SIGINT, on_signal as *const () as libc::sighandler_t);
+    }
+    while !relay.stopped() && !STOP.load(Ordering::SeqCst) {
         std::thread::sleep(tick);
         ticks += 1;
         if every.is_some() || debug && ticks.is_multiple_of(60) {
@@ -174,6 +184,14 @@ pub fn command(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) 
         }
     }
     0
+}
+
+/// Set by SIGTERM or SIGINT: the relay ends.
+static STOP: AtomicBool = AtomicBool::new(false);
+
+#[cfg(unix)]
+extern "C" fn on_signal(_: libc::c_int) {
+    STOP.store(true, Ordering::SeqCst);
 }
 
 #[cfg(test)]
