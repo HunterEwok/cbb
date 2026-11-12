@@ -2849,3 +2849,33 @@ fn a_root_s_checkpoints_never_push_out_its_removals() {
     let s = g.state();
     assert!(removed.iter().all(|(d, r)| s.counting.contains(&r.id()) && s.revoked.contains(d)));
 }
+
+/// A root's removal of a claimant, by its admin key or its device's
+/// member key: one that saw the claim cancels it; one that did not came
+/// before and voids it; one that saw records of the claim's new root came
+/// after the takeover and cancels nothing.
+#[test]
+fn a_root_s_removal_of_a_claimant_cancels_or_voids() {
+    let all = POWER_ADMIT | POWER_REMOVE | POWER_TAKEOVER;
+    let (pa, a, n) = (k("phone a"), k("admin a"), k("new root"));
+    let case = |key: &K, saw_claim: bool, saw_new_root: bool| {
+        let mut g = G::new();
+        g.admin(&pa, &a, all);
+        g.device(&k("root"), &k("laptop"), "laptop", |_| {});
+        let before = g.seen();
+        let claim = g.rec(&a, Kind::Claim { root: n.key.clone(), seen: before.clone() });
+        g.device(&n, &k("new phone"), "new phone", |d| d.holds_root = true);
+        let mut seen = if saw_claim { g.seen() } else { before };
+        if !saw_new_root {
+            seen.retain(|s| s.key != n.hash);
+        }
+        g.root_rec(Kind::Revoke(removal(&[key.hash], seen)));
+        let s = state_of(&g.root.key, &g.recs, &BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]));
+        s.claims.iter().find(|c| c.record == claim.id()).map(|c| c.state)
+    };
+    for key in [&a, &pa] {
+        assert_eq!(case(key, true, false), Some(ClaimState::Cancelled));
+        assert_eq!(case(key, false, false), Some(ClaimState::Void));
+        assert_eq!(case(key, true, true), Some(ClaimState::Effective));
+    }
+}

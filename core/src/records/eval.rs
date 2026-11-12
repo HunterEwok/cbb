@@ -2017,14 +2017,25 @@ impl<'e, 'a> Epoch<'e, 'a> {
 
     fn decide_claims(&mut self, held_ms: &BTreeMap<RecordId, u64>) -> Option<(KeyHash, Cut)> {
         let mut delay = self.settings.delay_ms();
+        // The current root cancels a claim with a resolve of it, or with a
+        // removal of its claimant (either key of the device) that saw the
+        // claim; a removal that did not see it came before and voids it
+        // (below, by its cut). A removal that saw records of the claim's
+        // new root came after the takeover and cancels nothing.
         let cancelled = |c: usize| {
-            let c = self.r(c);
+            let rc = self.r(c);
+            let keys = self.with_pair(&rc.b().signer);
+            let new_root = rc.claim().map(|(root, _)| root.hash());
             self.of(&self.cur).iter().any(|&i| {
                 let r = self.r(i);
                 self.root_record(i)
                     && match &r.b().kind {
-                        Kind::Resolve(ids) => ids.binary_search(&c.id).is_ok(),
-                        Kind::Revoke(rm) => rm.keys.binary_search(&c.b().signer).is_ok(),
+                        Kind::Resolve(ids) => ids.binary_search(&rc.id).is_ok(),
+                        Kind::Revoke(rm) => {
+                            keys.iter().any(|k| rm.keys.binary_search(k).is_ok())
+                                && self.e.saw(i, c)
+                                && !new_root.is_some_and(|n| self.of(&n).iter().any(|&j| self.e.saw(i, j)))
+                        }
                         _ => false,
                     }
             })
