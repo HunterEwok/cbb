@@ -3,8 +3,8 @@
 
 For engineers and anyone binding the Rust core into another program: the one call through
 which every program uses the core's rules (`cbb_core::api`, `core/src/api.rs`). Every
-program reaches it through the same C functions of `ffi/`: the phone kits link them, Go
-through cgo or wasm. The rules themselves are in
+program reaches it through the same C functions of `ffi/`, which the phone kits link; the Go
+programs do not link it. The rules themselves are in
 [records-v2.md](records-v2.md).
 
 ## Requests and answers
@@ -37,7 +37,7 @@ bytes, also bytes that are not a request. A change an older caller would misread
 `cbb_call` takes the request's bytes and returns the answer's, which the caller gives back
 with `cbb_free`; `cbb_abi` gives the ABI. `ffi/bind.sh` builds the library for the
 phones. The Swift kit links it as the module `CCbbCore` (`Core.swift`), the Kotlin kit loads
-`libcbb_ffi` through JNA (`Core.kt`); both check the ABI before each call, as Go does.
+`libcbb_ffi` through JNA (`Core.kt`); both check the ABI before each call.
 
 Built with the feature `join` (only the Aurora app's library, `bind.sh aurora`), the library
 also lets a phone join by its QR code with a key the core does not hold, the Aurora app's key
@@ -483,12 +483,11 @@ most the records records-v2.md allows. `group_view` answers:
 release files in section 16, manifests in section 7): the strict form of signed bodies, then
 each field against its row. A release file's body is refused above 256 KiB, as its envelope
 allows. It checks the body alone; the signature, the signer and the time are the caller's, or
-`group_command`'s for a command. Go calls it in a build that links the core, as the release
-builds do, and decodes the fields from the bytes it checked; a build without the core reads the
-bodies with Go's own code, which the strict vectors keep the same. The phone kits call it for
+`group_command`'s for a command. Go reads the bodies with its own code, which the strict vectors
+keep the same. The phone kits call it for
 each command, credential and release file they take. A manifest comes inside a copy's sealed
 Content, in the canonical form, and `open_copy` reads it there for the phones; Go reads it with
-`clip.ParseManifest`, which asks `parse_body` first in a build that links the core, and the kits'
+`clip.ParseManifest`, and the kits'
 `Media.Manifest.parse` asks it for a manifest given as bytes.
 
 `seal_command` seals a command's orders to its receiver (protocol.md, section 15, "Sealed
