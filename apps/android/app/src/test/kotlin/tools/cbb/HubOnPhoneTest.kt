@@ -59,6 +59,7 @@ class HubOnPhoneTest {
                 override val secret = ByteArray(16)
                 override val expires = 0L
                 override fun admitted() {}
+                override fun dialed(port: Int) = true
                 override fun close() {}
             }
         }

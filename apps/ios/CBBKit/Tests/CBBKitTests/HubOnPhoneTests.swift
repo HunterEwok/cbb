@@ -42,6 +42,7 @@ final class HubOnPhoneTests: XCTestCase {
     final class Guest: HubGuest, @unchecked Sendable {
         let text = "cbb://invite#x", secret = Data(count: 16), expires = Date()
         func admitted() {}
+        func dialed(port: UInt16) -> Bool { true }
         func close() {}
     }
 

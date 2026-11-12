@@ -44,6 +44,11 @@
 //! - `guest_admitted` with `id` and `guest`: the window admitted the device,
 //!   whose connections now go to the member port, for a day at most;
 //!   `guest_close` with `id` and `guest` drops the guest;
+//! - `guest_dialed` with `id`, `guest` and `port`: `{"through"}`, whether
+//!   the connection that reached the app's pairing window from the loopback
+//!   port `port` is one the hub made for that guest. The window takes only
+//!   those: another app on the phone can reach its loopback port too, and
+//!   its attempts would count against the invitation;
 //! - `hub_set_records` with `id` and `records`: the group's authority
 //!   records the next registration with the forwarder carries;
 //! - `hub_set_project_ways` with `id` and `ways`: the hub's forwarder is
@@ -185,6 +190,12 @@ enum Request {
     GuestClose {
         id: u64,
         guest: u64,
+    },
+    GuestDialed {
+        id: u64,
+        guest: u64,
+        /// The port on the loopback address the connection came from.
+        port: u16,
     },
     HubSetRecords {
         id: u64,
@@ -518,6 +529,14 @@ impl RunningHub {
         Ok(json!({ "guest": guest, "text": text, "secret": b64(&secret), "expires": expires }))
     }
 
+    /// Whether the hub made the connection from the loopback port `port`
+    /// for the guest `guest`, while the guest's time lasts.
+    fn dialed_for(&self, guest: u64, port: u16) -> bool {
+        let Some(from) = self.hub.tunnel_addr(port) else { return false };
+        let Ok(g) = self.guests.lock() else { return false };
+        g.get(&guest).is_some_and(|g| g.peer.addr == from && g.peer.until.is_none_or(|u| u > Instant::now()))
+    }
+
     /// Changes the guests, then gives the hub its peers again.
     fn guests_then(&self, f: impl FnOnce(&mut HashMap<u64, Guest>)) -> Result<Value> {
         {
@@ -597,6 +616,10 @@ fn handle(request: &[u8]) -> Result<Value> {
             r.guests_then(|g| {
                 g.remove(&guest);
             })
+        }),
+        Request::GuestDialed { id, guest, port } => hubs(|t| {
+            let r = t.get(&id).ok_or_else(|| Error::msg(format!("there is no hub {id}")))?;
+            Ok(json!({ "through": r.dialed_for(guest, port) }))
         }),
         Request::HubStatus { id } => hubs(|t| {
             let r = t.get(&id).ok_or_else(|| Error::msg(format!("there is no hub {id}")))?;
@@ -993,6 +1016,41 @@ mod tests {
         ] {
             assert!(refused_with(relay_start(&req, no_sign, no_event, 0)), "{name}");
         }
+    }
+
+    /// The pairing window learns which connections the hub made for its
+    /// guest: one through the invitation's guest tunnel is, one another
+    /// program makes to the window's loopback port is not.
+    #[test]
+    fn the_window_tells_the_hubs_connections_from_others() {
+        use std::io::Write;
+        use std::net::{TcpListener, TcpStream};
+        let window = TcpListener::bind("127.0.0.1:0").unwrap();
+        let window_port = window.local_addr().unwrap().port();
+        let h = ok(json!({"op": "hub_start", "key": ok(json!({"op": "new_key"}))["key"].clone(),
+            "device": DeviceId::random().to_string(), "member_port": 1, "clients": [], "listen": "127.0.0.1:0"}));
+        let (hub, udp) = (h["id"].as_u64().unwrap(), h["udp_port"].as_u64().unwrap());
+        let group = "0123456789abcdef";
+        let inv = ok(json!({"op": "hub_invite", "id": hub, "group": group, "endpoints": [format!("127.0.0.1:{udp}")],
+            "lifetime": 600, "guest_port": window_port}));
+        let guest = inv["guest"].as_u64().unwrap();
+        let g = ok(json!({"op": "guest_start", "invite": inv["text"]}));
+        let mut through = TcpStream::connect(("127.0.0.1", g["port"].as_u64().unwrap() as u16)).unwrap();
+        through.write_all(b"hello").unwrap();
+        let (_in, from) = window.accept().unwrap();
+        let dialed = |port: u16, guest: u64| {
+            ok(json!({"op": "guest_dialed", "id": hub, "guest": guest, "port": port}))["through"].clone()
+        };
+        assert_eq!(dialed(from.port(), guest), true, "the hub's connection for its guest");
+        assert_eq!(dialed(from.port(), guest + 1000), false, "for another guest");
+        let other = TcpStream::connect(("127.0.0.1", window_port)).unwrap();
+        let (_in2, from2) = window.accept().unwrap();
+        assert_eq!(from2.port(), other.local_addr().unwrap().port());
+        assert_eq!(dialed(from2.port(), guest), false, "another program's connection");
+        ok(json!({"op": "guest_close", "id": hub, "guest": guest}));
+        assert_eq!(dialed(from.port(), guest), false, "a guest that is gone");
+        ok(json!({"op": "stop", "id": g["id"]}));
+        ok(json!({"op": "hub_stop", "id": hub}));
     }
 
     /// Stopping a tunnel ends a connection in use and closes its port.

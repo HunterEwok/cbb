@@ -12,12 +12,18 @@ import java.time.Instant
  * address, where the phone's hub joins the connections of the invitation's
  * guest tunnel, and runs each attempt with admit, one at a time. It admits
  * one device once, until expires, and ends after three failed attempts;
- * onEnd gets the admitted device, or why it ended without one.
+ * onEnd gets the admitted device, or why it ended without one. Another app
+ * on the phone can reach the loopback port too: a connection that fromGuest
+ * says the hub did not make for the invitation's guest is closed after the
+ * TLS handshake, before any pairing message, and neither counts nor keeps
+ * the window busy.
  */
 class InvitationWindow(
     key: PrivateKey,
     memberCert: ByteArray,
     private val expires: Instant,
+    /** Whether the connection from this loopback port came through the invitation's guest tunnel (RustTunnel.Guest.dialed). */
+    private val fromGuest: (Int) -> Boolean,
     /** Runs the exchange (PhoneGroup.admit with the invitation): the connection, the joiner's certificate, the session ID. */
     private val admit: (TLSTransport, ByteArray, ByteArray) -> PairingMember.Admitted,
     private val onEnd: (Result<PairingMember.Admitted>) -> Unit,
@@ -26,6 +32,9 @@ class InvitationWindow(
 ) {
     /** Why the window ended without a device. */
     class Ended(message: String, val code: Pairing.ErrorCode) : Exception(message)
+
+    /** A connection the hub did not make for the guest, closed before any pairing message. */
+    class NotFromGuest : Exception("a connection to the invitation's window did not come through its guest tunnel")
 
     private val listener = TLSListener(0, Pairing.ALPN, key, listOf(memberCert), TLSTransport.LOOPBACK) { it.isNotEmpty() }
     private val expiry = Thread({
@@ -67,6 +76,11 @@ class InvitationWindow(
             handshake(TLSTransport.HANDSHAKE_TIMEOUT_MS)
         } catch (e: Exception) {
             onError(e)
+            return
+        }
+        if (!fromGuest(t.remotePort)) {
+            onError(NotFromGuest())
+            t.close()
             return
         }
         val joiner = t.peerCertificate

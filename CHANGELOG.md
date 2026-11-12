@@ -1583,6 +1583,20 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The phone apps hold their keys and data tighter. iPhone: "Sync clipboard" from Siri or a
+  shortcut and the Control Center switch run only on an unlocked phone, and the shortcut's
+  answer names the device a copy came from but not the copy; the root and admin keys sign
+  without asking only in the minutes after Face ID while the app stays at the front; the
+  group's file and the recovery sheet state their file protection. Android: the share sheet
+  and the clipboard read only what another app's provider hands over; the questions before
+  sending hide windows drawn over them and ignore taps through them; nothing of the app goes
+  into a backup or a transfer to a new phone; the Quick Settings tile asks to unlock first;
+  the launch extra `ShowErrorDetails` counts in debug builds only (the switch in Settings
+  stays); a release build does not sign with a group key that a debug build made without the
+  screen lock. A remote invitation's pairing window on a phone hub takes only the connections
+  its hub made for the invitation (docs/protocol.md, section 12). Aurora: the join QR code's
+  text reaches the log in debug builds only. The core's C functions all stop a panic, and
+  `cbb_qr_read` refuses a frame size that overflows before it reads the frame.
 - The README leads with what Copy Beyond Borders is in one sentence, sums up its status in
   three lines (the full table moved to docs/parity.md, "On real devices") and lists what it
   also does. The keyboards, the TV remotes, the Nano ESP32 and the ZX Spectrum Next are on

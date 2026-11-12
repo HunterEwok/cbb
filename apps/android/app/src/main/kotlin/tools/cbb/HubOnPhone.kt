@@ -139,6 +139,8 @@ interface HubGuest {
     val expires: Long
     /** The window admitted the device: its first member connection goes to the member port. */
     fun admitted()
+    /** Whether the hub made the window's connection from this loopback port for the guest. */
+    fun dialed(port: Int): Boolean
     fun close()
 }
 
@@ -176,6 +178,7 @@ object CoreHubTunnels : HubTunnels {
                     override val secret: ByteArray = g.secret
                     override val expires: Long = g.expires
                     override fun admitted() = g.admitted()
+                    override fun dialed(port: Int) = g.dialed(port)
                     override fun close() = g.close()
                 }
             }

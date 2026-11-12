@@ -83,13 +83,18 @@ object Keys {
      * The signer of the root or admin key under alias, made now when there
      * is none, whose every signature asks the user through authorize. A key
      * made without authentication (a debug build on a phone without a
-     * screen lock) signs without asking. Throws OldKey for a key that an
-     * earlier version made.
+     * screen lock) signs without asking in a debug build only: a release
+     * build of the same signature installed over it does not sign with it
+     * and throws OldKey, so the phone sets the group up again. Throws
+     * OldKey for a key that an earlier version made, too.
      */
     fun loadOrCreateAuthorized(context: Context, alias: String, groupTag: String = "", authorize: (Signature) -> Signature): KeystoreSigner {
         val k = loadOrCreate(context, alias, groupTag)
         val info = info(k)
-        if (!info.isUserAuthenticationRequired) return k
+        if (!info.isUserAuthenticationRequired) {
+            if (isDebuggable(context)) return k
+            throw OldKey()
+        }
         if (isOld(info)) throw OldKey()
         return KeystoreSigner(k.privateKey, k.publicKeyDER, authorize)
     }

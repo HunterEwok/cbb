@@ -161,7 +161,8 @@ they look, so both apps are built to the same plan.
    a heading, the notifications, the watch, the recovery key on the root, the switch
    "Advanced settings", leaving the group, and about (seven taps on the version show the
    switch "Show error details", which puts the error itself under each error message; it is
-   on in debug builds, and the launch argument or extra `ShowErrorDetails` sets it too).
+   on in debug builds, and the launch argument `ShowErrorDetails` sets it too; Android takes the
+   extra in debug builds only, since any app can start the activity with one).
    The advanced ones: why it does not sync (below), away from home (the hub, moving it to a
    computer, "Strict networks": two switches, for networks that block VPNs (AmneziaWG) and for
    networks that let only the web through (VLESS), the blind relay) and, for admins, the group ("Copy lifetime", "Security level": root,

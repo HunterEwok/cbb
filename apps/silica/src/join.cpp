@@ -122,10 +122,14 @@ void Join::start(const QString &name, const QString &os, const QByteArray &publi
         m_modules.append(row.toString());
     Errors::log(QStringLiteral("join: listening as %1 on %2").arg(made.value(QStringLiteral("device")).toString(),
                                                                    QString::fromLatin1(QJsonDocument(addrs).toJson(QJsonDocument::Compact))));
-    // With the details on, the QR code's text goes to the log too, so that a
-    // test can admit the phone without a camera; it holds the one-time code.
+    // In a debug build with the details on, the QR code's text goes to the
+    // log too, so that a test can admit the phone without a camera. It
+    // holds the one-time code, and the log goes into bug reports, so a
+    // release build never writes it, whatever the switch says.
+#ifdef QT_DEBUG
     if (Errors::showDetails())
         Errors::log(QStringLiteral("join: QR: %1").arg(m_qr));
+#endif
     setState(QStringLiteral("listening"));
 }
 

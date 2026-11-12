@@ -174,7 +174,11 @@ pub unsafe extern "C" fn cbb_qr_read(
     if gray.is_null() {
         return core::ptr::null_mut();
     }
-    let len = stride.saturating_mul(height.saturating_sub(1)).saturating_add(width);
+    // The length is checked before a slice is made of gray: one that
+    // overflows, or passes what a slice can hold, is refused here.
+    let Some(len) = qr::frame_len(width, height, stride) else {
+        return to_c(guard::answer(qr::refused), answer_len);
+    };
     // SAFETY: the caller gives that many readable bytes at gray.
     let frame = unsafe { core::slice::from_raw_parts(gray, len) };
     to_c(guard::answer(|| qr::read(frame, width, height, stride)), answer_len)
@@ -357,7 +361,7 @@ pub unsafe extern "C" fn cbb_join_announce(j: *mut join::Join, port: u16) -> i32
 pub unsafe extern "C" fn cbb_join_answered(j: *const join::Join) -> i32 {
     // SAFETY: as the function's contract says.
     let Some(j) = (unsafe { j.as_ref() }) else { return 0 };
-    i32::from(j.answered())
+    i32::from(guard::or(|| false, || j.answered()))
 }
 
 /// Frees a joiner; null does nothing.
@@ -432,7 +436,7 @@ pub unsafe extern "C" fn cbb_restore(
     }
     // SAFETY: the caller gives len readable bytes at request.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
-    to_c(restore::restore(req, sign, ctx as usize), answer_len)
+    to_c(guard::answer(|| restore::restore(req, sign, ctx as usize)), answer_len)
 }
 
 /// Asks the member: `request` is `{"op", "args"}` (src/member.rs,
@@ -620,7 +624,7 @@ pub unsafe extern "C" fn cbb_invite_new(
     let Some(m) = (unsafe { m.as_ref() }) else { return core::ptr::null_mut() };
     // SAFETY: the caller gives len readable bytes at request.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
-    let (i, ans) = m.invite(req, sign, ctx as usize);
+    let (i, ans) = guard::or(|| (None, guard::panicked()), || m.invite(req, sign, ctx as usize));
     // SAFETY: the caller gives a writable pointer at answer.
     unsafe { answer.write(to_c(ans, answer_len)) };
     i.map_or(core::ptr::null_mut(), |i| Box::into_raw(Box::new(i)))
@@ -646,7 +650,7 @@ pub unsafe extern "C" fn cbb_invite_next(
 ) -> *mut u8 {
     // SAFETY: as the function's contract says.
     let Some(i) = (unsafe { i.as_ref() }) else { return core::ptr::null_mut() };
-    to_c(i.next(version, timeout_ms), answer_len)
+    to_c(guard::answer(|| i.next(version, timeout_ms)), answer_len)
 }
 
 /// Answers whether to admit the device the state's `joining` names: `yes`
@@ -660,7 +664,7 @@ pub unsafe extern "C" fn cbb_invite_next(
 pub unsafe extern "C" fn cbb_invite_answer(i: *const invite::Invite, yes: i32) {
     // SAFETY: as the function's contract says.
     if let Some(i) = unsafe { i.as_ref() } {
-        i.answer(yes != 0);
+        guard::or(|| (), || i.answer(yes != 0));
     }
 }
 
@@ -677,7 +681,7 @@ pub unsafe extern "C" fn cbb_invite_answer(i: *const invite::Invite, yes: i32) {
 pub unsafe extern "C" fn cbb_invite_free(i: *mut invite::Invite) {
     if !i.is_null() {
         // SAFETY: i is a box cbb_invite_new let go of.
-        drop(unsafe { Box::from_raw(i) });
+        guard::or(|| (), || drop(unsafe { Box::from_raw(i) }));
     }
 }
 
@@ -876,6 +880,12 @@ mod tests {
             assert!(cbb_qr_read(frame.as_ptr(), w, h, stride, core::ptr::null_mut()).is_null());
             // A stride narrower than the width is refused, not read.
             let got = error(cbb_qr_read(frame.as_ptr(), w, 1, w - 1, &mut n), n);
+            assert!(got.get("error").is_some(), "{got}");
+            // A size whose length overflows is refused before a slice is
+            // made of the pointer, so no byte of it is read.
+            let got = error(cbb_qr_read(frame.as_ptr(), w, h, usize::MAX, &mut n), n);
+            assert!(got.get("error").is_some(), "{got}");
+            let got = error(cbb_qr_read(frame.as_ptr(), w, 2, isize::MAX as usize, &mut n), n);
             assert!(got.get("error").is_some(), "{got}");
         }
         let req = b"{not json";
