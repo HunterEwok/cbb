@@ -455,11 +455,12 @@ module records_v3 {
     // A head takes its first checkpoint along if the set got it before; a first checkpoint goes
     // beside the chain once its head is held. Either may apply the change.
     if (isChain(r)) applyChain({ ...s, chain: s.chain.union(Set(r.id)) }, db)
-    // A halted set (a fork of the recovery chain) takes recovery records only.
-    else if (chainState(s, db).stop) s
     else {
       val isFirst = recsOf(s.chain, db).exists(h => namesFirst(h, r))
-      storeOne(if (isFirst) applyChain(s, db) else s, r, db)
+      // A halted set (a fork of the recovery chain) takes recovery records only, a head's
+      // first checkpoint among them.
+      if (chainState(s, db).stop) (if (isFirst) applyChain(s, db) else s)
+      else storeOne(if (isFirst) applyChain(s, db) else s, r, db)
     }
   }
   // A head that may extend the set's chain: it follows the chain's records below its seq and
@@ -1305,6 +1306,15 @@ module records_v3 {
       .then(offerEveryone(20))
       .then(compactAt("c"))
       .then(syncAll)
+      .expect(promises)
+  // A twin head at seq 1 halts the set; the twin's first checkpoint, which comes after,
+  // still goes beside the chain, so the set's path is the one its chain gives.
+  run haltedTakesTwinFirstTest = init
+      .then(recoverAs(RECOVERY, "NA"))
+      .then(sign("R", "admin", "X", "phone", 0, false, false, 1))
+      .then(sign("NA", "checkpoint", "", "", 0, false, false, 2))
+      .then(offerEveryone(7))
+      .then(signChain(RECOVERY, "recover", "NA", 1, "literal"))
       .expect(promises)
   run recoveryChangesRootTest =
     init
