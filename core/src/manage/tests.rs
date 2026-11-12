@@ -411,3 +411,34 @@ fn an_admin_peer_needs_a_real_admin_ca() {
     // The real thing: the admin CA from the root, which issued the leaf.
     assert!(g.rs.admin_peer(dev.as_str(), &[leaf(&g.admin_ca, &*g.admin_key), g.admin_ca.clone()]));
 }
+
+/// The root records what an attestation showed once, takes a revoked one
+/// back to "hardware", and an admin records none.
+#[test]
+fn the_root_records_what_an_attestation_shows() {
+    let mut g = group();
+    let s = Signer { ca: &g.root, key: &*g.root_key, me: &g.root_phone };
+    let key = g.rs.devices().into_iter().find(|d| d.id == g.admin_phone).unwrap().key;
+    let device = |rs: &Records, id: &str| rs.devices().into_iter().find(|d| d.id == id).unwrap();
+    let proven = Attested { store: "proven", kind: "android-tee", proof: "ab" };
+    // Another key than the record's: nothing yet.
+    assert!(evidence(&g.rs, &s, &g.admin_phone, &certs::random_bytes(), &proven, now_ms()).unwrap().is_none());
+    let r = evidence(&g.rs, &s, &g.admin_phone, &key, &proven, now_ms()).unwrap().unwrap();
+    assert!(g.rs.add(&r).unwrap());
+    let d = device(&g.rs, &g.admin_phone);
+    assert_eq!((d.store.as_str(), d.kind.as_str(), d.proof.as_str()), ("proven", "android-tee", "ab"));
+    assert!(d.admin_key.is_some() && !d.powers.is_empty(), "the admin keeps its powers");
+    assert!(evidence(&g.rs, &s, &g.admin_phone, &key, &proven, now_ms()).unwrap().is_none(), "said already");
+
+    // Revoked: back to hardware with the kind it had.
+    let revoked = Attested { store: "hardware", kind: "", proof: "" };
+    let r = evidence(&g.rs, &s, &g.admin_phone, &key, &revoked, now_ms()).unwrap().unwrap();
+    assert!(g.rs.add(&r).unwrap());
+    let d = device(&g.rs, &g.admin_phone);
+    assert_eq!((d.store.as_str(), d.kind.as_str()), ("hardware", "android-tee"));
+    assert!(evidence(&g.rs, &s, &g.admin_phone, &key, &revoked, now_ms()).unwrap().is_none(), "proven no more");
+
+    let a = Signer { ca: &g.admin_ca, key: &*g.admin_key, me: &g.admin_phone };
+    let laptop_key = device(&g.rs, &g.laptop).key;
+    assert!(evidence(&g.rs, &a, &g.laptop, &laptop_key, &proven, now_ms()).is_err());
+}

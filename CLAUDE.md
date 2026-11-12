@@ -106,7 +106,7 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
 - The Rust workspace (`Cargo.toml` at the top, its crates beside `cmd/` and `internal/`): `member/` is
   `cbb` in Rust, the service and command line on computers and small devices: joins by a QR code,
   a member like the others, whose capabilities (`-caps`: `admin`, `dials`, `hub`) say what it does (mDNS TXT `r=listen` without `dials`). Its protocol core is the crate `core/` (`cbb_core`: `certs`,
-  `command` (the commands' bodies), `authority` (records `v:2` and their evaluation, docs/protocol.md section 10), `group` (the set of records `v:2` a member keeps), `api` (the one entry point, docs/core-api.md), `clip`, `hlc`, `wire`, `pair`, `identity`, `store`, `keyboard` (the layouts' keys), `rule` (which incoming copies are written), `vless` (VLESS and XHTTP's bytes for cbb's tunnel), CPace under `src/third_party`, the
+  `command` (the commands' bodies), `attest` (Android Key Attestation, with `web`), `authority` (records `v:2` and their evaluation, docs/protocol.md section 10), `group` (the set of records `v:2` a member keeps), `api` (the one entry point, docs/core-api.md), `clip`, `hlc`, `wire`, `pair`, `identity`, `store`, `keyboard` (the layouts' keys), `rule` (which incoming copies are written), `vless` (VLESS and XHTTP's bytes for cbb's tunnel), CPace under `src/third_party`, the
   interop vectors, and with the `tls` feature `tls`: rustls unbuffered with a RustCrypto
   provider, the peer checks, a sans-I/O `Session`, the pairing exporter from the key log;
   with `web` also `tls::web`, RSA and P-384 for a public site's certificate):

@@ -139,6 +139,8 @@ pub struct Member {
     servers: Arc<std::sync::OnceLock<Arc<crate::credentials::Credentials>>>,
     /// What gets the messages the member does not take itself: the app's.
     app_messages: Arc<RwLock<Option<OnMessage>>>,
+    #[cfg(feature = "tunnel")]
+    attest: Arc<crate::phone_attest::Attestations>,
 }
 
 /// How often the server credentials are looked at when nothing changed,
@@ -256,9 +258,21 @@ impl Member {
         // itself once it serves the servers, the rest to the app.
         let servers: Arc<std::sync::OnceLock<Arc<crate::credentials::Credentials>>> = Arc::default();
         let app_messages: Arc<RwLock<Option<OnMessage>>> = Arc::default();
+        #[cfg(feature = "tunnel")]
+        let attest = Arc::new(crate::phone_attest::Attestations::new(&state_dir));
         {
             let (servers, app, away, n) = (servers.clone(), app_messages.clone(), away.clone(), Arc::downgrade(&node));
+            #[cfg(feature = "tunnel")]
+            let attest = attest.clone();
             node.on_message(Box::new(move |from, m| {
+                // The evidence an Android peer sends waits for the root key
+                // (src/phone_attest.rs); the app sees it too.
+                #[cfg(feature = "tunnel")]
+                if let (Some(v), "evidence", Some(node)) = (m.evidence.as_ref(), m.kind.as_str(), n.upgrade())
+                    && let Some(leaf) = node.chain_of(from).into_iter().next()
+                {
+                    attest.received(from, leaf, v);
+                }
                 if let (Some(creds), Some(node)) = (servers.get(), n.upgrade()) {
                     if let (Some(v), "credentials") = (m.credentials.as_ref(), m.kind.as_str()) {
                         creds.received(&node, from, v);
@@ -288,6 +302,8 @@ impl Member {
             state_dir,
             servers,
             app_messages,
+            #[cfg(feature = "tunnel")]
+            attest,
         })
     }
 
@@ -945,6 +961,42 @@ impl Member {
             return Err(Error::msg("the group's records did not take the change; the log says why"));
         }
         Ok(())
+    }
+
+    /// Takes the revocation list of Android attestations the app fetched
+    /// from the mirror (keys.json and attest-status.json), when it checks
+    /// out; it answers how many certificates it revokes.
+    #[cfg(feature = "tunnel")]
+    pub fn attest_status(&self, keys: cbb_core::release::File, status: cbb_core::release::File) -> Result<usize> {
+        self.attest.take_status(keys, status, &|line| self.node.logf(line))
+    }
+
+    /// How many Android peers' evidence waits for the root key.
+    #[cfg(feature = "tunnel")]
+    pub fn attest_pending(&self) -> usize {
+        self.attest.pending()
+    }
+
+    /// Records, as the root that s signs for, what the evidence that waits
+    /// shows; it answers how many records it signed.
+    #[cfg(feature = "tunnel")]
+    pub fn attest_record(&self, s: &Signer) -> Result<usize> {
+        self.attest.record(&self.node, s)
+    }
+
+    #[cfg(not(feature = "tunnel"))]
+    pub fn attest_status(&self, _: cbb_core::release::File, _: cbb_core::release::File) -> Result<usize> {
+        Err(Error::msg("this library checks no attestations"))
+    }
+
+    #[cfg(not(feature = "tunnel"))]
+    pub fn attest_pending(&self) -> usize {
+        0
+    }
+
+    #[cfg(not(feature = "tunnel"))]
+    pub fn attest_record(&self, _: &Signer) -> Result<usize> {
+        Err(Error::msg("this library checks no attestations"))
     }
 
     /// Claims the group for new_root (DER), a root CA for a new key of the

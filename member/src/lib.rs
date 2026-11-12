@@ -72,6 +72,8 @@ mod pastehelper;
 pub mod peer;
 mod peripheral;
 pub mod phone;
+#[cfg(feature = "tunnel")]
+mod phone_attest;
 mod piv;
 pub mod records;
 #[cfg(feature = "tunnel")]

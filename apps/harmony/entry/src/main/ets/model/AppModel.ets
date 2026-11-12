@@ -53,6 +53,7 @@ interface ManageAnswer {
   result?: CommandResult;
   root_ca?: string;
   renewed?: number;
+  recorded?: number;
   below?: string[];
   text?: string;
   modules?: string[];
@@ -515,6 +516,14 @@ export class AppModel {
     const a = await this.runManage('renew', '', {} as Record<string, Object>, undefined, true);
     if (a !== undefined && (a.renewed ?? 0) > 0) {
       Errors.log(`renew: renewed ${a.renewed} member certificates`);
+    }
+    // The root records what the Android phones' attestations show
+    // (docs/protocol.md, section 17), with the revocation list.
+    if (this.isRoot() && await this.member.attestPending() > 0) {
+      const r = await this.runManage('attest', '', {} as Record<string, Object>, undefined, true);
+      if (r !== undefined && (r.recorded ?? 0) > 0) {
+        Errors.log(`attest: recorded what ${r.recorded} attestations show`);
+      }
     }
     // The root key signs the next period of the group's server keys
     // (docs/protocol.md, section 18) when it is due.

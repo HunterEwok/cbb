@@ -995,6 +995,10 @@ settings, why it does not sync and the lab.
   the server and period keys in HUKS; the root phone signs the next period of the group's
   server credentials (docs/protocol.md, section 18) with the root key when it renews the
   certificates, after the face, fingerprint or PIN.
+- **Attestations**: as on the iPhone, the root phone checks the attestation an Android phone
+  sends of its member key, with the revocation list the app fetches from the mirror once a
+  day, and records whether its keys are proven in hardware (docs/protocol.md, section 17); the
+  core checks it (`cbb_core::attest`) when the root key signs the certificates' renewals.
 - **The lab's Bluetooth keyboard**: the app serves HID over GATT (`@ohos.bluetooth.ble`, a
   GATT server and its advertising) with the core's report map and reports, as Aurora does
   through BlueZ; a TV, a tablet or a computer pairs with the phone, which the system confirms,

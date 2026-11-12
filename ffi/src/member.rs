@@ -892,6 +892,17 @@ impl Member {
                 Ok(json!({ "away": n.away_status() }))
             }
             "servers" => Ok(json!({ "period_due": n.period_due() })),
+            // The revocation list of Android attestations the app fetched,
+            // and how many peers' evidence waits for the root key.
+            "attest_status" => {
+                let file = |k: &str| -> Result<cbb_core::release::File> {
+                    serde_json::from_value(arg(&a, k).clone())
+                        .map_err(|_| Error::msg(format!("the revocation list's {k} does not decode")))
+                };
+                let revoked = n.attest_status(file("keys")?, file("status")?)?;
+                Ok(json!({ "revoked": revoked, "pending": n.attest_pending() }))
+            }
+            "attest" => Ok(json!({ "pending": n.attest_pending() })),
             // The phone joined by a remote invitation and stored its
             // identity: sync away from home goes on, and the member offers
             // its tunnel key to the hub through the invitation's guest
@@ -1140,6 +1151,12 @@ impl Member {
                 "resolve" => self.node.change(&s, "", &Change::Resolve(a.records.clone()))?,
                 "make_admin" => self.node.make_admin(&s, &a.device, a.allow_file_key)?,
                 "renew" => return Ok(json!({ "renewed": self.node.renew(&s)? })),
+                // The root records what the Android peers' evidence shows
+                // (member/src/phone_attest.rs).
+                "attest" => {
+                    let recorded = self.node.attest_record(&s)?;
+                    return Ok(json!({ "recorded": recorded, "pending": self.node.attest_pending() }));
+                }
                 "take_over" => self.node.claim(&s, How::From(&a.device), new_root()?)?,
                 "take_handed_over" => self.node.claim(&s, How::HandedOver, new_root()?)?,
                 "recover" => self.node.claim(&s, How::Recovery, new_root()?)?,

@@ -10,6 +10,7 @@
 
 import cbb, { Handle } from 'libcbb_napi.so';
 import { pasteboard } from '@kit.BasicServicesKit';
+import { http } from '@kit.NetworkKit';
 import { cryptoFramework } from '@kit.CryptoArchitectureKit';
 import { fileIo } from '@kit.CoreFileKit';
 import { image } from '@kit.ImageKit';
@@ -164,6 +165,18 @@ interface Away {
 interface Servers {
   period_due?: boolean;
 }
+
+interface Attest {
+  pending?: number;
+  revoked?: number;
+}
+
+// The mirror of Google's revocation list of Android attestations, signed
+// with the project's release keys (docs/protocol.md, section 17).
+const ATTEST_MIRROR: string = 'https://cbb.tools/attest/';
+const ATTEST_EVERY_MS: number = 24 * 3600 * 1000;
+// A signed file of the mirror is far smaller.
+const ATTEST_MAX: number = 2 * 1024 * 1024;
 
 interface AwayAnswer {
   away?: Away;
@@ -689,6 +702,51 @@ export class Member {
     Errors.log(on ? `member: this phone is a hub of the group, through ${forwarder}` : 'member: this phone is no hub any more');
     this.readAway(a.ok.away);
     return undefined;
+  }
+
+  private attestFetched: number = 0;
+
+  // On the root: fetches the revocation list of Android attestations from
+  // the mirror at most once a day and hands it to the member, which checks
+  // it with the release keys; then answers how many Android peers'
+  // evidence waits for the root key (member/src/phone_attest.rs).
+  async attestPending(): Promise<number> {
+    if (Date.now() - this.attestFetched >= ATTEST_EVERY_MS) {
+      this.attestFetched = Date.now();
+      const keys = await this.fetchJson('keys.json');
+      const status = keys !== undefined ? await this.fetchJson('attest-status.json') : undefined;
+      if (keys !== undefined && status !== undefined) {
+        const a = await this.call<Attest>('attest_status', { 'keys': keys, 'status': status } as Record<string, Object>);
+        if (a.ok === undefined) {
+          Errors.log(`attest: the revocation list was not taken: ${(a.failure as Failure).details}`);
+        }
+      }
+    }
+    const a = await this.call<Attest>('attest');
+    return a.ok?.pending ?? 0;
+  }
+
+  private async fetchJson(name: string): Promise<Object | undefined> {
+    const req = http.createHttp();
+    try {
+      const r = await req.request(ATTEST_MIRROR + name, {
+        method: http.RequestMethod.GET,
+        expectDataType: http.HttpDataType.STRING,
+        connectTimeout: 15000,
+        readTimeout: 15000
+      });
+      const body = r.result as string;
+      if (r.responseCode !== 200 || body.length > ATTEST_MAX) {
+        Errors.log(`attest: ${name} from the mirror: HTTP ${r.responseCode}`);
+        return undefined;
+      }
+      return JSON.parse(body) as Object;
+    } catch (e) {
+      Errors.log(`attest: ${name} from the mirror: ${(e as Error).message}`);
+      return undefined;
+    } finally {
+      req.destroy();
+    }
   }
 
   // Meets the group at the blind relay at relay whose key's pin is key
