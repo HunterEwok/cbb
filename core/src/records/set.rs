@@ -63,9 +63,9 @@ pub struct RecordSet {
     /// The takeovers' cuts of the roots before the promoted ones (`compact`):
     /// such a root keeps nothing off its cut.
     cuts: BTreeMap<KeyHash, Seen>,
-    /// The checkpoint that counted when the set last compacted: what it
-    /// prunes is not taken again.
-    checkpoint: Option<(Vec<Head>, BTreeSet<RecordId>)>,
+    /// The checkpoints that counted when the set last compacted: what
+    /// they prune is not taken again.
+    checkpoints: Vec<(Vec<Head>, BTreeSet<RecordId>)>,
     records: BTreeMap<RecordId, Entry>,
     bytes: usize,
 }
@@ -83,7 +83,7 @@ impl RecordSet {
             counted: Vec::new(),
             pending: Vec::new(),
             cuts: BTreeMap::new(),
-            checkpoint: None,
+            checkpoints: Vec::new(),
             records: BTreeMap::new(),
             bytes: 0,
         }
@@ -140,8 +140,8 @@ impl RecordSet {
         let Some((key, role)) = self.keys.signer(&r.body().signer) else { return Err(Refused::UnknownSigner) };
         let held = r.verify(key).map_err(Refused::Broken)?;
         let signer = r.body().signer;
-        if self.checkpoint.as_ref().is_some_and(|(heads, anchors)| eval::pruned_by(&r, heads, anchors)) {
-            // The counting checkpoint left it out.
+        if self.checkpoints.iter().any(|(heads, anchors)| eval::pruned_by(&r, heads, anchors)) {
+            // A counting checkpoint left it out.
             return Ok(Added::NoRoom);
         }
         if let Some(cut) = self.cuts.get(&signer) {
@@ -337,7 +337,7 @@ impl RecordSet {
     /// The group's state. held_ms is how long the device has held each
     /// claim (rule 7).
     pub fn state(&self, held_ms: &BTreeMap<RecordId, u64>) -> State {
-        let state = eval::evaluate_checked(
+        eval::evaluate_checked(
             &self.root,
             self.checked(),
             BTreeMap::new(),
@@ -345,8 +345,7 @@ impl RecordSet {
             &self.counted,
             &self.promoted,
             &self.cuts,
-        );
-        state
+        )
     }
 
     /// The claims the member has counted, which its caller keeps across
@@ -437,7 +436,7 @@ impl RecordSet {
         Ok(())
     }
 
-    /// Drops what the counting checkpoint of state leaves out: a root's
+    /// Drops what the counting checkpoints of state leave out: a root's
     /// checkpoint resets the set's count.
     ///
     /// It also gives the roots state put on the path after the first a
@@ -468,15 +467,18 @@ impl RecordSet {
         let promoted: BTreeSet<KeyHash> = state.roots.iter().skip(1).copied().collect();
         let cuts: BTreeMap<KeyHash, Seen> = state.cuts.iter().map(|c| (c.key, *c)).collect();
         self.keep_by(promoted, cuts);
-        self.checkpoint = None;
-        let Some(cp) = state.checkpoint else { return 0 };
-        let Some(Kind::Checkpoint { heads, keep }) = self.get(&cp).map(|r| r.body().kind.clone()) else { return 0 };
-        let anchors = eval::anchors_of(&heads, &keep);
-        self.checkpoint = Some((heads.clone(), anchors.clone()));
+        self.checkpoints = state
+            .checkpoints
+            .iter()
+            .filter_map(|cp| match self.get(cp).map(|r| &r.body().kind) {
+                Some(Kind::Checkpoint { heads, keep }) => Some((heads.clone(), eval::anchors_of(heads, keep))),
+                _ => None,
+            })
+            .collect();
         let drop: Vec<RecordId> = self
             .records
             .values()
-            .filter(|e| eval::pruned_by(&e.record, &heads, &anchors))
+            .filter(|e| self.checkpoints.iter().any(|(heads, anchors)| eval::pruned_by(&e.record, heads, anchors)))
             .map(|e| e.record.id())
             .collect();
         for id in &drop {

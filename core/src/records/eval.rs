@@ -242,8 +242,11 @@ pub struct State {
     /// Held records a current root or admin signed: update to apply them.
     pub newer: Vec<RecordId>,
     pub ignored: Vec<Ignored>,
-    /// The root's checkpoint that counts.
+    /// The root's checkpoint that counts: the last of checkpoints.
     pub checkpoint: Option<RecordId>,
+    /// The roots' checkpoints that count, in the order of the path, at
+    /// most one for each root: a member drops what each leaves out.
+    pub checkpoints: Vec<RecordId>,
     pub hubs: Vec<DeviceId>,
     /// The current root's newest settings that count, or the defaults.
     pub settings: Settings,
@@ -687,37 +690,40 @@ pub(crate) fn evaluate_checked(
     let group_root = root.hash();
     let full = Evaluation::new(root, checked.clone(), failed.clone(), BTreeSet::new(), promoted, cuts, counted);
     // The set a root's checkpoint prunes is evaluated as if the member had
-    // dropped what it leaves out; the checkpoint that counts is the newest
-    // that still counts there.
-    let mut best: Option<((usize, u64, RecordId), State)> = None;
+    // dropped what it leaves out. The roots' checkpoints are taken in the
+    // order of the path, each the newest of its root within its cut, as a
+    // member that compacted under each root in turn took them: one counts
+    // when it still counts in the set the ones before it pruned.
     let plain = full.run(held_ms, counted);
-    for c in full.checkpoints(&plain.path, &plain.cuts) {
+    let mut cands = full.checkpoints(&plain.path, &plain.cuts);
+    cands.sort_by_key(|&c| full.recs.get(c).map(|x| plain.on_path.get(&x.b().signer).copied().unwrap_or(0)));
+    let mut kept: Vec<Checked> = checked.clone();
+    let mut anchors_all: BTreeSet<RecordId> = BTreeSet::new();
+    let mut applied: Vec<RecordId> = Vec::new();
+    let mut best: Option<State> = None;
+    for c in cands {
         let Some(x) = full.recs.get(c) else { continue };
         let (Kind::Checkpoint { heads, keep }, id) = (&x.b().kind, x.id) else { continue };
         let anchors = anchors_of(heads, keep);
-        let pruned: Vec<Checked> = checked.iter().copied().filter(|c| !pruned_by(c.r, heads, &anchors)).collect();
-        let pruned = still_known(root, promoted, counted, pruned);
-        let e = Evaluation::new(root, pruned, failed.clone(), anchors, promoted, cuts, counted);
+        let mut all = anchors_all.clone();
+        all.extend(anchors.iter().copied());
+        let pruned: Vec<Checked> = kept.iter().copied().filter(|c| !pruned_by(c.r, heads, &anchors)).collect();
+        let known = still_known(root, promoted, counted, pruned.clone());
+        let e = Evaluation::new(root, known, failed.clone(), all.clone(), promoted, cuts, counted);
         let ep = e.run(held_ms, counted);
         let Some(i) = e.recs.iter().position(|r| r.id == id) else { continue };
         if !ep.root_record(i) {
             continue;
         }
-        let key = (ep.on_path.get(&x.b().signer).copied().unwrap_or(0), x.b().seq, id);
-        let better = match &best {
-            None => true,
-            Some((b, _)) => key.0 > b.0 || key.0 == b.0 && (key.1 > b.1 || key.1 == b.1 && key.2 < b.2),
-        };
-        if better {
-            let mut state = ep.finish();
-            state.checkpoint = Some(id);
-            best = Some((key, state));
-        }
+        applied.push(id);
+        let mut state = ep.finish();
+        state.checkpoint = Some(id);
+        state.checkpoints = applied.clone();
+        best = Some(state);
+        kept = pruned;
+        anchors_all = all;
     }
-    let mut state = match best {
-        Some((_, state)) => state,
-        None => plain.finish(),
-    };
+    let mut state = best.unwrap_or_else(|| plain.finish());
     state.group = DeviceId::of(&group_root);
     state
 }

@@ -2287,7 +2287,7 @@ mod differential {
     }
 
     proptest! {
-        #![proptest_config(ProptestConfig { cases: 48, failure_persistence: None, ..ProptestConfig::default() })]
+        #![proptest_config(ProptestConfig { cases: 96, failure_persistence: None, ..ProptestConfig::default() })]
 
         /// A set's state is evaluate's state of the records it keeps and
         /// the claims it counted, and of all the records with those claims,
