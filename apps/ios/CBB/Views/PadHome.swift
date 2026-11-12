@@ -42,6 +42,12 @@ struct PadHome: View {
         }
         .navigationSplitViewStyle(.balanced)
         .background { shortcuts }
+        // The sidebar stands while the window is wide, as in landscape, and
+        // folds away when it narrows, as in portrait; between the two the
+        // user's own choice holds.
+        .onGeometryChange(for: Bool.self) { $0.size.width >= 1100 } action: { wide in
+            columns = wide ? .all : .detailOnly
+        }
         // Another section closes the card, and Arrange mode, of the last.
         .onChange(of: section) { _, _ in
             selected = nil

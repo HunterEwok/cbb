@@ -166,6 +166,9 @@ struct DeviceDetailView: View {
                 }
             }
             .accessibilityElement(children: .combine)
+            // The name takes the room before the buttons do, so that a
+            // short one never breaks.
+            .layoutPriority(1)
             Spacer()
             if model.isAdmin { menu(d) }
             if let close {
