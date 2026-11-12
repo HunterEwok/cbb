@@ -327,4 +327,104 @@ mod tests {
         assert!(RECENT.lock().unwrap().iter().any(|l| l == "a line"));
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    fn fresh(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("cbb-bugs-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn remember_keeps_the_last_lines_cut_at_a_character() {
+        let long = "й".repeat(cbb_core::bug::MAX_LINE);
+        remember(&long);
+        {
+            let r = RECENT.lock().unwrap();
+            let kept = r.iter().find(|l| l.starts_with('й')).unwrap();
+            assert!(kept.len() <= cbb_core::bug::MAX_LINE && kept.chars().all(|c| c == 'й'));
+        }
+        for i in 0..LINES + 3 {
+            remember(&format!("line {i}"));
+        }
+        let r = RECENT.lock().unwrap();
+        assert!(r.len() <= LINES);
+        assert!(r.iter().any(|l| l == &format!("line {}", LINES + 2)));
+        assert!(!r.iter().any(|l| l == "line 0"));
+    }
+
+    #[test]
+    fn the_hook_writes_what_broke_and_where() {
+        let dir = fresh("hook");
+        remember("before the panic");
+        install(&dir);
+        let r = std::thread::Builder::new()
+            .name("breaker".into())
+            .spawn(|| std::panic::panic_any(String::from("the test breaks")))
+            .unwrap()
+            .join();
+        let _ = std::panic::take_hook();
+        assert!(r.is_err());
+        let v: Value = serde_json::from_slice(&std::fs::read(dir.join(PANIC_FILE)).unwrap()).unwrap();
+        let details = v["details"].as_str().unwrap();
+        assert!(details.starts_with("panic: the test breaks at "), "{details}");
+        assert!(details.ends_with(" in thread breaker"), "{details}");
+        assert!(v["log"].as_array().unwrap().iter().any(|l| l == "before the panic"), "{v}");
+        let b = Bugs::new(&dir);
+        assert!(b.waiting());
+        let (d, _) = b.pending().unwrap();
+        assert_eq!(d, details);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_report_that_cannot_go_waits_and_goes_again_at_the_start() {
+        let dir = fresh("queue");
+        let b = Bugs::new(&dir);
+        // An address that refuses: curl fails, and the report waits.
+        b.send("fp", "0.6.0", "{\"sealed\":1}", "https://127.0.0.1:1/");
+        let st = b.state();
+        assert_eq!(st["queue"][0]["fingerprint"], "fp", "{st}");
+        // A panic this build cannot seal is skipped at the start, and the
+        // waiting report is tried again and still waits.
+        std::fs::write(dir.join(PANIC_FILE), r#"{"details":"panic: at the start"}"#).unwrap();
+        let lines = Mutex::new(Vec::<String>::new());
+        b.start(&[], &|l: &str| lines.lock().unwrap().push(l.to_string()));
+        assert!(!b.waiting());
+        assert!(lines.lock().unwrap().iter().any(|l| l.contains("reported for this version before")));
+        assert_eq!(b.state()["queue"][0]["fingerprint"], "fp");
+        // An empty post is not sent at all.
+        b.send("other", "0.6.0", "", "https://127.0.0.1:1/");
+        assert_eq!(b.state()["queue"].as_array().unwrap().len(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_broken_state_or_panic_file_reads_as_none() {
+        let dir = fresh("broken");
+        let b = Bugs::new(&dir);
+        std::fs::write(dir.join(STATE_FILE), "not json").unwrap();
+        assert_eq!(b.state(), json!({}));
+        std::fs::write(dir.join(PANIC_FILE), "{").unwrap();
+        assert!(b.waiting() && b.pending().is_none());
+        std::fs::write(dir.join(PANIC_FILE), r#"{"log":["x"]}"#).unwrap();
+        assert!(b.pending().is_none());
+        std::fs::write(dir.join(PANIC_FILE), r#"{"details":"d","log":[1,"x"]}"#).unwrap();
+        assert_eq!(b.pending().unwrap().1, vec!["x".to_string()]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_report_goes_only_over_https() {
+        let e = post("http://127.0.0.1:1/", b"{}").unwrap_err();
+        assert!(e.to_string().contains("only over https"), "{e}");
+        let e = post("https://127.0.0.1:1/", b"{}").unwrap_err();
+        assert!(e.to_string().contains("did not go"), "{e}");
+    }
+
+    #[test]
+    fn the_core_refusal_reads_as_an_error() {
+        let e = Bugs::core("no_such_op", json!({})).unwrap_err();
+        assert!(!e.to_string().is_empty());
+    }
 }

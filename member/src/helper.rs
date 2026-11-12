@@ -64,6 +64,9 @@ const KEPT_ENV: &[&str] = &[
     "APPDATA",
     "USERPROFILE",
     "COMPUTERNAME",
+    // Where a helper built with -cover writes its coverage, in the tests;
+    // a release's helper reads nothing from it.
+    "GOCOVERDIR",
 ];
 
 /// What the helper says it is, the answer to hello.

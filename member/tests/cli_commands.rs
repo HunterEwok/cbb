@@ -2628,3 +2628,269 @@ fn pair_waits_on_the_service_port() {
     let j: Value = serde_json::from_str(written.trim()).unwrap_or_else(|e| panic!("the file holds {written:?}: {e}"));
     assert_eq!(j["port"].as_u64(), Some(u64::from(port)), "the file holds {j}");
 }
+
+/// The ZX Spectrum Next's commands (member/README.md, "ZX Spectrum Next"):
+/// each answer ends in one status line, CBBOK or CBBERR.
+#[test]
+fn next_commands() {
+    run_cases(
+        "next",
+        vec![
+            Case {
+                name: "next paste",
+                args: &["next", "paste"],
+                payload: b"Hi",
+                sent: Some(("paste", None)),
+                stdout: "CBB1 2 4d170e0e\rHi\rCBBOK\r",
+                ..Case::default()
+            },
+            Case {
+                name: "next paste -max",
+                args: &["next", "paste", "-max", "1"],
+                payload: b"Hi",
+                sent: Some(("paste", None)),
+                stdout: "CBB1 1 ",
+                ..Case::default()
+            },
+            Case {
+                name: "next paste -max not a number",
+                args: &["next", "paste", "-max", "x"],
+                code: 1,
+                stdout: "CBBERR the -max value is a number",
+                ..Case::default()
+            },
+            Case {
+                name: "next paste refused",
+                args: &["next", "paste"],
+                answer: err("no text yet\nsecond line"),
+                sent: Some(("paste", None)),
+                code: 1,
+                stdout: "CBBERR no text yet; second line\r",
+                ..Case::default()
+            },
+            Case {
+                name: "next copy",
+                args: &["next", "copy", "5", "3610a686"],
+                stdin: "hello",
+                sent: Some(("copy", Some(|s| s.payload == b"hello" && s.s("kind").is_empty()))),
+                stdout: "CBBGO\rCBBOK\r",
+                ..Case::default()
+            },
+            Case {
+                name: "next copy -secret",
+                args: &["next", "copy", "-secret", "5", "3610a686"],
+                stdin: "hello",
+                sent: Some(("copy", Some(|s| s.s("kind") == "secret"))),
+                stdout: "CBBOK",
+                ..Case::default()
+            },
+            Case {
+                name: "next copy damaged",
+                args: &["next", "copy", "5", "00000000"],
+                stdin: "hello",
+                code: 1,
+                stdout: "CBBERR the text arrived damaged",
+                ..Case::default()
+            },
+            Case {
+                name: "next copy cut short",
+                args: &["next", "copy", "5", "3610a686"],
+                stdin: "he",
+                code: 1,
+                stdout: "CBBERR the Next sent 2 of 5 bytes and stopped",
+                ..Case::default()
+            },
+            Case {
+                name: "next copy too long",
+                args: &["next", "copy", "999999999", "3610a686"],
+                code: 1,
+                stdout: "CBBERR the text is too long",
+                ..Case::default()
+            },
+            Case {
+                name: "next copy bad CRC",
+                args: &["next", "copy", "5", "xyz"],
+                code: 1,
+                stdout: "CBBERR the CRC-32 is 8 hex digits",
+                ..Case::default()
+            },
+            Case {
+                name: "next copy bad length",
+                args: &["next", "copy", "five", "3610a686"],
+                code: 1,
+                stdout: "CBBERR the length is a number",
+                ..Case::default()
+            },
+            Case {
+                name: "next copy usage",
+                args: &["next", "copy"],
+                code: 1,
+                stdout: "CBBERR usage: cbb next",
+                ..Case::default()
+            },
+            Case { name: "next alone", args: &["next"], code: 1, stdout: "CBBERR usage", ..Case::default() },
+            Case {
+                name: "next speed",
+                args: &["next", "speed", "115200", "4"],
+                stdout: "CBBS 115200 4 ",
+                ..Case::default()
+            },
+            Case {
+                name: "next speed of no such baud",
+                args: &["next", "speed", "1200", "4"],
+                code: 1,
+                stdout: "CBBERR the Pi's line takes no such speed",
+                ..Case::default()
+            },
+            Case {
+                name: "next speed too long",
+                args: &["next", "speed", "115200", "2000000"],
+                code: 1,
+                stdout: "CBBERR at most 1 MiB",
+                ..Case::default()
+            },
+            Case {
+                name: "next speed not numbers",
+                args: &["next", "speed", "fast", "4"],
+                code: 1,
+                stdout: "CBBERR the speed is a number",
+                ..Case::default()
+            },
+            Case {
+                name: "next speed bad length",
+                args: &["next", "speed", "115200", "many"],
+                code: 1,
+                stdout: "CBBERR the length is a number",
+                ..Case::default()
+            },
+            Case {
+                name: "next speed-in",
+                args: &["next", "speed-in", "115200", "4"],
+                stdin: "abcd",
+                stdout: "CBBGO\r\nCBBR 4 ed82cd11\rCBBOK\r",
+                ..Case::default()
+            },
+            Case {
+                name: "next speed-in short",
+                args: &["next", "speed-in", "115200", "8"],
+                stdin: "abcd",
+                stdout: "CBBR 4 ed82cd11\r",
+                ..Case::default()
+            },
+            Case {
+                name: "next check-list of no file",
+                args: &["next", "check-list", "no-such-list"],
+                code: 1,
+                stdout: "CBBERR cannot read no-such-list",
+                ..Case::default()
+            },
+            Case {
+                name: "next check-list usage",
+                args: &["next", "check-list"],
+                code: 1,
+                stdout: "CBBERR usage",
+                ..Case::default()
+            },
+            Case {
+                name: "next image bad mode",
+                args: &["next", "image", "-mode", "huge"],
+                code: 1,
+                stdout: "CBBERR usage",
+                ..Case::default()
+            },
+            Case {
+                name: "next image bad flag",
+                args: &["next", "image", "-big"],
+                code: 1,
+                stdout: "CBBERR usage",
+                ..Case::default()
+            },
+        ],
+    );
+}
+
+/// A PNG of w × h pixels in one colour.
+fn png(w: u32, h: u32) -> Vec<u8> {
+    let mut out = Vec::new();
+    {
+        let mut e = png::Encoder::new(&mut out, w, h);
+        e.set_color(png::ColorType::Rgb);
+        e.set_depth(png::BitDepth::Eight);
+        let mut wr = e.write_header().unwrap();
+        wr.write_image_data(&vec![0x40; (w * h * 3) as usize]).unwrap();
+    }
+    out
+}
+
+/// cbb next image: the latest copy's first PNG or JPEG, for Layer 2, sent
+/// once the Next asks with a byte.
+#[test]
+fn next_image() {
+    let dir = tempdir("next-image");
+    let img: &'static [u8] = Box::leak(png(8, 8).into_boxed_slice());
+    let serve = |parts: Vec<(Value, &'static [u8])>| {
+        handler(move |s| {
+            if s.op() != "paste_media" {
+                return vec![];
+            }
+            let mut a = vec![(json!({}), Vec::new())];
+            for (h, b) in &parts {
+                a.push((h.clone(), b.to_vec()));
+            }
+            a.push(done(json!({})));
+            a
+        })
+    };
+    let part = |p: Value| (json!({ "part": p }), &b""[..]);
+    let data = |b: &'static [u8]| (json!({}), b);
+    let n = img.len() as i64;
+    for (mode, letter) in [("lo", "L"), ("hi", "H"), ("auto", "")] {
+        let r = run_with(
+            &dir,
+            &["next", "image", "-mode", mode],
+            "g",
+            serve(vec![
+                part(json!({"path": "a.txt", "size": 1})),
+                data(b"a"),
+                part(json!({"type": "image/png", "size": n})),
+                data(img),
+            ]),
+            &[],
+        );
+        want(&format!("next image -mode {mode}"), &r, 0, &format!("CBBI {letter}"), "");
+        assert!(r.stdout.ends_with("\rCBBOK\r"), "{:?}", &r.stdout[r.stdout.len().saturating_sub(20)..]);
+    }
+    // The Next never asks.
+    let r = run_with(
+        &dir,
+        &["next", "image"],
+        "",
+        serve(vec![part(json!({"type": "image/png", "size": n})), data(img)]),
+        &[],
+    );
+    want("next image unasked", &r, 1, "CBBERR the Next did not ask for the image", "");
+    // No image in the copy, an image that is not one, and parts that do
+    // not come as said.
+    let r =
+        run_with(&dir, &["next", "image"], "g", serve(vec![part(json!({"path": "a", "size": 1})), data(b"a")]), &[]);
+    want("next image of files", &r, 1, "CBBERR the latest copy has no PNG or JPEG image", "");
+    let r = run_with(
+        &dir,
+        &["next", "image"],
+        "g",
+        serve(vec![part(json!({"type": "image/png", "size": 3})), data(b"abc")]),
+        &[],
+    );
+    want("next image broken", &r, 1, "CBBERR", "");
+    let r = run_with(
+        &dir,
+        &["next", "image"],
+        "g",
+        serve(vec![part(json!({"type": "image/png", "size": 2})), data(b"abc")]),
+        &[],
+    );
+    want("next image too long a part", &r, 1, "CBBERR the copy's parts did not come as said", "");
+    let r = run_with(&dir, &["next", "image"], "g", serve(vec![data(b"abc")]), &[]);
+    want("next image without a part", &r, 1, "CBBERR the copy's parts did not come as said", "");
+    let _ = std::fs::remove_dir_all(&dir);
+}

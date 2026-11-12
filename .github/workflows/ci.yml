@@ -2206,21 +2206,43 @@ jobs:
         run: |
           cargo build --locked --release -p cbb-member
           cargo build --locked --release -p cbb-ffi --features member,tunnel --example phone-on-linux
-          CGO_ENABLED=0 go build -trimpath -o target/release/cbb-helper ./cmd/cbb-helper
+          cargo build --locked --release -p cbb-ffi --features tunnel --example tunnel-on-linux
+          # Built with -cover: the Go side's coverage (cover-go-service.out)
+          # counts what the helper does under these tests too.
+          CGO_ENABLED=0 go build -trimpath -cover -coverpkg=./cmd/...,./internal/... -o target/release/cbb-helper ./cmd/cbb-helper
+      # Each Go package runs as a test binary built with -cover, with
+      # GOCOVERDIR for it and the helpers it starts; one package at a
+      # time, so that -test.v streams each test's lines as it runs and a
+      # test that hangs is named by the timeout's goroutine dump before the
+      # job's own limit.
       - name: go test ./internal/service and the desktop connector with every Linux member a Rust cbb
         run: |
           Xvfb :5 -screen 0 640x480x24 >"$RUNNER_TEMP/xvfb.log" 2>&1 &
           for _ in $(seq 1 100); do [ -e /tmp/.X11-unix/X5 ] && break; sleep 0.1; done
-          DISPLAY=:5 CBB_TEST_X11=1 \
-            CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_TEST_ALONE="$PWD/target/release/cbb" \
-            CBB_PHONE_ON_LINUX="$PWD/target/release/examples/phone-on-linux" \
-            go test -timeout 45m ./internal/service -v
-          # One package at a time, so that -v streams each test's lines as
-          # it runs and a test that hangs is named by the timeout's
-          # goroutine dump before the job's own limit.
-          DISPLAY=:5 CBB_TEST_X11=1 \
-            CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_TEST_ALONE="$PWD/target/release/cbb" \
-            go test -timeout 5m ./internal/connector -v
+          export GOCOVERDIR="$RUNNER_TEMP/go-cover"
+          mkdir -p "$GOCOVERDIR"
+          go test -c -cover -coverpkg=./cmd/...,./internal/... -o "$RUNNER_TEMP/service.test" ./internal/service
+          go test -c -cover -coverpkg=./cmd/...,./internal/... -o "$RUNNER_TEMP/connector.test" ./internal/connector
+          (cd internal/service && DISPLAY=:5 CBB_TEST_X11=1 \
+            CBB_TEST_RUST_SERVICE="$GITHUB_WORKSPACE/target/release/cbb" CBB_TEST_ALONE="$GITHUB_WORKSPACE/target/release/cbb" \
+            CBB_PHONE_ON_LINUX="$GITHUB_WORKSPACE/target/release/examples/phone-on-linux" \
+            "$RUNNER_TEMP/service.test" -test.timeout 45m -test.v)
+          (cd internal/connector && DISPLAY=:5 CBB_TEST_X11=1 \
+            CBB_TEST_RUST_SERVICE="$GITHUB_WORKSPACE/target/release/cbb" CBB_TEST_ALONE="$GITHUB_WORKSPACE/target/release/cbb" \
+            "$RUNNER_TEMP/connector.test" -test.timeout 5m -test.v)
+      # The relay and the phones' tunnel, which the rust job checks from
+      # outside, count here too: their Go tests run the same instrumented
+      # build.
+      - name: the relay and the phones' tunnel, from Go's side, for the coverage
+        run: |
+          export GOCOVERDIR="$RUNNER_TEMP/go-cover"
+          go test -c -cover -coverpkg=./cmd/...,./internal/... -o "$RUNNER_TEMP/relay.test" ./internal/relay
+          go test -c -cover -coverpkg=./cmd/...,./internal/... -o "$RUNNER_TEMP/tunnel.test" ./internal/tunnel
+          (cd internal/relay && CBB_TEST_RUST_RELAY="$GITHUB_WORKSPACE/target/release/cbb-relay" \
+            "$RUNNER_TEMP/relay.test" -test.timeout 10m -test.v)
+          (cd internal/tunnel && CBB_TUNNEL_ON_LINUX="$GITHUB_WORKSPACE/target/release/examples/tunnel-on-linux" \
+            CBB_TEST_RUST_RELAY="$GITHUB_WORKSPACE/target/release/cbb-relay" \
+            "$RUNNER_TEMP/tunnel.test" -test.run TestRustPhone -test.timeout 15m -test.v)
       - name: a device of the previous release works in one group with this build (from 0.6 on; skips until 0.6.0 is out)
         run: |
           prev=$(sh tools/e2e/previous.sh "$RUNNER_TEMP/previous")
@@ -2234,6 +2256,17 @@ jobs:
         with:
           name: coverage-rust-service
           path: coverage-rust-service.json
+      - name: the Go side's coverage under the same tests
+        if: success() || failure()
+        run: |
+          [ -d "$RUNNER_TEMP/go-cover" ] || exit 0
+          go tool covdata textfmt -i "$RUNNER_TEMP/go-cover" -o cover-go-service.out
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: success() || failure()
+        with:
+          name: coverage-go-service
+          path: cover-go-service.out
+          if-no-files-found: ignore
 
   rust:
     name: cbb (Rust)
