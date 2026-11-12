@@ -52,6 +52,12 @@
         "name": "ohos.permission.ACCESS_BIOMETRIC",
         "reason": "$string:reason_biometric",
         "usedScene": { "abilities": ["EntryAbility"], "when": "inuse" }
+      },
+      // The lab's Bluetooth keyboard, asked for when the user turns it on.
+      {
+        "name": "ohos.permission.ACCESS_BLUETOOTH",
+        "reason": "$string:reason_bluetooth",
+        "usedScene": { "abilities": ["EntryAbility"], "when": "always" }
       }
     ]
   }

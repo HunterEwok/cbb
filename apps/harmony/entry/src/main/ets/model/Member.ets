@@ -20,6 +20,7 @@ import { Joined, Membership, sealSecret } from '../core/Membership';
 import { OS, osVersion, STORE } from '../core/Phone';
 import { t } from '../core/Text';
 import { ensure } from '../core/Keys';
+import { CheckedPaste, PasteAnswer } from './Paste';
 
 // The most bytes the phone fetches of a copy, or sends of shared files.
 const MAX_FETCH_BYTES: number = 200 * 1024 * 1024;
@@ -173,10 +174,17 @@ interface CommandBody {
   by?: string;
   time_ms: number;
   expires_ms: number;
+  // A paste's.
+  text?: string;
+  enter?: boolean;
+  kind?: string;
 }
 
 interface Checked {
   command: CommandBody;
+  verified?: boolean;
+  sender?: string;
+  clean?: string;
 }
 
 interface MemberEvent {
@@ -241,6 +249,13 @@ export class Member {
   // Something in the member broke (docs/core-api.md, "Panics"): details say
   // what and where. The app shows it and starts the member again.
   onPanic: (details: string) => void = () => {};
+  // A paste or paste-off command, checked: the paste receiver carries it
+  // out; name is the sender's when the records show it signed.
+  onPaste: (c: CheckedPaste, name: string) => PasteAnswer = () => {
+    const a = new PasteAnswer();
+    a.reason = 'this phone takes no remote pastes';
+    return a;
+  };
 
   // The member's recent log lines, oldest first, for a bug report.
   recentLog: string[] = [];
@@ -745,8 +760,21 @@ export class Member {
     } else if (body.type === 'actions-off') {
       // A phone has no quick actions, so none of them stays on.
       await this.answer(token, 'done', '');
+    } else if (body.type === 'paste' || body.type === 'paste-off') {
+      let name = '';
+      if (c.ok.verified === true) {
+        const d = this.devices.find((d: Device) => d.id === body.by);
+        name = d !== undefined ? d.name : '';
+      }
+      const paste: CheckedPaste = {
+        command: { type: body.type, by: body.by, text: body.text, enter: body.enter, kind: body.kind },
+        verified: c.ok.verified,
+        sender: c.ok.sender,
+        clean: c.ok.clean
+      };
+      const a = this.onPaste(paste, name);
+      await this.answer(token, a.status, a.reason);
     } else {
-      // No remote paste target on this phone yet (docs/apps.md, "HarmonyOS").
       await refuse(`this phone takes no ${body.type} commands`);
     }
   }

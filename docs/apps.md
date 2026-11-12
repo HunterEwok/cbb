@@ -275,7 +275,7 @@ shows its code and the member's own words.
 Some things work but are no promise of 1.0: the ZX Spectrum Next, the Arduino Nano ESP32, a
 computer as a TV's remote and a phone or a Linux computer as a Bluetooth keyboard. In the apps
 they sit in a "Lab" section at the end of the advanced settings (the Bluetooth keyboard on
-Android and Aurora; the others have no screen in the apps). The settings show only what most
+Android, Aurora and HarmonyOS; the others have no screen in the apps). The settings show only what most
 people need: the hub is chosen by itself, so making a device the hub, the hub's tunnel and its
 forwarder show only with the advanced settings on, on every app.
 
@@ -966,7 +966,7 @@ joining by the phone's QR code, as an admin, by an invitation, restoring), Home 
 or the list, a device's page with the admin's actions, adding a device by its QR code,
 invitations, the recovery key, the takeover, the arrangement and collections, and Settings
 with the error details, the notifications, the root's settings and, under the advanced
-settings, why it does not sync.
+settings, why it does not sync and the lab.
 
 - **Keys**: P-256 keys in HUKS, in the TEE (level "hardware"). The member key signs without
   asking; the admin key (the root's in a group the phone made) only after the user's face,
@@ -981,6 +981,18 @@ settings, why it does not sync.
   clipboard, other images and files wait for the user to save them where they choose.
 - **QR codes**: Scan Kit's scanner reads a computer's code and the recovery sheet; the
   phone's own code for joining is drawn from the core's modules.
+- **Remote paste**: an admin phone pastes on a computer or another phone from the device's
+  page, pasted or typed, with Enter or as a secret, as on the iPhone and Android; the core
+  signs the paste command (`cbb_member_manage`, `paste`). As a target, HarmonyOS lets no app
+  put keys into another app, so the phone types an admin's paste on its Bluetooth keyboard,
+  as Aurora does.
+- **The lab's Bluetooth keyboard**: the app serves HID over GATT (`@ohos.bluetooth.ble`, a
+  GATT server and its advertising) with the core's report map and reports, as Aurora does
+  through BlueZ; a TV, a tablet or a computer pairs with the phone, which the system confirms,
+  and takes the clipboard at a tap or an admin's remote paste. HarmonyOS names a
+  characteristic by its UUID alone, so the service has the input report and not the LEDs'
+  output report. Whether the system lets an app serve the HID service is known only on a
+  phone.
 - **Background**: the system freezes an app soon after it leaves the screen. While the member
   runs, the app keeps it going as a continuous task of the kind "multi-device connection",
   with the system's notification; where the system or the store refuses that, it asks for the
@@ -999,7 +1011,7 @@ settings, why it does not sync.
   for now; elsewhere the app is tested on a phone with HarmonyOS 5 or later (sold in China;
   the same models elsewhere run HarmonyOS 4, where the Android app works).
 
-Not yet: the lab (the Bluetooth keyboard and remote paste on the phone), and a run on a phone.
+Not yet: pasting images and files on another device, and a run on a phone.
 
 ## Releasing the Android app
 

@@ -9,6 +9,7 @@
 import cbb from 'libcbb_napi.so';
 import { preferences } from '@kit.ArkData';
 import { deviceInfo } from '@kit.BasicServicesKit';
+import { util } from '@kit.ArkTS';
 import { call, read, Result } from '../core/Core';
 import { Errors, Failure } from '../core/Errors';
 import { ensure, forget } from '../core/Keys';
@@ -20,7 +21,9 @@ import { Bugs } from './Bugs';
 import { Events } from './Events';
 import { Invite } from './Invite';
 import { Join } from './Join';
+import { Keyboard } from './Keyboard';
 import { Device, Member } from './Member';
+import { CheckedPaste, Paste, PasteAnswer } from './Paste';
 import { Shared } from '../common/Share';
 
 // Renewals are due months ahead, so a look every few hours, and one a
@@ -114,6 +117,10 @@ export class AppModel {
   readonly events: Events = new Events();
   // The bug report the app asks about in release mode (docs/core-api.md, "Bug reports").
   readonly bugs: Bugs = new Bugs();
+  // The lab (docs/apps.md, "The lab"): the phone as a Bluetooth keyboard,
+  // which also types an admin's remote paste.
+  readonly keyboard: Keyboard = new Keyboard();
+  readonly paste: Paste = new Paste();
 
   private dir: string = '';
   private prefs: preferences.Preferences | undefined = undefined;
@@ -149,6 +156,11 @@ export class AppModel {
     this.member.onPanic = (details: string) => {
       this.panicked(details);
     };
+    this.paste.init(prefs, this.keyboard);
+    this.paste.pasted = (name: string) => {
+      this.events.post(t('pasted_from', name));
+    };
+    this.member.onPaste = (c: CheckedPaste, name: string): PasteAnswer => this.paste.carryOut(c, name);
     this.member.onSaved = (folder: string, count: number) => {
       this.events.post(count === 1 ? t('notify_saved_one') : t('notify_saved', count));
     };
@@ -347,6 +359,19 @@ export class AppModel {
       extra['records'] = records;
     }
     const a = await this.runManage(action, device, extra);
+    return a !== undefined;
+  }
+
+  // Puts text where a computer's focus is (docs/design.md, "Remote paste"),
+  // pasted or typed key by key, with Enter after it if asked; a secret
+  // leaves no trace there. Signed with the admin key; true once the
+  // computer took it.
+  async pasteOn(device: string, text: string, method: string, enter: boolean, secret: boolean): Promise<boolean> {
+    // The computer waits 5 s for its target, and 5 ms more for each typed byte.
+    const typed = method === 'type' ? new util.TextEncoder().encodeInto(text).length * 5 : 0;
+    const a = await this.runManage('paste', device, {
+      'method': method, 'kind': secret ? 'secret' : 'text', 'text': text, 'enter': enter, 'timeout_ms': 10000 + typed
+    } as Record<string, Object>);
     return a !== undefined;
   }
 
@@ -724,6 +749,7 @@ export class AppModel {
     this.membership = undefined;
     this.claimState = '';
     this.events.forget();
+    this.paste.forgetLog();
     this.show('');
     // A phone that joined again with its old member key would share it with
     // its old device record, and removing that record revokes the key; the

@@ -141,8 +141,9 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   `cbb_core.h`, `keys.cpp` the keys in HUKS), as the Aurora app is Qt around it and ported
   from it; its system is `harmonyos`. In `entry/src/main/ets`: `core/` (the core's calls,
   errors, keys, the membership's files), `model/` (`AppModel`, `Member`, `Join`, `Admit`,
-  `Invite`, `Events`, `Bugs`), `pages/` (the screens), `components/`, `common/` (the devices'
-  words, Scan Kit, sharing in); its strings come from `apps/l10n` (`harmony:NAME`), its colours
+  `Invite`, `Events`, `Bugs`, `Keyboard` the lab's Bluetooth keyboard, `Paste` the remote
+  paste target), `pages/` (the screens), `components/`, `common/` (the devices' words, Scan
+  Kit, sharing in, the clipboard); its strings come from `apps/l10n` (`harmony:NAME`), its colours
   from `tools/tokens`; `build.sh` and `ffi/bind.sh harmony` build the core with OpenHarmony's
   native SDK (`ffi/ohos-sdk.sh`), `check.sh` compiles and lints the ArkTS with OpenHarmony's
   compiler (stubs of the HarmonyOS-only kits in `check/`); CI's `HarmonyOS app` job.

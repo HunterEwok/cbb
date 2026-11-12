@@ -39,6 +39,7 @@ export default class EntryAbility extends UIAbility {
     Errors.log(`app: started, CBB ${AppStorage.get<string>('version') ?? ''}, ${versionLine()}, ${osVersion()}`);
     setPrompt(t('auth_title'));
     app.init(this.context.filesDir, prefs);
+    app.keyboard.init(prefs, this.context);
     this.takeShared(want);
   }
 

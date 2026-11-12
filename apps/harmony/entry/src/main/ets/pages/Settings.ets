@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 // Settings: the language, the error details, the notifications, the
-// root's settings of the group (how long a claim waits, which keys an admin
+// advanced settings with the lab, the root's settings of the group (how long a claim waits, which keys an admin
 // may keep), leaving the group, and what this app and its core are.
 
 import { router } from '@kit.ArkUI';
@@ -59,6 +59,16 @@ struct Settings {
     } catch (e) {
       this.error = Errors.shown(Errors.unexpected(t('error_language'), e as Object));
     }
+  }
+
+  keyboardState(): string {
+    if (!app.keyboard.on) {
+      return t('lab_off');
+    }
+    if (app.keyboard.state === 'connected') {
+      return t('lab_connected');
+    }
+    return app.keyboard.state === 'failed' ? t('lab_failed') : t('lab_on');
   }
 
   confirm(message: string, button: string, yes: () => void): void {
@@ -148,6 +158,18 @@ struct Settings {
         })
         if (app.membership !== undefined && app.advanced) {
           WhySection({ why: app.member.why, details: app.errorDetails })
+        }
+        // The lab: what works but is no promise of 1.0 (docs/apps.md, "The lab").
+        if (app.advanced) {
+          this.section(t('lab'))
+          Row() {
+            Text($r('app.string.keyboard_switch')).fontColor($r('app.color.text')).layoutWeight(1)
+            Text(this.keyboardState()).fontColor($r('app.color.secondary'))
+          }
+          .width('100%')
+          .onClick(() => {
+            router.pushUrl({ url: 'pages/Keyboard' });
+          })
         }
 
         if (app.membership !== undefined) {

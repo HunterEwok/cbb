@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 // A device of the group (docs/apps.md, Devices): its sync, and for an
-// admin its changes: rename, mute, freeze's thaw, make an admin (the root,
+// admin its changes and commands: paste on it, rename, mute, freeze's thaw, make an admin (the root,
 // for a computer that offers an admin key), hand the group over (the root),
 // take the group over (an admin, from a lost root), remove. A removal by
 // the root is final, so the page asks first and says so.
@@ -12,7 +12,14 @@ import { t } from '../core/Text';
 import { can, kind, line, mark, nameOf, role, status } from '../common/Devices';
 import { app } from '../model/AppModel';
 import { Device as DeviceInfo } from '../model/Member';
+
 import { BusyLine, ErrorText, PageTitle } from '../components/Common';
+
+// Members take remote pastes, and the phones that type them on a keyboard
+// or into their own focus; an iPhone cannot.
+function takesPastes(d: DeviceInfo): boolean {
+  return d.role === 'member' || (d.role === 'phone' && ['android', 'aurora', 'harmonyos'].includes(d.os ?? ''));
+}
 
 @Entry
 @ComponentV2
@@ -149,6 +156,11 @@ struct Device {
                 this.action(t('device_rename'), false, () => {
                   this.name = (this.device() as DeviceInfo).name;
                   this.renaming = true;
+                })
+              }
+              if (this.acts(this.device() as DeviceInfo) && takesPastes(this.device() as DeviceInfo)) {
+                this.action(t('paste_on_it'), false, () => {
+                  router.pushUrl({ url: 'pages/Paste', params: { 'device': this.deviceId } });
                 })
               }
               if (this.acts(this.device() as DeviceInfo)) {
