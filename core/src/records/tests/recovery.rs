@@ -1164,3 +1164,126 @@ fn a_halted_set_restores_from_what_it_saved() {
         assert_eq!(back.state(), s);
     }
 }
+
+/// A recovery record off the chain (here one past a gap) has nothing kept
+/// aside: its root's records are not taken. The
+/// chain's next record, waiting for its list, has its root's records kept
+/// aside.
+#[test]
+fn a_head_off_the_chain_keeps_nothing_aside() {
+    let mut g = base();
+    let from = g.recs.clone();
+    let w1 = write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
+    let mut m = set_of(&g.root.key);
+    sync_all(&mut m, &from, &[]);
+    // Seq 2 with no seq 1 held: off the chain.
+    let gap = head_at(&g, 2, Some(w1.record.id()), &k("n9"), [9; 32]);
+    m.insert(gap).unwrap();
+    let of_n9 = g.device(&k("n9"), &k("n9 phone"), "n9 phone", |_| {});
+    assert!(matches!(m.insert(of_n9.clone()), Ok(Added::NoRoom) | Err(Refused::UnknownSigner)));
+    assert!(!m.contains(&of_n9.id()));
+    assert_eq!(m.aside().count(), 0);
+    // The chain's first record, without its list: what its root signed
+    // waits aside.
+    m.insert(w1.record.clone()).unwrap();
+    for r in &w1.first {
+        assert_eq!(m.insert(r.clone()), Ok(Added::Waiting));
+    }
+    assert_eq!(m.aside().count(), w1.first.len());
+}
+
+/// When a later change applies, the earlier root's first checkpoint is
+/// not kept any more: the set keeps the newest applied record's first.
+#[test]
+fn an_earlier_first_goes_when_a_later_change_applies() {
+    let mut g = base();
+    let from = g.recs.clone();
+    let w1 = write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
+    let from = g.recs.clone();
+    let w2 = write(&mut g, &from, &k("n2"), &k("phone 2"), &[]);
+    let (cp1, cp2) = (w1.first.last().unwrap().id(), w2.first.last().unwrap().id());
+    let mut m = set_of(&g.root.key);
+    sync_all(&mut m, &g.recs, &g.lists);
+    let s = m.state();
+    assert_eq!(s.roots, vec![k("root").hash, k("n1").hash, k("n2").hash]);
+    assert!(!m.contains(&cp1));
+    assert!(m.contains(&cp2));
+    let fresh = set_with(&g.root.key, &g.recs, &g.lists);
+    assert_eq!(fresh.digest(), m.digest());
+}
+
+/// The records of a root whose recovery record came before the record it
+/// follows are not taken at first, and taken once it is on the chain: a
+/// member that got them in that order ends as one that got them in order.
+#[test]
+fn records_of_a_late_chain_record_are_taken_when_it_joins() {
+    let mut g = base();
+    let from = g.recs.clone();
+    let w1 = write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
+    let from = g.recs.clone();
+    let w2 = write(&mut g, &from, &k("n2"), &k("phone 2"), &[]);
+    let mut early = set_of(&g.root.key);
+    early.insert(w2.record.clone()).unwrap();
+    for r in &w2.first {
+        assert!(matches!(early.insert(r.clone()), Ok(Added::NoRoom) | Err(Refused::UnknownSigner)));
+        assert!(!early.contains(&r.id()));
+    }
+    sync_all(&mut early, &g.recs, &g.lists);
+    let fresh = set_with(&g.root.key, &g.recs, &g.lists);
+    assert_eq!(early.digest(), fresh.digest());
+    assert_eq!(early.state(), fresh.state());
+    assert!(has(&early.state(), &k("phone 2")));
+    let _ = w1;
+}
+
+/// A new root's first checkpoint over the 64 KiB a checkpoint once had
+/// (the whole list and what the old root's checkpoint kept of 256 devices'
+/// admins) is signed and taken, and the change applies.
+#[test]
+fn a_large_first_checkpoint_applies() {
+    let mut g = base();
+    let admins: Vec<K> = (0..6).map(|i| k(&format!("admin {i}"))).collect();
+    for (i, a) in admins.iter().enumerate() {
+        g.admin(&k(&format!("admin device {i}")), a, POWER_ADMIT | POWER_MANAGE);
+    }
+    for a in &admins {
+        for _ in 0..240 {
+            g.rec(a, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
+        }
+    }
+    for _ in 0..560 {
+        g.root_rec(Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
+    }
+    let set = set_with(&g.root.key, &g.recs, &g.lists);
+    let mut keep: Vec<RecordId> = set
+        .ids()
+        .filter(|id| set.get(id).is_some_and(|r| admins.iter().any(|a| a.hash == r.body().signer)))
+        .copied()
+        .collect();
+    keep.sort();
+    let mut heads: Vec<Head> =
+        admins.iter().map(|a| Head { key: a.hash, seq: g.heads[&a.hash].0, id: g.heads[&a.hash].1 }).collect();
+    heads.sort_by_key(|h| h.key);
+    let cp = g.root_rec(Kind::Checkpoint { heads, keep });
+    let from = g.recs.clone();
+    assert_eq!(set_with(&g.root.key, &from, &g.lists).state().checkpoint, Some(cp.id()));
+    let w = write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
+    let first = w.first.last().unwrap();
+    assert!(first.body_bytes().len() > 64 << 10, "{}", first.body_bytes().len());
+    let m = set_with(&g.root.key, &g.recs, &g.lists);
+    assert!(m.contains(&first.id()));
+    assert!(has(&m.state(), &k("new phone")));
+}
+
+/// A checkpoint over its ceiling is not signed.
+#[test]
+fn a_checkpoint_over_its_ceiling_is_not_signed() {
+    let g = base();
+    let mut keep: Vec<RecordId> = (0..5000u32).map(|i| RecordId(crate::certs::sha256(&i.to_be_bytes()))).collect();
+    keep.sort();
+    let root = k("root");
+    let head = Head { key: root.hash, seq: g.heads[&root.hash].0, id: g.heads[&root.hash].1 };
+    let body = g.body(&root, Kind::Checkpoint { heads: vec![head], keep });
+    assert!(body.encode().len() > crate::records::MAX_CHECKPOINT_BODY);
+    assert!(Record::sign(body, &root).is_err());
+}
