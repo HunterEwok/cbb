@@ -92,6 +92,8 @@ jobs:
           elif [ -z "$GOMIPS" ]; then
             # cbb-relay, the relay in Rust, a service of its own beside cbb.
             cp "$dir/cbb" "$dir/cbb-relay" "$RUNNER_TEMP/"
+            # cbb-push, the project's push service, runs on a Linux server.
+            if [ "$GOOS" = linux ]; then cp "$dir/cbb-push" "$RUNNER_TEMP/"; fi
           else
             cp "$dir/cbb" "$RUNNER_TEMP/"
           fi
