@@ -643,3 +643,33 @@ fn refused_groups() {
     drop(r);
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// A registration's setup ends at its deadline, however the device spaces
+/// its bytes, and frees its slot (docs/relay-budget.md: a slot is free
+/// again within the setup's time).
+#[test]
+fn setup_ends_at_its_deadline() {
+    let r = relay(true, Limits::default());
+    let inner = r.inner().clone();
+    inner.lock().setup_wait = Duration::from_secs(2);
+    let k = new_key();
+    let point = k.public();
+    let cert = certs::server_cert_by(&point, &mut |m| identity::sign_external(&k, m)).unwrap();
+    let pins = vec![Cert::parse(&inner.cfg.keys.cert).unwrap().key_hash()];
+    let key: Arc<dyn ExternalKey> = Arc::new(k);
+    let mut reg =
+        crate::forward::Registrar::connect(r.addr(), &pins, &[cert], &key, crate::relay::PROTOCOL, "relay").unwrap();
+    let stop = std::sync::atomic::AtomicBool::new(false);
+    let _challenge: serde_json::Value = reg.read(&stop).unwrap();
+    // A claim of 1000 bytes, one byte every half second.
+    reg.raw_write(&1000u32.to_be_bytes()).unwrap();
+    let from = ip("127.0.0.1");
+    let start = Instant::now();
+    while start.elapsed() < Duration::from_secs(6) {
+        std::thread::sleep(Duration::from_millis(500));
+        if reg.raw_write(b" ").is_err() {
+            break;
+        }
+    }
+    assert_eq!(inner.lock().setups.held(from, Level::Address), 0, "a slow claim kept its slot past the deadline");
+}
