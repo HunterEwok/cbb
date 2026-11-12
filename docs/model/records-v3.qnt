@@ -22,7 +22,6 @@
 //     all it made, or its ceiling); only the roots on the path and the admin keys they name
 //     have room; the set never holds more than its room. Recovery records live outside it.
 //     A halted set keeps what it had (promise 11), so the fair share is asked of the others.
-//     Past the room a set holds one record only: the one its counting checkpoint waited for.
 //  7. A member follows its recovery chain: its path is the first root and the new roots of the
 //     longest chain of recovery records it holds and has verified, whatever the old roots, the
 //     admins or anyone else signed, and in whatever order it got them (with promise 1).
@@ -414,29 +413,35 @@ module records_v3 {
     val shown = items.filter(r => within(cuts, r))
     val ceil = ceilings(path, admins)
     val plain = keepAfter(shown, ceil, cut, last(path), orderOf(s, db))
-    // The record a held checkpoint waits for to count, its key's head below it, is taken
-    // whatever the room says, one for each checkpoint; the rooms are judged without it. It
-    // stays only while its checkpoint is kept and counts with it: a checkpoint that does not
-    // count keeps nothing past the room.
-    val waited = shown.filter(c => c.kind == "checkpoint" and c.signer == last(path)).map(c => waitedBy(c, shown))
-      .filter(h => h != NONEREC and ceil.keys().contains(h.signer) and not(plain._1.contains(h.id)))
-    if (waited == Set()) plain
+    // A record a held checkpoint names (its key's record below it, or one it keeps) settles
+    // the set before the rooms are judged: when the checkpoint counts with what the rooms
+    // keep and those records, the rooms are judged on what it leaves after pruning; if it
+    // still cannot count, the usual rule stands.
+    val cps = shown.filter(c => c.kind == "checkpoint" and c.signer == last(path))
+    val named = shown.filter(r => cps.exists(c => namedBy(c, r, shown))).filter(r => not(plain._1.contains(r.id)))
+    if (named == Set()) plain
     else {
-      val res = keepAfter(shown.exclude(waited), ceil, cut, last(path), orderOf(s, db))
-      val held = recsOf(res._1, db).union(firstsHeld(s, db))
-      val v = fullEvaluate(held.union(waited), chainState(s, db))
-      val door = waited.filter(h => held.exists(c => c.id == v.checkpoint and waitedBy(c, shown) == h))
-      if (door == Set()) plain else (res._1.union(idsOf(door)), res._2)
+      val firsts = firstsHeld(s, db)
+      val v = fullEvaluate(recsOf(plain._1, db).union(named).union(firsts), chainState(s, db))
+      if (not(cps.exists(c => c.id == v.checkpoint))) plain
+      else {
+        val c = db.get(v.checkpoint)
+        val res = keepAfter(shown.filter(r => not(prunedBy(c, r))), ceil, NOCUT, last(path), orderOf(s, db))
+        if (fullEvaluate(recsOf(res._1, db).union(firsts), chainState(s, db)).checkpoint == c.id) res else plain
+      }
     }
   }
   // The record checkpoint c waits for: its key's record just below it, among items.
   pure def waitedBy(c: Record, items: Set[Record]): Record =
     if (c.line.length() < 2) NONEREC
     else items.filter(r => r.id == c.line[c.line.length() - 2]).fold(NONEREC, (a, r) => r)
-  // The records a set holds past its rooms: the one the checkpoint it counts waited for.
-  pure def doorOf(s: Store, v: View, db: Id -> Record): Set[Record] =
-    if (v.checkpoint == 0) Set()
-    else Set(waitedBy(db.get(v.checkpoint), recsOf(s.recs, db))).filter(h => h != NONEREC)
+  // Checkpoint c names r: r is its key's record below it, or one it keeps.
+  pure def namedBy(c: Record, r: Record, items: Set[Record]): bool = c.keep.contains(r.id) or waitedBy(c, items) == r
+  // r is named by a checkpoint of the current root the set holds: it is not turned away for
+  // its key's earlier drops.
+  pure def namedByHeld(s: Store, r: Record, db: Id -> Record): bool =
+    recsOf(s.recs, db).exists(c => c.kind == "checkpoint" and c.signer == last(keptPath(s, db))
+      and namedBy(c, r, recsOf(s.got, db)))
 
   // Drops what the set does not keep.
   pure def recut(s: Store, db: Id -> Record): Store = {
@@ -472,8 +477,15 @@ module records_v3 {
       and validAt(h, pathCutsOf(ch.recs.slice(0, below))._1)
   }
   pure def storeOne(s: Store, r: Record, db: Id -> Record): Store =
-    if (s.recs.contains(r.id) or past(s.cut, r, last(keptPath(s, db)), orderOf(s, db)) or not(storable(s, r, db))) s
-    else recut({ ...s, recs: s.recs.union(Set(r.id)) }, db)
+    if (s.recs.contains(r.id) or not(storable(s, r, db))
+      or (past(s.cut, r, last(keptPath(s, db)), orderOf(s, db)) and not(namedByHeld(s, r, db)))) s
+    else {
+      val s1 = recut({ ...s, recs: s.recs.union(Set(r.id)) }, db)
+      // A checkpoint the set keeps takes again the records it names that the set got.
+      if (r.kind != "checkpoint" or not(s1.recs.contains(r.id))) s1
+      else recsOf(s1.got, db).filter(x => namedBy(r, x, recsOf(s1.got, db)) and not(s1.recs.contains(x.id))
+        and storable(s1, x, db)).fold(s1, (y, x) => recut({ ...y, recs: y.recs.union(Set(x.id)) }, db))
+    }
   // The set cuts by the path its chain gives; the records of a root the change made, which the
   // set got while the change waited, it takes now (format 20.3, records of a waiting root).
   // The first checkpoints of the held heads that may extend the chain go beside it; each
@@ -1148,8 +1160,7 @@ module records_v3 {
   // 6. No key takes another key's room.
   val fairRoom = MEMBERS.forall(m => {
     val s = st.get(m)
-    // The record the counting checkpoint waited for is held past the rooms; nothing else.
-    val rs = recsOf(s.recs, db).exclude(doorOf(s, views.get(m), db))
+    val rs = recsOf(s.recs, db)
     val got = recsOf(s.got, db)
     val path = keptPath(s, db)
     val cuts = keptCuts(s, db)
@@ -1164,7 +1175,7 @@ module records_v3 {
       sumUnits(rs) <= ROOM,
       rs.map(r => r.signer).forall(k => ceil.keys().contains(k) and sumUnits(ofKey(rs, k)) <= ceil.get(k)),
       (saturated(m) and not(chainState(s, db).stop)) implies owners.forall(k =>
-        sumUnits(ofKey(recsOf(s.recs, db), k)) + MAXU - 1 >= min2(fair, min2(ceil.get(k), sumUnits(ofKey(got.filter(r => storable(s, r, db)), k))))),
+        sumUnits(ofKey(rs, k)) + MAXU - 1 >= min2(fair, min2(ceil.get(k), sumUnits(ofKey(got.filter(r => storable(s, r, db)), k))))),
     }
   })
 
@@ -1274,7 +1285,7 @@ module records_v3 {
   // The recovery key changes the root: a member that holds the record follows it at once.
   // The new root's checkpoint (19) waits for its key's record below it (18), which fits in
   // the rooms only after that checkpoint prunes. Members that got 19 before 18 and those that
-  // got 18 first end in one state: the waited record passes the rooms, and only it.
+  // got 18 first end in one state: the checkpoint settles the set before the rooms are judged.
   run waitedRecordTest = init
       .then(offerEveryone(3))
       .then(compactAt("a"))
