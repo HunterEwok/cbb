@@ -77,6 +77,8 @@ mod piv;
 pub mod push;
 #[cfg(feature = "tunnel")]
 pub mod pushd;
+#[cfg(feature = "tunnel")]
+pub mod pusher;
 pub mod records;
 #[cfg(feature = "tunnel")]
 pub mod relay;

@@ -104,3 +104,5 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Network
 [dev-dependencies]
 # Signs the releases the update tests check.
 p256 = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "ecdsa", "pkcs8"] }
+# The push tests build registrations, whose key is kept in Zeroizing.
+zeroize = { version = "1.8", default-features = false, features = ["alloc"] }

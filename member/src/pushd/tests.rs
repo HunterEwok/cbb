@@ -307,3 +307,119 @@ fn live_apple_sandbox_answers_without_a_token() {
     let a = c.post(host, &path, &[("apns-topic", apns::TOPIC)], b"{}").unwrap();
     assert!(String::from_utf8_lossy(&a.body).contains("reason"));
 }
+
+// ------------------------------------------------------------ the sender
+
+use crate::pusher::{self, Face, Faces, Role, Saved};
+use cbb_core::records::key::{DeviceId, GroupId};
+
+struct OneFace {
+    addr: SocketAddr,
+    pin: [u8; 32],
+    tag: [u8; 16],
+}
+
+impl Faces for OneFace {
+    fn face(&self, _: &GroupId) -> Option<Face> {
+        let (key, credentials) = member(self.tag, 1, "period", 1, true);
+        Some(Face { addr: self.addr, pin: self.pin, key, credentials })
+    }
+}
+
+#[derive(Default)]
+struct Kept(Mutex<Vec<(DeviceId, bool)>>);
+
+impl Saved for Kept {
+    fn save(&self, _: &GroupId, d: &DeviceId, r: Option<&push::Registration>) {
+        self.0.lock().unwrap().push((*d, r.is_some()));
+    }
+}
+
+fn registration(seq: u64, kinds: u64, key: [u8; 32]) -> Vec<u8> {
+    push::Registration {
+        seq,
+        kinds,
+        on: (kinds != 0).then(|| push::On {
+            token: vec![5; 32],
+            env: push::ENV_APNS,
+            key: zeroize::Zeroizing::new(key),
+        }),
+    }
+    .write()
+}
+
+fn wait_for(what: impl Fn() -> bool) -> bool {
+    let until = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < until {
+        if what() {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    false
+}
+
+#[test]
+fn the_sender_wakes_a_phone_once_and_never_one_that_is_connected() {
+    let w = world(Budgets::default());
+    let kept = Arc::new(Kept::default());
+    let faces = Arc::new(OneFace { addr: w.service.addr(), pin: w.pin, tag: [50; 16] });
+    let s = pusher::Sender::start(faces, kept.clone(), Vec::new(), Arc::new(|_| {}));
+    let (g, phone, laptop) = (DeviceId([1; 16]), DeviceId([2; 16]), DeviceId([3; 16]));
+    let pk = [8u8; 32];
+    let f = registration(1, push::KIND_COPIES | push::KIND_EVENTS, pk);
+    let m = frame::read(&f, 64 * 1024).unwrap();
+    s.registration(&g, &phone, &m.map);
+    assert_eq!(s.held(), 1);
+    assert_eq!(kept.0.lock().unwrap().as_slice(), &[(phone, true)]);
+    // A copy this laptop made: the phone gets the hint that it waits; the
+    // laptop, a reader without a registration, nothing.
+    let id = [9u8; 16];
+    s.copy(&g, &id, Role::Origin, &[phone, laptop], None, &|_| push::Body::Waits { id, origin: [3; 16] });
+    assert!(wait_for(|| w.fake.got.lock().unwrap().len() == 1), "nothing sent");
+    let (env, token, len) = w.fake.got.lock().unwrap()[0].clone();
+    assert_eq!((env, token, len), (push::ENV_APNS, vec![5; 32], push::MAX_BODY));
+    // A hub received the same copy: the service drops the repeat.
+    s.copy(&g, &id, Role::Hub, &[phone], None, &|_| push::Body::Waits { id, origin: [3; 16] });
+    assert!(wait_for(|| s.waiting() == 0));
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(w.fake.got.lock().unwrap().len(), 1);
+    // The phone's app is open: nothing goes, and a body queued before it
+    // connected is dropped.
+    s.copy(&g, &[10; 16], Role::Origin, &[phone], None, &|_| push::Body::Unknown(9));
+    s.connected(&phone);
+    assert_eq!(s.waiting(), 0);
+    s.copy(&g, &[11; 16], Role::Origin, &[phone], None, &|_| push::Body::Unknown(9));
+    assert_eq!(s.waiting(), 0);
+    s.left(&phone);
+    // Neither origin nor hub: nothing.
+    s.copy(&g, &[12; 16], Role::Neither, &[phone], None, &|_| push::Body::Unknown(9));
+    assert_eq!(s.waiting(), 0);
+    // An event: the phone hears of a removal.
+    s.event(&g, &[13; 16], push::EVENT_REMOVED, Some(laptop), true, 1);
+    assert!(wait_for(|| w.fake.got.lock().unwrap().len() == 2));
+    // An older registration changes nothing; push off drops it.
+    s.registration(&g, &phone, &frame::read(&registration(1, 0, pk), 1 << 16).unwrap().map);
+    assert_eq!(s.held(), 1);
+    s.registration(&g, &phone, &frame::read(&registration(2, 0, pk), 1 << 16).unwrap().map);
+    assert_eq!(s.held(), 0);
+    s.stop();
+    w.service.stop();
+}
+
+#[test]
+fn the_sender_drops_a_token_the_platform_says_is_gone() {
+    let w = world(Budgets::default());
+    *w.fake.answer.lock().unwrap() = Some(Outcome::Gone);
+    let kept = Arc::new(Kept::default());
+    let faces = Arc::new(OneFace { addr: w.service.addr(), pin: w.pin, tag: [51; 16] });
+    let (g, phone) = (DeviceId([1; 16]), DeviceId([2; 16]));
+    let loaded = push::Registration::read(&frame::read(&registration(4, 1, [7; 32]), 1 << 16).unwrap().map).unwrap();
+    let s = pusher::Sender::start(faces, kept.clone(), vec![(g, phone, loaded)], Arc::new(|_| {}));
+    assert_eq!(s.held(), 1, "the saved registration is back after a restart");
+    s.copy(&g, &[1; 16], Role::Origin, &[phone], Some(1), &|_| push::Body::Unknown(9));
+    assert!(wait_for(|| s.held() == 0), "the gone token is still held");
+    assert_eq!(kept.0.lock().unwrap().last(), Some(&(phone, false)));
+    s.stop();
+    w.service.stop();
+}
