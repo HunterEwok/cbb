@@ -25,6 +25,7 @@ import (
 
 	"github.com/HunterEwok/cbb/internal/frame"
 	"github.com/HunterEwok/cbb/internal/group"
+	"github.com/HunterEwok/cbb/internal/refused"
 	"github.com/HunterEwok/cbb/internal/tunnel"
 	"github.com/HunterEwok/cbb/internal/vless"
 )
@@ -409,6 +410,9 @@ func (f *Forwarder) register(raw net.Conn) (*reg, error) {
 		// A period's tag is the group's own choice: it never meets a tag
 		// from a group CA.
 		tag = credentialTag(cred.Tag)
+	}
+	if f.refused.Refused(tag) {
+		return refuse(refused.Message)
 	}
 	r := &reg{tag: tag, obf: c.Obfuscation, vlessID: c.VLESS, seen: make(chan netip.AddrPort, 1), clients: map[netip.AddrPort]int{}, conn: tc, raw: raw}
 	copy(r.key[:], c.Key)
