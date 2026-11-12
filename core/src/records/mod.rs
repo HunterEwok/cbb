@@ -41,8 +41,9 @@
 //!     freeze that names one names both.
 //! 12. A takeover the device has counted is final there: its old root's
 //!     records above the claim's cut do not count, nor does a later claim
-//!     of that root's epoch rival it. When the device holds a record that
-//!     would have undone it, the state says so (`owner_split`).
+//!     of that root's epoch rival it. Whether a peer counts another owner
+//!     comes from the peers' paths of roots (`State::disagrees`), never
+//!     from records.
 //! 13. `seen` names each signer's head with its seq and record ID, and a
 //!     takeover's cut is the claim's entry for the old root: a record at
 //!     or below a seen seq counts as seen only on the chain ending at that
@@ -57,10 +58,13 @@
 /// array head, the heads of body and sig, and the 64-byte signature.
 pub const ENVELOPE_ALLOWANCE: usize = 1 + 9 + 9 + 64;
 
-/// The bytes counted for a second signature, whatever its length: its head
-/// and 64 bytes. A body that names `signer2` is held in 0.6, so this only
-/// keeps such records from being counted as smaller than they are.
-pub const SIG2_ALLOWANCE: usize = 9 + 64;
+/// The bytes counted for a second signature, whatever its length: nine
+/// units, which hold the largest one the format takes
+/// (`format::envelope::MAX_SIG2`) with its head. The count still depends
+/// on the body alone.
+pub const SIG2_ALLOWANCE: usize = 9 * keep::UNIT;
+
+const _: () = assert!(SIG2_ALLOWANCE >= crate::format::envelope::MAX_SIG2 + 9);
 
 pub mod body;
 pub mod eval;
@@ -76,7 +80,7 @@ use alloc::vec::Vec;
 use core::fmt;
 
 pub use body::{Body, Kind};
-pub use eval::{Input, State, evaluate};
+pub use eval::{Counted, Input, State, evaluate};
 pub use key::{DeviceId, GroupId, Key, KeyHash, RecordId};
 pub use set::RecordSet;
 

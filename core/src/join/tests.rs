@@ -206,6 +206,13 @@ fn the_info_follows_its_table() {
     assert!(Info::decode(&info_of((40, Value::Uint(7)))).is_ok());
 }
 
+/// A joiner's new session, as if the person started it on a fresh joiner.
+fn joiner_session() -> (invitation::JoinerAttempts, invitation::JoinerCode, [u8; 32]) {
+    let mut j = invitation::JoinerAttempts::default();
+    let (code, c) = j.start().unwrap();
+    (j, code, c)
+}
+
 #[test]
 fn the_short_code_opens_its_commitment() {
     let mut open = invitation::Open {
@@ -217,78 +224,80 @@ fn the_short_code_opens_its_commitment() {
         failures: 0,
         allowed_key: None,
         attempt: None,
+        next_attempt: 0,
     };
     let e = [9u8; 32];
     // One attempt to the end: both ends show one code, and the Welcome
     // takes back the count.
-    assert_eq!(open.begin(Network::Home, 100), Ok(()));
-    let (joiner, c) = invitation::JoinerCode::new();
-    let nm = open.reply(c, 110).unwrap();
+    let n = open.begin(Network::Home, 100).unwrap();
+    let (mut j, joiner, c) = joiner_session();
+    let nm = open.reply(n, c, 110).unwrap();
     assert_eq!(open.failures, 1, "counted once the member replied");
-    let (code, nj) = joiner.open(&e, &nm);
+    let (code, nj) = j.open(joiner, &e, &nm);
     assert_eq!(code.len(), 6);
-    assert_eq!(open.short_code(&e, &nj, 120), Ok(code.clone()));
-    open.end(true, 130);
+    assert_eq!(open.short_code(n, &e, &nj, 120), Ok(code.clone()));
+    open.end(n, true, 130);
     assert_eq!(open.failures, 0);
 
     // Each session draws new nonces at both ends.
-    assert_eq!(open.begin(Network::Home, 200), Ok(()));
-    let (joiner2, c2) = invitation::JoinerCode::new();
+    let n2 = open.begin(Network::Home, 200).unwrap();
+    assert_ne!(n2, n);
+    let (mut j2, joiner2, c2) = joiner_session();
     assert_ne!(c2, c);
-    let nm2 = open.reply(c2, 210).unwrap();
+    let nm2 = open.reply(n2, c2, 210).unwrap();
     assert_ne!(nm2, nm);
     // A second attempt while one is in progress: busy.
     assert_eq!(open.begin(Network::Home, 220), Err(PairError::Busy));
     // Walking away after the reply counts as a failed attempt.
-    let (_, nj2) = joiner2.open(&e, &nm2);
-    open.end(false, 230);
+    let (_, nj2) = j2.open(joiner2, &e, &nm2);
+    open.end(n2, false, 230);
     assert_eq!(open.failures, 1);
     assert_ne!(nj2, nj);
 
     // Another nonce than the committed one ends the attempt, counted.
-    assert_eq!(open.begin(Network::Home, 300), Ok(()));
-    let (_, c3) = invitation::JoinerCode::new();
-    open.reply(c3, 310).unwrap();
-    assert_eq!(open.short_code(&e, &nj, 320), Err(PairError::WrongCode));
+    let n3 = open.begin(Network::Home, 300).unwrap();
+    let (_, _, c3) = joiner_session();
+    open.reply(n3, c3, 310).unwrap();
+    assert_eq!(open.short_code(n3, &e, &nj, 320), Err(PairError::WrongCode));
     assert_eq!(open.failures, 2);
     assert!(open.attempt.is_none());
 
     // The person takes minutes to compare and answer: the attempt stays the
     // open one, and the Welcome still takes back its count.
     let kept = open.failures;
-    assert_eq!(open.begin(Network::Home, 1_000), Ok(()));
-    let (joiner5, c5) = invitation::JoinerCode::new();
-    let nm5 = open.reply(c5, 1_010).unwrap();
-    let (code5, nj5) = joiner5.open(&e, &nm5);
-    assert_eq!(open.short_code(&e, &nj5, 1_020), Ok(code5));
+    let n5 = open.begin(Network::Home, 1_000).unwrap();
+    let (mut j5, joiner5, c5) = joiner_session();
+    let nm5 = open.reply(n5, c5, 1_010).unwrap();
+    let (code5, nj5) = j5.open(joiner5, &e, &nm5);
+    assert_eq!(open.short_code(n5, &e, &nj5, 1_020), Ok(code5));
     let minutes = 1_020 + 5 * 60_000;
     assert_eq!(open.begin(Network::Home, minutes), Err(PairError::Busy), "still the open attempt");
-    open.end(true, minutes);
+    open.end(n5, true, minutes);
     assert_eq!(open.failures, kept);
     // The machine's steps alone have the short timer: a nonce opened late
     // is refused, and the attempt stays counted.
-    assert_eq!(open.begin(Network::Home, 2_000_000), Ok(()));
-    let (joiner6, c6) = invitation::JoinerCode::new();
-    let nm6 = open.reply(c6, 2_000_010).unwrap();
-    let (_, nj6) = joiner6.open(&e, &nm6);
-    assert_eq!(open.short_code(&e, &nj6, 2_000_000 + invitation::ATTEMPT_MS), Err(PairError::Closed));
+    let n6 = open.begin(Network::Home, 2_000_000).unwrap();
+    let (mut j6, joiner6, c6) = joiner_session();
+    let nm6 = open.reply(n6, c6, 2_000_010).unwrap();
+    let (_, nj6) = j6.open(joiner6, &e, &nm6);
+    assert_eq!(open.short_code(n6, &e, &nj6, 2_000_000 + invitation::ATTEMPT_MS), Err(PairError::Closed));
     assert_eq!(open.failures, kept + 1);
     open.failures = kept;
     // An answer after the person's time takes nothing back.
-    assert_eq!(open.begin(Network::Home, 3_000_000), Ok(()));
-    let (joiner7, c7) = invitation::JoinerCode::new();
-    let nm7 = open.reply(c7, 3_000_010).unwrap();
-    let (_, nj7) = joiner7.open(&e, &nm7);
-    assert!(open.short_code(&e, &nj7, 3_000_020).is_ok());
-    open.end(true, 3_000_020 + invitation::ANSWER_MS);
+    let n7 = open.begin(Network::Home, 3_000_000).unwrap();
+    let (mut j7, joiner7, c7) = joiner_session();
+    let nm7 = open.reply(n7, c7, 3_000_010).unwrap();
+    let (_, nj7) = j7.open(joiner7, &e, &nm7);
+    assert!(open.short_code(n7, &e, &nj7, 3_000_020).is_ok());
+    open.end(n7, true, 3_000_020 + invitation::ANSWER_MS);
     assert_eq!(open.failures, kept + 1);
     open.failures = kept;
 
     // An attempt that runs out of time frees the invitation; its count stays.
     let t = 4_000_000;
-    assert_eq!(open.begin(Network::Home, t), Ok(()));
-    let (_, c4) = invitation::JoinerCode::new();
-    open.reply(c4, t + 10).unwrap();
+    let n8 = open.begin(Network::Home, t).unwrap();
+    let (_, _, c8) = joiner_session();
+    open.reply(n8, c8, t + 10).unwrap();
     assert_eq!(open.begin(Network::Home, t + invitation::ATTEMPT_MS - 1), Err(PairError::Busy));
     assert_eq!(open.begin(Network::Home, t + invitation::ATTEMPT_MS), Err(PairError::TooMany));
     assert_eq!(open.failures, invitation::MAX_FAILURES);
@@ -298,6 +307,56 @@ fn the_short_code_opens_its_commitment() {
         let table = crate::msg::tables::of(t).unwrap();
         assert!(table.fields.iter().any(|f| f.rule == rule && f.needed), "{rule}");
     }
+}
+
+#[test]
+fn a_late_message_of_an_earlier_attempt_changes_nothing() {
+    let mut open = invitation::Open {
+        invitation: Invitation::new(Vec::new(), Profile::small_device()),
+        name: "kettle".into(),
+        created_ms: 1,
+        expires_ms: 10_000_000,
+        used: false,
+        failures: 0,
+        allowed_key: None,
+        attempt: None,
+        next_attempt: 0,
+    };
+    let e = [9u8; 32];
+    let first = open.begin(Network::Home, 0).unwrap();
+    let (mut j1, joiner1, c1) = joiner_session();
+    let nm1 = open.reply(first, c1, 10).unwrap();
+    let (_, nj1) = j1.open(joiner1, &e, &nm1);
+    // The first attempt's time runs out; a second begins.
+    let second = open.begin(Network::Home, invitation::ATTEMPT_MS).unwrap();
+    let (_, _, c2) = joiner_session();
+    // The first attempt's late messages name it, and change nothing.
+    assert_eq!(open.reply(first, c2, invitation::ATTEMPT_MS + 1), Err(PairError::Closed));
+    open.reply(second, c2, invitation::ATTEMPT_MS + 2).unwrap();
+    assert_eq!(open.short_code(first, &e, &nj1, invitation::ATTEMPT_MS + 3), Err(PairError::Closed));
+    open.end(first, true, invitation::ATTEMPT_MS + 4);
+    assert_eq!(open.attempt.as_ref().map(|a| a.number), Some(second), "the second attempt still runs");
+    assert_eq!(open.begin(Network::Home, invitation::ATTEMPT_MS + 5), Err(PairError::Busy));
+    assert_eq!(open.failures, 2);
+}
+
+#[test]
+fn the_joiner_counts_its_sessions() {
+    let mut j = invitation::JoinerAttempts::default();
+    let e = [9u8; 32];
+    // A session shows its code; until the person answers, no other starts.
+    let (code, _) = j.start().unwrap();
+    let (shown, _) = j.open(code, &e, &[1; 32]);
+    assert_eq!(shown.len(), 6);
+    assert_eq!(j.start().err(), Some(PairError::Busy), "the shown code stays until the person answers");
+    // The session dropped before the person answered: it counted.
+    j.answered();
+    for _ in 1..invitation::MAX_FAILURES {
+        let (code, _) = j.start().unwrap();
+        j.open(code, &e, &[2; 32]);
+        j.answered();
+    }
+    assert_eq!(j.start().err(), Some(PairError::TooMany), "three sessions per invitation");
 }
 
 #[test]
@@ -524,7 +583,7 @@ fn the_joiner_checks_its_welcome() {
     let mut counted = w.clone();
     counted.counted = vec![RecordId([2; 32]), RecordId([1; 32])];
     let back = Welcome::decode(&counted.encode()).unwrap();
-    assert_eq!(back.counted, vec![RecordId([1; 32]), RecordId([2; 32])], "written sorted");
+    assert_eq!(back.counted, vec![RecordId([2; 32]), RecordId([1; 32])], "in the order of counting");
     // The encoding's parts read back.
     let (root, envs, ages, time) = Welcome::parts(&w.encode()).unwrap();
     assert_eq!(root, g.root.key.public);
@@ -594,6 +653,32 @@ fn the_joiner_checks_its_welcome() {
     assert!(set.counted().contains(&claim.id()));
     // A guarded leaf takes no claim its admitter counted.
     assert_eq!(back.check(&group, &point(&k("phone 2")), &point(&slate), true).err(), Some(welcome::Refusal::Takeover));
+
+    // Nor a claim by its age: the claim's new root signs a guarded leaf's
+    // record, and the Welcome gives the claim an age of the root's delay.
+    let bulb = k("bulb");
+    let mut d = Device::new(k("phone 2").key.clone(), "phone 2", ROLE_PHONE);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    d.admin = Some(k("phone 2 admin").key.clone());
+    let (p, c) = AdminKind::Phone.grants();
+    d.powers = p;
+    d.commands = c;
+    d.holds_root = true;
+    g.rec(&k("phone 2 root"), Kind::Device(d));
+    let mut d = Device::new(bulb.key.clone(), "bulb", ROLE_LEAF);
+    d.guarded = true;
+    d.rights = RIGHT_READ;
+    g.rec(&k("phone 2 root"), Kind::Device(d));
+    let mut set = RecordSet::new(g.root.key.clone());
+    set.insert_all(g.recs.iter().cloned());
+    let st = set.state(&held);
+    let aged = Welcome::build(&set, &st, &k("phone 2").hash, &bulb.hash, &held, 1_793_000_000_000);
+    let mut aged = aged;
+    aged.counted.clear();
+    assert!(aged.claim_ages.iter().any(|(id, ms)| *id == claim.id() && *ms == DEFAULT_DELAY_MS));
+    let r = aged.check(&group, &point(&k("phone 2")), &point(&bulb), false);
+    assert!(r.is_ok(), "{:?}", r.err());
+    assert!(aged.check(&group, &point(&k("phone 2")), &point(&bulb), true).is_err(), "a guarded leaf does not");
 }
 
 #[test]
@@ -740,6 +825,7 @@ fn an_open_invitation() {
         failures: 0,
         allowed_key: None,
         attempt: None,
+        next_attempt: 0,
     };
     assert_eq!(open.may_use(Network::Guest, 2000), Ok(()));
     assert_eq!(open.may_use(Network::Guest, 5000), Err(PairError::Expired), "the admitter checks the expiry");
@@ -958,9 +1044,17 @@ fn one_host_cannot_keep_intros_out() {
     assert!(!lim.allow(ip("192.168.1.7"), 0));
     assert!(lim.allow(ip("192.168.1.8"), 0), "another device of the same home");
     assert!(lim.allow(ip("2001:db8:0:1::8"), 0), "the same over IPv6");
+    // A host with a few addresses spends their shares, not the network's.
+    let mut lim = intro::Limiter::default();
+    for i in 0..8u32 {
+        for _ in 0..intro::MAX_PER_WINDOW {
+            assert!(lim.allow(ip(&alloc::format!("2001:db8:0:1::{:x}", 0x100 + i)), 0));
+        }
+    }
+    assert!(lim.allow(ip("2001:db8:0:1::8"), 0), "another device of the same /64");
     // A host with a whole /64 spends the network's higher share, no more.
     let mut lim = intro::Limiter::default();
-    let taken = (0..300u32).filter(|i| lim.allow(ip(&alloc::format!("2001:db8:0:1::{i:x}")), 0)).count();
+    let taken = (0..600u32).filter(|i| lim.allow(ip(&alloc::format!("2001:db8:0:1::{i:x}")), 0)).count();
     assert_eq!(taken, usize::try_from(intro::MAX_PER_NETWORK).unwrap());
     // A full table gives way to a newcomer.
     for i in 0..intro::MAX_ADDRESSES {
@@ -1097,7 +1191,7 @@ fn one_invitation_takes_few_waiting_places() {
     }
     let home = |h: &Held| h.requests.iter().filter(|r| matches!(r.came, waiting::Came::Home(_))).count();
     assert_eq!(home(&held), 1, "one host at home holds one place");
-    for n in 0..20u8 {
+    for n in 0..40u8 {
         let mut a = info("x", ROLE_MEMBER);
         a.invite = Some([n.wrapping_add(150); 16]);
         assert!(held.knock(

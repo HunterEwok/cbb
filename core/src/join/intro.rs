@@ -191,7 +191,7 @@ pub const MAX_PER_WINDOW: u32 = 4;
 /// The most intros one network (an IPv6 /64, an IPv4 /24, a home's whole
 /// network) may send in a window: higher, so that one host cannot spend it
 /// for the others.
-pub const MAX_PER_NETWORK: u32 = 32;
+pub const MAX_PER_NETWORK: u32 = 256;
 /// The window.
 pub const WINDOW_MS: u64 = 60_000;
 /// The most addresses, and the most networks, a [`Limiter`] tracks at

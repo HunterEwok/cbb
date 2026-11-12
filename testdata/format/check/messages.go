@@ -440,8 +440,7 @@ func addrOK(s string) bool {
 // with 0x, with its port.
 func endpointOK(s string) bool {
 	if ap, err := netip.ParseAddrPort(s); err == nil {
-		a := ap.Addr()
-		return addrOK(s) && !a.IsLoopback() && !a.IsLinkLocalUnicast() && !a.IsMulticast()
+		return addrOK(s) && publicIP(ap.Addr())
 	}
 	i := strings.LastIndexByte(s, ':')
 	if i < 0 {
@@ -454,13 +453,47 @@ func endpointOK(s string) bool {
 	}
 	labels := strings.Split(host, ".")
 	last := labels[len(labels)-1]
-	if strings.HasPrefix(last, "0x") || strings.Trim(last, "0123456789") == "" || last == "localhost" {
+	if strings.HasPrefix(last, "0x") || strings.Trim(last, "0123456789") == "" || last == "localhost" || last == "local" {
 		return false
 	}
 	for _, l := range labels {
 		if l == "" || len(l) > 63 || l[0] == '-' || l[len(l)-1] == '-' || strings.Trim(l, "abcdefghijklmnopqrstuvwxyz0123456789-") != "" {
 			return false
 		}
+	}
+	return true
+}
+
+// publicV4 reports whether an IPv4 address is none of this network, private,
+// shared, loopback, link-local, multicast or reserved.
+func publicV4(b [4]byte) bool {
+	x, y := b[0], b[1]
+	return !(x == 0 || x == 10 || x == 127 || x >= 224 || (x == 172 && y >= 16 && y < 32) ||
+		(x == 192 && y == 168) || (x == 100 && y >= 64 && y < 128) || (x == 169 && y == 254))
+}
+
+// publicIP reports whether a card may name the address: a public IPv4
+// address, or an IPv6 address that is not loopback, unspecified, multicast,
+// link-local, site-local or unique-local, nor a refused IPv4 address in a
+// translated, NAT64 or 6to4 form.
+func publicIP(a netip.Addr) bool {
+	if a.Is4() {
+		return publicV4(a.As4())
+	}
+	p := a.As16()
+	v4 := func(b []byte) bool { return publicV4([4]byte(b)) }
+	first := uint16(p[0])<<8 | uint16(p[1])
+	switch {
+	case a.IsLoopback(), a.IsUnspecified(), a.IsMulticast():
+		return false
+	case first&0xffc0 == 0xfe80, first&0xffc0 == 0xfec0, first&0xfe00 == 0xfc00:
+		return false
+	case bytes.Equal(p[:12], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0, 0}) && !v4(p[12:]):
+		return false
+	case bytes.Equal(p[:12], []byte{0, 0x64, 0xff, 0x9b, 0, 0, 0, 0, 0, 0, 0, 0}) && !v4(p[12:]):
+		return false
+	case first == 0x2002 && !v4(p[2:6]):
+		return false
 	}
 	return true
 }
