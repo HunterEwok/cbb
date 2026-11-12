@@ -250,6 +250,8 @@
     {"name": "paste_on_body", "value": "Huenda mahali ambapo kibodi ya %1$s imeelekezwa, mara mtumiaji wake atakapowasha kubandika kwa mbali huko."},
     {"name": "paste_on_it", "value": "Bandika kwake…"},
     {"name": "paste_on_title", "value": "Bandika kwenye %1$s"},
+    {"name": "paste_pick", "value": "Bandika picha au faili…"},
+    {"name": "paste_pick_note", "value": "Picha au faili huenda kwenye kikundi kama nakala, na kompyuta huzibandika mahali lengo lake lilipo, kama Ctrl+V ingefanya: kwenye gumzo, hati au folda. Enter, ikiwa imewashwa, huzituma kwenye gumzo."},
     {"name": "paste_refused", "value": "imekataliwa"},
     {"name": "paste_secret", "value": "Siri"},
     {"name": "paste_text", "value": "Maandishi"},

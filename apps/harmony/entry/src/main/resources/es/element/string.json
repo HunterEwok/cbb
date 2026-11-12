@@ -250,6 +250,8 @@
     {"name": "paste_on_body", "value": "Va adonde esté el foco del teclado de %1$s, una vez que su usuario haya activado allí el pegado remoto."},
     {"name": "paste_on_it", "value": "Pegar en él…"},
     {"name": "paste_on_title", "value": "Pegar en %1$s"},
+    {"name": "paste_pick", "value": "Pegar una imagen o archivos…"},
+    {"name": "paste_pick_note", "value": "Una imagen o archivos van al grupo como una copia, y el ordenador los pega donde tiene el foco, como lo haría Ctrl+V: en un chat, un documento o una carpeta. Intro, si está activado, los envía en un chat."},
     {"name": "paste_refused", "value": "rechazado"},
     {"name": "paste_secret", "value": "Un secreto"},
     {"name": "paste_text", "value": "Texto"},

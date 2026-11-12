@@ -250,6 +250,8 @@
     {"name": "paste_on_body", "value": "يذهب إلى حيث تركيز لوحة مفاتيح %1$s، بعد أن يشغّل مستخدمه اللصق عن بُعد هناك."},
     {"name": "paste_on_it", "value": "لصق عليه…"},
     {"name": "paste_on_title", "value": "لصق على %1$s"},
+    {"name": "paste_pick", "value": "لصق صورة أو ملفات…"},
+    {"name": "paste_pick_note", "value": "تذهب الصورة أو الملفات إلى المجموعة كنسخة، ويلصقها الكمبيوتر حيث يكون التركيز، كما يفعل Ctrl+V: في محادثة أو مستند أو مجلد. مفتاح Enter، إن كان مفعّلًا، يرسلها في المحادثة."},
     {"name": "paste_refused", "value": "مرفوض"},
     {"name": "paste_secret", "value": "سرّ"},
     {"name": "paste_text", "value": "نص"},

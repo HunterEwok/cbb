@@ -4,12 +4,17 @@
 // Remote paste (docs/design.md, "Remote paste"), as the iPhone's and
 // Android's: a text to put where a device's focus is, pasted or typed, with
 // Enter after it if asked; a secret leaves no trace there. The device takes
-// it only when its user turned remote paste on there. The admin key signs
-// it after the face, fingerprint or PIN.
+// it only when its user turned remote paste on there. A picture or files
+// go to the group as a copy, which the device pastes as Ctrl+V would. The
+// admin key signs it after the face, fingerprint or PIN.
 
+import { common } from '@kit.AbilityKit';
+import { picker } from '@kit.CoreFileKit';
 import { router } from '@kit.ArkUI';
+import { Errors } from '../core/Errors';
 import { t } from '../core/Text';
 import { clipboardText } from '../common/Clipboard';
+import { copyIn, Shared } from '../common/Share';
 import { app } from '../model/AppModel';
 import { Device } from '../model/Member';
 import { BusyLine, ErrorText, PageTitle } from '../components/Common';
@@ -42,6 +47,31 @@ struct Paste {
     }
     this.error = '';
     if (await app.pasteOn(this.deviceId, this.text, this.typing ? 'type' : 'paste', this.enter, this.secret)) {
+      this.getUIContext().getPromptAction().showToast({ message: t('pasted') });
+      router.back();
+    }
+  }
+
+  // Picks a picture or files with the system's picker, which needs no
+  // permission, and pastes them.
+  async pick(): Promise<void> {
+    const context = getContext(this) as common.UIAbilityContext;
+    let uris: string[] = [];
+    try {
+      const options = new picker.DocumentSelectOptions();
+      options.maxSelectNumber = 20;
+      uris = await new picker.DocumentViewPicker(context).select(options);
+    } catch (e) {
+      this.error = Errors.shown(Errors.unexpected(t('error_share_nothing'), e as Object));
+      return;
+    }
+    if (uris.length === 0) {
+      return;
+    }
+    const picked = new Shared();
+    copyIn(uris, `${context.cacheDir}/paste-${Date.now()}`, picked);
+    this.error = '';
+    if (await app.pasteMedia(this.deviceId, picked.files, picked.types, this.enter)) {
       this.getUIContext().getPromptAction().showToast({ message: t('pasted') });
       router.back();
     }
@@ -98,6 +128,13 @@ struct Paste {
           .onClick(() => {
             this.send();
           })
+        Button($r('app.string.paste_pick'), { type: ButtonType.Capsule, buttonStyle: ButtonStyleMode.NORMAL })
+          .width('100%')
+          .enabled(!app.busy)
+          .onClick(() => {
+            this.pick();
+          })
+        Text($r('app.string.paste_pick_note')).fontSize(12).fontColor($r('app.color.secondary'))
         BusyLine({ busy: app.busy })
         ErrorText({ text: this.error })
         ErrorText({ text: app.error })

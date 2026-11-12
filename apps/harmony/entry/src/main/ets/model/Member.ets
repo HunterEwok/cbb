@@ -164,6 +164,10 @@ interface Part {
   dir?: boolean;
 }
 
+interface CopyMade {
+  copy?: Copy;
+}
+
 interface Fetched {
   parts?: Part[];
 }
@@ -445,12 +449,10 @@ export class Member {
     this.setLast(text, false);
   }
 
-  // Sends files shared to the app (paths in its sandbox), up to
-  // MAX_SEND_BYTES together; a lone image goes as clipboard data.
-  async sendFiles(files: string[], types: string[]): Promise<void> {
-    if (this.handle === null || this.muted || files.length === 0) {
-      return;
-    }
+  // Makes the group's copy of files (paths in the app's sandbox), up to
+  // MAX_SEND_BYTES together; a lone image goes as clipboard data. It
+  // answers the copy's ID, or the failure to show.
+  private async copyFiles(files: string[], types: string[]): Promise<Result<string>> {
     const parts: Record<string, Object>[] = [];
     let total = 0;
     for (let i = 0; i < files.length; i++) {
@@ -466,22 +468,41 @@ export class Member {
         parts.push({ 'path': name, 'file': files[i] } as Record<string, Object>);
       }
     }
-    let failure: Failure | undefined = undefined;
     if (parts.length === 0) {
-      failure = new Failure(t('error_share_nothing'), 'share: no readable file');
-    } else if (total > MAX_SEND_BYTES) {
-      failure = new Failure(t('error_share_too_large'), `share: ${total} bytes`);
-    } else {
-      const sent = await this.call<Object>('copy_media', { 'parts': parts } as Record<string, Object>);
-      failure = sent.failure;
+      return Result.failed<string>(new Failure(t('error_share_nothing'), 'share: no readable file'));
     }
-    if (failure !== undefined) {
-      this.error = Errors.shown(failure);
+    if (total > MAX_SEND_BYTES) {
+      return Result.failed<string>(new Failure(t('error_share_too_large'), `share: ${total} bytes`));
+    }
+    const sent = await this.call<CopyMade>('copy_media', { 'parts': parts } as Record<string, Object>);
+    if (sent.ok === undefined) {
+      return Result.failed<string>(sent.failure as Failure);
+    }
+    return Result.of<string>(sent.ok.copy?.id ?? '');
+  }
+
+  // Sends files shared to the app.
+  async sendFiles(files: string[], types: string[]): Promise<void> {
+    if (this.handle === null || this.muted || files.length === 0) {
+      return;
+    }
+    const made = await this.copyFiles(files, types);
+    if (made.ok === undefined) {
+      this.error = Errors.shown(made.failure as Failure);
       return;
     }
     this.error = '';
     const first = files[0].substring(files[0].lastIndexOf('/') + 1);
-    this.last = parts.length === 1 ? first : t('last_files', parts.length);
+    this.last = files.length === 1 ? first : t('last_files', files.length);
+  }
+
+  // The group's copy of the files the user picked to paste on another
+  // device, which the paste command names: its ID.
+  async copyForPaste(files: string[], types: string[]): Promise<Result<string>> {
+    if (this.handle === null) {
+      return Result.failed<string>(new Failure(t('error_broken'), 'paste: no member'));
+    }
+    return this.copyFiles(files, types);
   }
 
   // Keeps the group's copies out of the pasteboard for minutes (0 for

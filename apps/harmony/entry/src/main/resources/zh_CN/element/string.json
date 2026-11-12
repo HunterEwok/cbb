@@ -250,6 +250,8 @@
     {"name": "paste_on_body", "value": "它会进入 %1$s 键盘焦点所在之处，前提是那里的用户已开启远程粘贴。"},
     {"name": "paste_on_it", "value": "在其上粘贴…"},
     {"name": "paste_on_title", "value": "在 %1$s 上粘贴"},
+    {"name": "paste_pick", "value": "粘贴图片或文件…"},
+    {"name": "paste_pick_note", "value": "图片或文件作为一份拷贝发送到群组，电脑会像按 Ctrl+V 一样把它们粘贴到焦点所在处：聊天、文档或文件夹中。如果开启了回车，会在聊天中发送它们。"},
     {"name": "paste_refused", "value": "已拒绝"},
     {"name": "paste_secret", "value": "机密"},
     {"name": "paste_text", "value": "文本"},

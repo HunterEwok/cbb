@@ -375,6 +375,26 @@ export class AppModel {
     return a !== undefined;
   }
 
+  // Pastes images or files where a computer's focus is (docs/protocol.md,
+  // section 15): they go to the group as a copy, then a paste command of
+  // kind media names it; the computer fetches it, puts it in its
+  // clipboard and presses the paste keys. True once it took them.
+  async pasteMedia(device: string, files: string[], types: string[], enter: boolean): Promise<boolean> {
+    if (this.busy) {
+      return false;
+    }
+    const made = await this.member.copyForPaste(files, types);
+    if (made.ok === undefined) {
+      this.show(Errors.shown(made.failure as Failure));
+      return false;
+    }
+    // The computer waits up to 20 s for the copy, then 8 s for its desktop.
+    const a = await this.runManage('paste', device, {
+      'method': 'paste', 'kind': 'media', 'text': made.ok, 'enter': enter, 'timeout_ms': 35000
+    } as Record<string, Object>);
+    return a !== undefined;
+  }
+
   // The root's decision on an alert: voids the records it names.
   resolve(records: string[]): Promise<boolean> {
     return this.manage('resolve', '', '', 0, records);

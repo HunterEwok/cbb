@@ -251,6 +251,8 @@
     {"name": "paste_on_body", "value": "It goes where %1$s's keyboard focus is, once its user turned remote paste on there."},
     {"name": "paste_on_it", "value": "Paste on it…"},
     {"name": "paste_on_title", "value": "Paste on %1$s"},
+    {"name": "paste_pick", "value": "Paste a picture or files…"},
+    {"name": "paste_pick_note", "value": "A picture or files go to the group as a copy, and the computer pastes them where its focus is, as Ctrl+V would: into a chat, a document or a folder. Enter, if on, sends them in a chat."},
     {"name": "paste_refused", "value": "refused"},
     {"name": "paste_secret", "value": "A secret"},
     {"name": "paste_text", "value": "Text"},

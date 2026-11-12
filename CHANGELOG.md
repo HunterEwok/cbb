@@ -14,9 +14,9 @@ All notable changes to cbb are documented in this file. The format follows
   with the tiles, the devices and the admin's actions, adding a device with Scan Kit,
   invitations, the recovery key and the takeover, the arrangement, the notifications, and
   why it does not sync; it sends with the system's Paste button and the Share menu, pastes
-  on another device as an admin, acts as a Bluetooth keyboard in the lab (HID over GATT),
-  which also types an admin's remote paste, and the member runs on in the background as a
-  continuous task (docs/apps.md, "HarmonyOS"). `cbb_member_manage` signs a remote paste
+  a text, pictures or files on another device as an admin, acts as a Bluetooth keyboard in
+  the lab (HID over GATT), which also types an admin's remote paste, and the member runs on
+  in the background as a continuous task (docs/apps.md, "HarmonyOS"). `cbb_member_manage` signs a remote paste
   (`paste`, `paste_off`) for the apps that sign through the core. The
   protocol names its system `harmonyos`, a phone's system like `ios`, `android`, `aurora`
   and `sailfish` (docs/protocol.md, section 6), and a bug report may name it as its app.

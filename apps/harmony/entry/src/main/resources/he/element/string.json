@@ -250,6 +250,8 @@
     {"name": "paste_on_body", "value": "זה נכנס למקום שבו נמצא מיקוד המקלדת של %1$s, אחרי שהמשתמש שלו הפעיל שם הדבקה מרחוק."},
     {"name": "paste_on_it", "value": "הדבקה בו…"},
     {"name": "paste_on_title", "value": "הדבקה ב-%1$s"},
+    {"name": "paste_pick", "value": "הדבקת תמונה או קבצים…"},
+    {"name": "paste_pick_note", "value": "התמונה או הקבצים נשלחים לקבוצה כהעתקה, והמחשב מדביק אותם במקום שבו נמצא המיקוד, כמו Ctrl+V: בצ׳אט, במסמך או בתיקייה. Enter, אם הוא מופעל, שולח אותם בצ׳אט."},
     {"name": "paste_refused", "value": "נדחה"},
     {"name": "paste_secret", "value": "סוד"},
     {"name": "paste_text", "value": "טקסט"},

@@ -982,7 +982,8 @@ settings, why it does not sync and the lab.
 - **QR codes**: Scan Kit's scanner reads a computer's code and the recovery sheet; the
   phone's own code for joining is drawn from the core's modules.
 - **Remote paste**: an admin phone pastes on a computer or another phone from the device's
-  page, pasted or typed, with Enter or as a secret, as on the iPhone and Android; the core
+  page, pasted or typed, with Enter or as a secret, and pictures or files picked with the
+  system's picker, which go to the group as a copy first, as on the iPhone and Android; the core
   signs the paste command (`cbb_member_manage`, `paste`). As a target, HarmonyOS lets no app
   put keys into another app, so the phone types an admin's paste on its Bluetooth keyboard,
   as Aurora does.
@@ -1011,7 +1012,7 @@ settings, why it does not sync and the lab.
   for now; elsewhere the app is tested on a phone with HarmonyOS 5 or later (sold in China;
   the same models elsewhere run HarmonyOS 4, where the Android app works).
 
-Not yet: pasting images and files on another device, and a run on a phone.
+Not yet: a run on a phone.
 
 ## Releasing the Android app
 
