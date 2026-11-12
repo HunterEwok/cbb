@@ -15,15 +15,18 @@
 //!   That connection's key exchange is X25519MLKEM768, so the tunnel holds
 //!   against a later quantum computer as WireGuard's X25519 alone does not.
 //!   Each connection gives a new one.
-//! - **The switch.** A new pre-shared key is pending on both ends. The
-//!   device sends `tunnel` with the new key's confirmation tag; the hub
-//!   takes it as pending, keeps its current one too, and answers with the
-//!   same tag in its offer. Only then does the device handshake with the new
-//!   key; the hub makes it current when a handshake with it succeeds. The
-//!   device keeps the one before as a fallback, so a hub that lost its last
-//!   switch (restarted from an older state) still lets it in: a switch never
-//!   locks a device out away from home. Anything worse is repaired by the
-//!   next direct connection, which starts a new switch.
+//! - **The switch.** Each end keeps the keys of the last few connections
+//!   beside the key of the last tunnel handshake, and a new key is added
+//!   beside them, never in their place. The device sends `tunnel` with the
+//!   new key's confirmation tag; the hub keeps the key and answers with the
+//!   tag in its offer; the device then tries the confirmed key first, and
+//!   every other key it keeps after it. A handshake drops, at the hub, the
+//!   keys of connections before its own; the device keeps them, for a hub
+//!   that comes back from an older saved state. So a lost `tunnel`, a lost
+//!   confirmation or a lost step of either end's saved state never leaves
+//!   the two ends without a common key: a switch never locks a device out
+//!   away from home. Anything worse is repaired by the next direct
+//!   connection.
 //! - **No client lists between hubs.** Away from home a device uses only
 //!   hubs it has met directly; `hubs` carries no clients and no offers.
 //!
@@ -119,167 +122,113 @@ pub fn read(msg: &[u8]) -> Result<([u8; 32], [u8; 32]), Rule> {
     Ok((key, confirm))
 }
 
+/// How many keys of recent connections each end keeps.
+pub const KEEP: usize = 4;
+
 /// The device's pre-shared keys toward one hub. Kept across restarts.
 #[derive(Clone, Default, PartialEq, Eq, Debug)]
 pub struct DeviceSide {
-    /// The key it handshakes with.
-    pub current: Option<[u8; 32]>,
-    /// The one before, tried when the current one fails.
-    pub previous: Option<[u8; 32]>,
-    /// This connection's, until the hub confirms it.
-    pub pending: Option<Psk>,
+    /// The key of the last tunnel handshake with the hub.
+    pub handshaked: Option<[u8; 32]>,
+    /// The newest key the hub confirmed.
+    pub confirmed: Option<[u8; 32]>,
+    /// The keys of the last connections it sent `tunnel` over, newest
+    /// first, at most [`KEEP`], whether or not the hub confirmed them.
+    pub sent: Vec<Psk>,
 }
 
 impl DeviceSide {
-    /// A member connection with the hub gave a new key: it is pending, and
-    /// its tag goes in `tunnel`.
+    /// A member connection with the hub gave a new key: it is kept, and its
+    /// tag goes in `tunnel`.
     pub fn connected(&mut self, psk: Psk) -> [u8; 32] {
-        self.pending = Some(psk);
+        self.sent.retain(|p| p != &psk);
+        self.sent.insert(0, psk);
+        self.sent.truncate(KEEP);
         psk.confirm
     }
 
-    /// The hub's offer came back with `confirm`: if it is the pending key's
-    /// tag, the key becomes current and the current one the fallback.
-    /// Returns whether it switched.
+    /// The hub's offer came back with `confirm`: the key of that tag is the
+    /// newest the hub holds. Returns whether the tag was one of its keys.
     pub fn confirmed(&mut self, confirm: &[u8; 32]) -> bool {
-        match self.pending {
-            Some(p) if &p.confirm == confirm => {
-                self.pending = None;
-                if self.current != Some(p.key) {
-                    self.previous = self.current;
-                    self.current = Some(p.key);
-                }
+        match self.sent.iter().find(|p| &p.confirm == confirm) {
+            Some(p) => {
+                self.confirmed = Some(p.key);
                 true
             }
-            _ => false,
+            None => false,
         }
     }
 
-    /// The keys to try, in order: the current one, then the fallback.
+    /// The keys to try, in order: the confirmed one, the last handshake's,
+    /// then every key of a recent connection, newest first. The hub holds
+    /// one of them unless it lost more of its saved state than the last
+    /// [`KEEP`] connections, or missed [`KEEP`] `tunnel` messages in a row.
     pub fn to_try(&self) -> Vec<[u8; 32]> {
-        self.current.into_iter().chain(self.previous).collect()
+        let mut out: Vec<[u8; 32]> = Vec::new();
+        for k in self.confirmed.into_iter().chain(self.handshaked).chain(self.sent.iter().map(|p| p.key)) {
+            if !out.contains(&k) {
+                out.push(k);
+            }
+        }
+        out
+    }
+
+    /// A handshake with `key` succeeded: it is the last handshake's key.
+    /// The keys of earlier connections stay, for a hub that comes back from
+    /// an older saved state.
+    pub fn handshake(&mut self, key: &[u8; 32]) {
+        self.handshaked = Some(*key);
     }
 }
 
 /// A hub's pre-shared keys for one device. Kept across restarts.
 #[derive(Clone, Default, PartialEq, Eq, Debug)]
 pub struct HubSide {
-    pub current: Option<[u8; 32]>,
-    /// Confirmed to the device, not yet used by a handshake.
-    pub pending: Option<[u8; 32]>,
+    /// The key of the last tunnel handshake with the device.
+    pub handshaked: Option<[u8; 32]>,
+    /// The keys of the last connections the device sent `tunnel` over,
+    /// newest first, at most [`KEEP`]. Each new one is added beside the
+    /// others, never in their place.
+    pub received: Vec<[u8; 32]>,
 }
 
 impl HubSide {
     /// The device sent `tunnel` over a connection whose key is `psk`: if its
-    /// tag matches, the key is pending and the hub confirms it with that
-    /// tag in its offer; the current key stays.
+    /// tag matches, the key is kept and the hub confirms it with that tag in
+    /// its offer; the keys it held stay.
     pub fn tunnel(&mut self, psk: Psk, confirm: &[u8; 32]) -> Option<[u8; 32]> {
         if &psk.confirm != confirm {
             return None;
         }
-        self.pending = Some(psk.key);
+        self.received.retain(|k| k != &psk.key);
+        self.received.insert(0, psk.key);
+        self.received.truncate(KEEP);
         Some(psk.confirm)
     }
 
-    /// The keys a handshake from the device may use: the pending one and
-    /// the current one.
+    /// The keys a handshake from the device may use.
     pub fn accepts(&self) -> Vec<[u8; 32]> {
-        self.pending.into_iter().chain(self.current).collect()
+        let mut out = self.received.clone();
+        if let Some(h) = self.handshaked
+            && !out.contains(&h)
+        {
+            out.push(h);
+        }
+        out
     }
 
-    /// A handshake with `key` succeeded: a pending key becomes current and
-    /// the old one goes.
+    /// A handshake with `key` succeeded: it is the last handshake's key,
+    /// and the keys of connections before it go.
     pub fn handshake(&mut self, key: &[u8; 32]) {
-        if self.pending.as_ref() == Some(key) {
-            self.current = self.pending.take();
+        if !self.accepts().contains(key) {
+            return;
+        }
+        self.handshaked = Some(*key);
+        if let Some(i) = self.received.iter().position(|k| k == key) {
+            self.received.truncate(i.saturating_add(1));
         }
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn exported(n: u8) -> [u8; 32] {
-        [n; 32]
-    }
-
-    /// The device tries its keys in order against what the hub accepts; the
-    /// first that fits is the handshake.
-    fn handshake(d: &DeviceSide, h: &mut HubSide) -> Option<[u8; 32]> {
-        let ok = d.to_try().into_iter().find(|k| h.accepts().contains(k))?;
-        h.handshake(&ok);
-        Some(ok)
-    }
-
-    /// One direct connection: the device sends `tunnel`, the hub confirms.
-    fn connect(d: &mut DeviceSide, h: &mut HubSide, n: u8) {
-        let p = psk(&exported(n));
-        let tag = d.connected(p);
-        let back = h.tunnel(p, &tag).expect("the hub takes its own connection's tag");
-        assert!(d.confirmed(&back));
-    }
-
-    #[test]
-    fn one_key_per_hub() {
-        let secret = [7u8; 32];
-        let (a, b) = (DeviceId([1; 16]), DeviceId([2; 16]));
-        assert_eq!(key_for(&secret, &a), key_for(&secret, &a), "stable for a hub");
-        assert_ne!(key_for(&secret, &a).1, key_for(&secret, &b).1, "another for another hub");
-        assert_ne!(key_for(&secret, &a).1, key_for(&[8; 32], &a).1, "another device, another key");
-        let (k, c) = (key_for(&secret, &a).1, psk(&exported(1)).confirm);
-        assert_eq!(read(&message(&k, &c)), Ok((k, c)));
-        assert!(read(&message(&[0; 32], &c)).is_err());
-        let p = psk(&exported(1));
-        assert_ne!(p.key, p.confirm, "the tag does not give the key away");
-    }
-
-    #[test]
-    fn a_switch_needs_both_ends() {
-        let (mut d, mut h) = (DeviceSide::default(), HubSide::default());
-        connect(&mut d, &mut h, 1);
-        assert_eq!(handshake(&d, &mut h), Some(psk(&exported(1)).key));
-        assert_eq!(h.current, Some(psk(&exported(1)).key));
-
-        // The next connection breaks after the device sent `tunnel` and
-        // before the hub's confirmation came back.
-        let p2 = psk(&exported(2));
-        let tag = d.connected(p2);
-        assert!(h.tunnel(p2, &tag).is_some());
-        // The device still handshakes with the old key, and the hub still
-        // takes it beside the pending one.
-        assert_eq!(handshake(&d, &mut h), Some(psk(&exported(1)).key));
-        assert_eq!(h.current, Some(psk(&exported(1)).key), "a handshake with the old key keeps it");
-        // A tag of another connection confirms nothing.
-        assert!(!d.confirmed(&psk(&exported(9)).confirm));
-        assert!(h.tunnel(psk(&exported(3)), &psk(&exported(9)).confirm).is_none());
-
-        // The next connection completes the switch.
-        connect(&mut d, &mut h, 3);
-        assert_eq!(handshake(&d, &mut h), Some(psk(&exported(3)).key));
-        assert_eq!(h.accepts(), alloc::vec![psk(&exported(3)).key], "the hub drops the old key");
-    }
-
-    #[test]
-    fn a_hub_restarted_from_an_older_state_still_lets_the_device_in() {
-        let (mut d, mut h) = (DeviceSide::default(), HubSide::default());
-        connect(&mut d, &mut h, 1);
-        assert!(handshake(&d, &mut h).is_some());
-        let saved = h.clone();
-        connect(&mut d, &mut h, 2);
-        assert!(handshake(&d, &mut h).is_some());
-        // The hub comes back from the state it saved before the switch.
-        let mut h = saved;
-        assert_eq!(handshake(&d, &mut h), Some(psk(&exported(1)).key), "the device falls back");
-        // The next direct connection puts both on a new key.
-        connect(&mut d, &mut h, 3);
-        assert_eq!(handshake(&d, &mut h), Some(psk(&exported(3)).key));
-
-        // A hub that lost everything: away from home the device is out
-        // until a direct connection, which repairs it.
-        let mut h = HubSide::default();
-        assert_eq!(handshake(&d, &mut h), None);
-        connect(&mut d, &mut h, 4);
-        assert_eq!(handshake(&d, &mut h), Some(psk(&exported(4)).key));
-    }
-}
+mod tests;
