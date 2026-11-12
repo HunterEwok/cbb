@@ -1,0 +1,635 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 HunterEwok
+
+//! Push to a phone whose app is closed (format section 20.4, roadmap item
+//! 57): the phone's registration (member message `push`, t 28), the body a
+//! member seals to that phone, the `once` tag that lets the project's push
+//! service drop a repeat, and the messages between a member and that
+//! service (t 100–104, ALPN `cbb-push/1`).
+//!
+//! - A phone tells each member it is connected to, for each group apart, the
+//!   token of its platform's push service, the platform (`env`) and a push
+//!   key of 32 random bytes it drew for that group. The message is not
+//!   signed and never passed on: a member takes it only from the device
+//!   itself over their member connection.
+//! - The body is one fixed size per platform (the env registry, 2972 bytes
+//!   for every platform today), sealed with ChaCha20-Poly1305 under a key
+//!   derived from the push key. Inside: a reduced copy (format section 10)
+//!   whose origin's signature the phone checks before it shows anything; or
+//!   a hint that a copy waits; or a hint of a group event. Hints are shown
+//!   as "open the app", never as facts.
+//! - `once` is a keyed hash of the copy's or event's ID under a key derived
+//!   from the push key: the same from every member that sends one copy,
+//!   meaningless to the service.
+//!
+//! The service sees its own face's period tag and the server keys' hashes
+//! (the blind credentials of section 8), tokens, times and one size per
+//! platform; never a group ID, a device ID, a name or content.
+
+#[cfg(test)]
+mod tests;
+
+use alloc::vec::Vec;
+
+use chacha20poly1305::aead::{Aead, KeyInit, Payload};
+use chacha20poly1305::{ChaCha20Poly1305, Nonce};
+use hkdf::Hkdf;
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
+use zeroize::Zeroizing;
+
+use crate::format::Rule;
+use crate::format::cbor::head_len;
+use crate::format::cbor::{self, Value};
+use crate::format::frame;
+use crate::msg::{Field, Table, Ty, check_map};
+
+// ------------------------------------------------------------- numbers
+
+/// Member message `push`: a phone's registration, to a member.
+pub const T_PUSH: u64 = 28;
+/// The push service's messages.
+pub const T_HELLO: u64 = 100;
+pub const T_READY: u64 = 101;
+pub const T_SEND: u64 = 102;
+pub const T_SENT: u64 = 103;
+pub const T_ERROR: u64 = 104;
+/// The ALPN of a member's connection to the push service.
+pub const ALPN: &[u8] = b"cbb-push/1";
+
+/// The platforms and their environments (`push/env`). A reader keeps a
+/// value it does not know and hands it on as it is (E-1).
+pub const ENV_APNS: u64 = 1;
+pub const ENV_APNS_SANDBOX: u64 = 2;
+pub const ENV_FCM: u64 = 3;
+pub const ENV_UNIFIEDPUSH: u64 = 4;
+pub const ENV_PUSHKIT: u64 = 5;
+pub const ENV_AURORA: u64 = 6;
+
+/// `push/kinds` bits.
+pub const KIND_COPIES: u64 = 1;
+pub const KIND_EVENTS: u64 = 2;
+
+/// The body's kinds.
+pub const BODY_COPY: u64 = 1;
+pub const BODY_WAITS: u64 = 2;
+pub const BODY_EVENT: u64 = 3;
+
+/// Events (`pushbody/event`), rule 33's.
+pub const EVENT_JOINED: u64 = 1;
+pub const EVENT_REMOVED: u64 = 2;
+pub const EVENT_WAITING: u64 = 3;
+pub const EVENT_ROOT: u64 = 4;
+pub const EVENT_OWN_RECORD: u64 = 5;
+pub const EVENT_STOPPED: u64 = 6;
+
+/// `push/sent/status`.
+pub const SENT: u64 = 1;
+pub const SENT_GONE: u64 = 2;
+pub const SENT_BUDGET: u64 = 3;
+pub const SENT_FAILED: u64 = 4;
+pub const SENT_REPEAT: u64 = 5;
+
+/// The nonce and the tag around a body's plaintext.
+pub const NONCE_LEN: usize = 12;
+pub const TAG_LEN: usize = 16;
+/// The smallest body: a nonce and a tag around nothing.
+pub const MIN_BODY: usize = NONCE_LEN + TAG_LEN;
+/// The largest body any platform takes.
+pub const MAX_BODY: usize = 2972;
+/// The longest token (a UnifiedPush endpoint with its keys fits).
+pub const MAX_TOKEN: usize = 1024;
+
+/// The body's size for a platform: the env registry. 2972 bytes for every
+/// platform today: base64 of it in each service's wrapper stays under its
+/// 4096 bytes (APNs, FCM, Push Kit), and RFC 8291's encryption of it under
+/// UnifiedPush's. A platform found smaller later changes only its row.
+/// None for an env this version does not know: it is kept, never sent.
+pub fn body_len(env: u64) -> Option<usize> {
+    match env {
+        ENV_APNS | ENV_APNS_SANDBOX | ENV_FCM | ENV_UNIFIEDPUSH | ENV_PUSHKIT | ENV_AURORA => Some(MAX_BODY),
+        _ => None,
+    }
+}
+
+// --------------------------------------------------------------- tables
+
+const fn f(n: u16, rule: &'static str, ty: Ty, needed: bool) -> Field {
+    Field { n, rule, ty, needed }
+}
+
+const ENV: Ty = Ty::Uint { min: 1, max: 255 };
+const TOKEN: Ty = Ty::BytesUpTo(MAX_TOKEN);
+const SEQ: Ty = Ty::Uint { min: 1, max: 1 << 53 };
+const N: Ty = Ty::Uint { min: 1, max: u32::MAX as u64 };
+const STATUS: Ty = Ty::Uint { min: 1, max: 255 };
+
+/// Member message `push` (t 28).
+pub static PUSH: Table = Table {
+    shape: "push/shape",
+    fields: &[
+        f(2, "push/token", TOKEN, false),
+        f(3, "push/env", ENV, false),
+        f(4, "push/key", Ty::Bytes(32), false),
+        f(5, "push/seq", SEQ, true),
+        f(6, "push/kinds", Ty::Uint { min: 0, max: 255 }, true),
+    ],
+};
+
+/// The token of env 4 (UnifiedPush, RFC 8030 and 8291): the endpoint and
+/// the phone's keys for the message's encryption.
+pub static PUSH_UP: Table = Table {
+    shape: "push-up/shape",
+    fields: &[
+        f(1, "push-up/url", Ty::Text(900), true),
+        f(2, "push-up/p256dh", Ty::Bytes(65), true),
+        f(3, "push-up/auth", Ty::Bytes(16), true),
+    ],
+};
+
+/// `push/hello` (t 100): the face's hubs' and members' credentials.
+pub static HELLO: Table = Table {
+    shape: "push/hello/shape",
+    fields: &[f(2, "push/hello/credentials", Ty::Array { of: &Ty::Envelope, max: 2 }, true)],
+};
+/// `push/ready` (t 101): sends left this hour for the tag.
+pub static READY: Table = Table {
+    shape: "push/ready/shape",
+    fields: &[f(2, "push/ready/left", Ty::Uint { min: 0, max: u32::MAX as u64 }, true)],
+};
+/// `push/send` (t 102).
+pub static SEND: Table = Table {
+    shape: "push/send/shape",
+    fields: &[
+        f(2, "push/send/n", N, true),
+        f(3, "push/send/token", TOKEN, true),
+        f(4, "push/send/env", ENV, true),
+        f(5, "push/send/once", Ty::Bytes(16), true),
+        f(6, "push/send/body", Ty::BytesUpTo(MAX_BODY), true),
+        f(7, "push/send/ttl", Ty::Uint { min: 1, max: 4 }, false),
+    ],
+};
+/// `push/sent` (t 103).
+pub static SENT_TABLE: Table = Table {
+    shape: "push/sent/shape",
+    fields: &[
+        f(2, "push/sent/n", N, true),
+        f(3, "push/sent/status", STATUS, true),
+        f(4, "push/sent/retry_ms", Ty::Uint { min: 1, max: (1 << 63) - 1 }, false),
+    ],
+};
+/// `push/error` (t 104).
+pub static ERROR: Table =
+    Table { shape: "push/error/shape", fields: &[f(2, "push/error/reason", Ty::Text(256), true)] };
+
+/// The body's plaintext (its needs depend on the kind; see [`Body::read`]).
+pub static BODY: Table = Table {
+    shape: "pushbody/shape",
+    fields: &[
+        f(0, "pushbody/kind", Ty::Uint { min: 1, max: (1 << 63) - 1 }, true),
+        f(2, "pushbody/copy", Ty::BytesUpTo(PLAIN_LEN), false),
+        f(3, "pushbody/id", Ty::Bytes(16), false),
+        f(4, "pushbody/origin", Ty::Bytes(16), false),
+        f(5, "pushbody/event", Ty::Uint { min: 1, max: (1 << 63) - 1 }, false),
+        f(6, "pushbody/device", Ty::Bytes(16), false),
+        f(7, "pushbody/time_ms", Ty::Uint { min: 0, max: (1 << 63) - 1 }, false),
+    ],
+};
+
+/// Every table of this file, for the vectors.
+pub static ALL: [&Table; 8] = [&PUSH, &PUSH_UP, &HELLO, &READY, &SEND, &SENT_TABLE, &ERROR, &BODY];
+
+/// The table of message type t, if this file numbers it.
+pub fn of(t: u64) -> Option<&'static Table> {
+    Some(match t {
+        T_PUSH => &PUSH,
+        T_HELLO => &HELLO,
+        T_READY => &READY,
+        T_SEND => &SEND,
+        T_SENT => &SENT_TABLE,
+        T_ERROR => &ERROR,
+        _ => return None,
+    })
+}
+
+pub const RULE_PUSH_SHAPE: Rule = Rule::field("push/shape");
+pub const RULE_BODY_SHAPE: Rule = Rule::field("pushbody/shape");
+pub const RULE_BODY_PAD: Rule = Rule::field("pushbody/pad");
+pub const RULE_BODY_OPEN: Rule = Rule::field("pushbody/open");
+pub const RULE_BODY_SIZE: Rule = Rule::field("pushbody/size");
+pub const RULE_UP_URL: Rule = Rule::field("push-up/url");
+
+// --------------------------------------------------------- registration
+
+/// A phone's registration with a member of one group.
+#[derive(Clone, PartialEq, Eq)]
+pub struct Registration {
+    pub seq: u64,
+    /// The bits the phone asks for; 0 is push off. Unknown bits are kept.
+    pub kinds: u64,
+    /// With `kinds` ≠ 0: the token, the platform, the push key.
+    pub on: Option<On>,
+}
+
+/// What a registration that is on carries.
+#[derive(Clone, PartialEq, Eq)]
+pub struct On {
+    pub token: Vec<u8>,
+    pub env: u64,
+    pub key: Zeroizing<[u8; 32]>,
+}
+
+impl core::fmt::Debug for Registration {
+    // The push key never goes to a log; the token neither.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Registration")
+            .field("seq", &self.seq)
+            .field("kinds", &self.kinds)
+            .field("env", &self.on.as_ref().map(|o| o.env))
+            .finish()
+    }
+}
+
+impl Registration {
+    /// Reads message `push` (its map, `t` 28).
+    pub fn read(m: &Value<'_>) -> Result<Registration, Rule> {
+        check_map(&PUSH, m)?;
+        let uint = |n| m.get(n).and_then(Value::as_uint);
+        let seq = uint(5).ok_or(RULE_PUSH_SHAPE)?;
+        let kinds = uint(6).ok_or(RULE_PUSH_SHAPE)?;
+        let (token, env, key) = (m.get(2).and_then(Value::as_bytes), uint(3), m.get(4).and_then(Value::as_bytes));
+        let on = match (kinds, token, env, key) {
+            (0, None, None, None) => None,
+            (k, Some(token), Some(env), Some(key)) if k != 0 => {
+                let key: [u8; 32] = key.try_into().map_err(|_| RULE_PUSH_SHAPE)?;
+                Some(On { token: token.to_vec(), env, key: Zeroizing::new(key) })
+            }
+            _ => return Err(RULE_PUSH_SHAPE),
+        };
+        Ok(Registration { seq, kinds, on })
+    }
+
+    /// The frame of message `push`.
+    pub fn write(&self) -> Vec<u8> {
+        let mut m = alloc::vec![(frame::FIELD_T, Value::Uint(T_PUSH))];
+        if let Some(on) = &self.on {
+            m.push((2, Value::Bytes(&on.token)));
+            m.push((3, Value::Uint(on.env)));
+            m.push((4, Value::Bytes(&on.key[..])));
+        }
+        m.push((5, Value::Uint(self.seq)));
+        m.push((6, Value::Uint(self.kinds)));
+        frame::write(&Value::Map(m))
+    }
+
+    /// Whether the phone asks for pushes of kind bit `kind`.
+    pub fn wants(&self, kind: u64) -> bool {
+        self.on.is_some() && self.kinds & kind != 0
+    }
+
+    /// Whether a member that holds `self` takes `newer` in its place: a
+    /// higher number only.
+    pub fn replaced_by(&self, newer: &Registration) -> bool {
+        newer.seq > self.seq
+    }
+}
+
+/// A UnifiedPush token: the endpoint and RFC 8291's keys.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct UnifiedPush<'a> {
+    pub url: &'a str,
+    pub p256dh: &'a [u8; 65],
+    pub auth: &'a [u8; 16],
+}
+
+impl<'a> UnifiedPush<'a> {
+    /// Reads a token of env 4. The service reads it; a member keeps any
+    /// token as bytes.
+    pub fn read(token: &'a [u8]) -> Result<UnifiedPush<'a>, Rule> {
+        let v = cbor::decode(token)?;
+        check_map(&PUSH_UP, &v)?;
+        let url = v.get(1).and_then(Value::as_text).ok_or(RULE_UP_URL)?;
+        if !url.starts_with("https://") || url.len() <= "https://".len() {
+            return Err(RULE_UP_URL);
+        }
+        let p256dh = v.get(2).and_then(Value::as_bytes).and_then(|b| b.try_into().ok()).ok_or(RULE_UP_URL)?;
+        let auth = v.get(3).and_then(Value::as_bytes).and_then(|b| b.try_into().ok()).ok_or(RULE_UP_URL)?;
+        Ok(UnifiedPush { url, p256dh, auth })
+    }
+
+    /// The token's encoding.
+    pub fn write(&self) -> Vec<u8> {
+        Value::Map(alloc::vec![
+            (1, Value::Text(self.url)),
+            (2, Value::Bytes(&self.p256dh[..])),
+            (3, Value::Bytes(&self.auth[..])),
+        ])
+        .encode()
+    }
+}
+
+// ----------------------------------------------------------------- keys
+
+const LABEL_BODY: &str = "cbb push body v1";
+const LABEL_ONCE: &str = "cbb push once v1";
+const LABEL_AD: &str = "cbb push v1";
+
+fn derive(pk: &[u8; 32], info: &str) -> Zeroizing<[u8; 32]> {
+    let mut out = Zeroizing::new([0u8; 32]);
+    // 32 bytes are well within HKDF-SHA256's limit.
+    let _ = Hkdf::<Sha256>::new(None, pk).expand(info.as_bytes(), &mut out[..]);
+    out
+}
+
+/// `once`: the first 16 bytes of HMAC-SHA256(once key, id), id the copy's
+/// or the event's 16-byte ID.
+pub fn once(pk: &[u8; 32], id: &[u8; 16]) -> [u8; 16] {
+    let k = derive(pk, LABEL_ONCE);
+    let mut out = [0u8; 16];
+    // HMAC takes a key of any length, so this never fails.
+    if let Ok(mut mac) = <Hmac<Sha256> as hmac::KeyInit>::new_from_slice(&k[..]) {
+        mac.update(id);
+        let full = mac.finalize().into_bytes();
+        for (o, b) in out.iter_mut().zip(full.iter()) {
+            *o = *b;
+        }
+    }
+    out
+}
+
+fn associated(seq: u64) -> Vec<u8> {
+    let mut ad = Vec::with_capacity(LABEL_AD.len().saturating_add(9));
+    ad.extend_from_slice(LABEL_AD.as_bytes());
+    ad.push(0);
+    ad.extend_from_slice(&seq.to_be_bytes());
+    ad
+}
+
+// ----------------------------------------------------------------- body
+
+/// The plaintext's size in a body of `MAX_BODY` bytes.
+pub const PLAIN_LEN: usize = MAX_BODY - MIN_BODY;
+
+/// What a body says.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum Body {
+    /// A reduced copy (format section 10.1) holding this phone's wrap and
+    /// the payload whole: shown only after the origin's signature and the
+    /// commitment hold.
+    Copy(Vec<u8>),
+    /// A hint: a copy waits (it did not fit, or it is a file).
+    Waits { id: [u8; 16], origin: [u8; 16] },
+    /// A hint: something happened in the group. An event this version does
+    /// not number is the neutral hint.
+    Event { id: [u8; 16], event: u64, device: Option<[u8; 16]>, time_ms: Option<u64> },
+    /// A kind this version does not know: the neutral hint.
+    Unknown(u64),
+}
+
+/// The zeros a map of `base` bytes and `entries` entries needs in a `pad`
+/// field (key 1) so that its encoding is exactly `target` bytes; None when
+/// no padding reaches it exactly.
+fn pad_for(base: usize, entries: usize, target: usize) -> Option<usize> {
+    let grow = head_len((entries as u64).saturating_add(1)).saturating_sub(head_len(entries as u64));
+    let fixed = base.checked_add(grow)?.checked_add(1)?;
+    [1usize, 2, 3, 5, 9].into_iter().find_map(|hl| {
+        let plen = target.checked_sub(fixed)?.checked_sub(hl)?;
+        (head_len(plen as u64) == hl).then_some(plen)
+    })
+}
+
+impl Body {
+    /// The map, without `pad`.
+    fn entries(&self) -> Vec<(u16, Value<'_>)> {
+        match self {
+            Body::Copy(c) => alloc::vec![(0, Value::Uint(BODY_COPY)), (2, Value::Bytes(c))],
+            Body::Waits { id, origin } => {
+                alloc::vec![(0, Value::Uint(BODY_WAITS)), (3, Value::Bytes(id)), (4, Value::Bytes(origin)),]
+            }
+            Body::Event { id, event, device, time_ms } => {
+                let mut m = alloc::vec![(0, Value::Uint(BODY_EVENT)), (3, Value::Bytes(id)), (5, Value::Uint(*event)),];
+                if let Some(d) = device {
+                    m.push((6, Value::Bytes(d)));
+                }
+                if let Some(t) = time_ms {
+                    m.push((7, Value::Uint(*t)));
+                }
+                m
+            }
+            Body::Unknown(k) => alloc::vec![(0, Value::Uint(*k))],
+        }
+    }
+
+    /// The plaintext padded to exactly `PLAIN_LEN` bytes; None when it
+    /// does not fit (a copy too large: send [`Body::Waits`]).
+    pub fn plaintext(&self) -> Option<Vec<u8>> {
+        self.padded(PLAIN_LEN)
+    }
+
+    /// The plaintext padded to exactly `len` bytes.
+    fn padded(&self, len: usize) -> Option<Vec<u8>> {
+        let entries = self.entries();
+        let base = Value::Map(entries.clone()).encode();
+        if base.len() == len {
+            return Some(base);
+        }
+        let plen = pad_for(base.len(), entries.len(), len)?;
+        let zeros = alloc::vec![0u8; plen];
+        let mut all = entries;
+        // `pad` is key 1: after key 0, before the rest.
+        all.insert(1, (1, Value::Bytes(&zeros)));
+        Some(Value::Map(all).encode())
+    }
+
+    /// Reads a plaintext opened from a body of any size: a map in the
+    /// profile with the one padding that brings it to its size.
+    pub fn read(b: &[u8]) -> Result<Body, Rule> {
+        let v = cbor::decode(b)?;
+        check_map(&BODY, &v)?;
+        if let Some(p) = v.get(1)
+            && p.as_bytes().is_none_or(|z| z.iter().any(|x| *x != 0))
+        {
+            return Err(RULE_BODY_PAD);
+        }
+        let id16 = |n| v.get(n).and_then(Value::as_bytes).and_then(|b| <[u8; 16]>::try_from(b).ok());
+        let kind = v.get(0).and_then(Value::as_uint).ok_or(RULE_BODY_SHAPE)?;
+        let need = |r: &'static str| Rule::field(r);
+        let body = match kind {
+            BODY_COPY => Body::Copy(v.get(2).and_then(Value::as_bytes).ok_or(need("pushbody/copy"))?.to_vec()),
+            BODY_WAITS => {
+                Body::Waits { id: id16(3).ok_or(need("pushbody/id"))?, origin: id16(4).ok_or(need("pushbody/origin"))? }
+            }
+            BODY_EVENT => Body::Event {
+                id: id16(3).ok_or(need("pushbody/id"))?,
+                event: v.get(5).and_then(Value::as_uint).ok_or(need("pushbody/event"))?,
+                device: id16(6),
+                time_ms: v.get(7).and_then(Value::as_uint),
+            },
+            k => Body::Unknown(k),
+        };
+        // One padding only: the one that brings the other fields, known or
+        // not (fields from 8 and kinds from 4 are a later version's), to
+        // this size.
+        let rest: Vec<(u16, Value<'_>)> = v.as_map().unwrap_or(&[]).iter().filter(|(k, _)| *k != 1).cloned().collect();
+        let base = Value::Map(rest.clone()).encode().len();
+        let exact = match v.get(1).and_then(Value::as_bytes) {
+            None => base == b.len(),
+            Some(z) => pad_for(base, rest.len(), b.len()) == Some(z.len()),
+        };
+        if !exact {
+            return Err(RULE_BODY_PAD);
+        }
+        Ok(body)
+    }
+
+    /// Whether this is a hint (shown as "open the app"), not content.
+    pub fn is_hint(&self) -> bool {
+        !matches!(self, Body::Copy(_))
+    }
+}
+
+/// Seals a body for env's platform under the push key: nonce ‖
+/// ChaCha20-Poly1305. `nonce` is 12 fresh random bytes from the caller.
+/// None when the env has no size this version knows or the body does not
+/// fit.
+pub fn seal(pk: &[u8; 32], seq: u64, env: u64, body: &Body, nonce: &[u8; NONCE_LEN]) -> Option<Vec<u8>> {
+    let len = body_len(env)?;
+    let mut plain = Zeroizing::new(body.plaintext()?);
+    // Every size of the registry is MAX_BODY today; a smaller row would
+    // pad to its own plaintext size.
+    if len != MAX_BODY {
+        return None;
+    }
+    let k = derive(pk, LABEL_BODY);
+    let aead = ChaCha20Poly1305::new_from_slice(&k[..]).ok()?;
+    let ad = associated(seq);
+    let ct = aead.encrypt(&Nonce::from(*nonce), Payload { msg: &plain, aad: &ad }).ok()?;
+    plain.iter_mut().for_each(|b| *b = 0);
+    let mut out = Vec::with_capacity(len);
+    out.extend_from_slice(nonce);
+    out.extend_from_slice(&ct);
+    (out.len() == len).then_some(out)
+}
+
+/// Opens a body of any size from 28 bytes under the push key of
+/// registration `seq`; the AEAD decides.
+pub fn open(pk: &[u8; 32], seq: u64, sealed: &[u8]) -> Result<Body, Rule> {
+    if sealed.len() < MIN_BODY || sealed.len() > MAX_BODY {
+        return Err(RULE_BODY_SIZE);
+    }
+    let (nonce, ct) = sealed.split_at(NONCE_LEN);
+    let nonce: [u8; NONCE_LEN] = nonce.try_into().map_err(|_| RULE_BODY_SIZE)?;
+    let nonce = &nonce;
+    let k = derive(pk, LABEL_BODY);
+    let aead = ChaCha20Poly1305::new_from_slice(&k[..]).map_err(|_| RULE_BODY_OPEN)?;
+    let ad = associated(seq);
+    let plain =
+        Zeroizing::new(aead.decrypt(&Nonce::from(*nonce), Payload { msg: ct, aad: &ad }).map_err(|_| RULE_BODY_OPEN)?);
+    Body::read(&plain)
+}
+
+/// The body for copy `copy` (its wire form) to `phone`: the reduced copy
+/// when it fits with the payload whole, else the hint that it waits.
+pub fn copy_body(
+    copy: &crate::format::copy::Copy<'_>,
+    readers: &[(crate::records::key::DeviceId, u64)],
+    phone: &crate::records::key::DeviceId,
+    id: [u8; 16],
+    origin: [u8; 16],
+) -> Body {
+    if copy.payload.is_some()
+        && let Ok(reduced) = crate::copies::reduce(copy, readers, phone)
+        && cbor::decode(&reduced).is_ok_and(|v| v.get(crate::format::copy::FIELD_PAYLOAD).is_some())
+    {
+        let body = Body::Copy(reduced);
+        if body.plaintext().is_some() {
+            return body;
+        }
+    }
+    Body::Waits { id, origin }
+}
+
+// ---------------------------------------------------- service messages
+
+/// `push/send`.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Send<'a> {
+    pub n: u64,
+    pub token: &'a [u8],
+    pub env: u64,
+    pub once: [u8; 16],
+    pub body: &'a [u8],
+    pub ttl: Option<u64>,
+}
+
+impl<'a> Send<'a> {
+    /// Reads `push/send` from its map.
+    pub fn read(m: &'a Value<'a>) -> Result<Send<'a>, Rule> {
+        check_map(&SEND, m)?;
+        let bad = Rule::field("push/send/shape");
+        Ok(Send {
+            n: m.get(2).and_then(Value::as_uint).ok_or(bad)?,
+            token: m.get(3).and_then(Value::as_bytes).ok_or(bad)?,
+            env: m.get(4).and_then(Value::as_uint).ok_or(bad)?,
+            once: m.get(5).and_then(Value::as_bytes).and_then(|b| b.try_into().ok()).ok_or(bad)?,
+            body: m.get(6).and_then(Value::as_bytes).ok_or(bad)?,
+            ttl: m.get(7).and_then(Value::as_uint),
+        })
+    }
+
+    /// Its frame.
+    pub fn write(&self) -> Vec<u8> {
+        let mut m = alloc::vec![
+            (frame::FIELD_T, Value::Uint(T_SEND)),
+            (2, Value::Uint(self.n)),
+            (3, Value::Bytes(self.token)),
+            (4, Value::Uint(self.env)),
+            (5, Value::Bytes(&self.once)),
+            (6, Value::Bytes(self.body)),
+        ];
+        if let Some(t) = self.ttl {
+            m.push((7, Value::Uint(t)));
+        }
+        frame::write(&Value::Map(m))
+    }
+
+    /// Whether the body has its env's size. The service answers a body of
+    /// another size, or an env it has no path for, with status 4.
+    pub fn sized(&self) -> bool {
+        body_len(self.env) == Some(self.body.len())
+    }
+}
+
+/// `push/hello`'s frame.
+pub fn hello(credentials: &[&[u8]]) -> Result<Vec<u8>, Rule> {
+    let items: Result<Vec<Value<'_>>, Rule> = credentials.iter().map(|c| cbor::decode(c)).collect();
+    Ok(frame::write(&Value::Map(alloc::vec![(frame::FIELD_T, Value::Uint(T_HELLO)), (2, Value::Array(items?))])))
+}
+
+/// `push/ready`'s frame.
+pub fn ready(left: u64) -> Vec<u8> {
+    frame::write(&Value::Map(alloc::vec![(frame::FIELD_T, Value::Uint(T_READY)), (2, Value::Uint(left))]))
+}
+
+/// `push/sent`'s frame.
+pub fn sent(n: u64, status: u64, retry_ms: Option<u64>) -> Vec<u8> {
+    let mut m = alloc::vec![(frame::FIELD_T, Value::Uint(T_SENT)), (2, Value::Uint(n)), (3, Value::Uint(status))];
+    if let Some(r) = retry_ms {
+        m.push((4, Value::Uint(r)));
+    }
+    frame::write(&Value::Map(m))
+}
+
+/// What a sender does with a status: a status this version does not know
+/// is "failed, try later" (E-1).
+pub fn status(s: u64) -> u64 {
+    match s {
+        SENT | SENT_GONE | SENT_BUDGET | SENT_REPEAT => s,
+        _ => SENT_FAILED,
+    }
+}
+
+/// `push/error`'s frame.
+pub fn error(reason: &str) -> Vec<u8> {
+    frame::write(&Value::Map(alloc::vec![(frame::FIELD_T, Value::Uint(T_ERROR)), (2, Value::Text(reason))]))
+}

@@ -7,6 +7,14 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- Push to a phone whose app is closed, in the core's 0.6 format: a phone's registration with
+  each member of each group (message `push`, a token of its platform's push service and a push
+  key of its own per group), the body a member seals to it (one size per platform, a reduced
+  copy whose origin the phone checks, or a hint that something waits), the `once` tag that
+  lets the push service drop a repeat, and the messages between a member and the project's
+  push service (`cbb-push/1`), which sees tokens, times and one size, never a group or
+  content (`cbb_core::push`, vectors in `testdata/format/push.json`). The service and the
+  apps follow.
 - The Rust core wipes the secrets it holds when it lets them go, prints none in `Debug` or
   an error, and compares every mark and confirmation tag in constant time; the C library
   wipes each answer as it is given back (docs/core-api.md, "Secrets"). Timing tests of the
