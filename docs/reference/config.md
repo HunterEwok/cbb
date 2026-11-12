@@ -91,6 +91,8 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_TEST_UINPUT` | Go tests of the uinput helper | `1` makes a missing `/dev/uinput` a failure instead of a skip. |
 | `CBB_TEST_CLIPBOARD` | Go tests of the Windows clipboard | `1` allows the tests to overwrite the clipboard. |
 | `CBB_UI_BROWSER` | Go tests of the tray app's window | The Chrome, Chromium or Edge to run the window in; without it the test looks in the usual places, and skips without a browser outside CI. |
+| `CBB_UPDATE_SCREENSHOTS` | Go tests of the tray app's window | Set (to anything), `TestWindow/screenshots` writes its pictures to `apps/desktop/testdata/screenshots` instead of comparing with them, after a change to the window. |
+| `CBB_SCREENSHOT_OUT` | Go tests of the tray app's window | The folder a failed screenshot comparison leaves the new picture and the difference in; by default `cbb-screenshots` in the system's temporary folder. |
 | `CBB_TEST_ACTIONS` | the Rust service, in the Go service's tests | A folder that stands for the system's quick actions: a preset with a file `refuse-NAME` there is refused with its text, any other is noted in the file `ran` and not run. Never set by hand. |
 | `CBB_TEST_CLOCK` | the bench's time-scaled build (the feature `benchtime`) | What the build adds to the wall clock, so that certificates expire on the bench in minutes. Never in a release. |
 | `CBB_TEST_CLOCK_FILE` | the bench's time-scaled build | A file that holds the value of `CBB_TEST_CLOCK` when that is not set, so the bench moves a member's clock with a restart of the service. |
@@ -103,6 +105,7 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_E2E_COVERDIR` | `tools/e2e/e2e.sh` | A directory where a `cbb` built with `-cover` writes its coverage, as `GOCOVERDIR` in every container (CI's coverage, [testing](../testing.md#coverage)). |
 | `CBB_FAKE_HELPER` | the lite member's tests | Makes the test program play `cbb-helper` for the helper channel's tests. |
 | `CBB_TEST_ALONE` | Go tests of cbb without its helper | The cbb binary they run alone, without `cbb-helper` beside it (`cargo build` at the top, `target/`). |
+| `CBB_TEST_RUN_AS` | the Rust cbb's own tests | Set by `sys::tests::gives_up_root` for the copy of the test process it starts as root: that copy becomes `nobody` and checks that it cannot become root again. |
 | `CBB_PREVIOUS` | Go tests of the service | The previous release's `cbb` for TestPreviousRelease (a device of version N in one group with N-1), as `tools/e2e/previous.sh` prints it. |
 | `CBB_REPO` | `tools/e2e/previous.sh` | The repository on GitHub whose releases it reads, `HunterEwok/cbb` by default. |
 | `CBB_WEEKLY_SCENARIO` | `tools/bench/weekly.sh` | Limits the weekly fleet run to these scenarios (`-scenario`); all of them when unset. |

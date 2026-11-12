@@ -42,3 +42,36 @@ func TestSealSecret(t *testing.T) {
 		}
 	}
 }
+
+// A seal key the hardware holds that is not there, a file that does not
+// read and a folder that cannot take a new file are refused.
+func TestSealSecretRefusals(t *testing.T) {
+	t.Setenv(TPMEnv, "off")
+	dir := t.TempDir()
+	if runtime.GOOS != "darwin" {
+		if err := os.WriteFile(filepath.Join(dir, SealKeyFileName), []byte(`{"v":1,"se":"AQID"}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadSealSecret(dir); err == nil {
+			t.Error("a seal key in a Secure Enclave that is not there is taken")
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, SealKeyFileName), []byte(`{"v":1,"tpm":{}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := theTPM(); err != nil {
+		if _, err := LoadSealSecret(dir); err == nil {
+			t.Error("a seal key in a TPM that is not there is taken")
+		}
+	}
+	unreadable := t.TempDir()
+	if err := os.Mkdir(filepath.Join(unreadable, SealKeyFileName), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadSealSecret(unreadable); err == nil {
+		t.Error("a folder in place of the file is taken")
+	}
+	if _, err := LoadSealSecret(filepath.Join(dir, "missing", "folder")); err == nil {
+		t.Error("a new seal key was kept in a folder that is not there")
+	}
+}

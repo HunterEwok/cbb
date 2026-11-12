@@ -145,6 +145,7 @@ func checkRepo(testsSince string) (problems []string, checked int, err error) {
 	problems = append(problems, checkAndroidVersion(contents)...)
 	problems = append(problems, checkSpecVersions(contents)...)
 	problems = append(problems, checkReleaseSecrets(contents)...)
+	problems = append(problems, checkAppTranslations(contents)...)
 	problems = append(problems, checkInstallerL10n(contents)...)
 	problems = append(problems, checkAppStrings(contents)...)
 	if testsSince != "" {

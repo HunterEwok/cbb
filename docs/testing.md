@@ -88,6 +88,59 @@ each runs, and a coverage report of the product's functions
 ([functions](testbench-functions.md)). Security cases block a release; a case that cannot
 run yet is skipped with its reason and stays on the list.
 
+## The apps' languages, accessibility and screenshots
+
+Every app is checked in the project's eight languages (zh en es ru ar sw he hi) and for a
+person who uses a screen reader, large text or the keyboard (docs/testbench-catalogue.md,
+A9 and U14 to U18).
+
+- `tools/repocheck` checks that every text of every app (the String Catalogs, Android's
+  `strings.xml`, the tray's and the command line's JSON) is translated into all eight, marked
+  done, and keeps the original's placeholders. `tools/tokens` checks that every palette keeps
+  WCAG AA contrast for text, the accent included, on the background and on a surface.
+- The tray app (`apps/desktop`, `TestWindow` in a headless Chrome): each language without
+  English left over, clipped text or a page wider than the window, Arabic and Hebrew from
+  right to left and no text set to one side; every control named in the accessibility tree;
+  every text's contrast in all ten colours, dark and light; the window at twice the text size;
+  Tab through the header and Settings with the focus shown.
+- Android (`LanguagesTest`, `AccessibilityTest` on Robolectric): the Start screen and Settings
+  in each language, no text cut off or ended with "…", right to left in Arabic and Hebrew,
+  every control named and at least 48 dp to touch, nothing cut off at font scale 2.
+- The iPhone and the Mac (`ReadersUITests`): each language launched with `-AppleLanguages`,
+  the texts checked against the app's catalog, the iPhone's top row swapping sides from right
+  to left, and Xcode's accessibility audit (clipped text, descriptions, touch targets; on the
+  iPhone also Dynamic Type and clipped text at the largest size in English, Swahili and
+  Hindi) passing; each screen's picture is attached to the run's `.xcresult`, uploaded by CI (`ios-screens`, `mac-windows`), and the English ones
+  are printed into a failed job's log (`.github/pictures.py`), with, on the iPhone, a picture
+  of each element the audit fails and of the screen a lost tap met (the test taps Settings
+  again and says so in its output). For each failed iPhone test CI also keeps its activities,
+  every launch, tap, wait and query with its time (`.github/activities.py`, in `ios-screens`
+  and the log). The audit's contrast check
+  fails text its own picture shows at 6.9:1 and more, so each text's (and on the iPhone each
+  button's) contrast is measured on the screen's picture instead: its darkest and lightest
+  pixels at least 4.5:1. The iPhone's Start screen scrolls rather than squeeze its texts. The
+  audit looks only at what a person can reach.
+
+Screenshots are compared where a picture is the same on every machine that draws it: the
+tray window on Linux in the Noto fonts (`fonts-noto-core`, `fonts-noto-mono`,
+`fonts-droid-fallback`), and the Android screens in Robolectric's native graphics, which
+bring their own fonts. A picture may differ from its reference in 0.3% of its pixels, the
+smoothing of text between two builds of a browser, not more. A failed comparison leaves the
+new picture and the difference in the job's artifacts. The simulators' pictures change with
+each Xcode and iOS, so the iPhone's and the Mac's are kept with the results to look at, not
+compared.
+
+After a change to a screen, write the pictures again and look at each before committing it:
+
+```sh
+cd apps/desktop && CBB_UPDATE_SCREENSHOTS=1 go test -run 'TestWindow/screenshots' .
+cd apps/android && ./gradlew :app:recordRoborazziFullDebug
+```
+
+The tray's references are CI's pictures: another build of Chrome smooths text differently in
+more than 0.3% of the pixels. When a run elsewhere draws them, compare them by eye and take
+the ones to commit from the `tray-screenshots` artifact of the failed CI job.
+
 ## Coverage
 
 CI measures how much of the code the tests run, part by part and by kind, and its `coverage`
@@ -118,7 +171,7 @@ Under the table are the hard gates, which have no floor and fail the job at once
 
 | Part | What counts | Measured by |
 |---|---|---|
-| `go` | statements of `cmd`, `internal` and `mobile`, without `third_party` and the packages only tests use (`eitest`, `testnet` and the others `tools/coverage` lists) | the `go coverage` job: every test across packages (`-coverpkg`, so a test of `internal/service` counts for `internal/group` too), the desktop clipboards under sway and Xvfb, the uinput keyboard against the kernel, mDNS beside avahi-daemon, the e2e's members built with `-cover`; and each system's own files from the `test` jobs on Linux, macOS and Windows |
+| `go` | statements of `cmd`, `internal` and `mobile`, without `third_party` and the packages only tests use (`eitest`, `testnet` and the others `tools/coverage` lists) | the `go coverage` job: every test across packages (`-coverpkg`, so a test of `internal/service` counts for `internal/group` too), the desktop clipboards under sway and Xvfb, the uinput keyboard against the kernel, mDNS beside avahi-daemon, the e2e's members built with `-cover`; the `service tests on the Rust cbb` job's tests of `internal/service` and the desktop connector against the Rust `cbb`, whose `cbb-helper` is built with `-cover`; and each system's own files from the `test` jobs on Linux, macOS and Windows |
 | `go-core` | the same, in `internal/group`, `pair`, `node`, `clip` and `hlc` | as `go` |
 | `rust-core` | lines of `core/src`, without `third_party` | `cargo llvm-cov` in the `rust` job |
 | `rust-member` | lines of `member/src/`, by the Rust tests alone | as `rust-core` |

@@ -53,6 +53,12 @@ func TestWindow(t *testing.T) {
 	exe := findBrowser(t)
 	svc := newFakeService(t)
 	w := &window{t: t, svc: svc}
+	dir, err := os.MkdirTemp("", "cbbui-desk")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	w.dir = dir
 	srv := httptest.NewServer(w.handler())
 	t.Cleanup(srv.Close)
 	w.page = startBrowser(t, exe)
@@ -60,7 +66,11 @@ func TestWindow(t *testing.T) {
 
 	t.Run("themes", w.themes)
 	t.Run("collections", w.collections)
-	t.Run("russian", w.russian)
+	t.Run("languages", w.languages)
+	t.Run("contrast", w.contrast)
+	t.Run("large text", w.largeText)
+	t.Run("keyboard", w.keyboard)
+	t.Run("screenshots", w.screenshots)
 	t.Run("errors", w.errors)
 	t.Run("admin", w.admin)
 	t.Run("switches", w.switches)
@@ -75,6 +85,11 @@ type window struct {
 	page *cdpPage
 	url  string
 	desk atomic.Pointer[Desk]
+	// dir holds each Desk's desktop.json. It is not a subtest's TempDir:
+	// a Desk may still be saving its settings when the subtest ends,
+	// which Windows refuses to remove under it.
+	dir   string
+	desks atomic.Int32
 	// ran lists what adminRun was asked to run; fail is its next answer.
 	mu   sync.Mutex
 	ran  [][]string
@@ -141,7 +156,7 @@ func callDesk(d *Desk, name string, body io.Reader) ([]byte, error) {
 func (w *window) open(lang string) *Desk {
 	d := &Desk{socket: w.svc.path, lang: lang, tr: translations(lang),
 		settings:     Settings{Color: "terminal", Appearance: "system", Layout: "tiles"},
-		settingsPath: filepath.Join(w.t.TempDir(), "desktop.json")}
+		settingsPath: filepath.Join(w.dir, fmt.Sprintf("desktop-%d.json", w.desks.Add(1)))}
 	w.desk.Store(d)
 	// Each window starts from the group's order, as a fresh member would.
 	w.svc.mu.Lock()
