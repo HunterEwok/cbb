@@ -171,7 +171,8 @@ fn a_removal_the_writer_lacks_becomes_a_notice() {
     assert!(!s.revoked.contains(&k("tv").hash) && has(&s, &k("tv")));
     let mut m = set_of(&g.root.key);
     sync_all(&mut m, &g.recs, &g.lists);
-    assert!(m.notices().contains(&k("tv").hash));
+    let st = m.state();
+    assert_eq!(m.notices(&st), vec![(rv.id(), vec![k("tv").hash])]);
     assert!(m.get(&rv.id()).is_none(), "the dropped removal is not kept");
 }
 
@@ -1579,4 +1580,107 @@ fn a_checkpoint_keeping_what_the_change_cut_counts_nowhere() {
         sync_all(&mut m, recs, &g.lists);
         assert!(has(&m.state(), &k("tv")));
     }
+}
+
+/// The old root's removals the writer lacked, whichever way they reach a
+/// member: held at the change, or coming after it. Both members keep the
+/// same notices, and the notice goes once the new root removes the key
+/// again.
+#[test]
+fn a_late_removal_is_a_notice_and_goes_when_the_key_is_removed_again() {
+    let mut g = base();
+    let seen = g.seen();
+    let rv = g.root_rec(Kind::Revoke(removal(&[k("tv").hash], seen)));
+    let from: Vec<Record> = g.recs.iter().filter(|r| r.id() != rv.id()).cloned().collect();
+    write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
+    let mut held = set_of(&g.root.key);
+    sync_all(&mut held, &g.recs, &g.lists);
+    let others: Vec<Record> = g.recs.iter().filter(|r| r.id() != rv.id()).cloned().collect();
+    let mut late = set_of(&g.root.key);
+    sync_all(&mut late, &others, &g.lists);
+    assert!(late.notices(&late.state()).is_empty());
+    assert_eq!(late.insert(rv.clone()), Ok(Added::NoRoom));
+    let want = vec![(rv.id(), vec![k("tv").hash])];
+    assert_eq!(late.notices(&late.state()), want);
+    assert_eq!(held.notices(&held.state()), want);
+    // A copy with another signature is not taken.
+    let mut bad = rv.clone();
+    bad.sig[10] ^= 1;
+    let mut other = set_of(&g.root.key);
+    sync_all(&mut other, &others, &g.lists);
+    assert!(other.insert(bad).is_err());
+    assert!(other.notices(&other.state()).is_empty());
+    // The new root removes the TV again: nothing to tell.
+    let seen = g.seen();
+    let again = g.rec(&k("n1"), Kind::Revoke(removal(&[k("tv").hash], seen)));
+    for m in [&mut held, &mut late] {
+        m.insert(again.clone()).unwrap();
+        assert!(m.notices(&m.state()).is_empty());
+    }
+}
+
+/// A dismissed notice is not shown again, also when its removal comes
+/// again; what the app saved brings the notices and the dismissals back
+/// after a restart.
+#[test]
+fn notices_are_dismissed_and_kept_across_a_restart() {
+    let mut g = base();
+    let seen = g.seen();
+    let tv = g.root_rec(Kind::Revoke(removal(&[k("tv").hash], seen)));
+    let seen = g.seen();
+    let laptop = g.root_rec(Kind::Revoke(removal(&[k("laptop").hash], seen)));
+    let from: Vec<Record> = g.recs.iter().filter(|r| r.id() != tv.id() && r.id() != laptop.id()).cloned().collect();
+    write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
+    let mut m = set_of(&g.root.key);
+    sync_all(&mut m, &g.recs, &g.lists);
+    assert_eq!(m.notices(&m.state()).len(), 2);
+    m.dismiss(&tv.id());
+    assert_eq!(m.notices(&m.state()), vec![(laptop.id(), vec![k("laptop").hash])]);
+    assert_eq!(m.insert(tv.clone()), Ok(Added::NoRoom));
+    assert_eq!(m.notices(&m.state()).len(), 1);
+    // Saved, restarted, taken back.
+    let records: Vec<Record> = m.ids().map(|id| m.get(id).unwrap().clone()).collect();
+    let lists: Vec<Vec<u8>> = m.lists().map(<[u8]>::to_vec).collect();
+    let saved: Vec<Record> = m.notice_records().cloned().collect();
+    let dismissed: Vec<RecordId> = m.dismissed().copied().collect();
+    let mut back = RecordSet::restore(g.root.key.clone(), rk(), &records, &lists);
+    assert!(back.notices(&back.state()).is_empty());
+    back.keep_notices(&saved, &dismissed);
+    assert_eq!(back.notices(&back.state()), m.notices(&m.state()));
+    assert_eq!(back.dismissed().collect::<Vec<_>>(), vec![&tv.id()]);
+    // A saved record that is no notice (a record the list names) is not taken.
+    let listed = g.recs.iter().find(|r| r.body().signer == g.root.hash && back.contains(&r.id())).unwrap();
+    back.keep_notices(core::slice::from_ref(listed), &[]);
+    assert_eq!(back.notice_records().count(), 1);
+}
+
+/// At most MAX_NOTICES notices, the oldest going first, the same on two
+/// members that took the records in other orders.
+#[test]
+fn notices_are_bounded_alike_on_every_member() {
+    let mut g = base();
+    let mut removals = Vec::new();
+    for i in 0..MAX_NOTICES + 20 {
+        let seen = g.seen();
+        removals.push(g.root_rec(Kind::Revoke(removal(&[k(&alloc::format!("gone {i}")).hash], seen))));
+    }
+    let ids: BTreeSet<RecordId> = removals.iter().map(Record::id).collect();
+    let from: Vec<Record> = g.recs.iter().filter(|r| !ids.contains(&r.id())).cloned().collect();
+    write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
+    let mut kept = Vec::new();
+    for order in 0..2 {
+        let mut recs = g.recs.clone();
+        if order == 1 {
+            recs.reverse();
+        }
+        let mut m = set_of(&g.root.key);
+        sync_all(&mut m, &recs, &g.lists);
+        let n: Vec<RecordId> = m.notices(&m.state()).into_iter().map(|(id, _)| id).collect();
+        assert_eq!(n.len(), MAX_NOTICES);
+        kept.push(n);
+    }
+    assert_eq!(kept[0], kept[1]);
+    // The newest stay.
+    let newest: BTreeSet<RecordId> = removals.iter().skip(20).map(Record::id).collect();
+    assert_eq!(kept[0].iter().copied().collect::<BTreeSet<_>>(), newest);
 }
