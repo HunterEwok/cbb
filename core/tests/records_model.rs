@@ -602,3 +602,44 @@ fn a_full_room_after_a_takeover_keeps_it() {
     assert_eq!(s.roots, vec![g.root.hash, k("NK").hash]);
     assert_eq!(claim_state(&s, &c), Some(ClaimState::Effective));
 }
+
+/// replacedAdminKeyTest: the root names another admin key for C's device:
+/// C's later record does not count, the new key's does.
+#[test]
+fn an_admin_key_the_root_replaced_signs_nothing() {
+    let mut g = Group::new();
+    g.admin_again("C computer", Some(("C2", AdminKind::Computer)));
+    g.device("C");
+    let s = g.member(&g.all()).state(&BTreeMap::new());
+    assert!(s.device_by_key(&k("D").hash).is_none());
+    assert!(s.may_command(&k("C2").hash) && !s.may_command(&k("C").hash));
+    g.device("C2");
+    let s = g.member(&g.all()).state(&BTreeMap::new());
+    assert!(s.device_by_key(&k("D").hash).is_some());
+}
+
+/// secondClaimShortSeenTest and secondTakeoverTest: after a counted
+/// takeover a claim that did not see the new root is not taken; one that
+/// saw it is, and the counted claims are a list in that order.
+#[test]
+fn a_second_takeover_comes_only_under_the_last_root() {
+    let mut g = Group::new();
+    let ck = g.claim("K", "NK");
+    let seen = g.seen();
+    let short = g.sign("A", Kind::Claim { root: k("NA").key, seen });
+    let m = counting_member(&g, &[&ck]);
+    let s = m.state(&held(&[&ck, &short], DEFAULT_DELAY_MS));
+    assert_eq!(s.roots, vec![g.root.hash, k("NK").hash]);
+    assert_ne!(claim_state(&s, &short), Some(ClaimState::Effective));
+
+    let mut g = Group::new();
+    let ck = g.claim("K", "NK");
+    g.device_by_new_root();
+    let ca = g.claim("A", "NA");
+    let mut m = counting_member(&g, &[&ck]);
+    let h = held(&[&ck, &ca], DEFAULT_DELAY_MS);
+    let s = m.state(&h);
+    assert_eq!(s.roots, vec![g.root.hash, k("NK").hash, k("NA").hash]);
+    m.remember_counted([ca.id()]).unwrap();
+    assert_eq!(m.counted(), vec![ck.id(), ca.id()]);
+}
