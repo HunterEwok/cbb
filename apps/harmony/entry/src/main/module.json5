@@ -22,6 +22,9 @@
         "exported": true,
         // The member runs on in the background (EntryAbility, keepRunning).
         "backgroundModes": ["multiDeviceConnection"],
+        // The app icon's long-press menu: Sync clipboard (EntryAbility's
+        // quick actions).
+        "metadata": [{ "name": "ohos.ability.shortcuts", "resource": "$profile:shortcuts_config" }],
         "skills": [
           {
             "entities": ["entity.system.home"],
@@ -38,6 +41,17 @@
             ]
           }
         ]
+      }
+    ],
+    // The home-screen widget "Sync clipboard" (common/Widgets.ets).
+    "extensionAbilities": [
+      {
+        "name": "EntryFormAbility",
+        "srcEntry": "./ets/entryformability/EntryFormAbility.ets",
+        "label": "$string:widget_name",
+        "description": "$string:widget_description",
+        "type": "form",
+        "metadata": [{ "name": "ohos.extension.form", "resource": "$profile:form_config" }]
       }
     ],
     // The watch's CBB, which Wear Engine lets this app talk to (common/Wear.ets);

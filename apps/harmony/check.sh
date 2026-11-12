@@ -10,7 +10,7 @@
 # It checks each module (the phone's entry and the watch's wearable), and
 # fails on any error of the compiler or the linter, or when the files the
 # two modules share differ. The HarmonyOS SDK's kits that OpenHarmony's
-# lacks (Scan Kit, Share Kit, Wear Engine) come from check/,
+# lacks (Scan Kit, Share Kit, Wear Engine, Live View Kit) come from check/,
 # hvigor's BuildProfile is a stub in debug mode, and the native module's
 # types are imported from where hvigor would resolve them.
 set -eu
@@ -24,7 +24,7 @@ loader=$sdk/ets/build-tools/ets-loader
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
-for kit in ScanKit ShareKit WearEngine; do
+for kit in ScanKit ShareKit WearEngine LiveViewKit; do
 	cp "$here/check/@kit.$kit.d.ts" "$sdk/ets/kits/"
 	cp "$here/check/@kit.$kit.json" "$loader/kit_configs/"
 done
@@ -50,6 +50,44 @@ for module in entry wearable; do
 		cp "$main/cpp/types/libcbb_napi/index.d.ts" "$main/ets/napi/index.d.ts"
 		grep -rl "from 'libcbb_napi.so'" "$main/ets" | xargs sed -i "s#from 'libcbb_napi.so'#from '../napi/index'#"
 	fi
+	# The compiler checks the types of the pages and what they import, not
+	# of the abilities, the intents or the widgets: a page of its own
+	# imports each ability and intent, and the widgets are checked as pages.
+	node -e '
+	const fs = require("fs");
+	const path = require("path");
+	const JSON5 = require(process.argv[1]);
+	const main = process.argv[2];
+	const m = JSON5.parse(fs.readFileSync(path.join(main, "module.json5"), "utf8")).module;
+	const entries = [];
+	const pages = [];
+	for (const a of [...(m.abilities || []), ...(m.extensionAbilities || [])]) {
+		entries.push(a.srcEntry);
+		for (const md of a.metadata || []) {
+			const res = (md.resource || "").replace("$profile:", "");
+			const f = path.join(main, "resources/base/profile", res + ".json");
+			if (res && fs.existsSync(f)) {
+				for (const form of JSON.parse(fs.readFileSync(f, "utf8")).forms || []) {
+					pages.push(form.src.replace(/^\.\/ets\//, "").replace(/\.ets$/, ""));
+				}
+			}
+		}
+	}
+	const intents = path.join(main, "resources/base/profile/insight_intent.json");
+	if (fs.existsSync(intents)) {
+		for (const i of JSON.parse(fs.readFileSync(intents, "utf8")).insightIntents || []) {
+			if (!entries.includes(i.srcEntry)) entries.push(i.srcEntry);
+		}
+	}
+	const imports = entries.map((e, i) => `import E${i} from "../${e.replace(/^\.\/ets\//, "").replace(/\.ets$/, "")}";`);
+	const used = entries.map((e, i) => `E${i}`).join(", ");
+	fs.writeFileSync(path.join(main, "ets/pages/CheckEntries.ets"), imports.join("\n") +
+		`\n@Entry\n@Component\nstruct CheckEntries {\n  build() {\n    Text(String([${used}].length))\n  }\n}\n`);
+	const mp = path.join(main, "resources/base/profile/main_pages.json");
+	const list = JSON.parse(fs.readFileSync(mp, "utf8"));
+	list.src.push("pages/CheckEntries", ...pages);
+	fs.writeFileSync(mp, JSON.stringify(list));
+	' "$loader/node_modules/json5" "$main"
 
 	# module.json as hvigor makes it: the module's and the app's JSON5.
 	node -e '

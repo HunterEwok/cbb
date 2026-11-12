@@ -142,12 +142,15 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   from it; its system is `harmonyos`. In `entry/src/main/ets`: `core/` (the core's calls,
   errors, keys, the membership's files), `model/` (`AppModel`, `Member`, `Join`, `Admit`,
   `Invite`, `Events`, `Bugs`, `Keyboard` the lab's Bluetooth keyboard, `Paste` the remote
-  paste target, `Watch` the link to the watch), `pages/` (the screens), `components/`, `common/` (the devices' words, Scan
-  Kit, sharing in, the clipboard, `WatchState` and `Wear`, shared with the watch); `wearable/` the
+  paste target, `Watch` the link to the watch, `Glance` the widget's state and quick actions,
+  `Live` Live View), `entryformability/` and `widget/` the home-screen widget,
+  `insightintents/` the intents, `pages/` (the screens), `components/`, `common/` (the devices' words, Scan
+  Kit, sharing in, the clipboard, `YubiKey` the recovery key over NFC, `Widgets`,
+  `WatchState` and `Wear`, shared with the watch); `wearable/` the
   watch app (`model/Link.ets`, `pages/Watch.ets`), through the phone over Wear Engine; its strings come from `apps/l10n` (`harmony:NAME`,
   the watch's `harmony-wear:NAME`), its colours from `tools/tokens`; `build.sh` and `ffi/bind.sh harmony` build the core with OpenHarmony's
   native SDK (`ffi/ohos-sdk.sh`), `check.sh` compiles and lints the ArkTS with OpenHarmony's
-  compiler (stubs of the HarmonyOS-only kits in `check/`); CI's `HarmonyOS app` job.
+  compiler, the abilities and widgets through a page of its own (stubs of the HarmonyOS-only kits in `check/`); CI's `HarmonyOS app` job.
 - `apps/macos`: the Mac app (SwiftUI, XcodeGen) over the service's control socket
   (`Control.swift`), admin actions through `cbb` with administrator privileges (`Admin.swift`),
   the Mac's remote paste target (`PasteTarget.swift`: a paste-only watch, Cmd+V or Unicode key

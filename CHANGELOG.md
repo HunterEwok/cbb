@@ -26,7 +26,10 @@ All notable changes to cbb are documented in this file. The format follows
   the ops `attest_status`, `attest` and the manage action `attest`). It puts the recovery key
   on a YubiKey over NFC and restores the group with one, the core speaking PIV for it
   (`cbb_piv`, `cbb_member_manage_card`, and `cbb_restore`'s `card`), as for any app without
-  a PIV of its own.
+  a PIV of its own. Outside the app it has the home-screen widget "Sync clipboard", a
+  shortcut on its icon, the intents SyncClipboard and ToggleSync, and Live View for adding a
+  device and for sync away from home, as the iPhone's widget, App Intents and Live
+  Activities.
   `cbb_member_manage` signs a remote paste (`paste`, `paste_off`) and a period of the
   server keys (`period`) for the apps that sign through the core, and `cbb_member_servers`
   makes the phone member serve the group's servers itself (the ops `hub`, `hub_off`,
@@ -35,7 +38,7 @@ All notable changes to cbb are documented in this file. The format follows
   and `sailfish` (docs/protocol.md, section 6), and a bug report may name it as its app.
   `ffi/bind.sh harmony` builds the core for it with OpenHarmony's native SDK
   (`ffi/ohos-sdk.sh`); `apps/harmony/check.sh` compiles and lints its ArkTS with
-  OpenHarmony's compiler; `tools/strings` writes its strings from `apps/l10n`,
+  OpenHarmony's compiler, the abilities, intents and widgets as well as the pages; `tools/strings` writes its strings from `apps/l10n`,
   `tools/tokens` its colours and `tools/icon` its icons, the watch's too. CI's `HarmonyOS app` job builds and links the native module and
   runs the check.
 - The apps are tested in all eight languages and for every reader (docs/testing.md, "The

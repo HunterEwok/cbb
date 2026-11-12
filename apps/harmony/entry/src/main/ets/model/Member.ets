@@ -447,44 +447,52 @@ export class Member {
 
   // Reads the pasteboard and sends it when the core's rule says so: neither
   // the group's copy nor what this phone sent or took last. Called from the
-  // paste button's tap, the one moment HarmonyOS lets the app read it.
-  async sendPasteboard(): Promise<void> {
+  // paste button's tap, the one moment HarmonyOS lets the app read it, and
+  // from a quick sync (quiet: a pasteboard the app may not read is no
+  // error then). Answers whether it sent.
+  async sendPasteboard(quiet?: boolean): Promise<boolean> {
     if (this.handle === null || this.muted) {
-      return;
+      return false;
     }
     let data: pasteboard.PasteData;
     try {
       data = await pasteboard.getSystemPasteboard().getData();
     } catch (e) {
-      this.error = Errors.shown(Errors.unexpected(t('error_pasteboard'), e as Object));
-      return;
+      const f = Errors.unexpected(t('error_pasteboard'), e as Object);
+      if (quiet === true) {
+        Errors.log(`member: the pasteboard: ${f.details}`);
+      } else {
+        this.error = Errors.shown(f);
+      }
+      return false;
     }
     for (let i = 0; i < data.getRecordCount(); i++) {
       const record = data.getRecord(i);
       if (record.mimeType === pasteboard.MIMETYPE_PIXELMAP && record.pixelMap !== undefined) {
         await this.sendImage(record.pixelMap);
-        return;
+        return true;
       }
     }
     const text = data.getPrimaryText();
     if (text === undefined || text.length === 0) {
-      return;
+      return false;
     }
     const sends = await this.call<Sends>('sends', { 'board': text } as Record<string, Object>);
     if (sends.ok === undefined) {
       this.error = Errors.shown(sends.failure as Failure);
-      return;
+      return false;
     }
     if (sends.ok.sends !== true) {
-      return;
+      return false;
     }
     const sent = await this.call<Object>('copy', { 'text': text, 'board': true } as Record<string, Object>);
     if (sent.ok === undefined) {
       this.error = Errors.shown(sent.failure as Failure);
-      return;
+      return false;
     }
     this.error = '';
     this.setLast(text, false);
+    return true;
   }
 
   // Sends a text shared to the app, as a copy of this phone.

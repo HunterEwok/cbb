@@ -300,8 +300,8 @@ forwarder show only with the advanced settings on, on every app.
 
 ## Dynamic Island
 
-A Live Activity (iPhone, iOS 17) shows what runs in the Dynamic Island and on the Lock
-Screen, in the colour chosen in Settings, and never what was copied:
+A Live Activity (iPhone, iOS 17; Live View on HarmonyOS) shows what runs in the Dynamic
+Island and on the Lock Screen, in the colour chosen in Settings, and never what was copied:
 
 - **Adding a device**: from the scan until the device is in the group, with a timer; then
   "The device is in the group." or "The device was not added." for a moment.
@@ -1005,6 +1005,17 @@ settings, why it does not sync and the lab.
   held once to find the group and once to sign the claim. HarmonyOS has no PIV of its own, so
   the core speaks it (`cbb_piv`, `cbb_member_manage_card`, docs/core-api.md) and the app only
   carries each APDU to the card's IsoDep tag in NFC reader mode (`ohos.permission.NFC_TAG`).
+- **Outside the app**: the home-screen widget "Sync clipboard" (Form Kit) has the iPhone's and
+  Android's Sync button, which opens the app and syncs, and a line with whether sync is on and
+  how many devices are online, whose tap turns sync on or off; the app icon's long-press menu
+  has "Sync clipboard"; and two intents (Intents Kit), SyncClipboard and ToggleSync, which
+  Celia and the system's suggestions offer, as the iPhone's App Intents. Each opens the app,
+  since HarmonyOS lets it read the clipboard only in front, and with the system's paste
+  button or `READ_PASTEBOARD` alone: without either, a quick sync takes what the group copied
+  and sends nothing. Live View (Live View Kit), the Live Activity's twin, shows adding a
+  device with a timer and its result, and sync away from home through the hub's tunnel with
+  the time since it connected (see "Dynamic Island"); Huawei grants Live View on request, and
+  until then it shows nothing.
 - **The lab's Bluetooth keyboard**: the app serves HID over GATT (`@ohos.bluetooth.ble`, a
   GATT server and its advertising) with the core's report map and reports, as Aurora does
   through BlueZ; a TV, a tablet or a computer pairs with the phone, which the system confirms,

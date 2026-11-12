@@ -6,7 +6,8 @@
 // another app shares, and keeps the member running in the background as a
 // continuous task of the kind "multi-device connection", with the system's
 // notification; where the system refuses that, a little longer, so that a
-// copy on its way arrives.
+// copy on its way arrives. The widget, the app's shortcuts and its intents
+// open it with an action (Glance.quick).
 
 import { AbilityConstant, bundleManager, UIAbility, Want, wantAgent } from '@kit.AbilityKit';
 import { backgroundTaskManager } from '@kit.BackgroundTasksKit';
@@ -21,6 +22,7 @@ import { setResources, t } from '../core/Text';
 import { sharedOf } from '../common/Share';
 import { app } from '../model/AppModel';
 import { Watch } from '../model/Watch';
+import { glance } from '../model/Glance';
 
 export default class EntryAbility extends UIAbility {
   private delayId: number = -1;
@@ -44,11 +46,24 @@ export default class EntryAbility extends UIAbility {
     app.init(this.context.filesDir, prefs);
     app.keyboard.init(prefs, this.context);
     this.watch.start(this.context);
+    glance.start(this.context);
     this.takeShared(want);
+    this.takeAction(want);
   }
 
   onNewWant(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     this.takeShared(want);
+    this.takeAction(want);
+  }
+
+  // The quick action a widget, a shortcut or an intent opened the app with.
+  private takeAction(want: Want): void {
+    const given = want.parameters?.['action'];
+    const action = typeof given === 'string' ? given : '';
+    if (action === 'sync' || action === 'sync_toggle') {
+      Errors.log(`app: quick action ${action}`);
+      glance.quick(action);
+    }
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
@@ -127,6 +142,7 @@ export default class EntryAbility extends UIAbility {
 
   onDestroy(): void {
     this.watch.stop();
+    glance.stop();
     if (this.running) {
       this.running = false;
       backgroundTaskManager.stopBackgroundRunning(this.context).catch(() => {});
