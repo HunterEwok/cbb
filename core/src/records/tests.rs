@@ -1327,6 +1327,13 @@ fn set_with(root: &Key, recs: &[Record], lists: &[Vec<u8>]) -> RecordSet {
     set
 }
 
+/// The records a set holds that count, without those kept aside for a
+/// root whose change waits.
+fn counting(set: &RecordSet) -> Vec<Record> {
+    let aside: Vec<&RecordId> = set.aside().collect();
+    set.ids().filter(|id| !aside.contains(id)).map(|id| set.get(id).unwrap().clone()).collect()
+}
+
 fn state_with(root: &Key, recs: &[Record], lists: &[Vec<u8>]) -> State {
     evaluate(&Input { root, recovery: &rk(), records: recs, lists })
 }
@@ -1360,7 +1367,7 @@ mod props {
             prop_assert_eq!(a.digest(), b.digest());
             // The set refuses what it cannot verify; its state is that of
             // the records it kept.
-            let kept: Vec<Record> = a.ids().map(|id| a.get(id).unwrap().clone()).collect();
+            let kept = counting(&a);
             let stored = state_with(&root, &kept, &lists);
             prop_assert_eq!(&a.state(), &stored);
             prop_assert_eq!(&b.state(), &stored);
@@ -1716,6 +1723,31 @@ mod differential {
         m
     }
 
+    /// Compacting the set by its own state changes neither what it holds
+    /// nor its state.
+    fn compacted_as_it_came(set: &RecordSet) {
+        let mut again = set.clone();
+        let st = again.state();
+        again.compact(&st);
+        assert_eq!(again.digest(), set.digest(), "compacting dropped records");
+        assert_eq!(again.state(), st, "compacting changed the state");
+    }
+
+    /// What a member saves (its records as it sends them, then its lists)
+    /// restores to the same set, in that order or any other: the same IDs,
+    /// those kept aside included, the same digest, the same state.
+    fn restores(set: &RecordSet, seed: u64) {
+        let saved: Vec<Record> = set.in_dependency_order().into_iter().cloned().collect();
+        let lists: Vec<Vec<u8>> = set.lists().map(<[u8]>::to_vec).collect();
+        let st = set.state();
+        for records in [saved.clone(), shuffled(&saved, seed.wrapping_add(1))] {
+            let back = RecordSet::restore(set.root().clone(), set.recovery().clone(), &records, &lists);
+            assert_eq!(back.ids().collect::<Vec<_>>(), set.ids().collect::<Vec<_>>(), "restored IDs");
+            assert_eq!(back.digest(), set.digest());
+            assert_eq!(back.state(), st, "restored state");
+        }
+    }
+
     /// A set filled in the order of seed (0: as made), compacting every
     /// so many records, agrees with evaluate: its state is that of the
     /// records it keeps, and the roots, devices, removals and stop are
@@ -1723,7 +1755,7 @@ mod differential {
     fn agree(g: &G, recs: &[Record], every: usize, seed: u64) -> RecordSet {
         let order = if seed == 0 { recs.to_vec() } else { shuffled(recs, seed) };
         let m = fill(&g.root.key, &order, &g.lists, every);
-        let kept: Vec<Record> = m.ids().map(|id| m.get(id).unwrap().clone()).collect();
+        let kept = counting(&m);
         let st = m.state();
         assert_eq!(st, state_with(&g.root.key, &kept, &g.lists));
         let whole = state_with(&g.root.key, recs, &g.lists);
@@ -1734,12 +1766,18 @@ mod differential {
         assert_eq!(st.changes, whole.changes);
         // A member that never asks to compact is in the same state: a
         // counting checkpoint compacts as it comes.
+        // After any insert, compacting changes nothing: no caller needs
+        // to ask for it.
         let mut plain = set_of(&g.root.key);
         for _ in 0..12 {
             let before = plain.digest();
-            plain.insert_all(order.iter().cloned());
+            for r in &order {
+                let _ = plain.insert(r.clone());
+                compacted_as_it_came(&plain);
+            }
             for l in &g.lists {
                 let _ = plain.insert_list(l);
+                compacted_as_it_came(&plain);
             }
             if plain.digest() == before {
                 break;
@@ -1747,11 +1785,17 @@ mod differential {
         }
         assert_eq!(plain.digest(), m.digest());
         assert_eq!(plain.state(), st);
+        restores(&m, seed);
+        restores(&plain, seed);
         // One round with every list last: the records of a root whose
         // recovery record waited for its list were kept aside and taken
         // when it came, so the set ends the same.
         let mut late = set_of(&g.root.key);
         late.insert_all(order.iter().cloned());
+        // Saved while a head waits for its list: what is kept aside comes
+        // back.
+        compacted_as_it_came(&late);
+        restores(&late, seed);
         for l in &g.lists {
             let _ = late.insert_list(l);
         }
@@ -1769,6 +1813,7 @@ mod differential {
             let s = late.state();
             late.compact(&s);
         }
+        restores(&late, seed);
         let ls = late.state();
         assert_eq!((ls.halted(), ls.fork), (st.halted(), st.fork));
         assert_eq!(
@@ -1818,6 +1863,100 @@ mod differential {
         let (g, recs) = build(&steps);
         agree(&g, &recs, 5, 0);
         agree(&g, &recs, 7, 17_255_029_705_063_971_860);
+    }
+
+    /// A sequence once found by the property below: a later resolve of
+    /// the root takes its checkpoint out of the count after the set
+    /// compacted by it; the set takes again what it left out.
+    #[test]
+    fn agrees_when_a_resolve_takes_a_checkpoint_out() {
+        let steps = [
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (4, 0, 0),
+            (4, 0, 0),
+            (1, 0, 0),
+            (0, 6, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (2, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 6, 0),
+            (0, 6, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (4, 4, 162),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 7),
+            (0, 8, 66),
+            (0, 0, 0),
+            (0, 6, 0),
+            (0, 0, 0),
+            (0, 4, 124),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+        ];
+        let (g, recs) = build(&steps);
+        agree(&g, &recs, 1, 0);
+        agree(&g, &recs, 3, 65241865646381);
+    }
+
+    /// Another such sequence, the resolve after two root records arriving
+    /// one by one.
+    #[test]
+    fn agrees_when_a_resolve_comes_after_the_checkpoint() {
+        let steps = [
+            (0, 0, 0),
+            (0, 0, 0),
+            (1, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 6, 0),
+            (0, 0, 0),
+            (0, 5, 125),
+            (0, 6, 0),
+            (4, 0, 0),
+            (0, 0, 0),
+            (0, 5, 43),
+            (4, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 6, 0),
+            (4, 8, 0),
+            (4, 4, 71),
+            (0, 2, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+        ];
+        let (g, recs) = build(&steps);
+        agree(&g, &recs, 1, 0);
+        agree(&g, &recs, 3, 17222876326135848401);
     }
 
     /// A sequence once found by the property below: the set agrees with

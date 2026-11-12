@@ -174,6 +174,31 @@ impl RecordSet {
         }
     }
 
+    /// The set a member saved, rebuilt: its records (`in_dependency_order`
+    /// or any other order) and its lists (`lists`), taken round by round
+    /// until a round takes nothing new, as a record may wait for a list or
+    /// for another record. Saving and restoring keeps the digest, the
+    /// state and what is kept aside for a root whose change waits.
+    pub fn restore(root: Key, recovery: Key, records: &[Record], lists: &[Vec<u8>]) -> RecordSet {
+        let mut set = RecordSet::new(root, recovery);
+        // Each round that changes something takes at least one record or
+        // list for good; the bound only guards against a loop.
+        let rounds = records.len().saturating_add(lists.len()).saturating_add(2);
+        let mut last = None;
+        for _ in 0..rounds {
+            for l in lists {
+                let _ = set.insert_list(l);
+            }
+            set.insert_all(records.iter().cloned());
+            let now = (set.digest(), set.lists.len(), set.state());
+            if last.as_ref() == Some(&now) {
+                break;
+            }
+            last = Some(now);
+        }
+        set
+    }
+
     /// An empty set for the keys the device's own store pinned, with the
     /// mark it saved beside them (`super::pin_mark`); None when the mark
     /// does not hold, so that a store whose recovery key was changed is
@@ -194,6 +219,7 @@ impl RecordSet {
         self.group
     }
 
+    /// How many records count in the state, without those kept aside.
     pub fn len(&self) -> usize {
         self.records.len()
     }
@@ -207,22 +233,42 @@ impl RecordSet {
         self.bytes
     }
 
+    /// Whether the set holds the record: among what counts or what is
+    /// kept aside for a root whose change waits. A peer asked for it gets
+    /// it either way.
     pub fn contains(&self, id: &RecordId) -> bool {
-        self.records.contains_key(id)
+        self.records.contains_key(id) || self.early.contains_key(id)
     }
 
+    /// The record, among what counts or what is kept aside.
     pub fn get(&self, id: &RecordId) -> Option<&Record> {
+        self.held(id).or_else(|| self.early.get(id))
+    }
+
+    /// The record among what the state counts, not among what is kept
+    /// aside.
+    fn held(&self, id: &RecordId) -> Option<&Record> {
         self.records.get(id).map(|e| &e.record)
     }
 
-    /// The IDs, sorted.
+    /// The IDs, sorted: what counts and what is kept aside for a root
+    /// whose change waits, as both sync.
     pub fn ids(&self) -> impl Iterator<Item = &RecordId> {
-        self.records.keys()
+        let mut out: Vec<&RecordId> = self.records.keys().chain(self.early.keys()).collect();
+        out.sort();
+        out.into_iter()
     }
 
-    /// The set digest two members compare.
+    /// The IDs kept aside for a root whose change waits, sorted: they
+    /// sync with the rest and count for nothing in the state.
+    pub fn aside(&self) -> impl Iterator<Item = &RecordId> {
+        self.early.keys()
+    }
+
+    /// The set digest two members compare: of every ID the set holds,
+    /// the records kept aside among them.
     pub fn digest(&self) -> [u8; 32] {
-        super::digest(self.records.keys())
+        super::digest(self.records.keys().chain(self.early.keys()))
     }
 
     /// The lists the set holds, as their bytes, which a sender sends
@@ -320,7 +366,17 @@ impl RecordSet {
             // A head's first checkpoint: the head may apply now.
             self.rechain();
         }
-        if self.trusted.is_empty() && self.records.contains_key(&id) && self.may_count(&id) {
+        // A second history of a root, or a root's resolve once its chain
+        // is whole, may take a checkpoint the set compacted by out of the
+        // count: the set forgets it, and what it left out is taken again.
+        let unsettles = role == Role::Root
+            && !self.checkpoints.is_empty()
+            && (twin
+                || self
+                    .records
+                    .values()
+                    .any(|e| e.role == Role::Root && matches!(e.record.body().kind, Kind::Resolve(_))));
+        if self.trusted.is_empty() && self.records.contains_key(&id) && (unsettles || self.may_count(&id)) {
             // A counting checkpoint compacts at once: what it leaves out
             // takes no room and is not held from the moment it counts, so
             // a member is in one state whenever it compacts.
@@ -664,7 +720,7 @@ impl RecordSet {
         let mut off = eval::off_cuts(&self.cuts, self.records.values().map(|e| &e.record));
         off.retain(|id| !self.firsts.contains(id));
         for id in &off {
-            if let Some(Kind::Revoke(rm)) = self.get(id).map(|r| &r.body().kind) {
+            if let Some(Kind::Revoke(rm)) = self.held(id).map(|r| &r.body().kind) {
                 let keys = rm.keys.clone();
                 self.notices.extend(keys);
             }
@@ -826,14 +882,14 @@ impl RecordSet {
             }
         }
         if let Some(cut) = &state.cut {
-            out.extend(cut.keep.iter().copied().filter(|id| self.contains(id)));
+            out.extend(cut.keep.iter().copied().filter(|id| self.records.contains_key(id)));
         }
         for cp in &state.checkpoints {
-            if let Some(r) = self.get(cp)
+            if let Some(r) = self.held(cp)
                 && Some(&r.body().signer) == cur
                 && let Kind::Checkpoint { heads, .. } = &r.body().kind
             {
-                out.extend(heads.iter().map(|h| h.id).filter(|id| self.contains(id)));
+                out.extend(heads.iter().map(|h| h.id).filter(|id| self.records.contains_key(id)));
             }
         }
         out.remove(&RecordId::default());
@@ -841,7 +897,7 @@ impl RecordSet {
         // first checkpoint prunes again.
         // An earlier root's removal is listed only within the share, even
         // when an earlier list named it.
-        out.retain(|id| match self.get(id).map(|r| r.body()) {
+        out.retain(|id| match self.held(id).map(|r| r.body()) {
             Some(b) if matches!(b.kind, Kind::Checkpoint { .. }) => false,
             Some(b) if matches!(b.kind, Kind::Revoke(_)) && roots.contains(&b.signer) && Some(&b.signer) != cur => {
                 earlier.contains(id)
@@ -958,7 +1014,7 @@ impl RecordSet {
         if state.settings != Settings::default() {
             first.push(sign(Kind::settings(state.settings.clone()))?);
         }
-        let old_hubs = list.0.iter().find_map(|id| match self.get(id).map(|r| &r.body().kind) {
+        let old_hubs = list.0.iter().find_map(|id| match self.held(id).map(|r| &r.body().kind) {
             Some(Kind::Hubs { hubs, .. }) if state.counting.contains(id) => Some(hubs.clone()),
             _ => None,
         });
@@ -988,7 +1044,7 @@ impl RecordSet {
         let mut heads: BTreeMap<KeyHash, super::body::Head> = BTreeMap::new();
         let mut keep: BTreeSet<RecordId> = list.0.iter().copied().collect();
         for cp in &state.checkpoints {
-            let Some(r) = self.get(cp) else { continue };
+            let Some(r) = self.held(cp) else { continue };
             let Kind::Checkpoint { heads: hs, keep: kept } = &r.body().kind else { continue };
             if Some(&r.body().signer) != cur {
                 continue;
@@ -999,11 +1055,9 @@ impl RecordSet {
                     *e = *hd;
                 }
             }
-            keep.extend(
-                kept.iter()
-                    .copied()
-                    .filter(|id| self.get(id).is_some_and(|x| !path.contains(&x.body().signer)) && self.contains(id)),
-            );
+            keep.extend(kept.iter().copied().filter(|id| {
+                self.held(id).is_some_and(|x| !path.contains(&x.body().signer)) && self.records.contains_key(id)
+            }));
         }
         let mut own = first.iter().map(Record::id).collect::<Vec<_>>();
         let own_head = own.pop();
@@ -1086,7 +1140,7 @@ impl RecordSet {
     /// compacted by count: it is such a checkpoint, a record it names, or
     /// a record of its key below it.
     fn may_count(&self, id: &RecordId) -> bool {
-        let Some(r) = self.get(id) else { return false };
+        let Some(r) = self.held(id) else { return false };
         let (signer, seq) = (r.body().signer, r.body().seq);
         self.records.values().any(|e| {
             let b = e.record.body();
@@ -1116,14 +1170,14 @@ impl RecordSet {
     /// Drops what the counting checkpoints of state leave out: a root's
     /// checkpoint resets the set's count. The cut takes state's, which the
     /// current root's first checkpoint narrows.
-    pub fn compact(&mut self, state: &State) -> usize {
+    pub(super) fn compact(&mut self, state: &State) -> usize {
         let promoted: BTreeSet<KeyHash> = state.roots.iter().skip(1).copied().collect();
         let cuts = eval::cuts_of(state.cut.as_ref());
         self.keep_by(promoted, cuts);
         self.checkpoints = state
             .checkpoints
             .iter()
-            .filter_map(|cp| match self.get(cp).map(|r| &r.body().kind) {
+            .filter_map(|cp| match self.held(cp).map(|r| &r.body().kind) {
                 Some(Kind::Checkpoint { heads, keep }) => Some((heads.clone(), eval::anchors_of(heads, keep))),
                 _ => None,
             })
@@ -1203,7 +1257,7 @@ impl RecordSet {
     pub fn for_peer<'a>(&'a self, state: &State, peer: &KeyHash) -> Vec<&'a Record> {
         if state.halted() {
             let mut out: Vec<&Record> = match state.fork {
-                Some((_, a, b)) => [a, b].iter().filter_map(|id| self.get(id)).collect(),
+                Some((_, a, b)) => [a, b].iter().filter_map(|id| self.held(id)).collect(),
                 None => self.records.values().filter(|e| e.role == Role::Recovery).map(|e| &e.record).collect(),
             };
             out.sort_by_key(|r| (r.body().seq, r.id()));

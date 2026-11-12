@@ -1076,3 +1076,91 @@ fn a_head_waits_for_the_new_roots_first_checkpoint() {
     assert_eq!(s.first_missing, None);
     assert!(has(&s, &k("new phone")) && !has(&s, &k("old phone")));
 }
+
+/// What a member keeps aside for a root whose change waits is part of the
+/// set for sync: its IDs, its digest, what it holds when asked, and what
+/// a device of the group gets, after the head that names the root. It
+/// counts for nothing in the state until the change applies.
+#[test]
+fn what_waits_syncs_with_the_rest() {
+    let mut g = base();
+    let from = g.recs.clone();
+    let w = write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
+    let mut head_only = set_of(&g.root.key);
+    sync_all(&mut head_only, &from, &[]);
+    head_only.insert(w.record.clone()).unwrap();
+    let mut a = head_only.clone();
+    for r in &w.first {
+        assert_eq!(a.insert(r.clone()), Ok(Added::Waiting));
+    }
+    let st = a.state();
+    assert_eq!(st.roots, vec![k("root").hash]);
+    assert!(!has(&st, &k("new phone")));
+    for r in &w.first {
+        assert!(a.contains(&r.id()));
+        assert_eq!(a.get(&r.id()), Some(r));
+        assert!(a.ids().any(|id| *id == r.id()));
+    }
+    assert_ne!(a.digest(), head_only.digest());
+    // Another member that took them in the other order holds the same.
+    let mut b = set_of(&g.root.key);
+    for r in w.first.iter().rev() {
+        let _ = b.insert(r.clone());
+    }
+    sync_all(&mut b, &from, &[]);
+    b.insert(w.record.clone()).unwrap();
+    for r in w.first.iter().rev() {
+        let _ = b.insert(r.clone());
+    }
+    assert_eq!(b.digest(), a.digest());
+    assert_eq!(b.ids().collect::<Vec<_>>(), a.ids().collect::<Vec<_>>());
+    // A device of the group gets them, each after the head.
+    let sent = a.for_peer(&st, &k("laptop").hash);
+    let at = |id: RecordId| sent.iter().position(|r| r.id() == id);
+    let head = at(w.record.id()).unwrap();
+    for r in &w.first {
+        assert!(at(r.id()).is_some_and(|i| i > head));
+    }
+    // A member fed in that order takes them all, and the change applies
+    // once the list comes.
+    let mut c = set_of(&g.root.key);
+    for r in sent {
+        let _ = c.insert(r.clone());
+    }
+    assert_eq!(c.digest(), a.digest());
+    c.insert_list(&w.list.encode()).unwrap();
+    assert!(has(&c.state(), &k("new phone")));
+}
+
+/// A halted member restarted from what it saved (its records as it sends
+/// them, then its lists) holds and shows what it did before, in that
+/// order or reversed: after a fork at depth the list below it names the
+/// records of the root before, its device record at seq 1 among them.
+#[test]
+fn a_halted_set_restores_from_what_it_saved() {
+    let mut g = base();
+    let from = g.recs.clone();
+    write(&mut g, &from, &k("n1"), &k("new phone"), &[k("old phone").hash]);
+    let from = g.recs.clone();
+    write(&mut g, &from, &k("n2"), &k("phone 2"), &[]);
+    let from = g.recs.clone();
+    write(&mut g, &from, &k("n3"), &k("phone 3"), &[]);
+    let mut old = set_of(&g.root.key);
+    sync_all(&mut old, &g.recs, &g.lists);
+    let prev = old.state().chain().get(1).copied();
+    let twin = head_at(&g, 3, prev, &k("n9"), [9; 32]);
+    old.insert(twin).unwrap();
+    let s = old.state();
+    assert!(s.halted());
+    assert!(has(&s, &k("new phone")));
+    let saved: Vec<Record> = old.in_dependency_order().into_iter().cloned().collect();
+    let lists: Vec<Vec<u8>> = old.lists().map(<[u8]>::to_vec).collect();
+    let mut reversed = saved.clone();
+    reversed.reverse();
+    for records in [saved, reversed] {
+        let back = RecordSet::restore(g.root.key.clone(), k("recovery").key, &records, &lists);
+        assert_eq!(back.ids().collect::<Vec<_>>(), old.ids().collect::<Vec<_>>());
+        assert_eq!(back.digest(), old.digest());
+        assert_eq!(back.state(), s);
+    }
+}
