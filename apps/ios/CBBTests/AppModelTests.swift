@@ -363,7 +363,7 @@ final class AppModelTests: XCTestCase {
 
     /// The colour of the first versions, kept under the same key, is no
     /// theme's name: the default theme shows.
-    func testOldThemeSetting() {
+    func testThemeMigration() {
         let d = freshDefaults()
         d.set("midnight", forKey: ThemeChoice.key)
         XCTAssertEqual(ThemeChoice.theme(d.string(forKey: ThemeChoice.key) ?? "").name, Tokens.themes[0].name)
