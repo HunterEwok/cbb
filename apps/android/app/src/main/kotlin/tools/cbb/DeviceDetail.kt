@@ -176,12 +176,7 @@ private fun DeviceMenu(model: AppModel, d: LiveGroup.Device) {
         }
     }
     if (removing) {
-        Confirm(
-            title = stringResource(R.string.remove_title, d.name),
-            body = stringResource(if (d.isRoot) R.string.remove_root_body else R.string.remove_body),
-            action = stringResource(R.string.remove),
-            dismiss = { removing = false },
-        ) { scope.launch { model.remove(d.id) } }
+        RemoveConfirm(d.name, d.isRoot, dismiss = { removing = false }) { scope.launch { model.remove(d.id) } }
     }
     if (promoting) {
         Confirm(
@@ -574,5 +569,21 @@ private fun MuteChoice(dismiss: () -> Unit, choose: (Long) -> Unit) {
         containerColor = palette.surface,
         titleContentColor = palette.text,
         textContentColor = palette.textDim,
+    )
+}
+
+/**
+ * Asks before a device is removed; removing the root is taking the group
+ * over. Apart from its menu so that the sheet of the dangerous screens
+ * (DangerousScreensTest) draws it without a group.
+ */
+@Composable
+internal fun RemoveConfirm(name: String, isRoot: Boolean, dismiss: () -> Unit, confirm: () -> Unit) {
+    Confirm(
+        title = stringResource(R.string.remove_title, name),
+        body = stringResource(if (isRoot) R.string.remove_root_body else R.string.remove_body),
+        action = stringResource(R.string.remove),
+        dismiss = dismiss,
+        confirm = confirm,
     )
 }

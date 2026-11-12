@@ -1187,25 +1187,34 @@ private fun InviteFromAfar(model: AppModel) {
         Text(stringResource(R.string.invite_open_until, until), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
         QuietButton(stringResource(R.string.invite_share), onClick = { context.startActivity(Invitations.share(context, invite.file)) })
         QuietButton(stringResource(R.string.invite_cancel), onClick = model::cancelInvite)
-        invite.request?.let { req ->
-            AlertDialog(
-                onDismissRequest = {},
-                title = { Text(stringResource(R.string.invite_ask_title, req.info.name)) },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-                        Text(stringResource(R.string.invite_ask_body, req.info.os))
-                        Text(req.fingerprint, fontFamily = FontFamily.Monospace, color = palette.text)
-                    }
-                },
-                confirmButton = { TextButton(onClick = { model.answer(true) }) { Text(stringResource(R.string.invite_admit), color = palette.accent) } },
-                dismissButton = { TextButton(onClick = { model.answer(false) }) { Text(stringResource(R.string.invite_decline)) } },
-                containerColor = palette.surface,
-                titleContentColor = palette.text,
-                textContentColor = palette.textDim,
-            )
-        }
+        invite.request?.let { req -> InviteAsk(req.info.name, req.info.os, req.fingerprint, model::answer) }
     }
     model.inviteNote?.let { NoteText(it) }
+}
+
+/**
+ * The device that used the invitation, admitted only if it shows the same
+ * fingerprint. Apart from the invitation so that the sheet of the dangerous
+ * screens (DangerousScreensTest) draws it without a group.
+ */
+@Composable
+internal fun InviteAsk(name: String, os: String, fingerprint: String, answer: (Boolean) -> Unit) {
+    val palette = LocalPalette.current
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text(stringResource(R.string.invite_ask_title, name)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
+                Text(stringResource(R.string.invite_ask_body, os))
+                Text(fingerprint, fontFamily = FontFamily.Monospace, color = palette.text)
+            }
+        },
+        confirmButton = { TextButton(onClick = { answer(true) }) { Text(stringResource(R.string.invite_admit), color = palette.accent) } },
+        dismissButton = { TextButton(onClick = { answer(false) }) { Text(stringResource(R.string.invite_decline)) } },
+        containerColor = palette.surface,
+        titleContentColor = palette.text,
+        textContentColor = palette.textDim,
+    )
 }
 
 @Composable

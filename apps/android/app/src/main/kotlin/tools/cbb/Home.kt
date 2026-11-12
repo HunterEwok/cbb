@@ -551,11 +551,26 @@ private fun SwitchFace(
 private fun Alerts(model: AppModel) {
     RemovedCard(model)
     Handed(model)
-    if (model.alerts.isEmpty()) return
-    val palette = LocalPalette.current
     val scope = rememberCoroutineScope()
+    AlertList(
+        model.alerts,
+        model.isRoot,
+        resolve = { alert -> scope.launch { model.resolve(alert) } },
+        remove = { id -> scope.launch { model.remove(id) } },
+    )
+}
+
+/**
+ * The alerts' card: each alert in a sentence and, on the root phone, what
+ * ends it. Apart from Alerts so that the sheet of the dangerous screens
+ * (DangerousScreensTest) draws it without a group.
+ */
+@Composable
+internal fun AlertList(alerts: List<GroupAlert>, isRoot: Boolean, resolve: (GroupAlert) -> Unit, remove: (String) -> Unit) {
+    if (alerts.isEmpty()) return
+    val palette = LocalPalette.current
     Column(Modifier.fillMaxWidth().card().padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingSmall)) {
-        for (alert in model.alerts) {
+        for (alert in alerts) {
             Text(
                 alertText(alert),
                 style = MaterialTheme.typography.bodyMedium,
@@ -563,21 +578,21 @@ private fun Alerts(model: AppModel) {
             )
             when (alert.kind) {
                 GroupAlert.Kind.TWO_HISTORIES ->
-                    if (model.isRoot) {
-                        QuietButton(stringResource(R.string.void_both_histories), onClick = { scope.launch { model.resolve(alert) } })
+                    if (isRoot) {
+                        QuietButton(stringResource(R.string.void_both_histories), onClick = { resolve(alert) })
                     } else {
                         RootDecides()
                     }
                 GroupAlert.Kind.CLAIMS, GroupAlert.Kind.CLAIM_PENDING, GroupAlert.Kind.CLAIM_STOPPED ->
-                    if (model.isRoot) {
-                        QuietButton(stringResource(R.string.cancel_claim), onClick = { scope.launch { model.resolve(alert) } })
+                    if (isRoot) {
+                        QuietButton(stringResource(R.string.cancel_claim), onClick = { resolve(alert) })
                     } else {
                         RootDecides()
                     }
                 GroupAlert.Kind.ADMINS ->
-                    if (model.isRoot) {
+                    if (isRoot) {
                         for ((id, name) in alert.devices.zip(alert.names)) {
-                            QuietButton(stringResource(R.string.remove_device, name), onClick = { scope.launch { model.remove(id) } })
+                            QuietButton(stringResource(R.string.remove_device, name), onClick = { remove(id) })
                         }
                     } else {
                         RootDecides()

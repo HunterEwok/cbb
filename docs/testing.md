@@ -210,15 +210,19 @@ one HTML file: the six digits a joining computer shows, an invitation's fingerpr
 removing a device, making a computer an admin, the takeover warning and the alerts of admins or
 claims that split the group, voiding a key's two histories, claiming the group with the recovery
 key, and a group taken over from this device. Each picture has its words under it, for a native
-speaker to quote. It is for a person to read before a release; nothing compares it. It runs only
-when asked:
+speaker to quote. The Android app's part (`DangerousScreensTest`, on Robolectric's native graphics) adds an
+invitation's fingerprint, removing a device and the root phone, the alerts, and the recovery
+sheet with the question on closing it. It is for a person to read before a release; nothing
+compares it. It runs only when asked, Android first, as the tray's test puts its pictures on the
+sheet:
 
 ```sh
-cd apps/desktop && CBB_DANGEROUS_SHEET=/tmp/sheet go test -run 'TestWindow/dangerous' .
+export CBB_DANGEROUS_SHEET=/tmp/sheet
+(cd apps/android && ./gradlew :app:testFullDebugUnitTest --tests 'tools.cbb.DangerousScreensTest')
+(cd apps/desktop && go test -run 'TestWindow/dangerous' .)
 ```
 
-The phones' screens are not on it yet: Android's would come from Robolectric as the screenshots
-above, the iPhone's from `ReadersUITests` on a Mac.
+The iPhone's screens are not on it yet: they would come from `ReadersUITests` on a Mac.
 
 ## Coverage
 

@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"image"
+	"image/color"
 	"image/jpeg"
 	"image/png"
 	"os"
@@ -90,10 +92,11 @@ func (w *window) dangerous(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(out, "dangerous-screens.html")
-	if err := os.WriteFile(path, dangerousSheet(shots), 0o644); err != nil {
+	phone := phoneShots(t, filepath.Join(out, "android"))
+	if err := os.WriteFile(path, dangerousSheet(shots, phone), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("the sheet of %d pictures is %s", len(shots), path)
+	t.Logf("the sheet of %d pictures, %d of them Android's, is %s", len(shots)+len(phone), len(phone), path)
 }
 
 // dangerousScreens are the screens of the sheet, in the order a person
@@ -292,7 +295,7 @@ func toJPEG(t *testing.T, b []byte) []byte {
 // dangerousSheet is the HTML page: a section for each screen, the eight
 // languages in it, each picture with its words under it; a click on a
 // picture shows it whole.
-func dangerousSheet(shots []dangerousShot) []byte {
+func dangerousSheet(shots, phone []dangerousShot) []byte {
 	var b strings.Builder
 	b.WriteString(`<!doctype html>
 <html lang="en">
@@ -315,22 +318,100 @@ pre { white-space: pre-wrap; font: 12px/1.4 ui-monospace, monospace; color: var(
 </head>
 <body>
 <h1>Dangerous screens</h1>
-<p>Every screen of the tray app where a person decides something the group's safety depends on, in the project's eight languages, drawn by its UI tests (apps/desktop/dangerous_test.go). For a person to read: does each language say the same as the English, as plainly, and does nothing hide the danger? A click on a picture shows it whole.</p>
+<p>Every screen of the tray app and of the Android app where a person decides something the group's safety depends on, in the project's eight languages, drawn by their UI tests (apps/desktop/dangerous_test.go, apps/android/app/src/test/kotlin/tools/cbb/DangerousScreensTest.kt). For a person to read: does each language say the same as the English, as plainly, and does nothing hide the danger? A click on a picture shows it whole.</p>
 `)
 	for _, s := range dangerousScreens {
-		fmt.Fprintf(&b, "<h2 id=%q>%s</h2>\n<div class=\"grid\">\n", s.id, html.EscapeString(s.title))
-		for _, sh := range shots {
-			if sh.Screen != s.id {
-				continue
-			}
-			fmt.Fprintf(&b, "<figure><img alt=\"%s, %s\" src=\"data:image/jpeg;base64,%s\"><figcaption><span class=\"lang\">%s</span><pre>%s</pre></figcaption></figure>\n",
-				html.EscapeString(s.title), sh.Lang, base64.StdEncoding.EncodeToString(sh.JPEG), sh.Lang, html.EscapeString(sh.Text))
-		}
-		b.WriteString("</div>\n")
+		section(&b, s.id, s.title, shots)
+	}
+	if len(phone) > 0 {
+		b.WriteString("<h1 id=\"android\">Android</h1>\n")
+	}
+	for _, s := range phoneScreens {
+		section(&b, s.id, s.title, phone)
 	}
 	b.WriteString(`<script>document.addEventListener("click", (e) => { if (e.target.tagName === "IMG") e.target.classList.toggle("big"); });</script>
 </body>
 </html>
 `)
 	return []byte(b.String())
+}
+
+// section writes a screen's heading and its pictures in every language.
+func section(b *strings.Builder, id, title string, shots []dangerousShot) {
+	var n int
+	for _, sh := range shots {
+		if sh.Screen == id {
+			n++
+		}
+	}
+	if n == 0 {
+		return
+	}
+	fmt.Fprintf(b, "<h2 id=%q>%s</h2>\n<div class=\"grid\">\n", id, html.EscapeString(title))
+	for _, sh := range shots {
+		if sh.Screen != id {
+			continue
+		}
+		fmt.Fprintf(b, "<figure><img alt=\"%s, %s\" src=\"data:image/jpeg;base64,%s\"><figcaption><span class=\"lang\">%s</span><pre>%s</pre></figcaption></figure>\n",
+			html.EscapeString(title), sh.Lang, base64.StdEncoding.EncodeToString(sh.JPEG), sh.Lang, html.EscapeString(sh.Text))
+	}
+	b.WriteString("</div>\n")
+}
+
+// phoneScreens are the Android app's screens of the sheet, which
+// DangerousScreensTest draws into the android folder beside the sheet.
+var phoneScreens = []struct{ id, title string }{
+	{"invite-fingerprint", "An invitation used: admit the device only if its fingerprint is the same"},
+	{"remove", "Removing a device"},
+	{"remove-root", "Removing the root phone: taking the group over"},
+	{"alerts", "The takeover warning and the owners split: a claim waits, admins removed each other, two claims, a key with two histories"},
+	{"recovery-sheet", "The recovery sheet, shown once"},
+	{"recovery-kept", "Closing the recovery sheet: did you keep it?"},
+}
+
+// phoneShots reads the Android pictures and words in dir, if it is there,
+// each picture halved, as the phone's are drawn at three pixels a point.
+func phoneShots(t *testing.T, dir string) []dangerousShot {
+	t.Helper()
+	var out []dangerousShot
+	for _, s := range phoneScreens {
+		for _, lang := range projectLanguages {
+			name := filepath.Join(dir, s.id+"-"+lang)
+			b, err := os.ReadFile(name + ".png")
+			if err != nil {
+				continue
+			}
+			img, err := png.Decode(bytes.NewReader(b))
+			if err != nil {
+				t.Fatalf("%s.png: %v", name, err)
+			}
+			text, _ := os.ReadFile(name + ".txt")
+			var j bytes.Buffer
+			if err := jpeg.Encode(&j, half(img), &jpeg.Options{Quality: 85}); err != nil {
+				t.Fatal(err)
+			}
+			out = append(out, dangerousShot{Screen: s.id, Lang: lang, JPEG: j.Bytes(), Text: string(text)})
+		}
+	}
+	return out
+}
+
+// half is img at half its size, each pixel the mean of four.
+func half(img image.Image) image.Image {
+	r := img.Bounds()
+	dst := image.NewRGBA(image.Rect(0, 0, r.Dx()/2, r.Dy()/2))
+	for y := 0; y < r.Dy()/2; y++ {
+		for x := 0; x < r.Dx()/2; x++ {
+			var sum [4]uint32
+			for _, d := range [][2]int{{0, 0}, {1, 0}, {0, 1}, {1, 1}} {
+				c := color.RGBAModel.Convert(img.At(r.Min.X+2*x+d[0], r.Min.Y+2*y+d[1])).(color.RGBA)
+				sum[0] += uint32(c.R)
+				sum[1] += uint32(c.G)
+				sum[2] += uint32(c.B)
+				sum[3] += uint32(c.A)
+			}
+			dst.Set(x, y, color.RGBA{uint8(sum[0] / 4), uint8(sum[1] / 4), uint8(sum[2] / 4), uint8(sum[3] / 4)})
+		}
+	}
+	return dst
 }
