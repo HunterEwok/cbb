@@ -53,6 +53,7 @@ for module in entry wearable; do
 	# The compiler checks the types of the pages and what they import, not
 	# of the abilities, the intents or the widgets: a page of its own
 	# imports each ability and intent, and the widgets are checked as pages.
+	# shellcheck disable=SC2016 # the JavaScript's own ${} and backticks
 	node -e '
 	const fs = require("fs");
 	const path = require("path");
