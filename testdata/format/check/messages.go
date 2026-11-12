@@ -490,7 +490,7 @@ func publicV4(b [4]byte) bool {
 // publicIP reports whether a card may name the address: a public IPv4
 // address, or an IPv6 address that is not loopback, unspecified, multicast,
 // link-local, site-local or unique-local, nor a refused IPv4 address in a
-// translated, NAT64 or 6to4 form.
+// mapped, translated, NAT64 or 6to4 form.
 func publicIP(a netip.Addr) bool {
 	if a.Is4() {
 		return publicV4(a.As4())
@@ -502,6 +502,8 @@ func publicIP(a netip.Addr) bool {
 	case a.IsLoopback(), a.IsUnspecified(), a.IsMulticast():
 		return false
 	case first&0xffc0 == 0xfe80, first&0xffc0 == 0xfec0, first&0xfe00 == 0xfc00:
+		return false
+	case bytes.Equal(p[:12], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff}) && !v4(p[12:]):
 		return false
 	case bytes.Equal(p[:12], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0, 0}) && !v4(p[12:]):
 		return false

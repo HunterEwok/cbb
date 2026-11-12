@@ -1623,7 +1623,7 @@ def public_v4(a):
 def public_ip(a):
     """An address a card may name: a public IPv4 address, or an IPv6 address that is not
     loopback, unspecified, multicast, link-local, site-local or unique-local, nor a refused
-    IPv4 address in a translated, NAT64 or 6to4 form."""
+    IPv4 address in a mapped, translated, NAT64 or 6to4 form."""
     import ipaddress
     if a.version == 4:
         return public_v4(a)
@@ -1633,6 +1633,8 @@ def public_ip(a):
     if a.is_loopback or a.is_unspecified or a.is_multicast:
         return False
     if first & 0xffc0 in (0xfe80, 0xfec0) or first & 0xfe00 == 0xfc00:
+        return False
+    if p[:12] == bytes(10) + b"\xff\xff" and not v4(p[12:]):
         return False
     if p[:12] == bytes(8) + b"\xff\xff\x00\x00" and not v4(p[12:]):
         return False
@@ -2010,6 +2012,7 @@ def card_vectors():
               "127.0.0.1:443", "[fe80::1]:443", "169.254.1.1:443", "[ff02::1]:443", "224.0.0.1:443",
               "0.0.0.0:443", "localhost:443", "a-.example.org:443", "10.1.2.3:443", "172.16.0.1:443",
               "192.168.1.1:443", "100.64.0.1:443", "0.1.2.3:443", "240.0.0.1:443", "[::ffff:0:7f00:1]:443",
+              "[::ffff:10.1.2.3]:443",
               "[64:ff9b::7f00:1]:443", "[2002:7f00:1::1]:443", "[fec0::1]:443", "[fd00::1]:443",
               "printer.local:443"]:
         no(f"an endpoint {e}", card({11: [e]}), "card/endpoints")

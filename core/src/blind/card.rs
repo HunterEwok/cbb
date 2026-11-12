@@ -217,9 +217,9 @@ fn public_v4(a: core::net::Ipv4Addr) -> bool {
 /// a public IPv4 address ([`public_v4`]), or an IPv6 address that is not
 /// loopback, unspecified, multicast, link-local, site-local (fec0::/10) or
 /// unique-local (fc00::/7), nor carries a refused IPv4 address in a
-/// translated (::ffff:0:0/96), NAT64 (64:ff9b::/96) or 6to4 (2002::/16)
-/// form.
-fn public_ip(ip: core::net::IpAddr) -> bool {
+/// mapped (::ffff:0:0/96), translated (::ffff:0:0:0/96), NAT64
+/// (64:ff9b::/96) or 6to4 (2002::/16) form.
+pub fn public_ip(ip: core::net::IpAddr) -> bool {
     match ip {
         core::net::IpAddr::V4(v4) => public_v4(v4),
         core::net::IpAddr::V6(v6) => {
@@ -234,6 +234,7 @@ fn public_ip(ip: core::net::IpAddr) -> bool {
                 || (first & 0xffc0) == 0xfe80
                 || (first & 0xffc0) == 0xfec0
                 || (first & 0xfe00) == 0xfc00
+                || (s.get(..6) == Some(&[0, 0, 0, 0, 0, 0xffff][..]) && !embedded(o.get(12..).unwrap_or_default()))
                 || (s.get(..6) == Some(&[0, 0, 0, 0, 0xffff, 0][..]) && !embedded(o.get(12..).unwrap_or_default()))
                 || (s.get(..6) == Some(&[0x64, 0xff9b, 0, 0, 0, 0][..]) && !embedded(o.get(12..).unwrap_or_default()))
                 || (first == 0x2002 && !embedded(o.get(2..6).unwrap_or_default())))
