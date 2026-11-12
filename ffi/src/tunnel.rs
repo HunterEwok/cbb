@@ -520,6 +520,7 @@ impl RunningHub {
             psk: guest_psk,
             addr: hub::guest_addr(&public),
             until: Instant::now().checked_add(Duration::from_secs(lifetime)),
+            source: None,
         };
         let guest = NEXT.fetch_add(1, Ordering::SeqCst);
         self.guests
@@ -855,7 +856,7 @@ fn peers(clients: &[Client]) -> Result<Vec<Peer>> {
             let psk =
                 c.psk.as_slice().try_into().map_err(|_| Error::msg("a client's preshared key is not 32 bytes"))?;
             let addr = tunnel::addr(&c.device).ok_or_else(|| Error::msg(format!("{} is not a device ID", c.device)))?;
-            Ok(Peer { key, psk, addr, until: None })
+            Ok(Peer { key, psk, addr, until: None, source: None })
         })
         .collect()
 }

@@ -756,4 +756,13 @@ fn stream_port_knows_only_the_hub_s_connections() {
         assert!(start.elapsed() < Duration::from_secs(5), "a stranger's connection was held");
     }
     assert!(r.inner().lock().members.is_empty());
+    // Many at once wait their moment side by side: none holds up the port.
+    let start = Instant::now();
+    let many: Vec<TcpStream> =
+        (0..200).map(|_| TcpStream::connect((Ipv4Addr::LOCALHOST, r.streams_port())).unwrap()).collect();
+    for mut c in many {
+        c.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+        assert!(matches!(c.read(&mut [0u8; 1]), Ok(0) | Err(_)), "a stranger's connection was served");
+    }
+    assert!(start.elapsed() < Duration::from_secs(3), "200 strangers' connections took {:?}", start.elapsed());
 }

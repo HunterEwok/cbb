@@ -28,6 +28,7 @@ use smoltcp::socket::tcp;
 use smoltcp::wire::{HardwareAddress, IpAddress, IpCidr};
 
 use crate::error::{Context, Error, Result};
+use crate::relayd::budget::{Caps, Count, Level};
 use crate::sys;
 use crate::tunnel::{
     Bridge, HANDSHAKE_RATE_LIMIT, MAX_BRIDGES, MAX_POLL, MEMBER_PORT, MTU, Queues, TCP_BUFFER, move_bytes, now,
@@ -41,16 +42,19 @@ const DIAL_TIMEOUT: Duration = Duration::from_secs(5);
 /// The prefix of the guests' tunnel addresses (docs/protocol.md, section 12).
 const GUEST_PREFIX: [u8; 4] = [0xfd, 0x00, 0x0c, 0xbc];
 
-/// Handshake initiations a second, from all sources together, past which
-/// the hub is under load, as WireGuard has it: every initiation must then
-/// carry a cookie, which only a source that receives at its address can
-/// have, before the hub spends a Diffie-Hellman on it.
-const UNDER_LOAD: u32 = 128;
-/// The initiations a second the hub spends a Diffie-Hellman on: under load,
-/// for one IPv4 /24 or IPv6 /64, and in all. One takes about 50
-/// microseconds of the pump's thread, which carries every client's data.
-const DH_PER_NETWORK: u32 = 32;
-const DH_ALL: u32 = 2048;
+/// The Diffie-Hellmans a second on handshake initiations, of initiations
+/// whose mac1 was right, past which the hub is under load, as WireGuard has
+/// it: every initiation must then carry a cookie, which only a source that
+/// receives at its address can have, before the hub spends one more.
+const UNDER_LOAD: usize = 512;
+/// The Diffie-Hellmans a second the hub spends on initiations, by the
+/// source's network (an IPv4 /24 or IPv6 /64), wide network (/16 or /48)
+/// and provider (an IPv6 /32), and in all; one takes about 50 microseconds
+/// of the pump's thread, which carries every client's data. DH_KNOWN more
+/// are kept for initiations from the address a client last spoke from, so
+/// that strangers who spend the rest hold up no client that rekeys.
+const DH_CAPS: Caps = Caps { address: 0, network: 32, wide: 128, provider: 512, all: 1536 };
+const DH_KNOWN: usize = 512;
 
 /// How long a connection a client opens may wait for the hub's answer to
 /// be acknowledged, and a client's opening that no socket took be counted.
@@ -62,15 +66,30 @@ const OPENING_FOR: Duration = Duration::from_secs(3);
 /// each of its clients, at least MAX_BRIDGES and at most bridges; the
 /// relay, one hub for the devices of many groups, holds bridges. A client
 /// past its share has its new connections ignored; the others' go on.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+///
+/// Every client may hold its first floor connections whatever the others
+/// hold, so a full hub still takes each client's few. A connection being
+/// opened, whose client has not acknowledged the hub's answer yet, counts
+/// besides against opening_per_client of its client and against openings,
+/// by the source each client came from (Peer::source) at each level.
+#[derive(Clone, Copy, Debug)]
 pub struct Limits {
     pub bridges: usize,
     pub per_client: usize,
+    pub floor: usize,
+    pub opening_per_client: usize,
+    pub openings: Caps,
 }
 
 /// A device's hub: its clients each open one or two connections, and a
 /// guest one; a phone or a computer holds a few hundred clients at most.
-pub const DEVICE_LIMITS: Limits = Limits { bridges: 1024, per_client: 8 };
+pub const DEVICE_LIMITS: Limits = Limits {
+    bridges: 1024,
+    per_client: 8,
+    floor: 2,
+    opening_per_client: 4,
+    openings: Caps { address: 0, network: 0, wide: 0, provider: 0, all: 256 },
+};
 
 /// Whether ip, a packet from a client, opens a connection to the member
 /// port: an IPv6 packet without extension headers whose TCP segment is a
@@ -92,6 +111,9 @@ pub struct Peer {
     pub psk: [u8; 32],
     pub addr: Ipv6Addr,
     pub until: Option<Instant>,
+    /// Where the client came from when it registered, for the shares of a
+    /// hub that serves many sources (the relay); None for a device's hub.
+    pub source: Option<std::net::IpAddr>,
 }
 
 impl Peer {
@@ -192,7 +214,7 @@ impl Hub {
             public,
             limiter: Arc::new(RateLimiter::new(&public, HANDSHAKE_RATE_LIMIT)),
             strict: RateLimiter::new(&public, 0),
-            second: Second::default(),
+            second: Second::new(HashSet::new()),
             index: IndexTable::from_os_rng(),
             obf,
             listen_awg,
@@ -209,6 +231,10 @@ impl Hub {
             limits,
             held: HashMap::new(),
             total: 0,
+            floors: 0,
+            charges: HashMap::new(),
+            half: HashMap::new(),
+            openings: Count::new(limits.openings),
             opening: HashMap::new(),
             owners: HashMap::new(),
             owned: HashSet::new(),
@@ -311,39 +337,50 @@ struct Listening {
 /// A connection of a client: its tunnel address and the port it comes from.
 type Conn = (Ipv6Addr, u16);
 
-/// What the hub counted of the handshake initiations in the current second.
+/// What the hub spent on handshake initiations in the current second: the
+/// Diffie-Hellmans on strangers' by source, those on known addresses, and
+/// the addresses its clients last spoke from, as of the second's start.
 struct Second {
     began: Instant,
-    initiations: u32,
-    dh: u32,
-    by_network: HashMap<[u8; 9], u32>,
+    dh: Count,
+    known_dh: usize,
+    known: HashSet<std::net::IpAddr>,
 }
 
-impl Default for Second {
-    fn default() -> Second {
-        Second { began: Instant::now(), initiations: 0, dh: 0, by_network: HashMap::new() }
+impl Second {
+    fn new(known: HashSet<std::net::IpAddr>) -> Second {
+        Second { began: Instant::now(), dh: Count::new(DH_CAPS), known_dh: 0, known }
+    }
+
+    /// The Diffie-Hellmans spent this second.
+    fn spent(&self) -> usize {
+        self.dh.held(None, Level::All) + self.known_dh
+    }
+
+    /// Whether an address a client last spoke from sent it.
+    fn is_known(&self, from: std::net::IpAddr) -> bool {
+        self.known.contains(&from)
+    }
+
+    /// Charges a Diffie-Hellman on an initiation from the address from to
+    /// its source's shares, or to the part kept for clients' addresses
+    /// when from is one; false when neither has room.
+    fn admit(&mut self, from: std::net::IpAddr) -> bool {
+        if self.is_known(from) && self.known_dh < DH_KNOWN {
+            self.known_dh += 1;
+            return true;
+        }
+        self.dh.take(Some(from), 1)
     }
 }
 
-/// The IPv4 /24 or the IPv6 /64 of an address, as the key of its count.
-fn network_of(ip: std::net::IpAddr) -> [u8; 9] {
-    let mut k = [0u8; 9];
-    let v4 = match ip {
-        std::net::IpAddr::V4(a) => Some(a),
-        std::net::IpAddr::V6(a) => a.to_ipv4_mapped(),
-    };
-    match (v4, ip) {
-        (Some(a), _) => {
-            k[0] = 4;
-            k[1..4].copy_from_slice(&a.octets()[..3]);
-        }
-        (None, std::net::IpAddr::V6(a)) => {
-            k[0] = 6;
-            k[1..].copy_from_slice(&a.octets()[..8]);
-        }
-        (None, std::net::IpAddr::V4(_)) => {}
-    }
-    k
+/// What the hub counted of a connection a client opened: the client's
+/// source, whether it is still being opened, and whether it is one of the
+/// client's floor.
+struct Charge {
+    source: Option<std::net::IpAddr>,
+    opening: bool,
+    floor: bool,
 }
 
 struct Pump {
@@ -370,10 +407,16 @@ struct Pump {
     listening: Vec<Listening>,
     bridges: Vec<Bridge>,
     limits: Limits,
-    /// The connections each client holds, those being opened counted, and
-    /// all of them.
+    /// The connections each client holds, those being opened counted; all
+    /// of them but the floors, and the floors; what each connection was
+    /// counted for; the connections each client is opening, and those of
+    /// all clients by source.
     held: HashMap<Ipv6Addr, usize>,
     total: usize,
+    floors: usize,
+    charges: HashMap<Conn, Charge>,
+    half: HashMap<Ipv6Addr, usize>,
+    openings: Count,
     /// The openings counted that no socket took yet, since when.
     opening: HashMap<Conn, Instant>,
     /// The connection each socket that took one holds, and those
@@ -411,6 +454,7 @@ impl Pump {
         for (k, p) in keep {
             if let Some(s) = self.peers.get_mut(&k) {
                 s.peer.until = p.until;
+                s.peer.source = p.source;
                 continue;
             }
             let tunn = Tunn::new(
@@ -491,20 +535,25 @@ impl Pump {
 
     /// Checks a handshake initiation from the network before the hub
     /// spends a Diffie-Hellman on it, as WireGuard's DoS protection has it:
-    /// its mac1 under the hub's key; under load, from all sources together,
-    /// a cookie (mac2), which the hub sends to a source that has none; and
-    /// within what the hub spends a second, on a source's network under
-    /// load and in all. None drops it.
+    /// its mac1 under the hub's key; under load, a cookie (mac2), which the
+    /// hub sends to a source that has none; and within what the hub spends
+    /// a second, by the source's network, wide network and provider and in
+    /// all, with a part kept for the addresses its clients last spoke from.
+    /// None drops it.
     fn admit_initiation(&mut self, from: SocketAddr, wg: &[u8]) -> Option<Packet<gotatun::packet::WgHandshakeInit>> {
         if self.second.began.elapsed() >= Duration::from_secs(1) {
-            self.second = Second::default();
+            let known = self.peers.values().filter_map(|s| s.endpoint.map(|e| e.ip())).collect();
+            self.second = Second::new(known);
             self.limiter.try_reset_count();
             self.strict.try_reset_count();
         }
-        self.second.initiations = self.second.initiations.saturating_add(1);
-        // AmneziaWG checked mac1 itself and has no cookie replies: only the
-        // group's devices know the settings that reach the hub.
-        let under = self.second.initiations > UNDER_LOAD && self.listen_awg.is_none();
+        // Only what the hub spent counts toward the load, so packets with
+        // a wrong mac1 never put it there. AmneziaWG checked mac1 itself
+        // and has no cookie replies: only the group's devices know the
+        // settings that reach the hub, and the shares below hold anyway.
+        // A client that rekeys from the address it last spoke from needs no
+        // cookie: its rekeys go on while strangers are asked for one.
+        let under = self.second.spent() >= UNDER_LOAD && self.listen_awg.is_none() && !self.second.is_known(from.ip());
         let limiter = if under { &self.strict } else { &*self.limiter };
         let init = match limiter.verify_packet(from, Packet::from_bytes(BytesMut::from(wg))) {
             Ok(WgKind::HandshakeInit(p)) => p,
@@ -519,18 +568,7 @@ impl Pump {
             }
             _ => return None,
         };
-        if self.second.dh >= DH_ALL {
-            return None;
-        }
-        if under {
-            let n = self.second.by_network.entry(network_of(from.ip())).or_insert(0);
-            if *n >= DH_PER_NETWORK {
-                return None;
-            }
-            *n += 1;
-        }
-        self.second.dh += 1;
-        Some(init)
+        self.second.admit(from.ip()).then_some(init)
     }
 
     /// The client of an initiation the hub let through, by the key in it.
@@ -666,29 +704,70 @@ impl Pump {
     }
 
     /// Counts a connection a client opens; false when the client or the
-    /// hub holds as many as it may. An opening already counted, which the
-    /// client sent again, is let through.
+    /// hub holds as many as it may. A client's first floor connections
+    /// are taken whatever the hub holds; past them, one being opened needs
+    /// room in its client's and its source's shares of openings. An
+    /// opening already counted, which the client sent again, is let
+    /// through.
     fn take(&mut self, c: Conn) -> bool {
         if self.opening.contains_key(&c) || self.owned.contains(&c) {
             return true;
         }
         let held = self.held.get(&c.0).copied().unwrap_or(0);
-        if held >= self.limits.per_client || self.total >= self.cap() {
+        let floor = held < self.limits.floor;
+        if !floor
+            && (held >= self.limits.per_client
+                || self.total >= self.cap()
+                || self.half.get(&c.0).copied().unwrap_or(0) >= self.limits.opening_per_client)
+        {
+            return false;
+        }
+        let source = self.peers.values().find(|s| s.peer.addr == c.0).and_then(|s| s.peer.source);
+        if floor {
+            self.floors += 1;
+        } else if self.openings.take(source, 1) {
+            self.total += 1;
+        } else {
             return false;
         }
         self.held.insert(c.0, held + 1);
-        self.total += 1;
+        *self.half.entry(c.0).or_insert(0) += 1;
+        self.charges.insert(c, Charge { source, opening: true, floor });
         self.opening.insert(c, Instant::now());
         true
     }
 
+    /// The connection c is open: it no longer counts as being opened.
+    fn opened(&mut self, c: Conn) {
+        let Some(ch) = self.charges.get_mut(&c) else { return };
+        if !std::mem::replace(&mut ch.opening, false) {
+            return;
+        }
+        let (source, floor) = (ch.source, ch.floor);
+        if !floor {
+            self.openings.remove(source, 1);
+        }
+        if let Some(n) = self.half.get_mut(&c.0) {
+            *n -= 1;
+            if *n == 0 {
+                self.half.remove(&c.0);
+            }
+        }
+    }
+
     /// Stops counting the connection c.
     fn discharge(&mut self, c: Conn) {
+        self.opened(c);
+        let Some(ch) = self.charges.remove(&c) else { return };
         if let Some(n) = self.held.get_mut(&c.0) {
             *n -= 1;
             if *n == 0 {
                 self.held.remove(&c.0);
             }
+        }
+        if ch.floor {
+            self.floors = self.floors.saturating_sub(1);
+        } else {
             self.total = self.total.saturating_sub(1);
         }
     }
@@ -745,7 +824,7 @@ impl Pump {
             }
             true
         });
-        while free < want && self.bridges.len() + self.listening.len() < self.cap() + LISTENERS {
+        while free < want && self.bridges.len() + self.listening.len() < self.cap() + self.floors + LISTENERS {
             let mut sock = tcp::Socket::new(
                 tcp::SocketBuffer::new(vec![0; TCP_BUFFER]),
                 tcp::SocketBuffer::new(vec![0; TCP_BUFFER]),
@@ -816,6 +895,9 @@ impl Pump {
                 continue;
             }
             busy = true;
+            if let Some(c) = remote {
+                self.opened(c);
+            }
             let Some((from, _)) = remote else {
                 self.drop_listening(l.handle);
                 continue;
@@ -909,6 +991,7 @@ mod tests {
             psk: [2; 32],
             addr: crate::tunnel::addr("ffeeddccbbaa99887766554433221100").unwrap(),
             until: None,
+            source: None,
         };
         assert!(check_peers(std::slice::from_ref(&p), own).is_ok());
         assert!(check_peers(&[p.clone(), p.clone()], own).is_err());
@@ -950,7 +1033,13 @@ mod tests {
             let k = crate::certs::random_bytes::<32>();
             let psk = crate::certs::random_bytes::<32>();
             let addr = crate::tunnel::addr(&format!("{:02x}112233445566778899aabbccddee00", i + 0x10)).unwrap();
-            peers.push(Peer { key: *PublicKey::from(&StaticSecret::from(k)).as_bytes(), psk, addr, until: None });
+            peers.push(Peer {
+                key: *PublicKey::from(&StaticSecret::from(k)).as_bytes(),
+                psk,
+                addr,
+                until: None,
+                source: None,
+            });
             clients.push((k, psk, addr));
         }
         let hub = Hub::start_at(
@@ -1067,7 +1156,7 @@ mod tests {
     #[test]
     fn connections_are_held_per_client() {
         let (port, took) = target();
-        let limits = Limits { bridges: 256, per_client: 16 };
+        let limits = Limits { bridges: 256, per_client: 16, ..DEVICE_LIMITS };
         let (_hub, _, links) = hub_and_links(4, port, limits);
         let mut held = Vec::new();
         for i in 0..60 {
@@ -1139,8 +1228,8 @@ mod tests {
         let b = crate::tunnel::addr("22112233445566778899aabbccddee02").unwrap();
         let pubkey = |k: [u8; 32]| *PublicKey::from(&StaticSecret::from(k)).as_bytes();
         let peers = vec![
-            Peer { key: pubkey(ka), psk: pa, addr: a, until: None },
-            Peer { key: pubkey(kb), psk: pb, addr: b, until: None },
+            Peer { key: pubkey(ka), psk: pa, addr: a, until: None, source: None },
+            Peer { key: pubkey(kb), psk: pb, addr: b, until: None, source: None },
         ];
         let hub = Hub::start_at(
             &hub_key,
@@ -1149,7 +1238,7 @@ mod tests {
             peers,
             "127.0.0.1:0".parse().unwrap(),
             Arc::new(move |_| Some(port)),
-            Limits { bridges: 64, per_client: 8 },
+            Limits { bridges: 64, per_client: 8, ..DEVICE_LIMITS },
             Arc::new(|_| {}),
         )
         .unwrap();
@@ -1216,5 +1305,194 @@ mod tests {
             assert!(c.is_ok(), "connection {} of the other client did not get through: {c:?}", i + 1);
             held.push(c.unwrap());
         }
+    }
+
+    /// The Diffie-Hellmans on initiations are shared by source: the
+    /// networks of one wide network take its share and no more, strangers
+    /// of many providers take what is left in all, and a client that
+    /// rekeys from its address still gets through.
+    #[test]
+    fn handshakes_are_shared_by_source() {
+        use std::net::IpAddr;
+        let client: IpAddr = "2001:db8:ffff::1".parse().unwrap();
+        let mut s = Second::new([client].into_iter().collect());
+        let mut got = 0;
+        for n in 0..256u16 {
+            for _ in 0..DH_CAPS.network + 1 {
+                got += usize::from(s.admit(IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 1, n, 0, 0, 0, 1))));
+            }
+        }
+        assert_eq!(got, DH_CAPS.wide, "the networks of one wide network");
+        for p in 0..64u16 {
+            for n in 0..16u16 {
+                for _ in 0..DH_CAPS.network {
+                    s.admit(IpAddr::V6(Ipv6Addr::new(0x2001, 0x1000 + p, n, 0, 0, 0, 0, 1)));
+                }
+            }
+        }
+        assert_eq!(s.dh.held(None, Level::All), DH_CAPS.all, "strangers in all");
+        for i in 0..DH_KNOWN {
+            assert!(s.admit(client), "a client's rekey {i} found no room");
+        }
+        assert!(!s.admit(client));
+        // IPv4: a /16 is its own provider.
+        let mut s = Second::new(HashSet::new());
+        let got: usize = (0..=255u8)
+            .flat_map(|c| (0..DH_CAPS.network).map(move |_| c))
+            .map(|c| usize::from(s.admit(IpAddr::V4(std::net::Ipv4Addr::new(198, 18, c, 1)))))
+            .sum();
+        assert_eq!(got, DH_CAPS.wide, "the /24s of one /16");
+    }
+
+    /// Initiations with a wrong mac1, however many, do not put the hub
+    /// under load: a client's handshake needs no cookie round.
+    #[test]
+    fn garbage_does_not_put_the_hub_under_load() {
+        let (port, _) = target();
+        let (hub, _, links) = hub_and_links(1, port, DEVICE_LIMITS);
+        let ep: SocketAddr = format!("127.0.0.1:{}", hub.udp_port()).parse().unwrap();
+        let stop = Arc::new(AtomicBool::new(false));
+        let sent = Arc::new(AtomicUsize::new(0));
+        let flood = {
+            let (stop, sent) = (stop.clone(), sent.clone());
+            std::thread::spawn(move || {
+                let u = UdpSocket::bind("127.0.0.2:0").unwrap();
+                let mut g = vec![7u8; 148];
+                g[..4].copy_from_slice(&[1, 0, 0, 0]);
+                while !stop.load(Ordering::SeqCst) {
+                    for _ in 0..64 {
+                        let _ = u.send_to(&g, ep);
+                    }
+                    sent.fetch_add(64, Ordering::Relaxed);
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+            })
+        };
+        std::thread::sleep(Duration::from_millis(500));
+        let start = Instant::now();
+        let r = reach(&links[0], Duration::from_secs(20));
+        let took = start.elapsed();
+        stop.store(true, Ordering::SeqCst);
+        flood.join().unwrap();
+        assert!(r.is_ok(), "the client did not get through: {r:?}");
+        assert!(sent.load(Ordering::Relaxed) > 1_000, "the flood sent {}", sent.load(Ordering::Relaxed));
+        assert!(took < Duration::from_secs(3), "the client waited {took:?}, a cookie round");
+    }
+
+    /// A client by hand: a handshake with the hub at ep, after which it
+    /// sends what it likes through the returned tunnel and socket.
+    fn raw_client(key: [u8; 32], psk: [u8; 32], hub_pub: PublicKey, ep: SocketAddr) -> (Tunn, UdpSocket) {
+        let u = UdpSocket::bind("127.0.0.1:0").unwrap();
+        u.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        let sk = StaticSecret::from(key);
+        let mut t = Tunn::new(
+            sk.clone(),
+            hub_pub,
+            Some(psk),
+            None,
+            IndexTable::from_os_rng(),
+            Arc::new(RateLimiter::new(&PublicKey::from(&sk), HANDSHAKE_RATE_LIMIT)),
+        );
+        let init: Packet = t.format_handshake_initiation(true).unwrap().into();
+        u.send_to(init.as_ref(), ep).unwrap();
+        let mut buf = [0u8; 2048];
+        let (n, _) = u.recv_from(&mut buf).unwrap();
+        let kind = Packet::from_bytes(BytesMut::from(&buf[..n])).try_into_wg().unwrap();
+        if let TunnResult::WriteToNetwork(p) = t.handle_incoming_packet(kind) {
+            u.send_to(Packet::from(p).as_ref(), ep).unwrap();
+        }
+        u.set_nonblocking(true).unwrap();
+        (t, u)
+    }
+
+    /// Clients of one source that open connections without end and never
+    /// complete them fill neither the hub nor its openings: their source's
+    /// share holds them, and a client of another source gets its
+    /// connections all the while.
+    #[test]
+    fn a_full_hub_still_takes_each_client_s_few() {
+        let (port, _) = target();
+        let hub_key = crate::certs::random_bytes::<32>();
+        let hub_pub = PublicKey::from(&StaticSecret::from(hub_key));
+        let own = crate::tunnel::addr("00112233445566778899aabbccddeeff").unwrap();
+        let pubkey = |k: [u8; 32]| *PublicKey::from(&StaticSecret::from(k)).as_bytes();
+        let mut peers = Vec::new();
+        let mut many = Vec::new();
+        for i in 0..6u16 {
+            let (k, psk) = (crate::certs::random_bytes::<32>(), crate::certs::random_bytes::<32>());
+            let addr = crate::tunnel::addr(&format!("{:02x}112233445566778899aabbccddee00", i + 0x30)).unwrap();
+            let source = Some(std::net::IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 1, i, 0, 0, 0, 1)));
+            peers.push(Peer { key: pubkey(k), psk, addr, until: None, source });
+            many.push((k, psk, addr));
+        }
+        let (kb, pb) = (crate::certs::random_bytes::<32>(), crate::certs::random_bytes::<32>());
+        let b = crate::tunnel::addr("22112233445566778899aabbccddee02").unwrap();
+        let source = Some(std::net::IpAddr::V6(Ipv6Addr::new(0x2001, 0xdb8, 2, 0, 0, 0, 0, 1)));
+        peers.push(Peer { key: pubkey(kb), psk: pb, addr: b, until: None, source });
+        let limits = Limits {
+            bridges: 48,
+            per_client: 80,
+            floor: 2,
+            opening_per_client: 4,
+            openings: Caps { address: 0, network: 0, wide: 8, provider: 0, all: 16 },
+        };
+        let hub = Hub::start_at(
+            &hub_key,
+            own,
+            None,
+            peers,
+            "127.0.0.1:0".parse().unwrap(),
+            Arc::new(move |_| Some(port)),
+            limits,
+            Arc::new(|_| {}),
+        )
+        .unwrap();
+        let ep: SocketAddr = format!("127.0.0.1:{}", hub.udp_port()).parse().unwrap();
+        let mut raws: Vec<_> = many.iter().map(|(k, psk, a)| (raw_client(*k, *psk, hub_pub, ep), *a)).collect();
+        let stop = Arc::new(AtomicBool::new(false));
+        let flood = {
+            let stop = stop.clone();
+            std::thread::spawn(move || {
+                let mut sport = 10_000u16;
+                let mut buf = [0u8; 2048];
+                while !stop.load(Ordering::SeqCst) {
+                    for ((t, u), a) in &mut raws {
+                        for _ in 0..20 {
+                            sport = sport.wrapping_add(1).max(10_000);
+                            if let Some(p) = t.handle_outgoing_packet(
+                                Packet::from_bytes(BytesMut::from(&syn(*a, own, sport)[..])),
+                                None,
+                            ) {
+                                let _ = u.send_to(Packet::from(p).as_ref(), ep);
+                            }
+                        }
+                        // The hub's answers are read and never acknowledged.
+                        while u.recv_from(&mut buf).is_ok() {}
+                    }
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+            })
+        };
+        std::thread::sleep(Duration::from_secs(1));
+        let h = crate::tunnel::Hub {
+            device: "hub".into(),
+            key: hub_pub.as_bytes().to_vec(),
+            psk: pb.to_vec(),
+            endpoints: vec![ep],
+            next: Vec::new(),
+            obfuscation: None,
+            vless: None,
+        };
+        let link =
+            crate::tunnel::Link::start_at(&crate::tunnel::State::with_key(&kb).unwrap(), &h, b, own, Arc::new(|_| {}))
+                .unwrap();
+        let mut held = Vec::new();
+        for i in 0..6 {
+            let c = reach(&link, Duration::from_secs(10));
+            assert!(c.is_ok(), "connection {} of the other source's client did not get through: {c:?}", i + 1);
+            held.push(c.unwrap());
+        }
+        stop.store(true, Ordering::SeqCst);
+        flood.join().unwrap();
     }
 }

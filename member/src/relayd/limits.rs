@@ -89,6 +89,17 @@ impl Limits {
         Caps { address: half / 32, network: half / 16, wide: half / 4, provider: half / 2, all: half }
     }
 
+    /// The caps of the connections being opened through the relay's
+    /// tunnel at once, before a device acknowledged the relay's answer, by
+    /// the source the device registered from: an eighth of streams in all,
+    /// a provider a quarter of that, a wide network an eighth, a network
+    /// 1/32 and an address 1/128. Each device's first two connections do
+    /// not count (crate::hub::Limits::floor).
+    pub fn opening_caps(&self) -> Caps {
+        let all = self.streams / 8;
+        Caps { address: all / 128, network: all / 32, wide: all / 8, provider: all / 4, all }
+    }
+
     /// The caps of the registrations an open relay holds, by the source
     /// they came from.
     pub fn registration_caps(&self) -> Caps {

@@ -9,7 +9,7 @@
 //! the member protocol's TLS then runs between two members, and the relay
 //! passes only its ciphertext.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::net::{IpAddr, Ipv6Addr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
@@ -53,6 +53,10 @@ pub const SETUP_CAPS: Caps = Caps { address: 16, network: 64, wide: 128, provide
 pub const REQUEST_CAPS: Caps = Caps { address: 32, network: 64, wide: 64, provider: 128, all: 256 };
 /// Requests being read of one device and of one group.
 pub const MAX_REQUESTS_ONE: usize = 16;
+/// How long a connection to the relay's loopback port waits for the hub
+/// to note its tunnel address, and how many wait at once.
+const STREAM_ADDR_WAIT: Duration = Duration::from_millis(100);
+const MAX_WAITING_STREAMS: usize = 256;
 pub const MAX_REQUESTS_GROUP: usize = 32;
 
 /// How often the list of refused groups is read again.
@@ -297,7 +301,18 @@ impl Relay {
             Vec::new(),
             SocketAddr::new(local.ip(), local.port()),
             Arc::new(move |_| Some(streams_port)),
-            crate::hub::Limits { bridges: inner.cfg.limits.with_defaults().streams, per_client: STREAMS_ONE },
+            {
+                // Room for every device's watch and calls, the requests
+                // being read and the connections being opened.
+                let l = inner.cfg.limits.with_defaults();
+                crate::hub::Limits {
+                    bridges: l.streams + REQUEST_CAPS.all + l.opening_caps().all,
+                    per_client: STREAMS_ONE,
+                    floor: 2,
+                    opening_per_client: 4,
+                    openings: l.opening_caps(),
+                }
+            },
             hub_log,
         )?;
         *inner.hub.lock().map_err(|_| Error::msg("relay: broken"))? = Some(hub);
@@ -648,7 +663,11 @@ impl Inner {
     }
 
     fn set_peers_locked(&self, st: &State) -> Result<()> {
-        let peers = st.by_addr.iter().map(|(a, m)| Peer { key: m.key, psk: m.psk, addr: *a, until: None }).collect();
+        let peers = st
+            .by_addr
+            .iter()
+            .map(|(a, m)| Peer { key: m.key, psk: m.psk, addr: *a, until: None, source: m.from })
+            .collect();
         match self.hub.lock().ok().as_deref() {
             Some(Some(h)) => h.set_peers_at(peers, RELAY_ADDR),
             _ => Ok(()),
@@ -734,60 +753,76 @@ impl Inner {
     /// member port.
     fn accept_streams(self: Arc<Self>, ln: TcpListener) {
         let _ = ln.set_nonblocking(true);
+        // The connections whose tunnel address the hub has not noted yet,
+        // since when: the hub notes it as soon as its connection is made,
+        // so a connection waits a moment, without holding up the others.
+        let mut waiting: VecDeque<(TcpStream, u16, Instant)> = VecDeque::new();
         while !self.stopping() {
-            let (c, from) = match ln.accept() {
-                Ok(x) => x,
-                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    std::thread::sleep(Duration::from_millis(5));
-                    continue;
+            let mut busy = false;
+            match ln.accept() {
+                Ok((c, from)) => {
+                    busy = true;
+                    if waiting.len() >= MAX_WAITING_STREAMS
+                        && let Some((old, _, _)) = waiting.pop_front()
+                    {
+                        let _ = old.shutdown(Shutdown::Both);
+                    }
+                    waiting.push_back((c, from.port(), Instant::now()));
                 }
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
                 Err(_) => continue,
-            };
-            // The port is on the loopback, where every local user may
-            // connect: a connection of another user is closed at once. One
-            // of the relay's own user that the hub did not make has no
-            // tunnel address below, and is closed as well; a connection is
-            // known only by the port the hub made it from.
-            if !crate::tunnel::own_user(&crate::tunnel::tcp_table(), from, ln.local_addr().ok()) {
-                let _ = c.shutdown(Shutdown::Both);
-                continue;
             }
-            let _ = c.set_nonblocking(false);
-            let _ = c.set_nodelay(true);
-            // The tunnel address names the device; a connection is served
-            // only while its device is registered and within its share. The
-            // hub notes the address as soon as its connection is made.
-            let mut addr = None;
-            for _ in 0..50 {
-                addr = self.hub.lock().ok().and_then(|h| h.as_ref().and_then(|h| h.tunnel_addr(from.port())));
-                if addr.is_some() {
-                    break;
+            // The tunnel address names the device: the port is on the
+            // loopback, where every local user may connect, and a
+            // connection the hub did not make has none, and is closed once
+            // its moment is over. A connection is served only while its
+            // device is registered and within its share.
+            for _ in 0..waiting.len() {
+                let Some((c, port, since)) = waiting.pop_front() else { break };
+                let addr = self.hub.lock().ok().and_then(|h| h.as_ref().and_then(|h| h.tunnel_addr(port)));
+                match addr {
+                    Some(a) => {
+                        busy = true;
+                        self.take_stream(c, a);
+                    }
+                    None if since.elapsed() >= STREAM_ADDR_WAIT => {
+                        let _ = c.shutdown(Shutdown::Both);
+                    }
+                    None => waiting.push_back((c, port, since)),
                 }
+            }
+            if !busy {
                 std::thread::sleep(Duration::from_millis(2));
             }
-            let mut st = self.lock();
-            let m = addr.and_then(|a| st.by_addr.get(&a).cloned());
-            let Some(m) = m.filter(|m| Self::take_request_locked(&mut st, m)) else {
-                drop(st);
-                let _ = c.shutdown(Shutdown::Both);
-                continue;
-            };
-            let sid = st.next_id();
-            let Ok(clone) = c.try_clone() else {
-                drop(st);
-                self.free_request(&m);
-                continue;
-            };
-            if let Some(ms) = st.members.get_mut(&m.id) {
-                ms.streams.insert(sid, clone);
-            }
-            let wait = st.request_wait;
+        }
+    }
+
+    /// Serves a connection through the tunnel from the tunnel address a,
+    /// when its device is registered and within its share.
+    fn take_stream(self: &Arc<Self>, c: TcpStream, a: Ipv6Addr) {
+        let _ = c.set_nonblocking(false);
+        let _ = c.set_nodelay(true);
+        let mut st = self.lock();
+        let m = st.by_addr.get(&a).cloned();
+        let Some(m) = m.filter(|m| Self::take_request_locked(&mut st, m)) else {
             drop(st);
-            let inner = self.clone();
-            match spawn(move || inner.serve_stream(&m, sid, c, wait)) {
-                Ok(t) => self.keep(t),
-                Err(_) => continue,
-            }
+            let _ = c.shutdown(Shutdown::Both);
+            return;
+        };
+        let sid = st.next_id();
+        let Ok(clone) = c.try_clone() else {
+            drop(st);
+            self.free_request(&m);
+            return;
+        };
+        if let Some(ms) = st.members.get_mut(&m.id) {
+            ms.streams.insert(sid, clone);
+        }
+        let wait = st.request_wait;
+        drop(st);
+        let inner = self.clone();
+        if let Ok(t) = spawn(move || inner.serve_stream(&m, sid, c, wait)) {
+            self.keep(t);
         }
     }
 

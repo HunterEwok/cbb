@@ -90,7 +90,7 @@ impl Away {
     /// pairing connections the window serves.
     pub fn open_own(self: &Arc<Self>, keys: &GuestKeys, w: &Arc<Window>) -> Result<Opened> {
         let addr = hub::guest_addr(&keys.public);
-        let peer = hub::Peer { key: keys.public, psk: keys.psk, addr, until: None };
+        let peer = hub::Peer { key: keys.public, psk: keys.psk, addr, until: None, source: None };
         let (hub_key, endpoints, obfuscation, vless) = self.open_guest(peer, Some(w.clone()), None)?;
         let me = self.clone();
         Ok(Opened {
@@ -305,7 +305,7 @@ impl Away {
         if self.guests.lock().unwrap().contains_key(&addr) {
             return Err(Error::msg("that guest key is in use"));
         }
-        let peer = hub::Peer { key, psk, addr, until: None };
+        let peer = hub::Peer { key, psk, addr, until: None, source: None };
         let (hub_key, endpoints, obfuscation, vless) = self.open_guest(peer, None, Some(from.clone()))?;
         // The guest goes at its expiry unless its window admitted a device.
         let (me, left) = (self.clone(), Duration::from_millis(u64::try_from(g.expires_ms - now).unwrap_or(0)));
