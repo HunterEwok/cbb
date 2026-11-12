@@ -756,7 +756,7 @@ fn read_settings(r: &Read<'_, '_>) -> Result<Settings, Rule> {
 fn check_device(d: &Device) -> Result<bool, Rule> {
     let t = "device";
     let mut held = signer_key(&d.key, t, "key")?;
-    if d.name.is_empty() || d.name.len() > 64 || !plain_text(&d.name) {
+    if !crate::format::name_ok(&d.name) {
         return Err(field(t, "name"));
     }
     if !(ROLE_MEMBER..=ROLE_LEAF).contains(&d.role) {
