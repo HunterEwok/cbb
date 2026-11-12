@@ -5245,6 +5245,52 @@
         }
       }
     },
+    "It can then add and remove devices. Its keys are in the phone's hardware, which never lets them out.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سيتمكن بعدها من إضافة الأجهزة وإزالتها. مفاتيحه في عتاد الهاتف، ولا تخرج منه أبدًا."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Así podrá añadir y quitar dispositivos. Sus claves están en el hardware del teléfono, que nunca las deja salir."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "אז הוא יוכל להוסיף ולהסיר מכשירים. המפתחות שלו בחומרה של הטלפון, שלעולם לא מוציאה אותם."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "फिर वह डिवाइस जोड़ और हटा सकेगा। उसकी कुंजियाँ फ़ोन के हार्डवेयर में हैं, जो उन्हें कभी बाहर नहीं जाने देता।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тогда он сможет добавлять и удалять устройства. Его ключи хранятся в железе телефона и никогда его не покидают."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kisha itaweza kuongeza na kuondoa vifaa. Funguo zake ziko kwenye maunzi ya simu, ambayo hayaziachii kamwe."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "之后它可以添加和移除设备。它的密钥保存在手机硬件中，永远不会离开。"
+          }
+        }
+      }
+    },
     "It is a hub now that only passes the copies on, and reads none of them.": {
       "localizations": {
         "ar": {

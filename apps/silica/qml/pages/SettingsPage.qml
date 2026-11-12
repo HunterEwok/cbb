@@ -13,6 +13,8 @@ import Sailfish.Silica 1.0
 Page {
     id: page
     property int taps: 0
+    // How the last change of the admin PIN went.
+    property string pinNote: ""
 
     RemorsePopup { id: remorse }
 
@@ -147,6 +149,55 @@ Page {
                 label: qsTr("Recovery key")
                 value: app.member.rootView.recovery ? qsTr("Made") : qsTr("None")
                 onClicked: pageStack.push(Qt.resolvedUrl("RecoveryPage.qml"))
+            }
+            // A member phone that joined without an admin key makes it now,
+            // for the root's "Make an admin".
+            Button {
+                visible: app.group !== "" && !app.admin && !app.adminOffered && app.adminPin !== "locked"
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: qsTr("Get ready to be an admin")
+                enabled: !app.busy
+                onClicked: app.prepareAdmin()
+            }
+            Label {
+                visible: app.group !== "" && app.adminOffered
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.secondaryHighlightColor
+                text: qsTr("The group's root can make this phone an admin: on the root, open this phone and tap Make an admin.")
+            }
+            // The admin PIN, which the TEE checks before the admin key signs.
+            Button {
+                visible: app.adminPin === "set"
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: qsTr("Change the admin PIN")
+                onClicked: pageStack.push(Qt.resolvedUrl("ChangePinDialog.qml"))
+            }
+            Label {
+                visible: app.adminPin === "locked" || page.pinNote !== ""
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                font.pixelSize: Theme.fontSizeSmall
+                color: app.adminPin === "locked" ? Theme.errorColor : Theme.secondaryHighlightColor
+                text: app.adminPin === "locked"
+                      ? qsTr("Seven wrong PINs locked the admin key for good. The phone stays in the group as a member; to be an admin again, reinstall CBB and join as a new device.")
+                      : page.pinNote
+            }
+            Connections {
+                target: app
+                onPinChanged: page.pinNote = ok ? qsTr("The admin PIN is changed.")
+                                           : locked ? ""
+                                           : triesLeft > 0 ? qsTr("Wrong PIN. Tries left: %1.").arg(triesLeft)
+                                           : qsTr("The admin PIN is not changed.")
+            }
+            // Room between the PIN and leaving, which is far from undone.
+            Item {
+                visible: app.group !== ""
+                width: 1
+                height: Theme.paddingLarge * 2
             }
             // The root's key goes with it: the group then has no root until
             // an admin phone takes it over.
