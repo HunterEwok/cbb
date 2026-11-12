@@ -84,7 +84,7 @@ impl G {
         let mut d = Device::new(m.key.clone(), member, role);
         d.rights = rights;
         f(&mut d);
-        self.rec(&k("root"), Kind::Device(d));
+        self.rec(&k("root"), Kind::device(d));
         m
     }
 
