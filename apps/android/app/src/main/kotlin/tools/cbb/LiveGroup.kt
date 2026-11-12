@@ -45,6 +45,8 @@ import tools.cbb.kit.RustTunnel
 import tools.cbb.kit.ServerCredentials
 import tools.cbb.kit.SyncEngine
 import tools.cbb.kit.TLSTransport
+import tools.cbb.kit.WhyAway
+import tools.cbb.kit.WhyReason
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -372,8 +374,15 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     val hasGroup: Boolean get() = synchronized(lock) { state != null }
 
-    /** The group's tag, which the arrangement of the tiles is kept for; null without a group. */
+    /** The group's tag; null without a group. */
     val groupTag: String? get() = synchronized(lock) { state?.tag }
+
+    /**
+     * The device tiles as the member keeps them, with the user's change op
+     * applied first (docs/apps.md, "What the member shows"); null while no
+     * member runs. A change that does not fit throws and changes nothing.
+     */
+    fun view(op: tools.cbb.kit.Arrangement.Op? = null): tools.cbb.kit.Arrangement.View? = synchronized(lock) { node }?.view(op)
 
     /**
      * Whether this phone may add and remove devices: it made the group, or
@@ -547,6 +556,43 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     private fun refreshHub() = hubWork.execute {
         updateHub()
         updateRelay()
+    }
+
+    /**
+     * Why the phone does not sync (docs/apps.md, "Why it does not sync"):
+     * the member's reasons, with where the app's own tunnel stands, since
+     * the phone's hub, its sync away from home and its relay run here. Blocks.
+     */
+    fun why(): List<WhyReason> {
+        val n = synchronized(lock) { node } ?: return listOf(WhyReason("not_in_group", "stop"))
+        val paused = !foreground
+        val h = phoneHub?.takeIf { it.isOn }
+        val r = blindRelay?.takeIf { it.status(paused).first != RelayOnPhone.Status.OFF }
+        val a = awayFromHome?.takeIf { it.isOn }
+        val away = when {
+            h != null -> {
+                val (status, error) = h.status(paused)
+                WhyAway(
+                    hub = true,
+                    forwarder = status != HubOnPhone.Status.HOME_ONLY && status != HubOnPhone.Status.OFF,
+                    forwarderRegistered = status == HubOnPhone.Status.REGISTERED,
+                    entriesStale = status == HubOnPhone.Status.FAILED && h.forwarder?.isProject == true && entriesStale,
+                    error = error ?: "",
+                )
+            }
+            r != null -> {
+                val (status, _, error) = r.status(paused)
+                WhyAway(relay = true, relayConnected = status == RelayOnPhone.Status.CONNECTED, error = error ?: "")
+            }
+            a != null -> WhyAway(
+                hubDevice = a.hub ?: "",
+                through = a.status == AwayFromHome.Status.CONNECTED,
+                hidden = a.hubHidesTunnel,
+                error = a.lastError?.message ?: "",
+            )
+            else -> null
+        }
+        return runCatching { n.why(away) }.getOrDefault(emptyList())
     }
 
     /** The phone at a blind relay: null without a group. */
@@ -2533,6 +2579,13 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             }
             // The device the relay said calls from that loopback port, once.
             is CoreMember.Event.Caller -> runCatching { n.caller(e.token, synchronized(lock) { relayLink }?.caller(e.port)) }
+            // A member that broke stops and starts again, off its own events' thread.
+            is CoreMember.Event.Panic -> {
+                Log.e(TAG, "the node broke, starting it again: ${e.details}")
+                val lines = synchronized(nodeLog) { nodeLog.toList() }
+                onPanic?.invoke(e.details, lines)
+                Thread({ restartSync() }, "restart").start()
+            }
             is CoreMember.Event.Identity -> Log.i(TAG, "the node holds a renewed certificate or new roots; the group's file keeps its own")
             is CoreMember.Event.Message -> when (val m = e.message) {
                 is Member.Message.Credentials -> {
@@ -3057,6 +3110,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
 
     /** Called on the node's thread when records arrived that change the group, for the notifications. */
     @Volatile var onRecords: (() -> Unit)? = null
+
+    /** Something in the node broke (a `panic` event): what broke and CBB's log lines, oldest first, for the bug report; the node starts again by itself. */
+    @Volatile var onPanic: ((details: String, log: List<String>) -> Unit)? = null
 
     /** This phone's secret for sealed messages (docs/protocol.md, section 15), 32 random bytes under a Keystore key. */
     private val sealFile = SealedFile(File(file.parentFile, "seal-secret"), "cbb.seal")

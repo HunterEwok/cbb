@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-// Command difffuzz compares how the four implementations (Go, the lite
-// member's Rust core, the Swift kit and the Kotlin kit) read the bodies that
+// Command difffuzz compares how the four implementations (Go, the
+// Rust core, the Swift kit and the Kotlin kit) read the bodies that
 // come from the network and the record sets they make of them.
 //
 //	go run ./tools/difffuzz gen -seed 1 -n 20000 -o corpus.jsonl

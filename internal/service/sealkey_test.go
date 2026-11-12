@@ -56,7 +56,7 @@ func TestSealKeysRecorded(t *testing.T) {
 			deckID = d.ID
 		}
 	}
-	if _, err := pi.do(t, control.Header{Op: control.OpSync, Device: deckID, Name: "off"}, ""); err != nil {
+	if _, err := pi.do(t, control.Header{Op: control.OpSync, Device: deckID, On: control.Bool(false)}, ""); err != nil {
 		t.Fatal(err)
 	}
 	if deck.status(t).Mode != "own" {

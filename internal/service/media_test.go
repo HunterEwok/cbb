@@ -98,7 +98,7 @@ func TestMedia(t *testing.T) {
 	b := startService(t, &h, "beta")
 	pairWith(t, a, b)
 	waitFor(t, "beta connected", func() bool { return len(b.status(t).Peers) == 1 })
-	if _, err := b.do(t, control.Header{Op: control.OpSync, Name: "off"}, ""); err != nil {
+	if _, err := b.do(t, control.Header{Op: control.OpSync, On: control.Bool(false)}, ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -136,7 +136,7 @@ func TestMedia(t *testing.T) {
 	check(b)
 
 	// With sync on beta fetches by itself.
-	if _, err := b.do(t, control.Header{Op: control.OpSync, Name: "on"}, ""); err != nil {
+	if _, err := b.do(t, control.Header{Op: control.OpSync, On: control.Bool(true)}, ""); err != nil {
 		t.Fatal(err)
 	}
 	// A watcher whose clipboard takes images gets the image once it has

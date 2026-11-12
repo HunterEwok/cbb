@@ -73,6 +73,34 @@ pub fn set(dir: &Path, engine: &Engine, on: bool, ms: i64) -> Result<()> {
     save(dir, engine)
 }
 
+/// Where sync and an admin's mute stand, as the operations sync and muted
+/// answer on both the control socket and the phone's member
+/// (docs/core-api.md, "Operations"): how long each lasts, 0 for until it
+/// is lifted.
+#[derive(Serialize, Deserialize, Default, Debug, Clone, PartialEq, Eq)]
+pub struct Standing {
+    pub sync_off: bool,
+    pub sync_off_ms: i64,
+    pub muted: bool,
+    pub muted_ms: i64,
+}
+
+/// Where sync and the mute stand on engine now.
+pub fn standing(engine: &Engine) -> Standing {
+    let off = match engine.sync() {
+        (true, _) => None,
+        (false, 0) => Some(0),
+        (false, u) => Some(u.saturating_sub(crate::uptime::wall_ms()).max(1)),
+    };
+    let muted = engine.mute_left();
+    Standing {
+        sync_off: off.is_some(),
+        sync_off_ms: off.unwrap_or(0),
+        muted: muted.is_some(),
+        muted_ms: muted.unwrap_or(0),
+    }
+}
+
 /// Reads "on" or "off", as cbb sync takes them.
 pub fn parse(name: &str) -> Result<bool> {
     match name {

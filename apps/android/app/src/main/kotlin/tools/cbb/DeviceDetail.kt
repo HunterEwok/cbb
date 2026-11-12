@@ -168,7 +168,8 @@ private fun DeviceMenu(model: AppModel, d: LiveGroup.Device) {
             if (d.canMakeAdmin) item(R.string.make_admin) { promoting = true }()
             // An admin member that may be a hub, or one the root makes an admin first; this phone is the hub under Settings.
             // A member that is no admin can be a hub that only passes the copies on.
-            if (!d.isSelf && d.online && !d.throughHub && d.can("hub") && !d.frozen && !d.rootless && (d.mayHub || d.canMakeAdmin || !d.admin)) {
+            // The hub is chosen by itself: making one is in the advanced settings.
+            if (model.settings.advanced && !d.isSelf && d.online && !d.throughHub && d.can("hub") && !d.frozen && !d.rootless && (d.mayHub || d.canMakeAdmin || !d.admin)) {
                 item(R.string.make_hub) { hubbing = true }()
             }
             if (!d.isSelf) item(R.string.remove, danger = true) { removing = true }()

@@ -14,9 +14,12 @@ private let log = Logger(subsystem: "tools.cbb", category: "app")
 @MainActor
 protocol GroupController: AnyObject {
     var hasGroup: Bool { get }
-    /// The group's tag, which the arrangement of the tiles is kept for;
-    /// nil without a group.
+    /// The group's tag; nil without a group.
     var groupTag: String? { get }
+    /// The device tiles as the member keeps them, with the user's change op
+    /// applied first (docs/apps.md, "What the member shows"); nil while no
+    /// member runs. A change that does not fit throws and changes nothing.
+    func view(_ op: Arrangement.Op?) throws -> Arrangement.View<CoreMember.TileDevice>?
     /// Whether this phone may add and remove devices.
     var isAdmin: Bool { get }
     var computers: [AppModel.Computer] { get }
@@ -156,11 +159,14 @@ protocol GroupController: AnyObject {
     func relayStatus() async -> AppModel.BlindRelay?
     /// Meets the group at a blind relay; both empty leave it.
     func setRelay(address: String, pin: String) async throws
+    /// Why the phone does not sync, the reason that stops the most first.
+    func why() async -> [WhyReason]
 }
 
 extension GroupController {
     /// A stand-in tag for the tests' and previews' groups.
     var groupTag: String? { hasGroup ? "group" : nil }
+    func view(_ op: Arrangement.Op?) throws -> Arrangement.View<CoreMember.TileDevice>? { nil }
     func unfreeze(_ id: String) async throws {}
     var removed: Bool { false }
     func leave() async throws { throw LiveGroup.Failure.noGroup }
@@ -212,6 +218,7 @@ extension GroupController {
     func makeHub(_ id: String, forwardOnly: Bool) async throws { throw HubOnPhone.Failure.notRunning }
     func relayStatus() async -> AppModel.BlindRelay? { nil }
     func setRelay(address: String, pin: String) async throws {}
+    func why() async -> [WhyReason] { hasGroup ? [] : [WhyReason(code: "not_in_group", level: "stop")] }
 }
 
 /// What the app shows and does; the views only read it and call it.
@@ -345,16 +352,20 @@ final class AppModel: ObservableObject {
     @Published private(set) var computers: [Computer] = []
     @Published private(set) var devices: [Computer] = [] {
         didSet {
-            loadArrangement()
+            loadTiles()
             SyncSwitch.publish(group.hasGroup ? syncOff == nil : nil)
         }
     }
-    /// The user's order of the tiles and their collections (docs/apps.md,
-    /// "Collections and the order of the tiles"), kept on this phone only;
-    /// nil without a group.
-    @Published private(set) var arrangement: Arrangement?
+    /// The devices and collections, this phone among them, in the user's
+    /// order as the member keeps it (docs/apps.md, "What the member
+    /// shows"), and whether the user changed it.
+    @Published private(set) var arranged: [Arranged] = []
+    @Published private(set) var customOrder = false
     /// One line about the last action, in plain words.
     @Published var message: String?
+    /// The bug report to ask about in release mode ("Oops, something
+    /// broke"); in debug mode a break shows whole in `message` instead.
+    @Published private(set) var bug: BugReports.Offer?
     @Published private(set) var busy = false
     /// How many times a device being added that has not answered yet was
     /// dialed again; 0 before that.
@@ -520,7 +531,103 @@ final class AppModel: ObservableObject {
         computers = group.computers
         devices = group.devices
         isAdmin = group.isAdmin
-        loadArrangement()
+        loadTiles()
+        if let live = group as? LiveGroup {
+            live.onPanic = { [weak self] details, log in self?.broke(kind: "panic", code: 5, name: "panic", details: details, log: log) }
+            let bugs = self.bugs
+            Task.detached { bugs.resend() }
+        }
+    }
+
+    // MARK: Bug reports
+
+    /// The bug reports' state in the app's defaults, posted with URLSession.
+    nonisolated let bugs = BugReports(
+        load: { UserDefaults.standard.data(forKey: "BugState") },
+        save: { UserDefaults.standard.set($0, forKey: "BugState") },
+        post: AppModel.postBug
+    )
+
+    /// Something broke: in debug mode `message` shows it whole; in release
+    /// mode the core's report is offered (asked, sent by itself when the
+    /// user allowed always, or not made again).
+    func broke(kind: String, code: Int, name: String, details: String, log lines: [String]) {
+        log.error("\(kind, privacy: .public): \(details, privacy: .public)")
+        let summary = String(localized: "Something in CBB broke. It started again.", bundle: .app)
+        var i = BugReports.Input(kind: kind, code: code, name: name, message: "Something in CBB broke, and it started again.",
+                                 details: details, app: "ios", version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
+        i.build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
+        i.os = "ios"
+        i.os_version = ProcessInfo.processInfo.operatingSystemVersionString
+        i.model = Self.machine
+        #if arch(arm64)
+        i.arch = "arm64"
+        #else
+        i.arch = "x86_64"
+        #endif
+        i.log = lines
+        i.names = devices.map(\.name)
+        let bugs = self.bugs
+        Task.detached {
+            let offer = try? bugs.offer(i)
+            await MainActor.run {
+                if Self.showsErrorDetails {
+                    self.message = summary + "\n\n" + details
+                    return
+                }
+                switch offer?.action {
+                case "ask": self.bug = offer
+                case "send": if let offer { Task.detached { bugs.send(offer) } }
+                default: self.message = summary
+                }
+            }
+        }
+    }
+
+    /// The user allowed the report on screen, and maybe always; it goes in
+    /// the background.
+    func allowBug(always: Bool) {
+        guard let o = bug else { return }
+        bug = nil
+        let bugs = self.bugs
+        Task.detached {
+            try? bugs.allow(always: always)
+            bugs.send(o)
+        }
+    }
+
+    /// The user cancelled the report: nothing goes.
+    func cancelBug() { bug = nil }
+
+    /// The device's model identifier, as iPhone17,1.
+    nonisolated static var machine: String {
+        var u = utsname()
+        uname(&u)
+        return withUnsafeBytes(of: &u.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+    }
+
+    /// Posts a report's body and waits for the server's answer; throws when
+    /// it did not go.
+    nonisolated static func postBug(_ url: String, _ body: Data) throws -> Data {
+        guard let u = URL(string: url) else { throw URLError(.badURL) }
+        var r = URLRequest(url: u, timeoutInterval: 20)
+        r.httpMethod = "POST"
+        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        r.httpBody = body
+        let done = DispatchSemaphore(value: 0)
+        nonisolated(unsafe) var result: Result<Data, Error> = .failure(URLError(.timedOut))
+        URLSession.shared.dataTask(with: r) { data, response, error in
+            if let error {
+                result = .failure(error)
+            } else if (response as? HTTPURLResponse)?.statusCode != 200 {
+                result = .failure(URLError(.badServerResponse))
+            } else {
+                result = .success(data ?? Data())
+            }
+            done.signal()
+        }.resume()
+        done.wait()
+        return try result.get()
     }
 
     /// Reads what the camera saw, or what the user typed: the text of the QR
@@ -876,6 +983,9 @@ final class AppModel: ObservableObject {
     }
 
     /// Updates which computers are online.
+    /// Why the phone does not sync (docs/apps.md, "Why it does not sync").
+    func why() async -> [WhyReason] { await group.why() }
+
     func refresh() async {
         await group.refresh()
         computers = group.computers
@@ -1410,26 +1520,6 @@ final class AppModel: ObservableObject {
         }
     }
 
-    static let arrangementKey = "deviceArrangement"
-
-    /// This phone's own ID: first in the arrangement until the user moves it.
-    private var selfID: String? { devices.first(where: \.isSelf)?.id }
-
-    /// The devices and collections, this phone among them, in the user's
-    /// order: the group's order, this phone first, until the user changes it.
-    var arranged: [Arranged] {
-        guard let a = arrangement else {
-            return (devices.filter(\.isSelf) + devices.filter { !$0.isSelf }).map { .device($0) }
-        }
-        let byID = Dictionary(devices.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        return a.view(devices: devices.map(\.id), self: selfID).compactMap { item in
-            switch item {
-            case .device(let id): byID[id].map { .device($0) }
-            case .collection(let c): .collection(c, c.devices.compactMap { byID[$0] })
-            }
-        }
-    }
-
     /// The collection with the ID, as Home shows it.
     func collection(_ id: String) -> (Arrangement.Collection, [Computer])? {
         for case let .collection(c, ds) in arranged where c.id == id { return (c, ds) }
@@ -1450,38 +1540,42 @@ final class AppModel: ObservableObject {
         return nil
     }
 
-    /// Reads the group's arrangement once its tag is known, and drops the
-    /// devices that left once the list is whole: the group loaded, this
-    /// phone in it. Until the user changes something nothing is stored.
-    private func loadArrangement() {
-        guard let tag = group.groupTag else {
-            if arrangement != nil { arrangement = nil }
+    /// Draws the member's tiles for the devices the group lists: the
+    /// group's order, this phone first, while no member answers.
+    private func loadTiles() {
+        guard group.hasGroup, let v = try? group.view(nil) else {
+            arranged = (devices.filter(\.isSelf) + devices.filter { !$0.isSelf }).map { .device($0) }
+            customOrder = false
             return
         }
-        var a = Arrangement.decode(defaults.data(forKey: Self.arrangementKey), group: tag)
-        if let current = arrangement, current.group == tag { a = current }
-        if selfID != nil, defaults.data(forKey: Self.arrangementKey) != nil {
-            let before = a
-            a.prune(devices: devices.map(\.id))
-            if a != before { defaults.set(a.encoded(), forKey: Self.arrangementKey) }
-        }
-        if a != arrangement { arrangement = a }
+        show(v)
     }
 
-    /// Makes a change to the arrangement and keeps it; one that does not
-    /// fit leaves it as it was and says so.
+    /// Shows the member's view: its tiles, each device as the group lists it.
+    private func show(_ v: Arrangement.View<CoreMember.TileDevice>) {
+        let byID = Dictionary(devices.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        arranged = v.tiles.compactMap { t in
+            switch t {
+            case .device(let d): byID[d.id].map { .device($0) }
+            case let .collection(id, name, ds):
+                .collection(Arrangement.Collection(id: id, name: name, devices: ds.map(\.id)), ds.compactMap { byID[$0.id] })
+            }
+        }
+        customOrder = v.custom
+    }
+
+    /// Makes a change to the tiles, which the member keeps; one that does
+    /// not fit leaves them as they were and says so.
     @discardableResult
     func arrange(_ op: Arrangement.Op) -> Bool {
-        guard var a = arrangement else { return false }
         do {
-            try a.apply(op, devices: devices.map(\.id), self: selfID)
+            guard let v = try group.view(op) else { return false }
+            show(v)
+            return true
         } catch {
-            message = Self.describe(error)
+            message = Self.describe(error, summary: String(localized: "The tiles stay as they were: that change does not fit.", bundle: .app))
             return false
         }
-        defaults.set(a.encoded(), forKey: Self.arrangementKey)
-        arrangement = a
-        return true
     }
 
     /// Makes a collection of the devices and returns its ID; nil when it
@@ -1493,8 +1587,8 @@ final class AppModel: ObservableObject {
     }
 
     private var collectionIDs: [String] {
-        (arrangement?.items ?? []).compactMap { item -> String? in
-            guard case let .collection(c) = item else { return nil }
+        arranged.compactMap { item -> String? in
+            guard case let .collection(c, _) = item else { return nil }
             return c.id
         }
     }
@@ -1622,9 +1716,6 @@ final class AppModel: ObservableObject {
         }
         if error is LiveGroup.ClipboardUnreadable {
             return String(localized: "Could not read the clipboard, so it was left as it is. Allow pasting for CBB, or copy the text again.", bundle: .app)
-        }
-        if error is Arrangement.Refused {
-            return String(localized: "The tiles stay as they were: that change does not fit.", bundle: .app)
         }
         if let f = error as? PhoneGroup.Failure, f == .cannotRemoveRoot {
             return String(localized: "The phone that made the group cannot be removed yet.", bundle: .app)

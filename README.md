@@ -2,13 +2,16 @@
 
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/HunterEwok/cbb/badge)](https://securityscorecards.dev/viewer/?uri=github.com/HunterEwok/cbb)
 
-One clipboard for your phone and every computer at home: copy on one, paste on another.
-Android, iPhone, Linux, Windows and Mac, on your own network, with no cloud and no
-accounts. Its short name is CBB and its command is `cbb`.
+**One encrypted clipboard for all your devices, with no cloud.**
+
+Copy on your phone, paste on your laptop: Copy Beyond Borders takes the borders between your
+devices away. Android, iPhone, Linux, Windows and Mac share one clipboard, encrypted end to
+end, with no accounts and nothing kept in a cloud. Its short name is CBB and its command is
+`cbb`.
 
 > **Status: early development.** Tried on real devices so far: Linux computers, a Mac, an
 > iPhone and an Apple Watch; Windows only in a virtual machine, Android only in CI's emulator.
-> The [status table](#status) has every part.
+> [Status](#status) has more.
 
 ![The phone adds each computer by its QR code; then the devices share one clipboard](docs/images/group.svg)
 
@@ -65,11 +68,25 @@ gesture. Apple devices on one Apple Account already share a clipboard; Copy Beyo
 connects them to everything else. On Linux it works with X11 and Wayland desktops, and without one
 through tmux and `cbb copy` and `cbb paste`.
 
+It also does:
+
+- **Away from home**: your devices keep one clipboard through a computer of yours at home,
+  still encrypted end to end ([away from home](docs/guide/away-from-home.md)).
+- **Images, files and formatted text**, not only plain text
+  ([images and files](docs/guide/images-and-files.md)).
+- **Remote paste** from the phone or the watch into the window in front on a computer, and
+  **quick actions** such as locking its screen ([remote paste](docs/guide/remote-paste.md),
+  [quick actions](docs/guide/quick-actions.md)).
+- **Watches**: the Apple Watch and Wear OS show the group and send a remote paste.
+
+The [lab](docs/guide/lab.md) has the experiments: keyboards and TV remotes that type a text
+for you, the Arduino Nano ESP32 and the ZX Spectrum Next.
+
 ## Principles
 
-- **Your network only.** At home the devices talk to each other directly. Away from home
-  they reach a computer of yours at home through the group's own encrypted tunnel
-  ([how it works](docs/guide/how-it-works.md)). No cloud, no accounts, no telemetry.
+- **Your devices only.** At home the devices talk to each other directly. Away from home
+  they reach a computer of yours at home ([how it works](docs/guide/how-it-works.md)). No
+  cloud, no accounts, no telemetry.
 - **Encrypted end to end.** Every copy, its text, images and files, is sealed on the device
   that makes it, for the devices of your group that read copies, and signed by it. Whatever
   carries it on the way, a hub, a forwarder or a relay, can neither read it, change it nor
@@ -115,7 +132,7 @@ the [threat model](docs/threat-model.md).
 - [KDE Connect](https://apps.kde.org/kdeconnect) shares the clipboard among Linux, Android,
   iOS, macOS and Windows, with much more besides (notifications, files, media control). It
   pairs devices two by two; Copy Beyond Borders keeps one group with a root key in the
-  phone's security chip, syncs away from home through the group's own tunnel, and does only
+  phone's security chip, syncs away from home through a computer of yours, and does only
   the clipboard and what goes with it.
 - [ClipCascade](https://github.com/Sathvik-Rao/ClipCascade) syncs the clipboard of Windows,
   macOS, Linux and Android, encrypted end to end, through a server you run or a community
@@ -144,34 +161,14 @@ Android and Windows not yet tried on real devices.
 
 ## Status
 
-| Part | State | On real devices |
-|---|---|---|
-| Linux service, desktop clipboard (X11, Wayland), tmux, `cbb copy`/`paste` | works | yes (Raspberry Pi, Steam Deck) |
-| macOS service and pasteboard agent | works | yes |
-| Windows service, clipboard agent, installer | built, CI on windows-latest | in a Windows 11 virtual machine (Arm), not yet on a PC |
-| FreeBSD service and installer | built, CI in a FreeBSD 15.1 virtual machine | not yet |
-| OpenWrt service and installer | built, CI on OpenWrt in QEMU | not yet |
-| iPhone app (the phone as the root, admin phones, devices list) | built, CI on a simulator | yes, on an iPhone 12 Pro Max: the root key in the Secure Enclave with Face ID, admitting computers, making a computer an admin, sync both ways; not yet a second phone or the takeover |
-| Android app | built, CI; APK in every release | not yet |
-| Mac app (menu bar) and the tray app for Linux and Windows | built, CI; the tray app in the Windows and Linux releases | the Mac app on a Mac; the tray app in the Windows 11 virtual machine |
-| Apple Watch and Wear OS apps (devices, events, away switch) | built, CI | the Apple Watch app on an Apple Watch Ultra: its list and remote paste; Wear OS not yet |
-| Lite member on Linux | built, CI e2e with Go members | joined a group on a Pi Zero W |
-| Lite member on the Arduino Nano ESP32 | firmware: Wi-Fi, joining by the phone, the USB port as a keyboard; CI in QEMU; syncing next | not yet |
-| Sync away from home between computers (`cbb global`, `cbb invite`) | built | not yet |
-| Sync away from home for the phones and the lite member | built | the iPhone on mobile data, through a Mac hub and the `cbb.tools` forwarder |
-| The phone as the hub, several hubs, your own blind relay | built | not yet |
-| Images, files and formatted text | built | not yet |
-| Remote paste and quick actions | built | remote paste from the iPhone and the watch to a Mac, at home and away from home; Windows, Linux and the quick actions not yet |
-| Keys in the TPM on Linux and Windows, proven Android keys, the group's key level (`cbb keys`) | built; CI against a software TPM | Windows in a virtual machine only |
-| Releases signed with the project's own keys | built; waits for the project's root keys | |
-| `cbb update`, automatic updates, the Android APK updating itself | built; takes only signed releases, so it waits for the root keys too | not yet |
-| The project's forwarder and relay at `cbb.tools`, open to everyone | being tested | the forwarder carried a phone's sync to a Mac hub |
-| Keyboards and TV remotes (`cbb keyboard`, `cbb remote`, the Android phone as a Bluetooth keyboard) | built, CI against fake TVs and BlueZ | typing on an Apple TV 4K |
-| Console paste on a key press | planned | |
-| Homebrew (`hunterewok/tap`) | a formula with each release | |
-| Signed macOS `.pkg` with the Mac app, TestFlight | built; the release signs them with the Apple developer account | not yet run |
-| App stores | planned | |
+- **Tried on real devices**: the service on Linux and macOS, the iPhone app with the phone
+  as the root, the Mac app and the Apple Watch app, sync away from home through a Mac hub.
+- **Built and tested in CI**, not yet on real devices: Windows (in a virtual machine),
+  Android, FreeBSD, OpenWrt, the tray app on Linux.
+- **Waiting for the project's keys and the Apple developer account**: signed releases and
+  `cbb update`, TestFlight and the signed macOS package; app stores are planned.
 
+Every part, and where it has run: [on real devices](docs/parity.md#on-real-devices).
 The order of what comes next is the [roadmap](docs/roadmap.md).
 
 ## Documentation
@@ -181,6 +178,7 @@ The order of what comes next is the [roadmap](docs/roadmap.md).
   [networks that block VPNs](docs/guide/blocked-networks.md), [keys and attestation](docs/guide/keys.md),
   [images and files](docs/guide/images-and-files.md), [remote paste](docs/guide/remote-paste.md),
   [quick actions](docs/guide/quick-actions.md), [the apps](docs/guide/apps.md),
+  [the lab](docs/guide/lab.md),
   [without the app](docs/guide/without-app.md), [a lost device](docs/guide/lost-device.md) and
   [troubleshooting](docs/guide/troubleshooting.md).
 - **Running servers**: [your own forwarder or relay](docs/admin/self-hosting.md), the

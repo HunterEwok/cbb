@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 //! The member inside a phone's app (the Aurora app, the iPhone and Android
-//! apps): the lite member's node (`cbb_lite::phone`) with the app's key,
+//! apps): cbb's node (`cbb_member::phone`) with the app's key,
 //! which stays where the app keeps it and signs through the callback the
 //! join takes too. The node runs on threads of its own: it dials the
 //! members mDNS finds or the app hands in, syncs with them, and calls the
@@ -26,9 +26,9 @@ use cbb_core::media::Part;
 use cbb_core::root::{self, Setting};
 use cbb_core::takeover::How;
 use cbb_core::wire::CommandResult;
-use cbb_lite::content::Source;
-use cbb_lite::node::{Peer, WriteReq};
-use cbb_lite::phone::{self, Listen, Member as Node};
+use cbb_member::content::Source;
+use cbb_member::node::{Peer, WriteReq};
+use cbb_member::phone::{self, Listen, Member as Node};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -94,8 +94,9 @@ struct Request {
 #[derive(Deserialize)]
 struct CopyArgs {
     text: String,
+    /// text (the default) or secret, as the control socket's copy.
     #[serde(default)]
-    secret: bool,
+    kind: String,
     /// The text came from the phone's clipboard (the default), not from
     /// another app's share.
     #[serde(default = "yes")]
@@ -269,6 +270,12 @@ enum Event<'a> {
     Log {
         line: &'a str,
     },
+    /// Something in the member broke (a panic in one of its threads,
+    /// docs/core-api.md "Panics"): what and where. The app shows it and
+    /// starts the member again.
+    Panic {
+        details: &'a str,
+    },
     /// A copy that became the group's current one from another member.
     Copy {
         copy: Value,
@@ -409,27 +416,6 @@ fn listen_kind(v: &Value) -> Result<Option<Listen>> {
     }
 }
 
-#[derive(Serialize)]
-struct DeviceAnswer {
-    device: String,
-    name: String,
-    role: String,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    caps: Vec<String>,
-    os: String,
-    admin: bool,
-    root: bool,
-    frozen: bool,
-    online: bool,
-    #[serde(rename = "self")]
-    this: bool,
-    listed: bool,
-    sync: String,
-    version: String,
-    os_version: String,
-    mac: String,
-}
-
 /// The app's callback and its context, called from the member's threads.
 #[derive(Clone, Copy)]
 struct Events {
@@ -468,6 +454,8 @@ pub struct Member {
     events: Events,
     /// Set by stop: the member stays allocated, and answers no more.
     stopped: std::sync::atomic::AtomicBool,
+    /// The guard's number for the member's panic events.
+    panics: u64,
 }
 
 impl Member {
@@ -525,13 +513,13 @@ impl Member {
                 }),
                 on_mute: Box::new(move |until: Option<i64>, by: &str| {
                     let for_ms = until
-                        .map_or(0, |u| if u == 0 { 0 } else { u.saturating_sub(cbb_lite::uptime::wall_ms()).max(1) });
+                        .map_or(0, |u| if u == 0 { 0 } else { u.saturating_sub(cbb_member::uptime::wall_ms()).max(1) });
                     ev.send(&Event::Mute { muted: until.is_some(), for_ms, by });
                 }),
                 log: Arc::new(move |line: &str| ev.send(&Event::Log { line })),
             })?;
             node.on_change(Box::new(move |c: &Copy| {
-                let key = cbb_lite::button::key_of(c).unwrap_or_default();
+                let key = cbb_member::button::key_of(c).unwrap_or_default();
                 ev.send(&Event::Copy { copy: copy_json(c, &key) });
             }));
             node.on_message(Box::new(move |from, m| {
@@ -569,7 +557,14 @@ impl Member {
                 res.id = id;
                 res
             }));
-            Ok(Member { node: Arc::new(node), answers, events: ev, stopped: std::sync::atomic::AtomicBool::new(false) })
+            let panics = crate::guard::watch(Box::new(move |details: &str| ev.send(&Event::Panic { details })));
+            Ok(Member {
+                node: Arc::new(node),
+                answers,
+                events: ev,
+                stopped: std::sync::atomic::AtomicBool::new(false),
+                panics,
+            })
         })();
         match made {
             Ok(m) => (Some(m), answer(Ok(serde_json::json!({})))),
@@ -600,7 +595,12 @@ impl Member {
             // The clipboard and the button (docs/design.md, "The one button").
             "copy" => {
                 let a: CopyArgs = args(a)?;
-                n.copy(&a.text, a.secret, a.board)?;
+                let secret = match a.kind.as_str() {
+                    "" | "text" => false,
+                    "secret" => true,
+                    other => return Err(Error::msg(format!("a copy is a text or a secret, not {other:?}"))),
+                };
+                n.copy(&a.text, secret, a.board)?;
                 done()
             }
             "copy_media" => {
@@ -688,7 +688,7 @@ impl Member {
                 let ms = arg(&a, "timeout_ms").as_u64().unwrap_or(5_000).min(60_000);
                 Ok(json!({ "connected": n.wait_connected(Duration::from_millis(ms)) }))
             }
-            "mute" => {
+            "set_mute" => {
                 n.set_mute(arg(&a, "until_ms").as_i64());
                 done()
             }
@@ -753,6 +753,13 @@ impl Member {
             }
             // What the group's records stop, for the alerts card.
             "alerts" => Ok(json!({ "alerts": n.alerts() })),
+            // Why the phone does not sync, for the screen in the advanced
+            // settings (docs/apps.md, "Why it does not sync"); `away`, the
+            // facts of a tunnel the app runs itself, or none.
+            "why" => {
+                let away: Option<cbb_core::why::AwayFacts> = args(arg(&a, "away").clone())?;
+                Ok(json!({ "why": n.why(away) }))
+            }
             // Sync away from home: on with new tunnel keys, or off; and its
             // state, null while it is off.
             "away" => {
@@ -773,29 +780,18 @@ impl Member {
                 Ok(json!({ "away": n.away_status() }))
             }
             // Every device of the group as the app shows it.
-            "devices" => {
-                let ds: Vec<DeviceAnswer> = n
-                    .device_views()
-                    .into_iter()
-                    .map(|d| DeviceAnswer {
-                        device: d.id,
-                        name: d.name,
-                        role: d.role,
-                        caps: d.caps,
-                        os: d.os,
-                        admin: d.admin,
-                        root: d.root,
-                        frozen: d.frozen,
-                        online: d.online,
-                        this: d.this,
-                        listed: d.listed,
-                        sync: d.sync,
-                        version: d.version,
-                        os_version: d.os_version,
-                        mac: d.mac,
-                    })
-                    .collect();
-                Ok(json!({ "devices": ds }))
+            "devices" => Ok(json!({ "devices": devices_of(n) })),
+            // The tiles to draw, and the user's change of their order
+            // (docs/apps.md, "What the member shows").
+            // The view's warnings are why: `away` is the app's own tunnel.
+            "view" => {
+                let away: Option<cbb_core::why::AwayFacts> = args(arg(&a, "away").clone())?;
+                Ok(json!({ "view": n.view(devices_of(n), None, away)? }))
+            }
+            "arrange" => {
+                let op: cbb_core::arrange::Op = args(arg(&a, "arrange").clone())?;
+                let away: Option<cbb_core::why::AwayFacts> = args(arg(&a, "away").clone())?;
+                Ok(json!({ "view": n.view(devices_of(n), Some(&op), away)? }))
             }
             // What an admin's app signed.
             "add_records" => {
@@ -855,7 +851,7 @@ impl Member {
     /// The check of the relay's port: the app names the device the relay
     /// announced from the call's loopback port, and the call is served only
     /// when its certificate names the same device.
-    fn caller_check(&self) -> cbb_lite::node::Admit {
+    fn caller_check(&self) -> cbb_member::node::Admit {
         let (answers, ev) = (self.answers.clone(), self.events);
         Arc::new(move |port: u16, id: &DeviceId| {
             let token = answers.next.fetch_add(1, Ordering::SeqCst);
@@ -872,18 +868,13 @@ impl Member {
     /// `{"sync_off", "sync_off_ms", "muted", "muted_ms"}`, the times what
     /// is left, 0 for until it is lifted.
     fn state(&self) -> serde_json::Value {
-        let (off, muted) = self.node.muted();
-        serde_json::json!({
-            "sync_off": off.is_some(),
-            "sync_off_ms": off.unwrap_or(0),
-            "muted": muted.is_some(),
-            "muted_ms": muted.unwrap_or(0),
-        })
+        serde_json::to_value(self.node.muted()).unwrap_or_default()
     }
 
     /// Stops the member once; calls answer that it stopped from then on.
     pub fn stop(&self) {
         if !self.stopped.swap(true, Ordering::SeqCst) {
+            crate::guard::unwatch(self.panics);
             self.node.stop();
         }
     }
@@ -940,7 +931,7 @@ impl Member {
                 // claim here and is not kept.
                 "recover_with_sheet" => {
                     let sheet = cbb_core::recovery::read(&a.sheet).map_err(|r| Error::msg(r.message()))?;
-                    let der = sheet.cert.as_deref().ok_or_else(|| Error::msg(cbb_lite::restore::NEEDS_QR))?;
+                    let der = sheet.cert.as_deref().ok_or_else(|| Error::msg(cbb_member::restore::NEEDS_QR))?;
                     let ca = Cert::parse(der)?;
                     let pkcs8 = sheet.pkcs8().ok_or_else(|| Error::msg("the recovery key cannot be encoded"))?;
                     let key = cbb_core::identity::FileKey::new(&pkcs8)?;
@@ -1046,4 +1037,34 @@ impl Member {
     pub fn invite(&self, request: &[u8], sign: SignFn, ctx: usize) -> (Option<crate::invite::Invite>, Vec<u8>) {
         crate::invite::Invite::new(self.node.clone(), request, sign, ctx)
     }
+}
+
+/// Every device of the group as the app shows it: the same devices, in the
+/// same form, as the control socket's devices answers on a computer.
+fn devices_of(n: &cbb_member::phone::Member) -> Vec<cbb_member::control::Device> {
+    n.device_views()
+        .into_iter()
+        .map(|d| cbb_member::control::Device {
+            id: d.id,
+            name: d.name,
+            role: d.role,
+            caps: d.caps,
+            os: d.os,
+            admin: d.admin,
+            root: d.root,
+            frozen: d.frozen,
+            online: d.online,
+            this: d.this,
+            listed: d.listed,
+            mode: match d.sync.as_str() {
+                "on" => "shared".into(),
+                "off" => "own".into(),
+                _ => String::new(),
+            },
+            version: d.version,
+            os_version: d.os_version,
+            mac: d.mac,
+            ..Default::default()
+        })
+        .collect()
 }

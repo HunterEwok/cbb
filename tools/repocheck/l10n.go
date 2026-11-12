@@ -4,13 +4,47 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io/fs"
 	"path"
 	"regexp"
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/HunterEwok/cbb/tools/strings/catalog"
 )
+
+// checkAppStrings reports the apps' translations that differ from what
+// tools/strings makes of their source, apps/l10n, and the source's own
+// problems; nothing in a tree without them.
+func checkAppStrings(contents map[string][]byte) []string {
+	if _, ok := contents[catalog.Dir+"/en.json"]; !ok {
+		return nil
+	}
+	src, err := catalog.Load(func(name string) ([]byte, error) {
+		if b, ok := contents[name]; ok {
+			return b, nil
+		}
+		return nil, fmt.Errorf("%s: %w", name, fs.ErrNotExist)
+	})
+	if err != nil {
+		var out []string
+		for _, line := range strings.Split(err.Error(), "\n") {
+			out = append(out, line+" (apps/l10n, tools/strings)")
+		}
+		return out
+	}
+	var out []string
+	for name, want := range src.Generate() {
+		if !bytes.Equal(contents[name], want) {
+			out = append(out, fmt.Sprintf("%s:1: not what tools/strings makes of apps/l10n: edit apps/l10n and run go run ./tools/strings", name))
+		}
+	}
+	sort.Strings(out)
+	return out
+}
 
 // installerTranslation matches the catalog of a language of the installers'
 // messages (packaging/l10n.sh).

@@ -13,7 +13,7 @@ import (
 )
 
 // TestVectors checks the layouts against testdata/interop/keyboard.json,
-// which the lite core's keyboard tests write: the Nano, the Android phone
+// which the Rust core's keyboard tests write: the Nano, the Android phone
 // and a Linux computer type alike.
 func TestVectors(t *testing.T) {
 	b, err := os.ReadFile(filepath.Join("..", "..", "testdata", "interop", "keyboard.json"))

@@ -115,16 +115,17 @@ Devices try the hub's own address first and the forwarder last.
 
 ## When the network blocks WireGuard
 
-Some networks (hotels, offices, some countries) block VPN traffic. The hub can disguise the
-group's tunnel:
+Some networks (hotels, offices, some countries) block VPN traffic. The hub disguises the
+group's tunnel unless you turn it off:
 
-- **Obfuscation** (`-obfuscate`): the tunnel speaks AmneziaWG, which does not look like
-  WireGuard on the wire. Computers and both phone apps support it.
-- **VLESS** (`-vless`, through a forwarder): the devices reach the forwarder inside what
-  looks like an ordinary HTTPS connection to the forwarder's website. For networks
-  that block both of the above. Computers and both phone apps support it.
+- **Obfuscation**: the tunnel speaks AmneziaWG, which does not look like WireGuard on the
+  wire. Computers and both phone apps support it.
+- **VLESS** (through a forwarder): the devices reach the forwarder inside what looks like an
+  ordinary HTTPS connection to the forwarder's website. For networks that block both of the
+  above. Computers and both phone apps support it.
 
-The lite member speaks only plain WireGuard, so with either of these it syncs at home only.
+`cbb global hub -no-vless` turns VLESS off, and `-no-obfuscate` with it plain WireGuard. The
+lite member speaks only plain WireGuard, so with either of these on it syncs at home only.
 
 ## Phones only: the phone as the hub
 
@@ -144,8 +145,8 @@ syncing away from home:
 
 A group may have several hubs: the root, every admin with a hub set up, and the hubs that only
 pass copies on. Devices away from
-home use the first one that answers, phones first, so a group of phones and a computer keeps
-working while the phone's app is closed.
+home use the first one that answers, the computers before the phones, so a group of phones and
+a computer keeps working while the phone's app is closed.
 
 **Planned:** a blind relay at `cbb.tools` for everyone who does not want to run a hub or a
 relay. It will see which devices talk and when, never what they copy, and you turn it on

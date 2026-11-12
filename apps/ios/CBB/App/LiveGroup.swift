@@ -26,6 +26,12 @@ private let syncLog = Logger(subsystem: "tools.cbb", category: "sync")
 /// keeps a connection to each, and syncs with them.
 @MainActor
 final class LiveGroup: GroupController {
+    /// Something in the member broke (a `panic` event): what broke and the
+    /// member's recent log lines, oldest first, for the bug report
+    /// (docs/core-api.md, "Bug reports"); the member starts again by itself.
+    var onPanic: ((String, [String]) -> Void)?
+    /// The member's recent log lines, for a bug report.
+    private var recentLog: [String] = []
     enum Failure: Error, Equatable { case unreachable, notConfirmed, noNetwork, timedOut, tooManyWrongCodes, notAdmin, noWindow, twoWindows, needsRoot, noGroupComputer, noGroup, rootLeaves([String]), hubUnreachable }
 
     /// The clipboard holds something the app could not read as text: the
@@ -205,6 +211,11 @@ final class LiveGroup: GroupController {
     var hasGroup: Bool { state != nil }
 
     var groupTag: String? { state?.tag }
+
+    /// The member's tiles (docs/apps.md, "What the member shows").
+    func view(_ op: Arrangement.Op?) throws -> Arrangement.View<CoreMember.TileDevice>? {
+        try node?.view(op)
+    }
 
     /// Whether this phone may add and remove devices: it made the group, or
     /// the phone that did made it an admin. A phone without a group makes
@@ -1971,6 +1982,13 @@ final class LiveGroup: GroupController {
             modeLog.notice("\(by, privacy: .public) \(muted ? "muted" : "unmuted", privacy: .public) this phone")
         case let .log(line):
             syncLog.notice("\(line, privacy: .public)")
+            recentLog.append(line)
+            if recentLog.count > 300 { recentLog.removeFirst(recentLog.count - 300) }
+        case let .panic(details):
+            // A member that broke stops and starts again.
+            syncLog.error("the member broke, starting it again: \(details, privacy: .public)")
+            onPanic?(details, recentLog)
+            Task { await restartSync() }
         case .identity:
             // The core kept the certificate an admin renewed for this phone;
             // the app renews its own (renewOwnCertificate) and keeps that.
@@ -2340,6 +2358,34 @@ final class LiveGroup: GroupController {
     }
 
     /// The blind relay as Settings shows it; nil without a group.
+    /// Why the phone does not sync (docs/apps.md, "Why it does not sync"):
+    /// the member's reasons, with where the app's own tunnel stands, since
+    /// the phone's hub, its sync away from home and its relay run here.
+    func why() async -> [WhyReason] {
+        guard let node else { return [WhyReason(code: "not_in_group", level: "stop")] }
+        var a: WhyAway?
+        if let hub, state?.isAdmin == true, hub.isOn {
+            let (status, error) = hub.status(paused: !foreground)
+            var w = WhyAway()
+            (w.hub, w.forwarder, w.forwarderRegistered) = (true, status != .homeOnly && status != .off, status == .registered)
+            w.entriesStale = status == .failed && hub.forwarder?.isProject == true && entries.current == nil
+            w.error = error ?? ""
+            a = w
+        } else if let r = blindRelay, case let (status, _, error) = r.status(paused: !foreground), status != .off {
+            var w = WhyAway()
+            (w.relay, w.relayConnected, w.error) = (true, status == .connected, error ?? "")
+            a = w
+        } else if let away, await away.isOn {
+            var w = WhyAway()
+            w.hubDevice = await away.hub ?? ""
+            w.through = await away.status == .connected
+            w.hidden = await away.hubHidesTunnel
+            w.error = await away.lastError.map { "\($0)" } ?? ""
+            a = w
+        }
+        return (try? node.why(away: a)) ?? []
+    }
+
     func relayStatus() async -> AppModel.BlindRelay? {
         guard let r = blindRelay else { return nil }
         let (status, report, error) = r.status(paused: !foreground)

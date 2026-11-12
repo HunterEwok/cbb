@@ -397,7 +397,11 @@ void Member::event(const QByteArray &json)
     const QJsonObject e = QJsonDocument::fromJson(json).object();
     const QString type = e.value(QStringLiteral("type")).toString();
     if (type == QStringLiteral("log")) {
-        Errors::log(e.value(QStringLiteral("line")).toString());
+        const QString line = e.value(QStringLiteral("line")).toString();
+        Errors::log(line);
+        m_recentLog.append(line);
+        if (m_recentLog.size() > 300)
+            m_recentLog.removeFirst();
     } else if (type == QStringLiteral("write")) {
         write(e.value(QStringLiteral("text")).toString(), e.value(QStringLiteral("kind")).toString() == QStringLiteral("secret"),
               qint64(e.value(QStringLiteral("ttl_ms")).toDouble()));
@@ -407,6 +411,10 @@ void Member::event(const QByteArray &json)
             roots.append(QByteArray::fromBase64(r.toString().toLatin1()));
         emit identityChanged(QByteArray::fromBase64(e.value(QStringLiteral("cert")).toString().toLatin1()),
                              QByteArray::fromBase64(e.value(QStringLiteral("issuer")).toString().toLatin1()), roots);
+    } else if (type == QStringLiteral("panic")) {
+        const QString details = e.value(QStringLiteral("details")).toString();
+        Errors::log(QStringLiteral("member: %1").arg(details));
+        emit panicked(details);
     } else if (type == QStringLiteral("mute")) {
         pollMuted();
     } else if (type == QStringLiteral("command")) {
@@ -664,7 +672,7 @@ void Member::readAway(const QJsonValue &away)
         bool online = false;
         for (const QVariant &d : m_devices) {
             const QVariantMap m = d.toMap();
-            if (m.value(QStringLiteral("device")).toString() == hub) {
+            if (m.value(QStringLiteral("id")).toString() == hub) {
                 hubName = m.value(QStringLiteral("name")).toString();
                 online = m.value(QStringLiteral("online")).toBool();
             }
@@ -707,15 +715,30 @@ void Member::pollDevices()
     const QJsonObject al = call(m_member, QStringLiteral("alerts"), QJsonObject(), &failure);
     const QVariantList alerts =
         failure.isNull() ? al.value(QStringLiteral("alerts")).toArray().toVariantList() : m_alerts;
+    const QJsonObject w = call(m_member, QStringLiteral("why"), QJsonObject(), &failure);
+    const QVariantList why = failure.isNull() ? w.value(QStringLiteral("why")).toArray().toVariantList() : m_why;
     Failure viewFailure;
     const QJsonObject rv = call(m_member, QStringLiteral("root_view"), QJsonObject(), &viewFailure);
     const QVariantMap rootView = viewFailure.isNull() ? rv.toVariantMap() : m_rootView;
-    if (devices != m_devices || alerts != m_alerts || rootView != m_rootView) {
+    if (devices != m_devices || alerts != m_alerts || why != m_why || rootView != m_rootView) {
         m_devices = devices;
         m_alerts = alerts;
+        m_why = why;
         m_rootView = rootView;
         emit devicesChanged();
     }
+}
+
+QJsonObject Member::view(const QJsonValue &op, Failure *failure) const
+{
+    if (!m_member) {
+        failure->message = QStringLiteral("no member runs");
+        return QJsonObject();
+    }
+    const QJsonObject a = op.isNull()
+        ? call(m_member, QStringLiteral("view"), QJsonObject(), failure)
+        : call(m_member, QStringLiteral("arrange"), QJsonObject{{QStringLiteral("arrange"), op}}, failure);
+    return failure->isNull() ? a.value(QStringLiteral("view")).toObject() : QJsonObject();
 }
 
 void Member::setLast(const QString &text, bool secret)

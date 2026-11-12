@@ -45,20 +45,17 @@ CBB is removed. Its keys stay in /var/db/cbb for a reinstall; --purge removes th
 --port needs a port number	--port inahitaji namba ya mlango
 --home-cgnat needs on or off	--home-cgnat inahitaji on au off
 --auto-update needs on or off	--auto-update inahitaji on au off
-unknown option %s (known: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)	chaguo lisilojulikana %s (yanayojulikana: --lite, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)
+unknown option %s (known: --no-helper, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)	chaguo lisilojulikana %s (yanayojulikana: --no-helper, --no-pair, --rootless, --console, --uinput, --port N, --home-cgnat on|off, --auto-update on|off, --express, --no-firewall)
 --rootless installs for your own user: run it without sudo: %s	--rootless husakinisha kwa mtumiaji wako mwenyewe: iendeshe bila sudo: %s
 --rootless is for Linux computers	--rootless ni kwa kompyuta za Linux
 run it with sudo: %s	iendeshe kwa sudo: %s
 no release for this MIPS system: it is not OpenWrt, which names its byte order	hakuna toleo la mfumo huu wa MIPS: si OpenWrt, ambayo hutaja mpangilio wake wa baiti
 no release for the architecture %s	hakuna toleo la usanifu %s
-the lite member for MIPS has no sync away from home yet (roadmap item 37); the full member has it.	mwanachama mwepesi wa MIPS bado hana usawazishaji ukiwa mbali na nyumbani (kipengele 37 cha ramani); mwanachama kamili anao.
 --console is not for a router	--console si kwa ruta
 --uinput is not for a router	--uinput si kwa ruta
 --home-cgnat is not for a router	--home-cgnat si kwa ruta
---lite is for Linux; a Mac runs the full member	--lite ni kwa Linux; Mac huendesha mwanachama kamili
 --console is for Linux	--console ni kwa Linux
 --uinput is for Linux	--uinput ni kwa Linux
---lite is for Linux; FreeBSD runs the full member	--lite ni kwa Linux; FreeBSD huendesha mwanachama kamili
 this installer is for Linux, macOS and FreeBSD; on Windows use get.ps1	kisakinishi hiki ni cha Linux, macOS na FreeBSD; kwenye Windows tumia get.ps1
 tar is required	tar inahitajika
 sha256sum or shasum is required	sha256sum au shasum inahitajika
@@ -106,7 +103,6 @@ no ufw or firewalld is active; nothing was added.	si ufw wala firewalld inayotum
 %s needs root; a rootless install has no console or uinput helper	%s inahitaji root; usakinishaji bila root hauna msaidizi wa console au uinput
 --rootless installs for your own user: run it without sudo. With sudo, install.sh without --rootless installs the system service, which is safer.	--rootless husakinisha kwa mtumiaji wako mwenyewe: iendeshe bila sudo. Kwa sudo, install.sh bila --rootless husakinisha huduma ya mfumo, ambayo ni salama zaidi.
 a rootless install runs as a systemd user unit, and this session has no systemd user manager; log in to a desktop or over ssh and run it again	usakinishaji bila root huendeshwa kama kitengo cha mtumiaji cha systemd, na kipindi hiki hakina msimamizi wa mtumiaji wa systemd; ingia kwenye eneo-kazi au kupitia ssh kisha uiendeshe tena
---home-cgnat is for the full member	--home-cgnat ni kwa mwanachama kamili
 CBB is installed for the whole system here (%s), and one device runs one service; remove it first or keep it	CBB imesakinishwa kwa mfumo wote hapa (%s), na kifaa kimoja huendesha huduma moja; iondoe kwanza au uibakize
 the desktop agent did not start; it starts at your next login	wakala wa eneo-kazi haukuanza; utaanza utakapoingia tena
 CBB runs while you are logged in. To keep it running after you log out, an administrator runs: sudo loginctl enable-linger %s	CBB huendeshwa ukiwa umeingia. Ili iendelee kuendeshwa baada ya kutoka, msimamizi anaendesha: sudo loginctl enable-linger %s
@@ -116,12 +112,9 @@ Next: see member/README.md; in short, %s pair here, and scan its QR code with th
 Next: run %s pair and scan its QR code with the CBB app on your phone.	Kinachofuata: endesha %s pair na uchanganue msimbo wake wa QR kwa programu ya CBB kwenye simu yako.
 this archive has no install-rootless.sh, so it cannot install without root	kumbukumbu hii haina install-rootless.sh, kwa hiyo haiwezi kusakinisha bila root
 systemd is required	systemd inahitajika
-the full member is installed here, and the lite member cannot use its keys; remove it first: %s	mwanachama kamili amesakinishwa hapa, na mwanachama mwepesi hawezi kutumia funguo zake; mwondoe kwanza: %s
-the lite member is installed here, and the full member cannot use its keys; remove it first: %s	mwanachama mwepesi amesakinishwa hapa, na mwanachama kamili hawezi kutumia funguo zake; mwondoe kwanza: %s
 an account named cbb exists here and is not this service's (its comment is not "cbb service"); it would get the group's keys. Rename or remove it, then run install.sh again.	akaunti iitwayo cbb ipo hapa na si ya huduma hii (maelezo yake si "cbb service"); ingepata funguo za kikundi. Ibadilishe jina au iondoe, kisha endesha install.sh tena.
 a group named cbb exists here with members (%s), and no service account; they would reach the service. Rename or remove the group, then run install.sh again.	kikundi kiitwacho cbb kipo hapa chenye wanachama (%s), na hakuna akaunti ya huduma; wangefikia huduma. Badilisha jina la kikundi au kiondoe, kisha endesha install.sh tena.
 Not installed: the tray app, which needs GTK 4 and WebKitGTK 6.0 (Debian and Ubuntu: %s; Fedora: %s). Install them and run this again to add it.	Haijasakinishwa: programu ya trei, inayohitaji GTK 4 na WebKitGTK 6.0 (Debian na Ubuntu: %s; Fedora: %s). Zisakinishe kisha endesha hii tena ili kuiongeza.
---uinput is for the full member, which runs the desktop connector	--uinput ni kwa mwanachama kamili, anayeendesha kiunganishi cha eneo-kazi
 could not load the uinput module now; it loads at the next boot	imeshindwa kupakia moduli ya uinput sasa; itapakiwa wakati wa kuwasha unaofuata
 100.64.0.0/10 counts as the home network on this device (--home-cgnat on).	100.64.0.0/10 inahesabiwa kama mtandao wa nyumbani kwenye kifaa hiki (--home-cgnat on).
 New member and admin keys of this device go into its TPM.	Funguo mpya za mwanachama na msimamizi za kifaa hiki huwekwa katika TPM yake.
@@ -160,7 +153,6 @@ see logread -e cbb	angalia logread -e cbb
 CBB is running on TCP port %s, on the lan zone. To remove it: sh /usr/share/cbb/uninstall.sh	CBB inaendeshwa kwenye mlango wa TCP %s, katika eneo la lan. Kuiondoa: sh /usr/share/cbb/uninstall.sh
 Packages from outside OpenWrt's feeds are left out by attended sysupgrade (ASU, owut): install it again after one.	Vifurushi vilivyo nje ya vyanzo vya OpenWrt huachwa na attended sysupgrade (ASU, owut): isakinishe tena baada ya uboreshaji huo.
 Next: run su -s /bin/sh cbb -c 'cbb pair -name router' and scan its QR code with the CBB app on your phone.	Kinachofuata: endesha su -s /bin/sh cbb -c 'cbb pair -name router' na uchanganue msimbo wake wa QR kwa programu ya CBB kwenye simu yako.
-Next: run cbb pair and scan its QR code with the CBB app on your phone.	Kinachofuata: endesha cbb pair na uchanganue msimbo wake wa QR kwa programu ya CBB kwenye simu yako.
 CBB is removed. Its keys stay in /etc/cbb for a reinstall; --purge removes them.	CBB imeondolewa. Funguo zake zinabaki katika /etc/cbb kwa usakinishaji upya; --purge huziondoa.
 This device is in no group yet, so it starts pairing now (--no-pair skips this).	Kifaa hiki bado hakimo katika kikundi chochote, kwa hiyo kinaanza kuoanisha sasa (--no-pair huruka hili).
 could not record how CBB was installed; cbb update takes it as get.sh	imeshindwa kurekodi jinsi CBB ilivyosakinishwa; cbb update itaichukulia kama get.sh
@@ -259,3 +251,7 @@ removing cbb from PATH	inaondoa cbb kwenye PATH
 removing %s	inaondoa %s
 removing %s and the %s group	inaondoa %s na kikundi %s
 CBB is removed. Its keys stay in %s for a reinstall; -Purge removes them.	CBB imeondolewa. Funguo zake zinabaki katika %s kwa usakinishaji upya; -Purge huziondoa.
+cbb for MIPS has no sync away from home yet (roadmap item 37).	cbb ya MIPS bado haina usawazishaji ukiwa mbali na nyumbani (kipengele 37 cha mpango).
+--no-helper is for Linux	--no-helper ni kwa Linux pekee
+cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	hapa cbb inaendeshwa pamoja na msaidizi wake, ambaye huenda anashikilia funguo zake; bila msaidizi cbb haiwezi kuzitumia. Iondoe kwanza: %s
+--uinput needs cbb's helper, which runs the desktop connector	--uinput inahitaji msaidizi wa cbb, unaoendesha kiunganishi cha eneo-kazi

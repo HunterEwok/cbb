@@ -641,7 +641,7 @@ impl Admin<'_> {
     /// Records what a peer's hello says about its device, as Go's
     /// ensureListed on the group's root: a computer whose record names no
     /// system or another one, or that its record has in a file while its
-    /// hello says hardware, and a computer or lite member whose hello says
+    /// hello says hardware, and a computer or a small device whose hello says
     /// it is a rootless install (D-79), which is then no admin. Nothing is
     /// signed when the record already says it, or on a member that is not
     /// the root.
@@ -1484,10 +1484,15 @@ impl Admin<'_> {
     /// makes a phone that offers an admin key an admin.
     pub fn admitter(&self, admins: bool) -> Result<admit::Admitter> {
         let s = self.signing().map_err(|_| Error::msg(NOT_ADMITTER))?;
+        // The app shows the refusal; the log keeps it too, for whoever
+        // reads why a phone did not join here.
         if admins && !s.root {
-            return Err(Error::msg("only the group's root lets a phone join as an admin"));
+            let why = "only the group's root lets a phone join as an admin";
+            self.node.logf(&format!("cbb: refused to let a phone join as an admin: {why}"));
+            return Err(Error::msg(why));
         }
         if !s.root && self.node.records().lock().unwrap().frozen(&s.ca.key_hash()) {
+            self.node.logf(&format!("cbb: refused to admit a device: {FROZEN}"));
             return Err(Error::msg(FROZEN));
         }
         Ok(admit::Admitter {

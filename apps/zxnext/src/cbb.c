@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 // .cbb: the CBB dot command for the ZX Spectrum Next. It talks
-// to the lite member on the Next's own Raspberry Pi over the UART between
+// to cbb on the Next's own Raspberry Pi over the UART between
 // them, by typing `cbb next ...` at NextPi's shell (docs/roadmap.md, item 14;
 // the frames are in member/README.md, "ZX Spectrum Next").
 
@@ -27,13 +27,13 @@
 #include "sha256.h"
 
 #define VERSION "0.5.0"
-// The lite member on the Pi; the NextPi set-up puts it on the shell's PATH.
-#define CBB_LITE "cbb"
-// Stops the lite member's service that cbb next link started.
+// cbb on the Pi; the NextPi set-up puts it on the shell's PATH.
+#define CBB_PI "cbb"
+// Stops cbb's service that cbb next link started.
 #define PKILL_SERVICE "pkill -f ' service -peer 127\\.0\\.0\\.1:'"
 // The longest text pasted or copied.
 #define MAX_TEXT 8192
-// How long the lite member may take to answer, in seconds.
+// How long cbb on the Pi may take to answer, in seconds.
 #define ANSWER_SECONDS 20
 // The ROM's frame counter, 50 a second while interrupts run.
 #define FRAMES_LO (*(volatile uint16_t *)23672)
@@ -182,7 +182,7 @@ static void say(const char *msg)
 static int link_fail(uint8_t err)
 {
     if (err == LINK_BREAK) {
-        link_send(3); // Ctrl-C stops the lite member on the Pi
+        link_send(3); // Ctrl-C stops cbb on the Pi
         return fail("stopped", 0);
     }
     return fail("the Pi stopped answering", "timeout");
@@ -380,14 +380,14 @@ uint8_t ovl_load(uint8_t page) __z88dk_fastcall
 #pragma constseg rodata_compiler
 #pragma bssseg bss_compiler
 
-// Types a command for the lite member at NextPi's shell (the network
+// Types a command for cbb at NextPi's shell (the network
 // stopped: cmd_run() and net_pair() see to it).
 static int command(const char *args)
 {
     if (link_shell()) {
         return pi_silent();
     }
-    link_send_str(CBB_LITE);
+    link_send_str(CBB_PI);
     if (debug) link_send_str(" -debug");
     link_send_str(" next ");
     link_send_str(args);
@@ -492,7 +492,7 @@ static const char p_sent_secret[] = "%u bytes sent to the group as a secret\n";
 static const char p_sent[] = "%u bytes sent to the group\n";
 static const char p_no_open[] = "cannot open the file";
 
-// Eight lowercase hex digits, as the lite member writes a CRC-32.
+// Eight lowercase hex digits, as cbb writes a CRC-32.
 static void hex8(char *out, uint32_t v)
 {
     int8_t i;
@@ -864,14 +864,14 @@ static uint8_t esp_speed(uint32_t speed)
 
 
 // The short form's defaults: the member's port, and where the phones reach
-// the Pi (the ESP's port, the lite member's own).
+// the Pi (the ESP's port, cbb's own).
 static const char net_port[] = ":8764";
 static const char net_serve[] = " -serve 8764:8764";
 
 // net_pair starts the network under its QR code, without a word.
 static uint8_t quiet;
 
-// Finds a computer of the group on the home network, as the lite members
+// Finds a computer of the group on the home network, as cbb on small devices
 // on a network of their own do with mDNS: the question for _cbb._tcp.local
 // goes from the ESP's UDP port 5354, which the members answer to that port
 // alone (a legacy unicast query, RFC 6762 section 6.7). The first answer
@@ -1147,7 +1147,7 @@ static int net_start(int argc, char **argv)
         link_use(LINK_PI);
         return pi_silent();
     }
-    start_send(CBB_LITE " next link ");
+    start_send(CBB_PI " next link ");
     start_send(net_to);
     start_send(net_args);
     if (pair_code) {
@@ -1262,7 +1262,7 @@ static int qr(uint8_t size)
 // network runs under the QR code the phone scans.
 static int net_stop(void);
 extern int far_pair_check(void);
-static const char pair_cmd[] = "(%s; " CBB_LITE " next pair -addr %s:%s -port %s >/ram/cbbjoin 2>/dev/null; %s) &\n";
+static const char pair_cmd[] = "(%s; " CBB_PI " next pair -addr %s:%s -port %s >/ram/cbbjoin 2>/dev/null; %s) &\n";
 static const char pair_pkill[] = PKILL_SERVICE;
 static const char qr_wait[] = "WAIT: THE NETWORK STARTS";
 static const char qr_after[] = "The app shows the Next\nonce it joins.\n";
@@ -2914,7 +2914,7 @@ static int install(void)
 }
 
 // .cbb show and speed, in CBB.OVL's second page (far.asm, far_show()).
-// show: the lite member's `cbb next image` (member/README.md) sends the
+// show: cbb's `cbb next image` (member/README.md) sends the
 // group's latest image as Layer 2 wants it, a column of 256 pixels after
 // another, then its palette. The bytes go straight into ten 8K banks that
 // are Layer 2's for the moment, while it shows the middle of the screen

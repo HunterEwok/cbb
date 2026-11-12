@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! Sync away from home on the lite member (docs/protocol.md, section 11):
+//! Sync away from home on cbb (docs/protocol.md, section 11):
 //! off until the user turns it on (cbb global on), then the hellos offer the
 //! device's tunnel key and its own preshared key, it keeps the offers of the
 //! group's hubs, and whenever no hub is found at home or connected it dials,

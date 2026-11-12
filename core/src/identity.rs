@@ -3,7 +3,7 @@
 
 //! This device's place in a group: its device ID, its key, its member
 //! certificate, the admin CA that issued it, the group CA and the later
-//! roots. A lite member holds no CA keys, like a Mac (docs/protocol.md,
+//! roots. A member in Rust holds no CA keys, like a Mac (docs/protocol.md,
 //! section 2).
 //!
 //! The identity file has the format of the Go member's identity.json,

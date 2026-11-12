@@ -91,7 +91,7 @@ type v2Case struct {
 // checkV2Cases checks that a Records set given each case of
 // testdata/interop/v2-records.json whose name starts with one of prefixes
 // says the case's state, byte for byte: the set's own checks take every
-// record of the vectors, and its state is the one rule's (internal/core).
+// record of the vectors, and its state is the one rule's (internal/authority).
 // A case where the member does not know the time is for the core's tests.
 func checkV2Cases(t *testing.T, prefixes ...string) {
 	t.Helper()
