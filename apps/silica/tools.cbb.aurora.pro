@@ -121,6 +121,8 @@ DISTFILES += \
     qml/pages/ArrangePage.qml \
     qml/pages/SettingsPage.qml \
     qml/pages/KeyboardPage.qml \
+    qml/pages/PastePage.qml \
+    qml/pages/PasteFilesDialog.qml \
     qml/pages/SwitchFace.qml \
     qml/pages/AwayDialog.qml \
     qml/pages/devices.js \

@@ -9,6 +9,7 @@
 
 #include <cbb_core.h>
 
+#include <QClipboard>
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QGuiApplication>
@@ -21,6 +22,7 @@
 #include <QSettings>
 #include <QSysInfo>
 #include <QThread>
+#include <QUrl>
 
 namespace {
 
@@ -114,9 +116,17 @@ protected:
         // A command the device refused answers with its reason.
         const QJsonObject result = a.value(QStringLiteral("result")).toObject();
         const QString status = result.value(QStringLiteral("status")).toString();
+        const QString reason = result.value(QStringLiteral("reason")).toString();
         if (failure.isNull() && !result.isEmpty() && status != QStringLiteral("done")) {
             failure = Failure{QCoreApplication::translate("Errors", "The device did not take the command."),
-                              QStringLiteral("manage: %1: %2").arg(status, result.value(QStringLiteral("reason")).toString())};
+                              QStringLiteral("manage: %1: %2").arg(status, reason)};
+            // Why a paste did not go in is the device's own word, such as
+            // remote paste being off there, which the user needs to see.
+            if (request.value(QStringLiteral("action")).toString() == QStringLiteral("paste")) {
+                failure.message = QCoreApplication::translate("Errors", "The device did not paste.");
+                if (!reason.isEmpty())
+                    failure.message += QLatin1Char(' ') + reason;
+            }
         }
     }
 
@@ -628,6 +638,58 @@ void App::runManage(const QString &action, const QString &device, const QJsonObj
         emit managed(action, device, true);
     });
     thread->start();
+}
+
+void App::paste(const QString &device, const QString &text, bool typing, bool enter, bool secret)
+{
+    // An empty field sends what the phone's clipboard holds.
+    const QString out = text.isEmpty() ? QGuiApplication::clipboard()->text() : text;
+    if (out.isEmpty()) {
+        show(Errors::shown({tr("The clipboard holds no text."), QStringLiteral("paste: the clipboard is empty")}));
+        emit managed(QStringLiteral("paste"), device, false);
+        return;
+    }
+    // The device waits 5 s for its target, and 5 ms more for each typed byte.
+    const qint64 wait = 10000 + (typing ? qint64(out.toUtf8().size()) * 5 : 0);
+    runManage(QStringLiteral("paste"), device,
+              QJsonObject{
+                  {QStringLiteral("text"), out},
+                  {QStringLiteral("mode"), typing ? QStringLiteral("type") : QStringLiteral("paste")},
+                  {QStringLiteral("kind"), secret ? QStringLiteral("secret") : QStringLiteral("text")},
+                  {QStringLiteral("enter"), enter},
+                  {QStringLiteral("timeout_ms"), double(wait)},
+              },
+              nullptr);
+}
+
+void App::pasteFiles(const QString &device, const QStringList &files, bool enter)
+{
+    if (m_busy || files.isEmpty())
+        return;
+    QStringList paths;
+    for (const QString &f : files) {
+        const QUrl url(f);
+        paths.append(url.isLocalFile() ? url.toLocalFile() : f);
+    }
+    Failure failure;
+    const QString copy = m_node.copyFiles(paths, &failure);
+    if (copy.isEmpty()) {
+        if (failure.isNull())
+            failure = Failure{tr("There is nothing to send: no file could be read."), QStringLiteral("paste: no copy")};
+        show(Errors::shown(failure));
+        emit managed(QStringLiteral("paste"), device, false);
+        return;
+    }
+    // The device waits up to 20 s for the copy, then 8 s for its desktop.
+    runManage(QStringLiteral("paste"), device,
+              QJsonObject{
+                  {QStringLiteral("text"), copy},
+                  {QStringLiteral("mode"), QStringLiteral("paste")},
+                  {QStringLiteral("kind"), QStringLiteral("media")},
+                  {QStringLiteral("enter"), enter},
+                  {QStringLiteral("timeout_ms"), 35000.0},
+              },
+              nullptr);
 }
 
 void App::setTakeoverDelay(int hours)

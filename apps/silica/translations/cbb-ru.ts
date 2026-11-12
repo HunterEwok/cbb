@@ -119,6 +119,17 @@
     </message>
 </context>
 <context>
+    <name>App</name>
+    <message>
+        <source>The clipboard holds no text.</source>
+        <translation>В буфере обмена нет текста.</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>Нечего отправлять: ни один файл не удалось прочитать.</translation>
+    </message>
+</context>
+<context>
     <name>ArrangePage</name>
     <message>
         <source>Arrange</source>
@@ -419,6 +430,10 @@
         <translation>Заглушение: %1</translation>
     </message>
     <message>
+        <source>Paste on it…</source>
+        <translation>Вставить на нём…</translation>
+    </message>
+    <message>
         <source>Remove</source>
         <translation>Удалить</translation>
     </message>
@@ -548,6 +563,10 @@
     <message>
         <source>The code did not match. Scan the code the other device shows now.</source>
         <translation>Код не совпал. Отсканируйте код, который другое устройство показывает сейчас.</translation>
+    </message>
+    <message>
+        <source>The device did not paste.</source>
+        <translation>Устройство не вставило текст.</translation>
     </message>
     <message>
         <source>The device did not take the command.</source>
@@ -1163,6 +1182,10 @@
         <translation>Видео</translation>
     </message>
     <message>
+        <source>An admin muted this phone, so its copies stay on it.</source>
+        <translation>Админ заглушил этот телефон, поэтому его копии остаются на нём.</translation>
+    </message>
+    <message>
         <source>An image</source>
         <translation>Изображение</translation>
     </message>
@@ -1223,6 +1246,49 @@
     <message>
         <source>a file</source>
         <translation>файл</translation>
+    </message>
+</context>
+<context>
+    <name>PastePage</name>
+    <message>
+        <source>A paste suits most apps; typing suits those that take no paste, and only up to 4 KB. Enter runs a command in a terminal, so the computer takes it only when its user allowed that. A secret leaves no trace in the computer's log or clipboard.</source>
+        <translation>Вставка подходит большинству приложений, а набор по клавишам нужен тем, что вставку не принимают, и только до 4 КБ. Enter в терминале запускает команду, поэтому компьютер примет его, только если его пользователь это разрешил. Секрет не остаётся ни в журнале компьютера, ни в его буфере.</translation>
+    </message>
+    <message>
+        <source>A picture or files go to the group as a copy, and the computer pastes them where its focus is, as Ctrl+V would: into a chat, a document or a folder. Enter, if on, sends them in a chat.</source>
+        <translation>Картинка или файлы уходят в группу копией, и компьютер вставляет их туда, где фокус, как Ctrl+V: в чат, документ или папку. Enter, если включён, отправляет их в чате.</translation>
+    </message>
+    <message>
+        <source>A secret</source>
+        <translation>Секрет</translation>
+    </message>
+    <message>
+        <source>It goes where %1's keyboard focus is, once its user turned remote paste on there. Left empty, Paste sends what the clipboard holds.</source>
+        <translation>Текст попадёт туда, где фокус клавиатуры устройства %1, если его пользователь включил там удалённую вставку. Если поле пустое, «Вставить» отправит то, что в буфере обмена.</translation>
+    </message>
+    <message>
+        <source>Paste</source>
+        <translation>Вставить</translation>
+    </message>
+    <message>
+        <source>Paste a picture or files…</source>
+        <translation>Вставить картинку или файлы…</translation>
+    </message>
+    <message>
+        <source>Paste on %1</source>
+        <translation>Вставить на %1</translation>
+    </message>
+    <message>
+        <source>Press Enter after it</source>
+        <translation>Нажать Enter после него</translation>
+    </message>
+    <message>
+        <source>Text</source>
+        <translation>Текст</translation>
+    </message>
+    <message>
+        <source>Type it key by key</source>
+        <translation>Набрать по клавишам</translation>
     </message>
 </context>
 <context>

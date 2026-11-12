@@ -119,6 +119,17 @@
     </message>
 </context>
 <context>
+    <name>App</name>
+    <message>
+        <source>The clipboard holds no text.</source>
+        <translation>क्लिपबोर्ड में कोई टेक्स्ट नहीं है।</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>भेजने को कुछ नहीं: कोई फ़ाइल पढ़ी नहीं जा सकी।</translation>
+    </message>
+</context>
+<context>
     <name>ArrangePage</name>
     <message>
         <source>Arrange</source>
@@ -419,6 +430,10 @@
         <translation>%1 म्यूट किया जा रहा है</translation>
     </message>
     <message>
+        <source>Paste on it…</source>
+        <translation>उस पर पेस्ट करें…</translation>
+    </message>
+    <message>
         <source>Remove</source>
         <translation>हटाएँ</translation>
     </message>
@@ -548,6 +563,10 @@
     <message>
         <source>The code did not match. Scan the code the other device shows now.</source>
         <translation>कोड मेल नहीं खाया। दूसरा डिवाइस अभी जो कोड दिखा रहा है उसे स्कैन करें।</translation>
+    </message>
+    <message>
+        <source>The device did not paste.</source>
+        <translation>डिवाइस ने पेस्ट नहीं किया।</translation>
     </message>
     <message>
         <source>The device did not take the command.</source>
@@ -1163,6 +1182,10 @@
         <translation>एक वीडियो</translation>
     </message>
     <message>
+        <source>An admin muted this phone, so its copies stay on it.</source>
+        <translation>एक एडमिन ने इस फ़ोन को म्यूट किया, इसलिए इसकी कॉपी इसी पर रहती हैं।</translation>
+    </message>
+    <message>
         <source>An image</source>
         <translation>एक छवि</translation>
     </message>
@@ -1223,6 +1246,49 @@
     <message>
         <source>a file</source>
         <translation>एक फ़ाइल</translation>
+    </message>
+</context>
+<context>
+    <name>PastePage</name>
+    <message>
+        <source>A paste suits most apps; typing suits those that take no paste, and only up to 4 KB. Enter runs a command in a terminal, so the computer takes it only when its user allowed that. A secret leaves no trace in the computer's log or clipboard.</source>
+        <translation>पेस्ट ज़्यादातर ऐप के लिए ठीक है; टाइप करना उन ऐप के लिए जो पेस्ट नहीं लेते, और केवल 4 KB तक। Enter टर्मिनल में कमांड चला देता है, इसलिए कंप्यूटर इसे तभी लेता है जब उसके उपयोगकर्ता ने अनुमति दी हो। गोपनीय टेक्स्ट कंप्यूटर के लॉग या क्लिपबोर्ड में कोई निशान नहीं छोड़ता।</translation>
+    </message>
+    <message>
+        <source>A picture or files go to the group as a copy, and the computer pastes them where its focus is, as Ctrl+V would: into a chat, a document or a folder. Enter, if on, sends them in a chat.</source>
+        <translation>तस्वीर या फ़ाइलें ग्रुप में एक कॉपी के रूप में जाती हैं, और कंप्यूटर उन्हें वहाँ पेस्ट करता है जहाँ उसका फ़ोकस है, जैसे Ctrl+V करता: किसी चैट, दस्तावेज़ या फ़ोल्डर में। Enter, अगर चालू है, तो उन्हें चैट में भेज देता है।</translation>
+    </message>
+    <message>
+        <source>A secret</source>
+        <translation>एक गोपनीय टेक्स्ट</translation>
+    </message>
+    <message>
+        <source>It goes where %1's keyboard focus is, once its user turned remote paste on there. Left empty, Paste sends what the clipboard holds.</source>
+        <translation>यह वहाँ जाता है जहाँ %1 का कीबोर्ड फ़ोकस है, जब उसके उपयोगकर्ता ने वहाँ रिमोट पेस्ट चालू किया हो। खाली छोड़ने पर, पेस्ट वह भेजता है जो क्लिपबोर्ड में है।</translation>
+    </message>
+    <message>
+        <source>Paste</source>
+        <translation>पेस्ट करें</translation>
+    </message>
+    <message>
+        <source>Paste a picture or files…</source>
+        <translation>तस्वीर या फ़ाइलें पेस्ट करें…</translation>
+    </message>
+    <message>
+        <source>Paste on %1</source>
+        <translation>%1 पर पेस्ट करें</translation>
+    </message>
+    <message>
+        <source>Press Enter after it</source>
+        <translation>उसके बाद Enter दबाएँ</translation>
+    </message>
+    <message>
+        <source>Text</source>
+        <translation>टेक्स्ट</translation>
+    </message>
+    <message>
+        <source>Type it key by key</source>
+        <translation>इसे एक-एक कुंजी से टाइप करें</translation>
     </message>
 </context>
 <context>

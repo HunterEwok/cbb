@@ -119,6 +119,17 @@
     </message>
 </context>
 <context>
+    <name>App</name>
+    <message>
+        <source>The clipboard holds no text.</source>
+        <translation>لا تحتوي الحافظة على نص.</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>لا يوجد ما يُرسل: تعذّرت قراءة أي ملف.</translation>
+    </message>
+</context>
+<context>
     <name>ArrangePage</name>
     <message>
         <source>Arrange</source>
@@ -419,6 +430,10 @@
         <translation>جارٍ كتم %1</translation>
     </message>
     <message>
+        <source>Paste on it…</source>
+        <translation>لصق عليه…</translation>
+    </message>
+    <message>
         <source>Remove</source>
         <translation>إزالة</translation>
     </message>
@@ -548,6 +563,10 @@
     <message>
         <source>The code did not match. Scan the code the other device shows now.</source>
         <translation>الرمز غير مطابق. امسح الرمز الذي يعرضه الجهاز الآخر الآن.</translation>
+    </message>
+    <message>
+        <source>The device did not paste.</source>
+        <translation>لم يلصق الجهاز.</translation>
     </message>
     <message>
         <source>The device did not take the command.</source>
@@ -1163,6 +1182,10 @@
         <translation>مقطع فيديو</translation>
     </message>
     <message>
+        <source>An admin muted this phone, so its copies stay on it.</source>
+        <translation>كتم مشرف هذا الهاتف، لذا تبقى نسخه عليه.</translation>
+    </message>
+    <message>
         <source>An image</source>
         <translation>صورة</translation>
     </message>
@@ -1223,6 +1246,49 @@
     <message>
         <source>a file</source>
         <translation>ملف</translation>
+    </message>
+</context>
+<context>
+    <name>PastePage</name>
+    <message>
+        <source>A paste suits most apps; typing suits those that take no paste, and only up to 4 KB. Enter runs a command in a terminal, so the computer takes it only when its user allowed that. A secret leaves no trace in the computer's log or clipboard.</source>
+        <translation>اللصق يناسب معظم التطبيقات؛ والكتابة تناسب التي لا تقبل اللصق، وحتى 4 كيلوبايت فقط. ‏Enter يشغّل أمرًا في الطرفية، لذا لا يقبله الحاسوب إلا إذا سمح مستخدمه بذلك. السرّ لا يترك أثرًا في سجل الحاسوب أو حافظته.</translation>
+    </message>
+    <message>
+        <source>A picture or files go to the group as a copy, and the computer pastes them where its focus is, as Ctrl+V would: into a chat, a document or a folder. Enter, if on, sends them in a chat.</source>
+        <translation>تذهب الصورة أو الملفات إلى المجموعة كنسخة، ويلصقها الكمبيوتر حيث يكون التركيز، كما يفعل Ctrl+V: في محادثة أو مستند أو مجلد. مفتاح Enter، إن كان مفعّلًا، يرسلها في المحادثة.</translation>
+    </message>
+    <message>
+        <source>A secret</source>
+        <translation>سرّ</translation>
+    </message>
+    <message>
+        <source>It goes where %1's keyboard focus is, once its user turned remote paste on there. Left empty, Paste sends what the clipboard holds.</source>
+        <translation>يذهب إلى حيث تركيز لوحة مفاتيح %1، بعد أن يشغّل مستخدمه اللصق عن بُعد هناك. إذا تُرك فارغًا، يرسل لصق ما في الحافظة.</translation>
+    </message>
+    <message>
+        <source>Paste</source>
+        <translation>لصق</translation>
+    </message>
+    <message>
+        <source>Paste a picture or files…</source>
+        <translation>لصق صورة أو ملفات…</translation>
+    </message>
+    <message>
+        <source>Paste on %1</source>
+        <translation>لصق على %1</translation>
+    </message>
+    <message>
+        <source>Press Enter after it</source>
+        <translation>اضغط Enter بعده</translation>
+    </message>
+    <message>
+        <source>Text</source>
+        <translation>نص</translation>
+    </message>
+    <message>
+        <source>Type it key by key</source>
+        <translation>كتابته مفتاحًا مفتاحًا</translation>
     </message>
 </context>
 <context>

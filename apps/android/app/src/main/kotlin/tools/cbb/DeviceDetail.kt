@@ -241,8 +241,8 @@ private fun IconRow(model: AppModel, d: LiveGroup.Device) {
     var acting by remember { mutableStateOf(false) }
     var muting by remember { mutableStateOf(false) }
     Row(horizontalArrangement = Arrangement.spacedBy(Tokens.spacingMedium)) {
-        // Members and Android phones take pastes; iPhones cannot.
-        if (!d.isSelf && (d.role == "member" || (d.role == "phone" && d.os == "android"))) {
+        // Members and Android and Aurora phones take pastes; iPhones cannot.
+        if (!d.isSelf && (d.role == "member" || (d.role == "phone" && d.os in setOf("android", "aurora", "sailfish")))) {
             IconLabel("⌨", stringResource(R.string.paste_on_it)) { pasting = true }
         }
         // An admin mutes any device for the whole group, or ends its mute (docs/design.md, "Muting a device").

@@ -115,6 +115,9 @@ public:
     // Sends images or files shared to the app (absolute paths), up to
     // maxSendBytes together.
     Q_INVOKABLE void sendFiles(const QStringList &paths);
+    // Makes a copy of images or files for a remote paste, as sendFiles
+    // would send them, and returns its event ID, or none with failure set.
+    QString copyFiles(const QStringList &paths, Failure *failure);
 
     // Keeps the group's copies out of the clipboard for minutes (0 for
     // until resume), or takes them again; the phone's own still go out.
@@ -174,6 +177,9 @@ private:
     // clipboard too; then tells the core it took it.
     void take(const QJsonObject &copy);
     void sendImage(const QImage &image);
+    // Sends images or files as one copy, up to maxSendBytes together, and
+    // returns its event ID, or none with failure set.
+    QString copyMedia(const QStringList &paths, Failure *failure);
     // The key the core's rule compares an image by: its PNG's SHA-256.
     static QString imageKey(const QByteArray &png);
     // Reads the pause and the mute from the core's answer, or asks for it.

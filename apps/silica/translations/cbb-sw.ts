@@ -119,6 +119,17 @@
     </message>
 </context>
 <context>
+    <name>App</name>
+    <message>
+        <source>The clipboard holds no text.</source>
+        <translation>Ubao wa kunakili hauna maandishi.</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>Hakuna cha kutuma: hakuna faili iliyoweza kusomwa.</translation>
+    </message>
+</context>
+<context>
     <name>ArrangePage</name>
     <message>
         <source>Arrange</source>
@@ -419,6 +430,10 @@
         <translation>Inanyamazisha %1</translation>
     </message>
     <message>
+        <source>Paste on it…</source>
+        <translation>Bandika kwake…</translation>
+    </message>
+    <message>
         <source>Remove</source>
         <translation>Ondoa</translation>
     </message>
@@ -548,6 +563,10 @@
     <message>
         <source>The code did not match. Scan the code the other device shows now.</source>
         <translation>Msimbo haukulingana. Changanua msimbo unaoonyeshwa na kifaa kingine sasa.</translation>
+    </message>
+    <message>
+        <source>The device did not paste.</source>
+        <translation>Kifaa hakikubandika.</translation>
     </message>
     <message>
         <source>The device did not take the command.</source>
@@ -1163,6 +1182,10 @@
         <translation>Video</translation>
     </message>
     <message>
+        <source>An admin muted this phone, so its copies stay on it.</source>
+        <translation>Msimamizi amenyamazisha simu hii, kwa hiyo nakala zake hubaki ndani yake.</translation>
+    </message>
+    <message>
         <source>An image</source>
         <translation>Picha</translation>
     </message>
@@ -1223,6 +1246,49 @@
     <message>
         <source>a file</source>
         <translation>faili moja</translation>
+    </message>
+</context>
+<context>
+    <name>PastePage</name>
+    <message>
+        <source>A paste suits most apps; typing suits those that take no paste, and only up to 4 KB. Enter runs a command in a terminal, so the computer takes it only when its user allowed that. A secret leaves no trace in the computer's log or clipboard.</source>
+        <translation>Kubandika kunafaa programu nyingi; kuandika kunafaa zile zisizokubali kubandika, na hadi KB 4 tu. Enter huendesha amri kwenye kituo, kwa hiyo kompyuta huikubali tu ikiwa mtumiaji wake aliruhusu. Siri haiachi alama kwenye kumbukumbu au ubao wa kunakili wa kompyuta.</translation>
+    </message>
+    <message>
+        <source>A picture or files go to the group as a copy, and the computer pastes them where its focus is, as Ctrl+V would: into a chat, a document or a folder. Enter, if on, sends them in a chat.</source>
+        <translation>Picha au faili huenda kwenye kikundi kama nakala, na kompyuta huzibandika mahali lengo lake lilipo, kama Ctrl+V ingefanya: kwenye gumzo, hati au folda. Enter, ikiwa imewashwa, huzituma kwenye gumzo.</translation>
+    </message>
+    <message>
+        <source>A secret</source>
+        <translation>Siri</translation>
+    </message>
+    <message>
+        <source>It goes where %1's keyboard focus is, once its user turned remote paste on there. Left empty, Paste sends what the clipboard holds.</source>
+        <translation>Huenda mahali ambapo kibodi ya %1 imeelekezwa, mara mtumiaji wake atakapowasha kubandika kwa mbali huko. Ikiachwa tupu, Bandika hutuma kilichomo kwenye ubao wa kunakili.</translation>
+    </message>
+    <message>
+        <source>Paste</source>
+        <translation>Bandika</translation>
+    </message>
+    <message>
+        <source>Paste a picture or files…</source>
+        <translation>Bandika picha au faili…</translation>
+    </message>
+    <message>
+        <source>Paste on %1</source>
+        <translation>Bandika kwenye %1</translation>
+    </message>
+    <message>
+        <source>Press Enter after it</source>
+        <translation>Bonyeza Enter baada yake</translation>
+    </message>
+    <message>
+        <source>Text</source>
+        <translation>Maandishi</translation>
+    </message>
+    <message>
+        <source>Type it key by key</source>
+        <translation>Iandike kitufe kwa kitufe</translation>
     </message>
 </context>
 <context>

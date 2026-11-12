@@ -119,6 +119,17 @@
     </message>
 </context>
 <context>
+    <name>App</name>
+    <message>
+        <source>The clipboard holds no text.</source>
+        <translation>El portapapeles no contiene texto.</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>No hay nada que enviar: no se pudo leer ningún archivo.</translation>
+    </message>
+</context>
+<context>
     <name>ArrangePage</name>
     <message>
         <source>Arrange</source>
@@ -419,6 +430,10 @@
         <translation>Silenciando %1</translation>
     </message>
     <message>
+        <source>Paste on it…</source>
+        <translation>Pegar en él…</translation>
+    </message>
+    <message>
         <source>Remove</source>
         <translation>Quitar</translation>
     </message>
@@ -548,6 +563,10 @@
     <message>
         <source>The code did not match. Scan the code the other device shows now.</source>
         <translation>El código no coincide. Escanea el código que muestra ahora el otro dispositivo.</translation>
+    </message>
+    <message>
+        <source>The device did not paste.</source>
+        <translation>El dispositivo no pegó.</translation>
     </message>
     <message>
         <source>The device did not take the command.</source>
@@ -1163,6 +1182,10 @@
         <translation>Un vídeo</translation>
     </message>
     <message>
+        <source>An admin muted this phone, so its copies stay on it.</source>
+        <translation>Un administrador silenció este teléfono, así que sus copias se quedan en él.</translation>
+    </message>
+    <message>
         <source>An image</source>
         <translation>Una imagen</translation>
     </message>
@@ -1223,6 +1246,49 @@
     <message>
         <source>a file</source>
         <translation>un archivo</translation>
+    </message>
+</context>
+<context>
+    <name>PastePage</name>
+    <message>
+        <source>A paste suits most apps; typing suits those that take no paste, and only up to 4 KB. Enter runs a command in a terminal, so the computer takes it only when its user allowed that. A secret leaves no trace in the computer's log or clipboard.</source>
+        <translation>Pegar sirve para la mayoría de las apps; escribir sirve para las que no aceptan pegar, y solo hasta 4 KB. Intro ejecuta una orden en una terminal, así que el ordenador lo acepta solo si su usuario lo permitió. Un secreto no deja rastro en el registro ni en el portapapeles del ordenador.</translation>
+    </message>
+    <message>
+        <source>A picture or files go to the group as a copy, and the computer pastes them where its focus is, as Ctrl+V would: into a chat, a document or a folder. Enter, if on, sends them in a chat.</source>
+        <translation>Una imagen o archivos van al grupo como una copia, y el ordenador los pega donde tiene el foco, como lo haría Ctrl+V: en un chat, un documento o una carpeta. Intro, si está activado, los envía en un chat.</translation>
+    </message>
+    <message>
+        <source>A secret</source>
+        <translation>Un secreto</translation>
+    </message>
+    <message>
+        <source>It goes where %1's keyboard focus is, once its user turned remote paste on there. Left empty, Paste sends what the clipboard holds.</source>
+        <translation>Va adonde esté el foco del teclado de %1, una vez que su usuario haya activado allí el pegado remoto. Si se deja vacío, Pegar envía lo que hay en el portapapeles.</translation>
+    </message>
+    <message>
+        <source>Paste</source>
+        <translation>Pegar</translation>
+    </message>
+    <message>
+        <source>Paste a picture or files…</source>
+        <translation>Pegar una imagen o archivos…</translation>
+    </message>
+    <message>
+        <source>Paste on %1</source>
+        <translation>Pegar en %1</translation>
+    </message>
+    <message>
+        <source>Press Enter after it</source>
+        <translation>Pulsar Intro después</translation>
+    </message>
+    <message>
+        <source>Text</source>
+        <translation>Texto</translation>
+    </message>
+    <message>
+        <source>Type it key by key</source>
+        <translation>Escribirlo tecla a tecla</translation>
     </message>
 </context>
 <context>

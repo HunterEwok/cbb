@@ -12,6 +12,12 @@ All notable changes to cbb are documented in this file. The format follows
   second token of the app in the TEE, whose PIN the user chooses (at least four digits) and
   the TEE checks; seven wrong PINs lock it for good. The member key stays where it was, so
   sync needs no PIN. Settings change the PIN.
+- The Aurora app pastes on another device, as the iPhone and Android apps do: "Paste on it…" in
+  an admin's menu on a device's page sends a text (or the clipboard's), pasted or typed, with
+  Enter after it if asked, or a picture or files that the device pastes with its paste keys. It
+  signs the paste command with the admin key in the core (`cbb_member_manage` action `paste`).
+  The iPhone and Android apps paste on Aurora phones too, which type the text on their
+  Bluetooth keyboard's device.
 - The forwarder refuses the groups their operator lists after an abuse report:
   `refused-groups` next to the key (or `-refused FILE`), one group tag a line, read again
   within ten seconds of a change; a listed group is refused at registration and its devices
@@ -2209,6 +2215,10 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The Aurora app renamed and handed the group over to no device, and named no sender of a
+  remote paste: its pages read a device's ID from a field the core's list does not have. An
+  Aurora phone refuses a paste of pictures or files, which its Bluetooth keyboard cannot type,
+  in place of typing the copy's ID.
 - Quotation marks in a few texts: the Android app showed a backslash before them in Arabic,
   Spanish, Hebrew, Hindi and Swahili, and dropped them in English; the Mac app showed the
   backslash in the same languages on its pairing screen.
