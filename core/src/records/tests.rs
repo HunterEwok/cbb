@@ -2784,3 +2784,28 @@ fn below_a_cut_root_s_checkpoint_only_what_it_names_stays() {
     assert_eq!(s.roots, before.roots);
     assert_eq!(s.devices, before.devices);
 }
+
+/// A root's removal is final: when the root key signs a twin at its seq,
+/// the removal still counts; the two histories are a conflict of their
+/// own, and the twin counts for nothing.
+#[test]
+fn a_root_s_removal_outlasts_a_twin_at_its_seq() {
+    let mut g = G::new();
+    let root = k("root");
+    g.device(&root, &k("laptop"), "laptop", |_| {});
+    g.device(&root, &k("tablet"), "tablet", |_| {});
+    let seen = g.seen();
+    let rm = g.root_rec(Kind::Revoke(removal(&[k("laptop").hash], seen)));
+    let b = rm.body();
+    let twin = Record::sign(
+        Body { seq: b.seq, prev: b.prev, ..g.body(&root, Kind::Copies { incoming_ms: 60_000, seen: vec![] }) },
+        &root,
+    )
+    .unwrap();
+    g.recs.push(twin.clone());
+    let s = g.state();
+    assert!(s.counting.contains(&rm.id()) && s.revoked.contains(&k("laptop").hash));
+    assert!(!s.counting.contains(&twin.id()));
+    assert!(s.conflicts.iter().any(|c| c.kind == ConflictKind::TwoHistories && c.signers == vec![root.hash]));
+    assert!(s.device(&k("tablet").key.device_id()).is_some());
+}

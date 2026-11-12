@@ -1295,9 +1295,13 @@ impl<'e, 'a> Epoch<'e, 'a> {
         if fork <= MAX_SEQ {
             self.forked.insert(signer, fork);
         }
+        // A root's removal is final: on a whole chain it counts at or above
+        // the fork too; the two histories are a conflict of their own.
+        let root = self.on_path.contains_key(&signer);
         for (seq, l) in live {
             for i in l {
-                if seq < fork && !self.voided.contains(&self.r(i).id) {
+                let r = self.r(i);
+                if (seq < fork || root && r.is_revoke()) && !self.voided.contains(&r.id) {
                     self.counted[i] = true;
                 }
             }
