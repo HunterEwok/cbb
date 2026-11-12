@@ -46,6 +46,68 @@ pub fn write_atomic(path: &Path, data: &[u8], mode: u32) -> Result<()> {
     Ok(())
 }
 
+/// A file written in pieces that appears at its path only whole: the
+/// pieces go to a new temporary file beside it, and [`Atomic::commit`]
+/// syncs and renames it; dropped without a commit, as when a download
+/// breaks, it removes the temporary file and leaves what was at the path.
+/// A crash leaves only the temporary file, which [`sweep`] removes.
+pub struct Atomic {
+    file: Option<fs::File>,
+    tmp: PathBuf,
+    path: PathBuf,
+}
+
+impl Atomic {
+    pub fn create(path: &Path, mode: u32) -> Result<Atomic> {
+        let fail = |e| Error::with(format!("cannot write {}", path.display()), e);
+        let dir = path.parent().unwrap_or(Path::new("."));
+        let tmp =
+            dir.join(format!(".{}.{}.tmp", path.file_name().and_then(|n| n.to_str()).unwrap_or("file"), random_name()));
+        let mut opts = fs::OpenOptions::new();
+        opts.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            opts.mode(mode);
+        }
+        #[cfg(not(unix))]
+        let _ = mode;
+        let file = opts.open(&tmp).map_err(fail)?;
+        Ok(Atomic { file: Some(file), tmp, path: path.to_path_buf() })
+    }
+
+    /// Syncs the file and puts it at its path.
+    pub fn commit(mut self) -> Result<()> {
+        let fail = |e| Error::with(format!("cannot write {}", self.path.display()), e);
+        let Some(f) = self.file.take() else { return Err(Error::msg("the file was committed")) };
+        let synced = f.sync_all();
+        drop(f);
+        synced.and_then(|()| fs::rename(&self.tmp, &self.path)).map_err(fail)?;
+        if let Some(d) = self.path.parent().and_then(|d| fs::File::open(d).ok()) {
+            let _ = d.sync_all();
+        }
+        Ok(())
+    }
+}
+
+impl Write for Atomic {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.file.as_mut().ok_or_else(|| std::io::Error::other("committed"))?.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.file.as_mut().map_or(Ok(()), Write::flush)
+    }
+}
+
+impl Drop for Atomic {
+    fn drop(&mut self) {
+        if self.file.take().is_some() {
+            let _ = fs::remove_file(&self.tmp);
+        }
+    }
+}
+
 /// How old a temporary file of write_atomic must be before [`sweep`]
 /// removes it: older than any write in progress, by another process too.
 const LEFT_OVER: std::time::Duration = std::time::Duration::from_secs(3600);
@@ -227,6 +289,52 @@ mod tests {
         }
         assert!(cuts > 60);
         assert!(path.exists());
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A file written in pieces: a break in the middle leaves the old
+    /// file, a crash only a temporary file that is swept, a commit the new.
+    #[test]
+    fn a_file_in_pieces_appears_only_whole() {
+        let dir = std::env::temp_dir().join(format!("cbb-pieces-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("cbb.tar.gz");
+        fs::write(&path, b"old").unwrap();
+        let data: Vec<u8> = (0..=255u8).collect();
+        let left = || {
+            fs::read_dir(&dir)
+                .unwrap()
+                .filter_map(|e| e.ok()?.file_name().into_string().ok())
+                .filter(|n| is_left_over(n))
+                .collect::<Vec<_>>()
+        };
+        for cut in 0..data.len() {
+            // A break: dropped without a commit.
+            let mut a = Atomic::create(&path, 0o644).unwrap();
+            a.write_all(&data[..cut]).unwrap();
+            drop(a);
+            assert_eq!(fs::read(&path).unwrap(), b"old");
+            assert!(left().is_empty(), "cut {cut}");
+        }
+        // A crash: the process is gone, its temporary file stays.
+        let mut a = Atomic::create(&path, 0o644).unwrap();
+        a.write_all(&data[..100]).unwrap();
+        std::mem::forget(a);
+        assert_eq!(fs::read(&path).unwrap(), b"old");
+        let l = left();
+        assert_eq!(l.len(), 1);
+        fs::File::options()
+            .write(true)
+            .open(dir.join(&l[0]))
+            .unwrap()
+            .set_modified(std::time::SystemTime::UNIX_EPOCH)
+            .unwrap();
+        assert_eq!(sweep(&dir), 1);
+        let mut a = Atomic::create(&path, 0o644).unwrap();
+        a.write_all(&data).unwrap();
+        a.commit().unwrap();
+        assert_eq!(fs::read(&path).unwrap(), data);
         fs::remove_dir_all(&dir).unwrap();
     }
 

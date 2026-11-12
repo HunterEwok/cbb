@@ -67,10 +67,17 @@ pub fn install(dir: &Path) {
     std::panic::set_hook(Box::new(move |info| {
         let details = describe(info);
         let log: Vec<String> = RECENT.try_lock().map(|r| r.iter().cloned().collect()).unwrap_or_default();
-        let body = json!({ "details": details, "log": log, "at_ms": crate::uptime::wall_ms() });
-        let _ = std::fs::write(dir.join(PANIC_FILE), body.to_string());
+        write_panic(&dir, &details, log);
         earlier(info);
     }));
+}
+
+/// Writes panic.json whole or not at all (write_atomic takes no lock, so a
+/// panic hook may call it); a power cut while the service dies leaves the
+/// report before, never half of one.
+fn write_panic(dir: &Path, details: &str, log: Vec<String>) {
+    let body = json!({ "details": details, "log": log, "at_ms": crate::uptime::wall_ms() });
+    let _ = crate::files::write_atomic(&dir.join(PANIC_FILE), body.to_string().as_bytes(), 0o644);
 }
 
 /// The computer's side of the bug reports, in the service's state folder.
@@ -293,6 +300,31 @@ fn wait(child: std::process::Child, time: Duration) -> Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// panic.json cut at every step: the report before stays whole.
+    #[test]
+    fn a_panic_report_cut_short_leaves_the_one_before() {
+        use crate::files::faults::{self, How};
+        let dir = std::env::temp_dir().join(format!("cbb-panic-cut-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        write_panic(&dir, "panic: first", vec![]);
+        let before = std::fs::read(dir.join(PANIC_FILE)).unwrap();
+        for step in 0..200 {
+            for how in [How::Dies, How::Fails] {
+                faults::at(step, how);
+                write_panic(&dir, "panic: second", vec!["a line".into()]);
+                let now = std::fs::read(dir.join(PANIC_FILE)).unwrap();
+                assert!(now == before || serde_json::from_slice::<Value>(&now).is_ok(), "step {step}: a torn report");
+                if now != before {
+                    // Renamed: the new report, whole.
+                    assert!(String::from_utf8_lossy(&now).contains("panic: second"));
+                    std::fs::write(dir.join(PANIC_FILE), &before).unwrap();
+                }
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn a_panic_waits_until_the_user_answers() {

@@ -271,7 +271,9 @@ impl Limit for Systemd {
             if let Some(dir) = self.drop_in.parent() {
                 std::fs::create_dir_all(dir).map_err(fail)?;
             }
-            std::fs::write(&self.drop_in, drop_in_text(g)).map_err(fail)?;
+            // Whole or not at all: systemd never reads half a drop-in.
+            crate::files::write_atomic(&self.drop_in, drop_in_text(g).as_bytes(), 0o644)
+                .map_err(|e| Error::msg(format!("{}: {e}", self.drop_in.display())))?;
         } else if let Err(e) = std::fs::remove_file(&self.drop_in)
             && e.kind() != std::io::ErrorKind::NotFound
         {
@@ -590,6 +592,27 @@ mod tests {
         assert!(net.granted(&Grant::default()).same(&client));
         net.set(&Grant::default()).unwrap();
         assert_eq!(calls.borrow().len(), 12);
+        let _ = std::fs::remove_dir_all(drop_in.parent().unwrap().parent().unwrap());
+    }
+
+    /// A drop-in write cut at every step leaves the drop-in before it.
+    #[test]
+    fn a_drop_in_cut_short_is_the_one_before() {
+        use crate::files::faults::{self, How};
+        let (net, drop_in, _) = fake_unit(true);
+        let client = Grant { on: true, addrs: vec![fwd_addr(), hub_addr()], ..Default::default() };
+        net.set(&client).unwrap();
+        let before = std::fs::read_to_string(&drop_in).unwrap();
+        let other = Grant { on: true, ..Default::default() };
+        for step in 0..drop_in_text(&other).len() + 3 {
+            for how in [How::Dies, How::Fails] {
+                faults::at(step, how);
+                assert!(net.set(&other).is_err(), "step {step}");
+                assert_eq!(std::fs::read_to_string(&drop_in).unwrap(), before, "step {step} ({how:?})");
+            }
+        }
+        net.set(&other).unwrap();
+        assert!(!std::fs::read_to_string(&drop_in).unwrap().contains("IPAddressAllow"));
         let _ = std::fs::remove_dir_all(drop_in.parent().unwrap().parent().unwrap());
     }
 
