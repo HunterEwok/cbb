@@ -262,14 +262,19 @@ impl RecordSet {
         // is verified: a record offered again after the set dropped it
         // costs no verification, and none of these steps stores it.
         // A second record of a key at a seq the set holds one of is the
-        // proof of two histories: kept whatever a checkpoint pruned.
+        // proof of two histories, outside the rooms; a counting checkpoint
+        // that covers it settles it, unless both are checkpoints
+        // (`eval::proof_stays`).
         let twin = matches!(role, Role::Root | Role::Admin)
             && self.records.values().any(|e| {
                 let b = e.record.body();
                 b.signer == signer && b.seq == r.body().seq && e.record.id() != id
             });
         let listed = self.cuts.get(&signer).is_some_and(|cut| cut.covers(&signer, r.body().seq) && cut.keeps(&id));
-        if !listed && !twin && self.checkpoints.iter().any(|(heads, anchors)| eval::pruned_by(&r, role, heads, anchors))
+        let twin_checkpoint = twin && matches!(r.body().kind, Kind::Checkpoint { .. });
+        if !listed
+            && !twin_checkpoint
+            && self.checkpoints.iter().any(|(heads, anchors)| eval::pruned_by(&r, role, heads, anchors))
         {
             // A counting checkpoint left it out.
             return Ok(Added::NoRoom);
@@ -575,7 +580,7 @@ impl RecordSet {
     }
 
     /// The proof of a key's two histories among the records
-    /// (`eval::fork_proof`): outside the rooms, never pruned.
+    /// (`eval::fork_proof`): outside the rooms.
     fn proof(&self) -> BTreeSet<RecordId> {
         eval::fork_proof(self.records.values().map(|e| (&e.record, self.role_of(e))))
     }
@@ -1016,7 +1021,7 @@ impl RecordSet {
         let drop: Vec<RecordId> = self
             .records
             .values()
-            .filter(|e| !proof.contains(&e.record.id()))
+            .filter(|e| !eval::proof_stays(&proof, &e.record))
             .filter(|e| {
                 let b = e.record.body();
                 let listed =

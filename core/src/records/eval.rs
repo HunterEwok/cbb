@@ -568,9 +568,15 @@ pub(crate) fn chain_kept<'r>(checked: impl Iterator<Item = (&'r Record, Role)>) 
 
 /// The proof that a key has two histories: of each root's or admin key's
 /// lowest seq that holds two records, the two smallest IDs. Like the
-/// recovery chain's twins, they are kept outside the rooms and no
-/// checkpoint prunes them, so every member that holds them is stopped
-/// alike, whatever it compacted before.
+/// recovery chain's twins, they are kept outside the rooms. A counting
+/// checkpoint settles what is below it, twins included: twins it prunes
+/// go as any record it prunes, and the stop they made with them; twins it
+/// does not cover, and two checkpoints at one seq, stay a fork
+/// (`proof_stays`).
+pub(crate) fn proof_stays(proof: &BTreeSet<RecordId>, r: &Record) -> bool {
+    proof.contains(&r.id()) && matches!(r.body().kind, Kind::Checkpoint { .. })
+}
+
 pub(crate) fn fork_proof<'r>(checked: impl Iterator<Item = (&'r Record, Role)>) -> BTreeSet<RecordId> {
     let mut by: BTreeMap<KeyHash, BTreeMap<u64, BTreeSet<RecordId>>> = BTreeMap::new();
     for (r, role) in checked {
@@ -921,7 +927,7 @@ pub(crate) fn evaluate_checked(
         let pruned: Vec<Checked> = kept
             .iter()
             .copied()
-            .filter(|c| listed(c.r) || proof.contains(&c.r.id()) || !pruned_by(c.r, c.role, heads, &anchors))
+            .filter(|c| listed(c.r) || proof_stays(&proof, c.r) || !pruned_by(c.r, c.role, heads, &anchors))
             .collect();
         let known = still_known(root, recovery, pruned.clone());
         let e = Evaluation::new(root, recovery, known, failed.clone(), all.clone(), &promoted, &these);
@@ -972,12 +978,19 @@ pub(crate) fn anchors_of(heads: &[Head], keep: &[RecordId]) -> BTreeSet<RecordId
 }
 
 /// Reports whether checkpoint cp may count on a member that holds the
-/// records get finds: it holds every record cp keeps; of a head key's
-/// named records (its head and those it keeps), none is above the head,
-/// no two share a seq, and each is on the key's chain as far as the held
-/// records show it: down from cp itself for cp's own key, down from the
-/// head for another key. So no ID can stand for a record nobody held, and
-/// two named twins show as a fork before anything is pruned.
+/// records get finds: it holds every record cp keeps, and of a head key's
+/// named records (its head and those it keeps) none is above the head and
+/// no two share a seq. So no ID can stand for a record nobody held.
+///
+/// A counting checkpoint settles what is below its heads, forks included:
+/// it may keep any record of a key below that key's head, whichever
+/// sibling its own chain ran through, and prunes the rest, twins with
+/// them. It is not asked whether a kept record is on the chain below a
+/// head: a member cannot always know that chain (it may have pruned it),
+/// and the answer would then depend on the order the records came in.
+/// Twins it does not cover, and two checkpoints at one seq, stay a fork
+/// with the proof kept outside the rooms (`proof_stays`). Only the root
+/// signs checkpoints.
 pub(crate) fn checkpoint_ok<'r>(cp: &'r Record, get: impl Fn(&RecordId) -> Option<&'r Record>) -> bool {
     let Kind::Checkpoint { heads, keep } = &cp.body().kind else { return false };
     let head_of = |k: &KeyHash| heads.binary_search_by(|h| h.key.cmp(k)).ok().and_then(|i| heads.get(i));
@@ -991,25 +1004,6 @@ pub(crate) fn checkpoint_ok<'r>(cp: &'r Record, get: impl Fn(&RecordId) -> Optio
         if let Some(h) = head_of(&b.signer)
             && (b.seq > h.seq || named.entry(b.signer).or_default().insert(b.seq, *id).is_some_and(|o| o != *id))
         {
-            return false;
-        }
-    }
-    for h in heads {
-        // The chain down, while the held records show it.
-        let start = if h.key == cp.body().signer { Some(cp) } else { get(&h.id) };
-        let mut chain: BTreeMap<u64, RecordId> = BTreeMap::new();
-        let mut at = start;
-        while let Some(r) = at {
-            let b = r.body();
-            if b.signer != h.key || chain.first_key_value().is_some_and(|(s, _)| b.seq.saturating_add(1) != *s) {
-                break;
-            }
-            chain.insert(b.seq, r.id());
-            at = b.prev.as_ref().and_then(&get);
-        }
-        let Some(low) = chain.first_key_value().map(|(s, _)| *s) else { continue };
-        let off = named.get(&h.key).into_iter().flatten().any(|(seq, id)| *seq >= low && chain.get(seq) != Some(id));
-        if off {
             return false;
         }
     }

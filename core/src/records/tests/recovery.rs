@@ -1005,7 +1005,7 @@ fn a_dropped_removal_brings_no_admin_admission_back() {
     let (rs, rid) = g.heads[&k("root").hash];
     let (as_, aid) = g.heads[&a.hash];
     let mut heads = vec![Head { key: k("root").hash, seq: rs, id: rid }, Head { key: a.hash, seq: as_, id: aid }];
-    heads.sort_by(|p, q| p.key.cmp(&q.key));
+    heads.sort_by_key(|h| h.key);
     let mut keep: Vec<RecordId> =
         st.counting.iter().copied().filter(|id| *id != admitted.id() && *id != aid && *id != rid).collect();
     keep.sort();

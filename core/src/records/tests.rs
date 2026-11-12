@@ -1816,9 +1816,49 @@ mod differential {
         agree(&g, &recs, 3, 0);
     }
 
+    /// Every order of recs, never compacted or compacting every 1, 2 or 3
+    /// records, ends as evaluate of them all, with stop.
+    fn every_order(g: &G, recs: &[Record], stop: Stop) {
+        fn perms(items: &[Record]) -> Vec<Vec<Record>> {
+            if items.len() <= 1 {
+                return vec![items.to_vec()];
+            }
+            let mut out = Vec::new();
+            for i in 0..items.len() {
+                let mut rest = items.to_vec();
+                let first = rest.remove(i);
+                for mut p in perms(&rest) {
+                    p.insert(0, first.clone());
+                    out.push(p);
+                }
+            }
+            out
+        }
+        let whole = state_with(&g.root.key, recs, &g.lists);
+        assert_eq!(whole.stop, stop);
+        for order in perms(recs) {
+            let s = set_with(&g.root.key, &order, &g.lists).state();
+            assert_eq!(
+                (&s.devices, &s.stop, &s.counting),
+                (&whole.devices, &whole.stop, &whole.counting),
+                "never compacted"
+            );
+            for every in [1, 2, 3] {
+                let s = fill(&g.root.key, &order, &g.lists, every).state();
+                assert_eq!(
+                    (&s.roots, &s.devices, &s.revoked, &s.stop, &s.counting),
+                    (&whole.roots, &whole.devices, &whole.revoked, &whole.stop, &whole.counting),
+                    "every {every}"
+                );
+            }
+        }
+    }
+
     /// Found by the fuzzer: the root signs two records at seq 1; its later
-    /// checkpoints chain from one and keep the other. Every member that
-    /// gets them, in any order and however it compacts, ends stopped alike.
+    /// checkpoints chain from one and keep the other. The counting
+    /// checkpoint settles them: the one it keeps stays, the other goes
+    /// with the stop it made, in every order (the checkpoints and the
+    /// kept twin before the other included).
     #[test]
     fn agrees_on_two_records_of_the_root_at_one_seq_under_its_checkpoints() {
         let mut g = G::new();
@@ -1835,25 +1875,48 @@ mod differential {
             vec![Head { key: root.hash, seq, id }]
         };
         let h = head(&g);
-        g.root_rec(Kind::Checkpoint { heads: h, keep: vec![] });
+        let c2 = g.root_rec(Kind::Checkpoint { heads: h, keep: vec![] });
+        let mut later = Vec::new();
         for _ in 0..2 {
             let h = head(&g);
-            g.root_rec(Kind::Checkpoint { heads: h, keep: vec![twin.id()] });
+            later.push(g.root_rec(Kind::Checkpoint { heads: h, keep: vec![twin.id()] }));
         }
         let recs = g.recs.clone();
-        for seed in 0..12u64 {
-            for every in [1, 2, 3] {
-                let m = agree(&g, &recs, every, seed.wrapping_mul(0x9e37_79b9_7f4a_7c15));
-                assert_eq!(m.state().stop, Stop::Full, "seed {seed}, every {every}");
-            }
-        }
-        // The checkpoints first, then the twin, then the record they prune.
-        let mut order: Vec<Record> =
-            recs.iter().filter(|r| matches!(r.body().kind, Kind::Checkpoint { .. })).cloned().collect();
-        order.push(twin);
-        order.push(dev);
-        let m = fill(&g.root.key, &order, &g.lists, 1);
-        assert_eq!(m.state().stop, Stop::Full);
+        every_order(&g, &recs, Stop::None);
+        let order = vec![later[0].clone(), twin.clone(), c2, dev.clone(), later[1].clone()];
+        let s = fill(&g.root.key, &order, &g.lists, 1).state();
+        assert_eq!(s.stop, Stop::None);
+        assert!(s.counting.contains(&twin.id()) && !s.counting.contains(&dev.id()));
+    }
+
+    /// Found by the fuzzer: two records of the root at seq 1, a device on
+    /// one of them, and a checkpoint above that keeps nothing below its
+    /// head: the twins are settled, the device counts, in every order.
+    #[test]
+    fn agrees_on_twins_a_checkpoint_prunes() {
+        let mut g = G::new();
+        let root = k("root");
+        let copies = |g: &G, i: u64| {
+            Record::sign(
+                Body {
+                    seq: 1,
+                    prev: None,
+                    ..g.body(&root, Kind::Copies { incoming_ms: MIN_INCOMING_MS + i, seen: vec![] })
+                },
+                &root,
+            )
+            .unwrap()
+        };
+        let (a, b) = (copies(&g, 0), copies(&g, 1));
+        g.push(a.clone());
+        g.recs.push(b);
+        let dev = g.device(&root, &k("dev 2"), "dev", |_| {});
+        assert_eq!(dev.body().prev, Some(a.id()));
+        let (seq, id) = g.heads[&root.hash];
+        g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep: vec![] });
+        let recs = g.recs.clone();
+        every_order(&g, &recs, Stop::None);
+        assert!(g.state().device_by_key(&k("dev 2").hash).is_some());
     }
 
     /// Found by the fuzzer: a second head's list names a checkpoint of the
