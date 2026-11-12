@@ -774,4 +774,188 @@ mod tests {
         assert_eq!(again["tunnel"]["hub_key"], "x");
         assert!(serde_json::to_value(CommandResult::default()).unwrap().get("tunnel").is_none());
     }
+
+    /// A guest message is taken with a key of 32 bytes, a known op and what
+    /// that op needs, and travels as its object.
+    #[test]
+    fn guest_messages() {
+        use super::{Guest, MAX_GUEST_DATA, guest};
+        let base = Guest { key: vec![7; 32], ..Default::default() };
+        let with = |f: &dyn Fn(&mut Guest)| {
+            let mut g = base.clone();
+            f(&mut g);
+            g
+        };
+        let taken = [
+            with(&|g| {
+                g.op = "open".into();
+                g.psk = Some(vec![1; 32]);
+                g.expires_ms = 5;
+            }),
+            with(&|g| {
+                g.op = "opened".into();
+                g.hub_key = Some(vec![2; 32]);
+                g.endpoints = vec!["192.0.2.1:51820".into()];
+            }),
+            with(&|g| g.op = "refused".into()),
+            with(&|g| g.op = "close".into()),
+            with(&|g| {
+                g.op = "data".into();
+                g.conn = 1;
+                g.data = Some(vec![0; MAX_GUEST_DATA]);
+            }),
+            with(&|g| {
+                g.op = "end".into();
+                g.conn = 2;
+            }),
+            with(&|g| {
+                g.op = "admitted".into();
+                g.device = "d".into();
+            }),
+        ];
+        for g in taken {
+            let m = guest(&g);
+            assert_eq!(m.kind, "guest");
+            assert_eq!(Guest::decode(m.guest.as_ref().unwrap()), Some(g.clone()), "{}", g.op);
+        }
+        let refused = [
+            with(&|g| g.op = "nonsense".into()),
+            with(&|g| {
+                g.op = "close".into();
+                g.key = vec![7; 31];
+            }),
+            with(&|g| {
+                g.op = "open".into();
+                g.psk = Some(vec![1; 31]);
+                g.expires_ms = 5;
+            }),
+            with(&|g| {
+                g.op = "open".into();
+                g.psk = Some(vec![1; 32]);
+            }),
+            with(&|g| {
+                g.op = "opened".into();
+                g.hub_key = Some(vec![2; 32]);
+            }),
+            with(&|g| {
+                g.op = "data".into();
+                g.conn = 1;
+                g.data = Some(vec![0; MAX_GUEST_DATA + 1]);
+            }),
+            with(&|g| {
+                g.op = "data".into();
+                g.data = Some(vec![0; 1]);
+            }),
+            with(&|g| {
+                g.op = "data".into();
+                g.conn = 1;
+                g.data = Some(Vec::new());
+            }),
+            with(&|g| g.op = "end".into()),
+            with(&|g| g.op = "admitted".into()),
+        ];
+        for g in refused {
+            assert_eq!(Guest::decode(guest(&g).guest.as_ref().unwrap()), None, "{:?}", g);
+        }
+        assert_eq!(Guest::decode(&serde_json::json!("not an object")), None);
+    }
+
+    /// Every message builder gives its type and its part, which a frame
+    /// carries and decode reads back.
+    #[test]
+    fn messages_and_frames() {
+        use super::*;
+        let v = serde_json::json!({"a": 1});
+        let g = Get { sha256: vec![3; 32], offset: 0, length: 10 };
+        assert!(g.valid());
+        assert!(!Get { length: MAX_GET + 1, ..g.clone() }.valid());
+        assert!(!Get { offset: -1, ..g.clone() }.valid());
+        assert!(!Get { sha256: vec![3; 31], ..g.clone() }.valid());
+        assert!(Get { length: 0, ..g.clone() }.valid());
+        let r = crate::authority::Record::new(vec![1], vec![2], None);
+        let cases: Vec<(Message, &str)> = vec![
+            (get(g.clone()), "get"),
+            (missing(g.clone()), "missing"),
+            (result(CommandResult::default()), "result"),
+            (event(&crate::copy::Sealed::default()), "event"),
+            (entries(&v), "entries"),
+            (release(&v), "release"),
+            (command(&r), "command"),
+            (cert(&[1], Some(&[2])), "cert"),
+            (admin(&[1]), "admin"),
+            (tunnel(&v), "tunnel"),
+            (hubs(&v), "hubs"),
+            (credentials(&v), "credentials"),
+            (evidence(&v), "evidence"),
+            (reach(&["a", "b"]), "reach"),
+            (bare("ping"), "ping"),
+        ];
+        for (m, kind) in cases {
+            assert_eq!(m.kind, kind);
+            let f = frame(&m).unwrap();
+            let len = u32::from_be_bytes(f[..4].try_into().unwrap()) as usize;
+            assert_eq!(len, f.len() - 4);
+            let back = decode(&f[4..]).unwrap();
+            assert_eq!(back.kind, kind);
+            assert_eq!(serde_json::to_value(&back).unwrap(), serde_json::to_value(&m).unwrap(), "{kind}");
+        }
+        assert_eq!(reach(&["a"]).reach, Some(serde_json::json!(["a"])));
+        assert!(decode(b"{\"t\":\"ping\",\"n\":1.5}").is_err());
+        assert!(decode(b"[").is_err());
+
+        let big = bare(&"x".repeat(MAX_FRAME));
+        assert!(frame(&big).is_err());
+        assert_eq!(json_frame(&v, 100).unwrap()[4..], *b"{\"a\":1}");
+        assert!(json_frame(&v, 3).is_err());
+    }
+
+    /// The hello's features, capabilities and release go in only when there
+    /// are some; a hello's current copy that does not decode counts as none.
+    #[test]
+    fn hello_parts() {
+        use super::*;
+        let h = Hello { wall: 1, current: None };
+        let m = hello(
+            &h,
+            "d".into(),
+            "member",
+            "pi",
+            "linux",
+            &DeviceInfo::default(),
+            Some((&[1; 32], &[2; 32])),
+            "own",
+            Some(9),
+            &["lock".into()],
+            "file",
+            Some(&[3; 4]),
+            (4, 5),
+            Some(&[6; 65]),
+        );
+        let plain = serde_json::to_value(&m).unwrap();
+        let m2 = with_release(with_caps(with_features(m.clone(), &[]), &[]), (1, 0));
+        assert_eq!(serde_json::to_value(&m2).unwrap(), plain);
+        let m = with_release(with_caps(with_features(m, &["media"]), &["admin".into()]), (2, 7));
+        let hb = m.hello.as_ref().unwrap();
+        assert_eq!(hb["features"], serde_json::json!(["media"]));
+        assert_eq!(hb["caps"], serde_json::json!(["admin"]));
+        assert_eq!((hb["release_seq"].as_u64(), hb["release_keys_seq"].as_u64()), (Some(7), Some(2)));
+        let (back, body) = decode_hello(m.hello.as_ref()).unwrap();
+        assert_eq!(back.wall, 1);
+        assert!(back.current.is_none());
+        assert!(body.muted && body.muted_for_ms == 9);
+        assert_eq!((body.entries_seq, body.entries_keys_seq), (5, 4));
+        let mut odd = m.hello.clone().unwrap();
+        odd["current"] = serde_json::json!("from a newer version");
+        assert!(decode_hello(Some(&odd)).unwrap().0.current.is_none());
+        assert!(decode_hello(None).is_err());
+        assert!(decode_hello(Some(&serde_json::json!([1]))).is_err());
+        assert!(decode_hello(Some(&serde_json::json!({"records": 5}))).is_err());
+        // Not a hello: the parts are not added.
+        assert!(with_features(bare("ping"), &["media"]).hello.is_none());
+
+        let caps: Vec<String> = ["hub", "admin", "nonsense", "admin", "dials"].iter().map(|s| s.to_string()).collect();
+        assert_eq!(clean_caps(&caps), vec!["admin", "dials", "hub"]);
+        let many: Vec<String> = core::iter::repeat_n("x".to_string(), 40).chain(["admin".to_string()]).collect();
+        assert!(clean_caps(&many).is_empty());
+    }
 }
