@@ -312,8 +312,12 @@ pub struct Open {
     pub attempt: Option<Attempt>,
 }
 
-/// The longest one attempt may take, at each end.
+/// The longest the machine's steps of one attempt may take, at each end:
+/// from `pair/start` to the opening of the joiner's nonce.
 pub const ATTEMPT_MS: u64 = 30_000;
+/// The longest the person may take to compare the two codes and answer,
+/// once both are shown; the attempt stays the one open attempt meanwhile.
+pub const ANSWER_MS: u64 = 600_000;
 
 /// An attempt in progress on an open invitation, at the member.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -322,6 +326,19 @@ pub struct Attempt {
     /// The joiner's commitment and the member's nonce, once the member
     /// sent `pair/reply`.
     pub replied: Option<([u8; 32], [u8; 32])>,
+    /// When the member's code was shown, waiting for the person's answer.
+    pub shown_ms: Option<u64>,
+}
+
+impl Attempt {
+    /// Whether the attempt is still open at `now_ms`: within the machine's
+    /// time until the code is shown, then within the person's.
+    fn open_at(&self, now_ms: u64) -> bool {
+        match self.shown_ms {
+            None => now_ms.saturating_sub(self.since_ms) < ATTEMPT_MS,
+            Some(t) => now_ms.saturating_sub(t) < ANSWER_MS,
+        }
+    }
 }
 
 impl Open {
@@ -453,6 +470,8 @@ fn within_one(a: &[char], b: &[char]) -> bool {
 /// (one in a million). Each attempt counts as failed once the member has
 /// sent `pair/reply`, unless it ends in a Welcome, and an invitation takes
 /// one attempt at a time: three attempts give three chances in a million.
+/// The machine's steps have [`ATTEMPT_MS`]; the person's comparison and
+/// answer have [`ANSWER_MS`] of their own.
 /// The user answers "they match".
 fn short_code(exporter: &[u8], joiner_nonce: &[u8; 32], member_nonce: &[u8; 32]) -> String {
     let h = crate::format::sha256(&[b"cbb short code v2\0", exporter, joiner_nonce, member_nonce]);
@@ -490,17 +509,18 @@ impl JoinerCode {
 
 impl Open {
     /// A joiner starts an attempt at `now_ms`: refused while another is in
-    /// progress ([`PairError::Busy`]), until it ends or its time
-    /// ([`ATTEMPT_MS`]) is over.
+    /// progress ([`PairError::Busy`]), until it ends or its time is over
+    /// ([`ATTEMPT_MS`] for the machine's steps, then [`ANSWER_MS`] for the
+    /// person's answer).
     pub fn begin(&mut self, network: Network, now_ms: u64) -> Result<(), PairError> {
         if let Some(a) = &self.attempt
-            && now_ms.saturating_sub(a.since_ms) < ATTEMPT_MS
+            && a.open_at(now_ms)
         {
             return Err(PairError::Busy);
         }
         self.attempt = None;
         self.may_use(network, now_ms)?;
-        self.attempt = Some(Attempt { since_ms: now_ms, replied: None });
+        self.attempt = Some(Attempt { since_ms: now_ms, replied: None, shown_ms: None });
         Ok(())
     }
 
@@ -508,9 +528,7 @@ impl Open {
     /// new for this attempt, which it returns. From here the attempt counts
     /// as failed unless it ends in a Welcome.
     pub fn reply(&mut self, commitment: [u8; 32], now_ms: u64) -> Result<[u8; 32], PairError> {
-        let Some(a) =
-            self.attempt.as_mut().filter(|a| a.replied.is_none() && now_ms.saturating_sub(a.since_ms) < ATTEMPT_MS)
-        else {
+        let Some(a) = self.attempt.as_mut().filter(|a| a.replied.is_none() && a.open_at(now_ms)) else {
             return Err(PairError::Closed);
         };
         let nonce = crate::certs::random_bytes();
@@ -521,10 +539,11 @@ impl Open {
 
     /// The member's short code once the joiner opened its nonce in
     /// `pair/confirm`; [`PairError::WrongCode`] when the nonce does not
-    /// open the commitment, which ends the attempt.
+    /// open the commitment, which ends the attempt. From here the person
+    /// has [`ANSWER_MS`] to answer.
     pub fn short_code(&mut self, exporter: &[u8], joiner_nonce: &[u8; 32], now_ms: u64) -> Result<String, PairError> {
         let Some((commitment, nonce)) =
-            self.attempt.as_ref().filter(|a| now_ms.saturating_sub(a.since_ms) < ATTEMPT_MS).and_then(|a| a.replied)
+            self.attempt.as_ref().filter(|a| a.shown_ms.is_none() && a.open_at(now_ms)).and_then(|a| a.replied)
         else {
             self.attempt = None;
             return Err(PairError::Closed);
@@ -533,13 +552,17 @@ impl Open {
             self.attempt = None;
             return Err(PairError::WrongCode);
         }
+        if let Some(a) = self.attempt.as_mut() {
+            a.shown_ms = Some(now_ms);
+        }
         Ok(short_code(exporter, joiner_nonce, &nonce))
     }
 
-    /// The attempt ended: `welcomed` when the joiner got its Welcome, which
-    /// takes back the failure counted at the reply.
-    pub fn end(&mut self, welcomed: bool) {
-        if welcomed && self.attempt.as_ref().is_some_and(|a| a.replied.is_some()) {
+    /// The attempt ended at `now_ms`: `welcomed` when the joiner got its
+    /// Welcome, which takes back the failure counted at the reply; an
+    /// answer after the person's time is over takes nothing back.
+    pub fn end(&mut self, welcomed: bool, now_ms: u64) {
+        if welcomed && self.attempt.as_ref().is_some_and(|a| a.replied.is_some() && a.open_at(now_ms)) {
             self.failures = self.failures.saturating_sub(1);
         }
         self.attempt = None;

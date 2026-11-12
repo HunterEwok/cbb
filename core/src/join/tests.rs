@@ -228,7 +228,7 @@ fn the_short_code_opens_its_commitment() {
     let (code, nj) = joiner.open(&e, &nm);
     assert_eq!(code.len(), 6);
     assert_eq!(open.short_code(&e, &nj, 120), Ok(code.clone()));
-    open.end(true);
+    open.end(true, 130);
     assert_eq!(open.failures, 0);
 
     // Each session draws new nonces at both ends.
@@ -241,7 +241,7 @@ fn the_short_code_opens_its_commitment() {
     assert_eq!(open.begin(Network::Home, 220), Err(PairError::Busy));
     // Walking away after the reply counts as a failed attempt.
     let (_, nj2) = joiner2.open(&e, &nm2);
-    open.end(false);
+    open.end(false, 230);
     assert_eq!(open.failures, 1);
     assert_ne!(nj2, nj);
 
@@ -253,12 +253,44 @@ fn the_short_code_opens_its_commitment() {
     assert_eq!(open.failures, 2);
     assert!(open.attempt.is_none());
 
+    // The person takes minutes to compare and answer: the attempt stays the
+    // open one, and the Welcome still takes back its count.
+    let kept = open.failures;
+    assert_eq!(open.begin(Network::Home, 1_000), Ok(()));
+    let (joiner5, c5) = invitation::JoinerCode::new();
+    let nm5 = open.reply(c5, 1_010).unwrap();
+    let (code5, nj5) = joiner5.open(&e, &nm5);
+    assert_eq!(open.short_code(&e, &nj5, 1_020), Ok(code5));
+    let minutes = 1_020 + 5 * 60_000;
+    assert_eq!(open.begin(Network::Home, minutes), Err(PairError::Busy), "still the open attempt");
+    open.end(true, minutes);
+    assert_eq!(open.failures, kept);
+    // The machine's steps alone have the short timer: a nonce opened late
+    // is refused, and the attempt stays counted.
+    assert_eq!(open.begin(Network::Home, 2_000_000), Ok(()));
+    let (joiner6, c6) = invitation::JoinerCode::new();
+    let nm6 = open.reply(c6, 2_000_010).unwrap();
+    let (_, nj6) = joiner6.open(&e, &nm6);
+    assert_eq!(open.short_code(&e, &nj6, 2_000_000 + invitation::ATTEMPT_MS), Err(PairError::Closed));
+    assert_eq!(open.failures, kept + 1);
+    open.failures = kept;
+    // An answer after the person's time takes nothing back.
+    assert_eq!(open.begin(Network::Home, 3_000_000), Ok(()));
+    let (joiner7, c7) = invitation::JoinerCode::new();
+    let nm7 = open.reply(c7, 3_000_010).unwrap();
+    let (_, nj7) = joiner7.open(&e, &nm7);
+    assert!(open.short_code(&e, &nj7, 3_000_020).is_ok());
+    open.end(true, 3_000_020 + invitation::ANSWER_MS);
+    assert_eq!(open.failures, kept + 1);
+    open.failures = kept;
+
     // An attempt that runs out of time frees the invitation; its count stays.
-    assert_eq!(open.begin(Network::Home, 400), Ok(()));
+    let t = 4_000_000;
+    assert_eq!(open.begin(Network::Home, t), Ok(()));
     let (_, c4) = invitation::JoinerCode::new();
-    open.reply(c4, 410).unwrap();
-    assert_eq!(open.begin(Network::Home, 400 + invitation::ATTEMPT_MS - 1), Err(PairError::Busy));
-    assert_eq!(open.begin(Network::Home, 400 + invitation::ATTEMPT_MS), Err(PairError::TooMany));
+    open.reply(c4, t + 10).unwrap();
+    assert_eq!(open.begin(Network::Home, t + invitation::ATTEMPT_MS - 1), Err(PairError::Busy));
+    assert_eq!(open.begin(Network::Home, t + invitation::ATTEMPT_MS), Err(PairError::TooMany));
     assert_eq!(open.failures, invitation::MAX_FAILURES);
 
     // The first message commits to the nonce, the answer and the confirmation carry the nonces.
