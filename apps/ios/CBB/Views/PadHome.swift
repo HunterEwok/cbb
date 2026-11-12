@@ -209,24 +209,33 @@ struct PadDevices: View {
     @ScaledMetric(relativeTo: .body) private var cardWidth: CGFloat = 400
     /// The narrowest the devices may be beside the card.
     @ScaledMetric(relativeTo: .body) private var devicesWidth: CGFloat = 360
+    /// Whether the window leaves the card room beside the devices.
+    @State private var beside = true
+    /// The card as the next page, chosen while there was no room beside.
+    @State private var pushed: PadCard?
 
     var body: some View {
-        GeometryReader { geo in
-            let beside = geo.size.width >= devicesWidth + min(cardWidth, 520)
-            HStack(spacing: 0) {
-                devices
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                if beside, let id = selected {
-                    Divider().overlay(palette.line)
-                    DeviceDetailView(id: id, close: { selected = nil })
-                        .frame(width: min(cardWidth, 520))
-                        .transition(.move(edge: .trailing))
-                }
+        HStack(spacing: 0) {
+            devices
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            if beside, let id = selected {
+                Divider().overlay(palette.line)
+                DeviceDetailView(id: id, close: { selected = nil })
+                    .frame(width: min(cardWidth, 520))
+                    .transition(.move(edge: .trailing))
             }
-            .navigationDestination(item: Binding(get: { beside ? nil : selected.map(PadCard.init) },
-                                                 set: { selected = $0?.id })) { card in
-                DeviceDetailView(id: card.id)
+        }
+        // A change of width (a turn, Split View) keeps the card where it is
+        // until there is room again; then the next page comes back beside.
+        .onGeometryChange(for: Bool.self) { $0.size.width >= devicesWidth + min(cardWidth, 520) } action: { room in
+            beside = room
+            if room, let p = pushed {
+                pushed = nil
+                selected = p.id
             }
+        }
+        .navigationDestination(item: $pushed) { card in
+            DeviceDetailView(id: card.id)
         }
         .animation(.smooth, value: selected)
         .environment(\.chosenDevice, selected)
@@ -256,7 +265,7 @@ struct PadDevices: View {
                 Text(message).foregroundStyle(palette.textDim)
             }
             if orbit {
-                OrbitView(devices: model.devices, selected: selected, select: { selected = $0 })
+                OrbitView(devices: model.devices, selected: selected, select: choose)
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Tokens.spacingMedium) {
@@ -295,15 +304,15 @@ struct PadDevices: View {
             if found.isEmpty {
                 Text("No devices match.").foregroundStyle(palette.textDim)
             } else {
-                DeviceCollection(devices: found, layout: tiles, select: { selected = $0 })
+                DeviceCollection(devices: found, layout: tiles, select: choose)
             }
         } else if section == .all {
-            ArrangedDevices(layout: tiles, select: { selected = $0 })
+            ArrangedDevices(layout: tiles, select: choose)
         } else if case .collection(let id) = section, shown.isEmpty {
             Text("Drag devices here, or add them with Move to collection in a device's menu.").foregroundStyle(palette.textDim)
                 .id(id)
         } else {
-            DeviceCollection(devices: shown, layout: tiles, select: { selected = $0 })
+            DeviceCollection(devices: shown, layout: tiles, select: choose)
         }
     }
 
@@ -322,10 +331,16 @@ struct PadDevices: View {
         }
     }
 
+    /// Opens a device's card: beside the devices, or as the next page in a
+    /// window too narrow for both.
+    private func choose(_ id: AppModel.Computer.ID) {
+        if beside { selected = id } else { pushed = PadCard(id: id) }
+    }
+
     /// Moves the choice to the device before or after it, as they stand.
     private func move(by step: Int) -> KeyPress.Result {
         let ids = (query.isEmpty ? shown : shown.filter { $0.matches(query) }).map(\.id)
-        guard !ids.isEmpty, !arrange.on else { return .ignored }
+        guard beside, !ids.isEmpty, !arrange.on else { return .ignored }
         guard let at = selected.flatMap(ids.firstIndex(of:)) else {
             selected = step > 0 ? ids.first : ids.last
             return .handled

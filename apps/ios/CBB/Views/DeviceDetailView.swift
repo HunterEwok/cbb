@@ -139,7 +139,29 @@ struct DeviceDetailView: View {
         }
     }
 
+    /// The name, badges and line, with the admin's menu; in a pane the
+    /// menu and the cross stand on a row of their own above, so that the
+    /// name has the pane's width.
     private func header(_ d: AppModel.Computer) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.spacingSmall) {
+            if let close {
+                HStack(spacing: Tokens.spacingSmall) {
+                    Spacer()
+                    if model.isAdmin { menu(d) }
+                    Button(action: close) {
+                        Image(systemName: "xmark").font(.body.weight(.semibold)).foregroundStyle(palette.text).glassCircle()
+                    }
+                    .accessibilityLabel(Text("Close"))
+                    .accessibilityIdentifier("padCardClose")
+                    // Escape on an iPad's keyboard closes the pane.
+                    .keyboardShortcut(.cancelAction)
+                }
+            }
+            title(d)
+        }
+    }
+
+    private func title(_ d: AppModel.Computer) -> some View {
         HStack(alignment: .top, spacing: Tokens.spacingMedium) {
             DeviceIcon(device: d, size: 64)
             VStack(alignment: .leading, spacing: 4) {
@@ -166,20 +188,9 @@ struct DeviceDetailView: View {
                 }
             }
             .accessibilityElement(children: .combine)
-            // The name takes the room before the buttons do, so that a
-            // short one never breaks.
             .layoutPriority(1)
             Spacer()
-            if model.isAdmin { menu(d) }
-            if let close {
-                Button(action: close) {
-                    Image(systemName: "xmark").font(.body.weight(.semibold)).foregroundStyle(palette.text).glassCircle()
-                }
-                .accessibilityLabel(Text("Close"))
-                .accessibilityIdentifier("padCardClose")
-                // Escape on an iPad's keyboard closes the pane.
-                .keyboardShortcut(.cancelAction)
-            }
+            if close == nil, model.isAdmin { menu(d) }
         }
     }
 
