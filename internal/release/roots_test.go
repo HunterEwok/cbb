@@ -113,10 +113,11 @@ var yubikeys = []int64{36667388, 36667392}
 // in slot 82, with the PIN and a touch for every signature
 // (roots/README.md).
 func TestRootsAttested(t *testing.T) {
-	if len(Roots) != 2 {
-		t.Fatalf("%d roots, want 2", len(Roots))
+	es := es256Roots()
+	if len(es) != 2 {
+		t.Fatalf("%d roots, want 2", len(es))
 	}
-	for i, spki := range Roots {
+	for i, spki := range es {
 		checkAttested(t, "root-"+strconv.Itoa(i+1)+".pem", spki, "82", yubikeys[i])
 	}
 }
@@ -129,7 +130,10 @@ func TestReleaseKeysAttested(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	keys := parseRoots(data)
+	var keys [][]byte
+	for b, rest := pem.Decode(data); b != nil; b, rest = pem.Decode(rest) {
+		keys = append(keys, b.Bytes)
+	}
 	if len(keys) != 2 {
 		t.Fatalf("%d release keys, want 2", len(keys))
 	}
@@ -138,8 +142,8 @@ func TestReleaseKeysAttested(t *testing.T) {
 	}
 }
 
-// TestRootCopies checks the copies of the roots that the installers, the
-// Rust cbb and the phone kits carry.
+// TestRootCopies checks the copies of the roots that the installers carry
+// and that the Rust core reads.
 func TestRootCopies(t *testing.T) {
 	read := func(p string) string {
 		data, err := os.ReadFile(filepath.Join("..", "..", filepath.FromSlash(p)))
@@ -153,10 +157,9 @@ func TestRootCopies(t *testing.T) {
 		t.Error("packaging/get.sh: release_roots is not roots/roots.pem")
 	}
 	b64 := regexp.MustCompile(`"(MF[A-Za-z0-9+/=]{100,})"|'(MF[A-Za-z0-9+/=]{100,})'`)
+	// The phone kits ask the core and carry no copy.
 	for _, p := range []string{
 		"packaging/windows/get.ps1",
-		"apps/android/kit/src/main/kotlin/tools/cbb/kit/Releases.kt",
-		"apps/ios/CBBKit/Sources/CBBKit/Releases.swift",
 	} {
 		var got [][]byte
 		for _, m := range b64.FindAllStringSubmatch(read(p), -1) {
@@ -170,32 +173,30 @@ func TestRootCopies(t *testing.T) {
 			t.Errorf("%s: the roots are not roots/roots.pem", p)
 		}
 	}
-	rust := read("member/src/update.rs")
-	_, rest, ok := strings.Cut(rust, "pub const ROOTS: &[&[u8]] = &[")
-	body, _, ok2 := strings.Cut(rest, "\n];")
-	if !ok || !ok2 {
-		t.Fatal("member/src/update.rs: no ROOTS")
-	}
-	var got [][]byte
-	for _, block := range strings.Split(body, "&[")[1:] {
-		var der []byte
-		for _, h := range regexp.MustCompile(`0x([0-9a-f]{2})`).FindAllStringSubmatch(block, -1) {
-			v, _ := strconv.ParseUint(h[1], 16, 8)
-			der = append(der, byte(v))
-		}
-		got = append(got, der)
-	}
-	if !sameRoots(got) {
-		t.Error("member/src/update.rs: ROOTS are not roots/roots.pem")
+	// The Rust core reads roots/roots.pem itself (include_str!), for the
+	// Rust cbb and for the phone kits through its release calls.
+	if !strings.Contains(read("core/src/release.rs"), `include_str!("../../internal/release/roots/roots.pem")`) {
+		t.Error("core/src/release.rs does not read roots/roots.pem")
 	}
 }
 
+func es256Roots() [][]byte {
+	var out [][]byte
+	for _, r := range Roots {
+		if r.Alg == AlgES256 {
+			out = append(out, r.Key)
+		}
+	}
+	return out
+}
+
 func sameRoots(got [][]byte) bool {
-	if len(got) != len(Roots) {
+	es := es256Roots()
+	if len(got) != len(es) {
 		return false
 	}
 	for i := range got {
-		if !bytes.Equal(got[i], Roots[i]) {
+		if !bytes.Equal(got[i], es[i]) {
 			return false
 		}
 	}

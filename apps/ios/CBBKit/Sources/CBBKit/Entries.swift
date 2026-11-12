@@ -11,13 +11,13 @@ import Foundation
 /// the phone trusts, so any peer may send them.
 public final class EntriesFile: @unchecked Sendable {
     private let url: URL
-    private let roots: [Data]
+    private let roots: [Releases.Key]?
     private let now: @Sendable () -> Date
     private let log: @Sendable (String) -> Void
     private let lock = NSLock()
     private var held: (set: Releases.EntriesSet, entries: Releases.Entries, seen: Releases.Seen)?
 
-    public init(url: URL, roots: [Data] = Releases.roots, now: @escaping @Sendable () -> Date = { Date() },
+    public init(url: URL, roots: [Releases.Key]? = nil, now: @escaping @Sendable () -> Date = { Date() },
                 log: @escaping @Sendable (String) -> Void = { _ in }) {
         (self.url, self.roots, self.now, self.log) = (url, roots, now, log)
         reload()

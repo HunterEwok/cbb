@@ -78,7 +78,9 @@ release.json is not the release stable.json names; not installing	release.json �
 release.json is for %s, not %s	release.json для %s, а не для %s
 release.json does not list %s	в release.json нет %s
 %s does not match the signed release.json; not installing it	%s не совпадает с подписанным release.json; установка отменена
-The release's signature checks out (%s).	Подпись выпуска верна (%s).
+The release's signature checks out (%s): ES256 and SLH-DSA-SHA2-128s.	Подпись выпуска верна (%s): ES256 и SLH-DSA-SHA2-128s.
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, it needs OpenSSL 3.5 or later.	Подпись выпуска верна (%s): ES256; SLH-DSA-SHA2-128s не проверена, для неё нужен OpenSSL 3.5 или новее.
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, PowerShell cannot check it.	Подпись выпуска верна (%s): ES256; SLH-DSA-SHA2-128s не проверена, PowerShell не умеет её проверять.
 could not download %s	не удалось скачать %s
 stable.json names no release	stable.json не называет выпуск
 Downloading %s (%s)...	Скачивание %s (%s)...

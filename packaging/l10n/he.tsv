@@ -78,7 +78,9 @@ release.json is not the release stable.json names; not installing	release.json �
 release.json is for %s, not %s	release.json מיועד ל-%s, לא ל-%s
 release.json does not list %s	release.json אינו מפרט את %s
 %s does not match the signed release.json; not installing it	%s אינו תואם ל-release.json החתום; לא מתקין אותו
-The release's signature checks out (%s).	החתימה של הגרסה תקינה (%s).
+The release's signature checks out (%s): ES256 and SLH-DSA-SHA2-128s.	החתימה של הגרסה תקינה (%s): ES256 ו-SLH-DSA-SHA2-128s.
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, it needs OpenSSL 3.5 or later.	החתימה של הגרסה תקינה (%s): ES256; SLH-DSA-SHA2-128s לא נבדקה, נדרש OpenSSL 3.5 ומעלה.
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, PowerShell cannot check it.	החתימה של הגרסה תקינה (%s): ES256; SLH-DSA-SHA2-128s לא נבדקה, PowerShell אינו יכול לבדוק אותה.
 could not download %s	לא ניתן להוריד את %s
 stable.json names no release	stable.json אינו מציין גרסה
 Downloading %s (%s)...	מוריד את %s (%s)...

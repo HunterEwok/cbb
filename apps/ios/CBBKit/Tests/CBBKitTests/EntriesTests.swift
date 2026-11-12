@@ -13,7 +13,7 @@ final class EntriesTests: XCTestCase {
     }
 
     struct V: Decodable {
-        var roots: [Data]
+        var roots: [Releases.Key]
         var now_ms: Int64
         var vectors: [C]
     }

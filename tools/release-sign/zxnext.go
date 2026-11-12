@@ -5,7 +5,6 @@ package main
 
 import (
 	"bytes"
-	"crypto"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -63,7 +62,7 @@ func zxnextMatches(z release.ZXNext, files map[string][]byte, version string) er
 
 // signZXNext signs the list of the Next's files of the release in dir, when
 // it has them; ok is false for a release without them.
-func signZXNext(dir, version string, rs crypto.Signer) (f release.File, ok bool, err error) {
+func signZXNext(dir, version string, rs release.Signer) (f release.File, ok bool, err error) {
 	path := filepath.Join(dir, zxnextArchive)
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		return f, false, nil

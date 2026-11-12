@@ -6,9 +6,7 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"crypto"
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -35,7 +33,7 @@ var (
 		line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 		return strings.EqualFold(strings.TrimSpace(line), "y")
 	}
-	pinnedRoots = func() [][]byte { return release.Roots }
+	pinnedRoots = func() []release.Key { return release.Roots }
 )
 
 // keysMargin is how long keys.json must still be valid for a release to
@@ -75,16 +73,9 @@ func (s *signing) flags(fs *flag.FlagSet) {
 	fs.BoolVar(&s.newKeys, "new-keys", false, "sign keys.json again even when it is valid for long enough")
 	add := func(use string) func(string) error {
 		return func(v string) error {
-			name, path, ok := strings.Cut(v, "=")
-			if !ok {
-				return fmt.Errorf("%q is not NAME=KEY.pem", v)
-			}
-			key, err := readPublic(path)
-			if err != nil {
-				return err
-			}
-			s.extra = append(s.extra, release.Key{Key: key, Name: name, Use: use})
-			return nil
+			keys, err := keyArg(v, use)
+			s.extra = append(s.extra, keys...)
+			return err
 		}
 	}
 	fs.Func("release", "NAME=KEY.pem of one more release key, such as one on a YubiKey, added to keys.json (repeatable)", add(release.UseRelease))
@@ -353,7 +344,7 @@ func putChannel(repo string, cur map[string]branchFile, files map[string]release
 	}
 	for _, name := range []string{"keys.json", stableChannel + ".json"} {
 		f, ok := files[name]
-		if !ok || bytes.Equal(f.Body, cur[name].f.Body) && bytes.Equal(f.Sig, cur[name].f.Sig) {
+		if !ok || bytes.Equal(f.Body, cur[name].f.Body) && sameSigs(f.Sigs, cur[name].f.Sigs) {
 			continue
 		}
 		data, err := json.Marshal(f)
@@ -432,8 +423,8 @@ func releaseFile(repo, version string) (release.File, error) {
 // it is valid for long enough, certifies the release key and has the keys
 // asked for, otherwise a new one from a root, with the current one's keys
 // and a sequence number above its own.
-func (s *signing) keysFor(prev release.File, rs crypto.Signer) (release.File, error) {
-	spki, err := x509.MarshalPKIXPublicKey(rs.Public())
+func (s *signing) keysFor(prev release.File, rs release.Signer) (release.File, error) {
+	own, err := rs.Keys("", release.UseRelease)
 	if err != nil {
 		return release.File{}, err
 	}
@@ -465,14 +456,14 @@ func (s *signing) keysFor(prev release.File, rs crypto.Signer) (release.File, er
 			if use == "" {
 				use = release.UseRelease
 			}
-			if bytes.Equal(key.Key, want.Key) && use == want.Use {
+			if key.Alg == want.Alg && bytes.Equal(key.Key, want.Key) && use == want.Use {
 				return true
 			}
 		}
 		return false
 	}
 	var missing []release.Key
-	for _, want := range append([]release.Key{{Key: spki, Use: release.UseRelease}}, s.extra...) {
+	for _, want := range append(own, s.extra...) {
 		if !holds(want) {
 			missing = append(missing, want)
 		}
@@ -484,11 +475,17 @@ func (s *signing) keysFor(prev release.File, rs crypto.Signer) (release.File, er
 	}
 	next := release.Keys{V: 1, Type: release.TypeKeys, Seq: k.Seq + 1, TimeMS: now().UnixMilli(), Keys: k.Keys}
 	next.ExpiresMS = next.TimeMS + 90*24*time.Hour.Milliseconds()
+	// The release key's halves go under one name, which no key of keys.json
+	// has yet.
+	ownName := "release " + time.UnixMilli(next.TimeMS).UTC().Format("2006-01")
+	if pin := sha256.Sum256(own[0].Key); nameTaken(next.Keys, ownName) {
+		ownName += " " + hex.EncodeToString(pin[:2])
+	}
 	for _, m := range missing {
 		if m.Use == release.UseRelease {
 			m.Use = ""
 			if m.Name == "" {
-				m.Name = "release " + time.UnixMilli(next.TimeMS).UTC().Format("2006-01")
+				m.Name = ownName
 			}
 		}
 		next.Keys = append(next.Keys, m)
@@ -503,7 +500,7 @@ func (s *signing) keysFor(prev release.File, rs crypto.Signer) (release.File, er
 
 // channelFor signs a channel file naming rel, its sequence number above the
 // current one's.
-func channelFor(prev, rel release.File, s crypto.Signer) (release.File, error) {
+func channelFor(prev, rel release.File, s release.Signer) (release.File, error) {
 	var last release.Channel
 	if prev.Body != nil {
 		if err := json.Unmarshal(prev.Body, &last); err != nil {
@@ -522,16 +519,29 @@ func channelFor(prev, rel release.File, s crypto.Signer) (release.File, error) {
 	return signWith(s, c)
 }
 
-// signWith signs body; a hardware key is handed the exact bytes it signs.
-func signWith(s crypto.Signer, body any) (release.File, error) {
+// signWith signs body with both halves; a hardware key is handed the exact
+// bytes it signs.
+func signWith(s release.Signer, body any) (release.File, error) {
 	data, err := json.Marshal(body)
 	if err != nil {
 		return release.File{}, err
 	}
-	if t, ok := s.(*tool); ok {
-		t.data = data
+	for _, h := range s {
+		if t, ok := h.(*tool); ok {
+			t.data = data
+		}
 	}
 	return release.Sign(json.RawMessage(data), s)
+}
+
+// nameTaken reports whether a key in keys has the name.
+func nameTaken(keys []release.Key, name string) bool {
+	for _, k := range keys {
+		if k.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 // checkSigned checks the files as a device would, under the pinned roots,
@@ -579,4 +589,11 @@ func expiry(f release.File) string {
 	var c release.Channel
 	json.Unmarshal(f.Body, &c)
 	return time.UnixMilli(c.ExpiresMS).UTC().Format(time.DateOnly)
+}
+
+// sameSigs reports whether two files carry the same signatures.
+func sameSigs(a, b []release.Sig) bool {
+	return slices.EqualFunc(a, b, func(x, y release.Sig) bool {
+		return x.Alg == y.Alg && bytes.Equal(x.Key, y.Key) && bytes.Equal(x.Sig, y.Sig)
+	})
 }

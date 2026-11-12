@@ -4,6 +4,7 @@
 package tools.cbb.kit
 
 import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -17,18 +18,17 @@ class ReleasesTest {
     @Test
     fun goRelease() {
         val v = Interop.read("go-release.json").jsonObject
-        val roots = v.getValue("roots").jsonArray.map { b64(it.jsonPrimitive.content) }
+        val roots = v.getValue("roots").jsonArray.map { Releases.Key.fromJson(it.jsonObject) }
         val now = v.getValue("now_ms").jsonPrimitive.long
         val cases = v.getValue("vectors").jsonArray.map { it.jsonObject }
-        assertEquals(33, cases.size)
+        assertEquals(47, cases.size)
+        // Each case names its files by their index in files.
+        val files = v.getValue("files").jsonArray.map { Releases.File.fromJson(it.jsonObject) }
         for (c in cases) {
             val name = c.str("name")
-            val file = { k: String -> Releases.File.fromJson(c.getValue(k).jsonObject) }
+            val file = { k: String -> files[c.getValue(k).jsonPrimitive.int] }
             val s = c.getValue("seen").jsonObject
-            val seen = Releases.Seen(
-                s.optLong("keys_seq") ?: 0, s.optLong("channel_seq") ?: 0, s.optString("version") ?: "",
-                channelKeysSeq = s.optLong("channel_keys_seq") ?: 0,
-            )
+            val seen = Releases.Seen.fromJson(s)
             val got = runCatching { Releases.check(file("keys"), file("channel"), file("release"), roots, v.str("channel"), now, seen) }
             assertEquals(c.getValue("ok").jsonPrimitive.boolean, got.isSuccess, "$name: ${got.exceptionOrNull()?.message}")
             got.getOrNull()?.let { (r, next) ->
@@ -44,15 +44,16 @@ class ReleasesTest {
     @Test
     fun goStatus() {
         val v = Interop.read("go-release.json").jsonObject
-        val roots = v.getValue("roots").jsonArray.map { b64(it.jsonPrimitive.content) }
+        val roots = v.getValue("roots").jsonArray.map { Releases.Key.fromJson(it.jsonObject) }
         val now = v.getValue("now_ms").jsonPrimitive.long
         val cases = v.getValue("status").jsonArray.map { it.jsonObject }
         assertEquals(18, cases.size)
+        val files = v.getValue("files").jsonArray.map { Releases.File.fromJson(it.jsonObject) }
         for (c in cases) {
             val name = c.str("name")
-            val file = { k: String -> Releases.File.fromJson(c.getValue(k).jsonObject) }
+            val file = { k: String -> files[c.getValue(k).jsonPrimitive.int] }
             val s = c.getValue("seen").jsonObject
-            val seen = Releases.Seen(s.optLong("keys_seq") ?: 0, statusSeq = s.optLong("status_seq") ?: 0, statusKeysSeq = s.optLong("status_keys_seq") ?: 0)
+            val seen = Releases.Seen.fromJson(s)
             val got = runCatching { Releases.checkStatus(file("keys"), file("status"), roots, now, seen) }
             assertEquals(c.getValue("ok").jsonPrimitive.boolean, got.isSuccess, "$name: ${got.exceptionOrNull()?.message}")
             got.getOrNull()?.let { (st, next) ->
@@ -66,18 +67,14 @@ class ReleasesTest {
     @Test
     fun goEntries() {
         val v = Interop.read("go-entries.json").jsonObject
-        val roots = v.getValue("roots").jsonArray.map { b64(it.jsonPrimitive.content) }
+        val roots = v.getValue("roots").jsonArray.map { Releases.Key.fromJson(it.jsonObject) }
         val now = v.getValue("now_ms").jsonPrimitive.long
         val cases = v.getValue("vectors").jsonArray.map { it.jsonObject }
         assertEquals(14, cases.size)
         for (c in cases) {
             val name = c.str("name")
             val s = c.getValue("seen").jsonObject
-            val seen = Releases.Seen(
-                s.optLong("keys_seq") ?: 0,
-                entriesSeq = s.optLong("entries_seq") ?: 0,
-                entriesKeysSeq = s.optLong("entries_keys_seq") ?: 0,
-            )
+            val seen = Releases.Seen.fromJson(s)
             val set = Releases.EntriesSet.fromJson(c)!!
             val got = runCatching { Releases.checkEntries(set, roots, now, seen) }
             assertEquals(c.getValue("ok").jsonPrimitive.boolean, got.isSuccess, "$name: ${got.exceptionOrNull()?.message}")

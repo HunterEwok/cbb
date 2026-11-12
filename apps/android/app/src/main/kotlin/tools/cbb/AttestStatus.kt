@@ -14,10 +14,10 @@ import java.net.URL
  * The revocation list of Android attestations that a root phone checks
  * evidence against (docs/protocol.md, section 17, "Revoked attestations"):
  * keys.json and attest-status.json from the mirror, kept in [dir] and
- * fetched again at most once a day. It does nothing while no root keys are
- * pinned ([Releases.roots]).
+ * fetched again at most once a day, checked by the core under the roots it
+ * pins; [roots] replaces them in tests, and an empty list turns it off.
  */
-class AttestStatus(private val dir: File, private val roots: List<ByteArray> = Releases.roots) {
+class AttestStatus(private val dir: File, private val roots: List<Releases.Key>? = null) {
     @Volatile
     var revoked: Set<String> = emptySet()
         private set
@@ -29,7 +29,7 @@ class AttestStatus(private val dir: File, private val roots: List<ByteArray> = R
     private var fetchedAt = 0L
 
     init {
-        if (roots.isNotEmpty()) load()
+        if (roots?.isEmpty() != true) load()
     }
 
     private fun load() {
@@ -45,7 +45,7 @@ class AttestStatus(private val dir: File, private val roots: List<ByteArray> = R
     /** Fetches the mirror's list on a thread of its own, unless that was done in the last day. */
     fun refreshIfDue() {
         val now = System.currentTimeMillis()
-        if (roots.isEmpty() || now - fetchedAt < DAY_MS) return
+        if (roots?.isEmpty() == true || now - fetchedAt < DAY_MS) return
         fetchedAt = now
         Thread({ runCatching { fetch() }.onFailure { Log.w(TAG, "fetching the revocation list: ${it.message}") } }, "attest status").start()
     }
@@ -78,7 +78,7 @@ class AttestStatus(private val dir: File, private val roots: List<ByteArray> = R
                     val n = s.read(buf)
                     if (n < 0) break
                     out.write(buf, 0, n)
-                    if (out.size() > 2 * Releases.MAX_BODY) error("$url is too large")
+                    if (out.size() > Releases.MAX_FILE) error("$url is too large")
                 }
             }
             return out.toByteArray()

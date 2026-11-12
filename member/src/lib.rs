@@ -1717,11 +1717,11 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
             Some(d) => {
                 let roots = match std::env::var_os("CBB_RELEASE_ROOTS") {
                     Some(f) => update::read_roots(std::path::Path::new(&f))?,
-                    None => update::ROOTS.iter().map(|r| r.to_vec()).collect(),
+                    None => cbb_core::release::pinned_roots(),
                 };
                 (roots, vec![update::Source::Dir(PathBuf::from(d))])
             }
-            None => (update::ROOTS.iter().map(|r| r.to_vec()).collect(), update::Source::defaults(&st.mirror)?),
+            None => (cbb_core::release::pinned_roots(), update::Source::defaults(&st.mirror)?),
         };
         let archive = update_os::archive_name().ok_or_else(|| {
             Error::msg(format!("the release has no archive for {}/{}", std::env::consts::OS, std::env::consts::ARCH))

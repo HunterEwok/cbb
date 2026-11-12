@@ -10,24 +10,23 @@ private let log = Logger(subsystem: "tools.cbb", category: "keys")
 /// The revocation list of Android attestations that a root phone checks
 /// evidence against (docs/protocol.md, section 17, "Revoked attestations"):
 /// keys.json and attest-status.json from the mirror, kept in a directory
-/// and fetched again at most once a day. It does nothing while no root keys
-/// are pinned (Releases.roots).
+/// and fetched again at most once a day, checked by the core under the
+/// roots it pins.
 actor AttestStatus {
     private static let mirror = URL(string: "https://cbb.tools/attest/")!
     private static let keysName = "keys.json"
     private static let statusName = "attest-status.json"
 
     private let dir: URL
-    private let roots: [Data]
+    private let roots: [Releases.Key]?
     private(set) var revoked: Set<String> = []
     private var seen = Releases.Seen()
     private var fetchedAt: Date?
 
-    init(dir: URL, roots: [Data] = Releases.roots) {
+    init(dir: URL, roots: [Releases.Key]? = nil) {
         self.dir = dir
         self.roots = roots
-        guard !roots.isEmpty,
-              let k = try? Data(contentsOf: dir.appendingPathComponent(Self.keysName)),
+        guard let k = try? Data(contentsOf: dir.appendingPathComponent(Self.keysName)),
               let s = try? Data(contentsOf: dir.appendingPathComponent(Self.statusName)),
               let keys = try? JSONDecoder().decode(Releases.File.self, from: k),
               let status = try? JSONDecoder().decode(Releases.File.self, from: s),
@@ -40,7 +39,6 @@ actor AttestStatus {
 
     /// Fetches the mirror's list, unless that was done in the last day.
     func refreshIfDue() async {
-        if roots.isEmpty { return }
         if let at = fetchedAt, Date().timeIntervalSince(at) < 24 * 3600 { return }
         fetchedAt = Date()
         do {
@@ -64,7 +62,7 @@ actor AttestStatus {
 
     private func get(_ name: String) async throws -> Data {
         let (data, resp) = try await URLSession.shared.data(from: Self.mirror.appendingPathComponent(name))
-        guard (resp as? HTTPURLResponse)?.statusCode == 200, data.count <= 2 * Releases.maxBody else {
+        guard (resp as? HTTPURLResponse)?.statusCode == 200, data.count <= Releases.maxFile else {
             throw URLError(.badServerResponse)
         }
         return data

@@ -53,7 +53,7 @@ func (s *releaseSigner) signRelay(t *testing.T, seq uint64, endpoints []string, 
 		}
 	}
 	for _, r := range relays {
-		k.Keys = append(k.Keys, release.Key{Key: r.Cert.Leaf.RawSubjectPublicKeyInfo, Name: projectRelayHost, Use: release.UseRelay})
+		k.Keys = append(k.Keys, release.Key{Alg: release.AlgES256, Key: r.Cert.Leaf.RawSubjectPublicKeyInfo, Name: projectRelayHost, Use: release.UseRelay})
 	}
 	var err error
 	if set.Keys, err = release.Sign(k, s.root); err != nil {

@@ -554,14 +554,15 @@ fn go_actions() {
 fn go_release() {
     use crate::release::{self, File, Seen};
     let v = vectors("go-release.json");
-    let roots: Vec<Vec<u8>> = v["roots"].as_array().unwrap().iter().map(bytes).collect();
-    let roots: Vec<&[u8]> = roots.iter().map(|r| r.as_slice()).collect();
+    let roots: Vec<release::Key> = serde_json::from_value(v["roots"].clone()).unwrap();
     let name = v["channel"].as_str().unwrap();
     let now = v["now_ms"].as_i64().unwrap();
     let cases = v["vectors"].as_array().unwrap();
-    assert_eq!(cases.len(), 33);
+    assert_eq!(cases.len(), 47);
     for c in cases {
-        let file = |k: &str| -> File { serde_json::from_value(c[k].clone()).unwrap() };
+        // Each case names its files by their index in files.
+        let file =
+            |k: &str| -> File { serde_json::from_value(v["files"][c[k].as_u64().unwrap() as usize].clone()).unwrap() };
         let seen: Seen = serde_json::from_value(c["seen"].clone()).unwrap();
         let got = release::check(&file("keys"), &file("channel"), &file("release"), &roots, name, now, &seen);
         let label = c["name"].as_str().unwrap();
@@ -595,8 +596,7 @@ fn go_release() {
 fn go_entries() {
     use crate::release::{self, File, Seen};
     let v = vectors("go-entries.json");
-    let roots: Vec<Vec<u8>> = v["roots"].as_array().unwrap().iter().map(bytes).collect();
-    let roots: Vec<&[u8]> = roots.iter().map(|r| r.as_slice()).collect();
+    let roots: Vec<release::Key> = serde_json::from_value(v["roots"].clone()).unwrap();
     let now = v["now_ms"].as_i64().unwrap();
     let cases = v["vectors"].as_array().unwrap();
     assert_eq!(cases.len(), 14);
@@ -620,8 +620,7 @@ fn go_entries() {
 fn go_zxnext() {
     use crate::release::{self, File};
     let v = vectors("go-zxnext.json");
-    let roots: Vec<Vec<u8>> = v["roots"].as_array().unwrap().iter().map(bytes).collect();
-    let roots: Vec<&[u8]> = roots.iter().map(|r| r.as_slice()).collect();
+    let roots: Vec<release::Key> = serde_json::from_value(v["roots"].clone()).unwrap();
     let cases = v["vectors"].as_array().unwrap();
     assert_eq!(cases.len(), 18);
     for c in cases {

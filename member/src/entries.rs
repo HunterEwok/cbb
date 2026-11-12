@@ -37,7 +37,7 @@ struct Held {
 /// The entry points this member holds.
 pub struct Entries {
     path: PathBuf,
-    roots: Vec<Vec<u8>>,
+    roots: Vec<cbb_core::release::Key>,
     held: Mutex<Option<Held>>,
 }
 
@@ -50,7 +50,7 @@ pub fn newer(a: (u64, u64), b: (u64, u64)) -> bool {
 impl Entries {
     /// Opens the list kept in dir, checked again under roots; a list that
     /// no longer checks out is dropped, and logged.
-    pub fn open(dir: &Path, roots: Vec<Vec<u8>>, now_ms: i64, log: &dyn Fn(&str)) -> Entries {
+    pub fn open(dir: &Path, roots: Vec<cbb_core::release::Key>, now_ms: i64, log: &dyn Fn(&str)) -> Entries {
         let e = Entries { path: dir.join(FILE), roots, held: Mutex::new(None) };
         match std::fs::read(&e.path) {
             Ok(data) => match serde_json::from_slice::<Value>(&data).map_err(|_| Error::msg("it does not decode")) {
@@ -71,8 +71,8 @@ impl Entries {
             return Err(Error::msg("this build pins no release keys"));
         }
         let set: Set = serde_json::from_value(v.clone()).map_err(|_| Error::msg("the entry points do not decode"))?;
-        let roots: Vec<&[u8]> = self.roots.iter().map(Vec::as_slice).collect();
-        let (e, next) = release::check_entries(&set.keys, &set.entries, &roots, now_ms, seen)?;
+        let roots = &self.roots;
+        let (e, next) = release::check_entries(&set.keys, &set.entries, roots, now_ms, seen)?;
         Ok(Held { set: v.clone(), seen: next, expires_ms: e.expires_ms })
     }
 
@@ -96,8 +96,8 @@ impl Entries {
     pub fn relay_keys(&self, name: &str, now_ms: i64) -> Vec<Vec<u8>> {
         let Some(set) = self.current(now_ms) else { return Vec::new() };
         let Ok(set) = serde_json::from_value::<Set>(set) else { return Vec::new() };
-        let roots: Vec<&[u8]> = self.roots.iter().map(Vec::as_slice).collect();
-        let Ok(keys) = release::verify_keys(&set.keys, &roots, now_ms, &Seen::default()) else { return Vec::new() };
+        let roots = &self.roots;
+        let Ok(keys) = release::verify_keys(&set.keys, roots, now_ms, &Seen::default()) else { return Vec::new() };
         keys.keys.into_iter().filter(|k| k.usage == "relay" && k.name == name).map(|k| k.key).collect()
     }
 
@@ -106,8 +106,8 @@ impl Entries {
     pub fn relay_endpoints(&self, name: &str, now_ms: i64) -> Vec<String> {
         let Some(set) = self.current(now_ms) else { return Vec::new() };
         let Ok(set) = serde_json::from_value::<Set>(set) else { return Vec::new() };
-        let roots: Vec<&[u8]> = self.roots.iter().map(Vec::as_slice).collect();
-        match release::check_entries(&set.keys, &set.entries, &roots, now_ms, &Seen::default()) {
+        let roots = &self.roots;
+        match release::check_entries(&set.keys, &set.entries, roots, now_ms, &Seen::default()) {
             Ok((e, _)) => e.relays.into_iter().find(|r| r.name == name).map(|r| r.endpoints).unwrap_or_default(),
             Err(_) => Vec::new(),
         }
@@ -143,10 +143,8 @@ mod tests {
         serde_json::from_slice(&std::fs::read(p).unwrap()).unwrap()
     }
 
-    fn roots(v: &Value) -> Vec<Vec<u8>> {
-        #[derive(Deserialize)]
-        struct Der(#[serde(with = "cbb_core::certs::b64")] Vec<u8>);
-        v["roots"].as_array().unwrap().iter().map(|r| serde_json::from_value::<Der>(r.clone()).unwrap().0).collect()
+    fn roots(v: &Value) -> Vec<cbb_core::release::Key> {
+        serde_json::from_value(v["roots"].clone()).unwrap()
     }
 
     fn case(v: &Value, name: &str) -> Value {

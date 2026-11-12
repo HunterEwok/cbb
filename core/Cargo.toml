@@ -50,6 +50,9 @@ rustls = { version = "0.23.46", default-features = false, optional = true }
 serde = { version = "1", default-features = false, features = ["alloc", "derive"] }
 serde_json = { version = "1", default-features = false, features = ["alloc"] }
 sha2 = { version = "0.11", default-features = false }
+# slhdsa: SLH-DSA-SHA2-128s verification, the post-quantum half of the
+# release files' signatures and of the recovery key (one verifier).
+slh-dsa = { version = "=0.2.0-rc.5", default-features = false }
 spin = { version = "0.12", default-features = false, features = ["mutex", "spin_mutex"] }
 x25519-dalek = { version = "3", default-features = false, features = ["static_secrets"] }
 x509-cert = { version = "0.3", default-features = false, features = ["hazmat"] }

@@ -189,7 +189,7 @@ func (g *fakeGitHub) verifyPublished(tag string) {
 
 type keyFiles struct {
 	root1, release, channel, channelPub string
-	roots                               [][]byte
+	roots                               []release.Key
 }
 
 func testKeys(t *testing.T) keyFiles {
@@ -200,9 +200,9 @@ func testKeys(t *testing.T) keyFiles {
 	_, root2Pub = newKey(t, dir, "root-2")
 	k.release, _ = newKey(t, dir, "release")
 	k.channel, k.channelPub = newKey(t, dir, "channel")
-	k.roots = [][]byte{must(readPublic(root1Pub)), must(readPublic(root2Pub))}
+	k.roots = must(readRoots([]string{root1Pub, root2Pub}))
 	prevRoots, prevAsk, prevNow := pinnedRoots, ask, now
-	pinnedRoots = func() [][]byte { return k.roots }
+	pinnedRoots = func() []release.Key { return k.roots }
 	ask = func(string) bool { return true }
 	clock := time.Now()
 	now = func() time.Time { return clock }
@@ -239,7 +239,7 @@ func TestPublish(t *testing.T) {
 	g.file(g.channel(), "keys.json", &ks)
 	g.file(g.channel(), "stable.json", &c)
 	g.file(g.release("v0.6.0"), "release.json", &r)
-	if ks.Seq != 1 || len(ks.Keys) != 2 || ks.Keys[1].Use != release.UseChannel || c.Seq != 1 || c.Release != "0.6.0" ||
+	if ks.Seq != 1 || len(ks.Keys) != 4 || ks.Keys[2].Use != release.UseChannel || c.Seq != 1 || c.Release != "0.6.0" ||
 		r.MinFrom != "0.5.0" || r.Docker == nil || len(r.Files) != 4 {
 		t.Fatalf("keys %+v, channel %+v, release %+v", ks, c, r)
 	}
@@ -280,7 +280,7 @@ func TestPublish(t *testing.T) {
 	}
 	g.file(g.channel(), "keys.json", &ks)
 	g.file(g.channel(), "stable.json", &c)
-	if ks.Seq != 2 || len(ks.Keys) != 2 || c.Seq != 4 {
+	if ks.Seq != 2 || len(ks.Keys) != 4 || c.Seq != 4 {
 		t.Fatalf("after the second renew: keys %+v, channel %d", ks, c.Seq)
 	}
 	g.verifyPublished("v0.6.0")
@@ -375,7 +375,7 @@ func TestPublishKeepsTheSequence(t *testing.T) {
 	}
 	var ks release.Keys
 	g.file(g.channel(), "keys.json", &ks)
-	if ks.Seq != 8 || len(ks.Keys) != 1 {
+	if ks.Seq != 8 || len(ks.Keys) != 2 {
 		t.Errorf("keys.json is %+v", ks)
 	}
 }
@@ -409,7 +409,7 @@ func TestDropAChannelKey(t *testing.T) {
 	}
 	var ks release.Keys
 	g.file(g.channel(), "keys.json", &ks)
-	if ks.Seq != 2 || len(ks.Keys) != 1 || ks.Keys[0].Use != "" {
+	if ks.Seq != 2 || len(ks.Keys) != 2 || ks.Keys[0].Use != "" {
 		t.Errorf("keys.json is %+v", ks)
 	}
 	if extend([]string{"-key", "file:" + k.channel, "-out", t.TempDir(), "-from", g.channel(), "-releases", g.dir}) == nil {

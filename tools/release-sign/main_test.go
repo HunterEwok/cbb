@@ -8,11 +8,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -46,14 +42,14 @@ func write(t *testing.T, path string, data []byte) string {
 
 func newKey(t *testing.T, dir, name string) (priv, pub string) {
 	t.Helper()
-	k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	k, err := release.GenerateSigner()
 	if err != nil {
 		t.Fatal(err)
 	}
-	der, _ := x509.MarshalPKCS8PrivateKey(k)
-	spki, _ := x509.MarshalPKIXPublicKey(&k.PublicKey)
-	priv = write(t, filepath.Join(dir, name+".key"), pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}))
-	pub = write(t, filepath.Join(dir, name+".pem"), pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: spki}))
+	// Both halves in one file; the public keys named, as roots.pem names
+	// a root.
+	priv = write(t, filepath.Join(dir, name+".key"), must(release.MarshalSignerPEM(k)))
+	pub = write(t, filepath.Join(dir, name+".pem"), must(release.PublicPEM(k, name)))
 	return priv, pub
 }
 

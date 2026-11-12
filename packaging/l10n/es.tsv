@@ -78,7 +78,9 @@ release.json is not the release stable.json names; not installing	release.json n
 release.json is for %s, not %s	release.json es para %s, no para %s
 release.json does not list %s	release.json no incluye %s
 %s does not match the signed release.json; not installing it	%s no coincide con el release.json firmado; no se instala
-The release's signature checks out (%s).	La firma de la versión es correcta (%s).
+The release's signature checks out (%s): ES256 and SLH-DSA-SHA2-128s.	La firma de la versión es correcta (%s): ES256 y SLH-DSA-SHA2-128s.
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, it needs OpenSSL 3.5 or later.	La firma de la versión es correcta (%s): ES256; SLH-DSA-SHA2-128s no se comprobó, necesita OpenSSL 3.5 o posterior.
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, PowerShell cannot check it.	La firma de la versión es correcta (%s): ES256; SLH-DSA-SHA2-128s no se comprobó, PowerShell no puede comprobarla.
 could not download %s	no se pudo descargar %s
 stable.json names no release	stable.json no nombra ninguna versión
 Downloading %s (%s)...	Descargando %s (%s)...

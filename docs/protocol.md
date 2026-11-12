@@ -3288,13 +3288,23 @@ sealed one. The vectors are `go-sealed-commands.json`.
 
 Every release is described by signed files, so that a program updates only to a release the
 project signed, whichever server it came from (design.md, "Secure updates"; D-69). The Go
-package `internal/release`, `core/` (`release.rs`) and the phone kits (`Releases`) check
-them alike, against `testdata/interop/go-release.json`.
+package `internal/release` and `core/` (`release.rs`) check them alike, against
+`testdata/interop/go-release.json` (whose cases name their files by their index in its
+`files`); the phone kits ask the core (`release_check`, core-api.md, "Release files").
 
 ### Keys
 
-- Two **root keys**, P-256, each on its own hardware key kept offline. Every program pins
-  both (their SubjectPublicKeyInfos); either one signs `keys.json`.
+Every key below has two halves, which sign every file it signs together (see "Two
+signatures"): a P-256 key and an SLH-DSA-SHA2-128s key (FIPS 205), whose signatures hold
+when a quantum computer breaks P-256. Where the P-256 half lives in hardware (a YubiKey, the
+Mac's Secure Enclave), the SLH-DSA half, which no such hardware holds, is a file encrypted to
+that same hardware (with `age` and its plugin for the YubiKey or the Secure Enclave) and opened
+only to sign; on a server, an encrypted credential of the service that signs
+(maintaining.md, "Two signatures").
+
+- Two **root keys**, each on its own hardware key kept offline. Every program pins both,
+  each by its two halves' SubjectPublicKeyInfos under its name (`internal/release/roots/roots.pem`,
+  a `Name` header on each half); either one signs `keys.json`.
 - **Release keys**, P-256, which `keys.json` certifies. A release key signs `release.json`
   and the channel files.
 - A **status key**, P-256, which `keys.json` certifies with `use` `status`. It lives on the
@@ -3317,10 +3327,13 @@ them alike, against `testdata/interop/go-release.json`.
 
 ### The envelope
 
-Each file is JSON: `{"body": "...", "sig": "...", "key": "..."}`. `body` is the body's exact
-bytes (base64), signed as they are and never re-encoded; `sig` is ECDSA P-256 with SHA-256
-over them, DER (base64); `key` is SHA-256 of the signer's SubjectPublicKeyInfo (base64, 32
-bytes), which picks the key to verify with. A body is at most 256 KiB. Every body has `v`
+Each file is JSON: `{"body": "...", "sigs": [{"alg": n, "key": "...", "sig": "..."}, ...]}`.
+`body` is the body's exact bytes (base64), signed as they are and never re-encoded. Each of
+`sigs` (1 to 8) is one signature over them: `alg` names its algorithm, `key` is SHA-256 of the
+signing half's SubjectPublicKeyInfo (base64, 32 bytes), which picks the half to verify with,
+and `sig` the signature (base64): for `alg` `1`, ES256, ECDSA P-256 with SHA-256, DER; for
+`alg` `4`, SLH-DSA-SHA2-128s, pure, with the context `cbb release v1`, 7856 bytes. A body is
+at most 256 KiB and a whole file at most 1 MiB. Every body has `v`
 (`1`) and `type`, so one kind of file is never taken for another; unknown fields are ignored.
 A body follows the strict form of signed bodies (Conventions), checked before its fields, and
 has every field of its row: only `min_from`, `docker`, `binaries`, `use` and `source_ms` may
@@ -3333,7 +3346,7 @@ vectors in `testdata/interop/strict-files.json` (section `releases`) test each r
 
 | `type` | Signed by | Fields |
 |--------|-----------|--------|
-| `keys` (`keys.json`) | a root key | `seq` (from 1, raised with each new file), `time_ms`, `expires_ms`, `keys`: 1 to 8 of `{key` (SubjectPublicKeyInfo, DER, base64), `name` (1-64 bytes), `use` (`release` when absent, `status`, `channel`, `forwarder` or `relay`)`}` |
+| `keys` (`keys.json`) | a root key | `seq` (from 1, raised with each new file), `time_ms`, `expires_ms`, `keys`: 1 to 64 of `{alg` (from 1: `1` a P-256 half, `4` an SLH-DSA-SHA2-128s half), `key` (SubjectPublicKeyInfo, DER, base64), `name` (1-64 bytes), `use` (`release` when absent, `status`, `channel`, `forwarder` or `relay`)`}`, the two halves of one key under the same `name` and `use` |
 | `release` (`release.json`) | a release key | `version`, `channel`, `time_ms`, `min_from` (a version, optional), `files`: 1 to 256 of `{name, size, sha256, binaries?}`, `docker` (optional `{image, digest}`) |
 | `channel` (`stable.json`, ...) | a release key or a channel key | `channel`, `seq` (from 1), `time_ms`, `expires_ms`, `release` (the version), `release_sha256` (SHA-256 of that `release.json`'s body, hex) |
 | `entries` (`entries.json`) | a release key or a channel key | `seq` (from 1), `time_ms`, `expires_ms`, `forwarders`: at most 16 of `{name` (the forwarder, `host:port`, each once), `vless`: at most 8 of `{transport` (`xhttp`), `server_name` (a site's name), `port` (1 to 65535), `path` (`/` and 8 to 64 of `A-Z a-z 0-9 - _`)`}}`, `relays` (optional): at most 16 of `{name` (the relay, `host:port`, each once), `endpoints` (optional): at most 8 `host:port` where it is reached now`}` |
@@ -3341,7 +3354,7 @@ vectors in `testdata/interop/strict-files.json` (section `releases`) test each r
 | `attest-status` (`attest-status.json`) | a status key | `seq` (from 1), `time_ms`, `expires_ms`, `source_ms` (when Google last changed its list, optional), `android_revoked`: the serial numbers |
 
 - A key of a `use` the reader does not know is in `keys.json` for newer programs and signs
-  nothing for it; a release key signs no `attest-status.json`, a status key no release
+  nothing for it, and so is a half of an `alg` it does not know, whatever its length; a release key signs no `attest-status.json`, a status key no release
   or channel file, a channel key nothing but channel files, and a forwarder or relay key
   nothing.
 
@@ -3361,6 +3374,22 @@ vectors in `testdata/interop/strict-files.json` (section `releases`) test each r
 - A serial number is lowercase hex without leading zeros (`0` for zero), at most 64
   digits, as Google's list names them. `android_revoked` lists each once, shorter numbers
   first and numbers of one length in string order, which is numeric order.
+
+### Two signatures
+
+A reader takes a file only when the halves of one key, one `name` and `use` of the keys it
+checks the file under (the pinned roots for `keys.json`), signed it with every algorithm the
+reader requires: `1` and `4`, fixed in every program from 0.6, with no switch to turn either
+off. A signature of an algorithm the reader does not know, or by a half it does not list, is
+passed over, whatever its length; a signature of a known algorithm by a listed half that does
+not verify refuses the file. So a later version can add an algorithm beside these two, and
+MUST keep signing with both while readers of 0.6 are in use. 0.5 reads no release files, so
+the envelope of `sig` and `key` that it never took is gone.
+
+`get.sh` checks the ES256 signatures always and the SLH-DSA ones where its `openssl` does
+(OpenSSL 3.5 and later, tried with a key of its own first), and says which it checked;
+`get.ps1` checks the ES256 ones and says that PowerShell cannot check SLH-DSA. Both pass over
+a signature they do not check, and the program they install checks both from then on.
 
 ### Where the files are
 
@@ -3395,7 +3424,7 @@ checked the same way, wherever they came from.
 A device that looks for an update fetches `keys.json`, the channel file of its channel and
 the `release.json` that names, and MUST take the release only when:
 
-1. `keys.json` verifies under a pinned root key, decodes as a `keys` body, has not expired,
+1. `keys.json` verifies under a pinned root key (both of its halves, as "Two signatures"), decodes as a `keys` body, has not expired,
    is not signed more than a day ahead of the device's clock (`time_ms`), and its `seq` is
    not below the highest the device has taken;
 2. the channel file verifies under a release or channel key of that `keys.json`, decodes as a `channel`

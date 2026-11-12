@@ -44,7 +44,7 @@ struct Held {
 /// The release this member holds.
 pub struct Releases {
     dir: PathBuf,
-    roots: Vec<Vec<u8>>,
+    roots: Vec<cbb_core::release::Key>,
     held: Mutex<Option<Held>>,
 }
 
@@ -59,7 +59,7 @@ impl Releases {
     /// Opens the release kept in dir, checked again under roots, which may
     /// be others since; one that no longer checks out is dropped, and
     /// logged.
-    pub fn open(dir: &Path, roots: Vec<Vec<u8>>, now_ms: i64, log: &dyn Fn(&str)) -> Releases {
+    pub fn open(dir: &Path, roots: Vec<cbb_core::release::Key>, now_ms: i64, log: &dyn Fn(&str)) -> Releases {
         let r = Releases { dir: dir.to_path_buf(), roots, held: Mutex::new(None) };
         match std::fs::read(dir.join(FILE)) {
             Ok(data) => match serde_json::from_slice::<Value>(&data).map_err(|_| Error::msg("it does not decode")) {
@@ -80,10 +80,10 @@ impl Releases {
             return Err(Error::msg("this build pins no release keys"));
         }
         let set: Set = serde_json::from_value(v.clone()).map_err(|_| Error::msg("the release does not decode"))?;
-        let roots: Vec<&[u8]> = self.roots.iter().map(Vec::as_slice).collect();
+        let roots = &self.roots;
         let seen = Seen { version: String::new(), ..seen.clone() };
         let (r, next) =
-            release::check(&set.keys, &set.channel, &set.release, &roots, crate::update::CHANNEL, now_ms, &seen)?;
+            release::check(&set.keys, &set.channel, &set.release, roots, crate::update::CHANNEL, now_ms, &seen)?;
         let c = release::decode_channel(&set.channel.body)?;
         Ok(Held { set: v.clone(), seen: next, version: r.version, files: r.files, expires_ms: c.expires_ms })
     }

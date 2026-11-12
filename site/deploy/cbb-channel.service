@@ -3,8 +3,10 @@
 #
 # Renews the release channel's stable.json with the channel key
 # (docs/maintaining.md, "Signed releases"): /etc/systemd/system/cbb-channel.service,
-# run by cbb-channel.timer. The key stays readable only by root, and the
-# service gets it as a credential for the run.
+# run by cbb-channel.timer. The key's P-256 half stays readable only by
+# root and its SLH-DSA half is a credential encrypted with systemd-creds to
+# this machine (docs/maintaining.md, "Two signatures"); the service gets both
+# as credentials for the run.
 
 [Unit]
 Description=Renew the cbb release channel
@@ -16,7 +18,8 @@ Type=oneshot
 User=cbb-channel
 Group=cbb-channel
 LoadCredential=channel-key.pem:/etc/cbb-channel/channel-key.pem
-ExecStart=/bin/sh -ec 'exec /usr/local/bin/release-sign extend -key "file:$CREDENTIALS_DIRECTORY/channel-key.pem" -out /srv/cbb.tools/channel'
+LoadCredentialEncrypted=channel-pq.pem:/etc/cbb-channel/channel-pq.cred
+ExecStart=/bin/sh -ec 'exec /usr/local/bin/release-sign extend -key "file:$CREDENTIALS_DIRECTORY/channel-key.pem+slh:$CREDENTIALS_DIRECTORY/channel-pq.pem" -out /srv/cbb.tools/channel'
 UMask=0022
 NoNewPrivileges=yes
 ProtectSystem=strict

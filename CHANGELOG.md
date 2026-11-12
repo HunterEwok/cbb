@@ -7,6 +7,18 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- Every release file carries two signatures, ES256 and SLH-DSA-SHA2-128s (FIPS 205), and
+  every program from 0.6 takes a file only with both, with no switch to turn either off
+  (docs/protocol.md, section 16, "Two signatures"): a release stays trusted when a quantum
+  computer breaks P-256. Files list their signatures (`sigs`) and `keys.json` names each
+  half's algorithm (`alg`); unknown algorithms are passed over, so later versions can add
+  one. Each key's post-quantum half sits beside its P-256 half, encrypted with `age` to the
+  same YubiKey or Secure Enclave, or as an encrypted credential on cbb.tools
+  (`release-sign pq-new`, docs/maintaining.md, "Two signatures"). The phone kits check
+  release files through the Rust core (`release_check`, `release_check_status`,
+  `release_check_entries`), which pins the roots, and `get.sh` checks the SLH-DSA
+  signatures where OpenSSL 3.5 or later is installed and says which it checked; `get.ps1`
+  checks ES256 and says so.
 - The forwarder refuses the groups their operator lists after an abuse report:
   `refused-groups` next to the key (or `-refused FILE`), one group tag a line, read again
   within ten seconds of a change; a listed group is refused at registration and its devices

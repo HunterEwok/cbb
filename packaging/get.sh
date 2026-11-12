@@ -239,12 +239,17 @@ archive=cbb-$os-$arch.tar.gz
 dir=cbb
 
 # The project's release root keys (docs/protocol.md, section 16), which sign
-# keys.json: two YubiKeys, as internal/release/roots/roots.pem.
+# keys.json: two YubiKeys, each with its ES256 half and its SLH-DSA half
+# (the halves of one root share its Name), as internal/release/roots/roots.pem.
 release_roots='-----BEGIN PUBLIC KEY-----
+Name: root-1
+
 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE9sLfrcGBi23XveQN8dK8Z+lbEuxT
 LOgnQ9s/gzp/k7xx88IFvkdMuyoL2K7j1necQGYLmq3ifie9wDrF69AO/A==
 -----END PUBLIC KEY-----
 -----BEGIN PUBLIC KEY-----
+Name: root-2
+
 MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAExGbAq55XGXip3Dtq6jsM2bOYUeoY
 fDxsggXLisjwoCQoDM28pCYkIoZAfcjwR3aAGOAUWZX+L53og7/TLLpnfg==
 -----END PUBLIC KEY-----'
@@ -281,24 +286,84 @@ strict() {
 	done
 }
 
-# opened FILE NAME KEYS... checks the envelope in FILE with any of the PEM
-# keys KEYS, and leaves its body in $tmp/NAME.body; it fails when none
-# verifies or the body is not of the type NAME.
+# Every file carries a signature of each algorithm (docs/protocol.md,
+# section 16, "Two signatures"): 1, ES256, which every openssl checks, and 4,
+# SLH-DSA-SHA2-128s, which OpenSSL 3.5 and later check. checked names those
+# this openssl checks, set by algorithms.
+checked=
+algorithms() {
+	checked=1
+	# The post-quantum half only where this openssl signs and checks it as
+	# the project does, with the context "cbb release v1": a round trip with
+	# a key of its own, so that an openssl that reads the options otherwise
+	# checks one signature rather than refusing every release.
+	openssl list -signature-algorithms 2>/dev/null | grep -qi 'SLH-DSA-SHA2-128s' || return 0
+	printf 'cbb' >"$tmp/slh.msg"
+	openssl genpkey -algorithm SLH-DSA-SHA2-128s -out "$tmp/slh.key" 2>/dev/null &&
+		openssl pkey -in "$tmp/slh.key" -pubout -out "$tmp/slh.pub" 2>/dev/null &&
+		openssl pkeyutl -sign -rawin -inkey "$tmp/slh.key" -in "$tmp/slh.msg" -out "$tmp/slh.sig" -pkeyopt "context-string:cbb release v1" >/dev/null 2>&1 &&
+		slh_verify "$tmp/slh.pub" "$tmp/slh.sig" "$tmp/slh.msg" &&
+		checked="1 4"
+	rm -f "$tmp/slh.key" "$tmp/slh.pub" "$tmp/slh.sig" "$tmp/slh.msg"
+}
+slh_verify() {
+	openssl pkeyutl -verify -pubin -inkey "$1" -rawin -in "$3" -sigfile "$2" -pkeyopt "context-string:cbb release v1" >/dev/null 2>&1
+}
+# roots_list writes the root keys as keys.list writes keys.json's: a line
+# "ALG USE KEY NAME" for each half, KEY its SubjectPublicKeyInfo in base64.
+roots_list() {
+	printf '%s\n' "$roots" | awk '
+		/^-----BEGIN PUBLIC KEY-----$/ { name = ""; key = ""; body = 0; next }
+		/^-----END PUBLIC KEY-----$/ {
+			alg = 0
+			if (key ~ /^MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE/) alg = 1
+			if (key ~ /^MDAwCwYJYIZIAWUDBAMUAyEA/) alg = 4
+			print alg, "root", key, name
+			next
+		}
+		!body && /^Name:/ { sub(/^Name:[ \t]*/, ""); name = $0; next }
+		!body && /^$/ { body = 1; next }
+		{ body = 1; key = key $0 }
+	'
+}
+
+# opened FILE NAME LIST USES... checks the envelope in FILE with the keys of
+# LIST (lines "ALG USE KEY NAME") of the uses USES, and leaves its body in
+# $tmp/NAME.body. It takes the file when the halves of one key signed it
+# with every algorithm of $checked, and refuses it when a listed key's
+# signature that this openssl checks does not verify, or the body is not of
+# the type NAME. A signature of another algorithm, or of a key not listed,
+# is passed over, as every reader does.
 opened() {
-	f=$1 kind=$2
-	shift 2
+	f=$1 kind=$2 list=$3
+	shift 3
 	field body "$f" | openssl base64 -d -A >"$tmp/$kind.body" 2>/dev/null || return 1
-	field sig "$f" | openssl base64 -d -A >"$tmp/$kind.sig" 2>/dev/null || return 1
-	for k in "$@"; do
-		if openssl dgst -sha256 -verify "$k" -signature "$tmp/$kind.sig" "$tmp/$kind.body" >/dev/null 2>&1; then
-			strict "$tmp/$kind.body" || fail "the signed %s file is not in the strict form of signed bodies; not installing" "$kind"
-			[ "$(field type "$tmp/$kind.body")" = "$kind" ] || return 1
-			[ "$(number v "$tmp/$kind.body")" = 1 ] || return 1
-			[ -n "$(number time_ms "$tmp/$kind.body")" ] || return 1
-			return 0
-		fi
-	done
-	return 1
+	grep -oE '\{"alg":[0-9]+,"key":"[A-Za-z0-9+/=]*","sig":"[A-Za-z0-9+/=]*"\}' "$f" >"$tmp/$kind.sigs" || return 1
+	: >"$tmp/$kind.good"
+	n=0
+	while read -r alg use key name; do
+		n=$((n + 1))
+		case " $checked " in *" $alg "*) ;; *) continue ;; esac
+		case " $* " in *" $use "*) ;; *) continue ;; esac
+		khash=$(printf '%s' "$key" | openssl base64 -d -A | openssl dgst -sha256 -binary | openssl base64 -A)
+		grep -F "\"alg\":$alg,\"key\":\"$khash\"," "$tmp/$kind.sigs" | head -n 1 >"$tmp/$kind.sig.json"
+		[ -s "$tmp/$kind.sig.json" ] || continue
+		field sig "$tmp/$kind.sig.json" | openssl base64 -d -A >"$tmp/$kind.sig" 2>/dev/null || return 1
+		printf '%s' "$key" | openssl base64 -d -A | openssl pkey -pubin -inform DER -out "$tmp/$kind.pub-$n.pem" 2>/dev/null || return 1
+		case $alg in
+		1) openssl dgst -sha256 -verify "$tmp/$kind.pub-$n.pem" -signature "$tmp/$kind.sig" "$tmp/$kind.body" >/dev/null 2>&1 || return 1 ;;
+		4) slh_verify "$tmp/$kind.pub-$n.pem" "$tmp/$kind.sig" "$tmp/$kind.body" || return 1 ;;
+		esac
+		printf '%s %s %s\n' "$alg" "$use" "$name" >>"$tmp/$kind.good"
+	done <"$list"
+	# One key, by its use and name, signed with every algorithm checked.
+	awk -v n="$(echo "$checked" | wc -w)" '{ k = $0; sub(/^[^ ]* /, "", k); if (!seen[$0]++) c[k]++ }
+		END { for (k in c) if (c[k] == n) ok = 1; exit !ok }' "$tmp/$kind.good" || return 1
+	strict "$tmp/$kind.body" || fail "the signed %s file is not in the strict form of signed bodies; not installing" "$kind"
+	[ "$(field type "$tmp/$kind.body")" = "$kind" ] || return 1
+	[ "$(number v "$tmp/$kind.body")" = 1 ] || return 1
+	[ -n "$(number time_ms "$tmp/$kind.body")" ] || return 1
+	return 0
 }
 
 # verify_release checks keys.json against the root keys, release.json and,
@@ -315,38 +380,45 @@ verify_release() {
 	fi
 	command -v openssl >/dev/null 2>&1 ||
 		fail "openssl is required to check the release's signature (or CBB_VERIFY=skip to install it unchecked)"
-	printf '%s\n' "$roots" | awk -v d="$tmp" '/BEGIN/ { n++ } { print > (d "/root-" n ".pem") }'
+	algorithms
+	roots_list >"$tmp/roots.list"
 	if ! fetch "$channel_files/keys.json" "$tmp/keys.json" || ! fetch "$base/release.json" "$tmp/release.json"; then
 		fail "%s has no signed release files; not installing it (CBB_VERIFY=skip installs it unchecked)" "$version"
 	fi
-	opened "$tmp/keys.json" keys "$tmp"/root-*.pem || fail "keys.json is not signed by the project's root key; not installing"
+	opened "$tmp/keys.json" keys "$tmp/roots.list" root || fail "keys.json is not signed by the project's root key; not installing"
 	now_ms=$(($(date +%s) * 1000))
 	[ "$(number expires_ms "$tmp/keys.body")" -gt "$now_ms" ] || fail "keys.json has expired; check the clock, or try again later"
-	# Each key with its use: a release key (no use) signs release.json and
+	# Each half with its use: a release key (no use) signs release.json and
 	# stable.json, a channel key only stable.json, a key of another use
 	# neither. Each entry is read whole, as the signer writes it (a name may
 	# hold a brace), and one that does not read so, or a use written empty,
 	# refuses the file.
-	grep -oE '\{"key":"[A-Za-z0-9+/=]+","name":"[^"]*"(,"use":"[a-z]+")?\}' "$tmp/keys.body" >"$tmp/keys.list" || true
-	[ "$(wc -l <"$tmp/keys.list")" -eq "$(grep -o '{"key":' "$tmp/keys.body" | wc -l)" ] ||
+	grep -oE '\{"alg":[0-9]+,"key":"[A-Za-z0-9+/=]*","name":"[^"]*"(,"use":"[a-z]+")?\}' "$tmp/keys.body" >"$tmp/keys.entries" || true
+	[ "$(wc -l <"$tmp/keys.entries")" -eq "$(grep -o '{"alg":' "$tmp/keys.body" | wc -l)" ] ||
 		fail "keys.json is not valid; not installing"
-	n=0
+	: >"$tmp/keys.list"
 	while read -r entry; do
-		n=$((n + 1))
 		printf '%s\n' "$entry" >"$tmp/key"
 		case $(field use "$tmp/key") in
 		"" | release) use=release ;;
 		channel) use=channel ;;
 		*) continue ;;
 		esac
-		field key "$tmp/key" | openssl base64 -d -A | openssl pkey -pubin -inform DER -out "$tmp/$use-$n.pem" 2>/dev/null ||
-			fail "keys.json holds a key that is not valid"
-	done <"$tmp/keys.list"
-	ls "$tmp"/release-*.pem >/dev/null 2>&1 || fail "keys.json holds no release key"
-	opened "$tmp/release.json" release "$tmp"/release-*.pem || fail "release.json is not signed by a release key; not installing"
+		alg=$(number alg "$tmp/key")
+		# A half this openssl checks must be a key it reads.
+		case " $checked " in
+		*" $alg "*)
+			field key "$tmp/key" | openssl base64 -d -A | openssl pkey -pubin -inform DER -noout 2>/dev/null ||
+				fail "keys.json holds a key that is not valid"
+			;;
+		esac
+		printf '%s %s %s %s\n' "$alg" "$use" "$(field key "$tmp/key")" "$(field name "$tmp/key")" >>"$tmp/keys.list"
+	done <"$tmp/keys.entries"
+	grep -q ' release ' "$tmp/keys.list" || fail "keys.json holds no release key"
+	opened "$tmp/release.json" release "$tmp/keys.list" release || fail "release.json is not signed by a release key; not installing"
 	got_version=$(field version "$tmp/release.body")
 	if [ -n "$named" ]; then
-		opened "$tmp/stable.json" channel "$tmp"/release-*.pem "$tmp"/channel-*.pem ||
+		opened "$tmp/stable.json" channel "$tmp/keys.list" release channel ||
 			fail "stable.json is not signed by a release or channel key; not installing"
 		[ "$(field channel "$tmp/channel.body")" = stable ] || fail "stable.json is not the stable channel's"
 		[ "$(number expires_ms "$tmp/channel.body")" -gt "$now_ms" ] || fail "stable.json has expired; check the clock, or try again later"
@@ -365,7 +437,11 @@ verify_release() {
 	if [ "$(field sha256 "$tmp/entry")" != "$got" ] || [ "$(number size "$tmp/entry")" != "$(wc -c <"$tmp/$archive" | tr -d ' ')" ]; then
 		fail "%s does not match the signed release.json; not installing it" "$archive"
 	fi
-	say "The release's signature checks out (%s)." "$got_version"
+	if [ "$checked" = "1 4" ]; then
+		say "The release's signature checks out (%s): ES256 and SLH-DSA-SHA2-128s." "$got_version"
+	else
+		say "The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, it needs OpenSSL 3.5 or later." "$got_version"
+	fi
 }
 
 tmp=$(mktemp -d)

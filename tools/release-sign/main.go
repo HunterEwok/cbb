@@ -38,7 +38,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto"
-	"crypto/ecdsa"
 	"crypto/sha256"
 	"crypto/x509"
 	_ "embed"
@@ -66,6 +65,7 @@ func main() {
 		"manifest": manifest, "keys": keys, "channel": channel,
 		"sign": sign, "public": public, "verify": verify, "drill": drill,
 		"publish": publish, "renew": renew, "extend": extend, "take": take, "due": due, "mirror": mirror, "entries": entries,
+		"pq-new": pqNew,
 	}
 	cmd, ok := cmds[os.Args[1]]
 	if !ok {
@@ -78,7 +78,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: release-sign publish|renew|extend|entries|mirror|take|due|manifest|keys|channel|sign|public|verify|drill ... (see the comment in tools/release-sign/main.go)")
+	fmt.Fprintln(os.Stderr, "usage: release-sign publish|renew|extend|entries|mirror|take|due|manifest|keys|channel|sign|public|pq-new|verify|drill ... (see the comment in tools/release-sign/main.go)")
 	os.Exit(2)
 }
 
@@ -227,12 +227,7 @@ func checkBody(body []byte) error {
 	if err := json.Unmarshal(body, &v); err != nil {
 		return err
 	}
-	k, err := ecdsa.GenerateKey(ellipticP256(), randReader)
-	if err != nil {
-		return err
-	}
-	_, err = release.Sign(json.RawMessage(body), k)
-	return err
+	return release.CheckBody(body)
 }
 
 // keys writes the body of keys.json, certifying the release keys and,
@@ -260,16 +255,9 @@ func keys(args []string) error {
 	k := release.Keys{V: 1, Type: release.TypeKeys, Seq: *seq, TimeMS: now().UnixMilli()}
 	k.ExpiresMS = k.TimeMS + int64(*days)*24*time.Hour.Milliseconds()
 	add := func(arg, use string) error {
-		name, path, ok := strings.Cut(arg, "=")
-		if !ok {
-			return fmt.Errorf("%q is not NAME=KEY.pem", arg)
-		}
-		spki, err := readPublic(path)
-		if err != nil {
-			return err
-		}
-		k.Keys = append(k.Keys, release.Key{Key: spki, Name: name, Use: use})
-		return nil
+		keys, err := keyArg(arg, use)
+		k.Keys = append(k.Keys, keys...)
+		return err
 	}
 	for _, arg := range fs.Args() {
 		if err := add(arg, ""); err != nil {
@@ -328,42 +316,54 @@ func readFile(path string) (release.File, error) {
 	return f, json.Unmarshal(data, &f)
 }
 
-func readPublic(path string) ([]byte, error) {
-	keys, err := readPublics(path)
-	if err != nil {
-		return nil, err
+// keyArg reads NAME=KEY.pem as the entries of keys.json for use: both
+// halves of a signer's key, or for a forwarder or a relay its one P-256
+// key, the pin its TLS shows.
+func keyArg(arg, use string) ([]release.Key, error) {
+	name, path, ok := strings.Cut(arg, "=")
+	if !ok {
+		return nil, fmt.Errorf("%q is not NAME=KEY.pem", arg)
 	}
-	if len(keys) != 1 {
-		return nil, fmt.Errorf("%s holds %d keys, not one", path, len(keys))
-	}
-	return keys[0], nil
-}
-
-// readPublics reads the PUBLIC KEY blocks of a PEM file, one or more.
-func readPublics(path string) ([][]byte, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	var keys [][]byte
-	for {
-		var b *pem.Block
-		b, data = pem.Decode(data)
-		if b == nil {
-			break
-		}
-		if b.Type != "PUBLIC KEY" {
-			return nil, fmt.Errorf("%s holds a %s, not a PUBLIC KEY", path, b.Type)
-		}
-		if _, err := x509.ParsePKIXPublicKey(b.Bytes); err != nil {
-			return nil, fmt.Errorf("%s: %w", path, err)
-		}
-		keys = append(keys, b.Bytes)
+	halves, err := release.ReadHalves(data)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
 	}
-	if len(keys) == 0 {
-		return nil, fmt.Errorf("%s holds no PUBLIC KEY", path)
+	if use == release.UseForwarder || use == release.UseRelay {
+		if len(halves) != 1 || halves[release.AlgES256] == nil {
+			return nil, fmt.Errorf("%s: a forwarder's or relay's pin is one P-256 key", path)
+		}
+		return []release.Key{{Alg: release.AlgES256, Key: halves[release.AlgES256], Name: name, Use: use}}, nil
 	}
-	return keys, nil
+	var out []release.Key
+	for _, alg := range release.Required {
+		if halves[alg] == nil {
+			return nil, fmt.Errorf("%s holds no key of algorithm %d: a signer's key has both halves (release-sign public)", path, alg)
+		}
+		out = append(out, release.Key{Alg: alg, Key: halves[alg], Name: name, Use: use})
+	}
+	return out, nil
+}
+
+// readRoots reads root keys from PEM files, the halves of each named by
+// its Name header.
+func readRoots(paths []string) ([]release.Key, error) {
+	var roots []release.Key
+	for _, p := range paths {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			return nil, err
+		}
+		r, err := release.ParseRoots(data)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", p, err)
+		}
+		roots = append(roots, r...)
+	}
+	return roots, nil
 }
 
 // sign signs a body with a signer and writes the file.
@@ -387,10 +387,7 @@ func sign(args []string) error {
 	if err != nil {
 		return err
 	}
-	if t, ok := s.(*tool); ok {
-		t.data = body
-	}
-	f, err := release.Sign(json.RawMessage(body), s)
+	f, err := signWith(s, json.RawMessage(body))
 	if err != nil {
 		return err
 	}
@@ -400,16 +397,18 @@ func sign(args []string) error {
 func public(args []string) error {
 	fs := flag.NewFlagSet("public", flag.ExitOnError)
 	key := fs.String("key", "", "the signer: file:KEY.pem, piv:SLOT or se:KEY")
+	name := fs.String("name", "", "the Name header, as roots.pem names a root")
 	fs.Parse(args)
 	s, err := signer(*key)
 	if err != nil {
 		return err
 	}
-	spki, err := x509.MarshalPKIXPublicKey(s.Public())
+	out, err := release.PublicPEM(s, *name)
 	if err != nil {
 		return err
 	}
-	return pem.Encode(stdout, &pem.Block{Type: "PUBLIC KEY", Bytes: spki})
+	_, err = stdout.Write(out)
+	return err
 }
 
 // verify checks a directory that holds keys.json, the channel file,
@@ -425,13 +424,9 @@ func verify(args []string) error {
 	dir := fs.Arg(0)
 	roots := pinnedRoots()
 	if *rootsFlag != "" {
-		roots = nil
-		for _, p := range strings.Split(*rootsFlag, ",") {
-			keys, err := readPublics(p)
-			if err != nil {
-				return err
-			}
-			roots = append(roots, keys...)
+		var err error
+		if roots, err = readRoots(strings.Split(*rootsFlag, ",")); err != nil {
+			return err
 		}
 	}
 	var files [3]release.File
@@ -504,8 +499,36 @@ func checkSums(dir string, r release.Release) error {
 	return nil
 }
 
-// signer returns the key a SIGNER names.
-func signer(spec string) (crypto.Signer, error) {
+// signer returns the key a SIGNER names, both halves: CLASSICAL+PQ, or
+// file:KEY.pem holding both, or piv:SLOT or se:KEY whose post-quantum half
+// pqDir holds.
+func signer(spec string) (release.Signer, error) {
+	cspec, pspec, _ := strings.Cut(spec, "+")
+	if kind, arg, _ := strings.Cut(cspec, ":"); kind == "file" && pspec == "" {
+		data, err := os.ReadFile(arg)
+		if err != nil {
+			return nil, err
+		}
+		defer clear(data)
+		s, err := release.ParseSigner(data)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w (a key in a file holds both halves, or names its other half with +slh:FILE)", arg, err)
+		}
+		return s, nil
+	}
+	c, err := classicalSigner(cspec)
+	if err != nil {
+		return nil, err
+	}
+	pq, err := pqOf(c, pspec)
+	if err != nil {
+		return nil, err
+	}
+	return release.Signer{c, pq}, nil
+}
+
+// classicalSigner returns the P-256 half a CLASSICAL spec names.
+func classicalSigner(spec string) (crypto.Signer, error) {
 	kind, arg, _ := strings.Cut(spec, ":")
 	switch kind {
 	case "file":
@@ -570,7 +593,7 @@ func seHelper() (string, error) {
 var drillFaults = []string{"empty-use", "upper-case", "twice", "null", "no-time", "status-brace"}
 
 // faultyKeys signs body, a valid keys.json body, with fault put in.
-func faultyKeys(body []byte, fault string, key *ecdsa.PrivateKey) (release.File, error) {
+func faultyKeys(body []byte, fault string, key release.Signer) (release.File, error) {
 	s := string(body)
 	switch fault {
 	case "empty-use":
@@ -595,18 +618,8 @@ func faultyKeys(body []byte, fault string, key *ecdsa.PrivateKey) (release.File,
 }
 
 // signRaw signs data as it is, without the checks of release.Sign.
-func signRaw(data []byte, key *ecdsa.PrivateKey) (release.File, error) {
-	spki, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
-	if err != nil {
-		return release.File{}, err
-	}
-	sum := sha256.Sum256(data)
-	sig, err := ecdsa.SignASN1(randReader, key, sum[:])
-	if err != nil {
-		return release.File{}, err
-	}
-	kh := sha256.Sum256(spki)
-	return release.File{Body: data, Sig: sig, Key: kh[:]}, nil
+func signRaw(data []byte, key release.Signer) (release.File, error) {
+	return release.SignUnchecked(data, key)
 }
 
 // drill signs the files in dir as a release with new keys in files: two
@@ -622,17 +635,20 @@ func drill(args []string) error {
 		return errors.New("drill needs the directory and the file for the roots")
 	}
 	dir, rootsPath := fs.Arg(0), fs.Arg(1)
-	var ks [4]*ecdsa.PrivateKey
+	var ks [4]release.Signer
 	var roots []byte
 	for i := range ks {
-		k, err := ecdsa.GenerateKey(ellipticP256(), randReader)
+		k, err := release.GenerateSigner()
 		if err != nil {
 			return err
 		}
 		ks[i] = k
 		if i < 2 {
-			spki, _ := x509.MarshalPKIXPublicKey(&k.PublicKey)
-			roots = append(roots, pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: spki})...)
+			p, err := release.PublicPEM(k, fmt.Sprintf("drill-root-%d", i+1))
+			if err != nil {
+				return err
+			}
+			roots = append(roots, p...)
 		}
 	}
 	r, err := buildManifest(dir, *version, *relChannel, "", "")
@@ -643,20 +659,21 @@ func drill(args []string) error {
 	if err != nil {
 		return err
 	}
-	spki, _ := x509.MarshalPKIXPublicKey(&ks[2].PublicKey)
+	halves := func(s release.Signer, name, use string) []release.Key {
+		k, _ := s.Keys(name, use)
+		return k
+	}
 	t := now().UnixMilli()
 	k := release.Keys{V: 1, Type: release.TypeKeys, Seq: 1, TimeMS: t,
-		ExpiresMS: t + 90*24*time.Hour.Milliseconds(), Keys: []release.Key{{Key: spki, Name: "drill"}}}
+		ExpiresMS: t + 90*24*time.Hour.Milliseconds(), Keys: halves(ks[2], "drill", "")}
 	chSigner := ks[2]
 	if *channelKey {
-		chSpki, _ := x509.MarshalPKIXPublicKey(&ks[3].PublicKey)
-		k.Keys = append(k.Keys, release.Key{Key: chSpki, Name: "drill channel", Use: release.UseChannel})
+		k.Keys = append(k.Keys, halves(ks[3], "drill channel", release.UseChannel)...)
 		chSigner = ks[3]
 	}
 	if *fault == "status-brace" {
 		// A status key whose name holds a brace signs the release.
-		stSpki, _ := x509.MarshalPKIXPublicKey(&ks[3].PublicKey)
-		k.Keys = append(k.Keys, release.Key{Key: stSpki, Name: "a}b", Use: release.UseStatus})
+		k.Keys = append(k.Keys, halves(ks[3], "a}b", release.UseStatus)...)
 		chSigner = ks[3]
 		data, _ := json.Marshal(r)
 		if rel, err = signRaw(data, ks[3]); err != nil {

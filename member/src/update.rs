@@ -23,26 +23,6 @@ use serde::{Deserialize, Serialize};
 use crate::error::{Context, Error, Result};
 use crate::files::write_atomic;
 
-/// The release root keys, SubjectPublicKeyInfos in DER, as Go's
-/// release.Roots (internal/release/roots/roots.pem): two YubiKeys.
-pub const ROOTS: &[&[u8]] = &[
-    &[
-        0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01, 0x06, 0x08, 0x2a, 0x86, 0x48,
-        0xce, 0x3d, 0x03, 0x01, 0x07, 0x03, 0x42, 0x00, 0x04, 0xf6, 0xc2, 0xdf, 0xad, 0xc1, 0x81, 0x8b, 0x6d, 0xd7,
-        0xbd, 0xe4, 0x0d, 0xf1, 0xd2, 0xbc, 0x67, 0xe9, 0x5b, 0x12, 0xec, 0x53, 0x2c, 0xe8, 0x27, 0x43, 0xdb, 0x3f,
-        0x83, 0x3a, 0x7f, 0x93, 0xbc, 0x71, 0xf3, 0xc2, 0x05, 0xbe, 0x47, 0x4c, 0xbb, 0x2a, 0x0b, 0xd8, 0xae, 0xe3,
-        0xd6, 0x77, 0x9c, 0x40, 0x66, 0x0b, 0x9a, 0xad, 0xe2, 0x7e, 0x27, 0xbd, 0xc0, 0x3a, 0xc5, 0xeb, 0xd0, 0x0e,
-        0xfc,
-    ],
-    &[
-        0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01, 0x06, 0x08, 0x2a, 0x86, 0x48,
-        0xce, 0x3d, 0x03, 0x01, 0x07, 0x03, 0x42, 0x00, 0x04, 0xc4, 0x66, 0xc0, 0xab, 0x9e, 0x57, 0x19, 0x78, 0xa9,
-        0xdc, 0x3b, 0x6a, 0xea, 0x3b, 0x0c, 0xd9, 0xb3, 0x98, 0x51, 0xea, 0x18, 0x7c, 0x3c, 0x6c, 0x82, 0x05, 0xcb,
-        0x8a, 0xc8, 0xf0, 0xa0, 0x24, 0x28, 0x0c, 0xcd, 0xbc, 0xa4, 0x26, 0x24, 0x22, 0x86, 0x40, 0x7d, 0xc8, 0xf0,
-        0x47, 0x76, 0x80, 0x18, 0xe0, 0x14, 0x59, 0x95, 0xfe, 0x2f, 0x9d, 0xe8, 0x83, 0xbf, 0xd3, 0x2c, 0xba, 0x67,
-        0x7e,
-    ],
-];
 pub const CHANNEL: &str = "stable";
 const GITHUB: &str = "https://github.com/HunterEwok/cbb/releases";
 pub const MIRROR: &str = "https://dl.cbb.tools";
@@ -377,7 +357,7 @@ pub type Health<'a> = dyn Fn(&str, Duration) -> Result<()> + 'a;
 
 pub struct Updater<'a> {
     pub work: PathBuf,
-    pub roots: Vec<Vec<u8>>,
+    pub roots: Vec<cbb_core::release::Key>,
     pub sources: Vec<Source>,
     pub installed: String,
     pub archive: String,
@@ -401,7 +381,7 @@ impl Updater<'_> {
         if self.roots.is_empty() {
             return Err(Error::msg(NO_ROOTS));
         }
-        let roots: Vec<&[u8]> = self.roots.iter().map(Vec::as_slice).collect();
+        let roots = &self.roots;
         mkdir_private(&self.work)?;
         let mut errs = Vec::new();
         for (i, src) in self.sources.iter().enumerate() {
@@ -436,7 +416,7 @@ impl Updater<'_> {
             // server that is out of date: another server must not get a
             // say. Any other refusal, such as a channel file that expired,
             // leaves the next server to answer, as in Go's Updater.Check.
-            let (r, seen) = match release::check(&keys, &ch, &rel, &roots, CHANNEL, self.now_ms, &st.seen) {
+            let (r, seen) = match release::check(&keys, &ch, &rel, roots, CHANNEL, self.now_ms, &st.seen) {
                 Ok(v) => v,
                 Err(e) if e.is_answer() => return Err(e),
                 Err(e) => {
@@ -459,7 +439,7 @@ impl Updater<'_> {
                     release: File,
                 }
                 let set: Set = serde_json::from_value(v).context("the service's release does not decode")?;
-                release::check(&set.keys, &set.channel, &set.release, &roots, CHANNEL, self.now_ms, &st.seen)
+                release::check(&set.keys, &set.channel, &set.release, roots, CHANNEL, self.now_ms, &st.seen)
             });
             match held {
                 Ok((r, seen)) => {
@@ -676,42 +656,19 @@ pub fn wait_healthy(status: &dyn Fn() -> Result<String>, version: &str, within: 
 
 /// The release roots: those of the PEM file CBB_RELEASE_ROOTS names, for
 /// tests, else the pinned ones.
-pub fn release_roots() -> Vec<Vec<u8>> {
+pub fn release_roots() -> Vec<release::Key> {
     if let Some(f) = std::env::var_os("CBB_RELEASE_ROOTS")
         && let Ok(r) = read_roots(Path::new(&f))
     {
         return r;
     }
-    ROOTS.iter().map(|r| r.to_vec()).collect()
+    release::pinned_roots()
 }
 
-/// Reads the public keys of a PEM file, for tests (CBB_RELEASE_ROOTS).
-pub fn read_roots(path: &Path) -> Result<Vec<Vec<u8>>> {
-    #[derive(Deserialize)]
-    struct Der(#[serde(with = "cbb_core::certs::b64")] Vec<u8>);
+/// Reads the root keys of a PEM file, for tests (CBB_RELEASE_ROOTS).
+pub fn read_roots(path: &Path) -> Result<Vec<release::Key>> {
     let text = fs::read_to_string(path).context(format!("cannot read {}", path.display()))?;
-    let mut roots = Vec::new();
-    let mut body: Option<String> = None;
-    for line in text.lines().map(str::trim) {
-        match line {
-            "-----BEGIN PUBLIC KEY-----" => body = Some(String::new()),
-            "-----END PUBLIC KEY-----" => {
-                if let Some(b) = body.take() {
-                    let Der(der) = serde_json::from_str(&format!("\"{b}\"")).context("a PUBLIC KEY is not base64")?;
-                    roots.push(der);
-                }
-            }
-            l => {
-                if let Some(b) = body.as_mut() {
-                    b.push_str(l);
-                }
-            }
-        }
-    }
-    if roots.is_empty() {
-        return Err(Error::msg(format!("{} holds no PUBLIC KEY", path.display())));
-    }
-    Ok(roots)
+    release::parse_roots(&text).map_err(|e| Error::msg(format!("{}: {}", path.display(), e.message())))
 }
 
 const SYSTEMD_SERVICE: &str = "/etc/systemd/system/cbb-update.service";
@@ -813,40 +770,22 @@ fn cron_timer(on: bool, exe: &Path) -> Result<()> {
 mod tests {
     use super::*;
     use cbb_core::certs::b64;
-    use p256::ecdsa::signature::Signer;
-    use p256::ecdsa::{Signature, SigningKey};
-    use p256::pkcs8::EncodePublicKey;
+    use cbb_core::release::testing::TestKey;
     use std::cell::RefCell;
 
     const NOW: i64 = 1_800_000_000_000;
     const ARCHIVE: &str = "cbb-linux-test.tar.gz";
 
-    fn key(n: u8) -> SigningKey {
-        SigningKey::from_slice(&[n; 32]).unwrap()
+    fn key(n: u8) -> TestKey {
+        TestKey::new(n)
     }
 
-    fn spki(k: &SigningKey) -> Vec<u8> {
-        k.verifying_key().to_public_key_der().unwrap().as_bytes().to_vec()
-    }
-
-    fn sign(body: serde_json::Value, k: &SigningKey) -> File {
-        let body = serde_json::to_vec(&body).unwrap();
-        let sig: Signature = k.sign(&body);
-        File { body, sig: sig.to_der().as_bytes().to_vec(), key: sha256(&spki(k)).to_vec() }
+    fn sign(body: serde_json::Value, k: &TestKey) -> File {
+        k.sign(&serde_json::to_vec(&body).unwrap())
     }
 
     fn write(dir: &Path, name: &str, f: &File) {
-        #[derive(Serialize)]
-        struct Out<'a> {
-            #[serde(with = "b64")]
-            body: &'a [u8],
-            #[serde(with = "b64")]
-            sig: &'a [u8],
-            #[serde(with = "b64")]
-            key: &'a [u8],
-        }
-        let data = serde_json::to_vec(&Out { body: &f.body, sig: &f.sig, key: &f.key }).unwrap();
-        fs::write(dir.join(name), data).unwrap();
+        fs::write(dir.join(name), serde_json::to_vec(f).unwrap()).unwrap();
     }
 
     /// A release of version with an archive, whose cbb is
@@ -867,7 +806,7 @@ mod tests {
         let at = NOW - 1000;
         let keys = sign(
             serde_json::json!({"v": 1, "type": "keys", "seq": 1, "time_ms": at, "expires_ms": at + 86_400_000,
-                "keys": [{"key": base64(&spki(&rel)), "name": "test"}]}),
+                "keys": rel.keys("test", "")}),
             &root,
         );
         let r = sign(
@@ -920,7 +859,7 @@ mod tests {
         };
         let u = Updater {
             work,
-            roots: vec![spki(&key(1))],
+            roots: key(1).root("root-1"),
             sources: vec![Source::Dir(dir.to_path_buf())],
             installed: installed.into(),
             archive: ARCHIVE.into(),
@@ -1006,7 +945,7 @@ mod tests {
             };
             let u = Updater {
                 work: dir.join("work"),
-                roots: vec![spki(&key(1))],
+                roots: key(1).root("root-1"),
                 sources: vec![Source::Dir(if servers { dir.clone() } else { empty.clone() })],
                 installed: "0.6.0".into(),
                 archive: ARCHIVE.into(),
@@ -1077,7 +1016,7 @@ mod tests {
         let dir = tmp("sig");
         publish(&dir, "0.6.1", 1, None);
         let mut data: serde_json::Value = serde_json::from_slice(&fs::read(dir.join("release.json")).unwrap()).unwrap();
-        data["sig"] = serde_json::Value::String(base64(&[0x30, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x01]));
+        data["sigs"][0]["sig"] = serde_json::Value::String(base64(&[0x30, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x01]));
         fs::write(dir.join("release.json"), serde_json::to_vec(&data).unwrap()).unwrap();
         let (res, installs, _) = run(&dir, "0.6.0", "", &mut State::default());
         assert!(res.is_err() && installs.is_empty());
@@ -1086,7 +1025,11 @@ mod tests {
         let dir = tmp("name");
         publish(&dir, "0.6.1", 1, None);
         let body = serde_json::to_vec(&serde_json::json!({"release": "0.6.1/../x"})).unwrap();
-        write(&dir, &format!("{CHANNEL}.json"), &File { body, sig: vec![1], key: vec![1] });
+        write(
+            &dir,
+            &format!("{CHANNEL}.json"),
+            &File { body, sigs: vec![cbb_core::release::Sig { alg: 1, key: vec![1], sig: vec![1] }] },
+        );
         let (res, installs, _) = run(&dir, "0.6.0", "", &mut State::default());
         assert!(res.unwrap_err().for_user().contains("not a version"));
         assert!(installs.is_empty());
@@ -1116,7 +1059,7 @@ mod tests {
         let install = |_: &Path, _: &Path| Ok(());
         let u = Updater {
             work: dirs[0].join("work"),
-            roots: vec![spki(&key(1))],
+            roots: key(1).root("root-1"),
             sources: dirs.iter().map(|d| Source::Dir(d.to_path_buf())).collect(),
             installed: "0.6.0".into(),
             archive: ARCHIVE.into(),
@@ -1152,7 +1095,7 @@ mod tests {
         // A signature that fails on the first: the check ends.
         let mut data: serde_json::Value =
             serde_json::from_slice(&fs::read(first.join("release.json")).unwrap()).unwrap();
-        data["sig"] = serde_json::Value::String(base64(&[0x30, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x01]));
+        data["sigs"][0]["sig"] = serde_json::Value::String(base64(&[0x30, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x01]));
         fs::write(first.join("release.json"), serde_json::to_vec(&data).unwrap()).unwrap();
         let err = check_from(&[&first, &second], &State::default()).err().expect("a bad signature was passed over");
         assert!(err.is_answer() && err.for_log().contains("signature"), "{}", err.for_log());
@@ -1259,11 +1202,13 @@ mod tests {
     #[test]
     fn roots_from_pem() {
         let dir = tmp("pem");
-        let der = spki(&key(1));
-        let pem = format!("-----BEGIN PUBLIC KEY-----\n{}\n-----END PUBLIC KEY-----\n", base64(&der));
-        fs::write(dir.join("r.pem"), pem).unwrap();
-        assert_eq!(read_roots(&dir.join("r.pem")).unwrap(), vec![der]);
+        fs::write(dir.join("r.pem"), key(1).pem("root-1")).unwrap();
+        assert_eq!(read_roots(&dir.join("r.pem")).unwrap(), key(1).root("root-1"));
         fs::write(dir.join("e.pem"), "nothing").unwrap();
         assert!(read_roots(&dir.join("e.pem")).is_err());
+        let one = key(1).pem("root-1").replace("Name: root-1\n", "");
+        fs::write(dir.join("n.pem"), one).unwrap();
+        assert!(read_roots(&dir.join("n.pem")).is_err(), "a root without a name");
+        assert_eq!(release::pinned_roots().len(), 2, "the pinned roots read");
     }
 }

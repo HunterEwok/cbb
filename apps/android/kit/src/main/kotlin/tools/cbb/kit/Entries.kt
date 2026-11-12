@@ -14,7 +14,7 @@ import java.io.File
  */
 class EntriesFile(
     private val file: File,
-    private val roots: List<ByteArray> = Releases.roots,
+    private val roots: List<Releases.Key>? = null,
     private val now: () -> Long = System::currentTimeMillis,
     private val log: (String) -> Unit = {},
 ) : EntriesKeeper {

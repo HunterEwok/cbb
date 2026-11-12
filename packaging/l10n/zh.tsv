@@ -78,7 +78,9 @@ release.json is not the release stable.json names; not installing	release.json �
 release.json is for %s, not %s	release.json 属于 %s，而不是 %s
 release.json does not list %s	release.json 中没有列出 %s
 %s does not match the signed release.json; not installing it	%s 与已签名的 release.json 不符；不安装
-The release's signature checks out (%s).	版本签名验证通过（%s）。
+The release's signature checks out (%s): ES256 and SLH-DSA-SHA2-128s.	版本签名验证通过（%s）：ES256 和 SLH-DSA-SHA2-128s。
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, it needs OpenSSL 3.5 or later.	版本签名验证通过（%s）：ES256；未检查 SLH-DSA-SHA2-128s，需要 OpenSSL 3.5 或更高版本。
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, PowerShell cannot check it.	版本签名验证通过（%s）：ES256；未检查 SLH-DSA-SHA2-128s，PowerShell 无法检查它。
 could not download %s	无法下载 %s
 stable.json names no release	stable.json 没有指定版本
 Downloading %s (%s)...	正在下载 %s（%s）...

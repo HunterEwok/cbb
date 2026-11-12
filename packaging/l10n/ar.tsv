@@ -78,7 +78,9 @@ release.json is not the release stable.json names; not installing	release.json �
 release.json is for %s, not %s	release.json يخص %s، وليس %s
 release.json does not list %s	لا يذكر release.json الملف %s
 %s does not match the signed release.json; not installing it	لا يطابق %s ملف release.json الموقّع؛ لن يُثبَّت
-The release's signature checks out (%s).	توقيع الإصدار صحيح (%s).
+The release's signature checks out (%s): ES256 and SLH-DSA-SHA2-128s.	توقيع الإصدار صحيح (%s): ES256 و SLH-DSA-SHA2-128s.
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, it needs OpenSSL 3.5 or later.	توقيع الإصدار صحيح (%s): ES256؛ لم يُتحقق من SLH-DSA-SHA2-128s، فهو يحتاج إلى OpenSSL 3.5 أو أحدث.
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, PowerShell cannot check it.	توقيع الإصدار صحيح (%s): ES256؛ لم يُتحقق من SLH-DSA-SHA2-128s، لا يستطيع PowerShell التحقق منه.
 could not download %s	تعذّر تنزيل %s
 stable.json names no release	لا يسمّي stable.json أي إصدار
 Downloading %s (%s)...	جارٍ تنزيل %s (%s)...

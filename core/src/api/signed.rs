@@ -107,12 +107,87 @@ fn seal_public(a: PublicArgs) -> core::result::Result<Vec<u8>, Refusal> {
     Ok(json(Value::Object(m)))
 }
 
+/// The release files of one check, as the device fetched them.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ReleaseArgs {
+    keys: crate::release::File,
+    #[serde(default)]
+    channel: Option<crate::release::File>,
+    #[serde(default)]
+    release: Option<crate::release::File>,
+    #[serde(default)]
+    status: Option<crate::release::File>,
+    #[serde(default)]
+    entries: Option<crate::release::File>,
+    /// The channel's name, for `release_check`.
+    #[serde(default)]
+    name: String,
+    /// Root keys other than the pinned ones, for tests and drills; the
+    /// pinned roots (release::ROOTS_PEM) when absent.
+    #[serde(default)]
+    roots: Option<Vec<crate::release::Key>>,
+    now_ms: i64,
+    #[serde(default)]
+    seen: crate::release::Seen,
+}
+
+impl ReleaseArgs {
+    fn roots(&self) -> Vec<crate::release::Key> {
+        self.roots.clone().unwrap_or_else(crate::release::pinned_roots)
+    }
+}
+
+fn missing(what: &str) -> Refusal {
+    refuse(Code::Request, Error::msg(alloc::format!("The request has no {what}.")))
+}
+
+/// `release_check`, `release_check_status` and `release_check_entries`:
+/// release files checked as the Rust cbb checks them (docs/protocol.md,
+/// section 16): keys.json under the roots, the file under the keys it
+/// certifies, both signatures of each, the expiries and that nothing is
+/// older than `seen`. The answer is `{"value": the file's body, "seen":
+/// the Seen to keep}`.
+fn release_check(op: &str, a: ReleaseArgs) -> core::result::Result<Vec<u8>, Refusal> {
+    use crate::release;
+    fn answer<T: Serialize>(value: T, seen: release::Seen) -> core::result::Result<Vec<u8>, Refusal> {
+        let mut m = Map::new();
+        m.insert("value".into(), serde_json::to_value(value).unwrap_or_default());
+        m.insert("seen".into(), serde_json::to_value(seen).unwrap_or_default());
+        Ok(json(Value::Object(m)))
+    }
+    let roots = a.roots();
+    let signed = |e: Error| refuse(Code::Signed, e);
+    match op {
+        "release_check_status" => {
+            let status = a.status.as_ref().ok_or_else(|| missing("status"))?;
+            let (st, seen) = release::check_status(&a.keys, status, &roots, a.now_ms, &a.seen).map_err(signed)?;
+            answer(st, seen)
+        }
+        "release_check_entries" => {
+            let entries = a.entries.as_ref().ok_or_else(|| missing("entries"))?;
+            let (e, seen) = release::check_entries(&a.keys, entries, &roots, a.now_ms, &a.seen).map_err(signed)?;
+            answer(e, seen)
+        }
+        _ => {
+            let channel = a.channel.as_ref().ok_or_else(|| missing("channel"))?;
+            let rel = a.release.as_ref().ok_or_else(|| missing("release"))?;
+            let (r, seen) =
+                release::check(&a.keys, channel, rel, &roots, &a.name, a.now_ms, &a.seen).map_err(signed)?;
+            answer(r, seen)
+        }
+    }
+}
+
 /// Runs a call over a signed body; None for an op that is not one.
 pub(super) fn dispatch(op: &str, args: &Value) -> Option<core::result::Result<Vec<u8>, Refusal>> {
     Some(match op {
         "parse_body" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(parse_body),
         "seal_command" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(seal_command),
         "seal_public" => serde_json::from_value(args.clone()).map_err(bad_args).and_then(seal_public),
+        "release_check" | "release_check_status" | "release_check_entries" => {
+            serde_json::from_value(args.clone()).map_err(bad_args).and_then(|a| release_check(op, a))
+        }
         _ => return None,
     })
 }
@@ -285,6 +360,63 @@ mod tests {
         ] {
             assert_eq!(ask("entries", bad.as_bytes())["error"]["name"], "signed", "{bad}");
         }
+    }
+
+    /// The release calls take and refuse exactly the files Go's vectors
+    /// say, under the vectors' roots; the pinned roots refuse them all.
+    #[test]
+    fn release_checks() {
+        fn run(op: &str, args: Value) -> Value {
+            let req = serde_json::json!({"abi": 1, "op": op, "args": args});
+            serde_json::from_slice(&call(req.to_string().as_bytes())).unwrap()
+        }
+        let v = vectors("go-release.json");
+        let vs = v["vectors"].as_array().unwrap();
+        assert_eq!(vs.len(), 47);
+        // Each case names its files by their index in files.
+        let file = |c: &Value, k: &str| v["files"][c[k].as_u64().unwrap() as usize].clone();
+        for c in vs {
+            let mut args = serde_json::json!({"keys": file(c, "keys"), "channel": file(c, "channel"), "release": file(c, "release"),
+                "name": v["channel"], "now_ms": v["now_ms"], "seen": c["seen"]});
+            let pinned = run("release_check", args.clone());
+            args["roots"] = v["roots"].clone();
+            let got = run("release_check", args);
+            if c["ok"] == true {
+                assert_eq!(got["ok"]["value"]["version"], c["version"], "{}: {got}", c["name"]);
+                assert_eq!(got["ok"]["seen"]["version"], c["version"], "{}", c["name"]);
+                assert_eq!(pinned["error"]["name"], "signed", "{}: the pinned roots took a test key", c["name"]);
+            } else {
+                assert_eq!(got["error"]["name"], "signed", "{}: {got}", c["name"]);
+            }
+        }
+        for c in v["status"].as_array().unwrap() {
+            let args = serde_json::json!({"keys": file(c, "keys"), "status": file(c, "status"), "roots": v["roots"],
+                "now_ms": v["now_ms"], "seen": c["seen"]});
+            let got = run("release_check_status", args);
+            if c["ok"] == true {
+                assert_eq!(got["ok"]["value"]["android_revoked"], c["revoked"], "{}: {got}", c["name"]);
+            } else {
+                assert_eq!(got["error"]["name"], "signed", "{}: {got}", c["name"]);
+            }
+        }
+        let e = vectors("go-entries.json");
+        for c in e["vectors"].as_array().unwrap() {
+            let args = serde_json::json!({"keys": c["keys"], "entries": c["entries"], "roots": e["roots"],
+                "now_ms": e["now_ms"], "seen": c["seen"]});
+            let got = run("release_check_entries", args);
+            if c["ok"] == true {
+                assert_eq!(got["ok"]["value"]["seq"], c["seq"], "{}: {got}", c["name"]);
+                assert_eq!(got["ok"]["seen"]["entries_seq"], c["seq"], "{}", c["name"]);
+            } else {
+                assert_eq!(got["error"]["name"], "signed", "{}: {got}", c["name"]);
+            }
+        }
+        // A call without its file is a bad request, not a refused file.
+        let c = &vs[0];
+        let got = run("release_check", serde_json::json!({"keys": file(c, "keys"), "now_ms": 1}));
+        assert_eq!(got["error"]["name"], "request", "{got}");
+        let got = run("release_check_status", serde_json::json!({"keys": file(c, "keys"), "now_ms": 1, "extra": 1}));
+        assert_eq!(got["error"]["name"], "request", "{got}");
     }
 
     /// A good body comes back as its fields; an unknown kind is refused as

@@ -17,7 +17,7 @@ import kotlin.test.assertTrue
 
 class EntriesTest {
     private val v = Interop.read("go-entries.json").jsonObject
-    private val roots = v.getValue("roots").jsonArray.map { b64(it.jsonPrimitive.content) }
+    private val roots = v.getValue("roots").jsonArray.map { Releases.Key.fromJson(it.jsonObject) }
     private val now = v.getValue("now_ms").jsonPrimitive.long
 
     private fun case(name: String): Releases.EntriesSet {

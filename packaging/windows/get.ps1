@@ -68,8 +68,9 @@
 	$step = T 'starting'
 
 	# The project's release root keys (docs/protocol.md, section 16), base64
-	# SubjectPublicKeyInfos, which sign keys.json: two YubiKeys, as
-	# internal/release/roots/roots.pem.
+	# SubjectPublicKeyInfos, which sign keys.json: the ES256 halves of the two
+	# YubiKeys, as internal/release/roots/roots.pem. Their SLH-DSA halves are
+	# left out, since PowerShell cannot check them (Test-Release says so).
 	$releaseRoots = @(
 		'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE9sLfrcGBi23XveQN8dK8Z+lbEuxTLOgnQ9s/gzp/k7xx88IFvkdMuyoL2K7j1necQGYLmq3ifie9wDrF69AO/A==',
 		'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAExGbAq55XGXip3Dtq6jsM2bOYUeoYfDxsggXLisjwoCQoDM28pCYkIoZAfcjwR3aAGOAUWZX+L53og7/TLLpnfg=='
@@ -83,8 +84,10 @@
 	# The roots the release is checked against; none while CBB_VERIFY=skip.
 	$roots = $releaseRoots
 	if ($env:CBB_RELEASE_DIR -and $env:CBB_RELEASE_ROOTS) {
+		# Each block without its headers (Name), the ES256 halves only.
 		$roots = @(((Get-Content -Raw $env:CBB_RELEASE_ROOTS) -split '-----END PUBLIC KEY-----') |
-			ForEach-Object { ($_ -replace '-----BEGIN PUBLIC KEY-----', '' -replace '\s', '') } | Where-Object { $_ })
+			ForEach-Object { ($_ -replace '-----BEGIN PUBLIC KEY-----', '' -replace '(?m)^.*:.*$', '' -replace '\s', '') } |
+			Where-Object { $_.StartsWith('MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE') })
 	}
 	$verifying = $env:CBB_VERIFY -ne 'skip' -and $roots.Count -gt 0
 
@@ -166,22 +169,36 @@
 		$true
 	}
 
-	# Open-ReleaseFile checks the envelope at path with any of the keys and
-	# returns its body, decoded, or throws.
+	# Open-ReleaseFile checks the envelope at path with the ES256 keys (P-256
+	# SubjectPublicKeyInfos) and returns its body, decoded, or throws. Each
+	# file carries a signature of each algorithm (docs/protocol.md, section
+	# 16, "Two signatures"): the ES256 one of a listed key must verify, and a
+	# failed one refuses the file; the SLH-DSA one is passed over here, as a
+	# signature of an algorithm a reader does not check.
 	function Open-ReleaseFile($path, $type, $keys) {
+		$name = Split-Path $path -Leaf
 		$f = Get-Content -Raw $path | ConvertFrom-Json
 		$body = [Convert]::FromBase64String($f.body)
-		$sig = ConvertFrom-DerSignature ([Convert]::FromBase64String($f.sig))
-		foreach ($k in $keys) {
-			if ($sig -and (Get-P256Key $k).VerifyData($body, $sig, [Security.Cryptography.HashAlgorithmName]::SHA256)) {
-				$text = [Text.Encoding]::UTF8.GetString($body)
-				if (-not (Test-StrictBody $text)) { throw (T '%s is not a valid release file; not installing' (Split-Path $path -Leaf)) }
-				$b = $text | ConvertFrom-Json
-				if ($b.type -cne $type -or $b.v -ne 1 -or -not $b.PSObject.Properties['time_ms']) { break }
-				return @{ Bytes = $body; Value = $b }
+		$sha = [Security.Cryptography.SHA256]::Create()
+		$ok = $false
+		foreach ($s in @($f.sigs | Where-Object { $_.alg -eq 1 })) {
+			$id = [Convert]::FromBase64String($s.key)
+			$k = $keys | Where-Object { Test-ByteEqual $sha.ComputeHash([byte[]]$_) $id } | Select-Object -First 1
+			if (-not $k) { continue }
+			$sig = ConvertFrom-DerSignature ([Convert]::FromBase64String($s.sig))
+			if (-not $sig -or -not (Get-P256Key $k).VerifyData($body, $sig, [Security.Cryptography.HashAlgorithmName]::SHA256)) {
+				throw (T '%s is not signed by the project''s key; not installing' $name)
 			}
+			$ok = $true
 		}
-		throw (T '%s is not signed by the project''s key; not installing' (Split-Path $path -Leaf))
+		if (-not $ok) { throw (T '%s is not signed by the project''s key; not installing' $name) }
+		$text = [Text.Encoding]::UTF8.GetString($body)
+		if (-not (Test-StrictBody $text)) { throw (T '%s is not a valid release file; not installing' $name) }
+		$b = $text | ConvertFrom-Json
+		if ($b.type -cne $type -or $b.v -ne 1 -or -not $b.PSObject.Properties['time_ms']) {
+			throw (T '%s is not signed by the project''s key; not installing' $name)
+		}
+		@{ Bytes = $body; Value = $b }
 	}
 
 	# Test-Release checks keys.json against the root keys, release.json and,
@@ -210,9 +227,11 @@
 		if (@($keys.Value.keys | Where-Object { $u = $_.PSObject.Properties['use']; $u -and $u.Value -ceq '' }).Count -gt 0) {
 			throw (T 'keys.json holds a key whose use is empty; not installing')
 		}
-		$releaseKeys = @($keys.Value.keys | Where-Object { $u = $_.PSObject.Properties['use']; -not $u -or $u.Value -ceq 'release' } |
+		# The ES256 halves; a half of another algorithm is not checked here.
+		$es256 = @($keys.Value.keys | Where-Object { $_.alg -eq 1 })
+		$releaseKeys = @($es256 | Where-Object { $u = $_.PSObject.Properties['use']; -not $u -or $u.Value -ceq 'release' } |
 			ForEach-Object { , [Convert]::FromBase64String($_.key) })
-		$channelKeys = @($keys.Value.keys | Where-Object { $u = $_.PSObject.Properties['use']; $u -and $u.Value -ceq 'channel' } |
+		$channelKeys = @($es256 | Where-Object { $u = $_.PSObject.Properties['use']; $u -and $u.Value -ceq 'channel' } |
 			ForEach-Object { , [Convert]::FromBase64String($_.key) })
 		$rel = Open-ReleaseFile -path (Join-Path $tmp 'release.json') -type 'release' -keys $releaseKeys
 		if ($named) {
@@ -232,7 +251,9 @@
 		if ($entry.sha256 -cne $got -or -not $entry.PSObject.Properties['size'] -or [long]$entry.size -ne (Get-Item (Join-Path $tmp $archive)).Length) {
 			throw (T '%s does not match the signed release.json; not installing it' $archive)
 		}
-		Write-Host (T 'The release''s signature checks out (%s).' ($rel.Value.version))
+		# PowerShell has no SLH-DSA: the post-quantum signature waits for a
+		# .NET that checks it, and the user is told so.
+		Write-Host (T 'The release''s signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, PowerShell cannot check it.' ($rel.Value.version))
 	}
 
 	try {

@@ -11,25 +11,27 @@ final class ReleaseTests: XCTestCase {
     func testGoRelease() throws {
         var url = URL(fileURLWithPath: #filePath)
         for _ in 0..<6 { url.deleteLastPathComponent() }
+        // Each case names its files by their index in files.
         struct C: Decodable {
             var name: String
-            var keys: Releases.File
-            var channel: Releases.File
-            var release: Releases.File
+            var keys: Int
+            var channel: Int
+            var release: Int
             var seen: Releases.Seen
             var ok: Bool
             var version: String?
         }
         struct V: Decodable {
-            var roots: [Data]
+            var roots: [Releases.Key]
             var now_ms: Int64
             var channel: String
+            var files: [Releases.File]
             var vectors: [C]
         }
         let v = try JSONDecoder().decode(V.self, from: Data(contentsOf: url.appendingPathComponent("testdata/interop/go-release.json")))
-        XCTAssertEqual(v.vectors.count, 33)
+        XCTAssertEqual(v.vectors.count, 47)
         for c in v.vectors {
-            let got = Result { try Releases.check(keys: c.keys, channel: c.channel, release: c.release, roots: v.roots,
+            let got = Result { try Releases.check(keys: v.files[c.keys], channel: v.files[c.channel], release: v.files[c.release], roots: v.roots,
                                                   name: v.channel, nowMS: v.now_ms, seen: c.seen) }
             switch got {
             case let .success((r, next)):
@@ -50,21 +52,22 @@ final class ReleaseTests: XCTestCase {
         for _ in 0..<6 { url.deleteLastPathComponent() }
         struct C: Decodable {
             var name: String
-            var keys: Releases.File
-            var status: Releases.File
+            var keys: Int
+            var status: Int
             var seen: Releases.Seen
             var ok: Bool
             var revoked: [String]?
         }
         struct V: Decodable {
-            var roots: [Data]
+            var roots: [Releases.Key]
             var now_ms: Int64
+            var files: [Releases.File]
             var status: [C]
         }
         let v = try JSONDecoder().decode(V.self, from: Data(contentsOf: url.appendingPathComponent("testdata/interop/go-release.json")))
         XCTAssertEqual(v.status.count, 18)
         for c in v.status {
-            let got = Result { try Releases.checkStatus(keys: c.keys, status: c.status, roots: v.roots, nowMS: v.now_ms, seen: c.seen) }
+            let got = Result { try Releases.checkStatus(keys: v.files[c.keys], status: v.files[c.status], roots: v.roots, nowMS: v.now_ms, seen: c.seen) }
             switch got {
             case let .success((st, next)):
                 XCTAssertTrue(c.ok, c.name)
@@ -90,7 +93,7 @@ final class ReleaseTests: XCTestCase {
             var seq: UInt64?
         }
         struct V: Decodable {
-            var roots: [Data]
+            var roots: [Releases.Key]
             var now_ms: Int64
             var vectors: [C]
         }

@@ -269,13 +269,12 @@ func TestRename(t *testing.T) {
 func TestEvidence(t *testing.T) {
 	// The revocation list's mirror: keys.json from a root key, and a list
 	// the test changes.
-	rootKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	statusKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	rootSPKI, _ := x509.MarshalPKIXPublicKey(&rootKey.PublicKey)
-	statusSPKI, _ := x509.MarshalPKIXPublicKey(&statusKey.PublicKey)
+	rootKey, _ := release.GenerateSigner()
+	statusKey, _ := release.GenerateSigner()
+	statusKeys, _ := statusKey.Keys("status", release.UseStatus)
 	now := time.Now().UnixMilli()
 	keysFile, err := release.Sign(release.Keys{V: 1, Type: release.TypeKeys, Seq: 1, TimeMS: now, ExpiresMS: now + 3600_000,
-		Keys: []release.Key{{Key: statusSPKI, Name: "status", Use: release.UseStatus}}}, rootKey)
+		Keys: statusKeys}, rootKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,7 +295,8 @@ func TestEvidence(t *testing.T) {
 	defer mirror.Close()
 	dir := t.TempDir()
 	statusRoots := dir + "/release-roots.pem"
-	if err := os.WriteFile(statusRoots, pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: rootSPKI}), 0o644); err != nil {
+	rootsPEM, _ := release.PublicPEM(rootKey, "root-1")
+	if err := os.WriteFile(statusRoots, rootsPEM, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	// The attestation roots the root's cbb-helper reads at each check.

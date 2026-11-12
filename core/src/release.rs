@@ -21,22 +21,51 @@ use crate::error::{Error, Result};
 
 /// The largest body a file may carry.
 pub const MAX_BODY: usize = 256 << 10;
+/// The largest a release file may be whole, its body and signatures in
+/// base64: room for several post-quantum signatures beside the largest body.
+pub const MAX_FILE: usize = 1 << 20;
 /// The longest a keys or channel file may stay valid after it was signed.
 pub const MAX_LIFETIME_MS: i64 = 100 * 24 * 3600 * 1000;
 /// The longest attest-status.json stays valid after it was signed: it
 /// must follow Google's list closely.
 pub const MAX_STATUS_LIFETIME_MS: i64 = 8 * 24 * 3600 * 1000;
 
-/// The envelope of every release file.
+/// ECDSA P-256 with SHA-256, the signature DER (the format's registry).
+pub const ALG_ES256: u64 = 1;
+/// SLH-DSA-SHA2-128s, pure, under the context SLH_CONTEXT.
+pub const ALG_SLH_DSA: u64 = 4;
+/// The algorithms every file must carry a signature of, all by the halves
+/// of one key. Nothing read at run time changes them.
+pub const REQUIRED: [u64; 2] = [ALG_ES256, ALG_SLH_DSA];
+/// The context of every SLH-DSA signature on a release file.
+pub const SLH_CONTEXT: &[u8] = b"cbb release v1";
+/// The use of a pinned root key.
+pub const USE_ROOT: &str = "root";
+
+const MAX_SIGS: usize = 8;
+const MAX_SIG_BYTES: usize = 16 << 10;
+const MAX_KEYS: usize = 64;
+
+/// The envelope of every release file: the body and its signatures, one
+/// for each algorithm of REQUIRED by the halves of one key, and any of
+/// algorithms a later version adds (docs/protocol.md, section 16, "Two
+/// signatures").
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub struct File {
     #[serde(with = "b64")]
     pub body: Vec<u8>,
-    #[serde(with = "b64")]
-    pub sig: Vec<u8>,
-    /// SHA-256 of the signer's SubjectPublicKeyInfo.
+    pub sigs: Vec<Sig>,
+}
+
+/// One signature of a file.
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
+pub struct Sig {
+    pub alg: u64,
+    /// SHA-256 of the signing half's SubjectPublicKeyInfo.
     #[serde(with = "b64")]
     pub key: Vec<u8>,
+    #[serde(with = "b64")]
+    pub sig: Vec<u8>,
 }
 
 #[derive(Deserialize)]
@@ -47,15 +76,19 @@ struct Head {
     kind: String,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+/// One half of a key keys.json certifies, or of a pinned root (use
+/// USE_ROOT): the halves of one key share its name and use.
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Key {
+    pub alg: u64,
+    /// The SubjectPublicKeyInfo, DER.
     #[serde(with = "b64")]
     pub key: Vec<u8>,
     pub name: String,
     /// `release` when absent; a key of another use, such as the `status`
     /// key of the revocation mirror or the `channel` key that renews the
     /// channel files, signs no release.
-    #[serde(default, rename = "use")]
+    #[serde(default, rename = "use", skip_serializing_if = "String::is_empty")]
     pub usage: String,
 }
 
@@ -233,21 +266,76 @@ impl File {
         sha256(&self.body)
     }
 
-    fn verify(&self, spkis: &[&[u8]]) -> Result<()> {
+    /// Checks that the file is signed by one key among keys: for each
+    /// algorithm of REQUIRED, a signature by its half of the algorithm.
+    /// Signatures of other algorithms, or by halves not among keys, are
+    /// skipped; one by a half among keys that does not verify refuses it.
+    fn verify(&self, keys: &[&Key]) -> Result<()> {
+        // As Go's release.ErrSignature, a refusal is an answer.
+        let bad = || Error::msg("the signature is not valid").answer();
         if self.body.len() > MAX_BODY {
             return Err(Error::msg("the file is too large"));
         }
-        for spki in spkis {
-            if sha256(spki)[..] != self.key[..] {
+        if self.sigs.is_empty() || self.sigs.len() > MAX_SIGS {
+            return Err(bad());
+        }
+        let mut good: Vec<(&str, &str, u64)> = Vec::new();
+        for s in &self.sigs {
+            if !REQUIRED.contains(&s.alg) || s.sig.len() > MAX_SIG_BYTES {
                 continue;
             }
-            // As Go's release.ErrSignature, each of these is an answer.
-            let key = crate::certs::p256_spki(spki).ok_or_else(|| Error::msg("a key is not P-256").answer())?;
-            let sig = Signature::from_der(&self.sig).map_err(|_| Error::msg("the signature is not valid").answer())?;
-            return key.verify(&self.body, &sig).map_err(|_| Error::msg("the signature is not valid").answer());
+            for k in keys.iter().filter(|k| k.alg == s.alg && sha256(&k.key)[..] == s.key[..]) {
+                if !verify_half(s.alg, &k.key, &self.body, &s.sig) {
+                    return Err(bad());
+                }
+                good.push((k.name.as_str(), k.usage.as_str(), s.alg));
+            }
         }
-        Err(Error::msg("the signature is not valid").answer())
+        let signed = good.iter().any(|(name, usage, _)| {
+            REQUIRED.iter().all(|alg| good.iter().any(|g| g.0 == *name && g.1 == *usage && g.2 == *alg))
+        });
+        if signed { Ok(()) } else { Err(bad()) }
     }
+}
+
+/// Checks one signature of an algorithm of REQUIRED.
+fn verify_half(alg: u64, spki: &[u8], body: &[u8], sig: &[u8]) -> bool {
+    match alg {
+        ALG_ES256 => {
+            let (Some(key), Ok(sig)) = (crate::certs::p256_spki(spki), Signature::from_der(sig)) else { return false };
+            key.verify(body, &sig).is_ok()
+        }
+        ALG_SLH_DSA => crate::slhdsa::from_spki(spki).is_some_and(|k| crate::slhdsa::verify(k, body, sig, SLH_CONTEXT)),
+        _ => false,
+    }
+}
+
+/// Checks that spki is a key of alg, for the algorithms this version
+/// knows; a key of another is kept unread, whatever its length.
+fn check_public(alg: u64, spki: &[u8]) -> Result<()> {
+    let ok = match alg {
+        0 => false,
+        ALG_ES256 => crate::certs::p256_spki(spki).is_some(),
+        ALG_SLH_DSA => crate::slhdsa::from_spki(spki).is_some(),
+        _ => true,
+    };
+    if ok { Ok(()) } else { Err(Error::msg(format!("a key of algorithm {alg} is not valid"))) }
+}
+
+/// The halves of the keys for use, a release key's when it is empty.
+fn of<'a>(k: &'a Keys, uses: &[&str]) -> Vec<&'a Key> {
+    k.keys
+        .iter()
+        .filter(|key| {
+            let u = if key.usage.is_empty() { "release" } else { key.usage.as_str() };
+            uses.contains(&u)
+        })
+        .collect()
+}
+
+/// Pinned roots as verify takes them.
+fn pinned(roots: &[Key]) -> Vec<&Key> {
+    roots.iter().collect()
 }
 
 fn decode<'a, T: Deserialize<'a>>(body: &'a [u8], kind: &str) -> Result<T> {
@@ -422,14 +510,14 @@ pub(crate) fn decode_keys(body: &[u8]) -> Result<Keys> {
         return Err(Error::msg("keys.json has no sequence number"));
     }
     lifetime(k.time_ms, k.expires_ms)?;
-    if k.keys.is_empty() || k.keys.len() > 8 {
-        return Err(Error::msg("keys.json must hold 1 to 8 keys"));
+    if k.keys.is_empty() || k.keys.len() > MAX_KEYS {
+        return Err(Error::msg("keys.json must hold 1 to 64 keys"));
     }
     for key in &k.keys {
         if key.name.is_empty() || key.name.len() > 64 {
             return Err(Error::msg("a key has no valid name"));
         }
-        crate::certs::p256_spki(&key.key).ok_or_else(|| Error::msg("a key is not P-256"))?;
+        check_public(key.alg, &key.key)?;
     }
     // A key's use is left out for a release key, never written empty.
     #[derive(Deserialize)]
@@ -523,10 +611,10 @@ pub(crate) fn decode_status(body: &[u8]) -> Result<Status> {
     Ok(s)
 }
 
-/// Checks keys.json against the pinned root keys (SubjectPublicKeyInfos,
-/// DER) at now_ms, and that it is not older than seen.
-pub fn verify_keys(f: &File, roots: &[&[u8]], now_ms: i64, seen: &Seen) -> Result<Keys> {
-    f.verify(roots)?;
+/// Checks keys.json against the pinned root keys (the halves of each, of
+/// one name) at now_ms, and that it is not older than seen.
+pub fn verify_keys(f: &File, roots: &[Key], now_ms: i64, seen: &Seen) -> Result<Keys> {
+    f.verify(&pinned(roots))?;
     let k = decode_keys(&f.body)?;
     if now_ms >= k.expires_ms {
         return Err(Error::msg("keys.json has expired"));
@@ -546,23 +634,15 @@ pub fn check(
     keys: &File,
     channel: &File,
     rel: &File,
-    roots: &[&[u8]],
+    roots: &[Key],
     name: &str,
     now_ms: i64,
     seen: &Seen,
 ) -> Result<(Release, Seen)> {
     let k = verify_keys(keys, roots, now_ms, seen).map_err(|e| e.context("keys.json is not valid"))?;
-    let of = |usage: &str| -> Vec<&[u8]> {
-        k.keys
-            .iter()
-            .filter(|key| key.usage == usage || (key.usage.is_empty() && usage == "release"))
-            .map(|key| key.key.as_slice())
-            .collect()
-    };
-    let spkis = of("release");
+    let spkis = of(&k, &["release"]);
     // A channel key signs channel files and nothing else.
-    let mut channel_spkis = spkis.clone();
-    channel_spkis.extend(of("channel"));
+    let channel_spkis = of(&k, &["release", "channel"]);
     channel.verify(&channel_spkis).map_err(|e| e.context(format!("{name}.json is not valid")))?;
     let c = decode_channel(&channel.body).map_err(|e| e.context(format!("{name}.json is not valid")))?;
     if c.channel != name {
@@ -620,20 +700,9 @@ pub fn check(
 /// the pinned roots, the list under a release or channel key of it, its
 /// expiry, and that neither is older than seen. Returns the list and the
 /// Seen to keep.
-pub fn check_entries(
-    keys: &File,
-    entries: &File,
-    roots: &[&[u8]],
-    now_ms: i64,
-    seen: &Seen,
-) -> Result<(Entries, Seen)> {
+pub fn check_entries(keys: &File, entries: &File, roots: &[Key], now_ms: i64, seen: &Seen) -> Result<(Entries, Seen)> {
     let k = verify_keys(keys, roots, now_ms, seen).map_err(|e| e.context("keys.json is not valid"))?;
-    let spkis: Vec<&[u8]> = k
-        .keys
-        .iter()
-        .filter(|key| key.usage.is_empty() || key.usage == "release" || key.usage == "channel")
-        .map(|key| key.key.as_slice())
-        .collect();
+    let spkis = of(&k, &["release", "channel"]);
     let bad = |e: Error| e.context("entries.json is not valid");
     entries.verify(&spkis).map_err(bad)?;
     let e = decode_entries(&entries.body).map_err(bad)?;
@@ -658,9 +727,9 @@ pub fn check_entries(
 /// under the pinned roots, the list under a status key of it, its expiry,
 /// and that neither is older than seen (docs/protocol.md, section 17,
 /// "Revoked attestations"). Returns the list and the Seen to keep.
-pub fn check_status(keys: &File, status: &File, roots: &[&[u8]], now_ms: i64, seen: &Seen) -> Result<(Status, Seen)> {
+pub fn check_status(keys: &File, status: &File, roots: &[Key], now_ms: i64, seen: &Seen) -> Result<(Status, Seen)> {
     let k = verify_keys(keys, roots, now_ms, seen).map_err(|e| e.context("keys.json is not valid"))?;
-    let spkis: Vec<&[u8]> = k.keys.iter().filter(|key| key.usage == "status").map(|key| key.key.as_slice()).collect();
+    let spkis = of(&k, &["status"]);
     let bad = |e: Error| e.context("attest-status.json is not valid");
     status.verify(&spkis).map_err(bad)?;
     let s = decode_status(&status.body).map_err(bad)?;
@@ -756,14 +825,9 @@ pub(crate) fn decode_zxnext(body: &[u8]) -> Result<ZXNext> {
 /// pinned roots, the list under one of its release keys, not signed ahead
 /// of now_ms, and not of a release older than installed, the version of
 /// the cbb that checks it (none when empty).
-pub fn check_zxnext(keys: &File, list: &File, roots: &[&[u8]], now_ms: i64, installed: &str) -> Result<ZXNext> {
+pub fn check_zxnext(keys: &File, list: &File, roots: &[Key], now_ms: i64, installed: &str) -> Result<ZXNext> {
     let k = verify_keys(keys, roots, now_ms, &Seen::default()).map_err(|e| e.context("keys.json is not valid"))?;
-    let spkis: Vec<&[u8]> = k
-        .keys
-        .iter()
-        .filter(|key| key.usage.is_empty() || key.usage == "release")
-        .map(|key| key.key.as_slice())
-        .collect();
+    let spkis = of(&k, &["release"]);
     let bad = |e: Error| e.context("zxnext.json is not valid");
     list.verify(&spkis).map_err(bad)?;
     let z = decode_zxnext(&list.body).map_err(bad)?;
@@ -774,4 +838,137 @@ pub fn check_zxnext(keys: &File, list: &File, roots: &[&[u8]], now_ms: i64, inst
         return Err(Error::msg(format!("zxnext.json is of {}, older than this cbb, {installed}", z.version)));
     }
     Ok(z)
+}
+
+/// The pinned root keys, two YubiKeys, each with its classical and its
+/// post-quantum half: the same file Go embeds, which every program that
+/// checks release files reads through the core (the Rust cbb, the phone
+/// kits through the entry point's release calls).
+pub const ROOTS_PEM: &str = include_str!("../../internal/release/roots/roots.pem");
+
+/// The pinned root keys, ROOTS_PEM.
+pub fn pinned_roots() -> Vec<Key> {
+    parse_roots(ROOTS_PEM).unwrap_or_default()
+}
+
+/// Reads pinned root keys from PEM, as Go's release.ParseRoots: each block
+/// a PUBLIC KEY with the header `Name`, the halves of one root sharing it.
+pub fn parse_roots(pem: &str) -> Result<Vec<Key>> {
+    let mut roots = Vec::new();
+    let mut block: Option<(String, String, bool)> = None; // name, base64, past the headers
+    for line in pem.lines().map(str::trim) {
+        match (line, block.as_mut()) {
+            ("-----BEGIN PUBLIC KEY-----", None) => block = Some((String::new(), String::new(), false)),
+            ("-----END PUBLIC KEY-----", Some(_)) => {
+                let Some((name, text, _)) = block.take() else { break };
+                let der =
+                    crate::certs::b64::decode_str(&text).ok_or_else(|| Error::msg("a PUBLIC KEY is not base64"))?;
+                if name.is_empty() || name.len() > 64 {
+                    return Err(Error::msg("a root key has no Name"));
+                }
+                let alg = [ALG_ES256, ALG_SLH_DSA]
+                    .into_iter()
+                    .find(|a| check_public(*a, &der).is_ok())
+                    .ok_or_else(|| Error::msg("a root key of an unknown algorithm"))?;
+                roots.push(Key { alg, key: der, name, usage: USE_ROOT.into() });
+            }
+            (l, Some((name, text, past))) => {
+                if let Some(v) = l.strip_prefix("Name:").filter(|_| !*past) {
+                    *name = v.trim().into();
+                } else if l.is_empty() {
+                    *past = true;
+                } else if !l.contains(':') || *past {
+                    *past = true;
+                    text.push_str(l);
+                }
+            }
+            _ => {}
+        }
+    }
+    if roots.is_empty() {
+        return Err(Error::msg("no root keys"));
+    }
+    Ok(roots)
+}
+
+/// Keys that sign release files in tests and drills: both halves made
+/// from a seed, never a real key.
+#[cfg(feature = "std")]
+#[allow(clippy::expect_used)]
+pub mod testing {
+    use super::*;
+    use p256::ecdsa::signature::Signer;
+
+    pub struct TestKey {
+        es: p256::ecdsa::SigningKey,
+        slh: slh_dsa::SigningKey<slh_dsa::Sha2_128s>,
+    }
+
+    impl TestKey {
+        /// The key of seed n.
+        pub fn new(n: u8) -> TestKey {
+            let mut s = [0u8; 32];
+            s[31] = n.max(1);
+            let es = p256::ecdsa::SigningKey::from_slice(&s).expect("a scalar");
+            let slh = slh_dsa::SigningKey::slh_keygen_internal(&[n; 16], &[n ^ 0x55; 16], &[n ^ 0xaa; 16]);
+            TestKey { es, slh }
+        }
+
+        /// The SubjectPublicKeyInfo of the half of alg.
+        pub fn spki(&self, alg: u64) -> Vec<u8> {
+            if alg == ALG_ES256 {
+                crate::certs::p256_spki_of(self.es.verifying_key().to_sec1_point(false).as_bytes())
+            } else {
+                let vk: &slh_dsa::VerifyingKey<slh_dsa::Sha2_128s> = self.slh.as_ref();
+                let mut spki = crate::slhdsa::SPKI_PREFIX.to_vec();
+                spki.extend_from_slice(&vk.to_bytes());
+                spki
+            }
+        }
+
+        /// The halves as keys.json lists them.
+        pub fn keys(&self, name: &str, usage: &str) -> Vec<Key> {
+            REQUIRED
+                .iter()
+                .map(|a| Key { alg: *a, key: self.spki(*a), name: name.into(), usage: usage.into() })
+                .collect()
+        }
+
+        /// The halves as a pinned root.
+        pub fn root(&self, name: &str) -> Vec<Key> {
+            self.keys(name, USE_ROOT)
+        }
+
+        /// The halves as roots.pem writes them.
+        pub fn pem(&self, name: &str) -> String {
+            REQUIRED
+                .iter()
+                .map(|a| {
+                    let b = crate::certs::b64::encode(&self.spki(*a));
+                    format!("-----BEGIN PUBLIC KEY-----\nName: {name}\n\n{b}\n-----END PUBLIC KEY-----\n")
+                })
+                .collect()
+        }
+
+        /// The file of body with both signatures.
+        pub fn sign(&self, body: &[u8]) -> File {
+            let es: Signature = self.es.sign(body);
+            let slh = self.slh.try_sign_with_context(body, SLH_CONTEXT, None).expect("a short context");
+            File {
+                body: body.to_vec(),
+                sigs: vec![
+                    Sig {
+                        alg: ALG_ES256,
+                        key: sha256(&self.spki(ALG_ES256)).to_vec(),
+                        sig: es.to_der().as_bytes().to_vec(),
+                    },
+                    Sig {
+                        alg: ALG_SLH_DSA,
+                        key: sha256(&self.spki(ALG_SLH_DSA)).to_vec(),
+                        sig: slh.to_bytes().to_vec(),
+                    },
+                ],
+            }
+        }
+    }
 }

@@ -236,25 +236,27 @@ the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
   generate --subject "CN=Copy Beyond Borders release signing root N (2026)" 82 root-N.pem` so
   the key can be read from the slot, and `ykman piv keys attest 82` with the `f9`
   certificate as proof that the key was made on the YubiKey.
-  Their public keys go into `packaging/get.sh` (`release_roots`), `packaging/windows/get.ps1`
-  (`$releaseRoots`) and the programs (`internal/release.Roots`, the lite member's
-  `update::ROOTS` in `member/src/update.rs`, and the phone kits' `Releases.roots`, which
-  also turn on the Android app's own update).
+  Each root's post-quantum half is made beside it ("Two signatures" below). Both halves'
+  public keys go into `internal/release/roots/roots.pem` under the root's `Name`, which
+  `internal/release.Roots` and the Rust core (`release::ROOTS_PEM`, for `cbb` and the phone
+  kits) read, and into `packaging/get.sh` (`release_roots`, the same text); the P-256 halves
+  into `packaging/windows/get.ps1` (`$releaseRoots`).
 - **The release key**, in the Mac's Secure Enclave, asking for Touch ID at each signature:
-  `swift tools/release-sign/se.swift create ~/.config/cbb-release/release.se`. A root
-  certifies it in `keys.json`, which lives 90 days.
+  `swift tools/release-sign/se.swift create ~/.config/cbb-release/release.se`, with its
+  post-quantum half encrypted to the same Secure Enclave. A root certifies both in
+  `keys.json`, which lives 90 days.
 - **The branch `channel`** holds the current `keys.json` and `stable.json`
   (docs/protocol.md, section 16, "Where the files are"), since a published release takes no
   new files. `release-sign publish` makes it with the first signed release, and only
   `release-sign` and the `channel` workflow write to it.
 - **The channel key**, once, on cbb.tools beside the status key, readable only by root:
-  `openssl ecparam -name prime256v1 -genkey -noout -out /etc/cbb-channel/channel-key.pem`
-  and its public key `openssl ec -in channel-key.pem -pubout -out channel.pem`, copied to the
-  Mac. The first `release-sign publish` certifies it with `-channel cbb.tools=channel.pem`;
+  `openssl ecparam -name prime256v1 -genkey -noout -out /etc/cbb-channel/channel-key.pem`,
+  then its post-quantum half as an encrypted credential and both public keys in
+  `channel.pem` ("Two signatures"), copied to the Mac. The first `release-sign publish` certifies it with `-channel cbb.tools=channel.pem`;
   later ones keep it. A weekly systemd timer on cbb.tools
   (`site/deploy/cbb-channel.service` and `.timer`, as the user `cbb-channel`, which gets the
-  root-only key as a credential for the run) runs `release-sign extend -key
-  file:channel-key.pem -out /srv/cbb.tools/channel`, which reads the
+  root-only key and its encrypted half as credentials for the run) runs `release-sign extend
+  -key file:channel-key.pem+slh:channel-pq.pem -out /srv/cbb.tools/channel`, which reads the
   branch, checks it, signs `stable.json` again for 30 days with the same release and a
   higher number, and serves it with `keys.json` at `https://cbb.tools/channel/` (build it
   with `GOOS=linux GOARCH=amd64 go build ./tools/release-sign`). The daily `channel`
@@ -297,7 +299,7 @@ the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
   the new `keys.json` and a few days for the devices to get it (`cbb update` once a day, the
   group, and a device that fails at the relay fetches it from the mirror itself), then switch
   the server to the new key file. After a few more days drop the old one: `release-sign renew
-  -drop <the old pin>`. `keys.json` holds at most 8 keys in all, so drop old ones before
+  -drop <the old pin>`. `keys.json` holds at most 64 halves in all, so drop old keys before
   adding more.
 - **Reminders**: the `channel` workflow opens the issue "Release channel: renewal due" when
   the branch's `keys.json` expires within 21 days (run `release-sign renew -new-keys` on the
@@ -310,8 +312,10 @@ the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
 - **The status key** of the revocation mirror, on cbb.tools in a file readable only by the
   mirror's user (it signs nothing but `attest-status.json`, so a stolen one can at most keep
   a revoked phone proven until it is replaced): `openssl ecparam -name prime256v1 -genkey
-  -noout -out status-key.pem`. `keys.json` certifies it with `-status mirror=status.pem`. A
-  daily timer runs `attest-status -key status-key.pem -out /srv/cbb.tools/attest` and copies
+  -noout -out status-key.pem`, with its post-quantum half (`release-sign pq-new -key
+  file:status-key.pem -out - -public status.pem >status-pq.pem`, readable only by the same
+  user). `keys.json` certifies both with `-status mirror=status.pem`. A daily timer runs
+  `attest-status -key status-key.pem,status-pq.pem -out /srv/cbb.tools/attest` and copies
   `keys.json` beside it from `/srv/cbb.tools/channel`. When it stops on a list that drops a serial number, check Google's
   list and run it once with `-allow-drop`; a stolen status key is dropped from the next
   `keys.json` like a release key.
@@ -322,6 +326,40 @@ the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
   diff (a maker added or gone) and note the date in the README.
 - `release-sign drill -version X.Y.Z DIR ROOTS.pem` signs DIR with throwaway keys in files,
   as CI does to test the installers, and for drills of the steps above.
+
+### Two signatures
+
+Every key that signs release files has a P-256 half and an SLH-DSA-SHA2-128s half, and every
+file carries a signature of each (docs/protocol.md, section 16, "Two signatures"); devices
+from 0.6 take a file only with both. No YubiKey or Secure Enclave holds an SLH-DSA key, so
+the post-quantum half of a key in hardware is a file encrypted with `age` to a key in the
+same hardware, opened for one signature and dropped: the file alone signs nothing, and
+neither does the P-256 half alone.
+
+- **Tools**, on the Mac: `brew install age age-plugin-yubikey age-plugin-se`.
+- **A YubiKey's age key**, once per YubiKey, in another free retired PIV slot (one that
+  `ykman piv keys info` finds empty; the root and the release key hold 82 and 83, and
+  nothing on the YubiKey is reset or changed): `age-plugin-yubikey --generate --slot N
+  --pin-policy always --touch-policy always >yubikey-K.identity`, where N counts the
+  retired slots from 1 for 82 (3 is 84), writes the identity and its recipient
+  (`age1yubikey1...`). The identity file only points at the YubiKey.
+- **The Secure Enclave's age key**, once: `age-plugin-se keygen --access-control
+  any-biometry -o release-se.identity` prints its recipient (`age1se1...`).
+- **The post-quantum half of a key in hardware**: `release-sign pq-new -key piv:82 -to
+  age1yubikey1... -identity yubikey-K.identity -name root-K` (a root; `piv:83` a release
+  key on the YubiKey, `se:~/.config/cbb-release/release.se` with the Secure Enclave's
+  recipient and identity for the release key on the Mac) makes the half, encrypts it into
+  `~/.config/cbb-release/pq` (`CBB_RELEASE_PQ_DIR`) under the P-256 half's name, opens it
+  once with the hardware to check it, and prints both public keys with the `Name` that
+  `roots.pem` takes. From then on `piv:82`, `piv:83` and `se:...` sign with both halves:
+  the hardware asks once for the P-256 signature and once more to open the other half.
+- **A key on a server** (the channel key, the status key): `release-sign pq-new -key
+  file:KEY.pem -out - -public KEY-public.pem` writes the half as PEM to the standard output,
+  for `systemd-creds encrypt --name=channel-pq.pem - /etc/cbb-channel/channel-pq.cred`, and
+  `release-sign` signs with `file:KEY.pem+slh:PQ.pem`.
+- **Back up** `~/.config/cbb-release/pq` with the Mac's other release files: without it the
+  hardware's P-256 half signs nothing devices take, and a lost half is replaced like a lost
+  key (a new key, certified by a root, or for a root a new root in the next release).
 
 ## Watching cbb.tools
 

@@ -78,7 +78,9 @@ release.json is not the release stable.json names; not installing	release.json �
 release.json is for %s, not %s	release.json %s के लिए है, %s के लिए नहीं
 release.json does not list %s	release.json में %s सूचीबद्ध नहीं है
 %s does not match the signed release.json; not installing it	%s हस्ताक्षरित release.json से मेल नहीं खाता; इसे इंस्टॉल नहीं किया जा रहा
-The release's signature checks out (%s).	रिलीज़ का हस्ताक्षर सही है (%s)।
+The release's signature checks out (%s): ES256 and SLH-DSA-SHA2-128s.	रिलीज़ का हस्ताक्षर सही है (%s): ES256 और SLH-DSA-SHA2-128s।
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, it needs OpenSSL 3.5 or later.	रिलीज़ का हस्ताक्षर सही है (%s): ES256; SLH-DSA-SHA2-128s की जाँच नहीं हुई, इसके लिए OpenSSL 3.5 या नया चाहिए।
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, PowerShell cannot check it.	रिलीज़ का हस्ताक्षर सही है (%s): ES256; SLH-DSA-SHA2-128s की जाँच नहीं हुई, PowerShell इसे जाँच नहीं सकता।
 could not download %s	%s डाउनलोड नहीं हो सका
 stable.json names no release	stable.json किसी रिलीज़ का नाम नहीं देता
 Downloading %s (%s)...	%s डाउनलोड हो रहा है (%s)...

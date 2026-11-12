@@ -79,14 +79,19 @@ fn check_list(args: &[String], out: &mut dyn Write) -> Result<()> {
         return Err(Error::msg("the signed list is too large"));
     }
     let roots = crate::update::release_roots();
-    let roots: Vec<&[u8]> = roots.iter().map(Vec::as_slice).collect();
     let installed =
         if release::parse_version(crate::service::VERSION).is_some() { crate::service::VERSION } else { "" };
     check_signed(&data, &roots, crate::uptime::wall_ms(), installed, out)
 }
 
 /// check_list's check of the file's data under roots at now_ms.
-fn check_signed(data: &[u8], roots: &[&[u8]], now_ms: i64, installed: &str, out: &mut dyn Write) -> Result<()> {
+fn check_signed(
+    data: &[u8],
+    roots: &[cbb_core::release::Key],
+    now_ms: i64,
+    installed: &str,
+    out: &mut dyn Write,
+) -> Result<()> {
     use cbb_core::release::{self, File};
     let text = std::str::from_utf8(data).map_err(|_| Error::msg("the signed list is not text"))?;
     let mut lines = text.lines().map(str::trim).filter(|l| !l.is_empty());
@@ -758,11 +763,7 @@ mod tests {
     fn check_list_vectors() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata/interop/go-zxnext.json");
         let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-        #[derive(serde::Deserialize)]
-        struct Der(#[serde(with = "cbb_core::certs::b64")] Vec<u8>);
-        let b64 = |x: &serde_json::Value| -> Vec<u8> { serde_json::from_value::<Der>(x.clone()).unwrap().0 };
-        let roots: Vec<Vec<u8>> = v["roots"].as_array().unwrap().iter().map(b64).collect();
-        let roots: Vec<&[u8]> = roots.iter().map(Vec::as_slice).collect();
+        let roots: Vec<cbb_core::release::Key> = serde_json::from_value(v["roots"].clone()).unwrap();
         for c in v["vectors"].as_array().unwrap() {
             let data = format!("{}\n{}\n", c["keys"], c["list"]);
             let mut out = Vec::new();

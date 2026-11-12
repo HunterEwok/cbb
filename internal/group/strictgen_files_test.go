@@ -33,6 +33,8 @@ const (
 	genSHA            = `"00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"`
 	// The P-256 key above with one byte of its point changed, so that the
 	// point is not on the curve.
+	// genSLH is an SLH-DSA-SHA2-128s key.
+	genSLH          = `"MDAwCwYJYIZIAWUDBAMUAyEAAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="`
 	genP256OffCurve = `"MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEisTU0kiulUla1IJnCzjqGjJXTjaRtYjaMBcnJkhyA7t34yvhwHB6/8QmvZ+ZzjvjhygF8oLcfmRq6a/qgoX/FA=="`
 )
 
@@ -198,7 +200,9 @@ func releaseKinds() []genKind {
 	base := func(typ string, own ...genMember) genBody {
 		return append(genBody{{"v", "1"}, {"type", `"` + typ + `"`}}, own...)
 	}
-	key := func(fields string) string { return `{"key":` + genP256 + `,"name":"release key"` + fields + `}` }
+	key := func(fields string) string {
+		return `{"alg":1,"key":` + genP256 + `,"name":"release key"` + fields + `}`
+	}
 	keyList := func(n int) string {
 		var s []string
 		for range n {
@@ -207,23 +211,32 @@ func releaseKinds() []genKind {
 		return "[" + strings.Join(s, ",") + "]"
 	}
 	keys := []genValue{
-		ok("of 8", keyList(8)),
+		ok("of 64", keyList(64)),
 		ok("of a status key", `[`+key(`,"use":"status"`)+`]`),
 		ok("of a key of a later use", `[`+key(`,"use":"later"`)+`]`),
-		ok("of a name of 64 bytes", `[{"key":`+genP256+`,"name":"`+strings.Repeat("k", 64)+`"}]`),
-		bad("of 9", keyList(9)),
+		ok("of a name of 64 bytes", `[{"alg":1,"key":`+genP256+`,"name":"`+strings.Repeat("k", 64)+`"}]`),
+		ok("of an SLH-DSA half", `[`+key("")+`,{"alg":4,"key":`+genSLH+`,"name":"release key"}]`),
+		ok("of a key of a later algorithm", `[{"alg":9,"key":`+genB64(32, 7)+`,"name":"k"}]`),
+		bad("of 65", keyList(65)),
+		ok("of a key of a later algorithm of 8192 bytes", `[{"alg":9,"key":`+genB64(8192, 7)+`,"name":"k"}]`),
+		ok("of an empty key of a later algorithm", `[{"alg":9,"key":"","name":"k"}]`),
 		bad("of an empty use", `[`+key(`,"use":""`)+`]`),
-		bad("of a compressed key", `[{"key":`+genP256Compressed+`,"name":"k"}]`),
-		bad("of a key not on the curve", `[{"key":`+genP256OffCurve+`,"name":"k"}]`),
+		bad("of a key without an algorithm", `[{"key":`+genP256+`,"name":"k"}]`),
+		bad("of algorithm 0", `[{"alg":0,"key":`+genP256+`,"name":"k"}]`),
+		bad("of a P-256 key as algorithm 4", `[{"alg":4,"key":`+genP256+`,"name":"k"}]`),
+		bad("of an SLH-DSA key as algorithm 1", `[{"alg":1,"key":`+genSLH+`,"name":"k"}]`),
+		bad("of an algorithm as a string", `[{"alg":"1","key":`+genP256+`,"name":"k"}]`),
+		bad("of a compressed key", `[{"alg":1,"key":`+genP256Compressed+`,"name":"k"}]`),
+		bad("of a key not on the curve", `[{"alg":1,"key":`+genP256OffCurve+`,"name":"k"}]`),
 		bad("empty", `[]`),
-		bad("of a P-384 key", `[{"key":`+genP384+`,"name":"k"}]`),
-		bad("of a key with stray bits", `[{"key":`+genP256Stray+`,"name":"k"}]`),
-		bad("of a key that is not one", `[{"key":`+genB64(32, 7)+`,"name":"k"}]`),
-		bad("of a key without a name", `[{"key":`+genP256+`}]`),
-		bad("of an empty name", `[{"key":`+genP256+`,"name":""}]`),
-		bad("of a name of 65 bytes", `[{"key":`+genP256+`,"name":"`+strings.Repeat("k", 65)+`"}]`),
-		bad("of an entry without a key", `[{"name":"k"}]`),
-		bad("of a key as a number", `[{"key":1,"name":"k"}]`),
+		bad("of a P-384 key", `[{"alg":1,"key":`+genP384+`,"name":"k"}]`),
+		bad("of a key with stray bits", `[{"alg":1,"key":`+genP256Stray+`,"name":"k"}]`),
+		bad("of a key that is not one", `[{"alg":1,"key":`+genB64(32, 7)+`,"name":"k"}]`),
+		bad("of a key without a name", `[{"alg":1,"key":`+genP256+`}]`),
+		bad("of an empty name", `[{"alg":1,"key":`+genP256+`,"name":""}]`),
+		bad("of a name of 65 bytes", `[{"alg":1,"key":`+genP256+`,"name":"`+strings.Repeat("k", 65)+`"}]`),
+		bad("of an entry without a key", `[{"alg":1,"name":"k"}]`),
+		bad("of a key as a number", `[{"alg":1,"key":1,"name":"k"}]`),
 		bad("of an entry as a string", `["k"]`),
 	}
 	file := func(fields string) string { return `{"name":"cbb.tar.gz","size":3,"sha256":` + genSHA + fields + `}` }

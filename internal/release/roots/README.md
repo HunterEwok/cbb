@@ -3,10 +3,13 @@
 
 `roots.pem` holds the project's two release root keys (docs/protocol.md, section 16): the
 public keys of P-256 keys made on two YubiKey 5C NFC (firmware 5.7.4) on 2026-10-28, each in
-the PIV slot 82, with the PIN and a touch required for every signature. They sign
-`keys.json` and nothing else. `internal/release.Roots` reads this file; `packaging/get.sh`,
-`packaging/windows/get.ps1`, the Rust cbb's `update::ROOTS` and the phone kits'
-`Releases.roots` carry copies, which `roots_test.go` compares with it.
+the PIV slot 82, with the PIN and a touch required for every signature, and beside each its
+SLH-DSA-SHA2-128s half, encrypted to the same YubiKey (docs/maintaining.md, "Two
+signatures"). Each block has the header `Name` (`root-1`, `root-2`), the same for both halves
+of a root. They sign `keys.json` and nothing else. `internal/release.Roots` and the Rust core
+(`release::ROOTS_PEM`, for `cbb` and the phone kits) read this file; `packaging/get.sh` and
+`packaging/windows/get.ps1` (its P-256 halves) carry copies, which `roots_test.go` compares
+with it.
 
 `release-keys.pem` holds the release keys on the same two YubiKeys, in the PIV slot 83 with
 the same policies: they sign `release.json` and `stable.json`, and the roots certify them
