@@ -101,3 +101,8 @@ windows = { version = "0.62", features = ["Foundation", "Security_Credentials", 
 [dev-dependencies]
 # Signs the releases the update tests check.
 p256 = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "ecdsa", "pkcs8"] }
+
+# Asks for a TXT record from port 5353 in discovery's tests; mdns-sd already
+# brings it.
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+socket2 = "0.6.5"

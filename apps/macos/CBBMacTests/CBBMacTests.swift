@@ -96,7 +96,7 @@ final class CBBMacTests: XCTestCase {
         // This Mac itself is unmuted on the plain socket, without the
         // password; another device takes the administrator.
         let own = try XCTUnwrap(MacModel.ownMute("me", on: false, me: "me"))
-        XCTAssertEqual(String(decoding: try Control.encode(own), as: UTF8.self), "{\"device\":\"me\",\"len\":0,\"op\":\"unmute\"}\n")
+        XCTAssertEqual(String(decoding: try Control.encode(own), as: UTF8.self), "{\"args\":{\"device\":\"me\"},\"len\":0,\"op\":\"unmute\"}\n")
         XCTAssertEqual(MacModel.ownMute("me", on: true, forMS: 60000, me: "me")?.forMS, 60000)
         XCTAssertNil(MacModel.ownMute("ab12", on: false, me: "me"))
         XCTAssertNil(MacModel.ownMute("me", on: false, me: nil))
