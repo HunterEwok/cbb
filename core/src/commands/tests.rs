@@ -59,7 +59,8 @@ impl World {
 
     fn accept(&self, c: &Command<'_>, counters: &mut Counters, now: Option<u64>) -> Result<Option<Vec<u8>>, Refusal> {
         let state = self.g.state();
-        let at = Member { me: self.laptop.key.device_id(), state: &state, set: &self.g.set, now_ms: now };
+        let keys = Keys::of(&self.g.set);
+        let at = Member { me: self.laptop.key.device_id(), state: &state, keys: &keys, now_ms: now };
         accept_member(c, &at, counters, &self.laptop_store)
     }
 }
@@ -503,4 +504,16 @@ fn command_vectors() {
             }
         }
     }
+}
+
+/// The signer is found by its key hash among the set's keys: the first
+/// root, a claim's root, admin and member keys; nothing else.
+#[test]
+fn a_signer_is_found_by_its_key_hash() {
+    let w = World::new();
+    let keys = Keys::of(&w.g.set);
+    for who in ["root", "desk admin", "watch admin", "laptop", "phone"] {
+        assert_eq!(keys.get(&k(who).hash), Some(&k(who).key), "{who}");
+    }
+    assert!(keys.get(&k("stranger").hash).is_none());
 }

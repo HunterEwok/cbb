@@ -23,30 +23,33 @@ fn held(r: &MemoryStore<crate::testkit::K>) -> Vec<u64> {
 fn the_sealing_key_changes_once_a_week_and_the_old_one_stays_a_week() {
     let group = k("root").key.device_id();
     let mut s = MemoryStore::new(k("laptop"));
-    let r = rotate(&mut s, &group, T0).unwrap();
+    let r = rotate(&mut s, &group, T0, Some(T0)).unwrap();
     assert!(r.made.is_some());
     assert_eq!(held(&s), [1]);
     // Within the week nothing changes.
-    assert_eq!(rotate(&mut s, &group, T0 + WEEK_MS - 1).unwrap(), Rotated::default());
+    assert_eq!(rotate(&mut s, &group, T0 + WEEK_MS - 1, Some(T0 + WEEK_MS - 1)).unwrap(), Rotated::default());
     // A week on: epoch 2, and epoch 1 still opens late copies.
-    let r = rotate(&mut s, &group, T0 + WEEK_MS).unwrap();
+    let r = rotate(&mut s, &group, T0 + WEEK_MS, Some(T0 + WEEK_MS)).unwrap();
     assert!(r.made.is_some() && r.erased.is_empty());
     assert_eq!(held(&s), [1, 2]);
     assert!(s.sealing(1).is_some());
     // Another week: epoch 3, epoch 1 erased.
-    let r = rotate(&mut s, &group, T0 + 2 * WEEK_MS).unwrap();
+    let r = rotate(&mut s, &group, T0 + 2 * WEEK_MS, Some(T0 + 2 * WEEK_MS)).unwrap();
     assert_eq!(r.erased, [1]);
     assert_eq!(held(&s), [2, 3]);
     assert!(s.sealing(1).is_none());
     // A clock gone back a little makes nothing and erases nothing.
-    assert_eq!(rotate(&mut s, &group, T0 + 2 * WEEK_MS - AHEAD_MS).unwrap(), Rotated::default());
+    assert_eq!(
+        rotate(&mut s, &group, T0 + 2 * WEEK_MS - AHEAD_MS, Some(T0 + 2 * WEEK_MS - AHEAD_MS)).unwrap(),
+        Rotated::default()
+    );
     assert_eq!(held(&s), [2, 3]);
     // After a long sleep: one new epoch, the previous one kept, older ones
     // gone.
-    let r = rotate(&mut s, &group, T0 + 10 * WEEK_MS).unwrap();
+    let r = rotate(&mut s, &group, T0 + 10 * WEEK_MS, Some(T0 + 10 * WEEK_MS)).unwrap();
     assert_eq!(r.erased, [2]);
     assert_eq!(held(&s), [3, 4]);
-    let r = rotate(&mut s, &group, T0 + 11 * WEEK_MS).unwrap();
+    let r = rotate(&mut s, &group, T0 + 11 * WEEK_MS, Some(T0 + 11 * WEEK_MS)).unwrap();
     assert_eq!(r.erased, [3]);
     assert_eq!(held(&s), [4, 5]);
 }
@@ -56,7 +59,7 @@ fn the_device_itself_signs_its_statement() {
     let mut g = G::new();
     let laptop = g.device("laptop", ROLE_MEMBER, RIGHT_READ, |_| {});
     let mut s = MemoryStore::new(k("laptop"));
-    let env = rotate(&mut s, &g.gid, T0).unwrap().made.unwrap();
+    let env = rotate(&mut s, &g.gid, T0, Some(T0)).unwrap().made.unwrap();
     let ReadStatement::Take(st) = read_statement(&env).unwrap() else { panic!("held") };
     assert_eq!(st.body().signer, laptop.hash);
     assert_eq!(st.envelope(), env);
@@ -169,14 +172,14 @@ fn statement_vectors() {
 fn a_clock_once_far_ahead_does_not_stop_the_change() {
     let group = k("root").key.device_id();
     let mut s = MemoryStore::new(k("laptop"));
-    rotate(&mut s, &group, T0).unwrap();
-    rotate(&mut s, &group, T0 + 520 * WEEK_MS).unwrap();
+    rotate(&mut s, &group, T0, Some(T0)).unwrap();
+    rotate(&mut s, &group, T0 + 520 * WEEK_MS, Some(T0 + 520 * WEEK_MS)).unwrap();
     assert_eq!(held(&s), [1, 2]);
-    let r = rotate(&mut s, &group, T0 + 1000).unwrap();
+    let r = rotate(&mut s, &group, T0 + 1000, Some(T0 + 1000)).unwrap();
     assert!(r.made.is_some(), "a new epoch at once");
     assert_eq!(held(&s), [2, 3]);
-    assert_eq!(rotate(&mut s, &group, T0 + 2000).unwrap(), Rotated::default());
-    assert!(rotate(&mut s, &group, T0 + 1000 + WEEK_MS).unwrap().made.is_some());
+    assert_eq!(rotate(&mut s, &group, T0 + 2000, Some(T0 + 2000)).unwrap(), Rotated::default());
+    assert!(rotate(&mut s, &group, T0 + 1000 + WEEK_MS, Some(T0 + 1000 + WEEK_MS)).unwrap().made.is_some());
 }
 
 /// A statement of a later type is held whatever its other fields are; a

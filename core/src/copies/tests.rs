@@ -294,8 +294,8 @@ fn a_device_that_slept_through_a_key_change_gets_the_copy_sealed_again() {
     let mut kept = Kept::new(m, content.clone(), &rs);
     // The laptop sleeps three weeks: two epochs later its epoch 1 is gone.
     let laptop = w.stores.get_mut("laptop").unwrap();
-    keystore::rotate(laptop, &w.g.gid, T0 + 2 * WEEK_MS).unwrap();
-    let r = keystore::rotate(laptop, &w.g.gid, T0 + 3 * WEEK_MS).unwrap();
+    keystore::rotate(laptop, &w.g.gid, T0 + 2 * WEEK_MS, Some(T0 + 2 * WEEK_MS)).unwrap();
+    let r = keystore::rotate(laptop, &w.g.gid, T0 + 3 * WEEK_MS, Some(T0 + 3 * WEEK_MS)).unwrap();
     assert!(r.erased.contains(&1));
     let now = testkit::statement_of(r.made.as_ref().unwrap());
     let v = cbor::decode(&copy).unwrap();
@@ -404,14 +404,14 @@ fn freshness_survives_a_restart_from_a_state_one_step_old() {
     let (a, b) = (seen(&w, "phone", 1, T0, true), seen(&w, "phone", 2, T0 + 1, false));
     let mut m = Marks::default();
     assert!(matches!(m.judge(&a, Some(T0), &st), Fresh::New { .. }));
-    m.wrote(&a.origin, a.signed, &st);
+    m.wrote(&a.origin, a.signed);
     let one_step_old = m.encode();
     assert!(matches!(m.judge(&b, Some(T0), &st), Fresh::New { .. }));
-    m.wrote(&b.origin, b.signed, &st);
+    m.wrote(&b.origin, b.signed);
     let mut back = Marks::decode(&one_step_old).unwrap();
     assert_eq!(back.judge(&a, Some(T0), &st), Fresh::SeenSecret);
     assert!(matches!(back.judge(&b, Some(T0), &st), Fresh::New { .. }));
-    back.wrote(&b.origin, b.signed, &st);
+    back.wrote(&b.origin, b.signed);
     let mut again = Marks::decode(&back.encode()).unwrap();
     assert_eq!(again.judge(&b, Some(T0), &st), Fresh::Behind);
 }
@@ -431,7 +431,7 @@ fn freshness_is_decided_from_signed_fields() {
     assert_eq!(back.judge(&old, Some(T0 + 1), &st), Fresh::SeenSecret);
     // A copy not after the newest written is behind (A-61), with or
     // without a clock, whichever origin it comes from.
-    back.wrote(&w.id("phone"), Timestamp { wall: (T0 + 5000) as i64, logical: 0 }, &st);
+    back.wrote(&w.id("phone"), Timestamp { wall: (T0 + 5000) as i64, logical: 0 });
     assert_eq!(back.judge(&seen(&w, "laptop", 2, T0 + 5000, false), None, &st), Fresh::Behind);
     let mut later = seen(&w, "laptop", 3, T0 + 5000, false);
     later.signed.logical = 1;
@@ -471,17 +471,43 @@ fn a_copy_dated_ahead_stops_no_reader() {
     // the phone's copies are behind it until the laptop is removed.
     let year = seen(&w, "laptop", 4, T0 + 365 * DAY, false);
     assert!(matches!(m.judge(&year, None, &st), Fresh::New { .. }));
-    m.wrote(&year.origin, year.signed, &st);
-    let honest = seen(&w, "phone", 5, T0 + DAY, true);
-    assert_eq!(m.clone().judge(&honest, None, &st), Fresh::Behind);
+    m.wrote(&year.origin, year.signed);
+    let honest = seen(&w, "phone", 5, T0 + DAY, false);
+    assert_eq!(m.judge(&honest, None, &st), Fresh::Behind);
     let saved = m.encode();
     w.g.revoke(&[w.laptop.hash]);
     let frozen = w.g.state();
     assert!(frozen.device(&w.id("laptop")).is_none());
     let mut back = Marks::decode(&saved).unwrap();
-    assert!(matches!(back.judge(&honest, None, &frozen), Fresh::New { .. }));
-    back.wrote(&honest.origin, honest.signed, &frozen);
-    assert_eq!(back.newest(&frozen), honest.signed);
+    assert_eq!(back, m);
+    // Once the laptop is removed, a newer copy of the phone is new; the
+    // one already judged stays behind.
+    assert_eq!(back.judge(&honest, None, &frozen), Fresh::Behind);
+    let next = seen(&w, "phone", 6, T0 + DAY + 1, false);
+    assert!(matches!(back.judge(&next, None, &frozen), Fresh::New { .. }));
+    back.wrote(&next.origin, next.signed);
+    assert_eq!(back.newest(&frozen), next.signed);
+}
+
+/// Without a clock, a removal lets no copy older than what the reader
+/// already judged be written.
+#[test]
+fn a_removal_lets_no_older_copy_in_without_a_clock() {
+    let mut w = World::new();
+    let st = w.g.state();
+    let mut m = Marks::default();
+    let x = seen(&w, "laptop", 1, T0 + 600_000, false);
+    assert!(matches!(m.judge(&x, None, &st), Fresh::New { .. }));
+    m.wrote(&x.origin, x.signed);
+    let old = seen(&w, "phone", 2, T0, false);
+    assert_eq!(m.judge(&old, None, &st), Fresh::Behind);
+    w.g.revoke(&[w.laptop.hash]);
+    let after = w.g.state();
+    let mut back = Marks::decode(&m.encode()).unwrap();
+    assert_eq!(back.judge(&old, None, &after), Fresh::Behind);
+    // A copy of the phone newer than the one it saw is written.
+    let newer = seen(&w, "phone", 3, T0 + 1, false);
+    assert!(matches!(back.judge(&newer, None, &after), Fresh::New { .. }));
 }
 
 /// The allowance for a copy with a lifetime is at most a quarter of it.
@@ -566,4 +592,44 @@ fn an_old_statement_is_not_sealed_to() {
     assert!(ids(Some(made_at + STATEMENT_MAX_AGE_MS)).contains(&w.id("laptop")));
     assert!(!ids(Some(made_at + STATEMENT_MAX_AGE_MS + 1)).contains(&w.id("laptop")));
     assert!(ids(None).contains(&w.id("laptop")), "no clock, no age");
+}
+
+/// A leaf counts its weeks on its running time and writes no time into its
+/// statement: a sender with a clock seals to it all the same.
+#[test]
+fn a_leaf_on_running_time_is_sealed_to() {
+    let mut w = World::new();
+    let state = w.g.state();
+    let mut s = keystore::MemoryStore::new(k("kettle"));
+    let made = keystore::rotate(&mut s, &w.g.gid, 7_200_000, None).unwrap().made.unwrap();
+    let st = testkit::statement_of(&made);
+    assert_eq!(st.body().time_ms, 0, "no wall clock, no time");
+    w.statements.retain(|x| x.body().signer != k("kettle").hash);
+    w.statements.push(st);
+    let sealing = w.sealing();
+    let content = Content::text("tea", false);
+    let kettle = w.id("kettle");
+    let rs = readers(&state, &sealing, &content, &w.id("phone"), &[kettle], Some(T0 + 400 * DAY));
+    assert!(rs.iter().any(|r| r.id == kettle));
+}
+
+/// A secret without its own ttl lives the group's lifetime, and the
+/// allowance is a quarter of that too.
+#[test]
+fn a_default_secret_gets_a_quarter_of_the_groups_lifetime() {
+    let w = World::new();
+    let state = w.g.state();
+    let s = w.sealing();
+    let secret = Content::text("pw", true);
+    let rs = readers(&state, &s, &secret, &w.id("phone"), &[], None);
+    let copy = seal(&w.phone, &rs, &made(5), &secret).unwrap();
+    let v = cbor::decode(&copy).unwrap();
+    let c = check(&v, &state).unwrap();
+    let seen = fresh::Seen::of(&c, &secret, 60_000);
+    assert_eq!(seen.ttl_ms, Some(60_000));
+    let wall = c.time.wall as u64;
+    assert_eq!(Marks::default().judge(&seen, Some(wall + 299_000), &state), Fresh::New { age_ms: 284_000 });
+    // Not a secret, no ttl: the full allowance.
+    let plain = Content::text("hi", false);
+    assert_eq!(fresh::Seen::of(&c, &plain, 60_000).ttl_ms, None);
 }

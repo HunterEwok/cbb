@@ -72,14 +72,19 @@ pub struct Rotated {
     pub erased: Vec<u64>,
 }
 
-/// Keeps the device's sealing keys current at time now_ms: a first epoch
+/// Keeps the device's sealing keys current at time now_ms (its weeks: the
+/// wall clock, or a leaf's running time): a first epoch
 /// when it has none, a new one when the newest is a week old, and erases
 /// every epoch but the newest once the newest has been the newest for a
 /// week (the previous one is kept that long). Time going back a little
 /// changes nothing; a newest epoch made more than [`AHEAD_MS`] ahead of now
 /// (a clock that was once far ahead) is due at once, so such a clock never
 /// stops the weekly change.
-pub fn rotate(store: &mut dyn KeyStore, group: &GroupId, now_ms: u64) -> Result<Rotated> {
+///
+/// A new statement's `time_ms` is `wall_ms`, the device's wall clock, and
+/// only that: a device without one (a leaf counting on its running time)
+/// passes None and writes no time, so its statement has no age.
+pub fn rotate(store: &mut dyn KeyStore, group: &GroupId, now_ms: u64, wall_ms: Option<u64>) -> Result<Rotated> {
     let mut out = Rotated::default();
     let mut epochs = store.epochs();
     epochs.sort_by_key(|e| e.epoch);
@@ -94,7 +99,7 @@ pub fn rotate(store: &mut dyn KeyStore, group: &GroupId, now_ms: u64) -> Result<
         let secret = crate::seal::generate_secret()?;
         let seal = Key { alg: ALG_XWING, public: crate::seal::public_key(&secret)? };
         let signer = Key::es256(store.member().public()).hash();
-        let body = Body { group: *group, signer, epoch, time_ms: now_ms, seal, held: false };
+        let body = Body { group: *group, signer, epoch, time_ms: wall_ms.unwrap_or(0), seal, held: false };
         let st = Statement::sign(body, store.member())?;
         let env = statement_envelope(&st);
         store.put(Epoch { epoch, made_ms: now_ms, statement: env.clone() }, secret)?;

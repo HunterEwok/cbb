@@ -16,9 +16,11 @@
 //! - It writes no copy whose signed time is not after the newest copy it
 //!   wrote (A-61), so an old copy is never written over a newer one; a
 //!   device without a clock decides by this alone. The newest is kept for
-//!   each origin, and only the origins the records still name and have not
-//!   frozen count: a removed or frozen device's copy dated ahead stops no
-//!   one.
+//!   each origin. An origin the records still name and have not frozen
+//!   counts with its own time; a removed or frozen one counts only up to
+//!   the newest time judged from the origins that still stand, so its copy
+//!   dated ahead stops no one, and its removal lets no copy older than what
+//!   the reader already judged be written.
 //! - A secret it has seen once (opened, written or not) is never written
 //!   again, by its origin and ID, or, past the list's length, by its time.
 //!
@@ -53,6 +55,9 @@ pub const MAX_ORIGINS: usize = 1024;
 pub struct Marks {
     /// The signed time of the newest copy written here, by origin.
     pub written: BTreeMap<DeviceId, Timestamp>,
+    /// The signed time of the newest copy judged here (not
+    /// [`Fresh::Ahead`]), written or not, by origin.
+    pub judged: BTreeMap<DeviceId, Timestamp>,
     /// Secrets seen, by origin and ID, with their signed times.
     pub secrets: BTreeMap<(DeviceId, [u8; 16]), Timestamp>,
     /// Every secret at or before this time counts as seen: the newest of
@@ -70,8 +75,26 @@ pub struct Seen {
     /// Its `age_ms`, outside the signature.
     pub age_ms: u64,
     pub secret: bool,
-    /// The content's own lifetime, if it has one.
+    /// The lifetime that applies: the content's own `ttl`, else for a
+    /// secret the group's ([`Seen::of`] fills it so).
     pub ttl_ms: Option<u64>,
+}
+
+impl Seen {
+    /// A checked copy that opened to content, with the lifetime that
+    /// applies to it: its own `ttl`, else for a secret the group's
+    /// lifetime of secrets (`group_ttl_ms`).
+    pub fn of(c: &super::Checked<'_>, content: &crate::content::Content, group_ttl_ms: u64) -> Seen {
+        let secret = content.is_secret();
+        Seen {
+            origin: c.origin,
+            id: c.id,
+            signed: c.time,
+            age_ms: c.copy.age_ms,
+            secret,
+            ttl_ms: content.ttl_ms().or(secret.then_some(group_ttl_ms)),
+        }
+    }
 }
 
 /// The verdict on a copy that opened.
@@ -119,14 +142,38 @@ fn ts_read(v: &Value<'_>) -> Option<Timestamp> {
     }
 }
 
+fn pairs(m: &BTreeMap<DeviceId, Timestamp>) -> Vec<Value<'_>> {
+    m.iter().map(|(o, t)| Value::Array(alloc::vec![Value::Bytes(&o.0), ts_value(t)])).collect()
+}
+
+fn read_pairs(v: Option<&Value<'_>>, bad: Rule) -> Result<BTreeMap<DeviceId, Timestamp>, Rule> {
+    let mut out = BTreeMap::new();
+    for e in v.and_then(Value::as_array).unwrap_or(&[]) {
+        match e.as_array() {
+            Some([Value::Bytes(o), t]) => {
+                let o = <[u8; 16]>::try_from(*o).map_err(|_| bad)?;
+                out.insert(DeviceId(o), ts_read(t).ok_or(bad)?);
+            }
+            _ => return Err(bad),
+        }
+    }
+    if out.len() > MAX_ORIGINS {
+        return Err(bad);
+    }
+    Ok(out)
+}
+
 fn standing(state: &State, origin: &DeviceId) -> bool {
     state.device(origin).is_some_and(|d| !d.frozen)
 }
 
 impl Marks {
-    /// The newest copy written here from the origins that still stand.
+    /// The newest copy written here: from an origin that still stands its
+    /// time, from one that does not at most the newest time judged from
+    /// the origins that still stand.
     pub fn newest(&self, state: &State) -> Timestamp {
-        self.written.iter().filter(|(o, _)| standing(state, o)).map(|(_, t)| *t).max().unwrap_or_default()
+        let cap = self.judged.iter().filter(|(o, _)| standing(state, o)).map(|(_, t)| *t).max().unwrap_or_default();
+        self.written.iter().map(|(o, t)| if standing(state, o) { *t } else { (*t).min(cap) }).max().unwrap_or_default()
     }
 
     /// Judges a copy that opened here, on the reader's clock (None without
@@ -146,25 +193,33 @@ impl Marks {
         if s.secret {
             self.see_secret(key, s.signed);
         }
-        if seen {
+        let verdict = if seen {
             Fresh::SeenSecret
         } else if s.signed <= self.newest(state) {
             Fresh::Behind
         } else {
             Fresh::New { age_ms: effective_age(s.age_ms, s.signed, s.ttl_ms, now_ms) }
+        };
+        Self::note(&mut self.judged, &s.origin, s.signed);
+        verdict
+    }
+
+    /// Raises an origin's time in a map of origins, keeping at most
+    /// [`MAX_ORIGINS`] (the oldest go first).
+    fn note(map: &mut BTreeMap<DeviceId, Timestamp>, origin: &DeviceId, signed: Timestamp) {
+        let t = map.entry(*origin).or_default();
+        *t = (*t).max(signed);
+        while map.len() > MAX_ORIGINS {
+            let Some(oldest) = map.iter().min_by_key(|(o, t)| (**t, **o)).map(|(o, _)| *o) else { break };
+            map.remove(&oldest);
         }
     }
 
     /// Notes that a copy from this origin with this signed time was
-    /// written. Origins the records no longer name are forgotten.
-    pub fn wrote(&mut self, origin: &DeviceId, signed: Timestamp, state: &State) {
-        self.written.retain(|o, _| state.device(o).is_some());
-        let t = self.written.entry(*origin).or_default();
-        *t = (*t).max(signed);
-        while self.written.len() > MAX_ORIGINS {
-            let Some(oldest) = self.written.iter().min_by_key(|(o, t)| (**t, **o)).map(|(o, _)| *o) else { break };
-            self.written.remove(&oldest);
-        }
+    /// written (and judged).
+    pub fn wrote(&mut self, origin: &DeviceId, signed: Timestamp) {
+        Self::note(&mut self.written, origin, signed);
+        Self::note(&mut self.judged, origin, signed);
     }
 
     fn see_secret(&mut self, key: (DeviceId, [u8; 16]), t: Timestamp) {
@@ -180,10 +235,11 @@ impl Marks {
 
     /// The marks as bytes to save: a map in the profile, 1 the newest
     /// written `[origin, time]` sorted by origin, 2 `floor`, 3 the secrets
-    /// `[origin, ID, time]` sorted by origin and ID.
+    /// `[origin, ID, time]` sorted by origin and ID, 4 the newest judged
+    /// `[origin, time]` sorted by origin.
     pub fn encode(&self) -> Vec<u8> {
-        let written: Vec<Value<'_>> =
-            self.written.iter().map(|(o, t)| Value::Array(alloc::vec![Value::Bytes(&o.0), ts_value(t)])).collect();
+        let written = pairs(&self.written);
+        let judged = pairs(&self.judged);
         let secrets: Vec<Value<'_>> = self
             .secrets
             .iter()
@@ -197,6 +253,9 @@ impl Marks {
         if !secrets.is_empty() {
             m.push((3, Value::Array(secrets)));
         }
+        if !judged.is_empty() {
+            m.push((4, Value::Array(judged)));
+        }
         Value::Map(m).encode()
     }
 
@@ -205,15 +264,8 @@ impl Marks {
         let bad = Rule::field("marks/shape");
         let v = cbor::decode(b)?;
         let id16 = |v: &Value<'_>| v.as_bytes().and_then(|b| <[u8; 16]>::try_from(b).ok());
-        let mut written = BTreeMap::new();
-        for e in v.get(1).and_then(Value::as_array).unwrap_or(&[]) {
-            match e.as_array() {
-                Some([o, t]) => {
-                    written.insert(DeviceId(id16(o).ok_or(bad)?), ts_read(t).ok_or(bad)?);
-                }
-                _ => return Err(bad),
-            }
-        }
+        let written = read_pairs(v.get(1), bad)?;
+        let judged = read_pairs(v.get(4), bad)?;
         let floor = v.get(2).and_then(ts_read).ok_or(bad)?;
         let mut secrets = BTreeMap::new();
         for e in v.get(3).and_then(Value::as_array).unwrap_or(&[]) {
@@ -224,9 +276,9 @@ impl Marks {
                 _ => return Err(bad),
             }
         }
-        if written.len() > MAX_ORIGINS || secrets.len() > MAX_SECRETS {
+        if secrets.len() > MAX_SECRETS {
             return Err(bad);
         }
-        Ok(Marks { written, secrets, floor })
+        Ok(Marks { written, judged, secrets, floor })
     }
 }

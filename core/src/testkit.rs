@@ -61,11 +61,16 @@ impl G {
     }
 
     pub fn rec(&mut self, by: &K, kind: Kind) -> Record {
+        self.rec_at(by, kind, 0)
+    }
+
+    /// A record signed at time_ms.
+    pub fn rec_at(&mut self, by: &K, kind: Kind, time_ms: u64) -> Record {
         let (seq, prev) = match self.heads.get(&by.hash) {
             Some((s, id)) => (s + 1, Some(*id)),
             None => (1, None),
         };
-        let body = Body { group: self.gid, signer: by.hash, seq, prev, time_ms: 0, kind, held: false };
+        let body = Body { group: self.gid, signer: by.hash, seq, prev, time_ms, kind, held: false };
         let r = Record::sign(body, by).unwrap();
         self.heads.insert(by.hash, (seq, r.id()));
         self.set.insert(r.clone()).unwrap();
@@ -113,6 +118,22 @@ impl G {
         self.rec(&k("root"), Kind::Revoke(Removal { keys, seen }));
     }
 
+    /// The root's checkpoint at time_ms, keeping every other signer's
+    /// record.
+    pub fn checkpoint(&mut self, time_ms: u64) -> Record {
+        let root = k("root");
+        let mut keep: Vec<RecordId> = self
+            .set
+            .ids()
+            .filter(|id| self.set.get(id).is_some_and(|r| r.body().signer != root.hash))
+            .copied()
+            .collect();
+        keep.sort();
+        let heads =
+            self.heads.get(&root.hash).map(|(s, id)| Head { key: root.hash, seq: *s, id: *id }).into_iter().collect();
+        self.rec_at(&root, Kind::Checkpoint { heads, keep }, time_ms)
+    }
+
     pub fn state(&self) -> State {
         self.set.state(&BTreeMap::new())
     }
@@ -121,7 +142,7 @@ impl G {
 /// A device's key store with its first epoch made at T0.
 pub fn store(member: &str, group: &GroupId) -> (MemoryStore<K>, Statement) {
     let mut s = MemoryStore::new(k(member));
-    let made = keystore::rotate(&mut s, group, T0).unwrap().made.unwrap();
+    let made = keystore::rotate(&mut s, group, T0, Some(T0)).unwrap().made.unwrap();
     (s, statement_of(&made))
 }
 

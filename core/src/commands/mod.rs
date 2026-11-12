@@ -302,25 +302,40 @@ impl Counters {
     }
 }
 
-/// The key with hash h that a record of the set names: a root (the first,
-/// or a claim's new root), an admin key, or a member key. Whether that key
-/// may command is the state's to say.
-pub fn key_of(set: &RecordSet, h: &KeyHash) -> Option<Key> {
-    if set.root().hash() == *h {
-        return Some(set.root().clone());
-    }
-    for id in set.ids() {
-        let Some(r) = set.get(id) else { continue };
-        let found = match &r.body().kind {
-            Kind::Device(d) => d.admin.iter().chain(core::iter::once(&d.key)).find(|k| k.hash() == *h),
-            Kind::Claim { root, .. } if root.hash() == *h => Some(root),
-            _ => None,
-        };
-        if let Some(k) = found {
-            return Some(k.clone());
+/// The keys a set's records name, by their hashes: its first root, the
+/// new roots of claims, and the admin and member keys of device records.
+/// A member builds it once when its set changes, so a command's signer is
+/// found by its hash, not by walking the records. Whether that key may
+/// command is the state's to say.
+#[derive(Clone, Debug, Default)]
+pub struct Keys(BTreeMap<KeyHash, Key>);
+
+impl Keys {
+    pub fn of(set: &RecordSet) -> Keys {
+        let mut m = BTreeMap::new();
+        let root = set.root().clone();
+        m.insert(root.hash(), root);
+        for id in set.ids() {
+            let Some(r) = set.get(id) else { continue };
+            match &r.body().kind {
+                Kind::Device(d) => {
+                    for k in d.admin.iter().chain(core::iter::once(&d.key)) {
+                        m.entry(k.hash()).or_insert_with(|| k.clone());
+                    }
+                }
+                Kind::Claim { root, .. } => {
+                    m.entry(root.hash()).or_insert_with(|| root.clone());
+                }
+                _ => {}
+            }
         }
+        Keys(m)
     }
-    None
+
+    /// The key with hash h.
+    pub fn get(&self, h: &KeyHash) -> Option<&Key> {
+        self.0.get(h)
+    }
 }
 
 /// A member receiving a command: who it is, the group's state and records,
@@ -328,7 +343,8 @@ pub fn key_of(set: &RecordSet, h: &KeyHash) -> Option<Key> {
 pub struct Member<'a> {
     pub me: DeviceId,
     pub state: &'a State,
-    pub set: &'a RecordSet,
+    /// The keys of the member's set ([`Keys::of`]).
+    pub keys: &'a Keys,
     pub now_ms: Option<u64>,
 }
 
@@ -364,7 +380,7 @@ pub fn accept_member(
     counters: &mut Counters,
     store: &dyn KeyStore,
 ) -> Result<Option<Vec<u8>>, Refusal> {
-    let key = key_of(at.set, &c.signer).ok_or(Refusal::SILENT)?;
+    let key = at.keys.get(&c.signer).ok_or(Refusal::SILENT)?;
     c.envelope.verify(&key.public, sig::LABEL_COMMAND).map_err(|_| Refusal::SILENT)?;
     let refuse = |r| Err(Refusal::signed(r));
     if c.group != at.state.group {
