@@ -1287,3 +1287,73 @@ fn a_checkpoint_over_its_ceiling_is_not_signed() {
     assert!(body.encode().len() > crate::records::MAX_CHECKPOINT_BODY);
     assert!(Record::sign(body, &root).is_err());
 }
+
+/// A halted state is for display only: it shows the devices of the list
+/// below the stop, and nothing acts on them. No key commands, nobody
+/// admits, the holder sends no request to anyone and an admin takes none,
+/// every other peer stands as halted, and the writer writes no change.
+#[test]
+fn a_halted_state_is_for_display_only() {
+    use crate::join::decide::{Signer, may_admit};
+    use crate::join::waiting::{admin_may_take, holder_may_send};
+    let mut g = base();
+    g.device(&k("root"), &k("hub"), "hub", |d| d.rights |= RIGHT_HUB);
+    let from = g.recs.clone();
+    write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
+    let from = g.recs.clone();
+    write(&mut g, &from, &k("n2"), &k("phone 2"), &[]);
+    let mut m = set_of(&g.root.key);
+    sync_all(&mut m, &g.recs, &g.lists);
+    let live = m.state();
+    let hub = live.device_by_key(&k("hub").hash).unwrap().id;
+    assert!(admin_may_take(&live, &hub));
+    let prev = live.chain().first().copied();
+    m.insert(head_at(&g, 2, prev, &k("n9"), [9; 32])).unwrap();
+    let s = m.state();
+    assert!(s.halted());
+    assert!(s.device(&hub).is_some(), "the halted state still shows the devices");
+    for key in ["root", "n1", "n2"] {
+        assert!(!s.may_command(&k(key).hash), "{key}");
+    }
+    let f = |h: KeyHash| crate::format::KeyHash(h.0);
+    let n1 = f(k("n1").hash);
+    assert!(!may_admit(&s, &n1, Signer::Root, &n1));
+    for d in &s.devices {
+        assert!(!holder_may_send(&s, &d.id));
+        assert!(!admin_may_take(&s, &d.id));
+        let p: [u8; 65] = d.key.public.clone().try_into().unwrap();
+        if d.key.hash() != k("laptop").hash {
+            assert_eq!(crate::peer::standing(&s, &f(k("laptop").hash), &p), crate::peer::Standing::Halted);
+        }
+    }
+    let err = m.write_change(&s, &k("recovery"), &k("n3"), phone(&k("p3")), &[], false, 0).unwrap_err();
+    assert_eq!(err.to_string(), crate::records::set::CHANGE_WAITING);
+}
+
+/// Nothing computed while halted is carried over: a member that halted
+/// and restarts from what it saved, without the record that halted it (as
+/// a version that reads it would apply it), and takes again from a peer
+/// what the halt dropped, ends as a member that never saw it.
+#[test]
+fn leaving_a_halt_carries_nothing_over() {
+    let mut g = base();
+    let from = g.recs.clone();
+    write(&mut g, &from, &k("n1"), &k("new phone"), &[k("old phone").hash]);
+    let from = g.recs.clone();
+    write(&mut g, &from, &k("n2"), &k("phone 2"), &[]);
+    let mut m = set_of(&g.root.key);
+    sync_all(&mut m, &g.recs, &g.lists);
+    let prev = m.state().chain().first().copied();
+    let twin = head_at(&g, 2, prev, &k("n9"), [9; 32]);
+    m.insert(twin.clone()).unwrap();
+    assert!(m.state().halted());
+    assert!(m.len() < g.recs.len(), "the halt dropped records");
+    let mut saved: Vec<Record> = m.in_dependency_order().into_iter().filter(|r| r.id() != twin.id()).cloned().collect();
+    saved.extend(g.recs.iter().cloned());
+    let lists: Vec<Vec<u8>> = m.lists().map(<[u8]>::to_vec).collect();
+    let back = RecordSet::restore(g.root.key.clone(), k("recovery").key, &saved, &lists);
+    let never = set_with(&g.root.key, &g.recs, &g.lists);
+    assert_eq!(back.digest(), never.digest());
+    assert_eq!(back.state(), never.state());
+    assert!(has(&back.state(), &k("phone 2")));
+}
