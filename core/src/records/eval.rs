@@ -644,6 +644,29 @@ impl Chain {
         self.steps.iter().map(|(_, k)| k.hash()).collect()
     }
 
+    /// The roots whose records wait aside, each with the lowest seq of a
+    /// record that names it: the roots of the chain's records that have
+    /// not applied yet, not a root of the path. A halted group keeps
+    /// nothing aside. Their records are neither counted nor ignored until
+    /// the record naming the root applies; the set keeps them apart and
+    /// evaluate leaves them out the same way.
+    pub fn waiting_roots(&self, group_root: &KeyHash) -> BTreeMap<KeyHash, (u64, Key)> {
+        let mut out: BTreeMap<KeyHash, (u64, Key)> = BTreeMap::new();
+        if self.halted() {
+            return out;
+        }
+        let promoted = self.promoted();
+        for (seq, root) in &self.pending {
+            let h = root.hash();
+            if promoted.contains(&h) || h == *group_root {
+                continue;
+            }
+            let slot = out.entry(h).or_insert((*seq, root.clone()));
+            slot.0 = slot.0.min(*seq);
+        }
+        out
+    }
+
     /// The cut, by each key it covers.
     pub fn cuts(&self) -> BTreeMap<KeyHash, Cut> {
         cuts_of(self.cut.as_ref())
@@ -825,6 +848,14 @@ pub(crate) fn off_cuts<'r>(
     records.filter(|r| off_cut(cuts, r)).map(Record::id).collect()
 }
 
+/// Whether r is the current root's record at the recovery record's
+/// `from` (above 1): the start of its line as the root, which the record
+/// vouches for whatever its prev names.
+pub(crate) fn starts_line(cuts: &BTreeMap<KeyHash, Cut>, r: &Record) -> bool {
+    let b = r.body();
+    cuts.get(&b.signer).is_some_and(|c| c.current == b.signer && c.from > 1 && b.seq == c.from)
+}
+
 /// Whether r is of a root a takeover cut and the takeover does not list
 /// it.
 pub(crate) fn off_cut(cuts: &BTreeMap<KeyHash, Cut>, r: &Record) -> bool {
@@ -919,6 +950,10 @@ pub(crate) fn evaluate_checked(
             checked.iter().map(|c| c.r).chain(early.iter().copied()).map(|r| (r.id(), r)).collect();
         chain(&group_root, checked.iter().map(|c| (c.r, c.role)), lists, |id, root| first_held(&held, id, root))
     };
+    // The records of a root only a waiting record names stay aside, as
+    // in the set (Chain::waiting_roots).
+    let waiting = chain.waiting_roots(&group_root);
+    let checked: Vec<Checked> = checked.into_iter().filter(|c| !waiting.contains_key(&c.r.body().signer)).collect();
     // Halted: only the recovery chain and what the newest list applied
     // below the fork names (State::halted).
     let checked = if chain.halted() {
@@ -961,9 +996,13 @@ pub(crate) fn evaluate_checked(
         let (Kind::Checkpoint { heads, keep }, id) = (&x.b().kind, x.id) else { continue };
         let anchors = anchors_of(heads, keep);
         // A checkpoint counts only where the member holds what it names,
-        // on its chains; one the set already pruned by stays (proven).
+        // on its chains; one the set already pruned by stays (proven). A
+        // record the cut drops (a cut root's, or the current root's below
+        // its `from`, unlisted) is not held for it: nothing below the line
+        // the recovery record starts is followed.
         if !proven.iter().any(|(h, a)| h == heads && *a == anchors) {
-            let held: BTreeMap<RecordId, &Record> = kept.iter().map(|c| (c.r.id(), c.r)).collect();
+            let held: BTreeMap<RecordId, &Record> =
+                kept.iter().filter(|c| !off_cut(&cuts, c.r)).map(|c| (c.r.id(), c.r)).collect();
             if !checkpoint_ok(x.r, |id| held.get(id).copied()) {
                 continue;
             }
@@ -1131,6 +1170,8 @@ struct Evaluation<'a> {
     /// The heads and keep of the checkpoint it prunes by, where a prev
     /// chain may end.
     anchors: BTreeSet<RecordId>,
+    /// The current root's records at the chain's `from` (`starts_line`).
+    starts: BTreeSet<RecordId>,
     failed: BTreeMap<RecordId, Why>,
     /// The verified records within the set's ceilings.
     recs: Vec<Rec<'a>>,
@@ -1165,6 +1206,11 @@ impl<'a> Evaluation<'a> {
         // checkpoint's anchor does: not by that root's chain.
         let mut anchors = anchors;
         anchors.extend(cuts.values().flat_map(|c| c.keep.iter().copied()));
+        // The current root's record at the chain's `from` starts its line
+        // as the root: the recovery record vouches for it, it counts with
+        // any prev, and nothing below it by that key is followed.
+        let starts: BTreeSet<RecordId> = checked.iter().filter(|c| starts_line(cuts, c.r)).map(|c| c.r.id()).collect();
+        anchors.extend(starts.iter().copied());
         let mut failed = failed;
         for c in &checked {
             if !kept.contains(&c.r.id()) {
@@ -1181,6 +1227,7 @@ impl<'a> Evaluation<'a> {
             group_root,
             recovery: recovery.hash(),
             anchors,
+            starts,
             failed,
             recs: Vec::with_capacity(checked.len()),
             by_sig: BTreeMap::new(),
@@ -1239,6 +1286,9 @@ impl<'a> Evaluation<'a> {
             }
             signer = Some(b.signer);
             chain.insert(b.seq, r.id);
+            if self.starts.contains(&r.id) {
+                break;
+            }
             at = b.prev.as_ref().and_then(|p| self.by_id.get(p)).copied();
         }
         chain

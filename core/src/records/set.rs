@@ -612,16 +612,7 @@ impl RecordSet {
         // The roots the chain's records name that have not applied yet: a
         // record off the chain (one side of a fork, past a gap, after a
         // void one) has nothing kept aside.
-        let mut early_roots: BTreeMap<KeyHash, (u64, Key)> = BTreeMap::new();
-        for (seq, root) in &chain.pending {
-            let h = root.hash();
-            if chain.promoted().contains(&h) || h == self.root.hash() {
-                continue;
-            }
-            let slot = early_roots.entry(h).or_insert((*seq, root.clone()));
-            slot.0 = slot.0.min(*seq);
-        }
-        self.early_roots = if self.halted.is_some() { BTreeMap::new() } else { early_roots };
+        self.early_roots = if self.halted.is_some() { BTreeMap::new() } else { chain.waiting_roots(&self.root.hash()) };
         if let (Some(old), Some(new)) = (self.cuts.values().next(), cuts.values().next())
             && old.record == new.record
         {

@@ -61,6 +61,13 @@ fn has(s: &State, member: &K) -> bool {
     s.device_by_key(&member.hash).is_some()
 }
 
+/// The state without what it ignored: a member that holds a record the
+/// change cut lists it there, one that never had it does not.
+fn unignored(mut s: State) -> State {
+    s.ignored.clear();
+    s
+}
+
 fn forked(s: &State) -> bool {
     s.stop == Stop::Full && s.conflicts.iter().any(|c| c.kind == ConflictKind::Fork)
 }
@@ -1474,4 +1481,102 @@ fn a_key_a_removal_does_not_name_is_untouched() {
     assert!(s.counting.contains(&later.id()));
     assert!(!has(&s, &k("laptop")) && has(&s, &k("new phone")));
     let _ = w;
+}
+
+/// What a member keeps aside for a root only a waiting head names reads
+/// the same in the set and in evaluate of what it holds: neither counted
+/// nor ignored, and naming no device.
+#[test]
+fn a_waiting_roots_records_read_alike_in_the_set_and_evaluate() {
+    let mut g = base();
+    let from = g.recs.clone();
+    let w = write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
+    // The list has not come: the head waits, the new root's records with it.
+    let mut m = set_of(&g.root.key);
+    sync_all(&mut m, &from, &[]);
+    m.insert(w.record.clone()).unwrap();
+    for r in &w.first {
+        assert_eq!(m.insert(r.clone()), Ok(Added::Waiting));
+    }
+    let held: Vec<Record> = m.ids().map(|id| m.get(id).unwrap().clone()).collect();
+    let lists: Vec<Vec<u8>> = m.lists().map(<[u8]>::to_vec).collect();
+    let set = m.state();
+    let eval = state_with(&g.root.key, &held, &lists);
+    assert_eq!(set, eval);
+    for r in &w.first {
+        assert!(!eval.ignored.iter().any(|i| i.record == r.id()));
+    }
+    assert!(!has(&eval, &k("new phone")));
+}
+
+/// The new root's record at the head's `from` starts its line: it counts
+/// with any prev, here a record of its own below `from` the list leaves
+/// out, and the records above it count by it, whether or not the member
+/// ever held the one below, in both orders.
+#[test]
+fn the_record_at_from_starts_the_new_roots_line() {
+    let mut g = base();
+    g.admin(&k("phone a"), &k("admin a"), POWER_ADMIT);
+    let lamp = g.device(&k("admin a"), &k("lamp"), "lamp", |_| {});
+    let (seq, _) = g.heads[&k("admin a").hash];
+    let list = g.listing();
+    assert!(!list.contains(&lamp.id()));
+    g.change_from(&k("admin a"), &list, seq + 1);
+    let kettle = g.device(&k("admin a"), &k("kettle"), "kettle", |_| {});
+    let without: Vec<Record> = g.recs.iter().filter(|r| r.id() != lamp.id()).cloned().collect();
+    let want = state_with(&g.root.key, &g.recs, &g.lists);
+    assert!(has(&want, &k("kettle")) && !has(&want, &k("lamp")));
+    assert!(want.ignored.iter().any(|i| i.record == lamp.id()), "held, and cut");
+    assert_eq!(unignored(want.clone()), unignored(state_with(&g.root.key, &without, &g.lists)));
+    for recs in [&g.recs, &without] {
+        for order in 0..2 {
+            let mut recs = recs.clone();
+            if order == 1 {
+                recs.reverse();
+            }
+            let mut m = set_of(&g.root.key);
+            sync_all(&mut m, &recs, &g.lists);
+            let s = m.state();
+            assert_eq!(s.roots.last(), Some(&k("admin a").hash));
+            assert!(has(&s, &k("kettle")), "order {order}");
+            assert!(!has(&s, &k("lamp")));
+            assert!(m.contains(&kettle.id()));
+        }
+    }
+}
+
+/// A new root's checkpoint that keeps a record the change cut (its own
+/// below `from`, not listed) does not count, whether or not the member
+/// holds that record: the two members end equal.
+#[test]
+fn a_checkpoint_keeping_what_the_change_cut_counts_nowhere() {
+    let mut g = base();
+    g.admin(&k("phone a"), &k("admin a"), POWER_ADMIT);
+    let lamp = g.device(&k("admin a"), &k("lamp"), "lamp", |_| {});
+    let (seq, _) = g.heads[&k("admin a").hash];
+    let tv =
+        g.recs.iter().find(|r| matches!(&r.body().kind, Kind::Device(d) if d.key.hash() == k("tv").hash)).unwrap().id();
+    let list = g.listing();
+    assert!(list.contains(&tv));
+    // Its first checkpoint keeps the list without the TV, and the lamp.
+    let mut keep: Vec<RecordId> = list.iter().copied().filter(|id| *id != tv).chain([lamp.id()]).collect();
+    keep.sort();
+    let (rs, rid) = g.heads[&g.root.hash];
+    let cp = g.rec(&k("admin a"), Kind::Checkpoint { heads: vec![Head { key: g.root.hash, seq: rs, id: rid }], keep });
+    let l = List(list.clone());
+    g.lists.push(l.encode());
+    g.rec(
+        &k("recovery"),
+        Kind::Recovery { root: k("admin a").key.clone(), list: l.hash(), from: seq + 1, first: cp.id() },
+    );
+    let without: Vec<Record> = g.recs.iter().filter(|r| r.id() != lamp.id()).cloned().collect();
+    let all = state_with(&g.root.key, &g.recs, &g.lists);
+    assert_eq!(unignored(all.clone()), unignored(state_with(&g.root.key, &without, &g.lists)));
+    assert_eq!(all.roots.last(), Some(&k("admin a").hash));
+    assert!(has(&all, &k("tv")));
+    for recs in [&g.recs, &without] {
+        let mut m = set_of(&g.root.key);
+        sync_all(&mut m, recs, &g.lists);
+        assert!(has(&m.state(), &k("tv")));
+    }
 }
