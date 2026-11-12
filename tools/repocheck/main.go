@@ -8,7 +8,8 @@
 //     translations of the apps (String Catalogs, *.xcstrings, Android's
 //     res/values-<language>/strings.xml, the tray app's
 //     frontend/l10n/<language>.json, the Aurora app's
-//     translations/cbb-<language>.ts, the command line's
+//     translations/cbb-<language>.ts, the HarmonyOS app's
+//     resources/<language>/element/string.json, the command line's
 //     member/l10n/<language>.json, the installers' packaging/l10n/<language>.tsv,
 //     the localized keys of a .desktop file, such as Comment[ru]=,
 //     the website's site/l10n/<language>.json
@@ -206,6 +207,10 @@ var docTranslation = regexp.MustCompile(`^(site/docs/[a-z]{2,3}/.+\.md|docs/imag
 // the app for Aurora OS and Sailfish OS (Qt's .ts files).
 var silicaTranslation = regexp.MustCompile(`^apps/silica/translations/cbb-[a-z]{2,3}\.ts$`)
 
+// harmonyTranslation matches the strings of a language other than the
+// default one (resources/base) in the HarmonyOS app.
+var harmonyTranslation = regexp.MustCompile(`^apps/harmony/(entry/src/main|AppScope)/resources/[a-z]{2,3}(_[A-Za-z]+)?/element/string\.json$`)
+
 // cliTranslation matches the texts of a language other than English of the
 // command line, the Rust cbb (member/src/l10n.rs).
 var cliTranslation = regexp.MustCompile(`^member/l10n/[a-z]{2,3}\.json$`)
@@ -224,7 +229,7 @@ func isTranslation(name string) bool {
 	if m := storeTranslation.FindStringSubmatch(name); m != nil && m[2] != "en" {
 		return true
 	}
-	return strings.HasSuffix(name, ".xcstrings") || androidTranslation.MatchString(name) || desktopTranslation.MatchString(name) || siteTranslation.MatchString(name) || docTranslation.MatchString(name) || silicaTranslation.MatchString(name) || cliTranslation.MatchString(name) || installerTranslation.MatchString(name)
+	return strings.HasSuffix(name, ".xcstrings") || androidTranslation.MatchString(name) || desktopTranslation.MatchString(name) || siteTranslation.MatchString(name) || docTranslation.MatchString(name) || silicaTranslation.MatchString(name) || harmonyTranslation.MatchString(name) || cliTranslation.MatchString(name) || installerTranslation.MatchString(name)
 }
 
 // check returns the rule violations in one file; listed holds the paths of

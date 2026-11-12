@@ -17,3 +17,8 @@ export function phoneName(): string {
   const name = deviceInfo.marketName.length > 0 ? deviceInfo.marketName : deviceInfo.productModel;
   return name.length > 64 ? name.substring(0, 64) : name;
 }
+
+// The system's version for the hello, as "HarmonyOS 5.0.1".
+export function osVersion(): string {
+  return deviceInfo.osFullName.length > 0 ? deviceInfo.osFullName : `HarmonyOS ${deviceInfo.sdkApiVersion}`;
+}

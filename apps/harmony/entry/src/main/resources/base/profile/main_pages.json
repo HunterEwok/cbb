@@ -1,3 +1,17 @@
 {
-  "src": ["pages/Start", "pages/Group"]
+  "src": [
+    "pages/Start",
+    "pages/Main",
+    "pages/Join",
+    "pages/Invitation",
+    "pages/Restore",
+    "pages/Device",
+    "pages/AddDevice",
+    "pages/Invite",
+    "pages/Recovery",
+    "pages/Settings",
+    "pages/Arrange",
+    "pages/Collection",
+    "pages/CollectionName"
+  ]
 }

@@ -1,5 +1,14 @@
 {
   "color": [
-    { "name": "start_window_background", "value": "#FFFFFF" }
+    { "name": "start_window_background", "value": "#F4F5F8" },
+    { "name": "background", "value": "#F4F5F8" },
+    { "name": "surface", "value": "#FFFFFF" },
+    { "name": "text", "value": "#111318" },
+    { "name": "secondary", "value": "#4F5462" },
+    { "name": "accent", "value": "#0A7A3E" },
+    { "name": "on_accent", "value": "#FFFFFF" },
+    { "name": "error", "value": "#B3261E" },
+    { "name": "online", "value": "#0A7A3E" },
+    { "name": "offline", "value": "#4F5462" }
   ]
 }

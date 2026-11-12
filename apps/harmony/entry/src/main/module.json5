@@ -24,6 +24,16 @@
           {
             "entities": ["entity.system.home"],
             "actions": ["action.system.home"]
+          },
+          // A text, images or files shared to CBB go to the group as a copy
+          // of this phone.
+          {
+            "actions": ["ohos.want.action.sendData"],
+            "uris": [
+              { "scheme": "file", "utd": "general.text", "maxFileSupported": 1 },
+              { "scheme": "file", "utd": "general.image", "maxFileSupported": 20 },
+              { "scheme": "file", "utd": "general.file", "maxFileSupported": 20 }
+            ]
           }
         ]
       }
