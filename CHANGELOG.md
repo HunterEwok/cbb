@@ -2258,6 +2258,12 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- A hub that started serving in place of one above it ended its first clients' connections
+  a moment later, when it made its key for the next period, and those clients then tried the
+  hub above, which may be off, before it again. The hub makes those keys before it listens,
+  and only a hub that serves reconnects its members for a new offer.
+- In Settings on the iPhone, the theme swatches grow with the text size as their names do,
+  and no theme's name in Hindi reads as clipped to the accessibility checks.
 - The Aurora app renamed and handed the group over to no device, and named no sender of a
   remote paste: its pages read a device's ID from a field the core's list does not have. An
   Aurora phone refuses a paste of pictures or files, which its Bluetooth keyboard cannot type,

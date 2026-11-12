@@ -457,6 +457,9 @@ struct ThemeSwatches: View {
     /// theme's name ("Liquid Glass" and its longer translations) breaks between words,
     /// never inside one.
     @ScaledMetric(relativeTo: .caption2) private var width: CGFloat = 76
+    /// The swatch grows with the text, as its name and checkmark do: at the
+    /// largest sizes a fixed swatch left the checkmark wider than it.
+    @ScaledMetric(relativeTo: .caption2) private var swatchSize: CGFloat = 36
 
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: width), spacing: Tokens.spacingSmall)], spacing: Tokens.spacingMedium) {
@@ -466,7 +469,7 @@ struct ThemeSwatches: View {
                 Button { selection = theme.name } label: {
                     VStack(spacing: 6) {
                         ThemeSwatch(palette: swatch)
-                            .frame(width: 36, height: 36)
+                            .frame(width: swatchSize, height: swatchSize)
                             .overlay {
                                 if chosen {
                                     Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(swatch.text)
@@ -474,12 +477,17 @@ struct ThemeSwatches: View {
                             }
                             .padding(3)
                             .overlay(Circle().stroke(chosen ? palette.accent : palette.line, lineWidth: 2))
-                        Text(ThemeChoice.title(theme.name)).font(.caption2).multilineTextAlignment(.center)
+                        // A hair space on each side: some names' last letter draws a
+                        // little past the text's own width (the Hindi names of Swiss and
+                        // Hardware), which the accessibility audit reports as clipped text.
+                        (Text(verbatim: "\u{200A}") + Text(ThemeChoice.title(theme.name)) + Text(verbatim: "\u{200A}"))
+                            .font(.caption2).multilineTextAlignment(.center)
                             .foregroundStyle(chosen ? palette.text : palette.textDim)
                     }
                     .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(Text(ThemeChoice.title(theme.name)))
                 .accessibilityAddTraits(chosen ? .isSelected : [])
             }
         }
