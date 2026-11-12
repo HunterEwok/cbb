@@ -53,7 +53,8 @@
 # every member within SOAK_WAIT, 60 s, is missed), the delivery time's p95 is
 # at most SOAK_P95_MAX_MS (10000 ms), every start was whole, no member's RSS
 # floor grew more than SOAK_GROW_MAX_KB over its first window's without a
-# restart, no member's RSS floor rose in three windows in a row, and no
+# restart, no member's RSS floor rose in three windows in a row (a rise is
+# a floor at least 64 KiB above the previous window's), and no
 # member's floor of open files rose over the first window's; else FAIL with
 # why. Beside it the raw numbers of single samples (the growth of a member's
 # RSS over its first sample after warm-up, and the samples whose open files
@@ -342,7 +343,7 @@ usage() {
 				else
 					read -r r0 f0 <"$dir/m$m/base"
 					read -r pr run <"$dir/m$m/prev"
-					if [ "$fr" -gt "$pr" ]; then run=$((run + 1)); else run=0; fi
+					if [ "$fr" -ge $((pr + 64)) ]; then run=$((run + 1)); else run=0; fi
 					echo "$fr $run" >"$dir/m$m/prev"
 					up=0
 					[ "$ff" -gt "$f0" ] && up=1

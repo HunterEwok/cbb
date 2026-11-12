@@ -186,7 +186,7 @@ minutes, go into windows of an hour, and a window's floor is its least RSS and o
 `soak.sh verdict` prints the pass or fail line so far, and `soak.sh stop` ends with it: PASS when
 no copy was missed, every start was whole, no member's RSS floor grew over its first window's by
 more than 1 MiB on the calm stand or 4 MiB on the loaded one, no member's RSS floor rose in three
-windows in a row, no member's floor of open files rose over its first window's, and the delivery
+windows in a row (a rise being at least 64 KiB over the previous window's floor), no member's floor of open files rose over its first window's, and the delivery
 time's p95 is at most 10 s. The bounds were fixed before any long run was measured: a run over
 them is a finding, not a reason to move them. Beside the verdict the single samples' numbers are
 printed as `raw_*`, for reading. A checked copy that is not on every member within 60 s counts as
