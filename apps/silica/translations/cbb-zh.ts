@@ -27,14 +27,6 @@
         <translation>正在连接设备…</translation>
     </message>
     <message>
-        <source>For a phone that joins as an admin</source>
-        <translation>适用于以管理员身份加入的手机</translation>
-    </message>
-    <message>
-        <source>Make it an admin</source>
-        <translation>设为管理员</translation>
-    </message>
-    <message>
         <source>On the device to add, choose to join a group, then point the camera at the code it shows.</source>
         <translation>在要添加的设备上选择加入群组，然后将相机对准它显示的二维码。</translation>
     </message>
@@ -124,6 +116,17 @@
     <message>
         <source>devices unknown here</source>
         <translation>此处未知的设备</translation>
+    </message>
+</context>
+<context>
+    <name>App</name>
+    <message>
+        <source>The clipboard holds no text.</source>
+        <translation>剪贴板中没有文本。</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>没有可发送的内容：无法读取任何文件。</translation>
     </message>
 </context>
 <context>
@@ -260,6 +263,29 @@
     <message>
         <source>Version %1 fixes this: update CBB.</source>
         <translation>版本 %1 已修复此问题：请更新 CBB。</translation>
+    </message>
+</context>
+<context>
+    <name>ChangePinDialog</name>
+    <message>
+        <source>Change</source>
+        <translation>更改</translation>
+    </message>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>更改管理员 PIN</translation>
+    </message>
+    <message>
+        <source>Current PIN</source>
+        <translation>当前 PIN</translation>
+    </message>
+    <message>
+        <source>New PIN</source>
+        <translation>新 PIN</translation>
+    </message>
+    <message>
+        <source>The new PIN again</source>
+        <translation>再次输入新 PIN</translation>
     </message>
 </context>
 <context>
@@ -404,6 +430,10 @@
         <translation>正在静音 %1</translation>
     </message>
     <message>
+        <source>Paste on it…</source>
+        <translation>在其上粘贴…</translation>
+    </message>
+    <message>
         <source>Remove</source>
         <translation>移除</translation>
     </message>
@@ -475,6 +505,10 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>Adding a device needs the admin PIN.</source>
+        <translation>添加设备需要管理员 PIN。</translation>
+    </message>
+    <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
         <translation>二维码中的地址由另一台设备应答。请重新扫描。</translation>
     </message>
@@ -503,12 +537,20 @@
         <translation>扫描恢复单上的二维码：在新手机上，仅输入密钥是不够的。</translation>
     </message>
     <message>
+        <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
+        <translation>连续七次输错 PIN，管理员密钥已被永久锁定；手机仍作为成员留在群组中。</translation>
+    </message>
+    <message>
         <source>Something in CBB broke. It starts again.</source>
         <translation>CBB 出了点问题，正在重新启动。</translation>
     </message>
     <message>
         <source>That phone asks to be an admin. Only the group's root makes admins; on that phone, join without being an admin.</source>
         <translation>该手机请求成为管理员。只有群组的根才能设置管理员；请在那台手机上以非管理员身份加入。</translation>
+    </message>
+    <message>
+        <source>The admin PIN is needed first.</source>
+        <translation>需要先输入管理员 PIN。</translation>
     </message>
     <message>
         <source>The claim to restore the group became void.</source>
@@ -521,6 +563,10 @@
     <message>
         <source>The code did not match. Scan the code the other device shows now.</source>
         <translation>代码不匹配。请扫描另一台设备当前显示的二维码。</translation>
+    </message>
+    <message>
+        <source>The device did not paste.</source>
+        <translation>设备未粘贴。</translation>
     </message>
     <message>
         <source>The device did not take the command.</source>
@@ -547,8 +593,8 @@
         <translation>邀请已过期。请索要新的邀请。</translation>
     </message>
     <message>
-        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
-        <translation>另一台设备没有以管理员身份接纳此手机。只有群组的根设备可以设立管理员：请在根设备上以管理员身份接纳它（cbb pair -qr -admin），或者以非管理员身份加入。</translation>
+        <source>The other device did not admit this phone as an admin. Only the device that made the group makes admins: scan the code there, or join without being an admin.</source>
+        <translation>另一台设备没有以管理员身份接纳此手机。只有创建群组的设备可以设立管理员：请在那台设备上扫描代码，或者以非管理员身份加入。</translation>
     </message>
     <message>
         <source>The other device did not join.</source>
@@ -635,6 +681,10 @@
         <translation>手机的安全元件未能签名。</translation>
     </message>
     <message>
+        <source>The phone's secure element did not take the PIN.</source>
+        <translation>手机的安全元件未接受该 PIN。</translation>
+    </message>
+    <message>
         <source>The phone's secure element holds a broken key.</source>
         <translation>手机的安全元件中有一个损坏的密钥。</translation>
     </message>
@@ -673,6 +723,10 @@
     <message>
         <source>This phone keeps no keys for apps.</source>
         <translation>此手机不为应用保存密钥。</translation>
+    </message>
+    <message>
+        <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
+        <translation>此手机的管理员密钥早于管理员 PIN。请退出群组，然后重新加入。</translation>
     </message>
 </context>
 <context>
@@ -807,10 +861,6 @@
         <translation>加入群组</translation>
     </message>
     <message>
-        <source>Join as an admin</source>
-        <translation>以管理员身份加入</translation>
-    </message>
-    <message>
         <source>Join with an invitation</source>
         <translation>通过邀请加入</translation>
     </message>
@@ -825,10 +875,6 @@
     <message>
         <source>On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open.</source>
         <translation>在群组中的手机上点按 + 并扫描此二维码。在群组中的电脑上点按 + 并输入这些数字。请保持此屏幕打开。</translation>
-    </message>
-    <message>
-        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
-        <translation>在群组的根电脑上用此代码以管理员身份接纳此手机：在 CBB 应用中添加设备并选择以管理员身份接纳，或运行 cbb pair -qr -admin。请保持此屏幕打开。</translation>
     </message>
     <message>
         <source>The phone is in the group now.</source>
@@ -1017,10 +1063,6 @@
         <translation>加入群组</translation>
     </message>
     <message>
-        <source>Join a group as an admin</source>
-        <translation>以管理员身份加入群组</translation>
-    </message>
-    <message>
         <source>Join with an invitation</source>
         <translation>通过邀请加入</translation>
     </message>
@@ -1029,8 +1071,8 @@
         <translation>手机丢了？</translation>
     </message>
     <message>
-        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
-        <translation>让第二部手机成为管理员：在那部手机上点按“以管理员身份加入群组”，然后在这里用“扫描代码”扫描它的代码。点按即可关闭。</translation>
+        <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
+        <translation>让第二部手机成为管理员：先把它加入群组，然后在这里打开它并点按“设为管理员”。点按即可关闭。</translation>
     </message>
     <message>
         <source>New collection…</source>
@@ -1140,6 +1182,10 @@
         <translation>一段视频</translation>
     </message>
     <message>
+        <source>An admin muted this phone, so its copies stay on it.</source>
+        <translation>管理员已将这部手机静音，所以它的副本留在本机。</translation>
+    </message>
+    <message>
         <source>An image</source>
         <translation>一张图片</translation>
     </message>
@@ -1200,6 +1246,100 @@
     <message>
         <source>a file</source>
         <translation>一个文件</translation>
+    </message>
+</context>
+<context>
+    <name>PastePage</name>
+    <message>
+        <source>A paste suits most apps; typing suits those that take no paste, and only up to 4 KB. Enter runs a command in a terminal, so the computer takes it only when its user allowed that. A secret leaves no trace in the computer's log or clipboard.</source>
+        <translation>粘贴适合大多数应用；输入适合不接受粘贴的应用，且最多 4 KB。回车会在终端中执行命令，所以只有电脑的用户允许时才会接受。机密不会在电脑的日志或剪贴板中留下痕迹。</translation>
+    </message>
+    <message>
+        <source>A picture or files go to the group as a copy, and the computer pastes them where its focus is, as Ctrl+V would: into a chat, a document or a folder. Enter, if on, sends them in a chat.</source>
+        <translation>图片或文件作为一份拷贝发送到群组，电脑会像按 Ctrl+V 一样把它们粘贴到焦点所在处：聊天、文档或文件夹中。如果开启了回车，会在聊天中发送它们。</translation>
+    </message>
+    <message>
+        <source>A secret</source>
+        <translation>机密</translation>
+    </message>
+    <message>
+        <source>It goes where %1's keyboard focus is, once its user turned remote paste on there. Left empty, Paste sends what the clipboard holds.</source>
+        <translation>它会进入 %1 键盘焦点所在之处，前提是那里的用户已开启远程粘贴。留空时，“粘贴”会发送剪贴板中的内容。</translation>
+    </message>
+    <message>
+        <source>Paste</source>
+        <translation>粘贴</translation>
+    </message>
+    <message>
+        <source>Paste a picture or files…</source>
+        <translation>粘贴图片或文件…</translation>
+    </message>
+    <message>
+        <source>Paste on %1</source>
+        <translation>在 %1 上粘贴</translation>
+    </message>
+    <message>
+        <source>Press Enter after it</source>
+        <translation>之后按回车</translation>
+    </message>
+    <message>
+        <source>Text</source>
+        <translation>文本</translation>
+    </message>
+    <message>
+        <source>Type it key by key</source>
+        <translation>逐键输入</translation>
+    </message>
+</context>
+<context>
+    <name>PinDialog</name>
+    <message>
+        <source>Admin PIN</source>
+        <translation>管理员 PIN</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>CBB 自己的 PIN，至少四位数字。请勿使用手机的解锁密码。每次管理员操作前由手机的安全元件验证；七次输错将永久锁定管理员密钥，任何人都无法解锁。</translation>
+    </message>
+    <message>
+        <source>Choose the admin PIN</source>
+        <translation>设置管理员 PIN</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>确认</translation>
+    </message>
+    <message>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <source>Set</source>
+        <translation>设置</translation>
+    </message>
+    <message>
+        <source>The PIN again</source>
+        <translation>再次输入 PIN</translation>
+    </message>
+    <message>
+        <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
+        <translation>PIN 由手机的安全元件验证；七次输错将永久锁定管理员密钥。</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin later. Cancel to join as a member only.</source>
+        <translation>设置管理员 PIN 后，群组的根以后可以将此手机设为管理员。取消则仅以成员身份加入。</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin.</source>
+        <translation>设置管理员 PIN 后，群组的根可以将此手机设为管理员。</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
+        <translation>PIN 错误。只剩一次机会：再输错一次将永久锁定管理员密钥。</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>PIN 错误。剩余次数：%1。</translation>
     </message>
 </context>
 <context>
@@ -1362,6 +1502,10 @@
         <translation>跟随手机</translation>
     </message>
     <message>
+        <source>Change the admin PIN</source>
+        <translation>更改管理员 PIN</translation>
+    </message>
+    <message>
         <source>Checking…</source>
         <translation>正在检查…</translation>
     </message>
@@ -1380,6 +1524,10 @@
     <message>
         <source>Devices join or leave</source>
         <translation>设备加入或离开</translation>
+    </message>
+    <message>
+        <source>Get ready to be an admin</source>
+        <translation>准备成为管理员</translation>
     </message>
     <message>
         <source>Group</source>
@@ -1482,6 +1630,10 @@
         <translation>设置</translation>
     </message>
     <message>
+        <source>Seven wrong PINs locked the admin key for good. The phone stays in the group as a member; to be an admin again, reinstall CBB and join as a new device.</source>
+        <translation>连续七次输错 PIN，管理员密钥已被永久锁定。手机仍作为成员留在群组中；若要重新成为管理员，请重新安装 CBB 并作为新设备加入。</translation>
+    </message>
+    <message>
         <source>Show error details</source>
         <translation>显示错误详情</translation>
     </message>
@@ -1494,8 +1646,24 @@
         <translation>系统</translation>
     </message>
     <message>
+        <source>The admin PIN is changed.</source>
+        <translation>管理员 PIN 已更改。</translation>
+    </message>
+    <message>
+        <source>The admin PIN is not changed.</source>
+        <translation>管理员 PIN 未更改。</translation>
+    </message>
+    <message>
+        <source>The group's root can make this phone an admin: on the root, open this phone and tap Make an admin.</source>
+        <translation>群组的根可以将此手机设为管理员：在根设备上打开此手机，然后点按“设为管理员”。</translation>
+    </message>
+    <message>
         <source>Version</source>
         <translation>版本</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>PIN 错误。剩余次数：%1。</translation>
     </message>
 </context>
 <context>

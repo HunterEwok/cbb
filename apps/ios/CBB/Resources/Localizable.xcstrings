@@ -7594,6 +7594,52 @@
         }
       }
     },
+    "It can then add and remove devices, and take the group over if this phone is lost.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سيتمكن بعدها من إضافة الأجهزة وإزالتها، ومن تولّي المجموعة إذا ضاع هذا الهاتف."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Así podrá añadir y quitar dispositivos, y quedarse con el grupo si se pierde este teléfono."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "אז הוא יוכל להוסיף ולהסיר מכשירים, ולקחת את הקבוצה אם הטלפון הזה יאבד."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "फिर वह डिवाइस जोड़ और हटा सकेगा, और यह फ़ोन खो जाए तो ग्रुप अपने हाथ में ले सकेगा।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тогда он сможет добавлять и удалять устройства, а если этот телефон потеряется, забрать группу себе."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kisha itaweza kuongeza na kuondoa vifaa, na kuchukua kikundi simu hii ikipotea."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "之后它可以添加和移除设备，如果这部手机丢了，还能接管群组。"
+          }
+        }
+      }
+    },
     "It goes where %@'s keyboard focus is, once its user turned remote paste on there. Left empty, Paste sends what the clipboard holds.": {
       "localizations": {
         "ar": {
@@ -8372,98 +8418,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "加入群组"
-          }
-        }
-      }
-    },
-    "Join a group as an admin": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الانضمام إلى مجموعة كمشرف"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unirse a un grupo como administrador"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "הצטרפות לקבוצה כמנהל"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "एडमिन के रूप में समूह से जुड़ें"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Войти в группу как админ"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Jiunge na kikundi kama msimamizi"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "以管理员身份加入群组"
-          }
-        }
-      }
-    },
-    "Join as an admin": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الانضمام كمشرف"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unirse como administrador"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "הצטרפות כמנהל"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "एडमिन के रूप में जुड़ें"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Войти как админ"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Jiunge kama msimamizi"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "以管理员身份加入"
           }
         }
       }
@@ -9802,52 +9756,6 @@
         }
       }
     },
-    "Make a computer an admin": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "جعل حاسوب مشرفًا"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hacer administrador a un ordenador"
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "הפיכת מחשב למנהל"
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "किसी कंप्यूटर को एडमिन बनाएँ"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сделать компьютер админом"
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fanya kompyuta kuwa msimamizi"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "让电脑成为管理员"
-          }
-        }
-      }
-    },
     "Make a computer at home the base, in its advanced settings.": {
       "localizations": {
         "ar": {
@@ -9890,6 +9798,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "在家中某台电脑的高级设置中，将它设为主站。"
+          }
+        }
+      }
+    },
+    "Make a device an admin": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جعل جهاز مشرفًا"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hacer administrador a un dispositivo"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הפיכת מכשיר למנהל"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "किसी डिवाइस को एडमिन बनाएँ"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сделать устройство админом"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fanya kifaa kuwa msimamizi"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让设备成为管理员"
           }
         }
       }
@@ -12788,52 +12742,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "在群组的中心节点上运行 cbb invite，并通过你信任的渠道发送它生成的文件。在新设备上用该文件运行 cbb pair -invite。"
-          }
-        }
-      }
-    },
-    "On the group's root phone, tap + and scan this code: only the root adds a phone as an admin. Keep this screen open.": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "على الهاتف الجذر للمجموعة، اضغط + وامسح هذا الرمز: الجذر وحده يضيف هاتفًا كمشرف. أبقِ هذه الشاشة مفتوحة."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "En el teléfono raíz del grupo, toca + y escanea este código: solo la raíz añade un teléfono como administrador. Mantén esta pantalla abierta."
-          }
-        },
-        "he": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "בטלפון השורש של הקבוצה, הקישו על + וסרקו את הקוד הזה: רק השורש מוסיף טלפון כמנהל. השאירו את המסך הזה פתוח."
-          }
-        },
-        "hi": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "समूह के रूट फ़ोन पर + दबाएँ और यह कोड स्कैन करें: केवल रूट ही किसी फ़ोन को एडमिन के रूप में जोड़ता है। यह स्क्रीन खुली रखें।"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "На корневом телефоне группы нажмите + и отсканируйте этот код: добавить телефон админом может только корень. Не закрывайте этот экран."
-          }
-        },
-        "sw": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kwenye simu ya mzizi ya kikundi, gusa + na uchanganue msimbo huu: mzizi pekee ndio huongeza simu kama msimamizi. Acha skrini hii wazi."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在群组的根手机上轻点 + 并扫描此代码：只有根能将手机添加为管理员。请保持此屏幕打开。"
           }
         }
       }

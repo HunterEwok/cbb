@@ -266,9 +266,6 @@
     <string name="invite_share">आमंत्रण साझा करें</string>
     <string name="invite_title">दूर के डिवाइस को आमंत्रित करें</string>
     <string name="invite_too_many">तीन विफल प्रयासों के बाद आमंत्रण बंद हो गया। नया बनाएँ।</string>
-    <string name="join_admin">एडमिन के रूप में जुड़ें</string>
-    <string name="join_admin_hint">समूह के रूट फ़ोन पर + दबाएँ और यह कोड स्कैन करें: केवल रूट ही किसी फ़ोन को एडमिन के रूप में जोड़ता है। यह स्क्रीन खुली रखें।</string>
-    <string name="join_admin_title">एडमिन के रूप में जुड़ें</string>
     <string name="join_group">समूह से जुड़ें</string>
     <string name="join_hint">समूह के किसी फ़ोन पर, + टैप करें और यह कोड स्कैन करें। समूह के किसी कंप्यूटर पर, + टैप करें और अंक लिखें। यह स्क्रीन खुली रखें।</string>
     <string name="join_hint_tv">अपने फ़ोन पर CBB खोलें, + टैप करें और यह कोड स्कैन करें। यह स्क्रीन खुली रखें।</string>
@@ -346,6 +343,7 @@
     <string name="make_admin_body">फिर वह cbb pair और cbb remove से डिवाइस जोड़ और हटा सकता है। उसकी कुंजियाँ कंप्यूटर पर एक फ़ाइल में हैं: जो भी उस फ़ाइल को कॉपी करे, वह तब तक एडमिन की तरह काम कर सकता है जब तक कोई दूसरा एडमिन उसे हटा न दे। यह केवल उसी कंप्यूटर के लिए करें जिसे आप सुरक्षित रखते हैं।</string>
     <string name="make_admin_files_body">तब समूह फ़ाइलों में रखी कुंजियों को एडमिन और हब बनने देता है (सेटिंग्स, एडमिन कुंजियाँ)।</string>
     <string name="make_admin_hardware_body">फिर वह cbb pair और cbb remove से डिवाइस जोड़ और हटा सकता है। उसकी कुंजियाँ उसके हार्डवेयर में हैं, जो उन्हें कभी बाहर नहीं जाने देता।</string>
+    <string name="make_admin_phone_body">फिर वह डिवाइस जोड़ और हटा सकेगा, और यह फ़ोन खो जाए तो ग्रुप अपने हाथ में ले सकेगा।</string>
     <string name="make_admin_title">%1$s को एडमिन बनाएँ?</string>
     <string name="make_hub">इसे हब बनाएँ</string>
     <string name="make_hub_body">तब घर से दूर होने पर आपके डिवाइस cbb.tools पर प्रोजेक्ट के फ़ॉरवर्डर के ज़रिए, इसके माध्यम से समूह तक पहुँचते हैं। वहाँ घर से दूर सिंक पहले से चालू होना चाहिए; केवल उसका अपना उपयोगकर्ता इसे चालू करता है।</string>
@@ -424,7 +422,7 @@
     <string name="reason_incoming">बदलें कि दूसरे डिवाइस की कॉपी कितनी देर रहे</string>
     <string name="reason_join">एडमिन के रूप में समूह से जुड़ें</string>
     <string name="reason_key_level">बदलें कि कौन-सी कुंजियाँ एडमिन हो सकती हैं</string>
-    <string name="reason_make_admin">किसी कंप्यूटर को एडमिन बनाएँ</string>
+    <string name="reason_make_admin">किसी डिवाइस को एडमिन बनाएँ</string>
     <string name="reason_make_hub">किसी कंप्यूटर को हब बनाएँ</string>
     <string name="reason_make_recovery">रिकवरी कुंजी बनाएँ</string>
     <string name="reason_move_hub">हब को किसी कंप्यूटर पर ले जाएँ</string>

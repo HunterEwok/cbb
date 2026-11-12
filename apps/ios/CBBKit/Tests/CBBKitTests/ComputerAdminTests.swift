@@ -135,8 +135,11 @@ final class ComputerAdminTests: XCTestCase {
         try g.save(to: url)
         XCTAssertEqual(try PhoneGroup.load(from: url)?.computerAdmins, g.computerAdmins)
 
-        XCTAssertThrowsError(try g.makeAdmin(device: g.device, adminKey: adminKey.publicKeyDER, rootSigner: root, now: t0, allowFileKey: true)) {
-            XCTAssertEqual($0 as? PhoneGroup.Failure, .notAComputer)
+        XCTAssertThrowsError(try g.makeAdmin(device: g.device, adminKey: SoftwareSigner().publicKeyDER, rootSigner: root, now: t0, allowFileKey: true)) {
+            XCTAssertEqual($0 as? PhoneGroup.Failure, .alreadyAdmin, "the root is more than an admin")
+        }
+        XCTAssertThrowsError(try g.makeAdmin(device: pi, adminKey: SoftwareSigner().publicKeyDER, rootSigner: root, now: t0, allowFileKey: true)) {
+            XCTAssertEqual($0 as? PhoneGroup.Failure, .alreadyAdmin)
         }
         XCTAssertThrowsError(try g.makeAdmin(device: Member.newID(), adminKey: adminKey.publicKeyDER, rootSigner: root, now: t0, allowFileKey: true)) {
             XCTAssertEqual($0 as? PhoneGroup.Failure, .unknownDevice)
@@ -157,6 +160,60 @@ final class ComputerAdminTests: XCTestCase {
         XCTAssertEqual(Set(g.devices.map(\.id)), [g.device, deck])
         XCTAssertNil(g.computerAdmins[pi])
         XCTAssertNil(g.computerAdminCA(for: adminKey.publicKeyDER))
+    }
+
+    /// A phone joins as a member, and the root makes it an admin later with the
+    /// admin key its hello offers (section 10, "Admins"); the phone takes the
+    /// admin CA only for its own key and device, from the current root.
+    func testMakePhoneAdmin() throws {
+        let t = try group()
+        var g = t.g
+        let phone = Member.newID()
+        let cert = try GroupCertificates.member(device: phone, publicKey: SoftwareSigner().publicKeyDER, ca: g.groupCA, caSigner: t.root, now: t0)
+        _ = try g.record(device: phone, name: "iPhone", role: "phone", os: "ios", key: try Records.keyHash(cert: cert), store: Records.hardware,
+                         caSigner: t.root, now: t0)
+        // A key the group already names is refused: the root's, or another device's.
+        for taken in [t.root.publicKeyDER] {
+            XCTAssertThrowsError(try g.makeAdmin(device: phone, adminKey: taken, rootSigner: t.root, now: t1)) {
+                XCTAssertEqual($0 as? PhoneGroup.Failure, .keyTaken)
+            }
+        }
+        let adminKey = SoftwareSigner()
+        // The phone's store is its record's, whatever the hello says.
+        let (ca, r) = try g.makeAdmin(device: phone, adminKey: adminKey.publicKeyDER, rootSigner: t.root, now: t1, keyStore: Records.file)
+        XCTAssertTrue(g.records.records.contains(r))
+        let d = try XCTUnwrap(g.devices.first { $0.id == phone })
+        XCTAssertTrue(d.admin)
+        XCTAssertEqual(d.role, "phone")
+        XCTAssertEqual(d.store, Records.hardware)
+        XCTAssertEqual(Set(d.powers), Set(Records.powers))
+        XCTAssertEqual(g.computerAdminCA(for: adminKey.publicKeyDER), ca, "the root sends it again while the phone offers the key")
+
+        // The member phone's side.
+        var member = g
+        (member.isRoot, member.device, member.adminCA) = (false, phone, nil)
+        XCTAssertThrowsError(try member.takeAdminCA(ca, adminKey: SoftwareSigner().publicKeyDER)) {
+            XCTAssertEqual($0 as? PhoneGroup.Failure, .notThisAdminCA, "another key")
+        }
+        var other = member
+        other.device = Member.newID()
+        XCTAssertThrowsError(try other.takeAdminCA(ca, adminKey: adminKey.publicKeyDER)) {
+            XCTAssertEqual($0 as? PhoneGroup.Failure, .notThisAdminCA, "another device")
+        }
+        let foreign = try GroupCertificates.adminCA(device: phone, publicKey: adminKey.publicKeyDER,
+                                                    root: try PhoneGroup.create(caSigner: SoftwareSigner(), memberKey: SoftwareSigner().publicKeyDER,
+                                                                                now: t0).groupCA,
+                                                    rootSigner: SoftwareSigner())
+        XCTAssertThrowsError(try member.takeAdminCA(foreign, adminKey: adminKey.publicKeyDER)) {
+            XCTAssertEqual($0 as? PhoneGroup.Failure, .notThisAdminCA, "another root")
+        }
+        XCTAssertFalse(member.isAdmin)
+        try member.takeAdminCA(ca, adminKey: adminKey.publicKeyDER)
+        XCTAssertTrue(member.isAdmin)
+        XCTAssertEqual(member.adminCA, ca)
+        XCTAssertThrowsError(try member.takeAdminCA(ca, adminKey: adminKey.publicKeyDER)) {
+            XCTAssertEqual($0 as? PhoneGroup.Failure, .alreadyAdmin)
+        }
     }
 
     /// The root makes a watch an admin (section 10, "Watches"): its record

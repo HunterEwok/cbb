@@ -7,6 +7,17 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The Aurora app asks for a PIN of its own before its root or admin key signs, since Aurora OS
+  gives an app neither its authentication service nor the fingerprint. The key moves to a
+  second token of the app in the TEE, whose PIN the user chooses (at least four digits) and
+  the TEE checks; seven wrong PINs lock it for good. The member key stays where it was, so
+  sync needs no PIN. Settings change the PIN.
+- The Aurora app pastes on another device, as the iPhone and Android apps do: "Paste on it…" in
+  an admin's menu on a device's page sends a text (or the clipboard's), pasted or typed, with
+  Enter after it if asked, or a picture or files that the device pastes with its paste keys. It
+  signs the paste command with the admin key in the core (`cbb_member_manage` action `paste`).
+  The iPhone and Android apps paste on Aurora phones too, which type the text on their
+  Bluetooth keyboard's device.
 - The apps are tested in all eight languages and for every reader (docs/testing.md, "The
   apps' languages, accessibility and screenshots"): the tray app, Android, the iPhone and the
   Mac in zh, en, es, ru, ar, sw, he and hi, Arabic and Hebrew from right to left; every text
@@ -1597,6 +1608,19 @@ All notable changes to cbb are documented in this file. The format follows
   member", and pages that set the two programs apart (the device table, the design's routers,
   the protocol's notes on what one of them lacked) say what holds now. `tools/repocheck`
   refuses the old words outside the changelog and the decisions.
+- A phone joins a group with one button, "Join a group", on the iPhone and Android: it always
+  joins as a member, and "Join as an admin" is gone. The root makes it an admin later from the
+  phone's device page ("Make it an admin"), on a root phone, in the Mac app and the tray, and
+  with `cbb admin` on a root computer, with the admin key the phone's hellos now offer (made
+  without a prompt; none on a TV). The phone takes its admin CA from the root's admin message
+  once it names its key, its device and the current root. The root refuses an admin key that
+  the records already name for another device or a root (D-95; docs/protocol.md, section 10,
+  "Admins").
+- The Aurora app has one "Join a group" button too. Joining makes the admin key behind the
+  admin PIN (cancelling joins without it, and Settings' "Get ready to be an admin" makes it
+  later), the member's hellos offer it, and the root's device page has "Make an admin" for
+  phones; the member checks the admin CA of the root's admin message (`take_admin_ca`) before
+  the app keeps it.
 - The README leads with what Copy Beyond Borders is in one sentence, sums up its status in
   three lines (the full table moved to docs/parity.md, "On real devices") and lists what it
   also does. The keyboards, the TV remotes, the Nano ESP32 and the ZX Spectrum Next are on
@@ -2211,6 +2235,10 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- The Aurora app renamed and handed the group over to no device, and named no sender of a
+  remote paste: its pages read a device's ID from a field the core's list does not have. An
+  Aurora phone refuses a paste of pictures or files, which its Bluetooth keyboard cannot type,
+  in place of typing the copy's ID.
 - Quotation marks in a few texts: the Android app showed a backslash before them in Arabic,
   Spanish, Hebrew, Hindi and Swahili, and dropped them in English; the Mac app showed the
   backslash in the same languages on its pairing screen.

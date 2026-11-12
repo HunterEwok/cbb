@@ -266,9 +266,6 @@
     <string name="invite_share">Compartir la invitación</string>
     <string name="invite_title">Invitar a un dispositivo lejano</string>
     <string name="invite_too_many">La invitación se cerró tras tres intentos fallidos. Crea una nueva.</string>
-    <string name="join_admin">Unirse como administrador</string>
-    <string name="join_admin_hint">En el teléfono raíz del grupo, toca + y escanea este código: solo la raíz añade un teléfono como administrador. Mantén esta pantalla abierta.</string>
-    <string name="join_admin_title">Unirse como administrador</string>
     <string name="join_group">Unirse a un grupo</string>
     <string name="join_hint">En un teléfono del grupo, toca + y escanea este código. En un ordenador del grupo, toca + y escribe los números. Mantén esta pantalla abierta.</string>
     <string name="join_hint_tv">En tu teléfono, abre CBB, toca + y escanea este código. Mantén esta pantalla abierta.</string>
@@ -346,6 +343,7 @@
     <string name="make_admin_body">Entonces podrá añadir y quitar dispositivos con cbb pair y cbb remove. Sus claves están en un archivo del ordenador: quien copie ese archivo puede actuar como administrador hasta que otro administrador lo quite. Hazlo solo con un ordenador que mantengas seguro.</string>
     <string name="make_admin_files_body">Entonces el grupo permite que las claves en archivos sean administradores y hubs (Ajustes, Claves de administrador).</string>
     <string name="make_admin_hardware_body">Entonces podrá añadir y quitar dispositivos con cbb pair y cbb remove. Sus claves están en su hardware, que nunca las deja salir.</string>
+    <string name="make_admin_phone_body">Así podrá añadir y quitar dispositivos, y quedarse con el grupo si se pierde este teléfono.</string>
     <string name="make_admin_title">¿Hacer administrador a %1$s?</string>
     <string name="make_hub">Convertirlo en hub</string>
     <string name="make_hub_body">Entonces tus dispositivos llegan al grupo a través de él cuando están fuera de casa, por el reenviador del proyecto en cbb.tools. La sincronización fuera de casa ya debe estar activada allí; solo su propio usuario la activa.</string>
@@ -424,7 +422,7 @@
     <string name="reason_incoming">Cambiar cuánto dura una copia de otro dispositivo</string>
     <string name="reason_join">Unirse al grupo como administrador</string>
     <string name="reason_key_level">Cambiar qué claves pueden ser administradoras</string>
-    <string name="reason_make_admin">Hacer administrador a un ordenador</string>
+    <string name="reason_make_admin">Hacer administrador a un dispositivo</string>
     <string name="reason_make_hub">Convertir un ordenador en hub</string>
     <string name="reason_make_recovery">Crear una clave de recuperación</string>
     <string name="reason_move_hub">Mover el hub a un ordenador</string>
