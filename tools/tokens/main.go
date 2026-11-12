@@ -2,8 +2,9 @@
 // Copyright (C) 2026 HunterEwok
 
 // Command tokens turns the apps' design tokens (apps/design/tokens.json)
-// into Swift for the iPhone and Mac apps, Kotlin for the Android app and
-// JavaScript for the tray app: each
+// into Swift for the iPhone and Mac apps, Kotlin for the Android app,
+// JavaScript for the tray app and the HarmonyOS app's colour resources
+// (the default accent, light and dark): each
 // accent colour on the dark and the light base gives a palette, and every
 // palette must meet WCAG AA contrast: 4.5:1 for text, 3:1 for the accent
 // against the background.
@@ -29,6 +30,10 @@ const (
 	swiftFile  = "apps/ios/CBB/Theme/Tokens.swift"
 	kotlinFile = "apps/android/shared/src/main/kotlin/tools/cbb/Tokens.kt"
 	jsFile     = "apps/desktop/frontend/tokens.js"
+	// The HarmonyOS app's colours, the light ones by default and the dark
+	// ones in the dark theme.
+	harmonyLight = "apps/harmony/entry/src/main/resources/base/element/color.json"
+	harmonyDark  = "apps/harmony/entry/src/main/resources/dark/element/color.json"
 )
 
 // Palette is one theme's colours, "#RRGGBB", derived from a base and an
@@ -141,10 +146,14 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
+	light, dark, err := generateHarmony(data)
+	if err != nil {
+		fail(err)
+	}
 	for _, f := range []struct {
 		path string
 		out  []byte
-	}{{swiftFile, swift}, {kotlinFile, kotlin}, {jsFile, js}} {
+	}{{swiftFile, swift}, {kotlinFile, kotlin}, {jsFile, js}, {harmonyLight, light}, {harmonyDark, dark}} {
 		if *check {
 			have, _ := os.ReadFile(f.path)
 			if !bytes.Equal(have, f.out) {
@@ -206,6 +215,47 @@ func generate(data []byte) (swift, kotlin, js []byte, err error) {
 		pairs = append(pairs, pair{a.Name, dark, light})
 	}
 	return generateSwift(t, pairs), generateKotlin(t, pairs), generateJS(t, pairs), nil
+}
+
+// generateHarmony returns the HarmonyOS app's colour resources of the
+// default accent: the light palette and the dark one. JSON takes no
+// comment, so they do not say that they are generated.
+func generateHarmony(data []byte) (light, dark []byte, err error) {
+	if _, _, _, err := generate(data); err != nil {
+		return nil, nil, err
+	}
+	var t Tokens
+	if err := json.Unmarshal(data, &t); err != nil {
+		return nil, nil, err
+	}
+	l, err := palette(false, t.Base.Light, t.Colors[0].Light)
+	if err != nil {
+		return nil, nil, err
+	}
+	d, err := palette(true, t.Base.Dark, t.Colors[0].Dark)
+	if err != nil {
+		return nil, nil, err
+	}
+	return harmonyColours(l), harmonyColours(d), nil
+}
+
+// harmonyColours writes a palette as the app's colour names: online and
+// offline are the accent and the dim text.
+func harmonyColours(p Palette) []byte {
+	var b strings.Builder
+	b.WriteString("{\n  \"color\": [\n")
+	for i, c := range [][2]string{
+		{"start_window_background", p.Background}, {"background", p.Background}, {"surface", p.Surface},
+		{"grid", p.Grid}, {"text", p.Text}, {"secondary", p.TextDim}, {"accent", p.Accent},
+		{"on_accent", p.OnAccent}, {"error", p.Danger}, {"online", p.Accent}, {"offline", p.TextDim},
+	} {
+		if i > 0 {
+			b.WriteString(",\n")
+		}
+		fmt.Fprintf(&b, "    { \"name\": %q, \"value\": %q }", c[0], c[1])
+	}
+	b.WriteString("\n  ]\n}\n")
+	return []byte(b.String())
 }
 
 func generateSwift(t Tokens, pairs []pair) []byte {

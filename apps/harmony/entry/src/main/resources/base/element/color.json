@@ -1,8 +1,9 @@
 {
   "color": [
-    { "name": "start_window_background", "value": "#F4F5F8" },
-    { "name": "background", "value": "#F4F5F8" },
+    { "name": "start_window_background", "value": "#E8EFEF" },
+    { "name": "background", "value": "#E8EFEF" },
     { "name": "surface", "value": "#FFFFFF" },
+    { "name": "grid", "value": "#E2EFE8" },
     { "name": "text", "value": "#111318" },
     { "name": "secondary", "value": "#4F5462" },
     { "name": "accent", "value": "#0A7A3E" },

@@ -28,6 +28,13 @@ func TestTokensFile(t *testing.T) {
 	if !strings.Contains(string(js), "name: \"terminal\",") || !strings.Contains(string(js), "accent: \"#3DFF8A\",") {
 		t.Errorf("no terminal palette in\n%s", js)
 	}
+	light, dark, err := generateHarmony(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(light), `{ "name": "accent", "value": "#0A7A3E" }`) || !strings.Contains(string(dark), `{ "name": "accent", "value": "#3DFF8A" }`) {
+		t.Errorf("no terminal colours for HarmonyOS in\n%s\n%s", light, dark)
+	}
 }
 
 func TestContrast(t *testing.T) {

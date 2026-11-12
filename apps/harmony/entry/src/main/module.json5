@@ -20,6 +20,8 @@
         "startWindowIcon": "$media:icon",
         "startWindowBackground": "$color:start_window_background",
         "exported": true,
+        // The member runs on in the background (EntryAbility, keepRunning).
+        "backgroundModes": ["multiDeviceConnection"],
         "skills": [
           {
             "entities": ["entity.system.home"],
@@ -43,6 +45,8 @@
       { "name": "ohos.permission.INTERNET" },
       { "name": "ohos.permission.GET_NETWORK_INFO" },
       { "name": "ohos.permission.GET_WIFI_INFO" },
+      // The member as a continuous task in the background.
+      { "name": "ohos.permission.KEEP_BACKGROUND_RUNNING" },
       // The face, fingerprint or PIN before each signature of the admin key.
       {
         "name": "ohos.permission.ACCESS_BIOMETRIC",
