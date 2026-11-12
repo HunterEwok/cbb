@@ -501,6 +501,7 @@ pub(crate) fn item(r: &Record, role: Role) -> super::keep::Item {
     let early = role == Role::Root && matches!(r.body().kind, Kind::Revoke(_) | Kind::Freeze(_) | Kind::Resolve(_));
     super::keep::Item {
         early,
+        down: false,
         signer: r.body().signer,
         seq: r.body().seq,
         id: r.id(),
@@ -539,6 +540,7 @@ pub(crate) fn item_cut(r: &Record, role: Role, cuts: &BTreeMap<KeyHash, Seen>) -
     let mut it = item(r, role);
     if cuts.contains_key(&r.body().signer) {
         it.checkpoint = false;
+        it.down = true;
     }
     it
 }

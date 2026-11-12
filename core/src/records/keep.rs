@@ -15,7 +15,8 @@
 //! drops them, its checkpoints included; then its checkpoints, the newest
 //! first, so that a key at its ceiling can still checkpoint and free room;
 //! then the rest by seq, then ID (records of one seq with other IDs count
-//! against the same ceiling). The order is each record's own, never what
+//! against the same ceiling). A root a takeover cut keeps only its chain
+//! up to the cut, and takes it from the top down. The order is each record's own, never what
 //! else the set holds, so that a set that drops records as they come keeps
 //! what one that saw them all at once keeps. At level s a
 //! key keeps the longest start of that order within min(s, its ceiling)
@@ -65,6 +66,10 @@ pub struct Item {
     pub checkpoint: bool,
     /// A root's revoke, freeze or resolve: it comes first.
     pub early: bool,
+    /// A record of a root a takeover cut: its key's records are taken
+    /// from the head the claim saw downward, so that what is kept is the
+    /// top of its chain, never a part in the middle.
+    pub down: bool,
     /// A claim: the root it names.
     pub names: Option<KeyHash>,
 }
@@ -77,7 +82,9 @@ impl Item {
     /// by seq; then checkpoints, the newest first; then the rest by seq
     /// and ID.
     pub fn pos(&self) -> Pos {
-        if self.early {
+        if self.down {
+            (0, u64::MAX.saturating_sub(self.seq), self.id)
+        } else if self.early {
             (0, self.seq, self.id)
         } else if self.checkpoint {
             (1, u64::MAX.saturating_sub(self.seq), self.id)
@@ -293,6 +300,7 @@ mod tests {
             units: units(size, false),
             checkpoint: false,
             early: false,
+            down: false,
             names: None,
         }
     }
@@ -379,6 +387,23 @@ mod tests {
         let (_, cut) = keep_after(&items[..300], ceil, &Cut::default());
         let (kept, _) = keep_after(&[cp], ceil, &cut);
         assert!(kept.contains(&cp.id));
+    }
+
+    /// A cut root that does not fit keeps the top of its chain: the
+    /// records nearest the head the claim saw.
+    #[test]
+    fn a_cut_root_keeps_the_top_of_its_chain() {
+        let items: Vec<Item> = (1..=1500)
+            .map(|s| {
+                let mut it = item(0, s, 0, 100);
+                it.down = true;
+                it
+            })
+            .collect();
+        let kept = keep(&items, ceil);
+        let low = items.iter().filter(|it| kept.contains(&it.id)).map(|it| it.seq).min().unwrap();
+        assert!(kept.len() < items.len());
+        assert!(items.iter().all(|it| kept.contains(&it.id) == (it.seq >= low)));
     }
 
     fn arb_items() -> impl Strategy<Value = Vec<Item>> {
