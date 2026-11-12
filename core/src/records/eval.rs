@@ -1067,6 +1067,11 @@ impl<'e, 'a> Epoch<'e, 'a> {
         self.powers(admin) & power != 0
     }
 
+    /// Reports whether k is the recovery key.
+    fn is_recovery(&self, k: &KeyHash) -> bool {
+        self.recovery.is_some_and(|i| matches!(&self.r(i).b().kind, Kind::Recovery { admin } if &admin.hash() == k))
+    }
+
     /// The member key of the device whose record names admin key a.
     fn member_of_admin(&self, a: &KeyHash) -> Option<KeyHash> {
         self.admins.get(a).and_then(|&i| self.r(i).dev()).map(|d| d.key.hash())
@@ -1227,7 +1232,12 @@ impl<'e, 'a> Epoch<'e, 'a> {
             }),
             Kind::Freeze(rm) => {
                 self.has(a, POWER_FREEZE)
-                    && rm.keys.iter().all(|k| self.admins.contains_key(k) && !self.has(k, POWER_REMOVE_ADMINS))
+                    && rm.keys.iter().all(|k| {
+                        self.admins.contains_key(k)
+                            && !self.has(k, POWER_REMOVE_ADMINS)
+                            // The recovery key is frozen only by those who may remove it.
+                            && (!self.is_recovery(k) || self.has(a, POWER_REMOVE_ADMINS))
+                    })
             }
             Kind::Thaw(_) => self.has(a, POWER_THAW) && self.has(a, POWER_REMOVE_ADMINS),
             Kind::Claim { seen, .. } => self.has(a, POWER_TAKEOVER) && body::seen_of(seen, &self.cur) >= 1,

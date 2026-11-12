@@ -519,6 +519,50 @@ fn a_device_s_two_keys_are_removed_together() {
 }
 
 #[test]
+fn only_who_may_remove_the_recovery_key_freezes_it() {
+    let (rk, pw, w, pp, p, n) = (k("recovery"), k("watch"), k("admin w"), k("phone p"), k("admin p"), k("new root"));
+    let watch = POWER_REMOVE | POWER_FREEZE;
+    // Before the recovery key is used.
+    let mut g = G::new();
+    g.root_rec(Kind::Recovery { admin: rk.key.clone() });
+    g.admin(&pw, &w, watch);
+    g.admin(&pp, &p, POWER_REMOVE_ADMINS | POWER_FREEZE);
+    let seen = g.seen();
+    let by_watch = g.rec(&w, Kind::Freeze(removal(&[rk.hash], seen.clone())));
+    let revoke_by_watch = g.rec(&w, Kind::Revoke(removal(&[rk.hash], seen)));
+    let seen = g.seen();
+    let claim = g.rec(&rk, Kind::Claim { root: n.key.clone(), seen });
+    let s = state_of(&g.root.key, &g.recs, &BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]));
+    assert!(!s.counting.contains(&by_watch.id()) && !s.counting.contains(&revoke_by_watch.id()));
+    assert_eq!(s.claims[0].state, ClaimState::Effective);
+    assert_eq!(s.roots.len(), 2);
+    // After it was used.
+    let mut g = G::new();
+    g.root_rec(Kind::Recovery { admin: rk.key.clone() });
+    g.admin(&pw, &w, watch);
+    let seen = g.seen();
+    let claim = g.rec(&rk, Kind::Claim { root: n.key.clone(), seen });
+    g.device(&n, &k("new phone"), "new phone", |d| d.holds_root = true);
+    let held = BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]);
+    let seen = g.seen();
+    g.rec(&w, Kind::Freeze(removal(&[rk.hash], seen)));
+    let s = state_of(&g.root.key, &g.recs, &held);
+    assert_eq!(s.roots.len(), 2);
+    assert_eq!(s.stop, Stop::None);
+    // A phone admin may freeze it.
+    let mut g = G::new();
+    g.root_rec(Kind::Recovery { admin: rk.key.clone() });
+    g.admin(&pp, &p, POWER_REMOVE_ADMINS | POWER_FREEZE);
+    let seen = g.seen();
+    let by_phone = g.rec(&p, Kind::Freeze(removal(&[rk.hash], seen)));
+    let seen = g.seen();
+    let claim = g.rec(&rk, Kind::Claim { root: n.key.clone(), seen });
+    let s = state_of(&g.root.key, &g.recs, &BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]));
+    assert!(s.counting.contains(&by_phone.id()));
+    assert_eq!(s.roots.len(), 1);
+}
+
+#[test]
 fn a_claim_takes_effect_after_the_device_held_it() {
     let mut g = G::new();
     let (pa, a, laptop, n) = (k("phone a"), k("admin a"), k("laptop"), k("new root"));
