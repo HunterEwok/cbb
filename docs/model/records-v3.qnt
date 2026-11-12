@@ -272,11 +272,16 @@ module records_v3 {
   // or a device record.
   pure def admissionsOf(rs: Set[Record], k: Key): Set[Record] =
     rs.filter(r => (r.kind == "admin" or r.kind == "device") and (r.target == k or devOf(r) == k))
-  // What a root's checkpoint leaves out of the counted records: each root removal for every
-  // key of which the writer holds the admission, with those admissions and the keys' own
-  // records (the checkpoint names their heads, so none returns).
+  // What a root's checkpoint leaves out of the counted records: each root removal whose keys
+  // are all plain device keys (no admin key, nothing they signed), of each of which the writer
+  // holds an admission and every held admission is below its signer's head, with those
+  // admissions. A removal that names an admin key is never pruned.
   pure def droppedAt(mine: Set[Record], counted: Set[Record]): Set[Id] = {
-    val rms = counted.filter(r => rootRemoval(r) and withPair(r.target).forall(k => admissionsOf(mine, k) != Set()))
+    val rms = counted.filter(r => rootRemoval(r)
+      and withPair(r.target).forall(k => not(DEV.keys().contains(k)) and not(SIGNERS.contains(k))
+        and admissionsOf(mine, k) != Set()
+        and admissionsOf(mine, k).forall(a => headLine(mine, a.signer) != a.line))
+      and not(mine.exists(x => withPair(r.target).contains(x.signer))))
     val gone = rms.fold(Set(), (a, r) => a.union(withPair(r.target)))
     idsOf(rms).union(idsOf(mine.filter(x => gone.contains(x.signer) or gone.exists(k => admissionsOf(Set(x), k) != Set()))))
   }
@@ -484,7 +489,15 @@ module records_v3 {
       // A halted set (a fork of the recovery chain) takes recovery records only, a head's
       // first checkpoint among them.
       if (chainState(s, db).stop) (if (isFirst) applyChain(s, db) else s)
-      else storeOne(if (isFirst) applyChain(s, db) else s, r, db)
+      else {
+        // Two records of the current root at one seq are the proof of a root fork, kept
+        // beside the rooms whatever the set pruned.
+        val twin = recsOf(s.got, db).filter(o => o.id != r.id and not(isChain(o)) and o.signer == r.signer
+          and o.seq == r.seq and r.signer == last(keptPath(s, db)))
+        val s1 = if (twin == Set()) s
+          else { ...s, chain: s.chain.union(idsOf(twin)).union(Set(r.id)), recs: s.recs.exclude(idsOf(twin)) }
+        storeOne(if (isFirst) applyChain(s1, db) else s1, r, db)
+      }
     }
   }
   // A head that may extend the set's chain: it follows the chain's records below its seq and
@@ -554,7 +567,7 @@ module records_v3 {
 
   // The evaluation of the room records under the path of roots, with the anchors of the
   // checkpoint it prunes by.
-  pure def epoch(rs: Set[Record], path: List[Key], cuts: Key -> List[Id], anchors: Set[Id], settled: int): View = {
+  pure def epoch(rs: Set[Record], path: List[Key], cuts: Key -> List[Id], anchors: Set[Id]): View = {
     val cur = last(path)
     val adminKeys = learned(rs, path, cuts)
     val ids = idsOf(rs)
@@ -580,16 +593,15 @@ module records_v3 {
     val wholes = rs.filter(r => whole(r) and within(cuts, r))
     val deadIds = voids.filter(i => rs.exists(x => x.id == i and rs.exists(o => o != x and o.signer == x.signer and o.seq == x.seq)))
     val lives = wholes.filter(r => not(r.line.indices().exists(j => deadIds.contains(r.line[j]))))
-    // Of the current root, twins at or below the root's head in its counting checkpoint are
-    // settled by it, not a fork.
-    val forkSeq = SIGNERS.mapBy(k => lives.filter(r => r.signer == k and (k != cur or r.seq > settled)
+    val forkSeq = SIGNERS.mapBy(k => lives.filter(r => r.signer == k
       and lives.exists(o => o != r and o.signer == k and o.seq == r.seq)).fold(NONE, (m, r) => min2(m, r.seq)))
     pure def forkAt(k: Key): int = getOr(forkSeq, k, NONE)
     val forks = SIGNERS.filter(k => forkAt(k) < NONE)
-    // A root fork: from its seq on the root key has no power on either line, and the group
-    // halts until the recovery key changes the root.
+    // A root fork (two records of the root at one seq, at any depth): from its seq on the root
+    // key has no power on either line, and the group halts until the recovery key changes the
+    // root. A root's removal held on any line still bars its device.
     val rootForked = forkAt(cur) < NONE
-    pure def belowFork(r: Record): bool = r.seq < forkAt(r.signer)
+    pure def belowFork(r: Record): bool = r.seq < forkAt(r.signer) or (r.kind == "revoke" and onPath(r))
     pure def counted(r: Record): bool =
       lives.contains(r) and not(voids.contains(r.id)) and belowFork(r)
     pure def rootRec(r: Record): bool = onPath(r) and counted(r)
@@ -715,7 +727,7 @@ module records_v3 {
       val cp = acc._1.filter(r => r.id == c).fold(NONEREC, (a, r) => r)
       val pruned = acc._1.filter(r => not(prunedBy(cp, r)))
       val anchors = acc._2.union(anchorsOf(cp))
-      val v = epoch(pruned, path, cuts, anchors, if (cp.heads.keys().contains(cp.signer)) cp.heads.get(cp.signer).length() else 0)
+      val v = epoch(pruned, path, cuts, anchors)
       // It counts only on a set that holds every record its keep names, none above its key's
       // head and no two at one seq: no ID in keep stands for a record nobody saw. Below the
       // heads it settles forks: it may keep a record of either sibling, and what it leaves
@@ -733,17 +745,12 @@ module records_v3 {
   pure def fullEvaluate(rs: Set[Record], ch: Chain): View = {
     val pc = pathCuts(ch)
     val cur = last(pc._1)
-    val plain = epoch(rs, pc._1, pc._2, Set(), 0)
-    val c = newestCheckpoint(rs, plain, cur)
-    // The root's newest checkpoint settles the root's twins below its head when it counts:
-    // the evaluation tries it with them settled, and falls back to the fork when it does not
-    // count.
-    val twins = rs.exists(a => rs.exists(b => a != b and a.signer == cur and b.signer == cur and a.seq == b.seq))
-    val cpRec = rs.filter(r => r.id == c).fold(NONEREC, (a, r) => r)
-    val settle = if (c != 0 and twins and cpRec.heads.keys().contains(cur)) cpRec.heads.get(cur).length() else 0
-    val plainS = if (settle == 0) plain else epoch(rs, pc._1, pc._2, Set(), settle)
-    val tried = applyCheckpoint(pc._1, pc._2, c, (rs, Set(), plainS))._3
-    val v = if (settle == 0 or tried.checkpoint == c) tried else plain
+    val plain = epoch(rs, pc._1, pc._2, Set())
+    // A holder of a root fork's pair counts no checkpoint of the root at or above the fork.
+    val forkS = rs.filter(a => a.signer == cur and rs.exists(b => b != a and b.signer == cur and b.seq == a.seq))
+      .fold(NONE, (m, r) => min2(m, r.seq))
+    val c = newestCheckpoint(rs.filter(r => not(r.signer == cur and r.kind == "checkpoint" and r.seq >= forkS)), plain, cur)
+    val v = applyCheckpoint(pc._1, pc._2, c, (rs, Set(), plain))._3
     if (ch.stop) { ...v, stop: true, commanders: Set() } else v
   }
 
@@ -911,11 +918,12 @@ module records_v3 {
     val oldCp = if (v.checkpoint != 0 and db.get(v.checkpoint).signer == cur) db.get(v.checkpoint) else NONEREC
     val cp = oldCp.heads.keys().filter(k => oldCp.heads.get(k).length() > 0)
       .map(k => lastId(oldCp.heads.get(k))).filter(i => onList(before, db.get(i).signer) and db.get(i).kind != "checkpoint")
-    // A root's removal is listed only when it names a key some other held record names; a
-    // checkpoint is never listed (format 20.3).
-    def named(x: Record): bool = held.exists(y => y.id != x.id and y.kind != "revoke"
-      and (y.target == x.target or y.signer == x.target))
-    val honest = idsOf(held.filter(r => (v.counting.contains(r.id) and r.kind != "checkpoint") or (rootRemoval(r) and named(r)))).union(cp)
+    // Every root removal held, on any line, is listed; a checkpoint is never listed; nothing a
+    // held checkpoint of the root left out is listed (a root fork's lines included).
+    val rootCps = held.filter(x => x.signer == cur and x.kind == "checkpoint")
+    val leftOut = held.filter(x => rootCps.exists(c => prunedBy(c, x)))
+    val honest = idsOf(held.filter(r => (v.counting.contains(r.id) and r.kind != "checkpoint" and not(leftOut.contains(r)))
+      or rootRemoval(r))).union(cp)
     val keep = if (mode == "honest" or mode == "nocp" or mode == "from1") honest
       else if (mode == "literal") honest.filter(i => db.get(i).signer == cur or rootRemoval(db.get(i)) or cp.contains(i))
       else if (mode == "none") Set()
@@ -1383,26 +1391,37 @@ module records_v3 {
       .expect(MEMBERS.forall(m => views.get(m).path == [ROOT, "NK"] and not(views.get(m).stop)
         and views.get(m).commanders.contains("NK")) and promises)
 
-  // The root's counting checkpoint prunes its removal of the watch, with the watch's admission
-  // (the writer holds it; a removal that is the root's head stays as its anchor): a replay of
-  // either is refused, and the watch counts again only by a new admission.
+  // The root's counting checkpoint prunes its removal of a plain device, with the device's
+  // admission (the writer holds it below its head; a removal that is the root's head stays as
+  // its anchor): a replay of either is refused, and the device counts again only by a new
+  // admission.
   run prunedRemovalTest =
     init
-      .then(signAs(ROOT, "revoke", WATCH, 0))
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
+      .then(signAs(ROOT, "revoke", DEVICE, 0))
       .then(syncAll)
-      .expect(MEMBERS.forall(m => views.get(m).revoked.contains(WATCH)))
+      .expect(MEMBERS.forall(m => views.get(m).revoked.contains(DEVICE)))
       .then(signAs(ROOT, "copies", "", 0))
       .then(signAs(ROOT, "checkpoint", "", 0))
       .then(syncAll)
-      .expect(db.get(6).keep.intersect(Set(3, 4)) == Set() and MEMBERS.forall(m => views.get(m).checkpoint == 6
-        and not(st.get(m).recs.contains(3)) and not(st.get(m).recs.contains(4))
-        and not(views.get(m).devices.contains("dW")) and not(views.get(m).admins.keys().contains(WATCH))) and promises)
-      .then(give("m", 3))
+      .expect(db.get(7).keep.intersect(Set(4, 5)) == Set() and MEMBERS.forall(m => views.get(m).checkpoint == 7
+        and not(st.get(m).recs.contains(4)) and not(st.get(m).recs.contains(5))
+        and not(views.get(m).devices.contains(DEVICE))) and promises)
       .then(give("m", 4))
-      .expect(not(st.get("m").recs.contains(3)) and not(st.get("m").recs.contains(4)) and promises)
-      .then(sign(ROOT, "admin", WATCH, "watch", 0, false, false, 1))
+      .then(give("m", 5))
+      .expect(not(st.get("m").recs.contains(4)) and not(st.get("m").recs.contains(5)) and promises)
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
       .then(syncAll)
-      .expect(MEMBERS.forall(m => views.get(m).admins.keys().contains(WATCH)) and promises)
+      .expect(MEMBERS.forall(m => views.get(m).devices.contains(DEVICE)) and promises)
+
+  // A removal of an admin key is never pruned, even with nothing it signed.
+  run adminKeyRemovalStaysTest =
+    init
+      .then(signAs(ROOT, "revoke", WATCH, 0))
+      .then(signAs(ROOT, "copies", "", 0))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .then(syncAll)
+      .expect(db.get(6).keep.contains(4) and MEMBERS.forall(m => views.get(m).revoked.contains(WATCH)) and promises)
 
   // A root's resolve voids only admins' records: of its own records, nothing.
   run resolveSparesRootTest =
@@ -1411,6 +1430,72 @@ module records_v3 {
       .then(signAs(ROOT, "resolve", "", 4))
       .then(syncAll)
       .expect(MEMBERS.forall(m => views.get(m).revoked.contains(WATCH)) and promises)
+
+  // Review F-1: the pair is a fork at any depth. Member a gets the root's record (4) and its
+  // twin (5) before the root's checkpoint above them (6); member c counts the checkpoint
+  // first, then gets the twin. Both halt and end in one state.
+  run forkAnyDepthTest =
+    init
+      .then(signAs(ROOT, "copies", "", 0))
+      .then(signFull(ROOT, "copies", "", "", 0, false, true, 1, true, Set()))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(db.get(6).line == [1, 2, 3, 4, 6])
+      .then(give("a", 4)).then(give("a", 5)).then(give("a", 6))
+      .then(give("c", 4)).then(give("c", 6))
+      .expect(views.get("c").checkpoint == 6 and not(views.get("c").stop))
+      .then(give("c", 5))
+      .expect(views.get("a").stop and views.get("c").stop and views.get("a").commanders == Set()
+        and views.get("c").commanders == Set() and views.get("a") == views.get("c")
+        and st.get("a").recs == st.get("c").recs and promises)
+      .then(syncAll)
+      .expect(MEMBERS.forall(m => views.get(m).stop and views.get(m) == views.get("a")) and promises)
+
+  // Review F-4: an admin key that signed records is never pruned out with its removal; its
+  // key admitted again does not count while the removal stands.
+  run adminRemovalKeptTest =
+    init
+      .then(signAs(PHONE, "copies", "", 0))
+      .then(signAs(ROOT, "revoke", PHONE, 0))
+      .then(signAs(ROOT, "copies", "", 0))
+      .then(syncAll)
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .then(syncAll)
+      .expect(db.get(7).keep.contains(5) and MEMBERS.forall(m => views.get(m).checkpoint == 7
+        and views.get(m).revoked.contains(PHONE)) and promises)
+      .then(sign(ROOT, "admin", PHONE, "phone", 0, false, false, 1))
+      .then(syncAll)
+      .expect(MEMBERS.forall(m => not(views.get(m).admins.keys().contains(PHONE))) and promises)
+
+  // Review F-7: a device the root admitted below a fork and removed above it stays removed
+  // during the halt (a root's removal on any line bars its device), and the change of root's
+  // list leaves it out.
+  run removalBarsDuringHaltTest =
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
+      .then(signAs(ROOT, "copies", "", 0))
+      .then(signFull(ROOT, "copies", "", "", 0, false, true, 1, true, Set()))
+      .then(signAs(ROOT, "revoke", DEVICE, 0))
+      .expect(db.get(6).seq == 5 and db.get(7).seq == 6)
+      .then(offerEveryone(6))
+      .then(syncAll)
+      .expect(MEMBERS.forall(m => views.get(m).stop and not(views.get(m).devices.contains(DEVICE))) and promises)
+      .then(recoverAs(RECOVERY, "NK"))
+      .then(syncAll)
+      .expect(MEMBERS.forall(m => not(views.get(m).stop) and not(views.get(m).devices.contains(DEVICE))) and promises)
+
+  // Review section 2: three records of the root at one seq, and a second fork above the first
+  // on one line: the fork seq is the lowest, and every member halts alike.
+  run threeLinesTest =
+    init
+      .then(signAs(ROOT, "copies", "", 0))
+      .then(signFull(ROOT, "copies", "", "", 0, false, true, 1, true, Set()))
+      .then(signFull(ROOT, "copies", "", "", 0, false, true, 2, true, Set()))
+      .then(signAs(ROOT, "copies", "", 0))
+      .then(signFull(ROOT, "copies", "", "", 0, false, true, 1, true, Set()))
+      .expect(db.get(5).seq == 4 and db.get(6).seq == 4 and db.get(8).seq == 5)
+      .then(give("a", 8)).then(give("a", 7)).then(give("a", 6))
+      .then(syncAll)
+      .expect(MEMBERS.forall(m => views.get(m).stop and views.get(m) == views.get("r")) and promises)
 
   run recoveryChangesRootTest =
     init
