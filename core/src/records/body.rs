@@ -712,13 +712,17 @@ fn read_settings(r: &Read<'_, '_>) -> Result<Settings, Rule> {
         None => None,
         Some(_) => Some(r.opt_uint(10, DEFAULT_DELAY_MS, f("takeover_delay_ms"))?),
     };
-    let key_level = match r.opt_uint(11, LEVEL_HARDWARE, f("key_level"))? {
-        LEVEL_HARDWARE => 0,
-        n => n,
+    // Absent is the default, which the type keeps as 0; a written 0 is
+    // outside both rows.
+    let key_level = match (r.get(11), r.opt_uint(11, LEVEL_HARDWARE, f("key_level"))?) {
+        (Some(_), 0) => return Err(f("key_level")),
+        (_, LEVEL_HARDWARE) => 0,
+        (_, n) => n,
     };
-    let min_rules = match r.opt_uint(12, 1, f("min_rules"))? {
-        1 => 0,
-        n => n,
+    let min_rules = match (r.get(12), r.opt_uint(12, 1, f("min_rules"))?) {
+        (Some(_), 0) => return Err(f("min_rules")),
+        (_, 1) => 0,
+        (_, n) => n,
     };
     let servers = r.opt_list(15, f("servers"), |v| match v.as_array() {
         Some([Value::Uint(kind), Value::Text(endpoint), key]) => {

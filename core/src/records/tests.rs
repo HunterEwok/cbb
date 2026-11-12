@@ -1577,6 +1577,44 @@ fn seen_names_each_key_once() {
     assert!(body.check().unwrap_err().is("records/claim/seen"));
 }
 
+/// A record of by with kind, its body's map edited before it is signed.
+fn raw(
+    g: &G,
+    by: &K,
+    kind: Kind,
+    edit: impl FnOnce(&mut Vec<(u16, crate::format::cbor::Value<'static>)>),
+) -> Result<Record, Rule> {
+    let plain: &'static [u8] = Box::leak(g.body(by, kind).encode().into_boxed_slice());
+    let map = crate::format::decode(plain).unwrap();
+    let mut entries = map.as_map().unwrap().to_vec();
+    edit(&mut entries);
+    entries.sort_by_key(|(k, _)| *k);
+    let bytes = crate::format::cbor::Value::Map(entries).encode();
+    let sig = key::sign_es256(by, LABEL_RECORD, &bytes).unwrap();
+    Record::decode(&crate::format::envelope::write(&bytes, &sig, None))
+}
+
+/// Settings take each value of their rows only: a level or a rules
+/// version of 0 is refused, the default written out too.
+#[test]
+fn settings_take_only_the_values_of_their_rows() {
+    let g = G::new();
+    let root = k("root");
+    let plain = Settings::default();
+    for (field, value, rule) in [
+        (11u16, 0u64, "records/settings/key_level"),
+        (12, 0, "records/settings/min_rules"),
+        (11, 2, "form/default"),
+        (12, 1, "form/default"),
+    ] {
+        let r =
+            raw(&g, &root, Kind::Settings(plain.clone()), |m| m.push((field, crate::format::cbor::Value::Uint(value))));
+        assert_eq!(r.map(|_| ()).unwrap_err().to_string(), rule, "{field} = {value}");
+    }
+    let ok = raw(&g, &root, Kind::Settings(plain), |m| m.push((11, crate::format::cbor::Value::Uint(3)))).unwrap();
+    assert_eq!(ok.body().encode(), ok.body_bytes());
+}
+
 /// Every record the rules' tests make reads back from its envelope as the
 /// same record.
 #[test]
