@@ -101,6 +101,11 @@ impl Statement {
         self.id
     }
 
+    /// The envelope `[body, sig]`, as message `keys` carries it.
+    pub fn envelope(&self) -> Vec<u8> {
+        crate::format::envelope::write(&self.bytes, &self.sig, None)
+    }
+
     /// Checks the statement against the device's member key.
     pub fn verify(&self, member: &Key) -> Result<(), Rule> {
         if self.bytes.len() > MAX_STATEMENT_BODY {

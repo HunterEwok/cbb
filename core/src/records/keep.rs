@@ -10,11 +10,15 @@
 //! it brings a new root key, and 16 paid ahead for that root's records.
 //! 4096 units hold at most 4096 records and 2 MiB.
 //!
-//! Each key's records are taken in its own order: its checkpoints first,
-//! the newest first, so that a key at its ceiling can still checkpoint and
-//! free room; then a root's removals and resolves, by seq, so that a full
-//! set never drops them; then the rest by seq, then ID (records of one seq
-//! with other IDs count against the same ceiling). At level s a
+//! Each key's records are taken in its own order: a root's removals,
+//! freezes and resolves first, by seq, so that nothing of the root's
+//! drops them, its checkpoints included; then its checkpoints, the newest
+//! first, so that a key at its ceiling can still checkpoint and free room;
+//! then the rest by seq, then ID (records of one seq with other IDs count
+//! against the same ceiling). A root a takeover cut keeps only its chain
+//! up to the cut, and takes it from the top down. The order is each record's own, never what
+//! else the set holds, so that a set that drops records as they come keeps
+//! what one that saw them all at once keeps. At level s a
 //! key keeps the longest start of that order within min(s, its ceiling)
 //! units. A key's demand at s is min(s, its ceiling, all its units); s is
 //! the highest level at which the demands fit in 4096 units. So a key whose
@@ -58,11 +62,14 @@ pub struct Item {
     pub seq: u64,
     pub id: RecordId,
     pub units: u64,
-    /// A checkpoint: it comes first in its key's order.
+    /// A checkpoint: it comes after a root's removals, before the rest.
     pub checkpoint: bool,
-    /// A root's revoke, freeze or resolve: it comes after the checkpoints,
-    /// before the rest.
+    /// A root's revoke, freeze or resolve: it comes first.
     pub early: bool,
+    /// A record of a root a takeover cut: its key's records are taken
+    /// from the head the claim saw downward, so that what is kept is the
+    /// top of its chain, never a part in the middle.
+    pub down: bool,
     /// A claim: the root it names.
     pub names: Option<KeyHash>,
 }
@@ -71,14 +78,16 @@ pub struct Item {
 pub type Pos = (u8, u64, RecordId);
 
 impl Item {
-    /// Its place in its key's order: checkpoints first, the newest first;
-    /// then a root's removals and resolves by seq; then the rest by seq
+    /// Its place in its key's order: a root's removals and resolves first,
+    /// by seq; then checkpoints, the newest first; then the rest by seq
     /// and ID.
     pub fn pos(&self) -> Pos {
-        if self.checkpoint {
+        if self.down {
             (0, u64::MAX.saturating_sub(self.seq), self.id)
         } else if self.early {
-            (1, self.seq, self.id)
+            (0, self.seq, self.id)
+        } else if self.checkpoint {
+            (1, u64::MAX.saturating_sub(self.seq), self.id)
         } else {
             (2, self.seq, self.id)
         }
@@ -145,6 +154,12 @@ impl Cut {
         self.marks.get(&it.signer).is_some_and(|(m, _)| it.pos() >= *m)
             || self.future.get(&it.signer).is_some_and(|m| it.pos() >= *m)
     }
+
+    /// Forgets where a key stopped while it had no room of its own: it has
+    /// a ceiling now (an admin key, or a promoted root).
+    pub fn forget_future(&mut self, key: &KeyHash) {
+        self.future.remove(key);
+    }
 }
 
 /// The IDs of the records a set keeps. ceiling_of gives a key's ceiling
@@ -162,6 +177,14 @@ pub fn keep_after(
 ) -> (BTreeSet<RecordId>, Cut) {
     let mut by_key: BTreeMap<KeyHash, Vec<&Item>> = BTreeMap::new();
     let mut claimed: BTreeMap<KeyHash, Vec<&Item>> = BTreeMap::new();
+    // A key with a ceiling of its own no longer stops where it stopped as
+    // a claim's root.
+    let mut cut = cut.clone();
+    let owned: Vec<KeyHash> = cut.future.keys().filter(|k| ceiling_of(k).is_some()).copied().collect();
+    for k in &owned {
+        cut.forget_future(k);
+    }
+    let cut = &cut;
     for it in items {
         if cut.past(it) {
             continue;
@@ -277,6 +300,7 @@ mod tests {
             units: units(size, false),
             checkpoint: false,
             early: false,
+            down: false,
             names: None,
         }
     }
@@ -363,6 +387,23 @@ mod tests {
         let (_, cut) = keep_after(&items[..300], ceil, &Cut::default());
         let (kept, _) = keep_after(&[cp], ceil, &cut);
         assert!(kept.contains(&cp.id));
+    }
+
+    /// A cut root that does not fit keeps the top of its chain: the
+    /// records nearest the head the claim saw.
+    #[test]
+    fn a_cut_root_keeps_the_top_of_its_chain() {
+        let items: Vec<Item> = (1..=1500)
+            .map(|s| {
+                let mut it = item(0, s, 0, 100);
+                it.down = true;
+                it
+            })
+            .collect();
+        let kept = keep(&items, ceil);
+        let low = items.iter().filter(|it| kept.contains(&it.id)).map(|it| it.seq).min().unwrap();
+        assert!(kept.len() < items.len());
+        assert!(items.iter().all(|it| kept.contains(&it.id) == (it.seq >= low)));
     }
 
     fn arb_items() -> impl Strategy<Value = Vec<Item>> {
