@@ -1422,7 +1422,7 @@ pub(crate) fn move_bytes(b: &mut Bridge, s: &mut tcp::Socket, buf: &mut [u8]) ->
 /// there are none. A client on a dual-stack socket (Java's, on a system
 /// with IPv6) that dials the loopback port is in IPv6's table, by its
 /// IPv4-mapped address.
-fn tcp_table() -> String {
+pub(crate) fn tcp_table() -> String {
     let mut t = std::fs::read_to_string("/proc/net/tcp").unwrap_or_default();
     t.push_str(&std::fs::read_to_string("/proc/net/tcp6").unwrap_or_default());
     t
@@ -1433,7 +1433,7 @@ fn tcp_table() -> String {
 /// /proc/net/tcp6.
 /// Without the table (a system without /proc) it cannot tell and lets the
 /// connection through.
-fn own_user(table: &str, from: SocketAddr, to: Option<SocketAddr>) -> bool {
+pub(crate) fn own_user(table: &str, from: SocketAddr, to: Option<SocketAddr>) -> bool {
     let (SocketAddr::V4(from), Some(SocketAddr::V4(to))) = (from, to) else { return true };
     if table.is_empty() {
         return true;

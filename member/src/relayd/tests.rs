@@ -740,3 +740,20 @@ fn registrations_bound_by_the_tunnel() {
     drop(st);
     assert!(fake_member(inner, "00000000000000ff", v4(10, 9, 0, 1)).is_ok(), "a place freed");
 }
+
+/// A connection to the loopback port of the tunnels' connections that the
+/// hub did not make names no device: it is closed, and the port goes on
+/// taking the hub's.
+#[test]
+fn stream_port_knows_only_the_hub_s_connections() {
+    use std::io::Read;
+    let r = relay(true, Limits::default());
+    for _ in 0..3 {
+        let mut c = TcpStream::connect((Ipv4Addr::LOCALHOST, r.streams_port())).unwrap();
+        c.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        let start = Instant::now();
+        assert!(matches!(c.read(&mut [0u8; 1]), Ok(0) | Err(_)), "a stranger's connection was served");
+        assert!(start.elapsed() < Duration::from_secs(5), "a stranger's connection was held");
+    }
+    assert!(r.inner().lock().members.is_empty());
+}

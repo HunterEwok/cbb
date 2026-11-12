@@ -212,6 +212,9 @@ pub struct Relay {
     inner: Arc<Inner>,
     addr: SocketAddr,
     accept: Vec<JoinHandle<()>>,
+    /// The loopback port the hub brings the tunnels' connections to.
+    #[cfg_attr(not(test), allow(dead_code))]
+    streams_port: u16,
 }
 
 impl Relay {
@@ -323,7 +326,13 @@ impl Relay {
                 }
             })?);
         }
-        Ok(Relay { inner, addr: local, accept })
+        Ok(Relay { inner, addr: local, accept, streams_port })
+    }
+
+    /// The loopback port of the tunnels' connections, for the tests.
+    #[cfg(test)]
+    pub(super) fn streams_port(&self) -> u16 {
+        self.streams_port
     }
 
     /// The address of the relay's port.
@@ -734,6 +743,15 @@ impl Inner {
                 }
                 Err(_) => continue,
             };
+            // The port is on the loopback, where every local user may
+            // connect: a connection of another user is closed at once. One
+            // of the relay's own user that the hub did not make has no
+            // tunnel address below, and is closed as well; a connection is
+            // known only by the port the hub made it from.
+            if !crate::tunnel::own_user(&crate::tunnel::tcp_table(), from, ln.local_addr().ok()) {
+                let _ = c.shutdown(Shutdown::Both);
+                continue;
+            }
             let _ = c.set_nonblocking(false);
             let _ = c.set_nodelay(true);
             // The tunnel address names the device; a connection is served
