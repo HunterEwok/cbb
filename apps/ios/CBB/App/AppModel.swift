@@ -102,10 +102,10 @@ protocol GroupController: AnyObject {
     /// Admits the device whose QR code the user scanned; retrying is told
     /// each time the device did not answer yet and is dialed again.
     func admit(_ code: JoinCode, retrying: @escaping @MainActor () -> Void) async throws
-    /// Joins another phone's group: listens, hands show the QR code for the
-    /// other phone to scan, and returns once this phone is in the group.
-    /// With asAdmin it offers an admin key, which only the root grants.
-    func join(asAdmin: Bool, show: @escaping @MainActor (JoinCode) -> Void) async throws
+    /// Joins another phone's group as a member: listens, hands show the QR
+    /// code for the other phone to scan, and returns once this phone is in
+    /// the group. The root makes it an admin later from its device page.
+    func join(show: @escaping @MainActor (JoinCode) -> Void) async throws
     /// Joins a computer's group with the code cbb pair shows on its root.
     func joinComputer(code: String) async throws
     /// Joins a group from afar by a remote invitation the user accepted;
@@ -679,14 +679,9 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Whether the join screen asks to join as an admin, which only the
-    /// group's root grants.
-    @Published private(set) var joinAsAdmin = false
-
-    /// Opens the screen that joins a group; with admin, as an admin.
-    func startJoining(admin: Bool = false) {
+    /// Opens the screen that joins a group, always as a member.
+    func startJoining() {
         message = nil
-        joinAsAdmin = admin
         joiningInvite = nil
         phase = .joining
     }
@@ -729,7 +724,6 @@ final class AppModel: ObservableObject {
         guard let p = pendingInvite else { return }
         pendingInvite = nil
         message = nil
-        joinAsAdmin = false
         joiningInvite = p
         phase = .joining
     }
@@ -759,7 +753,7 @@ final class AppModel: ObservableObject {
     /// task, so leaving the screen cancels it and stops listening.
     func join() async {
         do {
-            try await group.join(asAdmin: joinAsAdmin) { [weak self] code in self?.joinCode = code }
+            try await group.join { [weak self] code in self?.joinCode = code }
             computers = group.computers
             devices = group.devices
             isAdmin = group.isAdmin
@@ -1760,7 +1754,7 @@ final class PendingGroup: GroupController {
     func remove(_ id: String) async throws {}
     func makeAdmin(_ id: String) async throws {}
     func admit(_ code: JoinCode, retrying: @escaping @MainActor () -> Void) async throws { throw Failure.notReady }
-    func join(asAdmin: Bool, show: @escaping @MainActor (JoinCode) -> Void) async throws { throw Failure.notReady }
+    func join(show: @escaping @MainActor (JoinCode) -> Void) async throws { throw Failure.notReady }
     func sync(board: AppModel.Board?) async throws -> AppModel.SyncResult { throw Failure.noComputers }
     func refresh() async {}
 }

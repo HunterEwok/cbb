@@ -352,14 +352,9 @@ class AppModel(private val app: Context) {
         }
     }
 
-    /** Whether the join screen asks to join as an admin, which only the group's root grants. */
-    var joinAsAdmin by mutableStateOf(false)
-        private set
-
-    /** Opens the screen that joins another device's group; with admin, as an admin. */
-    fun startJoining(admin: Boolean = false) {
+    /** Opens the screen that joins another device's group, always as a member. */
+    fun startJoining() {
         message = null
-        joinAsAdmin = admin
         joiningInvite = null
         phase = Phase.JOINING
     }
@@ -422,7 +417,6 @@ class AppModel(private val app: Context) {
         val p = pendingInvite ?: return
         pendingInvite = null
         message = null
-        joinAsAdmin = false
         joiningInvite = p
         phase = Phase.JOINING
     }
@@ -456,7 +450,7 @@ class AppModel(private val app: Context) {
      */
     suspend fun join() {
         try {
-            group.join(joinAsAdmin) { code -> joinCode = code }
+            group.join { code -> joinCode = code }
             update()
             phase = Phase.HOME
         } catch (e: CancellationException) {

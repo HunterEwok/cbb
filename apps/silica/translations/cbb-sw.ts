@@ -27,14 +27,6 @@
         <translation>Inaunganisha na kifaa…</translation>
     </message>
     <message>
-        <source>For a phone that joins as an admin</source>
-        <translation>Kwa simu inayojiunga kama msimamizi</translation>
-    </message>
-    <message>
-        <source>Make it an admin</source>
-        <translation>Kifanye msimamizi</translation>
-    </message>
-    <message>
         <source>On the device to add, choose to join a group, then point the camera at the code it shows.</source>
         <translation>Kwenye kifaa unachoongeza, chagua kujiunga na kikundi, kisha elekeza kamera kwenye msimbo unaoonyesha.</translation>
     </message>
@@ -124,6 +116,17 @@
     <message>
         <source>devices unknown here</source>
         <translation>vifaa visivyojulikana hapa</translation>
+    </message>
+</context>
+<context>
+    <name>App</name>
+    <message>
+        <source>The clipboard holds no text.</source>
+        <translation>Ubao wa kunakili hauna maandishi.</translation>
+    </message>
+    <message>
+        <source>There is nothing to send: no file could be read.</source>
+        <translation>Hakuna cha kutuma: hakuna faili iliyoweza kusomwa.</translation>
     </message>
 </context>
 <context>
@@ -260,6 +263,29 @@
     <message>
         <source>Version %1 fixes this: update CBB.</source>
         <translation>Toleo %1 linarekebisha hili: sasisha CBB.</translation>
+    </message>
+</context>
+<context>
+    <name>ChangePinDialog</name>
+    <message>
+        <source>Change</source>
+        <translation>Badilisha</translation>
+    </message>
+    <message>
+        <source>Change the admin PIN</source>
+        <translation>Badilisha PIN ya msimamizi</translation>
+    </message>
+    <message>
+        <source>Current PIN</source>
+        <translation>PIN ya sasa</translation>
+    </message>
+    <message>
+        <source>New PIN</source>
+        <translation>PIN mpya</translation>
+    </message>
+    <message>
+        <source>The new PIN again</source>
+        <translation>PIN mpya tena</translation>
     </message>
 </context>
 <context>
@@ -404,6 +430,10 @@
         <translation>Inanyamazisha %1</translation>
     </message>
     <message>
+        <source>Paste on it…</source>
+        <translation>Bandika kwake…</translation>
+    </message>
+    <message>
         <source>Remove</source>
         <translation>Ondoa</translation>
     </message>
@@ -475,6 +505,10 @@
 <context>
     <name>Errors</name>
     <message>
+        <source>Adding a device needs the admin PIN.</source>
+        <translation>Kuongeza kifaa kunahitaji PIN ya msimamizi.</translation>
+    </message>
+    <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
         <translation>Kifaa kingine kilijibu kwenye anwani ya msimbo. Changanua msimbo tena.</translation>
     </message>
@@ -503,12 +537,20 @@
         <translation>Changanua msimbo wa QR wa karatasi ya urejeshaji: kwenye simu mpya ufunguo ulioandikwa hautoshi.</translation>
     </message>
     <message>
+        <source>Seven wrong PINs locked the admin key for good; the phone stays in the group as a member.</source>
+        <translation>PIN saba zisizo sahihi zimefunga ufunguo wa msimamizi kabisa; simu inabaki kwenye kikundi kama mwanachama.</translation>
+    </message>
+    <message>
         <source>Something in CBB broke. It starts again.</source>
         <translation>Kuna kitu kimeharibika katika CBB. Kinaanza upya.</translation>
     </message>
     <message>
         <source>That phone asks to be an admin. Only the group's root makes admins; on that phone, join without being an admin.</source>
         <translation>Simu hiyo inaomba kuwa msimamizi. Ni mzizi wa kikundi pekee anayeteua wasimamizi; kwenye simu hiyo, jiunge bila kuwa msimamizi.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is needed first.</source>
+        <translation>PIN ya msimamizi inahitajika kwanza.</translation>
     </message>
     <message>
         <source>The claim to restore the group became void.</source>
@@ -521,6 +563,10 @@
     <message>
         <source>The code did not match. Scan the code the other device shows now.</source>
         <translation>Msimbo haukulingana. Changanua msimbo unaoonyeshwa na kifaa kingine sasa.</translation>
+    </message>
+    <message>
+        <source>The device did not paste.</source>
+        <translation>Kifaa hakikubandika.</translation>
     </message>
     <message>
         <source>The device did not take the command.</source>
@@ -547,8 +593,8 @@
         <translation>Mwaliko umeisha muda. Omba mpya.</translation>
     </message>
     <message>
-        <source>The other device did not admit this phone as an admin. Only the group's root makes admins: there, admit it as an admin (cbb pair -qr -admin), or join without being an admin.</source>
-        <translation>Kifaa kingine hakikukubali simu hii kama msimamizi. Ni mzizi wa kikundi pekee unaoteua wasimamizi: huko, ikubali kama msimamizi (cbb pair -qr -admin), au jiunge bila kuwa msimamizi.</translation>
+        <source>The other device did not admit this phone as an admin. Only the device that made the group makes admins: scan the code there, or join without being an admin.</source>
+        <translation>Kifaa kingine hakikukubali simu hii kama msimamizi. Ni kifaa kilichounda kikundi pekee kinachoteua wasimamizi: changanua msimbo huko, au jiunge bila kuwa msimamizi.</translation>
     </message>
     <message>
         <source>The other device did not join.</source>
@@ -635,6 +681,10 @@
         <translation>Kipengele salama cha simu hakikutia sahihi.</translation>
     </message>
     <message>
+        <source>The phone's secure element did not take the PIN.</source>
+        <translation>Kipengele salama cha simu hakikukubali PIN.</translation>
+    </message>
+    <message>
         <source>The phone's secure element holds a broken key.</source>
         <translation>Kipengele salama cha simu kina ufunguo ulioharibika.</translation>
     </message>
@@ -673,6 +723,10 @@
     <message>
         <source>This phone keeps no keys for apps.</source>
         <translation>Simu hii haihifadhi funguo za programu.</translation>
+    </message>
+    <message>
+        <source>This phone's admin key predates the admin PIN. Leave the group and join it again.</source>
+        <translation>Ufunguo wa msimamizi wa simu hii ni wa kabla ya PIN ya msimamizi. Ondoka kwenye kikundi kisha ujiunge tena.</translation>
     </message>
 </context>
 <context>
@@ -807,10 +861,6 @@
         <translation>Jiunge na kikundi</translation>
     </message>
     <message>
-        <source>Join as an admin</source>
-        <translation>Jiunge kama msimamizi</translation>
-    </message>
-    <message>
         <source>Join with an invitation</source>
         <translation>Jiunge kwa mwaliko</translation>
     </message>
@@ -825,10 +875,6 @@
     <message>
         <source>On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open.</source>
         <translation>Kwenye simu ya kikundi, gusa + na uchanganue msimbo huu. Kwenye kompyuta ya kikundi, gusa + na uandike nambari. Acha skrini hii wazi.</translation>
-    </message>
-    <message>
-        <source>On the group's root computer, admit this phone as an admin with this code: in the CBB app, add a device and choose to admit it as an admin, or run cbb pair -qr -admin. Keep this screen open.</source>
-        <translation>Kwenye kompyuta ya mzizi wa kikundi, ikubali simu hii kama msimamizi kwa msimbo huu: katika programu ya CBB ongeza kifaa na uchague kukikubali kama msimamizi, au endesha cbb pair -qr -admin. Acha skrini hii wazi.</translation>
     </message>
     <message>
         <source>The phone is in the group now.</source>
@@ -1017,10 +1063,6 @@
         <translation>Jiunge na kikundi</translation>
     </message>
     <message>
-        <source>Join a group as an admin</source>
-        <translation>Jiunge na kikundi kama msimamizi</translation>
-    </message>
-    <message>
         <source>Join with an invitation</source>
         <translation>Jiunge kwa mwaliko</translation>
     </message>
@@ -1029,8 +1071,8 @@
         <translation>Umepoteza simu?</translation>
     </message>
     <message>
-        <source>Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.</source>
-        <translation>Fanya simu ya pili kuwa msimamizi: kwenye simu hiyo, gusa Jiunge na kikundi kama msimamizi, kisha changanua msimbo wake hapa kwa Changanua msimbo. Gusa ili kufunga.</translation>
+        <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
+        <translation>Fanya simu ya pili kuwa msimamizi: iongeze kwenye kikundi, kisha ifungue hapa na uguse Fanya msimamizi. Gusa ili kufunga.</translation>
     </message>
     <message>
         <source>New collection…</source>
@@ -1140,6 +1182,10 @@
         <translation>Video</translation>
     </message>
     <message>
+        <source>An admin muted this phone, so its copies stay on it.</source>
+        <translation>Msimamizi amenyamazisha simu hii, kwa hiyo nakala zake hubaki ndani yake.</translation>
+    </message>
+    <message>
         <source>An image</source>
         <translation>Picha</translation>
     </message>
@@ -1200,6 +1246,100 @@
     <message>
         <source>a file</source>
         <translation>faili moja</translation>
+    </message>
+</context>
+<context>
+    <name>PastePage</name>
+    <message>
+        <source>A paste suits most apps; typing suits those that take no paste, and only up to 4 KB. Enter runs a command in a terminal, so the computer takes it only when its user allowed that. A secret leaves no trace in the computer's log or clipboard.</source>
+        <translation>Kubandika kunafaa programu nyingi; kuandika kunafaa zile zisizokubali kubandika, na hadi KB 4 tu. Enter huendesha amri kwenye kituo, kwa hiyo kompyuta huikubali tu ikiwa mtumiaji wake aliruhusu. Siri haiachi alama kwenye kumbukumbu au ubao wa kunakili wa kompyuta.</translation>
+    </message>
+    <message>
+        <source>A picture or files go to the group as a copy, and the computer pastes them where its focus is, as Ctrl+V would: into a chat, a document or a folder. Enter, if on, sends them in a chat.</source>
+        <translation>Picha au faili huenda kwenye kikundi kama nakala, na kompyuta huzibandika mahali lengo lake lilipo, kama Ctrl+V ingefanya: kwenye gumzo, hati au folda. Enter, ikiwa imewashwa, huzituma kwenye gumzo.</translation>
+    </message>
+    <message>
+        <source>A secret</source>
+        <translation>Siri</translation>
+    </message>
+    <message>
+        <source>It goes where %1's keyboard focus is, once its user turned remote paste on there. Left empty, Paste sends what the clipboard holds.</source>
+        <translation>Huenda mahali ambapo kibodi ya %1 imeelekezwa, mara mtumiaji wake atakapowasha kubandika kwa mbali huko. Ikiachwa tupu, Bandika hutuma kilichomo kwenye ubao wa kunakili.</translation>
+    </message>
+    <message>
+        <source>Paste</source>
+        <translation>Bandika</translation>
+    </message>
+    <message>
+        <source>Paste a picture or files…</source>
+        <translation>Bandika picha au faili…</translation>
+    </message>
+    <message>
+        <source>Paste on %1</source>
+        <translation>Bandika kwenye %1</translation>
+    </message>
+    <message>
+        <source>Press Enter after it</source>
+        <translation>Bonyeza Enter baada yake</translation>
+    </message>
+    <message>
+        <source>Text</source>
+        <translation>Maandishi</translation>
+    </message>
+    <message>
+        <source>Type it key by key</source>
+        <translation>Iandike kitufe kwa kitufe</translation>
+    </message>
+</context>
+<context>
+    <name>PinDialog</name>
+    <message>
+        <source>Admin PIN</source>
+        <translation>PIN ya msimamizi</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>PIN ya CBB yenyewe, angalau tarakimu nne. Usitumie msimbo wa kufungua simu. Kipengele salama cha simu huikagua kabla ya kila kitendo cha msimamizi; PIN saba zisizo sahihi hufunga ufunguo wa msimamizi kabisa, na hakuna anayeweza kuufungua.</translation>
+    </message>
+    <message>
+        <source>Choose the admin PIN</source>
+        <translation>Chagua PIN ya msimamizi</translation>
+    </message>
+    <message>
+        <source>Confirm</source>
+        <translation>Thibitisha</translation>
+    </message>
+    <message>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <source>Set</source>
+        <translation>Weka</translation>
+    </message>
+    <message>
+        <source>The PIN again</source>
+        <translation>PIN tena</translation>
+    </message>
+    <message>
+        <source>The phone's secure element checks the PIN; seven wrong PINs lock the admin key for good.</source>
+        <translation>Kipengele salama cha simu hukagua PIN; PIN saba zisizo sahihi hufunga ufunguo wa msimamizi kabisa.</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin later. Cancel to join as a member only.</source>
+        <translation>Ukiwa na PIN ya msimamizi, mzizi wa kikundi unaweza baadaye kuifanya simu hii kuwa msimamizi. Ghairi ili ujiunge kama mwanachama tu.</translation>
+    </message>
+    <message>
+        <source>With the admin PIN, the group's root can make this phone an admin.</source>
+        <translation>Ukiwa na PIN ya msimamizi, mzizi wa kikundi unaweza kuifanya simu hii kuwa msimamizi.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
+        <translation>PIN si sahihi. Imebaki jaribio moja: PIN nyingine isiyo sahihi itafunga ufunguo wa msimamizi kabisa.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>PIN si sahihi. Majaribio yaliyobaki: %1.</translation>
     </message>
 </context>
 <context>
@@ -1362,6 +1502,10 @@
         <translation>Kama simu</translation>
     </message>
     <message>
+        <source>Change the admin PIN</source>
+        <translation>Badilisha PIN ya msimamizi</translation>
+    </message>
+    <message>
         <source>Checking…</source>
         <translation>Inakagua…</translation>
     </message>
@@ -1380,6 +1524,10 @@
     <message>
         <source>Devices join or leave</source>
         <translation>Vifaa vinajiunga au kuondoka</translation>
+    </message>
+    <message>
+        <source>Get ready to be an admin</source>
+        <translation>Jiandae kuwa msimamizi</translation>
     </message>
     <message>
         <source>Group</source>
@@ -1482,6 +1630,10 @@
         <translation>Mipangilio</translation>
     </message>
     <message>
+        <source>Seven wrong PINs locked the admin key for good. The phone stays in the group as a member; to be an admin again, reinstall CBB and join as a new device.</source>
+        <translation>PIN saba zisizo sahihi zimefunga ufunguo wa msimamizi kabisa. Simu inabaki kwenye kikundi kama mwanachama; ili kuwa msimamizi tena, sakinisha CBB upya na ujiunge kama kifaa kipya.</translation>
+    </message>
+    <message>
         <source>Show error details</source>
         <translation>Onyesha maelezo ya hitilafu</translation>
     </message>
@@ -1494,8 +1646,24 @@
         <translation>Mfumo</translation>
     </message>
     <message>
+        <source>The admin PIN is changed.</source>
+        <translation>PIN ya msimamizi imebadilishwa.</translation>
+    </message>
+    <message>
+        <source>The admin PIN is not changed.</source>
+        <translation>PIN ya msimamizi haijabadilishwa.</translation>
+    </message>
+    <message>
+        <source>The group's root can make this phone an admin: on the root, open this phone and tap Make an admin.</source>
+        <translation>Mzizi wa kikundi unaweza kuifanya simu hii kuwa msimamizi: kwenye mzizi, fungua simu hii na uguse Fanya msimamizi.</translation>
+    </message>
+    <message>
         <source>Version</source>
         <translation>Toleo</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Tries left: %1.</source>
+        <translation>PIN si sahihi. Majaribio yaliyobaki: %1.</translation>
     </message>
 </context>
 <context>

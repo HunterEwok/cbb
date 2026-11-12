@@ -9,8 +9,10 @@
 
 #include <cbb_core.h>
 
+#include <QClipboard>
 #include <QCoreApplication>
 #include <QCryptographicHash>
+#include <QGuiApplication>
 #include <QHash>
 #include <QImage>
 #include <QJsonArray>
@@ -20,6 +22,7 @@
 #include <QSettings>
 #include <QSysInfo>
 #include <QThread>
+#include <QUrl>
 
 namespace {
 
@@ -57,12 +60,14 @@ public:
     QJsonObject request; // without root_public, which the key gives
     QJsonObject group;   // the core's answer, with a join's fields
     Failure failure;
+    Core::AdminSign sign;
 
 protected:
     void run() override
     {
         const KeyStore::Key key = KeyStore::ensure(KeyStore::Which::Admin);
         if (key.state != KeyStore::State::Ready) {
+            sign.pinNeeded = key.pinNeeded;
             failure = key.failure;
             return;
         }
@@ -70,7 +75,7 @@ protected:
         const QByteArray bytes = QJsonDocument(request).toJson(QJsonDocument::Compact);
         size_t len = 0;
         group = Core::take(cbb_group_new(reinterpret_cast<const uint8_t *>(bytes.constData()), size_t(bytes.size()),
-                                         Core::signAdminDigest, nullptr, &len),
+                                         Core::signAdminDigest, &sign, &len),
                            len, QStringLiteral("group"), &failure);
     }
 };
@@ -89,12 +94,14 @@ public:
     QString refused; // why the request's own action was refused, for the log
     QJsonObject answer;
     Failure failure;
+    Core::AdminSign sign; // whether the admin key waited for its PIN
 
 protected:
     void run() override
     {
         const KeyStore::Key key = KeyStore::ensure(KeyStore::Which::Admin);
         if (key.state != KeyStore::State::Ready) {
+            sign.pinNeeded = key.pinNeeded;
             failure = key.failure;
             return;
         }
@@ -109,9 +116,17 @@ protected:
         // A command the device refused answers with its reason.
         const QJsonObject result = a.value(QStringLiteral("result")).toObject();
         const QString status = result.value(QStringLiteral("status")).toString();
+        const QString reason = result.value(QStringLiteral("reason")).toString();
         if (failure.isNull() && !result.isEmpty() && status != QStringLiteral("done")) {
             failure = Failure{QCoreApplication::translate("Errors", "The device did not take the command."),
-                              QStringLiteral("manage: %1: %2").arg(status, result.value(QStringLiteral("reason")).toString())};
+                              QStringLiteral("manage: %1: %2").arg(status, reason)};
+            // Why a paste did not go in is the device's own word, such as
+            // remote paste being off there, which the user needs to see.
+            if (request.value(QStringLiteral("action")).toString() == QStringLiteral("paste")) {
+                failure.message = QCoreApplication::translate("Errors", "The device did not paste.");
+                if (!reason.isEmpty())
+                    failure.message += QLatin1Char(' ') + reason;
+            }
         }
     }
 
@@ -121,10 +136,57 @@ private:
         const QByteArray bytes = QJsonDocument(request).toJson(QJsonDocument::Compact);
         size_t len = 0;
         return Core::take(cbb_member_manage(member, reinterpret_cast<const uint8_t *>(bytes.constData()), size_t(bytes.size()),
-                                            Core::signAdminDigest, nullptr, &len),
+                                            Core::signAdminDigest, &sign, &len),
                           len, QStringLiteral("manage"), &failure);
     }
 };
+
+// Asks the key store about the admin PIN, or hands it one, off the GUI
+// thread: the TEE takes a few hundred milliseconds.
+class PinThread : public QThread
+{
+public:
+    enum Job { Status, Enter, Change };
+    Job job = Status;
+    QByteArray old, pin;
+    KeyStore::PinResult result = KeyStore::PinResult::Failed;
+    KeyStore::PinStatus status;
+    Failure failure;
+
+    ~PinThread() override
+    {
+        old.fill('\0');
+        pin.fill('\0');
+    }
+
+protected:
+    void run() override
+    {
+        switch (job) {
+        case Status:
+            status = KeyStore::adminPin();
+            break;
+        case Enter:
+            result = KeyStore::enterAdminPin(pin, &status, &failure);
+            break;
+        case Change:
+            result = KeyStore::changeAdminPin(old, pin, &status, &failure);
+            break;
+        }
+    }
+};
+
+QString pinStateName(KeyStore::PinState state)
+{
+    switch (state) {
+    case KeyStore::PinState::None: return QStringLiteral("none");
+    case KeyStore::PinState::NotSet: return QStringLiteral("not_set");
+    case KeyStore::PinState::Set: return QStringLiteral("set");
+    case KeyStore::PinState::Locked: return QStringLiteral("locked");
+    case KeyStore::PinState::Failed: break;
+    }
+    return QStringLiteral("unknown");
+}
 
 // Restores a group from its recovery sheet off the GUI thread: the core
 // browses for a member of the group, takes its records on a connection
@@ -234,6 +296,16 @@ App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current()), m_startLan
     });
     m_claimTimer.setInterval(claimEveryMs);
     connect(&m_claimTimer, &QTimer::timeout, this, &App::finishTakeover);
+    // The admin token stays logged in only while the app is on the screen,
+    // and is logged out once unused for five minutes, which adminPinHeld
+    // checks.
+    auto *pinCheck = new QTimer(this);
+    connect(pinCheck, &QTimer::timeout, this, [] { KeyStore::adminPinHeld(); });
+    pinCheck->start(30 * 1000);
+    connect(qGuiApp, &QGuiApplication::applicationStateChanged, this, [](Qt::ApplicationState state) {
+        if (state != Qt::ApplicationActive)
+            KeyStore::dropAdminPin();
+    });
     // A member that broke stops and starts again; the user sees what
     // broke, the details only in debug mode (Errors::showDetails).
     // Reports that waited for the network go now.
@@ -269,6 +341,12 @@ App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current()), m_startLan
     });
     connect(&m_join, &Join::joined, this, [this](const Membership &m) {
         m_member = m;
+        if (!m_joinOffer.isEmpty() && !m.isAdmin()) {
+            Membership next = m;
+            next.adminOffer = m_joinOffer;
+            keep(next);
+        }
+        m_joinOffer.clear();
         emit groupChanged();
         startMember();
         // Joined from afar: sync away from home goes on, and the member
@@ -276,6 +354,24 @@ App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current()), m_startLan
         // tunnel until the hub answers.
         if (m_join.byInvite())
             m_node.joinedByInvite(m_join.invite());
+    });
+    // The root made this phone an admin: the member checks the admin CA
+    // first, then the phone keeps it and signs with it.
+    connect(&m_node, &Member::adminCaArrived, this, [this](const QByteArray &ca) {
+        if (m_member.isAdmin())
+            return;
+        Failure failure;
+        if (!m_node.takeAdminCa(ca, &failure)) {
+            Errors::log(QStringLiteral("admin: refused an admin CA: %1 (%2)").arg(failure.message, failure.details));
+            return;
+        }
+        Membership next = m_member;
+        next.adminCa = ca;
+        next.adminOffer.clear();
+        if (!keep(next))
+            return;
+        Errors::log(QStringLiteral("admin: the root made this phone an admin"));
+        emit groupChanged();
     });
 }
 
@@ -309,6 +405,7 @@ void App::setUpKey()
             Errors::log(QStringLiteral("key: %1 %2 key %3").arg(key.created ? QStringLiteral("made") : QStringLiteral("found"), m_keyLevel, m_keyFingerprint));
             show(QString());
             startMember();
+            refreshAdminPin();
         } else {
             // Aurora 5 without OP-TEE (the emulator) has no key: its file
             // key at level 3 needs the user's consent, which comes later.
@@ -321,17 +418,58 @@ void App::setUpKey()
     thread->start();
 }
 
-void App::startJoin(bool admin)
+void App::startJoin()
 {
     if (m_publicKey.isEmpty()) {
         show(Errors::shown({QCoreApplication::translate("Errors", "The phone has no key yet."), QStringLiteral("join: no key")}));
         return;
     }
-    if (!admin) {
-        m_join.start(phoneName(), phoneOs(), m_publicKey);
-        return;
-    }
     if (m_busy)
+        return;
+    const int serial = ++m_joinSerial;
+    m_joinOffer.clear();
+    const auto listen = [this, serial]() {
+        if (serial == m_joinSerial)
+            m_join.start(phoneName(), phoneOs(), m_publicKey);
+    };
+    // The admin key, which the member's hellos offer the root for its
+    // "Make an admin": found without the PIN, or made behind it.
+    m_busy = true;
+    emit keyChanged();
+    auto *thread = new KeyThread(KeyStore::Which::Admin);
+    connect(thread, &QThread::finished, this, [this, thread, serial, listen]() {
+        const KeyStore::Key key = thread->key;
+        thread->deleteLater();
+        m_busy = false;
+        emit keyChanged();
+        if (serial != m_joinSerial)
+            return;
+        if (key.state == KeyStore::State::Ready) {
+            Errors::log(QStringLiteral("key: %1 the admin key").arg(key.created ? QStringLiteral("made") : QStringLiteral("found")));
+            m_joinOffer = key.publicKey;
+            listen();
+            return;
+        }
+        if (key.pinNeeded && m_adminPin != QStringLiteral("locked")
+            && askPin([this]() { startJoin(); }, listen,
+                      QCoreApplication::translate("PinDialog", "With the admin PIN, the group's root can make this phone an admin later. Cancel to join as a member only.")))
+            return;
+        Errors::log(QStringLiteral("key: joining without an admin key: %1 (%2)").arg(key.failure.message, key.failure.details));
+        listen();
+    });
+    thread->start();
+}
+
+void App::stopJoin()
+{
+    ++m_joinSerial;
+    m_joinOffer.clear();
+    m_join.stop();
+}
+
+void App::prepareAdmin()
+{
+    if (m_busy || m_member.isNull() || m_member.isAdmin() || !m_member.adminOffer.isEmpty())
         return;
     m_busy = true;
     emit keyChanged();
@@ -341,12 +479,25 @@ void App::startJoin(bool admin)
         thread->deleteLater();
         m_busy = false;
         emit keyChanged();
+        if (m_member.isNull() || m_member.isAdmin())
+            return;
         if (key.state != KeyStore::State::Ready) {
-            m_join.fail(key.failure);
+            if (key.pinNeeded
+                && askPin([this]() { prepareAdmin(); }, std::function<void()>(),
+                          QCoreApplication::translate("PinDialog", "With the admin PIN, the group's root can make this phone an admin.")))
+                return;
+            show(Errors::shown(key.failure));
             return;
         }
-        Errors::log(QStringLiteral("key: %1 the admin key").arg(key.created ? QStringLiteral("made") : QStringLiteral("found")));
-        m_join.start(phoneName(), phoneOs(), m_publicKey, key.publicKey);
+        Membership next = m_member;
+        next.adminOffer = key.publicKey;
+        if (!keep(next))
+            return;
+        Errors::log(QStringLiteral("key: %1 the admin key, offered to the root").arg(key.created ? QStringLiteral("made") : QStringLiteral("found")));
+        emit groupChanged();
+        // The hellos of the new connections offer it.
+        m_node.stop();
+        startMember();
     });
     thread->start();
 }
@@ -359,6 +510,9 @@ void App::startAdmit(const QString &qr, bool makeAdmin)
     }
     if (m_busy)
         return;
+    if (askPin([this, qr, makeAdmin]() { startAdmit(qr, makeAdmin); },
+               [this]() { m_admit.fail({QCoreApplication::translate("Errors", "Adding a device needs the admin PIN."), QStringLiteral("admit: no PIN")}); }))
+        return;
     m_busy = true;
     emit keyChanged();
     m_admit.setPreparing();
@@ -369,6 +523,8 @@ void App::startAdmit(const QString &qr, bool makeAdmin)
         m_busy = false;
         emit keyChanged();
         if (key.state != KeyStore::State::Ready) {
+            if (key.pinNeeded && askPin([this, qr, makeAdmin]() { startAdmit(qr, makeAdmin); }))
+                return;
             m_admit.fail(key.failure);
             return;
         }
@@ -446,6 +602,9 @@ void App::runManage(const QString &action, const QString &device, const QJsonObj
     }
     if (m_busy)
         return;
+    if (askPin([this, action, device, extra, done]() { runManage(action, device, extra, done); },
+               [this, action, device]() { emit managed(action, device, false); }))
+        return;
     m_busy = true;
     emit keyChanged();
     auto *thread = new ManageThread;
@@ -455,12 +614,17 @@ void App::runManage(const QString &action, const QString &device, const QJsonObj
     thread->request.insert(QStringLiteral("device"), device);
     if (!m_member.adminCa.isEmpty() && !m_member.root)
         thread->request.insert(QStringLiteral("admin_ca"), QString::fromLatin1(m_member.adminCa.toBase64()));
-    connect(thread, &QThread::finished, this, [this, thread, action, device, done]() {
+    connect(thread, &QThread::finished, this, [this, thread, action, device, extra, done]() {
         const Failure failure = thread->failure;
         const QJsonObject answer = thread->answer;
+        const bool pinNeeded = thread->sign.pinNeeded;
         thread->deleteLater();
         m_busy = false;
         emit keyChanged();
+        if (!failure.isNull() && pinNeeded
+            && askPin([this, action, device, extra, done]() { runManage(action, device, extra, done); },
+                      [this, action, device]() { emit managed(action, device, false); }))
+            return;
         if (!failure.isNull()) {
             show(Errors::shown(failure));
             emit managed(action, device, false);
@@ -474,6 +638,58 @@ void App::runManage(const QString &action, const QString &device, const QJsonObj
         emit managed(action, device, true);
     });
     thread->start();
+}
+
+void App::paste(const QString &device, const QString &text, bool typing, bool enter, bool secret)
+{
+    // An empty field sends what the phone's clipboard holds.
+    const QString out = text.isEmpty() ? QGuiApplication::clipboard()->text() : text;
+    if (out.isEmpty()) {
+        show(Errors::shown({tr("The clipboard holds no text."), QStringLiteral("paste: the clipboard is empty")}));
+        emit managed(QStringLiteral("paste"), device, false);
+        return;
+    }
+    // The device waits 5 s for its target, and 5 ms more for each typed byte.
+    const qint64 wait = 10000 + (typing ? qint64(out.toUtf8().size()) * 5 : 0);
+    runManage(QStringLiteral("paste"), device,
+              QJsonObject{
+                  {QStringLiteral("text"), out},
+                  {QStringLiteral("mode"), typing ? QStringLiteral("type") : QStringLiteral("paste")},
+                  {QStringLiteral("kind"), secret ? QStringLiteral("secret") : QStringLiteral("text")},
+                  {QStringLiteral("enter"), enter},
+                  {QStringLiteral("timeout_ms"), double(wait)},
+              },
+              nullptr);
+}
+
+void App::pasteFiles(const QString &device, const QStringList &files, bool enter)
+{
+    if (m_busy || files.isEmpty())
+        return;
+    QStringList paths;
+    for (const QString &f : files) {
+        const QUrl url(f);
+        paths.append(url.isLocalFile() ? url.toLocalFile() : f);
+    }
+    Failure failure;
+    const QString copy = m_node.copyFiles(paths, &failure);
+    if (copy.isEmpty()) {
+        if (failure.isNull())
+            failure = Failure{tr("There is nothing to send: no file could be read."), QStringLiteral("paste: no copy")};
+        show(Errors::shown(failure));
+        emit managed(QStringLiteral("paste"), device, false);
+        return;
+    }
+    // The device waits up to 20 s for the copy, then 8 s for its desktop.
+    runManage(QStringLiteral("paste"), device,
+              QJsonObject{
+                  {QStringLiteral("text"), copy},
+                  {QStringLiteral("mode"), QStringLiteral("paste")},
+                  {QStringLiteral("kind"), QStringLiteral("media")},
+                  {QStringLiteral("enter"), enter},
+                  {QStringLiteral("timeout_ms"), 35000.0},
+              },
+              nullptr);
 }
 
 void App::setTakeoverDelay(int hours)
@@ -535,7 +751,8 @@ void App::removeRecovery()
 
 void App::renew()
 {
-    if (m_busy || !m_member.isAdmin() || !m_node.running())
+    // Renewals wait for a time the user entered the admin PIN anyway.
+    if (m_busy || !m_member.isAdmin() || !m_node.running() || !KeyStore::adminPinHeld())
         return;
     m_busy = true;
     emit keyChanged();
@@ -572,6 +789,8 @@ bool App::keep(const Membership &next)
 void App::takeOver(const QString &device)
 {
     if (m_busy || !m_member.isAdmin() || m_member.root || !m_member.claim.isEmpty() || !m_node.running())
+        return;
+    if (askPin([this, device]() { takeOver(device); }))
         return;
     m_busy = true;
     emit keyChanged();
@@ -659,9 +878,17 @@ void App::finishTakeover()
     connect(thread, &QThread::finished, this, [this, thread]() {
         const Failure failure = thread->failure;
         const QJsonObject a = thread->answer;
+        const bool pinNeeded = thread->sign.pinNeeded;
         thread->deleteLater();
         m_busy = false;
         emit keyChanged();
+        // The claim took effect and the new root signs now: the user's PIN
+        // first, asked once; the timer tries again after a cancel.
+        if (!failure.isNull() && pinNeeded && !m_pinRun) {
+            Errors::log(QStringLiteral("takeover: the claim took effect, the admin PIN is asked"));
+            askPin([this]() { finishTakeover(); });
+            return;
+        }
         if (!failure.isNull()) {
             // Tried again in a minute; the log says why.
             Errors::log(QStringLiteral("takeover: %1 (%2)").arg(failure.message, failure.details));
@@ -879,6 +1106,8 @@ void App::makeGroup()
         show(Errors::shown({QCoreApplication::translate("Errors", "The phone has no key yet."), QStringLiteral("group: no key")}));
         return;
     }
+    if (askPin([this]() { makeGroup(); }))
+        return;
     Failure failure;
     const QByteArray secret = sealSecret(&failure);
     const QJsonObject seal = secret.isEmpty() ? QJsonObject()
@@ -900,9 +1129,12 @@ void App::makeGroup()
     connect(thread, &QThread::finished, this, [this, thread]() {
         const QJsonObject group = thread->group;
         Failure failure = thread->failure;
+        const bool pinNeeded = thread->sign.pinNeeded;
         thread->deleteLater();
         m_busy = false;
         emit keyChanged();
+        if (!failure.isNull() && pinNeeded && askPin([this]() { makeGroup(); }))
+            return;
         if (!failure.isNull()) {
             show(Errors::shown(failure));
             return;
@@ -960,6 +1192,128 @@ void App::leave()
         }
         Errors::log(QStringLiteral("key: deleted the member and admin keys"));
         setUpKey();
+    });
+    thread->start();
+}
+
+bool App::askPin(std::function<void()> run, std::function<void()> cancel, const QString &reason)
+{
+    if (m_adminPin == QStringLiteral("unknown")) {
+        // Before the first answer came: asked here, a short call to the TEE.
+        const KeyStore::PinStatus status = KeyStore::adminPin();
+        if (status.state != KeyStore::PinState::Failed)
+            setAdminPin(pinStateName(status.state));
+    }
+    if (m_adminPin == QStringLiteral("none") || KeyStore::adminPinHeld())
+        return false;
+    if (m_adminPin == QStringLiteral("locked")) {
+        show(Errors::shown({QCoreApplication::translate("Errors", "Seven wrong PINs locked the admin key for good; the phone stays in the group as a member."),
+                            QStringLiteral("pin: locked")}));
+        if (cancel)
+            cancel();
+        return true;
+    }
+    if (m_pinCancel)
+        m_pinCancel();
+    m_pinRun = std::move(run);
+    m_pinCancel = std::move(cancel);
+    emit pinNeeded(m_adminPin == QStringLiteral("not_set"), reason);
+    return true;
+}
+
+void App::setAdminPin(const QString &state)
+{
+    if (state == m_adminPin)
+        return;
+    m_adminPin = state;
+    Errors::log(QStringLiteral("pin: %1").arg(state));
+    emit adminPinChanged();
+}
+
+void App::refreshAdminPin()
+{
+    auto *thread = new PinThread;
+    connect(thread, &QThread::finished, this, [this, thread]() {
+        const KeyStore::PinStatus status = thread->status;
+        thread->deleteLater();
+        if (status.state == KeyStore::PinState::Failed)
+            Errors::log(QStringLiteral("pin: %1 (%2)").arg(status.failure.message, status.failure.details));
+        setAdminPin(pinStateName(status.state));
+    });
+    thread->start();
+}
+
+void App::enterPin(const QString &pin)
+{
+    auto *thread = new PinThread;
+    thread->job = PinThread::Enter;
+    thread->pin = pin.toUtf8();
+    connect(thread, &QThread::finished, this, [this, thread]() {
+        const KeyStore::PinResult result = thread->result;
+        const KeyStore::PinStatus status = thread->status;
+        const Failure failure = thread->failure;
+        thread->deleteLater();
+        if (status.state != KeyStore::PinState::Failed)
+            setAdminPin(pinStateName(status.state));
+        switch (result) {
+        case KeyStore::PinResult::Right: {
+            emit pinAccepted();
+            std::function<void()> run = std::move(m_pinRun);
+            m_pinRun = nullptr;
+            m_pinCancel = nullptr;
+            if (run)
+                run();
+            // Certificates due for renewal go while the PIN is held.
+            QTimer::singleShot(renewFirstMs / 2, this, &App::renew);
+            return;
+        }
+        case KeyStore::PinResult::Wrong:
+            Errors::log(QStringLiteral("pin: wrong, %1 tries left").arg(status.triesLeft));
+            emit pinRefused(false, status.triesLeft);
+            return;
+        case KeyStore::PinResult::Locked:
+            emit pinRefused(true, 0);
+            cancelPin();
+            show(Errors::shown({QCoreApplication::translate("Errors", "Seven wrong PINs locked the admin key for good; the phone stays in the group as a member."),
+                                QStringLiteral("pin: locked")}));
+            return;
+        case KeyStore::PinResult::Failed:
+            break;
+        }
+        emit pinRefused(false, -1);
+        cancelPin();
+        show(Errors::shown(failure));
+    });
+    thread->start();
+}
+
+void App::cancelPin()
+{
+    std::function<void()> cancel = std::move(m_pinCancel);
+    m_pinRun = nullptr;
+    m_pinCancel = nullptr;
+    if (cancel)
+        cancel();
+}
+
+void App::changePin(const QString &old, const QString &pin)
+{
+    auto *thread = new PinThread;
+    thread->job = PinThread::Change;
+    thread->old = old.toUtf8();
+    thread->pin = pin.toUtf8();
+    connect(thread, &QThread::finished, this, [this, thread]() {
+        const KeyStore::PinResult result = thread->result;
+        const KeyStore::PinStatus status = thread->status;
+        const Failure failure = thread->failure;
+        thread->deleteLater();
+        if (status.state != KeyStore::PinState::Failed)
+            setAdminPin(pinStateName(status.state));
+        if (result == KeyStore::PinResult::Failed)
+            show(Errors::shown(failure));
+        if (result == KeyStore::PinResult::Right)
+            Errors::log(QStringLiteral("pin: changed"));
+        emit pinChanged(result == KeyStore::PinResult::Right, result == KeyStore::PinResult::Locked, status.triesLeft);
     });
     thread->start();
 }

@@ -120,13 +120,6 @@ Page {
                     visible: app.keyLevel !== "none"
                     anchors.horizontalCenter: parent.horizontalCenter
                     preferredWidth: Theme.buttonWidthLarge
-                    text: qsTr("Join a group as an admin")
-                    onClicked: pageStack.push(Qt.resolvedUrl("JoinPage.qml"), { admin: true })
-                }
-                Button {
-                    visible: app.keyLevel !== "none"
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    preferredWidth: Theme.buttonWidthLarge
                     text: qsTr("Join with an invitation")
                     onClicked: pageStack.push(Qt.resolvedUrl("InvitationPage.qml"))
                 }
@@ -271,7 +264,7 @@ Page {
                     }
                     Label {
                         width: parent.width
-                        text: qsTr("Make a second phone an admin: on it, tap Join a group as an admin, then scan its code here with Scan a code. Tap to close.")
+                        text: qsTr("Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.")
                         font.pixelSize: Theme.fontSizeExtraSmall
                         color: Theme.secondaryColor
                         wrapMode: Text.Wrap
