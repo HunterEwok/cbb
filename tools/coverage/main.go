@@ -495,7 +495,7 @@ func report(parts, packages map[string]tally, floors map[string]float64, o optio
 	slack := o.slack
 	var b strings.Builder
 	var failed, short []string
-	b.WriteString("## Test coverage by kind\n\n| Part | Kind | Covered | Of | % | Floor | |\n|---|---|---:|---:|---:|---:|---|\n")
+	b.WriteString("## Test coverage by kind\n\n| Part | Kind | Covered | Of | % | Floor | Target | |\n|---|---|---:|---:|---:|---:|---:|---|\n")
 	names := make([]string, 0, len(parts))
 	for k := range parts {
 		names = append(names, k)
@@ -514,13 +514,16 @@ func report(parts, packages map[string]tally, floors map[string]float64, o optio
 		}
 		t, measured := parts[n]
 		floor, hasFloor := floors[n]
-		floorText, verdict := "-", ""
+		floorText, targetText, verdict := "-", "-", ""
 		if hasFloor {
 			floorText = fmt.Sprintf("%.1f", floor)
 		}
+		if target > 0 {
+			targetText = fmt.Sprintf("%.0f", target)
+		}
 		switch {
 		case !measured:
-			fmt.Fprintf(&b, "| %s | %s | | | not measured | %s | |\n", part, kind, floorText)
+			fmt.Fprintf(&b, "| %s | %s | | | not measured | %s | %s | |\n", part, kind, floorText, targetText)
 			continue
 		case hasFloor && t.pct() < floor-slack:
 			verdict = "below the floor"
@@ -535,7 +538,7 @@ func report(parts, packages map[string]tally, floors map[string]float64, o optio
 		case hasFloor:
 			verdict = "ok"
 		}
-		fmt.Fprintf(&b, "| %s | %s | %d | %d | %.1f | %s | %s |\n", part, kind, t.covered, t.total, t.pct(), floorText, verdict)
+		fmt.Fprintf(&b, "| %s | %s | %d | %d | %.1f | %s | %s | %s |\n", part, kind, t.covered, t.total, t.pct(), floorText, targetText, verdict)
 	}
 	if len(packages) > 0 {
 		b.WriteString("\n<details><summary>Go packages, least covered first</summary>\n\n| Package | Statements | % |\n|---|---:|---:|\n")

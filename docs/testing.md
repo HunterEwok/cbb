@@ -102,7 +102,8 @@ report counts them: JaCoCo for the Kotlin kit, llvm-cov for the Swift kit, and f
 core the nightly `rust core, branch coverage` job, since only a nightly compiler counts Rust's
 branches. Go counts statements only. The aim is 80% of the branches (`-branch-target 80`),
 90% in a core (`-core-branch-target 90`), where each branch is a decision to take or refuse;
-a branch row's floor is its first measure, and it only rises.
+a branch row's floor is its first measure, and it only rises. The table shows each row's floor
+and target side by side, so the gap between them is in view.
 
 Under the table are the hard gates, which have no floor and fail the job at once:
 

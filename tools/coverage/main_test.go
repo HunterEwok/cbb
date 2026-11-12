@@ -149,9 +149,9 @@ func TestBranches(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"| rust-core | branches | 17 | 20 | 85.0 | 80.0 | below the target of 90 |",
-		"| kotlin-kit | branches | 8 | 10 | 80.0 | 79.0 | ok |",
-		"| kotlin-kit | lines | 10 | 10 | 100.0 | - | ok |",
+		"| rust-core | branches | 17 | 20 | 85.0 | 80.0 | 90 | below the target of 90 |",
+		"| kotlin-kit | branches | 8 | 10 | 80.0 | 79.0 | 80 | ok |",
+		"| kotlin-kit | lines | 10 | 10 | 100.0 | - | 90 | ok |",
 		"::warning title=coverage below the target::rust-core/branches 85.0% < 90%",
 	} {
 		if !strings.Contains(out.String(), want) {
