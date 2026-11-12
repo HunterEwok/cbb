@@ -154,7 +154,7 @@ fn each_server_its_own_face() {
     for (i, s) in ["server a", "server b", "server c"].iter().enumerate() {
         faces.insert(
             Key::new(Alg::Es256, &k(s).public()).hash(),
-            alias::new_face(k(&format!("period {i}")).public(), &[7; 32], 1_900_000_000_000),
+            alias::new_face(k(&format!("period {i}")).public(), &[7; 32], 1_890_000_000_000, 1_900_000_000_000),
         );
     }
     assert!(alias::distinct(&faces));
@@ -187,8 +187,13 @@ fn each_server_its_own_face() {
     let mut same_expiry = faces.clone();
     same_expiry.insert(Key::new(Alg::Es256, &k("server d").public()).hash(), Face { version: 1, ..fresh(&first) });
     assert!(!alias::distinct(&same_expiry), "one expiry for two servers links them");
-    let e = alias::expiry(1_900_000_000_000);
-    assert!((1_900_000_000_000..1_900_000_000_000 + 2 * alias::DAY_MS).contains(&e));
+    // A face's expiry stays within its period.
+    for _ in 0..200 {
+        let e = alias::expiry(1_890_000_000_000, 1_900_000_000_000);
+        assert!((1_900_000_000_000 - alias::DAY_MS..=1_900_000_000_000).contains(&e));
+        let short = alias::expiry(1_900_000_000_000 - 1000, 1_900_000_000_000);
+        assert!((1_900_000_000_000 - 1000..=1_900_000_000_000).contains(&short));
+    }
     let mut f = first.clone();
     let v = f.version;
     assert_eq!(f.next_version(), v + 1);
