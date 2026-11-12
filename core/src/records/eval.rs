@@ -1907,16 +1907,23 @@ impl<'e, 'a> Epoch<'e, 'a> {
         t
     }
 
-    /// Reports whether one of thaws (of a freeze) saw record b: a thaw
-    /// brings back only what it saw of the frozen keys.
+    /// Reports whether one of thaws (of a freeze) lifts it for record b
+    /// (`lifts`).
     fn spared(&self, thaws: Option<&Vec<usize>>, b: usize) -> bool {
-        thaws.is_some_and(|ts| ts.iter().any(|&t| self.e.saw(t, b)))
+        thaws.is_some_and(|ts| ts.iter().any(|&t| self.lifts(t, b)))
+    }
+
+    /// Reports whether thaw t lifts its freeze for record b of a frozen
+    /// key: t saw b, or b's own seen lists t (signed after the thaw). What
+    /// the key signed in the frozen time counts only if the thaw saw it.
+    fn lifts(&self, t: usize, b: usize) -> bool {
+        self.e.saw(t, b) || self.e.saw(b, t)
     }
 
     /// Gives every admin record its label: the grounded labelling of the
     /// attacks of removals and freezes. A freeze's cut of a record is
-    /// lifted by a thaw of that freeze that saw the record and counts; what
-    /// no such thaw saw stays cut.
+    /// lifted by a thaw of that freeze that counts and saw the record, or
+    /// that the record's own seen lists; the rest stays cut.
     fn do_label(&mut self) {
         let root_thaws = self.root_thaws();
         let mut admin_recs = Vec::new();
@@ -1950,7 +1957,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
         }
         // Who attacks whom, by signer, so that this stays near linear: a
         // record is attacked by the removals and freezes naming its signer;
-        // a freeze's attack is lifted by its thaws that saw the record.
+        // a freeze's attack is lifted by its thaws that lift it (`lifts`).
         let mut removals_of: BTreeMap<KeyHash, Vec<usize>> = BTreeMap::new();
         let mut thaws_of: BTreeMap<RecordId, Vec<usize>> = BTreeMap::new();
         for &a in &admin_recs {
@@ -1982,7 +1989,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
                         continue;
                     }
                     let lift: Vec<usize> = if ra.is_freeze() {
-                        thaws_of.get(&ra.id).into_iter().flatten().copied().filter(|&t| self.e.saw(t, b)).collect()
+                        thaws_of.get(&ra.id).into_iter().flatten().copied().filter(|&t| self.lifts(t, b)).collect()
                     } else {
                         Vec::new()
                     };
@@ -2341,28 +2348,20 @@ impl<'e, 'a> Epoch<'e, 'a> {
     /// removal of its claimant (either key of the device) that saw the
     /// claim, or with a record of the claimant's device that takes its
     /// admin key and saw the claim, which works as a removal; one that
-    /// did not see it came before and voids it (below, by its cut). A
-    /// removal that saw records of the claim's new root came after the
-    /// takeover and cancels nothing.
+    /// did not see it came before and voids it (below, by its cut). What
+    /// the removal saw of the claim's new root changes nothing: the
+    /// claimant writes those records, so they cannot show that the
+    /// takeover counted where the removal was written.
     fn cancelled(&self, c: usize) -> bool {
         let rc = self.r(c);
         let keys = self.with_pair(&rc.b().signer);
-        let new_root = rc.claim().map(|(root, _)| root.hash());
         self.of(&self.cur).iter().any(|&i| {
             let r = self.r(i);
             self.root_record(i)
                 && match &r.b().kind {
                     Kind::Resolve(ids) => ids.binary_search(&rc.id).is_ok(),
-                    Kind::Revoke(rm) => {
-                        keys.iter().any(|k| rm.keys.binary_search(k).is_ok())
-                            && self.e.saw(i, c)
-                            && !new_root.is_some_and(|n| self.of(&n).iter().any(|&j| self.e.saw(i, j)))
-                    }
-                    Kind::Device(_) => {
-                        self.superseded.get(&rc.b().signer) == Some(&i)
-                            && self.e.saw(i, c)
-                            && !new_root.is_some_and(|n| self.of(&n).iter().any(|&j| self.e.saw(i, j)))
-                    }
+                    Kind::Revoke(rm) => keys.iter().any(|k| rm.keys.binary_search(k).is_ok()) && self.e.saw(i, c),
+                    Kind::Device(_) => self.superseded.get(&rc.b().signer) == Some(&i) && self.e.saw(i, c),
                     _ => false,
                 }
         })
@@ -2454,22 +2453,18 @@ impl<'e, 'a> Epoch<'e, 'a> {
             }
         }
         // An admin's removal or freeze of a claimant that the claimant had
-        // seen voids its claim; one it had not seen disputes it, unless it
-        // saw records of the claim's new root: then it came after the
-        // takeover and disputes nothing. (A writer lists a claimed root in
-        // seen only once the takeover counts there.)
+        // seen voids its claim; one it had not seen disputes it, whatever
+        // it saw of the claim's new root (the claimant writes those
+        // records). A member that came after a takeover counted takes it
+        // from a peer it trusts (`RecordSet::remember_counted`).
         let mut disputes: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
         let mut kept = Vec::new();
         for &c in &one {
             let cs = self.r(c).b().signer;
-            let new_root = self.r(c).claim().map(|(root, _)| root.hash());
             let mut void = false;
             for r in self.removals(&cs) {
-                let after = new_root.is_some_and(|n| self.of(&n).iter().any(|&j| self.e.saw(r, j)));
                 if self.e.saw(c, r) {
                     void = true;
-                } else if after {
-                    continue;
                 } else {
                     disputes.entry(c).or_default().push(r);
                 }

@@ -2800,10 +2800,12 @@ fn a_counted_claim_is_checked_once() {
 }
 
 /// A thaw brings back what it lists of the frozen key: a record the
-/// key signed that the thaw saw counts again; one it did not see, signed
-/// before the thaw or after it, stays cut. The same for a root's thaw.
+/// key signed that the thaw saw counts again; one from the frozen time it
+/// did not see stays cut. What the key signs after, listing the thaw in
+/// its own seen, counts; one that does not list it stays cut. The same
+/// for a root's thaw, and the state agrees: the key may command.
 #[test]
-fn a_thaw_brings_back_only_what_it_lists() {
+fn a_thaw_brings_back_what_it_lists_and_what_lists_it() {
     let both = |by_root: bool| {
         let mut g = G::new();
         let (pw, w, pp, p) = (k("watch"), k("admin w"), k("phone p"), k("admin p"));
@@ -2811,6 +2813,8 @@ fn a_thaw_brings_back_only_what_it_lists() {
         g.admin(&pp, &p, POWER_REMOVE_ADMINS | POWER_FREEZE | POWER_THAW);
         g.device(&k("root"), &k("laptop"), "laptop", |_| {});
         g.device(&k("root"), &k("tablet"), "tablet", |_| {});
+        g.device(&k("root"), &k("phone"), "phone", |_| {});
+        g.device(&k("root"), &k("tv"), "tv", |_| {});
         let seen = g.seen();
         let fr = if by_root {
             g.root_rec(Kind::Freeze(removal(&[w.hash], seen)))
@@ -2828,13 +2832,18 @@ fn a_thaw_brings_back_only_what_it_lists() {
         } else {
             g.rec(&p, thaw);
         }
+        let thawer = if by_root { k("root").hash } else { p.hash };
+        let blind: Vec<Seen> = g.seen().into_iter().filter(|x| x.key != thawer).collect();
+        let unseeing = g.rec(&w, Kind::Revoke(removal(&[k("phone").hash], blind)));
         let seen = g.seen();
-        let after = g.rec(&w, Kind::Revoke(removal(&[k("laptop").hash], seen)));
+        let after = g.rec(&w, Kind::Revoke(removal(&[k("tv").hash], seen)));
         let s = g.state();
         assert!(s.counting.contains(&listed.id()) && s.revoked.contains(&k("laptop").hash), "root {by_root}");
         assert!(!s.counting.contains(&unlisted.id()) && !s.revoked.contains(&k("tablet").hash), "root {by_root}");
-        assert!(!s.counting.contains(&after.id()), "root {by_root}");
+        assert!(!s.counting.contains(&unseeing.id()) && !s.revoked.contains(&k("phone").hash), "root {by_root}");
+        assert!(s.counting.contains(&after.id()) && s.revoked.contains(&k("tv").hash), "root {by_root}");
         assert!(s.device(&pw.key.device_id()).is_some_and(|d| !d.frozen), "root {by_root}");
+        assert!(s.may_command(&w.hash), "root {by_root}");
     };
     both(false);
     both(true);
@@ -2909,30 +2918,28 @@ fn an_admin_key_counts_from_its_device_s_newest_root_record() {
     assert_eq!(s.device(&pt.key.device_id()).and_then(|d| d.admin), Some(t2.hash));
 }
 
-/// A removal of a claimant that saw records of the claim's new root came
-/// after the takeover and disputes nothing, also on a member that had not
-/// counted the claim; one that saw none of them disputes it, as before.
-/// Whether a peer counts another owner comes from its path alone.
+/// An admin's removal of a claimant it had not seen disputes the claim,
+/// whatever it saw of the claim's new root: the claimant writes those
+/// records. A member that came after the takeover counted takes the claim
+/// from a peer it trusts, and then follows the new root.
 #[test]
-fn a_removal_after_the_new_root_s_records_disputes_nothing() {
-    let (mut g, held, claim) = taken_over_group();
+fn a_removal_disputes_whatever_it_saw_of_the_new_root() {
     let (a, pa, t) = (k("admin a"), k("phone a"), k("admin t"));
-    let seen = g.seen();
-    assert!(seen.iter().any(|s| s.key == k("new root").hash));
-    g.rec(&t, Kind::Revoke(removal(&[a.hash, pa.hash], seen)));
-    for counted in [&[][..], &[claim.id()][..]] {
-        let s = counted_state(&g, &held, counted);
-        assert_eq!(s.roots, vec![g.root.hash, k("new root").hash], "counted {}", counted.len());
-        assert_eq!(s.stop, Stop::None);
+    for with_new_root in [true, false] {
+        let (mut g, held, claim) = taken_over_group();
+        let mut seen = g.seen();
+        assert!(seen.iter().any(|s| s.key == k("new root").hash));
+        if !with_new_root {
+            seen.retain(|s| s.key != k("new root").hash);
+        }
+        g.rec(&t, Kind::Revoke(removal(&[a.hash, pa.hash], seen)));
+        let s = counted_state(&g, &held, &[]);
+        assert_eq!(s.claims.iter().find(|c| c.record == claim.id()).map(|c| c.state), Some(ClaimState::Disputed));
+        assert_eq!(s.roots, vec![g.root.hash]);
+        let s = counted_state(&g, &held, &[claim.id()]);
+        assert_eq!(s.roots, vec![g.root.hash, k("new root").hash]);
         assert_eq!(s.claims.iter().find(|c| c.record == claim.id()).map(|c| c.state), Some(ClaimState::Effective));
-        assert!(!s.disagrees(&[g.root.hash]) && !s.disagrees(&s.roots));
     }
-    // Without the new root's records in its seen, it disputes the claim.
-    let (mut g, held, claim) = taken_over_group();
-    let seen: Vec<Seen> = g.seen().into_iter().filter(|s| s.key != k("new root").hash).collect();
-    g.rec(&t, Kind::Revoke(removal(&[a.hash, pa.hash], seen)));
-    let s = counted_state(&g, &held, &[]);
-    assert_eq!(s.claims.iter().find(|c| c.record == claim.id()).map(|c| c.state), Some(ClaimState::Disputed));
 }
 
 /// Of a root a takeover cut, below the chain the records show, a member
@@ -3056,9 +3063,8 @@ fn a_root_s_checkpoints_never_push_out_its_removals() {
 }
 
 /// A root's removal of a claimant, by its admin key or its device's
-/// member key: one that saw the claim cancels it; one that did not came
-/// before and voids it; one that saw records of the claim's new root came
-/// after the takeover and cancels nothing.
+/// member key: one that saw the claim cancels it, whatever it saw of the
+/// claim's new root; one that did not came before and voids it.
 #[test]
 fn a_root_s_removal_of_a_claimant_cancels_or_voids() {
     let all = POWER_ADMIT | POWER_REMOVE | POWER_TAKEOVER;
@@ -3081,7 +3087,7 @@ fn a_root_s_removal_of_a_claimant_cancels_or_voids() {
     for key in [&a, &pa] {
         assert_eq!(case(key, true, false), Some(ClaimState::Cancelled));
         assert_eq!(case(key, false, false), Some(ClaimState::Void));
-        assert_eq!(case(key, true, true), Some(ClaimState::Effective));
+        assert_eq!(case(key, true, true), Some(ClaimState::Cancelled));
     }
 }
 
@@ -3670,4 +3676,24 @@ fn a_wrong_mark_falls_back_to_the_signature() {
     let ((stored, _), n) = verified_by(|| other.load_marked(&[8u8; 32], store));
     assert_eq!((stored, n), (set.len(), set.len()));
     assert_eq!(other.digest(), set.digest());
+}
+
+/// A thawed admin admits again: its device record that lists the thaw
+/// counts, as the state's may_command says.
+#[test]
+fn a_thawed_admin_admits_again() {
+    let mut g = G::new();
+    let (pw, w, pp, p) = (k("computer"), k("admin w"), k("phone p"), k("admin p"));
+    g.admin(&pw, &w, POWER_ADMIT | POWER_MANAGE);
+    g.admin(&pp, &p, POWER_REMOVE_ADMINS | POWER_FREEZE | POWER_THAW);
+    let seen = g.seen();
+    let fr = g.rec(&p, Kind::Freeze(removal(&[w.hash], seen)));
+    let seen = g.seen();
+    g.rec(&p, Kind::Thaw { ids: vec![fr.id()], seen });
+    let seen = g.seen();
+    let admit = g.device(&w, &k("tv"), "tv", |d| d.seen = seen);
+    let s = g.state();
+    assert!(s.may_command(&w.hash));
+    assert!(s.counting.contains(&admit.id()));
+    assert!(s.device(&k("tv").key.device_id()).is_some());
 }
