@@ -59,6 +59,10 @@ pub trait KeyStore {
     fn erase(&mut self, epoch: u64) -> Result<()>;
 }
 
+/// How far ahead of now the newest epoch's time may be before [`rotate`]
+/// takes it for a clock that was wrong and makes a new epoch: one day.
+pub const AHEAD_MS: u64 = 86_400_000;
+
 /// What [`rotate`] did.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub struct Rotated {
@@ -68,19 +72,26 @@ pub struct Rotated {
     pub erased: Vec<u64>,
 }
 
-/// Keeps the device's sealing keys current at time now_ms: a first epoch
+/// Keeps the device's sealing keys current at time now_ms (its weeks: the
+/// wall clock, or a leaf's running time): a first epoch
 /// when it has none, a new one when the newest is a week old, and erases
 /// every epoch but the newest once the newest has been the newest for a
-/// week (the previous one is kept that long). Time going back changes
-/// nothing.
-pub fn rotate(store: &mut dyn KeyStore, group: &GroupId, now_ms: u64) -> Result<Rotated> {
+/// week (the previous one is kept that long). Time going back a little
+/// changes nothing; a newest epoch made more than [`AHEAD_MS`] ahead of now
+/// (a clock that was once far ahead) is due at once, so such a clock never
+/// stops the weekly change.
+///
+/// A new statement's `time_ms` is `wall_ms`, the device's wall clock, and
+/// only that: a device without one (a leaf counting on its running time)
+/// passes None and writes no time, so its statement has no age.
+pub fn rotate(store: &mut dyn KeyStore, group: &GroupId, now_ms: u64, wall_ms: Option<u64>) -> Result<Rotated> {
     let mut out = Rotated::default();
     let mut epochs = store.epochs();
     epochs.sort_by_key(|e| e.epoch);
     let newest = epochs.last().map(|e| (e.epoch, e.made_ms));
     let due = match newest {
         None => true,
-        Some((_, made)) => now_ms >= made.saturating_add(WEEK_MS),
+        Some((_, made)) => now_ms >= made.saturating_add(WEEK_MS) || made > now_ms.saturating_add(AHEAD_MS),
     };
     let mut newest_made = newest.map(|(_, m)| m);
     if due {
@@ -88,7 +99,7 @@ pub fn rotate(store: &mut dyn KeyStore, group: &GroupId, now_ms: u64) -> Result<
         let secret = crate::seal::generate_secret()?;
         let seal = Key { alg: ALG_XWING, public: crate::seal::public_key(&secret)? };
         let signer = Key::es256(store.member().public()).hash();
-        let body = Body { group: *group, signer, epoch, time_ms: now_ms, seal, held: false };
+        let body = Body { group: *group, signer, epoch, time_ms: wall_ms.unwrap_or(0), seal, held: false };
         let st = Statement::sign(body, store.member())?;
         let env = statement_envelope(&st);
         store.put(Epoch { epoch, made_ms: now_ms, statement: env.clone() }, secret)?;
@@ -139,22 +150,29 @@ pub fn read_statement(envelope: &[u8]) -> core::result::Result<ReadStatement, Ru
     let m = &e.map;
     crate::format::sig::check_form(e.sig)?;
     let bytes = |f, n, rule| m.get(f).and_then(Value::as_bytes).filter(|b| b.len() == n).ok_or(rule);
+    // What every type has decides first: a later type is held whatever its
+    // other fields are.
+    let typ = m.get(1).and_then(Value::as_uint).filter(|t| *t >= 1).ok_or(Rule::field("statements/type"))?;
     let group =
         GroupId::from_slice(bytes(2, 16, Rule::field("statements/group"))?).ok_or(Rule::field("statements/group"))?;
     let signer =
         KeyHash::from_slice(bytes(3, 32, Rule::field("statements/signer"))?).ok_or(Rule::field("statements/signer"))?;
     let epoch = m.get(4).and_then(Value::as_uint).filter(|e| *e >= 1).ok_or(Rule::field("statements/epoch"))?;
+    let unknown_field = m.as_map().unwrap_or(&[]).iter().any(|(k, _)| *k < 256 && !STATEMENT_FIELDS.contains(k));
+    let held = || ReadStatement::Held { id: e.id(), envelope: envelope.to_vec() };
+    if typ != 1 || unknown_field || e.sig2.is_some() {
+        return Ok(held());
+    }
     let time_ms = match m.get(6) {
         None => 0,
         Some(Value::Uint(0)) => return Err(Rule::FORM_DEFAULT),
         Some(t) => t.as_uint().ok_or(Rule::field("statements/time"))?,
     };
     let seal = crate::format::Key::from_value(m.get(10).ok_or(Rule::field("statements/seal"))?)?;
-    let typ = m.get(1).and_then(Value::as_uint).ok_or(Rule::field("statements/type"))?;
-    let unknown_field = m.as_map().unwrap_or(&[]).iter().any(|(k, _)| *k < 256 && !STATEMENT_FIELDS.contains(k));
-    let unknown_alg = matches!(seal.alg, crate::format::Alg::Unknown(_));
-    if typ != 1 || unknown_field || unknown_alg || e.sig2.is_some() {
-        return Ok(ReadStatement::Held { id: e.id(), envelope: envelope.to_vec() });
+    // A sealing algorithm of a later version is held; one this version
+    // knows that is not a sealing key (ES256, X25519) is refused below.
+    if matches!(seal.alg, crate::format::Alg::Unknown(_)) {
+        return Ok(held());
     }
     seal.check()?;
     if seal.alg != crate::format::Alg::XWing || seal.public.len() != XWING_PUBLIC {

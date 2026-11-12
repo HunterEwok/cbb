@@ -21,6 +21,8 @@ use crate::format::cbor::{self, Value};
 use crate::format::copy::{read_content, write_content};
 use crate::media;
 
+mod unicode;
+
 /// Text.
 pub const TYPE_TEXT: u64 = 1;
 /// Clipboard media: images, formatted text.
@@ -143,7 +145,7 @@ impl Content {
             TYPE_MEDIA | TYPE_FILES => {
                 let files = self.kind == TYPE_FILES;
                 let m = self.manifest.as_ref().ok_or(RULE_MANIFEST)?;
-                if m.files() != files || m.validate().is_err() {
+                if m.files() != files || m.validate().is_err() || (files && !names_ok(m)) {
                     return Err(RULE_MANIFEST);
                 }
                 if self.text.as_ref().is_some_and(|t| t.len() > media::MAX_ALT_TEXT) {
@@ -231,6 +233,171 @@ impl Content {
         c.check()?;
         Ok(c)
     }
+}
+
+/// Whether a character is a bidirectional control (Unicode's Bidi_Control:
+/// U+061C, U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069).
+fn bidi(c: char) -> bool {
+    matches!(c, '\u{61c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
+}
+
+/// Finds `c` in a table of ranges `(first, last, value)`.
+fn in_ranges<T: Copy>(table: &[(u32, u32, T)], c: u32) -> Option<T> {
+    use core::cmp::Ordering;
+    let i = table
+        .binary_search_by(|(lo, hi, _)| {
+            if *hi < c {
+                Ordering::Less
+            } else if *lo > c {
+                Ordering::Greater
+            } else {
+                Ordering::Equal
+            }
+        })
+        .ok()?;
+    table.get(i).map(|e| e.2)
+}
+
+/// A code point's canonical combining class.
+fn class(c: u32) -> u8 {
+    in_ranges(unicode::CCC, c).unwrap_or(0)
+}
+
+const S_BASE: u32 = 0xac00;
+const L_BASE: u32 = 0x1100;
+const V_BASE: u32 = 0x1161;
+const T_BASE: u32 = 0x11a7;
+const L_COUNT: u32 = 19;
+const V_COUNT: u32 = 21;
+const T_COUNT: u32 = 28;
+const S_COUNT: u32 = 11_172;
+const VT_COUNT: u32 = V_COUNT * T_COUNT;
+
+/// Appends the full canonical decomposition of `c`.
+fn decompose(c: u32, out: &mut Vec<u32>) {
+    if let Some(s) = c.checked_sub(S_BASE).filter(|s| *s < S_COUNT) {
+        out.push(L_BASE.wrapping_add(s / VT_COUNT));
+        out.push(V_BASE.wrapping_add((s % VT_COUNT) / T_COUNT));
+        if s % T_COUNT != 0 {
+            out.push(T_BASE.wrapping_add(s % T_COUNT));
+        }
+        return;
+    }
+    match unicode::DECOMP.binary_search_by_key(&c, |e| e.0).ok().and_then(|i| unicode::DECOMP.get(i)) {
+        Some(&(_, a, b)) => {
+            decompose(a, out);
+            if b != 0 {
+                decompose(b, out);
+            }
+        }
+        None => out.push(c),
+    }
+}
+
+/// The primary composite of a pair, if there is one.
+fn compose(a: u32, b: u32) -> Option<u32> {
+    let l = a.checked_sub(L_BASE).filter(|l| *l < L_COUNT);
+    let v = b.checked_sub(V_BASE).filter(|v| *v < V_COUNT);
+    if let (Some(l), Some(v)) = (l, v) {
+        return Some(S_BASE.wrapping_add(l.wrapping_mul(V_COUNT).wrapping_add(v).wrapping_mul(T_COUNT)));
+    }
+    let s = a.checked_sub(S_BASE).filter(|s| *s < S_COUNT && s % T_COUNT == 0);
+    let t = b.checked_sub(T_BASE).filter(|t| (1..T_COUNT).contains(t));
+    if let (Some(_), Some(t)) = (s, t) {
+        return Some(a.wrapping_add(t));
+    }
+    let i = unicode::COMP.binary_search_by_key(&(a, b), |e| (e.0, e.1)).ok()?;
+    unicode::COMP.get(i).map(|e| e.2)
+}
+
+/// A path in NFC (UAX #15): decomposed, its marks put in canonical order,
+/// and composed again.
+fn nfc(path: &str) -> Vec<u32> {
+    let mut d = Vec::with_capacity(path.len());
+    for c in path.chars() {
+        decompose(u32::from(c), &mut d);
+    }
+    // Canonical order: a stable sort of each run of marks by class.
+    let mut i = 1usize;
+    while let (Some(j), Some(&b)) = (i.checked_sub(1), d.get(i)) {
+        let a = d.get(j).copied().unwrap_or(0);
+        let (ca, cb) = (class(a), class(b));
+        if cb != 0 && ca > cb {
+            d.swap(j, i);
+            if j > 0 {
+                i = j;
+                continue;
+            }
+        }
+        i = i.saturating_add(1);
+    }
+    let mut out: Vec<u32> = Vec::with_capacity(d.len());
+    let mut starter: Option<usize> = None;
+    // The class of the last code point after the starter; None while the
+    // starter is the last code point.
+    let mut last: Option<u8> = None;
+    for c in d {
+        let cc = class(c);
+        if let Some(s) = starter {
+            let blocked = last.is_some_and(|l| l == 0 || l >= cc);
+            if !blocked && let Some(x) = out.get(s).and_then(|a| compose(*a, c)) {
+                if let Some(slot) = out.get_mut(s) {
+                    *slot = x;
+                }
+                continue;
+            }
+        }
+        if cc == 0 {
+            starter = Some(out.len());
+            last = None;
+        } else {
+            last = Some(cc);
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// Whether a path is its own NFC. A sender writes names in NFC.
+fn is_nfc(path: &str) -> bool {
+    nfc(path).into_iter().eq(path.chars().map(u32::from))
+}
+
+/// The character two paths are compared by when case is ignored: the
+/// simple case folding (C and S) of its upper case, so that names one on
+/// NTFS (upper case) or on APFS (case folding) are one here.
+fn case_key(c: char) -> char {
+    let u = u32::from(c);
+    unicode::CASE
+        .binary_search_by_key(&u, |e| e.0)
+        .ok()
+        .and_then(|i| unicode::CASE.get(i))
+        .and_then(|e| char::from_u32(e.1))
+        .unwrap_or(c)
+}
+
+/// A path as systems that ignore case compare it.
+fn fold(path: &str) -> String {
+    path.chars().map(case_key).collect()
+}
+
+/// The rules of 0.6 on the names of files, over today's: no device name of
+/// Windows (`media::device`: CON, PRN, AUX, NUL, CONIN$, CONOUT$, COM and
+/// LPT with a digit or a superscript, with or without an extension), no
+/// bidirectional control, every path its own NFC, and no two paths that
+/// are one when case is ignored ([`case_key`]), nor a path inside a file
+/// so.
+fn names_ok(m: &media::Manifest) -> bool {
+    let mut seen = alloc::collections::BTreeMap::new();
+    for p in &m.parts {
+        if p.path.split('/').any(media::device) || p.path.chars().any(bidi) || !is_nfc(&p.path) {
+            return false;
+        }
+        if seen.insert(fold(&p.path), p.dir).is_some() {
+            return false;
+        }
+    }
+    seen.keys().all(|path| path.match_indices('/').all(|(i, _)| seen.get(&path[..i]) != Some(&false)))
 }
 
 /// The manifest's CBOR form: 1 `size`; 2 `parts`, 1 to 10 000 maps of

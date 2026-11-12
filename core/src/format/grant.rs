@@ -164,18 +164,27 @@ impl Granted<'_> {
 /// The admin key of the root's record in field 3, if it makes that key an
 /// admin with `admit`: a `device` record (type 1) the root signed, with its
 /// `admin` Key (20) and the admit bit in its `powers` (21).
-fn admin_key(record: &Envelope<'_>, root: &[u8]) -> Result<[u8; 65], Rule> {
+fn admin_key(record: &Envelope<'_>, root: &[u8], group: &GroupId) -> Result<[u8; 65], Rule> {
+    use crate::records::{Body, Kind, key::ALG_ES256};
     record.verify(root, sig::LABEL_RECORD).map_err(|_| RULE_ADMIN)?;
-    let m = &record.map;
-    let root_hash = Key::new(Alg::Es256, root).hash();
-    let by_root = m.get(3).and_then(Value::as_bytes).and_then(KeyHash::from_slice) == Some(root_hash);
-    let device = m.get(1).and_then(Value::as_uint) == Some(1);
-    let admits = m.get(21).and_then(Value::as_uint).is_some_and(|p| p & 1 == 1);
-    let key = m.get(20).map(Key::from_value).transpose().map_err(|_| RULE_ADMIN)?.ok_or(RULE_ADMIN)?;
-    if !(by_root && device && admits && key.alg == Alg::Es256) || key.check().is_err() {
+    // Read by the record reader itself (section 4.1): a device record of
+    // this group that a reader would apply, not hold.
+    if record.sig2.is_some() || record.body.len() > crate::records::MAX_BODY {
         return Err(RULE_ADMIN);
     }
-    key.public.try_into().map_err(|_| RULE_ADMIN)
+    let body = Body::from_value(&record.map).map_err(|_| RULE_ADMIN)?;
+    if body.check().map_err(|_| RULE_ADMIN)? || body.held {
+        return Err(RULE_ADMIN);
+    }
+    let Kind::Device(d) = &body.kind else { return Err(RULE_ADMIN) };
+    let by_root = body.signer == Key::new(Alg::Es256, root).hash();
+    let admits = d.powers & crate::records::body::POWER_ADMIT != 0;
+    let admin = d.admin.as_ref().ok_or(RULE_ADMIN)?;
+    let points = [&d.key, admin].iter().all(|k| k.alg == ALG_ES256 && Key::new(Alg::Es256, &k.public).check().is_ok());
+    if !(body.group == *group && by_root && admits && points) {
+        return Err(RULE_ADMIN);
+    }
+    admin.public.clone().try_into().map_err(|_| RULE_ADMIN)
 }
 
 /// The commanders of a grant body: at most eight ES256 Keys, sorted by key
@@ -278,7 +287,7 @@ pub fn read<'a>(
         match kept {
             None => {
                 let record = Envelope::from_value(msg.get(FIELD_ADMIN).ok_or(RULE_ADMIN)?)?;
-                let key = admin_key(&record, root)?;
+                let key = admin_key(&record, root, group)?;
                 if Key::new(Alg::Es256, &key).hash() != signer {
                     return Err(RULE_ADMIN);
                 }
@@ -315,9 +324,8 @@ pub fn read<'a>(
     };
     let readers = list(FIELD_READERS, RULE_READERS)?;
     let reader_ok = |r: &Value<'_>| match r.as_array() {
-        Some([Value::Bytes(id), k]) => {
-            id.len() == 16 && Key::from_value(k).is_ok_and(|k| k.alg == Alg::Es256 && k.check().is_ok())
-        }
+        Some([Value::Bytes(id), k]) => Key::from_value(k)
+            .is_ok_and(|k| k.alg == Alg::Es256 && k.check().is_ok() && k.device_id().0.as_slice() == *id),
         _ => false,
     };
     if readers.len() > MAX_READERS || !is_set(readers) || !readers.iter().all(reader_ok) {

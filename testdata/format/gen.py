@@ -15,6 +15,7 @@ import hmac
 import json
 import os
 import sys
+import unicodedata
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -239,7 +240,9 @@ STRANGER = Signer("stranger")
 PERIOD = Signer("period key")
 SRVKEY = Signer("laptop server key")
 OPERATOR = Signer("server operator")
-GROUP = ROOT.id16
+RECOVERY = Signer("recovery")
+# The Group ID commits to the first root key and the recovery key (rule 33).
+GROUP = sha(b"cbb group v3\x00" + enc(ROOT.key) + enc(RECOVERY.key))[:16]
 T0 = 1793000000000  # 2026-10-26, display only
 
 LABELS = {
@@ -360,8 +363,13 @@ def rec(signer, seq, typ, fields, prev=None, time=None, extra=None):
     return m
 
 
+def list_hash(b):
+    """The hash a recovery head names its list by (rule 33)."""
+    return sha(b"cbb recovery list v3\x00" + b)
+
+
 def record_vectors():
-    take, refuse = [], []
+    take, refuse, lists = [], [], []
     chain = {}
 
     def seen_of(*signers):
@@ -396,29 +404,34 @@ def record_vectors():
 
     # device records
     add("root's own phone", ROOT, 1, {10: PHONE.key, 11: "Phone", 12: 2, 13: 0b1111,
-                                      17: 4, 18: 2, 20: ADMIN.key, 21: 0b111111111,
+                                      17: 4, 18: 2, 20: ADMIN.key, 21: 0b110111111,
                                       22: (1 << 10) - 1, 23: 1})
     lap_env, lap_body, lap_m = add("laptop admitted by the root", ROOT, 1,
                                    {10: LAPTOP.key, 11: "Laptop", 12: 1, 13: 0b0111, 16: 0b111, 17: 1, 18: 2})
     add("board admitted by an admin, base rights", ADMIN, 1,
         {10: BOARD.key, 11: "Kettle", 12: 4, 13: 0b0011, 17: 10},
         note="an ordinary leaf: any admin with admit admits it, and it obeys the group's admins")
-    add("settings", ROOT, 7, {10: 0, 14: 1,
+    add("settings", ROOT, 7, {14: 1,
                               15: [[1, "forward.cbb.tools:8764", OPERATOR.key]]})
-    add("copies", ADMIN, 8, {10: 30000})
+    add("copies", ADMIN, 8, {10: 30000, 11: seen_of(ROOT)})
     # hubs keep the user's order (not sorted), each once
-    add("hubs", ROOT, 10, {10: sorted([LAPTOP.id16, PHONE.id16], reverse=True)})
+    add("hubs", ROOT, 10, {10: sorted([LAPTOP.id16, PHONE.id16], reverse=True), 11: seen_of(ADMIN)})
     add("revoke", ROOT, 2, {10: srt([STRANGER.hash, Signer("stranger 2").hash]), 11: seen_of(ADMIN, ROOT)})
     add("freeze", ROOT, 3, {10: [ADMIN.hash], 11: seen_of(ADMIN, ROOT)})
     thaw_target = take[-1]["id"]
-    add("thaw", ROOT, 4, {10: [bytes.fromhex(thaw_target)]})
-    add("claim", ADMIN, 5, {10: ROOT2.key, 11: seen_of(ADMIN, ROOT)})
+    add("thaw", ROOT, 4, {10: [bytes.fromhex(thaw_target)], 11: seen_of(ADMIN)})
     add("resolve", ROOT, 6, {10: [bytes.fromhex(take[-1]["id"])]})
-    add("recovery", ROOT, 11, {10: Signer("recovery").key})
-    add("handover", ROOT, 12, {10: ADMIN.hash})
-    add("checkpoint", ROOT, 9, {10: srt([[ADMIN.hash, 3, bytes.fromhex(take[-2]["id"])],
-                                         [ROOT.hash, 11, bytes.fromhex(take[-1]["id"])]]),
+    add("checkpoint", ROOT, 9, {10: srt([[ADMIN.hash, *chain[ADMIN.name]], [ROOT.hash, *chain[ROOT.name]]]),
                                 11: srt([bytes.fromhex(take[0]["id"]), bytes.fromhex(take[1]["id"])])})
+    # the change of root by the recovery key (rule 33): a small head that
+    # names its list by hash; the list rides beside it
+    listed = sorted(bytes.fromhex(t["id"]) for t in take if t["signer"] == ROOT.name)
+    list_bytes = enc(listed)
+    add("recovery head: the recovery key makes root 2 the root", RECOVERY, 13,
+        {10: ROOT2.key, 11: list_hash(list_bytes)},
+        note="the list (lists[0]) rides beside it, taken from anyone by its hash")
+    lists.append({"name": "the list of the first head", "bytes": list_bytes.hex(),
+                  "hash": list_hash(list_bytes).hex(), "ids": len(listed)})
     add("device with an optional field from a later version", ROOT, 1,
         {10: Signer("tv").key, 11: "TV", 12: 1, 13: 0b0011},
         extra={300: "later"},
@@ -429,10 +442,10 @@ def record_vectors():
         note="key 99 is unknown in the critical zone: keep, pass on, do not apply")
     add("record of a type from a later version", ROOT, 40, {10: b"\x01"}, verdict="hold",
         note="unknown type: keep, pass on, do not apply")
-    add("second signer named (room only in 0.6)", ROOT, 7, {10: 3600000},
+    add("second signer named (room only in 0.6)", ROOT, 7, {14: 1},
         verdict="hold", extra={8: ADMIN.hash},
         note="signer2 (key 8) with a three-element envelope; 0.6 checks the first signature, keeps the record and never applies it")
-    add("second signature of 3000 bytes (a later algorithm)", ROOT, 7, {10: 3600000},
+    add("second signature of 3000 bytes (a later algorithm)", ROOT, 7, {14: 1},
         verdict="hold", extra={8: ADMIN.hash}, sig2=fake("later signature", 3000),
         note="sig2 is not fixed at 64 bytes; up to 4096 it is kept, outside the ID; the size counts from the body")
 
@@ -448,6 +461,11 @@ def record_vectors():
         {10: Signer("lamp member key").key, 11: "Lamp", 12: 4, 13: 0b0011, 17: 10, 25: 1},
         verdict="refuse",
         note="records/device/guarded: only a root sets guarded; the form is valid, the evaluation counts it for nothing")
+
+    # the root takes the admin key off its device; what the key signed up
+    # to the head named in seen (26) still counts
+    add("root takes the admin key off a device", ROOT, 1,
+        {10: PHONE.key, 11: "Phone", 12: 2, 13: 0b1111, 17: 4, 18: 2, 23: 1, 26: seen_of(ADMIN)})
 
     # an admin's later record of the board that widens it: counts for nothing
     add("admin widens a device it admitted", ADMIN, 1,
@@ -473,7 +491,7 @@ def record_vectors():
     bad("one element", "env/shape", enc([lap_body]))
     bad("body as a map, not bytes", "env/shape", Raw(head(4, 2) + enc(lap_m) + enc(sig)).b)
     bad("trailing byte after the envelope", "cbor/trailing", enc([lap_body, sig]) + b"\x00")
-    m2 = rec(ROOT, 91, 7, {10: 3600000}, extra={8: ADMIN.hash})
+    m2 = rec(ROOT, 91, 7, {14: 1}, extra={8: ADMIN.hash})
     b2 = enc(m2)
     bad("second signature over 4096 bytes", "env/sig2",
         enc([b2, ROOT.sign(LABELS["record"], b2), fake("later signature", 4097)]))
@@ -491,6 +509,12 @@ def record_vectors():
     m = dict(lap_m)
     m[11] = "Lap\ntop"
     bad_body("control character in a name", "records/device/name", m)
+    for what, ch in [("a C1 control", "\u009b"), ("a line separator", "\u2028"),
+                     ("a paragraph separator", "\u2029"), ("a right-to-left override", "\u202e"),
+                     ("a bidi isolate", "\u2066")]:
+        m = dict(lap_m)
+        m[11] = "Lap" + ch + "top"
+        bad_body("name with " + what, "records/device/name", m)
     m = dict(lap_m)
     m[10] = [ES256, LAPTOP.pub[:33]]
     bad_body("member key of 33 bytes", "keys/es256", m)
@@ -555,14 +579,51 @@ def record_vectors():
         ("revoke seen with one key twice", "records/revoke/seen", 2, {10: [a], 11: [sa, [sa[0], 3, i2]]}),
         ("revoke seen entry without its record ID", "records/revoke/seen", 2, {10: [a], 11: [sa[:2], sb]}),
         ("revoke seen entry at sequence 0", "records/revoke/seen", 2, {10: [a], 11: [[sa[0], 0, sa[2]], sb]}),
-        ("thaw records out of order", "records/thaw/records", 4, {10: [i2, i1]}),
+        ("thaw records out of order", "records/thaw/records", 4, {10: [i2, i1], 11: [sa]}),
         ("checkpoint heads out of order", "records/checkpoint/heads", 9, {10: [hb, ha]}),
         ("checkpoint heads with one key twice", "records/checkpoint/heads", 9, {10: [ha, [ha[0], 4, i2]]}),
         ("checkpoint keep out of order", "records/checkpoint/keep", 9, {10: [ha, hb], 11: [i2, i1]}),
-        ("hubs with one device twice", "records/hubs/hubs", 10, {10: [LAPTOP.id16, LAPTOP.id16]}),
+        # a checkpoint names heads before itself: its own key's below its seq
+        ("checkpoint naming its own key at its own seq", "records/checkpoint/own-head", 9,
+         {10: srt([[ADMIN.hash, 3, i1], [ROOT.hash, 90, i2]])}),
+        ("checkpoint naming its own key above its seq", "records/checkpoint/own-head", 9,
+         {10: srt([[ADMIN.hash, 3, i1], [ROOT.hash, 91, i2]])}),
+        ("hubs with one device twice", "records/hubs/hubs", 10, {10: [LAPTOP.id16, LAPTOP.id16], 11: [sa]}),
+        ("device seen out of order", "records/device/seen", 1, {**{k: lap_m[k] for k in (10, 11, 12)}, 26: [sb, sa]}),
+        ("thaw seen out of order", "records/thaw/seen", 4, {10: [i1], 11: [sb, sa]}),
+        ("thaw without its seen", "records/thaw/seen", 4, {10: [i1]}),
+        ("hubs seen with one key twice", "records/hubs/seen", 10, {10: [LAPTOP.id16], 11: [sa, [sa[0], 3, i2]]}),
+        ("copies seen entry without its record ID", "records/copies/seen", 8, {10: 30000, 11: [sa[:2]]}),
+        ("copies without its seen", "records/copies/seen", 8, {10: 30000}),
     ]:
         bad_body(name, rule, rec(ROOT, 90, typ, fields))
-    return take, refuse
+    # what rule 33 retired (format 0.6 freezes): the claim, the root's
+    # recovery record and the handover; the takeover power; settings'
+    # takeover delay
+    for name, typ, fields in [("claim (type 5, retired)", 5, {10: ROOT2.key, 11: [sa]}),
+                              ("root's recovery record (type 11, retired)", 11, {10: RECOVERY.key}),
+                              ("handover (type 12, retired)", 12, {10: ADMIN.hash})]:
+        bad_body(name, "records/retired", rec(ROOT, 90, typ, fields))
+    m = dict(lap_m)
+    m.update({20: ADMIN.key, 21: 64})
+    bad_body("admin with power bit 64 (takeover, retired)", "records/device/powers", m)
+    bad_body("settings field 10 (takeover delay, gone)", "form/critical",
+             {1: 7, 2: GROUP, 3: ROOT.hash, 4: 90, 6: T0, 10: 86400000})
+
+    def bad_signed(name, rule, signer, m):
+        body = enc(m)
+        bad(name, rule, enc([body, signer.sign(LABELS["record"], body)]))
+
+    some = list_hash(enc([]))
+    bad_signed("recovery head naming the recovery key as the root", "records/recovery/root", RECOVERY,
+               rec(RECOVERY, 2, 13, {10: RECOVERY.key, 11: some}))
+    bad_signed("recovery head at seq 17 (at most 16 for the group's life)", "records/recovery/seq", RECOVERY,
+               rec(RECOVERY, 17, 13, {10: Signer("root 17").key, 11: some}))
+    bad_signed("recovery head without its list", "records/recovery/list", RECOVERY,
+               rec(RECOVERY, 2, 13, {10: Signer("root 3").key}))
+    bad_signed("recovery head with a list hash of 31 bytes", "records/recovery/list", RECOVERY,
+               rec(RECOVERY, 2, 13, {10: Signer("root 3").key, 11: some[:31]}))
+    return take, refuse, lists
 
 
 def statement_vectors():
@@ -710,6 +771,7 @@ def grant_vectors(admin_record):
     bad("guarded grant signed by an admin", "grants/guarded", message(genv, admin_record), L)
     root_bad("lifetime in an ordinary grant", "grants/life",
              {**{k: v for k, v in g.items() if k != 15}, 11: 86400000})
+    root_bad("guarded with the value 2", "grants/guarded-value", {**g, 15: 2})
     root_bad("guarded lifetime 0", "grants/life", {**g, 11: 0})
     root_bad("guarded lifetime over 40 days", "grants/life", {**g, 11: 3456000001})
     root_bad("guarded lifetime as text", "grants/life", {**g, 11: "forever"})
@@ -733,6 +795,24 @@ def grant_vectors(admin_record):
         message(enc([gb2, ROOT.sign(LABELS["grant"], gb2), ADMIN.sign(LABELS["grant"], gb2)])), L)
     _, genv, _ = signed({**kettle, 4: 2}, ADMIN)
     bad("admin's first grant without the root's record", "grants/admin", message(genv), K)
+    root_bad("a reader under another device's ID", "grants/readers",
+             {**g, 13: [[TABLET.id16, LAPTOP.key]]})
+    # the root's record in a first grant is read as a record: a device
+    # record of this group with the fields of 0.6 only
+    rec_body = dec(dec(admin_record)[0])
+    _, genv, _ = signed({**kettle, 4: 2}, ADMIN)
+
+    def record_bad(name, fields, raw=None):
+        renv = raw if raw is not None else envelope("record", ROOT, fields)[0]
+        bad(name, "grants/admin", message(genv, renv), K)
+
+    record_bad("admin's record with a critical field from a later version", {**rec_body, 99: 1})
+    record_bad("admin's record of another type", {**rec_body, 1: 7})
+    record_bad("admin's record of another group", {**rec_body, 2: ROOT2.id16})
+    record_bad("admin's record without a name", {k: v for k, v in rec_body.items() if k != 11})
+    rb2 = enc({**rec_body, 8: ADMIN.hash})
+    record_bad("admin's record naming a second signer", None,
+               enc([rb2, ROOT.sign(LABELS["record"], rb2), ADMIN.sign(LABELS["record"], rb2)]))
     _, genv, _ = signed({**kettle, 4: 2, 18: sha(b"some grant")}, ADMIN)
     bad("admin's first grant naming a grant it replaces", "grants/replaces", message(genv, admin_record), K)
     for name, rule, field, val in [
@@ -976,12 +1056,27 @@ def copy_vector():
                 ("origin of 15 bytes", "copy/shape", {**full, 1: enc({**hdr, 2: LAPTOP.id16[:15]})}),
                 ("time [0, 0]", "copy/shape", {**full, 1: enc({**hdr, 3: [0, 0]})}),
                 ("readers that are numbers", "copy/readers", {**full, 1: enc({**hdr, 4: [1, 2, 3]})}),
+                ("an outer field the format does not name", "form/critical", {**full, 7: 1}),
+                ("outer field 200", "form/critical", {**full, 200: b"x"}),
             ]
         ],
         "refuse_readers": [
             {"name": name, "rule": "copy/readers", "copy": enc({**full, 1: enc({**hdr, 4: rs})}).hex()}
             for name, rs in [("readers out of order", list(reversed(readers))),
                              ("a reader twice", [readers[0], [readers[0][0], 3], readers[2]])]
+        ],
+        "refuse_commit": [
+            {"name": "a copy key that does not match its commit", "rule": "copy/commit",
+             "K": hkdf(K, b"", b"another key").hex()},
+        ],
+        "refuse_contents": [
+            {"name": name, "rule": "copy/content-pad", "content": b.hex()}
+            for name, b in [
+                ("a pad one byte longer than its step", enc({**content, 1: content[1] + b"\x00"})),
+                ("a content short of its step without a pad", enc({0: 1, 5: "a" * 1015})),
+                ("a pad of text", enc({**{k: v for k, v in content.items() if k != 1}, 1: "0" * len(content[1])})),
+                ("a pad of ones", enc({**content, 1: b"\x01" * len(content[1])})),
+            ]
         ],
         "content_plaintext": enc(content).hex(), "content_diag": diag({k: v for k, v in content.items() if k != 1}) + " with pad to 1024",
         "frame": frame({0: 2, 2: full}).hex(),
@@ -1029,8 +1124,8 @@ def message_vectors(records_take):
     add("welcome", {0: 67, 2: fake("Tb", 32), 3: {
         1: ROOT.key,
         2: [dec(bytes.fromhex(r["envelope"])) for r in records_take[:3]],
-        3: srt([[bytes.fromhex(records_take[9]["id"]), 3600000], [bytes.fromhex(records_take[10]["id"]), 60000]]),
-        5: T0 + 60000}})
+        5: T0 + 60000,
+        9: RECOVERY.key}})
     add("pairing error taken", {0: 69, 2: 8})
     add("have", {0: 6, 2: ids[:3]})
     add("reach", {0: 18, 2: srt([LAPTOP.id16, PHONE.id16, BOARD.id16])})
@@ -1058,15 +1153,10 @@ def message_vectors(records_take):
     # sets in messages (section 1): a message whose set is out of order or
     # holds a value twice is refused, with the field's rule
     a, b = ids[0], ids[1]
-    w = [bytes.fromhex(records_take[9]["id"]), 3600000]
-    w2 = [bytes.fromhex(records_take[10]["id"]), 60000]
-    wa, wb = srt([w, w2])
     fields = [
         ("have out of order", "messages/have", [2], {0: 6, 2: [b, a]}),
         ("have with one ID twice", "messages/have", [2], {0: 6, 2: [a, a]}),
         ("reach out of order", "messages/reach", [2], {0: 18, 2: list(reversed(srt([LAPTOP.id16, PHONE.id16])))}),
-        ("welcome claim_ages out of order", "pairing/welcome/claim_ages", [3, 3],
-         {0: 67, 2: fake("Tb", 32), 3: {1: ROOT.key, 3: [wb, wa], 5: T0 + 60000}}),
     ]
     field_bad = [{"name": n, "rule": r, "path": p, "message": enc(m).hex()} for n, r, p, m in fields]
     return v, bad, digest.hex(), field_bad
@@ -1078,7 +1168,8 @@ def container_vector():
     writers write the constant ECDSA signature r=1, s=1 (owner, section 12).
     Readers are tolerant of the signature's value but not of its form: a BIT
     STRING with no unused bits holding SEQUENCE { INTEGER r, INTEGER s }, each
-    integer 1 to 33 bytes, every length exact, the whole value at most 72
+    integer 1 to 33 bytes in DER (no needless zero in front, not negative),
+    every length exact, the whole value at most 72
     bytes; so a later writer may sign for real and old readers still read it."""
     def tlv(tag, body):
         n = len(body)
@@ -1177,6 +1268,8 @@ def container_vector():
         {"name": "three integers", "cert": cont(p, tlv(0x03, b"\x00" + tlv(0x30, tlv(0x02, b"\x01") * 3))).hex()},
         {"name": "empty integer", "cert": cont(p, sigbits(b"", b"\x01")).hex()},
         {"name": "integer of 34 bytes", "cert": cont(p, sigbits(b"\x00" * 2 + b"\xff" * 32, b"\x01")).hex()},
+        {"name": "integer with a needless zero in front", "cert": cont(p, sigbits(b"\x00\x01", b"\x01")).hex()},
+        {"name": "negative integer", "cert": cont(p, sigbits(b"\x01", b"\x80")).hex()},
         {"name": "not an integer", "cert": cont(p, tlv(0x03, b"\x00" + tlv(0x30, tlv(0x04, b"\x01") + tlv(0x02, b"\x01")))).hex()},
         {"name": "a byte after the integers", "cert": cont(p, tlv(0x03, b"\x00" + tlv(0x30, tlv(0x02, b"\x01") + tlv(0x02, b"\x01") + b"\x00"))).hex()},
         {"name": "a byte after the SEQUENCE", "cert": cont(p, tlv(0x03, b"\x00" + tlv(0x30, tlv(0x02, b"\x01") + tlv(0x02, b"\x01")) + b"\x00")).hex()},
@@ -1188,7 +1281,7 @@ def container_vector():
             assert r["cert"] != c.hex()
     return {
         "source": "the template task 2 tested on five TLS stacks (research-0.6/key-container/report-ru.md, sections 2 and 7)",
-        "reader": "the TBS byte for byte the template with the point and its serial; the point on the curve; ecdsa-with-SHA256; the signature a BIT STRING with no unused bits holding SEQUENCE { INTEGER, INTEGER }, each integer 1 to 33 bytes, every length exact, at most 72 bytes; its value is not read",
+        "reader": "the TBS byte for byte the template with the point and its serial; the point on the curve; ecdsa-with-SHA256; the signature a BIT STRING with no unused bits holding SEQUENCE { INTEGER, INTEGER }, each integer 1 to 33 bytes in DER (no needless zero in front, not negative), every length exact, at most 72 bytes; its value is not read",
         "tbs_template_hex": t[:10].hex() + "<16-byte serial>" + t[26:i].hex() + "<65-byte key>" + t[i + 65:].hex(),
         "key_offset_in_tbs": i,
         "tbs_length": len(t),
@@ -1201,10 +1294,11 @@ def container_vector():
 
 def keys_table():
     rows = []
-    for s in [ROOT, ROOT2, ADMIN, PHONE, LAPTOP, BOARD, LOCK, STRANGER, PERIOD, SRVKEY, OPERATOR]:
+    for s in [ROOT, ROOT2, ADMIN, PHONE, LAPTOP, BOARD, LOCK, STRANGER, PERIOD, SRVKEY, OPERATOR, RECOVERY]:
         rows.append({"name": s.name, "private_scalar": format(s.d, "064x"), "key": enc(s.key).hex(),
                      "key_hash": s.hash.hex(), "id16": s.id16.hex()})
     return {"group_id": GROUP.hex(), "keys": rows,
+            "group_id_of": "the first 16 bytes of SHA-256('cbb group v3' 0x00 key(root) key(recovery)) (rule 33)",
             "note": "test keys only; private scalar = SHA-256('cbb test key ' + name) mod (n-1) + 1"}
 
 
@@ -1250,12 +1344,12 @@ TABLES = {
     "welcome": [
         (1, "welcome/root", "key 1", True),
         (2, "welcome/records", "array 1..4096 of envelope", True),
-        (3, "welcome/claim-ages", "set 1..4096 of age", False),
         (4, "welcome/keys", "array 1..256 of envelope", False),
         (5, "welcome/time", "uint 1..9223372036854775807", True),
         (6, "welcome/grant", "map welcome/grant", False),
         (7, "welcome/credentials", "array 1..259 of envelope", False),
-        (8, "welcome/counted", "set 1..16 of bytes 32", False),
+        (9, "welcome/recovery", "key 1", True),
+        (10, "welcome/list", "bytes 1..34820", False),
     ],
     "welcome/grant": [
         (2, "welcome/grant", "envelope", True),
@@ -1317,6 +1411,11 @@ TABLES = {
         (6, "offer/moved", "flag", False),
         (7, "offer/next-key", "key 3", False),
         (8, "offer/confirm", "bytes 32", False),
+        (9, "offer/endpoint-keys", "array 1..8 of map offer/endpoint-key", False),
+    ],
+    "offer/endpoint-key": [
+        (1, "offer/endpoint-key/endpoint", "addr", True),
+        (2, "offer/endpoint-key/key", "key 3", True),
     ],
     "tunnel": [
         (2, "tunnel/key", "key 3", True),
@@ -1347,7 +1446,7 @@ TABLES = {
         (6, "waiting/request/attempts", "uint 1..255", True),
     ],
     "waiting": [
-        (2, "waiting/requests", "once 1..16 of map waiting/request", True),
+        (2, "waiting/requests", "once 1..48 of map waiting/request", True),
     ],
     "dismiss": [
         (2, "dismiss/invite", "bytes 16", True),
@@ -1452,18 +1551,50 @@ def addr_ok(t):
         return False
 
 
+def public_v4(a):
+    """Not this network, private, shared, loopback, link-local, multicast or reserved."""
+    x, y = a.packed[0], a.packed[1]
+    return not (x == 0 or x == 10 or x == 127 or x >= 224 or (x == 172 and 16 <= y < 32)
+                or (x == 192 and y == 168) or (x == 100 and 64 <= y < 128) or (x == 169 and y == 254))
+
+
+def public_ip(a):
+    """An address a card may name: a public IPv4 address, or an IPv6 address that is not
+    loopback, unspecified, multicast, link-local, site-local or unique-local, nor a refused
+    IPv4 address in a translated, NAT64 or 6to4 form."""
+    import ipaddress
+    if a.version == 4:
+        return public_v4(a)
+    p = a.packed
+    v4 = lambda b: public_v4(ipaddress.IPv4Address(b))
+    first = int.from_bytes(p[:2], "big")
+    if a.is_loopback or a.is_unspecified or a.is_multicast:
+        return False
+    if first & 0xffc0 in (0xfe80, 0xfec0) or first & 0xfe00 == 0xfc00:
+        return False
+    if p[:12] == bytes(8) + b"\xff\xff\x00\x00" and not v4(p[12:]):
+        return False
+    if p[:12] == b"\x00\x64\xff\x9b" + bytes(8) and not v4(p[12:]):
+        return False
+    if first == 0x2002 and not v4(p[2:6]):
+        return False
+    return True
+
+
 def endpoint_ok(t):
     """A card's endpoint: an addr, or a lower-case DNS name whose last label
     is neither all digits nor starts with 0x, with its port."""
+    import ipaddress
     if addr_ok(t):
-        return True
+        return public_ip(ipaddress.ip_address(t.rpartition(":")[0].strip("[]")))
     host, sep, port = t.rpartition(":")
     if not sep or not (port.isascii() and port.isdigit() and str(int(port)) == port and 1 <= int(port) <= 65535):
         return False
     labels = host.split(".")
     last = labels[-1]
     return (0 < len(host) <= 253 and not last.isdigit() and not last.startswith("0x")
-            and all(0 < len(l) <= 63 and not l.startswith("-")
+            and last not in ("localhost", "local")
+            and all(0 < len(l) <= 63 and not l.startswith("-") and not l.endswith("-")
                     and all(c in "abcdefghijklmnopqrstuvwxyz0123456789-" for c in l) for l in labels))
 
 
@@ -1522,9 +1653,6 @@ def ty_ok(ty, v):
         return all(ty_ok(inner, x) for x in v)
     if w[0] == "map":
         return check_map(w[1], v) is None
-    if w[0] == "age":
-        return (isinstance(v, list) and len(v) == 2 and isinstance(v[0], bytes) and len(v[0]) == 32
-                and isinstance(v[1], int))
     raise ValueError(ty)
 
 
@@ -1541,8 +1669,13 @@ def check_map(name, v):
     # The one rule between fields of a map: AmneziaWG's junk sizes.
     if name == "obfuscation" and v[2] > v[3]:
         return "obfuscation/jmax"
-    if name == "welcome" and 3 in v and any(a[0] >= b[0] for a, b in zip(v[3], v[3][1:])):
-        return "welcome/claim-ages"
+    if name == "offer" and 9 in v:
+        named = [k[1] for k in v[9]]
+        if len(set(named)) != len(named) or any(n not in v.get(2, []) for n in named):
+            return "offer/endpoint-keys"
+    # Fields 3 (claim ages) and 8 (counted claims) of earlier drafts.
+    if name == "welcome" and (3 in v or 8 in v):
+        return "welcome/retired"
     return None
 
 
@@ -1563,7 +1696,7 @@ def wave3_vectors(records_take):
     info = {1: "kitchen tablet", 2: 3, 4: 1, 9: fake("invite id", 16)}
     request = {1: fake("invite id", 16), 2: TABLET.key, 3: info, 4: 2, 5: 120000, 6: 2}
     envs = [bytes.fromhex(r["envelope"]) for r in records_take[:2]]
-    welcome = {1: ROOT.key, 2: [dec(e) for e in envs], 5: T0}
+    welcome = {1: ROOT.key, 2: [dec(e) for e in envs], 5: T0, 9: RECOVERY.key}
 
     def msg(name, m, note=None):
         assert check_message(m) is None, (name, check_message(m))
@@ -1645,7 +1778,8 @@ def wave3_vectors(records_take):
     bad("relay online: 65 names", {0: 97, 2: sorted(fake(f"n{i}", 32) for i in range(65))}, "relay/online/names")
     bad("waiting: a request twice", {0: 26, 2: [request, request]}, "waiting/requests")
     bad("waiting: held over a day", {0: 26, 2: [{**request, 5: 86400001}]}, "waiting/requests")
-    bad("waiting: 17 requests", {0: 26, 2: [{**request, 6: i + 1} for i in range(17)]}, "waiting/requests")
+    bad("waiting: 49 requests", {0: 26, 2: [{**request, 6: (i % 255) + 1, 5: i + 1} for i in range(49)]},
+        "waiting/requests")
     bad("result: an endpoint twice in the offer", {0: 10, 2: fake("command id", 16), 3: PHONE.id16, 4: 1,
                                                    6: {**offer, 2: ["203.0.113.5:51820"] * 2}}, "result/tunnel")
     bad("forwarder register: 4 credentials", {0: 81, 2: hub_key, 3: fake("p", 32), 6: [dec(envs[0])] * 4},
@@ -1664,6 +1798,14 @@ def wave3_vectors(records_take):
     mp("an offer", "offer", offer)
     mp("an offer: endpoints in the hub's order", "offer", {**offer, 2: list(reversed(offer[2]))})
     mp("an offer: an endpoint twice", "offer", {**offer, 2: [offer[2][0]] * 2}, "offer/endpoints")
+    face_key = [X25519, fake("hub face key", 32)]
+    mp("an offer: an endpoint with its own hub key", "offer", {**offer, 9: [{1: offer[2][0], 2: face_key}]})
+    mp("an offer: a key for an endpoint it does not list", "offer",
+       {**offer, 9: [{1: "198.51.100.99:443", 2: face_key}]}, "offer/endpoint-keys")
+    mp("an offer: two keys for one endpoint", "offer",
+       {**offer, 9: [{1: offer[2][0], 2: face_key}] * 2}, "offer/endpoint-keys")
+    mp("an offer: an endpoint key that is no addr", "offer",
+       {**offer, 9: [{1: "fwd.example.org:443", 2: face_key}]}, "offer/endpoint-keys")
     mp("an offer: bad settings", "offer", {**offer, 3: {**obf, 1: 129}}, "offer/obfuscation")
     mp("the settings", "obfuscation", obf)
     mp("the settings: jmin above jmax", "obfuscation", {**obf, 2: 80}, "obfuscation/jmax")
@@ -1674,19 +1816,15 @@ def wave3_vectors(records_take):
     mp("a request", "waiting/request", request)
     mp("a Welcome", "welcome", welcome)
     mp("a Welcome without its time", "welcome", {1: ROOT.key, 2: welcome[2]}, "welcome/time")
+    mp("a Welcome without the recovery key", "welcome", {k: v for k, v in welcome.items() if k != 9},
+       "welcome/recovery")
+    lst = enc(sorted(bytes.fromhex(r["id"]) for r in records_take[:2]))
+    mp("a Welcome with the newest list", "welcome", {**welcome, 10: lst})
+    mp("a Welcome with an empty list", "welcome", {**welcome, 10: b""}, "welcome/list")
     claims = sorted([fake("claim a", 32), fake("claim b", 32)])
-    later = {**welcome, 3: [[claims[0], 3600000], [claims[1], 0]], 8: claims}
-    mp("a Welcome with claim ages and the claims the admitter counted", "welcome", later)
-    mp("a Welcome: counted out of order", "welcome", {**later, 8: list(reversed(claims))}, "welcome/counted")
-    mp("a Welcome: a claim counted twice", "welcome", {**later, 8: [claims[0]] * 2}, "welcome/counted")
-    mp("a Welcome: 17 claims counted", "welcome", {**later, 8: sorted(fake(f"c{i}", 32) for i in range(17))},
-       "welcome/counted")
-    mp("a Welcome: claim ages out of order", "welcome", {**later, 3: list(reversed(later[3]))},
-       "welcome/claim-ages")
-    mp("a Welcome: two ages for one claim", "welcome", {**later, 3: [[claims[0], 1], [claims[0], 2]]},
-       "welcome/claim-ages")
-    mp("a Welcome: an age without its claim's ID", "welcome", {**later, 3: [[claims[0][:16], 1]]},
-       "welcome/claim-ages")
+    mp("a Welcome with claim ages (field 3, retired)", "welcome", {**welcome, 3: [[claims[0], 1]]},
+       "welcome/retired")
+    mp("a Welcome with counted claims (field 8, retired)", "welcome", {**welcome, 8: claims}, "welcome/retired")
     return take, refuse, maps
 
 
@@ -1794,9 +1932,15 @@ def card_vectors():
     no("a key twice", card({12: [[ES256, tls[0]]] * 2}), "card/keys")
     no("an endpoint twice", card({11: ["fwd.example.org:443"] * 2}), "card/endpoints")
     for e in ["0192.0.2.7:443", "192.0.2.07:443", "3221225991:443", "0xc0.0.2.7:443", "EXAMPLE.org:443",
-              "fwd.example.org:0", "[2001:DB8::1]:443", "[2001:db8:0:0:0:0:0:1]:443"]:
+              "fwd.example.org:0", "[2001:DB8::1]:443", "[2001:db8:0:0:0:0:0:1]:443", "[::1]:443",
+              "127.0.0.1:443", "[fe80::1]:443", "169.254.1.1:443", "[ff02::1]:443", "224.0.0.1:443",
+              "0.0.0.0:443", "localhost:443", "a-.example.org:443", "10.1.2.3:443", "172.16.0.1:443",
+              "192.168.1.1:443", "100.64.0.1:443", "0.1.2.3:443", "240.0.0.1:443", "[::ffff:0:7f00:1]:443",
+              "[64:ff9b::7f00:1]:443", "[2002:7f00:1::1]:443", "[fec0::1]:443", "[fd00::1]:443",
+              "printer.local:443"]:
         no(f"an endpoint {e}", card({11: [e]}), "card/endpoints")
     ok("an endpoint by IPv6 address", card({11: ["fwd.example.org:443", "[2001:db8::7]:443"]}))
+    ok("an endpoint by NAT64 of a public address", card({11: ["[64:ff9b::c000:207]:443", "172.32.0.1:443"]}))
     no("kinds 4", card({13: 4}), "card/kinds")
     no("signed by another key than the operator it names", card(), "sig/verify", by=STRANGER)
     return take, refuse
@@ -1817,6 +1961,237 @@ MESSAGE_TYPES4 = {7: "keys-message", 9: "command", 21: "nonce", 22: "beacon", 23
 TABLES.update(TABLES4)
 
 MEDIA_TYPES = 4
+
+
+def _device(name):
+    base = name.split(".", 1)[0].rstrip(" ").upper()
+    if base in ("CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"):
+        return True
+    for pre in ("COM", "LPT"):
+        if base.startswith(pre) and base[3:] in [str(d) for d in range(10)] + ["¹", "²", "³"]:
+            return True
+    return False
+
+
+def _reserved(name):
+    base = name.split(".", 1)[0].upper()
+    return base in ("CON", "PRN", "AUX", "NUL") or (
+        len(base) == 4 and base[:3] in ("COM", "LPT") and "1" <= base[3] <= "9")
+
+
+def _save_name(name):
+    if not _device(name):
+        return name
+    if "." in name:
+        base, ext = name.split(".", 1)
+        return base + "_." + ext
+    return name + "_"
+
+
+def _save_path(path):
+    return "/".join(_save_name(n) for n in path.split("/"))
+
+
+def _name_ok(name):
+    nb = len(name.encode())
+    return not (nb == 0 or nb > 255 or len(_save_name(name).encode()) > 255 or name in (".", "..")
+                or any(c in name for c in '/\\:*?"<>|') or name.endswith(".") or name.endswith(" ")
+                or _reserved(name) or any(c < " " or c == "\x7f" or "\x80" <= c < "\xa0" for c in name))
+
+
+def _path_ok(path):
+    return (0 < len(path.encode()) <= 4096 and len(_save_path(path).encode()) <= 4096
+            and all(_name_ok(n) for n in path.split("/")))
+
+
+def read_manifest(m):
+    """The manifest's rows (section 10.3): the parts as dicts, or a rule."""
+    bad = "content/manifest"
+    if not isinstance(m, dict) or any(k < 256 and k not in (1, 2) for k in m):
+        return None, bad
+    if 1 in m:
+        if not isinstance(m[1], int) or m[1] >= 1 << 63:
+            return None, bad
+        if m[1] == 0:
+            return None, "form/default"
+    parts = m.get(2)
+    if not isinstance(parts, list) or not 1 <= len(parts) <= 10000:
+        return None, bad
+    for p in parts:
+        if not isinstance(p, dict) or any(k < 256 and k not in (1, 2, 3, 4, 5) for k in p):
+            return None, bad
+        if 1 in p and not (isinstance(p[1], int) and 1 <= p[1] <= MEDIA_TYPES):
+            return None, bad
+        if 2 in p and not (isinstance(p[2], str) and p[2]):
+            return None, bad
+        if 3 in p and p[3] != 1:
+            return None, bad
+        if 4 in p:
+            if not isinstance(p[4], int) or p[4] >= 1 << 63:
+                return None, bad
+            if p[4] == 0:
+                return None, "form/default"
+        if 5 in p and not (isinstance(p[5], bytes) and len(p[5]) == 32):
+            return None, bad
+    return m, None
+
+
+def manifest_ok(m):
+    """Today's manifest rules."""
+    parts = m[2]
+    files = 2 in parts[0]
+    if not files and len(parts) > 8:
+        return False
+    seen, total, paths = set(), 0, 0
+    for p in parts:
+        if files:
+            if 2 not in p or 1 in p or not _path_ok(p[2]):
+                return False
+            paths += len(p[2].encode())
+            key = _save_path(p[2])
+        else:
+            if 1 not in p or 3 in p:
+                return False
+            key = p[1]
+        if key in seen:
+            return False
+        seen.add(key)
+        if 3 in p:
+            if 4 in p or 5 in p:
+                return False
+            continue
+        if 5 not in p or p.get(4, 0) > 1 << 30:
+            return False
+        total += p.get(4, 0)
+    if paths > 512 << 10 or total != m.get(1, 0) or total > 1 << 30:
+        return False
+    if files:
+        kind = {_save_path(p[2]): 3 in p for p in parts}
+        for p in parts:
+            sp = _save_path(p[2])
+            for i, ch in enumerate(sp):
+                if ch == "/" and kind.get(sp[:i]) is False:
+                    return False
+    return True
+
+
+def _bidi(c):
+    o = ord(c)
+    return o in (0x61C, 0x200E, 0x200F) or 0x202A <= o <= 0x202E or 0x2066 <= o <= 0x2069
+
+
+# The three simple case foldings (status S) of CaseFolding.txt 15.1 that
+# Python's Unicode data does not give: their full folding is shared with
+# another code point, and their lower case is themselves.
+FOLD_S_EXTRA = {0xFB05: 0xFB06, 0x1FD3: 0x0390, 0x1FE3: 0x03B0}
+
+
+def _simple_fold(c):
+    """CaseFolding.txt's C and S mappings, from Python's Unicode data."""
+    o = ord(c)
+    if o in FOLD_S_EXTRA:
+        return chr(FOLD_S_EXTRA[o])
+    f = c.casefold()
+    if len(f) == 1:
+        return f
+    lo = c.lower()
+    return lo if len(lo) == 1 else c
+
+
+def _case_key(c):
+    """The character two names are compared by when case is ignored: the
+    simple case folding of its upper case (when that is one character), so
+    names one on NTFS (upper case) or on APFS (case folding) are one here."""
+    up = c.upper()
+    return _simple_fold(up if len(up) == 1 else c)
+
+
+def _nfc_ok(path):
+    """The name is its own NFC."""
+    return unicodedata.normalize("NFC", path) == path
+
+
+def unicode_tables():
+    """The tables of the name rules, from this Python's Unicode data: each
+    canonical decomposition one level deep (Hangul aside, by rule), the
+    primary composites by their pair, the non-zero combining classes, and
+    the case key of each code point whose key is not itself."""
+    decomp, comp, ccc, keys = [], [], [], []
+    for c in range(0x110000):
+        if 0xD800 <= c <= 0xDFFF:
+            continue
+        ch = chr(c)
+        k = _case_key(ch)
+        if k != ch:
+            keys.append((c, ord(k)))
+        cc = unicodedata.combining(ch)
+        if cc:
+            if ccc and ccc[-1][1] == c - 1 and ccc[-1][2] == cc:
+                ccc[-1][1] = c
+            else:
+                ccc.append([c, c, cc])
+        if 0xAC00 <= c <= 0xD7A3:
+            continue
+        d = unicodedata.decomposition(ch)
+        if not d or d.startswith("<"):
+            continue
+        p = [int(x, 16) for x in d.split()]
+        decomp.append((c, p[0], p[1] if len(p) > 1 else 0))
+        if len(p) == 2 and unicodedata.normalize("NFC", ch) == ch:
+            comp.append((p[0], p[1], c))
+    return decomp, sorted(comp), ccc, keys
+
+
+UNICODE_HEAD = ("Written by testdata/format/gen.py from Unicode %s for the names of files:\n"
+                "canonical decompositions one level deep (second 0 for one code point), the\n"
+                "primary composites by their pair (Hangul by rule), the non-zero combining\n"
+                "classes, and the case keys (the simple case folding, C and S, of the upper\n"
+                "case). Do not edit.")
+
+
+def write_unicode(outdir):
+    decomp, comp, ccc, keys = unicode_tables()
+    head = UNICODE_HEAD % unicodedata.unidata_version
+    lic = "SPDX-License-Identifier: AGPL-3.0-only\nCopyright (C) 2026 HunterEwok\n"
+    rows = lambda items, f, per: "\n".join("    " + " ".join(f(x) for x in items[i:i + per]) for i in range(0, len(items), per))
+    h3 = lambda r: "(0x%X, 0x%X, 0x%X)," % tuple(r)
+    h2 = lambda r: "(0x%X, 0x%X)," % tuple(r)
+    rs = ("".join("// " + l + "\n" for l in lic.splitlines()) + "\n" + "".join("//! " + l + "\n" for l in head.splitlines())
+          + "\n#[rustfmt::skip]\npub(crate) static DECOMP: &[(u32, u32, u32)] = &[\n" + rows(decomp, h3, 4) + "\n];\n"
+          + "\n#[rustfmt::skip]\npub(crate) static COMP: &[(u32, u32, u32)] = &[\n" + rows(comp, h3, 4) + "\n];\n"
+          + "\n#[rustfmt::skip]\npub(crate) static CCC: &[(u32, u32, u8)] = &[\n" + rows(ccc, lambda r: "(0x%X, 0x%X, %d)," % tuple(r), 5) + "\n];\n"
+          + "\n#[rustfmt::skip]\npub(crate) static CASE: &[(u32, u32)] = &[\n" + rows(keys, h2, 6) + "\n];\n")
+    g = lambda f: (lambda r: f(r).replace("(", "{").replace("),", "},"))
+    go = ("".join("// " + l + "\n" for l in lic.splitlines()) + "\n" + "".join("// " + l + "\n" for l in head.splitlines())
+          + "\npackage main\n"
+          + "\nvar uDecomp = [][3]rune{\n" + rows(decomp, g(h3), 4).replace("    ", "\t") + "\n}\n"
+          + "\nvar uComp = [][3]rune{\n" + rows(comp, g(h3), 4).replace("    ", "\t") + "\n}\n"
+          + "\nvar uCCC = [][3]rune{\n" + rows(ccc, lambda r: "{0x%X, 0x%X, %d}," % tuple(r), 5).replace("    ", "\t") + "\n}\n"
+          + "\nvar uCase = [][2]rune{\n" + rows(keys, g(h2), 6).replace("    ", "\t") + "\n}\n")
+    with open(os.path.join(outdir, "..", "..", "core", "src", "content", "unicode.rs"), "w") as f:
+        f.write(rs)
+    with open(os.path.join(outdir, "check", "unicode.go"), "w") as f:
+        f.write(go)
+
+
+def names_ok(m):
+    """0.6's rules on names of files: no device name of Windows, no
+    bidirectional control, every name its own NFC, no two paths one by the
+    case key of each character, nor a path inside a file so."""
+    kind = {}
+    for p in m[2]:
+        path = p[2]
+        if any(_device(n) for n in path.split("/")) or any(_bidi(c) for c in path) or not _nfc_ok(path):
+            return False
+        key = "".join(_case_key(c) for c in path)
+        if key in kind:
+            return False
+        kind[key] = 3 in p
+    for key in kind:
+        for i, ch in enumerate(key):
+            if ch == "/" and kind.get(key[:i]) is False:
+                return False
+    return True
 
 
 def content_rule(b):
@@ -1845,33 +2220,29 @@ def content_rule(b):
             return rule
         if c.get(f) == 0:
             return "form/default"
+    if 5 in c and not isinstance(c[5], str):
+        return "content/text"
+    man = None
+    if 6 in c:
+        man, rule = read_manifest(c[6])
+        if rule:
+            return rule
+    if 7 in c and not isinstance(c[7], bytes):
+        return "content/data"
     if c.get(3, 1) > 4:
         return "content/ttl"
     if c.get(4, 1) > 2:
         return "content/via"
-    if 5 in c and not isinstance(c[5], str):
-        return "content/text"
     if c.get(5) == "":
         return "form/default"
-    if 7 in c and not isinstance(c[7], bytes):
-        return "content/data"
     known = t <= 4
     if t == 1 and 5 not in c:
         return "content/text"
     if t in (2, 3):
-        m = c.get(6)
-        if not isinstance(m, dict) or not isinstance(m.get(2), list) or not m[2]:
+        if man is None or (2 in man[2][0]) != (t == 3) or not manifest_ok(man) or (t == 3 and not names_ok(man)):
             return "content/manifest"
-        files = "path" if t == 3 else "type"
-        for part in m[2]:
-            if not isinstance(part, dict) or any(k < 256 and k not in (1, 2, 3, 4, 5) for k in part):
-                return "content/manifest"
-            if t == 2 and not (isinstance(part.get(1), int) and 1 <= part[1] <= MEDIA_TYPES and 2 not in part):
-                return "content/manifest"
-            if t == 3 and not (isinstance(part.get(2), str) and 1 not in part):
-                return "content/manifest"
-        if sum(p.get(4, 0) for p in m[2]) != m.get(1, 0):
-            return "content/manifest"
+        if len(c.get(5, "").encode()) > 256 << 10:
+            return "content/text"
     if t == 4:
         d = c.get(7)
         if not isinstance(d, bytes) or not 1 <= len(d) <= 4096:
@@ -1880,12 +2251,12 @@ def content_rule(b):
             dec(d)
         except Bad:
             return "content/data"
-        if 5 in c:
-            return "content/text"
     if known and 6 in c and t not in (2, 3):
         return "content/manifest"
     if known and 7 in c and t != 4:
         return "content/data"
+    if known and t == 4 and 5 in c:
+        return "content/text"
     if not known or c.get(2, 0) & ~1 or any(k < 256 and k not in range(8) for k in c):
         return "keep"
     return "take"
@@ -1899,12 +2270,16 @@ def command_rule(env_b):
         return e.rule
     if not (isinstance(env, list) and len(env) == 2 and all(isinstance(x, bytes) for x in env)):
         return "env/shape"
+    if len(env[0]) > 2 << 20:
+        return "env/size"
     m = dec(env[0])
     if any(k < 256 and k not in (1, 2, 3, 4, 6, 7, 10, 11, 13, 14, 15) for k in m):
         return "form/critical"
     t = m.get(1)
     if not (isinstance(t, int) and 1 <= t <= 10):
         return "commands/type"
+    if t != 3 and len(env[0]) > 64 << 10:
+        return "env/size"
     for f, n, rule in [(2, 16, "commands/group"), (3, 32, "commands/signer")]:
         if not (isinstance(m.get(f), bytes) and len(m[f]) == n):
             return rule
@@ -1921,6 +2296,8 @@ def command_rule(env_b):
         return "commands/nonce"
     if m.get(14) == 0:
         return "form/default"
+    if 14 in m and not isinstance(m[14], int):
+        return "commands/epoch"
     if 15 in m and not (isinstance(m[15], bytes) and len(m[15]) >= 1136):
         return "commands/sealed"
     if (14 in m) != (15 in m):
@@ -1933,11 +2310,15 @@ def command_rule(env_b):
 def orders_rule(t, b):
     """The rule opened orders of type t break, or "take"."""
     o = dec(b)
-    allowed = {1: (10,), 2: (10, 11, 12, 13), 3: (10, 11, 12, 13, 14), 5: (10,), 8: (10,), 10: (10, 11)}[t]
-    if any(k < 256 and k not in allowed for k in o):
+    allowed = {1: (10,), 2: (10, 11, 12, 13), 3: (10, 11, 12, 13, 14), 5: (10,), 8: (10,), 10: (10, 11)}.get(t)
+    if allowed is None:
+        return "commands/type"
+    if not isinstance(o, dict) or any(k < 256 and k not in allowed for k in o):
         return "form/critical"
     if t == 1:
         return "take" if o.get(10) in (1, 2) else "orders/mode"
+    if t == 2:
+        return hub_rule(o)
     if t == 3:
         way, kind = o.get(10), o.get(12)
         if way not in (1, 2) or kind not in (1, 2, 3) or o.get(11, 1) != 1:
@@ -1970,6 +2351,76 @@ def orders_rule(t, b):
                 return "orders/device"
         return "take"
     raise ValueError(t)
+
+
+def _plain(x, most=255):
+    hidden = lambda ch: ord(ch) < 0x20 or 0x7f <= ord(ch) <= 0x9f or 0x2028 <= ord(ch) <= 0x202e or 0x2066 <= ord(ch) <= 0x2069
+    return isinstance(x, str) and 1 <= len(x.encode()) <= most and not any(hidden(ch) for ch in x)
+
+
+def hub_rule(o):
+    """`hub` orders: 13 off alone, or 10 [endpoint, key 32], 11 forwarders
+    (1 to 8 texts, each once), 12 clients (a set of 1 to 256 [ID 16, key
+    32, psk 32]); not empty."""
+    bad = "orders/hub"
+    if 13 in o:
+        return "take" if o[13] == 1 and all(k >= 256 or k == 13 for k in o) else bad
+    if 10 in o:
+        a = o[10]
+        if not (isinstance(a, list) and len(a) == 2 and _plain(a[0]) and isinstance(a[1], bytes) and len(a[1]) == 32):
+            return bad
+    if 11 in o:
+        a = o[11]
+        if not (isinstance(a, list) and 1 <= len(a) <= 8 and all(_plain(x) for x in a) and len(set(a)) == len(a)):
+            return bad
+    if 12 in o:
+        a = o[12]
+        if not (isinstance(a, list) and 1 <= len(a) <= 256):
+            return bad
+        keys = [enc(x[0] if isinstance(x, list) and x else x) for x in a]
+        if any(keys[i] >= keys[i + 1] for i in range(len(keys) - 1)):
+            return bad
+        if not all(isinstance(c, list) and len(c) == 3 and all(isinstance(v, bytes) and len(v) == n for v, n in zip(c, (16, 32, 32))) for c in a):
+            return bad
+    if all(k >= 256 for k in o):
+        return bad
+    return "take"
+
+
+def statement_rule(env_b):
+    """A keys statement (section 5): "take", "hold" or the rule."""
+    env = dec(env_b)
+    body = env[0]
+    if len(body) > 2048:
+        return "env/size"
+    m = dec(body)
+    if not (isinstance(m.get(1), int) and m[1] >= 1):
+        return "statements/type"
+    if not (isinstance(m.get(2), bytes) and len(m[2]) == 16):
+        return "statements/group"
+    if not (isinstance(m.get(3), bytes) and len(m[3]) == 32):
+        return "statements/signer"
+    if not (isinstance(m.get(4), int) and m[4] >= 1):
+        return "statements/epoch"
+    if m[1] != 1 or any(k < 256 and k not in (1, 2, 3, 4, 6, 10) for k in m) or len(env) == 3:
+        return "hold"
+    if m.get(6) == 0:
+        return "form/default"
+    if 6 in m and not isinstance(m[6], int):
+        return "statements/time"
+    if 10 not in m:
+        return "statements/seal"
+    k = m[10]
+    if not (isinstance(k, list) and len(k) == 2 and isinstance(k[0], int) and isinstance(k[1], bytes)):
+        return "keys/shape"
+    alg, pub = k
+    if alg == ES256:
+        return "keys/es256" if len(pub) != 65 or pub[0] != 4 else "keys/xwing"
+    if alg == XWING:
+        return "take" if len(pub) == 1216 else "keys/xwing"
+    if alg == X25519:
+        return "keys/x25519" if len(pub) != 32 else "keys/xwing"
+    return "hold"
 
 
 def beacon_rule(env_b):
@@ -2034,6 +2485,51 @@ def wave4_vectors():
         ("state not one item", {0: 4, 7: b"\x82\x01"}),
         ("state over 4 KiB", {0: 4, 7: enc(bytes(4100))}),
         ("state with text", {0: 4, 5: "x", 7: b"\x01"}),
+        ("a flag far beyond the known", {0: 1, 2: (1 << 62) + 1, 5: "x"}),
+        ("a later type with a field 6 not a manifest", {0: 5, 6: 1}),
+        ("media with one type twice", {0: 2, 6: {1: 6, 2: [{1: 1, 4: 3, 5: sha(b"a")}, {1: 1, 4: 3, 5: sha(b"b")}]}}),
+        ("media of nine types", {0: 2, 6: {1: 9, 2: [{1: 1 + i % 4, 4: 1, 5: sha(bytes([i]))} for i in range(9)]}}),
+        ("media part without its hash", {0: 2, 6: {1: 3, 2: [{1: 1, 4: 3}]}}),
+        ("media part with a folder", {0: 2, 6: {2: [{1: 1, 3: 1}]}}),
+        ("manifest with a critical field 3", {0: 2, 6: {1: 3, 2: png[2], 3: 1}}),
+        ("manifest size written as 0", {0: 2, 6: {1: 0, 2: png[2]}}),
+        ("files with a path up", {0: 3, 6: {1: 5, 2: [{2: "../../.bashrc", 4: 5, 5: sha(b"a")}]}}),
+        ("files with a name Windows reserves", {0: 3, 6: {1: 5, 2: [{2: "docs/CON.txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with a name ending in a dot", {0: 3, 6: {1: 5, 2: [{2: "a.", 4: 5, 5: sha(b"a")}]}}),
+        ("files with one path twice as written", {0: 3, 6: {1: 10, 2: [{2: "COM\u00b9", 4: 5, 5: sha(b"a")}, {2: "COM\u00b9_", 4: 5, 5: sha(b"b")}]}}),
+        ("files with a file inside a file", {0: 3, 6: {1: 10, 2: [{2: "a", 4: 5, 5: sha(b"a")}, {2: "a/b", 4: 5, 5: sha(b"b")}]}}),
+        ("files with a folder that has a size", {0: 3, 6: {1: 5, 2: [{2: "d", 3: 1, 4: 5}]}}),
+        ("files named as a device with a superscript", {0: 3, 6: {1: 5, 2: [{2: "lpt\u00b3.log", 4: 5, 5: sha(b"a")}]}}),
+        ("files named as a console device", {0: 3, 6: {1: 5, 2: [{2: "d/CONIN$", 4: 5, 5: sha(b"a")}]}}),
+        ("files named as COM0 with an extension", {0: 3, 6: {1: 5, 2: [{2: "com0.tar.gz", 4: 5, 5: sha(b"a")}]}}),
+        ("files named as a device before spaces", {0: 3, 6: {1: 5, 2: [{2: "NUL  .txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with names one but for case", {0: 3, 6: {1: 10, 2: [{2: "Notes.txt", 4: 5, 5: sha(b"a")}, {2: "notes.TXT", 4: 5, 5: sha(b"b")}]}}),
+        ("files with names one but for case beyond ASCII", {0: 3, 6: {1: 10, 2: [{2: "\u00c9T\u00c9", 4: 5, 5: sha(b"a")}, {2: "\u00e9t\u00e9", 4: 5, 5: sha(b"b")}]}}),
+        ("files with a file inside a file but for case", {0: 3, 6: {1: 10, 2: [{2: "Read", 4: 5, 5: sha(b"a")}, {2: "read/me", 4: 5, 5: sha(b"b")}]}}),
+        ("files with an e and a combining acute", {0: 3, 6: {1: 5, 2: [{2: "cafe\u0301.txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with a decomposed Hangul syllable", {0: 3, 6: {1: 5, 2: [{2: "\u1112\u1161\u11ab", 4: 5, 5: sha(b"a")}]}}),
+        ("files with a name of a kana and its voicing mark", {0: 3, 6: {1: 5, 2: [{2: "\u304b\u3099", 4: 5, 5: sha(b"a")}]}}),
+        ("files with a name that reads backwards", {0: 3, 6: {1: 5, 2: [{2: "photo\u202egpj.exe", 4: 5, 5: sha(b"a")}]}}),
+        ("files with an isolate in a name", {0: 3, 6: {1: 5, 2: [{2: "a\u2067b", 4: 5, 5: sha(b"a")}]}}),
+        ("files with a right-to-left mark in a name", {0: 3, 6: {1: 5, 2: [{2: "a\u200fb", 4: 5, 5: sha(b"a")}]}}),
+        ("files with names in NFC and in other scripts", {0: 3, 6: {1: 15, 2: [{2: "caf\u00e9.txt", 4: 5, 5: sha(b"a")}, {2: "\ud55c\uae00", 4: 5, 5: sha(b"b")}, {2: "\u05e9\u05dc\u05d5\u05dd.txt", 4: 5, 5: sha(b"c")}]}}),
+        ("files with a Hindi name", {0: 3, 6: {1: 5, 2: [{2: "\u0939\u093f\u0928\u094d\u0926\u0940.txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with an Arabic name with harakat", {0: 3, 6: {1: 5, 2: [{2: "\u0643\u064e\u062a\u064e\u0628\u064e.txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with a Hebrew name with niqqud", {0: 3, 6: {1: 5, 2: [{2: "\u05e9\u05b8\u05c1\u05dc\u05d5\u05b9\u05dd.txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with a combining mark nothing composes with", {0: 3, 6: {1: 5, 2: [{2: "q\u0301.txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with two marks out of canonical order", {0: 3, 6: {1: 5, 2: [{2: "q\u0301\u0323.txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with two marks in canonical order", {0: 3, 6: {1: 5, 2: [{2: "q\u0323\u0301.txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with a mark that composes across another class", {0: 3, 6: {1: 5, 2: [{2: "e\u0316\u0301.txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with a mark out of order behind a precomposed letter", {0: 3, 6: {1: 5, 2: [{2: "\u00e2\u0325.txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with the NFC of a mark across another class", {0: 3, 6: {1: 5, 2: [{2: "\u00e9\u0316.txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with sigma and final sigma", {0: 3, 6: {1: 10, 2: [{2: "\u03c3.txt", 4: 5, 5: sha(b"a")}, {2: "\u03c2.txt", 4: 5, 5: sha(b"b")}]}}),
+        ("files with s and long s", {0: 3, 6: {1: 10, 2: [{2: "s.txt", 4: 5, 5: sha(b"a")}, {2: "\u017f.txt", 4: 5, 5: sha(b"b")}]}}),
+        ("files with i and dotless i", {0: 3, 6: {1: 10, 2: [{2: "i.txt", 4: 5, 5: sha(b"a")}, {2: "\u0131.txt", 4: 5, 5: sha(b"b")}]}}),
+        ("files with micro and mu", {0: 3, 6: {1: 10, 2: [{2: "\u00b5.txt", 4: 5, 5: sha(b"a")}, {2: "\u03bc.txt", 4: 5, 5: sha(b"b")}]}}),
+        ("files with i and dotted capital I", {0: 3, 6: {1: 10, 2: [{2: "i.txt", 4: 5, 5: sha(b"a")}, {2: "\u0130.txt", 4: 5, 5: sha(b"b")}]}}),
+        ("files with a precomposed character NFC replaces", {0: 3, 6: {1: 5, 2: [{2: "\u212b.txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files named like a device but longer", {0: 3, 6: {1: 10, 2: [{2: "COM10", 4: 5, 5: sha(b"a")}, {2: "console.log", 4: 5, 5: sha(b"b")}]}}),
+        ("files of more than 1 GiB", {0: 3, 6: {1: (1 << 30) + 1, 2: [{2: "big", 4: (1 << 30) + 1, 5: sha(b"a")}]}}),
     ]
     contents = []
     for name, c in cases:
@@ -2074,6 +2570,9 @@ def wave4_vectors():
         ("sealed on a type without orders", body(6, {14: 2, 15: sealed})),
         ("field 12 (class, gone)", body(4, {12: 4})),
         ("a critical field of a later version", body(4, {99: 1})),
+        ("epoch as bytes", body(1, {14: b"\x02", 15: sealed})),
+        ("paste-off of 70 KiB", body(4, {300: bytes(70 << 10)})),
+        ("paste of 70 KiB", body(3, {300: bytes(70 << 10)})),
     ]:
         env, b = envelope("command", ADMIN, m)
         commands.append({"name": name, "verdict": command_rule(env), "diag": diag(m), "envelope": env.hex()})
@@ -2099,21 +2598,41 @@ def wave4_vectors():
         ("mute over 30 days", 8, {10: 2592000001}),
         ("device command with a hidden character", 10, {10: "he‮at"}),
         ("device command with arguments not one item", 10, {10: "heat", 11: b"\x82"}),
+        ("hub to use with a forwarder", 2, {10: ["203.0.113.5:51820", fake("hub key", 32)], 11: ["cbb.tools:8764"]}),
+        ("hub off", 2, {13: 1}),
+        ("hub with its clients", 2, {12: sorted([[fake("c1", 16), fake("k1", 32), fake("p1", 32)], [fake("c2", 16), fake("k2", 32), fake("p2", 32)]], key=lambda c: enc(c[0]))}),
+        ("hub empty", 2, {}),
+        ("hub off with an endpoint", 2, {13: 1, 10: ["203.0.113.5:51820", fake("hub key", 32)]}),
+        ("hub endpoint with a hidden character", 2, {10: ["203.0.113.5\u202e:51820", fake("hub key", 32)]}),
+        ("hub forwarder twice", 2, {11: ["cbb.tools:8764", "cbb.tools:8764"]}),
+        ("hub clients out of order", 2, {12: sorted([[fake("c1", 16), fake("k1", 32), fake("p1", 32)], [fake("c2", 16), fake("k2", 32), fake("p2", 32)]], key=lambda c: enc(c[0]), reverse=True)}),
+        ("orders of a type without orders", 4, {10: 1}),
     ]:
         b = enc(o)
         orders.append({"name": name, "type": t, "verdict": orders_rule(t, b), "orders": b.hex()})
     out["orders"] = orders
 
-    # statements a later version wrote: held
-    held = []
-    for name, m in [
-        ("a critical field of a later version", {1: 1, 2: GROUP, 3: LAPTOP.hash, 4: 5, 10: [XWING, fake("s5", 1216)], 99: 1}),
-        ("a type of a later version", {1: 2, 2: GROUP, 3: LAPTOP.hash, 4: 5, 10: [XWING, fake("s6", 1216)]}),
-        ("a sealing key of a later algorithm", {1: 1, 2: GROUP, 3: LAPTOP.hash, 4: 5, 10: [9, fake("s7", 40)]}),
+    # keys statements: taken, held (a later version wrote them) or refused
+    statements = []
+    good = fake("seal", 1216)
+    for name, signer, m, sig2 in [
+        ("a statement of this version", LAPTOP, {1: 1, 2: GROUP, 3: LAPTOP.hash, 4: 5, 6: T0, 10: [XWING, good]}, False),
+        ("a critical field of a later version", LAPTOP, {1: 1, 2: GROUP, 3: LAPTOP.hash, 4: 5, 10: [XWING, fake("s5", 1216)], 99: 1}, False),
+        ("a type of a later version", LAPTOP, {1: 2, 2: GROUP, 3: LAPTOP.hash, 4: 5, 10: [XWING, fake("s6", 1216)]}, False),
+        ("a type of a later version without a key", LAPTOP, {1: 2, 2: GROUP, 3: LAPTOP.hash, 4: 5}, False),
+        ("a type of a later version with another field 10", LAPTOP, {1: 2, 2: GROUP, 3: LAPTOP.hash, 4: 5, 10: "x"}, False),
+        ("a sealing key of a later algorithm", LAPTOP, {1: 1, 2: GROUP, 3: LAPTOP.hash, 4: 5, 10: [9, fake("s7", 40)]}, False),
+        ("no type", LAPTOP, {2: GROUP, 3: LAPTOP.hash, 4: 5, 10: [XWING, good]}, False),
+        ("time 0 written", LAPTOP, {1: 1, 2: GROUP, 3: LAPTOP.hash, 4: 5, 6: 0, 10: [XWING, good]}, False),
+        ("no sealing key", LAPTOP, {1: 1, 2: GROUP, 3: LAPTOP.hash, 4: 5}, False),
+        ("an ES256 key to seal with", LAPTOP, {1: 1, 2: GROUP, 3: LAPTOP.hash, 4: 5, 10: LAPTOP.key}, False),
+        ("an X25519 key to seal with", LAPTOP, {1: 1, 2: GROUP, 3: LAPTOP.hash, 4: 5, 10: [X25519, fake("x", 32)]}, False),
+        ("an X-Wing key one byte short", LAPTOP, {1: 1, 2: GROUP, 3: LAPTOP.hash, 4: 5, 10: [XWING, good[:-1]]}, False),
+        ("epoch 0", LAPTOP, {1: 1, 2: GROUP, 3: LAPTOP.hash, 4: 0, 10: [XWING, good]}, False),
     ]:
-        env, b = envelope("keys", LAPTOP, m)
-        held.append({"name": name, "verdict": "hold", "envelope": env.hex()})
-    out["statements_held"] = held
+        env, b = envelope("keys", signer, m)
+        statements.append({"name": name, "verdict": statement_rule(env), "diag": diag(m), "envelope": env.hex()})
+    out["statements"] = statements
 
     # beacons
     beacons = []
@@ -2162,7 +2681,8 @@ def wave4_vectors():
 def main():
     outdir = sys.argv[1]
     os.makedirs(outdir, exist_ok=True)
-    rt, rr = record_vectors()
+    write_unicode(outdir)
+    rt, rr, rl = record_vectors()
     st, sr = statement_vectors()
     ct, cr = command_vectors()
     gt, gr, gs, gq = grant_vectors(bytes.fromhex(rt[0]["envelope"]))
@@ -2171,11 +2691,12 @@ def main():
     files = {
         "profile.json": {"vectors": profile_vectors()},
         "keys.json": keys_table(),
-        "records.json": {"label": LABELS["record"], "take": rt, "refuse": rr},
+        "records.json": {"label": LABELS["record"], "take": rt, "refuse": rr, "lists": rl},
         "statements.json": {"label": LABELS["keys"], "take": st, "refuse": sr},
         "commands.json": {"label": LABELS["command"], "take": ct, "refuse": cr},
         "grants.json": {"label": LABELS["grant"], "group": GROUP.hex(), "take": gt, "refuse": gr, "copy_senders": gs, "sequences": gq},
-        "credentials.json": {"label": LABELS["credential"], "take": kt, "refuse": kr},
+        "credentials.json": {"label": LABELS["credential"], "take": kt, "refuse": kr,
+                             "recovery": RECOVERY.pub.hex()},
         "frames.json": {"grid": "64, 256, 1024, 4096, 16384, then multiples of 16384",
                         "take": mv, "refuse": mb, "refuse_fields": mf,
                         "set_digest_of_records_take": digest},

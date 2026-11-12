@@ -22,33 +22,32 @@
 //! 4. The sealing key is in the device's own keys statement (`statement`).
 //! 5. Unknown critical fields hold a record (kept, passed on, not applied);
 //!    `min_rules` in the settings stops older devices from secrets.
-//! 6. The kept set and the state depend on the set and the claims the
-//!    device counted alone, never on the order they came in; its ceilings are the format's, with no working
-//!    limits under them. A claim pays ahead for its root's first records,
-//!    which have no room of their own.
-//! 7. No rule reads a clock: the takeover delay is the time the device
-//!    itself held a claim, which its caller keeps.
-//! 8. Two competing claims stop the group; a root's own records still
-//!    count during a stop, and only a root resolves it.
+//! 6. The kept set and the state depend on the set alone, never on the
+//!    order its records came in; its ceilings are the format's, with no
+//!    working limits under them.
+//! 7. No rule reads a clock.
+//! 8. A root's own records count during a stop, and only a root resolves
+//!    a conflict between admins.
 //! 9. A root's removal is final: a resolve never voids a revoke signed by
 //!    a root, and the device comes back only by a new admission with a new
 //!    key. A root's resolve may void an admin's revoke; the device then
 //!    counts again with its key and ID.
-//! 10. A takeover cuts the old root at the claim's `seen`: what that root
-//!     signs after it, removals included, does not count once the claim
-//!     does; a live root cancels the claim within the delay instead.
+//! 10. The root changes only by a takeover the group's recovery key
+//!     signs, at once: no delay, no cancel, no objection, and no admin
+//!     takes the group over (rule 33). The recovery chain, walked from the
+//!     recovery key the device was given with the group, gives the path of
+//!     roots before anything else; no root's or admin's record changes it,
+//!     whatever order the records came in.
 //! 11. A device's member key and its admin key go together: a removal or
 //!     freeze that names one names both.
-//! 12. A takeover the device has counted is final there: its old root's
-//!     records above the claim's cut do not count, nor does a later claim
-//!     of that root's epoch rival it. When the device holds a record that
-//!     would have undone it, the state says so (`owner_split`).
-//! 13. `seen` names each signer's head with its seq and record ID, and a
-//!     takeover's cut is the claim's entry for the old root: a record at
-//!     or below a seen seq counts as seen only on the chain ending at that
-//!     ID, and a cut root keeps only that chain: a member that promoted
-//!     its successor stores nothing of it off the cut, and its checkpoints
-//!     no longer come first in its order.
+//! 12. A recovery record hands the chain to the next recovery key, whose
+//!     records start again at seq 1; the key that handed over signs
+//!     nothing more that counts. Two records at one step of the chain stop
+//!     the group for good. Whether a peer counts another owner comes from
+//!     the peers' paths of roots (`State::disagrees`), never from records.
+//! 13. A takeover lists what stays of the root it follows (`keep`): those
+//!     records count by themselves, at once, with no chain below them; the
+//!     rest of that root counts nothing and is not stored.
 //!
 //! The bytes are the format's (`crate::format`): a record is read from its
 //! envelope with [`Record::decode`] and written with [`Record::envelope`].
@@ -57,10 +56,13 @@
 /// array head, the heads of body and sig, and the 64-byte signature.
 pub const ENVELOPE_ALLOWANCE: usize = 1 + 9 + 9 + 64;
 
-/// The bytes counted for a second signature, whatever its length: its head
-/// and 64 bytes. A body that names `signer2` is held in 0.6, so this only
-/// keeps such records from being counted as smaller than they are.
-pub const SIG2_ALLOWANCE: usize = 9 + 64;
+/// The bytes counted for a second signature, whatever its length: nine
+/// units, which hold the largest one the format takes
+/// (`format::envelope::MAX_SIG2`) with its head. The count still depends
+/// on the body alone.
+pub const SIG2_ALLOWANCE: usize = 9 * keep::UNIT;
+
+const _: () = assert!(SIG2_ALLOWANCE >= crate::format::envelope::MAX_SIG2 + 9);
 
 pub mod body;
 pub mod eval;
@@ -74,10 +76,12 @@ mod tests;
 
 use alloc::vec::Vec;
 use core::fmt;
+use hmac::{Hmac, KeyInit, Mac};
+use sha2::Sha256;
 
-pub use body::{Body, Kind};
+pub use body::{Body, Kind, List};
 pub use eval::{Input, State, evaluate};
-pub use key::{DeviceId, GroupId, Key, KeyHash, RecordId};
+pub use key::{DeviceId, GroupId, Key, KeyHash, RecordId, group_id};
 pub use set::RecordSet;
 
 use crate::certs::sha256;
@@ -85,6 +89,34 @@ use crate::identity::ExternalKey;
 
 /// The label records are signed under.
 pub const LABEL_RECORD: &str = "cbb record v3";
+
+/// The label of a record's mark (`Record::mark`).
+pub const LABEL_MARK: &str = "cbb record mark v3";
+
+/// A device's mark on a record it verified, stored beside it in its own
+/// store: HMAC-SHA-256 under a 32-byte key the device keeps to itself, over
+/// the label, a zero byte and the record's envelope. Loading checks the
+/// mark instead of the signature (design-records-v3 section 7, rule 29).
+pub type Mark = [u8; 32];
+/// The label of the pinned keys' mark (`pin_mark`).
+pub const LABEL_PIN: &str = "cbb pin v3";
+
+/// The mark a device keeps beside the group's first root key and recovery
+/// key in its own store (rule 29): HMAC-SHA-256 under its own local key
+/// over the label, a zero byte and the two keys' encodings. A store whose
+/// pinned keys were changed does not load (`RecordSet::pinned`).
+#[allow(clippy::expect_used, reason = "HMAC takes a key of any length, so this never fails")]
+pub fn pin_mark(local: &[u8; 32], root: &Key, recovery: &Key) -> Mark {
+    let mut m = <Hmac<Sha256> as KeyInit>::new_from_slice(local).expect("HMAC takes a key of any length");
+    m.update(LABEL_PIN.as_bytes());
+    m.update(&[0]);
+    m.update(&root.encode());
+    m.update(&recovery.encode());
+    let mut out = [0u8; 32];
+    out.copy_from_slice(&m.finalize().into_bytes());
+    out
+}
+
 /// The label of the set digest.
 pub const LABEL_SET: &str = "cbb set v3";
 
@@ -98,23 +130,21 @@ pub const MAX_SEEN: usize = 1024;
 
 // The ceilings frozen in the format (section 13).
 
-/// A record body, and a checkpoint's.
+/// A record body, and a checkpoint's (whose list of kept records may name
+/// 1024 IDs). A recovery record is small: its list rides beside it.
 pub const MAX_BODY: usize = 8 << 10;
 pub const MAX_CHECKPOINT_BODY: usize = 64 << 10;
 /// Records of one root key.
 pub const MAX_ROOT_RECORDS: usize = 1024;
 /// Records of one admin key.
 pub const MAX_ADMIN_RECORDS: usize = 256;
-/// A claimant's records as the future root before its claim counts,
-/// counted in the claimant's own.
-pub const MAX_FUTURE_ROOT_RECORDS: usize = 16;
 /// Records in a set, and their bytes.
 pub const MAX_RECORDS: usize = 4096;
 pub const MAX_SET_BYTES: usize = 2 << 20;
 /// Devices with a device record.
 pub const MAX_DEVICES: usize = 256;
-/// Roots on the path: the first and 15 handovers.
-pub const MAX_PATH: usize = 16;
+/// Roots on the path: the first and one for each recovery record.
+pub const MAX_PATH: usize = 1 + body::MAX_RECOVERY as usize;
 /// Held records a state lists.
 pub const MAX_NEWER: usize = 16;
 
@@ -267,9 +297,49 @@ impl Record {
             return Err(Rule::new("records/size"));
         }
         let held = self.body.check()?;
+        #[cfg(test)]
+        VERIFIED.with(|n| n.set(n.get().saturating_add(1)));
         key::verify_es256(key, LABEL_RECORD, &self.bytes, &self.sig)?;
         Ok(held)
     }
+
+    /// The mark of the record under the device's own key local. The core
+    /// never makes or stores that key; its caller keeps it.
+    pub fn mark(&self, local: &[u8; 32]) -> Mark {
+        let mut out = [0u8; 32];
+        out.copy_from_slice(&self.marker(local).finalize().into_bytes());
+        out
+    }
+
+    #[allow(clippy::expect_used, reason = "HMAC takes a key of any length, so this never fails")]
+    fn marker(&self, local: &[u8; 32]) -> Hmac<Sha256> {
+        let mut m = <Hmac<Sha256> as KeyInit>::new_from_slice(local).expect("HMAC takes a key of any length");
+        m.update(LABEL_MARK.as_bytes());
+        m.update(&[0]);
+        m.update(&self.envelope());
+        m
+    }
+
+    /// verify for a record from the device's own store: with its mark under
+    /// local, the checks without the signature; with a missing or wrong
+    /// mark, verify.
+    pub(crate) fn verify_marked(&self, key: &Key, mark: Option<(&[u8; 32], &Mark)>) -> Result<bool, Rule> {
+        match mark {
+            Some((local, mark)) if self.marker(local).verify_slice(mark).is_ok() => {
+                if self.bytes.len() > self.max_body() {
+                    return Err(Rule::new("records/size"));
+                }
+                self.body.check()
+            }
+            _ => self.verify(key),
+        }
+    }
+}
+
+#[cfg(test)]
+std::thread_local! {
+    /// The signatures this thread verified, for the tests that count them.
+    pub(crate) static VERIFIED: core::cell::Cell<usize> = const { core::cell::Cell::new(0) };
 }
 
 /// The set digest: SHA-256 over the label, a zero byte and the sorted IDs.

@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/hkdf"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/asn1"
@@ -228,6 +229,9 @@ func envelope(b []byte, label string, signerKey func(map[any]any) ([]byte, error
 	return m, body, nil
 }
 
+// keyOf holds each test key's encoding by its name.
+var keyOf = map[string][]byte{}
+
 func bySignerHash(m map[any]any) ([]byte, error) {
 	h, _ := m[uint64(3)].([]byte)
 	pub, ok := byHash[hex.EncodeToString(h)]
@@ -288,6 +292,12 @@ func checkSigned(dir, file string, sk func(map[any]any) ([]byte, error)) {
 			fail("%s / %s: %v", file, t.Name, err)
 			continue
 		}
+		if typ, _ := m[uint64(1)].(uint64); f.Label == "cbb record v3" && typ == 1 && !nameOK(m[uint64(11)]) {
+			fail("%s / %s: its name is refused", file, t.Name)
+		}
+		if typ, _ := m[uint64(1)].(uint64); f.Label == "cbb record v3" && typ == 9 && !ownHeadBefore(m) {
+			fail("%s / %s: it names its own key at or above its seq", file, t.Name)
+		}
 		if t.Body != "" && hex.EncodeToString(body) != t.Body {
 			fail("%s / %s: body differs", file, t.Name)
 		}
@@ -317,7 +327,24 @@ func checkSigned(dir, file string, sk func(map[any]any) ([]byte, error)) {
 		ok++
 	}
 	for _, r := range f.Refuse {
-		_, _, err := envelope(unhex(r.Envelope), f.Label, sk)
+		m, _, err := envelope(unhex(r.Envelope), f.Label, sk)
+		if r.Rule == "records/checkpoint/own-head" {
+			if err != nil || ownHeadBefore(m) {
+				fail("%s / %s: its heads hold", file, r.Name)
+			} else {
+				ok++
+			}
+			continue
+		}
+		if r.Rule == "records/device/name" {
+			// names: checked here by themselves, apart from the rules
+			if err != nil || nameOK(m[uint64(11)]) {
+				fail("%s / %s: its name holds", file, r.Name)
+			} else {
+				ok++
+			}
+			continue
+		}
 		if formatRule(r.Rule) {
 			if err == nil {
 				fail("%s / %s: taken, want refused (%s)", file, r.Name, r.Rule)
@@ -348,9 +375,13 @@ func main() {
 			fail("keys.json %s: hash", k.Name)
 		}
 		byHash[k.KeyHash] = pub
-		if k.Name == "root" && k.ID16 != keys.GroupID {
-			fail("group id is not the root key's id")
-		}
+		keyOf[k.Name] = unhex(k.Key)
+	}
+	// The Group ID commits to the first root key and the recovery key
+	// (rule 33).
+	gid := sha256.Sum256(append(append([]byte("cbb group v3\x00"), keyOf["root"]...), keyOf["recovery"]...))
+	if hex.EncodeToString(gid[:16]) != keys.GroupID {
+		fail("group id is not that of the root key and the recovery key")
 	}
 
 	var prof struct {
@@ -466,6 +497,9 @@ func main() {
 						if typ != 1 || !bytes.Equal(gr, group) || !bytes.Equal(lf, leaf) {
 							return nil, errors.New("grants/shape")
 						}
+						if gv, ok := pre[uint64(15)]; ok && gv != uint64(1) {
+							return nil, errors.New("grants/guarded-value")
+						}
 					}
 				}
 			}
@@ -496,11 +530,11 @@ func main() {
 				return nil, err
 			}
 			r, _, err := envelope(rb, "cbb record v3", bySignerHash)
-			if err != nil || hex.EncodeToString(r[uint64(3)].([]byte)) != rootHash {
+			if err != nil || hex.EncodeToString(r[uint64(3)].([]byte)) != rootHash || !adminRecord(r, group) {
 				return nil, errors.New("grants/admin")
 			}
 			kh, pub, err := keyHash(r[uint64(20)])
-			if err != nil || !bytes.Equal(kh, h) {
+			if err != nil || !bytes.Equal(kh, h) || !onCurve(pub) {
 				return nil, errors.New("grants/admin")
 			}
 			if p, _ := r[uint64(21)].(uint64); p&1 != 1 {
@@ -776,6 +810,50 @@ func main() {
 			fail("copy content: not the one padding (%v)", err)
 		}
 	}
+	// refused: a copy key whose commitment is not the header's, and
+	// contents not padded to their one step
+	var rc struct {
+		Commit []struct {
+			Name string `json:"name"`
+			Rule string `json:"rule"`
+			K    string `json:"K"`
+		} `json:"refuse_commit"`
+		Contents []struct {
+			Name    string `json:"name"`
+			Rule    string `json:"rule"`
+			Content string `json:"content"`
+		} `json:"refuse_contents"`
+	}
+	load(dir, "copy.json", &rc)
+	if len(rc.Commit) == 0 || len(rc.Contents) == 0 {
+		fail("copy: no refused commit or content")
+	}
+	for _, r := range rc.Commit {
+		cv, _ := strict(unhex(c["copy"]))
+		hv, _ := strict(cv.(map[any]any)[uint64(1)].([]byte))
+		have, _ := hv.(map[any]any)[uint64(6)].([]byte)
+		ck := hkdfSHA256(unhex(r.K), nil, []byte("cbb copy commit v2"))
+		if r.Rule != "copy/commit" || bytes.Equal(ck, have) {
+			fail("copy %s: its commit holds", r.Name)
+		}
+		if !bytes.Equal(hkdfSHA256(unhex(c["K"]), nil, []byte("cbb copy commit v2")), have) {
+			fail("copy: the header's commit is not its key's")
+		}
+	}
+	for _, r := range rc.Contents {
+		b := unhex(r.Content)
+		v, err := strict(b)
+		if err != nil {
+			fail("copy content %s: %v", r.Name, err)
+			continue
+		}
+		cm := v.(map[any]any)
+		delete(cm, uint64(1))
+		again, err := padded(cm, contentStep)
+		if r.Rule != "copy/content-pad" || (err == nil && bytes.Equal(again, b)) {
+			fail("copy content %s: its padding holds", r.Name)
+		}
+	}
 	var edges struct {
 		Edges []struct {
 			Name    string `json:"name"`
@@ -803,7 +881,7 @@ func main() {
 	fmt.Printf("%-18s checked\n", "copy.json")
 
 	// container: the TBS byte for byte with the key and its serial, the point on the curve;
-	// the signature in its form (SEQUENCE of two INTEGERs of 1 to 33 bytes, at most 72 bytes),
+	// the signature in its form (SEQUENCE of two DER INTEGERs of 1 to 33 bytes, at most 72 bytes),
 	// its value not read (section 12)
 	var ct struct {
 		Cert    string `json:"example_cert"`
@@ -835,6 +913,10 @@ func main() {
 		for _, i := range ints {
 			if i.Class != asn1.ClassUniversal || i.Tag != asn1.TagInteger || len(i.Bytes) < 1 || len(i.Bytes) > 33 {
 				return errors.New("signature integer")
+			}
+			// DER: not negative, and no zero in front it does not need.
+			if i.Bytes[0]&0x80 != 0 || len(i.Bytes) > 1 && i.Bytes[0] == 0 && i.Bytes[1]&0x80 == 0 {
+				return errors.New("signature integer not in DER")
 			}
 		}
 		return nil
@@ -1050,6 +1132,10 @@ func grantSets(body map[any]any) error {
 		if alg, _ := keyAlg(k); len(id) != 16 || alg != 1 || len(pub) != 65 {
 			return errors.New("grants/readers")
 		}
+		// a reader's ID is its key's: the key hash's first 16 bytes
+		if h, _, err := keyHash(k); err != nil || !bytes.Equal(h[:16], id) {
+			return errors.New("grants/readers")
+		}
 	}
 	if v, ok := body[uint64(14)]; ok {
 		if ns, ok = v.([]any); !ok {
@@ -1074,13 +1160,16 @@ func recordSets(m map[any]any) (int, bool) {
 	typ, _ := m[uint64(1)].(uint64)
 	var sorted, once []uint64
 	switch typ {
-	case 2, 3, 9:
+	case 1:
+		sorted = []uint64{26}
+	case 2, 3, 4, 9:
 		sorted = []uint64{10, 11}
-	case 4, 6:
+	case 6:
 		sorted = []uint64{10}
-	case 5:
+	case 5, 8:
 		sorted = []uint64{11}
 	case 10:
+		sorted = []uint64{11}
 		once = []uint64{10}
 	}
 	n, ok := 0, true
@@ -1091,10 +1180,23 @@ func recordSets(m map[any]any) (int, bool) {
 		}
 		ok = ok && sortedSet(a)
 	}
-	// seen (field 11 of revoke, freeze and claim): every entry is
-	// [key hash, seq, record ID].
-	if typ == 2 || typ == 3 || typ == 5 {
-		a, _ := m[uint64(11)].([]any)
+	// seen: every entry is [key hash, seq >= 1, record ID]; device 26 and
+	// revoke, freeze and claim 11 optional, thaw, copies and hubs 11 required
+	seenField, required := uint64(0), false
+	switch typ {
+	case 1:
+		seenField = 26
+	case 2, 3, 5:
+		seenField = 11
+	case 4, 8, 10:
+		seenField, required = 11, true
+	}
+	if seenField != 0 {
+		v, present := m[seenField]
+		a, isArr := v.([]any)
+		if (required && !present) || (present && !isArr) {
+			ok = false
+		}
 		for _, e := range a {
 			ok = ok && seenEntry(e)
 		}
@@ -1107,6 +1209,65 @@ func recordSets(m map[any]any) (int, bool) {
 		ok = ok && onceSet(a)
 	}
 	return n, ok
+}
+
+// hidden tells a character a list must not show as it is: C0, DEL, C1,
+// U+2028, U+2029 and the bidi controls.
+func hidden(r rune) bool {
+	return r <= 0x1f || (r >= 0x7f && r <= 0x9f) || (r >= 0x2028 && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069)
+}
+
+// nameOK: a device's name, 1 to 64 bytes, no hidden character.
+func nameOK(v any) bool {
+	n, ok := v.(string)
+	if !ok || len(n) < 1 || len(n) > 64 {
+		return false
+	}
+	for _, r := range n {
+		if hidden(r) {
+			return false
+		}
+	}
+	return true
+}
+
+// adminRecord reads the root's record in a first grant as a record: a
+// device record of this group, with the fields of 0.6 only (a reader
+// applies it, not holds it), a seq, a name, a role and a member key.
+func adminRecord(r map[any]any, group []byte) bool {
+	allowed := map[uint64]bool{}
+	for _, f := range []uint64{1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26} {
+		allowed[f] = true
+	}
+	for k := range r {
+		if n, ok := k.(uint64); ok && n < 256 && !allowed[n] {
+			return false
+		}
+	}
+	typ, _ := r[uint64(1)].(uint64)
+	g, _ := r[uint64(2)].([]byte)
+	seq, _ := r[uint64(4)].(uint64)
+	role, _ := r[uint64(12)].(uint64)
+	prev, hasPrev := r[uint64(5)]
+	prevOK := !hasPrev && seq == 1
+	if p, ok := prev.([]byte); hasPrev && ok && len(p) == 32 {
+		prevOK = true
+	}
+	_, pub, err := keyHash(r[uint64(10)])
+	k, _ := r[uint64(10)].([]any)
+	alg, _ := keyAlg(k)
+	return typ == 1 && bytes.Equal(g, group) && seq >= 1 && seq < 1<<31 && prevOK && nameOK(r[uint64(11)]) &&
+		role >= 1 && role <= 4 && err == nil && alg == 1 && onCurve(pub)
+}
+
+// onCurve reports whether pub is an uncompressed P-256 point, as the Rust
+// reader checks a member key and an admin key.
+func onCurve(pub []byte) bool {
+	if len(pub) != 65 {
+		return false
+	}
+	x, _ := elliptic.Unmarshal(elliptic.P256(), pub) //nolint:staticcheck
+	return x != nil
 }
 
 func seenEntry(e any) bool {
@@ -1130,6 +1291,11 @@ func copyRule(c []byte) string {
 	m, ok := v.(map[any]any)
 	if !ok {
 		return "copy/shape"
+	}
+	for k := range m {
+		if n, ok := k.(uint64); ok && n < 256 && (n < 1 || n > 6) {
+			return "form/critical"
+		}
 	}
 	hb, ok := m[uint64(1)].([]byte)
 	if !ok {
@@ -1240,7 +1406,8 @@ func checkSets(dir string) {
 		fail("records: only %d sets of two or more", twos)
 	}
 	setRule := map[string]bool{"records/revoke/keys": true, "records/revoke/seen": true, "records/thaw/records": true,
-		"records/checkpoint/heads": true, "records/checkpoint/keep": true, "records/hubs/hubs": true}
+		"records/checkpoint/heads": true, "records/checkpoint/keep": true, "records/hubs/hubs": true,
+		"records/device/seen": true, "records/thaw/seen": true, "records/hubs/seen": true, "records/copies/seen": true}
 	for _, t := range rs.Refuse {
 		if !setRule[t.Rule] {
 			continue
@@ -1271,10 +1438,6 @@ func checkSets(dir string) {
 		switch typ {
 		case 6, 18:
 			set = m[uint64(2)]
-		case 67:
-			if w, ok := m[uint64(3)].(map[any]any); ok {
-				set = w[uint64(3)]
-			}
 		}
 		if a, ok := set.([]any); ok && (len(a) < 2 || !sortedSet(a)) {
 			fail("frames %s: set out of order or short", t.Name)
@@ -1343,4 +1506,32 @@ func keyAlg(k []any) (uint64, bool) {
 	}
 	a, ok := k[0].(uint64)
 	return a, ok
+}
+
+// hkdfSHA256 gives 32 bytes of HKDF-SHA256 (an empty salt is 32 zero
+// bytes, as RFC 5869 says).
+func hkdfSHA256(ikm, salt, info []byte) []byte {
+	k, err := hkdf.Key(sha256.New, ikm, salt, string(info), 32)
+	must(err)
+	return k
+}
+
+// ownHeadBefore: a checkpoint names its own key's head, if at all, below
+// its own seq.
+func ownHeadBefore(m map[any]any) bool {
+	signer, _ := m[uint64(3)].([]byte)
+	seq, _ := m[uint64(4)].(uint64)
+	heads, _ := m[uint64(10)].([]any)
+	for _, h := range heads {
+		e, _ := h.([]any)
+		if len(e) != 3 {
+			continue
+		}
+		k, _ := e[0].([]byte)
+		n, _ := e[1].(uint64)
+		if bytes.Equal(k, signer) && n >= seq {
+			return false
+		}
+	}
+	return true
 }

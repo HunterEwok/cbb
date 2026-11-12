@@ -111,6 +111,63 @@ fn rows_and_rows_between_fields() {
     up.parts[1].path = "../a.txt".into();
     up.parts.remove(0);
     assert_eq!(Content { kind: TYPE_FILES, manifest: Some(up), ..Content::default() }.check(), Err(RULE_MANIFEST));
+    // The rules of 0.6 on names of files.
+    let named = |paths: &[&str]| {
+        let parts: Vec<media::Part> = paths
+            .iter()
+            .map(|p| media::Part { path: (*p).into(), size: 1, sha256: Some(vec![1; 32]), ..Default::default() })
+            .collect();
+        let m = media::Manifest { size: parts.len() as i64, parts };
+        Content { kind: TYPE_FILES, manifest: Some(m), ..Content::default() }.check()
+    };
+    for ok in [
+        &["a.txt", "b.txt"][..],
+        &["caf\u{e9}.txt"],
+        &["COM10.txt"],
+        &["CONSOLE"],
+        &["\u{d55c}.txt"],
+        &["\u{939}\u{93f}\u{928}\u{94d}\u{926}\u{940}"],
+        &["\u{643}\u{64e}\u{62a}\u{64e}"],
+        &["\u{5e9}\u{5b8}\u{5c1}\u{5dc}"],
+        &["q\u{301}"],
+        &["\u{1100}\u{1100}"],
+    ] {
+        assert_eq!(named(ok), Ok(()), "{ok:?}");
+    }
+    for bad in [
+        &["con"][..],
+        &["NUL.txt"],
+        &["com1.tar.gz"],
+        &["LPT9"],
+        &["COM\u{b9}.txt"],
+        &["lpt\u{b3}"],
+        &["COM0"],
+        &["CONIN$"],
+        &["conout$.log"],
+        &["CON .txt"],
+        &["dir/aux.c"],
+        &["A.txt", "a.txt"],
+        &["\u{c9}t\u{e9}.txt", "\u{e9}t\u{e9}.txt"],
+        &["cafe\u{301}.txt"],
+        &["\u{212b}"],
+        &["q\u{301}\u{323}"],
+        &["e\u{316}\u{301}"],
+        &["\u{e2}\u{325}"],
+        &["\u{3c3}", "\u{3c2}"],
+        &["s", "\u{17f}"],
+        &["i", "\u{131}"],
+        &["\u{b5}", "\u{3bc}"],
+        &["\u{1e9e}", "\u{df}"],
+        &["\u{ac00}\u{11a8}"],
+        &["\u{1112}\u{1161}\u{11ab}.txt"],
+        &["\u{304b}\u{3099}.txt"],
+        &["a\u{202e}txt.exe"],
+        &["a\u{2066}b"],
+        &["a\u{200f}b"],
+        &["Readme", "readme/x"],
+    ] {
+        assert_eq!(named(bad), Err(RULE_MANIFEST), "{bad:?}");
+    }
     // Padding that is not the one padding of its step.
     let mut b = Content::text("x", false).write().unwrap();
     let middle = b.len() / 2;

@@ -44,21 +44,20 @@ pub enum Refusal {
 }
 
 /// The records that lead from the group's first root to the device with
-/// member key `device`: every counting claim and handover (the root
+/// member key `device`: every recovery record the set holds (the root
 /// changes), the device's counting records, and for each admin key that
 /// signed one of them the counting record that named that key, up to the
 /// roots.
 pub fn chain(set: &RecordSet, state: &State, device: &KeyHash) -> BTreeSet<RecordId> {
-    let records: Vec<&Record> =
-        set.in_dependency_order().into_iter().filter(|r| state.counting.contains(&r.id())).collect();
-    let mut out: BTreeSet<RecordId> = BTreeSet::new();
+    let order = set.in_dependency_order();
+    // Every recovery record the set holds goes, a fork's two heads too: they
+    // live outside the rooms, and a newcomer sees the fork its admitter saw.
+    let mut out: BTreeSet<RecordId> =
+        order.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).map(|r| r.id()).collect();
+    let records: Vec<&Record> = order.into_iter().filter(|r| state.counting.contains(&r.id())).collect();
     let mut signers: Vec<KeyHash> = Vec::new();
     for r in records.iter() {
         match &r.body().kind {
-            Kind::Claim { .. } | Kind::Handover { .. } => {
-                out.insert(r.id());
-                signers.push(r.body().signer);
-            }
             Kind::Device(d) if &d.key.hash() == device => {
                 out.insert(r.id());
                 signers.push(r.body().signer);
@@ -157,7 +156,6 @@ impl Intro {
     pub fn check(
         &self,
         set: &RecordSet,
-        held_ms: &BTreeMap<RecordId, u64>,
         own: &crate::format::KeyHash,
         peer: &[u8; 65],
     ) -> Result<Vec<Record>, Refusal> {
@@ -178,7 +176,7 @@ impl Intro {
                 Ok(Added::NoRoom) | Err(_) => return Err(Refusal::Broken),
             }
         }
-        let state = trial.state(held_ms);
+        let state = trial.state();
         match standing(&state, own, peer) {
             Standing::Member(_) => Ok(new),
             _ => Err(Refusal::NotMember),
@@ -186,45 +184,62 @@ impl Intro {
     }
 }
 
-/// The most intros one network (an IPv6 /64, an IPv4 /24) may send in a
-/// window.
+/// The most intros one address may send in a window.
 pub const MAX_PER_WINDOW: u32 = 4;
+/// The most intros one network (an IPv6 /64, an IPv4 /24, a home's whole
+/// network) may send in a window: higher, so that one host cannot spend it
+/// for the others.
+pub const MAX_PER_NETWORK: u32 = 256;
 /// The window.
 pub const WINDOW_MS: u64 = 60_000;
-/// The most networks a [`Limiter`] tracks at once; when full, the oldest
-/// gives way.
+/// The most addresses, and the most networks, a [`Limiter`] tracks at
+/// once; when full, the oldest gives way.
 pub const MAX_ADDRESSES: usize = 256;
 
-/// Counts intros per network (an IPv6 /64, an IPv4 /24), so that one host
-/// cannot make a member check intro after intro, nor fill the table and
-/// keep everybody else out.
+/// Counts intros per address and per network (an IPv6 /64, an IPv4 /24),
+/// so that one host cannot make a member check intro after intro, nor fill
+/// the table and keep everybody else out.
 #[derive(Clone, Default, Debug)]
 pub struct Limiter {
-    seen: BTreeMap<Vec<u8>, (u64, u32)>,
+    addresses: BTreeMap<Vec<u8>, (u64, u32)>,
+    networks: BTreeMap<Vec<u8>, (u64, u32)>,
+}
+
+/// Counts one more in `table` under `key` within the window, up to `max`;
+/// whether it was allowed.
+fn count(table: &mut BTreeMap<Vec<u8>, (u64, u32)>, key: &[u8], max: u32, now_ms: u64) -> bool {
+    table.retain(|_, (start, _)| now_ms.saturating_sub(*start) < WINDOW_MS);
+    if let Some((_, n)) = table.get_mut(key) {
+        return *n < max;
+    }
+    while table.len() >= MAX_ADDRESSES {
+        let Some(oldest) = table.iter().min_by_key(|(_, (start, _))| *start).map(|(k, _)| k.clone()) else {
+            break;
+        };
+        table.remove(&oldest);
+    }
+    true
+}
+
+fn add(table: &mut BTreeMap<Vec<u8>, (u64, u32)>, key: &[u8], now_ms: u64) {
+    let e = table.entry(key.to_vec()).or_insert((now_ms, 0));
+    e.1 = e.1.saturating_add(1);
 }
 
 impl Limiter {
     /// Whether an intro from `addr` at `now_ms` may be checked; it counts it.
     pub fn allow(&mut self, addr: core::net::IpAddr, now_ms: u64) -> bool {
-        let net: Vec<u8> = match addr.to_canonical() {
-            core::net::IpAddr::V4(a) => a.octets().get(..3).unwrap_or_default().to_vec(),
-            core::net::IpAddr::V6(a) => a.octets().get(..8).unwrap_or_default().to_vec(),
+        let (whole, net): (Vec<u8>, Vec<u8>) = match addr.to_canonical() {
+            core::net::IpAddr::V4(a) => (a.octets().to_vec(), a.octets().get(..3).unwrap_or_default().to_vec()),
+            core::net::IpAddr::V6(a) => (a.octets().to_vec(), a.octets().get(..8).unwrap_or_default().to_vec()),
         };
-        self.seen.retain(|_, (start, _)| now_ms.saturating_sub(*start) < WINDOW_MS);
-        if let Some((_, n)) = self.seen.get_mut(&net) {
-            if *n >= MAX_PER_WINDOW {
-                return false;
-            }
-            *n = n.saturating_add(1);
-            return true;
+        if !count(&mut self.addresses, &whole, MAX_PER_WINDOW, now_ms)
+            || !count(&mut self.networks, &net, MAX_PER_NETWORK, now_ms)
+        {
+            return false;
         }
-        while self.seen.len() >= MAX_ADDRESSES {
-            let Some(oldest) = self.seen.iter().min_by_key(|(_, (start, _))| *start).map(|(k, _)| k.clone()) else {
-                break;
-            };
-            self.seen.remove(&oldest);
-        }
-        self.seen.insert(net, (now_ms, 1));
+        add(&mut self.addresses, &whole, now_ms);
+        add(&mut self.networks, &net, now_ms);
         true
     }
 }

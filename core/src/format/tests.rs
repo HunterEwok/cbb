@@ -47,11 +47,17 @@ fn keys() -> HashMap<String, Vec<u8>> {
         assert_eq!(key.encode(), enc);
         assert_eq!(hex(&key.hash().0), s(row, "key_hash"), "{}", s(row, "name"));
         assert_eq!(hex(&key.device_id().0), s(row, "id16"));
-        if s(row, "name") == "root" {
-            assert_eq!(hex(&key.device_id().0), s(&k, "group_id"));
-        }
         out.insert(s(row, "key_hash").to_string(), key.public.to_vec());
     }
+    // The Group ID commits to the first root key and the recovery key
+    // (rule 33).
+    let point = |name: &str| {
+        let row = k["keys"].as_array().unwrap().iter().find(|r| r["name"] == name).unwrap();
+        let b = unhex(s(row, "key"));
+        let v = cbor::decode(&b).unwrap();
+        crate::records::Key::es256(Key::from_value(&v).unwrap().public.to_vec())
+    };
+    assert_eq!(hex(&crate::records::group_id(&point("root"), &point("recovery")).0), s(&k, "group_id"));
     out
 }
 
@@ -174,6 +180,41 @@ fn credentials() {
 }
 
 #[test]
+fn device_fields_are_the_ones_the_printer_names() {
+    // One list of a device record's fields: the printer names each, and
+    // names no other below 256 but expires_ms (7) and signer2 (8).
+    let named: Vec<u16> =
+        (0..256).filter(|&k| print::field_name(Kind::Record, 1, k).is_some() && k != 7 && k != 8).collect();
+    assert_eq!(named, super::DEVICE_FIELDS);
+}
+
+#[test]
+fn names_refuse_what_a_list_cannot_show() {
+    let r = load("records.json");
+    let mut refused = 0;
+    for t in r["refuse"].as_array().unwrap() {
+        if s(t, "rule") != "records/device/name" {
+            continue;
+        }
+        let b = unhex(s(t, "envelope"));
+        let e = Envelope::parse(&b).unwrap();
+        assert!(!super::name_ok(e.map.get(11).and_then(Value::as_text).unwrap_or("")), "{}", s(t, "name"));
+        refused += 1;
+    }
+    assert_eq!(refused, 7);
+    for t in r["take"].as_array().unwrap() {
+        let b = unhex(s(t, "envelope"));
+        let e = Envelope::parse(&b).unwrap();
+        if let Some(n) = e.map.get(11).and_then(Value::as_text).filter(|_| e.map.get(1) == Some(&Value::Uint(1))) {
+            assert!(super::name_ok(n), "{}", s(t, "name"));
+        }
+    }
+    let shown = print::diag(&Value::Text("a\u{9b}b\u{2028}c\u{202e}d\u{2069}e\u{7f}"));
+    assert_eq!(shown, "\"a\\u009bb\\u2028c\\u202ed\\u2069e\\u007f\"");
+    assert!(super::name_ok("Laptop \u{1F4BB}"));
+}
+
+#[test]
 fn keys_of_the_wrong_size_or_off_the_curve() {
     let r = load("records.json");
     let st = load("statements.json");
@@ -278,12 +319,22 @@ fn grants() {
 /// `hubs`, each device once in the user's order.
 fn record_sets(typ: u64) -> (&'static [u16], &'static [u16]) {
     match typ {
-        2 | 3 => (&[10, 11], &[]),
-        4 | 6 => (&[10], &[]),
-        5 => (&[11], &[]),
-        9 => (&[10, 11], &[]),
-        10 => (&[], &[10]),
+        1 => (&[26], &[]),
+        2 | 3 | 4 | 9 => (&[10, 11], &[]),
+        6 => (&[10], &[]),
+        5 | 8 => (&[11], &[]),
+        10 => (&[11], &[10]),
         _ => (&[], &[]),
+    }
+}
+
+/// The field of a record type's `seen`, and whether it is required.
+fn seen_field(typ: u64) -> Option<(u16, bool)> {
+    match typ {
+        1 => Some((26, false)),
+        2 | 3 | 5 => Some((11, false)),
+        4 | 8 | 10 => Some((11, true)),
+        _ => None,
     }
 }
 
@@ -293,9 +344,11 @@ fn record_sets_hold(m: &Value<'_>) -> bool {
     let typ = m.get(1).and_then(Value::as_uint).unwrap_or(0);
     let (sorted, once) = record_sets(typ);
     let arr = |f: u16| m.get(f).and_then(Value::as_array).unwrap_or(&[]);
-    // seen (removal, freeze, claim): [key hash, seq >= 1, record ID]
+    // seen: [key hash, seq >= 1, record ID]
     let seen_ok = |e: &Value<'_>| matches!(e.as_array(), Some([Value::Bytes(k), Value::Uint(s), Value::Bytes(id)]) if k.len() == 32 && *s >= 1 && id.len() == 32);
-    if matches!(typ, 2 | 3 | 5) && !arr(11).iter().all(seen_ok) {
+    if let Some((f, required)) = seen_field(typ)
+        && ((required && m.get(f).is_none()) || !arr(f).iter().all(seen_ok))
+    {
         return false;
     }
     sorted.iter().all(|f| cbor::is_set(arr(*f)))
@@ -303,6 +356,39 @@ fn record_sets_hold(m: &Value<'_>) -> bool {
             let a = arr(*f);
             a.iter().enumerate().all(|(i, x)| !a[..i].contains(x))
         })
+}
+
+/// Whether a checkpoint names its own key's head below its own seq (or
+/// not at all).
+fn own_head_before(m: &Value<'_>) -> bool {
+    let (Some(signer), Some(seq)) = (m.get(3).and_then(Value::as_bytes), m.get(4).and_then(Value::as_uint)) else {
+        return false;
+    };
+    m.get(10).and_then(Value::as_array).unwrap_or(&[]).iter().all(|h| match h.as_array() {
+        Some([Value::Bytes(k), Value::Uint(n), _]) if k == &signer => *n < seq,
+        _ => true,
+    })
+}
+
+#[test]
+fn checkpoints_name_heads_before_themselves() {
+    let r = load("records.json");
+    let mut refused = 0;
+    for (verdict, list) in [("take", &r["take"]), ("refuse", &r["refuse"])] {
+        for t in list.as_array().unwrap() {
+            let b = unhex(s(t, "envelope"));
+            let Ok(e) = Envelope::parse(&b) else { continue };
+            if e.map.get(1) != Some(&Value::Uint(9)) {
+                continue;
+            }
+            let own = verdict == "refuse" && s(t, "rule") == "records/checkpoint/own-head";
+            if verdict == "take" || own {
+                assert_eq!(own_head_before(&e.map), !own, "{}", s(t, "name"));
+                refused += usize::from(own);
+            }
+        }
+    }
+    assert_eq!(refused, 2);
 }
 
 #[test]
@@ -329,13 +415,13 @@ fn sets_keep_their_order() {
         let typ = e.map.get(1).and_then(Value::as_uint).unwrap_or(0);
         let field = rule.rsplit('/').next().unwrap();
         let is_set_rule = ["keys", "seen", "records", "heads", "keep", "hubs"].contains(&field)
-            && (typ == 2 || typ == 4 || typ == 9 || typ == 10);
+            && matches!(typ, 1 | 2 | 4 | 8 | 9 | 10);
         if is_set_rule {
             assert!(!record_sets_hold(&e.map), "{}", s(t, "name"));
             refused += 1;
         }
     }
-    assert_eq!(refused, 11);
+    assert_eq!(refused, 17);
     let fr = load("frames.json");
     for t in fr["refuse_fields"].as_array().unwrap() {
         let b = unhex(s(t, "message"));
@@ -350,7 +436,6 @@ fn sets_keep_their_order() {
         let f = frame::read(&fb, frame::LIMIT_MEMBER).unwrap();
         let set = match f.t {
             6 | 18 => f.map.get(2),
-            67 => f.map.get(3).and_then(|w| w.get(3)),
             _ => None,
         };
         if let Some(a) = set {
@@ -467,6 +552,17 @@ fn copies() {
     let twin = unhex(s(&c, "copy_high_s_twin"));
     let tv = cbor::decode(&twin).unwrap();
     assert_eq!(copy::Copy::from_value(&tv).unwrap().verify(&laptop), Err(Rule::SIG_LOW_S));
+    for r in c["refuse_commit"].as_array().unwrap() {
+        let other: [u8; 32] = unhex(s(r, "K")).try_into().unwrap();
+        let b = unhex(s(&c, "copy"));
+        let v = cbor::decode(&b).unwrap();
+        let got = copy::Copy::from_value(&v).unwrap().check_commit(&other).err().map(Rule::name);
+        assert_eq!(got, Some(s(r, "rule")), "{}", s(r, "name"));
+    }
+    for r in c["refuse_contents"].as_array().unwrap() {
+        let b = unhex(s(r, "content"));
+        assert_eq!(copy::read_content(&b).err().map(Rule::name), Some(s(r, "rule")), "{}", s(r, "name"));
+    }
     let content = unhex(s(&c, "content_plaintext"));
     let v = copy::read_content(&content).unwrap();
     let without: Vec<(u16, Value<'_>)> = v.as_map().unwrap().iter().filter(|(k, _)| *k != 1).cloned().collect();
@@ -690,5 +786,67 @@ fn every_signature_has_one_form() {
                     .is_ok()
             );
         }
+    }
+}
+
+/// The root's record of the admin that signs a first grant is read by the
+/// record reader itself: a body that reader refuses is no admin's record
+/// for a grant either.
+#[test]
+fn the_admins_record_of_a_grant_is_read_as_a_record() {
+    use p256::ecdsa::SigningKey;
+    let sk = |name: &str| SigningKey::from_slice(&super::sha256(&[name.as_bytes()])).unwrap();
+    let point = |name: &str| sig::public_point(&sk(name));
+    let (root, admin_p, member_p) = (point("root"), point("admin"), point("member"));
+    let root_hash = Key::new(Alg::Es256, &root).hash().0;
+    let group = Key::new(Alg::Es256, &root).device_id().0;
+    let leaf = Key::new(Alg::Es256, &point("lamp")).device_id().0;
+    let (admin, member) = (Key::new(Alg::Es256, &admin_p), Key::new(Alg::Es256, &member_p));
+    let admin_hash = admin.hash().0;
+    let record = |change: Option<(u16, Value<'static>)>| {
+        let mut m: Vec<(u16, Value)> = vec![
+            (1, Value::Uint(1)),
+            (2, Value::Bytes(&group)),
+            (3, Value::Bytes(&root_hash)),
+            (4, Value::Uint(1)),
+            (6, Value::Uint(1)),
+            (10, member.to_value()),
+            (11, Value::Text("phone")),
+            (12, Value::Uint(1)),
+            (13, Value::Uint(3)),
+            (20, admin.to_value()),
+            (21, Value::Uint(1)),
+        ];
+        if let Some((k, v)) = change {
+            m.retain(|(f, _)| *f != k);
+            m.push((k, v));
+            m.sort_by_key(|(f, _)| *f);
+        }
+        envelope::sign(&sk("root"), sig::LABEL_RECORD, &Value::Map(m).encode())
+    };
+    let grant_of = |rec: &[u8]| {
+        let body = Value::Map(vec![
+            (1, Value::Uint(1)),
+            (2, Value::Bytes(&group)),
+            (3, Value::Bytes(&admin_hash)),
+            (4, Value::Uint(1)),
+            (10, Value::Bytes(&leaf)),
+            (12, Value::Array(vec![admin.to_value()])),
+        ])
+        .encode();
+        let env = envelope::sign(&sk("admin"), sig::LABEL_GRANT, &body);
+        let mut e = cbor::Encoder::new();
+        e.map(2).uint(2).raw(&env).uint(3).raw(rec);
+        let msg = e.finish();
+        let v = cbor::decode(&msg).unwrap();
+        grant::read(&v, &root, &DeviceId(leaf), &DeviceId(group), None).map(|_| ()).map_err(Rule::name)
+    };
+    assert_eq!(grant_of(&record(None)), Ok(()));
+    for change in
+        [(13, Value::Text("all")), (21, Value::Uint(1 | 1 << 40)), (22, Value::Text("x")), (26, Value::Uint(7))]
+    {
+        let rec = record(Some(change.clone()));
+        assert!(crate::records::Record::decode(&rec).is_err(), "{change:?}");
+        assert_eq!(grant_of(&rec), Err("grants/admin"), "{change:?}");
     }
 }

@@ -181,14 +181,14 @@ impl Credential {
     }
 
     /// A relay with a fixed list of groups: the period is signed by the
-    /// group's first root key, whose Group ID is on the list. Only the root
-    /// signs periods in 0.6.
-    pub fn period_of_listed_group(&self, root: &[u8], listed: &[[u8; 16]]) -> bool {
-        let rk = Key::new(Alg::Es256, root);
-        self.kind == TYPE_PERIOD
-            && self.signer == root
-            && self.group == rk.device_id().0
-            && listed.contains(&self.group)
+    /// group's first root key, whose Group ID with the group's recovery key
+    /// is on the list. Only the root signs periods in 0.6.
+    pub fn period_of_listed_group(&self, root: &[u8], recovery: &[u8], listed: &[[u8; 16]]) -> bool {
+        let gid = crate::records::group_id(
+            &crate::records::Key::es256(root.to_vec()),
+            &crate::records::Key::es256(recovery.to_vec()),
+        );
+        self.kind == TYPE_PERIOD && self.signer == root && self.group == gid.0 && listed.contains(&self.group)
     }
 }
 

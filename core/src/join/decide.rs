@@ -146,7 +146,7 @@ pub fn joiner_record(
             || state.revoked.contains(&h)
             || state.id_taken(&a.device_id())
             || state.roots.contains(&h)
-            || state.recovery == Some(h)
+            || state.recovery == h
             || state.devices.iter().any(|d| d.admin == Some(h) || d.key.hash() == h)
         {
             return Err(Refusal::Taken);

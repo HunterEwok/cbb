@@ -18,6 +18,8 @@ pub mod tables;
 pub mod wave4;
 
 #[cfg(test)]
+mod mutants;
+#[cfg(test)]
 mod tests;
 
 use crate::format::{Alg, Rule, Value, cbor, frame};
@@ -51,8 +53,6 @@ pub enum Ty {
     Set { of: &'static Ty, max: usize },
     /// A map of its own table.
     Map(&'static Table),
-    /// A claim's age in a Welcome: `[record ID (bytes 32), held_ms]`.
-    Age,
 }
 
 /// One field of a table.
@@ -134,10 +134,6 @@ fn check_ty(f: &Field, v: &Value<'_>) -> Result<(), Rule> {
                 check_ty(&inner, x)?;
             }
         }
-        Ty::Age => match v.as_array() {
-            Some([Value::Bytes(id), Value::Uint(ms)]) if id.len() == 32 && *ms < (1 << 63) => {}
-            _ => return Err(bad()),
-        },
         // A bad field inside breaks the field that holds the map.
         Ty::Map(t) => check_map(t, v).map_err(|_| bad())?,
     }
@@ -164,7 +160,6 @@ impl Ty {
             Ty::Once { of, max } => format!("once 1..{max} of {}", of.describe()),
             Ty::Set { of, max } => format!("set 1..{max} of {}", of.describe()),
             Ty::Map(t) => format!("map {}", t.name()),
-            Ty::Age => "age".into(),
         }
     }
 }
@@ -219,22 +214,33 @@ pub fn check_map(table: &Table, v: &Value<'_>) -> Result<(), Rule> {
             Some(x) => check_ty(f, x)?,
         }
     }
-    // The rules between fields of a map: AmneziaWG's junk sizes, and one
-    // age per claim in a Welcome (the claims' IDs rise).
+    // The rules between fields of a map: AmneziaWG's junk sizes and an
+    // offer's endpoint keys.
     if core::ptr::eq(table, &tables::OBFUSCATION)
         && v.get(2).and_then(Value::as_uint) > v.get(3).and_then(Value::as_uint)
     {
         return Err(Rule::field("obfuscation/jmax"));
     }
-    if core::ptr::eq(table, &tables::WELCOME)
-        && let Some(a) = v.get(3).and_then(Value::as_array)
+    // An offer's endpoint keys each name one of its endpoints, once.
+    if core::ptr::eq(table, &tables::OFFER)
+        && let Some(keys) = v.get(9).and_then(Value::as_array)
     {
-        fn id<'a>(x: &Value<'a>) -> Option<&'a [u8]> {
-            x.as_array().and_then(|p| p.first()).and_then(Value::as_bytes)
+        let eps = v.get(2).and_then(Value::as_array).unwrap_or(&[]);
+        let named: alloc::vec::Vec<Option<&Value<'_>>> = keys.iter().map(|k| k.get(1)).collect();
+        let mut seen: alloc::vec::Vec<alloc::vec::Vec<u8>> = alloc::vec::Vec::new();
+        for n in named {
+            let Some(n) = n else { return Err(Rule::field("offer/endpoint-keys")) };
+            let e = n.encode();
+            if !eps.iter().any(|x| x.encode() == e) || seen.contains(&e) {
+                return Err(Rule::field("offer/endpoint-keys"));
+            }
+            seen.push(e);
         }
-        if a.windows(2).any(|w| w.first().and_then(id) >= w.last().and_then(id)) {
-            return Err(Rule::field("welcome/claim-ages"));
-        }
+    }
+    // Fields 3 (claim ages) and 8 (counted claims) of earlier drafts are
+    // refused (rule 33).
+    if core::ptr::eq(table, &tables::WELCOME) && (v.get(3).is_some() || v.get(8).is_some()) {
+        return Err(Rule::field("welcome/retired"));
     }
     Ok(())
 }

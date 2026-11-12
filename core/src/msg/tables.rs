@@ -71,12 +71,12 @@ pub static WELCOME: Table = Table {
     fields: &[
         f(1, "welcome/root", MEMBER_KEY, true),
         f(2, "welcome/records", Ty::Array { of: &ENV, max: 4096 }, true),
-        f(3, "welcome/claim-ages", Ty::Set { of: &Ty::Age, max: 4096 }, false),
         f(4, "welcome/keys", Ty::Array { of: &ENV, max: 256 }, false),
         f(5, "welcome/time", MS, true),
         f(6, "welcome/grant", Ty::Map(&GRANT), false),
         f(7, "welcome/credentials", Ty::Array { of: &ENV, max: 259 }, false),
-        f(8, "welcome/counted", Ty::Set { of: &B32, max: 16 }, false),
+        f(9, "welcome/recovery", MEMBER_KEY, true),
+        f(10, "welcome/list", Ty::BytesUpTo(4 + 34 * 1024), false),
     ],
 };
 
@@ -171,7 +171,16 @@ pub static OFFER: Table = Table {
         f(6, "offer/moved", Ty::Flag, false),
         f(7, "offer/next-key", WG_KEY, false),
         f(8, "offer/confirm", B32, false),
+        f(9, "offer/endpoint-keys", Ty::Array { of: &Ty::Map(&ENDPOINT_KEY), max: 8 }, false),
     ],
+};
+
+/// The hub's own key on one endpoint of an offer: the key it serves
+/// WireGuard under on that forwarder's endpoint (its key for that face).
+/// An endpoint without one uses the offer's key (field 1).
+pub static ENDPOINT_KEY: Table = Table {
+    shape: "offer/endpoint-key/shape",
+    fields: &[f(1, "offer/endpoint-key/endpoint", ADDR, true), f(2, "offer/endpoint-key/key", WG_KEY, true)],
 };
 
 /// `tunnel` (t 15): to a hub only, the device's WireGuard key toward it and
@@ -267,7 +276,7 @@ pub static INFO_DEVICE: Table = Table { shape: "pair/info/device/shape", fields:
 /// while no admin was there.
 pub static WAITING: Table = Table {
     shape: "waiting/shape",
-    fields: &[f(2, "waiting/requests", Ty::Once { of: &Ty::Map(&REQUEST), max: 16 }, true)],
+    fields: &[f(2, "waiting/requests", Ty::Once { of: &Ty::Map(&REQUEST), max: 48 }, true)],
 };
 
 /// `dismiss` (t 27): from that admin to the holder: drop the requests of
@@ -393,6 +402,7 @@ pub static ALL: &[&Table] = &[
     &OBFUSCATION,
     &VLESS,
     &OFFER,
+    &ENDPOINT_KEY,
     &TUNNEL,
     &HUBS,
     &GUEST,

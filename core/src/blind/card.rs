@@ -169,13 +169,14 @@ impl Card {
     }
 }
 
-/// `host:port`: an IP address with its port (an `addr`), or a DNS name
-/// (lower-case letters, digits, hyphens and dots, at most 253 bytes, its
+/// `host:port`: a public IP address with its port (an `addr`, see
+/// [`public_ip`]), or a DNS name (lower-case letters, digits, hyphens and
+/// dots, at most 253 bytes, no label starting or ending with a hyphen, its
 /// last label neither all digits nor starting with `0x`, so no resolver
-/// reads it as a number) with its port.
+/// reads it as a number, nor `localhost` or `local`) with its port.
 fn valid_endpoint(t: &str) -> bool {
-    if t.parse::<core::net::SocketAddr>().is_ok() {
-        return crate::msg::valid_addr(t);
+    if let Ok(a) = t.parse::<core::net::SocketAddr>() {
+        return public_ip(a.ip()) && crate::msg::valid_addr(t);
     }
     let Some((host, port)) = t.rsplit_once(':') else { return false };
     let last = host.rsplit('.').next().unwrap_or_default();
@@ -185,10 +186,57 @@ fn valid_endpoint(t: &str) -> bool {
         && host.len() <= 253
         && !last.bytes().all(|b| b.is_ascii_digit())
         && !last.starts_with("0x")
+        && last != "localhost"
+        && last != "local"
         && host.split('.').all(|l| {
             !l.is_empty()
                 && l.len() <= 63
                 && l.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
                 && !l.starts_with('-')
+                && !l.ends_with('-')
         })
+}
+
+/// Whether an IPv4 address may stand in a card: none of this network
+/// (0/8), private (10/8, 172.16/12, 192.168/16), shared (100.64/10),
+/// loopback (127/8), link-local (169.254/16), multicast (224/4) or
+/// reserved (240/4).
+fn public_v4(a: core::net::Ipv4Addr) -> bool {
+    let [x, y, ..] = a.octets();
+    !(x == 0
+        || x == 10
+        || x == 127
+        || x >= 224
+        || (x == 172 && (16..32).contains(&y))
+        || (x == 192 && y == 168)
+        || (x == 100 && (64..128).contains(&y))
+        || (x == 169 && y == 254))
+}
+
+/// Whether an address may stand in a card, which is for a public server:
+/// a public IPv4 address ([`public_v4`]), or an IPv6 address that is not
+/// loopback, unspecified, multicast, link-local, site-local (fec0::/10) or
+/// unique-local (fc00::/7), nor carries a refused IPv4 address in a
+/// translated (::ffff:0:0/96), NAT64 (64:ff9b::/96) or 6to4 (2002::/16)
+/// form.
+fn public_ip(ip: core::net::IpAddr) -> bool {
+    match ip {
+        core::net::IpAddr::V4(v4) => public_v4(v4),
+        core::net::IpAddr::V6(v6) => {
+            let o = v6.octets();
+            let s = v6.segments();
+            let embedded =
+                |b: &[u8]| -> bool { <[u8; 4]>::try_from(b).is_ok_and(|q| public_v4(core::net::Ipv4Addr::from(q))) };
+            let first = s.first().copied().unwrap_or(0);
+            !(v6.is_loopback()
+                || v6.is_unspecified()
+                || v6.is_multicast()
+                || (first & 0xffc0) == 0xfe80
+                || (first & 0xffc0) == 0xfec0
+                || (first & 0xfe00) == 0xfc00
+                || (s.get(..6) == Some(&[0, 0, 0, 0, 0xffff, 0][..]) && !embedded(o.get(12..).unwrap_or_default()))
+                || (s.get(..6) == Some(&[0x64, 0xff9b, 0, 0, 0, 0][..]) && !embedded(o.get(12..).unwrap_or_default()))
+                || (first == 0x2002 && !embedded(o.get(2..6).unwrap_or_default())))
+        }
+    }
 }

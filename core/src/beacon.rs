@@ -130,20 +130,37 @@ pub fn message(envelope: &[u8]) -> Result<Vec<u8>, Rule> {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Beacons(pub BTreeMap<KeyHash, Beacon>);
 
+/// How far ahead of the receiver's clock a beacon's time may be.
+pub const ALLOWANCE_MS: u64 = crate::copies::fresh::ALLOWANCE_MS;
+
+/// How old a beacon may be, on the receiver's clock, and still say that
+/// the receiver is behind: as old as a statement may be.
+pub const MAX_AGE_MS: u64 = crate::copies::STATEMENT_MAX_AGE_MS;
+
 /// What a device can tell of its records from the beacons it holds.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct Freshness {
     /// The latest time an admin saw exactly the set this device holds.
     pub current_at_ms: Option<u64>,
-    /// An admin saw more records, at a later time than that, than this
-    /// device holds: it asks for them.
+    /// Some admin's newest beacon names another, larger set than this
+    /// device holds: it asks for the records. Judged for each admin by its
+    /// own beacon, so one admin's time never hides another's. A beacon
+    /// dated at or before the newest checkpoint this device holds (unless
+    /// that checkpoint is dated more than [`ALLOWANCE_MS`] ahead of its
+    /// clock), or older than [`MAX_AGE_MS`] on its clock, does not count: a set before a
+    /// checkpoint was larger, and a silent admin's old view says nothing of
+    /// today's.
     pub behind: bool,
 }
 
 impl Beacons {
-    /// Keeps a checked beacon when its `n` is above the signer's last one;
-    /// reports whether it kept it.
-    pub fn take(&mut self, b: Beacon) -> bool {
+    /// Keeps a checked beacon when its `n` is above the signer's last one
+    /// and, on a receiver with a clock, its time is not more than
+    /// [`ALLOWANCE_MS`] ahead of it; reports whether it kept it.
+    pub fn take(&mut self, b: Beacon, now_ms: Option<u64>) -> bool {
+        if now_ms.is_some_and(|now| b.time_ms > now.saturating_add(ALLOWANCE_MS)) {
+            return false;
+        }
         if self.0.get(&b.signer).is_some_and(|old| b.n <= old.n) {
             return false;
         }
@@ -157,15 +174,28 @@ impl Beacons {
             .retain(|k, _| state.device_by_key(k).and_then(|d| d.admin.as_ref()).is_some_and(|a| state.may_command(a)));
     }
 
-    /// How fresh a set with this digest and count is, by the beacons held.
-    pub fn freshness(&self, digest: &[u8; 32], count: u64) -> Freshness {
+    /// How fresh a set with this digest and count is, by the beacons held,
+    /// on the device's clock (None without one) and the time of the newest
+    /// checkpoint it holds ([`checkpoint_ms`], 0 without one).
+    pub fn freshness(&self, digest: &[u8; 32], count: u64, now_ms: Option<u64>, checkpoint_ms: u64) -> Freshness {
         let current_at_ms = self.0.values().filter(|b| &b.digest == digest).map(|b| b.time_ms).max();
-        let behind = self
-            .0
-            .values()
-            .any(|b| &b.digest != digest && b.count > count && current_at_ms.is_none_or(|t| b.time_ms > t));
+        // A checkpoint dated more than the allowance ahead of the clock is
+        // not used, as a beacon so dated is not taken.
+        let checkpoint_ms = match now_ms {
+            Some(now) if checkpoint_ms > now.saturating_add(ALLOWANCE_MS) => 0,
+            _ => checkpoint_ms,
+        };
+        let recent = |b: &Beacon| {
+            b.time_ms > checkpoint_ms && now_ms.is_none_or(|now| now.saturating_sub(b.time_ms) <= MAX_AGE_MS)
+        };
+        let behind = self.0.values().any(|b| &b.digest != digest && b.count > count && recent(b));
         Freshness { current_at_ms, behind }
     }
+}
+
+/// The time of the checkpoint that counts in these records, 0 without one.
+pub fn checkpoint_ms(state: &State, set: &crate::records::set::RecordSet) -> u64 {
+    state.checkpoint.as_ref().and_then(|id| set.get(id)).map_or(0, |r| r.body().time_ms)
 }
 
 #[cfg(test)]
@@ -248,17 +278,88 @@ mod tests {
             digest: [d; 32],
             count,
         };
-        assert!(bs.take(b("phone", 2, T0, 1, 10)));
-        assert!(!bs.take(b("phone", 2, T0 + 5, 9, 10)), "n must rise");
-        assert_eq!(bs.freshness(&[1; 32], 10), Freshness { current_at_ms: Some(T0), behind: false });
+        assert!(bs.take(b("phone", 2, T0, 1, 10), Some(T0)));
+        assert!(!bs.take(b("phone", 2, T0 + 5, 9, 10), Some(T0)), "n must rise");
+        assert_eq!(bs.freshness(&[1; 32], 10, Some(T0), 0), Freshness { current_at_ms: Some(T0), behind: false });
         // Another admin saw more records later.
-        assert!(bs.take(b("desk", 1, T0 + 1000, 2, 11)));
-        assert_eq!(bs.freshness(&[1; 32], 10), Freshness { current_at_ms: Some(T0), behind: true });
-        assert_eq!(bs.freshness(&[3; 32], 12), Freshness { current_at_ms: None, behind: false });
+        assert!(bs.take(b("desk", 1, T0 + 1000, 2, 11), Some(T0)));
+        assert_eq!(bs.freshness(&[1; 32], 10, Some(T0), 0), Freshness { current_at_ms: Some(T0), behind: true });
+        assert_eq!(bs.freshness(&[3; 32], 12, Some(T0), 0), Freshness { current_at_ms: None, behind: false });
         // A signer no longer a witness is forgotten.
         let mut g = G::new();
         g.admin("phone", "phone admin", AdminKind::Phone);
         bs.retain(&g.state());
         assert_eq!(bs.0.len(), 1);
+    }
+
+    /// A beacon dated ahead of the receiver's clock is not used, and each
+    /// admin's evidence counts by itself, whatever the times of others.
+    #[test]
+    fn one_admins_time_never_hides_anothers_evidence() {
+        let b = |who: &str, t, d: u8, count| Beacon {
+            group: k("root").key.device_id(),
+            signer: k(who).hash,
+            n: 1,
+            time_ms: t,
+            digest: [d; 32],
+            count,
+        };
+        let mut bs = Beacons::default();
+        assert!(bs.take(b("phone", T0, 2, 11), Some(T0)));
+        assert!(bs.freshness(&[1; 32], 10, Some(T0), 0).behind);
+        // Far ahead of the clock: not taken.
+        assert!(!bs.take(b("desk", T0 + ALLOWANCE_MS + 1, 1, 10), Some(T0)));
+        assert!(bs.take(b("desk", T0 + ALLOWANCE_MS, 1, 10), Some(T0)));
+        // A later beacon that saw this set does not hide the larger one.
+        let f = bs.freshness(&[1; 32], 10, Some(T0), 0);
+        assert_eq!(f, Freshness { current_at_ms: Some(T0 + ALLOWANCE_MS), behind: true });
+        // Without a clock the time is not judged; the evidence still holds.
+        let mut nc = Beacons::default();
+        assert!(nc.take(b("desk", u64::MAX / 2, 1, 10), None));
+        assert!(nc.take(b("phone", T0, 2, 11), None));
+        assert!(nc.freshness(&[1; 32], 10, None, 0).behind);
+    }
+
+    /// An admin's beacon of a larger set stops counting once it is older
+    /// than the checkpoint this device holds, or than the age of a set.
+    #[test]
+    fn behind_follows_the_newest_checkpoint_and_the_age_of_a_beacon() {
+        let b = |who: &str, t, d: u8, count| Beacon {
+            group: k("root").key.device_id(),
+            signer: k(who).hash,
+            n: 1,
+            time_ms: t,
+            digest: [d; 32],
+            count,
+        };
+        let now = T0 + 90 * 86_400_000;
+        let mut bs = Beacons::default();
+        assert!(bs.take(b("watch", T0, 2, 50), Some(now)));
+        // Ninety days old: says nothing of today's set, with a clock.
+        assert!(!bs.freshness(&[1; 32], 10, Some(now), 0).behind);
+        assert!(bs.freshness(&[1; 32], 10, Some(T0 + MAX_AGE_MS), 0).behind);
+        // Without a clock, the checkpoint the device holds decides.
+        assert!(bs.freshness(&[1; 32], 10, None, 0).behind);
+        assert!(!bs.freshness(&[1; 32], 10, None, T0).behind);
+        assert!(bs.freshness(&[1; 32], 10, None, T0 - 1).behind);
+        // A checkpoint dated ahead of the clock beyond the allowance is not
+        // used; within it, it is.
+        let soon = T0 + 1000;
+        assert!(bs.freshness(&[1; 32], 10, Some(soon), soon + 365 * 86_400_000).behind);
+        assert!(!bs.freshness(&[1; 32], 10, Some(soon), soon + ALLOWANCE_MS).behind);
+        // A newer beacon from the same admin counts again.
+        assert!(bs.take(Beacon { n: 2, ..b("watch", T0 + 10, 3, 11) }, None));
+        assert!(bs.freshness(&[1; 32], 10, None, T0).behind);
+    }
+
+    #[test]
+    fn the_checkpoint_time_comes_from_the_records() {
+        let mut g = G::new();
+        assert_eq!(checkpoint_ms(&g.state(), &g.set), 0);
+        g.device("laptop", ROLE_MEMBER, RIGHT_READ, |_| {});
+        let cp = g.checkpoint(T0);
+        let state = g.state();
+        assert_eq!(state.checkpoint, Some(cp.id()));
+        assert_eq!(checkpoint_ms(&state, &g.set), T0);
     }
 }

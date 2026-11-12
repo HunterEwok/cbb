@@ -60,13 +60,16 @@ fn credentials_of_the_vectors() {
     assert_eq!(credential::check_chain(period, hubs, Some(members)), Ok(()));
     assert_eq!(credential::check_chain(period, members, None), Err(Chain::Hubs));
     assert_eq!(credential::check_chain(&read[1], hubs, None), Err(Chain::Period));
-    // A relay with a fixed list takes the period of a listed group by its root.
+    // A relay with a fixed list takes the period of a listed group by its
+    // first root and its recovery key.
     let root = period.signer.clone();
-    let gid = Key::new(Alg::Es256, &root).device_id().0;
-    assert!(period.period_of_listed_group(&root, &[gid]));
-    assert!(!period.period_of_listed_group(&root, &[[0; 16]]));
+    let recovery = unhex(v["recovery"].as_str().unwrap());
+    let gid = period.group;
+    assert!(period.period_of_listed_group(&root, &recovery, &[gid]));
+    assert!(!period.period_of_listed_group(&root, &root, &[gid]));
+    assert!(!period.period_of_listed_group(&root, &recovery, &[[0; 16]]));
     assert!(
-        !read[1].period_of_listed_group(&read[1].signer, &[read[1].group]),
+        !read[1].period_of_listed_group(&read[1].signer, &recovery, &[read[1].group]),
         "a device's server credential is no period"
     );
     assert!(period.live(period.expires_ms - 1) && !period.live(period.expires_ms));
@@ -154,7 +157,7 @@ fn each_server_its_own_face() {
     for (i, s) in ["server a", "server b", "server c"].iter().enumerate() {
         faces.insert(
             Key::new(Alg::Es256, &k(s).public()).hash(),
-            alias::new_face(k(&format!("period {i}")).public(), &[7; 32], 1_900_000_000_000),
+            alias::new_face(k(&format!("period {i}")).public(), &[7; 32], 1_890_000_000_000, 1_900_000_000_000),
         );
     }
     assert!(alias::distinct(&faces));
@@ -187,8 +190,13 @@ fn each_server_its_own_face() {
     let mut same_expiry = faces.clone();
     same_expiry.insert(Key::new(Alg::Es256, &k("server d").public()).hash(), Face { version: 1, ..fresh(&first) });
     assert!(!alias::distinct(&same_expiry), "one expiry for two servers links them");
-    let e = alias::expiry(1_900_000_000_000);
-    assert!((1_900_000_000_000..1_900_000_000_000 + 2 * alias::DAY_MS).contains(&e));
+    // A face's expiry stays within its period.
+    for _ in 0..200 {
+        let e = alias::expiry(1_890_000_000_000, 1_900_000_000_000);
+        assert!((1_900_000_000_000 - alias::DAY_MS..=1_900_000_000_000).contains(&e));
+        let short = alias::expiry(1_900_000_000_000 - 1000, 1_900_000_000_000);
+        assert!((1_900_000_000_000 - 1000..=1_900_000_000_000).contains(&short));
+    }
     let mut f = first.clone();
     let v = f.version;
     assert_eq!(f.next_version(), v + 1);

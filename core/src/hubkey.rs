@@ -21,12 +21,15 @@
 //!   them, never in their place. The device sends `tunnel` with the new
 //!   key's confirmation tag; the hub keeps the key and answers with the tag
 //!   in its offer; the device then tries the confirmed key first, and every
-//!   other key it keeps after it. A handshake drops no key at either end,
-//!   so either end may come back from an older saved state. So a lost
-//!   `tunnel`, a lost confirmation or a lost step of either end's saved
-//!   state never leaves the two ends without a common key: a switch never
-//!   locks a device out away from home. Anything worse is repaired by the
-//!   next direct connection.
+//!   other key it keeps after it. A handshake drops no key at either end.
+//! - **How far back.** The two ends share a key after: a lost `tunnel` or
+//!   a lost confirmation (up to 4 confirmations lost and then 4 `tunnel`
+//!   messages lost); a hub back from a saved state at most 4 of the
+//!   device's connections old; a device back from a saved state that still
+//!   holds one of the hub's last 4 received keys or its last 2 handshake
+//!   keys (about 3 connections at home with a trip after each). Beyond
+//!   that the device is out away from home until its next direct
+//!   connection with the hub, which mends it. Nothing more is promised.
 //! - **The responder's answer** (for the service, wave 5): WireGuard mixes
 //!   the pre-shared key in at the responder's answer, so a hub that accepts
 //!   several keys answers once with each key it holds, in the order of
@@ -37,7 +40,10 @@
 //!   connection whose key exchange was X25519MLKEM768 ([`psk`] takes no
 //!   other).
 //! - **The hub's key toward forwarders** is per face ([`hub_key_for_face`]):
-//!   two forwarders a hub registers with see two keys.
+//!   two forwarders a hub registers with see two keys. The hub serves
+//!   WireGuard under that key on that forwarder's endpoints, and its offer
+//!   says so per endpoint (`offer` field 9); an endpoint without one uses
+//!   the offer's key.
 //! - **No client lists between hubs.** Away from home a device uses only
 //!   hubs it has met directly; `hubs` carries no clients and no offers.
 //!

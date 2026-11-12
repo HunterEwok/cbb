@@ -151,14 +151,6 @@ func tyOK(ty string, v any) bool {
 		return true
 	case "map":
 		return checkTable(w[1], v) == ""
-	case "age":
-		a, ok := v.([]any)
-		if !ok || len(a) != 2 {
-			return false
-		}
-		id, ok1 := a[0].([]byte)
-		_, ok2 := a[1].(uint64)
-		return ok1 && ok2 && len(id) == 32
 	}
 	panic("type " + ty)
 }
@@ -186,17 +178,29 @@ func checkTable(name string, v any) string {
 		}
 	}
 	// The rules between fields of a map: AmneziaWG's junk sizes, and below
-	// one age per claim in a Welcome.
+	// the retired fields of a Welcome.
 	if name == "obfuscation" && m[uint64(2)].(uint64) > m[uint64(3)].(uint64) {
 		return "obfuscation/jmax"
 	}
-	// One age per claim in a Welcome: the IDs rise.
-	if ages, ok := m[uint64(3)].([]any); ok && name == "welcome" {
-		for i := 1; i < len(ages); i++ {
-			if bytes.Compare(ages[i-1].([]any)[0].([]byte), ages[i].([]any)[0].([]byte)) >= 0 {
-				return "welcome/claim-ages"
+	// An offer's endpoint keys each name one of its endpoints, once.
+	if keys, ok := m[uint64(9)].([]any); ok && name == "offer" {
+		eps, _ := m[uint64(2)].([]any)
+		seen := map[string]bool{}
+		for _, k := range keys {
+			e, _ := k.(map[any]any)[uint64(1)].(string)
+			listed := false
+			for _, x := range eps {
+				listed = listed || x == e
 			}
+			if !listed || seen[e] {
+				return "offer/endpoint-keys"
+			}
+			seen[e] = true
 		}
+	}
+	// Fields 3 (claim ages) and 8 (counted claims) of earlier drafts.
+	if _, three := m[uint64(3)]; name == "welcome" && (three || m[uint64(8)] != nil) {
+		return "welcome/retired"
 	}
 	return ""
 }
@@ -423,8 +427,8 @@ func addrOK(s string) bool {
 // lower-case DNS name whose last label is neither all digits nor starts
 // with 0x, with its port.
 func endpointOK(s string) bool {
-	if _, err := netip.ParseAddrPort(s); err == nil {
-		return addrOK(s)
+	if ap, err := netip.ParseAddrPort(s); err == nil {
+		return addrOK(s) && publicIP(ap.Addr())
 	}
 	i := strings.LastIndexByte(s, ':')
 	if i < 0 {
@@ -437,13 +441,47 @@ func endpointOK(s string) bool {
 	}
 	labels := strings.Split(host, ".")
 	last := labels[len(labels)-1]
-	if strings.HasPrefix(last, "0x") || strings.Trim(last, "0123456789") == "" {
+	if strings.HasPrefix(last, "0x") || strings.Trim(last, "0123456789") == "" || last == "localhost" || last == "local" {
 		return false
 	}
 	for _, l := range labels {
-		if l == "" || len(l) > 63 || l[0] == '-' || strings.Trim(l, "abcdefghijklmnopqrstuvwxyz0123456789-") != "" {
+		if l == "" || len(l) > 63 || l[0] == '-' || l[len(l)-1] == '-' || strings.Trim(l, "abcdefghijklmnopqrstuvwxyz0123456789-") != "" {
 			return false
 		}
+	}
+	return true
+}
+
+// publicV4 reports whether an IPv4 address is none of this network, private,
+// shared, loopback, link-local, multicast or reserved.
+func publicV4(b [4]byte) bool {
+	x, y := b[0], b[1]
+	return !(x == 0 || x == 10 || x == 127 || x >= 224 || (x == 172 && y >= 16 && y < 32) ||
+		(x == 192 && y == 168) || (x == 100 && y >= 64 && y < 128) || (x == 169 && y == 254))
+}
+
+// publicIP reports whether a card may name the address: a public IPv4
+// address, or an IPv6 address that is not loopback, unspecified, multicast,
+// link-local, site-local or unique-local, nor a refused IPv4 address in a
+// translated, NAT64 or 6to4 form.
+func publicIP(a netip.Addr) bool {
+	if a.Is4() {
+		return publicV4(a.As4())
+	}
+	p := a.As16()
+	v4 := func(b []byte) bool { return publicV4([4]byte(b)) }
+	first := uint16(p[0])<<8 | uint16(p[1])
+	switch {
+	case a.IsLoopback(), a.IsUnspecified(), a.IsMulticast():
+		return false
+	case first&0xffc0 == 0xfe80, first&0xffc0 == 0xfec0, first&0xfe00 == 0xfc00:
+		return false
+	case bytes.Equal(p[:12], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0, 0}) && !v4(p[12:]):
+		return false
+	case bytes.Equal(p[:12], []byte{0, 0x64, 0xff, 0x9b, 0, 0, 0, 0, 0, 0, 0, 0}) && !v4(p[12:]):
+		return false
+	case first == 0x2002 && !v4(p[2:6]):
+		return false
 	}
 	return true
 }
