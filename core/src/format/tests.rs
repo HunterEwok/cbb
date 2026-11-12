@@ -352,6 +352,39 @@ fn record_sets_hold(m: &Value<'_>) -> bool {
         })
 }
 
+/// Whether a checkpoint names its own key's head below its own seq (or
+/// not at all).
+fn own_head_before(m: &Value<'_>) -> bool {
+    let (Some(signer), Some(seq)) = (m.get(3).and_then(Value::as_bytes), m.get(4).and_then(Value::as_uint)) else {
+        return false;
+    };
+    m.get(10).and_then(Value::as_array).unwrap_or(&[]).iter().all(|h| match h.as_array() {
+        Some([Value::Bytes(k), Value::Uint(n), _]) if k == &signer => *n < seq,
+        _ => true,
+    })
+}
+
+#[test]
+fn checkpoints_name_heads_before_themselves() {
+    let r = load("records.json");
+    let mut refused = 0;
+    for (verdict, list) in [("take", &r["take"]), ("refuse", &r["refuse"])] {
+        for t in list.as_array().unwrap() {
+            let b = unhex(s(t, "envelope"));
+            let Ok(e) = Envelope::parse(&b) else { continue };
+            if e.map.get(1) != Some(&Value::Uint(9)) {
+                continue;
+            }
+            let own = verdict == "refuse" && s(t, "rule") == "records/checkpoint/own-head";
+            if verdict == "take" || own {
+                assert_eq!(own_head_before(&e.map), !own, "{}", s(t, "name"));
+                refused += usize::from(own);
+            }
+        }
+    }
+    assert_eq!(refused, 2);
+}
+
 #[test]
 fn sets_keep_their_order() {
     let r = load("records.json");
