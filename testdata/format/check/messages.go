@@ -152,6 +152,14 @@ func tyOK(ty string, v any) bool {
 		return true
 	case "map":
 		return checkTable(w[1], v) == ""
+	case "age":
+		a, ok := v.([]any)
+		if !ok || len(a) != 2 {
+			return false
+		}
+		id, ok1 := a[0].([]byte)
+		_, ok2 := a[1].(uint64)
+		return ok1 && ok2 && len(id) == 32
 	}
 	panic("type " + ty)
 }
@@ -178,9 +186,18 @@ func checkTable(name string, v any) string {
 			return r.Rule
 		}
 	}
-	// The one rule between fields of a map: AmneziaWG's junk sizes.
+	// The rules between fields of a map: AmneziaWG's junk sizes, and below
+	// one age per claim in a Welcome.
 	if name == "obfuscation" && m[uint64(2)].(uint64) > m[uint64(3)].(uint64) {
 		return "obfuscation/jmax"
+	}
+	// One age per claim in a Welcome: the IDs rise.
+	if ages, ok := m[uint64(3)].([]any); ok && name == "welcome" {
+		for i := 1; i < len(ages); i++ {
+			if bytes.Compare(ages[i-1].([]any)[0].([]byte), ages[i].([]any)[0].([]byte)) >= 0 {
+				return "welcome/claim-ages"
+			}
+		}
 	}
 	return ""
 }

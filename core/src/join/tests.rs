@@ -339,8 +339,12 @@ fn the_joiner_checks_its_welcome() {
     assert!(w.check(&group, &point(&k("phone")), &point(&tab)).is_ok());
     assert_eq!(w.check(&group, &point(&k("laptop")), &point(&tab)).err(), Some(welcome::Refusal::NotAdmitter));
 
-    // The encoding reads back.
+    // The encoding reads back, with the claims the admitter counted.
     assert_eq!(Welcome::decode(&w.encode()).unwrap(), w);
+    let mut counted = w.clone();
+    counted.counted = vec![RecordId([2; 32]), RecordId([1; 32])];
+    let back = Welcome::decode(&counted.encode()).unwrap();
+    assert_eq!(back.counted, vec![RecordId([1; 32]), RecordId([2; 32])], "written sorted");
     // The encoding's parts read back.
     let (root, envs, ages, time) = Welcome::parts(&w.encode()).unwrap();
     assert_eq!(root, g.root.key.public);

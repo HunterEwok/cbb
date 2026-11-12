@@ -86,3 +86,21 @@ fn cards_of_the_vectors() {
         assert_eq!(got, r["rule"].as_str(), "{}", r["name"]);
     }
 }
+
+#[test]
+#[ignore = "prints the tables in gen.py's form"]
+fn print_tables() {
+    for t in tables::ALL {
+        println!("    \"{}\": [", t.name());
+        for f in t.fields {
+            println!(
+                "        ({}, \"{}\", \"{}\", {}),",
+                f.n,
+                f.rule,
+                f.ty.describe(),
+                if f.needed { "True" } else { "False" }
+            );
+        }
+        println!("    ],");
+    }
+}

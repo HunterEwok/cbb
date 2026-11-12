@@ -61,9 +61,24 @@ pub static WELCOME: Table = Table {
     fields: &[
         f(1, "welcome/root", MEMBER_KEY, true),
         f(2, "welcome/records", Ty::Array { of: &ENV, max: 4096 }, true),
+        f(3, "welcome/claim-ages", Ty::Set { of: &Ty::Age, max: 4096 }, false),
         f(4, "welcome/keys", Ty::Array { of: &ENV, max: 256 }, false),
         f(5, "welcome/time", MS, true),
+        f(6, "welcome/grant", Ty::Map(&GRANT), false),
         f(7, "welcome/credentials", Ty::Array { of: &ENV, max: 259 }, false),
+        f(8, "welcome/counted", Ty::Set { of: &B32, max: 16 }, false),
+    ],
+};
+
+/// A leaf's first grant in a Welcome: the fields 2–5 of message `grant`
+/// (format section 7), read by the grant's own reader.
+pub static GRANT: Table = Table {
+    shape: "welcome/grant/shape",
+    fields: &[
+        f(2, "welcome/grant", ENV, true),
+        f(3, "welcome/grant", Ty::BytesUpTo(8192), true),
+        f(4, "welcome/grant", Ty::Array { of: &B32, max: 8 }, false),
+        f(5, "welcome/grant", Ty::Uint { min: 1, max: u32::MAX as u64 }, false),
     ],
 };
 
@@ -354,6 +369,7 @@ pub static ALL: &[&Table] = &[
     &PAIR_DONE,
     &PAIR_ERROR,
     &WELCOME,
+    &GRANT,
     &INFO,
     &INVITE,
     &PATH,

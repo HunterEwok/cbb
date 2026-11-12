@@ -1166,9 +1166,18 @@ TABLES = {
     "welcome": [
         (1, "welcome/root", "key 1", True),
         (2, "welcome/records", "array 1..4096 of envelope", True),
+        (3, "welcome/claim-ages", "set 1..4096 of age", False),
         (4, "welcome/keys", "array 1..256 of envelope", False),
         (5, "welcome/time", "uint 1..9223372036854775807", True),
+        (6, "welcome/grant", "map welcome/grant", False),
         (7, "welcome/credentials", "array 1..259 of envelope", False),
+        (8, "welcome/counted", "set 1..16 of bytes 32", False),
+    ],
+    "welcome/grant": [
+        (2, "welcome/grant", "envelope", True),
+        (3, "welcome/grant", "bytes 1..8192", True),
+        (4, "welcome/grant", "array 1..8 of bytes 32", False),
+        (5, "welcome/grant", "uint 1..4294967295", False),
     ],
     "pair/info": [
         (1, "pair/info/name", "text 1..64", True),
@@ -1311,16 +1320,16 @@ TABLES = {
     ],
     "relay/ok": [
     ],
-    "member-credentials": [
-        (2, "member-credentials/list", "array 1..259 of envelope", True),
-        (3, "member-credentials/obfuscation", "map obfuscation", False),
-    ],
     "result": [
         (2, "result/id", "bytes 16", True),
         (3, "result/by", "bytes 16", True),
         (4, "result/status", "uint 1..3", True),
         (5, "result/reason", "text 1..256", False),
         (6, "result/tunnel", "map offer", False),
+    ],
+    "member-credentials": [
+        (2, "member-credentials/list", "array 1..259 of envelope", True),
+        (3, "member-credentials/obfuscation", "map obfuscation", False),
     ],
 }
 
@@ -1405,6 +1414,9 @@ def ty_ok(ty, v):
         return all(ty_ok(inner, x) for x in v)
     if w[0] == "map":
         return check_map(w[1], v) is None
+    if w[0] == "age":
+        return (isinstance(v, list) and len(v) == 2 and isinstance(v[0], bytes) and len(v[0]) == 32
+                and isinstance(v[1], int))
     raise ValueError(ty)
 
 
@@ -1421,6 +1433,8 @@ def check_map(name, v):
     # The one rule between fields of a map: AmneziaWG's junk sizes.
     if name == "obfuscation" and v[2] > v[3]:
         return "obfuscation/jmax"
+    if name == "welcome" and 3 in v and any(a[0] >= b[0] for a, b in zip(v[3], v[3][1:])):
+        return "welcome/claim-ages"
     return None
 
 
@@ -1538,6 +1552,19 @@ def wave3_vectors(records_take):
     mp("a request", "waiting/request", request)
     mp("a Welcome", "welcome", welcome)
     mp("a Welcome without its time", "welcome", {1: ROOT.key, 2: welcome[2]}, "welcome/time")
+    claims = sorted([fake("claim a", 32), fake("claim b", 32)])
+    later = {**welcome, 3: [[claims[0], 3600000], [claims[1], 0]], 8: claims}
+    mp("a Welcome with claim ages and the claims the admitter counted", "welcome", later)
+    mp("a Welcome: counted out of order", "welcome", {**later, 8: list(reversed(claims))}, "welcome/counted")
+    mp("a Welcome: a claim counted twice", "welcome", {**later, 8: [claims[0]] * 2}, "welcome/counted")
+    mp("a Welcome: 17 claims counted", "welcome", {**later, 8: sorted(fake(f"c{i}", 32) for i in range(17))},
+       "welcome/counted")
+    mp("a Welcome: claim ages out of order", "welcome", {**later, 3: list(reversed(later[3]))},
+       "welcome/claim-ages")
+    mp("a Welcome: two ages for one claim", "welcome", {**later, 3: [[claims[0], 1], [claims[0], 2]]},
+       "welcome/claim-ages")
+    mp("a Welcome: an age without its claim's ID", "welcome", {**later, 3: [[claims[0][:16], 1]]},
+       "welcome/claim-ages")
     return take, refuse, maps
 
 

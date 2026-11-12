@@ -33,6 +33,7 @@ pub const RULE_SHAPE: Rule = Rule::field("welcome/shape");
 pub const RULE_ROOT: Rule = Rule::field("welcome/root");
 /// A record of the Welcome that does not read (`Record::decode`).
 pub const RULE_RECORD: Rule = Rule::field("welcome/record");
+pub const RULE_AGES: Rule = Rule::field("welcome/claim-ages");
 
 /// The Welcome.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
@@ -51,6 +52,9 @@ pub struct Welcome {
     pub grant: Option<Vec<u8>>,
     /// The current period's server credentials, as envelopes.
     pub credentials: Vec<Vec<u8>>,
+    /// The claims the admitter has counted, sorted: a takeover a member
+    /// counted is final for it, and the joiner takes them as its own.
+    pub counted: Vec<RecordId>,
 }
 
 /// Why the joiner does not take a Welcome.
@@ -108,6 +112,7 @@ impl Welcome {
             time_ms,
             grant: None,
             credentials: Vec::new(),
+            counted: Vec::new(),
         }
     }
 
@@ -142,6 +147,12 @@ impl Welcome {
         if !self.credentials.is_empty() {
             m.push((7, Value::Array(values(&self.credentials).unwrap_or_default())));
         }
+        let mut counted = self.counted.clone();
+        counted.sort();
+        counted.dedup();
+        if !counted.is_empty() {
+            m.push((8, Value::Array(counted.iter().map(|id| Value::Bytes(&id.0)).collect())));
+        }
         Value::Map(m).encode()
     }
 
@@ -150,6 +161,7 @@ impl Welcome {
     #[allow(clippy::type_complexity, reason = "the parts as they come")]
     pub fn parts(b: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>, Vec<(RecordId, u64)>, u64), Rule> {
         let v = cbor::decode(b)?;
+        crate::msg::check_map(&crate::msg::tables::WELCOME, &v)?;
         let root = crate::format::Key::from_value(v.get(1).ok_or(RULE_ROOT)?).map_err(|_| RULE_ROOT)?;
         if root.alg != Alg::Es256 || root.check().is_err() {
             return Err(RULE_ROOT);
@@ -166,6 +178,10 @@ impl Welcome {
                     return Err(RULE_SHAPE);
                 };
                 ages.push((RecordId(id), ms));
+            }
+            // One age per claim: the IDs rise.
+            if ages.windows(2).any(|w| w.first().map(|a| a.0) >= w.last().map(|a| a.0)) {
+                return Err(RULE_AGES);
             }
         }
         let time = v.get(5).and_then(Value::as_uint).ok_or(RULE_SHAPE)?;
@@ -189,7 +205,16 @@ impl Welcome {
             Some(g) if g.as_map().is_some() => Some(g.encode()),
             Some(_) => return Err(RULE_SHAPE),
         };
-        Ok(Welcome { root, records, claim_ages, keys: list(4)?, time_ms, grant, credentials: list(7)? })
+        let counted = match v.get(8) {
+            None => Vec::new(),
+            Some(a) => a
+                .as_array()
+                .ok_or(RULE_SHAPE)?
+                .iter()
+                .map(|x| x.as_bytes().and_then(|b| <[u8; 32]>::try_from(b).ok()).map(RecordId).ok_or(RULE_SHAPE))
+                .collect::<Result<Vec<_>, _>>()?,
+        };
+        Ok(Welcome { root, records, claim_ages, keys: list(4)?, time_ms, grant, credentials: list(7)?, counted })
     }
 
     /// The joiner's checks. `group` is the group ID the code exchange gave
