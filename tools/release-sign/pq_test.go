@@ -62,11 +62,19 @@ func ecFile(t *testing.T, dir string) string {
 // finds it and signs twice.
 func TestPQNew(t *testing.T) {
 	fakeAge(t)
-	asked := testPassphrase(t, "the owner's passphrase")
 	dir := t.TempDir()
 	t.Setenv("CBB_RELEASE_PQ_DIR", filepath.Join(dir, "pq"))
 	ec := ecFile(t, dir)
 	id := write(t, filepath.Join(dir, "yubikey.identity"), []byte("age1yubikey1test\n"))
+	// A short new passphrase is refused, and nothing is written.
+	testPassphrase(t, "twelve chars")
+	if pqNew([]string{"-key", "file:" + ec, "-to", "age1yubikey1test", "-identity", id}) == nil {
+		t.Error("pq-new took a short passphrase")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "pq")); !os.IsNotExist(err) {
+		t.Errorf("a refused passphrase left pq: %v", err)
+	}
+	asked := testPassphrase(t, "the owner's passphrase of five words")
 	pubs := call(t, pqNew, "-key", "file:"+ec, "-to", "age1yubikey1test", "-identity", id, "-name", "root-9")
 	roots, err := release.ParseRoots(pubs)
 	if err != nil || len(roots) != 2 || roots[0].Name != "root-9" {
@@ -140,7 +148,7 @@ func TestPQNew(t *testing.T) {
 	if pqNew([]string{"-key", "file:" + ec2, "-to", "age1yubikey1test", "-identity", id}) == nil || n != 1 {
 		t.Errorf("pq-new sealed a half with another passphrase (asked %d)", n)
 	}
-	readPassphrase = func(string) ([]byte, error) { return []byte("the owner's passphrase"), nil }
+	readPassphrase = func(string) ([]byte, error) { return []byte("the owner's passphrase of five words"), nil }
 	s := release.Signer{c, pq}
 	at := now().UnixMilli()
 	kb := release.Keys{V: 1, Type: release.TypeKeys, Seq: 1, TimeMS: at, ExpiresMS: at + 86_400_000, Keys: must(s.Keys("release", ""))}
@@ -182,6 +190,9 @@ func TestPQNew(t *testing.T) {
 // and CLASSICAL+slh:FILE signs with it.
 func TestPQNewForAServer(t *testing.T) {
 	dir := t.TempDir()
+	prev := stdoutIsPipe
+	stdoutIsPipe = func() bool { return true }
+	t.Cleanup(func() { stdoutIsPipe = prev })
 	ec := ecFile(t, dir)
 	pubPath := filepath.Join(dir, "channel.pem")
 	secret := call(t, pqNew, "-key", "file:"+ec, "-out", "-", "-public", pubPath)
@@ -214,14 +225,27 @@ func TestPQNewForAServer(t *testing.T) {
 	if pqNew([]string{"-key", "file:" + ec, "-out", "-"}) == nil {
 		t.Error("-out - without -public")
 	}
-	// Never to a terminal.
-	prev := isTerminal
-	isTerminal = func(*os.File) bool { return true }
+	// Only into a pipe: never a terminal or a file.
+	stdoutIsPipe = func() bool { return false }
 	err = pqNew([]string{"-key", "file:" + ec, "-out", "-", "-public", filepath.Join(dir, "p2.pem")})
-	isTerminal = prev
+	stdoutIsPipe = func() bool { return true }
 	if err == nil {
-		t.Error("pq-new wrote the private half to a terminal")
+		t.Error("pq-new wrote the private half elsewhere than into a pipe")
 	}
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := os.Create(filepath.Join(dir, "plain"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !isPipe(r) || !isPipe(w) || isPipe(plain) {
+		t.Errorf("isPipe: %v %v %v", isPipe(r), isPipe(w), isPipe(plain))
+	}
+	r.Close()
+	w.Close()
+	plain.Close()
 	// -out FILE: a new file only its owner reads.
 	half := filepath.Join(dir, "status-pq.pem")
 	call(t, pqNew, "-key", "file:"+ec, "-out", half, "-public", filepath.Join(dir, "status.pem"))
@@ -254,14 +278,14 @@ func TestCutPaths(t *testing.T) {
 	}
 }
 
-// testPassphrase answers the passphrase prompts with p, at a low scrypt
-// cost, and counts them.
 // kb0 is a channel body to sign in the tests.
 func kb0() release.Channel {
 	return release.Channel{V: 1, Type: release.TypeChannel, Channel: "stable", Seq: 1,
 		TimeMS: now().UnixMilli(), ExpiresMS: now().UnixMilli() + 86_400_000, Release: "0.6.0", ReleaseSHA256: strings.Repeat("ab", 32)}
 }
 
+// testPassphrase answers the passphrase prompts with p, at a low scrypt
+// cost, and counts them.
 func testPassphrase(t *testing.T, p string) *int {
 	asked := 0
 	prevRead, prevN := readPassphrase, sealLogN
@@ -292,9 +316,11 @@ func TestSeal(t *testing.T) {
 	if _, err := unseal([]byte("right passphrase"), box, "another key"); err == nil {
 		t.Error("the seal opened for another key")
 	}
-	raised := bytes.Replace(box, []byte("scrypt 10 "), []byte("scrypt 30 "), 1)
-	if _, err := unseal([]byte("right passphrase"), raised, "name"); err == nil || errors.Is(err, errPassphrase) {
-		t.Errorf("a cost out of range: %v", err)
+	for _, cost := range []string{"scrypt 30 8 1", "scrypt 21 8 1", "scrypt 10 17 1", "scrypt 10 8 5", "scrypt 9 8 1", "scrypt 10 0 1", "scrypt 10 8 0"} {
+		raised := bytes.Replace(box, []byte("scrypt 10 8 1"), []byte(cost), 1)
+		if _, err := unseal([]byte("right passphrase"), raised, "name"); err == nil || errors.Is(err, errPassphrase) {
+			t.Errorf("a cost out of range, %s: %v", cost, err)
+		}
 	}
 	if _, err := unseal([]byte("right passphrase"), box[:40], "name"); err == nil {
 		t.Error("a seal cut short opened")

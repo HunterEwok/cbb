@@ -559,12 +559,15 @@ fn go_release() {
     let now = v["now_ms"].as_i64().unwrap();
     let cases = v["vectors"].as_array().unwrap();
     assert_eq!(cases.len(), 53);
+    // Every reader of release files reads up to the same sizes.
+    assert_eq!(v["max_file"].as_u64(), Some(release::MAX_FILE as u64));
+    assert_eq!(v["max_body"].as_u64(), Some(release::MAX_BODY as u64));
     // A release.json as it comes, under one keys.json and channel file
     // (go-release-envelopes.json): an envelope read otherwise than Go reads
     // it refuses.
     let ev = vectors("go-release-envelopes.json");
     let envelopes = ev["envelopes"].as_array().unwrap();
-    assert_eq!(envelopes.len(), 18);
+    assert_eq!(envelopes.len(), 21);
     let env_roots: Vec<release::Key> = serde_json::from_value(ev["roots"].clone()).unwrap();
     let keys: File = serde_json::from_value(ev["keys"].clone()).unwrap();
     let channel: File = serde_json::from_value(ev["channel_file"].clone()).unwrap();

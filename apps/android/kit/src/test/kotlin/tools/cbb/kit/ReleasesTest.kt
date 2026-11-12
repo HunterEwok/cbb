@@ -22,6 +22,8 @@ class ReleasesTest {
         val now = v.getValue("now_ms").jsonPrimitive.long
         val cases = v.getValue("vectors").jsonArray.map { it.jsonObject }
         assertEquals(53, cases.size)
+        // Every reader of release files reads up to the same size.
+        assertEquals(Releases.MAX_FILE, v.getValue("max_file").jsonPrimitive.int)
         // Each case names its files by their index in files.
         val files = v.getValue("files").jsonArray.map { Releases.File.fromJson(it.jsonObject) }
         for (c in cases) {

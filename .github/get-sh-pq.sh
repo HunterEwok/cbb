@@ -24,7 +24,7 @@ run() { sh packaging/get.sh --no-firewall --no-helper >"$rel/out" 2>&1 || true; 
 "$sign" drill -version 0.6.0 "$rel" "$rel/roots.pem"
 run
 grep -F "signature checks out (0.6.0): ES256 and SLH-DSA-SHA2-128s" "$rel/out" || { cat "$rel/out"; exit 1; }
-for f in broken-pq no-pq same-name; do
+for f in broken-pq no-pq same-name high-s broken-twin alg-zero; do
 	"$sign" drill -version 0.6.0 -fault "$f" "$rel" "$rel/roots.pem"
 	run
 	if grep -q "signature checks out" "$rel/out"; then

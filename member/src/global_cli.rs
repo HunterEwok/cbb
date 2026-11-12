@@ -551,8 +551,8 @@ fn resolve_addr_port(s: &str) -> Result<String> {
 /// to another (docs/protocol.md, section 16, "Entry points").
 const ENTRIES_PREFIX: &str = "cbb-entries:";
 
-/// The largest body of a signed file, as Go's release.MaxBody.
-const MAX_BODY: usize = 256 << 10;
+/// The largest body of a signed file.
+const MAX_BODY: usize = cbb_core::release::MAX_BODY;
 
 /// cbb global entries: shows the signed entry points this device holds,
 /// gives them as a string or a QR code for another device, or takes them

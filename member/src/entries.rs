@@ -98,7 +98,7 @@ impl Entries {
         let Ok(set) = serde_json::from_value::<Set>(set) else { return Vec::new() };
         let roots = &self.roots;
         let Ok(keys) = release::verify_keys(&set.keys, roots, now_ms, &Seen::default()) else { return Vec::new() };
-        keys.keys.into_iter().filter(|k| k.usage == "relay" && k.name == name).map(|k| k.key).collect()
+        keys.relays(name)
     }
 
     /// Where the list held says the project's relay `name` is reached now,

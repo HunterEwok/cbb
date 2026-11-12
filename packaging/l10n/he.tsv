@@ -257,3 +257,4 @@ cbb for MIPS has no sync away from home yet (roadmap item 37).	ל־cbb עבור 
 --no-helper is for Linux	‏--no-helper מיועד ל־Linux בלבד
 cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	כאן cbb פועל עם העוזר שלו, שעשוי להחזיק את המפתחות שלו; בלעדיו cbb לא יכול להשתמש בהם. הסירו אותו קודם: %s
 --uinput needs cbb's helper, which runs the desktop connector	‏--uinput דורש את העוזר של cbb, שמריץ את המחבר של שולחן העבודה
+%s has SLH-DSA-SHA2-128s but does not check it as cbb signs it; update openssl (or CBB_VERIFY=skip to install unchecked)	%s כולל SLH-DSA-SHA2-128s אך אינו בודק אותו כפי ש-cbb חותם; עדכנו את openssl (או CBB_VERIFY=skip כדי להתקין בלי בדיקה)

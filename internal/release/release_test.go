@@ -159,6 +159,8 @@ type vectorsFile struct {
 	Roots   []Key  `json:"roots"`
 	NowMS   int64  `json:"now_ms"`
 	Name    string `json:"channel"`
+	MaxFile int    `json:"max_file"`
+	MaxBody int    `json:"max_body"`
 	Files   []File `json:"files"`
 	Vectors []struct {
 		Name    string `json:"name"`
@@ -211,7 +213,7 @@ func (t *fileTable) add(f File) int {
 
 func (v vectors) MarshalJSON() ([]byte, error) {
 	var t fileTable
-	out := vectorsFile{Roots: v.Roots, NowMS: v.NowMS, Name: v.Name}
+	out := vectorsFile{Roots: v.Roots, NowMS: v.NowMS, Name: v.Name, MaxFile: MaxFile, MaxBody: MaxBody}
 	for _, c := range v.Vectors {
 		out.Vectors = append(out.Vectors, struct {
 			Name    string `json:"name"`
@@ -247,6 +249,10 @@ func (v *vectors) UnmarshalJSON(b []byte) error {
 			return File{}
 		}
 		return in.Files[i]
+	}
+	// Every reader of release files reads up to the same sizes.
+	if in.MaxFile != MaxFile || in.MaxBody != MaxBody {
+		return fmt.Errorf("the file's limits are %d and %d, the reader's %d and %d", in.MaxFile, in.MaxBody, MaxFile, MaxBody)
 	}
 	*v = vectors{Roots: in.Roots, NowMS: in.NowMS, Name: in.Name}
 	for _, c := range in.Vectors {
@@ -431,6 +437,9 @@ func makeVectors(t *testing.T) vectors {
 	env("with a signature whose alg is named in capitals", `{"body":"`+body+`","sigs":[`+both+`,{"Alg":9,"key":"CQ==","sig":"Bw=="}]}`, false)
 	env("with a signature whose key is null", `{"body":"`+body+`","sigs":[`+both+`,{"alg":9,"key":null,"sig":"Bw=="}]}`, false)
 	env("with a signature whose alg is given twice", `{"body":"`+body+`","sigs":[{"alg":1,"alg":1,"key":"`+base64.StdEncoding.EncodeToString(rel.Sigs[0].Key)+`","sig":"`+base64.StdEncoding.EncodeToString(rel.Sigs[0].Sig)+`"},`+sig(1)+`]}`, false)
+	env("with a member of a later version whose name escapes a whole surrogate pair", `{"body":"`+body+`","sigs":[`+both+`],"later\ud83d\ude00":1}`, true)
+	env("with a member whose name escapes half a surrogate pair", `{"body":"`+body+`","sigs":[`+both+`],"bod\ud800":1}`, false)
+	env("with a signature with a member whose name escapes half a surrogate pair", `{"body":"`+body+`","sigs":[`+both+`,{"alg":9,"key":"CQ==","sig":"Bw==","\udc00":1}]}`, false)
 	env("with a signature that is not an object", `{"body":"`+body+`","sigs":[`+both+`,[9]]}`, false)
 
 	revoked := []string{"0", "1f", "9a", "c35a2e1e3b46b5a1", "15b3d8b2f3a0e3e3cc1d2a4e1f0b7c9d"}
@@ -509,7 +518,7 @@ func TestReleaseVectors(t *testing.T) {
 	if err := json.Unmarshal(envData, &env); err != nil {
 		t.Fatal(err)
 	}
-	if len(env.Envelopes) != 18 {
+	if len(env.Envelopes) != 21 {
 		t.Fatalf("%d envelopes", len(env.Envelopes))
 	}
 	for _, c := range env.Envelopes {

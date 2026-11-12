@@ -293,11 +293,12 @@ strict() {
 checked=
 algorithms() {
 	checked=1
-	# The post-quantum half only where this openssl signs and checks it as
-	# the project does, with the context "cbb release v1": a round trip with
-	# a key of its own, which another context must refuse, so that an
-	# openssl that reads the options otherwise checks one signature rather
-	# than refusing every release.
+	# The post-quantum half where this openssl has SLH-DSA (OpenSSL 3.5 and
+	# later). It must sign and check it as the project does, with the
+	# context "cbb release v1": a round trip with a key of its own, which
+	# another context must refuse. An openssl that has SLH-DSA and reads the
+	# options otherwise stops the install rather than checking one
+	# signature quietly.
 	openssl list -signature-algorithms 2>/dev/null | grep -qi 'SLH-DSA-SHA2-128s' || return 0
 	printf 'cbb' >"$tmp/slh.msg"
 	openssl genpkey -algorithm SLH-DSA-SHA2-128s -out "$tmp/slh.key" 2>/dev/null &&
@@ -307,6 +308,8 @@ algorithms() {
 		! openssl pkeyutl -verify -pubin -inkey "$tmp/slh.pub" -rawin -in "$tmp/slh.msg" -sigfile "$tmp/slh.sig" -pkeyopt "context-string:cbb release v0" >/dev/null 2>&1 &&
 		checked="1 4"
 	rm -f "$tmp/slh.key" "$tmp/slh.pub" "$tmp/slh.sig" "$tmp/slh.msg"
+	[ "$checked" = "1 4" ] ||
+		fail "%s has SLH-DSA-SHA2-128s but does not check it as cbb signs it; update openssl (or CBB_VERIFY=skip to install unchecked)" "$(openssl version)"
 }
 slh_verify() {
 	openssl pkeyutl -verify -pubin -inkey "$1" -rawin -in "$3" -sigfile "$2" -pkeyopt "context-string:cbb release v1" >/dev/null 2>&1
@@ -329,6 +332,30 @@ roots_list() {
 	'
 }
 
+# small FILE tells whether FILE is no larger than a release file may be,
+# 1 MiB.
+small() { [ "$(wc -c <"$1" | tr -d ' ')" -le 1048576 ]; }
+
+# algs_valid tells whether every line of its input is an algorithm number
+# as the readers take it: 1 to 2^31-1, written without leading zeros.
+algs_valid() {
+	awk '!/^[1-9][0-9]*$/ || length($0) > 10 || $0 + 0 > 2147483647 { bad = 1 } END { exit bad }'
+}
+
+# low_s FILE tells whether the ES256 signature in FILE (DER) has the low S,
+# at most half the order of P-256, the one form every reader takes.
+low_s() {
+	s=$(openssl asn1parse -inform DER -in "$1" 2>/dev/null | awk -F: '/INTEGER/ { v = $NF } END { print v }')
+	[ -n "$s" ] || return 1
+	awk -v s="$s" 'BEGIN {
+		h = "7FFFFFFF800000007FFFFFFFFFFFFFFFDE737D56D38BCF4279DCE5617E3192A8"
+		s = toupper(s); sub(/^0+/, "", s)
+		if (length(s) > 64) exit 1
+		while (length(s) < 64) s = "0" s
+		exit !(s <= h)
+	}'
+}
+
 # opened FILE NAME LIST USES... checks the envelope in FILE with the keys of
 # LIST (lines "ALG USE KEY NAME") of the uses USES, and leaves its body in
 # $tmp/NAME.body. It takes the file when the halves of one key signed it
@@ -342,8 +369,14 @@ opened() {
 	field body "$f" | openssl base64 -d -A >"$tmp/$kind.body" 2>/dev/null || return 1
 	# Each signature read whole, in the form the signer writes; one that
 	# does not read so refuses the file, as it does in every reader.
+	small "$f" || return 1
 	grep -oE '\{"alg":[0-9]+,"key":"[A-Za-z0-9+/=]*","sig":"[A-Za-z0-9+/=]*"\}' "$f" >"$tmp/$kind.sigs" || return 1
 	[ "$(wc -l <"$tmp/$kind.sigs")" -eq "$(grep -o '"alg":' "$f" | wc -l)" ] || return 1
+	# At most 8 signatures, each of an algorithm 1 to 2^31-1, and a body
+	# of 256 KiB at most, as every reader takes.
+	[ "$(wc -l <"$tmp/$kind.sigs")" -le 8 ] || return 1
+	sed 's/^{"alg":\([0-9]*\),.*/\1/' "$tmp/$kind.sigs" | algs_valid || return 1
+	[ "$(wc -c <"$tmp/$kind.body" | tr -d ' ')" -le 262144 ] || return 1
 	# A key is its halves under one use and name, one of each algorithm:
 	# two of one algorithm there would make one key of two.
 	awk '{ n = $0; sub(/^[^ ]* [^ ]* [^ ]* /, "", n); if (seen[$1 " " $2 " " n]++) exit 1 }' "$list" || return 1
@@ -354,15 +387,23 @@ opened() {
 		case " $checked " in *" $alg "*) ;; *) continue ;; esac
 		case " $* " in *" $use "*) ;; *) continue ;; esac
 		khash=$(printf '%s' "$key" | openssl base64 -d -A | openssl dgst -sha256 -binary | openssl base64 -A)
-		grep -F "\"alg\":$alg,\"key\":\"$khash\"," "$tmp/$kind.sigs" | head -n 1 >"$tmp/$kind.sig.json"
-		[ -s "$tmp/$kind.sig.json" ] || continue
-		field sig "$tmp/$kind.sig.json" | openssl base64 -d -A >"$tmp/$kind.sig" 2>/dev/null || return 1
+		grep -F "\"alg\":$alg,\"key\":\"$khash\"," "$tmp/$kind.sigs" >"$tmp/$kind.sig.lines" || continue
 		printf '%s' "$key" | openssl base64 -d -A | openssl pkey -pubin -inform DER -out "$tmp/$kind.pub-$n.pem" 2>/dev/null || return 1
-		case $alg in
-		1) openssl dgst -sha256 -verify "$tmp/$kind.pub-$n.pem" -signature "$tmp/$kind.sig" "$tmp/$kind.body" >/dev/null 2>&1 || return 1 ;;
-		4) slh_verify "$tmp/$kind.pub-$n.pem" "$tmp/$kind.sig" "$tmp/$kind.body" || return 1 ;;
-		esac
-		printf '%s %s %s\n' "$alg" "$use" "$name" >>"$tmp/$kind.good"
+		# Every signature by this half must verify, not only the first.
+		while read -r line; do
+			printf '%s\n' "$line" >"$tmp/$kind.sig.json"
+			field sig "$tmp/$kind.sig.json" | openssl base64 -d -A >"$tmp/$kind.sig" 2>/dev/null || return 1
+			# A signature longer than 16 KiB is passed over, as every reader does.
+			[ "$(wc -c <"$tmp/$kind.sig" | tr -d ' ')" -le 16384 ] || continue
+			case $alg in
+			1)
+				low_s "$tmp/$kind.sig" || return 1
+				openssl dgst -sha256 -verify "$tmp/$kind.pub-$n.pem" -signature "$tmp/$kind.sig" "$tmp/$kind.body" >/dev/null 2>&1 || return 1
+				;;
+			4) slh_verify "$tmp/$kind.pub-$n.pem" "$tmp/$kind.sig" "$tmp/$kind.body" || return 1 ;;
+			esac
+			printf '%s %s %s\n' "$alg" "$use" "$name" >>"$tmp/$kind.good"
+		done <"$tmp/$kind.sig.lines"
 	done <"$list"
 	# One key, by its use and name, signed with every algorithm checked.
 	awk -v n="$(echo "$checked" | wc -w)" '{ k = $0; sub(/^[^ ]* /, "", k); if (!seen[$0]++) c[k]++ }
@@ -413,6 +454,7 @@ verify_release() {
 		*) continue ;;
 		esac
 		alg=$(number alg "$tmp/key")
+		printf '%s\n' "$alg" | algs_valid || fail "keys.json is not valid; not installing"
 		# A half this openssl checks must be a key it reads.
 		case " $checked " in
 		*" $alg "*)

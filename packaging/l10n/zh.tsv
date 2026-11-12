@@ -257,3 +257,4 @@ cbb for MIPS has no sync away from home yet (roadmap item 37).	MIPS 版 cbb 暂�
 --no-helper is for Linux	--no-helper 仅适用于 Linux
 cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	这里的 cbb 与其辅助程序一起运行，辅助程序可能保存着它的密钥；没有辅助程序，cbb 无法使用这些密钥。请先将其移除：%s
 --uinput needs cbb's helper, which runs the desktop connector	--uinput 需要 cbb 的辅助程序，桌面连接器在其中运行
+%s has SLH-DSA-SHA2-128s but does not check it as cbb signs it; update openssl (or CBB_VERIFY=skip to install unchecked)	%s 支持 SLH-DSA-SHA2-128s，但不能按 cbb 的签名方式验证它；请更新 openssl（或用 CBB_VERIFY=skip 跳过验证安装）

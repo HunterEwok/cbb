@@ -30,7 +30,7 @@ pub const MIRROR: &str = "https://dl.cbb.tools";
 /// channel, since a published release takes no new files and these are
 /// signed again while it is current (docs/protocol.md, section 16).
 const CHANNEL_FILES: &str = "https://raw.githubusercontent.com/HunterEwok/cbb/channel";
-const MAX_MANIFEST: u64 = 1 << 20;
+const MAX_MANIFEST: u64 = cbb_core::release::MAX_FILE as u64;
 const MAX_ARCHIVE: u64 = 256 << 20;
 pub const HEALTH: Duration = Duration::from_secs(60);
 /// A timer checks again only a day after the last check, less a margin for

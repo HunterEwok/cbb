@@ -94,8 +94,9 @@ func unseal(passphrase, data []byte, name string) ([]byte, error) {
 		}
 		n[j] = v
 	}
-	// Bounds that keep a damaged line from asking for more than a few GiB.
-	if n[0] < 10 || n[0] > 24 || n[1] < 1 || n[1] > 32 || n[2] < 1 || n[2] > 16 {
+	// Bounds that keep a damaged line from asking for more than 2 GiB
+	// (128 * r * 2^LOGN bytes) and a few seconds per p.
+	if n[0] < 10 || n[0] > 20 || n[1] < 1 || n[1] > 16 || n[2] < 1 || n[2] > 4 {
 		return nil, errors.New("the half's seal has a cost out of range")
 	}
 	rest := data[i+1:]
@@ -139,10 +140,16 @@ var readPassphrase = func(prompt string) ([]byte, error) {
 
 // passphraseCheck is a file beside the halves, sealed with the
 // passphrase, so that a run knows a wrong passphrase before it asks the
-// hardware for anything, and every half gets the same passphrase.
+// hardware for anything, and every half gets the same passphrase. It is
+// not encrypted to the hardware, so whoever copies it can try
+// passphrases against it without the hardware, at scrypt's cost each:
+// hence a long passphrase (minPassphrase), five random words or more.
 func passphraseCheck() string { return filepath.Join(pqDir(), "passphrase.check") }
 
 const checkText = "the passphrase of the post-quantum halves"
+
+// minPassphrase is the shortest new passphrase, in bytes.
+const minPassphrase = 24
 
 // passphrase returns the run's passphrase, asking for it the first time
 // and checking it against passphrase.check when there is one.
@@ -177,7 +184,7 @@ func newPassphrase() ([]byte, error) {
 	if _, err := os.Stat(passphraseCheck()); err == nil {
 		return passphrase()
 	}
-	p, err := readPassphrase("release-sign: a new passphrase for the post-quantum halves (the same for every hardware key; keep it in the password manager and on paper with the backup): ")
+	p, err := readPassphrase("release-sign: a new passphrase for the post-quantum halves (five random words or more, the same for every hardware key; keep it in the password manager and on paper with the backup): ")
 	if err != nil {
 		return nil, err
 	}
@@ -186,8 +193,8 @@ func newPassphrase() ([]byte, error) {
 		return nil, err
 	}
 	defer clear(again)
-	if len(p) < 12 {
-		return nil, errors.New("the passphrase must be 12 characters or more")
+	if len(p) < minPassphrase {
+		return nil, fmt.Errorf("the passphrase must be %d characters or more: five random words or more", minPassphrase)
 	}
 	if !bytes.Equal(p, again) {
 		return nil, errors.New("the two passphrases differ")

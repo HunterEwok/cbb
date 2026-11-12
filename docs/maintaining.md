@@ -360,10 +360,13 @@ relay's pins excepted), `release-sign` refuses a new key under a name another ke
 and `-drop` with the pin of either half of a signing key drops both halves.
 
 - **Tools**, on the Mac: `brew install age age-plugin-yubikey age-plugin-se`.
-- **The passphrase**, one for every hardware half: 12 characters or more, asked twice at the
-  first `pq-new`, which seals a check of it into `pq/passphrase.check`; every later run checks
-  the passphrase typed against that file before it asks the hardware for anything, and says
-  plainly when it is wrong. Keep it in the password manager and on paper with the backup. Losing it
+- **The passphrase**, one for every hardware half: five random words or more (24 characters
+  at least), asked twice at the first `pq-new`, which seals a check of it into
+  `pq/passphrase.check`; every later run checks the passphrase typed against that file before
+  it asks the hardware for anything, and says plainly when it is wrong. That file is not
+  encrypted to the hardware, so whoever copies `pq` (or its backup) can try passphrases
+  against it offline, about a second of scrypt each: only the passphrase's length holds them
+  off, so it must be random words, not a phrase someone could guess. Keep it in the password manager and on paper with the backup. Losing it
   loses every hardware key's post-quantum half: the P-256 halves then sign nothing devices
   take, and each key is replaced like a lost one (the roots in the next release, which
   needs a root that still signs: so keep the passphrase as safe as the YubiKeys).

@@ -58,8 +58,9 @@ pub fn run(g: &Global, args: &[String]) -> i32 {
     if line.starts_with("CBBOK") { 0 } else { 1 }
 }
 
-/// The largest file check-list reads: keys.json and zxnext.json.
-const MAX_CHECK_LIST: u64 = 16 << 10;
+/// The largest file check-list reads: keys.json and zxnext.json, each up
+/// to the size of any release file.
+const MAX_CHECK_LIST: u64 = 2 * cbb_core::release::MAX_FILE as u64;
 
 /// `.cbb update`'s check of the site's list for a newer CBB (apps/zxnext,
 /// docs/protocol.md section 16, "Where the files are"): the file
@@ -71,6 +72,15 @@ const MAX_CHECK_LIST: u64 = 16 << 10;
 fn check_list(args: &[String], out: &mut dyn Write) -> Result<()> {
     use cbb_core::release;
     let [path] = args else { return Err(Error::msg(USAGE)) };
+    let data = read_list(path)?;
+    let roots = crate::update::release_roots();
+    let installed =
+        if release::parse_version(crate::service::VERSION).is_some() { crate::service::VERSION } else { "" };
+    check_signed(&data, &roots, crate::uptime::wall_ms(), installed, out)
+}
+
+/// check_list's read of its file, up to MAX_CHECK_LIST.
+fn read_list(path: &str) -> Result<Vec<u8>> {
     let mut data = Vec::new();
     std::fs::File::open(path)
         .and_then(|f| f.take(MAX_CHECK_LIST + 1).read_to_end(&mut data))
@@ -78,10 +88,7 @@ fn check_list(args: &[String], out: &mut dyn Write) -> Result<()> {
     if data.len() as u64 > MAX_CHECK_LIST {
         return Err(Error::msg("the signed list is too large"));
     }
-    let roots = crate::update::release_roots();
-    let installed =
-        if release::parse_version(crate::service::VERSION).is_some() { crate::service::VERSION } else { "" };
-    check_signed(&data, &roots, crate::uptime::wall_ms(), installed, out)
+    Ok(data)
 }
 
 /// check_list's check of the file's data under roots at now_ms.
@@ -784,6 +791,18 @@ mod tests {
                 assert!(out.is_empty(), "{name}: {out}");
             }
         }
+        // The list as cbb.tools serves it, read from a file: each file
+        // carries both signatures, larger than a file of one.
+        let c = &v["vectors"][0];
+        let path = std::env::temp_dir().join(format!("cbb-next-list-{}", std::process::id()));
+        std::fs::write(&path, format!("{}\n{}\n", c["keys"], c["list"])).unwrap();
+        let data = read_list(path.to_str().unwrap()).unwrap();
+        assert!(data.len() > 16 << 10, "{}", data.len());
+        let mut out = Vec::new();
+        check_signed(&data, &roots, c["now_ms"].as_i64().unwrap(), c["installed"].as_str().unwrap(), &mut out).unwrap();
+        std::fs::write(&path, vec![b' '; MAX_CHECK_LIST as usize + 1]).unwrap();
+        assert!(read_list(path.to_str().unwrap()).is_err());
+        std::fs::remove_file(&path).unwrap();
         let mut out = Vec::new();
         assert!(check_signed(b"{}\n", &roots, 0, "", &mut out).is_err());
         assert!(check_signed(b"{}\n{}\n{}\n", &roots, 0, "", &mut out).is_err());

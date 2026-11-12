@@ -148,7 +148,20 @@
 			[Array]::Copy($v, 0, $out, $half * 32 + 32 - $v.Length, $v.Length)
 		}
 		if ($i -ne $der.Length) { return $null }
+		# Only the low S, at most half the order of P-256, the one form every
+		# reader takes.
+		$halfOrder = [Convert]::FromBase64String('f////4AAAAB//////////95zfVbTi89CedzlYX4xkqg=')
+		for ($j = 0; $j -lt 32; $j++) {
+			if ($out[32 + $j] -lt $halfOrder[$j]) { break }
+			if ($out[32 + $j] -gt $halfOrder[$j]) { return $null }
+		}
 		$out
+	}
+
+	# Test-Alg tells whether a, read from JSON, is an algorithm number as
+	# every reader takes it: a whole number 1 to 2^31-1.
+	function Test-Alg($a) {
+		($a -is [int] -or $a -is [long]) -and $a -ge 1 -and $a -le 2147483647
 	}
 
 	# Test-StrictBody tells whether text, a body, is in the strict form as far
@@ -177,15 +190,25 @@
 	# signature of an algorithm a reader does not check.
 	function Open-ReleaseFile($path, $type, $keys) {
 		$name = Split-Path $path -Leaf
+		# A release file is 1 MiB at most, its body 256 KiB, with 1 to 8
+		# signatures, each of an algorithm 1 to 2^31-1, as every reader takes.
+		if ((Get-Item $path).Length -gt 1048576) { throw (T '%s is not a valid release file; not installing' $name) }
 		$f = Get-Content -Raw $path | ConvertFrom-Json
 		$body = [Convert]::FromBase64String($f.body)
+		$sigs = @($f.sigs)
+		if ($body.Length -gt 262144 -or $sigs.Count -lt 1 -or $sigs.Count -gt 8 -or @($sigs | Where-Object { -not (Test-Alg $_.alg) }).Count -gt 0) {
+			throw (T '%s is not a valid release file; not installing' $name)
+		}
 		$sha = [Security.Cryptography.SHA256]::Create()
 		$ok = $false
-		foreach ($s in @($f.sigs | Where-Object { $_.alg -eq 1 })) {
+		foreach ($s in @($sigs | Where-Object { $_.alg -eq 1 })) {
 			$id = [Convert]::FromBase64String($s.key)
 			$k = $keys | Where-Object { Test-ByteEqual $sha.ComputeHash([byte[]]$_) $id } | Select-Object -First 1
 			if (-not $k) { continue }
-			$sig = ConvertFrom-DerSignature ([Convert]::FromBase64String($s.sig))
+			$der = [Convert]::FromBase64String($s.sig)
+			# A signature longer than 16 KiB is passed over, as every reader does.
+			if ($der.Length -gt 16384) { continue }
+			$sig = ConvertFrom-DerSignature $der
 			if (-not $sig -or -not (Get-P256Key $k).VerifyData($body, $sig, [Security.Cryptography.HashAlgorithmName]::SHA256)) {
 				throw (T '%s is not signed by the project''s key; not installing' $name)
 			}
@@ -226,6 +249,9 @@
 		# use is never written empty.
 		if (@($keys.Value.keys | Where-Object { $u = $_.PSObject.Properties['use']; $u -and $u.Value -ceq '' }).Count -gt 0) {
 			throw (T 'keys.json holds a key whose use is empty; not installing')
+		}
+		if (@($keys.Value.keys | Where-Object { -not (Test-Alg $_.alg) }).Count -gt 0) {
+			throw (T '%s is not a valid release file; not installing' 'keys.json')
 		}
 		# The ES256 halves; a half of another algorithm is not checked here.
 		$es256 = @($keys.Value.keys | Where-Object { $_.alg -eq 1 })

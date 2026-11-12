@@ -27,9 +27,12 @@ final class ReleaseTests: XCTestCase {
             var channel: String
             var files: [Releases.File]
             var vectors: [C]
+            var max_file: Int
         }
         let v = try JSONDecoder().decode(V.self, from: Data(contentsOf: url.appendingPathComponent("testdata/interop/go-release.json")))
         XCTAssertEqual(v.vectors.count, 53)
+        // Every reader of release files reads up to the same size.
+        XCTAssertEqual(Releases.maxFile, v.max_file)
         for c in v.vectors {
             let got = Result { try Releases.check(keys: v.files[c.keys], channel: v.files[c.channel], release: v.files[c.release], roots: v.roots,
                                                   name: v.channel, nowMS: v.now_ms, seen: c.seen) }

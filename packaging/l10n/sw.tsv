@@ -257,3 +257,4 @@ cbb for MIPS has no sync away from home yet (roadmap item 37).	cbb ya MIPS bado 
 --no-helper is for Linux	--no-helper ni kwa Linux pekee
 cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	hapa cbb inaendeshwa pamoja na msaidizi wake, ambaye huenda anashikilia funguo zake; bila msaidizi cbb haiwezi kuzitumia. Iondoe kwanza: %s
 --uinput needs cbb's helper, which runs the desktop connector	--uinput inahitaji msaidizi wa cbb, unaoendesha kiunganishi cha eneo-kazi
+%s has SLH-DSA-SHA2-128s but does not check it as cbb signs it; update openssl (or CBB_VERIFY=skip to install unchecked)	%s ina SLH-DSA-SHA2-128s lakini haiikagui jinsi cbb inavyosaini; sasisha openssl (au CBB_VERIFY=skip kusakinisha bila kukagua)

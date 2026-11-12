@@ -128,6 +128,18 @@ pub struct Keys {
     pub keys: Vec<Key>,
 }
 
+impl Keys {
+    /// The keys certified as the relay at name: its ES256 pins, as Go's
+    /// Keys.Relays, a pin of another algorithm passed over.
+    pub fn relays(&self, name: &str) -> Vec<Vec<u8>> {
+        self.keys
+            .iter()
+            .filter(|k| k.usage == "relay" && k.name == name && k.alg == ALG_ES256)
+            .map(|k| k.key.clone())
+            .collect()
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Binary {
     pub name: String,
@@ -1018,6 +1030,30 @@ pub mod testing {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn relays_are_es256_pins() {
+        use super::{ALG_ES256, ALG_SLH_DSA, Key, Keys};
+        let key = |alg, key: u8, name: &str, usage: &str| Key {
+            alg,
+            key: alloc::vec![key],
+            name: name.into(),
+            usage: usage.into(),
+        };
+        let k = Keys {
+            seq: 1,
+            time_ms: 0,
+            expires_ms: 1,
+            keys: alloc::vec![
+                key(ALG_ES256, 1, "r:1", "relay"),
+                key(ALG_SLH_DSA, 2, "r:1", "relay"),
+                key(9, 3, "r:1", "relay"),
+                key(ALG_ES256, 4, "r:2", "relay"),
+                key(ALG_ES256, 5, "r:1", "forwarder"),
+            ],
+        };
+        assert_eq!(k.relays("r:1"), alloc::vec![alloc::vec![1u8]]);
+    }
+
     use super::*;
 
     /// A root is its halves under one Name, one of each algorithm.

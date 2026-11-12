@@ -19,7 +19,6 @@ import (
 	"strings"
 
 	"github.com/HunterEwok/cbb/internal/release"
-	"golang.org/x/term"
 )
 
 // The post-quantum half of a key (docs/maintaining.md, "Two signatures")
@@ -265,9 +264,10 @@ func pqNew(args []string) error {
 			return errors.New("-out needs -public for the public keys")
 		}
 		if *out == "-" {
-			// Into a pipe, such as systemd-creds encrypt, never a terminal.
-			if isTerminal(os.Stdout) {
-				return errors.New("-out - writes the private half: pipe it (systemd-creds encrypt) or name a file")
+			// Only into a pipe, such as systemd-creds encrypt: never a
+			// terminal, nor a file the shell makes with the umask's mode.
+			if !stdoutIsPipe() {
+				return errors.New("-out - writes the private half into a pipe only (systemd-creds encrypt); name a file with -out FILE")
 			}
 			if _, err := stdout.Write(secret); err != nil {
 				return err
@@ -388,6 +388,12 @@ func pqCheck(args []string) error {
 	return nil
 }
 
-// isTerminal reports whether f is a terminal rather than a pipe or a file;
-// a variable for the tests.
-var isTerminal = func(f *os.File) bool { return term.IsTerminal(int(f.Fd())) }
+// isPipe reports whether f is a pipe, not a terminal or a file.
+func isPipe(f *os.File) bool {
+	st, err := f.Stat()
+	return err == nil && st.Mode()&os.ModeNamedPipe != 0
+}
+
+// stdoutIsPipe reports whether the standard output is a pipe; a variable
+// for the tests.
+var stdoutIsPipe = func() bool { return isPipe(os.Stdout) }

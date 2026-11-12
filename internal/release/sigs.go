@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"unicode/utf8"
 	"unsafe"
 
 	"github.com/HunterEwok/cbb/internal/strict"
@@ -137,8 +138,12 @@ func members(b []byte, required ...string) (map[string]json.RawMessage, error) {
 	}
 	m := map[string]json.RawMessage{}
 	for d.More() {
+		at := d.InputOffset()
 		t, err := d.Token()
 		if err != nil {
+			return nil, err
+		}
+		if err := exactName(b[at:d.InputOffset()]); err != nil {
 			return nil, err
 		}
 		name, _ := t.(string)
@@ -160,6 +165,66 @@ func members(b []byte, required ...string) (map[string]json.RawMessage, error) {
 		}
 	}
 	return m, nil
+}
+
+// exactName refuses a member name that does not stand for one string of
+// Unicode as written: bytes that are not UTF-8, or a \u escape of half a
+// surrogate pair, which encoding/json reads as U+FFFD and the core
+// refuses. raw is the name as the decoder passed it, with what comes
+// before it.
+func exactName(raw []byte) error {
+	i := bytes.IndexByte(raw, '"')
+	if i < 0 {
+		return errors.New("a member without a name")
+	}
+	raw = raw[i:]
+	if !utf8.Valid(raw) {
+		return errors.New("a member name that is not UTF-8")
+	}
+	high := false
+	for i := 0; i < len(raw); i++ {
+		if raw[i] != '\\' {
+			if high {
+				return errors.New("a member name with half a surrogate pair")
+			}
+			continue
+		}
+		i++
+		if i >= len(raw) || raw[i] != 'u' {
+			if high {
+				return errors.New("a member name with half a surrogate pair")
+			}
+			continue
+		}
+		if i+4 >= len(raw) {
+			return errors.New("a member name cut short")
+		}
+		v, err := strconv.ParseUint(string(raw[i+1:i+5]), 16, 16)
+		if err != nil {
+			return errors.New("a member name with a bad escape")
+		}
+		i += 4
+		switch {
+		case v >= 0xD800 && v < 0xDC00:
+			if high {
+				return errors.New("a member name with half a surrogate pair")
+			}
+			high = true
+		case v >= 0xDC00 && v < 0xE000:
+			if !high {
+				return errors.New("a member name with half a surrogate pair")
+			}
+			high = false
+		default:
+			if high {
+				return errors.New("a member name with half a surrogate pair")
+			}
+		}
+	}
+	if high {
+		return errors.New("a member name with half a surrogate pair")
+	}
+	return nil
 }
 
 // base64Member reads a member that holds base64 in its one form; null,
