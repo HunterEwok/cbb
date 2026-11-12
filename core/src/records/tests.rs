@@ -1898,3 +1898,53 @@ fn counted_claims_give_one_state_in_any_order() {
         }
     }
 }
+
+/// Checkpoints signed by a key a claim names, which is not on the path,
+/// are not tried: the root's checkpoint still counts on a member that
+/// compacted on it and on one that did not.
+#[test]
+fn only_the_path_roots_checkpoints_are_tried() {
+    let mut g = G::new();
+    let root = k("root");
+    let (pw, w) = (k("watch"), k("admin w"));
+    g.admin(&pw, &w, POWER_REMOVE | POWER_FREEZE | POWER_TAKEOVER);
+    let mut ds = Vec::new();
+    for i in 0..6 {
+        ds.push(g.device(&root, &k(&format!("d{i}")), &format!("d{i}"), |_| {}));
+    }
+    let seen = g.seen();
+    let rv = g.root_rec(Kind::Revoke(removal(&[w.hash, pw.hash], seen)));
+    let (s, id) = g.heads[&root.hash];
+    let mut keep: Vec<RecordId> = ds.iter().map(|r| r.id()).chain([rv.id()]).collect();
+    keep.sort();
+    let cp = g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq: s, id }], keep });
+    let late = g.device(&root, &k("late"), "late", |_| {});
+    let mut a = RecordSet::new(g.root.key.clone());
+    a.insert_all(g.recs.clone());
+    let st = a.state(&BTreeMap::new());
+    assert_eq!(st.checkpoint, Some(cp.id()));
+    assert!(a.compact(&st) > 0);
+    let mut b = RecordSet::new(g.root.key.clone());
+    b.insert_all(g.recs.clone());
+    let x = k("named root");
+    let mut more = vec![
+        Record::sign(Body { seq: 1, prev: None, ..g.body(&w, Kind::Claim { root: x.key.clone(), seen: vec![] }) }, &w)
+            .unwrap(),
+    ];
+    for i in 0..8u64 {
+        let body = Body {
+            seq: MAX_SEQ - i,
+            prev: Some(RecordId([9; 32])),
+            ..g.body(&x, Kind::Checkpoint { heads: vec![Head { key: x.hash, seq: 1, id: RecordId([8; 32]) }], keep: vec![] })
+        };
+        more.push(Record::sign(body, &x).unwrap());
+    }
+    a.insert_all(more.clone());
+    b.insert_all(more);
+    let (sa, sb) = (a.state(&BTreeMap::new()), b.state(&BTreeMap::new()));
+    assert_eq!(sa.checkpoint, Some(cp.id()));
+    assert_eq!(sb.checkpoint, Some(cp.id()));
+    assert_eq!(sa.devices.len(), 7);
+    assert!(sa.counting.contains(&late.id()));
+    assert_eq!(sa.devices, sb.devices);
+}

@@ -490,7 +490,8 @@ pub(crate) fn evaluate_checked(
     // dropped what it leaves out; the checkpoint that counts is the newest
     // that still counts there.
     let mut best: Option<((usize, u64, RecordId), State)> = None;
-    for c in full.checkpoints() {
+    let plain = full.run(held_ms, counted);
+    for c in full.checkpoints(&plain.path, &plain.cuts) {
         let Some(x) = full.recs.get(c) else { continue };
         let (Kind::Checkpoint { heads, keep }, id) = (&x.b().kind, x.id) else { continue };
         let anchors = anchors_of(heads, keep);
@@ -514,7 +515,7 @@ pub(crate) fn evaluate_checked(
     }
     let mut state = match best {
         Some((_, state)) => state,
-        None => full.run(held_ms, counted).finish(),
+        None => plain.finish(),
     };
     state.group = DeviceId::of(&group_root);
     state
@@ -535,10 +536,6 @@ pub(crate) fn pruned_by(r: &Record, heads: &[Head], anchors: &BTreeSet<RecordId>
 pub(crate) fn anchors_of(heads: &[Head], keep: &[RecordId]) -> BTreeSet<RecordId> {
     heads.iter().map(|h| h.id).chain(keep.iter().copied()).collect()
 }
-
-/// How many checkpoints the evaluation tries: those of the highest seq,
-/// then the smallest ID.
-pub const MAX_CHECKPOINTS: usize = 8;
 
 struct Rec<'a> {
     r: &'a Record,
@@ -672,21 +669,30 @@ impl<'a> Evaluation<'a> {
         e
     }
 
-    /// The checkpoints the evaluation tries, by index: a root's own, at
-    /// most MAX_CHECKPOINTS.
-    fn checkpoints(&self) -> Vec<usize> {
-        let mut cs: Vec<usize> = (0..self.recs.len())
-            .filter(|&i| {
-                let r = &self.recs[i];
-                !r.held && r.role == Role::Root && matches!(r.b().kind, Kind::Checkpoint { .. })
-            })
-            .collect();
-        cs.sort_by(|&a, &b| {
-            let (ra, rb) = (&self.recs[a], &self.recs[b]);
-            rb.b().seq.cmp(&ra.b().seq).then(ra.id.cmp(&rb.id))
-        });
-        cs.truncate(MAX_CHECKPOINTS);
-        cs
+    /// The checkpoints the evaluation tries, by index: for each root on
+    /// the path, its newest checkpoint within its cut (the highest seq,
+    /// then the smallest ID).
+    fn checkpoints(&self, path: &[KeyHash], cuts: &BTreeMap<KeyHash, u64>) -> Vec<usize> {
+        let mut newest: BTreeMap<KeyHash, usize> = BTreeMap::new();
+        for (i, r) in self.recs.iter().enumerate() {
+            let b = r.b();
+            if r.held
+                || r.role != Role::Root
+                || !matches!(b.kind, Kind::Checkpoint { .. })
+                || !path.contains(&b.signer)
+                || cuts.get(&b.signer).is_some_and(|cut| b.seq > *cut)
+            {
+                continue;
+            }
+            let better = newest.get(&b.signer).is_none_or(|&o| {
+                let o = &self.recs[o];
+                b.seq > o.b().seq || b.seq == o.b().seq && r.id < o.id
+            });
+            if better {
+                newest.insert(b.signer, i);
+            }
+        }
+        newest.into_values().collect()
     }
 
     /// The records of rs (one signer's, by_id their IDs) whose prev chain
