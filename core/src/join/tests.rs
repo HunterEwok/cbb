@@ -556,7 +556,7 @@ fn admit(g: &mut G, by_admin: bool, joiner: &K, name: &str) -> Welcome {
     let set = g.set();
     let st = set.state();
     let admitter = if by_admin { laptop.hash } else { k("phone").hash };
-    Welcome::build(&set, &st, &admitter, &joiner.hash, 1_793_000_000_000)
+    Welcome::build(&set, &st, &admitter, &joiner.hash, 1_793_000_000_000).unwrap()
 }
 
 #[test]
@@ -659,7 +659,7 @@ fn the_joiner_takes_two_changes_of_root() {
     let st = set.state();
     assert_eq!(st.roots, vec![g.root.hash, n1.hash, n2.hash]);
     assert!(st.device_by_key(&slate.hash).is_some());
-    let w = Welcome::build(&set, &st, &k("phone c").hash, &slate.hash, 1_793_000_000_000);
+    let w = Welcome::build(&set, &st, &k("phone c").hash, &slate.hash, 1_793_000_000_000).unwrap();
     let group = format::DeviceId(g.gid.0);
     let back = Welcome::decode(&w.encode()).unwrap();
     let r = back.check(&group, &point(&k("phone c")), &point(&slate), Joining::Ordinary);
@@ -718,7 +718,7 @@ fn the_joiner_sees_a_fork_in_its_welcome() {
     g.rec(&k("root n1"), Kind::device(d));
     let set = g.set();
     let st = set.state();
-    let w = Welcome::build(&set, &st, &k("phone b").hash, &tv.hash, 1_793_000_000_000);
+    let w = Welcome::build(&set, &st, &k("phone b").hash, &tv.hash, 1_793_000_000_000).unwrap();
     assert_eq!(w.records.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).count(), 2);
     let group = format::DeviceId(g.gid.0);
     assert_eq!(
@@ -792,11 +792,11 @@ fn a_guarded_leaf_joins_by_the_newest_root_only() {
     let group = format::DeviceId(g.gid.0);
     let set = g.set();
     let st = set.state();
-    let w = Welcome::build(&set, &st, &k("phone a").hash, &lock.hash, 1_793_000_000_000);
+    let w = Welcome::build(&set, &st, &k("phone a").hash, &lock.hash, 1_793_000_000_000).unwrap();
     let (_, st) = w.check(&group, &point(&k("phone a")), &point(&lock), Joining::Guarded).unwrap();
     assert_eq!(st.roots, vec![g.root.hash, n1.hash]);
     // The old root's phone is no admitter of it.
-    let w = Welcome::build(&set, &st, &k("phone").hash, &lock.hash, 1_793_000_000_000);
+    let w = Welcome::build(&set, &st, &k("phone").hash, &lock.hash, 1_793_000_000_000).unwrap();
     assert_eq!(
         w.check(&group, &point(&k("phone")), &point(&lock), Joining::Guarded).err(),
         Some(welcome::Refusal::NotAdmitter)
@@ -1334,4 +1334,75 @@ fn one_invitation_takes_few_waiting_places() {
         held.knock(&point(&k("real tablet")), real, Network::Guest, waiting::Came::Path([6; 16]), t0 + 1, exp),
         "another invitation still has room"
     );
+}
+
+/// Under its budget a Welcome carries the recovery records and the list,
+/// the new root's first checkpoint, the removals that count and the two
+/// devices' records before anything else; when even those do not fit, no
+/// Welcome is built, nothing of them is cut.
+#[test]
+fn a_welcome_carries_what_it_must_first() {
+    let mut g = G::new();
+    let (n1, tv, slate) = (k("root n1"), k("tv"), k("slate"));
+    g.change(&n1);
+    phone_admin(&mut g, &n1, &k("phone b"), &k("admin b"), true);
+    let mut d = Device::new(tv.key.clone(), "tv", ROLE_MEMBER);
+    d.rights = RIGHT_READ;
+    g.rec(&n1, Kind::device(d));
+    let seen = g.seen();
+    let removal = g.rec(&n1, Kind::Revoke(Removal { keys: vec![tv.hash], seen }));
+    let mut d = Device::new(slate.key.clone(), "slate", ROLE_MEMBER);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    let own = g.rec(&n1, Kind::device(d));
+    let mut filler = Vec::new();
+    for i in 0..40u64 {
+        filler.push(g.rec(&n1, Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] }).id());
+    }
+    let set = g.set();
+    let st = set.state();
+    assert!(st.revoked.contains(&tv.hash));
+    let admitter = k("phone b").hash;
+    let all = Welcome::build(&set, &st, &admitter, &slate.hash, 1).unwrap();
+    let full: usize = all.records.iter().map(Record::size).sum::<usize>() + all.list.as_ref().map_or(0, Vec::len);
+    let some = full - 30 * set.get(&filler[0]).unwrap().size();
+    let w = Welcome::build_within(&set, &st, &admitter, &slate.hash, 1, some).unwrap();
+    let has = |id: &RecordId| w.records.iter().any(|r| r.id() == *id);
+    let heads: Vec<RecordId> =
+        g.recs.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).map(Record::id).collect();
+    assert!(heads.iter().all(has) && w.list.is_some());
+    assert!(set.firsts().iter().all(has));
+    assert!(has(&removal.id()) && has(&own.id()));
+    assert!(filler.iter().filter(|id| has(id)).count() <= 10);
+    let group = format::DeviceId(g.gid.0);
+    let (_, back) = Welcome::decode(&w.encode())
+        .unwrap()
+        .check(&group, &point(&k("phone b")), &point(&slate), Joining::Ordinary)
+        .unwrap();
+    assert_eq!(back.roots, st.roots);
+    assert!(back.revoked.contains(&tv.hash));
+    // Too small for what it must carry: no Welcome.
+    assert_eq!(Welcome::build_within(&set, &st, &admitter, &slate.hash, 1, 600), Err(welcome::TooLarge));
+}
+
+/// The joiner's record comes with its signer's chain below it: a budget
+/// that cannot hold that chain gives no Welcome, not one the joiner would
+/// refuse.
+#[test]
+fn a_welcome_carries_the_chain_of_the_joiners_record() {
+    let mut g = G::new();
+    let slate = k("slate");
+    for i in 0..20u64 {
+        g.rec_root(Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] });
+    }
+    let mut d = Device::new(slate.key.clone(), "slate", ROLE_MEMBER);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    g.rec_root(Kind::device(d));
+    let set = g.set();
+    let st = set.state();
+    let admitter = k("phone").hash;
+    let all = Welcome::build(&set, &st, &admitter, &slate.hash, 1).unwrap();
+    let full: usize = all.records.iter().map(Record::size).sum::<usize>() + all.list.as_ref().map_or(0, Vec::len);
+    let group = format::DeviceId(g.gid.0);
+    assert!(all.check(&group, &point(&k("phone")), &point(&slate), Joining::Ordinary).is_ok());
+    assert_eq!(Welcome::build_within(&set, &st, &admitter, &slate.hash, 1, full - 1), Err(welcome::TooLarge));
 }

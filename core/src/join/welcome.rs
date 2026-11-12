@@ -5,9 +5,13 @@
 //! confirmed, and the joiner's checks of it (design-no-certificates
 //! section 4). No certificate: the group's first root key and its recovery
 //! key, which give the Group ID together (rule 33), and records in
-//! dependency order: the recovery records, the admitter's records with its
-//! rights, the joiner's own record, then the others while the frame holds
-//! them; and the newest recovery record's list.
+//! dependency order. What it must carry: the recovery records and the
+//! newest one's list, the new roots' first checkpoints, the removals that
+//! count, the admitter's records with its rights and the joiner's own
+//! record; a set whose must-carry does not fit the budget gives no Welcome
+//! (`TooLarge`), nothing of it is cut. Each of them comes with its chain
+//! down to seq 1 or to the counting checkpoint that names it, which comes
+//! too. Then the others while the budget holds them.
 //!
 //! The joiner checks: the Group ID from the code exchange is the one the
 //! two keys give, so no admitter can pin a false recovery key; the records
@@ -27,9 +31,16 @@ use crate::records::{Key, KeyHash, Record, RecordId, State, group_id};
 
 use super::intro::chain;
 
-/// What a Welcome may take of a pairing frame (64 KiB) for its records and
-/// its list.
-pub const RECORDS_BUDGET: usize = 56 * 1024;
+/// What a Welcome may take of a pairing frame (1 MiB) for its records and
+/// its list: the rest is left for its keys, the grant, the credentials and
+/// the padding.
+pub const RECORDS_BUDGET: usize = crate::format::frame::LIMIT_PAIRING - 64 * 1024;
+
+/// The set's must-carry (its recovery records and list, first checkpoints,
+/// counting removals and the two devices' records) passes RECORDS_BUDGET:
+/// no Welcome is built.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct TooLarge;
 
 pub const RULE_SHAPE: Rule = Rule::field("welcome/shape");
 pub const RULE_ROOT: Rule = Rule::field("welcome/root");
@@ -92,24 +103,90 @@ pub enum Refusal {
 impl Welcome {
     /// The Welcome an admitter sends: its set already holds the joiner's
     /// record. `admitter` and `joiner` are the member keys' hashes.
-    pub fn build(set: &RecordSet, state: &State, admitter: &KeyHash, joiner: &KeyHash, time_ms: u64) -> Welcome {
+    pub fn build(
+        set: &RecordSet,
+        state: &State,
+        admitter: &KeyHash,
+        joiner: &KeyHash,
+        time_ms: u64,
+    ) -> Result<Welcome, TooLarge> {
+        Self::build_within(set, state, admitter, joiner, time_ms, RECORDS_BUDGET)
+    }
+
+    /// build under a budget of budget bytes for the records and the list.
+    pub(crate) fn build_within(
+        set: &RecordSet,
+        state: &State,
+        admitter: &KeyHash,
+        joiner: &KeyHash,
+        time_ms: u64,
+        budget: usize,
+    ) -> Result<Welcome, TooLarge> {
         let list = state.cut.as_ref().and_then(|c| set.list(&c.list)).map(<[u8]>::to_vec);
-        let mut needed: BTreeSet<RecordId> = chain(set, state, admitter);
-        needed.extend(chain(set, state, joiner));
         let order = set.in_dependency_order();
-        let mut records: Vec<Record> =
-            order.iter().filter(|r| needed.contains(&r.id())).map(|r| (*r).clone()).collect();
-        let mut used: usize =
-            records.iter().map(Record::size).fold(list.as_ref().map_or(0, Vec::len), usize::saturating_add);
-        for r in order.iter().filter(|r| !needed.contains(&r.id())) {
+        // What it must carry: the recovery records (in `chain`), the first
+        // checkpoints, the counting removals, the two devices' records and
+        // the counting checkpoints.
+        let mut must: BTreeSet<RecordId> = chain(set, state, admitter);
+        must.extend(chain(set, state, joiner));
+        must.extend(set.firsts().iter().copied().filter(|id| set.contains(id)));
+        must.extend(
+            order
+                .iter()
+                .filter(|r| state.counting.contains(&r.id()) && matches!(r.body().kind, Kind::Revoke(_)))
+                .map(|r| r.id()),
+        );
+        // A record counts by its chain: each must-carry record's prev down
+        // to seq 1 or to what a counting checkpoint names, which goes too.
+        let mut anchors: BTreeSet<RecordId> = BTreeSet::new();
+        for id in &state.checkpoints {
+            if let Some(Kind::Checkpoint { heads, keep }) = set.get(id).map(|r| &r.body().kind) {
+                must.insert(*id);
+                anchors.extend(heads.iter().map(|h| h.id).chain(keep.iter().copied()));
+            }
+        }
+        // A removal counts by itself (`eval::Evaluation::wholes`).
+        let walks: Vec<RecordId> = must
+            .iter()
+            .copied()
+            .filter(|id| set.get(id).is_some_and(|r| !matches!(r.body().kind, Kind::Revoke(_))))
+            .collect();
+        for id in walks {
+            let mut at = set.get(&id).and_then(|r| r.body().prev);
+            while let Some(p) = at {
+                if !must.insert(p) && anchors.contains(&p) {
+                    break;
+                }
+                let Some(r) = set.get(&p) else {
+                    must.remove(&p);
+                    break;
+                };
+                if anchors.contains(&p) {
+                    break;
+                }
+                at = r.body().prev;
+            }
+        }
+        let mut used: usize = order
+            .iter()
+            .filter(|r| must.contains(&r.id()))
+            .map(|r| r.size())
+            .fold(list.as_ref().map_or(0, Vec::len), usize::saturating_add);
+        if used > budget {
+            return Err(TooLarge);
+        }
+        // Then the rest, while it fits.
+        let mut take = must;
+        for r in order.iter().filter(|r| !take.contains(&r.id())).collect::<Vec<_>>() {
             let n = used.saturating_add(r.size());
-            if n > RECORDS_BUDGET {
-                break;
+            if n > budget {
+                continue;
             }
             used = n;
-            records.push((*r).clone());
+            take.insert(r.id());
         }
-        Welcome {
+        let records: Vec<Record> = order.iter().filter(|r| take.contains(&r.id())).map(|r| (*r).clone()).collect();
+        Ok(Welcome {
             root: set.root().public.clone(),
             records,
             keys: Vec::new(),
@@ -118,7 +195,7 @@ impl Welcome {
             credentials: Vec::new(),
             recovery: set.recovery().public.clone(),
             list,
-        }
+        })
     }
 
     /// The Welcome's encoding (the map of format 11.2).

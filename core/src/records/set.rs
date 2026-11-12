@@ -285,6 +285,11 @@ impl RecordSet {
         self.lists.values().map(|(b, _)| b.as_slice())
     }
 
+    /// The first checkpoints kept outside the rooms (`eval::Chain::firsts`).
+    pub(crate) fn firsts(&self) -> &BTreeSet<RecordId> {
+        &self.firsts
+    }
+
     /// The bytes of the list of hash, when the set holds it.
     pub fn list(&self, hash: &[u8; 32]) -> Option<&[u8]> {
         self.lists.get(hash).map(|(b, _)| b.as_slice())
