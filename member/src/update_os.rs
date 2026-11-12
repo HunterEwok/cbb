@@ -262,14 +262,9 @@ fn xml_escape(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
 }
 
-fn launchd_timer(on: bool, exe: &Path) -> Result<()> {
-    let plist = PathBuf::from(format!("/Library/LaunchDaemons/{LAUNCHD_LABEL}.plist"));
-    let _ = Command::new("launchctl").args(["bootout", &format!("system/{LAUNCHD_LABEL}")]).output();
-    if !on {
-        return remove(&plist);
-    }
-    let (h, m) = at();
-    let body = format!(
+/// The launchd job of the timer: exe update -timer each day at h:m.
+fn launchd_plist(exe: &Path, h: u8, m: u8) -> String {
+    format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!-- Written by cbb update -auto on; cbb update -auto off removes it. -->
@@ -294,9 +289,27 @@ fn launchd_timer(on: bool, exe: &Path) -> Result<()> {
 </plist>
 "#,
         xml_escape(&exe.display().to_string())
-    );
+    )
+}
+
+fn launchd_timer(on: bool, exe: &Path) -> Result<()> {
+    let plist = PathBuf::from(format!("/Library/LaunchDaemons/{LAUNCHD_LABEL}.plist"));
+    let _ = Command::new("launchctl").args(["bootout", &format!("system/{LAUNCHD_LABEL}")]).output();
+    if !on {
+        return remove(&plist);
+    }
+    let (h, m) = at();
+    let body = launchd_plist(exe, h, m);
     write_atomic(&plist, body.as_bytes(), 0o644)?;
     run("launchctl", &["bootstrap", "system", &plist.display().to_string()])
+}
+
+/// The cron line of the timer on FreeBSD: exe update -timer each day at h:m.
+fn cron_line(exe: &Path, h: u8, m: u8) -> String {
+    format!(
+        "# Written by cbb update -auto on; cbb update -auto off removes it.\n{m} {h} * * * root {} update -timer\n",
+        exe.display()
+    )
 }
 
 fn freebsd_timer(on: bool, exe: &Path) -> Result<()> {
@@ -305,15 +318,18 @@ fn freebsd_timer(on: bool, exe: &Path) -> Result<()> {
         return remove(file);
     }
     let (h, m) = at();
-    let line = format!(
-        "# Written by cbb update -auto on; cbb update -auto off removes it.\n{m} {h} * * * root {} update -timer\n",
-        exe.display()
-    );
+    let line = cron_line(exe, h, m);
     fs::create_dir_all("/usr/local/etc/cron.d").context("cannot make /usr/local/etc/cron.d")?;
     write_atomic(file, line.as_bytes(), 0o644)
 }
 
 fn windows_timer(on: bool, exe: &Path) -> Result<()> {
+    run("powershell.exe", &["-NoProfile", "-NonInteractive", "-Command", &windows_script(on, exe)])
+}
+
+/// The PowerShell that removes the timer's scheduled task and, when on,
+/// registers it again for exe.
+fn windows_script(on: bool, exe: &Path) -> String {
     // Unregister-ScheduledTask fails without the task, whatever its
     // ErrorAction says.
     let mut script = format!(
@@ -331,7 +347,7 @@ fn windows_timer(on: bool, exe: &Path) -> Result<()> {
              Register-ScheduledTask -TaskName '{WINDOWS_TASK}' -Description 'Checks for a CBB update once a day (cbb update -auto off removes it).' -Action $a -Trigger $t -Principal $p -Settings $s -Force | Out-Null"
         );
     }
-    run("powershell.exe", &["-NoProfile", "-NonInteractive", "-Command", &script])
+    script
 }
 
 /// Runs cbb update again from a copy of this program in the updater's
@@ -382,6 +398,92 @@ mod tests {
         assert_eq!(programs(&cbb).len(), 1);
         fs::write(dir.join(format!("cbb-helper{}", std::env::consts::EXE_SUFFIX)), b"").unwrap();
         assert_eq!(programs(&cbb).len(), if cfg!(windows) { 1 } else { 2 });
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[cfg(unix)] // only the Unix install test uses it
+    fn tempdir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("cbb-update-os-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn timers_of_the_other_systems() {
+        let exe = Path::new("/opt/a&b/<cbb>");
+        let plist = launchd_plist(exe, 3, 7);
+        assert!(plist.contains("<string>/opt/a&amp;b/&lt;cbb&gt;</string>"), "{plist}");
+        assert!(plist.contains("<integer>3</integer>") && plist.contains("<integer>7</integer>"));
+        assert!(plist.contains(LAUNCHD_LABEL));
+        assert_eq!(
+            cron_line(Path::new("/usr/local/bin/cbb"), 4, 30).lines().nth(1),
+            Some("30 4 * * * root /usr/local/bin/cbb update -timer")
+        );
+        let off = windows_script(false, Path::new(r"C:\cbb\cbb.exe"));
+        assert!(off.contains("Unregister-ScheduledTask") && !off.contains("New-ScheduledTaskAction"));
+        let exe_in = if cfg!(windows) { r"C:\it's\cbb.exe" } else { "/it's/cbb.exe" };
+        let on = windows_script(true, Path::new(exe_in));
+        assert!(on.contains("cbbw.exe") && on.contains("it''s") && on.contains("New-ScheduledTaskAction"), "{on}");
+        for _ in 0..50 {
+            let (h, m) = at();
+            assert!((1..=6).contains(&h) && m < 60, "{h}:{m}");
+        }
+        if cfg!(target_os = "linux") {
+            assert!(set_timer(true, exe).is_none());
+        }
+        assert_eq!(xml_escape("<&>"), "&lt;&amp;&gt;");
+    }
+
+    #[test]
+    fn folders_and_the_installed_program() {
+        let (dir, downloads) = paths();
+        assert!(!dir.as_os_str().is_empty() && !downloads.as_os_str().is_empty());
+        if std::env::var_os("CBB_UPDATE_FROM").is_none() {
+            assert!(installed_program().unwrap().is_absolute());
+        }
+        assert!(!in_opt());
+        assert!(install_script(Path::new("/x")).ends_with("install.sh") || cfg!(windows));
+        assert!(verify_signer(&[PathBuf::from("/a")], &[PathBuf::from("/b")]).is_ok() || cfg!(windows));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn runs_the_installer_and_tar() {
+        let dir = tempdir("install");
+        let script = install_script(&dir);
+        fs::create_dir_all(script.parent().unwrap()).unwrap();
+        let name = script.file_name().unwrap().to_str().unwrap().to_string();
+        // It asks nothing (CBB_UPDATING) and gets the program to install.
+        fs::write(
+            &script,
+            format!("[ \"$CBB_UPDATING\" = 1 ] && [ \"$1\" = /bin/x ] || {{ echo \"{name}: asked\" >&2; exit 1; }}\n"),
+        )
+        .unwrap();
+        install(&dir, Path::new("/bin/x")).unwrap();
+        fs::write(&script, format!("echo working\necho \"{name}: no room\" >&2\nexit 3\n")).unwrap();
+        let err = install(&dir, Path::new("/bin/x")).unwrap_err().to_string();
+        assert!(err.contains("failed: no room"), "{err}");
+        assert!(install(&dir.join("none"), Path::new("/bin/x")).is_err());
+
+        let src = dir.join("src");
+        fs::create_dir_all(src.join("top")).unwrap();
+        fs::write(src.join("top/f"), b"x").unwrap();
+        let tgz = dir.join("a.tar.gz");
+        assert!(Command::new("tar").arg("-czf").arg(&tgz).arg("-C").arg(&src).arg("top").status().unwrap().success());
+        let out = dir.join("out");
+        fs::create_dir_all(&out).unwrap();
+        assert!(unpack(&tgz, &out).unwrap().status.success());
+        assert_eq!(fs::read(out.join("top/f")).unwrap(), b"x");
+        assert!(!unpack(&dir.join("none.tar.gz"), &out).unwrap().status.success());
+
+        assert!(run("true", &[]).is_ok());
+        let err = run("sh", &["-c", "echo broken >&2; exit 1"]).unwrap_err().to_string();
+        assert!(err.contains("broken"), "{err}");
+        assert!(run("/nonexistent/program", &[]).is_err());
+        remove(&dir.join("none")).unwrap();
+        remove(&out.join("top/f")).unwrap();
+        assert!(remove(&out).is_err(), "removed a folder as a file");
         fs::remove_dir_all(&dir).unwrap();
     }
 }

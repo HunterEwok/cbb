@@ -1,6 +1,6 @@
 module github.com/HunterEwok/cbb/apps/desktop
 
-go 1.27.0
+go 1.27.3
 
 toolchain go1.27.4
 

@@ -20,3 +20,7 @@ pub use server::{Config, Relay};
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(all(test, feature = "tunnel"))]
+#[path = "../nettest/relayd.rs"]
+mod net_tests;

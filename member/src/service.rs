@@ -390,6 +390,7 @@ pub fn run(cfg: Config) -> Result<()> {
     // so the status says it until the service listens there itself.
     *svc.port.lock().unwrap() = cfg.port;
     let admin_socket = control::admin_socket(&cfg.socket);
+    crate::confirm::install(&|l: &str| log(l), &cfg.state_dir);
     for (ln, admin) in [(listen(&cfg.socket, false)?, false), (listen(&admin_socket, true)?, true)] {
         let svc = svc.clone();
         std::thread::spawn(move || accept_control(ln, move |conn| svc.serve(conn, admin)));
@@ -956,6 +957,20 @@ impl Service {
             self.set_muted(&node, on, until, &me)?;
         }
         Ok(())
+    }
+
+    /// Whether the request h only mutes or unmutes this device itself,
+    /// which the service also takes on its control socket: it changes
+    /// nothing for the rest of the group, and only an admin device may do it
+    /// (mute_op asks for the admin key), so the app turns its own device back
+    /// on without the administrator's password (docs/design.md, "Muting a
+    /// device").
+    fn own_device_op(&self, h: &Header) -> bool {
+        if !control::is_own_device_op(&h.op) || h.device.is_empty() {
+            return false;
+        }
+        let Ok(node) = self.node() else { return false };
+        crate::admin::find_device(&node, &h.device).is_ok_and(|d| d.id == node.identity().id.to_string())
     }
 
     /// The answer to sync and muted, as the phone's member gives it.
@@ -2102,16 +2117,43 @@ impl Service {
         if let Ok(c) = idle {
             let _ = c.set_read_timeout(None);
         }
-        if control::needs_admin(&m.header) && !admin {
-            let e = Error::msg(format!(
-                "{:?} changes the group, so the service takes it only on its admin socket, which only the administrator reaches",
-                m.header.op
-            ));
-            let _ = control::write(&mut out, &control::failure(&e));
+        // Confirming itself (confirm.rs): the challenge to sign, and on the
+        // admin socket a user's key.
+        if m.header.op == crate::confirm::OP_CHALLENGE || m.header.op == crate::confirm::OP_REGISTER {
+            // A user's key is registered only on the admin socket: no
+            // confirmation stands in for it.
+            let answer = if admin || m.header.op == crate::confirm::OP_CHALLENGE {
+                crate::confirm::answer(&out, &m.header).unwrap_or_else(|e| control::failure(&e))
+            } else {
+                control::failure(&Error::msg(format!(
+                    "{:?} is taken only on the admin socket, which only the administrator reaches",
+                    m.header.op
+                )))
+            };
+            let _ = control::write(&mut out, &answer);
             return;
         }
+        if control::needs_admin(&m.header) && !admin && !self.own_device_op(&m.header) {
+            // The user at the screen confirms it with the system's prompt
+            // instead (confirm.rs), where this system has one.
+            let res = if crate::confirm::supported() {
+                crate::confirm::check(&out, &m.header)
+            } else {
+                Err(Error::msg(format!(
+                    "{:?} changes the group, so the service takes it only on its admin socket, which only the administrator reaches",
+                    m.header.op
+                )))
+            };
+            match res {
+                Ok(()) => (self.log)(&format!("cbb: {} confirmed by the user at the screen", m.header.op)),
+                Err(e) => {
+                    let _ = control::write(&mut out, &control::failure(&e));
+                    return;
+                }
+            }
+        }
         let broken = self.broken.lock().unwrap().clone();
-        if let Some(detail) = broken.filter(|_| m.header.op != "leave") {
+        if let Some(detail) = broken.filter(|_| m.header.op != control::op::LEAVE) {
             let h = Header { error: BROKEN.to_string(), detail, done: true, ..Default::default() };
             let _ = control::write(&mut out, &control::reply(h, Vec::new()));
             return;
@@ -2601,7 +2643,7 @@ impl Service {
                 self.bugs.cancel();
                 Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
             }
-            "new" => self.new_group(),
+            control::op::NEW => self.new_group(),
             "remove" => {
                 let name = self.admin(|a| a.revoke(&h.device))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
@@ -2618,15 +2660,15 @@ impl Service {
                 let who = self.admin(|a| a.resolve())?;
                 Ok(control::reply(Header { name: who.join(", "), done: true, ..Default::default() }, Vec::new()))
             }
-            "make_admin" => {
+            control::op::MAKE_ADMIN => {
                 let name = self.admin(|a| a.make_admin(&h.device, h.allow_file_key))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
-            "key_level" => {
+            control::op::KEY_LEVEL => {
                 let below = self.admin(|a| a.set_key_level(&h.value))?;
                 Ok(control::reply(Header { below, done: true, ..Default::default() }, Vec::new()))
             }
-            "takeover_delay" => {
+            control::op::TAKEOVER_DELAY => {
                 self.admin(|a| a.set_takeover_delay(&h.value))?;
                 Ok(control::reply(Header::default(), Vec::new()))
             }
@@ -2634,11 +2676,11 @@ impl Service {
                 self.admin(|a| a.set_incoming(&h.value))?;
                 Ok(control::reply(Header::default(), Vec::new()))
             }
-            "take_over" => {
+            control::op::TAKE_OVER => {
                 let name = self.admin(|a| a.take_over(&h.device))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
-            "recover" => {
+            control::op::RECOVER => {
                 let text = String::from_utf8_lossy(&m.payload).to_string();
                 if h.name == "yubikey" {
                     self.admin(|a| a.recover_with_card(&text))?;
@@ -2647,7 +2689,7 @@ impl Service {
                 }
                 Ok(control::reply(Header::default(), Vec::new()))
             }
-            "hand_over" => {
+            control::op::HAND_OVER => {
                 let name = self.admin(|a| a.hand_over(&h.device))?;
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
@@ -2676,7 +2718,7 @@ impl Service {
                 };
                 Ok(control::reply(Header { name, done: true, ..Default::default() }, Vec::new()))
             }
-            "leave" => {
+            control::op::LEAVE => {
                 // The node stops first, so nothing writes the group's files
                 // again; the service then restarts in no group.
                 let node = self.node.read().unwrap().clone();

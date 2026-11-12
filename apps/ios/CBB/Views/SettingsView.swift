@@ -12,7 +12,7 @@ import UIKit
 /// relay) and, for admins, the group (copy lifetime, security level). No
 /// long texts under the items: a hard one has a tip, shown until closed.
 struct SettingsView: View {
-    @AppStorage(AccentChoice.key) private var color = Tokens.colors[0].name
+    @AppStorage(ThemeChoice.key) private var theme = Tokens.themes[0].name
     @AppStorage(Appearance.key) private var appearance = Appearance.system
     @AppStorage(LanguageChoice.key) private var language = LanguageChoice.system
     @Environment(\.palette) private var palette
@@ -59,7 +59,7 @@ struct SettingsView: View {
                     .accessibilityLabel(Text("Language"))
                     .accessibilityValue(Text(verbatim: language.title))
                 }
-                ColorSwatches(selection: $color)
+                ThemeSwatches(selection: $theme)
             }
             .listRowBackground(palette.surface)
             NotificationSettings()
@@ -448,37 +448,46 @@ extension SettingsView {
     }
 }
 
-/// The ten colours as round swatches, the chosen one ringed and ticked.
-struct ColorSwatches: View {
+/// The ten themes as round swatches, each its background and its accent,
+/// the chosen one ringed and ticked.
+struct ThemeSwatches: View {
     @Binding var selection: String
     @Environment(\.palette) private var palette
     /// A swatch's least width, growing with the text size so that a
-    /// colour's name breaks between words, never inside one.
-    @ScaledMetric(relativeTo: .caption2) private var width: CGFloat = 64
+    /// theme's name ("Liquid Glass" and its longer translations) breaks between words,
+    /// never inside one.
+    @ScaledMetric(relativeTo: .caption2) private var width: CGFloat = 76
+    /// The swatch grows with the text, as its name and checkmark do: at the
+    /// largest sizes a fixed swatch left the checkmark wider than it.
+    @ScaledMetric(relativeTo: .caption2) private var swatchSize: CGFloat = 36
 
     var body: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: width), spacing: Tokens.spacingSmall)], spacing: Tokens.spacingMedium) {
-            ForEach(Tokens.colors, id: \.name) { pair in
-                let swatch = palette.dark ? pair.dark : pair.light
-                let chosen = pair.name == selection
-                Button { selection = pair.name } label: {
+            ForEach(Tokens.themes, id: \.name) { theme in
+                let swatch = palette.dark ? theme.dark : theme.light
+                let chosen = theme.name == selection
+                Button { selection = theme.name } label: {
                     VStack(spacing: 6) {
-                        Circle()
-                            .fill(swatch.accent)
-                            .frame(width: 36, height: 36)
+                        ThemeSwatch(palette: swatch)
+                            .frame(width: swatchSize, height: swatchSize)
                             .overlay {
                                 if chosen {
-                                    Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(swatch.onAccent)
+                                    Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(swatch.text)
                                 }
                             }
                             .padding(3)
-                            .overlay(Circle().stroke(chosen ? swatch.accent : .clear, lineWidth: 2))
-                        Text(AccentChoice.title(pair.name)).font(.caption2).multilineTextAlignment(.center)
+                            .overlay(Circle().stroke(chosen ? palette.accent : palette.line, lineWidth: 2))
+                        // A hair space on each side: some names' last letter draws a
+                        // little past the text's own width (the Hindi names of Swiss and
+                        // Hardware), which the accessibility audit reports as clipped text.
+                        (Text(verbatim: "\u{200A}") + Text(ThemeChoice.title(theme.name)) + Text(verbatim: "\u{200A}"))
+                            .font(.caption2).multilineTextAlignment(.center)
                             .foregroundStyle(chosen ? palette.text : palette.textDim)
                     }
                     .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(Text(ThemeChoice.title(theme.name)))
                 .accessibilityAddTraits(chosen ? .isSelected : [])
             }
         }

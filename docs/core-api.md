@@ -3,8 +3,8 @@
 
 For engineers and anyone binding the Rust core into another program: the one call through
 which every program uses the core's rules (`cbb_core::api`, `core/src/api.rs`). Every
-program reaches it through the same C functions of `ffi/`: the phone kits link them, Go
-through cgo or wasm. The rules themselves are in
+program reaches it through the same C functions of `ffi/`, which the phone kits link; the Go
+programs do not link it. The rules themselves are in
 [records-v2.md](records-v2.md).
 
 ## Requests and answers
@@ -37,7 +37,7 @@ bytes, also bytes that are not a request. A change an older caller would misread
 `cbb_call` takes the request's bytes and returns the answer's, which the caller gives back
 with `cbb_free`; `cbb_abi` gives the ABI. `ffi/bind.sh` builds the library for the
 phones. The Swift kit links it as the module `CCbbCore` (`Core.swift`), the Kotlin kit loads
-`libcbb_ffi` through JNA (`Core.kt`); both check the ABI before each call, as Go does.
+`libcbb_ffi` through JNA (`Core.kt`); both check the ABI before each call.
 
 Built with the feature `join` (only the Aurora app's library, `bind.sh aurora`), the library
 also lets a phone join by its QR code with a key the core does not hold, the Aurora app's key
@@ -177,6 +177,8 @@ after the header, and an operation that answers more than once marks the last an
 | `entries_get` | computer | none | payload = the signed entry points this device holds, in the same JSON, or an error when it holds none or they have expired: `cbb global entries` shows them and `export` gives them as a string |
 | `release_want` | computer | none | payload = the names of the held release's archives that the members' hellos name and this device does not hold whole, a JSON array, at most 16; `null` on a device that is no hub: its `cbb update` downloads them for the group (protocol.md section 16). Only on the admin socket |
 | `update_way` | computer | none | payload = the VLESS settings (protocol.md section 11) of the hub this device reaches away from home, with the group's VLESS user ID, or none without VLESS: `cbb update` reaches the mirror through them (protocol.md section 16). Only on the admin socket |
+| `confirm` | computer | `value`: the operation to confirm | `{name, value}`: on Windows, `kept` while this user's last confirmation lasts (five minutes, not for what is confirmed each time), `register` when the user has no Windows Hello key registered, else `sign` with a 32-byte challenge in base64 in `value`, good for 120 seconds, for this user and this operation; elsewhere an error (protocol.md section 8) |
+| `confirm_key` | computer | `name`, `value`: a user's SID and the public key (PKCS #1 RSAPublicKey, base64) of the user's Windows Hello key | `{}`: the key that confirms this user's admin actions on Windows. Only on the admin socket |
 | `release_get` | computer | `{value}`: an archive's SHA-256 | `{part}`, its bytes in `data` answers, then `{}`: the archive of the held release, from this device or fetched from its peers |
 | `watch` | computer | `kind`, `via`, `inject` (the remote paste target the watcher offers: `desktop`, `tmux` or `console`), `paste_only` (it holds no clipboard and only pastes, like the Mac app), `act` (it runs the quick actions in its session), `images`, `files`, `html` (it writes copies with images, files, formatted text) + payload = what the clipboard holds now (may be empty) | an answer `{"ok":{}}` without `done`; then the watcher protocol (protocol.md, section 8) |
 | `away` | computer | `{name: "on", consent}`, `{name: "off"}`, `{name: "off", device}`, `{name: "hub", addrs, port, forwarder, forwarder_key, obfuscate_off?, vless_off?, keep?, consent?}`, `{name: "hub", device, forwarder?, forwarder_key?, addrs?, forward_only?}`, `{name: "hub-off", device?, force?}`, `{name: "move", device, forwarder?, forwarder_key?, addrs?}` or `{name: "relay", relay, relay_key, consent}` | `{status}` or an error. `on` makes the tunnel key and needs `consent` on a device whose keys sit in files (every computer whose keys are not in a TPM); `off` deletes `tunnel.json`, and with `device`, on an admin, sends that device an `away-off` command (protocol.md section 15); `hub` makes this device the group's hub, reached at `addrs` (`ip:port`) on UDP `port`, and through the forwarder at `forwarder` (`ip:port`) whose key `forwarder_key` pins (protocol.md section 13); at most 8 addresses with the forwarder's, and at least one of them; with `device`, on an admin, `hub` sends that member, an admin computer, a signed `hub` command that makes it a hub of the group as well (protocol.md section 11, "Several hubs"); with `forward_only` `true` the member may be any computer that is not an admin, and an admin with `hub` first signs it a device record with `forward_only` (protocol.md section 11, "Two kinds of hub"); reached at `addrs` and through `forwarder`, one of them at least; `relay` makes this device meet the others at the blind relay at `relay` (`ip:port`) whose key `relay_key` pins (`default` for the project's relay, protocol.md section 14), in place of a hub or its offer (protocol.md section 14), and needs `consent`, since the relay learns which devices talk; `move`, on the hub, an admin, makes the member `device` the hub in its place with a signed `hub` command (protocol.md section 15), reached at `addrs` and through `forwarder`, or through this hub's forwarder when none are given; with `hub`, `obfuscate_off` turns off the AmneziaWG a hub speaks by default and `vless_off` the VLESS it asks a forwarder for (protocol.md section 11; `obfuscate_off` goes with `vless_off` where there is a forwarder), and `keep` on a hub keeps its addresses, port and forwarder where the message gives none; `consent` with `hub` turns sync away from home on first where it is off; `hub-off` makes this device, a hub, stop being one, or with `device`, on an admin, sends that hub a `hub` command with a stop order, and refuses while the group has no other hub unless `force` (protocol.md section 11, "Stopping a hub"). The members connected learn the change from a `presence` message, without connecting again (protocol.md section 4, "Presence") |
@@ -487,12 +489,11 @@ most the records records-v2.md allows. `group_view` answers:
 release files in section 16, manifests in section 7): the strict form of signed bodies, then
 each field against its row. A release file's body is refused above 256 KiB, as its envelope
 allows. It checks the body alone; the signature, the signer and the time are the caller's, or
-`group_command`'s for a command. Go calls it in a build that links the core, as the release
-builds do, and decodes the fields from the bytes it checked; a build without the core reads the
-bodies with Go's own code, which the strict vectors keep the same. The phone kits call it for
+`group_command`'s for a command. Go reads the bodies with its own code, which the strict vectors
+keep the same. The phone kits call it for
 each command, credential and release file they take. A manifest comes inside a copy's sealed
 Content, in the canonical form, and `open_copy` reads it there for the phones; Go reads it with
-`clip.ParseManifest`, which asks `parse_body` first in a build that links the core, and the kits'
+`clip.ParseManifest`, and the kits'
 `Media.Manifest.parse` asks it for a manifest given as bytes.
 
 `seal_command` seals a command's orders to its receiver (protocol.md, section 15, "Sealed

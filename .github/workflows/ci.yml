@@ -29,6 +29,8 @@ jobs:
       tools: ${{ steps.parts.outputs.tools }}
       rust: ${{ steps.parts.outputs.rust }}
       ios: ${{ steps.parts.outputs.ios }}
+      iosapp: ${{ steps.parts.outputs.iosapp }}
+      swift: ${{ steps.parts.outputs.swift }}
       macos: ${{ steps.parts.outputs.macos }}
       desktop: ${{ steps.parts.outputs.desktop }}
       android: ${{ steps.parts.outputs.android }}
@@ -116,7 +118,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+        # macOS's go test runs in the job build (macOS): macOS runners are few.
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     env:
@@ -130,11 +133,15 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false # nothing to download; leaves the shared cache key to the check job
+      - name: apt packages for the next step
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: swtpm
+          cache: swtpm
       - name: swtpm, a software TPM for the tests of keys in a TPM
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q swtpm
           echo CBB_TPM_REQUIRED=1 >>"$GITHUB_ENV"
       - name: go test
         # bash: PowerShell splits -coverprofile=cover-go.out at the dot. Each
@@ -185,9 +192,11 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: swtpm, sway, Xvfb and the clipboard tools
-        run: |
-          sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends swtpm sway wl-clipboard xvfb xclip xterm foot >/dev/null
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: swtpm sway wl-clipboard xvfb xclip xterm foot
+          cache: desktop-tests
+          no-recommends: "true"
       - name: go test across packages
         env:
           CBB_TPM_REQUIRED: "1"
@@ -198,7 +207,9 @@ jobs:
           export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg"
           mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
           WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman sway >"$RUNNER_TEMP/sway.log" 2>&1 &
-          Xvfb :5 -screen 0 640x480x24 >"$RUNNER_TEMP/xvfb.log" 2>&1 &
+          # -noreset: Xvfb resets when its last client goes, and a test
+          # that connects while it does fails.
+          Xvfb :5 -screen 0 640x480x24 -noreset >"$RUNNER_TEMP/xvfb.log" 2>&1 &
           for _ in $(seq 1 100); do
             WAYLAND_DISPLAY=$(find "$XDG_RUNTIME_DIR" -maxdepth 1 -name 'wayland-[0-9]' -printf '%f\n' | head -n 1)
             [ -n "$WAYLAND_DISPLAY" ] && [ -e /tmp/.X11-unix/X5 ] && break
@@ -249,10 +260,12 @@ jobs:
           retention-days: 7
 
   # Sums up the coverage of every part that ran (docs/testing.md, "Coverage")
-  # and fails when one falls below its floor in tools/coverage/floor.json.
+  # and fails when one falls below its floor in tools/coverage/floor.json,
+  # or a hard gate fails: a closed audit finding whose test is gone, a
+  # format rule no vector refuses.
   coverage:
     name: coverage
-    needs: [changes, test, gocover, kit, android, rust, service]
+    needs: [changes, test, gocover, kit, androidkit, rust, service, service-coverage]
     if: always() && needs.changes.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -281,7 +294,9 @@ jobs:
           [ -f cov/coverage-rust-service.json ] && set -- "$@" -llvm rust-service=cov/coverage-rust-service.json
           [ -f cov/coverage-swift-kit.json ] && set -- "$@" -llvm swift-kit=cov/coverage-swift-kit.json
           [ -f cov/jacocoTestReport.xml ] && set -- "$@" -jacoco kotlin-kit=cov/jacocoTestReport.xml
-          go run ./tools/coverage -floor tools/coverage/floor.json -summary "$GITHUB_STEP_SUMMARY" "$@"
+          go run ./tools/coverage -floor tools/coverage/floor.json -target 90 -branch-target 80 -core-branch-target 90 \
+            -audit testdata/audit/closed.json -rules core/src -vectors testdata/format \
+            -summary "$GITHUB_STEP_SUMMARY" "$@"
 
   build:
     name: build (${{ matrix.systems }})
@@ -331,12 +346,25 @@ jobs:
           if-no-files-found: error
           retention-days: 1
   buildmac:
-    name: build (macOS)
+    name: test and build (macOS), homebrew, Mac app
     needs: changes
-    if: needs.changes.outputs.core == 'true'
-    # The Mac's pasteboard agent needs cgo, so the macOS targets are built on macOS.
+    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.tools == 'true' || needs.changes.outputs.macos == 'true'
+    # go test on macOS as the test job runs it on the other systems, then the
+    # macOS targets, built on macOS since the Mac's pasteboard agent needs cgo,
+    # then Homebrew's formula and the installers, then the Mac app and its
+    # .pkg, one after the other on one machine: macOS runners are few, and so
+    # the iPhone app's jobs, the longest, start at once (docs/testing.md,
+    # "Running tests in parallel"). Each installer is removed, and checked to
+    # be gone, before the next one installs.
     runs-on: macos-latest
-    timeout-minutes: 20
+    timeout-minutes: 75
+    env:
+      GO: ${{ needs.changes.outputs.core == 'true' || needs.changes.outputs.tools == 'true' }}
+      CORE: ${{ needs.changes.outputs.core }}
+      MACOS: ${{ needs.changes.outputs.macos }}
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_ANALYTICS: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -345,17 +373,31 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false # nothing to download; leaves the shared cache key to the check job
+      - name: go test
+        if: env.GO == 'true'
+        # The service's tests take close to go test's default 10 minutes
+        # under -race on the macOS runner, so the package has 20.
+        run: go test -race -timeout 20m -coverprofile=cover-go-macos-latest.out ./...
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: env.GO == 'true'
+        with:
+          name: coverage-go-macos-latest
+          path: cover-go-macos-latest.out
+          retention-days: 7
       - name: cbb, the Go programs beside it and the release archives, as at a release
+        if: env.CORE == 'true'
         env:
           CGO_ENABLED: "1"
         run: sh .github/build-targets.sh "$RUNNER_TEMP" darwin/arm64/vet darwin/amd64
       - name: the agent's helper has the pasteboard
+        if: env.CORE == 'true'
         # Without cgo the agent would start and fail; the helper must link AppKit.
         run: |
           for a in arm64 amd64; do
             otool -L "$RUNNER_TEMP/darwin-$a/cbb-helper" | grep -q AppKit.framework
           done
       - name: the programs run under the hardened runtime, as a release signs them (ad hoc here)
+        if: env.CORE == 'true'
         run: |
           for a in arm64 amd64; do
             for f in cbb cbb-helper cbb-forward cbb-relay; do
@@ -363,6 +405,191 @@ jobs:
             done
           done
           "$RUNNER_TEMP/darwin-arm64/cbb" version
+      - name: the formula installs a release archive
+        if: env.CORE == 'true'
+        run: |
+          # The archive as the release workflow makes it; the formula wants the
+          # other three too, so they are copies of it.
+          rel="$RUNNER_TEMP/release"
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          mkdir -p "$RUNNER_TEMP/bin"
+          CBB_VERSION=0.0.1 cargo build --locked --release -p cbb-member
+          cp target/release/cbb "$RUNNER_TEMP/bin/cbb"
+          go build -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v0.0.1" -o "$RUNNER_TEMP/bin/cbb-helper" ./cmd/cbb-helper
+          sh packaging/archive.sh "$RUNNER_TEMP/bin/cbb" darwin arm64 "$rel"
+          for n in darwin-amd64 linux-amd64 linux-arm64; do
+            cp "$rel/cbb-darwin-arm64.tar.gz" "$rel/cbb-$n.tar.gz"
+          done
+          (cd "$rel" && shasum -a 256 -- *.tar.gz >SHA256SUMS)
+          brew tap-new --no-git local/test
+          # Homebrew from 5.2 on loads formulas only from taps one trusts;
+          # earlier ones have no brew trust.
+          if brew trust --help >/dev/null 2>&1; then brew trust local/test; fi
+          formula="$(brew --repository local/test)/Formula/cbb.rb"
+          sh packaging/homebrew/formula.sh v0.0.1 "$rel/SHA256SUMS" "file://$rel" >"$formula"
+          cat "$formula"
+          brew audit --strict local/test/cbb
+          brew install local/test/cbb
+          brew test local/test/cbb
+          "$(brew --prefix)/bin/cbb" version | grep -q '^cbb 0.0.1 '
+      - name: install.sh --in-place runs a root-owned copy of Homebrew's binary, and uninstall.sh removes it all
+        if: env.CORE == 'true'
+        run: |
+          opt="$(brew --prefix)/opt/cbb"
+          share="$opt/share/cbb/packaging/macos"
+          daemon=tools.cbb
+          sudo sh "$share/install.sh" --express --in-place "$opt/bin/cbb" | tee "$RUNNER_TEMP/install.out"
+          grep -q 'express installation' "$RUNNER_TEMP/install.out"
+          grep -qx yes /etc/cbb/firewall.answer
+          # The service, which holds the group's keys, runs a root-owned copy, never the
+          # binary Homebrew's user may replace; the agent runs Homebrew's.
+          service="/Library/Application Support/cbb/bin/cbb"
+          grep -qF "<string>$service</string>" "/Library/LaunchDaemons/$daemon.plist"
+          if grep -qF "<string>$opt/bin/cbb</string>" "/Library/LaunchDaemons/$daemon.plist"; then
+            echo "the service runs Homebrew's binary" >&2
+            exit 1
+          fi
+          [ "$(sudo stat -f %Su "$service")" = root ]
+          [ "$(sudo stat -f %Su "$(dirname "$service")")" = root ]
+          grep -qF "<string>$opt/bin/cbb</string>" "/Library/LaunchAgents/$daemon.agent.plist"
+          plutil -lint "/Library/LaunchDaemons/$daemon.plist" "/Library/LaunchAgents/$daemon.agent.plist"
+          for _ in $(seq 20); do sudo "$opt/bin/cbb" status && break; sleep 0.5; done
+          sudo "$opt/bin/cbb" status | grep -q 'Not in a group'
+          fw=/usr/libexec/ApplicationFirewall/socketfilterfw
+          sudo "$fw" --listapps | grep -qF "$service"
+          # Again, as after an upgrade: it restarts the service and keeps the answer.
+          sudo sh "$share/install.sh" --in-place "$opt/bin/cbb" | tee "$RUNNER_TEMP/install.out"
+          grep -q 'as answered before' "$RUNNER_TEMP/install.out"
+          sudo "$fw" --listapps | grep -qF "$service"
+          for _ in $(seq 20); do sudo "$opt/bin/cbb" status && break; sleep 0.5; done
+          sudo sh "$share/uninstall.sh" --purge
+          for f in "/Library/LaunchDaemons/$daemon.plist" "/Library/LaunchAgents/$daemon.agent.plist" \
+            "/Library/Application Support/cbb" /Library/Logs/cbb; do
+            if [ -e "$f" ]; then
+              echo "uninstall.sh left $f" >&2
+              exit 1
+            fi
+          done
+          if sudo launchctl print "system/$daemon" >/dev/null 2>&1; then
+            echo "uninstall.sh left the service running" >&2
+            exit 1
+          fi
+          if sudo "$fw" --listapps | grep -qF "$service"; then
+            echo "uninstall.sh left the firewall entry" >&2
+            exit 1
+          fi
+          brew uninstall cbb
+      - name: get.sh installs a release archive on a Mac and refuses a changed one
+        if: env.CORE == 'true'
+        run: |
+          rel="$RUNNER_TEMP/release"
+          daemon=tools.cbb
+          (cd "$rel" && shasum -a 256 -- *.tar.gz >SHA256SUMS)
+          sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --no-firewall
+          for _ in $(seq 20); do sudo /usr/local/bin/cbb status && break; sleep 0.5; done
+          sudo /usr/local/bin/cbb status | grep -q 'Not in a group'
+          # --port moves the member port, and a reinstall without it keeps it.
+          sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --no-firewall --port 9000 | tee "$RUNNER_TEMP/get.out"
+          grep -q 'TCP port 9000' "$RUNNER_TEMP/get.out"
+          grep -qx 'CBB_PORT=9000' /etc/cbb/cbb.env
+          # The member port listens once the Mac is in a group.
+          for _ in $(seq 20); do sudo /usr/local/bin/cbb status >/dev/null && break; sleep 0.5; done
+          sudo /usr/local/bin/cbb new
+          for _ in $(seq 60); do sudo lsof -nP -iTCP:9000 -sTCP:LISTEN && break; sleep 0.5; done
+          if ! sudo lsof -nP -iTCP:9000 -sTCP:LISTEN | grep -q cbb; then
+            echo "the member port does not listen in 30 s; the service's log:" >&2
+            sudo cat /Library/Logs/cbb/service.log >&2 || true
+            exit 1
+          fi
+          sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --no-firewall | tee "$RUNNER_TEMP/get.out"
+          grep -q 'TCP port 9000' "$RUNNER_TEMP/get.out"
+          echo tampered >>"$rel/cbb-darwin-arm64.tar.gz"
+          if sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --no-firewall; then
+            echo "get.sh installed an archive that does not match SHA256SUMS" >&2
+            exit 1
+          fi
+          sudo sh /usr/local/share/cbb/uninstall.sh --purge
+          for f in /usr/local/bin/cbb /usr/local/share/cbb /etc/cbb "/Library/LaunchDaemons/$daemon.plist"; do
+            if [ -e "$f" ]; then
+              echo "uninstall.sh left $f" >&2
+              exit 1
+            fi
+          done
+      # The Mac app, the last: what the installers above left was checked to be gone.
+      - name: generate the Xcode project
+        if: env.MACOS == 'true'
+        working-directory: apps/macos
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: build and test, signed ad hoc
+        if: env.MACOS == 'true'
+        working-directory: apps/macos
+        run: |
+          set -o pipefail
+          xcodebuild test -project CBBMac.xcodeproj -scheme CBBMac -destination 'platform=macOS' \
+            -resultBundlePath "$RUNNER_TEMP/mac.xcresult" \
+            CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= | tail -n 200
+      # The windows' pictures in every language (ReadersUITests), to look at
+      # what the accessibility audit found.
+      - name: the windows' pictures
+        if: always() && env.MACOS == 'true'
+        run: xcrun xcresulttool export attachments --path "$RUNNER_TEMP/mac.xcresult" --output-path "$RUNNER_TEMP/mac-windows" || true
+      - name: the English window in the log
+        if: failure() && env.MACOS == 'true'
+        run: python3 .github/pictures.py "$RUNNER_TEMP/mac-windows" -en
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always() && env.MACOS == 'true'
+        with:
+          name: mac-windows
+          path: ${{ runner.temp }}/mac-windows
+          retention-days: 7
+          if-no-files-found: ignore
+      - name: the .pkg installs the app and the service, and uninstall.sh removes them
+        if: env.MACOS == 'true'
+        # As the release builds it (release.yml, "the Mac app and the .pkg"),
+        # signed ad hoc and the package unsigned.
+        run: |
+          set -o pipefail
+          (cd apps/macos && xcodebuild build -project CBBMac.xcodeproj -scheme CBBMac -configuration Release \
+            -destination 'generic/platform=macOS' -derivedDataPath "$RUNNER_TEMP/derived" \
+            ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO | tail -n 50)
+          app="$RUNNER_TEMP/derived/Build/Products/Release/CBB.app"
+          sh packaging/macos/sign.sh - "$app"
+          rustup toolchain install stable --profile minimal --target aarch64-apple-darwin,x86_64-apple-darwin
+          for a in arm64 amd64; do
+            t=aarch64-apple-darwin
+            [ "$a" = arm64 ] || t=x86_64-apple-darwin
+            cargo +stable build --locked --release -p cbb-member --target "$t"
+            cp "target/$t/release/cbb" "$RUNNER_TEMP/cbb-$a"
+            CGO_ENABLED=1 GOARCH=$a go build -trimpath -o "$RUNNER_TEMP/cbb-helper-$a" ./cmd/cbb-helper
+            sh packaging/macos/sign.sh - "$RUNNER_TEMP/cbb-$a"
+            sh packaging/macos/sign.sh - "$RUNNER_TEMP/cbb-helper-$a"
+          done
+          lipo -create "$RUNNER_TEMP/cbb-arm64" "$RUNNER_TEMP/cbb-amd64" -output "$RUNNER_TEMP/cbb"
+          lipo -create "$RUNNER_TEMP/cbb-helper-arm64" "$RUNNER_TEMP/cbb-helper-amd64" -output "$RUNNER_TEMP/cbb-helper"
+          sh packaging/macos/pkg.sh 0.0.1 "$RUNNER_TEMP/cbb" "$app" "$RUNNER_TEMP/cbb-0.0.1.pkg"
+          sudo installer -pkg "$RUNNER_TEMP/cbb-0.0.1.pkg" -target / -verboseR
+          [ -x /Applications/CBB.app/Contents/MacOS/CBB ]
+          pkgutil --pkg-info tools.cbb.pkg
+          for _ in $(seq 20); do sudo /usr/local/bin/cbb status && break; sleep 0.5; done
+          sudo /usr/local/bin/cbb status | grep -q 'Not in a group'
+          [ ! -e "/Library/Application Support/cbb-package" ]
+          # The service's folder is the _cbb account's alone.
+          [ -x /usr/local/bin/cbb-helper ] && sudo test -x "/Library/Application Support/cbb/bin/cbb-helper"
+          sudo sh /usr/local/share/cbb/uninstall.sh --purge
+          for f in /Applications/CBB.app /usr/local/bin/cbb /usr/local/bin/cbb-helper "/Library/Application Support/cbb" /Library/LaunchDaemons/tools.cbb.plist; do
+            if [ -e "$f" ]; then
+              echo "uninstall.sh left $f" >&2
+              exit 1
+            fi
+          done
+          if pkgutil --pkg-info tools.cbb.pkg >/dev/null 2>&1; then
+            echo "uninstall.sh left the package's receipt" >&2
+            exit 1
+          fi
+
   mips:
     name: test (linux/mips under qemu)
     needs: changes
@@ -384,9 +611,10 @@ jobs:
           go-version-file: go.mod
           cache: false # nothing to download; leaves the shared cache key to the check job
       - name: qemu for mips programs
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q qemu-user qemu-user-binfmt
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: qemu-user qemu-user-binfmt
+          cache: qemu-user
       - name: go test the network and the group under qemu-mips
         run: >-
           go test -timeout 20m -exec "$(command -v qemu-mips-static || command -v qemu-mips)" ./internal/clip ./internal/control ./internal/group
@@ -433,7 +661,7 @@ jobs:
             go test ./... </dev/null
             # The desktop connector against X11 under Xvfb, as on Linux.
             go test -c -o /tmp/desktop.test ./internal/desktop
-            Xvfb :5 -screen 0 640x480x24 >/tmp/xvfb.log 2>&1 &
+            Xvfb :5 -screen 0 640x480x24 -noreset >/tmp/xvfb.log 2>&1 &
             # Its socket shows before it takes clients (TestX11 met EOF):
             # wait until xclip reaches it, with no selection to read yet.
             for _ in $(seq 1 100); do
@@ -552,10 +780,13 @@ jobs:
         run: sh tools/e2e/openwrt.sh rootfs "$RUNNER_TEMP/release"
       - name: the apk feed, signed with a test key, installs and removes it
         run: sh tools/e2e/openwrt.sh feed "$RUNNER_TEMP/release"
+      - name: apt packages for the next step
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: qemu-system-x86 sshpass
+          cache: openwrt-vm
       - name: on OpenWrt booted in QEMU, the service, the hub's rule in fw4, the wait for NTP and get.sh --no-helper
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q qemu-system-x86 sshpass
           sudo chmod 666 /dev/kvm
           sh tools/e2e/openwrt.sh vm "$RUNNER_TEMP/release"
 
@@ -673,16 +904,18 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: install sway, Xvfb, xterm, foot and the clipboard tools
-        run: |
-          sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends sway wl-clipboard xvfb xclip xterm foot >/dev/null
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: sway wl-clipboard xvfb xclip xterm foot
+          cache: desktop-clipboards
+          no-recommends: "true"
       - name: Wayland data-control under headless sway, and X11 under Xvfb
         run: |
           go test -c -o "$RUNNER_TEMP/desktop.test" ./internal/desktop
           export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg"
           mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
           WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman sway >"$RUNNER_TEMP/sway.log" 2>&1 &
-          Xvfb :5 -screen 0 640x480x24 >"$RUNNER_TEMP/xvfb.log" 2>&1 &
+          Xvfb :5 -screen 0 640x480x24 -noreset >"$RUNNER_TEMP/xvfb.log" 2>&1 &
           for _ in $(seq 1 100); do
             WAYLAND_DISPLAY=$(find "$XDG_RUNTIME_DIR" -maxdepth 1 -name 'wayland-[0-9]' -printf '%f\n' | head -n 1)
             [ -n "$WAYLAND_DISPLAY" ] && [ -e /tmp/.X11-unix/X5 ] && break
@@ -794,9 +1027,13 @@ jobs:
             echo "manifest.sh wrote a manifest without a checksum" >&2
             exit 1
           fi
+      - name: apt packages for the next step
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: desktop-file-utils
+          cache: desktop-entry
       - name: desktop entry
         run: |
-          sudo apt-get install -y -qq desktop-file-utils >/dev/null
           desktop-file-validate packaging/linux/cbb-desktop.desktop
       - name: get.sh installs a release archive and refuses a changed one
         run: |
@@ -1021,133 +1258,6 @@ jobs:
           sh ~/.local/share/cbb/uninstall.sh --purge
           for f in ~/.local/bin/cbb ~/.config/systemd/user/cbb.service ~/.config/systemd/user/cbb-agent.service \
             ~/.config/autostart/cbb-desktop.desktop ~/.local/share/cbb ~/.local/state/cbb ~/.local/state/cbb-update; do
-            if [ -e "$f" ]; then
-              echo "uninstall.sh left $f" >&2
-              exit 1
-            fi
-          done
-
-  homebrew:
-    name: homebrew
-    needs: changes
-    if: needs.changes.outputs.core == 'true'
-    runs-on: macos-latest
-    timeout-minutes: 20
-    env:
-      HOMEBREW_NO_AUTO_UPDATE: "1"
-      HOMEBREW_NO_ANALYTICS: "1"
-      HOMEBREW_NO_INSTALL_CLEANUP: "1"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: false
-      - name: the formula installs a release archive
-        run: |
-          # The archive as the release workflow makes it; the formula wants the
-          # other three too, so they are copies of it.
-          rel="$RUNNER_TEMP/release"
-          rustup toolchain install stable --profile minimal
-          rustup default stable
-          mkdir -p "$RUNNER_TEMP/bin"
-          CBB_VERSION=0.0.1 cargo build --locked --release -p cbb-member
-          cp target/release/cbb "$RUNNER_TEMP/bin/cbb"
-          go build -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v0.0.1" -o "$RUNNER_TEMP/bin/cbb-helper" ./cmd/cbb-helper
-          sh packaging/archive.sh "$RUNNER_TEMP/bin/cbb" darwin arm64 "$rel"
-          for n in darwin-amd64 linux-amd64 linux-arm64; do
-            cp "$rel/cbb-darwin-arm64.tar.gz" "$rel/cbb-$n.tar.gz"
-          done
-          (cd "$rel" && shasum -a 256 -- *.tar.gz >SHA256SUMS)
-          brew tap-new --no-git local/test
-          # Homebrew from 5.2 on loads formulas only from taps one trusts;
-          # earlier ones have no brew trust.
-          if brew trust --help >/dev/null 2>&1; then brew trust local/test; fi
-          formula="$(brew --repository local/test)/Formula/cbb.rb"
-          sh packaging/homebrew/formula.sh v0.0.1 "$rel/SHA256SUMS" "file://$rel" >"$formula"
-          cat "$formula"
-          brew audit --strict local/test/cbb
-          brew install local/test/cbb
-          brew test local/test/cbb
-          "$(brew --prefix)/bin/cbb" version | grep -q '^cbb 0.0.1 '
-      - name: install.sh --in-place runs a root-owned copy of Homebrew's binary, and uninstall.sh removes it all
-        run: |
-          opt="$(brew --prefix)/opt/cbb"
-          share="$opt/share/cbb/packaging/macos"
-          daemon=tools.cbb
-          sudo sh "$share/install.sh" --express --in-place "$opt/bin/cbb" | tee "$RUNNER_TEMP/install.out"
-          grep -q 'express installation' "$RUNNER_TEMP/install.out"
-          grep -qx yes /etc/cbb/firewall.answer
-          # The service, which holds the group's keys, runs a root-owned copy, never the
-          # binary Homebrew's user may replace; the agent runs Homebrew's.
-          service="/Library/Application Support/cbb/bin/cbb"
-          grep -qF "<string>$service</string>" "/Library/LaunchDaemons/$daemon.plist"
-          if grep -qF "<string>$opt/bin/cbb</string>" "/Library/LaunchDaemons/$daemon.plist"; then
-            echo "the service runs Homebrew's binary" >&2
-            exit 1
-          fi
-          [ "$(sudo stat -f %Su "$service")" = root ]
-          [ "$(sudo stat -f %Su "$(dirname "$service")")" = root ]
-          grep -qF "<string>$opt/bin/cbb</string>" "/Library/LaunchAgents/$daemon.agent.plist"
-          plutil -lint "/Library/LaunchDaemons/$daemon.plist" "/Library/LaunchAgents/$daemon.agent.plist"
-          for _ in $(seq 20); do sudo "$opt/bin/cbb" status && break; sleep 0.5; done
-          sudo "$opt/bin/cbb" status | grep -q 'Not in a group'
-          fw=/usr/libexec/ApplicationFirewall/socketfilterfw
-          sudo "$fw" --listapps | grep -qF "$service"
-          # Again, as after an upgrade: it restarts the service and keeps the answer.
-          sudo sh "$share/install.sh" --in-place "$opt/bin/cbb" | tee "$RUNNER_TEMP/install.out"
-          grep -q 'as answered before' "$RUNNER_TEMP/install.out"
-          sudo "$fw" --listapps | grep -qF "$service"
-          for _ in $(seq 20); do sudo "$opt/bin/cbb" status && break; sleep 0.5; done
-          sudo sh "$share/uninstall.sh" --purge
-          for f in "/Library/LaunchDaemons/$daemon.plist" "/Library/LaunchAgents/$daemon.agent.plist" \
-            "/Library/Application Support/cbb" /Library/Logs/cbb; do
-            if [ -e "$f" ]; then
-              echo "uninstall.sh left $f" >&2
-              exit 1
-            fi
-          done
-          if sudo launchctl print "system/$daemon" >/dev/null 2>&1; then
-            echo "uninstall.sh left the service running" >&2
-            exit 1
-          fi
-          if sudo "$fw" --listapps | grep -qF "$service"; then
-            echo "uninstall.sh left the firewall entry" >&2
-            exit 1
-          fi
-          brew uninstall cbb
-      - name: get.sh installs a release archive on a Mac and refuses a changed one
-        run: |
-          rel="$RUNNER_TEMP/release"
-          daemon=tools.cbb
-          (cd "$rel" && shasum -a 256 -- *.tar.gz >SHA256SUMS)
-          sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --no-firewall
-          for _ in $(seq 20); do sudo /usr/local/bin/cbb status && break; sleep 0.5; done
-          sudo /usr/local/bin/cbb status | grep -q 'Not in a group'
-          # --port moves the member port, and a reinstall without it keeps it.
-          sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --no-firewall --port 9000 | tee "$RUNNER_TEMP/get.out"
-          grep -q 'TCP port 9000' "$RUNNER_TEMP/get.out"
-          grep -qx 'CBB_PORT=9000' /etc/cbb/cbb.env
-          # The member port listens once the Mac is in a group.
-          for _ in $(seq 20); do sudo /usr/local/bin/cbb status >/dev/null && break; sleep 0.5; done
-          sudo /usr/local/bin/cbb new
-          for _ in $(seq 60); do sudo lsof -nP -iTCP:9000 -sTCP:LISTEN && break; sleep 0.5; done
-          if ! sudo lsof -nP -iTCP:9000 -sTCP:LISTEN | grep -q cbb; then
-            echo "the member port does not listen in 30 s; the service's log:" >&2
-            sudo cat /Library/Logs/cbb/service.log >&2 || true
-            exit 1
-          fi
-          sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --no-firewall | tee "$RUNNER_TEMP/get.out"
-          grep -q 'TCP port 9000' "$RUNNER_TEMP/get.out"
-          echo tampered >>"$rel/cbb-darwin-arm64.tar.gz"
-          if sudo CBB_VERIFY=skip CBB_RELEASE_DIR="$rel" sh packaging/get.sh --no-firewall; then
-            echo "get.sh installed an archive that does not match SHA256SUMS" >&2
-            exit 1
-          fi
-          sudo sh /usr/local/share/cbb/uninstall.sh --purge
-          for f in /usr/local/bin/cbb /usr/local/share/cbb /etc/cbb "/Library/LaunchDaemons/$daemon.plist"; do
             if [ -e "$f" ]; then
               echo "uninstall.sh left $f" >&2
               exit 1
@@ -1488,22 +1598,32 @@ jobs:
   kit:
     name: phone kit (${{ matrix.os }})
     needs: changes
-    if: needs.changes.outputs.ios == 'true'
+    # The macOS job also builds the phones' libraries with the latest Rust
+    # (phone core), when the Rust changes: macOS runners are few.
+    if: needs.changes.outputs.ios == 'true' || needs.changes.outputs.rust == 'true'
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 35
+    timeout-minutes: 50
+    env:
+      KIT: ${{ needs.changes.outputs.ios }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: the Rust build from this pull request's cache
+        if: env.KIT == 'true' && runner.os == 'macOS'
+        uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
+        with:
+          name: kit
       - name: the Rust core, which the kit links
+        if: env.KIT == 'true'
         # Built on the runner: the Swift container has no Rust.
         run: sh ffi/bind.sh host "$RUNNER_TEMP/core"
       - name: swift test (in the Swift container on Linux)
-        if: runner.os == 'Linux'
+        if: env.KIT == 'true' && runner.os == 'Linux'
         run: |
           mkdir interop-out
           docker run --rm -v "$PWD:/src" -v "$RUNNER_TEMP/core:/core" -w /src/apps/ios/CBBKit -e CBB_INTEROP_OUT=/src/interop-out swift:6.2-noble sh -euc '
@@ -1511,12 +1631,12 @@ jobs:
             swift build -c release --product cbb-interop --static-swift-stdlib -Xlinker -L/core
             cp "$(swift build -c release --show-bin-path)/cbb-interop" /src/cbb-interop'
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        if: runner.os == 'Linux'
+        if: env.KIT == 'true' && runner.os == 'Linux'
         with:
           go-version-file: go.mod
           cache: false
       - name: the core and Go read what the Swift phone wrote
-        if: runner.os == 'Linux'
+        if: env.KIT == 'true' && runner.os == 'Linux'
         run: |
           # swift test just wrote testdata/interop/swift-member.json, and to
           # interop-out the records it signed, a certificate it renewed and
@@ -1524,7 +1644,7 @@ jobs:
           cargo test --locked -p cbb-core --lib vectors::swift_member_frames
           CBB_INTEROP_OUT="$PWD/interop-out" go test ./internal/group -run 'TestSwiftRecords|TestSwiftRenewal|TestSwiftAdmin|TestSwiftRoot|TestSwiftComputerAdmin|TestSwiftCommand' -v
       - name: swift test
-        if: runner.os == 'macOS'
+        if: env.KIT == 'true' && runner.os == 'macOS'
         working-directory: apps/ios/CBBKit
         run: |
           swift test --enable-code-coverage -Xlinker -L"$RUNNER_TEMP/core"
@@ -1532,12 +1652,12 @@ jobs:
           swift build --product cbb-interop -Xlinker -L"$RUNNER_TEMP/core"
           cp "$(swift build --show-bin-path)/cbb-interop" "$GITHUB_WORKSPACE/cbb-interop"
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        if: runner.os == 'macOS'
+        if: env.KIT == 'true' && runner.os == 'macOS'
         with:
           go-version-file: go.mod
           cache: false
       - name: the Swift phone pairs both ways with the computers' cbb and syncs with it over TLS
-        if: runner.os == 'macOS'
+        if: env.KIT == 'true' && runner.os == 'macOS'
         run: |
           # The computer is the Rust cbb, with cbb-helper beside it.
           cargo build --locked --release -p cbb-member
@@ -1549,35 +1669,77 @@ jobs:
           security unlock-keychain -p ci ci.keychain
           security set-keychain-settings ci.keychain
           CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_SWIFT_INTEROP_TLS="$PWD/cbb-interop" go test -timeout 5m ./internal/service -run 'TestSwift' -v
+      - name: the Rust build into this pull request's cache
+        if: env.KIT == 'true' && runner.os == 'macOS'
+        uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
+        with:
+          name: kit
+          save: "true"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: runner.os == 'macOS'
+        if: env.KIT == 'true' && runner.os == 'macOS'
         with:
           name: coverage-swift-kit
           path: coverage-swift-kit.json
           retention-days: 7
+      - name: the phone core, the iPhone's libraries with the latest Rust
+        # The apps' jobs build them with the Rust the apps pin; this follows
+        # the latest. Last, so the kit's steps keep the runner's Rust.
+        if: needs.changes.outputs.rust == 'true' && runner.os == 'macOS'
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          sh ffi/bind.sh ios "$RUNNER_TEMP/phonecore"
+          find "$RUNNER_TEMP/phonecore" -maxdepth 3 | sort
 
   app:
-    name: iPhone app
+    name: iPhone app (${{ matrix.device }})
     needs: changes
-    if: needs.changes.outputs.ios == 'true'
+    if: needs.changes.outputs.iosapp == 'true'
+    # The iPhone and the iPad run their UI tests on machines of their own at
+    # the same time (docs/testing.md, "Running tests in parallel"); one after
+    # the other they took some 40 minutes.
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [iPhone, iPad]
     runs-on: macos-latest
     # The libraries and the build take about 15 minutes, and a slow runner
     # can spend 5 minutes booting a simulator for each of the retries
-    # below: 45 minutes cut off a run whose tests had passed on the iPhone
-    # while the iPad's first try was being retried. The languages' and
-    # accessibility's UI tests (ReadersUITests) launch the app eighteen
-    # times on each simulator.
-    timeout-minutes: 95
+    # below. The languages' and accessibility's UI tests (ReadersUITests)
+    # launch the app eighteen times on the simulator.
+    timeout-minutes: 70
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - name: the simulator boots while Rust builds
+        # A fresh runner's first boot spends minutes migrating its data; started
+        # here, the boot runs beside the Rust build, and test_on below finds the
+        # simulator up.
+        env:
+          DEVICE: ${{ matrix.device }}
+        run: |
+          # The first available iPhone or iPad simulator: the app is universal.
+          device=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          print(next(d["udid"] for runtime, ds in devices.items() if "iOS" in runtime for d in ds if d["name"].startswith(sys.argv[1])))' "$DEVICE")
+          echo "SIMULATOR=$device" >>"$GITHUB_ENV"
+          xcrun simctl boot "$device" || true
+      - name: the Rust build from this pull request's cache
+        uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
         with:
-          go-version-file: go.mod
-          cache: false
+          name: ios-sim
       - name: build the Rust core, which the kit links
-        run: sh ffi/bind.sh ios apps/ios/CbbCore
+        # Only the simulator's library for this Mac's processor, which is all
+        # the tests link; the phone core job builds every library of the
+        # three targets.
+        run: sh ffi/bind.sh ios-sim apps/ios/CbbCore
+      - name: the Rust build into this pull request's cache
+        uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
+        with:
+          name: ios-sim
+          save: "true"
       - name: generate the Xcode project
         working-directory: apps/ios
         run: |
@@ -1587,15 +1749,7 @@ jobs:
         working-directory: apps/ios
         run: |
           set -o pipefail
-          # The first available iPhone and iPad simulators: the app is universal.
-          pick() {
-            xcrun simctl list devices available -j | python3 -c '
-          import json, sys
-          devices = json.load(sys.stdin)["devices"]
-          print(next(d["udid"] for runtime, ds in devices.items() if "iOS" in runtime for d in ds if d["name"].startswith(sys.argv[1])))' "$1"
-          }
-          iphone=$(pick iPhone)
-          ipad=$(pick iPad)
+          device=$SIMULATOR
           # Ad hoc signing needs no Apple account, and without a signature the
           # simulator gives the app no keychain (-34018), which its TLS tests use.
           sign=(CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=)
@@ -1609,21 +1763,23 @@ jobs:
           #
           # XCTest can also connect and then fail to launch the app itself:
           # "Failed to launch <XCUIApplicationImpl ...>: Timed out while
-          # launching application via Xcode", seen on the first launch on a
+          # launching application via Xcode", or "Failed to get background
+          # assertion for target app", seen on the first launch on a
           # simulator fresh from its data migration while the later tests
           # launched it at once. When every failed test failed only so, those
           # tests (and only they) run again on the simulator booted again; a
           # failed assertion is never run again.
+          launch="Failed to launch <XCUIApplicationImpl|Failed to get background assertion for target app"
           failed_tests() {
             sed -nE "s/^Test Case '-\[([A-Za-z0-9_]+)\.([A-Za-z0-9_]+) ([A-Za-z0-9_]+)\]' failed .*/\1\/\2\/\3/p" "$1" | sort -u
           }
           launch_failed() {
-            sed -nE "s/.*: error: -\[([A-Za-z0-9_]+)\.([A-Za-z0-9_]+) ([A-Za-z0-9_]+)\] : Failed to launch <XCUIApplicationImpl.*/\1\/\2\/\3/p" "$1" | sort -u
+            sed -nE "s/.*: error: -\[([A-Za-z0-9_]+)\.([A-Za-z0-9_]+) ([A-Za-z0-9_]+)\] : ($launch).*/\1\/\2\/\3/p" "$1" | sort -u
           }
           only_launches() {
             failed=$(failed_tests "$1")
             [ -n "$failed" ] && [ "$failed" = "$(launch_failed "$1")" ] &&
-              ! grep -E ": error: " "$1" | grep -qv ": Failed to launch <XCUIApplicationImpl"
+              ! grep -E ": error: " "$1" | grep -qvE ": ($launch)"
           }
           test_on() {
             log="${RUNNER_TEMP:-/tmp}/test-$1.log"
@@ -1685,13 +1841,13 @@ jobs:
             return 1
           }
           # Built once, then tested on one simulator at a time.
-          xcodebuild build-for-testing -project CBB.xcodeproj -scheme CBB -destination "id=$iphone" \
+          xcodebuild build-for-testing -project CBB.xcodeproj -scheme CBB -destination "id=$device" \
             "${sign[@]}" | tail -n 50
-          test_on "$iphone"
-          test_on "$ipad"
+          test_on "$device"
       # The screens' pictures in every language (ReadersUITests), to look at
-      # what the accessibility audit found; the English ones also go into
-      # the log as small JPEGs when the tests fail.
+      # what the accessibility audit found; the English ones, the failed
+      # audits' and the screens a lost tap met (ReadersUITests.lostTap) also
+      # go into the log as small JPEGs when the tests fail.
       - name: the screens' pictures
         if: always()
         run: |
@@ -1699,100 +1855,35 @@ jobs:
             [ -d "$r" ] || continue
             xcrun xcresulttool export attachments --path "$r" --output-path "$RUNNER_TEMP/ios-screens/$(basename "$r" .xcresult)" || true
           done
+      # The attachments alone do not show what a failed test did, such as a
+      # tap the simulator lost: each failed test's activities, every launch,
+      # tap, wait and query with its time, go into the log and beside the
+      # pictures.
+      - name: the failed tests' activities
+        if: always()
+        run: python3 .github/activities.py "$RUNNER_TEMP/ios-screens/activities" "$RUNNER_TEMP"/ios-*.xcresult
       - name: the English screens in the log
         if: failure()
-        run: python3 .github/pictures.py "$RUNNER_TEMP/ios-screens" -en failed-
+        run: python3 .github/pictures.py "$RUNNER_TEMP/ios-screens" -en failed- lost-tap-
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: ios-screens
+          name: ios-screens-${{ matrix.device }}
           path: ${{ runner.temp }}/ios-screens
           retention-days: 7
           if-no-files-found: ignore
-  macapp:
-    name: Mac app
-    needs: changes
-    if: needs.changes.outputs.macos == 'true'
-    runs-on: macos-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: generate the Xcode project
-        working-directory: apps/macos
-        run: |
-          brew install xcodegen
-          xcodegen generate
-      - name: build and test, signed ad hoc
-        working-directory: apps/macos
-        run: |
-          set -o pipefail
-          xcodebuild test -project CBBMac.xcodeproj -scheme CBBMac -destination 'platform=macOS' \
-            -resultBundlePath "$RUNNER_TEMP/mac.xcresult" \
-            CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= | tail -n 200
-      # The windows' pictures in every language (ReadersUITests), to look at
-      # what the accessibility audit found.
-      - name: the windows' pictures
-        if: always()
-        run: xcrun xcresulttool export attachments --path "$RUNNER_TEMP/mac.xcresult" --output-path "$RUNNER_TEMP/mac-windows" || true
-      - name: the English window in the log
-        if: failure()
-        run: python3 .github/pictures.py "$RUNNER_TEMP/mac-windows" -en
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
-        with:
-          name: mac-windows
-          path: ${{ runner.temp }}/mac-windows
-          retention-days: 7
-          if-no-files-found: ignore
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: false
-      - name: the .pkg installs the app and the service, and uninstall.sh removes them
-        # As the release builds it (release.yml, "the Mac app and the .pkg"),
-        # signed ad hoc and the package unsigned.
-        run: |
-          set -o pipefail
-          (cd apps/macos && xcodebuild build -project CBBMac.xcodeproj -scheme CBBMac -configuration Release \
-            -destination 'generic/platform=macOS' -derivedDataPath "$RUNNER_TEMP/derived" \
-            ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO | tail -n 50)
-          app="$RUNNER_TEMP/derived/Build/Products/Release/CBB.app"
-          sh packaging/macos/sign.sh - "$app"
-          rustup toolchain install stable --profile minimal --target aarch64-apple-darwin,x86_64-apple-darwin
-          for a in arm64 amd64; do
-            t=aarch64-apple-darwin
-            [ "$a" = arm64 ] || t=x86_64-apple-darwin
-            cargo +stable build --locked --release -p cbb-member --target "$t"
-            cp "target/$t/release/cbb" "$RUNNER_TEMP/cbb-$a"
-            CGO_ENABLED=1 GOARCH=$a go build -trimpath -o "$RUNNER_TEMP/cbb-helper-$a" ./cmd/cbb-helper
-            sh packaging/macos/sign.sh - "$RUNNER_TEMP/cbb-$a"
-            sh packaging/macos/sign.sh - "$RUNNER_TEMP/cbb-helper-$a"
-          done
-          lipo -create "$RUNNER_TEMP/cbb-arm64" "$RUNNER_TEMP/cbb-amd64" -output "$RUNNER_TEMP/cbb"
-          lipo -create "$RUNNER_TEMP/cbb-helper-arm64" "$RUNNER_TEMP/cbb-helper-amd64" -output "$RUNNER_TEMP/cbb-helper"
-          sh packaging/macos/pkg.sh 0.0.1 "$RUNNER_TEMP/cbb" "$app" "$RUNNER_TEMP/cbb-0.0.1.pkg"
-          sudo installer -pkg "$RUNNER_TEMP/cbb-0.0.1.pkg" -target / -verboseR
-          [ -x /Applications/CBB.app/Contents/MacOS/CBB ]
-          pkgutil --pkg-info tools.cbb.pkg
-          for _ in $(seq 20); do sudo /usr/local/bin/cbb status && break; sleep 0.5; done
-          sudo /usr/local/bin/cbb status | grep -q 'Not in a group'
-          [ ! -e "/Library/Application Support/cbb-package" ]
-          # The service's folder is the _cbb account's alone.
-          [ -x /usr/local/bin/cbb-helper ] && sudo test -x "/Library/Application Support/cbb/bin/cbb-helper"
-          sudo sh /usr/local/share/cbb/uninstall.sh --purge
-          for f in /Applications/CBB.app /usr/local/bin/cbb /usr/local/bin/cbb-helper "/Library/Application Support/cbb" /Library/LaunchDaemons/tools.cbb.plist; do
-            if [ -e "$f" ]; then
-              echo "uninstall.sh left $f" >&2
-              exit 1
-            fi
-          done
-          if pkgutil --pkg-info tools.cbb.pkg >/dev/null 2>&1; then
-            echo "uninstall.sh left the package's receipt" >&2
-            exit 1
-          fi
-
+  codeql-swift:
+    # The iPhone app's CodeQL analysis, which takes a macOS runner for about half
+    # an hour, starts when the iPhone app's jobs are done, so they need not
+    # wait for it; it is not in ci-ok, and its results show under Security →
+    # Code scanning (codeql-swift.yml).
+    needs: [changes, app]
+    if: ${{ !cancelled() && needs.changes.outputs.swift == 'true' }}
+    uses: ./.github/workflows/codeql-swift.yml # zizmor: ignore[self-repository]
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
   trayapp:
     name: tray app (${{ matrix.os }})
     needs: changes
@@ -1893,16 +1984,23 @@ jobs:
           # This runner has GTK 4 and WebKitGTK, which install.sh looks for.
           ! ldd "$RUNNER_TEMP/cbb-desktop" | grep 'not found'
 
-  android:
-    name: Android app
+  androidkit:
+    name: Android kit
     needs: changes
     if: needs.changes.outputs.android == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
+    # The kit's tests and its cross tests with Go and the computers' cbb, on a
+    # machine of their own beside the app's build (job Android app).
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: the Gradle wrapper's jar is one Gradle published
+        # gradlew runs gradle-wrapper.jar from the repository before anything
+        # else, so a changed jar would run in every build; this checks it
+        # against the checksums of Gradle's own releases.
+        uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
       - name: Gradle from the cache
         id: gradle
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -1939,6 +2037,33 @@ jobs:
           cargo +stable build --locked --release -p cbb-member
           go build -o target/release/cbb-helper ./cmd/cbb-helper
           CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_SWIFT_INTEROP_TLS="$tool" go test -timeout 5m ./internal/service -run 'TestSwift' -v
+
+  android:
+    name: Android app
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # The Kotlin kit's tests run beside it in the job Android kit.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: the Gradle wrapper's jar is one Gradle published
+        # gradlew runs gradle-wrapper.jar from the repository before anything
+        # else, so a changed jar would run in every build; this checks it
+        # against the checksums of Gradle's own releases.
+        uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - name: Gradle from the cache
+        id: gradle
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.gradle/wrapper/dists
+          key: gradle-dist-${{ runner.os }}-${{ hashFiles('apps/android/gradle/wrapper/gradle-wrapper.properties') }}
+      - name: Gradle, its download tried three times when it is not in the cache
+        if: steps.gradle.outputs.cache-hit != 'true'
+        working-directory: apps/android
+        run: for _ in 1 2 3; do ./gradlew --no-daemon -q --version >/dev/null && exit 0; sleep 30; done; exit 1
       - name: the NDK the core is built with
         working-directory: apps/android
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$(sed -n "s/^cbb.ndk=//p" gradle.properties)" >/dev/null </dev/null'
@@ -2182,12 +2307,16 @@ jobs:
         with:
           path: ${{ runner.temp }}/qemu
           key: qemu-${{ env.QEMU }}-mips-linux-user-${{ runner.os }}-${{ env.ImageOS }}
+      - name: apt packages for the next step
+        if: steps.qemu.outputs.cache-hit != 'true'
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: ninja-build libglib2.0-dev python3-venv
+          cache: qemu-build
       - name: qemu from its source
         if: steps.qemu.outputs.cache-hit != 'true'
         working-directory: ${{ runner.temp }}
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q ninja-build libglib2.0-dev python3-venv
           curl -fsSL --retry 3 -o qemu.tar.xz "https://download.qemu.org/qemu-$QEMU.tar.xz"
           echo "$QEMU_SHA256  qemu.tar.xz" | sha256sum -c -
           tar xJf qemu.tar.xz
@@ -2234,12 +2363,20 @@ jobs:
   # The service's tests (internal/service) against the Rust service that
   # every release ships: each member is a Rust cbb with cbb-helper beside
   # it, a phone is phone-on-linux, and they find each other by mDNS.
-  service:
-    name: service tests on the Rust cbb
+  # The service's tests run in parts at the same time (docs/testing.md,
+  # "Running tests in parallel"): service-build builds every program once,
+  # instrumented for the coverage, and runs the Rust cbb's own tests; each
+  # part of service runs its share of ./internal/service (tools/shard splits
+  # them by the seconds in tools/shard/service.txt), the part "others" the
+  # connector, the relay, the phones' tunnel and the previous release, each
+  # on a machine of its own, so their mDNS and ports never meet;
+  # service-coverage adds up the Rust coverage of them all.
+  service-build:
+    name: service tests on the Rust cbb, the build
     needs: changes
     if: needs.changes.outputs.core == 'true' || needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
     env:
       COVERPKG: ./cmd/...,./internal/...
     steps:
@@ -2250,91 +2387,259 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: the Rust toolchain, swtpm for the keys in a TPM, and Xvfb for an X11 session's clipboard
+      - name: the Rust toolchain with llvm-tools
         run: |
           rustup toolchain install stable --profile minimal --component llvm-tools-preview
           rustup default stable
-          sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends swtpm xvfb xclip
       # The service's coverage (rust-service, docs/testing.md "Coverage"):
       # every Rust program below is built with instrument-coverage, so the
       # Rust cbb's own tests and the Go tests that run it add up.
+      - name: the Rust build from this pull request's cache
+        uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
+        with:
+          name: service
+      - name: no coverage profiles of an earlier run
+        # The cache keeps target/ as a run left it; only this run's profiles count.
+        run: find target -maxdepth 1 -name '*.profraw' -delete 2>/dev/null || true
       - name: cargo-llvm-cov, and the instrumented build's environment for the steps after
         run: |
           cargo install --locked cargo-llvm-cov@0.9.1
           # Without the shell's quotes, which $GITHUB_ENV would keep.
           cargo llvm-cov show-env | sed "s/='\(.*\)'\$/=\1/" >>"$GITHUB_ENV"
+      # Cargo names the own tests' binaries first: since Rust 1.100 they sit
+      # under target/release/build/<package>/<hash>/out, Cargo's new layout,
+      # where a search by path cannot tell them from the build scripts' files.
       - name: the Rust cbb's own tests, instrumented
-        run: cargo test --locked --release -p cbb-member
-      - name: the Rust cbb, cbb-helper beside it, and the phone's member on Linux
+        run: |
+          mkdir -p target
+          cargo test --locked --release -p cbb-member --no-run --message-format=json |
+            jq -r 'select(.profile.test == true and .executable != null) | .executable' >target/own-tests.txt
+          cargo test --locked --release -p cbb-member
+      - name: the Rust cbb, the phone's member and tunnel on Linux, cbb-helper, and the Go tests' binaries
         run: |
           cargo build --locked --release -p cbb-member
           cargo build --locked --release -p cbb-ffi --features member,tunnel --example phone-on-linux
-          # Built with -cover, for the Go coverage (docs/testing.md,
-          # "Coverage"): cbb hands its helper only the environment it needs,
-          # so a script in the helper's place gives it GOCOVERDIR.
+          cargo build --locked --release -p cbb-ffi --features tunnel --example tunnel-on-linux
+          # Built with -cover: the Go side's coverage counts what the helper
+          # does under these tests too; each part puts a script in the
+          # helper's place that gives it GOCOVERDIR, since cbb hands its
+          # helper only the environment it needs.
           CGO_ENABLED=0 go build -trimpath -cover -coverpkg="$COVERPKG" -o target/release/cbb-helper.cover ./cmd/cbb-helper
-          mkdir -p "$RUNNER_TEMP/helper-cover"
-          printf '#!/bin/sh\nGOCOVERDIR=%s exec %s "$@"\n' "$RUNNER_TEMP/helper-cover" "$PWD/target/release/cbb-helper.cover" >target/release/cbb-helper
-          chmod 755 target/release/cbb-helper
-      - name: go test ./internal/service and the desktop connector with every Linux member a Rust cbb
-        run: |
-          Xvfb :5 -screen 0 640x480x24 >"$RUNNER_TEMP/xvfb.log" 2>&1 &
-          for _ in $(seq 1 100); do [ -e /tmp/.X11-unix/X5 ] && break; sleep 0.1; done
-          DISPLAY=:5 CBB_TEST_X11=1 \
-            CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_TEST_ALONE="$PWD/target/release/cbb" \
-            CBB_PHONE_ON_LINUX="$PWD/target/release/examples/phone-on-linux" \
-            go test -timeout 45m -coverpkg="$COVERPKG" -coverprofile=cover-go-service.out ./internal/service -v
-          # One package at a time, so that -v streams each test's lines as
-          # it runs and a test that hangs is named by the timeout's
-          # goroutine dump before the job's own limit.
-          DISPLAY=:5 CBB_TEST_X11=1 \
-            CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_TEST_ALONE="$PWD/target/release/cbb" \
-            go test -timeout 5m -coverpkg="$COVERPKG" -coverprofile=cover-go-connector.out ./internal/connector -v
-      - name: a device of the previous release works in one group with this build (from 0.6 on; skips until 0.6.0 is out)
-        run: |
-          prev=$(sh tools/e2e/previous.sh "$RUNNER_TEMP/previous")
-          CBB_PREVIOUS="$prev" CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_TEST_ALONE="$PWD/target/release/cbb" \
-            go test -timeout 5m ./internal/service -run '^TestPreviousRelease$' -v
-      - name: the cbb-helpers' coverage
-        if: always()
-        run: |
-          if [ -n "$(ls -A "$RUNNER_TEMP/helper-cover" 2>/dev/null)" ]; then
-            go tool covdata textfmt -i "$RUNNER_TEMP/helper-cover" -o cover-go-helper.out
-          fi
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
+          # Each Go package runs as a test binary built with -cover, with
+          # GOCOVERDIR for it and the helpers it starts.
+          mkdir -p target/go-tests
+          for p in service connector relay tunnel; do
+            go test -c -cover -coverpkg="$COVERPKG" -o "target/go-tests/$p.test" "./internal/$p"
+          done
+      - name: the Rust build into this pull request's cache
+        uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
         with:
-          name: coverage-go-service
-          path: cover-go-*.out
-          retention-days: 7
-          if-no-files-found: ignore
-      - name: the Rust service's coverage, from its own tests and Go's
-        if: success() || failure()
-        run: cargo llvm-cov report --release --json --summary-only --output-path "$GITHUB_WORKSPACE/coverage-rust-service.json"
+          name: service
+          save: "true"
+      # Only what the parts run and what llvm-cov reads: the programs and
+      # test binaries (not the build scripts, the proc macros' libraries or
+      # Cargo's own files), the own tests' profiles and the compiler's version,
+      # in one archive, since an artifact keeps no file modes. The own tests'
+      # binaries go into a folder of their own, the one place llvm-cov finds
+      # them in either of Cargo's layouts: under build/ it skips an out folder
+      # without Cargo's fingerprint beside it.
+      - name: the build, for the parts and the coverage
+        run: |
+          rustc --version | cut -d' ' -f2 >target/rustc-version
+          rm -rf target/release/own-tests && mkdir target/release/own-tests
+          while read -r f; do cp "$f" target/release/own-tests/; done <target/own-tests.txt
+          [ -n "$(ls target/release/own-tests)" ] || { echo "no own tests' binaries" >&2; exit 1; }
+          find target/release -maxdepth 2 -type f -perm -u+x \
+            -not -path '*/build/*' -not -path '*/deps/*' -not -path '*/.fingerprint/*' -not -path '*/incremental/*' -not -name '*.so' \
+            >"$RUNNER_TEMP/files"
+          {
+            cat "$RUNNER_TEMP/files"
+            find target -maxdepth 1 -name '*.profraw'
+            find target/go-tests -type f
+            echo target/rustc-version
+          } | tar -czf "$RUNNER_TEMP/service-build.tar.gz" -T -
+          ls -l "$RUNNER_TEMP/service-build.tar.gz"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: success() || failure()
         with:
-          name: coverage-rust-service
-          path: coverage-rust-service.json
+          name: service-build
+          path: ${{ runner.temp }}/service-build.tar.gz
+          retention-days: 1
+          compression-level: 0
 
-  rust:
-    name: cbb (Rust)
-    needs: changes
-    if: needs.changes.outputs.rust == 'true'
+  service:
+    name: service tests on the Rust cbb (${{ matrix.part }})
+    needs: [changes, service-build]
+    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.rust == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        # The parts of ./internal/service, as many as SERVICE_PARTS says.
+        part: ["1", "2", "3", "4", "5", "6", others]
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 30
+    env:
+      SERVICE_PARTS: 6
+      # Where the instrumented Rust programs write their profiles, as
+      # cargo llvm-cov show-env names them.
+      LLVM_PROFILE_FILE: ${{ github.workspace }}/target/cbb-%p-%4m.profraw
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: the Rust toolchain, a cross compiler for the Raspberry Pi, and swtpm for the key in a TPM
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: apt packages for the next step
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: swtpm xvfb xclip
+          cache: rust-service
+          no-recommends: "true"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: service-build
+          path: ${{ runner.temp }}
+      - name: the build, with a cbb-helper that writes its coverage, and Xvfb for an X11 session's clipboard
         run: |
-          rustup toolchain install stable --profile minimal --component rustfmt,clippy,llvm-tools-preview --target aarch64-unknown-linux-gnu,arm-unknown-linux-musleabihf,x86_64-pc-windows-gnu,aarch64-apple-darwin,x86_64-unknown-freebsd
+          tar -xzf "$RUNNER_TEMP/service-build.tar.gz"
+          # Where the test binaries and the helpers they start write the Go coverage.
+          GOCOVERDIR="$RUNNER_TEMP/go-cover"
+          echo "GOCOVERDIR=$GOCOVERDIR" >>"$GITHUB_ENV"
+          mkdir -p "$GOCOVERDIR"
+          printf '#!/bin/sh\nGOCOVERDIR=%s exec %s "$@"\n' "$GOCOVERDIR" "$PWD/target/release/cbb-helper.cover" >target/release/cbb-helper
+          chmod 755 target/release/cbb-helper
+          Xvfb :5 -screen 0 640x480x24 -noreset >"$RUNNER_TEMP/xvfb.log" 2>&1 &
+          for _ in $(seq 1 100); do [ -e /tmp/.X11-unix/X5 ] && break; sleep 0.1; done
+      # -test.v streams each test's lines as it runs, and a test that hangs
+      # is named by the timeout's goroutine dump before the job's own limit.
+      - name: this part of go test ./internal/service, with every Linux member a Rust cbb
+        if: matrix.part != 'others'
+        env:
+          PART: ${{ matrix.part }}
+        run: |
+          cd internal/service
+          run=$("$GITHUB_WORKSPACE/target/go-tests/service.test" -test.list . |
+            go run ../../tools/shard -n "$SERVICE_PARTS" -i "$PART" -durations ../../tools/shard/service.txt)
+          echo "part $PART of $SERVICE_PARTS: $run"
+          DISPLAY=:5 CBB_TEST_X11=1 \
+            CBB_TEST_RUST_SERVICE="$GITHUB_WORKSPACE/target/release/cbb" CBB_TEST_ALONE="$GITHUB_WORKSPACE/target/release/cbb" \
+            CBB_PHONE_ON_LINUX="$GITHUB_WORKSPACE/target/release/examples/phone-on-linux" \
+            "$GITHUB_WORKSPACE/target/go-tests/service.test" -test.run "$run" -test.timeout 25m -test.v
+      - name: the desktop connector with a Rust cbb
+        if: matrix.part == 'others'
+        run: |
+          cd internal/connector
+          DISPLAY=:5 CBB_TEST_X11=1 \
+            CBB_TEST_RUST_SERVICE="$GITHUB_WORKSPACE/target/release/cbb" CBB_TEST_ALONE="$GITHUB_WORKSPACE/target/release/cbb" \
+            "$GITHUB_WORKSPACE/target/go-tests/connector.test" -test.timeout 5m -test.v
+      # The relay and the phones' tunnel, which the rust job checks from
+      # outside, count here too: their Go tests run the same instrumented
+      # build.
+      - name: the relay and the phones' tunnel, from Go's side, for the coverage
+        if: matrix.part == 'others'
+        run: |
+          (cd internal/relay && CBB_TEST_RUST_RELAY="$GITHUB_WORKSPACE/target/release/cbb-relay" \
+            "$GITHUB_WORKSPACE/target/go-tests/relay.test" -test.timeout 10m -test.v)
+          (cd internal/tunnel && CBB_TUNNEL_ON_LINUX="$GITHUB_WORKSPACE/target/release/examples/tunnel-on-linux" \
+            CBB_TEST_RUST_RELAY="$GITHUB_WORKSPACE/target/release/cbb-relay" \
+            "$GITHUB_WORKSPACE/target/go-tests/tunnel.test" -test.run TestRustPhone -test.timeout 15m -test.v)
+      - name: a device of the previous release works in one group with this build (from 0.6 on; skips until 0.6.0 is out)
+        if: matrix.part == 'others'
+        run: |
+          prev=$(sh tools/e2e/previous.sh "$RUNNER_TEMP/previous")
+          cd internal/service
+          CBB_PREVIOUS="$prev" CBB_TEST_RUST_SERVICE="$GITHUB_WORKSPACE/target/release/cbb" CBB_TEST_ALONE="$GITHUB_WORKSPACE/target/release/cbb" \
+            "$GITHUB_WORKSPACE/target/go-tests/service.test" -test.run '^TestPreviousRelease$' -test.timeout 5m -test.v
+      - name: the Go side's coverage under these tests
+        if: success() || failure()
+        env:
+          PART: ${{ matrix.part }}
+        run: |
+          if [ -n "$(ls -A "$GOCOVERDIR" 2>/dev/null)" ]; then
+            go tool covdata textfmt -i "$GOCOVERDIR" -o "cover-go-service-$PART.out"
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: success() || failure()
+        with:
+          name: coverage-go-service-${{ matrix.part }}
+          path: cover-go-service-*.out
+          retention-days: 7
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: success() || failure()
+        with:
+          name: service-profiles-${{ matrix.part }}
+          path: target/*.profraw
+          retention-days: 1
+          if-no-files-found: ignore
+
+  service-coverage:
+    name: service tests on the Rust cbb, the coverage
+    needs: [changes, service-build, service]
+    if: always() && needs.service-build.result == 'success' && (needs.service.result == 'success' || needs.service.result == 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: service-build
+          path: ${{ runner.temp }}
+      # Each part's profiles in a folder of their own: two machines can give
+      # a process the same ID, and so a profile the same name.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: service-profiles-*
+          path: ${{ runner.temp }}/profiles
+      - name: the build, every part's profiles beside the own tests', and the compiler that built it
+        run: |
+          tar -xzf "$RUNNER_TEMP/service-build.tar.gz"
+          for d in "$RUNNER_TEMP"/profiles/*/; do
+            part=$(basename "$d")
+            for f in "$d"*.profraw; do
+              [ -e "$f" ] && mv "$f" "target/$part-$(basename "$f")"
+            done
+          done
+          echo "$(find target -maxdepth 1 -name "*.profraw" | wc -l) profiles"
+          v=$(cat target/rustc-version)
+          rustup toolchain install "$v" --profile minimal --component llvm-tools-preview
+          rustup default "$v"
+          cargo install --locked cargo-llvm-cov@0.9.1
+      - name: the Rust service's coverage, from its own tests and Go's
+        run: |
+          eval "$(cargo llvm-cov show-env --export-prefix)"
+          cargo llvm-cov report --release --json --summary-only --output-path "$GITHUB_WORKSPACE/coverage-rust-service.json"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-rust-service
+          path: coverage-rust-service.json
+
+  # The Rust workspace's checks and cross builds, and its tests with what
+  # runs them, are two jobs that run at the same time (docs/testing.md,
+  # "Running tests in parallel").
+  rustcheck:
+    name: cbb (Rust), the checks and the Raspberry Pi builds
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: apt packages for the next step
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+          cache: rust-cross
+          no-recommends: "true"
+      - name: the Rust toolchain, with the targets of the cross builds and of clippy, and a cross compiler for the Raspberry Pi
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy --target aarch64-unknown-linux-gnu,arm-unknown-linux-musleabihf,x86_64-pc-windows-gnu,aarch64-apple-darwin,x86_64-unknown-freebsd
           rustup default stable
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross swtpm xvfb xclip
-          echo CBB_TPM_REQUIRED=1 >>"$GITHUB_ENV"
       - name: cargo check on the oldest Rust the crates declare (rust-version)
         # Every crate of the workspace declares 1.95; the lock file must build there.
         run: |
@@ -2355,6 +2660,47 @@ jobs:
           for t in x86_64-pc-windows-gnu aarch64-apple-darwin x86_64-unknown-freebsd; do
             cargo clippy --locked -p cbb-member --target "$t" --all-targets -- -D warnings
           done
+      - name: cargo build for the Raspberry Pi
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: cargo build --locked --release --target aarch64-unknown-linux-gnu
+      - name: cargo build for the Raspberry Pi Zero (ARMv6, static; see .cargo/config.toml)
+        run: cargo build --locked --release --target arm-unknown-linux-musleabihf
+      - name: the crates' licenses, as the release archives carry them
+        run: sh member/packaging/notices.sh arm-unknown-linux-musleabihf | grep -q '^rustls '
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cbb-linux-arm64
+          path: target/aarch64-unknown-linux-gnu/release/cbb
+          retention-days: 14
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cbb-linux-armv6
+          path: target/arm-unknown-linux-musleabihf/release/cbb
+          retention-days: 14
+
+
+  rust:
+    name: cbb (Rust)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: apt packages for the next step
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: swtpm xvfb xclip
+          cache: rust-tests
+          no-recommends: "true"
+      - name: the Rust toolchain, and swtpm for the key in a TPM
+        run: |
+          rustup toolchain install stable --profile minimal --component llvm-tools-preview
+          rustup default stable
+          echo CBB_TPM_REQUIRED=1 >>"$GITHUB_ENV"
       - name: cargo-llvm-cov, for the tests' coverage
         run: cargo install --locked cargo-llvm-cov@0.9.1
       - name: cargo test (the interop vectors in testdata/interop too), with coverage
@@ -2368,14 +2714,6 @@ jobs:
         run: |
           cargo build --locked --release
           cargo build --locked --release -p cbb-embassy --features host
-      - name: cargo build for the Raspberry Pi
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-        run: cargo build --locked --release --target aarch64-unknown-linux-gnu
-      - name: cargo build for the Raspberry Pi Zero (ARMv6, static; see .cargo/config.toml)
-        run: cargo build --locked --release --target arm-unknown-linux-musleabihf
-      - name: the crates' licenses, as the release archives carry them
-        run: sh member/packaging/notices.sh arm-unknown-linux-musleabihf | grep -q '^rustls '
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -2528,17 +2866,6 @@ jobs:
             go test -race ./internal/tunnel -run TestRustPhone -v
       - name: the relay in Rust, checked from outside by a device's side in Go
         run: CBB_TEST_RUST_RELAY="$PWD/target/release/cbb-relay" go test -race -count=1 ./internal/relay -v
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: cbb-linux-arm64
-          path: target/aarch64-unknown-linux-gnu/release/cbb
-          retention-days: 14
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: cbb-linux-armv6
-          path: target/arm-unknown-linux-musleabihf/release/cbb
-          retention-days: 14
-
   esp32:
     name: the core on the ESP32
     needs: changes
@@ -2593,11 +2920,14 @@ jobs:
           cargo +esp clippy --locked --release --features console-type -- -D warnings
           cargo +esp clippy --locked --release --no-default-features --features qemu -- -D warnings
           cargo +esp build --locked --release
+      - name: apt packages for the next step
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: libslirp0 libsdl2-2.0-0 libpixman-1-0
+          cache: esp-qemu
       - name: Espressif's QEMU and espflash
         working-directory: ${{ runner.temp }}
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q libslirp0 libsdl2-2.0-0 libpixman-1-0
           curl -fsSL --retry 3 -o qemu.tar.xz "https://github.com/espressif/qemu/releases/download/$ESP_QEMU/qemu-xtensa-softmmu-${ESP_QEMU//-/_}-x86_64-linux-gnu.tar.xz"
           echo "$ESP_QEMU_SHA256  qemu.tar.xz" | sha256sum -c -
           tar xf qemu.tar.xz
@@ -2629,12 +2959,16 @@ jobs:
         with:
           path: ${{ runner.temp }}/z88dk
           key: z88dk-${{ env.Z88DK }}-zxn-${{ runner.os }}
+      - name: apt packages for the next step
+        if: steps.z88dk.outputs.cache-hit != 'true'
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: flex libxml2-dev libgmp-dev libboost-dev texinfo dos2unix
+          cache: z88dk
       - name: z88dk from its source
         if: steps.z88dk.outputs.cache-hit != 'true'
         working-directory: ${{ runner.temp }}
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q flex libxml2-dev libgmp-dev libboost-dev texinfo dos2unix
           curl -fsSL --retry 3 -o z88dk.tgz "https://github.com/z88dk/z88dk/releases/download/v$Z88DK/z88dk-src-$Z88DK.tgz"
           echo "$Z88DK_SHA256  z88dk.tgz" | sha256sum -c -
           tar xzf z88dk.tgz
@@ -2708,13 +3042,16 @@ jobs:
         with:
           path: ${{ runner.temp }}/psdk/dl
           key: psdk-${{ matrix.system }}-${{ hashFiles('apps/silica/psdk.sh') }}
+      - name: apt packages for the next step
+        uses: ./.github/actions/apt # zizmor: ignore[self-repository]
+        with:
+          packages: p7zip-full imagemagick gcc-arm-linux-gnueabihf libc6-dev-armhf-cross gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+          cache: silica
       - name: the RPMs, unsigned (apps/silica/ci.sh; the workflow aurora signs Aurora 5's)
         env:
           ARCHS: ${{ matrix.archs }}
           SYSTEM: ${{ matrix.system }}
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q p7zip-full imagemagick gcc-arm-linux-gnueabihf libc6-dev-armhf-cross gcc-aarch64-linux-gnu libc6-dev-arm64-cross
           rustup toolchain install stable --profile minimal
           rustup default stable
           apps/silica/ci.sh "$RUNNER_TEMP/psdk" "$ARCHS" "$RUNNER_TEMP/rpm"
@@ -2723,20 +3060,27 @@ jobs:
     name: phone core (${{ matrix.target }})
     needs: changes
     if: needs.changes.outputs.rust == 'true'
+    # The iPhone's libraries are built in the phone kit's macOS job.
     strategy:
       fail-fast: false
       matrix:
         include:
           - target: android
             os: ubuntu-latest
-          - target: ios
-            os: macos-latest
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: the latest Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - name: the Rust build from this pull request's cache
+        uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
+        with:
+          name: phonecore-${{ matrix.target }}
       - name: build the Rust core's libraries for the phones
         # The runner images have the Android NDK and Xcode; cargo-ndk links
         # the Android libraries with the NDK. The apps' jobs build them too,
@@ -2744,14 +3088,17 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
         run: |
-          rustup toolchain install stable --profile minimal
-          rustup default stable
           if [ "$TARGET" = android ]; then
             export ANDROID_NDK_HOME="${ANDROID_NDK_LATEST_HOME:-}"
             cargo install --locked cargo-ndk@4.1.2
           fi
           sh ffi/bind.sh "$TARGET" "$RUNNER_TEMP/phonecore"
           find "$RUNNER_TEMP/phonecore" -maxdepth 3 | sort
+      - name: the Rust build into this pull request's cache
+        uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
+        with:
+          name: phonecore-${{ matrix.target }}
+          save: "true"
 
   advisories:
     name: advisories (Rust, Android, tray app)
@@ -2802,7 +3149,6 @@ jobs:
         # cbb's crates, the Android apps' libraries and the tray app's module.
         run: |
           go run github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.6.0 scan source \
-            --config .github/osv-scanner.toml \
             -L Cargo.lock -L esp32/Cargo.lock -L apps/desktop/go.mod \
             -L apps/android/app/gradle.lockfile -L apps/android/shared/gradle.lockfile \
             -L apps/android/wear/gradle.lockfile -L apps/android/kit/gradle.lockfile
@@ -2961,7 +3307,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonecore, service, rust, rustmips, esp32, zxnext, silica, advisories, docker, differential, model]
+    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, windows, kit, app, trayapp, androidkit, android, androidemu, fdroid, phonecore, service-build, service, service-coverage, rustcheck, rust, rustmips, esp32, zxnext, silica, advisories, docker, differential, model]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
