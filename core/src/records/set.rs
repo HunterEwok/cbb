@@ -9,7 +9,7 @@ use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::vec::Vec;
 
 use super::body::Seen;
-use super::eval::{self, Checked, ClaimState, Keys, Role, State, Why};
+use super::eval::{self, Checked, ClaimState, Counted, Keys, Role, State, Why};
 use super::key::{Key, KeyHash, RecordId};
 use super::{Kind, Record, Rule, keep};
 
@@ -54,8 +54,12 @@ pub struct RecordSet {
     /// The roots after the first that the member's evaluation put on the
     /// path (`compact`): they have a root's room.
     promoted: BTreeSet<KeyHash>,
-    /// The claims the member has counted: final here (`Input::counted`).
-    counted: Vec<RecordId>,
+    /// The claims the member has counted, in order, with what its path
+    /// needs of each: final here (`Input::counted`).
+    counted: Vec<Counted>,
+    /// Counted claims the caller named whose records the set does not hold
+    /// yet; read in order as they come.
+    pending: Vec<RecordId>,
     /// The takeovers' cuts of the roots before the promoted ones (`compact`):
     /// such a root keeps nothing off its cut.
     cuts: BTreeMap<KeyHash, Seen>,
@@ -77,6 +81,7 @@ impl RecordSet {
             cut: keep::Cut::default(),
             promoted: BTreeSet::new(),
             counted: Vec::new(),
+            pending: Vec::new(),
             cuts: BTreeMap::new(),
             split: false,
             records: BTreeMap::new(),
@@ -161,6 +166,9 @@ impl RecordSet {
         if self.needs_cut(&signer) {
             self.cut();
         }
+        if !self.pending.is_empty() {
+            self.read_pending();
+        }
         Ok(if self.records.contains_key(&id) { Added::Stored } else { Added::NoRoom })
     }
 
@@ -228,19 +236,17 @@ impl RecordSet {
             })
             .collect();
         let (promoted, first) = (&self.promoted, self.root.hash());
-        self.keys.retain_roots(|h| *h == first || named.contains(h) || promoted.contains(h));
+        let counted: BTreeSet<KeyHash> = self.counted.iter().map(|c| c.root.hash()).collect();
+        self.keys
+            .retain_roots(|h| *h == first || named.contains(h) || promoted.contains(h) || counted.contains(h));
     }
 
     /// Reports whether r would cancel a claim the member counted: a
     /// resolve that names it, or a revoke of its signer.
     fn cancels_counted(&self, r: &Record) -> bool {
         match &r.body().kind {
-            Kind::Resolve(ids) => ids.iter().any(|id| self.counted.contains(id)),
-            Kind::Revoke(rm) => self
-                .counted
-                .iter()
-                .filter_map(|id| self.records.get(id))
-                .any(|e| rm.keys.binary_search(&e.record.body().signer).is_ok()),
+            Kind::Resolve(ids) => ids.iter().any(|id| self.counted.iter().any(|c| c.claim == *id)),
+            Kind::Revoke(rm) => self.counted.iter().any(|c| rm.keys.binary_search(&c.claimant).is_ok()),
             _ => false,
         }
     }
@@ -250,6 +256,9 @@ impl RecordSet {
     /// knows.
     fn relearn(&mut self) {
         let mut keys = Keys::trusting(&self.root, &self.promoted);
+        for c in &self.counted {
+            keys.add_root(&c.root);
+        }
         loop {
             let mut learned = false;
             for e in self.records.values() {
@@ -352,19 +361,57 @@ impl RecordSet {
 
     /// The claims the member has counted, which its caller keeps across
     /// restarts and hands a joiner with the claims' ages.
-    pub fn counted(&self) -> &[RecordId] {
+    pub fn counted(&self) -> Vec<RecordId> {
+        self.counted.iter().map(|c| c.claim).chain(self.pending.iter().copied()).collect()
+    }
+
+    /// The counted claims with what their path needs, which the caller
+    /// keeps across restarts.
+    pub fn counted_claims(&self) -> &[Counted] {
         &self.counted
     }
 
     /// Takes claims as counted, in the order they were counted: those the
     /// caller kept from before a restart, or those its admitter counted.
-    /// A counted claim stays counted, in its place.
+    /// Each is read from its record, under the root the one before it
+    /// named; those whose records the set does not hold yet wait. A
+    /// counted claim stays counted, in its place.
     pub fn remember_counted(&mut self, ids: impl IntoIterator<Item = RecordId>) {
         for id in ids {
-            if !self.counted.contains(&id) {
-                self.counted.push(id);
+            if !self.counted.iter().any(|c| c.claim == id) && !self.pending.contains(&id) {
+                self.pending.push(id);
             }
         }
+        self.read_pending();
+    }
+
+    /// Takes counted claims with what their path needs, as the caller kept
+    /// them.
+    pub fn remember_counted_claims(&mut self, claims: impl IntoIterator<Item = Counted>) {
+        for c in claims {
+            if !self.counted.iter().any(|x| x.claim == c.claim) {
+                self.keys.add_root(&c.root);
+                self.counted.push(c);
+            }
+        }
+    }
+
+    /// Reads the waiting counted claims whose records are here, in order.
+    fn read_pending(&mut self) {
+        let group = self.root.hash();
+        let more = eval::Counted::chain(
+            &self.counted.last().map_or(group, |c| c.root.hash()),
+            &self.pending,
+            |id| self.records.get(id).map(|e| &e.record),
+        );
+        if more.is_empty() {
+            return;
+        }
+        self.pending.drain(..more.len());
+        for c in &more {
+            self.keys.add_root(&c.root);
+        }
+        self.counted.extend(more);
     }
 
     /// Drops what the counting checkpoint of state leaves out: a root's
@@ -378,14 +425,22 @@ impl RecordSet {
     pub fn compact(&mut self, state: &State) -> usize {
         // The claims that took effect, in the order of the path; a list
         // that already holds an earlier path's keeps it.
-        let mut along: Vec<RecordId> = Vec::new();
-        for next in state.roots.iter().skip(1) {
-            match state.claims.iter().find(|c| c.state == ClaimState::Effective && c.root == *next) {
-                Some(c) => along.push(c.record),
+        let mut along: Vec<Counted> = Vec::new();
+        for (under, next) in state.roots.iter().zip(state.roots.iter().skip(1)) {
+            let found = state
+                .claims
+                .iter()
+                .find(|c| c.state == ClaimState::Effective && c.root == *next)
+                .and_then(|c| match self.counted.get(along.len()) {
+                    Some(old) if old.claim == c.record => Some(old.clone()),
+                    _ => self.records.get(&c.record).and_then(|e| Counted::of(&e.record, under)),
+                });
+            match found {
+                Some(c) => along.push(c),
                 None => break,
             }
         }
-        if along.len() > self.counted.len() && along.starts_with(&self.counted) {
+        if self.pending.is_empty() && along.len() > self.counted.len() && along.starts_with(&self.counted) {
             self.counted = along;
         }
         let promoted: BTreeSet<KeyHash> = state.roots.iter().skip(1).copied().collect();

@@ -79,7 +79,7 @@ use alloc::vec::Vec;
 use core::fmt;
 
 pub use body::{Body, Kind};
-pub use eval::{Input, State, evaluate};
+pub use eval::{Counted, Input, State, evaluate};
 pub use key::{DeviceId, GroupId, Key, KeyHash, RecordId};
 pub use set::RecordSet;
 

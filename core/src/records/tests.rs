@@ -1599,14 +1599,14 @@ mod props {
             // the records it kept.
             let kept: Vec<Record> = a.ids().map(|id| a.get(id).unwrap().clone()).collect();
             prop_assert_eq!(a.counted(), b.counted());
-            let stored = evaluate(&Input { root: &root, records: &kept, held_ms: &held, counted: a.counted() });
+            let stored = evaluate(&Input { root: &root, records: &kept, held_ms: &held, counted: a.counted_claims() });
             prop_assert_eq!(&a.state(&held), &stored);
             prop_assert_eq!(&b.state(&held), &stored);
             let strip = |s: &State| State { ignored: Vec::new(), ..s.clone() };
             // The claims the set counted are final for it, on its whole
             // set too.
             let sub: Vec<Record> = recs.iter().enumerate().filter(|(i, _)| *i != drop).map(|(_, r)| r.clone()).collect();
-            let whole = evaluate(&Input { root: &root, records: &sub, held_ms: &held, counted: a.counted() });
+            let whole = evaluate(&Input { root: &root, records: &sub, held_ms: &held, counted: a.counted_claims() });
             prop_assert_eq!(strip(&stored), strip(&whole));
             prop_assert_eq!(strip(&stored).roots, want.roots);
         }
@@ -1831,7 +1831,8 @@ fn taken_over_group() -> (G, BTreeMap<RecordId, u64>, Record) {
 }
 
 fn counted_state(g: &G, held: &BTreeMap<RecordId, u64>, counted: &[RecordId]) -> State {
-    evaluate(&Input { root: &g.root.key, records: &g.recs, held_ms: held, counted })
+    let counted = Counted::chain(&g.root.hash, counted, |id| g.recs.iter().find(|r| r.id() == *id));
+    evaluate(&Input { root: &g.root.key, records: &g.recs, held_ms: held, counted: &counted })
 }
 
 /// A takeover the device counted stays: the old root's later resolve of
@@ -2276,7 +2277,7 @@ mod differential {
             let m2 = fill(&g.root.key, &shuffle(&recs, seed), &held, every.saturating_add(2));
             for m in [&m1, &m2] {
                 let kept: Vec<Record> = m.ids().map(|id| m.get(id).unwrap().clone()).collect();
-                let want = evaluate(&Input { root: &g.root.key, records: &kept, held_ms: &held, counted: m.counted() });
+                let want = evaluate(&Input { root: &g.root.key, records: &kept, held_ms: &held, counted: m.counted_claims() });
                 // A set also remembers a cancel it did not store.
                 let got = m.state(&held);
                 prop_assert!(got.owner_split || !want.owner_split);
@@ -2494,4 +2495,49 @@ fn counted_claims_follow_the_path_in_order() {
     let st = m.state(&held);
     assert_eq!(st.roots, vec![g.root.hash, n.hash, n2.hash]);
     assert!(st.revoked.contains(&k("gone").hash));
+}
+
+/// A counted claim needs no record: when its signer's later records push
+/// the claim out of its room, the takeover stays, before and after the
+/// set compacts.
+#[test]
+fn a_counted_takeover_outlives_its_record() {
+    let mut g = G::new();
+    let (rk, n) = (k("recovery"), k("new root"));
+    g.root_rec(Kind::Recovery { admin: rk.key.clone() });
+    g.device(&k("root"), &k("laptop"), "laptop", |_| {});
+    g.device(&k("root"), &k("gone"), "gone", |_| {});
+    let seen = g.seen();
+    let claim = g.rec(&rk, Kind::Claim { root: n.key.clone(), seen });
+    g.device(&n, &k("new phone"), "new phone", |d| d.holds_root = true);
+    let seen = g.seen();
+    g.rec(&n, Kind::Revoke(removal(&[k("gone").hash], seen)));
+    let held = BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]);
+    let mut m = RecordSet::new(g.root.key.clone());
+    m.insert_all(g.recs.iter().cloned());
+    for _ in 0..2 {
+        let st = m.state(&held);
+        m.compact(&st);
+    }
+    assert_eq!(m.counted(), vec![claim.id()]);
+    let more: Vec<Record> = (0..4000u64)
+        .map(|i| Record::sign(Body { seq: 1, prev: None, ..g.body(&rk, Kind::Copies { incoming_ms: MIN_INCOMING_MS + i }) }, &rk).unwrap())
+        .filter(|r| r.id() < claim.id())
+        .collect();
+    m.insert_all(more.iter().cloned());
+    assert!(!m.contains(&claim.id()));
+    let after = m.state(&held);
+    assert_eq!(after.roots, vec![g.root.hash, n.hash]);
+    assert!(after.revoked.contains(&k("gone").hash));
+    for _ in 0..2 {
+        let st = m.state(&held);
+        m.compact(&st);
+    }
+    let last = m.state(&held);
+    assert_eq!(last.roots, vec![g.root.hash, n.hash]);
+    assert!(g.recs.iter().filter(|r| r.body().signer == n.hash).all(|r| m.contains(&r.id())));
+    // The same for evaluate, from what the device kept of the claim.
+    let kept: Vec<Record> = m.ids().map(|id| m.get(id).unwrap().clone()).collect();
+    let s = evaluate(&Input { root: &g.root.key, records: &kept, held_ms: &held, counted: m.counted_claims() });
+    assert_eq!(s.roots, vec![g.root.hash, n.hash]);
 }
