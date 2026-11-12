@@ -34,6 +34,13 @@ pub use crate::relay::RELAY_ADDR;
 pub const MAX_MEMBERS: usize = 64;
 pub const MAX_CALLS: usize = 16;
 pub const MAX_PAIRS: usize = 256;
+/// The connections through the tunnel one device holds at once: its watch,
+/// a call to or from each other device of its group, and its requests
+/// being read. The hub ignores a device's new connections past it.
+pub const STREAMS_ONE: usize = MAX_MEMBERS + MAX_REQUESTS_ONE;
+/// The connections of calls one group holds at once, those waiting for an
+/// answer counted: both ends of each joined pair.
+pub const STREAMS_GROUP: usize = 2 * MAX_PAIRS;
 
 /// Limits of the setups, which strangers can start: a registration is set
 /// up before the relay knows its device, so the registrations being set up
@@ -95,6 +102,8 @@ pub struct Config {
 pub(super) struct GroupShare {
     pub pairs: AtomicUsize,
     pub reads: AtomicUsize,
+    /// Its calls' connections, waiting or joined.
+    pub streams: AtomicUsize,
     pub bytes: Option<Arc<ByteRate>>,
 }
 
@@ -150,6 +159,9 @@ pub(super) struct State {
     pub held: Count,
     pub setups: Count,
     pub requests: Count,
+    /// The connections of calls, waiting or joined, by the address each
+    /// end registered from (an open relay's).
+    pub streams: Count,
     /// Each group's authority records, from all its members'
     /// registrations, verified once and kept in memory while the relay
     /// runs, and what they take by the source that brought them.
@@ -239,6 +251,7 @@ impl Relay {
             held,
             setups: Count::new(SETUP_CAPS),
             requests: Count::new(REQUEST_CAPS),
+            streams: Count::new(if cfg.open { limits.stream_caps() } else { Caps::default() }),
             records: HashMap::new(),
             record_bytes,
             tag_locks: HashMap::new(),
@@ -281,6 +294,7 @@ impl Relay {
             Vec::new(),
             SocketAddr::new(local.ip(), local.port()),
             Arc::new(move |_| Some(streams_port)),
+            crate::hub::Limits { bridges: inner.cfg.limits.with_defaults().streams, per_client: STREAMS_ONE },
             hub_log,
         )?;
         *inner.hub.lock().map_err(|_| Error::msg("relay: broken"))? = Some(hub);
@@ -503,6 +517,21 @@ impl Inner {
         m.share.reads.fetch_sub(1, Ordering::SeqCst);
     }
 
+    /// Counts a connection of a call of m; false when its group or the
+    /// address it registered from holds as many as the relay gives them.
+    pub fn take_stream_locked(st: &mut State, m: &Member) -> bool {
+        if m.share.streams.load(Ordering::SeqCst) >= STREAMS_GROUP || !st.streams.take(m.from, 1) {
+            return false;
+        }
+        m.share.streams.fetch_add(1, Ordering::SeqCst);
+        true
+    }
+
+    pub fn free_stream(&self, m: &Member) {
+        self.lock().streams.remove(m.from, 1);
+        m.share.streams.fetch_sub(1, Ordering::SeqCst);
+    }
+
     /// Whether the relay would register m, in place of the same device's
     /// earlier registration and of the devices of its group that leaving
     /// tells go with it; it changes nothing, so a refused registration
@@ -552,6 +581,12 @@ impl Inner {
             if full {
                 return Err("too many devices registered from this network; try again later".into());
             }
+            // Each device keeps a watch, which must have its place.
+            let others =
+                st.by_addr.len() - gone.iter().filter(|o| st.by_addr.values().any(|b| Arc::ptr_eq(b, o))).count();
+            if others >= self.limits.devices() {
+                return Err("the relay holds as many devices as it can; try again later, or run your own relay".into());
+            }
         }
         Ok(())
     }
@@ -562,7 +597,12 @@ impl Inner {
             return o.share.clone();
         }
         let bytes = self.cfg.open.then(|| ByteRate::new(self.limits.byte_rate));
-        Arc::new(GroupShare { pairs: AtomicUsize::new(0), reads: AtomicUsize::new(0), bytes })
+        Arc::new(GroupShare {
+            pairs: AtomicUsize::new(0),
+            reads: AtomicUsize::new(0),
+            streams: AtomicUsize::new(0),
+            bytes,
+        })
     }
 
     /// Registers m, which admit_locked let through, in place of the same
@@ -844,8 +884,13 @@ impl Inner {
             Some(_) if m.share.pairs.load(Ordering::SeqCst) >= MAX_PAIRS => {
                 "this group has as many connections as the relay joins"
             }
+            Some(_) if !Self::take_stream_locked(&mut st, m) => {
+                "the relay holds as many connections of this group or network as it can; try again later"
+            }
             Some(_) => "",
         };
+        // The dial's connection is charged from here until it ends.
+        let charged = msg.is_empty();
         let mut msg = msg.to_string();
         if msg.is_empty()
             && let Some(t) = &t
@@ -871,6 +916,9 @@ impl Inner {
         let refuse = |msg: &str| {
             let _ = wire::send_note(&c, &Note::error(msg), NOTE_TIMEOUT);
             self.close_stream(m, sid, &c);
+            if charged {
+                self.free_stream(m);
+            }
         };
         let (true, Some(t)) = (msg.is_empty(), t) else {
             refuse(&msg);
@@ -901,11 +949,13 @@ impl Inner {
             m.share.pairs.fetch_add(1, Ordering::SeqCst);
         }
         drop(st);
+        // The answer's connection came charged to t.
         let (osid, other) = match other {
             Some(o) if ok => o,
             o => {
                 if let Some((osid, o)) = o {
                     self.close_stream(&t, osid, &o);
+                    self.free_stream(&t);
                 }
                 refuse("that device did not answer");
                 return;
@@ -921,20 +971,31 @@ impl Inner {
         m.share.pairs.fetch_sub(1, Ordering::SeqCst);
         self.close_stream(m, sid, &c);
         self.close_stream(&t, osid, &other);
+        self.free_stream(m);
+        self.free_stream(&t);
     }
 
     /// Hands c to the call it answers; the dialing side joins them.
     fn serve_answer(&self, m: &Member, sid: u64, c: TcpStream, ticket: &str) {
         let mut st = self.lock();
-        if st.calls.get(ticket).is_some_and(|cl| cl.to == m.id)
-            && let Some(cl) = st.calls.remove(ticket)
-            && let Ok(mine) = c.try_clone()
-        {
-            let _ = cl.answered.try_send((sid, mine));
-            return;
+        let mut msg = "no such call";
+        if st.calls.get(ticket).is_some_and(|cl| cl.to == m.id) {
+            if !Self::take_stream_locked(&mut st, m) {
+                msg = "the relay holds as many connections of this group or network as it can; try again later";
+            } else if let Some(cl) = st.calls.remove(ticket)
+                && let Ok(mine) = c.try_clone()
+                && cl.answered.try_send((sid, mine)).is_ok()
+            {
+                // The dialing side frees the charge when the pair ends.
+                return;
+            } else {
+                drop(st);
+                self.free_stream(m);
+                st = self.lock();
+            }
         }
         drop(st);
-        let _ = wire::send_note(&c, &Note::error("no such call"), NOTE_TIMEOUT);
+        let _ = wire::send_note(&c, &Note::error(msg), NOTE_TIMEOUT);
         self.close_stream(m, sid, &c);
     }
 }

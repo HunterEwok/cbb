@@ -38,6 +38,11 @@ pub struct Limits {
     /// provider 64.
     pub group_record_bytes: usize,
     pub record_bytes: usize,
+    /// Connections through the relay's tunnel at once, of all devices
+    /// together: half for the devices' watches, one each, so a device
+    /// registers only while its watch has room; half for the calls they
+    /// join, charged to the address each end registered from.
+    pub streams: usize,
 }
 
 /// An open relay's limits: enough for clipboards, which are small, and for
@@ -51,6 +56,7 @@ pub const DEFAULT_OPEN: Limits = Limits {
     byte_rate: (1 << 20) as f64,
     group_record_bytes: 256 << 10,
     record_bytes: 128 << 20,
+    streams: 8192,
 };
 
 impl Limits {
@@ -66,7 +72,21 @@ impl Limits {
             byte_rate: if self.byte_rate > 0.0 { self.byte_rate } else { d.byte_rate },
             group_record_bytes: or(self.group_record_bytes, d.group_record_bytes),
             record_bytes: or(self.record_bytes, d.record_bytes),
+            streams: or(self.streams, d.streams),
         }
+    }
+
+    /// The devices an open relay registers at once: each keeps a watch.
+    pub fn devices(&self) -> usize {
+        self.streams / 2
+    }
+
+    /// The caps of the joined calls' connections, by the address each end
+    /// registered from: a network may hold 1/32 of them, a wide network
+    /// 1/8, a provider 1/4, and all of them half of the relay's.
+    pub fn stream_caps(&self) -> Caps {
+        let half = self.streams / 2;
+        Caps { address: half / 32, network: half / 16, wide: half / 4, provider: half / 2, all: half }
     }
 
     /// The caps of the registrations an open relay holds, by the source

@@ -87,6 +87,11 @@ impl List {
         self.lock().tags.len()
     }
 
+    /// Whether the list refuses no group.
+    pub fn is_empty(&self) -> bool {
+        self.lock().tags.is_empty()
+    }
+
     /// Reads the file again when it changed, and tells whether the list
     /// did. A file that cannot be read or parsed keeps the list as it was:
     /// a typo in the file never lets a refused group back in.

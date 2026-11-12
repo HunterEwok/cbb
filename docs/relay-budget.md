@@ -55,13 +55,16 @@ is done (setups, record checks) is paid for by the second, with a burst, by `bud
 |---|---|---|---|---|---|---|
 | Registration being set up | a goroutine and a TLS handshake, about 50 KiB; one ECDH | 15 s at most | address, network, wide network, provider | 16, 64, 128, 128 | 256 | the connection is closed |
 | Setup, paid by the second | 4 units | | address, network, wide network, provider | 64, 256, 1024, 2048 units a second; bursts of 1536, 4096, 8192, 16384 | | the connection is closed |
-| Registered device (open relay) | a tunnel peer and its entry, about 2 KiB | while its connection lasts | address, network, wide network, provider; group | 16, 64, 256, 1024; 64 devices of a group | 4096 groups | refused |
+| Registered device (open relay) | a tunnel peer and its entry, about 2 KiB | while its connection lasts | address, network, wide network, provider; group | 16, 64, 256, 1024; 64 devices of a group | 4096 groups; 4096 devices, so that each device's watch has its connection | refused |
 | A group's authority records | their bytes; one ECDSA check each, once | until the group's last device leaves | the group; the network, wide network and provider that brought them | 256 KiB a group; 1 MiB a network, 4 MiB a wide network, 16 MiB a provider | 128 MiB | refused, none of them kept |
 | Record check | about 45 µs | | address, network, wide network, provider | 1 unit each, from the same allowance as setups | | refused |
 | Period (registration with credentials) | the period key, versions and members' list | until the group's last device leaves | the group | one per period tag | 4096 groups | refused |
 | Request being read in a tunnel | a goroutine | 5 s at most | device, group; address, network, wide network, provider the device registered from | 16, 32; 32, 64, 64, 128 | 256 | the connection is closed |
 | Call waiting for an answer | a ticket | 10 s at most | the called device | 16 | | refused |
 | Joined connections | two copies | while both last | the group | 256 | | refused |
+| Connection of a call, waiting or joined (open relay) | a socket in the tunnel, two 64 KiB buffers | while it lasts | the group; address, network, wide network, provider each end registered from | 512 a group; 128, 256, 1024, 2048 | 4096, half of the tunnel's connections | refused |
+| Connection in the tunnel, being opened or open | a socket in the tunnel, two 64 KiB buffers | being opened: 5 s at most | the device | 80: its watch, a call with each other device of its group, its requests | 8192 | the device's new connection is ignored |
+| WireGuard handshake initiation | one Diffie-Hellman, about 50 µs | | the network of its source, under load | none checked without a valid mac1; past 128 a second from all sources, a cookie for each, which needs the source's own address; then 32 a second a network | 2048 a second | dropped |
 | Copying | bandwidth | | the group | 1 MiB a second, two seconds' burst | | slowed down |
 | Note to a device | a queued line | until sent | the watching device | 32 | | the watch is closed |
 | Allowance of a source | about 150 bytes for each of its payers | until full again: under 30 s | itself | | forgotten past 4096 sources when full | |
@@ -83,6 +86,19 @@ What the relay guarantees:
   provider may hold half of the setups and half of the requests being read: these slots are
   short-lived and refilled in seconds, so this is the accepted bound; the state that lasts
   (registrations, records) takes at least 4 providers.
+- **The tunnel**: each registered device has its watch's connection, since the relay
+  registers no more devices than half its tunnel's connections; the other half is for calls,
+  and strangers in one address hold 128 of them (1/32), in one network 256, in one wide
+  network 1024 and in one IPv6 provider 2048, so taking them all needs at least 4 wide
+  networks or 2 providers, and a device that opens connections it never completes holds its
+  own 80 for 5 s at most (`call_connections_bound_by_source_and_group`,
+  `registrations_bound_by_the_tunnel`, the hub's `connections_are_held_per_client` and
+  `half_open_connections_hold_a_client_s_share_only`, Go's `TestManyDevicesThroughRelay`).
+- **Handshakes**: a WireGuard initiation costs the relay a Diffie-Hellman only once its mac1,
+  under the relay's key, holds; past 128 initiations a second from all sources, only once its
+  cookie, which the relay sends to its source address, holds too; and at most 32 a second
+  for one network then, 2048 in all, on the thread that carries every group's data
+  (`initiations_are_checked_before_the_hub_pays_for_them`). A device's hub does the same.
 - After strangers register and leave, the relay keeps nothing of them but their sources'
   allowances, which it forgets once full again (`TestOpenRelayForgetsStrangers`).
 

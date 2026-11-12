@@ -22,7 +22,7 @@ use super::keys::Keys;
 use super::limits::{self, DEFAULT_OPEN, Limits, SETUP_COST};
 use super::server::{
     Config, GroupShare, Inner, MAX_REQUESTS_GROUP, MAX_REQUESTS_ONE, Member, MemberState, REQUEST_CAPS, Relay,
-    SETUP_CAPS,
+    SETUP_CAPS, STREAMS_GROUP,
 };
 
 fn relay(open: bool, limits: Limits) -> Relay {
@@ -73,7 +73,12 @@ fn conn() -> TcpStream {
 }
 
 fn share() -> Arc<GroupShare> {
-    Arc::new(GroupShare { pairs: AtomicUsize::new(0), reads: AtomicUsize::new(0), bytes: None })
+    Arc::new(GroupShare {
+        pairs: AtomicUsize::new(0),
+        reads: AtomicUsize::new(0),
+        streams: AtomicUsize::new(0),
+        bytes: None,
+    })
 }
 
 /// A member of a group of the share from the address from, known to the
@@ -672,4 +677,66 @@ fn setup_ends_at_its_deadline() {
         }
     }
     assert_eq!(inner.lock().setups.held(from, Level::Address), 0, "a slow claim kept its slot past the deadline");
+}
+
+/// Takes up to n connections of calls of m; how many it took.
+fn take_streams(inner: &Inner, m: &Member, n: usize) -> usize {
+    let mut st = inner.lock();
+    (0..n).filter(|_| Inner::take_stream_locked(&mut st, m)).count()
+}
+
+/// The connections of calls are counted by the address each end
+/// registered from and by group, so one source or one group cannot take
+/// the relay's tunnel from the others; a stranger who registers devices
+/// in many groups from one address holds its address's share only.
+#[test]
+fn call_connections_bound_by_source_and_group() {
+    let r = relay(true, Limits::default());
+    let inner = r.inner();
+    let caps = DEFAULT_OPEN.stream_caps();
+    let one = ip("203.0.113.7");
+    let mut got = 0;
+    for _ in 0..16 {
+        got += take_streams(inner, &counted(inner, one, &share()), STREAMS_GROUP);
+    }
+    assert_eq!(got, caps.address, "the calls of one address");
+    got = 0;
+    for i in 0..64 {
+        got += take_streams(inner, &counted(inner, v4(192, 0, 2, i), &share()), caps.address);
+    }
+    assert_eq!(got, caps.network, "the calls of one network");
+    let group = share();
+    got = 0;
+    for i in 0..16 {
+        got += take_streams(inner, &counted(inner, v4(10, 0, i, 1), &group), caps.address);
+    }
+    assert_eq!(got, STREAMS_GROUP, "the calls of one group");
+    assert_eq!(take_streams(inner, &counted(inner, ip("198.51.100.9"), &share()), 1), 1, "a device from elsewhere");
+    let m = counted(inner, ip("198.51.100.10"), &group);
+    assert_eq!(take_streams(inner, &m, 1), 0, "a full group");
+    let first = counted(inner, ip("198.51.100.11"), &share());
+    assert_eq!(take_streams(inner, &first, 2), 2);
+    inner.free_stream(&first);
+    inner.free_stream(&first);
+    assert_eq!(inner.lock().streams.held(ip("198.51.100.11"), Level::Address), 0, "freed calls are still held");
+}
+
+/// An open relay registers a device only while its watch has room in the
+/// relay's tunnel: half its connections, one a device.
+#[test]
+fn registrations_bound_by_the_tunnel() {
+    let limits = Limits { streams: 8, ..Limits::default() };
+    let r = relay(true, limits);
+    let inner = r.inner();
+    let mut held = Vec::new();
+    for i in 0..4 {
+        held.push(fake_member(inner, &format!("{i:016x}"), v4(10, 0, i as u8, 1)).unwrap());
+    }
+    let err = fake_member(inner, "00000000000000ff", v4(10, 9, 0, 1)).err().unwrap();
+    assert!(err.contains("as many devices as it can"), "{err}");
+    // A device that registers again takes its own place.
+    let mut st = inner.lock();
+    inner.drop_locked(&mut st, &held[0]);
+    drop(st);
+    assert!(fake_member(inner, "00000000000000ff", v4(10, 9, 0, 1)).is_ok(), "a place freed");
 }

@@ -42,8 +42,7 @@ struct Flags {
 }
 
 fn parse(args: &[String]) -> std::result::Result<Flags, String> {
-    let mut f =
-        Flags {
+    let mut f = Flags {
         listen: ":8764".into(),
         key: default_key(),
         refused: String::new(),
@@ -103,6 +102,7 @@ fn test_limits() -> Result<super::limits::Limits> {
         byte_rate: f64,
         group_record_bytes: usize,
         record_bytes: usize,
+        streams: usize,
     }
     let Ok(v) = std::env::var("CBB_RELAY_LIMITS") else { return Ok(Default::default()) };
     let l: L = serde_json::from_str(&v).map_err(|e| Error::msg(format!("CBB_RELAY_LIMITS: {e}")))?;
@@ -115,6 +115,7 @@ fn test_limits() -> Result<super::limits::Limits> {
         byte_rate: l.byte_rate,
         group_record_bytes: l.group_record_bytes,
         record_bytes: l.record_bytes,
+        streams: l.streams,
     })
 }
 
