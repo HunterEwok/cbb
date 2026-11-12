@@ -235,6 +235,7 @@ dependencies = [
  "hkdf 0.13.0",
  "hmac 0.13.0",
  "hpke",
+ "ml-kem",
  "p256 0.14.0",
  "rustls",
  "serde",

@@ -21,6 +21,7 @@ import (
 	"crypto/hkdf"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/asn1"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -228,6 +229,9 @@ func envelope(b []byte, label string, signerKey func(map[any]any) ([]byte, error
 	return m, body, nil
 }
 
+// keyOf holds each test key's encoding by its name.
+var keyOf = map[string][]byte{}
+
 func bySignerHash(m map[any]any) ([]byte, error) {
 	h, _ := m[uint64(3)].([]byte)
 	pub, ok := byHash[hex.EncodeToString(h)]
@@ -291,6 +295,9 @@ func checkSigned(dir, file string, sk func(map[any]any) ([]byte, error)) {
 		if typ, _ := m[uint64(1)].(uint64); f.Label == "cbb record v3" && typ == 1 && !nameOK(m[uint64(11)]) {
 			fail("%s / %s: its name is refused", file, t.Name)
 		}
+		if typ, _ := m[uint64(1)].(uint64); f.Label == "cbb record v3" && typ == 9 && !ownHeadBefore(m) {
+			fail("%s / %s: it names its own key at or above its seq", file, t.Name)
+		}
 		if t.Body != "" && hex.EncodeToString(body) != t.Body {
 			fail("%s / %s: body differs", file, t.Name)
 		}
@@ -321,6 +328,14 @@ func checkSigned(dir, file string, sk func(map[any]any) ([]byte, error)) {
 	}
 	for _, r := range f.Refuse {
 		m, _, err := envelope(unhex(r.Envelope), f.Label, sk)
+		if r.Rule == "records/checkpoint/own-head" {
+			if err != nil || ownHeadBefore(m) {
+				fail("%s / %s: its heads hold", file, r.Name)
+			} else {
+				ok++
+			}
+			continue
+		}
 		if r.Rule == "records/device/name" {
 			// names: checked here by themselves, apart from the rules
 			if err != nil || nameOK(m[uint64(11)]) {
@@ -360,9 +375,13 @@ func main() {
 			fail("keys.json %s: hash", k.Name)
 		}
 		byHash[k.KeyHash] = pub
-		if k.Name == "root" && k.ID16 != keys.GroupID {
-			fail("group id is not the root key's id")
-		}
+		keyOf[k.Name] = unhex(k.Key)
+	}
+	// The Group ID commits to the first root key and the recovery key
+	// (rule 33).
+	gid := sha256.Sum256(append(append([]byte("cbb group v3\x00"), keyOf["root"]...), keyOf["recovery"]...))
+	if hex.EncodeToString(gid[:16]) != keys.GroupID {
+		fail("group id is not that of the root key and the recovery key")
 	}
 
 	var prof struct {
@@ -515,7 +534,7 @@ func main() {
 				return nil, errors.New("grants/admin")
 			}
 			kh, pub, err := keyHash(r[uint64(20)])
-			if err != nil || !bytes.Equal(kh, h) {
+			if err != nil || !bytes.Equal(kh, h) || !onCurve(pub) {
 				return nil, errors.New("grants/admin")
 			}
 			if p, _ := r[uint64(21)].(uint64); p&1 != 1 {
@@ -862,19 +881,70 @@ func main() {
 	fmt.Printf("%-18s checked\n", "copy.json")
 
 	// container: the TBS byte for byte with the key and its serial, the point on the curve;
-	// the signature's value is not read (section 12)
+	// the signature in its form (SEQUENCE of two DER INTEGERs of 1 to 33 bytes, at most 72 bytes),
+	// its value not read (section 12)
 	var ct struct {
 		Cert    string `json:"example_cert"`
 		KeyHash string `json:"example_key_hash"`
-		Refuse  []struct {
+		Take    []struct {
+			Name  string `json:"name"`
+			Point string `json:"point"`
+			Cert  string `json:"cert"`
+		} `json:"take"`
+		Refuse []struct {
 			Name string `json:"name"`
 			Cert string `json:"cert"`
 		} `json:"refuse"`
 	}
 	load(dir, "container.json", &ct)
+	sigForm := func(v asn1.BitString) error {
+		if v.BitLength%8 != 0 || len(v.Bytes) > 72 {
+			return errors.New("signature length")
+		}
+		var seq asn1.RawValue
+		rest, err := asn1.Unmarshal(v.Bytes, &seq)
+		if err != nil || len(rest) != 0 || seq.Class != asn1.ClassUniversal || seq.Tag != asn1.TagSequence {
+			return errors.New("signature not a SEQUENCE")
+		}
+		ints, err := elements(seq.Bytes)
+		if err != nil || len(ints) != 2 {
+			return errors.New("signature not two elements")
+		}
+		for _, i := range ints {
+			if i.Class != asn1.ClassUniversal || i.Tag != asn1.TagInteger || len(i.Bytes) < 1 || len(i.Bytes) > 33 {
+				return errors.New("signature integer")
+			}
+			// DER: not negative, and no zero in front it does not need.
+			if i.Bytes[0]&0x80 != 0 || len(i.Bytes) > 1 && i.Bytes[0] == 0 && i.Bytes[1]&0x80 == 0 {
+				return errors.New("signature integer not in DER")
+			}
+		}
+		return nil
+	}
 	container := func(der []byte) ([]byte, error) {
 		cert, err := x509.ParseCertificate(der)
 		if err != nil {
+			return nil, err
+		}
+		if !bytes.Equal(cert.Raw, der) {
+			return nil, errors.New("bytes after the certificate")
+		}
+		var seq asn1.RawValue
+		if rest, err := asn1.Unmarshal(der, &seq); err != nil || len(rest) != 0 {
+			return nil, errors.New("outer form")
+		}
+		parts, err := elements(seq.Bytes)
+		if err != nil || len(parts) != 3 {
+			return nil, errors.New("outer form")
+		}
+		var sig asn1.BitString
+		if rest, err := asn1.Unmarshal(parts[2].FullBytes, &sig); err != nil || len(rest) != 0 {
+			return nil, errors.New("signature not a BIT STRING")
+		}
+		if !bytes.Equal(parts[1].FullBytes, []byte{0x30, 0x0a, 0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x04, 0x03, 0x02}) {
+			return nil, errors.New("signature algorithm")
+		}
+		if err := sigForm(sig); err != nil {
 			return nil, err
 		}
 		pk, ok := cert.PublicKey.(*ecdsa.PublicKey)
@@ -898,6 +968,13 @@ func main() {
 	} else if !bytes.Equal(pub, byHash[ct.KeyHash]) {
 		fail("container key")
 	}
+	for _, t := range ct.Take {
+		if pub, err := container(unhex(t.Cert)); err != nil {
+			fail("container %s: %v", t.Name, err)
+		} else if !bytes.Equal(pub, unhex(t.Point)) {
+			fail("container %s: key", t.Name)
+		}
+	}
 	for _, r := range ct.Refuse {
 		if r.Cert == "" {
 			continue
@@ -909,11 +986,28 @@ func main() {
 	fmt.Printf("%-18s checked\n", "container.json")
 
 	checkSets(dir)
+	checkMessages(dir)
+	checkWave4(dir)
 	if bad > 0 {
 		fmt.Printf("%d failures\n", bad)
 		os.Exit(1)
 	}
 	fmt.Println("all good")
+}
+
+// elements splits the contents of a SEQUENCE into its elements.
+func elements(b []byte) ([]asn1.RawValue, error) {
+	var out []asn1.RawValue
+	for len(b) > 0 {
+		var v asn1.RawValue
+		rest, err := asn1.Unmarshal(b, &v)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+		b = rest
+	}
+	return out, nil
 }
 
 func mustHashOf(name string, rows []keyRow) string {
@@ -1163,7 +1257,17 @@ func adminRecord(r map[any]any, group []byte) bool {
 	k, _ := r[uint64(10)].([]any)
 	alg, _ := keyAlg(k)
 	return typ == 1 && bytes.Equal(g, group) && seq >= 1 && seq < 1<<31 && prevOK && nameOK(r[uint64(11)]) &&
-		role >= 1 && role <= 4 && err == nil && alg == 1 && len(pub) == 65
+		role >= 1 && role <= 4 && err == nil && alg == 1 && onCurve(pub)
+}
+
+// onCurve reports whether pub is an uncompressed P-256 point, as the Rust
+// reader checks a member key and an admin key.
+func onCurve(pub []byte) bool {
+	if len(pub) != 65 {
+		return false
+	}
+	x, _ := elliptic.Unmarshal(elliptic.P256(), pub) //nolint:staticcheck
+	return x != nil
 }
 
 func seenEntry(e any) bool {
@@ -1334,10 +1438,6 @@ func checkSets(dir string) {
 		switch typ {
 		case 6, 18:
 			set = m[uint64(2)]
-		case 67:
-			if w, ok := m[uint64(3)].(map[any]any); ok {
-				set = w[uint64(3)]
-			}
 		}
 		if a, ok := set.([]any); ok && (len(a) < 2 || !sortedSet(a)) {
 			fail("frames %s: set out of order or short", t.Name)
@@ -1414,4 +1514,24 @@ func hkdfSHA256(ikm, salt, info []byte) []byte {
 	k, err := hkdf.Key(sha256.New, ikm, salt, string(info), 32)
 	must(err)
 	return k
+}
+
+// ownHeadBefore: a checkpoint names its own key's head, if at all, below
+// its own seq.
+func ownHeadBefore(m map[any]any) bool {
+	signer, _ := m[uint64(3)].([]byte)
+	seq, _ := m[uint64(4)].(uint64)
+	heads, _ := m[uint64(10)].([]any)
+	for _, h := range heads {
+		e, _ := h.([]any)
+		if len(e) != 3 {
+			continue
+		}
+		k, _ := e[0].([]byte)
+		n, _ := e[1].(uint64)
+		if bytes.Equal(k, signer) && n >= seq {
+			return false
+		}
+	}
+	return true
 }

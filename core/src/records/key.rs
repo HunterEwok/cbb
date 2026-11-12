@@ -77,8 +77,7 @@ impl Key {
         self.format().hash()
     }
 
-    /// The first 16 bytes of the key's hash: a device ID, or, for a group's
-    /// first root key, the group ID.
+    /// The first 16 bytes of the key's hash: a device ID.
     pub fn device_id(&self) -> DeviceId {
         DeviceId::of(&self.hash())
     }
@@ -161,6 +160,22 @@ impl DeviceId {
         #[cfg(not(test))]
         h.id()
     }
+}
+
+/// The label of the Group ID's hash.
+pub const LABEL_GROUP: &str = "cbb group v3";
+
+/// The Group ID: the first 16 bytes of SHA-256 over the label, a zero
+/// byte, and the encodings of the group's first root key and its recovery
+/// key (rule 33). It commits to both: a recovery key that is not the
+/// group's gives another Group ID, so no admitter can pin a false one.
+pub fn group_id(root: &Key, recovery: &Key) -> GroupId {
+    let mut m = Vec::new();
+    m.extend_from_slice(LABEL_GROUP.as_bytes());
+    m.push(0);
+    m.extend_from_slice(&root.encode());
+    m.extend_from_slice(&recovery.encode());
+    DeviceId::of(&KeyHash(sha256(&m)))
 }
 
 /// Checks an ES256 signature in the one form the format takes: 64 bytes

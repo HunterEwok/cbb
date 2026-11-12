@@ -196,6 +196,7 @@ dependencies = [
  "hkdf",
  "hmac 0.13.0",
  "hpke",
+ "ml-kem",
  "p256",
  "p384",
  "proptest",

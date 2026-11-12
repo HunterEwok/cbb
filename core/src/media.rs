@@ -234,7 +234,7 @@ fn reserved(name: &str) -> bool {
 /// its first dot, and without the spaces that end that part, one of CON,
 /// PRN, AUX, NUL, CONIN$, CONOUT$, or COM or LPT followed by one digit 0 to
 /// 9 or one of the superscripts ¹, ² and ³, in any case of ASCII letters.
-fn device(name: &str) -> bool {
+pub(crate) fn device(name: &str) -> bool {
     let base = name.split('.').next().unwrap_or("").trim_end_matches(' ').to_ascii_uppercase();
     match base.as_str() {
         "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$" => true,

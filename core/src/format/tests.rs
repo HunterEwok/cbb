@@ -47,11 +47,17 @@ fn keys() -> HashMap<String, Vec<u8>> {
         assert_eq!(key.encode(), enc);
         assert_eq!(hex(&key.hash().0), s(row, "key_hash"), "{}", s(row, "name"));
         assert_eq!(hex(&key.device_id().0), s(row, "id16"));
-        if s(row, "name") == "root" {
-            assert_eq!(hex(&key.device_id().0), s(&k, "group_id"));
-        }
         out.insert(s(row, "key_hash").to_string(), key.public.to_vec());
     }
+    // The Group ID commits to the first root key and the recovery key
+    // (rule 33).
+    let point = |name: &str| {
+        let row = k["keys"].as_array().unwrap().iter().find(|r| r["name"] == name).unwrap();
+        let b = unhex(s(row, "key"));
+        let v = cbor::decode(&b).unwrap();
+        crate::records::Key::es256(Key::from_value(&v).unwrap().public.to_vec())
+    };
+    assert_eq!(hex(&crate::records::group_id(&point("root"), &point("recovery")).0), s(&k, "group_id"));
     out
 }
 
@@ -352,6 +358,39 @@ fn record_sets_hold(m: &Value<'_>) -> bool {
         })
 }
 
+/// Whether a checkpoint names its own key's head below its own seq (or
+/// not at all).
+fn own_head_before(m: &Value<'_>) -> bool {
+    let (Some(signer), Some(seq)) = (m.get(3).and_then(Value::as_bytes), m.get(4).and_then(Value::as_uint)) else {
+        return false;
+    };
+    m.get(10).and_then(Value::as_array).unwrap_or(&[]).iter().all(|h| match h.as_array() {
+        Some([Value::Bytes(k), Value::Uint(n), _]) if k == &signer => *n < seq,
+        _ => true,
+    })
+}
+
+#[test]
+fn checkpoints_name_heads_before_themselves() {
+    let r = load("records.json");
+    let mut refused = 0;
+    for (verdict, list) in [("take", &r["take"]), ("refuse", &r["refuse"])] {
+        for t in list.as_array().unwrap() {
+            let b = unhex(s(t, "envelope"));
+            let Ok(e) = Envelope::parse(&b) else { continue };
+            if e.map.get(1) != Some(&Value::Uint(9)) {
+                continue;
+            }
+            let own = verdict == "refuse" && s(t, "rule") == "records/checkpoint/own-head";
+            if verdict == "take" || own {
+                assert_eq!(own_head_before(&e.map), !own, "{}", s(t, "name"));
+                refused += usize::from(own);
+            }
+        }
+    }
+    assert_eq!(refused, 2);
+}
+
 #[test]
 fn sets_keep_their_order() {
     let r = load("records.json");
@@ -397,7 +436,6 @@ fn sets_keep_their_order() {
         let f = frame::read(&fb, frame::LIMIT_MEMBER).unwrap();
         let set = match f.t {
             6 | 18 => f.map.get(2),
-            67 => f.map.get(3).and_then(|w| w.get(3)),
             _ => None,
         };
         if let Some(a) = set {
@@ -570,20 +608,11 @@ fn key_container() {
             assert_eq!(container::read(&unhex(b)), Err(Rule::CONTAINER), "{}", s(r, "name"));
         }
     }
-    // Another signature of up to 80 bytes is not read; a longer one, or
-    // anything after it, is refused.
-    let tbs = container::tbs(&point);
-    let alg = [0x30, 0x0a, 0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x04, 0x03, 0x02];
-    for (n, ok) in [(73usize, true), (80, true), (81, false)] {
-        let mut inner = tbs.to_vec();
-        inner.extend_from_slice(&alg);
-        inner.push(0x03);
-        inner.push(n as u8);
-        inner.extend(std::iter::repeat_n(0u8, n));
-        let mut der = vec![0x30, 0x82];
-        der.extend_from_slice(&(inner.len() as u16).to_be_bytes());
-        der.extend_from_slice(&inner);
-        assert_eq!(container::read(&der).is_ok(), ok, "{n}");
+    // The tolerant reader: any signature value in its form, the constant
+    // one, a real self-signature, the longest integers.
+    for t in c["take"].as_array().unwrap() {
+        let got = container::read(&unhex(s(t, "cert"))).unwrap_or_else(|r| panic!("{}: {r}", s(t, "name")));
+        assert_eq!(hex(&got), s(t, "point"), "{}", s(t, "name"));
     }
     let mut trailing = cert.clone();
     trailing.push(0);
@@ -757,5 +786,67 @@ fn every_signature_has_one_form() {
                     .is_ok()
             );
         }
+    }
+}
+
+/// The root's record of the admin that signs a first grant is read by the
+/// record reader itself: a body that reader refuses is no admin's record
+/// for a grant either.
+#[test]
+fn the_admins_record_of_a_grant_is_read_as_a_record() {
+    use p256::ecdsa::SigningKey;
+    let sk = |name: &str| SigningKey::from_slice(&super::sha256(&[name.as_bytes()])).unwrap();
+    let point = |name: &str| sig::public_point(&sk(name));
+    let (root, admin_p, member_p) = (point("root"), point("admin"), point("member"));
+    let root_hash = Key::new(Alg::Es256, &root).hash().0;
+    let group = Key::new(Alg::Es256, &root).device_id().0;
+    let leaf = Key::new(Alg::Es256, &point("lamp")).device_id().0;
+    let (admin, member) = (Key::new(Alg::Es256, &admin_p), Key::new(Alg::Es256, &member_p));
+    let admin_hash = admin.hash().0;
+    let record = |change: Option<(u16, Value<'static>)>| {
+        let mut m: Vec<(u16, Value)> = vec![
+            (1, Value::Uint(1)),
+            (2, Value::Bytes(&group)),
+            (3, Value::Bytes(&root_hash)),
+            (4, Value::Uint(1)),
+            (6, Value::Uint(1)),
+            (10, member.to_value()),
+            (11, Value::Text("phone")),
+            (12, Value::Uint(1)),
+            (13, Value::Uint(3)),
+            (20, admin.to_value()),
+            (21, Value::Uint(1)),
+        ];
+        if let Some((k, v)) = change {
+            m.retain(|(f, _)| *f != k);
+            m.push((k, v));
+            m.sort_by_key(|(f, _)| *f);
+        }
+        envelope::sign(&sk("root"), sig::LABEL_RECORD, &Value::Map(m).encode())
+    };
+    let grant_of = |rec: &[u8]| {
+        let body = Value::Map(vec![
+            (1, Value::Uint(1)),
+            (2, Value::Bytes(&group)),
+            (3, Value::Bytes(&admin_hash)),
+            (4, Value::Uint(1)),
+            (10, Value::Bytes(&leaf)),
+            (12, Value::Array(vec![admin.to_value()])),
+        ])
+        .encode();
+        let env = envelope::sign(&sk("admin"), sig::LABEL_GRANT, &body);
+        let mut e = cbor::Encoder::new();
+        e.map(2).uint(2).raw(&env).uint(3).raw(rec);
+        let msg = e.finish();
+        let v = cbor::decode(&msg).unwrap();
+        grant::read(&v, &root, &DeviceId(leaf), &DeviceId(group), None).map(|_| ()).map_err(Rule::name)
+    };
+    assert_eq!(grant_of(&record(None)), Ok(()));
+    for change in
+        [(13, Value::Text("all")), (21, Value::Uint(1 | 1 << 40)), (22, Value::Text("x")), (26, Value::Uint(7))]
+    {
+        let rec = record(Some(change.clone()));
+        assert!(crate::records::Record::decode(&rec).is_err(), "{change:?}");
+        assert_eq!(grant_of(&rec), Err("grants/admin"), "{change:?}");
     }
 }

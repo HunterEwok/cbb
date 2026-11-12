@@ -93,6 +93,13 @@ impl Statement {
         Ok(Statement { id: RecordId(sha256(&bytes)), bytes, sig, body })
     }
 
+    /// A statement from a reader that checked the bytes itself and found
+    /// body in them (`crate::keystore::read_statement`): fields of the
+    /// optional zone it skipped stay in the bytes and the signature.
+    pub(crate) fn from_read(bytes: Vec<u8>, sig: Vec<u8>, body: Body) -> Statement {
+        Statement { id: RecordId(sha256(&bytes)), bytes, sig, body }
+    }
+
     pub fn body(&self) -> &Body {
         &self.body
     }

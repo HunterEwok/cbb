@@ -82,10 +82,17 @@ pub fn build(point: &[u8; 65]) -> [u8; LEN] {
     c
 }
 
+/// The longest signature value a reader takes: SEQUENCE { INTEGER r,
+/// INTEGER s } with two integers of 33 bytes.
+pub const MAX_SIG: usize = 72;
+
 /// Reads a container: the TBSCertificate byte for byte the template with
 /// its point and that point's serial, the point on the curve, then
-/// ecdsa-with-SHA256 and a BIT STRING of at most 80 bytes, whatever it
-/// holds. Returns the point.
+/// ecdsa-with-SHA256 and the signature in its form (a BIT STRING with no
+/// unused bits holding SEQUENCE { INTEGER, INTEGER }, each integer 1 to 33
+/// bytes in DER, every length exact, at most 72 bytes), whatever its value. Writers
+/// of 0.6 write the constant signature; a later one may sign for real, and
+/// this reader takes it. Returns the point.
 pub fn read(cert: &[u8]) -> Result<[u8; 65], Rule> {
     // A SEQUENCE in DER: its length in one byte after 0x81 (128 to 255) or
     // two after 0x82 (256 and up).
@@ -116,7 +123,35 @@ pub fn read(cert: &[u8]) -> Result<[u8; 65], Rule> {
         return Err(Rule::CONTAINER);
     }
     match bits {
-        [0x03, n, body @ ..] if usize::from(*n) == body.len() && *n <= 80 && *n >= 1 => Ok(point),
+        [0x03, n, 0x00, sig @ ..] if usize::from(*n) == sig.len().saturating_add(1) && well_formed(sig) => Ok(point),
         _ => Err(Rule::CONTAINER),
+    }
+}
+
+/// Whether a signature value has the form of a DER ECDSA signature:
+/// SEQUENCE { INTEGER, INTEGER }, short lengths that are exact, each integer
+/// 1 to 33 bytes in DER (not negative, no needless zero in front), at most
+/// [`MAX_SIG`] bytes in all.
+fn well_formed(sig: &[u8]) -> bool {
+    let integer = |b: &[u8]| -> Option<usize> {
+        match b {
+            [0x02, n, rest @ ..] if (1..=33).contains(n) && rest.len() >= usize::from(*n) => {
+                // DER: not negative, and no zero in front it does not need.
+                match rest {
+                    [first, ..] if first & 0x80 != 0 => None,
+                    [0, second, ..] if *n > 1 && second & 0x80 == 0 => None,
+                    _ => Some(usize::from(*n).saturating_add(2)),
+                }
+            }
+            _ => None,
+        }
+    };
+    match sig {
+        [0x30, n, body @ ..] if sig.len() <= MAX_SIG && usize::from(*n) == body.len() => {
+            let Some(a) = integer(body) else { return false };
+            let Some(rest) = body.get(a..) else { return false };
+            integer(rest) == Some(rest.len())
+        }
+        _ => false,
     }
 }
