@@ -251,7 +251,9 @@ jobs:
           retention-days: 7
 
   # Sums up the coverage of every part that ran (docs/testing.md, "Coverage")
-  # and fails when one falls below its floor in tools/coverage/floor.json.
+  # and fails when one falls below its floor in tools/coverage/floor.json,
+  # or a hard gate fails: a closed audit finding whose test is gone, a
+  # format rule no vector refuses.
   coverage:
     name: coverage
     needs: [changes, test, gocover, kit, android, rust, service]
@@ -283,7 +285,9 @@ jobs:
           [ -f cov/coverage-rust-service.json ] && set -- "$@" -llvm rust-service=cov/coverage-rust-service.json
           [ -f cov/coverage-swift-kit.json ] && set -- "$@" -llvm swift-kit=cov/coverage-swift-kit.json
           [ -f cov/jacocoTestReport.xml ] && set -- "$@" -jacoco kotlin-kit=cov/jacocoTestReport.xml
-          go run ./tools/coverage -floor tools/coverage/floor.json -target 90 -branch-target 80 -core-branch-target 90 -summary "$GITHUB_STEP_SUMMARY" "$@"
+          go run ./tools/coverage -floor tools/coverage/floor.json -target 90 -branch-target 80 -core-branch-target 90 \
+            -audit testdata/audit/closed.json -rules core/src -vectors testdata/format \
+            -summary "$GITHUB_STEP_SUMMARY" "$@"
 
   build:
     name: build (${{ matrix.systems }})

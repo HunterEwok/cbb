@@ -31,6 +31,13 @@
 // without failing: the floor is where CI stops, the target where the tests
 // are written up to again (plans of 0.6: lines 90, branches 80, a core's
 // branches 90).
+//
+// Below the table are the hard gates, which have no floor and fail at once:
+// -audit, every closed audit finding's tests still exist; -rules with
+// -vectors, every rule a format reader names with Rule::field is refused by
+// some vector (not measured until the 0.6 core's readers are in the tree);
+// -mutants, cargo mutants left no survivor tools/mutants/missed.txt does not
+// name.
 // docs/testing.md, "Coverage", says what each part counts.
 package main
 
@@ -137,6 +144,9 @@ type options struct {
 	target                          float64 // lines
 	branchTarget, coreBranchTarget  float64
 	summary                         string
+	audit, root                     string // the closed findings, and where their tests' paths start
+	rules, vectors                  string // the readers' sources and the format's vectors
+	mutants, knownMutants           string // cargo mutants' missed.txt and the known list
 }
 
 func main() {
@@ -151,6 +161,12 @@ func main() {
 	flag.Float64Var(&o.branchTarget, "branch-target", 0, "the branch coverage aimed at, as -target")
 	flag.Float64Var(&o.coreBranchTarget, "core-branch-target", 0, "the branch coverage aimed at in the cores (rust-core, go-core); 0 takes -branch-target")
 	flag.StringVar(&o.summary, "summary", "", "also append the table to this file")
+	flag.StringVar(&o.audit, "audit", "", "the closed audit findings and their tests (testdata/audit/closed.json): fail when a test is gone")
+	flag.StringVar(&o.root, "root", ".", "the repository, where -audit's test paths start")
+	flag.StringVar(&o.rules, "rules", "", "the format readers' Rust sources (core/src): with -vectors, fail when a rule named by Rule::field has no refused vector")
+	flag.StringVar(&o.vectors, "vectors", "", "the format's vectors (testdata/format)")
+	flag.StringVar(&o.mutants, "mutants", "", "cargo mutants' missed.txt: with -known-mutants, fail on a survivor the list does not name")
+	flag.StringVar(&o.knownMutants, "known-mutants", "tools/mutants/missed.txt", "the survivors the tests do not catch yet, each with why")
 	flag.Parse()
 	o.goFiles, o.llvmFiles, o.jacocoFiles = goFiles, llvmFiles, jacocoFiles
 	if err := run(o, os.Stdout); err != nil {
@@ -228,6 +244,16 @@ func run(o options, stdout io.Writer) error {
 		}
 	}
 	text, failed, short := report(parts, packages, floors, o)
+	gates, err := runGates(o)
+	if err != nil {
+		return err
+	}
+	text += gatesReport(gates)
+	for _, g := range gates {
+		if g.failed() {
+			failed = append(failed, fmt.Sprintf("%s %d/%d", g.name, g.met, g.of))
+		}
+	}
 	fmt.Fprint(stdout, text)
 	for _, s := range short {
 		fmt.Fprintf(stdout, "::warning title=coverage below the target::%s\n", s)
@@ -246,9 +272,39 @@ func run(o options, stdout io.Writer) error {
 		}
 	}
 	if len(failed) > 0 {
-		return fmt.Errorf("below the floor: %s", strings.Join(failed, ", "))
+		return fmt.Errorf("below the floor or a gate: %s", strings.Join(failed, ", "))
 	}
 	return nil
+}
+
+// runGates checks the gates whose inputs are given.
+func runGates(o options) ([]gate, error) {
+	var gates []gate
+	if o.audit != "" {
+		g, err := auditGate(o.audit, o.root)
+		if err != nil {
+			return nil, err
+		}
+		gates = append(gates, g)
+	}
+	if o.rules != "" || o.vectors != "" {
+		if o.rules == "" || o.vectors == "" {
+			return nil, errors.New("-rules and -vectors go together")
+		}
+		g, err := formatGate(o.rules, o.vectors)
+		if err != nil {
+			return nil, err
+		}
+		gates = append(gates, g)
+	}
+	if o.mutants != "" {
+		g, err := mutantsGate(o.mutants, o.knownMutants)
+		if err != nil {
+			return nil, err
+		}
+		gates = append(gates, g)
+	}
+	return gates, nil
 }
 
 func add(a, b tally) tally { return tally{a.total + b.total, a.covered + b.covered} }

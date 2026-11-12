@@ -337,12 +337,12 @@ mod tests {
 
     #[test]
     fn remember_keeps_the_last_lines_cut_at_a_character() {
-        let long = "й".repeat(cbb_core::bug::MAX_LINE);
+        let long = "\u{e9}".repeat(cbb_core::bug::MAX_LINE);
         remember(&long);
         {
             let r = RECENT.lock().unwrap();
-            let kept = r.iter().find(|l| l.starts_with('й')).unwrap();
-            assert!(kept.len() <= cbb_core::bug::MAX_LINE && kept.chars().all(|c| c == 'й'));
+            let kept = r.iter().find(|l| l.starts_with('\u{e9}')).unwrap();
+            assert!(kept.len() <= cbb_core::bug::MAX_LINE && kept.chars().all(|c| c == '\u{e9}'));
         }
         for i in 0..LINES + 3 {
             remember(&format!("line {i}"));

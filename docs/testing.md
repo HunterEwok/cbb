@@ -104,6 +104,17 @@ branches. Go counts statements only. The aim is 80% of the branches (`-branch-ta
 90% in a core (`-core-branch-target 90`), where each branch is a decision to take or refuse;
 a branch row's floor is its first measure, and it only rises.
 
+Under the table are the hard gates, which have no floor and fail the job at once:
+
+- every closed finding of the security audits keeps its tests: `testdata/audit/closed.json`
+  lists each by an opaque id with the tests that hold it closed, and `-audit` fails when one
+  of them is gone; a fix that closes a finding adds its row;
+- every rule a format reader refuses by name (`Rule::field("grants/replaces")` in `core/src`)
+  is the expected refusal of at least one vector in `testdata/format/*.json` (`-rules`,
+  `-vectors`); until the 0.6 core's readers are in the tree it is not measured;
+- no mutant survives that `tools/mutants/missed.txt` does not name (`-mutants`, as
+  `tools/mutants/check.sh` in the nightly jobs).
+
 | Part | What counts | Measured by |
 |---|---|---|
 | `go` | statements of `cmd`, `internal` and `mobile`, without `third_party` and the packages only tests use (`eitest`, `testnet` and the others `tools/coverage` lists) | the `go coverage` job: every test across packages (`-coverpkg`, so a test of `internal/service` counts for `internal/group` too), the desktop clipboards under sway and Xvfb, the uinput keyboard against the kernel, mDNS beside avahi-daemon, the e2e's members built with `-cover`; and each system's own files from the `test` jobs on Linux, macOS and Windows |
