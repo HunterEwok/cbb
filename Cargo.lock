@@ -270,6 +270,7 @@ dependencies = [
  "sha2",
  "smoltcp",
  "windows-sys",
+ "zeroize",
  "zune-jpeg",
 ]
 
