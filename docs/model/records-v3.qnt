@@ -352,13 +352,16 @@ module records_v3 {
 
   // What a set keeps of items, having dropped before what cut remembers: water-filling to one
   // level for every key with room (ceil), each key's records in its order.
-  pure def keepAfter(items: Set[Record], ceil: Key -> int, cut: Cut, cur: Key, ord: Order): (Set[Id], Cut) = {
+  pure def keepAfter(items: Set[Record], ceil: Key -> int, cut: Cut, cur: Key, ord: Order): (Set[Id], Cut) =
+    keepIn(items, ceil, cut, cur, ord, ROOM)
+  // The same in a room of the given size.
+  pure def keepIn(items: Set[Record], ceil: Key -> int, cut: Cut, cur: Key, ord: Order, room: int): (Set[Id], Cut) = {
     val live = items.filter(r => not(past(cut, r, cur, ord)))
     val owned = live.filter(r => ceil.keys().contains(r.signer))
     val top = min2(cut.level, TOP)
     val level =
-      if (demand(owned, ceil, cut, top) <= ROOM) top
-      else 0.to(top).filter(s => demand(owned, ceil, cut, s) <= ROOM).fold(0, (m, s) => max2(m, s))
+      if (demand(owned, ceil, cut, top) <= room) top
+      else 0.to(top).filter(s => demand(owned, ceil, cut, s) <= room).fold(0, (m, s) => max2(m, s))
     val keptOwned = owned.filter(r => prefix(ofKey(owned, r.signer), r, cur, ord) <= min2(level, ceil.get(r.signer)))
     val out = owned.exclude(keptOwned)
     val markKeys = cut.marks.keys().union(out.map(r => r.signer))
@@ -415,10 +418,11 @@ module records_v3 {
     val plain = keepAfter(shown, ceil, cut, last(path), orderOf(s, db))
     // A record a held checkpoint names (its key's record below it, or one it keeps) settles
     // the set before the rooms are judged: when the checkpoint counts with what the rooms
-    // keep and those records, the rooms are judged on what it leaves after pruning; if it
-    // still cannot count, the usual rule stands.
+    // keep and those records, it and the records it names are kept first and the rooms are
+    // filled after them with what it leaves after pruning; if it still cannot count, the
+    // usual rule stands.
     val cps = shown.filter(c => c.kind == "checkpoint" and c.signer == last(path))
-    val named = shown.filter(r => cps.exists(c => namedBy(c, r, shown))).filter(r => not(plain._1.contains(r.id)))
+    val named = shown.filter(r => cps.contains(r) or cps.exists(c => namedBy(c, r, shown))).filter(r => not(plain._1.contains(r.id)))
     if (named == Set()) plain
     else {
       val firsts = firstsHeld(s, db)
@@ -426,8 +430,16 @@ module records_v3 {
       if (not(cps.exists(c => c.id == v.checkpoint))) plain
       else {
         val c = db.get(v.checkpoint)
-        val res = keepAfter(shown.filter(r => not(prunedBy(c, r))), ceil, NOCUT, last(path), orderOf(s, db))
-        if (fullEvaluate(recsOf(res._1, db).union(firsts), chainState(s, db)).checkpoint == c.id) res else plain
+        val left = shown.filter(r => not(prunedBy(c, r)))
+        val first = left.filter(r => r == c or namedBy(c, r, shown))
+        val ceil2 = ceil.keys().mapBy(k => ceil.get(k) - sumUnits(ofKey(first, k)))
+        val room2 = ROOM - sumUnits(first)
+        if (room2 < 0 or ceil2.keys().exists(k => ceil2.get(k) < 0) or first.exists(r => not(ceil.keys().contains(r.signer)))) plain
+        else {
+          val rest = keepIn(left.exclude(first), ceil2, NOCUT, last(path), orderOf(s, db), room2)
+          val res = (rest._1.union(idsOf(first)), rest._2)
+          if (fullEvaluate(recsOf(res._1, db).union(firsts), chainState(s, db)).checkpoint == c.id) res else plain
+        }
       }
     }
   }
@@ -437,12 +449,6 @@ module records_v3 {
     else items.filter(r => r.id == c.line[c.line.length() - 2]).fold(NONEREC, (a, r) => r)
   // Checkpoint c names r: r is its key's record below it, or one it keeps.
   pure def namedBy(c: Record, r: Record, items: Set[Record]): bool = c.keep.contains(r.id) or waitedBy(c, items) == r
-  // r is named by a checkpoint of the current root the set holds: it is not turned away for
-  // its key's earlier drops.
-  pure def namedByHeld(s: Store, r: Record, db: Id -> Record): bool =
-    recsOf(s.recs, db).exists(c => c.kind == "checkpoint" and c.signer == last(keptPath(s, db))
-      and namedBy(c, r, recsOf(s.got, db)))
-
   // Drops what the set does not keep.
   pure def recut(s: Store, db: Id -> Record): Store = {
     val res = settle(s, recsOf(s.recs, db), s.cut, db)
@@ -477,14 +483,18 @@ module records_v3 {
       and validAt(h, pathCutsOf(ch.recs.slice(0, below))._1)
   }
   pure def storeOne(s: Store, r: Record, db: Id -> Record): Store =
-    if (s.recs.contains(r.id) or not(storable(s, r, db))
-      or (past(s.cut, r, last(keptPath(s, db)), orderOf(s, db)) and not(namedByHeld(s, r, db)))) s
+    if (s.recs.contains(r.id) or not(storable(s, r, db))) s
     else {
-      val s1 = recut({ ...s, recs: s.recs.union(Set(r.id)) }, db)
-      // A checkpoint the set keeps takes again the records it names that the set got.
-      if (r.kind != "checkpoint" or not(s1.recs.contains(r.id))) s1
-      else recsOf(s1.got, db).filter(x => namedBy(r, x, recsOf(s1.got, db)) and not(s1.recs.contains(x.id))
-        and storable(s1, x, db)).fold(s1, (y, x) => recut({ ...y, recs: y.recs.union(Set(x.id)) }, db))
+      // The current root's checkpoints the set got, and the records they name, are not turned
+      // away for their keys' earlier drops: they are offered again, all at once, with each
+      // record, since a checkpoint may count only with all of them.
+      val got1 = recsOf(s.got, db)
+      val cps = got1.filter(c => c.kind == "checkpoint" and c.signer == last(keptPath(s, db)) and storable(s, c, db))
+      val back = got1.filter(x => (cps.contains(x) or cps.exists(c => namedBy(c, x, got1)))
+        and not(s.recs.contains(x.id)) and storable(s, x, db))
+      val turned = past(s.cut, r, last(keptPath(s, db)), orderOf(s, db)) and not(back.contains(r))
+      val add = if (turned) idsOf(back) else idsOf(back).union(Set(r.id))
+      if (add == Set()) s else recut({ ...s, recs: s.recs.union(add) }, db)
     }
   // The set cuts by the path its chain gives; the records of a root the change made, which the
   // set got while the change waited, it takes now (format 20.3, records of a waiting root).
