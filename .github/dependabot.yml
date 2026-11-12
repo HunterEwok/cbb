@@ -12,8 +12,9 @@
 # pinned to a git commit on purpose and are left alone. gradle covers the Android app and its kit.
 # npm covers only the checks of the website in CI (site/package.json).
 # swift covers the iPhone kit's packages. Versions written out by hand in the workflows (qemu,
-# zig, the ESP32 toolchain, the cargo tools CI installs) are checked weekly by tools/pins, as is
-# the commit go.mod pins for gVisor, which publishes no tagged versions for Dependabot to propose.
+# zig, the ESP32 toolchain, the cargo tools CI installs) are checked weekly by tools/pins, as are
+# the Go modules go.mod pins at a commit (gVisor, amneziawg-go), the code copied under third_party
+# and the age of the esp-hal commit: Dependabot proposes none of them.
 # The cooldown waits a week after a release before proposing it, so a compromised release
 # has time to be noticed and pulled.
 version: 2
