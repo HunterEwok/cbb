@@ -344,10 +344,10 @@ the core's.
 | `bug_allow` | `state`, `always` | `{"state"}`: the user allowed a report, and maybe always |
 | `bug_sent` | `state`, `fingerprint`, `version`, `post`, `ok`, `fixed_in` (what the server answered, optional), `now_ms` | `{"state"}`: the report went (`ok`), or it waits to be sent again |
 | `bug_pending` | `state`, `now_ms` | `{"queue", "state"}`: the reports waiting (`[{fingerprint, version, post, at_ms}]`), without those older than seven days |
-| `push_key` | none | `{"key"}`: a new push key, 32 random bytes, base64: one per group, kept where the notification extension reads it (see "Push") |
+| `push_key` | none | `{"key", "send_key"}`: a new push key, 32 random bytes, and a new send key (P-256, PKCS #8), both base64: the push key one per group, kept where the notification extension reads it; the send key one per token, drawn again with each new token, kept by the app only (see "Push") |
 | `push_limits` | `env` (the platform, as the env registry numbers it) | `{"known", "body", "token", "kinds"}`: whether this core knows the platform, the size of its sealed bodies, the longest token, the bits of `kinds` it defines; the apps hold no number of the format |
-| `push_registration` | `seq` (higher than the last one sent), `kinds` (0 turns push off), and with `kinds` ≠ 0 `env`, `key` (the push key, base64) and either `token` (base64, as the platform gave it) or `unifiedpush` (`{url, p256dh, auth}`, the last two base64) | `{"frame"}`: message `push` (t 28) as a frame, base64, for every member connection of the group; code 18 when a field breaks its row (a UnifiedPush endpoint that is not `https`, a key not 32 bytes) |
-| `push_open` | `keys` (`[{key, seq}]`: the group's push keys the phone holds, the current one first), `body` (base64, the sealed body as the notification carries it), `me` (the phone's device ID), `origins` (`[{key, rights, frozen}]`: the devices the app last saved, each member key as the records encode it, base64), `sealing` (`[{epoch, secret}]`: the phone's copy-opening secrets), `too_old`, `halted` (booleans, false when left out) | `{"kind", "key_index", ...}`: `copy` with `id`, `origin`, `type` (`text`, `media`, `files` or `other`), `secret`, `ttl_ms` and `text` once the origin, its signature and `commit` hold; `waits` with `id` and `origin` when the copy did not fit or does not open here; `event` with `id`, `event`, `device`, `time_ms`; `hint` for anything else. Only `copy` states a fact; the rest the app shows as "open the app". Code 18 when no key opens the body |
+| `push_registration` | `now_ms` (the phone's clock), `saved_seq` (the last seq the app saved, left out when none), `kinds` (0 turns push off), and with `kinds` ≠ 0 `env`, `key` (the push key, base64), `send_key` (the token's send key from `push_key`, base64) and either `token` (base64, as the platform gave it) or `unifiedpush` (`{url, p256dh, auth}`, the last two base64) | `{"frame", "seq"}`: message `push` (t 28) as a frame, base64, for every member connection of the group, signed with the send key, and its seq, max(`saved_seq` + 1, `now_ms`), which the app saves before it sends the frame, so that a phone restored from a backup still moves forward; code 18 when a field breaks its row (a UnifiedPush endpoint that is not `https` on port 443 with a DNS name, a key not 32 bytes) |
+| `push_open` | `keys` (`[{key, seq}]`: the group's push keys the phone holds, the current one first), `body` (base64, the sealed body as the notification carries it), `me` (the phone's device ID), `origins` (`[{key, rights, frozen}]`: the devices the app last saved, each member key as the records encode it, base64), `sealing` (`[{epoch, secret}]`: the phone's copy-opening secrets), `too_old`, `halted`, `hints_only` (booleans, false when left out: `halted` opens nothing, `hints_only` after an event of removal, a new root or a stop until the app has run), `now_ms` and `window_ms` (the extension's clock and how old a copy may be) | `{"kind", "key_index", ...}`: `copy` with `id`, `origin`, `type` (`text`, `media`, `files` or `other`), `secret`, `ttl_ms` and `text` once the origin, its signature and `commit` hold and the copy is within the window; `waits` with `id` and `origin` when the copy did not fit, does not open here or is older; `event` with `id`, `event`, `device`, `time_ms` for an event less than a day old; `hint` for anything else. Only `copy` states a fact; the rest the app shows as "open the app". The extension keeps the IDs it showed and shows none twice. Code 18 when no key opens the body |
 
 The arguments of `evaluate` are a case of `testdata/interop/v2-records.json` as it is.
 
@@ -395,6 +395,15 @@ head of `pusher.rs`: `registration` (message `push` arrived from the device itse
 or frozen), `copy` (with the copy's readers and `cbb_core::push::copy_body` for each),
 `event`, and the traits `Faces` (the push service's address, pin, server key and credentials
 of the group's face) and `Saved` (where the registrations are kept).
+
+Every honest sender of one body makes the same bytes (the nonce is derived from the plaintext, a
+copy is reduced with age 0, an event carries its record's time), so the service drops a repeat by
+the bytes and a phone gets one notification. The service binds a token to the send key of its
+first accepted send and keeps the highest seq it accepted, across restarts: a send under another
+key or a lower seq is answered `stale` (7), one of a key algorithm it does not take `key` (6),
+and the sender drops both. The bounds of this: until the first send under the new seq, the old
+seq passes, and its bodies open nothing; a member present at a token's first registration can
+bind it first, and the way out is a new token or the 30 days after the binding's last send.
 
 ## Panics
 

@@ -10,10 +10,12 @@ All notable changes to cbb are documented in this file. The format follows
 - Push to a phone whose app is closed, in the core's 0.6 format: a phone's registration with
   each member of each group (message `push`, a token of its platform's push service and a push
   key of its own per group), the body a member seals to it (one size per platform, a reduced
-  copy whose origin the phone checks, or a hint that something waits), the `once` tag that
-  lets the push service drop a repeat, and the messages between a member and the project's
-  push service (`cbb-push/1`), which sees tokens, times and one size, never a group or
-  content (`cbb_core::push`, vectors in `testdata/format/push.json`). The push service
+  copy whose origin the phone checks, or a hint that something waits; every sender of one
+  body makes the same bytes, so the push service drops a repeat), the send key a phone draws
+  with each token, whose signature binds the token at the push service so that only the
+  newest registration's senders get through, and the messages between a member and the
+  project's push service (`cbb-push/1`), which sees tokens, times and one size, never a group
+  or content (`cbb_core::push`, vectors in `testdata/format/push.json`). The push service
   `cbb-push` (APNs first, `packaging/linux/cbb-push.service`), the member's sender, and the
   phones' calls `push_key`, `push_limits`, `push_registration` and `push_open` (error code 18,
   `push`). The apps follow.

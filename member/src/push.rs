@@ -20,7 +20,7 @@ use rustls::{ClientConnection, StreamOwned};
 use crate::error::{Context, Error, Result};
 
 const TIMEOUT: Duration = Duration::from_secs(15);
-const MAX_FRAME: usize = 16_384;
+const MAX_FRAME: usize = push::MAX_SERVICE_FRAME;
 
 /// A server key for a face, from its scalar (`blind::alias::server_key`).
 pub struct ServerKey(SigningKey);
@@ -60,14 +60,6 @@ pub struct Client {
     next: u64,
     /// Sends left this hour for the face's tag, as the service said.
     pub left: u64,
-}
-
-/// The service's answer to one send.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Sent {
-    /// `push::SENT` …, an unknown status read as failed.
-    pub status: u64,
-    pub retry_ms: Option<u64>,
 }
 
 fn read_frame(s: &mut impl std::io::Read) -> Result<Vec<u8>> {
@@ -116,21 +108,26 @@ impl Client {
         }
     }
 
-    /// Asks the service to pass one sealed body to a token.
-    pub fn send(&mut self, token: &[u8], env: u64, once: [u8; 16], body: &[u8], ttl: Option<u64>) -> Result<Sent> {
+    /// Asks the service to pass one sealed body to a token, with the
+    /// registration's send key, signature and seq; `s.n` is set here. The
+    /// answer's status is as a sender acts on it ([`push::status`]).
+    pub fn send(&mut self, mut s: push::Send<'_>) -> Result<push::Sent> {
         use std::io::Write;
         let n = self.next;
         self.next = if n >= u64::from(u32::MAX) { 1 } else { n + 1 };
-        let f = push::Send { n, token, env, once, body, ttl }.write();
+        s.n = n;
+        let f = s.write().ok_or_else(|| Error::msg("the send is not one the push service reads"))?;
         self.tls.write_all(&f).and_then(|()| self.tls.flush()).context("cannot write to the push service")?;
         loop {
             let f = read_frame(&mut self.tls)?;
             let m = frame::read(&f, MAX_FRAME).map_err(|r| Error::msg(r.name()))?;
             match m.t {
-                push::T_SENT if m.map.get(2).and_then(cbb_core::format::Value::as_uint) == Some(n) => {
-                    let status = push::status(m.map.get(3).and_then(cbb_core::format::Value::as_uint).unwrap_or(0));
-                    let retry_ms = m.map.get(4).and_then(cbb_core::format::Value::as_uint);
-                    return Ok(Sent { status, retry_ms });
+                push::T_SENT => {
+                    let sent = push::Sent::read(&m.map)
+                        .map_err(|r| Error::msg(format!("the push service sent a bad answer ({})", r.name())))?;
+                    if sent.n == n {
+                        return Ok(sent);
+                    }
                 }
                 push::T_ERROR => {
                     let why = m.map.get(2).and_then(cbb_core::format::Value::as_text).unwrap_or("refused");

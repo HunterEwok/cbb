@@ -16,9 +16,10 @@ use super::{Budgets, Config, Platform, Service};
 use crate::error::{Error, Result};
 use crate::relayd::keys::Keys;
 
-const USAGE: &str = "usage: cbb-push [-listen ADDRESS] [-key FILE] -apns-team ID [-apns-key FILE -apns-key-id ID] [-apns-sandbox-key FILE -apns-sandbox-key-id ID] [-roots FILE] [-show-key]
+const USAGE: &str = "usage: cbb-push [-listen ADDRESS] [-key FILE] [-state FILE] -apns-team ID [-apns-key FILE -apns-key-id ID] [-apns-sandbox-key FILE -apns-sandbox-key-id ID] [-roots FILE] [-show-key]
   -listen ADDRESS            the address to listen on, TCP (default :8767)
   -key FILE                  the service's TLS key, which members pin, made on the first run
+  -state FILE                where the tokens' bindings to their send keys are kept across restarts
   -apns-team ID              the Apple team ID of the APNs keys
   -apns-key FILE             the team's APNs key for production (.p8): the iPhone and iPad apps of the stores and TestFlight
   -apns-key-id ID            its ID
@@ -30,6 +31,7 @@ const USAGE: &str = "usage: cbb-push [-listen ADDRESS] [-key FILE] -apns-team ID
 struct Flags {
     listen: String,
     key: PathBuf,
+    state: PathBuf,
     apns_team: String,
     apns: [(Option<PathBuf>, String); 2],
     roots: PathBuf,
@@ -44,6 +46,7 @@ fn parse(args: &[String]) -> std::result::Result<Flags, String> {
     let mut f = Flags {
         listen: ":8767".into(),
         key: state_dir().join("push.pem"),
+        state: state_dir().join("push.state"),
         apns_team: String::new(),
         apns: [(None, String::new()), (None, String::new())],
         roots: PathBuf::from("/etc/ssl/certs/ca-certificates.crt"),
@@ -63,6 +66,7 @@ fn parse(args: &[String]) -> std::result::Result<Flags, String> {
         match name {
             "listen" => f.listen = value()?,
             "key" => f.key = PathBuf::from(value()?),
+            "state" => f.state = PathBuf::from(value()?),
             "apns-team" => f.apns_team = value()?,
             "apns-key" => f.apns[0].0 = Some(PathBuf::from(value()?)),
             "apns-key-id" => f.apns[0].1 = value()?,
@@ -148,6 +152,7 @@ pub fn command(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) 
         key: keys.key.clone(),
         platforms,
         budgets: Budgets::default(),
+        state: Some(f.state.clone()),
         log: log.clone(),
     }) {
         Ok(s) => s,

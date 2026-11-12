@@ -14,17 +14,28 @@
 //!   period key it sees for a tag, never an older version of a credential,
 //!   and the member only when the members' credential lists its key.
 //! - Then `push/send` as often as the budgets allow: per tag, per token,
-//!   per address. A repeated `once` for one token within a day is answered
-//!   `repeat` and not sent, so that several members sending one copy give
-//!   one notification.
+//!   per address. Every honest sender of one body makes the same bytes, so
+//!   a body already sent to a token within a day is answered `repeat` and
+//!   not sent again: several members sending one copy give one
+//!   notification.
+//! - Each send carries the phone's send key for the token, its signature
+//!   over (env, token, seq) and seq. The service binds a token to the first
+//!   send key it sees with it and keeps the highest seq it accepted: a send
+//!   under another key or a lower seq is answered `stale`, one of a key
+//!   algorithm it does not take `key`. A binding ends 30 days after its
+//!   last accepted send; a new token starts a new one.
 //! - It sees its face's tag, server keys' hashes, tokens, times and one
-//!   size per platform. It keeps all of it in memory only, the tokens and
-//!   tags as keyed hashes under a secret drawn at start, and logs counts,
-//!   never a token, a tag or an address.
+//!   size per platform. The tags, the budgets and the repeats stay in
+//!   memory; the bindings are kept in its state file (mode 0600) with the
+//!   secret of the keyed hashes they are filed under, so that a restart
+//!   keeps them, and hold no token, only its keyed hash, the send key's
+//!   hash, seq and a time. It logs counts, never a token, a tag or an
+//!   address.
 
 pub mod apns;
 pub mod command;
 pub mod h2;
+mod saved;
 
 #[cfg(test)]
 mod tests;
@@ -32,6 +43,7 @@ mod tests;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpListener, TcpStream};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -89,12 +101,20 @@ pub struct Config {
     /// The platforms by env.
     pub platforms: HashMap<u64, Arc<dyn Platform>>,
     pub budgets: Budgets,
+    /// The file the bindings are kept in; None keeps them in memory only.
+    pub state: Option<PathBuf>,
     pub log: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
-/// How long a `once` is remembered, and how many at most.
-const ONCE_FOR: Duration = Duration::from_secs(24 * 3600);
-const ONCE_MAX: usize = 1 << 20;
+/// How long a body sent is remembered as a repeat, and how many at most.
+const REPEAT_FOR: Duration = Duration::from_secs(24 * 3600);
+const REPEATS_MAX: usize = 1 << 20;
+/// How long a token's binding to its send key outlives its last accepted
+/// send, and how many bindings are held at most.
+pub const BINDING_LIFE_MS: u64 = 30 * 24 * 3600 * 1000;
+const BINDINGS_MAX: usize = 1 << 20;
+/// How often changed bindings are written.
+const SAVE_EVERY: Duration = Duration::from_secs(5);
 /// Tags and token budgets kept at most. Anyone can make a period key and
 /// credentials of a tag of their own, so the table of first period keys is
 /// bounded three ways: an entry lives at most until its credentials expire
@@ -144,11 +164,37 @@ struct Period {
     expires_ms: u64,
 }
 
+/// A token's binding to the send key of its first accepted send.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Binding {
+    /// The hash of the send key's encoding.
+    pub key: [u8; 32],
+    /// The highest seq accepted.
+    pub seq: u64,
+    /// When a send was last accepted under it (Unix milliseconds).
+    pub used_ms: u64,
+}
+
+/// Whether a send under `key` with `seq` at `now_ms` passes a token's
+/// binding, and the binding after it. A token with no binding, or whose
+/// binding was not used for [`BINDING_LIFE_MS`], is bound anew.
+pub fn bind(old: Option<&Binding>, key: [u8; 32], seq: u64, now_ms: u64) -> Option<Binding> {
+    match old {
+        Some(b) if now_ms.saturating_sub(b.used_ms) < BINDING_LIFE_MS => {
+            (b.key == key && seq >= b.seq).then_some(Binding { key, seq, used_ms: now_ms.max(b.used_ms) })
+        }
+        _ => Some(Binding { key, seq, used_ms: now_ms }),
+    }
+}
+
 #[derive(Default)]
 struct State {
     periods: HashMap<[u8; 32], Period>,
     tokens: HashMap<[u8; 32], Bucket>,
-    once: HashMap<[u8; 32], Instant>,
+    repeats: HashMap<[u8; 32], Instant>,
+    bindings: HashMap<[u8; 32], Binding>,
+    /// The bindings changed since they were last written.
+    dirty: bool,
     connections: usize,
     per_address: HashMap<IpAddr, usize>,
     /// New tags each address (its /64 for IPv6) may bring.
@@ -158,7 +204,8 @@ struct State {
 struct Inner {
     cfg: Config,
     tls: Arc<rustls::ServerConfig>,
-    /// The secret of the keyed hashes, drawn at start, never written.
+    /// The secret of the keyed hashes, drawn on the first start and kept
+    /// with the bindings.
     secret: [u8; 32],
     state: Mutex<State>,
     stop: AtomicBool,
@@ -287,17 +334,27 @@ impl Inner {
         if s.env == push::ENV_UNIFIEDPUSH && push::UnifiedPush::read(s.token).is_err() {
             return (push::SENT_FAILED, None);
         }
+        match push::check_send(&s.key, s.sig, s.env, s.token, s.seq) {
+            Ok(push::SendCheck::Good) => {}
+            Ok(push::SendCheck::Unknown) => return (push::SENT_KEY, None),
+            Err(_) => return (push::SENT_STALE, None),
+        }
         let tok = self.keyed(b"token", &s.env.to_be_bytes(), s.token);
-        let once = self.keyed(b"once", &tok, &s.once);
+        let repeat = self.keyed(b"body", &tok, s.body);
+        let key = s.key.hash().0;
         let at = Instant::now();
+        let now = now_ms();
         {
             let mut st = self.lock();
-            if st.once.get(&once).is_some_and(|t| at.saturating_duration_since(*t) < ONCE_FOR) {
+            let Some(binding) = bind(st.bindings.get(&tok), key, s.seq, now) else {
+                return (push::SENT_STALE, None);
+            };
+            if st.repeats.get(&repeat).is_some_and(|t| at.saturating_duration_since(*t) < REPEAT_FOR) {
                 return (push::SENT_REPEAT, None);
             }
             let budgets = self.cfg.budgets;
             let Some(p) = st.periods.get_mut(tag) else { return (push::SENT_FAILED, None) };
-            if p.expires_ms <= now_ms() {
+            if p.expires_ms <= now {
                 // The credentials expired while connected: a new hello.
                 return (push::SENT_FAILED, Some(1000));
             }
@@ -311,13 +368,23 @@ impl Inner {
             if let Err(wait) = b.take(budgets.per_token, at) {
                 return (push::SENT_BUDGET, Some(wait.as_millis() as u64));
             }
-            if st.once.len() >= ONCE_MAX {
-                st.once.retain(|_, t| at.saturating_duration_since(*t) < ONCE_FOR);
-                if st.once.len() >= ONCE_MAX {
+            if st.repeats.len() >= REPEATS_MAX {
+                st.repeats.retain(|_, t| at.saturating_duration_since(*t) < REPEAT_FOR);
+                if st.repeats.len() >= REPEATS_MAX {
                     return (push::SENT_BUDGET, Some(60_000));
                 }
             }
-            st.once.insert(once, at);
+            if !st.bindings.contains_key(&tok) && st.bindings.len() >= BINDINGS_MAX {
+                st.bindings.retain(|_, b| now.saturating_sub(b.used_ms) < BINDING_LIFE_MS);
+                if st.bindings.len() >= BINDINGS_MAX {
+                    return (push::SENT_BUDGET, Some(60_000));
+                }
+            }
+            st.repeats.insert(repeat, at);
+            if st.bindings.get(&tok) != Some(&binding) {
+                st.bindings.insert(tok, binding);
+                st.dirty = true;
+            }
         }
         match platform.send(s.env, s.token, s.body, expires(s.ttl)) {
             Outcome::Sent => {
@@ -327,13 +394,30 @@ impl Inner {
             Outcome::Gone => (push::SENT_GONE, None),
             Outcome::Later(d) => {
                 // Not sent: the next sender may try.
-                self.lock().once.remove(&once);
+                self.lock().repeats.remove(&repeat);
                 (push::SENT_FAILED, Some(d.as_millis() as u64))
             }
             Outcome::NoPath => {
-                self.lock().once.remove(&once);
+                self.lock().repeats.remove(&repeat);
                 (push::SENT_FAILED, None)
             }
+        }
+    }
+
+    /// Writes the bindings when they changed.
+    fn save(&self) {
+        let Some(path) = &self.cfg.state else { return };
+        let bytes = {
+            let mut st = self.lock();
+            if !st.dirty {
+                return;
+            }
+            st.dirty = false;
+            saved::write(&self.secret, &st.bindings)
+        };
+        if let Err(e) = crate::files::write_atomic(path, &bytes, 0o600) {
+            self.lock().dirty = true;
+            (self.cfg.log)(&format!("cbb-push: cannot keep the bindings: {e}"));
         }
     }
 
@@ -419,11 +503,16 @@ impl Service {
         let tls = cbb_core::tls::registration_server(&cfg.cert, &cfg.key, push::ALPN, &clock)?;
         let tcp = TcpListener::bind(cfg.listen).context(format!("cannot listen on {}", cfg.listen))?;
         let addr = tcp.local_addr().context("cannot listen")?;
+        let (secret, bindings) = match &cfg.state {
+            Some(path) => saved::load(path)?,
+            None => (cbb_core::certs::random_bytes(), HashMap::new()),
+        };
+        let fresh = cfg.state.as_ref().is_some_and(|p| !p.exists());
         let inner = Arc::new(Inner {
             cfg,
             tls: Arc::new(tls),
-            secret: cbb_core::certs::random_bytes(),
-            state: Mutex::new(State::default()),
+            secret,
+            state: Mutex::new(State { bindings, dirty: fresh, ..State::default() }),
             stop: AtomicBool::new(false),
             sent: AtomicU64::new(0),
         });
@@ -431,6 +520,18 @@ impl Service {
         std::thread::Builder::new()
             .name("cbb-push accept".into())
             .spawn(move || accept.accept(tcp))
+            .context("cannot start the service")?;
+        // The secret is written before the first binding is filed under it.
+        inner.save();
+        let saver = inner.clone();
+        std::thread::Builder::new()
+            .name("cbb-push saver".into())
+            .spawn(move || {
+                while !saver.stop.load(Ordering::Relaxed) {
+                    std::thread::sleep(SAVE_EVERY);
+                    saver.save();
+                }
+            })
             .context("cannot start the service")?;
         Ok(Service { inner, addr })
     }
@@ -445,9 +546,16 @@ impl Service {
         (st.periods.len(), st.tokens.len(), self.inner.sent.load(Ordering::Relaxed))
     }
 
+    /// Bindings held.
+    pub fn bindings(&self) -> usize {
+        self.inner.lock().bindings.len()
+    }
+
+    /// Stops the service and writes its bindings.
     pub fn stop(&self) {
         self.inner.stop.store(true, Ordering::Relaxed);
         let _ = TcpStream::connect(self.addr);
+        self.inner.save();
     }
 }
 

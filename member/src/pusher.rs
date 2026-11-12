@@ -12,13 +12,16 @@
 //! module; it never edits it:
 //!
 //! - [`Sender::registration`]: message `push` (t 28) arrived from a device
-//!   over its own member connection, in a group;
+//!   over its own member connection, in a group, with the device's role
+//!   (only a phone's or a computer's is taken, `cbb_core::push::may_register`);
+//! - [`Sender::forget`]: a device was removed or frozen;
 //! - [`Sender::connected`] and [`Sender::left`]: a peer's member connection
 //!   opened or closed;
 //! - [`Sender::copy`]: a copy was made here or received, with its readers
-//!   and how to make the body for one reader (`cbb_core::push::copy_body`);
+//!   and how to make the body for one reader (`cbb_core::push::copy_body`,
+//!   None for a device the copy is not sealed to);
 //! - [`Sender::event`]: a record was applied that a phone hears of (rule
-//!   33's events);
+//!   33's events), with the record's own time;
 //! - [`Faces`]: how the member gives the sender, per group, the push
 //!   service's address and pin, its server key for the service's face and
 //!   the face's hubs' and members' credentials;
@@ -26,10 +29,14 @@
 //!   group's section of the member's state.
 //!
 //! Who sends: the copy's origin, once while it runs, and every device with
-//! the `hub` right that received it; the service drops the repeats by
-//! `once`. Events: a hub, else the root's or an admin's device. Nobody
-//! sends to a phone it is connected to, and a sender waits two seconds
-//! after a copy, in case the phone connects meanwhile.
+//! the `hub` right that received it. Every one of them makes the same
+//! bytes (the copy reduced with age 0, the nonce derived from the
+//! plaintext), and the service drops the repeats by those bytes. Events: a
+//! hub, else the root's or an admin's device, each with the record's own
+//! time. Nobody sends to a phone it is connected to, and a sender waits two
+//! seconds after a copy, in case the phone connects meanwhile. A send the
+//! service answers `stale` (an older registration than one it saw) or
+//! `key` (a send key it does not take) is dropped, the registration kept.
 
 use std::collections::{BTreeMap, HashMap};
 use std::net::SocketAddr;
@@ -38,6 +45,7 @@ use std::time::{Duration, Instant};
 
 use cbb_core::format::cbor::Value;
 use cbb_core::push::{self, Body, Registration};
+use cbb_core::records::key::Key;
 use cbb_core::records::key::{DeviceId, GroupId};
 
 use crate::push::{Client, ServerKey};
@@ -86,11 +94,13 @@ const TRIES: u32 = 5;
 struct Job {
     group: GroupId,
     phone: DeviceId,
-    once: [u8; 16],
     body: Vec<u8>,
     env: u64,
     token: Vec<u8>,
     ttl: Option<u64>,
+    send_key: Key,
+    send_sig: Vec<u8>,
+    seq: u64,
     at: Instant,
     tries: u32,
 }
@@ -117,10 +127,6 @@ pub struct Sender {
     inner: Arc<Inner>,
 }
 
-fn random<const N: usize>() -> [u8; N] {
-    cbb_core::certs::random_bytes()
-}
-
 impl Sender {
     /// Starts the sender with the registrations the member saved.
     pub fn start(
@@ -143,9 +149,13 @@ impl Sender {
         self.inner.state.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// Message `push` arrived from `device` over its own connection, in
-    /// `group`. A refused message changes nothing.
-    pub fn registration(&self, group: &GroupId, device: &DeviceId, msg: &Value<'_>) {
+    /// Message `push` arrived from `device`, whose role in `group` is
+    /// `role`, over its own connection. A refused message, or one from a
+    /// device that may not register, changes nothing.
+    pub fn registration(&self, group: &GroupId, device: &DeviceId, role: u64, msg: &Value<'_>) {
+        if !push::may_register(role) {
+            return;
+        }
         let Ok(r) = Registration::read(msg) else { return };
         let mut st = self.lock();
         if st.regs.get(&(*group, *device)).is_some_and(|old| !old.replaced_by(&r)) {
@@ -189,7 +199,7 @@ impl Sender {
         }
     }
 
-    fn queue(&self, group: &GroupId, phone: &DeviceId, kind: u64, id: &[u8; 16], body: &Body, ttl: Option<u64>) {
+    fn queue(&self, group: &GroupId, phone: &DeviceId, kind: u64, body: &Body, ttl: Option<u64>) {
         let mut st = self.lock();
         if st.connected.contains_key(phone) {
             return;
@@ -199,15 +209,17 @@ impl Sender {
             return;
         }
         let Some(on) = r.on.as_ref() else { return };
-        let Some(sealed) = push::seal(&on.key, r.seq, on.env, body, &random()) else { return };
+        let Some(sealed) = push::seal(&on.key, r.seq, on.env, body) else { return };
         let job = Job {
             group: *group,
             phone: *phone,
-            once: push::once(&on.key, id),
             body: sealed,
             env: on.env,
             token: on.token.clone(),
             ttl,
+            send_key: on.send_key.clone(),
+            send_sig: on.send_sig.clone(),
+            seq: r.seq,
             at: Instant::now() + WAIT,
             tries: 0,
         };
@@ -217,30 +229,32 @@ impl Sender {
 
     /// A copy was made here (`Role::Origin`) or received (`Role::Hub` when
     /// this device has the `hub` right): each reader with a registration
-    /// that is not connected gets the body `body_for` makes for it.
+    /// that is not connected gets the body `body_for` makes for it; a
+    /// device `body_for` makes none for (the copy is not sealed to it)
+    /// gets nothing.
     pub fn copy(
         &self,
         group: &GroupId,
-        id: &[u8; 16],
         role: Role,
         readers: &[DeviceId],
         ttl: Option<u64>,
-        body_for: &dyn Fn(&DeviceId) -> Body,
+        body_for: &dyn Fn(&DeviceId) -> Option<Body>,
     ) {
         if role == Role::Neither {
             return;
         }
         for phone in readers {
             let wanted = self.lock().regs.contains_key(&(*group, *phone));
-            if wanted {
-                self.queue(group, phone, push::KIND_COPIES, id, &body_for(phone), ttl);
+            if wanted && let Some(body) = body_for(phone) {
+                self.queue(group, phone, push::KIND_COPIES, &body, ttl);
             }
         }
     }
 
     /// A record was applied that the group's phones hear of. `sends` says
     /// whether this device sends events: a hub, else the root's or an
-    /// admin's device when the group has no hub.
+    /// admin's device when the group has no hub. `record_ms` is the
+    /// record's own time, so that every sender makes the same body.
     pub fn event(
         &self,
         group: &GroupId,
@@ -248,15 +262,15 @@ impl Sender {
         event: u64,
         device: Option<DeviceId>,
         sends: bool,
-        now_ms: u64,
+        record_ms: Option<u64>,
     ) {
         if !sends {
             return;
         }
-        let body = Body::Event { id: *id, event, device: device.map(|d| d.0), time_ms: Some(now_ms) };
+        let body = Body::Event { id: *id, event, device: device.map(|d| d.0), time_ms: record_ms };
         let phones: Vec<DeviceId> = self.lock().regs.keys().filter(|(g, _)| g == group).map(|(_, d)| *d).collect();
         for p in phones {
-            self.queue(group, &p, push::KIND_EVENTS, id, &body, Some(4));
+            self.queue(group, &p, push::KIND_EVENTS, &body, Some(4));
         }
     }
 
@@ -309,7 +323,18 @@ impl Inner {
                     }
                 }
             });
-            let result = client.as_mut().map(|c| c.send(&job.token, job.env, job.once, &job.body, job.ttl));
+            let result = client.as_mut().map(|c| {
+                c.send(push::Send {
+                    n: 0,
+                    token: &job.token,
+                    env: job.env,
+                    body: &job.body,
+                    ttl: job.ttl,
+                    key: job.send_key.clone(),
+                    sig: &job.send_sig,
+                    seq: job.seq,
+                })
+            });
             st = self.state.lock().unwrap_or_else(|e| e.into_inner());
             let retry = match result {
                 Some(Ok(sent)) => {
@@ -317,7 +342,11 @@ impl Inner {
                         st.clients.insert(job.group, c);
                     }
                     match sent.status {
-                        push::SENT | push::SENT_REPEAT => None,
+                        // Sent, or a repeat of what another sender sent; or
+                        // a registration the service holds older than one
+                        // it saw, or a send key it does not take: trying
+                        // again changes nothing.
+                        push::SENT | push::SENT_REPEAT | push::SENT_STALE | push::SENT_KEY => None,
                         push::SENT_GONE => {
                             // The app is gone from the phone: its token too.
                             let key = (job.group, job.phone);
