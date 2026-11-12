@@ -364,23 +364,29 @@ module records_v3 {
     cut.marks.keys().contains(r.signer) and pos(r, cur, ord) >= cut.marks.get(r.signer)._1
 
   pure def dropped(cut: Cut, k: Key): int = if (cut.marks.keys().contains(k)) cut.marks.get(k)._2 else 0
-  pure def demand(owned: Set[Record], ceil: Key -> int, cut: Cut, s: int): int =
+  pure def demand(owned: Set[Record], ceil: Key -> int, cut: Cut, s: int, pre: Key -> int): int =
     owned.map(r => r.signer).fold(0, (d, k) =>
-      d + min2(s, min2(ceil.get(k), dropped(cut, k) + sumUnits(ofKey(owned, k)))))
+      d + min2(max2(0, s - preOf(pre, k)), min2(ceil.get(k), dropped(cut, k) + sumUnits(ofKey(owned, k)))))
+  // The units a key already holds in the room before the water-filling (a counting
+  // checkpoint's records, kept first).
+  pure def preOf(pre: Key -> int, k: Key): int = if (pre.keys().contains(k)) pre.get(k) else 0
 
   // What a set keeps of items, having dropped before what cut remembers: water-filling to one
   // level for every key with room (ceil), each key's records in its order.
   pure def keepAfter(items: Set[Record], ceil: Key -> int, cut: Cut, cur: Key, ord: Order): (Set[Id], Cut) =
-    keepIn(items, ceil, cut, cur, ord, ROOM)
-  // The same in a room of the given size.
-  pure def keepIn(items: Set[Record], ceil: Key -> int, cut: Cut, cur: Key, ord: Order, room: int): (Set[Id], Cut) = {
+    keepIn(items, ceil, cut, cur, ord, ROOM, Map())
+  // The same in a room of the given size, where each key already holds pre of it: the level
+  // is one for every key, counted with what it already holds.
+  pure def keepIn(items: Set[Record], ceil: Key -> int, cut: Cut, cur: Key, ord: Order, room: int,
+      pre: Key -> int): (Set[Id], Cut) = {
     val live = items.filter(r => not(past(cut, r, cur, ord)))
     val owned = live.filter(r => ceil.keys().contains(r.signer))
     val top = min2(cut.level, TOP)
     val level =
-      if (demand(owned, ceil, cut, top) <= room) top
-      else 0.to(top).filter(s => demand(owned, ceil, cut, s) <= room).fold(0, (m, s) => max2(m, s))
-    val keptOwned = owned.filter(r => prefix(ofKey(owned, r.signer), r, cur, ord) <= min2(level, ceil.get(r.signer)))
+      if (demand(owned, ceil, cut, top, pre) <= room) top
+      else 0.to(top).filter(s => demand(owned, ceil, cut, s, pre) <= room).fold(0, (m, s) => max2(m, s))
+    val keptOwned = owned.filter(r =>
+      prefix(ofKey(owned, r.signer), r, cur, ord) <= min2(max2(0, level - preOf(pre, r.signer)), ceil.get(r.signer)))
     val out = owned.exclude(keptOwned)
     val markKeys = cut.marks.keys().union(out.map(r => r.signer))
     val marks = markKeys.mapBy(k => {
@@ -454,7 +460,8 @@ module records_v3 {
         val room2 = ROOM - sumUnits(first)
         if (room2 < 0 or ceil2.keys().exists(k => ceil2.get(k) < 0) or first.exists(r => not(ceil.keys().contains(r.signer)))) plain
         else {
-          val rest = keepIn(left.exclude(first), ceil2, NOCUT, last(path), orderOf(s, db), room2)
+          val rest = keepIn(left.exclude(first), ceil2, NOCUT, last(path), orderOf(s, db), room2,
+            ceil.keys().mapBy(k => sumUnits(ofKey(first, k))))
           val res = (rest._1.union(idsOf(first)), rest._2)
           if (fullEvaluate(recsOf(res._1, db).union(firsts), chainState(s, db)).checkpoint == c.id) res else plain
         }
@@ -495,7 +502,7 @@ module records_v3 {
         val twin = recsOf(s.got, db).filter(o => o.id != r.id and not(isChain(o)) and o.signer == r.signer
           and o.seq == r.seq and r.signer == last(keptPath(s, db)))
         val s1 = if (twin == Set()) s
-          else { ...s, chain: s.chain.union(idsOf(twin)).union(Set(r.id)), recs: s.recs.exclude(idsOf(twin)) }
+          else reopen({ ...s, chain: s.chain.union(idsOf(twin)).union(Set(r.id)), recs: s.recs.exclude(idsOf(twin)) }, db)
         storeOne(if (isFirst) applyChain(s1, db) else s1, r, db)
       }
     }
@@ -558,10 +565,15 @@ module records_v3 {
     if (v.checkpoint == s.checkpoint) s
     else {
       val s2 = { ...s, checkpoint: v.checkpoint, cut: NOCUT }
-      val s3 = recut({ ...s2, recs: s2.recs.filter(i => storable(s2, db.get(i), db)) }, db)
-      val left = recsOf(s3.got, db).filter(x => not(isChain(x)) and not(s3.recs.contains(x.id)))
-      toList(idsOf(left)).foldl(s3, (x, i) => storeOne(x, db.get(i), db))
+      reopen(s2, db)
     }
+  // The set judges its rooms again from no cut and offers again what they turned away: after a
+  // compaction, and when a root fork's pair leaves the rooms for the proof.
+  pure def reopen(s2: Store, db: Id -> Record): Store = {
+    val s3 = recut({ ...s2, cut: NOCUT, recs: s2.recs.filter(i => storable(s2, db.get(i), db)) }, db)
+    val left = recsOf(s3.got, db).filter(x => not(isChain(x)) and not(s3.recs.contains(x.id)))
+    toList(idsOf(left)).foldl(s3, (x, i) => storeOne(x, db.get(i), db))
+  }
 
   // --- Evaluation --------------------------------------------------------------------------
 
