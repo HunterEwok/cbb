@@ -63,8 +63,8 @@ is done (setups, record checks) is paid for by the second, with a burst, by `bud
 | Call waiting for an answer | a ticket | 10 s at most | the called device | 16 | | refused |
 | Joined connections | two copies | while both last | the group | 256 | | refused |
 | Connection of a call, waiting or joined (open relay) | a socket in the tunnel, two 64 KiB buffers | while it lasts | the group; address, network, wide network, provider each end registered from | 512 a group; 128, 256, 1024, 2048 | 4096, half of the tunnel's connections | refused |
-| Connection in the tunnel, being opened or open | a socket in the tunnel, two 64 KiB buffers | being opened: 5 s at most | the device | 80: its watch, a call with each other device of its group, its requests | 8192 | the device's new connection is ignored |
-| WireGuard handshake initiation | one Diffie-Hellman, about 50 µs | | the network of its source, under load | none checked without a valid mac1; past 128 a second from all sources, a cookie for each, which needs the source's own address; then 32 a second a network | 2048 a second | dropped |
+| Connection in the tunnel, being opened or open | a socket in the tunnel, two 64 KiB buffers | being opened: 5 s at most | the device; being opened, also the address, network, wide network, provider the device registered from | 80: its watch, a call with each other device of its group, its requests; its first 2 whatever the others hold; 4 being opened; being opened, 8, 32, 128, 256 | 9472 (the watches, the calls, the requests and the openings), and the first 2 of each device besides; 1024 being opened | the device's new connection is ignored |
+| WireGuard handshake initiation | one Diffie-Hellman, about 50 µs | | the network, wide network and provider of its source; the address a client last spoke from | none checked without a valid mac1; past 512 Diffie-Hellmans a second, a cookie for each initiation from an address no client last spoke from, which needs the source's own address; 32, 128, 512 a second | 1536 a second for strangers, 512 more for clients' addresses | dropped |
 | Copying | bandwidth | | the group | 1 MiB a second, two seconds' burst | | slowed down |
 | Note to a device | a queued line | until sent | the watching device | 32 | | the watch is closed |
 | Allowance of a source | about 150 bytes for each of its payers | until full again: under 30 s | itself | | forgotten past 4096 sources when full | |
@@ -90,15 +90,27 @@ What the relay guarantees:
   registers no more devices than half its tunnel's connections; the other half is for calls,
   and strangers in one address hold 128 of them (1/32), in one network 256, in one wide
   network 1024 and in one IPv6 provider 2048, so taking them all needs at least 4 wide
-  networks or 2 providers, and a device that opens connections it never completes holds its
-  own 80 for 5 s at most (`call_connections_bound_by_source_and_group`,
-  `registrations_bound_by_the_tunnel`, the hub's `connections_are_held_per_client` and
-  `half_open_connections_hold_a_client_s_share_only`, Go's `TestManyDevicesThroughRelay`).
+  networks or 2 providers. Connections being opened, which no device has acknowledged yet
+  and so reach none of the counts above, are 4 a device and 1024 in all, of which one
+  network holds 32, one wide network 128 and one provider 256, for 5 s at most; and each
+  device's first 2 connections are taken whatever the others hold, so a device keeps its
+  watch and a call even while the tunnel is full (`call_connections_bound_by_source_and_group`,
+  `registrations_bound_by_the_tunnel`, the hub's `connections_are_held_per_client`,
+  `half_open_connections_hold_a_client_s_share_only` and
+  `a_full_hub_still_takes_each_client_s_few`, Go's `TestManyDevicesThroughRelay`). The worst
+  case is (9472 + 2 × 4096) sockets of two 64 KiB buffers, about 2.2 GiB. A connection to the
+  tunnel's loopback port that the hub did not make waits 100 ms beside the others, at most
+  256 at once, and is closed (`stream_port_knows_only_the_hub_s_connections`).
 - **Handshakes**: a WireGuard initiation costs the relay a Diffie-Hellman only once its mac1,
-  under the relay's key, holds; past 128 initiations a second from all sources, only once its
-  cookie, which the relay sends to its source address, holds too; and at most 32 a second
-  for one network then, 2048 in all, on the thread that carries every group's data
-  (`initiations_are_checked_before_the_hub_pays_for_them`). A device's hub does the same.
+  under the relay's key, holds, so packets without one cost a hash and never put it under
+  load; past 512 Diffie-Hellmans a second, an initiation from an address no client last spoke
+  from costs one only once its cookie, which the relay sends to its source address, holds
+  too. Strangers get 32 a second a network, 128 a wide network, 512 a provider and 1536 in
+  all, and 512 more are kept for the addresses the clients last spoke from, so a client that
+  rekeys goes on while strangers spend the rest; all of it on the thread that carries every
+  group's data (`initiations_are_checked_before_the_hub_pays_for_them`,
+  `handshakes_are_shared_by_source`, `garbage_does_not_put_the_hub_under_load`). A device's
+  hub does the same; an AmneziaWG hub, which sends no cookies, has the same shares.
 - After strangers register and leave, the relay keeps nothing of them but their sources'
   allowances, which it forgets once full again (`TestOpenRelayForgetsStrangers`).
 

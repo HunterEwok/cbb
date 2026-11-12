@@ -1585,18 +1585,21 @@ All notable changes to cbb are documented in this file. The format follows
 
 ### Changed
 - The hub and the open relay share their tunnels' connections: the hub holds at most 1024
-  at once and 8 for each client, half-open ones included, and the relay's tunnel holds 8192,
-  half for the devices' watches and half for their calls, by group and by the address, network
-  and provider each end registered from (docs/relay-budget.md). A hub checks a handshake's
-  `mac1` before its key exchange, asks for a cookie when many come at once, and caps the
-  exchanges of one network each second. A relay gives a registration's setup and each request
-  one deadline for the whole exchange. AmneziaWG junk stays within the settings' bounds.
+  at once and 8 for each client, half-open ones included, and the relay's tunnel holds the
+  devices' watches, their calls by group and by the address, network and provider each end
+  registered from, and connections being opened by the same sources; every client keeps its
+  first two connections whatever the others hold (docs/relay-budget.md). A hub checks a
+  handshake's `mac1` before its key exchange, asks for a cookie when many key exchanges come
+  at once, and shares them each second by network, wide network and provider, with a part
+  kept for its clients' rekeys. A relay gives a registration's setup and each request one
+  deadline for the whole exchange. AmneziaWG junk stays within the settings' bounds.
 - A phone that is the group's hub registers with its forwarder by the period's hubs'
   credential once that lists its server key, as a computer's hub does (`cbb_tunnel_hub_credentials`),
   so the forwarder learns neither the phone nor the group; until then it registers with its
   member certificate and the records.
-- The loopback ports of the relay's tunnel and of a phone's dialed call through a relay take
-  connections of their own user only.
+- A phone's port for a call it dialed through a relay takes connections of its own user only,
+  and the relay's tunnel port closes connections it did not make without holding up the
+  others.
 - The README leads with what Copy Beyond Borders is in one sentence, sums up its status in
   three lines (the full table moved to docs/parity.md, "On real devices") and lists what it
   also does. The keyboards, the TV remotes, the Nano ESP32 and the ZX Spectrum Next are on
