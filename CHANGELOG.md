@@ -6,7 +6,7 @@ All notable changes to cbb are documented in this file. The format follows
 
 ## [Unreleased]
 
-<<<<<<< HEAD
+### Added
 - The 0.6 format's vectors have a manifest (`testdata/format/FROZEN`) and CI's `format` job:
   every vector must match it, `gen.py` must write the same bytes and the Go reader must take
   them; once the format is declared frozen, a listed vector changes only in a commit that
