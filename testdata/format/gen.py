@@ -1802,6 +1802,363 @@ def card_vectors():
     return take, refuse
 
 
+# ---------------------------------------------------------------- wave 4
+
+# The messages wave 4 adds (section 9.2): what each carries is read by its
+# own reader; the copy (t 2) by the copy's.
+TABLES4 = {
+    "keys-message": [(2, "keys-message/list", "array 1..256 of envelope", True)],
+    "command": [(2, "command/envelope", "envelope", True)],
+    "nonce": [(2, "nonce/nonce", "bytes 16", False)],
+    "beacon": [(2, "beacon/envelope", "envelope", True)],
+    "reseal": [(2, "reseal/copy", "bytes 16", True), (3, "reseal/epoch", "uint 1..9223372036854775807", True)],
+}
+MESSAGE_TYPES4 = {7: "keys-message", 9: "command", 21: "nonce", 22: "beacon", 23: "reseal"}
+TABLES.update(TABLES4)
+
+MEDIA_TYPES = 4
+
+
+def content_rule(b):
+    """The verdict on a content as section 10.3 has it: "take", "keep" (a
+    type, flag or critical field of a later version: passed on, never
+    written) or the rule it breaks."""
+    try:
+        c = dec(b)
+    except Bad as e:
+        return e.rule
+    if not isinstance(c, dict) or not isinstance(c.get(0), int):
+        return "copy/shape"
+    pad = c.get(1)
+    if pad is None:
+        if len(b) not in STEPS:
+            return "copy/content-pad"
+    else:
+        rest = {k: v for k, v in c.items() if k != 1}
+        if not isinstance(pad, bytes) or any(pad) or pad_content(rest) != b:
+            return "copy/content-pad"
+    t = c[0]
+    if t == 0:
+        return "content/type"
+    for f, rule in [(2, "content/flags"), (3, "content/ttl"), (4, "content/via")]:
+        if f in c and not isinstance(c[f], int):
+            return rule
+        if c.get(f) == 0:
+            return "form/default"
+    if c.get(3, 1) > 4:
+        return "content/ttl"
+    if c.get(4, 1) > 2:
+        return "content/via"
+    if 5 in c and not isinstance(c[5], str):
+        return "content/text"
+    if c.get(5) == "":
+        return "form/default"
+    if 7 in c and not isinstance(c[7], bytes):
+        return "content/data"
+    known = t <= 4
+    if t == 1 and 5 not in c:
+        return "content/text"
+    if t in (2, 3):
+        m = c.get(6)
+        if not isinstance(m, dict) or not isinstance(m.get(2), list) or not m[2]:
+            return "content/manifest"
+        files = "path" if t == 3 else "type"
+        for part in m[2]:
+            if not isinstance(part, dict) or any(k < 256 and k not in (1, 2, 3, 4, 5) for k in part):
+                return "content/manifest"
+            if t == 2 and not (isinstance(part.get(1), int) and 1 <= part[1] <= MEDIA_TYPES and 2 not in part):
+                return "content/manifest"
+            if t == 3 and not (isinstance(part.get(2), str) and 1 not in part):
+                return "content/manifest"
+        if sum(p.get(4, 0) for p in m[2]) != m.get(1, 0):
+            return "content/manifest"
+    if t == 4:
+        d = c.get(7)
+        if not isinstance(d, bytes) or not 1 <= len(d) <= 4096:
+            return "content/data"
+        try:
+            dec(d)
+        except Bad:
+            return "content/data"
+        if 5 in c:
+            return "content/text"
+    if known and 6 in c and t not in (2, 3):
+        return "content/manifest"
+    if known and 7 in c and t != 4:
+        return "content/data"
+    if not known or c.get(2, 0) & ~1 or any(k < 256 and k not in range(8) for k in c):
+        return "keep"
+    return "take"
+
+
+def command_rule(env_b):
+    """The rule a command's form breaks (section 6 and wave 4), or "take"."""
+    try:
+        env = dec(env_b)
+    except Bad as e:
+        return e.rule
+    if not (isinstance(env, list) and len(env) == 2 and all(isinstance(x, bytes) for x in env)):
+        return "env/shape"
+    m = dec(env[0])
+    if any(k < 256 and k not in (1, 2, 3, 4, 6, 7, 10, 11, 13, 14, 15) for k in m):
+        return "form/critical"
+    t = m.get(1)
+    if not (isinstance(t, int) and 1 <= t <= 10):
+        return "commands/type"
+    for f, n, rule in [(2, 16, "commands/group"), (3, 32, "commands/signer")]:
+        if not (isinstance(m.get(f), bytes) and len(m[f]) == n):
+            return rule
+    if not (isinstance(m.get(4), int) and m[4] >= 1):
+        return "commands/n"
+    if not isinstance(m.get(6), int):
+        return "commands/time"
+    if not (isinstance(m.get(7), int) and m[6] < m[7] <= m[6] + 30000):
+        return "commands/expires"
+    for f, rule in [(10, "commands/to"), (11, "commands/id")]:
+        if not (isinstance(m.get(f), bytes) and len(m[f]) == 16):
+            return rule
+    if 13 in m and not (isinstance(m[13], bytes) and len(m[13]) == 16):
+        return "commands/nonce"
+    if m.get(14) == 0:
+        return "form/default"
+    if 15 in m and not (isinstance(m[15], bytes) and len(m[15]) >= 1136):
+        return "commands/sealed"
+    if (14 in m) != (15 in m):
+        return "commands/epoch"
+    if 15 in m and t not in (1, 2, 3, 5, 8, 10):
+        return "commands/sealed"
+    return "take"
+
+
+def orders_rule(t, b):
+    """The rule opened orders of type t break, or "take"."""
+    o = dec(b)
+    allowed = {1: (10,), 2: (10, 11, 12, 13), 3: (10, 11, 12, 13, 14), 5: (10,), 8: (10,), 10: (10, 11)}[t]
+    if any(k < 256 and k not in allowed for k in o):
+        return "form/critical"
+    if t == 1:
+        return "take" if o.get(10) in (1, 2) else "orders/mode"
+    if t == 3:
+        way, kind = o.get(10), o.get(12)
+        if way not in (1, 2) or kind not in (1, 2, 3) or o.get(11, 1) != 1:
+            return "orders/paste"
+        if kind in (1, 2):
+            txt = o.get(13)
+            ok = isinstance(txt, str) and 14 not in o and 1 <= len(txt.encode()) <= (4096 if way == 2 else 1 << 20)
+        else:
+            ok = 13 not in o and isinstance(o.get(14), bytes) and len(o[14]) == 16 and way == 1
+        return "take" if ok else "orders/paste"
+    if t == 5:
+        a = o.get(10)
+        ok = (isinstance(a, str) and 1 <= len(a) <= 32 and a[0].isascii() and a[0].islower()
+              and all(c.isascii() and (c.islower() or c.isdigit() or c == "-") for c in a))
+        return "take" if ok else "orders/action"
+    if t == 8:
+        return "take" if 10 not in o or (isinstance(o[10], int) and 1 <= o[10] <= 2592000000) else "orders/mute"
+    if t == 10:
+        name = o.get(10)
+        hidden = lambda ch: ord(ch) < 0x20 or 0x7f <= ord(ch) <= 0x9f or 0x2028 <= ord(ch) <= 0x202e or 0x2066 <= ord(ch) <= 0x2069
+        if not (isinstance(name, str) and 1 <= len(name.encode()) <= 32 and not any(hidden(ch) for ch in name)):
+            return "orders/device"
+        if 11 in o:
+            a = o[11]
+            if not (isinstance(a, bytes) and 1 <= len(a) <= 4096):
+                return "orders/device"
+            try:
+                dec(a)
+            except Bad:
+                return "orders/device"
+        return "take"
+    raise ValueError(t)
+
+
+def beacon_rule(env_b):
+    """The rule a beacon's form breaks (section 9.4), or "take"."""
+    env = dec(env_b)
+    if len(env[0]) > 512:
+        return "env/size"
+    m = dec(env[0])
+    if any(k < 256 and k not in (1, 2, 3, 4, 6, 10, 11) for k in m):
+        return "form/critical"
+    if m.get(1) != 1:
+        return "beacons/type"
+    if not (isinstance(m.get(2), bytes) and len(m[2]) == 16):
+        return "beacons/group"
+    if not (isinstance(m.get(3), bytes) and len(m[3]) == 32):
+        return "beacons/signer"
+    if not (isinstance(m.get(4), int) and m[4] >= 1):
+        return "beacons/n"
+    if not (isinstance(m.get(6), int) and m[6] >= 1):
+        return "beacons/time"
+    if not (isinstance(m.get(10), bytes) and len(m[10]) == 32):
+        return "beacons/digest"
+    if not (isinstance(m.get(11), int) and 1 <= m[11] <= 4096):
+        return "beacons/count"
+    return "take"
+
+
+def wave4_vectors():
+    out = {"labels": {k: LABELS[k] for k in ("keys", "command", "beacon")},
+           "tables": {name: [{"n": n, "rule": r, "type": t, "needed": nd} for n, r, t, nd in rows]
+                      for name, rows in TABLES4.items()},
+           "types": {str(t): name for t, name in MESSAGE_TYPES4.items()}}
+
+    # contents
+    png = {1: 3, 2: [{1: 1, 4: 3, 5: sha(b"png")}]}
+    tree = {1: 5, 2: [{2: "docs", 3: 1}, {2: "docs/a.txt", 4: 5, 5: sha(b"a")}]}
+    cases = [
+        ("text", {0: 1, 5: "hello"}),
+        ("secret text with a ttl", {0: 1, 2: 1, 3: 1, 5: "hunter2"}),
+        ("secret image with its text", {0: 2, 2: 1, 5: "alt", 6: png}),
+        ("files from a phone", {0: 3, 4: 1, 6: tree}),
+        ("a device's state", {0: 4, 7: enc({1: 21})}),
+        ("a secret device state", {0: 4, 2: 1, 7: enc({1: 22})}),
+        ("an optional field skipped", {0: 1, 5: "x", 300: 1}),
+        ("a type of a later version", {0: 9, 5: "x"}),
+        ("a flag of a later version", {0: 1, 2: 2, 5: "x"}),
+        ("a critical field of a later version", {0: 1, 5: "x", 40: 1}),
+        ("type 0", {0: 0}),
+        ("flags 0 written", {0: 1, 2: 0, 5: "x"}),
+        ("ttl 5", {0: 1, 3: 5, 5: "x"}),
+        ("via 3", {0: 1, 4: 3, 5: "x"}),
+        ("text without text", {0: 1}),
+        ("empty text", {0: 1, 5: ""}),
+        ("text as bytes", {0: 1, 5: b"x"}),
+        ("media without a manifest", {0: 2, 5: "x"}),
+        ("media with a files manifest", {0: 2, 6: tree}),
+        ("files with a media manifest", {0: 3, 6: png}),
+        ("manifest on a text", {0: 1, 5: "x", 6: png}),
+        ("manifest size not its parts'", {0: 2, 6: {1: 4, 2: png[2]}}),
+        ("state on a text", {0: 1, 5: "x", 7: b"\x01"}),
+        ("state without data", {0: 4}),
+        ("state not one item", {0: 4, 7: b"\x82\x01"}),
+        ("state over 4 KiB", {0: 4, 7: enc(bytes(4100))}),
+        ("state with text", {0: 4, 5: "x", 7: b"\x01"}),
+    ]
+    contents = []
+    for name, c in cases:
+        b = pad_content(c)
+        contents.append({"name": name, "verdict": content_rule(b), "diag": diag(c), "content": b.hex()})
+    bad = bytearray(pad_content({0: 1, 5: "x"}))
+    bad[len(bad) // 2] = 1
+    contents.append({"name": "padding not zero", "verdict": "copy/content-pad", "content": bytes(bad).hex()})
+    out["contents"] = contents
+
+    # commands: the form's rules between fields
+    def body(t, extra=None, drop=()):
+        m = {1: t, 2: GROUP, 3: ADMIN.hash, 4: 7, 6: T0, 7: T0 + 30000, 10: LAPTOP.id16,
+             11: sha(b"cmd", t.to_bytes(2, "big"))[:16]}
+        m.update(extra or {})
+        for d in drop:
+            m.pop(d, None)
+        return m
+
+    sealed = fake("sealed orders", 1120 + 16 + 4)
+    commands = []
+    for name, m in [
+        ("mode, sealed", body(1, {14: 2, 15: sealed})),
+        ("unmute, no orders", body(9)),
+        ("a guarded lock's command with its nonce", body(10, {13: fake("n", 16), 14: 1, 15: sealed})),
+        ("type 0", body(0)),
+        ("type 11", body(11)),
+        ("n 0", body(4, {4: 0})),
+        ("no time", body(4, drop=(6,))),
+        ("expires at its time", body(4, {7: T0})),
+        ("lifetime of 30 s and 1 ms", body(4, {7: T0 + 30001})),
+        ("to of 15 bytes", body(4, {10: bytes(15)})),
+        ("nonce of 15 bytes", body(4, {13: bytes(15)})),
+        ("epoch without sealed", body(1, {14: 2})),
+        ("sealed without epoch", body(1, {15: sealed})),
+        ("epoch 0 written", body(1, {14: 0, 15: sealed})),
+        ("sealed shorter than a seal", body(1, {14: 2, 15: bytes(100)})),
+        ("sealed on a type without orders", body(6, {14: 2, 15: sealed})),
+        ("field 12 (class, gone)", body(4, {12: 4})),
+        ("a critical field of a later version", body(4, {99: 1})),
+    ]:
+        env, b = envelope("command", ADMIN, m)
+        commands.append({"name": name, "verdict": command_rule(env), "diag": diag(m), "envelope": env.hex()})
+    out["commands"] = commands
+
+    orders = []
+    for name, t, o in [
+        ("mode own", 1, {10: 2}),
+        ("paste typed with enter", 3, {10: 2, 11: 1, 12: 2, 13: "pw\n"}),
+        ("paste of a media copy", 3, {10: 1, 12: 3, 14: fake("copy id", 16)}),
+        ("action", 5, {10: "lock-screen"}),
+        ("mute until unmute", 8, {}),
+        ("mute for a minute", 8, {10: 60000}),
+        ("device command with arguments", 10, {10: "heat", 11: enc({1: 90})}),
+        ("mode 3", 1, {10: 3}),
+        ("mode with a later critical field", 1, {10: 1, 11: 1}),
+        ("paste without text", 3, {10: 1, 12: 1}),
+        ("paste typed over 4 KiB", 3, {10: 2, 12: 1, 13: "x" * 4097}),
+        ("paste of media with a text", 3, {10: 1, 12: 3, 13: "x"}),
+        ("paste enter 2", 3, {10: 1, 11: 2, 12: 1, 13: "x"}),
+        ("action with a capital", 5, {10: "Reboot"}),
+        ("action starting with a digit", 5, {10: "1st"}),
+        ("mute over 30 days", 8, {10: 2592000001}),
+        ("device command with a hidden character", 10, {10: "he‮at"}),
+        ("device command with arguments not one item", 10, {10: "heat", 11: b"\x82"}),
+    ]:
+        b = enc(o)
+        orders.append({"name": name, "type": t, "verdict": orders_rule(t, b), "orders": b.hex()})
+    out["orders"] = orders
+
+    # statements a later version wrote: held
+    held = []
+    for name, m in [
+        ("a critical field of a later version", {1: 1, 2: GROUP, 3: LAPTOP.hash, 4: 5, 10: [XWING, fake("s5", 1216)], 99: 1}),
+        ("a type of a later version", {1: 2, 2: GROUP, 3: LAPTOP.hash, 4: 5, 10: [XWING, fake("s6", 1216)]}),
+        ("a sealing key of a later algorithm", {1: 1, 2: GROUP, 3: LAPTOP.hash, 4: 5, 10: [9, fake("s7", 40)]}),
+    ]:
+        env, b = envelope("keys", LAPTOP, m)
+        held.append({"name": name, "verdict": "hold", "envelope": env.hex()})
+    out["statements_held"] = held
+
+    # beacons
+    beacons = []
+    digest = sha(b"a set")
+    for name, m in [
+        ("an admin's phone saw 12 records", {1: 1, 2: GROUP, 3: PHONE.hash, 4: 3, 6: T0, 10: digest, 11: 12}),
+        ("an optional field skipped", {1: 1, 2: GROUP, 3: PHONE.hash, 4: 4, 6: T0, 10: digest, 11: 12, 300: 1}),
+        ("type 2", {1: 2, 2: GROUP, 3: PHONE.hash, 4: 3, 6: T0, 10: digest, 11: 12}),
+        ("no time", {1: 1, 2: GROUP, 3: PHONE.hash, 4: 3, 10: digest, 11: 12}),
+        ("count 0", {1: 1, 2: GROUP, 3: PHONE.hash, 4: 3, 6: T0, 10: digest, 11: 0}),
+        ("count over a set", {1: 1, 2: GROUP, 3: PHONE.hash, 4: 3, 6: T0, 10: digest, 11: 4097}),
+        ("no count", {1: 1, 2: GROUP, 3: PHONE.hash, 4: 3, 6: T0, 10: digest}),
+        ("digest of 31 bytes", {1: 1, 2: GROUP, 3: PHONE.hash, 4: 3, 6: T0, 10: digest[:31], 11: 12}),
+        ("a critical field of a later version", {1: 1, 2: GROUP, 3: PHONE.hash, 4: 3, 6: T0, 10: digest, 11: 12, 12: 1}),
+        ("over 512 bytes", {1: 1, 2: GROUP, 3: PHONE.hash, 4: 3, 6: T0, 10: digest, 11: 12, 300: bytes(500)}),
+    ]:
+        env, b = envelope("beacon", PHONE, m)
+        beacons.append({"name": name, "verdict": beacon_rule(env), "diag": diag(m), "envelope": env.hex()})
+    out["beacons"] = beacons
+
+    # messages
+    good_cmd = dec(bytes.fromhex(commands[0]["envelope"]))
+    good_beacon = dec(bytes.fromhex(beacons[0]["envelope"]))
+    msgs = []
+    for name, m in [
+        ("keys with one statement", {0: 7, 2: [dec(envelope("keys", LAPTOP, {1: 1, 2: GROUP, 3: LAPTOP.hash, 4: 1, 10: [XWING, fake("k", 1216)]})[0])]}),
+        ("command", {0: 9, 2: good_cmd}),
+        ("nonce from a guarded lock", {0: 21, 2: fake("nonce", 16)}),
+        ("nonce asked for", {0: 21}),
+        ("beacon", {0: 22, 2: good_beacon}),
+        ("reseal", {0: 23, 2: fake("copy", 16), 3: 4}),
+        ("keys empty", {0: 7, 2: []}),
+        ("command without its envelope", {0: 9}),
+        ("nonce of 8 bytes", {0: 21, 2: bytes(8)}),
+        ("beacon not an envelope", {0: 22, 2: b"x"}),
+        ("reseal at epoch 0", {0: 23, 2: fake("copy", 16), 3: 0}),
+        ("reseal without its copy", {0: 23, 3: 4}),
+    ]:
+        rule = check_map(MESSAGE_TYPES4[m[0]], m)
+        f = frame(m)
+        msgs.append({"name": name, "t": m[0], "verdict": rule or "take", "message": enc(m).hex(), "frame": f.hex()})
+    out["messages"] = msgs
+    return out
+
+
 def main():
     outdir = sys.argv[1]
     os.makedirs(outdir, exist_ok=True)
@@ -1830,12 +2187,13 @@ def main():
     cdt, cdr = card_vectors()
     files["messages3.json"] = {
         "tables": {name: [{"n": n, "rule": r, "type": t, "needed": nd} for n, r, t, nd in rows]
-                   for name, rows in TABLES.items()},
+                   for name, rows in TABLES.items() if name not in TABLES4},
         "types": {str(t): name for t, name in MESSAGE_TYPES.items()},
         "take": wt, "refuse": wr, "maps": wm,
         "invitations": {"prefix": "cbb://join#", "take": it, "refuse": ir},
         "cards": {"label": LABELS["card"], "take": cdt, "refuse": cdr},
     }
+    files["wave4.json"] = wave4_vectors()
     # Each signature has one form: the high-S twin of a valid signature
     # (the same r, n - s) is refused for every kind.
     def twin(sig):

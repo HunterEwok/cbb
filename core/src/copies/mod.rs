@@ -72,6 +72,14 @@ pub const RULE_LEAF_FRAME: Rule = Rule::field("copy/leaf-frame");
 pub const RULE_RESEAL_READER: Rule = Rule::field("reseal/reader");
 /// A request to seal again to an epoch that is not the asker's current one.
 pub const RULE_RESEAL_EPOCH: Rule = Rule::field("reseal/not-current");
+/// A copy past its lifetime, or a secret asked of an origin without a
+/// clock: it is not sealed again.
+pub const RULE_RESEAL_EXPIRED: Rule = Rule::field("reseal/expired");
+/// The asker already had this copy sealed again [`MAX_RESEALS`] times.
+pub const RULE_RESEAL_LIMIT: Rule = Rule::field("reseal/limit");
+
+/// How many times the origin seals one copy again for one asker.
+pub const MAX_RESEALS: u8 = 2;
 
 /// A reader of a copy: its device ID, the epoch of its statement, and that
 /// statement's sealing key.
@@ -385,31 +393,100 @@ pub struct Kept {
     pub content: Content,
     /// The devices it was sealed to.
     pub readers: Vec<DeviceId>,
+    /// How many times it was sealed again for each asker.
+    pub resealed: BTreeMap<DeviceId, u8>,
 }
 
-/// Seals a kept copy again for the device asker at its epoch (message
-/// `reseal`): only for a device that was one of the copy's readers
+impl Kept {
+    /// What the origin keeps of a copy it just sealed to readers.
+    pub fn new(made: Made, content: Content, readers: &[Reader]) -> Kept {
+        Kept { made, content, readers: readers.iter().map(|r| r.id).collect(), resealed: BTreeMap::new() }
+    }
+
+    /// The copy's lifetime: its own `ttl`, or for a secret the group's.
+    /// None: a copy that lives as long as the group keeps copies.
+    pub fn life_ms(&self, group_ttl_ms: u64) -> Option<u64> {
+        self.content.ttl_ms().or(self.content.is_secret().then_some(group_ttl_ms))
+    }
+}
+
+/// A request to seal a copy again, as the origin sees it.
+#[derive(Clone, Copy, Debug)]
+pub struct Ask<'a> {
+    /// The device that asked.
+    pub asker: DeviceId,
+    /// The epoch it asked at.
+    pub epoch: u64,
+    /// The leaves the origin seals to, as for [`readers`].
+    pub leaves: &'a [DeviceId],
+    /// The origin's clock, None without one.
+    pub now_ms: Option<u64>,
+    /// The group's lifetime of a secret without its own `ttl`.
+    pub group_ttl_ms: u64,
+}
+
+/// Seals a kept copy again for the asker at its epoch (message `reseal`):
+/// only for a device that was one of the copy's readers
 /// ([`RULE_RESEAL_READER`]), whose statement that counts is of that epoch
 /// ([`RULE_RESEAL_EPOCH`]), and that would still be sealed this copy by the
-/// state now. The new copy has the same ID, origin and time, the asker as
-/// its one reader, and a new K.
+/// state now; never a copy past its lifetime, and never a copy with a
+/// lifetime on an origin without a clock ([`RULE_RESEAL_EXPIRED`]); at most
+/// [`MAX_RESEALS`] times for one asker ([`RULE_RESEAL_LIMIT`]). The new
+/// copy has the same ID, origin and time, the asker as its one reader, and
+/// a new K. A member that holds the first copy keeps it for its other
+/// readers and passes this one on to the asker ([`second`]).
 pub fn reseal(
     origin: &dyn ExternalKey,
-    kept: &Kept,
+    kept: &mut Kept,
     state: &State,
     sealing: &BTreeMap<DeviceId, Sealing>,
-    asker: &DeviceId,
-    epoch: u64,
-    leaves: &[DeviceId],
+    ask: &Ask<'_>,
 ) -> Result<Vec<u8>, Rule> {
-    if !kept.readers.contains(asker) {
+    if !kept.readers.contains(&ask.asker) {
         return Err(RULE_RESEAL_READER);
     }
+    if let Some(life) = kept.life_ms(ask.group_ttl_ms) {
+        let now = ask.now_ms.ok_or(RULE_RESEAL_EXPIRED)?;
+        let made = u64::try_from(kept.made.time.wall).unwrap_or(0);
+        if now.saturating_sub(made) >= life {
+            return Err(RULE_RESEAL_EXPIRED);
+        }
+    }
+    let done = kept.resealed.get(&ask.asker).copied().unwrap_or(0);
+    if done >= MAX_RESEALS {
+        return Err(RULE_RESEAL_LIMIT);
+    }
     let me = rkey::Key::es256(origin.public()).device_id();
-    let now = readers(state, sealing, &kept.content, &me, leaves);
-    let r = now.into_iter().find(|r| r.id == *asker).ok_or(RULE_RESEAL_READER)?;
-    if r.epoch != epoch {
+    let now = readers(state, sealing, &kept.content, &me, ask.leaves);
+    let r = now.into_iter().find(|r| r.id == ask.asker).ok_or(RULE_RESEAL_READER)?;
+    if r.epoch != ask.epoch {
         return Err(RULE_RESEAL_EPOCH);
     }
-    seal(origin, &[r], &kept.made, &kept.content).map_err(|_| fcopy::RULE_SHAPE)
+    let sealed = seal(origin, &[r], &kept.made, &kept.content).map_err(|_| fcopy::RULE_SHAPE)?;
+    kept.resealed.insert(ask.asker, done.saturating_add(1));
+    Ok(sealed)
+}
+
+/// What a member that holds a copy does with a second one of the same ID.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum Second {
+    /// The same copy again, or one that claims the ID with another origin
+    /// or time: dropped. The first stays as it is.
+    Drop,
+    /// The copy sealed again for these readers: passed on to them, and
+    /// never written over the first, which stays for its other readers.
+    Pass { to: Vec<DeviceId> },
+}
+
+/// Judges a second checked copy with the ID of a first one held here. Both
+/// passed [`check`], so both are signed by their origin.
+pub fn second(first: &Checked<'_>, again: &Checked<'_>) -> Second {
+    if first.id != again.id
+        || first.origin != again.origin
+        || first.time != again.time
+        || first.copy.hdr == again.copy.hdr
+    {
+        return Second::Drop;
+    }
+    Second::Pass { to: again.readers.iter().map(|(d, _)| *d).collect() }
 }

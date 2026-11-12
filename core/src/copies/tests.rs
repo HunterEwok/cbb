@@ -291,7 +291,7 @@ fn a_device_that_slept_through_a_key_change_gets_the_copy_sealed_again() {
     let rs = readers(&state, &w.sealing(), &content, &w.id("phone"), &[]);
     let m = made(1);
     let copy = seal(&w.phone, &rs, &m, &content).unwrap();
-    let kept = Kept { made: m, content: content.clone(), readers: rs.iter().map(|r| r.id).collect() };
+    let mut kept = Kept::new(m, content.clone(), &rs);
     // The laptop sleeps three weeks: two epochs later its epoch 1 is gone.
     let laptop = w.stores.get_mut("laptop").unwrap();
     keystore::rotate(laptop, &w.g.gid, T0 + 2 * WEEK_MS).unwrap();
@@ -310,9 +310,10 @@ fn a_device_that_slept_through_a_key_change_gets_the_copy_sealed_again() {
     let s = w.sealing();
     assert_eq!(s[&w.id("laptop")].statement.body().epoch, 3);
     // Not to a device that was no reader, nor to another epoch.
-    assert_eq!(reseal(&w.phone, &kept, &state, &s, &w.id("watch"), 1, &[]).err(), Some(RULE_RESEAL_READER));
-    assert_eq!(reseal(&w.phone, &kept, &state, &s, &w.id("laptop"), 2, &[]).err(), Some(RULE_RESEAL_EPOCH));
-    let again = reseal(&w.phone, &kept, &state, &s, &w.id("laptop"), 3, &[]).unwrap();
+    let ask = |who: &str, epoch| Ask { asker: w.id(who), epoch, leaves: &[], now_ms: Some(T0), group_ttl_ms: DAY };
+    assert_eq!(reseal(&w.phone, &mut kept, &state, &s, &ask("watch", 1)).err(), Some(RULE_RESEAL_READER));
+    assert_eq!(reseal(&w.phone, &mut kept, &state, &s, &ask("laptop", 2)).err(), Some(RULE_RESEAL_EPOCH));
+    let again = reseal(&w.phone, &mut kept, &state, &s, &ask("laptop", 3)).unwrap();
     let v = cbor::decode(&again).unwrap();
     let c2 = check(&v, &state).unwrap();
     assert_eq!((c2.id, c2.time), (c.id, c.time), "the same copy, at its own time");
@@ -323,7 +324,83 @@ fn a_device_that_slept_through_a_key_change_gets_the_copy_sealed_again() {
     let st2 = g2.g.state();
     let refs: Vec<&_> = w.statements.iter().collect();
     let s2 = sealing(&st2, &refs);
-    assert_eq!(reseal(&w.phone, &kept, &st2, &s2, &w.id("laptop"), 3, &[]).err(), Some(RULE_RESEAL_READER));
+    assert_eq!(reseal(&w.phone, &mut kept, &st2, &s2, &ask("laptop", 3)).err(), Some(RULE_RESEAL_READER));
+}
+
+#[test]
+fn a_copy_sealed_again_is_passed_to_the_asker_and_limited() {
+    let w = World::new();
+    let state = w.g.state();
+    let s = w.sealing();
+    let content = Content::text("again", false);
+    let rs = readers(&state, &s, &content, &w.id("phone"), &[]);
+    assert!(rs.len() >= 2, "the laptop and another reader");
+    let m = made(1);
+    let first_bytes = seal(&w.phone, &rs, &m, &content).unwrap();
+    let mut kept = Kept::new(m, content.clone(), &rs);
+    let ask = Ask { asker: w.id("laptop"), epoch: 1, leaves: &[], now_ms: None, group_ttl_ms: DAY };
+    // A copy without a lifetime is sealed again without a clock.
+    let again_bytes = reseal(&w.phone, &mut kept, &state, &s, &ask).unwrap();
+    let (v1, v2) = (cbor::decode(&first_bytes).unwrap(), cbor::decode(&again_bytes).unwrap());
+    let (first, again) = (check(&v1, &state).unwrap(), check(&v2, &state).unwrap());
+    // A member holding the first keeps it and passes the second to the
+    // asker alone; the same copy twice is dropped.
+    assert_eq!(second(&first, &again), Second::Pass { to: vec![w.id("laptop")] });
+    assert_eq!(second(&first, &first), Second::Drop);
+    let other = seal(&w.phone, &rs, &made(2), &content).unwrap();
+    let v3 = cbor::decode(&other).unwrap();
+    assert_eq!(second(&first, &check(&v3, &state).unwrap()), Second::Drop, "another copy");
+    // The first still opens for its other readers.
+    assert_eq!(opened(open(&first, &w.id("desktop"), &w.stores["desktop"]).unwrap()), content);
+    // At most MAX_RESEALS times for one asker.
+    reseal(&w.phone, &mut kept, &state, &s, &ask).unwrap();
+    assert_eq!(reseal(&w.phone, &mut kept, &state, &s, &ask).err(), Some(RULE_RESEAL_LIMIT));
+    assert_eq!(kept.resealed[&w.id("laptop")], MAX_RESEALS);
+}
+
+#[test]
+fn a_secret_past_its_lifetime_is_not_sealed_again() {
+    let w = World::new();
+    let state = w.g.state();
+    let s = w.sealing();
+    let mut secret = Content::text("pin", true);
+    secret.ttl = 2; // ten minutes
+    let rs = readers(&state, &s, &secret, &w.id("phone"), &[]);
+    let mut kept = Kept::new(made(1), secret.clone(), &rs);
+    let wall = u64::try_from(kept.made.time.wall).unwrap();
+    let at = |now_ms| Ask { asker: w.id("laptop"), epoch: 1, leaves: &[], now_ms, group_ttl_ms: DAY };
+    assert!(reseal(&w.phone, &mut kept, &state, &s, &at(Some(wall + 599_999))).is_ok());
+    assert_eq!(reseal(&w.phone, &mut kept, &state, &s, &at(Some(wall + 600_000))).err(), Some(RULE_RESEAL_EXPIRED));
+    // An origin without a clock cannot tell: a secret is not sealed again.
+    assert_eq!(reseal(&w.phone, &mut kept, &state, &s, &at(None)).err(), Some(RULE_RESEAL_EXPIRED));
+    // A secret without its own ttl lives the group's lifetime.
+    let plain = Content::text("pin", true);
+    let mut k2 = Kept::new(made(2), plain, &rs);
+    let wall2 = u64::try_from(k2.made.time.wall).unwrap();
+    assert_eq!(k2.life_ms(DAY), Some(DAY));
+    let late = Ask { now_ms: Some(wall2 + DAY), ..at(None) };
+    assert_eq!(reseal(&w.phone, &mut k2, &state, &s, &late).err(), Some(RULE_RESEAL_EXPIRED));
+}
+
+/// The marks are saved before a copy is written. A restart from the marks
+/// one step old (saved before this copy) means it was not written yet: it
+/// is written once more, and then never again; a secret seen before the
+/// step stays seen.
+#[test]
+fn freshness_survives_a_restart_from_a_state_one_step_old() {
+    let t = |wall: u64| Timestamp { wall: wall as i64, logical: 0 };
+    let mut m = Marks::default();
+    assert!(matches!(m.judge(&[1; 16], t(T0), 0, true, Some(T0)), Fresh::New { .. }));
+    m.wrote(t(T0));
+    let one_step_old = m.encode();
+    assert!(matches!(m.judge(&[2; 16], t(T0 + 1), 0, false, Some(T0)), Fresh::New { .. }));
+    m.wrote(t(T0 + 1));
+    let mut back = Marks::decode(&one_step_old).unwrap();
+    assert_eq!(back.judge(&[1; 16], t(T0), 0, true, Some(T0)), Fresh::SeenSecret);
+    assert!(matches!(back.judge(&[2; 16], t(T0 + 1), 0, false, Some(T0)), Fresh::New { .. }));
+    back.wrote(t(T0 + 1));
+    let mut again = Marks::decode(&back.encode()).unwrap();
+    assert_eq!(again.judge(&[2; 16], t(T0 + 1), 0, false, Some(T0)), Fresh::Behind);
 }
 
 #[test]

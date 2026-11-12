@@ -471,6 +471,24 @@ pub fn nonce_message(n: Option<&[u8; 16]>) -> Vec<u8> {
     frame::write(&Value::Map(m))
 }
 
+/// `result` status 2: refused.
+pub const STATUS_REFUSED: u64 = 2;
+
+/// Message `result` (t 10) to the sender of a command this device refused:
+/// the command's ID, this device, status refused, and the rule's name as
+/// the reason, so the sender's app can say why (`commands/late`: one of the
+/// two clocks is off). A receiver answers so only a command whose signature
+/// it verified; it says nothing to a stranger.
+pub fn refusal(id: &[u8; 16], me: &DeviceId, rule: Rule) -> Vec<u8> {
+    frame::write(&Value::Map(alloc::vec![
+        (frame::FIELD_T, Value::Uint(crate::msg::tables::T_RESULT)),
+        (2, Value::Bytes(id)),
+        (3, Value::Bytes(&me.0)),
+        (4, Value::Uint(STATUS_REFUSED)),
+        (5, Value::Text(rule.name())),
+    ]))
+}
+
 /// Message `command` (t 9) carrying a command's envelope.
 pub fn message(envelope: &[u8]) -> Result<Vec<u8>, Rule> {
     let v = cbor::decode(envelope)?;

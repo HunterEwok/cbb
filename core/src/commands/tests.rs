@@ -97,6 +97,63 @@ fn a_member_obeys_the_root_and_its_admins_by_their_commands() {
     assert_eq!(w.take(&env, &mut ctr, None), Ok(None));
 }
 
+/// A member without a trusted clock is a stated case: it judges no time
+/// and decides by the signer's counter alone, so a command is taken once
+/// however old it is, and never twice.
+#[test]
+fn a_receiver_without_a_trusted_clock_decides_by_the_counter() {
+    let w = World::new();
+    let mut ctr = Counters::default();
+    let mut old = w.draft(COMMAND_PASTE_OFF, 3, None);
+    old.time_ms = T0 - 365 * 86_400_000;
+    let env = make(&old, &k("root")).unwrap();
+    assert_eq!(w.take(&env, &mut ctr.clone(), Some(T0)), Err(RULE_LATE), "with a clock: late");
+    assert_eq!(w.take(&env, &mut ctr, None), Ok(None), "without one: by n");
+    assert_eq!(w.take(&env, &mut ctr, None), Err(RULE_COUNTER));
+    let lower = make(&w.draft(COMMAND_PASTE_OFF, 2, None), &k("root")).unwrap();
+    assert_eq!(w.take(&lower, &mut ctr, None), Err(RULE_COUNTER));
+}
+
+/// A late command is refused back to its sender with the rule's name, so
+/// the sender's app can say that a clock is off.
+#[test]
+fn a_late_command_is_refused_back_with_its_rule() {
+    let w = World::new();
+    let env = make(&w.draft(COMMAND_PASTE_OFF, 1, None), &k("root")).unwrap();
+    let c = Command::read(&env).unwrap();
+    let rule = w.take(&env, &mut Counters::default(), Some(T0 + LIFETIME_MS + SKEW_MS + 1)).unwrap_err();
+    assert_eq!(rule, RULE_LATE);
+    let me = w.laptop.key.device_id();
+    let r = refusal(&c.id, &me, rule);
+    let m = frame::read(&r, frame::LIMIT_LEAF).unwrap();
+    assert_eq!(m.t, crate::msg::tables::T_RESULT);
+    assert_eq!(crate::msg::check(&m.map.encode()), Ok(crate::msg::tables::T_RESULT));
+    assert_eq!(m.get(2).and_then(Value::as_bytes), Some(&c.id[..]));
+    assert_eq!(m.get(3).and_then(Value::as_bytes), Some(&me.0[..]));
+    assert_eq!(m.get(4), Some(&Value::Uint(STATUS_REFUSED)));
+    assert_eq!(m.get(5), Some(&Value::Text("commands/late")));
+}
+
+/// The counters are saved before the command's effect. A restart from the
+/// state one step old (saved before this command) means its effect did
+/// not happen yet: the command is taken once more, and then never again.
+#[test]
+fn counters_survive_a_restart_from_a_state_one_step_old() {
+    let w = World::new();
+    let mut ctr = Counters::default();
+    let first = make(&w.draft(COMMAND_PASTE_OFF, 1, None), &k("root")).unwrap();
+    w.take(&first, &mut ctr, Some(T0)).unwrap();
+    let one_step_old = ctr.encode();
+    let next = make(&w.draft(COMMAND_PASTE_OFF, 2, None), &k("root")).unwrap();
+    w.take(&next, &mut ctr, Some(T0)).unwrap();
+    // Saved, then the device stops before the effect: back at the old state.
+    let mut back = Counters::decode(&one_step_old).unwrap();
+    assert_eq!(w.take(&first, &mut back, Some(T0)), Err(RULE_COUNTER), "the step before stays done");
+    assert_eq!(w.take(&next, &mut back, Some(T0)), Ok(None), "this one runs once");
+    let saved = back.encode();
+    assert_eq!(w.take(&next, &mut Counters::decode(&saved).unwrap(), Some(T0)), Err(RULE_COUNTER));
+}
+
 #[test]
 fn a_removed_frozen_or_forked_key_commands_nothing() {
     let paste_off = |w: &World, by: &str, n| make(&w.draft(COMMAND_PASTE_OFF, n, None), &k(by)).unwrap();
