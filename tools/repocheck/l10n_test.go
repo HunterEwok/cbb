@@ -121,3 +121,21 @@ func TestCheckInstallerL10nLanguages(t *testing.T) {
 		t.Fatalf("a missing catalog is not reported:\n%s", problems)
 	}
 }
+
+func TestCheckAppStrings(t *testing.T) {
+	if got := checkAppStrings(map[string][]byte{"README.md": nil}); got != nil {
+		t.Errorf("a tree without apps/l10n: %q", got)
+	}
+	contents := map[string][]byte{"apps/l10n/en.json": []byte(`{"Paste": {"in": ["tray"]}}`)}
+	for _, l := range installerLanguages {
+		contents["apps/l10n/"+l+".json"] = []byte(`{"Paste": "` + l + `"}`)
+	}
+	src := checkAppStrings(contents)
+	if len(src) == 0 || !strings.Contains(strings.Join(src, "\n"), "apps/desktop/frontend/l10n/ru.json:1: not what tools/strings makes") {
+		t.Fatalf("a missing generated file: %q", src)
+	}
+	contents["apps/l10n/ru.json"] = []byte(`{}`)
+	if got := strings.Join(checkAppStrings(contents), "\n"); !strings.Contains(got, `no translation of "Paste"`) {
+		t.Errorf("a missing translation: %q", got)
+	}
+}

@@ -222,7 +222,7 @@ func makeVectors(t *testing.T) vectors {
 // TestReleaseVectors writes (with -update) and checks
 // testdata/interop/go-release.json: keys.json, a channel file and
 // release.json in valid and invalid combinations (docs/protocol.md,
-// section 16), for the lite member and the phone kits to agree with.
+// section 16), for the Rust cbb and the phone kits to agree with.
 func TestReleaseVectors(t *testing.T) {
 	path := filepath.Join("..", "..", "testdata", "interop", "go-release.json")
 	if *update {

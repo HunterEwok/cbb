@@ -234,6 +234,39 @@ App::App(QObject *parent) : QObject(parent), m_os(OsInfo::current()), m_startLan
     });
     m_claimTimer.setInterval(claimEveryMs);
     connect(&m_claimTimer, &QTimer::timeout, this, &App::finishTakeover);
+    // A member that broke stops and starts again; the user sees what
+    // broke, the details only in debug mode (Errors::showDetails).
+    // Reports that waited for the network go now.
+    QTimer::singleShot(0, this, [this]() { m_bugs.resend(); });
+    connect(&m_node, &Member::panicked, this, [this](const QString &details) {
+        show(Errors::shown({QCoreApplication::translate("Errors", "Something in CBB broke. It starts again."), details}));
+        // In release mode the app asks to send a report (Bugs); in debug
+        // mode the error shows whole and nothing is asked.
+        if (!Errors::showDetails()) {
+            QJsonArray names, log;
+            for (const QVariant &d : m_node.devices())
+                names.append(d.toMap().value(QStringLiteral("name")).toString());
+            for (const QString &l : m_node.recentLog())
+                log.append(l);
+            m_bugs.offer(QJsonObject{{QStringLiteral("kind"), QStringLiteral("panic")},
+                                     {QStringLiteral("code"), 5},
+                                     {QStringLiteral("name"), QStringLiteral("panic")},
+                                     {QStringLiteral("message"), QStringLiteral("Something in CBB broke, and it started again.")},
+                                     {QStringLiteral("details"), details},
+                                     {QStringLiteral("app"), QStringLiteral("aurora")},
+                                     {QStringLiteral("version"), version()},
+                                     {QStringLiteral("os"), phoneOs()},
+                                     {QStringLiteral("os_version"), m_os.version},
+                                     {QStringLiteral("model"), QSysInfo::prettyProductName()},
+                                     {QStringLiteral("arch"), QSysInfo::currentCpuArchitecture()},
+                                     {QStringLiteral("log"), log},
+                                     {QStringLiteral("names"), names}});
+        }
+        QTimer::singleShot(0, this, [this]() {
+            m_node.stop();
+            startMember();
+        });
+    });
     connect(&m_join, &Join::joined, this, [this](const Membership &m) {
         m_member = m;
         emit groupChanged();
@@ -973,6 +1006,19 @@ void App::setErrorDetails(bool on)
     emit settingsChanged();
 }
 
+bool App::advanced() const
+{
+    return QSettings().value(QStringLiteral("ui/advanced")).toBool();
+}
+
+void App::setAdvanced(bool on)
+{
+    if (on == advanced())
+        return;
+    QSettings().setValue(QStringLiteral("ui/advanced"), on);
+    emit settingsChanged();
+}
+
 QString App::language() const
 {
     return QSettings().value(QStringLiteral("ui/language")).toString();
@@ -1019,91 +1065,58 @@ QString App::languageName(const QString &code) const
     return name.isEmpty() ? code : name.left(1).toUpper() + name.mid(1);
 }
 
-static const QString arrangementKey = QStringLiteral("ui/arrangement");
-
 bool App::hasArrangement() const
 {
-    return QSettings().contains(arrangementKey);
-}
-
-QJsonObject App::callArrange(const QStringList &ids, bool prune, const QJsonValue &op)
-{
-    QSettings settings;
-    const QJsonDocument stored = QJsonDocument::fromJson(settings.value(arrangementKey).toByteArray());
-    QJsonObject args{
-        {QStringLiteral("group"), m_member.groupTag()},
-        {QStringLiteral("devices"), QJsonArray::fromStringList(ids)},
-        {QStringLiteral("prune"), prune},
-    };
-    if (!m_member.device.isEmpty())
-        args.insert(QStringLiteral("self"), m_member.device);
-    if (stored.isObject())
-        args.insert(QStringLiteral("stored"), stored.object());
-    if (!op.isNull())
-        args.insert(QStringLiteral("op"), op);
     Failure failure;
-    const QJsonObject answer = Core::call(QStringLiteral("arrange"), args, &failure).toObject();
-    if (!failure.isNull()) {
-        show(Errors::shown(failure));
-        return QJsonObject();
-    }
-    // Until the user changes something nothing is stored (docs/apps.md).
-    const QJsonObject next = answer.value(QStringLiteral("stored")).toObject();
-    if (next.value(QStringLiteral("items")).toArray().isEmpty())
-        settings.remove(arrangementKey);
-    else if (!stored.isObject() || stored.object() != next)
-        settings.setValue(arrangementKey, QJsonDocument(next).toJson(QJsonDocument::Compact));
-    return answer;
+    return m_node.view(QJsonValue(), &failure).value(QStringLiteral("custom")).toBool();
 }
 
 QVariantList App::arranged(const QVariantList &devices, int)
 {
-    if (m_member.isNull())
-        return QVariantList();
-    QStringList ids;
     QHash<QString, QVariant> byId;
-    for (const QVariant &d : devices) {
-        const QString id = d.toMap().value(QStringLiteral("device")).toString();
-        ids << id;
-        byId.insert(id, d);
-    }
-    m_arrangeIds = ids;
-    const QJsonObject answer = callArrange(ids, ids.contains(m_member.device), QJsonValue());
-    if (answer.isEmpty()) {
+    for (const QVariant &d : devices)
+        byId.insert(d.toMap().value(QStringLiteral("id")).toString(), d);
+    Failure failure;
+    const QJsonObject view = m_node.view(QJsonValue(), &failure);
+    if (!failure.isNull()) {
         // The group's order, so the devices still show.
         QVariantList flat;
         for (const QVariant &d : devices)
             flat << QVariantMap{{QStringLiteral("kind"), QStringLiteral("device")}, {QStringLiteral("device"), d}};
         return flat;
     }
-    // This phone is an item of the core's view, first until the user
-    // moves it.
-    QVariantList view;
-    for (const QJsonValue &item : answer.value(QStringLiteral("view")).toArray()) {
-        const QJsonObject o = item.toObject();
+    // Each device as Member::devices lists it, or as the view gives it.
+    const auto device = [&byId](const QJsonValue &d) {
+        const QJsonObject o = d.toObject();
+        return byId.value(o.value(QStringLiteral("id")).toString(), o.toVariantMap());
+    };
+    QVariantList out;
+    for (const QJsonValue &tile : view.value(QStringLiteral("tiles")).toArray()) {
+        const QJsonObject o = tile.toObject();
         if (o.contains(QStringLiteral("device"))) {
-            view << QVariantMap{{QStringLiteral("kind"), QStringLiteral("device")},
-                                {QStringLiteral("device"), byId.value(o.value(QStringLiteral("device")).toString())}};
+            out << QVariantMap{{QStringLiteral("kind"), QStringLiteral("device")},
+                               {QStringLiteral("device"), device(o.value(QStringLiteral("device")))}};
             continue;
         }
         const QJsonObject c = o.value(QStringLiteral("collection")).toObject();
         QVariantList inside;
-        for (const QJsonValue &id : c.value(QStringLiteral("devices")).toArray())
-            inside << byId.value(id.toString());
-        view << QVariantMap{{QStringLiteral("kind"), QStringLiteral("collection")},
-                            {QStringLiteral("id"), c.value(QStringLiteral("id")).toString()},
-                            {QStringLiteral("name"), c.value(QStringLiteral("name")).toString()},
-                            {QStringLiteral("devices"), inside}};
+        for (const QJsonValue &d : c.value(QStringLiteral("devices")).toArray())
+            inside << device(d);
+        out << QVariantMap{{QStringLiteral("kind"), QStringLiteral("collection")},
+                           {QStringLiteral("id"), c.value(QStringLiteral("id")).toString()},
+                           {QStringLiteral("name"), c.value(QStringLiteral("name")).toString()},
+                           {QStringLiteral("devices"), inside}};
     }
-    return view;
+    return out;
 }
 
 bool App::arrange(const QVariantMap &op)
 {
-    if (m_member.isNull())
-        return false;
-    const bool ok = !callArrange(m_arrangeIds, false, QJsonObject::fromVariantMap(op)).isEmpty();
+    Failure failure;
+    m_node.view(QJsonObject::fromVariantMap(op), &failure);
+    if (!failure.isNull())
+        show(Errors::shown(failure));
     ++m_arrangement;
     emit arrangementChanged();
-    return ok;
+    return failure.isNull();
 }

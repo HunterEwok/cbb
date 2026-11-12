@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -43,6 +44,51 @@ func TestRoundTrip(t *testing.T) {
 	}
 	if _, err := r.Read(); err == nil {
 		t.Error("read past the end")
+	}
+}
+
+// TestEnvelope: a request goes as {"op", "args", "len", "seq"}, an answer
+// as {"ok", ...} or {"error", "detail", ...}, as cbb_member_call's
+// (docs/core-api.md, "Operations"), and both read back.
+func TestEnvelope(t *testing.T) {
+	for _, tt := range []struct {
+		m    Message
+		want string
+	}{
+		{Message{Header: Header{Op: OpMute, Device: "pi", ForMS: 5}}, `{"args":{"device":"pi","for_ms":5},"op":"mute"}`},
+		{Message{Header: Header{Op: OpInject, Seq: 7, Method: "type"}, Payload: []byte("hi")}, `{"args":{"method":"type"},"len":2,"op":"inject","seq":7}`},
+		{Message{Header: Header{Op: OpReply, Name: "pi", Done: true}}, `{"done":true,"ok":{"name":"pi"}}`},
+		{Message{Header: Header{Op: OpReply, Error: "no", Detail: "why", Name: "dropped", Done: true}}, `{"detail":"why","done":true,"error":"no"}`},
+		{Message{Header: Header{Seq: 3}}, `{"ok":{},"seq":3}`},
+	} {
+		var buf bytes.Buffer
+		if err := Write(&buf, &tt.m); err != nil {
+			t.Fatal(err)
+		}
+		line, _, _ := strings.Cut(buf.String(), "\n")
+		if line != tt.want {
+			t.Errorf("%s: wrote %s, want %s", tt.m.Op, line, tt.want)
+		}
+		got, err := NewReader(&buf).Read()
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := tt.m.Header
+		if want.Op == "" {
+			want.Op = OpReply
+		}
+		if want.Error != "" {
+			want.Name = ""
+		}
+		want.Len = len(tt.m.Payload)
+		if !reflect.DeepEqual(got.Header, want) {
+			t.Errorf("read back %+v, want %+v", got.Header, want)
+		}
+	}
+	for _, bad := range []string{`[]`, `{"op":"copy","args":[]}`, `{"ok":1}`} {
+		if _, err := NewReader(strings.NewReader(bad + "\n")).Read(); err == nil {
+			t.Errorf("read %s", bad)
+		}
 	}
 }
 
@@ -110,10 +156,10 @@ func TestNames(t *testing.T) {
 // TestNeedsAdmin: this device's own sync is on either socket; another
 // device's sync and a mute only on the admin socket.
 func TestNeedsAdmin(t *testing.T) {
-	if NeedsAdmin(Header{Op: OpSync, Name: "off"}) {
+	if NeedsAdmin(Header{Op: OpSync, On: Bool(false)}) {
 		t.Error("turning this device's sync off needs the admin socket")
 	}
-	if !NeedsAdmin(Header{Op: OpSync, Name: "off", Device: "beta"}) || !NeedsAdmin(Header{Op: OpMute, Device: "beta"}) || !NeedsAdmin(Header{Op: OpUnmute, Device: "beta"}) {
+	if !NeedsAdmin(Header{Op: OpSync, On: Bool(false), Device: "beta"}) || !NeedsAdmin(Header{Op: OpMute, Device: "beta"}) || !NeedsAdmin(Header{Op: OpUnmute, Device: "beta"}) {
 		t.Error("another device's sync or mute does not need the admin socket")
 	}
 }

@@ -53,7 +53,7 @@ internal object Strict {
     /**
      * Whether every number in b, outside its strings, is an integer as
      * [check] takes it: never "-0", a fraction or an exponent. Readers differ
-     * on those (Go takes "-0" for 0, the lite member's reader for a float),
+     * on those (Go takes "-0" for 0, the Rust core's reader for a float),
      * so the member protocol's frames pass this first, members a reader does
      * not know included. It only scans: whether b is JSON is for the decoder.
      */

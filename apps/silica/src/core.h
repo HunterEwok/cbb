@@ -32,6 +32,10 @@ QString versionLine(Failure *failure);
 // or its error in failure, the details under what.
 QJsonObject take(uint8_t *answer, size_t len, const QString &what, Failure *failure);
 
+// Panics inside the core's guard (cbb_test_panic), as the wrappers' tests
+// do: the answer is code 5 `panic`, in failure, and the app goes on.
+QJsonValue testPanic(Failure *failure);
+
 // The core's signing callback (cbb_sign_fn): the key store signs the digest.
 int32_t signDigest(void *ctx, const uint8_t *digest, uint8_t *sig, size_t *sigLen);
 // The same with the admin key, for a phone that joins as an admin.

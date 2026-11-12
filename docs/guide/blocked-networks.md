@@ -3,47 +3,47 @@
 
 Away from home, your devices reach the hub through the group's own WireGuard tunnel. Some
 networks block WireGuard: hotel and office Wi-Fi, some mobile operators, and whole
-countries that filter VPNs. Copy Beyond Borders has two ways around it. Both are switched on
-at the hub, and the devices pick them up the next time they meet the hub at home.
+countries that filter VPNs. Copy Beyond Borders has two ways around it, and a hub uses both
+unless you turn them off; the devices pick up a change the next time they meet the hub at
+home.
 
 | Way | What the network sees | You need | Works on |
 |---|---|---|---|
-| Plain WireGuard (default) | WireGuard packets | the hub or a forwarder | computers, phones, lite member |
-| **AmneziaWG** (`-obfuscate`) | UDP packets that look like nothing in particular | the hub or a forwarder | computers, phones |
-| **VLESS** (`-vless`) | an HTTPS connection to a website | a forwarder with VLESS on (the project's has it) | computers, phones |
+| **AmneziaWG** (on by default; `-no-obfuscate` with `-no-vless` turns it off) | UDP packets that look like nothing in particular | the hub or a forwarder | computers, phones |
+| **VLESS** (on by default at a forwarder; `-no-vless` turns it off) | an HTTPS connection to a website | a forwarder with VLESS on (the project's has it) | computers, phones |
+| Plain WireGuard (`-no-obfuscate -no-vless`) | WireGuard packets | the hub or a forwarder | computers, phones, lite member |
 
 Whatever you choose, the clipboard stays inside the group's tunnel and the devices' own TLS,
 so nothing between your devices can read it. The disguise only changes how the packets look on the wire.
 
-## Which one to use
+## How the devices choose
 
-1. Try **plain WireGuard** first. It is the fastest and works on most networks.
-2. If the tunnel does not come up on some network, or is cut after a while, turn on
-   **AmneziaWG**. Most filters that look for WireGuard no longer recognise it.
-3. If even that is blocked, as in countries that block every unknown kind of traffic, use
-   **VLESS**. It needs a forwarder that takes VLESS on TCP port 443: the project's at
-   cbb.tools does, or your own.
+The devices try **AmneziaWG** over UDP first, which is the fastest where the network lets it
+through: most filters that look for WireGuard do not recognise it. Where even that is
+blocked, as in countries that block every unknown kind of traffic, they reach the forwarder
+over **VLESS**, which needs a forwarder that takes VLESS on TCP port 443: the project's at
+cbb.tools does, or your own. A hub without a forwarder offers AmneziaWG alone.
 
 Nothing helps on a network that lets through only a list of approved addresses.
 
 ## AmneziaWG
 
-On the hub:
+A hub speaks AmneziaWG as soon as it is one:
 
 ```sh
-sudo cbb global hub -obfuscate 203.0.113.7:8764
+sudo cbb global hub 203.0.113.7:8764
 ```
 
-With a forwarder, add `-obfuscate` the same way:
+It makes the group's settings once, at random, and keeps them. On a network where nothing is
+blocked, plain WireGuard is a little faster:
 
 ```sh
-sudo cbb global hub -obfuscate -forwarder 198.51.100.9:8764 -forwarder-key <key>
+sudo cbb global hub -no-obfuscate -no-vless 203.0.113.7:8764
 ```
 
-The hub makes the group's settings once, at random, and keeps them while `-obfuscate`
-stays. Bring each laptop and phone home once afterwards, or keep the app open at home, so it
-takes the new settings. The lite member speaks only plain WireGuard: in an obfuscated group
-it syncs at home only.
+Bring each laptop and phone home once after a change, or keep the app open at home, so it
+takes the new settings. The lite member speaks only plain WireGuard: in a group whose hub
+hides its tunnel it syncs at home only.
 
 ## VLESS
 
@@ -63,15 +63,16 @@ ordinary HTTPS connection to a website.
    beside UDP and TCP 8764. Setting up the server is in
    [running your own servers](../admin/self-hosting.md#vless-on-the-forwarder).
 
-2. **On the hub**: switch VLESS on in the app (the hub's tunnel: VLESS), or:
+2. **On the hub**: nothing to do. A hub at a forwarder asks for VLESS:
 
    ```sh
-   sudo cbb global hub -forwarder default -vless
+   sudo cbb global hub -forwarder default
    ```
 
    (`-forwarder 198.51.100.9:8764 -forwarder-key <key>` for your own.) The forwarder tells
-   the hub its site and path. VLESS switches AmneziaWG on as well: inside VLESS it hides
-   the sizes of WireGuard's packets, which would otherwise show through the HTTPS.
+   the hub its site and path; one without VLESS registers the hub for UDP alone. VLESS
+   comes with AmneziaWG: inside VLESS it hides the sizes of WireGuard's packets, which would
+   otherwise show through the HTTPS. `-no-vless` turns VLESS off.
 
 3. **On the devices**: meet the hub at home once, as after any change. From then on they
    try AmneziaWG over UDP first, which is faster where the network lets it through, and

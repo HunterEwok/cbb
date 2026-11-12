@@ -20,8 +20,8 @@ use crate::control::{Away, Header, Message, Status};
 use crate::error::{Context, Error, Result};
 use crate::{Global, hubport, request, status_text};
 
-/// The project's forwarder and relay, as Go's forward.ProjectHost and
-/// relay.ProjectHost, and the word that names them.
+/// The project's forwarder (as Go's forward.ProjectHost) and relay, and the
+/// word that names them.
 const PROJECT_FORWARDER: &str = "cbb.tools:8764";
 const PROJECT_RELAY: &str = "cbb.tools:8765";
 const PROJECT: &str = "default";
@@ -72,12 +72,13 @@ fn usage_text() -> String {
        cbb global off [-yes]          turn it off here and forget its keys
        cbb global off -on DEVICE      on an admin: turn it off on another device, whose own user
                                       turns it on again
-       cbb global hub [-away-on] [-keep] [-port N] [-firewall ask|yes|no] [-obfuscate] [-forwarder default|address:port -forwarder-key KEY] [-vless] [address:port...]
+       cbb global hub [-away-on] [-keep] [-port N] [-firewall ask|yes|no] [-no-obfuscate] [-forwarder default|address:port -forwarder-key KEY] [-no-vless] [address:port...]
                                       make this device the group's hub, reached at these addresses
                                       or through the forwarder (without addresses, the project's at
-                                      {PROJECT_FORWARDER}); -obfuscate for networks that block WireGuard,
-                                      -vless for clients that reach the forwarder only over VLESS;
-                                      -away-on turns sync away from home on here first
+                                      {PROJECT_FORWARDER}); it hides WireGuard with AmneziaWG and lets
+                                      its clients reach the forwarder over VLESS, for networks that
+                                      block WireGuard: -no-vless turns VLESS off, -no-obfuscate with it
+                                      plain WireGuard; -away-on turns sync away from home on here first
        cbb global hub -on DEVICE [-forward-only] [-forwarder default|address:port -forwarder-key KEY] [address:port...]
                                       on an admin: make DEVICE, an admin computer with sync away from
                                       home on, a hub of the group as well, reached through the forwarder
@@ -269,7 +270,7 @@ pub(crate) fn global(g: &Global, args: &[String]) -> Result<()> {
         "hub" => {
             let f = Flags::parse(
                 rest,
-                &["obfuscate", "vless", "forward-only", "away-on", "keep"],
+                &["no-obfuscate", "no-vless", "forward-only", "away-on", "keep"],
                 &["port", "firewall", "forwarder", "forwarder-key", "on"],
             )?;
             let port: i64 = match f.get("port") {
@@ -289,7 +290,8 @@ pub(crate) fn global(g: &Global, args: &[String]) -> Result<()> {
             if !on.is_empty() && keep {
                 return Err(usage_plain("-keep changes this hub's own settings; -on makes another device a hub"));
             }
-            if !on.is_empty() && (port != 0 || f.on("obfuscate") || f.on("vless") || away_on || firewall != "ask") {
+            if !on.is_empty() && (port != 0 || f.on("no-obfuscate") || f.on("no-vless") || away_on || firewall != "ask")
+            {
                 return Err(usage_plain(
                     "-on takes only -forwarder, -forwarder-key and the new hub's addresses; its own settings stay its own",
                 ));
@@ -326,7 +328,7 @@ pub(crate) fn global(g: &Global, args: &[String]) -> Result<()> {
                 fwd = resolve_addr_port(&fwd)?;
             }
             (h.port, h.addrs, h.forwarder, h.forwarder_key) = (port, f.rest.clone(), fwd, fwd_key);
-            (h.obfuscate, h.vless, h.keep) = (f.on("obfuscate"), f.on("vless"), keep);
+            (h.obfuscate_off, h.vless_off, h.keep) = (f.on("no-obfuscate"), f.on("no-vless"), keep);
             if !on.is_empty() {
                 (h.device, h.forward_only) = (on, f.on("forward-only"));
             }
@@ -609,7 +611,7 @@ fn entries(g: &Global, args: &[String]) -> Result<()> {
 
 /// The signed entry points the service holds.
 fn held_entries(g: &Global) -> Result<serde_json::Value> {
-    let m = request(g, &Message::new(Header { op: "entries-get".into(), ..Default::default() }, Vec::new()))?;
+    let m = request(g, &Message::new(Header { op: "entries_get".into(), ..Default::default() }, Vec::new()))?;
     serde_json::from_slice(&m.payload).map_err(|_| Error::msg("the service sent entry points that do not decode"))
 }
 
@@ -663,13 +665,13 @@ mod tests {
     #[test]
     fn flags_as_go() {
         let f = Flags::parse(
-            &strings(&["-port", "9000", "--obfuscate", "-forwarder=cbb.tools:8764", "203.0.113.9:8764", "-keep"]),
-            &["obfuscate", "keep"],
+            &strings(&["-port", "9000", "--no-obfuscate", "-forwarder=cbb.tools:8764", "203.0.113.9:8764", "-keep"]),
+            &["no-obfuscate", "keep"],
             &["port", "forwarder"],
         )
         .unwrap();
         assert_eq!(f.get("port"), "9000");
-        assert!(f.on("obfuscate") && !f.on("keep"));
+        assert!(f.on("no-obfuscate") && !f.on("keep"));
         assert_eq!(f.get("forwarder"), "cbb.tools:8764");
         // Go's flag package stops at the first argument that is no flag.
         assert_eq!(f.rest, ["203.0.113.9:8764", "-keep"]);

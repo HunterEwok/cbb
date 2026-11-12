@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 HunterEwok
+#
+# Counts the server's traffic for the money and traffic budget
+# (docs/relay-budget.md, "Money and traffic"):
+# /etc/systemd/system/cbb-traffic.service, run by cbb-traffic.timer. It
+# reads the interface's counters and writes the totals of the last 24
+# hours to /srv/cbb.tools/status/traffic.json, which belongs to the system
+# user cbb-traffic (site/README.md, "The traffic counter").
+
+[Unit]
+Description=Count the cbb.tools traffic of the last 24 hours
+
+[Service]
+Type=oneshot
+User=cbb-traffic
+Group=cbb-traffic
+StateDirectory=cbb-traffic
+ExecStart=/usr/local/lib/cbb/cbb-traffic.sh
+ProtectSystem=strict
+ReadWritePaths=/srv/cbb.tools/status
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_UNIX AF_NETLINK

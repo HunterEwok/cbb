@@ -49,7 +49,7 @@ internal fun JsonObject.optString(key: String): String? =
 
 internal fun JsonObject.optLong(key: String): Long? =
     // -?[1-9][0-9]*|0 as written, as in Go: "-0" and "-00" are no integers here (Go reads
-    // "-0" as 0, the lite member's reader as a float).
+    // "-0" as 0, the Rust core's reader as a float).
     opt(key)?.let { (it as? JsonPrimitive)?.takeIf { p -> !p.isString && INTEGER.matches(p.content) }?.longOrNull ?: throw WireTypeException("$key: not an integer") }
 
 private val INTEGER = Regex("0|-?[1-9][0-9]*")

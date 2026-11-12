@@ -17,15 +17,15 @@ import (
 
 // TestPreviousRelease holds the promise that from 0.6 on a device of
 // version N works in one group with a device of N-1: the previous release's cbb (CBB_PREVIOUS, which
-// tools/e2e/previous.sh downloads) and this build's (CBB_LITE) join one
+// tools/e2e/previous.sh downloads) and this build's (CBB_TEST_ALONE) join one
 // group, the previous one also dialing this build directly, sync both
 // ways and take the record of a device admitted after them, and the
 // previous one takes its own removal. The previous release is driven only through its own command
 // line, which may differ from this build's.
 func TestPreviousRelease(t *testing.T) {
-	prev, cur := os.Getenv("CBB_PREVIOUS"), os.Getenv("CBB_LITE")
+	prev, cur := os.Getenv("CBB_PREVIOUS"), os.Getenv("CBB_TEST_ALONE")
 	if prev == "" || cur == "" {
-		t.Skip("CBB_PREVIOUS and CBB_LITE are not both set: tools/e2e/previous.sh finds no release of 0.6 or later before this one")
+		t.Skip("CBB_PREVIOUS and CBB_TEST_ALONE are not both set: tools/e2e/previous.sh finds no release of 0.6 or later before this one")
 	}
 	if runtime.GOOS != "linux" {
 		t.Skip("the Rust member's tests run on Linux")
@@ -57,8 +57,8 @@ func TestPreviousRelease(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 	l.Close()
 	curAddr := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
-	current := startLite(t, cur, curDir, "-no-mdns", "-port", strconv.Itoa(port), "-peer", root.addr())
-	previous := startLite(t, prev, prevDir, "-no-mdns", "-no-listen", "-peer", root.addr(), "-peer", curAddr)
+	current := startAlone(t, cur, curDir, "-no-mdns", "-port", strconv.Itoa(port), "-peer", root.addr())
+	previous := startAlone(t, prev, prevDir, "-no-mdns", "-no-listen", "-peer", root.addr(), "-peer", curAddr)
 	cli := func(bin string, s *testService, stdin string, args ...string) string {
 		t.Helper()
 		out, err := runCLI(bin, s.socket, stdin, args...)
@@ -97,7 +97,7 @@ func TestPreviousRelease(t *testing.T) {
 	})
 
 	// Its removal reaches it.
-	if _, err := root.do(t, control.Header{Op: control.OpRevoke, Name: "previous"}, ""); err != nil {
+	if _, err := root.do(t, control.Header{Op: control.OpRemove, Device: "previous"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the previous release takes its removal", func() bool {

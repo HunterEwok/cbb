@@ -167,7 +167,7 @@ impl Vless {
 }
 
 /// The VLESS settings of a hub's offer for an invitation: None for none or
-/// for REALITY, which a phone or a lite member cannot speak.
+/// for REALITY, which a phone or cbb cannot speak.
 pub fn vless_from_offer(v: &Value) -> Option<Vless> {
     let o = v.as_object()?;
     // An offer's REALITY fields come absent or null with XHTTP.

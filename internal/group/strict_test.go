@@ -20,7 +20,7 @@ import (
 )
 
 // A strictVector is a body and whether every member takes it: the
-// vectors of testdata/interop/strict.json, which the lite member and both
+// vectors of testdata/interop/strict.json, which the Rust core and both
 // phone kits read too.
 type strictVector struct {
 	Name  string `json:"name"`
