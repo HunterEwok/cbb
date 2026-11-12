@@ -237,7 +237,7 @@ the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
   the key can be read from the slot, and `ykman piv keys attest 82` with the `f9`
   certificate as proof that the key was made on the YubiKey.
   Their public keys go into `packaging/get.sh` (`release_roots`), `packaging/windows/get.ps1`
-  (`$releaseRoots`) and the programs (`internal/release.Roots`, the lite member's
+  (`$releaseRoots`) and the programs (`internal/release.Roots`, `cbb`'s
   `update::ROOTS` in `member/src/update.rs`, and the phone kits' `Releases.roots`, which
   also turn on the Android app's own update).
 - **The release key**, in the Mac's Secure Enclave, asking for Touch ID at each signature:
@@ -430,8 +430,8 @@ secret the release still succeeds and warns that there is no feed.
 
 ## The ZX Spectrum Next's files
 
-The release workflow's `zxnext` job takes the lite member for the Pi Zero from the `lite`
-job, builds `.cbb`, its overlay `CBB.OVL` and `CBB.DRV` with the SHA-256 of that member, of
+The release workflow's `zxnext` job takes `cbb` for the Pi Zero from the `build`
+job's armv6 archive, builds `.cbb`, its overlay `CBB.OVL` and `CBB.DRV` with the SHA-256 of that member, of
 the overlay and of the driver inside `.cbb` (`make PI_CBB=...`, `apps/zxnext/pins.sh` and
 `ovl.sh`), and lays them out for cbb.tools (`packaging/zxnext/site.sh`) as
 `cbb-zxnext.tar.gz`: `zxnext/` with the four files and `LIST`, a line of name, size, CRC-32

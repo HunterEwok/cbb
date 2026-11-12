@@ -1569,6 +1569,13 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The documentation, the website's index and the command line's messages no longer speak of
+  a "lite member" or a "full member": every computer and small device runs the one `cbb`, and
+  a small device usually without `cbb-helper` beside it. `member/README.md` is now "`cbb` on
+  small devices", the command reference's section "Without cbb-helper" replaces "The lite
+  member", and pages that set the two programs apart (the device table, the design's routers,
+  the protocol's notes on what one of them lacked) say what holds now. `tools/repocheck`
+  refuses the old words outside the changelog and the decisions.
 - The README leads with what Copy Beyond Borders is in one sentence, sums up its status in
   three lines (the full table moved to docs/parity.md, "On real devices") and lists what it
   also does. The keyboards, the TV remotes, the Nano ESP32 and the ZX Spectrum Next are on

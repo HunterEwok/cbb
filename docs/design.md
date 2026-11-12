@@ -66,7 +66,7 @@ What the design cannot choose:
   the user cannot run (D-3, D-4).
 - **Licence.** The code is AGPL-3.0-only with one author (D-1); copied code keeps its own
   licence under `internal/third_party` and `core/src/third_party`.
-- **Small devices.** The lite member's protocol core is `no_std` Rust with no I/O, so that it
+- **Small devices.** `cbb`'s protocol core is `no_std` Rust with no I/O, so that it
   fits an ESP32.
 - **Signing.** Apple's and Microsoft's code signing need accounts the project is still
   getting; development and CI never wait for them (ad hoc signing).
@@ -92,11 +92,11 @@ The system context (C4 level 1): the group is the system; everything around it i
 | Windows                 | service + clipboard agent         | automatic                                                      |
 | iPhone, iPad            | the app                           | one tap or the Action button                                   |
 | Android phone           | the app                           | receives by itself; sends by itself (accessibility service) or with one tap |
-| Small Linux device      | the lite member, `cbb`            | `cbb copy`/`paste`/`watch`; no desktop clipboard               |
+| Small Linux device      | `cbb` without its helper | `cbb copy`/`paste`/`watch`; no desktop clipboard               |
 | Apple Watch, Wear OS watch | the watch app, through its phone | shows the group, sends commands as an admin                 |
 | Android TV, set-top box | the Android app                   | as an Android phone                                            |
-| Arduino Nano ESP32      | the lite member's firmware        | a USB keyboard on its console only (`console-type` build); takes no remote paste yet |
-| ZX Spectrum Next        | `.cbb`, through its Pi's lite member | sends and receives on demand                               |
+| Arduino Nano ESP32      | the firmware (`esp32/`)  | a USB keyboard on its console only (`console-type` build); takes no remote paste yet |
+| ZX Spectrum Next        | `.cbb`, through `cbb` on its Pi | sends and receives on demand                               |
 
 Linux machines, Windows PCs, Macs, boards and routers are equal **members** of a **group**, and
 so is a phone with the app. There is no central server, and any member may be switched off
@@ -108,7 +108,7 @@ apps" below).
 - **Device ID**: 128 random bits as 32 lowercase hex characters. It fits in a DNS label and
   compares the same way everywhere.
 - **Member port**: CBB's one port, TCP 8764 unless the installer was given another,
-  advertised in the mDNS SRV record. Every computer and lite member listens there for mutual
+  advertised in the mDNS SRV record. Every computer and small device listens there for mutual
   TLS (Macs too, D-50); phones only dial, except a phone that is the hub. The ALPN protocol of a connection picks
   what it gets (docs/protocol.md, section 4):
   - members and the phone app, with the member ALPN protocol and mutual TLS;
@@ -133,7 +133,7 @@ The few ideas the rest follows from:
   other by mDNS on one TCP port; away from home they reach a hub through the group's own
   WireGuard star, optionally through a forwarder or a blind relay that hold no keys.
 - **One protocol, two members, four readers**: the member protocol runs in Go (the service)
-  and in the Rust core, which the lite member and every phone app run (D-86); the Swift and
+  and in the Rust core, which `cbb` and every phone app run (D-86); the Swift and
   Kotlin kits still read and write the records, pairing and certificates themselves. All four
   are held together by shared interop vectors in `testdata/interop`.
 - **Copies sealed end to end** (D-84). The device that copies seals each copy to the devices
@@ -150,7 +150,7 @@ The parts of each implementation and what each does. The directory of each part 
 
 The containers (C4 level 2): the programs of a group and how they talk.
 
-![The containers: the programs of a computer, a phone, a lite member and the hub, and how they talk](images/containers.svg)
+![The containers: the programs of a computer, a phone, a small device and the hub, and how they talk](images/containers.svg)
 
 ### The service and its helper
 
@@ -437,7 +437,7 @@ is not built yet (roadmap item 10); the design:
 
 - **Service**: the same service as on Linux, as a LaunchDaemon under a hidden service account.
   macOS grants local network access to daemons without a prompt. It listens on UDP 5353
-  for mDNS (D-32), and dials and takes connections like the other full members, from the
+  for mDNS (D-32), and dials and takes connections like the other computers, from the
   home network only. It may create a group and be an admin. `install.sh` lists the
   service in the application firewall (`socketfilterfw --add` and `--unblockapp`), and
   `uninstall.sh` takes it away; `CBB_FIREWALL=no` leaves the firewall alone.
@@ -451,7 +451,7 @@ is not built yet (roadmap item 10); the design:
   `universal-clipboard`; they do not count as a computer's copy for the iPhone button.
   Received secrets are written with `org.nspasteboard.ConcealedType` and for the current host
   only, so clipboard histories skip them and they do not travel over Universal Clipboard.
-- Finds the members with CBB's own mDNS code, publishing itself as a full member,
+- Finds the members with CBB's own mDNS code, publishing itself as a computer,
   and trusts only the group CA, in its own configuration; the system keychain is not changed.
 - Installing needs administrator rights once. The Mac app (`apps/macos`) adds a window and
   a menu bar item over the control socket, and is the Mac's remote paste target.
@@ -512,7 +512,7 @@ creates the phone is the root of the group (D-33 to D-36; the wire side is secti
   the phone in the admitting role, then issues its certificate. No profile for the user to
   check: the app trusts its own group's CA.
 - Every computer is then a member without CA keys; computers still publish themselves. A
-  lite member (Rust) takes part the same way.
+  small device takes part the same way.
 - Certificate renewal (every two years) and revocation need an admin phone. Losing one is
   covered by a second admin phone, which is an equal admin with a key of its own; see
   "Admin phones, the devices list and revocation" below.
@@ -522,7 +522,7 @@ creates the phone is the root of the group (D-33 to D-36; the wire side is secti
   impossible on iOS.
 - A group that a computer created stays for users without a phone app (["without the
   app"](guide/without-app.md)).
-- Every phone app syncs through the same member: the lite member's node in the Rust core,
+- Every phone app syncs through the same member: `cbb`'s node in the Rust core,
   which runs in the app's process (`ffi/`, docs/core-api.md, "The member"; D-86). The
   iPhone, Android and Aurora apps keep only what is theirs: their keys and the prompts that
   unlock them, pairing, the records they sign, finding the computers on the network (Bonjour,
@@ -653,8 +653,8 @@ permission to paste.
   `golang.org/x/time` (BSD-3-Clause), `jezek/xgb` (BSD-3-Clause), `rsc.io/qr`
   (BSD-3-Clause), `amnezia-vpn/amneziawg-go` (MIT, a fork of wireguard-go) with gVisor's netstack (Apache-2.0)
   and `google/btree` (Apache-2.0) for the tunnel, and the CPace implementation translated to Rust from
-  `rsc.io/cmd/mote` v0.1.3 (BSD-3-Clause) in `core/src/third_party/cpace`. The lite
-  member uses RustCrypto and rustls (MIT or Apache-2.0). The tray app reads QR codes from
+  `rsc.io/cmd/mote` v0.1.3 (BSD-3-Clause) in `core/src/third_party/cpace`. `cbb`
+  uses RustCrypto and rustls (MIT or Apache-2.0). The tray app reads QR codes from
   pictures with `makiuchi-d/gozxing` (Apache-2.0).
 
 ## 6. Runtime view
@@ -722,7 +722,7 @@ sync away from home, the admins, and remote paste.
   `cbb pair` or `cbb new` goes on. Sync on or off, the limits, the TVs and the update
   settings stay. The group's root leaves only alone; otherwise it hands the group over
   first. A removed device (`cbb status` says so) and one whose group file is damaged leave
-  the same way. The lite member's `cbb leave` does the same through its service, or by
+  the same way. `cbb leave` does it through the service, or by
   itself when the service does not run. The phones, the tray app and the Mac app have a
   "Leave the group" button (docs/apps.md), and a phone's watch forgets its admin key with
   it. The group keeps the device's entry until an admin removes it.
@@ -734,7 +734,7 @@ sync away from home, the admins, and remote paste.
   another group, or of a replaced CA, are ignored; and `p=1` while a pairing window is open)
   and A/AAAA records under their own host label `cb-<device ID>.local`, never the system
   host name. Members that do not dial publish with `r=listen`, phones that are the hub with `r=phone`.
-- Full members run CBB's own small mDNS responder, which shares UDP port 5353 with
+- Computers run CBB's own small mDNS responder, which shares UDP port 5353 with
   avahi-daemon or systemd-resolved; a CI job checks that avahi browses and resolves it. On
   FreeBSD a socket shares a port only with the sockets of its own user unless root opened
   it, so the rc.d script starts `cbb service -user cbb` as root: it opens the
@@ -757,7 +757,7 @@ sync away from home, the admins, and remote paste.
   there. A received record lives no longer than CBB's own records of its type, and
   only names in the form of device IDs count as members. Names are not probed: device IDs
   are random. Macs
-  publish and browse with the same code, as full members; a test on macOS showed that it shares port 5353 with
+  publish and browse with the same code, as computers; a test on macOS showed that it shares port 5353 with
   mDNSResponder and that the system's `dns-sd` sees what it publishes, so no Bonjour
   binding is needed.
 - Members connect to the addresses from discovery, never by resolving a `.local` name: a
@@ -787,7 +787,7 @@ sync away from home, the admins, and remote paste.
   router where every member keeps quiet. A pairing window takes connections on any network
   while it is open. The Rust service keeps the same list in the same file
   (`member/src/networks.rs`, its network IDs checked against Go's), so a computer moving to
-  it keeps its known networks; the lite member on a board, which stays at home, takes the
+  it keeps its known networks; a small device, which stays at home, takes the
   networks it is on as known at its first start in a group. A phone's member keeps no list.
 - **The interface list.** A router or a gateway is on the internet side and the home side
   at once, and its internet side may even carry a private address (double NAT). So the
@@ -899,7 +899,7 @@ Every device has one switch, **sync**, on by default (D-55):
   DEVICE on|off`, the apps' device page; docs/protocol.md section 15), checked like a
   `paste` command (see "Remote paste"); that change lasts until turned again.
 - Built: a computer keeps sync off, and until when, in `sync.json` in the service's state
-  directory, as does the lite member; without the file sync is on. Every member reports it
+  directory; without the file sync is on. Every member reports it
   in its hello as the mode `shared` (on) or `own` (off), so the devices list shows it. On a
   phone it decides what the automatic paths do: Android's foreground service writes the
   group's copies to the clipboard and its accessibility service sends copies by itself only
@@ -943,7 +943,7 @@ queue, so large content cannot simply go inside it.
 | Mac | `com.compuserve.gif`, `public.png`, `public.jpeg`, `public.tiff` (sent as PNG) | `public.file-url` items | `public.html` |
 | iPhone app | on the button and while the app runs, written to this phone only; HEIC is sent as JPEG (PNG with transparency) | Share sends images and files (up to 50 MB, the share extension's memory); the button saves received files in the app's folder in Files | later |
 | Android app | reads a `content://` image with the clipboard, writes one through its FileProvider; other formats are sent as PNG | Android file managers have no system copy, so files come through the share sheet; the button saves received files in Downloads, in a folder "CBB" | later |
-| The lite member, ESP32, ZX Next | no | no | no |
+| ESP32, ZX Next | no | no | no |
 
 Text-only devices take the event, so the group converges, but never fetch its content and
 keep their last text; a copy that carries text next to its image (a browser copies both)
@@ -1044,7 +1044,7 @@ through the FileTransfer portal; files a Flatpak app copies are under the docume
 `/run/user/UID/doc`, which the host reads.
 
 1. The `media` event, the content cache, `get` and `chunk`, priorities and limits in Go;
-   interop vectors for the Swift and Kotlin kits and the lite core (which learns to ignore
+   interop vectors for the Swift and Kotlin kits and the Rust core (which learns to ignore
    content); `cbb copy FILE` and `cbb paste -o DIR` without a desktop.
 2. Images in the desktop connectors: Wayland, X11, Mac, Windows.
 3. Files and folders in the desktop connectors.
@@ -1052,7 +1052,7 @@ through the FileTransfer portal; files a Flatpak app copies are under the docume
 5. Away from home: the away limit, the hub serving its clients, the bench's tests.
 6. HTML in the desktop connectors: `text/html` on Wayland and X11, `public.html` on a Mac
    and `HTML Format` on Windows, read next to the text and never with a secret. It goes as
-   a media copy with the text as its alternative, so the phones, the lite member and older
+   a media copy with the text as its alternative, so the phones and older
    connectors get the text; formatted text over 8 MiB, or whose text is over 256 KiB, goes
    as its text alone.
 
@@ -1062,7 +1062,7 @@ Away from home, and between subnets that mDNS does not reach (for example a Pi o
 192.168.20.x and the rest of the group on 192.168.0.x), members reach each other through the
 group's own WireGuard tunnel in a star around one member, the hub. Built: the tunnel
 (`internal/tunnel`: the hub and the Go client, with tests that clients cannot reach each
-other; GotaTun in the lite member on Linux and, through `ffi/`, on the phones), the exchange of
+other; GotaTun in `cbb` on Linux and, through `ffi/`, on the phones), the exchange of
 its keys in the member protocol, and `cbb global`, which turns it on with the consent below
 and makes a computer the hub; the phones as clients and, while their app is open, as the
 hub; remote invitations for computers; the forwarder (`cbb forward`, routing by `mac1`),
@@ -1145,9 +1145,9 @@ forwarder's own site. Where a network admits only listed addresses (allow-lists)
   among themselves. The user chooses: a computer that is always on, one that is turned on
   when sync away from home is needed (for example to copy codes from afar for an hour), or
   no hub and sync at home only. `cbb global hub` and the documentation say so. Any
-  computer can be the hub: Linux, FreeBSD, a router, Windows or a Mac. Phones and lite
-  members are clients: a phone is not always on
-  and cannot accept connections in the background, and a lite member has no room for it. A
+  computer can be the hub: Linux, FreeBSD, a router, a Raspberry Pi, Windows or a Mac. Phones
+  are clients: a phone is not always on
+  and cannot accept connections in the background. A
   group with no computer has its phone as the hub while the app is open (built in 0.5,
   below).
 - Why sync over the internet needs a computer of the user's: the hub must be on and
@@ -1190,8 +1190,8 @@ forwarder's own site. Where a network admits only listed addresses (allow-lists)
 #### The phone as the hub while its app is open
 
 Everyone in a group has a phone; not everyone has a computer. A group made on a phone with
-TVs, set-top boxes, other phones or lite members and no computer has nothing to be its hub,
-and without a lite member nothing in it accepts connections even at home: phones never do,
+TVs, set-top boxes, other phones or small devices and no computer has nothing to be its hub,
+and without a small device nothing in it accepts connections even at home: phones never do,
 and the Android app on a TV is a phone app. So the phone takes on the hub's work as far as it
 can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
 
@@ -1203,7 +1203,7 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
   so it is a choice the user may keep, not a fault the app keeps pointing out.
 - **At home** the open app accepts member connections on the home network, as its
   `TLSListener` already does for a joining phone, and publishes itself by mDNS while it is
-  open. The devices that only dial (phones, TVs, and lite members dialing out) find it and
+  open. The devices that only dial (phones, TVs, and small devices dialing out) find it and
   connect, so a group of phones and TVs syncs at home too.
 - **From afar** nobody reaches the phone directly (carrier-grade NAT on mobile networks, an
   address that changes, iOS closing sockets in the background), so it registers with the
@@ -1211,8 +1211,8 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
   the registration and its hellos while the app is open. The forwarder finds a hub by its
   key, not its address, so a phone that moves from Wi-Fi to a mobile network stays the same
   hub. The hub's WireGuard runs in the app's process, in the Rust core's tunnel
-  (`ffi/src/tunnel.rs`), beside the client side: the lite member's tunnel, one for the lite
-  member and every phone, rather than a tunnel in Go for the phones, which would keep a
+  (`ffi/src/tunnel.rs`), beside the client side: `cbb`'s tunnel, one for the computers,
+  small devices and every phone, rather than a tunnel in Go for the phones, which would keep a
   second WireGuard, AmneziaWG and VLESS to maintain and Go in both apps' builds (D-87). The
   phones then reach a forwarder over VLESS with XHTTP, the only transport (D-91).
 - **The clients come quickly.** A phone hub is there for minutes at a time, so its clients
@@ -1264,7 +1264,7 @@ can: while its app is open, it is the hub. Decided on 2026-10-25 (D-64).
 | Situation | What happens | Still open |
 |---|---|---|
 | Phones only, or phones and Android TVs or other Android devices | a phone with its app open is the hub; the others sync while they run (Android in its foreground service, an iPhone with its app open) | |
-| A phone and lite members | syncs at home, where lite members listen; from afar, the phone with its app open is the hub | |
+| A phone and small devices | syncs at home, where small devices listen; from afar, the phone with its app open is the hub | |
 | The whole group away together (a trip, a hotel Wi-Fi that isolates its clients, mobile data) | the phone hub, through the forwarder | |
 | A computer is the hub but is off, broken or offline | another hub of the group serves: the root and every admin with a hub set up, the computers first, then the phones (D-96; docs/protocol.md, section 11, "Several hubs") | the user's main hubs in a signed table (D-65; `cbb global hubs` signs it, the apps later) |
 | The hub's home has no public address and the project's forwarder is not reached | nothing syncs away from home, unless the group has a forwarder or relay of the user's own (`cbb forward`, `cbb relay`) | |
@@ -1289,10 +1289,10 @@ All built in 0.5, but for what each step names as still to do.
    with the member listener's port, `Register` with the forwarder set in Settings and the
    group's authority records, its status on Home and in Settings, publishing of the member
    port (`r=phone`) on the home networks the phone remembers, and on Android the option to
-   keep it running in the foreground service. Still to do on the bench: a computer and the
-   lite member through the forwarder to a phone.
+   keep it running in the foreground service. Still to do on the bench: a computer and a
+   small device through the forwarder to a phone.
 4. Done: clients for a hub that comes and goes: a hub whose device record says `phone` is
-   tried at least every 5 s instead of up to 30 s, in `cbb`, the lite member and both apps.
+   tried at least every 5 s instead of up to 30 s, in `cbb` and both apps.
    Still to measure on real phones: the battery cost and the forwarder's load.
 5. Done: remote invitations made and served on the phone (step 7 of the order of work in
    [design.md](design.md#order-of-work)): the hub's guest tunnel (`hub_invite`), the kits'
@@ -1302,13 +1302,13 @@ All built in 0.5, but for what each step names as still to do.
 6. Done: moving the hub to an admin computer (docs/protocol.md, section 11, "Moving the
    hub"): the `hub` command with the clients' keys, the old hub passing the new hub's offer
    to its clients with their own preshared keys, the clients' rules for following it in
-   `cbb`, the lite member and both kits, `cbb global move`, and in both apps "Move the hub
+   `cbb` and both kits, `cbb global move`, and in both apps "Move the hub
    to a computer" with the suggestion of a computer that is always on, and the hub moving
    with an admin phone's takeover; `TestMoveHub` moves a hub with a client away from home.
-   Still to do on the bench: moving from a phone to the Linux desktop with the lite member far away.
+   Still to do on the bench: moving from a phone to the Linux desktop with a small device far away.
 7. Done: several hubs with a priority (D-65; docs/protocol.md, section 11, "Several hubs"):
-   the order of hubs from the records (`v2-hubs.json` checks Go, both kits and the lite
-   member), the clients keeping every hub's offer with a preshared key of their own, the
+   the order of hubs from the records (`v2-hubs.json` checks Go, both kits and
+   `cbb`), the clients keeping every hub's offer with a preshared key of their own, the
    hubs sharing their clients and passing each other's offers on, and a computer's hub
    yielding to a higher one and serving again when it goes; `TestSeveralHubs` switches both
    ways; the signed table of main hubs the user orders (`hubs` records, `cbb global hubs`). Still
@@ -1456,8 +1456,8 @@ not. The project's forwarder runs at `cbb.tools`, still being tested; a user can
 #### Joining from another network
 
 Three ways admit a device that is not on the home network. The first two work for the
-pairing itself; the third, the remote invitation, works for computers, phones and the lite
-member alike.
+pairing itself; the third, the remote invitation, works for computers, phones and small
+devices alike.
 
 - **Through SSH.** When the new computer can log in to a computer of the group that admits devices,
   it forwards a local port to the member port, `ssh -N -L 18764:localhost:8764 user@member`;
@@ -1523,9 +1523,9 @@ member alike.
 #### Groups that sync at home only
 
 At home no hub is needed: the members sync directly over the home network, with the phone as
-the root and any computers and lite members. Some member has to accept connections: a Linux
-member, a Windows PC, a Mac or a lite member; only phones never do. So any group with a
-computer or a lite member besides its phones syncs at home.
+the root and any computers and small devices. Some member has to accept connections: a Linux
+member, a Windows PC, a Mac or a small device; only phones never do. So any group with a
+computer or a small device besides its phones syncs at home.
 
 #### Blind relay
 
@@ -1607,9 +1607,9 @@ relay, or a hub.
      headers, never a key that decrypts anything. The hub's hellos to the forwarder are
      masked with a key the forwarder gives every hub, so they show no constant either.
    - The phones keep the settings with the hub's offer and start their tunnel with them
-     (`ffi/src/tunnel.rs` takes them as JSON), as the lite member does (`member/src/awg.rs`).
+     (`ffi/src/tunnel.rs` takes them as JSON), as `cbb` does (`member/src/awg.rs`).
 2. **WireGuard inside VLESS**, between a client and the forwarder, with
-   Xray-core (MPL-2.0) as a Go module in `cbb`, and in the phones' and the lite member's
+   Xray-core (MPL-2.0) in the forwarder, and in the phones' and `cbb`'s
    Rust tunnel (`member/src/vless.rs`); VLESS
    carries the UDP packets itself. The forwarder then has one path for everything, the hub does not
    change, and traffic is always inside our own tunnel. VLESS adds no security of its own and
@@ -1650,7 +1650,7 @@ relay, or a hub.
      anything else; with AmneziaWG on as well, both apply.
    - Risks: WireGuard over TCP adds latency on a lossy network (TCP inside TCP), which a
      clipboard tolerates; XHTTP's packet-up costs a request per batch of packets.
-3. **The lite member, in 0.6.** AmneziaWG around GotaTun (`member/src/awg.rs`), and VLESS over
+3. **`cbb`, in 0.6.** AmneziaWG around GotaTun (`member/src/awg.rs`), and VLESS over
    XHTTP on Linux, a client of its own on rustls and HTTP/1.1 (`member/src/vless.rs`, its bytes
    in `cbb_core::vless`), without Chrome's TLS fingerprint: a network sees rustls's
    ClientHello and HTTP/1.1 where Xray's client shows a browser's and HTTP/2. The site's
@@ -1666,11 +1666,11 @@ sing-box is not used (GPL).
 
 | Member                         | Tunnel                                                                                        | Role                     |
 |--------------------------------|-----------------------------------------------------------------------------------------------|--------------------------|
-| Go service (Linux, FreeBSD, macOS, Windows) | amneziawg-go with netstack in `cbb`; Xray-core as a Go module                | hub, forwarder, relay or client |
+| `cbb` (Linux, FreeBSD, macOS, Windows, routers, small devices) | GotaTun's WireGuard (from Mullvad) with smoltcp's TCP, in its process; AmneziaWG and VLESS over XHTTP of its own | hub or client |
+| The forwarder (`cbb-forward`, Go) | none of its own: it passes the tunnel's packets; Xray-core as a Go module for VLESS | forwarder |
 | iPhone app                     | in the app process, no Network Extension; the Rust tunnel of `ffi/src/tunnel.rs` (D-87)        | client, or the hub, while the app is open |
 | Android app                    | in the app process, in the foreground service the app already has; no `VpnService`            | client, or the hub while the app is open or in its foreground service |
-| the lite member on Linux       | GotaTun's WireGuard (from Mullvad) with smoltcp's TCP, in its process; AmneziaWG and VLESS over XHTTP of its own | client |
-| the lite member on the ESP32   | none: the home network only, until a mature WireGuard exists for it                           | home only                |
+| the ESP32 firmware   | none: the home network only, until a mature WireGuard exists for it                           | home only                |
 
 - On phones the tunnel is ordinary UDP traffic of the app. It does not take the phone's
   single VPN slot, the user's own VPN keeps working, and the app is not a VPN app (Apple's
@@ -1680,13 +1680,13 @@ sing-box is not used (GPL).
   app that connects to that port reaches only the hub's member TLS. A phone that is the hub
   takes the tunnel's connections on a member port on the loopback address too, and a blind
   relay's calls on another, each only from the device the relay announced.
-- The lite member does the same: GotaTun's WireGuard over a UDP socket and smoltcp's TCP run
+- `cbb` does the same: GotaTun's WireGuard over a UDP socket and smoltcp's TCP run
   in one thread of `cbb`, behind a port on the loopback address that its member TLS dials, so
   no TUN device, no root and no capability is needed. GotaTun takes its AEAD from ring, whose
-  C and assembly would need a C cross compiler for each target; the lite member gives it a
+  C and assembly would need a C cross compiler for each target; `cbb` gives it a
   stand-in with ring's API on RustCrypto's ChaCha20-Poly1305 (`ring-shim/`), the
   implementation its TLS uses too, so it stays all Rust and links with rust-lld. GotaTun
-  speaks plain WireGuard; the lite member wraps its messages in AmneziaWG for a hub that
+  speaks plain WireGuard; `cbb` wraps its messages in AmneziaWG for a hub that
   hides its tunnel (`member/src/awg.rs`) and carries them over VLESS with XHTTP when the offer
   has it (`member/src/vless.rs`).
 - No push notifications: they go through Apple's and Google's servers. A phone gets the
@@ -1751,17 +1751,17 @@ only adds to it.
    found at home; remote invitations made and served on a phone that is the hub. Using an
    invitation on a phone follows.
 8. Blocked networks: AmneziaWG, then VLESS. Done: `cbb` runs on amneziawg-go, and the
-   phones' and the lite member's tunnel on GotaTun with AmneziaWG of its own (`awg.rs`);
+   phones' and `cbb`'s tunnel on GotaTun with AmneziaWG of its own (`awg.rs`);
    obfuscation per group between computers (on by default, `cbb global hub -no-obfuscate` with
    `-no-vless` off), in the hub's offer and in invitations, on both phones, and through the
    forwarder; VLESS between computers (`cbb forward -vless-xhttp` behind a web server, asked
    for by every hub at a forwarder unless `-no-vless`) and on both phones.
-9. The lite member on Linux (done: `cbb global on`, GotaTun and smoltcp in `cbb`, with
+9. `cbb` on Linux (done: `cbb global on`, GotaTun and smoltcp in its process, with
    AmneziaWG and VLESS over XHTTP); the ESP32 when WireGuard on it is mature.
 
 ### What the servers learn
 
-Built in 0.6 (D-67, D-75), in Go, the lite member's core and both phone kits; the wire
+Built in 0.6 (D-67, D-75), in Go, the Rust core and both phone kits; the wire
 format is in docs/protocol.md, section 18. A forwarder and a relay check short credentials
 made for them instead of the group's records, which name the root's and the admins' devices
 with their names, systems and dates:
@@ -1836,7 +1836,7 @@ made, so two phones cannot share one CA key. Instead:
   **becomes the root** (below).
 
 **The devices list.** Every admission produces a signed **device record**: the device ID,
-its name, its role and system ("Full members, admins and the operating system" below), the hash of its key, whether it is an admin,
+its name, its role and system ("Computers, admins and the operating system" below), the hash of its key, whether it is an admin,
 who admitted it and when. Revocations are signed **revocation records**. Both kinds form one
 set that only grows: every member keeps the set and gives it to every peer it meets, so all
 members, and every app, show the same list. Merging two sets is their union, and what the
@@ -1888,7 +1888,7 @@ act as an admin until another admin removes it; that is the price of the conveni
 why it is a choice, not the default.
 
 **Groups that a computer created** have a root and admins as a phone group has, and any
-device but the root is removed by a record ("Full members, admins and the operating system"
+device but the root is removed by a record ("Computers, admins and the operating system"
 below).
 
 **Built in this order:** the Go side first, since it needs no phone: the records, their
@@ -1932,22 +1932,21 @@ pairing Info; when a device's hello states another `os` than its record, an admi
 meets it signs a new record, which is how the Windows PCs that joined as `linux` get their
 name back.
 
-**Who dials whom.** Between two full members the one with the lower device ID dials; if it
+**Who dials whom.** Between two computers the one with the lower device ID dials; if it
 has not connected within 30 seconds, the other dials as well, and of two connections
-between the same pair the one the lower ID dialed stays. Full members dial the lite
-members; phones dial everyone. The installers open the member port in the system's
+between the same pair the one the lower ID dialed stays. Computers dial the members
+that do not dial (no `dials` among their capabilities); phones dial everyone. The installers open the member port in the system's
 firewall on every system, with the user's consent.
 
-**Keys: the creator and the admins.** Any full member can create a group, a Mac included.
+**Keys: the creator and the admins.** Any computer can create a group, a Mac included.
 Every new group gets a root CA with path length 1, as a group a phone creates has, and the
-creating computer holds its key and is the group's **root**. Every other full member gets
-only its member certificate: no CA key reaches it by joining. Each full member keeps an
+creating computer holds its key and is the group's **root**. Every other computer gets
+only its member certificate: no CA key reaches it by joining. Each computer keeps an
 admin key next to its identity and offers it in its hello, as a computer of a phone group
 does today ("A computer as admin" above); the root makes a member an **admin** on request,
 with `cbb admin <name>` on the root computer or "Make it an admin" on a root phone, by
 certifying that key as an admin CA. An admin admits devices, renews certificates, signs
-records and removes devices; only the root makes admins. Lite members never hold keys and
-are never admins.
+records and removes devices; only the root makes admins.
 
 **Removing a device.** Every device except the root is removed with a revocation record, as
 in a phone group, without a new group:
@@ -2009,7 +2008,7 @@ and its removal of that admin reaches them, before or after it heard. A frozen a
   admin did before stays. The irreversible step, removal, stays with the keys that are
   hardest to steal.
 
-**What it costs.** A new record type in every implementation (Go, the lite member, both phone
+**What it costs.** A new record type in every implementation (Go, `cbb`, both phone
 kits), and a short time in which a thief can keep honest admin computers frozen until the
 owner reaches the root or an admin phone. Two admins that freeze each other both stay
 frozen: a freeze counts whoever signed it, so the rule does not depend on which freeze came
@@ -2080,7 +2079,7 @@ pasted newline before the user sees it. The `enter` flag presses Enter afterward
 | macOS | the Mac app (`apps/macos`), which holds the Accessibility permission: pasteboard and Cmd+V through `CGEventPost`, or `CGEventKeyboardSetUnicodeString` | the permission is granted to the app once in System Settings, and again after each update while the app is signed ad hoc (until Developer ID); the app's settings show when it is missing, and a paste then refuses with that reason; a Mac without the app open (or with Homebrew only) refuses saying it needs the app; Secure Event Input (password fields, Terminal's Secure Keyboard Entry) and the lock screen refuse it |
 | Android | the app's accessibility service: the clipboard, then `ACTION_PASTE` on the focused input node (or `ACTION_SET_TEXT`) | views without an editable node (some terminals and games); not on the lock screen |
 | iPhone, iPad | not possible: iOS lets no app put text into another app | sender only |
-| the lite member on Linux | the console helper or tmux, as on Linux | as Linux |
+| A small Linux device | the console helper or tmux, as on Linux | as Linux |
 | Nano ESP32 | not yet: the firmware takes no commands; its USB keyboard (`esp32/`, `usb.rs`) types only what its console's `type` gives it, in a `console-type` build | only the characters of the layout set on the board, which must match the host's |
 | ZX Spectrum Next | none: `.cbb` runs only when started | |
 
@@ -2219,7 +2218,7 @@ All built in 0.6:
 1. Actions on the computers: the presets, `cbb action`, the rights prompt, the signed
    command and its checks in Go, with interop vectors for Rust, Swift and Kotlin.
 2. The buttons in the phone apps.
-3. The presets on the lite member.
+3. The presets on small devices.
 4. The buttons on the watch.
 
 ### Secure updates
@@ -2310,7 +2309,7 @@ docs/protocol.md, section 16.
   runs `cbb update` through UAC or pkexec, like its other admin actions.
 - **The Mac app:** Sparkle with its EdDSA signature, once the app is signed and notarized
   (waits for the Apple developer account), with the same manifest feeding the appcast.
-- **The lite member on Linux:** `cbb update` the same way, for its own archive (built).
+- **Small Linux devices:** `cbb update` the same way, for their archive (built).
 - **The Nano ESP32:** OTA into the second app partition, checked against the manifest and
   the release key in the firmware, with a fallback to the old partition if the new one does
   not boot. Later, with the firmware's sync (item 15).
@@ -2368,7 +2367,7 @@ docs/protocol.md, section 16.
    "Check for updates" and "Update automatically", nothing for a copy from a store. Not
    yet run on a device; installs from 2027 need the owner's registration with Google's
    developer verification.
-7. **Built for Linux and OpenWrt:** the lite member's `cbb update` (`member/src/update.rs`),
+7. **Built for Linux and OpenWrt:** the Rust `cbb update` (`member/src/update.rs`),
    checked with `core/`'s verifier, downloading with the system's curl, wget or
    uclient-fetch, installing and rolling back as step 3 does, with the same timers. The
    Nano ESP32 follows with its sync (item 15): a partition table with two app slots and a
@@ -2418,29 +2417,22 @@ infrastructure, not a place to copy and paste:
 - **The hub for sync away from home.** The router is always on and is the device with the
   public address, so it needs no port forwarding: it opens the hub's UDP port on its own
   WAN.
-- **An always-on member at home.** Phones and lite members sync through it when no
+- **An always-on member at home.** Phones and small devices sync through it when no
   computer is on.
 - **A member on every subnet.** A router sits on the home network and the IoT subnet at
   once, so a device on the IoT subnet syncs with the router directly, and the router passes
   its events on as every member does. No rule from the IoT subnet into the home network is
   needed, only one that lets the IoT subnet reach the router's member port.
 - **Not a place for remote paste or CA keys.** It has no screen to paste on. It should
-  join as an ordinary full member, never as the creator or an admin: CA keys do not belong
+  join as an ordinary member, never as the creator or an admin: CA keys do not belong
   on a box that faces the internet.
 
-#### Full or lite
+#### One program on routers
 
-| | `cbb` (Go, full member) | the lite member's `cbb` (Rust) |
-|---|---|---|
-| Size of the binary | about 25 MB stripped (6.4 MB compressed with xz) for arm64; armv7, mips and mipsle the same order | 1.7 MB for arm64 (static musl) |
-| Routers it fits | 128 MB of flash or more, or eMMC (for example the Banana Pi BPI-R4); 256 MB of RAM or more | almost any OpenWrt router, 16 MB of flash and 64 MB of RAM |
-| Hub | yes | no: lite members are clients only |
-| Away from home | yes, as hub or client, with obfuscation and VLESS | as a client, with plain WireGuard (GotaTun); AmneziaWG and VLESS in 0.7 |
-| Builds | Go cross-compiles statically for every OpenWrt CPU: aarch64, armv7, mips and mipsle (softfloat), x86-64; arm64 and armv7 are in every release already | aarch64, armv7, x86-64 with stable Rust; mips and mipsle are Tier 3 in Rust (nightly and `-Zbuild-std`) |
-
-Recommendation: the full service first, aimed at routers with room for it, because the hub
-is what a router adds that nothing else does; the lite member afterwards for small routers, as
-packaging around what exists.
+Since 0.6 a router runs the same `cbb` as every computer, in Rust, without `cbb-helper`, which
+only a desktop, a TPM or Bluetooth needs. It can be the hub, with AmneziaWG and VLESS. It
+builds for aarch64, armv7 and x86-64 with stable Rust; mips and mipsle are Tier 3 in Rust
+(nightly and `-Zbuild-std`) and are built without the tunnel for now (roadmap item 37).
 
 #### What OpenWrt needs that other Linux does not
 
@@ -2534,7 +2526,7 @@ infrastructure, not a place to copy and paste:
   (`CBB_CONTAINER`) it makes no group and offers no admin key unless `CBB_KEYS_IN_FILE=yes`.
 - **A forwarder or a relay on a VPS.** `cbb forward` and `cbb relay` hold no group keys, so
   a container on a rented server is the natural way to run them.
-- **Never the creator, and an admin only by choice.** It joins as an ordinary full member;
+- **Never the creator, and an admin only by choice.** It joins as an ordinary member;
   CA keys stay on the devices the user holds.
 
 What the image needs:
@@ -2600,13 +2592,13 @@ Desktop Mode.
 ### Rootless installs
 
 Built in 0.6 (D-79, roadmap item 39): `sh install.sh --rootless`
-(`packaging/linux/install-rootless.sh`), `internal/rootless` and the lite member's
-`member/src/rootless.rs`; CI installs and removes a full member and a lite member this way.
+(`packaging/linux/install-rootless.sh`), `internal/rootless` and
+`member/src/rootless.rs`; CI installs and removes a computer and a small device this way.
 Not yet run on a desktop session.
 
 Every install so far needs root once: for the service's own account, the system unit, its
 sandbox and the firewall. Some users cannot or will not give it, on a computer at work for
-example. A rootless install runs the same full member, or the lite member, as the user's systemd user unit, with
+example. A rootless install runs the same `cbb`, with or without its helper, as the user's systemd user unit, with
 the binary, the state and the settings in the user's home, and the control socket in the
 user's runtime directory.
 
@@ -2625,8 +2617,8 @@ has lingering). So a rootless device:
   (D-71);
 - is shown as rootless in `cbb status` and on the phones' device pages.
 
-A rootless lite member loses little more than its own account, since it never holds CA keys
-and is never an admin or a hub anyway: its text console target (the console helper needs
+A rootless install of `cbb` without its helper loses little more than its own account, since
+a rootless install is never the root, an admin or a hub anyway: its text console target (the console helper needs
 `CAP_SYS_ADMIN`, so `cbb paste-receive on -console` refuses) and the quick actions that need
 a polkit rule (`reboot` and `cancel-shutdown`; `restart` stays). Remote paste into tmux, sync
 away from home and updates work as in a system install. It is not the advice for a router or
@@ -2731,7 +2723,7 @@ or a Windows PC with a TPM 2.0 keeps its new member, admin and tunnel keys there
 the storage root key Windows keeps at 0x81000001, since Windows holds the owner hierarchy's
 password). A Mac with a Secure Enclave keeps its member, admin and server keys there
 (`internal/sekey`), while its tunnel key stays in a file. Intel Macs without the T2 chip,
-computers without a TPM and the lite member keep them in files readable only by the
+computers without a TPM and small devices keep them in files readable only by the
 service. The rest of the plan is in [roadmap.md](roadmap.md#device-keys-in-hardware)
 (D-44, D-47).
 

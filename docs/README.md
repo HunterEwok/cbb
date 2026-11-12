@@ -37,7 +37,7 @@ For administrators: your own server, a router, a NAS.
 | [Routers and FreeBSD](admin/routers.md) | OpenWrt, OPNsense and FreeBSD: what the installers set up, the networks it answers on, the firewall, the checks |
 | [Hardening](admin/hardening.md) | the settings that make a group harder to attack, beyond the defaults |
 | [Docker image](../packaging/docker/README.md) | the image for a NAS, a home server or a server on the internet |
-| [Lite member](../member/README.md) | the lite member for small Linux devices: build, install, use |
+| [Small devices](../member/README.md) | `cbb` without its helper on small Linux devices: build, install, use |
 
 ## Reference
 
@@ -45,7 +45,7 @@ Complete and exact, without the reasons.
 
 | Document | What is in it |
 |---|---|
-| [Commands](reference/cli.md) | every `cbb` command, on a full and on the lite member, with every flag |
+| [Commands](reference/cli.md) | every `cbb` command, with every flag |
 | [Settings and environment variables](reference/config.md) | the settings files and every `CBB_*` variable |
 | [Devices, ports and files](reference/devices.md) | what each device can do, the ports, where the keys and logs are |
 | [Limits and lifetimes](reference/limits.md) | sizes, rates, timeouts, certificate lifetimes, the servers' limits |
@@ -70,7 +70,7 @@ for security reviewers.
 | [Cryptography](cryptography.md) | every primitive, library, key, its size, lifetime and where it is kept |
 | [Testing](testing.md) | the test levels, the interop vectors, the cross tests and the bench |
 | [Differential fuzzing](differential.md) | the four implementations reading changed bodies and record sets alike, in CI and nightly |
-| [Platform parity](parity.md) | what each computer, phone and lite device can do, the gaps and the plan to close them |
+| [Platform parity](parity.md) | what each computer, phone and small device can do, the gaps and the plan to close them |
 | [App specification](apps.md) | what the apps do and how they look |
 | [Roadmap](roadmap.md) | what comes next, the agreed plans not built yet, research |
 | [Contributing](../CONTRIBUTING.md) | conventions, building and testing every part |

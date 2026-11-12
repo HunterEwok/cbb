@@ -23,7 +23,7 @@ The cases below refer to these instead of repeating them.
 Every device starts a run in no group; the bench never touches a group it did not make.
 
 1. Linux, macOS: `sudo ./uninstall.sh --purge` (or the installer's copy), then install the
-   build under test with `install.sh` (or `get.sh`). Lite member: `get.sh --lite` after the
+   build under test with `install.sh` (or `get.sh`). Small device: `get.sh --no-helper` after the
    purge. Windows: `uninstall.ps1 -Purge`, a check that it left nothing (L10), then
    `install.ps1` from the build's zip; no VM snapshot is needed. Container: on its host
    `sh tools/bench/setup-docker.sh up CBB`, which removes
@@ -31,8 +31,7 @@ Every device starts a run in no group; the bench never touches a group it did no
    `linux` binary under test for the host's CPU, with `compose.home.yaml`.
 2. On the Linux member with a desktop, sign out and in again (or reboot), so the desktop
    agent starts with the `cbb` group.
-3. `cbb version` shows the build under test; `cbb status` says "Not in a group" (the lite
-   member: "in no group").
+3. `cbb version` shows the build under test; `cbb status` says "Not in a group".
 
 ### R2. Form the bench group (layout A)
 
@@ -40,11 +39,11 @@ What `smoke` and `full` do first.
 
 1. On every device: the clock is within 2 s of the controller's (`check`); the device is in
    no group (R1).
-2. For a lite member in another subnet: a systemd drop-in gives it `-peer HUB:8764` for the
+2. For a small device in another subnet: a systemd drop-in gives it `-peer HUB:8764` for the
    run (mDNS does not cross subnets) and restarts its service.
 3. On the hub: `cbb new`.
 4. For each other device: on the hub `cbb pair` (shows a six-digit code and waits); on the
-   device `cbb pair -code [HUB:PORT]` (the lite member: `sudo -u cbb cbb pair -code
+   device `cbb pair -code [HUB:PORT]` (the small device: `sudo -u cbb cbb pair -code
    HUB:PORT`), the code on standard input. The hub's `cbb pair` ends when the device joins.
 5. On every device, right after it made or joined the group: `cbb sync` says that sync is
    on (design.md, "Sync on and off").
@@ -54,7 +53,7 @@ What `smoke` and `full` do first.
 
 1. The hub revokes every other member (`cbb remove ID`), so nothing copied on them later (the
    Mac is also a real computer) reaches the group.
-2. The bench takes back what it changed for the run (the lite member's drop-in, network
+2. The bench takes back what it changed for the run (the small device's drop-in, network
    rules, `tc` settings), newest first.
 3. Each device is reset (R1) before the next run.
 
@@ -65,7 +64,7 @@ What `smoke` and `full` do first.
 | Linux member with a desktop | `xclip -selection clipboard -i` on the session's XWayland (GNOME), or `wl-copy` | `xclip -o` / `wl-paste -n` |
 | Mac | `pbcopy` as the signed-in user | `pbpaste` |
 | Windows | the scheduled task `cbbbench-copy` (from `setup-windows.ps1`) puts a file on the clipboard inside the signed-in session | `cbbbench-paste` writes the clipboard to a file |
-| Lite member, away computer | `cbb copy` | `cbb paste` (or `cbb watch -0`) |
+| Small device, away computer | `cbb copy` | `cbb paste` (or `cbb watch -0`) |
 | Container (`nas`) | `docker exec -i cbb cbb copy` on its host | `docker exec -i cbb cbb paste` |
 | Android emulator | the app's UI through UI Automator over `adb` | the app's UI |
 
@@ -98,7 +97,7 @@ case's rule.
 
 ## 1. Sync on the home network (section 6)
 
-All on N1 (one LAN), the group of R2 with the hub, the Windows VM, the lite member and, when a
+All on N1 (one LAN), the group of R2 with the hub, the Windows VM, the small device and, when a
 test needs it, the Mac. Each class runs from every member to every other one.
 
 **C1. Short ASCII.** Runs: auto (`full`).
@@ -172,7 +171,7 @@ third text.
 **L1. Pair each kind of device (layout A).** Runs: auto (`smoke`, `full`).
 1. R1 on every device, then R2.
 2. `cbb status` on the hub lists every device with its system (linux, windows, macos), role
-   (full, lite) and the hub as root.
+   (`member`, and the hub's marks) and the hub as root.
 Pass: every join succeeds within 2 minutes and the list is right. Fail: a join fails or a
 device shows the wrong system or role.
 
@@ -189,8 +188,8 @@ Fail: any of them joins, or the counter does not stop.
 2. Copy a marker on the hub.
 3. On the revoked device: `cbb status`; try to sync; try `cbb pair -code` with a fresh code from
    its old keys (no reset).
-Pass: the marker does not reach the revoked device; its status says it was removed; the lite
-member and every other member refuse its certificate; rejoining without a reset is refused.
+Pass: the marker does not reach the revoked device; its status says it was removed; the small device
+and every other member refuse its certificate; rejoining without a reset is refused.
 Fail: it still receives, or any member accepts it.
 
 **L4. Renewal.** Runs: planned (needs a short-lifetime test build or a disposable device whose
@@ -267,14 +266,14 @@ fetches nothing. Fail: an error, a crash, markup instead of text, or a file that
 Pass: the text arrives once; neither member sends it back; no ping-pong. Fail: the text is sent
 again or flips between two texts.
 
-**P4. The Mac as a full member.** Runs: manual (bring the Mac in for it only).
-1. Only the Mac and the lite member on (others off): copy each way.
+**P4. The Mac as a computer.** Runs: manual (bring the Mac in for it only).
+1. Only the Mac and the small device on (others off): copy each way.
 2. Mac and the Linux member on: `cbb status` on both shows one connection; turn the Mac's
    application firewall on and repeat.
 Pass: sync works both ways; one connection per pair (the lower device ID dials). Fail: no sync
 or two connections.
 
-**P5. The lite member's options.** Runs: manual (`-peer` is auto in R2).
+**P5. the small device's options.** Runs: manual (`-peer` is auto in R2).
 1. `cbb service -peer HUB:8764`: it connects without mDNS.
 2. `-no-mdns`: it no longer announces itself (`avahi-browse -r _cbb._tcp` shows
    nothing for it) and still dials its peers.
@@ -310,7 +309,7 @@ Pass: only the signed-in user who installed it gets the text; no other user's se
 **P10. A phone's group in the emulator.** Runs: manual (partly run; sync needs an address the
 emulator can dial).
 1. In the Android app create a group (root key).
-2. Join a computer and the lite member from its QR code (injected image or pasted QR text) and
+2. Join a computer and the small device from its QR code (injected image or pasted QR text) and
    PIN.
 3. Make the Mac an admin with "Make it an admin"; renew a certificate.
 Pass: each step succeeds within the emulator's limits (testbench.md section 3). Fail: a step
@@ -375,7 +374,7 @@ Pass: each as said.
 Pass: reconnects within 30 s; Game Mode and the lock screen are recorded as they behave.
 
 **P18. mDNS on the router.** Runs: manual (the router's avahi reflector is off by default).
-1. Reflector off: the lite member in the IoT subnet is reached by address (`-peer`).
+1. Reflector off: the small device in the IoT subnet is reached by address (`-peer`).
 2. Reflector on (`/etc/avahi/avahi-daemon.conf`, `enable-reflector=yes`): drop `-peer`; it is
    found by mDNS.
 3. Put the router back as it was.
@@ -488,7 +487,7 @@ off survives the restart and win lists it; with sync on both cross (R5).
 6. On `desktop` (the root) `cbb sync -on mac off`, then `cbb sync -on lite off`; `cbb sync`
    on each. On `win` before it is an admin `cbb sync -on desktop off`. With `mac`'s service
    stopped, `cbb sync -on mac on` on `desktop`.
-Pass (steps 5 and 6): the lite member keeps sync off in its `sync.json` and prints the
+Pass (steps 5 and 6): the small device keeps sync off in its `sync.json` and prints the
 group's text with sync off; the container and the Mac follow the same rules as `desktop`;
 the root's commands are taken and each target's `cbb sync` shows it; a member that is not an
 admin is refused with a clear message; a stopped target gives an error within 10 s and
@@ -546,7 +545,7 @@ set up), `lite`, `nas`, `remote` (away, connected through `desktop`).
 3. On `desktop` `cbb global move mac`.
 4. Copy each way between `remote` and `mac`, and `desktop`; `cbb global` on all three.
 5. Turn `remote`'s sync away from home off and on, and copy again.
-Pass: step 2 is refused with a clear message (a lite member and a container cannot be the
+Pass: step 2 is refused with a clear message (a small device and a container cannot be the
 hub); after step 3 `mac` serves with `desktop`'s forwarder, `desktop` is its client, and `remote`
 follows without coming home or a new invitation; copies arrive both ways (R5).
 
@@ -584,8 +583,8 @@ written in mode `own`, or a copy over the hub's limit through its tunnel.
 Pass: the service manager restarted it and it gets the marker.
 
 **F2. Reboot.** Runs: manual (a device with an encrypted disk needs a person at its boot prompt;
-the lite member's power is pulled by hand).
-1. Reboot the Linux member, the Windows VM, the Mac; power-cycle the lite member.
+the small device's power is pulled by hand).
+1. Reboot the Linux member, the Windows VM, the Mac; power-cycle the small device.
 2. When each is back, copy each way.
 Pass: each rejoins and syncs with no person's action beyond booting (Windows syncs in the
 service before sign-in).
@@ -704,7 +703,7 @@ Pass: no packet to any address but the hub and forwarder; nothing in clear.
 3. After 65 s read every clipboard.
 Pass: no hit; swap off; gone.
 
-**S11. Local access.** Runs: auto (`full`, Linux, the lite member and the Mac); Windows manual.
+**S11. Local access.** Runs: auto (`full`, Linux, the small device and the Mac); Windows manual.
 1. As a user outside the `cbb` group run `cbb status` and `cbb paste`, on Linux,
    macOS and Windows.
 Pass: refused with a message that names the group; the admin socket refuses non-admins too.

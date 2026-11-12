@@ -211,7 +211,7 @@ meets something only a newer release understands says so and asks you to update.
 made with 0.5 is set up again once on 0.6.
 
 `sudo cbb update` (on Windows `cbb update` in a terminal opened as administrator) installs
-the newest release on a computer or a lite member installed with `get.sh`, `get.ps1` or a
+the newest release on a computer or a small device installed with `get.sh`, `get.ps1` or a
 release archive; `cbb update -check` only says whether there is one. Your settings stay.
 It installs only a release the project signed, and never an older one. If the new version
 does not start within a minute, the previous one comes back by itself. How it checks the

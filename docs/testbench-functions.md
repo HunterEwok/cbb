@@ -19,8 +19,8 @@ line here with every new function, and a case for it in the catalogue.
 |---|---|---|
 | I.1 | `install.sh` on Linux | I1 |
 | I.2 | `install.sh` on macOS | I1 |
-| I.3 | `get.sh` (full member) | I1, I3 |
-| I.4 | `get.sh --lite` | I1 |
+| I.3 | `get.sh` (with the helper) | I1, I3 |
+| I.4 | `get.sh --no-helper` | I1 |
 | I.5 | `install.ps1` on Windows | I1 |
 | I.6 | `get.ps1` on Windows | I1, I3 |
 | I.7 | winget, then `cbb install` | I1, I11 |
@@ -58,7 +58,7 @@ line here with every new function, and a case for it in the catalogue.
 | I.39 | The install method recorded (Homebrew, winget, Docker, packages) | I11 |
 | I.40 | `cbb update -auto on/off`, the timers, the installers' question | I12 |
 | I.41 | Members passing the manifest and archives to each other | I12 |
-| I.42 | The lite member's own update | I13 |
+| I.42 | the small device's own update | I13 |
 | I.43 | The Nano's update over the air with rollback | I13 |
 | I.44 | Android's self-update of the sideloaded APK | I14 |
 | I.45 | Sparkle in the Mac app | I15 |
@@ -84,12 +84,12 @@ line here with every new function, and a case for it in the catalogue.
 |---|---|---|
 | G.1 | `cbb new` | G1 |
 | G.2 | Containers make no group; `CBB_KEYS_IN_FILE=yes` | G1, H6 |
-| G.3 | The lite member makes no group | G1 |
+| G.3 | the small device makes no group | G1 |
 | G.4 | A phone makes the group, root key in hardware | G2, A1, A2 |
 | G.5 | `cbb pair` on an admitter (the code, the wait) | G3 |
 | G.6 | `cbb pair -code` found by mDNS | G3, G4 |
 | G.7 | `cbb pair -code ADDRESS` | G4 |
-| G.8 | `cbb pair -code` on the lite member | G3 |
+| G.8 | `cbb pair -code` on the small device | G3 |
 | G.9 | Joining through an SSH forward or one's own VPN | G4 |
 | G.10 | The CGNAT range refused, or taken with `CBB_HOME_CGNAT` | G4 |
 | G.11 | The pairing window's 5 minutes | G5 |
@@ -107,7 +107,7 @@ line here with every new function, and a case for it in the catalogue.
 | G.23 | A device in a group keeps it | G9 |
 | G.24 | The Welcome (certificate, records, `issuer`) | G3, K14 |
 | G.25 | A computer joins a phone's group by QR code | G10 |
-| G.26 | The lite member joins by QR code (`cbb pair`, `-addr`) | G10 |
+| G.26 | the small device joins by QR code (`cbb pair`, `-addr`) | G10 |
 | G.27 | The Nano joins by the phone | G10, H11 |
 | G.28 | A QR code of another session refused | G10 |
 | G.29 | The joining computer listens for the phone | G17 |
@@ -264,7 +264,7 @@ line here with every new function, and a case for it in the catalogue.
 | M.8 | The phones' sync switch on a device's page | M5, A1 |
 | M.9 | New devices with sync on | M6 |
 | M.10 | The phones' automatic paths follow sync | M7 |
-| M.11 | The lite member's `cbb sync` | M1 |
+| M.11 | the small device's `cbb sync` | M1 |
 | M.12 | `cbb sync off [-for]` and `cbb sync on` on the device itself | M8 |
 | M.13 | An admin mutes a device for the group (`cbb mute -on`, the `mute` and `unmute` commands) | M9 |
 | M.14 | The group's copies setting (`cbb incoming`) | M10 |
@@ -325,7 +325,7 @@ line here with every new function, and a case for it in the catalogue.
 | T.10 | Windows: Ctrl+V and SendInput | T3 |
 | T.11 | The Mac app's target | T3, A4 |
 | T.12 | The Android accessibility target | T4 |
-| T.13 | The lite member's targets | T4 |
+| T.13 | the small device's targets | T4 |
 | T.14 | The Nano's USB keyboard | T4, T20 |
 | T.15 | Exact text, layouts, sizes | T5 |
 | T.16 | The clipboard put back after a paste | T5 |
@@ -359,7 +359,7 @@ line here with every new function, and a case for it in the catalogue.
 | Q.7 | cancel-shutdown | Q3 |
 | Q.8 | restart the service | Q3 |
 | Q.9 | Through the agent on macOS and Windows | Q3 |
-| Q.10 | The lite member's presets | Q3 |
+| Q.10 | the small device's presets | Q3 |
 | Q.11 | `-by` and `-any-key` | Q4 |
 | Q.12 | Own actions: `add`, `remove`, 15 s | Q5 |
 | Q.13 | `cbb action -on DEVICE NAME` | Q6 |
@@ -393,7 +393,7 @@ line here with every new function, and a case for it in the catalogue.
 | W.21 | `cbb global move` | W15 |
 | W.22 | The phone as the hub | W16 |
 | W.23 | "This is my home network" | W16 |
-| W.24 | The lite member as a client | W17 |
+| W.24 | the small device as a client | W17 |
 | W.25 | A client behind on obfuscation | W18 |
 | W.26 | Client isolation | W19, S3 |
 | W.27 | One port on the hub | W19, S4 |
@@ -445,7 +445,7 @@ line here with every new function, and a case for it in the catalogue.
 | U.16 | The watcher protocol | U11 |
 | U.17 | One agent per session | U11, H2 |
 | U.18 | The apps' "Show error details" | U12 |
-| U.19 | The lite member's global flags | U13 |
+| U.19 | the small device's global flags | U13 |
 | U.20 | `CBB_SOCKET`, `CBB_STATE` | U13 |
 | U.21 | `cbb service` and `cbb agent` by hand | U2, H2 |
 
@@ -460,7 +460,7 @@ line here with every new function, and a case for it in the catalogue.
 | H.5 | The Linux agent's life | H2 |
 | H.6 | tmux's copy mode and paste key | H3 |
 | H.7 | The text console | H4 |
-| H.8 | The lite member's options | H5 |
+| H.8 | the small device's options | H5 |
 | H.9 | The container | H6 |
 | H.10 | Windows sessions | H7 |
 | H.11 | Windows on ARM and x64 | H7 |

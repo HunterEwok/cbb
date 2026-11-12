@@ -11,7 +11,7 @@ home.
 |---|---|---|---|
 | **AmneziaWG** (on by default; `-no-obfuscate` with `-no-vless` turns it off) | UDP packets that look like nothing in particular | the hub or a forwarder | computers, phones |
 | **VLESS** (on by default at a forwarder; `-no-vless` turns it off) | an HTTPS connection to a website | a forwarder with VLESS on (the project's has it) | computers, phones |
-| Plain WireGuard (`-no-obfuscate -no-vless`) | WireGuard packets | the hub or a forwarder | computers, phones, lite member |
+| Plain WireGuard (`-no-obfuscate -no-vless`) | WireGuard packets | the hub or a forwarder | computers, phones, small devices |
 
 Whatever you choose, the clipboard stays inside the group's tunnel and the devices' own TLS,
 so nothing between your devices can read it. The disguise only changes how the packets look on the wire.
@@ -42,8 +42,7 @@ sudo cbb global hub -no-obfuscate -no-vless 203.0.113.7:8764
 ```
 
 Bring each laptop and phone home once after a change, or keep the app open at home, so it
-takes the new settings. The lite member speaks only plain WireGuard: in a group whose hub
-hides its tunnel it syncs at home only.
+takes the new settings.
 
 ## VLESS
 

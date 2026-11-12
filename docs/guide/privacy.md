@@ -55,7 +55,7 @@ Both are your choice:
 
 | Who | What they can see | How to avoid it |
 |---|---|---|
-| Others on your home network | that devices there run Copy Beyond Borders, their random device IDs and your group's tag in mDNS, and which of them talk and how much; never device names or contents | nothing to do; a computer publishes only on the home networks it knows (a lite member on every network) |
+| Others on your home network | that devices there run Copy Beyond Borders, their random device IDs and your group's tag in mDNS, and which of them talk and how much; never device names or contents | nothing to do; a computer publishes only on the home networks it knows |
 | Others on a network away from home (a café, a hotel) | that the device talks WireGuard, or with VLESS that it opens a TLS connection to your hub or forwarder, when and how much | a system VPN hides even that |
 | The forwarder (yours, or the project's at `cbb.tools`) | the addresses that encrypted packets come from and go to your hub, when, and how large they are; not which group or device they belong to | run your own, or forward a port to your hub and use none |
 | A blind relay | which devices of a group are online now and talk to each other, when and how much; it keeps none of it | run your own, or use a hub |

@@ -56,7 +56,7 @@ them is in the [protocol](../protocol.md).
 | What | Lifetime |
 |---|---|
 | The group's CA certificates | 20 years |
-| A member certificate (computers, lite members and phones) | 2 years, renewed 240 days before its end |
+| A member certificate (computers, small devices and phones) | 2 years, renewed 240 days before its end |
 | A period of the server credentials | 35 days; the root starts the next after 30, which on a phone asks for Face ID or the fingerprint about once a month |
 | A release's signed files (`keys.json`, `release.json`) | at most 100 days |
 | The signed status of the stable release (`stable.json`) | at most 8 days, so an old one cannot hold back an update |

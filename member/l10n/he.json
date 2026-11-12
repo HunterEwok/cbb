@@ -4,7 +4,7 @@
  "On a phone of the group, tap + in the CBB app, then Scan a code, and scan this:": "בטלפון של הקבוצה, הקישו + באפליקציית CBB, אחר כך ״סריקת קוד״, וסרקו את זה:",
  "Or paste this into the app: {}": "או הדביקו את זה באפליקציה: {}",
  "Waiting up to 5 minutes. Press Ctrl+C to cancel.": "ממתין עד 5 דקות. לחצו Ctrl+C לביטול.",
- "Without a phone: run cbb pair on a full member and cbb pair -code <its address> here.": "בלי טלפון: הריצו cbb pair בחבר מלא ו־cbb pair -code <הכתובת שלו> כאן.",
+ "Without a phone: run cbb pair on the group's root or an admin and cbb pair -code <its address> here.": "בלי טלפון: הריצו cbb pair בשורש הקבוצה או במנהל ו־cbb pair -code <הכתובת שלו> כאן.",
  "Joined the group {} as {}.": "הצטרפת לקבוצה {} בתור {}.",
  "is it running ({} status cbb)?": "האם הוא פועל ({} status cbb)?",
  "is it running (start it with cbb service)?": "האם הוא פועל (הפעילו אותו עם cbb service)?",

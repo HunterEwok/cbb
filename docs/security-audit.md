@@ -53,7 +53,7 @@ To keep the result honest, the audit observes these rules:
 | `controller` | the bench's controller on the home network | also the audit box (attacker's machine) |
 | `desktop` | a Linux member with a desktop, the hub | home network or the away network |
 | `win` | Windows member | in a VM |
-| `lite` | the lite member | a second subnet |
+| `lite` | `cbb` without its helper on a small device | a second subnet |
 | `mac` | macOS member | home network |
 | `cbb.tools` | the project's production forwarder | **touch only `cbb`/`cbb forward`; never change `ufw` or any other service** |
 | `remote` | a server away from home, also running other services | **touch only `cbb`; never change `ufw` or any other service** |
@@ -111,7 +111,7 @@ From the audit box, which is in no group, attempt to join or to be answered as a
 - dial a member's port and present no certificate, a self-signed certificate, and a
   certificate from a different (foreign) CA;
 - replay a connection captured earlier on the LAN;
-- run `cbb pair -code` (on a full and on a lite member) with a wrong code, an expired code, and a code
+- run `cbb pair -code` (on a computer and on a small device) with a wrong code, an expired code, and a code
   reused after it was already spent;
 - offer a forged hello and a record signed by a key that is not in the group.
 

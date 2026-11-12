@@ -2,7 +2,7 @@
 # Differential fuzzing
 
 For engineers and security reviewers: how CI checks that the four implementations (Go, the
-lite member's Rust core, the Swift kit and the Kotlin kit) read what comes from the network
+Rust core of `cbb`, the Swift kit and the Kotlin kit) read what comes from the network
 alike, and how a case they read differently becomes a test vector.
 
 The interop vectors ([testing](testing.md#interop-vectors)) fix the verdict on bodies chosen
@@ -27,7 +27,7 @@ the same record set of the same signed records in any order and subset.
   another order, some twice, one with its chain dropped or its signature or body changed.
 - Each implementation has a **verdict test** that reads a corpus and writes one line per
   case: Go's `TestVerdicts` in `internal/group` (and in `internal/release` for the release
-  files), the lite core's `command::verdicts`, the Kotlin kit's `VerdictTest` and the Swift
+  files), the Rust core's `command::verdicts`, the Kotlin kit's `VerdictTest` and the Swift
   kit's `VerdictTests`. Without a corpus each runs on a small one of its own, so the normal
   test runs keep it working.
 - `tools/difffuzz compare` reads the corpus and the verdicts and fails on any case the
@@ -42,7 +42,7 @@ A verdict is one line:
 - `refused` when the implementation refuses the body;
 - `skip` when it does not read bodies of that kind: the kits read records (version 2) and
   record sets only through the Rust core (docs/core-api.md), which the comparison reads as
-  the lite core's;
+  the Rust core's;
 - `taken` and, for records, commands and server credentials, every field the body gives, as
   ` name=value` in a fixed order (`tools/difffuzz/main.go` lists them): strings as the hex of
   their UTF-8 bytes, integers in decimal, booleans as 0 or 1, bytes in hex, lists joined by
@@ -57,13 +57,13 @@ kits), so a reader that fails in another way also shows as a difference.
 ## In CI
 
 - The `differential` job of `ci.yml` runs `.github/differential.sh` with seed 1, 20 000
-  changed bodies and 500 record sets on every pull request that changes Go, the lite member,
+  changed bodies and 500 record sets on every pull request that changes Go, `cbb`,
   the kits or the tools. The Swift kit runs in the Swift container, as the phone kit job runs
   it on Linux.
 - The `nightly` workflow runs it with a fresh seed (printed in the log) and 200 000 bodies,
   and the native fuzz targets for ten minutes each: Go's `FuzzRecordBody`, `FuzzCommand`
   (`internal/group`), `FuzzRelayWire` (`internal/relay`), `FuzzForwardWire`
-  (`internal/forward`) and `FuzzDecodeDIB` (`internal/pasteboard`), and the lite core's
+  (`internal/forward`) and `FuzzDecodeDIB` (`internal/pasteboard`), and the Rust core's
   `cargo fuzz` targets in `core/fuzz` (`record_body`, `command`, `credential`,
   `release`, `wire`, `vless`, and `api`, the core's entry point of [core-api.md](core-api.md)),
   seeded by `go run ./tools/difffuzz seeds`. `api` starts from requests for every operation,

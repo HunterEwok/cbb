@@ -98,7 +98,7 @@ of service, **E**levation of privilege.
   are sealed to reads every copy from then on, and whoever holds the root's or an admin's key
   can add such a device. Keep the group to devices you control, and the root's and admins'
   keys in hardware; a hub that only passes copies on reads none.
-- Keys in a file (Macs, Windows PCs and Linux computers without a TPM, the lite member) can be
+- Keys in a file (Macs, Windows PCs and Linux computers without a TPM, small devices) can be
   copied by whoever reads the disk; encrypt the disk and remove a lost device at once.
 - A blind relay and the project's forwarder see addresses and times of activity (threat 10).
 - On the ZX Spectrum Next, the first `.http -h cbb.tools -u /zxnext -f CBB` trusts the

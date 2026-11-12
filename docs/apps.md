@@ -118,8 +118,7 @@ they look, so both apps are built to the same plan.
    computer's), a row of icons (paste on it, mute, quick actions), the rest (type, MAC
    address, role, ID) under More, and "…" with rename, make it an admin or a hub, unfreeze
    and remove; Back returns to Home. The whole group, one tile per device: its name, an icon and the name of its
-   system (Linux, Windows, macOS, iOS, Android, or "device" for firmware; a lite member is
-   marked so), a "root", "admin" or "frozen" mark, a live dot when it is online and
+   system (Linux, Windows, macOS, iOS, Android, or "device" for firmware), a "root", "admin" or "frozen" mark, a live dot when it is online and
    "seen 5 min ago" otherwise, and "this phone" on its own row. The list is the group's
    device records (section 10 of [protocol.md](protocol.md)), so every app and
    `cbb status` show the same. On an admin phone, a row opens the device: rename,
@@ -144,13 +143,13 @@ they look, so both apps are built to the same plan.
    device's page says "The group's hub", and Settings, "Away from home", names the hub the
    phone is connected to through the tunnel. The Mac app and the tray app say the same on a
    device's page, from `hub` in the service's device list.
-   On an admin phone, the page of a computer or a lite member also offers "Paste on it…"
+   On an admin phone, the page of a computer or a small device also offers "Paste on it…"
    (docs/design.md, "Remote paste"): a text, typed or taken from the clipboard (on the iPhone
    through the system's Paste button, which asks nothing), pasted or typed key by key, with
    Enter after it and as a secret if asked. The phone signs a `paste` command after Face ID or
    the fingerprint, and a member connected to the computer passes it on when the phone is not.
    The computer answers once the text is in, or why it would not.
-   While a computer or a lite member is online, its page also offers "Quick actions"
+   While a computer or a small device is online, its page also offers "Quick actions"
    (docs/protocol.md, section 15): the actions its hello says are on, the presets by their
    names in words and the user's own by theirs. A tap runs one, after Face ID or the
    fingerprint; reboot and shut down ask again first. "Turn all off" signs `actions-off`,
@@ -470,8 +469,8 @@ keep syncing without it. It speaks the service's control socket (`Control`, the 
   device that may be a hub it is "Make it a hub"; on this Mac with sync away from home off,
   its question says that a hub needs it and turns it on in the same step (`cbb global hub
   -away-on`): the consent to sync away from home is given on this Mac. Elsewhere the line is
-  dimmed with the reason: a phone is a hub only from its own app's Settings, a lite member,
-  a watch and a computer without root never, a frozen device once the root unfreezes it, and
+  dimmed with the reason: a phone is a hub only from its own app's Settings, a member without
+  `hub` among its capabilities, a watch and a computer without root never, a frozen device once the root unfreezes it, and
   a computer that is no admin once the root makes it one.
 - **Remote paste**: only an app may press keys on a Mac, once its user allowed it in
   Accessibility, so the app is the Mac's paste target (`PasteTarget`), not the service or its

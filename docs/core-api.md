@@ -65,7 +65,7 @@ moves the bytes.
 ### The member
 
 Built with the feature `member` too (every library `bind.sh` builds: the iPhone, Android and
-Aurora apps run it), the library runs the lite member's own node in the app's process once the phone
+Aurora apps run it), the library runs `cbb`'s own node in the app's process once the phone
 is in a group (`ffi/src/member.rs`, over `cbb_lite::phone`): `cbb_member_start` takes the
 app's data directory, the phone's name, system and versions, its identity (device,
 certificate, issuer, group CA, roots), its public key, its secret for sealed messages and the
@@ -137,7 +137,7 @@ after the header, and an operation that answers more than once marks the last an
 | `records` | phone | none | `{"records"}` |
 | `alerts` | phone | none | `{"alerts"}`: what the group's records stop and what ends it, for the alerts card (`cbb_core::manage::alerts`, as the kits' `GroupAlert`), `[{kind, names, devices, records, left_ms, count}]`, kind `stopped`, `secrets_stopped`, `two_histories`, `admins`, `claims`, `claim_pending`, `claim_stopped` or `newer`; the root ends one with `cbb_member_manage`'s `resolve` of its records, or by removing one of its devices |
 | `why` | phone | `away` (optional: where a tunnel the app runs itself stands, `{hub, standby, hub_device, through, hidden, relay, relay_connected, forwarder, forwarder_registered, entries_stale, error}`; without it the member's own) | `{"why"}`: why the phone does not sync (`cbb_core::why`, docs/apps.md "Why it does not sync"), `[{code, level, until_ms?, device?, devices?, value?, detail?}]`, the reason that stops the most first; empty when everything syncs |
-| `away`, `away_status` | phone | `on` for `away` | `{"away"}`: sync away from home turned on (new tunnel keys, which the hellos offer the group's hubs) or off (the keys and the hubs' offers forgotten), and where it stands, as `cbb global` shows it on the lite member (`hub_device`, `endpoints`, `through`, `error`, `detail`), or null while it is off; only in a library built with the feature `tunnel`, otherwise `away` with `on` answers an error |
+| `away`, `away_status` | phone | `on` for `away` | `{"away"}`: sync away from home turned on (new tunnel keys, which the hellos offer the group's hubs) or off (the keys and the hubs' offers forgotten), and where it stands, as `cbb global` shows it (`hub_device`, `endpoints`, `through`, `error`, `detail`), or null while it is off; only in a library built with the feature `tunnel`, otherwise `away` with `on` answers an error |
 | `joined_by_invite` | phone | `invite`: the invitation's text the phone joined by | `{"away"}`: sync away from home turned on as `away` does, and the member offers its tunnel key to the hub through the invitation's guest tunnel until the hub answers, after a restart too, for up to a day (the Aurora app; the iPhone and Android apps do it with their own tunnels and the tunnel's `guest_start`); only with the feature `tunnel` |
 | `add_records` | phone | `records`: those the app's root or admin key signed | `{}`: kept and sent to every peer |
 | `command` | phone | `command` (a record envelope), `timeout_ms` (10 s by default) | `{"result"}`: sent to its receiver, or to the group's hubs connected, which pass it on (protocol.md, section 15) |
@@ -193,14 +193,14 @@ after the header, and an operation that answers more than once marks the last an
 A phone's node passes on a command for another device when it is connected to it, as
 protocol.md section 15 says: once until it expires, never one that has expired or claims to live
 longer than a command may. For itself it carries out the `mute` and `unmute` commands an
-admin sends, keeps both in `mute.json` as the lite member does, and tells the app (the `mute`
-event); every other command for the phone goes to the app as a `command` event, as the lite
-member refuses it. A phone takes tunnel offers and hub shares only from a device the records
+admin sends, keeps both in `mute.json` as `cbb` does, and tells the app (the `mute`
+event); every other command for the phone goes to the app as a `command` event, as `cbb`
+refuses it. A phone takes tunnel offers and hub shares only from a device the records
 let be a hub, by the chain it proved. It keeps the sealed blobsof the copies with images or files it made or fetched in `content/` of its data directory,
 the last eight, and serves them (its hello says `media`). `TestFFIJoiner` runs the join, sync
 both ways, a pause, an admin's mute and a renewal against a Go member through the example `phone-on-linux`,
 `TestFFIPhoneAway` sync away from home through a Go hub's tunnel, the phone's node running the
-lite member's (`member/src/away.rs`: it keeps the hubs' offers and, while no hub is at home,
+`cbb`'s (`member/src/away.rs`: it keeps the hubs' offers and, while no hub is at home,
 dials the first that answers through its tunnel's loopback port),
 `TestFFIJoinerAdmin` the join as an admin, then that admin phone admitting a Go computer that
 listens, `TestFFIPhoneRoot` a phone that makes its own group and admits a Go computer as its
@@ -444,7 +444,7 @@ cases both give the same answer.
 ## The record set
 
 The calls whose names start with `group_` work on the set of records a member keeps, which the
-phones store as the records file the lite member writes (`cbb_core::group::Records`):
+phones store as the records file `cbb` writes (`cbb_core::group::Records`):
 `{"v": 2, "records": [{body, sig, chain}], "first_seen": [{record, ms}]}`. The caller keeps the
 file and passes it in each call, base64; a call that changes the set answers the new file,
 which the caller saves in place of the old one. So the phones hold no rule of the group in

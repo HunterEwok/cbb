@@ -8,8 +8,9 @@ repository stays under the GNU AGPL v3.0 only ([LICENSE](../LICENSE)).
 
 This document specifies protocol version 1 of Copy Beyond Borders as the code in this
 repository implements it, so that another implementation can interoperate with it. Four
-implementations follow it today: Go (`cbb`, the computers and the servers), Rust (the lite
-member, `core/`, whose member the phones' apps run too, through `ffi/`), Swift
+implementations follow it today: Go (`cbb-helper`, the forwarder, and the references the tests check against), Rust
+(`cbb` on the computers and small devices, `core/`, whose member the phones' apps run too,
+through `ffi/`), Swift
 (`CBBKit`) and Kotlin (`apps/android/kit`), with shared test vectors in `testdata/interop`.
 The phones' kits keep pairing, restoring, the records they sign and the credentials; the
 member protocol of section 4 runs in the Rust core's member on every phone (docs/core-api.md,
@@ -134,7 +135,7 @@ these words depends on it.
   in section 15); then the group, the signature and the rules of evaluation. A body that
   fails a step is refused there, so a member never verifies a signature over a body it
   cannot read alike, and never evaluates a record whose fields another member reads
-  otherwise. Go's `checkStrict`, the lite member's `strict`, and `Strict` in both phone kits
+  otherwise. Go's `checkStrict`, `cbb`'s `strict`, and `Strict` in both phone kits
   implement these rules. Every one of them gives the same verdict on the vectors in
   `testdata/interop/strict.json`, written by hand, and in
   `testdata/interop/strict-generated-*.json`, which Go's `TestStrictGenerated` writes from
@@ -253,8 +254,8 @@ hub"), and a device that listens to join (section 6, "The joiner listens"), whic
 its new device ID as the instance, its listening port in the SRV record and `v=1`, `j=1`,
 `f=<fingerprint>` while it waits.
 [RFC 6762](https://www.rfc-editor.org/rfc/rfc6762) and
-[RFC 6763](https://www.rfc-editor.org/rfc/rfc6763) apply where this section is silent. Source: `internal/mdns`; a lite
-member publishes and browses with the `mdns-sd` crate (`member/src/discovery.rs`), which
+[RFC 6763](https://www.rfc-editor.org/rfc/rfc6763) apply where this section is silent. Source: `internal/mdns` (Go, for the tests); `cbb`
+publishes and browses with the `mdns-sd` crate (`member/src/discovery.rs`), which
 follows the same RFCs but not every detail below: it publishes the PTR, SRV, TXT and A/AAAA
 records of the table (the TXT with `r=listen` when it does not dial), with the addresses of its interfaces except
 loopback. The phones browse with the system's DNS-SD (iOS: `BonjourBrowser`, Android: NSD),
@@ -265,8 +266,7 @@ starts with its own mDNS off; a phone that is the hub publishes its home port th
 A member SHOULD publish, answer queries and take connections on the member port only on
 an interface whose network it knows (design.md, "Known networks"); elsewhere it only
 browses, and connections to its member port there are closed at once, except while a pairing
-window is open. Publishing on every network is a local setting of the device, not a role:
-the lite member (the Rust program) publishes on every interface.
+window is open. Publishing on every network is a local setting of the device, not a role.
 
 ### Records a member publishes
 
@@ -376,7 +376,7 @@ phones' `member/src/node.rs` and `member/src/phone.rs`.
   dial it; the members do not, since it dials them.
 - Members on another network than the home one (another subnet, where mDNS does not reach)
   reach the hub through the group's WireGuard tunnel (section 11; design.md, "Sync away from
-  home"); so do the phone apps and the lite member on Linux, as clients. A lite member can
+  home"); so do the phone apps, as clients. A member can
   be given a member's address with `-peer`; it MUST NOT dial an address outside the home network
   (private IPv4, unique-local and link-local IPv6, loopback), so away from home it reaches
   the group only through the tunnel.
@@ -399,7 +399,7 @@ phones' `member/src/node.rs` and `member/src/phone.rs`.
   when an admin issued it (section 10).
 - Every implementation MUST support the key exchange group `x25519`, the cipher suite
   `TLS_AES_128_GCM_SHA256` and the signature scheme `ecdsa_secp256r1_sha256`, since the
-  certificates' keys are P-256; it MAY offer more. The lite member offers only these, with
+  certificates' keys are P-256; it MAY offer more. `cbb` offers only these, with
   `TLS_CHACHA20_POLY1305_SHA256` beside the suite. The same holds for every TLS connection of
   this document (sections 6, 13 and 14).
 - Server: MUST require and verify a client certificate from the group's CAs; session tickets
@@ -412,9 +412,8 @@ phones' `member/src/node.rs` and `member/src/phone.rs`.
   connection to one's own device ID is closed.
 - The handshake must finish within 10 s, counted from its start rather than from each read;
   an implementation SHOULD close one that does not.
-- A lite member listens on the member port for the member protocol only: TLS with ALPN
-  `cbb/3`, from home network addresses, at most 16 handshakes at once. It has
-  no pairing window.
+- Outside a pairing window, a member takes on its member port the member protocol only: TLS
+  with ALPN `cbb/3`, from home network addresses, at most 16 handshakes at once.
 - The member port takes TLS only. A ClientHello that offers `cbb-pair/2` gets the pairing
   configuration (section 6), whether or not a window is open; any other the member
   configuration, and a connection that does not negotiate `cbb/3` is closed.
@@ -728,7 +727,7 @@ range of int64, and the members of every object in bytewise order of their names
 MUST refuse a manifest that breaks any of these rules (the vectors of
 `strict-generated-*.json` cite them as `manifests/size`, `manifests/parts` and the `form/`
 rules), and MUST NOT follow or create links when it writes a copy of files. The Go code is
-`internal/clip/media.go`, and the Rust core's `media.rs` reads it for the lite member and the
+`internal/clip/media.go`, and the Rust core's `media.rs` reads it for `cbb` and the
 phones.
 
 Inside the Content the manifest is JSON such as
@@ -813,7 +812,7 @@ member that a connected member reaches as online through it. Each message replac
 last from that connection, and the connection's end drops it. The list is shown, never
 trusted: a member may leave a device out or name one it does not reach, as it could drop
 the commands it should pass on. A receiver ignores an ID that is not valid or that no
-device record of the group names. The lite member and the phones send none for now, and
+device record of the group names. `cbb` and the phones send none for now, and
 a member that does not know the message ignores it.
 
 ### Presence
@@ -832,7 +831,7 @@ key counts as a hello with it would: a hub answers with its offer, or forgets th
 (section 11). A member that has just become a hub also answers each peer connected to it as
 it would answer that peer's hello. A presence that does not decode is dropped; the
 connection stays. A member that does not know the message ignores it, and shows the change
-at the next connection. Every member sends it: computers, the lite member and the phones.
+at the next connection. Every member sends it: computers, small devices and the phones.
 
 ## 5. Sync semantics
 
@@ -852,7 +851,7 @@ MUST be refused in an event.
 An event whose `wall` is more than 7 days (MaxAhead) ahead of the receiver's wall clock MUST
 be refused, whatever `last.wall` is, so a chain of events, each within MaxAhead of the one
 before, cannot carry the clocks further ahead: as a message it changes nothing (Go and
-the lite member answer it with an error), and as a hello's current event it is taken as no
+`cbb` answer it with an error), and as a hello's current event it is taken as no
 current event while the connection stays. Otherwise one device with a wrong date, or a removed
 member, could hold every clock of the group at MaxWall for good. A device whose reference is
 before 2026-01-01 (1767225600000), such as a board without a real-time clock that has not set
@@ -872,7 +871,7 @@ its time yet, refuses nothing.
   a wall clock that reads 2026 or later is dropped at the restart, and the clock starts
   from the wall clock: the device's clock was ahead and has been set right, every member
   with a right clock refused those timestamps, and keeping the mark would leave its copies
-  refused until real time caught up (Go and the lite member).
+  refused until real time caught up (Go and `cbb`).
 
 ### Ordering and the current event (wire)
 
@@ -1213,10 +1212,7 @@ connect. `CBB_ADMIN_SOCKET` overrides its path for clients. The control socket t
 `copy`, `paste`, `copy_media`, `copied_media`, `paste_media`, `config`, `status`, `devices`, `muted`, `sync` without `device`, `release`, `release_get`, `release_held`, `entries`, `entries_get`, `keys` (from root only) and `watch` (with
 the watcher's `copied`, `clipboard`, `injected` and `acted`) and refuses every other operation with an error; the admin socket takes them
 all, and MUST be the only way to them. So a program of a user in the group can use the clipboard but cannot admit, remove,
-rename, freeze or make admin a device, take over, or change sync away from home. `cbb` dials the socket each operation needs. The lite member does the same
-with its own two sockets, but its control socket takes fewer: no `copy_media`, `copied_media`,
-`paste_media`, `config`, `release`, `release_get`, `entries`, `entries_get` or `keys`, and of the watcher's reports no
-`acted`.
+rename, freeze or make admin a device, take over, or change sync away from home. `cbb` dials the socket each operation needs.
 
 ### Framing
 
@@ -1282,7 +1278,7 @@ A desktop connector or the Mac's pasteboard agent keeps a `watch` connection ope
 - Service to watcher, for remote paste, only to a watcher whose watch request named an
   `inject` target: `inject` (payload, `seq`, `method`, `enter`, `kind`, `name`, the
   sender's device name, and for a `desktop` watcher `keys`, the grant for the uinput
-  helper; the lite member gives no grant, so a desktop connector that types through the
+  helper; `cbb` without its helper gives no grant, so a desktop connector that types through the
   uinput helper refuses its pastes). The watcher checks
   that its session is active and not locked, puts the text in, presses Enter when `enter`
   is set, clears the clipboard after a `secret`, shows a notification with the sender, and
@@ -1316,7 +1312,7 @@ A desktop connector or the Mac's pasteboard agent keeps a `watch` connection ope
   manager or a greeter). A watcher whose user the system does not name gets
   none. Where the system does not tell who is at the screen (Linux or FreeBSD without
   logind), a paste goes to any target, but a `secret` to none, and the member refuses it
-  with a reason that says so. The lite member checks its `tmux`, `console` and `desktop`
+  with a reason that says so. `cbb` checks its `tmux`, `console` and `desktop`
   watchers the same way.
 - A watcher MUST check right before it injects keys that its session is active and not
   locked, and refuse otherwise; a watcher MUST NOT run an action's `command` through a
@@ -1366,8 +1362,8 @@ The wire side of "Admin phones, the devices list and revocation" in
 [design.md](design.md). The group's authority records are of version 2: one rule evaluates
 a set of them into the group's state ("The state"), and it is written twice, in Go
 (`internal/authority`, with the record set in `internal/group/records.go`) for the
-computers, and in Rust (`cbb_core::authority` and `cbb_core::group`, `core/`) for the
-lite member and, through the core's entry point ([core-api.md](core-api.md)), for both
+computers, and in Rust (`cbb_core::authority` and `cbb_core::group`, `core/`) for
+`cbb` and, through the core's entry point ([core-api.md](core-api.md)), for both
 phone apps, which sign records in their kits (`Records.swift`, `Records.kt`, with the
 Secure Enclave or the Keystore) but evaluate none themselves. Go's release builds evaluate
 through the core as well. The vectors (`testdata/interop/v2-records.json`) and the
@@ -1376,7 +1372,7 @@ they are tested is in [records-v2.md](records-v2.md).
 
 There is no migration from version 1: a member that holds records of version 1, or a group
 made before them, refuses them, and the group is set up again.
-A computer or a lite member that finds a group of version 1 at start (its `records.json` is a
+A computer or a small device that finds a group of version 1 at start (its `records.json` is a
 JSON array, or, on a computer, its group CA has path length 0, section 2) leaves it: it moves the group's files into `before-0.6` in its state directory,
 keeps its settings, and says so in its log and, on a computer, in `cbb status`; CI's upgrade
 job checks it from 0.5.0.
@@ -2061,8 +2057,8 @@ beyond) and check the same bytes.
   hubs). It closes the connection once the records let the peer in, and the side that
   dialed connects again at once as a member, or when no records came for 5 seconds. Every
   member keeps such a connection while the state stops the exchange with the peer, so that
-  the root's decision reaches it; for the other cases only the Go members keep it, and the
-  lite member and the phones refuse the peer and take the records from the others.
+  the root's decision reaches it; in the other cases `cbb` and the phones refuse the peer
+  and take the records from the others.
 - After adding records that refuse a certificate a member first queues the new records for
   its peers, then closes every connection whose peer certificate is now refused
   ("Certificates"), after what is queued for it and a `bye`, and the TLS check refuses it from
@@ -2094,7 +2090,7 @@ members ("Through the tunnel" below). The phone kits speak the hello's `tunnel_k
 `tunnel` message (through the phones' member in the Rust core: `tunnel_key`, the `tunnel`
 event, `send_tunnel`) and run the tunnel itself in
 the Rust core (`ffi/src/tunnel.rs`), and both apps turn it on in their settings; the kits keep the obfuscation settings with
-the offer and hand them to the tunnel. The lite member on Linux takes part as a client, with
+the offer and hand them to the tunnel. `cbb` on Linux takes part as a client, with
 plain WireGuard only: GotaTun's WireGuard and smoltcp's TCP in its process
 (`member/src/tunnel.rs`, `member/src/away.rs`), with AmneziaWG (`member/src/awg.rs`) and VLESS over
 XHTTP (`member/src/vless.rs`).
@@ -2104,7 +2100,7 @@ XHTTP (`member/src/vless.rs`).
   by writing `tunnel.json` next to the identity
   (mode 0600), which holds the device's own Curve25519 key pair, made on the device, and the
   rest of this section's state; on a Linux computer with a TPM the private key is sealed by
-  it (`key_tpm` in place of `key`, section 17). The lite member keeps its own `tunnel.json` there: `v` (1),
+  it (`key_tpm` in place of `key`, section 17). `cbb` keeps its own `tunnel.json` there: `v` (1),
   `group` (the group tag), `key` (its private key, base64), `psk` (the preshared key it chose)
   and `hubs`, each hub's offer (`device`, `key`, `psk`, `endpoints`, `next`). A device whose tunnel key sits in a file (every
   one but a Linux computer with a TPM) MUST ask for the user's consent before it turns sync
@@ -2146,7 +2142,7 @@ XHTTP (`member/src/vless.rs`).
   the one its `hub` names when the records make that device one that may be a hub and it is
   not the member itself, which it ignores. A new offer for a hub replaces that hub's earlier one;
   `moved` also makes the member forget the sender's own. An offer that does not decode is
-  ignored and changes nothing. Go, both kits and the lite member all apply these rules.
+  ignored and changes nothing. Go, both kits and `cbb` all apply these rules.
   `cbb global hub` refuses on a device that may not be a hub. A phone that is the hub ignores
   offers. The tunnel addresses follow from the device IDs (fd00:cbb::/32 followed by the
   first 96 bits of the ID), so the offer does not carry them.
@@ -2199,7 +2195,7 @@ in an order every member derives from the records alone: the computers that are 
 admins first (a computer stays on, so every client keeps one place), then the phones (a phone
 is a hub only while its app is open), then the devices with `forward_only`; within each, the
 root first, then by device ID (D-96). The vectors in `testdata/interop/v2-hubs.json` (Go's `TestGoHubVectors`) give an
-order that Go (`Records.HubOrder`), both kits (`RecordSet.hubOrder`) and the lite member
+order that Go (`Records.HubOrder`), both kits (`RecordSet.hubOrder`) and `cbb`
 (`hub_order`) must all derive. The root, or an admin with `hub`, may sign a table of main
 hubs in the user's order (a `hubs` record, section 10, "The hubs table"; `cbb global hubs`):
 its hubs come first, in its order, then the others in the derived order (D-65 in
@@ -2298,7 +2294,7 @@ stops one of two hubs, then the only one.
    Becoming a hub again clears `retired`.
 
 The receiver of the command answers `done` first and then stops, after the result has gone
-back. The sender forgets the stopped hub's offer at once. A phone or a lite member that was
+back. The sender forgets the stopped hub's offer at once. A phone or a small device that was
 away and not connected keeps the old hub's offer until a hub passes it a newer one; it tries
 the hubs in order, so the stopped one costs it a try.
 
@@ -2322,7 +2318,7 @@ the hub's key. Implemented in Go (`tunnel.State.Rotate`, `internal/service/tunne
 - A client tries a hub with its key and, when the offer has one, with `next`, so a client
   that was away while the hub moved on still reaches it; the offer it gets then replaces the
   one it kept. Go tries both keys at once (`tryHub`, `internal/service/hubs.go`), so the key
-  the hub no longer serves with, which gets no answer, costs no time; the lite member
+  the hub no longer serves with, which gets no answer, costs no time; `cbb`
   (`member/src/tunnel.rs`, `hubs_to_try`) and the phone kits (`TunnelOffer.withNextKey`) try
   them in turn, the old key first. A client that was away for the whole three days and
   never got `next` reaches the hub again at home.
@@ -2423,9 +2419,9 @@ carries:
   the dialers through the hub follow the same rule.
 - A member MUST fail closed: when the hub or the link cannot start, or the hub does not answer, the
   member syncs at home only, and `status` says why (`error`, with `detail` for debugging).
-- The lite member starts its end only while it dials the hub through it, so at home it sends
-  nothing to the hub's addresses away from home. It accepts an offer only from a full
-  member, starts the handshake at once, tries the next endpoint after 10 s without an answer,
+- `cbb` starts its end only while it dials the hub through it, so at home it sends
+  nothing to the hub's addresses away from home. It accepts an offer only from a
+  member that may be a hub, starts the handshake at once, tries the next endpoint after 10 s without an answer,
   and runs TCP inside the tunnel with an MTU of 1280, so no packet is fragmented on the way.
 
 ## 12. Remote invitations
@@ -2433,7 +2429,7 @@ carries:
 A device that shares no network with the group joins through the hub's tunnel with a remote
 invitation ([design.md](design.md), "Joining from another network"). Implemented in the Rust
 `cbb` (`member/src/inviter.rs`, `member/src/away/invite.rs`, `cbb invite`, `cbb pair -invite`)
-on the computers and the lite member, in the phones' member through ffi (`cbb_invite_*`,
+on the computers and small devices, in the phones' member through ffi (`cbb_invite_*`,
 `cbb_join_*` with `invite`, the tunnel's `guest_start`), and on a phone that is the group's hub
 (the Rust tunnel's `hub_invite`, the kits' `InvitationWindow`). The text is read by the Rust
 core (`cbb_core::invite`) and Go's `internal/invite`.
@@ -2482,7 +2478,7 @@ Rust core's `cbb_core::invite`, both checked on `testdata/interop/invites.json`)
 - `x`, when present, has exactly its five fields, each a string: `transport` is `xhttp`,
   `endpoint` an address as in `ep`, `server_name` a host name, `path` an absolute path and
   `id` a UUID in lowercase, as the offer's VLESS settings. A hub whose offer has none, or
-  REALITY, which the phones and the lite member do not speak, writes none. A device that
+  REALITY, which the phones and `cbb` do not speak, writes none. A device that
   cannot reach the hub over UDP dials the guest tunnel through it.
 
 A text refused names one reason, the same in every implementation:
@@ -2536,7 +2532,7 @@ and joins only once the user accepts; declining sends nothing.
    answers with its offer.
 4. With the offer, the device closes the guest tunnel and from then on reaches the hub
    through the tunnel with its own key, as any member. Until it has the offer, it keeps the
-   invitation (the lite member and the Rust `cbb` in `invite-guest`, mode 0600, the phones in
+   invitation (`cbb` in `invite-guest`, mode 0600, the phones in
    their key store) and tries again through the guest tunnel, after a restart too, for up to
    24 hours.
 
@@ -3135,7 +3131,7 @@ turns each control character (C0, DEL, C1) into a space and cuts it to 256 bytes
 character boundary. A `hub` command's `done` carries `tunnel`, the new hub's offer. A member without
 commands ignores the message, so the sender gives up after 10 s (20 s for `hub`).
 
-Each computer and lite member keeps a secret for sealed messages in `seal.json` next to its
+Each computer and small device keeps a secret for sealed messages in `seal.json` next to its
 identity (sealed by the TPM where a computer has one, as the WireGuard key) and offers its public key in its hello
 (`seal`, section 4) and in its pairing info (ADa, section 5); a root computer records it in
 the device's record, as it records a changed system, a member that admits it records it at
@@ -3152,7 +3148,7 @@ connected to that device and has not passed that `id` before (it keeps the IDs u
 command expires, at most 4096), and passes the receiver's `result` back to the member it
 came from, once; a member not connected to `to` drops it. The receiver names itself in the
 result's `by`, so that a sender takes a result from a member in between only when `by` is
-the receiver: the lite member refuses a command for another device
+the receiver: `cbb` refuses a command for another device
 for itself instead of passing it on. The signature, not the
 connection, says who sent a command, so the member in between can neither forge nor change
 it; it could withhold a command or forge a `result`, as any member could drop messages.
@@ -3174,7 +3170,7 @@ The receiver MUST take a command only when:
 A body is at most 64 KiB, a `paste` command's 2 MiB (the sender writes the text without
 JSON's escapes of `<`, `>` and `&`). A `mode` command with an unknown mode is refused. One that is taken sets the mode, saves it
 and logs who sent it. Every member takes `mode` commands; only a computer takes `hub`, and the
-phones and the lite member refuse it.
+phones and `cbb` refuse it.
 
 A `paste` command MUST be refused unless the receiver's user turned remote paste on there,
 and, with `enter`, allowed Enter; and beyond one a second and 30 a minute from one sender
@@ -3247,7 +3243,7 @@ mode stays as its user set it. It saves the mute, so that it lasts across restar
 (section 4, "Presence") without the connection ending. An `unmute` command ends it the same way; the device's own
 user ends it only where the device is itself an admin or the root (section 8, `unmute`), and
 a mute that ends by its time ends without a message. Every member takes both: computers,
-lite members and the phones. A device that does not take the command (an older one, or one
+small devices and the phones. A device that does not take the command (an older one, or one
 that is broken) is removed instead; each device's user may also pause receiving there
 (section 8, `mute`).
 
@@ -3276,7 +3272,7 @@ orders open only under the header they were sealed with, so no other signer can 
 again under an `id` or a time of its own. The limits of a body (64 KiB, 2 MiB for `paste`)
 hold for the body as sent and for the orders once opened. The members in between pass a
 sealed command on as any other. Every sender seals to a receiver whose record has a `seal`
-key: computers, lite members and both phone apps (the kits through the core's
+key: computers, small devices and both phone apps (the kits through the core's
 `seal_command`), and every one of them has a key of its own, which it opens the commands for
 it with (the phones through the core's `group_command`). So a receiver whose own record has one refuses a `paste` command in the
 open, whose text was read on its way; it takes the other types in the open, as a watch signs
@@ -3328,7 +3324,7 @@ be left out, and `use` is never empty. Every key is a P-256 SubjectPublicKeyInfo
 uncompressed point, and every name, version, channel, serial number and hash matches its rule
 whole (a line break after it is refused). `get.sh` and `get.ps1` refuse a body they cannot
 read as the programs do: a member name that is not 1 to 64 of `a`-`z`, `0`-`9` and `_`, a
-`null`, a backslash, or a field they read written twice. `seq` is from 1 to 2^63-1. The lite member reads no `attest-status.json`; the
+`null`, a backslash, or a field they read written twice. `seq` is from 1 to 2^63-1. `cbb` reads no `attest-status.json`; the
 vectors in `testdata/interop/strict-files.json` (section `releases`) test each row.
 
 | `type` | Signed by | Fields |
@@ -3491,8 +3487,7 @@ the project, where it is reached now (section 14, "The project's relay").
   above, keeps it and sends it on to its other peers; it drops one that fails, and logs why.
   A phone takes it the same way and keeps it in its own files, but passes none on: its hello
   carries the seqs it holds, so that a computer does not send the same list again, and its
-  hub registers through the ways it names (section 13). The lite member, which is no hub,
-  takes it, keeps it and passes it on as a computer does. A member that does not know
+  hub registers through the ways it names (section 13). A member that does not know
   `entries` ignores it.
 - A hub of the project's forwarder that does not register, and holds no list that has not
   expired, says so where it shows the forwarder (`cbb global`, the apps; control status
@@ -3514,7 +3509,7 @@ far.
   NOT trust it for anything but what the root records, below: the phones send
   `hardware`, a Linux computer whose member key is in its TPM and a Mac whose member key is in
   its Secure Enclave `hardware`, a rootless
-  install (below) `rootless`, the other computers and the lite member `file`. A device that
+  install (below) `rootless`, the other computers and small devices `file`. A device that
   cannot tell sends `file`.
 - **Rootless installs** (D-79). A member installed and run without root, as its
   user's own service, keeps its keys in a file that every program of that user may read. Its
@@ -3524,7 +3519,7 @@ far.
   that only passes copies on, section 11, "Two kinds of hub"), whatever the key level and the user's consent; it makes no group, offers no admin key and takes no
   admin CA itself. A reader that does not know the value takes it as `file` (below), so an
   older member keeps it from being an admin unless its user allowed keys in files.
-- **Keys in a TPM.** A full member on Linux makes its member key and its admin key in the
+- **Keys in a TPM.** A computer on Linux makes its member key and its admin key in the
   TPM 2.0 at `/dev/tpmrm0` when it may open it (the installer lets the service do so):
   an ECC P-256 signing key under the TPM's ECC storage root key (the TCG template, made
   again each time the service starts), fixed to that TPM and its parent, used without a
@@ -3532,7 +3527,7 @@ far.
   in `key_tpm` and `admin_key_tpm` instead of `key` and `admin_key`; the blob loads only in
   that TPM. `CBB_TPM=off` makes new keys in a file; a key already in a file stays there
   until the device joins again. The CA keys of a root computer stay in the file.
-- **Keys in the Secure Enclave.** A full member on a Mac with a Secure Enclave (Apple
+- **Keys in the Secure Enclave.** A computer on a Mac with a Secure Enclave (Apple
   silicon, or an Intel Mac with the T2 chip) makes its member key, its admin key and its
   server keys (section 18) there: a P-256 signing key that no keychain keeps, usable after
   the Mac's first unlock since it started and without the user's presence, so the service,
@@ -3696,7 +3691,7 @@ from one month to the next ([design.md](design.md), D-67 and D-75). Implemented 
 `internal/service/credentials.go`), and in Rust for the relay (`member/src/relayd`). The vectors in `testdata/interop/v2-credentials.json`
 (Go's `TestGoCredentialVectors`) give a group's records, the lists its credentials must hold,
 a period with its server credentials, its hubs' and members' credentials, and sets a server
-refuses. The lite member's core reads and checks them as Go does (`core/src/credential.rs`:
+refuses. `cbb`'s core reads and checks them as Go does (`core/src/credential.rs`:
 the lists, the signatures and types, and a server's check), and passes the vectors; it
 registers with no server, so it signs none and keeps none. The phones' kits do what Go does
 (`Credentials.kt`, `Credentials.swift`: `ServerCredentials`, `CredentialStore`, and

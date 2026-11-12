@@ -24,10 +24,10 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
    yet run on a real PC.
 - **9.** Apps for iPhone and Android, which make the phone the group's root of trust
    ([design](design.md#the-phone-apps)); tested in CI, not yet on a real phone or in a store.
-- **12.** Sync away from home through the group's own WireGuard tunnel: the hub, the phones and the
-    lite member on Linux as clients, remote invitations for computers and phones, the forwarder, the
+- **12.** Sync away from home through the group's own WireGuard tunnel: the hub, the phones and
+    small devices on Linux as clients, remote invitations for computers and phones, the forwarder, the
     blind relay, AmneziaWG and VLESS ([design](design.md#sync-away-from-home)).
-- **16.** Full members, admins and the device's system, in 0.3 and 0.4
+- **16.** Computers, admins and the device's system, in 0.3 and 0.4
     ([design](design.md#members-capabilities-admins-and-the-operating-system)).
 - **17.** Every phone joins through its app, with a key of its own, in 0.6 (D-80;
     [design](design.md#group-and-pairing)).
@@ -55,26 +55,26 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
    and releases with checksums and attestations are done; on SteamOS the Linux installer
    uses `/opt` and SteamOS's keep list (not yet run on a real Steam Deck); the signed
    `.pkg` for macOS waits for the Apple developer account.
-- **11.** The lite member in Rust: done on Linux and OpenWrt. On the Arduino Nano ESP32 see item
+- **11.** `cbb` in Rust: done on Linux and OpenWrt. On the Arduino Nano ESP32 see item
     15; other ESP32 boards follow on the same `core/`.
 - **13.** Device keys in hardware: done for Linux and Windows with a TPM (Windows not yet
     tested on a real PC) and for a Mac's Secure Enclave; sealing the Mac's tunnel key
     follows. See
     "Device keys in hardware" below.
-- **14.** **The ZX Spectrum Next** through its own Raspberry Pi: `cbb next` on the lite member and
+- **14.** **The ZX Spectrum Next** through its own Raspberry Pi: `cbb next` and
     the `.cbb` dot command (`apps/zxnext`) are written, not yet run on a real Next; the
     NextPi set-up and the path through the ESP8266 are next (see "The Next's network in the
     background" below). The Accelerated Next carries a
     Raspberry Pi Zero on its accelerator header, wired to the FPGA's second UART, with
-    NextPi (a read-only DietPi) and a root shell (`SUP>`) on that UART. The lite member runs
-    on this Pi as an ordinary lite member, installed on the NextPi card itself (its user
+    NextPi (a read-only DietPi) and a root shell (`SUP>`) on that UART. `cbb` runs
+    on this Pi as an ordinary member without its helper, installed on the NextPi card itself (its user
     partition and a start script), so NextPi's own tools keep working. It speaks the member
     protocol with TLS 1.3 like any other member and reaches the network in one of two ways,
     both built: the Pi's own Wi-Fi on a Zero W, which NextPi turns off and we turn back on;
     or, on a Zero without a radio, the Next's built-in ESP8266, which then only carries the
     Pi's TLS bytes: the Z80 copies them between the Pi's UART and the ESP's, and the ESP
-    never sees anything but ciphertext. A dot command on the Next, `.cbb`, talks to the lite
-    member over the internal UART the way NextPi's own tools do (`.pisend`): it copies a text
+    never sees anything but ciphertext. A dot command on the Next, `.cbb`, talks to `cbb`
+    over the internal UART the way NextPi's own tools do (`.pisend`): it copies a text
     to the group, pastes the latest one, and joins by drawing the QR code for the phone app
     on the Next's screen (`cbb next`, member/README.md). The UART is a trace on the Next's
     board and never leaves the case, so it carries the texts in the clear. The Pi converts
@@ -82,7 +82,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     character shown as `?`; Cyrillic follows later as an encoding of its own. No other
     device takes part: a Next without a Pi is future research (below), not a reason to lean
     on a computer in the group.
-- **15.** **The Arduino Nano ESP32** (an ESP32-S3) as a lite member, on the same `core/` as
+- **15.** **The Arduino Nano ESP32** (an ESP32-S3) as a small device, on the same `core/` as
     the other ESP32 boards, with the member protocol and TLS 1.3 on the board itself. Done:
     the firmware (`esp32/`) builds, keeps its settings in flash, joins the Wi-Fi network
     set on its USB console, joins a group by the phone, passes its self-test in QEMU, and
@@ -119,13 +119,13 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     - the relay's own key in the signed `keys.json` from the first `release-sign publish`
       (`-relay cbb.tools:8765=...`), before the relay ever gets a new key;
     - the rotation run once on the Windows virtual machine, as the other changes;
-    - "The project's relay" in both phone apps and on the lite member: today a phone enters
-      the relay's address and key by hand and the lite member has no relay; the kits would
+    - "The project's relay" in both phone apps and on small devices: today a phone enters
+      the relay's address and key by hand and a small device has no relay; the kits would
       take the relay's keys and address from the signed lists they already keep, as `cbb`
       does;
     - AmneziaWG and VLESS on the relay.
 - **29.** Secure updates: `cbb update`, automatic updates, the release passed through the group,
-    the Android APK's own updates and the lite member's on Linux and OpenWrt are done
+    the Android APK's own updates and `cbb`'s on Linux and OpenWrt are done
     ([design](design.md#secure-updates)); the project's root and release keys wait for the
     owner's hardware keys, then Sparkle in the Mac app and OTA on the Nano ESP32.
 
@@ -145,8 +145,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
        canonical form that refuses unknown fields;
     2. the servers check only server credentials (section 18) and read no records; both stay
        open to every group;
-    3. one rules core, `cbb_core`, for the phones (through Swift and Kotlin bindings), the lite
-       member and the Go service (natively on Linux, as WebAssembly elsewhere), which keeps
+    3. one rules core, `cbb_core`, for the phones (through Swift and Kotlin bindings), the Rust
+       `cbb` and the Go service (natively on Linux, as WebAssembly elsewhere), which keeps
        its own rules only as a test oracle;
     4. no CA keys between devices, and a Welcome without one;
     5. features instead of versions in the hello;
@@ -189,8 +189,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     well as in the apps' translations, and `tools/repocheck` checks that each Russian page
     has its English original with the same sections, so a translation cannot fall behind
     unnoticed. The Russian text uses the words of the apps' Russian translations.
-- **37.** **Planned for 0.7.** Sync away from home for the lite member on MIPS routers. In 0.6 the
-    lite member for mips and mipsle is built without the tunnel, since GotaTun, its
+- **37.** **Planned for 0.7.** Sync away from home for `cbb` on MIPS routers. In 0.6
+    `cbb` for mips and mipsle is built without the tunnel, since GotaTun, its
     WireGuard library, needs 64-bit atomics that 32-bit MIPS lacks; such a router syncs only
     at home. The aim is the full tunnel there too: GotaTun without 64-bit atomics, or
     another WireGuard for that build (design.md, "OpenWrt routers", step 5).
@@ -207,7 +207,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       Uploading with the release key itself keeps one key for both. The decision is the
       owner's, with the Wear OS app (which must share its key with the phone's) and the
       F-Droid build, planned at the end of 0.6 or in 0.7.
-- **39.** **Rootless installs** (D-79), built in 0.6 and not yet run on a desktop session: a full member or a lite member on Linux installed and run without root,
+- **39.** **Rootless installs** (D-79), built in 0.6 and not yet run on a desktop session: a computer or a small device on Linux installed and run without root,
     for a computer whose user has no `sudo` or does not want to give it. The service runs as
     the user's systemd user unit, with its files under the user's home; its hello and device
     record say `rootless`, and such a device is never the root, an admin or a hub, not even
@@ -232,7 +232,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     key signs; the sender seals the body to it (HPKE, RFC 9180: X-Wing, HKDF-SHA256,
     ChaCha20-Poly1305; `internal/seal` and `cbb_core::seal`) with the open header (group, sender, receiver, ID, times) as its
     associated data, and signs the sealed command. A device that published no key gets a
-    secret paste only directly. The same in Go, the lite member, both kits, with shared
+    secret paste only directly. The same in Go, `cbb`, both kits, with shared
     vectors and docs/protocol.md section 15.
 - **43.** **Planned for 0.7.** What the app stores ask for, before the apps are submitted:
     - App Store (the iPhone, Apple Watch and Mac apps): a privacy manifest
@@ -296,13 +296,13 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
       relative's group): every call into the core and every saved state names its group.
     - A temporary guest: a device record with an end date, after which the device leaves the
       group without being removed by hand.
-- **46.** **XHTTP in 0.6 for `cbb`, the phones and the lite member.** Sync away from home through networks that block VPNs, on
-    every member, the lite member included. There are two ways, equal options that the user
+- **46.** **XHTTP in 0.6 for `cbb` and the phones.** Sync away from home through networks that block VPNs, on
+    every member, small devices included. There are two ways, equal options that the user
     or the server's operator picks, and more may join them: VLESS and AmneziaWG. VLESS runs
     with the site's real certificate, behind the server's own web server (XHTTP, which the
     site's nginx passes to the forwarder; the project's forwarder at cbb.tools runs it);
     REALITY, its other kind until then, was removed (the owner, 2026-11-08, D-91). Every
-    client speaks both ways; the lite member on Linux speaks AmneziaWG and VLESS over XHTTP
+    client speaks both ways; `cbb` on Linux speaks AmneziaWG and VLESS over XHTTP
     in 0.6 (the owner, 2026-11-07); the ESP32 and the blind relay come later
     ([below](#vless-behind-a-web-server)).
 - **47.** **After TestFlight.** Back Tap on the iPhone in two taps: iOS lets no app make a
@@ -326,12 +326,12 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     that asks the service over its control socket, with an ACL that allows only that. Later,
     after 1.0, when the protocol keeps backward compatibility: the official OpenWrt feeds,
     a package for `openwrt/packages` built from source with OpenWrt's Go or Rust package
-    rules (likely the lite member, since the full `cbb` is too large for routers with 16 MB
+    rules (`cbb` in Rust, which fits routers with 16 MB
     of flash) and the page for `openwrt/luci`, with a maintainer for each.
 - **51.** **Planned for 0.7, research.** Arduino boards whose Wi-Fi module is an ESP32, as
     devices of their own: the Uno R4 WiFi (an RA4M1 with an ESP32-S3 module), and the Nano 33
     IoT, MKR WiFi 1010 and Nano RP2040 Connect (u-blox NINA-W10x, a classic ESP32). Our
-    firmware on the module makes it the lite member (`core/`, TLS 1.3, joining by the
+    firmware on the module makes it a member (`core/`, TLS 1.3, joining by the
     phone's QR code), and the board's main chip only types the texts as a USB keyboard and
     shows them, over the UART or SPI already between the two, in frames like `cbb next`'s:
     the split of the ZX Spectrum Next, where the Pi is the member and the Z80 only types.
@@ -397,7 +397,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     after the launch: the GitHub Secure Open Source Fund, then FLOSS/fund once the project
     has users; NLnet's calls since 20 October 2026 do not fund code written with generative
     AI.
-- **55.** **Built for 0.6 (the owner, 2026-11-03): the mirror over VLESS, the release from the group, and the hub fetching the archives its members install; the lite member and the Android APK do not take them from the group yet.** Updates through the group's ways
+- **55.** **Built for 0.6 (the owner, 2026-11-03): the mirror over VLESS, the release from the group, and the hub fetching the archives its members install; `cbb` and the Android APK do not take them from the group yet.** Updates through the group's ways
     out, for devices on networks that block GitHub or the mirror. GitHub stays reached
     directly, as now. Where the user switched AmneziaWG or VLESS on, the mirror on cbb.tools
     is reached only through them: over VLESS the forwarder lets a group's registered VLESS
@@ -409,7 +409,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     device per group asks the internet, and each still checks the signatures itself; `cbb update` asks the group when GitHub and the mirror do not answer. The
     Android app's APK the same way where it can. `dl.cbb.tools` is not set up yet: it comes
     with this item, on the same server.
-- **56.** **Built for 0.6 in `cbb` (the owner, 2026-11-03): a hub registers over VLESS, each group has an XHTTP path of its own, and the signed entry points (`entries.json`) pass from cbb.tools, the `channel` branch, the group and a string or QR code (`cbb global entries`); the phones and the lite member take, keep and (the lite member) pass on the list, a phone hub registers over VLESS through its ways, and a hub whose forwarder does not answer says in every app when its list is stale (2026-11-04).** A hub that reaches its forwarder
+- **56.** **Built for 0.6 in `cbb` (the owner, 2026-11-03): a hub registers over VLESS, each group has an XHTTP path of its own, and the signed entry points (`entries.json`) pass from cbb.tools, the `channel` branch, the group and a string or QR code (`cbb global entries`); the phones and `cbb` take, keep and (`cbb`) pass on the list, a phone hub registers over VLESS through its ways, and a hub whose forwarder does not answer says in every app when its list is stale (2026-11-04).** A hub that reaches its forwarder
     only over VLESS, for a phone hub on a trip in a network that lets nothing else through.
     The project's forwarder's VLESS settings (XHTTP, cbb.tools, port 443, the path) are built
     into `cbb` and the kits beside its key, as they are no secret the design relies on; a
@@ -541,8 +541,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     nothing: VLESS over XHTTP (`internal/vless/onlycbb_test.go`: packets reach
     only the forwarder's port, streams only the mirror, the registrations' ID neither), the
     hub's tunnel (`internal/tunnel/onlycbb_test.go`), the phones' hub
-    (`internal/tunnel/rustonly_test.go`, the Rust hub through `tunnel-on-linux`), the relay (`internal/relay/onlycbb_test.go`) and the
-    lite member's tunnel, whose end a fake hub on GotaTun sends to (`member/src/tunnel.rs`,
+    (`internal/tunnel/rustonly_test.go`, the Rust hub through `tunnel-on-linux`), the relay (`internal/relay/onlycbb_test.go`) and
+    `cbb`'s tunnel, whose end a fake hub on GotaTun sends to (`member/src/tunnel.rs`,
     `link_reaches_nothing_from_the_tunnel`); the forwarder's `FuzzForwardWire` sends a
     packet only to an endpoint it knows. The check of cbb.tools is written down in
     docs/maintaining.md, "Ways out carry only cbb", and was run on 2026-11-07.
@@ -891,10 +891,10 @@ hub's offer, and the clients in `cbb` and the phones' tunnel, the default on cbb
 ([design](design.md#blocked-networks)). Also in 0.6 (the owner, 2026-11-03): a hub that sets
 VLESS speaks AmneziaWG too, and its clients try AmneziaWG over UDP first and VLESS after it,
 never plain WireGuard; the client's XHTTP reuses its connections and spaces its uploads at
-random, with Xray's usual numbers. Brought into 0.6 (the owner, 2026-11-07): the lite member's
+random, with Xray's usual numbers. Brought into 0.6 (the owner, 2026-11-07): `cbb`'s
 AmneziaWG and its VLESS client over XHTTP on Linux. Left for 0.7: VLESS's own encryption. Before it, VLESS ran only inside REALITY: the forwarder
 listens on TCP 443 itself and borrows another site's TLS. A server that already serves a site on 443, as cbb.tools does with
-nginx, cannot do that, and the lite member cannot speak REALITY at all: REALITY needs a
+nginx, cannot do that, and `cbb` cannot speak REALITY at all: REALITY needs a
 browser's ClientHello and its own check inside the session ID, which rustls does not
 make. So VLESS gets a second kind beside REALITY, with the site's real certificate behind
 a web server; neither replaces the other. VLESS and AmneziaWG stay two equal ways, and the
@@ -932,7 +932,7 @@ single out the Rust client's own ClientHello, a browser-like one for XHTTP comes
 - **Clients.**
   - `cbb`: Xray-core has VLESS over XHTTP; its TLS uses Xray's browser fingerprint (uTLS),
     so the ClientHello looks like a browser's.
-  - The lite member on Linux and the phones (the owner, 2026-11-03: not on the ESP32, whose memory
+  - `cbb` on Linux and the phones (the owner, 2026-11-03: not on the ESP32, whose memory
     it would not fit, and after AmneziaWG): a VLESS and XHTTP client of its own in
     `cbb_core` (sans-I/O, `no_std` with alloc), on the TLS it has (rustls with the
     RustCrypto provider), with VLESS's own encryption (ML-KEM-768 with X25519, as
@@ -941,7 +941,7 @@ single out the Rust client's own ClientHello, a browser-like one for XHTTP comes
     which its member TLS never needed. GotaTun's packets go over that connection instead of
     its UDP socket.
   - Interop vectors for the VLESS header, the XHTTP framing and the encryption in
-    `testdata/interop`, checked against Xray-core, and a test of the lite member against
+    `testdata/interop`, checked against Xray-core, and a test of `cbb` against
     the Go forwarder in CI's `rust` job.
 - **Risks.** rustls' ClientHello is not a browser's, and a censor that singles out TLS
   fingerprints (JA3, JA4) may notice it; a real site and its certificate still hide far more
@@ -951,12 +951,12 @@ single out the Rust client's own ClientHello, a browser-like one for XHTTP comes
 - **cbb.tools.** `site/deploy/nginx.conf` gains the XHTTP location, which reads the path
   from a file made on the server (as `cbb-preview.conf`), so the path stays out of the
   repository; `site/README.md` gains the step, and the forwarder runs with XHTTP.
-- **First, on the lite member (built in 0.6):** AmneziaWG (its changes to WireGuard's packets: junk
+- **First, on `cbb` (built in 0.6):** AmneziaWG (its changes to WireGuard's packets: junk
   packets, shifted sizes and headers, padding) as a layer around GotaTun's UDP socket,
   ported from amneziawg-go (MIT, already in `internal/third_party/amneziawg-go`) to a
   sans-I/O layer in `cbb_core` under `src/third_party`, checked against it with interop
   vectors, an end-to-end test against a hub with AmneziaWG and fuzzing of the incoming
-  packets, so the lite member also reaches an obfuscated hub (today `member/src/tunnel.rs`
+  packets, so `cbb` also reaches an obfuscated hub (today `member/src/tunnel.rs`
   refuses one). WireGuard's Noise and keys stay GotaTun's; the layer recomputes `mac1` for
   the changed message types. Padding inside the encrypted packets and random rekey times
   live inside GotaTun and need a small patch of it (`[patch]` in `Cargo.toml`, as for
@@ -966,10 +966,10 @@ single out the Rust client's own ClientHello, a browser-like one for XHTTP comes
   behind a web server (`TestAloneMemberAwayXHTTP`); the blind relay (item 28) comes later.
 
 Steps: the protocol and the Go forwarder and hub first, with Xray's XHTTP transport; then
-the phones' tunnel; then the lite member's client and its vectors; then cbb.tools' nginx
+the phones' tunnel; then `cbb`'s client and its vectors; then cbb.tools' nginx
 and forwarder; then the guide for blocked networks (with its translations), the reference
 and the bench's cases for a network that blocks WireGuard (P20, S9, F7), run from a real
-network that blocks VPNs; AmneziaWG and VLESS on the lite member came in 0.6, the relay later.
+network that blocks VPNs; AmneziaWG and VLESS on `cbb` came in 0.6, the relay later.
 
 ## The Next's network in the background
 
@@ -1001,11 +1001,11 @@ Pi's side uses GPIO 16 and 17 (the ESP honours it only on an issue 4 board). Nex
   ROM's keyboard routine does: 50 characters a second, so a text of 1 KB types in 20
   seconds. Programs that read the keyboard through the system take it: NextBASIC, the
   editors, most applications; games that read the ports themselves do not.
-- *The lite member on the Pi* runs `cbb service` as a service from the user partition
+- *`cbb` on the Pi* runs `cbb service` as a service from the user partition
   (`/NextPi`) and drives the ESP through the pipe: AT commands, then passthrough to one
   member or the hub, the member protocol with TLS 1.3 on the Pi, so the ESP sees only
   ciphertext. The stock firmware (AT 1.2) holds one passthrough connection, which is enough
-  for a lite member that dials one peer. A new `cbb next link` holds the Pi's UART for the
+  for a small device that dials one peer. A new `cbb next link` holds the Pi's UART for the
   frames.
 - *Frames on the Pi's UART.* A start byte, a type (bytes from the ESP, bytes for the ESP,
   a paste, a status), a length and the bytes; the start byte doubled inside a frame. The
@@ -1015,13 +1015,13 @@ Pi's side uses GPIO 16 and 17 (the ESP honours it only on an issue 4 board). Nex
 **Time.** The Pi Zero has no clock of its own (NextPi keeps a saved time, which is wrong
 after every power-up), and TLS checks certificates against the time. The Next has a
 battery-backed DS1307 that NextZXOS reads (`.date`, `.time`), so the driver or `.cbb` reads
-it at the start and sends it to the Pi in a frame of its own, and the lite member sets the
-system clock. The DS1307 keeps local time without a zone, so the lite member takes the zone
+it at the start and sends it to the Pi in a frame of its own, and `cbb` sets the
+system clock. The DS1307 keeps local time without a zone, so `cbb` takes the zone
 from its own setting; the group's time is the fallback when the Next's battery has run down.
 
 **What NextPi gives** (read on the bench, NextPi 1.91D): the user partition `/NextPi` is
 writable and on the shell's `PATH` (`/NextPi/nextpi`), and NextPi's start script runs
-`/NextPi/nextpi/autoexec.sh` when it exists, so the lite member is installed and started
+`/NextPi/nextpi/autoexec.sh` when it exists, so `cbb` is installed and started
 without touching the read-only root. The shell on the UART is a systemd service that
 restarts bash at once; GPIO 16 and 17 are plain inputs, so there is no RTS and CTS, and
 flow control towards the Next is XON and XOFF.
@@ -1106,8 +1106,8 @@ from their apps, at home or away from home.
 
 - Given at install: the installers ask, as they ask about updating themselves, and
   `--global on|off` (or `CBB_GLOBAL`) in `get.sh` and `install.sh` on Linux, macOS and
-  FreeBSD, and `-Global on|off` in `get.ps1` and `install.ps1`, answer ahead; the lite
-  member's installers ask the same, `.cbb install` on the ZX Spectrum Next asks Y or N, and
+  FreeBSD, and `-Global on|off` in `get.ps1` and `install.ps1`, answer ahead; the installers of
+  small devices ask the same, `.cbb install` on the ZX Spectrum Next asks Y or N, and
   the ESP32's console has a setting. The question is `[y/N]`: without an answer it stays off.
 - Given or taken back later: `cbb global consent [on|off]` on a computer (with root or as
   administrator, as every change of the group), a switch in the phone apps' settings and on
@@ -1125,13 +1125,13 @@ from their apps, at home or away from home.
    (after pairing, or at once when the consent comes later): it makes its tunnel key and
    offers it to the group's hubs as `cbb global on` does now. A group with no hub yet only
    keeps the key. This holds for devices that are never a hub or an admin too (keys in a
-   file, rootless, a lite member): they go online at once and keep their role, whoever asks.
+   file, rootless, a small device): they go online at once and keep their role, whoever asks.
 2. A new signed command `away-on` (protocol section 15) from the root or an admin turns it on
    again on a device that has the consent, for example after an `away-off`; without the
    consent the device refuses it and says so. A watch never signs it.
 3. A `hub` command to a device with the consent turns sync away from home on there first,
    then makes it a hub. Who may be a hub does not change: an admin, at the group's key level
-   (D-66), never a rootless install (D-79), never a lite member; phones only as D-64 says.
+   (D-66), never a rootless install (D-79), never a member without `hub` among its capabilities; phones only as D-64 says.
 4. A device turned off by `away-off` or by its own `cbb global off` does not turn itself on
    again at the next start; only `away-on`, a `hub` command or its user do.
 
@@ -1171,11 +1171,11 @@ where root is at hand and nothing of ours runs as root for it later:
   runs `cbb global hub` elevated, as the pair QR button runs `cbb pair` (pkexec, UAC, the
   administrator's password on a Mac), which opens the port in the system's firewall.
 - Without the consent the installers write nothing beyond the home network. A Mac keeps the
-  program's limit only, as now; the lite member has none of its own.
+  program's limit only, as now; `cbb` on a small device has none of its own.
 
 **Steps.** The protocol (the hello field, `away-on`, the interop vectors) and the Rust
-core's checks of the command; the Go service, its control operation and the installers; the
-lite member; the phone kits and the apps' screens; then the guide (sync away from home) and
+core's checks of the command; the Go service, its control operation and the installers;
+`cbb` on small devices; the phone kits and the apps' screens; then the guide (sync away from home) and
 its translations, and design.md in place of this section.
 
 ## Future research (not planned)
@@ -1197,7 +1197,7 @@ Questions to study before anything is planned for them.
   lean on another member over the network to do its part, neither through a gateway with
   a simpler encrypted protocol nor in the clear. Such a device joins through hardware of
   its own (the Next's Pi, an ESP32 on the board) or not at all. Arduino boards whose
-  Wi-Fi chip runs its own TLS (Uno R4 WiFi, Nano 33 IoT, MKR WiFi 1010) cannot be lite
+  Wi-Fi chip runs its own TLS (Uno R4 WiFi, Nano 33 IoT, MKR WiFi 1010) cannot be
   members with their stock firmware, because that TLS gives no access to the exporter the
   member protocol needs; with our firmware on that chip they may be (item 51). Boards
   without a network are not supported.

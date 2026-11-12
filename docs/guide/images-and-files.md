@@ -6,11 +6,11 @@ with its formatting, copied on one device, can be pasted on the others as they a
 
 ## What goes where
 
-| Copied | Computers with a desktop | Phones | A computer without a desktop | Lite member |
-|---|---|---|---|---|
-| Text with its formatting (a browser, an office program) | pasted with its formatting | pasted as plain text | plain text | plain text |
-| An image (PNG, JPEG; TIFF on a Mac, HEIC on a phone are converted) | pasted as the image | the app's button pastes it; it also comes by itself, on the iPhone while the app runs | only its text; `cbb paste -o DIR` saves the image | only its text; it passes the image on |
-| Files and folders | pasted as copied files | the app saves them: Downloads on Android, the app's folder in Files on the iPhone | `cbb paste -o DIR` saves them | passes them on, keeps none |
+| Copied | Computers with a desktop | Phones | A computer or small device without a desktop |
+|---|---|---|---|
+| Text with its formatting (a browser, an office program) | pasted with its formatting | pasted as plain text | plain text |
+| An image (PNG, JPEG; TIFF on a Mac, HEIC on a phone are converted) | pasted as the image | the app's button pastes it; it also comes by itself, on the iPhone while the app runs | only its text; `cbb paste -o DIR` saves the image |
+| Files and folders | pasted as copied files | the app saves them: Downloads on Android, the app's folder in Files on the iPhone | `cbb paste -o DIR` saves them |
 
 A copy with a text and an image goes as text. A cut in a file manager is taken as a copy:
 nothing is deleted anywhere.
