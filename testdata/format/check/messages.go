@@ -190,6 +190,22 @@ func checkTable(name string, v any) string {
 	if name == "obfuscation" && m[uint64(2)].(uint64) > m[uint64(3)].(uint64) {
 		return "obfuscation/jmax"
 	}
+	// An offer's endpoint keys each name one of its endpoints, once.
+	if keys, ok := m[uint64(9)].([]any); ok && name == "offer" {
+		eps, _ := m[uint64(2)].([]any)
+		seen := map[string]bool{}
+		for _, k := range keys {
+			e, _ := k.(map[any]any)[uint64(1)].(string)
+			listed := false
+			for _, x := range eps {
+				listed = listed || x == e
+			}
+			if !listed || seen[e] {
+				return "offer/endpoint-keys"
+			}
+			seen[e] = true
+		}
+	}
 	// One age per claim in a Welcome: the IDs rise.
 	if ages, ok := m[uint64(3)].([]any); ok && name == "welcome" {
 		for i := 1; i < len(ages); i++ {
@@ -423,8 +439,9 @@ func addrOK(s string) bool {
 // lower-case DNS name whose last label is neither all digits nor starts
 // with 0x, with its port.
 func endpointOK(s string) bool {
-	if _, err := netip.ParseAddrPort(s); err == nil {
-		return addrOK(s)
+	if ap, err := netip.ParseAddrPort(s); err == nil {
+		a := ap.Addr()
+		return addrOK(s) && !a.IsLoopback() && !a.IsLinkLocalUnicast() && !a.IsMulticast()
 	}
 	i := strings.LastIndexByte(s, ':')
 	if i < 0 {
@@ -437,11 +454,11 @@ func endpointOK(s string) bool {
 	}
 	labels := strings.Split(host, ".")
 	last := labels[len(labels)-1]
-	if strings.HasPrefix(last, "0x") || strings.Trim(last, "0123456789") == "" {
+	if strings.HasPrefix(last, "0x") || strings.Trim(last, "0123456789") == "" || last == "localhost" {
 		return false
 	}
 	for _, l := range labels {
-		if l == "" || len(l) > 63 || l[0] == '-' || strings.Trim(l, "abcdefghijklmnopqrstuvwxyz0123456789-") != "" {
+		if l == "" || len(l) > 63 || l[0] == '-' || l[len(l)-1] == '-' || strings.Trim(l, "abcdefghijklmnopqrstuvwxyz0123456789-") != "" {
 			return false
 		}
 	}

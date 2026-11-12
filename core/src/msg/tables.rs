@@ -171,7 +171,16 @@ pub static OFFER: Table = Table {
         f(6, "offer/moved", Ty::Flag, false),
         f(7, "offer/next-key", WG_KEY, false),
         f(8, "offer/confirm", B32, false),
+        f(9, "offer/endpoint-keys", Ty::Array { of: &Ty::Map(&ENDPOINT_KEY), max: 8 }, false),
     ],
+};
+
+/// The hub's own key on one endpoint of an offer: the key it serves
+/// WireGuard under on that forwarder's endpoint (its key for that face).
+/// An endpoint without one uses the offer's key (field 1).
+pub static ENDPOINT_KEY: Table = Table {
+    shape: "offer/endpoint-key/shape",
+    fields: &[f(1, "offer/endpoint-key/endpoint", ADDR, true), f(2, "offer/endpoint-key/key", WG_KEY, true)],
 };
 
 /// `tunnel` (t 15): to a hub only, the device's WireGuard key toward it and
@@ -393,6 +402,7 @@ pub static ALL: &[&Table] = &[
     &OBFUSCATION,
     &VLESS,
     &OFFER,
+    &ENDPOINT_KEY,
     &TUNNEL,
     &HUBS,
     &GUEST,

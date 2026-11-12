@@ -1317,6 +1317,11 @@ TABLES = {
         (6, "offer/moved", "flag", False),
         (7, "offer/next-key", "key 3", False),
         (8, "offer/confirm", "bytes 32", False),
+        (9, "offer/endpoint-keys", "array 1..8 of map offer/endpoint-key", False),
+    ],
+    "offer/endpoint-key": [
+        (1, "offer/endpoint-key/endpoint", "addr", True),
+        (2, "offer/endpoint-key/key", "key 3", True),
     ],
     "tunnel": [
         (2, "tunnel/key", "key 3", True),
@@ -1455,15 +1460,17 @@ def addr_ok(t):
 def endpoint_ok(t):
     """A card's endpoint: an addr, or a lower-case DNS name whose last label
     is neither all digits nor starts with 0x, with its port."""
+    import ipaddress
     if addr_ok(t):
-        return True
+        a = ipaddress.ip_address(t.rpartition(":")[0].strip("[]"))
+        return not (a.is_loopback or a.is_link_local or a.is_multicast)
     host, sep, port = t.rpartition(":")
     if not sep or not (port.isascii() and port.isdigit() and str(int(port)) == port and 1 <= int(port) <= 65535):
         return False
     labels = host.split(".")
     last = labels[-1]
-    return (0 < len(host) <= 253 and not last.isdigit() and not last.startswith("0x")
-            and all(0 < len(l) <= 63 and not l.startswith("-")
+    return (0 < len(host) <= 253 and not last.isdigit() and not last.startswith("0x") and last != "localhost"
+            and all(0 < len(l) <= 63 and not l.startswith("-") and not l.endswith("-")
                     and all(c in "abcdefghijklmnopqrstuvwxyz0123456789-" for c in l) for l in labels))
 
 
@@ -1541,6 +1548,10 @@ def check_map(name, v):
     # The one rule between fields of a map: AmneziaWG's junk sizes.
     if name == "obfuscation" and v[2] > v[3]:
         return "obfuscation/jmax"
+    if name == "offer" and 9 in v:
+        named = [k[1] for k in v[9]]
+        if len(set(named)) != len(named) or any(n not in v.get(2, []) for n in named):
+            return "offer/endpoint-keys"
     if name == "welcome" and 3 in v and any(a[0] >= b[0] for a, b in zip(v[3], v[3][1:])):
         return "welcome/claim-ages"
     return None
@@ -1664,6 +1675,14 @@ def wave3_vectors(records_take):
     mp("an offer", "offer", offer)
     mp("an offer: endpoints in the hub's order", "offer", {**offer, 2: list(reversed(offer[2]))})
     mp("an offer: an endpoint twice", "offer", {**offer, 2: [offer[2][0]] * 2}, "offer/endpoints")
+    face_key = [X25519, fake("hub face key", 32)]
+    mp("an offer: an endpoint with its own hub key", "offer", {**offer, 9: [{1: offer[2][0], 2: face_key}]})
+    mp("an offer: a key for an endpoint it does not list", "offer",
+       {**offer, 9: [{1: "198.51.100.99:443", 2: face_key}]}, "offer/endpoint-keys")
+    mp("an offer: two keys for one endpoint", "offer",
+       {**offer, 9: [{1: offer[2][0], 2: face_key}] * 2}, "offer/endpoint-keys")
+    mp("an offer: an endpoint key that is no addr", "offer",
+       {**offer, 9: [{1: "fwd.example.org:443", 2: face_key}]}, "offer/endpoint-keys")
     mp("an offer: bad settings", "offer", {**offer, 3: {**obf, 1: 129}}, "offer/obfuscation")
     mp("the settings", "obfuscation", obf)
     mp("the settings: jmin above jmax", "obfuscation", {**obf, 2: 80}, "obfuscation/jmax")
@@ -1794,7 +1813,9 @@ def card_vectors():
     no("a key twice", card({12: [[ES256, tls[0]]] * 2}), "card/keys")
     no("an endpoint twice", card({11: ["fwd.example.org:443"] * 2}), "card/endpoints")
     for e in ["0192.0.2.7:443", "192.0.2.07:443", "3221225991:443", "0xc0.0.2.7:443", "EXAMPLE.org:443",
-              "fwd.example.org:0", "[2001:DB8::1]:443", "[2001:db8:0:0:0:0:0:1]:443"]:
+              "fwd.example.org:0", "[2001:DB8::1]:443", "[2001:db8:0:0:0:0:0:1]:443", "[::1]:443",
+              "127.0.0.1:443", "[fe80::1]:443", "169.254.1.1:443", "[ff02::1]:443", "224.0.0.1:443",
+              "0.0.0.0:443", "localhost:443", "a-.example.org:443"]:
         no(f"an endpoint {e}", card({11: [e]}), "card/endpoints")
     ok("an endpoint by IPv6 address", card({11: ["fwd.example.org:443", "[2001:db8::7]:443"]}))
     no("kinds 4", card({13: 4}), "card/kinds")

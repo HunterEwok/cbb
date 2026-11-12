@@ -124,3 +124,36 @@ fn one_address_one_spelling() {
         assert!(!super::valid_addr(t), "{t}");
     }
 }
+
+#[test]
+fn an_offer_names_its_endpoint_keys() {
+    use crate::format::Value;
+    let key = |k: &'static [u8; 32]| Value::Array(vec![Value::Uint(3), Value::Bytes(k)]);
+    static HUB: [u8; 32] = [3; 32];
+    static FACE: [u8; 32] = [4; 32];
+    let offer = |keys: Vec<(&'static str, &'static [u8; 32])>| {
+        let mut m = vec![
+            (1, key(&HUB)),
+            (2, Value::Array(vec![Value::Text("203.0.113.5:51820"), Value::Text("[2001:db8::5]:51820")])),
+        ];
+        if !keys.is_empty() {
+            m.push((
+                9,
+                Value::Array(
+                    keys.into_iter().map(|(e, k)| Value::Map(vec![(1, Value::Text(e)), (2, key(k))])).collect(),
+                ),
+            ));
+        }
+        Value::Map(m)
+    };
+    assert_eq!(check_map(&tables::OFFER, &offer(vec![])), Ok(()));
+    // One endpoint on a forwarder with the hub's key for that face.
+    assert_eq!(check_map(&tables::OFFER, &offer(vec![("203.0.113.5:51820", &FACE)])), Ok(()));
+    let bad = Err(Rule::field("offer/endpoint-keys"));
+    assert_eq!(check_map(&tables::OFFER, &offer(vec![("198.51.100.1:1", &FACE)])), bad, "not its endpoint");
+    assert_eq!(
+        check_map(&tables::OFFER, &offer(vec![("203.0.113.5:51820", &FACE), ("203.0.113.5:51820", &HUB)])),
+        bad,
+        "two keys for one endpoint"
+    );
+}
