@@ -631,6 +631,48 @@ pub fn evaluate(input: &Input) -> State {
     }
 }
 
+/// The records whose signer the others still name once a checkpoint
+/// pruned some: a key whose naming record it left out is not known, as on
+/// a member that dropped what it pruned.
+fn still_known<'a>(
+    root: &Key,
+    promoted: &BTreeSet<KeyHash>,
+    counted: &[Counted],
+    checked: Vec<Checked<'a>>,
+) -> Vec<Checked<'a>> {
+    let mut keys = Keys::trusting(root, promoted);
+    for c in counted {
+        keys.add_root(&c.root);
+    }
+    loop {
+        let mut learned = false;
+        for c in &checked {
+            if let Some((_, role)) = keys.signer(&c.r.body().signer) {
+                learned |= keys.learn(c.r.body(), role, c.held);
+            }
+        }
+        if !learned {
+            break;
+        }
+    }
+    checked.into_iter().filter(|c| keys.signer(&c.r.body().signer).is_some()).collect()
+}
+
+/// Reports whether records prove claim c, taken as counted after the
+/// claims prefix (an admitter's, or ones kept from before a restart): the
+/// check a member makes once, when it takes a claim as counted.
+pub(crate) fn proven(root: &Key, records: &[Record], prefix: &[Counted], c: &Counted) -> bool {
+    let promoted: BTreeSet<KeyHash> = prefix.iter().map(|p| p.root.hash()).collect();
+    let mut cuts: BTreeMap<KeyHash, Seen> = prefix.iter().map(|p| (p.cut.key, p.cut)).collect();
+    cuts.insert(c.cut.key, c.cut);
+    let (checked, failed) = check_all(root, &promoted, prefix, records);
+    let mut with_c = prefix.to_vec();
+    with_c.push(c.clone());
+    let e = Evaluation::new(root, checked, failed, BTreeSet::new(), &promoted, &cuts, &with_c);
+    let ep = e.run(&BTreeMap::new(), prefix);
+    ep.proves(c)
+}
+
 pub(crate) fn evaluate_checked(
     root: &Key,
     checked: Vec<Checked<'_>>,
@@ -652,6 +694,7 @@ pub(crate) fn evaluate_checked(
         let (Kind::Checkpoint { heads, keep }, id) = (&x.b().kind, x.id) else { continue };
         let anchors = anchors_of(heads, keep);
         let pruned: Vec<Checked> = checked.iter().copied().filter(|c| !pruned_by(c.r, heads, &anchors)).collect();
+        let pruned = still_known(root, promoted, counted, pruned);
         let e = Evaluation::new(root, pruned, failed.clone(), anchors, promoted, cuts, counted);
         let ep = e.run(held_ms, counted);
         let Some(i) = e.recs.iter().position(|r| r.id == id) else { continue };
@@ -1941,20 +1984,18 @@ impl<'e, 'a> Epoch<'e, 'a> {
             || self.e.devices.values().flatten().any(|&i| self.r(i).dev().is_some_and(|d| d.key.hash() == *root))
     }
 
-    /// Looks at the claims under the current root and returns the next
-    /// root and the current root's cut when one takes effect.
-    /// Takes claim c, which the device counted, as in effect, whether or
-    /// not the set still holds its record; the other claims of this epoch
-    /// are left out. None when the claim could never have counted here.
-    fn decide_counted(&mut self, c: &Counted) -> Option<KeyHash> {
-        let root = c.root.hash();
-        // What no later record changes: the claimant had the takeover
-        // power under this root, and the new key is not void by itself.
-        let gid = DeviceId::of(&root);
+    /// Reports whether the records prove counted claim c under this
+    /// epoch's root, the one its cut names: within the cut, the claimant
+    /// held the takeover power and was not removed, and a removal it saw
+    /// did not take it away. Checked once, when a member takes the claim
+    /// as counted; nothing later asks again.
+    fn proves(&self, c: &Counted) -> bool {
+        if self.cur != c.cut.key {
+            return false;
+        }
         let keys = self.with_pair(&c.claimant);
         let claim = self.e.by_id.get(&c.claim).copied();
-        // Only the current root's records within the cut: its later
-        // records, checkpoints among them, change nothing here.
+        // Only the current root's records within the cut.
         let at_cut = |i: usize| {
             let r = self.r(i);
             !r.held && r.b().signer == c.cut.key && self.e.within(&c.cut, i)
@@ -1983,26 +2024,33 @@ impl<'e, 'a> Epoch<'e, 'a> {
                     && i != n
                     && self.newer(i, n)
                     && self.r(i).dev().and_then(|d| d.admin.as_ref()).is_none_or(|a| a.hash() != c.claimant)
-                    && claim.is_some_and(|cl| !self.e.saw(i, cl))
+                    && claim.is_none_or(|cl| !self.e.saw(i, cl))
             })
         });
         let named = named.filter(|_| !taken);
         let powers = named.and_then(|i| self.r(i).dev()).map_or(0, |d| d.powers)
             | recovery.max().filter(|(_, a)| *a == c.claimant).map_or(0, |_| POWER_TAKEOVER);
-        // A removal of the claimant it saw: a root's within the cut, or an
-        // admin's the claim's record lists.
+        // A removal of the claimant the claim saw: a root's within the
+        // cut, or an admin's that is in.
         let removed = self.all().any(|i| {
             let r = self.r(i);
             r.is_revoke()
                 && r.removal().is_some_and(|rm| keys.iter().any(|k| rm.keys.binary_search(k).is_ok()))
-                && (at_cut(i) || r.admin() && self.label[i] == Label::In && claim.is_some_and(|c| self.e.saw(c, i)))
+                && (at_cut(i) && claim.is_none_or(|cl| !self.e.saw(i, cl))
+                    || r.admin() && self.label[i] == Label::In && claim.is_some_and(|cl| self.e.saw(cl, i)))
         });
-        if powers & POWER_TAKEOVER == 0
-            || removed
-            || root == c.claimant
-            || self.on_path.contains_key(&root)
-            || self.path.iter().any(|p| DeviceId::of(p) == gid)
-        {
+        powers & POWER_TAKEOVER != 0 && !removed
+    }
+
+    /// Takes claim c, which the device counted, as in effect, whether or
+    /// not the set still holds its record; the other claims of this epoch
+    /// are left out. What proved it was checked when it was counted
+    /// (`proves`) and is not asked again; only a new key void by itself
+    /// is refused.
+    fn decide_counted(&mut self, c: &Counted) -> Option<KeyHash> {
+        let root = c.root.hash();
+        let gid = DeviceId::of(&root);
+        if root == c.claimant || self.on_path.contains_key(&root) || self.path.iter().any(|p| DeviceId::of(p) == gid) {
             return None;
         }
         self.claims.push(Claim {

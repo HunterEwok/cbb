@@ -1931,7 +1931,7 @@ fn counted_claims_give_one_state_in_any_order() {
         // A fixed shuffle per turn.
         recs.sort_by_key(|r| sha256(&[r.id().0.as_slice(), &turn.to_be_bytes()].concat()));
         let mut set = RecordSet::new(g.root.key.clone());
-        set.remember_counted([claim.id()]);
+        assert_eq!(set.remember_counted([claim.id()]), Ok(()));
         set.insert_all(recs);
         let st = set.state(&held);
         assert!(!st.counting.contains(&late.id()));
@@ -2205,7 +2205,7 @@ mod differential {
         for &(who, op, arg) in steps {
             let by = &signers[usize::from(who) % signers.len()];
             let target = &devices[usize::from(arg) % devices.len()];
-            let kind = match op % 7 {
+            let kind = match op % 9 {
                 0 => {
                     let mut d = Device::new(target.key.clone(), "dev", ROLE_MEMBER);
                     d.rights = RIGHT_READ | RIGHT_SEND;
@@ -2214,6 +2214,7 @@ mod differential {
                 1 => Kind::Revoke(removal(&[target.hash], g.seen())),
                 2 => Kind::Freeze(removal(&[signers[1 + usize::from(arg) % 2].hash], g.seen())),
                 3 => match g.recs.iter().rev().find(|r| matches!(r.body().kind, Kind::Freeze(_))) {
+                    Some(f) if arg % 2 == 0 => Kind::Thaw { ids: vec![f.id()], seen: g.seen() },
                     Some(f) => Kind::Thaw { ids: vec![f.id()], seen: vec![] },
                     None => continue,
                 },
@@ -2222,12 +2223,24 @@ mod differential {
                     None => continue,
                 },
                 5 => Kind::Claim { root: signers[3 + usize::from(arg) % 2].key.clone(), seen: g.seen() },
+                6 => Kind::Hubs {
+                    hubs: vec![target.key.device_id()],
+                    seen: if arg % 2 == 0 { g.seen() } else { vec![] },
+                },
+                7 => Kind::Copies { incoming_ms: MIN_INCOMING_MS + u64::from(arg), seen: g.seen() },
                 _ => {
                     let Some(&(seq, id)) = g.heads.get(&by.hash) else { continue };
+                    let counting = g.state().counting;
                     let mut keep: Vec<RecordId> = g
                         .recs
                         .iter()
-                        .filter(|r| r.body().signer == by.hash && r.body().seq < seq && r.id().0[0] % 2 == arg % 2)
+                        // A checkpoint keeps what counts, as a real one
+                        // does, and of the rest some.
+                        .filter(|r| {
+                            r.body().signer == by.hash
+                                && r.body().seq < seq
+                                && (counting.contains(&r.id()) || r.id().0[0] % 2 == arg % 2)
+                        })
                         .map(Record::id)
                         .collect();
                     keep.sort();
@@ -2252,14 +2265,18 @@ mod differential {
         out
     }
 
-    /// Fills a set in order, compacting now and then, as a member does.
+    /// Fills a set in order, compacting now and then, as a member does,
+    /// in three rounds of sync: a record whose signer it did not know yet
+    /// comes again.
     fn fill(root: &Key, recs: &[Record], held: &BTreeMap<RecordId, u64>, every: usize) -> RecordSet {
         let mut m = RecordSet::new(root.clone());
-        for (i, r) in recs.iter().enumerate() {
-            let _ = m.insert(r.clone());
-            if (i + 1) % every == 0 {
-                let st = m.state(held);
-                m.compact(&st);
+        for _ in 0..3 {
+            for (i, r) in recs.iter().enumerate() {
+                let _ = m.insert(r.clone());
+                if (i + 1) % every == 0 {
+                    let st = m.state(held);
+                    m.compact(&st);
+                }
             }
         }
         for _ in 0..2 {
@@ -2273,11 +2290,12 @@ mod differential {
         #![proptest_config(ProptestConfig { cases: 48, failure_persistence: None, ..ProptestConfig::default() })]
 
         /// A set's state is evaluate's state of the records it keeps and
-        /// the claims it counted, whatever the order and the compactions;
-        /// two sets that counted the same claims keep the same records.
+        /// the claims it counted, and of all the records with those claims,
+        /// whatever the order and the compactions; two sets that counted
+        /// the same claims keep the same records.
         #[test]
         fn a_set_agrees_with_evaluate(
-            steps in prop::collection::vec((0u8..5, 0u8..7, any::<u8>()), 4..36),
+            steps in prop::collection::vec((0u8..5, 0u8..9, any::<u8>()), 4..40),
             seed in any::<u64>(),
             every in 1usize..8,
             held_ms in prop::sample::select(vec![0u64, DEFAULT_DELAY_MS]),
@@ -2290,10 +2308,18 @@ mod differential {
             for m in [&m1, &m2] {
                 let kept: Vec<Record> = m.ids().map(|id| m.get(id).unwrap().clone()).collect();
                 let want = evaluate(&Input { root: &g.root.key, records: &kept, held_ms: &held, counted: m.counted_claims() });
-                prop_assert_eq!(&m.state(&held), &want);
+                let got = m.state(&held);
+                prop_assert_eq!(&got, &want);
+                let whole = evaluate(&Input { root: &g.root.key, records: &recs, held_ms: &held, counted: m.counted_claims() });
+                prop_assert_eq!(&got.roots, &whole.roots);
+                prop_assert_eq!(&got.devices, &whole.devices);
+                prop_assert_eq!(&got.revoked, &whole.revoked);
+                prop_assert_eq!(&got.stop, &whole.stop);
+                prop_assert_eq!(&got.claims, &whole.claims);
             }
             if m1.counted() == m2.counted() {
-                prop_assert_eq!(m1.state(&held).roots, m2.state(&held).roots);
+                prop_assert_eq!(m1.digest(), m2.digest());
+                prop_assert_eq!(m1.state(&held), m2.state(&held));
             }
         }
     }
@@ -2573,25 +2599,40 @@ fn a_counted_takeover_outlives_its_record() {
     assert_eq!(s.roots, vec![g.root.hash, n.hash]);
 }
 
-/// A counted claim still needs what no later record changes: a claimant
-/// with the takeover power under its root, not removed in what it saw.
+/// A counted claim is checked once, when a member takes it as counted:
+/// the records must show a claimant with the takeover power under its
+/// root, not removed in what the claim saw. Once taken, nothing later
+/// asks again.
 #[test]
-fn a_counted_claim_keeps_the_checks_nothing_later_changes() {
+fn a_counted_claim_is_checked_once() {
     let (pw, w, pa, a) = (k("watch"), k("admin w"), k("phone a"), k("admin a"));
+    let take = |g: &G, claim: &Record| {
+        let mut set = RecordSet::new(g.root.key.clone());
+        set.insert_all(g.recs.iter().cloned());
+        set.remember_counted([claim.id()]).map(|()| set)
+    };
+    // No takeover power.
     let mut g = G::new();
     g.admin(&pw, &w, POWER_REMOVE | POWER_FREEZE);
     let seen = g.seen();
     let claim = g.rec(&w, Kind::Claim { root: k("other root").key.clone(), seen });
-    let held = BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]);
-    assert_eq!(counted_state(&g, &held, &[claim.id()]).roots.len(), 1);
+    assert_eq!(take(&g, &claim).err(), Some(claim.id()));
+    // Removed before the claim.
     let mut g = G::new();
     g.admin(&pa, &a, POWER_ADMIT | POWER_TAKEOVER);
     let seen = g.seen();
     g.root_rec(Kind::Revoke(removal(&[a.hash, pa.hash], seen)));
     let seen = g.seen();
     let claim = g.rec(&a, Kind::Claim { root: k("other root").key.clone(), seen });
-    let held = BTreeMap::from([(claim.id(), DEFAULT_DELAY_MS)]);
-    assert_eq!(counted_state(&g, &held, &[claim.id()]).roots.len(), 1);
+    assert_eq!(take(&g, &claim).err(), Some(claim.id()));
+    // Proved: it stays counted, whatever the old root signs after.
+    let (mut g, held, claim) = taken_over_group();
+    let mut set = take(&g, &claim).unwrap();
+    let seen = g.seen();
+    let late = g.root_rec(Kind::Revoke(removal(&[k("admin a").hash, k("phone a").hash], seen)));
+    let _ = set.insert(late);
+    let st = set.state(&held);
+    assert_eq!(st.roots, vec![g.root.hash, k("new root").hash]);
 }
 
 /// A thaw brings back what it lists of the frozen key: a record the

@@ -168,7 +168,8 @@ impl RecordSet {
             self.cut();
         }
         if !self.pending.is_empty() {
-            self.read_pending();
+            // A claim the records do not prove yet waits for more.
+            let _ = self.read_pending(false);
         }
         Ok(if self.records.contains_key(&id) { Added::Stored } else { Added::NoRoom })
     }
@@ -365,13 +366,18 @@ impl RecordSet {
     /// Each is read from its record, under the root the one before it
     /// named; those whose records the set does not hold yet wait. A
     /// counted claim stays counted, in its place.
-    pub fn remember_counted(&mut self, ids: impl IntoIterator<Item = RecordId>) {
+    ///
+    /// Each is checked once, when its record is read: the records must
+    /// prove that its claimant held the takeover power under that root
+    /// within its cut and was not removed. One they do not prove is
+    /// refused with those after it, and its ID comes back.
+    pub fn remember_counted(&mut self, ids: impl IntoIterator<Item = RecordId>) -> Result<(), RecordId> {
         for id in ids {
             if !self.counted.iter().any(|c| c.claim == id) && !self.pending.contains(&id) {
                 self.pending.push(id);
             }
         }
-        self.read_pending();
+        self.read_pending(true)
     }
 
     /// Takes counted claims with what their path needs, as the caller kept
@@ -386,19 +392,29 @@ impl RecordSet {
     }
 
     /// Reads the waiting counted claims whose records are here, in order.
-    fn read_pending(&mut self) {
+    /// strict: a claim the records do not prove is refused, with the ones
+    /// after it; otherwise it waits for more records.
+    fn read_pending(&mut self, strict: bool) -> Result<(), RecordId> {
         let group = self.root.hash();
         let more = eval::Counted::chain(&self.counted.last().map_or(group, |c| c.root.hash()), &self.pending, |id| {
             self.records.get(id).map(|e| &e.record)
         });
         if more.is_empty() {
-            return;
+            return Ok(());
         }
-        self.pending.drain(..more.len());
-        for c in &more {
+        let records: Vec<Record> = self.records.values().map(|e| e.record.clone()).collect();
+        for c in more {
+            if !eval::proven(&self.root, &records, &self.counted, &c) {
+                if strict {
+                    self.pending.clear();
+                }
+                return Err(c.claim);
+            }
+            self.pending.remove(0);
             self.keys.add_root(&c.root);
+            self.counted.push(c);
         }
-        self.counted.extend(more);
+        Ok(())
     }
 
     /// Drops what the counting checkpoint of state leaves out: a root's
