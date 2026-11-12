@@ -12,6 +12,9 @@ import UIKit
 /// relay) and, for admins, the group (copy lifetime, security level). No
 /// long texts under the items: a hard one has a tip, shown until closed.
 struct SettingsView: View {
+    /// One part, as a big screen's sidebar opens it; nil for them all, as
+    /// one page with the advanced ones behind their switch.
+    var part: SettingsPart?
     @AppStorage(AccentChoice.key) private var color = Tokens.colors[0].name
     @AppStorage(Appearance.key) private var appearance = Appearance.system
     @AppStorage(LanguageChoice.key) private var language = LanguageChoice.system
@@ -37,48 +40,35 @@ struct SettingsView: View {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
     }
 
+    /// Whether the page shows a part.
+    private func shows(_ p: SettingsPart) -> Bool { part == nil || part == p }
+
     var body: some View {
         Form {
-            Section {
-                HStack(spacing: Tokens.spacingMedium) {
-                    Picker(selection: $appearance) {
-                        ForEach(Appearance.allCases) { a in
-                            Image(systemName: a.symbol).accessibilityLabel(Text(a.title)).tag(a)
-                        }
-                    } label: {
-                        Text("Theme")
-                    }
-                    .pickerStyle(.segmented)
-                    Menu {
-                        Picker(selection: $language) {
-                            ForEach(LanguageChoice.allCases) { Text(verbatim: $0.title).tag($0) }
-                        } label: { Text("Language") }
-                    } label: {
-                        Image(systemName: "globe").font(.title3)
-                    }
-                    .accessibilityLabel(Text("Language"))
-                    .accessibilityValue(Text(verbatim: language.title))
+            if shows(.look) { lookSection }
+            if shows(.notifications) {
+                NotificationSettings()
+                if model.devices.contains(where: { $0.isSelf && $0.isRoot }), WatchLink.shared.watchApp {
+                    watchSection
                 }
-                ColorSwatches(selection: $color)
             }
-            .listRowBackground(palette.surface)
-            NotificationSettings()
-            if model.devices.contains(where: { $0.isSelf && $0.isRoot }), WatchLink.shared.watchApp {
-                watchSection
-            }
-            if model.isRoot {
+            if shows(.recovery), model.isRoot {
                 RecoverySection()
             }
-            Section {
-                Toggle(isOn: $advanced) { Text("Advanced settings") }
+            if part == nil {
+                Section {
+                    Toggle(isOn: $advanced) { Text("Advanced settings") }
+                }
+                .listRowBackground(palette.surface)
             }
-            .listRowBackground(palette.surface)
-            if advanced {
+            if part == nil, advanced {
                 Section {
                     NavigationLink { WhyScreen() } label: { Text("Why it does not sync") }
                         .accessibilityIdentifier("why")
                 }
                 .listRowBackground(palette.surface)
+            }
+            if part == nil ? advanced : part == .away {
                 if let hub = model.hub {
                     hubSection(hub)
                     if !hub.computers.isEmpty {
@@ -91,6 +81,8 @@ struct SettingsView: View {
                 if let relay = model.blindRelay {
                     relaySection(relay)
                 }
+            }
+            if part == nil ? advanced : part == .group {
                 if model.isAdmin, model.phase == .home {
                     incomingSection
                 }
@@ -98,41 +90,11 @@ struct SettingsView: View {
                     keyLevelSection(level)
                 }
             }
-            if model.phase == .home {
-                Section {
-                    LeaveButton()
-                }
-                .listRowBackground(palette.surface)
-            }
-            Section {
-                LabeledContent {
-                    Text(version).font(.system(.body, design: .monospaced))
-                } label: {
-                    Text("Version")
-                }
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    versionTaps += 1
-                    if versionTaps >= 7 { detailsSwitch = true }
-                }
-                if detailsSwitch {
-                    Toggle(isOn: $errorDetails) {
-                        Text("Show error details")
-                    }
-                    // The share extension reads it from the app group.
-                    .onChange(of: errorDetails, initial: true) { _, on in Shared.defaults.set(on, forKey: "ShowErrorDetails") }
-                }
-                Link(destination: URL(string: "https://github.com/HunterEwok/cbb")!) {
-                    Text("Source code and license (AGPL-3.0)")
-                }
-            } header: {
-                Text("About")
-            }
-            .listRowBackground(palette.surface)
+            if shows(.about) { aboutSections }
         }
         .scrollContentBackground(.hidden)
         .background(AppBackground())
-        .navigationTitle(Text("Settings"))
+        .navigationTitle(part?.title ?? Text("Settings"))
         .task {
             // Where sync away from home stands, as it changes.
             while !Task.isCancelled {
@@ -140,6 +102,68 @@ struct SettingsView: View {
                 try? await Task.sleep(for: .seconds(2))
             }
         }
+    }
+
+    /// The theme, the language and the colour, as icons without a heading.
+    private var lookSection: some View {
+        Section {
+            HStack(spacing: Tokens.spacingMedium) {
+                Picker(selection: $appearance) {
+                    ForEach(Appearance.allCases) { a in
+                        Image(systemName: a.symbol).accessibilityLabel(Text(a.title)).tag(a)
+                    }
+                } label: {
+                    Text("Theme")
+                }
+                .pickerStyle(.segmented)
+                Menu {
+                    Picker(selection: $language) {
+                        ForEach(LanguageChoice.allCases) { Text(verbatim: $0.title).tag($0) }
+                    } label: { Text("Language") }
+                } label: {
+                    Image(systemName: "globe").font(.title3)
+                }
+                .accessibilityLabel(Text("Language"))
+                .accessibilityValue(Text(verbatim: language.title))
+            }
+            ColorSwatches(selection: $color)
+        }
+        .listRowBackground(palette.surface)
+    }
+
+    /// Leaving the group, and about the app.
+    @ViewBuilder private var aboutSections: some View {
+        if model.phase == .home {
+            Section {
+                LeaveButton()
+            }
+            .listRowBackground(palette.surface)
+        }
+        Section {
+            LabeledContent {
+                Text(version).font(.system(.body, design: .monospaced))
+            } label: {
+                Text("Version")
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                versionTaps += 1
+                if versionTaps >= 7 { detailsSwitch = true }
+            }
+            if detailsSwitch {
+                Toggle(isOn: $errorDetails) {
+                    Text("Show error details")
+                }
+                // The share extension reads it from the app group.
+                .onChange(of: errorDetails, initial: true) { _, on in Shared.defaults.set(on, forKey: "ShowErrorDetails") }
+            }
+            Link(destination: URL(string: "https://github.com/HunterEwok/cbb")!) {
+                Text("Source code and license (AGPL-3.0)")
+            }
+        } header: {
+            Text("About")
+        }
+        .listRowBackground(palette.surface)
     }
 
     /// Which keys may be the group's admins and hubs, on the root phone
@@ -512,6 +536,48 @@ extension SettingsView {
             Text("Apple Watch")
         }
         .listRowBackground(palette.surface)
+    }
+}
+
+/// A part of the settings, as a big screen's sidebar lists them: the look,
+/// notifications (and the watch), the recovery key on the root, away from
+/// home (the hub, moving it, Everywhere, the relay), the group's rules for
+/// admins, why it does not sync, and about (leaving the group too).
+enum SettingsPart: String, CaseIterable, Hashable {
+    case look, notifications, recovery, away, group, why, about
+
+    var title: Text {
+        switch self {
+        case .look: Text("Appearance")
+        case .notifications: Text("Notifications")
+        case .recovery: Text("Recovery key")
+        case .away: Text("Away from home")
+        case .group: Text("Group")
+        case .why: Text("Why it does not sync")
+        case .about: Text("About")
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .look: "circle.lefthalf.filled"
+        case .notifications: "bell"
+        case .recovery: "key"
+        case .away: "globe"
+        case .group: "person.3"
+        case .why: "questionmark.circle"
+        case .about: "info.circle"
+        }
+    }
+
+    /// Whether the part has anything on this device.
+    @MainActor func shown(_ model: AppModel) -> Bool {
+        switch self {
+        case .recovery: model.isRoot
+        case .away: model.hub != nil || model.away != nil || model.blindRelay != nil
+        case .group: (model.isAdmin && model.phase == .home) || model.keyLevel != nil
+        default: true
+        }
     }
 }
 

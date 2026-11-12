@@ -226,7 +226,13 @@ extension GroupController {
 final class AppModel: ObservableObject {
     /// The one model of the running app, which the Shortcuts action uses
     /// too.
-    static let shared = AppModel(group: LiveGroup(), notifies: true)
+    static let shared: AppModel = {
+        #if DEBUG
+        // The made-up group of the screenshots and Home's UI tests.
+        if let showcase = ShowcaseGroup.requested() { return AppModel(group: showcase) }
+        #endif
+        return AppModel(group: LiveGroup(), notifies: true)
+    }()
 
     enum Phase: Equatable { case start, joining, home }
 
