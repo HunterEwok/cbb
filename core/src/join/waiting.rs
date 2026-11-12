@@ -15,11 +15,15 @@
 //! - The holder sends `waiting` only to a device that may admit: the root's
 //!   device, or a device whose admin key has `admit` (`decide::may_admit`).
 //! - An admin takes `waiting` only from a device the records let be a hub.
+//! - The holder takes `dismiss` only from a device that may admit.
 //! - The holder keeps a request until the invitation's guest path expires
 //!   (the expiry its admin gave with `guest`), and never more than a day; at
 //!   most 16 requests, one per invitation and key, and at most 2 of one
 //!   invitation (a third key is refused, so it cannot push out the first);
-//!   a second knock of the same counts as an attempt.
+//!   a second knock of the same counts as an attempt. The invitation is
+//!   the one of the guest path the joiner came by, as the holder knows it;
+//!   an Info that names another is refused. From the home network, where
+//!   no guest path tells it, at most 2 requests in all.
 
 use alloc::vec::Vec;
 
@@ -38,6 +42,9 @@ pub const MAX_REQUESTS: usize = 16;
 /// The most requests of one invitation: whoever holds one invitation
 /// cannot take the places of the others.
 pub const MAX_PER_INVITATION: usize = 2;
+/// The most requests whose invitation only the joiner names (from the home
+/// network, where no guest path tells it).
+pub const MAX_UNVOUCHED: usize = 2;
 
 pub const RULE_WAITING: Rule = Rule::field("waiting/requests");
 pub const RULE_DISMISS: Rule = Rule::field("dismiss/invite");
@@ -55,6 +62,9 @@ pub struct Request {
     /// When the holder drops it.
     pub until_ms: u64,
     pub attempts: u8,
+    /// The holder knows the invitation from the guest path the joiner came
+    /// by, not only from the joiner's word.
+    pub vouched: bool,
 }
 
 /// One request, as an admin reads it.
@@ -95,6 +105,12 @@ pub fn admin_may_take(state: &State, from: &DeviceId) -> bool {
     state.device(from).is_some_and(|d| !d.frozen && d.rights & RIGHT_HUB != 0)
 }
 
+/// Whether the holder takes `dismiss` from device `from`: only from a
+/// device it may send `waiting` to, one that may admit.
+pub fn holder_takes_dismiss(state: &State, from: &DeviceId) -> bool {
+    holder_may_send(state, from)
+}
+
 /// The requests a holder keeps.
 #[derive(Clone, Default, PartialEq, Eq, Debug)]
 pub struct Held {
@@ -102,12 +118,24 @@ pub struct Held {
 }
 
 impl Held {
-    /// A joiner knocked at `now_ms` by an invitation whose guest path is
-    /// good until `expires_ms`. Returns whether the request is kept.
-    pub fn knock(&mut self, key: &[u8], info: Info, network: Network, now_ms: u64, expires_ms: u64) -> bool {
+    /// A joiner knocked at `now_ms` from `network`. `path` is the
+    /// invitation of the guest path it came by, as the holder knows it (the
+    /// `guest` message that opened the path), not as the joiner names it;
+    /// None from the home network, where no guest path tells the
+    /// invitation. `expires_ms` is when that path ends. Returns whether the
+    /// request is kept.
+    pub fn knock(
+        &mut self,
+        key: &[u8],
+        info: Info,
+        network: Network,
+        path: Option<[u8; 16]>,
+        now_ms: u64,
+        expires_ms: u64,
+    ) -> bool {
         self.drop_old(now_ms);
         let Some(invite) = info.invite else { return false };
-        if now_ms >= expires_ms {
+        if path.is_some_and(|p| p != invite) || now_ms >= expires_ms {
             return false;
         }
         if let Some(r) = self.requests.iter_mut().find(|r| r.invite == invite && r.key == key) {
@@ -116,9 +144,14 @@ impl Held {
             r.network = network;
             return true;
         }
-        if self.requests.len() >= MAX_REQUESTS
-            || self.requests.iter().filter(|r| r.invite == invite).count() >= MAX_PER_INVITATION
-        {
+        let full = self.requests.len() >= MAX_REQUESTS
+            || match path {
+                Some(_) => {
+                    self.requests.iter().filter(|r| r.vouched && r.invite == invite).count() >= MAX_PER_INVITATION
+                }
+                None => self.requests.iter().filter(|r| !r.vouched).count() >= MAX_UNVOUCHED,
+            };
+        if full {
             return false;
         }
         let until_ms = expires_ms.min(now_ms.saturating_add(MAX_WAIT_MS));
@@ -130,6 +163,7 @@ impl Held {
             since_ms: now_ms,
             until_ms,
             attempts: 1,
+            vouched: path.is_some(),
         });
         true
     }

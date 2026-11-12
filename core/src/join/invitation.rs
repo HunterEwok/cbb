@@ -429,11 +429,40 @@ fn within_one(a: &[char], b: &[char]) -> bool {
 }
 
 /// The short code both screens show, for a device with a screen and no
-/// camera (A-43): six digits from the pairing session's exporter, which
-/// both ends share only when nobody sits between them. The user answers
-/// "they match".
-pub fn short_code(exporter: &[u8]) -> String {
-    let h = crate::format::sha256(&[b"cbb short code v1\0", exporter]);
+/// camera (A-43): six digits from the pairing session's exporter and two
+/// nonces, one from each end. The joiner sends the hash of its nonce
+/// ([`code_commitment`]) in `pair/start`, the member answers with its own
+/// nonce in `pair/reply`, and the joiner opens its nonce in `pair/confirm`.
+/// Neither end can choose its part after it has seen the other's, so the
+/// codes of two sessions match by chance only (one in a million). The user
+/// answers "they match".
+pub fn short_code(exporter: &[u8], joiner_nonce: &[u8; 32], member_nonce: &[u8; 32]) -> String {
+    let h = crate::format::sha256(&[b"cbb short code v2\0", exporter, joiner_nonce, member_nonce]);
     let n = u32::from_be_bytes([h[0], h[1], h[2], h[3]]) % 1_000_000;
     alloc::format!("{n:06}")
+}
+
+/// The hash of the joiner's nonce that `pair/start` carries.
+pub fn code_commitment(joiner_nonce: &[u8; 32]) -> [u8; 32] {
+    crate::format::sha256(&[b"cbb short code commitment v1\0", joiner_nonce])
+}
+
+impl Open {
+    /// The member's short code once the joiner opened its nonce: the code,
+    /// or [`PairError::WrongCode`] when the nonce does not open the
+    /// commitment. A wrong opening ends the pairing and counts as a failed
+    /// attempt.
+    pub fn short_code(
+        &mut self,
+        exporter: &[u8],
+        commitment: &[u8; 32],
+        joiner_nonce: &[u8; 32],
+        member_nonce: &[u8; 32],
+    ) -> Result<String, PairError> {
+        if &code_commitment(joiner_nonce) != commitment {
+            self.failures = self.failures.saturating_add(1);
+            return Err(PairError::WrongCode);
+        }
+        Ok(short_code(exporter, joiner_nonce, member_nonce))
+    }
 }

@@ -1227,13 +1227,16 @@ TABLES = {
     "pair/start": [
         (2, "pair/start/ya", "bytes 1..256", True),
         (3, "pair/start/ada", "bytes 1..16384", True),
+        (4, "pair/start/commitment", "bytes 32", True),
     ],
     "pair/reply": [
         (2, "pair/reply/yb", "bytes 1..256", True),
         (3, "pair/reply/adb", "bytes 1..1024", True),
+        (4, "pair/reply/nonce", "bytes 32", True),
     ],
     "pair/confirm": [
         (2, "pair/confirm/ta", "bytes 1..64", True),
+        (3, "pair/confirm/nonce", "bytes 32", True),
     ],
     "pair/welcome": [
         (2, "pair/welcome/tb", "bytes 1..64", True),
@@ -1268,8 +1271,10 @@ TABLES = {
         (5, "pair/info/admin", "key 1", False),
         (6, "pair/info/admin-pop", "bytes 64", False),
         (7, "pair/info/keys", "envelope", False),
+        (8, "pair/info/device", "map pair/info/device", False),
         (9, "pair/info/invite", "bytes 16", False),
     ],
+    "pair/info/device": [],
     "invite": [
         (1, "invite/shape", "bytes 16", True),
         (2, "invite/shape", "bytes 32", True),
@@ -1425,19 +1430,41 @@ MESSAGE_TYPES = {
 
 
 def addr_ok(t):
+    """An addr in its one canonical text: RFC 5952 for IPv6, no zone, not
+    IPv4-mapped, not unspecified, the port 1..65535 in its shortest digits."""
     import ipaddress
     try:
         if t.startswith("["):
             host, sep, port = t[1:].partition("]:")
-            if not sep or "%" in host or ipaddress.IPv6Address(host).ipv4_mapped:
+            if not sep or "%" in host:
+                return False
+            a = ipaddress.IPv6Address(host)
+            if a.ipv4_mapped or a.compressed != host:
                 return False
         else:
             host, port = t.rsplit(":", 1)
-            ipaddress.IPv4Address(host)
-        return (port.isdigit() and int(port) <= 65535 and port.isascii()
-                and not (len(port) > 1 and port[0] == "0"))
+            a = ipaddress.IPv4Address(host)
+            if str(a) != host:
+                return False
+        return (port.isascii() and port.isdigit() and str(int(port)) == port
+                and 1 <= int(port) <= 65535 and not a.is_unspecified)
     except ValueError:
         return False
+
+
+def endpoint_ok(t):
+    """A card's endpoint: an addr, or a lower-case DNS name whose last label
+    is neither all digits nor starts with 0x, with its port."""
+    if addr_ok(t):
+        return True
+    host, sep, port = t.rpartition(":")
+    if not sep or not (port.isascii() and port.isdigit() and str(int(port)) == port and 1 <= int(port) <= 65535):
+        return False
+    labels = host.split(".")
+    last = labels[-1]
+    return (0 < len(host) <= 253 and not last.isdigit() and not last.startswith("0x")
+            and all(0 < len(l) <= 63 and not l.startswith("-")
+                    and all(c in "abcdefghijklmnopqrstuvwxyz0123456789-" for c in l) for l in labels))
 
 
 def key_ok(v, alg):
@@ -1564,9 +1591,9 @@ def wave3_vectors(records_take):
         "field 3: room for the settings to change with the period; no 0.6 writer sets it, a reader checks its shape and does not apply it")
     bad("credentials with settings out of shape", {0: 11, 2: [dec(envs[0])], 3: {**obf, 2: 80}},
         "member-credentials/obfuscation")
-    msg("pair start", {0: 64, 2: fake("cpace ya", 32), 3: enc(info)})
-    msg("pair reply", {0: 65, 2: fake("cpace yb", 32), 3: enc(adb)})
-    msg("pair confirm", {0: 66, 2: fake("cpace ta", 32)})
+    msg("pair start", {0: 64, 2: fake("cpace ya", 32), 3: enc(info), 4: fake("code commitment", 32)})
+    msg("pair reply", {0: 65, 2: fake("cpace yb", 32), 3: enc(adb), 4: fake("member nonce", 32)})
+    msg("pair confirm", {0: 66, 2: fake("cpace ta", 32), 3: fake("joiner nonce", 32)})
     msg("pair welcome", {0: 67, 2: fake("cpace tb", 32), 3: welcome}, "records: the first two of records.json")
     msg("pair done", {0: 68})
     msg("pair error: taken", {0: 69, 2: 8})
@@ -1588,6 +1615,8 @@ def wave3_vectors(records_take):
     msg("forwarder registered", {0: 82, 2: 7, 3: fake("fwd mask", 32), 4: {1: fake("vless user", 16), 2: 443}})
     msg("forwarder error", {0: 83, 2: "unknown group"})
     msg("forwarder seen", {0: 84, 2: "198.51.100.7:40000"})
+    msg("forwarder seen: IPv6", {0: 84, 2: "[2001:db8::7]:40000"})
+    msg("forwarder seen: IPv6, one zero group written out", {0: 84, 2: "[2001:db8:0:1:1:1:1:1]:40000"})
     msg("relay challenge", {0: 90, 2: fake("relay e", 32), 3: 1})
     msg("relay register", {0: 91, 2: dev_key, 3: fake("relay proof", 32), 4: [dec(envs[0])], 5: ROOT.key})
     msg("relay registered", {0: 92, 2: hub_key, 3: fake("relay psk", 32), 4: "10.64.0.2"})
@@ -1607,6 +1636,10 @@ def wave3_vectors(records_take):
     bad("hubs: flag 2", {0: 16, 2: 2}, "hubs/stopped")
     bad("guest op 8", {0: 17, 2: 8, 3: guest_key}, "guest/op")
     bad("pair error code 0", {0: 69, 2: 0}, "pair/error/code")
+    bad("pair start without the code's commitment", {0: 64, 2: fake("cpace ya", 32), 3: enc(info)},
+        "pair/start/commitment")
+    bad("pair confirm with a short nonce", {0: 66, 2: fake("cpace ta", 32), 3: fake("joiner nonce", 31)},
+        "pair/confirm/nonce")
     bad("relay online: names out of order", {0: 97, 2: list(reversed(names))}, "relay/online/names")
     bad("relay online: a name twice", {0: 97, 2: [names[0], names[0]]}, "relay/online/names")
     bad("relay online: 65 names", {0: 97, 2: sorted(fake(f"n{i}", 32) for i in range(65))}, "relay/online/names")
@@ -1621,8 +1654,13 @@ def wave3_vectors(records_take):
     bad("forwarder seen: an IPv6 zone", {0: 84, 2: "[fe80::1%2]:443"}, "forward/seen/addr")
     bad("forwarder seen: an IPv4-mapped address", {0: 84, 2: "[::ffff:192.0.2.1]:443"}, "forward/seen/addr")
     bad("forwarder seen: a port with a leading zero", {0: 84, 2: "192.0.2.1:080"}, "forward/seen/addr")
+    for a in ["[2001:DB8::1]:443", "[2001:db8:0:0:0:0:0:1]:443", "[2001:0db8::0001]:443", "[2001:db8::0.0.0.1]:443",
+              "[2001:db8:0::1]:443", "[2001:db8::1:1:1:1:1]:443", "192.0.2.1:0", "0.0.0.0:443", "[::]:443"]:
+        bad(f"forwarder seen: {a}", {0: 84, 2: a}, "forward/seen/addr")
     bad("relay error: empty reason", {0: 93, 2: ""}, "server/error/reason")
 
+    mp("an info with the hello's device map", "pair/info", {1: "tv", 4: 1, 8: {1: 1}})
+    mp("an info: device not a map", "pair/info", {1: "tv", 4: 1, 8: 5}, "pair/info/device")
     mp("an offer", "offer", offer)
     mp("an offer: endpoints in the hub's order", "offer", {**offer, 2: list(reversed(offer[2]))})
     mp("an offer: an endpoint twice", "offer", {**offer, 2: [offer[2][0]] * 2}, "offer/endpoints")
@@ -1755,6 +1793,10 @@ def card_vectors():
     no("two keys out of order", card({12: [[ES256, k] for k in reversed(tls)]}), "card/keys")
     no("a key twice", card({12: [[ES256, tls[0]]] * 2}), "card/keys")
     no("an endpoint twice", card({11: ["fwd.example.org:443"] * 2}), "card/endpoints")
+    for e in ["0192.0.2.7:443", "192.0.2.07:443", "3221225991:443", "0xc0.0.2.7:443", "EXAMPLE.org:443",
+              "fwd.example.org:0", "[2001:DB8::1]:443", "[2001:db8:0:0:0:0:0:1]:443"]:
+        no(f"an endpoint {e}", card({11: [e]}), "card/endpoints")
+    ok("an endpoint by IPv6 address", card({11: ["fwd.example.org:443", "[2001:db8::7]:443"]}))
     no("kinds 4", card({13: 4}), "card/kinds")
     no("signed by another key than the operator it names", card(), "sig/verify", by=STRANGER)
     return take, refuse

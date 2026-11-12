@@ -80,11 +80,7 @@ func tyOK(ty string, v any) bool {
 		if !ok {
 			return false
 		}
-		ap, err := netip.ParseAddrPort(s)
-		i := strings.LastIndexByte(s, ':')
-		port := s[i+1:]
-		return err == nil && ap.Addr().Zone() == "" && !ap.Addr().Is4In6() &&
-			!(len(port) > 1 && port[0] == '0')
+		return addrOK(s)
 	case "key":
 		a, ok := v.([]any)
 		if !ok || len(a) != 2 {
@@ -390,6 +386,11 @@ func checkMessages(dir string) {
 		if !tyOK("once 1..8 of text 1..253", m[uint64(11)]) {
 			return "card/endpoints"
 		}
+		for _, e := range m[uint64(11)].([]any) {
+			if !endpointOK(e.(string)) {
+				return "card/endpoints"
+			}
+		}
 		if k, ok := m[uint64(13)].(uint64); !ok || k == 0 || k&^3 != 0 {
 			return "card/kinds"
 		}
@@ -408,4 +409,41 @@ func checkMessages(dir string) {
 		count++
 	}
 	fmt.Printf("%-18s %d checked, %d of them by the invitation's rules between fields\n", "messages3.json", count, cross)
+}
+
+// addrOK reports whether s is an addr in its one canonical text (RFC 5952
+// for IPv6), no zone, not IPv4-mapped, not unspecified, not port 0.
+func addrOK(s string) bool {
+	ap, err := netip.ParseAddrPort(s)
+	return err == nil && ap.String() == s && ap.Addr().Zone() == "" && !ap.Addr().Is4In6() &&
+		!ap.Addr().IsUnspecified() && ap.Port() != 0
+}
+
+// endpointOK reports whether s is a card's endpoint: an addr, or a
+// lower-case DNS name whose last label is neither all digits nor starts
+// with 0x, with its port.
+func endpointOK(s string) bool {
+	if _, err := netip.ParseAddrPort(s); err == nil {
+		return addrOK(s)
+	}
+	i := strings.LastIndexByte(s, ':')
+	if i < 0 {
+		return false
+	}
+	host, port := s[:i], s[i+1:]
+	p, err := strconv.ParseUint(port, 10, 16)
+	if err != nil || p == 0 || strconv.FormatUint(p, 10) != port || host == "" || len(host) > 253 {
+		return false
+	}
+	labels := strings.Split(host, ".")
+	last := labels[len(labels)-1]
+	if strings.HasPrefix(last, "0x") || strings.Trim(last, "0123456789") == "" {
+		return false
+	}
+	for _, l := range labels {
+		if l == "" || len(l) > 63 || l[0] == '-' || strings.Trim(l, "abcdefghijklmnopqrstuvwxyz0123456789-") != "" {
+			return false
+		}
+	}
+	return true
 }

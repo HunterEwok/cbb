@@ -154,7 +154,7 @@ fn each_server_its_own_face() {
     for (i, s) in ["server a", "server b", "server c"].iter().enumerate() {
         faces.insert(
             Key::new(Alg::Es256, &k(s).public()).hash(),
-            alias::new_face(k(&format!("period {i}")).public(), &[7; 32]),
+            alias::new_face(k(&format!("period {i}")).public(), &[7; 32], 1_900_000_000_000),
         );
     }
     assert!(alias::distinct(&faces));
@@ -165,9 +165,33 @@ fn each_server_its_own_face() {
     let mut same_server_key = faces.clone();
     same_server_key.insert(
         Key::new(Alg::Es256, &k("server d").public()).hash(),
-        Face { tag: [9; 16], period_key: k("period d").public(), server_key: first.server_key.clone() },
+        Face {
+            tag: [9; 16],
+            period_key: k("period d").public(),
+            server_key: first.server_key.clone(),
+            version: 1,
+            expires_ms: 1,
+        },
     );
     assert!(!alias::distinct(&same_server_key), "a server key shown to two servers links them");
+    // Each face has its own versions and expiry.
+    let fresh = |f: &Face| Face {
+        tag: [9; 16],
+        period_key: k("period d").public(),
+        server_key: alias::server_key(&[7; 32], &[9; 16]).1,
+        ..f.clone()
+    };
+    let mut same_version = faces.clone();
+    same_version.insert(Key::new(Alg::Es256, &k("server d").public()).hash(), Face { expires_ms: 1, ..fresh(&first) });
+    assert!(!alias::distinct(&same_version), "one version for two servers links them");
+    let mut same_expiry = faces.clone();
+    same_expiry.insert(Key::new(Alg::Es256, &k("server d").public()).hash(), Face { version: 1, ..fresh(&first) });
+    assert!(!alias::distinct(&same_expiry), "one expiry for two servers links them");
+    let e = alias::expiry(1_900_000_000_000);
+    assert!((1_900_000_000_000..1_900_000_000_000 + 2 * alias::DAY_MS).contains(&e));
+    let mut f = first.clone();
+    let v = f.version;
+    assert_eq!(f.next_version(), v + 1);
 
     // The device's server key: stable for a face, another for another face
     // or another device.
@@ -180,7 +204,7 @@ fn each_server_its_own_face() {
     // Two servers' hubs credentials, each signed by its own period key: with
     // the hub's server key per face they share no hash; with one server key
     // for both, they link.
-    let hubs_for = |period: &str, tag: [u8; 16], hub_key: &[u8]| -> Credential {
+    let hubs_for = |period: &str, tag: [u8; 16], hub_key: &[u8], version: u64, expires: u64| -> Credential {
         let real = Key::new(Alg::Es256, hub_key).hash().0;
         let hubs = credential::pad(&[real], credential::LENGTHS_HUBS).unwrap();
         let admins = credential::pad(&[], credential::LENGTHS_ADMINS).unwrap();
@@ -189,8 +213,8 @@ fn each_server_its_own_face() {
             (1, crate::format::Value::Uint(credential::TYPE_HUBS)),
             (2, crate::format::Value::Bytes(&tag)),
             (3, crate::format::Value::Array(vec![crate::format::Value::Uint(1), crate::format::Value::Bytes(&pk)])),
-            (4, crate::format::Value::Uint(1)),
-            (7, crate::format::Value::Uint(1_900_000_000_000)),
+            (4, crate::format::Value::Uint(version)),
+            (7, crate::format::Value::Uint(expires)),
             (12, crate::format::Value::Array(hubs.iter().map(|h| crate::format::Value::Bytes(h)).collect())),
             (13, crate::format::Value::Array(admins.iter().map(|h| crate::format::Value::Bytes(h)).collect())),
         ])
@@ -199,12 +223,16 @@ fn each_server_its_own_face() {
         Credential::read(&crate::format::envelope::write(&body, &sig, None)).unwrap()
     };
     let (ta, tb) = ([1u8; 16], [2u8; 16]);
-    let a = hubs_for("period a", ta, &alias::server_key(&[7; 32], &ta).1);
-    let b = hubs_for("period b", tb, &alias::server_key(&[7; 32], &tb).1);
+    let a = hubs_for("period a", ta, &alias::server_key(&[7; 32], &ta).1, 37, 1_900_000_000_123);
+    let b = hubs_for("period b", tb, &alias::server_key(&[7; 32], &tb).1, 9_001, 1_900_040_000_456);
     assert!(!alias::linkable(&a, &b));
     let one = alias::server_key(&[7; 32], &ta).1;
-    let b_same = hubs_for("period b", tb, &one);
+    let b_same = hubs_for("period b", tb, &one, 9_001, 1_900_040_000_456);
     assert!(alias::linkable(&a, &b_same), "one server key in both lists links them");
+    let b_version = hubs_for("period b", tb, &alias::server_key(&[7; 32], &tb).1, 37, 1_900_040_000_456);
+    assert!(alias::linkable(&a, &b_version), "one version links them");
+    let b_expiry = hubs_for("period b", tb, &alias::server_key(&[7; 32], &tb).1, 9_001, 1_900_000_000_123);
+    assert!(alias::linkable(&a, &b_expiry), "one expiry links them");
 
     let v = load("credentials.json");
     let creds: Vec<Credential> = v["take"]

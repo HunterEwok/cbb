@@ -186,36 +186,45 @@ impl Intro {
     }
 }
 
-/// The most intros one address may send in a window.
+/// The most intros one network (an IPv6 /64, an IPv4 /24) may send in a
+/// window.
 pub const MAX_PER_WINDOW: u32 = 4;
 /// The window.
 pub const WINDOW_MS: u64 = 60_000;
-/// The most addresses a [`Limiter`] tracks at once.
+/// The most networks a [`Limiter`] tracks at once; when full, the oldest
+/// gives way.
 pub const MAX_ADDRESSES: usize = 256;
 
-/// Counts intros per address, so that one address cannot make a member
-/// check intro after intro.
+/// Counts intros per network (an IPv6 /64, an IPv4 /24), so that one host
+/// cannot make a member check intro after intro, nor fill the table and
+/// keep everybody else out.
 #[derive(Clone, Default, Debug)]
 pub struct Limiter {
     seen: BTreeMap<Vec<u8>, (u64, u32)>,
 }
 
 impl Limiter {
-    /// Whether an intro from `addr` (its IP address's bytes) at `now_ms` may
-    /// be checked; it counts it.
-    pub fn allow(&mut self, addr: &[u8], now_ms: u64) -> bool {
+    /// Whether an intro from `addr` at `now_ms` may be checked; it counts it.
+    pub fn allow(&mut self, addr: core::net::IpAddr, now_ms: u64) -> bool {
+        let net: Vec<u8> = match addr.to_canonical() {
+            core::net::IpAddr::V4(a) => a.octets().get(..3).unwrap_or_default().to_vec(),
+            core::net::IpAddr::V6(a) => a.octets().get(..8).unwrap_or_default().to_vec(),
+        };
         self.seen.retain(|_, (start, _)| now_ms.saturating_sub(*start) < WINDOW_MS);
-        if let Some((_, n)) = self.seen.get_mut(addr) {
+        if let Some((_, n)) = self.seen.get_mut(&net) {
             if *n >= MAX_PER_WINDOW {
                 return false;
             }
             *n = n.saturating_add(1);
             return true;
         }
-        if self.seen.len() >= MAX_ADDRESSES {
-            return false;
+        while self.seen.len() >= MAX_ADDRESSES {
+            let Some(oldest) = self.seen.iter().min_by_key(|(_, (start, _))| *start).map(|(k, _)| k.clone()) else {
+                break;
+            };
+            self.seen.remove(&oldest);
         }
-        self.seen.insert(addr.to_vec(), (now_ms, 1));
+        self.seen.insert(net, (now_ms, 1));
         true
     }
 }
