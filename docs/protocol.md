@@ -2620,8 +2620,11 @@ key, the group's obfuscation settings and VLESS user ID when set, the addresses 
 and its clients, and the timing and sizes of their packets. A hub that registers with a
 credential (section 18) shows besides only the period's tag, a certificate of its server key
 that names neither a device nor a group, and the period's hubs' credential: hashes of
-server keys, padded, a version, an expiry and the period key; all of it new each period, so
-the forwarder cannot tell one month of a group from the next. A hub that registers with
+server keys, padded, a version, an expiry and the period key; all of it new each period, as is
+the hub's WireGuard key (section 11, "The hub's key"). The obfuscation settings and the VLESS
+user ID stay with the group from one period to the next, so they let the forwarder, and an
+observer on the path who sees the obfuscation settings, tell that two periods are of the
+same group. A hub that registers with
 records shows instead the group tag, its member certificate (device ID, validity, admin
 CA), the group's root certificates and its authority records, which name the root's and the
 admins' devices, with their names and systems, and the removals. It never sees a member key,
@@ -3706,7 +3709,10 @@ and pass them on through the phone's member in the Rust core (`send_credentials`
 by them once the members' credential lists its server key (`CredentialStore.registration`,
 `cbb_tunnel_relay_credentials`, member/src/relay.rs,
 with the server certificate of `certs::server_cert_by`); it maps the pseudonyms the relay
-names back to device IDs by the server credentials.
+names back to device IDs by the server credentials. A phone that is the group's hub
+registers with its forwarder the same way once the hubs' credential lists its server key
+(`CredentialStore.hubRegistration`, `cbb_tunnel_hub_credentials`, member/src/forward.rs), and
+with its member certificate and the records until then.
 
 The group lives in **periods** of about 30 days. For each, its root signs, inside the group,
 a fresh **tag** for the servers and a fresh **period key**; each device signs with its member

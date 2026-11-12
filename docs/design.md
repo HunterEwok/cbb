@@ -1398,7 +1398,8 @@ not. The project's forwarder runs at `cbb.tools`, still being tested; a user can
   and, on disk, under a keyed hash of each period's tag, the version of the newest
   credential and a hash of the period key, so an older credential is refused even after a
   restart. The files of earlier versions, one per group with its roots and removals, are
-  deleted. Built in Go and in both phone kits; hubs from before the credentials still
+  deleted. Built in Go, in the Rust hub and in both phone kits, whose hub registers by the
+  credential once it lists the phone's server key; hubs from before the credentials still
   register with their member certificate, a signature by the root or an admin CA, and the group's authority records,
   which the forwarder keeps in memory only.
 - **No interference.** Limits per group: packets and bytes per second, at most 16 clients,
