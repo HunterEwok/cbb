@@ -2595,13 +2595,6 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     }
 
     /**
-     * Answers a peer whose hello the node took: an admin phone notes its
-     * certificate for renewal when due, the root sends a computer it made an
-     * admin its admin CA again while it still offers the key, and the hub
-     * answers its tunnel key with its offers and shares its clients with the
-     * group's other hubs; every peer gets the group's server credentials.
-     */
-    /**
      * The group's records are synced with a member once it has stayed
      * connected for 30 s (its records came in at the connection's start):
      * that spends the push hints-only marks that arrived before it connected.
@@ -2617,6 +2610,13 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }, "push synced").start()
     }
 
+    /**
+     * Answers a peer whose hello the node took: an admin phone notes its
+     * certificate for renewal when due, the root sends a computer it made an
+     * admin its admin CA again while it still offers the key, and the hub
+     * answers its tunnel key with its offers and shares its clients with the
+     * group's other hubs; every peer gets the group's server credentials.
+     */
     private fun peerConnected(n: CoreMember, p: CoreMember.Peer, isHub: Boolean, h: HubOnPhone) {
         if (p.recordsOnly) return
         renew(p.device, p.chain)
