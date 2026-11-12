@@ -375,10 +375,9 @@ jobs:
           cache: false # nothing to download; leaves the shared cache key to the check job
       - name: go test
         if: env.GO == 'true'
-        # Under -race on macOS gVisor's network stack is about a hundred
-        # times slower: the packages that use it run one at a time, after
-        # the others (the script says why).
-        run: sh .github/go-test-race.sh cover-go-macos-latest.out
+        # The service's tests take close to go test's default 10 minutes
+        # under -race on the macOS runner, so the package has 20.
+        run: go test -race -timeout 20m -coverprofile=cover-go-macos-latest.out ./...
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: env.GO == 'true'
         with:
