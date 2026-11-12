@@ -928,12 +928,18 @@ impl Service {
     /// until an admin lifts it), or ends its mute, saves it, and tells the
     /// members connected in a presence message, without connecting again.
     fn set_muted(&self, node: &Arc<Node>, on: bool, until: i64, by: &str) -> Result<()> {
+        self.set_muted_as(node, on, until, by, by)
+    }
+
+    /// set_muted, saving `saved` as the muter (mute::kept_by) while the
+    /// log names `by`.
+    fn set_muted_as(&self, node: &Arc<Node>, on: bool, until: i64, by: &str, saved: &str) -> Result<()> {
         if on {
             node.engine.set_mute(until);
         } else {
             node.engine.unmute();
         }
-        crate::mute::save(&self.state_dir, &node.engine, by)?;
+        crate::mute::save(&self.state_dir, &node.engine, saved)?;
         (self.log)(&match (on, until) {
             (false, _) => format!("cbb: {by} ended the mute: this device's copies reach the group again"),
             (true, 0) => format!("cbb: {by} muted this device until an admin unmutes it"),
@@ -957,7 +963,14 @@ impl Service {
         let until = crate::mute::until(h.for_ms)?;
         if self.admin(|a| a.mute(&h.device, on, h.for_ms))?.is_none() {
             let me = node.identity().id.to_string();
-            self.set_muted(&node, on, until, &me)?;
+            // Muting again keeps who muted it first, so another admin's mute
+            // never becomes this device's own to end.
+            let saved = if on {
+                crate::mute::kept_by(&crate::mute::by(&self.state_dir, &node.engine)?, &me)
+            } else {
+                me.clone()
+            };
+            self.set_muted_as(&node, on, until, &me, &saved)?;
         }
         Ok(())
     }
@@ -968,8 +981,9 @@ impl Service {
     /// for the rest of the group, and only an admin device may do it
     /// (mute_op asks for the admin key), so the app turns its own device
     /// back on without the administrator's password (docs/design.md,
-    /// "Muting a device"). Ending a mute another admin set is not the
-    /// device's own matter: it goes through the confirmation.
+    /// "Muting a device"). A mute another admin set is not the device's own
+    /// matter, to end or to set again: it goes through the confirmation, as
+    /// does any request when nothing tells that its user is at the screen.
     fn own_device_op(&self, conn: &UnixStream, h: &Header) -> bool {
         if !control::is_own_device_op(&h.op) || h.device.is_empty() {
             return false;
@@ -979,10 +993,10 @@ impl Service {
         if !crate::admin::find_device(&node, &h.device).is_ok_and(|d| d.id == me) {
             return false;
         }
-        if peer::may_take(peer::uid(conn), DESKTOP, peer::at_screen) == peer::Verdict::Refused {
+        if peer::may_take(peer::uid(conn), DESKTOP, peer::at_screen_surely) != peer::Verdict::Allowed {
             return false;
         }
-        h.op != "unmute" || crate::mute::by(&self.state_dir, &node.engine).is_ok_and(|by| by.is_empty() || by == me)
+        crate::mute::by(&self.state_dir, &node.engine).is_ok_and(|by| by.is_empty() || by == me)
     }
 
     /// The answer to sync and muted, as the phone's member gives it.

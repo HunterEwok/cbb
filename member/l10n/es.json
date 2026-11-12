@@ -136,5 +136,6 @@
  "Start the service (cbb service) within a day: it hands this device's key to the hub.": "Inicia el servicio (cbb service) en menos de un día: entrega la clave de este dispositivo al hub.",
  "Paste the invitation: ": "Pegue la invitación: ",
  "the invitation is a secret, so cbb takes it from its file or, with cbb pair -invite -, pasted on standard input, never on the command line": "la invitación es un secreto, así que cbb la toma de su archivo o, con cbb pair -invite -, pegada en la entrada estándar, nunca de la línea de órdenes",
- "cannot find this user's settings folder, so the agent of the user's session would not run the command": "no se encuentra la carpeta de ajustes de este usuario, así que el agente de su sesión no ejecutaría la orden"
+ "cannot find this user's settings folder, so the agent of the user's session would not run the command": "no se encuentra la carpeta de ajustes de este usuario, así que el agente de su sesión no ejecutaría la orden",
+ "cannot write the command in this user's settings folder": "no se puede escribir el comando en la carpeta de ajustes de este usuario"
 }

@@ -136,5 +136,6 @@
  "Start the service (cbb service) within a day: it hands this device's key to the hub.": "شغّل الخدمة (cbb service) خلال يوم: فهي تسلّم مفتاح هذا الجهاز إلى المحور.",
  "Paste the invitation: ": "الصق الدعوة: ",
  "the invitation is a secret, so cbb takes it from its file or, with cbb pair -invite -, pasted on standard input, never on the command line": "الدعوة سرّية، لذا يأخذها cbb من ملفها أو، مع cbb pair -invite -، ملصقة على الإدخال القياسي، وليس من سطر الأوامر أبدًا",
- "cannot find this user's settings folder, so the agent of the user's session would not run the command": "تعذّر العثور على مجلد إعدادات هذا المستخدم، لذا لن يشغّل وكيل جلسته الأمر"
+ "cannot find this user's settings folder, so the agent of the user's session would not run the command": "تعذّر العثور على مجلد إعدادات هذا المستخدم، لذا لن يشغّل وكيل جلسته الأمر",
+ "cannot write the command in this user's settings folder": "تعذّرت كتابة الأمر في مجلد إعدادات هذا المستخدم"
 }

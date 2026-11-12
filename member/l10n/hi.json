@@ -136,5 +136,6 @@
  "Start the service (cbb service) within a day: it hands this device's key to the hub.": "एक दिन के भीतर सेवा (cbb service) शुरू करें: यह इस डिवाइस की कुंजी हब को सौंपती है।",
  "Paste the invitation: ": "निमंत्रण पेस्ट करें: ",
  "the invitation is a secret, so cbb takes it from its file or, with cbb pair -invite -, pasted on standard input, never on the command line": "निमंत्रण गोपनीय है, इसलिए cbb इसे इसकी फ़ाइल से या cbb pair -invite - के साथ मानक इनपुट पर पेस्ट किए गए पाठ से लेता है, कमांड लाइन से कभी नहीं",
- "cannot find this user's settings folder, so the agent of the user's session would not run the command": "इस उपयोगकर्ता का सेटिंग फ़ोल्डर नहीं मिला, इसलिए उसके सत्र का एजेंट कमांड नहीं चलाएगा"
+ "cannot find this user's settings folder, so the agent of the user's session would not run the command": "इस उपयोगकर्ता का सेटिंग फ़ोल्डर नहीं मिला, इसलिए उसके सत्र का एजेंट कमांड नहीं चलाएगा",
+ "cannot write the command in this user's settings folder": "इस उपयोगकर्ता के सेटिंग फ़ोल्डर में कमांड नहीं लिखा जा सका"
 }

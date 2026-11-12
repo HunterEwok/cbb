@@ -8235,48 +8235,48 @@
         }
       }
     },
-    "On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. Show or send it only to the person who joins.": {
+    "On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite - and paste its text. Show or send it only to the person who joins.": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "على هاتف جديد، افتح CBB واضغط «الانضمام بدعوة» وامسح الرمز. على حاسوب، شغّل cbb pair -invite مع نصها. اعرضها أو أرسلها فقط لمن سينضم."
+            "value": "على هاتف جديد، افتح CBB واضغط «الانضمام بدعوة» وامسح الرمز. على حاسوب، شغّل cbb pair -invite - والصق نصها. اعرضها أو أرسلها فقط لمن سينضم."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "En un teléfono nuevo, abre CBB, toca Unirse con una invitación y escanea el código. En un ordenador, ejecuta cbb pair -invite con su texto. Muéstralo o envíalo solo a quien se une."
+            "value": "En un teléfono nuevo, abre CBB, toca Unirse con una invitación y escanea el código. En un ordenador, ejecuta cbb pair -invite - y pega su texto. Muéstralo o envíalo solo a quien se une."
           }
         },
         "he": {
           "stringUnit": {
             "state": "translated",
-            "value": "בטלפון חדש, פתחו את CBB, הקישו על הצטרפות בהזמנה וסרקו את הקוד. במחשב, הריצו cbb pair -invite עם הטקסט שלה. הציגו או שלחו אותה רק למי שמצטרף."
+            "value": "בטלפון חדש, פתחו את CBB, הקישו על הצטרפות בהזמנה וסרקו את הקוד. במחשב, הריצו cbb pair -invite - והדביקו את הטקסט שלה. הציגו או שלחו אותה רק למי שמצטרף."
           }
         },
         "hi": {
           "stringUnit": {
             "state": "translated",
-            "value": "नए फ़ोन पर CBB खोलें, निमंत्रण से जुड़ें पर टैप करें और कोड स्कैन करें। कंप्यूटर पर इसके पाठ के साथ cbb pair -invite चलाएँ। इसे केवल जुड़ने वाले व्यक्ति को दिखाएँ या भेजें।"
+            "value": "नए फ़ोन पर CBB खोलें, निमंत्रण से जुड़ें पर टैप करें और कोड स्कैन करें। कंप्यूटर पर cbb pair -invite - चलाएँ और इसका पाठ पेस्ट करें। इसे केवल जुड़ने वाले व्यक्ति को दिखाएँ या भेजें।"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "На новом телефоне откройте CBB, нажмите «Вступить по приглашению» и отсканируйте код. На компьютере выполните cbb pair -invite с его текстом. Показывайте или отправляйте его только тому, кто вступает."
+            "value": "На новом телефоне откройте CBB, нажмите «Вступить по приглашению» и отсканируйте код. На компьютере выполните cbb pair -invite - и вставьте его текст. Показывайте или отправляйте его только тому, кто вступает."
           }
         },
         "sw": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kwenye simu mpya, fungua CBB, gusa Jiunge kwa mwaliko na uchanganue msimbo. Kwenye kompyuta, endesha cbb pair -invite ukitumia maandishi yake. Uonyeshe au utume kwa anayejiunga pekee."
+            "value": "Kwenye simu mpya, fungua CBB, gusa Jiunge kwa mwaliko na uchanganue msimbo. Kwenye kompyuta, endesha cbb pair -invite - na ubandike maandishi yake. Uonyeshe au utume kwa anayejiunga pekee."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在新手机上打开 CBB，点按“通过邀请加入”并扫描二维码。在电脑上用其文本运行 cbb pair -invite。只向要加入的人出示或发送它。"
+            "value": "在新手机上打开 CBB，点按“通过邀请加入”并扫描二维码。在电脑上运行 cbb pair -invite - 并粘贴其文本。只向要加入的人出示或发送它。"
           }
         }
       }

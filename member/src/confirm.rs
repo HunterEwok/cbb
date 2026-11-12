@@ -53,8 +53,9 @@ pub const RIGHT_EACH: &str = "tools.cbb.admin.each";
 /// the settings that decide who may hold the group, and what lets another
 /// device in for good or sends this device's copies elsewhere: admitting a
 /// device here or by an invitation, joining a group, a hub and sync away
-/// from home.
-pub const EACH_TIME: [&str; 13] = [
+/// from home, taking remote pastes, and pairing a Bluetooth keyboard or a
+/// TV's remote, which type what the group sends.
+pub const EACH_TIME: [&str; 16] = [
     op::NEW,
     op::LEAVE,
     op::TAKE_OVER,
@@ -68,13 +69,16 @@ pub const EACH_TIME: [&str; 13] = [
     "invite",
     "away",
     "hubs",
+    "paste_receive",
+    "keyboard",
+    "remote",
 ];
 
 /// The group's everyday changes, which one confirmation covers for five
 /// minutes: none of them lets a device in or sends copies anywhere new.
 /// Every other operation, also one added later and not listed here, is
 /// confirmed each time.
-pub const KEPT: [&str; 21] = [
+pub const KEPT: [&str; 18] = [
     "sync",
     "mute",
     "unmute",
@@ -86,9 +90,6 @@ pub const KEPT: [&str; 21] = [
     "incoming",
     "network",
     "paste_on",
-    "paste_receive",
-    "keyboard",
-    "remote",
     "action_set",
     "action_remove",
     "action_on",
@@ -372,12 +373,15 @@ pub fn register_cli(args: &[String], request: &dyn Fn(Header) -> Result<Header>)
     Ok(())
 }
 
-/// What a confirmation on Windows signs: the operation and the service's
-/// challenge, after a fixed prefix that nothing else signs.
+/// What a confirmation on Windows signs: the action the user was shown
+/// (action, with its device or name) and the service's challenge, after a
+/// fixed prefix that nothing else signs. The service derives the action
+/// from the request itself, so a signature for one action confirms no
+/// other.
 #[cfg_attr(not(all(windows, feature = "tunnel")), allow(dead_code))]
-pub fn hello_message(op: &str, challenge: &[u8]) -> Vec<u8> {
-    let mut m = b"cbb confirm v1\n".to_vec();
-    m.extend_from_slice(op.as_bytes());
+pub fn hello_message(h: &Header, challenge: &[u8]) -> Vec<u8> {
+    let mut m = b"cbb confirm v2\n".to_vec();
+    m.extend_from_slice(action(h).as_bytes());
     m.push(b'\n');
     m.extend_from_slice(challenge);
     m
@@ -1027,7 +1031,7 @@ mod win {
             st.challenges.remove(at);
             let key =
                 keys(&st.dir).get(&sid).and_then(|k| b64.decode(k).ok()).ok_or_else(|| Error::msg(UNAVAILABLE))?;
-            if !cbb_core::tls::web::verify_rsa_pkcs1_sha256(&key, &super::hello_message(&h.op, &challenge), &sig) {
+            if !cbb_core::tls::web::verify_rsa_pkcs1_sha256(&key, &super::hello_message(h, &challenge), &sig) {
                 return Err(Error::msg("the Windows Hello signature does not match this user's key"));
             }
             if super::right(&h.op) == RIGHT_KEPT {
@@ -1171,7 +1175,7 @@ mod win {
                     if !agree(&super::prompt_for(h))? {
                         return Err(Error::msg(CANCELLED));
                     }
-                    match sign(&super::hello_message(&h.op, &nonce))? {
+                    match sign(&super::hello_message(h, &nonce))? {
                         Some(sig) => {
                             h.auth = format!("{}.{}", a.value, b64.encode(sig));
                             return Ok(());
@@ -1385,16 +1389,44 @@ mod tests {
             assert!(ops.iter().any(|o| o == op), "{op} is in a tier but is no operation");
             assert!(crate::control::is_admin(op), "{op} is in a tier but needs no admin");
         }
-        for op in ["new", "leave", "take_over", "recover", "hand_over", "key_level", "takeover_delay", "make_admin"] {
+        for op in [
+            "new",
+            "leave",
+            "take_over",
+            "recover",
+            "hand_over",
+            "key_level",
+            "takeover_delay",
+            "make_admin",
+            "pair",
+            "join",
+            "invite",
+            "away",
+            "hubs",
+            "paste_receive",
+            "keyboard",
+            "remote",
+        ] {
             assert!(EACH_TIME.contains(&op) && each_time(op), "{op} is not confirmed each time");
         }
     }
 
-    /// What Windows Hello signs names the action and the challenge.
+    /// What Windows Hello signs names the action, its device and the
+    /// challenge.
     #[test]
     fn hello() {
         let challenge: Vec<u8> = (1..=2).collect();
-        assert_eq!(hello_message("remove", &challenge), b"cbb confirm v1\nremove\n\x01\x02");
+        let h = |op: &str, device: &str| Header { op: op.into(), device: device.into(), ..Default::default() };
+        assert_eq!(hello_message(&h("remove", "laptop"), &challenge), b"cbb confirm v2\ncbb remove laptop\n\x01\x02");
+        // Another device, or another action, is another message.
+        assert_ne!(
+            hello_message(&h("remove", "laptop"), &challenge),
+            hello_message(&h("remove", "tablet"), &challenge)
+        );
+        assert_ne!(
+            hello_message(&h("remove", "laptop"), &challenge),
+            hello_message(&h("freeze", "laptop"), &challenge)
+        );
         assert!(crate::control::is_admin(OP_REGISTER) && !crate::control::is_admin(OP_CHALLENGE));
     }
 

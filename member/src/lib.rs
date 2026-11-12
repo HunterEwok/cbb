@@ -343,6 +343,8 @@ pub fn main() {
                 }),
                 // Run by the installer as root.
                 "confirm-setup" => confirm::setup_cli(rest),
+                // Run by cbb itself as the user who ran it with sudo.
+                "own-command" => own_command_cli(rest),
                 "version" | "-version" | "--version" => {
                     // Never to be mistaken for a release: its certificates
                     // last minutes.
@@ -1528,7 +1530,41 @@ fn own_command(name: &str, command: &[String]) -> Result<()> {
             "cannot find this user's settings folder, so the agent of the user's session would not run the command"
         )));
     };
+    // Under sudo the folder is another user's: cbb writes it as that user,
+    // never with root's rights.
+    #[cfg(unix)]
+    if let Some((uid, gid, home)) = actions::sudo_user() {
+        use std::os::unix::process::CommandExt;
+        let exe = std::env::current_exe().map_err(|e| Error::with("cannot find cbb", e))?;
+        let status = std::process::Command::new(exe)
+            .arg("own-command")
+            .arg(name)
+            .arg("--")
+            .args(command)
+            .env_clear()
+            .env("HOME", &home)
+            .env("PATH", "/usr/bin:/bin")
+            .current_dir("/")
+            .uid(uid)
+            .gid(gid)
+            .status()
+            .map_err(|e| Error::with("cannot run cbb as the user", e))?;
+        return if status.success() {
+            Ok(())
+        } else {
+            Err(Error::msg(tr!("cannot write the command in this user's settings folder")))
+        };
+    }
     actions::set_own_command(&dir.join("cbb"), name, command)
+}
+
+/// cbb own-command NAME -- [COMMAND...]: what cbb runs as the user who ran
+/// it with sudo, to set (or with no command remove) the user's own command.
+fn own_command_cli(args: &[String]) -> Result<()> {
+    match args {
+        [name, sep, command @ ..] if sep == "--" && !name.is_empty() => own_command(name, command),
+        _ => Err(cli::usage("cbb own-command NAME -- [COMMAND...]")),
+    }
 }
 
 /// Writes or removes the polkit rule for the actions a status says are on;

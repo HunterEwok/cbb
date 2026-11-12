@@ -922,10 +922,13 @@ Its own user turns sync off ("Sync on and off"); for the whole group an admin mu
 
 An admin computer mutes or unmutes itself on the control socket too, not only on the admin
 socket, for the user at its screen (root and the service's own user too): it changes nothing
-for the rest of the group, so the Mac app and the tray app do it without asking anything.
-Ending a mute that another admin set is not the device's own matter: it takes a confirmation,
-as does muting or unmuting any other device ("Confirming admin actions"). `mute.json` keeps
-which device's admin set the mute; one without it counts as another admin's.
+for the rest of the group, so the Mac app and the tray app do it without asking anything. The
+user must surely be at the screen: logind says so on Linux, the console's owner on a Mac, an
+active session on Windows; where nothing tells, it takes a confirmation. A mute that another
+admin set is not the device's own matter, to end or to set again: it takes a confirmation, as
+does muting or unmuting any other device ("Confirming admin actions"). `mute.json` keeps which
+device's admin set the mute, and muting again keeps it; one without it counts as another
+admin's.
 
 ### Confirming admin actions
 
@@ -937,12 +940,14 @@ prompt, and the service checks that confirmation itself, never what the caller s
 
 - **This device itself** (muting or unmuting it, its own sync): no prompt.
 - **The group's everyday changes** (removing or renaming a device, freezing an admin, muting
-  another device, remote paste, the quick actions, updates): one confirmation lasts five
-  minutes. None of them lets a device in or sends copies anywhere new.
+  another device, sending remote pastes, the quick actions, updates): one confirmation lasts
+  five minutes. None of them lets a device in, sends copies anywhere new or lets anything type
+  on this computer.
 - **What cannot be undone, changes who holds the group, or lets another device in for good**
   (making a group, leaving it, taking it over, handing it on, recovering its root, making a
   device an admin, the key level and the takeover delay; admitting a device, by its code or
-  an invitation, joining a group, a hub and sync away from home): a confirmation each time.
+  an invitation, joining a group, a hub and sync away from home; taking remote pastes, and
+  pairing a Bluetooth keyboard or a TV's remote): a confirmation each time.
   The service lists the everyday operations by name (`confirm::KEPT`); any other, also one
   added later, is confirmed each time.
 
@@ -951,6 +956,17 @@ device (`cbb remove Laptop`), so that a prompt a program raised does not pass fo
 user expects. A user has one prompt at a time, and after a cancelled one the next waits 5
 seconds, doubling up to five minutes; on Windows at most six challenges a minute. The service
 logs every confirmed action with its user.
+
+Who shows the prompt differs. On Linux polkit's agent shows it, with the action the service
+names, and the service paces it. On Windows `cbb` shows the action in its own dialog before
+Windows Hello's prompt, and the key signs that action, which the service derives from the
+request itself: a signature confirms no other action or device, but the text in the dialog and
+the pace of the prompts are `cbb`'s, so a program of the user that skips the dialog still needs
+Windows Hello, whose prompt names no action. On a Mac `cbb` asks macOS for the right with the
+action in the prompt, and the service only checks the right it holds: the text and the pace of
+the prompts are the caller's, so a program of the user may raise the system's prompt with a
+text of its own. On both, the system's prompt and the user's fingerprint, face or password are
+what confirm, never the text.
 
 `cbb` run as a user of the service's group sends an admin request on the control socket when
 the admin socket is out of reach, and the service takes it once confirmed:

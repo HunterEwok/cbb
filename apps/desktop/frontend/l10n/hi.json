@@ -160,7 +160,7 @@
   "Off": "बंद",
   "Offline: %s.": "ऑफ़लाइन: %s।",
   "On": "चालू",
-  "On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. Show or send it only to the person who joins.": "नए फ़ोन पर CBB खोलें, निमंत्रण से जुड़ें पर टैप करें और कोड स्कैन करें। कंप्यूटर पर इसके पाठ के साथ cbb pair -invite चलाएँ। इसे केवल जुड़ने वाले व्यक्ति को दिखाएँ या भेजें।",
+  "On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite - and paste its text. Show or send it only to the person who joins.": "नए फ़ोन पर CBB खोलें, निमंत्रण से जुड़ें पर टैप करें और कोड स्कैन करें। कंप्यूटर पर cbb pair -invite - चलाएँ और इसका पाठ पेस्ट करें। इसे केवल जुड़ने वाले व्यक्ति को दिखाएँ या भेजें।",
   "On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this window open.": "समूह के किसी फ़ोन पर, + टैप करें और यह कोड स्कैन करें। समूह के किसी कंप्यूटर पर, + टैप करें और अंक लिखें। यह विंडो खुली रखें।",
   "On the new device, choose Join a group: it shows a QR code and six digits. A phone of the group scans the code; here, type the digits.": "नए डिवाइस पर समूह से जुड़ें चुनें: वह एक QR कोड और छह अंक दिखाता है। समूह का कोई फ़ोन कोड स्कैन करता है; यहाँ अंक लिखें।",
   "Online": "ऑनलाइन",

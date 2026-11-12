@@ -47,6 +47,13 @@ pub fn by(dir: &Path, engine: &Engine) -> Result<String> {
     Ok(if st.by.is_empty() { "?".to_string() } else { st.by })
 }
 
+/// Who a mute this device sets on itself is saved as, when `current` (as
+/// `by` tells) muted it before: a mute already set keeps its muter, so a
+/// later one does not make it the device's own.
+pub fn kept_by(current: &str, me: &str) -> String {
+    if current.is_empty() { me.to_string() } else { current.to_string() }
+}
+
 /// Gives the engine the mute saved in dir.
 pub fn load(dir: &Path, engine: &Engine) -> Result<()> {
     let st = read(dir)?;
@@ -104,5 +111,15 @@ mod tests {
         load(&dir, &again).unwrap();
         assert_eq!(by(&dir, &again).unwrap(), "?");
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Muting again keeps who muted it first: another admin's mute, or one
+    /// whose muter is unknown, does not become this device's own.
+    #[test]
+    fn a_second_mute_keeps_the_muter() {
+        assert_eq!(kept_by("", "me"), "me");
+        assert_eq!(kept_by("me", "me"), "me");
+        assert_eq!(kept_by("admin-b", "me"), "admin-b");
+        assert_eq!(kept_by("?", "me"), "?");
     }
 }

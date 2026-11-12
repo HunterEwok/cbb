@@ -2648,3 +2648,49 @@ fn pair_waits_on_the_service_port() {
     let j: Value = serde_json::from_str(written.trim()).unwrap_or_else(|e| panic!("the file holds {written:?}: {e}"));
     assert_eq!(j["port"].as_u64(), Some(u64::from(port)), "the file holds {j}");
 }
+
+/// cbb own-command writes the user's own command in the user's settings
+/// folder, refuses a link there, and under sudo writes only as the user
+/// who ran it: what that user cannot write stays unwritten.
+#[test]
+fn own_command_as_the_user() {
+    let dir = tempdir("own-command");
+    let config = dir.join(".config");
+    let env = [("XDG_CONFIG_HOME", config.to_str().unwrap())];
+    let none = || always(json!({}), b"");
+    let r = run_with(&dir, &["own-command", "backup", "--", "/usr/local/bin/backup", "--quick"], "", none(), &env);
+    want("own-command", &r, 0, "", "");
+    let raw: Value = serde_json::from_slice(&std::fs::read(config.join("cbb/own-actions.json")).unwrap()).unwrap();
+    assert_eq!(raw["backup"], json!(["/usr/local/bin/backup", "--quick"]));
+    let r = run_with(&dir, &["own-command", "backup", "--"], "", none(), &env);
+    want("own-command removing", &r, 0, "", "");
+    let raw: Value = serde_json::from_slice(&std::fs::read(config.join("cbb/own-actions.json")).unwrap()).unwrap();
+    assert!(raw.get("backup").is_none());
+    let r = run_with(&dir, &["own-command", "backup"], "", none(), &env);
+    assert_eq!(r.code, 2, "{}", r.stderr);
+
+    // A link in place of the folder is not followed.
+    let elsewhere = dir.join("elsewhere");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    let linked = dir.join("linked");
+    std::fs::create_dir_all(&linked).unwrap();
+    std::os::unix::fs::symlink(&elsewhere, linked.join("cbb")).unwrap();
+    let env = [("XDG_CONFIG_HOME", linked.to_str().unwrap())];
+    let r = run_with(&dir, &["own-command", "backup", "--", "/usr/bin/true"], "", none(), &env);
+    assert_ne!(r.code, 0);
+    assert!(!elsewhere.join("own-actions.json").exists());
+
+    // As root under sudo, the write is the other user's: nobody cannot
+    // create a folder in its own (missing) home, and root does not either.
+    // SAFETY: geteuid has no preconditions.
+    if unsafe { libc::geteuid() } == 0 {
+        let home = Path::new("/nonexistent");
+        if !home.exists() {
+            let env = [("SUDO_USER", "nobody"), ("SUDO_UID", "65534"), ("SUDO_GID", "65534")];
+            let r = run_with(&dir, &["own-command", "backup", "--", "/usr/bin/true"], "", none(), &env);
+            assert_ne!(r.code, 0, "{}", r.stderr);
+            assert!(!home.exists());
+        }
+    }
+    std::fs::remove_dir_all(&dir).unwrap();
+}

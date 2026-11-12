@@ -136,5 +136,6 @@
  "Start the service (cbb service) within a day: it hands this device's key to the hub.": "הפעילו את השירות (cbb service) בתוך יום: הוא מוסר את המפתח של המכשיר הזה לרכזת.",
  "Paste the invitation: ": "הדביקו את ההזמנה: ",
  "the invitation is a secret, so cbb takes it from its file or, with cbb pair -invite -, pasted on standard input, never on the command line": "ההזמנה היא סוד, לכן cbb לוקח אותה מהקובץ שלה או, עם cbb pair -invite -, מודבקת בקלט התקני, ולעולם לא משורת הפקודה",
- "cannot find this user's settings folder, so the agent of the user's session would not run the command": "תיקיית ההגדרות של המשתמש לא נמצאה, ולכן הסוכן של ההפעלה שלו לא יריץ את הפקודה"
+ "cannot find this user's settings folder, so the agent of the user's session would not run the command": "תיקיית ההגדרות של המשתמש לא נמצאה, ולכן הסוכן של ההפעלה שלו לא יריץ את הפקודה",
+ "cannot write the command in this user's settings folder": "לא ניתן לכתוב את הפקודה בתיקיית ההגדרות של משתמש זה"
 }

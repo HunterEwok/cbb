@@ -617,9 +617,16 @@ pub fn own_commands(dir: &Path) -> Result<std::collections::BTreeMap<String, Vec
 }
 
 /// Sets the user's own command of the action name in dir, or with none
-/// removes it; the folder and the file are the user's (under sudo, given
-/// to the user who ran it).
+/// removes it. It runs as the user whose folder it is: under sudo cbb
+/// hands the write to itself as that user (own_command in lib.rs), so
+/// nothing here acts with root's rights. A link in place of the folder or
+/// the file is refused rather than followed.
 pub fn set_own_command(dir: &Path, name: &str, command: &[String]) -> Result<()> {
+    for p in [dir.to_path_buf(), dir.join(OWN_FILE)] {
+        if std::fs::symlink_metadata(&p).is_ok_and(|m| m.file_type().is_symlink()) {
+            return Err(Error::msg(format!("{} is a link, not changed", p.display())));
+        }
+    }
     let mut all = own_commands(dir)?;
     if command.is_empty() {
         if all.remove(name).is_none() {
@@ -630,24 +637,17 @@ pub fn set_own_command(dir: &Path, name: &str, command: &[String]) -> Result<()>
     }
     std::fs::create_dir_all(dir).context(format!("cannot create {}", dir.display()))?;
     let data = serde_json::to_vec_pretty(&all).map_err(|e| Error::with("encoding the commands", e))?;
-    let path = dir.join(OWN_FILE);
-    files::write_atomic(&path, &data, 0o600)?;
-    #[cfg(unix)]
-    give_to_sudo_user(&[dir, &path]);
-    Ok(())
+    files::write_atomic(&dir.join(OWN_FILE), &data, 0o600)
 }
 
-/// Under sudo, gives the paths to the user who ran it.
+/// The user who ran cbb with sudo, when cbb runs as root: the user's id,
+/// group and home.
 #[cfg(unix)]
-fn give_to_sudo_user(paths: &[&Path]) {
+pub fn sudo_user() -> Option<(u32, u32, PathBuf)> {
     let id = |k: &str| std::env::var(k).ok().and_then(|v| v.parse::<u32>().ok());
-    let (Some(uid), Some(gid)) = (id("SUDO_UID"), id("SUDO_GID")) else { return };
-    if sudo_home().is_none() {
-        return;
-    }
-    for p in paths {
-        let _ = std::os::unix::fs::chown(p, Some(uid), Some(gid));
-    }
+    let (uid, gid) = (id("SUDO_UID")?, id("SUDO_GID")?);
+    (uid != 0).then_some(())?;
+    Some((uid, gid, sudo_home()?))
 }
 
 #[cfg(test)]
@@ -677,5 +677,29 @@ mod own_tests {
         assert!(!own_commands(&dir).unwrap().contains_key("backup"));
         assert!(own_commands(&dir).unwrap().contains_key("notes"));
         std::fs::remove_dir_all(dir.parent().unwrap()).unwrap();
+    }
+
+    /// A link in place of the folder or the file is left alone: the target
+    /// is neither written nor changed.
+    #[cfg(unix)]
+    #[test]
+    fn own_commands_leave_links_alone() {
+        let top = std::env::temp_dir().join(format!("cbb-own-link-{}", std::process::id()));
+        let elsewhere = top.join("elsewhere");
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        std::fs::write(elsewhere.join("keep"), b"keep").unwrap();
+        let cmd = vec!["/usr/bin/true".to_string()];
+
+        let dir = top.join("linked-dir");
+        std::os::unix::fs::symlink(&elsewhere, &dir).unwrap();
+        assert!(set_own_command(&dir, "a", &cmd).is_err());
+        assert!(!elsewhere.join(OWN_FILE).exists());
+
+        let dir = top.join("cbb");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::os::unix::fs::symlink(elsewhere.join("keep"), dir.join(OWN_FILE)).unwrap();
+        assert!(set_own_command(&dir, "a", &cmd).is_err());
+        assert_eq!(std::fs::read(elsewhere.join("keep")).unwrap(), b"keep");
+        std::fs::remove_dir_all(&top).unwrap();
     }
 }

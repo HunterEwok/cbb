@@ -136,5 +136,6 @@
  "Start the service (cbb service) within a day: it hands this device's key to the hub.": "Запустите службу (cbb service) в течение суток: она передаст ключ этого устройства хабу.",
  "Paste the invitation: ": "Вставьте приглашение: ",
  "the invitation is a secret, so cbb takes it from its file or, with cbb pair -invite -, pasted on standard input, never on the command line": "приглашение секретно, поэтому cbb берёт его из файла или, с cbb pair -invite -, вставленным в стандартный ввод, но никогда из командной строки",
- "cannot find this user's settings folder, so the agent of the user's session would not run the command": "не найдена папка настроек этого пользователя, поэтому агент его сеанса не запустит команду"
+ "cannot find this user's settings folder, so the agent of the user's session would not run the command": "не найдена папка настроек этого пользователя, поэтому агент его сеанса не запустит команду",
+ "cannot write the command in this user's settings folder": "не удалось записать команду в папку настроек этого пользователя"
 }

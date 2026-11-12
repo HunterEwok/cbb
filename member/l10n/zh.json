@@ -136,5 +136,6 @@
  "Start the service (cbb service) within a day: it hands this device's key to the hub.": "请在一天内启动服务（cbb service）：它会把此设备的密钥交给中心节点。",
  "Paste the invitation: ": "粘贴邀请：",
  "the invitation is a secret, so cbb takes it from its file or, with cbb pair -invite -, pasted on standard input, never on the command line": "邀请是机密，因此 cbb 从其文件读取，或用 cbb pair -invite - 从标准输入粘贴，绝不从命令行读取",
- "cannot find this user's settings folder, so the agent of the user's session would not run the command": "找不到此用户的设置文件夹，因此用户会话的代理不会运行该命令"
+ "cannot find this user's settings folder, so the agent of the user's session would not run the command": "找不到此用户的设置文件夹，因此用户会话的代理不会运行该命令",
+ "cannot write the command in this user's settings folder": "无法将命令写入此用户的设置文件夹"
 }
