@@ -421,7 +421,7 @@ func savePath(path string) string {
 	return strings.Join(names, "/")
 }
 
-func nameOK(name string) bool {
+func fileNameOK(name string) bool {
 	if name == "" || len(name) > 255 || len(saveName(name)) > 255 || name == "." || name == ".." ||
 		strings.ContainsAny(name, "/\\:*?\"<>|") || strings.HasSuffix(name, ".") || strings.HasSuffix(name, " ") ||
 		reserved(name) {
@@ -440,7 +440,7 @@ func pathOK(path string) bool {
 		return false
 	}
 	for _, n := range strings.Split(path, "/") {
-		if !nameOK(n) {
+		if !fileNameOK(n) {
 			return false
 		}
 	}

@@ -179,7 +179,7 @@ fn a_removed_frozen_or_forked_key_commands_nothing() {
             seq: 1,
             prev: None,
             time_ms: 0,
-            kind: Kind::Copies { incoming_ms: ms },
+            kind: Kind::Copies { incoming_ms: ms, seen: vec![] },
             held: false,
         };
         let _ = w.g.set.insert(Record::sign(body, &admin).unwrap());
