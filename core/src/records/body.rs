@@ -550,7 +550,7 @@ impl Body {
         let f = |name: &'static str| field(t, name);
         let (kind, own, gone): (Kind, &[u16], &[u16]) = match type_number {
             TYPE_DEVICE => {
-                (Kind::Device(read_device(&r)?), &[10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25], &[15])
+                (Kind::Device(read_device(&r)?), DEVICE_OWN, &[15])
             }
             TYPE_REVOKE | TYPE_FREEZE => {
                 let keys = r.need_list(10, f("keys"), |v| v.as_bytes().and_then(KeyHash::from_slice))?;
@@ -592,7 +592,7 @@ impl Body {
         };
         // The common fields of a record: type, group, signer, seq, prev,
         // time.
-        const COMMON: [u16; 6] = [1, 2, 3, 4, 5, 6];
+        const COMMON: [u16; 6] = COMMON_FIELDS;
         let mut held = false;
         for (k, _) in map {
             if COMMON.contains(k) || own.contains(k) {
@@ -752,6 +752,13 @@ fn read_settings(r: &Read<'_, '_>) -> Result<Settings, Rule> {
     })?;
     Ok(Settings { takeover_delay_ms, key_level, min_rules, shared: r.flag(14, f("shared"))?, servers })
 }
+
+/// The fields every record has.
+pub(crate) const COMMON_FIELDS: [u16; 6] = [1, 2, 3, 4, 5, 6];
+
+/// A device record's own fields; with COMMON_FIELDS they are the format's
+/// `DEVICE_FIELDS` (a test holds the two lists equal).
+pub(crate) const DEVICE_OWN: &[u16] = &[10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25];
 
 fn check_device(d: &Device) -> Result<bool, Rule> {
     let t = "device";

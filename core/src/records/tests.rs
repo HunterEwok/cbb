@@ -2415,3 +2415,10 @@ fn a_second_signer_costs_nine_units() {
     assert_eq!(units(&r), units(&plain) + 9);
     assert!(r.size() >= r.envelope().len());
 }
+
+/// The device record's fields here are the format's list.
+#[test]
+fn device_fields_are_the_format_s() {
+    let mine: Vec<u16> = body::COMMON_FIELDS.iter().chain(body::DEVICE_OWN).copied().collect();
+    assert_eq!(mine, crate::format::DEVICE_FIELDS);
+}
