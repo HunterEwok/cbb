@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/HunterEwok/cbb/internal/refused"
 )
 
 // Command runs a forwarder: a server that holds no keys and passes the
@@ -32,6 +34,7 @@ func Command(args []string, stdout, stderr io.Writer, defaultKey string) int {
 	vlessMirror := fs.String("vless-mirror", "", "with VLESS, the TCP address of the mirror of the releases on this server, such as 127.0.0.1:443, which the clients of registered hubs reach over VLESS for their updates")
 	vlessListen := fs.String("vless-listen", "127.0.0.1:3276", "with -vless-xhttp, the TCP address to listen on for the web server in front")
 	state := fs.String("state", "", "the file that keeps, under a hash of each group's tag, the version of its newest credential (default: forward-state.json next to the key; \"none\" keeps them in memory only)")
+	refusedFile := fs.String("refused", "", "the list of groups refused after an abuse report, a tag a line, read again when it changes (default: refused-groups next to the key; \"none\" refuses none)")
 	records := fs.String("records", "", "where earlier versions kept a file for each group; they are deleted (default: groups next to the key)")
 	if fs.Parse(args) != nil {
 		return 2
@@ -51,6 +54,9 @@ func Command(args []string, stdout, stderr io.Writer, defaultKey string) int {
 	}
 	logf := func(format string, args ...any) { fmt.Fprintf(stderr, format+"\n", args...) }
 	cfg := Config{Listen: *listen, Cert: cert, Logf: logf}
+	if cfg.Refused, err = refused.Open(*refusedFile, *keyFile); err != nil {
+		return fail(stderr, err)
+	}
 	switch *state {
 	case "none":
 	case "":
