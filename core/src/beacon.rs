@@ -145,8 +145,9 @@ pub struct Freshness {
     /// Some admin's newest beacon names another, larger set than this
     /// device holds: it asks for the records. Judged for each admin by its
     /// own beacon, so one admin's time never hides another's. A beacon
-    /// dated at or before the newest checkpoint this device holds, or older
-    /// than [`MAX_AGE_MS`] on its clock, does not count: a set before a
+    /// dated at or before the newest checkpoint this device holds (unless
+    /// that checkpoint is dated more than [`ALLOWANCE_MS`] ahead of its
+    /// clock), or older than [`MAX_AGE_MS`] on its clock, does not count: a set before a
     /// checkpoint was larger, and a silent admin's old view says nothing of
     /// today's.
     pub behind: bool,
@@ -178,6 +179,12 @@ impl Beacons {
     /// checkpoint it holds ([`checkpoint_ms`], 0 without one).
     pub fn freshness(&self, digest: &[u8; 32], count: u64, now_ms: Option<u64>, checkpoint_ms: u64) -> Freshness {
         let current_at_ms = self.0.values().filter(|b| &b.digest == digest).map(|b| b.time_ms).max();
+        // A checkpoint dated more than the allowance ahead of the clock is
+        // not used, as a beacon so dated is not taken.
+        let checkpoint_ms = match now_ms {
+            Some(now) if checkpoint_ms > now.saturating_add(ALLOWANCE_MS) => 0,
+            _ => checkpoint_ms,
+        };
         let recent = |b: &Beacon| {
             b.time_ms > checkpoint_ms && now_ms.is_none_or(|now| now.saturating_sub(b.time_ms) <= MAX_AGE_MS)
         };
@@ -335,6 +342,11 @@ mod tests {
         assert!(bs.freshness(&[1; 32], 10, None, 0).behind);
         assert!(!bs.freshness(&[1; 32], 10, None, T0).behind);
         assert!(bs.freshness(&[1; 32], 10, None, T0 - 1).behind);
+        // A checkpoint dated ahead of the clock beyond the allowance is not
+        // used; within it, it is.
+        let soon = T0 + 1000;
+        assert!(bs.freshness(&[1; 32], 10, Some(soon), soon + 365 * 86_400_000).behind);
+        assert!(!bs.freshness(&[1; 32], 10, Some(soon), soon + ALLOWANCE_MS).behind);
         // A newer beacon from the same admin counts again.
         assert!(bs.take(Beacon { n: 2, ..b("watch", T0 + 10, 3, 11) }, None));
         assert!(bs.freshness(&[1; 32], 10, None, T0).behind);

@@ -625,13 +625,29 @@ fn a_default_secret_gets_a_quarter_of_the_groups_lifetime() {
     let copy = seal(&w.phone, &rs, &made(5), &secret).unwrap();
     let v = cbor::decode(&copy).unwrap();
     let c = check(&v, &state).unwrap();
-    let seen = fresh::Seen::of(&c, &secret, 60_000);
+    let seen = fresh::Seen::of(&c, &secret, 60_000, 120_000);
     assert_eq!(seen.ttl_ms, Some(60_000));
     let wall = c.time.wall as u64;
     assert_eq!(Marks::default().judge(&seen, Some(wall + 299_000), &state), Fresh::New { age_ms: 284_000 });
-    // Not a secret, no ttl: the full allowance.
+    // Not a secret, no ttl: the group's window for incoming copies.
     let plain = Content::text("hi", false);
-    assert_eq!(fresh::Seen::of(&c, &plain, 60_000).ttl_ms, None);
+    assert_eq!(fresh::Seen::of(&c, &plain, 60_000, 120_000).ttl_ms, Some(120_000));
+}
+
+/// An ordinary copy without a ttl is bounded by the group's window for
+/// incoming copies: a quarter of it is the allowance.
+#[test]
+fn an_ordinary_copy_gets_a_quarter_of_the_incoming_window() {
+    let w = World::new();
+    let state = w.g.state();
+    let plain = Content::text("hi", false);
+    let rs = readers(&state, &w.sealing(), &plain, &w.id("phone"), &[], None);
+    let copy = seal(&w.phone, &rs, &made(6), &plain).unwrap();
+    let v = cbor::decode(&copy).unwrap();
+    let c = check(&v, &state).unwrap();
+    let seen = fresh::Seen::of(&c, &plain, 60_000, 60_000);
+    let wall = c.time.wall as u64;
+    assert_eq!(Marks::default().judge(&seen, Some(wall + 299_000), &state), Fresh::New { age_ms: 284_000 });
 }
 
 /// A leaf checks a copy against the origins its grant names, with no

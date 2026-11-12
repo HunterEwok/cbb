@@ -2044,91 +2044,110 @@ def _bidi(c):
     return o in (0x61C, 0x200E, 0x200F) or 0x202A <= o <= 0x202E or 0x2066 <= o <= 0x2069
 
 
+# The three simple case foldings (status S) of CaseFolding.txt 15.1 that
+# Python's Unicode data does not give: their full folding is shared with
+# another code point, and their lower case is themselves.
+FOLD_S_EXTRA = {0xFB05: 0xFB06, 0x1FD3: 0x0390, 0x1FE3: 0x03B0}
+
+
+def _simple_fold(c):
+    """CaseFolding.txt's C and S mappings, from Python's Unicode data."""
+    o = ord(c)
+    if o in FOLD_S_EXTRA:
+        return chr(FOLD_S_EXTRA[o])
+    f = c.casefold()
+    if len(f) == 1:
+        return f
+    lo = c.lower()
+    return lo if len(lo) == 1 else c
+
+
+def _case_key(c):
+    """The character two names are compared by when case is ignored: the
+    simple case folding of its upper case (when that is one character), so
+    names one on NTFS (upper case) or on APFS (case folding) are one here."""
+    up = c.upper()
+    return _simple_fold(up if len(up) == 1 else c)
+
+
 def _nfc_ok(path):
-    """No character NFC would change: none whose NFC_Quick_Check is No,
-    none that composes with the character before it, and no mark before
-    one of a lower combining class (the canonical order)."""
-    prev = ""
-    for c in path:
-        if unicodedata.normalize("NFC", c) != c:
-            return False
-        if prev and len(unicodedata.normalize("NFC", prev + c)) == 1:
-            return False
-        if prev and 0 < unicodedata.combining(c) < unicodedata.combining(prev):
-            return False
-        prev = c
-    return True
+    """The name is its own NFC."""
+    return unicodedata.normalize("NFC", path) == path
 
 
-def nfc_tables():
-    """The tables of the NFC check, from this Python's Unicode data: the
-    ranges of code points NFC changes alone (NFC_Quick_Check No), and the
-    pairs that compose to one code point (Hangul aside, which composes by
-    rule)."""
-    no = []
+def unicode_tables():
+    """The tables of the name rules, from this Python's Unicode data: each
+    canonical decomposition one level deep (Hangul aside, by rule), the
+    primary composites by their pair, the non-zero combining classes, and
+    the case key of each code point whose key is not itself."""
+    decomp, comp, ccc, keys = [], [], [], []
     for c in range(0x110000):
-        if 0xD800 <= c <= 0xDFFF or unicodedata.normalize("NFC", chr(c)) == chr(c):
+        if 0xD800 <= c <= 0xDFFF:
             continue
-        if no and no[-1][1] == c - 1:
-            no[-1][1] = c
-        else:
-            no.append([c, c])
-    pairs = []
-    for c in range(0x110000):
-        if 0xD800 <= c <= 0xDFFF or 0xAC00 <= c <= 0xD7A3:
+        ch = chr(c)
+        k = _case_key(ch)
+        if k != ch:
+            keys.append((c, ord(k)))
+        cc = unicodedata.combining(ch)
+        if cc:
+            if ccc and ccc[-1][1] == c - 1 and ccc[-1][2] == cc:
+                ccc[-1][1] = c
+            else:
+                ccc.append([c, c, cc])
+        if 0xAC00 <= c <= 0xD7A3:
             continue
-        d = unicodedata.decomposition(chr(c))
+        d = unicodedata.decomposition(ch)
         if not d or d.startswith("<"):
             continue
         p = [int(x, 16) for x in d.split()]
-        if len(p) == 2 and unicodedata.normalize("NFC", chr(c)) == chr(c):
-            pairs.append((p[0], p[1]))
-    ccc = []
-    for c in range(0x110000):
-        k = unicodedata.combining(chr(c))
-        if not k:
-            continue
-        if ccc and ccc[-1][1] == c - 1 and ccc[-1][2] == k:
-            ccc[-1][1] = c
-        else:
-            ccc.append([c, c, k])
-    return no, sorted(pairs), ccc
+        decomp.append((c, p[0], p[1] if len(p) > 1 else 0))
+        if len(p) == 2 and unicodedata.normalize("NFC", ch) == ch:
+            comp.append((p[0], p[1], c))
+    return decomp, sorted(comp), ccc, keys
 
 
-NFC_HEAD = ("Written by testdata/format/gen.py from Unicode %s: the code points NFC changes\n"
-            "alone (NFC_Quick_Check No), the pairs that compose to one code point\n"
-            "(Hangul composes by rule), and the non-zero combining classes. Do not edit.")
+UNICODE_HEAD = ("Written by testdata/format/gen.py from Unicode %s for the names of files:\n"
+                "canonical decompositions one level deep (second 0 for one code point), the\n"
+                "primary composites by their pair (Hangul by rule), the non-zero combining\n"
+                "classes, and the case keys (the simple case folding, C and S, of the upper\n"
+                "case). Do not edit.")
 
 
-def write_nfc(outdir):
-    no, pairs, ccc = nfc_tables()
-    head = NFC_HEAD % unicodedata.unidata_version
+def write_unicode(outdir):
+    decomp, comp, ccc, keys = unicode_tables()
+    head = UNICODE_HEAD % unicodedata.unidata_version
     lic = "SPDX-License-Identifier: AGPL-3.0-only\nCopyright (C) 2026 HunterEwok\n"
     rows = lambda items, f, per: "\n".join("    " + " ".join(f(x) for x in items[i:i + per]) for i in range(0, len(items), per))
+    h3 = lambda r: "(0x%X, 0x%X, 0x%X)," % tuple(r)
+    h2 = lambda r: "(0x%X, 0x%X)," % tuple(r)
     rs = ("".join("// " + l + "\n" for l in lic.splitlines()) + "\n" + "".join("//! " + l + "\n" for l in head.splitlines())
-          + "\n#[rustfmt::skip]\npub(crate) static NO: &[(u32, u32)] = &[\n" + rows(no, lambda r: "(0x%X, 0x%X)," % tuple(r), 6) + "\n];\n"
-          + "\n#[rustfmt::skip]\npub(crate) static PAIRS: &[(u32, u32)] = &[\n" + rows(pairs, lambda r: "(0x%X, 0x%X)," % r, 6) + "\n];\n"
-          + "\n#[rustfmt::skip]\npub(crate) static CCC: &[(u32, u32, u8)] = &[\n" + rows(ccc, lambda r: "(0x%X, 0x%X, %d)," % tuple(r), 5) + "\n];\n")
+          + "\n#[rustfmt::skip]\npub(crate) static DECOMP: &[(u32, u32, u32)] = &[\n" + rows(decomp, h3, 4) + "\n];\n"
+          + "\n#[rustfmt::skip]\npub(crate) static COMP: &[(u32, u32, u32)] = &[\n" + rows(comp, h3, 4) + "\n];\n"
+          + "\n#[rustfmt::skip]\npub(crate) static CCC: &[(u32, u32, u8)] = &[\n" + rows(ccc, lambda r: "(0x%X, 0x%X, %d)," % tuple(r), 5) + "\n];\n"
+          + "\n#[rustfmt::skip]\npub(crate) static CASE: &[(u32, u32)] = &[\n" + rows(keys, h2, 6) + "\n];\n")
+    g = lambda f: (lambda r: f(r).replace("(", "{").replace("),", "},"))
     go = ("".join("// " + l + "\n" for l in lic.splitlines()) + "\n" + "".join("// " + l + "\n" for l in head.splitlines())
-          + "\npackage main\n\nvar nfcNo = [][2]rune{\n" + rows(no, lambda r: "{0x%X, 0x%X}," % tuple(r), 6).replace("    ", "\t") + "\n}\n"
-          + "\nvar nfcPairs = [][2]rune{\n" + rows(pairs, lambda r: "{0x%X, 0x%X}," % r, 6).replace("    ", "\t") + "\n}\n"
-          + "\nvar nfcCCC = [][3]rune{\n" + rows(ccc, lambda r: "{0x%X, 0x%X, %d}," % tuple(r), 5).replace("    ", "\t") + "\n}\n")
-    with open(os.path.join(outdir, "..", "..", "core", "src", "content", "nfc.rs"), "w") as f:
+          + "\npackage main\n"
+          + "\nvar uDecomp = [][3]rune{\n" + rows(decomp, g(h3), 4).replace("    ", "\t") + "\n}\n"
+          + "\nvar uComp = [][3]rune{\n" + rows(comp, g(h3), 4).replace("    ", "\t") + "\n}\n"
+          + "\nvar uCCC = [][3]rune{\n" + rows(ccc, lambda r: "{0x%X, 0x%X, %d}," % tuple(r), 5).replace("    ", "\t") + "\n}\n"
+          + "\nvar uCase = [][2]rune{\n" + rows(keys, g(h2), 6).replace("    ", "\t") + "\n}\n")
+    with open(os.path.join(outdir, "..", "..", "core", "src", "content", "unicode.rs"), "w") as f:
         f.write(rs)
-    with open(os.path.join(outdir, "check", "nfc.go"), "w") as f:
+    with open(os.path.join(outdir, "check", "unicode.go"), "w") as f:
         f.write(go)
 
 
 def names_ok(m):
     """0.6's rules on names of files: no device name of Windows, no
-    bidirectional control, no character of a decomposed form, no two paths
-    one when each character is lowered, nor a path inside a file so."""
+    bidirectional control, every name its own NFC, no two paths one by the
+    case key of each character, nor a path inside a file so."""
     kind = {}
     for p in m[2]:
         path = p[2]
         if any(_device(n) for n in path.split("/")) or any(_bidi(c) for c in path) or not _nfc_ok(path):
             return False
-        key = "".join((c.lower() or c)[0] for c in path)
+        key = "".join(_case_key(c) for c in path)
         if key in kind:
             return False
         kind[key] = 3 in p
@@ -2464,6 +2483,14 @@ def wave4_vectors():
         ("files with a combining mark nothing composes with", {0: 3, 6: {1: 5, 2: [{2: "q\u0301.txt", 4: 5, 5: sha(b"a")}]}}),
         ("files with two marks out of canonical order", {0: 3, 6: {1: 5, 2: [{2: "q\u0301\u0323.txt", 4: 5, 5: sha(b"a")}]}}),
         ("files with two marks in canonical order", {0: 3, 6: {1: 5, 2: [{2: "q\u0323\u0301.txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with a mark that composes across another class", {0: 3, 6: {1: 5, 2: [{2: "e\u0316\u0301.txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with a mark out of order behind a precomposed letter", {0: 3, 6: {1: 5, 2: [{2: "\u00e2\u0325.txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with the NFC of a mark across another class", {0: 3, 6: {1: 5, 2: [{2: "\u00e9\u0316.txt", 4: 5, 5: sha(b"a")}]}}),
+        ("files with sigma and final sigma", {0: 3, 6: {1: 10, 2: [{2: "\u03c3.txt", 4: 5, 5: sha(b"a")}, {2: "\u03c2.txt", 4: 5, 5: sha(b"b")}]}}),
+        ("files with s and long s", {0: 3, 6: {1: 10, 2: [{2: "s.txt", 4: 5, 5: sha(b"a")}, {2: "\u017f.txt", 4: 5, 5: sha(b"b")}]}}),
+        ("files with i and dotless i", {0: 3, 6: {1: 10, 2: [{2: "i.txt", 4: 5, 5: sha(b"a")}, {2: "\u0131.txt", 4: 5, 5: sha(b"b")}]}}),
+        ("files with micro and mu", {0: 3, 6: {1: 10, 2: [{2: "\u00b5.txt", 4: 5, 5: sha(b"a")}, {2: "\u03bc.txt", 4: 5, 5: sha(b"b")}]}}),
+        ("files with i and dotted capital I", {0: 3, 6: {1: 10, 2: [{2: "i.txt", 4: 5, 5: sha(b"a")}, {2: "\u0130.txt", 4: 5, 5: sha(b"b")}]}}),
         ("files with a precomposed character NFC replaces", {0: 3, 6: {1: 5, 2: [{2: "\u212b.txt", 4: 5, 5: sha(b"a")}]}}),
         ("files named like a device but longer", {0: 3, 6: {1: 10, 2: [{2: "COM10", 4: 5, 5: sha(b"a")}, {2: "console.log", 4: 5, 5: sha(b"b")}]}}),
         ("files of more than 1 GiB", {0: 3, 6: {1: (1 << 30) + 1, 2: [{2: "big", 4: (1 << 30) + 1, 5: sha(b"a")}]}}),
@@ -2618,7 +2645,7 @@ def wave4_vectors():
 def main():
     outdir = sys.argv[1]
     os.makedirs(outdir, exist_ok=True)
-    write_nfc(outdir)
+    write_unicode(outdir)
     rt, rr = record_vectors()
     st, sr = statement_vectors()
     ct, cr = command_vectors()

@@ -76,15 +76,17 @@ pub struct Seen {
     pub age_ms: u64,
     pub secret: bool,
     /// The lifetime that applies: the content's own `ttl`, else for a
-    /// secret the group's ([`Seen::of`] fills it so).
+    /// secret the group's lifetime of secrets, else the group's window for
+    /// incoming copies ([`Seen::of`] fills it so).
     pub ttl_ms: Option<u64>,
 }
 
 impl Seen {
     /// A checked copy that opened to content, with the lifetime that
     /// applies to it: its own `ttl`, else for a secret the group's
-    /// lifetime of secrets (`group_ttl_ms`).
-    pub fn of(c: &super::Checked<'_>, content: &crate::content::Content, group_ttl_ms: u64) -> Seen {
+    /// lifetime of secrets (`secret_ms`), else the group's window for
+    /// incoming copies (`incoming_ms`).
+    pub fn of(c: &super::Checked<'_>, content: &crate::content::Content, secret_ms: u64, incoming_ms: u64) -> Seen {
         let secret = content.is_secret();
         Seen {
             origin: c.origin,
@@ -92,7 +94,7 @@ impl Seen {
             signed: c.time,
             age_ms: c.copy.age_ms,
             secret,
-            ttl_ms: content.ttl_ms().or(secret.then_some(group_ttl_ms)),
+            ttl_ms: Some(content.ttl_ms().unwrap_or(if secret { secret_ms } else { incoming_ms })),
         }
     }
 }

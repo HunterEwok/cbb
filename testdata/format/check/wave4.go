@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 )
 
@@ -377,52 +376,107 @@ func bidiRune(r rune) bool {
 	return r == 0x61c || r == 0x200e || r == 0x200f || (r >= 0x202a && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069)
 }
 
-// nfcKeeps is true when NFC leaves path as it is: no code point NFC
-// changes alone (NFC_Quick_Check No, nfcNo), none that composes with the
-// one before it (nfcPairs, Hangul by rule), and no mark before one of a
-// lower combining class (nfcCCC, the canonical order).
-func nfcKeeps(path string) bool {
-	changed := func(c rune) bool {
-		i := sort.Search(len(nfcNo), func(i int) bool { return nfcNo[i][1] >= c })
-		return i < len(nfcNo) && nfcNo[i][0] <= c
+// uRange finds c in a table of ranges {first, last, value}.
+func uRange(t [][3]rune, c rune) rune {
+	i := sort.Search(len(t), func(i int) bool { return t[i][1] >= c })
+	if i < len(t) && t[i][0] <= c {
+		return t[i][2]
 	}
-	composes := func(a, b rune) bool {
-		if a >= 0x1100 && a <= 0x1112 && b >= 0x1161 && b <= 0x1175 {
-			return true
+	return 0
+}
+
+const (
+	sBase, lBase, vBase, tBase     = 0xac00, 0x1100, 0x1161, 0x11a7
+	lCount, vCount, tCount, sCount = 19, 21, 28, 11172
+)
+
+// uDecompose appends the full canonical decomposition of c.
+func uDecompose(c rune, out []rune) []rune {
+	if s := c - sBase; s >= 0 && s < sCount {
+		out = append(out, lBase+s/(vCount*tCount), vBase+(s%(vCount*tCount))/tCount)
+		if s%tCount != 0 {
+			out = append(out, tBase+s%tCount)
 		}
-		if a >= 0xac00 && a <= 0xd7a3 && (a-0xac00)%28 == 0 && b >= 0x11a8 && b <= 0x11c2 {
-			return true
-		}
-		i := sort.Search(len(nfcPairs), func(i int) bool {
-			p := nfcPairs[i]
-			return p[0] > a || (p[0] == a && p[1] >= b)
-		})
-		return i < len(nfcPairs) && nfcPairs[i] == [2]rune{a, b}
+		return out
 	}
-	class := func(c rune) rune {
-		i := sort.Search(len(nfcCCC), func(i int) bool { return nfcCCC[i][1] >= c })
-		if i < len(nfcCCC) && nfcCCC[i][0] <= c {
-			return nfcCCC[i][2]
+	i := sort.Search(len(uDecomp), func(i int) bool { return uDecomp[i][0] >= c })
+	if i < len(uDecomp) && uDecomp[i][0] == c {
+		out = uDecompose(uDecomp[i][1], out)
+		if uDecomp[i][2] != 0 {
+			out = uDecompose(uDecomp[i][2], out)
 		}
-		return 0
+		return out
 	}
-	prev := rune(-1)
+	return append(out, c)
+}
+
+// uCompose is the primary composite of a pair, or -1.
+func uCompose(a, b rune) rune {
+	if l, v := a-lBase, b-vBase; l >= 0 && l < lCount && v >= 0 && v < vCount {
+		return sBase + (l*vCount+v)*tCount
+	}
+	if s, t := a-sBase, b-tBase; s >= 0 && s < sCount && s%tCount == 0 && t > 0 && t < tCount {
+		return a + t
+	}
+	i := sort.Search(len(uComp), func(i int) bool {
+		return uComp[i][0] > a || (uComp[i][0] == a && uComp[i][1] >= b)
+	})
+	if i < len(uComp) && uComp[i][0] == a && uComp[i][1] == b {
+		return uComp[i][2]
+	}
+	return -1
+}
+
+// isNFC is true when path is its own NFC (UAX #15: decompose, put the
+// marks in canonical order, compose).
+func isNFC(path string) bool {
+	var d []rune
 	for _, c := range path {
-		if changed(c) || (prev >= 0 && composes(prev, c)) {
-			return false
-		}
-		if prev >= 0 && class(c) > 0 && class(c) < class(prev) {
-			return false
-		}
-		prev = c
+		d = uDecompose(c, d)
 	}
-	return true
+	for i := 1; i < len(d); {
+		ca, cb := uRange(uCCC, d[i-1]), uRange(uCCC, d[i])
+		if cb != 0 && ca > cb {
+			d[i-1], d[i] = d[i], d[i-1]
+			if i > 1 {
+				i--
+				continue
+			}
+		}
+		i++
+	}
+	var out []rune
+	starter, last := -1, rune(-1)
+	for _, c := range d {
+		cc := uRange(uCCC, c)
+		if starter >= 0 && !(last >= 0 && (last == 0 || last >= cc)) {
+			if x := uCompose(out[starter], c); x >= 0 {
+				out[starter] = x
+				continue
+			}
+		}
+		if cc == 0 {
+			starter, last = len(out), -1
+		} else {
+			last = cc
+		}
+		out = append(out, c)
+	}
+	return string(out) == path
+}
+
+// caseKey is the simple case folding (C and S) of a rune's upper case.
+func caseKey(c rune) rune {
+	i := sort.Search(len(uCase), func(i int) bool { return uCase[i][0] >= c })
+	if i < len(uCase) && uCase[i][0] == c {
+		return uCase[i][1]
+	}
+	return c
 }
 
 // namesOK is 0.6's rules on the names of files over today's: no device
-// name of Windows in any name, no bidirectional control, nothing NFC
-// would change, and no two paths one when each character is lowered,
-// nor a path inside a file so.
+// name of Windows in any name, no bidirectional control, every path its
+// own NFC, and no two paths one by caseKey, nor a path inside a file so.
 func (m *manifest) namesOK() bool {
 	kind := map[string]bool{}
 	for _, p := range m.parts {
@@ -431,7 +485,7 @@ func (m *manifest) namesOK() bool {
 				return false
 			}
 		}
-		if !nfcKeeps(p.path) {
+		if !isNFC(p.path) {
 			return false
 		}
 		var b strings.Builder
@@ -439,7 +493,7 @@ func (m *manifest) namesOK() bool {
 			if bidiRune(r) {
 				return false
 			}
-			b.WriteRune(unicode.ToLower(r))
+			b.WriteRune(caseKey(r))
 		}
 		key := b.String()
 		if _, there := kind[key]; there {
