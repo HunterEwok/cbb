@@ -166,8 +166,9 @@ fn statement_vectors() {
     }
 }
 
-/// A clock that was once far ahead does not stop the weekly change: the
-/// epoch it made is due as soon as the clock is right again.
+/// A clock that was once far ahead does not stop the weekly change: once
+/// the clock has been behind that epoch for a week of its own, a new epoch
+/// is made, and the one made ahead is kept a week after it.
 #[test]
 fn a_clock_once_far_ahead_does_not_stop_the_change() {
     let group = k("root").key.device_id();
@@ -175,11 +176,73 @@ fn a_clock_once_far_ahead_does_not_stop_the_change() {
     rotate(&mut s, &group, T0, Some(T0)).unwrap();
     rotate(&mut s, &group, T0 + 520 * WEEK_MS, Some(T0 + 520 * WEEK_MS)).unwrap();
     assert_eq!(held(&s), [1, 2]);
-    let r = rotate(&mut s, &group, T0 + 1000, Some(T0 + 1000)).unwrap();
-    assert!(r.made.is_some(), "a new epoch at once");
+    let at = |t: u64| T0 + 1000 + t;
+    assert_eq!(rotate(&mut s, &group, at(0), Some(at(0))).unwrap(), Rotated::default());
+    assert_eq!(rotate(&mut s, &group, at(WEEK_MS - 1), Some(at(WEEK_MS - 1))).unwrap(), Rotated::default());
+    assert_eq!(held(&s), [1, 2]);
+    let r = rotate(&mut s, &group, at(WEEK_MS), Some(at(WEEK_MS))).unwrap();
+    assert!(r.made.is_some());
     assert_eq!(held(&s), [2, 3]);
-    assert_eq!(rotate(&mut s, &group, T0 + 2000, Some(T0 + 2000)).unwrap(), Rotated::default());
-    assert!(rotate(&mut s, &group, T0 + 1000 + WEEK_MS, Some(T0 + 1000 + WEEK_MS)).unwrap().made.is_some());
+    assert_eq!(rotate(&mut s, &group, at(WEEK_MS + 1), Some(at(WEEK_MS + 1))).unwrap(), Rotated::default());
+    let r = rotate(&mut s, &group, at(2 * WEEK_MS), Some(at(2 * WEEK_MS))).unwrap();
+    assert!(r.made.is_some());
+    assert_eq!(held(&s), [3, 4]);
+}
+
+/// A restart with the clock at a default date and the clock set right an
+/// hour later: the epochs of before the restart still open.
+#[test]
+fn a_restart_at_a_default_date_keeps_the_epochs() {
+    let group = k("root").key.device_id();
+    let mut s = MemoryStore::new(k("laptop"));
+    let real = T0 + 100 * WEEK_MS;
+    rotate(&mut s, &group, real, Some(real)).unwrap();
+    rotate(&mut s, &group, real + WEEK_MS, Some(real + WEEK_MS)).unwrap();
+    assert_eq!(held(&s), [1, 2]);
+    let now = real + WEEK_MS + 3 * AHEAD_MS;
+    // The default date, then the right time an hour later, then a restart
+    // at the default date again.
+    for t in [T0, now + 3_600_000, T0, now + 7_200_000] {
+        assert_eq!(rotate(&mut s, &group, t, Some(t)).unwrap(), Rotated::default(), "at {t}");
+    }
+    assert_eq!(held(&s), [1, 2]);
+    assert!(s.sealing(1).is_some() && s.sealing(2).is_some());
+    // The week of epoch 2 ends on the real clock as before.
+    let r = rotate(&mut s, &group, real + 2 * WEEK_MS, Some(real + 2 * WEEK_MS)).unwrap();
+    assert!(r.made.is_some());
+    assert_eq!(held(&s), [2, 3]);
+}
+
+/// A clock moved back and forth by days makes no epoch within the week,
+/// however many calls.
+#[test]
+fn a_clock_moved_back_and_forth_makes_one_epoch_a_week() {
+    let group = k("root").key.device_id();
+    let mut s = MemoryStore::new(k("laptop"));
+    rotate(&mut s, &group, T0 + WEEK_MS, Some(T0 + WEEK_MS)).unwrap();
+    let mut made = 0;
+    for i in 0..20u64 {
+        let t = if i % 2 == 0 { T0 + WEEK_MS - 2 * AHEAD_MS } else { T0 + WEEK_MS + 6 * AHEAD_MS };
+        made += usize::from(rotate(&mut s, &group, t, Some(t)).unwrap().made.is_some());
+    }
+    assert_eq!(made, 0);
+    assert_eq!(held(&s), [1]);
+}
+
+/// A leaf on its running time makes its new epoch at a restart at once, made
+/// at the start of the run, and the next restarts do not rotate.
+#[test]
+fn a_leaf_rotates_at_most_once_at_a_restart() {
+    let group = k("root").key.device_id();
+    let mut s = MemoryStore::new(k("kettle"));
+    rotate(&mut s, &group, 3 * AHEAD_MS, None).unwrap();
+    // A restart: running time starts again.
+    assert!(rotate(&mut s, &group, 1000, None).unwrap().made.is_some());
+    assert_eq!(held(&s), [1, 2]);
+    for t in [1000, 2000, 500] {
+        assert_eq!(rotate(&mut s, &group, t, None).unwrap(), Rotated::default());
+    }
+    assert_eq!(held(&s), [1, 2]);
 }
 
 /// A statement of a later type is held whatever its other fields are; a

@@ -83,6 +83,20 @@ const SETTLED_BYTES: usize = 256 << 10;
 /// (`RecordSet::settled_ids`), the oldest arrival going first.
 const SETTLED_IDS: usize = 1024;
 
+/// Why a checkpoint of the current root is still not whole after its
+/// records were asked for in MISSING_ROUNDS rounds
+/// ([`RecordSet::stuck_checkpoints`]).
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub enum Stuck {
+    /// A record it keeps was never offered: "a checkpoint of the root is
+    /// waiting for records nobody has".
+    NeverOffered,
+    /// Its records were offered, but the place aside had no room for them
+    /// beside what a newer checkpoint of the root keeps: "a checkpoint of
+    /// the root is held back by a newer one".
+    NoRoom,
+}
+
 /// A member's record set.
 #[derive(Clone)]
 pub struct RecordSet {
@@ -202,7 +216,10 @@ pub struct RecordSet {
     /// in MISSING_ROUNDS rounds (`missing`): a notice, once per checkpoint,
     /// at most MAX_NOTICES, the oldest going first. Local, never on the
     /// wire, never a rule.
-    stuck: BTreeMap<RecordId, u64>,
+    stuck: BTreeMap<RecordId, (u64, Stuck)>,
+    /// Records the place aside had no room for, among those still asked
+    /// for (`missing`): they were offered.
+    no_room: BTreeSet<RecordId>,
 }
 
 /// The most removals of the roots before the current one a list carries:
@@ -292,6 +309,7 @@ impl RecordSet {
             asked: BTreeMap::new(),
             kept_aside: BTreeMap::new(),
             stuck: BTreeMap::new(),
+            no_room: BTreeSet::new(),
         }
     }
 
@@ -1400,6 +1418,9 @@ impl RecordSet {
         }
         let gone: Vec<RecordId> = self.kept_aside.keys().filter(|id| !keep.contains(*id)).copied().collect();
         for id in gone {
+            if !self.records.contains_key(&id) {
+                self.no_room.insert(id);
+            }
             if let Some((r, role, _)) = self.kept_aside.remove(&id)
                 && role == Role::Root
                 && !self.records.contains_key(&id)
@@ -2180,6 +2201,7 @@ impl RecordSet {
             .copied()
             .collect();
         self.asked.retain(|id, _| want.contains(id));
+        self.no_room.retain(|id| want.contains(id));
         let mut out = Vec::new();
         for id in want {
             let n = self.asked.entry(id).or_insert(0);
@@ -2188,16 +2210,21 @@ impl RecordSet {
                 out.push(id);
             }
         }
-        // A checkpoint above the counting one whose records nobody gave in
-        // every round is told once (`stuck_checkpoints`).
+        // A checkpoint above the counting one whose records were asked for
+        // in every round without staying is told once, with its reason
+        // (`stuck_checkpoints`): one nobody offered, or only records the
+        // place aside had no room for.
         for cp in &above {
             let Some(Kind::Checkpoint { keep, .. }) = self.held(cp).map(|r| &r.body().kind) else { continue };
-            let given_up = keep.iter().any(|id| self.asked.get(id).is_some_and(|n| *n >= MISSING_ROUNDS));
-            if given_up && !self.stuck.contains_key(cp) {
+            let mut given_up = keep.iter().filter(|id| self.asked.get(*id).is_some_and(|n| *n >= MISSING_ROUNDS));
+            let Some(first) = given_up.next() else { continue };
+            if !self.stuck.contains_key(cp) {
+                let offered = |id: &RecordId| self.no_room.contains(id);
+                let why = if offered(first) && given_up.all(offered) { Stuck::NoRoom } else { Stuck::NeverOffered };
                 self.marked = self.marked.saturating_add(1);
-                self.stuck.insert(*cp, self.marked);
+                self.stuck.insert(*cp, (self.marked, why));
                 while self.stuck.len() > MAX_NOTICES {
-                    let Some(old) = self.stuck.iter().min_by_key(|(_, n)| **n).map(|(k, _)| *k) else { break };
+                    let Some(old) = self.stuck.iter().min_by_key(|(_, (n, _))| *n).map(|(k, _)| *k) else { break };
                     self.stuck.remove(&old);
                 }
             }
@@ -2205,13 +2232,13 @@ impl RecordSet {
         out
     }
 
-    /// The current root's checkpoints that wait for records nobody gave
-    /// in MISSING_ROUNDS rounds, still not whole: the app tells "a
-    /// checkpoint of the root is waiting for records nobody has". Local,
-    /// once per checkpoint; what counts does not change.
-    pub fn stuck_checkpoints(&self) -> Vec<RecordId> {
+    /// The current root's checkpoints still not whole after their records
+    /// were asked for in MISSING_ROUNDS rounds, each with its reason
+    /// ([`Stuck`]), for the app to tell. Local, once per checkpoint; what
+    /// counts does not change.
+    pub fn stuck_checkpoints(&self) -> Vec<(RecordId, Stuck)> {
         let (_, above) = self.line();
-        self.stuck.keys().filter(|cp| above.contains(cp)).copied().collect()
+        self.stuck.iter().filter(|(cp, _)| above.contains(cp)).map(|(cp, (_, why))| (*cp, *why)).collect()
     }
 
     /// The record id for peer, asked by its ID: only one `for_peer` would
@@ -2429,21 +2456,24 @@ impl RecordSet {
             return out;
         }
         if state.revoked.contains(peer) {
-            // In a root fork nothing at or above the fork seq: no part of
-            // the pair goes to a removed key.
-            let forked = |r: &Record| {
-                state.root_pair.is_some_and(|(seq, _, _)| state.is_root(&r.body().signer) && r.body().seq >= seq)
+            // In a root fork its removals count on every line (F-7), so it
+            // is told them at any seq, also one that is half of the pair;
+            // but never the pair as such: of two removals that make it, the
+            // one with the smaller ID, and no other record of the pair.
+            let pair = state.root_pair.map(|(_, a, b)| (a, b));
+            let forked = |r: &Record| pair.is_some_and(|(a, b)| r.id() == a || r.id() == b);
+            let names_it = |e: &&Entry| {
+                matches!(&e.record.body().kind, Kind::Revoke(rm) if rm.keys.binary_search(peer).is_ok())
+                    && (state.counting.contains(&e.record.id()) || forked(&e.record))
             };
-            let mut out: Vec<&Record> = self
-                .records
-                .values()
-                .filter(|e| {
-                    state.counting.contains(&e.record.id())
-                        && !forked(&e.record)
-                        && matches!(&e.record.body().kind, Kind::Revoke(rm) if rm.keys.binary_search(peer).is_ok())
-                })
-                .map(|e| &e.record)
-                .collect();
+            let mut out: Vec<&Record> = self.records.values().filter(names_it).map(|e| &e.record).collect();
+            if let Some((a, b)) = pair
+                && out.iter().any(|r| r.id() == a)
+                && out.iter().any(|r| r.id() == b)
+            {
+                let drop = a.max(b);
+                out.retain(|r| r.id() != drop);
+            }
             if out.is_empty() {
                 return out;
             }
@@ -2452,7 +2482,8 @@ impl RecordSet {
             // checkpoint (their lists ride beside, `lists`), and for an
             // admin the root's device record that names its admin key.
             // Nothing else: no copies, no settings, no other member.
-            let mut ids: BTreeSet<RecordId> = out.iter().map(|r| r.id()).collect();
+            let own: BTreeSet<RecordId> = out.iter().map(|r| r.id()).collect();
+            let mut ids = own.clone();
             if out.iter().any(|r| r.body().signer != self.root.hash()) {
                 ids.extend(self.records.values().filter(|e| e.role == Role::Recovery).map(|e| e.record.id()));
                 ids.extend(self.firsts.keys().filter(|id| self.records.contains_key(*id)).copied());
@@ -2483,7 +2514,11 @@ impl RecordSet {
                     }
                 }
             }
-            out = self.in_dependency_order().into_iter().filter(|r| ids.contains(&r.id())).collect();
+            out = self
+                .in_dependency_order()
+                .into_iter()
+                .filter(|r| ids.contains(&r.id()) && (own.contains(&r.id()) || !forked(r)))
+                .collect();
             return out;
         }
         if state.device_by_key(peer).is_some() {
