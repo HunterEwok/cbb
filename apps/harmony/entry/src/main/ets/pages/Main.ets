@@ -8,14 +8,21 @@
 // its tile. The Aurora app's MainPage, on ArkUI. A big screen (from 720 vp
 // wide: a tablet, a foldable open) shows the devices on orbits around this
 // phone, or as tiles or a list, and a device's details in a pane beside them
-// (docs/apps.md, "Big screens").
+// (docs/apps.md, "Big screens"); a sidebar with the devices' sections (all,
+// needs attention, each collection) and the parts of Settings, which stands
+// from 1040 vp and slides in behind ☰ below; the keyboard's shortcuts, a
+// right click's menu on a tile, and drag and drop: on a tile to paste on its
+// device, beside the tiles to send to the group.
 
 import { common } from '@kit.AbilityKit';
+import { unifiedDataChannel, uniformTypeDescriptor } from '@kit.ArkData';
 import { router } from '@kit.ArkUI';
+import { KeyCode } from '@kit.InputKit';
 import { fileIo, picker } from '@kit.CoreFileKit';
 import { Errors } from '../core/Errors';
 import { t } from '../core/Text';
 import { scanQr } from '../common/Scan';
+import { copyIn, Shared } from '../common/Share';
 import { glyph, line, mark, nameOf } from '../common/Devices';
 import { app, Tile } from '../model/AppModel';
 import { Admit } from '../model/Admit';
@@ -23,12 +30,64 @@ import { isInvitation } from '../model/Invite';
 import { Alert, Device, Member } from '../model/Member';
 import { BugCard } from '../components/BugCard';
 import { BusyLine, ErrorText } from '../components/Common';
-import { DeviceDetail } from '../components/DeviceDetail';
+import { DeviceDetail, takesPastes } from '../components/DeviceDetail';
 import { Orbit } from '../components/Orbit';
+import { SettingsBody } from '../components/SettingsBody';
 
 const LOST_PHONE_TIP: string = 'tip_lost_phone';
 // From how wide a screen is a big one, in vp.
 const WIDE_VP: number = 720;
+// From how wide the sidebar stands beside the devices and the details (its
+// 280, 360 of devices, the details' 400), in vp; narrower it slides in.
+const SIDEBAR_VP: number = 1040;
+const SIDEBAR_WIDTH: number = 280;
+// What may be dropped on a tile or beside the tiles.
+const DROPS: uniformTypeDescriptor.UniformDataType[] = [uniformTypeDescriptor.UniformDataType.PLAIN_TEXT,
+  uniformTypeDescriptor.UniformDataType.IMAGE, uniformTypeDescriptor.UniformDataType.FILE];
+
+// The text and files of a drop, the files copied into the new folder dir.
+function dropped(event: DragEvent, dir: string): Shared {
+  const out = new Shared();
+  const uris: string[] = [];
+  try {
+    for (const r of event.getData().getRecords()) {
+      if (r instanceof unifiedDataChannel.PlainText) {
+        out.text += r.textContent;
+      } else if (r instanceof unifiedDataChannel.Image) {
+        uris.push(r.imageUri);
+      } else if (r instanceof unifiedDataChannel.File) {
+        uris.push(r.uri);
+      }
+    }
+  } catch (e) {
+    Errors.log(`main: reading a drop: ${String(e)}`);
+  }
+  copyIn(uris, dir, out);
+  return out;
+}
+
+// What a settings row of the sidebar says: 's:' and a part of
+// SettingsBody, or 'p:' and a page of its own.
+function settingsLabel(key: string): string {
+  switch (key) {
+    case 's:general':
+      return t('settings_language');
+    case 's:notifications':
+      return t('settings_notifications');
+    case 'p:recovery':
+      return t('recovery_title');
+    case 'p:hub':
+      return t('hub_title');
+    case 's:group':
+      return t('settings_group');
+    case 's:lab':
+      return t('lab');
+    case 's:why':
+      return t('why_screen');
+    default:
+      return t('settings_about');
+  }
+}
 
 @Entry
 @ComponentV2
@@ -42,6 +101,12 @@ struct Main {
   @Local wide: boolean = false;
   // The device whose details a big screen shows beside the devices.
   @Local selected: string = '';
+  // Whether the sidebar stands beside the devices, or has slid in.
+  @Local sidebar: boolean = false;
+  @Local drawer: boolean = false;
+  // The sidebar's section: 'all', 'attention', 'c:' and a collection's ID,
+  // or 's:' and a part of Settings.
+  @Local section: string = 'all';
 
   aboutToAppear(): void {
     this.lostTipClosed = app.tipClosed(LOST_PHONE_TIP);
@@ -65,7 +130,188 @@ struct Main {
   rearrange(): void {
     if (app.membership !== undefined) {
       this.tiles = app.arranged(app.member.devices);
+      if (!this.sections().includes(this.section)) {
+        this.section = 'all';
+      }
     }
+  }
+
+  attention(): Device[] {
+    return app.member.devices.filter((d: Device) => d.frozen === true);
+  }
+
+  collections(): Tile[] {
+    return this.tiles.filter((x: Tile) => x.kind === 'collection');
+  }
+
+  settingsRows(): string[] {
+    const rows: string[] = ['s:general', 's:notifications'];
+    if (app.isRoot()) {
+      rows.push('p:recovery');
+    }
+    if (app.member.running) {
+      rows.push('p:hub');
+    }
+    if (app.membership !== undefined) {
+      rows.push('s:group');
+    }
+    rows.push('s:lab');
+    if (app.membership !== undefined) {
+      rows.push('s:why');
+    }
+    rows.push('s:about');
+    return rows;
+  }
+
+  // The sidebar's rows in its order, which Ctrl+1 to 9 open.
+  sections(): string[] {
+    const s: string[] = ['all'];
+    if (this.attention().length > 0) {
+      s.push('attention');
+    }
+    for (const c of this.collections()) {
+      s.push(`c:${c.id}`);
+    }
+    return s.concat(this.settingsRows());
+  }
+
+  // Opens a section; another one closes the details.
+  choose(section: string): void {
+    this.drawer = false;
+    if (section === 'p:recovery') {
+      router.pushUrl({ url: 'pages/Recovery' });
+    } else if (section === 'p:hub') {
+      router.pushUrl({ url: 'pages/Hub' });
+    } else if (section !== this.section) {
+      this.section = section;
+      this.selected = '';
+    }
+  }
+
+  sectionTitle(): string {
+    if (this.section === 'attention') {
+      return t('needs_attention');
+    }
+    if (this.section.startsWith('c:')) {
+      return this.collections().find((c: Tile) => `c:${c.id}` === this.section)?.name ?? '';
+    }
+    if (this.section.startsWith('s:')) {
+      return settingsLabel(this.section);
+    }
+    return t('app_name');
+  }
+
+  // The tiles of the section: all of them in the user's order, or the
+  // devices that need attention or are in the collection.
+  shownTiles(): Tile[] {
+    if (!this.wide || this.section === 'all') {
+      return this.tiles;
+    }
+    const devices = this.section === 'attention' ? this.attention() :
+      (this.collections().find((c: Tile) => `c:${c.id}` === this.section)?.devices ?? []);
+    return devices.map((d: Device) => {
+      const x = new Tile();
+      x.device = d;
+      x.id = d.id;
+      return x;
+    });
+  }
+
+  // Whether this phone may paste on the device of a tile.
+  pastesOn(item: Tile): boolean {
+    const d = item.device;
+    return d !== undefined && d.self !== true && app.isAdmin() && app.member.running && takesPastes(d);
+  }
+
+  // A right click on a tile: paste on its device and mute or unmute it for
+  // an admin, besides arranging it.
+  tileActions(item: Tile): void {
+    const sheets: SheetInfo[] = [];
+    const d = item.device;
+    if (d !== undefined && this.pastesOn(item)) {
+      sheets.push({ title: t('paste_on_it'), action: () => {
+        router.pushUrl({ url: 'pages/Paste', params: { 'device': d.id } as Record<string, Object> });
+      } });
+    }
+    if (d !== undefined && d.self !== true && app.isAdmin() && app.member.running) {
+      sheets.push({ title: t('device_mute_hour'), action: () => { app.manage('mute', d.id, '', 60); } });
+      sheets.push({ title: t('device_unmute'), action: () => { app.manage('unmute', d.id); } });
+    }
+    sheets.push({ title: t('arrange_title'), action: () => { this.arrangeTile(item); } });
+    this.getUIContext().showActionSheet({ title: item.kind === 'collection' ? item.name : nameOf(d as Device), message: '', sheets: sheets });
+  }
+
+  // Text, a picture or files dropped on a tile: pasted on its device.
+  async dropOn(item: Tile, event: DragEvent): Promise<void> {
+    const d = item.device;
+    if (d === undefined || !this.pastesOn(item)) {
+      return;
+    }
+    const s = dropped(event, `${getContext(this).cacheDir}/drop-${Date.now()}`);
+    if (s.files.length > 0) {
+      await app.pasteMedia(d.id, s.files, s.types, false);
+    } else if (s.text.length > 0) {
+      await app.pasteOn(d.id, s.text, 'paste', false, false);
+    }
+  }
+
+  // Dropped beside the tiles: to the group, as Share sends it.
+  dropBeside(event: DragEvent): void {
+    const s = dropped(event, `${getContext(this).cacheDir}/drop-${Date.now()}`);
+    app.member.sendDropped(s.text, s.files, s.types);
+  }
+
+  // The arrows choose the device before or after the chosen one, as they stand.
+  step(by: number): void {
+    const ids = this.shownTiles().filter((x: Tile) => x.device !== undefined).map((x: Tile) => (x.device as Device).id);
+    if (ids.length === 0) {
+      return;
+    }
+    const at = ids.indexOf(this.selected);
+    this.selected = at < 0 ? ids[by > 0 ? 0 : ids.length - 1] : ids[Math.min(Math.max(at + by, 0), ids.length - 1)];
+  }
+
+  // The keyboard on a big screen: Ctrl+1 to 9 the sidebar's rows, Ctrl+,
+  // the settings, Ctrl+N adds a device, the arrows choose one, Esc closes
+  // its details.
+  handleKey(e: KeyEvent): boolean {
+    if (!this.wide || e.type !== KeyType.Down) {
+      return false;
+    }
+    const ctrl = e.getModifierKeyState !== undefined && e.getModifierKeyState(['Ctrl']);
+    if (ctrl && e.keyCode >= KeyCode.KEYCODE_1 && e.keyCode <= KeyCode.KEYCODE_9) {
+      const s = this.sections();
+      const i = e.keyCode - KeyCode.KEYCODE_1;
+      if (i < s.length) {
+        this.choose(s[i]);
+      }
+      return true;
+    }
+    if (ctrl && e.keyCode === KeyCode.KEYCODE_COMMA) {
+      this.choose('s:general');
+      return true;
+    }
+    if (ctrl && e.keyCode === KeyCode.KEYCODE_N && app.isAdmin()) {
+      this.scanCode();
+      return true;
+    }
+    if (ctrl || this.section.startsWith('s:')) {
+      return false;
+    }
+    if (e.keyCode === KeyCode.KEYCODE_DPAD_RIGHT || e.keyCode === KeyCode.KEYCODE_DPAD_DOWN) {
+      this.step(1);
+      return true;
+    }
+    if (e.keyCode === KeyCode.KEYCODE_DPAD_LEFT || e.keyCode === KeyCode.KEYCODE_DPAD_UP) {
+      this.step(-1);
+      return true;
+    }
+    if (e.keyCode === KeyCode.KEYCODE_ESCAPE && (this.selected.length > 0 || this.drawer)) {
+      this.selected = '';
+      this.drawer = false;
+      return true;
+    }
+    return false;
   }
 
   onlineLine(): string {
@@ -316,6 +562,18 @@ struct Main {
     .gesture(LongPressGesture().onAction(() => {
       this.arrangeTile(item);
     }))
+
+    .border({ width: this.wide && item.device !== undefined && item.device.id === this.selected ? 2 : 0,
+      color: $r('app.color.accent'), radius: 20 })
+    .onMouse((e: MouseEvent) => {
+      if (e.button === MouseButton.Right && e.action === MouseAction.Press) {
+        this.tileActions(item);
+      }
+    })
+    .allowDrop(this.pastesOn(item) ? DROPS : null)
+    .onDrop((e: DragEvent) => {
+      this.dropOn(item, e);
+    })
   }
 
   @Builder
@@ -343,12 +601,28 @@ struct Main {
     .gesture(LongPressGesture().onAction(() => {
       this.arrangeTile(item);
     }))
+
+    .border({ width: this.wide && item.device !== undefined && item.device.id === this.selected ? 2 : 0,
+      color: $r('app.color.accent'), radius: 20 })
+    .onMouse((e: MouseEvent) => {
+      if (e.button === MouseButton.Right && e.action === MouseAction.Press) {
+        this.tileActions(item);
+      }
+    })
+    .allowDrop(this.pastesOn(item) ? DROPS : null)
+    .onDrop((e: DragEvent) => {
+      this.dropOn(item, e);
+    })
   }
 
   @Builder
   header() {
     Row() {
-      Text($r('app.string.app_name')).fontSize(28).fontWeight(FontWeight.Bold).fontColor($r('app.color.text')).layoutWeight(1)
+      if (this.wide && !this.sidebar) {
+        this.menuButton()
+      }
+      Text(this.wide ? this.sectionTitle() : t('app_name')).fontSize(28).fontWeight(FontWeight.Bold).fontColor($r('app.color.text'))
+        .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
       Button({ type: ButtonType.Circle }) {
         Text('⋯').fontSize(24).fontColor($r('app.color.text'))
       }
@@ -452,11 +726,11 @@ struct Main {
   // The devices as tiles or a list; columns, the tiles in a row.
   @Builder
   devices(list: boolean, columns: number) {
-    if (this.tiles.length > 0) {
+    if (this.shownTiles().length > 0) {
       Text($r('app.string.main_devices')).fontSize(15).fontWeight(FontWeight.Medium).fontColor($r('app.color.secondary'))
       if (list) {
         Column() {
-          ForEach(this.tiles, (item: Tile) => {
+          ForEach(this.shownTiles(), (item: Tile) => {
             this.row(item);
           }, (item: Tile) => item.kind === 'collection' ? `c:${item.id}:${item.name}:${item.devices.length}` :
             `d:${JSON.stringify(item.device)}`)
@@ -465,7 +739,7 @@ struct Main {
         .backgroundColor($r('app.color.surface'))
       } else {
         Grid() {
-          ForEach(this.tiles, (item: Tile) => {
+          ForEach(this.shownTiles(), (item: Tile) => {
             GridItem() {
               this.tile(item);
             }
@@ -495,7 +769,7 @@ struct Main {
   home() {
     Column() {
       this.header()
-      if (this.wide && app.wideLayout === 'orbit') {
+      if (this.wide && app.wideLayout === 'orbit' && this.section === 'all') {
         Scroll() {
           Column({ space: 16 }) {
             this.top()
@@ -529,33 +803,179 @@ struct Main {
         }
         .layoutWeight(1)
         .align(Alignment.Top)
+        .allowDrop(this.wide && app.member.running ? DROPS : null)
+        .onDrop((e: DragEvent) => {
+          this.dropBeside(e);
+        })
       }
     }
     .layoutWeight(1)
     .height('100%')
   }
 
-  build() {
+  // ☰, which slides the sidebar in where it does not stand.
+  @Builder
+  menuButton() {
+    Button({ type: ButtonType.Circle }) {
+      Text('☰').fontSize(22).fontColor($r('app.color.text'))
+    }
+    .width(44)
+    .height(44)
+    .backgroundColor(Color.Transparent)
+    .accessibilityText($r('app.string.menu'))
+    .onClick(() => {
+      this.drawer = true;
+    })
+  }
+
+  @Builder
+  sideTitle(title: string) {
+    Text(title).fontSize(13).fontWeight(FontWeight.Medium).fontColor($r('app.color.secondary'))
+      .padding({ left: 12, top: 16, bottom: 4 })
+  }
+
+  // A row of the sidebar; count -1 for none.
+  @Builder
+  sideRow(key: string, symbol: string, label: string, count: number, danger: boolean) {
+    Row({ space: 10 }) {
+      Text(symbol).fontSize(17).width(24).textAlign(TextAlign.Center)
+        .fontColor(danger ? $r('app.color.error') : $r('app.color.text'))
+      Text(label).fontColor(danger ? $r('app.color.error') : $r('app.color.text')).layoutWeight(1)
+        .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+      if (count >= 0) {
+        Text(`${count}`).fontSize(13).fontColor($r('app.color.secondary'))
+      }
+    }
+    .padding({ left: 12, right: 12, top: 10, bottom: 10 })
+    .borderRadius(10)
+    .width('100%')
+    .backgroundColor(this.section === key ? $r('app.color.surface') : Color.Transparent)
+    .onClick(() => {
+      this.choose(key);
+    })
+  }
+
+  // The sidebar: the group's line, the devices' sections and the parts of
+  // Settings, with a short line on the keys at its foot.
+  @Builder
+  sidebarContent() {
+    Scroll() {
+      Column({ space: 2 }) {
+        Text(this.onlineLine()).fontSize(15).fontColor($r('app.color.text')).padding({ left: 12, top: 12 })
+        Text(this.syncLine()).fontSize(12).fontColor($r('app.color.secondary')).padding({ left: 12 })
+        this.sideTitle(t('main_devices'))
+        this.sideRow('all', '▦', t('all_devices'), app.member.devices.length, false)
+        if (this.attention().length > 0) {
+          this.sideRow('attention', '!', t('needs_attention'), this.attention().length, true)
+        }
+        ForEach(this.collections(), (c: Tile) => {
+          this.sideRow(`c:${c.id}`, '\u{1F5C2}', c.name, c.devices.length, false)
+        }, (c: Tile) => `${c.id}:${c.name}:${c.devices.length}`)
+        this.sideTitle(t('settings_title'))
+        ForEach(this.settingsRows(), (key: string) => {
+          this.sideRow(key, key.startsWith('p:') ? '›' : '', settingsLabel(key), -1, false)
+        }, (key: string) => key)
+        Text(t('shortcuts_hint')).fontSize(11).fontColor($r('app.color.secondary')).padding({ left: 12, right: 12, top: 16 })
+      }
+      .padding({ left: 8, right: 8, bottom: 16 })
+      .alignItems(HorizontalAlign.Start)
+      .width('100%')
+    }
+    .align(Alignment.Top)
+    .width('100%')
+    .height('100%')
+    .backgroundColor($r('app.color.background'))
+  }
+
+  // A part of Settings beside the sidebar.
+  @Builder
+  settingsPane() {
+    Column() {
+      Row() {
+        if (!this.sidebar) {
+          this.menuButton()
+        }
+        Text(this.sectionTitle()).fontSize(28).fontWeight(FontWeight.Bold).fontColor($r('app.color.text')).layoutWeight(1)
+      }
+      .padding({ left: 24, right: 12, top: 8 })
+      .width('100%')
+      Scroll() {
+        Column() {
+          SettingsBody({ part: this.section.substring(2) })
+        }
+        .padding(24)
+        .width('100%')
+      }
+      .layoutWeight(1)
+      .align(Alignment.Top)
+    }
+    .layoutWeight(1)
+    .height('100%')
+  }
+
+  // The devices, or a part of Settings, and the chosen device's details beside.
+  @Builder
+  content() {
     Row() {
-      this.home()
-      if (this.wide && this.selected.length > 0) {
-        Divider().vertical(true).color($r('app.color.grid'))
-        DeviceDetail({ deviceId: this.selected, close: () => {
-          this.selected = '';
-        } })
-          .width(400)
-          .height('100%')
+      if (this.wide && this.section.startsWith('s:')) {
+        this.settingsPane()
+      } else {
+        this.home()
+        if (this.wide && this.selected.length > 0) {
+          Divider().vertical(true).color($r('app.color.grid'))
+          DeviceDetail({ deviceId: this.selected, close: () => {
+            this.selected = '';
+          } })
+            .width(400)
+            .height('100%')
+        }
       }
     }
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.background'))
+  }
+
+  build() {
+    Stack() {
+      if (this.wide) {
+        SideBarContainer(this.sidebar ? SideBarContainerType.Embed : SideBarContainerType.Overlay) {
+          this.sidebarContent()
+          this.content()
+        }
+        .showSideBar(this.sidebar || this.drawer)
+        .showControlButton(false)
+        .sideBarWidth(SIDEBAR_WIDTH)
+        .minSideBarWidth(SIDEBAR_WIDTH)
+        .maxSideBarWidth(SIDEBAR_WIDTH)
+        .divider({ strokeWidth: 1, color: $r('app.color.grid') })
+        .onChange((shown: boolean) => {
+          if (!this.sidebar) {
+            this.drawer = shown;
+          }
+        })
+      } else {
+        this.content()
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor($r('app.color.background'))
+    .focusable(true)
+    .defaultFocus(true)
+    .onKeyEvent((e: KeyEvent) => {
+      this.handleKey(e);
+    })
     .onAreaChange((_: Area, area: Area) => {
-      const wide = Number(area.width) >= WIDE_VP;
+      const width = Number(area.width);
+      const wide = width >= WIDE_VP;
+      this.sidebar = width >= SIDEBAR_VP;
       if (wide !== this.wide) {
         this.wide = wide;
         if (!wide) {
           this.selected = '';
+          this.section = 'all';
+          this.drawer = false;
         }
       }
     })

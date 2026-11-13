@@ -369,14 +369,11 @@
     </message>
 </context>
 <context>
-    <name>DeviceItems</name>
+    <name>DeviceCard</name>
     <message>
-        <source>%1 of %2 online</source>
-        <translation>%1 מתוך %2 מחוברים</translation>
+        <source>Close</source>
+        <translation>סגירה</translation>
     </message>
-</context>
-<context>
-    <name>DevicePage</name>
     <message>
         <source>Device ID</source>
         <translation>מזהה מכשיר</translation>
@@ -503,6 +500,13 @@
     </message>
 </context>
 <context>
+    <name>DeviceItems</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 מתוך %2 מחוברים</translation>
+    </message>
+</context>
+<context>
     <name>DeviceTile</name>
     <message>
         <source>Mute for 15 minutes</source>
@@ -543,10 +547,6 @@
     <message>
         <source>Turn sync on</source>
         <translation>הפעלת הסנכרון</translation>
-    </message>
-    <message>
-        <source>Unmute</source>
-        <translation>ביטול השתקה</translation>
     </message>
 </context>
 <context>
@@ -1058,6 +1058,10 @@
         <translation>%1 מתוך %2 מחוברים</translation>
     </message>
     <message>
+        <source>All devices</source>
+        <translation>כל המכשירים</translation>
+    </message>
+    <message>
         <source>An admin muted this phone until %1: its copies do not reach the group.</source>
         <translation>מנהל השתיק את הטלפון הזה עד %1: העותקים שלו לא מגיעים לקבוצה.</translation>
     </message>
@@ -1120,6 +1124,10 @@
     <message>
         <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
         <translation>הפכו טלפון שני למנהל: הוסיפו אותו לקבוצה, פתחו אותו כאן והקישו ״הפיכה למנהל״. הקישו לסגירה.</translation>
+    </message>
+    <message>
+        <source>Needs attention</source>
+        <translation>דורש תשומת לב</translation>
     </message>
     <message>
         <source>New collection…</source>
@@ -1266,6 +1274,10 @@
     <message>
         <source>The group's root key is made in the phone's secure element and never leaves it.</source>
         <translation>מפתח השורש של הקבוצה נוצר ברכיב המאובטח של הטלפון ולעולם לא יוצא ממנו.</translation>
+    </message>
+    <message>
+        <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
+        <translation>למכשיר הזה אין שבב מאובטח למפתחות או חיישן אמין של טביעת אצבע או פנים: כמכשיר הראשי של הקבוצה הוא מגן עליה פחות טוב מטלפון שיש לו את שניהם.</translation>
     </message>
     <message>
         <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
@@ -1484,6 +1496,10 @@
     <message>
         <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
         <translation>הקבוצה שוחזרה בטלפון הזה. הוא יהפוך לשורש הקבוצה כשזמן ההמתנה יסתיים, בעוד %1 שעות, אלא אם השורש יבטל את הבקשה.</translation>
+    </message>
+    <message>
+        <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
+        <translation>למכשיר הזה אין שבב מאובטח למפתחות או חיישן אמין של טביעת אצבע או פנים: כמכשיר הראשי של הקבוצה הוא מגן עליה פחות טוב מטלפון שיש לו את שניהם.</translation>
     </message>
     <message>
         <source>This phone is the group's root now.</source>

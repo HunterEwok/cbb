@@ -7,7 +7,7 @@
 
 import { router } from '@kit.ArkUI';
 import { app } from '../model/AppModel';
-import { BusyLine, ErrorText } from '../components/Common';
+import { BusyLine, ErrorText, KeyGuardNote } from '../components/Common';
 
 @Entry
 @ComponentV2
@@ -40,6 +40,7 @@ struct Start {
         this.choice($r('app.string.start_new_group'), $r('app.string.start_new_group_note'), true, () => {
           this.makeGroup();
         })
+        KeyGuardNote({ hint: true })
         this.choice($r('app.string.start_join'), $r('app.string.start_join_note'), false, () => {
           router.pushUrl({ url: 'pages/Join', params: { 'admin': false } as Record<string, Object> });
         })

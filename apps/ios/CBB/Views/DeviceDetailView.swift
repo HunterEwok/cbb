@@ -139,7 +139,29 @@ struct DeviceDetailView: View {
         }
     }
 
+    /// The name, badges and line, with the admin's menu; in a pane the
+    /// menu and the cross stand on a row of their own above, so that the
+    /// name has the pane's width.
     private func header(_ d: AppModel.Computer) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.spacingSmall) {
+            if let close {
+                HStack(spacing: Tokens.spacingSmall) {
+                    Spacer()
+                    if model.isAdmin { menu(d) }
+                    Button(action: close) {
+                        Image(systemName: "xmark").font(.body.weight(.semibold)).foregroundStyle(palette.text).glassCircle()
+                    }
+                    .accessibilityLabel(Text("Close"))
+                    .accessibilityIdentifier("padCardClose")
+                    // Escape on an iPad's keyboard closes the pane.
+                    .keyboardShortcut(.cancelAction)
+                }
+            }
+            title(d)
+        }
+    }
+
+    private func title(_ d: AppModel.Computer) -> some View {
         HStack(alignment: .top, spacing: Tokens.spacingMedium) {
             DeviceIcon(device: d, size: 64)
             VStack(alignment: .leading, spacing: 4) {
@@ -166,16 +188,9 @@ struct DeviceDetailView: View {
                 }
             }
             .accessibilityElement(children: .combine)
+            .layoutPriority(1)
             Spacer()
-            if model.isAdmin { menu(d) }
-            if let close {
-                Button(action: close) {
-                    Image(systemName: "xmark").font(.body.weight(.semibold)).foregroundStyle(palette.text).glassCircle()
-                }
-                .accessibilityLabel(Text("Close"))
-                // Escape on an iPad's keyboard closes the pane.
-                .keyboardShortcut(.cancelAction)
-            }
+            if close == nil, model.isAdmin { menu(d) }
         }
     }
 
@@ -212,8 +227,7 @@ struct DeviceDetailView: View {
     @ViewBuilder private func iconRow(_ d: AppModel.Computer) -> some View {
         if model.isAdmin {
             HStack(spacing: Tokens.spacingSmall) {
-                // Members and Android and Aurora phones take pastes; iPhones cannot.
-                if !d.isSelf, d.role == "member" || (d.role == "phone" && ["android", "aurora", "sailfish"].contains(d.os)) {
+                if d.takesPaste {
                     Button { pasting = true } label: { IconLabel(symbol: "keyboard", title: Text("Paste")) }
                         .buttonStyle(.plain)
                 }

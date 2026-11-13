@@ -555,6 +555,37 @@ export class Member {
     return Result.of<string>(sent.ok.copy?.id ?? '');
   }
 
+  // Sends to the group what was dropped beside a big screen's tiles, as the
+  // Share menu would: files from the app's cache, or a text. Answers
+  // whether it sent.
+  async sendDropped(text: string, files: string[], types: string[]): Promise<boolean> {
+    if (this.handle === null || this.muted) {
+      return false;
+    }
+    if (files.length > 0) {
+      const made = await this.copyFiles(files, types);
+      if (made.ok === undefined) {
+        this.error = Errors.shown(made.failure as Failure);
+        return false;
+      }
+      Errors.log(`member: sent ${files.length} dropped files`);
+      this.error = '';
+      return true;
+    }
+    if (text.length === 0) {
+      return false;
+    }
+    const sent = await this.call<Object>('copy', { 'text': text } as Record<string, Object>);
+    if (sent.ok === undefined) {
+      this.error = Errors.shown(sent.failure as Failure);
+      return false;
+    }
+    Errors.log('member: sent a dropped text');
+    this.error = '';
+    this.setLast(text, false);
+    return true;
+  }
+
   // The group's copy of the files the user picked to paste on another
   // device, which the paste command names: its ID.
   async copyForPaste(files: string[], types: string[]): Promise<Result<string>> {
