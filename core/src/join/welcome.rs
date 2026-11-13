@@ -31,11 +31,24 @@ use crate::records::{Key, KeyHash, Record, RecordId, Recovery, State, group_id};
 
 use super::intro::chain;
 
-/// What a Welcome may take of a pairing frame (1 MiB) for its records and
-/// its list, counted by the bytes they take in it (the envelopes, not the
-/// allowances a set counts them for): the rest is left for its keys, the
-/// grant, the credentials and the padding.
-pub const RECORDS_BUDGET: usize = crate::format::frame::LIMIT_PAIRING - 64 * 1024;
+/// What a Welcome may take of its frame (the member limit, 7 MiB, which
+/// message 67 alone of pairing takes, after the confirm) for its records
+/// and its list, counted by the bytes they take in it (the envelopes, not
+/// the allowances a set counts them for): the rest is left for its keys,
+/// the grant, the credentials and the padding. What the joiner must have
+/// to evaluate goes first; the rest it gets by sync.
+pub const RECORDS_BUDGET: usize = crate::format::frame::LIMIT_MEMBER - 64 * 1024;
+
+// The widest must-carry fits the budget: every head at its widest (a
+// fork's second head too), the whole set's bytes (each record counted by
+// its allowance, never below its envelope) and the newest list.
+const _: () = assert!(
+    super::intro::MAX_HEADS * super::intro::HEAD_BYTES
+        + crate::records::MAX_SET_BYTES
+        + crate::records::LIST_MAX * 34
+        + 8
+        <= RECORDS_BUDGET
+);
 
 /// The set's must-carry (its recovery records and list, first checkpoints,
 /// counting removals and the two devices' records) passes RECORDS_BUDGET:

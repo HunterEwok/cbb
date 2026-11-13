@@ -932,7 +932,7 @@ func beaconVerdict(body []byte, m map[any]any) string {
 	if !bs(m, 10, 32) {
 		return "beacons/digest"
 	}
-	if c, ok := u(m, 11); !ok || c < 1 || c > 4096 {
+	if c, ok := u(m, 11); !ok || c < 1 || c > 7168 {
 		return "beacons/count"
 	}
 	return "take"

@@ -26,7 +26,7 @@ mod tests;
 
 use alloc::vec::Vec;
 
-use crate::format::KeyHash;
+use crate::format::{KeyHash, Rule};
 use crate::identity::ExternalKey;
 use crate::records::Key;
 
@@ -42,6 +42,34 @@ pub const T_DONE: u64 = 68;
 pub const T_ERROR: u64 = 69;
 /// The intro of a peer whose key the other side does not know (format 11.3).
 pub const T_INTRO: u64 = 8;
+
+/// Reads one frame of pairing. Before the code is confirmed every message
+/// takes the pairing limit (1 MiB); after it, the Welcome (message 67) may
+/// take the member limit (7 MiB) and every other message still the pairing
+/// limit. A Welcome before the confirm is refused whatever its size.
+pub fn read_pairing(frame: &[u8], confirmed: bool) -> Result<crate::format::frame::Message<'_>, Rule> {
+    use crate::format::frame::{self, LIMIT_MEMBER, LIMIT_PAIRING};
+    let m = frame::read(frame, if confirmed { LIMIT_MEMBER } else { LIMIT_PAIRING })?;
+    if m.t == T_WELCOME && !confirmed {
+        return Err(RULE_EARLY_WELCOME);
+    }
+    if m.t != T_WELCOME && frame.len().saturating_sub(4) > LIMIT_PAIRING {
+        return Err(Rule::FRAME_GRID);
+    }
+    Ok(m)
+}
+
+/// The length a pairing frame's header announces, checked against the
+/// widest the next message may be: the member limit after the confirm
+/// (only a Welcome reaches it, which [`read_pairing`] checks once read),
+/// the pairing limit before.
+pub fn pairing_length(header: [u8; 4], confirmed: bool) -> Result<usize, Rule> {
+    use crate::format::frame::{self, LIMIT_MEMBER, LIMIT_PAIRING};
+    frame::length(header, if confirmed { LIMIT_MEMBER } else { LIMIT_PAIRING })
+}
+
+/// A Welcome before the code is confirmed.
+pub const RULE_EARLY_WELCOME: Rule = Rule::field("pair/early-welcome");
 
 /// The label of the admin key's proof at pairing.
 pub const LABEL_ADMIN_POP: &str = "cbb admin pop v1";
