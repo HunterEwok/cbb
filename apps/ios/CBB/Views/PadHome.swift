@@ -240,7 +240,7 @@ struct PadDevices: View {
         }
         .animation(.smooth, value: selected)
         .environment(\.chosenDevice, selected)
-        .modifier(DiagSearch(query: $query))
+        .diagSearch($query)
         .onChange(of: query) { _, q in if !q.isEmpty { arrange.on = false } }
         .background(AppBackground())
         .navigationTitle(PadSidebar.title(section, model))
@@ -473,13 +473,12 @@ struct PasteDrop: ViewModifier {
 }
 
 // DIAGNOSTIC ONLY (not for main): -padDiag nosearch drops the search field.
-struct DiagSearch: ViewModifier {
-    @Binding var query: String
-    func body(content: Content) -> some View {
+extension View {
+    @ViewBuilder func diagSearch(_ query: Binding<String>) -> some View {
         if (UserDefaults.standard.string(forKey: "padDiag") ?? "").contains("nosearch") {
-            content
+            self
         } else {
-            content.searchable(text: $query, placement: .toolbar, prompt: Text("Search devices"))
+            self.searchable(text: query, placement: .toolbar, prompt: Text("Search devices"))
         }
     }
 }
