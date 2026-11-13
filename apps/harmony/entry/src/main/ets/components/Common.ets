@@ -2,7 +2,10 @@
 // Copyright (C) 2026 HunterEwok
 
 // Small pieces every page shows: an error as Errors.shown gave it (its
-// details under it in debug mode, selectable to copy), and the busy line.
+// details under it in debug mode, selectable to copy), the busy line, the
+// page's title and the note on how well this device guards the group.
+
+import { guardsLikeAPhone } from '../core/Keys';
 
 @ComponentV2
 export struct ErrorText {
@@ -55,5 +58,35 @@ export struct PageTitle {
       Text(this.title).fontSize(24).fontWeight(FontWeight.Bold).fontColor($r('app.color.text')).layoutWeight(1)
     }
     .width('100%')
+  }
+}
+
+// Before this device becomes the group's main device (making a group,
+// restoring one, taking it over): on one that does not guard its keys as a
+// phone does, that it guards the group less well; with hint, on a big screen
+// that does, that the main device is best one always at hand (docs/apps.md,
+// "Big screens").
+@ComponentV2
+export struct KeyGuardNote {
+  @Param hint: boolean = false;
+  @Local guards: boolean = true;
+  @Local wide: boolean = false;
+
+  aboutToAppear(): void {
+    this.guards = guardsLikeAPhone();
+  }
+
+  build() {
+    Column() {
+      if (!this.guards) {
+        Text($r('app.string.key_guard_weak')).fontSize(13).fontColor($r('app.color.error')).width('100%')
+      } else if (this.hint && this.wide) {
+        Text($r('app.string.create_group_main_hint')).fontSize(13).fontColor($r('app.color.secondary')).width('100%')
+      }
+    }
+    .width('100%')
+    .onAreaChange((_: Area, area: Area) => {
+      this.wide = Number(area.width) >= 600;
+    })
   }
 }

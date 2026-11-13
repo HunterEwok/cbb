@@ -387,10 +387,31 @@ is in software gets the same big-screen layout with a computer's rights.
 
   Android draws the device icons itself (`DeviceGlyph`), on the same 24-unit grid as the
   system's line icons.
-- **HarmonyOS tablets and foldables** (a Mate X open, a MatePad) do the same from 720 vp wide:
-  the orbits, tiles or a list, which the "…" menu switches and the app keeps, and a device's
-  details in a pane beside them, the page a phone's screen opens (`DeviceDetail`). Folding
-  the phone closes the pane and goes back to the phone's page.
+- **HarmonyOS tablets and foldables** (a Mate X open, a MatePad) do the same from 720 vp wide
+  (`pages/Main.ets`): the orbits (only for all devices), tiles or a list, which the "…" menu
+  switches and the app keeps, and a device's details in a pane beside them, 400 vp, the page a
+  phone's screen opens (`DeviceDetail`), with the chosen tile outlined. Folding the phone closes
+  the pane and goes back to the phone's page.
+  - **The sidebar** (280 vp, ArkUI's `SideBarContainer`): the group's line; **Devices**: "All
+    devices", "Needs attention" while a device does, each collection, each with its count;
+    **Settings**: the language and the error details, notifications, the recovery key (on the
+    root) and this phone as the hub (each its own page), the group, the lab, why it does not
+    sync, and About; a part opens beside the sidebar (`components/SettingsBody.ets`, which the
+    phone's Settings page shows whole, the advanced parts behind their switch). It stands from
+    1040 vp (the sidebar, 360 of devices and the details); narrower it slides in behind ☰. A
+    short line at its foot names the keys. Another section closes the details.
+  - **The keyboard**: Ctrl+1 to 9 open the sidebar's rows in its order, Ctrl+, the settings,
+    Ctrl+N adds a device (an admin's scan), the arrows choose the device before or after, Esc
+    closes the details.
+  - **The pointer**: a right click on a tile opens its menu, which for an admin pastes on the
+    device and mutes or unmutes it, besides Arrange; a long press still arranges it.
+  - **Drag and drop**: text, a picture or files dropped on a tile of a device that takes remote
+    paste are pasted there (an admin's); dropped beside the tiles they go to the group.
+  - **The rights** follow the keys as on Android (`Keys.guardsLikeAPhone`): HUKS keeps them in
+    the TEE, so a fingerprint or face sensor at ATL3, enrolled or not yet, makes it a phone for
+    the group; without one Start under "Create a group", restoring and taking the group over say
+    that it guards the group less well than a phone with both, and a big screen that has one
+    says on Start that the main device is best one always at hand.
 
 ## Dynamic Island
 

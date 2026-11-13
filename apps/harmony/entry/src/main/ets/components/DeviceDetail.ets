@@ -9,6 +9,7 @@
 // the root is final, so the page asks first and says so.
 
 import { router } from '@kit.ArkUI';
+import { guardsLikeAPhone } from '../core/Keys';
 import { t } from '../core/Text';
 import { can, kind, line, mark, nameOf, role, status } from '../common/Devices';
 import { app } from '../model/AppModel';
@@ -18,7 +19,7 @@ import { BusyLine, ErrorText, PageTitle } from './Common';
 
 // Members take remote pastes, and the phones that type them on a keyboard
 // or into their own focus; an iPhone cannot.
-function takesPastes(d: DeviceInfo): boolean {
+export function takesPastes(d: DeviceInfo): boolean {
   return d.role === 'member' || (d.role === 'phone' && ['android', 'aurora', 'harmonyos'].includes(d.os ?? ''));
 }
 
@@ -168,7 +169,9 @@ export struct DeviceDetail {
               if (this.acts(this.device() as DeviceInfo)) {
                 if ((this.device() as DeviceInfo).root === true && !app.isRoot() && app.claimState.length === 0) {
                   this.action(t('device_take_over'), true, () => {
-                    this.confirm(t('device_take_over_confirm'), t('device_take_over'), () => {
+                    // Before this device becomes the group's main device: how well it guards the group.
+                    const weak = guardsLikeAPhone() ? '' : `\n\n${t('key_guard_weak')}`;
+                    this.confirm(t('device_take_over_confirm') + weak, t('device_take_over'), () => {
                       app.takeOver(this.deviceId);
                     });
                   })

@@ -25,6 +25,12 @@ All notable changes to cbb are documented in this file. The format follows
   beside the tiles, and on the widest screens a sidebar with all devices, the ones that need
   attention, each collection and Settings. Making or restoring a group on Aurora says that
   its keys, behind the app's PIN and no fingerprint, guard the group less well than a phone's.
+- HarmonyOS tablets and open foldables get the same Home: the sidebar (standing from 1040 vp,
+  sliding in behind ☰ below) with the devices' sections and the parts of Settings, the
+  chosen tile outlined beside its details, Ctrl+1 to 9, Ctrl+, Ctrl+N, the arrows and Esc, a
+  right click for a tile's menu, and drops on a tile pasted there or beside the tiles sent to
+  the group. A HarmonyOS device without a strong fingerprint or face sensor says so before it
+  makes a group, restores one or takes one over.
 - The app for HarmonyOS 5 and later (`apps/harmony`), in development: ArkTS around the same
   Rust core as the Aurora app, through a Node-API module (`libcbb_napi.so`), with the keys in
   HUKS and the admin key behind the user's face, fingerprint or PIN. It has the other phones'

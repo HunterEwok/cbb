@@ -150,7 +150,7 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   `Live` Live View, `OneShot` one send from the Share menu), `entryformability/` and `widget/`
   the home-screen widget, `shareextability/` the Share menu's sheet,
   `insightintents/` the intents, `pages/` (the screens), `components/` (`DeviceDetail` a device's page and a big screen's
-  pane, `Orbit` the devices on orbits), `common/` (the devices' words, Scan
+  pane, `Orbit` the devices on orbits, `SettingsBody` Settings' parts), `common/` (the devices' words, Scan
   Kit, sharing in, the clipboard, `YubiKey` the recovery key over NFC, `Widgets`,
   `WatchState` and `Wear`, shared with the watch); `wearable/` the
   watch app (`model/Link.ets`, `model/AdminKey.ets` its admin key in HUKS, `pages/Watch.ets`),
