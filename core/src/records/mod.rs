@@ -184,22 +184,37 @@ pub const MAX_SEEN: usize = 1024;
 /// A record body, and a checkpoint's. A recovery record is small: its list
 /// rides beside it.
 pub const MAX_BODY: usize = 16 << 10;
+/// The admin keys a group has at most (the owner's cap, 2026-11-13). The
+/// ceilings below are sized so that their sum is the set's room: the
+/// current root's ceiling, the cut roots' reserve and every admin key's
+/// ceiling together fill MAX_RECORDS exactly, so the level never falls
+/// below any key's ceiling and no key pushes out another's records.
+pub const ADMIN_KEYS_MAX: usize = 16;
+/// Records of one root key, in units: a full checkpoint (about 484
+/// units), a second waiting one and a device record for each of 256
+/// devices fit, with room left for its removals.
+pub const MAX_ROOT_RECORDS: usize = 1536;
+/// Records of one admin key, in units.
+pub const MAX_ADMIN_RECORDS: usize = 256;
+/// What the roots before the current one keep together, in units: what
+/// the newest change's list names, removals first.
+pub const CUT_ROOTS_RESERVE: usize = 1536;
+/// IDs a change's list names at most: everything the reserve can hold.
+/// The list rides beside its recovery record, outside the rooms.
+pub const LIST_MAX: usize = CUT_ROOTS_RESERVE;
+/// Records in a set (its room, in units of 512 bytes), and their bytes.
+pub const MAX_RECORDS: usize = MAX_ROOT_RECORDS + CUT_ROOTS_RESERVE + ADMIN_KEYS_MAX * MAX_ADMIN_RECORDS;
+pub const MAX_SET_BYTES: usize = 7 << 19;
+const _: () = assert!(MAX_RECORDS == 7168 && MAX_SET_BYTES / MAX_RECORDS == 512);
 /// A checkpoint names records of a full set: at most one head per key that
-/// signs (the roots on the path and 256 admin keys, about 76 bytes each)
-/// and the other records it keeps, one per seq of a key, all of them in
-/// the set's 4096 records or among the first checkpoints outside the
-/// rooms, 34 bytes each: 321 * 76 + (4096 + 65 - 321) * 34 + the fixed
-/// fields is about 155 000 bytes. The new root's first checkpoint, which
+/// signs (the 17 roots a path can hold and 16 admin keys, about 76 bytes
+/// each) and the other records it keeps, one per seq of a key, all of them
+/// in the set's 7168 records or among the first checkpoints outside the
+/// rooms, 34 bytes each: 33 * 76 + (7168 + 65 - 33) * 34 + the fixed
+/// fields is about 248 000 bytes. The new root's first checkpoint, which
 /// keeps the whole list besides what the old root's checkpoint kept, is
 /// such a checkpoint too.
-pub const MAX_CHECKPOINT_BODY: usize = 160 << 10;
-/// Records of one root key.
-pub const MAX_ROOT_RECORDS: usize = 1024;
-/// Records of one admin key.
-pub const MAX_ADMIN_RECORDS: usize = 256;
-/// Records in a set, and their bytes.
-pub const MAX_RECORDS: usize = 4096;
-pub const MAX_SET_BYTES: usize = 2 << 20;
+pub const MAX_CHECKPOINT_BODY: usize = 256 << 10;
 /// Devices with a device record.
 pub const MAX_DEVICES: usize = 256;
 /// Roots on the path: the first and one for each recovery record.

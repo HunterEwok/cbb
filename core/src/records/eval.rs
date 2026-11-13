@@ -576,6 +576,27 @@ fn units_of(r: &Record) -> u64 {
     super::keep::units(r.size())
 }
 
+/// The room the roots before the current one share (`CUT_ROOTS_RESERVE`):
+/// in the keeping their records are one key's, so that however many
+/// changes of root the path holds, they take one reserve together. No key
+/// hashes to it.
+pub(crate) const CUT_ROOTS: KeyHash = KeyHash([0xff; 32]);
+
+/// Whether k is a root a change cut: one before the current root.
+pub(crate) fn is_cut_root(cuts: &BTreeMap<KeyHash, Cut>, k: &KeyHash) -> bool {
+    cuts.get(k).is_some_and(|c| c.current != *k)
+}
+
+/// A record's item in the rooms: a cut root's record is in the cut roots'
+/// shared room.
+pub(crate) fn room_item(r: &Record, role: Role, cuts: &BTreeMap<KeyHash, Cut>) -> super::keep::Item {
+    let mut it = item(r, role);
+    if role == Role::Root && is_cut_root(cuts, &it.signer) {
+        it.signer = CUT_ROOTS;
+    }
+    it
+}
+
 pub(crate) fn item(r: &Record, role: Role) -> super::keep::Item {
     let early = role == Role::Root && matches!(r.body().kind, Kind::Revoke(_) | Kind::Freeze(_) | Kind::Resolve(_));
     super::keep::Item {
@@ -919,13 +940,14 @@ pub(crate) fn kept_of(
                 && !is_first(c.r)
                 && !kept_first.contains(&c.r.id())
         })
-        .map(|c| item(c.r, c.role))
+        .map(|c| room_item(c.r, c.role, cuts))
         .collect();
     // The checkpoint kept first takes its part of the rooms before them.
     let mut pre: BTreeMap<KeyHash, u64> = BTreeMap::new();
     for c in checked.iter().filter(|c| first(c) && !proof.contains(&c.r.id())) {
-        let u = pre.entry(c.r.body().signer).or_default();
-        *u = u.saturating_add(item(c.r, c.role).units);
+        let it = room_item(c.r, c.role, cuts);
+        let u = pre.entry(it.signer).or_default();
+        *u = u.saturating_add(it.units);
     }
     let ceiling = |k: &KeyHash| ceiling_of(group_root, promoted, &admins, k);
     let mut kept = super::keep::keep_with(&items, ceiling, &super::keep::Cut::default(), &pre).0;
@@ -983,6 +1005,7 @@ pub(crate) fn fits_alone<'r>(
     named: impl Iterator<Item = (&'r Record, Role)> + Clone,
     group_root: &KeyHash,
     promoted: &BTreeSet<KeyHash>,
+    cuts: &BTreeMap<KeyHash, Cut>,
 ) -> bool {
     let admins: BTreeSet<KeyHash> = named
         .clone()
@@ -994,8 +1017,9 @@ pub(crate) fn fits_alone<'r>(
     let mut by: BTreeMap<KeyHash, u64> = BTreeMap::new();
     let mut total = 0u64;
     for (r, role) in named.filter(|(_, role)| *role != Role::Recovery) {
-        let u = item(r, role).units;
-        let e = by.entry(r.body().signer).or_default();
+        let it = room_item(r, role, cuts);
+        let u = it.units;
+        let e = by.entry(it.signer).or_default();
         *e = e.saturating_add(u);
         total = total.saturating_add(u);
     }
@@ -1009,7 +1033,9 @@ pub(crate) fn ceiling_of(
     admins: &BTreeSet<KeyHash>,
     k: &KeyHash,
 ) -> Option<u64> {
-    if k == group_root || promoted.contains(k) {
+    if *k == CUT_ROOTS {
+        Some(super::keep::reserve())
+    } else if k == group_root || promoted.contains(k) {
         Some(super::keep::ceiling(true))
     } else if admins.contains(k) {
         Some(super::keep::ceiling(false))
@@ -1202,7 +1228,7 @@ pub(crate) fn evaluate_checked(
             kept.iter().filter(|c| !off_cut(&cuts, c.r)).map(|c| (c.r.id(), c)).collect();
         let first = named_first(x, |id| by_id.contains_key(id));
         let named = first.iter().filter_map(|id| by_id.get(id)).map(|c| (c.r, c.role));
-        if !fits_alone(named, &root.hash(), &chain.promoted()) {
+        if !fits_alone(named, &root.hash(), &chain.promoted(), &cuts) {
             continue;
         }
         let these = if x.body().signer == cur && chain.cut.is_some() { closed(&cuts, &anchors) } else { cuts.clone() };
@@ -1960,6 +1986,31 @@ impl<'e, 'a> Epoch<'e, 'a> {
             if !current.contains(&a) {
                 self.superseded.insert(a, by);
             }
+        }
+        // At most ADMIN_KEYS_MAX admin keys count: of those no newer root
+        // record took back and no root removal names, the first admitted
+        // (a root earlier on the path, then a lower seq, then the smaller
+        // ID). A key past them is no admin: its device stays a device.
+        let removed: BTreeSet<KeyHash> = (0..self.e.recs.len())
+            .filter(|&i| self.root_record(i))
+            .filter_map(|i| match &self.r(i).b().kind {
+                Kind::Revoke(rm) => Some(rm.keys.clone()),
+                _ => None,
+            })
+            .flatten()
+            .collect();
+        let mut live: Vec<((usize, u64, RecordId), KeyHash)> = self
+            .admins
+            .iter()
+            .filter(|(a, _)| !self.superseded.contains_key(*a) && !removed.contains(*a))
+            .map(|(a, &i)| {
+                let b = self.r(i).b();
+                ((self.on_path.get(&b.signer).copied().unwrap_or(0), b.seq, self.r(i).id), *a)
+            })
+            .collect();
+        live.sort();
+        for (_, a) in live.into_iter().skip(super::ADMIN_KEYS_MAX) {
+            self.admins.remove(&a);
         }
     }
 

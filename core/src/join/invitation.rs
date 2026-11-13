@@ -556,6 +556,7 @@ pub struct JoinerCode {
 pub struct Shown {
     local: DeviceId,
     session: [u8; 32],
+    member: KeyHash,
 }
 
 /// A joiner's pairing session whose code the person said matches, at the
@@ -569,6 +570,9 @@ pub struct Matched {
     /// The session's mark (`grant::session_mark` of its exporter): the
     /// answer names that session and serves no other.
     session: [u8; 32],
+    /// The hash of the member's key the session's handshake proved: the
+    /// answer is of that member and no other.
+    member: KeyHash,
 }
 
 impl Matched {
@@ -595,6 +599,11 @@ impl Matched {
     /// Whether the answer was given in the session with this exporter.
     pub(crate) fn of(&self, exporter: &[u8]) -> bool {
         crate::secret::ct_eq(&self.session, &crate::format::grant::session_mark(exporter))
+    }
+
+    /// Whether the answer was given to the member with this key.
+    pub(crate) fn to(&self, member: &[u8; 65]) -> bool {
+        crate::format::Key::new(Alg::Es256, member).hash() == self.member
     }
 }
 
@@ -651,7 +660,8 @@ impl JoinerAttempts {
     /// nonce that `pair/confirm` opens, and the session past its code step
     /// at this end ([`Shown`]); invitation is the invitation the joiner is
     /// using, none at home without one, local the device ID of the
-    /// joiner's own TLS key in this session. It takes the session by
+    /// joiner's own TLS key in this session, member the member's key its
+    /// handshake proved. It takes the session by
     /// value: a nonce serves one session. An invitation with the ID of
     /// none is refused ([`PairError::Refused`]). The code stays shown
     /// until [`JoinerAttempts::answered`] or [`JoinerAttempts::gave_up`].
@@ -662,6 +672,7 @@ impl JoinerAttempts {
         member_nonce: &[u8; 32],
         invitation: Option<&Invitation>,
         local: DeviceId,
+        member: &[u8; 65],
     ) -> Result<(String, [u8; 32], Shown), PairError> {
         let id = match invitation {
             Some(i) if i.id == super::NO_INVITATION => return Err(PairError::Refused),
@@ -670,7 +681,8 @@ impl JoinerAttempts {
         };
         self.showing = true;
         let session = crate::format::grant::session_mark(exporter);
-        Ok((short_code(exporter, &code.nonce, member_nonce, &id), code.nonce, Shown { local, session }))
+        let member = crate::format::Key::new(Alg::Es256, member).hash();
+        Ok((short_code(exporter, &code.nonce, member_nonce, &id), code.nonce, Shown { local, session, member }))
     }
 
     /// The person answered the shown code: only now may the person start
@@ -679,7 +691,7 @@ impl JoinerAttempts {
     /// nothing, and that session ends.
     pub fn answered(&mut self, shown: Shown, matched: bool) -> Option<Matched> {
         self.showing = false;
-        matched.then_some(Matched { local: shown.local, session: shown.session })
+        matched.then_some(Matched { local: shown.local, session: shown.session, member: shown.member })
     }
 
     /// The person gave up, or the session that showed the code is gone (a

@@ -278,7 +278,8 @@ fn the_short_code_opens_its_commitment() {
     let (mut j, joiner, c) = joiner_session();
     let nm = open.reply(n, c, 110).unwrap();
     assert_eq!(open.failures, 1, "counted once the member replied");
-    let (code, nj, _) = j.open(joiner, &e, &nm, Some(&open.invitation), DeviceId([1; 16])).unwrap();
+    let (code, nj, _) =
+        j.open(joiner, &e, &nm, Some(&open.invitation), DeviceId([1; 16]), &point(&k("laptop"))).unwrap();
     assert_eq!(code.len(), 6);
     assert_eq!(open.short_code(n, &e, &nj, 120), Ok(code.clone()));
     open.end(n, true, 130);
@@ -294,7 +295,8 @@ fn the_short_code_opens_its_commitment() {
     // A second attempt while one is in progress: busy.
     assert_eq!(open.begin(Network::Home, 220), Err(PairError::Busy));
     // Walking away after the reply counts as a failed attempt.
-    let (_, nj2, _) = j2.open(joiner2, &e, &nm2, Some(&open.invitation), DeviceId([1; 16])).unwrap();
+    let (_, nj2, _) =
+        j2.open(joiner2, &e, &nm2, Some(&open.invitation), DeviceId([1; 16]), &point(&k("laptop"))).unwrap();
     open.end(n2, false, 230);
     assert_eq!(open.failures, 1);
     assert_ne!(nj2, nj);
@@ -313,7 +315,8 @@ fn the_short_code_opens_its_commitment() {
     let n5 = open.begin(Network::Home, 1_000).unwrap();
     let (mut j5, joiner5, c5) = joiner_session();
     let nm5 = open.reply(n5, c5, 1_010).unwrap();
-    let (code5, nj5, _) = j5.open(joiner5, &e, &nm5, Some(&open.invitation), DeviceId([1; 16])).unwrap();
+    let (code5, nj5, _) =
+        j5.open(joiner5, &e, &nm5, Some(&open.invitation), DeviceId([1; 16]), &point(&k("laptop"))).unwrap();
     assert_eq!(open.short_code(n5, &e, &nj5, 1_020), Ok(code5));
     let minutes = 1_020 + 5 * 60_000;
     assert_eq!(open.begin(Network::Home, minutes), Err(PairError::Busy), "still the open attempt");
@@ -324,7 +327,8 @@ fn the_short_code_opens_its_commitment() {
     let n6 = open.begin(Network::Home, 2_000_000).unwrap();
     let (mut j6, joiner6, c6) = joiner_session();
     let nm6 = open.reply(n6, c6, 2_000_010).unwrap();
-    let (_, nj6, _) = j6.open(joiner6, &e, &nm6, Some(&open.invitation), DeviceId([1; 16])).unwrap();
+    let (_, nj6, _) =
+        j6.open(joiner6, &e, &nm6, Some(&open.invitation), DeviceId([1; 16]), &point(&k("laptop"))).unwrap();
     assert_eq!(open.short_code(n6, &e, &nj6, 2_000_000 + invitation::ATTEMPT_MS), Err(PairError::Closed));
     assert_eq!(open.failures, kept + 1);
     open.failures = kept;
@@ -332,7 +336,8 @@ fn the_short_code_opens_its_commitment() {
     let n7 = open.begin(Network::Home, 3_000_000).unwrap();
     let (mut j7, joiner7, c7) = joiner_session();
     let nm7 = open.reply(n7, c7, 3_000_010).unwrap();
-    let (_, nj7, _) = j7.open(joiner7, &e, &nm7, Some(&open.invitation), DeviceId([1; 16])).unwrap();
+    let (_, nj7, _) =
+        j7.open(joiner7, &e, &nm7, Some(&open.invitation), DeviceId([1; 16]), &point(&k("laptop"))).unwrap();
     assert!(open.short_code(n7, &e, &nj7, 3_000_020).is_ok());
     open.end(n7, true, 3_000_020 + invitation::ANSWER_MS);
     assert_eq!(open.failures, kept + 1);
@@ -371,7 +376,8 @@ fn a_late_message_of_an_earlier_attempt_changes_nothing() {
     let first = open.begin(Network::Home, 0).unwrap();
     let (mut j1, joiner1, c1) = joiner_session();
     let nm1 = open.reply(first, c1, 10).unwrap();
-    let (_, nj1, _) = j1.open(joiner1, &e, &nm1, Some(&open.invitation), DeviceId([1; 16])).unwrap();
+    let (_, nj1, _) =
+        j1.open(joiner1, &e, &nm1, Some(&open.invitation), DeviceId([1; 16]), &point(&k("laptop"))).unwrap();
     // The first attempt's time runs out; a second begins.
     let second = open.begin(Network::Home, invitation::ATTEMPT_MS).unwrap();
     let (_, _, c2) = joiner_session();
@@ -392,7 +398,7 @@ fn the_joiner_counts_its_sessions() {
     // A session shows its code; until the person answers, no other starts.
     let inv = invitation();
     let (code, _) = j.start().unwrap();
-    let (shown, _, session) = j.open(code, &e, &[1; 32], Some(&inv), DeviceId([1; 16])).unwrap();
+    let (shown, _, session) = j.open(code, &e, &[1; 32], Some(&inv), DeviceId([1; 16]), &point(&k("laptop"))).unwrap();
     assert_eq!(shown.len(), 6);
     assert_eq!(j.start().err(), Some(PairError::Busy), "the shown code stays until the person answers");
     // The session dropped before the person answered: it counted.
@@ -400,7 +406,7 @@ fn the_joiner_counts_its_sessions() {
     j.gave_up();
     for _ in 1..invitation::MAX_FAILURES {
         let (code, _) = j.start().unwrap();
-        let (_, _, session) = j.open(code, &e, &[2; 32], Some(&inv), DeviceId([1; 16])).unwrap();
+        let (_, _, session) = j.open(code, &e, &[2; 32], Some(&inv), DeviceId([1; 16]), &point(&k("laptop"))).unwrap();
         assert!(j.answered(session, false).is_none(), "no match proves nothing");
     }
     assert_eq!(j.start().err(), Some(PairError::TooMany), "three sessions per invitation");
@@ -429,7 +435,7 @@ fn the_code_takes_the_invitation_id() {
     let mut other = invitation();
     other.id = open.invitation.id;
     other.id[0] ^= 1;
-    let (theirs, nj, _) = j.open(joiner, &e, &nm, Some(&other), DeviceId([1; 16])).unwrap();
+    let (theirs, nj, _) = j.open(joiner, &e, &nm, Some(&other), DeviceId([1; 16]), &point(&k("laptop"))).unwrap();
     let ours = open.short_code(n, &e, &nj, 120).unwrap();
     assert_ne!(theirs, ours);
     // The same session's code with the member's ID, at home without one.
@@ -996,8 +1002,46 @@ fn an_intro_proves_a_new_device() {
     assert!(keys.is_none());
 }
 
+/// At the most changes of root a group may have, the Welcome still carries
+/// every head (each near 8 KiB with the recovery key's second signature)
+/// with the newest root's list and first checkpoint under its budget, and
+/// the joiner takes it; the intro of a device admitted after them fits too.
+#[test]
+fn the_joiner_takes_the_most_changes_of_root() {
+    let mut g = G::new();
+    let max = crate::records::body::MAX_RECOVERY;
+    let mut last = k("root");
+    for i in 1..=max {
+        last = k(&format!("root n{i}"));
+        g.change(&last);
+    }
+    let (pa, slate) = (k("phone a"), k("slate"));
+    phone_admin(&mut g, &last, &pa, &k("admin a"), true);
+    let mut d = Device::new(slate.key.clone(), "slate", ROLE_MEMBER);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    g.rec(&last, Kind::device(d));
+    let set = g.set();
+    let st = set.state();
+    assert_eq!(st.roots.len() as u64, max + 1);
+    let w = Welcome::build(&set, &st, &pa.hash, &slate.hash, 1_793_000_000_000).unwrap();
+    let heads = w.records.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).count();
+    assert_eq!(heads as u64, max);
+    let bytes = w.encode();
+    assert!(bytes.len() <= crate::format::frame::LIMIT_PAIRING, "{}", bytes.len());
+    let back = Welcome::decode(&bytes).unwrap();
+    let group = format::DeviceId(g.gid.0);
+    let (mine, st2) = back
+        .check(&group, &point(&pa), &point(&slate), Joining::Ordinary, Way::Invited(&invitation()))
+        .unwrap_or_else(|e| panic!("{e:?}"));
+    assert_eq!(st2.roots, st.roots);
+    assert_eq!(mine.len(), set.len());
+    let intro = Intro::of(&set, &st, &slate.hash, None).unwrap();
+    assert!(intro::fits(&intro.records));
+    assert!(intro.message().len() <= crate::format::frame::LIMIT_MEMBER);
+}
+
 /// The recovery heads ride beside the intro's 32 records and 16 KiB, at
-/// most 64 of them: three changes of root pass 16 KiB in their heads'
+/// most MAX_HEADS of them: three changes of root pass 16 KiB in their heads'
 /// envelopes alone, and the device admitted after them still proves
 /// itself. Sender and reader count alike, by the envelopes' bytes.
 #[test]
@@ -1032,7 +1076,7 @@ fn an_intro_counts_the_recovery_heads_apart() {
     assert_eq!(back, intro);
     assert_eq!(back.check(&old, &me, &point(&pa)).unwrap().len(), 1);
 
-    // Up to 64 heads pass; one more does not, on either side.
+    // Up to MAX_HEADS heads pass; one more does not, on either side.
     let mut many = intro.clone();
     while many.records.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).count() < intro::MAX_HEADS {
         many.records.insert(0, heads[0].clone());
@@ -1563,8 +1607,9 @@ fn a_welcome_carries_what_it_must_first() {
     assert!(st.revoked.contains(&tv.hash));
     let admitter = k("phone b").hash;
     let all = Welcome::build(&set, &st, &admitter, &slate.hash, 1).unwrap();
-    let full: usize = all.records.iter().map(Record::size).sum::<usize>() + all.list.as_ref().map_or(0, Vec::len);
-    let some = full - 30 * set.get(&filler[0]).unwrap().size();
+    let full: usize =
+        all.records.iter().map(|r| r.envelope().len()).sum::<usize>() + all.list.as_ref().map_or(0, Vec::len);
+    let some = full - 30 * set.get(&filler[0]).unwrap().envelope().len();
     let w = Welcome::build_within(&set, &st, &admitter, &slate.hash, 1, some).unwrap();
     let has = |id: &RecordId| w.records.iter().any(|r| r.id() == *id);
     let heads: Vec<RecordId> =
@@ -1601,7 +1646,8 @@ fn a_welcome_carries_the_chain_of_the_joiners_record() {
     let st = set.state();
     let admitter = k("phone").hash;
     let all = Welcome::build(&set, &st, &admitter, &slate.hash, 1).unwrap();
-    let full: usize = all.records.iter().map(Record::size).sum::<usize>() + all.list.as_ref().map_or(0, Vec::len);
+    let full: usize =
+        all.records.iter().map(|r| r.envelope().len()).sum::<usize>() + all.list.as_ref().map_or(0, Vec::len);
     let group = format::DeviceId(g.gid.0);
     assert!(
         all.check(&group, &point(&k("phone")), &point(&slate), Joining::Ordinary, Way::Invited(&invitation())).is_ok()
@@ -1687,7 +1733,7 @@ fn only_the_leafs_own_matched_session_makes_a_binding() {
     let waiting = plain.changed(new_root.hash, 1);
     let session = |j: &mut invitation::JoinerAttempts, exporter: &[u8], local| {
         let (code, _) = j.start().unwrap();
-        j.open(code, exporter, &[1; 32], None, local).unwrap().2
+        j.open(code, exporter, &[1; 32], None, local, &point(&k("laptop"))).unwrap().2
     };
     let mut j = invitation::JoinerAttempts::default();
     // "They do not match": nothing, and the session is over.
@@ -1717,42 +1763,65 @@ fn only_the_leafs_own_matched_session_makes_a_binding() {
     none.id = NO_INVITATION;
     let mut j = invitation::JoinerAttempts::default();
     let (code, _) = j.start().unwrap();
-    assert_eq!(j.open(code, &[9; 32], &[1; 32], Some(&none), lock).err(), Some(PairError::Refused));
+    assert_eq!(
+        j.open(code, &[9; 32], &[1; 32], Some(&none), lock, &point(&k("laptop"))).err(),
+        Some(PairError::Refused)
+    );
 }
 
 /// At home without an invitation the joiner takes a Welcome only with the
-/// person's "they match" from this very session; with an invitation the
-/// invitation binds the member as before. The member's end computes the
-/// same code by its own function, from the joiner's commitment.
+/// person's "they match" from this very session, given to the member that
+/// admits it; with an invitation the invitation binds the member as before,
+/// and one with the ID of none is no invitation. The member's end computes
+/// the same code by its own function, from the joiner's commitment.
 #[test]
 fn at_home_the_joiner_takes_a_welcome_only_after_the_person_matched() {
     let mut g = G::new();
     let tv = k("tv");
     let w = admit(&mut g, true, &tv, "tv");
     let group = format::DeviceId(g.gid.0);
-    let mut j = invitation::JoinerAttempts::default();
+    let laptop = point(&k("laptop"));
     let e = [9u8; 32];
-    let (code, commitment) = j.start().unwrap();
     let nm = [4u8; 32];
-    let (shown_code, nj, shown) = j.open(code, &e, &nm, None, tv.key.device_id()).unwrap();
+    // A session with the member `member` over exporter `exporter`, whose
+    // code the person said matches.
+    let answer = |exporter: &[u8], member: &[u8; 65]| {
+        let mut j = invitation::JoinerAttempts::default();
+        let (code, _) = j.start().unwrap();
+        let (_, _, shown) = j.open(code, exporter, &nm, None, tv.key.device_id(), member).unwrap();
+        j.answered(shown, true).unwrap()
+    };
+    let take = |matched, exporter: &[u8], admitter: &[u8; 65]| {
+        w.check(&group, admitter, &point(&tv), Joining::Ordinary, Way::Home { matched, exporter })
+    };
+    let mut j = invitation::JoinerAttempts::default();
+    let (code, commitment) = j.start().unwrap();
+    let (shown_code, nj, shown) = j.open(code, &e, &nm, None, tv.key.device_id(), &laptop).unwrap();
     assert_eq!(invitation::home_code(&commitment, &e, &nj, &nm), Ok(shown_code.clone()));
     let mut wrong = nj;
     wrong[0] ^= 1;
     assert_eq!(invitation::home_code(&commitment, &e, &wrong, &nm), Err(PairError::WrongCode));
-    let matched = j.answered(shown, true).unwrap();
-    let take = |m, exporter: &[u8], own: &K| {
-        w.check(&group, &point(&k("laptop")), &point(own), Joining::Ordinary, Way::Home { matched: m, exporter })
-    };
-    assert!(take(&matched, &e, &tv).is_ok());
+    assert!(take(j.answered(shown, true).unwrap(), &e, &laptop).is_ok());
     // The same answer offered in another session takes nothing.
-    assert_eq!(take(&matched, &[8; 32], &tv).err(), Some(welcome::Refusal::Unconfirmed));
-    // An answer for another key takes nothing.
+    assert_eq!(take(answer(&e, &laptop), &[8; 32], &laptop).err(), Some(welcome::Refusal::Unconfirmed));
+    // An answer from session A, with the exporter of A, offered with the
+    // admitter of session B takes nothing.
+    let phone = point(&k("phone"));
+    assert_eq!(take(answer(&e, &laptop), &e, &phone).err(), Some(welcome::Refusal::Unconfirmed));
+    // An answer for another key of the joiner's takes nothing.
+    let mut j = invitation::JoinerAttempts::default();
     let (code, _) = j.start().unwrap();
-    let (_, _, other) = j.open(code, &e, &nm, None, k("someone").key.device_id()).unwrap();
-    let other = j.answered(other, true).unwrap();
-    assert_eq!(take(&other, &e, &tv).err(), Some(welcome::Refusal::Unconfirmed));
+    let (_, _, other) = j.open(code, &e, &nm, None, k("someone").key.device_id(), &laptop).unwrap();
+    assert_eq!(take(j.answered(other, true).unwrap(), &e, &laptop).err(), Some(welcome::Refusal::Unconfirmed));
     // "They do not match" leaves no answer to show: the session ends there.
     let (code, _) = j.start().unwrap();
-    let (_, _, shown) = j.open(code, &e, &nm, None, tv.key.device_id()).unwrap();
+    let (_, _, shown) = j.open(code, &e, &nm, None, tv.key.device_id(), &laptop).unwrap();
     assert!(j.answered(shown, false).is_none());
+    // An invitation with the ID of none is no invitation.
+    let mut none = invitation();
+    none.id = NO_INVITATION;
+    assert_eq!(
+        w.check(&group, &laptop, &point(&tv), Joining::Ordinary, Way::Invited(&none)).err(),
+        Some(welcome::Refusal::Unconfirmed)
+    );
 }

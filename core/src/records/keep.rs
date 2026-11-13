@@ -38,7 +38,7 @@ use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::vec::Vec;
 
 use super::key::{KeyHash, RecordId};
-use super::{MAX_ADMIN_RECORDS, MAX_RECORDS, MAX_ROOT_RECORDS, MAX_SET_BYTES};
+use super::{CUT_ROOTS_RESERVE, MAX_ADMIN_RECORDS, MAX_RECORDS, MAX_ROOT_RECORDS, MAX_SET_BYTES};
 
 /// The bytes of one unit.
 pub const UNIT: usize = MAX_SET_BYTES / MAX_RECORDS;
@@ -144,6 +144,17 @@ pub fn ceiling(root: bool) -> u64 {
     if root { MAX_ROOT_RECORDS as u64 } else { MAX_ADMIN_RECORDS as u64 }
 }
 
+/// The units the roots before the current one keep together: as much as
+/// a root's ceiling (`CUT_ROOTS_RESERVE`), a test's small root ceiling
+/// with small rooms.
+pub fn reserve() -> u64 {
+    #[cfg(test)]
+    if let Some((_, r, _)) = small::ROOMS.with(core::cell::Cell::get) {
+        return r;
+    }
+    CUT_ROOTS_RESERVE as u64
+}
+
 /// What a set that drops records as they come remembers of them.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Cut {
@@ -156,7 +167,7 @@ pub struct Cut {
 
 /// The highest level: past it no ceiling binds.
 fn top() -> u64 {
-    ceiling(true)
+    ceiling(true).max(reserve())
 }
 
 impl Default for Cut {

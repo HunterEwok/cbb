@@ -135,7 +135,7 @@ pub const RULE_COUNTER: Rule = Rule::field("grants/counter");
 pub const RULE_REPLACES: Rule = Rule::field("grants/replaces");
 
 /// A grant made under another recovery seq than the newest the leaf knows,
-/// one above 16, or a leaf asked to read grants under a recovery seq below
+/// one above MAX_RECOVERY, or a leaf asked to read grants under a recovery seq below
 /// the one it kept.
 pub const RULE_RECOVERY: Rule = Rule::field("grants/recovery");
 
@@ -242,6 +242,10 @@ impl Kept {
 /// field this version does not know.
 pub const RULE_STATE: Rule = Rule::field("grants/state");
 
+/// A stored leaf state of a later version, or with a recovery seq above
+/// this version's [`MAX_RECOVERY`]: the firmware needs an update.
+pub const RULE_STATE_NEWER: Rule = Rule::field("grants/state-newer");
+
 /// The version of the stored leaf state's encoding.
 pub const STATE_VERSION: u64 = 1;
 
@@ -260,22 +264,67 @@ pub const STATE_VERSION: u64 = 1;
 /// version's: kept as they are and written back; another field below 256
 /// is refused. Recovery seqs are 1 to [`MAX_RECOVERY`].
 ///
-/// The state is not signed or authenticated at rest: whoever can write the
-/// leaf's flash owns the leaf, and the chip's flash encryption and secure
-/// boot (the firmware's) are what guard it; the store's SHA-256 frame
-/// (`crate::store`) only catches a torn write.
+/// The reader takes only what a writer makes: the wait (9) only on a
+/// guarded leaf, the wait and the fork (8) only without a grant (no
+/// commanders, counters or grant hash), commanders and counters only with
+/// a grant hash, and the head (10) at or above every other seq.
+///
+/// A leaf loads its state with [`Stored::load`] and never treats bytes
+/// that are there and do not read as no state: they give
+/// [`Stored::unreadable`], which obeys nobody and takes no grant until the
+/// leaf is set up again in person. A state of a later version, or with a
+/// recovery seq above this version's [`MAX_RECOVERY`], is the same, with
+/// [`Stored::update_needed`]. The bytes go in the store's frames
+/// (`crate::store`), which are required, not a convenience: two slots keep
+/// the last whole copy while the next is written, and the SHA-256 of each
+/// frame catches a torn write or a flipped bit, so a cut write gives the
+/// older state and never a freed lock.
+///
+/// The named limit: the state is not signed or authenticated at rest.
+/// Whoever can write the leaf's flash owns the leaf: the bytes of before a
+/// change of root, put back whole, read, and the leaf obeys the old
+/// commanders again, which a MAC would not stop (they carry a right one
+/// too). Only the chip guards against it: flash encryption, secure boot
+/// and a counter in hardware are the firmware's.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Stored {
     kept: Kept,
     head: Option<(KeyHash, u64)>,
     later: Vec<(u16, Vec<u8>)>,
+    update: bool,
 }
 
 impl Stored {
     /// What the leaf stores once it took `kept`, knowing `head` as the
     /// newest recovery head; a later version's fields of `before` stay.
     pub fn new(kept: Kept, head: Option<(KeyHash, u64)>, before: Option<&Stored>) -> Stored {
-        Stored { kept, head, later: before.map(|b| b.later.clone()).unwrap_or_default() }
+        Stored { kept, head, later: before.map(|b| b.later.clone()).unwrap_or_default(), update: false }
+    }
+
+    /// The state of a leaf whose store holds bytes that do not read: guarded
+    /// and forked under the highest recovery seq, so it obeys nobody, takes
+    /// no grant by [`read`] or [`read_bound`] and can be bound by no root,
+    /// until it is set up again in person. Never written.
+    pub fn unreadable(update: bool) -> Stored {
+        let kept = Kept { guarded: true, forked: true, recovery: MAX_RECOVERY, ..Kept::default() };
+        Stored { kept, head: None, later: Vec::new(), update }
+    }
+
+    /// The leaf's state from its store: `None` when the store holds no state
+    /// at all (a leaf never set up, or erased on purpose), the bytes of the
+    /// newest whole frame otherwise. Bytes that do not read are never no
+    /// state ([`Stored::unreadable`]).
+    pub fn load(bytes: Option<&[u8]>) -> Stored {
+        match bytes {
+            None => Stored::default(),
+            Some(b) => Stored::decode(b).unwrap_or_else(|r| Stored::unreadable(r == RULE_STATE_NEWER)),
+        }
+    }
+
+    /// Whether the state is of a later version than this firmware reads:
+    /// the leaf obeys nobody until it is updated.
+    pub fn update_needed(&self) -> bool {
+        self.update
     }
 
     /// The leaf's kept state at a start ([`Kept::start`] by the stored head)
@@ -333,8 +382,10 @@ impl Stored {
     pub fn decode(b: &[u8]) -> Result<Stored, Rule> {
         let v = cbor::decode(b).map_err(|_| RULE_STATE)?;
         let map = v.as_map().ok_or(RULE_STATE)?;
-        if v.get(1).and_then(Value::as_uint) != Some(STATE_VERSION) {
-            return Err(RULE_STATE);
+        match v.get(1).and_then(Value::as_uint) {
+            Some(STATE_VERSION) => {}
+            Some(n) if n > STATE_VERSION => return Err(RULE_STATE_NEWER),
+            _ => return Err(RULE_STATE),
         }
         if map.iter().any(|(n, _)| *n < 256 && *n > 10) {
             return Err(Rule::FORM_CRITICAL);
@@ -354,6 +405,7 @@ impl Stored {
             let Some(x) = v.get(n) else { return Ok(None) };
             match x.as_array() {
                 Some([h, Value::Uint(seq)]) if (1..=MAX_RECOVERY).contains(seq) => Ok(Some((hash(h)?, *seq))),
+                Some([_, Value::Uint(seq)]) if *seq > MAX_RECOVERY => Err(RULE_STATE_NEWER),
                 _ => Err(RULE_STATE),
             }
         };
@@ -378,7 +430,7 @@ impl Stored {
         };
         let recovery = count(7)?;
         if recovery > MAX_RECOVERY {
-            return Err(RULE_STATE);
+            return Err(RULE_STATE_NEWER);
         }
         let kept = Kept {
             guarded: flag(2)?,
@@ -390,8 +442,23 @@ impl Stored {
             forked: flag(8)?,
             rebind: pair(9)?,
         };
+        let head = pair(10)?;
+        // Only what a writer makes: the wait on a guarded leaf, the wait and
+        // the fork without a grant, a grant's parts with its hash, the head
+        // at or above every other seq.
+        let k = &kept;
+        let has_grant = k.grant_hash != [0; 32];
+        let grant_parts = !k.commanders.is_empty() || k.root_counter > 0 || k.admin_counter > 0;
+        let seqs_ok = head.is_none_or(|(_, h)| h >= k.recovery && k.rebind.is_none_or(|(_, r)| h >= r));
+        if (k.rebind.is_some() && !k.guarded)
+            || ((k.rebind.is_some() || k.forked) && (has_grant || grant_parts))
+            || (grant_parts && !has_grant)
+            || !seqs_ok
+        {
+            return Err(RULE_STATE);
+        }
         let later = map.iter().filter(|(n, _)| *n >= 256).map(|(n, x)| (*n, x.encode())).collect();
-        let stored = Stored { kept, head: pair(10)?, later };
+        let stored = Stored { kept, head, later, update: false };
         // One spelling: the bytes are the ones this state writes.
         if stored.encode() != b {
             return Err(RULE_STATE);

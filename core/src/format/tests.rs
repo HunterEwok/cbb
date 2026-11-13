@@ -1174,7 +1174,7 @@ fn a_leafs_stored_state_reads_back_in_one_spelling() {
     // commanders out of order or with a hash of another key: refused.
     assert_eq!(Stored::decode(&with(vec![(11, Value::Uint(1))])), Err(Rule::FORM_CRITICAL));
     let other_version = Value::Map(vec![(1, Value::Uint(2))]).encode();
-    assert_eq!(Stored::decode(&other_version), Err(grant::RULE_STATE));
+    assert_eq!(Stored::decode(&other_version), Err(grant::RULE_STATE_NEWER));
     let zero = Value::Map(vec![(1, Value::Uint(1)), (3, Value::Uint(0))]).encode();
     assert_eq!(Stored::decode(&zero), Err(Rule::FORM_DEFAULT));
     let swapped = Kept { commanders: commanders.iter().rev().cloned().collect(), ..full.clone() };
@@ -1182,4 +1182,91 @@ fn a_leafs_stored_state_reads_back_in_one_spelling() {
     let wrong = Kept { commanders: vec![(k("tablet").hash, point)], ..full.clone() };
     assert_eq!(Stored::decode(&Stored::new(wrong, None, None).encode()), Err(grant::RULE_STATE));
     assert_eq!(Stored::decode(&[0xa0]), Err(grant::RULE_STATE));
+}
+
+/// Bytes that are there and do not read are never "no state": the leaf
+/// then obeys nobody and takes no grant, by any way, until it is set up
+/// again; a later version's state or a seq above this version's says that
+/// the firmware needs an update. The reader takes no state a writer never
+/// makes.
+#[test]
+fn a_leafs_state_that_does_not_read_obeys_nobody() {
+    use crate::testkit::k;
+    use grant::{Kept, Stored};
+    let (root, new_root) = (k("root"), k("new root"));
+    let phone = k("phone");
+    let point: [u8; 65] = phone.key.public.clone().try_into().unwrap();
+    let full = Kept {
+        guarded: true,
+        root_counter: 1,
+        commanders: vec![(phone.hash, point)],
+        grant_hash: [5; 32],
+        ..Kept::default()
+    };
+    let waiting = full.changed(new_root.hash, 1);
+    let bytes = Stored::new(waiting.clone(), Some((new_root.hash, 1)), None).encode();
+    assert_eq!(Stored::load(Some(&bytes)).start().0, waiting);
+    // A leaf never set up has no state; cut bytes are not that.
+    assert_eq!(Stored::load(None), Stored::default());
+    let lost = Stored::load(Some(&bytes[..bytes.len() - 3]));
+    assert!(!lost.update_needed());
+    assert_eq!(lost, Stored::unreadable(false));
+    let (kept, recovery) = lost.start();
+    assert!(kept.commanders.is_empty() && kept.forked && kept.guarded);
+    // No grant by any way, whatever seq: not the new root's, not the old one's.
+    let group = DeviceId([7; 16]);
+    let lock = k("lock").key.device_id();
+    let grant_msg = |by: &crate::testkit::K, seq: u64| {
+        let mut m = vec![
+            (1, Value::Uint(1)),
+            (2, Value::Bytes(&group.0)),
+            (3, Value::Bytes(&by.hash.0)),
+            (4, Value::Uint(1)),
+            (10, Value::Bytes(&lock.0)),
+            (12, Value::Array(vec![Key::new(Alg::Es256, &phone.key.public).to_value()])),
+            (15, Value::Uint(1)),
+        ];
+        if seq > 0 {
+            m.push((19, Value::Uint(seq)));
+        }
+        let env = envelope::sign(&by.sk, sig::LABEL_GRANT, &Value::Map(m).encode());
+        let mut e = cbor::Encoder::new();
+        e.map(1).uint(2).raw(&env);
+        e.finish()
+    };
+    for (by, seq) in [(&new_root, 1), (&root, 0), (&new_root, recovery)] {
+        let msg = grant_msg(by, seq);
+        let v = cbor::decode(&msg).unwrap();
+        assert!(grant::read(&v, &by.key.public, &lock, &group, Some(&kept), seq).is_err(), "seq {seq}");
+        let b = grant::Binding::matched(&kept, Some((by.hash, seq.max(1))), lock, grant::session_mark(b"s"));
+        assert!(b.is_none(), "no binding for an unreadable state");
+    }
+    // A later version, or a seq above this version's: the same, and says so.
+    let newer = Value::Map(vec![(1, Value::Uint(2))]).encode();
+    assert!(Stored::load(Some(&newer)).update_needed());
+    let above = Value::Map(vec![
+        (1, Value::Uint(1)),
+        (10, Value::Array(vec![Value::Bytes(&new_root.hash.0), Value::Uint(grant::MAX_RECOVERY + 1)])),
+    ])
+    .encode();
+    assert_eq!(Stored::decode(&above), Err(grant::RULE_STATE_NEWER));
+    assert_eq!(Stored::load(Some(&above)), Stored::unreadable(true));
+    // States no writer makes: the wait without `guarded`, the wait or the
+    // fork beside a grant, a grant's parts without its hash, a head below
+    // the grant's seq.
+    let not_guarded = Kept { guarded: false, ..waiting.clone() };
+    let waiting_with_grant = Kept { grant_hash: [5; 32], ..waiting.clone() };
+    let forked_with_grant = Kept { forked: true, ..full.clone() };
+    let parts_without_hash = Kept { grant_hash: [0; 32], ..full.clone() };
+    for (kept, head) in [
+        (not_guarded, None),
+        (waiting_with_grant, None),
+        (forked_with_grant, None),
+        (parts_without_hash, None),
+        (Kept { recovery: 2, ..full.clone() }, Some((new_root.hash, 1))),
+    ] {
+        let b = Stored::new(kept, head, None).encode();
+        assert_eq!(Stored::decode(&b), Err(grant::RULE_STATE));
+        assert_eq!(Stored::load(Some(&b)), Stored::unreadable(false));
+    }
 }

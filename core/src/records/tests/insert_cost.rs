@@ -326,7 +326,9 @@ fn a_full_group_fills_in_about_the_time_of_its_signatures() {
         g.recs.len(),
         set.len()
     );
-    assert!(units > keep::room() * 3 / 4, "the set is near its room: {units} units");
+    // The twelve admins that sign (every fourth record is the root's)
+    // fill their ceilings, and the root keeps its newest devices.
+    assert!(units > 12 * crate::records::MAX_ADMIN_RECORDS as u64, "the set is near its room: {units} units");
     assert!(fill < verify * 2, "fill {fill:?} against verifying all {verify:?}");
     let (first, last) = (laps[0], laps[laps.len() - 1]);
     assert!(last < first * 4, "the last quarter {last:?} against the first {first:?}");
