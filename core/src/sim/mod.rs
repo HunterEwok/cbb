@@ -433,8 +433,97 @@ impl World {
         for t in 1..=first {
             w.admit_by(0, &root_name, t);
         }
+        if real_seed() {
+            w.prefill();
+        }
         w.note(format!("{n} members, {} admitted", first + 1));
         w
+    }
+
+    /// SIM_REAL: the group starts at the real sizes of table A. The root
+    /// admits 200 more devices and 12 phone admins, signs settings and
+    /// copies up to some 64 units under its ceiling, and each admin fills
+    /// its room to some 4 units under its own; the records are signed
+    /// here, as groupgen does, and the members admitted so far take them
+    /// at once. What the run then does meets the real ceilings.
+    fn prefill(&mut self) {
+        use crate::records::keep;
+        let root = k(&self.root_name);
+        let mut heads: BTreeMap<KeyHash, (u64, RecordId)> = BTreeMap::new();
+        {
+            let set = &self.members[0].live.set;
+            for r in set.ids().filter_map(|id| set.get(id)) {
+                let b = r.body();
+                if heads.get(&b.signer).is_none_or(|(s, _)| b.seq > *s) {
+                    heads.insert(b.signer, (b.seq, r.id()));
+                }
+            }
+        }
+        let mut units: BTreeMap<KeyHash, u64> = BTreeMap::new();
+        for id in self.members[0].live.set.ids() {
+            if let Some(r) = self.members[0].live.set.get(id) {
+                *units.entry(r.body().signer).or_insert(0) += keep::units(r.size());
+            }
+        }
+        let gid = self.gid;
+        let time_ms = self.time;
+        let mut out: Vec<Record> = Vec::new();
+        let mut rec = |by: &K, kind: Kind, out: &mut Vec<Record>, units: &mut BTreeMap<KeyHash, u64>| {
+            let (seq, prev) = match heads.get(&by.hash) {
+                Some((s, id)) => (s + 1, Some(*id)),
+                None => (1, None),
+            };
+            let body = Body { group: gid, signer: by.hash, seq, prev, time_ms, kind, held: false };
+            let r = Record::sign(body, by).unwrap();
+            heads.insert(by.hash, (seq, r.id()));
+            *units.entry(by.hash).or_insert(0) += keep::units(r.size());
+            out.push(r);
+        };
+        for j in 0..200 {
+            let m = k(&format!("sim{}/fill device {j}", self.seed));
+            let mut d = Device::new(m.key.clone(), &format!("fill device {j}"), ROLE_MEMBER);
+            d.rights = RIGHT_READ | RIGHT_SEND;
+            rec(&root, Kind::device(d), &mut out, &mut units);
+        }
+        let (powers, commands) = AdminKind::Phone.grants();
+        let admins: Vec<K> = (0..12).map(|a| k(&format!("sim{}/fill admin {a}", self.seed))).collect();
+        for (a, ak) in admins.iter().enumerate() {
+            let phone = k(&format!("sim{}/fill admin phone {a}", self.seed));
+            let mut d = Device::new(phone.key.clone(), &format!("fill admin phone {a}"), ROLE_PHONE);
+            d.rights = RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS;
+            d.admin = Some(ak.key.clone());
+            d.powers = powers;
+            d.commands = commands;
+            rec(&root, Kind::device(d), &mut out, &mut units);
+        }
+        let mut f = 0u64;
+        while units.get(&root.hash).copied().unwrap_or(0) + 64 < keep::ceiling(true) {
+            let kind = if f % 4 == 3 {
+                Kind::settings(Settings { shared: f % 8 == 3, ..Settings::default() })
+            } else {
+                Kind::Copies { incoming_ms: MIN_INCOMING_MS + f % 1000, seen: Vec::new() }
+            };
+            rec(&root, kind, &mut out, &mut units);
+            f += 1;
+        }
+        for ak in &admins {
+            let mut f = 0u64;
+            while units.get(&ak.hash).copied().unwrap_or(0) + 4 < keep::ceiling(false) {
+                rec(ak, Kind::Copies { incoming_ms: MIN_INCOMING_MS + f % 1000, seen: Vec::new() }, &mut out, &mut units);
+                f += 1;
+            }
+        }
+        self.signed.extend(out.iter().map(Record::id));
+        for i in 0..self.members.len() {
+            if !self.admitted[i] {
+                continue;
+            }
+            let (_, refused) = self.members[i].live.set.insert_all(out.iter().cloned());
+            assert!(refused.is_empty(), "sim: the real-size records refused on m{i}: {}", refused.len());
+            self.refresh(i);
+            self.save(i);
+        }
+        REAL_UNITS.fetch_max(units.values().sum::<u64>() as usize, Ordering::Relaxed);
     }
 
     fn note(&mut self, s: String) {
@@ -2300,6 +2389,8 @@ static ADMIN_TWINS: AtomicUsize = AtomicUsize::new(0);
 /// Changes of root refused because the live devices' admissions alone
 /// pass what a change carries.
 static CHANGE_TOO_BIG: AtomicUsize = AtomicUsize::new(0);
+/// The most units a real-size run's group started with (SIM_REAL).
+static REAL_UNITS: AtomicUsize = AtomicUsize::new(0);
 /// The same, where the devices fit alone and the roots' removals with them
 /// do not.
 static CHANGE_TOO_BIG_REMOVALS: AtomicUsize = AtomicUsize::new(0);
@@ -2321,7 +2412,8 @@ fn refused_why(e: &str) -> &'static AtomicUsize {
     }
 }
 
-const COUNTERS: [&AtomicUsize; 26] = [
+const COUNTERS: [&AtomicUsize; 27] = [
+    &REAL_UNITS,
     &CHANGE_TOO_BIG_REMOVALS,
     &CHANGE_TOO_BIG,
     &RECOVERY_FORK_LIVE,
@@ -2364,13 +2456,18 @@ fn small_seed(seed: u64) -> bool {
 fn small_rooms() -> crate::records::keep::small::Small {
     let v: Vec<u64> = std::env::var("SIM_ROOMS")
         .ok()
-        .map(|s| s.split(',').filter_map(|x| x.trim().parse().ok()).collect())
+        .map(|s| s.split([',', '.', '/']).filter_map(|x| x.trim().parse().ok()).collect())
         .unwrap_or_default();
     let (room, root, admin) = match v[..] {
         [a, b, c] => (a, b, c),
         _ => (56, 12, 2),
     };
     crate::records::keep::small::Small::new(room, root, admin)
+}
+
+/// With SIM_REAL=1 every seed starts at the real sizes (`World::prefill`).
+fn real_seed() -> bool {
+    env("SIM_REAL") == Some(1)
 }
 
 fn twins_on() -> bool {
@@ -2430,7 +2527,7 @@ fn groups_under_faults_agree() {
         LEFT_OUT.load(Ordering::Relaxed)
     );
     std::eprintln!(
-        "sim refusals: {} first tries past the key's ceiling (then checkpoint and retry); standing: {} past the key's ceiling, {} a key without a room, {} the group's records full, {} a stopped group, {} a key with two histories, {} other; {} runs with an admin key's twin after its removal; {} changes of root refused because the live devices pass the reserve, {} because the roots' removals with them do",
+        "sim refusals: {} first tries past the key's ceiling (then checkpoint and retry); standing: {} past the key's ceiling, {} a key without a room, {} the group's records full, {} a stopped group, {} a key with two histories, {} other; {} runs with an admin key's twin after its removal; {} changes of root refused because the live devices pass the reserve, {} because the roots' removals with them do; real-size groups started at up to {} units",
         REFUSED_FIRST.load(Ordering::Relaxed),
         REFUSED_CEILING.load(Ordering::Relaxed),
         REFUSED_NO_ROOM.load(Ordering::Relaxed),
@@ -2440,7 +2537,8 @@ fn groups_under_faults_agree() {
         REFUSED_OTHER.load(Ordering::Relaxed),
         ADMIN_TWINS.load(Ordering::Relaxed),
         CHANGE_TOO_BIG.load(Ordering::Relaxed),
-        CHANGE_TOO_BIG_REMOVALS.load(Ordering::Relaxed)
+        CHANGE_TOO_BIG_REMOVALS.load(Ordering::Relaxed),
+        REAL_UNITS.load(Ordering::Relaxed)
     );
     assert!(failed.is_empty(), "{}", failed.join("\n\n"));
 }
