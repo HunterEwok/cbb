@@ -274,7 +274,7 @@ struct Main {
   // The keyboard on a big screen: Ctrl+1 to 9 the sidebar's rows, Ctrl+,
   // the settings, Ctrl+N adds a device, the arrows choose one, Esc closes
   // its details.
-  key(e: KeyEvent): boolean {
+  handleKey(e: KeyEvent): boolean {
     if (!this.wide || e.type !== KeyType.Down) {
       return false;
     }
@@ -964,7 +964,7 @@ struct Main {
     .focusable(true)
     .defaultFocus(true)
     .onKeyEvent((e: KeyEvent) => {
-      this.key(e);
+      this.handleKey(e);
     })
     .onAreaChange((_: Area, area: Area) => {
       const width = Number(area.width);
