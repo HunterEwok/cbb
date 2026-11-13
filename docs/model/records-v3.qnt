@@ -1232,12 +1232,17 @@ module records_v3 {
     // Only the roots on the path and the admin keys their records name.
     val legit = rootsOf(path).union(got.filter(r => onList(path, r.signer) and r.kind == "admin").map(r => r.target))
     val owners = got.filter(r => not(isChain(r))).map(r => r.signer).filter(k => ceil.keys().contains(k))
-    val fair = if (owners.size() == 0) ROOM else ROOM / owners.size()
+    // A counting checkpoint of the current root and the records it names are kept first: the
+    // fair share is of the room they leave, among the keys with a record they do not name.
+    val cp = rs.filter(c => c.id == views.get(m).checkpoint and c.signer == last(path)).fold(NONEREC, (a, c) => c)
+    val first = if (cp == NONEREC) Set() else rs.filter(r => r == cp or namedBy(cp, r, rs))
+    val others = owners.filter(k => got.exists(r => r.signer == k and storable(s, r, db) and not(first.contains(r))))
+    val fair = if (others.size() == 0) ROOM else (ROOM - sumUnits(first)) / others.size()
     and {
       ceil.keys().forall(k => legit.contains(k)),
       sumUnits(rs) <= ROOM,
       rs.map(r => r.signer).forall(k => ceil.keys().contains(k) and sumUnits(ofKey(rs, k)) <= ceil.get(k)),
-      (saturated(m) and not(chainState(s, db).stop)) implies owners.forall(k =>
+      (saturated(m) and not(chainState(s, db).stop)) implies others.forall(k =>
         sumUnits(ofKey(rs, k)) + MAXU - 1 >= min2(fair, min2(ceil.get(k), sumUnits(ofKey(got.filter(r => storable(s, r, db)), k))))),
     }
   })
