@@ -1294,6 +1294,11 @@ module records_v3 {
       at >= 1,
       at <= ch.ids.length() + 1,
       nextId + 1 <= FIRST + MAXREC,
+      // (J): the honest writer of a change refuses one whose new root's records and first
+      // checkpoint would not fit the new root's ceiling.
+      // (The new root's own device signs its first checkpoint, so its own set counts too.)
+      not(CEIL_FIT) or mode != "honest"
+        or sumUnits(ofKey(recsOf(s.recs.union(st.get(HOLDER.get(target)).recs), db), target)) + 2 <= ROOTC,
       commit(db3, if (withCp) nextId + 2 else nextId + 1, h, if (withCp) insertInto(s1, c, db3) else s1),
     }
   }
@@ -1779,12 +1784,10 @@ module records_v3 {
   // (H). With honest writers no record is turned away by the rooms: a synced member holds
   // every record it got that it may store and its counting checkpoint does not prune (that
   // it gets every record is converges').
-  // (No bent, deviating or hidden record, no recovery twin (two recovery records at one seq),
-  // and no change of root back to a key that was root before.)
+  // (No bent, deviating or hidden record, and no recovery twin: two recovery records at one
+  // seq.)
   def honestW: bool = db.keys().forall(i => db.get(i).kit != "bent" and db.get(i).kit != "deviant" and not(db.get(i).off)
-    and not(isChain(db.get(i)) and db.keys().exists(j => j != i and isChain(db.get(j)) and db.get(j).seq == db.get(i).seq))
-    and not(isChain(db.get(i)) and (db.get(i).target == ROOT or db.keys().exists(j => j != i and isChain(db.get(j))
-      and db.get(j).target == db.get(i).target))))
+    and not(isChain(db.get(i)) and db.keys().exists(j => j != i and isChain(db.get(j)) and db.get(j).seq == db.get(i).seq)))
   val honestNeverDropped = ((WRITER_FLOOR or CEIL_FIT) and honestW) implies MEMBERS.forall(m => {
     val s = st.get(m)
     val v = views.get(m)
