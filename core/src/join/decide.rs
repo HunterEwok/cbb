@@ -98,9 +98,9 @@ pub struct Choice {
 /// Whether the device with member key `admitter` may sign a first record as
 /// `signer`: a root signs as the root; an admin's device is in the records,
 /// not frozen, with an admin key that has `admit`. Nobody admits while the
-/// group is halted.
+/// group is stopped (`State::stopped`).
 pub fn may_admit(state: &State, admitter: &KeyHash, signer: Signer, root_key: &KeyHash) -> bool {
-    if state.halted() {
+    if state.stopped() {
         return false;
     }
     match signer {

@@ -79,7 +79,7 @@ pub const RULE_RESEAL_EPOCH: Rule = Rule::field("reseal/not-current");
 pub const RULE_RESEAL_EXPIRED: Rule = Rule::field("reseal/expired");
 /// The asker already had this copy sealed again [`MAX_RESEALS`] times.
 pub const RULE_RESEAL_LIMIT: Rule = Rule::field("reseal/limit");
-/// A request to seal again while the group is halted (`State::halted`).
+/// A request to seal again while the group is stopped (`State::stopped`).
 pub const RULE_RESEAL_HALTED: Rule = Rule::field("reseal/halted");
 
 /// How many times the origin seals one copy again for one asker.
@@ -117,7 +117,7 @@ pub const STATEMENT_MAX_AGE_MS: u64 = 35 * 86_400_000;
 /// device without a clock, has no age); the origin itself is left out. A
 /// leaf is a reader only when the origin names it in `leaves` (the leaves
 /// whose grants name the origin). At most 256, in the order of their IDs.
-/// None while the group is halted (`State::halted`).
+/// None while the group is stopped (`State::stopped`).
 pub fn readers(
     state: &State,
     sealing: &BTreeMap<DeviceId, Sealing>,
@@ -129,7 +129,7 @@ pub fn readers(
     let secret = content.is_secret();
     let skip_bit = content.kind.checked_sub(1).filter(|b| *b < 64).map_or(0, |b| 1u64 << b);
     let mut out = Vec::new();
-    if state.halted() {
+    if state.stopped() {
         return out;
     }
     for d in &state.devices {
@@ -357,7 +357,7 @@ pub enum Opened {
     /// A secret while this device's rules are too old for the group
     /// (format 3.3): opened only to learn that, then dropped.
     TooOld,
-    /// The group is halted here (`State::halted`): no copy is opened.
+    /// The group is stopped here (`State::stopped`): no copy is opened.
     Halted,
 }
 
@@ -365,9 +365,9 @@ pub enum Opened {
 /// secret of the wrap's epoch, then `commit` against K before anything
 /// else, then the payload under `h`, then the content's rows. A secret is
 /// never given while the state says this device's rules are too old, and
-/// nothing is opened while the group is halted.
+/// nothing is opened while the group is stopped.
 pub fn open(c: &Checked<'_>, me: &DeviceId, store: &dyn KeyStore, state: &State) -> Result<Opened, Rule> {
-    if state.halted() {
+    if state.stopped() {
         return Ok(Opened::Halted);
     }
     let Some(i) = c.readers.iter().position(|(d, _)| d == me) else { return Ok(Opened::NotForMe) };
@@ -501,7 +501,7 @@ pub struct Ask<'a> {
 }
 
 /// Seals a kept copy again for the asker at its epoch (message `reseal`),
-/// never while the group is halted ([`RULE_RESEAL_HALTED`]):
+/// never while the group is stopped ([`RULE_RESEAL_HALTED`]):
 /// only for a device that was one of the copy's readers
 /// ([`RULE_RESEAL_READER`]), whose statement that counts is of that epoch
 /// ([`RULE_RESEAL_EPOCH`]), and that would still be sealed this copy by the
@@ -518,7 +518,7 @@ pub fn reseal(
     sealing: &BTreeMap<DeviceId, Sealing>,
     ask: &Ask<'_>,
 ) -> Result<Vec<u8>, Rule> {
-    if state.halted() {
+    if state.stopped() {
         return Err(RULE_RESEAL_HALTED);
     }
     if !kept.readers.contains(&ask.asker) {

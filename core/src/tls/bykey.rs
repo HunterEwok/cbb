@@ -296,11 +296,13 @@ pub fn any_key() -> Judge {
 /// A judge from a device's view of the records: members go on, unknown
 /// keys too when `unknown_ok` (the caller then waits for the intro), any
 /// key of a halted group (the caller then gives and takes the recovery
-/// key's records only, `RecordSet::for_peer`), the rest are refused. `look` usually locks the caller's records and answers
+/// key's records only, `RecordSet::for_peer`), a key that gets a root
+/// fork's proof (`Standing::ForkProof`: the pair alone, both ways), the
+/// rest are refused. `look` usually locks the caller's records and answers
 /// with [`standing`].
 pub fn by_standing(look: impl Fn(&[u8; 65]) -> Standing + Send + Sync + 'static, unknown_ok: bool) -> Judge {
     Arc::new(move |point| match look(point) {
-        Standing::Member(_) | Standing::Halted => Ok(()),
+        Standing::Member(_) | Standing::Halted | Standing::ForkProof => Ok(()),
         Standing::Unknown if unknown_ok => Ok(()),
         Standing::Unknown => Err("not a device of the group".to_string()),
         Standing::Refused(why) => Err(format!("refused: {why}")),

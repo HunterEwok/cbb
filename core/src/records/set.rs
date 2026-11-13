@@ -1951,7 +1951,7 @@ impl RecordSet {
         if state.roots.last() != Some(&h) {
             return Err(Error::msg("only the current root writes a checkpoint"));
         }
-        if state.stop == eval::Stop::Full {
+        if state.stop == eval::Stop::Full || state.stopped() {
             return Err(Error::msg("the group is stopped: no root action works until the root is changed"));
         }
         let path: BTreeSet<&KeyHash> = state.roots.iter().collect();
@@ -2363,11 +2363,17 @@ impl RecordSet {
             return out;
         }
         if state.revoked.contains(peer) {
+            // In a root fork nothing at or above the fork seq: no part of
+            // the pair goes to a removed key.
+            let forked = |r: &Record| {
+                state.root_pair.is_some_and(|(seq, _, _)| state.is_root(&r.body().signer) && r.body().seq >= seq)
+            };
             let mut out: Vec<&Record> = self
                 .records
                 .values()
                 .filter(|e| {
                     state.counting.contains(&e.record.id())
+                        && !forked(&e.record)
                         && matches!(&e.record.body().kind, Kind::Revoke(rm) if rm.keys.binary_search(peer).is_ok())
                 })
                 .map(|e| &e.record)
@@ -2378,7 +2384,40 @@ impl RecordSet {
         if state.device_by_key(peer).is_some() {
             return self.in_dependency_order();
         }
+        // A key a held record of the forked current root admits gets the
+        // proof, the lowest pair, and nothing else.
+        if state.proof_to.binary_search(peer).is_ok()
+            && let Some((_, a, b)) = state.root_pair
+        {
+            return [a, b].iter().filter_map(|id| self.held(id)).collect();
+        }
         Vec::new()
+    }
+
+    /// Takes a record from a peer that gets the proof only
+    /// (`peer::Standing::ForkProof`): one the current root signed that
+    /// makes a pair at a seq below the fork seq the set holds (none held:
+    /// any seq), or the partner a half waits for. Nothing else from it is
+    /// read: `Added::Halted`.
+    pub fn insert_proof(&mut self, r: Record) -> Result<Added, Refused> {
+        let b = r.body();
+        let cur = self.current_root();
+        if b.group != self.group || b.signer != cur {
+            return Ok(Added::Halted);
+        }
+        let (at, id) = ((b.seq, b.signer), r.id());
+        let partner = self.halves.get(&at).is_some_and(|(_, _, o)| *o == id);
+        let other = |o: RecordId| o != id;
+        let pairs =
+            self.records.values().any(|e| (e.record.body().seq, e.record.body().signer) == at && other(e.record.id()))
+                || self.settled.get(&at).is_some_and(|(_, o)| other(o.id()))
+                || self.settled_ids.get(&at).is_some_and(|(_, o)| other(*o))
+                || self.aside_at(&at).is_some_and(|o| other(o.id()));
+        let lower = self.fork_seq(&cur).is_none_or(|f| b.seq < f);
+        if !(partner || pairs && lower) {
+            return Ok(Added::Halted);
+        }
+        self.insert(r)
     }
 
     /// The IDs a state's evaluation left out for each reason, for a
