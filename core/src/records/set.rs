@@ -877,11 +877,18 @@ impl RecordSet {
 
     /// Keeps the records set aside within one root's room in all, the
     /// lowest recovery seq first, then the lowest seq, then the smallest
-    /// ID: what stays does not depend on the order they came in.
+    /// ID: what stays does not depend on the order they came in. A first
+    /// checkpoint the chain waits for stays outside that room, as it does
+    /// in the set: without it the chain never applies, and the records of
+    /// earlier roots that fill the room would hold it out for good.
     fn trim_early(&mut self) {
         let rank = |r: &Record| self.early_roots.get(&r.body().signer).map_or(u64::MAX, |(s, _)| *s);
-        let mut all: Vec<(u64, u64, RecordId, u64)> =
-            self.early.values().map(|r| (rank(r), r.body().seq, r.id(), eval::item(r, Role::Root).units)).collect();
+        let mut all: Vec<(u64, u64, RecordId, u64)> = self
+            .early
+            .values()
+            .filter(|r| !eval::is_first(&self.firsts, r))
+            .map(|r| (rank(r), r.body().seq, r.id(), eval::item(r, Role::Root).units))
+            .collect();
         all.sort();
         let mut units = 0u64;
         for (_, _, id, u) in all {
