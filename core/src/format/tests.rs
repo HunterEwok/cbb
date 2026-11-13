@@ -81,7 +81,7 @@ fn vector_recovery() -> crate::records::Recovery {
     assert_eq!(made.public(), k2.public.to_vec(), "recovery2 comes of its seeds");
     crate::records::Recovery::new(
         crate::records::Key::es256(k1.public.to_vec()),
-        crate::records::Key { alg: crate::records::key::ALG_SLH_DSA, public: k2.public.to_vec() },
+        crate::records::Key::new(crate::records::key::ALG_SLH_DSA, k2.public.to_vec()),
     )
     .unwrap()
 }
@@ -920,7 +920,7 @@ fn a_leaf_handed_two_records_of_its_root_at_one_seq_stops() {
     use crate::testkit::{G, k};
     let mut g = G::new();
     let root = k("root");
-    let point = root.key.public.clone();
+    let point = root.key.public().to_vec();
     let device = |name: &str| RecordKind::device(Device::new(k(name).key.clone(), name, ROLE_MEMBER));
     g.rec(&root, device("laptop"));
     let a = g.rec(&root, device("lamp"));
@@ -941,7 +941,7 @@ fn a_leaf_handed_two_records_of_its_root_at_one_seq_stops() {
     let thief = k("thief");
     let by_thief = Record::sign(Body { signer: thief.hash, ..b.body().clone() }, &thief).unwrap();
     assert_eq!(grant::fork(&ea, &by_thief.envelope(), &point, &g.gid), no);
-    assert_eq!(grant::fork(&ea, &eb, &thief.key.public, &g.gid), no);
+    assert_eq!(grant::fork(&ea, &eb, thief.key.public(), &g.gid), no);
     // A signature that is not the root's over the root's body.
     let mut forged = cbor::Encoder::new();
     forged.array(2).bytes(b.body_bytes()).bytes(by_thief.sig());
@@ -951,7 +951,7 @@ fn a_leaf_handed_two_records_of_its_root_at_one_seq_stops() {
 
     // The lamp's grants from the root.
     let lamp = k("lamp").key.device_id();
-    let phone_point = k("phone").key.public;
+    let phone_point = k("phone").key.public().to_vec();
     let phone = Key::new(Alg::Es256, &phone_point);
     let grant_msg = |counter: u64, recovery: u64| {
         let mut m = vec![
@@ -1003,7 +1003,7 @@ fn a_guarded_leaf_waits_to_be_bound_again_after_a_change_of_root() {
     let (root, new_root) = (k("root"), k("new root"));
     let group = DeviceId([7; 16]);
     let lock = k("lock").key.device_id();
-    let phone_point = k("phone").key.public;
+    let phone_point = k("phone").key.public().to_vec();
     let phone = Key::new(Alg::Es256, &phone_point);
     let grant_msg = |by: &crate::testkit::K, counter: u64, recovery: u64, guarded: bool| {
         let mut m = vec![
@@ -1027,11 +1027,11 @@ fn a_guarded_leaf_waits_to_be_bound_again_after_a_change_of_root() {
     };
     let read = |msg: &[u8], by: &crate::testkit::K, kept: Option<&grant::Kept>, recovery| {
         let v = cbor::decode(msg).unwrap();
-        grant::read(&v, &by.key.public, &lock, &group, kept, recovery).map(|got| got.keep(kept))
+        grant::read(&v, by.key.public(), &lock, &group, kept, recovery).map(|got| got.keep(kept))
     };
     let bound = |msg: &[u8], by: &crate::testkit::K, kept: Option<&grant::Kept>, recovery, b: grant::Binding| {
         let v = cbor::decode(msg).unwrap();
-        grant::read_bound(&v, &by.key.public, &lock, &group, kept, recovery, b, b"session").map(|got| got.keep(kept))
+        grant::read_bound(&v, by.key.public(), &lock, &group, kept, recovery, b, b"session").map(|got| got.keep(kept))
     };
     let kept = read(&grant_msg(&root, 1, 0, true), &root, None, 0).unwrap();
     assert!(kept.guarded && kept.commander(&phone.hash()).is_some());
@@ -1087,7 +1087,7 @@ fn a_guarded_leaf_waits_to_be_bound_again_after_a_change_of_root() {
     // A grant right in every byte that came by sync or another session than
     // the one whose code the person confirmed: refused while the lock waits.
     let v = cbor::decode(&msg).unwrap();
-    let other = grant::read_bound(&v, &new_root.key.public, &lock, &group, Some(&waiting), 1, binding(), b"another");
+    let other = grant::read_bound(&v, new_root.key.public(), &lock, &group, Some(&waiting), 1, binding(), b"another");
     assert_eq!(other.err(), Some(grant::RULE_REBIND));
     // A head stored without the kept state that should follow it: the
     // binding is made from the head and the grant is taken.
@@ -1125,9 +1125,9 @@ fn a_leafs_stored_state_reads_back_in_one_spelling() {
     use crate::testkit::k;
     use grant::{Kept, Stored};
     let phone = k("phone");
-    let point: [u8; 65] = phone.key.public.clone().try_into().unwrap();
+    let point: [u8; 65] = phone.key.public().to_vec().try_into().unwrap();
     let mut commanders = vec![(phone.hash, point), {
-        let p: [u8; 65] = k("tablet").key.public.clone().try_into().unwrap();
+        let p: [u8; 65] = k("tablet").key.public().to_vec().try_into().unwrap();
         (k("tablet").hash, p)
     }];
     commanders.sort_by_key(|c| c.0);
@@ -1198,7 +1198,7 @@ fn a_leafs_state_that_does_not_read_obeys_nobody() {
     use grant::{Kept, Stored};
     let (root, new_root) = (k("root"), k("new root"));
     let phone = k("phone");
-    let point: [u8; 65] = phone.key.public.clone().try_into().unwrap();
+    let point: [u8; 65] = phone.key.public().to_vec().try_into().unwrap();
     let full = Kept {
         guarded: true,
         root_counter: 1,
@@ -1226,7 +1226,7 @@ fn a_leafs_state_that_does_not_read_obeys_nobody() {
             (3, Value::Bytes(&by.hash.0)),
             (4, Value::Uint(1)),
             (10, Value::Bytes(&lock.0)),
-            (12, Value::Array(vec![Key::new(Alg::Es256, &phone.key.public).to_value()])),
+            (12, Value::Array(vec![Key::new(Alg::Es256, phone.key.public()).to_value()])),
             (15, Value::Uint(1)),
         ];
         if seq > 0 {
@@ -1240,7 +1240,7 @@ fn a_leafs_state_that_does_not_read_obeys_nobody() {
     for (by, seq) in [(&new_root, 1), (&root, 0), (&new_root, recovery)] {
         let msg = grant_msg(by, seq);
         let v = cbor::decode(&msg).unwrap();
-        assert!(grant::read(&v, &by.key.public, &lock, &group, Some(&kept), seq).is_err(), "seq {seq}");
+        assert!(grant::read(&v, by.key.public(), &lock, &group, Some(&kept), seq).is_err(), "seq {seq}");
         let b = grant::Binding::matched(&kept, Some((by.hash, seq.max(1))), lock, grant::session_mark(b"s"));
         assert!(b.is_none(), "no binding for an unreadable state");
     }

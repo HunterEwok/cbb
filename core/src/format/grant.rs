@@ -54,8 +54,9 @@ use super::envelope::Envelope;
 use super::key::{Alg, DeviceId, GroupId, Key, KeyHash};
 use super::{Rule, sha256, sig};
 
-/// The largest grant body.
-pub const MAX_GRANT: usize = 2048;
+/// The largest grant body: 4 KiB, room for 16 commanders and 16 readers
+/// and a later second key's fields, inside the leaf's 16 KiB frame.
+pub const MAX_GRANT: usize = 4096;
 
 /// Message `grant`'s field of the grant envelope.
 pub const FIELD_GRANT: u16 = 2;
@@ -95,10 +96,10 @@ pub const FIELD_LEAF: u16 = 10;
 pub const FIELDS: [u16; 15] = [1, 2, 3, 4, 6, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
 /// The longest lifetime of a guarded grant: 40 days.
 pub const MAX_LIFE_MS: u64 = 3_456_000_000;
-/// The most readers of a leaf.
-pub const MAX_READERS: usize = 4;
-/// The most commanders of a leaf.
-pub const MAX_COMMANDERS: usize = 8;
+/// The most readers of a leaf (format 20.6).
+pub const MAX_READERS: usize = 16;
+/// The most commanders of a leaf (format 20.6).
+pub const MAX_COMMANDERS: usize = 16;
 /// The grant's field of the only peers the leaf connects with.
 pub const FIELD_NEIGHBORS: u16 = 14;
 /// The most neighbours of a leaf.
@@ -602,11 +603,12 @@ fn admin_key(record: &Envelope<'_>, root: &[u8], group: &GroupId) -> Result<[u8;
     let by_root = body.signer == Key::new(Alg::Es256, root).hash();
     let admits = d.powers & crate::records::body::POWER_ADMIT != 0;
     let admin = d.admin.as_ref().ok_or(RULE_ADMIN)?;
-    let points = [&d.key, admin].iter().all(|k| k.alg == ALG_ES256 && Key::new(Alg::Es256, &k.public).check().is_ok());
+    let points =
+        [&d.key, admin].iter().all(|k| k.alg() == ALG_ES256 && Key::new(Alg::Es256, k.public()).check().is_ok());
     if !(body.group == *group && by_root && admits && points) {
         return Err(RULE_ADMIN);
     }
-    admin.public.clone().try_into().map_err(|_| RULE_ADMIN)
+    admin.public().to_vec().try_into().map_err(|_| RULE_ADMIN)
 }
 
 /// The commanders of a grant body: at most eight ES256 Keys, sorted by key

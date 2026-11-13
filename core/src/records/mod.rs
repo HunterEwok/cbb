@@ -81,6 +81,7 @@ pub mod key;
 pub mod pq;
 pub mod set;
 pub mod statement;
+pub mod sync;
 
 #[cfg(test)]
 mod tests;

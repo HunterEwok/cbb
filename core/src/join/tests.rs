@@ -30,7 +30,7 @@ struct K {
 
 impl ExternalKey for K {
     fn public(&self) -> Vec<u8> {
-        self.key.public.clone()
+        self.key.public().to_vec()
     }
     fn sign_digest(&self, digest: &[u8; 32]) -> crate::error::Result<Vec<u8>> {
         let sig: p256::ecdsa::Signature = self.sk.sign_prehash(digest).unwrap();
@@ -46,11 +46,11 @@ fn k(name: &str) -> K {
 }
 
 fn point(k: &K) -> [u8; 65] {
-    k.key.public.clone().try_into().unwrap()
+    k.key.public().to_vec().try_into().unwrap()
 }
 
 fn fhash(k: &K) -> format::KeyHash {
-    format::Key::new(Alg::Es256, &k.key.public).hash()
+    format::Key::new(Alg::Es256, k.key.public()).hash()
 }
 
 /// A group: the root phone (member key "phone", root key "root"), an admin
@@ -204,7 +204,7 @@ fn an_admin_key_needs_its_proof() {
 
     // In the Info, a key and its proof come together, from a phone or an admin member.
     let mut i = info("phone 2", ROLE_PHONE);
-    i.admin = Some(admin.key.public.clone());
+    i.admin = Some(admin.key.public().to_vec());
     assert_eq!(Info::decode(&i.encode()), Err(super::info::RULE_ADMIN));
     i.admin_pop = Some(pop.to_vec());
     assert_eq!(Info::decode(&i.encode()).unwrap(), i);
@@ -506,7 +506,7 @@ fn an_offered_admin_key_is_new() {
     let tv = k("tv");
     let with_admin = |a: &K| {
         let mut i = info("tv", ROLE_MEMBER);
-        i.admin = Some(a.key.public.clone());
+        i.admin = Some(a.key.public().to_vec());
         i
     };
     let rec =
@@ -593,7 +593,7 @@ fn who_admits_whom() {
     // An admin key: only from the root, only with its proof, only as one of the three sets.
     let phone2 = k("phone 2");
     let mut ph = info("phone 2", ROLE_PHONE);
-    ph.admin = Some(k("phone 2 admin").key.public.clone());
+    ph.admin = Some(k("phone 2 admin").key.public().to_vec());
     let make = Choice { rights: RIGHT_READ | RIGHT_SEND, admin: Some(AdminKind::Phone), guarded: false };
     let none = joiner_record_any(&st, Signer::Root, None, &point(&phone2), &ph, Checked::default(), make).unwrap();
     assert!(none.admin.is_none(), "no proof, no admin key");
@@ -718,7 +718,7 @@ fn the_joiner_checks_its_welcome() {
 
     // The root's path comes from the records: a Welcome under another root is another group.
     let mut other = w.clone();
-    other.root = k("root 2").key.public.clone();
+    other.root = k("root 2").key.public().to_vec();
     assert_eq!(
         other.check(&group, &point(&k("laptop")), &point(&tv), Joining::Ordinary, Way::Invited(&invitation())).err(),
         Some(welcome::Refusal::OtherGroup)
@@ -750,8 +750,8 @@ fn the_joiner_checks_its_welcome() {
     // The encoding reads back.
     assert_eq!(Welcome::decode(&w.encode()).unwrap(), w);
     let (root, envs, time, recovery, recovery2) = Welcome::parts(&w.encode()).unwrap();
-    assert_eq!(root, g.root.key.public);
-    assert_eq!(recovery, k("recovery").key.public);
+    assert_eq!(root, g.root.key.public());
+    assert_eq!(recovery, k("recovery").key.public());
     assert_eq!(recovery2, crate::testkit::rk2().public());
     assert_eq!(envs.len(), w.records.len());
     assert_eq!(time, 1_793_000_000_000);
@@ -763,7 +763,7 @@ fn the_joiner_checks_its_welcome() {
     assert_eq!(Welcome::parts(&wide.encode()).err().map(|r| r.name()), Some("welcome/records"));
     // A recovery key other than the group's gives another Group ID.
     let mut false_key = w.clone();
-    false_key.recovery = k("not the recovery key").key.public.clone();
+    false_key.recovery = k("not the recovery key").key.public().to_vec();
     let back = Welcome::decode(&false_key.encode()).unwrap();
     assert_eq!(
         back.check(&group, &point(&k("phone")), &point(&tab), Joining::Ordinary, Way::Invited(&invitation())).err(),
@@ -1153,7 +1153,7 @@ fn one_invitation_for_home_and_away() {
     let b = inv.encode();
     let g = G::new();
     assert!(!b.windows(16).any(|w| w == g.gid.0));
-    assert!(!b.windows(65).any(|w| w == g.root.key.public.as_slice()));
+    assert!(!b.windows(65).any(|w| w == g.root.key.public()));
 
     // Rows.
     let mut home_only = inv.clone();

@@ -186,9 +186,7 @@ impl Credential {
     /// list. Only the root signs periods in 0.6.
     pub fn period_of_listed_group(&self, root: &[u8], recovery: &[u8], recovery2: &[u8], listed: &[[u8; 16]]) -> bool {
         use crate::records::{Key, Recovery, group_id, key::ALG_SLH_DSA};
-        let Some(rec) =
-            Recovery::new(Key::es256(recovery.to_vec()), Key { alg: ALG_SLH_DSA, public: recovery2.to_vec() })
-        else {
+        let Some(rec) = Recovery::new(Key::es256(recovery.to_vec()), Key::new(ALG_SLH_DSA, recovery2.to_vec())) else {
             return false;
         };
         let gid = group_id(&Key::es256(root.to_vec()), &rec);

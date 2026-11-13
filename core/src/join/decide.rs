@@ -147,7 +147,7 @@ pub fn joiner_record(
     // not named by a record the member keeps.
     if let Some(a) = info.admin_key() {
         let h = a.hash();
-        if a.public == key.public
+        if a.public() == key.public()
             || state.revoked.contains(&h)
             || state.id_taken(&a.device_id())
             || state.roots.contains(&h)

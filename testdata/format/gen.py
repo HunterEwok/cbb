@@ -845,11 +845,11 @@ def grant_vectors(admin_record):
             msg[3] = dec(admin)
         return msg
 
-    def signed(g, signer):
+    def signed(g, signer, big=False):
         g = dict(g)
         g[3] = signer.hash
         genv, gbody = envelope("grant", signer, g)
-        assert len(gbody) <= 2048
+        assert big or len(gbody) <= 4096
         return g, genv, gbody
 
     def ok(name, g, signer, admin=None):
@@ -875,6 +875,9 @@ def grant_vectors(admin_record):
     g = ok("guarded lock, grant signed by the root", lock, ROOT)
     ok("guarded lock, lifetime of 40 days", {**lock, 11: 3456000000}, ROOT)
     ok("guarded lock, an optional field from a later version", {**lock, 300: "later"}, ROOT)
+    sixteen = {**lock, 12: by_hash([Signer(f"c{i}").key for i in range(16)]),
+               13: sorted([[Signer(f"r{i}").id16, Signer(f"r{i}").key] for i in range(16)], key=lambda a: a[0])}
+    ok("guarded lock, sixteen commanders and sixteen readers", sixteen, ROOT)
     L, K = LOCK.id16, BOARD.id16
 
     def root_bad(name, rule, fields, leaf=L):
@@ -889,9 +892,12 @@ def grant_vectors(admin_record):
     root_bad("guarded lifetime 0", "grants/life", {**g, 11: 0})
     root_bad("guarded lifetime over 40 days", "grants/life", {**g, 11: 3456000001})
     root_bad("guarded lifetime as text", "grants/life", {**g, 11: "forever"})
-    root_bad("nine commanders", "grants/commanders", {**g, 12: by_hash([Signer(f"c{i}").key for i in range(9)])})
-    root_bad("five readers", "grants/readers",
-             {**g, 13: sorted([[Signer(f"r{i}").id16, Signer(f"r{i}").key] for i in range(5)], key=lambda a: a[0])})
+    root_bad("seventeen commanders", "grants/commanders",
+             {**g, 12: by_hash([Signer(f"c{i}").key for i in range(17)])})
+    root_bad("seventeen readers", "grants/readers",
+             {**g, 13: sorted([[Signer(f"r{i}").id16, Signer(f"r{i}").key] for i in range(17)], key=lambda a: a[0])})
+    _, genv, _ = signed({**g, 300: fake("later", 4096)}, ROOT, big=True)
+    bad("grant body over 4096 bytes", "env/size", message(genv), L)
     root_bad("readers as a number", "grants/readers", {**g, 13: 5})
     root_bad("a reader without its key", "grants/readers", {**g, 13: [[LAPTOP.id16]]})
     root_bad("a reader with text for its key", "grants/readers", {**g, 13: [[LAPTOP.id16, "key"]]})
@@ -1466,7 +1472,7 @@ TABLES = {
     "pair/adb": [
         (1, "pair/adb/group", "bytes 16", True),
         (2, "pair/adb/device", "bytes 16", True),
-        (3, "pair/adb/name", "text 1..64", True),
+        (3, "pair/adb/name", "text 1..128", True),
     ],
     "pair/start": [
         (2, "pair/start/ya", "bytes 1..256", True),
@@ -1509,12 +1515,12 @@ TABLES = {
         (5, "welcome/grant", "uint 1..4294967295", False),
     ],
     "pair/info": [
-        (1, "pair/info/name", "text 1..64", True),
+        (1, "pair/info/name", "text 1..128", True),
         (2, "pair/info/os", "uint 1..4294967295", False),
         (3, "pair/info/caps", "uint 1..7", False),
         (4, "pair/info/role", "uint 1..4", True),
         (5, "pair/info/admin", "key 1", False),
-        (6, "pair/info/admin-pop", "bytes 64", False),
+        (6, "pair/info/admin-pop", "bytes 1..8192", False),
         (7, "pair/info/keys", "envelope", False),
         (8, "pair/info/device", "map pair/info/device", False),
         (9, "pair/info/invite", "id 16", False),
@@ -1544,7 +1550,7 @@ TABLES = {
         (1, "obfuscation/jc", "uint 1..128", True),
         (2, "obfuscation/jmin", "uint 0..1280", True),
         (3, "obfuscation/jmax", "uint 1..1280", True),
-        (4, "obfuscation/s", "array 1..4 of uint 0..64", True),
+        (4, "obfuscation/s", "array 1..4 of uint 0..1280", True),
         (5, "obfuscation/h", "array 1..4 of array 1..2 of uint 0..4294967295", True),
         (6, "obfuscation/key", "bytes 32", False),
     ],
@@ -1637,7 +1643,7 @@ TABLES = {
     "relay/registered": [
         (2, "relay/registered/key", "key 3", True),
         (3, "relay/registered/psk", "bytes 32", True),
-        (4, "relay/registered/addr", "text 1..64", True),
+        (4, "relay/registered/addr", "text 1..261", True),
     ],
     "relay/watch": [
     ],
