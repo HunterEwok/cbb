@@ -20,6 +20,20 @@ pub const FIELD_SIGNER: u16 = 3;
 /// The body's field naming a second signer: a recovery head's K2 (E-6),
 /// room elsewhere in 0.6.
 pub const FIELD_SIGNER2: u16 = 8;
+/// Reads `signer2` (field 8) of a statement, command, grant, credential,
+/// card or beacon: the 32-byte hash of a second key, present exactly when
+/// the envelope has a second signature (checked when it was read). A
+/// reader of this version applies the object on its first signature alone,
+/// which covers the second's SHA-256 ([`signed_data`]), and keeps the
+/// second signature to pass on; `rule` is the kind's own rule for a
+/// `signer2` of the wrong shape.
+pub fn signer2(map: &Value<'_>, rule: Rule) -> Result<Option<[u8; 32]>, Rule> {
+    match map.get(FIELD_SIGNER2) {
+        None => Ok(None),
+        Some(v) => v.as_bytes().and_then(|b| <[u8; 32]>::try_from(b).ok()).map(Some).ok_or(rule),
+    }
+}
+
 /// The largest second signature: room for a later algorithm's, a
 /// post-quantum one among them. Its length is not fixed at 64, and it is
 /// outside the record's ID, so a record's size is counted from its body.

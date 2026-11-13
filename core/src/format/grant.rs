@@ -685,9 +685,16 @@ fn read_any<'a>(
         return Err(Rule::ENV_SIZE);
     }
     let map = &grant.map;
-    if map.as_map().unwrap_or(&[]).iter().any(|(k, _)| *k < 256 && !FIELDS.contains(k)) {
+    if map
+        .as_map()
+        .unwrap_or(&[])
+        .iter()
+        .any(|(k, _)| *k < 256 && *k != crate::format::envelope::FIELD_SIGNER2 && !FIELDS.contains(k))
+    {
         return Err(Rule::FORM_CRITICAL);
     }
+    // A second signature is taken on the first alone, which covers it.
+    crate::format::envelope::signer2(map, Rule::field("grants/signer2"))?;
     let bytes_of = |field| map.get(field).and_then(Value::as_bytes);
     if map.get(FIELD_TYPE).and_then(Value::as_uint) != Some(1)
         || bytes_of(FIELD_GROUP) != Some(group.0.as_slice())

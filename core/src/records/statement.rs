@@ -68,6 +68,10 @@ impl Body {
 pub struct Statement {
     bytes: Vec<u8>,
     sig: Vec<u8>,
+    /// A second signature of a later version (its body names `signer2`):
+    /// the statement is applied on the first alone, which covers this
+    /// one's SHA-256, and passed on with it.
+    sig2: Option<Vec<u8>>,
     body: Body,
     id: RecordId,
 }
@@ -81,7 +85,7 @@ impl Statement {
         }
         let bytes = body.encode();
         let sig = key::sign_es256(key, LABEL_KEYS, &bytes)?.to_vec();
-        Ok(Statement { id: RecordId(sha256(&bytes)), bytes, sig, body })
+        Ok(Statement { id: RecordId(sha256(&bytes)), bytes, sig, sig2: None, body })
     }
 
     /// A statement from what a reader found; the value must encode to the
@@ -90,14 +94,14 @@ impl Statement {
         if body.encode() != bytes {
             return Err(Rule::new("cbor/encoding"));
         }
-        Ok(Statement { id: RecordId(sha256(&bytes)), bytes, sig, body })
+        Ok(Statement { id: RecordId(sha256(&bytes)), bytes, sig, sig2: None, body })
     }
 
     /// A statement from a reader that checked the bytes itself and found
     /// body in them (`crate::keystore::read_statement`): fields of the
     /// optional zone it skipped stay in the bytes and the signature.
-    pub(crate) fn from_read(bytes: Vec<u8>, sig: Vec<u8>, body: Body) -> Statement {
-        Statement { id: RecordId(sha256(&bytes)), bytes, sig, body }
+    pub(crate) fn from_read(bytes: Vec<u8>, sig: Vec<u8>, sig2: Option<Vec<u8>>, body: Body) -> Statement {
+        Statement { id: RecordId(sha256(&bytes)), bytes, sig, sig2, body }
     }
 
     pub fn body(&self) -> &Body {
@@ -108,9 +112,10 @@ impl Statement {
         self.id
     }
 
-    /// The envelope `[body, sig]`, as message `keys` carries it.
+    /// The envelope `[body, sig]`, or `[body, sig, sig2]`, as message `keys`
+    /// carries it.
     pub fn envelope(&self) -> Vec<u8> {
-        crate::format::envelope::write(&self.bytes, &self.sig, None)
+        crate::format::envelope::write(&self.bytes, &self.sig, self.sig2.as_deref())
     }
 
     /// Checks the statement against the device's member key.
@@ -122,7 +127,20 @@ impl Statement {
         if member.hash() != self.body.signer {
             return Err(Rule::new("sig/verify"));
         }
-        key::verify_es256(member, LABEL_KEYS, &self.bytes, &self.sig)
+        match &self.sig2 {
+            None => key::verify_es256(member, LABEL_KEYS, &self.bytes, &self.sig),
+            // The first signature covers the second's SHA-256: a second
+            // signature swapped or cut on the way is a damaged copy.
+            Some(s2) => match key::verify_es256(
+                member,
+                LABEL_KEYS,
+                &crate::format::envelope::signed_data(&self.bytes, Some(s2)),
+                &self.sig,
+            ) {
+                Err(r) if r.is("sig/verify") => Err(Rule::new("env/damaged")),
+                other => other,
+            },
+        }
     }
 }
 

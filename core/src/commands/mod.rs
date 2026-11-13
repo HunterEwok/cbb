@@ -132,16 +132,22 @@ fn fixed<const N: usize>(v: Option<&Value<'_>>, rule: Rule) -> Result<[u8; N], R
 impl<'a> Command<'a> {
     /// Reads a command from its envelope: the size, the envelope and the
     /// profile, each field's row (no critical field 0.6 does not define, so
-    /// no `class` and no `signer2`), the lifetime within 600 s, `epoch`
+    /// no `class`; a `signer2` with its second signature is taken on the
+    /// first alone), the lifetime within 600 s, `epoch`
     /// exactly with `sealed`, and `sealed` only on a type with orders. The
     /// signature's form is checked here, the signature itself by
     /// [`accept_member`] or [`accept_leaf`], which know the signer's key.
     pub fn read(b: &'a [u8]) -> Result<Command<'a>, Rule> {
         let e = Envelope::parse_limited(b, MAX_PASTE_BODY)?;
         let m = &e.map;
-        if m.as_map().unwrap_or(&[]).iter().any(|(k, _)| *k < 256 && !FIELDS.contains(k)) {
+        if m.as_map()
+            .unwrap_or(&[])
+            .iter()
+            .any(|(k, _)| *k < 256 && *k != crate::format::envelope::FIELD_SIGNER2 && !FIELDS.contains(k))
+        {
             return Err(Rule::FORM_CRITICAL);
         }
+        crate::format::envelope::signer2(m, Rule::field("commands/signer2"))?;
         let kind = m.get(1).and_then(Value::as_uint).filter(|t| (1..=10).contains(t)).ok_or(RULE_TYPE)?;
         let max = if kind == COMMAND_PASTE { MAX_PASTE_BODY } else { MAX_BODY };
         if e.body.len() > max {

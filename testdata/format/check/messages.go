@@ -423,8 +423,15 @@ func checkMessages(dir string) {
 				return "card/endpoints"
 			}
 		}
-		if k, ok := m[uint64(13)].(uint64); !ok || k == 0 || k&^3 != 0 {
+		// Bits of a later version are ignored; none this version knows
+		// refuses.
+		if k, ok := m[uint64(13)].(uint64); !ok || k == 0 || k&3 == 0 {
 			return "card/kinds"
+		}
+		if p, there := m[uint64(14)]; there {
+			if p, ok := p.(uint64); !ok || p&7 == 0 {
+				return "card/paths"
+			}
 		}
 		return ""
 	}

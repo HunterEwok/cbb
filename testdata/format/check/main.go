@@ -526,7 +526,9 @@ func main() {
 	// after taking it. A kept grant of a lower recovery seq counts as
 	// none, but a guarded leaf stays guarded.
 	group := unhex(g.Group)
-	allowed := map[uint64]bool{1: true, 2: true, 3: true, 4: true, 6: true}
+	// 8, signer2: a second signer of a later version, taken on the first
+	// signature alone.
+	allowed := map[uint64]bool{1: true, 2: true, 3: true, 4: true, 6: true, 8: true}
 	for k := uint64(10); k <= 19; k++ {
 		allowed[k] = true
 	}

@@ -84,13 +84,19 @@ fn fixed<const N: usize>(v: Option<&Value<'_>>, rule: Rule) -> Result<[u8; N], R
 }
 
 /// Reads a beacon's form: at most 512 bytes of body, no critical field 0.6
-/// does not define (a beacon is never held), each field's row.
+/// does not define (a beacon is never held; a `signer2` with its second
+/// signature is taken on the first alone), each field's row.
 pub fn read(b: &[u8]) -> Result<(Beacon, Envelope<'_>), Rule> {
     let e = Envelope::parse_limited(b, MAX_BEACON)?;
     let m = &e.map;
-    if m.as_map().unwrap_or(&[]).iter().any(|(k, _)| *k < 256 && !FIELDS.contains(k)) {
+    if m.as_map()
+        .unwrap_or(&[])
+        .iter()
+        .any(|(k, _)| *k < 256 && *k != crate::format::envelope::FIELD_SIGNER2 && !FIELDS.contains(k))
+    {
         return Err(Rule::FORM_CRITICAL);
     }
+    crate::format::envelope::signer2(m, Rule::field("beacons/signer2"))?;
     sig::check_form(e.sig)?;
     if m.get(1).and_then(Value::as_uint) != Some(1) {
         return Err(RULE_TYPE);

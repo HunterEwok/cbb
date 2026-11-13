@@ -317,6 +317,23 @@ def envelope(kind, signer, body_map, body_raw=None):
     return enc([body, signer.sign(LABELS[kind], body)]), body
 
 
+# A second signer of a later version: its key's hash in signer2 (field 8),
+# its signature (here a stand-in of ML-DSA-44's 2420 bytes) beside the
+# first, which covers the body and the second's SHA-256 (audit Q-1). A
+# reader of this version takes the object on the first signature alone.
+SIG2_HASH = sha(b"a second key of a later version")
+SIG2 = fake("a second signature of a later version", 2420)
+
+
+def envelope2(kind, signer, body_map, sig2=SIG2):
+    """The envelope [body, sig, sig2] of body_map with signer2 set; its
+    damaged twin, whose sig2 was swapped on the way, is envelope2(...)[2]."""
+    body = enc({**body_map, 8: SIG2_HASH})
+    env = enc([body, signer.sign(LABELS[kind], body + sha(sig2)), sig2])
+    swapped = enc([body, signer.sign(LABELS[kind], body + sha(sig2)), fake("another second signature", 2420)])
+    return env, body, swapped
+
+
 # ---------------------------------------------------------------- vectors
 
 out = {}
@@ -760,6 +777,13 @@ def statement_vectors():
         m, env, body = st(sg, ep, fake(name, 1216))
         take.append({"name": name, "verdict": "take", "diag": diag(m), "body": body.hex(),
                      "id": sha(body).hex(), "envelope": env.hex()})
+    m = {1: 1, 2: GROUP, 3: LAPTOP.hash, 4: 3, 6: T0 + 3, 10: [XWING, fake("with sig2", 1216)]}
+    env, body, swapped = envelope2("keys", LAPTOP, m)
+    take.append({"name": "a second signer of a later version, taken on the first signature alone",
+                 "verdict": "take", "diag": diag(dec(body)), "body": body.hex(), "id": sha(body).hex(),
+                 "envelope": env.hex()})
+    refuse.append({"name": "a second signature swapped on the way", "rule": "env/damaged", "verdict": "refuse",
+                   "envelope": swapped.hex()})
     m, env, body = st(LAPTOP, 1, fake("short", 1215))
     refuse.append({"name": "seal key of 1215 bytes", "rule": "keys/xwing", "verdict": "refuse",
                    "envelope": env.hex()})
@@ -816,6 +840,12 @@ def command_vectors():
     env, body = envelope("command", ADMIN, m)
     refuse.append({"name": "lifetime over 600 s", "rule": "commands/expires", "verdict": "refuse",
                    "envelope": env.hex()})
+    m, _ = cmd(4, ADMIN, 11, LAPTOP.id16, {}, sealed=False)
+    env, body, swapped = envelope2("command", ADMIN, m)
+    take.append({"name": "a second signer of a later version, taken on the first signature alone", "verdict": "take",
+                 "diag": diag(dec(body)), "body": body.hex(), "envelope": env.hex()})
+    refuse.append({"name": "a second signature swapped on the way", "rule": "env/damaged", "verdict": "refuse",
+                   "envelope": swapped.hex(), "signer": ADMIN.pub.hex()})
     m, _ = cmd(10, PHONE, 8, LOCK.id16, {})
     env, body = envelope("command", PHONE, m)
     refuse.append({"name": "command to a guarded lock without a nonce", "rule": "commands/nonce", "verdict": "refuse",
@@ -936,10 +966,11 @@ def grant_vectors(admin_record):
     _, genv, _ = signed(g, ROOT)
     row = bad("the old root's grant made before the change the leaf knows", "grants/recovery", message(genv), L)
     row.update({"recovery": 1, "root": ROOT2.hash.hex()})
-    g2 = {**g, 3: ROOT.hash, 8: ADMIN.hash}
-    gb2 = enc(g2)
-    bad("grant with a second signer", "form/critical",
-        message(enc([gb2, ROOT.sign(LABELS["grant"], gb2), ADMIN.sign(LABELS["grant"], gb2)])), L)
+    genv2, gb2, swapped = envelope2("grant", ROOT, {**g, 3: ROOT.hash})
+    take.append({"name": "guarded lock's grant with a second signer of a later version, taken on the first signature alone",
+                 "verdict": "take", "leaf": g[10].hex(), "grant_diag": diag(dec(gb2)), "grant": gb2.hex(),
+                 "envelope": genv2.hex(), "message": enc(message(genv2)).hex(), "frame": frame(message(genv2)).hex()})
+    bad("grant whose second signature was swapped on the way", "env/damaged", message(swapped), L)
     _, genv, _ = signed({**kettle, 4: 2}, ADMIN)
     bad("admin's first grant without the root's record", "grants/admin", message(genv), K)
     root_bad("a reader under another device's ID", "grants/readers",
@@ -1110,6 +1141,13 @@ def credential_vectors():
     # The optional zone (section 3.3): skipped, the signature covers it.
     cred("period with an unknown optional field", ROOT,
          {1: 1, 2: GROUP, 3: ROOT.key, 4: 1, 7: exp, 10: tag, 11: PERIOD.key, 300: "later"})
+    m = {1: 1, 2: GROUP, 3: ROOT.key, 4: 2, 7: exp, 10: tag, 11: PERIOD.key}
+    env, body, swapped = envelope2("credential", ROOT, m)
+    take.append({"name": "period with a second signer of a later version, taken on the first signature alone",
+                 "verdict": "take", "diag": diag(dec(body)), "body": body.hex(), "id": sha(body).hex(),
+                 "envelope": env.hex()})
+    refuse.append({"name": "a second signature swapped on the way", "rule": "env/damaged", "verdict": "refuse",
+                   "envelope": swapped.hex()})
     m = {1: 4, 2: tag, 3: PERIOD.key, 4: 1, 7: exp, 14: pad([SRVKEY.hash], 3)}
     env, _ = envelope("credential", PERIOD, m)
     refuse.append({"name": "members list of 3 (not a padded length)", "rule": "credentials/members/members",
@@ -2384,7 +2422,16 @@ def card_vectors():
         no(f"an endpoint {e}", card({11: [e]}), "card/endpoints")
     ok("an endpoint by IPv6 address", card({11: ["fwd.example.org:443", "[2001:db8::7]:443"]}))
     ok("an endpoint by NAT64 of a public address", card({11: ["[64:ff9b::c000:207]:443", "172.32.0.1:443"]}))
-    no("kinds 4", card({13: 4}), "card/kinds")
+    no("kinds of a later version only", card({13: 4}), "card/kinds")
+    # Bits this version does not know are ignored and grant nothing.
+    env, body = envelope("card", OPERATOR, card({13: 1 | 8, 14: 5 | 16}))
+    take.append({"name": "kinds and paths with bits of a later version", "envelope": env.hex(), "id": sha(body).hex(),
+                 "kinds": 1, "paths": 5})
+    no("paths of a later version only", card({14: 16}), "card/paths")
+    env, body, swapped = envelope2("card", OPERATOR, card())
+    take.append({"name": "a second signer of a later version, taken on the first signature alone",
+                 "envelope": env.hex(), "id": sha(body).hex()})
+    refuse.append({"name": "a second signature swapped on the way", "rule": "env/damaged", "envelope": swapped.hex()})
     no("signed by another key than the operator it names", card(), "sig/verify", by=STRANGER)
     return take, refuse
 
@@ -2848,7 +2895,10 @@ def statement_rule(env_b):
         return "statements/signer"
     if not (isinstance(m.get(4), int) and m[4] >= 1):
         return "statements/epoch"
-    if m[1] != 1 or any(k < 256 and k not in (1, 2, 3, 4, 6, 10) for k in m) or len(env) == 3:
+    # A second signer of a later version: taken on the first signature alone.
+    if 8 in m and not (isinstance(m[8], bytes) and len(m[8]) == 32):
+        return "statements/signer2"
+    if m[1] != 1 or any(k < 256 and k not in (1, 2, 3, 4, 6, 8, 10) for k in m):
         return "hold"
     if m.get(6) == 0:
         return "form/default"
@@ -2875,8 +2925,12 @@ def beacon_rule(env_b):
     if len(env[0]) > 512:
         return "env/size"
     m = dec(env[0])
-    if any(k < 256 and k not in (1, 2, 3, 4, 6, 10, 11) for k in m):
+    if any(k < 256 and k not in (1, 2, 3, 4, 6, 8, 10, 11) for k in m):
         return "form/critical"
+    if (8 in m) != (len(env) == 3):
+        return "env/shape"
+    if 8 in m and not (isinstance(m[8], bytes) and len(m[8]) == 32):
+        return "beacons/signer2"
     if m.get(1) != 1:
         return "beacons/type"
     if not (isinstance(m.get(2), bytes) and len(m[2]) == 16):
@@ -3078,6 +3132,11 @@ def wave4_vectors():
     ]:
         env, b = envelope("keys", signer, m)
         statements.append({"name": name, "verdict": statement_rule(env), "diag": diag(m), "envelope": env.hex()})
+    for name, extra in [("a second signer of a later version, taken on the first signature alone", {}),
+                        ("a second signer of a later version and a later type: held", {1: 2})]:
+        m = {1: 1, 2: GROUP, 3: LAPTOP.hash, 4: 9, 6: T0, 10: [XWING, fake("sig2 statement", 1216)], **extra}
+        env, b, _ = envelope2("keys", LAPTOP, m)
+        statements.append({"name": name, "verdict": statement_rule(env), "diag": diag(dec(b)), "envelope": env.hex()})
     out["statements"] = statements
 
     # beacons
@@ -3097,6 +3156,9 @@ def wave4_vectors():
     ]:
         env, b = envelope("beacon", PHONE, m)
         beacons.append({"name": name, "verdict": beacon_rule(env), "diag": diag(m), "envelope": env.hex()})
+    env, b, _ = envelope2("beacon", PHONE, {1: 1, 2: GROUP, 3: PHONE.hash, 4: 5, 6: T0, 10: digest, 11: 12})
+    beacons.append({"name": "a second signer of a later version, taken on the first signature alone",
+                    "verdict": beacon_rule(env), "diag": diag(dec(b)), "envelope": env.hex()})
     out["beacons"] = beacons
 
     # messages

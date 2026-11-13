@@ -564,6 +564,12 @@ fn command_vectors() {
         let rule: String = r["rule"].as_str().unwrap().into();
         match Command::read(&env) {
             Err(e) => assert_eq!(e.name(), rule, "{}", r["name"]),
+            // A second signature swapped on the way: the form reads, the
+            // first signature, which covers it, does not hold.
+            Ok(c) if rule == "env/damaged" => {
+                let signer = unhex(r["signer"].as_str().unwrap());
+                assert_eq!(c.envelope.verify(&signer, sig::LABEL_COMMAND), Err(Rule::ENV_DAMAGED), "{}", r["name"]);
+            }
             Ok(c) => {
                 assert_eq!(rule, "commands/nonce", "{}", r["name"]);
                 assert!(c.nonce.is_none());

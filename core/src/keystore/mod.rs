@@ -202,9 +202,15 @@ pub fn read_statement(envelope: &[u8]) -> core::result::Result<ReadStatement, Ru
     let signer =
         KeyHash::from_slice(bytes(3, 32, Rule::field("statements/signer"))?).ok_or(Rule::field("statements/signer"))?;
     let epoch = m.get(4).and_then(Value::as_uint).filter(|e| *e >= 1).ok_or(Rule::field("statements/epoch"))?;
-    let unknown_field = m.as_map().unwrap_or(&[]).iter().any(|(k, _)| *k < 256 && !STATEMENT_FIELDS.contains(k));
+    let unknown_field = m
+        .as_map()
+        .unwrap_or(&[])
+        .iter()
+        .any(|(k, _)| *k < 256 && *k != crate::format::envelope::FIELD_SIGNER2 && !STATEMENT_FIELDS.contains(k));
     let held = || ReadStatement::Held { id: e.id(), envelope: envelope.to_vec() };
-    if typ != 1 || unknown_field || e.sig2.is_some() {
+    // A second signature is taken on the first alone, which covers it.
+    crate::format::envelope::signer2(m, Rule::field("statements/signer2"))?;
+    if typ != 1 || unknown_field {
         return Ok(held());
     }
     let time_ms = match m.get(6) {
@@ -223,7 +229,7 @@ pub fn read_statement(envelope: &[u8]) -> core::result::Result<ReadStatement, Ru
         return Err(Rule::KEYS_XWING);
     }
     let body = Body { group, signer, epoch, time_ms, seal: Key::new(ALG_XWING, seal.public.to_vec()), held: false };
-    Ok(ReadStatement::Take(Statement::from_read(e.body.to_vec(), e.sig.to_vec(), body)))
+    Ok(ReadStatement::Take(Statement::from_read(e.body.to_vec(), e.sig.to_vec(), e.sig2.map(<[u8]>::to_vec), body)))
 }
 
 /// A key store in memory: for the tests and for a device that keeps its

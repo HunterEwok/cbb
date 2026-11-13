@@ -842,10 +842,11 @@ func hubOrders(o map[any]any) string {
 
 // statementVerdict: a keys statement (section 5). What every type has is
 // read first; a later type, a critical field this version does not define
-// or a second signer is held ("hold", passed on as it is, never used), and
-// so is a sealing key of a later algorithm; an algorithm this version
-// knows that is not X-Wing is refused.
-func statementVerdict(body []byte, m map[any]any, sig2 bool) string {
+// is held ("hold", passed on as it is, never used), and so is a sealing key
+// of a later algorithm; an algorithm this version knows that is not X-Wing
+// is refused. A second signer of a later version is taken on the first
+// signature alone.
+func statementVerdict(body []byte, m map[any]any) string {
 	if len(body) > 2048 {
 		return "env/size"
 	}
@@ -861,7 +862,10 @@ func statementVerdict(body []byte, m map[any]any, sig2 bool) string {
 	if e, ok := u(m, 4); !ok || e < 1 {
 		return "statements/epoch"
 	}
-	if t, _ := u(m, 1); t != 1 || !only(m, 1, 2, 3, 4, 6, 10) || sig2 {
+	if _, two := m[uint64(8)]; two && !bs(m, 8, 32) {
+		return "statements/signer2"
+	}
+	if t, _ := u(m, 1); t != 1 || !only(m, 1, 2, 3, 4, 6, 8, 10) {
 		return "hold"
 	}
 	if x, there := m[uint64(6)]; there {
@@ -911,8 +915,11 @@ func beaconVerdict(body []byte, m map[any]any) string {
 	if len(body) > 512 {
 		return "env/size"
 	}
-	if !only(m, 1, 2, 3, 4, 6, 10, 11) {
+	if !only(m, 1, 2, 3, 4, 6, 8, 10, 11) {
 		return "form/critical"
+	}
+	if _, two := m[uint64(8)]; two && !bs(m, 8, 32) {
+		return "beacons/signer2"
 	}
 	if t, _ := u(m, 1); t != 1 {
 		return "beacons/type"
@@ -971,7 +978,7 @@ func checkWave4(dir string) {
 			fail("wave4 statements %s: %v", h.Name, err)
 			continue
 		}
-		if got := statementVerdict(body, m, false); got != h.Verdict {
+		if got := statementVerdict(body, m); got != h.Verdict {
 			fail("wave4 statements %s: %q, want %q", h.Name, got, h.Verdict)
 		}
 		count++
@@ -1133,7 +1140,7 @@ func checkMutants(dir string, f *wave4File) {
 			case "commands":
 				return commandVerdict(body, m)
 			case "statements":
-				return statementVerdict(body, m, len(env) == 3)
+				return statementVerdict(body, m)
 			case "beacons":
 				return beaconVerdict(body, m)
 			}
