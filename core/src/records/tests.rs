@@ -4574,3 +4574,56 @@ fn what_waits_aside_goes_by_id_as_the_peers_standing_says() {
     assert!(m.for_peer_by_id(&st, &k("gone").hash, &x.id()).is_none());
     assert!(m.for_peer_by_id(&st, &k("stranger").hash, &x.id()).is_none());
 }
+
+/// The writer of ordinary records: it follows the key's head, the set
+/// takes what it writes, and it refuses what its own set would not keep
+/// or count, leaving the set as it was and using no seq.
+#[test]
+fn the_writer_writes_only_what_its_own_set_keeps_and_counts() {
+    let _small = crate::records::keep::small::Small::new(64, 16, 4);
+    let mut g = G::new();
+    let (pa, a) = (k("phone a"), k("admin a"));
+    g.admin(&pa, &a, POWER_ADMIT);
+    let mut set = set_with(&g.root.key, &g.recs, &g.lists);
+    let mut seqs = Vec::new();
+    for i in 0..4 {
+        let st = set.state();
+        let d = Device::new(k(&format!("laptop {i}")).key.clone(), "laptop", ROLE_MEMBER);
+        let r = set.write_record(&st, &a, Kind::device(d), 0).unwrap();
+        assert!(set.contains(&r.id()) && set.state().counting.contains(&r.id()), "record {i}");
+        seqs.push(r.body().seq);
+    }
+    assert_eq!(seqs, vec![1, 2, 3, 4], "each follows the key's head");
+    // The admin key's room (four units) is full: the next is refused and
+    // the set is as it was.
+    let (before, st) = (set.digest(), set.state());
+    let d = Device::new(k("laptop 4").key.clone(), "laptop", ROLE_MEMBER);
+    assert!(set.write_record(&st, &a, Kind::device(d), 0).is_err());
+    assert_eq!(set.digest(), before);
+    // A key with no room, the recovery key, a checkpoint: refused.
+    let d = Device::new(k("laptop 5").key.clone(), "laptop", ROLE_MEMBER);
+    assert!(set.write_record(&st, &k("stranger"), Kind::device(d.clone()), 0).is_err());
+    assert!(set.write_record(&st, &k("recovery"), Kind::device(d.clone()), 0).is_err());
+    let cp = Kind::Checkpoint { heads: Vec::new(), keep: Vec::new() };
+    assert!(set.write_record(&st, &g.root, cp, 0).is_err());
+    assert_eq!(set.digest(), before);
+    // The root still writes, at its own next seq.
+    let r = set.write_record(&st, &g.root, Kind::device(d), 0).unwrap();
+    assert_eq!(r.body().seq, 2);
+    assert!(set.state().counting.contains(&r.id()));
+}
+
+/// A frozen admin's next record would not count: the writer refuses it.
+#[test]
+fn the_writer_refuses_a_record_that_would_not_count() {
+    let mut g = G::new();
+    let (pa, a) = (k("phone a"), k("admin a"));
+    g.admin(&pa, &a, POWER_ADMIT);
+    let seen = g.seen();
+    g.root_rec(Kind::Freeze(removal(&[a.hash], seen)));
+    let mut set = set_with(&g.root.key, &g.recs, &g.lists);
+    let (before, st) = (set.digest(), set.state());
+    let d = Device::new(k("laptop").key.clone(), "laptop", ROLE_MEMBER);
+    assert!(set.write_record(&st, &a, Kind::device(d), 0).is_err());
+    assert_eq!(set.digest(), before);
+}

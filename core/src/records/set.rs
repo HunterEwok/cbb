@@ -1988,9 +1988,17 @@ impl RecordSet {
         // The set takes the change before it is given out: asked again,
         // with any ticks, the writer gives back this one, never a second
         // record at its seq. The caller saves the set before it sends.
-        let _ = self.insert(record.clone());
-        let _ = self.insert_list(&list.encode());
-        self.insert_all(first.iter().cloned());
+        let mut trial = self.clone();
+        let _ = trial.insert(record.clone());
+        let _ = trial.insert_list(&list.encode());
+        trial.insert_all(first.iter().cloned());
+        // The writer's own set takes the change and counts the new root's
+        // first records, or the change reaches nobody for sure.
+        let st = trial.state();
+        if st.roots.last() != Some(&h) || first.iter().any(|r| !st.counting.contains(&r.id())) {
+            return Err(Error::msg("the change of root would not count in the writer's own records"));
+        }
+        *self = trial;
         // Its own records are no peer's.
         self.reached = !blind;
         Ok(Written { record, list, first, again: false, blind })
@@ -2168,7 +2176,70 @@ impl RecordSet {
         if !eval::fits_alone(others.chain([(&cp, Role::Root)]), &self.root.hash(), &self.promoted) {
             return Err(Error::msg("what the checkpoint names would not fit the rooms by itself"));
         }
+        // The writer's own set keeps it and counts it, or it reaches
+        // nobody for sure.
+        let mut trial = self.clone();
+        let _ = trial.insert(cp.clone());
+        if trial.state().checkpoint != Some(cp.id()) {
+            return Err(Error::msg("the checkpoint would not count in the writer's own records"));
+        }
         Ok(cp)
+    }
+
+    /// Writes signer's next ordinary record of kind (every type but a
+    /// checkpoint, which `write_checkpoint` writes, and a change of root,
+    /// which `write_change` writes): its seq and prev follow the key's
+    /// head in the set, and the set takes it. It refuses, leaving the set
+    /// as it was and using no seq, when the key has no room of its own,
+    /// when the key's records would pass its ceiling, and when the set
+    /// would not keep the record or it would not count: a record its own
+    /// writer drops reaches nobody for sure, and one that passes the key's
+    /// ceiling pushes the key's own older records out. The writer of every
+    /// ordinary record of a group goes through it.
+    pub fn write_record(
+        &mut self,
+        state: &State,
+        signer: &dyn ExternalKey,
+        kind: Kind,
+        time_ms: u64,
+    ) -> crate::error::Result<Record> {
+        use crate::error::Error;
+        if matches!(kind, Kind::Checkpoint { .. } | Kind::Recovery { .. }) {
+            return Err(Error::msg("a checkpoint or a change of root has its own writer"));
+        }
+        if state.stop == eval::Stop::Full || state.halted() {
+            return Err(Error::msg("the group is stopped: no record counts until the root is changed"));
+        }
+        let h = Key::es256(signer.public()).hash();
+        if h == self.recovery.hash() {
+            return Err(Error::msg("the recovery key writes only changes of root"));
+        }
+        if state.two_histories(&h) {
+            return Err(Error::msg("this key signed two histories; the root must resolve them before it signs again"));
+        }
+        let Some(ceiling) = self.ceiling(&h) else {
+            return Err(Error::msg("this key has no room in the group's records"));
+        };
+        let own = self.heads_where(|k| *k == h).into_iter().next();
+        let (seq, prev) = own.map_or((1, None), |o| (o.seq.saturating_add(1), Some(o.id)));
+        let body = Body { group: self.group, signer: h, seq, prev, time_ms, kind, held: false };
+        if body.encode().len() > super::MAX_BODY {
+            return Err(Error::msg("the record would be larger than a record may be"));
+        }
+        let r = Record::sign(body, signer)?;
+        let role = self.keys.signer(&h).map_or(Role::Admin, |(_, role)| role);
+        let used = self.units.get(&h).copied().unwrap_or(0);
+        if used.saturating_add(eval::item(&r, role).units) > ceiling {
+            return Err(Error::msg("this key's records would pass its room: the root must write a checkpoint first"));
+        }
+        let mut trial = self.clone();
+        trial.insert(r.clone()).map_err(|e| Error::msg(alloc::format!("the set refuses the record: {e:?}")))?;
+        let id = r.id();
+        if !trial.records.contains_key(&id) || !trial.state().counting.contains(&id) {
+            return Err(Error::msg("the group's records have no room for the record: it would not count"));
+        }
+        *self = trial;
+        Ok(r)
     }
 
     /// The heads the set holds of the keys a removal of `keys` concerns:

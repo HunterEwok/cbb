@@ -89,6 +89,14 @@ impl G {
 
     /// A record signed at time_ms.
     pub fn rec_at(&mut self, by: &K, kind: Kind, time_ms: u64) -> Record {
+        // An ordinary record goes through the core's writer, as a kit's
+        // does; a checkpoint or a change of root is signed as given.
+        if !matches!(kind, Kind::Checkpoint { .. } | Kind::Recovery { .. }) {
+            let st = self.set.state();
+            let r = self.set.write_record(&st, by, kind, time_ms).unwrap();
+            self.heads.insert(by.hash, (r.body().seq, r.id()));
+            return r;
+        }
         let (seq, prev) = match self.heads.get(&by.hash) {
             Some((s, id)) => (s + 1, Some(*id)),
             None => (1, None),

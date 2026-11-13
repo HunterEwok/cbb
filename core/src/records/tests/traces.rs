@@ -178,6 +178,15 @@ impl Run {
         set.compact(&st);
     }
 
+    /// Member m restarts from what it saved: its records and lists.
+    fn restart(&mut self, m: &str) {
+        let set = &self.sets[m];
+        let held: Vec<Record> = set.in_dependency_order().into_iter().cloned().collect();
+        let lists: Vec<Vec<u8>> = set.lists().map(<[u8]>::to_vec).collect();
+        let back = RecordSet::restore(set.root().clone(), set.recovery().clone(), &held, &lists);
+        *self.sets.get_mut(m).unwrap() = back;
+    }
+
     /// Runs the steps of a trace.
     fn steps(&mut self, trace: &str) {
         for line in trace.lines().filter(|l| !l.trim().is_empty()) {
@@ -202,6 +211,9 @@ impl Run {
                         self.offer(m, n);
                     }
                 }
+            }
+            if let Some(m) = action.strip_prefix("restart(\"") {
+                self.restart(m.split('"').next().unwrap());
             }
             if let Some(m) = action.strip_prefix("compact (m=") {
                 self.compact(m.trim_end_matches(')'));
@@ -700,6 +712,64 @@ fn a_drop_nobody_else_holds_does_not_turn_away_a_later_record() {
         let fresh: Vec<u32> = r.by_n.iter().filter(|(_, x)| once.contains(&x.id())).map(|(n, _)| *n).collect();
         assert_eq!(r.held(m), fresh, "1301 {m}: as a member given what is still held, at once");
         assert_eq!(r.sets[m].state(), once.state(), "1301 {m}: the state");
+    }
+}
+
+/// Run 1301 up to the key's later record, then a restart of the member
+/// that dropped two of the key's records: the restarted member and the
+/// live one take the key's later record alike.
+#[test]
+#[ignore = "waits for the rule on what a member remembers of its drops"]
+fn a_restart_does_not_change_what_a_later_record_meets() {
+    let mut r = Run::new();
+    let (before, after) = T_SEED_1301.split_at(T_SEED_1301.find("\n22. ").unwrap());
+    r.steps(before);
+    r.settle();
+    let live = r.sets["k"].clone();
+    let held: Vec<Record> = live.in_dependency_order().into_iter().cloned().collect();
+    let lists: Vec<Vec<u8>> = live.lists().map(<[u8]>::to_vec).collect();
+    let mut back = RecordSet::restore(live.root().clone(), live.recovery().clone(), &held, &lists);
+    assert_eq!(back.digest(), live.digest(), "restored");
+    r.steps(after);
+    let later = r.by_n[&17].clone();
+    let mut live = live;
+    let _ = live.insert(later.clone());
+    let _ = back.insert(later.clone());
+    assert_eq!(back.contains(&later.id()), live.contains(&later.id()), "the later record");
+    assert_eq!(back.digest(), live.digest(), "the records held");
+    assert_eq!(back.state(), live.state(), "the state");
+}
+
+/// Model seed 4004: the root's counting checkpoint moves from 7 to 9,
+/// which keeps only 1; 3 and 6, which 7 kept, go also at the member that
+/// had compacted on 7.
+const T_SEED_4004: &str = r#"
+0. init: #1 R seq 1 prev - admin target A units 1; #2 R seq 2 prev 1 admin target C units 1; #3 R seq 3 prev 2 admin target W units 1
+1. signCheckpointKeep("R", Set(), "", 1): #4 R seq 4 prev 3 checkpoint heads {'R': 3} keep [] units 1  | got: r+[4]
+2. signChain(RECOVERY, "recover", "NA", 1, "nocp"): #5 K seq 1 prev - recover target NA targetRec 1 list [1, 2, 3] from 1 first 99 units 0  | got: k+[5]
+3. sign("R", "revoke", "A", "", 0, false, false, 1): #6 R seq 5 prev 4 revoke target A units 1  | got: r+[6]
+4. signFull("R", "checkpoint", "", "", 0, false, false, 2, false, Set(6)): #7 R seq 6 prev 6 checkpoint heads {'R': 6} keep [3, 6] units 2  | got: r+[7]
+5. restart("k")
+6. sign("A", "revoke", "D", "", 0, true, false, 1): #8 A seq 1 prev - revoke target D units 1  | got: a+[8]
+7. signCheckpointKeep("R", Set(1), "", 2): #9 R seq 7 prev 7 checkpoint heads {'R': 7} keep [1] units 2  | got: r+[9]
+8. syncRound  | got: a+[5, 6, 7, 9], c+[5, 6, 7, 8, 9], k+[6, 7, 8, 9], m+[5, 6, 7, 8, 9], r+[5, 8]
+"#;
+
+/// Seed 4004: every member ends as the model's, holding 1, 7, 8 and 9 and
+/// counting 9, the one that compacted on 7 too.
+#[test]
+fn only_what_the_counting_checkpoint_names_is_kept_first() {
+    let mut r = Run::new();
+    r.steps(T_SEED_4004);
+    r.compact("r");
+    r.settle();
+    r.check("4004");
+    let cp9 = r.by_n[&9].id();
+    for m in MEMBERS {
+        // #5, the recovery record, is held outside the rooms.
+        let rooms: Vec<u32> = r.held(m).into_iter().filter(|n| *n != 5).collect();
+        assert_eq!(rooms, vec![1, 7, 8, 9], "4004 {m}");
+        assert_eq!(r.sets[m].state().checkpoint, Some(cp9), "4004 {m}");
     }
 }
 
