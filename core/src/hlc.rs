@@ -125,6 +125,18 @@ impl Clock {
         self.floor
     }
 
+    /// The latest point certainly at or before a timestamp this member
+    /// issued or observed before this start: the floor less MARK_STEP, as
+    /// the mark is saved that far ahead of the clock (zero for a first
+    /// start). A copy at or before it is older than the start; one after it
+    /// may have been made since.
+    pub fn started_after(&self) -> Timestamp {
+        if self.floor.is_zero() {
+            return Timestamp::default();
+        }
+        Timestamp { wall: self.floor.wall.saturating_sub(MARK_STEP).max(0), logical: 0 }
+    }
+
     /// A timestamp for a local event, greater than every one returned or
     /// observed before, until MAX_WALL.
     pub fn now(&self) -> Timestamp {

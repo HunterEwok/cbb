@@ -912,7 +912,7 @@ impl Engine {
             age_ms: ms(now.saturating_sub(st.copied_at)),
             // A copy from before this member started is never new to its
             // clipboard, whatever age a peer gives it.
-            before_start: !self.clock.floor().is_zero() && st.current.time <= self.clock.floor(),
+            before_start: !self.clock.started_after().is_zero() && st.current.time <= self.clock.started_after(),
             window_ms: ms(st.window),
             secret_ttl_ms: ms(SECRET_TTL),
         };
@@ -1096,9 +1096,12 @@ mod tests {
         };
         let old = e.received(event(mark.wall - 3_600_000, "an hour before")).unwrap();
         assert!(!old.write && old.forward.is_some());
-        let at_mark = e.received(event(mark.wall, "at the mark")).unwrap();
-        assert!(!at_mark.write);
-        let new = e.received(event(mark.wall + 1, "after the mark")).unwrap();
+        // The mark is saved MARK_STEP ahead of the clock, so the start is
+        // certainly after mark - MARK_STEP only.
+        let step = 10_000;
+        let at_start = e.received(event(mark.wall - step, "at the start")).unwrap();
+        assert!(!at_start.write);
+        let new = e.received(event(mark.wall - step + 1, "after the start")).unwrap();
         assert!(new.write);
         // A first start, with no mark, takes a young copy as before.
         let first = Engine::new(
@@ -1108,6 +1111,46 @@ mod tests {
             Box::new(|| Duration::from_secs(3600)),
         );
         assert!(first.received(event(now - 1_000, "young")).unwrap().write);
+    }
+
+    /// A peer's copy made just after this member restarted is written,
+    /// though the mark its clock saved before the stop is ahead of it.
+    #[test]
+    fn a_copy_made_right_after_a_restart_is_written() {
+        let t0 = 1_792_886_400_000; // 2026-10-25
+        let saved = Arc::new(std::sync::Mutex::new(Timestamp::default()));
+        let keep = saved.clone();
+        let before = Clock::new(
+            Box::new(move || t0),
+            Timestamp::default(),
+            Some(Box::new(move |m| {
+                *keep.lock().unwrap() = m;
+                true
+            })),
+        );
+        let last = before.now();
+        let mark = *saved.lock().unwrap();
+        assert!(mark > last, "the mark is saved ahead of the clock");
+        // Two seconds later the member starts again from its mark.
+        let now = t0 + 2_000;
+        let e = Engine::new(
+            A,
+            Clock::new(Box::new(move || now), mark, None),
+            Box::new(move || now),
+            Box::new(|| Duration::from_secs(3600)),
+        );
+        let event = |wall, text: &str| Event {
+            id: random_id(),
+            origin: B.to_string(),
+            via: Via::Copy,
+            time: Timestamp { wall, logical: 0 },
+            age: 0,
+            kind: Kind::Text,
+            text: text.to_string(),
+            ..Event::default()
+        };
+        assert!(!e.received(event(last.wall - 1, "before the stop")).unwrap().write);
+        assert!(e.received(event(now - 500, "after the restart")).unwrap().write);
     }
 
     /// A phone's media copy becomes the group's current one with the key
