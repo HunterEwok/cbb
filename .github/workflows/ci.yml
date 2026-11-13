@@ -1750,14 +1750,24 @@ jobs:
         env:
           DEVICE: ${{ matrix.device }}
         run: |
-          # An iPhone or iPad simulator of the newest iOS: the app is universal.
+          # The same model as before on the newest iOS: an iPad Pro 13-inch,
+          # whose width holds the card beside the tiles in portrait, and the
+          # newest numbered iPhone Pro. The first iPad or iPhone in the list
+          # can be an iPad mini or another shape (seen on the xcode-27 image).
           device=$(xcrun simctl list devices available -j | python3 -c '
           import json, re, sys
           devices = json.load(sys.stdin)["devices"]
           def version(runtime):
               return [int(n) for n in re.findall(r"\d+", runtime.rsplit(".", 1)[-1])]
+          model = {"iPad": r"iPad Pro 13-inch \(M(\d+)\)$", "iPhone": r"iPhone (\d+) Pro$"}[sys.argv[1]]
           ios = sorted((r for r in devices if ".iOS-" in r), key=version, reverse=True)
-          print(next(d["udid"] for runtime in ios for d in devices[runtime] if d["name"].startswith(sys.argv[1])))' "$DEVICE")
+          for runtime in ios:
+              found = [(int(m.group(1)), d["udid"]) for d in devices[runtime] if (m := re.match(model, d["name"]))]
+              if found:
+                  print(max(found)[1])
+                  break
+          else:
+              sys.exit("no " + sys.argv[1] + " simulator: " + model)' "$DEVICE")
           echo "simulator: $(xcrun simctl list devices | grep "$device")"
           echo "SIMULATOR=$device" >>"$GITHUB_ENV"
           xcrun simctl boot "$device" || true
