@@ -49,7 +49,7 @@ export const memberManageWatch: (member: Handle, request: string) => Promise<str
 export const memberServers: (member: Handle, index: string) => Promise<string>;
 export const memberStop: (member: Handle) => Promise<void>;
 
-export const joinNew: (request: string, admin: boolean) => Promise<Made>;
+export const joinNew: (request: string) => Promise<Made>;
 export const joinAccept: (join: Handle) => Promise<string>;
 export const joinFeed: (join: Handle, data: ArrayBuffer, nowMs: number) => Promise<string>;
 export const joinFinish: (join: Handle, saved: boolean) => Promise<string>;

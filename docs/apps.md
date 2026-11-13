@@ -39,8 +39,7 @@ they look, so both apps are built to the same plan.
    key**. A phone always joins as a member; the root makes it an admin later from the
    phone's device page ("Make it an admin"), with the admin key its hellos offer
    (docs/protocol.md, section 10, "Admins"). On Aurora the settings and the language are in
-   the pull-down menu, as in every Silica app, and the Start screen also has **Join a group
-   as an admin**.
+   the pull-down menu, as in every Silica app.
 2. **Home**: how many devices are online, with the two switches beside it: the **house**
    (sync on this phone: a tap turns it off or on, touching and holding it turns it off for
    15 minutes, an hour, 8 hours or until turned on; off, the clipboard is this phone's own
@@ -1024,7 +1023,7 @@ Rust core, which does the protocol, the pairing, sync, the member's view of the 
 tunnel. ArkTS and ArkUI make the interface; `libcbb_napi.so` gives it each C function of
 `ffi/include/cbb_core.h`, the ones that block or sign on a worker thread with a Promise. Its
 system in the protocol is `harmonyos`. It has the other phones' screens: Start (a new group,
-joining by the phone's QR code, as an admin, by an invitation, restoring), Home with the tiles
+joining by the phone's QR code, always as a member, or by an invitation, restoring), Home with the tiles
 or the list, a device's page with the admin's actions, adding a device by its QR code,
 invitations, the recovery key, the takeover, the arrangement and collections, and Settings
 with the error details, the notifications, the root's settings and, under the advanced

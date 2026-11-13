@@ -686,23 +686,20 @@ napi_value memberStop(napi_env env, napi_callback_info info)
 
 // ---- joining by the phone's QR code or an invitation ----
 
-// joinNew(request: string, admin: boolean): Promise<{handle, answer}>; with
-// admin the request names admin_public and the admin key signs too.
+// joinNew(request: string): Promise<{handle, answer}>; the phone joins as
+// a member, signing with its member key.
 napi_value joinNew(napi_env env, napi_callback_info info)
 {
     Args a(env, info);
     const std::string req = stringOf(env, a.v[0]);
-    const bool admin = boolOf(env, a.v[1]);
     auto joiner = std::make_shared<cbb_join *>(nullptr);
     auto answer = std::make_shared<std::string>();
     return later(
         env,
-        [req, admin, joiner, answer]() {
+        [req, joiner, answer]() {
             uint8_t *out = nullptr;
             size_t len = 0;
-            const auto *data = reinterpret_cast<const uint8_t *>(req.data());
-            *joiner = admin ? cbb_join_new_admin(data, req.size(), keys::signMember, nullptr, keys::signAdmin, nullptr, &out, &len)
-                            : cbb_join_new(data, req.size(), keys::signMember, nullptr, &out, &len);
+            *joiner = cbb_join_new(reinterpret_cast<const uint8_t *>(req.data()), req.size(), keys::signMember, nullptr, &out, &len);
             *answer = take(out, len);
         },
         [joiner, answer](napi_env env) { return made(env, *joiner, *answer); });
