@@ -950,10 +950,12 @@ fn the_set_stays_within_its_bytes_whatever_the_order() {
     b.insert_all(rev);
     assert!(a.bytes() <= MAX_SET_BYTES && a.len() < g.recs.len());
     assert_eq!(a.digest(), b.digest());
-    // The root's checkpoints come first, the newest first; the newest
-    // prunes the first device anyway.
+    // The root's checkpoints come first, the newest first; none counts,
+    // and the first device is out of the rooms: at most aside, as the
+    // record the oldest waiting checkpoint waits for.
     assert!(a.contains(&g.recs.last().unwrap().id()));
-    assert!(!a.contains(&first.id()));
+    assert!(!a.contains(&first.id()) || a.waits_aside(&first.id()));
+    assert!(!a.state().counting.contains(&first.id()));
 }
 
 /// A removed admin signs as much as it can, through recovery records of
@@ -3285,32 +3287,49 @@ fn what_waits_aside_still_makes_the_pair() {
     assert!(m.state().conflicts.iter().any(|c| c.kind == ConflictKind::TwoHistories && c.signers == vec![root]));
 }
 
-/// The place aside holds at most one ROOM, the lowest (seq, ID) first,
-/// whatever order the records came in.
+/// The place aside holds at most one ROOM: what the newest waiting
+/// checkpoint names first, then the next newest, each by the lowest
+/// (seq, ID), whatever order the records came in.
 #[test]
 fn the_place_aside_keeps_one_room_by_seq() {
     let mut g = G::new();
     let laptop = g.device(&k("root"), &k("laptop"), "laptop", |_| {});
-    let old: Vec<Record> = (0..20).map(|i| g.root_rec(Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] })).collect();
     let c7 = root_cp(&mut g, vec![laptop.id()]);
-    let mut keep: Vec<RecordId> = old.iter().map(Record::id).collect();
-    keep.extend([laptop.id(), c7.id(), RecordId([0x5b; 32])]);
-    root_cp(&mut g, keep);
+    let old: Vec<Record> = (0..20).map(|i| g.root_rec(Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] })).collect();
+    // Five checkpoints that never become whole (each keeps a record never
+    // released), each naming itself, its prev and five records: seven
+    // units, within the root's ceiling of eight.
+    let mut waiting = Vec::new();
+    for w in 0..5u8 {
+        let mut keep: Vec<RecordId> = old[usize::from(w) * 4..usize::from(w) * 4 + 4].iter().map(Record::id).collect();
+        keep.extend([laptop.id(), RecordId([0x50 + w; 32])]);
+        waiting.push(root_cp(&mut g, keep));
+    }
     let small = crate::records::keep::small::Small::new(14, 8, 5);
     for r in &g.recs {
         small.units(r.id(), 1);
     }
     let base: Vec<Record> = g.recs.iter().filter(|r| !old.iter().any(|o| o.id() == r.id())).cloned().collect();
+    // The rooms keep c7, the laptop and the five checkpoints (seven of the
+    // root's eight units) and the lowest old record; aside, by the newest
+    // checkpoint first: what the fifth, fourth and third keep (old 16..19,
+    // 12..15, 8..11), then the second's lowest two (old 4 and 5).
+    let mut want: Vec<RecordId> =
+        [16, 17, 18, 19, 12, 13, 14, 15, 8, 9, 10, 11, 4, 5].iter().map(|i: &usize| old[*i].id()).collect();
+    want.sort();
     let mut seen = Vec::new();
     for seed in [0, 1, 2] {
         let mut m = set_with(&g.root.key, &base, &g.lists);
         sync_all(&mut m, &[], &g.lists);
         assert_eq!(m.state().checkpoint, Some(c7.id()));
+        assert!(waiting.iter().all(|w| m.contains(&w.id()) && !m.waits_aside(&w.id())));
         let order = if seed == 0 { old.clone() } else { shuffled(&old, seed) };
         sync_all(&mut m, &order, &g.lists);
-        let aside: Vec<RecordId> = old.iter().map(Record::id).filter(|id| m.waits_aside(id)).collect();
+        let mut aside: Vec<RecordId> = old.iter().map(Record::id).filter(|id| m.waits_aside(id)).collect();
+        aside.sort();
         assert_eq!(aside.len(), 14, "order {seed}");
-        assert_eq!(aside, old[..14].iter().map(Record::id).collect::<Vec<_>>(), "order {seed}");
+        assert_eq!(aside, want, "order {seed}");
+        assert!(m.contains(&old[0].id()) && !m.waits_aside(&old[0].id()), "order {seed}: old 0 in the rooms");
         seen.push((m.digest(), m.state()));
     }
     assert!(seen.windows(2).all(|w| w[0] == w[1]));

@@ -512,6 +512,109 @@ const T_X3262C_END: &str = r#"
 - r: recs [1, 2, 3, 5, 7, 13, 15, 17, 18], checkpoint 18, view checkpoint 18, counting [1, 2, 3, 5, 7, 17, 18], got [1, 2, 3, 4, 5, 6, 7, 9, 10, 12, 13, 14, 15, 16, 17, 18]
 "#;
 
+/// The model's everyWaitingTest (#552): checkpoint 9 and what it names fill
+/// the root's ceiling; the newest waiting checkpoint 11 keeps a record
+/// nobody holds.
+const T_EVERY_WAITING: &str = r#"
+0. init: #1 R seq 1 prev - admin target A units 1; #2 R seq 2 prev 1 admin target C units 1; #3 R seq 3 prev 2 admin target W units 1
+1. sign R copies: #4 R seq 4 prev 3 copies units 1  | got: r+[4]
+2. sign R copies: #5 R seq 5 prev 4 copies units 1  | got: r+[5]
+3. sign R copies: #6 R seq 6 prev 5 copies units 1  | got: r+[6]
+4. sign R checkpoint (honest): #7 R seq 7 prev 6 checkpoint heads {'R': 6} keep [1, 2, 3, 4, 5, 6] units 1  | got: r+[7]
+5. syncAll (every member offered every held record in ID order)  | got: a+[4, 5, 6, 7], c+[4, 5, 6, 7], k+[4, 5, 6, 7], m+[4, 5, 6, 7]
+6. sign R copies: #8 R seq 8 prev 7 copies units 1  | got: r+[8]
+7. sign R checkpoint (honest): #9 R seq 9 prev 8 checkpoint heads {'R': 8} keep [1, 2, 3, 4, 5, 6, 8] units 1  | got: r+[9]
+8. sign R copies: #10 R seq 10 prev 9 copies units 1  | got: r+[10]
+9. sign R checkpoint keeping also 99 (never released): #11 R seq 11 prev 10 checkpoint heads {'R': 10} keep [1, 2, 3, 4, 5, 6, 8, 99] units 1  | got: r+[11]
+10. give a 8  | got: a+[8]
+11. give a 9  | got: a+[9]
+12. give m 11  | got: m+[11]
+13. give m 9  | got: m+[9]
+14. give m 8  | got: m+[8]
+15. give m 10  | got: m+[10]
+16. syncAll  | got: a+[11], c+[8, 9, 11], k+[8, 9, 11]
+"#;
+
+/// everyWaitingTest's end once nothing that waits takes a unit from the
+/// counting checkpoint: every member counts 9.
+const T_EVERY_WAITING_END: &str = r#"
+- a: recs [1, 2, 3, 4, 5, 6, 8, 9], aside [11], checkpoint 9, view checkpoint 9, counting [1, 2, 3, 4, 5, 6, 8, 9], devices ['dA', 'dC', 'dW'], got [1, 2, 3, 4, 5, 6, 7, 8, 9, 11]
+- c: recs [1, 2, 3, 4, 5, 6, 8, 9], aside [11], checkpoint 9, view checkpoint 9, counting [1, 2, 3, 4, 5, 6, 8, 9], devices ['dA', 'dC', 'dW'], got [1, 2, 3, 4, 5, 6, 7, 8, 9, 11]
+- k: recs [1, 2, 3, 4, 5, 6, 8, 9], aside [11], checkpoint 9, view checkpoint 9, counting [1, 2, 3, 4, 5, 6, 8, 9], devices ['dA', 'dC', 'dW'], got [1, 2, 3, 4, 5, 6, 7, 8, 9, 11]
+- m: recs [1, 2, 3, 4, 5, 6, 8, 9], aside [11], checkpoint 9, view checkpoint 9, counting [1, 2, 3, 4, 5, 6, 8, 9], devices ['dA', 'dC', 'dW'], got [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+- r: recs [1, 2, 3, 4, 5, 6, 8, 9], aside [11], checkpoint 9, view checkpoint 9, counting [1, 2, 3, 4, 5, 6, 8, 9], devices ['dA', 'dC', 'dW'], got [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+"#;
+
+/// The model's olderWaitingTurnedAwayTest (#552): checkpoint 15 waits for
+/// 14, its prev, which it does not keep.
+const T_OLDER_WAITING: &str = r#"
+0. init: #1 R seq 1 prev - admin target A units 1; #2 R seq 2 prev 1 admin target C units 1; #3 R seq 3 prev 2 admin target W units 1
+1. sign A copies 3u: #4 A seq 1 prev - copies units 3  | got: a+[4]
+2. sign A copies 3u: #5 A seq 2 prev 4 copies units 3  | got: a+[5]
+3. sign A copies 3u: #6 A seq 3 prev 5 copies units 3  | got: a+[6]
+4. sign C copies 3u: #7 C seq 1 prev - copies units 3  | got: c+[7]
+5. sign C copies 3u: #8 C seq 2 prev 7 copies units 3  | got: c+[8]
+6. sign C copies 3u: #9 C seq 3 prev 8 copies units 3  | got: c+[9]
+7. sign W copies 3u: #10 W seq 1 prev - copies units 3  | got: c+[10]
+8. sign W copies 3u: #11 W seq 2 prev 10 copies units 3  | got: c+[11]
+9. sign W copies 3u: #12 W seq 3 prev 11 copies units 3  | got: c+[12]
+10. every member offered 4..12 in order  | got: a+[7, 8, 9, 10, 11, 12], c+[4, 5, 6], k+[4, 5, 6, 7, 8, 9, 10, 11, 12], m+[4, 5, 6, 7, 8, 9, 10, 11, 12], r+[4, 5, 6, 7, 8, 9, 10, 11, 12]
+11. sign R checkpoint (honest): #13 R seq 4 prev 3 checkpoint heads {'A': 4, 'C': 7, 'R': 3, 'W': 10} keep [1, 2, 3, 4, 7, 10] units 1  | got: r+[13]
+12. syncRound  | got: a+[13], c+[13], k+[13], m+[13]
+13. compact r
+14. compact a
+15. compact c
+16. compact m
+17. compact k
+18. R signs checkpoint with explicit keep [1,2,3,5,8]: #14 R seq 5 prev 13 checkpoint heads {'A': 5, 'C': 8, 'R': 13, 'W': 10} keep [1, 2, 3, 5, 8] units 1  | got: r+[14]
+19. R signs checkpoint with explicit keep [1,2,3,6,99]: #15 R seq 6 prev 14 checkpoint heads {'A': 6, 'C': 7, 'R': 14, 'W': 10} keep [1, 2, 3, 6, 99] units 1  | got: r+[15]
+20. a offered 14, 5, 8  | got: a+[14]
+21. m offered 15, 6, 14, 5, 8  | got: m+[14, 15]
+22. syncRound  | got: a+[15], c+[14, 15], k+[14, 15]
+23. syncRound
+24. syncRound
+25. syncRound
+"#;
+
+/// olderWaitingTurnedAwayTest's end with the prev of a waiting checkpoint
+/// held aside: every member counts 14.
+const T_OLDER_WAITING_END: &str = r#"
+- a: recs [1, 2, 3, 5, 8, 13, 14, 15], aside [6], checkpoint 14, view checkpoint 14, counting [1, 2, 3, 5, 8, 13, 14, 15], devices ['dA', 'dC', 'dW'], got [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+- c: recs [1, 2, 3, 5, 8, 13, 14, 15], aside [6], checkpoint 14, view checkpoint 14, counting [1, 2, 3, 5, 8, 13, 14, 15], devices ['dA', 'dC', 'dW'], got [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+- k: recs [1, 2, 3, 5, 8, 13, 14, 15], aside [6], checkpoint 14, view checkpoint 14, counting [1, 2, 3, 5, 8, 13, 14, 15], devices ['dA', 'dC', 'dW'], got [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+- m: recs [1, 2, 3, 5, 8, 13, 14, 15], aside [6], checkpoint 14, view checkpoint 14, counting [1, 2, 3, 5, 8, 13, 14, 15], devices ['dA', 'dC', 'dW'], got [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+- r: recs [1, 2, 3, 5, 8, 13, 14, 15], aside [6], checkpoint 14, view checkpoint 14, counting [1, 2, 3, 5, 8, 13, 14, 15], devices ['dA', 'dC', 'dW'], got [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+"#;
+
+/// The model's random run 1301 (#552): a member's own key's later record
+/// after the rooms turned away two before it.
+const T_SEED_1301: &str = r#"
+0. init: #1 R seq 1 prev - admin target A units 1; #2 R seq 2 prev 1 admin target C units 1; #3 R seq 3 prev 2 admin target W units 1
+1. compactAt("a")
+2. sign("NA", "checkpoint", "", "", 0, false, false, 2): #4 NA seq 1 prev - checkpoint heads {'R': 3} keep [1, 2, 3] units 2  | got: a+[4]
+3. offerEveryone(4)  | got: c+[4], k+[4], m+[4], r+[4]
+4. signFull("R", "checkpoint", "", "", 0, false, false, 2, false, Set(1)): #5 R seq 4 prev 3 checkpoint heads {'R': 3} keep [1, 2, 3] units 2  | got: r+[5]
+5. recoverAs(RECOVERY, "NK"): #6 K seq 1 prev - recover target NK targetRec 1 list [1, 2, 3] from 1 first 7 units 0; #7 NK seq 1 prev - checkpoint heads {} keep [1, 2, 3] units 2  | got: k+[6, 7]
+6. giveOnly("r", 7)  | got: r+[7]
+7. sign("R", "checkpoint", "", "", 0, false, false, 2): #8 R seq 5 prev 5 checkpoint heads {'R': 5} keep [1, 2, 3] units 2  | got: r+[8]
+8. offerEveryone(8)  | got: a+[8], c+[8], k+[8], m+[8]
+9. offerEveryone(3)
+10. sign("NK", "copies", "", "", 0, false, false, 2): #9 NK seq 2 prev 7 copies units 2  | got: k+[9]
+11. syncRound  | got: a+[5, 6, 7, 9], c+[5, 6, 7, 9], k+[5], m+[5, 6, 7, 9], r+[6, 9]
+12. sign("R", "revoke", "K", "", 0, false, false, 1): #10 R seq 6 prev 8 revoke target K units 1  | got: r+[10]
+13. sign("NK", "copies", "", "", 0, false, false, 1): #11 NK seq 3 prev 9 copies units 1  | got: k+[11]
+14. offerEveryone(11)  | got: a+[11], c+[11], m+[11], r+[11]
+15. offerEveryone(11)
+16. sign("NK", "copies", "", "", 0, false, false, 2): #12 NK seq 4 prev 11 copies units 2  | got: k+[12]
+17. sign("NK", "checkpoint", "", "", 0, false, false, 2): #13 NK seq 5 prev 12 checkpoint heads {'NK': 12, 'R': 3} keep [1, 2, 3, 9, 11, 12] units 2  | got: k+[13]
+18. sign("NK", "copies", "", "", 0, false, false, 2): #14 NK seq 6 prev 13 copies units 2  | got: k+[14]
+19. sign("NK", "copies", "", "", 0, false, false, 2): #15 NK seq 7 prev 14 copies units 2  | got: k+[15]
+20. compactAt("r")
+21. signCheckpointKeep("NA", Set(1, 2, 3, 6, 7, 8, 10, 11, 12), "W", 2): #16 NA seq 2 prev 4 checkpoint heads {'NA': 4, 'NK': 12, 'R': 10} keep [1, 2, 3, 6, 7, 8, 10, 11, 12] units 2  | got: a+[16]
+22. sign("NK", "copies", "", "", 0, false, false, 1): #17 NK seq 8 prev 15 copies units 1  | got: k+[17]
+23. offerEveryone(17)  | got: a+[17], c+[17], m+[17], r+[17]
+"#;
+
 /// Each trace: every member ends as a member that took the same records at
 /// once, and compacting changes nothing.
 #[test]
@@ -528,3 +631,162 @@ fn the_models_traces_end_alike_in_any_order() {
     }
 }
 
+/// The model's traces of the place aside, each member against the end the
+/// model gives under the rule decided (NEWEST_ASIDE, what a waiting
+/// checkpoint names held aside): every member counts the model's
+/// checkpoint and holds, in its rooms or aside, what the model's member
+/// holds, and besides only the heads that checkpoint names, which the core
+/// keeps as anchors.
+#[test]
+fn the_waiting_checkpoints_end_as_the_model_says() {
+    for (name, trace, end, counting) in [
+        ("every waiting", T_EVERY_WAITING, T_EVERY_WAITING_END, 9),
+        ("older waiting", T_OLDER_WAITING, T_OLDER_WAITING_END, 14),
+    ] {
+        let mut r = Run::new();
+        r.steps(trace);
+        r.settle();
+        r.check(name);
+        let model: BTreeMap<String, Vec<u32>> = end
+            .lines()
+            .filter_map(|l| l.strip_prefix("- "))
+            .map(|l| {
+                let (m, rest) = l.split_once(": recs ").unwrap();
+                let (recs, rest) = bracket(rest, ']');
+                let aside = rest.split_once("aside ").map_or("[]", |(_, a)| bracket(a, ']').0);
+                let mut all = ids(recs);
+                all.extend(ids(aside));
+                all.sort();
+                (String::from(m), all)
+            })
+            .collect();
+        let cp = r.by_n[&counting].clone();
+        let Kind::Checkpoint { heads, .. } = &cp.body().kind else { panic!("{name}: not a checkpoint") };
+        for m in MEMBERS {
+            let st = r.sets[m].state();
+            assert_eq!(st.checkpoint, Some(cp.id()), "{name} {m}: the counting checkpoint");
+            let anchor = |n: &u32| heads.iter().any(|h| h.id == r.by_n[n].id());
+            let held: Vec<u32> = r.held(m).into_iter().filter(|n| !anchor(n) || model[m].contains(n)).collect();
+            assert_eq!(held, model[m], "{name} {m}");
+        }
+    }
+}
+
+/// Run 1301 (#552): a member that dropped two records of its own key,
+/// which nobody else holds, ends as a member that took the same records at
+/// once: the key's later record is judged against the rooms as they are.
+#[test]
+#[ignore = "waits for the rule on what a member remembers of its drops"]
+fn a_drop_nobody_else_holds_does_not_turn_away_a_later_record() {
+    let mut r = Run::new();
+    r.steps(T_SEED_1301);
+    r.settle();
+    r.check("1301");
+    // What some member still holds: a record every member dropped is gone.
+    let alive: BTreeSet<u32> = MEMBERS.iter().flat_map(|m| r.held(m)).collect();
+    for m in MEMBERS {
+        let got: BTreeSet<u32> = r.got[m].iter().copied().filter(|n| alive.contains(n)).collect();
+        let mut once = set_of(&r.g.root.key);
+        for _ in 0..8 {
+            let before = once.digest();
+            once.insert_all(got.iter().map(|n| r.by_n[n].clone()));
+            for l in &r.g.lists {
+                let _ = once.insert_list(l);
+            }
+            if once.digest() == before {
+                break;
+            }
+        }
+        let fresh: Vec<u32> = r.by_n.iter().filter(|(_, x)| once.contains(&x.id())).map(|(n, _)| *n).collect();
+        assert_eq!(r.held(m), fresh, "1301 {m}: as a member given what is still held, at once");
+        assert_eq!(r.sets[m].state(), once.state(), "1301 {m}: the state");
+    }
+}
+
+/// A checkpoint that may count, and a newer one that waits and keeps it:
+/// members that get the two in either order, and one that gets the newer
+/// before what the older names, end alike, counting the older (simulator
+/// seeds 695 and 843: the place aside is only for what the rooms turn
+/// away).
+const T_MAY_COUNT_AFTER_WAITING: &str = r#"
+0. init: #1 R seq 1 prev - admin target A units 1; #2 R seq 2 prev 1 admin target C units 1; #3 R seq 3 prev 2 admin target W units 1
+1. sign: #4 R seq 4 prev 3 copies units 2  | got: r+[4]
+2. sign: #5 R seq 5 prev 4 checkpoint heads {'R': 4} keep [1, 2, 3, 4] units 1  | got: r+[5], a+[4, 5], c+[4, 5], k+[4, 5], m+[4, 5]
+3. sign: #6 R seq 6 prev 5 copies units 2  | got: r+[6]
+4. sign: #7 R seq 7 prev 6 checkpoint heads {'R': 6} keep [1, 2, 3, 4, 6] units 1  | got: r+[7]
+5. sign: #8 R seq 8 prev 7 checkpoint heads {'R': 7} keep [1, 2, 3, 7, 99] units 1  | got: r+[8]
+6. sign W copies: #9 W seq 1 prev - copies units 3  | got: c+[9], k+[9], m+[9]
+7. offers  | got: a+[6, 7, 8], c+[8, 6, 7], k+[8, 7, 6], m+[7, 8, 6]
+"#;
+
+/// A checkpoint whose named records cannot fit the rooms on their own
+/// (nine units over a root's ceiling of eight) never counts and never
+/// waits: an ordinary record of the root's room, the same at a member that
+/// got it first and at one that got it last (simulator seed 623).
+const T_NEVER_FITS: &str = r#"
+0. init: #1 R seq 1 prev - admin target A units 1; #2 R seq 2 prev 1 admin target C units 1; #3 R seq 3 prev 2 admin target W units 1
+1. sign: #4 R seq 4 prev 3 copies units 1  | got: r+[4]
+2. sign: #5 R seq 5 prev 4 copies units 1  | got: r+[5]
+3. sign: #6 R seq 6 prev 5 copies units 1  | got: r+[6]
+4. sign: #7 R seq 7 prev 6 copies units 1  | got: r+[7]
+5. sign: #8 R seq 8 prev 7 copies units 1  | got: r+[8]
+6. sign: #9 R seq 9 prev 8 checkpoint heads {'R': 8} keep [1, 2, 3, 4, 5, 6, 7, 8] units 1  | got: r+[9]
+7. offers  | got: a+[9, 4, 5, 6, 7, 8], c+[4, 5, 6, 7, 8, 9], k+[6, 9, 4, 8, 5, 7], m+[4, 5, 6, 7, 8]
+"#;
+
+/// A checkpoint that may count reaches members whose root's room is full
+/// (eight units), some before the records it names: the room turns it
+/// away, it waits aside, and once it is whole it counts and the records it
+/// does not keep leave the room.
+const T_COUNTS_AFTER_ASIDE: &str = r#"
+0. init: #1 R seq 1 prev - admin target A units 1; #2 R seq 2 prev 1 admin target C units 1; #3 R seq 3 prev 2 admin target W units 1
+1. sign: #4 R seq 4 prev 3 copies units 1  | got: r+[4]
+2. sign: #5 R seq 5 prev 4 copies units 1  | got: r+[5]
+3. sign: #6 R seq 6 prev 5 copies units 1  | got: r+[6]
+4. sign: #7 R seq 7 prev 6 copies units 1  | got: r+[7]
+5. sign: #8 R seq 8 prev 7 copies units 1  | got: r+[8]
+6. sign: #9 R seq 9 prev 8 checkpoint heads {'R': 8} keep [1, 2, 3, 8] units 1  | got: r+[9]
+7. offers  | got: a+[4, 5, 6, 7, 8, 9], c+[9, 4, 5, 6, 7, 8], k+[4, 5, 6, 7, 9, 8], m+[9, 8, 7, 6, 5, 4]
+"#;
+
+/// The two shapes above: every member ends as one that took the same
+/// records at once, and members that took the same records agree.
+#[test]
+fn a_checkpoint_goes_aside_only_when_the_rooms_turn_it_away() {
+    let mut r = Run::new();
+    r.steps(T_MAY_COUNT_AFTER_WAITING);
+    r.settle();
+    r.check("may count after waiting");
+    let cp7 = r.by_n[&7].id();
+    for m in ["r", "a", "c", "k", "m"] {
+        assert_eq!(r.sets[m].state().checkpoint, Some(cp7), "may count after waiting {m}");
+        assert!(!r.sets[m].waits_aside(&cp7), "may count after waiting {m}");
+    }
+    let mut r = Run::new();
+    r.steps(T_NEVER_FITS);
+    r.settle();
+    r.check("never fits");
+    let cp9 = r.by_n[&9].id();
+    let held: Vec<bool> = ["r", "a", "c", "k"].iter().map(|m| r.sets[*m].contains(&cp9)).collect();
+    assert!(held.windows(2).all(|w| w[0] == w[1]), "never fits: {held:?}");
+    for m in ["r", "a", "c", "k", "m"] {
+        assert_ne!(r.sets[m].state().checkpoint, Some(cp9), "never fits {m}");
+        assert!(!r.sets[m].waits_aside(&cp9), "never fits {m}");
+    }
+    let digests: Vec<[u8; 32]> = ["r", "a", "c", "k"].iter().map(|m| r.sets[*m].digest()).collect();
+    assert!(digests.windows(2).all(|w| w[0] == w[1]), "never fits: members that hold the same records");
+    let mut r = Run::new();
+    r.steps(T_COUNTS_AFTER_ASIDE);
+    r.settle();
+    r.check("counts after aside");
+    let cp9 = r.by_n[&9].id();
+    for m in ["r", "a", "c", "k", "m"] {
+        assert_eq!(r.sets[m].state().checkpoint, Some(cp9), "counts after aside {m}");
+        assert!(!r.sets[m].waits_aside(&cp9), "counts after aside {m}");
+        for n in [4, 5, 6, 7] {
+            assert!(!r.sets[m].contains(&r.by_n[&n].id()), "counts after aside {m}: #{n}");
+        }
+    }
+    let digests: Vec<[u8; 32]> = ["r", "a", "c", "k", "m"].iter().map(|m| r.sets[*m].digest()).collect();
+    assert!(digests.windows(2).all(|w| w[0] == w[1]), "counts after aside: members that hold the same records");
+}
