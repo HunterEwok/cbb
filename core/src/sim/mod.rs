@@ -182,6 +182,11 @@ struct World {
     forks: Vec<(RecordId, RecordId)>,
     /// Every change of root written, by its seq.
     heads: Vec<(u64, RecordId)>,
+    /// Root records signed and lost to a power cut before they were
+    /// stored: they never left the device, so no member may hold one.
+    lost: Vec<RecordId>,
+    /// Twins of a root record made on purpose (two writers with one key).
+    twins: usize,
     net: Vec<Msg>,
     side: Vec<bool>,
     changes: usize,
@@ -258,6 +263,8 @@ impl World {
             freezes: Vec::new(),
             forks: Vec::new(),
             heads: Vec::new(),
+            lost: Vec::new(),
+            twins: 0,
             net: Vec::new(),
             side: alloc::vec![false; n],
             changes: 0,
@@ -309,6 +316,14 @@ impl World {
     /// Signs a record with the key named key_name on member i, takes it
     /// and saves: an act counts once it is written.
     fn sign(&mut self, i: usize, key_name: &str, kind: Kind) -> Record {
+        let r = self.sign_unsaved(i, key_name, kind);
+        self.save(i);
+        r
+    }
+
+    /// Signs and takes a record on member i without storing it: what is
+    /// in memory between the signature and the durable store.
+    fn sign_unsaved(&mut self, i: usize, key_name: &str, kind: Kind) -> Record {
         let time_ms = self.now(i);
         let kk = k(key_name);
         let m = &mut self.members[i].live;
@@ -318,8 +333,88 @@ impl World {
         m.heads.insert(kk.hash, (seq, r.id()));
         let _ = m.set.insert(r.clone());
         self.refresh(i);
-        self.save(i);
         r
+    }
+
+    /// The root's own device as a record, signed again unchanged: an
+    /// action of the root that changes nothing else.
+    fn own_device(&self, i: usize) -> Option<Kind> {
+        let ds = self.members[i].live.state.device(&self.members[i].id)?.clone();
+        Some(Kind::device(self.device_of(i, &ds)))
+    }
+
+    /// Every root key of the run: the first and each change's.
+    fn root_keys(&self) -> BTreeSet<KeyHash> {
+        let mut out = BTreeSet::new();
+        out.insert(k(&self.root_name).hash);
+        for c in 1..=self.changes {
+            out.insert(k(&format!("sim{}/root{c}", self.seed)).hash);
+        }
+        out
+    }
+
+    /// The root's power is cut between its signature and the durable
+    /// store: the action was shown as done, the record never left (a
+    /// root record leaves only once stored), and the root comes back
+    /// without it.
+    fn power_loss(&mut self) {
+        let Some((i, key)) = self.signer(true) else { return };
+        let Some(kind) = self.own_device(i) else { return };
+        let r = self.sign_unsaved(i, &key, kind);
+        self.lost.push(r.id());
+        self.crash(i);
+        self.note(format!("m{i} loses power after signing, before storing"));
+    }
+
+    /// Two writers with one key, forced: the root signs a record, and a
+    /// second process with the same key signs another at the same seq,
+    /// which reaches another member. The group halts until a change of
+    /// root by the recovery key.
+    fn twin(&mut self) -> Check {
+        let Some((i, key)) = self.signer(true) else { return Ok(()) };
+        let others: Vec<usize> = self.on_members().into_iter().filter(|j| *j != i && self.admitted[*j]).collect();
+        let Some(j) = self.rng.pick(&others) else { return Ok(()) };
+        let Some(kind) = self.own_device(i) else { return Ok(()) };
+        let kk = k(&key);
+        let before = self.members[i].live.heads.get(&kk.hash).copied();
+        let a = self.sign(i, &key, kind.clone());
+        let (seq, prev) = before.map_or((1, None), |(s, id)| (s + 1, Some(id)));
+        let body =
+            Body { group: self.gid, signer: kk.hash, seq, prev, time_ms: a.body().time_ms + 1, kind, held: false };
+        let b = Record::sign(body, &kk).unwrap();
+        let _ = self.members[j].live.set.insert(b.clone());
+        self.refresh(j);
+        self.save(j);
+        self.forks.push((a.id(), b.id()));
+        self.twins += 1;
+        self.note(format!("two writers with m{i}'s root key sign at seq {seq}; m{j} takes the second"));
+        self.after_save(i)?;
+        self.after_save(j)
+    }
+
+    /// No member holds a lost record, nor two records of a root key at
+    /// one seq unless the run made a twin on purpose.
+    fn no_twins(&self) -> Check {
+        let roots = self.root_keys();
+        for (i, m) in self.members.iter().enumerate() {
+            let mut at: BTreeMap<(KeyHash, u64), RecordId> = BTreeMap::new();
+            for id in m.live.set.ids() {
+                if self.lost.contains(id) {
+                    return Err(format!("m{i} holds a root record that was never stored"));
+                }
+                let b = m.live.set.get(id).unwrap().body();
+                if !roots.contains(&b.signer) {
+                    continue;
+                }
+                if let Some(other) = at.insert((b.signer, b.seq), *id)
+                    && other != *id
+                    && self.twins == 0
+                {
+                    return Err(format!("m{i} holds two records of a root key at seq {}", b.seq));
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Each signer's newest record that member i holds.
@@ -777,8 +872,12 @@ impl World {
                     self.after_save(by)?;
                 }
             }
-            26 if self.changes < MAX_CHANGES => self.change_root(false)?,
-            27 if self.changes < MAX_CHANGES && self.rng.chance(1, 3) => self.change_root(true)?,
+            26 if self.changes < MAX_CHANGES => self.change_root(false, false)?,
+            27 if self.changes < MAX_CHANGES && self.rng.chance(1, 3) => self.change_root(true, false)?,
+            29 => self.power_loss(),
+            30 if twins_on() && self.twins == 0 && self.changes < MAX_CHANGES && self.rng.chance(1, 4) => {
+                self.twin()?
+            }
             28 if self.days_off < MAX_DAYS_OFF => {
                 let on = self.on_members();
                 if on.len() > 2
@@ -798,9 +897,17 @@ impl World {
     }
 
     /// The owner enters the recovery key on a member and makes it the
-    /// root; with fork, on two members from the same seq.
-    fn change_root(&mut self, fork: bool) -> Check {
-        let g = self.in_group();
+    /// root; with fork, on two members from the same seq; with halted, on
+    /// a halted member, which ends the halt.
+    fn change_root(&mut self, fork: bool, halted: bool) -> Check {
+        let g: Vec<usize> = if halted {
+            self.on_members()
+                .into_iter()
+                .filter(|i| self.admitted[*i] && self.members[*i].live.state.halted())
+                .collect()
+        } else {
+            self.in_group()
+        };
         let Some(i) = self.rng.pick(&g) else { return Ok(()) };
         let tip = self.members[i].live.state.chain().len();
         let other = if fork {
@@ -815,8 +922,15 @@ impl World {
         };
         for w in core::iter::once(i).chain(other) {
             let st = self.members[w].live.state.clone();
-            let ds = st.device(&self.members[w].id).unwrap().clone();
-            let device = self.device_of(w, &ds);
+            // A halted state lists no devices: the member is named anew.
+            let device = match st.device(&self.members[w].id) {
+                Some(ds) => self.device_of(w, &ds.clone()),
+                None => {
+                    let mut d = Device::new(self.members[w].key.key.clone(), &format!("m{w}"), ROLE_PHONE);
+                    d.rights = RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS;
+                    d
+                }
+            };
             let mut remove = Vec::new();
             if let Some(rd) = st.root_device
                 && rd != self.members[w].id
@@ -844,6 +958,7 @@ impl World {
             let unapplied = held.iter().any(|(_, id)| !chain.contains(id));
             let written = match set.write_change(&st, &recovery, &new_root, device, &remove, false, now) {
                 Ok(x) => x,
+                Err(e) if halted => return Err(format!("the recovery key could not end the halt on m{w}: {e:?}")),
                 Err(_) if unapplied => {
                     self.note(format!("m{w} refuses a change over a change it does not apply"));
                     continue;
@@ -853,7 +968,7 @@ impl World {
             if let Some((s, _)) = held.iter().find(|(s, _)| *s == written.record.body().seq) {
                 return Err(format!("m{w} wrote a second change at seq {s}, where it holds one"));
             }
-            if unapplied {
+            if unapplied && !halted {
                 return Err(format!("m{w} wrote a change over a change it does not apply"));
             }
             // Any two changes at one seq are a fork, whether written at
@@ -1131,14 +1246,35 @@ impl World {
 
     fn finish(&mut self) -> Check {
         self.quiet()?;
-        let (group, state) = self.settled()?;
+        self.no_twins()?;
+        let (mut group, mut state) = self.settled()?;
         if state.halted() {
+            // Halted, records are still taken: every member holds the
+            // same records and the same state.
+            let first = &self.members[group[0]].live;
             for i in &group {
-                if !self.members[*i].live.state.halted() {
+                let m = &self.members[*i].live;
+                if !m.state.halted() {
                     return Err(format!("m{i} is not halted with the group"));
                 }
+                if m.set.digest() != first.set.digest() || m.state != first.state {
+                    return Err(format!("halted m{i} holds other records or another state than m{}", group[0]));
+                }
             }
-            return Ok(());
+            // Nothing is sealed while halted; a change of root by the
+            // recovery key ends it.
+            for i in group.clone() {
+                if self.copy(i, None).is_some() {
+                    return Err(format!("halted m{i} sealed a copy"));
+                }
+            }
+            self.change_root(false, true)?;
+            self.quiet()?;
+            self.no_twins()?;
+            (group, state) = self.settled()?;
+            if state.halted() {
+                return Err(String::from("the group is still halted after a change of root"));
+            }
         }
         for _ in 0..2 {
             self.last_copy(&group, &state)?;
@@ -1170,6 +1306,12 @@ fn shrink(seed: u64, steps: usize) -> usize {
         if run(seed, mid).is_err() { hi = mid } else { lo = mid }
     }
     hi
+}
+
+/// Root twins (two writers with one key) are made only with SIM_TWINS=1
+/// until the core halts on two histories of the root.
+fn twins_on() -> bool {
+    env("SIM_TWINS") == Some(1)
 }
 
 fn env(name: &str) -> Option<u64> {
@@ -1224,7 +1366,7 @@ fn records_before_their_list_end_as_after() {
     // (`list_missing`) and ends there once it comes again.
     let mut w = (0u64..).map(World::new).find(|w| w.admitted.iter().filter(|a| **a).count() >= 3).unwrap();
     w.quiet().unwrap();
-    w.change_root(false).unwrap();
+    w.change_root(false, false).unwrap();
     let writer = w.members.iter().position(|m| m.live.state.chain().len() == 1).unwrap();
     let mut others = w.in_group().into_iter().filter(|i| *i != writer && w.admitted[*i]);
     let (a, b) = (others.next().unwrap(), others.next().unwrap());
