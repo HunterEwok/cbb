@@ -586,9 +586,10 @@ impl World {
         let Some(j) = self.rng.pick(&others) else { return Ok(()) };
         let Some(kind) = self.own_device(i) else { return Ok(()) };
         let kk = k(&key);
-        let before = self.members[i].live.heads.get(&kk.hash).copied();
         let Some(a) = self.sign(i, &key, kind.clone()) else { return Ok(()) };
-        let (seq, prev) = before.map_or((1, None), |(s, id)| (s + 1, Some(id)));
+        // The twin takes a's seq and prev, as a second device with the
+        // same key would: the core's writer picks the seq, not the sim.
+        let (seq, prev) = (a.body().seq, a.body().prev);
         let body =
             Body { group: self.gid, signer: kk.hash, seq, prev, time_ms: a.body().time_ms + 1, kind, held: false };
         let b = Record::sign(body, &kk).unwrap();
