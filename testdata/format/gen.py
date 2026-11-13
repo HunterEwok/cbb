@@ -449,6 +449,11 @@ def record_vectors():
         note="the admin's records below field 12 count only if listed; this list (lists[1]) is empty")
     lists.append({"name": "the empty list of the second head", "bytes": empty.hex(),
                   "hash": list_hash(empty).hex(), "ids": 0})
+    # bytes that are no list (a map), taken by their hash as any list is:
+    # they read as the empty list (rule 33)
+    not_a_list = enc({1: 1})
+    lists.append({"name": "bytes that are no list: the empty list", "bytes": not_a_list.hex(),
+                  "hash": list_hash(not_a_list).hex(), "ids": 0})
     add("device with an optional field from a later version", ROOT, 1,
         {10: Signer("tv").key, 11: "TV", 12: 1, 13: 0b0011},
         extra={300: "later"},

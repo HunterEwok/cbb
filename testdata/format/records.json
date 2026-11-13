@@ -662,6 +662,12 @@
    "bytes": "80",
    "hash": "9fddba824e538b01b4975cb80b3dfc3e88413dd1fa0f538c43f865b65ca61475",
    "ids": 0
+  },
+  {
+   "name": "bytes that are no list: the empty list",
+   "bytes": "a10101",
+   "hash": "f68efae9a43703f76b0372976c9d9ddaa7d63386d0bfdea745c36aa412505120",
+   "ids": 0
   }
  ]
 }
