@@ -233,6 +233,10 @@ struct World {
     gone: Option<(usize, RecordId, usize)>,
     /// The root wrote a checkpoint with a free keep (SIM_ROOT_DEVIATES).
     deviated: bool,
+    /// An admin's records past its room (small-room seeds): the admin
+    /// member and its key, and the stage: 1 flooded, 2 more records of that
+    /// key and a fresh member after it.
+    flood: Option<(usize, String, u8)>,
     log: Vec<String>,
 }
 
@@ -332,6 +336,7 @@ impl World {
             aside_seen: false,
             gone: None,
             deviated: false,
+            flood: None,
             log: Vec::new(),
         };
         // The root's phone is member 0; it admits a first few.
@@ -399,6 +404,10 @@ impl World {
         let m = &mut self.members[i].live;
         m.heads.insert(kk.hash, (seq, r.id()));
         let _ = m.set.insert(r.clone());
+        // A record its writer's own set does not keep never leaves it.
+        if !m.set.contains(&r.id()) {
+            NOT_KEPT.fetch_add(1, Ordering::Relaxed);
+        }
         self.refresh(i);
         r
     }
@@ -1013,25 +1022,7 @@ impl World {
                     }
                 }
             }
-            22..=23 if self.admins < MAX_ADMINS => {
-                if let Some((by, key)) = self.signer(true)
-                    && let Some(t) = self.target(by, |d| d.admin.is_none() && !d.frozen)
-                {
-                    let name = format!("sim{}/admin{}", self.seed, self.admins);
-                    self.admins += 1;
-                    let ds = self.members[by].live.state.device(&self.members[t].id).unwrap().clone();
-                    let mut d = self.device_of(by, &ds);
-                    let (powers, commands) = AdminKind::Phone.grants();
-                    d.admin = Some(k(&name).key);
-                    d.powers = powers;
-                    d.commands = commands;
-                    self.members[t].live.keys.push(name);
-                    self.save(t);
-                    self.sign(by, &key, Kind::device(d));
-                    self.note(format!("m{by} makes m{t} an admin"));
-                    self.after_save(by)?;
-                }
-            }
+            22..=23 if self.admins < MAX_ADMINS => self.make_admin()?,
             24..=25 => self.checkpoint()?,
             26 if self.changes < MAX_CHANGES => self.change_root(false, false)?,
             27 if self.changes < MAX_CHANGES && self.rng.chance(1, 3) => self.change_root(true, false)?,
@@ -1042,6 +1033,7 @@ impl World {
             // A member away over two or three checkpoints, so that it
             // comes back to a checkpoint that may not be whole for it yet.
             31 if self.small && self.away.is_none() => self.go_away(),
+            43..=50 if self.small => self.flood()?,
             42 if env("SIM_ROOT_LOST") == Some(1) && self.gone.is_none() && self.rng.chance(1, 2) => {
                 self.root_lost()?
             }
@@ -1195,6 +1187,101 @@ impl World {
         units > crate::records::keep::room()
     }
 
+    /// The root makes a device an admin.
+    fn make_admin(&mut self) -> Check {
+        if let Some((by, key)) = self.signer(true)
+            && let Some(t) = self.target(by, |d| d.admin.is_none() && !d.frozen)
+        {
+            let name = format!("sim{}/admin{}", self.seed, self.admins);
+            self.admins += 1;
+            let ds = self.members[by].live.state.device(&self.members[t].id).unwrap().clone();
+            let mut d = self.device_of(by, &ds);
+            let (powers, commands) = AdminKind::Phone.grants();
+            d.admin = Some(k(&name).key);
+            d.powers = powers;
+            d.commands = commands;
+            self.members[t].live.keys.push(name);
+            self.save(t);
+            self.sign(by, &key, Kind::device(d));
+            self.note(format!("m{by} makes m{t} an admin"));
+            self.after_save(by)?;
+        }
+        Ok(())
+    }
+
+    /// The shape of a cut: an admin's own device signs past its room, so
+    /// that its own set turns some of them away and nobody else ever gets
+    /// them; later the same key signs again (checkpoints may come between)
+    /// and a fresh member joins when one is left; quiet compares them all.
+    fn flood(&mut self) -> Check {
+        match self.flood.clone() {
+            None => {
+                let admins: Vec<(usize, String)> =
+                    self.in_group().into_iter().filter_map(|i| self.admin_key(i).map(|n| (i, n))).collect();
+                if admins.is_empty() {
+                    // The shape needs an admin: the root makes one first.
+                    if self.admins < MAX_ADMINS {
+                        self.make_admin()?;
+                    }
+                    return Ok(());
+                }
+                let (by, key) = admins[self.rng.below(admins.len())].clone();
+                let n = self.rng.range(6, 9);
+                let signed = self.resign(by, &key, n as usize);
+                if signed > 0 {
+                    self.note(format!("m{by} signs {signed} records with its admin key, past its room"));
+                    self.flood = Some((by, key, 1));
+                    self.after_save(by)?;
+                }
+            }
+            Some((by, key, 1)) => {
+                if !self.members[by].on {
+                    return Ok(());
+                }
+                if self.admin_key(by).as_deref() != Some(key.as_str()) {
+                    self.flood = None;
+                    return Ok(());
+                }
+                let n = self.rng.range(2, 3);
+                let signed = self.resign(by, &key, n as usize);
+                if signed == 0 {
+                    return Ok(());
+                }
+                self.flood = Some((by, key, 2));
+                CUT_SHAPE.fetch_add(1, Ordering::Relaxed);
+                // A fresh member, when one is left, gets it all at once.
+                let free: Vec<usize> = (0..self.members.len()).filter(|t| !self.admitted[*t]).collect();
+                if let Some(t) = self.rng.pick(&free)
+                    && let Some((root, rk)) = self.signer(true)
+                {
+                    self.admit_by(root, &rk, t);
+                    self.note(format!("m{by} signs {signed} more with its admin key; m{root} admits m{t} fresh"));
+                    self.after_save(root)?;
+                } else {
+                    self.note(format!("m{by} signs {signed} more with its admin key"));
+                }
+                self.after_save(by)?;
+            }
+            Some(_) => {}
+        }
+        Ok(())
+    }
+
+    /// Member by signs n device records again, unchanged, with key: the
+    /// devices it may edit (not itself, not the root's, not an admin's).
+    /// Returns how many it signed: past the room the set drops some.
+    fn resign(&mut self, by: usize, key: &str, n: usize) -> usize {
+        let mut took = 0;
+        for _ in 0..n {
+            let Some(t) = self.target(by, |d| d.admin.is_none() && !d.frozen) else { break };
+            let Some(ds) = self.members[by].live.state.device(&self.members[t].id).cloned() else { break };
+            let d = self.device_of(by, &ds);
+            self.sign(by, key, Kind::device(d));
+            took += 1;
+        }
+        took
+    }
+
     /// An admitted member goes off until the root has checkpointed two or
     /// three times.
     fn go_away(&mut self) {
@@ -1208,7 +1295,7 @@ impl World {
             return;
         }
         let Some(i) = self.rng.pick(&on) else { return };
-        let left = self.rng.range(2, 4) as u32;
+        let left = self.rng.range(2, 3) as u32;
         self.crash(i);
         // Back on its own only if the checkpoints never come.
         self.members[i].back_at = Some(self.step + 400);
@@ -1759,8 +1846,20 @@ static CAME_BACK: AtomicUsize = AtomicUsize::new(0);
 static ASIDE_SEEN: AtomicUsize = AtomicUsize::new(0);
 static EVIDENCE_LOST: AtomicUsize = AtomicUsize::new(0);
 static ROOT_POWER: AtomicUsize = AtomicUsize::new(0);
-const COUNTERS: [&AtomicUsize; 8] =
-    [&FORKS_TWICE, &FORKS_SPLIT, &ASIDE_RUNS, &SMALL_RUNS, &CAME_BACK, &ASIDE_SEEN, &EVIDENCE_LOST, &ROOT_POWER];
+static CUT_SHAPE: AtomicUsize = AtomicUsize::new(0);
+static NOT_KEPT: AtomicUsize = AtomicUsize::new(0);
+const COUNTERS: [&AtomicUsize; 10] = [
+    &NOT_KEPT,
+    &FORKS_TWICE,
+    &FORKS_SPLIT,
+    &ASIDE_RUNS,
+    &SMALL_RUNS,
+    &CAME_BACK,
+    &ASIDE_SEEN,
+    &EVIDENCE_LOST,
+    &ROOT_POWER,
+    &CUT_SHAPE,
+];
 
 /// Root twins (two writers with one key) are made unless SIM_TWINS=0.
 /// Every SIM_SMALL-th seed (4 by default, 0 for none) runs with small
@@ -1809,10 +1908,10 @@ fn groups_under_faults_agree() {
         if let Err(e) = run(seed, steps) {
             let counted = COUNTERS.map(|c| c.load(Ordering::Relaxed));
             let small = shrink(seed, steps);
+            let e = run(seed, small).err().unwrap_or(e);
             for (c, v) in COUNTERS.into_iter().zip(counted) {
                 c.store(v, Ordering::Relaxed);
             }
-            let e = run(seed, small).err().unwrap_or(e);
             failed.push(format!(
                 "sim seed {seed} failed: {e}\nreplay: SIM_SEED={seed} SIM_STEPS={small} cargo test -p cbb-core --lib sim::"
             ));
@@ -1822,7 +1921,7 @@ fn groups_under_faults_agree() {
         }
     }
     std::eprintln!(
-        "sim: {n} seeds; recovery forks: {} by the key used twice, {} by a split network; {} settled with records aside; {} with small rooms, {} members back after the checkpoints they were away for, {} runs kept a record aside on the way; {} runs where a root's twin lived only on removed devices; {} runs where a deviating root's checkpoint left nobody in",
+        "sim: {n} seeds; recovery forks: {} by the key used twice, {} by a split network; {} settled with records aside; {} with small rooms, {} members back after the checkpoints they were away for, {} runs kept a record aside on the way; {} runs where a root's twin lived only on removed devices; {} runs where a deviating root's checkpoint left nobody in; {} runs where an admin signed past its own room and later again beside a fresh member; {} records their writer's own set did not keep",
         FORKS_TWICE.load(Ordering::Relaxed),
         FORKS_SPLIT.load(Ordering::Relaxed),
         ASIDE_RUNS.load(Ordering::Relaxed),
@@ -1830,7 +1929,9 @@ fn groups_under_faults_agree() {
         CAME_BACK.load(Ordering::Relaxed),
         ASIDE_SEEN.load(Ordering::Relaxed),
         EVIDENCE_LOST.load(Ordering::Relaxed),
-        ROOT_POWER.load(Ordering::Relaxed)
+        ROOT_POWER.load(Ordering::Relaxed),
+        CUT_SHAPE.load(Ordering::Relaxed),
+        NOT_KEPT.load(Ordering::Relaxed)
     );
     assert!(failed.is_empty(), "{}", failed.join("\n\n"));
 }
