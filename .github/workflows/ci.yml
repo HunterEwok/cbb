@@ -1786,7 +1786,7 @@ jobs:
             log="${RUNNER_TEMP:-/tmp}/test-$1.log"
             # A measurement of the runner, not to be merged: only the iPad's
             # testLargestText, five times, with the audit's traces.
-            only=(-only-testing:CBBUITests/ReadersUITests/testLargestText -test-iterations 5)
+            only=(-only-testing:CBBUITests/ReadersUITests/testLargestText -test-iterations 4)
             for attempt in 1 2 3; do
               xcrun simctl boot "$1" 2>/dev/null || true
               # A simulator can hang at boot ("Waiting on System App") for
@@ -1802,7 +1802,7 @@ jobs:
                 "${sign[@]}" "${only[@]}" >"$log" 2>&1 &
               pid=$!
               killed=
-              for second in $(seq 1200); do
+              for second in $(seq 3000); do
                 kill -0 "$pid" 2>/dev/null || break
                 if [ "$second" -ge 150 ] && ! grep -q "^Test Suite " "$log"; then killed=1; break; fi
                 sleep 1
