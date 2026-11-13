@@ -2355,10 +2355,11 @@ jobs:
           printf '#include <ifaddrs.h>\n#include <stdio.h>\nint main(void){struct ifaddrs *a; if (getifaddrs(&a)) return 1; for (struct ifaddrs *p = a; p; p = p->ifa_next) puts(p->ifa_name); return 0;}\n' >"$RUNNER_TEMP/ifaddrs.c"
           python3 -m ziglang cc -target mips-linux-musleabi -msoft-float -static -o "$RUNNER_TEMP/ifaddrs" "$RUNNER_TEMP/ifaddrs.c"
           timeout 60 "$RUNNER_TEMP/qemu/bin/qemu-mips" "$RUNNER_TEMP/ifaddrs"
-      - name: build for mips and mipsel
+      # For the service's tests: their hooks (testhooks) steer the MIPS cbb too.
+      - name: build for mips and mipsel, for tests (testhooks)
         run: |
-          sh member/packaging/mips.sh mips
-          sh member/packaging/mips.sh mipsel
+          sh member/packaging/mips.sh mips testhooks
+          sh member/packaging/mips.sh mipsel testhooks
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
