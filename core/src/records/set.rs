@@ -1369,13 +1369,17 @@ impl RecordSet {
         for (root, cps) in by_root.iter_mut() {
             // Newest first; of two at one seq the smaller ID.
             cps.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
-            let counts = |id: &RecordId| self.held(id).is_some_and(|r| self.may_count_with(r, false));
-            let at = cps.iter().position(|(_, id)| counts(id));
+            // While the current root has two histories nothing at or above
+            // the fork seq counts (as in the evaluation).
+            let fork = if *root == current { self.fork_seq(root) } else { None };
+            let counts = |seq: u64, id: &RecordId| {
+                fork.is_none_or(|f| seq < f) && self.held(id).is_some_and(|r| self.may_count_with(r, false))
+            };
+            let at = cps.iter().position(|(seq, id)| counts(*seq, id));
             if let Some(e) = at.and_then(|i| cps.get(i)).and_then(|(_, id)| self.held(id)) {
                 first.extend(eval::named_first(e, |id| self.records.contains_key(id)));
             }
             if *root == current && self.halted.is_none() {
-                let fork = self.fork_seq(root);
                 let end = at.unwrap_or(cps.len());
                 // One whose named records already fail the rooms on their
                 // own never counts: it is an ordinary record and waits for
@@ -2329,12 +2333,35 @@ impl RecordSet {
             })
             .flatten()
             .collect();
+        // And what the counting checkpoint names that the set lacks; while
+        // the current root has two histories, what its checkpoints below
+        // the fork seq name: one that pruned before its twin came (the
+        // pair stops the group and nothing at or above it prunes) dropped
+        // records a peer may still hold.
+        let names = |r: &Record| -> Vec<RecordId> {
+            match &r.body().kind {
+                Kind::Checkpoint { heads, keep } => {
+                    heads.iter().map(|h| h.id).chain(keep.iter().copied()).chain(r.body().prev).collect()
+                }
+                _ => Vec::new(),
+            }
+        };
+        let counting: Vec<RecordId> = match (state.root_pair, state.roots.last()) {
+            (Some((fork, _, _)), Some(cur)) => self
+                .records
+                .values()
+                .filter(|e| e.record.body().signer == *cur && e.record.body().seq < fork)
+                .flat_map(|e| names(&e.record))
+                .collect(),
+            _ => state.checkpoint.and_then(|id| self.get(&id)).map(names).unwrap_or_default(),
+        };
         let want: BTreeSet<RecordId> = state
             .cut
             .iter()
             .flat_map(|c| c.keep.iter())
             .chain(state.first_missing.iter())
             .chain(named.iter())
+            .chain(counting.iter())
             .chain(self.halves.values().map(|(_, _, o)| o))
             .filter(|id| !self.contains(id))
             .copied()
@@ -2353,7 +2380,19 @@ impl RecordSet {
         // in every round without staying is told once, with its reason
         // (`stuck_checkpoints`): one nobody offered, or only records the
         // place aside had no room for.
-        for cp in &above {
+        let below: Vec<RecordId> = match (state.root_pair, state.roots.last()) {
+            (Some((fork, _, _)), Some(cur)) => self
+                .records
+                .values()
+                .filter(|e| {
+                    let b = e.record.body();
+                    b.signer == *cur && b.seq < fork && matches!(b.kind, Kind::Checkpoint { .. })
+                })
+                .map(|e| e.record.id())
+                .collect(),
+            _ => state.checkpoint.into_iter().collect(),
+        };
+        for cp in above.iter().chain(below.iter()) {
             let Some(Kind::Checkpoint { keep, .. }) = self.get(cp).map(|r| &r.body().kind) else { continue };
             let mut given_up = keep.iter().filter(|id| self.asked.get(*id).is_some_and(|n| *n >= MISSING_ROUNDS));
             let Some(first) = given_up.next() else { continue };
@@ -2372,12 +2411,22 @@ impl RecordSet {
     }
 
     /// The current root's checkpoints still not whole after their records
-    /// were asked for in MISSING_ROUNDS rounds, each with its reason
+    /// were asked for in MISSING_ROUNDS rounds (the counting one too, which
+    /// a twin of a newer one brought back after that one pruned), each with its reason
     /// ([`Stuck`]), for the app to tell. Local, once per checkpoint; what
     /// counts does not change.
     pub fn stuck_checkpoints(&self) -> Vec<(RecordId, Stuck)> {
-        let (_, above) = self.line();
-        self.stuck.iter().filter(|(cp, _)| above.contains(cp)).map(|(cp, (_, why))| (*cp, *why)).collect()
+        let (first, above) = self.line();
+        let st = self.state();
+        let below = |cp: &RecordId| match (st.root_pair, st.roots.last(), self.held(cp)) {
+            (Some((fork, _, _)), Some(cur), Some(r)) => r.body().signer == *cur && r.body().seq < fork,
+            _ => false,
+        };
+        self.stuck
+            .iter()
+            .filter(|(cp, _)| above.contains(cp) || first.contains(cp) || below(cp))
+            .map(|(cp, (_, why))| (*cp, *why))
+            .collect()
     }
 
     /// The record id for peer, asked by its ID: only one `for_peer` would
