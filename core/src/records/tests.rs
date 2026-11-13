@@ -2988,6 +2988,7 @@ fn members_agree(g: &G) -> State {
     s
 }
 
+mod insert_cost;
 mod recovery;
 mod traces;
 
