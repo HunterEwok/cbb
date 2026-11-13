@@ -19,7 +19,7 @@ import (
 	"strings"
 )
 
-// The bench's release feed (docs/testbench-catalogue.md, section 0.1,
+// The bench's release feed (docs/maintainers/testbench-catalogue.md, section 0.1,
 // "feed"): releases of the build under test, in the format of the real one
 // (docs/protocol.md, section 16), signed by tools/release-sign with the
 // bench's own throwaway keys in files, never the project's. Each release is

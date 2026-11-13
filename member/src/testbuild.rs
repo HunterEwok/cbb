@@ -7,7 +7,7 @@
 //! read through [`env`] and [`env_os`], and a few shorter waits) and the
 //! fuzzing build (`fuzzing`). A build without them reads no hook.
 //!
-//! Three guards keep them out of a release (docs/maintaining.md, "Test
+//! Three guards keep them out of a release (docs/maintainers/maintaining.md, "Test
 //! builds"): such a build does not compile when CBB_RELEASE_BUILD is set, as
 //! the release workflow sets it; `cbb version` names it; and its binary
 //! carries [`MARKER`], which the release workflow looks for in every

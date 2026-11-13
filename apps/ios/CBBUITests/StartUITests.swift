@@ -3,7 +3,7 @@
 import XCTest
 
 /// The app's screens before a group, driven as a person would
-/// (docs/testbench-catalogue.md, A9, A14, A15, U12): the Start screen,
+/// (docs/maintainers/testbench-catalogue.md, A9, A14, A15, U12): the Start screen,
 /// Settings before a group with the colours and
 /// themes kept across a launch, the error details switch behind seven taps
 /// on the version, and Russian. A group needs the Secure Enclave and a

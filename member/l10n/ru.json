@@ -4,7 +4,7 @@
  "On a phone of the group, tap + in the CBB app, then Scan a code, and scan this:": "На телефоне группы нажмите + в приложении CBB, затем «Сканировать код» и отсканируйте это:",
  "Or paste this into the app: {}": "Или вставьте это в приложение: {}",
  "Waiting up to 5 minutes. Press Ctrl+C to cancel.": "Ожидание до 5 минут. Ctrl+C отменяет.",
- "Without a phone: run cbb pair on a full member and cbb pair -code <its address> here.": "Без телефона: запустите cbb pair на полном участнике, а здесь cbb pair -code <его адрес>.",
+ "Without a phone: run cbb pair on the group's root or an admin and cbb pair -code <its address> here.": "Без телефона: запустите cbb pair на корне группы или администраторе, а здесь cbb pair -code <его адрес>.",
  "Joined the group {} as {}.": "Вошли в группу {} как {}.",
  "is it running ({} status cbb)?": "она запущена ({} status cbb)?",
  "is it running (start it with cbb service)?": "она запущена (запустите её через cbb service)?",

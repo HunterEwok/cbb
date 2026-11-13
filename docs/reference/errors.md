@@ -14,14 +14,13 @@ and the log always has them. What to do about the common messages is in
 |---|---|---|---|
 | `cbb` on a computer | in a development build (`cbb version` says `dev`) | `CBB_DEBUG=1` shows them, `CBB_DEBUG=0` hides them: `CBB_DEBUG=1 cbb status`, on Windows `$env:CBB_DEBUG = "1"` first | the service's log ([where](devices.md#files-and-logs)) |
 | The service | | `CBB_DEBUG=1` in its environment also logs WireGuard's own messages | its log |
-| The lite member | in a debug build | `-debug` before the command, or `CBB_DEBUG=1`; `CBB_DEBUG=0` hides them | its log, `journalctl -u cbb` (on OpenWrt `logread -e cbb`) |
 | The iPhone and Android apps | in a debug build | Settings: seven taps on the version show the switch "Show error details"; the launch argument `ShowErrorDetails` sets it too | the app's log |
 | The watch apps | as their phone | follow the phone's switch | the phone app's log |
 | The Mac app | in a debug build | "Error details" in Settings; it passes `CBB_DEBUG=1` to the `cbb` commands it runs | the service's log |
 | The tray app for Linux and Windows | in a development build | "Error details" in Settings, else `CBB_DEBUG` as for `cbb` | its standard error |
 | The installers (`install.sh`, `uninstall.sh`, `get.sh`) | | `CBB_ERROR_DETAILS=1` shows every command as it runs; without it a failure names its exit status | |
 | The Windows installers (`get.ps1`, `install.ps1`, `uninstall.ps1`) | | `-Details` or `CBB_ERROR_DETAILS=1` adds the full error record | |
-| `.cbb` on the ZX Spectrum Next | | `.cbb -d` | the lite member's log on its Pi |
+| `.cbb` on the ZX Spectrum Next | | `.cbb -d` | the log of `cbb` on its Pi |
 
 The variables are in [settings and environment variables](config.md).
 

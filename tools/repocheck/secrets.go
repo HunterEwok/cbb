@@ -22,7 +22,7 @@ var (
 // checkReleaseSecrets checks that every job of the release workflows that
 // reads a secret (other than GITHUB_TOKEN, which GitHub gives each run)
 // runs in the deployment environment release, whose protection rules
-// guard those secrets (docs/maintaining.md, "Release secrets").
+// guard those secrets (docs/maintainers/maintaining.md, "Release secrets").
 func checkReleaseSecrets(files map[string][]byte) []string {
 	var problems []string
 	for _, name := range releaseWorkflows {

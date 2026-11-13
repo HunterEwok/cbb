@@ -19,7 +19,7 @@ Include, if you can:
 - the affected component (the service on Linux, macOS, Windows, FreeBSD or OpenWrt, the
   desktop connector, the clipboard agents, remote paste, quick actions, sync away from home,
   the forwarder or the relay, `cbb update`, the iPhone, Android, watch, Mac or tray app, or
-  the lite member) and the version or commit;
+  `cbb` on a small device) and the version or commit;
 - the steps to reproduce;
 - the impact: what an attacker can read, change or run.
 

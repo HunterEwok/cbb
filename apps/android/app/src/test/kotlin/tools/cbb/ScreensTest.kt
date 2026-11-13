@@ -30,7 +30,7 @@ import org.robolectric.annotation.ConscryptMode
 
 /**
  * The app's screens before a group, driven as a person would on Robolectric
- * (docs/testbench-catalogue.md, A2, A9, A14, A15, U12): the Start screen,
+ * (docs/maintainers/testbench-catalogue.md, A2, A9, A14, A15, U12): the Start screen,
  * Settings with the colours and themes kept in the settings, the error
  * details switch behind seven taps on the version, and Russian. A group needs
  * the Keystore and a computer, which the bench's devices give. The screens

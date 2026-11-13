@@ -301,3 +301,27 @@ func TestCheckGoneName(t *testing.T) {
 		}
 	}
 }
+
+// TestCheckGoneWord finds a lite or full member in the pages and the
+// website's texts, but not in the history or the code.
+func TestCheckGoneWord(t *testing.T) {
+	for _, c := range []struct {
+		file, content string
+		want          int
+	}{
+		{"docs/guide/a.md", "A lite member joins the same way.\n", 1},
+		{"README.md", "on a Full member and\n", 1},
+		{"docs/a.md", "the lite-device list\n", 1},
+		{"site/l10n/ru.json", "  \"Lite member\": \"x\",\n", 1},
+		{"member/l10n/es.json", "  \"run cbb pair on a full member\": \"x\",\n", 1},
+		{"CHANGELOG.md", "The lite member syncs.\n", 0},
+		{"docs/decisions.md", "| D-1 | the lite member |\n", 0},
+		{"member/src/a.rs", "// as a full member does\n", 0},
+		{"docs/a.md", "a small device, the full memberships\n", 0},
+	} {
+		got := checkGoneWord(c.file, []byte(c.content))
+		if len(got) != c.want {
+			t.Errorf("checkGoneWord(%q, %q) = %q, want %d problems", c.file, c.content, got, c.want)
+		}
+	}
+}

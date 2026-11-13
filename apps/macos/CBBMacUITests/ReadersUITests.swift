@@ -4,7 +4,7 @@ import AppKit
 import XCTest
 
 /// The Mac app's window in each of the project's eight languages and for
-/// every reader (docs/testbench-catalogue.md, A9, U14; docs/testing.md, "The
+/// every reader (docs/maintainers/testbench-catalogue.md, A9, U14; docs/testing.md, "The
 /// apps' languages, accessibility and screenshots"), with no service
 /// answering (CBB_SOCKET), as MacUITests runs it: the notice translated and
 /// Xcode's accessibility audit (element descriptions; macOS audits no

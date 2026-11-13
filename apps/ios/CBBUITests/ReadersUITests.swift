@@ -3,7 +3,7 @@
 import XCTest
 
 /// The app in each of the project's eight languages and for every reader
-/// (docs/testbench-catalogue.md, A9, U14, U16; docs/testing.md, "The apps'
+/// (docs/maintainers/testbench-catalogue.md, A9, U14, U16; docs/testing.md, "The apps'
 /// languages, accessibility and screenshots"): the Start screen and Settings
 /// translated, Arabic and Hebrew laid out from right to left, and Xcode's
 /// accessibility audit (clipped text, element descriptions, touch targets,

@@ -14,7 +14,7 @@ import (
 )
 
 // Inventory is the bench's description of its devices
-// (docs/testbench.md, section 13).
+// (docs/maintainers/testbench.md, section 13).
 type Inventory struct {
 	Controller string             `toml:"controller"`
 	Device     map[string]*Device `toml:"device"`

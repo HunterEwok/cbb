@@ -5,7 +5,7 @@
 # Runs a second member on a Linux host in a network namespace of its own, so
 # that its traffic takes another way out than the host's own member: through
 # a SOCKS5 proxy, such as a VPN client's local inbound (a device with
-# os = "netns" in the inventory; docs/testbench.md). Run it as root, or as a
+# os = "netns" in the inventory; docs/maintainers/testbench.md). Run it as root, or as a
 # user with sudo for it:
 #
 #   sh setup-netns.sh setup NAME SOCKS TUN2SOCKS  # once: the namespace, its way out, the units

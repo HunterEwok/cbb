@@ -4,7 +4,7 @@
  "On a phone of the group, tap + in the CBB app, then Scan a code, and scan this:": "Kwenye simu ya kikundi, gusa + katika programu ya CBB, kisha Changanua msimbo, na uchanganue huu:",
  "Or paste this into the app: {}": "Au bandika hiki kwenye programu: {}",
  "Waiting up to 5 minutes. Press Ctrl+C to cancel.": "Inasubiri hadi dakika 5. Bonyeza Ctrl+C kughairi.",
- "Without a phone: run cbb pair on a full member and cbb pair -code <its address> here.": "Bila simu: endesha cbb pair kwenye mwanachama kamili na cbb pair -code <anwani yake> hapa.",
+ "Without a phone: run cbb pair on the group's root or an admin and cbb pair -code <its address> here.": "Bila simu: endesha cbb pair kwenye mzizi wa kikundi au msimamizi na cbb pair -code <anwani yake> hapa.",
  "Joined the group {} as {}.": "Umejiunga na kikundi {} kama {}.",
  "is it running ({} status cbb)?": "je, inaendeshwa ({} status cbb)?",
  "is it running (start it with cbb service)?": "je, inaendeshwa (ianzishe kwa cbb service)?",

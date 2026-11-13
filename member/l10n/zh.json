@@ -4,7 +4,7 @@
  "On a phone of the group, tap + in the CBB app, then Scan a code, and scan this:": "在群组中的一部手机上，打开 CBB 应用点按 +，再点按“扫描代码”，扫描下面的码：",
  "Or paste this into the app: {}": "或把这段内容粘贴到应用中：{}",
  "Waiting up to 5 minutes. Press Ctrl+C to cancel.": "最多等待 5 分钟。按 Ctrl+C 取消。",
- "Without a phone: run cbb pair on a full member and cbb pair -code <its address> here.": "没有手机时：在完整成员上运行 cbb pair，在这里运行 cbb pair -code <它的地址>。",
+ "Without a phone: run cbb pair on the group's root or an admin and cbb pair -code <its address> here.": "没有手机时：在群组的根或管理员上运行 cbb pair，在这里运行 cbb pair -code <它的地址>。",
  "Joined the group {} as {}.": "已加入群组 {}，身份为 {}。",
  "is it running ({} status cbb)?": "它在运行吗（{} status cbb）？",
  "is it running (start it with cbb service)?": "它在运行吗（用 cbb service 启动）？",

@@ -2,7 +2,7 @@
 # Builds the Aurora app's RPMs from the branch it is run on and signs them with
 # the developer certificate, for a phone: run by hand ("Run workflow"), it
 # waits for the maintainer's approval in the environment aurora, which alone
-# holds the certificate's key (docs/maintaining.md, "Signing for Aurora OS").
+# holds the certificate's key (docs/maintainers/maintaining.md, "Signing for Aurora OS").
 # CI builds the same RPMs unsigned on every pull request.
 name: aurora
 

@@ -349,7 +349,7 @@ func TestReset(t *testing.T) {
 }
 
 func TestCatalogue(t *testing.T) {
-	cases, funcs, err := loadCatalogue(filepath.Join("..", "..", "docs"))
+	cases, funcs, err := loadCatalogue(filepath.Join("..", "..", "docs", "maintainers"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -365,7 +365,7 @@ func TestCatalogue(t *testing.T) {
 		{"testbench-catalogue.md", `^\| [A-Z][0-9]+ \|`, len(cases)},
 		{"testbench-functions.md", `^\| [A-Z]\.[0-9]+ \|`, len(funcs)},
 	} {
-		b, err := os.ReadFile(filepath.Join("..", "..", "docs", f.name))
+		b, err := os.ReadFile(filepath.Join("..", "..", "docs", "maintainers", f.name))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -375,7 +375,7 @@ func TestCatalogue(t *testing.T) {
 		}
 	}
 	var out strings.Builder
-	if err := Coverage(&out, filepath.Join("..", "..", "docs")); err != nil || !strings.Contains(out.String(), "functions with a case") {
+	if err := Coverage(&out, filepath.Join("..", "..", "docs", "maintainers")); err != nil || !strings.Contains(out.String(), "functions with a case") {
 		t.Fatalf("Coverage: %v\n%s", err, out.String())
 	}
 }

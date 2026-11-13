@@ -1,8 +1,8 @@
 # Copy Beyond Borders for the ZX Spectrum Next
 
 `.cbb` is a dot command for NextZXOS. It copies text to the Copy Beyond Borders group, pastes
-the group's latest text, and joins the group, all through the lite member on the Raspberry Pi
-inside the Accelerated Next. The Pi is a full lite member of the group (TLS 1.3, the same
+the group's latest text, and joins the group, all through `cbb` on the Raspberry Pi
+inside the Accelerated Next. The Pi is a member of the group like any other (TLS 1.3, the same
 certificates as every other device). The Next talks to it only over the UART between the
 two, which never leaves the case (docs/roadmap.md, item 14). The frames on that UART are
 described in [member/README.md](../../member/README.md#zx-spectrum-next).
@@ -72,7 +72,7 @@ fast. Not yet run on a real Next.
 SPACE stops a command that waits, such as `pair` while the phone has not scanned yet.
 
 Texts use the Spectrum character set: printable ASCII, the pound sign and the copyright
-sign. The lite member on the Pi converts them; every other character arrives as `?`. Cyrillic
+sign. `cbb` on the Pi converts them; every other character arrives as `?`. Cyrillic
 comes later.
 
 ## Install
@@ -92,7 +92,7 @@ runs from any folder. Over an earlier installation, `.cbb update` is the way (be
 `.http` waits for it until a reset, and the `CBB` it left half written is what
 `AUTOEXEC.BAS` then runs at power-on: the Next stops with garbage on the screen until a
 whole `CBB` is copied to `C:/DOT` on the card. `install` writes everything else in `/cbb`: it fetches the rest from
-cbb.tools (`CBB.OVL`, `CBB.DRV` and the lite member for the Pi), then copies the Pi's `cbb` over the
+cbb.tools (`CBB.OVL`, `CBB.DRV` and `cbb` for the Pi), then copies the Pi's `cbb` over the
 UART to `/NextPi/nextpi`, where it writes a start script `cbb` that keeps the member's state
 in `/NextPi/nextpi/cbb-state` (NextPi's root is read-only). Nothing else on the card or the Pi
 changes; the Pi's copy is removed from the card once the Pi has it.
@@ -178,7 +178,7 @@ Not yet run on a real Next.
 ## Set up the Pi
 
 1. Make sure NextPi answers: `.pisend -q`.
-2. Put the lite member's binary `cbb` for the Pi Zero on the Pi: `.cbb install` (above), or
+2. Put the binary `cbb` for the Pi Zero on the Pi: `.cbb install` (above), or
    by hand from `cbb-linux-armv6.tar.gz` of a release, for example with `.piput`,
    in `/NextPi/nextpi`, which is on the shell's `PATH`.
 3. Give the Pi a network: the Zero W's own Wi-Fi, which NextPi turns off, or the Next's
@@ -231,7 +231,7 @@ runs from the next start. Before the first such update, copy the bridge to the c
 
 ## The driver: the network in the background
 
-`CBB.DRV` (`drv/`) is a NextZXOS driver that gives the lite member on the Pi a network
+`CBB.DRV` (`drv/`) is a NextZXOS driver that gives `cbb` on the Pi a network
 through the ESP8266 while any program runs (docs/roadmap.md, "The Next's network in the
 background"). Its 512 bytes (`stub.asm`) page its 8K bank in at $E000 on every frame's
 interrupt and for its API, and put back the bank they found; the bank (`bank.asm`) does
@@ -279,7 +279,7 @@ tools do, and run:
 .cbb net on
 ```
 
-It finds a computer of the group each time, as the lite members on a network of their own
+It finds a computer of the group each time, as the members on a network of their own
 do with mDNS: the question for `_cbb._tcp.local` goes from the ESP's UDP port 5354, which the
 members answer to that port alone (a legacy unicast query, RFC 6762 section 6.7), and the first
 computer to answer (not a member that only listens nor a phone, TXT `r=listen` or `r=phone`) is the one the
@@ -294,12 +294,12 @@ do not reach the Pi. After a reset or a power cycle, which drop installed driver
 `.install` does through the driver API (M_DRVAPI with driver 0, and IDE_BANK for the 8K
 bank); `.install /cbb/CBB.DRV` still works too. It types `cbb next link` with these settings at NextPi's shell and turns the driver on; it
 keeps the settings in `/cbb/NET.CFG`, so the next time `.cbb net on` is enough. `-to` is a
-member at home, `-serve` the ESP's port for the phones and the lite member's own,
+member at home, `-serve` the ESP's port for the phones and `cbb`'s own,
 `-zone` the Next's clock's offset from UTC (member/README.md, "The network through the Next's
 ESP8266"). While the network runs, the ESP's UART is at 19200 (`AT+UART_CUR`, not kept in its
 flash): the driver hands the Pi 2400 of its bytes a second, and the ESP has no flow control, so
 at its stock 115200 a burst would overflow the Next's 512-byte buffer; `.cbb net off` puts it
-back at 115200. The lite member (`cbb service -peer 127.0.0.1:8769`) has to run on the Pi as well.
+back at 115200. `cbb` (`cbb service -peer 127.0.0.1:8769`) has to run on the Pi as well.
 While the network runs, the Pi's line is the driver's: `.cbb paste`, `copy` and `text` go
 through the driver (calls 7 and 8), and the link on the Pi runs their `cbb next paste` or
 `copy` as NextPi's shell would, so the network goes on. With an older driver, which has no
@@ -329,7 +329,7 @@ at its `lib/config`):
 ```sh
 make PI_CBB=cbb   # build/CBB (to C:/DOT), build/CBB.OVL (to /cbb), build/PIBRIDGE and
                   # build/CBB.DRV;
-                  # cbb is the Pi's lite member, which CBB installs (pins.sh)
+                  # cbb is the Pi's member, which CBB installs (pins.sh)
 make PI_CBB=cbb SITE_DIR=/zxn/
                   # a test build, which installs and updates from cbb.tools/zxn/
                   # (packaging/zxnext/site.sh lays out its files; rename zxnext/)

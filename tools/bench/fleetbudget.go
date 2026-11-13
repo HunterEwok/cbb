@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// A device class's budget (E12, docs/testbench.md "Budgets"): the
+// A device class's budget (E12, docs/maintainers/testbench.md "Budgets"): the
 // container's cap, which stands in for the device's memory and CPU, and
 // the most the small device may use there. A run records each number as a
 // metric too, so that -baseline also catches a slow drift under the

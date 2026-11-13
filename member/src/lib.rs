@@ -591,7 +591,9 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
                 println!("\n{}", tr!("Waiting up to 5 minutes. Press Ctrl+C to cancel."));
                 println!(
                     "{}",
-                    tr!("Without a phone: run cbb pair on a full member and cbb pair -code <its address> here.")
+                    tr!(
+                        "Without a phone: run cbb pair on the group's root or an admin and cbb pair -code <its address> here."
+                    )
                 );
                 std::io::stdout().flush().ok();
             };

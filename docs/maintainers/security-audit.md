@@ -9,8 +9,8 @@ It is a plan, the scope and the method, not a report: the audits that follow it 
 findings private until they are fixed, and the fixes reach CHANGELOG.md like any change.
 
 Read it together with [the hardware test bench](testbench.md), whose section 9 lists the
-security tests this audit carries out, and with [the protocol](protocol.md) and
-[the design](design.md), which this audit measures against.
+security tests this audit carries out, and with [the protocol](../protocol.md) and
+[the design](../design.md), which this audit measures against.
 
 ## 1. Authorization and framing
 
@@ -53,12 +53,12 @@ To keep the result honest, the audit observes these rules:
 | `controller` | the bench's controller on the home network | also the audit box (attacker's machine) |
 | `desktop` | a Linux member with a desktop, the hub | home network or the away network |
 | `win` | Windows member | in a VM |
-| `lite` | the lite member | a second subnet |
+| `lite` | `cbb` without its helper on a small device | a second subnet |
 | `mac` | macOS member | home network |
 | `cbb.tools` | the project's production forwarder | **touch only `cbb`/`cbb forward`; never change `ufw` or any other service** |
 | `remote` | a server away from home, also running other services | **touch only `cbb`; never change `ufw` or any other service** |
 
-The bench's inventory (docs/testbench.md, section 13) maps each role to a real device.
+The bench's inventory (docs/maintainers/testbench.md, section 13) maps each role to a real device.
 
 Everything reachable on these targets may be probed. On the two VPSes the audit interacts
 only with CBB's own processes and ports; it does not stop, reconfigure or firewall
@@ -111,7 +111,7 @@ From the audit box, which is in no group, attempt to join or to be answered as a
 - dial a member's port and present no certificate, a self-signed certificate, and a
   certificate from a different (foreign) CA;
 - replay a connection captured earlier on the LAN;
-- run `cbb pair -code` (on a full and on a lite member) with a wrong code, an expired code, and a code
+- run `cbb pair -code` (on a computer and on a small device) with a wrong code, an expired code, and a code
   reused after it was already spent;
 - offer a forged hello and a record signed by a key that is not in the group.
 

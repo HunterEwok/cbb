@@ -1,29 +1,29 @@
-# The lite member
+# `cbb` on small devices
 
-The lite member is a small Copy Beyond Borders member in Rust for weak Linux devices: a
-Raspberry Pi, a router, a small board. Its command is `cbb`, as on a full member, with the
-same paths and service (`cbb version` says which one a device runs). It speaks the member
-protocol of [docs/protocol.md](../docs/protocol.md), but unlike a full member it
+`cbb`, the program every computer runs, also runs on weak Linux devices: a Raspberry Pi, a
+router, a small board. There it is usually installed without `cbb-helper` beside it, which only
+a desktop's clipboard, keys in a TPM, the Bluetooth keyboard and the TVs' remotes need; the
+commands, paths and service are the same ([commands](../docs/reference/cli.md#without-cbb-helper)).
+It speaks the member protocol of [docs/protocol.md](../docs/protocol.md) like any member and
 
-- never holds CA keys, so it never admits devices;
+- keeps its keys in files, so it is the root or an admin only where the group's level allows
+  keys in files ([keys](../docs/guide/keys.md#the-three-levels));
 - dials the computers on the home network (found by mDNS, or named with `-peer`), and
-  publishes itself in mDNS
-  and listens on the member port, TCP 8764, so that phones and other lite members
-  dial it: a phone syncs with it directly, with no computer on;
+  publishes itself in mDNS and listens on the member port, TCP 8764, so that phones and
+  other devices dial it: a phone syncs with it directly, with no computer on;
 - has no desktop clipboard of its own: other programs use `copy`, `paste` and `watch`.
 
-Full members list it with role `lite`. Away from home, or on another subnet where mDNS does
-not reach, it syncs through the group's WireGuard tunnel to the hub once `cbb global on` is
-run on it ("Sync away from home" below); it dials no address outside the home network
-itself.
+Away from home, or on another subnet where mDNS does not reach, it syncs through the group's
+WireGuard tunnel to the hub once `cbb global on` is run on it ("Sync away from home" below);
+it dials no address outside the home network itself.
 
 The protocol core is its own crate, [`core`](../core) (`cbb_core`): certificates, records,
 the hybrid clock, the sync engine, the frames and the joiner's side of the pairing, with
 CPace in `core/src/third_party/cpace`. It does no I/O and needs no operating system
-(no_std with alloc; RustCrypto for P-256, SHA-2 and HMAC), so a lite member on the ESP32
+(no_std with alloc; RustCrypto for P-256, SHA-2 and HMAC), so the firmware on the ESP32
 can use it as it is. On a microcontroller the firmware supplies the randomness, as
 getrandom's custom backend (`__getrandom_v03_custom`), and the core's locks are spin
-locks; with the `std` feature, as the lite member uses it, they are the standard library's.
+locks; with the `std` feature, as `cbb` uses it, they are the standard library's.
 
 With the `tls` feature the core has the TLS of members and pairing too (`core/src/tls`):
 rustls through its unbuffered API, which needs no standard library, with a crypto
@@ -31,9 +31,9 @@ provider of RustCrypto code (TLS 1.3 only, ChaCha20-Poly1305 or AES-128-GCM, X25
 ECDSA P-256), the certificate checks, a `Session` that does no I/O (the caller moves the
 bytes) and the pairing's TLS exporter, which rustls offers only with std: the core takes
 the exporter secret from the connection's key log and derives the exporter itself
-(RFC 8446, section 7.5). The lite member runs on exactly this code, so the e2e test below
-checks the TLS a microcontroller would use against Go members.
-The lite member itself (`src`) adds the state files, the sockets, mDNS, the control socket,
+(RFC 8446, section 7.5). `cbb` runs on exactly this code, so the e2e tests
+check the TLS a microcontroller would use.
+`cbb` itself (`src`) adds the state files, the sockets, mDNS, the control socket,
 the service and the tunnel to the hub (`src/tunnel.rs`, `src/away.rs`): GotaTun's WireGuard
 from Mullvad and smoltcp's TCP, in one thread, behind a port on the loopback address that the
 member TLS dials. GotaTun gets its ChaCha20-Poly1305 from a stand-in for ring on RustCrypto
@@ -88,8 +88,8 @@ artifacts of the `cbb (Rust)` job. A release builds cbb for each system and arch
 and `THIRD_PARTY_NOTICES`, the licenses of the crates it is built from
 (`member/packaging/notices.sh`).
 
-The e2e test runs the lite member among Go members: it joins through the phone's QR code,
-gets no CA keys and syncs both ways.
+The e2e test runs `cbb` without its helper among other members: it joins through the
+phone's QR code and syncs both ways.
 
 ```sh
 CBB_TEST_ALONE=$PWD/target/release/cbb go test ./internal/service -run TestAloneMember -v
@@ -147,7 +147,7 @@ cbb status                     # this device, the group and its devices
 cbb watch                      # one line per text the group sends here
 ```
 
-`sudo cbb update` installs the newest signed release as a full member's does
+`sudo cbb update` installs the newest signed release as on a computer
 ([updating](../docs/guide/install.md#updating)): it checks `keys.json`, `stable.json` and
 `release.json`, downloads this device's archive with curl, wget or uclient-fetch, checks it
 and the program in it, runs its installer, and puts the previous program back when the
@@ -155,7 +155,7 @@ service does not report the new version within a minute. `cbb update -check` onl
 whether there is one; `sudo cbb update -auto on|off` checks once a day (a systemd timer, or
 cron on OpenWrt), as the installer asks once (`--auto-update on|off`).
 
-Without mDNS on the network, name the full members in a drop-in
+Without mDNS on the network, name the computers in a drop-in
 (`sudo systemctl edit cbb`): `ExecStart=` and then
 `ExecStart=/usr/local/bin/cbb service -peer 192.168.0.10:8764 -peer ...`. `service -no-listen`
 turns the member port off (the device then only dials the computers).
@@ -174,7 +174,7 @@ It runs as your own systemd user service (`systemctl --user status cbb`), with t
 program in `~/.local/bin`, the keys in `~/.local/state/cbb` and the control socket
 in `$XDG_RUNTIME_DIR/cbb`, and its hello and device record say `rootless`. Since
 every program you run can read its keys, the system install stays the advice: a rootless
-lite member has no firewall rules, no text console target (`paste-receive on -console`
+install has no firewall rules, no text console target (`paste-receive on -console`
 refuses) and no preset of the system (`lock`, `sleep`, `reboot`, `shutdown`, `cancel-shutdown`: they need a polkit rule; `restart`
 stays), and it starts at boot only when an administrator once runs
 `sudo loginctl enable-linger YOUR-USER`. The commands above that take `sudo` take none here.
@@ -197,7 +197,7 @@ It installs OpenWrt's procd service, cbb without its helper
 `cbb`. The keys live in `/etc/cbb/state`, the control socket is
 `/var/run/cbb/control.sock`. The member port, mDNS and the QR code's addresses
 use only the devices of the `lan` zone, which the service gets as `CBB_INTERFACES`; the same
-variable limits the lite member on any Linux.
+variable limits `cbb` on any Linux.
 
 ### Sync away from home
 
@@ -207,13 +207,13 @@ cbb global                     # the hub, and whether it is reached through the 
 sudo cbb global off            # forget the tunnel's keys
 ```
 
-Turn it on at home: the device then meets the group's hub (a full member made the hub with
+Turn it on at home: the device then meets the group's hub (a computer made the hub with
 `cbb global hub` there) and keeps the hub's offer, its keys and addresses. Whenever the hub is
 neither found on the home network nor connected, it dials the hub through the tunnel: plain
 WireGuard to the hub's UDP port, with the member TLS inside, so the clipboard stays encrypted
 end to end. At home it sends nothing to the hub's outside addresses. A hub that hides its
-tunnel (AmneziaWG and VLESS, as a hub does unless `-no-obfuscate -no-vless`) is reached too: the lite
-member speaks AmneziaWG, and VLESS over XHTTP through the forwarder's web site, whose
+tunnel (AmneziaWG and VLESS, as a hub does unless `-no-obfuscate -no-vless`) is reached too: `cbb`
+speaks AmneziaWG, and VLESS over XHTTP through the forwarder's web site, whose
 certificate it checks against the system's CA certificates (`ca-certificates`, or the file
 `SSL_CERT_FILE` names). The keys are in
 `/var/lib/cbb/tunnel.json`, a file, so the warning asks you to protect the disk
@@ -229,7 +229,7 @@ sudo cbb paste-receive off
 ```
 
 An admin phone's "Paste on it…", or `cbb paste --on` on an admin computer, puts a text where
-this device's keyboard focus is, as on a full Linux member: into the tmux pane in use, through
+this device's keyboard focus is, as on a Linux computer: into the tmux pane in use, through
 the helper that CBB's `tmux.conf` starts in each tmux server, or, with
 `-console`, into the active text console, through the `cbb-console` unit that
 `--console` installs. The device's own user turns it on, never an admin; a text with a line
@@ -250,7 +250,7 @@ sudo cbb action off                # all of them
 ```
 
 An admin phone's "Quick actions", or `cbb action -on DEVICE NAME` on an admin computer, runs
-one of them here, as on a full Linux member. The lite member has the full member's presets:
+one of them here, as on a Linux computer, with the same presets:
 `lock`, `sleep`, `reboot` and `shutdown` (a minute after the admin asks, which
 `cancel-shutdown` stops), `restart`, which restarts the service, and `keyboard-layout`; and
 your own (`cbb action add NAME -- PROGRAM ARGS`, `cbb action remove NAME`), which CBB's agent
@@ -264,7 +264,7 @@ turns the actions off from afar. The last 100 are in `/var/lib/cbb/actions-log.j
 
 ## ZX Spectrum Next
 
-On the Accelerated ZX Spectrum Next, the lite member runs on the Raspberry Pi wired to the
+On the Accelerated ZX Spectrum Next, `cbb` runs on the Raspberry Pi wired to the
 Next's second UART (docs/roadmap.md, item 14), and the Next's `.cbb` dot command
 types `cbb next ...` at NextPi's shell (`SUP>`) on that UART, as NextPi's own tools
 do. These commands answer in frames a Z80 reads without a parser:
@@ -282,17 +282,17 @@ do. These commands answer in frames a Z80 reads without a parser:
 | Command | Answer |
 | --- | --- |
 | `cbb next paste [-max bytes]` | `CBB1 <len> <crc32>`, then len bytes of the latest text (cut to bytes), then CR, then the status line. |
-| `cbb next copy [-secret] <len> <crc32>` | `CBBGO` once the service answers; the Next then sends exactly len bytes, which the lite member reads with the terminal in raw mode (no echo, no CR to LF; it gives up after 10 s without a byte), checks the CRC-32 and sends to the group, as a secret with `-secret` (as `cbb copy -secret`); then the status line. |
+| `cbb next copy [-secret] <len> <crc32>` | `CBBGO` once the service answers; the Next then sends exactly len bytes, which `cbb` reads with the terminal in raw mode (no echo, no CR to LF; it gives up after 10 s without a byte), checks the CRC-32 and sends to the group, as a secret with `-secret` (as `cbb copy -secret`); then the status line. |
 | `cbb next check-list <file>` | For `.cbb update`: the file holds `keys.json` and the release's `zxnext.json`, a line each (at most 16 KiB). It checks them against the pinned roots, refuses a release older than this `cbb`, and writes `CBBL <name> <size> <crc32> <sha256>` for each of the Next's four files; then the status line. |
-| `cbb next image [-mode auto\|lo\|hi] [-tape]` | For `.cbb show`: the latest image the lite member received (PNG or JPEG), fitted to Layer 2's 320×256 in 256 colours (`L`) or 640×256 in 16 (`H`), whichever shows it closer (`auto`), with colours from the Next's 512 and Floyd–Steinberg dithering. `CBBI <L\|H> <len> <crc32>`; the Next answers one byte once it has room, and then come len bytes: the 81920 bytes of pixels in Layer 2's order (a column of 256 after another; in `H` two pixels a byte, the left one in the high nibble), then the palette, two bytes an entry as Next register 0x44 takes them (256 entries for `L`, 16 for `H`), then CR and the status line. With `-tape` the bytes go as sound instead (`aplay`, through the Pi's I2S, which the Next hands to EAR): half a second of silence, then eleven blocks as the Spectrum's ROM saves them (3223 pilot halves of 2168 T-states at 3.5 MHz, a sync of 667 and 735, the flag, the data and their XOR, each bit two halves of 855 or 1710), the flag the index of the block: the ten 8K pieces of the pixels, then the palette, half a second apart; then CR and the status line. A byte 3 from the Next stops it, and the status line is `CBBOK`. |
+| `cbb next image [-mode auto\|lo\|hi] [-tape]` | For `.cbb show`: the latest image `cbb` received (PNG or JPEG), fitted to Layer 2's 320×256 in 256 colours (`L`) or 640×256 in 16 (`H`), whichever shows it closer (`auto`), with colours from the Next's 512 and Floyd–Steinberg dithering. `CBBI <L\|H> <len> <crc32>`; the Next answers one byte once it has room, and then come len bytes: the 81920 bytes of pixels in Layer 2's order (a column of 256 after another; in `H` two pixels a byte, the left one in the high nibble), then the palette, two bytes an entry as Next register 0x44 takes them (256 entries for `L`, 16 for `H`), then CR and the status line. With `-tape` the bytes go as sound instead (`aplay`, through the Pi's I2S, which the Next hands to EAR): half a second of silence, then eleven blocks as the Spectrum's ROM saves them (3223 pilot halves of 2168 T-states at 3.5 MHz, a sync of 667 and 735, the flag, the data and their XOR, each bit two halves of 855 or 1710), the flag the index of the block: the ten 8K pieces of the pixels, then the palette, half a second apart; then CR and the status line. A byte 3 from the Next stops it, and the status line is `CBBOK`. |
 | `cbb next speed <baud> <bytes>` | For `.cbb speed`: `CBBS <baud> <bytes> <crc32>` at the line's own speed; half a second later the line goes to baud (115200 to 2000000) and the bytes follow, the low byte of each step of xorshift32 from 1; half a second after the last one the line's own speed again, and the status line. The Next checks the CRC-32 to see what that speed keeps whole. |
 | `cbb next speed-in <baud> <bytes>` | `.cbb speed`'s other way: the line goes to baud and, half a second later, `CBBGO` at it; then up to bytes from the Next, until a second passes without one; then the line's own speed, half a second, and `CBBR <bytes got> <crc32>` before the status line. |
 | `cbb next pair [-name name] [-port port] [-addr host[:port]]...` | `CBBQ <size>`, then size rows of the QR code for the phone app, each of (size + 3) / 4 hex digits with the leftmost module in the high bit of the first digit and a set bit dark; the Next draws it, the phone scans it, and after the pairing the status line (up to 5 minutes). A join payload makes a code of about 41 modules, which fits the 192 lines of the screen at 4 pixels per module. |
 
 ### The network through the Next's ESP8266
 
-On a Pi without a radio (the Pi Zero of the Accelerated Next), `cbb next link` gives the
-lite member a network through the Next's ESP8266, with a driver on the Next that passes
+On a Pi without a radio (the Pi Zero of the Accelerated Next), `cbb next link` gives
+`cbb` a network through the Next's ESP8266, with a driver on the Next that passes
 bytes between the two UARTs (docs/roadmap.md, "The Next's network in the background"). It
 runs at NextPi's shell on the Pi's UART until the driver stops it:
 
@@ -301,19 +301,19 @@ cbb next link -to 192.168.0.10:8764 -serve 8764:8764 -zone +01:00 -log /ram/link
 cbb service -peer 127.0.0.1:8769
 ```
 
-- `-to host:port`: the member to dial, a computer at home; each connection the lite
-  member makes to the link's local port (`-port`, 8769 by default) becomes a connection of
+- `-to host:port`: the member to dial, a computer at home; each connection `cbb`
+  makes to the link's local port (`-port`, 8769 by default) becomes a connection of
   the ESP to it. The member protocol and its TLS run on the Pi, so the ESP and the Z80
   see only ciphertext.
 - `-serve esp-port:local-port`: the ESP takes connections on its own port and leads each
-  to the local one, where the lite member listens: phones that sync with it, and the phone
+  to the local one, where `cbb` listens: phones that sync with it, and the phone
   that admits it (`cbb next pair -addr <the ESP's address>:<esp-port>`).
 - `-udp local-port:host:port`: a local UDP port that leads, through one UDP connection
   of the ESP, to host:port: the hub, or a forwarder that leads to it. With
   `cbb service -tunnel-via 127.0.0.1:local-port`, the tunnel of sync away from home sends its
   packets there instead of to the hub's own addresses, so the Pi syncs away from home
   through the ESP too; WireGuard's keys stay on the Pi.
-- `-join code`: join the group with the code of `cbb pair` on the full member at `-to`,
+- `-join code`: join the group with the code of `cbb pair` on the computer at `-to`,
   through a connection to the link's own port, once the Pi's clock is set; the service
   starts after it has joined. `.cbb pair CODE` on the Next runs the link with it.
 - `-paste on|on-enter|off`: tells the service, once it answers, whether the group's admins

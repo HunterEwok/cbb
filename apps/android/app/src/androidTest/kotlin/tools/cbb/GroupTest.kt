@@ -43,7 +43,7 @@ import java.io.File
 /**
  * The phone makes its own group and admits a computer of the bench's fleet
  * by its QR code's text, then syncs with it both ways
- * (docs/testbench-catalogue.md, A1 on Android). The steps share the app's
+ * (docs/maintainers/testbench-catalogue.md, A1 on Android). The steps share the app's
  * state in order: the group the first step makes is the next ones' group,
  * and Gradle uninstalls the app after the run.
  */

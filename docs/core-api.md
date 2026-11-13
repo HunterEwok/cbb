@@ -65,7 +65,7 @@ moves the bytes.
 ### The member
 
 Built with the feature `member` too (every library `bind.sh` builds: the iPhone, Android and
-Aurora apps run it), the library runs the lite member's own node in the app's process once the phone
+Aurora apps run it), the library runs `cbb`'s own node in the app's process once the phone
 is in a group (`ffi/src/member.rs`, over `cbb_lite::phone`): `cbb_member_start` takes the
 app's data directory, the phone's name, system and versions, its identity (device,
 certificate, issuer, group CA, roots), its public key, its secret for sealed messages and the
@@ -151,7 +151,7 @@ after the header, and an operation that answers more than once marks the last an
 | `records` | phone | none | `{"records"}` |
 | `alerts` | phone | none | `{"alerts"}`: what the group's records stop and what ends it, for the alerts card (`cbb_core::manage::alerts`, as the kits' `GroupAlert`), `[{kind, names, devices, records, left_ms, count}]`, kind `stopped`, `secrets_stopped`, `two_histories`, `admins`, `claims`, `claim_pending`, `claim_stopped` or `newer`; the root ends one with `cbb_member_manage`'s `resolve` of its records, or by removing one of its devices |
 | `why` | phone | `away` (optional: where a tunnel the app runs itself stands, `{hub, standby, hub_device, through, hidden, relay, relay_connected, forwarder, forwarder_registered, entries_stale, error}`; without it the member's own) | `{"why"}`: why the phone does not sync (`cbb_core::why`, docs/apps.md "Why it does not sync"), `[{code, level, until_ms?, device?, devices?, value?, detail?}]`, the reason that stops the most first; empty when everything syncs |
-| `away`, `away_status` | phone | `on` for `away` | `{"away"}`: sync away from home turned on (new tunnel keys, which the hellos offer the group's hubs) or off (the keys and the hubs' offers forgotten), and where it stands, as `cbb global` shows it on the lite member (`hub_device`, `endpoints`, `through`, `error`, `detail`), or null while it is off; only in a library built with the feature `tunnel`, otherwise `away` with `on` answers an error |
+| `away`, `away_status` | phone | `on` for `away` | `{"away"}`: sync away from home turned on (new tunnel keys, which the hellos offer the group's hubs) or off (the keys and the hubs' offers forgotten), and where it stands, as `cbb global` shows it (`hub_device`, `endpoints`, `through`, `error`, `detail`), or null while it is off; only in a library built with the feature `tunnel`, otherwise `away` with `on` answers an error |
 | `joined_by_invite` | phone | `invite`: the invitation's text the phone joined by | `{"away"}`: sync away from home turned on as `away` does, and the member offers its tunnel key to the hub through the invitation's guest tunnel until the hub answers, after a restart too, for up to a day (the Aurora app; the iPhone and Android apps do it with their own tunnels and the tunnel's `guest_start`); only with the feature `tunnel` |
 | `servers` | phone | none | `{"period_due"}`: whether the group's server keys need a period the root key signs (protocol.md, section 18), after `cbb_member_servers`; the app of a root phone then signs it with `cbb_member_manage`'s `period` |
 | `hub`, `hub_off` | phone | `forwarder` (`host:port`), `key` (its pin, `default` for the project's), `obfuscate_off`, `vless_off` for `hub`; `anyway` for `hub_off` | `{"away"}`, as `away_status` gives it, with `hub` and `forwarder` `{endpoint, registered, error, detail}`: this phone, the root or an admin, is one of the group's hubs with the member's own WireGuard (`member/src/away/serve.rs`), registered with the forwarder, or stops being one; `hub_off` refuses while the group has no other hub unless `anyway` (protocol.md, section 11, "Stopping a hub"); only after `cbb_member_servers` and with the feature `tunnel` (the Harmony app; the iPhone and Android apps run their own hub through `cbb_tunnel`) |
@@ -213,14 +213,14 @@ after the header, and an operation that answers more than once marks the last an
 A phone's node passes on a command for another device when it is connected to it, as
 protocol.md section 15 says: once until it expires, never one that has expired or claims to live
 longer than a command may. For itself it carries out the `mute` and `unmute` commands an
-admin sends, keeps both in `mute.json` as the lite member does, and tells the app (the `mute`
-event); every other command for the phone goes to the app as a `command` event, as the lite
-member refuses it. A phone takes tunnel offers and hub shares only from a device the records
+admin sends, keeps both in `mute.json` as `cbb` does, and tells the app (the `mute`
+event); every other command for the phone goes to the app as a `command` event, as `cbb`
+refuses it. A phone takes tunnel offers and hub shares only from a device the records
 let be a hub, by the chain it proved. It keeps the sealed blobsof the copies with images or files it made or fetched in `content/` of its data directory,
 the last eight, and serves them (its hello says `media`). `TestFFIJoiner` runs the join, sync
 both ways, a pause, an admin's mute and a renewal against a Go member through the example `phone-on-linux`,
 `TestFFIPhoneAway` sync away from home through a Go hub's tunnel, the phone's node running the
-lite member's (`member/src/away.rs`: it keeps the hubs' offers and, while no hub is at home,
+`cbb`'s (`member/src/away.rs`: it keeps the hubs' offers and, while no hub is at home,
 dials the first that answers through its tunnel's loopback port),
 `TestFFIJoinerAdmin` the join as an admin, then that admin phone admitting a Go computer that
 listens, `TestFFIJoinerMadeAdmin` a phone joined as a member that the root makes an admin
@@ -376,7 +376,7 @@ the core's.
 | `group_hub_peer` | the set's arguments, `device`, `chain` | `{"hub"}`: whether the device may be a hub of the group, whose offers a member keeps: the root, an admin, or a device that only passes copies on ([protocol.md](protocol.md), section 11, "Two kinds of hub") |
 | `group_seal_copy` | the set's arguments, `id`, `origin`, `time`, `cert` and `issuer` (optional; base64 DER), `kind`, `via` (optional), `text`, `media` (a manifest, optional), `blob` (`{size, sha256}`, optional) and `key` (base64, 32 bytes, the key that sealed the blob; optional without a blob) | `{"event", "to_sign", "readers", "key"}`: the copy sealed to the readers the set names ([protocol.md](protocol.md), section 4, "Sealing" and "Readers"), without `sig`; the caller signs `to_sign` (base64) with its member key, ECDSA P-256 with SHA-256 in DER, and puts it in the event's `sig`. `key` comes back when the core made it. A copy that cannot be sealed is code 17 |
 | `group_check_copy` | the set's arguments, `event` (a copy as the member protocol carries it) | `{}` when the copy's certificate, its issuer, its origin's key and its signature check against the set, as a member checks a copy before it passes it on; code 17 with the reason otherwise |
-| `seal_copy_to` | `id`, `origin`, `time`, `cert` and `issuer` (optional; base64 DER), `readers` (`[{id, seal}]`, `seal` base64: each reader's public key for sealed messages), `kind`, `via` (optional), `text`, `media` (optional), `blob` (optional) and `key` (base64, 32 bytes) | `{"event", "to_sign"}`: the copy sealed to the readers given, as `group_seal_copy` seals it, for a member that keeps its records itself (the Go service); the caller signs `to_sign` |
+| `seal_copy_to` | `id`, `origin`, `time`, `cert` and `issuer` (optional; base64 DER), `readers` (`[{id, seal}]`, `seal` base64: each reader's public key for sealed messages), `kind`, `via` (optional), `text`, `media` (optional), `blob` (optional) and `key` (base64, 32 bytes) | `{"event", "to_sign"}`: the copy sealed to the readers given, as `group_seal_copy` seals it, for a member that keeps its records itself; the caller signs `to_sign` |
 | `copy_verdict` | `receives`, `kind`, `mark`, `unread`, `has_text`, `has_media`, `takes_media`, `held` (booleans, false when left out but `receives`), `age_ms`, `window_ms`, `secret_ttl_ms` | `{"verdict"}`: whether the group's current copy goes into the member's clipboard (`write`), or why not: `mode`, `unread`, `secret_gone`, `no_text`, `held` or `old` (`cbb_core::rule`; the cases of `testdata/interop/copy-verdicts.json`) |
 | `open_copy` | `event`, `me` (the reader's device), `secret` (base64, its secret for sealed messages) | `{"kind", "via", "text", "media", "key"}`: what the copy holds, and the copy's key (base64), which opens its blob; code 17 when it is not sealed to `me`, does not open or breaks a rule of its content. It does not check the origin |
 | `seal_segment`, `open_segment` | `key` (base64, the copy's key), `index` (from 0), `last` (the blob's last segment), `data` (base64: at most 64 KiB to seal, 65 552 bytes to open) | `{"data"}`: the segment sealed or opened ([protocol.md](protocol.md), section 4, "The blob"); a segment that does not open is code 17 |
@@ -494,7 +494,7 @@ cases both give the same answer.
 ## The record set
 
 The calls whose names start with `group_` work on the set of records a member keeps, which the
-phones store as the records file the lite member writes (`cbb_core::group::Records`):
+phones store as the records file `cbb` writes (`cbb_core::group::Records`):
 `{"v": 2, "records": [{body, sig, chain}], "first_seen": [{record, ms}]}`. The caller keeps the
 file and passes it in each call, base64; a call that changes the set answers the new file,
 which the caller saves in place of the old one. So the phones hold no rule of the group in
