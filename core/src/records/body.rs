@@ -193,11 +193,14 @@ pub enum Kind {
     /// new root's first checkpoint: the head applies only once the device
     /// holds its list and that checkpoint, verified with `root`, so the
     /// new root never shows without its phone and the owner's choice.
+    /// `signer2` (the common field 8) is the hash of the recovery key's
+    /// second half, K2 (E-6): every head carries both signatures.
     Recovery {
         root: Key,
         list: [u8; 32],
         from: u64,
         first: RecordId,
+        signer2: KeyHash,
     },
     /// A type of a later version: held.
     Unknown(u64),
@@ -489,11 +492,14 @@ impl Body {
                 }
                 check_seen(seen, t)?;
             }
-            Kind::Recovery { root, from, .. } => {
+            Kind::Recovery { root, from, signer2, .. } => {
                 held |= signer_key(root, t, "root")?;
                 // A root that is the recovery key ends the ranks.
-                if root.hash() == self.signer {
+                if root.hash() == self.signer || root.hash() == *signer2 {
                     return Err(field(t, "root"));
+                }
+                if *signer2 == self.signer {
+                    return Err(field(t, "signer2"));
                 }
                 if self.seq > MAX_RECOVERY {
                     return Err(field(t, "seq"));
@@ -565,7 +571,8 @@ impl Body {
                 m.push((10, Value::Array(hubs.iter().map(|d| Value::Bytes(&d.0)).collect())));
                 m.push((11, seen(s)));
             }
-            Kind::Recovery { root, list, from, first } => {
+            Kind::Recovery { root, list, from, first, signer2 } => {
+                m.push((8, Value::Bytes(&signer2.0)));
                 m.push((10, root.to_value()));
                 m.push((11, Value::Bytes(list)));
                 if *from != 0 {
@@ -645,7 +652,8 @@ impl Body {
                 let list = r.need(11, f("list"))?.as_bytes().and_then(|b| <[u8; 32]>::try_from(b).ok());
                 let from = r.opt_uint(12, 0, f("from"))?;
                 let first = r.need(13, f("first"))?.as_bytes().and_then(RecordId::from_slice).ok_or(f("first"))?;
-                (Kind::Recovery { root, list: list.ok_or(f("list"))?, from, first }, &[10, 11, 12, 13], &[])
+                let signer2 = r.need(8, f("signer2"))?.as_bytes().and_then(KeyHash::from_slice).ok_or(f("signer2"))?;
+                (Kind::Recovery { root, list: list.ok_or(f("list"))?, from, first, signer2 }, &[8, 10, 11, 12, 13], &[])
             }
             n if RETIRED_TYPES.contains(&n) => return Err(Rule::new("records/retired")),
             n => (Kind::Unknown(n), &[], &[]),

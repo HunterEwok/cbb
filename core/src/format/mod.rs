@@ -94,6 +94,8 @@ impl Rule {
     pub const KEYS_XWING: Rule = Rule("keys/xwing");
     /// An X25519 key of the wrong size.
     pub const KEYS_X25519: Rule = Rule("keys/x25519");
+    /// An SLH-DSA-SHA2-128s key that is not 32 bytes.
+    pub const KEYS_SLH_DSA: Rule = Rule("keys/slh-dsa");
     /// A Key that is not `[alg, pub]`.
     pub const KEYS_SHAPE: Rule = Rule("keys/shape");
 

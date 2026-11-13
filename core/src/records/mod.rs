@@ -67,6 +67,13 @@ pub const SIG2_ALLOWANCE: usize = 9 * keep::UNIT;
 
 const _: () = assert!(SIG2_ALLOWANCE >= crate::format::envelope::MAX_SIG2 + 9);
 
+/// The bytes counted for a recovery head's second signature, K2's
+/// (`format::envelope::MAX_SIG2_HEAD` with its head). Heads are kept
+/// outside the rooms (rule 33); this counts them in the set's bytes.
+pub const HEAD_SIG2_ALLOWANCE: usize = 65 * keep::UNIT;
+
+const _: () = assert!(HEAD_SIG2_ALLOWANCE >= crate::format::envelope::MAX_SIG2_HEAD + 9);
+
 pub mod body;
 pub mod eval;
 pub mod keep;
@@ -85,7 +92,7 @@ use sha2::Sha256;
 
 pub use body::{Body, Kind, List};
 pub use eval::{Input, State, evaluate};
-pub use key::{DeviceId, GroupId, Key, KeyHash, RecordId, group_id};
+pub use key::{DeviceId, GroupId, Key, KeyHash, RecordId, Recovery, group_id};
 pub use set::{RecordSet, Stuck};
 
 use crate::certs::sha256;
@@ -100,15 +107,36 @@ pub const LABEL_RECORD: &str = "cbb record v3";
 /// record as a fetch proof; the fetch protocol itself is not built yet.
 pub const LABEL_RECOVERY_FETCH: &str = "cbb recovery fetch v3";
 
-/// The recovery key's signature over data under [`LABEL_RECOVERY_FETCH`].
-pub fn sign_fetch(recovery: &dyn ExternalKey, data: &[u8]) -> crate::error::Result<[u8; 64]> {
-    key::sign_es256(recovery, LABEL_RECOVERY_FETCH, data)
+/// The data a first signature covers beside a second one (audit Q-1):
+/// the signed bytes, then the SHA-256 of the second signature, so a second
+/// signature cannot be swapped on the way.
+pub fn with_sig2(data: &[u8], sig2: &[u8]) -> Vec<u8> {
+    let mut m = Vec::with_capacity(data.len().saturating_add(32));
+    m.extend_from_slice(data);
+    m.extend_from_slice(&sha256(sig2));
+    m
 }
 
-/// Checks a fetch proof: sig over data under [`LABEL_RECOVERY_FETCH`] by
-/// the recovery key.
-pub fn verify_fetch(recovery: &Key, data: &[u8], sig: &[u8]) -> Result<(), Rule> {
-    key::verify_es256(recovery, LABEL_RECOVERY_FETCH, data, sig)
+/// The recovery key's fetch proof over data (rule 33, E-6): K2 signs first,
+/// over data under [`pq::CONTEXT_FETCH`]; K1 signs data and the SHA-256 of
+/// K2's signature under [`LABEL_RECOVERY_FETCH`]. It returns
+/// `(sig, sig2)`.
+pub fn sign_fetch(k1: &dyn ExternalKey, k2: &pq::PqKey, data: &[u8]) -> crate::error::Result<([u8; 64], Vec<u8>)> {
+    let sig2 = k2.sign(data, pq::CONTEXT_FETCH)?;
+    let sig = key::sign_es256(k1, LABEL_RECOVERY_FETCH, &with_sig2(data, &sig2))?;
+    Ok((sig, sig2))
+}
+
+/// Checks a fetch proof: both signatures of the group's recovery key, as
+/// [`sign_fetch`] makes them. Both are checked every time, K1's first.
+pub fn verify_fetch(recovery: &Recovery, data: &[u8], sig: &[u8], sig2: &[u8]) -> Result<(), Rule> {
+    let first = key::verify_es256(&recovery.k1, LABEL_RECOVERY_FETCH, &with_sig2(data, sig2), sig);
+    let second = pq::verify(&recovery.k2, data, sig2, pq::CONTEXT_FETCH);
+    first?;
+    if !second {
+        return Err(Rule::new("sig/verify"));
+    }
+    Ok(())
 }
 
 /// The label of a record's mark (`Record::mark`).
@@ -124,15 +152,17 @@ pub const LABEL_PIN: &str = "cbb pin v3";
 
 /// The mark a device keeps beside the group's first root key and recovery
 /// key in its own store (rule 29): HMAC-SHA-256 under its own local key
-/// over the label, a zero byte and the two keys' encodings. A store whose
-/// pinned keys were changed does not load (`RecordSet::pinned`).
+/// over the label, a zero byte and the encodings of the root key and both
+/// halves of the recovery key. A store whose pinned keys were changed does
+/// not load (`RecordSet::pinned`).
 #[allow(clippy::expect_used, reason = "HMAC takes a key of any length, so this never fails")]
-pub fn pin_mark(local: &[u8; 32], root: &Key, recovery: &Key) -> Mark {
+pub fn pin_mark(local: &[u8; 32], root: &Key, recovery: &Recovery) -> Mark {
     let mut m = <Hmac<Sha256> as KeyInit>::new_from_slice(local).expect("HMAC takes a key of any length");
     m.update(LABEL_PIN.as_bytes());
     m.update(&[0]);
     m.update(&root.encode());
-    m.update(&recovery.encode());
+    m.update(&recovery.k1.encode());
+    m.update(&recovery.k2.encode());
     let mut out = [0u8; 32];
     out.copy_from_slice(&m.finalize().into_bytes());
     out
@@ -244,6 +274,9 @@ impl Record {
         if Key::es256(key.public()).hash() != body.signer {
             return Err(crate::error::Error::msg("the record's signer is not the key that signs it"));
         }
+        if matches!(body.kind, Kind::Recovery { .. }) {
+            return Err(crate::error::Error::msg("a recovery head is signed by both halves of the recovery key"));
+        }
         let bytes = body.encode();
         let max = if matches!(body.kind, Kind::Checkpoint { .. }) { MAX_CHECKPOINT_BODY } else { MAX_BODY };
         if bytes.len() > max {
@@ -257,6 +290,28 @@ impl Record {
         Ok(Record { bytes, sig, sig2: None, body, id })
     }
 
+    /// Signs a recovery head with both halves of the recovery key (E-6):
+    /// K2 first, over the body under [`pq::CONTEXT_RECORD`]; then K1 over
+    /// the body and the SHA-256 of K2's signature under [`LABEL_RECORD`]
+    /// (audit Q-1). The body's signer is K1's hash, its `signer2` K2's.
+    pub fn sign_head(body: Body, k1: &dyn ExternalKey, k2: &pq::PqKey) -> crate::error::Result<Record> {
+        use crate::error::Error;
+        let Kind::Recovery { signer2, .. } = &body.kind else {
+            return Err(Error::msg("only a recovery head carries two signatures in 0.6"));
+        };
+        if Key::es256(k1.public()).hash() != body.signer || k2.key().hash() != *signer2 {
+            return Err(Error::msg("the head's signers are not the keys that sign it"));
+        }
+        if body.held || body.check().map_err(|r| Error::msg(alloc::format!("the record breaks {r}")))? {
+            return Err(Error::msg("a record naming a key of an unknown algorithm is not signed"));
+        }
+        let bytes = body.encode();
+        let sig2 = k2.sign(&bytes, pq::CONTEXT_RECORD)?;
+        let sig = key::sign_es256(k1, LABEL_RECORD, &with_sig2(&bytes, &sig2))?.to_vec();
+        let id = RecordId(sha256(&bytes));
+        Ok(Record { bytes, sig, sig2: Some(sig2), body, id })
+    }
+
     /// A record from the parts a reader found: the body's bytes, the
     /// signatures, and the body's value. Until the codec reads the bytes
     /// itself, the value must encode to exactly those bytes (one value has
@@ -265,7 +320,7 @@ impl Record {
         if body.encode() != bytes {
             return Err(Rule::new("cbor/encoding"));
         }
-        if sig2.is_some() && !body.held {
+        if sig2.is_some() && !(body.held || matches!(body.kind, Kind::Recovery { .. })) {
             return Err(Rule::new("env/shape"));
         }
         let id = RecordId(sha256(&bytes));
@@ -315,11 +370,15 @@ impl Record {
 
     /// The bytes the record is counted for in a set: its body's and one
     /// fixed allowance for the rest of its envelope ([`ENVELOPE_ALLOWANCE`],
-    /// and [`SIG2_ALLOWANCE`] when the body names `signer2`). The count
-    /// depends on the body alone, so every envelope of one record ID counts
-    /// the same.
+    /// and [`SIG2_ALLOWANCE`] when the body names `signer2`, or
+    /// [`HEAD_SIG2_ALLOWANCE`] for a recovery head). The count depends on
+    /// the body alone, so every envelope of one record ID counts the same.
     pub fn size(&self) -> usize {
-        let rest = if self.sig2.is_some() { ENVELOPE_ALLOWANCE + SIG2_ALLOWANCE } else { ENVELOPE_ALLOWANCE };
+        let rest = match (&self.body.kind, self.sig2.is_some()) {
+            (Kind::Recovery { .. }, true) => ENVELOPE_ALLOWANCE + HEAD_SIG2_ALLOWANCE,
+            (_, true) => ENVELOPE_ALLOWANCE + SIG2_ALLOWANCE,
+            _ => ENVELOPE_ALLOWANCE,
+        };
         self.bytes.len().saturating_add(rest)
     }
 
@@ -336,10 +395,75 @@ impl Record {
             return Err(Rule::new("records/size"));
         }
         let held = self.body.check()?;
+        // A recovery head is the recovery key's two signatures: `verify_head`.
+        if !held && matches!(self.body.kind, Kind::Recovery { .. }) {
+            return Err(Rule::new("sig/verify"));
+        }
         #[cfg(test)]
         VERIFIED.with(|n| n.set(n.get().saturating_add(1)));
         key::verify_es256(key, LABEL_RECORD, &self.bytes, &self.sig)?;
         Ok(held)
+    }
+
+    /// Checks a record the recovery key signed, as [`verify`](Self::verify)
+    /// does with one key: a head this version applies must carry both
+    /// signatures, `signer2` must be the group's K2, and both must hold.
+    /// Both are checked every time, K1's first and K2's second, whatever
+    /// the first gave, so the time taken does not tell which failed. K1's
+    /// signature covers the SHA-256 of K2's (Q-1): a K2 signature swapped
+    /// on the way breaks K1's (`records/recovery/damaged`), and the copy is
+    /// dropped like any that does not verify. A held record of the recovery
+    /// key carries both signatures and is checked as a head: K1 alone never
+    /// stands for the key.
+    pub fn verify_head(&self, recovery: &Recovery) -> Result<bool, Rule> {
+        if self.bytes.len() > self.max_body() {
+            return Err(Rule::new("records/size"));
+        }
+        let held = self.body.check()?;
+        // Every record of the recovery key carries both signatures, one
+        // this version holds too: K1 alone never stands for the key, so a
+        // held record that a later version reads was checked as a head.
+        if !held {
+            let Kind::Recovery { signer2, .. } = &self.body.kind else { return Err(Rule::new("records/recovery")) };
+            if *signer2 != recovery.hash2() {
+                return Err(Rule::field("recovery", "signer2"));
+            }
+        }
+        let Some(sig2) = self.sig2.as_deref() else { return Err(Rule::new("env/shape")) };
+        #[cfg(test)]
+        VERIFIED.with(|n| n.set(n.get().saturating_add(1)));
+        let first = key::verify_es256(&recovery.k1, LABEL_RECORD, &with_sig2(&self.bytes, sig2), &self.sig);
+        let second = pq::verify(&recovery.k2, &self.bytes, sig2, pq::CONTEXT_RECORD);
+        if first.is_err() {
+            return Err(Rule::field("recovery", "damaged"));
+        }
+        if !second {
+            return Err(Rule::new("sig/verify"));
+        }
+        Ok(held)
+    }
+
+    /// `verify_head` for a record from the device's own store, as
+    /// [`verify_marked`](Self::verify_marked).
+    pub(crate) fn verify_head_marked(
+        &self,
+        recovery: &Recovery,
+        mark: Option<(&[u8; 32], &Mark)>,
+    ) -> Result<bool, Rule> {
+        match mark {
+            Some((local, mark)) if self.mark_holds(local, mark) => {
+                if self.bytes.len() > self.max_body() {
+                    return Err(Rule::new("records/size"));
+                }
+                self.body.check()
+            }
+            _ => self.verify_head(recovery),
+        }
+    }
+
+    /// The second signature, when the envelope has one.
+    pub fn sig2(&self) -> Option<&[u8]> {
+        self.sig2.as_deref()
     }
 
     /// The mark of the record under the device's own key local. The core

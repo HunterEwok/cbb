@@ -14,7 +14,9 @@ import hashlib
 import hmac
 import json
 import os
+import subprocess
 import sys
+import tempfile
 import unicodedata
 
 from cryptography.hazmat.primitives import hashes, serialization
@@ -200,6 +202,47 @@ class Signer:
         return r.to_bytes(32, "big") + s.to_bytes(32, "big")
 
 
+_SLH_SIGNER = None
+
+
+def slh_sign(seeds, items):
+    """SLH-DSA-SHA2-128s (FIPS 205) through check/'s circl: the public key
+    of the three seeds and the deterministic signature of each (msg, ctx).
+    Python has no SLH-DSA of its own here; the Rust core checks these with
+    another implementation (RustCrypto's slh-dsa)."""
+    global _SLH_SIGNER
+    if _SLH_SIGNER is None:
+        here = os.path.join(os.path.dirname(os.path.abspath(__file__)), "check")
+        _SLH_SIGNER = os.path.join(tempfile.mkdtemp(), "check")
+        subprocess.run(["go", "build", "-o", _SLH_SIGNER, "."], cwd=here, check=True)
+    req = {"seeds": seeds.hex(), "items": [{"msg": m.hex(), "ctx": c.hex()} for m, c in items]}
+    got = json.loads(subprocess.run([_SLH_SIGNER, "slhdsa-sign"], input=json.dumps(req).encode(),
+                                    capture_output=True, check=True).stdout)
+    return bytes.fromhex(got["pk"]), [bytes.fromhex(x) for x in got["sigs"]]
+
+
+SLH_DSA = 4  # the registry's SLH-DSA-SHA2-128s
+
+
+class PqSigner:
+    """The recovery key's second half, K2 (E-6): SLH-DSA-SHA2-128s from
+    three seeds made from a fixed label."""
+
+    def __init__(self, name):
+        self.name = name
+        self.seeds = hashlib.sha512(b"cbb test key " + name.encode()).digest()[:48]
+        self.pub, _ = slh_sign(self.seeds, [])
+        self.key = [SLH_DSA, self.pub]
+        self.hash = sha(enc(self.key))
+        self._sigs = {}
+
+    def sign(self, data, ctx):
+        k = (data, ctx)
+        if k not in self._sigs:
+            self._sigs[k] = slh_sign(self.seeds, [k])[1][0]
+        return self._sigs[k]
+
+
 def verify(key, label, data, sig):
     """ES256 check of the profile: 64 bytes, low S."""
     if len(sig) != 64:
@@ -241,8 +284,13 @@ PERIOD = Signer("period key")
 SRVKEY = Signer("laptop server key")
 OPERATOR = Signer("server operator")
 RECOVERY = Signer("recovery")
-# The Group ID commits to the first root key and the recovery key (rule 33).
-GROUP = sha(b"cbb group v3\x00" + enc(ROOT.key) + enc(RECOVERY.key))[:16]
+RECOVERY2 = PqSigner("recovery 2")
+# The Group ID commits to the first root key and both halves of the
+# recovery key (rule 33, E-6).
+GROUP = sha(b"cbb group v3\x00" + enc(ROOT.key) + enc(RECOVERY.key) + enc(RECOVERY2.key))[:16]
+# The contexts of K2's signatures.
+CTX_RECORD = b"cbb record v3"
+CTX_FETCH = b"cbb recovery fetch v3"
 T0 = 1793000000000  # 2026-10-26, display only
 
 LABELS = {
@@ -254,6 +302,14 @@ LABELS = {
     "beacon": "cbb beacon v1",
     "card": "cbb server card v1",
 }
+
+
+def head_envelope(body, sig2=None):
+    """A recovery head's envelope (E-6): K2 signs the body first; K1 signs
+    the body and the SHA-256 of K2's signature (Q-1)."""
+    if sig2 is None:
+        sig2 = RECOVERY2.sign(body, CTX_RECORD)
+    return enc([body, RECOVERY.sign(LABELS["record"], body + sha(sig2)), sig2])
 
 
 def envelope(kind, signer, body_map, body_raw=None):
@@ -355,6 +411,8 @@ def srt(xs):
 
 def rec(signer, seq, typ, fields, prev=None, time=None, extra=None):
     m = {1: typ, 2: GROUP, 3: signer.hash, 4: seq, 6: time if time is not None else T0 + seq * 1000}
+    if typ == 13:  # a recovery head names K2 (E-6)
+        m[8] = RECOVERY2.hash
     if prev is not None:
         m[5] = prev
     m.update(fields)
@@ -382,7 +440,9 @@ def record_vectors():
         prev = chain.get(signer.name, (0, None))[1]
         m = rec(signer, seq, typ, fields, prev=prev, extra=extra)
         env, body = envelope("record", signer, m)
-        if 8 in m:  # room for a second signature: [body, sig, sig2]
+        if typ == 13:  # a recovery head: both halves of the recovery key
+            env = head_envelope(body, sig2)
+        elif 8 in m:  # room for a second signature: [body, sig, sig2]
             env = enc([body, signer.sign(LABELS["record"], body),
                        sig2 if sig2 is not None else ADMIN.sign(LABELS["record"], body)])
         rid = sha(body)
@@ -634,7 +694,10 @@ def record_vectors():
 
     def bad_signed(name, rule, signer, m):
         body = enc(m)
-        bad(name, rule, enc([body, signer.sign(LABELS["record"], body)]))
+        if m.get(1) == 13 and signer is RECOVERY and 8 in m:
+            bad(name, rule, head_envelope(body))
+        else:
+            bad(name, rule, enc([body, signer.sign(LABELS["record"], body)]))
 
     some = list_hash(enc([]))
     cp = sha(b"a first checkpoint")
@@ -654,6 +717,19 @@ def record_vectors():
                rec(RECOVERY, 2, 13, {10: Signer("root 3").key, 11: some}))
     bad_signed("recovery head with a first checkpoint ID of 31 bytes", "records/recovery/first", RECOVERY,
                rec(RECOVERY, 2, 13, {10: Signer("root 3").key, 11: some, 13: cp[:31]}))
+    no2 = rec(RECOVERY, 2, 13, {10: Signer("root 3").key, 11: some, 13: cp})
+    del no2[8]
+    bad_signed("recovery head without signer2 (K2's hash)", "records/recovery/signer2", RECOVERY, no2)
+    bad_signed("recovery head whose signer2 is its signer", "records/recovery/signer2", RECOVERY,
+               {**rec(RECOVERY, 2, 13, {10: Signer("root 3").key, 11: some, 13: cp}), 8: RECOVERY.hash})
+    bad_signed("recovery head naming K2 as the root", "records/recovery/root", RECOVERY,
+               rec(RECOVERY, 2, 13, {10: Signer("root 3").key, 11: some, 13: cp}) | {10: RECOVERY2.key})
+    hb = enc(rec(RECOVERY, 2, 13, {10: Signer("root 3").key, 11: some, 13: cp}))
+    bad("recovery head whose second signature is over 32 KiB", "env/sig2",
+        head_envelope(hb, fake("later signature", 32 * 1024 + 1)))
+    bad("recovery head with K2's signature over another body", "sig/verify",
+        head_envelope(hb, RECOVERY2.sign(enc(rec(RECOVERY, 3, 13, {10: Signer("root 3").key, 11: some,
+                                                                   13: cp})), CTX_RECORD)))
     return take, refuse, lists
 
 
@@ -1192,7 +1268,8 @@ def message_vectors(records_take):
         1: ROOT.key,
         2: [dec(bytes.fromhex(r["envelope"])) for r in records_take[:3]],
         5: T0 + 60000,
-        9: RECOVERY.key}})
+        9: RECOVERY.key,
+        11: RECOVERY2.key}})
     add("pairing error taken", {0: 69, 2: 8})
     add("have", {0: 6, 2: ids[:3]})
     add("reach", {0: 18, 2: srt([LAPTOP.id16, PHONE.id16, BOARD.id16])})
@@ -1365,8 +1442,13 @@ def keys_table():
         rows.append({"name": s.name, "private_scalar": format(s.d, "064x"), "key": enc(s.key).hex(),
                      "key_hash": s.hash.hex(), "id16": s.id16.hex()})
     return {"group_id": GROUP.hex(), "keys": rows,
-            "group_id_of": "the first 16 bytes of SHA-256('cbb group v3' 0x00 key(root) key(recovery)) (rule 33)",
-            "note": "test keys only; private scalar = SHA-256('cbb test key ' + name) mod (n-1) + 1"}
+            "recovery2": {"name": RECOVERY2.name, "seeds": RECOVERY2.seeds.hex(), "key": enc(RECOVERY2.key).hex(),
+                          "key_hash": RECOVERY2.hash.hex(), "id16": RECOVERY2.hash[:16].hex()},
+            "group_id_of": "the first 16 bytes of SHA-256('cbb group v3' 0x00 key(root) key(recovery) "
+                           "key(recovery2)) (rule 33, E-6)",
+            "note": "test keys only; private scalar = SHA-256('cbb test key ' + name) mod (n-1) + 1; "
+                    "recovery2's seeds (sk_seed, sk_prf, pk_seed) = the first 48 bytes of "
+                    "SHA-512('cbb test key ' + name)"}
 
 
 # ---------------------------------------------------------------- wave 3 messages
@@ -1417,6 +1499,7 @@ TABLES = {
         (7, "welcome/credentials", "array 1..259 of envelope", False),
         (9, "welcome/recovery", "key 1", True),
         (10, "welcome/list", "bytes 1..34820", False),
+        (11, "welcome/recovery2", "key 4", True),
     ],
     "welcome/grant": [
         (2, "welcome/grant", "envelope", True),
@@ -1766,7 +1849,7 @@ def wave3_vectors(records_take):
     info = {1: "kitchen tablet", 2: 3, 4: 1, 9: fake("invite id", 16)}
     request = {1: fake("invite id", 16), 2: TABLET.key, 3: info, 4: 2, 5: 120000, 6: 2}
     envs = [bytes.fromhex(r["envelope"]) for r in records_take[:2]]
-    welcome = {1: ROOT.key, 2: [dec(e) for e in envs], 5: T0, 9: RECOVERY.key}
+    welcome = {1: ROOT.key, 2: [dec(e) for e in envs], 5: T0, 9: RECOVERY.key, 11: RECOVERY2.key}
 
     def msg(name, m, note=None):
         assert check_message(m) is None, (name, check_message(m))
@@ -1888,6 +1971,10 @@ def wave3_vectors(records_take):
     mp("a Welcome without its time", "welcome", {1: ROOT.key, 2: welcome[2]}, "welcome/time")
     mp("a Welcome without the recovery key", "welcome", {k: v for k, v in welcome.items() if k != 9},
        "welcome/recovery")
+    mp("a Welcome without the recovery key's second half", "welcome",
+       {k: v for k, v in welcome.items() if k != 11}, "welcome/recovery2")
+    mp("a Welcome whose second half is an ES256 key", "welcome", {**welcome, 11: RECOVERY.key},
+       "welcome/recovery2")
     lst = enc(sorted(bytes.fromhex(r["id"]) for r in records_take[:2]))
     mp("a Welcome with the newest list", "welcome", {**welcome, 10: lst})
     mp("a Welcome with an empty list", "welcome", {**welcome, 10: b""}, "welcome/list")
@@ -2779,7 +2866,7 @@ def main():
         "commands.json": {"label": LABELS["command"], "take": ct, "refuse": cr},
         "grants.json": {"label": LABELS["grant"], "group": GROUP.hex(), "take": gt, "refuse": gr, "copy_senders": gs, "sequences": gq},
         "credentials.json": {"label": LABELS["credential"], "take": kt, "refuse": kr,
-                             "recovery": RECOVERY.pub.hex()},
+                             "recovery": RECOVERY.pub.hex(), "recovery2": RECOVERY2.pub.hex()},
         "frames.json": {"grid": "64, 256, 1024, 4096, 16384, then multiples of 16384",
                         "take": mv, "refuse": mb, "refuse_fields": mf,
                         "set_digest_of_records_take": digest},

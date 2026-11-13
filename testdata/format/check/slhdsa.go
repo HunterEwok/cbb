@@ -123,3 +123,30 @@ func checkSLHDSA(dir string) {
 	}
 	fmt.Printf("%-18s %d checked\n", "slhdsa (NIST)", len(raw.Keygen)+len(raw.Siggen)+len(raw.Sigver)+changed)
 }
+
+// slhSign is gen.py's signer of SLH-DSA-SHA2-128s (go run . slhdsa-sign):
+// it reads {"seeds": hex of sk_seed, sk_prf and pk_seed, "items": [{"msg",
+// "ctx"}]} on stdin and writes {"pk", "sigs"}, deterministic signing. The
+// vectors' K2 signatures come from circl; the Rust core signs and checks
+// them with RustCrypto's slh-dsa.
+func slhSign() {
+	var in struct {
+		Seeds string
+		Items []struct{ Msg, Ctx string }
+	}
+	must(json.NewDecoder(os.Stdin).Decode(&in))
+	pub, sk, err := slhdsa.GenerateKey(bytes.NewReader(unhex(in.Seeds)), slhdsa.SHA2_128s)
+	must(err)
+	pk, err := pub.MarshalBinary()
+	must(err)
+	out := struct {
+		Pk   string   `json:"pk"`
+		Sigs []string `json:"sigs"`
+	}{Pk: fmt.Sprintf("%x", pk), Sigs: []string{}}
+	for _, it := range in.Items {
+		sig, err := slhdsa.SignDeterministic(&sk, slhdsa.NewMessage(unhex(it.Msg)), unhex(it.Ctx))
+		must(err)
+		out.Sigs = append(out.Sigs, fmt.Sprintf("%x", sig))
+	}
+	must(json.NewEncoder(os.Stdout).Encode(out))
+}

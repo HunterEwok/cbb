@@ -21,16 +21,16 @@ use super::body::{
     POWER_REMOVE, POWER_REMOVE_ADMINS, POWER_THAW, RIGHT_HUB, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND, ROLE_LEAF,
     ROLE_WATCH, Removal, Seen, Settings,
 };
-use super::key::{DeviceId, GroupId, Key, KeyHash, RecordId};
+use super::key::{DeviceId, GroupId, Key, KeyHash, RecordId, Recovery};
 use super::{MAX_ADMIN_RECORDS, MAX_DEVICES, MAX_NEWER, MAX_ROOT_RECORDS, MAX_SEQ, RULES_VERSION, Record};
 
 /// What the evaluation takes.
 pub struct Input<'a> {
     /// The group's first root key.
     pub root: &'a Key,
-    /// The group's recovery key, made with the group (rule 33); the Group
-    /// ID commits to both (`key::group_id`).
-    pub recovery: &'a Key,
+    /// The group's recovery key, made with the group (rule 33): its two
+    /// halves; the Group ID commits to all three keys (`key::group_id`).
+    pub recovery: &'a Recovery,
     pub records: &'a [Record],
     /// The recovery records' lists the device holds, as their bytes
     /// (`List`).
@@ -396,11 +396,11 @@ pub struct Keys {
 }
 
 impl Keys {
-    pub fn new(root: &Key, recovery: &Key) -> Keys {
+    pub fn new(root: &Key, recovery: &Recovery) -> Keys {
         let mut k = Keys { recovery: recovery.hash(), ..Keys::default() };
         k.roots.insert(root.hash());
         k.keys.insert(root.hash(), root.clone());
-        k.keys.insert(recovery.hash(), recovery.clone());
+        k.keys.insert(recovery.hash(), recovery.k1.clone());
         k
     }
 
@@ -464,11 +464,14 @@ impl Sigs {
 
     /// Whether record r, at place i, verifies under key: whether it is
     /// held, or None when it does not verify.
-    fn verify(&mut self, i: usize, r: &Record, key: &Key) -> Option<bool> {
+    fn verify(&mut self, i: usize, r: &Record, key: &Key, recovery: Option<&Recovery>) -> Option<bool> {
         match self.0.get(i).copied().flatten() {
             Some(known) => known,
             None => {
-                let v = r.verify(key).ok();
+                let v = match recovery {
+                    Some(rec) => r.verify_head(rec).ok(),
+                    None => r.verify(key).ok(),
+                };
                 if let Some(slot) = self.0.get_mut(i) {
                     *slot = Some(v);
                 }
@@ -484,7 +487,7 @@ impl Sigs {
 /// records' signatures already came to, by place in records.
 pub(crate) fn check_all<'a>(
     root: &Key,
-    recovery: &Key,
+    recovery: &Recovery,
     records: &[&'a Record],
     sigs: &mut Sigs,
 ) -> (Vec<Checked<'a>>, BTreeMap<RecordId, Why>) {
@@ -509,7 +512,7 @@ pub(crate) fn check_all<'a>(
             }
             match keys.signer(&r.body().signer) {
                 None => rest.push((i, r)),
-                Some((key, role)) => match sigs.verify(i, r, key) {
+                Some((key, role)) => match sigs.verify(i, r, key, (role == Role::Recovery).then_some(recovery)) {
                     Some(held) => {
                         learned |= keys.learn(r.body(), role, held);
                         done.insert(r.id(), Checked { r, role, held });
@@ -812,7 +815,7 @@ pub(crate) fn chain<'r>(
             out.unreadable = true;
             break;
         }
-        let Kind::Recovery { root, list, from, first } = &r.body().kind else { break };
+        let Kind::Recovery { root, list, from, first, .. } = &r.body().kind else { break };
         if r.body().prev != tip {
             break;
         }
@@ -1026,7 +1029,7 @@ pub fn evaluate(input: &Input) -> State {
 /// The records whose signer the others still name once a checkpoint
 /// pruned some: a key whose naming record it left out is not known, as on
 /// a member that dropped what it pruned.
-fn still_known<'a>(root: &Key, recovery: &Key, checked: Vec<Checked<'a>>) -> Vec<Checked<'a>> {
+fn still_known<'a>(root: &Key, recovery: &Recovery, checked: Vec<Checked<'a>>) -> Vec<Checked<'a>> {
     let mut keys = Keys::new(root, recovery);
     loop {
         let mut learned = false;
@@ -1099,7 +1102,7 @@ pub(crate) fn closed(cuts: &BTreeMap<KeyHash, Cut>, anchors: &BTreeSet<RecordId>
 /// counts by itself at once (rule 32).
 pub(crate) fn evaluate_checked(
     root: &Key,
-    recovery: &Key,
+    recovery: &Recovery,
     checked: Vec<Checked<'_>>,
     failed: BTreeMap<RecordId, Why>,
     lists: &BTreeMap<[u8; 32], &List>,
@@ -1447,7 +1450,7 @@ impl<'a> Evaluation<'a> {
     #[allow(clippy::too_many_arguments, reason = "the parts of one evaluation")]
     fn new(
         root: &Key,
-        recovery: &Key,
+        recovery: &Recovery,
         mut checked: Vec<Checked<'a>>,
         failed: BTreeMap<RecordId, Why>,
         anchors: BTreeSet<RecordId>,

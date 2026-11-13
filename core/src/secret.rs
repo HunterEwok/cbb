@@ -163,7 +163,7 @@ mod timing {
     #[test]
     #[ignore = "a timing measurement; run with --ignored timing"]
     fn timing_pin_mark() {
-        let (root, recovery) = (k("root").key, k("recovery").key);
+        let (root, recovery) = (k("root").key, crate::testkit::recovery());
         let local = [9u8; 32];
         let mark = pin_mark(&local, &root, &recovery);
         let t =

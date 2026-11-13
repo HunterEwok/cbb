@@ -10,7 +10,7 @@ use alloc::vec::Vec;
 
 use super::body::{Body, Head, List, Settings};
 use super::eval::{self, Checked, Cut, Keys, Role, State, Why};
-use super::key::{GroupId, Key, KeyHash, RecordId, group_id};
+use super::key::{GroupId, Key, KeyHash, RecordId, Recovery, group_id};
 use super::{Kind, MAX_NOTICES, Mark, Record, Rule, keep};
 use crate::identity::ExternalKey;
 
@@ -101,7 +101,7 @@ pub enum Stuck {
 #[derive(Clone)]
 pub struct RecordSet {
     root: Key,
-    recovery: Key,
+    recovery: Recovery,
     group: GroupId,
     keys: Keys,
     /// Each signer's units, to know when one is past its ceiling.
@@ -272,7 +272,7 @@ pub struct Written {
 impl RecordSet {
     /// An empty set for the group whose first root key is root and whose
     /// recovery key is recovery: the Group ID commits to both.
-    pub fn new(root: Key, recovery: Key) -> RecordSet {
+    pub fn new(root: Key, recovery: Recovery) -> RecordSet {
         let keys = Keys::new(&root, &recovery);
         let group = group_id(&root, &recovery);
         RecordSet {
@@ -318,7 +318,7 @@ impl RecordSet {
     /// until a round takes nothing new, as a record may wait for a list or
     /// for another record. Saving and restoring keeps the digest, the
     /// state and what is kept aside for a root whose change waits.
-    pub fn restore(root: Key, recovery: Key, records: &[Record], lists: &[Vec<u8>]) -> RecordSet {
+    pub fn restore(root: Key, recovery: Recovery, records: &[Record], lists: &[Vec<u8>]) -> RecordSet {
         let mut set = RecordSet::new(root, recovery);
         // Each round that changes something takes at least one record or
         // list for good; the bound only guards against a loop.
@@ -343,8 +343,8 @@ impl RecordSet {
     /// mark it saved beside them (`super::pin_mark`); None when the mark
     /// does not hold, so that a store whose recovery key was changed is
     /// not taken.
-    pub fn pinned(root: Key, recovery: Key, local: &[u8; 32], mark: &Mark) -> Option<RecordSet> {
-        (root != recovery && crate::secret::ct_eq(&super::pin_mark(local, &root, &recovery), mark))
+    pub fn pinned(root: Key, recovery: Recovery, local: &[u8; 32], mark: &Mark) -> Option<RecordSet> {
+        (root != recovery.k1 && crate::secret::ct_eq(&super::pin_mark(local, &root, &recovery), mark))
             .then(|| RecordSet::new(root, recovery))
     }
 
@@ -352,7 +352,7 @@ impl RecordSet {
         &self.root
     }
 
-    pub fn recovery(&self) -> &Key {
+    pub fn recovery(&self) -> &Recovery {
         &self.recovery
     }
 
@@ -580,7 +580,7 @@ impl RecordSet {
     fn insert_only(&mut self, r: Record, mark: Option<(&[u8; 32], &Mark)>) -> Result<Added, Refused> {
         // A group whose root key is its recovery key is no group: its set
         // takes nothing.
-        if r.body().group != self.group || self.root == self.recovery {
+        if r.body().group != self.group || self.root == self.recovery.k1 {
             return Err(Refused::Group);
         }
         let id = r.id();
@@ -599,7 +599,7 @@ impl RecordSet {
             return self.insert_early(r);
         }
         if role == Role::Recovery {
-            return self.insert_recovery(r, &key, mark);
+            return self.insert_recovery(r, mark);
         }
         // What the set would not keep is turned away before its signature
         // is verified: a record offered again after the set dropped it
@@ -870,8 +870,8 @@ impl RecordSet {
     /// signs nothing else. Its records are kept outside the rooms, at most
     /// two at one seq, the proof of a fork; the path and the cut follow at
     /// once.
-    fn insert_recovery(&mut self, r: Record, key: &Key, mark: Option<(&[u8; 32], &Mark)>) -> Result<Added, Refused> {
-        let held = r.verify_marked(key, mark).map_err(Refused::Broken)?;
+    fn insert_recovery(&mut self, r: Record, mark: Option<(&[u8; 32], &Mark)>) -> Result<Added, Refused> {
+        let held = r.verify_head_marked(&self.recovery, mark).map_err(Refused::Broken)?;
         let b = r.body();
         if b.seq > super::body::MAX_RECOVERY || !held && !matches!(b.kind, Kind::Recovery { .. }) {
             return Err(Refused::Broken(Rule::new("records/recovery")));
@@ -1772,6 +1772,7 @@ impl RecordSet {
         &mut self,
         state: &State,
         recovery: &dyn ExternalKey,
+        recovery2: &super::pq::PqKey,
         new_root: &dyn ExternalKey,
         device: super::body::Device,
         remove: &[KeyHash],
@@ -1801,7 +1802,7 @@ impl RecordSet {
         if unapplied {
             return Err(Error::msg(CHANGE_WAITING));
         }
-        if Key::es256(recovery.public()) != self.recovery {
+        if Key::es256(recovery.public()) != self.recovery.k1 || recovery2.key() != self.recovery.k2 {
             return Err(Error::msg("this is not the group's recovery key"));
         }
         let tip = state.chain();
@@ -1933,10 +1934,16 @@ impl RecordSet {
             seq,
             prev: tip.last().copied(),
             time_ms,
-            kind: Kind::Recovery { root: root_key, list: list.hash(), from: 0, first: first_id },
+            kind: Kind::Recovery {
+                root: root_key,
+                list: list.hash(),
+                from: 0,
+                first: first_id,
+                signer2: self.recovery.hash2(),
+            },
             held: false,
         };
-        let record = Record::sign(body, recovery)?;
+        let record = Record::sign_head(body, recovery, recovery2)?;
         let blind = !self.reached;
         // The set takes the change before it is given out: asked again,
         // with any ticks, the writer gives back this one, never a second

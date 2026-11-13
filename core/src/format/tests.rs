@@ -57,8 +57,50 @@ fn keys() -> HashMap<String, Vec<u8>> {
         let v = cbor::decode(&b).unwrap();
         crate::records::Key::es256(Key::from_value(&v).unwrap().public.to_vec())
     };
-    assert_eq!(hex(&crate::records::group_id(&point("root"), &point("recovery")).0), s(&k, "group_id"));
+    assert_eq!(hex(&crate::records::group_id(&point("root"), &vector_recovery()).0), s(&k, "group_id"));
     out
+}
+
+/// The vectors' recovery key: K1 the test key "recovery", K2 the SLH-DSA
+/// key of keys.json's `recovery2`, which its seeds make.
+fn vector_recovery() -> crate::records::Recovery {
+    let k = load("keys.json");
+    let row = k["keys"].as_array().unwrap().iter().find(|r| r["name"] == "recovery").unwrap();
+    let (b1, r2) = (unhex(s(row, "key")), &k["recovery2"]);
+    let b2 = unhex(s(r2, "key"));
+    let k1 = Key::from_value(&cbor::decode(&b1).unwrap()).unwrap();
+    let k2 = Key::from_value(&cbor::decode(&b2).unwrap()).unwrap();
+    assert_eq!(k2.alg, Alg::SlhDsa);
+    assert_eq!(hex(&k2.hash().0), s(r2, "key_hash"));
+    let seeds = unhex(s(r2, "seeds"));
+    let made = crate::records::pq::PqKey::from_seeds(
+        &seeds[..16].try_into().unwrap(),
+        &seeds[16..32].try_into().unwrap(),
+        &seeds[32..].try_into().unwrap(),
+    );
+    assert_eq!(made.public(), k2.public.to_vec(), "recovery2 comes of its seeds");
+    crate::records::Recovery::new(
+        crate::records::Key::es256(k1.public.to_vec()),
+        crate::records::Key { alg: crate::records::key::ALG_SLH_DSA, public: k2.public.to_vec() },
+    )
+    .unwrap()
+}
+
+/// Verifies an envelope's signatures as its kind has them: a recovery
+/// head (a record of type 13) carries both halves of the recovery key, K2
+/// over the body, K1 over the body and the SHA-256 of K2's signature.
+fn verify_signed(e: &Envelope<'_>, public: &[u8], label: &str) -> Result<(), Rule> {
+    let head = label == sig::LABEL_RECORD && e.map.get(1) == Some(&Value::Uint(13));
+    match (head, e.sig2) {
+        (true, Some(sig2)) => {
+            let rec = vector_recovery();
+            if !crate::records::pq::verify(&rec.k2, e.body, sig2, crate::records::pq::CONTEXT_RECORD) {
+                return Err(Rule::SIG_VERIFY);
+            }
+            sig::verify_es256(public, label, &crate::records::with_sig2(e.body, sig2), e.sig)
+        }
+        _ => e.verify(public, label),
+    }
 }
 
 #[test]
@@ -113,7 +155,7 @@ fn signed(file: &str, by_key: bool) {
         let name = s(t, "name");
         let b = unhex(s(t, "envelope"));
         let e = Envelope::parse(&b).unwrap_or_else(|r| panic!("{name}: {r}"));
-        e.verify(&signer_point(&e), label).unwrap_or_else(|r| panic!("{name}: {r}"));
+        verify_signed(&e, &signer_point(&e), label).unwrap_or_else(|r| panic!("{name}: {r}"));
         assert_eq!(hex(e.body), s(t, "body"), "{name}");
         if let Some(id) = t["id"].as_str() {
             assert_eq!(hex(&e.id()), id, "{name}");
@@ -148,7 +190,7 @@ fn signed(file: &str, by_key: bool) {
         let name = s(t, "name");
         let rule = s(t, "rule");
         let b = unhex(s(t, "envelope"));
-        let got = Envelope::parse(&b).and_then(|e| e.verify(&signer_point(&e), label));
+        let got = Envelope::parse(&b).and_then(|e| verify_signed(&e, &signer_point(&e), label));
         let format_level = ["cbor/", "env/", "sig/"].iter().any(|p| rule.starts_with(p));
         if format_level {
             assert_eq!(got.err().map(Rule::name), Some(rule), "{name}");
@@ -233,7 +275,7 @@ fn keys_of_the_wrong_size_or_off_the_curve() {
     }
     assert_eq!(seen, 3);
     assert_eq!(Key::new(Alg::X25519, &[0; 31]).check(), Err(Rule::KEYS_X25519));
-    assert_eq!(Key::new(Alg::Unknown(4), &[1]).check(), Ok(()));
+    assert_eq!(Key::new(Alg::Unknown(9), &[1]).check(), Ok(()));
     assert_eq!(Key::from_value(&Value::Array(vec![Value::Uint(1)])), Err(Rule::KEYS_SHAPE));
 }
 
@@ -778,8 +820,14 @@ fn every_signature_has_one_form() {
                 keys[&hex(e.signer().unwrap().as_bytes().unwrap())].clone()
             };
             let twin = high_s_twin(e.sig);
+            // A recovery head's K1 signs the body and K2's signature's hash.
+            let head = label == sig::LABEL_RECORD && e.map.get(1) == Some(&Value::Uint(13));
+            let signed = match (head, e.sig2) {
+                (true, Some(s2)) => crate::records::with_sig2(e.body, s2),
+                _ => e.body.to_vec(),
+            };
             assert_eq!(
-                sig::verify_es256(&point, label, e.body, &twin),
+                sig::verify_es256(&point, label, &signed, &twin),
                 Err(Rule::SIG_LOW_S),
                 "{file} {}",
                 s(t, "name")
@@ -790,7 +838,7 @@ fn every_signature_has_one_form() {
             assert!(
                 p256::ecdsa::VerifyingKey::from_sec1_bytes(&point)
                     .unwrap()
-                    .verify(&sig::message(label, e.body), &full)
+                    .verify(&sig::message(label, &signed), &full)
                     .is_ok()
             );
         }
@@ -882,7 +930,8 @@ fn a_leaf_handed_two_records_of_its_root_at_one_seq_stops() {
     // One record twice, two seqs, another group, another signer: no fork.
     assert_eq!(grant::fork(&ea, &ea, &point, &g.gid), no);
     assert_eq!(grant::fork(&ea, &later.envelope(), &point, &g.gid), no);
-    let other = group_id(&root.key, &k("other recovery").key);
+    let other =
+        group_id(&root.key, &crate::records::Recovery { k1: k("other recovery").key, ..crate::testkit::recovery() });
     let elsewhere = Record::sign(Body { group: other, ..b.body().clone() }, &root).unwrap();
     assert_eq!(grant::fork(&ea, &elsewhere.envelope(), &point, &g.gid), no);
     assert_eq!(grant::fork(&ea, &eb, &point, &other), no);

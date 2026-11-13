@@ -139,13 +139,19 @@ impl Run {
                     let a: Vec<&str> = after.split_whitespace().collect();
                     let from: u64 = a[1].parse().unwrap();
                     let first = self.id(a[3].parse().unwrap());
-                    Kind::Recovery { root: root.key.clone(), list: list.hash(), from, first }
+                    Kind::Recovery {
+                        root: root.key.clone(),
+                        list: list.hash(),
+                        from,
+                        first,
+                        signer2: crate::testkit::rk2().key().hash(),
+                    }
                 }
                 other => panic!("kind {other}"),
             };
             let body = self.g.body(&by, kind);
             assert_eq!(body.seq, seq, "#{n}");
-            let r = Record::sign(body, &by).unwrap_or_else(|e| panic!("#{n}: {e}"));
+            let r = crate::testkit::sign_by(body, &by);
             self.small.units(r.id(), units);
             self.g.push(r.clone());
             self.by_n.insert(n, r);
@@ -199,6 +205,10 @@ impl Run {
             }
             if let Some(m) = action.strip_prefix("compact (m=") {
                 self.compact(m.trim_end_matches(')'));
+            } else if let Some(m) = action.strip_prefix("compactAt(\"") {
+                self.compact(m.split('"').next().unwrap());
+            } else if let Some(m) = action.strip_prefix("compact ") {
+                self.compact(m.trim());
             }
             if let Some(got) = got {
                 let mut rest = got;
@@ -517,3 +527,4 @@ fn the_models_traces_end_alike_in_any_order() {
         }
     }
 }
+

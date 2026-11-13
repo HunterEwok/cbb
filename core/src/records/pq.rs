@@ -34,12 +34,20 @@ pub const CONTEXT_RECORD: &[u8] = b"cbb record v3";
 pub const CONTEXT_FETCH: &[u8] = b"cbb recovery fetch v3";
 
 /// The stack, in bytes, that verifying one change of root's two
-/// signatures needs: measured at 23.8 KiB on riscv32imac (opt-level s) and
-/// below 32 KiB on a 64-bit host, where the test
-/// `the_stack_a_verify_needs` holds it within a margin. A board sizes the
-/// task that verifies from it. Heads are verified one at a time, never
+/// signatures needs in any release profile. Measured: 23.8 KiB on
+/// riscv32imac and 28 KiB on x86-64 under the workspace's profile (opt-level
+/// s, LTO, one codegen unit); 36 to 40 KiB on x86-64 without LTO at s, 2 or
+/// 3, and 44 to 48 KiB at z, a valid signature or not; Xtensa not measured.
+/// A debug build needs over 96 KiB and is not supported on a board. The
+/// test `the_stack_a_verify_needs` runs it in release with and without LTO
+/// and holds this within a factor two. A board gives the task less only
+/// from its own measured number. Heads are verified one at a time, never
 /// recursively over a chain.
-pub const VERIFY_STACK: usize = 32 * 1024;
+pub const VERIFY_STACK: usize = 48 * 1024;
+
+#[cfg(test)]
+static SIGNED: std::sync::Mutex<alloc::collections::BTreeMap<[u8; 32], Vec<u8>>> =
+    std::sync::Mutex::new(alloc::collections::BTreeMap::new());
 
 /// K2: the recovery key's SLH-DSA half. Deterministic signing (FIPS 205's
 /// randomizer is the public seed), so a head signed twice is one head.
@@ -63,8 +71,28 @@ impl PqKey {
 
     /// The signature of msg under the context ctx (at most 255 bytes).
     pub fn sign(&self, msg: &[u8], ctx: &[u8]) -> Result<Vec<u8>> {
+        // Signing is deterministic and slow; the unit tests sign the same
+        // heads many times, so they keep what they signed.
+        #[cfg(test)]
+        let key = {
+            let mut h = Sha256::new();
+            h.update(self.public());
+            h.update([u8::try_from(ctx.len()).unwrap_or(u8::MAX)]);
+            h.update(ctx);
+            h.update(msg);
+            let key: [u8; 32] = h.finalize().into();
+            if let Some(sig) = SIGNED.lock().ok().and_then(|m| m.get(&key).cloned()) {
+                return Ok(sig);
+            }
+            key
+        };
         let sig = self.0.try_sign_with_context(msg, ctx, None).map_err(|_| Error::msg("the context is too long"))?;
-        Ok(sig.to_bytes().to_vec())
+        let sig = sig.to_bytes().to_vec();
+        #[cfg(test)]
+        if let Ok(mut m) = SIGNED.lock() {
+            m.insert(key, sig.clone());
+        }
+        Ok(sig)
     }
 }
 

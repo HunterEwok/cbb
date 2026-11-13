@@ -169,19 +169,54 @@ impl DeviceId {
     }
 }
 
+/// The group's recovery key (E-6): a pair, K1 (ES256) and K2
+/// (SLH-DSA-SHA2-128s), both fixed in the Group ID. A recovery head carries
+/// both signatures and both are required; everywhere else the recovery key
+/// is named by K1's hash.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Recovery {
+    pub k1: Key,
+    pub k2: Key,
+}
+
+impl Recovery {
+    /// The pair, when K1 is an ES256 key and K2 an SLH-DSA-SHA2-128s key of
+    /// the right sizes.
+    pub fn new(k1: Key, k2: Key) -> Option<Recovery> {
+        let ok = k1.check().is_ok_and(|c| c == KeyCheck::Good)
+            && k1.alg == ALG_ES256
+            && k2.alg == ALG_SLH_DSA
+            && k2.public.len() == SLH_DSA_PUBLIC;
+        ok.then_some(Recovery { k1, k2 })
+    }
+
+    /// K1's hash: the recovery key's name as a signer.
+    pub fn hash(&self) -> KeyHash {
+        self.k1.hash()
+    }
+
+    /// K2's hash: a recovery head's `signer2`.
+    pub fn hash2(&self) -> KeyHash {
+        self.k2.hash()
+    }
+}
+
 /// The label of the Group ID's hash.
 pub const LABEL_GROUP: &str = "cbb group v3";
 
 /// The Group ID: the first 16 bytes of SHA-256 over the label, a zero
-/// byte, and the encodings of the group's first root key and its recovery
-/// key (rule 33). It commits to both: a recovery key that is not the
-/// group's gives another Group ID, so no admitter can pin a false one.
-pub fn group_id(root: &Key, recovery: &Key) -> GroupId {
+/// byte, and the encodings of the group's first root key and the two
+/// halves of its recovery key (rule 33, E-6). It commits to all three: a
+/// recovery key that is not the group's gives another Group ID, so no
+/// admitter can pin a false one. Each key is one self-delimiting item, so
+/// the three cannot be cut another way; a second preimage costs 2^128.
+pub fn group_id(root: &Key, recovery: &Recovery) -> GroupId {
     let mut m = Vec::new();
     m.extend_from_slice(LABEL_GROUP.as_bytes());
     m.push(0);
     m.extend_from_slice(&root.encode());
-    m.extend_from_slice(&recovery.encode());
+    m.extend_from_slice(&recovery.k1.encode());
+    m.extend_from_slice(&recovery.k2.encode());
     DeviceId::of(&KeyHash(sha256(&m)))
 }
 

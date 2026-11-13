@@ -170,6 +170,9 @@ type keyRow struct {
 
 var byHash = map[string][]byte{} // key hash hex -> pub
 
+// recovery2ByHash holds the recovery key's K2 (SLH-DSA) by its key hash.
+var recovery2ByHash = map[string][]byte{}
+
 func keyHash(k any) ([]byte, []byte, error) {
 	a, ok := k.([]any)
 	if !ok || len(a) != 2 {
@@ -199,14 +202,6 @@ func envelope(b []byte, label string, signerKey func(map[any]any) ([]byte, error
 	if !ok1 || !ok2 {
 		return nil, nil, errors.New("env/shape")
 	}
-	if len(a) == 3 {
-		// sig2 is not fixed: a later algorithm's signature, up to 4 KiB.
-		if s2, ok := a[2].([]byte); !ok {
-			return nil, nil, errors.New("env/shape")
-		} else if len(s2) > 4096 {
-			return nil, nil, errors.New("env/sig2")
-		}
-	}
 	bv, err := strict(body)
 	if err != nil {
 		return nil, nil, fmt.Errorf("body cbor: %w", err)
@@ -214,6 +209,24 @@ func envelope(b []byte, label string, signerKey func(map[any]any) ([]byte, error
 	m, ok := bv.(map[any]any)
 	if !ok {
 		return nil, nil, errors.New("body not a map")
+	}
+	// A recovery head (record type 13) carries K2's SLH-DSA signature.
+	head := label == "cbb record v3" && m[uint64(1)] == uint64(13)
+	var sig2 []byte
+	if len(a) == 3 {
+		// sig2 is not fixed: a later algorithm's signature, up to 4 KiB,
+		// a recovery head's up to 32 KiB.
+		max := 4096
+		if head {
+			max = 32 * 1024
+		}
+		if s2, ok := a[2].([]byte); !ok {
+			return nil, nil, errors.New("env/shape")
+		} else if len(s2) > max {
+			return nil, nil, errors.New("env/sig2")
+		} else {
+			sig2 = s2
+		}
 	}
 	_, hasSigner2 := m[uint64(8)]
 	if (len(a) == 3) != hasSigner2 {
@@ -223,7 +236,19 @@ func envelope(b []byte, label string, signerKey func(map[any]any) ([]byte, error
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := es256(pub, label, body, sig); err != nil {
+	signed := body
+	if head && sig2 != nil {
+		// E-6: both halves sign every head. K2 signs the body; K1 signs the
+		// body and the SHA-256 of K2's signature (audit Q-1).
+		h2, _ := m[uint64(8)].([]byte)
+		k2, ok := recovery2ByHash[hex.EncodeToString(h2)]
+		if !ok || !slhVerify(k2, body, sig2, []byte("cbb record v3")) {
+			return nil, nil, errors.New("sig: sig/verify (K2)")
+		}
+		d := sha256.Sum256(sig2)
+		signed = append(bytes.Clone(body), d[:]...)
+	}
+	if err := es256(pub, label, signed, sig); err != nil {
 		return nil, nil, fmt.Errorf("sig: %w", err)
 	}
 	return m, body, nil
@@ -359,13 +384,28 @@ func checkSigned(dir, file string, sk func(map[any]any) ([]byte, error)) {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "slhdsa-sign" {
+		slhSign()
+		return
+	}
 	dir := os.Args[1]
 
 	var keys struct {
-		GroupID string   `json:"group_id"`
-		Keys    []keyRow `json:"keys"`
+		GroupID   string   `json:"group_id"`
+		Keys      []keyRow `json:"keys"`
+		Recovery2 keyRow   `json:"recovery2"`
 	}
 	load(dir, "keys.json", &keys)
+	{
+		v, err := strict(unhex(keys.Recovery2.Key))
+		must(err)
+		h, pub, err := keyHash(v)
+		must(err)
+		if a := v.([]any); a[0] != uint64(4) || len(pub) != 32 || hex.EncodeToString(h) != keys.Recovery2.KeyHash {
+			fail("keys.json recovery2: not an SLH-DSA key of its hash")
+		}
+		recovery2ByHash[keys.Recovery2.KeyHash] = pub
+	}
 	for _, k := range keys.Keys {
 		v, err := strict(unhex(k.Key))
 		must(err)
@@ -377,11 +417,13 @@ func main() {
 		byHash[k.KeyHash] = pub
 		keyOf[k.Name] = unhex(k.Key)
 	}
-	// The Group ID commits to the first root key and the recovery key
-	// (rule 33).
-	gid := sha256.Sum256(append(append([]byte("cbb group v3\x00"), keyOf["root"]...), keyOf["recovery"]...))
+	// The Group ID commits to the first root key and both halves of the
+	// recovery key (rule 33, E-6).
+	pre := append([]byte("cbb group v3\x00"), keyOf["root"]...)
+	pre = append(append(pre, keyOf["recovery"]...), unhex(keys.Recovery2.Key)...)
+	gid := sha256.Sum256(pre)
 	if hex.EncodeToString(gid[:16]) != keys.GroupID {
-		fail("group id is not that of the root key and the recovery key")
+		fail("group id is not that of the root key and the recovery key's two halves")
 	}
 
 	var prof struct {
