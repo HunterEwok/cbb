@@ -85,7 +85,7 @@ use sha2::Sha256;
 pub use body::{Body, Kind, List};
 pub use eval::{Input, State, evaluate};
 pub use key::{DeviceId, GroupId, Key, KeyHash, RecordId, group_id};
-pub use set::RecordSet;
+pub use set::{RecordSet, Stuck};
 
 use crate::certs::sha256;
 use crate::identity::ExternalKey;

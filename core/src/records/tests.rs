@@ -4182,11 +4182,11 @@ fn a_key_one_line_admits_gets_the_pair_alone() {
     assert_eq!(st.root_pair, Some((low.body().seq, low_pair[0], low_pair[1])));
 }
 
-/// In a root fork a removed key gets no record at or above the fork seq,
-/// the removal that is half of the pair included; a removal below it
-/// still reaches it.
+/// A removed key is told its removal also when that removal is half of the
+/// pair, but never the pair as such: not the other half, and of two
+/// removals that both name it, one.
 #[test]
-fn a_removed_key_gets_no_part_of_the_pair() {
+fn a_removed_key_gets_its_removal_but_never_the_pair() {
     let mut g = G::new();
     g.device(&k("root"), &k("m0"), "m0", |_| {});
     let a = g.device(&k("root"), &k("m5"), "m5", |_| {});
@@ -4197,7 +4197,44 @@ fn a_removed_key_gets_no_part_of_the_pair() {
     assert!(st.stopped() && st.revoked.contains(&k("m5").hash));
     assert!(st.proof_to.is_empty());
     assert_ne!(crate::peer::standing(&st, &k("m0").hash, &point_of(&k("m5"))), crate::peer::Standing::ForkProof);
-    assert!(m0.for_peer(&st, &k("m5").hash).is_empty());
+    let got: Vec<RecordId> = m0.for_peer(&st, &k("m5").hash).iter().map(|r| r.id()).collect();
+    assert_eq!(got, [rm.id()]);
+
+    // Both halves name it: it gets one of them.
+    let mut g = G::new();
+    g.device(&k("root"), &k("m0"), "m0", |_| {});
+    g.device(&k("root"), &k("m5"), "m5", |_| {});
+    g.device(&k("root"), &k("m6"), "m6", |_| {});
+    let one = g.root_rec(Kind::Revoke(removal(&[k("m5").hash], g.seen())));
+    let mut both = [k("m5").hash, k("m6").hash];
+    both.sort();
+    let two = root_twin(&g, &one, Kind::Revoke(removal(&both, g.seen())));
+    let mut m0 = set_with(&g.root.key, &g.recs, &g.lists);
+    m0.insert(two.clone()).unwrap();
+    let st = m0.state();
+    assert!(st.stopped() && st.revoked.contains(&k("m5").hash));
+    let got: Vec<RecordId> = m0.for_peer(&st, &k("m5").hash).iter().map(|r| r.id()).collect();
+    assert_eq!(got, [one.id().min(two.id())]);
+}
+
+/// A device the root removes above the fork learns it is removed: the
+/// removal counts on its line, and it is no part of the pair.
+#[test]
+fn a_device_removed_above_the_fork_learns_it_is_removed() {
+    let mut g = G::new();
+    g.device(&k("root"), &k("m0"), "m0", |_| {});
+    g.device(&k("root"), &k("m5"), "m5", |_| {});
+    let x = g.device(&k("root"), &k("m6"), "m6", |_| {});
+    let twin = root_twin(&g, &x, Kind::Copies { incoming_ms: 5_000, seen: vec![] });
+    let rm = g.root_rec(Kind::Revoke(removal(&[k("m5").hash], g.seen())));
+    let mut m0 = set_with(&g.root.key, &g.recs, &g.lists);
+    m0.insert(twin.clone()).unwrap();
+    let st = m0.state();
+    assert!(st.stopped() && st.revoked.contains(&k("m5").hash));
+    assert!(st.root_pair.is_some_and(|(seq, _, _)| seq < rm.body().seq));
+    let got: Vec<RecordId> = m0.for_peer(&st, &k("m5").hash).iter().map(|r| r.id()).collect();
+    assert!(got.contains(&rm.id()));
+    assert!(!got.contains(&x.id()) && !got.contains(&twin.id()));
 }
 
 /// A key an admin admits while the root has two histories: the admin's
@@ -4315,13 +4352,14 @@ fn the_newest_waiting_checkpoint_keeps_its_records_aside_first() {
     }
 }
 
-/// The limit, as written: a checkpoint of the root that is never whole and
-/// keeps more old records than the place aside holds keeps a member at an
-/// older checkpoint, and once the member gave up asking it is told.
+/// The limit, as written: a checkpoint of the root that is never whole,
+/// whose records with an older waiting one's pass the place aside, keeps a
+/// member at an older checkpoint, and once the member gave up asking each
+/// is told with its reason.
 #[test]
 fn a_checkpoint_never_whole_that_fills_the_place_aside_is_told() {
     let small = crate::records::keep::small::Small::new(14, 12, 5);
-    let (g, old, c7, _c8, c9) = eight_and_nine(true);
+    let (g, old, c7, c8, c9) = eight_and_nine(true);
     for r in &g.recs {
         small.units(r.id(), 1);
     }
@@ -4342,7 +4380,13 @@ fn a_checkpoint_never_whole_that_fills_the_place_aside_is_told() {
         sync_all(&mut m, &given, &g.lists);
     }
     assert_eq!(m.state().checkpoint, Some(c7.id()));
-    assert!(m.stuck_checkpoints().contains(&c9.id()));
+    // 9 waits for a record nobody has; 8's records were offered every
+    // round and had no room beside 9's.
+    let mut told = m.stuck_checkpoints();
+    told.sort();
+    let mut want = vec![(c9.id(), Stuck::NeverOffered), (c8.id(), Stuck::NoRoom)];
+    want.sort();
+    assert_eq!(told, want);
 }
 
 /// A record a later checkpoint keeps, of which the member remembers only
