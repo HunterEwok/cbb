@@ -307,6 +307,8 @@ struct State {
     /// By token: what every group together may send, while no key is
     /// confirmed and under the confirmed key.
     ceilings: Shared<Ceiling>,
+    /// By (payer, token): the quiet passes past the unconfirmed ceiling.
+    quiet: Shared<Bucket>,
     repeats: Shared<Repeat>,
     bindings: Shared<Binding>,
     /// Bodies on their way to a platform.
@@ -344,17 +346,6 @@ pub struct Service {
 
 fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
-}
-
-/// How long the platform keeps a body of `ttl` (the content's: one
-/// minute, ten minutes, one hour, one day), in seconds.
-fn life(ttl: Option<u64>) -> u64 {
-    match ttl {
-        Some(1) => 60,
-        Some(2) => 600,
-        Some(4) => 86_400,
-        _ => 3600,
-    }
 }
 
 /// Whose share an address uses: the address, or its /64 for IPv6, an IPv4
@@ -524,11 +515,11 @@ impl Inner {
     /// generation or slots is journaled before the send is answered. Err
     /// when the journal could not take it: the send is then answered
     /// `failed`, and the next snapshot keeps the change.
-    fn commit(&self, st: &mut State, tok: [u8; 32], payer: Payer, ask: &Ask) -> std::result::Result<(), ()> {
+    fn commit(&self, st: &mut State, tok: [u8; 32], payer: Payer, ask: &Ask, born: u32) -> std::result::Result<(), ()> {
         let now = now_ms();
         let current = st.bindings.get(&tok).cloned();
         let mint = |k: &[u8; 32], g: u32, p: u64| self.challenge(&tok, k, g, p);
-        let then = match binding::judge(current.as_ref(), ask, now, &mint) {
+        let then = match binding::judge(current.as_ref(), ask, now, born, &mint) {
             Verdict::Pass { then, .. } => then,
             Verdict::Stale | Verdict::Ahead | Verdict::Challenge { .. } => return Ok(()),
         };
@@ -596,7 +587,11 @@ impl Inner {
         let repeat = self.keyed(b"body", &tok, s.body);
         let key = s.key.hash().0;
         let ask = Ask { key, slot: s.slot, seq: s.seq, challenge: s.challenge };
-        let life_s = life(s.ttl);
+        // One read of the clock for a binding this send makes: the
+        // challenge sent with it and the binding filed after the platform
+        // answered are of the same generation.
+        let born = binding::clock_generation(now);
+        let life_s = push::life_s(s.ttl);
         let expires_s = now / 1000 + life_s;
         let plan = {
             let mut st = self.lock();
@@ -615,7 +610,7 @@ impl Inner {
             }
             let mint = |k: &[u8; 32], g: u32, p: u64| self.challenge(&tok, k, g, p);
             let confirmed = st.bindings.get(&tok).is_some_and(Binding::confirmed);
-            let verdict = binding::judge(st.bindings.get(&tok), &ask, now, &mint);
+            let verdict = binding::judge(st.bindings.get(&tok), &ask, now, born, &mint);
             // The group's budgets toward this token.
             let tb = self.keyed(b"token-tag", &tok, tag);
             if st.tokens.get(&tb).is_none() {
@@ -670,9 +665,11 @@ impl Inner {
                     // sent nothing to this token lately (its own rate full)
                     // still sends one body: the phone's own group, which
                     // sends seldom, is not the one that waits behind groups
-                    // that keep the ceiling spent. Any other send carries its
-                    // challenge alone, so that a flood of other groups never
-                    // keeps the phone from confirming.
+                    // that keep the ceiling spent. Those quiet passes are
+                    // counted per payer and token at the group's rate, so
+                    // groups of one maker's making share one. Any other send
+                    // carries its challenge alone, so that a flood of other
+                    // groups never keeps the phone from confirming.
                     let quiet = b.unconfirmed.full_at(budgets.unconfirmed, at);
                     if let Err(wait) = b.unconfirmed.take(budgets.unconfirmed, at) {
                         return answer(push::SENT_BUDGET, Some(wait.as_millis() as u64));
@@ -680,8 +677,21 @@ impl Inner {
                     let ceiling = st
                         .ceilings
                         .get_mut(&tok)
-                        .map_or(Err(Duration::from_secs(60)), |c| c.unconfirmed.take(budgets.unconfirmed_token, at))
-                        .or_else(|wait| if quiet { Ok(()) } else { Err(wait) });
+                        .map_or(Err(Duration::from_secs(60)), |c| c.unconfirmed.take(budgets.unconfirmed_token, at));
+                    let ceiling = match ceiling {
+                        Err(wait) if quiet => {
+                            let qk = self.keyed(b"quiet", &payer, &tok);
+                            if st.quiet.get(&qk).is_none() {
+                                st.quiet.insert(qk, Bucket::full(budgets.unconfirmed.1, at), payer, |q| {
+                                    q.full_at(budgets.unconfirmed, at)
+                                });
+                            }
+                            st.quiet
+                                .get_mut(&qk)
+                                .map_or(Err(wait), |q| q.take(budgets.unconfirmed, at).map_err(|_| wait))
+                        }
+                        other => other,
+                    };
                     match ceiling {
                         Ok(()) => {
                             st.in_flight.insert(repeat);
@@ -725,7 +735,7 @@ impl Inner {
                     && let Some(a) = file
                 {
                     let mut st = self.lock();
-                    if st.bindings.get(&tok).is_none() && self.commit(&mut st, tok, payer, &a).is_err() {
+                    if st.bindings.get(&tok).is_none() && self.commit(&mut st, tok, payer, &a, born).is_err() {
                         return answer(push::SENT_FAILED, Some(JOURNAL_WAIT_MS));
                     }
                 }
@@ -748,7 +758,7 @@ impl Inner {
                         self.sent.fetch_add(1, Ordering::Relaxed);
                         let r = Repeat { at, life_s, upgraded: upgrade };
                         st.repeats.insert(repeat, r, payer, |r| at.saturating_duration_since(r.at) >= REPEAT_FOR);
-                        match self.commit(&mut st, tok, payer, &ask) {
+                        match self.commit(&mut st, tok, payer, &ask, born) {
                             Ok(()) => answer(push::SENT, None),
                             Err(()) => answer(push::SENT_FAILED, Some(JOURNAL_WAIT_MS)),
                         }
@@ -913,6 +923,7 @@ impl Service {
             periods: HashMap::new(),
             tokens: Shared::new(TOKENS_MAX),
             ceilings: Shared::new(TOKENS_MAX),
+            quiet: Shared::new(TOKENS_MAX),
             repeats: Shared::new(REPEATS_MAX),
             bindings,
             in_flight: HashSet::new(),

@@ -59,6 +59,17 @@ object PushPlatform {
         UnifiedPush.unregister(c, old)
     }
 
+    /**
+     * The phone left its last group: the endpoint goes, and the next start
+     * registers a new instance, so the left group's members hold an address
+     * that reaches nothing.
+     */
+    fun giveUp(c: Context) {
+        val old = instance(c)
+        prefs(c).edit { putString(INSTANCE, "cbb-" + java.util.UUID.randomUUID().toString()) }
+        UnifiedPush.unregister(c, old)
+    }
+
     fun stop(c: Context) {
         UnifiedPush.unregister(c, instance(c))
     }

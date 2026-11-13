@@ -222,6 +222,31 @@ fn the_next_number_falls_to_the_clock_only_when_the_service_says_ahead() {
     assert_eq!(next_seq(Some(high.max(low)), now - day, false), high + 1);
 }
 
+/// After a true `ahead` the phone's next registration of its own is in
+/// time: the restart's number becomes the highest when the phone's clock
+/// also finds the saved one ahead; a false `ahead` keeps the highest.
+#[test]
+fn a_true_ahead_brings_the_highest_back_to_the_clock() {
+    let day = MAX_SEQ_AHEAD_MS;
+    let now = 1_800_000_000_000u64;
+    let high = now + 400 * day;
+    let seq = next_seq(Some(high), now, true);
+    let saved = next_highest(Some(high), seq, now, true);
+    assert_eq!(saved, now);
+    // A day later, a registration of the phone's own: in time.
+    let later = next_seq(Some(saved), now + day, false);
+    assert!(seq_in_time(later, now + day), "{} days ahead", (later - now - day) / day);
+    // A false `ahead` (the saved highest within a day of the clock): the
+    // highest stays, and the next one is above it.
+    let near = now + 1000;
+    let low = next_seq(Some(near), now, true);
+    assert_eq!(next_highest(Some(near), low, now, true), near);
+    assert_eq!(next_seq(Some(near), now, false), near + 1);
+    // Without a restart the highest never falls.
+    assert_eq!(next_highest(Some(high), now, now, false), high);
+    assert_eq!(next_highest(None, 5, now, false), 5);
+}
+
 /// A member keeps the higher number; a lower one only by step 2 of rule
 /// S-1, which the sender decides from the service's answer.
 #[test]
@@ -791,7 +816,8 @@ fn the_phone_registers_and_opens_a_body_through_the_core_api() {
     assert_eq!(restored["ok"]["highest"], T0);
     // Without a restart a number given while the clock was ahead stays the
     // floor; after a `push-renew` with `ahead` the next is the clock, and
-    // the highest is kept.
+    // so is the highest, since the phone's clock finds the old one ahead too;
+    // a restart the clock disagrees with keeps the highest.
     let month = 30 * 86_400_000u64;
     let on = call("push_registration", serde_json::json!({ "highest_seq": T0 + month, "now_ms": T0, "kinds": 0 }));
     assert_eq!(on["ok"]["seq"].as_u64(), Some(T0 + month + 1), "{on}");
@@ -799,7 +825,16 @@ fn the_phone_registers_and_opens_a_body_through_the_core_api() {
         "push_registration",
         serde_json::json!({ "highest_seq": T0 + month, "now_ms": T0, "kinds": 0, "restart": true }),
     );
-    assert_eq!((back["ok"]["seq"].as_u64(), back["ok"]["highest"].as_u64()), (Some(T0), Some(T0 + month)), "{back}");
+    assert_eq!((back["ok"]["seq"].as_u64(), back["ok"]["highest"].as_u64()), (Some(T0), Some(T0)), "{back}");
+    let false_ahead = call(
+        "push_registration",
+        serde_json::json!({ "highest_seq": T0 + 1000, "now_ms": T0, "kinds": 0, "restart": true }),
+    );
+    assert_eq!(
+        (false_ahead["ok"]["seq"].as_u64(), false_ahead["ok"]["highest"].as_u64()),
+        (Some(T0), Some(T0 + 1000)),
+        "{false_ahead}"
+    );
     let up = call(
         "push_registration",
         serde_json::json!({ "now_ms": 0, "kinds": 1, "env": ENV_UNIFIEDPUSH,

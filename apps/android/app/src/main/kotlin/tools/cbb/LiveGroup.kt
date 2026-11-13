@@ -2606,7 +2606,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             Thread.sleep(SYNCED_AFTER_MS)
             if (runCatching { n.peers() }.getOrDefault(emptyList()).any { it.device == device }) {
                 val tag = groupTag ?: return@Thread
-                PushSetup.synced(context, tag, since, device)
+                PushSetup.synced(context, tag, since, device, recordsTakenAtMs)
             }
         }, "push synced").start()
     }
@@ -2754,6 +2754,10 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      * and the roots they lead to: a new root, after another admin phone took
      * the group over, means connecting again with it trusted.
      */
+    /** When records the group's file did not have were last taken in: a push hints-only mark is spent by a sync only after it. */
+    @Volatile
+    private var recordsTakenAtMs: Long? = null
+
     private fun takeRecords(n: CoreMember) {
         val rs = runCatching { n.records() }.getOrNull() ?: return
         val (fresh, rooted) = synchronized(lock) {
@@ -2763,6 +2767,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             if (fresh.isNotEmpty()) runCatching { g.save(file) }
             fresh to (g.roots.size != roots)
         }
+        if (fresh.isNotEmpty()) recordsTakenAtMs = System.currentTimeMillis()
         if (fresh.isNotEmpty()) {
             relay()
             refreshCredentials()

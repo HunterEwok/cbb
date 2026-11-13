@@ -161,13 +161,16 @@ impl Binding {
 }
 
 /// Judges a send against the token's binding at `now_ms`; `mint` makes
-/// the token's challenges.
-pub fn judge(old: Option<&Binding>, a: &Ask, now_ms: u64, mint: Mint<'_>) -> Verdict {
+/// the token's challenges. `born` is the generation a binding made by this
+/// send starts at: the clock in seconds when the send was first judged,
+/// carried to its filing after the platform answered, so that the challenge
+/// that went with the send is for the generation the binding gets.
+pub fn judge(old: Option<&Binding>, a: &Ask, now_ms: u64, born: u32, mint: Mint<'_>) -> Verdict {
     if !push::seq_in_time(a.seq, now_ms) {
         return Verdict::Ahead;
     }
     let clock = clock_generation(now_ms);
-    let mut b = old.cloned().unwrap_or_else(|| Binding { generation: clock, ..Binding::default() });
+    let mut b = old.cloned().unwrap_or_else(|| Binding { generation: born, ..Binding::default() });
     b.clamp(now_ms);
     let p = period(now_ms);
     // The challenge made for this token, this key and this generation, in
@@ -237,7 +240,7 @@ mod tests {
     }
 
     fn j(old: Option<&Binding>, a: &Ask, now: u64) -> Verdict {
-        judge(old, a, now, &mint)
+        judge(old, a, now, clock_generation(now), &mint)
     }
 
     fn pass(v: Verdict) -> (Option<[u8; 16]>, Binding) {

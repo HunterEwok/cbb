@@ -121,6 +121,8 @@ pub const SERVICE: &str = "cbb.tools:8767";
 pub const WAIT: Duration = Duration::from_secs(2);
 /// Tries of one body at most.
 const TRIES: u32 = 5;
+/// Bodies waiting at most: past it the oldest goes.
+const JOBS_MAX: usize = 4096;
 
 /// One body waiting to go.
 struct Job {
@@ -138,6 +140,10 @@ struct Job {
     challenge: Option<[u8; 16]>,
     at: Instant,
     tries: u32,
+    /// When the body was made, and how long it is of use
+    /// (`push::life_s`): one still waiting after that is dropped.
+    made: Instant,
+    life: Duration,
 }
 
 #[derive(Default)]
@@ -300,8 +306,10 @@ impl Sender {
             challenge: on.challenge,
             at: Instant::now() + WAIT,
             tries: 0,
+            made: Instant::now(),
+            life: Duration::from_secs(push::life_s(ttl)),
         };
-        st.jobs.push(job);
+        push_job(&mut st.jobs, job);
         self.inner.wake.notify_all();
     }
 
@@ -368,6 +376,22 @@ impl Sender {
     }
 }
 
+/// Queues a body, dropping the oldest when the queue is full.
+fn push_job(jobs: &mut Vec<Job>, job: Job) {
+    push_capped(jobs, job, |j| j.made, JOBS_MAX);
+}
+
+/// Pushes `item`, first dropping the one made longest ago when `items`
+/// holds `max`.
+fn push_capped<T>(items: &mut Vec<T>, item: T, made: impl Fn(&T) -> Instant, max: usize) {
+    if items.len() >= max
+        && let Some(i) = items.iter().enumerate().min_by_key(|(_, j)| made(j)).map(|(i, _)| i)
+    {
+        items.swap_remove(i);
+    }
+    items.push(item);
+}
+
 impl Inner {
     fn run(self: Arc<Self>) {
         let mut st = self.state.lock().unwrap_or_else(|e| e.into_inner());
@@ -384,7 +408,7 @@ impl Inner {
                 continue;
             };
             let mut job = st.jobs.swap_remove(i);
-            if st.connected.contains_key(&job.phone) {
+            if st.connected.contains_key(&job.phone) || job.made.elapsed() > job.life {
                 continue;
             }
             // The connection to the service under the face the registration
@@ -471,9 +495,29 @@ impl Inner {
                 job.tries += 1;
                 if job.tries < TRIES {
                     job.at = Instant::now() + after.min(Duration::from_secs(600));
-                    st.jobs.push(job);
+                    push_job(&mut st.jobs, job);
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A full queue drops the body made longest ago, never the new one.
+    #[test]
+    fn a_full_queue_drops_the_oldest_body() {
+        let t = Instant::now();
+        let mut q: Vec<(u32, Instant)> = Vec::new();
+        for i in 0..4u32 {
+            push_capped(&mut q, (i, t + Duration::from_secs(u64::from(10 - i))), |j| j.1, 4);
+        }
+        // Body 3 was made first (the smallest time): it goes.
+        push_capped(&mut q, (9, t + Duration::from_secs(20)), |j| j.1, 4);
+        let mut left: Vec<u32> = q.iter().map(|j| j.0).collect();
+        left.sort_unstable();
+        assert_eq!(left, vec![0, 1, 2, 9]);
     }
 }

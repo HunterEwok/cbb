@@ -1378,3 +1378,107 @@ fn the_previous_face_serves_push_only_until_the_phone_registers_again() {
     s.stop();
     w.service.stop();
 }
+
+/// A challenge and the binding filed for it are of one generation, however
+/// long the platform takes: the phone's first registration over its first
+/// challenge confirms its key even when a second passed in between.
+#[test]
+fn the_first_challenge_confirms_however_slow_the_platform() {
+    let w = world(Budgets::default());
+    let mut c = conn(&w, 1, 1);
+    let phone = send_key(3);
+    let t0 = now_seq(0);
+    for i in 0..3u8 {
+        let token = [60 + i; 32];
+        // Answer after a second boundary, whenever the send began.
+        *w.fake.delay.lock().unwrap() = Duration::from_millis(1100);
+        assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, t0, &body(i)).status, push::SENT);
+        *w.fake.delay.lock().unwrap() = Duration::ZERO;
+        let ch = challenge_for(&w, &token, hint_of(&phone)).expect("a challenge went with the body");
+        let r = S { challenge: Some(ch), ..s(&phone, push::ENV_APNS, &token, t0 + 1) }.send(&mut c, &body(10 + i));
+        assert_eq!(r.status, push::SENT);
+        assert_eq!(confirmed(&w, &token), Some(true), "token {i}: the first challenge confirmed nothing");
+    }
+    w.service.stop();
+}
+
+/// Past the unconfirmed ceiling a quiet group still sends one body, and
+/// the quiet passes of every group one payer brings to one token share a
+/// single bucket of the group's size: groups of one maker's making add
+/// nothing.
+#[test]
+fn the_quiet_pass_is_one_bucket_for_each_payer_and_token() {
+    let b = Budgets { unconfirmed_token: (0.001, 1.0), unconfirmed: (12.0, 2.0), ..Budgets::default() };
+    let w = world(b);
+    let token = [8u8; 32];
+    let t0 = now_seq(0);
+    // One group spends the ceiling.
+    let mut first = conn(&w, 10, 10);
+    assert_eq!(send(&mut first, &send_key(40), push::ENV_APNS, &token, t0, &body(1)).status, push::SENT);
+    let before = w.fake.bodies();
+    // Eight more groups from the same address, each quiet.
+    for g in 0..8u8 {
+        let mut c = conn(&w, 20 + g, 20 + g);
+        let _ = send(&mut c, &send_key(50 + g), push::ENV_APNS, &token, t0, &body(2 + g));
+    }
+    assert_eq!(w.fake.bodies() - before, 2, "quiet bodies past the ceiling: one bucket of burst 2");
+    w.service.stop();
+}
+
+/// A push service that never gives a send its own answer, however much
+/// else it sends, holds the sender only until the answer's deadline: the
+/// connection is given up, a try is counted, and the next body goes.
+#[test]
+fn a_service_that_never_answers_holds_the_sender_only_until_the_deadline() {
+    let keys = Keys::new().unwrap();
+    let pin = cbb_core::certs::Cert::parse(&keys.cert).unwrap().key_hash();
+    let clock: cbb_core::tls::Clock = Arc::new(crate::forward::SystemClock);
+    let tls = Arc::new(cbb_core::tls::registration_server(&keys.cert, &keys.key, push::ALPN, &clock).unwrap());
+    let tcp = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = tcp.local_addr().unwrap();
+    let sends = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let seen = sends.clone();
+    std::thread::spawn(move || {
+        for c in tcp.incoming() {
+            let Ok(c) = c else { continue };
+            let (tls, seen) = (tls.clone(), seen.clone());
+            std::thread::spawn(move || {
+                let Ok(conn) = ServerConnection::new(tls) else { return };
+                let mut s = StreamOwned::new(conn, c);
+                while s.conn.is_handshaking() {
+                    if s.conn.complete_io(&mut s.sock).is_err() {
+                        return;
+                    }
+                }
+                if read_frame(&mut s).is_err() || write_frame(&mut s, &push::ready(100)).is_err() {
+                    return;
+                }
+                let Ok(f) = read_frame(&mut s) else { return };
+                let Ok(m) = frame::read(&f, 1 << 16) else { return };
+                let n = m.map.get(2).and_then(Value::as_uint).unwrap_or(0);
+                seen.fetch_add(1, Ordering::SeqCst);
+                // Another send's answer every half second, never this one's.
+                while write_frame(&mut s, &push::sent(n + 1000, push::SENT, None)).is_ok() {
+                    std::thread::sleep(Duration::from_millis(500));
+                }
+            });
+        }
+    });
+    let faces = Arc::new(OneFace { addr, pin, tag: [50; 16] });
+    let s = pusher::Sender::start(faces, Arc::new(Kept::default()), Vec::new(), Arc::new(|_| {}));
+    let (g, phone, phone2) = (DeviceId([1; 16]), DeviceId([2; 16]), DeviceId([3; 16]));
+    let t0 = now_seq(0);
+    s.registration(&g, &phone, PHONE, &read_reg(&registration(50, t0, push::KIND_COPIES, [8; 32])));
+    s.registration(&g, &phone2, PHONE, &read_reg(&registration_in([2; 16], [50; 16], t0, push::KIND_COPIES, [7; 32])));
+    s.copy(&g, Role::Origin, &[phone], None, &|_| Some(push::Body::Unknown(9)));
+    assert!(wait_for(|| sends.load(Ordering::SeqCst) == 1));
+    s.copy(&g, Role::Origin, &[phone2], None, &|_| Some(push::Body::Unknown(10)));
+    // The deadline is short in tests (crate::push::ANSWER_WITHIN): the
+    // second phone's body reaches the service on a new connection.
+    let until = Instant::now() + crate::push::ANSWER_WITHIN * 3 + pusher::WAIT;
+    while sends.load(Ordering::SeqCst) < 2 && Instant::now() < until {
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    assert!(sends.load(Ordering::SeqCst) >= 2, "the sender stayed held by one send");
+    s.stop();
+}

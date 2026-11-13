@@ -223,18 +223,26 @@ public final class PushVault: @unchecked Sendable {
 
     /// The phone left the group: the group goes, and so does the send key,
     /// so that the registration the left group's members hold stops being
-    /// good once the phone's other groups confirm the new one. The token
-    /// stays; the next registration draws the new send key.
-    public func left(_ group: String) throws {
+    /// good once the phone's other groups confirm the new one; the next
+    /// registration draws the new send key. With no group left the sender
+    /// goes whole, token and all, and the answer is true: the app gives the
+    /// token up, since no other group would confirm a new key.
+    @discardableResult
+    public func left(_ group: String) throws -> Bool {
         lock.lock()
         defer { lock.unlock() }
         try save(group, nil)
+        if try groups().isEmpty {
+            try save(sender: nil)
+            return true
+        }
         var s = try sender()
-        guard s.sendKey != nil else { return }
+        guard s.sendKey != nil else { return false }
         s.sendKey = nil
         s.keyHint = nil
         s.challenge = nil
         try save(sender: s)
+        return false
     }
 
     /// Changes one group's state under the lock.

@@ -405,14 +405,19 @@ final class LiveGroup: GroupController {
             guard let self, let node = self.node else { return }
             let now = Set(((try? node.peers()) ?? []).map(\.device))
             let stayed = now.intersection(before)
-            if !stayed.isEmpty { PushSetup.shared.synced(at: since, peers: stayed) }
+            if !stayed.isEmpty { PushSetup.shared.synced(at: since, peers: stayed, recordsAt: self.recordsTakenAt) }
         }
     }
+
+    /// When the app last took in records from the member that it did not
+    /// have: a push hints-only mark is spent by a sync only after it.
+    private var recordsTakenAt: Date?
 
     private func pullRecords() {
         guard let node, let rs = try? node.records(), !rs.isEmpty, let g = state else { return }
         var set = g.records
         guard !set.addAll(rs, groupCA: g.groupCA).isEmpty else { return }
+        recordsTakenAt = Date()
         adopt(set)
     }
 

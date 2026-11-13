@@ -63,13 +63,17 @@ class PushTest {
         assertEquals(r.seq + 1, off.seq)
         assertNull(off.keyHint)
         // Saved while the clock was two days ahead: above it until a member
-        // says the service found it ahead; then once from the clock, and the
-        // highest stays.
+        // says the service found it ahead; then from the clock, and so is the
+        // highest, which the phone's clock finds ahead too. A restart the
+        // clock disagrees with keeps the highest.
         val ahead = reg(now + 2 * 86_400_000L)
         assertEquals(now + 2 * 86_400_000L + 1, ahead.seq)
         val restarted = reg(ahead.highest, restart = true)
         assertEquals(now, restarted.seq)
-        assertEquals(ahead.highest, restarted.highest)
+        assertEquals(now, restarted.highest)
+        val falseAhead = reg(now + 1000, restart = true)
+        assertEquals(now, falseAhead.seq)
+        assertEquals(now + 1000, falseAhead.highest)
         // Another face signs other bytes.
         assertFalse(reg(r.seq, face = bytes(5, 16)).frame.contentEquals(reg(r.seq).frame))
         // A key not 32 bytes, a face not 16 or none: code 18.
@@ -157,15 +161,15 @@ class PushTest {
         assertEquals(PushVault.Registered(hexStr(bytes(8, 160)), Push.Env.FCM, 1, hexStr(key3), vault.sender().sendKey?.let(::hexStr), vault.sender().challenge?.let(::hexStr), hexStr(moved)), vault.load("g3").registered)
         assertFailsWith<PushVault.NoFace> { vault.register("g3", me, bytes(8, 160), env = Push.Env.FCM, kinds = 1) }
         assertEquals(onMoved.seq, vault.load("g3").seq)
-        // A member said the number was ahead: one registration from the
-        // clock, below the highest, which stays; the next goes on above it.
+        // A member said the number was ahead, and the phone's clock agrees:
+        // one registration from the clock, which becomes the highest.
         val past = System.currentTimeMillis() + 3 * 86_400_000L
         vault.save("g3", vault.load("g3").also { it.seq = past; it.highest = past })
         val restarted = assertNotNull(vault.register("g3", me, bytes(8, 160), env = Push.Env.FCM, kinds = 1, face = moved, reasons = setOf(PushVault.Reason.RENEW, PushVault.Reason.AHEAD)))
         assertTrue(restarted.seq < past)
-        assertEquals(past, vault.load("g3").highest)
+        assertEquals(restarted.seq, vault.load("g3").highest)
         val again = assertNotNull(vault.register("g3", me, bytes(8, 160), env = Push.Env.FCM, kinds = 1, face = moved, reasons = setOf(PushVault.Reason.RENEW)))
-        assertEquals(past + 1, again.seq)
+        assertTrue(again.seq in (restarted.seq + 1) until past)
     }
 
     /**
@@ -188,7 +192,7 @@ class PushTest {
         assertContentEquals(off.frame, vault.load("left").frame, "the frame the members get turns push off")
         assertEquals(0, vault.load("left").kinds)
         assertNull(vault.leaving("left"), "already off: nothing more")
-        vault.left("left")
+        assertFalse(vault.left("left"), "another group stays")
         assertEquals(listOf("stays"), vault.groups())
         val after = vault.sender()
         assertNull(after.sendKey)
@@ -198,6 +202,11 @@ class PushTest {
         assertFalse(again.keyHint!!.contentEquals(stays.keyHint))
         assertFalse(vault.sender().sendKey!!.contentEquals(before.sendKey))
         assertNull(vault.load("stays").registered?.challenge)
+        // Leaving the last group gives the token up: the sender goes whole.
+        assertNotNull(vault.leaving("stays"))
+        assertTrue(vault.left("stays"))
+        assertNull(vault.sender().token)
+        assertTrue(vault.items().isEmpty())
     }
 
     /**
@@ -233,6 +242,16 @@ class PushTest {
         val next = t0 + 14L * 24 * 3600 * 1000
         assertTrue(vault.keep(bytes(41, 16) + hint, next))
         assertNotNull(vault.register("g2", me, null, up, Push.Env.UNIFIED_PUSH, 1, FACE, nowMs = next))
+        // A new endpoint (a new send key) in the same period: the hour and the
+        // period's one registration over a challenge start afresh.
+        val up2 = Push.UnifiedPush("https://up.example.org/y", UNIFIED_POINT, bytes(2, 16))
+        val t1 = next + 5L * 24 * 3600 * 1000
+        assertTrue(vault.keep(bytes(42, 16) + vault.sender().keyHint!!, t1))
+        assertNotNull(vault.register("g1", me, null, up, Push.Env.UNIFIED_PUSH, 1, FACE, nowMs = t1))
+        val newKey = assertNotNull(vault.register("g1", me, null, up2, Push.Env.UNIFIED_PUSH, 1, FACE, nowMs = t1 + 60_000))
+        assertFalse(newKey.keyHint!!.contentEquals(hint))
+        assertTrue(vault.keep(bytes(43, 16) + newKey.keyHint!!, t1 + 120_000), "the new key's challenge is kept at once")
+        assertNotNull(vault.register("g1", me, null, up2, Push.Env.UNIFIED_PUSH, 1, FACE, nowMs = t1 + 180_000), "and registered over")
         // FCM, which only the push service reaches, keeps every new challenge.
         val fcm = PushVault(MemoryStore())
         fcm.register("g", me, bytes(7, 160), env = Push.Env.FCM, kinds = 1, face = FACE, nowMs = t0)
@@ -304,7 +323,8 @@ class PushTest {
 
     @Test
     fun aHintsOnlyMarkLastsUntilItsChangeIsApplied() {
-        val marks = PushMarks(MemoryStore())
+        var clock = NOW
+        val marks = PushMarks(MemoryStore()) { clock }
         val me = bytes(1, 16)
         val gone = bytes(2, 16)
         val g = PushVault.Group(members = listOf(me, gone), root = me, keyDrawnMs = 1_000)
@@ -336,30 +356,42 @@ class PushTest {
         assertFalse(marks.hintsOnly("g", g))
         // An event naming a change that never comes: spent once the app has
         // synced the group's records after it with a member other than the
-        // device it names, and those records say it did not happen.
+        // device it names, taken in records newer than the mark, and those
+        // records say it did not happen.
         val other = bytes(3, 16)
         marks.spend("g", g)
         assertTrue(marks.of("g").isEmpty())
         marks.mark("g", 2, gone, g, 20_000)
         marks.mark("g", 6, null, g, 21_000)
         assertTrue(marks.hintsOnly("g", g))
-        marks.synced("g", 20_500, listOf(other), g)
+        // A member that brought nothing newer than the marks has not heard of
+        // the change either: nothing spent.
+        marks.synced("g", 25_000, listOf(other), 19_000, g)
+        marks.synced("g", 25_000, listOf(other), null, g)
+        assertEquals(listOf(2L, 6L), marks.of("g").map { it.event }, "no newer records: no mark spent")
+        marks.synced("g", 20_500, listOf(other), 20_200, g)
         assertTrue(marks.hintsOnly("g", g), "the stop came after that sync")
         assertEquals(listOf(6L), marks.of("g").map { it.event })
         marks.mark("g", 2, gone, g, 23_000)
-        marks.synced("g", 24_000, listOf(gone), g)
+        marks.synced("g", 24_000, listOf(gone), 23_500, g)
         assertEquals(listOf(2L), marks.of("g").map { it.event }, "the device a mark names never clears it")
-        marks.synced("g", 24_000, emptyList(), g)
+        marks.synced("g", 24_000, emptyList(), 23_500, g)
         assertTrue(marks.hintsOnly("g", g), "no member: nothing synced")
-        marks.synced("g", 24_000, listOf(other), g)
+        marks.synced("g", 24_000, listOf(other), 23_500, g)
         assertFalse(marks.hintsOnly("g", g))
         // A stop that is there stays in force whatever a sync brings, until a
         // key drawn after it.
         g.halted = true
         marks.mark("g", 6, null, g, 30_000)
-        marks.synced("g", 31_000, listOf(other), g)
+        marks.synced("g", 31_000, listOf(other), 30_500, g)
         assertTrue(marks.hintsOnly("g", g))
         g.keyDrawnMs = 32_000
+        assertFalse(marks.hintsOnly("g", g))
+        // Any mark ends after a week.
+        g.halted = false
+        marks.mark("g", 2, gone, g, 40_000)
+        assertTrue(marks.hintsOnly("g", g))
+        clock = 40_000 + PushMarks.LIFE_MS
         assertFalse(marks.hintsOnly("g", g))
         marks.forget("g")
         assertTrue(marks.of("g").isEmpty())
@@ -368,7 +400,7 @@ class PushTest {
     /** A full list keeps the marks in force; an event naming no device of the group never pushes one out. */
     @Test
     fun aFullListOfMarksKeepsTheOnesInForce() {
-        val marks = PushMarks(MemoryStore())
+        val marks = PushMarks(MemoryStore()) { NOW }
         val me = bytes(1, 16)
         val gone = bytes(2, 16)
         val g = PushVault.Group(members = listOf(me, gone), root = me, keyDrawnMs = 1_000)
@@ -381,7 +413,7 @@ class PushTest {
         marks.mark("g", 6, null, g, 50_000)
         l = marks.of("g")
         assertEquals(PushMarks.MAX, l.size)
-        assertEquals(listOf(2L, 6L), l.filter { it.inForce(g) }.map { it.event })
+        assertEquals(listOf(2L, 6L), l.filter { it.inForce(g, NOW) }.map { it.event })
         for (i in 0 until PushMarks.MAX) marks.mark("g", 6, null, g, 60_000L + i * 1000)
         l = marks.of("g")
         assertEquals(PushMarks.MAX, l.size)
@@ -422,5 +454,8 @@ class PushTest {
 
         /** A group's face for the push service. */
         val FACE = ByteArray(16) { 4 }
+
+        /** The marks' clock in the tests, after every mark they make. */
+        const val NOW = 100_000L
     }
 }

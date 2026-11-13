@@ -50,12 +50,16 @@ final class PushTests: XCTestCase {
         XCTAssertLessThan(off.frame.count, r.frame.count)
         // Saved while the clock was two days ahead: the number stays above
         // it until a member says the service found it ahead; then it starts
-        // again from the clock, once, and the highest stays.
+        // again from the clock, and so does the highest, which the phone's
+        // clock finds ahead too. A restart the clock disagrees with keeps it.
         let ahead = try reg(r.seq + 2 * 86_400_000)
         XCTAssertEqual(ahead.seq, r.seq + 2 * 86_400_000 + 1)
         let restarted = try reg(ahead.highest, restart: true)
         XCTAssertEqual(restarted.seq, r.seq)
-        XCTAssertEqual(restarted.highest, ahead.highest)
+        XCTAssertEqual(restarted.highest, r.seq)
+        let falseAhead = try reg(r.seq + 1000, restart: true)
+        XCTAssertEqual(falseAhead.seq, r.seq)
+        XCTAssertEqual(falseAhead.highest, r.seq + 1000)
         // Another face signs other bytes.
         let other = try Push.registration(highestSeq: r.seq, now: now, kinds: [.copies], env: Push.Env.apns, token: token,
                                           key: k.key, sendKey: k.sendKey, slot: k.slot, face: Data(repeating: 5, count: 16))
@@ -169,8 +173,9 @@ final class PushTests: XCTestCase {
             guard case PushVault.Failure.noFace = e else { return XCTFail("\(e)") }
         }
         XCTAssertEqual(try vault.load("g1").seq, onNewFace.seq, "nothing saved without a face")
-        // A member said the number was ahead: one registration from the
-        // clock, below the highest, which stays; the next goes on above it.
+        // A member said the number was ahead, and the phone's clock agrees:
+        // one registration from the clock, which becomes the highest, so the
+        // next of the phone's own is in time too.
         var g = try vault.load("g1")
         let past = UInt64(Date().timeIntervalSince1970 * 1000) + 3 * 86_400_000
         g.highest = past
@@ -180,12 +185,13 @@ final class PushTests: XCTestCase {
                                                          kinds: [.copies, .events], face: moved,
                                                          reasons: [.renew, .ahead], devices: devices))
         XCTAssertLessThan(restarted.seq, past)
-        XCTAssertEqual(try vault.load("g1").highest, past)
+        XCTAssertEqual(try vault.load("g1").highest, restarted.seq)
         XCTAssertEqual(try vault.load("g1").seq, restarted.seq)
         let renewedAgain = try XCTUnwrap(try vault.register("g1", me: me, token: token, env: Push.Env.apns,
                                                             kinds: [.copies, .events], face: moved, reasons: .renew,
                                                             devices: devices))
-        XCTAssertEqual(renewedAgain.seq, past + 1)
+        XCTAssertLessThan(renewedAgain.seq, past)
+        XCTAssertGreaterThan(renewedAgain.seq, restarted.seq)
 
         // A new token: a new send key for every group, its challenge gone.
         try vault.register("g1", me: me, token: Data(repeating: 8, count: 32), env: Push.Env.apns, kinds: [.copies], face: face)
@@ -244,7 +250,7 @@ final class PushTests: XCTestCase {
         XCTAssertEqual(try vault.load("left").frame, off.frame, "the frame the members get is the one turning it off")
         XCTAssertEqual(try vault.load("left").kinds, 0)
         XCTAssertNil(try vault.leaving("left"), "already off: nothing more")
-        try vault.left("left")
+        XCTAssertFalse(try vault.left("left"), "another group stays")
         XCTAssertEqual(try vault.groups(), ["stays"])
         let after = try vault.sender()
         XCTAssertNil(after.sendKey)
@@ -256,6 +262,12 @@ final class PushTests: XCTestCase {
         XCTAssertNotEqual(again.keyHint, stays.keyHint)
         XCTAssertNotEqual(try vault.sender().sendKey, before.sendKey)
         XCTAssertNil(try vault.load("stays").registered?.challenge)
+        // Leaving the last group gives the token up: the sender goes whole.
+        XCTAssertNotNil(try vault.leaving("stays"))
+        XCTAssertTrue(try vault.left("stays"))
+        XCTAssertNil(try vault.sender().token)
+        XCTAssertNil(try vault.sender().sendKey)
+        XCTAssertEqual(try vault.items().count, 0)
     }
 
     /// testdata/interop/push-open.json, from the Rust core's push tests: the
@@ -396,6 +408,8 @@ final class PushTests: XCTestCase {
     }
 
     func testAHintsOnlyMarkLastsUntilItsChangeIsApplied() throws {
+        PushMarks.clock = { Date(timeIntervalSince1970: 100) }
+        defer { PushMarks.clock = { Date() } }
         let defaults = try XCTUnwrap(UserDefaults(suiteName: "push-marks-\(UUID().uuidString)"))
         let gone = Data(repeating: 2, count: 16), me = Data(repeating: 1, count: 16)
         var g = PushVault.Group()
@@ -437,31 +451,45 @@ final class PushTests: XCTestCase {
         // An event naming a change that never comes (a removal of a device
         // that stays, a stop that is not there): spent once the app has
         // synced the group's records after it with a member other than the
-        // device the event names, and those records say it did not happen.
+        // device it names, taken in records newer than the mark, and those
+        // records say it did not happen.
         let other = Data(repeating: 3, count: 16)
         PushMarks.spend("g", g, in: defaults)
         XCTAssertNil(PushMarks.all(defaults)["g"])
-        PushMarks.mark("g", event: 2, device: gone, state: g, now: Date(timeIntervalSince1970: 20), in: defaults)
-        PushMarks.mark("g", event: 6, device: nil, state: g, now: Date(timeIntervalSince1970: 21), in: defaults)
+        func at(_ s: Double) -> Date { Date(timeIntervalSince1970: s) }
+        PushMarks.mark("g", event: 2, device: gone, state: g, now: at(20), in: defaults)
+        PushMarks.mark("g", event: 6, device: nil, state: g, now: at(21), in: defaults)
         XCTAssertTrue(PushMarks.hintsOnly("g", g, in: defaults))
-        PushMarks.synced("g", at: Date(timeIntervalSince1970: 20.5), peers: [other], state: g, in: defaults)
+        // A member that brought nothing newer than the marks has not heard
+        // of the change either: nothing spent.
+        PushMarks.synced("g", at: at(25), peers: [other], recordsAt: at(19), state: g, in: defaults)
+        PushMarks.synced("g", at: at(25), peers: [other], recordsAt: nil, state: g, in: defaults)
+        XCTAssertEqual(PushMarks.all(defaults)["g"]?.map(\.event), [2, 6], "no newer records: no mark spent")
+        PushMarks.synced("g", at: at(20.5), peers: [other], recordsAt: at(20.2), state: g, in: defaults)
         XCTAssertTrue(PushMarks.hintsOnly("g", g, in: defaults), "the stop came after that sync")
         XCTAssertEqual(PushMarks.all(defaults)["g"]?.map(\.event), [6])
-        PushMarks.mark("g", event: 2, device: gone, state: g, now: Date(timeIntervalSince1970: 23), in: defaults)
-        PushMarks.synced("g", at: Date(timeIntervalSince1970: 24), peers: [gone], state: g, in: defaults)
+        PushMarks.mark("g", event: 2, device: gone, state: g, now: at(23), in: defaults)
+        PushMarks.synced("g", at: at(24), peers: [gone], recordsAt: at(23.5), state: g, in: defaults)
         XCTAssertEqual(PushMarks.all(defaults)["g"]?.map(\.event), [2], "the device a mark names never clears it")
-        PushMarks.synced("g", at: Date(timeIntervalSince1970: 24), peers: [], state: g, in: defaults)
+        PushMarks.synced("g", at: at(24), peers: [], recordsAt: at(23.5), state: g, in: defaults)
         XCTAssertTrue(PushMarks.hintsOnly("g", g, in: defaults), "no member: nothing synced")
-        PushMarks.synced("g", at: Date(timeIntervalSince1970: 24), peers: [other], state: g, in: defaults)
+        PushMarks.synced("g", at: at(24), peers: [other], recordsAt: at(23.5), state: g, in: defaults)
         XCTAssertFalse(PushMarks.hintsOnly("g", g, in: defaults))
         // A stop that is there stays in force whatever a sync brings, until
         // a key drawn after it.
         g.halted = true
-        PushMarks.mark("g", event: 6, device: nil, state: g, now: Date(timeIntervalSince1970: 30), in: defaults)
-        PushMarks.synced("g", at: Date(timeIntervalSince1970: 31), peers: [other], state: g, in: defaults)
+        PushMarks.mark("g", event: 6, device: nil, state: g, now: at(30), in: defaults)
+        PushMarks.synced("g", at: at(31), peers: [other], recordsAt: at(30.5), state: g, in: defaults)
         XCTAssertTrue(PushMarks.hintsOnly("g", g, in: defaults))
         g.keyDrawnMS = 32_000
         XCTAssertFalse(PushMarks.hintsOnly("g", g, in: defaults))
+        // Any mark ends after a week.
+        g.halted = false
+        PushMarks.mark("g", event: 2, device: gone, state: g, now: at(40), in: defaults)
+        XCTAssertTrue(PushMarks.hintsOnly("g", g, in: defaults))
+        PushMarks.clock = { Date(timeIntervalSince1970: 40 + 7 * 24 * 3600 + 1) }
+        XCTAssertFalse(PushMarks.hintsOnly("g", g, in: defaults))
+        PushMarks.clock = { Date(timeIntervalSince1970: 100) }
         PushMarks.forget("g", in: defaults)
         XCTAssertNil(PushMarks.all(defaults)["g"])
     }
@@ -470,6 +498,8 @@ final class PushTests: XCTestCase {
     /// and an event naming a device the group does not list never pushes
     /// one out.
     func testAFullListOfMarksKeepsTheOnesInForce() throws {
+        PushMarks.clock = { Date(timeIntervalSince1970: 100) }
+        defer { PushMarks.clock = { Date() } }
         let defaults = try XCTUnwrap(UserDefaults(suiteName: "push-marks-\(UUID().uuidString)"))
         let gone = Data(repeating: 2, count: 16), me = Data(repeating: 1, count: 16)
         var g = PushVault.Group()

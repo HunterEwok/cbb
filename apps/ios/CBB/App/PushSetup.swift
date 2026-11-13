@@ -92,16 +92,19 @@ final class PushSetup {
         let face = face ?? Self.testFace(tag)
         if group?.tag == tag, group?.me == id, group?.devices == applied, group?.face == face { return }
         group = (tag, id, applied, face)
+        // A token given up when the last group was left: ask again.
+        if on, token == nil, Self.accessGroup != nil { ask() }
         refresh()
     }
 
     /// The group's records are synced since `at` with `peers` (the hex IDs
     /// of members that stayed connected a while), and applied: a hints-only
     /// mark from before then is spent when those records say its change did
-    /// not happen (PushMarks.synced).
-    func synced(at: Date, peers: Set<String>) {
+    /// not happen and the app took in new records after the mark
+    /// (PushMarks.synced).
+    func synced(at: Date, peers: Set<String>, recordsAt: Date?) {
         guard let group, let g = try? vault.load(group.tag) else { return }
-        PushMarks.synced(group.tag, at: at, peers: Set(peers.compactMap { Data(hex: $0) }), state: g,
+        PushMarks.synced(group.tag, at: at, peers: Set(peers.compactMap { Data(hex: $0) }), recordsAt: recordsAt, state: g,
                          in: PushMarks.defaults)
     }
 
@@ -124,11 +127,20 @@ final class PushSetup {
 
     /// The phone left its group: the group's push keys, slot, secrets and
     /// marks go, and the send key with them, so that what the left group's
-    /// members hold stops being good (PushVault.left); the token stays.
+    /// members hold stops being good (PushVault.left). With no group left
+    /// the token is given up too: the left group's members hold it, and no
+    /// other group would confirm a new send key.
     func left() {
         guard let group else { return }
         if Self.accessGroup != nil {
-            do { try vault.left(group.tag) } catch { fail(error) }
+            do {
+                if try vault.left(group.tag) {
+                    UIApplication.shared.unregisterForRemoteNotifications()
+                    token = nil
+                }
+            } catch {
+                fail(error)
+            }
         }
         PushMarks.forget(group.tag, in: PushMarks.defaults)
         self.group = nil

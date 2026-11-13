@@ -130,6 +130,18 @@ pub const TAG_LEN: usize = 16;
 pub const MIN_BODY: usize = NONCE_LEN + TAG_LEN;
 /// The largest body any platform takes.
 pub const MAX_BODY: usize = 2972;
+
+/// How long a body is of use, in seconds, by its send's `ttl` (field 7):
+/// 1 a minute, 2 ten minutes, 4 a day, otherwise an hour. The service
+/// keeps a repeat that long; a member drops a body still waiting after it.
+pub fn life_s(ttl: Option<u64>) -> u64 {
+    match ttl {
+        Some(1) => 60,
+        Some(2) => 600,
+        Some(4) => 86_400,
+        _ => 3600,
+    }
+}
 /// The longest token: FCM states no maximum, and a UnifiedPush endpoint or
 /// a WNS channel is a URL. The longest send is on the 16384 step; an APNs
 /// or FCM token keeps it on the 4096 step.
@@ -435,6 +447,20 @@ pub fn next_seq(highest: Option<u64>, now_ms: u64, restart: bool) -> u64 {
         return now.clamp(1, 1 << 53);
     }
     highest.map_or(1, |s| s.saturating_add(1)).max(now).clamp(1, 1 << 53)
+}
+
+/// The highest number the phone saves after giving `seq`. It stays above
+/// `seq` (a restart may number below it), except on a restart that the
+/// phone's own clock agrees with: when the saved highest is also more than
+/// a day past `now_ms`, it was given while the clock was ahead, and keeping
+/// it would number every later registration ahead again. A false `ahead`
+/// changes nothing while the phone's clock disagrees with it.
+pub fn next_highest(highest: Option<u64>, seq: u64, now_ms: u64, restart: bool) -> u64 {
+    match highest {
+        Some(h) if restart && !seq_in_time(h, now_ms.min(MAX_CLOCK_MS)) => seq,
+        Some(h) => h.max(seq),
+        None => seq,
+    }
 }
 
 /// Whether the service takes `seq` at its clock `now_ms`: seq is a clock

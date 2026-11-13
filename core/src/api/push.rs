@@ -189,9 +189,9 @@ fn registration(a: RegistrationArgs) -> Result<Vec<u8>, Refusal> {
     let mut m = Map::new();
     m.insert("frame".into(), b64_value(&frame));
     m.insert("seq".into(), Value::from(seq));
-    // A restart may number below the highest: the highest stays, so the
-    // next registration after it moves above again.
-    m.insert("highest".into(), Value::from(a.highest_seq.map_or(seq, |h| h.max(seq))));
+    // A restart may number below the highest, which stays unless the
+    // phone's clock also finds it ahead (`push::next_highest`).
+    m.insert("highest".into(), Value::from(push::next_highest(a.highest_seq, seq, a.now_ms, a.restart)));
     // The send key's hint, the first 8 bytes of its hash: the push service
     // puts it beside each challenge, so that the phone keeps only one sent
     // to its own key.

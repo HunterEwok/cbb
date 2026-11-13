@@ -60,6 +60,12 @@ object PushPlatform {
      */
     fun newEndpoint(c: Context) = Unit
 
+    /** The phone left its last group: the token goes; the next group asks for a new one. */
+    fun giveUp(c: Context) {
+        app(c) ?: return
+        FirebaseMessaging.getInstance().deleteToken().addOnFailureListener { Log.e(TAG, "push: the FCM token was not deleted", it) }
+    }
+
     fun stop(c: Context) {
         app(c) ?: return
         val m = FirebaseMessaging.getInstance()

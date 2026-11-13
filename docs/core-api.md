@@ -408,8 +408,9 @@ because the app ran. A device gone or a new root draws a new push key, and the p
 not kept, so a removed member's bodies open nothing; until then an event of a removal, a new root
 or a stop marks the group hints-only (`PushMarks`), and the mark is spent once the app has
 applied that change and drawn the new key, or has synced the group's records after the mark with
-a member other than the device it names (one stayed connected 30 s) and those records say the
-change did not happen (the device still listed, another root, no stop). When the list of marks
+a member other than the device it names (one stayed connected 30 s), took in records newer
+than the mark, and those records say the change did not happen (the device still listed,
+another root, no stop); any mark ends after a week. When the list of marks
 is full a mark no longer in force goes first, and one not in force when it arrives never pushes
 one out. Every registration names the group's face for the push service; until the group gives
 one nothing is registered. Leaving the group first saves a registration with `kinds` 0 for its
@@ -417,7 +418,11 @@ members, then forgets its push keys, secrets and marks and the send key, so that
 group's members hold stops being good once the phone's other groups confirm the new key; the
 token stays. On UnifiedPush, whose endpoint takes a message from whoever knows it, at most one
 new challenge an hour is kept, a challenge alone makes a new registration once in a challenge
-period, and applying a removal takes a new endpoint. The Android app does the same
+period (under the same send key), and applying a removal takes a new endpoint. A current
+member knows the endpoint and its keys, so it can plant a challenge part of its own each hour
+just before the service's and keep the phone's key unconfirmed for as long as it does so; the
+phone's groups then send at the unconfirmed rate, which costs function only, no more than
+membership already gives. Leaving the last group gives the token up. The Android app does the same
 (`PushVault.kt`, `PushSetup.kt`). A copy's text gets the notification's Copy button;
 the test tool's row in Settings is in debug builds only.
 
@@ -479,8 +484,10 @@ under a new seq, the old seq passes, and its bodies open nothing. Every send cos
 budget, a refused one too, and the service closes a connection after eight refusals. What goes
 to one token is budgeted per group: under the confirmed key, with one ceiling for every group
 together; while no key is confirmed, a small
-rate per group and one ceiling for every group together, past which a group's send carries only
-its challenge, alone; and challenges alone. The tables
+rate per group and one ceiling for every group together, past which a group that sent nothing
+to the token lately still sends one body (these passes counted per payer and token, so groups
+of one address share them) and any other send carries only its challenge, alone; and
+challenges alone. The tables
 everyone shares give each payer (an address, an IPv6 /64, an IPv4 client on an IPv6 socket read
 as its IPv4 address) a share, and when one is full the payer with the most entries loses its
 oldest entry, never everyone.

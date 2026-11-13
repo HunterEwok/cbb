@@ -19,6 +19,11 @@ public enum PushMarks {
 
     static let key = "push.marks"
     static let max = 16
+    /// How long a mark lasts when nothing ends it before: a week.
+    static let lifeMS: UInt64 = 7 * 24 * 3600 * 1000
+    /// The clock the marks' age is read on; tests set another.
+    static var clock: () -> Date = { Date() }
+    static var nowMS: UInt64 { UInt64(Swift.max(0, clock().timeIntervalSince1970 * 1000)) }
 
     public struct Mark: Codable, Equatable {
         public var event: UInt64
@@ -38,7 +43,7 @@ public enum PushMarks {
         /// device the app no longer lists, or a new root the app already
         /// knows, was applied before the event came.
         public func inForce(_ g: PushVault.Group) -> Bool {
-            guard atMS > (g.keyDrawnMS ?? 0) else { return false }
+            guard atMS > (g.keyDrawnMS ?? 0), PushMarks.nowMS < atMS &+ PushMarks.lifeMS else { return false }
             switch (event, device, g.members) {
             case let (2, d?, members?): return members.contains(d)
             case let (4, d?, _): return g.root != d
@@ -93,21 +98,25 @@ public enum PushMarks {
     }
 
     /// The app has synced the group's records with `peers` (members that
-    /// stayed connected a while) since `at`, and applied them into `g`:
-    /// a mark that arrived before then is spent when those records
+    /// stayed connected a while) since `at`, and applied them into `g`;
+    /// `recordsAt` is when the app last took in records it did not have.
+    /// A mark that arrived before `at` is spent when those records
     /// contradict its event (the device it names is still listed, the root
-    /// is not the one it names, the group is not stopped) and they came from
-    /// a member other than the device it names, as for an event made by a
-    /// holder of the push key that names a change which never comes. A mark
-    /// whose change is there is spent only once the app applies it
-    /// (`spend`).
-    public static func synced(_ group: String, at: Date, peers: Set<Data>, state g: PushVault.Group,
+    /// is not the one it names, the group is not stopped), they came from a
+    /// member other than the device it names, and the app took in new
+    /// records after the mark: a member that brought nothing newer has not
+    /// heard of the change either, and spends nothing. That ends a mark of an
+    /// event made by a holder of the push key that names a change which
+    /// never comes. A mark whose change is there is spent once the app
+    /// applies it (`spend`); any mark ends after a week.
+    public static func synced(_ group: String, at: Date, peers: Set<Data>, recordsAt: Date?, state g: PushVault.Group,
                               in defaults: UserDefaults?) {
         var marks = all(defaults)
         guard let list = marks[group] else { return }
         let ms = UInt64(Swift.max(0, at.timeIntervalSince1970 * 1000))
+        let newer = recordsAt.map { UInt64(Swift.max(0, $0.timeIntervalSince1970 * 1000)) } ?? 0
         let left = list.filter { m in
-            guard m.atMS < ms else { return true }
+            guard m.atMS < ms, newer > m.atMS else { return true }
             guard !peers.subtracting(m.device.map { [$0] } ?? []).isEmpty else { return true }
             return !m.contradicted(by: g)
         }

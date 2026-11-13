@@ -137,6 +137,8 @@ object PushSetup {
             putString("group", tag)
             (face ?: testFace(c, tag))?.let { putString("face", b64(it)) } ?: remove("face")
         }
+        // A token given up when the last group was left: ask again.
+        if (on(c) && token(c) == null && PushPlatform.available(c)) PushPlatform.start(c)
         refresh(c, tag, me, PushVault.Devices(list, root))
     }
 
@@ -161,11 +163,12 @@ object PushSetup {
      * The group's records are synced since [sinceMs] with [peer] (the hex ID
      * of a member that stayed connected a while), and applied: a hints-only
      * mark from before then is spent when those records say its change did
-     * not happen (PushMarks.synced).
+     * not happen and the app took in new records after the mark
+     * (PushMarks.synced).
      */
-    fun synced(c: Context, tag: String, sinceMs: Long, peer: String) {
+    fun synced(c: Context, tag: String, sinceMs: Long, peer: String, recordsAtMs: Long?) {
         runCatching {
-            marks(c).synced(tag, sinceMs, listOfNotNull(hex(peer)), vault(c).load(tag))
+            marks(c).synced(tag, sinceMs, listOfNotNull(hex(peer)), recordsAtMs, vault(c).load(tag))
         }.onFailure { Log.e(TAG, "push: cannot spend the marks", it) }
     }
 
@@ -185,11 +188,18 @@ object PushSetup {
     /**
      * The phone left its group: that group's push state and marks go, and the
      * send key with them, so that what the left group's members hold stops
-     * being good (PushVault.left); the token stays.
+     * being good (PushVault.left). With no group left the token is given up
+     * too: the left group's members hold it, and no other group would confirm
+     * a new send key; the next group asks for a new one.
      */
     fun left(c: Context) {
         val tag = prefs(c).getString("group", null) ?: return
-        runCatching { vault(c).left(tag) }.onFailure { Log.e(TAG, "push: cannot forget the group", it) }
+        runCatching {
+            if (vault(c).left(tag)) {
+                SealedStore.of(c).put(TOKEN, null)
+                PushPlatform.giveUp(c)
+            }
+        }.onFailure { Log.e(TAG, "push: cannot forget the group", it) }
         runCatching { marks(c).forget(tag) }.onFailure { Log.e(TAG, "push: cannot forget the marks", it) }
         prefs(c).edit {
             remove("group")

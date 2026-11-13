@@ -20,6 +20,13 @@ use rustls::{ClientConnection, StreamOwned};
 use crate::error::{Context, Error, Result};
 
 const TIMEOUT: Duration = Duration::from_secs(15);
+/// How long a send waits for its own answer in all, whatever else the
+/// service sends meanwhile; then the connection is given up.
+#[cfg(not(test))]
+pub const ANSWER_WITHIN: Duration = Duration::from_secs(30);
+/// Short in tests, so that a service that never answers is shown quickly.
+#[cfg(test)]
+pub const ANSWER_WITHIN: Duration = Duration::from_secs(3);
 const MAX_FRAME: usize = push::MAX_SERVICE_FRAME;
 
 /// A server key for a face, from its scalar (`blind::alias::server_key`).
@@ -63,6 +70,8 @@ pub struct Client {
     /// The face's tag, as its hubs' credential names it: a registration's
     /// signature must cover it to hold on this connection.
     pub face: [u8; 16],
+    /// How long a send waits for its answer ([`ANSWER_WITHIN`]).
+    pub answer_within: Duration,
 }
 
 fn read_frame(s: &mut impl std::io::Read) -> Result<Vec<u8>> {
@@ -107,7 +116,7 @@ impl Client {
         match m.t {
             push::T_READY => {
                 let left = m.map.get(2).and_then(cbb_core::format::Value::as_uint).unwrap_or(0);
-                Ok(Client { tls, next: 1, left, face })
+                Ok(Client { tls, next: 1, left, face, answer_within: ANSWER_WITHIN })
             }
             push::T_ERROR => {
                 let why = m.map.get(2).and_then(cbb_core::format::Value::as_text).unwrap_or("refused");
@@ -127,7 +136,16 @@ impl Client {
         s.n = n;
         let f = s.write().ok_or_else(|| Error::msg("the send is not one the push service reads"))?;
         self.tls.write_all(&f).and_then(|()| self.tls.flush()).context("cannot write to the push service")?;
+        // One deadline for the answer: a service that keeps sending other
+        // answers never holds the sender past it. The caller drops a
+        // connection whose send failed.
+        let until = std::time::Instant::now() + self.answer_within;
         loop {
+            let left = until.saturating_duration_since(std::time::Instant::now());
+            if left.is_zero() {
+                return Err(Error::msg("the push service did not answer the send in time"));
+            }
+            self.tls.sock.set_read_timeout(Some(left.min(TIMEOUT))).context("cannot set a timeout")?;
             let f = read_frame(&mut self.tls)?;
             let m = frame::read(&f, MAX_FRAME).map_err(|r| Error::msg(r.name()))?;
             match m.t {
