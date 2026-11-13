@@ -51,7 +51,7 @@ libfuzzer_sys::fuzz_target!(|data: &[u8]| {
         }
         let _ = slhdsa::verify(&public, msg, &sig, &ctx);
         let _ = slhdsa::from_spki(rest);
-        let k = cbb_core::records::Key { alg: if mode & 8 != 0 { cbb_core::records::key::ALG_SLH_DSA } else { 1 }, public: public.clone() };
+        let k = cbb_core::records::Key::new(if mode & 8 != 0 { cbb_core::records::key::ALG_SLH_DSA } else { 1 }, public.clone());
         let _ = pq::verify(&k, msg, &sig, &ctx);
     } else {
         // A valid signature with bytes changed: it verifies only unchanged.

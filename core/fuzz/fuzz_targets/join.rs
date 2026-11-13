@@ -18,12 +18,26 @@ fn one(data: &[u8]) {
         use cbb_core::records::Key;
         // The group the two keys make, so the joiner's checks go past the
         // Group ID (fields 1 and 9), and another group.
-        let g = cbb_core::records::key::group_id(&Key::es256(w.root.clone()), &cbb_core::records::Recovery { k1: Key::es256(w.recovery.clone()), k2: Key { alg: cbb_core::records::key::ALG_SLH_DSA, public: w.recovery2.clone() } });
+        let g = cbb_core::records::key::group_id(&Key::es256(w.root.clone()), &cbb_core::records::Recovery { k1: Key::es256(w.recovery.clone()), k2: Key::new(cbb_core::records::key::ALG_SLH_DSA, w.recovery2.clone()) });
         let admitter: [u8; 65] = w.root.clone().try_into().unwrap_or([4; 65]);
+        // At home: the person's "they match" in this session, to this
+        // admitter (the joiner's checks then go past the way).
+        let home = |member: &[u8; 65]| {
+            let mut t = cbb_core::join::invitation::JoinerAttempts::default();
+            let (code, _) = t.start().ok()?;
+            let (_, _, shown) =
+                t.open(code, &[0x11; 32], &[0; 32], None, cbb_core::format::DeviceId([3; 16]), member).ok()?;
+            t.answered(shown, true)
+        };
+        use cbb_core::join::welcome::Way;
         for j in [Joining::Ordinary, Joining::Guarded] {
-            let _ = w.check(&g, &admitter, &[4; 65], j);
+            if let Some(m) = home(&admitter) {
+                let _ = w.check(&g, &admitter, &[4; 65], j, Way::Home { matched: m, exporter: &[0x11; 32] });
+            }
         }
-        let _ = w.check(&cbb_core::format::DeviceId([0; 16]), &[4; 65], &[4; 65], Joining::Ordinary);
+        if let Some(m) = home(&[4; 65]) {
+            let _ = w.check(&cbb_core::format::DeviceId([0; 16]), &[4; 65], &[4; 65], Joining::Ordinary, Way::Home { matched: m, exporter: &[0x22; 32] });
+        }
     }
     let _ = Welcome::parts(data);
     let _ = Intro::envelopes(data);

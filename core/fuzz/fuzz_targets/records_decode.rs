@@ -40,7 +40,7 @@ fn one(data: &[u8]) {
                 0x2b, 0xce, 0x33, 0x57, 0x6b, 0x31, 0x5e, 0xce, 0xcb, 0xb6, 0x40, 0x68, 0x37, 0xbf, 0x51, 0xf5]);
             p
         });
-        let mut set = cbb_core::records::set::RecordSet::new(root.clone(), cbb_core::records::Recovery { k1: root, k2: cbb_core::records::Key { alg: cbb_core::records::key::ALG_SLH_DSA, public: vec![0x5a; 32] } });
+        let mut set = cbb_core::records::set::RecordSet::new(root.clone(), cbb_core::records::Recovery { k1: root, k2: cbb_core::records::Key::new(cbb_core::records::key::ALG_SLH_DSA, vec![0x5a; 32]) });
         let _ = set.insert(r);
         let st = set.state();
         drop(st);

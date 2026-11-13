@@ -156,3 +156,10 @@ path = "fuzz_targets/grant_seq.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "grant_stored"
+path = "fuzz_targets/grant_stored.rs"
+test = false
+doc = false
+bench = false

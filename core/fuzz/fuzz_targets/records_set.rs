@@ -42,7 +42,7 @@ struct K {
 
 impl ExternalKey for K {
     fn public(&self) -> Vec<u8> {
-        self.key.public.clone()
+        self.key.public().to_vec()
     }
     fn sign_digest(&self, digest: &[u8; 32]) -> cbb_core::error::Result<Vec<u8>> {
         let sig: p256::ecdsa::Signature = self.sk.sign_prehash(digest).unwrap();
