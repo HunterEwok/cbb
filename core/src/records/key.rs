@@ -26,6 +26,13 @@ pub const ALG_XWING: u64 = 2;
 /// X25519 (WireGuard); a 32-byte public key.
 pub const ALG_X25519: u64 = 3;
 
+/// SLH-DSA-SHA2-128s (FIPS 205): the recovery key's second half (E-6); a
+/// 32-byte public key. It names no record's signer: it rides in the Group
+/// ID, the Welcome and a recovery head's `signer2`.
+pub const ALG_SLH_DSA: u64 = 4;
+/// The size of an SLH-DSA-SHA2-128s public key.
+pub const SLH_DSA_PUBLIC: usize = 32;
+
 /// The size of an X-Wing public key.
 pub const XWING_PUBLIC: usize = 1216;
 

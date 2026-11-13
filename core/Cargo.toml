@@ -54,6 +54,9 @@ rustls = { version = "0.23.46", default-features = false, optional = true }
 serde = { version = "1", default-features = false, features = ["alloc", "derive"] }
 serde_json = { version = "1", default-features = false, features = ["alloc"] }
 sha2 = { version = "0.11", default-features = false }
+# slhdsa: SLH-DSA-SHA2-128s verification, the post-quantum half of the
+# release files' signatures and of the recovery key (one verifier).
+slh-dsa = { version = "=0.2.0-rc.5", default-features = false }
 # Secrets are compared in constant time (subtle) and wiped when dropped
 # (zeroize); both are no_std and already in the tree through RustCrypto.
 subtle = { version = "2.6", default-features = false }

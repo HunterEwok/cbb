@@ -403,6 +403,7 @@ func main() {
 		}
 	}
 	fmt.Printf("%-18s %d checked\n", "profile.json", len(prof.Vectors))
+	checkSLHDSA(dir)
 
 	checkSigned(dir, "records.json", bySignerHash)
 	// os numbers: one this version does not name is taken and shown as unknown
