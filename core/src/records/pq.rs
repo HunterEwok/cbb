@@ -66,7 +66,7 @@ impl PqKey {
 
     /// The public key as the format writes it: `[4, pub]`.
     pub fn key(&self) -> Key {
-        Key { alg: ALG_SLH_DSA, public: self.public() }
+        Key::new(ALG_SLH_DSA, self.public())
     }
 
     /// The signature of msg under the context ctx (at most 255 bytes).
@@ -135,5 +135,5 @@ pub fn recovery_keys(secret: &[u8; 32]) -> Result<(p256::SecretKey, PqKey)> {
 
 /// Whether sig is K2's signature of msg under ctx.
 pub fn verify(k2: &Key, msg: &[u8], sig: &[u8], ctx: &[u8]) -> bool {
-    k2.alg == ALG_SLH_DSA && crate::slhdsa::verify(&k2.public, msg, sig, ctx)
+    k2.alg() == ALG_SLH_DSA && crate::slhdsa::verify(k2.public(), msg, sig, ctx)
 }

@@ -381,7 +381,7 @@ pub fn accept_member(
     store: &dyn KeyStore,
 ) -> Result<Option<Vec<u8>>, Refusal> {
     let key = at.keys.get(&c.signer).ok_or(Refusal::SILENT)?;
-    c.envelope.verify(&key.public, sig::LABEL_COMMAND).map_err(|_| Refusal::SILENT)?;
+    c.envelope.verify(key.public(), sig::LABEL_COMMAND).map_err(|_| Refusal::SILENT)?;
     let refuse = |r| Err(Refusal::signed(r));
     if c.group != at.state.group {
         return refuse(RULE_GROUP);

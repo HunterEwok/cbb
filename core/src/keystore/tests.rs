@@ -260,7 +260,7 @@ fn a_later_statement_is_held_with_or_without_its_key() {
     other.push((10, Value::Text("another form")));
     assert!(matches!(read_statement(&statement(&other)), Ok(ReadStatement::Held { .. })));
     let mut f = base(1);
-    let es = k("laptop").key.public.clone();
+    let es = k("laptop").key.public().to_vec();
     let mut e = Encoder::new();
     e.array(2).uint(1).bytes(&es);
     let es_key = e.finish();

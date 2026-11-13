@@ -30,7 +30,7 @@ struct K {
 
 impl ExternalKey for K {
     fn public(&self) -> Vec<u8> {
-        self.key.public.clone()
+        self.key.public().to_vec()
     }
     fn sign_digest(&self, digest: &[u8; 32]) -> crate::error::Result<Vec<u8>> {
         let sig: p256::ecdsa::Signature = self.sk.sign_prehash(digest).unwrap();
@@ -777,7 +777,7 @@ fn a_removed_device_learns_it_is_removed_whoever_signed() {
 }
 
 fn xwing(n: u8) -> Key {
-    Key { alg: ALG_XWING, public: vec![n; XWING_PUBLIC] }
+    Key::new(ALG_XWING, vec![n; XWING_PUBLIC])
 }
 
 #[test]
@@ -4215,7 +4215,7 @@ fn a_checkpoint_with_a_lower_head_is_followed_as_written() {
 
 /// The peer's key as its 65 bytes.
 fn point_of(x: &K) -> [u8; 65] {
-    x.key.public.clone().try_into().unwrap()
+    x.key.public().to_vec().try_into().unwrap()
 }
 
 /// Two histories of the current root: a key one line admits, which the

@@ -35,7 +35,7 @@ impl World {
         g.admin("desk", "desk admin", AdminKind::Computer);
         g.admin("watch", "watch admin", AdminKind::Watch);
         let (laptop_store, st) = store("laptop", &g.gid);
-        let seal = (st.body().epoch, st.body().seal.public.clone());
+        let seal = (st.body().epoch, st.body().seal.public().to_vec());
         World { g, laptop, laptop_store, seal }
     }
 
@@ -349,7 +349,7 @@ fn a_leaf_obeys_its_grant() {
     let (kettle_store, kst) = store("kettle", &g.gid);
     let kettle = k("kettle").key.device_id();
     let phone = k("phone");
-    let point = |x: &K| -> [u8; 65] { x.key.public.clone().try_into().unwrap() };
+    let point = |x: &K| -> [u8; 65] { x.key.public().to_vec().try_into().unwrap() };
     let mut kept = Kept { commanders: vec![(phone.hash, point(&phone))], ..Kept::default() };
     let heat = orders(vec![(10, Value::Text("heat"))]);
     let draft = |n, nonce| Draft {
@@ -360,7 +360,7 @@ fn a_leaf_obeys_its_grant() {
         time_ms: T0,
         nonce,
         orders: Some(&heat),
-        seal_to: Some((kst.body().epoch, &kst.body().seal.public)),
+        seal_to: Some((kst.body().epoch, kst.body().seal.public())),
     };
     let take = |env: &[u8], kept: &Kept, stale: bool, ctr: &mut Counters, nonces: &mut Nonces| {
         let c = Command::read(env)?;
@@ -453,7 +453,7 @@ fn an_old_command_sent_again_leaves_the_number() {
     let (lock_store, lst) = store("lock", &g.gid);
     let lock = k("lock").key.device_id();
     let phone = k("phone");
-    let point: [u8; 65] = phone.key.public.clone().try_into().unwrap();
+    let point: [u8; 65] = phone.key.public().to_vec().try_into().unwrap();
     let kept = Kept { commanders: vec![(phone.hash, point)], guarded: true, ..Kept::default() };
     let open = orders(vec![(10, Value::Text("open"))]);
     let draft = |n, nonce| Draft {
@@ -464,7 +464,7 @@ fn an_old_command_sent_again_leaves_the_number() {
         time_ms: T0,
         nonce,
         orders: Some(&open),
-        seal_to: Some((lst.body().epoch, &lst.body().seal.public)),
+        seal_to: Some((lst.body().epoch, lst.body().seal.public())),
     };
     let take = |env: &[u8], ctr: &mut Counters, nonces: &mut Nonces| {
         let c = Command::read(env).unwrap();
