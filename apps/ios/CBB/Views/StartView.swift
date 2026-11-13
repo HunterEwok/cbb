@@ -101,6 +101,8 @@ struct StartView: View {
                     .font(.footnote)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(palette.textDim)
+                    // Wraps instead of standing on one clipped line.
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Button { model.startJoining() } label: { Text("Join a group") }
                 .buttonStyle(GlassButtonStyle())

@@ -254,6 +254,13 @@ struct PadDevices: View {
         .onKeyPress(keys: [.leftArrow, .upArrow, .rightArrow, .downArrow]) { press in
             move(by: press.key == .leftArrow || press.key == .upArrow ? -1 : 1)
         }
+        // Escape closes the card, as its cross's shortcut does; the
+        // shortcut alone does not reach a pane while the devices hold focus.
+        .onKeyPress(.escape) {
+            guard selected != nil else { return .ignored }
+            selected = nil
+            return .handled
+        }
         .onAppear { focused = true }
     }
 
@@ -336,6 +343,9 @@ struct PadDevices: View {
     /// window too narrow for both.
     private func choose(_ id: AppModel.Computer.ID) {
         if beside { selected = id } else { pushed = PadCard(id: id) }
+        // A tap moves the keyboard's focus to the tile; the arrow keys and
+        // Escape are the devices' own, so the focus comes back to them.
+        focused = true
     }
 
     /// Moves the choice to the device before or after it, as they stand.
