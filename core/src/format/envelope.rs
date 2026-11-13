@@ -99,9 +99,20 @@ impl<'a> Envelope<'a> {
     }
 
     /// Verifies the first signature by the uncompressed point public under
-    /// the kind's label. In 0.6 nobody checks `sig2`.
+    /// the kind's label. Beside a second signature the first covers the
+    /// body and the second's SHA-256 ([`signed_data`]), so a second
+    /// signature swapped, cut or bent on the way breaks the first: that
+    /// copy is damaged ([`Rule::ENV_DAMAGED`]), whatever its signature's
+    /// form. Whether `sig2` itself holds is checked by a reader that knows
+    /// its algorithm.
     pub fn verify(&self, public: &[u8], label: &str) -> Result<(), Rule> {
-        sig::verify_es256(public, label, self.body, self.sig)
+        match self.sig2 {
+            None => sig::verify_es256(public, label, self.body, self.sig),
+            Some(s2) => match sig::verify_es256(public, label, &signed_data(self.body, Some(s2)), self.sig) {
+                Err(Rule::SIG_VERIFY) => Err(Rule::ENV_DAMAGED),
+                other => other,
+            },
+        }
     }
 
     /// The ID of the body: SHA-256 over its bytes.
@@ -113,6 +124,19 @@ impl<'a> Envelope<'a> {
 /// The ID of a record, statement or credential: SHA-256 over the body.
 pub fn body_id(body: &[u8]) -> [u8; 32] {
     sha256(&[body])
+}
+
+/// The data an envelope's first signature covers (audit Q-1): the body,
+/// and beside a second signature the body and that signature's SHA-256.
+/// The second signer signs first, over the body alone; the ID stays the
+/// SHA-256 of the body.
+pub fn signed_data(body: &[u8], sig2: Option<&[u8]>) -> Vec<u8> {
+    let mut m = Vec::with_capacity(body.len().saturating_add(32));
+    m.extend_from_slice(body);
+    if let Some(s2) = sig2 {
+        m.extend_from_slice(&sha256(&[s2]));
+    }
+    m
 }
 
 /// Writes an envelope of a body and its signatures.

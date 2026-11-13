@@ -87,6 +87,11 @@ impl Rule {
     pub const SIG_LOW_S: Rule = Rule("sig/low-s");
     /// A signature that does not verify.
     pub const SIG_VERIFY: Rule = Rule("sig/verify");
+    /// An envelope with a second signature whose first signature does not
+    /// verify over the body and that second signature's SHA-256 (audit
+    /// Q-1): a damaged copy, dropped, not stored, not passed on, its ID
+    /// neither had nor refused.
+    pub const ENV_DAMAGED: Rule = Rule("env/damaged");
 
     /// An ES256 key of the wrong size, not uncompressed, or off the curve.
     pub const KEYS_ES256: Rule = Rule("keys/es256");

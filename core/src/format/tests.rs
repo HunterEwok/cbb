@@ -823,12 +823,9 @@ fn every_signature_has_one_form() {
                 keys[&hex(e.signer().unwrap().as_bytes().unwrap())].clone()
             };
             let twin = high_s_twin(e.sig);
-            // A recovery head's K1 signs the body and K2's signature's hash.
-            let head = label == sig::LABEL_RECORD && e.map.get(1) == Some(&Value::Uint(13));
-            let signed = match (head, e.sig2) {
-                (true, Some(s2)) => crate::records::with_sig2(e.body, s2),
-                _ => e.body.to_vec(),
-            };
+            // Beside a second signature the first covers its hash too (a
+            // recovery head's K1 over K2's, any kind's alike).
+            let signed = envelope::signed_data(e.body, e.sig2);
             assert_eq!(
                 sig::verify_es256(&point, label, &signed, &twin),
                 Err(Rule::SIG_LOW_S),
@@ -1272,4 +1269,61 @@ fn a_leafs_state_that_does_not_read_obeys_nobody() {
         assert_eq!(Stored::decode(&b), Err(grant::RULE_STATE));
         assert_eq!(Stored::load(Some(&b)), Stored::unreadable(false));
     }
+}
+
+/// The first signature covers the second's SHA-256 (audit Q-1): the
+/// records' vectors of a second signature swapped, cut or signed apart
+/// are damaged copies by the envelope's reader; a
+/// held record whose two signatures were made in order verifies.
+#[test]
+fn a_second_signature_swapped_on_the_way_spoils_the_copy() {
+    let keys = keys();
+    let r = load("records.json");
+    let signer = |e: &Envelope<'_>| -> Vec<u8> {
+        let h = e.signer().and_then(Value::as_bytes).unwrap();
+        keys[&hex(h)].clone()
+    };
+    let mut damaged = 0;
+    for t in r["refuse"].as_array().unwrap().iter().filter(|t| t["rule"] == "env/damaged") {
+        let b = unhex(s(t, "envelope"));
+        let v = cbor::decode(&b).unwrap();
+        let e = Envelope::from_value(&v).unwrap();
+        assert!(e.sig2.is_some(), "{}", s(t, "name"));
+        assert_eq!(e.verify(&signer(&e), sig::LABEL_RECORD), Err(Rule::ENV_DAMAGED), "{}", s(t, "name"));
+        damaged += 1;
+    }
+    assert_eq!(damaged, 3);
+    let mut held = 0;
+    for t in r["take"].as_array().unwrap() {
+        let b = unhex(s(t, "envelope"));
+        let v = cbor::decode(&b).unwrap();
+        let e = Envelope::from_value(&v).unwrap();
+        if e.sig2.is_none() || e.map.get(1).and_then(Value::as_uint) == Some(13) {
+            continue;
+        }
+        assert_eq!(e.verify(&signer(&e), sig::LABEL_RECORD), Ok(()), "{}", s(t, "name"));
+        held += 1;
+    }
+    assert!(held >= 1);
+    // The same with a fresh signer: the second signs first, the first
+    // covers its hash; a bent second signature, a bad first one.
+    let sk = p256::ecdsa::SigningKey::from_slice(&[7u8; 32]).unwrap();
+    let point = sig::public_point(&sk);
+    let body = Value::Map(vec![(1, Value::Uint(7)), (8, Value::Bytes(&[1; 32]))]).encode();
+    let s2 = vec![9u8; 100];
+    let first = sig::sign_es256(&sk, sig::LABEL_RECORD, &envelope::signed_data(&body, Some(&s2)));
+    let read = |b: &[u8]| -> Result<(), Rule> {
+        let v = cbor::decode(b)?;
+        Envelope::from_value(&v)?.verify(&point, sig::LABEL_RECORD)
+    };
+    assert_eq!(read(&envelope::write(&body, &first, Some(&s2))), Ok(()));
+    let mut bent = s2.clone();
+    bent[0] ^= 1;
+    assert_eq!(read(&envelope::write(&body, &first, Some(&bent))), Err(Rule::ENV_DAMAGED));
+    // A signature of the wrong form keeps its own rule.
+    assert_eq!(read(&envelope::write(&body, &[0u8; 64], Some(&s2))), Err(Rule::SIG_RANGE));
+    // Without a second signature nothing changes.
+    let plain = Value::Map(vec![(1, Value::Uint(7))]).encode();
+    let sig_plain = sig::sign_es256(&sk, sig::LABEL_RECORD, &plain);
+    assert_eq!(read(&envelope::write(&plain, &sig_plain, None)), Ok(()));
 }
