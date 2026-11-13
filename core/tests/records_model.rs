@@ -170,7 +170,7 @@ impl Group {
     /// only `from`: the writer's first records of the new root, its head
     /// and its list join the group. It unticks `remove`.
     fn change_from(&mut self, from: &[&Record], new_root: &str, remove: &[&str]) -> Written {
-        let set = self.member(from);
+        let mut set = self.member(from);
         let st = set.state();
         let mut d = Device::new(k(&format!("{new_root} phone")).key, "new phone", ROLE_PHONE);
         d.rights = RIGHT_READ | RIGHT_SEND;

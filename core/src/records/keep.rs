@@ -45,6 +45,58 @@ pub const UNIT: usize = MAX_SET_BYTES / MAX_RECORDS;
 /// The units of the whole set.
 pub const ROOM: u64 = MAX_RECORDS as u64;
 
+/// The units of the whole set: ROOM, or a test's small rooms.
+pub fn room() -> u64 {
+    #[cfg(test)]
+    if let Some(r) = small::ROOMS.with(core::cell::Cell::get) {
+        return r.0;
+    }
+    ROOM
+}
+
+/// Small rooms for tests (`Small`), so that a trace of the records model,
+/// whose rooms are a few units, runs as it is: the set's room, a root's
+/// ceiling and an admin's, and the units each record takes.
+#[cfg(test)]
+pub(crate) mod small {
+    use alloc::collections::BTreeMap;
+    use core::cell::{Cell, RefCell};
+
+    use super::RecordId;
+
+    std::thread_local! {
+        pub static ROOMS: Cell<Option<(u64, u64, u64)>> = const { Cell::new(None) };
+        pub static UNITS: RefCell<BTreeMap<RecordId, u64>> = const { RefCell::new(BTreeMap::new()) };
+    }
+
+    /// Small rooms on this thread while it lives.
+    pub struct Small;
+
+    impl Small {
+        pub fn new(room: u64, root: u64, admin: u64) -> Small {
+            ROOMS.with(|r| r.set(Some((room, root, admin))));
+            Small
+        }
+
+        /// The units record id takes.
+        pub fn units(&self, id: RecordId, units: u64) {
+            UNITS.with(|u| u.borrow_mut().insert(id, units));
+        }
+    }
+
+    impl Drop for Small {
+        fn drop(&mut self) {
+            ROOMS.with(|r| r.set(None));
+            UNITS.with(|u| u.borrow_mut().clear());
+        }
+    }
+
+    /// The units a test gave record id.
+    pub fn units_of(id: &RecordId) -> Option<u64> {
+        UNITS.with(|u| u.borrow().get(id).copied())
+    }
+}
+
 /// One record as the keeping sees it.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Item {
@@ -85,6 +137,10 @@ pub fn units(size: usize) -> u64 {
 /// A key's ceiling in units: a root's on the path 1024, an admin key's
 /// 256.
 pub fn ceiling(root: bool) -> u64 {
+    #[cfg(test)]
+    if let Some((_, r, a)) = small::ROOMS.with(core::cell::Cell::get) {
+        return if root { r } else { a };
+    }
     if root { MAX_ROOT_RECORDS as u64 } else { MAX_ADMIN_RECORDS as u64 }
 }
 
@@ -99,11 +155,13 @@ pub struct Cut {
 }
 
 /// The highest level: past it no ceiling binds.
-const TOP: u64 = MAX_ROOT_RECORDS as u64;
+fn top() -> u64 {
+    ceiling(true)
+}
 
 impl Default for Cut {
     fn default() -> Cut {
-        Cut { level: TOP, marks: BTreeMap::new() }
+        Cut { level: top(), marks: BTreeMap::new() }
     }
 }
 
@@ -115,7 +173,7 @@ impl Cut {
 
     /// The level the shares stand at.
     pub fn level(&self) -> u64 {
-        self.level.min(TOP)
+        self.level.min(top())
     }
 
     /// The units key dropped, when it dropped any.
@@ -148,6 +206,22 @@ pub fn keep_after(
     ceiling_of: impl Fn(&KeyHash) -> Option<u64>,
     cut: &Cut,
 ) -> (BTreeSet<RecordId>, Cut) {
+    keep_with(items, ceiling_of, cut, &BTreeMap::new())
+}
+
+/// keep_after where each key already holds `pre` units before the rooms
+/// are judged (each root's newest checkpoint, kept first): they take
+/// their part of the set's room and of their key's ceiling, and a key's
+/// level counts them, so every other key keeps its fair share of what is
+/// left.
+pub fn keep_with(
+    items: &[Item],
+    ceiling_of: impl Fn(&KeyHash) -> Option<u64>,
+    cut: &Cut,
+    pre: &BTreeMap<KeyHash, u64>,
+) -> (BTreeSet<RecordId>, Cut) {
+    let pre_of = |k: &KeyHash| pre.get(k).copied().unwrap_or(0);
+    let room = room().saturating_sub(pre.values().fold(0u64, |a, u| a.saturating_add(*u)));
     let mut by_key: BTreeMap<KeyHash, Vec<&Item>> = BTreeMap::new();
     for it in items {
         if !cut.past(it) && ceiling_of(&it.signer).is_some() {
@@ -168,26 +242,29 @@ pub fn keep_after(
             items.dedup_by_key(|it| it.id);
             let dropped = cut.marks.get(&hash).map_or(0, |(_, u)| *u);
             let total = items.iter().fold(dropped, |t, it| t.saturating_add(it.units));
-            Key { hash, ceiling: ceiling_of(&hash).unwrap_or(0), items, total }
+            let ceiling = ceiling_of(&hash).unwrap_or(0).saturating_sub(pre_of(&hash));
+            Key { hash, ceiling, items, total }
         })
         .collect();
-    let demand = |s: u64| keys.iter().fold(0u64, |d, k| d.saturating_add(s.min(k.ceiling).min(k.total)));
-    let top = cut.level.min(TOP);
-    let level = if demand(top) <= ROOM {
+    let demand = |s: u64| {
+        keys.iter().fold(0u64, |d, k| d.saturating_add(s.saturating_sub(pre_of(&k.hash)).min(k.ceiling).min(k.total)))
+    };
+    let top = cut.level.min(top());
+    let level = if demand(top) <= room {
         top
     } else {
         let (mut lo, mut hi) = (0u64, top);
         // demand(lo) fits (nothing at 0), demand(hi) does not.
         while hi.saturating_sub(lo) > 1 {
             let mid = lo.saturating_add(hi.saturating_sub(lo) / 2);
-            if demand(mid) <= ROOM { lo = mid } else { hi = mid }
+            if demand(mid) <= room { lo = mid } else { hi = mid }
         }
         lo
     };
     let mut kept = BTreeSet::new();
     let mut next = Cut { level, marks: BTreeMap::new() };
     for k in &keys {
-        let cap = level.min(k.ceiling);
+        let cap = level.saturating_sub(pre_of(&k.hash)).min(k.ceiling);
         let mut used = 0u64;
         let mut first_out: Option<Pos> = None;
         let mut out_units = 0u64;

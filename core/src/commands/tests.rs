@@ -403,6 +403,12 @@ fn a_leaf_obeys_its_grant() {
     assert!(!stale(true, None, DEFAULT_LIFE_MS - 1));
     assert!(!stale(false, None, u64::MAX));
     assert_eq!(take(&env, &kept, true, &mut ctr, &mut nonces), Err(RULE_STALE));
+    // A leaf that holds a fork of its root obeys nobody.
+    let n6 = nonces.issue(&phone.hash).unwrap();
+    let env = make(&draft(11, Some(n6)), &phone).unwrap();
+    let held = Kept { forked: true, ..kept.clone() };
+    assert_eq!(take(&env, &held, false, &mut ctr, &mut nonces), Err(RULE_SIGNER));
+    assert_eq!(take(&env, &kept, false, &mut ctr, &mut nonces), Ok(Some(heat.clone())));
     // Message nonce: from the leaf with a number, to it without.
     let nm = nonce_message(Some(&n5));
     let m = frame::read(&nm, frame::LIMIT_LEAF).unwrap();

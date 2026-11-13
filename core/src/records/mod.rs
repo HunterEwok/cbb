@@ -28,10 +28,13 @@
 //! 7. No rule reads a clock.
 //! 8. A root's own records count during a stop, and only a root resolves
 //!    a conflict between admins.
-//! 9. A root's removal is final: a resolve never voids a revoke signed by
-//!    a root, and the device comes back only by a new admission with a new
-//!    key. A root's resolve may void an admin's revoke; the device then
-//!    counts again with its key and ID.
+//! 9. A root's removal counts for good while it is kept: a resolve never
+//!    voids a root's record, and the root's checkpoint leaves a removal out
+//!    only with the admissions of the keys it names, so no old record
+//!    brings the device back; only a new record admits it again. A root's
+//!    resolve may void an admin's revoke; the device then counts again
+//!    with its key and ID. Two histories of the current root stop the
+//!    group until the recovery key changes the root.
 //! 10. The root changes only by a takeover the group's recovery key
 //!     signs, at once: no delay, no cancel, no objection, and no admin
 //!     takes the group over (rule 33). The recovery chain, walked from the

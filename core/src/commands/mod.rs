@@ -440,7 +440,8 @@ pub fn accept_leaf(
     nonces: &mut Nonces,
     store: &dyn KeyStore,
 ) -> Result<Option<Vec<u8>>, Refusal> {
-    let point = at.kept.commander(&c.signer).ok_or(Refusal::SILENT)?;
+    // A leaf that holds a fork of its root obeys nobody (`Kept::fork`).
+    let point = at.kept.commander(&c.signer).filter(|_| !at.kept.forked).ok_or(Refusal::SILENT)?;
     c.envelope.verify(point, sig::LABEL_COMMAND).map_err(|_| Refusal::SILENT)?;
     let refuse = |r| Err(Refusal::signed(r));
     if c.group != at.group {
