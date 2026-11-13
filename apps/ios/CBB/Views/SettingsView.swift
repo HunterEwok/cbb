@@ -59,6 +59,11 @@ struct SettingsView: View {
                     .accessibilityLabel(Text("Language"))
                     .accessibilityValue(Text(verbatim: language.title))
                 }
+                if Measure.on("FixedText") {
+                    // The positive control: a text that does not follow the
+                    // text size, which every check of it must report.
+                    Text(verbatim: "Fixed size text").font(.system(size: 17))
+                }
                 if Measure.on("NoSwatches") {
                 } else if Measure.on("PlainGrid") {
                     PlainThemeSwatches(selection: $theme)

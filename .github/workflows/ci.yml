@@ -1804,7 +1804,7 @@ jobs:
               killed=
               # The measurement's lines as they come, so that the step shows
               # its progress.
-              (tail -n +1 -F "$log" 2>/dev/null | grep --line-buffered -E "MEASURE-(AUDIT|PROGRESS|SUMMARY)|^Test Case") &
+              (tail -n +1 -F "$log" 2>/dev/null | grep --line-buffered -E "MEASURE-(AUDIT|PROGRESS|SUMMARY|GROWTH |RETRY|CROSS)|^Test Case") &
               follow=$!
               started=$SECONDS
               while [ $((SECONDS - started)) -lt 2880 ]; do

@@ -359,68 +359,144 @@ final class ReadersUITests: XCTestCase {
         }
     }
 
-    /// Runs the dynamic type audit of Settings in many variants of the
-    /// screen and of the run, round after round until its time is up, and
-    /// prints what each audit flagged.
+    /// Every text on the screen that has a label, with its height, from
+    /// one snapshot of the app.
+    private func textHeights(_ app: XCUIApplication) -> [String: CGFloat] {
+        var out: [String: CGFloat] = [:]
+        guard let root = try? app.snapshot() else { return out }
+        var stack: [XCUIElementSnapshot] = [root]
+        let window = app.windows.firstMatch.frame
+        while let e = stack.popLast() {
+            if e.elementType == .staticText, !e.label.isEmpty, window.contains(e.frame) {
+                out[e.label] = max(out[e.label] ?? 0, e.frame.height)
+            }
+            stack.append(contentsOf: e.children)
+        }
+        return out
+    }
+
+    /// Settings' texts' heights at a text size.
+    private func settingsHeights(_ language: String, _ size: String, _ args: [String] = []) -> [String: CGFloat] {
+        let app = launch(language: language, extra: ["-UIPreferredContentSizeCategoryName", size] + args)
+        defer { app.terminate() }
+        let settings = app.buttons[tr("Settings", language)]
+        guard settings.waitForExistence(timeout: 30) else { return [:] }
+        settings.tap()
+        guard app.navigationBars[tr("Settings", language)].waitForExistence(timeout: 10) else { return [:] }
+        settle(app, "MEASURE heights \(language) \(size)")
+        return textHeights(app)
+    }
+
+    /// The candidate check of our own: every text of Settings seen at the
+    /// default size and at the largest is taller at the largest.
+    private func growth(_ language: String, _ round: Int, control: Bool = false) -> [String: CGFloat] {
+        let args = control ? ["-CBBMeasureFixedText"] : []
+        let small = settingsHeights(language, "UICTContentSizeCategoryL", args)
+        let large = settingsHeights(language, "UICTContentSizeCategoryAccessibilityXXXL", args)
+        var ratios: [String: CGFloat] = [:]
+        for (label, h) in large { if let s = small[label], s > 0 { ratios[label] = h / s } }
+        let sorted = ratios.sorted { $0.value < $1.value }
+        let low = sorted.filter { $0.value < 1.5 }.map { "'\($0.key)' ×\(String(format: "%.2f", $0.value))" }
+        print("MEASURE-GROWTH \(language) round \(round): \(ratios.count) texts in both, least ×\(String(format: "%.2f", sorted.first?.value ?? 0)), most ×\(String(format: "%.2f", sorted.last?.value ?? 0)), under ×1.5: \(low.isEmpty ? "none" : low.joined(separator: ", "))")
+        for (label, r) in sorted { print("MEASURE-GROWTH-TEXT \(language) round \(round): '\(label)' \(String(format: "%.1f", small[label] ?? 0)) -> \(String(format: "%.1f", large[label] ?? 0)) ×\(String(format: "%.2f", r))") }
+        let key = "own check: every text grows ×1.5 (\(language))\(control ? ", with the fixed text" : "")"
+        if probeStats[key] == nil { probeStats[key] = (0, 0, [:]); probeOrder.append(key) }
+        var stat = probeStats[key]!
+        stat.audits += 1
+        if !low.isEmpty || ratios.isEmpty { stat.notifications += 1; for l in low { stat.labels[l, default: 0] += 1 } }
+        probeStats[key] = stat
+        return ratios
+    }
+
+    /// Runs the candidate ways round the audit's false reports on Settings,
+    /// round after round until its time is up: the audit at smaller text
+    /// sizes, textClipped alone, the audit twice with only issues in both
+    /// counted, our own check of the texts' growth, the audit's issues
+    /// cross-checked with that growth, and three changes to the app.
     func testDynamicTypeProbe() {
-        let variants: [Variant] = [
-            Variant(name: "baseline", middle: true),
-            Variant(name: "baseline hi", language: "hi"),
-            Variant(name: "with textClipped", types: [.textClipped, .dynamicType]),
-            Variant(name: "refresh off", args: ["-CBBMeasureNoRefresh"]),
-            Variant(name: "plain grid", args: ["-CBBMeasurePlainGrid"]),
-            Variant(name: "no swatches", args: ["-CBBMeasureNoSwatches"], middle: true),
-            Variant(name: "no hair spaces", args: ["-CBBMeasureNoHairSpace"]),
-            Variant(name: "no Notifications section", args: ["-CBBMeasureNoNotifications"]),
-            Variant(name: "header as a row", args: ["-CBBMeasureHeaderAsRow"]),
-            Variant(name: "header without text case", args: ["-CBBMeasureHeaderNoTextCase"]),
-            Variant(name: "header with .footnote", args: ["-CBBMeasureHeaderFont"]),
-            Variant(name: "plain list style", args: ["-CBBMeasurePlainList"]),
-            Variant(name: "no background", args: ["-CBBMeasureNoBackground"]),
-            Variant(name: "no animations", args: ["-CBBMeasureNoAnimations"]),
-            Variant(name: "no tips", args: ["-CBBMeasureNoTips"]),
-            Variant(name: "everything off", args: ["-CBBMeasureNoRefresh", "-CBBMeasureNoAnimations", "-CBBMeasureNoTips", "-CBBMeasureNoSwatches", "-CBBMeasureHeaderNoTextCase"]),
-            Variant(name: "size AX-XXL", size: "UICTContentSizeCategoryAccessibilityXXL"),
-            Variant(name: "size AX-L", size: "UICTContentSizeCategoryAccessibilityL"),
-            Variant(name: "size Large (default)", size: "UICTContentSizeCategoryL"),
-            Variant(name: "dark", dark: true),
-            Variant(name: "landscape", landscape: true),
-            Variant(name: "5 s idle before", pause: 5),
-            Variant(name: "3 audits in a row", repeats: 3),
-        ]
+        let xxxl = "UICTContentSizeCategoryAccessibilityXXXL"
         let start = Date()
         let budget: TimeInterval = 40 * 60
         var round = 0
-        rounds: while true {
+        func left() -> Bool { Date().timeIntervalSince(start) < budget - 120 }
+        func onSettings(_ v: Variant, _ body: (XCUIApplication, String) -> Void) {
+            if v.landscape { XCUIDevice.shared.orientation = .landscapeLeft }
+            let app = launch(language: v.language, extra: ["-UIPreferredContentSizeCategoryName", v.size] + v.args)
+            let settings = app.buttons[tr("Settings", v.language)]
+            if settings.waitForExistence(timeout: 30) {
+                settings.tap()
+                if app.navigationBars[tr("Settings", v.language)].waitForExistence(timeout: 10) {
+                    body(app, tr("Notifications", v.language))
+                } else { print("MEASURE \(v.name): Settings did not open") }
+            } else { print("MEASURE \(v.name): no Settings button") }
+            app.terminate()
+            if v.landscape { XCUIDevice.shared.orientation = .portrait }
+            print("MEASURE-PROGRESS round \(round), \(v.name) done at \(Int(Date().timeIntervalSince(start))) s")
+        }
+        rounds: while left() {
             round += 1
-            for v in variants {
-                if Date().timeIntervalSince(start) > budget - 90 { break rounds }
-                if v.dark { XCUIDevice.shared.appearance = .dark }
-                if v.landscape { XCUIDevice.shared.orientation = .landscapeLeft }
-                let app = launch(language: v.language, extra: ["-UIPreferredContentSizeCategoryName", v.size] + v.args)
-                let settings = app.buttons[tr("Settings", v.language)]
-                if settings.waitForExistence(timeout: 30) {
-                    settings.tap()
-                    if app.navigationBars[tr("Settings", v.language)].waitForExistence(timeout: 10) {
-                        let notifications = tr("Notifications", v.language)
-                        for rep in 1...v.repeats { probeAudit(app, v, "top", notifications, round, rep) }
-                        if v.middle {
-                            scrollToMiddle(app, notifications)
-                            probeAudit(app, v, "Notifications in the middle", notifications, round, 1)
-                        }
-                    } else {
-                        print("MEASURE \(v.name): Settings did not open")
-                    }
-                } else {
-                    print("MEASURE \(v.name): no Settings button")
+            // Our own check first: the heights it finds also judge the
+            // audit's issues below.
+            let ratios = growth("en", round)
+            _ = growth("hi", round)
+            _ = growth("en", round, control: true)
+            let singles: [Variant] = [
+                Variant(name: "audit at the default size", size: "UICTContentSizeCategoryL"),
+                Variant(name: "audit at the default size (hi)", language: "hi", size: "UICTContentSizeCategoryL"),
+                Variant(name: "audit at AX-L", size: "UICTContentSizeCategoryAccessibilityL"),
+                Variant(name: "textClipped alone at the largest", size: xxxl, types: .textClipped),
+                Variant(name: "fix: no hair spaces", args: ["-CBBMeasureNoHairSpace"], size: xxxl),
+                Variant(name: "fix: header without text case", args: ["-CBBMeasureHeaderNoTextCase"], size: xxxl),
+                Variant(name: "fix: header with .footnote", args: ["-CBBMeasureHeaderFont"], size: xxxl),
+                // The positive control: each of these must report the
+                // fixed text, or it checks nothing.
+                Variant(name: "control: audit at the default size, fixed text", args: ["-CBBMeasureFixedText"], size: "UICTContentSizeCategoryL"),
+                Variant(name: "control: audit at AX-L, fixed text", args: ["-CBBMeasureFixedText"], size: "UICTContentSizeCategoryAccessibilityL"),
+                Variant(name: "control: audit at the largest, fixed text", args: ["-CBBMeasureFixedText"], size: xxxl),
+            ]
+            // The audit as testLargestText runs it, twice in a row: an
+            // issue in both is what a retry would still report, and each
+            // issue is set against our own heights.
+            if !left() { break rounds }
+            onSettings(Variant(name: "audit at the largest", size: xxxl)) { app, notifications in
+                let first = probeLabels(app, Variant(name: "audit at the largest", size: xxxl), notifications, round, 1)
+                let second = probeLabels(app, Variant(name: "audit at the largest", size: xxxl), notifications, round, 2)
+                let both = first.intersection(second)
+                let key = "retry: only issues in two audits in a row"
+                if probeStats[key] == nil { probeStats[key] = (0, 0, [:]); probeOrder.append(key) }
+                var stat = probeStats[key]!
+                stat.audits += 1
+                if both.contains(notifications) { stat.notifications += 1 }
+                for l in both { stat.labels[l, default: 0] += 1 }
+                probeStats[key] = stat
+                print("MEASURE-RETRY round \(round): first \(first.sorted()), second \(second.sorted()), in both \(both.sorted())")
+                let cross = "cross-check: issues whose text does not grow ×1.5"
+                if probeStats[cross] == nil { probeStats[cross] = (0, 0, [:]); probeOrder.append(cross) }
+                var c = probeStats[cross]!
+                c.audits += 1
+                for l in first.union(second) {
+                    let r = ratios[l]
+                    print("MEASURE-CROSS round \(round): '\(l)' grows \(r.map { "×" + String(format: "%.2f", $0) } ?? "unknown (not seen at both sizes)")")
+                    if r == nil || r! < 1.5 { c.labels[l, default: 0] += 1; if l == notifications { c.notifications += 1 } }
                 }
-                app.terminate()
-                if v.dark { XCUIDevice.shared.appearance = .light }
-                if v.landscape { XCUIDevice.shared.orientation = .portrait }
-                print("MEASURE-PROGRESS round \(round), \(v.name) done at \(Int(Date().timeIntervalSince(start))) s")
+                probeStats[cross] = c
+            }
+            for v in singles {
+                if !left() { break rounds }
+                onSettings(v) { app, notifications in _ = probeLabels(app, v, notifications, round, 1) }
             }
             probeSummary("after round \(round)")
         }
         probeSummary("final, \(round) rounds begun, \(Int(Date().timeIntervalSince(start))) s")
+    }
+
+    /// probeAudit, returning the labels it flagged.
+    private func probeLabels(_ app: XCUIApplication, _ v: Variant, _ notifications: String, _ round: Int, _ rep: Int) -> Set<String> {
+        let before = probeStats[v.name]?.labels ?? [:]
+        let audits = probeStats[v.name]?.audits ?? 0
+        probeAudit(app, v, "top", notifications, round, rep)
+        let after = probeStats[v.name]!
+        _ = audits
+        return Set(after.labels.filter { $0.value > (before[$0.key] ?? 0) }.keys)
     }
 }
