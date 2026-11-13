@@ -184,6 +184,12 @@ func checkTable(name string, v any) string {
 			return r.Rule
 		}
 	}
+	return betweenRule(name, m)
+}
+
+// betweenRule returns the rule between fields m breaks, its fields each in
+// range, or "".
+func betweenRule(name string, m map[any]any) string {
 	// The rules between fields of a map: AmneziaWG's junk sizes, and below
 	// the retired fields of a Welcome.
 	if name == "obfuscation" && m[uint64(2)].(uint64) > m[uint64(3)].(uint64) {

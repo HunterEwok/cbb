@@ -498,6 +498,36 @@ mod reading {
         assert!(tables::of(200).is_none() && wave4::of(200).is_none());
     }
 
+    /// future.json: the rows are ours, and each case reads as it says.
+    #[test]
+    fn the_future_vectors_are_what_the_reader_says() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/format/future.json");
+        let v: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        let all: Vec<&'static Table> = tables::ALL.iter().chain(wave4::ALL.iter()).copied().collect();
+        let by_name = |n: &str| *all.iter().find(|t| t.name() == n).unwrap_or_else(|| panic!("no table {n}"));
+        let word = |l: Later| match l {
+            Later::Refuse => "refuse".into(),
+            Later::Absent => "absent".into(),
+            Later::Bits(m) => format!("bits {m}"),
+            Later::Unusable => "unusable".into(),
+        };
+        let rows = v["rows"].as_array().unwrap();
+        assert_eq!(rows.len(), later::OPTIONAL.len());
+        for r in rows {
+            let t = by_name(r["table"].as_str().unwrap());
+            let n = u16::try_from(r["n"].as_u64().unwrap()).unwrap();
+            assert_eq!(word(later::of(t, n)), r["later"].as_str().unwrap(), "{} {n}", t.name());
+        }
+        for c in v["cases"].as_array().unwrap() {
+            let b = super::unhex(&c["value"]);
+            let got = read_map(by_name(c["table"].as_str().unwrap()), &crate::format::cbor::decode(&b).unwrap());
+            match c["rule"].as_str() {
+                Some(rule) => assert_eq!(got.err().map(Rule::name), Some(rule), "{}", c["name"]),
+                None => assert_eq!(got.map(|x| x.encode()), Ok(super::unhex(&c["read"])), "{}", c["name"]),
+            }
+        }
+    }
+
     /// Everything the vectors take reads back unchanged.
     #[test]
     fn what_the_writer_check_takes_reads_unchanged() {

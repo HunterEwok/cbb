@@ -1843,7 +1843,12 @@ def check_map(name, v):
                 return rule
         elif not ty_ok(ty, v[n]):
             return rule
-    # The one rule between fields of a map: AmneziaWG's junk sizes.
+    return between_rule(name, v)
+
+
+def between_rule(name, v):
+    """The rule between fields v breaks, its fields each in range, or None."""
+    # AmneziaWG's junk sizes.
     if name == "obfuscation" and v[2] > v[3]:
         return "obfuscation/jmax"
     if name == "offer" and 9 in v:
@@ -1857,6 +1862,186 @@ def check_map(name, v):
     if name == "welcome" and (3 in v or 8 in v):
         return "welcome/retired"
     return None
+
+
+# What a reader of this version does with an optional field whose value is
+# out of range (format 20.5): one row a field; every optional field not
+# listed refuses. core/src/msg/later.rs holds the same rows.
+LATER = {
+    ("welcome", 4): "absent", ("welcome", 7): "absent",
+    ("invite/path", 6): "unusable", ("invite/profile", 2): "bits 15",
+    ("offer", 3): "unusable", ("offer", 4): "unusable",
+    ("member-credentials", 3): "unusable", ("pair/info", 3): "bits 7",
+    ("forward/register", 4): "unusable", ("forward/registered", 4): "unusable",
+}
+TRANSPORTS = ("obfuscation", "vless")
+
+
+class Refused(Exception):
+    pass
+
+
+ABSENT = object()
+
+
+def later_of(name, n):
+    return LATER.get((name, n), "refuse")
+
+
+def read_ty(ty, later, rule, v):
+    """A value as a reader of this version reads it: the value (lists
+    cleaned), ABSENT, or Refused(rule)."""
+    import unicodedata
+    w = ty.split(" ", 2)
+
+    def out():
+        if later == "absent":
+            return ABSENT
+        raise Refused(rule)
+
+    def shape(ok):
+        if not ok:
+            raise Refused(rule)
+
+    if w[0] == "uint":
+        shape(isinstance(v, int) and not isinstance(v, bool))
+        if later.startswith("bits "):
+            x = v & int(later[5:])
+            return x if x else ABSENT
+        lo, hi = map(int, w[1].split(".."))
+        return v if lo <= v <= hi else out()
+    if w[0] == "flag":
+        shape(isinstance(v, int))
+        return v if v == 1 else out()
+    if w[0] == "bytes" and ".." not in w[1]:
+        shape(isinstance(v, bytes) and len(v) == int(w[1]))
+        return v
+    if w[0] == "bytes":
+        shape(isinstance(v, bytes))
+        return v if 1 <= len(v) <= int(w[1].split("..")[1]) else out()
+    if w[0] == "id":
+        shape(isinstance(v, bytes) and len(v) == int(w[1]))
+        return v if any(v) else out()
+    if w[0] == "text":
+        shape(isinstance(v, str))
+        ok = 1 <= len(v.encode()) <= int(w[1].split("..")[1]) and \
+            not any(unicodedata.category(c) == "Cc" for c in v)
+        return v if ok else out()
+    if w[0] == "addr":
+        shape(isinstance(v, str))
+        return v if addr_ok(v) else out()
+    if w[0] == "key":
+        alg = int(w[1])
+        shape(isinstance(v, list) and len(v) == 2 and isinstance(v[0], int) and isinstance(v[1], bytes))
+        if v[0] != alg:
+            return out()
+        shape(key_ok(v, alg))
+        return v
+    if w[0] == "envelope":
+        shape(ty_ok(ty, v))
+        return v
+    if w[0] in ("array", "once", "set"):
+        n = int(w[1].split("..")[1])
+        inner = w[2][len("of "):]
+        shape(isinstance(v, list))
+        es = [enc(x) for x in v]
+        shape(not (w[0] == "once" and len(set(es)) != len(es)))
+        shape(not (w[0] == "set" and any(a >= b for a, b in zip(es, es[1:]))))
+        if len(v) > n:
+            return out()
+        el = "absent" if later == "absent" else "refuse"
+        kept = [x for x in (read_ty(inner, el, rule, e) for e in v) if x is not ABSENT]
+        return kept if kept else out()
+    if w[0] == "map" and later == "unusable":
+        shape(isinstance(v, dict))
+        known = {r[0] for r in TABLES[w[1]]}
+        try:
+            got = read_map(w[1], v)
+        except Refused:
+            return {}
+        return got if all(k in known for k in v) else {}
+    if w[0] == "map":
+        try:
+            return read_map(w[1], v)
+        except Refused:
+            raise Refused(rule)
+    raise ValueError(ty)
+
+
+def read_map(name, v):
+    """A map as a reader of this version reads it (core msg::read_map)."""
+    if not isinstance(v, dict):
+        raise Refused(name + "/shape")
+    rows = {r[0]: r for r in TABLES[name]}
+    out = {}
+    for k, x in v.items():
+        if k not in rows:
+            out[k] = x
+            continue
+        n, rule, ty, needed = rows[k]
+        got = read_ty(ty, "refuse" if needed else later_of(name, n), rule, x)
+        if got is not ABSENT:
+            out[k] = got
+    for n, rule, ty, needed in TABLES[name]:
+        if needed and n not in out:
+            raise Refused(rule)
+    rule = between_rule(name, out)
+    if rule:
+        raise Refused(rule)
+    return out
+
+
+def future_vectors():
+    """future.json: what a reader of this version reads a value from a later
+    version as, by each optional field's row."""
+    rows = []
+    for name, fields in TABLES.items():
+        for n, rule, ty, needed in fields:
+            if not needed:
+                rows.append({"table": name, "n": n, "later": later_of(name, n)})
+    obf = {1: 4, 2: 40, 3: 70, 4: [15, 20, 0, 0], 5: [[1000, 1100], [2000, 2100], [3000, 3100], [4000, 4100]]}
+    hub = [X25519, fake("hub wg key", 32)]
+    env = [enc({1: 1}), fake("sig", 64)]
+    welcome = {1: ROOT.key, 2: [env], 5: T0, 9: RECOVERY.key, 11: RECOVERY2.key}
+    info = {1: "kitchen tablet", 4: 1}
+    cases = []
+
+    def case(name, table, v):
+        try:
+            got = {"read": enc(read_map(table, v)).hex()}
+        except Refused as e:
+            got = {"rule": str(e)}
+        cases.append({"name": name, "table": table, "value": enc(v).hex(), **got})
+
+    case("an offer as written", "offer", {1: hub, 3: obf})
+    case("an offer, moved of a later version: refused", "offer", {1: hub, 6: 2})
+    case("an offer, settings out of range: unusable", "offer", {1: hub, 3: {**obf, 1: 0}})
+    case("an offer, settings with a later field: unusable", "offer", {1: hub, 3: {**obf, 7: 1}})
+    case("an offer, settings jmin above jmax: unusable", "offer", {1: hub, 3: {**obf, 2: 80}})
+    case("an offer, settings not a map: refused", "offer", {1: hub, 3: 1})
+    case("an offer, a VLESS way with a later port: unusable", "offer", {1: hub, 4: {1: fake("u", 16), 2: 70000}})
+    case("an offer, an endpoint out of range: refused", "offer", {1: hub, 2: ["host.example:1"]})
+    case("an offer, a field of a later version kept", "offer", {1: hub, 300: "later"})
+    case("a Welcome, 257 keys statements: none", "welcome", {**welcome, 4: [env] * 257})
+    case("a Welcome, 260 credentials: none", "welcome", {**welcome, 7: [env] * 260})
+    case("a Welcome, an empty list: refused", "welcome", {**welcome, 10: b""})
+    case("an info, unknown capability bits ignored", "pair/info", {**info, 3: 8 | 4})
+    case("an info, only unknown capability bits: none", "pair/info", {**info, 3: 8})
+    case("an info, the zero invitation ID: refused", "pair/info", {**info, 9: bytes(16)})
+    case("an info, a role of a later version: refused", "pair/info", {**info, 4: 5})
+    case("an info, an admin key of a later algorithm: refused", "pair/info", {**info, 5: [99, b"k"]})
+    case("a profile, unknown rights bits ignored", "invite/profile", {1: 1, 2: 16 | 2})
+    case("a profile, home only of a later version: refused", "invite/profile", {1: 1, 3: 2})
+    case("a path, settings of a later version: unusable", "invite/path", {1: 2, 6: {**obf, 3: 2000}})
+    case("a guest, a reason too long: refused", "guest", {0: 17, 2: 7, 3: hub, 7: "x" * 257})
+    case("a guest, a later op: refused", "guest", {0: 17, 2: 8, 3: hub})
+    case("a dismiss, the zero invitation ID: refused", "dismiss", {0: 27, 2: bytes(16)})
+    case("credentials, settings for later out of range: unusable", "member-credentials",
+         {0: 11, 2: [env], 3: {**obf, 2: 80}})
+    case("a key of the wrong length: refused", "tunnel", {0: 15, 2: [X25519, b"short"], 3: fake("c", 32)})
+    return {"note": "a reader of this version, by each optional field's row; shape always refuses, and so does a "
+                    "needed field; unusable reads as the empty map",
+            "rows": rows, "cases": cases}
 
 
 def check_message(m):
@@ -2982,6 +3167,7 @@ def main():
         "codes": code_vectors(),
     }
     files["wave4.json"] = wave4_vectors()
+    files["future.json"] = future_vectors()
     # Each signature has one form: the high-S twin of a valid signature
     # (the same r, n - s) is refused for every kind.
     def twin(sig):
