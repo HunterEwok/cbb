@@ -20,6 +20,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -37,9 +38,8 @@ type listsMirror struct {
 	srv *httptest.Server
 	ca  string // the root's PEM file
 
-	mu      sync.Mutex
-	files   map[string][]byte
-	entries int // how often entries.json was served since the last serve
+	mu    sync.Mutex
+	files map[string][]byte
 }
 
 func newListsMirror(t *testing.T) *listsMirror {
@@ -70,9 +70,6 @@ func newListsMirror(t *testing.T) *listsMirror {
 	m.srv = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		m.mu.Lock()
 		data, ok := m.files[r.URL.Path]
-		if ok && r.URL.Path == "/entries.json" {
-			m.entries++
-		}
 		m.mu.Unlock()
 		if !ok {
 			http.NotFound(w, r)
@@ -103,14 +100,6 @@ func (m *listsMirror) serve(keys, entries []byte) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.files["/keys.json"], m.files["/entries.json"] = keys, entries
-	m.entries = 0
-}
-
-// served is how often entries.json went out since the last serve.
-func (m *listsMirror) served() int {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.entries
 }
 
 // relaySet splits what signRelay signs into the two files the mirror
@@ -175,12 +164,24 @@ func TestProjectRelayRefetch(t *testing.T) {
 	_, stop = runRelay(t, newKeys, at, group)
 	defer stop()
 
-	// Each refused set is fetched at least twice: a fetch starts only
-	// after the one before it was read, so the first was then refused.
-	refused := func(what string, keys, entries []byte) {
+	// A refused set is refused for a reason of its own, which the device
+	// logs once it read the set: a refusal of the set before it cannot be
+	// taken for it. The link to the relay fails again after a backoff of
+	// up to a minute, and each failure may fetch the lists once.
+	refusals := func(reason string) int {
+		n := 0
+		for _, l := range pi.linesWith("fetching the signed lists for the relay: ") {
+			if strings.Contains(l, reason) {
+				n++
+			}
+		}
+		return n
+	}
+	refused := func(what, reason string, keys, entries []byte) {
 		t.Helper()
+		before := refusals(reason)
 		mirror.serve(keys, entries)
-		waitUpTo(t, 90*time.Second, "the pi fetches "+what+" again", func() bool { return mirror.served() >= 2 })
+		waitUpTo(t, 150*time.Second, "the pi fetches and refuses "+what, func() bool { return refusals(reason) > before })
 		if connected() {
 			t.Fatalf("the pi took the relay's new key from %s", what)
 		}
@@ -197,17 +198,19 @@ func TestProjectRelayRefetch(t *testing.T) {
 	if len(half.Sigs) != 1 || len(k.Sigs) != 2 {
 		t.Fatalf("keys.json has %d signatures, %d of them ES256", len(k.Sigs), len(half.Sigs))
 	}
-	refused("a keys.json signed by one half of the root", fileBytes(t, half), fileBytes(t, e))
+	refused("a keys.json signed by one half of the root", "keys.json is not valid: the signature is not valid", fileBytes(t, half), fileBytes(t, e))
 
 	ok, e := relaySet(t, signer.signRelayKeys(t, 4, oldKeys, newKeys))
-	refused("lists older than those it holds", fileBytes(t, ok), fileBytes(t, e))
+	refused("lists older than those it holds", "older than one already seen", fileBytes(t, ok), fileBytes(t, e))
 
 	k, e = relaySet(t, signer.signRelayKeys(t, 6, oldKeys, newKeys))
 	large := append(fileBytes(t, k), bytes.Repeat([]byte{' '}, release.MaxFile)...)
-	refused("a keys.json over the largest file", large, fileBytes(t, e))
+	// A download cut at the largest file names the URL; the readers'
+	// refusals name only the file.
+	refused("a keys.json over the largest file", "/keys.json", large, fileBytes(t, e))
 
 	mirror.serve(fileBytes(t, k), fileBytes(t, e))
-	waitUpTo(t, 90*time.Second, "the pi registers with the key the refetched lists name", connected)
+	waitUpTo(t, 150*time.Second, "the pi registers with the key the refetched lists name", connected)
 	if a := pi.status(t).Away; a.Relay.Error != "" {
 		t.Errorf("an error left in status: %q", a.Relay.Error)
 	}
