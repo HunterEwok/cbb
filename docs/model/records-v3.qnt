@@ -197,9 +197,9 @@ module records_v3 {
   pure val DEV = Map("A" -> "dA", "C" -> "dC", "C2" -> "dC", "W" -> "dW", "X" -> "dX", "NA" -> "dN")
   pure val DEVS = Set("dA", "dC", "dW", "dX", "dN")
 
-  pure val ROOM = 14
-  pure val ROOTC = 8
-  pure val ADMINC = 5
+  pure val ROOM = if (CEIL_FIT) 20 else 14
+  pure val ROOTC = if (CEIL_FIT) 4 else 8
+  pure val ADMINC = if (CEIL_FIT) 2 else 5
   pure val MAXU = 2
   pure val TOP = ROOTC
   pure val MAXREC = 16
@@ -251,6 +251,13 @@ module records_v3 {
   pure val FLOOR = 2
   pure val ROOT_FLOOR = 6
   pure val MAX_ADMINS = 4
+  // (J): the ceilings of every key with room fit ROOM together, so the level never falls:
+  // the writer of an admission refuses one that would break it (room reserved for ROOTS_MAX
+  // roots on the path), and no writer signs past its own ceiling above the counting
+  // checkpoint's head (with WRITER_KEEPS, nor what its own set would not keep). Sizes under
+  // CEIL_FIT: ROOM 20 = 3 roots at 4 + 4 admins at 2 (architecture 15:43Z).
+  pure val CEIL_FIT = false
+  pure val ROOTS_MAX = 3
   pure val MISSING_NEWEST_ONLY = false
 
   pure val NONE = 10000000
@@ -572,12 +579,14 @@ module records_v3 {
   }
   // Every lower seq of r's key above the head the set's checkpoint names is among items.
   pure def gapFree(s: Store, r: Record, items: Set[Record], db: Id -> Record): bool = {
-    // The head comes from the set's checkpoint when it is the current root's; a replaced
-    // root's records count by its list.
+    // A replaced root's records count by its list.
     // A checkpoint of the current root is never past a gap: it is what moves the head over one.
-    val c0 = if (s.checkpoint == 0) NONEREC else db.get(s.checkpoint)
-    val c = if (c0 != NONEREC and c0.signer == last(keptPath(s, db))) c0 else NONEREC
-    val hd = if (c != NONEREC and c.heads.keys().contains(r.signer)) c.heads.get(r.signer).length() else 0
+    // The head is the furthest any held checkpoint of the current root names for the key
+    // (the set's own or one in items): below it the checkpoint vouches for the run.
+    val cur = last(keptPath(s, db))
+    val cps = items.union(if (s.checkpoint == 0) Set() else Set(db.get(s.checkpoint)))
+      .filter(c => c.kind == "checkpoint" and c.signer == cur)
+    val hd = cps.fold(0, (m, c) => if (c.heads.keys().contains(r.signer)) max2(m, c.heads.get(r.signer).length()) else m)
     val ids = idsOf(items).union(s.chain).union(s.wait)
     replaced(keptCuts(s, db), r.signer)
       or (r.kind == "checkpoint" and r.signer == last(keptPath(s, db)))
@@ -1179,6 +1188,10 @@ module records_v3 {
       // within FLOOR; the root admits no admin key past MAX_ADMINS.
       not(keeps) or not(WRITER_FLOOR) or hidden or isChain(r) or kind == "checkpoint"
         or unitsAbove(recsOf(s.recs, db).union(Set(r)), views.get(h), k, db2) <= (if (onList(views.get(h).path, k)) ROOT_FLOOR else FLOOR),
+      not(keeps) or not(CEIL_FIT) or hidden or isChain(r) or kind == "checkpoint"
+        or unitsAbove(recsOf(s.recs, db).union(Set(r)), views.get(h), k, db2) <= (if (onList(views.get(h).path, k)) ROOTC else ADMINC),
+      not(keeps) or not(CEIL_FIT) or kind != "admin" or ROOTS_MAX * ROOTC + learned(recsOf(s.recs, db), views.get(h).path, views.get(h).cuts)
+        .union(Set(target)).filter(x => not(onList(views.get(h).path, x))).size() * ADMINC <= ROOM,
       not(keeps) or not(WRITER_FLOOR) or kind != "admin" or learned(recsOf(s.recs, db), views.get(h).path, views.get(h).cuts)
         .union(Set(target)).size() <= MAX_ADMINS,
       commit(db2, nextId + 1, h, if (hidden) s else insertInto(s, r, db2)),
@@ -1760,7 +1773,7 @@ module records_v3 {
   // every record some member holds that it may store and its counting checkpoint does not
   // prune.
   def honestW: bool = db.keys().forall(i => db.get(i).kit != "bent" and db.get(i).kit != "deviant")
-  val honestNeverDropped = (WRITER_FLOOR and honestW) implies MEMBERS.forall(m => {
+  val honestNeverDropped = ((WRITER_FLOOR or CEIL_FIT) and honestW) implies MEMBERS.forall(m => {
     val s = st.get(m)
     val v = views.get(m)
     val c = if (v.checkpoint == 0) NONEREC else db.get(v.checkpoint)
@@ -1768,9 +1781,12 @@ module records_v3 {
       isChain(r) or not(storable(s, r, db)) or (c != NONEREC and prunedBy(c, r)) or heldBy(s).contains(r.id))
   })
 
+  // (J): with honest writers no member ever holds a mark.
+  val honestNoMarks = (CEIL_FIT and honestW) implies MEMBERS.forall(m => st.get(m).cut.marks.keys() == Set())
+
   val promises = and {
     oneState, converges, convergesHonest, countsNewest, removedStayOut, oneChainOneState, stopRootOnly, fairRoom, followsRecovery, pathGrows, newcomerTakes,
-    oldRootListed, twinStops, removedGainsNothing, compactedAgree, F12 implies heldBackCountsLess, honestNeverDropped,
+    oldRootListed, twinStops, removedGainsNothing, compactedAgree, F12 implies heldBackCountsLess, honestNeverDropped, honestNoMarks,
   }
 
   // --- Scenarios ---------------------------------------------------------------------------
