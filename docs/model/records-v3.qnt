@@ -2278,6 +2278,32 @@ module records_v3 {
       .expect(CUT_MODE != "follows" or MEMBERS.forall(m => st.get(m).recs.contains(4) and st.get(m).recs.contains(12)
         and convergesAt(m)) and promises)
 
+  // --- A twin checkpoint at the fork seq ---------------------------------------------------
+  // A signs two records at seq 1 (4 and 5) and the root's resolve 6 voids 5, so 5 no longer
+  // counts; the root, off its device, signs a checkpoint 7 at seq 5 that keeps what counts and
+  // so prunes 5; then on its device a device record 8 at the same seq 5. Member a gets 7 then
+  // 8, c gets 8 then 7, k gets 7, compacts on it (drops 5), then gets 8. The pair halts every
+  // member alike; after a sync every member holds the same records.
+  action twinCpBase =
+    init
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 1))
+      .then(sign(PHONE, "device", DEVICE, "", 0, false, true, 1)).then(syncRound)
+      .then(sign(ROOT, "resolve", "", "", 5, false, false, 1)).then(syncRound)
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 2, true, Set()))
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, true, 1))
+  run twinCheckpointOrderTest = twinCpBase
+      .then(giveOnly("a", 7)).then(compactAt("a")).then(giveOnly("a", 8)).then(compactAt("a"))
+      .then(giveOnly("c", 8)).then(giveOnly("c", 7)).then(compactAt("c"))
+      .then(giveOnly("k", 7)).then(compactAt("k")).then(giveOnly("k", 8)).then(compactAt("k"))
+      // All halt alike; a and k, which compacted on 7 before the pair, lack the voided 5 that c
+      // holds until a sync: 7 no longer counts, so they forget it and take 5 back.
+      .expect(Set("a", "c", "k").forall(m => heldBy(st.get(m)).contains(7) and heldBy(st.get(m)).contains(8)
+        and views.get(m).stop and views.get(m) == views.get("c"))
+        and st.get("a").recs == Set(1, 2, 3, 4, 6) and st.get("k").recs == Set(1, 2, 3, 4, 6)
+        and st.get("c").recs == Set(1, 2, 3, 4, 5, 6) and promises)
+      .then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m) == views.get("c") and st.get(m).recs == st.get("c").recs) and promises)
+
   // --- (J): ceilings that fit the room -----------------------------------------------------
   // The cap: the root admits a fourth admin key (3 roots at 6 and 4 admins at 2 fill ROOM),
   // and refuses a fifth.
