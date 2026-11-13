@@ -244,6 +244,9 @@ struct World {
     admission: BTreeMap<usize, RecordId>,
     /// The record IDs each change of root's list names, in order.
     change_lists: Vec<Vec<RecordId>>,
+    /// SIM_ADMIN_TWIN: the member an admin removed before a twin of its
+    /// key, and the changes of root written by then.
+    admin_twin: Option<(usize, usize)>,
     log: Vec<String>,
 }
 
@@ -358,6 +361,7 @@ impl World {
             not_kept: BTreeSet::new(),
             admission: BTreeMap::new(),
             change_lists: Vec::new(),
+            admin_twin: None,
             log: Vec::new(),
         };
         // The root's phone is member 0; it admits a first few.
@@ -425,8 +429,9 @@ impl World {
             let st = m.state.clone();
             let r = match m.set.write_record(&st, &kk, kind, time_ms) {
                 Ok(r) => r,
-                Err(_) => {
+                Err(e) => {
                     REFUSED.fetch_add(1, Ordering::Relaxed);
+                    refused_why(&alloc::format!("{e:?}")).fetch_add(1, Ordering::Relaxed);
                     return None;
                 }
             };
@@ -1037,6 +1042,12 @@ impl World {
                         self.removed.insert(h);
                         self.note(format!("m{by} removes m{t}"));
                         self.after_save(by)?;
+                        if env("SIM_ADMIN_TWIN") == Some(1)
+                            && self.root_key(by).as_deref() != Some(key.as_str())
+                            && self.admin_twin.is_none()
+                        {
+                            self.admin_twin(by, &key, t);
+                        }
                     }
                 }
             }
@@ -1183,6 +1194,33 @@ impl World {
             .into_iter()
             .collect();
         Some(Kind::Checkpoint { heads, keep })
+    }
+
+    /// SIM_ADMIN_TWIN=1: after the admin key key on member by removed
+    /// member t, a second record of that key at seq 1 (the key's two
+    /// histories). Its removal must keep barring t at every member.
+    fn admin_twin(&mut self, by: usize, key: &str, t: usize) {
+        let kk = k(key);
+        let set = &self.members[by].live.set;
+        let Some(first) =
+            set.ids().filter_map(|id| set.get(id)).find(|r| r.body().signer == kk.hash && r.body().seq == 1)
+        else {
+            return;
+        };
+        let mut body = first.body().clone();
+        body.time_ms += 1;
+        let Ok(twin) = Record::sign(body, &kk) else { return };
+        self.signed.insert(twin.id());
+        // The twin reaches one other member of the group, as if a second
+        // device had the admin key, and spreads from there.
+        let others: Vec<usize> = self.in_group().into_iter().filter(|j| *j != by && *j != t).collect();
+        let Some(to) = self.rng.pick(&others) else { return };
+        let _ = self.members[to].live.set.insert(twin);
+        self.refresh(to);
+        self.save(to);
+        self.admin_twin = Some((t, self.changes));
+        ADMIN_TWINS.fetch_add(1, Ordering::Relaxed);
+        self.note(format!("a twin of m{by}'s admin key at seq 1 reaches m{to} after it removed m{t}"));
     }
 
     fn is_gone(&self, i: usize) -> bool {
@@ -1692,7 +1730,9 @@ impl World {
         // its removal does not.
         // A halted member lists no devices; it counts itself in all the same.
         let own = |m: &Member| m.live.state.halted() || m.live.state.device_by_key(&m.key.hash).is_some();
-        for i in (0..self.members.len()).filter(|i| self.admitted[*i] && own(&self.members[*i])) {
+        // A root lost for good never comes back, even when a member that
+        // never heard of the loss admits its key again.
+        for i in (0..self.members.len()).filter(|i| self.admitted[*i] && !self.is_gone(*i) && own(&self.members[*i])) {
             *count.entry(self.members[i].live.set.digest()).or_default() += 1;
         }
         // The group's records: the longest chain of changes of root (a
@@ -1753,7 +1793,9 @@ impl World {
         // member that was ever admitted must be halted on the same fork.
         let group: Vec<usize> = (0..self.members.len())
             .filter(|i| {
-                self.admitted[*i] && (state.halted() || state.device_by_key(&self.members[*i].key.hash).is_some())
+                self.admitted[*i]
+                    && !self.is_gone(*i)
+                    && (state.halted() || state.device_by_key(&self.members[*i].key.hash).is_some())
             })
             .collect();
         for i in &group {
@@ -1776,6 +1818,20 @@ impl World {
         for (i, m) in self.members.iter().enumerate() {
             if !state.halted() && state.revoked.contains(&m.key.hash) && !m.live.state.revoked.contains(&m.key.hash) {
                 return Err(format!("removed m{i} never learned its removal"));
+            }
+        }
+        // An admin's removal keeps barring after a twin of that admin key,
+        // until a change of root.
+        if let Some((t, changes)) = self.admin_twin
+            && changes == self.changes
+        {
+            let h = self.members[t].key.hash;
+            for j in group.iter().filter(|j| **j != t) {
+                if self.members[*j].live.state.device_by_key(&h).is_some() {
+                    return Err(format!(
+                        "m{j} counts m{t} again after its admin's removal and a twin of that admin key"
+                    ));
+                }
             }
         }
         // A member the group's view does not know (its admission dropped by
@@ -1838,11 +1894,12 @@ impl World {
         let Some(i) = self.rng.pick(&senders) else { return Ok(()) };
         let newest = self.members.iter().map(|m| m.live.last.wall).max().unwrap_or(0).max(self.time as i64);
         // A root lost for good is still a device to the others: the copy
-        // is sealed to it too, and it never shows it.
+        // is sealed to it too while its keys statement lasts, and it never
+        // shows it. Once that statement ages out, it is sealed to no more.
         let gone = self.gone.map(|(g, _, _)| g);
+        let gone_id = gone.and_then(|g| state.device(&self.members[g].id)).map(|d| d.id);
         let expect: BTreeSet<DeviceId> = group
             .iter()
-            .chain(gone.iter())
             .filter(|j| **j != i)
             .filter_map(|j| state.device(&self.members[*j].id))
             .filter(|d| !d.frozen && d.rights & RIGHT_READ != 0 && !state.nothing_to.contains(&d.id))
@@ -1854,7 +1911,10 @@ impl World {
             }
             return Err(format!("m{i} could not seal its last copy"));
         };
-        let readers: BTreeSet<DeviceId> = readers.into_iter().collect();
+        let mut readers: BTreeSet<DeviceId> = readers.into_iter().collect();
+        if let Some(g) = gone_id {
+            readers.remove(&g);
+        }
         if readers != expect {
             return Err(format!("m{i} sealed its last copy to {} readers of {}", readers.len(), expect.len()));
         }
@@ -1957,6 +2017,9 @@ fn run(seed: u64, steps: usize) -> Result<(), String> {
     // A split after a deviating checkpoint is the stated limit N-1 when
     // the waiting checkpoints keep more than one ROOM aside.
     let r = r.map_err(|e| {
+        if w.admin_twin.is_some() {
+            return format!("admin twin (expected until the core's fix): {e}");
+        }
         if !w.deviated {
             return e;
         }
@@ -2014,7 +2077,41 @@ static UNKNOWN_PRUNED: AtomicUsize = AtomicUsize::new(0);
 static REFUSED: AtomicUsize = AtomicUsize::new(0);
 /// Members a change of root's list left out that still count themselves in.
 static LEFT_OUT: AtomicUsize = AtomicUsize::new(0);
-const COUNTERS: [&AtomicUsize; 15] = [
+/// The core writer's refusals by reason.
+static REFUSED_CEILING: AtomicUsize = AtomicUsize::new(0);
+static REFUSED_NO_ROOM: AtomicUsize = AtomicUsize::new(0);
+static REFUSED_GROUP_FULL: AtomicUsize = AtomicUsize::new(0);
+static REFUSED_STOPPED: AtomicUsize = AtomicUsize::new(0);
+static REFUSED_TWO_HISTORIES: AtomicUsize = AtomicUsize::new(0);
+static REFUSED_OTHER: AtomicUsize = AtomicUsize::new(0);
+/// Runs with a twin of an admin key after its removal (SIM_ADMIN_TWIN).
+static ADMIN_TWINS: AtomicUsize = AtomicUsize::new(0);
+
+/// The counter of a refusal of the core's writer, by its message.
+fn refused_why(e: &str) -> &'static AtomicUsize {
+    if e.contains("would pass its room") {
+        &REFUSED_CEILING
+    } else if e.contains("has no room in the group") {
+        &REFUSED_NO_ROOM
+    } else if e.contains("have no room for the record") {
+        &REFUSED_GROUP_FULL
+    } else if e.contains("group is stopped") {
+        &REFUSED_STOPPED
+    } else if e.contains("two histories") {
+        &REFUSED_TWO_HISTORIES
+    } else {
+        &REFUSED_OTHER
+    }
+}
+
+const COUNTERS: [&AtomicUsize; 22] = [
+    &ADMIN_TWINS,
+    &REFUSED_CEILING,
+    &REFUSED_NO_ROOM,
+    &REFUSED_GROUP_FULL,
+    &REFUSED_STOPPED,
+    &REFUSED_TWO_HISTORIES,
+    &REFUSED_OTHER,
     &LEFT_OUT,
     &REFUSED,
     &UNKNOWN_PRUNED,
@@ -2108,6 +2205,16 @@ fn groups_under_faults_agree() {
         UNKNOWN_PRUNED.load(Ordering::Relaxed),
         REFUSED.load(Ordering::Relaxed),
         LEFT_OUT.load(Ordering::Relaxed)
+    );
+    std::eprintln!(
+        "sim refusals: {} past the key's ceiling (checkpoint first), {} a key without a room, {} the group's records full, {} a stopped group, {} a key with two histories, {} other; {} runs with an admin key's twin after its removal",
+        REFUSED_CEILING.load(Ordering::Relaxed),
+        REFUSED_NO_ROOM.load(Ordering::Relaxed),
+        REFUSED_GROUP_FULL.load(Ordering::Relaxed),
+        REFUSED_STOPPED.load(Ordering::Relaxed),
+        REFUSED_TWO_HISTORIES.load(Ordering::Relaxed),
+        REFUSED_OTHER.load(Ordering::Relaxed),
+        ADMIN_TWINS.load(Ordering::Relaxed)
     );
     assert!(failed.is_empty(), "{}", failed.join("\n\n"));
 }
