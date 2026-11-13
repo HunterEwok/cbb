@@ -35,9 +35,9 @@ while IFS=/ read -r os arch _; do
 		{ echo "release-targets.sh: no cbb for $os/$arch" >&2; exit 1; }
 done <"$work/release"
 # The release copies, builds and checks by the list, as CI's builds do.
-for k in rust go all; do
-	for f in "$release" .github/build-targets.sh; do
-		grep -qF "release-programs.sh $k " "$f" || { echo "release-targets.sh: $f does not take the $k programs from release-programs.sh" >&2; exit 1; }
+for f in "$release" .github/build-targets.sh; do
+	for k in "release-programs.sh rust " "release-programs.sh all " "release-go.sh "; do
+		grep -qF "$k" "$f" || { echo "release-targets.sh: $f does not use $k" >&2; exit 1; }
 	done
 done
 echo "CI builds all $n targets of the release by its list of programs"

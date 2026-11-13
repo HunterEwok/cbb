@@ -117,21 +117,16 @@ jobs:
           sh member/packaging/notices.sh "$(basename "$(dirname "$dir")")" >"$RUNNER_TEMP/rust-notices"
       - name: cbb-helper and cbb-forward, the Go programs beside cbb
         run: |
-          ldflags="-s -w -X github.com/HunterEwok/cbb/internal/version.Version=$GITHUB_REF_NAME"
-          exe=; if [ "$GOOS" = windows ]; then exe=.exe; fi
           if [ "$GOOS" = windows ]; then
             # The tray app, a module of its own; on Windows it needs no cgo.
             (cd apps/desktop && go build -trimpath -ldflags "-s -w -H=windowsgui" -o "$RUNNER_TEMP/cbb-desktop.exe" .)
           fi
-          # cbb-helper, the Go helper cbb starts as its child, with the same
-          # version: a release cbb takes only a helper of its own release. The
-          # routers' builds (mips) go without the Go programs, as cbb runs
-          # there alone (.github/release-programs.sh).
-          for p in $(sh .github/release-programs.sh go "$GOOS" "$GOARCH"); do
-            go build -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/$p" "./cmd/${p%"$exe"}"
-            # -trimpath leaves -ldflags out of the build info, so the tag itself is looked for.
-            grep -aqF -- "$GITHUB_REF_NAME" "$RUNNER_TEMP/$p"
-          done
+          # cbb-helper, the Go helper cbb starts as its child, and
+          # cbb-forward, each with the release's version: a release cbb takes
+          # only a helper of its own release. The routers' builds (mips) go
+          # without the Go programs, as cbb runs there alone
+          # (.github/release-programs.sh). CI builds them by the same script.
+          sh .github/release-go.sh "$RUNNER_TEMP" "$GITHUB_REF_NAME"
       - name: the tray app for Linux
         if: matrix.tray
         env:

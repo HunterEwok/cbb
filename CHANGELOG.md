@@ -7,6 +7,7 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- `cbb-forward version` prints the forwarder's version, as `cbb-helper version` does.
 - Every release file carries two signatures, ES256 and SLH-DSA-SHA2-128s (FIPS 205), and
   every program from 0.6 takes a file only with both, with no switch to turn either off
   (docs/protocol.md, section 16, "Two signatures"): a release stays trusted when a quantum

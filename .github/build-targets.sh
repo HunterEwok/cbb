@@ -59,9 +59,9 @@ EOF
 	for p in $(sh .github/release-programs.sh rust "$os" "$arch"); do
 		cp "$rust/$p" "$out/"
 	done
-	for p in $(sh .github/release-programs.sh go "$os" "$arch"); do
-		go build -trimpath -o "$out/$p" "./cmd/${p%"$exe"}"
-	done
+	# The Go programs by the release's own script, under a tag of CI's own
+	# with a pre-release part, as an rc's.
+	sh .github/release-go.sh "$out" "${CBB_TEST_TAG:-v0.0.0-rc.1}"
 	# The release workflow's check that no program carries the test hooks,
 	# on the same list.
 	no_hooks "$out" "$os" "$arch"
