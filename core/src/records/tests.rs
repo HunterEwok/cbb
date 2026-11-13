@@ -4699,3 +4699,107 @@ fn a_removed_device_gets_its_removals_chain() {
     seqs.dedup();
     assert_eq!(seqs.len(), n, "one record of the admin's key per seq");
 }
+
+/// A root checkpoint that pruned before its twin came (fuzz
+/// min-dev-twin-cp): the pair stops the group and the checkpoint below
+/// counts again, naming records the member dropped. It asks for them, takes
+/// them from a peer that holds them, and ends as one that took every
+/// record at once. When no peer holds them every member ends alike and is
+/// told; the recovery key's change of root, written from what the writer
+/// holds, is taken by every member and the group goes on.
+#[test]
+fn a_checkpoint_that_pruned_before_its_twin_gets_back_what_it_dropped() {
+    let mut g = G::new();
+    let d0 = g.device(&k("root"), &k("dev0"), "dev0", |_| {});
+    let d3 = g.device(&k("root"), &k("dev3"), "dev3", |_| {});
+    let d1 = g.device(&k("root"), &k("dev1"), "dev1", |_| {});
+    let c6 = root_cp(&mut g, vec![d0.id(), d3.id()]);
+    let c7 = root_cp(&mut g, vec![]);
+    let t7 = root_twin(&g, &c7, Kind::device(Device::new(k("dev9").key.clone(), "dev9", ROLE_MEMBER)));
+    let base: Vec<Record> = vec![d0.clone(), d3.clone(), d1.clone(), c6.clone()];
+    let pruned_first = || {
+        let mut a = set_with(&g.root.key, &base, &g.lists);
+        a.insert(c7.clone()).unwrap();
+        let _ = a.insert(t7.clone());
+        a
+    };
+    let mut a = pruned_first();
+    let mut b = set_with(&g.root.key, &base, &g.lists);
+    let _ = b.insert(t7.clone());
+    let _ = b.insert(c7.clone());
+    let mut all = base.clone();
+    all.extend([c7.clone(), t7.clone()]);
+    let whole = state_with(&g.root.key, &all, &g.lists);
+    assert!(whole.stopped() && whole.devices.len() == 3);
+    assert_eq!(b.state().devices, whole.devices);
+    assert!(!a.contains(&d0.id()) && !a.contains(&d3.id()));
+    // It asks for them, and the peer gives them by ID.
+    let st = a.state();
+    let asked = a.missing(&st);
+    assert!(asked.contains(&d0.id()) && asked.contains(&d3.id()));
+    let sb = b.state();
+    let given: Vec<Record> =
+        asked.iter().filter_map(|id| b.for_peer_by_id(&sb, &k("dev1").hash, id)).cloned().collect();
+    a.insert_all(given);
+    assert_eq!(a.digest(), b.digest());
+    assert_eq!(a.state().devices, whole.devices);
+
+    // Nobody holds them: the members end alike, and are told.
+    let (mut a1, mut a2) = (pruned_first(), pruned_first());
+    assert_eq!(a1.digest(), a2.digest());
+    assert_eq!(a1.state(), a2.state());
+    assert!(a1.state().stopped());
+    for _ in 0..=crate::records::set::MISSING_ROUNDS {
+        let st = a1.state();
+        a1.missing(&st);
+    }
+    assert!(a1.stuck_checkpoints().contains(&(c6.id(), Stuck::NeverOffered)));
+    // The recovery key changes the root from what a1 holds; a2 takes it and
+    // the group goes on, the same at both.
+    let st = a1.state();
+    let phone = Device::new(k("root2 phone").key.clone(), "root2 phone", ROLE_PHONE);
+    let w = a1.write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("root2"), phone, &[], false, 0).unwrap();
+    a2.insert(w.record.clone()).unwrap();
+    a2.insert_list(&w.list.encode()).unwrap();
+    a2.insert_all(w.first.iter().cloned());
+    let (s1, s2) = (a1.state(), a2.state());
+    assert_eq!(s1.roots.last(), Some(&k("root2").hash));
+    assert!(!s1.stopped());
+    assert_eq!(s1, s2);
+    assert_eq!(a1.digest(), a2.digest());
+}
+
+/// Fuzz min-dev-twin-cp: a whole checkpoint of the root at the seq where
+/// it has two histories never counts, so it does not hold back the one
+/// below it: what that one keeps again (a record an older one pruned) is
+/// taken, and the member ends as one that took every record at once.
+#[test]
+fn a_checkpoint_at_the_fork_seq_counts_for_nothing() {
+    let mut g = G::new();
+    let d0 = g.device(&k("root"), &k("dev0"), "dev0", |_| {});
+    let d3 = g.device(&k("root"), &k("dev3"), "dev3", |_| {});
+    let s3 = g.root_rec(Kind::settings(Settings { shared: true, ..Settings::default() }));
+    let c4 = root_cp(&mut g, vec![d3.id()]);
+    let d1 = g.device(&k("root"), &k("dev1"), "dev1", |_| {});
+    let c6 = root_cp(&mut g, vec![s3.id(), d0.id()]);
+    let c7 = root_cp(&mut g, vec![c4.id(), d3.id()]);
+    let t7 = root_twin(&g, &c7, Kind::device(Device::new(k("dev9").key.clone(), "dev9", ROLE_MEMBER)));
+    let all = vec![d0.clone(), d3.clone(), s3.clone(), c4.clone(), d1.clone(), c6.clone(), c7.clone(), t7.clone()];
+    let whole = state_with(&g.root.key, &all, &g.lists);
+    assert!(whole.stopped());
+    let mut m = set_with(&g.root.key, &all[..4], &g.lists);
+    for r in [&d1, &c6, &c7, &t7] {
+        let _ = m.insert(r.clone());
+    }
+    // What the checkpoint below the fork keeps again, asked for.
+    for _ in 0..4 {
+        let st = m.state();
+        let asked = m.missing(&st);
+        m.insert_all(all.iter().filter(|r| asked.contains(&r.id())).cloned());
+    }
+    let st = m.state();
+    assert!(m.contains(&d0.id()) && m.contains(&s3.id()));
+    assert_eq!(st.checkpoint, whole.checkpoint);
+    assert_eq!(st.devices, whole.devices);
+    assert_eq!(st.counting, whole.counting);
+}
