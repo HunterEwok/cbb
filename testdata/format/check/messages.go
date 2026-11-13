@@ -6,7 +6,10 @@ package main
 import (
 	"bytes"
 	"crypto/elliptic"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"net/netip"
 	"sort"
@@ -298,6 +301,17 @@ func checkMessages(dir string) {
 			} `json:"refuse"`
 		} `json:"invitations"`
 		Cards signedFile `json:"cards"`
+		Codes struct {
+			Label        string `json:"short_code_label"`
+			Prefix       string `json:"channel_prefix"`
+			NoInvitation string `json:"no_invitation"`
+			Short        []struct {
+				Name, Exporter, Nj, Nm, Invitation, Code string
+			} `json:"short_code"`
+			Channel []struct {
+				Name, Member, Joiner, Invitation, Ci string
+			} `json:"channel_id"`
+		} `json:"codes"`
 	}
 	load(dir, "messages3.json", &f)
 	msgTables = f.Tables
@@ -416,7 +430,60 @@ func checkMessages(dir string) {
 		}
 		count++
 	}
+	count += checkCodes(f.Codes.Label, f.Codes.Prefix, f.Codes.NoInvitation, len(f.Codes.Short), func(i int) (string, []byte, string) {
+		c := f.Codes.Short[i]
+		h := sha256.New()
+		h.Write([]byte("cbb short code v3\x00"))
+		for _, part := range []string{c.Exporter, c.Nj, c.Nm, c.Invitation} {
+			h.Write(unhex(part))
+		}
+		d := h.Sum(nil)
+		return c.Name, unhex(c.Invitation), fmt.Sprintf("%06d", binary.BigEndian.Uint32(d[:4])%1000000) + "|" + c.Code
+	}, len(f.Codes.Channel), func(i int) (string, []byte, string) {
+		c := f.Codes.Channel[i]
+		ci := append([]byte("cbb pair channel v3\x00"), unhex(c.Member)...)
+		ci = append(ci, unhex(c.Joiner)...)
+		ci = append(ci, unhex(c.Invitation)...)
+		return c.Name, unhex(c.Invitation), hex.EncodeToString(ci) + "|" + c.Ci
+	})
 	fmt.Printf("%-18s %d checked, %d of them by the invitation's rules between fields\n", "messages3.json", count, cross)
+}
+
+// checkCodes checks the short code and CPace's channel identifier (W.3,
+// 11.1), each computed here from its inputs: both take the invitation ID,
+// 16 bytes, all zero at home without an invitation, and every case gives
+// a value of its own. Each case returns its name, its ID and "computed|vector".
+func checkCodes(label, prefix, none string, nShort int, short func(int) (string, []byte, string),
+	nChannel int, channel func(int) (string, []byte, string)) int {
+	if label != "cbb short code v3" || prefix != "cbb pair channel v3" || none != strings.Repeat("00", 16) {
+		fail("codes: label %q, prefix %q, no invitation %q", label, prefix, none)
+	}
+	n := 0
+	for _, part := range []struct {
+		count int
+		at    func(int) (string, []byte, string)
+	}{{nShort, short}, {nChannel, channel}} {
+		if part.count < 3 {
+			fail("codes: %d cases", part.count)
+		}
+		seen := map[string]string{}
+		for i := 0; i < part.count; i++ {
+			name, id, both := part.at(i)
+			got, want, _ := strings.Cut(both, "|")
+			if len(id) != 16 {
+				fail("codes %s: an invitation ID of %d bytes", name, len(id))
+			}
+			if got != want {
+				fail("codes %s: %s, want %s", name, got, want)
+			}
+			if other, ok := seen[got]; ok {
+				fail("codes %s: the same value as %s", name, other)
+			}
+			seen[got] = name
+			n++
+		}
+	}
+	return n
 }
 
 // addrOK reports whether s is an addr in its one canonical text (RFC 5952

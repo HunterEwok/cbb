@@ -139,8 +139,17 @@ impl core::fmt::Debug for Invitation {
 
 impl Invitation {
     /// A new invitation with fresh one-time values.
+    /// A new invitation: its ID and secret drawn here, never all zero
+    /// bytes (the ID of a pairing at home without an invitation,
+    /// [`super::NO_INVITATION`], and a secret nobody keeps), which readers
+    /// refuse (`invite/shape`).
     pub fn new(paths: Vec<Path>, profile: Profile) -> Invitation {
-        Invitation { id: crate::certs::random_bytes(), secret: crate::certs::random_bytes(), paths, profile }
+        Invitation {
+            id: not_zero(crate::certs::random_bytes),
+            secret: not_zero(crate::certs::random_bytes),
+            paths,
+            profile,
+        }
     }
 
     /// The encoding.
@@ -503,8 +512,15 @@ fn within_one(a: &[char], b: &[char]) -> bool {
 /// The machine's steps have [`ATTEMPT_MS`]; the person's comparison and
 /// answer have [`ANSWER_MS`] of their own.
 /// The user answers "they match".
-fn short_code(exporter: &[u8], joiner_nonce: &[u8; 32], member_nonce: &[u8; 32]) -> String {
-    let h = crate::format::sha256(&[b"cbb short code v2\0", exporter, joiner_nonce, member_nonce]);
+/// The code takes the ID of the invitation each end believes it is using,
+/// so that two ends in the flows of two invitations show two codes.
+pub(crate) fn short_code(
+    exporter: &[u8],
+    joiner_nonce: &[u8; 32],
+    member_nonce: &[u8; 32],
+    invitation: &[u8; 16],
+) -> String {
+    let h = crate::format::sha256(&[b"cbb short code v3\0", exporter, joiner_nonce, member_nonce, invitation]);
     let n = u32::from_be_bytes([h[0], h[1], h[2], h[3]]) % 1_000_000;
     alloc::format!("{n:06}")
 }
@@ -512,6 +528,16 @@ fn short_code(exporter: &[u8], joiner_nonce: &[u8; 32], member_nonce: &[u8; 32])
 /// The hash of the joiner's nonce that `pair/start` carries.
 fn code_commitment(joiner_nonce: &[u8; 32]) -> [u8; 32] {
     crate::format::sha256(&[b"cbb short code commitment v1\0", joiner_nonce])
+}
+
+/// What draw gives that is not all zero bytes, drawn again until it is.
+pub(crate) fn not_zero<const N: usize>(mut draw: impl FnMut() -> [u8; N]) -> [u8; N] {
+    loop {
+        let b = draw();
+        if b != [0; N] {
+            return b;
+        }
+    }
 }
 
 /// The joiner's side of the short code, for one session: its nonce, drawn
@@ -552,12 +578,19 @@ impl JoinerAttempts {
     }
 
     /// The code to show once `pair/reply` brought the member's nonce, and
-    /// the nonce that `pair/confirm` opens. It takes the session by value:
-    /// a nonce serves one session. The code stays shown until
+    /// the nonce that `pair/confirm` opens; invitation is the ID of the
+    /// invitation the joiner is using. It takes the session by value: a
+    /// nonce serves one session. The code stays shown until
     /// [`JoinerAttempts::answered`].
-    pub fn open(&mut self, code: JoinerCode, exporter: &[u8], member_nonce: &[u8; 32]) -> (String, [u8; 32]) {
+    pub fn open(
+        &mut self,
+        code: JoinerCode,
+        exporter: &[u8],
+        member_nonce: &[u8; 32],
+        invitation: &[u8; 16],
+    ) -> (String, [u8; 32]) {
         self.showing = true;
-        (short_code(exporter, &code.nonce, member_nonce), code.nonce)
+        (short_code(exporter, &code.nonce, member_nonce, invitation), code.nonce)
     }
 
     /// The person answered the shown code (they match, they do not, or
@@ -580,6 +613,11 @@ impl Open {
             return Err(PairError::Busy);
         }
         self.attempt = None;
+        // An ID of zero bytes is a pairing at home without an invitation:
+        // no invitation kept open has it.
+        if self.invitation.id == super::NO_INVITATION {
+            return Err(PairError::Refused);
+        }
         self.may_use(network, now_ms)?;
         let number = self.next_attempt;
         self.next_attempt = self.next_attempt.saturating_add(1);
@@ -629,7 +667,7 @@ impl Open {
         if let Some(a) = self.attempt.as_mut() {
             a.shown_ms = Some(now_ms);
         }
-        Ok(short_code(exporter, joiner_nonce, &nonce))
+        Ok(short_code(exporter, joiner_nonce, &nonce, &self.invitation.id))
     }
 
     /// The attempt ended at `now_ms`: `welcomed` when the joiner got its

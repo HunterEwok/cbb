@@ -87,14 +87,22 @@ impl PairError {
     }
 }
 
-/// CPace's channel identifier: the key hashes of the member's TLS key and
-/// the joiner's, the member's first. Both come from the key containers the
-/// TLS handshake saw, so a party in the middle with its own keys gets
-/// another identifier and the exchange fails.
-pub fn channel_id(member: &KeyHash, joiner: &KeyHash) -> Vec<u8> {
+/// The invitation ID of a pairing at home without an invitation: 16 zero
+/// bytes, which no invitation has (`invite/shape`).
+pub const NO_INVITATION: [u8; 16] = [0; 16];
+
+/// CPace's channel identifier: the prefix, the key hashes of the member's
+/// TLS key and the joiner's, the member's first, and the ID of the
+/// invitation each side believes it is using ([`NO_INVITATION`] at home
+/// without one). The keys come from the key containers the TLS handshake
+/// saw, so a party in the middle with its own keys gets another
+/// identifier and the exchange fails; two ends in the flows of two
+/// invitations get two identifiers too.
+pub fn channel_id(member: &KeyHash, joiner: &KeyHash, invitation: &[u8; 16]) -> Vec<u8> {
     let mut ci = CHANNEL_PREFIX.to_vec();
     ci.extend_from_slice(&member.0);
     ci.extend_from_slice(&joiner.0);
+    ci.extend_from_slice(invitation);
     ci
 }
 

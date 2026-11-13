@@ -2065,6 +2065,48 @@ def invitation_vectors():
     return take, refuse
 
 
+def code_vectors():
+    """The short code (W.3) and CPace's channel identifier (11.1), both
+    with the invitation ID each end believes it is using; 16 zero bytes at
+    home without an invitation. Each pair of cases differs in one input."""
+    def h(label):
+        return hashlib.sha256(label.encode()).digest()
+
+    def code(exporter, nj, nm, inv):
+        d = hashlib.sha256(b"cbb short code v3\x00" + exporter + nj + nm + inv).digest()
+        return "%06d" % (int.from_bytes(d[:4], "big") % 1000000)
+
+    def ci(member, joiner, inv):
+        return b"cbb pair channel v3\x00" + member + joiner + inv
+
+    exporter, nj, nm = h("vector exporter"), h("vector joiner nonce"), h("vector member nonce")
+    inv = h("vector invitation")[:16]
+    other = bytes([inv[0] ^ 1]) + inv[1:]
+    home = bytes(16)
+    short = []
+    for name, e, a, b, i in [
+        ("an invitation", exporter, nj, nm, inv),
+        ("another invitation ID, one bit apart", exporter, nj, nm, other),
+        ("at home without an invitation", exporter, nj, nm, home),
+        ("the nonces swapped", exporter, nm, nj, inv),
+        ("another session", h("vector exporter 2"), nj, nm, inv),
+    ]:
+        short.append({"name": name, "exporter": e.hex(), "nj": a.hex(), "nm": b.hex(), "invitation": i.hex(),
+                      "code": code(e, a, b, i)})
+    member, joiner = h("vector member key"), h("vector joiner key")
+    channel = []
+    for name, m, j, i in [
+        ("an invitation", member, joiner, inv),
+        ("another invitation ID, one bit apart", member, joiner, other),
+        ("at home without an invitation", member, joiner, home),
+        ("the keys swapped", joiner, member, inv),
+    ]:
+        channel.append({"name": name, "member": m.hex(), "joiner": j.hex(), "invitation": i.hex(),
+                        "ci": ci(m, j, i).hex()})
+    return {"short_code_label": "cbb short code v3", "channel_prefix": "cbb pair channel v3",
+            "no_invitation": home.hex(), "short_code": short, "channel_id": channel}
+
+
 def card_vectors():
     take, refuse = [], []
     tls = sorted([Signer("server tls").pub, Signer("server tls 2").pub])
@@ -2883,6 +2925,7 @@ def main():
         "take": wt, "refuse": wr, "maps": wm,
         "invitations": {"prefix": "cbb://join#", "take": it, "refuse": ir},
         "cards": {"label": LABELS["card"], "take": cdt, "refuse": cdr},
+        "codes": code_vectors(),
     }
     files["wave4.json"] = wave4_vectors()
     # Each signature has one form: the high-S twin of a valid signature

@@ -180,10 +180,16 @@ fn info(name: &str, role: u64) -> Info {
 #[test]
 fn the_channel_binds_both_keys() {
     let (a, b) = (k("a"), k("b"));
-    let ab = channel_id(&fhash(&a), &fhash(&b));
-    assert_ne!(ab, channel_id(&fhash(&b), &fhash(&a)), "the member's key comes first");
-    assert_ne!(ab, channel_id(&fhash(&a), &fhash(&k("c"))));
-    assert!(ab.ends_with(&fhash(&b).0));
+    let id = [5u8; 16];
+    let ab = channel_id(&fhash(&a), &fhash(&b), &id);
+    assert_ne!(ab, channel_id(&fhash(&b), &fhash(&a), &id), "the member's key comes first");
+    assert_ne!(ab, channel_id(&fhash(&a), &fhash(&k("c")), &id));
+    assert!(ab.ends_with(&id));
+    assert_eq!(&ab[ab.len() - 48..ab.len() - 16], &fhash(&b).0);
+    // Two ends in the flows of two invitations, or one at home without
+    // one, get two identifiers.
+    assert_ne!(ab, channel_id(&fhash(&a), &fhash(&b), &[6u8; 16]));
+    assert_ne!(ab, channel_id(&fhash(&a), &fhash(&b), &NO_INVITATION));
 }
 
 #[test]
@@ -271,7 +277,7 @@ fn the_short_code_opens_its_commitment() {
     let (mut j, joiner, c) = joiner_session();
     let nm = open.reply(n, c, 110).unwrap();
     assert_eq!(open.failures, 1, "counted once the member replied");
-    let (code, nj) = j.open(joiner, &e, &nm);
+    let (code, nj) = j.open(joiner, &e, &nm, &open.invitation.id);
     assert_eq!(code.len(), 6);
     assert_eq!(open.short_code(n, &e, &nj, 120), Ok(code.clone()));
     open.end(n, true, 130);
@@ -287,7 +293,7 @@ fn the_short_code_opens_its_commitment() {
     // A second attempt while one is in progress: busy.
     assert_eq!(open.begin(Network::Home, 220), Err(PairError::Busy));
     // Walking away after the reply counts as a failed attempt.
-    let (_, nj2) = j2.open(joiner2, &e, &nm2);
+    let (_, nj2) = j2.open(joiner2, &e, &nm2, &open.invitation.id);
     open.end(n2, false, 230);
     assert_eq!(open.failures, 1);
     assert_ne!(nj2, nj);
@@ -306,7 +312,7 @@ fn the_short_code_opens_its_commitment() {
     let n5 = open.begin(Network::Home, 1_000).unwrap();
     let (mut j5, joiner5, c5) = joiner_session();
     let nm5 = open.reply(n5, c5, 1_010).unwrap();
-    let (code5, nj5) = j5.open(joiner5, &e, &nm5);
+    let (code5, nj5) = j5.open(joiner5, &e, &nm5, &open.invitation.id);
     assert_eq!(open.short_code(n5, &e, &nj5, 1_020), Ok(code5));
     let minutes = 1_020 + 5 * 60_000;
     assert_eq!(open.begin(Network::Home, minutes), Err(PairError::Busy), "still the open attempt");
@@ -317,7 +323,7 @@ fn the_short_code_opens_its_commitment() {
     let n6 = open.begin(Network::Home, 2_000_000).unwrap();
     let (mut j6, joiner6, c6) = joiner_session();
     let nm6 = open.reply(n6, c6, 2_000_010).unwrap();
-    let (_, nj6) = j6.open(joiner6, &e, &nm6);
+    let (_, nj6) = j6.open(joiner6, &e, &nm6, &open.invitation.id);
     assert_eq!(open.short_code(n6, &e, &nj6, 2_000_000 + invitation::ATTEMPT_MS), Err(PairError::Closed));
     assert_eq!(open.failures, kept + 1);
     open.failures = kept;
@@ -325,7 +331,7 @@ fn the_short_code_opens_its_commitment() {
     let n7 = open.begin(Network::Home, 3_000_000).unwrap();
     let (mut j7, joiner7, c7) = joiner_session();
     let nm7 = open.reply(n7, c7, 3_000_010).unwrap();
-    let (_, nj7) = j7.open(joiner7, &e, &nm7);
+    let (_, nj7) = j7.open(joiner7, &e, &nm7, &open.invitation.id);
     assert!(open.short_code(n7, &e, &nj7, 3_000_020).is_ok());
     open.end(n7, true, 3_000_020 + invitation::ANSWER_MS);
     assert_eq!(open.failures, kept + 1);
@@ -364,7 +370,7 @@ fn a_late_message_of_an_earlier_attempt_changes_nothing() {
     let first = open.begin(Network::Home, 0).unwrap();
     let (mut j1, joiner1, c1) = joiner_session();
     let nm1 = open.reply(first, c1, 10).unwrap();
-    let (_, nj1) = j1.open(joiner1, &e, &nm1);
+    let (_, nj1) = j1.open(joiner1, &e, &nm1, &open.invitation.id);
     // The first attempt's time runs out; a second begins.
     let second = open.begin(Network::Home, invitation::ATTEMPT_MS).unwrap();
     let (_, _, c2) = joiner_session();
@@ -384,17 +390,103 @@ fn the_joiner_counts_its_sessions() {
     let e = [9u8; 32];
     // A session shows its code; until the person answers, no other starts.
     let (code, _) = j.start().unwrap();
-    let (shown, _) = j.open(code, &e, &[1; 32]);
+    let (shown, _) = j.open(code, &e, &[1; 32], &[3; 16]);
     assert_eq!(shown.len(), 6);
     assert_eq!(j.start().err(), Some(PairError::Busy), "the shown code stays until the person answers");
     // The session dropped before the person answered: it counted.
     j.answered();
     for _ in 1..invitation::MAX_FAILURES {
         let (code, _) = j.start().unwrap();
-        j.open(code, &e, &[2; 32]);
+        j.open(code, &e, &[2; 32], &[3; 16]);
         j.answered();
     }
     assert_eq!(j.start().err(), Some(PairError::TooMany), "three sessions per invitation");
+}
+
+/// The short code takes the ID of the invitation each end is using: a
+/// joiner that uses another ID shows another code, and the member's end
+/// answers as for any code; nothing tells the two apart but the codes.
+#[test]
+fn the_code_takes_the_invitation_id() {
+    let mut open = Open {
+        invitation: Invitation::new(Vec::new(), Profile::small_device()),
+        name: "kettle".into(),
+        created_ms: 1,
+        expires_ms: 10_000_000,
+        used: false,
+        failures: 0,
+        allowed_key: None,
+        attempt: None,
+        next_attempt: 0,
+    };
+    let e = [9u8; 32];
+    let n = open.begin(Network::Home, 100).unwrap();
+    let (mut j, joiner, c) = joiner_session();
+    let nm = open.reply(n, c, 110).unwrap();
+    let mut other = open.invitation.id;
+    other[0] ^= 1;
+    let (theirs, nj) = j.open(joiner, &e, &nm, &other);
+    let ours = open.short_code(n, &e, &nj, 120).unwrap();
+    assert_ne!(theirs, ours);
+    // The same session's code with the member's ID, at home without one.
+    assert_eq!(invitation::short_code(&e, &nj, &nm, &open.invitation.id), ours);
+    assert_ne!(invitation::short_code(&e, &nj, &nm, &NO_INVITATION), ours);
+}
+
+/// No invitation has the ID of a pairing at home without one: a new one
+/// draws again, an open one with it takes no attempt, and a reader
+/// refuses it (`invite/shape`, the vector "an ID of zeros").
+#[test]
+fn no_invitation_has_the_id_of_none() {
+    let mut draws = [[0u8; 16], [0u8; 16], [7u8; 16]].into_iter();
+    assert_eq!(invitation::not_zero(|| draws.next().unwrap()), [7u8; 16]);
+    let home = Path { kind: PathKind::Home, endpoints: vec![], hub_key: None, guest: None, obfuscation: None };
+    let mut inv = Invitation::new(vec![home], Profile::small_device());
+    assert_ne!(inv.id, NO_INVITATION);
+    assert!(Invitation::decode(&inv.encode()).is_ok());
+    inv.id = NO_INVITATION;
+    let mut open = Open {
+        invitation: inv.clone(),
+        name: "kettle".into(),
+        created_ms: 1,
+        expires_ms: 10_000_000,
+        used: false,
+        failures: 0,
+        allowed_key: None,
+        attempt: None,
+        next_attempt: 0,
+    };
+    assert_eq!(open.begin(Network::Home, 100), Err(PairError::Refused));
+    assert_eq!(open.failures, 0);
+    assert_eq!(Invitation::decode(&inv.encode()).err(), Some(invitation::RULE_SHAPE));
+}
+
+/// The short code and CPace's channel identifier against the vectors
+/// (`testdata/format/messages3.json`, "codes"), which gen.py writes and
+/// the Go check computes on its own.
+#[test]
+fn the_codes_match_their_vectors() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/format/messages3.json");
+    let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let hex = |s: &serde_json::Value| -> Vec<u8> {
+        let s = s.as_str().unwrap();
+        (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+    };
+    let arr = |s: &serde_json::Value| -> [u8; 32] { hex(s).try_into().unwrap() };
+    let id = |s: &serde_json::Value| -> [u8; 16] { hex(s).try_into().unwrap() };
+    let codes = &v["codes"];
+    let short = codes["short_code"].as_array().unwrap();
+    assert!(short.len() >= 3);
+    for c in short {
+        let got = invitation::short_code(&hex(&c["exporter"]), &arr(&c["nj"]), &arr(&c["nm"]), &id(&c["invitation"]));
+        assert_eq!(got, c["code"].as_str().unwrap(), "{}", c["name"]);
+    }
+    let channel = codes["channel_id"].as_array().unwrap();
+    assert!(channel.len() >= 3);
+    for c in channel {
+        let ci = channel_id(&KeyHash(arr(&c["member"])), &KeyHash(arr(&c["joiner"])), &id(&c["invitation"]));
+        assert_eq!(crate::certs::hex(&ci), c["ci"].as_str().unwrap(), "{}", c["name"]);
+    }
 }
 
 #[test]
