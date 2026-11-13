@@ -652,9 +652,10 @@ jobs:
         with:
           release: "15.1"
           usesh: true
-          # FreeBSD's go fetches the toolchain go.mod names; Xvfb, xclip
-          # and xterm are for the desktop connector's X11 tests.
-          prepare: pkg install -y go xorg-vfbserver xclip xterm
+          # FreeBSD's go fetches the toolchain go.mod names; git is for
+          # prcheck's test of a real repository; Xvfb, xclip and xterm are
+          # for the desktop connector's X11 tests.
+          prepare: pkg install -y go git xorg-vfbserver xclip xterm
           run: |
             set -e
             export GOTOOLCHAIN=auto GOFLAGS=-buildvcs=false
