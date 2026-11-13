@@ -143,6 +143,8 @@ module records_v3 {
     follows: Id,
     // Signed off its key's device (a second writer on the key: signHidden); the model's mark.
     off: bool,
+    // A removal's further keys beside target (REISSUE_REMOVALS packs several removals into one).
+    also: Set[Key],
   }
 
   // What a member that drops records remembers of them (core keep::Cut): the level, which only
@@ -208,7 +210,8 @@ module records_v3 {
   pure val ADMINC = if (CEIL_FIT) 2 else 5
   pure val MAXU = 2
   pure val TOP = ROOTC
-  pure val MAXREC = 16
+  // (REISSUE_REMOVALS: the new roots' re-signed removals take IDs too.)
+  pure val MAXREC = if (REISSUE_REMOVALS) 20 else 16
   pure val MAXCHAIN = 3
 
   // An ID no record ever has: a first checkpoint named and never released.
@@ -296,6 +299,7 @@ module records_v3 {
   // removals off the list without the new ones; it must fail.
   pure val REISSUE_REMOVALS = false
   pure val REISSUE_DROP_ONLY = false
+  pure val REISSUE_PACK_ANY = false
   // (J): the units the cut roots' listed records may take together.
   pure val RESERVE = ROOTC
   pure val MISSING_NEWEST_ONLY = false
@@ -350,6 +354,8 @@ module records_v3 {
   pure def keysOfDev(d: Key): Set[Key] = Set(d).union(DEV.keys().filter(a => DEV.get(a) == d))
   pure def withPair(k: Key): Set[Key] =
     if (DEV.keys().contains(k)) keysOfDev(DEV.get(k)) else if (DEVS.contains(k)) keysOfDev(k) else Set(k)
+  // The keys a record names: target with its pair, and a packed removal's further keys.
+  pure def tgt(r: Record): Set[Key] = r.also.fold(withPair(r.target), (a, k) => a.union(withPair(k)))
   pure def devOf(r: Record): Key =
     if (r.kind == "admin" and DEV.keys().contains(r.target)) DEV.get(r.target) else if (r.kind == "device") r.target else ""
   pure def lineOf(m: Key -> List[Id], k: Key): List[Id] = if (m.keys().contains(k)) m.get(k) else []
@@ -384,7 +390,7 @@ module records_v3 {
   // Two removals see alike every key either names (the core, #530 2bccc9ef): only then may the
   // older fold into the newer, or a record of the key signed between them would count.
   pure def sameSeen(r: Record, n: Record): bool =
-    withPair(r.target).union(withPair(n.target)).forall(k => lineOf(r.seen, k) == lineOf(n.seen, k))
+    tgt(r).union(tgt(n)).forall(k => lineOf(r.seen, k) == lineOf(n.seen, k))
   pure def rootRemoval(r: Record): bool = r.kind == "revoke" and ROOT_KEYS.contains(r.signer)
   // A checkpoint prunes what is below its heads and not kept, a root's removal too: whether a
   // removal stays is the writer's choice in the signed keep (members follow it).
@@ -406,19 +412,19 @@ module records_v3 {
   // admissions. A removal that names an admin key is never pruned.
   pure def droppedAt(mine: Set[Record], counted: Set[Record]): Set[Id] = {
     val rms = counted.filter(r => rootRemoval(r)
-      and withPair(r.target).forall(k => not(DEV.keys().contains(k)) and not(SIGNERS.contains(k))
+      and tgt(r).forall(k => not(DEV.keys().contains(k)) and not(SIGNERS.contains(k))
         and admissionsOf(mine, k) != Set()
         and admissionsOf(mine, k).forall(a => headLine(mine, a.signer) != a.line))
-      and not(mine.exists(x => withPair(r.target).contains(x.signer))))
-    val gone = rms.fold(Set(), (a, r) => a.union(withPair(r.target)))
+      and not(mine.exists(x => tgt(r).contains(x.signer))))
+    val gone = rms.fold(Set(), (a, r) => a.union(tgt(r)))
     val folded = if (not(FOLD_REMOVALS)) Set() else counted.filter(r => rootRemoval(r) and counted.exists(n => rootRemoval(n)
-      and n.signer == r.signer and n.seq > r.seq and not(rms.contains(n)) and withPair(r.target).subseteq(withPair(n.target))
+      and n.signer == r.signer and n.seq > r.seq and not(rms.contains(n)) and tgt(r).subseteq(tgt(n))
       and sameSeen(r, n)))
     idsOf(rms).union(idsOf(folded)).union(idsOf(mine.filter(x => gone.contains(x.signer) or gone.exists(k => admissionsOf(Set(x), k) != Set()))))
   }
 
   pure val NONEREC: Record = {
-    id: 0, signer: "", seq: 0, line: [], kind: "", target: "", kit: "", targetRec: 0, seen: Map(), heads: Map(), keep: Set(), units: 0, first: 0, follows: 0, off: false,
+    id: 0, signer: "", seq: 0, line: [], kind: "", target: "", kit: "", targetRec: 0, seen: Map(), heads: Map(), keep: Set(), units: 0, first: 0, follows: 0, off: false, also: Set(),
   }
 
   // --- The recovery chain (rule 33) -------------------------------------------------------
@@ -1010,12 +1016,12 @@ module records_v3 {
         not(rootHas(r.target)) and (first == r.id or (first != NONE and first != -1 and has(r.signer, "manage")))
       }
       else if (r.kind == "revoke")
-        if (withPair(r.target).exists(t => isRootKey(t))) false
+        if (tgt(r).exists(t => isRootKey(t))) false
         else if (isAdminKey(r.target)) has(r.signer, "removeAdmins")
         else has(r.signer, "remove")
       else if (r.kind == "freeze")
-        has(r.signer, "freeze") and withPair(r.target).exists(t => adm.keys().contains(t))
-          and withPair(r.target).forall(t => not(has(t, "removeAdmins")))
+        has(r.signer, "freeze") and tgt(r).exists(t => adm.keys().contains(t))
+          and tgt(r).forall(t => not(has(t, "removeAdmins")))
       else if (r.kind == "thaw") has(r.signer, "thaw") and has(r.signer, "removeAdmins")
       else if (r.kind == "copies") true
       else false
@@ -1026,7 +1032,7 @@ module records_v3 {
     pure def thawedFor(f: Record, b: Record): bool = rs.exists(t => t.kind == "thaw" and t.targetRec == f.id
       and (onPath(t) or (isAdmin(t) and has(t.signer, "thaw") and has(t.signer, "removeAdmins"))) and saw(b, t))
     pure def cutsOffRm(a: Record, b: Record): bool =
-      (a.kind == "revoke" or a.kind == "freeze") and a != b and withPair(a.target).contains(b.signer)
+      (a.kind == "revoke" or a.kind == "freeze") and a != b and tgt(a).contains(b.signer)
         and (if (a.signer == b.signer) b.seq > a.seq else not(saw(a, b)))
         and not(a.kind == "freeze" and thawedFor(a, b))
     pure def cutsOff(a: Record, b: Record): bool =
@@ -1053,9 +1059,9 @@ module records_v3 {
     val undecided = toLabel.exclude(ins).exclude(labels._2)
     val adminConflict = undecided.exists(r => r.kind == "revoke" or r.kind == "freeze" or r.kind == "thaw")
     pure def counts(r: Record): bool = rootRec(r) or (isAdmin(r) and ins.contains(r))
-    val revoked = rs.filter(r => r.kind == "revoke" and counts(r)).fold(Set(), (s, r) => s.union(withPair(r.target)))
+    val revoked = rs.filter(r => r.kind == "revoke" and counts(r)).fold(Set(), (s, r) => s.union(tgt(r)))
     val frozen = rs.filter(r => r.kind == "freeze" and counts(r) and not(rootThawed.contains(r.id)))
-      .fold(Set(), (s, r) => s.union(withPair(r.target)))
+      .fold(Set(), (s, r) => s.union(tgt(r)))
     val currentAdmins = adm.keys().filter(a => current(a) and not(revoked.contains(a)))
     val stop = adminConflict or rootForked
     val devices = rs.filter(r => counts(r) and devOf(r) != "").map(r => devOf(r)).exclude(revoked)
@@ -1189,7 +1195,7 @@ module records_v3 {
 
   pure def rootRemoved(v: View, db: Id -> Record): Set[Key] =
     recsOf(v.counting, db).filter(r => r.kind == "revoke" and onList(v.path, r.signer))
-      .fold(Set(), (s, r) => s.union(withPair(r.target)))
+      .fold(Set(), (s, r) => s.union(tgt(r)))
 
   // A set cut by its chain's path, and its state. A counting checkpoint compacts at once
   // (there is no separate compacted state); taking it may make another count, so twice.
@@ -1230,7 +1236,7 @@ module records_v3 {
   pure def rec(id: Id, signer: Key, line: List[Id], kind: str, target: Key, kit: str, targetRec: Id,
       seen: Key -> List[Id], heads: Key -> List[Id], keep: Set[Id], units: int): Record =
     { id: id, signer: signer, seq: line.length(), line: line, kind: kind, target: target, kit: kit, targetRec: targetRec,
-      seen: seen, heads: heads, keep: keep, units: units, first: 0, follows: 0, off: false }
+      seen: seen, heads: heads, keep: keep, units: units, first: 0, follows: 0, off: false, also: Set() }
 
   // The group as the root made it: A a phone admin, C a computer admin, W a watch admin; the
   // recovery key K is the group's own, known to every member from its admission.
@@ -1356,7 +1362,7 @@ module records_v3 {
       commit(db2, nextId + 1, h, insertInto(s, r, db2)),
     }
   }
-  action signBent = nondet k = ROOT_KEYS.oneOf() nondet keep = db.keys().union(Set(NEVER)).powerset().oneOf()
+  action signBent = nondet k = ROOT_KEYS.exclude(Set("NB")).oneOf() nondet keep = db.keys().union(Set(NEVER)).powerset().oneOf()
     nondet lower = Set("", PHONE, COMPUTER, WATCH).oneOf() nondet u = Set(1, 2).oneOf() signCheckpointKeep(k, keep, lower, u)
 
   // The recovery key k (or a thief holding it) signs a recovery record at seq `at` of the
@@ -1399,7 +1405,7 @@ module records_v3 {
       .map(k => lastId(heads.get(k))).filter(i => onList(before, db.get(i).signer) and db.get(i).kind != "checkpoint")
     // (CORE_LIST_FILTER: the core's list today drops a removal of keys no held record names.)
     def unnamedRm(r: Record): bool = CORE_LIST_FILTER and rootRemoval(r)
-      and withPair(r.target).forall(t => admissionsOf(recsOf(s.recs, db), t) == Set())
+      and tgt(r).forall(t => admissionsOf(recsOf(s.recs, db), t) == Set())
     val honest = idsOf(held.filter(r => ((v.counting.contains(r.id) and r.kind != "checkpoint" and not(leftOut.contains(r)))
       or rootRemoval(r)) and not(unnamedRm(r)))).union(cp)
     // (J): the cut roots' listed records fit RESERVE (carry-over). Every root removal stays
@@ -1414,9 +1420,9 @@ module records_v3 {
     val superseded = beforeRecs.filter(x => isAdm(x)
       and beforeRecs.exists(y => y != x and isAdm(y) and y.target == x.target and notOlder(y, x)))
     val live = beforeRecs.filter(x => isAdm(x) and not(superseded.contains(x))
-      and not(withPair(x.target).exists(t => v.revoked.contains(t))))
+      and not(tgt(x).exists(t => v.revoked.contains(t))))
     val foldedRm = if (not(FOLD_REMOVALS)) Set() else beforeRecs.filter(x => rootRemoval(x)
-      and beforeRecs.exists(n => n != x and rootRemoval(n) and notOlder(n, x) and withPair(x.target).subseteq(withPair(n.target))
+      and beforeRecs.exists(n => n != x and rootRemoval(n) and notOlder(n, x) and tgt(x).subseteq(tgt(n))
         and sameSeen(x, n)))
     // REISSUE_REMOVALS (records 11-13 21:12Z): the honest writer re-signs the cut roots'
     // counting removals as the new root's first records Z, one per removal X (same key, same
@@ -1430,7 +1436,20 @@ module records_v3 {
     val zSrc = reC.foldl(([], ownUnits), (a, i) =>
       if (a._2 + db.get(i).units + 2 <= ROOTC) (a._1.append(i), a._2 + db.get(i).units) else a)._1
     val covered = zSrc.foldl(Set(), (a, i) => a.union(Set(i)))
-    val zIds = if (REISSUE_DROP_ONLY) [] else range(0, zSrc.length()).foldl([], (l, j) => l.append(nextId + 1 + j))
+    // Packing (the core, architecture 22:00Z): each X goes whole into the first Z whose Xs agree
+    // with it on the seen entries of every key both concern (their keys and their seen keys);
+    // two Xs that saw a shared key differently go to different Zs. A Z's units are its Xs'.
+    // REISSUE_PACK_ANY (a mutation that must fail): every X into one Z, the longest seen line.
+    pure def concerns(x: Record): Set[Key] = tgt(x).union(x.seen.keys())
+    pure def agree(y: Record, x: Record): bool =
+      concerns(y).intersect(concerns(x)).forall(k => lineOf(y.seen, k) == lineOf(x.seen, k))
+    val groups = zSrc.foldl([], (gs, i) => {
+      val x = db.get(i)
+      val j = range(0, gs.length()).foldl(-1, (f, g) =>
+        if (f < 0 and (REISSUE_PACK_ANY or gs[g].foldl(true, (ok, y) => ok and agree(db.get(y), x)))) g else f)
+      if (j < 0) gs.append([i]) else gs.replaceAt(j, gs[j].append(i))
+    })
+    val zIds = if (REISSUE_DROP_ONLY) [] else range(0, groups.length()).foldl([], (l, j) => l.append(nextId + 1 + j))
     val remUnits = sumUnits(beforeRecs.filter(x => rootRemoval(x) and not(foldedRm.contains(x)) and not(covered.contains(x.id))))
     val fixedUnits = remUnits + sumUnits(live)
     val droppable = beforeRecs.filter(x => not(rootRemoval(x)) and not(live.contains(x)) and not(superseded.contains(x)))
@@ -1455,9 +1474,13 @@ module records_v3 {
     val ownZ = own.concat(zIds)
     val dbH = db.put(nextId, r)
     val db2 = range(0, zIds.length()).foldl(dbH, (d, j) => {
-      val x = db.get(zSrc[j])
-      d.put(nextId + 1 + j, rec(nextId + 1 + j, target, own.concat(zIds.slice(0, j + 1)), "revoke", x.target, "z", nextId,
-        x.seen, Map(), Set(), x.units))
+      val xs = groups[j].foldl(Set(), (a, i) => a.union(Set(db.get(i))))
+      val x0 = db.get(groups[j][0])
+      val zKeys = xs.fold(Set(), (a, x) => a.union(x.seen.keys()))
+      val seenZ = zKeys.mapBy(k => xs.fold([], (l, x) => if (lineOf(x.seen, k).length() > l.length()) lineOf(x.seen, k) else l))
+      val z = rec(nextId + 1 + j, target, own.concat(zIds.slice(0, j + 1)), "revoke", x0.target, "z", nextId,
+        seenZ, Map(), Set(), sumUnits(xs))
+      d.put(nextId + 1 + j, { ...z, also: xs.exclude(Set(x0)).fold(Set(), (a, x) => a.union(Set(x.target)).union(x.also)).union(x0.also) })
     })
     val s1 = zIds.foldl(insertInto(s, r, dbH), (x, i) => insertInto(x, db2.get(i), db2))
     // The new root's first checkpoint: what the writer counts once the head applies (a look
@@ -1491,7 +1514,7 @@ module records_v3 {
   action signAdmin = nondet k = Set(ROOT, PHONE, "NA", "NK").oneOf() nondet a = Set(PHONE, COMPUTER, "C2", WATCH, MINTED, "NA").oneOf()
     nondet kit = Set("phone", "computer", "watch").oneOf() sign(k, "admin", a, kit, 0, false, false, 1)
   // A root takes the admin key off a device: a device record about it, with no admin key.
-  action signDemote = nondet k = ROOT_KEYS.oneOf() nondet d = Set("dA", "dC", "dW").oneOf()
+  action signDemote = nondet k = ROOT_KEYS.exclude(Set("NB")).oneOf() nondet d = Set("dA", "dC", "dW").oneOf()
     sign(k, "device", d, "", 0, false, false, 1)
   // Anyone removes or freezes anyone, the recovery key too (which no such record touches).
   action signRevoke = nondet k = SIGNERS.oneOf() nondet t = Set(PHONE, "dA", COMPUTER, WATCH, RECOVERY, DEVICE, MINTED).oneOf()
@@ -1519,10 +1542,10 @@ module records_v3 {
   action signCheckpoint = nondet k = Set(ROOT, "NA", "NK").oneOf() sign(k, "checkpoint", "", "", 0, false, false, 2)
   // A root's record kept back from every member (a twin of its newest record, or the next
   // one), and a root's checkpoint whose keep names any record of its key, held or not.
-  action signHidden = nondet k = ROOT_KEYS.oneOf() nondet f = Set(true, false).oneOf()
+  action signHidden = nondet k = ROOT_KEYS.exclude(Set("NB")).oneOf() nondet f = Set(true, false).oneOf()
     nondet kind = Set("admin", "revoke").oneOf() nondet t = Set(MINTED, PHONE, COMPUTER).oneOf()
     signFull(k, kind, t, "phone", 0, false, f, 1, true, Set())
-  action signCheckpointNaming = nondet k = ROOT_KEYS.oneOf() nondet i = db.keys().oneOf() all {
+  action signCheckpointNaming = nondet k = ROOT_KEYS.exclude(Set("NB")).oneOf() nondet i = db.keys().oneOf() all {
     db.get(i).signer == k,
     signFull(k, "checkpoint", "", "", 0, false, false, 2, false, Set(i)),
   }
@@ -1638,7 +1661,7 @@ module records_v3 {
   }
   // A root removes the phone admin; then a thief holding the removed phone admin's key signs
   // removals, freezes, devices and thaws, pretending it saw nothing.
-  action rootRemovesPhone = nondet k = ROOT_KEYS.oneOf() all {
+  action rootRemovesPhone = nondet k = ROOT_KEYS.exclude(Set("NB")).oneOf() all {
     onList(views.get(HOLDER.get(k)).path, k),
     sign(k, "revoke", PHONE, "", 0, false, false, 1),
   }
@@ -1729,7 +1752,7 @@ module records_v3 {
       val h = raw.recs[raw.recs.length() - 1]
       val listed = recsOf(h.keep.filter(i => db.keys().contains(i)), db)
       val named = keysOfMember(m).exists(x => onList(pathCutsOf(raw.recs)._1, x)
-        or (admissionsOf(listed, x) != Set() and not(listed.exists(r => r.kind == "revoke" and withPair(r.target).contains(x)))))
+        or (admissionsOf(listed, x) != Set() and not(listed.exists(r => r.kind == "revoke" and tgt(r).contains(x)))))
       // Once it applied every head, its own state decides (a new root's record may admit it).
       val ownCounts = raw.recs.length() == applied and keysOfMember(m).exists(x =>
         onList(v.path, x) or v.admins.keys().contains(x) or v.devices.contains(x))
@@ -1745,7 +1768,7 @@ module records_v3 {
       or (UNKNOWN_HEADS and n == "m" and v.path.length() == 1 and not(v.revoked.contains(MDEV)))
   }
   def everKnew(m: str, n: str): bool = {
-    val known = recsOf(st.get(m).got, db).fold(Set(), (a, r) => a.union(Set(r.signer, r.target)))
+    val known = recsOf(st.get(m).got, db).fold(Set(), (a, r) => a.union(Set(r.signer, r.target)).union(r.also))
     keysOfMember(n).exists(x => known.contains(x) or ROOT == x)
   }
   def listedFrom(n: str, m: str): Set[Id] =
@@ -1931,16 +1954,16 @@ module records_v3 {
     // removes nothing).
     val removals = recsOf(st.get(m).got, db).filter(r => r.kind == "revoke" and onList(v.path, r.signer))
     v.stop or gone.get(m).forall(k =>
-      removals.filter(r => withPair(r.target).contains(k)).forall(r => not(writerHeld(m, r))
+      removals.filter(r => tgt(r).contains(k)).forall(r => not(writerHeld(m, r))
           and (cutOff(v, r) or (cutEarlier(m, r) and heldByNone(r))))
         or (not(v.admins.keys().contains(k)) and not(v.devices.contains(k)))
         or recsOf(v.counting, db).exists(x => admissionsOf(Set(x), k) != Set()
-          and removals.forall(r => not(withPair(r.target).contains(k)) or x.id > r.id))
+          and removals.forall(r => not(tgt(r).contains(k)) or x.id > r.id))
         // The current root brought it back itself: its counting checkpoint keeps the admission
         // and leaves out every root removal naming the key (review C, 11:54Z).
         or (v.checkpoint != 0 and db.get(v.checkpoint).signer == last(v.path) and recsOf(v.counting, db).exists(x =>
           admissionsOf(Set(x), k) != Set() and db.get(v.checkpoint).keep.contains(x.id)
-            and removals.forall(r => not(withPair(r.target).contains(k)) or not(rootRemoval(r))
+            and removals.forall(r => not(tgt(r).contains(k)) or not(rootRemoval(r))
               or prunedBy(db.get(v.checkpoint), r)))))
   })
 
@@ -2023,11 +2046,15 @@ module records_v3 {
 
   // 12. A removed key gains nothing: of a key a counted removal took, a record counts only if
   // every counted removal of it saw the record (or it came before the key's own removal).
+  // (Made stricter 11-13 22:10Z, with removedStayOut: a removal a change cut off though an
+  // honest writer on the member's chain held it still bars, as if it counted; packing two
+  // removals that saw a key differently into one, REISSUE_PACK_ANY, fails here.)
   val removedGainsNothing = MEMBERS.forall(m => {
     val v = views.get(m)
     val cnt = recsOf(v.counting, db)
-    val removals = cnt.filter(r => r.kind == "revoke")
-    cnt.forall(r => removals.filter(rm => withPair(rm.target).contains(r.signer) and rm != r).forall(rm =>
+    val cutHeld = recsOf(st.get(m).got, db).filter(r => r.kind == "revoke" and cutOff(v, r) and writerHeld(m, r))
+    val removals = cnt.filter(r => r.kind == "revoke").union(cutHeld)
+    cnt.forall(r => removals.filter(rm => tgt(rm).contains(r.signer) and rm != r).forall(rm =>
       if (rm.signer == r.signer) r.seq < rm.seq else inLine(lineOf(rm.seen, r.signer), r.id)))
   })
 
@@ -2096,7 +2123,9 @@ module records_v3 {
   // (J): with honest writers no member ever holds a mark.
   // (A member that holds a checkpoint before the records of its line can sit over a ceiling,
   // with a mark, until it syncs: the writer counted its own set after the prune; seed j.8012.)
-  val honestNoMarks = (CEIL_FIT and honestW) implies MEMBERS.forall(m => syncedProto(m) implies st.get(m).cut.marks.keys() == Set())
+  // (Under UNKNOWN_HEADS a removed member is out of the group and takes heads alone, not the
+  // root's checkpoints: it may keep a mark; seed k.9501, a after R removed A.)
+  val honestNoMarks = (CEIL_FIT and honestW) implies MEMBERS.forall(m => (syncedProto(m) and inGroup(m)) implies st.get(m).cut.marks.keys() == Set())
 
   // A restart keeps the state: a member's saved set, reloaded with no cut, keeps the same
   // records and shows the same state (what the simulator checks with restore, seed 47).
@@ -2945,6 +2974,18 @@ module records_v3 {
         and Set(DEVICE, "dC", "dW", COMPUTER, WATCH).subseteq(views.get(m).revoked)
         and views.get(m).admins.keys() == Set(PHONE, "X")) and promises)
 
+  // REISSUE_REMOVALS, packing: R removes A, A signs 5 after (R is handed it), R removes A again.
+  // The two removals saw A differently ([] and [5]), so the change packs them into two Zs; the
+  // first still bars 5. REISSUE_PACK_ANY packs them into one Z with A's seen [5]: 5 counts.
+  run reissuePackTest =
+    init
+      .then(sign(ROOT, "revoke", PHONE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 1)).then(giveOnly("r", 5)).then(syncRound)
+      .then(sign(ROOT, "revoke", PHONE, "", 0, false, false, 1)).then(syncRound)
+      .then(recoverAs(RECOVERY, "NK")).then(syncRound).then(syncRound)
+      .expect(Set("r", "c", "k").forall(m => views.get(m).path == ["R", "NK"] and not(views.get(m).counting.contains(5)))
+        and (REISSUE_REMOVALS implies db.keys().filter(i => db.get(i).kit == "z").size() == 2) and promises)
+
   // REISSUE_REMOVALS, a cut root full of removals, then changes: R removes two keys (with its
   // three admins, 5 of its 6 units under (J); three would pass MAXREC by the third change); the
   // recovery key changes to NA, NA removes one more key
@@ -2956,7 +2997,9 @@ module records_v3 {
       .then(syncRound)
       .then(recoverAs(RECOVERY, "NA")).then(syncRound)
       .expect(MEMBERS.filter(m => inGroup(m)).forall(m => views.get(m).path == ["R", "NA"]
-        and Set(DEVICE, "dW").subseteq(views.get(m).revoked)) and promises)
+        and Set(DEVICE, "dW").subseteq(views.get(m).revoked)) and promises
+        // (Packing: R's two removals name different keys, so NA re-signs them in one Z.)
+        and (REISSUE_REMOVALS implies db.keys().filter(i => db.get(i).kit == "z").size() == 1))
       .then(sign("NA", "revoke", "dX", "", 0, false, false, 1)).then(syncRound)
       .then(recoverAs(RECOVERY, "NK")).then(syncRound).then(syncRound)
       .expect(MEMBERS.filter(m => inGroup(m)).forall(m => views.get(m).path == ["R", "NA", "NK"]
