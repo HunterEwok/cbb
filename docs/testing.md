@@ -55,6 +55,8 @@ watch's state, content hashes, join QR codes and a CPace exchange.
   Go; the Kotlin kit writes the same files, so Go checks both phones against one set.
 - A Go test fails when a committed vector is out of date, and names the command that
   writes it again.
+- `xwing-hpke-pq.json` is the vector of draft-ietf-hpke-pq-05 for the sealing suite, copied
+  from the draft; Go and the Rust core open its messages, and no test writes it.
 
 A change to the wire format changes the vectors in the same pull request, together with
 [the protocol](protocol.md) and every implementation.
@@ -267,12 +269,29 @@ network or a container with one of its own):
 ```sh
 eval "$(cargo llvm-cov show-env --sh)"
 cargo llvm-cov clean --workspace
-cargo test --release -p cbb-member && cargo build --release -p cbb-member
-CGO_ENABLED=0 go build -o target/release/cbb-helper ./cmd/cbb-helper
+cargo test --release -p cbb-member && cargo build --release -p cbb-member --features testhooks
+CGO_ENABLED=0 go build -tags testhooks -o target/release/cbb-helper ./cmd/cbb-helper
 CBB_TEST_RUST_SERVICE=$PWD/target/release/cbb CBB_TEST_ALONE=$PWD/target/release/cbb go test ./internal/service
 cargo llvm-cov report --release --json --summary-only --output-path service.json
 go run ./tools/coverage -llvm rust-service=service.json -floor tools/coverage/floor.json
 ```
+
+## Firmware size
+
+A small device takes only the parts of the core it calls, and the linker drops the rest, so
+what a part costs shows only in a linked program. `tools/size` is a program for the ESP32-C6's
+RISC-V (`riscv32imac-unknown-none-elf`, the workspace's release profile) that calls the parts
+its features name with input the linker cannot see through; it is never run. `sh
+tools/size/size.sh` builds it empty, once per part (`p256`: X.509 and a chain check; `json`;
+`records`: the group's records and their state; `seal`: opening a sealed message, X-Wing;
+`copy`: a copy read, checked and opened; `pair`: a joiner and CPace; `tls`: the member TLS),
+with all of them, and with the core's whole entry point (`api`), and prints each program's
+flash (`.text`, `.rodata` and `.data`) and its cost over the empty one against
+`tools/size/baseline.txt`. The `esp32` job runs it on every change to the Rust code and puts
+the table in the job's summary; it fails when everything together grows more than 10% over
+the baseline. A change that makes the core larger on purpose writes the baseline again with
+`sh tools/size/size.sh -update` in the same pull request. The parts overlap (`copy` holds
+`records`, `seal` and JSON), so the costs do not add up to `all`.
 
 ## Unsafe code
 

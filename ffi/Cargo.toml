@@ -27,6 +27,10 @@ member = ["join", "dep:cbb-member"]
 # AmneziaWG and VLESS with XHTTP, in place of the Go tunnel; the iPhone's and
 # Android's builds take it.
 tunnel = ["join", "dep:cbb-member", "cbb-member/tunnel", "dep:base64"]
+# testhooks: the member reads the hooks of Go's service tests (CBB_TEST_*,
+# member/src/testbuild.rs), for the example phone-on-linux in those tests;
+# never an app's build.
+testhooks = ["cbb-member?/testhooks"]
 
 [dependencies]
 cbb-core = { path = "../core", features = ["std"] }

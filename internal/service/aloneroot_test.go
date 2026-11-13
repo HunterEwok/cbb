@@ -741,7 +741,7 @@ func TestAloneHubs(t *testing.T) {
 	}
 	c.Close()
 	deskAddr := desk.addr()
-	env := []string{"CBB_STANDBY_GRACE=2"}
+	env := []string{"CBB_TEST_STANDBY_GRACE=2"}
 	rust := startAloneEnv(t, bin, dir, env, "-no-mdns", "-no-listen", "-peer", deskAddr, "-peer", laptop.addr())
 	adminOn(t, cli, desk, "rust")
 	deskPort, rustPort := freeUDP(t), freeUDP(t)
@@ -1068,7 +1068,7 @@ func TestAloneHubCredential(t *testing.T) {
 		t.Fatalf("pair on the desk ended with %+v, %v", m, err)
 	}
 	c.Close()
-	rust := startAloneEnv(t, bin, dir, []string{"CBB_HUB_KEY_AHEAD=2"}, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
+	rust := startAloneEnv(t, bin, dir, []string{"CBB_TEST_HUB_KEY_AHEAD=2"}, "-no-mdns", "-no-listen", "-peer", desk.addr(), "-peer", laptop.addr())
 	adminOn(t, cli, desk, "rust")
 	req := control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Forwarder: f.Addr().String(), ForwarderKey: forward.Pin(cert.Leaf), Consent: true}
 	waitFor(t, "the Rust member a hub", func() bool {
@@ -1085,7 +1085,7 @@ func TestAloneHubCredential(t *testing.T) {
 		return rust.logged("registered with the forwarder with the group's hubs' credential")
 	})
 	// The period gives the hub a key of its own for its clients, which it
-	// serves with CBB_HUB_KEY_AHEAD later, registering again with it.
+	// serves with CBB_TEST_HUB_KEY_AHEAD later, registering again with it.
 	waitUpTo(t, 30*time.Second, "the Rust hub serves with its key for the period", func() bool {
 		return rust.logged("the hub serves with its key for the new period from now on")
 	})

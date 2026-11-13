@@ -103,6 +103,23 @@ class CommandsTest {
         assertEquals("ls", o.optString("text"))
     }
 
+    /**
+     * A phone group signs a paste of a copy of images or files with its root
+     * key, and the device it names takes it.
+     */
+    @Test
+    fun phoneGroupPasteCopyCommand() {
+        val rootKey = SoftwareSigner()
+        val g = PhoneGroup.create(rootKey, SoftwareSigner().publicKeyDER, now)
+        val copy = "00112233445566778899aabbccddeeff"
+        val b = Commands.verify(g.pasteCopyCommand(pc, copy, enter = true, caSigner = rootKey, now = now), g.records, pc, now.toEpochMilli())
+        assertEquals("paste", b.type)
+        assertEquals("paste", b.mode)
+        assertEquals("media", b.kind)
+        assertEquals(copy, b.text)
+        assertEquals(true, b.enter)
+    }
+
     /** A hub command carries the forwarder and the clients; a result carries the new hub's offer. */
     @Test
     fun hubCommand() {
@@ -158,6 +175,16 @@ class CommandsTest {
         assertFailsWith<IllegalArgumentException> { Commands.paste(pc, "", group = "t", by = pc, now = now, signer = root) }
         assertFailsWith<IllegalArgumentException> { Commands.paste(pc, "x".repeat(Commands.MAX_TYPE_TEXT + 1), "type", group = "t", by = pc, now = now, signer = root) }
         assertFailsWith<IllegalArgumentException> { Commands.paste(pc, "x", "drop", group = "t", by = pc, now = now, signer = root) }
+        // A paste of images or files names the copy by its event ID and is never typed.
+        val copy = "00112233445566778899aabbccddeeff"
+        val media = Wire.parse(Commands.paste(pc, copy, kind = "media", group = "t", by = pc, now = now, signer = root).body)!!
+        assertEquals("media", media.optString("kind"))
+        assertEquals("paste", media.optString("mode"))
+        assertEquals(copy, media.optString("text"))
+        assertFailsWith<IllegalArgumentException> { Commands.paste(pc, copy, "type", kind = "media", group = "t", by = pc, now = now, signer = root) }
+        assertFailsWith<IllegalArgumentException> { Commands.paste(pc, "photo.png", kind = "media", group = "t", by = pc, now = now, signer = root) }
+        assertFailsWith<IllegalArgumentException> { Commands.paste(pc, copy.uppercase(), kind = "media", group = "t", by = pc, now = now, signer = root) }
+        assertFailsWith<IllegalArgumentException> { Commands.paste(pc, "x", kind = "file", group = "t", by = pc, now = now, signer = root) }
         val off = Wire.parse(Commands.pasteOff(pc, "t", pc, now, root).body)!!
         assertEquals("paste-off", off.optString("type"))
         assertNull(off.opt("text"))
@@ -225,8 +252,8 @@ class CommandsTest {
             Commands.paste(pc, "sealed <text>", group = tag, by = adminBy, now = now, signer = admin, adminCA = adminCA, seal = sealPublic()),
             Commands.mute(pc, 3_600_000, tag, adminBy, now, admin, adminCA),
             Commands.unmute(pc, tag, by, now, root),
+            Commands.paste(pc, "00112233445566778899aabbccddeeff", kind = "media", group = tag, by = adminBy, now = now, signer = admin, adminCA = adminCA),
         )
-        // The last one is sealed, for Go to open: a phone opens none.
         // The eighth is sealed, for Go to open: a phone opens none.
         for ((i, c) in commands.withIndex()) if (i != 7) Commands.verify(c, set, pc, now.toEpochMilli())
         val out = Wire.obj(

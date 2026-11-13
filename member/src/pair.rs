@@ -221,6 +221,7 @@ pub fn listen(
     ln.set_nonblocking(true).context("cannot listen")?;
     let end = Instant::now() + wait;
     let mut failures = 0;
+    let mut tries = Attempts::default();
     while Instant::now() < end {
         let (sock, from) = match ln.accept() {
             Ok(c) => c,
@@ -230,7 +231,7 @@ pub fn listen(
             }
             Err(e) => return Err(Error::with("cannot accept a connection", e)),
         };
-        if !home_address(from.ip()) || !crate::interfaces::arrived(&sock) {
+        if !home_address(from.ip()) || !crate::interfaces::arrived(&sock) || !tries.allowed(from.ip()) {
             continue;
         }
         let _ = sock.set_nonblocking(false);
@@ -238,7 +239,8 @@ pub fn listen(
             Ok(id) => return Ok(id),
             Err(e) => {
                 log(&format!("cbb: a pairing attempt from {from} failed: {}", e.for_log()));
-                if e.details().contains(Refusal::WrongCode.message()) {
+                tries.failed(from.ip());
+                if is_wrong_code(&e) {
                     failures += 1;
                     if failures >= MAX_FAILURES {
                         return Err(Error::with(format!("pair: {}", Refusal::TooMany), Refusal::TooMany));

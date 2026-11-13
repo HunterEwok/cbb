@@ -258,7 +258,7 @@ fn tls_config() -> Result<ClientConfig> {
     // public CA signs (docs/testbench-catalogue.md, W46). A file that is not
     // there yet is skipped.
     #[cfg(feature = "benchtime")]
-    if let Some(file) = std::env::var_os("CBB_TEST_XHTTP_CA")
+    if let Some(file) = crate::testbuild::env_os("CBB_TEST_XHTTP_CA")
         && let Ok(extra) = read_roots(std::path::Path::new(&file))
     {
         roots.add_parsable_certificates(extra);

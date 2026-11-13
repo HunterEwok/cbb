@@ -19,6 +19,60 @@
    "verdict": "write"
   },
   {
+   "name": "a copy made before the member last started is not written, however young its age",
+   "incoming": {
+    "receives": true,
+    "kind": "text",
+    "mark": false,
+    "unread": false,
+    "has_text": true,
+    "has_media": false,
+    "takes_media": true,
+    "held": false,
+    "age_ms": 1000,
+    "window_ms": 60000,
+    "secret_ttl_ms": 60000,
+    "before_start": true
+   },
+   "verdict": "old"
+  },
+  {
+   "name": "one the clipboard holds stays held",
+   "incoming": {
+    "receives": true,
+    "kind": "text",
+    "mark": false,
+    "unread": false,
+    "has_text": true,
+    "has_media": false,
+    "takes_media": true,
+    "held": true,
+    "age_ms": 1000,
+    "window_ms": 60000,
+    "secret_ttl_ms": 60000,
+    "before_start": true
+   },
+   "verdict": "held"
+  },
+  {
+   "name": "a copy made after the member started is written",
+   "incoming": {
+    "receives": true,
+    "kind": "text",
+    "mark": false,
+    "unread": false,
+    "has_text": true,
+    "has_media": false,
+    "takes_media": true,
+    "held": false,
+    "age_ms": 1000,
+    "window_ms": 60000,
+    "secret_ttl_ms": 60000,
+    "before_start": false
+   },
+   "verdict": "write"
+  },
+  {
    "name": "a mode that does not receive keeps it out",
    "incoming": {
     "receives": false,

@@ -61,6 +61,24 @@ impl Error {
         self.answer
     }
 
+    /// The first error of type E among the causes, through every context:
+    /// what failed, told by its type rather than by its text, which may
+    /// carry a peer's words.
+    pub fn find<E: core::error::Error + 'static>(&self) -> Option<&E> {
+        let mut cur: Option<&(dyn core::error::Error + 'static)> = self.cause.as_deref().map(|e| e as _);
+        while let Some(e) = cur {
+            if let Some(Cause(inner)) = e.downcast_ref::<Cause>() {
+                cur = inner.cause.as_deref().map(|e| e as _);
+                continue;
+            }
+            if let Some(found) = e.downcast_ref::<E>() {
+                return Some(found);
+            }
+            cur = e.source();
+        }
+        None
+    }
+
     /// The message for the user.
     pub fn message(&self) -> &str {
         &self.msg
@@ -195,5 +213,16 @@ mod tests {
         set_show_details(true);
         assert!(e.for_user().contains("details: cannot read the identity"));
         assert!(e.for_user().contains("PermissionDenied"));
+    }
+
+    #[test]
+    fn find_tells_a_cause_by_its_type() {
+        let io = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied");
+        let e = Error::with("cannot read the identity", io).context("cannot start").context("the service stopped");
+        assert_eq!(e.find::<std::io::Error>().map(|e| e.kind()), Some(std::io::ErrorKind::PermissionDenied));
+        assert!(e.find::<core::fmt::Error>().is_none());
+        // The text of a cause is no cause of that type.
+        let words = Error::msg("denied (std::io::Error)").context("cannot start");
+        assert!(words.find::<std::io::Error>().is_none());
     }
 }
