@@ -603,19 +603,30 @@ struct DeviceRow: View {
 
 /// The system (or kind) of a device, then where it stands: on one line
 /// when it fits, else one under the other, so a narrow tile cuts nothing.
+/// At the accessibility text sizes always one under the other, each part
+/// free to wrap: a part held to one line has no room to grow, which the
+/// accessibility audit reports as clipped text (seen on the phone's own
+/// tile, whose "This phone · admin" is the longest).
 struct DeviceSubtitle: View {
     let device: AppModel.Computer
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
+    @Environment(\.dynamicTypeSize) private var textSize
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 4) { parts(dots: true) }
-            VStack(alignment: .leading, spacing: 2) { parts(dots: false) }
+        Group {
+            if textSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 2) { parts(dots: false) }
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 4) { parts(dots: true) }
+                    VStack(alignment: .leading, spacing: 2) { parts(dots: false) }
+                }
+                .lineLimit(1)
+            }
         }
         .font(.caption)
         .foregroundStyle(palette.textDim)
-        .lineLimit(1)
     }
 
     @ViewBuilder private func parts(dots: Bool) -> some View {
