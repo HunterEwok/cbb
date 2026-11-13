@@ -87,17 +87,20 @@ pub enum Joining {
 
 /// What binds the member to the joiner in this pairing, which the joiner
 /// shows to take a Welcome.
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 pub enum Way<'a> {
-    /// An invitation: its secret, CPace's password, binds the member.
+    /// An invitation: its secret, CPace's password, binds the member. One
+    /// with the ID of none is no invitation.
     Invited(&'a super::invitation::Invitation),
     /// At home without an invitation nothing secret binds the member: only
     /// the person's "they match" at the joiner, in this session
     /// (`invitation::JoinerAttempts::answered`). Without it, or after "they
     /// do not match", there is no Welcome to take, and the session ends.
     /// `exporter` is the TLS exporter of the session the Welcome came on:
-    /// an answer given in another session takes nothing.
-    Home { matched: &'a super::invitation::Matched, exporter: &'a [u8] },
+    /// an answer given in another session, or to another member than the
+    /// admitter, takes nothing. The answer is taken by value: one answer,
+    /// one Welcome.
+    Home { matched: super::invitation::Matched, exporter: &'a [u8] },
 }
 
 /// Why the joiner does not take a Welcome.
@@ -114,8 +117,9 @@ pub enum Refusal {
     /// The Welcome is damaged.
     Damaged,
     /// At home without an invitation, the person's "they match" is of
-    /// another session than this one, or of another key than the
-    /// joiner's own.
+    /// another session than this one, of another member than the
+    /// admitter, or of another key than the joiner's own; or the
+    /// invitation shown has the ID of none.
     Unconfirmed,
     /// The group is stopped (`State::stopped`): two recovery records at
     /// one seq, one this version cannot read, or two histories of the
@@ -333,9 +337,13 @@ impl Welcome {
         joining: Joining,
         way: Way<'_>,
     ) -> Result<(RecordSet, State), Refusal> {
-        if let Way::Home { matched, exporter } = way
-            && (matched.local() != Key::es256(own.to_vec()).device_id() || !matched.of(exporter))
-        {
+        let confirmed = match &way {
+            Way::Invited(i) => i.id != super::NO_INVITATION,
+            Way::Home { matched, exporter } => {
+                matched.local() == Key::es256(own.to_vec()).device_id() && matched.of(exporter) && matched.to(admitter)
+            }
+        };
+        if !confirmed {
             return Err(Refusal::Unconfirmed);
         }
         let root = Key::es256(self.root.clone());

@@ -426,7 +426,12 @@ fn a_leaf_obeys_its_grant() {
     assert_eq!(take_at(&env, &started, 1, &mut ctr, &mut nonces), Err(RULE_SIGNER));
     // The same across a restart through the stored bytes: the head stored
     // with the kept state not yet changed by it.
-    let bytes = crate::format::grant::Stored::new(kept.clone(), Some((k("new root").hash, 1)), None).encode();
+    let bytes = crate::format::grant::Stored::new(
+        crate::format::grant::Kept { grant_hash: [5; 32], ..kept.clone() },
+        Some((k("new root").hash, 1)),
+        None,
+    )
+    .encode();
     let (back, recovery) = crate::format::grant::Stored::decode(&bytes).unwrap().start();
     assert_eq!((&back, recovery), (&started, 1));
     assert_eq!(take_at(&env, &back, recovery, &mut ctr, &mut nonces), Err(RULE_SIGNER));
