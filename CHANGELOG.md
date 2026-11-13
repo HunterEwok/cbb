@@ -1677,6 +1677,8 @@ made with 0.5 is set up again once. The details follow.
   from `/cargo`, the nightly workflow builds both twice in two folders and compares
   (`.github/reproducible.sh`), and `docs/own-build.md`, "Checking a release", says how
   to check a release against its tag.
+- CI runs `site check -strict`: a guide page changed without its translations (and
+  `site docs-sync`) fails the pull request.
 - The build scripts of `cbb` in Rust (`build.sh`, `mips.sh`, `notices.sh`) moved from
   `member/packaging/` to `packaging/`, beside the installers and archives of the same program.
 - Versions and compatibility (`docs/reference/compatibility.md`): which releases work

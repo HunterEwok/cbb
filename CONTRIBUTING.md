@@ -87,8 +87,8 @@ The maintainer follows these rules; they are written down to keep the history co
   in `site/docs/<language>/guide/<page>.md`: the same headings, links, pictures and code
   blocks as the English page, only the text translated. When you change a guide page, change
   its translations in the same pull request (or say in it which languages are left), then
-  run `go run ./tools/site docs-sync`; `go run ./tools/site check -strict` fails on a
-  translation that follows an older page. The text inside the pictures of `docs/images` is
+  run `go run ./tools/site docs-sync`; `go run ./tools/site check -strict`, which CI runs,
+  fails on a translation that follows an older page. The text inside the pictures of `docs/images` is
   translated in `tools/diagrams/l10n/<language>.json`; `python3 tools/diagrams/diagrams.py`
   draws them again. Every other page stays English and opens on GitHub from the website.
     [the protocol](docs/protocol.md), which is normative (MUST, SHOULD), its registries

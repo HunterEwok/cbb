@@ -101,8 +101,8 @@ jobs:
         run: go run ./tools/tokens -check
       - name: app icon up to date
         run: go run ./tools/icon -check
-      - name: website pages and translations
-        run: go run ./tools/site check
+      - name: website pages, and translations that follow their originals
+        run: go run ./tools/site check -strict
       - name: shellcheck, every shell script
         run: sh .github/shellcheck.sh
       - name: typos, the spelling of the English text (_typos.toml)
