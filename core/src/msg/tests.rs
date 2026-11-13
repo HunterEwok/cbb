@@ -235,3 +235,87 @@ fn an_offer_names_its_endpoint_keys() {
         "two keys for one endpoint"
     );
 }
+
+mod reading {
+    use super::super::{Field, Table, Ty, read_map, tables};
+    use crate::format::{Rule, Value};
+
+    const fn f(n: u16, rule: &'static str, ty: Ty, needed: bool) -> Field {
+        Field { n, rule, ty, needed }
+    }
+    static T: Table = Table {
+        shape: "t/shape",
+        fields: &[
+            f(2, "t/kind", Ty::Uint { min: 1, max: 3 }, true),
+            f(3, "t/count", Ty::Uint { min: 1, max: 9 }, false),
+            f(4, "t/name", Ty::Text(8), false),
+            f(5, "t/key", Ty::Bytes(32), false),
+            f(6, "t/list", Ty::Array { of: &Ty::Uint { min: 1, max: 9 }, max: 4 }, false),
+            f(7, "t/obfuscation", Ty::Map(&tables::OBFUSCATION), false),
+            f(8, "t/flag", Ty::Flag, false),
+        ],
+    };
+
+    fn m(entries: Vec<(u16, Value<'static>)>) -> Value<'static> {
+        Value::Map(entries)
+    }
+
+    /// A value from a later version: out of this version's range it reads
+    /// as absent; a list keeps what it understands; a transport's table
+    /// that does not read leaves only itself out; only the shape refuses.
+    #[test]
+    fn a_value_from_a_later_version_reads_as_absent() {
+        let base = vec![(0, Value::Uint(9)), (2, Value::Uint(1))];
+        let with = |extra: Vec<(u16, Value<'static>)>| {
+            let mut e = base.clone();
+            e.extend(extra);
+            e.sort_by_key(|(k, _)| *k);
+            m(e)
+        };
+        // In range: the same map.
+        let good = with(vec![(3, Value::Uint(4)), (4, Value::Text("lamp")), (6, Value::Array(vec![Value::Uint(2)]))]);
+        assert_eq!(read_map(&T, &good), Ok(good.clone()));
+        // Optional fields out of range: gone.
+        for (k, v) in [
+            (3, Value::Uint(10)),
+            (4, Value::Text("a name far too long")),
+            (4, Value::Text("a\nb")),
+            (8, Value::Uint(2)),
+            (6, Value::Array(vec![Value::Uint(1); 5])),
+        ] {
+            assert_eq!(read_map(&T, &with(vec![(k, v.clone())])), Ok(with(vec![])), "{k}: {v:?}");
+        }
+        // A list skips the element it does not understand, and reads as
+        // absent when nothing is left.
+        let list = with(vec![(6, Value::Array(vec![Value::Uint(2), Value::Uint(20), Value::Uint(3)]))]);
+        assert_eq!(read_map(&T, &list), Ok(with(vec![(6, Value::Array(vec![Value::Uint(2), Value::Uint(3)]))])));
+        assert_eq!(read_map(&T, &with(vec![(6, Value::Array(vec![Value::Uint(20)]))])), Ok(with(vec![])));
+        // A transport's table that does not read leaves only itself out.
+        let broken = with(vec![(7, m(vec![(1, Value::Uint(0))]))]);
+        assert_eq!(read_map(&T, &broken), Ok(with(vec![])));
+        // A field this table does not name is kept for its reader.
+        let later = with(vec![(300, Value::Text("later"))]);
+        assert_eq!(read_map(&T, &later), Ok(later.clone()));
+        // The shape refuses: a CBOR type, a fixed length, a needed field.
+        assert_eq!(read_map(&T, &with(vec![(3, Value::Text("4"))])), Err(Rule::field("t/count")));
+        assert_eq!(read_map(&T, &with(vec![(5, Value::Bytes(&[1; 31]))])), Err(Rule::field("t/key")));
+        assert_eq!(read_map(&T, &with(vec![(6, Value::Array(vec![Value::Text("x")]))])), Err(Rule::field("t/list")));
+        assert_eq!(read_map(&T, &m(vec![(0, Value::Uint(9)), (2, Value::Uint(7))])), Err(Rule::field("t/kind")));
+        assert_eq!(read_map(&T, &m(vec![(0, Value::Uint(9))])), Err(Rule::field("t/kind")));
+        assert_eq!(read_map(&T, &Value::Uint(1)), Err(Rule::field("t/shape")));
+    }
+
+    /// Everything the vectors take reads back unchanged.
+    #[test]
+    fn what_the_writer_check_takes_reads_unchanged() {
+        let v = super::load();
+        for t in v["take"].as_array().unwrap() {
+            let msg = super::unhex(&t["message"]);
+            let val = crate::format::cbor::decode(&msg).unwrap();
+            let ty = val.get(0).and_then(Value::as_uint).unwrap();
+            if let Some(table) = tables::of(ty).or_else(|| super::super::wave4::of(ty)) {
+                assert_eq!(read_map(table, &val).as_ref(), Ok(&val), "{}", t["name"]);
+            }
+        }
+    }
+}
