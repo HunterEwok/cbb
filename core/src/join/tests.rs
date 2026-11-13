@@ -243,7 +243,11 @@ fn the_info_follows_its_table() {
     };
     // A field at its default is left out, not written.
     assert_eq!(Info::decode(&info_of((2, Value::Uint(0)))), Err(Rule::field("pair/info/os")));
-    assert_eq!(Info::decode(&info_of((3, Value::Uint(0)))), Err(Rule::field("pair/info/caps")));
+    // Capabilities are bits: those this version does not know are ignored
+    // and grant nothing, so none left reads as no capability.
+    assert_eq!(Info::decode(&info_of((3, Value::Uint(0)))).unwrap().caps, 0);
+    assert_eq!(Info::decode(&info_of((3, Value::Uint(8)))).unwrap().caps, 0);
+    assert_eq!(Info::decode(&info_of((3, Value::Uint(8 | CAP_HUB)))).unwrap().caps, CAP_HUB);
     // Admin keys come as a signed envelope.
     assert_eq!(Info::decode(&info_of((7, Value::Bytes(b"not an envelope")))), Err(Rule::field("pair/info/keys")));
     assert_eq!(Info::decode(&info_of((9, Value::Bytes(&[1; 8])))), Err(Rule::field("pair/info/invite")));

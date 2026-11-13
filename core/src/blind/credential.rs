@@ -88,10 +88,9 @@ impl Credential {
     /// row, then its signature by the Key in it.
     pub fn read(b: &[u8]) -> Result<Credential, Rule> {
         let env = Envelope::parse_limited(b, MAX_BODY)?;
-        if env.sig2.is_some() {
-            return Err(Rule::FORM_CRITICAL);
-        }
         let m = &env.map;
+        // A second signature is taken on the first alone, which covers it.
+        crate::format::envelope::signer2(m, Rule::field("credentials/signer2"))?;
         let kind = m.get(1).and_then(Value::as_uint).ok_or(rule(0, "type"))?;
         if !(TYPE_PERIOD..=TYPE_MEMBERS).contains(&kind) {
             return Err(rule(kind, "type"));
@@ -103,7 +102,7 @@ impl Credential {
         };
         for (k, _) in m.as_map().unwrap_or(&[]) {
             // The optional zone (format 3.3): skipped, the signature covers it.
-            if *k >= 256 {
+            if *k >= 256 || *k == crate::format::envelope::FIELD_SIGNER2 {
                 continue;
             }
             if !allowed.contains(k) {

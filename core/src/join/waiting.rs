@@ -93,7 +93,8 @@ pub struct Seen {
     pub key: Vec<u8>,
     pub info: Info,
     pub network: Network,
-    /// How long it has waited when the holder sent it.
+    /// How long it has waited when the holder sent it; 0 when not said (or
+    /// said in a form this version cannot read).
     pub waited_ms: u64,
     pub attempts: u8,
 }
@@ -245,10 +246,10 @@ impl Held {
 
 /// Reads `waiting`: each request checked against its table.
 pub fn read(msg: &[u8]) -> Result<Vec<Seen>, Rule> {
-    if crate::msg::check(msg)? != T_WAITING {
+    let (t, v) = crate::msg::read(msg)?;
+    if t != T_WAITING {
         return Err(RULE_WAITING);
     }
-    let v = cbor::decode(msg)?;
     let mut out = Vec::new();
     for r in v.get(2).and_then(Value::as_array).ok_or(RULE_WAITING)? {
         let invite: [u8; 16] =
@@ -261,7 +262,9 @@ pub fn read(msg: &[u8]) -> Result<Vec<Seen>, Rule> {
         let network = match r.get(4).and_then(Value::as_uint) {
             Some(1) => Network::Home,
             Some(2) => Network::Guest,
-            _ => Network::Bypass,
+            Some(3) => Network::Bypass,
+            // An unknown network never reads as a known one.
+            _ => return Err(RULE_WAITING),
         };
         let waited_ms = r.get(5).and_then(Value::as_uint).unwrap_or(0);
         let attempts = r.get(6).and_then(Value::as_uint).and_then(|a| u8::try_from(a).ok()).ok_or(RULE_WAITING)?;
@@ -281,10 +284,10 @@ pub fn dismiss_message(invite: &[u8; 16], key: Option<&KeyHash>) -> Vec<u8> {
 
 /// Reads `dismiss`.
 pub fn read_dismiss(msg: &[u8]) -> Result<([u8; 16], Option<KeyHash>), Rule> {
-    if crate::msg::check(msg)? != T_DISMISS {
+    let (t, v) = crate::msg::read(msg)?;
+    if t != T_DISMISS {
         return Err(RULE_DISMISS);
     }
-    let v = cbor::decode(msg)?;
     let invite = v.get(2).and_then(Value::as_bytes).and_then(|b| b.try_into().ok()).ok_or(RULE_DISMISS)?;
     let key = v.get(3).and_then(Value::as_bytes).and_then(|b| <[u8; 32]>::try_from(b).ok()).map(KeyHash);
     Ok((invite, key))

@@ -278,13 +278,18 @@ impl Welcome {
         Value::Map(m).encode()
     }
 
+    /// An encoded Welcome read against its table as a reader of this
+    /// version does (`crate::msg::read_map`).
+    fn read(b: &[u8]) -> Result<Value<'_>, Rule> {
+        crate::msg::read_map(&crate::msg::tables::WELCOME, &cbor::decode(b)?)
+    }
+
     /// The parts of an encoded Welcome before each record is read: the
     /// root's point, the record envelopes, the time, the recovery key's
     /// point and its second half's 32 bytes.
     #[allow(clippy::type_complexity, reason = "the parts as they come")]
     pub fn parts(b: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>, u64, Vec<u8>, Vec<u8>), Rule> {
-        let v = cbor::decode(b)?;
-        crate::msg::check_map(&crate::msg::tables::WELCOME, &v)?;
+        let v = Welcome::read(b)?;
         let key = |n: u16, alg: Alg, rule: Rule| -> Result<Vec<u8>, Rule> {
             let k = crate::format::Key::from_value(v.get(n).ok_or(rule)?).map_err(|_| rule)?;
             if k.alg != alg || k.check().is_err() {
@@ -308,7 +313,7 @@ impl Welcome {
     pub fn decode(b: &[u8]) -> Result<Welcome, Rule> {
         let (root, envs, time_ms, recovery, recovery2) = Welcome::parts(b)?;
         let records = envs.iter().map(|e| Record::decode(e).map_err(|_| RULE_RECORD)).collect::<Result<Vec<_>, _>>()?;
-        let v = cbor::decode(b)?;
+        let v = Welcome::read(b)?;
         let list_of = |k: u16| -> Result<Vec<Vec<u8>>, Rule> {
             match v.get(k) {
                 None => Ok(Vec::new()),

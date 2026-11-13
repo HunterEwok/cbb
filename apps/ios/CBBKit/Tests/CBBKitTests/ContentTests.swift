@@ -124,9 +124,9 @@ final class ContentTests: XCTestCase {
     func testCleanNames() {
         for (given, want) in [("report.pdf", "report.pdf"), ("a/b:c?.txt", "a_b_c_.txt"), ("CON.txt", "CON_.txt"), ("lpt1", "lpt1_"),
                               ("dots...", "dots..._"), ("", "_"), ("..", "_"), ("tab\there", "tab_here"),
-                              (String(repeating: "x", count: 300), String(repeating: "x", count: 255)),
-                              ("CON." + String(repeating: "a", count: 249) + ".x", "CON_." + String(repeating: "a", count: 249)),
-                              (String(repeating: "a", count: 254) + ".", String(repeating: "a", count: 254))] {
+                              (String(repeating: "x", count: 800), String(repeating: "x", count: 765)),
+                              ("CON." + String(repeating: "a", count: 759) + ".x", "CON_." + String(repeating: "a", count: 759)),
+                              (String(repeating: "a", count: 764) + ".", String(repeating: "a", count: 764))] {
             let got = Media.cleanName(given)
             XCTAssertEqual(got, want, given)
             XCTAssertTrue(Media.checkName(got), got)

@@ -17,9 +17,11 @@ pub const RULE_ACTION: Rule = Rule::field("orders/action");
 pub const RULE_MUTE: Rule = Rule::field("orders/mute");
 pub const RULE_DEVICE: Rule = Rule::field("orders/device");
 
-/// The longest text of a paste, and of one typed out.
+/// The longest text of a paste, and of one typed out (format 20.6: 16 KiB
+/// for a member; a leaf takes what its 16 KiB frame holds beside the
+/// command's envelope).
 pub const MAX_PASTE_TEXT: usize = 1 << 20;
-pub const MAX_TYPED_TEXT: usize = 4 << 10;
+pub const MAX_TYPED_TEXT: usize = 16 << 10;
 /// The longest mute.
 pub const MAX_MUTE_MS: u64 = 2_592_000_000;
 /// A device command's arguments.

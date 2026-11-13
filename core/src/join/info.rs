@@ -106,11 +106,12 @@ impl Info {
         Value::Map(m).encode()
     }
 
-    /// Reads an Info and checks each field against its row. Unknown fields
-    /// are skipped: messages are not signed and later versions add fields.
+    /// Reads an Info and checks each field against its row, as a reader of
+    /// this version does (`crate::msg::read_map`: unknown capability bits
+    /// are ignored). Unknown fields are skipped: messages are not signed
+    /// and later versions add fields.
     pub fn decode(b: &[u8]) -> Result<Info, Rule> {
-        let v = cbor::decode(b)?;
-        crate::msg::check_map(&crate::msg::tables::INFO, &v)?;
+        let v = crate::msg::read_map(&crate::msg::tables::INFO, &cbor::decode(b)?)?;
         let name = v.get(1).and_then(Value::as_text).ok_or(RULE_NAME)?;
         if !valid_name(name) {
             return Err(RULE_NAME);

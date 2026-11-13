@@ -97,7 +97,7 @@ fn a_member_obeys_the_root_and_its_admins_by_their_commands() {
     assert_eq!(w.take(&make(&d, &k("root")).unwrap(), &mut ctr, Some(T0)), Err(RULE_GROUP));
     // Expired on a receiver with a clock; a leaf without one decides by n.
     let env = make(&w.draft(COMMAND_PASTE_OFF, 10, None), &k("root")).unwrap();
-    assert_eq!(w.take(&env, &mut ctr.clone(), Some(T0 + LIFETIME_MS + SKEW_MS + 1)), Err(RULE_LATE));
+    assert_eq!(w.take(&env, &mut ctr.clone(), Some(T0 + WRITE_LIFETIME_MS + SKEW_MS + 1)), Err(RULE_LATE));
     assert_eq!(w.take(&env, &mut ctr.clone(), Some(T0 - SKEW_MS - 1)), Err(RULE_LATE));
     assert_eq!(w.take(&env, &mut ctr, None), Ok(None));
 }
@@ -126,7 +126,7 @@ fn a_late_command_is_refused_back_with_its_rule() {
     let w = World::new();
     let env = make(&w.draft(COMMAND_PASTE_OFF, 1, None), &k("root")).unwrap();
     let c = Command::read(&env).unwrap();
-    let r = w.accept(&c, &mut Counters::default(), Some(T0 + LIFETIME_MS + SKEW_MS + 1)).unwrap_err();
+    let r = w.accept(&c, &mut Counters::default(), Some(T0 + WRITE_LIFETIME_MS + SKEW_MS + 1)).unwrap_err();
     assert_eq!(r, Refusal { rule: RULE_LATE, answer: true });
     let me = w.laptop.key.device_id();
     let r = refusal(&c.id, &me, r).unwrap();
@@ -255,11 +255,12 @@ fn the_form_and_its_rules_between_fields() {
         body(f)
     };
     assert!(Command::read(&full(COMMAND_PASTE_OFF, vec![])).is_ok());
+    assert!(Command::read(&full(COMMAND_PASTE_OFF, vec![(7, Value::Uint(T0 + 600_000))])).is_ok());
     assert!(Command::read(&full(COMMAND_MODE, vec![(14, Value::Uint(1)), (15, Value::Bytes(&sealed))])).is_ok());
     let cases: Vec<(&str, Vec<u8>, Rule)> = vec![
         ("type 0", full(0, vec![]), RULE_TYPE),
         ("type 11", full(11, vec![]), RULE_TYPE),
-        ("lifetime 30 s and 1 ms", full(4, vec![(7, Value::Uint(T0 + 30_001))]), RULE_EXPIRES),
+        ("lifetime 600 s and 1 ms", full(4, vec![(7, Value::Uint(T0 + 600_001))]), RULE_EXPIRES),
         ("expires at time", full(4, vec![(7, Value::Uint(T0))]), RULE_EXPIRES),
         ("n 0", full(4, vec![(4, Value::Uint(0))]), RULE_N),
         ("nonce of 15 bytes", full(4, vec![(13, Value::Bytes(&[0; 15]))]), RULE_NONCE),
@@ -282,6 +283,38 @@ fn the_form_and_its_rules_between_fields() {
     }
     // An optional field of a later version is skipped.
     assert!(Command::read(&full(4, vec![(300, Value::Uint(1))])).is_ok());
+}
+
+/// A reader takes a life of up to 600 s, so a later writer may give more
+/// than 30 s; every 0.6 writer gives exactly 30 s. The replay guard is the
+/// per-signer counter, not the life.
+#[test]
+fn a_reader_takes_up_to_600_s_and_our_writer_gives_30_s() {
+    assert_eq!((MAX_LIFETIME_MS, WRITE_LIFETIME_MS), (600_000, 30_000));
+    let w = World::new();
+    let env = make(&w.draft(COMMAND_PASTE_OFF, 1, None), &k("root")).unwrap();
+    let c = Command::read(&env).unwrap();
+    assert_eq!(c.expires_ms - c.time_ms, WRITE_LIFETIME_MS, "our writer");
+    let m = cbor::decode(c.envelope.body).unwrap();
+    let fields = |life: u64| -> Vec<u8> {
+        let f: Vec<(u16, Value<'_>)> = m
+            .as_map()
+            .unwrap()
+            .iter()
+            .map(|(n, v)| (*n, if *n == 7 { Value::Uint(T0 + life) } else { v.clone() }))
+            .collect();
+        body(f)
+    };
+    // Signed by the root with a life of 600 s: taken at its end, with the skew.
+    let long = fields(MAX_LIFETIME_MS);
+    let mut ctr = Counters::default();
+    assert_eq!(w.take(&long, &mut ctr.clone(), Some(T0 + MAX_LIFETIME_MS + SKEW_MS)), Ok(None));
+    assert_eq!(w.take(&long, &mut ctr.clone(), Some(T0 + MAX_LIFETIME_MS + SKEW_MS + 1)), Err(RULE_LATE));
+    assert_eq!(w.take(&long, &mut ctr, Some(T0)), Ok(None));
+    // Taken once: the counter, not the life, refuses it again.
+    assert_eq!(w.take(&long, &mut ctr, Some(T0)), Err(RULE_COUNTER));
+    // One millisecond more: refused by its form.
+    assert_eq!(Command::read(&fields(MAX_LIFETIME_MS + 1)).err(), Some(RULE_EXPIRES));
 }
 
 #[test]
@@ -531,6 +564,12 @@ fn command_vectors() {
         let rule: String = r["rule"].as_str().unwrap().into();
         match Command::read(&env) {
             Err(e) => assert_eq!(e.name(), rule, "{}", r["name"]),
+            // A second signature swapped on the way: the form reads, the
+            // first signature, which covers it, does not hold.
+            Ok(c) if rule == "env/damaged" => {
+                let signer = unhex(r["signer"].as_str().unwrap());
+                assert_eq!(c.envelope.verify(&signer, sig::LABEL_COMMAND), Err(Rule::ENV_DAMAGED), "{}", r["name"]);
+            }
             Ok(c) => {
                 assert_eq!(rule, "commands/nonce", "{}", r["name"]);
                 assert!(c.nonce.is_none());

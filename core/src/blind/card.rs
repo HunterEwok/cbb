@@ -87,15 +87,14 @@ impl Card {
     /// key in it.
     pub fn read(b: &[u8]) -> Result<Card, Rule> {
         let env = Envelope::parse_limited(b, MAX_BODY)?;
-        if env.sig2.is_some() {
-            return Err(Rule::FORM_CRITICAL);
-        }
         let m = &env.map;
         for (k, _) in m.as_map().unwrap_or(&[]) {
-            if !matches!(k, 1 | 3 | 4 | 7 | 10..=14) && *k < 256 {
+            if !matches!(k, 1 | 3 | 4 | 7 | 8 | 10..=14) && *k < 256 {
                 return Err(Rule::FORM_CRITICAL);
             }
         }
+        // A second signature is taken on the first alone, which covers it.
+        crate::format::envelope::signer2(m, Rule::field("card/signer2"))?;
         if m.get(1).and_then(Value::as_uint) != Some(1) {
             return Err(RULE_SHAPE);
         }
@@ -127,15 +126,21 @@ impl Card {
             }
             keys.push(k.public.to_vec());
         }
-        let kinds = m.get(13).and_then(Value::as_uint).ok_or(RULE_KINDS)?;
-        if kinds == 0 || kinds & !(KIND_FORWARDER | KIND_RELAY) != 0 {
+        // Bits this version does not know are ignored and grant nothing; a
+        // card with no kind this version knows is of no use to it.
+        let kinds = m.get(13).and_then(Value::as_uint).filter(|k| *k != 0).ok_or(RULE_KINDS)?;
+        let kinds = kinds & (KIND_FORWARDER | KIND_RELAY);
+        if kinds == 0 {
             return Err(RULE_KINDS);
         }
         let paths = match m.get(14) {
             None => 0,
+            // Ways given, none this version knows: refused, never read as
+            // "not said".
             Some(p) => p
                 .as_uint()
-                .filter(|p| *p != 0 && p & !(PATH_WIREGUARD | PATH_AMNEZIAWG | PATH_VLESS) == 0)
+                .map(|p| p & (PATH_WIREGUARD | PATH_AMNEZIAWG | PATH_VLESS))
+                .filter(|p| *p != 0)
                 .ok_or(RULE_PATHS)?,
         };
         env.verify(op.public, LABEL_SERVER_CARD)?;
