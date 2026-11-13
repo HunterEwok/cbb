@@ -970,6 +970,64 @@ fn an_intro_proves_a_new_device() {
     assert!(keys.is_none());
 }
 
+/// The recovery heads ride beside the intro's 32 records and 16 KiB, at
+/// most 64 of them: three changes of root pass 16 KiB in their heads'
+/// envelopes alone, and the device admitted after them still proves
+/// itself. Sender and reader count alike, by the envelopes' bytes.
+#[test]
+fn an_intro_counts_the_recovery_heads_apart() {
+    let mut g = G::new();
+    let (n1, n2, n3, pa) = (k("root n1"), k("root n2"), k("root n3"), k("phone a"));
+    g.change(&n1);
+    g.change(&n2);
+    g.change(&n3);
+    phone_admin(&mut g, &n3, &pa, &k("admin a"), true);
+    let full = g.set();
+    let st = full.state();
+    let intro = Intro::of(&full, &st, &pa.hash, None).unwrap();
+    let heads: Vec<&Record> = intro.records.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).collect();
+    assert_eq!(heads.len(), 3);
+    assert!(heads.iter().map(|r| r.envelope().len()).sum::<usize>() > intro::MAX_BYTES);
+    assert!(intro::fits(&intro.records));
+
+    // A peer that holds everything but the phone's record takes it.
+    let mut old = g.empty();
+    old.insert_all(g.recs.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).cloned());
+    for l in &g.lists {
+        old.insert_list(l).unwrap();
+    }
+    old.insert_all(g.recs[..g.recs.len() - 1].iter().cloned());
+    let me = fhash(&k("phone"));
+    let new = intro.check(&old, &me, &point(&pa)).unwrap();
+    assert_eq!(new.len(), 1);
+
+    // The reader counts as the sender did.
+    let back = Intro::read(&intro.message()).unwrap();
+    assert_eq!(back, intro);
+    assert_eq!(back.check(&old, &me, &point(&pa)).unwrap().len(), 1);
+
+    // Up to 64 heads pass; one more does not, on either side.
+    let mut many = intro.clone();
+    while many.records.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).count() < intro::MAX_HEADS {
+        many.records.insert(0, heads[0].clone());
+    }
+    assert!(intro::fits(&many.records));
+    assert_eq!(Intro::read(&many.message()).map(|i| i.records.len()), Ok(many.records.len()));
+    many.records.insert(0, heads[0].clone());
+    assert!(!intro::fits(&many.records));
+    assert_eq!(many.check(&old, &me, &point(&pa)), Err(intro::Refusal::TooBig));
+    assert_eq!(Intro::read(&many.message()), Err(intro::RULE_SIZE));
+
+    // The others still at most 32 records and 16 KiB, by their envelopes.
+    let mut wide = intro.clone();
+    let own = wide.records.last().unwrap().clone();
+    while wide.records.len() - 3 <= intro::MAX_RECORDS {
+        wide.records.insert(3, own.clone());
+    }
+    assert_eq!(wide.check(&old, &me, &point(&pa)), Err(intro::Refusal::TooBig));
+    assert_eq!(Intro::read(&wide.message()), Err(intro::RULE_SIZE));
+}
+
 /// AmneziaWG settings: jc, jmin, jmax, the four sizes, the four header
 /// ranges.
 fn obfuscation_with(jc: u64, jmin: u64, jmax: u64) -> Vec<u8> {

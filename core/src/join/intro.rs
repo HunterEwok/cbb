@@ -6,7 +6,12 @@
 //! device admitted a minute ago by an admin the peer has not heard from.
 //! It carries the sender's own record and the records that prove it up to
 //! the group's first root: the root changes, and for each signer on the way
-//! the record that gave it its admin key. At most 32 records and 16 KiB.
+//! the record that gave it its admin key. At most 32 records and 16 KiB,
+//! and apart from them at most 64 recovery heads (format 20.7): a head's
+//! second signature alone may pass 16 KiB.
+//!
+//! Sender and reader count one way, [`fits`]: by the bytes of each
+//! record's envelope.
 //!
 //! The receiver checks every signature up to the root it holds, on a copy
 //! of its set; only when the sender's key then stands as a member does it
@@ -25,6 +30,14 @@ use crate::records::{KeyHash, Record, RecordId, State};
 pub const MAX_RECORDS: usize = 32;
 /// The most bytes its records take together.
 pub const MAX_BYTES: usize = 16 * 1024;
+/// The most recovery heads an intro carries, counted apart from
+/// [`MAX_RECORDS`] and [`MAX_BYTES`].
+pub const MAX_HEADS: usize = 64;
+/// The most bytes one head's envelope can take: its body, the envelope's
+/// heads and signature, and K2's second signature.
+const HEAD_BYTES: usize = crate::records::MAX_BODY
+    .saturating_add(crate::records::ENVELOPE_ALLOWANCE)
+    .saturating_add(crate::records::HEAD_SIG2_ALLOWANCE);
 
 pub const RULE_SHAPE: Rule = Rule::field("intro/shape");
 pub const RULE_SIZE: Rule = Rule::field("intro/size");
@@ -34,13 +47,30 @@ pub const RULE_RECORD: Rule = Rule::field("intro/record");
 /// Why an intro is refused; the connection closes.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Refusal {
-    /// More than 32 records or 16 KiB.
+    /// More than 32 records or 16 KiB besides the heads, or more than 64
+    /// heads.
     TooBig,
     /// A record that does not verify, of another group, or whose signer
     /// leads nowhere.
     Broken,
     /// With its records the sender's key is still not a member of the group.
     NotMember,
+}
+
+/// Whether records fit an intro, counted the one way sender and reader
+/// share: the recovery heads apart, at most [`MAX_HEADS`]; the others at
+/// most [`MAX_RECORDS`] and [`MAX_BYTES`] by the bytes of their envelopes.
+pub fn fits(records: &[Record]) -> bool {
+    let (mut heads, mut others, mut bytes) = (0usize, 0usize, 0usize);
+    for r in records {
+        if matches!(r.body().kind, Kind::Recovery { .. }) {
+            heads = heads.saturating_add(1);
+        } else {
+            others = others.saturating_add(1);
+            bytes = bytes.saturating_add(r.envelope().len());
+        }
+    }
+    heads <= MAX_HEADS && others <= MAX_RECORDS && bytes <= MAX_BYTES
 }
 
 /// The records that lead from the group's first root to the device with
@@ -102,11 +132,7 @@ impl Intro {
     }
 
     fn check_size(&self) -> Result<(), Refusal> {
-        let bytes: usize = self.records.iter().map(Record::size).fold(0, usize::saturating_add);
-        if self.records.len() > MAX_RECORDS || bytes > MAX_BYTES {
-            return Err(Refusal::TooBig);
-        }
-        Ok(())
+        if fits(&self.records) { Ok(()) } else { Err(Refusal::TooBig) }
     }
 
     /// The message (t = 8), unpadded: field 2 the record envelopes, field 3
@@ -123,7 +149,9 @@ impl Intro {
     }
 
     /// The record envelopes and the statement of an intro message, before
-    /// each record is read (`Record::decode`, the records' reader).
+    /// each record is read (`Record::decode`, the records' reader). Before
+    /// the kinds are known it bounds the widest intro: every head and the
+    /// others' 16 KiB; [`Intro::read`] then counts as the sender did.
     #[allow(clippy::type_complexity, reason = "the parts as they come")]
     pub fn envelopes(msg: &[u8]) -> Result<(Vec<Vec<u8>>, Option<Vec<u8>>), Rule> {
         let v = cbor::decode(msg)?;
@@ -131,11 +159,12 @@ impl Intro {
             return Err(RULE_SHAPE);
         }
         let arr = v.get(2).and_then(Value::as_array).ok_or(RULE_SHAPE)?;
-        if arr.len() > MAX_RECORDS {
+        if arr.len() > MAX_RECORDS.saturating_add(MAX_HEADS) {
             return Err(RULE_SIZE);
         }
         let envs: Vec<Vec<u8>> = arr.iter().map(Value::encode).collect();
-        if envs.iter().map(Vec::len).fold(0, usize::saturating_add) > MAX_BYTES {
+        let widest = MAX_HEADS.saturating_mul(HEAD_BYTES).saturating_add(MAX_BYTES);
+        if envs.iter().map(Vec::len).fold(0, usize::saturating_add) > widest {
             return Err(RULE_SIZE);
         }
         Ok((envs, v.get(3).map(Value::encode)))
@@ -146,6 +175,9 @@ impl Intro {
     pub fn read(msg: &[u8]) -> Result<Intro, Rule> {
         let (envs, keys) = Intro::envelopes(msg)?;
         let records = envs.iter().map(|e| Record::decode(e).map_err(|_| RULE_RECORD)).collect::<Result<Vec<_>, _>>()?;
+        if !fits(&records) {
+            return Err(RULE_SIZE);
+        }
         Ok(Intro { records, keys })
     }
 
