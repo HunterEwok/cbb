@@ -196,6 +196,10 @@ A9 and U14 to U18).
   app): the sidebar's sections, a tile's card beside the tiles, the arrows and Escape, a
   settings part, Command-1, portrait, the card at the left in Arabic, and clipped text at the
   largest size; each screen's picture is attached.
+- The other big screens: on Android `TabletHomeTest` keeps the sidebar's sections across a
+  restart (their keys back to the same section); the HarmonyOS sidebar, keys and drops are
+  compiled and linted by `apps/harmony/check.sh`, and the Aurora layout by `qmllint`. None of
+  the three is yet run on a tablet.
 
 Screenshots are compared where a picture is the same on every machine that draws it: the
 tray window on Linux in the Noto fonts (`fonts-noto-core`, `fonts-noto-mono`,
