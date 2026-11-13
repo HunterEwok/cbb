@@ -4857,3 +4857,99 @@ fn a_key_in_two_histories_brings_back_nothing_it_removed() {
     assert!(s.two_histories(&a.hash));
     assert!(!s.counting.contains(&rv3.id()) && !s.revoked.contains(&d3.hash), "a removal above a gap");
 }
+
+/// The root removes an admin key in two histories: its own removals of
+/// what that key's removals bar come first, so nothing the key barred on
+/// either line comes back in any order of arrival, and nothing the key
+/// signs after its removal counts. A removal that skips the writer is told.
+#[test]
+fn removing_a_key_in_two_histories_keeps_out_what_it_barred() {
+    let mut g = G::new();
+    let (pa, a) = (k("pa"), k("a"));
+    g.admin(&pa, &a, POWER_ADMIT | POWER_REMOVE);
+    let (d1, d2, d3) = (k("d1"), k("d2"), k("d3"));
+    let x1 = g.device(&a, &d1, "d1", |_| {});
+    let x2 = g.device(&a, &d2, "d2", |_| {});
+    g.device(&a, &d3, "d3", |_| {});
+    let seen = g.seen();
+    let rv1 = g.rec(&a, Kind::Revoke(removal(&[d1.hash], seen.clone())));
+    // The other line: at rv1's seq, after x2... no: after the record below rv1.
+    let below = g.recs.iter().find(|r| r.id() == rv1.body().prev.unwrap()).unwrap().clone();
+    let tb = Body {
+        group: g.gid,
+        signer: a.hash,
+        seq: rv1.body().seq,
+        prev: Some(below.id()),
+        time_ms: 9,
+        kind: Kind::Revoke(removal(&[d2.hash], seen)),
+        held: false,
+    };
+    let rv2 = g.push(Record::sign(tb, &a).unwrap());
+    let _ = (x1, x2);
+    let mut set = set_with(&g.root.key, &g.recs, &g.lists);
+    let st = set.state();
+    assert!(st.two_histories(&a.hash));
+    assert!(st.revoked.contains(&d1.hash) && st.revoked.contains(&d2.hash));
+    // write_record refuses, untouched.
+    let before = set.digest();
+    assert!(set.write_record(&st, &g.root, Kind::Revoke(removal(&[a.hash], Vec::new())), 0).is_err());
+    assert_eq!(set.digest(), before);
+    let written = set.write_removal(&st, &g.root, &[a.hash], 0).unwrap();
+    assert!(written.len() >= 2);
+    let s = set.state();
+    for key in [&a.hash, &d1.hash, &d2.hash] {
+        assert!(s.revoked.contains(key));
+    }
+    assert!(s.forked_removed.is_empty());
+    // In every order of arrival of both lines and the removal at a member
+    // that holds the rest, whichever line arrives first.
+    let rest: Vec<Record> = g.recs.iter().filter(|r| r.id() != rv1.id() && r.id() != rv2.id()).cloned().collect();
+    let mut late: Vec<Record> = vec![rv1.clone(), rv2.clone()];
+    late.extend(written.iter().cloned());
+    let mut idx: Vec<usize> = (0..late.len()).collect();
+    let mut orders = 0;
+    loop {
+        let mut m = set_with(&g.root.key, &rest, &g.lists);
+        for &i in &idx {
+            let _ = m.insert(late[i].clone());
+        }
+        let sm = m.state();
+        assert!(sm.revoked.contains(&d1.hash) && sm.revoked.contains(&d2.hash) && sm.revoked.contains(&a.hash));
+        assert!(sm.forked_removed.is_empty());
+        orders += 1;
+        // Next permutation.
+        let Some(i) = (0..idx.len().saturating_sub(1)).rev().find(|&i| idx[i] < idx[i + 1]) else { break };
+        let j = (i + 1..idx.len()).rev().find(|&j| idx[j] > idx[i]).unwrap();
+        idx.swap(i, j);
+        idx[i + 1..].reverse();
+    }
+    assert!(orders >= 24);
+    // Nothing A signs after its removal counts.
+    let head = g.heads[&a.hash];
+    let late = Body {
+        group: g.gid,
+        signer: a.hash,
+        seq: head.0 + 1,
+        prev: Some(head.1),
+        time_ms: 10,
+        kind: Kind::Revoke(removal(&[d3.hash], g.seen())),
+        held: false,
+    };
+    let late = Record::sign(late, &a).unwrap();
+    let _ = set.insert(late.clone());
+    let s = set.state();
+    assert!(!s.counting.contains(&late.id()) && !s.revoked.contains(&d3.hash));
+    // A removal of A that skips the writer, seeing one line: the other
+    // line's removal no longer counts, and the state tells it.
+    for (line, other) in [(&rv1, &d2), (&rv2, &d1)] {
+        let mut seen = g.seen();
+        seen.retain(|e| e.key != a.hash);
+        seen.push(Seen { key: a.hash, seq: line.body().seq, id: line.id() });
+        seen.sort_by_key(|e| e.key);
+        let mut h = G { root: k("root"), gid: g.gid, heads: g.heads.clone(), recs: g.recs.clone(), lists: Vec::new() };
+        h.root_rec(Kind::Revoke(removal(&[a.hash], seen)));
+        let s = h.state();
+        assert!(!s.revoked.contains(&other.hash));
+        assert_eq!(s.forked_removed, vec![(a.hash, vec![other.hash])]);
+    }
+}

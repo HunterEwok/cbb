@@ -2221,7 +2221,100 @@ impl RecordSet {
     /// writer drops reaches nobody for sure, and one that passes the key's
     /// ceiling pushes the key's own older records out. The writer of every
     /// ordinary record of a group goes through it.
+    /// A removal that names a key in two histories goes through
+    /// `write_removal`, which keeps out what that key's removals bar.
     pub fn write_record(
+        &mut self,
+        state: &State,
+        signer: &dyn ExternalKey,
+        kind: Kind,
+        time_ms: u64,
+    ) -> crate::error::Result<Record> {
+        if let Kind::Revoke(rm) = &kind
+            && rm.keys.iter().any(|k| state.two_histories(k))
+        {
+            return Err(crate::error::Error::msg("a removal of a key in two histories is written with write_removal"));
+        }
+        self.write_one(state, signer, kind, time_ms)
+    }
+
+    /// The root removes keys, some of them in two histories (F-7): the
+    /// removal of such a key carries one seen head for it, so its removals
+    /// on the other line would stop counting. First the root's own
+    /// removals of every key those removals bar that no root removal bars
+    /// yet (they count by themselves, in any order), then the removal of
+    /// keys, as many records as their bodies need; all or nothing.
+    pub fn write_removal(
+        &mut self,
+        state: &State,
+        root: &dyn ExternalKey,
+        keys: &[KeyHash],
+        time_ms: u64,
+    ) -> crate::error::Result<Vec<Record>> {
+        use crate::error::Error;
+        let h = Key::es256(root.public()).hash();
+        if state.roots.last() != Some(&h) {
+            return Err(Error::msg("only the current root writes this removal"));
+        }
+        let forked: BTreeSet<KeyHash> = keys.iter().copied().filter(|k| state.two_histories(k)).collect();
+        let by_root: BTreeSet<KeyHash> = self
+            .records
+            .values()
+            .filter(|e| e.record.body().signer == h && state.counting.contains(&e.record.id()))
+            .filter_map(|e| match &e.record.body().kind {
+                Kind::Revoke(rm) => Some(rm.keys.clone()),
+                _ => None,
+            })
+            .flatten()
+            .collect();
+        let mut barred: BTreeSet<KeyHash> = BTreeSet::new();
+        for e in self.records.values().filter(|e| forked.contains(&e.record.body().signer)) {
+            if let Kind::Revoke(rm) = &e.record.body().kind
+                && state.counting.contains(&e.record.id())
+            {
+                barred.extend(rm.keys.iter().copied());
+            }
+        }
+        barred.retain(|k| !by_root.contains(k) && !keys.contains(k) && *k != h && *k != self.recovery.hash());
+        let mut trial = self.clone();
+        let mut out = Vec::new();
+        let barred: Vec<KeyHash> = barred.into_iter().collect();
+        for part in [barred, keys.to_vec()] {
+            let mut rest = part.as_slice();
+            while !rest.is_empty() {
+                let mut n = rest.len();
+                loop {
+                    let chunk = rest.get(..n).unwrap_or_default();
+                    let st = trial.state();
+                    let rm = super::body::Removal { keys: chunk.to_vec(), seen: trial.heads_of(&st, chunk) };
+                    let widest = Body {
+                        group: self.group,
+                        signer: h,
+                        seq: super::MAX_SEQ,
+                        prev: Some(RecordId([0; 32])),
+                        time_ms,
+                        kind: Kind::Revoke(rm),
+                        held: false,
+                    };
+                    if widest.encode().len() <= super::MAX_BODY || n == 1 {
+                        let r = trial.write_one(&st, root, widest.kind, time_ms).map_err(|e| {
+                            Error::msg(alloc::format!(
+                                "the root's room cannot hold the removals that keep these devices out: {e}"
+                            ))
+                        })?;
+                        out.push(r);
+                        break;
+                    }
+                    n = n.div_ceil(2);
+                }
+                rest = rest.get(n..).unwrap_or_default();
+            }
+        }
+        *self = trial;
+        Ok(out)
+    }
+
+    fn write_one(
         &mut self,
         state: &State,
         signer: &dyn ExternalKey,
