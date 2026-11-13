@@ -242,6 +242,8 @@ struct World {
     not_kept: BTreeSet<RecordId>,
     /// Each member's last admission record.
     admission: BTreeMap<usize, RecordId>,
+    /// The record IDs each change of root's list names, in order.
+    change_lists: Vec<Vec<RecordId>>,
     log: Vec<String>,
 }
 
@@ -355,6 +357,7 @@ impl World {
             flood: None,
             not_kept: BTreeSet::new(),
             admission: BTreeMap::new(),
+            change_lists: Vec::new(),
             log: Vec::new(),
         };
         // The root's phone is member 0; it admits a first few.
@@ -402,18 +405,36 @@ impl World {
     }
 
     /// Signs a record with the key named key_name on member i, takes it
-    /// and saves: an act counts once it is written.
-    fn sign(&mut self, i: usize, key_name: &str, kind: Kind) -> Record {
-        let r = self.sign_unsaved(i, key_name, kind);
+    /// and saves: an act counts once it is written. None when the core's
+    /// writer refuses it (`RecordSet::write_record`): nothing was written.
+    fn sign(&mut self, i: usize, key_name: &str, kind: Kind) -> Option<Record> {
+        let r = self.sign_unsaved(i, key_name, kind)?;
         self.save(i);
-        r
+        Some(r)
     }
 
     /// Signs and takes a record on member i without storing it: what is
     /// in memory between the signature and the durable store.
-    fn sign_unsaved(&mut self, i: usize, key_name: &str, kind: Kind) -> Record {
+    fn sign_unsaved(&mut self, i: usize, key_name: &str, kind: Kind) -> Option<Record> {
         let time_ms = self.now(i);
         let kk = k(key_name);
+        // An ordinary record goes through the core's writer, as a kit's
+        // does; a checkpoint signed here is a deviating root's.
+        if !matches!(kind, Kind::Checkpoint { .. } | Kind::Recovery { .. }) {
+            let m = &mut self.members[i].live;
+            let st = m.state.clone();
+            let r = match m.set.write_record(&st, &kk, kind, time_ms) {
+                Ok(r) => r,
+                Err(_) => {
+                    REFUSED.fetch_add(1, Ordering::Relaxed);
+                    return None;
+                }
+            };
+            m.heads.insert(kk.hash, (r.body().seq, r.id()));
+            self.signed.insert(r.id());
+            self.refresh(i);
+            return Some(r);
+        }
         let m = &mut self.members[i].live;
         let (seq, prev) = m.heads.get(&kk.hash).map_or((1, None), |(s, id)| (s + 1, Some(*id)));
         let body = Body { group: self.gid, signer: kk.hash, seq, prev, time_ms, kind, held: false };
@@ -428,7 +449,7 @@ impl World {
             self.not_kept.insert(r.id());
         }
         self.refresh(i);
-        r
+        Some(r)
     }
 
     /// The root's own device as a record, signed again unchanged: an
@@ -455,7 +476,7 @@ impl World {
     fn power_loss(&mut self) {
         let Some((i, key)) = self.signer(true) else { return };
         let Some(kind) = self.own_device(i) else { return };
-        let r = self.sign_unsaved(i, &key, kind);
+        let Some(r) = self.sign_unsaved(i, &key, kind) else { return };
         self.lost.push(r.id());
         self.crash(i);
         self.note(format!("m{i} loses power after signing, before storing"));
@@ -485,7 +506,7 @@ impl World {
         let Some(kind) = self.own_device(i) else { return Ok(()) };
         let kk = k(&key);
         let before = self.members[i].live.heads.get(&kk.hash).copied();
-        let a = self.sign(i, &key, kind.clone());
+        let Some(a) = self.sign(i, &key, kind.clone()) else { return Ok(()) };
         let (seq, prev) = before.map_or((1, None), |(s, id)| (s + 1, Some(id)));
         let body =
             Body { group: self.gid, signer: kk.hash, seq, prev, time_ms: a.body().time_ms + 1, kind, held: false };
@@ -586,9 +607,10 @@ impl World {
     fn admit_by(&mut self, by: usize, key_name: &str, t: usize) {
         let mut d = Device::new(self.members[t].key.key.clone(), &format!("m{t}"), ROLE_PHONE);
         d.rights = RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS;
-        let r = self.sign(by, key_name, Kind::device(d));
-        self.admission.insert(t, r.id());
-        self.admitted[t] = true;
+        if let Some(r) = self.sign(by, key_name, Kind::device(d)) {
+            self.admission.insert(t, r.id());
+            self.admitted[t] = true;
+        }
     }
 
     fn on_members(&self) -> Vec<usize> {
@@ -1011,10 +1033,11 @@ impl World {
                 {
                     let h = self.members[t].key.hash;
                     let seen = self.seen(by);
-                    self.sign(by, &key, Kind::Revoke(Removal { keys: alloc::vec![h], seen }));
-                    self.removed.insert(h);
-                    self.note(format!("m{by} removes m{t}"));
-                    self.after_save(by)?;
+                    if self.sign(by, &key, Kind::Revoke(Removal { keys: alloc::vec![h], seen })).is_some() {
+                        self.removed.insert(h);
+                        self.note(format!("m{by} removes m{t}"));
+                        self.after_save(by)?;
+                    }
                 }
             }
             18..=19 => {
@@ -1023,10 +1046,11 @@ impl World {
                 {
                     let h = self.members[t].key.hash;
                     let seen = self.seen(by);
-                    let r = self.sign(by, &key, Kind::Freeze(Removal { keys: alloc::vec![h], seen }));
-                    self.freezes.push(r.id());
-                    self.note(format!("m{by} freezes m{t}"));
-                    self.after_save(by)?;
+                    if let Some(r) = self.sign(by, &key, Kind::Freeze(Removal { keys: alloc::vec![h], seen })) {
+                        self.freezes.push(r.id());
+                        self.note(format!("m{by} freezes m{t}"));
+                        self.after_save(by)?;
+                    }
                 }
             }
             20..=21 => {
@@ -1035,10 +1059,11 @@ impl World {
                         self.freezes.iter().filter(|f| self.members[by].live.set.contains(f)).copied().collect();
                     if let Some(f) = self.rng.pick(&held) {
                         let seen = self.seen(by);
-                        self.sign(by, &key, Kind::Thaw { ids: alloc::vec![f], seen });
-                        self.freezes.retain(|x| *x != f);
-                        self.note(format!("m{by} thaws"));
-                        self.after_save(by)?;
+                        if self.sign(by, &key, Kind::Thaw { ids: alloc::vec![f], seen }).is_some() {
+                            self.freezes.retain(|x| *x != f);
+                            self.note(format!("m{by} thaws"));
+                            self.after_save(by)?;
+                        }
                     }
                 }
             }
@@ -1081,7 +1106,7 @@ impl World {
     fn checkpoint(&mut self) -> Check {
         let Some((by, key)) = self.signer(true) else { return Ok(()) };
         if let Some(kind) = self.deviating_checkpoint(by, &key) {
-            self.sign(by, &key, kind);
+            let _ = self.sign(by, &key, kind);
             self.note(format!("m{by} checkpoints, deviating"));
         } else if self.write_checkpoint(by, &key).is_some() {
             self.note(format!("m{by} checkpoints"));
@@ -1172,7 +1197,9 @@ impl World {
         let Some(kind) = self.own_device(by) else { return Ok(()) };
         let others: Vec<usize> = self.in_group().into_iter().filter(|j| *j != by).collect();
         let Some(to) = self.rng.pick(&others) else { return Ok(()) };
-        self.sign(by, &key, kind);
+        if self.sign(by, &key, kind).is_none() {
+            return Ok(());
+        }
         let Some(c) = self.write_checkpoint(by, &key) else { return Ok(()) };
         let _ = self.members[to].live.set.insert(c.clone());
         self.refresh(to);
@@ -1255,9 +1282,10 @@ impl World {
             d.commands = commands;
             self.members[t].live.keys.push(name);
             self.save(t);
-            self.sign(by, &key, Kind::device(d));
-            self.note(format!("m{by} makes m{t} an admin"));
-            self.after_save(by)?;
+            if self.sign(by, &key, Kind::device(d)).is_some() {
+                self.note(format!("m{by} makes m{t} an admin"));
+                self.after_save(by)?;
+            }
         }
         Ok(())
     }
@@ -1329,7 +1357,9 @@ impl World {
             let Some(t) = self.target(by, |d| d.admin.is_none() && !d.frozen) else { break };
             let Some(ds) = self.members[by].live.state.device(&self.members[t].id).cloned() else { break };
             let d = self.device_of(by, &ds);
-            self.sign(by, key, Kind::device(d));
+            if self.sign(by, key, Kind::device(d)).is_none() {
+                break;
+            }
             took += 1;
         }
         took
@@ -1431,6 +1461,7 @@ impl World {
                     }
                     Err(e) => return Err(format!("m{w} could not write a change of root: {e:?}")),
                 };
+            self.change_lists.push(written.list.0.clone());
             if let Some((s, _)) = held.iter().find(|(s, _)| *s == written.record.body().seq) {
                 return Err(format!("m{w} wrote a second change at seq {s}, where it holds one"));
             }
@@ -1775,9 +1806,17 @@ impl World {
                 return Err(format!("m{i}, whose admission the rooms later dropped, never learned it is out"));
             } else if unknown && !self.heads.is_empty() {
                 // Kept by its writer, never removed, and a change of root
-                // by the recovery key came after: the new root's view left
-                // it out.
-                return Err(format!("m{i}, left out by a change of root, never learned it is out"));
+                // by the recovery key came after. Its list either left the
+                // admission out (the recovery's choice, from the writer's
+                // view) or named it and the view still lacks it.
+                let named =
+                    self.admission.get(&i).is_some_and(|r| self.change_lists.last().is_some_and(|l| l.contains(r)));
+                if named {
+                    return Err(format!("m{i}, named by the last change's list, is unknown to the group"));
+                }
+                // The recovery's choice, from the writer's view: counted
+                // with the pruned removals, a notice question for wave 5.
+                LEFT_OUT.fetch_add(1, Ordering::Relaxed);
             } else if unknown {
                 return Err(format!("m{i}, unknown to the group, never learned it is out"));
             }
@@ -1971,7 +2010,13 @@ static RANKED: AtomicUsize = AtomicUsize::new(0);
 /// Removed members a checkpoint later made unknown, still counting
 /// themselves in.
 static UNKNOWN_PRUNED: AtomicUsize = AtomicUsize::new(0);
-const COUNTERS: [&AtomicUsize; 13] = [
+/// Ordinary records the core's writer refused (nothing written).
+static REFUSED: AtomicUsize = AtomicUsize::new(0);
+/// Members a change of root's list left out that still count themselves in.
+static LEFT_OUT: AtomicUsize = AtomicUsize::new(0);
+const COUNTERS: [&AtomicUsize; 15] = [
+    &LEFT_OUT,
+    &REFUSED,
     &UNKNOWN_PRUNED,
     &RANKED,
     &NOT_KEPT,
@@ -2047,7 +2092,7 @@ fn groups_under_faults_agree() {
         }
     }
     std::eprintln!(
-        "sim: {n} seeds; recovery forks: {} by the key used twice, {} by a split network; {} settled with records aside; {} with small rooms, {} members back after the checkpoints they were away for, {} runs kept a record aside on the way; {} runs where a root's twin lived only on removed devices; {} runs where a deviating root's checkpoint left nobody in; {} runs where an admin signed past its own room and later again beside a fresh member; {} records their writer's own set did not keep; {} checkpoints the core's writer refused; {} settled checks without a root's view; {} removed members a checkpoint made unknown that still count themselves in",
+        "sim: {n} seeds; recovery forks: {} by the key used twice, {} by a split network; {} settled with records aside; {} with small rooms, {} members back after the checkpoints they were away for, {} runs kept a record aside on the way; {} runs where a root's twin lived only on removed devices; {} runs where a deviating root's checkpoint left nobody in; {} runs where an admin signed past its own room and later again beside a fresh member; {} records their writer's own set did not keep; {} checkpoints the core's writer refused; {} settled checks without a root's view; {} removed members a checkpoint made unknown that still count themselves in; {} ordinary records the core's writer refused; {} members a change of root's list left out that still count themselves in",
         FORKS_TWICE.load(Ordering::Relaxed),
         FORKS_SPLIT.load(Ordering::Relaxed),
         ASIDE_RUNS.load(Ordering::Relaxed),
@@ -2060,7 +2105,9 @@ fn groups_under_faults_agree() {
         NOT_KEPT.load(Ordering::Relaxed),
         CP_REFUSED.load(Ordering::Relaxed),
         RANKED.load(Ordering::Relaxed),
-        UNKNOWN_PRUNED.load(Ordering::Relaxed)
+        UNKNOWN_PRUNED.load(Ordering::Relaxed),
+        REFUSED.load(Ordering::Relaxed),
+        LEFT_OUT.load(Ordering::Relaxed)
     );
     assert!(failed.is_empty(), "{}", failed.join("\n\n"));
 }

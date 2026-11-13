@@ -26,7 +26,8 @@ set -eu
 
 # busy: whether another thread's simulator, build or emulator runs.
 busy() {
-	pgrep -f 'Simulator\.app|xcodebuild|qemu-system|/emulator/emulator' >/dev/null 2>&1
+	# Each word bracketed, so that one batch's pgrep never finds another's.
+	pgrep -f '[S]imulator\.app|[x]codebuild|[q]emu-system|/[e]mulator/emulator' >/dev/null 2>&1
 }
 
 case "${1:-}" in
@@ -51,7 +52,7 @@ if [ "${1:-}" = one ]; then
 	done
 	# shellcheck disable=SC2086 # the variables are split on purpose
 	env SIM_ALL=1 SIM_FIRST="$first" SIM_SEEDS=100 $(echo "$vars" | tr ',' ' ') \
-		nice -n 19 "$bin" sim::groups_under_faults_agree --exact >"$file.part" 2>&1 || true
+		nice -n 19 "$bin" sim::groups_under_faults_agree --exact --nocapture >"$file.part" 2>&1 || true
 	mv "$file.part" "$file"
 	exit 0
 fi
