@@ -399,6 +399,52 @@ fn refused(status: u64) -> Answer {
     Answer { status, retry: None, refused: true }
 }
 
+/// A binding was dropped: a first send to its token still on its way files
+/// under the clock and past the dropped generation, so that no challenge of
+/// the earlier life matches the binding made again.
+fn raise_held(st: &mut State, tok: &[u8; 32], dropped: u32, now: u64) {
+    if let Some(e) = st.first_born.get_mut(tok) {
+        e.0 = e.0.max(binding::clock_generation(now)).max(dropped.saturating_add(1));
+    }
+}
+
+/// Lets a first send's entry in `first_born` go and says the generation it
+/// held.
+fn let_go(st: &mut State, tok: &[u8; 32]) -> Option<u32> {
+    let e = st.first_born.get_mut(tok)?;
+    let g = e.0;
+    e.1 -= 1;
+    if e.1 == 0 {
+        st.first_born.remove(tok);
+    }
+    Some(g)
+}
+
+/// A first send's hold on its token's generation: let go under the lock
+/// when the send is back, or on drop when the platform's send unwinds.
+struct FirstHold<'a> {
+    inner: &'a Inner,
+    tok: [u8; 32],
+    held: bool,
+}
+
+impl FirstHold<'_> {
+    fn back(&mut self, st: &mut State) -> Option<u32> {
+        if !std::mem::take(&mut self.held) {
+            return None;
+        }
+        let_go(st, &self.tok)
+    }
+}
+
+impl Drop for FirstHold<'_> {
+    fn drop(&mut self) {
+        if self.held {
+            let_go(&mut self.inner.lock(), &self.tok);
+        }
+    }
+}
+
 impl Inner {
     fn lock(&self) -> std::sync::MutexGuard<'_, State> {
         self.state.lock().unwrap_or_else(|e| e.into_inner())
@@ -535,7 +581,7 @@ impl Inner {
             .as_ref()
             .is_none_or(|c| c.key != then.key || c.generation != then.generation || c.slots != then.slots);
         let payer = st.bindings.payer(&tok).unwrap_or(payer);
-        st.bindings.insert_keeping(
+        let dropped = st.bindings.insert_keeping(
             tok,
             then.clone(),
             payer,
@@ -543,6 +589,9 @@ impl Inner {
             Binding::confirmed,
             |b| b.used_ms,
         );
+        for (k, b) in dropped {
+            raise_held(st, &k, b.generation, now);
+        }
         st.dirty = true;
         if meaningful {
             st.ver += 1;
@@ -729,14 +778,8 @@ impl Inner {
             (plan, first)
         };
         let (plan, first) = plan;
-        let first_back = |st: &mut State| {
-            if first && let Some(e) = st.first_born.get_mut(&tok) {
-                e.1 -= 1;
-                if e.1 == 0 {
-                    st.first_born.remove(&tok);
-                }
-            }
-        };
+        // Let go when the send is back, or when the platform's send unwinds.
+        let mut hold = FirstHold { inner: self, tok, held: first };
         let hint = |v: [u8; 16]| {
             let mut k = [0u8; 8];
             k.copy_from_slice(&key[..8]);
@@ -757,7 +800,9 @@ impl Inner {
                 // the generation the challenge was made for stays.
                 let out = platform.send(&d);
                 let mut st = self.lock();
-                first_back(&mut st);
+                // A first send files under its token's generation as it is
+                // now: raised past a binding dropped while it was away.
+                let born = hold.back(&mut st).unwrap_or(born);
                 if out == Outcome::Sent
                     && let Some(a) = file
                     && st.bindings.get(&tok).is_none()
@@ -779,7 +824,7 @@ impl Inner {
                 let out = platform.send(&d);
                 let mut st = self.lock();
                 st.in_flight.remove(&repeat);
-                first_back(&mut st);
+                let born = hold.back(&mut st).unwrap_or(born);
                 match out {
                     Outcome::Sent => {
                         self.sent.fetch_add(1, Ordering::Relaxed);
@@ -791,7 +836,8 @@ impl Inner {
                         }
                     }
                     Outcome::Gone => {
-                        if st.bindings.remove(&tok).is_some() {
+                        if let Some(b) = st.bindings.remove(&tok) {
+                            raise_held(&mut st, &tok, b.generation, now);
                             st.dirty = true;
                             st.ver += 1;
                             let c = saved::change(st.ver, &tok, &payer, None);

@@ -39,12 +39,15 @@ struct Fake {
     answer: Mutex<Option<Outcome>>,
     /// How long it takes to answer.
     delay: Mutex<Duration>,
+    /// Its send panics, as a platform's code might.
+    panics: std::sync::atomic::AtomicBool,
 }
 
 impl Platform for Fake {
     fn send(&self, d: &Delivery<'_>) -> Outcome {
         let delay = *self.delay.lock().unwrap();
         std::thread::sleep(delay);
+        assert!(!self.panics.load(Ordering::SeqCst), "the platform's send failed");
         self.got.lock().unwrap().push(Got {
             env: d.env,
             token: d.token.to_vec(),
@@ -1440,6 +1443,65 @@ fn two_first_sends_in_flight_together_carry_one_generation() {
     let r = S { challenge: Some(ch), ..s(&phone, push::ENV_APNS, &token, t0 + 1) }.send(&mut c2, &body(3));
     assert_eq!(r.status, push::SENT);
     assert_eq!(confirmed(&w, &token), Some(true), "the challenge the phone got last confirmed nothing");
+    w.service.stop();
+}
+
+/// A first send still on its way while its token's binding is filed by
+/// another, confirmed and dropped: the binding made again afterwards starts
+/// past the dropped one, so no challenge of the earlier life matches it.
+#[test]
+fn a_binding_made_again_while_a_first_send_is_away_takes_no_challenge_of_its_earlier_life() {
+    let w = world(Budgets::default());
+    let (phone, token) = (send_key(3), [71u8; 32]);
+    let t0 = now_seq(0);
+    let mut b = conn(&w, 2, 2);
+    *w.fake.delay.lock().unwrap() = Duration::from_millis(2700);
+    let held = {
+        let mut a = conn(&w, 1, 1);
+        let k = send_key(3);
+        std::thread::spawn(move || send(&mut a, &k, push::ENV_APNS, &token, t0, &body(1)).status)
+    };
+    std::thread::sleep(Duration::from_millis(300));
+    *w.fake.delay.lock().unwrap() = Duration::ZERO;
+    let other = [2u8; 16];
+    // Another first send files the binding; the phone confirms over its challenge.
+    assert_eq!(S { slot: other, ..s(&phone, push::ENV_APNS, &token, t0) }.send(&mut b, &body(2)).status, push::SENT);
+    let spent = challenge_for(&w, &token, hint_of(&phone)).unwrap();
+    let r =
+        S { slot: other, challenge: Some(spent), ..s(&phone, push::ENV_APNS, &token, t0 + 1) }.send(&mut b, &body(3));
+    assert_eq!(r.status, push::SENT);
+    assert_eq!(confirmed(&w, &token), Some(true));
+    // The platform says gone once: the binding is dropped.
+    *w.fake.answer.lock().unwrap() = Some(Outcome::Gone);
+    let _ = S { slot: other, ..s(&phone, push::ENV_APNS, &token, t0 + 2) }.send(&mut b, &body(4));
+    *w.fake.answer.lock().unwrap() = None;
+    assert_eq!(confirmed(&w, &token), None);
+    std::thread::sleep(Duration::from_millis(1500));
+    // The token's next life, the first send of the earlier one still away.
+    let _ = S { slot: other, ..s(&phone, push::ENV_APNS, &token, t0 + 3) }.send(&mut b, &body(5));
+    assert_ne!(challenge_for(&w, &token, hint_of(&phone)), Some(spent), "the new life's challenge is the spent one");
+    let _ =
+        S { slot: other, challenge: Some(spent), ..s(&phone, push::ENV_APNS, &token, t0 + 4) }.send(&mut b, &body(6));
+    assert_ne!(confirmed(&w, &token), Some(true), "a challenge of the earlier life confirmed the binding made again");
+    let _ = held.join().unwrap();
+    assert!(w.service.inner.lock().first_born.is_empty());
+    w.service.stop();
+}
+
+/// A platform's send that panics still lets its first send's hold on the
+/// token's generation go.
+#[test]
+fn a_first_send_whose_platform_panics_holds_no_generation() {
+    let w = world(Budgets::default());
+    let (phone, token) = (send_key(3), [72u8; 32]);
+    w.fake.panics.store(true, Ordering::SeqCst);
+    let mut c = conn(&w, 1, 1);
+    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        s(&phone, push::ENV_APNS, &token, now_seq(0)).send(&mut c, &body(1))
+    }));
+    assert!(r.is_err(), "the connection's send failed with the platform");
+    assert!(wait_for(|| w.service.inner.lock().first_born.is_empty()), "the hold outlived the send");
+    w.fake.panics.store(false, Ordering::SeqCst);
     w.service.stop();
 }
 

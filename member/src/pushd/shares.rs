@@ -74,11 +74,9 @@ impl<V> Shared<V> {
 
     /// Drops the entries `stale` says are past their life, when the table
     /// is full.
-    pub(super) fn prune(&mut self, stale: impl Fn(&V) -> bool) {
+    pub(super) fn prune(&mut self, stale: impl Fn(&V) -> bool) -> Vec<([u8; 32], V)> {
         let gone: Vec<[u8; 32]> = self.map.iter().filter(|(_, e)| stale(&e.v)).map(|(k, _)| *k).collect();
-        for k in gone {
-            self.remove(&k);
-        }
+        gone.into_iter().filter_map(|k| self.remove(&k).map(|v| (k, v))).collect()
     }
 
     /// Files `v` under `k`: an entry already there keeps its payer; a new
@@ -90,6 +88,7 @@ impl<V> Shared<V> {
     /// As `insert`, and when room is made the payer that gives way loses
     /// an entry `keep` does not hold to before one it does (its oldest),
     /// and of those it holds to, the one `used` says was used longest ago.
+    /// Returns the entries dropped to make room.
     pub(super) fn insert_keeping(
         &mut self,
         k: [u8; 32],
@@ -98,16 +97,17 @@ impl<V> Shared<V> {
         stale: impl Fn(&V) -> bool,
         keep: impl Fn(&V) -> bool,
         used: impl Fn(&V) -> u64,
-    ) {
+    ) -> Vec<([u8; 32], V)> {
+        let mut dropped = Vec::new();
         if let Some(e) = self.map.get_mut(&k) {
             e.v = v;
-            return;
+            return dropped;
         }
         if self.map.len() >= self.cap {
-            self.prune(stale);
+            dropped = self.prune(stale);
         }
         while self.map.len() >= self.cap.max(1) {
-            if !self.evict_one(&keep, &used) {
+            if !self.evict_one(&keep, &used, &mut dropped) {
                 break;
             }
         }
@@ -122,12 +122,18 @@ impl<V> Shared<V> {
             let map = &self.map;
             q.retain(|(k, s)| map.get(k).is_some_and(|e| e.serial == *s));
         }
+        dropped
     }
 
     /// Drops an entry of the payer with the most entries: its oldest that
     /// `keep` does not hold to, else the one `used` says was used longest
     /// ago (the oldest among equals).
-    fn evict_one(&mut self, keep: &dyn Fn(&V) -> bool, used: &dyn Fn(&V) -> u64) -> bool {
+    fn evict_one(
+        &mut self,
+        keep: &dyn Fn(&V) -> bool,
+        used: &dyn Fn(&V) -> u64,
+        dropped: &mut Vec<([u8; 32], V)>,
+    ) -> bool {
         let Some(payer) = self.counts.iter().max_by_key(|(p, n)| (**n, **p)).map(|(p, _)| *p) else { return false };
         let loose = self.order.get(&payer).and_then(|q| {
             q.iter()
@@ -135,7 +141,7 @@ impl<V> Shared<V> {
                 .map(|(k, _)| *k)
         });
         if let Some(k) = loose {
-            self.remove(&k);
+            dropped.extend(self.remove(&k).map(|v| (k, v)));
             return true;
         }
         let idle = self.order.get(&payer).and_then(|q| {
@@ -147,12 +153,12 @@ impl<V> Shared<V> {
                 .map(|(_, _, k)| k)
         });
         if let Some(k) = idle {
-            self.remove(&k);
+            dropped.extend(self.remove(&k).map(|v| (k, v)));
             return true;
         }
         while let Some((k, s)) = self.order.get_mut(&payer).and_then(VecDeque::pop_front) {
             if self.map.get(&k).is_some_and(|e| e.serial == s && e.payer == payer) {
-                self.remove(&k);
+                dropped.extend(self.remove(&k).map(|v| (k, v)));
                 return true;
             }
         }
