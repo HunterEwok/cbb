@@ -2232,7 +2232,17 @@ impl World {
                 if by_removed {
                     return Err(format!("m{i}, admitted by an admin the group removed, never learned it is out"));
                 }
-                return Err(format!("m{i}, unknown to the group, never learned it is out"));
+                // Held by the reference but not counting: say why.
+                let why = self
+                    .admission
+                    .get(&i)
+                    .filter(|r| self.members[at].live.set.get(r).is_some())
+                    .map(|r| match state.ignored.iter().find(|x| x.record == *r) {
+                        Some(x) => format!(" (its admission is held and ignored: {:?})", x.why),
+                        None => " (its admission is held, neither counting nor listed as ignored)".into(),
+                    })
+                    .unwrap_or_default();
+                return Err(format!("m{i}, unknown to the group, never learned it is out{why}"));
             }
         }
         for i in 0..self.members.len() {
