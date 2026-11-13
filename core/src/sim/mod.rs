@@ -238,6 +238,10 @@ struct World {
     /// member and its key, and the stage: 1 flooded, 2 more records of that
     /// key and a fresh member after it.
     flood: Option<(usize, String, u8)>,
+    /// Records their writer's own set did not keep.
+    not_kept: BTreeSet<RecordId>,
+    /// Each member's last admission record.
+    admission: BTreeMap<usize, RecordId>,
     log: Vec<String>,
 }
 
@@ -349,6 +353,8 @@ impl World {
             gone: None,
             deviated: false,
             flood: None,
+            not_kept: BTreeSet::new(),
+            admission: BTreeMap::new(),
             log: Vec::new(),
         };
         // The root's phone is member 0; it admits a first few.
@@ -419,6 +425,7 @@ impl World {
         // A record its writer's own set does not keep never leaves it.
         if !m.set.contains(&r.id()) {
             NOT_KEPT.fetch_add(1, Ordering::Relaxed);
+            self.not_kept.insert(r.id());
         }
         self.refresh(i);
         r
@@ -579,7 +586,8 @@ impl World {
     fn admit_by(&mut self, by: usize, key_name: &str, t: usize) {
         let mut d = Device::new(self.members[t].key.key.clone(), &format!("m{t}"), ROLE_PHONE);
         d.rights = RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS;
-        self.sign(by, key_name, Kind::device(d));
+        let r = self.sign(by, key_name, Kind::device(d));
+        self.admission.insert(t, r.id());
         self.admitted[t] = true;
     }
 
@@ -1629,13 +1637,16 @@ impl World {
                     self.twin_pairs.iter().any(|(x, y, h)| (x, y) == (a, b) && m.live.state.roots.last() != Some(h));
                 let (ha, hb) = (m.live.set.contains(a), m.live.set.contains(b));
                 if ha != hb && !ended && !self.is_gone(i) && m.live.state.device_by_key(&m.key.hash).is_some() {
-                    // A head that only removed devices hold makes no split:
-                    // a removed device is never handed the pair; nor one that
-                    // only a root lost for good held. Counted, as
+                    // A head that only devices out of m's view hold makes no
+                    // split: a removed device, or one whose removal a
+                    // checkpoint pruned with its admission, is never handed
+                    // the pair; nor one that only a root lost for good held. Counted, as
                     // the evidence dies there.
                     let other = if ha { b } else { a };
                     let removed_only = self.members.iter().enumerate().all(|(k, x)| {
-                        !x.live.set.contains(other) || m.live.state.revoked.contains(&x.key.hash) || self.is_gone(k)
+                        !x.live.set.contains(other)
+                            || m.live.state.device_by_key(&x.key.hash).is_none()
+                            || self.is_gone(k)
                     });
                     if removed_only {
                         evidence_lost = true;
@@ -1745,7 +1756,29 @@ impl World {
                 && !self.is_gone(i)
                 && self.admitted[i]
                 && m.live.state.device_by_key(&m.key.hash).is_some();
-            if unknown {
+            // Its admission was signed and its writer's own set never kept
+            // it (the writer class, until the core's write_record).
+            let never_kept = self.admission.get(&i).is_some_and(|r| self.not_kept.contains(r));
+            if unknown && never_kept {
+                return Err(format!("m{i}, whose admission the group never kept, never learned it is out"));
+            } else if unknown && self.removed.contains(&m.key.hash) {
+                // Removed, and a checkpoint later pruned the removal with
+                // its admission (the rules allow it): it is unknown, never
+                // told. Counted; whether it gets a notice is wave 5's.
+                UNKNOWN_PRUNED.fetch_add(1, Ordering::Relaxed);
+            } else if unknown
+                && self.admission.get(&i).is_some_and(|r| !self.members[at].live.set.contains(r))
+                && self.heads.is_empty()
+            {
+                // Kept when signed, never removed, and later dropped from
+                // the root's own set by its rooms filling up.
+                return Err(format!("m{i}, whose admission the rooms later dropped, never learned it is out"));
+            } else if unknown && !self.heads.is_empty() {
+                // Kept by its writer, never removed, and a change of root
+                // by the recovery key came after: the new root's view left
+                // it out.
+                return Err(format!("m{i}, left out by a change of root, never learned it is out"));
+            } else if unknown {
                 return Err(format!("m{i}, unknown to the group, never learned it is out"));
             }
         }
@@ -1935,7 +1968,11 @@ static NOT_KEPT: AtomicUsize = AtomicUsize::new(0);
 static CP_REFUSED: AtomicUsize = AtomicUsize::new(0);
 /// Settled checks without a root's view to compare with (the sets ranked).
 static RANKED: AtomicUsize = AtomicUsize::new(0);
-const COUNTERS: [&AtomicUsize; 12] = [
+/// Removed members a checkpoint later made unknown, still counting
+/// themselves in.
+static UNKNOWN_PRUNED: AtomicUsize = AtomicUsize::new(0);
+const COUNTERS: [&AtomicUsize; 13] = [
+    &UNKNOWN_PRUNED,
     &RANKED,
     &NOT_KEPT,
     &CP_REFUSED,
@@ -2010,7 +2047,7 @@ fn groups_under_faults_agree() {
         }
     }
     std::eprintln!(
-        "sim: {n} seeds; recovery forks: {} by the key used twice, {} by a split network; {} settled with records aside; {} with small rooms, {} members back after the checkpoints they were away for, {} runs kept a record aside on the way; {} runs where a root's twin lived only on removed devices; {} runs where a deviating root's checkpoint left nobody in; {} runs where an admin signed past its own room and later again beside a fresh member; {} records their writer's own set did not keep; {} checkpoints the core's writer refused; {} settled checks without a root's view",
+        "sim: {n} seeds; recovery forks: {} by the key used twice, {} by a split network; {} settled with records aside; {} with small rooms, {} members back after the checkpoints they were away for, {} runs kept a record aside on the way; {} runs where a root's twin lived only on removed devices; {} runs where a deviating root's checkpoint left nobody in; {} runs where an admin signed past its own room and later again beside a fresh member; {} records their writer's own set did not keep; {} checkpoints the core's writer refused; {} settled checks without a root's view; {} removed members a checkpoint made unknown that still count themselves in",
         FORKS_TWICE.load(Ordering::Relaxed),
         FORKS_SPLIT.load(Ordering::Relaxed),
         ASIDE_RUNS.load(Ordering::Relaxed),
@@ -2022,7 +2059,8 @@ fn groups_under_faults_agree() {
         CUT_SHAPE.load(Ordering::Relaxed),
         NOT_KEPT.load(Ordering::Relaxed),
         CP_REFUSED.load(Ordering::Relaxed),
-        RANKED.load(Ordering::Relaxed)
+        RANKED.load(Ordering::Relaxed),
+        UNKNOWN_PRUNED.load(Ordering::Relaxed)
     );
     assert!(failed.is_empty(), "{}", failed.join("\n\n"));
 }
