@@ -204,6 +204,7 @@ struct PadDevices: View {
     @AppStorage(DeviceLayout.wideKey) private var layout = DeviceLayout.tiles
     @State private var query = ""
     @FocusState private var focused: Bool
+    @State private var diagKeys = ""
     /// Whether something dragged from another app is over the devices.
     @State private var dropping = false
     /// The card's width, as the text size grows.
@@ -262,7 +263,17 @@ struct PadDevices: View {
             return .handled
         }
         .onAppear { focused = true }
+        .onKeyPress(phases: .down) { press in
+            DiagEscape.log.append("swiftui:\(press.key.character.unicodeScalars.map { String($0.value) }.joined(separator: "+"))")
+            return .ignored
+        }
         .background(DiagEscape())
+        .overlay(alignment: .bottomLeading) {
+            if DiagEscape.on {
+                Text(verbatim: diagKeys).font(.caption2).accessibilityIdentifier("padDiagKeys")
+                    .onReceive(Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()) { _ in diagKeys = DiagEscape.log.joined(separator: " ") }
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: DiagEscape.pressed)) { _ in selected = nil }
     }
 
@@ -489,6 +500,8 @@ extension View {
 // with priority over the system's on the window's root view controller.
 struct DiagEscape: UIViewRepresentable {
     static let pressed = Notification.Name("cbbDiagEscape")
+    nonisolated(unsafe) static var log: [String] = []
+    static var on: Bool { UserDefaults.standard.string(forKey: "padDiag") != nil }
     func makeUIView(context: Context) -> DiagEscapeView { DiagEscapeView() }
     func updateUIView(_ uiView: DiagEscapeView, context: Context) {}
 }
@@ -496,15 +509,24 @@ struct DiagEscape: UIViewRepresentable {
 final class DiagEscapeView: UIView {
     override func didMoveToWindow() {
         super.didMoveToWindow()
-        guard (UserDefaults.standard.string(forKey: "padDiag") ?? "").contains("uikit"),
-              let root = window?.rootViewController,
-              !(root.keyCommands ?? []).contains(where: { $0.input == UIKeyCommand.inputEscape }) else { return }
+        guard DiagEscape.on, let root = window?.rootViewController else { return }
+        DiagEscape.log.append("root:\(type(of: root)) cmds:\((root.keyCommands ?? []).map { $0.input ?? "?" }.map { $0.unicodeScalars.map { String($0.value) }.joined() }.joined(separator: ","))")
+        guard (UserDefaults.standard.string(forKey: "padDiag") ?? "").contains("uikit") else { return }
         let c = UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(UIViewController.cbbDiagEscape))
         c.wantsPriorityOverSystemBehavior = true
         root.addKeyCommand(c)
+        DiagEscape.log.append("installed")
+    }
+
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        DiagEscape.log.append("viewpress")
+        super.pressesBegan(presses, with: event)
     }
 }
 
 extension UIViewController {
-    @objc func cbbDiagEscape() { NotificationCenter.default.post(name: DiagEscape.pressed, object: nil) }
+    @objc func cbbDiagEscape() {
+        DiagEscape.log.append("uikit-fired:\(type(of: self))")
+        NotificationCenter.default.post(name: DiagEscape.pressed, object: nil)
+    }
 }

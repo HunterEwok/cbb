@@ -137,7 +137,9 @@ final class PadUITests: XCTestCase {
                 app.typeKey(.escape, modifierFlags: [])
                 tapEscape = app.buttons["Close"].waitForNonExistence(timeout: 5)
             }
-            print("PADDIAG \(variant): arrow=\(arrow) escape=\(escape) escapeAfterTap=\(tapEscape)")
+            Thread.sleep(forTimeInterval: 1)
+            let keys = app.staticTexts["padDiagKeys"]
+            print("PADDIAG \(variant): arrow=\(arrow) escape=\(escape) escapeAfterTap=\(tapEscape) log=[\(keys.exists ? keys.label : "no log")]")
             app.terminate()
         }
     }
