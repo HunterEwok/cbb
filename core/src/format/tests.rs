@@ -1026,7 +1026,7 @@ fn a_guarded_leaf_waits_to_be_bound_again_after_a_change_of_root() {
         let v = cbor::decode(msg).unwrap();
         grant::read(&v, &by.key.public, &lock, &group, kept, recovery).map(|got| got.keep(kept))
     };
-    let bound = |msg: &[u8], by: &crate::testkit::K, kept: Option<&grant::Kept>, recovery, b: &grant::Binding| {
+    let bound = |msg: &[u8], by: &crate::testkit::K, kept: Option<&grant::Kept>, recovery, b: grant::Binding| {
         let v = cbor::decode(msg).unwrap();
         grant::read_bound(&v, &by.key.public, &lock, &group, kept, recovery, b).map(|got| got.keep(kept))
     };
@@ -1053,27 +1053,39 @@ fn a_guarded_leaf_waits_to_be_bound_again_after_a_change_of_root() {
     let later = waiting.changed(k("third root").hash, 2);
     assert_eq!(later.rebind, Some((k("third root").hash, 2)));
     assert_eq!(later.changed(new_root.hash, 1), later, "an older head changes nothing");
-    let late = grant::Binding::at_code_step(&later, lock).unwrap();
-    assert!(bound(&grant_msg(&new_root, 1, 1, true), &new_root, Some(&later), 1, &late).is_err());
+    let late = grant::Binding::matched(&later, None, lock).unwrap();
+    assert!(bound(&grant_msg(&new_root, 1, 1, true), &new_root, Some(&later), 1, late).is_err());
     // A binding is made from what the leaf knows: none for a leaf that
     // waits for nothing; another leaf's session, or a grant of another
     // root than the head named, does nothing.
     let msg = grant_msg(&new_root, 1, 1, true);
-    assert!(grant::Binding::at_code_step(&kept, lock).is_none());
-    let elsewhere = grant::Binding::at_code_step(&waiting, k("other lock").key.device_id()).unwrap();
-    assert_eq!(bound(&msg, &new_root, Some(&waiting), 1, &elsewhere), Err(grant::RULE_REBIND));
-    let binding = grant::Binding::at_code_step(&waiting, lock).unwrap();
+    assert!(grant::Binding::matched(&kept, None, lock).is_none());
+    let elsewhere = grant::Binding::matched(&waiting, None, k("other lock").key.device_id()).unwrap();
+    assert_eq!(bound(&msg, &new_root, Some(&waiting), 1, elsewhere), Err(grant::RULE_REBIND));
+    let binding = || grant::Binding::matched(&waiting, None, lock).unwrap();
     let thief = k("thief");
-    assert_eq!(bound(&grant_msg(&thief, 1, 1, true), &thief, Some(&waiting), 1, &binding), Err(grant::RULE_REBIND));
+    assert_eq!(bound(&grant_msg(&thief, 1, 1, true), &thief, Some(&waiting), 1, binding()), Err(grant::RULE_REBIND));
     // The binding by code takes the new root's guarded grant, afresh.
-    let rebound = bound(&msg, &new_root, Some(&waiting), 1, &binding).unwrap();
+    let rebound = bound(&msg, &new_root, Some(&waiting), 1, binding()).unwrap();
     assert!(rebound.rebind.is_none() && rebound.guarded && rebound.recovery == 1 && rebound.root_counter == 1);
     assert!(rebound.commander(&phone.hash()).is_some() && !rebound.needs_rebind(1));
     // Not a grant without `guarded`.
     assert_eq!(
-        bound(&grant_msg(&new_root, 1, 1, false), &new_root, Some(&waiting), 1, &binding),
+        bound(&grant_msg(&new_root, 1, 1, false), &new_root, Some(&waiting), 1, binding()),
         Err(grant::RULE_GUARDED)
     );
+    // One binding reads one grant: it is taken by value. A binding made
+    // while the lock waited for one root clears nothing once it waits for a
+    // later one, whatever root and seq the caller passes with it.
+    let early = binding();
+    assert_eq!(bound(&msg, &new_root, Some(&later), 1, early), Err(grant::RULE_REBIND));
+    // A head stored without the kept state that should follow it: the
+    // binding is made from the head and the grant is taken.
+    let head = Some((new_root.hash, 1));
+    let from_head = grant::Binding::matched(&kept, head, lock).unwrap();
+    assert_eq!(kept.start(head), waiting);
+    let rebound2 = bound(&msg, &new_root, Some(&kept), 1, from_head).unwrap();
+    assert_eq!(rebound2, rebound);
     // Then the new root's later grants come as usual.
     assert!(read(&grant_msg(&new_root, 2, 1, true), &new_root, Some(&rebound), 1).is_ok());
 
@@ -1081,10 +1093,10 @@ fn a_guarded_leaf_waits_to_be_bound_again_after_a_change_of_root() {
     let again = rebound.changed(new_root.hash, 2);
     assert!(again.rebind.is_some());
     assert!(read(&grant_msg(&new_root, 3, 1, true), &new_root, Some(&again), 2).is_err());
-    assert!(bound(&msg, &new_root, Some(&again), 2, &binding).is_err());
+    assert!(bound(&msg, &new_root, Some(&again), 2, binding()).is_err());
     assert!(read(&grant_msg(&new_root, 3, 2, true), &new_root, Some(&again), 2).is_err());
-    let binding2 = grant::Binding::at_code_step(&again, lock).unwrap();
-    assert!(bound(&grant_msg(&new_root, 1, 2, true), &new_root, Some(&again), 2, &binding2).is_ok());
+    let binding2 = grant::Binding::matched(&again, None, lock).unwrap();
+    assert!(bound(&grant_msg(&new_root, 1, 2, true), &new_root, Some(&again), 2, binding2).is_ok());
 
     // An ordinary leaf follows the change: the new root's grant is taken.
     let plain = read(&grant_msg(&root, 1, 0, false), &root, None, 0).unwrap();
@@ -1092,4 +1104,75 @@ fn a_guarded_leaf_waits_to_be_bound_again_after_a_change_of_root() {
     assert_eq!(after, plain);
     assert!(!after.needs_rebind(1));
     assert!(read(&grant_msg(&new_root, 1, 1, false), &new_root, Some(&after), 1).is_ok());
+}
+
+/// A leaf's stored state reads back as it was written, in one spelling;
+/// a later version's fields are kept and written back, an unknown field
+/// below 256 is refused, and the reader gives the kept state only with the
+/// stored head applied.
+#[test]
+fn a_leafs_stored_state_reads_back_in_one_spelling() {
+    use crate::testkit::k;
+    use grant::{Kept, Stored};
+    let phone = k("phone");
+    let point: [u8; 65] = phone.key.public.clone().try_into().unwrap();
+    let mut commanders = vec![(phone.hash, point), {
+        let p: [u8; 65] = k("tablet").key.public.clone().try_into().unwrap();
+        (k("tablet").hash, p)
+    }];
+    commanders.sort_by_key(|c| c.0);
+    let full = Kept {
+        guarded: true,
+        root_counter: 3,
+        admin_counter: 2,
+        commanders: commanders.clone(),
+        grant_hash: [5; 32],
+        recovery: 1,
+        forked: false,
+        rebind: None,
+    };
+    for (kept, head) in [
+        (Kept::default(), None),
+        (full.clone(), None),
+        (full.clone(), Some((k("new root").hash, 2))),
+        (full.changed(k("new root").hash, 2), Some((k("new root").hash, 2))),
+        (full.fork(1), Some((k("root").hash, 1))),
+    ] {
+        let s = Stored::new(kept.clone(), head, None);
+        let back = Stored::decode(&s.encode()).unwrap();
+        assert_eq!(back, s);
+        assert_eq!(back.start(), (kept.start(head), head.map_or(kept.recovery, |h| h.1.max(kept.recovery))));
+    }
+    // The stored head applies at the start: the kept grant is over.
+    let (started, recovery) = Stored::new(full.clone(), Some((k("new root").hash, 2)), None).start();
+    assert!(started.commanders.is_empty() && started.needs_rebind(recovery) && recovery == 2);
+
+    let bytes = Stored::new(full.clone(), None, None).encode();
+    let v = cbor::decode(&bytes).unwrap();
+    let with = |extra: Vec<(u16, Value<'_>)>| {
+        let mut m = v.as_map().unwrap().to_vec();
+        m.extend(extra);
+        m.sort_by_key(|(n, _)| *n);
+        Value::Map(m).encode()
+    };
+    // A later version's field is kept and written back.
+    let later = with(vec![(300, Value::Text("later"))]);
+    let s = Stored::decode(&later).unwrap();
+    assert_eq!(s.encode(), later);
+    assert_eq!(Stored::new(Kept::default(), None, Some(&s)).encode(), {
+        let m = vec![(1u16, Value::Uint(1)), (300, Value::Text("later"))];
+        Value::Map(m).encode()
+    });
+    // An unknown field below 256, another version, a default written out,
+    // commanders out of order or with a hash of another key: refused.
+    assert_eq!(Stored::decode(&with(vec![(11, Value::Uint(1))])), Err(Rule::FORM_CRITICAL));
+    let other_version = Value::Map(vec![(1, Value::Uint(2))]).encode();
+    assert_eq!(Stored::decode(&other_version), Err(grant::RULE_STATE));
+    let zero = Value::Map(vec![(1, Value::Uint(1)), (3, Value::Uint(0))]).encode();
+    assert_eq!(Stored::decode(&zero), Err(Rule::FORM_DEFAULT));
+    let swapped = Kept { commanders: commanders.iter().rev().cloned().collect(), ..full.clone() };
+    assert_eq!(Stored::decode(&Stored::new(swapped, None, None).encode()), Err(grant::RULE_STATE));
+    let wrong = Kept { commanders: vec![(k("tablet").hash, point)], ..full.clone() };
+    assert_eq!(Stored::decode(&Stored::new(wrong, None, None).encode()), Err(grant::RULE_STATE));
+    assert_eq!(Stored::decode(&[0xa0]), Err(grant::RULE_STATE));
 }

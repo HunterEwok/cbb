@@ -33,6 +33,9 @@ pub enum Ty {
     Flag,
     /// Bytes of exactly this length.
     Bytes(usize),
+    /// An ID: bytes of exactly this length, not all zero (the zero ID is
+    /// "none", which a message says by leaving the field out).
+    Id(usize),
     /// Bytes of 1 to this many.
     BytesUpTo(usize),
     /// Text of 1 to this many bytes, no control character.
@@ -92,6 +95,11 @@ fn check_ty(f: &Field, v: &Value<'_>) -> Result<(), Rule> {
                 return Err(bad());
             }
         }
+        Ty::Id(n) => {
+            if v.as_bytes().is_none_or(|b| b.len() != n || b.iter().all(|&x| x == 0)) {
+                return Err(bad());
+            }
+        }
         Ty::BytesUpTo(n) => {
             let b = v.as_bytes().ok_or_else(bad)?;
             if b.is_empty() || b.len() > n {
@@ -142,7 +150,7 @@ fn check_ty(f: &Field, v: &Value<'_>) -> Result<(), Rule> {
 
 impl Ty {
     /// The type as the vectors' tables and the format document write it:
-    /// `uint 0..65535`, `flag`, `bytes 32`, `bytes 1..64`, `text 1..64`,
+    /// `uint 0..65535`, `flag`, `bytes 32`, `id 16`, `bytes 1..64`, `text 1..64`,
     /// `addr`, `key 3`, `envelope`, `array 1..8 of addr`, `once …`,
     /// `set …`, `map offer`.
     pub fn describe(&self) -> alloc::string::String {
@@ -151,6 +159,7 @@ impl Ty {
             Ty::Uint { min, max } => format!("uint {min}..{max}"),
             Ty::Flag => "flag".into(),
             Ty::Bytes(n) => format!("bytes {n}"),
+            Ty::Id(n) => format!("id {n}"),
             Ty::BytesUpTo(n) => format!("bytes 1..{n}"),
             Ty::Text(n) => format!("text 1..{n}"),
             Ty::Addr => "addr".into(),

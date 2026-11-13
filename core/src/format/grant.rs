@@ -29,8 +29,18 @@
 //! bound again in person, by code, by the new root ([`Kept::changed`],
 //! [`read_bound`]): [`read`] takes no grant for it, the new root's
 //! included, and a kept grant made under a lower recovery seq than the one
-//! the leaf knows means the same, whatever the leaf remembers. An ordinary
-//! leaf follows a change of root: it takes the new root's grant.
+//! the leaf knows means the same, whatever the leaf remembers: it takes
+//! no command either (`commands::accept_leaf` asks [`Kept::needs_rebind`]
+//! of the recovery seq the leaf knows). An ordinary leaf follows a change
+//! of root: it takes the new root's grant.
+//!
+//! A leaf stores the newest recovery head it verified apart from its kept
+//! state, so a power cut between the two writes can leave a head newer than
+//! the kept state. At every start, before it reads a grant or a command,
+//! it calls [`Kept::start`] with that head; and since a leaf that skips it
+//! must still neither obey nor be stuck, the commands ask the recovery seq
+//! itself, and a binding ([`Binding`]) and [`read_bound`] apply the head
+//! themselves.
 //!
 //! Two different records signed by the root the leaf keeps at one seq are
 //! a fork of that root (records rule 9): the leaf takes the pair from
@@ -39,7 +49,7 @@
 
 use alloc::vec::Vec;
 
-use super::cbor::{Value, is_set};
+use super::cbor::{self, Value, is_set};
 use super::envelope::Envelope;
 use super::key::{Alg, DeviceId, GroupId, Key, KeyHash};
 use super::{Rule, sha256, sig};
@@ -202,6 +212,16 @@ impl Kept {
         Kept { guarded: true, recovery: self.recovery, rebind: Some((root, recovery)), ..Kept::default() }
     }
 
+    /// The leaf's state at a start, from what it stored: its kept state and
+    /// the newest recovery head it verified, the head's new root key hash
+    /// and recovery seq (none before any change of root). It is
+    /// [`Kept::changed`] by that head, so a head stored without the kept
+    /// state that should have followed it counts all the same. A leaf calls
+    /// it at every start, before it reads anything.
+    pub fn start(&self, head: Option<(KeyHash, u64)>) -> Kept {
+        head.map_or_else(|| self.clone(), |(root, recovery)| self.changed(root, recovery))
+    }
+
     /// Whether the leaf, knowing `recovery` as the newest recovery seq,
     /// waits to be bound again in person: it is guarded and took a change
     /// of root, or keeps a grant made under a lower seq. The second needs
@@ -215,6 +235,164 @@ impl Kept {
     /// grant.
     pub fn commander(&self, hash: &KeyHash) -> Option<&[u8; 65]> {
         self.commanders.iter().find(|(h, _)| h == hash).map(|(_, p)| p)
+    }
+}
+
+/// A malformed stored leaf state ([`Stored::decode`]): not a map of the
+/// fields below in their one spelling, another version, or a critical
+/// field this version does not know.
+pub const RULE_STATE: Rule = Rule::field("grants/state");
+
+/// The version of the stored leaf state's encoding.
+pub const STATE_VERSION: u64 = 1;
+
+/// What a leaf stores across restarts, in one write: its kept state and the
+/// newest recovery head it verified (the head's new root key hash and
+/// recovery seq). Its one reader is [`Stored::start`], which applies the
+/// head ([`Kept::start`]), so a leaf cannot take the kept state without it.
+///
+/// The bytes ([`Stored::encode`]) are a canonical CBOR map, every field in
+/// its one spelling (a default is left out): 1 the version (1), 2 guarded
+/// (flag), 3 the root counter, 4 the admin counter, 5 the commanders
+/// (`[key hash, point]` sorted by key hash, at most eight), 6 the grant's
+/// hash (bytes 32), 7 the recovery seq of the grant, 8 forked (flag), 9 the
+/// wait to be bound again (`[root key hash, recovery seq]`), 10 the newest
+/// head (`[root key hash, recovery seq]`). Fields from 256 on are a later
+/// version's: kept as they are and written back; another field below 256
+/// is refused.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Stored {
+    kept: Kept,
+    head: Option<(KeyHash, u64)>,
+    later: Vec<(u16, Vec<u8>)>,
+}
+
+impl Stored {
+    /// What the leaf stores once it took `kept`, knowing `head` as the
+    /// newest recovery head; a later version's fields of `before` stay.
+    pub fn new(kept: Kept, head: Option<(KeyHash, u64)>, before: Option<&Stored>) -> Stored {
+        Stored { kept, head, later: before.map(|b| b.later.clone()).unwrap_or_default() }
+    }
+
+    /// The leaf's kept state at a start ([`Kept::start`] by the stored head)
+    /// and the newest recovery seq it knows, for `commands::Leaf` and the
+    /// grant readers.
+    pub fn start(&self) -> (Kept, u64) {
+        let recovery = self.head.map_or(self.kept.recovery, |(_, seq)| seq.max(self.kept.recovery));
+        (self.kept.start(self.head), recovery)
+    }
+
+    /// The newest recovery head the leaf stored.
+    pub fn head(&self) -> Option<(KeyHash, u64)> {
+        self.head
+    }
+
+    pub fn encode(&self) -> Vec<u8> {
+        let k = &self.kept;
+        fn pair((h, seq): &(KeyHash, u64)) -> Value<'_> {
+            Value::Array(alloc::vec![Value::Bytes(&h.0), Value::Uint(*seq)])
+        }
+        let later: Vec<(u16, Value<'_>)> =
+            self.later.iter().filter_map(|(n, b)| cbor::decode(b).ok().map(|v| (*n, v))).collect();
+        let mut m = alloc::vec![(1u16, Value::Uint(STATE_VERSION))];
+        if k.guarded {
+            m.push((2, Value::Uint(1)));
+        }
+        for (n, v) in [(3u16, k.root_counter), (4, k.admin_counter)] {
+            if v > 0 {
+                m.push((n, Value::Uint(v)));
+            }
+        }
+        if !k.commanders.is_empty() {
+            let cs = k.commanders.iter().map(|(h, p)| Value::Array(alloc::vec![Value::Bytes(&h.0), Value::Bytes(p)]));
+            m.push((5, Value::Array(cs.collect())));
+        }
+        if k.grant_hash != [0; 32] {
+            m.push((6, Value::Bytes(&k.grant_hash)));
+        }
+        if k.recovery > 0 {
+            m.push((7, Value::Uint(k.recovery)));
+        }
+        if k.forked {
+            m.push((8, Value::Uint(1)));
+        }
+        if let Some(r) = &k.rebind {
+            m.push((9, pair(r)));
+        }
+        if let Some(h) = &self.head {
+            m.push((10, pair(h)));
+        }
+        m.extend(later);
+        Value::Map(m).encode()
+    }
+
+    pub fn decode(b: &[u8]) -> Result<Stored, Rule> {
+        let v = cbor::decode(b).map_err(|_| RULE_STATE)?;
+        let map = v.as_map().ok_or(RULE_STATE)?;
+        if v.get(1).and_then(Value::as_uint) != Some(STATE_VERSION) {
+            return Err(RULE_STATE);
+        }
+        if map.iter().any(|(n, _)| *n < 256 && *n > 10) {
+            return Err(Rule::FORM_CRITICAL);
+        }
+        let flag = |n| match v.get(n) {
+            None => Ok(false),
+            Some(Value::Uint(1)) => Ok(true),
+            Some(_) => Err(RULE_STATE),
+        };
+        let count = |n| match v.get(n) {
+            None => Ok(0),
+            Some(Value::Uint(0)) => Err(Rule::FORM_DEFAULT),
+            Some(x) => x.as_uint().ok_or(RULE_STATE),
+        };
+        let hash = |x: &Value<'_>| x.as_bytes().and_then(KeyHash::from_slice).ok_or(RULE_STATE);
+        let pair = |n| -> Result<Option<(KeyHash, u64)>, Rule> {
+            let Some(x) = v.get(n) else { return Ok(None) };
+            match x.as_array() {
+                Some([h, Value::Uint(seq)]) if (1..=MAX_RECOVERY).contains(seq) => Ok(Some((hash(h)?, *seq))),
+                _ => Err(RULE_STATE),
+            }
+        };
+        let mut commanders: Vec<Commander> = Vec::new();
+        if let Some(cs) = v.get(5) {
+            let cs = cs.as_array().filter(|cs| !cs.is_empty() && cs.len() <= MAX_COMMANDERS).ok_or(RULE_STATE)?;
+            for c in cs {
+                let Some([h, p]) = c.as_array() else { return Err(RULE_STATE) };
+                let point: [u8; 65] = p.as_bytes().and_then(|p| p.try_into().ok()).ok_or(RULE_STATE)?;
+                let h = hash(h)?;
+                if Key::new(Alg::Es256, &point).hash() != h || commanders.last().is_some_and(|(last, _)| *last >= h) {
+                    return Err(RULE_STATE);
+                }
+                commanders.push((h, point));
+            }
+        }
+        let grant_hash = match v.get(6) {
+            None => [0; 32],
+            Some(x) => {
+                x.as_bytes().and_then(|b| <[u8; 32]>::try_from(b).ok()).filter(|h| *h != [0; 32]).ok_or(RULE_STATE)?
+            }
+        };
+        let recovery = count(7)?;
+        if recovery > MAX_RECOVERY {
+            return Err(RULE_STATE);
+        }
+        let kept = Kept {
+            guarded: flag(2)?,
+            root_counter: count(3)?,
+            admin_counter: count(4)?,
+            commanders,
+            grant_hash,
+            recovery,
+            forked: flag(8)?,
+            rebind: pair(9)?,
+        };
+        let later = map.iter().filter(|(n, _)| *n >= 256).map(|(n, x)| (*n, x.encode())).collect();
+        let stored = Stored { kept, head: pair(10)?, later };
+        // One spelling: the bytes are the ones this state writes.
+        if stored.encode() != b {
+            return Err(RULE_STATE);
+        }
+        Ok(stored)
     }
 }
 
@@ -258,8 +436,8 @@ impl Granted<'_> {
 }
 
 /// A binding in person by code: made only by the leaf's own pairing
-/// session once it passed its code step
-/// (`crate::join::invitation::Shown::binding`), for that session alone; no
+/// session once the person said its code matches
+/// (`crate::join::invitation::Matched::binding`), for that session alone; no
 /// message carries it, it is never built from values a caller passes, and
 /// it is not kept past the session or a restart. It holds what the leaf
 /// knows by itself: the new root's key hash and the recovery seq from the
@@ -273,18 +451,22 @@ pub struct Binding {
 }
 
 impl Binding {
-    /// The binding a session of the leaf `leaf` makes at its code step,
-    /// from the leaf's kept state: none unless it waits to be bound again.
-    pub(crate) fn at_code_step(kept: &Kept, leaf: DeviceId) -> Option<Binding> {
-        kept.rebind.map(|(root, recovery)| Binding { root, leaf, recovery })
+    /// The binding a session of the leaf `leaf` makes once the person said
+    /// the codes match, from the leaf's stored state ([`Kept::start`]):
+    /// none unless it waits to be bound again.
+    pub(crate) fn matched(kept: &Kept, head: Option<(KeyHash, u64)>, leaf: DeviceId) -> Option<Binding> {
+        kept.start(head).rebind.map(|(root, recovery)| Binding { root, leaf, recovery })
     }
 }
 
 /// Reads a grant as [`read`] does, for a leaf bound in person by code:
-/// the binding must commit to this root, this leaf and `recovery`. It is
-/// the only way a guarded leaf that took a change of root takes a grant
-/// again; the grant must be the root's, guarded, under `recovery`, and it
-/// starts the counters afresh.
+/// the binding must commit to this root, this leaf and `recovery`, and to
+/// the wait the kept state holds (with the head `root` under `recovery`
+/// applied, [`Kept::start`]), so a binding made before a later change of
+/// root clears nothing. It is the only way a guarded leaf that took a
+/// change of root takes a grant again; the grant must be the root's,
+/// guarded, under `recovery`, and it starts the counters afresh. The
+/// binding is taken by value: one binding reads one grant.
 pub fn read_bound<'a>(
     msg: &Value<'a>,
     root: &[u8],
@@ -292,12 +474,17 @@ pub fn read_bound<'a>(
     group: &GroupId,
     kept: Option<&Kept>,
     recovery: u64,
-    binding: &Binding,
+    binding: Binding,
 ) -> Result<Granted<'a>, Rule> {
-    if binding.root != Key::new(Alg::Es256, root).hash() || binding.leaf != *leaf || binding.recovery != recovery {
+    let root_hash = Key::new(Alg::Es256, root).hash();
+    if binding.root != root_hash || binding.leaf != *leaf || binding.recovery != recovery {
         return Err(RULE_REBIND);
     }
-    let got = read_any(msg, root, leaf, group, kept, recovery, true)?;
+    let kept = kept.map(|k| k.start(Some((root_hash, recovery))));
+    if kept.as_ref().and_then(|k| k.rebind) != Some((binding.root, binding.recovery)) {
+        return Err(RULE_REBIND);
+    }
+    let got = read_any(msg, root, leaf, group, kept.as_ref(), recovery, true)?;
     if !(got.by_root && got.guarded) {
         return Err(RULE_REBIND);
     }

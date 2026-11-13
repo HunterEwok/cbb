@@ -1516,7 +1516,7 @@ TABLES = {
         (6, "pair/info/admin-pop", "bytes 64", False),
         (7, "pair/info/keys", "envelope", False),
         (8, "pair/info/device", "map pair/info/device", False),
-        (9, "pair/info/invite", "bytes 16", False),
+        (9, "pair/info/invite", "id 16", False),
     ],
     "pair/info/device": [],
     "invite": [
@@ -1585,10 +1585,10 @@ TABLES = {
         (8, "guest/conn", "uint 1..4294967295", False),
         (9, "guest/data", "bytes 1..16384", False),
         (10, "guest/device", "bytes 16", False),
-        (11, "guest/invite", "bytes 16", False),
+        (11, "guest/invite", "id 16", False),
     ],
     "waiting/request": [
-        (1, "waiting/request/invite", "bytes 16", True),
+        (1, "waiting/request/invite", "id 16", True),
         (2, "waiting/request/key", "key 1", True),
         (3, "waiting/request/info", "map pair/info", True),
         (4, "waiting/request/network", "uint 1..3", True),
@@ -1599,7 +1599,7 @@ TABLES = {
         (2, "waiting/requests", "once 1..48 of map waiting/request", True),
     ],
     "dismiss": [
-        (2, "dismiss/invite", "bytes 16", True),
+        (2, "dismiss/invite", "id 16", True),
         (3, "dismiss/key", "bytes 32", False),
     ],
     "forward/challenge": [
@@ -1776,6 +1776,8 @@ def ty_ok(ty, v):
         if ".." in w[1]:
             return 1 <= len(v) <= int(w[1].split("..")[1])
         return len(v) == int(w[1])
+    if w[0] == "id":
+        return isinstance(v, bytes) and len(v) == int(w[1]) and any(v)
     if w[0] == "text":
         return (isinstance(v, str) and 1 <= len(v.encode()) <= int(w[1].split("..")[1])
                 and not any(unicodedata.category(c) == "Cc" for c in v))
@@ -1945,6 +1947,14 @@ def wave3_vectors(records_take):
               "[2001:db8:0::1]:443", "[2001:db8::1:1:1:1:1]:443", "192.0.2.1:0", "0.0.0.0:443", "[::]:443"]:
         bad(f"forwarder seen: {a}", {0: 84, 2: a}, "forward/seen/addr")
     bad("relay error: empty reason", {0: 93, 2: ""}, "server/error/reason")
+    # "No invitation" has one spelling, the field left out: the zero ID is refused.
+    zero_id = bytes(16)
+    bad("dismiss: the zero invitation ID", {0: 27, 2: zero_id}, "dismiss/invite")
+    bad("guest open: the zero invitation ID", {0: 17, 2: 1, 3: guest_key, 4: fake("guest psk", 32),
+                                                5: T0 + 86400000, 11: zero_id}, "guest/invite")
+    bad("waiting: a request with the zero invitation ID", {0: 26, 2: [{**request, 1: zero_id}]}, "waiting/requests")
+    bad("waiting: a request whose info has the zero invitation ID",
+        {0: 26, 2: [{**request, 3: {**info, 9: zero_id}}]}, "waiting/requests")
 
     mp("an info with the hello's device map", "pair/info", {1: "tv", 4: 1, 8: {1: 1}})
     mp("an info: device not a map", "pair/info", {1: "tv", 4: 1, 8: 5}, "pair/info/device")
@@ -1967,6 +1977,8 @@ def wave3_vectors(records_take):
     mp("ADb", "pair/adb", adb)
     mp("ADb without a name", "pair/adb", {1: GROUP, 2: PHONE.id16}, "pair/adb/name")
     mp("a request", "waiting/request", request)
+    mp("a request with the zero invitation ID", "waiting/request", {**request, 1: bytes(16)}, "waiting/request/invite")
+    mp("an info with the zero invitation ID", "pair/info", {**info, 9: bytes(16)}, "pair/info/invite")
     mp("a Welcome", "welcome", welcome)
     mp("a Welcome without its time", "welcome", {1: ROOT.key, 2: welcome[2]}, "welcome/time")
     mp("a Welcome without the recovery key", "welcome", {k: v for k, v in welcome.items() if k != 9},
