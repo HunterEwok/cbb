@@ -294,6 +294,16 @@ module records_v3 {
   // record the writer holds names is left off the list. Off: every held root removal is
   // listed (the proposed rule, part a). On, a late admission makes a removed key count again.
   pure val CORE_LIST_FILTER = false
+  // NEW_ROOT_ONLY (architecture 11-13 23:20Z, k.9521): no change names as new root a key already
+  // on the path before it; the core's write_change refuses one ("the new root key must be a new
+  // key") and eval::chain holds it void. Without it the model let the recovery key's holder
+  // write a change back to the current root and sign that root's first checkpoint on a device
+  // that does not hold the root key (two writers on one root key).
+  pure val NEW_ROOT_ONLY = false
+  // CUT_RESET_ON_DROP (k.9521, the part the core cannot take): the model's compaction forgot
+  // the set's marks whenever its counting checkpoint changed; the core's RecordSet::compact
+  // resets the cut only when the checkpoint drops a record.
+  pure val CUT_RESET_ON_DROP = false
   // Records 11-13 21:12Z: the change re-signs the cut roots' counting removals as the new
   // root's first records (signChainG). REISSUE_DROP_ONLY: the mutation that leaves the old
   // removals off the list without the new ones; it must fail.
@@ -911,6 +921,11 @@ module records_v3 {
   // it and takes again what that checkpoint left out (#530 51d25eaf).
   pure def compactStore(s: Store, v: View, db: Id -> Record): Store =
     if (v.checkpoint == s.checkpoint) s
+    else if (CUT_RESET_ON_DROP and v.checkpoint != 0
+        and not(recsOf(s.recs, db).exists(r => prunedBy(db.get(v.checkpoint), r))))
+      // (CUT_RESET_ON_DROP: as the core's RecordSet::compact, a new counting checkpoint that
+      // prunes nothing leaves the cut, its marks included.)
+      recut({ ...s, checkpoint: v.checkpoint }, db)
     else {
       val s2 = { ...s, checkpoint: v.checkpoint, cut: NOCUT }
       reopen(s2, db)
@@ -1508,6 +1523,13 @@ module records_v3 {
       at >= 1,
       at <= ch.ids.length() + 1,
       cpId <= FIRST + MAXREC,
+      // (NEW_ROOT_ONLY: the new root key must be new to the path: no writer signs a first
+      // checkpoint for a root already on it. A deviant recovery key may still sign the void
+      // head alone, "nocp".)
+      not(NEW_ROOT_ONLY) or mode == "nocp" or not(onList(before, target)),
+      // (REISSUE_REMOVALS: the writer's own check, as write_change's tests should assert: the
+      // list names no removal a Z covers; listed twice it would take reserve for nothing.)
+      not(REISSUE_REMOVALS) or mode != "honest" or keep.intersect(covered).size() == 0,
       // (J): the honest writer of a change refuses one whose new root's records and first
       // checkpoint would not fit the new root's ceiling.
       // (The new root's own device signs its first checkpoint, so its own set counts too.)
@@ -1958,6 +1980,8 @@ module records_v3 {
   // An honest head on the member's chain whose writer held the removal (the ghost "_rm"): a
   // list may leave out only what its writer never held (break 1 of 11-13 20:42Z: the core's
   // list dropped a held removal of a key no held record named, and a late admission revived it).
+  // The newest recovery record written (the scenarios' last change).
+  val lastHead = db.keys().filter(i => isChain(db.get(i))).fold(0, (a, i) => max2(a, i))
   def writerHeld(m: str, r: Record): bool = recsOf(st.get(m).chain, db).exists(h => isChain(h) and h.kit == ""
     and h.seen.keys().contains("_rm") and h.seen.get("_rm").indices().exists(j => h.seen.get("_rm")[j] == r.id))
   val removedStayOut = MEMBERS.forall(m => synced(m) implies {
@@ -2943,7 +2967,9 @@ module records_v3 {
       .then(recoverAs(RECOVERY, "NA")).then(syncRound)
       .then(recoverAs(RECOVERY, "NK")).then(syncRound)
       .expect(MEMBERS.filter(m => inGroup(m)).forall(m => views.get(m).path == ["R", "NA", "NK"]) and promises
-        and (CEIL_FIT implies db.get(9).keep == Set(1, 2, 3, 4, 5, 6)))
+        and ((CEIL_FIT and not(REISSUE_REMOVALS)) implies db.get(9).keep == Set(1, 2, 3, 4, 5, 6))
+        // (REISSUE_REMOVALS: record IDs move; the newest list names no root removal, NK re-signed them.)
+        and (REISSUE_REMOVALS implies not(recsOf(db.get(lastHead).keep, db).exists(r => rootRemoval(r)))))
 
   // A late admission after a change (architecture 11-13 20:42Z, break 1): A admits D, the root
   // removes D, the recovery key's member holds the removal but never A's admission and changes
@@ -2958,6 +2984,47 @@ module records_v3 {
       .expect(MEMBERS.forall(m => views.get(m).path == ["R", "NK"])
         and (CORE_LIST_FILTER implies (not(removedStayOut) and views.get("r").devices.contains(DEVICE)))
         and (not(CORE_LIST_FILTER) implies (promises and MEMBERS.forall(m => not(views.get(m).devices.contains(DEVICE))))))
+
+  // A Welcome builds a fresh set: no mark survives a pairing (architecture 23:00Z). k.9501's
+  // steps leave a mark at a (A removed; under UNKNOWN_HEADS a takes heads alone); m paired by
+  // r, then by the marked a itself, holds no mark and r's records.
+  // k.9521 (Mac run k3, minimal): the recovery key's holder writes a change back to NA, the
+  // current root, and signs NA's checkpoint 18 on its own device while NA's device writes 19
+  // and 20 without it; NA ends past its ceiling and the members part over 20. NEW_ROOT_ONLY
+  // refuses that change (the core's write_change does, and eval::chain holds it void).
+  run changeBackToRootTest =
+    init
+      .then(recoverAs(RECOVERY, "NK"))
+      .then(sign("R", "checkpoint", "", "", 0, false, false, 2))
+      .then(recoverAs(RECOVERY, "NA"))
+      .then(sign("R", "admin", "X", "phone", 0, false, false, 1))
+      .then(syncRound)
+      .then(sign("NA", "revoke", "A", "", 0, false, false, 1))
+      .then(sign("NA", "copies", "", "", 0, false, false, 1))
+      .then(signDeviant("X", "device", "D", 2))
+      .then(sign("A", "thaw", "", "", 7, true, false, 1))
+      .then(signFull("R", "revoke", "X", "phone", 0, false, true, 1, true, Set()))
+      .then(sign("A", "revoke", "D", "", 0, true, false, 1))
+      .then(sign("NA", "revoke", "A", "", 0, false, false, 1))
+      .then(if (NEW_ROOT_ONLY) syncRound else signChain(RECOVERY, "recover", "NA", 3, "honest"))
+      .then(sign("NA", "copies", "", "", 0, false, false, 2))
+      .then(offerEveryone(nextId - 1))
+      .then(sign("NA", "copies", "", "", 0, false, false, 1))
+      .then(if (NEW_ROOT_ONLY) syncRound else giveOnly("a", 18))
+      .then(syncRound)
+      .then(offerEveryone(nextId - 1))
+      .expect(NEW_ROOT_ONLY implies (MEMBERS.forall(m => views.get(m).path == ["R", "NK", "NA"]) and promises))
+
+  run welcomeFreshTest =
+    init
+      .then(sign(ROOT, "revoke", PHONE, "", 0, false, false, 1))
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 2, false, Set(3)))
+      .then(syncRound).then(offerEveryone(5))
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 2, false, Set(4))).then(offerEveryone(6))
+      .then(welcomeFrom("r"))
+      .expect(st.get("m").cut.marks.keys() == Set() and st.get("m").recs == st.get("r").recs)
+      .then(welcomeFrom("a"))
+      .expect(st.get("m").cut.marks.keys() == Set())
 
   // REISSUE_REMOVALS, a member with the head and the first checkpoint but not the new root's
   // re-signed removal: the root removes D, the recovery key changes to NK (head, Z for D, first
@@ -3023,6 +3090,24 @@ module records_v3 {
       .then(recoverAs(RECOVERY, "NB")).then(syncRound).then(syncRound)
       .expect(MEMBERS.filter(m => inGroup(m)).forall(m => views.get(m).path == ["R", "NA", "NK", "NB"]
         and Set(DEVICE, "dW", "dX").subseteq(views.get(m).revoked)) and promises)
+
+  // Restore after a change with re-issued removals (architecture 23:26Z: the core's restore
+  // broke there): R removes D and dW, the change to NA re-signs them (Z) beside its first
+  // checkpoint; NA writes on and a later checkpoint of NA's prunes the first one; then members
+  // restart, NA's own device among them. Each rebuilds the state of a member that did not.
+  run restartAfterReissueTest =
+    init
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(sign(ROOT, "revoke", "dW", "", 0, false, false, 1))
+      .then(syncRound)
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound)
+      .then(sign("NA", "copies", "", "", 0, false, false, 1))
+      .then(sign("NA", "checkpoint", "", "", 0, false, false, 2)).then(syncRound).then(syncRound)
+      .then(restart("a")).then(restart("c")).then(restart("k"))
+      .then(syncRound)
+      .expect(MEMBERS.filter(m => inGroup(m)).forall(m => views.get(m).path == ["R", "NA"]
+        and Set(DEVICE, "dW").subseteq(views.get(m).revoked)
+        and views.get(m).checkpoint == views.get("r").checkpoint
+        and st.get(m).recs == st.get("r").recs and st.get(m).cut.marks.keys() == Set()) and promises)
 
   // The fold of an admin key's removals: R removes A, A signs on, R removes A again, and R's
   // checkpoint folds the first removal into the second. A's record after the first removal
@@ -3158,10 +3243,11 @@ module records_v3 {
       .then(sign("NA", "copies", "", "", 0, false, false, 2)).then(syncRound)
       .then(sign("NA", "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
       .then(recoverAs(RECOVERY, "NK")).then(syncRound).then(syncRound)
-      .expect(CEIL_FIT implies (db.get(9).keep == Set(1, 2, 3, 4, 8)
+      .expect((REISSUE_REMOVALS implies not(recsOf(db.get(lastHead).keep, db).exists(r => rootRemoval(r))))
+        and (CEIL_FIT implies ((REISSUE_REMOVALS or db.get(9).keep == Set(1, 2, 3, 4, 8))
         and MEMBERS.filter(m => inGroup(m)).forall(m => st.get(m).recs == st.get("r").recs and views.get(m) == views.get("r")
           and views.get(m).path == ["R", "NA", "NK"] and views.get(m).admins.keys() == Set(PHONE, COMPUTER, WATCH, "X")
-          and views.get(m).revoked.contains(DEVICE))) and promises)
+          and views.get(m).revoked.contains(DEVICE)))) and promises)
 
   // (H): under WRITER_FLOOR the same group writes within FLOOR above the head: A's second
   // record waits for the root's next checkpoint; X's admission and record drop nothing.
@@ -3256,7 +3342,7 @@ module records_v3 {
   // nothing.
   run oldKeyNotValidTest =
     init
-      .then(signChain(RECOVERY, "recover", ROOT, 1, "honest"))
+      .then(signChain(RECOVERY, "recover", ROOT, 1, if (NEW_ROOT_ONLY) "nocp" else "honest"))
       .then(give("m", 4))
       .expect(views.get("m").path == [ROOT] and not(views.get("m").stop) and promises)
 
@@ -3265,10 +3351,10 @@ module records_v3 {
   // whether or not it holds the head.
   run invalidHeadKeepsNothingAsideTest =
     init
-      .then(signChain(RECOVERY, "recover", ROOT, 1, "honest"))
+      .then(signChain(RECOVERY, "recover", ROOT, 1, if (NEW_ROOT_ONLY) "nocp" else "honest"))
       .then(signAs(ROOT, "checkpoint", "", 0))
       .then(signAs(ROOT, "checkpoint", "", 0))
-      .then(give("m", 5)).then(give("m", 6)).then(give("m", 7))
+      .then(give("m", 5)).then(give("m", 6)).then(give("m", if (NEW_ROOT_ONLY) 6 else 7))
       .then(syncAll)
       .expect(MEMBERS.forall(x => views.get(x).path == [ROOT] and st.get(x).chain == Set(4)) and promises)
 
