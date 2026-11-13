@@ -40,7 +40,7 @@ func globalShows(ctx context.Context, d *Device, want string, timeout time.Durat
 	})
 }
 
-// Away runs sync away from home (docs/testbench-cases.md): the hub serves
+// Away runs sync away from home (docs/maintainers/testbench-cases.md): the hub serves
 // through the forwarder, each away device joins by invitation (P11) and
 // syncs both ways, also after cbb global off and on; with the hub's service
 // stopped it says so and sends nothing another way (F6). Then the hub moves

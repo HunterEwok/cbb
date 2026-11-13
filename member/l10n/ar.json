@@ -4,7 +4,7 @@
  "On a phone of the group, tap + in the CBB app, then Scan a code, and scan this:": "على هاتف في المجموعة، اضغط + في تطبيق CBB، ثم «مسح رمز»، وامسح هذا:",
  "Or paste this into the app: {}": "أو الصق هذا في التطبيق: {}",
  "Waiting up to 5 minutes. Press Ctrl+C to cancel.": "الانتظار حتى 5 دقائق. اضغط Ctrl+C للإلغاء.",
- "Without a phone: run cbb pair on a full member and cbb pair -code <its address> here.": "دون هاتف: شغّل cbb pair على عضو كامل و cbb pair -code <عنوانه> هنا.",
+ "Without a phone: run cbb pair on the group's root or an admin and cbb pair -code <its address> here.": "دون هاتف: شغّل cbb pair على جذر المجموعة أو على مسؤول و cbb pair -code <عنوانه> هنا.",
  "Joined the group {} as {}.": "تم الانضمام إلى المجموعة {} باسم {}.",
  "is it running ({} status cbb)?": "هل هي تعمل ({} status cbb)؟",
  "is it running (start it with cbb service)?": "هل هي تعمل (ابدأها بـ cbb service)؟",

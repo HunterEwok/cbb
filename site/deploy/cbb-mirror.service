@@ -2,7 +2,7 @@
 # Copyright (C) 2026 HunterEwok
 #
 # Keeps the mirror of the releases, dl.cbb.tools, and the ZX Spectrum
-# Next's files (docs/maintaining.md, "The mirror"):
+# Next's files (docs/maintainers/maintaining.md, "The mirror"):
 # /etc/systemd/system/cbb-mirror.service, run by cbb-mirror.timer. It holds
 # no key: it takes only files that check out under the pinned roots.
 

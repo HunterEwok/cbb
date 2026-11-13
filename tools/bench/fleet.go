@@ -18,7 +18,7 @@ import (
 
 // The fleet: full members in containers on the controller itself, each with
 // its own network namespace and state, on a Docker network of their own
-// (docs/testbench-catalogue.md, section 0.1). Cases that need many devices,
+// (docs/maintainers/testbench-catalogue.md, section 0.1). Cases that need many devices,
 // groups thrown away by the dozen or faults the real devices must not see
 // run there. A fleet member is a Device with os "fleet": the bench reaches it
 // with docker exec, not SSH, and it runs as root, so cbb needs no sudo.

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 HunterEwok
 
 // Package benchtime is the clock of the bench's time-scaled build
-// (docs/testbench-catalogue.md, section 0.1, "time"). Built with
+// (docs/maintainers/testbench-catalogue.md, section 0.1, "time"). Built with
 // `-tags benchtime`, never for a release, every long time of the product
 // that goes through D runs Scale times faster, so expiry, renewal and every
 // rule that waits for time play out in minutes, and CBB_TEST_CLOCK moves

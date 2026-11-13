@@ -130,6 +130,7 @@ func checkRepo(testsSince string) (problems []string, checked int, err error) {
 		problems = append(problems, checkDocs(f.name, f.data, contents)...)
 		problems = append(problems, checkOldName(f.name, f.data)...)
 		problems = append(problems, checkGoneName(f.name, f.data)...)
+		problems = append(problems, checkGoneWord(f.name, f.data)...)
 		problems = append(problems, checkWorkNotes(f.name, f.data)...)
 	}
 	problems = append(problems, checkCommands(contents)...)
@@ -277,6 +278,9 @@ func check(name string, data []byte, listed map[string]bool) []string {
 		if !listed[dir+"/LICENSE"] {
 			problems = append(problems, fmt.Sprintf("%s:1: copied code without %s/LICENSE", name, dir))
 		}
+		if !listed[dir+"/README.md"] {
+			problems = append(problems, fmt.Sprintf("%s:1: copied code without %s/README.md, which names its source, version and changes", name, dir))
+		}
 		if !generated && !strings.HasPrefix(string(data), "// Copyright ") {
 			problems = append(problems, fmt.Sprintf("%s:1: copied code must keep its copyright notice on the first line", name))
 		}
@@ -290,7 +294,7 @@ func check(name string, data []byte, listed map[string]bool) []string {
 
 // The tests' hooks (CBB_TEST_*, and the update's CBB_RELEASE_DIR and
 // CBB_RELEASE_ROOTS) are read only through the guards that keep
-// them out of a release (docs/maintaining.md, "Test builds"): Rust's
+// them out of a release (docs/maintainers/maintaining.md, "Test builds"): Rust's
 // member/src/testbuild.rs and Go's internal/testhook, or a Go file built only
 // for the bench (the tag benchtime).
 var (

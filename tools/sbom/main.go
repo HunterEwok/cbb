@@ -3,7 +3,7 @@
 
 // Command sbom writes the software bills of materials a release carries,
 // in CycloneDX 1.6 JSON, from what each part of the project is built
-// with (docs/maintaining.md, "What a release is built from"):
+// with (docs/maintainers/maintaining.md, "What a release is built from"):
 //
 //	sbom go -o sbom-go.cdx.json -version 0.6.0 ARCHIVE|BINARY...
 //	sbom cargo -o sbom-member.cdx.json -version 0.6.0 -manifest Cargo.toml -package cbb-member -target T,...

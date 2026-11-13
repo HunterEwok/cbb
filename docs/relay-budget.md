@@ -224,7 +224,7 @@ of that threshold, watched from outside:
 - `cbb-traffic.timer` on the server (site/README.md, "The server", step 8) samples the
   network interface every 15 minutes and publishes the totals of the last 24 hours, and
   nothing about a group, a device or an address, at `https://cbb.tools/status/traffic.json`;
-- the `monitor` workflow (docs/maintaining.md, "Watching cbb.tools") fails, which mails the
+- the `monitor` workflow (docs/maintainers/maintaining.md, "Watching cbb.tools") fails, which mails the
   maintainer, when those 24 hours pass 1 TB, half of the threshold, or when the file is more
   than two hours old.
 

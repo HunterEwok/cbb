@@ -30,7 +30,7 @@ import (
 	"github.com/HunterEwok/cbb/internal/control"
 )
 
-// The window's tests (docs/testbench-catalogue.md, A5, A8, A9, A15, A16,
+// The window's tests (docs/maintainers/testbench-catalogue.md, A5, A8, A9, A15, A16,
 // U12) run frontend/ in a headless Chrome or Edge, as WebView2 runs it on
 // Windows, against the real Desk: a stand-in for Wails' runtime passes each
 // call to Desk's method over HTTP, a stand-in service answers on the

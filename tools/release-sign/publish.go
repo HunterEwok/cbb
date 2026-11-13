@@ -105,7 +105,7 @@ func (s *signing) flags(fs *flag.FlagSet) {
 }
 
 // publish signs a release the workflow left as a draft, publishes it and
-// makes it the channel's: docs/maintaining.md, "Signed releases".
+// makes it the channel's: docs/maintainers/maintaining.md, "Signed releases".
 func publish(args []string) error {
 	fs := flag.NewFlagSet("publish", flag.ExitOnError)
 	var s signing

@@ -30,8 +30,8 @@ page only lists. Why each choice was made is in the [design](design.md) and the
 | Use | Primitive | Standard | Section of the protocol |
 |---|---|---|---|
 | Every TCP connection | TLS 1.3, mutual between members | RFC 8446 | 4, 6, 13, 14 |
-| Key exchange in TLS | X25519MLKEM768 first on Go members (Go 1.27's default), then X25519; X25519 on the lite member; what the system offers on the phones | RFC 8446, draft-ietf-tls-ecdhe-mlkem | 4 |
-| TLS cipher suites | Go: the three of TLS 1.3; the lite member: TLS_CHACHA20_POLY1305_SHA256 and TLS_AES_128_GCM_SHA256 | RFC 8446 | 4 |
+| Key exchange in TLS | X25519 in `cbb` and the phones' member (the Rust core's TLS); X25519MLKEM768 first in Go's TLS (Go 1.27's default), then X25519, in `cbb-helper` and the forwarder; what the system offers in the phones' pairing | RFC 8446, draft-ietf-tls-ecdhe-mlkem | 4 |
+| TLS cipher suites | Go: the three of TLS 1.3; the Rust core: TLS_CHACHA20_POLY1305_SHA256 and TLS_AES_128_GCM_SHA256 | RFC 8446 | 4 |
 | Certificates | X.509 v3, ECDSA P-256 with SHA-256 | RFC 5280 | 2 |
 | Device records, revocations, commands, server credentials, release files, evidence | ECDSA P-256 over SHA-256 of the exact signed bytes, ASN.1 DER signatures | FIPS 186-5 | 10, 15, 16, 17, 18 |
 | Pairing | CPace, suite CPACE-X25519-SHA512, bound to the TLS exporter | draft-irtf-cfrg-cpace-21, RFC 5705 | 6 |
@@ -50,12 +50,12 @@ page only lists. Why each choice was made is in the [design](design.md) and the
 
 | Implementation | Libraries |
 |---|---|
-| Go members, the forwarder, the relay | the Go standard library (`crypto/tls`, `crypto/ecdsa`, `crypto/ecdh`, `crypto/hkdf`, `crypto/sha256`, `crypto/hpke` for sealed messages), `golang.org/x/crypto` (ChaCha20, BLAKE2s), amneziawg-go (copied under `internal/third_party`), gVisor's netstack (a module) with wireguard-go's adapter for it (`internal/third_party/netstack`), go-tpm for the TPM, go-libpcsclite (PC/SC through pcscd) and the platforms' PC/SC for the recovery key on a YubiKey, Xray-core for VLESS |
-| The lite member | RustCrypto (`p256`, `sha2`, `hmac`, `x25519-dalek`, `chacha20poly1305`, `aes-gcm`, `x509-cert`), the `hpke` crate with its X-Wing KEM for sealed messages (`core/src/seal.rs`), rustls without its default provider, GotaTun for WireGuard with `ring-shim/` over RustCrypto |
+| `cbb-helper` and the forwarder | the Go standard library (`crypto/tls`, `crypto/ecdsa`, `crypto/ecdh`, `crypto/hkdf`, `crypto/sha256`, `crypto/hpke` for sealed messages), `golang.org/x/crypto` (ChaCha20, BLAKE2s), amneziawg-go (copied under `internal/third_party`), gVisor's netstack (a module) with wireguard-go's adapter for it (`internal/third_party/netstack`), go-tpm for the TPM, go-libpcsclite (PC/SC through pcscd) and the platforms' PC/SC for the recovery key on a YubiKey, Xray-core for VLESS |
+| `cbb`, the relay and the phones' member | RustCrypto (`p256`, `sha2`, `hmac`, `x25519-dalek`, `chacha20poly1305`, `aes-gcm`, `x509-cert`), the `hpke` crate with its X-Wing KEM for sealed messages (`core/src/seal.rs`), rustls without its default provider, GotaTun for WireGuard with `ring-shim/` over RustCrypto |
 | The iPhone kit | swift-crypto (CryptoKit's API, BoringSSL on Linux), the Security framework for the keychain and the Secure Enclave, Network.framework for TLS |
 | The Android kit | `java.security` and `javax.crypto`, the Android Keystore, its own X25519 and CPace in Kotlin (`Field25519.kt`, `CPace.kt`), checked against the Go code by the interop vectors |
 | The phones' sealed messages | the Rust core's (`core/src/seal.rs`) through `ffi/`, for copies and commands alike |
-| The phones' tunnel | the lite member's (`ffi/src/tunnel.rs`): GotaTun for WireGuard with `ring-shim/` over RustCrypto, rustls for VLESS with XHTTP |
+| The phones' tunnel | `cbb`'s (`ffi/src/tunnel.rs`): GotaTun for WireGuard with `ring-shim/` over RustCrypto, rustls for VLESS with XHTTP |
 
 The interop vectors in `testdata/interop` pin the bytes of each signed object, of a
 CPace exchange and of sealed messages (`seal-go.json`, `seal-rust.json`), so the four implementations cannot drift apart ([testing](testing.md)).

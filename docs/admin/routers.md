@@ -21,7 +21,7 @@ mistake.
 | Linux, macOS | `CBB_INTERFACES` in `/etc/cbb/cbb.env` | every interface |
 
 `CBB_INTERFACES` takes interface names separated by commas or spaces (`igb1,igb1_vlan20`).
-Name it on any machine with a guest, IoT or internet interface. A full member also answers
+Name it on any machine with a guest, IoT or internet interface. A member also answers
 only on the home networks it knows ([hardening](hardening.md)); the list of interfaces is
 the firmer limit, as it does not depend on what a network looks like.
 

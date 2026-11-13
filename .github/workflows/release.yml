@@ -55,7 +55,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
     # The Windows certificate's secrets live in the environment release, which
-    # only release tags and main may use (docs/maintaining.md, "Release secrets").
+    # only release tags and main may use (docs/maintainers/maintaining.md, "Release secrets").
     environment: release
     env:
       CGO_ENABLED: ${{ matrix.cgo }}
@@ -148,7 +148,7 @@ jobs:
           go build -trimpath -ldflags "-s -w" -o "$RUNNER_TEMP/cbb-desktop" .
       - name: sign the Windows programs (Authenticode), with a certificate in the secrets
         # A code signing certificate as a base64 PKCS#12 file and its password
-        # (docs/maintaining.md, "Signing for Windows"); without them the
+        # (docs/maintainers/maintaining.md, "Signing for Windows"); without them the
         # programs stay unsigned, as before.
         if: matrix.goos == 'windows'
         env:
@@ -176,7 +176,7 @@ jobs:
       - name: sign cbb with the Developer ID and notarize it, with the certificate in the secrets
         # The Developer ID Application certificate as a base64 PKCS#12 file and
         # its password, and the App Store Connect API key that notarytool signs
-        # in with (docs/maintaining.md, "Signing for macOS"); without them cbb
+        # in with (docs/maintainers/maintaining.md, "Signing for macOS"); without them cbb
         # is signed ad hoc, as before, and Gatekeeper asks before it first runs.
         if: matrix.goos == 'darwin'
         env:
@@ -219,7 +219,7 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 60
     # The Developer ID certificates and the App Store Connect key live in the
-    # environment release (docs/maintaining.md, "Signing for macOS").
+    # environment release (docs/maintainers/maintaining.md, "Signing for macOS").
     environment: release
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -308,7 +308,7 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 60
     # The Apple Distribution certificate, the App Store profiles and the App
-    # Store Connect key live in the environment release (docs/maintaining.md,
+    # Store Connect key live in the environment release (docs/maintainers/maintaining.md,
     # "Signing for macOS"). A tag uploads the build to TestFlight; a run by
     # hand from main only builds and signs it.
     environment: release
@@ -442,7 +442,7 @@ jobs:
 
   openwrt-feed:
     # The apk feed for OpenWrt from the Linux archives above, signed with
-    # the feed's ECDSA P-256 key (docs/maintaining.md, "The OpenWrt feed"),
+    # the feed's ECDSA P-256 key (docs/maintainers/maintaining.md, "The OpenWrt feed"),
     # as openwrt-feed.tar.gz, which goes to cbb.tools/openwrt/. Without the
     # key in the secrets there is no feed.
     needs: [build]
@@ -553,7 +553,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false # a release builds from scratch
-      - name: the software bills of materials (tools/sbom, docs/maintaining.md)
+      - name: the software bills of materials (tools/sbom, docs/maintainers/maintaining.md)
         # The Go programs' modules from the programs themselves; the crates of
         # cbb (the Rust program) and of the phones'
         # Rust core on their targets; the Swift kit's packages. The Android
@@ -583,7 +583,7 @@ jobs:
       - name: the winget manifest, from SHA256SUMS
         # For winget's repository, published with the release, which is
         # immutable once published; it goes to microsoft/winget-pkgs by a pull
-        # request (docs/maintaining.md, "winget"). A pre-release stays out, as
+        # request (docs/maintainers/maintaining.md, "winget"). A pre-release stays out, as
         # it does from the tap.
         if: ${{ !contains(github.ref_name, '-') }}
         run: |
@@ -617,7 +617,7 @@ jobs:
           # of the merged pull requests.
           sh packaging/release-notes.sh "$GITHUB_REF_NAME" >"$RUNNER_TEMP/notes.md"
           # A draft: the maintainer signs it and publishes it on their Mac with
-          # release-sign publish (docs/maintaining.md, "Signed releases").
+          # release-sign publish (docs/maintainers/maintaining.md, "Signed releases").
           gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" \
             --title "cbb $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" \
             --generate-notes --verify-tag --draft $prerelease

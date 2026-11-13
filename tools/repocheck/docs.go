@@ -18,6 +18,8 @@ import (
 //   - a relative link in a Markdown file names a file or directory of the
 //     repository, and its #anchor, if any, a heading of that file;
 //   - the project's old names do not come back, in any file (oldName);
+//   - no page or text of the website outside the history calls a device a
+//     lite or full member (goneWord);
 //   - every command of cbb is in docs/reference/cli.md;
 //   - every subcommand of the full member that has flags of its own, and each
 //     of those flags, is in docs/reference/cli.md, the flags in a line that
@@ -49,6 +51,10 @@ var (
 	// packages whose work the Rust cbb took over (D-88).
 	goneName = regexp.MustCompile(`\b(?:cbb` + `wasm|cbb` + `core|wa` + `zero|go` + `mobile|cbb` + `tun)\b|` +
 		`\binternal/(?:` + `core|update|piv|tmuxpaste|consolepaste|sysinfo|uptime|steamos)\b`)
+	// goneWord matches the words for a device that ran a program of its
+	// own before cbb became one program (D-88, D-89): every computer and
+	// small device runs cbb, with or without cbb-helper beside it.
+	goneWord = regexp.MustCompile(`(?i)\b(?:lite|full)[ -](?:members?|devices?|core)\b`)
 	// rsArm is an arm of cbb's commands in member/src/lib.rs: the names it
 	// takes and, when it calls one, the function that runs the command.
 	rsArm  = regexp.MustCompile(`(?m)^\s*((?:"[a-z][a-z-]*"(?: \| )?)+)(?: if [^=]+)? => (?:std::process::exit\()?([\w:]+\()?`)
@@ -104,6 +110,24 @@ func checkGoneName(name string, data []byte) []string {
 	for i, line := range strings.Split(string(data), "\n") {
 		if m := goneName.FindString(line); m != "" {
 			problems = append(problems, fmt.Sprintf("%s:%d: %s is gone from the project; name what replaced it", name, i+1, m))
+		}
+	}
+	return problems
+}
+
+// checkGoneWord reports each line of a page or a text of the website
+// outside the history that calls a device a lite or full member: cbb is
+// one program, so a page says "a computer", "a small device" or "cbb
+// without its helper".
+func checkGoneWord(name string, data []byte) []string {
+	text := strings.HasSuffix(name, ".md") || (path.Dir(name) == "site/l10n" || path.Dir(name) == "member/l10n") && strings.HasSuffix(name, ".json")
+	if historyFiles[name] || !text {
+		return nil
+	}
+	var problems []string
+	for i, line := range strings.Split(string(data), "\n") {
+		if m := goneWord.FindString(line); m != "" {
+			problems = append(problems, fmt.Sprintf("%s:%d: %q: cbb is one program; say a computer, a small device or cbb without its helper", name, i+1, m))
 		}
 	}
 	return problems

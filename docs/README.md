@@ -37,7 +37,7 @@ For administrators: your own server, a router, a NAS.
 | [Routers and FreeBSD](admin/routers.md) | OpenWrt, OPNsense and FreeBSD: what the installers set up, the networks it answers on, the firewall, the checks |
 | [Hardening](admin/hardening.md) | the settings that make a group harder to attack, beyond the defaults |
 | [Docker image](../packaging/docker/README.md) | the image for a NAS, a home server or a server on the internet |
-| [Lite member](../member/README.md) | the lite member for small Linux devices: build, install, use |
+| [Small devices](../member/README.md) | `cbb` without its helper on small Linux devices: build, install, use |
 
 ## Reference
 
@@ -45,7 +45,7 @@ Complete and exact, without the reasons.
 
 | Document | What is in it |
 |---|---|
-| [Commands](reference/cli.md) | every `cbb` command, on a full and on the lite member, with every flag |
+| [Commands](reference/cli.md) | every `cbb` command, with every flag |
 | [Settings and environment variables](reference/config.md) | the settings files and every `CBB_*` variable |
 | [Devices, ports and files](reference/devices.md) | what each device can do, the ports, where the keys and logs are |
 | [Limits and lifetimes](reference/limits.md) | sizes, rates, timeouts, certificate lifetimes, the servers' limits |
@@ -70,12 +70,11 @@ for security reviewers.
 | [Cryptography](cryptography.md) | every primitive, library, key, its size, lifetime and where it is kept |
 | [Testing](testing.md) | the test levels, the interop vectors, the cross tests and the bench |
 | [Differential fuzzing](differential.md) | the four implementations reading changed bodies and record sets alike, in CI and nightly |
-| [Platform parity](parity.md) | what each computer, phone and lite device can do, the gaps and the plan to close them |
+| [Platform parity](parity.md) | what each computer, phone and small device can do, the gaps and the plan to close them |
 | [App specification](apps.md) | what the apps do and how they look |
 | [Roadmap](roadmap.md) | what comes next, the agreed plans not built yet, research |
 | [Contributing](../CONTRIBUTING.md) | conventions, building and testing every part |
 | [Your own build](own-build.md) | what ties a build to this project's releases, and how to use your own keys and addresses |
-| [Security audit](security-audit.md) | the plan of the security audit |
 | [The servers' budget](relay-budget.md) | what strangers can make the open relay and the forwarder hold, who pays, what a genuine group keeps, the server's money and traffic, and the answer to an abuse report |
 
 ## For maintainers
@@ -84,8 +83,9 @@ Releasing and testing on real devices.
 
 | Document | What is in it |
 |---|---|
-| [Maintaining](maintaining.md) | repository settings, CI, releases, signing keys, Homebrew |
-| [Test bench](testbench.md) | testing on real devices before a release: the cases, the bench, the criteria |
-| [Test bench catalogue](testbench-catalogue.md) | every bench case of 0.6 in one line, with how it runs and what it still needs |
-| [Test bench functions](testbench-functions.md) | every function of the product with the cases that check it, for the coverage report |
-| [Test bench cases](testbench-cases.md) | bench cases step by step: the rule, the devices, the steps, pass and fail |
+| [Maintaining](maintainers/maintaining.md) | repository settings, CI, releases, signing keys, Homebrew |
+| [Test bench](maintainers/testbench.md) | testing on real devices before a release: the cases, the bench, the criteria |
+| [Test bench catalogue](maintainers/testbench-catalogue.md) | every bench case of 0.6 in one line, with how it runs and what it still needs |
+| [Test bench functions](maintainers/testbench-functions.md) | every function of the product with the cases that check it, for the coverage report |
+| [Test bench cases](maintainers/testbench-cases.md) | bench cases step by step: the rule, the devices, the steps, pass and fail |
+| [Security audit](maintainers/security-audit.md) | the plan of the security audit |

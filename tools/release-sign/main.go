@@ -29,7 +29,7 @@
 // the list of the project's entry points, which extend renews and take
 // brings in as well; mirror keeps
 // dl.cbb.tools and the ZX Spectrum Next's files on cbb.tools.
-// docs/maintaining.md, "Signed releases", has the whole flow.
+// docs/maintainers/maintaining.md, "Signed releases", has the whole flow.
 package main
 
 import (

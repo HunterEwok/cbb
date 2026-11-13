@@ -4,7 +4,7 @@
 // Package testhook reads the tests' hooks, the environment variables
 // CBB_TEST_* (and CBB_TPM_SIMULATOR) with which the service's tests steer
 // cbb-helper. Only a build for tests reads them: a test binary, or a program
-// built with the tag testhooks, which a release never is (docs/maintaining.md,
+// built with the tag testhooks, which a release never is (docs/maintainers/maintaining.md,
 // "Test builds"); any other build does as it would without the variable.
 package testhook
 

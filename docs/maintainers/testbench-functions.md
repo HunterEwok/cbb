@@ -3,8 +3,8 @@
 
 Every function of Copy Beyond Borders as release 0.6 has it, one line each, with the cases of
 [testbench-catalogue.md](testbench-catalogue.md) that check it. It is gathered from
-[design.md](design.md), [protocol.md](protocol.md), [apps.md](apps.md),
-[reference/cli.md](reference/cli.md) and the 0.6 plan. "A function" is something a user can
+[design.md](../design.md), [protocol.md](../protocol.md), [apps.md](../apps.md),
+[reference/cli.md](../reference/cli.md) and the 0.6 plan. "A function" is something a user can
 do or rely on, or a rule of the protocol that a device on the bench can break on purpose and
 watch being kept.
 
@@ -19,7 +19,7 @@ line here with every new function, and a case for it in the catalogue.
 |---|---|---|
 | I.1 | `install.sh` on Linux | I1 |
 | I.2 | `install.sh` on macOS | I1 |
-| I.3 | `get.sh` (full member) | I1, I3 |
+| I.3 | `get.sh` (with the helper) | I1, I3 |
 | I.4 | `get.sh --no-helper` | I1 |
 | I.5 | `install.ps1` on Windows | I1 |
 | I.6 | `get.ps1` on Windows | I1, I3 |

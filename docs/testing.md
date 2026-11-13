@@ -4,8 +4,8 @@
 For contributors and reviewers: how Copy Beyond Borders is tested, from a single function to
 real devices, and which level answers which question. The commands are in
 [CONTRIBUTING.md](../CONTRIBUTING.md#development), the CI jobs one by one in
-[maintaining](maintaining.md#ci), and the tests on real devices in the
-[test bench](testbench.md).
+[maintaining](maintainers/maintaining.md#ci), and the tests on real devices in the
+[test bench](maintainers/testbench.md).
 
 ## Levels
 
@@ -13,11 +13,11 @@ real devices, and which level answers which question. The commands are in
 |---|---|---|---|
 | Unit tests | one package or type does what its comment says | `*_test.go`, `cargo test`, `swift test`, `./gradlew -p kit test` | every push, in CI |
 | Interop vectors | the four implementations (Go, Rust, Swift, Kotlin) read and write the same bytes | `testdata/interop` | every push, in CI |
-| Cross tests | two implementations talk over a real connection | Go tests that start the Swift or Kotlin `cbb-interop`, or the lite member | every push, in CI |
+| Cross tests | two implementations talk over a real connection | Go tests that start the Swift or Kotlin `cbb-interop`, or `cbb` | every push, in CI |
 | Service tests | several members, with their real services, in one process or as programs | `internal/service`, `member/tests` | every push, in CI |
 | System tests | the built program on a real system: containers, sockets, a desktop, an installer | the `e2e`, `mdns with avahi`, `desktop clipboards`, `packaging`, `windows installer`, `OpenWrt`, `freebsd` jobs | every push, in CI |
 | App builds and tests | the apps build and their unit tests pass on simulators and runners | the `iPhone app`, `tray app`, `Android app` jobs and the Mac app's part of `test and build (macOS), homebrew, Mac app` | every push, in CI |
-| Bench scenarios | real devices pass real copies over real networks | the [test bench](testbench.md), its [catalogue](testbench-catalogue.md) | before each release |
+| Bench scenarios | real devices pass real copies over real networks | the [test bench](maintainers/testbench.md), its [catalogue](maintainers/testbench-catalogue.md) | before each release |
 
 A change is not done before the levels it touches pass locally (CONTRIBUTING lists the
 commands per part); CI then runs the jobs of every part the pull request changes, and the
@@ -155,16 +155,16 @@ and F-Droid builds build from nothing.
 ## Bench scenarios
 
 Unit and CI tests cannot show that a copy on an iPhone reaches a Windows PC through a café's
-Wi-Fi. The [test bench](testbench.md) does, on the real devices of each platform, with the
-rules R1 to R7 ([cases](testbench-cases.md)), a catalogue of the cases of a release with how
+Wi-Fi. The [test bench](maintainers/testbench.md) does, on the real devices of each platform, with the
+rules R1 to R7 ([cases](maintainers/testbench-cases.md)), a catalogue of the cases of a release with how
 each runs, and a coverage report of the product's functions
-([functions](testbench-functions.md)). Security cases block a release; a case that cannot
+([functions](maintainers/testbench-functions.md)). Security cases block a release; a case that cannot
 run yet is skipped with its reason and stays on the list.
 
 ## The apps' languages, accessibility and screenshots
 
 Every app is checked in the project's eight languages (zh en es ru ar sw he hi) and for a
-person who uses a screen reader, large text or the keyboard (docs/testbench-catalogue.md,
+person who uses a screen reader, large text or the keyboard (docs/maintainers/testbench-catalogue.md,
 A9 and U14 to U18).
 
 - `tools/repocheck` checks that every text of every app (the String Catalogs, Android's
@@ -364,7 +364,7 @@ its helper and with `cbb` alone, and its summary lists every test that failed an
 found there goes into this table with what is known of its cause, and leaves it with the
 fix that removes the cause. The bench finds them too: `go run ./tools/bench -repeat 5
 -scenario NAME fleet` lists in `flaky.txt` the cases that both passed and failed
-([test bench](testbench.md#11-automation)).
+([test bench](maintainers/testbench.md#11-automation)).
 
 | Test | Where | Seen | What is known |
 |---|---|---|---|

@@ -64,7 +64,7 @@ What `smoke` and `full` do first.
 | Linux member with a desktop | `xclip -selection clipboard -i` on the session's XWayland (GNOME), or `wl-copy` | `xclip -o` / `wl-paste -n` |
 | Mac | `pbcopy` as the signed-in user | `pbpaste` |
 | Windows | the scheduled task `cbbbench-copy` (from `setup-windows.ps1`) puts a file on the clipboard inside the signed-in session | `cbbbench-paste` writes the clipboard to a file |
-| Lite member, away computer | `cbb copy` | `cbb paste` (or `cbb watch -0`) |
+| Small device, away computer | `cbb copy` | `cbb paste` (or `cbb watch -0`) |
 | Container (`nas`) | `docker exec -i cbb cbb copy` on its host | `docker exec -i cbb cbb paste` |
 | Android emulator | the app's UI through UI Automator over `adb` | the app's UI |
 
@@ -266,7 +266,7 @@ fetches nothing. Fail: an error, a crash, markup instead of text, or a file that
 Pass: the text arrives once; neither member sends it back; no ping-pong. Fail: the text is sent
 again or flips between two texts.
 
-**P4. The Mac as a full member.** Runs: manual (bring the Mac in for it only).
+**P4. The Mac as a member that listens.** Runs: manual (bring the Mac in for it only).
 1. Only the Mac and `small` on (others off): copy each way.
 2. Mac and the Linux member on: `cbb status` on both shows one connection; turn the Mac's
    application firewall on and repeat.

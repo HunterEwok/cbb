@@ -27,7 +27,7 @@ import org.robolectric.annotation.ConscryptMode
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * The app in each of the project's eight languages (docs/testbench-catalogue.md,
+ * The app in each of the project's eight languages (docs/maintainers/testbench-catalogue.md,
  * A9; docs/testing.md, "The apps' languages, accessibility and screenshots"):
  * the Start screen and Settings are translated, no text is cut off, Arabic and
  * Hebrew lay the screen out from right to left, and every control has a name

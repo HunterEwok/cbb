@@ -12,13 +12,13 @@ option, so it is set by hand, and the installers and `cbb update` keep that line
 The tests' hooks, every `CBB_TEST_*` variable, `CBB_TPM_SIMULATOR` and, in `cbb` itself,
 `CBB_RELEASE_DIR` and `CBB_RELEASE_ROOTS`, are read only by a build for tests: `cbb` built with the feature `testhooks` (or the bench's `benchtime`),
 `cbb-helper` built with the tag `testhooks`, and Go's test binaries. A release ignores them
-([maintaining](../maintaining.md), "Test builds").
+([maintaining](../maintainers/maintaining.md), "Test builds").
 
 ## Settings files
 
 | File | Systems | Who writes it | What it holds |
 |---|---|---|---|
-| `/etc/cbb/cbb.env` | Linux, macOS, the lite member | the installers (`--port`, `--home-cgnat`); `CBB_INTERFACES` by hand | `CBB_PORT`, `CBB_HOME_CGNAT`, `CBB_INTERFACES`, one `NAME=value` per line; systemd passes them to the service. A full member's service and `cbb` also read the file themselves; the lite member reads only its environment |
+| `/etc/cbb/cbb.env` | Linux, macOS | the installers (`--port`, `--home-cgnat`); `CBB_INTERFACES` by hand | `CBB_PORT`, `CBB_HOME_CGNAT`, `CBB_INTERFACES`, one `NAME=value` per line; systemd passes them to the service. The service and `cbb` also read the file themselves |
 | `/usr/local/etc/cbb/cbb.env` | FreeBSD, OPNsense | the installer | the same as on Linux; rc.d passes them to the service |
 | `HKLM\SYSTEM\CurrentControlSet\Services\cbb`, the value `Environment` (a multi-string) | Windows | `install.ps1` (`-Port`, `-HomeCgnat`); `CBB_INTERFACES` by hand, which `install.ps1` keeps | the same values as the file on Linux |
 | `/etc/config/cbb` | OpenWrt | the package, then you (UCI) | `port`, the firewall `zone` list the service works in (it becomes `CBB_INTERFACES`), `wait_ntp` (start once NTP has set the clock); apply a change with `/etc/init.d/cbb reload` |
@@ -35,25 +35,25 @@ A variable set in the environment wins over the same name in the settings file.
 
 | Variable | Read by | Meaning |
 |---|---|---|
-| `CBB_DEBUG` | `cbb`, the lite member, the tray app | `1` shows the underlying error under each message; `0` hides it in a development build, which shows it by default. The service's log always has the details. In the service's environment, also WireGuard's own messages for sync away from home and the member connections a peer closed or reset. The Mac app and the tray app pass it to `cbb` when their own error details switch is on. |
-| `CBB_PORT` | the service, the lite member's `cbb service`, the installers | The member port, 8764 by default. Change it by running the installer again with `--port N` (`-Port N` on Windows), which keeps it in the settings file. |
-| `CBB_INTERFACES` | the service, the lite member | Network interfaces by name, separated by commas or spaces (`br-lan,br-iot`): mDNS, the member port and a listening join work only there, so that a router never answers on its internet side, even with a private address there or a firewall opened by mistake. Unset or empty, every interface. On OpenWrt the init script sets it from the zones in `/etc/config/cbb`. |
+| `CBB_DEBUG` | `cbb`, the tray app | `1` shows the underlying error under each message; `0` hides it in a development build, which shows it by default. The service's log always has the details. In the service's environment, also WireGuard's own messages for sync away from home and the member connections a peer closed or reset. The Mac app and the tray app pass it to `cbb` when their own error details switch is on. |
+| `CBB_PORT` | the service, the installers | The member port, 8764 by default. Change it by running the installer again with `--port N` (`-Port N` on Windows), which keeps it in the settings file. |
+| `CBB_INTERFACES` | the service | Network interfaces by name, separated by commas or spaces (`br-lan,br-iot`): mDNS, the member port and a listening join work only there, so that a router never answers on its internet side, even with a private address there or a firewall opened by mistake. Unset or empty, every interface. On OpenWrt the init script sets it from the zones in `/etc/config/cbb`. |
 | `CBB_HOME_CGNAT` | the service, the installers | `1` counts 100.64.0.0/10, the carrier-grade NAT range, as the home network too, for a home network that uses it: the service accepts and reaches it, publishes its addresses there, and the installers open it in the firewall and in the system's outbound limit (the systemd drop-in `cgnat.conf` on Linux, the Windows rule). Unset or `0`, it is outside the home network. Set it with `--home-cgnat on` (`off` goes back) or `-HomeCgnat on` on Windows. |
 | `CBB_TPM` | the service on Linux, Windows and macOS | `off` keeps new member and admin keys out of the TPM and a Mac's Secure Enclave, in files; a key already in one stays there. Unset, a computer with a TPM 2.0 or a Secure Enclave makes its keys in it ([keys and attestation](../guide/keys.md)). |
 | `CBB_CONTAINER` | the service | Set by the Docker image: the service runs in a container, whose keys are in a file in its volume, so it makes no group (`cbb new`, `cbb takeover`) and offers no admin key, and the root cannot make it an admin. |
 | `CBB_KEYS_IN_FILE` | the service, in a container | `yes` allows a container to hold the group's keys anyway: to make the group, or to be made an admin and so the hub. Anyone who copies its volume then has those keys. |
-| `CBB_ROOTLESS` | `cbb` on Linux, the lite member too | `1`, set by the user units of a rootless install (`install.sh --rootless`), makes `cbb` use the user's own paths: the socket in `$XDG_RUNTIME_DIR/cbb`, the state, settings and update folder under the user's home; the service then refuses to be the root, an admin or a hub. Unset, `cbb` in `~/.local/bin` does the same. |
-| `CBB_HELPER` | the lite member | The Go helper `cbb-helper` to start, instead of the one beside the program; empty for none. Like the one beside it, it starts only if nobody but root or `cbb`'s user may change it (docs/design.md, "The service and its helper"). |
-| `CBB_SOCKET` | `cbb`, the lite member, the Mac app | Another control socket, for tests or a second instance. |
+| `CBB_ROOTLESS` | `cbb` on Linux | `1`, set by the user units of a rootless install (`install.sh --rootless`), makes `cbb` use the user's own paths: the socket in `$XDG_RUNTIME_DIR/cbb`, the state, settings and update folder under the user's home; the service then refuses to be the root, an admin or a hub. Unset, `cbb` in `~/.local/bin` does the same. |
+| `CBB_HELPER` | `cbb` | The Go helper `cbb-helper` to start, instead of the one beside the program; empty for none. Like the one beside it, it starts only if nobody but root or `cbb`'s user may change it (docs/design.md, "The service and its helper"). |
+| `CBB_SOCKET` | `cbb`, the Mac app | Another control socket, for tests or a second instance. |
 | `CBB_ADMIN_SOCKET` | `cbb` | Another admin socket, the one for the commands that change the group; by default the admin socket next to the control socket. |
-| `CBB_STATE` | the lite member | Another state directory. |
-| `CBB_TEST_STANDBY_GRACE` | the Rust service built with the feature `testhooks`, in the Go service's tests | Seconds a hub that lost the hub above it tries the hubs above before it serves again, in place of 60. Never set by hand. |
-| `CBB_TEST_UP_CHECK` | the Rust service built with the feature `testhooks`, in the Go service's tests | Seconds a device stays on a hub below the first before it tries the hubs above again, in place of 300. Never set by hand. |
-| `CBB_TEST_HUB_KEY_AHEAD` | the Rust service built with the feature `testhooks`, in the Go service's tests | Seconds a hub's offers carry its key for a new period of the server credentials before it serves with it, in place of three days. Never set by hand. |
-| `CBB_TEST_RESOLVE` | the lite member's `cbb service` | For tests only: `host=ip` pairs, separated by commas, that stand in for DNS when it looks up the project's relay by the names `entries.json` gives. |
-| `CBB_TEST_ELSEWHERE` | the lite member's `cbb service` | For tests only: a folder; while it holds a file named by the device's ID, the device neither publishes itself by mDNS nor dials the members it finds, as if on another network. |
-| `CBB_MDNS_TRACE` | the lite member's `cbb service` | For tests only: a file to which the service appends, by the time of day in UTC, every event its mDNS browsing sees and mdns-sd's debug log (packets sent and received, the cache); the service tests set it and log the file when a test fails. |
-| `CBB_TEST_FALLBACK` | the lite member's `cbb service` | For tests only: milliseconds a member waits for one with a lower device ID to dial it before it dials that one itself (30 s otherwise); set, the member also dials the members with a greater device ID at port 1, as if a firewall there dropped the member port. |
+| `CBB_STATE` | `cbb` | Another state directory. |
+| `CBB_TEST_STANDBY_GRACE` | `cbb` built with the feature `testhooks`, in the Go end-to-end tests (`internal/service`) | Seconds a hub that lost the hub above it tries the hubs above before it serves again, in place of 60. Never set by hand. |
+| `CBB_TEST_UP_CHECK` | `cbb` built with the feature `testhooks`, in the Go end-to-end tests (`internal/service`) | Seconds a device stays on a hub below the first before it tries the hubs above again, in place of 300. Never set by hand. |
+| `CBB_TEST_HUB_KEY_AHEAD` | `cbb` built with the feature `testhooks`, in the Go end-to-end tests (`internal/service`) | Seconds a hub's offers carry its key for a new period of the server credentials before it serves with it, in place of three days. Never set by hand. |
+| `CBB_TEST_RESOLVE` | `cbb service` | For tests only: `host=ip` pairs, separated by commas, that stand in for DNS when it looks up the project's relay by the names `entries.json` gives. |
+| `CBB_TEST_ELSEWHERE` | `cbb service` | For tests only: a folder; while it holds a file named by the device's ID, the device neither publishes itself by mDNS nor dials the members it finds, as if on another network. |
+| `CBB_MDNS_TRACE` | `cbb service` | For tests only: a file to which the service appends, by the time of day in UTC, every event its mDNS browsing sees and mdns-sd's debug log (packets sent and received, the cache); the service tests set it and log the file when a test fails. |
+| `CBB_TEST_FALLBACK` | `cbb service` | For tests only: milliseconds a member waits for one with a lower device ID to dial it before it dials that one itself (30 s otherwise); set, the member also dials the members with a greater device ID at port 1, as if a firewall there dropped the member port. |
 | `CBB_TEST_APPLETV_NAME` | `cbb-helper` | For tests only: the name an Apple TV announces by mDNS, which the helper then takes instead of browsing for it; empty for none. |
 | `CBB_TEST_BLUEZ` | cbb-helper on Linux | For tests only: the D-Bus address of a test's BlueZ (`bluetest`), which the Bluetooth keyboard registers with instead of the system bus. |
 | `CBB_FORWARD_FLAGS` | `cbb-forward.service` | The flags of `cbb forward`, such as `-vless-xhttp vpn.example.org`. |
@@ -66,9 +66,9 @@ A variable set in the environment wins over the same name in the settings file.
 | Variable | Read by | Meaning |
 |---|---|---|
 | `CBB_FIREWALL` | `get.sh`, Linux, macOS and FreeBSD `install.sh`, Windows `install.ps1` (through `get.ps1` too) | `express` adds the firewall rules without asking (`--express`), `no` adds none and prints the commands (`--no-firewall`); unset, the installer asks. |
-| `CBB_VERSION` | `get.sh`, `get.ps1` | A release such as `v0.5.0` instead of the latest. In a build of the lite member, the version the release passes to `cargo build`. |
+| `CBB_VERSION` | `get.sh`, `get.ps1` | A release such as `v0.5.0` instead of the latest. In a build of `cbb`, the version the release passes to `cargo build`. |
 | `CBB_AUTO_UPDATE` | the installers | `on` or `off` answers whether the computer updates itself once a day (`--auto-update`, `-AutoUpdate`); unset, they ask once. `cbb update -auto` changes it later. |
-| `CBB_PAIR` | `get.sh`, Linux and OpenWrt `install.sh` (the lite member) | `no` skips the pairing the installer starts at the end for a lite member in no group (`--no-pair`), for a scripted install; unset, it pairs when its output is a terminal. |
+| `CBB_PAIR` | `get.sh`, Linux and OpenWrt `install.sh` | `no` skips the pairing the installer starts at the end for a device in no group (`--no-pair`), for a scripted install; unset, it pairs when its output is a terminal. |
 | `CBB_INSTALL_METHOD` | the installers | How the program came, which they record for `cbb update` (`cbb update -installed-by`): `get` by default, `brew` for a Homebrew copy (found from its path), `winget` from winget's folder, `package` for the OpenWrt package. |
 | `CBB_UPDATING` | the installers | Set by `cbb update` while it runs the new release's installer, so they ask no question about automatic updates. |
 | `CBB_UPDATE_FROM`, `CBB_UPDATE_PARENT` | `cbb update` and `install.ps1` on Windows | Set by `cbb update` for the copy of itself it runs the update from: the program it was started as, and its own process ID, which `install.ps1` leaves running and renames aside instead of stopping. Never set by hand. |
@@ -78,7 +78,7 @@ A variable set in the environment wins over the same name in the settings file.
 | `CBB_LANG` | `get.sh`, every `install.sh` and `uninstall.sh`, Windows `get.ps1`, `install.ps1` and `uninstall.ps1` | The language of the installers' messages: `zh`, `en`, `es`, `ru`, `ar`, `sw`, `he` or `hi`. Unset, it is the system's (the locale, as gettext reads it; on a Mac without one, the first of the user's languages; on Windows, the display language), and English where the project has no translation (packaging/l10n.sh). |
 | `CBB_OS_RELEASE` | the Linux `install.sh` | For tests: another `/etc/os-release`, whose `ID=steamos` makes it install as on SteamOS. |
 | `CBB_PF_CONF` | the FreeBSD firewall script | Another `pf.conf` than `/etc/pf.conf`, for tests. |
-| `CBB_IMAGE`, `CBB_PREVIEW` | the lite member's tests | For a look by eye at what the ZX Spectrum Next would show: `cargo test -p cbb-member preview -- --ignored` reads the PNG or JPEG `CBB_IMAGE` names and writes what `cbb next image` makes of it to the PNG `CBB_PREVIEW` names. |
+| `CBB_IMAGE`, `CBB_PREVIEW` | `cbb`'s tests | For a look by eye at what the ZX Spectrum Next would show: `cargo test -p cbb-member preview -- --ignored` reads the PNG or JPEG `CBB_IMAGE` names and writes what `cbb next image` makes of it to the PNG `CBB_PREVIEW` names. |
 | `CBB_RELEASE_DIR` | `get.sh`, `get.ps1`; `cbb update` built with the feature `testhooks` | For tests: takes the release's files from this directory instead of downloading them. A release's `cbb update` ignores it. |
 | `CBB_RELEASE_ROOTS` | `get.sh`, `get.ps1`; `cbb` built with the feature `testhooks` | For tests, with `CBB_RELEASE_DIR`: a file with the root keys to check the release against instead of the project's own. A release's `cbb` always checks against its pinned roots. |
 
@@ -98,7 +98,7 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_UI_BROWSER` | Go tests of the tray app's window | The Chrome, Chromium or Edge to run the window in; without it the test looks in the usual places, and skips without a browser outside CI. |
 | `CBB_UPDATE_SCREENSHOTS` | Go tests of the tray app's window | Set (to anything), `TestWindow/screenshots` writes its pictures to `apps/desktop/testdata/screenshots` instead of comparing with them, after a change to the window. |
 | `CBB_SCREENSHOT_OUT` | Go tests of the tray app's window | The folder a failed screenshot comparison leaves the new picture and the difference in; by default `cbb-screenshots` in the system's temporary folder. |
-| `CBB_TEST_ACTIONS` | the Rust service, in the Go service's tests | A folder that stands for the system's quick actions: a preset with a file `refuse-NAME` there is refused with its text, any other is noted in the file `ran` and not run. Never set by hand. |
+| `CBB_TEST_ACTIONS` | `cbb`, in the Go end-to-end tests (`internal/service`) | A folder that stands for the system's quick actions: a preset with a file `refuse-NAME` there is refused with its text, any other is noted in the file `ran` and not run. Never set by hand. |
 | `CBB_TEST_CLOCK` | the bench's time-scaled build (the feature `benchtime`) | What the build adds to the wall clock, so that certificates expire on the bench in minutes. Never in a release. |
 | `CBB_TEST_CLOCK_FILE` | the bench's time-scaled build | A file that holds the value of `CBB_TEST_CLOCK` when that is not set, so the bench moves a member's clock with a restart of the service. |
 | `CBB_TEST_SCALE` | the bench's time-scaled build | How many times faster long times run: 100000 by default, `1` for cases that move only the clock. |
@@ -108,8 +108,8 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_TPM_REQUIRED` | Go tests of the TPM | Makes a missing `swtpm` a failure instead of a skip, as in CI. |
 | `CBB_SE_TEST` | Go tests on a Mac | `1` lets the tests of `internal/sekey` make keys in the Mac's Secure Enclave; without it no test key goes there. |
 | `CBB_E2E_COVERDIR` | `tools/e2e/e2e.sh` | A directory where a `cbb` built with `-cover` writes its coverage, as `GOCOVERDIR` in every container (CI's coverage, [testing](../testing.md#coverage)). |
-| `CBB_FAKE_HELPER` | the lite member's tests | Makes the test program play `cbb-helper` for the helper channel's tests. |
-| `CBB_FAKE_HELPER_MODE` | the lite member's tests | Makes the test program play a `cbb-helper` that misbehaves as the value says (`crash`, `silent`, `garbage`, `hang`, `die-on-call`) or plays a TPM (`tpm`), for `member/tests/helper_faults.rs`. |
+| `CBB_FAKE_HELPER` | `cbb`'s tests | Makes the test program play `cbb-helper` for the helper channel's tests. |
+| `CBB_FAKE_HELPER_MODE` | `cbb`'s tests | Makes the test program play a `cbb-helper` that misbehaves as the value says (`crash`, `silent`, `garbage`, `hang`, `die-on-call`) or plays a TPM (`tpm`), for `member/tests/helper_faults.rs`. |
 | `CBB_TEST_ALONE` | Go tests of cbb without its helper | The cbb binary they run alone, without `cbb-helper` beside it (`cargo build` at the top, `target/`). |
 | `CBB_TEST_RUN_AS` | the Rust cbb's own tests | Set by `sys::tests::gives_up_root` for the copy of the test process it starts as root: that copy becomes `nobody` and checks that it cannot become root again. |
 | `CBB_PREVIOUS` | Go tests of the service | The previous release's `cbb` for TestPreviousRelease (a device of version N in one group with N-1), as `tools/e2e/previous.sh` prints it. |
@@ -118,8 +118,8 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_TEST_RUST_RELAY` | Go tests of the relay | The Rust `cbb-relay` binary, which the tests of `internal/relay`, `internal/tunnel` and `internal/service` run as the blind relay; without it they take the `cbb-relay` beside the `cbb` of `CBB_TEST_ALONE` or `CBB_TEST_RUST_SERVICE`, and skip when there is none. |
 | `CBB_RELAY_LIMITS` | `cbb-relay`, in tests | An open relay's limits as a JSON object of its fields (`groups`, `per_address`, `per_network`, `per_wide`, `per_provider`, `byte_rate`, `group_record_bytes`, `record_bytes`, `streams`); the Go tests set it. |
 | `CBB_RELAY_STATS_MS` | `cbb-relay`, in tests | Logs the counts of groups and devices every so many milliseconds, which the Go tests read. |
-| `CBB_TEST_IPV6` | the lite member's tests | `1` makes the tests of the tunnel and the relay over IPv6 fail where the system has no IPv6 loopback, instead of skipping them; the bench sets it. |
-| `CBB_TEST_RUST_SERVICE` | Go tests of the service | The Rust service's binary: the tests that start a Linux member with the default configuration run it in place of the Go service, finding their peers by mDNS. |
+| `CBB_TEST_IPV6` | `cbb`'s tests | `1` makes the tests of the tunnel and the relay over IPv6 fail where the system has no IPv6 loopback, instead of skipping them; the bench sets it. |
+| `CBB_TEST_RUST_SERVICE` | the Go end-to-end tests (`internal/service`) | The `cbb` binary the tests run as a Linux member with the default configuration, finding their peers by mDNS. |
 | `CBB_ESP32_ON_LINUX` | `TestEmbassyJoiner` | The `esp32-on-linux` binary of `embassy/`, run over a TAP interface. |
 | `CBB_PHONE_ON_LINUX` | `TestFFIJoiner` | The example `phone-on-linux` of `ffi/` (features `member` and `testhooks`, so it reads the tests' hooks): the Aurora app's joining and syncing with a software key. |
 | `CBB_TUNNEL_ON_LINUX` | `TestRustPhoneTunnel` | The example `tunnel-on-linux` of `ffi/` (feature `tunnel`): the phones' Rust tunnel to a Go hub. |
@@ -128,15 +128,15 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_INTEROP_OUT` | the Swift and Kotlin kits' tests, Go's interop tests | A directory where the kits write fresh interop vectors and Go reads them; without it Go reads `testdata/interop`. |
 | `CBB_VERDICTS` | the verdict tests of all four implementations (`TestVerdicts`, `command::verdicts`, `VerdictTest`, `VerdictTests`) | A corpus of `tools/difffuzz gen` to write the verdicts on ([differential fuzzing](../differential.md)); without it each runs on a small corpus of its own. |
 | `CBB_VERDICTS_OUT` | the same tests | The file the verdicts go to, one line per case. |
-| `CBB_TEST_AHEAD_FILE` | the Rust service built with the feature `testhooks`, in the Go service's tests | A file holding the milliseconds the service's wall clock is moved by, read each time; the tests write it to move the clock while the service runs (as the Go service's settings for tests). A release's build does not read it. Never set by hand. |
-| `CBB_RELEASE_BUILD` | building `cbb`, in the release workflow | Set to `1` by the release workflow: a build with a feature for tests only (`benchtime`, `testhooks`, `fuzzing`) then does not compile (docs/maintaining.md, "Releases"). |
-| `CBB_TEST_RENEW_EVERY` | the Rust service, in the Go service's tests | How often, in milliseconds, the root and the admins look for certificates due for renewal, in place of twice a day. Never set by hand. |
+| `CBB_TEST_AHEAD_FILE` | `cbb` built with the feature `testhooks`, in the Go end-to-end tests (`internal/service`) | A file holding the milliseconds the service's wall clock is moved by, read each time; the tests write it to move the clock while the service runs. A release's build does not read it. Never set by hand. |
+| `CBB_RELEASE_BUILD` | building `cbb`, in the release workflow | Set to `1` by the release workflow: a build with a feature for tests only (`benchtime`, `testhooks`, `fuzzing`) then does not compile (docs/maintainers/maintaining.md, "Releases"). |
+| `CBB_TEST_RENEW_EVERY` | `cbb`, in the Go end-to-end tests (`internal/service`) | How often, in milliseconds, the root and the admins look for certificates due for renewal, in place of twice a day. Never set by hand. |
 | `CBB_TEST_ATTEST_ROOTS` | `cbb-helper` built with the tag `testhooks` and the Rust service built with the feature `testhooks`, in the service's tests | A PEM file of the public keys (or certificates) of the roots an Android key attestation must chain to, in place of Google's; read at each check. A release's build does not read it. Never set by hand. |
 | `CBB_TEST_TPM_ROOTS` | `cbb-helper`, in the service's tests | A PEM file of the TPM makers' roots an EK certificate must chain to, in place of the built-in ones. Never set by hand. |
 | `CBB_TEST_STATUS_URL` | `cbb-helper`, in the service's tests | Where the attestation status list and its keys are fetched from, in place of `https://cbb.tools/attest/`. Never set by hand. |
 | `CBB_TEST_STATUS_EVERY` | the Rust service, in the service's tests | How often, in milliseconds, the root fetches the attestation status list, in place of once a day. Never set by hand. |
 | `CBB_TEST_DEAD_UDP` | the Rust service, in the service's tests | An address (host:port) that never answers, which replaces the hubs' UDP addresses, as on a network that blocks WireGuard, so that the tunnel goes over VLESS. Never set by hand. |
-| `CBB_UPDATE_VECTORS` | the lite core's keyboard tests | `1` writes the keyboard layouts' vectors again (`cargo test -p cbb-core keyboard`). |
+| `CBB_UPDATE_VECTORS` | the core's keyboard tests | `1` writes the keyboard layouts' vectors again (`cargo test -p cbb-core keyboard`). |
 | `CBB_ARCH` | the build of `cbb` in Rust (`member/packaging/build.sh`) | The architecture as the release's archives name it (`amd64`, `arm64`, `armv7`, `armv6`, `mips`, `mipsle`), which `cbb update` downloads for; set by `build.sh`, and without it the one Rust names. |
 | `CBB_SOURCE` | the Rust core's build | The commit the core is built from, which its `version` call names ([the core's entry point](../core-api.md)); empty when unset. |
 | `CBB_WRITE_INTEROP` | the Swift kit's certificate tests | Writes the certificates that Go's `TestSwiftCertificates` checks. |

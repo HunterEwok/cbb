@@ -176,7 +176,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | ID | Case | How | Needs |
 |---|---|---|---|
 | D1 | mDNS: every member, with and without its helper, publishes and browses; avahi, systemd-resolved, mDNSResponder and the Windows DNS client keep working beside it; another group's records are ignored | real, fleet | |
-| D2 | Who dials: of two full members the lower ID dials; the other dials after 30 s when that is blocked; one connection per pair stays [P4] | fleet, real | |
+| D2 | Who dials: of two computers the lower ID dials; the other dials after 30 s when that is blocked; one connection per pair stays [P4] | fleet, real | |
 | D3 | Members that dial dial those that publish `r=listen` at once, whatever their device IDs; of two that dial, the lower device ID dials and the other does after 30 s; phones dial everyone; a phone that is the hub listens while its app is open | fleet, ui | |
 | D6 | Known networks: a member is quiet on a network it does not know; it learns one by making or joining a group, a pairing window or a member connection; `cbb status` names quiet networks; `sudo cbb network` after a new router | fleet | |
 | D7 | Only private, unique-local and link-local addresses are published and accepted; a public source address on the member port is refused by the program and by the unit's limits | fleet | |

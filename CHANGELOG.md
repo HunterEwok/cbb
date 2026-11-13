@@ -697,7 +697,7 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb update` fetches it, the members pass it to each other, and `cbb global entries export`
   and `import` carry it as a string or QR code; every device checks the signature, wherever
   it came from. `release-sign entries` signs it, and `extend`, `take`, `due` and `mirror`
-  keep it (docs/maintaining.md, "Signed releases"). The iPhone and Android take the list
+  keep it (docs/maintainers/maintaining.md, "Signed releases"). The iPhone and Android take the list
   from the computers of their group and keep it, and a phone that is the hub registers with
   the project's forwarder over VLESS through the ways it names, then through the built-in
   ones. The lite member takes the list and passes it on. A hub of the project's forwarder
@@ -717,13 +717,13 @@ All notable changes to cbb are documented in this file. The format follows
   keys are taken from the newest `keys.json` with the entry points as well.
 - The `monitor` workflow watches `cbb.tools` from outside every six hours: the websites and
   their certificates, the forwarder's and the relay's ports, and the expiry of the signed files devices fetch
-  (`go run ./tools/monitor`; docs/maintaining.md, "Watching cbb.tools").
+  (`go run ./tools/monitor`; docs/maintainers/maintaining.md, "Watching cbb.tools").
 - The mirror of the releases at `dl.cbb.tools`, which `cbb update`, the installers, the
   Android app and the lite member fall back to when GitHub does not answer: `release-sign
   mirror` on cbb.tools takes every hour the newest `keys.json` and `stable.json` that check
   out, the release they name and the `min_from` of each, checks every file as a device does
   before it serves it, and unpacks the ZX Spectrum Next's files of the newest checked
-  release for `.cbb install` (docs/maintaining.md, "The mirror").
+  release for `.cbb install` (docs/maintainers/maintaining.md, "The mirror").
 - cbb for macOS is signed with the project's Developer ID and notarized by Apple, so that
   Gatekeeper opens it without a warning; it runs under the hardened runtime, and CI checks
   that every build still loads the Rust core there.
@@ -881,7 +881,7 @@ All notable changes to cbb are documented in this file. The format follows
   `SHA256SUMS` and the signed `release.json`: the Go programs' modules, the lite member's crates,
   the phones' Rust core, the iPhone kit's Swift packages and the Android apps' Maven modules,
   made by `tools/sbom`; the Docker image carries its own as an attestation in the registry
-  (docs/maintaining.md, "Releases").
+  (docs/maintainers/maintaining.md, "Releases").
 - The group's key level is a setting: `cbb keys proven|hardware|files` on a root computer
   sets which devices may be the group's root, an admin or a hub, and `cbb keys` and `cbb
   status` show it. `cbb admin`, `cbb hubs` and a hub's own tunnel check it; a group whose
@@ -1195,7 +1195,7 @@ All notable changes to cbb are documented in this file. The format follows
 - The bench's time suite checks certificates near the end of the group CA: a new member's
   certificate ends with the CA, and neither it nor the root's is renewed past it (K5).
 - The bench's fleet and time suites take `-coverdir DIR`, where containers running a `cbb` built
-  with `-cover` write which code the cases ran (docs/testbench.md, "Code coverage").
+  with `-cover` write which code the cases ran (docs/maintainers/testbench.md, "Code coverage").
 - `docs/protocol.md` gives the exact rule for a signed body: each rule of the strict form has
   a name, the order of the checks is written down, and section 10 has a table of every
   record field with its JSON type, the types that need it and its values; section 15 says
@@ -1383,10 +1383,10 @@ All notable changes to cbb are documented in this file. The format follows
 - The `away-off` command turns sync away from home off on a member (`cbb global off -on
   DEVICE` on an admin computer); turning it on stays each device's own decision.
 - Quick actions take `watch` in `-by`, for actions a watch may run.
-- The bench's catalogue for 0.6 (docs/testbench-catalogue.md): 287 cases in one line each,
+- The bench's catalogue for 0.6 (docs/maintainers/testbench-catalogue.md): 287 cases in one line each,
   by area, with where each runs (real devices, a fleet of containers, a time-scaled build,
   a test release feed, UI automation, a person) and what it still needs; and every function
-  of the product with its cases (docs/testbench-functions.md). `testbench coverage` counts
+  of the product with its cases (docs/maintainers/testbench-functions.md). `testbench coverage` counts
   how many functions have a case, how many run by themselves and how many the harness runs
   today; `testbench all` runs every suite in turn and ends with that table.
 - The bench's `faults` suite: a bad network at the hub, a blocked member port, a hung and a
@@ -1717,6 +1717,20 @@ All notable changes to cbb are documented in this file. The format follows
   a PIN set before still works. The admin token itself says whether its SO PIN was made
   random, and the tries left come from its flags, so clearing the app's data neither stops
   the PIN working nor shows a full seven tries.
+- The notes for coding agents are in `AGENTS.md`, short and pointing to the documents
+  instead of repeating them; `CLAUDE.md` only includes it.
+- Copied code may sit in a `third_party` directory beside the code that uses it, and
+  `tools/repocheck` asks each copied directory for its `README.md` as well as its `LICENSE`.
+- The maintainers' pages moved to `docs/maintainers/`: maintaining, the test bench, its
+  catalogue, functions and cases, and the security audit's plan. `tools/bench` reads the
+  catalogue there by default (`-docs`).
+- The documentation, the website's index and the command line's messages no longer speak of
+  a "lite member" or a "full member": every computer and small device runs the one `cbb`, and
+  a small device usually without `cbb-helper` beside it. `member/README.md` is now "`cbb` on
+  small devices", the command reference's section "Without cbb-helper" replaces "The lite
+  member", and pages that set the two programs apart (the device table, the design's routers,
+  the protocol's notes on what one of them lacked) say what holds now. `tools/repocheck`
+  refuses the old words outside the changelog and the decisions.
 - A member does not write to its clipboard a copy made before it last started, whatever its
   age: the rule of incoming copies takes the clock mark saved before the start.
 - The core wipes device keys, a secret's text and a copy's key from memory once it is done
@@ -1733,7 +1747,7 @@ All notable changes to cbb are documented in this file. The format follows
   release's `cbb` checks updates only against its pinned roots, whatever `CBB_RELEASE_DIR`
   and `CBB_RELEASE_ROOTS` say. A test build does not compile in the release workflow, names
   itself in `cbb version` and is refused by the release workflow, as is a Go program built
-  with the tag `benchtime` or `testhooks` (docs/maintaining.md, "Releases").
+  with the tag `benchtime` or `testhooks` (docs/maintainers/maintaining.md, "Releases").
 - The Mac app's Settings are a sheet on its window, as the tray app's dialog, instead of a
   window of their own; "Settings…" in the menu bar item and Command-comma open the window
   with them.
@@ -2256,7 +2270,7 @@ All notable changes to cbb are documented in this file. The format follows
   installed (the phone then joins its group again).
 - The keys that sign releases (Android, Windows, the OpenWrt feed, the Homebrew tap) are
   secrets of the environment `release`, which only release tags and `main` may use, instead
-  of repository secrets that any branch's workflow could read (docs/maintaining.md,
+  of repository secrets that any branch's workflow could read (docs/maintainers/maintaining.md,
   "Release secrets").
 - CI runs only the jobs of the parts a pull request changes (`.github/ci-changes.sh`), so a
   pull request of documentation no longer builds the phone apps, the lite member and the

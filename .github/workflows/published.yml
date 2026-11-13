@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Runs when the maintainer publishes a release that release.yml left as a
-# draft and release-sign publish signed (docs/maintaining.md, "Signed
+# draft and release-sign publish signed (docs/maintainers/maintaining.md, "Signed
 # releases"): checks the signed files GitHub serves and updates the Homebrew
 # tap. A draft cannot reach the tap, so nothing unsigned does.
 name: published
@@ -62,7 +62,7 @@ jobs:
           cat "$RUNNER_TEMP/cbb.rb"
       - name: push it to the tap
         # A deploy key with write access to the tap repository only
-        # (docs/maintaining.md, "Homebrew"); without it the tap keeps its formula.
+        # (docs/maintainers/maintaining.md, "Homebrew"); without it the tap keeps its formula.
         env:
           TAP_KEY: ${{ secrets.CBB_HOMEBREW_TAP_KEY }}
         run: |

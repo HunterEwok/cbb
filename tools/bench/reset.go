@@ -261,7 +261,7 @@ func resetDevice(ctx context.Context, r *Report, d *Device, b *Build, quick bool
 	case "windows":
 		return resetWindows(ctx, r, d, b, quick)
 	}
-	return Skipped("the bench does not reset os " + d.OS + " yet; reset it by hand (docs/testbench-cases.md, R1)")
+	return Skipped("the bench does not reset os " + d.OS + " yet; reset it by hand (docs/maintainers/testbench-cases.md, R1)")
 }
 
 // resetRouterOrBSD is R1 on OpenWrt and FreeBSD: uninstall.sh --purge, a

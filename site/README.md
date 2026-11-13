@@ -52,7 +52,7 @@ every way to download is shown. It also has error pages (`404`, `50x`) in every 
 `/docs/` is the repository's documentation as it reads on GitHub: every Markdown page below
 `docs/`, and the few pages elsewhere that it links to (`extraDocs` in
 [`tools/site/docs.go`](../tools/site/docs.go): CONTRIBUTING, SECURITY, the changelog, the
-lite member's and the Docker image's READMEs), rendered with goldmark inside
+READMEs of `cbb` on small devices and of the Docker image), rendered with goldmark inside
 `templates/doc.html`. Nothing is written for the site alone: change a page in `docs/` and
 the next build carries it. A link to another published page leads to its page here, a link
 to any other file of the repository to that file on GitHub, and `docs/images` is copied.

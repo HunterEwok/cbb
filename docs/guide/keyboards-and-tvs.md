@@ -67,7 +67,7 @@ The computer's own Bluetooth keyboards and mice keep working.
 
 ## The Nano ESP32 as a USB or Bluetooth keyboard
 
-The board is a lite member of your group. On its console:
+The board is a member of your group. On its console:
 
 - `usb keyboard` makes its USB port a keyboard, with the console as a second serial port
   beside it; plug it into the device. It works before any system starts: in a BIOS, a UEFI

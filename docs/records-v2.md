@@ -10,7 +10,7 @@ bodies"; this page was that specification until the switch ([roadmap](roadmap.md
 There is no migration. A member that holds records of version 1, or a group made before the
 switch, refuses them, and the group is set up again; until 1.0.0 the project keeps no
 backward compatibility. `cbb upgrade` of a legacy group went with version 1.
-A computer or a lite member that finds a group of version 1 at start (its `records.json` is a
+A computer or a small device that finds a group of version 1 at start (its `records.json` is a
 JSON array) leaves it: it moves the group's files into `before-0.6` in its state directory,
 keeps its settings, and says so in its log and, on a computer, in `cbb status`; CI's upgrade
 job checks it from 0.5.0.
@@ -42,7 +42,7 @@ security audit, each time through one of these properties. Version 2 removes the
 
 The rules are evaluated by a pure function from the record set to the group's **state**
 (protocol.md, section 10, "The state"). It is written twice: in Go (`internal/group`) for the computers, and in
-Rust (`cbb_core`, `core/`) for the lite member and, through bindings, for both phone
+Rust (`cbb_core`, `core/`) for `cbb` and, through bindings, for both phone
 apps, which no longer evaluate records themselves. The vectors and the differential run
 compare the whole state, not single answers.
 

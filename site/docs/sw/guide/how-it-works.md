@@ -88,7 +88,7 @@ Kikundi cha simu pekee, au simu na Mac, hakina kompyuta ya kuwa kitovu. Njia mbi
 
 ![Relei pofu huunganisha laptopu iliyo mbali na Mac iliyo nyumbani; usimbaji fiche hupita ndani yake mwisho hadi mwisho](../images/relay.svg)
 
-Kikundi kinaweza kuwa na vitovu kadhaa: mzizi, kila msimamizi aliye na kitovu kilichowekwa, na vitovu vinavyopitisha nakala tu. Vifaa vilivyo mbali na nyumbani hutumia cha kwanza kinachojibu, simu kwanza, kwa hiyo kikundi cha simu na kompyuta huendelea kufanya kazi wakati programu ya simu imefungwa.
+Kikundi kinaweza kuwa na vitovu kadhaa: mzizi, kila msimamizi aliye na kitovu kilichowekwa, na vitovu vinavyopitisha nakala tu. Vifaa vilivyo mbali na nyumbani hutumia cha kwanza kinachojibu, kompyuta kabla ya simu, kwa hiyo kikundi cha simu na kompyuta huendelea kufanya kazi wakati programu ya simu imefungwa.
 
 **Imepangwa:** relei pofu kwenye `cbb.tools` kwa kila mtu asiyetaka kuendesha kitovu au relei. Itaona ni vifaa vipi vinavyozungumza na lini, kamwe isione kinachonakiliwa, na wewe mwenyewe ndiye unayeiwasha.
 

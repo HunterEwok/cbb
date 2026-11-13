@@ -16,7 +16,7 @@ import (
 
 // runMemscan looks for text in the memory of every cbb service in the
 // container, the bench's check that a device holds no copy it must not read
-// (docs/testbench-catalogue.md, S25, S26, Y36): it prints "memscan: found N"
+// (docs/maintainers/testbench-catalogue.md, S25, S26, Y36): it prints "memscan: found N"
 // or "memscan: none", and fails when it finds no service or reads none of
 // its memory. The container runs it with --privileged, since the service
 // may make itself undumpable.

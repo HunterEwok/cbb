@@ -15,7 +15,7 @@ The same bench then runs before every later release.
 CI already covers a lot in containers and on hosted runners (unit tests with `-race`, the
 Docker e2e of three members, Wayland and X11 under headless compositors, the Windows
 installer on windows-latest, the cross tests between Go, Swift and Kotlin, cbb without its helper
-among full members). The bench covers what CI cannot:
+among other members). The bench covers what CI cannot:
 
 - real hardware and real operating systems: an ARMv6 board running cbb without its helper, a Linux
   desktop, a Mac, Windows, an Android phone;
@@ -170,7 +170,7 @@ Every other way Copy Beyond Borders works, so no path ships untested:
 | P1 | Password managers: a copy marked secret by the app (macOS concealed type, Windows "exclude from history and cloud", the Wayland password hint) | travels as a secret (C6 rules) or not at all, as designed; never as plain text |
 | P2 | Rich text from a browser and an office app; images, a folder of files, a copy over a member's limit | the plain text arrives; images and files arrive whole with their names, marked as downloads on Mac and Windows; a copy over the limit is refused once with a clear message |
 | P3 | Clipboard history (Windows Win+V, the GNOME clipboard) and copy echo | a received text is not sent back; no ping-pong between two members |
-| P4 | The Mac as a full member: `small` and the emulator reach the Mac with no other computer on; the Mac and a Linux member connect whichever has the lower device ID, also with the Mac's application firewall on | sync works; one connection between each pair |
+| P4 | The Mac as a member that listens: `small` and the emulator reach the Mac with no other computer on; the Mac and a Linux member connect whichever has the lower device ID, also with the Mac's application firewall on | sync works; one connection between each pair |
 | P5 | The service's options on `small`: `-peer`, `-no-mdns`, `-no-listen`, `watch` | each works as `docs/reference/cli.md` says |
 | P6 | Another port (`--port`, `CBB_PORT`) on every installer, and back to 8764 | members find each other; the old firewall rule is gone |
 | P7 | Homebrew on the Mac, `install.sh --in-place`, `uninstall.sh` before `brew uninstall` | the agent runs Homebrew's binary, the service a root-owned copy of it; nothing is left |
@@ -319,7 +319,7 @@ the number, which a profile of CI's tests copied there as well adds to. For the 
 `cbb-helper` with `-cover` (`CGO_ENABLED=0 go build -cover -coverpkg=./cmd/...,./internal/...
 -o cbb-helper ./cmd/cbb-helper`); `go tool covdata textfmt -i DIR -o fleet.out` and `go run
 ./tools/coverage -go fleet.out` give its table, by package, as CI's coverage job does
-([testing](testing.md#coverage)). The real devices run release builds and are not counted; an
+([testing](../testing.md#coverage)). The real devices run release builds and are not counted; an
 instrumented `cbb` is slower and larger, so E12's budgets mean nothing in such a run.
 
 **Budgets**: E12 holds `cbb` to fixed limits on the small devices it runs on, a
@@ -343,7 +343,7 @@ Raspberry Pi 4 runs the fleet and time suites every week with `tools/bench/weekl
 cron, on the newest main, each against the previous week's `metrics.json`. `-repeat N` runs
 the fleet, time or phone suite N times, each run's cases named `runK/...`, and lists in
 `flaky.txt` the cases that both passed and failed; every failure still fails the run, and each
-flaky case goes into [testing](testing.md#unstable-tests)' list until its cause is fixed.
+flaky case goes into [testing](../testing.md#unstable-tests)' list until its cause is fixed.
 
 **Reports**: a JUnit XML file for GitHub's test summary, an HTML report with the matrix
 (green and red cells), every failure's logs from all devices (`journalctl`, `log show`,
@@ -501,7 +501,7 @@ once: Docker, the SSH user in the `docker` group, and for F1 the helper
 container's process belongs to the image's user); `setup-docker.sh up CBB` starts a new
 container of the build under test, and `down` removes it with its volume.
 
-A device with `os = "netns"` is a second full member on a Linux host, for a way out that
+A device with `os = "netns"` is a second member on a Linux host, for a way out that
 the host's own member does not take, such as a VPN: it runs in a network namespace whose
 only interface is tun2socks's, which carries its traffic to a SOCKS5 proxy on the host:
 over a proxy without UDP the member goes away from home with VLESS (a hub's default at a forwarder), over one
@@ -536,5 +536,5 @@ One pull request per step, merged in order:
 5. Away cases through the hub (N3, N7) and security tests S1 to S7, S9 to S16.
 6. The relay: the VPS set up as the production relay (hardening, firewall, no logs) running
    `cbb forward`; S8 and N4.
-7. The GitHub runner, the soak suite, the release checklist in `docs/maintaining.md`.
+7. The GitHub runner, the soak suite, the release checklist in `docs/maintainers/maintaining.md`.
 8. The 0.4 test run and its report.
