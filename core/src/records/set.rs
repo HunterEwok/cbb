@@ -2525,36 +2525,84 @@ impl RecordSet {
             return self.in_dependency_order();
         }
         // A key a held record of the forked current root admits gets the
-        // proof, the lowest pair, and nothing else.
+        // proof, the lowest pair, and the way out: a change of root the
+        // set holds (the recovery records and each new root's records up
+        // to its first checkpoint); nothing else.
         if state.proof_to.binary_search(peer).is_ok()
             && let Some((_, a, b)) = state.root_pair
         {
-            return [a, b].iter().filter_map(|id| self.held(id)).collect();
+            let mut out: Vec<&Record> = [a, b].iter().filter_map(|id| self.held(id)).collect();
+            out.extend(self.changes());
+            return out;
         }
         Vec::new()
     }
 
-    /// Takes a record from a peer that gets the proof only
-    /// (`peer::Standing::ForkProof`): one the current root signed that
-    /// makes a pair at a seq below the fork seq the set holds (none held:
-    /// any seq), or the partner a half waits for. Nothing else from it is
-    /// read: `Added::Halted`.
+    /// The changes of root the set holds: each recovery record, then the
+    /// records of the root it names up to that root's first checkpoint.
+    fn changes(&self) -> Vec<&Record> {
+        let mut heads: Vec<&Record> =
+            self.records.values().filter(|e| e.role == Role::Recovery).map(|e| &e.record).collect();
+        heads.sort_by_key(|r| (r.body().seq, r.id()));
+        let mut out = Vec::new();
+        for head in heads {
+            out.push(head);
+            let Kind::Recovery { root, first, .. } = &head.body().kind else { continue };
+            let h = root.hash();
+            let mut firsts: Vec<&Record> = self
+                .records
+                .values()
+                .map(|e| &e.record)
+                .chain(self.early.values())
+                .filter(|r| r.body().signer == h)
+                .collect();
+            let Some(cp) = firsts.iter().find(|r| r.id() == *first).map(|r| r.body().seq) else { continue };
+            firsts.retain(|r| r.body().seq <= cp);
+            firsts.sort_by_key(|r| r.body().seq);
+            out.extend(firsts);
+        }
+        out
+    }
+
+    /// The lists a peer gets with what `for_peer` gives it: every list for
+    /// a device of the group; for any other peer those the recovery
+    /// records it is given name (a removed device, to place its removal's
+    /// signer; a key that gets the proof, with the way out). A list is
+    /// record IDs only.
+    pub fn lists_for_peer(&self, state: &State, peer: &KeyHash) -> Vec<&[u8]> {
+        if !state.halted() && !state.revoked.contains(peer) && state.device_by_key(peer).is_some() {
+            return self.lists().collect();
+        }
+        let mut out: Vec<&[u8]> = Vec::new();
+        for r in self.for_peer(state, peer) {
+            if let Kind::Recovery { list, .. } = &r.body().kind
+                && let Some(b) = self.list(list)
+                && !out.contains(&b)
+            {
+                out.push(b);
+            }
+        }
+        out
+    }
+
+    /// Takes a record from a peer that the set cannot place as a device,
+    /// whose key a held record of the forked current root admits
+    /// (`peer::Standing::ForkProof`): a halt stops acting, not taking. A
+    /// record the current root signed, on either line and at any seq, goes
+    /// through the ordinary insert (the pair judgment, the root room, the
+    /// settled rules); so does a change of root (a recovery record, and the
+    /// records of a root a held recovery record names), whose list comes
+    /// by `insert_list`, which takes only a list a recovery record names.
+    /// Nothing another key signed is read: `Added::Halted`. Once these
+    /// records make the sender a device, the ordinary path takes the rest.
     pub fn insert_proof(&mut self, r: Record) -> Result<Added, Refused> {
         let b = r.body();
-        let cur = self.current_root();
-        if b.group != self.group || b.signer != cur {
-            return Ok(Added::Halted);
-        }
-        let (at, id) = ((b.seq, b.signer), r.id());
-        let partner = self.halves.get(&at).is_some_and(|(_, _, o)| *o == id);
-        let other = |o: RecordId| o != id;
-        let pairs =
-            self.records.values().any(|e| (e.record.body().seq, e.record.body().signer) == at && other(e.record.id()))
-                || self.settled.get(&at).is_some_and(|(_, o)| other(o.id()))
-                || self.settled_ids.get(&at).is_some_and(|(_, o)| other(*o))
-                || self.aside_at(&at).is_some_and(|o| other(o.id()));
-        let lower = self.fork_seq(&cur).is_none_or(|f| b.seq < f);
-        if !(partner || pairs && lower) {
+        let named = self.records.values().any(|e| {
+            e.role == Role::Recovery
+                && matches!(&e.record.body().kind, Kind::Recovery { root, .. } if root.hash() == b.signer)
+        });
+        let ours = b.signer == self.current_root() || b.signer == self.recovery.hash() || named;
+        if b.group != self.group || !ours {
             return Ok(Added::Halted);
         }
         self.insert(r)

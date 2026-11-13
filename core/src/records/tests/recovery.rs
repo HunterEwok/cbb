@@ -1981,3 +1981,63 @@ fn a_change_written_without_a_sync_says_so() {
     let st = synced.state();
     assert!(!synced.write_change(&st, &k("recovery"), &k("n1"), phone(&k("p1")), &[], false, 0).unwrap().blind);
 }
+
+/// The way out of two histories of the root reaches a stopped member from
+/// a key one line admits: the new root's device was admitted on one line,
+/// and the member takes the change of root (its head, its list, the new
+/// root's records) from it; the group runs again.
+#[test]
+fn a_change_of_root_reaches_a_member_from_a_key_one_line_admits() {
+    let mut g = base();
+    let root = k("root");
+    let below = g.recs.last().unwrap().clone();
+    g.device(&root, &k("m4"), "m4", |_| {});
+    let other = Body {
+        seq: below.body().seq + 1,
+        prev: Some(below.id()),
+        ..g.body(&root, Kind::Revoke(removal(&[k("tv").hash], Vec::new())))
+    };
+    g.recs.push(Record::sign(other, &root).unwrap());
+    let stopped = g.recs.clone();
+    let w = write(&mut g, &stopped, &k("n1"), &k("m4"), &[]);
+    let mut m = set_with(&g.root.key, &stopped, &[]);
+    let st = m.state();
+    assert!(st.stopped());
+    let me = k("laptop").hash;
+    assert_eq!(crate::peer::standing(&st, &me, &point_of(&k("m4"))), crate::peer::Standing::ForkProof);
+    // The writer's set, before it applied the change, hands it out.
+    let mut writer = set_with(&g.root.key, &stopped, &[]);
+    writer.insert(w.record.clone()).unwrap();
+    let wst = writer.state();
+    let given: BTreeSet<RecordId> = writer.for_peer(&wst, &k("m4").hash).iter().map(|r| r.id()).collect();
+    assert!(given.contains(&w.record.id()));
+    for r in core::iter::once(&w.record).chain(&w.first) {
+        assert_ne!(m.insert_proof(r.clone()), Ok(Added::Halted), "{:?}", r.body().kind);
+    }
+    m.insert_list(&w.list.encode()).unwrap();
+    let st = m.state();
+    assert!(!st.stopped());
+    assert_eq!(st.roots.last(), Some(&k("n1").hash));
+}
+
+/// A device the new root removes in a change of root gets, with its
+/// removal and the change that proves its signer, the change's list, so
+/// it waits for nothing.
+#[test]
+fn a_removed_device_gets_the_list_of_the_change_that_removed_it() {
+    let mut g = base();
+    let before = g.recs.clone();
+    let w = write(&mut g, &before, &k("n1"), &k("new phone"), &[k("laptop").hash]);
+    let set = set_with(&g.root.key, &g.recs, &g.lists);
+    let st = set.state();
+    assert!(st.revoked.contains(&k("laptop").hash));
+    let lists = set.lists_for_peer(&st, &k("laptop").hash);
+    assert_eq!(lists, [w.list.encode().as_slice()]);
+    let mut laptop = set_with(&g.root.key, &before, &[]);
+    laptop.insert_all(set.for_peer(&st, &k("laptop").hash).into_iter().cloned());
+    for l in lists {
+        laptop.insert_list(l).unwrap();
+    }
+    assert_eq!(laptop.missing_list(), None);
+    assert!(laptop.state().revoked.contains(&k("laptop").hash));
+}

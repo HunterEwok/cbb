@@ -2365,6 +2365,8 @@ jobs:
           name: coverage-rust
           path: coverage-rust.json
           retention-days: 7
+      - name: the stack one change of root's verify needs, in the optimized build the board runs
+        run: cargo test --locked --release -p cbb-core --features std,tls,web --test slhdsa the_stack_a_verify_needs
       - name: cargo build
         run: |
           cargo build --locked --release

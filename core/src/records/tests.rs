@@ -4168,11 +4168,11 @@ fn a_key_one_line_admits_gets_the_pair_alone() {
     let st0 = m0.state();
     m5.insert_all(m0.for_peer(&st0, &k("m5").hash).into_iter().cloned());
     assert_eq!(m5.state().root_pair, st0.root_pair);
-    // From such a peer: a pair at a lower seq moves the fork seq down;
-    // anything else is not read.
+    // From such a peer: a record the root signed goes through the
+    // ordinary insert (a pair at a lower seq moves the fork seq down);
+    // what another key signed is not read.
     let other = g.root_rec(Kind::Copies { incoming_ms: 6_000, seen: vec![] });
-    assert_eq!(m0.insert_proof(other.clone()), Ok(Added::Halted));
-    assert!(!m0.contains(&other.id()));
+    assert_ne!(m0.insert_proof(other.clone()), Ok(Added::Halted));
     let theirs = g.device(&k("a admin"), &k("m9"), "m9", |_| {});
     assert_eq!(m0.insert_proof(theirs), Ok(Added::Halted));
     assert_eq!(m0.insert_proof(low2.clone()), Ok(Added::Stored));
@@ -4180,6 +4180,32 @@ fn a_key_one_line_admits_gets_the_pair_alone() {
     let mut low_pair = [low.id(), low2.id()];
     low_pair.sort();
     assert_eq!(st.root_pair, Some((low.body().seq, low_pair[0], low_pair[1])));
+}
+
+/// A member that took the pair before the records that admit anyone can
+/// place no peer: from a key one line admits it takes the root's records
+/// by the ordinary insert, and ends as a member that held them all.
+#[test]
+fn a_member_that_holds_only_the_pair_takes_the_root_records() {
+    let mut g = G::new();
+    g.device(&k("root"), &k("m0"), "m0", |_| {});
+    g.root_rec(Kind::Copies { incoming_ms: 5_000, seen: vec![] });
+    let a = g.device(&k("root"), &k("m5"), "m5", |_| {});
+    let a2 = root_twin(&g, &a, Kind::device(Device::new(k("m6").key.clone(), "m6", ROLE_MEMBER)));
+    g.device(&k("root"), &k("m7"), "m7", |_| {});
+    let mut full = set_with(&g.root.key, &g.recs, &g.lists);
+    full.insert(a2.clone()).unwrap();
+    let mut m = RecordSet::new(g.root.key.clone(), rk());
+    m.insert(a.clone()).unwrap();
+    m.insert(a2.clone()).unwrap();
+    let st = m.state();
+    assert!(st.stopped() && st.devices.is_empty());
+    assert_eq!(crate::peer::standing(&st, &k("m6").hash, &point_of(&k("m5"))), crate::peer::Standing::ForkProof);
+    for r in full.in_dependency_order() {
+        m.insert_proof(r.clone()).unwrap();
+    }
+    assert_eq!(m.digest(), full.digest());
+    assert_eq!(m.state(), full.state());
 }
 
 /// A removed key is told its removal also when that removal is half of the

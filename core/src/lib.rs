@@ -92,6 +92,7 @@ pub mod seal;
 pub mod secret;
 #[cfg(test)]
 mod sim;
+pub mod slhdsa;
 pub mod store;
 pub mod strict;
 pub mod sync;
