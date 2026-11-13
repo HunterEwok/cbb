@@ -130,13 +130,10 @@ final class PadUITests: XCTestCase {
             let arrow = thinkpad.waitForExistence(timeout: 5) && thinkpad.isSelected
             app.typeKey(.escape, modifierFlags: [])
             let escape = app.buttons["Close"].waitForNonExistence(timeout: 5)
-            var tapEscape = false
+            // typeText needs a focused text field, which the card has none
+            // of, so only Command-period is tried besides the Escape key.
+            let tapEscape = false
             if !escape {
-                // The escape character typed as text instead of the key.
-                app.typeText("\u{1B}")
-                tapEscape = app.buttons["Close"].waitForNonExistence(timeout: 5)
-            }
-            if !escape && !tapEscape {
                 // Command-period, the iPad's other cancel.
                 app.typeKey(".", modifierFlags: .command)
                 print("PADDIAG \(variant): cmd-period closed=\(app.buttons["Close"].waitForNonExistence(timeout: 5))")
