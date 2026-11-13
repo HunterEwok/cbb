@@ -2039,6 +2039,17 @@ module records_v3 {
     LOST.contains(n) or LOST.contains(m) or views.get(n).path.length() <= views.get(m).path.length()
       or leftOut(m) or chainState(st.get(m), db).stop or chainState(st.get(n), db).stop))
 
+  // Not a promise yet: a member that holds two records of its current root at one seq, both
+  // within its lists (in its rooms or beside its chain), is halted.
+  val rootPairHalts = MEMBERS.forall(m => {
+    val s = st.get(m)
+    val v = views.get(m)
+    val rs = recsOf(s.recs, db).union(firstsHeld(s, db))
+    val cur = last(v.path)
+    rs.exists(r => r.signer == cur and not(isChain(r)) and within(v.cuts, r)
+      and rs.exists(o => o != r and o.signer == cur and o.seq == r.seq)) implies v.stop
+  })
+
   val promises = and {
     oneState, converges, convergesHonest, countsNewest, removedStayOut, oneChainOneState, stopRootOnly, fairRoom, followsRecovery, pathGrows, newcomerTakes,
     oldRootListed, twinStops, removedGainsNothing, compactedAgree, F12 implies heldBackCountsLess, honestNeverDropped, honestNoMarks, marksInert,
