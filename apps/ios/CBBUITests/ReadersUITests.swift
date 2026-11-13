@@ -408,6 +408,22 @@ final class ReadersUITests: XCTestCase {
         return ratios
     }
 
+    /// Our own check at every step of the text size: each text of Settings
+    /// seen at all twelve sizes, and every step at which it is not taller
+    /// than at the step before.
+    private func ladder(_ round: Int) {
+        let steps = ["XS", "S", "M", "L", "XL", "XXL", "XXXL", "AccessibilityM", "AccessibilityL", "AccessibilityXL", "AccessibilityXXL", "AccessibilityXXXL"]
+        let heights = steps.map { settingsHeights("en", "UICTContentSizeCategory\($0)") }
+        let labels = heights.dropFirst().reduce(Set(heights[0].keys)) { $0.intersection($1.keys) }
+        var flat: [String] = []
+        for label in labels.sorted() {
+            let row = heights.map { $0[label]! }
+            print("MEASURE-LADDER round \(round): '\(label)' \(row.map { String(format: "%.1f", $0) }.joined(separator: " "))")
+            for i in 1..<steps.count where row[i] <= row[i - 1] { flat.append("'\(label)' \(steps[i - 1])→\(steps[i])") }
+        }
+        print("MEASURE-LADDER round \(round): \(labels.count) texts at all twelve sizes; not taller at: \(flat.isEmpty ? "none" : flat.joined(separator: ", "))")
+    }
+
     /// Runs the candidate ways round the audit's false reports on Settings,
     /// round after round until its time is up: the audit at smaller text
     /// sizes, textClipped alone, the audit twice with only issues in both
@@ -440,6 +456,7 @@ final class ReadersUITests: XCTestCase {
             let ratios = growth("en", round)
             _ = growth("hi", round)
             _ = growth("en", round, control: true)
+            if left() { ladder(round) }
             let singles: [Variant] = [
                 Variant(name: "audit at the default size", size: "UICTContentSizeCategoryL"),
                 Variant(name: "audit at the default size (hi)", language: "hi", size: "UICTContentSizeCategoryL"),
@@ -448,6 +465,8 @@ final class ReadersUITests: XCTestCase {
                 Variant(name: "fix: no hair spaces", args: ["-CBBMeasureNoHairSpace"], size: xxxl),
                 Variant(name: "fix: header without text case", args: ["-CBBMeasureHeaderNoTextCase"], size: xxxl),
                 Variant(name: "fix: header with .footnote", args: ["-CBBMeasureHeaderFont"], size: xxxl),
+                Variant(name: "fix: header in Georgia relative to .footnote", args: ["-CBBMeasureHeaderCustomFont"], size: xxxl),
+                Variant(name: "fix: header as a UIKit label", args: ["-CBBMeasureHeaderUILabel"], size: xxxl),
                 // The positive control: each of these must report the
                 // fixed text, or it checks nothing.
                 Variant(name: "control: audit at the default size, fixed text", args: ["-CBBMeasureFixedText"], size: "UICTContentSizeCategoryL"),

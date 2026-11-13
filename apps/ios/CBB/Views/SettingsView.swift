@@ -563,6 +563,27 @@ enum Measure {
     static func on(_ flag: String) -> Bool { ProcessInfo.processInfo.arguments.contains("-CBBMeasure" + flag) }
 }
 
+/// A measurement of CI's runner, not to be merged: a UIKit label that
+/// follows the text size as UIKit's own do.
+struct MeasureLabel: UIViewRepresentable {
+    let text: String
+
+    func makeUIView(context: Context) -> UILabel {
+        let label = UILabel()
+        label.font = .preferredFont(forTextStyle: .footnote)
+        label.adjustsFontForContentSizeCategory = true
+        label.numberOfLines = 0
+        label.text = text
+        return label
+    }
+
+    func updateUIView(_ label: UILabel, context: Context) { label.text = text }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UILabel, context: Context) -> CGSize? {
+        uiView.sizeThatFits(CGSize(width: proposal.width ?? .greatestFiniteMagnitude, height: .greatestFiniteMagnitude))
+    }
+}
+
 extension View {
     @ViewBuilder func measurePlainList() -> some View {
         if Measure.on("PlainList") { listStyle(.plain) } else { self }
@@ -621,6 +642,10 @@ struct NotificationSettings: View {
                     Text("Notifications").textCase(nil)
                 } else if Measure.on("HeaderFont") {
                     Text("Notifications").font(.footnote)
+                } else if Measure.on("HeaderCustomFont") {
+                    Text("Notifications").font(.custom("Georgia", size: 13, relativeTo: .footnote))
+                } else if Measure.on("HeaderUILabel") {
+                    MeasureLabel(text: String(localized: "Notifications"))
                 } else {
                     Text("Notifications")
                 }
