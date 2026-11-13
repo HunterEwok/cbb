@@ -7,6 +7,7 @@ import android.content.Context
 import android.util.Base64
 import androidx.core.content.edit
 import org.unifiedpush.android.connector.FailedReason
+import org.unifiedpush.android.connector.INSTANCE_DEFAULT
 import org.unifiedpush.android.connector.PushService
 import org.unifiedpush.android.connector.UnifiedPush
 import org.unifiedpush.android.connector.data.PushEndpoint
@@ -33,7 +34,7 @@ object PushPlatform {
      * The distributor's instance this app now uses: a new one with each
      * removal applied (newEndpoint), so the endpoint every member knew dies.
      */
-    fun instance(c: Context): String = prefs(c).getString(INSTANCE, null) ?: UnifiedPush.INSTANCE_DEFAULT
+    fun instance(c: Context): String = prefs(c).getString(INSTANCE, null) ?: INSTANCE_DEFAULT
 
     fun start(c: Context) {
         UnifiedPush.tryUseCurrentOrDefaultDistributor(c) { ok ->
