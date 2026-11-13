@@ -1685,7 +1685,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
             counted: vec![false; n],
             forked: BTreeMap::new(),
             admins: BTreeMap::new(),
-            recovery: KeyHash::default(),
+            recovery: e.recovery,
             chain_records: BTreeSet::new(),
             admitted: BTreeMap::new(),
             undecided_admits: BTreeSet::new(),
@@ -2134,7 +2134,8 @@ impl<'e, 'a> Epoch<'e, 'a> {
                 }
             }
             Kind::Revoke(rm) => rm.keys.iter().all(|k| {
-                if self.is_root(k) {
+                // No admin outranks a root or the recovery key.
+                if self.is_root(k) || *k == self.recovery {
                     false
                 } else if self.is_admin(k) {
                     self.has(a, POWER_REMOVE_ADMINS)
@@ -2381,7 +2382,9 @@ impl<'e, 'a> Epoch<'e, 'a> {
             let r = self.r(i);
             if let Some(rm) = r.removal() {
                 if r.is_revoke() {
-                    self.revoked.extend(rm.keys.iter().copied());
+                    // The recovery key is never removed (rule 33).
+                    let recovery = self.recovery;
+                    self.revoked.extend(rm.keys.iter().copied().filter(|k| *k != recovery));
                 } else if !thawed.contains_key(&r.id) {
                     self.frozen.extend(rm.keys.iter().copied());
                 }

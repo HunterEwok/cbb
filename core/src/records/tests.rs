@@ -713,6 +713,60 @@ fn a_removed_device_gets_only_its_removal() {
     assert_eq!(set.for_peer(&s, &tablet.hash).len(), 3);
 }
 
+/// A removed device that does not know its removal's signer gets what
+/// proves it, and nothing else: an admin's root record, or the change of
+/// root with its first checkpoint and list; it then knows it is removed.
+#[test]
+fn a_removed_device_learns_it_is_removed_whoever_signed() {
+    // An admin the device never heard of removes it.
+    let mut g = G::new();
+    let laptop = k("laptop");
+    g.device(&k("root"), &laptop, "laptop", |_| {});
+    let at_join = g.recs.clone();
+    let tablet = g.device(&k("root"), &k("tablet"), "tablet", |_| {});
+    let grant = g.admin(&k("pa"), &k("a"), POWER_ADMIT | POWER_REMOVE);
+    let rv = g.rec(&k("a"), Kind::Revoke(removal(&[laptop.hash], g.seen())));
+    let set = set_with(&g.root.key, &g.recs, &g.lists);
+    let st = set.state();
+    assert!(st.revoked.contains(&laptop.hash));
+    // The admin's root record with its chain to what the device holds.
+    let given: Vec<RecordId> = set.for_peer(&st, &laptop.hash).iter().map(|r| r.id()).collect();
+    let mut chain: Vec<RecordId> = at_join.iter().map(Record::id).collect();
+    chain.extend([tablet.id(), grant.id(), rv.id()]);
+    assert_eq!(given, chain);
+    let mut mine = set_with(&g.root.key, &at_join, &g.lists);
+    mine.insert_all(set.for_peer(&st, &laptop.hash).into_iter().cloned());
+    assert!(mine.state().revoked.contains(&laptop.hash));
+
+    // A new root, whose change the device never got, removes it.
+    let mut g = G::new();
+    g.device(&k("root"), &laptop, "laptop", |_| {});
+    g.device(&k("root"), &k("tablet"), "tablet", |_| {});
+    let at_join = g.recs.clone();
+    let list = g.listing();
+    let head = g.change(&k("root2"), &list);
+    let rv = g.rec(&k("root2"), Kind::Revoke(removal(&[laptop.hash], g.seen())));
+    let set = set_with(&g.root.key, &g.recs, &g.lists);
+    let st = set.state();
+    assert!(st.revoked.contains(&laptop.hash));
+    let given: Vec<&Record> = set.for_peer(&st, &laptop.hash);
+    let first = match &head.body().kind {
+        Kind::Recovery { first, .. } => *first,
+        _ => unreachable!(),
+    };
+    let ids: Vec<RecordId> = given.iter().map(|r| r.id()).collect();
+    assert!(ids.contains(&head.id()) && ids.contains(&first) && ids.contains(&rv.id()));
+    assert_eq!(ids.len(), 3, "nothing but the change, its first checkpoint and the removal");
+    let mut mine = set_with(&g.root.key, &at_join, &g.lists);
+    for _ in 0..2 {
+        mine.insert_all(given.iter().map(|r| (*r).clone()));
+        for l in set.lists() {
+            let _ = mine.insert_list(l);
+        }
+    }
+    assert!(mine.state().revoked.contains(&laptop.hash));
+}
+
 fn xwing(n: u8) -> Key {
     Key { alg: ALG_XWING, public: vec![n; XWING_PUBLIC] }
 }
@@ -1463,6 +1517,23 @@ mod vectors {
     fn records() -> Json {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/format/records.json");
         serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
+    }
+
+    /// Every list of the vectors is taken by its hash and reads as the
+    /// IDs it says, bytes that are no list as the empty list.
+    #[test]
+    fn lists_read_as_the_vectors_say() {
+        let v = records();
+        let lists = v["lists"].as_array().unwrap();
+        assert!(lists.iter().any(|l| l["name"].as_str().unwrap().contains("no list")));
+        for l in lists {
+            let name = l["name"].as_str().unwrap();
+            let bytes = unhex(l["bytes"].as_str().unwrap());
+            let hash: [u8; 32] = unhex(l["hash"].as_str().unwrap()).try_into().unwrap();
+            assert_eq!(list_hash(&bytes), hash, "{name}");
+            let list = List::of(&bytes, &hash).unwrap_or_else(|| panic!("{name}: taken by its hash"));
+            assert_eq!(list.0.len() as u64, l["ids"].as_u64().unwrap(), "{name}");
+        }
     }
 
     /// Every record the format's vectors take reads, held where they say
@@ -4151,4 +4222,197 @@ fn a_key_an_admin_admits_in_a_root_fork_is_a_device_that_does_nothing() {
         crate::peer::Standing::Member(crate::format::DeviceId(id.0))
     );
     assert!(!st.proof_to.contains(&k("m8").hash));
+}
+
+/// An admin's removal naming the recovery key counts for nothing (no
+/// admin outranks it), and no removal puts the recovery key among the
+/// removed; the state names the group's recovery key.
+#[test]
+fn the_recovery_key_is_never_removed() {
+    let mut g = G::new();
+    g.device(&k("root"), &k("m0"), "m0", |_| {});
+    g.admin(&k("pa"), &k("a"), POWER_ADMIT | POWER_REMOVE | POWER_REMOVE_ADMINS);
+    let by_admin = g.rec(&k("a"), Kind::Revoke(removal(&[rk().hash()], g.seen())));
+    g.root_rec(Kind::Revoke(removal(&[rk().hash()], g.seen())));
+    let set = set_with(&g.root.key, &g.recs, &g.lists);
+    let st = set.state();
+    assert!(!st.revoked.contains(&rk().hash()));
+    assert!(!st.counting.contains(&by_admin.id()));
+    assert!(st.ignored.iter().any(|i| i.record == by_admin.id() && i.why == Why::Power));
+    assert_eq!(st.recovery, rk().hash());
+    assert_eq!(st, state_with(&g.root.key, &g.recs, &g.lists));
+}
+
+/// A set whose root key is its recovery key takes nothing, and a device's
+/// store that pinned such keys is not taken.
+#[test]
+fn a_set_whose_root_is_its_recovery_key_takes_nothing() {
+    let root = k("root");
+    let gid = group_id(&root.key, &root.key);
+    let body = Body {
+        group: gid,
+        signer: root.hash,
+        seq: 1,
+        prev: None,
+        time_ms: 0,
+        kind: Kind::device(Device::new(k("m0").key.clone(), "m0", ROLE_MEMBER)),
+        held: false,
+    };
+    let r = Record::sign(body, &root).unwrap();
+    let mut set = RecordSet::new(root.key.clone(), root.key.clone());
+    assert_eq!(set.insert(r), Err(Refused::Group));
+    assert!(set.is_empty());
+    let local = [7u8; 32];
+    let mark = pin_mark(&local, &root.key, &root.key);
+    assert!(RecordSet::pinned(root.key.clone(), root.key.clone(), &local, &mark).is_none());
+}
+
+/// Records 1 to 20 of the root that checkpoint 7 pruned; 8 keeps the
+/// first eight, 9 the next eight: more than the place aside holds
+/// together (small rooms 14/12/5), each fitting on its own.
+fn eight_and_nine(nine_unheld: bool) -> (G, Vec<Record>, Record, Record, Record) {
+    let mut g = G::new();
+    let laptop = g.device(&k("root"), &k("laptop"), "laptop", |_| {});
+    let old: Vec<Record> = (0..20).map(|i| g.root_rec(Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] })).collect();
+    g.root_rec(Kind::Copies { incoming_ms: 6_000, seen: vec![] });
+    let c7 = root_cp(&mut g, vec![laptop.id()]);
+    let mut k8: Vec<RecordId> = old[..8].iter().map(Record::id).collect();
+    k8.extend([laptop.id(), c7.id()]);
+    let c8 = root_cp(&mut g, k8);
+    let mut k9: Vec<RecordId> = old[8..16].iter().map(Record::id).collect();
+    k9.extend([laptop.id(), c8.id()]);
+    if nine_unheld {
+        k9.push(RecordId([0x59; 32]));
+    }
+    let c9 = root_cp(&mut g, k9);
+    (g, old, c7, c8, c9)
+}
+
+/// What the newest waiting checkpoint keeps stays aside first: an honest
+/// 8 and 9 whose records together pass the place aside end at 9 on a
+/// member that counted 7, as on one handed everything at once.
+#[test]
+fn the_newest_waiting_checkpoint_keeps_its_records_aside_first() {
+    let small = crate::records::keep::small::Small::new(14, 12, 5);
+    let (g, old, c7, _c8, c9) = eight_and_nine(false);
+    for r in &g.recs {
+        small.units(r.id(), 1);
+    }
+    let base: Vec<Record> = g.recs.iter().filter(|r| !old.iter().any(|o| o.id() == r.id())).cloned().collect();
+    let without9: Vec<Record> = base.iter().filter(|r| r.id() != c9.id()).cloned().collect();
+    let mut m = set_with(&g.root.key, &without9[..without9.len() - 1], &g.lists);
+    sync_all(&mut m, &[], &g.lists);
+    assert_eq!(m.state().checkpoint, Some(c7.id()));
+    sync_all(&mut m, &base, &g.lists);
+    for seed in [0, 1, 2] {
+        let mut m = m.clone();
+        let order = if seed == 0 { old.clone() } else { shuffled(&old, seed) };
+        sync_all(&mut m, &order, &g.lists);
+        assert_eq!(m.state().checkpoint, Some(c9.id()), "order {seed}");
+        let once = set_with(&g.root.key, &g.recs, &g.lists);
+        assert_eq!(m.digest(), once.digest(), "order {seed}");
+        assert_eq!(m.state(), once.state(), "order {seed}");
+    }
+}
+
+/// The limit, as written: a checkpoint of the root that is never whole and
+/// keeps more old records than the place aside holds keeps a member at an
+/// older checkpoint, and once the member gave up asking it is told.
+#[test]
+fn a_checkpoint_never_whole_that_fills_the_place_aside_is_told() {
+    let small = crate::records::keep::small::Small::new(14, 12, 5);
+    let (g, old, c7, _c8, c9) = eight_and_nine(true);
+    for r in &g.recs {
+        small.units(r.id(), 1);
+    }
+    let base: Vec<Record> = g.recs.iter().filter(|r| !old.iter().any(|o| o.id() == r.id())).cloned().collect();
+    let without: Vec<Record> = base.iter().filter(|r| r.body().seq < c7.body().seq + 1).cloned().collect();
+    let mut m = set_with(&g.root.key, &without, &g.lists);
+    sync_all(&mut m, &[], &g.lists);
+    sync_all(&mut m, &base, &g.lists);
+    // 9's records first, then 8's: 9 keeps its place, 8 is never whole.
+    sync_all(&mut m, &old[8..16], &g.lists);
+    sync_all(&mut m, &old[..8], &g.lists);
+    assert_eq!(m.state().checkpoint, Some(c7.id()));
+    assert!(m.stuck_checkpoints().is_empty());
+    for _ in 0..crate::records::set::MISSING_ROUNDS {
+        let st = m.state();
+        let asked = m.missing(&st);
+        let given: Vec<Record> = asked.iter().filter_map(|id| g.recs.iter().find(|r| r.id() == *id).cloned()).collect();
+        sync_all(&mut m, &given, &g.lists);
+    }
+    assert_eq!(m.state().checkpoint, Some(c7.id()));
+    assert!(m.stuck_checkpoints().contains(&c9.id()));
+}
+
+/// A record a later checkpoint keeps, of which the member remembers only
+/// another record at its seq, waits aside as a half: the checkpoint counts
+/// once it is whole, and the member still asks for the other record.
+#[test]
+fn a_half_a_later_checkpoint_keeps_waits_aside() {
+    let mut g = G::new();
+    let laptop = g.device(&k("root"), &k("laptop"), "laptop", |_| {});
+    let x = g.device(&k("root"), &k("x"), "x", |_| {});
+    let x2 = root_twin(&g, &x, Kind::device(Device::new(k("y").key.clone(), "y", ROLE_MEMBER)));
+    let fill: Vec<Record> =
+        (0..20).map(|i| g.root_rec(Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] })).collect();
+    g.root_rec(Kind::Copies { incoming_ms: 6_000, seen: vec![] });
+    let c7 = root_cp(&mut g, vec![laptop.id()]);
+    let c8 = root_cp(&mut g, vec![laptop.id(), x.id(), c7.id()]);
+    let others: Vec<Record> =
+        g.recs.iter().filter(|r| r.id() != x.id() && !fill.iter().any(|f| f.id() == r.id())).cloned().collect();
+    let mut m = set_with(&g.root.key, &others, &g.lists);
+    sync_all(&mut m, &[], &g.lists);
+    assert_eq!(m.state().checkpoint, Some(c7.id()));
+    // x2 comes and goes; only its (seq, key, ID) stays.
+    assert!(matches!(m.insert(x2.clone()), Ok(Added::Settled { .. })));
+    for r in &fill {
+        let _ = m.insert(r.clone());
+    }
+    let _ = m.insert(x.clone());
+    sync_all(&mut m, &[], &g.lists);
+    assert_eq!(m.state().checkpoint, Some(c8.id()));
+    assert!(m.missing(&m.state()).contains(&x2.id()));
+}
+
+/// The member asks for what every checkpoint above the counting one
+/// keeps, not only the newest one.
+#[test]
+fn the_member_asks_for_what_every_waiting_checkpoint_keeps() {
+    let mut g = G::new();
+    let laptop = g.device(&k("root"), &k("laptop"), "laptop", |_| {});
+    let x = g.device(&k("root"), &k("x"), "x", |_| {});
+    g.root_rec(Kind::Copies { incoming_ms: 5_000, seen: vec![] });
+    let c7 = root_cp(&mut g, vec![laptop.id()]);
+    let c8 = root_cp(&mut g, vec![laptop.id(), x.id(), c7.id()]);
+    root_cp(&mut g, vec![laptop.id(), c8.id(), RecordId([0x59; 32])]);
+    let others: Vec<Record> = g.recs.iter().filter(|r| r.id() != x.id()).cloned().collect();
+    let mut m = set_with(&g.root.key, &others, &g.lists);
+    sync_all(&mut m, &[], &g.lists);
+    assert_eq!(m.state().checkpoint, Some(c7.id()));
+    let st = m.state();
+    assert!(m.missing(&st).contains(&x.id()));
+}
+
+/// A record of the place aside goes by its ID to a device of the group,
+/// not to a removed key.
+#[test]
+fn what_waits_aside_goes_by_id_as_the_peers_standing_says() {
+    let mut g = G::new();
+    let laptop = g.device(&k("root"), &k("laptop"), "laptop", |_| {});
+    let x = g.device(&k("root"), &k("x"), "x", |_| {});
+    g.device(&k("root"), &k("gone"), "gone", |_| {});
+    g.root_rec(Kind::Revoke(removal(&[k("gone").hash], g.seen())));
+    let c7 = root_cp(&mut g, vec![laptop.id()]);
+    root_cp(&mut g, vec![laptop.id(), x.id(), c7.id(), RecordId([0x5d; 32])]);
+    let others: Vec<Record> = g.recs.iter().filter(|r| r.id() != x.id()).cloned().collect();
+    let mut m = set_with(&g.root.key, &others, &g.lists);
+    sync_all(&mut m, &[], &g.lists);
+    m.insert(x.clone()).unwrap();
+    assert!(m.waits_aside(&x.id()));
+    let st = m.state();
+    assert!(st.revoked.contains(&k("gone").hash));
+    assert!(m.for_peer_by_id(&st, &k("laptop").hash, &x.id()).is_some());
+    assert!(m.for_peer_by_id(&st, &k("gone").hash, &x.id()).is_none());
+    assert!(m.for_peer_by_id(&st, &k("stranger").hash, &x.id()).is_none());
 }
