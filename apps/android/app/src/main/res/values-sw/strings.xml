@@ -34,6 +34,7 @@
     <string name="alert_stopped">Kikundi kimesimamishwa: vifaa vyake vinabadilishana rekodi zao tu, bila ubao wa kunakili, hadi mzizi wa kikundi uamue.</string>
     <string name="alert_two_histories">%1$s kilitia sahihi historia mbili kwa ufunguo mmoja, kama ufunguo ulioibiwa au urejeshaji kutoka nakala rudufu ungefanya.</string>
     <string name="alert_unknown_devices">vifaa visivyojulikana hapa</string>
+    <string name="all_devices">Vifaa vyote</string>
     <string name="app_info">Maelezo ya programu</string>
     <string name="appearance">Mwonekano</string>
     <string name="arrange">Panga</string>
@@ -95,7 +96,9 @@
     <string name="copies">Nakala</string>
     <string name="copies_forward_only">Huzipitisha, haisomi hata moja</string>
     <string name="create_group">Unda kikundi</string>
+    <string name="create_group_main_hint">Kifaa kinachounda kikundi hushika ufunguo wake mkuu: bora kiwe kile kilicho nawe kila wakati, kama simu yako.</string>
     <string name="device_id">Kitambulisho cha kifaa</string>
+    <string name="devices">Vifaa</string>
     <string name="error_action_refused">Kifaa hakikuendesha kitendo.</string>
     <string name="error_arrangement">Vigae vinabaki kama vilivyokuwa: badiliko hilo halifai.</string>
     <string name="error_below_key_level">Mpangilio wa funguo za msimamizi wa kikundi hauruhusu funguo za kifaa hiki kuwa msimamizi. Ubadilishe katika Mipangilio, Funguo za msimamizi.</string>
@@ -162,6 +165,7 @@
     <string name="files_sent">Imetumwa kwenye kompyuta, ambazo zinaileta kutoka simu hii sasa.</string>
     <string name="filter_online">Mtandaoni</string>
     <string name="frozen">imegandishwa</string>
+    <string name="group">Kikundi</string>
     <string name="group_hub">Kitovu cha kikundi</string>
     <string name="group_hub_in_use">Kitovu cha kikundi, kinatumika sasa</string>
     <string name="handed_body">Kompyuta iliyoshikilia kikundi imeikabidhi simu hii. Kichukue ili simu hii iwe mzizi wa kikundi; kompyuta inabaki kwenye kikundi.</string>
@@ -263,6 +267,7 @@
     <string name="join_title">Jiunge na kikundi</string>
     <string name="join_tv">Jiunge na kikundi cha simu</string>
     <string name="join_tv_hint">TV hii inajiunga na kikundi cha simu yako: inaonyesha msimbo wa QR, na simu inauchanganua.</string>
+    <string name="key_guard_weak">Kifaa hiki hakina chipu salama ya funguo au kihisi cha kuaminika cha alama ya kidole au uso: kama kifaa kikuu cha kikundi kinakilinda kikundi chini ya simu yenye vyote viwili.</string>
     <string name="key_level_body">Vifaa vipi vinaweza kuwa wasimamizi na vitovu vya kikundi. Funguo zilizo kwenye maunzi haziondoki kwenye kifaa kamwe; yeyote anayepata ufunguo ulio kwenye faili anaweza kuunakili. Wasimamizi walio tayari kwenye kikundi wanabaki hadi uwaondoe.</string>
     <string name="key_level_files">Funguo pia kwenye faili</string>
     <string name="key_level_hardware">Funguo kwenye maunzi</string>
@@ -342,6 +347,7 @@
     <string name="make_hub_reads">Kitovu kinachosoma nakala</string>
     <string name="make_hub_refused">Kompyuta haikuwa kitovu.</string>
     <string name="make_hub_title">Ufanye %1$s kuwa kitovu?</string>
+    <string name="menu">Menyu</string>
     <string name="more">Zaidi</string>
     <string name="move_earlier">Sogeza mbele</string>
     <string name="move_end">Hamishia mwisho</string>
@@ -523,6 +529,7 @@
     <string name="share_files_title">Utume kwenye kompyuta zako?</string>
     <string name="share_forget">Uliza kila programu tena</string>
     <string name="share_unknown_app">Programu</string>
+    <string name="shortcuts_hint">Ctrl+1 hadi 9 hufungua sehemu hizi, Ctrl+N huongeza kifaa, mishale huchagua kifaa na Esc hufunga maelezo yake.</string>
     <string name="signature_n">Sahihi %1$d</string>
     <string name="signature_of">Sahihi %1$d kati ya %2$d</string>
     <string name="source">Msimbo chanzo na leseni (AGPL-3.0)</string>

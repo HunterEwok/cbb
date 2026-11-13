@@ -243,6 +243,11 @@ pub struct Presence {
 }
 
 pub struct Node {
+    /// Held while this member signs a record of its own, from choosing
+    /// its seq until it is in the set: two signed at once, as the root's
+    /// records of two connections' evidence, took the same seq and stopped
+    /// the group with two histories of the signer.
+    pub signing: Mutex<()>,
     ident: RwLock<Arc<Identity>>,
     presence: Arc<Presence>,
     pub engine: Arc<Engine>,
@@ -337,12 +342,15 @@ pub fn command_id(r: &Record) -> String {
 }
 
 /// How a dial ended (Node::dial_ended).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Dialed {
-    /// The connection came up (or one to the peer was up already).
+    /// The connection came up (or one to the peer stayed in its place).
     pub up: bool,
     /// This member ended it to connect again: dial at once.
     pub again: bool,
+    /// The device the handshake found at the address, when it got that far:
+    /// a dial loop given only an address learns which member is there.
+    pub id: Option<DeviceId>,
 }
 
 /// A command a phone passed on: where it came from, when it expires, and
@@ -480,6 +488,7 @@ impl Node {
         let releases = Arc::new(Releases::open(&state_dir, crate::update::release_roots(), uptime::wall_ms(), &*log));
         engine.set_live_window(live_window(&records));
         Node {
+            signing: Mutex::new(()),
             ident: RwLock::new(Arc::new(ident)),
             presence: Arc::new(Presence {
                 role: "member".into(),
@@ -1667,7 +1676,8 @@ impl Node {
     /// Connects to the member at addr and runs the connection until it ends.
     /// peer is the device that discovery found there, or None for an
     /// address given by hand; the device is then the one the certificate
-    /// names. A device already connected is not connected twice.
+    /// names. Of two connections to one device the one the lower device ID
+    /// dialed stays, on both sides (run).
     pub fn dial(&self, addr: SocketAddr, peer: Option<DeviceId>) -> Result<()> {
         self.dial_ended(addr, peer).map(|_| ())
     }
@@ -1698,10 +1708,10 @@ impl Node {
         let cfg = tls::member_client(&ident, peer.clone(), tls::refused(&self.records), &tls::clock())?;
         let conn = tls::Session::client(Arc::new(cfg), tls::server_name(peer.as_ref()))?;
         let (conn, id, chain) = self.handshake(&sock, conn, addr, Usage::Server)?;
-        if self.connected_for(&id, &addr) {
-            let _ = sock.shutdown(Shutdown::Both);
-            return Ok(Dialed { up: true, again: false });
-        }
+        // A connection to the peer that came up meanwhile is not dropped
+        // here: run keeps the one the peer keeps too (the one the lower
+        // device ID dialed). Dropping this one would leave neither when the
+        // peer has already taken it in place of the old one.
         let before = self.reconnects.load(Ordering::SeqCst);
         // A connection that only tells a removed device so, or that this
         // removed device gets, is dialed again as after a failure: the
@@ -1710,9 +1720,9 @@ impl Node {
         // How it ended is logged; a connection that came up and ended is
         // dialed again at once when this member ended it to connect again,
         // else after a second.
-        let _ = self.run(sock, conn, id, chain, addr, true);
+        let _ = self.run(sock, conn, id.clone(), chain, addr, true);
         let up = !told && !self.removed();
-        Ok(Dialed { up, again: up && self.reconnects.load(Ordering::SeqCst) != before })
+        Ok(Dialed { up, again: up && self.reconnects.load(Ordering::SeqCst) != before, id: Some(id) })
     }
 
     /// Runs a connection that a member (a phone or another member)
@@ -2809,9 +2819,11 @@ fn read_any(r: &mut impl Read, max: usize) -> Result<Frame> {
 /// Whether a dial to addr replaces the connection up at up: a dial
 /// through a loopback port (a tunnel's, a relay's) replaces one at home,
 /// which may have gone quiet once the peer took the tunnel; nothing else
-/// replaces a connection that is up.
+/// replaces a connection that is up. A listener on both IPv4 and IPv6
+/// sees an IPv4 peer at its IPv4-mapped address (::ffff:127.0.0.1), which
+/// is loopback as much as 127.0.0.1 is.
 fn replaces(addr: &SocketAddr, up: &SocketAddr) -> bool {
-    addr.ip().is_loopback() && !up.ip().is_loopback()
+    addr.ip().to_canonical().is_loopback() && !up.ip().to_canonical().is_loopback()
 }
 
 /// A peer as its hello presents it, with what is not valid left out.
@@ -2913,6 +2925,23 @@ fn live_window(records: &Records) -> Duration {
 
 #[cfg(test)]
 mod tests {
+    use super::replaces;
+
+    /// A dial through a loopback port replaces a connection at home, but
+    /// not one a dual-stack listener took from 127.0.0.1, which it sees at
+    /// ::ffff:127.0.0.1: members given each other by -peer on one machine
+    /// otherwise replaced each other's connections every second.
+    #[test]
+    fn loopback_replaces_only_a_connection_at_home() {
+        let a = |s: &str| s.parse::<std::net::SocketAddr>().unwrap();
+        assert!(replaces(&a("127.0.0.1:7000"), &a("192.168.1.5:8764")));
+        assert!(replaces(&a("127.0.0.1:7000"), &a("[::ffff:192.168.1.5]:50000")));
+        assert!(!replaces(&a("127.0.0.1:7000"), &a("[::ffff:127.0.0.1]:50000")));
+        assert!(!replaces(&a("[::ffff:127.0.0.1]:50000"), &a("127.0.0.1:7000")));
+        assert!(!replaces(&a("127.0.0.1:7000"), &a("[::1]:50000")));
+        assert!(!replaces(&a("192.168.1.5:8764"), &a("127.0.0.1:7000")));
+    }
+
     use std::collections::HashMap;
     use std::time::Duration;
 

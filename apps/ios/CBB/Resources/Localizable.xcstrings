@@ -1933,6 +1933,52 @@
         }
       }
     },
+    "All devices": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كل الأجهزة"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todos los dispositivos"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "כל המכשירים"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "सभी डिवाइस"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все устройства"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vifaa vyote"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有设备"
+          }
+        }
+      }
+    },
     "Allow": {
       "localizations": {
         "ar": {
@@ -2389,6 +2435,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "另一位管理员冻结了这台电脑，就像对待被盗设备那样：它无法更改任何内容，其他设备也会拒绝它。只有当它在可靠的人手中时才解冻；否则请移除它。"
+          }
+        }
+      }
+    },
+    "Appearance": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المظهر"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apariencia"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מראה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "रूप"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оформление"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mwonekano"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外观"
           }
         }
       }
@@ -5244,6 +5336,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "设备 ID"
+          }
+        }
+      }
+    },
+    "Devices": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الأجهزة"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dispositivos"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "מכשירים"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "डिवाइस"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устройства"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vifaa"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设备"
           }
         }
       }
@@ -20930,6 +21068,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "设备拒绝加入。请在该设备上重试。"
+          }
+        }
+      }
+    },
+    "The device that makes the group holds its main key: best one that is always with you, such as your phone.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الجهاز الذي ينشئ المجموعة يحفظ مفتاحها الرئيسي: الأفضل أن يكون جهازًا معك دائمًا، مثل هاتفك."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El dispositivo que crea el grupo guarda su clave principal: mejor uno que siempre lleves contigo, como tu teléfono."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "המכשיר שיוצר את הקבוצה שומר את המפתח הראשי שלה: עדיף מכשיר שתמיד איתך, כמו הטלפון."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "जो डिवाइस समूह बनाता है, वही उसकी मुख्य कुंजी रखता है: बेहतर है कि वह हमेशा आपके पास रहे, जैसे आपका फ़ोन।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устройство, которое создаёт группу, хранит её главный ключ: лучше то, что всегда с вами, например телефон."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kifaa kinachounda kikundi hushika ufunguo wake mkuu: bora kiwe kile kilicho nawe kila wakati, kama simu yako."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建群组的设备保存群组的主密钥：最好是随身携带的设备，比如手机。"
           }
         }
       }

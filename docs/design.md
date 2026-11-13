@@ -539,7 +539,7 @@ creates the phone is the root of the group (D-33 to D-36; the wire side is secti
 ### Watches
 
 Steps 1 and 2 done in 0.4, step 3 and the admin key in 0.6; prompt delivery on the iPhone
-waits for the Apple developer account. Decided on 2026-10-24: a watch is never
+needs push notifications, not built yet (the Apple developer account is there). Decided on 2026-10-24: a watch is never
 the group's root, but it carries notifications, a switch for sync away from home and the
 emergency actions, with an admin key of its own.
 
@@ -610,8 +610,8 @@ One pull request each, smaller ones together:
    Kotlin, the interop vectors, certifying a watch from the root phone; the signed command
    that turns sync away from home off on a member. Done; not yet tried on a real watch.
 4. Emergency actions on the watch, and the quick actions. Done.
-5. Prompt iPhone notifications through an encrypted Apple push (D-74), after the Apple
-   developer account.
+5. Prompt iPhone notifications through an encrypted Apple push (D-74). Not built yet; the
+   Apple developer account and its APNs keys are there.
 
 Not yet verified on a real watch: the Secure Enclave key on the watch, WatchConnectivity
 waking the phone app in the background long enough to send a record, the Data Layer
@@ -2415,8 +2415,8 @@ docs/protocol.md, section 16.
   installed copy has one.
 - **The tray app** checks with the service and shows "update available" with a button that
   runs `cbb update` through UAC or pkexec, like its other admin actions.
-- **The Mac app:** Sparkle with its EdDSA signature, once the app is signed and notarized
-  (waits for the Apple developer account), with the same manifest feeding the appcast.
+- **The Mac app:** Sparkle with its EdDSA signature, now that the release signs and notarizes
+  the app (not built yet), with the same manifest feeding the appcast.
 - **The lite member on Linux:** `cbb update` the same way, for its own archive (built).
 - **The Nano ESP32:** OTA into the second app partition, checked against the manifest and
   the release key in the firmware, with a fallback to the old partition if the new one does
@@ -2480,7 +2480,7 @@ docs/protocol.md, section 16.
    uclient-fetch, installing and rolling back as step 3 does, with the same timers. The
    Nano ESP32 follows with its sync (item 15): a partition table with two app slots and a
    bootloader with rollback, and OTA from a member, checked against the manifest.
-8. Sparkle in the Mac app, after the Apple account, with its own Ed25519 key and the appcast
+8. Sparkle in the Mac app (not built yet; the Apple developer account is there), with its own Ed25519 key and the appcast
    made by `tools/release-sign`.
 9. On the bench: an update from the previous release on every device (L9), a refused
    downgrade, a refused unsigned build, a rotation of the release key by a root, and a drill

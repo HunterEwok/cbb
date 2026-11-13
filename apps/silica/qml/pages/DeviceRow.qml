@@ -10,9 +10,13 @@ import "devices.js" as Devices
 BackgroundItem {
     id: row
     property var device
+    // On a big screen the main page chooses the device (DeviceTile).
+    property var choose: null
+    property bool chosen: false
 
     height: Theme.itemSizeMedium
-    onClicked: pageStack.push(Qt.resolvedUrl("DevicePage.qml"), { device: row.device })
+    highlighted: down || chosen
+    onClicked: row.choose ? row.choose(row.device) : pageStack.push(Qt.resolvedUrl("DevicePage.qml"), { device: row.device })
 
     Rectangle {
         id: dot

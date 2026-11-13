@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import SwiftUI
+import UIKit
 
 /// No group yet: settings and the language at the top, the name, and the
 /// ways in: Create a group (this phone becomes its root and adds a device
@@ -24,8 +25,10 @@ struct StartView: View {
         GeometryReader { screen in
             ScrollView {
                 content
+                    // A column a hand's width on a big screen, as a phone's.
+                    .frame(maxWidth: Tokens.readableWidth)
                     .padding(Tokens.spacingLarge)
-                    .frame(minHeight: screen.size.height)
+                    .frame(maxWidth: .infinity, minHeight: screen.size.height)
             }
             .scrollBounceBehavior(.basedOnSize)
         }
@@ -91,6 +94,14 @@ struct StartView: View {
             Spacer()
             Button { adding = true } label: { Text("Create a group") }
                 .buttonStyle(AccentButtonStyle())
+            // An iPad may make the group as a phone does; the group's key is
+            // best on the device that is always at hand.
+            if UIDevice.current.userInterfaceIdiom == .pad {
+                Text("The device that makes the group holds its main key: best one that is always with you, such as your phone.")
+                    .font(.footnote)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(palette.textDim)
+            }
             Button { model.startJoining() } label: { Text("Join a group") }
                 .buttonStyle(GlassButtonStyle())
             Button { invited = true } label: { Text("Join with an invitation") }

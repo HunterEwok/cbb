@@ -13,10 +13,35 @@ All notable changes to cbb are documented in this file. The format follows
   failing when the whole grows more than 10% (docs/testing.md, "Firmware size").
 - Sealing is checked against the vector of draft-ietf-hpke-pq-05 for X-Wing with
   HKDF-SHA256 and ChaCha20-Poly1305, in Go and the Rust core.
+- The iPad has a Home of its own (docs/apps.md, "Big screens"): a sidebar with the group's
+  line and its switches, the devices' sections (all, needs attention, each collection) and the
+  settings' parts, the devices as tiles with the chosen one's card beside them, Command-1 to 9,
+  the arrows and Escape, a tile's menu that pastes and mutes, and text, pictures or files
+  dropped on a tile pasted on that device. A narrow window keeps the phone's page. The app is
+  no longer offered on a Mac or a Vision Pro as an iPad app.
+- Android tablets, foldables and wide windows get the iPad's Home: the sidebar (standing in
+  landscape, sliding in from the edge in portrait) with the devices' sections and the parts of
+  Settings, the tiles with the chosen device's details beside them, Ctrl+1 to 9, Ctrl+N,
+  Ctrl+F, the arrows and Esc, a right click for a tile's menu (which now also pastes on the
+  device and mutes it), and text, pictures or files dropped on a tile pasted there or beside
+  the tiles sent to the group. It starts from 600 dp instead of 720. An Android device
+  without its keys in secure hardware or without a strong fingerprint or face sensor says so
+  before it makes a group, restores one or takes one handed over.
+- The Aurora app on a tablet, or a phone turned on its side, shows the chosen device's card
+  beside the tiles, and on the widest screens a sidebar with all devices, the ones that need
+  attention, each collection and Settings. Making or restoring a group on Aurora says that
+  its keys, behind the app's PIN and no fingerprint, guard the group less well than a phone's.
+- HarmonyOS tablets and open foldables get the same Home: the sidebar (standing from 1040 vp,
+  sliding in behind ☰ below) with the devices' sections and the parts of Settings, the
+  chosen tile outlined beside its details, Ctrl+1 to 9, Ctrl+, Ctrl+N, the arrows and Esc, a
+  right click for a tile's menu, and drops on a tile pasted there or beside the tiles sent to
+  the group. A HarmonyOS device without a strong fingerprint or face sensor says so before it
+  makes a group, restores one or takes one over.
 - The app for HarmonyOS 5 and later (`apps/harmony`), in development: ArkTS around the same
   Rust core as the Aurora app, through a Node-API module (`libcbb_napi.so`), with the keys in
   HUKS and the admin key behind the user's face, fingerprint or PIN. It has the other phones'
-  screens: a new group, joining by QR code, as an admin or by an invitation, restoring, Home
+  screens: a new group, joining by QR code or by an invitation, always as a member (the root makes a phone an
+  admin later from its device page, with the admin key its hellos offer), restoring, Home
   with the tiles, the devices and the admin's actions, adding a device with Scan Kit,
   invitations, the recovery key and the takeover, the arrangement, the notifications, and
   why it does not sync; it sends with the system's Paste button and from the Share menu
@@ -2406,6 +2431,21 @@ All notable changes to cbb are documented in this file. The format follows
 - An admin phone pastes pictures and files on a device again: the iPhone and Android kits
   sign the paste command of kind `media` that names the group's copy, which they refused to
   build before.
+- Members given each other's addresses with `-peer` no longer reconnect to each other
+  several times a second: a member dialed a member it was connected to every second, and
+  when the member with the lower device ID did, its new connection replaced the old one on
+  the other side while it dropped the new one itself, so both ended. A member now remembers
+  which member it found at an address and leaves it alone while it is connected, and a
+  dialer keeps or drops its new connection by the same rule as the side that accepts it. A
+  member on one machine also took the address a dual-stack listener shows for 127.0.0.1
+  (`::ffff:127.0.0.1`) for one at home, so its dials to the loopback address replaced that
+  connection as a tunnel's would.
+- A root that got a member's key evidence over two connections at once signed two records
+  with the same number, which stopped the group as two histories of the root's key; a
+  member signs its records one at a time now.
+- `cbb pair -code ADDRESS` while the service runs joins through the service, as `cbb pair
+  -code` does, so the device takes the service's `-name` and capabilities (or those `cbb pair
+  -name` and `-caps` give); it joined by itself, under the computer's host name.
 - A hub that started serving in place of one above it ended its first clients' connections
   a moment later, when it made its key for the next period, and those clients then tried the
   hub above, which may be off, before it again. The hub makes those keys before it listens,

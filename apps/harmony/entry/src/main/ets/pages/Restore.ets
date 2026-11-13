@@ -14,7 +14,7 @@ import { Errors, Failure } from '../core/Errors';
 import { t } from '../core/Text';
 import { scanQr } from '../common/Scan';
 import { app } from '../model/AppModel';
-import { BusyLine, ErrorText, PageTitle } from '../components/Common';
+import { BusyLine, ErrorText, KeyGuardNote, PageTitle } from '../components/Common';
 
 const SHEET_PREFIX: string = 'cbb://recover?';
 
@@ -86,6 +86,7 @@ struct Restore {
           }
         } })
         Text(this.lead()).fontColor($r('app.color.text'))
+        KeyGuardNote()
         if ((app.restoreState === '' || app.restoreState === 'failed') && this.onCard) {
           TextInput({ placeholder: $r('app.string.yubikey_pin'), text: this.pin })
             .type(InputType.NUMBER_PASSWORD)

@@ -379,6 +379,9 @@ fn dial_loop_as(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>, later: bo
     let mut redials = node.redials();
     let mut since = std::time::Instant::now();
     let mut last_failure = String::new();
+    // The device last found at an address given by hand (-peer), whose
+    // connection, while it is up, is left alone as one to peer is.
+    let mut found: Option<DeviceId> = None;
     loop {
         if node.is_closed() {
             return;
@@ -406,7 +409,10 @@ fn dial_loop_as(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>, later: bo
         }
         // A connection up to the peer is left alone; a loopback address
         // (the tunnel's, a relay's) replaces one at home (Node::connected_for).
-        if node.is_paused() || peer.as_ref().is_some_and(|p| list.first().is_some_and(|a| node.connected_for(p, a))) {
+        // Dialed again, the lower device ID's new connection would replace
+        // it every time.
+        let known = peer.as_ref().or(found.as_ref());
+        if node.is_paused() || known.is_some_and(|p| list.first().is_some_and(|a| node.connected_for(p, a))) {
             node.nap(Duration::from_secs(1));
             continue;
         }
@@ -417,6 +423,9 @@ fn dial_loop_as(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>, later: bo
             match node.dial_ended(a, peer.clone()) {
                 Ok(d) => {
                     (up, again) = (d.up, d.again);
+                    if peer.is_none() && d.id.is_some() {
+                        found = d.id;
+                    }
                     failed.clear();
                     break;
                 }

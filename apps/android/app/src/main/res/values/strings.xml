@@ -34,6 +34,7 @@
     <string name="alert_stopped">The group is stopped: its devices exchange only their records, no clipboard, until the group\'s root decides.</string>
     <string name="alert_two_histories">%1$s signed two histories with one key, as a stolen key or a restore from a backup would.</string>
     <string name="alert_unknown_devices">devices unknown here</string>
+    <string name="all_devices">All devices</string>
     <string name="app_info">App info</string>
     <string name="app_name" translatable="false">CBB</string>
     <string name="appearance">Appearance</string>
@@ -97,7 +98,9 @@
     <string name="copies">Copies</string>
     <string name="copies_forward_only">Passes them on, reads none</string>
     <string name="create_group">Create a group</string>
+    <string name="create_group_main_hint">The device that makes the group holds its main key: best one that is always with you, such as your phone.</string>
     <string name="device_id">Device ID</string>
+    <string name="devices">Devices</string>
     <string name="error_action_refused">The device did not run the action.</string>
     <string name="error_arrangement">The tiles stay as they were: that change does not fit.</string>
     <string name="error_below_key_level">The group\'s admin keys setting does not let this device\'s keys be an admin. Change it in Settings, Admin keys.</string>
@@ -165,6 +168,7 @@
     <string name="filter_online">Online</string>
     <string name="frozen">frozen</string>
     <string name="full_name" translatable="false">Copy Beyond Borders</string>
+    <string name="group">Group</string>
     <string name="group_hub">The group\'s hub</string>
     <string name="group_hub_in_use">The group\'s hub, in use now</string>
     <string name="handed_body">The computer that held the group handed it to this phone. Take it to make this phone the group\'s root; the computer stays in the group.</string>
@@ -266,6 +270,7 @@
     <string name="join_title">Join a group</string>
     <string name="join_tv">Join a phone\'s group</string>
     <string name="join_tv_hint">This TV joins the group of your phone: it shows a QR code, and the phone scans it.</string>
+    <string name="key_guard_weak">This device has no secure key chip or no strong fingerprint or face sensor: as the group\'s main device it guards the group less well than a phone that has both.</string>
     <string name="key_level_body">Which devices may be the group\'s admins and hubs. Keys in hardware never leave the device; whoever gets a key in a file can copy it. Admins already in the group stay until you remove them.</string>
     <string name="key_level_files">Keys in files too</string>
     <string name="key_level_hardware">Keys in hardware</string>
@@ -345,6 +350,7 @@
     <string name="make_hub_reads">A hub that reads the copies</string>
     <string name="make_hub_refused">The computer did not become a hub.</string>
     <string name="make_hub_title">Make %1$s a hub?</string>
+    <string name="menu">Menu</string>
     <string name="more">More</string>
     <string name="move_earlier">Move earlier</string>
     <string name="move_end">Move to end</string>
@@ -527,6 +533,7 @@
     <string name="share_files_title">Send to your computers?</string>
     <string name="share_forget">Ask every app again</string>
     <string name="share_unknown_app">An app</string>
+    <string name="shortcuts_hint">Ctrl+1 to 9 open these sections, Ctrl+N adds a device, the arrows choose a device and Esc closes its details.</string>
     <string name="signature_n">Signature %1$d</string>
     <string name="signature_of">Signature %1$d of %2$d</string>
     <string name="source">Source code and license (AGPL-3.0)</string>

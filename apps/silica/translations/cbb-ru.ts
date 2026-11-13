@@ -373,14 +373,11 @@
     </message>
 </context>
 <context>
-    <name>DeviceItems</name>
+    <name>DeviceCard</name>
     <message>
-        <source>%1 of %2 online</source>
-        <translation>%1 из %2 в сети</translation>
+        <source>Close</source>
+        <translation>Закрыть</translation>
     </message>
-</context>
-<context>
-    <name>DevicePage</name>
     <message>
         <source>Device ID</source>
         <translation>ID устройства</translation>
@@ -507,6 +504,13 @@
     </message>
 </context>
 <context>
+    <name>DeviceItems</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 из %2 в сети</translation>
+    </message>
+</context>
+<context>
     <name>DeviceTile</name>
     <message>
         <source>Mute for 15 minutes</source>
@@ -547,10 +551,6 @@
     <message>
         <source>Turn sync on</source>
         <translation>Включить синхронизацию</translation>
-    </message>
-    <message>
-        <source>Unmute</source>
-        <translation>Включить</translation>
     </message>
 </context>
 <context>
@@ -1066,6 +1066,10 @@
         <translation>В сети %1 из %2</translation>
     </message>
     <message>
+        <source>All devices</source>
+        <translation>Все устройства</translation>
+    </message>
+    <message>
         <source>An admin muted this phone until %1: its copies do not reach the group.</source>
         <translation>Админ заглушил этот телефон до %1: его копии не доходят до группы.</translation>
     </message>
@@ -1128,6 +1132,10 @@
     <message>
         <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
         <translation>Сделайте второй телефон админом: добавьте его в группу, затем откройте его здесь и нажмите «Сделать админом». Нажмите, чтобы закрыть.</translation>
+    </message>
+    <message>
+        <source>Needs attention</source>
+        <translation>Требует внимания</translation>
     </message>
     <message>
         <source>New collection…</source>
@@ -1274,6 +1282,10 @@
     <message>
         <source>The group's root key is made in the phone's secure element and never leaves it.</source>
         <translation>Корневой ключ группы создаётся в защищённом элементе телефона и никогда его не покидает.</translation>
+    </message>
+    <message>
+        <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
+        <translation>У этого устройства нет защищённого чипа для ключей или надёжного датчика отпечатка или лица: главным устройством группы оно защищает её хуже, чем телефон, у которого есть и то и другое.</translation>
     </message>
     <message>
         <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
@@ -1500,6 +1512,10 @@
     <message>
         <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
         <translation>Группа восстановлена на этом телефоне. Он станет корнем группы, когда истечёт время ожидания, через %1 ч, если корень не отменит заявку.</translation>
+    </message>
+    <message>
+        <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
+        <translation>У этого устройства нет защищённого чипа для ключей или надёжного датчика отпечатка или лица: главным устройством группы оно защищает её хуже, чем телефон, у которого есть и то и другое.</translation>
     </message>
     <message>
         <source>This phone is the group's root now.</source>

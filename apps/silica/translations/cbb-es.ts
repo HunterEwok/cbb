@@ -373,14 +373,11 @@
     </message>
 </context>
 <context>
-    <name>DeviceItems</name>
+    <name>DeviceCard</name>
     <message>
-        <source>%1 of %2 online</source>
-        <translation>%1 de %2 en línea</translation>
+        <source>Close</source>
+        <translation>Cerrar</translation>
     </message>
-</context>
-<context>
-    <name>DevicePage</name>
     <message>
         <source>Device ID</source>
         <translation>ID del dispositivo</translation>
@@ -507,6 +504,13 @@
     </message>
 </context>
 <context>
+    <name>DeviceItems</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 de %2 en línea</translation>
+    </message>
+</context>
+<context>
     <name>DeviceTile</name>
     <message>
         <source>Mute for 15 minutes</source>
@@ -547,10 +551,6 @@
     <message>
         <source>Turn sync on</source>
         <translation>Activar la sincronización</translation>
-    </message>
-    <message>
-        <source>Unmute</source>
-        <translation>Reactivar</translation>
     </message>
 </context>
 <context>
@@ -1066,6 +1066,10 @@
         <translation>%1 de %2 en línea</translation>
     </message>
     <message>
+        <source>All devices</source>
+        <translation>Todos los dispositivos</translation>
+    </message>
+    <message>
         <source>An admin muted this phone until %1: its copies do not reach the group.</source>
         <translation>Un administrador silenció este teléfono hasta las %1: sus copias no llegan al grupo.</translation>
     </message>
@@ -1128,6 +1132,10 @@
     <message>
         <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
         <translation>Haz administrador a un segundo teléfono: añádelo al grupo, ábrelo aquí y toca Hacer admin. Toca para cerrar.</translation>
+    </message>
+    <message>
+        <source>Needs attention</source>
+        <translation>Requiere atención</translation>
     </message>
     <message>
         <source>New collection…</source>
@@ -1274,6 +1282,10 @@
     <message>
         <source>The group's root key is made in the phone's secure element and never leaves it.</source>
         <translation>La clave raíz del grupo se crea en el elemento seguro del teléfono y nunca sale de él.</translation>
+    </message>
+    <message>
+        <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
+        <translation>Este dispositivo no tiene un chip seguro para las claves o un sensor fiable de huella o de rostro: como dispositivo principal del grupo lo protege peor que un teléfono que tenga ambos.</translation>
     </message>
     <message>
         <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
@@ -1500,6 +1512,10 @@
     <message>
         <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
         <translation>El grupo está restaurado en este teléfono. Pasa a ser la raíz del grupo cuando termine el tiempo de espera, dentro de %1 h, salvo que la raíz cancele la solicitud.</translation>
+    </message>
+    <message>
+        <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
+        <translation>Este dispositivo no tiene un chip seguro para las claves o un sensor fiable de huella o de rostro: como dispositivo principal del grupo lo protege peor que un teléfono que tenga ambos.</translation>
     </message>
     <message>
         <source>This phone is the group's root now.</source>

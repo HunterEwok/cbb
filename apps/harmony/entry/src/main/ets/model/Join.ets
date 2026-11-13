@@ -101,7 +101,6 @@ export class Join {
 
   private handle: Handle | null = null;
   private wire: Wire | null = null;
-  private admin: boolean = false;
   private wrongCodes: number = 0;
   private invite: string = '';
   private invitePort: number = 0;
@@ -113,15 +112,13 @@ export class Join {
     return this.invite;
   }
 
-  // Starts listening; with admin, it asks to be an admin, which only the
-  // group's root admits.
-  async start(dir: string, admin: boolean): Promise<void> {
+  // Starts listening, to join as a member.
+  async start(dir: string): Promise<void> {
     await this.stop();
     this.dir = dir;
     this.invite = '';
     this.byInvite = false;
     this.fingerprint = '';
-    this.admin = admin;
     this.wrongCodes = 0;
     this.error = '';
     const request = await this.request();
@@ -134,15 +131,7 @@ export class Join {
       return;
     }
     request['addrs'] = addrs;
-    if (admin) {
-      const key = await ensure('admin');
-      if (key.ok === undefined) {
-        this.fail(key.failure as Failure);
-        return;
-      }
-      request['admin_public'] = key.ok.public;
-    }
-    const made = await cbb.joinNew(JSON.stringify(request), admin);
+    const made = await cbb.joinNew(JSON.stringify(request));
     const answer = read<Made>(made.answer, 'join');
     if (made.handle === null || answer.ok === undefined) {
       this.fail(answer.failure ?? new Failure(t('error_broken'), 'join: no joiner'));
@@ -179,7 +168,6 @@ export class Join {
   async startInvite(dir: string, invite: string): Promise<void> {
     await this.stop();
     this.dir = dir;
-    this.admin = false;
     this.wrongCodes = 0;
     this.inviteAttempts = 0;
     this.error = '';
@@ -191,7 +179,7 @@ export class Join {
       return;
     }
     request['invite'] = this.invite;
-    const made = await cbb.joinNew(JSON.stringify(request), false);
+    const made = await cbb.joinNew(JSON.stringify(request));
     const answer = read<Made>(made.answer, 'join');
     if (made.handle === null || answer.ok === undefined) {
       this.fail(answer.failure ?? new Failure(t('error_broken'), 'join: no joiner'));
@@ -400,11 +388,6 @@ export class Join {
       if (wrongCode && ++this.wrongCodes >= MAX_WRONG_CODES) {
         this.fail(new Failure(t('error_join_wrong_codes'), 'join: too many wrong codes'));
         return;
-      }
-      // A window that makes no admins refuses a phone that asks to be one:
-      // the page says so, and keeps waiting for the root.
-      if (this.admin && !wrongCode) {
-        this.error = Errors.shown(new Failure(t('error_join_not_admin'), `join: ${why}`));
       }
       this.state = 'listening';
       return;
