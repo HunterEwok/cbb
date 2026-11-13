@@ -57,7 +57,11 @@ struct SettingsView: View {
             }
             if part == nil {
                 Section {
-                    Toggle(isOn: $advanced) { Text("Advanced settings") }
+                    Toggle(isOn: $advanced) {
+                        // Its own height, so that a script with tall marks
+                        // (Devanagari) is not cut at the line's edge.
+                        Text("Advanced settings").fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 .listRowBackground(palette.surface)
             }

@@ -62,8 +62,8 @@ final class PadUITests: XCTestCase {
         app.typeKey(.escape, modifierFlags: [])
         XCTAssertTrue(app.buttons["Close"].waitForNonExistence(timeout: 5), "Escape closes the card")
 
-        // The sidebar's row is a button holding its text.
-        app.buttons["Appearance"].firstMatch.tap()
+        // The sidebar's row; the same words also stand on a button outside it.
+        app.collectionViews["Sidebar"].staticTexts["Appearance"].tap()
         XCTAssertTrue(app.buttons["Ocean"].waitForExistence(timeout: 10), "the look opens beside the sidebar")
         picture("pad-settings")
 

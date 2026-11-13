@@ -399,6 +399,16 @@ struct DeviceCollection: View {
     let layout: DeviceLayout
     var select: ((AppModel.Computer.ID) -> Void)?
     @Environment(\.palette) private var palette
+    /// The narrowest a tile may be, as the text size grows.
+    @ScaledMetric(relativeTo: .body) private var tileWidth: CGFloat = 150
+
+    /// The tiles' columns: at least 150 points wide at the usual text
+    /// size and wider as the text grows, so that a device's name stays
+    /// whole; a screen narrower than one column still gets one, as wide as
+    /// the screen.
+    static func columns(_ width: CGFloat) -> [GridItem] {
+        [GridItem(.adaptive(minimum: width), spacing: Tokens.spacingMedium)]
+    }
 
     var body: some View {
         if devices.isEmpty {
@@ -408,7 +418,7 @@ struct DeviceCollection: View {
                 ForEach(devices) { d in Self.open(d, select: select) { DeviceRow(device: d) } }
             }
         } else {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: Tokens.spacingMedium)], spacing: Tokens.spacingMedium) {
+            LazyVGrid(columns: DeviceCollection.columns(tileWidth), spacing: Tokens.spacingMedium) {
                 ForEach(devices) { d in Self.open(d, select: select) { DeviceTile(device: d) } }
             }
         }
