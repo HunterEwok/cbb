@@ -257,9 +257,30 @@ rule Ask_Reseal:
   --[ UsesEpoch(pk(~mR), n) ]->
     [ Out(<'reseal', $id, pk(~mR), n>) ]
 
+tactic: copies
+presort: s
+prio:
+  regex ".*ReaderOf\(.*"
+  regex ".*RemovedAt\(.*"
+  regex ".*KU\( h\(<'payload'.*"
+  regex ".*KU\( ~msg.*"
+  regex ".*!Kept\(.*"
+deprio:
+  regex ".*!Counts\(.*"
+  regex ".*!SealView\(.*"
+  regex ".*!Epoch\(.*"
+  regex ".*!Dev\(.*"
+  regex ".*!Auth\(.*"
+
 /* ---------------- Lemmas ---------------- */
 
 // Reachability: a copy sealed and opened by both readers, no key revealed.
+lemma exec_one_open [heuristic=S]:
+  exists-trace
+  "Ex R O id t m #a. Accept(R, O, id, t, m) @ #a
+     & not (Ex D #l. RevealMember(D) @ #l) & not (Ex D n #l. RevealEpoch(D, n) @ #l)
+     & not (Ex #l. RevealRoot() @ #l) & not (Ex #l. RevealAdmin() @ #l)"
+
 lemma exec_both_open:
   exists-trace
   "Ex O id t m R1 R2 #s #a #b. Sealed(O, id, t, m) @ #s & Accept(R1, O, id, t, m) @ #a
@@ -288,15 +309,21 @@ lemma key_secret [reuse]:
 
 // Helper: a copy's content is known only through one of its copy keys
 // (the seal's or a reseal's).
-lemma content_via_key [reuse]:
+lemma content_via_key [reuse, heuristic={copies}]:
   "All O id t m #s #k. Sealed(O, id, t, m) @ #s & KU(m) @ #k
      ==> Ex k2 #c #j. CopyKey(id, k2) @ #c & KU(k2) @ #j & #j < #k"
+
+// Helper: key_secret said with KU, for the content lemmas.
+lemma key_secret_ku [reuse]:
+  "All id k #s #k. CopyKey(id, k) @ #s & KU(k) @ #k
+     ==> Ex D n pke #r. ReaderOf(id, D, n, pke) @ #r
+           & ((Ex #l. RevealEpoch(D, n) @ #l) | not (Ex #h. HonestEpoch(D, n, pke) @ #h))"
 
 // 1. Secrecy: a copy's content is known only through one of its readers:
 //    that reader's epoch secret was taken while held, or the reader's
 //    statement key was not an honest device's.
-lemma content_secret:
-  "All O id t m #s #k. Sealed(O, id, t, m) @ #s & K(m) @ #k
+lemma content_secret [reuse, heuristic={copies}]:
+  "All O id t m #s #k. Sealed(O, id, t, m) @ #s & KU(m) @ #k
      ==> Ex D n pke #r. ReaderOf(id, D, n, pke) @ #r
            & ((Ex #l. RevealEpoch(D, n) @ #l) | not (Ex #h. HonestEpoch(D, n, pke) @ #h))"
 
@@ -304,8 +331,8 @@ lemma content_secret:
 //    taken, the content stays secret even with the root and admin keys
 //    taken, unless one of them admitted the attacker's own device and the
 //    origin sealed to it.
-lemma root_admin_open_nothing:
-  "All O id t m #s #k. Sealed(O, id, t, m) @ #s & K(m) @ #k
+lemma root_admin_open_nothing [heuristic={copies}]:
+  "All O id t m #s #k. Sealed(O, id, t, m) @ #s & KU(m) @ #k
      & not (Ex D n #l. RevealEpoch(D, n) @ #l) & not (Ex D #l. RevealMember(D) @ #l)
      ==> Ex D n pke #r. ReaderOf(id, D, n, pke) @ #r & not (Ex #h. HonestDev(D) @ #h)
            & ((Ex #l. RevealRoot() @ #l & #l < #r) | (Ex #l. RevealAdmin() @ #l & #l < #r))"
@@ -316,8 +343,14 @@ lemma root_admin_open_nothing:
 lemma removed_not_reader:
   "All O id D #i #j. SealedTo(O, id, D) @ #i & RemovedAt(O, D) @ #j ==> #i < #j"
 
-lemma removed_cannot_read:
-  "All O id t m D #s #j #k. Sealed(O, id, t, m) @ #s & RemovedAt(O, D) @ #j & #j < #s & K(m) @ #k
+// Helper: a device removed before a copy was sealed is never its reader
+// (not at the seal, not at a reseal).
+lemma removed_reader_none [reuse, heuristic={copies}]:
+  "All O id t m D n pke #s #r #j. Sealed(O, id, t, m) @ #s & ReaderOf(id, D, n, pke) @ #r
+     & RemovedAt(O, D) @ #j & #j < #s ==> F"
+
+lemma removed_cannot_read [heuristic={copies}]:
+  "All O id t m D #s #j #k. Sealed(O, id, t, m) @ #s & RemovedAt(O, D) @ #j & #j < #s & KU(m) @ #k
      ==> Ex D2 n pke #r. ReaderOf(id, D2, n, pke) @ #r & not (D2 = D)
            & ((Ex #l. RevealEpoch(D2, n) @ #l) | not (Ex #h. HonestEpoch(D2, n, pke) @ #h))"
 
@@ -359,7 +392,7 @@ lemma reader_was_sealed_to:
      ==> (Ex #j. SealedTo(O, id, R) @ #j & #j < #i) | (Ex #r. RevealMember(O) @ #r)
        | (not (Ex #h. HonestDev(O) @ #h))"
 
-lemma newcomer_reads_nothing_older:
+lemma newcomer_reads_nothing_older [heuristic={copies}]:
   "All R O id t m #s #a #i. Sealed(O, id, t, m) @ #s & LearnAdmit(O, R) @ #a & #s < #a
      & Accept(R, O, id, t, m) @ #i
      ==> (Ex #r. RevealMember(O) @ #r)"

@@ -9,7 +9,9 @@
  *
  * Models the design's rule 28 (bound again in person after a change of
  * root), as built in core/src/format/grant.rs (Kept::rebind, read_bound)
- * and core/src/join/invitation.rs (Matched::binding).
+ * and core/src/join/invitation.rs (Matched::binding), heads 93e0c288 and
+ * 7ed330f0. leaf_remote.spthy allows a remote grant after a change of
+ * root, to show what the rule is for.
  *
  * What is modelled
  *   - A group: the root key under recovery seq s, the recovery pair
@@ -36,8 +38,9 @@
  * attacker withholding grants makes the leaf stale, see the README),
  * several commanders (each is the same case), readers and copies,
  * ordinary leaves and admin grants (a guarded leaf refuses any grant not
- * signed by the root: grant::read RULE_GUARDED), root forks (rule 9,
- * grant::fork), clocks.
+ * signed by the root: grant::read RULE_GUARDED), clocks. Root forks (rule 9, Kept.forked) are modelled in this file: a
+ * leaf that sees two records its root signed at one position stops
+ * obeying until a head and a new binding.
  *
  * Attacker: the network and every neighbour of the leaf; any admin key;
  * the root key of any recovery seq (RevealRoot); a commander's key
@@ -62,7 +65,7 @@ restriction CommandCounter:
 
 rule Group:
     [ Fr(~g), Fr(~r0), Fr(~k1), Fr(~k2) ]
-  --[ GroupMade(~g), RootOf(~g, %1, pk(~r0)) ]->
+  --[ GroupMade(~g), RootOf(~g, %1, pk(~r0)), RootKey(~g, %1, ~r0) ]->
     [ !Group(~g, pk(~k1), pk(~k2)), !Recovery(~g, ~k1, ~k2), !Root(~g, %1, ~r0),
       Out(pk(~r0)), Out(pk(~k1)), Out(pk(~k2)) ]
 
@@ -75,7 +78,7 @@ rule Head:
   let body = <'recovery', G, %s %+ %1, pk(~nr)>
   in
     [ !Recovery(G, k1, k2), !Root(G, %s, r), Fr(~nr) ]
-  --[ HonestHead(G, %s %+ %1, pk(~nr)), RootOf(G, %s %+ %1, pk(~nr)) ]->
+  --[ HonestHead(G, %s %+ %1, pk(~nr)), RootOf(G, %s %+ %1, pk(~nr)), RootKey(G, %s %+ %1, ~nr) ]->
     [ !Root(G, %s %+ %1, ~nr), Out(pk(~nr)),
       Out(<body, sign(<'k2', body>, k2), sign(<'k1', body>, k1)>) ]
 
@@ -177,7 +180,6 @@ rule Leaf_Head_Binding:
   --[ LeaveSeq(L, G, %s), LeafHead(L, G, %s %+ %1, nr), WaitMade(L, G, %s %+ %1) ]->
     [ Waiting(L, G, %s %+ %1, nr) ]
 
-
 /* ---------------- A fork of the root (Kept.forked) ---------------- */
 
 // The root signs a checkpoint at a position; an honest root signs each
@@ -245,6 +247,85 @@ deprio:
   regex ".*!Root\(.*"
   regex ".*!Recovery\(.*"
 
+tactic: heads
+presort: s
+prio:
+  regex ".*!LeafGroup\(.*"
+  regex ".*KU\( sign\(<'k.*"
+  regex ".*!Recovery\(.*"
+deprio:
+  regex ".*Waiting\(.*"
+  regex ".*BindL\(.*"
+  regex ".*!BoundRoot\(.*"
+  regex ".*!Grant\(.*"
+  regex ".*Forked\(.*"
+  regex ".*!Root\(.*"
+
+tactic: leafg
+presort: s
+prio:
+  regex ".*!Grant\(.*"
+  regex ".*!BoundRoot\(.*"
+  regex ".*LeafHead\(.*"
+  regex ".*LeafForked\(.*"
+  regex ".*BindL\(.*"
+  regex ".*Waiting\(.*"
+  regex ".*Forked\(.*"
+deprio:
+  regex ".*!Root\(.*"
+  regex ".*!Recovery\(.*"
+
+tactic: forks
+presort: s
+prio:
+  regex ".*KU\( sign\(<'cp'.*"
+  regex ".*KU\( ~r.*"
+  regex ".*RootKey\(.*"
+deprio:
+  regex ".*!Grant\(.*"
+  regex ".*!BoundRoot\(.*"
+  regex ".*Waiting\(.*"
+  regex ".*BindL\(.*"
+  regex ".*!Root\(.*"
+
+tactic: cmds
+presort: s
+prio:
+  regex ".*KU\( sign\(<'cbb command v3'.*"
+  regex ".*!Cmd\(.*"
+deprio:
+  regex ".*Waiting\(.*"
+  regex ".*BindL\(.*"
+  regex ".*!BoundRoot\(.*"
+  regex ".*!Grant\(.*"
+  regex ".*Nonce\(.*"
+  regex ".*!Root\(.*"
+
+tactic: grants
+presort: s
+prio:
+  regex ".*KU\( sign\(<'cbb grant v1'.*"
+  regex ".*!BoundRoot\(.*"
+  regex ".*KU\( ~r.*"
+deprio:
+  regex ".*Waiting\(.*"
+  regex ".*BindL\(.*"
+  regex ".*!Grant\(.*"
+  regex ".*Nonce\(.*"
+  regex ".*!ShownTo\(.*"
+
+tactic: obeyg
+presort: s
+prio:
+  regex ".*GrantIssued.*"
+  regex ".*!Grant\(.*"
+deprio:
+  regex ".*KU\(.*"
+  regex ".*Waiting\(.*"
+  regex ".*BindL\(.*"
+  regex ".*Nonce\(.*"
+  regex ".*!BoundRoot\(.*"
+
 /* ---------------- Lemmas ---------------- */
 
 // Helpers: the code never reaches the network; a binding mac under a key
@@ -263,12 +344,28 @@ lemma bind_mac_origin [reuse]:
      ==> Ex #k. BindMac(h(<'pake', c, nl, nr>), x) @ #k & #k < #j"
 
 
-lemma exec_bind_and_obey:
+// Helpers (label RootKey added): a root key is known only by its reveal,
+// and the root a leaf is bound to is a real root of that seq.
+lemma root_key_secret [reuse]:
+  "All G s r #i #j. RootKey(G, s, r) @ #i & KU(r) @ #j ==> Ex #k. RevealRoot(G, s, pk(r)) @ #k"
+
+lemma bound_root_genuine [reuse, heuristic={grants}]:
+  "All L G s R C #i. BoundTo(L, G, s, R, C) @ #i ==> Ex r #k. RootKey(G, s, r) @ #k & R = pk(r)"
+
+lemma bound_grant_signed [reuse, heuristic={leafs}]:
+  "All L G s R C #i. BoundTo(L, G, s, R, C) @ #i
+     ==> (Ex ctr #g. GrantIssued(G, s, R, L, ctr, C) @ #g) | (Ex #r. RevealRoot(G, s, R) @ #r)"
+
+lemma regrant_signed [reuse, heuristic={grants}]:
+  "All L G s R C #i. Regrant(L, G, s, R, C) @ #i
+     ==> (Ex ctr #g. GrantIssued(G, s, R, L, ctr, C) @ #g) | (Ex #r. RevealRoot(G, s, R) @ #r)"
+
+lemma exec_bind_and_obey [heuristic=S]:
   exists-trace
   "Ex L G R C o #i. ObeysUnder(L, G, %1, R, C, o) @ #i
      & not (Ex G2 s r #j. RevealRoot(G2, s, r) @ #j) & not (Ex x #j. RevealCommander(x) @ #j)"
 
-lemma exec_rebind_after_head:
+lemma exec_rebind_after_head [heuristic=S]:
   exists-trace
   "Ex L G R C o #i. ObeysUnder(L, G, %1 %+ %1, R, C, o) @ #i
      & not (Ex G2 s r #j. RevealRoot(G2, s, r) @ #j) & not (Ex x #j. RevealCommander(x) @ #j)
@@ -278,16 +375,16 @@ lemma exec_rebind_after_head:
 //    bound to in person at that recovery seq (or a later grant of that same
 //    root), signed by a commander of that grant, unless that root's key or
 //    that commander's key was taken.
-lemma obeys_only_bound_root [heuristic={leafs}]:
+// The bound-root claim, split in three (the old single statement was false
+// as written: with the root key leaked the attacker grants its own commander).
+lemma obeys_bound [heuristic={leafg}]:
   "All L G s R C o #i. ObeysUnder(L, G, s, R, C, o) @ #i
-     ==> (Ex C0 #b. BoundTo(L, G, s, R, C0) @ #b & #b < #i)
-       & ((Ex ctr #g. GrantIssued(G, s, R, L, ctr, C) @ #g) | (Ex #r. RevealRoot(G, s, R) @ #r))
-       & ((Ex #c. CmdSigned(C, L, o) @ #c & #c < #i) | (Ex #r. RevealCommander(C) @ #r))"
+     ==> Ex C0 #b. BoundTo(L, G, s, R, C0) @ #b & #b < #i"
 
 // Binding needs the code: the leaf is bound only to a root whose device ran
 // the binding with the code read at the leaf. Holds even with the recovery
 // pair and every root key taken: watching the whole session gives nothing.
-lemma bind_needs_code [heuristic={leafs}]:
+lemma bind_needs_code [reuse, heuristic={leafs}]:
   "All L G s R C #i. BoundTo(L, G, s, R, C) @ #i
      ==> Ex #j. RootBinds(G, s, R, L) @ #j & #j < #i"
 
@@ -299,14 +396,15 @@ lemma obeys_nobody_until_rebound [heuristic={leafs}]:
 
 // The new root it waits for is the one a head signed by both recovery
 // halves named, unless the pair leaked.
-lemma head_from_recovery [heuristic={leafs}]:
+lemma head_from_recovery [heuristic={heads}]:
   "All L G s nr #h. LeafHead(L, G, s, nr) @ #h
      ==> (Ex #j. HonestHead(G, s, nr) @ #j) | (Ex #r. RevealRecovery(G) @ #r)"
 
 // 3. Replay: no grant is taken twice and a nonce opens one command only;
 //    a grant of an earlier recovery seq is never taken after a later head.
-lemma no_command_replay [heuristic={leafs}]:
-  "All L C n n2 o o2 #i #j. Obeys(L, C, n, o) @ #i & Obeys(L, C, n2, o2) @ #j & o = o2 ==> #i = #j"
+lemma no_command_replay [heuristic={cmds}]:
+  "All L C n n2 o o2 #i #j. Obeys(L, C, n, o) @ #i & Obeys(L, C, n2, o2) @ #j & o = o2
+     ==> #i = #j | (Ex #r. RevealCommander(C) @ #r) | not (Ex #k. CommanderKey(C) @ #k)"
 
 lemma no_older_seq_grant [heuristic={leafs}]:
   "All L G s s2 nr c #h #i. LeafHead(L, G, s2, nr) @ #h & Takes(L, G, s, c) @ #i & #h < #i
@@ -315,7 +413,7 @@ lemma no_older_seq_grant [heuristic={leafs}]:
 // 5. Withholding: with only the attacker as neighbour and the leaked pair,
 //    the attacker can stop a bound lock for good (it waits for a binding
 //    nobody can do without the code). Expected to be found.
-lemma leaked_pair_stops_lock [heuristic={leafs}]:
+lemma leaked_pair_stops_lock [heuristic=S]:
   exists-trace
   "Ex L G s nr #b #h. BoundTo(L, G, %1, s, nr) @ #b & LeafHead(L, G, %1 %+ %1, nr) @ #h
      & not (Ex #j. HonestHead(G, %1 %+ %1, nr) @ #j)"
@@ -344,20 +442,6 @@ lemma binding_for_kept_root [heuristic={leafs}]:
 lemma binding_ends_at_head [heuristic={leafs}]:
   "All L G %s nr c #h #u. LeafHead(L, G, %s %+ %1, nr) @ #h & UseGrant(L, G, %s, c) @ #u ==> not (#h < #u)"
 
-// Fork (Kept.forked): after the leaf sees its root forked at seq s, no grant
-// of s is used again (obeyed, refreshed or answered with a nonce).
-lemma forked_obeys_nobody [heuristic={leafs}]:
-  "All L G s c #f #u. LeafForked(L, G, s) @ #f & UseGrant(L, G, s, c) @ #u ==> not (#f < #u)"
-
-// A fork the leaf takes needs the root key of that seq.
-lemma fork_needs_root_key [heuristic={leafs}]:
-  "All L G s #f. LeafForked(L, G, s) @ #f ==> Ex R #r. RevealRoot(G, s, R) @ #r"
-
-lemma exec_fork_then_rebind:
-  exists-trace
-  "Ex L G R C o #f #i. LeafForked(L, G, %1) @ #f & ObeysUnder(L, G, %1 %+ %1, R, C, o) @ #i
-     & not (Ex G2 #j. RevealRecovery(G2) @ #j)"
-
 // Helpers for binding_once (labels WaitMade and ShowAt added; no rule
 // changed): the leaf waits at a seq once, and shows a code at a seq once.
 lemma wait_once [reuse, heuristic=c]:
@@ -368,5 +452,27 @@ lemma show_once [reuse, heuristic=c]:
 
 lemma binding_once [heuristic={leafs}]:
   "All L G s R R2 C C2 #i #j. BoundTo(L, G, s, R, C) @ #i & BoundTo(L, G, s, R2, C2) @ #j ==> #i = #j"
+
+lemma obeys_signed [heuristic={cmds}]:
+  "All L G s R C o #i. ObeysUnder(L, G, s, R, C, o) @ #i & (Ex #k. CommanderKey(C) @ #k)
+     ==> (Ex #c. CmdSigned(C, L, o) @ #c & #c < #i) | (Ex #r. RevealCommander(C) @ #r)"
+
+lemma obeys_granted [heuristic={obeyg}]:
+  "All L G s R C o #i. ObeysUnder(L, G, s, R, C, o) @ #i
+     ==> (Ex ctr #g. GrantIssued(G, s, R, L, ctr, C) @ #g) | (Ex #r. RevealRoot(G, s, R) @ #r)"
+
+// Fork (Kept.forked): after the leaf sees its root forked at seq s, no grant
+// of s is used again (obeyed, refreshed or answered with a nonce).
+lemma forked_obeys_nobody [heuristic={leafs}]:
+  "All L G s c #f #u. LeafForked(L, G, s) @ #f & UseGrant(L, G, s, c) @ #u ==> not (#f < #u)"
+
+// A fork the leaf takes needs the root key of that seq.
+lemma fork_needs_root_key [heuristic={forks}]:
+  "All L G s #f. LeafForked(L, G, s) @ #f ==> Ex R #r. RevealRoot(G, s, R) @ #r"
+
+lemma exec_fork_then_rebind [heuristic=S]:
+  exists-trace
+  "Ex L G R C o #f #i. LeafForked(L, G, %1) @ #f & ObeysUnder(L, G, %1 %+ %1, R, C, o) @ #i
+     & not (Ex G2 #j. RevealRecovery(G2) @ #j)"
 
 end

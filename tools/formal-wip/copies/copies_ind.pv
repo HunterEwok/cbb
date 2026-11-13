@@ -1,0 +1,71 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (C) 2026 HunterEwok *)
+(* CBB 0.6, model 1 in ProVerif: copies sealed end to end.
+   Two properties, as one diff-equivalence each:
+   (1) a removed device, holding every key it ever held, cannot tell two
+       later copies apart (real-or-real on contents the attacker picks);
+   (2) the same for a leaked OLD epoch of a reader: once the sender seals
+       to the reader's newer epoch, the old secret tells nothing.
+   Abstractions as in copies.spthy: HPKE (X-Wing), the AEAD and ES256 are
+   ideal; the header carries the readers' epoch keys and commit(K); the
+   origin and the remaining reader are honest. *)
+
+type skey. type pkey. type key.
+
+free c: channel.
+
+fun pk(skey): pkey.
+fun aenc(bitstring, pkey): bitstring.
+reduc forall m: bitstring, s: skey; adec(aenc(m, pk(s)), s) = m.
+
+fun senc(bitstring, key): bitstring.
+reduc forall m: bitstring, k: key; sdec(senc(m, k), k) = m.
+
+fun sign(bitstring, skey): bitstring.
+reduc forall m: bitstring, s: skey; checksign(sign(m, s), pk(s)) = m.
+
+fun kdf(key, bitstring): key.
+fun hh(bitstring): bitstring.
+fun commit(key): bitstring.
+fun k2b(key): bitstring [data, typeConverter].
+fun p2b(pkey): bitstring [data, typeConverter].
+
+(* The origin seals one copy: fresh id and K, header, payload, one wrap per
+   reader key in `readers`, signature. *)
+let SealTo(skO: skey, rk: pkey, m: bitstring) =
+  new id: bitstring;
+  new k: key;
+  let hdr = (id, pk(skO), rk, commit(k)) in
+  let h = hh(hdr) in
+  let payload = senc(m, kdf(k, h)) in
+  let w = aenc((k2b(k), h), rk) in
+  out(c, (hdr, payload, w, sign((h, hh(w), hh(payload)), skO))).
+
+(* The honest reader takes a copy and keeps the content to itself. *)
+let Reader(skD: skey, eD: skey, pkO: pkey) =
+  in(c, (hdr: bitstring, payload: bitstring, w: bitstring, sg: bitstring));
+  let (id: bitstring, =pkO, rk: pkey, cm: bitstring) = hdr in
+  let (=hh(hdr), =hh(w), =hh(payload)) = checksign(sg, pkO) in
+  let (kb: bitstring, =hh(hdr)) = adec(w, eD) in
+  let k2b(k) = kb in
+  let (=commit(k)) = cm in
+  let m = sdec(payload, kdf(k, hh(hdr))) in 0.
+
+process
+  new skO: skey; new skD: skey; new eD1: skey; new eD2: skey;
+  new skR: skey; new eR: skey;
+  out(c, (pk(skO), pk(skD), pk(skR)));
+  (* keys statements, signed by each member key alone *)
+  out(c, sign(p2b(pk(eD1)), skD)); out(c, sign(p2b(pk(eD2)), skD)); out(c, sign(p2b(pk(eR)), skR));
+  (* the removed device: everything it ever held *)
+  out(c, (skR, eR));
+  (* the reader's old epoch leaked *)
+  out(c, eD1);
+  (
+    (* before the removal and before the new epoch: copies the attacker may read *)
+    (! in(c, m: bitstring); SealTo(skO, pk(eR), m))
+  | (! in(c, m: bitstring); SealTo(skO, pk(eD1), m))
+    (* after the removal, sealed to the reader's newer epoch only *)
+  | (! in(c, (m1: bitstring, m2: bitstring)); SealTo(skO, pk(eD2), choice[m1, m2]))
+  | (! Reader(skD, eD2, pk(skO)))
+  )

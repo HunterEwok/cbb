@@ -1,0 +1,161 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 HunterEwok
+/*
+ * CBB 0.6: the Welcome in parts (plans/second-builder/welcome-in-parts.md,
+ * decided 2026-11-13, not built yet). Message 67 carries a digest of the
+ * whole set and a count of parts; with 0 parts field 2 holds the set,
+ * otherwise the records follow as `records` messages. The joiner trusts
+ * nothing until every part is in and the assembled set has the digest.
+ *
+ * What is modelled
+ *   - The confirmed session: jm2.spthy proves the joiner's session key is
+ *     shared only with the admitter the person confirmed (CPace bound to
+ *     the TLS exporter). Here that is an ideal fact: !Sess(sid, A, J, k),
+ *     k fresh, the attacker gets k only by RevealSess.
+ *   - Message 67's MACed bytes include the digest (field 12) and the count
+ *     (field 13): mac(k, <sid, root, digest, count>).
+ *   - digest = h(<'cbb welcome digest v1', IDs>) where IDs is the multiset
+ *     of the records' IDs (the sorted hashes in the format; a multiset is
+ *     the order-free form). A record = <body, sig, sig2>, its ID = h(body);
+ *     sig is the signer's signature over <body, h(sig2)> (rule of 46ac8527),
+ *     signer in the body. The joiner verifies each record's sig.
+ *   - Parts travel with NO protection at all (stronger than TLS): the
+ *     attacker drops, reorders, replays from another session, alters sig2
+ *     and adds parts at will. Two parts per Welcome here (one or more is
+ *     the same case for the digest), plus the zero-part form and a one-part
+ *     joiner path the admitter never uses (to show the count is bound).
+ *   - The joiner keeps one state per session and ends it at the first
+ *     failure (no rule continues from a failed state).
+ *
+ * Abstractions: SHA-256 and the MAC are ideal; one list per part; the
+ * records' own evaluation is not here (records-v3 model).
+ */
+
+theory CBB_Welcome_Parts_v1
+begin
+
+builtins: hashing, signing, multiset
+functions: mac/2
+
+// A signer of records (root or admin); its key may be stolen.
+rule Signer:
+    [ Fr(~s) ] --[ SignerKey(pk(~s)) ]-> [ !Signer(~s), Out(pk(~s)) ]
+rule Reveal_Signer:
+    [ !Signer(s) ] --[ RevealSigner(pk(s)) ]-> [ Out(s) ]
+
+// A record: a body naming its signer, a second signature, the first
+// signature over body and h(sig2). Records are public.
+rule Record:
+  let body = <'body', pk(s), ~b>
+      sig2 = <'sig2', ~x>
+      rec = <body, sign(<body, h(sig2)>, s), sig2>
+  in
+    [ !Signer(s), Fr(~b), Fr(~x) ]
+  --[ RecordMade(rec) ]->
+    [ !Rec(rec), Out(rec) ]
+
+// The confirmed session between admitter A and joiner J (from jm2).
+rule Session:
+    [ Fr(~sid), Fr(~k), Fr(~a), Fr(~j) ]
+  --[ SessionUp(~sid, ~a, ~j) ]->
+    [ !Sess(~sid, ~a, ~j, ~k), AdmitterS(~sid, ~a, ~j, ~k), JoinerS(~sid, ~a, ~j, ~k) ]
+rule Reveal_Session:
+    [ !Sess(sid, a, j, k) ] --[ RevealSess(sid) ]-> [ Out(k) ]
+
+// The admitter sends its set in two parts: message 67 then the records.
+rule Admitter_Parts:
+  let id1 = h(fst(r1))
+      id2 = h(fst(r2))
+      d = h(<'cbb welcome digest v1', id1 + id2>)
+  in
+    [ AdmitterS(sid, a, j, k), !Rec(r1), !Rec(r2), Fr(~root) ]
+  --[ Sent(sid, a, j, ~root, r1 + r2), SentIds(sid, id1 + id2) ]->
+    [ Out(<'m67', sid, ~root, d, '2', mac(k, <sid, ~root, d, '2'>)>),
+      Out(<'records', sid, r1>), Out(<'records', sid, r2>) ]
+
+// The admitter's set fits: zero parts, field 2 holds it.
+rule Admitter_Inline:
+  let id1 = h(fst(r1))
+      d = h(<'cbb welcome digest v1', id1>)
+  in
+    [ AdmitterS(sid, a, j, k), !Rec(r1), Fr(~root) ]
+  --[ Sent(sid, a, j, ~root, r1), SentIds(sid, id1) ]->
+    [ Out(<'m67', sid, ~root, d, '0', r1, mac(k, <sid, ~root, d, '0'>)>) ]
+
+// The joiner takes message 67 (its MAC under the session key).
+rule Joiner_67:
+    [ JoinerS(sid, a, j, k), In(<'m67', sid, root, d, n, mac(k, <sid, root, d, n>)>) ]
+  --> [ JWait(sid, a, j, root, d, n) ]
+
+rule Joiner_Inline:
+  let body = fst(r)
+      sig = fst(snd(r))
+      sig2 = snd(snd(r))
+  in
+    [ JoinerS(sid, a, j, k), In(<'m67', sid, root, d, '0', r, mac(k, <sid, root, d, '0'>)>) ]
+  --[ Eq(d, h(<'cbb welcome digest v1', h(body)>)),
+      Eq(verify(sig, <body, h(sig2)>, fst(snd(body))), true),
+      Finish(sid, a, j, root, r), FinishIds(sid, h(body)) ]->
+    [ ]
+
+// Parts may come from anywhere, in any order.
+rule Joiner_Part_First:
+  let body = fst(x)
+      sig = fst(snd(x))
+      sig2 = snd(snd(x))
+  in
+    [ JWait(sid, a, j, root, d, '2'), In(<'records', sid2, x>) ]
+  --[ Eq(verify(sig, <body, h(sig2)>, fst(snd(body))), true) ]->
+    [ JOne(sid, a, j, root, d, x) ]
+
+rule Joiner_Part_Second:
+  let body = fst(y)
+      sig = fst(snd(y))
+      sig2 = snd(snd(y))
+  in
+    [ JOne(sid, a, j, root, d, x), In(<'records', sid3, y>) ]
+  --[ Eq(verify(sig, <body, h(sig2)>, fst(snd(body))), true),
+      Eq(d, h(<'cbb welcome digest v1', h(fst(x)) + h(body)>)),
+      Finish(sid, a, j, root, x + y), FinishIds(sid, h(fst(x)) + h(body)) ]->
+    [ ]
+
+// A one-part path the admitter never takes: the count is bound by the MAC.
+rule Joiner_Part_Only:
+  let body = fst(x)
+      sig = fst(snd(x))
+      sig2 = snd(snd(x))
+  in
+    [ JWait(sid, a, j, root, d, '1'), In(<'records', sid2, x>) ]
+  --[ Eq(verify(sig, <body, h(sig2)>, fst(snd(body))), true),
+      Eq(d, h(<'cbb welcome digest v1', h(body)>)),
+      Finish(sid, a, j, root, x), FinishIds(sid, h(body)) ]->
+    [ ]
+
+restriction Eq: "All x y #i. Eq(x, y) @ #i ==> x = y"
+
+/* ---------------- Lemmas ---------------- */
+
+lemma exec_parts:
+  exists-trace
+  "Ex sid a j root S #f. Finish(sid, a, j, root, S) @ #f & not (Ex s #r. RevealSess(s) @ #r)
+     & not (Ex s #r. RevealSigner(s) @ #r)"
+
+// The claim: the joiner finishes only with exactly the set the admitter it
+// confirmed sent in this session, records with their signatures as sent,
+// unless the session key or a signer's key leaked.
+lemma parts_exact:
+  "All sid a j root S #f. Finish(sid, a, j, root, S) @ #f
+     ==> (Ex #s. Sent(sid, a, j, root, S) @ #s & #s < #f)
+       | (Ex #r. RevealSess(sid) @ #r)
+       | (Ex s #r. RevealSigner(s) @ #r)"
+
+// With signer keys stolen but the session safe: the joiner still gets
+// exactly the records' IDs the admitter sent (the digest binds them).
+lemma parts_ids_exact:
+  "All sid I #f. FinishIds(sid, I) @ #f
+     ==> (Ex #s. SentIds(sid, I) @ #s & #s < #f) | (Ex #r. RevealSess(sid) @ #r)"
+
+lemma finish_once:
+  "All sid a j r1 r2 S1 S2 #i #k. Finish(sid, a, j, r1, S1) @ #i & Finish(sid, a, j, r2, S2) @ #k ==> #i = #k"
+
+end
