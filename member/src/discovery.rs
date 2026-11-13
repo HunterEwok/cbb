@@ -1161,14 +1161,16 @@ fn browse_with(
                 untold.remove(&fullname);
                 // Anyone may say goodbye for a member: a device the records
                 // name keeps its dial loop, which its own connection and
-                // the loop's back-off pace.
+                // the loop's back-off pace. It no longer counts as at home,
+                // though, so that sync away from home may reach it through
+                // the relay meanwhile (a false goodbye costs a call there).
                 let Some(id) = instance_id(&fullname) else { continue };
+                node.found(&id, false);
                 let known = node.records().lock().unwrap().known();
-                if goodbye_stops(&known, &id) {
-                    node.found(&id, false);
-                    if let Some(cur) = found.remove(&id) {
-                        *cur.lock().unwrap() = None;
-                    }
+                if goodbye_stops(&known, &id)
+                    && let Some(cur) = found.remove(&id)
+                {
+                    *cur.lock().unwrap() = None;
                 }
             }
             _ => {}

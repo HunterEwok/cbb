@@ -194,6 +194,8 @@
 	# elevated get.ps1 checks and then runs stays what it checked. The
 	# user's %TEMP% is open to every program the user runs.
 	function New-PrivateFolder {
+		[CmdletBinding(SupportsShouldProcess)]
+		param()
 		$parent = Join-Path $env:SystemRoot 'Temp'
 		$path = Join-Path $parent ('cbb-' + [Guid]::NewGuid())
 		$acl = New-Object Security.AccessControl.DirectorySecurity
@@ -205,6 +207,7 @@
 			$acl.AddAccessRule($rule)
 		}
 		$acl.SetOwner($admins)
+		if (-not $PSCmdlet.ShouldProcess($path)) { throw "$path was not made" }
 		if ($PSVersionTable.PSEdition -eq 'Core') {
 			[IO.FileSystemAclExtensions]::Create((New-Object IO.DirectoryInfo $path), $acl) | Out-Null
 		} else {
