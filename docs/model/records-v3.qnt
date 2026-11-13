@@ -2845,11 +2845,12 @@ module records_v3 {
   // checkpoint folds the first removal into the second. A's record after the first removal
   // never counts, before or after: the two removals saw A differently, so the first does not
   // fold (the core's "same seen entries"; without it, at the default sizes, the fold let A's
-  // record count).
+  // record count). R is handed A's record 5 directly: under UNKNOWN_HEADS a removed key's member
+  // hands only heads, so 5 would never reach R and the two removals would see A alike.
   run foldAdminTest =
     init
       .then(sign(ROOT, "revoke", PHONE, "", 0, false, false, 1)).then(syncRound)
-      .then(sign(PHONE, "copies", "", "", 0, false, false, 1)).then(syncRound)
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 1)).then(giveOnly("r", 5)).then(syncRound)
       .then(sign(ROOT, "revoke", PHONE, "", 0, false, false, 1)).then(syncRound)
       .expect(MEMBERS.exclude(Set("a")).forall(m => not(views.get(m).counting.contains(5))) and promises)
       // (Under (J) R, at its ceiling with both removals kept, cannot write the checkpoint.)
