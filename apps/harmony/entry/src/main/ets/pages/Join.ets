@@ -13,7 +13,6 @@ import { QrView } from '../components/QrView';
 @Entry
 @ComponentV2
 struct Join {
-  @Local admin: boolean = false;
   @Local invite: string = '';
   // The model's join, a field so that the monitor sees its state.
   @Local joining: JoinModel = app.join;
@@ -21,7 +20,6 @@ struct Join {
   aboutToAppear(): void {
     const params = router.getParams() as Record<string, Object> | undefined;
     if (params !== undefined) {
-      this.admin = params['admin'] === true;
       this.invite = params['invite'] !== undefined ? String(params['invite']) : '';
     }
     this.begin();
@@ -37,7 +35,7 @@ struct Join {
     if (this.invite.length > 0) {
       app.startJoinByInvite(this.invite);
     } else {
-      app.startJoin(this.admin);
+      app.startJoin();
     }
   }
 
@@ -53,7 +51,7 @@ struct Join {
     if (this.invite.length > 0) {
       return $r('app.string.start_invitation');
     }
-    return this.admin ? $r('app.string.join_title_admin') : $r('app.string.start_join');
+    return $r('app.string.start_join');
   }
 
   lead(): ResourceStr {
@@ -67,7 +65,7 @@ struct Join {
     if (this.invite.length > 0) {
       return state === 'dialing' ? $r('app.string.join_dialing') : $r('app.string.join_invite_lead');
     }
-    return this.admin ? $r('app.string.join_admin_lead') : $r('app.string.join_lead');
+    return $r('app.string.join_lead');
   }
 
   build() {

@@ -4,7 +4,7 @@
 // A device's details (docs/apps.md, Devices), the page Device and, on a big
 // screen, the pane beside Home's devices: its sync, and for an
 // admin its changes and commands: paste on it, rename, mute, freeze's thaw, make an admin (the root,
-// for a computer that offers an admin key), hand the group over (the root),
+// for a phone or a computer that offers an admin key), hand the group over (the root),
 // take the group over (an admin, from a lost root), remove. A removal by
 // the root is final, so the page asks first and says so.
 
@@ -176,9 +176,13 @@ export struct DeviceDetail {
                     });
                   })
                 }
-                if (app.isRoot() && can(this.device() as DeviceInfo, 'admin') && (this.device() as DeviceInfo).admin !== true) {
+                // The admin key comes from the device's hello: a computer's
+                // with the admin capability, or a phone's.
+                if (app.isRoot() && (this.device() as DeviceInfo).admin !== true &&
+                  ((this.device() as DeviceInfo).role === 'phone' || can(this.device() as DeviceInfo, 'admin'))) {
                   this.action(t('device_make_admin'), false, () => {
-                    this.confirm(t('device_make_admin_confirm'), t('device_make_admin'), () => {
+                    const phone = (this.device() as DeviceInfo).role === 'phone';
+                    this.confirm(t(phone ? 'device_make_admin_phone_confirm' : 'device_make_admin_confirm'), t('device_make_admin'), () => {
                       app.manage('make_admin', this.deviceId);
                     });
                   })

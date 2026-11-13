@@ -15,7 +15,7 @@ import { cryptoFramework } from '@kit.CryptoArchitectureKit';
 import { fileIo } from '@kit.CoreFileKit';
 import { image } from '@kit.ImageKit';
 import { read, Result } from '../core/Core';
-import { shortLine, toBase64 } from '../core/Bytes';
+import { fromBase64, shortLine, toBase64 } from '../core/Bytes';
 import { Errors, Failure } from '../core/Errors';
 import { Joined, Membership, sealSecret } from '../core/Membership';
 import { OS, osVersion, STORE } from '../core/Phone';
@@ -236,6 +236,33 @@ interface MemberEvent {
   command?: Object;
   copy?: Copy;
   details?: string;
+  message?: PeerMessage;
+}
+
+// A peer's message the core hands over as it came: the root's admin
+// message carries the admin CA.
+interface PeerMessage {
+  t?: string;
+  admin_ca?: string;
+}
+
+// P-256's SubjectPublicKeyInfo before the 65-byte point.
+const P256_SPKI_PREFIX: number[] = [
+  0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01, 0x06, 0x08, 0x2a,
+  0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07, 0x03, 0x42, 0x00
+];
+
+// The SubjectPublicKeyInfo of a P-256 point in base64, base64; none for a
+// point of another length.
+export function p256Spki(point: string): string | undefined {
+  const p = new Uint8Array(fromBase64(point));
+  if (p.length !== 65) {
+    return undefined;
+  }
+  const out = new Uint8Array(P256_SPKI_PREFIX.length + p.length);
+  out.set(P256_SPKI_PREFIX, 0);
+  out.set(p, P256_SPKI_PREFIX.length);
+  return toBase64(out);
 }
 
 interface Started {
@@ -295,6 +322,9 @@ export class Member {
 
   // An admin renewed the certificate, or a takeover made a new root.
   onIdentity: (cert: string, issuer: string, roots: string[]) => void = () => {};
+  // The root made this phone an admin: its admin message brought the admin
+  // CA (base64) for the key the hellos offer, not yet checked.
+  onAdminCa: (ca: string, from: string) => void = () => {};
   // The images or files of a copy are in folder.
   onSaved: (folder: string, count: number) => void = () => {};
   // The devices changed, for the notifications.
@@ -374,6 +404,18 @@ export class Member {
     };
     if (j.issuer !== undefined && j.issuer.length > 0) {
       request['issuer'] = j.issuer;
+    }
+    // A member phone's hellos offer its admin key, for the root's "Make it
+    // an admin" (docs/protocol.md, section 10, "Admins"). HUKS makes it
+    // without asking; only a signature asks for the user's consent.
+    if (!m.isAdmin()) {
+      const admin = await ensure('admin');
+      const spki = admin.ok !== undefined ? p256Spki(admin.ok.public) : undefined;
+      if (spki !== undefined) {
+        request['admin_key'] = spki;
+      } else {
+        Errors.log(`member: no admin key to offer: ${admin.failure?.message ?? 'not a P-256 point'} (${admin.failure?.details ?? ''})`);
+      }
     }
     const made = await cbb.memberStart(JSON.stringify(request), (e: string) => {
       this.event(e);
@@ -928,6 +970,10 @@ export class Member {
         this.command(e.token ?? 0, e.from ?? '', e.command);
       } else {
         this.answer(e.token ?? 0, 'refused', 'the command has no body');
+      }
+    } else if (e.type === 'message') {
+      if (e.message?.t === 'admin' && (e.message.admin_ca ?? '').length > 0) {
+        this.onAdminCa(e.message.admin_ca ?? '', e.from ?? '');
       }
     } else if (e.type === 'copy') {
       // Images or files from another device come by themselves while sync

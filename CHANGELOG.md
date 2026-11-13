@@ -40,7 +40,8 @@ All notable changes to cbb are documented in this file. The format follows
 - The app for HarmonyOS 5 and later (`apps/harmony`), in development: ArkTS around the same
   Rust core as the Aurora app, through a Node-API module (`libcbb_napi.so`), with the keys in
   HUKS and the admin key behind the user's face, fingerprint or PIN. It has the other phones'
-  screens: a new group, joining by QR code, as an admin or by an invitation, restoring, Home
+  screens: a new group, joining by QR code or by an invitation, always as a member (the root makes a phone an
+  admin later from its device page, with the admin key its hellos offer), restoring, Home
   with the tiles, the devices and the admin's actions, adding a device with Scan Kit,
   invitations, the recovery key and the takeover, the arrangement, the notifications, and
   why it does not sync; it sends with the system's Paste button and from the Share menu

@@ -3,7 +3,8 @@
 
 // Adding a device by the code it shows: Scan Kit reads it (or the user
 // pastes its text), and the phone admits the device, signing with the admin
-// key after the user's consent. The root may make a phone that asks an admin.
+// key after the user's consent. A phone joins as a member: the root makes it
+// an admin later, from its device page.
 
 import { common } from '@kit.AbilityKit';
 import { router } from '@kit.ArkUI';
@@ -17,7 +18,6 @@ import { BusyLine, ErrorText, PageTitle } from '../components/Common';
 @Entry
 @ComponentV2
 struct AddDevice {
-  @Local makeAdmin: boolean = false;
   @Local pasted: string = '';
   @Local hint: string = '';
 
@@ -35,7 +35,7 @@ struct AddDevice {
       this.hint = Errors.shown(new Failure(t('error_not_join_code'), 'admit: the text does not start with cbb://join?'));
       return;
     }
-    app.startAdmit(text, this.makeAdmin);
+    app.startAdmit(text);
   }
 
   async scan(): Promise<void> {
@@ -69,22 +69,6 @@ struct AddDevice {
         } })
         Text(this.lead()).fontColor($r('app.color.text'))
         if (app.admit.state === 'idle' || app.admit.state === 'failed') {
-          if (app.isRoot()) {
-            Row() {
-              Column({ space: 2 }) {
-                Text($r('app.string.admit_make_admin')).fontColor($r('app.color.text'))
-                Text($r('app.string.admit_make_admin_note')).fontSize(12).fontColor($r('app.color.secondary'))
-              }
-              .alignItems(HorizontalAlign.Start)
-              .layoutWeight(1)
-              Toggle({ type: ToggleType.Switch, isOn: this.makeAdmin })
-                .selectedColor($r('app.color.accent'))
-                .onChange((on: boolean) => {
-                  this.makeAdmin = on;
-                })
-            }
-            .width('100%')
-          }
           Button(app.admit.state === 'failed' ? $r('app.string.try_again') : $r('app.string.scan'), { type: ButtonType.Capsule })
             .width('100%')
             .onClick(() => {

@@ -42,10 +42,7 @@ struct Start {
         })
         KeyGuardNote({ hint: true })
         this.choice($r('app.string.start_join'), $r('app.string.start_join_note'), false, () => {
-          router.pushUrl({ url: 'pages/Join', params: { 'admin': false } as Record<string, Object> });
-        })
-        this.choice($r('app.string.start_join_admin'), $r('app.string.start_join_admin_note'), false, () => {
-          router.pushUrl({ url: 'pages/Join', params: { 'admin': true } as Record<string, Object> });
+          router.pushUrl({ url: 'pages/Join' });
         })
         this.choice($r('app.string.start_invitation'), $r('app.string.start_invitation_note'), false, () => {
           router.pushUrl({ url: 'pages/Invitation' });

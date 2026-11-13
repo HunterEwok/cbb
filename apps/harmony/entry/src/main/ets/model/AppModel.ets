@@ -223,6 +223,9 @@ export class AppModel {
         Errors.log('group: kept a new member certificate or root');
       }
     };
+    this.member.onAdminCa = (ca: string, from: string) => {
+      this.adminCaArrived(ca, from);
+    };
     this.join.onJoined = (j: Membership) => {
       this.membership = j;
       this.startMember().then(() => {
@@ -349,19 +352,20 @@ export class AppModel {
     return seal.ok.key;
   }
 
-  // Listens for the device that scans this phone's QR code; with admin, the
-  // phone asks to be an admin.
-  startJoin(admin: boolean): void {
-    this.join.start(this.dir, admin);
+  // Listens for the device that scans this phone's QR code. The phone
+  // joins as a member; the group's root may make it an admin later, with
+  // the admin key its hellos offer.
+  startJoin(): void {
+    this.join.start(this.dir);
   }
 
   startJoinByInvite(text: string): void {
     this.join.startInvite(this.dir, text);
   }
 
-  startAdmit(qr: string, makeAdmin: boolean): void {
+  startAdmit(qr: string): void {
     if (this.membership !== undefined) {
-      this.admit.admit(qr, this.member, this.membership, makeAdmin);
+      this.admit.admit(qr, this.member, this.membership);
     }
   }
 
@@ -693,6 +697,31 @@ export class AppModel {
         Errors.log(`servers: the relay was not met again: ${failure.message} (${failure.details})`);
       }
     }
+  }
+
+  // The root made this phone an admin: its admin message brought the admin
+  // CA for the key the hellos offer. The member checks it (take_admin_ca:
+  // for that key, naming this phone, under the group's current root), then
+  // the phone keeps it, and the member starts again as an admin's, its
+  // hellos offering the key no more.
+  private async adminCaArrived(ca: string, from: string): Promise<void> {
+    if (this.membership === undefined || this.membership.isAdmin()) {
+      return;
+    }
+    const taken = await this.member.call<Object>('take_admin_ca', { 'key': ca } as Record<string, Object>);
+    if (taken.ok === undefined) {
+      const f = taken.failure as Failure;
+      Errors.log(`admin: refused the admin CA from ${from}: ${f.message} (${f.details})`);
+      return;
+    }
+    const next = this.membership.copy();
+    next.member.admin_ca = ca;
+    if (!this.keep(next)) {
+      return;
+    }
+    Errors.log(`admin: the root made this phone an admin (${from})`);
+    await this.stopMember();
+    await this.startMember();
   }
 
   // Keeps next as the membership, or shows why it could not.
