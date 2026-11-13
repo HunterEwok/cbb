@@ -314,14 +314,14 @@ final class ReadersUITests: XCTestCase {
     /// script, no text is clipped and the screens follow Dynamic Type.
     func testLargestText() {
         for language in Self.largestText {
-            // A measurement of the runner, not to be merged: Settings with
-            // its refresh every two seconds and without it, each audited
-            // as it opens and with Notifications in the middle.
-            for refresh in [true, false] {
-                let label = refresh ? "refresh on" : "refresh off"
-                let app = launch(language: language, extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] + (refresh ? [] : ["-CBBMeasureNoRefresh"]))
+            // A measurement of the runner, not to be merged: Settings as it
+            // is, without its refresh every two seconds, and with a plain
+            // grid of themes for the lazy one, each audited as it opens and
+            // with Notifications in the middle.
+            for (label, flag) in [("as it is", ""), ("refresh off", "-CBBMeasureNoRefresh"), ("plain grid", "-CBBMeasurePlainGrid")] {
+                let app = launch(language: language, extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] + (flag.isEmpty ? [] : [flag]))
                 XCTAssertTrue(app.buttons[tr("Create a group", language)].waitForExistence(timeout: 30))
-                if refresh {
+                if flag.isEmpty {
                     picture("start-\(language)-largest-text")
                     audit(app, [.textClipped, .dynamicType], "the Start screen in \(language) at the largest text")
                 }

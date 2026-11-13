@@ -465,36 +465,53 @@ struct ThemeSwatches: View {
     @ScaledMetric(relativeTo: .caption2) private var swatchSize: CGFloat = 36
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: width), spacing: Tokens.spacingSmall)], spacing: Tokens.spacingMedium) {
-            ForEach(Tokens.themes, id: \.name) { theme in
-                let swatch = palette.dark ? theme.dark : theme.light
-                let chosen = theme.name == selection
-                Button { selection = theme.name } label: {
-                    VStack(spacing: 6) {
-                        ThemeSwatch(palette: swatch)
-                            .frame(width: swatchSize, height: swatchSize)
-                            .overlay {
-                                if chosen {
-                                    Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(swatch.text)
-                                }
-                            }
-                            .padding(3)
-                            .overlay(Circle().stroke(chosen ? palette.accent : palette.line, lineWidth: 2))
-                        // A hair space on each side: some names' last letter draws a
-                        // little past the text's own width (the Hindi names of Swiss and
-                        // Hardware), which the accessibility audit reports as clipped text.
-                        (Text(verbatim: "\u{200A}") + Text(ThemeChoice.title(theme.name)) + Text(verbatim: "\u{200A}"))
-                            .font(.caption2).multilineTextAlignment(.center)
-                            .foregroundStyle(chosen ? palette.text : palette.textDim)
+        Group {
+            // A measurement of CI's runner, not to be merged: a UI test can
+            // swap the lazy grid for a plain one, three to a row.
+            if ProcessInfo.processInfo.arguments.contains("-CBBMeasurePlainGrid") {
+                let rows = stride(from: 0, to: Tokens.themes.count, by: 3).map { Array(Tokens.themes[$0..<min($0 + 3, Tokens.themes.count)]) }
+                Grid(horizontalSpacing: Tokens.spacingSmall, verticalSpacing: Tokens.spacingMedium) {
+                    ForEach(rows.indices, id: \.self) { r in
+                        GridRow {
+                            ForEach(rows[r], id: \.name) { theme in cell(theme) }
+                        }
                     }
-                    .frame(maxWidth: .infinity, minHeight: 44)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text(ThemeChoice.title(theme.name)))
-                .accessibilityAddTraits(chosen ? .isSelected : [])
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: width), spacing: Tokens.spacingSmall)], spacing: Tokens.spacingMedium) {
+                    ForEach(Tokens.themes, id: \.name) { theme in cell(theme) }
+                }
             }
         }
         .padding(.vertical, Tokens.spacingSmall)
+    }
+
+    @ViewBuilder private func cell(_ theme: Tokens.Theme) -> some View {
+        let swatch = palette.dark ? theme.dark : theme.light
+        let chosen = theme.name == selection
+        Button { selection = theme.name } label: {
+            VStack(spacing: 6) {
+                ThemeSwatch(palette: swatch)
+                    .frame(width: swatchSize, height: swatchSize)
+                    .overlay {
+                        if chosen {
+                            Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(swatch.text)
+                        }
+                    }
+                    .padding(3)
+                    .overlay(Circle().stroke(chosen ? palette.accent : palette.line, lineWidth: 2))
+                // A hair space on each side: some names' last letter draws a
+                // little past the text's own width (the Hindi names of Swiss and
+                // Hardware), which the accessibility audit reports as clipped text.
+                (Text(verbatim: "\u{200A}") + Text(ThemeChoice.title(theme.name)) + Text(verbatim: "\u{200A}"))
+                    .font(.caption2).multilineTextAlignment(.center)
+                    .foregroundStyle(chosen ? palette.text : palette.textDim)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(ThemeChoice.title(theme.name)))
+        .accessibilityAddTraits(chosen ? .isSelected : [])
     }
 }
 
