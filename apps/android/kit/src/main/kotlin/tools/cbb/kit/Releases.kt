@@ -30,31 +30,13 @@ object Releases {
 
     class Refused(message: String) : Exception(message)
 
-    /** One signature of a file: its algorithm (1 ES256, 4 SLH-DSA-SHA2-128s), SHA-256 of the signing half's SubjectPublicKeyInfo, and the signature. */
-    class Sig(val alg: Long, val key: ByteArray, val sig: ByteArray) {
-        fun toJson(): JsonObject = Wire.obj("alg" to Wire.num(alg), "key" to Wire.bytes(key), "sig" to Wire.bytes(sig))
-    }
-
-    /** The envelope of every release file: the body and its signatures, one for each algorithm a device requires (section 16, "Two signatures"). */
-    class File(val body: ByteArray, val sigs: List<Sig>) {
-        /** SHA-256 over the body, which names a release.json. */
-        val hash: ByteArray get() = sha256(body)
-
-        /** The envelope as JSON, as members pass it. */
-        fun toJson(): JsonObject = Wire.obj("body" to Wire.bytes(body), "sigs" to JsonArray(sigs.map { it.toJson() }))
-
-        companion object {
-            fun fromJson(o: JsonObject): File = File(
-                o.optBytes("body") ?: ByteArray(0),
-                o.optArray("sigs")?.map { s ->
-                    val so = s.jsonObject
-                    Sig(so.optLong("alg") ?: 0, so.optBytes("key") ?: ByteArray(0), so.optBytes("sig") ?: ByteArray(0))
-                } ?: emptyList(),
-            )
-
-            /** Reads a file as it is served; null when it is not one. */
-            fun parse(data: ByteArray): File? = runCatching { Wire.parse(data)?.let(::fromJson) }.getOrNull()
-        }
+    /**
+     * A release file as it was fetched: the kit reads nothing of it, the core reads its bytes as
+     * every reader does (docs/core-api.md, "Release files").
+     */
+    class File(val data: ByteArray) {
+        /** The file as the core's release calls take it: its bytes in base64. */
+        fun toJson(): JsonElement = JsonPrimitive(java.util.Base64.getEncoder().encodeToString(data))
     }
 
     /** A root key's half, for tests and drills that sign with roots of their own: the core uses the roots it pins when none are given. */
@@ -149,9 +131,8 @@ object Releases {
      * refuses is [Refused], with its reason; any other refusal is the kit's mistake and stays the
      * core's.
      */
-    private fun ask(op: String, keys: File, roots: List<Key>?, nowMS: Long, seen: Seen, vararg files: Pair<String, JsonElement?>): Pair<JsonObject, Seen> {
+    private fun ask(op: String, roots: List<Key>?, nowMS: Long, seen: Seen, vararg files: Pair<String, JsonElement?>): Pair<JsonObject, Seen> {
         val args = Wire.obj(
-            "keys" to keys.toJson(),
             "roots" to roots?.let { r -> JsonArray(r.map { it.toJson() }) },
             "now_ms" to Wire.num(nowMS),
             "seen" to seen.toJson(),
@@ -191,15 +172,21 @@ object Releases {
      * Returns the release and the Seen to keep.
      */
     fun check(keys: File, channel: File, release: File, roots: List<Key>? = null, name: String, nowMS: Long, seen: Seen): Pair<Release, Seen> {
-        val (v, next) = ask("release_check", keys, roots, nowMS, seen, "channel" to channel.toJson(), "release" to release.toJson(), "name" to Wire.str(name))
+        val (v, next) = ask("release_check", roots, nowMS, seen, "keys" to keys.toJson(), "channel" to channel.toJson(), "release" to release.toJson(), "name" to Wire.str(name))
         return release(v) to next
     }
 
     /**
-     * The version a channel file names, read before it is checked, to know
-     * which release.json to fetch; [check] then checks both.
+     * The version a channel file names, read by the core before the file is checked, to know
+     * which release.json to fetch; [check] then checks both. Null when the file is not a channel
+     * file.
      */
-    fun named(channel: File): String? = runCatching { Wire.parse(channel.body)?.optString("release") }.getOrNull()?.takeIf { parseVersion(it) != null }
+    fun named(channel: File): String? = try {
+        Core.run("release_named", Wire.obj("channel" to channel.toJson())).jsonObject.optString("release")?.takeIf { parseVersion(it) != null }
+    } catch (r: Core.Refusal) {
+        if (r.name != "signed") throw r
+        null
+    }
 
     /**
      * Checks attest-status.json: keys.json under the roots (the pinned ones when null), the list
@@ -207,7 +194,7 @@ object Releases {
      * and the Seen to keep.
      */
     fun checkStatus(keys: File, status: File, roots: List<Key>? = null, nowMS: Long, seen: Seen): Pair<Status, Seen> {
-        val (v, next) = ask("release_check_status", keys, roots, nowMS, seen, "status" to status.toJson())
+        val (v, next) = ask("release_check_status", roots, nowMS, seen, "keys" to keys.toJson(), "status" to status.toJson())
         val list = v.optArray("android_revoked")?.map { (it as JsonPrimitive).content } ?: emptyList()
         return Status(v.optLong("seq") ?: 0, v.optLong("time_ms") ?: 0, v.optLong("expires_ms") ?: 0, v.optLong("source_ms") ?: 0, list) to next
     }
@@ -228,18 +215,11 @@ object Releases {
         fun forwarder(name: String): EntryForwarder? = forwarders.firstOrNull { it.name == name }
     }
 
-    /** The signed entry points as members pass them: entries.json and the keys.json whose key signed it. */
-    class EntriesSet(val keys: File, val entries: File) {
-        fun toJson(): JsonObject = JsonObject(mapOf("keys" to keys.toJson(), "entries" to entries.toJson()))
-
-        companion object {
-            fun fromJson(o: JsonObject): EntriesSet? {
-                val k = o.optObject("keys") ?: return null
-                val e = o.optObject("entries") ?: return null
-                return EntriesSet(File.fromJson(k), File.fromJson(e))
-            }
-        }
-    }
+    /**
+     * The signed entry points as members pass them, `{"keys": keys.json, "entries": entries.json}`,
+     * as they were received or kept: the core reads them.
+     */
+    class EntriesSet(val data: ByteArray)
 
     /**
      * Checks entries.json: keys.json under the roots (the pinned ones when null), the list under a
@@ -247,7 +227,7 @@ object Releases {
      * list and the Seen to keep.
      */
     fun checkEntries(set: EntriesSet, roots: List<Key>? = null, nowMS: Long, seen: Seen): Pair<Entries, Seen> {
-        val (v, next) = ask("release_check_entries", set.keys, roots, nowMS, seen, "entries" to set.entries.toJson())
+        val (v, next) = ask("release_check_entries", roots, nowMS, seen, "set" to Wire.bytes(set.data))
         val fws = v.optArray("forwarders")?.map { f ->
             val fo = f.jsonObject
             val ways = fo.optArray("vless")?.map { w ->

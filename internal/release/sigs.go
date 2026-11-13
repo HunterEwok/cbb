@@ -19,8 +19,8 @@ import (
 	"io"
 	"math/big"
 	"reflect"
-	"sort"
 	"slices"
+	"sort"
 	"strconv"
 	"unsafe"
 
@@ -647,3 +647,16 @@ func ParseHalf(data []byte) (crypto.Signer, error) {
 // SignUnchecked signs data as it is, without Sign's check of its form: for
 // drills and tests of files every reader refuses.
 func SignUnchecked(data []byte, key Signer) (File, error) { return signData(data, key) }
+
+// ReadAll reads a release file whole, as every reader does: one larger
+// than MaxFile is refused, never cut.
+func ReadAll(r io.Reader) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(r, MaxFile+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > MaxFile {
+		return nil, fmt.Errorf("release: the file is larger than %d bytes", MaxFile)
+	}
+	return data, nil
+}

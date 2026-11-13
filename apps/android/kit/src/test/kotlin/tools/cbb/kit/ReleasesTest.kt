@@ -3,14 +3,18 @@
 
 package tools.cbb.kit
 
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
+import java.util.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ReleasesTest {
@@ -25,7 +29,7 @@ class ReleasesTest {
         // Every reader of release files reads up to the same size.
         assertEquals(Releases.MAX_FILE, v.getValue("max_file").jsonPrimitive.int)
         // Each case names its files by their index in files.
-        val files = v.getValue("files").jsonArray.map { Releases.File.fromJson(it.jsonObject) }
+        val files = v.getValue("files").jsonArray.map(::rawFile)
         for (c in cases) {
             val name = c.str("name")
             val file = { k: String -> files[c.getValue(k).jsonPrimitive.int] }
@@ -50,7 +54,7 @@ class ReleasesTest {
         val now = v.getValue("now_ms").jsonPrimitive.long
         val cases = v.getValue("status").jsonArray.map { it.jsonObject }
         assertEquals(18, cases.size)
-        val files = v.getValue("files").jsonArray.map { Releases.File.fromJson(it.jsonObject) }
+        val files = v.getValue("files").jsonArray.map(::rawFile)
         for (c in cases) {
             val name = c.str("name")
             val file = { k: String -> files[c.getValue(k).jsonPrimitive.int] }
@@ -77,7 +81,7 @@ class ReleasesTest {
             val name = c.str("name")
             val s = c.getValue("seen").jsonObject
             val seen = Releases.Seen.fromJson(s)
-            val set = Releases.EntriesSet.fromJson(c)!!
+            val set = entriesSet(c)
             val got = runCatching { Releases.checkEntries(set, roots, now, seen) }
             assertEquals(c.getValue("ok").jsonPrimitive.boolean, got.isSuccess, "$name: ${got.exceptionOrNull()?.message}")
             got.getOrNull()?.let { (e, next) ->
@@ -87,6 +91,30 @@ class ReleasesTest {
                 assertEquals(3L, next.keysSeq, name)
             }
         }
+    }
+
+    /**
+     * testdata/interop/go-release-envelopes.json: each release.json as it comes, its bytes passed
+     * to the core as the kit fetched them, taken or refused as Go and the core's reader do.
+     */
+    @Test
+    fun goEnvelopes() {
+        val v = Interop.read("go-release-envelopes.json").jsonObject
+        val roots = v.getValue("roots").jsonArray.map { Releases.Key.fromJson(it.jsonObject) }
+        val now = v.getValue("now_ms").jsonPrimitive.long
+        val keys = rawFile(v.getValue("keys"))
+        val channel = rawFile(v.getValue("channel_file"))
+        val cases = v.getValue("envelopes").jsonArray.map { it.jsonObject }
+        assertEquals(46, cases.size)
+        for (c in cases) {
+            val name = c.str("name")
+            val release = Releases.File(Base64.getDecoder().decode(c.str("release")))
+            val got = runCatching { Releases.check(keys, channel, release, roots, v.str("channel"), now, Releases.Seen()) }
+            got.exceptionOrNull()?.let { if (it !is Releases.Refused) throw it }
+            assertEquals(c.getValue("ok").jsonPrimitive.boolean, got.isSuccess, "$name: ${got.exceptionOrNull()?.message}")
+        }
+        // A channel file the core cannot read names nothing.
+        assertNull(Releases.named(Releases.File("{}".toByteArray())))
     }
 
     @Test
@@ -102,3 +130,10 @@ class ReleasesTest {
         assertEquals(-1, Releases.compare("0.6.0-rc.0", "0.0.0"))
     }
 }
+
+/** A release file of a vectors file, which holds it as an object: its JSON text, the bytes a device fetches. */
+fun rawFile(e: JsonElement): Releases.File = Releases.File(e.toString().toByteArray())
+
+/** The signed entry points as members pass them, from a case's two files. */
+fun entriesSet(c: JsonObject): Releases.EntriesSet =
+    Releases.EntriesSet("""{"keys":${c.getValue("keys")},"entries":${c.getValue("entries")}}""".toByteArray())

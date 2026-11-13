@@ -3388,13 +3388,18 @@ the envelope of `sig` and `key` that it never took is gone.
 
 Every reader reads a file alike, in one strict form beside the body's own:
 
-- The envelope is a JSON object whose members are named exactly `body` and `sigs`, neither
-  twice; other members are passed over. `body` is base64 in its one form (standard alphabet,
-  padded, no line break, no stray bits).
-- Each entry of `sigs` (at most 8) is an object with `alg`, `key` and `sig`, none twice,
-  others passed over: `alg` an integer from 1 to 2^31 − 1, `key` and `sig` base64 in its one
-  form. Any other shape refuses the file, whatever its algorithm; an entry of that shape and
-  an algorithm the reader does not know is passed over.
+- The file is the envelope in the canonical form of signed bodies (Conventions,
+  `form/canonical`), with whitespace (space, tab, line feed, carriage return) before and after
+  it passed over: one object whose members are exactly `body` and `sigs`, in that order, with
+  no whitespace inside, no escape, no `null`; nothing else before or after it, not even a byte
+  order mark. `body` is base64 in its one form (standard alphabet, padded, no line break, no
+  stray bits).
+- `sigs` holds 1 to 8 objects, each with exactly `alg`, `key` and `sig`, in that order: `alg`
+  an integer from 1 to 2^31 − 1 without leading zeros, `key` and `sig` base64 in its one form.
+  Any other shape refuses the file, whatever its algorithm; a member of another name refuses
+  it too, so a later version extends the envelope only by an algorithm, never by a member. An
+  entry of that shape and an algorithm the reader does not know is passed over, and so is a
+  signature longer than 16 KiB.
 - A key in `keys.json` names an `alg` from 1 to 2^31 − 1. A key that signs (every use but
   `forwarder` and `relay`) is its halves under one `name` and `use`, one of each algorithm:
   two halves of one algorithm under one name and use refuse the `keys.json`, so the halves of
@@ -3418,7 +3423,9 @@ until the new root reaches it. The two roots sit on separate YubiKeys for this r
 `get.sh` checks the ES256 signatures always and the SLH-DSA ones where its `openssl` does
 (OpenSSL 3.5 and later, tried with a key of its own first), and says which it checked;
 `get.ps1` checks the ES256 ones and says that PowerShell cannot check SLH-DSA. Both pass over
-a signature they do not check, and the program they install checks both from then on.
+a signature they do not check, and the program they install checks both from then on. Both
+read the envelope by the rules above, as the programs do: they take and refuse the same
+shapes, including the other S of an ES256 signature and a ninth signature.
 
 ### Where the files are
 

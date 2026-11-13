@@ -636,9 +636,6 @@ object Member {
         /** The group's server credentials the sender keeps, or new ones it passes on (section 18). */
         data class Credentials(val credentials: List<ServerCredentials.Credential>) : Message()
 
-        /** The newest signed entry points the sender holds (section 16, "Entry points"). */
-        class Entries(val set: Releases.EntriesSet) : Message()
-
         /** From the root: the receiver's admin CA, DER, for the admin key its hello offered. */
         class Admin(val adminCA: ByteArray) : Message() {
             override fun equals(other: Any?): Boolean = other is Admin && adminCA.contentEquals(other.adminCA)
@@ -722,7 +719,6 @@ object Member {
         is Message.Cert -> Wire.obj("t" to Wire.str("cert"), "cert" to Wire.bytes(m.cert), "issuer" to Wire.bytes(m.issuer))
         is Message.Records -> Wire.obj("t" to Wire.str("records"), "records" to JsonArray(m.records.map { it.toJson() }))
         is Message.Credentials -> Wire.obj("t" to Wire.str("credentials"), "credentials" to JsonArray(m.credentials.map { it.toJson() }))
-        is Message.Entries -> Wire.obj("t" to Wire.str("entries"), "entries" to m.set.toJson())
         is Message.Admin -> Wire.obj("t" to Wire.str("admin"), "admin_ca" to Wire.bytes(m.adminCA))
         is Message.Tunnel -> Wire.obj("t" to Wire.str("tunnel"), "tunnel" to m.offer?.toJson())
         is Message.Hubs -> Wire.obj("t" to Wire.str("hubs"), "hubs" to m.share.toJson())
@@ -855,7 +851,6 @@ object Member {
                         ServerCredentials.Credential.fromJson(it as? JsonObject ?: throw WireTypeException("credentials"))
                     } ?: emptyList(),
                 )
-                "entries" -> o.optObject("entries")?.let(Releases.EntriesSet::fromJson)?.let { Message.Entries(it) } ?: Message.Unknown(t)
                 "admin" -> Message.Admin(o.optBytes("admin_ca") ?: ByteArray(0))
                 "tunnel" -> Message.Tunnel(o.optObject("tunnel")?.let { TunnelOffer.fromJson(it) })
                 "hubs" -> o.optObject("hubs")?.let { Message.Hubs(HubShare.fromJson(it)) } ?: Message.Unknown(t)

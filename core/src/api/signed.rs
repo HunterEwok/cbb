@@ -150,7 +150,8 @@ impl ReleaseArgs {
 /// read is refused as a file that does not verify.
 fn file(what: &str, b: &Option<Vec<u8>>) -> core::result::Result<crate::release::File, Refusal> {
     let b = b.as_ref().ok_or_else(|| missing(what))?;
-    crate::release::File::parse(b).map_err(|e| refuse(Code::Signed, Error::msg(alloc::format!("{what}: {}", e.message()))))
+    crate::release::File::parse(b)
+        .map_err(|e| refuse(Code::Signed, Error::msg(alloc::format!("{what}: {}", e.message()))))
 }
 
 /// Reads the signed entry points as members pass them: in the strict form
@@ -210,7 +211,8 @@ fn release_check(op: &str, a: ReleaseArgs) -> core::result::Result<Vec<u8>, Refu
             answer(e, seen)
         }
         _ => {
-            let (keys, channel, rel) = (file("keys", &a.keys)?, file("channel", &a.channel)?, file("release", &a.release)?);
+            let (keys, channel, rel) =
+                (file("keys", &a.keys)?, file("channel", &a.channel)?, file("release", &a.release)?);
             let (r, seen) =
                 release::check(&keys, &channel, &rel, &roots, &a.name, a.now_ms, &a.seen).map_err(signed)?;
             answer(r, seen)
@@ -484,10 +486,16 @@ mod tests {
         // A set with a file twice, or with its files beside it, is refused.
         let c = &e["vectors"][0];
         let twice = format!(r#"{{"keys":{},"entries":{},"entries":{}}}"#, c["keys"], c["entries"], c["entries"]);
-        let got = run("release_check_entries", serde_json::json!({"set": STANDARD.encode(twice), "roots": e["roots"], "now_ms": e["now_ms"]}));
+        let got = run(
+            "release_check_entries",
+            serde_json::json!({"set": STANDARD.encode(twice), "roots": e["roots"], "now_ms": e["now_ms"]}),
+        );
         assert_eq!(got["error"]["name"], "signed", "{got}");
         let set = raw(&serde_json::json!({"keys": c["keys"], "entries": c["entries"]}));
-        let got = run("release_check_entries", serde_json::json!({"set": set, "keys": raw(&c["keys"]), "roots": e["roots"], "now_ms": e["now_ms"]}));
+        let got = run(
+            "release_check_entries",
+            serde_json::json!({"set": set, "keys": raw(&c["keys"]), "roots": e["roots"], "now_ms": e["now_ms"]}),
+        );
         assert_eq!(got["error"]["name"], "request", "{got}");
         // Each envelope as it comes, through the entry point: the same
         // answer as the File reader's.
@@ -505,7 +513,10 @@ mod tests {
         let c = &vs[0];
         let got = run("release_named", serde_json::json!({"channel": file(c, "channel")}));
         assert_eq!(got["ok"]["release"], c["version"], "{got}");
-        let got = run("release_named", serde_json::json!({"channel": STANDARD.encode(br#"{"body":"e30=","sigs":[],"sigs":[]}"#)}));
+        let got = run(
+            "release_named",
+            serde_json::json!({"channel": STANDARD.encode(br#"{"body":"e30=","sigs":[],"sigs":[]}"#)}),
+        );
         assert_eq!(got["error"]["name"], "signed", "{got}");
         // A call without its file is a bad request, not a refused file.
         let c = &vs[0];

@@ -139,7 +139,7 @@ final class ReleaseTests: XCTestCase {
             var envelopes: [C]
         }
         let v = try JSONDecoder().decode(V.self, from: Data(contentsOf: url.appendingPathComponent("testdata/interop/go-release-envelopes.json")))
-        XCTAssertEqual(v.envelopes.count, 44)
+        XCTAssertEqual(v.envelopes.count, 46)
         for c in v.envelopes {
             let got = Result { try Releases.check(keys: Releases.File(v.keys.data), channel: Releases.File(v.channel_file.data), release: Releases.File(c.release),
                                                   roots: v.roots, name: v.channel, nowMS: v.now_ms, seen: Releases.Seen()) }

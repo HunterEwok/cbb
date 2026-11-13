@@ -10,7 +10,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -56,7 +55,7 @@ func fetch(src string) ([]byte, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("%s: %s", src, resp.Status)
 	}
-	return io.ReadAll(io.LimitReader(resp.Body, release.MaxFile))
+	return release.ReadAll(resp.Body)
 }
 
 func fetchFile(src string) (release.File, error) {

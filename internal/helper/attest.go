@@ -13,7 +13,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"sync"
@@ -67,10 +66,6 @@ func statusURL() string {
 	return "https://cbb.tools/attest/"
 }
 
-// The most a fetched file may hold: a release file whole, its body and
-// its signatures (docs/protocol.md, section 16).
-const maxStatusFile = release.MaxFile
-
 func fetchStatus(req *control.Message) (*control.Message, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -88,7 +83,7 @@ func fetchStatus(req *control.Message) (*control.Message, error) {
 		if err != nil {
 			return nil, err
 		}
-		data, err := io.ReadAll(io.LimitReader(resp.Body, maxStatusFile))
+		data, err := release.ReadAll(resp.Body)
 		resp.Body.Close()
 		if err != nil {
 			return nil, err

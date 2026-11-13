@@ -138,7 +138,7 @@ type statusVector struct {
 // keys.json and channel file: whether the envelope is read, and the file
 // taken (docs/protocol.md, section 16, "Two signatures").
 type envelope struct {
-	Name    string `json:"name"`
+	Name string `json:"name"`
 	// Release is the release.json's bytes as they come, in base64: some
 	// are not UTF-8.
 	Release []byte `json:"release"`
@@ -460,6 +460,8 @@ func makeVectors(t *testing.T) vectors {
 	env("with sigs before body", `{"sigs":[`+both+`],"body":"`+body+`"}`, false)
 	env("with the body's first character written as an escape", `{"body":"\u00`+fmt.Sprintf("%02x", body[0])+body[1:]+`","sigs":[`+both+`]}`, false)
 	env("with a line break after it", `{"body":"`+body+`","sigs":[`+both+`]}`+"\n", true)
+	env("with a carriage return and a line break after it", `{"body":"`+body+`","sigs":[`+both+`]}`+"\r\n", true)
+	env("with a carriage return between its members", `{"body":"`+body+`",`+"\r"+`"sigs":[`+both+`]}`, false)
 	env("with spaces and a line break before it", " \n"+`{"body":"`+body+`","sigs":[`+both+`]}`, true)
 	env("with a byte order mark", "\xef\xbb\xbf"+`{"body":"`+body+`","sigs":[`+both+`]}`, false)
 	env("with a second object after it", `{"body":"`+body+`","sigs":[`+both+`]}{}`, false)
@@ -543,7 +545,7 @@ func TestReleaseVectors(t *testing.T) {
 	if err := json.Unmarshal(compacted(t, envData), &env); err != nil {
 		t.Fatal(err)
 	}
-	if len(env.Envelopes) != 44 {
+	if len(env.Envelopes) != 46 {
 		t.Fatalf("%d envelopes", len(env.Envelopes))
 	}
 	for _, c := range env.Envelopes {
@@ -1098,4 +1100,16 @@ func compacted(t *testing.T, data []byte) []byte {
 		t.Fatal(err)
 	}
 	return b.Bytes()
+}
+
+// TestReadAll: a release file of MaxFile bytes is read whole, one byte more
+// is refused, never cut.
+func TestReadAll(t *testing.T) {
+	data := bytes.Repeat([]byte("a"), MaxFile)
+	if got, err := ReadAll(bytes.NewReader(data)); err != nil || len(got) != MaxFile {
+		t.Errorf("read %d bytes of %d: %v", len(got), MaxFile, err)
+	}
+	if got, err := ReadAll(bytes.NewReader(append(data, 'a'))); err == nil {
+		t.Errorf("read %d bytes of a file of %d", len(got), MaxFile+1)
+	}
 }

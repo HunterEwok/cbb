@@ -33,8 +33,8 @@ class AttestStatus(private val dir: File, private val roots: List<Releases.Key>?
     }
 
     private fun load() {
-        val keys = Releases.File.parse(runCatching { File(dir, KEYS).readBytes() }.getOrNull() ?: return) ?: return
-        val status = Releases.File.parse(runCatching { File(dir, STATUS).readBytes() }.getOrNull() ?: return) ?: return
+        val keys = Releases.File(runCatching { File(dir, KEYS).readBytes() }.getOrNull() ?: return)
+        val status = Releases.File(runCatching { File(dir, STATUS).readBytes() }.getOrNull() ?: return)
         runCatching { Releases.checkStatus(keys, status, roots, System.currentTimeMillis(), Releases.Seen()) }
             .onSuccess { (st, next) ->
                 revoked = st.androidRevoked.toSet()
@@ -53,8 +53,8 @@ class AttestStatus(private val dir: File, private val roots: List<Releases.Key>?
     private fun fetch() {
         val keysData = get(MIRROR + KEYS)
         val statusData = get(MIRROR + STATUS)
-        val keys = Releases.File.parse(keysData) ?: error("keys.json is not valid")
-        val status = Releases.File.parse(statusData) ?: error("attest-status.json is not valid")
+        val keys = Releases.File(keysData)
+        val status = Releases.File(statusData)
         val (st, next) = Releases.checkStatus(keys, status, roots, System.currentTimeMillis(), seen)
         if (next == seen) return
         dir.mkdirs()

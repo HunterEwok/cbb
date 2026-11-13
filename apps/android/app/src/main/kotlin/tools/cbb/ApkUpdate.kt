@@ -154,10 +154,10 @@ class ApkUpdate(private val context: Context, private val roots: List<Releases.K
     }
 
     private fun checkFrom(base: String): Found? {
-        val keys = file(get(url(base, KEYS_FILE, null), Releases.MAX_FILE), KEYS_FILE)
-        val channel = file(get(url(base, CHANNEL_FILE, null), Releases.MAX_FILE), CHANNEL_FILE)
+        val keys = Releases.File(get(url(base, KEYS_FILE, null), Releases.MAX_FILE))
+        val channel = Releases.File(get(url(base, CHANNEL_FILE, null), Releases.MAX_FILE))
         val named = Releases.named(channel) ?: throw Releases.Refused("$CHANNEL_FILE names no valid release")
-        val release = file(get(url(base, RELEASE_FILE, named), Releases.MAX_FILE), RELEASE_FILE)
+        val release = Releases.File(get(url(base, RELEASE_FILE, named), Releases.MAX_FILE))
         val (r, next) = Releases.check(keys, channel, release, roots, CHANNEL, System.currentTimeMillis(), seen())
         prefs.edit().putLong(KEYS_SEQ, next.keysSeq).putLong(CHANNEL_SEQ, next.channelSeq).putLong(CHANNEL_KEYS_SEQ, next.channelKeysSeq)
             .putString(SEEN_VERSION, next.version).apply()
@@ -343,8 +343,6 @@ class ApkUpdate(private val context: Context, private val roots: List<Releases.K
                 context.packageManager.getInstallerPackageName(context.packageName)
             }
         }.getOrNull()
-
-        private fun file(data: ByteArray, name: String): Releases.File = Releases.File.parse(data) ?: throw Releases.Refused("$name is not valid")
 
         private fun open(url: String): HttpURLConnection {
             var u = URL(url)

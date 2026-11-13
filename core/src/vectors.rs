@@ -567,27 +567,25 @@ fn go_release() {
     // it refuses.
     let ev = vectors("go-release-envelopes.json");
     let envelopes = ev["envelopes"].as_array().unwrap();
-    assert_eq!(envelopes.len(), 44);
+    assert_eq!(envelopes.len(), 46);
     let env_roots: Vec<release::Key> = serde_json::from_value(ev["roots"].clone()).unwrap();
     let keys: File = serde_json::from_value(ev["keys"].clone()).unwrap();
     let channel: File = serde_json::from_value(ev["channel_file"].clone()).unwrap();
     for e in envelopes {
         let label = e["name"].as_str().unwrap();
         let raw = crate::certs::b64::decode_str(e["release"].as_str().unwrap()).unwrap();
-        let taken = File::parse(&raw)
-            .map_err(|e| alloc::format!("{e}"))
-            .and_then(|r| {
-                release::check(
-                    &keys,
-                    &channel,
-                    &r,
-                    &env_roots,
-                    ev["channel"].as_str().unwrap(),
-                    ev["now_ms"].as_i64().unwrap(),
-                    &Seen::default(),
-                )
-                .map_err(|e| alloc::string::String::from(e.message()))
-            });
+        let taken = File::parse(&raw).map_err(|e| alloc::format!("{e}")).and_then(|r| {
+            release::check(
+                &keys,
+                &channel,
+                &r,
+                &env_roots,
+                ev["channel"].as_str().unwrap(),
+                ev["now_ms"].as_i64().unwrap(),
+                &Seen::default(),
+            )
+            .map_err(|e| alloc::string::String::from(e.message()))
+        });
         assert_eq!(taken.is_ok(), e["ok"].as_bool().unwrap(), "envelope {label}: {:?}", taken.err());
     }
     for c in cases {

@@ -522,6 +522,13 @@ func signer(spec string) (release.Signer, error) {
 		}
 		return s, nil
 	}
+	// The passphrase of the sealed halves is asked and checked first,
+	// before the hardware is asked for anything.
+	if kind, _, _ := strings.Cut(cspec, ":"); pspec == "" && (kind == "piv" || kind == "se") && sealedHalves() {
+		if _, err := passphrase(); err != nil {
+			return nil, err
+		}
+	}
 	c, err := classicalSigner(cspec)
 	if err != nil {
 		return nil, err

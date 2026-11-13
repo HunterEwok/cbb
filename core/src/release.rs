@@ -79,9 +79,17 @@ impl File {
             return Err(Error::msg("the file is too large"));
         }
         let space = |c: &u8| matches!(c, b' ' | b'\t' | b'\n' | b'\r');
-        let start = b.iter().position(|c| !space(c)).unwrap_or(b.len());
-        let end = b.iter().rposition(|c| !space(c)).map_or(start, |i| i + 1);
-        let b = &b[start..end];
+        let mut b = b;
+        while let [c, rest @ ..] = b
+            && space(c)
+        {
+            b = rest;
+        }
+        while let [rest @ .., c] = b
+            && space(c)
+        {
+            b = rest;
+        }
         crate::strict::check_canonical(b, &["body", "sigs"]).map_err(|e| Error::msg(format!("the file: {e}")))?;
         let r: Raw = serde_json::from_slice(b).map_err(|e| Error::msg(format!("the file: {e}")))?;
         Ok(File { body: r.body, sigs: r.sigs })
@@ -1101,4 +1109,3 @@ mod tests {
         assert!(parse_roots(&ROOTS_PEM.replace("Name: root-2", "Name: root-1")).is_err());
     }
 }
-

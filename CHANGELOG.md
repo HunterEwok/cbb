@@ -18,7 +18,11 @@ All notable changes to cbb are documented in this file. The format follows
   signatures"). A release cannot be made while a pinned root lacks a half: `release-sign
   publish` refuses and the release workflow checks the roots before it builds anything. The phone kits check
   release files through the Rust core (`release_check`, `release_check_status`,
-  `release_check_entries`), which pins the roots, and `get.sh` checks the SLH-DSA
+  `release_check_entries`, and `release_named` for the version a channel file names), which
+  pins the roots and takes each file's bytes as they were fetched: the kits read nothing of a
+  release file. Every reader, `get.sh` and `get.ps1` among them, takes a file only as one
+  envelope in the canonical form of signed bodies with exactly its members, so all of them take
+  and refuse the same shapes. `get.sh` checks the SLH-DSA
   signatures where OpenSSL 3.5 or later is installed and says which it checked; `get.ps1`
   checks ES256 and says so.
 - The forwarder refuses the groups their operator lists after an abuse report:

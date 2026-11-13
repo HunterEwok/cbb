@@ -363,7 +363,9 @@ and `-drop` with the pin of either half of a signing key drops both halves.
 - **The passphrase**, one for every hardware half: five random words or more (24 characters
   at least), asked twice at the first `pq-new`, which seals a check of it into
   `pq/passphrase.check`; every later run checks the passphrase typed against that file before
-  it asks the hardware for anything, and says plainly when it is wrong. That file is not
+  it asks the hardware for anything, and says plainly when it is wrong. Without that file
+  beside the halves `pq-new` makes no new half (it would seal it under another passphrase):
+  put `passphrase.check` back from the backup first. That file is not
   encrypted to the hardware, so whoever copies `pq` (or its backup) can try passphrases
   against it offline, about a second of scrypt each: only the passphrase's length holds them
   off, so it must be random words, not a phrase someone could guess. Keep it in the password manager and on paper with the backup. Losing it

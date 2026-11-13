@@ -193,7 +193,22 @@
 		# A release file is 1 MiB at most, its body 256 KiB, with 1 to 8
 		# signatures, each of an algorithm 1 to 2^31-1, as every reader takes.
 		if ((Get-Item $path).Length -gt 1048576) { throw (T '%s is not a valid release file; not installing' $name) }
-		$f = Get-Content -Raw $path | ConvertFrom-Json
+		# The file whole, as the signer writes it and every reader takes it
+		# (docs/protocol.md, section 16, "Two signatures"): whitespace around
+		# it, then the envelope in its canonical form, with only body and
+		# sigs, and in each signature only alg, key and sig, base64 in its one
+		# form; any other shape refuses the file.
+		# Its bytes as they came: Get-Content would drop a byte order mark.
+		$raw = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($path)).Trim(" `t`r`n".ToCharArray())
+		$b64 = '[A-Za-z0-9+/]*={0,2}'
+		$one = "\{`"alg`":[1-9][0-9]*,`"key`":`"($b64)`",`"sig`":`"($b64)`"\}"
+		if ($raw -cnotmatch "^\{`"body`":`"($b64)`",`"sigs`":\[$one(,$one)*\]\}\z") { throw (T '%s is not a valid release file; not installing' $name) }
+		foreach ($m in [regex]::Matches($raw, "`"(body|key|sig)`":`"($b64)`"")) {
+			$v = $m.Groups[2].Value
+			try { $same = [Convert]::ToBase64String([Convert]::FromBase64String($v)) -ceq $v } catch { $same = $false }
+			if (-not $same) { throw (T '%s is not a valid release file; not installing' $name) }
+		}
+		$f = $raw | ConvertFrom-Json
 		$body = [Convert]::FromBase64String($f.body)
 		$sigs = @($f.sigs)
 		if ($body.Length -gt 262144 -or $sigs.Count -lt 1 -or $sigs.Count -gt 8 -or @($sigs | Where-Object { -not (Test-Alg $_.alg) }).Count -gt 0) {

@@ -4,6 +4,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -482,5 +483,68 @@ func TestEntries(t *testing.T) {
 	g.file(m, entriesName, &me)
 	if me.Seq != 2 {
 		t.Errorf("the mirror holds entries.json %d", me.Seq)
+	}
+}
+
+// TestDropByEitherPin: -drop with the pin of either half of a channel key
+// drops both its halves.
+func TestDropByEitherPin(t *testing.T) {
+	for _, alg := range []int{release.AlgES256, release.AlgSLHDSA} {
+		g := newFakeGitHub(t)
+		k := testKeys(t)
+		keyFlags := []string{"-root", "file:" + k.root1, "-release-key", "file:" + k.release}
+		g.draft("v0.6.0")
+		if err := publish(append(keyFlags, "-version", "0.6.0", "-channel", "cbb.tools="+k.channelPub)); err != nil {
+			t.Fatal(err)
+		}
+		var ks release.Keys
+		g.file(g.channel(), "keys.json", &ks)
+		pin := ""
+		for _, key := range ks.Keys {
+			if key.Use == release.UseChannel && key.Alg == alg {
+				sum := sha256.Sum256(key.Key)
+				pin = base64.StdEncoding.EncodeToString(sum[:])
+			}
+		}
+		if pin == "" {
+			t.Fatalf("keys.json holds no channel half of algorithm %d", alg)
+		}
+		if err := renew(append(keyFlags, "-drop", pin)); err != nil {
+			t.Fatal(err)
+		}
+		g.file(g.channel(), "keys.json", &ks)
+		for _, key := range ks.Keys {
+			if key.Use == release.UseChannel {
+				t.Errorf("-drop by the pin of the half of algorithm %d left %+v", alg, key)
+			}
+		}
+		if ks.Seq != 2 || len(ks.Keys) != 2 {
+			t.Errorf("keys.json is %+v", ks)
+		}
+	}
+}
+
+// TestNewKeyUnderAHeldName: a new channel key under the name of one that
+// keys.json holds is refused until that one is dropped.
+func TestNewKeyUnderAHeldName(t *testing.T) {
+	g := newFakeGitHub(t)
+	k := testKeys(t)
+	keyFlags := []string{"-root", "file:" + k.root1, "-release-key", "file:" + k.release}
+	g.draft("v0.6.0")
+	if err := publish(append(keyFlags, "-version", "0.6.0", "-channel", "cbb.tools="+k.channelPub)); err != nil {
+		t.Fatal(err)
+	}
+	_, otherPub := newKey(t, t.TempDir(), "channel")
+	err := renew(append(keyFlags, "-channel", "cbb.tools="+otherPub))
+	if err == nil || !strings.Contains(err.Error(), `another key named "cbb.tools"`) {
+		t.Fatalf("a new key under a held name: %v", err)
+	}
+	var ks release.Keys
+	g.file(g.channel(), "keys.json", &ks)
+	if ks.Seq != 1 {
+		t.Errorf("a refused key wrote keys.json %d", ks.Seq)
+	}
+	if err := renew(append(keyFlags, "-drop", "cbb.tools", "-channel", "cbb.tools="+otherPub)); err != nil {
+		t.Errorf("the new key after the old one is dropped: %v", err)
 	}
 }

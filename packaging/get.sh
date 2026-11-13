@@ -380,7 +380,8 @@ opened() {
 	# it, then the envelope in its canonical form, with only body and sigs,
 	# and in each of 1 to 8 signatures only alg, key and sig; any other
 	# shape refuses the file.
-	sed -e 's/^[ 	\r]*//' -e 's/[ 	\r]*$//' "$f" | grep -v '^$' >"$tmp/$kind.line" || return 1
+	cr=$(printf '\r')
+	sed -e "s/^[ 	$cr]*//" -e "s/[ 	$cr]*\$//" "$f" | grep -v '^$' >"$tmp/$kind.line" || return 1
 	[ "$(wc -l <"$tmp/$kind.line")" -eq 1 ] || return 1
 	b64='[A-Za-z0-9+/]*={0,2}'
 	sig="\\{\"alg\":[1-9][0-9]*,\"key\":\"$b64\",\"sig\":\"$b64\"\\}"

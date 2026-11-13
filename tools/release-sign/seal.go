@@ -94,9 +94,9 @@ func unseal(passphrase, data []byte, name string) ([]byte, error) {
 		}
 		n[j] = v
 	}
-	// Bounds that keep a damaged line from asking for more than 2 GiB
-	// (128 * r * 2^LOGN bytes) and a few seconds per p.
-	if n[0] < 10 || n[0] > 20 || n[1] < 1 || n[1] > 16 || n[2] < 1 || n[2] > 4 {
+	// The writer's r and p, and LOGN at most 20: a damaged line asks for
+	// 1 GiB at most (128 * r * 2^LOGN bytes).
+	if n[0] < 10 || n[0] > 20 || n[1] != sealR || n[2] != sealP {
 		return nil, errors.New("the half's seal has a cost out of range")
 	}
 	rest := data[i+1:]
@@ -174,6 +174,12 @@ func passphrase() ([]byte, error) {
 	return p, nil
 }
 
+// sealedHalves tells whether pqDir holds a sealed half (HASH.age).
+func sealedHalves() bool {
+	m, _ := filepath.Glob(filepath.Join(pqDir(), "*.age"))
+	return len(m) > 0
+}
+
 // newPassphrase returns the passphrase for a new seal: the one every half
 // has, checked against passphrase.check, or for the first half a new one,
 // asked twice, which passphrase.check then records.
@@ -183,6 +189,11 @@ func newPassphrase() ([]byte, error) {
 	}
 	if _, err := os.Stat(passphraseCheck()); err == nil {
 		return passphrase()
+	}
+	// Halves without the check file: a new passphrase here would seal the
+	// next half under another one than theirs.
+	if sealedHalves() {
+		return nil, fmt.Errorf("%s holds sealed halves but no passphrase.check: put it back from the backup before making another half", pqDir())
 	}
 	p, err := readPassphrase("release-sign: a new passphrase for the post-quantum halves (five random words or more, the same for every hardware key; keep it in the password manager and on paper with the backup): ")
 	if err != nil {

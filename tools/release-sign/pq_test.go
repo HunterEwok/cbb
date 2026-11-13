@@ -316,7 +316,7 @@ func TestSeal(t *testing.T) {
 	if _, err := unseal([]byte("right passphrase"), box, "another key"); err == nil {
 		t.Error("the seal opened for another key")
 	}
-	for _, cost := range []string{"scrypt 30 8 1", "scrypt 21 8 1", "scrypt 10 17 1", "scrypt 10 8 5", "scrypt 9 8 1", "scrypt 10 0 1", "scrypt 10 8 0"} {
+	for _, cost := range []string{"scrypt 30 8 1", "scrypt 21 8 1", "scrypt 10 17 1", "scrypt 10 8 5", "scrypt 10 16 1", "scrypt 10 8 2", "scrypt 10 4 1", "scrypt 9 8 1", "scrypt 10 0 1", "scrypt 10 8 0"} {
 		raised := bytes.Replace(box, []byte("scrypt 10 8 1"), []byte(cost), 1)
 		if _, err := unseal([]byte("right passphrase"), raised, "name"); err == nil || errors.Is(err, errPassphrase) {
 			t.Errorf("a cost out of range, %s: %v", cost, err)
@@ -338,5 +338,83 @@ func TestFetchWholeFile(t *testing.T) {
 	got, err := fetch(srv.URL)
 	if err != nil || len(got) != release.MaxFile {
 		t.Errorf("fetched %d bytes of %d: %v", len(got), release.MaxFile, err)
+	}
+	// One byte more is refused, not cut to what fits.
+	big = append(big, 'a')
+	if got, err := fetch(srv.URL); err == nil {
+		t.Errorf("fetched %d bytes of a file of %d", len(got), len(big))
+	}
+}
+
+// TestPassphraseFirst: a signer of a hardware key whose half is sealed asks
+// and checks the passphrase before the hardware is asked for anything, and
+// pq-new makes no half under a new passphrase beside halves whose
+// passphrase.check is gone.
+func TestPassphraseFirst(t *testing.T) {
+	fakeAge(t)
+	dir := t.TempDir()
+	t.Setenv("CBB_RELEASE_PQ_DIR", filepath.Join(dir, "pq"))
+	ec := ecFile(t, dir)
+	id := write(t, filepath.Join(dir, "yubikey.identity"), []byte("age1yubikey1test\n"))
+	testPassphrase(t, "the owner's passphrase of five words")
+	call(t, pqNew, "-key", "file:"+ec, "-to", "age1yubikey1test", "-identity", id)
+	// No hardware's tool on the path: reaching it fails otherwise.
+	t.Setenv("PATH", t.TempDir())
+	for _, spec := range []string{"piv:9c", "se:release"} {
+		asked := testPassphrase(t, "not the owner's passphrase at all")
+		if _, err := signer(spec); !errors.Is(err, errPassphrase) || *asked != 1 {
+			t.Errorf("%s with a wrong passphrase: %v (asked %d)", spec, err, *asked)
+		}
+		asked = testPassphrase(t, "the owner's passphrase of five words")
+		if _, err := signer(spec); err == nil || errors.Is(err, errPassphrase) || *asked != 1 {
+			t.Errorf("%s with the passphrase went on to the hardware: %v (asked %d)", spec, err, *asked)
+		}
+	}
+	// Without passphrase.check, pq-new refuses before it asks.
+	if err := os.Remove(passphraseCheck()); err != nil {
+		t.Fatal(err)
+	}
+	asked := testPassphrase(t, "another passphrase of five random words")
+	err := pqNew([]string{"-key", "file:" + ecFile(t, t.TempDir()), "-to", "age1yubikey1test", "-identity", id})
+	if err == nil || !strings.Contains(err.Error(), "passphrase.check") || *asked != 0 {
+		t.Errorf("pq-new beside halves without passphrase.check: %v (asked %d)", err, *asked)
+	}
+	if _, err := os.Stat(passphraseCheck()); !os.IsNotExist(err) {
+		t.Errorf("a refused pq-new wrote passphrase.check: %v", err)
+	}
+	// A short passphrase is refused however it comes: twelve of one letter.
+	empty := t.TempDir()
+	t.Setenv("CBB_RELEASE_PQ_DIR", filepath.Join(empty, "pq"))
+	testPassphrase(t, "aaaaaaaaaaaa")
+	if pqNew([]string{"-key", "file:" + ec, "-to", "age1yubikey1test", "-identity", id}) == nil {
+		t.Error("pq-new took aaaaaaaaaaaa")
+	}
+}
+
+// TestHalfOfAnotherKey: a half that opens to another key than HASH.pub
+// names does not sign.
+func TestHalfOfAnotherKey(t *testing.T) {
+	fakeAge(t)
+	dir := t.TempDir()
+	ec := ecFile(t, dir)
+	id := write(t, filepath.Join(dir, "yubikey.identity"), []byte("age1yubikey1test\n"))
+	testPassphrase(t, "the owner's passphrase of five words")
+	// Two halves for the same classical half, in two directories.
+	a, b := filepath.Join(dir, "a"), filepath.Join(dir, "b")
+	for _, d := range []string{b, a} {
+		t.Setenv("CBB_RELEASE_PQ_DIR", d)
+		call(t, pqNew, "-key", "file:"+ec, "-to", "age1yubikey1test", "-identity", id)
+	}
+	c := must(classicalSigner("file:" + ec))
+	name := must(pqName(c))
+	if err := copyFile(filepath.Join(b, name+".age"), filepath.Join(a, name+".age")); err != nil {
+		t.Fatal(err)
+	}
+	lazy, err := pqOf(c, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := signWith(release.Signer{c, lazy}, kb0()); err == nil || !strings.Contains(err.Error(), "another key") {
+		t.Errorf("a half of another key signed: %v", err)
 	}
 }
