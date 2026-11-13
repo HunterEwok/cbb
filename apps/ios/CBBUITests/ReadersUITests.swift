@@ -287,10 +287,51 @@ final class ReadersUITests: XCTestCase {
         }
     }
 
+    /// Whether this run of the test bundle has warmed the screens up yet.
+    private static var warmedUp = false
+
+    /// A measurement of the runner, not to be merged: before the first
+    /// iteration, walks the same screens at the largest text and runs the
+    /// same audit on each once, its issues only printed (WARMUP-ISSUE), so
+    /// the fonts and the screens are drawn once on the fresh simulator
+    /// before the audits that count.
+    private func warmUpLargestText() {
+        if Self.warmedUp { return }
+        Self.warmedUp = true
+        let start = Date()
+        for language in Self.largestText {
+            let app = launch(language: language, extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+            XCTAssertTrue(app.buttons[tr("Create a group", language)].waitForExistence(timeout: 30))
+            warmUpAudit(app, "the Start screen in \(language)")
+            app.buttons[tr("Settings", language)].tap()
+            XCTAssertTrue(app.navigationBars[tr("Settings", language)].waitForExistence(timeout: 10))
+            warmUpAudit(app, "Settings in \(language)")
+            app.terminate()
+        }
+        print("ReadersUITests: warmed up in \(String(format: "%.1f", Date().timeIntervalSince(start))) s")
+    }
+
+    private func warmUpAudit(_ app: XCUIApplication, _ screen: String) {
+        settle(app, "warm-up: \(screen)")
+        do {
+            try app.performAccessibilityAudit(for: [.textClipped, .dynamicType]) { issue in
+                var on = "no element"
+                if let e = issue.element {
+                    on = "\(e.elementType.rawValue) '\(e.label)' at \(e.frame) hittable \(e.isHittable)"
+                }
+                print("WARMUP-ISSUE \(screen): \(issue.compactDescription) on \(on)")
+                return true
+            }
+        } catch {
+            print("WARMUP-ISSUE \(screen): \(error)")
+        }
+    }
+
     /// U16: at the largest accessibility text size, in English, in
     /// Swahili, among the longest of the eight, and in Hindi, the tallest
     /// script, no text is clipped and the screens follow Dynamic Type.
     func testLargestText() {
+        warmUpLargestText()
         for language in Self.largestText {
             let app = launch(language: language, extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
             XCTAssertTrue(app.buttons[tr("Create a group", language)].waitForExistence(timeout: 30))
