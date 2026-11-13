@@ -232,7 +232,7 @@
    {
     "n": 9,
     "rule": "pair/info/invite",
-    "type": "bytes 16",
+    "type": "id 16",
     "needed": false
    }
   ],
@@ -541,7 +541,7 @@
    {
     "n": 11,
     "rule": "guest/invite",
-    "type": "bytes 16",
+    "type": "id 16",
     "needed": false
    }
   ],
@@ -549,7 +549,7 @@
    {
     "n": 1,
     "rule": "waiting/request/invite",
-    "type": "bytes 16",
+    "type": "id 16",
     "needed": true
    },
    {
@@ -595,7 +595,7 @@
    {
     "n": 2,
     "rule": "dismiss/invite",
-    "type": "bytes 16",
+    "type": "id 16",
     "needed": true
    },
    {
@@ -1205,6 +1205,26 @@
    "name": "relay error: empty reason",
    "rule": "server/error/reason",
    "message": "a200185d0260"
+  },
+  {
+   "name": "dismiss: the zero invitation ID",
+   "rule": "dismiss/invite",
+   "message": "a200181b025000000000000000000000000000000000"
+  },
+  {
+   "name": "guest open: the zero invitation ID",
+   "rule": "guest/invite",
+   "message": "a6001102010382035820b0f960d8707f6aee3993a6175389b0130479eb9b5407b9753bddaf05c6c8305e045820a5336c2791f9d2f379d142df6eca661d5c83bb38f61003da1fd70c1e5a0f5e18051b000001a17c4726000b5000000000000000000000000000000000"
+  },
+  {
+   "name": "waiting: a request with the zero invitation ID",
+   "rule": "waiting/requests",
+   "message": "a200181a0281a6015000000000000000000000000000000000028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c00602"
+  },
+  {
+   "name": "waiting: a request whose info has the zero invitation ID",
+   "rule": "waiting/requests",
+   "message": "a200181a0281a60150272c9b26a15f54cb1c227c493c496de0028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950000000000000000000000000000000000402051a0001d4c00602"
   }
  ],
  "maps": [
@@ -1301,6 +1321,18 @@
    "name": "a request",
    "table": "waiting/request",
    "value": "a60150272c9b26a15f54cb1c227c493c496de0028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c00602"
+  },
+  {
+   "name": "a request with the zero invitation ID",
+   "table": "waiting/request",
+   "value": "a6015000000000000000000000000000000000028201584104f29cd747a3b5a1f21a256bc4e732456fe1a6ab90482bfa988d138f4717a7625c25da591768f873ba243747457c3db892f2ac8bcc83522880eaa914d3792e0eed03a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de00402051a0001d4c00602",
+   "rule": "waiting/request/invite"
+  },
+  {
+   "name": "an info with the zero invitation ID",
+   "table": "pair/info",
+   "value": "a4016e6b69746368656e207461626c657402030401095000000000000000000000000000000000",
+   "rule": "pair/info/invite"
   },
   {
    "name": "a Welcome",

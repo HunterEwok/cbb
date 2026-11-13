@@ -12,6 +12,9 @@ const fn f(n: u16, rule: &'static str, ty: Ty, needed: bool) -> Field {
 }
 
 const ID16: Ty = Ty::Bytes(16);
+/// An invitation's ID in a message: never the zero ID, the one spelling of
+/// "no invitation" is the field left out.
+const INVITE_ID: Ty = Ty::Id(16);
 const B32: Ty = Ty::Bytes(32);
 const TEXT64: Ty = Ty::Text(64);
 const REASON: Ty = Ty::Text(256);
@@ -220,7 +223,7 @@ pub static GUEST: Table = Table {
         f(8, "guest/conn", Ty::Uint { min: 1, max: u32::MAX as u64 }, false),
         f(9, "guest/data", Ty::BytesUpTo(16384), false),
         f(10, "guest/device", ID16, false),
-        f(11, "guest/invite", ID16, false),
+        f(11, "guest/invite", INVITE_ID, false),
     ],
 };
 
@@ -243,7 +246,7 @@ pub static CREDENTIALS: Table = Table {
 pub static REQUEST: Table = Table {
     shape: "waiting/request/shape",
     fields: &[
-        f(1, "waiting/request/invite", ID16, true),
+        f(1, "waiting/request/invite", INVITE_ID, true),
         f(2, "waiting/request/key", MEMBER_KEY, true),
         f(3, "waiting/request/info", Ty::Map(&INFO), true),
         f(4, "waiting/request/network", Ty::Uint { min: 1, max: 3 }, true),
@@ -264,7 +267,7 @@ pub static INFO: Table = Table {
         f(6, "pair/info/admin-pop", Ty::Bytes(64), false),
         f(7, "pair/info/keys", ENV, false),
         f(8, "pair/info/device", Ty::Map(&INFO_DEVICE), false),
-        f(9, "pair/info/invite", ID16, false),
+        f(9, "pair/info/invite", INVITE_ID, false),
     ],
 };
 
@@ -282,8 +285,10 @@ pub static WAITING: Table = Table {
 
 /// `dismiss` (t 27): from that admin to the holder: drop the requests of
 /// this invitation, or of this key.
-pub static DISMISS: Table =
-    Table { shape: "dismiss/shape", fields: &[f(2, "dismiss/invite", ID16, true), f(3, "dismiss/key", B32, false)] };
+pub static DISMISS: Table = Table {
+    shape: "dismiss/shape",
+    fields: &[f(2, "dismiss/invite", INVITE_ID, true), f(3, "dismiss/key", B32, false)],
+};
 
 // ---------------------------------------------------------------- servers
 

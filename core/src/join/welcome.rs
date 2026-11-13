@@ -85,6 +85,19 @@ pub enum Joining {
     Guarded,
 }
 
+/// What binds the member to the joiner in this pairing, which the joiner
+/// shows to take a Welcome.
+#[derive(Clone, Copy, Debug)]
+pub enum Way<'a> {
+    /// An invitation: its secret, CPace's password, binds the member.
+    Invited(&'a super::invitation::Invitation),
+    /// At home without an invitation nothing secret binds the member: only
+    /// the person's "they match" at the joiner, in this session
+    /// (`invitation::JoinerAttempts::answered`). Without it, or after "they
+    /// do not match", there is no Welcome to take, and the session ends.
+    Home(&'a super::invitation::Matched),
+}
+
 /// Why the joiner does not take a Welcome.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Refusal {
@@ -98,6 +111,9 @@ pub enum Refusal {
     NotAdmitter,
     /// The Welcome is damaged.
     Damaged,
+    /// At home without an invitation, the person's "they match" is of
+    /// another session than the one with the joiner's own key.
+    Unconfirmed,
     /// The group is stopped (`State::stopped`): two recovery records at
     /// one seq, one this version cannot read, or two histories of the
     /// current root. An admitter in such a group does not admit, and a
@@ -303,15 +319,22 @@ impl Welcome {
 
     /// The joiner's checks. `group` is the group ID the code exchange gave
     /// (`ADb` 1), `admitter` the key the TLS handshake proved, `own` the
-    /// joiner's member key. Returns the joiner's record set and its state.
-    /// A guarded leaf (A-50) takes only a record the root signed itself.
+    /// joiner's member key, `way` what binds the member to the joiner.
+    /// Returns the joiner's record set and its state. A guarded leaf
+    /// (A-50) takes only a record the root signed itself.
     pub fn check(
         &self,
         group: &GroupId,
         admitter: &[u8; 65],
         own: &[u8; 65],
         joining: Joining,
+        way: Way<'_>,
     ) -> Result<(RecordSet, State), Refusal> {
+        if let Way::Home(m) = way
+            && m.local() != Key::es256(own.to_vec()).device_id()
+        {
+            return Err(Refusal::Unconfirmed);
+        }
         let root = Key::es256(self.root.clone());
         let k2 = Key { alg: crate::records::key::ALG_SLH_DSA, public: self.recovery2.clone() };
         let Some(recovery) = Recovery::new(Key::es256(self.recovery.clone()), k2) else {

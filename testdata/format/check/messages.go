@@ -66,6 +66,10 @@ func tyOK(ty string, v any) bool {
 		}
 		n, _ := strconv.Atoi(w[1])
 		return len(b) == n
+	case "id":
+		b, ok := v.([]byte)
+		n, _ := strconv.Atoi(w[1])
+		return ok && len(b) == n && !bytes.Equal(b, make([]byte, n))
 	case "text":
 		s, ok := v.(string)
 		_, hi := upTo(w[1])

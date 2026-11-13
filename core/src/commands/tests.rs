@@ -364,7 +364,7 @@ fn a_leaf_obeys_its_grant() {
     };
     let take = |env: &[u8], kept: &Kept, stale: bool, ctr: &mut Counters, nonces: &mut Nonces| {
         let c = Command::read(env)?;
-        let at = Leaf { me: kettle, group: g.gid, kept, stale, now_ms: None };
+        let at = Leaf { me: kettle, group: g.gid, kept, recovery: kept.recovery, stale, now_ms: None };
         accept_leaf(&c, &at, ctr, nonces, &kettle_store).map_err(|r| r.rule)
     };
     let (mut ctr, mut nonces) = (Counters::default(), Nonces::default());
@@ -411,6 +411,25 @@ fn a_leaf_obeys_its_grant() {
     // Nor one that waits to be bound again after a change of root.
     let waiting = Kept { rebind: Some((phone.hash, 1)), ..kept.clone() };
     assert_eq!(take(&env, &waiting, false, &mut ctr, &mut nonces), Err(RULE_SIGNER));
+    // Nor one whose kept grant is of a lower recovery seq than the newest
+    // it knows, whatever its kept state remembers: the head was stored
+    // and the kept state was not, before a restart.
+    assert!(kept.guarded && kept.recovery == 0);
+    let take_at = |env: &[u8], kept: &Kept, recovery, ctr: &mut Counters, nonces: &mut Nonces| {
+        let c = Command::read(env)?;
+        let at = Leaf { me: kettle, group: g.gid, kept, recovery, stale: false, now_ms: None };
+        accept_leaf(&c, &at, ctr, nonces, &kettle_store).map_err(|r| r.rule)
+    };
+    assert_eq!(take_at(&env, &kept, 1, &mut ctr, &mut nonces), Err(RULE_SIGNER));
+    let started = kept.start(Some((k("new root").hash, 1)));
+    assert!(started.rebind.is_some() && started.commanders.is_empty());
+    assert_eq!(take_at(&env, &started, 1, &mut ctr, &mut nonces), Err(RULE_SIGNER));
+    // The same across a restart through the stored bytes: the head stored
+    // with the kept state not yet changed by it.
+    let bytes = crate::format::grant::Stored::new(kept.clone(), Some((k("new root").hash, 1)), None).encode();
+    let (back, recovery) = crate::format::grant::Stored::decode(&bytes).unwrap().start();
+    assert_eq!((&back, recovery), (&started, 1));
+    assert_eq!(take_at(&env, &back, recovery, &mut ctr, &mut nonces), Err(RULE_SIGNER));
     assert_eq!(take(&env, &kept, false, &mut ctr, &mut nonces), Ok(Some(heat.clone())));
     // Message nonce: from the leaf with a number, to it without.
     let nm = nonce_message(Some(&n5));
@@ -444,7 +463,7 @@ fn an_old_command_sent_again_leaves_the_number() {
     };
     let take = |env: &[u8], ctr: &mut Counters, nonces: &mut Nonces| {
         let c = Command::read(env).unwrap();
-        let at = Leaf { me: lock, group: g.gid, kept: &kept, stale: false, now_ms: None };
+        let at = Leaf { me: lock, group: g.gid, kept: &kept, recovery: 0, stale: false, now_ms: None };
         accept_leaf(&c, &at, ctr, nonces, &lock_store)
     };
     let (mut ctr, mut nonces) = (Counters::default(), Nonces::default());
