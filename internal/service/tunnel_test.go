@@ -274,10 +274,10 @@ func TestAwayFromHome(t *testing.T) {
 	waitFor(t, "the deck is alone", func() bool { return len(deck.status(t).Peers) == 0 })
 }
 
-// TestHubKeyRotation checks that the hub takes a new WireGuard key for
-// each period of the server credentials: its offers give the next key
-// ahead of time, and a client that was away while the hub moved on to it
-// reaches the hub with it.
+// TestHubKeyRotation checks that the hub takes a new WireGuard key and new
+// AmneziaWG settings for each period of the server credentials: its offers
+// give the next ones ahead of time, and a client that was away while the
+// hub moved on to them reaches the hub with them.
 func TestHubKeyRotation(t *testing.T) {
 	t.Setenv("CBB_DEBUG", "1")
 	every, ahead := renewEvery, hubKeyAhead
@@ -317,24 +317,29 @@ func TestHubKeyRotation(t *testing.T) {
 		}
 	}
 	var old, next tunnel.Key
+	var obf *tunnel.Obfuscation
 	waitFor(t, "the deck keeps the hub's key for the next period", func() bool {
 		st := load(pi)
 		if st.Next.IsZero() {
 			return false
 		}
-		old, next = st.ServingKey().Public(), st.Next.Public()
+		old, next, obf = st.ServingKey().Public(), st.Next.Public(), st.Obfuscation
 		l := load(deck).Hub(piID)
 		return l != nil && l.PublicKey == old && l.Next == next
 	})
+	if obf == nil {
+		t.Fatal("the hub is not obfuscated")
+	}
 
 	// The deck is away and off while the hub moves on to the new key.
 	deckID := deck.status(t).Device
 	deck.stop()
 	h.hide(deckID)
 	clock.set(t, 25*time.Hour)
-	waitFor(t, "the hub serves with the new key", func() bool {
+	// It has the key after it at once, for the period after.
+	waitFor(t, "the hub serves with the new key and settings", func() bool {
 		st := load(pi)
-		return st.Next.IsZero() && st.ServingKey().Public() == next
+		return st.ServingKey().Public() == next && !st.Next.IsZero() && st.Next.Public() != next && st.Obfuscation != nil && !st.Obfuscation.Equal(obf)
 	})
 	deck = restartService(t, &h, deck)
 	// The deck tries the old key and the new one at once, so the old one,
@@ -343,9 +348,9 @@ func TestHubKeyRotation(t *testing.T) {
 		st := deck.status(t)
 		return st.Away != nil && st.Away.Through && len(st.Peers) == 1 && st.Peers[0].ID == piID
 	})
-	waitFor(t, "the deck keeps the new key", func() bool {
+	waitFor(t, "the deck keeps the new key and settings", func() bool {
 		l := load(deck).Hub(piID)
-		return l != nil && l.PublicKey == next && l.Next.IsZero()
+		return l != nil && l.PublicKey == next && !l.Next.IsZero() && l.Next != next && l.Obfuscation != nil && !l.Obfuscation.Equal(obf)
 	})
 	if _, err := deck.do(t, control.Header{Op: control.OpCopy}, "after the new period"); err != nil {
 		t.Fatal(err)
@@ -458,6 +463,12 @@ func TestAwayThroughForwarder(t *testing.T) {
 	t.Run("a default hub over XHTTP without UDP", func(t *testing.T) {
 		testAwayThroughForwarder(t, awayWay{vless: "xhttp", obfuscated: true, overVLESS: true}, "CBB_TEST_DEAD_UDP="+deadUDP(t))
 	})
+	// The hub moves to a new key, AmneziaWG settings and VLESS user ID with
+	// the period while the deck is off; the deck, which got the next ones
+	// ahead of time, reaches it over VLESS with them.
+	t.Run("vless without UDP across a new period", func(t *testing.T) {
+		testAwayThroughForwarder(t, awayWay{vless: "xhttp", obfuscated: true, overVLESS: true, rotate: true}, "CBB_TEST_DEAD_UDP="+deadUDP(t))
+	})
 }
 
 // deadUDP is a UDP address that nobody answers.
@@ -477,6 +488,7 @@ type awayWay struct {
 	obfuscateOff, vlessOff bool
 	vless                  string
 	obfuscated, overVLESS  bool
+	rotate                 bool // the hub serves a new period while the deck is off
 }
 
 // testAwayThroughForwarder runs the deck, with deckEnv, away from home
@@ -526,7 +538,16 @@ func testAwayThroughForwarder(t *testing.T, way awayWay, deckEnv ...string) {
 	}()
 
 	var h hub
-	pi := startService(t, &h, "pi")
+	var clock *testClock
+	var piEnv []string
+	if way.rotate {
+		every, ahead := renewEvery, hubKeyAhead
+		renewEvery, hubKeyAhead = 200*time.Millisecond, 24*time.Hour
+		t.Cleanup(func() { renewEvery, hubKeyAhead = every, ahead })
+		clock = newTestClock(t, 0)
+		piEnv = append(piEnv, clock.env())
+	}
+	pi := startEnv(t, &h, "pi", piEnv...)
 	deck := startEnv(t, &h, "deck", deckEnv...)
 	pairWith(t, pi, deck)
 	for _, s := range []*testService{pi, deck} {
@@ -565,8 +586,35 @@ func testAwayThroughForwarder(t *testing.T, way awayWay, deckEnv ...string) {
 	})
 
 	deckID := deck.status(t).Device
+	var nextID string
+	if way.rotate {
+		waitFor(t, "the deck keeps the hub's next VLESS user ID", func() bool {
+			nextID = keptNextVLESSID(t, deck, piID)
+			return nextID != ""
+		})
+	}
 	deck.stop()
 	h.hide(deckID)
+	if way.rotate {
+		clock.set(t, 25*time.Hour)
+		waitUpTo(t, 30*time.Second, "the hub serves with its next VLESS user ID at the forwarder", func() bool {
+			var st struct {
+				Forwarder *struct {
+					VLESSID string `json:"vless_id"`
+					VLESS   *struct {
+						Path string `json:"path"`
+					} `json:"vless"`
+				} `json:"forwarder"`
+			}
+			raw, err := os.ReadFile(filepath.Join(pi.dir, tunnel.StateFile))
+			if err != nil || json.Unmarshal(raw, &st) != nil || st.Forwarder == nil || st.Forwarder.VLESS == nil {
+				return false
+			}
+			a := pi.status(t).Away
+			return st.Forwarder.VLESSID == nextID && strings.HasSuffix(st.Forwarder.VLESS.Path, "/"+tunnel.GroupPath(nextID)) &&
+				a != nil && a.Forwarder != nil && a.Forwarder.Registered
+		})
+	}
 	deck = restartService(t, &h, deck)
 	// Without UDP the deck waits out a window on each endpoint before
 	// VLESS, which under the race detector on a slow runner takes a
@@ -583,6 +631,147 @@ func testAwayThroughForwarder(t *testing.T, way awayWay, deckEnv ...string) {
 		t.Fatal(err)
 	}
 	waitFor(t, "the deck has it", func() bool { return deck.paste(t) == "back home" })
+	if way.rotate {
+		waitFor(t, "the deck keeps the hub's new offer", func() bool {
+			id := keptNextVLESSID(t, deck, piID)
+			return id != "" && id != nextID
+		})
+	}
+}
+
+// TestHubVLESSIDTaken has a hub find its VLESS user ID held at the
+// forwarder by another group: it takes a new one and registers with it
+// rather than lose its way over VLESS.
+func TestHubVLESSIDTaken(t *testing.T) {
+	t.Setenv("CBB_DEBUG", "1")
+	cert, err := forward.NewCert()
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, err := tunnel.NewVLESSPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	free, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	vlessAddr := free.Addr().String()
+	free.Close()
+	web, _ := vlesstest.WebServerCA(t, path, func() string { return vlessAddr })
+	f, err := forward.Listen(forward.Config{Listen: "127.0.0.1:0", Cert: cert, Logf: t.Logf, StateFile: filepath.Join(t.TempDir(), "state.json"),
+		VLESS: &forward.VLESSConfig{Listen: vlessAddr, XHTTP: &forward.XHTTPConfig{Host: vlesstest.WebName, Port: web.Port(), Path: path}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	served := make(chan struct{})
+	go func() {
+		defer close(served)
+		f.Serve(ctx)
+	}()
+	defer func() {
+		cancel()
+		<-served
+	}()
+
+	// The hub's VLESS user ID and the path of its way, as its state keeps them.
+	vlessOf := func(s *testService) (id, path string) {
+		var st struct {
+			Forwarder *struct {
+				VLESSID string `json:"vless_id"`
+				VLESS   *struct {
+					Path string `json:"path"`
+				} `json:"vless"`
+			} `json:"forwarder"`
+		}
+		raw, err := os.ReadFile(filepath.Join(s.dir, tunnel.StateFile))
+		if err != nil || json.Unmarshal(raw, &st) != nil || st.Forwarder == nil || st.Forwarder.VLESS == nil {
+			return "", ""
+		}
+		return st.Forwarder.VLESSID, st.Forwarder.VLESS.Path
+	}
+	hubAt := func(s *testService) string {
+		if _, err := s.do(t, control.Header{Op: control.OpNew}, ""); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "on", Consent: true}, ""); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.do(t, control.Header{Op: control.OpAway, Name: "hub", Port: freeUDP(t), Forwarder: f.Addr().String(), ForwarderKey: forward.Pin(cert.Leaf)}, ""); err != nil {
+			t.Fatal(err)
+		}
+		var id string
+		waitFor(t, s.name+" registers with VLESS", func() bool {
+			a := s.status(t).Away
+			id, _ = vlessOf(s)
+			return id != "" && a != nil && a.Forwarder != nil && a.Forwarder.Registered
+		})
+		return id
+	}
+	var h1, h2 hub
+	pi := startService(t, &h1, "pi")
+	taken := hubAt(pi)
+	other := startService(t, &h2, "other")
+	hubAt(other)
+
+	// The other group's hub comes back with the pi's user ID.
+	other.stop()
+	file := filepath.Join(other.dir, tunnel.StateFile)
+	raw, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var st map[string]any
+	if err := json.Unmarshal(raw, &st); err != nil {
+		t.Fatal(err)
+	}
+	fw := st["forwarder"].(map[string]any)
+	fw["vless_id"] = taken
+	delete(fw, "vless")
+	if raw, err = json.Marshal(st); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	other = restartService(t, &h2, other)
+	waitUpTo(t, 60*time.Second, "the other hub registers with a user ID of its own", func() bool {
+		id, p := vlessOf(other)
+		a := other.status(t).Away
+		return id != "" && id != taken && strings.HasSuffix(p, "/"+tunnel.GroupPath(id)) && a != nil && a.Forwarder != nil && a.Forwarder.Registered
+	})
+	if !other.logged("takes a new one") {
+		t.Error("the other hub did not say why it took a new user ID")
+	}
+	if id, _ := vlessOf(pi); id != taken || !pi.status(t).Away.Forwarder.Registered {
+		t.Errorf("the pi's registration changed: %q", id)
+	}
+}
+
+// keptNextVLESSID is the VLESS user ID that goes with the next key of hub's
+// offer as s keeps it, "" for none.
+func keptNextVLESSID(t *testing.T, s *testService, hub string) string {
+	t.Helper()
+	var st struct {
+		Hubs []struct {
+			Device    string `json:"device"`
+			Next      string `json:"next"`
+			NextVLESS *struct {
+				ID string `json:"id"`
+			} `json:"next_vless"`
+		} `json:"hubs"`
+	}
+	raw, err := os.ReadFile(filepath.Join(s.dir, tunnel.StateFile))
+	if err != nil || json.Unmarshal(raw, &st) != nil {
+		return ""
+	}
+	for _, h := range st.Hubs {
+		if h.Device == hub && h.Next != "" && h.NextVLESS != nil {
+			return h.NextVLESS.ID
+		}
+	}
+	return ""
 }
 
 // TestAwayThroughRelay checks a group without a hub: both devices meet at a

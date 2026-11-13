@@ -199,6 +199,14 @@ impl Obfuscation {
         Ok(o)
     }
 
+    /// The size of one junk packet: jmin to jmax bytes, as amneziawg-go's
+    /// (jmin when the two are equal), and never more than MAX_JUNK_SIZE.
+    fn junk_size(&self) -> usize {
+        let (lo, hi) = (self.jmin.min(MAX_JUNK_SIZE), self.jmax.min(MAX_JUNK_SIZE));
+        let n = if hi > lo { lo + below(hi - lo) } else { lo };
+        n as usize
+    }
+
     /// The settings as the offers and the state file carry them.
     pub fn to_value(&self) -> Value {
         use base64::Engine as _;
@@ -310,9 +318,8 @@ impl Awg {
         let i = usize::from(t - 1);
         let mut out = Vec::new();
         if t == 1 {
-            for _ in 0..self.o.jc {
-                let n = self.o.jmin + below(self.o.jmax - self.o.jmin);
-                let mut junk = vec![0u8; n as usize];
+            for _ in 0..self.o.jc.min(MAX_JUNK_COUNT) {
+                let mut junk = vec![0u8; self.o.junk_size()];
                 random(&mut junk);
                 out.push(junk);
             }
@@ -493,6 +500,28 @@ mod tests {
         changed[40] ^= 1;
         assert!(a_side.incoming(&changed).is_none());
         assert!(a_side.incoming(&sent[..sent.len() - 1]).is_none());
+    }
+
+    /// Junk bounds that are equal, as a hub's offer may give them, make
+    /// junk of that size, and no bounds make more than MAX_JUNK_SIZE.
+    #[test]
+    fn junk_sizes_stay_in_bounds() {
+        let mut o = settings();
+        o.jmin = 100;
+        o.jmax = 100;
+        let o = Obfuscation::from_offer(&o.to_value()).unwrap();
+        let mut a = Awg::new(o.clone(), &key(), &key());
+        let init = [&[1u8, 0, 0, 0][..], &[0u8; INITIATION - 4]].concat();
+        let out = a.outgoing(&init);
+        assert_eq!(out.len(), o.jc as usize + 1);
+        assert!(out[..o.jc as usize].iter().all(|j| j.len() == 100), "junk of 100 to 100 bytes");
+        for (lo, hi) in [(0, 0), (0, 1), (999, 1000), (1000, 1000), (5000, u32::MAX)] {
+            let o = Obfuscation { jmin: lo, jmax: hi, ..o.clone() };
+            for _ in 0..64 {
+                let n = o.junk_size();
+                assert!(n as u32 <= MAX_JUNK_SIZE && n as u32 >= lo.min(MAX_JUNK_SIZE), "{lo}-{hi}: {n}");
+            }
+        }
     }
 
     /// The settings are read as Go writes them, and Check's refusals are

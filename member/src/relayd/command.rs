@@ -16,9 +16,10 @@ use super::keys::Keys;
 use super::server::{Config, Relay};
 use crate::error::{Error, Result};
 
-const USAGE: &str = "usage: cbb relay [-listen ADDRESS] [-key FILE] (-group TAGS | -open) [-show-key]
+const USAGE: &str = "usage: cbb relay [-listen ADDRESS] [-key FILE] [-refused FILE] (-group TAGS | -open) [-show-key]
   -listen ADDRESS  the address to listen on, UDP and TCP (default :8764)
   -key FILE        the relay's keys, made on the first run
+  -refused FILE    the list of groups refused after an abuse report, a tag a line, read again when it changes (default: refused-groups next to the key; \"none\" refuses none)
   -group TAGS      the tags of the groups to serve, separated by commas, as cbb status shows them
   -open            serve every group that registers, within limits per group and per network, in place of -group
   -show-key        print the key for cbb global relay -key and stop";
@@ -35,14 +36,21 @@ pub fn default_key() -> PathBuf {
 struct Flags {
     listen: String,
     key: PathBuf,
+    refused: String,
     groups: String,
     open: bool,
     show_key: bool,
 }
 
 fn parse(args: &[String]) -> std::result::Result<Flags, String> {
-    let mut f =
-        Flags { listen: ":8764".into(), key: default_key(), groups: String::new(), open: false, show_key: false };
+    let mut f = Flags {
+        listen: ":8764".into(),
+        key: default_key(),
+        refused: String::new(),
+        groups: String::new(),
+        open: false,
+        show_key: false,
+    };
     let mut it = args.iter();
     while let Some(a) = it.next() {
         let Some(name) = a.strip_prefix("--").or_else(|| a.strip_prefix('-')).filter(|n| !n.is_empty()) else {
@@ -57,6 +65,7 @@ fn parse(args: &[String]) -> std::result::Result<Flags, String> {
         match name {
             "listen" => f.listen = value()?,
             "key" => f.key = PathBuf::from(value()?),
+            "refused" => f.refused = value()?,
             "group" => f.groups = value()?,
             "open" => f.open = inline.as_deref().is_none_or(|v| v == "true" || v == "1"),
             "show-key" => f.show_key = inline.as_deref().is_none_or(|v| v == "true" || v == "1"),
@@ -153,11 +162,50 @@ pub fn command(args: &[String], stdout: &mut dyn Write, stderr: &mut dyn Write) 
         Ok(l) => l,
         Err(e) => return fail(stderr, e),
     };
-    let relay =
-        match Relay::start(Config { listen, keys, groups, open: f.open, limits, log: log.clone(), verbose: debug }) {
-            Ok(r) => r,
-            Err(e) => return fail(stderr, e),
-        };
+    // Each connection through the tunnel costs open files: the relay takes
+    // as many as its system lets it, and holds no more connections than
+    // they allow.
+    let limits = match super::limits::raise_files() {
+        Some(files) => {
+            let fit = limits.fit_files(files);
+            if fit.streams < limits.with_defaults().streams {
+                log(&format!(
+                    "cbb relay: {files} open files allowed, too few for {} tunnel connections: it holds {} (raise LimitNOFILE)",
+                    limits.with_defaults().streams,
+                    fit.streams
+                ));
+            } else {
+                log(&format!("cbb relay: {files} open files allowed, {} tunnel connections", fit.streams));
+            }
+            if fit.files() > files {
+                log(&format!(
+                    "cbb relay: {files} open files allowed, fewer than the {} it needs at least",
+                    fit.files()
+                ));
+            }
+            fit
+        }
+        None => limits,
+    };
+    // A list that cannot be read stops the relay: it never starts without
+    // the list its operator gave it.
+    let refused = match super::refused::List::open(&f.refused, &f.key) {
+        Ok(l) => l.map(Arc::new),
+        Err(e) => return fail(stderr, e),
+    };
+    let relay = match Relay::start(Config {
+        listen,
+        keys,
+        groups,
+        open: f.open,
+        limits,
+        log: log.clone(),
+        verbose: debug,
+        refused,
+    }) {
+        Ok(r) => r,
+        Err(e) => return fail(stderr, e),
+    };
     log(&format!(
         "cbb relay: listening on UDP and TCP port {} for {serving}; its key, for cbb global relay -key: {pin}",
         relay.addr().port()

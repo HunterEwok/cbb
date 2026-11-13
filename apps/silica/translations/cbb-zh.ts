@@ -268,6 +268,10 @@
 <context>
     <name>ChangePinDialog</name>
     <message>
+        <source>At least six digits, and not an easy one such as 123456 or 111111.</source>
+        <translation>至少六位数字，且不能是 123456 或 111111 这样简单的数字。</translation>
+    </message>
+    <message>
         <source>Change</source>
         <translation>更改</translation>
     </message>
@@ -558,6 +562,10 @@
     <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
         <translation>二维码中的地址由另一台设备应答。请重新扫描。</translation>
+    </message>
+    <message>
+        <source>Choose a PIN of at least six digits that is not easy to guess.</source>
+        <translation>请选择至少六位、不易被猜到的 PIN。</translation>
     </message>
     <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
@@ -877,8 +885,8 @@
         <translation>不是这个</translation>
     </message>
     <message>
-        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. It works once, until %1.</source>
-        <translation>在新手机上打开 CBB，点按“通过邀请加入”并扫描二维码。在电脑上用其文本运行 cbb pair -invite。只能使用一次，有效期至 %1。</translation>
+        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite - and paste its text. It works once, until %1.</source>
+        <translation>在新手机上打开 CBB，点按“通过邀请加入”并扫描二维码。在电脑上运行 cbb pair -invite - 并粘贴其文本。只能使用一次，有效期至 %1。</translation>
     </message>
     <message>
         <source>Opening the invitation on the group's hub…</source>
@@ -1345,8 +1353,12 @@
         <translation>管理员 PIN</translation>
     </message>
     <message>
-        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
-        <translation>CBB 自己的 PIN，至少四位数字。请勿使用手机的解锁密码。每次管理员操作前由手机的安全元件验证；七次输错将永久锁定管理员密钥，任何人都无法解锁。</translation>
+        <source>At least six digits, and not an easy one such as 123456 or 111111.</source>
+        <translation>至少六位数字，且不能是 123456 或 111111 这样简单的数字。</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least six digits and not an easy one such as 123456. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>CBB 自己的 PIN，至少六位数字，且不能是 123456 这样简单的数字。请勿使用手机的解锁密码。每次管理员操作前由手机的安全元件验证；七次输错将永久锁定管理员密钥，任何人都无法解锁。</translation>
     </message>
     <message>
         <source>Choose the admin PIN</source>
@@ -1383,6 +1395,10 @@
     <message>
         <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
         <translation>PIN 错误。只剩一次机会：再输错一次将永久锁定管理员密钥。</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Some tries are used up; seven wrong PINs lock the admin key for good.</source>
+        <translation>PIN 错误。已用掉部分尝试次数；七次输错将永久锁定管理员密钥。</translation>
     </message>
     <message>
         <source>Wrong PIN. Tries left: %1.</source>
@@ -1707,6 +1723,10 @@
     <message>
         <source>Version</source>
         <translation>版本</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Some tries are used up; seven wrong PINs lock the admin key for good.</source>
+        <translation>PIN 错误。已用掉部分尝试次数；七次输错将永久锁定管理员密钥。</translation>
     </message>
     <message>
         <source>Wrong PIN. Tries left: %1.</source>

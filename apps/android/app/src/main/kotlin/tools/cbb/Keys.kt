@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.hardware.biometrics.BiometricManager
 import android.os.Build
+import android.os.SystemClock
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyInfo
 import android.security.keystore.KeyProperties
@@ -84,13 +85,18 @@ object Keys {
      * is none, which asks the user through authorize: once for KEEP_SECONDS
      * for a key made so, or for each signature for one an earlier version
      * made. A key made without authentication (a debug build on a phone
-     * without a screen lock) signs without asking. Throws OldKey for a key
-     * made for another time.
+     * without a screen lock) signs without asking in a debug build only: a
+     * release build of the same signature installed over it does not sign
+     * with it and throws OldKey, so the phone sets the group up again. Throws
+     * OldKey for a key made for another time, too.
      */
     fun loadOrCreateAuthorized(context: Context, alias: String, groupTag: String = "", authorize: (Signature?) -> Signature?): KeystoreSigner {
         val k = loadOrCreate(context, alias, groupTag)
         val info = info(k)
-        if (!info.isUserAuthenticationRequired) return k
+        if (!info.isUserAuthenticationRequired) {
+            if (isDebuggable(context)) return k
+            throw OldKey()
+        }
         if (isOld(info)) throw OldKey()
         return KeystoreSigner(k.privateKey, k.publicKeyDER, authorize, timed = info.userAuthenticationValidityDurationSeconds > 0)
     }
@@ -206,6 +212,8 @@ object Keys {
     private fun authenticate(b: KeyGenParameterSpec.Builder, eachTime: Boolean) {
         b.setUserAuthenticationRequired(true)
         b.setInvalidatedByBiometricEnrollment(false)
+        // Never on a locked phone, whatever authentication came before.
+        b.setUnlockedDeviceRequired(true)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val seconds = if (eachTime) 0 else KEEP_SECONDS
             b.setUserAuthenticationParameters(seconds, KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL)
@@ -272,13 +280,27 @@ class KeystoreSigner(
         val s = Signature.getInstance(algorithm)
         val authorize = authorize ?: return s.apply { initSign(privateKey) }
         if (!timed) return authorize(s.apply { initSign(privateKey) }) ?: error("the prompt returned no signature")
+        // The Keystore opens a timed key after any authentication of the
+        // user, the screen unlock too; the app asks itself at the start of
+        // each five minutes, so that a phone handed over unlocked signs
+        // nothing without its owner.
+        if (!window.isOpen(SystemClock.elapsedRealtime())) {
+            authorize(null)
+            window.opened(SystemClock.elapsedRealtime())
+        }
         try {
             s.initSign(privateKey)
         } catch (e: UserNotAuthenticatedException) {
             authorize(null)
+            window.opened(SystemClock.elapsedRealtime())
             s.initSign(privateKey)
         }
         return s
+    }
+
+    companion object {
+        /** The app's own five minutes after its prompt, for every timed key. */
+        val window = KeepWindow(Keys.KEEP_SECONDS * 1000L)
     }
 
     override fun signature(data: ByteArray): ByteArray = ready("SHA256withECDSA").run {
@@ -315,5 +337,21 @@ class KeystoreSigner(
     override fun signDigest(digest: ByteArray): ByteArray = ready("NONEwithECDSA").run {
         update(digest)
         sign()
+    }
+}
+
+/**
+ * The time after the app's own prompt within which a timed key signs
+ * without asking again: from the prompt, for keepMs, on a clock that
+ * never goes back (elapsedRealtime). Before the first prompt, after a
+ * restart of the app too, it is closed.
+ */
+class KeepWindow(private val keepMs: Long) {
+    @Volatile private var since: Long? = null
+
+    fun isOpen(now: Long): Boolean = since?.let { now >= it && now - it < keepMs } ?: false
+
+    fun opened(now: Long) {
+        since = now
     }
 }

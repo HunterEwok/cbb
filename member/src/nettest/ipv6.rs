@@ -86,6 +86,7 @@ fn the_relay_over_ipv6() {
         limits: Limits::default(),
         log: Arc::new(|_| {}),
         verbose: false,
+        refused: None,
     })
     .unwrap();
     assert!(s.addr().is_ipv6());

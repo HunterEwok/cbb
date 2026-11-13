@@ -160,7 +160,9 @@ final class LiveGroup: GroupController {
                           version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)
     }
     /// The last authentication context the user passed for the root key.
-    private var authorized: (context: LAContext, at: Date)?
+    /// The user's last Face ID check, good for authorizedFor; the renewer
+    /// shares it, so both stop signing when it ends.
+    private let authorization = Authorization(lasts: LiveGroup.authorizedFor)
 
     /// In the app group's container, where the share extension reads it.
     nonisolated static var defaultFile: URL { Shared.groupFile }
@@ -181,6 +183,11 @@ final class LiveGroup: GroupController {
             }
         }
         paths.start(queue: DispatchQueue(label: "cbb.paths"))
+        // The phone locked with the app in front: the keys sign without
+        // asking no more, as when the app goes to the background.
+        let authorization = authorization
+        NotificationCenter.default.addObserver(forName: UIApplication.protectedDataWillBecomeUnavailableNotification,
+                                               object: nil, queue: nil) { _ in authorization.end() }
     }
 
     /// The network of path as the hub remembers it (HubState.networkKey):
@@ -421,13 +428,12 @@ final class LiveGroup: GroupController {
     private func signer(label: String, reason: String) async throws -> SecKeySigner {
         guard Self.secureEnclave else { return try SecKeySigner(key(label: label, secureEnclave: false)) }
         let context: LAContext
-        if let a = authorized, Date().timeIntervalSince(a.at) < Self.authorizedFor {
-            context = a.context
+        if let c = authorization.context() {
+            context = c
         } else {
             context = LAContext()
             try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)
-            authorized = (context, Date())
-            renewer?.context = context
+            authorization.keep(context)
         }
         if try KeychainIdentity.loadKey(label: label) == nil {
             _ = try KeychainIdentity.makeKey(label: label, secureEnclave: true, userPresence: true)
@@ -636,7 +642,9 @@ final class LiveGroup: GroupController {
         guard let hub, hub.isOn else { return try await inviteThroughHub(lifetime: lifetime, ask: ask, ended: ended) }
         guard let identity = memberIdentity else { throw HubOnPhone.Failure.notRunning }
         let guestBox = GuestBox()
-        let window = try InvitationWindow(identity: identity, expires: Date().addingTimeInterval(TimeInterval(lifetime)), admit: { [weak self] t, joinerCert, sid in
+        let window = try InvitationWindow(identity: identity, expires: Date().addingTimeInterval(TimeInterval(lifetime)),
+                                          fromGuest: { port in guestBox.guest?.dialed(port: port) == true },
+                                          admit: { [weak self] t, joinerCert, sid in
             guard let self, let guest = guestBox.guest else { throw HubOnPhone.Failure.notRunning }
             return try await self.admitInvited(over: t, joinerCert: joinerCert, sessionID: sid, guest: guest, ask: ask)
         }, onEnd: { r in
@@ -1230,7 +1238,7 @@ final class LiveGroup: GroupController {
             try? FileManager.default.removeItem(at: url)
         }
         (online, offers, keyStores, infos, modes, actions, mutes) = ([], [:], [:], [:], [:], [:], [:])
-        authorized = nil
+        authorization.end()
         state = nil
         keysLog.notice("this phone left its group: its keys and the group's files are deleted")
     }
@@ -1625,6 +1633,7 @@ final class LiveGroup: GroupController {
         try? FileManager.default.removeItem(at: credentialsURL)
         periodKeys.clear()
         blindRelay?.setCredentials(nil)
+        hub?.setCredentials(nil)
     }
 
     /// Brings the group's server credentials up to date as far as this
@@ -1639,6 +1648,7 @@ final class LiveGroup: GroupController {
         let signed = box.refresh(member: member, keys: periodKeys, rootSigner: root)
         if !signed.isEmpty { _ = try? node.sendCredentials(signed) }
         blindRelay?.setCredentials(box.relayCredentials(keys: periodKeys))
+        hub?.setCredentials(box.hubCredentials(keys: periodKeys))
     }
 
     /// Passes a changed group to the parts that run with it.
@@ -1706,8 +1716,7 @@ final class LiveGroup: GroupController {
         credentials.onAdd = { [weak self] in Task { @MainActor in self?.refreshCredentials() } }
         // An admin phone renews the computers' certificates when they
         // connect and are due (docs/protocol.md, section 2).
-        let renewer = Renewer(group: g, secureEnclave: Self.secureEnclave)
-        renewer.context = authorized?.context
+        let renewer = Renewer(group: g, secureEnclave: Self.secureEnclave, authorization: authorization)
         // The root sends a computer it made an admin its admin CA again
         // when the computer still offers the key.
         let admins = AdminBox(group: g)
@@ -2170,6 +2179,9 @@ final class LiveGroup: GroupController {
     /// would end them anyway.
     func setBackground(_ on: Bool) {
         background = on
+        // In the background the keys sign without asking no more: the
+        // next signing action asks for Face ID again.
+        if on { authorization.end() }
         guard let node else { return }
         if on { try? node.pause() } else { try? node.resume() }
     }
@@ -2287,6 +2299,8 @@ final class LiveGroup: GroupController {
         let sign: @Sendable (Data) throws -> Data = { try member.signature(digest: $0) }
         // The forwarder takes the member chain and the group's roots after it (docs/protocol.md, section 13).
         entries.reload()
+        // Once the hubs' credential lists this phone, the forwarder learns neither it nor the group (section 18).
+        hub.setCredentials(credentialBox?.hubCredentials(keys: periodKeys))
         hub.start(.init(memberPort: port, chain: g.memberChain + g.trusted, sign: sign, records: g.records.authorityRecords,
                         ways: entries.ways(for: HubState.Forwarder.projectHost)))
         guard hub.isHome(network) else { return stopHome() }
@@ -2433,21 +2447,63 @@ final class LiveGroup: GroupController {
         }
     }
 
+    /// The context of the user's last Face ID check and when it passed. It
+    /// lets the keys sign for `lasts` seconds after the check, while the app
+    /// stays at the front; after that, or on `end`, the context is
+    /// invalidated, so no copy of it signs any more, and the next signing
+    /// action asks again.
+    final class Authorization: @unchecked Sendable {
+        let lasts: TimeInterval
+        private let now: () -> Date
+        private let lock = NSLock()
+        private var kept: (context: LAContext, at: Date)?
+
+        init(lasts: TimeInterval, now: @escaping () -> Date = Date.init) { (self.lasts, self.now) = (lasts, now) }
+
+        /// Keeps the context of a check that just passed.
+        func keep(_ context: LAContext) {
+            let old = lock.withLock { () -> LAContext? in
+                defer { kept = (context, now()) }
+                return kept?.context
+            }
+            if let old, old !== context { old.invalidate() }
+        }
+
+        /// The kept context while it lasts, or nil.
+        func context() -> LAContext? {
+            let (live, stale) = lock.withLock { () -> (LAContext?, LAContext?) in
+                guard let k = kept else { return (nil, nil) }
+                let age = now().timeIntervalSince(k.at)
+                if age >= 0 && age < lasts { return (k.context, nil) }
+                kept = nil
+                return (nil, k.context)
+            }
+            stale?.invalidate()
+            return live
+        }
+
+        /// Ends the window at once.
+        func end() {
+            let old = lock.withLock { () -> LAContext? in
+                defer { kept = nil }
+                return kept?.context
+            }
+            old?.invalidate()
+        }
+    }
+
     /// Issues renewed member certificates with the root or admin key, without
-    /// asking: in the Secure Enclave only while the context of the user's
-    /// last Face ID check in this run lasts, so a computer that is due and
-    /// connects before that gets its renewal on a later connection.
+    /// asking: in the Secure Enclave only while the user's last Face ID
+    /// check lasts (Authorization), so a computer that is due and connects
+    /// after that gets its renewal on a later connection.
     final class Renewer: @unchecked Sendable {
         let group: PhoneGroup
         let secureEnclave: Bool
-        private let lock = NSLock()
-        private var _context: LAContext?
-        var context: LAContext? {
-            get { lock.withLock { _context } }
-            set { lock.withLock { _context = newValue } }
-        }
+        let authorization: Authorization
 
-        init(group: PhoneGroup, secureEnclave: Bool) { (self.group, self.secureEnclave) = (group, secureEnclave) }
+        init(group: PhoneGroup, secureEnclave: Bool, authorization: Authorization) {
+            (self.group, self.secureEnclave, self.authorization) = (group, secureEnclave, authorization)
+        }
 
         /// A renewal for a peer's chain, leaf first, when it is due and this
         /// phone may renew it.
@@ -2460,7 +2516,7 @@ final class LiveGroup: GroupController {
 
         /// The root or admin key's signer while it signs without asking.
         func signer() -> SecKeySigner? {
-            var ctx = context
+            var ctx = authorization.context()
             if secureEnclave && ctx == nil {
                 let quiet = LAContext()
                 quiet.interactionNotAllowed = true // a key that needs the user fails instead of asking

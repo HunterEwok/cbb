@@ -167,6 +167,7 @@ a key is not P-256	ufunguo si P-256
 %s is not signed by the project's key; not installing	%s haijasainiwa kwa ufunguo wa mradi; haisakinishwi
 keys.json holds a key whose use is empty; not installing	keys.json ina ufunguo ambao matumizi yake ni tupu; haisakinishwi
 checking for administrator rights	inakagua haki za msimamizi
+making a private folder for the download	kuunda folda ya faragha kwa upakuaji
 run it in a PowerShell opened with "Run as administrator"	iendeshe katika PowerShell iliyofunguliwa kwa "Run as administrator"
 finding the architecture	inatambua usanifu
 finding the latest release	inatafuta toleo la hivi karibuni
@@ -255,3 +256,5 @@ cbb for MIPS has no sync away from home yet (roadmap item 37).	cbb ya MIPS bado 
 --no-helper is for Linux	--no-helper ni kwa Linux pekee
 cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	hapa cbb inaendeshwa pamoja na msaidizi wake, ambaye huenda anashikilia funguo zake; bila msaidizi cbb haiwezi kuzitumia. Iondoe kwanza: %s
 --uinput needs cbb's helper, which runs the desktop connector	--uinput inahitaji msaidizi wa cbb, unaoendesha kiunganishi cha eneo-kazi
+the polkit actions that confirm admin actions were not written; the apps ask for the administrator's password instead	vitendo vya polkit vinavyothibitisha vitendo vya msimamizi havikuandikwa; programu zitauliza nenosiri la msimamizi badala yake
+the rights that confirm admin actions were not written; the Mac app asks for the administrator's password instead	haki zinazothibitisha vitendo vya msimamizi hazikuandikwa; programu ya Mac itauliza nenosiri la msimamizi badala yake

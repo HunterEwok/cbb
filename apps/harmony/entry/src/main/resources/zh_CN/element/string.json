@@ -196,7 +196,7 @@
     {"name": "invite_another", "value": "邀请另一台设备"},
     {"name": "invite_copy", "value": "复制文本"},
     {"name": "invite_done", "value": "%s 已加入群组；连接后会出现在列表中。"},
-    {"name": "invite_lead", "value": "在新手机上打开 CBB，点按“通过邀请加入”并扫描二维码。在电脑上用其文本运行 cbb pair -invite。只能使用一次，有效期至 %s。"},
+    {"name": "invite_lead", "value": "在新手机上打开 CBB，点按“通过邀请加入”并扫描二维码。在电脑上运行 cbb pair -invite - 并粘贴其文本。只能使用一次，有效期至 %s。"},
     {"name": "invite_not_this", "value": "不是这个"},
     {"name": "invite_opening", "value": "正在群组的中心节点上打开邀请…"},
     {"name": "invite_share", "value": "分享"},

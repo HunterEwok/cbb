@@ -624,7 +624,8 @@ jobs:
 
   docker:
     # The image of packaging/docker, from the release's own Linux archives, so
-    # it holds the binaries the release attests.
+    # it holds the binaries the release attests. It is tagged VERSION-unsigned;
+    # published.yml tags the digest release.json names as VERSION and latest.
     if: github.ref_type == 'tag'
     needs: [release]
     runs-on: ubuntu-latest
@@ -670,8 +671,10 @@ jobs:
           printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           docker buildx create --use --name cbb >/dev/null
           version=${GITHUB_REF_NAME#v}
-          set -- -t "$IMAGE:$version"
-          case $GITHUB_REF_NAME in *-*) ;; *) set -- "$@" -t "$IMAGE:latest" ;; esac
+          # Only a tag of its own until the release key signs the release:
+          # published.yml then gives the signed digest the version and latest,
+          # so that nothing unsigned reaches them.
+          set -- -t "$IMAGE:$version-unsigned"
           # The attestations below are GitHub's, the provenance and the bill of
           # materials; buildx's own would add a platform "unknown" to the
           # index, which confuses some NAS systems.

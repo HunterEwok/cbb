@@ -198,6 +198,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn find_takes_a_typed_cause() {
+        use crate::pair::Refusal;
+        let e = Error::with("pair: wrong code", Refusal::WrongCode).context("the attempt failed").context("join");
+        assert_eq!(e.find::<Refusal>(), Some(&Refusal::WrongCode));
+        // Words alone are no refusal.
+        let e = Error::msg(Refusal::WrongCode.message()).context("join");
+        assert_eq!(e.find::<Refusal>(), None);
+        let io = std::io::Error::other("x");
+        assert!(Error::with("read", io).find::<Refusal>().is_none());
+    }
+
+    #[test]
     fn details_name_the_causes() {
         let io = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied");
         let e = Error::with("cannot read the identity", io).context("cannot start");

@@ -108,6 +108,46 @@ fn mkdir_private(dir: &Path) -> Result<()> {
     crate::sys::mkdir_private(dir)
 }
 
+/// Makes the updater's work folder dir (or one inside it) for this user
+/// alone, and trusts a folder that is already there only when it is a
+/// folder, not a link, this user's and closed to everyone else; any other
+/// is removed and made again. The work folder can be in a folder others
+/// may write to (/tmp on OpenWrt, the temporary folder of a check), and
+/// what the updater unpacks there is run.
+pub fn work_dir(dir: &Path) -> Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+        if let Some(parent) = dir.parent().filter(|p| !p.as_os_str().is_empty())
+            && fs::symlink_metadata(parent).is_err()
+        {
+            fs::create_dir_all(parent).context(format!("cannot make {}", parent.display()))?;
+        }
+        let make = || fs::DirBuilder::new().mode(0o700).create(dir);
+        match make() {
+            Ok(()) => return Ok(()),
+            Err(e) if e.kind() != ErrorKind::AlreadyExists => {
+                return Err(Error::with(format!("cannot make {}", dir.display()), e));
+            }
+            Err(_) => {}
+        }
+        let meta = fs::symlink_metadata(dir).context(format!("cannot read {}", dir.display()))?;
+        // SAFETY: geteuid has no preconditions.
+        let me = unsafe { libc::geteuid() };
+        if meta.is_dir() && meta.uid() == me && meta.mode() & 0o077 == 0 {
+            return Ok(());
+        }
+        // remove_dir_all does not follow links inside the folder.
+        let gone = if meta.is_dir() { fs::remove_dir_all(dir) } else { fs::remove_file(dir) };
+        gone.context(format!("cannot remove {}, which is not this program's own", dir.display()))?;
+        make().context(format!("cannot make {}", dir.display()))
+    }
+    #[cfg(not(unix))]
+    {
+        mkdir_private(dir)
+    }
+}
+
 /// Reports whether a timer should check now.
 pub fn due(st: &State, now_ms: i64) -> bool {
     st.auto == Some(true) && now_ms - st.checked_ms >= CHECK_EVERY_MS
@@ -238,7 +278,13 @@ fn fetch_via(url: &str, path: &Path, max: u64, resolve: Option<&str>, time: Dura
     curl.push(url);
     let mut tools: Vec<(&str, Vec<&str>)> = vec![("curl", curl)];
     if resolve.is_none() {
-        tools.push(("wget", vec!["-q", "-U", "cbb", "-O", "-", url]));
+        // GNU wget can be told https only, also after a redirect; BusyBox's
+        // and uclient-fetch cannot. What they fetch is signed either way.
+        let mut wget = vec!["-q", "-U", "cbb", "-O", "-", url];
+        if wget_https_only() {
+            wget.insert(0, "--https-only");
+        }
+        tools.push(("wget", wget));
         tools.push(("uclient-fetch", vec!["-q", "-O", "-", url]));
     }
     for (tool, args) in tools {
@@ -287,6 +333,16 @@ const LISTS_TIME: Duration = Duration::from_secs(60);
 
 /// The longest a download may take.
 const FETCH_TIME: Duration = Duration::from_secs(30 * 60);
+
+/// Whether this system's wget knows --https-only (GNU wget 1.17 and later).
+fn wget_https_only() -> bool {
+    Command::new("wget")
+        .arg("--help")
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).contains("--https-only"))
+}
 
 /// Copies what child writes to path, at most max bytes, and stops it when
 /// it writes more or takes longer than FETCH_TIME.
@@ -402,7 +458,7 @@ impl Updater<'_> {
             return Err(Error::msg(NO_ROOTS));
         }
         let roots: Vec<&[u8]> = self.roots.iter().map(Vec::as_slice).collect();
-        mkdir_private(&self.work)?;
+        work_dir(&self.work)?;
         let mut errs = Vec::new();
         for (i, src) in self.sources.iter().enumerate() {
             let files = (|| -> Result<(File, File, File)> {
@@ -493,7 +549,7 @@ impl Updater<'_> {
         for name in g.want() {
             let Some(a) = r.files.iter().find(|a| a.name == name) else { continue };
             let file = self.work.join(format!(".group-{name}"));
-            let res = mkdir_private(&self.work)
+            let res = work_dir(&self.work)
                 .and_then(|()| src.fetch_to(&a.name, &r.version, &file, MAX_ARCHIVE.min(a.size.max(0) as u64)))
                 .and_then(|()| r.check_file(&a.name, &fs::read(&file).context("cannot read the downloaded archive")?));
             match res {
@@ -525,10 +581,10 @@ impl Updater<'_> {
             .iter()
             .find(|b| matches!(b.name.rsplit('/').next(), Some("cbb" | "cbb.exe")))
             .ok_or_else(|| Error::msg(format!("release.json lists no cbb in {}", asset.name)))?;
-        mkdir_private(&self.work)?;
+        work_dir(&self.work)?;
         let new = self.work.join("new");
         let _ = fs::remove_dir_all(&new);
-        mkdir_private(&new)?;
+        work_dir(&new)?;
         (self.log)(&format!("Downloading {} ({})...", asset.name, r.version));
         let file = self.work.join(&asset.name);
         let max = MAX_ARCHIVE.min(asset.size.max(0) as u64);
@@ -577,7 +633,7 @@ impl Updater<'_> {
         // installer finds those beside cbb when it puts them back.
         let prev = self.work.join("previous");
         let _ = fs::remove_dir_all(&prev);
-        mkdir_private(&prev)?;
+        work_dir(&prev)?;
         let mut saved = PathBuf::new();
         for (i, p) in self.programs.iter().enumerate() {
             let name = if i == 0 {
@@ -678,18 +734,43 @@ pub fn wait_healthy(status: &dyn Fn() -> Result<String>, version: &str, within: 
 /// CBB_RELEASE_ROOTS names (crate::testbuild::env_os); else, and always in a
 /// release, the pinned ones.
 pub fn release_roots() -> Vec<Vec<u8>> {
-    if let Some(f) = crate::testbuild::env_os("CBB_RELEASE_ROOTS")
-        && let Ok(r) = read_roots(Path::new(&f))
-    {
-        return r;
+    if let Some(f) = crate::testbuild::env_os("CBB_RELEASE_ROOTS") {
+        match read_roots(Path::new(&f)) {
+            Ok(r) => {
+                static SAID: std::sync::Once = std::sync::Once::new();
+                SAID.call_once(|| {
+                    eprintln!(
+                        "cbb: the release roots are those of {} (CBB_RELEASE_ROOTS), not the pinned ones: for tests only",
+                        Path::new(&f).display()
+                    )
+                });
+                return r;
+            }
+            Err(e) => eprintln!("cbb: CBB_RELEASE_ROOTS is not used: {}", e.message()),
+        }
     }
     ROOTS.iter().map(|r| r.to_vec()).collect()
 }
 
 /// Reads the public keys of a PEM file, for tests (CBB_RELEASE_ROOTS).
+/// The file must be this user's or root's and closed to others' writing, as
+/// it replaces the keys every release is checked against.
 pub fn read_roots(path: &Path) -> Result<Vec<Vec<u8>>> {
     #[derive(Deserialize)]
     struct Der(#[serde(with = "cbb_core::certs::b64")] Vec<u8>);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let m = fs::metadata(path).context(format!("cannot read {}", path.display()))?;
+        // SAFETY: geteuid has no preconditions.
+        let me = unsafe { libc::geteuid() };
+        if (m.uid() != me && m.uid() != 0) || m.mode() & 0o022 != 0 {
+            return Err(Error::msg(format!(
+                "{} may be changed by another user than this one or root; it is not used",
+                path.display()
+            )));
+        }
+    }
     let text = fs::read_to_string(path).context(format!("cannot read {}", path.display()))?;
     let mut roots = Vec::new();
     let mut body: Option<String> = None;
@@ -1266,6 +1347,48 @@ mod tests {
         assert_eq!(read_roots(&dir.join("r.pem")).unwrap(), vec![der]);
         fs::write(dir.join("e.pem"), "nothing").unwrap();
         assert!(read_roots(&dir.join("e.pem")).is_err());
+        // Not a file others may write to.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(dir.join("r.pem"), fs::Permissions::from_mode(0o666)).unwrap();
+            assert!(read_roots(&dir.join("r.pem")).is_err());
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn work_dir_trusts_only_its_own_closed_folder() {
+        use std::os::unix::fs::PermissionsExt;
+        let base = tmp("workdir");
+        let work = base.join("w");
+        // A new folder is closed to others.
+        work_dir(&work).unwrap();
+        assert_eq!(fs::metadata(&work).unwrap().permissions().mode() & 0o777, 0o700);
+        // Its own closed folder stays as it is.
+        fs::write(work.join("kept"), "x").unwrap();
+        work_dir(&work).unwrap();
+        assert!(work.join("kept").exists());
+        // A folder others may write to is made again, empty.
+        fs::set_permissions(&work, fs::Permissions::from_mode(0o777)).unwrap();
+        work_dir(&work).unwrap();
+        assert!(!work.join("kept").exists());
+        assert_eq!(fs::metadata(&work).unwrap().permissions().mode() & 0o777, 0o700);
+        // A link is replaced by a folder, and what it led to is left alone.
+        let elsewhere = base.join("elsewhere");
+        fs::create_dir(&elsewhere).unwrap();
+        fs::write(elsewhere.join("theirs"), "x").unwrap();
+        fs::remove_dir_all(&work).unwrap();
+        std::os::unix::fs::symlink(&elsewhere, &work).unwrap();
+        work_dir(&work).unwrap();
+        assert!(fs::symlink_metadata(&work).unwrap().is_dir());
+        assert!(elsewhere.join("theirs").exists());
+        // A file in its place is replaced too.
+        fs::remove_dir_all(&work).unwrap();
+        fs::write(&work, "x").unwrap();
+        work_dir(&work).unwrap();
+        assert!(work.is_dir());
+        let _ = fs::remove_dir_all(&base);
     }
 
     /// A download from an address that refuses fails with the tool's

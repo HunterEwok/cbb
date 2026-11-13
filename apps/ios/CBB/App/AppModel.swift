@@ -352,6 +352,13 @@ final class AppModel: ObservableObject {
         /// Files a computer copied, saved in the app's folder in Files, or
         /// one image or video in Photos.
         case savedFiles(photos: Bool)
+
+        /// The same result without the start of the text, for an answer
+        /// that may show on a locked phone.
+        var withoutPreview: SyncResult {
+            if case .fetched(let from, _) = self { return .fetched(from: from, preview: nil) }
+            return self
+        }
     }
 
     enum ScanResult: Equatable {
@@ -849,12 +856,12 @@ final class AppModel: ObservableObject {
 
     /// The one big button: the paste button hands over board; a button
     /// that is not one lets the app read the clipboard when it sends.
-    func sync(board: Board? = nil) async {
+    func sync(board: Board? = nil, preview: Bool = true) async {
         busy = true
         defer { busy = false }
         do {
             let result = try await group.sync(board: board)
-            message = Self.said(result)
+            message = Self.said(preview ? result : result.withoutPreview)
             if let message { Island.flash(message) }
             feel(result == .nothingNew ? .warning : .success)
         } catch {
@@ -973,7 +980,9 @@ final class AppModel: ObservableObject {
         }
         progress?.completedUnitCount = 1
         progress?.localizedDescription = String(localized: "Syncing…", bundle: .app)
-        await sync(board: text.map { Board(text: $0) })
+        // Siri and the Shortcuts app may speak or show the answer on the
+        // lock screen: it names the device, never the copy.
+        await sync(board: text.map { Board(text: $0) }, preview: false)
         return message ?? ""
     }
 

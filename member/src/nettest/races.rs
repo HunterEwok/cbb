@@ -55,7 +55,13 @@ pub(super) fn hub_and_link_at(ip: std::net::IpAddr, port: u16) -> (Server, Link,
     let (hub_key, client_key, psk) = (key(), key(), key());
     let own = tunnel::addr(&g.id(0)).unwrap();
     let client = tunnel::addr(&g.id(1)).unwrap();
-    let peer = Peer { key: tunnel::public_key_of(&client_key).try_into().unwrap(), psk, addr: client, until: None };
+    let peer = Peer {
+        key: tunnel::public_key_of(&client_key).try_into().unwrap(),
+        psk,
+        addr: client,
+        until: None,
+        source: None,
+    };
     let server = Server::start(
         &hub_key,
         &g.id(0),
@@ -74,6 +80,8 @@ pub(super) fn hub_and_link_at(ip: std::net::IpAddr, port: u16) -> (Server, Link,
         next: Vec::new(),
         obfuscation: None,
         vless: None,
+        next_obfuscation: None,
+        next_vless: None,
     };
     let me = cbb_core::certs::DeviceId::parse(&g.id(1)).unwrap();
     let link = Link::start(&State::with_key(&client_key).unwrap(), &hub, &me, Arc::new(|_| {})).unwrap();
@@ -217,6 +225,7 @@ fn registrations_at_once_and_a_stop() {
         },
         log: Arc::new(|_| {}),
         verbose: false,
+        refused: None,
     })
     .unwrap();
     let seen: Vec<Arc<Count>> = (0..n).map(|_| Arc::new(Count::default())).collect();

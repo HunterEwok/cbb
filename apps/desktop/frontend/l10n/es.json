@@ -161,7 +161,7 @@
   "Off": "Desactivado",
   "Offline: %s.": "Sin conexión: %s.",
   "On": "Activado",
-  "On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. Show or send it only to the person who joins.": "En un teléfono nuevo, abre CBB, toca Unirse con una invitación y escanea el código. En un ordenador, ejecuta cbb pair -invite con su texto. Muéstralo o envíalo solo a quien se une.",
+  "On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite - and paste its text. Show or send it only to the person who joins.": "En un teléfono nuevo, abre CBB, toca Unirse con una invitación y escanea el código. En un ordenador, ejecuta cbb pair -invite - y pega su texto. Muéstralo o envíalo solo a quien se une.",
   "On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this window open.": "En un teléfono del grupo, toca + y escanea este código. En un ordenador del grupo, toca + y escribe los números. Mantén esta ventana abierta.",
   "On the new device, choose Join a group: it shows a QR code and six digits. A phone of the group scans the code; here, type the digits.": "En el dispositivo nuevo, elige Unirse a un grupo: muestra un código QR y seis dígitos. Un teléfono del grupo escanea el código; aquí, escribe los dígitos.",
   "Online": "En línea",

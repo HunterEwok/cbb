@@ -97,11 +97,12 @@ public enum PairingMember {
     /// the QR code's fingerprint; sessionID is the TLS exporter's output.
     /// issue makes the welcome for the joiner's device ID, public key and
     /// description; it is called only after the joiner proved it knows the
-    /// code. With invitation, the device dialed this phone: code is unused,
+    /// code. taken says whether a device ID is in the group already, which
+    /// every caller must answer. With invitation, the device dialed this phone: code is unused,
     /// the device confirms the secret first, and the admin confirms the
     /// device.
     public static func admit(over t: FrameTransport, code: String, memberCert: Data, joinerCert: Data,
-                             sessionID: [UInt8], memberAD: Pairing.MemberAD, taken: (String) -> Bool = { _ in false },
+                             sessionID: [UInt8], memberAD: Pairing.MemberAD, taken: (String) -> Bool,
                              invitation: Invitation? = nil,
                              issue: (String, Data, Pairing.Info) throws -> Pairing.Welcome) async throws -> Admitted {
         let joiner = try CertificateInfo(der: joinerCert)

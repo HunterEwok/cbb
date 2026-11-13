@@ -95,13 +95,19 @@ class Settings(context: Context) {
     /**
      * Whether a message names the error underneath, to find out what
      * failed: on in debug builds, off in release ones, and either way what
-     * the switch in Settings (seven taps on the version show it) or the
-     * launch extra ShowErrorDetails set last
+     * the switch in Settings (seven taps on the version show it) or, in a
+     * debug build, the launch extra ShowErrorDetails set last
      * (adb shell am start -n tools.cbb/tools.cbb.MainActivity --ez ShowErrorDetails true).
      */
     var showsErrorDetails: Boolean
         get() = if (prefs.contains(ERROR_DETAILS)) prefs.getBoolean(ERROR_DETAILS, false) else debuggable
         set(v) = prefs.edit().putBoolean(ERROR_DETAILS, v).apply()
+
+    /**
+     * Whether the launch extra ShowErrorDetails counts: in debug builds
+     * only, since any app on the phone can start the activity with it.
+     */
+    val takesErrorDetailsExtra: Boolean get() = debuggable
 
     /**
      * Whether the user chose to keep this phone as the hub when the app

@@ -28,7 +28,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // adb shell am start -n tools.cbb/tools.cbb.MainActivity --ez ShowErrorDetails true
-        if (intent.hasExtra(Settings.ERROR_DETAILS)) model.settings.showsErrorDetails = intent.getBooleanExtra(Settings.ERROR_DETAILS, false)
+        // Any app can start this activity with extras, so a release build
+        // takes the switch in Settings only.
+        if (model.settings.takesErrorDetailsExtra && intent.hasExtra(Settings.ERROR_DETAILS)) {
+            model.settings.showsErrorDetails = intent.getBooleanExtra(Settings.ERROR_DETAILS, false)
+        }
         enableEdgeToEdge()
         setContent { Root(model) }
     }

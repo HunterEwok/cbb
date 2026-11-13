@@ -34,6 +34,8 @@ type Config struct {
 	Groups []string
 	Open   bool
 	Limits Limits
+	// Refused is the list of refused groups (-refused); none when empty.
+	Refused string
 
 	Logf    func(format string, args ...any) // its log lines; none when nil
 	Verbose bool                             // CBB_DEBUG=1
@@ -51,6 +53,7 @@ type Limits struct {
 	ByteRate         float64 `json:"byte_rate"`
 	GroupRecordBytes int     `json:"group_record_bytes"`
 	RecordBytes      int     `json:"record_bytes"`
+	Streams          int     `json:"streams"`
 }
 
 // StatsInterval is how often a relay that Start runs logs its counts.
@@ -115,7 +118,11 @@ func Start(bin string, cfg Config) (*Process, error) {
 	if cfg.Listen == "" {
 		cfg.Listen = "127.0.0.1:0"
 	}
-	args := []string{"-listen", cfg.Listen, "-key", key}
+	list := cfg.Refused
+	if list == "" {
+		list = "none"
+	}
+	args := []string{"-listen", cfg.Listen, "-key", key, "-refused", list}
 	if cfg.Open {
 		args = append(args, "-open")
 	}

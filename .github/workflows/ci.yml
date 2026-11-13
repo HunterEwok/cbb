@@ -1134,6 +1134,8 @@ jobs:
           rel="$RUNNER_TEMP/update"
           sh packaging/archive.sh "$RUNNER_TEMP/v061/cbb" linux amd64 "$rel"
           go run ./tools/release-sign drill -version 0.6.1 "$rel" "$RUNNER_TEMP/update.pem"
+          # cbb reads roots only from a file that root or its own user owns.
+          sudo chown root:root "$RUNNER_TEMP/update.pem"
           if CBB_RELEASE_DIR="$rel" cbb update -check 2>"$RUNNER_TEMP/err"; then echo "cbb update took a release the pinned roots did not sign" >&2; exit 1; fi
           grep -q 'keys.json' "$RUNNER_TEMP/err"
           export CBB_RELEASE_DIR="$rel" CBB_RELEASE_ROOTS="$RUNNER_TEMP/update.pem"
@@ -1155,6 +1157,7 @@ jobs:
           chmod 0755 "$RUNNER_TEMP/v062/cbb"
           sh packaging/archive.sh "$RUNNER_TEMP/v062/cbb" linux amd64 "$rel2"
           go run ./tools/release-sign drill -version 0.6.2 "$rel2" "$RUNNER_TEMP/update2.pem"
+          sudo chown root:root "$RUNNER_TEMP/update2.pem"
           if sudo CBB_RELEASE_DIR="$rel2" CBB_RELEASE_ROOTS="$RUNNER_TEMP/update2.pem" cbb update 2>"$RUNNER_TEMP/err"; then
             echo "cbb update kept a release whose service does not start" >&2
             exit 1
@@ -2840,6 +2843,8 @@ jobs:
           rel="$RUNNER_TEMP/update"
           sh packaging/archive.sh "$RUNNER_TEMP/alone-0.6.1/cbb" linux amd64 "$rel"
           go run ./tools/release-sign drill -version 0.6.1 "$rel" "$RUNNER_TEMP/update.pem"
+          # cbb reads roots only from a file that root or its own user owns.
+          sudo chown root:root "$RUNNER_TEMP/update.pem"
           # The pinned roots refuse the throwaway ones.
           if CBB_RELEASE_DIR="$rel" cbb update -check 2>"$RUNNER_TEMP/err"; then echo "cbb update took a release the pinned roots did not sign" >&2; exit 1; fi
           grep -q 'keys.json' "$RUNNER_TEMP/err"
@@ -2861,6 +2866,7 @@ jobs:
           chmod 0755 "$RUNNER_TEMP/alone-0.6.2/cbb"
           sh packaging/archive.sh "$RUNNER_TEMP/alone-0.6.2/cbb" linux amd64 "$rel2"
           go run ./tools/release-sign drill -version 0.6.2 "$rel2" "$RUNNER_TEMP/update2.pem"
+          sudo chown root:root "$RUNNER_TEMP/update2.pem"
           if sudo CBB_RELEASE_DIR="$rel2" CBB_RELEASE_ROOTS="$RUNNER_TEMP/update2.pem" cbb update 2>"$RUNNER_TEMP/err"; then
             echo "cbb update kept a release whose service does not start" >&2
             exit 1
@@ -3068,6 +3074,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: the admin PIN's rule (apps/silica/tests/pinrule_test.cpp)
+        run: |
+          c++ -std=c++17 -Wall -Wextra -Werror apps/silica/tests/pinrule_test.cpp -o "$RUNNER_TEMP/pinrule_test"
+          "$RUNNER_TEMP/pinrule_test"
       - name: room for the Platform SDK
         # The SDK takes about 10 GB; the runner's preinstalled toolchains
         # that this job does not use make room for it.

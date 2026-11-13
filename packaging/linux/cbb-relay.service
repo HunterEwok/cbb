@@ -24,6 +24,9 @@ StateDirectoryMode=0700
 UMask=0077
 Restart=on-failure
 RestartSec=2s
+# Each connection through its tunnel costs three open files: room for the
+# default limits (docs/relay-budget.md), which it takes at start.
+LimitNOFILE=65536
 
 # It needs no privileges: it listens on port 8764.
 NoNewPrivileges=yes

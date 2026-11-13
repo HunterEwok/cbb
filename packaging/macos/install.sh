@@ -185,12 +185,16 @@ fi
 install -d -o "$name" -g "$name" -m 0750 "/Library/Application Support/cbb"
 install -d -o "$name" -g "$name" -m 0700 "/Library/Application Support/cbb/state"
 install -d -o "$name" -g "$name" -m 0750 /Library/Logs/cbb
-# The service's own copy: a binary the user or another program can replace
-# would get the service's keys at its next start.
+# The service's own copy, root's, in a folder of root's, so that only root
+# replaces the program that starts as the service.
 service="/Library/Application Support/cbb/bin/cbb"
 install -d -o root -g wheel -m 0755 "/Library/Application Support/cbb/bin"
 install -o root -g wheel -m 0755 "$run" "$service.new"
 mv -f "$service.new" "$service"
+# The rights that confirm an admin action of the user at the screen
+# (docs/design.md, "Confirming admin actions"): the service, as _cbb, cannot
+# write them, and without them the system's default rule would decide.
+"$service" confirm-setup "$name" || note install.sh "the rights that confirm admin actions were not written; the Mac app asks for the administrator's password instead"
 # Its helper beside it, root's as well, as cbb requires of its helper.
 if [ -f "${run%/*}/cbb-helper" ]; then
 	install -o root -g wheel -m 0755 "${run%/*}/cbb-helper" "${service%/*}/cbb-helper.new"

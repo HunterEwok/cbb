@@ -196,7 +196,7 @@
     {"name": "invite_another", "value": "Invitar otro dispositivo"},
     {"name": "invite_copy", "value": "Copiar el texto"},
     {"name": "invite_done", "value": "%s se unió al grupo; aparece en la lista cuando se conecta."},
-    {"name": "invite_lead", "value": "En un teléfono nuevo, abre CBB, toca Unirse con una invitación y escanea el código. En un ordenador, ejecuta cbb pair -invite con su texto. Sirve una vez, hasta las %s."},
+    {"name": "invite_lead", "value": "En un teléfono nuevo, abre CBB, toca Unirse con una invitación y escanea el código. En un ordenador, ejecuta cbb pair -invite - y pega su texto. Sirve una vez, hasta las %s."},
     {"name": "invite_not_this", "value": "Este no"},
     {"name": "invite_opening", "value": "Abriendo la invitación en el hub del grupo…"},
     {"name": "invite_share", "value": "Compartir"},

@@ -1087,7 +1087,7 @@ func TestAloneHubCredential(t *testing.T) {
 	// The period gives the hub a key of its own for its clients, which it
 	// serves with CBB_TEST_HUB_KEY_AHEAD later, registering again with it.
 	waitUpTo(t, 30*time.Second, "the Rust hub serves with its key for the period", func() bool {
-		return rust.logged("the hub serves with its key for the new period from now on")
+		return rust.logged("the hub serves with its key and settings for the new period from now on")
 	})
 	waitFor(t, "the Rust hub registered with the forwarder", func() bool {
 		a := rust.status(t).Away

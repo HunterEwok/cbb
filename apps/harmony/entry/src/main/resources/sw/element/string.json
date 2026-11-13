@@ -196,7 +196,7 @@
     {"name": "invite_another", "value": "Alika kifaa kingine"},
     {"name": "invite_copy", "value": "Nakili maandishi"},
     {"name": "invite_done", "value": "%s amejiunga na kikundi; kitaonekana kwenye orodha kikiunganishwa."},
-    {"name": "invite_lead", "value": "Kwenye simu mpya, fungua CBB, gusa Jiunge kwa mwaliko na uchanganue msimbo. Kwenye kompyuta, endesha cbb pair -invite ukitumia maandishi yake. Unafanya kazi mara moja, hadi %s."},
+    {"name": "invite_lead", "value": "Kwenye simu mpya, fungua CBB, gusa Jiunge kwa mwaliko na uchanganue msimbo. Kwenye kompyuta, endesha cbb pair -invite - na ubandike maandishi yake. Unafanya kazi mara moja, hadi %s."},
     {"name": "invite_not_this", "value": "Si hiki"},
     {"name": "invite_opening", "value": "Inafungua mwaliko kwenye kitovu cha kikundi…"},
     {"name": "invite_share", "value": "Shiriki"},

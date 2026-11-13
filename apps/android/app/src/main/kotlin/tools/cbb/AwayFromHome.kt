@@ -58,13 +58,15 @@ class AwayState(val key: ByteArray, val psk: ByteArray = newPSK(), val hubs: Lis
                 writeUTF(o.vless ?: "")
                 writeByte(if (o.nextKey != null) 1 else 0)
                 o.nextKey?.let { write(it) }
+                writeUTF(o.nextObfuscation ?: "")
+                writeUTF(o.nextVless ?: "")
             }
         }
         return out.toByteArray()
     }
 
     companion object {
-        private const val VERSION = 5
+        private const val VERSION = 6
 
         /** The most hubs whose offers the phone keeps, as a byte counts them. */
         const val MAX_HUBS = 255
@@ -87,8 +89,11 @@ class AwayState(val key: ByteArray, val psk: ByteArray = newPSK(), val hubs: Lis
                     val obfuscation = readUTF()
                     val vless = readUTF()
                     val next = if (readBoolean()) ByteArray(32).also { readFully(it) } else null
+                    val nextObfuscation = readUTF()
+                    val nextVless = readUTF()
                     val o = Member.TunnelOffer(
                         hubKey, psk, endpoints, obfuscation.takeIf { it.isNotEmpty() }, vless.takeIf { it.isNotEmpty() }, nextKey = next,
+                        nextObfuscation = nextObfuscation.takeIf { it.isNotEmpty() }, nextVless = nextVless.takeIf { it.isNotEmpty() },
                     )
                     return if (o.isValid) hub to o else null
                 }

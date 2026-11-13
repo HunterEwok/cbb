@@ -5,8 +5,11 @@ package main
 
 import (
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"golang.org/x/sys/windows"
 )
 
 // Every argument is a literal: a name with quotes and $ runs nothing.
@@ -45,5 +48,17 @@ func TestEncodePS(t *testing.T) {
 func TestPSQuote(t *testing.T) {
 	if got, want := psQuote("a\u2018b\u2019c\u201ad\u201be'f"), "'a\u2018\u2018b\u2019\u2019c\u201a\u201ad\u201b\u201be''f'"; got != want {
 		t.Errorf("psQuote = %q, want %q", got, want)
+	}
+}
+
+// The elevated PowerShell is the system's own, by its full path.
+func TestPowershellFromTheSystem(t *testing.T) {
+	p, err := powershellPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sys, _ := windows.GetSystemDirectory()
+	if !filepath.IsAbs(p) || !strings.EqualFold(p, filepath.Join(sys, "WindowsPowerShell", "v1.0", "powershell.exe")) {
+		t.Fatalf("%s", p)
 	}
 }

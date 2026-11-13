@@ -196,7 +196,7 @@
     {"name": "invite_another", "value": "دعوة جهاز آخر"},
     {"name": "invite_copy", "value": "نسخ النص"},
     {"name": "invite_done", "value": "انضم %s إلى المجموعة؛ يظهر في القائمة حين يتصل."},
-    {"name": "invite_lead", "value": "على هاتف جديد، افتح CBB واضغط «الانضمام بدعوة» وامسح الرمز. على حاسوب، شغّل cbb pair -invite مع نصها. تعمل مرة واحدة، حتى %s."},
+    {"name": "invite_lead", "value": "على هاتف جديد، افتح CBB واضغط «الانضمام بدعوة» وامسح الرمز. على حاسوب، شغّل cbb pair -invite - والصق نصها. تعمل مرة واحدة، حتى %s."},
     {"name": "invite_not_this", "value": "ليس هذا"},
     {"name": "invite_opening", "value": "جارٍ فتح الدعوة على محور المجموعة…"},
     {"name": "invite_share", "value": "مشاركة"},

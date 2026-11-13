@@ -196,7 +196,7 @@
     {"name": "invite_another", "value": "הזמנת מכשיר נוסף"},
     {"name": "invite_copy", "value": "העתקת הטקסט"},
     {"name": "invite_done", "value": "%s הצטרף לקבוצה; הוא יופיע ברשימה כשיתחבר."},
-    {"name": "invite_lead", "value": "בטלפון חדש, פתחו את CBB, הקישו על הצטרפות בהזמנה וסרקו את הקוד. במחשב, הריצו cbb pair -invite עם הטקסט שלה. היא פועלת פעם אחת, עד %s."},
+    {"name": "invite_lead", "value": "בטלפון חדש, פתחו את CBB, הקישו על הצטרפות בהזמנה וסרקו את הקוד. במחשב, הריצו cbb pair -invite - והדביקו את הטקסט שלה. היא פועלת פעם אחת, עד %s."},
     {"name": "invite_not_this", "value": "לא זה"},
     {"name": "invite_opening", "value": "פותח את ההזמנה ברכזת של הקבוצה…"},
     {"name": "invite_share", "value": "שיתוף"},

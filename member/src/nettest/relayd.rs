@@ -82,6 +82,7 @@ fn config(open: bool, groups: Vec<String>) -> server::Config {
         limits: Limits::default(),
         log: Arc::new(|_| {}),
         verbose: true,
+        refused: None,
     }
 }
 
@@ -335,6 +336,8 @@ fn tunneled(g: &Group, i: usize, s: &Relay, pins: &[certs::KeyHash]) -> Tunneled
         next: Vec::new(),
         obfuscation: None,
         vless: None,
+        next_obfuscation: None,
+        next_vless: None,
     };
     let own: Ipv6Addr = w.addr.parse().unwrap();
     let link = Link::start_at(&State::with_key(&key).unwrap(), &hub, own, RELAY_ADDR, Arc::new(|_| {})).unwrap();

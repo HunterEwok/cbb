@@ -9,7 +9,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.view.Window
 import android.widget.Toast
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
@@ -38,6 +40,7 @@ open class SendActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        shield(window)
         val model = (application as CBBApp).model
         if (!model.group.hasGroup) {
             startActivity(Intent(this, MainActivity::class.java))
@@ -101,9 +104,10 @@ open class SendActivity : Activity() {
                 send(text)
             }
         }
-        b.setNegativeButton(android.R.string.cancel, null)
+        val d = b.setNegativeButton(android.R.string.cancel, null)
             .setOnDismissListener { if (!answered) finish() }
             .show()
+        d.window?.let { shield(it) }
     }
 
     /** Asks whether to send the images or files another app handed over. */
@@ -125,9 +129,10 @@ open class SendActivity : Activity() {
                 sendStreams(streams)
             }
         }
-        b.setNegativeButton(android.R.string.cancel, null)
+        val d = b.setNegativeButton(android.R.string.cancel, null)
             .setOnDismissListener { if (!answered) finish() }
             .show()
+        d.window?.let { shield(it) }
     }
 
     private fun sendStreams(streams: List<Uri>) {
@@ -137,6 +142,16 @@ open class SendActivity : Activity() {
             Toast.makeText(this@SendActivity, getString(note.text), Toast.LENGTH_LONG).show()
             finish()
         }
+    }
+
+    /**
+     * Keeps another app from drawing over the questions or tapping through
+     * them: a window over this one hides (Android 12 and later), and a touch
+     * that passed through another app's window does not count.
+     */
+    private fun shield(w: Window) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) w.setHideOverlayWindows(true)
+        w.decorView.filterTouchesWhenObscured = true
     }
 
     /**

@@ -197,7 +197,7 @@
     {"name": "invite_another", "value": "Invite another device"},
     {"name": "invite_copy", "value": "Copy the text"},
     {"name": "invite_done", "value": "%s joined the group; it appears in the list once it connects."},
-    {"name": "invite_lead", "value": "On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. It works once, until %s."},
+    {"name": "invite_lead", "value": "On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite - and paste its text. It works once, until %s."},
     {"name": "invite_not_this", "value": "Not this one"},
     {"name": "invite_opening", "value": "Opening the invitation on the group's hub…"},
     {"name": "invite_share", "value": "Share"},

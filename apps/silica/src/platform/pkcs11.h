@@ -77,6 +77,7 @@ const CK_RV CKR_GENERAL_ERROR = 0x5;
 const CK_RV CKR_CRYPTOKI_ALREADY_INITIALIZED = 0x191;
 const CK_RV CKR_USER_ALREADY_LOGGED_IN = 0x100;
 const CK_RV CKR_PIN_INCORRECT = 0xA0;
+const CK_RV CKR_PIN_INVALID = 0xA1;
 const CK_RV CKR_PIN_LEN_RANGE = 0xA2;
 const CK_RV CKR_PIN_LOCKED = 0xA4;
 // A read/write session with the user logged in.
