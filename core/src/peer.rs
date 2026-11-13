@@ -22,13 +22,21 @@ pub enum Standing {
     /// peer may connect only to give and take the recovery key's records,
     /// the fork's proof: no copies, no other records.
     Halted,
+    /// The current root has two histories, and a held record of that root
+    /// admits this key on one of its lines (`State::proof_to`): it is no
+    /// device and is listed nowhere. The connection gives it the proof
+    /// (`State::root_pair`) and takes from it only what makes or completes
+    /// a pair of the current root (`RecordSet::insert_proof`), then ends.
+    ForkProof,
 }
 
 /// Where the peer with key `peer` stands in the records `state`, for the
 /// device whose own key hash is `own`: removed keys, frozen devices, an ID
 /// that two keys claim or a removed device's ID, and the device itself are
 /// refused; a key no record names is unknown. While the group is halted
-/// every other key is `Halted`, whatever the records say of it.
+/// every other key is `Halted`, whatever the records say of it. Two
+/// histories of the current root stop the group (`State::stopped`) but not
+/// sync: the members go on giving each other the pair and their records.
 pub fn standing(state: &State, own: &KeyHash, peer: &[u8; 65]) -> Standing {
     let key = Key::new(Alg::Es256, peer);
     let h = key.hash();
@@ -47,6 +55,9 @@ pub fn standing(state: &State, own: &KeyHash, peer: &[u8; 65]) -> Standing {
             return Standing::Refused("frozen");
         }
         return Standing::Member(DeviceId(d.id.0));
+    }
+    if state.proof_to.binary_search(&rh).is_ok() {
+        return Standing::ForkProof;
     }
     if state.id_taken(&crate::records::DeviceId(key.device_id().0)) {
         return Standing::Refused("its device ID is not its own in the records");

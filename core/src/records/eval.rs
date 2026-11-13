@@ -270,6 +270,15 @@ pub struct State {
     /// The lowest seq at which the set holds two recovery records, and
     /// the two (the smaller ID first): the proof of a fork.
     pub fork: Option<(u64, RecordId, RecordId)>,
+    /// While the current root has two histories: the lowest seq at which
+    /// the set holds two of its records, and the two smallest IDs there
+    /// (the smaller first). The proof a member hands on (`proof_to`).
+    pub root_pair: Option<(u64, RecordId, RecordId)>,
+    /// While the current root has two histories: the keys a held record of
+    /// that root admits, on either line, that no held root removal names
+    /// and that are no device of the state, sorted. Each gets the proof
+    /// (`root_pair`) and nothing else (`peer::Standing::ForkProof`).
+    pub proof_to: Vec<KeyHash>,
 }
 
 impl State {
@@ -335,13 +344,25 @@ impl State {
         self.update_needed || self.conflicts.iter().any(|c| c.kind == ConflictKind::Fork)
     }
 
+    /// Whether the group is stopped for every action: halted (`halted`),
+    /// or the current root has two histories (a root fork, which only a
+    /// change of root by the recovery key ends). Nothing is sealed,
+    /// opened, sealed again, admitted, taken from a waiting joiner or
+    /// commanded, and no checkpoint is written, while it holds. Sync goes
+    /// on in a root fork: only `halted` stops it (`peer::standing`,
+    /// `RecordSet::for_peer`), so that the pair and the writer's list
+    /// reach every member.
+    pub fn stopped(&self) -> bool {
+        self.halted() || self.roots.last().is_some_and(|r| self.two_histories(r))
+    }
+
     /// Reports whether a command signed by key k may be carried out: the
     /// current root's, unless it has two histories; an admin's that is
     /// neither removed nor frozen, while the group is not stopped and the
     /// key has one history. Nothing else signs commands, and no key does
-    /// while the group is halted.
+    /// while the group is stopped (`stopped`).
     pub fn may_command(&self, k: &KeyHash) -> bool {
-        if self.halted() || self.two_histories(k) || self.revoked.contains(k) {
+        if self.stopped() || self.two_histories(k) || self.revoked.contains(k) {
             return false;
         }
         if self.is_root(k) {
@@ -1106,6 +1127,7 @@ pub(crate) fn evaluate_checked(
     } else {
         checked
     };
+    let root_recs: Vec<&Record> = checked.iter().filter(|c| c.role == Role::Root && !c.held).map(|c| c.r).collect();
     let mut cuts = chain.cuts();
     let proven = by.proven;
     // The recovery key's records off the chain: a twin, past its tip, or of
@@ -1220,7 +1242,45 @@ pub(crate) fn evaluate_checked(
     if chain.unreadable {
         state.stop = Stop::Full;
     }
+    root_proof(&mut state, &root_recs);
     state
+}
+
+/// While the current root of state has two histories, its lowest pair
+/// among the root records held and the keys that get it (`State::root_pair`,
+/// `State::proof_to`): what the held records give, nothing remembered.
+fn root_proof(state: &mut State, root_recs: &[&Record]) {
+    let Some(cur) = state.roots.last().copied() else { return };
+    if state.halted() || !state.two_histories(&cur) {
+        return;
+    }
+    let mut at: BTreeMap<u64, BTreeSet<RecordId>> = BTreeMap::new();
+    for r in root_recs.iter().filter(|r| r.body().signer == cur) {
+        at.entry(r.body().seq).or_default().insert(r.id());
+    }
+    state.root_pair = at.iter().find(|(_, ids)| ids.len() > 1).and_then(|(seq, ids)| {
+        let mut two = ids.iter();
+        Some((*seq, *two.next()?, *two.next()?))
+    });
+    let removed: BTreeSet<KeyHash> = root_recs
+        .iter()
+        .filter(|r| state.roots.contains(&r.body().signer))
+        .filter_map(|r| match &r.body().kind {
+            Kind::Revoke(rm) => Some(rm.keys.iter().copied()),
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    let admitted: BTreeSet<KeyHash> = root_recs
+        .iter()
+        .filter(|r| r.body().signer == cur)
+        .filter_map(|r| match &r.body().kind {
+            Kind::Device(d) => Some(d.key.hash()),
+            _ => None,
+        })
+        .filter(|k| !removed.contains(k) && !state.revoked.contains(k) && state.device_by_key(k).is_none())
+        .collect();
+    state.proof_to = admitted.into_iter().collect();
 }
 
 /// Reports whether checkpoint heads (with anchors, its heads' and keep's

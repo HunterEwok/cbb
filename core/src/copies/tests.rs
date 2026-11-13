@@ -320,6 +320,17 @@ fn a_device_that_slept_through_a_key_change_gets_the_copy_sealed_again() {
     assert_eq!(reseal(&w.phone, &mut kept, &halted, &s, &ask("laptop", 3)).err(), Some(RULE_RESEAL_HALTED));
     assert!(readers(&halted, &s, &content, &w.id("phone"), &[], None).is_empty());
     assert_eq!(open(&c, &w.id("laptop"), &w.stores["laptop"], &halted).unwrap(), Opened::Halted);
+    // Two histories of the current root stop it alike (`State::stopped`).
+    let mut forked = state.clone();
+    let root = *forked.roots.last().unwrap();
+    forked.conflicts.push(crate::records::eval::Conflict {
+        kind: crate::records::eval::ConflictKind::TwoHistories,
+        records: Vec::new(),
+        signers: vec![root],
+    });
+    assert_eq!(reseal(&w.phone, &mut kept, &forked, &s, &ask("laptop", 3)).err(), Some(RULE_RESEAL_HALTED));
+    assert!(readers(&forked, &s, &content, &w.id("phone"), &[], None).is_empty());
+    assert_eq!(open(&c, &w.id("laptop"), &w.stores["laptop"], &forked).unwrap(), Opened::Halted);
     let again = reseal(&w.phone, &mut kept, &state, &s, &ask("laptop", 3)).unwrap();
     let v = cbor::decode(&again).unwrap();
     let c2 = check(&v, &state).unwrap();

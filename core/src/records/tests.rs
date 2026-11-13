@@ -4048,3 +4048,107 @@ fn a_checkpoint_with_a_lower_head_is_followed_as_written() {
     let held: Vec<Record> = m.ids().map(|id| m.get(id).unwrap().clone()).collect();
     assert_eq!(st, state_with(&g.root.key, &held, &g.lists));
 }
+
+/// The peer's key as its 65 bytes.
+fn point_of(x: &K) -> [u8; 65] {
+    x.key.public.clone().try_into().unwrap()
+}
+
+/// Two histories of the current root: a key one line admits, which the
+/// state lists nowhere, gets the proof (the lowest pair) and nothing else,
+/// the same after a restart; from it the member takes only what makes or
+/// completes a pair of the current root.
+#[test]
+fn a_key_one_line_admits_gets_the_pair_alone() {
+    let mut g = G::new();
+    g.device(&k("root"), &k("m0"), "m0", |_| {});
+    let low = g.root_rec(Kind::Copies { incoming_ms: 5_000, seen: vec![] });
+    let low2 = root_twin(&g, &low, Kind::Copies { incoming_ms: 5_001, seen: vec![] });
+    let a = g.device(&k("root"), &k("m5"), "m5", |_| {});
+    let a2 = root_twin(&g, &a, Kind::device(Device::new(k("m6").key.clone(), "m6", ROLE_MEMBER)));
+    let mut m0 = set_with(&g.root.key, &g.recs, &g.lists);
+    m0.insert(a2.clone()).unwrap();
+    let mut pair = vec![a.id(), a2.id()];
+    pair.sort();
+    let me = k("m0").hash;
+    for (when, set) in [
+        ("live", m0.clone()),
+        ("restarted", {
+            let held: Vec<Record> = m0.in_dependency_order().into_iter().cloned().collect();
+            RecordSet::restore(g.root.key.clone(), rk(), &held, &g.lists)
+        }),
+    ] {
+        let st = set.state();
+        assert!(st.stopped() && !st.halted(), "{when}");
+        assert!(st.device_by_key(&k("m5").hash).is_none() && !st.revoked.contains(&k("m5").hash), "{when}");
+        let mut keys = vec![k("m5").hash, k("m6").hash];
+        keys.sort();
+        assert_eq!(st.proof_to, keys, "{when}");
+        assert_eq!(st.root_pair, Some((a.body().seq, pair[0], pair[1])), "{when}");
+        assert_eq!(crate::peer::standing(&st, &me, &point_of(&k("m5"))), crate::peer::Standing::ForkProof, "{when}");
+        let given: Vec<RecordId> = set.for_peer(&st, &k("m5").hash).iter().map(|r| r.id()).collect();
+        assert_eq!(given, pair, "{when}: the pair and nothing else");
+        assert_eq!(crate::peer::standing(&st, &me, &point_of(&k("stranger"))), crate::peer::Standing::Unknown);
+        assert!(set.for_peer(&st, &k("stranger").hash).is_empty());
+    }
+    // m5, which holds one half, takes the other from m0 and halts alike.
+    let upto: Vec<Record> = g.recs.clone();
+    let mut m5 = set_with(&g.root.key, &upto, &g.lists);
+    let st0 = m0.state();
+    m5.insert_all(m0.for_peer(&st0, &k("m5").hash).into_iter().cloned());
+    assert_eq!(m5.state().root_pair, st0.root_pair);
+    // From such a peer: a pair at a lower seq moves the fork seq down;
+    // anything else is not read.
+    let other = g.root_rec(Kind::Copies { incoming_ms: 6_000, seen: vec![] });
+    assert_eq!(m0.insert_proof(other.clone()), Ok(Added::Halted));
+    assert!(!m0.contains(&other.id()));
+    let theirs = g.device(&k("a admin"), &k("m9"), "m9", |_| {});
+    assert_eq!(m0.insert_proof(theirs), Ok(Added::Halted));
+    assert_eq!(m0.insert_proof(low2.clone()), Ok(Added::Stored));
+    let st = m0.state();
+    let mut low_pair = [low.id(), low2.id()];
+    low_pair.sort();
+    assert_eq!(st.root_pair, Some((low.body().seq, low_pair[0], low_pair[1])));
+}
+
+/// In a root fork a removed key gets no record at or above the fork seq,
+/// the removal that is half of the pair included; a removal below it
+/// still reaches it.
+#[test]
+fn a_removed_key_gets_no_part_of_the_pair() {
+    let mut g = G::new();
+    g.device(&k("root"), &k("m0"), "m0", |_| {});
+    let a = g.device(&k("root"), &k("m5"), "m5", |_| {});
+    let rm = root_twin(&g, &a, Kind::Revoke(removal(&[k("m5").hash], g.seen())));
+    let mut m0 = set_with(&g.root.key, &g.recs, &g.lists);
+    m0.insert(rm.clone()).unwrap();
+    let st = m0.state();
+    assert!(st.stopped() && st.revoked.contains(&k("m5").hash));
+    assert!(st.proof_to.is_empty());
+    assert_ne!(crate::peer::standing(&st, &k("m0").hash, &point_of(&k("m5"))), crate::peer::Standing::ForkProof);
+    assert!(m0.for_peer(&st, &k("m5").hash).is_empty());
+}
+
+/// A key an admin admits while the root has two histories: the admin's
+/// record counts as before (its power comes from a root record below the
+/// fork, and an admin's seq says nothing of the root's), so the key is a
+/// device; it gets the records, and the stop gates every action.
+#[test]
+fn a_key_an_admin_admits_in_a_root_fork_is_a_device_that_does_nothing() {
+    let mut g = G::new();
+    g.device(&k("root"), &k("m0"), "m0", |_| {});
+    g.admin(&k("pa"), &k("a"), POWER_ADMIT);
+    let a = g.device(&k("root"), &k("m5"), "m5", |_| {});
+    let a2 = root_twin(&g, &a, Kind::Copies { incoming_ms: 5_000, seen: vec![] });
+    let m8 = g.device(&k("a"), &k("m8"), "m8", |_| {});
+    let mut m0 = set_with(&g.root.key, &g.recs, &g.lists);
+    m0.insert(a2).unwrap();
+    let st = m0.state();
+    assert!(st.stopped() && st.counting.contains(&m8.id()));
+    let id = st.device_by_key(&k("m8").hash).unwrap().id;
+    assert_eq!(
+        crate::peer::standing(&st, &k("m0").hash, &point_of(&k("m8"))),
+        crate::peer::Standing::Member(crate::format::DeviceId(id.0))
+    );
+    assert!(!st.proof_to.contains(&k("m8").hash));
+}

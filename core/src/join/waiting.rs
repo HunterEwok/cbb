@@ -120,9 +120,9 @@ pub fn holder_may_send(state: &State, to: &DeviceId) -> bool {
 
 /// Whether an admin takes `waiting` from device `from`: its record lets it
 /// be a hub (`hub` in its rights), and it is not frozen. Nothing is taken
-/// while the group is halted (`State::halted`).
+/// while the group is stopped (`State::stopped`).
 pub fn admin_may_take(state: &State, from: &DeviceId) -> bool {
-    !state.halted() && state.device(from).is_some_and(|d| !d.frozen && d.rights & RIGHT_HUB != 0)
+    !state.stopped() && state.device(from).is_some_and(|d| !d.frozen && d.rights & RIGHT_HUB != 0)
 }
 
 /// Whether the holder takes `dismiss` from device `from`: only from a

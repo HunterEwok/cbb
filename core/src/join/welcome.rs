@@ -94,9 +94,10 @@ pub enum Refusal {
     NotAdmitter,
     /// The Welcome is damaged.
     Damaged,
-    /// The group is halted (`State::halted`): two recovery records at one
-    /// seq, or one this version cannot read. An admitter in such a group
-    /// does not admit, and a joiner does not join it.
+    /// The group is stopped (`State::stopped`): two recovery records at
+    /// one seq, one this version cannot read, or two histories of the
+    /// current root. An admitter in such a group does not admit, and a
+    /// joiner does not join it.
     Stopped,
 }
 
@@ -311,7 +312,7 @@ impl Welcome {
         }
         set.insert_all(self.records.iter().cloned());
         let state = set.state();
-        if state.halted() {
+        if state.stopped() {
             return Err(Refusal::Stopped);
         }
         let own_key = Key::es256(own.to_vec());

@@ -1406,3 +1406,65 @@ fn a_welcome_carries_the_chain_of_the_joiners_record() {
     assert!(all.check(&group, &point(&k("phone")), &point(&slate), Joining::Ordinary).is_ok());
     assert_eq!(Welcome::build_within(&set, &st, &admitter, &slate.hash, 1, full - 1), Err(welcome::TooLarge));
 }
+
+/// Every gate on admitting asks one predicate (`State::stopped`): two
+/// histories of the current root stop it as a recovery record this version
+/// cannot read does. Sync goes on in the root fork only, so that the pair
+/// reaches every member.
+#[test]
+fn every_gate_asks_whether_the_group_is_stopped() {
+    use super::waiting;
+    let mut g = G::new();
+    let hub = k("hub");
+    let mut d = Device::new(hub.key.clone(), "hub", ROLE_MEMBER);
+    d.rights = RIGHT_READ | RIGHT_SEND | RIGHT_HUB;
+    d.caps = CAP_HUB;
+    let last = g.rec_root(Kind::device(d));
+    let open = g.state();
+    let hub_id = open.device_by_key(&hub.hash).unwrap().id;
+    let root = k("root");
+    assert!(!open.stopped());
+    assert!(decide::may_admit(&open, &k("laptop").hash, Signer::Admin, &root.hash));
+    assert!(waiting::admin_may_take(&open, &hub_id));
+    // A second record of the root at the seq of its newest one.
+    let b = last.body();
+    let twin = Body {
+        group: g.gid,
+        signer: b.signer,
+        seq: b.seq,
+        prev: b.prev,
+        time_ms: 0,
+        kind: Kind::device(Device::new(k("other").key.clone(), "other", ROLE_MEMBER)),
+        held: false,
+    };
+    let twin = Record::sign(twin, &root).unwrap();
+    let mut set = g.set();
+    set.insert(twin.clone()).unwrap();
+    let forked = set.state();
+    assert!(forked.stopped() && !forked.halted());
+    let mut halted = open.clone();
+    halted.update_needed = true;
+    for (name, st) in [("root fork", &forked), ("halted", &halted)] {
+        assert!(st.stopped(), "{name}");
+        assert!(!decide::may_admit(st, &k("laptop").hash, Signer::Admin, &root.hash), "{name}");
+        assert!(!decide::may_admit(st, &k("phone").hash, Signer::Root, &root.hash), "{name}");
+        assert!(!waiting::admin_may_take(st, &hub_id), "{name}");
+        assert!(!st.may_command(&k("laptop admin").hash) && !st.may_command(&root.hash), "{name}");
+    }
+    assert!(set.write_checkpoint(&forked, &root, 0).is_err());
+    let laptop_id = open.device_by_key(&k("laptop").hash).unwrap().id;
+    assert_eq!(
+        crate::peer::standing(&forked, &k("phone").hash, &point(&k("laptop"))),
+        crate::peer::Standing::Member(laptop_id)
+    );
+    assert_eq!(crate::peer::standing(&halted, &k("phone").hash, &point(&k("laptop"))), crate::peer::Standing::Halted);
+    // A joiner handed the pair does not join.
+    let tv = k("tv");
+    let mut w = admit(&mut g, true, &tv, "tv");
+    w.records.push(twin);
+    let group = format::DeviceId(g.gid.0);
+    assert_eq!(
+        w.check(&group, &point(&k("laptop")), &point(&tv), Joining::Ordinary).err(),
+        Some(welcome::Refusal::Stopped)
+    );
+}
