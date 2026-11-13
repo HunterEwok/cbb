@@ -359,4 +359,18 @@ mod tests {
         assert!(RECENT.lock().unwrap().iter().any(|l| l == "a line"));
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    /// The recent lines stay within their bounds however many come: a
+    /// service up for months keeps at most LINES lines of MAX_LINE bytes.
+    #[test]
+    fn the_recent_lines_stay_bounded() {
+        let long = "\u{2}ж\"".repeat(cbb_core::bug::MAX_LINE);
+        for i in 0..LINES * 4 {
+            remember(&format!("{i} {long}"));
+        }
+        let r = RECENT.lock().unwrap();
+        assert!(r.len() <= LINES, "{} lines", r.len());
+        assert!(r.iter().all(|l| l.len() <= cbb_core::bug::MAX_LINE));
+        assert!(r.iter().map(String::len).sum::<usize>() <= LINES * cbb_core::bug::MAX_LINE);
+    }
 }
