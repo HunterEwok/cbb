@@ -1127,20 +1127,24 @@ impl RecordSet {
         (first, waiting)
     }
 
-    /// Whether a root's checkpoint that waits to be whole names id (a
-    /// head, a kept record or the record below it): it is taken though a
-    /// counting checkpoint settled it, and waits with it.
+    /// Whether the current root's checkpoint that waits to be whole keeps
+    /// id: it is taken though a counting checkpoint settled it, and waits
+    /// with it.
     fn waits_for(&self, id: &RecordId) -> bool {
         self.waiting_names().contains(id)
     }
 
-    /// What the checkpoints that wait name (`waits_for`).
+    /// What the current root's checkpoint that waits keeps (`waits_for`):
+    /// not an admin's, not a cut root's.
     fn waiting_names(&self) -> BTreeSet<RecordId> {
+        let current = self.cuts.values().next().map_or(self.root.hash(), |c| c.current);
         let mut out = BTreeSet::new();
         for e in self.first_and_waiting().2.iter().filter_map(|cp| self.records.get(cp)) {
             let b = e.record.body();
-            if let Kind::Checkpoint { heads, keep } = &b.kind {
-                out.extend(heads.iter().map(|h| h.id).chain(keep.iter().copied()).chain(b.prev));
+            if let Kind::Checkpoint { keep, .. } = &b.kind
+                && b.signer == current
+            {
+                out.extend(keep.iter().copied());
             }
         }
         out
@@ -1837,6 +1841,11 @@ impl RecordSet {
         };
         if body.encode().len() > super::MAX_CHECKPOINT_BODY {
             return Err(Error::msg("the checkpoint would be larger than a checkpoint may be"));
+        }
+        if let Kind::Checkpoint { heads, keep } = &body.kind
+            && eval::revives(heads, keep, self.records.values().map(|e| (&e.record, self.role_of(e))))
+        {
+            return Err(Error::msg("the checkpoint would keep a removed key's admission"));
         }
         let cp = Record::sign(body, root)?;
         // What it names must fit the rooms by itself, or it would count

@@ -3395,6 +3395,78 @@ fn an_unseen_admission_after_a_prune_is_a_notice() {
     assert!(has_key(&s, &k("d")) && n.notices(&s).is_empty());
 }
 
+/// An old admission a newer checkpoint of the root keeps again, while it
+/// prunes the removal: the key counts again, and a member that dropped the
+/// removal tells it. While a removal naming the key is kept, the key stays
+/// out whatever the keep says.
+#[test]
+fn an_admission_kept_again_counts_only_past_every_removal() {
+    for keep_removal in [false, true] {
+        let mut g = G::new();
+        let root = k("root");
+        let laptop = g.device(&root, &k("laptop"), "laptop", |_| {});
+        let x = g.device(&root, &k("d"), "d", |_| {});
+        let rm = g.root_rec(Kind::Revoke(removal(&[k("d").hash], Vec::new())));
+        g.device(&root, &k("tv"), "tv", |_| {});
+        let line = g.recs.clone();
+        let older = root_checkpoint(&mut g, &line);
+        let Kind::Checkpoint { keep, .. } = &older.body().kind else { unreachable!() };
+        assert!(!keep.contains(&x.id()) && !keep.contains(&rm.id()), "the writer prunes both");
+        let phone = g.device(&root, &k("phone"), "phone", |_| {});
+        let (seq, id) = g.heads[&root.hash];
+        let mut keep: Vec<RecordId> = keep.iter().copied().chain([x.id(), older.id()]).collect();
+        if keep_removal {
+            keep.push(rm.id());
+        }
+        keep.sort();
+        let newer = g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep });
+        let mut m = set_with(&g.root.key, &line, &g.lists);
+        m.insert(older.clone()).unwrap();
+        let st = m.state();
+        m.compact(&st);
+        assert!(!m.contains(&x.id()) && !has_key(&m.state(), &k("d")));
+        sync_all(&mut m, &[phone.clone(), newer.clone()], &g.lists);
+        sync_all(&mut m, &g.recs, &g.lists);
+        let s = m.state();
+        assert_eq!(s.checkpoint, Some(newer.id()), "removal kept {keep_removal}");
+        assert_eq!(has_key(&s, &k("d")), !keep_removal, "removal kept {keep_removal}");
+        let told = m.notices(&s);
+        assert_eq!(told.is_empty(), keep_removal, "{told:?}");
+        let at_once = set_with(&g.root.key, &g.recs, &g.lists);
+        assert_eq!(m.digest(), at_once.digest());
+        assert_eq!(s, at_once.state());
+        let _ = laptop;
+    }
+}
+
+/// The writer's check: a checkpoint that keeps an admission while it
+/// prunes the root's removal of that key is one the writer refuses; the
+/// one the writer writes passes it.
+#[test]
+fn keeping_an_admission_while_pruning_its_removal_is_refused() {
+    let mut g = G::new();
+    let root = k("root");
+    g.device(&root, &k("laptop"), "laptop", |_| {});
+    let x = g.device(&root, &k("d"), "d", |_| {});
+    let rm = g.root_rec(Kind::Revoke(removal(&[k("d").hash], Vec::new())));
+    g.device(&root, &k("tv"), "tv", |_| {});
+    let set = set_with(&g.root.key, &g.recs, &g.lists);
+    let recs: Vec<(&Record, crate::records::eval::Role)> =
+        set.ids().map(|id| (set.get(id).unwrap(), crate::records::eval::Role::Root)).collect();
+    let held = || recs.iter().copied();
+    let cp = set.write_checkpoint(&set.state(), &root, 0).unwrap();
+    let Kind::Checkpoint { heads, keep } = &cp.body().kind else { unreachable!() };
+    assert!(!crate::records::eval::revives(heads, keep, held()));
+    let mut with_x = keep.clone();
+    with_x.push(x.id());
+    with_x.sort();
+    assert!(crate::records::eval::revives(heads, &with_x, held()));
+    let mut both = with_x.clone();
+    both.push(rm.id());
+    both.sort();
+    assert!(!crate::records::eval::revives(heads, &both, held()), "the removal kept too");
+}
+
 fn has_key(s: &State, member: &K) -> bool {
     s.device_by_key(&member.hash).is_some()
 }

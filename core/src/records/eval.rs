@@ -1276,6 +1276,27 @@ pub(crate) fn checkpoint_ok<'r>(cp: &'r Record, get: impl Fn(&RecordId) -> Optio
     true
 }
 
+/// Whether a checkpoint with heads and keep, among the records held, keeps
+/// an admission of a key while it prunes a root's removal naming that key:
+/// it would bring a removed key back through an old record, which the
+/// core's writer never writes.
+pub(crate) fn revives<'r>(heads: &[Head], keep: &[RecordId], held: impl Iterator<Item = (&'r Record, Role)> + Clone) -> bool {
+    let anchors = anchors_of(heads, keep);
+    let removed: BTreeSet<KeyHash> = held
+        .clone()
+        .filter(|(r, role)| *role == Role::Root && pruned_by(r, *role, heads, &anchors))
+        .filter_map(|(r, _)| match &r.body().kind {
+            Kind::Revoke(rm) => Some(rm.keys.iter().copied()),
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    held.filter(|(r, _)| keep.binary_search(&r.id()).is_ok()).any(|(r, _)| match &r.body().kind {
+        Kind::Device(d) => removed.contains(&d.key.hash()) || d.admin.as_ref().is_some_and(|a| removed.contains(&a.hash())),
+        _ => false,
+    })
+}
+
 /// Whether what cp keeps that `get` holds breaks nothing: none above its
 /// key's head, none at a head's seq but the head, no two at one seq. The
 /// IDs it does not hold are not judged (`checkpoint_ok` wants them all).
