@@ -23,8 +23,12 @@ struct CBBApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .environmentObject(model)
+            if (UserDefaults.standard.string(forKey: "padDiag") ?? "").contains("bare") {
+                DiagBare()
+            } else {
+                RootView()
+                    .environmentObject(model)
+            }
         }
         // The phone is the group's hub while the app is open (D-64).
         .onChange(of: scenePhase, initial: true) { _, phase in

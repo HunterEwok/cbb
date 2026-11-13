@@ -530,3 +530,27 @@ extension UIViewController {
         NotificationCenter.default.post(name: DiagEscape.pressed, object: nil)
     }
 }
+
+// DIAGNOSTIC ONLY (not for main): -padDiag bare shows nothing of the app,
+// only one focused view that logs every key it gets, and the UIKit Escape
+// command, to see which keys reach a bare SwiftUI window.
+struct DiagBare: View {
+    @FocusState private var focused: Bool
+    @State private var keys = ""
+    var body: some View {
+        VStack {
+            Text(verbatim: "bare").font(.largeTitle)
+            Text(verbatim: keys).accessibilityIdentifier("padDiagKeys")
+                .onReceive(Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()) { _ in keys = DiagEscape.log.joined(separator: " ") }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .focusable()
+        .focused($focused)
+        .onAppear { focused = true }
+        .onKeyPress(phases: .down) { press in
+            DiagEscape.log.append("swiftui:\(press.key.character.unicodeScalars.map { String($0.value) }.joined(separator: "+"))")
+            return .handled
+        }
+        .background(DiagEscape())
+    }
+}

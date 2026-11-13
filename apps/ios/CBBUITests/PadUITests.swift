@@ -119,6 +119,20 @@ final class PadUITests: XCTestCase {
 
     /// DIAGNOSTIC ONLY: which part takes Escape away from the card.
     func testEscapeDiag() throws {
+        for variant in ["bare", "bare,uikit"] {
+            let app = try launch(extra: ["-padDiag", variant])
+            let keys = app.staticTexts["padDiagKeys"]
+            guard app.staticTexts["bare"].waitForExistence(timeout: 30) else { print("PADDIAG \(variant): no bare view"); continue }
+            Thread.sleep(forTimeInterval: 1)
+            app.typeKey(.rightArrow, modifierFlags: [])
+            app.typeKey(.escape, modifierFlags: [])
+            app.typeKey("a", modifierFlags: [])
+            app.typeKey(.tab, modifierFlags: [])
+            app.typeKey(".", modifierFlags: .command)
+            Thread.sleep(forTimeInterval: 2)
+            print("PADDIAG \(variant): sent right,escape,a,tab,cmd-period log=[\(keys.exists ? keys.label : "no log")]")
+            app.terminate()
+        }
         for variant in ["nosearch", "uikit,nosearch", "uikit,nosearch,noshortcut"] {
             let app = try launch(extra: ["-padDiag", variant])
             let mac = app.buttons.containing(NSPredicate(format: "label CONTAINS 'studio-mac'")).firstMatch
