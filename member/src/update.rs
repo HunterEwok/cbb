@@ -190,12 +190,14 @@ impl std::fmt::Display for Source {
 /// tool writes to a pipe, so that no more than max bytes reach the disk
 /// (the RAM on OpenWrt), and it is stopped after FETCH_TIME.
 fn fetch(url: &str, path: &Path, max: u64) -> Result<()> {
-    fetch_via(url, path, max, None, FETCH_TIME)
+    fetch_via(url, path, max, None, None, FETCH_TIME)
 }
 
-/// As fetch, within time; with resolve (`host:443:address`) only curl,
-/// which can be told to reach the host at that address.
-fn fetch_via(url: &str, path: &Path, max: u64, resolve: Option<&str>, time: Duration) -> Result<()> {
+/// As fetch, within time; with resolve (`host:port:address`) only curl,
+/// which can be told to reach the host at that address, and which then
+/// takes ca (a file of certificates) as the only roots when it is given:
+/// only a test's mirror is given one (lists_mirror).
+fn fetch_via(url: &str, path: &Path, max: u64, resolve: Option<&str>, ca: Option<&str>, time: Duration) -> Result<()> {
     let max_s = max.to_string();
     let time_s = time.as_secs().to_string();
     let mut curl = vec![
@@ -214,6 +216,9 @@ fn fetch_via(url: &str, path: &Path, max: u64, resolve: Option<&str>, time: Dura
     ];
     if let Some(r) = resolve {
         curl.extend(["--resolve", r]);
+        if let Some(ca) = ca {
+            curl.extend(["--cacert", ca]);
+        }
     }
     curl.push(url);
     let mut tools: Vec<(&str, Vec<&str>)> = vec![("curl", curl)];
@@ -248,17 +253,32 @@ pub fn fetch_lists_at(at: std::net::IpAddr, work: &Path) -> Result<Box<serde_jso
         std::net::IpAddr::V6(v6) => format!("[{v6}]"),
         v4 => v4.to_string(),
     };
-    let resolve = format!("{host}:443:{ip}");
+    let (port, ca) = lists_mirror()?;
+    let resolve = format!("{host}:{port}:{ip}");
+    let base = if port == 443 { MIRROR.to_string() } else { format!("{MIRROR}:{port}") };
     let mut got = Vec::new();
     for name in ["keys.json", "entries.json"] {
         let path = work.join(format!(".{name}.relay.part"));
-        let data = fetch_via(&format!("{MIRROR}/{name}"), &path, MAX_MANIFEST, Some(&resolve), LISTS_TIME)
+        let data = fetch_via(&format!("{base}/{name}"), &path, MAX_MANIFEST, Some(&resolve), ca.as_deref(), LISTS_TIME)
             .and_then(|()| fs::read(&path).context(format!("cannot read the downloaded {name}")));
         let _ = fs::remove_file(&path);
         got.push(data?);
     }
     // The files as fetched, which the node reads as every reader does.
     crate::entries::set_of(&[("keys", &got[0]), ("entries", &got[1])])
+}
+
+/// The port the mirror on the relay's server is reached at and the roots
+/// its certificate is checked against: 443 and the system's, or in a build
+/// with the test hooks those CBB_TEST_LISTS_MIRROR gives ("PORT CAFILE"), a
+/// test's mirror beside its relay.
+#[cfg(feature = "tunnel")]
+fn lists_mirror() -> Result<(u16, Option<String>)> {
+    let Some(v) = crate::testhooks::var_os("CBB_TEST_LISTS_MIRROR") else { return Ok((443, None)) };
+    let v = v.to_string_lossy();
+    let (port, ca) = v.split_once(' ').ok_or_else(|| Error::msg("CBB_TEST_LISTS_MIRROR is not \"PORT CAFILE\""))?;
+    let port = port.parse().map_err(|_| Error::msg("CBB_TEST_LISTS_MIRROR's port is not a number"))?;
+    Ok((port, Some(ca.to_string())))
 }
 
 /// The longest fetching the signed lists from the relay's server may take.

@@ -3,7 +3,7 @@
 # Copyright (C) 2026 HunterEwok
 #
 # A release build of cbb and cbb-helper ignores the test hooks
-# (member/src/testhooks.rs, internal/testhooks): with all six set, each
+# (member/src/testhooks.rs, internal/testhooks): with all the hooks set, each
 # says and does exactly what it does without them. cbb update -check is
 # given a release signed by throwaway roots that CBB_RELEASE_ROOTS names,
 # which only a build with the hooks takes; a build that reads the hooks
@@ -18,10 +18,10 @@ echo x >"$work/rel/notes.txt"
 echo 9999999999999 >"$work/ahead-far"
 run() {
 	# The same command, without and with every hook, must answer the same.
-	env -u CBB_TEST_AHEAD_FILE -u CBB_RELEASE_ROOTS -u CBB_HELPER -u CBB_TEST_ATTEST_ROOTS -u CBB_TEST_TPM_ROOTS -u CBB_TEST_BLUEZ \
+	env -u CBB_TEST_AHEAD_FILE -u CBB_RELEASE_ROOTS -u CBB_HELPER -u CBB_TEST_ATTEST_ROOTS -u CBB_TEST_TPM_ROOTS -u CBB_TEST_BLUEZ -u CBB_TEST_LISTS_MIRROR \
 		CBB_STATE="$work/state" CBB_RELEASE_DIR="$work/rel" "$@" >"$work/without" 2>&1 && echo "exit 0" >>"$work/without" || echo "exit $?" >>"$work/without"
 	CBB_TEST_AHEAD_FILE="$work/ahead-far" CBB_RELEASE_ROOTS="$work/roots.pem" CBB_HELPER="$work/no-such-helper" \
-		CBB_TEST_ATTEST_ROOTS="$work/roots.pem" CBB_TEST_TPM_ROOTS="$work/roots.pem" CBB_TEST_BLUEZ="unix:path=$work/bus" \
+		CBB_TEST_ATTEST_ROOTS="$work/roots.pem" CBB_TEST_TPM_ROOTS="$work/roots.pem" CBB_TEST_BLUEZ="unix:path=$work/bus" CBB_TEST_LISTS_MIRROR="1 $work/roots.pem" \
 		CBB_STATE="$work/state" CBB_RELEASE_DIR="$work/rel" "$@" >"$work/with" 2>&1 && echo "exit 0" >>"$work/with" || echo "exit $?" >>"$work/with"
 	if ! cmp -s "$work/without" "$work/with" || grep -qi "test hooks" "$work/with"; then
 		echo "$*: the test hooks changed what it does" >&2

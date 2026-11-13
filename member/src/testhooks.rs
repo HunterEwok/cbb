@@ -16,7 +16,7 @@ pub const ENABLED: bool = cfg!(feature = "testhooks");
 /// The variables only a build with the test hooks reads. Every other
 /// variable cbb reads is listed in UNGATED (tests below), so that a new one
 /// is put on one side or the other.
-pub const VARS: &[&str] = &["CBB_TEST_AHEAD_FILE", "CBB_RELEASE_ROOTS", "CBB_HELPER"];
+pub const VARS: &[&str] = &["CBB_TEST_AHEAD_FILE", "CBB_RELEASE_ROOTS", "CBB_HELPER", "CBB_TEST_LISTS_MIRROR"];
 
 /// The value of the test hook `name`, one of VARS; None in a build without
 /// the test hooks, whatever the environment holds.
@@ -51,6 +51,7 @@ mod tests {
         "CBB_TEST_FALLBACK",
         "CBB_TEST_RENEW_EVERY",
         "CBB_TEST_STATUS_EVERY",
+        "CBB_TEST_REFETCH_EVERY",
         "CBB_TEST_ACTIONS",
         "CBB_TEST_SCALE",
         "CBB_TEST_CLOCK",

@@ -42,6 +42,12 @@ const CALLER_WAIT: Duration = Duration::from_secs(5);
 /// again, as Go's relayRefetch, and looks for another address after the
 /// same error.
 const REFETCH: Duration = Duration::from_secs(600);
+
+/// REFETCH, or what the service's tests shorten it to with
+/// CBB_TEST_REFETCH_EVERY (milliseconds).
+fn refetch_every() -> Duration {
+    std::env::var("CBB_TEST_REFETCH_EVERY").ok().and_then(|v| v.parse().ok()).map_or(REFETCH, Duration::from_millis)
+}
 const MOVE_AGAIN: Duration = Duration::from_secs(60);
 const MAX_CALLS: usize = 16;
 
@@ -312,7 +318,7 @@ impl Away {
     /// key this device does not know), keeps the next address it is reached
     /// at in the state, which starts the link there.
     fn project_relay_failed(&self, node: &Arc<Node>, at: &Forwarder, err: &str) {
-        let due = self.refetched.lock().unwrap().is_none_or(|t| t.elapsed() >= REFETCH);
+        let due = self.refetched.lock().unwrap().is_none_or(|t| t.elapsed() >= refetch_every());
         if due && !self.fetching.swap(true, Ordering::SeqCst) {
             *self.refetched.lock().unwrap() = Some(Instant::now());
             let (node, log, dir, ip) = (node.clone(), self.log.clone(), self.dir.clone(), at.endpoint.ip());

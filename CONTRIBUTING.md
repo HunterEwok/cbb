@@ -154,7 +154,7 @@ The end-to-end tests run `cbb` and `cbb-helper` built with the test hooks (the f
 build tag `testhooks`, which `benchtime` implies; `member/src/testhooks.rs`,
 `internal/testhooks`): only such a build reads the variables that change whom they trust or
 their clock (`CBB_TEST_AHEAD_FILE`, `CBB_RELEASE_ROOTS`, `CBB_HELPER`,
-`CBB_TEST_ATTEST_ROOTS`, `CBB_TEST_TPM_ROOTS`, `CBB_TEST_BLUEZ`), and says so in `cbb version`
+`CBB_TEST_ATTEST_ROOTS`, `CBB_TEST_TPM_ROOTS`, `CBB_TEST_BLUEZ`, `CBB_TEST_LISTS_MIRROR`), and says so in `cbb version`
 and its log. Never install one; a release never has them (CI's `hooks` job and the release
 workflow check it). A new `CBB_TEST_` variable goes into one of the lists in those files.
 

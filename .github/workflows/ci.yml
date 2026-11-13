@@ -2222,7 +2222,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: cbb and cbb-helper as the release builds them, without the hooks, with all six set
+      - name: cbb and cbb-helper as the release builds them, without the hooks, with all the hooks set
         run: |
           rustup toolchain install stable --profile minimal
           rustup default stable
