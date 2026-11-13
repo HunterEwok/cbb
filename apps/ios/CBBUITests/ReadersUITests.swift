@@ -52,24 +52,19 @@ final class ReadersUITests: XCTestCase {
         add(a)
     }
 
-    /// The app's element tree without the addresses its lines name each
-    /// element by, which can change between snapshots of the same element.
-    private func plainTree(_ app: XCUIApplication) -> String {
-        let address = try! NSRegularExpression(pattern: "0x[0-9a-fA-F]+")
-        let d = app.debugDescription
-        return address.stringByReplacingMatches(in: d, range: NSRange(d.startIndex..., in: d), withTemplate: "")
-    }
-
-    /// When the audit running now began (a measurement of the runner).
-    private var auditBegan = Date()
-
     /// Waits until the screen has stopped changing: its element tree, every
     /// element's frame and text, the same in three snapshots in a row a
     /// third of a second apart. A screen still laying out or animating in
     /// gives the audit a picture of nothing a person sees, so a screen that
     /// does not settle in 20 seconds fails rather than being audited.
     private func settle(_ app: XCUIApplication, _ screen: String) {
-        func tree() -> String { plainTree(app) }
+        // The tree's lines name each element by an address that can change
+        // between snapshots of the same element.
+        let address = try! NSRegularExpression(pattern: "0x[0-9a-fA-F]+")
+        func tree() -> String {
+            let d = app.debugDescription
+            return address.stringByReplacingMatches(in: d, range: NSRange(d.startIndex..., in: d), withTemplate: "")
+        }
         let start = Date()
         let deadline = start.addingTimeInterval(20)
         var last = tree()
@@ -98,26 +93,8 @@ final class ReadersUITests: XCTestCase {
     /// sizes. Contrast is measured on the screen's picture (`contrast`).
     private func audit(_ app: XCUIApplication, _ types: XCUIAccessibilityAuditType, _ screen: String) {
         settle(app, screen)
-        let before = plainTree(app)
-        auditBegan = Date()
-        defer {
-            // A measurement of the runner: did the screen change while the
-            // audit ran?
-            let after = plainTree(app)
-            let took = String(format: "%.1f", Date().timeIntervalSince(auditBegan))
-            if before == after {
-                print("AUDIT-TREE \(screen): unchanged during the audit (\(took) s)")
-            } else {
-                let b = Set(before.split(separator: "\n")), a = Set(after.split(separator: "\n"))
-                print("AUDIT-TREE \(screen): CHANGED during the audit (\(took) s): \(b.subtracting(a).count) lines gone, \(a.subtracting(b).count) new")
-                for line in b.subtracting(a).prefix(15) { print("AUDIT-TREE - \(line)") }
-                for line in a.subtracting(b).prefix(15) { print("AUDIT-TREE + \(line)") }
-            }
-        }
         do {
             try app.performAccessibilityAudit(for: types) { issue in
-                print("AUDIT-ISSUE \(screen) at +\(String(format: "%.1f", Date().timeIntervalSince(self.auditBegan))) s: \(issue.compactDescription) on \(issue.element.map { "\($0.elementType.rawValue) '\($0.label)' \($0.frame)" } ?? "no element")")
-                self.trace(app, issue, screen)
                 guard let e = issue.element else {
                     self.fail("\(screen): \(issue.compactDescription) on no element: \(issue.detailedDescription)",
                               picture: XCUIScreen.main.screenshot(), screen)
@@ -138,39 +115,6 @@ final class ReadersUITests: XCTestCase {
             XCTFail("\(screen): \(error)")
         }
         contrast(app, screen)
-    }
-
-    /// Writes everything known about an audit's issue into the log, whether
-    /// it fails the test or is passed over: the issue, its element (frame,
-    /// whether a person can reach it, its own tree), the screen's window and
-    /// bars, the text size, the simulator and the whole element tree. A
-    /// failure seen only on CI's runner can then be read from the log.
-    private func trace(_ app: XCUIApplication, _ issue: XCUIAccessibilityAuditIssue, _ screen: String) {
-        var lines = ["AUDIT-TRACE begin: \(screen)",
-                     "type: \(issue.auditType.rawValue) \(issue.compactDescription)",
-                     "detail: \(issue.detailedDescription)"]
-        let env = ProcessInfo.processInfo.environment
-        for key in ["SIMULATOR_MODEL_IDENTIFIER", "SIMULATOR_RUNTIME_VERSION", "SIMULATOR_RUNTIME_BUILD_VERSION", "SIMULATOR_DEVICE_NAME", "SIMULATOR_MAINSCREEN_SCALE", "SIMULATOR_MAINSCREEN_WIDTH", "SIMULATOR_MAINSCREEN_HEIGHT"] {
-            lines.append("\(key): \(env[key] ?? "-")")
-        }
-        lines.append("orientation: \(XCUIDevice.shared.orientation.rawValue)")
-        lines.append("window: \(app.windows.firstMatch.frame)")
-        if app.navigationBars.firstMatch.exists { lines.append("navigation bar: \(app.navigationBars.firstMatch.frame)") }
-        if app.statusBars.firstMatch.exists { lines.append("status bar: \(app.statusBars.firstMatch.frame)") }
-        if let e = issue.element {
-            lines.append("element: type \(e.elementType.rawValue) label '\(e.label)' identifier '\(e.identifier)' value '\(String(describing: e.value))'")
-            lines.append("element frame: \(e.frame) hittable \(e.isHittable) exists \(e.exists)")
-            lines.append("element tree:\n\(e.debugDescription)")
-        } else {
-            lines.append("element: none")
-        }
-        lines.append("app tree:\n\(app.debugDescription)")
-        lines.append("AUDIT-TRACE end: \(screen)")
-        print(lines.joined(separator: "\n"))
-        let a = XCTAttachment(string: lines.joined(separator: "\n"))
-        a.name = "audit-trace-\(screen)"
-        a.lifetime = .keepAlways
-        add(a)
     }
 
     /// Fails with an issue, each on a line of its own, and attaches the
@@ -314,44 +258,169 @@ final class ReadersUITests: XCTestCase {
     /// script, no text is clipped and the screens follow Dynamic Type.
     func testLargestText() {
         for language in Self.largestText {
-            // A measurement of the runner, not to be merged: Settings as it
-            // is, without its refresh every two seconds, and with a plain
-            // grid of themes for the lazy one, each audited as it opens and
-            // with Notifications in the middle.
-            for (label, flag) in [("as it is", ""), ("refresh off", "-CBBMeasureNoRefresh"), ("plain grid", "-CBBMeasurePlainGrid")] {
-                let app = launch(language: language, extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] + (flag.isEmpty ? [] : [flag]))
-                XCTAssertTrue(app.buttons[tr("Create a group", language)].waitForExistence(timeout: 30))
-                if flag.isEmpty {
-                    picture("start-\(language)-largest-text")
-                    audit(app, [.textClipped, .dynamicType], "the Start screen in \(language) at the largest text")
+            let app = launch(language: language, extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+            XCTAssertTrue(app.buttons[tr("Create a group", language)].waitForExistence(timeout: 30))
+            picture("start-\(language)-largest-text")
+            audit(app, [.textClipped, .dynamicType], "the Start screen in \(language) at the largest text")
+            app.buttons[tr("Settings", language)].tap()
+            XCTAssertTrue(app.navigationBars[tr("Settings", language)].waitForExistence(timeout: 10))
+            picture("settings-\(language)-largest-text")
+            audit(app, [.textClipped, .dynamicType], "Settings in \(language) at the largest text")
+            app.terminate()
+        }
+    }
+
+    // MARK: A measurement of CI's runner, not to be merged
+
+    private struct Variant {
+        let name: String
+        var args: [String] = []
+        var language = "en"
+        var size = "UICTContentSizeCategoryAccessibilityXXXL"
+        var types: XCUIAccessibilityAuditType = .dynamicType
+        var middle = false
+        var repeats = 1
+        var pause: TimeInterval = 0
+        var dark = false
+        var landscape = false
+    }
+
+    private var probeStats: [String: (audits: Int, notifications: Int, labels: [String: Int])] = [:]
+    private var probeOrder: [String] = []
+
+    /// The app's element tree without the addresses its lines name each
+    /// element by, which can change between snapshots of the same element.
+    private func plainTree(_ app: XCUIApplication) -> String {
+        let address = try! NSRegularExpression(pattern: "0x[0-9a-fA-F]+")
+        let d = app.debugDescription
+        return address.stringByReplacingMatches(in: d, range: NSRange(d.startIndex..., in: d), withTemplate: "")
+    }
+
+    /// One audit of what is on the screen, every issue printed as a
+    /// MEASURE line and counted under the variant; it fails nothing.
+    private func probeAudit(_ app: XCUIApplication, _ v: Variant, _ position: String, _ notifications: String, _ round: Int, _ rep: Int) {
+        let key = position == "top" ? v.name : "\(v.name), \(position)"
+        if probeStats[key] == nil { probeStats[key] = (0, 0, [:]); probeOrder.append(key) }
+        settle(app, "MEASURE \(key)")
+        if v.pause > 0 { Thread.sleep(forTimeInterval: v.pause) }
+        let before = plainTree(app)
+        let began = Date()
+        var labels: [String] = []
+        do {
+            try app.performAccessibilityAudit(for: v.types) { issue in
+                let at = String(format: "%.1f", Date().timeIntervalSince(began))
+                guard let e = issue.element else {
+                    labels.append("<no element>")
+                    print("MEASURE-ISSUE \(key) round \(round) #\(rep) +\(at)s: \(issue.compactDescription) on no element")
+                    return true
                 }
-                app.buttons[tr("Settings", language)].tap()
-                XCTAssertTrue(app.navigationBars[tr("Settings", language)].waitForExistence(timeout: 10))
-                picture("settings-\(language)-largest-text-\(label)")
-                audit(app, [.textClipped, .dynamicType], "Settings in \(language) at the largest text, \(label)")
-                let middle = "Settings in \(language) at the largest text, \(label), Notifications in the middle"
-                scrollToMiddle(app, tr("Notifications", language), middle)
-                audit(app, [.textClipped, .dynamicType], middle)
-                app.terminate()
+                // The navigation bar's own buttons, as testLargestText passes them over.
+                if app.navigationBars.firstMatch.exists && app.navigationBars.firstMatch.frame.contains(e.frame) { return true }
+                labels.append(e.label)
+                print("MEASURE-ISSUE \(key) round \(round) #\(rep) +\(at)s: \(issue.compactDescription) on \(e.elementType.rawValue) '\(e.label)' \(e.frame) hittable \(e.isHittable)")
+                return true
             }
+        } catch {
+            print("MEASURE-ISSUE \(key) round \(round) #\(rep): the audit threw \(error)")
+            labels.append("<threw>")
+        }
+        let took = Date().timeIntervalSince(began)
+        let changed = plainTree(app) != before
+        var stat = probeStats[key]!
+        stat.audits += 1
+        if labels.contains(notifications) { stat.notifications += 1 }
+        for l in Set(labels) { stat.labels[l, default: 0] += 1 }
+        probeStats[key] = stat
+        print("MEASURE-AUDIT \(key) round \(round) #\(rep): \(String(format: "%.1f", took)) s, tree \(changed ? "changed" : "unchanged"), flagged \(labels.isEmpty ? "nothing" : labels.joined(separator: " | "))")
+    }
+
+    private func probeSummary(_ title: String) {
+        print("MEASURE-SUMMARY \(title)")
+        for key in probeOrder {
+            let s = probeStats[key]!
+            let others = s.labels.filter { $0.key != "Notifications" && $0.key != "सूचनाएँ" }.sorted { $0.key < $1.key }.map { "\($0.key)×\($0.value)" }.joined(separator: ", ")
+            print("MEASURE-SUMMARY \(key): Notifications \(s.notifications)/\(s.audits); others: \(others.isEmpty ? "-" : others)")
         }
     }
 
     /// Scrolls the screen's list until the text is near the middle of the
     /// window, with slow drags that do not fling the list.
-    private func scrollToMiddle(_ app: XCUIApplication, _ label: String, _ screen: String) {
+    private func scrollToMiddle(_ app: XCUIApplication, _ label: String) {
         let text = app.staticTexts[label].firstMatch
         let list = app.collectionViews.firstMatch
         let height = app.windows.firstMatch.frame.height
         for _ in 0..<8 {
-            guard text.exists else { break }
+            guard text.exists, list.exists else { break }
             let shift = text.frame.midY - height / 2
             if abs(shift) < 100 { break }
             let from = list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
             let to = from.withOffset(CGVector(dx: 0, dy: -max(-400, min(400, shift))))
-            from.press(forDuration: 0.1, thenDragTo: to, withVelocity: .slow, thenHoldForDuration: 0.5)
+            from.press(forDuration: 0.1, thenDragTo: to, withVelocity: .slow, thenHoldForDuration: 0.3)
         }
-        print("ReadersUITests: \(screen): '\(label)' at \(text.exists ? "\(text.frame)" : "nowhere") in a window \(height) high")
-        picture("scrolled-\(screen)")
+    }
+
+    /// Runs the dynamic type audit of Settings in many variants of the
+    /// screen and of the run, round after round until its time is up, and
+    /// prints what each audit flagged.
+    func testDynamicTypeProbe() {
+        let variants: [Variant] = [
+            Variant(name: "baseline", middle: true),
+            Variant(name: "baseline hi", language: "hi"),
+            Variant(name: "with textClipped", types: [.textClipped, .dynamicType]),
+            Variant(name: "refresh off", args: ["-CBBMeasureNoRefresh"]),
+            Variant(name: "plain grid", args: ["-CBBMeasurePlainGrid"]),
+            Variant(name: "no swatches", args: ["-CBBMeasureNoSwatches"], middle: true),
+            Variant(name: "no hair spaces", args: ["-CBBMeasureNoHairSpace"]),
+            Variant(name: "no Notifications section", args: ["-CBBMeasureNoNotifications"]),
+            Variant(name: "header as a row", args: ["-CBBMeasureHeaderAsRow"]),
+            Variant(name: "header without text case", args: ["-CBBMeasureHeaderNoTextCase"]),
+            Variant(name: "header with .footnote", args: ["-CBBMeasureHeaderFont"]),
+            Variant(name: "plain list style", args: ["-CBBMeasurePlainList"]),
+            Variant(name: "no background", args: ["-CBBMeasureNoBackground"]),
+            Variant(name: "no animations", args: ["-CBBMeasureNoAnimations"]),
+            Variant(name: "no tips", args: ["-CBBMeasureNoTips"]),
+            Variant(name: "everything off", args: ["-CBBMeasureNoRefresh", "-CBBMeasureNoAnimations", "-CBBMeasureNoTips", "-CBBMeasureNoSwatches", "-CBBMeasureHeaderNoTextCase"]),
+            Variant(name: "size AX-XXL", size: "UICTContentSizeCategoryAccessibilityXXL"),
+            Variant(name: "size AX-L", size: "UICTContentSizeCategoryAccessibilityL"),
+            Variant(name: "size Large (default)", size: "UICTContentSizeCategoryL"),
+            Variant(name: "dark", dark: true),
+            Variant(name: "landscape", landscape: true),
+            Variant(name: "5 s idle before", pause: 5),
+            Variant(name: "3 audits in a row", repeats: 3),
+        ]
+        let start = Date()
+        let budget: TimeInterval = 40 * 60
+        var round = 0
+        rounds: while true {
+            round += 1
+            for v in variants {
+                if Date().timeIntervalSince(start) > budget - 90 { break rounds }
+                if v.dark { XCUIDevice.shared.appearance = .dark }
+                if v.landscape { XCUIDevice.shared.orientation = .landscapeLeft }
+                let app = launch(language: v.language, extra: ["-UIPreferredContentSizeCategoryName", v.size] + v.args)
+                let settings = app.buttons[tr("Settings", v.language)]
+                if settings.waitForExistence(timeout: 30) {
+                    settings.tap()
+                    if app.navigationBars[tr("Settings", v.language)].waitForExistence(timeout: 10) {
+                        let notifications = tr("Notifications", v.language)
+                        for rep in 1...v.repeats { probeAudit(app, v, "top", notifications, round, rep) }
+                        if v.middle {
+                            scrollToMiddle(app, notifications)
+                            probeAudit(app, v, "Notifications in the middle", notifications, round, 1)
+                        }
+                    } else {
+                        print("MEASURE \(v.name): Settings did not open")
+                    }
+                } else {
+                    print("MEASURE \(v.name): no Settings button")
+                }
+                app.terminate()
+                if v.dark { XCUIDevice.shared.appearance = .light }
+                if v.landscape { XCUIDevice.shared.orientation = .portrait }
+                print("MEASURE-PROGRESS round \(round), \(v.name) done at \(Int(Date().timeIntervalSince(start))) s")
+            }
+            probeSummary("after round \(round)")
+        }
+        probeSummary("final, \(round) rounds begun, \(Int(Date().timeIntervalSince(start))) s")
     }
 }

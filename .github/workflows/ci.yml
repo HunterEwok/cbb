@@ -1785,8 +1785,8 @@ jobs:
           test_on() {
             log="${RUNNER_TEMP:-/tmp}/test-$1.log"
             # A measurement of the runner, not to be merged: only the iPad's
-            # testLargestText, five times, with the audit's traces.
-            only=(-only-testing:CBBUITests/ReadersUITests/testLargestText -test-iterations 4)
+            # testDynamicTypeProbe, which runs for 40 minutes.
+            only=(-only-testing:CBBUITests/ReadersUITests/testDynamicTypeProbe)
             for attempt in 1 2 3; do
               xcrun simctl boot "$1" 2>/dev/null || true
               # A simulator can hang at boot ("Waiting on System App") for
@@ -1802,9 +1802,14 @@ jobs:
                 "${sign[@]}" "${only[@]}" >"$log" 2>&1 &
               pid=$!
               killed=
-              for second in $(seq 3000); do
+              # The measurement's lines as they come, so that the step shows
+              # its progress.
+              (tail -n +1 -F "$log" 2>/dev/null | grep --line-buffered -E "MEASURE-(AUDIT|PROGRESS|SUMMARY)|^Test Case") &
+              follow=$!
+              started=$SECONDS
+              while [ $((SECONDS - started)) -lt 2880 ]; do
                 kill -0 "$pid" 2>/dev/null || break
-                if [ "$second" -ge 150 ] && ! grep -q "^Test Suite " "$log"; then killed=1; break; fi
+                if [ $((SECONDS - started)) -ge 150 ] && ! grep -q "^Test Suite " "$log"; then killed=1; break; fi
                 sleep 1
               done
               kill -0 "$pid" 2>/dev/null && killed=1
@@ -1817,6 +1822,8 @@ jobs:
                 status=0
                 wait "$pid" || status=$?
               fi
+              pkill -f "tail -n +1 -F $log" || true
+              kill "$follow" 2>/dev/null || true
               xcrun simctl shutdown "$1" || true
               if [ "$status" -ne 0 ] && [ -z "$killed" ] && [ "$attempt" -lt 3 ] && only_launches "$log"; then
                 grep -E "error: |^Test Case .* failed" "$log" || true
@@ -1830,7 +1837,7 @@ jobs:
                 # long before the tail: show those lines first.
                 grep -E "error: |^Test Case .* failed" "$log" || true
                 tail -n 100 "$log"
-                [ -n "$killed" ] && echo "::error::the tests on $1 did not finish in 20 minutes"
+                [ -n "$killed" ] && echo "::error::the tests on $1 did not finish in 48 minutes"
                 return "$status"
               fi
               tail -n 30 "$log"
@@ -1858,8 +1865,8 @@ jobs:
           for f in "$RUNNER_TEMP"/test-*.log; do
             [ -f "$f" ] || continue
             cp "$f" "$RUNNER_TEMP/ios-screens/"
-            sed -n '/AUDIT-TRACE begin/,/AUDIT-TRACE end/p' "$f"
-            grep -E "settled in|AUDIT-ISSUE|AUDIT-TREE|in the middle|Test Case .*(passed|failed)" "$f" || true
+            grep -E "MEASURE-SUMMARY" "$f" || true
+            grep -E "MEASURE|Test Case .*(passed|failed)" "$f" || true
           done
       - name: the screens' pictures
         if: always()

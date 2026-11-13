@@ -15,8 +15,9 @@ struct CBBApp: App {
         WatchLink.shared.start()
         // A recovery sheet's PDF that an ended app left behind.
         RecoveryPage.removePDF()
+        if Measure.on("NoAnimations") { UIView.setAnimationsEnabled(false) }
         // The settings' tips, each shown until it is closed.
-        try? Tips.configure()
+        if !Measure.on("NoTips") { try? Tips.configure() }
     }
 
     @Environment(\.scenePhase) private var scenePhase
