@@ -43,8 +43,8 @@ use crate::records::eval::{Input, State, evaluate};
 use crate::records::pq::PqKey;
 use crate::records::set::RecordSet;
 use crate::records::{
-    Body, GroupId, Key, KeyHash, MAX_ADMIN_RECORDS, MAX_DEVICES, MAX_ROOT_RECORDS, Record, RecordId, Recovery,
-    group_id, keep,
+    ADMIN_KEYS_MAX, Body, GroupId, Key, KeyHash, MAX_ADMIN_RECORDS, MAX_DEVICES, MAX_ROOT_RECORDS, Record, RecordId,
+    Recovery, group_id, keep,
 };
 
 /// A key made from a name.
@@ -305,9 +305,13 @@ fn build_with(spec: Spec, remove_holder: bool) -> Group {
     // The root's fill stops short of its ceiling, with room for the
     // checkpoints still to come, so that every record of the group counts.
     let cp_units = ((by_root + admins + 4) * 40).div_ceil(keep::UNIT) as u64 + 1;
+    // After a change of root the earlier roots share the reserve for cut
+    // roots, a root's ceiling: the first root leaves room in it for the
+    // records of the roots between it and the newest (some 50 units each).
+    let cut = takeovers.saturating_sub(1) as u64 * 50;
     let root_room = |b: &Builder, cps: usize, d: usize| {
         let reserve = (spec.checkpoints.saturating_sub(cps)) as u64 * cp_units + (by_root - d) as u64 + 2;
-        b.units.get(&root.hash).copied().unwrap_or(0) + 1 + reserve <= MAX_ROOT_RECORDS as u64
+        b.units.get(&root.hash).copied().unwrap_or(0) + 1 + reserve + cut <= MAX_ROOT_RECORDS as u64
     };
     for step in 0..steps {
         if d < by_root && d * steps <= step * by_root {
@@ -372,6 +376,7 @@ fn build_with(spec: Spec, remove_holder: bool) -> Group {
     let mut lists: Vec<Vec<u8>> = Vec::new();
     let mut new_roots = Vec::new();
     let mut holder: Option<KeyHash> = None;
+    let mut last_root: Option<NamedKey> = None;
     for t in 0..takeovers {
         let n = key(spec.seed, &format!("new root {t}"));
         let phone = key(spec.seed, &format!("new root phone {t}"));
@@ -399,6 +404,22 @@ fn build_with(spec: Spec, remove_holder: bool) -> Group {
         b.push(w.record);
         lists.push(w.list.encode().to_vec());
         new_roots.push(n.hash);
+        last_root = Some(n);
+    }
+
+    // The newest root fills its own room too, up to its ceiling and inside
+    // the set's room: the earlier roots' records stay in the reserve for
+    // cut roots, so that a group at the ceilings fills every part of it.
+    if let Some(n) = &last_root {
+        let mut f = 0;
+        while f < spec.root_fill {
+            let mine = b.units.get(&n.hash).copied().unwrap_or(0);
+            if mine + 1 > MAX_ROOT_RECORDS as u64 || b.total + 1 > keep::ROOM {
+                break;
+            }
+            b.fill(n, f, true);
+            f += 1;
+        }
     }
 
     Group { spec, root: root.key, recovery: recovery_pair, records: b.records, lists, new_roots, removed }
@@ -452,9 +473,9 @@ pub fn ceilings(seed: u64) -> Spec {
     Spec {
         seed,
         devices: MAX_DEVICES,
-        admins: 12,
+        admins: ADMIN_KEYS_MAX,
         removals: 8,
-        root_fill: 1000,
+        root_fill: MAX_ROOT_RECORDS,
         admin_fill: MAX_ADMIN_RECORDS,
         checkpoints: 4,
         takeovers: 2,
@@ -515,6 +536,81 @@ mod tests {
         let s = removed.evaluate();
         check(&removed, &s);
         assert!(s.device_by_key(&phone).is_none() && s.revoked.contains(&phone));
+    }
+
+    /// Units signer's records take in g.
+    fn units_of(g: &Group, signer: &KeyHash) -> u64 {
+        g.records.iter().filter(|r| r.body().signer == *signer).map(|r| keep::units(r.envelope().len())).sum()
+    }
+
+    /// The group at the ceilings is at each limit of table A, and the
+    /// core's writer refuses one record past each: an admin's next record,
+    /// the newest root's and a 17th admin key (a 257th device below).
+    #[test]
+    fn the_ceilings_refuse_one_record_past_each_limit() {
+        let spec = ceilings(1);
+        let g = build(spec);
+        let (mut set, state) = g.set();
+        check(&g, &state);
+        // At the limits: the set's room, every admin's ceiling, the newest
+        // root's, 16 admin keys and 256 devices.
+        assert!(g.units() <= keep::ROOM && g.units() + 32 >= keep::ROOM, "{} units", g.units());
+        let admins: Vec<NamedKey> = (0..ADMIN_KEYS_MAX).map(|i| key(spec.seed, &format!("admin {i}"))).collect();
+        for a in &admins {
+            let u = units_of(&g, &a.hash);
+            assert!(u <= MAX_ADMIN_RECORDS as u64 && u + 2 >= MAX_ADMIN_RECORDS as u64, "an admin at {u} units");
+        }
+        let newest = key(spec.seed, &format!("new root {}", spec.takeovers - 1));
+        let u = units_of(&g, &newest.hash);
+        assert!(u <= MAX_ROOT_RECORDS as u64 && u + 3 >= MAX_ROOT_RECORDS as u64, "the root at {u} units");
+        let admin_keys = state.devices.iter().filter(|d| d.admin.is_some()).count();
+        assert_eq!(admin_keys, ADMIN_KEYS_MAX);
+        assert_eq!(state.devices.len() + g.removed.len(), MAX_DEVICES);
+
+        // One past each.
+        let copies = || Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: Vec::new() };
+        let before = set.len();
+        let e = set.write_record(&state, &admins[0], copies(), 0).expect_err("an admin's record past its ceiling");
+        assert!(format!("{e:?}").contains("pass its room"), "{e:?}");
+        let e = set.write_record(&state, &newest, copies(), 0).expect_err("the root's record past its ceiling");
+        assert!(format!("{e:?}").contains("pass its room"), "{e:?}");
+        assert_eq!(set.len(), before, "a refused record leaves the set as it was");
+
+        // With room in the root's ceiling: the 17th admin key is refused
+        // for itself.
+        let roomy = Spec { root_fill: 0, admin_fill: 0, removals: 0, ..spec };
+        let g = build(roomy);
+        let (mut set, state) = g.set();
+        assert_eq!(state.devices.len(), MAX_DEVICES);
+        let newest = key(roomy.seed, &format!("new root {}", roomy.takeovers - 1));
+        let extra = key(roomy.seed, "admin 16");
+        let mut d = Device::new(key(roomy.seed, "admin phone 16").key.clone(), "admin phone 16", ROLE_PHONE);
+        d.admin = Some(extra.key.clone());
+        let e = set.write_record(&state, &newest, Kind::device(d), 0).expect_err("a 17th admin key");
+        assert!(format!("{e:?}").contains("admin keys already"), "{e:?}");
+    }
+
+    /// With 256 live devices the core's writer refuses a 257th, and no
+    /// device that counts stops counting.
+    #[test]
+    #[ignore = "waits for the records thread's change to the writer"]
+    fn a_257th_device_is_refused() {
+        let spec = Spec { root_fill: 0, admin_fill: 0, removals: 0, ..ceilings(1) };
+        let g = build(spec);
+        let (mut set, state) = g.set();
+        assert_eq!(state.devices.len(), MAX_DEVICES);
+        let newest = key(spec.seed, &format!("new root {}", spec.takeovers - 1));
+        let d = Device::new(key(spec.seed, "device 256").key.clone(), "device 256", ROLE_MEMBER);
+        if set.write_record(&state, &newest, Kind::device(d), 0).is_ok() {
+            let after = set.state();
+            let out: Vec<_> = state
+                .devices
+                .iter()
+                .filter(|x| after.device_by_key(&x.key.hash()).is_none())
+                .map(|x| x.name.clone())
+                .collect();
+            panic!("a 257th device was written; out now: {out:?}");
+        }
     }
 
     #[test]

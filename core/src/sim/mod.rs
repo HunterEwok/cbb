@@ -1223,6 +1223,42 @@ impl World {
     /// writer refuses.
     /// The root's checkpoint that a refusal "checkpoint first" on member i
     /// asks for: the root writes it, and an admin's member takes it.
+    /// The units and the number of the live devices' admissions in m{w}'s
+    /// set (the newest counting device record of each device a change
+    /// keeps), what a change of root must carry for nobody to drop out.
+    fn live_admissions(&self, w: usize, st: &State, remove: &[KeyHash]) -> (u64, usize) {
+        let set = &self.members[w].live.set;
+        let at = |k: &KeyHash| st.roots.iter().position(|r| r == k).unwrap_or(0);
+        let mut newest: BTreeMap<KeyHash, ((usize, u64), u64)> = BTreeMap::new();
+        for r in set.ids().filter(|id| st.counting.contains(id)).filter_map(|id| set.get(id)) {
+            let b = r.body();
+            let Kind::Device(d) = &b.kind else { continue };
+            if remove.contains(&d.key.hash()) || d.admin.as_ref().is_some_and(|a| remove.contains(&a.hash())) {
+                continue;
+            }
+            let pos = (at(&b.signer), b.seq);
+            let units = crate::records::keep::units(r.size());
+            let e = newest.entry(d.key.hash()).or_insert((pos, units));
+            if pos > e.0 {
+                *e = (pos, units);
+            }
+        }
+        (newest.values().map(|(_, u)| u).sum(), newest.len())
+    }
+
+    /// The units and the number of the roots' removals in m{w}'s set, which
+    /// a change of root carries before the devices' admissions.
+    fn root_removals(&self, w: usize, st: &State) -> (u64, usize) {
+        let set = &self.members[w].live.set;
+        let rs: Vec<u64> = set
+            .ids()
+            .filter_map(|id| set.get(id))
+            .filter(|r| matches!(r.body().kind, Kind::Revoke(_)) && st.roots.contains(&r.body().signer))
+            .map(|r| crate::records::keep::units(r.size()))
+            .collect();
+        (rs.iter().sum(), rs.len())
+    }
+
     fn checkpoint_for(&mut self, i: usize, key_name: &str) {
         if self.root_key(i).as_deref() == Some(key_name) {
             let _ = self.write_checkpoint(i, key_name);
@@ -1585,16 +1621,46 @@ impl World {
                 .collect();
             let unapplied = held.iter().any(|(_, id)| !chain.contains(id));
             let set = &mut self.members[w].live.set;
-            let written =
-                match set.write_change(&st, &recovery, crate::testkit::rk2(), &new_root, device, &remove, false, now) {
-                    Ok(x) => x,
-                    Err(e) if halted => return Err(format!("the recovery key could not end the halt on m{w}: {e:?}")),
-                    Err(_) if unapplied => {
-                        self.note(format!("m{w} refuses a change over a change it does not apply"));
+            let written = match set.write_change(
+                &st,
+                &recovery,
+                crate::testkit::rk2(),
+                &new_root,
+                device,
+                &remove,
+                false,
+                now,
+            ) {
+                Ok(x) => x,
+                Err(e) if halted => return Err(format!("the recovery key could not end the halt on m{w}: {e:?}")),
+                Err(_) if unapplied => {
+                    self.note(format!("m{w} refuses a change over a change it does not apply"));
+                    continue;
+                }
+                Err(e) if format!("{e:?}").contains("leave out devices that count") => {
+                    // Expected only where the live devices' admissions
+                    // alone pass what a change carries.
+                    let (units, n) = self.live_admissions(w, &st, &remove);
+                    let (ru, rn) = self.root_removals(w, &st);
+                    let (reserve, max) = (crate::records::keep::reserve(), crate::records::LIST_MAX);
+                    if units > reserve || n > max {
+                        CHANGE_TOO_BIG.fetch_add(1, Ordering::Relaxed);
+                        self.note(format!("m{w} refuses a change whose live devices pass the reserve"));
                         continue;
                     }
-                    Err(e) => return Err(format!("m{w} could not write a change of root: {e:?}")),
-                };
+                    if units + ru > reserve || n + rn > max {
+                        CHANGE_TOO_BIG_REMOVALS.fetch_add(1, Ordering::Relaxed);
+                        self.note(format!(
+                            "m{w} refuses a change whose live devices and the roots' removals pass the reserve"
+                        ));
+                        continue;
+                    }
+                    return Err(format!(
+                        "m{w} refused a change of root though its live devices and the roots' removals fit ({units}+{ru} units of {reserve}, {n}+{rn} records): {e:?}"
+                    ));
+                }
+                Err(e) => return Err(format!("m{w} could not write a change of root: {e:?}")),
+            };
             self.change_lists.push(written.list.0.clone());
             if let Some((s, _)) = held.iter().find(|(s, _)| *s == written.record.body().seq) {
                 return Err(format!("m{w} wrote a second change at seq {s}, where it holds one"));
@@ -2231,6 +2297,13 @@ static REFUSED_FIRST: AtomicUsize = AtomicUsize::new(0);
 /// Runs with a twin of an admin key after its removal (SIM_ADMIN_TWIN).
 static ADMIN_TWINS: AtomicUsize = AtomicUsize::new(0);
 
+/// Changes of root refused because the live devices' admissions alone
+/// pass what a change carries.
+static CHANGE_TOO_BIG: AtomicUsize = AtomicUsize::new(0);
+/// The same, where the devices fit alone and the roots' removals with them
+/// do not.
+static CHANGE_TOO_BIG_REMOVALS: AtomicUsize = AtomicUsize::new(0);
+
 /// The counter of a refusal of the core's writer, by its message.
 fn refused_why(e: &str) -> &'static AtomicUsize {
     if e.contains("would pass its room") {
@@ -2248,7 +2321,9 @@ fn refused_why(e: &str) -> &'static AtomicUsize {
     }
 }
 
-const COUNTERS: [&AtomicUsize; 24] = [
+const COUNTERS: [&AtomicUsize; 26] = [
+    &CHANGE_TOO_BIG_REMOVALS,
+    &CHANGE_TOO_BIG,
     &RECOVERY_FORK_LIVE,
     &REFUSED_FIRST,
     &ADMIN_TWINS,
@@ -2277,8 +2352,10 @@ const COUNTERS: [&AtomicUsize; 24] = [
 
 /// Root twins (two writers with one key) are made unless SIM_TWINS=0.
 /// Every SIM_SMALL-th seed (4 by default, 0 for none) runs with small
-/// rooms, SIM_ROOMS="room,root,admin" (14,8,5 by default, as the records
-/// model's traces), and with a member away over checkpoints.
+/// rooms, SIM_ROOMS="room,root,admin" (56,12,2 by default: table A's
+/// 7168 : 1536 : 256, with the reserve for cut roots a root's ceiling, room
+/// for every member's admission; 14,8,5 are the records model's traces),
+/// and with a member away over checkpoints.
 fn small_seed(seed: u64) -> bool {
     let k = env("SIM_SMALL").unwrap_or(4);
     k != 0 && seed % k == k - 1
@@ -2291,7 +2368,7 @@ fn small_rooms() -> crate::records::keep::small::Small {
         .unwrap_or_default();
     let (room, root, admin) = match v[..] {
         [a, b, c] => (a, b, c),
-        _ => (14, 8, 5),
+        _ => (56, 12, 2),
     };
     crate::records::keep::small::Small::new(room, root, admin)
 }
@@ -2353,7 +2430,7 @@ fn groups_under_faults_agree() {
         LEFT_OUT.load(Ordering::Relaxed)
     );
     std::eprintln!(
-        "sim refusals: {} first tries past the key's ceiling (then checkpoint and retry); standing: {} past the key's ceiling, {} a key without a room, {} the group's records full, {} a stopped group, {} a key with two histories, {} other; {} runs with an admin key's twin after its removal",
+        "sim refusals: {} first tries past the key's ceiling (then checkpoint and retry); standing: {} past the key's ceiling, {} a key without a room, {} the group's records full, {} a stopped group, {} a key with two histories, {} other; {} runs with an admin key's twin after its removal; {} changes of root refused because the live devices pass the reserve, {} because the roots' removals with them do",
         REFUSED_FIRST.load(Ordering::Relaxed),
         REFUSED_CEILING.load(Ordering::Relaxed),
         REFUSED_NO_ROOM.load(Ordering::Relaxed),
@@ -2361,7 +2438,9 @@ fn groups_under_faults_agree() {
         REFUSED_STOPPED.load(Ordering::Relaxed),
         REFUSED_TWO_HISTORIES.load(Ordering::Relaxed),
         REFUSED_OTHER.load(Ordering::Relaxed),
-        ADMIN_TWINS.load(Ordering::Relaxed)
+        ADMIN_TWINS.load(Ordering::Relaxed),
+        CHANGE_TOO_BIG.load(Ordering::Relaxed),
+        CHANGE_TOO_BIG_REMOVALS.load(Ordering::Relaxed)
     );
     assert!(failed.is_empty(), "{}", failed.join("\n\n"));
 }
