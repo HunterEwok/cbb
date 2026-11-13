@@ -593,6 +593,9 @@ class AppModel(private val app: Context) {
         keyLevel = withContext(Dispatchers.IO) { group.keyLevel }
         incomingMS = if (admin) withContext(Dispatchers.IO) { group.incomingMS } else null
         notifier.observe(d)
+        // Push learns the devices as applied: a device gone or a new root draws a new push key.
+        val tag = withContext(Dispatchers.IO) { group.groupTag }
+        withContext(Dispatchers.IO) { PushSetup.group(app, tag, d) }
         away = group.awayFromHome?.let { a ->
             // The last failure only while it is still trying; once connected or at home it is old news.
             val e = (a.lastError as? Exception)?.takeIf { a.status == AwayFromHome.Status.CONNECTING }
@@ -826,18 +829,22 @@ class AppModel(private val app: Context) {
      */
     suspend fun leave(): Boolean {
         busy = true
+        // Push off in this group while the phone still reaches its members.
+        withContext(Dispatchers.IO) { PushSetup.leaving(app) }
         try {
             withContext(Dispatchers.IO) { group.leave() }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             message = describe(e)
+            withContext(Dispatchers.IO) { PushSetup.stayed(app) }
             return false
         } finally {
             busy = false
         }
         SyncService.stop(app)
         notifier.forget()
+        withContext(Dispatchers.IO) { PushSetup.left(app) }
         try {
             withContext(Dispatchers.IO) { group.prepare() }
         } catch (e: CancellationException) {

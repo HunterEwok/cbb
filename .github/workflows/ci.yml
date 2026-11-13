@@ -752,8 +752,8 @@ jobs:
           systemd-analyze verify /etc/systemd/system/cbb.service
           sudo rm -rf /etc/systemd/system/cbb.service /etc/systemd/system/cbb.service.d
           CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/cbb-forward" ./cmd/cbb-forward
-          cp target/release/cbb-relay "$RUNNER_TEMP/cbb-relay"
-          for u in cbb-forward cbb-relay; do
+          cp target/release/cbb-relay target/release/cbb-push "$RUNNER_TEMP/"
+          for u in cbb-forward cbb-relay cbb-push; do
             sudo install -m 0755 "$RUNNER_TEMP/$u" "/usr/local/bin/$u"
             systemd-analyze verify "packaging/linux/$u.service"
             systemd-analyze security --offline=true "packaging/linux/$u.service" --threshold=20

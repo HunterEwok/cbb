@@ -4,8 +4,34 @@ import UIKit
 
 /// Keeps a phone's screen upright and lets a big one turn: an iPad, and the
 /// inner screen of a foldable iPhone, where the system moves the toolbar to
-/// the strip at the right edge in landscape.
+/// the strip at the right edge in landscape. And hands push's device token
+/// to PushSetup.
 final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        MainActor.assumeIsolated { PushSetup.shared.start() }
+        return true
+    }
+
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        MainActor.assumeIsolated { PushSetup.shared.got(token: deviceToken) }
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        MainActor.assumeIsolated { PushSetup.shared.failed(error) }
+    }
+
+    /// A background push from the push service carries only a challenge
+    /// ("k"): kept for this phone's send key, and the group registers again.
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+                     fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        guard let k = userInfo["k"] as? String, let challenge = Data(base64Encoded: k) else {
+            completionHandler(.noData)
+            return
+        }
+        MainActor.assumeIsolated { PushSetup.shared.challenge(challenge) }
+        completionHandler(.newData)
+    }
+
     func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
         guard let window else { return .portrait }
         return Self.mask(idiom: UIDevice.current.userInterfaceIdiom, regular: window.traitCollection.horizontalSizeClass == .regular)

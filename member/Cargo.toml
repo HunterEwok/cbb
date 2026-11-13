@@ -33,6 +33,11 @@ required-features = ["tunnel"]
 # cbbw.exe, the same program without a console window, which Windows starts
 # at sign-in for the agent (packaging/windows/install.ps1).
 [[bin]]
+name = "cbb-push"
+path = "src/push_main.rs"
+required-features = ["tunnel"]
+
+[[bin]]
 name = "cbbw"
 path = "src/windowless.rs"
 required-features = ["windowless"]
@@ -73,6 +78,10 @@ zune-jpeg = { version = "0.5.15", default-features = false, features = ["std"] }
 # signatures and sealing secrets as Go's internal/sekey does.
 p256 = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "ecdsa", "ecdh"] }
 hkdf = "0.13"
+# The push service's way to FCM (src/pushd/fcm.rs): a Google service
+# account's key is RSA, and its OAuth assertion RS256. Signing only, in
+# constant time on crypto-bigint, which the core already brings.
+rsa = { version = "0.10.0", default-features = false, features = ["std", "encoding", "pkcs1v15"] }
 aes-gcm = { version = "0.11", default-features = false, features = ["aes", "alloc"] }
 # WireGuard for sync away from home: GotaTun's noise protocol, sans I/O, with
 # the ring stand-in below; smoltcp is the TCP inside the tunnel.
@@ -99,3 +108,5 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Network
 [dev-dependencies]
 # Signs the releases the update tests check.
 p256 = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "ecdsa", "pkcs8"] }
+# The push tests build registrations, whose key is kept in Zeroizing.
+zeroize = { version = "1.8", default-features = false, features = ["alloc"] }

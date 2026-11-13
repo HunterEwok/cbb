@@ -94,11 +94,21 @@ impl Entries {
     /// `name` (each a SubjectPublicKeyInfo, DER), while the list has not
     /// expired; none when it names none.
     pub fn relay_keys(&self, name: &str, now_ms: i64) -> Vec<Vec<u8>> {
+        self.keys_of("relay", name, now_ms)
+    }
+
+    /// The keys keys.json names for the project's push service `name`
+    /// (use `push`, format section 20.4), as [`Entries::relay_keys`].
+    pub fn push_keys(&self, name: &str, now_ms: i64) -> Vec<Vec<u8>> {
+        self.keys_of("push", name, now_ms)
+    }
+
+    fn keys_of(&self, usage: &str, name: &str, now_ms: i64) -> Vec<Vec<u8>> {
         let Some(set) = self.current(now_ms) else { return Vec::new() };
         let Ok(set) = serde_json::from_value::<Set>(set) else { return Vec::new() };
         let roots: Vec<&[u8]> = self.roots.iter().map(Vec::as_slice).collect();
         let Ok(keys) = release::verify_keys(&set.keys, &roots, now_ms, &Seen::default()) else { return Vec::new() };
-        keys.keys.into_iter().filter(|k| k.usage == "relay" && k.name == name).map(|k| k.key).collect()
+        keys.keys.into_iter().filter(|k| k.usage == usage && k.name == name).map(|k| k.key).collect()
     }
 
     /// Where the list held says the project's relay `name` is reached now,
@@ -171,6 +181,8 @@ mod tests {
         assert!(!e.take(&case(&v, "valid"), now).unwrap());
         assert_eq!(e.order(now), (3, 5));
         assert!(e.current(now).is_some());
+        // The vectors list no push service: none is pinned.
+        assert!(e.push_keys("cbb.tools:8767", now).is_empty());
         // It is kept across a restart, and not used once it has expired.
         let again = Entries::open(&dir, roots(&v), now, &log);
         assert_eq!(again.order(now), (3, 5));

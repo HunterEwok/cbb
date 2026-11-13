@@ -120,7 +120,9 @@ final class Notifier {
         let old = defaults.data(forKey: Self.seenKey).flatMap { try? JSONDecoder().decode([String: GroupEvent.Seen].self, from: $0) }
         guard old != now else { return }
         if let data = try? JSONEncoder().encode(now) { defaults.set(data, forKey: Self.seenKey) }
-        if let old { GroupEvent.between(old, now).forEach(post) }
+        guard let old else { return }
+        let events = GroupEvent.between(old, now)
+        events.forEach(post)
     }
 
     /// Forgets the group's devices and events, once the phone left its
@@ -181,5 +183,10 @@ final class ForegroundNotifications: NSObject, UNUserNotificationCenterDelegate,
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
         [.banner, .list, .sound]
+    }
+
+    /// A push notification's Copy button.
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        await PushSetup.answered(response)
     }
 }

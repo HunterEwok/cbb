@@ -219,8 +219,8 @@ if [ "$helper" = yes ]; then
 	install -m 0755 "$(dirname "$bin")/cbb-helper" "${cbb%/*}/cbb-helper"
 fi
 # The servers, which cbb forward and cbb relay run, and their systemd units
-# (cbb-forward.service, cbb-relay.service) start by themselves.
-for server in cbb-forward cbb-relay; do
+# (cbb-forward.service, cbb-relay.service, cbb-push.service) start by themselves.
+for server in cbb-forward cbb-relay cbb-push; do
 	if [ -f "$(dirname "$bin")/$server" ]; then
 		install -m 0755 "$(dirname "$bin")/$server" "${cbb%/*}/$server"
 	fi

@@ -67,7 +67,7 @@ fn parse(args: &[String]) -> std::result::Result<Flags, String> {
 }
 
 /// The address to listen on: ":port" for every address.
-fn listen_addr(s: &str) -> Result<SocketAddr> {
+pub(crate) fn listen_addr(s: &str) -> Result<SocketAddr> {
     if let Some(port) = s.strip_prefix(':') {
         let port = port.parse::<u16>().map_err(|_| Error::msg(format!("{s:?} is not an address to listen on")))?;
         return Ok(SocketAddr::from((Ipv6Addr::UNSPECIFIED, port)));

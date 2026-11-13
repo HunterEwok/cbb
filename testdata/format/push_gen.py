@@ -1,0 +1,492 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 HunterEwok
+
+"""The vectors of push (format section 20.4): the tables of message `push`
+(t 28), the UnifiedPush token, the push service's messages (t 100-104) and
+the body's plaintext; registrations and their send keys; sealed bodies; and the cases a
+later version may write, which a 0.6 reader holds or treats neutrally.
+
+Written apart from gen.py (whose helpers it borrows: the profile's encoder
+and strict reader, frames and table checks) so that running it changes
+only push.json. Deterministic: every key is fixed, every nonce derived and
+every signature deterministic (RFC 6979).
+
+    python3 testdata/format/push_gen.py
+"""
+
+import hashlib
+import hmac
+import json
+import os
+import sys
+
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gen  # noqa: E402
+from gen import Bad, Signer, check_map, dec, enc, frame, head, verify  # noqa: E402
+
+TOKEN = "bytes 1..4096"
+MAX_UP_URL = 4000
+ENV = "uint 1..255"
+TABLES = {
+    "push": [
+        (2, "push/token", TOKEN, False),
+        (3, "push/env", ENV, False),
+        (4, "push/key", "bytes 32", False),
+        (5, "push/seq", "uint 1..9007199254740992", True),
+        (6, "push/kinds", "uint 0..4294967295", True),
+        (7, "push/send-key", "signer 1..4096", False),
+        (8, "push/send-sig", "bytes 1..4096", False),
+        (9, "push/slot", "bytes 16", False),
+        (10, "push/challenge", "bytes 16", False),
+        (11, "push/face", "bytes 16", False),
+    ],
+    "push-renew": [(2, "push-renew/slot", "bytes 16", True), (3, "push-renew/ahead", "flag", False)],
+    "push-up": [
+        (1, "push-up/url", "text 1..4000", True),
+        (2, "push-up/p256dh", "bytes 65", True),
+        (3, "push-up/auth", "bytes 16", True),
+    ],
+    "push/hello": [(2, "push/hello/credentials", "array 1..2 of envelope", True)],
+    "push/ready": [(2, "push/ready/left", "uint 0..4294967295", True)],
+    "push/send": [
+        (2, "push/send/n", "uint 1..4294967295", True),
+        (3, "push/send/token", TOKEN, True),
+        (4, "push/send/env", ENV, True),
+        (6, "push/send/body", "bytes 1..2972", True),
+        (7, "push/send/ttl", "uint 1..4", False),
+        (8, "push/send/key", "signer 1..4096", True),
+        (9, "push/send/sig", "bytes 1..4096", True),
+        (10, "push/send/seq", "uint 1..9007199254740992", True),
+        (11, "push/send/slot", "bytes 16", True),
+        (12, "push/send/challenge", "bytes 16", False),
+    ],
+    "push/sent": [
+        (2, "push/sent/n", "uint 1..4294967295", True),
+        (3, "push/sent/status", "uint 1..255", True),
+        (4, "push/sent/retry_ms", "uint 1..86400000", False),
+    ],
+    "push/error": [(2, "push/error/reason", "text 1..256", True)],
+    "pushbody": [
+        (0, "pushbody/kind", "uint 1..9223372036854775807", True),
+        (2, "pushbody/copy", "bytes 1..2944", False),
+        (3, "pushbody/id", "bytes 16", False),
+        (4, "pushbody/origin", "bytes 16", False),
+        (5, "pushbody/event", "uint 1..9223372036854775807", False),
+        (6, "pushbody/device", "bytes 16", False),
+        (7, "pushbody/time_ms", "uint 0..9223372036854775807", False),
+    ],
+}
+TYPES = {28: "push", 29: "push-renew", 100: "push/hello", 101: "push/ready", 102: "push/send", 103: "push/sent", 104: "push/error"}
+gen.TABLES.update(TABLES)
+
+MAX_BODY = 2972
+PLAIN = MAX_BODY - 28
+ENVS = {1: "APNs", 2: "APNs sandbox", 3: "FCM", 4: "UnifiedPush", 5: "Push Kit", 6: "Aurora"}
+LABEL_BODY, LABEL_NONCE, LABEL_AD = b"cbb push body v1", b"cbb push nonce v1", b"cbb push v1"
+LABEL_SEND = "cbb push send v1"
+COPY_AGE = 2  # the copy's field age (format section 10)
+SEND_KEY = Signer("push send key")
+
+
+def fake(label, n):
+    return hashlib.sha256(b"push vector " + label.encode()).digest()[:n] if n <= 32 else (fake(label, 32) + fake(label + "+", n - 32))
+
+
+def derive(pk, info):
+    # HKDF-SHA256, salt empty (RFC 5869: a salt of zeros).
+    return gen.hkdf(pk, b"", info)
+
+
+def nonce_for(pk, seq, plain):
+    """The nonce: HMAC(nonce key, associated data || plaintext), 12 bytes."""
+    return hmac.new(derive(pk, LABEL_NONCE), ad(seq) + plain, hashlib.sha256).digest()[:12]
+
+
+def send_message(env, token, slot, face, seq, challenge=None):
+    """[env, token, slot, face, seq], and the service's challenge when there is one."""
+    return enc([env, token, slot, face, seq] + ([challenge] if challenge is not None else []))
+
+
+def send_verdict(key, sig, env, token, slot, face, seq, challenge=None):
+    """good, held (an algorithm 0.6 does not know) or the rule."""
+    if not gen.ty_ok("signer 1..4096", key):
+        return "push/send-sig"
+    if key[0] != 1:
+        return "held"
+    return "good" if verify(key, LABEL_SEND, send_message(env, token, slot, face, seq, challenge), sig) else "push/send-sig"
+
+
+def ad(seq):
+    return LABEL_AD + b"\x00" + seq.to_bytes(8, "big")
+
+
+def pad_to(entries, size):
+    """The plaintext: the map with the one `pad` (key 1) that brings it to size."""
+    base = enc(entries)
+    if len(base) == size:
+        return base
+    for plen in range(0, size):
+        m = dict(entries)
+        m[1] = bytes(plen)
+        b = enc(m)
+        if len(b) == size:
+            return b
+        if len(b) > size:
+            return None
+    return None
+
+
+def read_body(b):
+    """The verdict of a plaintext: the kind's name, or the rule it breaks."""
+    try:
+        v = dec(b)
+    except Bad as e:
+        return e.rule
+    # A kind a later version numbers is the neutral hint before any other
+    # field is read against the table.
+    kind = v.get(0) if isinstance(v, dict) else None
+    if not isinstance(kind, int) or isinstance(kind, bool) or kind < 1:
+        return "pushbody/kind"
+    if kind > 3:
+        return "neutral"
+    r = check_map("pushbody", v)
+    if r:
+        return r
+    if 1 in v and (not isinstance(v[1], bytes) or any(v[1])):
+        return "pushbody/pad"
+    kind = v[0]
+    # A copy carries age 0, written by leaving it out: age is outside the
+    # origin's signature, so one copy has one plaintext.
+    if kind == 1 and 2 in v:
+        try:
+            c = dec(v[2])
+            if isinstance(c, dict) and COPY_AGE in c:
+                return "pushbody/age"
+        except Bad:
+            pass
+    needs = {1: [2], 2: [3, 4], 3: [3, 5]}.get(kind, [])
+    names = {2: "pushbody/copy", 3: "pushbody/id", 4: "pushbody/origin", 5: "pushbody/event"}
+    for n in needs:
+        if n not in v:
+            return names[n]
+    rest = {k: x for k, x in v.items() if k != 1}
+    if pad_to(rest, len(b)) != b:
+        return "pushbody/pad"
+    return {1: "copy", 2: "waits", 3: "event"}.get(kind, "neutral")
+
+
+def seal(pk, seq, plain):
+    nonce = nonce_for(pk, seq, plain)
+    return nonce + ChaCha20Poly1305(derive(pk, LABEL_BODY)).encrypt(nonce, plain, ad(seq))
+
+
+def open_body(pk, seq, sealed):
+    # Only a size of the registry opens.
+    if len(sealed) != MAX_BODY:
+        return "pushbody/size"
+    try:
+        plain = ChaCha20Poly1305(derive(pk, LABEL_BODY)).decrypt(sealed[:12], sealed[12:], ad(seq))
+    except Exception:
+        return "pushbody/open"
+    # The nonce is the plaintext's own: any other is refused.
+    if nonce_for(pk, seq, plain) != sealed[:12]:
+        return "pushbody/nonce"
+    return read_body(plain)
+
+
+def registration(m):
+    """The verdict of message `push`: on, off, or a rule."""
+    r = check_map("push", m)
+    if r:
+        return r
+    have = [n in m for n in (2, 3, 4, 7, 8, 9, 11)]
+    if m[6] == 0 and not any(have) and 10 not in m:
+        return "off"
+    if m[6] != 0 and all(have):
+        return "push/key" if m[4] == bytes(32) else "on"
+    return "push/shape"
+
+
+def up_token(t):
+    try:
+        v = dec(t)
+    except Bad as e:
+        return e.rule
+    r = check_map("push-up", v)
+    if r:
+        return r
+    if not up_url(v[1]):
+        return "push-up/url"
+    try:
+        if v[2][0] != 4:
+            raise ValueError
+        ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), v[2])
+    except ValueError:
+        return "push-up/p256dh"
+    return "take"
+
+
+def point(label):
+    """An uncompressed point of P-256, from a fixed scalar."""
+    k = ec.derive_private_key(int.from_bytes(fake(label, 32), "big") % (2**255), ec.SECP256R1())
+    return k.public_key().public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
+
+
+def up_url(url):
+    """The endpoint's rows: printable ASCII, https, no user or fragment, a
+    host name of two labels at least (never an address), port 443."""
+    if not url.startswith("https://") or "#" in url or not all(0x21 <= ord(c) <= 0x7E for c in url):
+        return False
+    rest = url[len("https://"):]
+    authority = rest
+    for sep in "/?":
+        authority = authority.split(sep, 1)[0]
+    if "@" in authority:
+        return False
+    host = authority
+    if ":" in authority:
+        host, port = authority.rsplit(":", 1)
+        if port != "443":
+            return False
+    labels = host.split(".")
+    ok = lambda lab: (1 <= len(lab) <= 63 and all(c.isascii() and (c.isalnum() or c == "-") for c in lab)
+                      and not lab.startswith("-") and not lab.endswith("-"))
+    return len(host) <= 253 and len(labels) >= 2 and all(ok(lab) for lab in labels) and not labels[-1][:1].isdigit()
+
+
+def main():
+    pk = fake("push key", 32)
+    token = fake("apns token", 32)
+    slot = fake("slot", 16)
+    challenge = fake("challenge", 16)
+    face = fake("face", 16)
+    out = {
+        "draft": "format-0.6-bytes.md section 20.4, 2026-11-13",
+        "labels": {"body": LABEL_BODY.decode(), "nonce": LABEL_NONCE.decode(), "ad": LABEL_AD.decode(),
+                   "send": LABEL_SEND},
+        "tables": {name: [{"n": n, "rule": r, "type": t, "needed": nd} for n, r, t, nd in rows]
+                   for name, rows in TABLES.items()},
+        "types": {str(t): name for t, name in TYPES.items()},
+        "envs": {str(e): {"platform": p, "body": MAX_BODY} for e, p in ENVS.items()},
+    }
+
+    # registrations
+    regs = []
+
+    def reg(name, m, note=None):
+        f = frame({0: 28, **m})
+        e = {"name": name, "verdict": registration(dec(f[4:])), "frame": f.hex()}
+        if note:
+            e["note"] = note
+        regs.append(e)
+
+    def signed(m):
+        """m with the send key and its signature over (env, token, slot, face, seq[, challenge])."""
+        sig = SEND_KEY.sign(LABEL_SEND, send_message(m[3], m[2], m[9], m[11], m[5], m.get(10)))
+        return {**m, 7: SEND_KEY.key, 8: sig}
+
+    on = signed({2: token, 3: 1, 4: pk, 5: 3, 6: 3, 9: slot, 11: face})
+    reg("on, copies and events, APNs", on)
+    reg("on with the service's challenge", signed({**on, 10: challenge}))
+    reg("on without the slot", {k: v for k, v in on.items() if k != 9})
+    reg("a slot of 15 bytes", {**on, 9: slot[:15]})
+    reg("on without the face", {k: v for k, v in on.items() if k != 11})
+    reg("a face of 15 bytes", {**on, 11: face[:15]})
+    reg("off with a face", {5: 4, 6: 0, 11: face})
+    reg("off with a challenge", {5: 4, 6: 0, 10: challenge})
+    reg("on without the send key", {k: v for k, v in on.items() if k != 7})
+    reg("on without the send key's signature", {k: v for k, v in on.items() if k != 8})
+    reg("off with a send key", {5: 4, 6: 0, 7: SEND_KEY.key})
+    reg("a push key of zeros", {**on, 4: bytes(32)})
+    reg("a send key of a later algorithm is held", {**on, 7: [9, fake("later key", 2000)], 8: fake("later sig", 3000)})
+    reg("a send key of X25519", {**on, 7: [3, fake("x25519", 32)]})
+    reg("a send key of algorithm 0", {**on, 7: [0, fake("zero", 32)]})
+    reg("a send key of 4097 bytes", {**on, 7: [9, fake("long key", 4097)]})
+    reg("off", {5: 4, 6: 0})
+    reg("a later platform's env is held", {**on, 3: 200}, "kept and handed on as it is (E-1)")
+    reg("only a later version's kinds bit", {**on, 6: 64}, "asks for nothing a 0.6 sender sends")
+    reg("a later version's bit 31 beside copies", {**on, 6: (1 << 31) | 1}, "unknown bits are ignored")
+    reg("a token of 4096 bytes", {**on, 2: fake("long token", 4096)})
+    reg("a token of 4097 bytes", {**on, 2: fake("long token", 4097)})
+    reg("off with a token", {2: token, 5: 4, 6: 0})
+    reg("on without a key", {k: v for k, v in on.items() if k != 4})
+    reg("on without an env", {k: v for k, v in on.items() if k != 3})
+    reg("a key of 31 bytes", {**on, 4: pk[:31]})
+    reg("seq 0", {**on, 5: 0})
+    reg("seq over 2^53", {**on, 5: (1 << 53) + 1})
+    reg("kinds 2^32", {**on, 6: 1 << 32})
+    reg("env 0", {**on, 3: 0})
+    reg("env 256", {**on, 3: 256})
+    reg("without seq", {k: v for k, v in on.items() if k != 5})
+    reg("a field of a later version is skipped", {**on, 12: b"x"})
+    out["registrations"] = regs
+
+    # the send key's signature, as the service checks it
+    sends = []
+    good = on[8]
+    with_ch = SEND_KEY.sign(LABEL_SEND, send_message(1, token, slot, face, 3, challenge))
+    other_slot = fake("other slot", 16)
+    other_face = fake("other face", 16)
+    for name, key, sig, env, tok, sl, fc, seq, ch in [
+        ("the phone's", SEND_KEY.key, good, 1, token, slot, face, 3, None),
+        ("another number", SEND_KEY.key, good, 1, token, slot, face, 4, None),
+        ("another token", SEND_KEY.key, good, 1, fake("other token", 32), slot, face, 3, None),
+        ("another platform", SEND_KEY.key, good, 3, token, slot, face, 3, None),
+        ("another slot", SEND_KEY.key, good, 1, token, other_slot, face, 3, None),
+        ("another group's face", SEND_KEY.key, good, 1, token, slot, other_face, 3, None),
+        ("a challenge the signature does not cover", SEND_KEY.key, good, 1, token, slot, face, 3, challenge),
+        ("the phone's, over the service's challenge", SEND_KEY.key, with_ch, 1, token, slot, face, 3, challenge),
+        ("over a challenge, the challenge left out", SEND_KEY.key, with_ch, 1, token, slot, face, 3, None),
+        ("another key", Signer("not the phone").key, good, 1, token, slot, face, 3, None),
+        ("a later algorithm", [9, fake("later key", 2000)], fake("later sig", 3000), 1, token, slot, face, 3, None),
+        ("a key exchange's algorithm", [3, fake("x25519", 32)], good, 1, token, slot, face, 3, None),
+    ]:
+        e = {"name": name, "key": enc(key).hex(), "sig": sig.hex(), "env": env, "token": tok.hex(),
+             "slot": sl.hex(), "face": fc.hex(), "seq": seq,
+             "verdict": send_verdict(key, sig, env, tok, sl, fc, seq, ch)}
+        if ch is not None:
+            e["challenge"] = ch.hex()
+        sends.append(e)
+    out["sends"] = sends
+
+    # bodies
+    bodies = []
+    cases = [
+        ("a reduced copy (its bytes are the copy's own vectors')", {0: 1, 2: fake("reduced copy", 32) * 40}),
+        ("a copy waits", {0: 2, 3: fake("copy id", 16), 4: fake("origin", 16)}),
+        ("a device was removed", {0: 3, 3: fake("record id", 16), 5: 2, 6: fake("device", 16), 7: 1_790_000_000_000}),
+        ("the root changed", {0: 3, 3: fake("record id 2", 16), 5: 4}),
+        ("the group stopped", {0: 3, 3: fake("record id 3", 16), 5: 6}),
+        ("an event a later version numbers", {0: 3, 3: fake("record id 4", 16), 5: 99}),
+        ("a kind a later version numbers, with a field of its own", {0: 4, 9: b"later"}),
+        ("a later kind whose field 3 is not 16 bytes", {0: 7, 3: b"short", 5: "text"}),
+        ("a field 8 of a later version beside a known kind", {0: 2, 3: fake("copy id", 16), 4: fake("origin", 16), 8: 1}),
+        ("a copy without the copy", {0: 1}),
+        ("a hint without its id", {0: 2, 4: fake("origin", 16)}),
+        ("an event without its event", {0: 3, 3: fake("record id", 16)}),
+        ("kind 0", {0: 0}),
+        ("a copy with an age", {0: 1, 2: enc({COPY_AGE: 1, 9: fake("reduced copy", 32)})}),
+    ]
+    for name, m in cases:
+        plain = pad_to(m, PLAIN)
+        assert plain is not None, name
+        sealed = seal(pk, 3, plain)
+        assert len(sealed) == MAX_BODY
+        bodies.append({"name": name, "key": pk.hex(), "seq": 3, "env": 1, "plaintext": plain.hex(),
+                       "sealed": sealed.hex(), "verdict": open_body(pk, 3, sealed)})
+    good = bytes.fromhex(bodies[1]["sealed"])
+    good_plain = bytes.fromhex(bodies[1]["plaintext"])
+    bent_pad = bytearray(good_plain)
+    bent_pad[20] = 1
+    long_pad = dict(cases[1][1])
+    other = enc({**long_pad, 1: bytes(10)})  # a smaller body, padded for its own size: read
+    chosen = b"\x5a" * 12
+    own_nonce = chosen + ChaCha20Poly1305(derive(pk, LABEL_BODY)).encrypt(chosen, good_plain, ad(3))
+    for name, sealed, seq in [
+        ("under another registration's number", good, 4),
+        ("a nonce of the sender's choosing", own_nonce, 3),
+        ("a byte bent", good[:100] + bytes([good[100] ^ 1]) + good[101:], 3),
+        ("27 bytes", good[:27], 3),
+        ("a pad byte not zero", seal(pk, 3, bytes(bent_pad)), 3),
+        ("a smaller body with its own one padding: not a size of the registry", seal(pk, 3, other), 3),
+    ]:
+        bodies.append({"name": name, "key": pk.hex(), "seq": seq, "env": 1, "sealed": sealed.hex(),
+                       "verdict": open_body(pk, seq, sealed)})
+    out["bodies"] = bodies
+
+    # UnifiedPush tokens
+    ups = []
+    up = {1: "https://up.example.org/" + "a" * (MAX_UP_URL - 23), 2: point("p256dh"), 3: fake("auth", 16)}
+    for name, t in [
+        ("the longest endpoint", up),
+        ("a short endpoint", {**up, 1: "https://ntfy.example.net/upAbc123"}),
+        ("port 443 named, and a query", {**up, 1: "https://up.example.org:443/x?t=1"}),
+        ("port 8443", {**up, 1: "https://up.example.org:8443/x"}),
+        ("a trailing dot", {**up, 1: "https://up.example.org./x"}),
+        ("a backslash", {**up, 1: "https://up.example.org\\@other.example/"}),
+        ("http", {**up, 1: "http://up.example.org/x"}),
+        ("https:// alone", {**up, 1: "https://"}),
+        ("an endpoint of 4001 bytes", {**up, 1: "https://up.example.org/" + "a" * (MAX_UP_URL - 22)}),
+        ("a single label", {**up, 1: "https://localhost/x"}),
+        ("an IPv4 address", {**up, 1: "https://10.0.0.1/x"}),
+        ("a last label of hex digits", {**up, 1: "https://up.0x7f/x"}),
+        ("a last label starting with a digit", {**up, 1: "https://up.example.9org/x"}),
+        ("a first label starting with a digit", {**up, 1: "https://9up.example.org/x"}),
+        ("an IPv6 address", {**up, 1: "https://[::1]/x"}),
+        ("port 8080", {**up, 1: "https://up.example.org:8080/x"}),
+        ("a user", {**up, 1: "https://user@up.example.org/x"}),
+        ("a fragment", {**up, 1: "https://up.example.org/x#f"}),
+        ("a space", {**up, 1: "https://up.example.org/a b"}),
+        ("a key of 64 bytes", {**up, 2: fake("p256dh", 64)}),
+        ("a key of 65 bytes not on the curve", {**up, 2: b"\x04" + fake("p256dh", 64)}),
+        ("a compressed key padded to 65 bytes", {**up, 2: b"\x02" + up[2][1:]}),
+        ("without auth", {1: up[1], 2: up[2]}),
+    ]:
+        b = enc(t)
+        ups.append({"name": name, "token": b.hex(), "length": len(b), "verdict": up_token(b)})
+    assert ups[0]["length"] <= 4096
+    out["unifiedpush"] = ups
+
+    # the service's messages
+    msgs = []
+    body = bytes(MAX_BODY)
+
+    def msg(name, m, sized=None):
+        f = frame(m)
+        e = {"name": name, "t": m[0], "frame": f.hex(), "length": len(f) - 4,
+             "verdict": check_map(TYPES[m[0]], dec(f[4:])) or "take"}
+        if sized is not None:
+            e["sized"] = sized
+        msgs.append(e)
+
+    send = {0: 102, 2: 1, 3: token, 4: 1, 6: body, 8: SEND_KEY.key, 9: on[8], 10: 3, 11: slot}
+    msg("send to APNs", send, True)
+    msg("send with the longest token and a ttl", {**send, 2: 4294967295, 3: fake("long token", 4096), 4: 4, 7: 4}, True)
+    msg("send with the longest token, send key and signature",
+        {**send, 3: fake("long token", 4096), 4: 4, 8: [9, fake("long key", 4096)], 9: fake("long sig", 4096),
+         12: challenge}, True)
+    msg("send with the service's challenge", {**send, 9: with_ch, 12: challenge}, True)
+    msg("send without the slot", {k: v for k, v in send.items() if k != 11})
+    msg("send without the send key", {k: v for k, v in send.items() if k != 8})
+    msg("send without seq", {k: v for k, v in send.items() if k != 10})
+    msg("send with a field 5 of an earlier draft", {**send, 5: bytes(16)})
+    msg("send of a body not its env's size", {**send, 6: body[:100]}, False)
+    msg("send to a later platform", {**send, 4: 200}, False)
+    msg("send of a body over 2972", {**send, 6: bytes(MAX_BODY + 1)})
+    msg("send with ttl 5", {**send, 7: 5})
+    msg("ready", {0: 101, 2: 1200})
+    msg("renew", {0: 29, 2: slot})
+    msg("renew with a slot of 15 bytes", {0: 29, 2: slot[:15]})
+    msg("renew with ahead", {0: 29, 2: slot, 3: 1})
+    msg("renew with ahead 2", {0: 29, 2: slot, 3: 2})
+    msg("sent", {0: 103, 2: 1, 3: 1})
+    msg("sent over budget with a retry", {0: 103, 2: 2, 3: 3, 4: 60000})
+    msg("sent with a retry of a day and a millisecond", {0: 103, 2: 2, 3: 3, 4: 86_400_001})
+    msg("sent stale: the registration is an old one", {0: 103, 2: 4, 3: 7})
+    msg("sent ahead: the number is more than a day past the service's clock", {0: 103, 2: 4, 3: 8})
+    msg("sent with a status of a later version", {0: 103, 2: 3, 3: 77})
+    msg("sent with status 0", {0: 103, 2: 3, 3: 0})
+    msg("error", {0: 104, 2: "the group's credentials do not verify"})
+    msg("hello with two credentials", {0: 100, 2: [[enc({1: 3}), bytes(64)], [enc({1: 4}), bytes(64)]]})
+    msg("hello without credentials", {0: 100, 2: []})
+    for m in msgs:
+        if m["t"] == 102 and m.get("sized"):
+            # An APNs token keeps a send on the 4096 step, the longest on 16384.
+            assert m["length"] == (16384 if "longest" in m["name"] else 4096), m
+    assert all(m["length"] <= 16384 for m in msgs)
+    out["messages"] = msgs
+
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "push.json")
+    with open(path, "w") as f:
+        json.dump(out, f, indent=1, ensure_ascii=False)
+        f.write("\n")
+    print("wrote", path)
+
+
+if __name__ == "__main__":
+    main()

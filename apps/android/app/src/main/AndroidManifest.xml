@@ -123,6 +123,11 @@
             </intent-filter>
         </activity-alias>
 
+        <!-- The Copy button of a push notification (PushSetup). -->
+        <receiver
+            android:name=".PushCopyReceiver"
+            android:exported="false" />
+
         <service
             android:name=".SyncService"
             android:exported="false"

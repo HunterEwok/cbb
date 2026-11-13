@@ -41,6 +41,10 @@ pub enum Ty {
     Addr,
     /// A Key of this algorithm.
     Key(Alg),
+    /// A Key where a signature key is wanted: ES256 checked as such, a key
+    /// exchange's algorithm refused, an algorithm this version does not
+    /// know held, its public part 1 to this many bytes.
+    Signer(usize),
     /// A signed envelope, kept as bytes for its own reader.
     Envelope,
     /// An array of 1 to `max` elements of one type, in the writer's order.
@@ -116,6 +120,13 @@ fn check_ty(f: &Field, v: &Value<'_>) -> Result<(), Rule> {
                 return Err(bad());
             }
         }
+        Ty::Signer(max) => {
+            let k = crate::format::Key::from_value(v).map_err(|_| bad())?;
+            let held = matches!(k.alg, Alg::Unknown(n) if n != 0);
+            if k.public.is_empty() || k.public.len() > max || !(k.alg == Alg::Es256 || held) || k.check().is_err() {
+                return Err(bad());
+            }
+        }
         Ty::Envelope => {
             crate::format::Envelope::from_value(v).map_err(|_| bad())?;
         }
@@ -155,6 +166,7 @@ impl Ty {
             Ty::Text(n) => format!("text 1..{n}"),
             Ty::Addr => "addr".into(),
             Ty::Key(a) => format!("key {}", a.number()),
+            Ty::Signer(n) => format!("signer 1..{n}"),
             Ty::Envelope => "envelope".into(),
             Ty::Array { of, max } => format!("array 1..{max} of {}", of.describe()),
             Ty::Once { of, max } => format!("once 1..{max} of {}", of.describe()),
@@ -284,7 +296,7 @@ impl Obfuscation {
 pub fn check(msg: &[u8]) -> Result<u64, Rule> {
     let v = cbor::decode(msg)?;
     let t = v.get(frame::FIELD_T).and_then(Value::as_uint).ok_or(Rule::FRAME_MESSAGE)?;
-    if let Some(table) = tables::of(t).or_else(|| wave4::of(t)) {
+    if let Some(table) = tables::of(t).or_else(|| wave4::of(t)).or_else(|| crate::push::of(t)) {
         check_map(table, &v)?;
     }
     Ok(t)

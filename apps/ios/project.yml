@@ -26,6 +26,18 @@ settings:
     # device.sh sets another one for a build signed by a free Personal Team, so
     # that it never takes the identifiers the developer account will register.
     CBB_BUNDLE_ID: tools.cbb
+    # The push keychain group the app and its notification extension share
+    # (App/PushSetup.swift): release builds only, debug builds signed ad hoc
+    # have no push.
+    CBB_PUSH_KEYCHAIN: ""
+    # The keychain group of the app's own keys and secrets, which every one of
+    # its keychain queries names (KeychainIdentity.accessGroup): release builds
+    # only, as their entitlement.
+    CBB_SHARED_KEYCHAIN: ""
+  configs:
+    Release:
+      CBB_PUSH_KEYCHAIN: $(AppIdentifierPrefix)tools.cbb.push
+      CBB_SHARED_KEYCHAIN: $(AppIdentifierPrefix)tools.cbb.shared
 targets:
   CBB:
     type: application
@@ -37,6 +49,8 @@ targets:
       - package: CBBKit
       # Share and the text selection menu's Share (docs/apps.md).
       - target: ShareExtension
+      # Opens a push body while the app is closed.
+      - target: NotificationService
       # The home-screen widget and the Control Center control.
       - target: Widgets
       # The Apple Watch app, in the app's Watch folder.
@@ -55,11 +69,13 @@ targets:
         NSSupportsLiveActivities: true
         # Now and then iOS wakes the app for a moment to hear of the group's
         # events (BackgroundRefresh.swift).
-        UIBackgroundModes: [fetch]
+        UIBackgroundModes: [fetch, remote-notification]
         BGTaskSchedulerPermittedIdentifiers: [tools.cbb.refresh]
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         NSBonjourServices: [_cbb._tcp]
+        CBBPushKeychain: $(CBB_PUSH_KEYCHAIN)
+        CBBSharedKeychain: $(CBB_SHARED_KEYCHAIN)
         # A dragged device tile (Views/Arrange.swift), which stays in the app.
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: tools.cbb.tile
@@ -108,6 +124,7 @@ targets:
         CFBundleLocalizations: [en, zh-Hans, es, ru, ar, sw, he, hi]
         NSBonjourServices: [_cbb._tcp]
         NSLocalNetworkUsageDescription: CBB finds your computers on the home network to send them what you share.
+        CBBSharedKeychain: $(CBB_SHARED_KEYCHAIN)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
@@ -124,6 +141,30 @@ targets:
       configs:
         Release:
           CODE_SIGN_ENTITLEMENTS: ShareExtension/ShareExtension.entitlements
+  NotificationService:
+    type: app-extension
+    platform: iOS
+    sources:
+      - NotificationService
+    dependencies:
+      - package: CBBKit
+    info:
+      path: NotificationService/Info.plist
+      properties:
+        CFBundleDisplayName: CBB
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [en, zh-Hans, es, ru, ar, sw, he, hi]
+        CBBPushKeychain: $(CBB_PUSH_KEYCHAIN)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(CBB_BUNDLE_ID).push
+        TARGETED_DEVICE_FAMILY: "1,2"
+      configs:
+        Release:
+          CODE_SIGN_ENTITLEMENTS: NotificationService/NotificationService.entitlements
   Widgets:
     type: app-extension
     platform: iOS

@@ -354,6 +354,8 @@ final class AppModel: ObservableObject {
         didSet {
             loadTiles()
             SyncSwitch.publish(group.hasGroup ? syncOff == nil : nil)
+            PushSetup.shared.group(tag: group.groupTag, me: devices.first(where: \.isSelf)?.id, devices: devices.map(\.id),
+                                   root: devices.first(where: \.isRoot)?.id)
         }
     }
     /// The devices and collections, this phone among them, in the user's
@@ -1240,12 +1242,16 @@ final class AppModel: ObservableObject {
     func leave() async -> Bool {
         busy = true
         defer { busy = false }
+        // Push off in this group while the phone still reaches its members.
+        PushSetup.shared.leaving()
         do {
             try await group.leave()
         } catch {
             message = Self.describe(error)
+            PushSetup.shared.stayed()
             return false
         }
+        PushSetup.shared.left()
         if notifies { Notifier.shared.forget() }
         do {
             try group.prepare()

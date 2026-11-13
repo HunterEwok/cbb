@@ -15,6 +15,12 @@ import kotlinx.coroutines.launch
 /** The app: one model for every screen, and later for the service and the tile. */
 class CBBApp : Application() {
     val model: AppModel by lazy { AppModel(this) }
+
+    override fun onCreate() {
+        super.onCreate()
+        // Push while the app is closed: the platform's token, when on.
+        runCatching { PushSetup.start(this) }.onFailure { PushSetup.failed(this, it) }
+    }
 }
 
 class MainActivity : ComponentActivity() {

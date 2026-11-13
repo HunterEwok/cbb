@@ -519,10 +519,38 @@ struct NotificationSettings: View {
     var body: some View {
         Section {
             ForEach(GroupEvent.Kind.allCases) { NotifyToggle(kind: $0) }
+            if PushSetup.accessGroup != nil { PushToggle() }
         } header: {
             Text("Notifications")
         }
         .listRowBackground(palette.surface)
+    }
+}
+
+/// Push while the app is closed (App/PushSetup.swift).
+private struct PushToggle: View {
+    @AppStorage(PushSetup.onKey) private var on = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle(isOn: Binding(get: { on }, set: { PushSetup.shared.set(on: $0); on = $0 })) {
+                Text("Notify me when the app is closed")
+            }
+            Text("A sealed notice goes through Apple's push service; only this phone opens it, and neither Apple nor CBB's service sees your copies.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            if let problem = PushSetup.shared.problem {
+                Text(problem).font(.footnote).foregroundStyle(.red)
+            }
+            #if DEBUG
+            // The test tool's input (member/src/pushd/tests.rs,
+            // live_push_to_a_phone), only in a debug build with
+            // -PushTestTools YES; never in a release build.
+            if UserDefaults.standard.bool(forKey: "PushTestTools"), let frame = PushSetup.shared.testFrame() {
+                Button { UIPasteboard.general.string = frame } label: { Text(verbatim: "Copy the push registration (test)") }
+            }
+            #endif
+        }
     }
 }
 

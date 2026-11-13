@@ -1289,6 +1289,52 @@
         }
       }
     },
+    "A sealed notice goes through Apple's push service; only this phone opens it, and neither Apple nor CBB's service sees your copies.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يمر إشعار مختوم عبر خدمة الإشعارات من Apple؛ لا يفتحه إلا هذا الهاتف، ولا ترى Apple ولا خدمة CBB ما تنسخه."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un aviso sellado pasa por el servicio de notificaciones de Apple; solo este teléfono lo abre, y ni Apple ni el servicio de CBB ven tus copias."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "הודעה חתומה עוברת דרך שירות ההתראות של Apple; רק הטלפון הזה פותח אותה, ולא Apple ולא השירות של CBB רואים את ההעתקות שלך."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "एक सील की हुई सूचना Apple की पुश सेवा से आती है; उसे केवल यह फ़ोन खोलता है, और न Apple न CBB की सेवा आपकी कॉपियाँ देखती है।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Запечатанное уведомление идёт через службу push Apple; открыть его может только этот телефон, и ни Apple, ни служба CBB не видят ваших копий."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arifa iliyofungwa hupita kupitia huduma ya arifa ya Apple; ni simu hii tu inayoifungua, na wala Apple wala huduma ya CBB haioni nakala zako."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一则加密封装的通知经由 Apple 的推送服务送达；只有这部手机能打开它，Apple 和 CBB 的服务都看不到你的复制内容。"
+          }
+        }
+      }
+    },
     "A secret": {
       "localizations": {
         "ar": {
@@ -4600,6 +4646,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "副本"
+          }
+        }
+      }
+    },
+    "Copy": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نسخ"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copiar"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "העתקה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "कॉपी करें"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Скопировать"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nakili"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制"
           }
         }
       }
@@ -11550,6 +11642,52 @@
         }
       }
     },
+    "New in your group. Open the app.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هناك جديد في مجموعتك. افتح التطبيق."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hay algo nuevo en tu grupo. Abre la app."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "יש משהו חדש בקבוצה שלך. פתחו את האפליקציה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "आपके समूह में कुछ नया है। ऐप खोलें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "В вашей группе что-то новое. Откройте приложение."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kuna jambo jipya katika kikundi chako. Fungua programu."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你的群组有新内容。请打开应用。"
+          }
+        }
+      }
+    },
     "No YubiKey was held to the phone. Try again.": {
       "localizations": {
         "ar": {
@@ -12236,6 +12374,98 @@
           "stringUnit": {
             "state": "translated",
             "value": "通知"
+          }
+        }
+      }
+    },
+    "Notifications while the app is closed could not be set up.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر إعداد الإشعارات عندما يكون التطبيق مغلقًا."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudieron configurar los avisos con la app cerrada."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לא ניתן היה להגדיר התראות כשהאפליקציה סגורה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ऐप बंद रहने पर सूचनाएँ सेट नहीं हो सकीं।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось включить уведомления при закрытом приложении."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arifa wakati programu imefungwa hazikuweza kuwekwa."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法设置应用关闭时的通知。"
+          }
+        }
+      }
+    },
+    "Notify me when the app is closed": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نبّهني عندما يكون التطبيق مغلقًا"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avisarme cuando la app esté cerrada"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "להודיע לי כשהאפליקציה סגורה"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ऐप बंद होने पर मुझे सूचित करें"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Уведомлять, когда приложение закрыто"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niarifu programu ikiwa imefungwa"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用关闭时通知我"
           }
         }
       }

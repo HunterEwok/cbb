@@ -77,6 +77,7 @@ pub mod pair;
 #[cfg(feature = "tls")]
 pub mod pair_session;
 pub mod peer;
+pub mod push;
 pub mod records;
 pub mod recovery;
 pub mod release;

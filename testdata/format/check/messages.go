@@ -100,6 +100,27 @@ func tyOK(ty string, v any) bool {
 			return len(pub) == 32
 		}
 		return true
+	case "signer":
+		// A key where a signature key is wanted: ES256 checked, a key
+		// exchange's algorithm refused, an unknown one held.
+		a, ok := v.([]any)
+		if !ok || len(a) != 2 {
+			return false
+		}
+		alg, ok1 := a[0].(uint64)
+		pub, ok2 := a[1].([]byte)
+		_, hi := upTo(w[1])
+		if !ok1 || !ok2 || len(pub) == 0 || uint64(len(pub)) > hi {
+			return false
+		}
+		switch alg {
+		case 1:
+			x, _ := elliptic.Unmarshal(elliptic.P256(), pub) //nolint:staticcheck
+			return x != nil
+		case 0, 2, 3:
+			return false
+		}
+		return true
 	case "envelope":
 		a, ok := v.([]any)
 		if !ok || (len(a) != 2 && len(a) != 3) {
@@ -114,8 +135,14 @@ func tyOK(ty string, v any) bool {
 		if err != nil {
 			return false
 		}
-		_, ok = body.(map[any]any)
-		return ok
+		bm, ok := body.(map[any]any)
+		if !ok {
+			return false
+		}
+		// A second signature goes with signer2 (key 8) and only with it
+		// (section 3.1), at most 4096 bytes.
+		_, signer2 := bm[uint64(8)]
+		return signer2 == (len(a) == 3) && (len(a) == 2 || len(a[2].([]byte)) <= 4096)
 	case "array", "once", "set":
 		_, hi := upTo(w[1])
 		inner := strings.TrimPrefix(w[2], "of ")
@@ -457,17 +484,18 @@ func endpointOK(s string) bool {
 }
 
 // publicV4 reports whether an IPv4 address is none of this network, private,
-// shared, loopback, link-local, multicast or reserved.
+// shared, loopback, link-local, IETF protocol assignments, benchmarking,
+// multicast or reserved.
 func publicV4(b [4]byte) bool {
-	x, y := b[0], b[1]
-	return !(x == 0 || x == 10 || x == 127 || x >= 224 || (x == 172 && y >= 16 && y < 32) ||
+	x, y, z := b[0], b[1], b[2]
+	return !(x == 0 || x == 10 || (x == 192 && y == 0 && z == 0) || (x == 198 && (y == 18 || y == 19)) || x == 127 || x >= 224 || (x == 172 && y >= 16 && y < 32) ||
 		(x == 192 && y == 168) || (x == 100 && y >= 64 && y < 128) || (x == 169 && y == 254))
 }
 
 // publicIP reports whether a card may name the address: a public IPv4
 // address, or an IPv6 address that is not loopback, unspecified, multicast,
 // link-local, site-local or unique-local, nor a refused IPv4 address in a
-// translated, NAT64 or 6to4 form.
+// mapped, translated, NAT64 or 6to4 form.
 func publicIP(a netip.Addr) bool {
 	if a.Is4() {
 		return publicV4(a.As4())
@@ -479,6 +507,11 @@ func publicIP(a netip.Addr) bool {
 	case a.IsLoopback(), a.IsUnspecified(), a.IsMulticast():
 		return false
 	case first&0xffc0 == 0xfe80, first&0xffc0 == 0xfec0, first&0xfe00 == 0xfc00:
+		return false
+	// IPv4-compatible, NAT64 of local use, Teredo.
+	case bytes.Equal(p[:12], make([]byte, 12)), bytes.Equal(p[:6], []byte{0, 0x64, 0xff, 0x9b, 0, 1}), bytes.Equal(p[:4], []byte{0x20, 0x01, 0, 0}):
+		return false
+	case bytes.Equal(p[:12], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff}) && !v4(p[12:]):
 		return false
 	case bytes.Equal(p[:12], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 0, 0}) && !v4(p[12:]):
 		return false

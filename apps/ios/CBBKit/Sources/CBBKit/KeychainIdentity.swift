@@ -14,6 +14,23 @@ import Security
 public enum KeychainIdentity {
     public enum Failure: Error { case keychain(OSStatus), noIdentity }
 
+    /// The keychain access group of the app's own keys and secrets
+    /// (`$(AppIdentifierPrefix)tools.cbb.shared`, the bundle's
+    /// `CBBSharedKeychain`), which every query of the app's names, so that
+    /// an item under the same label in the push group, which the app can
+    /// read too, never answers one. Nil in builds without the entitlement
+    /// (debug builds signed ad hoc, the Mac, tests and tools).
+    public static let accessGroup: String? =
+        (Bundle.main.object(forInfoDictionaryKey: "CBBSharedKeychain") as? String).flatMap { $0.isEmpty ? nil : $0 }
+
+    /// The query with the app's access group named, when there is one.
+    public static func inGroup(_ q: [CFString: Any]) -> [CFString: Any] {
+        guard let g = accessGroup else { return q }
+        var q = q
+        q[kSecAttrAccessGroup] = g
+        return q
+    }
+
     /// A SecKey for a software P-256 key, for tests and tools.
     public static func secKey(_ key: P256.Signing.PrivateKey) throws -> SecKey {
         var error: Unmanaged<CFError>?
@@ -57,7 +74,7 @@ public enum KeychainIdentity {
             privateAttrs[kSecAttrAccessible] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
             #endif
         }
-        attrs[kSecPrivateKeyAttrs] = privateAttrs
+        attrs[kSecPrivateKeyAttrs] = inGroup(privateAttrs)
         #if os(macOS)
         if !secureEnclave { attrs[kSecUseDataProtectionKeychain] = false }
         #endif
@@ -89,7 +106,7 @@ public enum KeychainIdentity {
         query[kSecUseDataProtectionKeychain] = false
         #endif
         var out: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &out)
+        let status = SecItemCopyMatching(inGroup(query) as CFDictionary, &out)
         if status == errSecItemNotFound { return nil }
         guard status == errSecSuccess, let out else { throw Failure.keychain(status) }
         return (out as! SecKey)
@@ -101,7 +118,7 @@ public enum KeychainIdentity {
         #if os(macOS)
         query[kSecUseDataProtectionKeychain] = false
         #endif
-        SecItemDelete(query as CFDictionary)
+        SecItemDelete(inGroup(query) as CFDictionary)
     }
 
     /// Removes public keys stored under label, as makeKey stored them
@@ -111,7 +128,7 @@ public enum KeychainIdentity {
         #if os(macOS)
         query[kSecUseDataProtectionKeychain] = false
         #endif
-        SecItemDelete(query as CFDictionary)
+        SecItemDelete(inGroup(query) as CFDictionary)
     }
 
     /// Removes the certificates stored under label, before a new one
@@ -121,7 +138,7 @@ public enum KeychainIdentity {
         #if os(macOS)
         query[kSecUseDataProtectionKeychain] = false
         #endif
-        SecItemDelete(query as CFDictionary)
+        SecItemDelete(inGroup(query) as CFDictionary)
     }
 
     /// Stores the key (unless it is in the keychain already, as a Secure
@@ -141,17 +158,17 @@ public enum KeychainIdentity {
         if storeKey {
             let item: [CFString: Any] = [kSecClass: kSecClassKey, kSecValueRef: key, kSecAttrLabel: label]
             let add = item.merging(where_) { a, _ in a }
-            let status = SecItemAdd(add as CFDictionary, nil)
+            let status = SecItemAdd(inGroup(add) as CFDictionary, nil)
             guard status == errSecSuccess || status == errSecDuplicateItem else { throw Failure.keychain(status) }
         }
         let item: [CFString: Any] = [kSecClass: kSecClassCertificate, kSecValueRef: cert, kSecAttrLabel: label]
         let add = item.merging(where_) { a, _ in a }
-        let status = SecItemAdd(add as CFDictionary, nil)
+        let status = SecItemAdd(inGroup(add) as CFDictionary, nil)
         guard status == errSecSuccess || status == errSecDuplicateItem else { throw Failure.keychain(status) }
         #if !os(macOS)
         // A certificate stored before was readable only while unlocked.
         if status == errSecDuplicateItem {
-            SecItemUpdate([kSecClass: kSecClassCertificate, kSecAttrLabel: label] as CFDictionary, where_ as CFDictionary)
+            SecItemUpdate(inGroup([kSecClass: kSecClassCertificate, kSecAttrLabel: label]) as CFDictionary, where_ as CFDictionary)
         }
         #endif
         #if os(macOS)
@@ -162,7 +179,7 @@ public enum KeychainIdentity {
         #else
         removePublicKeys(label: label)
         var out: CFTypeRef?
-        let s = SecItemCopyMatching([kSecClass: kSecClassIdentity, kSecAttrLabel: label, kSecReturnRef: true] as CFDictionary, &out)
+        let s = SecItemCopyMatching(inGroup([kSecClass: kSecClassIdentity, kSecAttrLabel: label, kSecReturnRef: true]) as CFDictionary, &out)
         guard s == errSecSuccess, let out else { throw Failure.keychain(s) }
         return out as! SecIdentity
         #endif

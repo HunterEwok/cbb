@@ -7,6 +7,27 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- Push to a phone whose app is closed, in the core's 0.6 format: a phone's registration with
+  each member of each group (message `push`, a token of its platform's push service and a push
+  key of its own per group), the body a member seals to it (one size per platform, a reduced
+  copy whose origin the phone checks, or a hint that something waits; every sender of one
+  body makes the same bytes, so the push service drops a repeat), the one send key a phone
+  keeps per token and the slot it draws per group, whose signature the push service checks so
+  that only the newest registration of each group gets through and a token's key is confirmed
+  only by a challenge the platform carried to the phone, the message that asks a phone to
+  register again (`push-renew`), and the messages between a member and the
+  project's push service (`cbb-push/1`), which sees tokens, times and one size, never a group
+  or content (`cbb_core::push`, vectors in `testdata/format/push.json`). The push service
+  `cbb-push` (APNs, FCM's HTTP v1 and UnifiedPush, `packaging/linux/cbb-push.service`), the member's sender, and the
+  phones' calls `push_key`, `push_limits`, `push_registration` and `push_open` (error code 18,
+  `push`). The iPhone and iPad app registers for push (a switch in Settings, on by default)
+  and opens each notification in an extension that holds what opens a body and a copy (the
+  push keys, the send key, the sealing secrets of the epochs in the group's window) and nothing
+  that signs a record; a copy's text shows with a Copy button, a secret never. It registers
+  again only when what it says changed, names the group's face toward the push service in each
+  registration, and turns push off in a group it leaves. The Android app does the same, its push vault sealed
+  under an Android Keystore key: the full build through FCM (Firebase's identifiers given at
+  build time), the F-Droid build through UnifiedPush. HarmonyOS and Aurora follow.
 - The Rust core wipes the secrets it holds when it lets them go, prints none in `Debug` or
   an error, and compares every mark and confirmation tag in constant time; the C library
   wipes each answer as it is given back (docs/core-api.md, "Secrets"). Timing tests of the

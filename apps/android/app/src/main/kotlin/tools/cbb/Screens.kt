@@ -1387,8 +1387,38 @@ private fun Notifications(notifier: Notifier) {
                 Switch(checked = on, onCheckedChange = null)
             }
         }
+        PushSwitch()
     }
     Tip(R.string.notifications_body)
+}
+
+/** Push while the app is closed (PushSetup), where this build can get it. */
+@Composable
+private fun PushSwitch() {
+    val context = LocalContext.current
+    if (!PushPlatform.available(context)) return
+    val palette = LocalPalette.current
+    var on by remember { mutableStateOf(PushSetup.on(context)) }
+    HorizontalDivider(color = palette.line)
+    Row(
+        Modifier.fillMaxWidth().focusRing().clickable(role = Role.Switch) {
+            on = !on
+            PushSetup.set(context, on)
+        }.padding(horizontal = Tokens.spacingMedium, vertical = Tokens.spacingSmall),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(stringResource(R.string.push_switch), modifier = Modifier.weight(1f))
+        Switch(checked = on, onCheckedChange = null)
+    }
+    Text(
+        stringResource(R.string.push_note),
+        style = MaterialTheme.typography.bodySmall,
+        color = palette.textDim,
+        modifier = Modifier.padding(horizontal = Tokens.spacingMedium, vertical = Tokens.spacingSmall),
+    )
+    PushSetup.problem?.let {
+        Text(it, style = MaterialTheme.typography.bodySmall, color = palette.danger, modifier = Modifier.padding(horizontal = Tokens.spacingMedium))
+    }
 }
 
 /** Keeps the activity's window out of screenshots and the recent apps' preview while shown. */

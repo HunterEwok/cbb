@@ -92,6 +92,8 @@ jobs:
           elif [ -z "$GOMIPS" ]; then
             # cbb-relay, the relay in Rust, a service of its own beside cbb.
             cp "$dir/cbb" "$dir/cbb-relay" "$RUNNER_TEMP/"
+            # cbb-push, the project's push service, runs on a Linux server.
+            if [ "$GOOS" = linux ]; then cp "$dir/cbb-push" "$RUNNER_TEMP/"; fi
           else
             cp "$dir/cbb" "$RUNNER_TEMP/"
           fi
@@ -352,8 +354,17 @@ jobs:
           CBB_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.CBB_ANDROID_KEYSTORE_PASSWORD }}
           CBB_ANDROID_KEY_ALIAS: ${{ secrets.CBB_ANDROID_KEY_ALIAS }}
           CBB_ANDROID_KEY_PASSWORD: ${{ secrets.CBB_ANDROID_KEY_PASSWORD }}
+          # The project's Firebase app, for push in the full build (docs/core-api.md, "Push");
+          # without them the full build offers no push. The fdroid build never reads them.
+          CBB_FIREBASE_APP_ID: ${{ secrets.CBB_FIREBASE_APP_ID }}
+          CBB_FIREBASE_PROJECT_ID: ${{ secrets.CBB_FIREBASE_PROJECT_ID }}
+          CBB_FIREBASE_API_KEY: ${{ secrets.CBB_FIREBASE_API_KEY }}
+          CBB_FIREBASE_SENDER_ID: ${{ secrets.CBB_FIREBASE_SENDER_ID }}
         run: |
           mkdir -p "$RUNNER_TEMP/dist"
+          if [ -z "$CBB_FIREBASE_APP_ID" ]; then
+            echo "::warning::no Firebase app in the secrets; the full build has no push"
+          fi
           if [ -z "$KEYSTORE_BASE64" ]; then
             echo "::warning::no Android release key in the secrets; the release has no APK"
             exit 0
