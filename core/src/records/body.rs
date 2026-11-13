@@ -11,7 +11,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use super::key::{DeviceId, GroupId, Key, KeyCheck, KeyHash, RecordId};
-use super::{MAX_ROOT_RECORDS, MAX_SEQ, Rule};
+use super::{LIST_MAX, MAX_SEQ, Rule};
 use crate::format::cbor::{MAX_INT, Value};
 
 /// Record types (section 4).
@@ -33,8 +33,9 @@ pub const TYPE_RECOVERY: u64 = 13;
 /// recovery key (rule 33).
 pub const RETIRED_TYPES: &[u64] = &[5, 11, 12];
 
-/// The most recovery records a group ever has: a 17th is refused.
-pub const MAX_RECOVERY: u64 = 16;
+/// The most recovery records a group ever has: a 65th is refused (the
+/// owner, 2026-11-12).
+pub const MAX_RECOVERY: u64 = 64;
 
 /// Roles of a device record.
 pub const ROLE_MEMBER: u64 = 1;
@@ -992,14 +993,14 @@ impl List {
     }
 
     /// Reads a list from its bytes: the profile's encoding, at most
-    /// MAX_ROOT_RECORDS IDs, sorted strictly (`records/list`).
+    /// LIST_MAX IDs, sorted strictly (`records/list`).
     pub fn decode(b: &[u8]) -> Result<List, Rule> {
         let bad = Rule::new("records/list");
         let v = crate::format::cbor::decode(b).map_err(|_| bad)?;
         let items = v.as_array().ok_or(bad)?;
         let list: Vec<RecordId> =
             items.iter().map(|i| i.as_bytes().and_then(RecordId::from_slice)).collect::<Option<_>>().ok_or(bad)?;
-        if list.len() > MAX_ROOT_RECORDS || !strictly_sorted(&list) {
+        if list.len() > LIST_MAX || !strictly_sorted(&list) {
             return Err(bad);
         }
         Ok(List(list))
