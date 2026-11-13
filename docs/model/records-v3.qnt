@@ -241,6 +241,11 @@ module records_v3 {
   // its signer. Until then it waits aside (seed j.8004: a checkpoint that can never be whole
   // evicted whole records of its key from the rooms of a fresh member).
   pure val CP_ROOM_WHEN_WHOLE = false
+  // A checkpoint names its key's record just below it (its prev) for the rooms only when it
+  // keeps it: a prev it prunes takes no part of the rooms beside it and does not decide whether
+  // it fits (seed j.8004: a fresh member holding a prev the checkpoint prunes found the counting
+  // checkpoint over its signer's ceiling and counted none; one that had dropped it counted it).
+  pure val PREV_ROOM_WHEN_KEPT = false
   // A set's memory of what its rooms dropped: "mark" (a key that dropped records turns away
   // its later ones and keeps claiming the dropped units), "none" (no memory: a record is judged
   // against the rooms as they are, as a member given everything at once would judge it), or
@@ -591,7 +596,8 @@ module records_v3 {
     if (c.line.length() < 2) NONEREC
     else items.filter(r => r.id == c.line[c.line.length() - 2]).fold(NONEREC, (a, r) => r)
   // Checkpoint c names r: r is its key's record below it, or one it keeps.
-  pure def namedBy(c: Record, r: Record, items: Set[Record]): bool = c.keep.contains(r.id) or waitedBy(c, items) == r
+  pure def namedBy(c: Record, r: Record, items: Set[Record]): bool =
+    c.keep.contains(r.id) or (not(PREV_ROOM_WHEN_KEPT) and waitedBy(c, items) == r)
   // Drops what the set does not keep.
   pure def recut(s: Store, db: Id -> Record): Store = {
     val res = settle(s, recsOf(s.recs, db), cutOf(s, db), db)
