@@ -13,6 +13,12 @@ final class PadUITests: XCTestCase {
         continueAfterFailure = true
     }
 
+    /// The simulator keeps the orientation for the tests after these: the
+    /// readers' contrast check maps frames onto a portrait screenshot.
+    override func tearDown() {
+        XCUIDevice.shared.orientation = .portrait
+    }
+
     private func launch(language: String = "en", extra: [String] = []) throws -> XCUIApplication {
         try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "Home's big screen is an iPad's")
         let app = XCUIApplication()
