@@ -1401,7 +1401,7 @@ fn a_large_first_checkpoint_applies() {
 #[test]
 fn a_checkpoint_over_its_ceiling_is_not_signed() {
     let g = base();
-    let mut keep: Vec<RecordId> = (0..5000u32).map(|i| RecordId(crate::certs::sha256(&i.to_be_bytes()))).collect();
+    let mut keep: Vec<RecordId> = (0..9000u32).map(|i| RecordId(crate::certs::sha256(&i.to_be_bytes()))).collect();
     keep.sort();
     let root = k("root");
     let head = Head { key: root.hash, seq: g.heads[&root.hash].0, id: g.heads[&root.hash].1 };
@@ -1492,7 +1492,7 @@ fn leaving_a_halt_carries_nothing_over() {
 fn a_full_set_names_more_ids_than_its_rooms_hold() {
     let mut g = base();
     let root = k("root");
-    let admins: Vec<K> = (0..12).map(|i| k(&format!("admin {i}"))).collect();
+    let admins: Vec<K> = (0..crate::records::ADMIN_KEYS_MAX).map(|i| k(&format!("admin {i}"))).collect();
     for (i, a) in admins.iter().enumerate() {
         g.admin(&k(&format!("admin device {i}")), a, POWER_ADMIT | POWER_MANAGE);
     }
@@ -1507,7 +1507,9 @@ fn a_full_set_names_more_ids_than_its_rooms_hold() {
     let from = g.recs.clone();
     let mut m = set_of(&g.root.key);
     m.insert_all(from.iter().cloned());
-    assert_eq!(m.len(), crate::records::MAX_RECORDS);
+    // The current root and every admin key full: the cut roots' reserve
+    // is the rest of the room.
+    assert_eq!(m.len(), crate::records::MAX_RECORDS - crate::records::CUT_ROOTS_RESERVE);
     let w = write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
     m.insert(w.record.clone()).unwrap();
     let n1 = k("n1");
@@ -1537,7 +1539,8 @@ fn many_admins() -> (G, Vec<K>) {
 /// concern, the removed keys and their admin or member key: removing a
 /// plain device names none and weighs one unit, removing an admin's
 /// device names its admin key, and removing 256 keys of a group of 250
-/// admin keys fits, in as many records as their bodies need.
+/// devices made admins (of which 16, the cap, count) fits, in as many
+/// records as their bodies need.
 #[test]
 fn removals_name_only_the_keys_they_concern() {
     let (g, admins) = many_admins();
@@ -1583,7 +1586,7 @@ fn removals_name_only_the_keys_they_concern() {
     many.extend((0..4).map(|i| k(&format!("stranger {i}")).hash));
     assert_eq!(many.len(), 256);
     let all = removals(&many);
-    assert!(all.len() > 1);
+    assert!(!all.is_empty());
     let mut named: Vec<KeyHash> = all.iter().flat_map(|rm| rm.keys.iter().copied()).collect();
     named.sort();
     many.sort();

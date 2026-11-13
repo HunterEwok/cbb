@@ -535,7 +535,7 @@ fn a_flood_from_one_key_keeps_the_others() {
     let quiet = g.recs.clone();
     for flooder in [&root, &b] {
         let mut g = G { root: k("root"), gid: g.gid, heads: g.heads.clone(), recs: quiet.clone(), lists: Vec::new() };
-        for i in 0..1500 {
+        for i in 0..2000 {
             g.device(flooder, &k(&format!("f{i}")), "flood", |_| {});
         }
         for order in 0..2 {
@@ -1353,8 +1353,8 @@ fn the_three_kinds_of_admin() {
 /// A pool of records that touches every rule: admins, devices, removals,
 /// a freeze and a thaw, two histories, claims, held records, settings.
 /// A full set never drops a root's removal or resolve: 16 admin keys fill
-/// their 256 units each, the root signs some 300 records after them, and
-/// its removal and its resolve at the end still count.
+/// their 256 units each, the root signs more records than its ceiling
+/// after them, and its removal and its resolve at the end still count.
 #[test]
 fn a_full_set_keeps_the_roots_removals() {
     let mut g = G::new();
@@ -1372,8 +1372,9 @@ fn a_full_set_keeps_the_roots_removals() {
             g.rec(a, Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] });
         }
     }
-    let below: Vec<Record> =
-        (0..300).map(|i| g.root_rec(Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] })).collect();
+    let below: Vec<Record> = (0..MAX_ROOT_RECORDS as u64 + 64)
+        .map(|i| g.root_rec(Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] }))
+        .collect();
     let rv_d = g.root_rec(Kind::Revoke(removal(&[d.hash], g.seen())));
     let resolve = g.root_rec(Kind::Resolve(vec![rv_e.id()]));
     let mut set = set_of(&g.root.key.clone());
@@ -1382,7 +1383,7 @@ fn a_full_set_keeps_the_roots_removals() {
     assert!(set.contains(&rv_d.id()) && set.contains(&resolve.id()));
     // The root's records right under them are dropped: the removal stands
     // for its chain.
-    assert!(!set.contains(&below[299].id()));
+    assert!(!set.contains(&below.last().unwrap().id()));
     for s in [set.state(), g.state()] {
         assert!(s.revoked.contains(&d.hash), "the root's removal counts");
         assert!(s.counting.contains(&rv_d.id()) && s.counting.contains(&resolve.id()));
@@ -3446,8 +3447,8 @@ fn a_checkpoint_keeps_a_removal_while_what_the_key_signed_counts() {
 }
 
 /// The root's checkpoint that comes after the set dropped some of the
-/// root's removals at a low level (many full admins share the room) is
-/// still taken: it counts on the set it prunes, as in evaluate, and frees
+/// root's removals past its ceiling (16 full admins beside it) is still
+/// taken: it counts on the set it prunes, as in evaluate, and frees
 /// the room it was turned away from.
 #[test]
 fn a_checkpoint_after_the_roots_drops_is_taken() {
@@ -3462,7 +3463,8 @@ fn a_checkpoint_after_the_roots_drops_is_taken() {
             g.rec(a, Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] });
         }
     }
-    for n in 0..20u8 {
+    // Past the root's own ceiling: the admins cannot push it lower.
+    for n in 0..100u8 {
         let keys: Vec<KeyHash> = (0..256u16)
             .map(|i| {
                 let mut h = [n; 32];
@@ -3475,7 +3477,7 @@ fn a_checkpoint_after_the_roots_drops_is_taken() {
     let mut set = set_of(&g.root.key);
     set.insert_all(g.recs.clone());
     let roots_held = g.recs.iter().filter(|r| r.body().signer == root.hash && set.contains(&r.id())).count();
-    assert!(roots_held < 16 + 20, "the root dropped some of its removals");
+    assert!(roots_held < 16 + 100, "the root dropped some of its removals");
     let mut heads: Vec<Head> = admins
         .iter()
         .map(|(_, a)| {
@@ -4952,4 +4954,93 @@ fn removing_a_key_in_two_histories_keeps_out_what_it_barred() {
         assert!(!s.revoked.contains(&other.hash));
         assert_eq!(s.forked_removed, vec![(a.hash, vec![other.hash])]);
     }
+}
+
+/// At most ADMIN_KEYS_MAX admin keys count: the writer refuses another
+/// admission of an admin key, and a reader handed one more (a root that
+/// deviates) counts the first sixteen admitted; the seventeenth device is
+/// a device without an admin key, and what its key signs counts for
+/// nothing.
+#[test]
+fn at_most_sixteen_admin_keys_count() {
+    use crate::records::ADMIN_KEYS_MAX;
+    let mut g = G::new();
+    for i in 0..ADMIN_KEYS_MAX {
+        g.admin(&k(&format!("admin device {i}")), &k(&format!("admin {i}")), POWER_ADMIT);
+    }
+    let mut set = set_with(&g.root.key, &g.recs, &g.lists);
+    let st = set.state();
+    assert_eq!(st.devices.iter().filter(|d| d.admin.is_some()).count(), ADMIN_KEYS_MAX);
+    let extra = k("admin 16");
+    let mut d = Device::new(k("admin device 16").key.clone(), "admin", ROLE_MEMBER);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    d.admin = Some(extra.key.clone());
+    d.powers = POWER_ADMIT;
+    let before = set.digest();
+    let err = set.write_record(&st, &g.root, Kind::device(d.clone()), 0).unwrap_err();
+    assert!(alloc::format!("{err}").contains("admin keys already"), "{err}");
+    assert_eq!(set.digest(), before);
+    // A plain device still goes in.
+    set.write_record(&st, &g.root, Kind::device(Device::new(k("laptop").key.clone(), "laptop", ROLE_MEMBER)), 0)
+        .unwrap();
+    // A reader handed a seventeenth admission.
+    g.rec(&k("root"), Kind::device(d));
+    let admitted = g.rec(&extra, Kind::device(Device::new(k("tv").key.clone(), "tv", ROLE_MEMBER)));
+    let s = state_with(&g.root.key, &g.recs, &g.lists);
+    assert_eq!(s.devices.iter().filter(|d| d.admin.is_some()).count(), ADMIN_KEYS_MAX);
+    let dev = s.devices.iter().find(|d| d.key.hash() == k("admin device 16").hash).unwrap();
+    assert_eq!(dev.admin, None);
+    assert!(!s.counting.contains(&admitted.id()));
+    assert!(s.device_by_key(&k("tv").hash).is_none());
+    // Removing one admin frees a place: the next admitted counts.
+    g.root_rec(Kind::Revoke(removal(&[k("admin 3").hash], g.seen())));
+    let s = state_with(&g.root.key, &g.recs, &g.lists);
+    assert_eq!(s.devices.iter().filter(|d| d.admin.is_some()).count(), ADMIN_KEYS_MAX);
+    assert!(s.devices.iter().any(|d| d.admin == Some(extra.hash)));
+}
+
+/// The roots before the current one keep, together, at most the cut
+/// roots' reserve, however many changes the path holds: two changes
+/// whose lists name every record of the roots before keep the first
+/// units of their removals and records within one reserve, the same in
+/// every order, and the set agrees with evaluate.
+#[test]
+fn the_cut_roots_share_one_reserve() {
+    let mut g = G::new();
+    let root = k("root");
+    for i in 0..4 {
+        g.device(&root, &k(&format!("d{i}")), "d", |_| {});
+    }
+    let list = g.listing();
+    g.change(&k("n1"), &list);
+    let n1 = k("n1");
+    for i in 0..4 {
+        g.device(&n1, &k(&format!("e{i}")), "e", |_| {});
+    }
+    // The second change lists everything the first two roots signed.
+    let all: Vec<RecordId> =
+        g.recs.iter().filter(|r| r.body().signer == root.hash || r.body().signer == n1.hash).map(Record::id).collect();
+    g.change(&k("n2"), &all);
+    let small = crate::records::keep::small::Small::new(30, 6, 4);
+    for r in &g.recs {
+        small.units(r.id(), 1);
+    }
+    let cut_units = |set: &RecordSet| {
+        set.ids()
+            .filter_map(|id| set.get(id))
+            .filter(|r| r.body().signer == root.hash || r.body().signer == n1.hash)
+            .count()
+    };
+    let mut seen = Vec::new();
+    for seed in [0, 1, 2, 3] {
+        let order = if seed == 0 { g.recs.clone() } else { shuffled(&g.recs, seed) };
+        let set = set_with(&g.root.key, &order, &g.lists);
+        let st = set.state();
+        assert_eq!(st.roots.last(), Some(&k("n2").hash), "order {seed}");
+        assert!(cut_units(&set) <= 6, "order {seed}: {} units of cut roots", cut_units(&set));
+        let held: Vec<Record> = set.ids().map(|id| set.get(id).unwrap().clone()).collect();
+        assert_eq!(st, state_with(&g.root.key, &held, &g.lists), "order {seed}");
+        seen.push(set.digest());
+    }
+    assert!(seen.windows(2).all(|w| w[0] == w[1]));
 }

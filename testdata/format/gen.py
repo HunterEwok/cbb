@@ -2657,7 +2657,7 @@ def beacon_rule(env_b):
         return "beacons/time"
     if not (isinstance(m.get(10), bytes) and len(m[10]) == 32):
         return "beacons/digest"
-    if not (isinstance(m.get(11), int) and 1 <= m[11] <= 4096):
+    if not (isinstance(m.get(11), int) and 1 <= m[11] <= 7168):
         return "beacons/count"
     return "take"
 
@@ -2857,7 +2857,7 @@ def wave4_vectors():
         ("type 2", {1: 2, 2: GROUP, 3: PHONE.hash, 4: 3, 6: T0, 10: digest, 11: 12}),
         ("no time", {1: 1, 2: GROUP, 3: PHONE.hash, 4: 3, 10: digest, 11: 12}),
         ("count 0", {1: 1, 2: GROUP, 3: PHONE.hash, 4: 3, 6: T0, 10: digest, 11: 0}),
-        ("count over a set", {1: 1, 2: GROUP, 3: PHONE.hash, 4: 3, 6: T0, 10: digest, 11: 4097}),
+        ("count over a set", {1: 1, 2: GROUP, 3: PHONE.hash, 4: 3, 6: T0, 10: digest, 11: 7169}),
         ("no count", {1: 1, 2: GROUP, 3: PHONE.hash, 4: 3, 6: T0, 10: digest}),
         ("digest of 31 bytes", {1: 1, 2: GROUP, 3: PHONE.hash, 4: 3, 6: T0, 10: digest[:31], 11: 12}),
         ("a critical field of a later version", {1: 1, 2: GROUP, 3: PHONE.hash, 4: 3, 6: T0, 10: digest, 11: 12, 12: 1}),

@@ -729,7 +729,7 @@ impl RecordSet {
         // count, is taken whatever the rooms say; they are judged after
         // the checkpoint's pruning.
         let wanted = self.wanted(&id) || self.newest_checkpoint(&r, role);
-        if !twin && !first && !wanted && self.cut.past(&eval::item(&r, role)) && !waits(self) {
+        if !twin && !first && !wanted && self.cut.past(&eval::room_item(&r, role, &self.cuts)) && !waits(self) {
             // Its key dropped a record before it: it would not be kept.
             return Ok(Added::NoRoom);
         }
@@ -1187,8 +1187,9 @@ impl RecordSet {
         let mut pre: BTreeMap<KeyHash, u64> = BTreeMap::new();
         for id in first.iter().filter(|id| !proof.contains(*id)) {
             if let Some(e) = self.records.get(id) {
-                let u = pre.entry(e.record.body().signer).or_default();
-                *u = u.saturating_add(eval::item(&e.record, self.role_of(e)).units);
+                let it = eval::room_item(&e.record, self.role_of(e), &self.cuts);
+                let u = pre.entry(it.signer).or_default();
+                *u = u.saturating_add(it.units);
             }
         }
         // What is kept first changed: the rooms are judged again from no
@@ -1206,7 +1207,7 @@ impl RecordSet {
                     && !proof.contains(&e.record.id())
                     && !eval::is_first(&self.firsts, &e.record)
             })
-            .map(|e| eval::item(&e.record, self.role_of(e)))
+            .map(|e| eval::room_item(&e.record, self.role_of(e), &self.cuts))
             .collect();
         let ceilings: BTreeMap<KeyHash, Option<u64>> =
             items.iter().map(|it| (it.signer, self.ceiling(&it.signer))).collect();
@@ -1317,7 +1318,7 @@ impl RecordSet {
         };
         let named = eval::named_first(cp, |id| rec(id).is_some());
         eval::checkpoint_ok(cp, |id| rec(id).map(|(r, _)| r))
-            && eval::fits_alone(named.iter().filter_map(rec), &self.root_hash, &self.promoted)
+            && eval::fits_alone(named.iter().filter_map(rec), &self.root_hash, &self.promoted, &self.cuts)
     }
 
     /// Whether what a checkpoint names, of what the set holds or keeps
@@ -1332,7 +1333,7 @@ impl RecordSet {
                 .or_else(|| (*id == cp.id()).then_some((cp, Role::Root)))
         };
         let named = eval::named_first(cp, |id| rec(id).is_some());
-        eval::fits_alone(named.iter().filter_map(rec), &self.root_hash, &self.promoted)
+        eval::fits_alone(named.iter().filter_map(rec), &self.root_hash, &self.promoted, &self.cuts)
     }
 
     /// The records kept ahead of the rooms, and the current root's
@@ -1624,9 +1625,16 @@ impl RecordSet {
     /// nothing, stays within the level, and the shares, dropped units
     /// included, still fit.
     fn needs_cut(&self, signer: &KeyHash) -> bool {
-        let units = |k: &KeyHash| self.units.get(k).copied().unwrap_or(0);
+        // By room: the cut roots share one.
+        let mut by_room: BTreeMap<KeyHash, u64> = BTreeMap::new();
+        for (k, u) in &self.units {
+            let e = by_room.entry(self.room_key(k)).or_default();
+            *e = e.saturating_add(*u);
+        }
+        let signer = &self.room_key(signer);
+        let units = |k: &KeyHash| by_room.get(k).copied().unwrap_or(0);
         if self.cut.is_empty() {
-            let total: u64 = self.units.values().sum();
+            let total: u64 = by_room.values().sum();
             return self.ceiling(signer).is_none_or(|c| units(signer) > c) || total > keep::room();
         }
         let Some(ceiling) = self.ceiling(signer) else { return true };
@@ -1635,14 +1643,14 @@ impl RecordSet {
             return true;
         }
         let mut demand = 0u64;
-        for (k, u) in &self.units {
+        for (k, u) in &by_room {
             if let Some(c) = self.ceiling(k) {
                 let total = u.saturating_add(self.cut.dropped(k).unwrap_or(0));
                 demand = demand.saturating_add(total.min(c).min(level));
             }
         }
         for (k, u) in self.cut.dropped_all() {
-            if !self.units.contains_key(k)
+            if !by_room.contains_key(k)
                 && let Some(c) = self.ceiling(k)
             {
                 demand = demand.saturating_add(u.min(c).min(level));
@@ -1654,6 +1662,9 @@ impl RecordSet {
     /// A key's ceiling: a root's on the path, an admin key's, or None for
     /// any other.
     fn ceiling(&self, k: &KeyHash) -> Option<u64> {
+        if *k == eval::CUT_ROOTS {
+            return Some(keep::reserve());
+        }
         let admins: BTreeSet<KeyHash> = if self.keys.is_admin(k) { BTreeSet::from([*k]) } else { BTreeSet::new() };
         eval::ceiling_of(&self.root_hash, &self.promoted, &admins, k)
     }
@@ -1667,6 +1678,11 @@ impl RecordSet {
                 *u = u.saturating_sub(eval::item(&e.record, e.role).units);
             }
         }
+    }
+
+    /// The room a key's records take: the cut roots share one.
+    fn room_key(&self, k: &KeyHash) -> KeyHash {
+        if eval::is_cut_root(&self.cuts, k) { eval::CUT_ROOTS } else { *k }
     }
 
     /// A record's role, read from the final table.
@@ -1802,8 +1818,8 @@ impl RecordSet {
         List(self.within_ceiling(out))
     }
 
-    /// At most a root's room of IDs, the removals first, then in the
-    /// keeping's order; sorted.
+    /// At most the cut roots' reserve of IDs and units, the removals
+    /// first, then in the keeping's order; sorted.
     fn within_ceiling(&self, ids: BTreeSet<RecordId>) -> Vec<RecordId> {
         let mut items: Vec<(bool, keep::Pos, RecordId, u64)> = ids
             .iter()
@@ -1817,7 +1833,7 @@ impl RecordSet {
         let mut out = BTreeSet::new();
         let mut units = 0u64;
         for (_, _, id, u) in items {
-            if out.len() >= super::MAX_ROOT_RECORDS || units.saturating_add(u) > keep::ceiling(true) {
+            if out.len() >= super::LIST_MAX || units.saturating_add(u) > keep::reserve() {
                 break;
             }
             units = units.saturating_add(u);
@@ -2205,7 +2221,7 @@ impl RecordSet {
         // for nobody (`eval::fits_alone`).
         let named = eval::named_first(&cp, |id| self.records.contains_key(id));
         let others = named.iter().filter_map(|id| self.records.get(id)).map(|e| (&e.record, self.role_of(e)));
-        if !eval::fits_alone(others.chain([(&cp, Role::Root)]), &self.root_hash, &self.promoted) {
+        if !eval::fits_alone(others.chain([(&cp, Role::Root)]), &self.root_hash, &self.promoted, &self.cuts) {
             return Err(Error::msg("what the checkpoint names would not fit the rooms by itself"));
         }
         // The writer's own set keeps it and counts it, or it reaches
@@ -2360,8 +2376,18 @@ impl RecordSet {
         let mut trial = self.clone();
         trial.insert(r.clone()).map_err(|e| Error::msg(alloc::format!("the set refuses the record: {e:?}")))?;
         let id = r.id();
-        if !trial.records.contains_key(&id) || !trial.state().counting.contains(&id) {
+        let after = trial.state();
+        if !trial.records.contains_key(&id) || !after.counting.contains(&id) {
             return Err(Error::msg("the group's records have no room for the record: it would not count"));
+        }
+        if let Kind::Device(d) = &r.body().kind
+            && let Some(a) = &d.admin
+            && !after.devices.iter().any(|x| x.admin == Some(a.hash()))
+        {
+            return Err(Error::msg(alloc::format!(
+                "the group has {} admin keys already: remove one before making another device an admin",
+                super::ADMIN_KEYS_MAX
+            )));
         }
         *self = trial;
         Ok(r)
