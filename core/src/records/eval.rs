@@ -861,6 +861,8 @@ pub(crate) fn kept_of(
     let admins: BTreeSet<KeyHash> =
         checked.iter().filter(|c| c.role == Role::Admin).map(|c| c.r.body().signer).collect();
     let proof = fork_proof(checked.iter().filter(|c| !off_cut(cuts, c.r)).map(|c| (c.r, c.role)));
+    // What a takeover cut stays out, named or not.
+    let first = |c: &Checked<'_>| kept_first.contains(&c.r.id()) && !off_cut(cuts, c.r);
     let items: Vec<super::keep::Item> = checked
         .iter()
         .filter(|c| {
@@ -874,13 +876,13 @@ pub(crate) fn kept_of(
         .collect();
     // The checkpoint kept first takes its part of the rooms before them.
     let mut pre: BTreeMap<KeyHash, u64> = BTreeMap::new();
-    for c in checked.iter().filter(|c| kept_first.contains(&c.r.id()) && !proof.contains(&c.r.id())) {
+    for c in checked.iter().filter(|c| first(c) && !proof.contains(&c.r.id())) {
         let u = pre.entry(c.r.body().signer).or_default();
         *u = u.saturating_add(item(c.r, c.role).units);
     }
     let ceiling = |k: &KeyHash| ceiling_of(group_root, promoted, &admins, k);
     let mut kept = super::keep::keep_with(&items, ceiling, &super::keep::Cut::default(), &pre).0;
-    kept.extend(checked.iter().filter(|c| kept_first.contains(&c.r.id())).map(|c| c.r.id()));
+    kept.extend(checked.iter().filter(|c| first(c)).map(|c| c.r.id()));
     kept.extend(chain_kept(checked.iter().map(|c| (c.r, c.role))));
     kept.extend(proof);
     kept.extend(checked.iter().filter(|c| is_first(c.r)).map(|c| c.r.id()));
@@ -911,6 +913,49 @@ pub(crate) fn off_cut(cuts: &BTreeMap<KeyHash, Cut>, r: &Record) -> bool {
 
 /// A key's ceiling in the keeping: a root's on the path, an admin key's,
 /// or None for any other.
+/// What a root's checkpoint cp keeps first, of what held holds: cp, the
+/// records it keeps and its key's record just below it (its prev). They
+/// are kept ahead of the rooms and take their part of them, so that
+/// whether cp counts depends on cp and these alone.
+pub(crate) fn named_first(cp: &Record, held: impl Fn(&RecordId) -> bool) -> BTreeSet<RecordId> {
+    let mut out = BTreeSet::from([cp.id()]);
+    if let Kind::Checkpoint { keep, .. } = &cp.body().kind {
+        out.extend(keep.iter().copied().filter(|id| held(id)));
+    }
+    out.extend(cp.body().prev.filter(|id| held(id)));
+    out
+}
+
+/// Whether the records a checkpoint names, each with its signer's role,
+/// fit the room rules on their own: all within the set's room, and each
+/// signer within its ceiling, where only the roots on the path and the
+/// admin keys the root's records among them name have one; the recovery
+/// key's records take no room. It reads nothing but those records, so every member judges it alike; a
+/// checkpoint whose named records do not fit counts for no member.
+pub(crate) fn fits_alone<'r>(
+    named: impl Iterator<Item = (&'r Record, Role)> + Clone,
+    group_root: &KeyHash,
+    promoted: &BTreeSet<KeyHash>,
+) -> bool {
+    let admins: BTreeSet<KeyHash> = named
+        .clone()
+        .filter_map(|(r, role)| match (&r.body().kind, role) {
+            (Kind::Device(d), Role::Root) => d.admin.as_ref().map(Key::hash),
+            _ => None,
+        })
+        .collect();
+    let mut by: BTreeMap<KeyHash, u64> = BTreeMap::new();
+    let mut total = 0u64;
+    for (r, role) in named.filter(|(_, role)| *role != Role::Recovery) {
+        let u = item(r, role).units;
+        let e = by.entry(r.body().signer).or_default();
+        *e = e.saturating_add(u);
+        total = total.saturating_add(u);
+    }
+    total <= super::keep::room()
+        && by.iter().all(|(k, u)| ceiling_of(group_root, promoted, &admins, k).is_some_and(|c| *u <= c))
+}
+
 pub(crate) fn ceiling_of(
     group_root: &KeyHash,
     promoted: &BTreeSet<KeyHash>,
@@ -1095,6 +1140,13 @@ pub(crate) fn evaluate_checked(
                 continue;
             }
         }
+        // What it names is kept first and must fit the rooms by itself.
+        let by_id: BTreeMap<RecordId, &Checked> = kept.iter().map(|c| (c.r.id(), c)).collect();
+        let first = named_first(x, |id| by_id.contains_key(id));
+        let named = first.iter().filter_map(|id| by_id.get(id)).map(|c| (c.r, c.role));
+        if !fits_alone(named, &root.hash(), &chain.promoted()) {
+            continue;
+        }
         let these = if x.body().signer == cur && chain.cut.is_some() { closed(&cuts, &anchors) } else { cuts.clone() };
         let mut all = anchors_all.clone();
         all.extend(anchors.iter().copied());
@@ -1116,7 +1168,6 @@ pub(crate) fn evaluate_checked(
             })
             .collect();
         let known = still_known(root, recovery, pruned.clone());
-        let first = BTreeSet::from([id]);
         let e = Evaluation::new(root, recovery, known, failed.clone(), all.clone(), &chain, &these, &first);
         let ep = e.run(&chain, &these);
         let Some(i) = e.recs.iter().position(|r| r.id == id) else { continue };
@@ -1291,8 +1342,8 @@ impl<'a> Evaluation<'a> {
     ) -> Evaluation<'a> {
         let group_root = root.hash();
         let promoted = &chain.promoted();
-        // The checkpoint being judged is kept first, outside the rooms, as
-        // a head's first checkpoint is.
+        // The checkpoint being judged and what it names are kept first,
+        // ahead of the rooms (`named_first`).
         let kept = kept_of(&group_root, promoted, cuts, |r: &Record| is_first(&chain.firsts, r), first, &checked);
         // What a takeover keeps of the root it cut counts by itself, as a
         // checkpoint's anchor does: not by that root's chain.

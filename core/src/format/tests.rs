@@ -924,10 +924,17 @@ fn a_leaf_handed_two_records_of_its_root_at_one_seq_stops() {
     };
     let kept = read(&grant_msg(1, 0), None, 0).unwrap();
     assert!(kept.commander(&phone.hash()).is_some() && !kept.forked);
-    let forked = kept.fork();
+    let forked = kept.fork(0);
     assert!(forked.forked && forked.commanders.is_empty() && forked.recovery == 0);
     assert_eq!(read(&grant_msg(2, 0), Some(&forked), 0), Err(grant::RULE_FORKED));
     // After a recovery head, a grant of its seq is taken.
     let after = read(&grant_msg(1, 1), Some(&forked), 1).unwrap();
     assert!(!after.forked && after.commander(&phone.hash()).is_some());
+    // A leaf that knows recovery seq 1 and keeps a grant made under 0
+    // records the fork under 1: a grant under 1 is refused, one under 2
+    // taken.
+    let forked = kept.fork(1);
+    assert_eq!(forked.recovery, 1);
+    assert_eq!(read(&grant_msg(1, 1), Some(&forked), 1), Err(grant::RULE_FORKED));
+    assert!(read(&grant_msg(1, 2), Some(&forked), 2).is_ok());
 }

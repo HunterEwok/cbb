@@ -156,12 +156,13 @@ pub struct Kept {
 }
 
 impl Kept {
-    /// The leaf's state once it verified a fork of its root ([`fork`]):
-    /// its grant is over, as at a change of root; guarded stays, and so
-    /// does the recovery seq, so that only a grant made under a higher one
-    /// is taken again.
-    pub fn fork(&self) -> Kept {
-        Kept { guarded: self.guarded, recovery: self.recovery, forked: true, ..Kept::default() }
+    /// The leaf's state once it verified a fork of its root ([`fork`]),
+    /// the root it knows under recovery seq `recovery` (the newest it
+    /// knows, whatever seq its kept grant was made under): its grant is
+    /// over, as at a change of root; guarded stays, and only a grant made
+    /// under a higher recovery seq is taken again.
+    pub fn fork(&self, recovery: u64) -> Kept {
+        Kept { guarded: self.guarded, recovery: recovery.max(self.recovery), forked: true, ..Kept::default() }
     }
 
     /// The point of the commander with this key hash: the keys the leaf
@@ -412,7 +413,7 @@ pub fn read<'a>(
 /// bodies (two record IDs; one body under another signature is the same
 /// record). It gives that seq. A leaf takes it from anyone, before any
 /// check of who speaks, rate limited like a recovery head, and then keeps
-/// [`Kept::fork`].
+/// [`Kept::fork`] with the recovery seq it knows its root under.
 pub fn fork(a: &[u8], b: &[u8], root: &[u8], group: &GroupId) -> Result<u64, Rule> {
     use crate::records::{Key as RecordKey, Record};
     let key = RecordKey::es256(root.to_vec());
