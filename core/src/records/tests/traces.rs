@@ -860,3 +860,42 @@ fn a_checkpoint_goes_aside_only_when_the_rooms_turn_it_away() {
     let digests: Vec<[u8; 32]> = ["r", "a", "c", "k", "m"].iter().map(|m| r.sets[*m].digest()).collect();
     assert!(digests.windows(2).all(|w| w[0] == w[1]), "counts after aside: members that hold the same records");
 }
+
+/// Every trace, its members filled once asking what waits before every
+/// record (as the set did) and once asking only where it decides: each
+/// member ends with the same records, place aside and state
+/// (`insert_cost.rs`).
+#[test]
+fn the_traces_end_alike_whichever_way_the_set_asks_what_waits() {
+    use crate::records::set::OLD_WAITS;
+    for trace in [
+        T_801,
+        T_X302D,
+        T_X9107,
+        T_X3262C,
+        T_EVERY_WAITING,
+        T_OLDER_WAITING,
+        T_SEED_1301,
+        T_SEED_4004,
+        T_MAY_COUNT_AFTER_WAITING,
+        T_NEVER_FITS,
+        T_COUNTS_AFTER_ASIDE,
+    ] {
+        let end = |old: bool| {
+            OLD_WAITS.with(|o| o.set(old));
+            let mut r = Run::new();
+            r.steps(trace);
+            r.settle();
+            OLD_WAITS.with(|o| o.set(false));
+            MEMBERS
+                .iter()
+                .map(|m| {
+                    let s = &r.sets[m];
+                    let aside: Vec<&RecordId> = s.aside().collect();
+                    alloc::format!("{m}: {:?} {aside:?} {:?}", s.digest(), s.state())
+                })
+                .collect::<Vec<String>>()
+        };
+        assert_eq!(end(true), end(false));
+    }
+}

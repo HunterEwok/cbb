@@ -97,10 +97,20 @@ pub enum Stuck {
     NoRoom,
 }
 
+#[cfg(test)]
+std::thread_local! {
+    /// Tests only: the set asks what waits before every record, as it did
+    /// before it asked only where the answer decides
+    /// (`tests/insert_cost.rs` compares the two ways).
+    pub(super) static OLD_WAITS: core::cell::Cell<bool> = const { core::cell::Cell::new(false) };
+}
+
 /// A member's record set.
 #[derive(Clone)]
 pub struct RecordSet {
     root: Key,
+    /// The hash of root, which never changes: asked for at every record.
+    root_hash: KeyHash,
     recovery: Recovery,
     group: GroupId,
     keys: Keys,
@@ -276,6 +286,7 @@ impl RecordSet {
         let keys = Keys::new(&root, &recovery);
         let group = group_id(&root, &recovery);
         RecordSet {
+            root_hash: root.hash(),
             root,
             recovery,
             group,
@@ -623,7 +634,17 @@ impl RecordSet {
         let first = eval::is_first(&self.firsts, &r);
         // What a checkpoint of the current root above the counting one
         // keeps goes to the place aside, after the judgment of the pair.
-        let waits = self.waits_for(&id);
+        // It walks the set's checkpoints, so it is asked only where it
+        // decides.
+        #[cfg(test)]
+        let asked = OLD_WAITS.with(|o| o.get()).then(|| self.waits_for(&id));
+        let waits = |set: &RecordSet| {
+            #[cfg(test)]
+            if let Some(w) = asked {
+                return w;
+            }
+            set.waits_for(&id)
+        };
         if role == Role::Root && !listed && !first && !twin_of(self) && pruned(self) {
             // A root's record a counting checkpoint settled: alone it is
             // refused, but two at one seq are a fork at any depth, so the
@@ -654,7 +675,7 @@ impl RecordSet {
                         // this one waits for it, and the set asks for it.
                         // A checkpoint above the counting one that keeps
                         // it has it aside too, as a half.
-                        let copy = waits.then(|| r.clone());
+                        let copy = waits(self).then(|| r.clone());
                         self.halves.insert(at, (n, r, o));
                         while self.halves.len() > SETTLED_KEPT
                             || self.halves.values().map(|(_, r, _)| r.size()).sum::<usize>() > SETTLED_BYTES
@@ -667,7 +688,7 @@ impl RecordSet {
                         }
                     } else {
                         self.remember(at, n, id);
-                        if waits {
+                        if waits(self) {
                             return Ok(self.put_aside(r, role, held));
                         }
                         self.settled.insert(at, (n, r));
@@ -687,7 +708,7 @@ impl RecordSet {
         let twin = twin_of(self);
         let twin_checkpoint = twin && matches!(r.body().kind, Kind::Checkpoint { .. });
         if !listed && !twin_checkpoint && !(twin && role == Role::Root) && !first && pruned(self) {
-            if waits && role != Role::Root {
+            if role != Role::Root && waits(self) {
                 let held = r.verify_marked(&key, mark).map_err(Refused::Broken)?;
                 return Ok(self.put_aside(r, role, held));
             }
@@ -708,7 +729,7 @@ impl RecordSet {
         // count, is taken whatever the rooms say; they are judged after
         // the checkpoint's pruning.
         let wanted = self.wanted(&id) || self.newest_checkpoint(&r, role);
-        if !twin && !first && !wanted && !waits && self.cut.past(&eval::item(&r, role)) {
+        if !twin && !first && !wanted && self.cut.past(&eval::item(&r, role)) && !waits(self) {
             // Its key dropped a record before it: it would not be kept.
             return Ok(Added::NoRoom);
         }
@@ -1032,7 +1053,7 @@ impl RecordSet {
         let held: BTreeMap<RecordId, &Record> =
             self.records.values().map(|e| &e.record).chain(self.early.values()).map(|r| (r.id(), r)).collect();
         let chain =
-            eval::chain(&self.root.hash(), self.records.values().map(|e| (&e.record, e.role)), &lists, |id, root| {
+            eval::chain(&self.root_hash, self.records.values().map(|e| (&e.record, e.role)), &lists, |id, root| {
                 eval::first_held(&held, id, root)
             });
         let promoted = chain.promoted();
@@ -1064,7 +1085,7 @@ impl RecordSet {
         // The roots the chain's records name that have not applied yet: a
         // record off the chain (one side of a fork, past a gap, after a
         // void one) has nothing kept aside.
-        self.early_roots = if self.halted.is_some() { BTreeMap::new() } else { chain.waiting_roots(&self.root.hash()) };
+        self.early_roots = if self.halted.is_some() { BTreeMap::new() } else { chain.waiting_roots(&self.root_hash) };
         // Halted, no checkpoint counts: the cut is the list as it stands.
         if let (Some(old), Some(new)) = (self.cuts.values().next(), cuts.values().next())
             && old.record == new.record
@@ -1203,7 +1224,7 @@ impl RecordSet {
 
     /// Whether signer, which signs as role, is a root on the set's path.
     fn on_path(&self, signer: &KeyHash, role: Role) -> bool {
-        role == Role::Root && (*signer == self.root.hash() || self.promoted.contains(signer))
+        role == Role::Root && (*signer == self.root_hash || self.promoted.contains(signer))
     }
 
     /// The newest checkpoint of each root the set holds, of a root a
@@ -1260,7 +1281,7 @@ impl RecordSet {
     /// The current root: the root of the newest change applied, else the
     /// group's first.
     fn current_root(&self) -> KeyHash {
-        self.cuts.values().next().map_or(self.root.hash(), |c| c.current)
+        self.cuts.values().next().map_or(self.root_hash, |c| c.current)
     }
 
     /// The lowest seq at which the set holds two records of key k: its
@@ -1289,7 +1310,7 @@ impl RecordSet {
         };
         let named = eval::named_first(cp, |id| rec(id).is_some());
         eval::checkpoint_ok(cp, |id| rec(id).map(|(r, _)| r))
-            && eval::fits_alone(named.iter().filter_map(rec), &self.root.hash(), &self.promoted)
+            && eval::fits_alone(named.iter().filter_map(rec), &self.root_hash, &self.promoted)
     }
 
     /// Whether what a checkpoint names, of what the set holds or keeps
@@ -1304,7 +1325,7 @@ impl RecordSet {
                 .or_else(|| (*id == cp.id()).then_some((cp, Role::Root)))
         };
         let named = eval::named_first(cp, |id| rec(id).is_some());
-        eval::fits_alone(named.iter().filter_map(rec), &self.root.hash(), &self.promoted)
+        eval::fits_alone(named.iter().filter_map(rec), &self.root_hash, &self.promoted)
     }
 
     /// The records kept ahead of the rooms, and the current root's
@@ -1623,7 +1644,7 @@ impl RecordSet {
     /// any other.
     fn ceiling(&self, k: &KeyHash) -> Option<u64> {
         let admins: BTreeSet<KeyHash> = if self.keys.is_admin(k) { BTreeSet::from([*k]) } else { BTreeSet::new() };
-        eval::ceiling_of(&self.root.hash(), &self.promoted, &admins, k)
+        eval::ceiling_of(&self.root_hash, &self.promoted, &admins, k)
     }
 
     fn remove(&mut self, id: &RecordId) {
@@ -2173,7 +2194,7 @@ impl RecordSet {
         // for nobody (`eval::fits_alone`).
         let named = eval::named_first(&cp, |id| self.records.contains_key(id));
         let others = named.iter().filter_map(|id| self.records.get(id)).map(|e| (&e.record, self.role_of(e)));
-        if !eval::fits_alone(others.chain([(&cp, Role::Root)]), &self.root.hash(), &self.promoted) {
+        if !eval::fits_alone(others.chain([(&cp, Role::Root)]), &self.root_hash, &self.promoted) {
             return Err(Error::msg("what the checkpoint names would not fit the rooms by itself"));
         }
         // The writer's own set keeps it and counts it, or it reaches
@@ -2602,7 +2623,7 @@ impl RecordSet {
             // Nothing else: no copies, no settings, no other member.
             let own: BTreeSet<RecordId> = out.iter().map(|r| r.id()).collect();
             let mut ids = own.clone();
-            if out.iter().any(|r| r.body().signer != self.root.hash()) {
+            if out.iter().any(|r| r.body().signer != self.root_hash) {
                 ids.extend(self.records.values().filter(|e| e.role == Role::Recovery).map(|e| e.record.id()));
                 ids.extend(self.firsts.keys().filter(|id| self.records.contains_key(*id)).copied());
             }
