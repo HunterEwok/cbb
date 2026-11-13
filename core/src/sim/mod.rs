@@ -25,6 +25,15 @@
 //!
 //! `SIM_SEEDS` sets how many seeds run (from `SIM_FIRST`, 0 by default),
 //! `SIM_STEPS` the steps of each; `SIM_SEED` runs one seed.
+//!
+//! Records move as the protocol moves them: a session opens with the
+//! digest, a peer whose digest differs answers with the IDs it gives, the
+//! other asks for what it lacks, for what `missing()` names (up to its
+//! rounds, across sessions) and for the list `missing_list()` waits for,
+//! and the records come one by one, lost or reordered like any message.
+//! `SIM_WHOLE=1` hands the whole offer at once instead, as before, so that
+//! the seeds found that way replay; `SIM_TWINS=0` leaves out the root's
+//! twin records.
 
 mod exchange;
 
@@ -133,14 +142,24 @@ struct Member {
     saved: Saved,
 }
 
+#[derive(Clone)]
 enum Says {
+    /// Statements and copies; with SIM_WHOLE=1 also every record and list,
+    /// the whole-set sync of the first simulator.
     Sync(Offer),
+    /// The records digest the sender holds; reply: an answer to one.
+    Hello { digest: [u8; 32], reply: bool },
+    /// The IDs the sender would give the receiver, once the digests
+    /// differ.
+    Ids(Vec<RecordId>),
+    /// The records and the list the receiver asks for by ID.
+    Want { ids: Vec<RecordId>, list: Option<[u8; 32]> },
+    /// One record envelope.
+    Record(Vec<u8>),
+    /// One list of a change of root.
+    List(Vec<u8>),
     /// Seal copy id of origin again for asker at its epoch.
-    Ask {
-        id: [u8; 16],
-        asker: DeviceId,
-        epoch: u64,
-    },
+    Ask { id: [u8; 16], asker: DeviceId, epoch: u64 },
 }
 
 struct Msg {
@@ -681,6 +700,69 @@ impl World {
                     self.receive(j, c, &mut fx)?;
                 }
             }
+            Says::Hello { digest, reply } => {
+                let a = msg.from;
+                if digest != self.members[j].live.set.digest() {
+                    let ids = self.ids_for(j, a);
+                    if !ids.is_empty() {
+                        fx.push(Effect::Send(Msg { from: j, to: a, says: Says::Ids(ids) }));
+                    }
+                }
+                // Equal digests say nothing of what both lack: what its
+                // records name and the list it waits for, it still asks.
+                let m = &mut self.members[j].live;
+                let state = m.state.clone();
+                let want = m.set.missing(&state);
+                let list = m.set.missing_list();
+                if !want.is_empty() || list.is_some() {
+                    fx.push(Effect::Send(Msg { from: j, to: a, says: Says::Want { ids: want, list } }));
+                }
+                if !reply {
+                    let digest = self.members[j].live.set.digest();
+                    fx.push(Effect::Send(Msg { from: j, to: a, says: Says::Hello { digest, reply: true } }));
+                }
+            }
+            Says::Ids(ids) => {
+                // What it lacks of the peer's; what its records name and
+                // the list it waits for it asked on the peer's Hello.
+                let m = &self.members[j].live;
+                let want: Vec<RecordId> = ids.into_iter().filter(|id| !m.set.contains(id)).collect();
+                if !want.is_empty() {
+                    fx.push(Effect::Send(Msg { from: j, to: msg.from, says: Says::Want { ids: want, list: None } }));
+                }
+            }
+            Says::Want { ids, list } => {
+                let a = msg.from;
+                let mine: BTreeSet<RecordId> = self.ids_for(j, a).into_iter().collect();
+                let m = &self.members[j].live;
+                for id in ids.iter().filter(|id| mine.contains(id)) {
+                    if let Some(r) = m.set.get(id) {
+                        fx.push(Effect::Send(Msg { from: j, to: a, says: Says::Record(r.envelope()) }));
+                    }
+                }
+                // As the whole offer does, a list goes to whoever asks for
+                // it: a removed member needs it to read its own removal.
+                if let Some(h) = list
+                    && let Some(l) = m.set.lists().find(|l| List::of(l, &h).is_some())
+                {
+                    fx.push(Effect::Send(Msg { from: j, to: a, says: Says::List(l.to_vec()) }));
+                }
+            }
+            Says::Record(env) => {
+                if let Ok(r) = Record::decode(&env) {
+                    let point: [u8; 65] = self.members[msg.from].key.key.public.clone().try_into().unwrap();
+                    let standing =
+                        crate::peer::standing(&self.members[j].live.state, &self.members[j].key.hash, &point);
+                    let set = &mut self.members[j].live.set;
+                    let _ =
+                        if standing == crate::peer::Standing::ForkProof { set.insert_proof(r) } else { set.insert(r) };
+                    self.refresh(j);
+                }
+            }
+            Says::List(bytes) => {
+                let _ = self.members[j].live.set.insert_list(&bytes);
+                self.refresh(j);
+            }
             Says::Ask { id, asker, epoch } => {
                 let now = self.now(j);
                 let sealing = self.sealing(j);
@@ -752,6 +834,25 @@ impl World {
             }
         }
         Ok(())
+    }
+
+    /// What a opens a session with b with: its statements and copies,
+    /// and its records digest (protocol-shaped), or everything at once
+    /// with SIM_WHOLE=1.
+    fn session(&self, a: usize, b: usize) -> Vec<Says> {
+        let mut off = self.offer(a, b);
+        if whole_sync() {
+            return alloc::vec![Says::Sync(off)];
+        }
+        off.records.clear();
+        off.lists.clear();
+        alloc::vec![Says::Sync(off), Says::Hello { digest: self.members[a].live.set.digest(), reply: false }]
+    }
+
+    /// The IDs member a gives member b: what for_peer hands it.
+    fn ids_for(&self, a: usize, b: usize) -> Vec<RecordId> {
+        let m = &self.members[a].live;
+        m.set.for_peer(&m.state, &self.members[b].key.hash).into_iter().map(Record::id).collect()
     }
 
     fn offer(&self, a: usize, b: usize) -> Offer {
@@ -1079,8 +1180,9 @@ impl World {
                     && a != b
                     && self.side[a] == self.side[b]
                 {
-                    let off = self.offer(a, b);
-                    self.net.push(Msg { from: a, to: b, says: Says::Sync(off) });
+                    for says in self.session(a, b) {
+                        self.net.push(Msg { from: a, to: b, says });
+                    }
                 }
             }
             35..=74 if !self.net.is_empty() => {
@@ -1088,14 +1190,7 @@ impl World {
                 let x = self.rng.below(self.net.len());
                 let msg = self.net.swap_remove(x);
                 if self.rng.chance(1, 12) {
-                    let again = Msg {
-                        from: msg.from,
-                        to: msg.to,
-                        says: match &msg.says {
-                            Says::Sync(o) => Says::Sync(o.clone()),
-                            Says::Ask { id, asker, epoch } => Says::Ask { id: *id, asker: *asker, epoch: *epoch },
-                        },
-                    };
+                    let again = Msg { from: msg.from, to: msg.to, says: msg.says.clone() };
                     self.net.push(again);
                 }
                 if self.side[msg.from] == self.side[msg.to] {
@@ -1196,12 +1291,20 @@ impl World {
             for a in 0..n {
                 for b in 0..n {
                     if a != b {
-                        let off = self.offer(a, b);
-                        self.deliver(Msg { from: a, to: b, says: Says::Sync(off) }, false)?;
+                        for says in self.session(a, b) {
+                            self.deliver(Msg { from: a, to: b, says }, false)?;
+                        }
                     }
                 }
             }
-            if self.net.is_empty() && print(self) == before {
+            // A protocol-shaped session leaves its replies in the net: drain them
+            // before comparing, so a quiet round ends only when nothing moves.
+            while !self.net.is_empty() {
+                let x = self.rng.below(self.net.len());
+                let msg = self.net.swap_remove(x);
+                self.deliver(msg, false)?;
+            }
+            if print(self) == before {
                 return Ok(());
             }
         }
@@ -1421,6 +1524,12 @@ fn shrink(seed: u64, steps: usize) -> usize {
         if run(seed, mid).is_err() { hi = mid } else { lo = mid }
     }
     hi
+}
+
+/// SIM_WHOLE=1: every session hands whole sets at once, as the first
+/// simulator did, so that its seeds replay.
+fn whole_sync() -> bool {
+    env("SIM_WHOLE") == Some(1)
 }
 
 static FORKS_TWICE: AtomicUsize = AtomicUsize::new(0);
