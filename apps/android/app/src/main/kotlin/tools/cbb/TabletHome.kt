@@ -7,6 +7,7 @@ import android.app.Activity
 import android.content.ClipDescription
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.annotation.StringRes
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -65,7 +66,6 @@ import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -601,7 +601,7 @@ private fun acceptsDrop(event: DragAndDropEvent): Boolean =
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun Modifier.groupDrop(model: AppModel): Modifier {
-    val activity = LocalContext.current as? Activity
+    val activity = LocalActivity.current
     val scope = rememberCoroutineScope()
     var over by remember { mutableStateOf(false) }
     val palette = LocalPalette.current
@@ -631,7 +631,7 @@ private fun Modifier.groupDrop(model: AppModel): Modifier {
 internal fun Modifier.pasteDrop(d: LiveGroup.Device): Modifier {
     val model = LocalTileDrop.current ?: return this
     if (!model.isAdmin || !d.takesPaste) return this
-    val activity = LocalContext.current as? Activity
+    val activity = LocalActivity.current
     val scope = rememberCoroutineScope()
     var over by remember { mutableStateOf(false) }
     val palette = LocalPalette.current
