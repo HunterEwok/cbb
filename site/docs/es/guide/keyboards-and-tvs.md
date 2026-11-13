@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 9b05c71a6bfc -->
+<!-- source: 1b77d3ce22fc -->
 # Teclados y televisores
 
 Para quien quiere escribir una contraseña larga, un enlace o una búsqueda en un televisor, una tableta, una consola o un ordenador que no tiene nada de Copy Beyond Borders. Un dispositivo de tu grupo escribe allí el texto como teclado o como mando a distancia del televisor, cuando tú lo pulsas o cuando un administrador envía un pegado remoto.
@@ -45,7 +45,7 @@ echo 'the text' | sudo cbb keyboard type
 
 ## La Nano ESP32 como teclado USB o Bluetooth
 
-La placa es un miembro ligero de tu grupo. En su consola:
+La placa es un miembro de tu grupo. En su consola:
 
 - `usb keyboard` convierte su puerto USB en un teclado, con la consola como segundo puerto serie a su lado; conéctala al dispositivo. Funciona antes de que arranque ningún sistema: en una BIOS, una configuración UEFI o una petición de cifrado de disco.
 - `ble on`, y después `ble pair`, la convierte en un teclado Bluetooth LE; añade «CBB Nano ESP32» en el dispositivo en dos minutos. Recuerda hasta cuatro dispositivos; `ble forget` los olvida.

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 0dae45ee8ba4 -->
+<!-- source: b1fa5d2433a5 -->
 # Instalación
 
 Copy Beyond Borders se ejecuta como un pequeño servicio en segundo plano en cada ordenador. Su comando es `cbb`. Todas las formas de abajo instalan el mismo programa; elige la que prefieras.
@@ -139,7 +139,9 @@ Todas las opciones del instalador están en la [referencia de comandos](../refer
 
 Las versiones están firmadas desde la 0.6. Para pasar a la 0.6 desde una versión anterior, ejecuta de nuevo el comando de instalación; a partir de entonces lo hace `cbb update`.
 
-`sudo cbb update` (en Windows, `cbb update` en una terminal abierta como administrador) instala la versión más reciente en un ordenador o miembro ligero instalado con `get.sh`, `get.ps1` o un archivo de versión; `cbb update -check` solo dice si hay una. Tus ajustes se conservan. Solo instala una versión firmada por el proyecto, y nunca una anterior. Si la versión nueva no arranca en un minuto, la anterior vuelve por sí sola. Cómo comprueba las firmas está en el [protocolo](../protocol.md), sección 16.
+Desde la 0.6, las actualizaciones nunca rompen tu grupo: un dispositivo funciona en un mismo grupo con dispositivos de la versión anterior, así que puedes actualizarlos de uno en uno, en cualquier orden. Un dispositivo que se encuentra con algo que solo entiende una versión más nueva lo dice y te pide actualizar. Un grupo creado con la 0.5 se vuelve a crear una vez en la 0.6.
+
+`sudo cbb update` (en Windows, `cbb update` en una terminal abierta como administrador) instala la versión más reciente en un ordenador o un dispositivo pequeño instalados con `get.sh`, `get.ps1` o un archivo de versión; `cbb update -check` solo dice si hay una. Tus ajustes se conservan. Solo instala una versión firmada por el proyecto, y nunca una anterior. Si la versión nueva no arranca en un minuto, la anterior vuelve por sí sola. Cómo comprueba las firmas está en el [protocolo](../protocol.md), sección 16.
 
 Qué versiones funcionan juntas y qué hace un dispositivo antiguo con algo más nuevo: [versiones y compatibilidad](../reference/compatibility.md).
 

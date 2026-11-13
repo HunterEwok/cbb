@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 0dae45ee8ba4 -->
+<!-- source: b1fa5d2433a5 -->
 # Kusakinisha
 
 Copy Beyond Borders huendeshwa kama huduma ndogo ya chinichini kwenye kila kompyuta. Amri yake ni `cbb`. Kila njia iliyo hapa chini husakinisha programu ile ile; chagua unayopenda.
@@ -139,7 +139,9 @@ Chaguo zote za kisakinishi ziko katika [marejeo ya amri](../reference/cli.md#ins
 
 Matoleo husainiwa kuanzia 0.6. Ili kuhamia 0.6 kutoka toleo la awali, endesha amri ya usakinishaji tena; kuanzia hapo `cbb update` hufanya hivyo.
 
-`sudo cbb update` (kwenye Windows `cbb update` kwenye terminal iliyofunguliwa kama msimamizi) husakinisha toleo jipya zaidi kwenye kompyuta au mwanachama mwepesi aliyesakinishwa kwa `get.sh`, `get.ps1` au kumbukumbu ya toleo; `cbb update -check` husema tu kama lipo. Mipangilio yako hubaki. Husakinisha tu toleo lililosainiwa na mradi, na kamwe si la zamani zaidi. Toleo jipya lisipoanza ndani ya dakika moja, lile la awali hurudi lenyewe. Jinsi inavyokagua saini imo katika [itifaki](../protocol.md), sehemu ya 16.
+Kuanzia 0.6, masasisho hayavunji kamwe kikundi chako: kifaa hufanya kazi katika kikundi kimoja na vifaa vya toleo lililotangulia, kwa hiyo unaweza kuvisasisha kimoja kimoja, kwa mpangilio wowote. Kifaa kinachokutana na kitu ambacho toleo jipya zaidi tu hukielewa husema hivyo na kukuomba usasishe. Kikundi kilichoundwa kwa 0.5 huundwa upya mara moja kwenye 0.6.
+
+`sudo cbb update` (kwenye Windows `cbb update` kwenye terminal iliyofunguliwa kama msimamizi) husakinisha toleo jipya zaidi kwenye kompyuta au kifaa kidogo kilichosakinishwa kwa `get.sh`, `get.ps1` au kumbukumbu ya toleo; `cbb update -check` husema tu kama lipo. Mipangilio yako hubaki. Husakinisha tu toleo lililosainiwa na mradi, na kamwe si la zamani zaidi. Toleo jipya lisipoanza ndani ya dakika moja, lile la awali hurudi lenyewe. Jinsi inavyokagua saini imo katika [itifaki](../protocol.md), sehemu ya 16.
 
 Matoleo gani hufanya kazi pamoja, na kifaa cha zamani hufanya nini na kitu kipya zaidi: [matoleo na uoanifu](../reference/compatibility.md).
 
