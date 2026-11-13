@@ -22,18 +22,21 @@ import Security
 /// sent to it. Per group: the push keys (the current one first; the
 /// previous one kept for late bodies, but not after a membership change),
 /// the slot, the last registration (its seq and frame, which the member's
-/// sync sends to the group's members) and what `push_open` needs.
+/// sync sends to the group's members), the highest seq given, and what
+/// `push_open` needs.
 public final class PushVault: @unchecked Sendable {
     public enum Failure: Error, CustomStringConvertible {
         case keychain(OSStatus)
         case unreadable
         case incomplete
+        case noFace
 
         public var description: String {
             switch self {
             case let .keychain(s): "the keychain refused the push keys (\(s))"
             case .unreadable: "the push keys in the keychain do not read"
             case .incomplete: "push needs a token and its platform"
+            case .noFace: "push needs the group's face for the push service, which this group has not given yet"
             }
         }
     }
@@ -60,7 +63,11 @@ public final class PushVault: @unchecked Sendable {
         /// The group's slot, kept for as long as the group is.
         public var slot: Data?
         public var kinds: UInt64 = 0
+        /// The last registration's seq, and the highest one given (higher
+        /// when a member said the number was ahead and the phone started
+        /// again from its clock).
         public var seq: UInt64?
+        public var highest: UInt64?
         public var frame: Data?
         /// What the last registration said: a new one is made only when
         /// this changes, never just because the app ran.
@@ -97,6 +104,7 @@ public final class PushVault: @unchecked Sendable {
         public var kinds: UInt64
         public var key: Data?
         public var sendKey: Data?
+        public var face: Data?
         public var challenge: Data?
     }
 
@@ -204,6 +212,31 @@ public final class PushVault: @unchecked Sendable {
         try save(group, nil)
     }
 
+    /// The phone is leaving the group: the registration that turns push
+    /// off there, which the member's sync sends to the group's members
+    /// while the phone still can (nil when push is already off there).
+    public func leaving(_ group: String, now: Date = Date()) throws -> Push.Registration? {
+        let g = try load(group)
+        guard let me = g.me, g.kinds != 0 else { return nil }
+        return try register(group, me: me, token: nil, env: nil, kinds: [], now: now)
+    }
+
+    /// The phone left the group: the group goes, and so does the send key,
+    /// so that the registration the left group's members hold stops being
+    /// good once the phone's other groups confirm the new one. The token
+    /// stays; the next registration draws the new send key.
+    public func left(_ group: String) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        try save(group, nil)
+        var s = try sender()
+        guard s.sendKey != nil else { return }
+        s.sendKey = nil
+        s.keyHint = nil
+        s.challenge = nil
+        try save(sender: s)
+    }
+
     /// Changes one group's state under the lock.
     @discardableResult
     public func update(_ group: String, _ change: (inout Group) throws -> Void) throws -> Group {
@@ -270,15 +303,21 @@ public final class PushVault: @unchecked Sendable {
         /// A member asked for it (`push-renew`): the push service lost the
         /// registration.
         public static let renew = Reasons(rawValue: 2)
+        /// A member's `push-renew` said the push service found the number
+        /// more than a day past its clock: the next one starts again from
+        /// the phone's clock, once.
+        public static let ahead = Reasons(rawValue: 4)
     }
 
     /// The group's registration for `token` of `env` with `kinds` (empty:
     /// push off), made again only when something in it changed or for
-    /// `reasons`; nil when the saved one still says it all. A new token
-    /// gets a new send key, which drops the challenge of the old one. The
-    /// seq is saved with the frame, so the next one is higher.
+    /// `reasons`; nil when the saved one still says it all. `face` is the
+    /// group's face for the push service, which the registration names: a
+    /// new face makes a new registration. A new token gets a new send key,
+    /// which drops the challenge of the old one. The highest seq is saved
+    /// with the frame, so the next one is higher.
     @discardableResult
-    public func register(_ group: String, me: Data, token: Data?, env: UInt64?, kinds: Push.Kinds,
+    public func register(_ group: String, me: Data, token: Data?, env: UInt64?, kinds: Push.Kinds, face: Data? = nil,
                          reasons: Reasons = [], devices: Devices? = nil, now: Date = Date()) throws -> Push.Registration? {
         lock.lock()
         defer { lock.unlock() }
@@ -307,16 +346,18 @@ public final class PushVault: @unchecked Sendable {
                 try save(group, g)
                 return nil
             }
-            let r = try Push.registration(savedSeq: g.seq, now: now, kinds: [], env: nil, token: nil, key: nil,
-                                          sendKey: nil, slot: nil, challenge: nil)
+            let r = try Push.registration(highestSeq: g.highest ?? g.seq, restart: reasons.contains(.ahead), now: now,
+                                          kinds: [], env: nil, token: nil, key: nil, sendKey: nil, slot: nil, face: nil)
             g.kinds = 0
             g.seq = r.seq
+            g.highest = r.highest
             g.frame = r.frame
             g.registered = off
             try save(group, g)
             return r
         }
         guard let token, let env else { throw Failure.incomplete }
+        guard let face else { throw Failure.noFace }
         if s.sendKey == nil || s.token != token || s.env != env {
             s.sendKey = try Push.newKeys().sendKey
             s.token = token
@@ -327,14 +368,15 @@ public final class PushVault: @unchecked Sendable {
         if g.slot == nil { g.slot = try Push.newKeys().slot }
         let drew = g.keys.isEmpty || g.kinds == 0 || reasons.contains(.membership)
         let key = drew ? try Push.newKeys().key : g.keys[0].key
-        let wanted = Registered(token: token, env: env, kinds: kinds.rawValue, key: key, sendKey: s.sendKey,
+        let wanted = Registered(token: token, env: env, kinds: kinds.rawValue, key: key, sendKey: s.sendKey, face: face,
                                 challenge: s.challenge)
-        if !drew, !reasons.contains(.renew), g.registered == wanted {
+        if !drew, reasons.isDisjoint(with: [.renew, .ahead]), g.registered == wanted {
             try save(group, g)
             return nil
         }
-        let r = try Push.registration(savedSeq: g.seq, now: now, kinds: kinds, env: env, token: token, key: key,
-                                      sendKey: s.sendKey, slot: g.slot, challenge: s.challenge)
+        let r = try Push.registration(highestSeq: g.highest ?? g.seq, restart: reasons.contains(.ahead), now: now,
+                                      kinds: kinds, env: env, token: token, key: key, sendKey: s.sendKey, slot: g.slot,
+                                      face: face, challenge: s.challenge)
         // The body's seq is in its associated data: the key under the
         // previous seq stays for bodies already on their way, one entry;
         // after a membership change none, so a removed member's bodies open
@@ -344,6 +386,7 @@ public final class PushVault: @unchecked Sendable {
         if drew { g.keyDrawnMS = UInt64(max(0, now.timeIntervalSince1970 * 1000)) }
         g.kinds = kinds.rawValue
         g.seq = r.seq
+        g.highest = r.highest
         g.frame = r.frame
         g.registered = wanted
         s.keyHint = r.keyHint ?? s.keyHint

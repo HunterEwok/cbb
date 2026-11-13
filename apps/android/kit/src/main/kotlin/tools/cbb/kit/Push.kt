@@ -54,20 +54,24 @@ object Push {
 
     /**
      * A registration made: the frame of message `push` for the group's
-     * members and the number it carries, which the app saves first, and with
-     * push on the send key's hint, which the push service puts beside each
-     * challenge.
+     * members, the number it carries and the highest number given so far,
+     * which the app saves first, and with push on the send key's hint, which
+     * the push service puts beside each challenge.
      */
-    class Registration(val frame: ByteArray, val seq: Long, val keyHint: ByteArray?)
+    class Registration(val frame: ByteArray, val seq: Long, val highest: Long, val keyHint: ByteArray?)
 
     /**
-     * Makes the registration for one group: its slot, and the last challenge
-     * the push service sent to the token, if any. With [kinds] 0 push is off
-     * and the rest is not read. Give either [token] or [unifiedPush].
+     * Makes the registration for one group: its slot, the group's face for the
+     * push service (the `group` of its hubs' credential), and the last
+     * challenge the push service sent to the token, if any. [restart] is set
+     * once after a member's `push-renew` said the number was ahead. With
+     * [kinds] 0 push is off and the rest is not read. Give either [token] or
+     * [unifiedPush].
      */
     fun registration(
-        savedSeq: Long?,
+        highestSeq: Long?,
         nowMs: Long,
+        restart: Boolean = false,
         kinds: Long,
         env: Long? = null,
         token: ByteArray? = null,
@@ -75,6 +79,7 @@ object Push {
         key: ByteArray? = null,
         sendKey: ByteArray? = null,
         slot: ByteArray? = null,
+        face: ByteArray? = null,
         challenge: ByteArray? = null,
     ): Registration {
         val on = kinds != 0L
@@ -84,7 +89,8 @@ object Push {
         val ok = Core.run(
             "push_registration",
             Wire.obj(
-                "saved_seq" to Wire.num(savedSeq),
+                "highest_seq" to Wire.num(highestSeq),
+                "restart" to (if (restart) JsonPrimitive(true) else null),
                 "now_ms" to Wire.num(maxOf(0, nowMs)),
                 "kinds" to Wire.num(kinds),
                 "env" to Wire.num(env?.takeIf { on }),
@@ -93,10 +99,16 @@ object Push {
                 "key" to Wire.bytes(key?.takeIf { on }),
                 "send_key" to Wire.bytes(sendKey?.takeIf { on }),
                 "slot" to Wire.bytes(slot?.takeIf { on }),
+                "face" to Wire.bytes(face?.takeIf { on }),
                 "challenge" to Wire.bytes(challenge?.takeIf { on }),
             ),
         ) as? JsonObject ?: throw Core.Mismatch("the answer to push_registration is not an object")
-        return Registration(need(ok, "frame"), ok.optLong("seq") ?: throw Core.Mismatch("push_registration: no seq"), ok.optBytes("key_hint"))
+        return Registration(
+            need(ok, "frame"),
+            ok.optLong("seq") ?: throw Core.Mismatch("push_registration: no seq"),
+            ok.optLong("highest") ?: throw Core.Mismatch("push_registration: no highest"),
+            ok.optBytes("key_hint"),
+        )
     }
 
     /** A push key with the registration number it was sent with. */

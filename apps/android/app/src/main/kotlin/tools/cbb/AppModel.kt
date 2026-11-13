@@ -829,19 +829,22 @@ class AppModel(private val app: Context) {
      */
     suspend fun leave(): Boolean {
         busy = true
+        // Push off in this group while the phone still reaches its members.
+        withContext(Dispatchers.IO) { PushSetup.leaving(app) }
         try {
             withContext(Dispatchers.IO) { group.leave() }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             message = describe(e)
+            withContext(Dispatchers.IO) { PushSetup.stayed(app) }
             return false
         } finally {
             busy = false
         }
         SyncService.stop(app)
         notifier.forget()
-        withContext(Dispatchers.IO) { PushSetup.forget(app) }
+        withContext(Dispatchers.IO) { PushSetup.left(app) }
         try {
             withContext(Dispatchers.IO) { group.prepare() }
         } catch (e: CancellationException) {

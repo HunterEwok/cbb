@@ -45,6 +45,17 @@ public enum PushMarks {
             default: return true
             }
         }
+
+        /// Whether the group's records as the app applied them say the
+        /// change this mark tells of did not happen.
+        func contradicted(by g: PushVault.Group) -> Bool {
+            switch (event, device) {
+            case let (2, d?): return g.members?.contains(d) ?? false
+            case let (4, d?): return g.root.map { $0 != d } ?? false
+            case (6, _): return !g.halted
+            default: return false
+            }
+        }
     }
 
     static func all(_ defaults: UserDefaults?) -> [String: [Mark]] {
@@ -56,12 +67,23 @@ public enum PushMarks {
         defaults?.set(try? JSONEncoder().encode(marks), forKey: key)
     }
 
-    /// Marks the group with an event that arrived now.
-    public static func mark(_ group: String, event: UInt64, device: Data?, now: Date = Date(), in defaults: UserDefaults?) {
+    /// Marks the group with an event that arrived now. When the list is
+    /// full a mark no longer in force goes first; a mark not in force when
+    /// it arrives (a removal of a device the group does not list) never
+    /// pushes one out.
+    public static func mark(_ group: String, event: UInt64, device: Data?, state g: PushVault.Group?, now: Date = Date(),
+                            in defaults: UserDefaults?) {
         var marks = all(defaults)
         let at = UInt64(Swift.max(0, now.timeIntervalSince1970 * 1000))
-        marks[group, default: []].append(Mark(event: event, device: device, atMS: at))
-        marks[group] = Array(marks[group]!.suffix(max))
+        let m = Mark(event: event, device: device, atMS: at)
+        var list = marks[group] ?? []
+        let g = g ?? PushVault.Group()
+        if list.count >= max {
+            guard m.inForce(g) else { return }
+            if let i = list.firstIndex(where: { !$0.inForce(g) }) { list.remove(at: i) } else { list.removeFirst() }
+        }
+        list.append(m)
+        marks[group] = Array(list.suffix(max))
         save(marks, defaults)
     }
 
@@ -70,18 +92,34 @@ public enum PushMarks {
         (all(defaults)[group] ?? []).contains { $0.inForce(g) }
     }
 
-    /// The app has synced the group's records with a member since `at`
-    /// (one has stayed connected a while): the marks that arrived before
-    /// then are spent, whether their change was there to apply (and a key
-    /// was drawn for it) or not there at all, as for an event made by a
-    /// holder of the push key that names a change which never comes.
-    public static func synced(_ group: String, at: Date, in defaults: UserDefaults?) {
+    /// The app has synced the group's records with `peers` (members that
+    /// stayed connected a while) since `at`, and applied them into `g`:
+    /// a mark that arrived before then is spent when those records
+    /// contradict its event (the device it names is still listed, the root
+    /// is not the one it names, the group is not stopped) and they came from
+    /// a member other than the device it names, as for an event made by a
+    /// holder of the push key that names a change which never comes. A mark
+    /// whose change is there is spent only once the app applies it
+    /// (`spend`).
+    public static func synced(_ group: String, at: Date, peers: Set<Data>, state g: PushVault.Group,
+                              in defaults: UserDefaults?) {
         var marks = all(defaults)
         guard let list = marks[group] else { return }
         let ms = UInt64(Swift.max(0, at.timeIntervalSince1970 * 1000))
-        let left = list.filter { $0.atMS >= ms }
+        let left = list.filter { m in
+            guard m.atMS < ms else { return true }
+            guard !peers.subtracting(m.device.map { [$0] } ?? []).isEmpty else { return true }
+            return !m.contradicted(by: g)
+        }
         if left == list { return }
         marks[group] = left.isEmpty ? nil : left
+        save(marks, defaults)
+    }
+
+    /// Drops every mark of a group the phone left.
+    public static func forget(_ group: String, in defaults: UserDefaults?) {
+        var marks = all(defaults)
+        guard marks.removeValue(forKey: group) != nil else { return }
         save(marks, defaults)
     }
 

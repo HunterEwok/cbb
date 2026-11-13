@@ -1242,10 +1242,13 @@ final class AppModel: ObservableObject {
     func leave() async -> Bool {
         busy = true
         defer { busy = false }
+        // Push off in this group while the phone still reaches its members.
+        PushSetup.shared.leaving()
         do {
             try await group.leave()
         } catch {
             message = Self.describe(error)
+            PushSetup.shared.stayed()
             return false
         }
         PushSetup.shared.left()

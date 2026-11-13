@@ -407,10 +407,17 @@ the slot and the last registration. A registration is made again only when what 
 because the app ran. A device gone or a new root draws a new push key, and the previous one is
 not kept, so a removed member's bodies open nothing; until then an event of a removal, a new root
 or a stop marks the group hints-only (`PushMarks`), and the mark is spent once the app has
-applied that change and drawn the new key, or has synced the group's records with a member after
-the mark (one stayed connected 30 s) and so found no such change. Leaving the group forgets its
-push keys, secrets and marks; the sender stays while the token does, so a group joined later
-registers under the send key the service has confirmed. The Android app does the same
+applied that change and drawn the new key, or has synced the group's records after the mark with
+a member other than the device it names (one stayed connected 30 s) and those records say the
+change did not happen (the device still listed, another root, no stop). When the list of marks
+is full a mark no longer in force goes first, and one not in force when it arrives never pushes
+one out. Every registration names the group's face for the push service; until the group gives
+one nothing is registered. Leaving the group first saves a registration with `kinds` 0 for its
+members, then forgets its push keys, secrets and marks and the send key, so that what the left
+group's members hold stops being good once the phone's other groups confirm the new key; the
+token stays. On UnifiedPush, whose endpoint takes a message from whoever knows it, at most one
+new challenge an hour is kept, a challenge alone makes a new registration once in a challenge
+period, and applying a removal takes a new endpoint. The Android app does the same
 (`PushVault.kt`, `PushSetup.kt`). A copy's text gets the notification's Copy button;
 the test tool's row in Settings is in debug builds only.
 

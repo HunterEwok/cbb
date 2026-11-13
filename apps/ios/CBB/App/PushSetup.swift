@@ -3,6 +3,7 @@
 import CBBKit
 import Foundation
 import os
+import Security
 import UIKit
 import UserNotifications
 
@@ -35,7 +36,7 @@ final class PushSetup {
 
     let vault = PushVault(accessGroup: PushSetup.accessGroup)
     private var token: Data?
-    private var group: (tag: String, me: Data, devices: PushVault.Devices)?
+    private var group: (tag: String, me: Data, devices: PushVault.Devices, face: Data?)?
     /// The last problem, shown in Settings under the switch.
     private(set) var problem: String?
 
@@ -77,35 +78,76 @@ final class PushSetup {
     /// The group, this phone's device ID in it and the group's devices
     /// (hex IDs, the root's among them), as the app applied them; nil when
     /// it has no group. A device gone or a new root draws a new push key,
-    /// so a removed member's bodies open nothing here.
-    func group(tag: String?, me: String?, devices: [String] = [], root: String? = nil) {
+    /// so a removed member's bodies open nothing here. `face` is the
+    /// group's face for the push service (the `group` of the period's hubs'
+    /// credential, 16 bytes), which every registration names; until the
+    /// group gives one nothing is registered (a debug build draws one of
+    /// its own, for the test tool).
+    func group(tag: String?, me: String?, devices: [String] = [], root: String? = nil, face: Data? = nil) {
         guard let tag, let me, let id = Data(hex: me), id.count == 16 else {
             group = nil
             return
         }
         let applied = PushVault.Devices(members: devices.compactMap { Data(hex: $0) }, root: root.flatMap { Data(hex: $0) })
-        if group?.tag == tag, group?.me == id, group?.devices == applied { return }
-        group = (tag, id, applied)
+        let face = face ?? Self.testFace(tag)
+        if group?.tag == tag, group?.me == id, group?.devices == applied, group?.face == face { return }
+        group = (tag, id, applied, face)
         refresh()
     }
 
-    /// The group's records are synced with a member since `at`: the
-    /// hints-only marks that arrived before then are spent.
-    func synced(at: Date) {
-        guard let group else { return }
-        PushMarks.synced(group.tag, at: at, in: PushMarks.defaults)
+    /// The group's records are synced since `at` with `peers` (the hex IDs
+    /// of members that stayed connected a while), and applied: a hints-only
+    /// mark from before then is spent when those records say its change did
+    /// not happen (PushMarks.synced).
+    func synced(at: Date, peers: Set<String>) {
+        guard let group, let g = try? vault.load(group.tag) else { return }
+        PushMarks.synced(group.tag, at: at, peers: Set(peers.compactMap { Data(hex: $0) }), state: g,
+                         in: PushMarks.defaults)
     }
 
+    /// The phone is about to leave its group: the registration that turns
+    /// push off there, saved as the group's frame for the members while the
+    /// phone can still reach them.
+    @discardableResult
+    func leaving() -> Data? {
+        guard Self.accessGroup != nil, let group else { return nil }
+        do {
+            return try vault.leaving(group.tag)?.frame
+        } catch {
+            fail(error)
+            return nil
+        }
+    }
+
+    /// Leaving failed: the phone stays, and push goes on as before.
+    func stayed() { refresh() }
+
     /// The phone left its group: the group's push keys, slot, secrets and
-    /// marks go; the sender stays while the token does (PushVault.forget).
-    /// The members drop the phone's registration when its removal comes.
+    /// marks go, and the send key with them, so that what the left group's
+    /// members hold stops being good (PushVault.left); the token stays.
     func left() {
         guard let group else { return }
         if Self.accessGroup != nil {
-            do { try vault.forget(group.tag) } catch { fail(error) }
+            do { try vault.left(group.tag) } catch { fail(error) }
         }
-        PushMarks.synced(group.tag, at: .distantFuture, in: PushMarks.defaults)
+        PushMarks.forget(group.tag, in: PushMarks.defaults)
         self.group = nil
+    }
+
+    /// A debug build's face for a group that has not given one, so that the
+    /// test tool has a registration to show; nil in a release build.
+    private static func testFace(_ tag: String) -> Data? {
+        #if DEBUG
+        let key = "push.testFace.\(tag)"
+        if let d = UserDefaults.standard.data(forKey: key), d.count == 16 { return d }
+        var d = Data(count: 16)
+        let ok = d.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) } == errSecSuccess
+        guard ok else { return nil }
+        UserDefaults.standard.set(d, forKey: key)
+        return d
+        #else
+        return nil
+        #endif
     }
 
     #if DEBUG
@@ -126,10 +168,12 @@ final class PushSetup {
     }
 
     /// A member asked for the registration of the group with this slot
-    /// (`push-renew`): the push service lost it.
-    func renew(slot: Data) {
+    /// (`push-renew`): the push service lost it, or with `ahead` found its
+    /// number more than a day past its clock, and the next one starts again
+    /// from the phone's clock.
+    func renew(slot: Data, ahead: Bool = false) {
         guard let group, (try? vault.group(slot: slot)) == group.tag else { return }
-        refresh(reasons: .renew)
+        refresh(reasons: ahead ? [.renew, .ahead] : .renew)
     }
 
     /// What opens a copy here, which the app writes on every rotation of
@@ -149,8 +193,14 @@ final class PushSetup {
         guard Self.accessGroup != nil, let group else { return }
         do {
             if on, let token {
+                guard let face = group.face else {
+                    // Nothing to name yet: the group registers once it gives
+                    // its face. Not a problem to show.
+                    Self.log.info("push: no face for the group yet, nothing registered")
+                    return
+                }
                 try vault.register(group.tag, me: group.me, token: token, env: Self.env(), kinds: [.copies, .events],
-                                   reasons: reasons, devices: group.devices)
+                                   face: face, reasons: reasons, devices: group.devices)
             } else {
                 try vault.register(group.tag, me: group.me, token: nil, env: nil, kinds: [], devices: group.devices)
             }

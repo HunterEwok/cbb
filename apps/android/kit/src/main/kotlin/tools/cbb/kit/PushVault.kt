@@ -24,8 +24,8 @@ import kotlinx.serialization.json.JsonPrimitive
  * endpoint), its platform, the send key drawn for it, the key's hint and the
  * last challenge the push service sent to it. Per group: the push keys (the
  * current one first; the previous one kept for late bodies, but not after a
- * membership change), the slot, the last registration and what `push_open`
- * needs.
+ * membership change), the slot, the last registration, the highest seq
+ * given and what `push_open` needs.
  */
 class PushVault(private val store: Store) {
     /** Named blobs the app keeps sealed on the device; null removes one. */
@@ -37,6 +37,8 @@ class PushVault(private val store: Store) {
 
     class Incomplete : Exception("push needs a token and its platform")
 
+    class NoFace : Exception("push needs the group's face for the push service, which this group has not given yet")
+
     /** The token's sender, shared by every group. */
     class Sender(
         var token: ByteArray? = null,
@@ -45,6 +47,8 @@ class PushVault(private val store: Store) {
         var sendKey: ByteArray? = null,
         var keyHint: ByteArray? = null,
         var challenge: ByteArray? = null,
+        /** When the challenge was kept (the phone's clock). */
+        var challengeAtMs: Long? = null,
     ) {
         internal fun json(): JsonObject = Wire.obj(
             "token" to Wire.bytes(token),
@@ -53,6 +57,7 @@ class PushVault(private val store: Store) {
             "send_key" to Wire.bytes(sendKey),
             "key_hint" to Wire.bytes(keyHint),
             "challenge" to Wire.bytes(challenge),
+            "challenge_at_ms" to Wire.num(challengeAtMs),
         )
 
         internal companion object {
@@ -65,6 +70,7 @@ class PushVault(private val store: Store) {
                 sendKey = o.optBytes("send_key"),
                 keyHint = o.optBytes("key_hint"),
                 challenge = o.optBytes("challenge"),
+                challengeAtMs = o.optLong("challenge_at_ms"),
             )
         }
     }
@@ -77,6 +83,7 @@ class PushVault(private val store: Store) {
         val key: String?,
         val sendKey: String?,
         val challenge: String?,
+        val face: String? = null,
     )
 
     /** The group's devices (their IDs) and its root, as the app applied them. */
@@ -87,9 +94,13 @@ class PushVault(private val store: Store) {
         var keys: List<Push.KeyAndSeq> = emptyList(),
         var slot: ByteArray? = null,
         var kinds: Long = 0,
+        /** The last registration's seq, and the highest one given. */
         var seq: Long? = null,
+        var highest: Long? = null,
         var frame: ByteArray? = null,
         var registered: Registered? = null,
+        /** The challenge period of the last registration made for a new challenge alone (UnifiedPush). */
+        var challengedPeriod: Long? = null,
         /** When the current push key was drawn (the phone's clock). */
         var keyDrawnMs: Long? = null,
         /** This phone's device ID in the group. */
@@ -115,13 +126,16 @@ class PushVault(private val store: Store) {
             "slot" to Wire.bytes(slot),
             "kinds" to Wire.num(kinds),
             "seq" to Wire.num(seq),
+            "highest" to Wire.num(highest),
             "frame" to Wire.bytes(frame),
             "registered" to registered?.let {
                 Wire.obj(
                     "token" to Wire.str(it.token), "env" to Wire.num(it.env), "kinds" to Wire.num(it.kinds),
                     "key" to Wire.str(it.key), "send_key" to Wire.str(it.sendKey), "challenge" to Wire.str(it.challenge),
+                    "face" to Wire.str(it.face),
                 )
             },
+            "challenged_period" to Wire.num(challengedPeriod),
             "key_drawn_ms" to Wire.num(keyDrawnMs),
             "me" to Wire.bytes(me),
             "members" to members?.let { Wire.list(it) },
@@ -141,10 +155,15 @@ class PushVault(private val store: Store) {
                 slot = o.optBytes("slot"),
                 kinds = o.optLong("kinds") ?: 0,
                 seq = o.optLong("seq"),
+                highest = o.optLong("highest"),
                 frame = o.optBytes("frame"),
                 registered = o.optObject("registered")?.let {
-                    Registered(it.optString("token"), it.optLong("env"), it.optLong("kinds") ?: 0, it.optString("key"), it.optString("send_key"), it.optString("challenge"))
+                    Registered(
+                        it.optString("token"), it.optLong("env"), it.optLong("kinds") ?: 0, it.optString("key"),
+                        it.optString("send_key"), it.optString("challenge"), it.optString("face"),
+                    )
                 },
+                challengedPeriod = o.optLong("challenged_period"),
                 keyDrawnMs = o.optLong("key_drawn_ms"),
                 me = o.optBytes("me"),
                 members = o.optBytesList("members"),
@@ -168,6 +187,13 @@ class PushVault(private val store: Store) {
 
         /** A member asked for it (`push-renew`): the push service lost the registration. */
         RENEW,
+
+        /**
+         * A member's `push-renew` said the push service found the number more
+         * than a day past its clock: the next one starts again from the
+         * phone's clock, once.
+         */
+        AHEAD,
     }
 
     private val lock = Any()
@@ -201,6 +227,35 @@ class PushVault(private val store: Store) {
     }
 
     /**
+     * The phone is leaving the group: the registration that turns push off
+     * there, which the member's sync sends to the group's members while the
+     * phone still can (null when push is already off there).
+     */
+    fun leaving(group: String, nowMs: Long = System.currentTimeMillis()): Push.Registration? {
+        val g = load(group)
+        val me = g.me ?: return null
+        if (g.kinds == 0L) return null
+        return register(group, me, null, null, null, 0, nowMs = nowMs)
+    }
+
+    /**
+     * The phone left the group: the group goes, and so does the send key, so
+     * that the registration the left group's members hold stops being good
+     * once the phone's other groups confirm the new one. The token stays; the
+     * next registration draws the new send key.
+     */
+    fun left(group: String) = synchronized(lock) {
+        save(group, null)
+        val s = sender()
+        if (s.sendKey == null) return@synchronized
+        s.sendKey = null
+        s.keyHint = null
+        s.challenge = null
+        s.challengeAtMs = null
+        save(s)
+    }
+
+    /**
      * What opens a copy in a body, which the app writes on every rotation of
      * its sealing key and whenever the group's devices change: the sealing
      * secrets of the epochs still in the window (any other is erased here),
@@ -222,16 +277,21 @@ class PushVault(private val store: Store) {
      * Keeps a challenge the push service sent (24 bytes: the value, then the
      * hint of the send key it is for) when it is for this phone's send key,
      * and says whether it kept it. Any other is dropped: a challenge of
-     * another key or token confirms nothing.
+     * another key or token confirms nothing. A UnifiedPush endpoint takes a
+     * message from whoever knows it and its keys, every member among them, so
+     * there at most one new challenge an hour is kept.
      */
-    fun keep(challenge: ByteArray): Boolean = synchronized(lock) {
+    fun keep(challenge: ByteArray, nowMs: Long = System.currentTimeMillis()): Boolean = synchronized(lock) {
         if (challenge.size != 24) return false
         val s = sender()
         val hint = s.keyHint ?: return false
         if (s.sendKey == null || !hint.contentEquals(challenge.copyOfRange(16, 24))) return false
         val value = challenge.copyOfRange(0, 16)
         if (s.challenge?.contentEquals(value) == true) return false
+        val at = s.challengeAtMs
+        if (s.unifiedPush != null && at != null && nowMs in at until at + CHALLENGE_EVERY_MS) return false
         s.challenge = value
+        s.challengeAtMs = nowMs
         save(s)
         true
     }
@@ -241,8 +301,11 @@ class PushVault(private val store: Store) {
      * [kinds] (0: push off), made again only when something in it changed or
      * for [reasons]; null when the saved one still says it all. A new token
      * gets a new send key, which drops the challenge of the old one. A device
-     * gone or a new root in [devices] is a membership change. The seq is
-     * saved with the frame, so the next one is higher.
+     * gone or a new root in [devices] is a membership change. [face] is the
+     * group's face for the push service, which the registration names: a new
+     * face makes a new registration. The highest seq is saved with the frame,
+     * so the next one is higher. On UnifiedPush a new challenge alone makes a
+     * new registration once in a challenge period.
      */
     fun register(
         group: String,
@@ -251,6 +314,7 @@ class PushVault(private val store: Store) {
         unifiedPush: Push.UnifiedPush? = null,
         env: Long?,
         kinds: Long,
+        face: ByteArray? = null,
         reasons: Set<Reason> = emptySet(),
         devices: Devices? = null,
         nowMs: Long = System.currentTimeMillis(),
@@ -278,15 +342,17 @@ class PushVault(private val store: Store) {
                 save(group, g)
                 return null
             }
-            val r = Push.registration(g.seq, nowMs, 0)
+            val r = Push.registration(g.highest ?: g.seq, nowMs, Reason.AHEAD in why, 0)
             g.kinds = 0
             g.seq = r.seq
+            g.highest = r.highest
             g.frame = r.frame
             g.registered = off
             save(group, g)
             return r
         }
         if ((token == null && unifiedPush == null) || env == null) throw Incomplete()
+        if (face == null) throw NoFace()
         val sameToken = (s.token?.contentEquals(token ?: ByteArray(0)) ?: (token == null)) && s.unifiedPush == unifiedPush
         if (s.sendKey == null || !sameToken || s.env != env) {
             s.sendKey = Push.newKeys().sendKey
@@ -301,13 +367,24 @@ class PushVault(private val store: Store) {
         val key = if (drew) Push.newKeys().key else g.keys[0].key
         val wanted = Registered(
             token?.let(::hex) ?: unifiedPush?.let { it.url + "|" + hex(it.p256dh) + "|" + hex(it.auth) },
-            env, kinds, hex(key), s.sendKey?.let(::hex), s.challenge?.let(::hex),
+            env, kinds, hex(key), s.sendKey?.let(::hex), s.challenge?.let(::hex), hex(face),
         )
-        if (!drew && Reason.RENEW !in why && g.registered == wanted) {
+        val asked = Reason.RENEW in why || Reason.AHEAD in why
+        if (!drew && !asked && g.registered == wanted) {
             save(group, g)
             return null
         }
-        val r = Push.registration(g.seq, nowMs, kinds, env, token, unifiedPush, key, s.sendKey, g.slot, s.challenge)
+        // Only the challenge is new: on UnifiedPush, once a period.
+        val challengeAlone = g.registered?.copy(challenge = wanted.challenge) == wanted && g.registered != wanted
+        val period = nowMs / CHALLENGE_PERIOD_MS
+        if (!drew && !asked && challengeAlone && unifiedPush != null && g.challengedPeriod == period) {
+            save(group, g)
+            return null
+        }
+        val r = Push.registration(
+            g.highest ?: g.seq, nowMs, Reason.AHEAD in why, kinds, env, token, unifiedPush, key, s.sendKey, g.slot, face, s.challenge,
+        )
+        if (challengeAlone) g.challengedPeriod = period
         // The body's seq is in its associated data: the key under the previous
         // seq stays for bodies already on their way, one entry; after a
         // membership change none, so a removed member's bodies open nothing.
@@ -316,6 +393,7 @@ class PushVault(private val store: Store) {
         if (drew) g.keyDrawnMs = nowMs
         g.kinds = kinds
         g.seq = r.seq
+        g.highest = r.highest
         g.frame = r.frame
         g.registered = wanted
         s.keyHint = r.keyHint ?: s.keyHint
@@ -330,6 +408,12 @@ class PushVault(private val store: Store) {
     private companion object {
         const val SENDER = "push.sender"
         const val GROUP = "push.group."
+
+        /** The push service's challenge period (member/src/pushd/binding.rs). */
+        const val CHALLENGE_PERIOD_MS = 14L * 24 * 3600 * 1000
+
+        /** At most one new challenge an hour on UnifiedPush. */
+        const val CHALLENGE_EVERY_MS = 3600L * 1000
 
         fun hex(b: ByteArray) = b.joinToString("") { "%02x".format(it) }
     }
@@ -359,6 +443,17 @@ class PushMarks(private val store: PushVault.Store) {
                 else -> true
             }
         }
+
+        /** Whether the group's records as the app applied them say the change did not happen. */
+        fun contradicted(g: PushVault.Group): Boolean {
+            val d = device
+            return when {
+                event == 2L && d != null -> g.members?.any { it.contentEquals(d) } ?: false
+                event == 4L && d != null -> g.root?.let { !it.contentEquals(d) } ?: false
+                event == 6L -> !g.halted
+                else -> false
+            }
+        }
     }
 
     private fun all(): MutableMap<String, MutableList<Mark>> {
@@ -373,35 +468,68 @@ class PushMarks(private val store: PushVault.Store) {
             JsonArray(l.map { Wire.obj("event" to Wire.num(it.event), "device" to Wire.bytes(it.device), "at_ms" to Wire.num(it.atMs)) })
         })))
 
-    /** Marks the group with an event that arrived at [nowMs]. */
-    fun mark(group: String, event: Long, device: ByteArray?, nowMs: Long = System.currentTimeMillis()) = synchronized(this) {
-        val marks = all()
-        val l = marks.getOrPut(group) { mutableListOf() }
-        l += Mark(event, device, nowMs)
-        marks[group] = l.takeLast(MAX).toMutableList()
-        save(marks)
-    }
+    /**
+     * Marks the group with an event that arrived at [nowMs]. When the list is
+     * full a mark no longer in force goes first; a mark not in force when it
+     * arrives (a removal of a device the group does not list) never pushes
+     * one out.
+     */
+    fun mark(group: String, event: Long, device: ByteArray?, state: PushVault.Group?, nowMs: Long = System.currentTimeMillis()) =
+        synchronized(this) {
+            val marks = all()
+            val l = marks.getOrPut(group) { mutableListOf() }
+            val g = state ?: PushVault.Group()
+            val m = Mark(event, device, nowMs)
+            if (l.size >= MAX) {
+                if (!m.inForce(g)) return@synchronized
+                val i = l.indexOfFirst { !it.inForce(g) }
+                l.removeAt(if (i >= 0) i else 0)
+            }
+            l += m
+            marks[group] = l.takeLast(MAX).toMutableList()
+            save(marks)
+        }
 
     /** Whether the group shows copies only as hints. */
     fun hintsOnly(group: String, g: PushVault.Group): Boolean = all()[group]?.any { it.inForce(g) } ?: false
 
     /**
-     * The app has synced the group's records with a member since [atMs] (one
-     * has stayed connected a while): the marks that arrived before then are
-     * spent, whether their change was there to apply (and a key was drawn for
-     * it) or not there at all, as for an event made by a holder of the push
-     * key that names a change which never comes.
+     * The app has synced the group's records with [peers] (members that
+     * stayed connected a while) since [atMs], and applied them into [state]:
+     * a mark that arrived before then is spent when those records contradict
+     * its event (the device it names is still listed, the root is not the one
+     * it names, the group is not stopped) and they came from a member other
+     * than the device it names, as for an event made by a holder of the push
+     * key that names a change which never comes. A mark whose change is there
+     * is spent only once the app applies it ([spend]).
      */
-    fun synced(group: String, atMs: Long) {
+    fun synced(group: String, atMs: Long, peers: List<ByteArray>, state: PushVault.Group) {
         synchronized(this) {
             val marks = all()
             val l = marks[group] ?: return
-            val left = l.filter { it.atMs >= atMs }
+            val left = l.filter { m ->
+                if (m.atMs >= atMs) return@filter true
+                val d = m.device
+                if (peers.none { d == null || !it.contentEquals(d) }) return@filter true
+                !m.contradicted(state)
+            }
             if (left.size == l.size) return
             if (left.isEmpty()) marks.remove(group) else marks[group] = left.toMutableList()
             save(marks)
         }
     }
+
+    /** Drops every mark of a group the phone left. */
+    fun forget(group: String) {
+        synchronized(this) {
+            val marks = all()
+            if (marks.remove(group) == null) return
+            save(marks)
+        }
+    }
+
+    /** The marks of the group, oldest first. */
+    fun of(group: String): List<Mark> = all()[group] ?: emptyList()
 
     /** Drops the marks the group's state has spent. */
     fun spend(group: String, g: PushVault.Group) {
@@ -415,8 +543,8 @@ class PushMarks(private val store: PushVault.Store) {
         }
     }
 
-    private companion object {
-        const val NAME = "push.marks"
+    companion object {
+        private const val NAME = "push.marks"
         const val MAX = 16
     }
 }

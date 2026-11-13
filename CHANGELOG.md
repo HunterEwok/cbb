@@ -24,7 +24,8 @@ All notable changes to cbb are documented in this file. The format follows
   and opens each notification in an extension that holds what opens a body and a copy (the
   push keys, the send key, the sealing secrets of the epochs in the group's window) and nothing
   that signs a record; a copy's text shows with a Copy button, a secret never. It registers
-  again only when what it says changed. The Android app does the same, its push vault sealed
+  again only when what it says changed, names the group's face toward the push service in each
+  registration, and turns push off in a group it leaves. The Android app does the same, its push vault sealed
   under an Android Keystore key: the full build through FCM (Firebase's identifiers given at
   build time), the F-Droid build through UnifiedPush. HarmonyOS and Aurora follow.
 - The Rust core wipes the secrets it holds when it lets them go, prints none in `Debug` or

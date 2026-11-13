@@ -54,6 +54,12 @@ object PushPlatform {
         }
     }
 
+    /**
+     * A removal was applied: nothing to do on FCM, whose token only the push
+     * service reaches (a UnifiedPush endpoint is taken anew).
+     */
+    fun newEndpoint(c: Context) = Unit
+
     fun stop(c: Context) {
         app(c) ?: return
         val m = FirebaseMessaging.getInstance()

@@ -28,27 +28,44 @@ final class PushTests: XCTestCase {
     func testRegistrationMovesForward() throws {
         let k = try Push.newKeys()
         let token = Data(repeating: 7, count: 32)
+        let face = Data(repeating: 4, count: 16)
         let now = Date(timeIntervalSince1970: 1_800_000_000)
-        let r = try Push.registration(savedSeq: nil, now: now, kinds: [.copies], env: Push.Env.apns, token: token,
-                                      key: k.key, sendKey: k.sendKey, slot: k.slot)
+        func reg(_ highest: UInt64?, restart: Bool = false, at: Date = now) throws -> Push.Registration {
+            try Push.registration(highestSeq: highest, restart: restart, now: at, kinds: [.copies], env: Push.Env.apns,
+                                  token: token, key: k.key, sendKey: k.sendKey, slot: k.slot, face: face)
+        }
+        let r = try reg(nil)
         XCTAssertEqual(r.seq, 1_800_000_000_000)
+        XCTAssertEqual(r.highest, r.seq)
         // Restored from a backup with an older seq: still forward of the clock.
-        let back = try Push.registration(savedSeq: 5, now: now, kinds: [.copies], env: Push.Env.apns, token: token,
-                                         key: k.key, sendKey: k.sendKey, slot: k.slot)
+        let back = try reg(5)
         XCTAssertEqual(back.seq, r.seq)
-        let next = try Push.registration(savedSeq: r.seq, now: now, kinds: [.copies], env: Push.Env.apns, token: token,
-                                         key: k.key, sendKey: k.sendKey, slot: k.slot)
+        let next = try reg(r.seq)
         XCTAssertEqual(next.seq, r.seq + 1)
-        let off = try Push.registration(savedSeq: next.seq, now: now, kinds: [], env: nil, token: nil, key: nil, sendKey: nil,
-                                        slot: nil)
+        let off = try Push.registration(highestSeq: next.highest, now: now, kinds: [], env: nil, token: nil, key: nil,
+                                        sendKey: nil, slot: nil, face: nil)
         XCTAssertEqual(r.keyHint?.count, 8)
         XCTAssertNil(off.keyHint)
         XCTAssertEqual(off.seq, next.seq + 1)
         XCTAssertLessThan(off.frame.count, r.frame.count)
-        // A key that is not 32 bytes is refused with code 18.
-        XCTAssertThrowsError(try Push.registration(savedSeq: nil, kinds: [.copies], env: Push.Env.apns, token: token,
-                                                   key: Data(count: 31), sendKey: k.sendKey, slot: k.slot)) { e in
-            XCTAssertEqual((e as? Core.Refusal)?.code, 18)
+        // Saved while the clock was two days ahead: the number stays above
+        // it until a member says the service found it ahead; then it starts
+        // again from the clock, once, and the highest stays.
+        let ahead = try reg(r.seq + 2 * 86_400_000)
+        XCTAssertEqual(ahead.seq, r.seq + 2 * 86_400_000 + 1)
+        let restarted = try reg(ahead.highest, restart: true)
+        XCTAssertEqual(restarted.seq, r.seq)
+        XCTAssertEqual(restarted.highest, ahead.highest)
+        // Another face signs other bytes.
+        let other = try Push.registration(highestSeq: r.seq, now: now, kinds: [.copies], env: Push.Env.apns, token: token,
+                                          key: k.key, sendKey: k.sendKey, slot: k.slot, face: Data(repeating: 5, count: 16))
+        XCTAssertNotEqual(other.frame, next.frame)
+        // A key that is not 32 bytes, a face that is not 16 or none: code 18.
+        for (key, face) in [(Data(count: 31), face), (k.key, Data(count: 15)), (k.key, nil)] as [(Data, Data?)] {
+            XCTAssertThrowsError(try Push.registration(highestSeq: nil, kinds: [.copies], env: Push.Env.apns, token: token,
+                                                       key: key, sendKey: k.sendKey, slot: k.slot, face: face)) { e in
+                XCTAssertEqual((e as? Core.Refusal)?.code, 18)
+            }
         }
     }
 
@@ -74,11 +91,12 @@ final class PushTests: XCTestCase {
         defer { clean(vault) }
         let me = Data(repeating: 1, count: 16)
         let token = Data(repeating: 7, count: 32)
+        let face = Data(repeating: 4, count: 16)
         let devices = PushVault.Devices(members: [me, Data(repeating: 2, count: 16), Data(repeating: 3, count: 16)], root: me)
         let first: Push.Registration?
         do {
             first = try vault.register("g1", me: me, token: token, env: Push.Env.apns, kinds: [.copies, .events],
-                                       devices: devices)
+                                       face: face, devices: devices)
         } catch PushVault.Failure.keychain(let s) {
             throw XCTSkip("no keychain here (\(s))")
         }
@@ -94,17 +112,18 @@ final class PushTests: XCTestCase {
         XCTAssertNil(sender.challenge)
         // The app ran again with nothing new: no new registration.
         XCTAssertNil(try vault.register("g1", me: me, token: token, env: Push.Env.apns, kinds: [.copies, .events],
-                                        devices: devices))
+                                        face: face, devices: devices))
         XCTAssertEqual(try vault.load("g1"), g1)
         // A member asked for it again: the same keys, a higher seq.
         let renewed = try XCTUnwrap(try vault.register("g1", me: me, token: token, env: Push.Env.apns,
-                                                       kinds: [.copies, .events], reasons: .renew, devices: devices))
+                                                       kinds: [.copies, .events], face: face, reasons: .renew, devices: devices))
         XCTAssertGreaterThan(renewed.seq, g1.seq ?? 0)
         XCTAssertEqual(try vault.load("g1").keys.map(\.key), [g1.keys[0].key, g1.keys[0].key])
         XCTAssertEqual(try vault.group(slot: g1.slot!), "g1")
 
         // A second group: the same send key, its own slot and push key.
-        let other = try XCTUnwrap(try vault.register("g2", me: me, token: token, env: Push.Env.apns, kinds: [.copies]))
+        let other = try XCTUnwrap(try vault.register("g2", me: me, token: token, env: Push.Env.apns, kinds: [.copies],
+                                                     face: face))
         let g2 = try vault.load("g2")
         XCTAssertEqual(other.keyHint, first?.keyHint)
         XCTAssertNotEqual(g2.slot, g1.slot)
@@ -119,7 +138,7 @@ final class PushTests: XCTestCase {
         XCTAssertFalse(try vault.keep(challenge: value + sender.keyHint!), "the same one twice changes nothing")
         XCTAssertEqual(try vault.sender().challenge, value)
         let withChallenge = try XCTUnwrap(try vault.register("g1", me: me, token: token, env: Push.Env.apns,
-                                                             kinds: [.copies, .events], devices: devices))
+                                                             kinds: [.copies, .events], face: face, devices: devices))
         XCTAssertGreaterThan(withChallenge.seq, renewed.seq)
         XCTAssertEqual(try vault.load("g1").registered?.challenge, value)
 
@@ -127,7 +146,7 @@ final class PushTests: XCTestCase {
         let before = try vault.load("g1")
         let fewer = PushVault.Devices(members: [me, Data(repeating: 2, count: 16)], root: me)
         XCTAssertNotNil(try vault.register("g1", me: me, token: token, env: Push.Env.apns, kinds: [.copies, .events],
-                                           devices: fewer))
+                                           face: face, devices: fewer))
         let after = try vault.load("g1")
         XCTAssertEqual(after.keys.count, 1)
         XCTAssertNotEqual(after.keys[0].key, before.keys[0].key)
@@ -135,11 +154,41 @@ final class PushTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(after.keyDrawnMS ?? 0, before.keyDrawnMS ?? 0)
         // A device added changes no key: the registration stays.
         XCTAssertNil(try vault.register("g1", me: me, token: token, env: Push.Env.apns, kinds: [.copies, .events],
-                                        devices: devices))
+                                        face: face, devices: devices))
         XCTAssertEqual(try vault.load("g1").keys, after.keys)
 
+        // A new face for the push service: a new registration naming it, the
+        // same push key; no face at all registers nothing.
+        let moved = Data(repeating: 6, count: 16)
+        let onNewFace = try XCTUnwrap(try vault.register("g1", me: me, token: token, env: Push.Env.apns,
+                                                         kinds: [.copies, .events], face: moved, devices: devices))
+        XCTAssertEqual(try vault.load("g1").registered?.face, moved)
+        XCTAssertEqual(try vault.load("g1").keys.first?.key, after.keys[0].key)
+        XCTAssertThrowsError(try vault.register("g1", me: me, token: token, env: Push.Env.apns, kinds: [.copies, .events],
+                                                devices: devices)) { e in
+            guard case PushVault.Failure.noFace = e else { return XCTFail("\(e)") }
+        }
+        XCTAssertEqual(try vault.load("g1").seq, onNewFace.seq, "nothing saved without a face")
+        // A member said the number was ahead: one registration from the
+        // clock, below the highest, which stays; the next goes on above it.
+        var g = try vault.load("g1")
+        let past = UInt64(Date().timeIntervalSince1970 * 1000) + 3 * 86_400_000
+        g.highest = past
+        g.seq = past
+        try vault.save("g1", g)
+        let restarted = try XCTUnwrap(try vault.register("g1", me: me, token: token, env: Push.Env.apns,
+                                                         kinds: [.copies, .events], face: moved,
+                                                         reasons: [.renew, .ahead], devices: devices))
+        XCTAssertLessThan(restarted.seq, past)
+        XCTAssertEqual(try vault.load("g1").highest, past)
+        XCTAssertEqual(try vault.load("g1").seq, restarted.seq)
+        let renewedAgain = try XCTUnwrap(try vault.register("g1", me: me, token: token, env: Push.Env.apns,
+                                                            kinds: [.copies, .events], face: moved, reasons: .renew,
+                                                            devices: devices))
+        XCTAssertEqual(renewedAgain.seq, past + 1)
+
         // A new token: a new send key for every group, its challenge gone.
-        try vault.register("g1", me: me, token: Data(repeating: 8, count: 32), env: Push.Env.apns, kinds: [.copies])
+        try vault.register("g1", me: me, token: Data(repeating: 8, count: 32), env: Push.Env.apns, kinds: [.copies], face: face)
         let s3 = try vault.sender()
         XCTAssertNotEqual(s3.sendKey, sender.sendKey)
         XCTAssertNil(s3.challenge)
@@ -150,7 +199,7 @@ final class PushTests: XCTestCase {
         XCTAssertEqual(try vault.load("g1").kinds, 0)
         XCTAssertNil(try vault.register("g1", me: me, token: nil, env: nil, kinds: []))
         // On again: a new push key, nothing from before kept.
-        try vault.register("g1", me: me, token: Data(repeating: 8, count: 32), env: Push.Env.apns, kinds: [.copies])
+        try vault.register("g1", me: me, token: Data(repeating: 8, count: 32), env: Push.Env.apns, kinds: [.copies], face: face)
         XCTAssertEqual(try vault.load("g1").keys.count, 1)
         // Leaving every group drops the groups and keeps the sender: a group
         // joined later registers under the same send key and challenge.
@@ -161,11 +210,52 @@ final class PushTests: XCTestCase {
         XCTAssertEqual(try vault.groups(), [])
         XCTAssertNil(try? vault.load("g1").slot)
         let g3 = try XCTUnwrap(try vault.register("g3", me: me, token: Data(repeating: 8, count: 32), env: Push.Env.apns,
-                                                  kinds: [.copies]))
+                                                  kinds: [.copies], face: face))
         XCTAssertEqual(g3.keyHint, kept.keyHint)
         XCTAssertEqual(try vault.sender().sendKey, kept.sendKey)
         XCTAssertEqual(try vault.load("g3").registered?.challenge, value)
         try vault.forget("g3")
+    }
+
+    /// Leaving a group turns push off there first, then drops the group and
+    /// the send key: the left group's members get a registration of kinds 0,
+    /// and what they held before is under a key the phone no longer signs
+    /// with, so its next registration anywhere carries a new one.
+    func testLeavingTurnsPushOffThereAndRetiresTheSendKey() throws {
+        let vault = vault()
+        defer { clean(vault) }
+        let me = Data(repeating: 1, count: 16)
+        let token = Data(repeating: 7, count: 32)
+        let face = Data(repeating: 4, count: 16)
+        let on: Push.Registration
+        do {
+            on = try XCTUnwrap(try vault.register("left", me: me, token: token, env: Push.Env.apns, kinds: [.copies],
+                                                  face: face))
+        } catch PushVault.Failure.keychain(let s) {
+            throw XCTSkip("no keychain here (\(s))")
+        }
+        let stays = try XCTUnwrap(try vault.register("stays", me: me, token: token, env: Push.Env.apns, kinds: [.copies],
+                                                     face: face))
+        let before = try vault.sender()
+        XCTAssertTrue(try vault.keep(challenge: Data(repeating: 9, count: 16) + before.keyHint!))
+        let off = try XCTUnwrap(try vault.leaving("left"))
+        XCTAssertGreaterThan(off.seq, on.seq)
+        XCTAssertNil(off.keyHint, "push off carries no send key")
+        XCTAssertEqual(try vault.load("left").frame, off.frame, "the frame the members get is the one turning it off")
+        XCTAssertEqual(try vault.load("left").kinds, 0)
+        XCTAssertNil(try vault.leaving("left"), "already off: nothing more")
+        try vault.left("left")
+        XCTAssertEqual(try vault.groups(), ["stays"])
+        let after = try vault.sender()
+        XCTAssertNil(after.sendKey)
+        XCTAssertNil(after.challenge)
+        XCTAssertEqual(after.token, token, "the token stays")
+        // The group the phone stays in registers again under a new send key.
+        let again = try XCTUnwrap(try vault.register("stays", me: me, token: token, env: Push.Env.apns, kinds: [.copies],
+                                                     face: face))
+        XCTAssertNotEqual(again.keyHint, stays.keyHint)
+        XCTAssertNotEqual(try vault.sender().sendKey, before.sendKey)
+        XCTAssertNil(try vault.load("stays").registered?.challenge)
     }
 
     /// testdata/interop/push-open.json, from the Rust core's push tests: the
@@ -237,9 +327,10 @@ final class PushTests: XCTestCase {
         let vault = vault()
         defer { clean(vault) }
         let me = Data(repeating: 1, count: 16)
+        let face = Data(repeating: 4, count: 16)
         do {
             try vault.register("g1", me: me, token: Data(repeating: 7, count: 32), env: Push.Env.apns,
-                               kinds: [.copies, .events], devices: PushVault.Devices(members: [me], root: me))
+                               kinds: [.copies, .events], face: face, devices: PushVault.Devices(members: [me], root: me))
         } catch PushVault.Failure.keychain(let s) {
             throw XCTSkip("no keychain here (\(s))")
         }
@@ -249,7 +340,7 @@ final class PushTests: XCTestCase {
             // Sender
             "token", "env", "sendKey", "keyHint", "challenge",
             // Group
-            "keys", "key", "seq", "slot", "kinds", "frame", "registered", "keyDrawnMS", "me", "members", "root",
+            "keys", "key", "seq", "highest", "face", "slot", "kinds", "frame", "registered", "keyDrawnMS", "me", "members", "root",
             "origins", "rights", "frozen", "sealing", "epoch", "secret", "tooOld", "halted", "windowMS",
         ]
         func names(_ v: Any) -> Set<String> {
@@ -313,7 +404,7 @@ final class PushTests: XCTestCase {
         g.keyDrawnMS = 1_000
         XCTAssertFalse(PushMarks.hintsOnly("g", g, in: defaults))
         // A removal the app has not applied yet: hints only.
-        PushMarks.mark("g", event: 2, device: gone, now: Date(timeIntervalSince1970: 2), in: defaults)
+        PushMarks.mark("g", event: 2, device: gone, state: g, now: Date(timeIntervalSince1970: 2), in: defaults)
         XCTAssertTrue(PushMarks.hintsOnly("g", g, in: defaults))
         XCTAssertFalse(PushMarks.hintsOnly("other", g, in: defaults))
         PushMarks.spend("g", g, in: defaults)
@@ -324,14 +415,14 @@ final class PushTests: XCTestCase {
         XCTAssertFalse(PushMarks.hintsOnly("g", g, in: defaults))
         PushMarks.spend("g", g, in: defaults)
         // A removal the phone applied before the event came: nothing.
-        PushMarks.mark("g", event: 2, device: gone, now: Date(timeIntervalSince1970: 9), in: defaults)
+        PushMarks.mark("g", event: 2, device: gone, state: g, now: Date(timeIntervalSince1970: 9), in: defaults)
         XCTAssertFalse(PushMarks.hintsOnly("g", g, in: defaults))
         PushMarks.spend("g", g, in: defaults)
         // A new root the app knows already: nothing; one it does not: hints.
         g.members = [me, gone]
-        PushMarks.mark("g", event: 4, device: me, now: Date(timeIntervalSince1970: 9), in: defaults)
+        PushMarks.mark("g", event: 4, device: me, state: g, now: Date(timeIntervalSince1970: 9), in: defaults)
         XCTAssertFalse(PushMarks.hintsOnly("g", g, in: defaults))
-        PushMarks.mark("g", event: 4, device: gone, now: Date(timeIntervalSince1970: 9), in: defaults)
+        PushMarks.mark("g", event: 4, device: gone, state: g, now: Date(timeIntervalSince1970: 9), in: defaults)
         XCTAssertTrue(PushMarks.hintsOnly("g", g, in: defaults))
         // Applied: the new root and its new key, and the mark for the old
         // root does not come back.
@@ -339,20 +430,74 @@ final class PushTests: XCTestCase {
         g.keyDrawnMS = 9_500
         XCTAssertFalse(PushMarks.hintsOnly("g", g, in: defaults))
         // A stop: until a key drawn after it.
-        PushMarks.mark("g", event: 6, device: nil, now: Date(timeIntervalSince1970: 10), in: defaults)
+        PushMarks.mark("g", event: 6, device: nil, state: g, now: Date(timeIntervalSince1970: 10), in: defaults)
         XCTAssertTrue(PushMarks.hintsOnly("g", g, in: defaults))
         g.keyDrawnMS = 11_000
         XCTAssertFalse(PushMarks.hintsOnly("g", g, in: defaults))
         // An event naming a change that never comes (a removal of a device
         // that stays, a stop that is not there): spent once the app has
-        // synced the group's records with a member after it.
-        PushMarks.mark("g", event: 2, device: gone, now: Date(timeIntervalSince1970: 20), in: defaults)
-        PushMarks.mark("g", event: 6, device: nil, now: Date(timeIntervalSince1970: 21), in: defaults)
+        // synced the group's records after it with a member other than the
+        // device the event names, and those records say it did not happen.
+        let other = Data(repeating: 3, count: 16)
+        PushMarks.spend("g", g, in: defaults)
+        XCTAssertNil(PushMarks.all(defaults)["g"])
+        PushMarks.mark("g", event: 2, device: gone, state: g, now: Date(timeIntervalSince1970: 20), in: defaults)
+        PushMarks.mark("g", event: 6, device: nil, state: g, now: Date(timeIntervalSince1970: 21), in: defaults)
         XCTAssertTrue(PushMarks.hintsOnly("g", g, in: defaults))
-        PushMarks.synced("g", at: Date(timeIntervalSince1970: 20.5), in: defaults)
+        PushMarks.synced("g", at: Date(timeIntervalSince1970: 20.5), peers: [other], state: g, in: defaults)
         XCTAssertTrue(PushMarks.hintsOnly("g", g, in: defaults), "the stop came after that sync")
-        PushMarks.synced("g", at: Date(timeIntervalSince1970: 22), in: defaults)
+        XCTAssertEqual(PushMarks.all(defaults)["g"]?.map(\.event), [6])
+        PushMarks.mark("g", event: 2, device: gone, state: g, now: Date(timeIntervalSince1970: 23), in: defaults)
+        PushMarks.synced("g", at: Date(timeIntervalSince1970: 24), peers: [gone], state: g, in: defaults)
+        XCTAssertEqual(PushMarks.all(defaults)["g"]?.map(\.event), [2], "the device a mark names never clears it")
+        PushMarks.synced("g", at: Date(timeIntervalSince1970: 24), peers: [], state: g, in: defaults)
+        XCTAssertTrue(PushMarks.hintsOnly("g", g, in: defaults), "no member: nothing synced")
+        PushMarks.synced("g", at: Date(timeIntervalSince1970: 24), peers: [other], state: g, in: defaults)
         XCTAssertFalse(PushMarks.hintsOnly("g", g, in: defaults))
+        // A stop that is there stays in force whatever a sync brings, until
+        // a key drawn after it.
+        g.halted = true
+        PushMarks.mark("g", event: 6, device: nil, state: g, now: Date(timeIntervalSince1970: 30), in: defaults)
+        PushMarks.synced("g", at: Date(timeIntervalSince1970: 31), peers: [other], state: g, in: defaults)
+        XCTAssertTrue(PushMarks.hintsOnly("g", g, in: defaults))
+        g.keyDrawnMS = 32_000
+        XCTAssertFalse(PushMarks.hintsOnly("g", g, in: defaults))
+        PushMarks.forget("g", in: defaults)
+        XCTAssertNil(PushMarks.all(defaults)["g"])
+    }
+
+    /// A full list keeps the marks in force: one not in force goes first,
+    /// and an event naming a device the group does not list never pushes
+    /// one out.
+    func testAFullListOfMarksKeepsTheOnesInForce() throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "push-marks-\(UUID().uuidString)"))
+        let gone = Data(repeating: 2, count: 16), me = Data(repeating: 1, count: 16)
+        var g = PushVault.Group()
+        g.members = [me, gone]
+        g.root = me
+        g.keyDrawnMS = 1_000
+        func at(_ s: Double) -> Date { Date(timeIntervalSince1970: s) }
+        PushMarks.mark("g", event: 2, device: gone, state: g, now: at(2), in: defaults)
+        for i in 0..<40 {
+            PushMarks.mark("g", event: 2, device: Data(repeating: UInt8(10 + i), count: 16), state: g, now: at(3 + Double(i)),
+                           in: defaults)
+        }
+        var list = try XCTUnwrap(PushMarks.all(defaults)["g"])
+        XCTAssertEqual(list.count, PushMarks.max)
+        XCTAssertEqual(list.first?.device, gone, "forty events naming no device of the group: the true mark stays")
+        XCTAssertTrue(PushMarks.hintsOnly("g", g, in: defaults))
+        // A stop in force pushes out one that is not, never the removal.
+        PushMarks.mark("g", event: 6, device: nil, state: g, now: at(50), in: defaults)
+        list = try XCTUnwrap(PushMarks.all(defaults)["g"])
+        XCTAssertEqual(list.count, PushMarks.max)
+        XCTAssertEqual(list.filter { $0.inForce(g) }.map(\.event), [2, 6])
+        // Filled with marks in force, the oldest goes.
+        for i in 0..<PushMarks.max {
+            PushMarks.mark("g", event: 6, device: nil, state: g, now: at(60 + Double(i)), in: defaults)
+        }
+        list = try XCTUnwrap(PushMarks.all(defaults)["g"])
+        XCTAssertEqual(list.count, PushMarks.max)
+        XCTAssertTrue(list.allSatisfy { $0.event == 6 && $0.atMS >= 60_000 })
     }
     #endif
 }

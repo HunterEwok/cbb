@@ -2597,7 +2597,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
     /**
      * The group's records are synced with a member once it has stayed
      * connected for 30 s (its records came in at the connection's start):
-     * that spends the push hints-only marks that arrived before it connected.
+     * that spends the push hints-only marks from before it connected which
+     * its records contradict.
      */
     private fun syncedSoon(n: CoreMember, device: String) {
         val since = System.currentTimeMillis()
@@ -2605,7 +2606,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
             Thread.sleep(SYNCED_AFTER_MS)
             if (runCatching { n.peers() }.getOrDefault(emptyList()).any { it.device == device }) {
                 val tag = groupTag ?: return@Thread
-                PushSetup.synced(context, tag, since)
+                PushSetup.synced(context, tag, since, device)
             }
         }, "push synced").start()
     }

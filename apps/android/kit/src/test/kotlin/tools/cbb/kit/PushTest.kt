@@ -53,21 +53,34 @@ class PushTest {
         assertEquals(Push.Kinds.COPIES or Push.Kinds.EVENTS, fcm.kinds)
         assertFalse(Push.limits(200).known)
         val now = 1_800_000_000_000L
-        val r = Push.registration(null, now, Push.Kinds.COPIES, Push.Env.FCM, bytes(7, 160), key = a.key, sendKey = a.sendKey, slot = a.slot)
+        fun reg(highest: Long?, restart: Boolean = false, face: ByteArray? = FACE, key: ByteArray = a.key) =
+            Push.registration(highest, now, restart, Push.Kinds.COPIES, Push.Env.FCM, bytes(7, 160), key = key, sendKey = a.sendKey, slot = a.slot, face = face)
+        val r = reg(null)
         assertEquals(now, r.seq)
+        assertEquals(now, r.highest)
         assertEquals(8, r.keyHint?.size)
-        val off = Push.registration(r.seq, now, 0)
+        val off = Push.registration(r.highest, now, kinds = 0)
         assertEquals(r.seq + 1, off.seq)
         assertNull(off.keyHint)
-        val e = assertFailsWith<Core.Refusal> {
-            Push.registration(null, now, Push.Kinds.COPIES, Push.Env.FCM, bytes(7, 160), key = ByteArray(31), sendKey = a.sendKey, slot = a.slot)
+        // Saved while the clock was two days ahead: above it until a member
+        // says the service found it ahead; then once from the clock, and the
+        // highest stays.
+        val ahead = reg(now + 2 * 86_400_000L)
+        assertEquals(now + 2 * 86_400_000L + 1, ahead.seq)
+        val restarted = reg(ahead.highest, restart = true)
+        assertEquals(now, restarted.seq)
+        assertEquals(ahead.highest, restarted.highest)
+        // Another face signs other bytes.
+        assertFalse(reg(r.seq, face = bytes(5, 16)).frame.contentEquals(reg(r.seq).frame))
+        // A key not 32 bytes, a face not 16 or none: code 18.
+        for (bad in listOf({ reg(null, key = ByteArray(31)) }, { reg(null, face = ByteArray(15)) }, { reg(null, face = null) })) {
+            assertEquals(18, assertFailsWith<Core.Refusal> { bad() }.code)
         }
-        assertEquals(18, e.code)
         // A UnifiedPush endpoint the core takes, and a plain-HTTP one it refuses.
         val p256dh = UNIFIED_POINT
-        Push.registration(null, now, 1, Push.Env.UNIFIED_PUSH, unifiedPush = Push.UnifiedPush("https://up.example.org/x", p256dh, bytes(1, 16)), key = a.key, sendKey = a.sendKey, slot = a.slot)
+        Push.registration(null, now, kinds = 1, env = Push.Env.UNIFIED_PUSH, unifiedPush = Push.UnifiedPush("https://up.example.org/x", p256dh, bytes(1, 16)), key = a.key, sendKey = a.sendKey, slot = a.slot, face = FACE)
         assertFailsWith<Core.Refusal> {
-            Push.registration(null, now, 1, Push.Env.UNIFIED_PUSH, unifiedPush = Push.UnifiedPush("http://up.example.org/x", p256dh, bytes(1, 16)), key = a.key, sendKey = a.sendKey, slot = a.slot)
+            Push.registration(null, now, kinds = 1, env = Push.Env.UNIFIED_PUSH, unifiedPush = Push.UnifiedPush("http://up.example.org/x", p256dh, bytes(1, 16)), key = a.key, sendKey = a.sendKey, slot = a.slot, face = FACE)
         }
     }
 
@@ -77,7 +90,7 @@ class PushTest {
         val me = bytes(1, 16)
         val token = bytes(7, 160)
         val devices = PushVault.Devices(listOf(me, bytes(2, 16), bytes(3, 16)), me)
-        val first = assertNotNull(vault.register("g1", me, token, env = Push.Env.FCM, kinds = 3, devices = devices))
+        val first = assertNotNull(vault.register("g1", me, token, env = Push.Env.FCM, kinds = 3, face = FACE, devices = devices))
         val g1 = vault.load("g1")
         assertEquals(first.seq, g1.seq)
         assertEquals(1, g1.keys.size)
@@ -87,14 +100,14 @@ class PushTest {
         val sender = vault.sender()
         assertContentEquals(first.keyHint, sender.keyHint)
         // Nothing new: no registration.
-        assertNull(vault.register("g1", me, token, env = Push.Env.FCM, kinds = 3, devices = devices))
+        assertNull(vault.register("g1", me, token, env = Push.Env.FCM, kinds = 3, face = FACE, devices = devices))
         // A member asked for it again: the same keys, a higher seq.
-        val renewed = assertNotNull(vault.register("g1", me, token, env = Push.Env.FCM, kinds = 3, reasons = setOf(PushVault.Reason.RENEW), devices = devices))
+        val renewed = assertNotNull(vault.register("g1", me, token, env = Push.Env.FCM, kinds = 3, face = FACE, reasons = setOf(PushVault.Reason.RENEW), devices = devices))
         assertTrue(renewed.seq > g1.seq!!)
         assertEquals(2, vault.load("g1").keys.size)
         assertEquals("g1", vault.group(g1.slot!!))
         // A second group: the same send key, its own slot and push key.
-        val other = assertNotNull(vault.register("g2", me, token, env = Push.Env.FCM, kinds = 1))
+        val other = assertNotNull(vault.register("g2", me, token, env = Push.Env.FCM, kinds = 1, face = FACE))
         assertContentEquals(first.keyHint, other.keyHint)
         assertFalse(vault.load("g2").slot!!.contentEquals(g1.slot))
         // The challenge: another key's is dropped, this send key's kept once.
@@ -103,19 +116,19 @@ class PushTest {
         assertFalse(vault.keep(ByteArray(23)))
         assertTrue(vault.keep(value + sender.keyHint!!))
         assertFalse(vault.keep(value + sender.keyHint!!))
-        val withChallenge = assertNotNull(vault.register("g1", me, token, env = Push.Env.FCM, kinds = 3, devices = devices))
+        val withChallenge = assertNotNull(vault.register("g1", me, token, env = Push.Env.FCM, kinds = 3, face = FACE, devices = devices))
         assertTrue(withChallenge.seq > renewed.seq)
         // A device removed: a new key, the previous not kept.
         val before = vault.load("g1")
         val fewer = PushVault.Devices(listOf(me, bytes(2, 16)), me)
-        assertNotNull(vault.register("g1", me, token, env = Push.Env.FCM, kinds = 3, devices = fewer))
+        assertNotNull(vault.register("g1", me, token, env = Push.Env.FCM, kinds = 3, face = FACE, devices = fewer))
         val after = vault.load("g1")
         assertEquals(1, after.keys.size)
         assertFalse(after.keys[0].key.contentEquals(before.keys[0].key))
         // A device added changes no key.
-        assertNull(vault.register("g1", me, token, env = Push.Env.FCM, kinds = 3, devices = devices))
+        assertNull(vault.register("g1", me, token, env = Push.Env.FCM, kinds = 3, face = FACE, devices = devices))
         // A new token: a new send key, its challenge gone, the slot kept.
-        vault.register("g1", me, bytes(8, 160), env = Push.Env.FCM, kinds = 1)
+        vault.register("g1", me, bytes(8, 160), env = Push.Env.FCM, kinds = 1, face = FACE)
         val s3 = vault.sender()
         assertFalse(s3.sendKey!!.contentEquals(sender.sendKey))
         assertNull(s3.challenge)
@@ -123,7 +136,7 @@ class PushTest {
         // Off, then off again: nothing new; on again: one fresh key.
         assertNotNull(vault.register("g1", me, null, env = null, kinds = 0))
         assertNull(vault.register("g1", me, null, env = null, kinds = 0))
-        vault.register("g1", me, bytes(8, 160), env = Push.Env.FCM, kinds = 1)
+        vault.register("g1", me, bytes(8, 160), env = Push.Env.FCM, kinds = 1, face = FACE)
         assertEquals(1, vault.load("g1").keys.size)
         // Leaving every group drops the groups and keeps the sender: a group
         // joined later registers under the same send key and challenge.
@@ -133,9 +146,102 @@ class PushTest {
         vault.forget("g2")
         assertTrue(vault.groups().isEmpty())
         assertEquals(1, vault.items().size, "the sender alone")
-        val g3 = assertNotNull(vault.register("g3", me, bytes(8, 160), env = Push.Env.FCM, kinds = 1))
+        val g3 = assertNotNull(vault.register("g3", me, bytes(8, 160), env = Push.Env.FCM, kinds = 1, face = FACE))
         assertContentEquals(kept.keyHint, g3.keyHint)
         assertNotNull(vault.load("g3").registered?.challenge, "registered with the kept challenge")
+        // A new face: a new registration naming it, the same push key; none
+        // at all registers nothing and saves nothing.
+        val key3 = vault.load("g3").keys[0].key
+        val moved = bytes(6, 16)
+        val onMoved = assertNotNull(vault.register("g3", me, bytes(8, 160), env = Push.Env.FCM, kinds = 1, face = moved))
+        assertEquals(PushVault.Registered(hexStr(bytes(8, 160)), Push.Env.FCM, 1, hexStr(key3), vault.sender().sendKey?.let(::hexStr), vault.sender().challenge?.let(::hexStr), hexStr(moved)), vault.load("g3").registered)
+        assertFailsWith<PushVault.NoFace> { vault.register("g3", me, bytes(8, 160), env = Push.Env.FCM, kinds = 1) }
+        assertEquals(onMoved.seq, vault.load("g3").seq)
+        // A member said the number was ahead: one registration from the
+        // clock, below the highest, which stays; the next goes on above it.
+        val past = System.currentTimeMillis() + 3 * 86_400_000L
+        vault.save("g3", vault.load("g3").also { it.seq = past; it.highest = past })
+        val restarted = assertNotNull(vault.register("g3", me, bytes(8, 160), env = Push.Env.FCM, kinds = 1, face = moved, reasons = setOf(PushVault.Reason.RENEW, PushVault.Reason.AHEAD)))
+        assertTrue(restarted.seq < past)
+        assertEquals(past, vault.load("g3").highest)
+        val again = assertNotNull(vault.register("g3", me, bytes(8, 160), env = Push.Env.FCM, kinds = 1, face = moved, reasons = setOf(PushVault.Reason.RENEW)))
+        assertEquals(past + 1, again.seq)
+    }
+
+    /**
+     * Leaving a group turns push off there first, then drops the group and
+     * the send key: the left group's members get a registration of kinds 0,
+     * and the phone's next registration anywhere carries a new send key.
+     */
+    @Test
+    fun leavingTurnsPushOffThereAndRetiresTheSendKey() {
+        val vault = PushVault(MemoryStore())
+        val me = bytes(1, 16)
+        val token = bytes(7, 160)
+        val on = assertNotNull(vault.register("left", me, token, env = Push.Env.FCM, kinds = 1, face = FACE))
+        val stays = assertNotNull(vault.register("stays", me, token, env = Push.Env.FCM, kinds = 1, face = FACE))
+        val before = vault.sender()
+        assertTrue(vault.keep(bytes(9, 16) + before.keyHint!!))
+        val off = assertNotNull(vault.leaving("left"))
+        assertTrue(off.seq > on.seq)
+        assertNull(off.keyHint, "push off carries no send key")
+        assertContentEquals(off.frame, vault.load("left").frame, "the frame the members get turns push off")
+        assertEquals(0, vault.load("left").kinds)
+        assertNull(vault.leaving("left"), "already off: nothing more")
+        vault.left("left")
+        assertEquals(listOf("stays"), vault.groups())
+        val after = vault.sender()
+        assertNull(after.sendKey)
+        assertNull(after.challenge)
+        assertContentEquals(token, after.token, "the token stays")
+        val again = assertNotNull(vault.register("stays", me, token, env = Push.Env.FCM, kinds = 1, face = FACE))
+        assertFalse(again.keyHint!!.contentEquals(stays.keyHint))
+        assertFalse(vault.sender().sendKey!!.contentEquals(before.sendKey))
+        assertNull(vault.load("stays").registered?.challenge)
+    }
+
+    /**
+     * A UnifiedPush endpoint takes a challenge part from whoever knows it: at
+     * most one new challenge an hour is kept, and a challenge alone makes a
+     * new registration once in a challenge period.
+     */
+    @Test
+    fun unifiedPushChallengesAreKeptSparingly() {
+        val vault = PushVault(MemoryStore())
+        val me = bytes(1, 16)
+        val up = Push.UnifiedPush("https://up.example.org/x", UNIFIED_POINT, bytes(1, 16))
+        val t0 = 1_800_000_000_000L
+        assertNotNull(vault.register("g1", me, null, up, Push.Env.UNIFIED_PUSH, 1, FACE, nowMs = t0))
+        assertNotNull(vault.register("g2", me, null, up, Push.Env.UNIFIED_PUSH, 1, FACE, nowMs = t0))
+        val hint = vault.sender().keyHint!!
+        // Twenty challenge parts in a minute: the first is kept, no other.
+        assertTrue(vault.keep(bytes(10, 16) + hint, t0))
+        for (i in 1 until 20) assertFalse(vault.keep(bytes(10 + i, 16) + hint, t0 + i * 1000L), "part $i")
+        assertContentEquals(bytes(10, 16), vault.sender().challenge)
+        // Each group registers again over it, once.
+        val g1 = assertNotNull(vault.register("g1", me, null, up, Push.Env.UNIFIED_PUSH, 1, FACE, nowMs = t0 + 30_000))
+        assertNotNull(vault.register("g2", me, null, up, Push.Env.UNIFIED_PUSH, 1, FACE, nowMs = t0 + 30_000))
+        // An hour on, another is kept, but within the period it makes no new
+        // registration: the one over a challenge stands.
+        assertTrue(vault.keep(bytes(40, 16) + hint, t0 + 3_600_000))
+        assertNull(vault.register("g1", me, null, up, Push.Env.UNIFIED_PUSH, 1, FACE, nowMs = t0 + 3_600_000))
+        assertEquals(g1.seq, vault.load("g1").seq)
+        // A member's ask still registers, with the newest challenge.
+        assertNotNull(vault.register("g1", me, null, up, Push.Env.UNIFIED_PUSH, 1, FACE, setOf(PushVault.Reason.RENEW), nowMs = t0 + 3_700_000))
+        assertEquals(hexStr(bytes(40, 16)), vault.load("g1").registered?.challenge)
+        // The next period: a challenge alone registers again.
+        val next = t0 + 14L * 24 * 3600 * 1000
+        assertTrue(vault.keep(bytes(41, 16) + hint, next))
+        assertNotNull(vault.register("g2", me, null, up, Push.Env.UNIFIED_PUSH, 1, FACE, nowMs = next))
+        // FCM, which only the push service reaches, keeps every new challenge.
+        val fcm = PushVault(MemoryStore())
+        fcm.register("g", me, bytes(7, 160), env = Push.Env.FCM, kinds = 1, face = FACE, nowMs = t0)
+        val h = fcm.sender().keyHint!!
+        assertTrue(fcm.keep(bytes(10, 16) + h, t0))
+        assertTrue(fcm.keep(bytes(11, 16) + h, t0 + 1000))
+        assertNotNull(fcm.register("g", me, bytes(7, 160), env = Push.Env.FCM, kinds = 1, face = FACE, nowMs = t0 + 2000))
+        assertTrue(fcm.keep(bytes(12, 16) + h, t0 + 3000))
+        assertNotNull(fcm.register("g", me, bytes(7, 160), env = Push.Env.FCM, kinds = 1, face = FACE, nowMs = t0 + 4000))
     }
 
     /** testdata/interop/push-open.json, from the Rust core's push tests: a real copy shows across a rotation. */
@@ -176,11 +282,11 @@ class PushTest {
     fun theVaultHoldsNoSigningKey() {
         val vault = PushVault(MemoryStore())
         val me = bytes(1, 16)
-        vault.register("g1", me, bytes(7, 160), env = Push.Env.FCM, kinds = 3, devices = PushVault.Devices(listOf(me), me))
+        vault.register("g1", me, bytes(7, 160), env = Push.Env.FCM, kinds = 3, face = FACE, devices = PushVault.Devices(listOf(me), me))
         vault.opening("g1", listOf(Push.Sealing(1, ByteArray(32))), listOf(Push.Origin(ByteArray(70), 1)), 120_000, false)
         val allowed = setOf(
-            "token", "unifiedpush", "url", "p256dh", "auth", "env", "send_key", "key_hint", "challenge",
-            "keys", "key", "seq", "slot", "kinds", "frame", "registered", "key_drawn_ms", "me", "members", "root",
+            "token", "unifiedpush", "url", "p256dh", "auth", "env", "send_key", "key_hint", "challenge", "challenge_at_ms",
+            "keys", "key", "seq", "highest", "face", "challenged_period", "slot", "kinds", "frame", "registered", "key_drawn_ms", "me", "members", "root",
             "origins", "rights", "frozen", "sealing", "epoch", "secret", "too_old", "halted", "window_ms",
         )
         fun names(e: JsonElement): Set<String> = when (e) {
@@ -203,7 +309,7 @@ class PushTest {
         val gone = bytes(2, 16)
         val g = PushVault.Group(members = listOf(me, gone), root = me, keyDrawnMs = 1_000)
         assertFalse(marks.hintsOnly("g", g))
-        marks.mark("g", 2, gone, 2_000)
+        marks.mark("g", 2, gone, g, 2_000)
         assertTrue(marks.hintsOnly("g", g))
         assertFalse(marks.hintsOnly("other", g))
         marks.spend("g", g)
@@ -213,30 +319,73 @@ class PushTest {
         assertFalse(marks.hintsOnly("g", g))
         marks.spend("g", g)
         // Applied before the event came: nothing.
-        marks.mark("g", 2, gone, 9_000)
+        marks.mark("g", 2, gone, g, 9_000)
         assertFalse(marks.hintsOnly("g", g))
         marks.spend("g", g)
         g.members = listOf(me, gone)
-        marks.mark("g", 4, me, 9_000)
+        marks.mark("g", 4, me, g, 9_000)
         assertFalse(marks.hintsOnly("g", g))
-        marks.mark("g", 4, gone, 9_000)
+        marks.mark("g", 4, gone, g, 9_000)
         assertTrue(marks.hintsOnly("g", g))
         g.root = gone
         g.keyDrawnMs = 9_500
         assertFalse(marks.hintsOnly("g", g))
-        marks.mark("g", 6, null, 10_000)
+        marks.mark("g", 6, null, g, 10_000)
         assertTrue(marks.hintsOnly("g", g))
         g.keyDrawnMs = 11_000
         assertFalse(marks.hintsOnly("g", g))
         // An event naming a change that never comes: spent once the app has
-        // synced the group's records with a member after it.
-        marks.mark("g", 2, gone, 20_000)
-        marks.mark("g", 6, null, 21_000)
+        // synced the group's records after it with a member other than the
+        // device it names, and those records say it did not happen.
+        val other = bytes(3, 16)
+        marks.spend("g", g)
+        assertTrue(marks.of("g").isEmpty())
+        marks.mark("g", 2, gone, g, 20_000)
+        marks.mark("g", 6, null, g, 21_000)
         assertTrue(marks.hintsOnly("g", g))
-        marks.synced("g", 20_500)
+        marks.synced("g", 20_500, listOf(other), g)
         assertTrue(marks.hintsOnly("g", g), "the stop came after that sync")
-        marks.synced("g", 22_000)
+        assertEquals(listOf(6L), marks.of("g").map { it.event })
+        marks.mark("g", 2, gone, g, 23_000)
+        marks.synced("g", 24_000, listOf(gone), g)
+        assertEquals(listOf(2L), marks.of("g").map { it.event }, "the device a mark names never clears it")
+        marks.synced("g", 24_000, emptyList(), g)
+        assertTrue(marks.hintsOnly("g", g), "no member: nothing synced")
+        marks.synced("g", 24_000, listOf(other), g)
         assertFalse(marks.hintsOnly("g", g))
+        // A stop that is there stays in force whatever a sync brings, until a
+        // key drawn after it.
+        g.halted = true
+        marks.mark("g", 6, null, g, 30_000)
+        marks.synced("g", 31_000, listOf(other), g)
+        assertTrue(marks.hintsOnly("g", g))
+        g.keyDrawnMs = 32_000
+        assertFalse(marks.hintsOnly("g", g))
+        marks.forget("g")
+        assertTrue(marks.of("g").isEmpty())
+    }
+
+    /** A full list keeps the marks in force; an event naming no device of the group never pushes one out. */
+    @Test
+    fun aFullListOfMarksKeepsTheOnesInForce() {
+        val marks = PushMarks(MemoryStore())
+        val me = bytes(1, 16)
+        val gone = bytes(2, 16)
+        val g = PushVault.Group(members = listOf(me, gone), root = me, keyDrawnMs = 1_000)
+        marks.mark("g", 2, gone, g, 2_000)
+        for (i in 0 until 40) marks.mark("g", 2, bytes(10 + i, 16), g, 3_000L + i * 1000)
+        var l = marks.of("g")
+        assertEquals(PushMarks.MAX, l.size)
+        assertContentEquals(gone, l.first().device, "forty events naming no device of the group: the true mark stays")
+        assertTrue(marks.hintsOnly("g", g))
+        marks.mark("g", 6, null, g, 50_000)
+        l = marks.of("g")
+        assertEquals(PushMarks.MAX, l.size)
+        assertEquals(listOf(2L, 6L), l.filter { it.inForce(g) }.map { it.event })
+        for (i in 0 until PushMarks.MAX) marks.mark("g", 6, null, g, 60_000L + i * 1000)
+        l = marks.of("g")
+        assertEquals(PushMarks.MAX, l.size)
+        assertTrue(l.all { it.event == 6L && it.atMs >= 60_000 })
     }
 
     @Test
@@ -268,5 +417,10 @@ class PushTest {
         )
 
         fun hexOf(s: String) = ByteArray(s.length / 2) { s.substring(2 * it, 2 * it + 2).toInt(16).toByte() }
+
+        fun hexStr(b: ByteArray) = b.joinToString("") { "%02x".format(it) }
+
+        /** A group's face for the push service. */
+        val FACE = ByteArray(16) { 4 }
     }
 }

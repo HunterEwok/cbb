@@ -50,28 +50,32 @@ public enum Push {
     }
 
     /// A registration made: the frame of message `push` for the group's
-    /// members and the number it carries, which the app saves first, and
-    /// with push on the send key's hint, which the push service puts beside
-    /// each challenge.
+    /// members, the number it carries and the highest number given so far,
+    /// which the app saves first, and with push on the send key's hint,
+    /// which the push service puts beside each challenge.
     public struct Registration: Codable, Equatable {
         public var frame: Data
         public var seq: UInt64
+        public var highest: UInt64
         public var keyHint: Data?
 
         enum CodingKeys: String, CodingKey {
-            case frame, seq
+            case frame, seq, highest
             case keyHint = "key_hint"
         }
     }
 
-    /// Makes the registration for one group: its slot, and the last
-    /// challenge the push service sent to the token, if any. With `kinds`
-    /// empty push is off and the rest is not read.
-    public static func registration(savedSeq: UInt64?, now: Date = Date(), kinds: Kinds, env: UInt64?,
-                                    token: Data?, key: Data?, sendKey: Data?, slot: Data?,
-                                    challenge: Data? = nil) throws -> Registration {
+    /// Makes the registration for one group: its slot, the group's face for
+    /// the push service (the `group` of its hubs credential), and the last
+    /// challenge the push service sent to the token, if any. `restart` is
+    /// set once after a member's `push-renew` said the number was ahead.
+    /// With `kinds` empty push is off and the rest is not read.
+    public static func registration(highestSeq: UInt64?, restart: Bool = false, now: Date = Date(), kinds: Kinds,
+                                    env: UInt64?, token: Data?, key: Data?, sendKey: Data?, slot: Data?,
+                                    face: Data?, challenge: Data? = nil) throws -> Registration {
         struct Args: Encodable {
-            var saved_seq: UInt64?
+            var highest_seq: UInt64?
+            var restart: Bool
             var now_ms: UInt64
             var kinds: UInt64
             var env: UInt64?
@@ -79,13 +83,15 @@ public enum Push {
             var key: Data?
             var send_key: Data?
             var slot: Data?
+            var face: Data?
             var challenge: Data?
         }
         let on = !kinds.isEmpty
         return try Core.run("push_registration", Args(
-            saved_seq: savedSeq, now_ms: UInt64(max(0, now.timeIntervalSince1970 * 1000)), kinds: kinds.rawValue,
-            env: on ? env : nil, token: on ? token : nil, key: on ? key : nil, send_key: on ? sendKey : nil,
-            slot: on ? slot : nil, challenge: on ? challenge : nil))
+            highest_seq: highestSeq, restart: restart, now_ms: UInt64(max(0, now.timeIntervalSince1970 * 1000)),
+            kinds: kinds.rawValue, env: on ? env : nil, token: on ? token : nil, key: on ? key : nil,
+            send_key: on ? sendKey : nil, slot: on ? slot : nil, face: on ? face : nil,
+            challenge: on ? challenge : nil))
     }
 
     /// A push key with the registration number it was sent with.

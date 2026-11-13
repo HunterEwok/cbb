@@ -128,36 +128,88 @@ object PushSetup {
      * or a new root draws a new push key, so a removed member's bodies open
      * nothing here.
      */
-    fun group(c: Context, tag: String?, devices: List<LiveGroup.Device>) {
+    fun group(c: Context, tag: String?, devices: List<LiveGroup.Device>, face: ByteArray? = null) {
         val me = devices.firstOrNull { it.isSelf }?.id?.let(::hex)
         if (tag == null || me == null || me.size != 16) return
         val list = devices.mapNotNull { hex(it.id) }
         val root = devices.firstOrNull { it.isRoot }?.id?.let(::hex)
-        prefs(c).edit { putString("group", tag) }
+        prefs(c).edit {
+            putString("group", tag)
+            (face ?: testFace(c, tag))?.let { putString("face", b64(it)) } ?: remove("face")
+        }
         refresh(c, tag, me, PushVault.Devices(list, root))
     }
 
     /**
-     * The group's records are synced with a member since [sinceMs]: the
-     * hints-only marks that arrived before then are spent.
+     * The group's face for the push service (the `group` of the period's
+     * hubs' credential, 16 bytes), which every registration names; until the
+     * group gives one nothing is registered.
      */
-    fun synced(c: Context, tag: String, sinceMs: Long) {
-        runCatching { marks(c).synced(tag, sinceMs) }.onFailure { Log.e(TAG, "push: cannot spend the marks", it) }
+    private fun face(c: Context): ByteArray? = prefs(c).getString("face", null)?.let(::unb64)?.takeIf { it.size == 16 }
+
+    /** A debug build's face for a group that has not given one, for the test tool; null in a release build. */
+    private fun testFace(c: Context, tag: String): ByteArray? {
+        if (!BuildConfig.DEBUG) return null
+        val key = "test_face.$tag"
+        prefs(c).getString(key, null)?.let(::unb64)?.takeIf { it.size == 16 }?.let { return it }
+        val f = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }
+        prefs(c).edit { putString(key, b64(f)) }
+        return f
     }
 
-    /** The phone left its group: that group's push state goes. */
-    fun forget(c: Context) {
+    /**
+     * The group's records are synced since [sinceMs] with [peer] (the hex ID
+     * of a member that stayed connected a while), and applied: a hints-only
+     * mark from before then is spent when those records say its change did
+     * not happen (PushMarks.synced).
+     */
+    fun synced(c: Context, tag: String, sinceMs: Long, peer: String) {
+        runCatching {
+            marks(c).synced(tag, sinceMs, listOfNotNull(hex(peer)), vault(c).load(tag))
+        }.onFailure { Log.e(TAG, "push: cannot spend the marks", it) }
+    }
+
+    /**
+     * The phone is about to leave its group: the registration that turns push
+     * off there, saved as the group's frame for the members while the phone
+     * can still reach them.
+     */
+    fun leaving(c: Context): ByteArray? {
+        val tag = prefs(c).getString("group", null) ?: return null
+        return runCatching { vault(c).leaving(tag)?.frame }.onFailure { failed(c, it) }.getOrNull()
+    }
+
+    /** Leaving failed: the phone stays, and push goes on as before. */
+    fun stayed(c: Context) = refresh(c)
+
+    /**
+     * The phone left its group: that group's push state and marks go, and the
+     * send key with them, so that what the left group's members hold stops
+     * being good (PushVault.left); the token stays.
+     */
+    fun left(c: Context) {
         val tag = prefs(c).getString("group", null) ?: return
-        runCatching { vault(c).forget(tag) }.onFailure { Log.e(TAG, "push: cannot forget the group", it) }
-        prefs(c).edit { remove("group") }
+        runCatching { vault(c).left(tag) }.onFailure { Log.e(TAG, "push: cannot forget the group", it) }
+        runCatching { marks(c).forget(tag) }.onFailure { Log.e(TAG, "push: cannot forget the marks", it) }
+        prefs(c).edit {
+            remove("group")
+            remove("face")
+            remove("test_face.$tag")
+        }
     }
 
-    /** A member asked for the registration of the group with this slot (`push-renew`). */
-    fun renew(c: Context, slot: ByteArray) {
+    /**
+     * A member asked for the registration of the group with this slot
+     * (`push-renew`): the push service lost it, or with [ahead] found its
+     * number more than a day past its clock, and the next one starts again
+     * from the phone's clock.
+     */
+    fun renew(c: Context, slot: ByteArray, ahead: Boolean = false) {
         val v = vault(c)
         val tag = runCatching { v.group(slot) }.getOrNull() ?: return
         val me = v.load(tag).me ?: return
-        refresh(c, tag, me, null, setOf(PushVault.Reason.RENEW))
+        val why = if (ahead) setOf(PushVault.Reason.RENEW, PushVault.Reason.AHEAD) else setOf(PushVault.Reason.RENEW)
+        refresh(c, tag, me, null, why)
     }
 
     /**
@@ -188,8 +240,20 @@ object PushSetup {
         val v = vault(c)
         try {
             val t = token(c)
+            val before = v.load(tag)
             if (on(c) && t != null) {
-                v.register(tag, me, t.bytes, t.unifiedPush, PushPlatform.env, Push.Kinds.COPIES or Push.Kinds.EVENTS, reasons, devices)
+                val face = face(c)
+                if (face == null) {
+                    // Nothing to name yet: the group registers once it gives its face. Not a problem to show.
+                    Log.i(TAG, "push: no face for the group yet, nothing registered")
+                    return
+                }
+                v.register(tag, me, t.bytes, t.unifiedPush, PushPlatform.env, Push.Kinds.COPIES or Push.Kinds.EVENTS, face, reasons, devices)
+                // A removal applied (a new push key for it): a UnifiedPush
+                // endpoint, which every member knew, is taken anew, so the old
+                // address dies with the removed device's knowledge of it.
+                val gone = devices != null && before.members?.any { o -> devices.members.none { it.contentEquals(o) } } == true
+                if (t.unifiedPush != null && gone) PushPlatform.newEndpoint(c)
             } else {
                 v.register(tag, me, null, null, null, 0, devices = devices)
             }
@@ -209,7 +273,7 @@ object PushSetup {
     fun received(c: Context, d: Push.Delivery) {
         val v = vault(c)
         d.challenge?.let { ch ->
-            if (runCatching { v.keep(ch) }.getOrDefault(false)) refresh(c)
+            if (runCatching { v.keep(ch, System.currentTimeMillis()) }.getOrDefault(false)) refresh(c)
         }
         val body = d.body ?: return
         var shown = false
@@ -262,7 +326,7 @@ object PushSetup {
                     },
                 )
                 // A removal, a new root or a stop: hints only until the app has applied it.
-                if (e == 2L || e == 4L || e == 6L) marks(c).mark(tag, e, o.device)
+                if (e == 2L || e == 4L || e == 6L) marks(c).mark(tag, e, o.device, runCatching { vault(c).load(tag) }.getOrNull())
             }
         }
         notify(c, title, text, copy, id)

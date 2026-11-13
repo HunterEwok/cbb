@@ -98,7 +98,7 @@ final class NotificationService: UNNotificationServiceExtension {
             // A removal, a new root or a stop: hints only until the app has
             // applied it and drawn a new push key.
             if [2, 4, 6].contains(o.event ?? 0) {
-                PushMarks.mark(group, event: o.event ?? 0, device: o.device, in: defaults)
+                PushMarks.mark(group, event: o.event ?? 0, device: o.device, state: try? vault.load(group), in: defaults)
             }
         default:
             break
