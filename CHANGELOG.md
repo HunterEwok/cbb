@@ -48,6 +48,10 @@ All notable changes to cbb are documented in this file. The format follows
   OpenHarmony's compiler, the abilities, intents and widgets as well as the pages; `tools/strings` writes its strings from `apps/l10n`,
   `tools/tokens` its colours and `tools/icon` its icons, the watch's too. CI's `HarmonyOS app` job builds and links the native module and
   runs the check.
+- `tools/prcheck` and its workflow check every pull request's commits for authors,
+  committers and co-authors outside a short list of known addresses, and its title and
+  description, which become the squash commit's message, for links to assistant
+  conversations and model names.
 - The Aurora app asks for a PIN of its own before its root or admin key signs, since Aurora OS
   gives an app neither its authentication service nor the fingerprint. The key moves to a
   second token of the app in the TEE, whose PIN the user chooses (at least four digits) and

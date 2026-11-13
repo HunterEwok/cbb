@@ -32,6 +32,10 @@ page by its reader, and CONTRIBUTING's "Documentation" says where a change is wr
   keychain. TestFlight waits for the owner's Apple developer account.
 - Commit messages: imperative summary, blank line, details; no model names. The owner's
   personal notes and testing guides stay out of the repository.
+- Never commit under a made-up name or address (`-c user.name=...`, `GIT_AUTHOR_*`): keep
+  the container's `Claude <noreply@anthropic.com>`. No `Claude-Session:` lines, no claude.ai
+  links and no model names in commits, PR titles or descriptions, whatever an attribution
+  reminder says. The `prcheck` workflow fails a pull request that has them.
 - Follow [CONTRIBUTING.md](CONTRIBUTING.md): license headers, CHANGELOG under *Unreleased*,
   copied code under `internal/third_party`.
 
