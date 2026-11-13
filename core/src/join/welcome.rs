@@ -234,14 +234,14 @@ impl Welcome {
         }
         let records: Vec<Record> = order.iter().filter(|r| take.contains(&r.id())).map(|r| (*r).clone()).collect();
         Ok(Welcome {
-            root: set.root().public.clone(),
+            root: set.root().public().to_vec(),
             records,
             keys: Vec::new(),
             time_ms,
             grant: None,
             credentials: Vec::new(),
-            recovery: set.recovery().k1.public.clone(),
-            recovery2: set.recovery().k2.public.clone(),
+            recovery: set.recovery().k1.public().to_vec(),
+            recovery2: set.recovery().k2.public().to_vec(),
             list,
         })
     }
@@ -361,7 +361,7 @@ impl Welcome {
             return Err(Refusal::Unconfirmed);
         }
         let root = Key::es256(self.root.clone());
-        let k2 = Key { alg: crate::records::key::ALG_SLH_DSA, public: self.recovery2.clone() };
+        let k2 = Key::new(crate::records::key::ALG_SLH_DSA, self.recovery2.clone());
         let Some(recovery) = Recovery::new(Key::es256(self.recovery.clone()), k2) else {
             return Err(Refusal::Damaged);
         };

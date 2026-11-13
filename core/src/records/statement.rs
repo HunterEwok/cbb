@@ -39,7 +39,7 @@ impl Body {
         if self.epoch == 0 || self.epoch > i64::MAX as u64 {
             return Err(Rule::field("keys", "epoch"));
         }
-        if self.seal.alg != ALG_XWING || self.seal.public.len() != XWING_PUBLIC {
+        if self.seal.alg() != ALG_XWING || self.seal.public().len() != XWING_PUBLIC {
             return Err(Rule::field("keys", "seal"));
         }
         Ok(())

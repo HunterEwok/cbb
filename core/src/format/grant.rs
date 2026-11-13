@@ -602,11 +602,12 @@ fn admin_key(record: &Envelope<'_>, root: &[u8], group: &GroupId) -> Result<[u8;
     let by_root = body.signer == Key::new(Alg::Es256, root).hash();
     let admits = d.powers & crate::records::body::POWER_ADMIT != 0;
     let admin = d.admin.as_ref().ok_or(RULE_ADMIN)?;
-    let points = [&d.key, admin].iter().all(|k| k.alg == ALG_ES256 && Key::new(Alg::Es256, &k.public).check().is_ok());
+    let points =
+        [&d.key, admin].iter().all(|k| k.alg() == ALG_ES256 && Key::new(Alg::Es256, k.public()).check().is_ok());
     if !(body.group == *group && by_root && admits && points) {
         return Err(RULE_ADMIN);
     }
-    admin.public.clone().try_into().map_err(|_| RULE_ADMIN)
+    admin.public().to_vec().try_into().map_err(|_| RULE_ADMIN)
 }
 
 /// The commanders of a grant body: at most eight ES256 Keys, sorted by key

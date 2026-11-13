@@ -116,7 +116,7 @@ pub fn check(b: &[u8], state: &State) -> Result<Beacon, Rule> {
     if d.frozen || !state.may_command(admin) || state.two_histories(&beacon.signer) {
         return Err(RULE_SIGNER);
     }
-    e.verify(&d.key.public, sig::LABEL_BEACON)?;
+    e.verify(d.key.public(), sig::LABEL_BEACON)?;
     Ok(beacon)
 }
 

@@ -150,7 +150,7 @@ pub fn readers(
         if body.time_ms != 0 && now_ms.is_some_and(|now| now.saturating_sub(body.time_ms) > STATEMENT_MAX_AGE_MS) {
             continue;
         }
-        out.push(Reader { id: d.id, epoch: body.epoch, seal: body.seal.public.clone() });
+        out.push(Reader { id: d.id, epoch: body.epoch, seal: body.seal.public().to_vec() });
         if out.len() == fcopy::MAX_READERS {
             break;
         }
@@ -337,7 +337,7 @@ pub fn check<'a>(v: &Value<'a>, origins: &dyn Origins) -> Result<Checked<'a>, Ru
     if d.rights & RIGHT_SEND == 0 || d.frozen {
         return Err(RULE_SEND);
     }
-    copy.verify(&d.key.public)?;
+    copy.verify(d.key.public())?;
     Ok(Checked { copy, id, origin, time, readers })
 }
 
