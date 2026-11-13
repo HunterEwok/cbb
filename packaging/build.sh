@@ -53,7 +53,13 @@ if [ -n "$std" ]; then
 else
 	rustup target add --toolchain "$toolchain" "$target" >&2
 fi
+# The crates' sources are named from /cargo, not from this computer's cargo
+# home, so the same commit builds the same bytes anywhere (docs/own-build.md,
+# "Checking a release"); the workspace's own paths are relative already. An
+# array in --config joins the target's rustflags of .cargo/config.toml.
+remap="--remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo"
 # shellcheck disable=SC2086 # std and the features are one word or none
 cargo "+$toolchain" "$tool" --locked --release -p cbb-member --target "$target" \
+	--config "target.$target.rustflags=[\"$remap\"]" \
 	${std} ${features:+--features "$features"} >&2
 echo "target/$target/release"

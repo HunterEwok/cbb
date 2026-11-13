@@ -67,6 +67,27 @@ Not checked by the test, and to change by hand:
 
 `go test ./internal/release` then tells whether a copy was left behind.
 
+## Checking a release
+
+`cbb` and `cbb-helper` build reproducibly: the same commit gives the same bytes on any
+computer, whatever folder the source sits in and wherever cargo keeps its downloads. So
+anyone can check that a release's programs come from the source of its tag:
+
+```sh
+git clone https://github.com/HunterEwok/cbb && cd cbb && git checkout vX.Y.Z
+CBB_RELEASE_BUILD=1 CBB_VERSION=X.Y.Z CBB_SOURCE="$(git rev-parse HEAD)" sh packaging/build.sh linux/amd64
+go build -trimpath -ldflags "-s -w -X github.com/HunterEwok/cbb/internal/version.Version=vX.Y.Z" ./cmd/cbb-helper
+```
+
+Then compare `target/x86_64-unknown-linux-musl/release/cbb` and `cbb-helper` with the ones in
+the release's archive. Build with the same versions of Rust and Go as the release: the Go
+of `go.mod`, and the stable Rust that the release's workflow run installed (its log names it,
+and the build provenance names the run). What makes it work: the workspace's paths
+are relative, `packaging/build.sh` names the crates' sources from `/cargo`
+(`--remap-path-prefix`), `Cargo.lock` and `go.sum` fix every dependency, and Go builds with
+`-trimpath`. The nightly workflow builds both programs twice, in two folders with two cargo
+homes, and fails when they differ (`.github/reproducible.sh`).
+
 ## The other servers
 
 The forwarder and the blind relay hold no release keys and no project address: a group

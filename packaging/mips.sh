@@ -27,6 +27,6 @@ mips | mipsel) target=$1-unknown-linux-musl ;;
 	;;
 esac
 cd "$(dirname "$0")/.."
-RUSTFLAGS="-C relocation-model=static" cargo "+$nightly" zigbuild --locked --release \
+RUSTFLAGS="-C relocation-model=static --remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo" cargo "+$nightly" zigbuild --locked --release \
 	-Zbuild-std=std,panic_abort --target "$target" --no-default-features ${2:+--features "$2"}
 echo "target/$target/release/cbb"
