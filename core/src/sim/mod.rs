@@ -293,6 +293,19 @@ fn trace_restart(i: usize, records: &[Vec<u8>], lists: &[Vec<u8>], live: &Record
         short(&live.digest()),
         short(&restored.digest())
     );
+    let (ls0, rs0) = (live.state(), restored.state());
+    let why = |s: &State, id: &RecordId| -> String {
+        if s.counting.contains(id) {
+            String::from("counts")
+        } else {
+            s.ignored
+                .iter()
+                .find(|x| x.record == *id)
+                .map(|x| alloc::format!("{:?}", x.why))
+                .unwrap_or_else(|| String::from("-"))
+        }
+    };
+    std::eprintln!("TRACE   saved order (restore takes the lists, then the records in this order, round by round):");
     for e in records {
         let Ok(r) = Record::decode(e) else {
             std::eprintln!("TRACE   (undecodable record)");
@@ -302,13 +315,15 @@ fn trace_restart(i: usize, records: &[Vec<u8>], lists: &[Vec<u8>], live: &Record
         let kind = alloc::format!("{:?}", b.kind);
         let kind: String = kind.chars().take(160).collect();
         std::eprintln!(
-            "TRACE   id {} signer {} seq {} prev {} | live {} restored {} | {}",
+            "TRACE   id {} signer {} seq {} prev {} | live {} {} restored {} {} | {}",
             short(&r.id().0),
             short(&b.signer.0),
             b.seq,
             b.prev.map(|p| short(&p.0)).unwrap_or_else(|| String::from("-")),
             if live.contains(&r.id()) { "kept" } else { "no" },
+            why(&ls0, &r.id()),
             if restored.contains(&r.id()) { "kept" } else { "no" },
+            why(&rs0, &r.id()),
             kind
         );
     }
@@ -1144,6 +1159,7 @@ impl World {
         let state = set.state();
         if state != m.saved.mem.state {
             if env("SIM_TRACE_RESTART") == Some(1) {
+                trace_restart(i, &m.saved.records, &m.saved.lists, &m.saved.mem.set, &set);
                 let live_now = m.saved.mem.set.state();
                 std::eprintln!("TRACE m{i}: saved state == live set's state now: {}", live_now == m.saved.mem.state);
                 std::eprintln!("TRACE saved {:#?}", m.saved.mem.state);
