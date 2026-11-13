@@ -29,7 +29,8 @@ use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use zeroize::Zeroize;
 
-use crate::format::{Alg, Rule, Value, cbor};
+use crate::format::grant::{Binding, Kept};
+use crate::format::{Alg, DeviceId, Rule, Value, cbor};
 use crate::records::State;
 use crate::records::body::{CAP_HUB, RIGHT_HUB, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND, ROLE_LEAF};
 
@@ -546,6 +547,25 @@ pub struct JoinerCode {
     nonce: [u8; 32],
 }
 
+/// A joiner's pairing session past its code step: the code is shown and
+/// the nonce opened. It lives with that session alone: it is neither
+/// cloned nor kept, and a restart has none.
+#[derive(Debug)]
+pub struct Shown {
+    local: DeviceId,
+}
+
+impl Shown {
+    /// A guarded leaf's binding in person by code (`grant::read_bound`):
+    /// the grant this session brings once the person confirmed the code,
+    /// and only it, binds the leaf to the root it waits for. None when the
+    /// leaf waits for no binding. What a binding names comes from the
+    /// leaf's own state and this session's own key, never from the peer.
+    pub fn binding(&self, kept: &Kept) -> Option<Binding> {
+        Binding::at_code_step(kept, self.local)
+    }
+}
+
 /// The joiner's sessions with one invitation (kept across restarts): at
 /// most [`MAX_FAILURES`] in all, each started only by the person's action
 /// (the app asks "start again?" and never starts a session by itself, nor
@@ -577,20 +597,22 @@ impl JoinerAttempts {
         Ok((JoinerCode { nonce }, c))
     }
 
-    /// The code to show once `pair/reply` brought the member's nonce, and
-    /// the nonce that `pair/confirm` opens; invitation is the ID of the
-    /// invitation the joiner is using. It takes the session by value: a
-    /// nonce serves one session. The code stays shown until
-    /// [`JoinerAttempts::answered`].
+    /// The code to show once `pair/reply` brought the member's nonce, the
+    /// nonce that `pair/confirm` opens, and the session's code step passed
+    /// at this end ([`Shown`]); invitation is the ID of the invitation the
+    /// joiner is using, local the device ID of the joiner's own TLS key in
+    /// this session. It takes the session by value: a nonce serves one
+    /// session. The code stays shown until [`JoinerAttempts::answered`].
     pub fn open(
         &mut self,
         code: JoinerCode,
         exporter: &[u8],
         member_nonce: &[u8; 32],
         invitation: &[u8; 16],
-    ) -> (String, [u8; 32]) {
+        local: DeviceId,
+    ) -> (String, [u8; 32], Shown) {
         self.showing = true;
-        (short_code(exporter, &code.nonce, member_nonce, invitation), code.nonce)
+        (short_code(exporter, &code.nonce, member_nonce, invitation), code.nonce, Shown { local })
     }
 
     /// The person answered the shown code (they match, they do not, or

@@ -408,6 +408,9 @@ fn a_leaf_obeys_its_grant() {
     let env = make(&draft(11, Some(n6)), &phone).unwrap();
     let held = Kept { forked: true, ..kept.clone() };
     assert_eq!(take(&env, &held, false, &mut ctr, &mut nonces), Err(RULE_SIGNER));
+    // Nor one that waits to be bound again after a change of root.
+    let waiting = Kept { rebind: Some((phone.hash, 1)), ..kept.clone() };
+    assert_eq!(take(&env, &waiting, false, &mut ctr, &mut nonces), Err(RULE_SIGNER));
     assert_eq!(take(&env, &kept, false, &mut ctr, &mut nonces), Ok(Some(heat.clone())));
     // Message nonce: from the leaf with a number, to it without.
     let nm = nonce_message(Some(&n5));
