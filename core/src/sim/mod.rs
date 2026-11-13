@@ -1143,6 +1143,12 @@ impl World {
         }
         let state = set.state();
         if state != m.saved.mem.state {
+            if env("SIM_TRACE_RESTART") == Some(1) {
+                let live_now = m.saved.mem.set.state();
+                std::eprintln!("TRACE m{i}: saved state == live set's state now: {}", live_now == m.saved.mem.state);
+                std::eprintln!("TRACE saved {:#?}", m.saved.mem.state);
+                std::eprintln!("TRACE restored {state:#?}");
+            }
             return Err(format!("m{i} restarted with another state than it wrote"));
         }
         m.live = m.saved.mem.clone();
@@ -1800,15 +1806,14 @@ impl World {
                     if std::env::var("SIM_TRACE_CHANGE").is_ok() {
                         self.trace_change(w, &st, &remove, (units, n), (ru, rn));
                     }
+                    // The cut roots' removals ride as the new root's own
+                    // records, outside the reserve: a refusal where the live
+                    // devices fit is a failure, removals or not.
                     if units + ru > reserve || n + rn > max {
                         CHANGE_TOO_BIG_REMOVALS.fetch_add(1, Ordering::Relaxed);
-                        self.note(format!(
-                            "m{w} refuses a change whose live devices and the roots' removals pass the reserve"
-                        ));
-                        continue;
                     }
                     return Err(format!(
-                        "m{w} refused a change of root though its live devices and the roots' removals fit ({units}+{ru} units of {reserve}, {n}+{rn} records): {e:?}"
+                        "m{w} refused a change of root though its live devices fit ({units} units of {reserve}, {n} records; the roots' removals {ru} units, {rn} records): {e:?}"
                     ));
                 }
                 Err(e) => return Err(format!("m{w} could not write a change of root: {e:?}")),
