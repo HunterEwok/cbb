@@ -31,10 +31,29 @@ fn try_rec(g: &mut G, set: &mut RecordSet, by: &K, kind: Kind) -> bool {
 }
 
 /// The recovery key's change from everything g holds, the set taking it.
+/// Its list names no removal one of its re-issued removals covers.
 fn change(g: &mut G, new_root: &K, member: &K) -> crate::error::Result<Written> {
     let mut set = set_with(&g.root.key, &g.recs, &g.lists);
     let st = set.state();
     let w = set.write_change(&st, &k("recovery"), crate::testkit::rk2(), new_root, phone(member), &[], false, 0)?;
+    let zs: Vec<&Removal> = w
+        .first
+        .iter()
+        .filter_map(|r| match &r.body().kind {
+            Kind::Revoke(rm) => Some(rm),
+            _ => None,
+        })
+        .collect();
+    for id in &w.list.0 {
+        let Some(Kind::Revoke(x)) = g.recs.iter().find(|r| r.id() == *id).map(|r| &r.body().kind) else { continue };
+        let concerns: alloc::collections::BTreeSet<KeyHash> =
+            x.keys.iter().copied().chain(x.seen.iter().map(|s| s.key)).collect();
+        let seen_of = |rm: &Removal| -> alloc::collections::BTreeSet<Seen> {
+            rm.seen.iter().filter(|s| concerns.contains(&s.key)).copied().collect()
+        };
+        let covered = zs.iter().any(|z| x.keys.iter().all(|k| z.keys.contains(k)) && seen_of(z) == seen_of(x));
+        assert!(!covered, "the list names a removal a re-issued one covers");
+    }
     for r in &w.first {
         g.push(r.clone());
     }
@@ -75,6 +94,9 @@ fn live(g: &G, member: &K) -> bool {
 /// before still counts after.
 #[test]
 fn a_lost_roots_full_room_never_refuses_the_recovery_key() {
+    if !full_size("a_lost_roots_full_room_never_refuses_the_recovery_key") {
+        return;
+    }
     for devices in [MAX_DEVICES - 4] {
         let mut g = G::new();
         let root = k("root");
@@ -151,6 +173,9 @@ fn removed_stay_out(g: &G, removed: &[KeyHash], what: &str) {
 /// lost after its first records; the change to n2; to n3.
 #[test]
 fn a_full_room_of_carried_records_and_three_changes() {
+    if !full_size("a_full_room_of_carried_records_and_three_changes") {
+        return;
+    }
     let mut g = G::new();
     let (admitted, n) = carried_room(&mut g, MAX_ROOT_RECORDS / ADMIN_KEYS_MAX);
     assert!(n > MAX_ROOT_RECORDS - 2 * ADMIN_KEYS_MAX, "{n}");
@@ -172,6 +197,9 @@ fn a_full_room_of_carried_records_and_three_changes() {
 /// until its room is full, before it is lost too; then the change to n2.
 #[test]
 fn a_later_root_adds_removals_before_it_is_lost() {
+    if !full_size("a_later_root_adds_removals_before_it_is_lost") {
+        return;
+    }
     let mut g = G::new();
     let (admitted, n) = carried_room(&mut g, MAX_ADMIN_RECORDS);
     let mut removed: Vec<KeyHash> = admitted[..n].to_vec();
@@ -330,4 +358,63 @@ fn two_removals_of_one_key_seen_apart() {
     let n1 = k("n1");
     g.rec(&n1, Kind::Revoke(Removal { keys: vec![a.hash], seen }));
     assert!(g.state().device_by_key(&five.hash).is_none(), "counts after one removal by hand");
+}
+
+/// Two changes of root, each re-issuing removals; the newest root
+/// checkpoints, which leaves out the first records of the roots before
+/// it, and the member compacts by it. What it saves restores to the same
+/// state, in the order it saves and in any other.
+#[test]
+fn a_restart_after_two_changes_and_a_checkpoint() {
+    let mut g = G::new();
+    let admin = k("admin a");
+    g.admin(&k("phone a"), &admin, POWER_ADMIT);
+    for i in 0..3 {
+        g.device(&k("root"), &k(&format!("d{i}")), "d", |_| {});
+    }
+    let x = k("x");
+    g.device(&admin, &x, "x", |_| {});
+    let seen = g.seen();
+    g.root_rec(Kind::Revoke(Removal { keys: vec![x.hash], seen }));
+    change(&mut g, &k("n1"), &k("p1")).unwrap();
+    let n1 = k("n1");
+    let y = k("y");
+    g.device(&n1, &y, "y", |_| {});
+    let seen = g.seen();
+    g.rec(&n1, Kind::Revoke(Removal { keys: vec![y.hash], seen }));
+    change(&mut g, &k("n2"), &k("p2")).unwrap();
+    let n2 = k("n2");
+    g.device(&n2, &k("z"), "z", |_| {});
+    for rounds in 0..2 {
+        let mut set = set_with(&g.root.key, &g.recs, &g.lists);
+        if rounds == 1 {
+            let cp = set.write_checkpoint(&set.state(), &n2, 0).unwrap();
+            g.push(cp.clone());
+            set.insert(cp).unwrap();
+        }
+        let st = set.state();
+        set.compact(&st);
+        let st = set.state();
+        assert_eq!(st.roots.len(), 3);
+        assert!(st.device_by_key(&x.hash).is_none() && st.device_by_key(&y.hash).is_none());
+        let saved: Vec<Record> = set.in_dependency_order().into_iter().cloned().collect();
+        let lists: Vec<Vec<u8>> = set.lists().map(<[u8]>::to_vec).collect();
+        for (i, records) in [saved.clone(), shuffled(&saved, 7), shuffled(&saved, 8)].into_iter().enumerate() {
+            for lists in [lists.clone(), lists.iter().rev().cloned().collect()] {
+                let back = RecordSet::restore(set.root().clone(), set.recovery().clone(), &records, &lists);
+                assert_eq!(back.digest(), set.digest(), "round {rounds}, order {i}");
+                assert_eq!(back.state(), st, "round {rounds}, order {i}");
+            }
+        }
+        // A device that joins now gets the same in parts, as the Welcome
+        // sends them.
+        let peer = k("d0").hash;
+        let mut joiner = set_of(&g.root.key);
+        for p in set.parts_for_peer(&st, &peer) {
+            let records: Vec<Record> = p.records.iter().map(|r| (*r).clone()).collect();
+            joiner.take_part(&records, &p.lists);
+        }
+        assert_eq!(joiner.digest(), set.digest(), "round {rounds}: a joiner");
+        assert_eq!(joiner.state(), st, "round {rounds}: a joiner");
+    }
 }

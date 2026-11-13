@@ -3034,6 +3034,17 @@ fn members_agree(g: &G) -> State {
     s
 }
 
+/// Whether the tests at real size run: they take minutes, so the default
+/// run leaves them out and CI's rust job sets CBB_FULL_SIZE=1. A test
+/// left out says so.
+fn full_size(name: &str) -> bool {
+    let on = std::env::var("CBB_FULL_SIZE").is_ok_and(|v| v == "1");
+    if !on {
+        std::eprintln!("{name}: at real size, runs with CBB_FULL_SIZE=1");
+    }
+    on
+}
+
 mod cap;
 mod insert_cost;
 mod lost_root;

@@ -434,24 +434,6 @@ impl RecordSet {
         super::digest(self.records.keys().chain(self.early.keys()))
     }
 
-    /// The digest a Welcome names of the set it sends in parts: over the
-    /// set digest and the hashes of the lists the set holds, in order, so
-    /// that a joiner that ends with it holds every record, the heads, the
-    /// first checkpoints and the proof of a fork among them, and every
-    /// list the heads name.
-    pub fn welcome_digest(&self) -> [u8; 32] {
-        let mut m = Vec::with_capacity(
-            super::LABEL_WELCOME_SET.len().saturating_add(33).saturating_add(self.lists.len().saturating_mul(32)),
-        );
-        m.extend_from_slice(super::LABEL_WELCOME_SET.as_bytes());
-        m.push(0);
-        m.extend_from_slice(&self.digest());
-        for h in self.lists.keys() {
-            m.extend_from_slice(h);
-        }
-        crate::certs::sha256(&m)
-    }
-
     /// The lists the set holds, as their bytes, which a sender sends
     /// with the records that name them.
     pub fn lists(&self) -> impl Iterator<Item = &[u8]> {
@@ -1112,7 +1094,7 @@ impl RecordSet {
             &self.root_hash,
             self.records.values().map(|e| (&e.record, e.role)),
             &lists,
-            |id, root, from| eval::first_gap(&held, &self.checkpoints, id, root, from),
+            |id, root, from, settlers| eval::first_gap(&held, &self.checkpoints, settlers, id, root, from),
         );
         let promoted = chain.promoted();
         let mut cuts = chain.cuts();
