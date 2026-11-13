@@ -203,7 +203,6 @@ struct PadDevices: View {
     @Environment(\.palette) private var palette
     @AppStorage(DeviceLayout.wideKey) private var layout = DeviceLayout.tiles
     @State private var query = ""
-    @FocusState private var focused: Bool
     /// Whether something dragged from another app is over the devices.
     @State private var dropping = false
     /// The card's width, as the text size grows.
@@ -248,20 +247,13 @@ struct PadDevices: View {
             ToolbarItem(placement: .secondaryAction) { viewMenu }
         }
         .sensoryFeedback(.success, trigger: model.message)
-        .focusable()
-        .focused($focused)
-        .focusEffectDisabled()
-        .onKeyPress(keys: [.leftArrow, .upArrow, .rightArrow, .downArrow]) { press in
-            move(by: press.key == .leftArrow || press.key == .upArrow ? -1 : 1)
-        }
-        // Escape closes the card, as its cross's shortcut does; the
-        // shortcut alone does not reach a pane while the devices hold focus.
-        .onKeyPress(.escape) {
-            guard selected != nil else { return .ignored }
-            selected = nil
-            return .handled
-        }
-        .onAppear { focused = true }
+        // The arrow keys choose the next device and Escape closes the card
+        // as the window's own shortcuts, as Command-1 opens a section: they
+        // work wherever the keyboard's focus stands, which a tap on a tile
+        // or a button of the card moves away from the devices. A text field
+        // keeps its own arrows and Escape (UIKeyCommand gives the system's
+        // text editing the first turn).
+        .background { keys }
     }
 
     @ViewBuilder private var devices: some View {
@@ -343,9 +335,23 @@ struct PadDevices: View {
     /// window too narrow for both.
     private func choose(_ id: AppModel.Computer.ID) {
         if beside { selected = id } else { pushed = PadCard(id: id) }
-        // A tap moves the keyboard's focus to the tile; the arrow keys and
-        // Escape are the devices' own, so the focus comes back to them.
-        focused = true
+    }
+
+    /// The keys of the devices, as buttons nobody sees: their shortcuts
+    /// are the window's.
+    private var keys: some View {
+        Group {
+            Button { _ = move(by: -1) } label: { Color.clear }.keyboardShortcut(.leftArrow, modifiers: [])
+            Button { _ = move(by: -1) } label: { Color.clear }.keyboardShortcut(.upArrow, modifiers: [])
+            Button { _ = move(by: 1) } label: { Color.clear }.keyboardShortcut(.rightArrow, modifiers: [])
+            Button { _ = move(by: 1) } label: { Color.clear }.keyboardShortcut(.downArrow, modifiers: [])
+            Button { selected = nil } label: { Color.clear }
+                .keyboardShortcut(.escape, modifiers: [])
+                .disabled(selected == nil)
+        }
+        .frame(width: 0, height: 0)
+        .opacity(0)
+        .accessibilityHidden(true)
     }
 
     /// Moves the choice to the device before or after it, as they stand.
