@@ -119,7 +119,7 @@ final class PadUITests: XCTestCase {
 
     /// DIAGNOSTIC ONLY: which part takes Escape away from the card.
     func testEscapeDiag() throws {
-        for variant in ["none", "nosearch", "noshortcut", "nosearch,noshortcut"] {
+        for variant in ["none", "uikit", "uikit,noshortcut"] {
             let app = try launch(extra: ["-padDiag", variant])
             let mac = app.buttons.containing(NSPredicate(format: "label CONTAINS 'studio-mac'")).firstMatch
             guard mac.waitForExistence(timeout: 30) else { print("PADDIAG \(variant): no tile"); continue }

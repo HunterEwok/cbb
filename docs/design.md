@@ -2610,7 +2610,7 @@ One pull request each, smaller ones together:
 5. `cbb` in Rust on OpenWrt. Done: the procd script runs `cbb service`, without its helper,
    `get.sh` installs it on aarch64, armv7, x86-64, mips and mipsle, and it takes
    `CBB_INTERFACES`. On mips and mipsle it is built with nightly Rust (`-Zbuild-std`,
-   `member/packaging/mips.sh`) and without the tunnel in 0.6, since GotaTun needs 64-bit
+   `packaging/mips.sh`) and without the tunnel in 0.6, since GotaTun needs 64-bit
    atomics; CI runs its Go tests under qemu-mips; the tunnel there is planned for 0.7
    (roadmap item 37).
 

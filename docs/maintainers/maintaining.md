@@ -217,7 +217,7 @@ Rules for workflows:
   `releases/latest/download/` has fixed names for `get.sh`; each holds `cbb/` with the
   binary, `LICENSE`, `THIRD_PARTY_NOTICES` (the licenses of the Go modules, the copied code
   and Go itself, written by `packaging/archive.sh`, after the crates' licenses from
-  `member/packaging/notices.sh`) and `packaging/`, with `cbb-helper` beside `cbb` on every
+  `packaging/notices.sh`) and `packaging/`, with `cbb-helper` beside `cbb` on every
   architecture but MIPS.
 - Published with `SHA256SUMS` and a build provenance attestation
   (`actions/attest-build-provenance`), which users can check with `gh attestation verify`;

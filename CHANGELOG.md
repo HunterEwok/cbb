@@ -6,6 +6,15 @@ All notable changes to cbb are documented in this file. The format follows
 
 ## [Unreleased]
 
+In short, for 0.6: every computer and small device runs one `cbb` in Rust on the same core as
+the phones' apps, with the Go helper beside it on computers; the group's signed records are
+new (version 2, in one strict form of CBOR) and a phone can be the group's root; there are
+apps for the iPhone, Android, Aurora OS and HarmonyOS, the Mac, and a tray app for Linux and
+Windows; devices sync away from home through a hub, a forwarder or a blind relay; releases are
+signed and `cbb update` installs them. From 0.6 on a device works in one group with devices of
+the release before it ([versions and compatibility](docs/reference/compatibility.md)); a group
+made with 0.5 is set up again once. The details follow.
+
 ### Added
 - The CI measures what each part of the core costs in a small device's flash (`tools/size`,
   for the ESP32-C6's RISC-V): X.509 and P-256, JSON, the group's records, sealing, a copy,
@@ -1221,7 +1230,7 @@ All notable changes to cbb are documented in this file. The format follows
 - On the website the pictures of the documentation are drawn in chalk on a board in a walnut
   frame, like every other picture of the site, in every language, and are drawn in once as
   they come into view. The files in `docs/images` are unchanged, so GitHub shows them as before.
-- The users' guides (`docs/guide`) in Chinese, Hindi, Spanish, Russian, Arabic, Swahili and
+- The users' guides (`docs/guide`), the lab among them, in Chinese, Hindi, Spanish, Russian, Arabic, Swahili and
   Hebrew, opening inside the website's own layout with its header and language menu, with
   the text inside their pictures translated; the index's descriptions are translated too.
   Every other page of the documentation stays English and opens on GitHub from the index.
@@ -1717,6 +1726,17 @@ All notable changes to cbb are documented in this file. The format follows
   a PIN set before still works. The admin token itself says whether its SO PIN was made
   random, and the tries left come from its flags, so clearing the app's data neither stops
   the PIN working nor shows a full seven tries.
+- `cbb` and `cbb-helper` build reproducibly: `packaging/build.sh` names the crates' sources
+  from `/cargo`, the nightly workflow builds both twice in two folders and compares
+  (`.github/reproducible.sh`), and `docs/own-build.md`, "Checking a release", says how
+  to check a release against its tag.
+- CI runs `site check -strict`: a guide page changed without its translations (and
+  `site docs-sync`) fails the pull request.
+- The build scripts of `cbb` in Rust (`build.sh`, `mips.sh`, `notices.sh`) moved from
+  `member/packaging/` to `packaging/`, beside the installers and archives of the same program.
+- Versions and compatibility (`docs/reference/compatibility.md`): which releases work
+  together in one group, how to update a group, and what an older device does with something
+  newer.
 - The notes for coding agents are in `AGENTS.md`, short and pointing to the documents
   instead of repeating them; `CLAUDE.md` only includes it.
 - Copied code may sit in a `third_party` directory beside the code that uses it, and

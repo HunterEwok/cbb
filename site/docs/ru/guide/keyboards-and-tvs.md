@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 9b05c71a6bfc -->
+<!-- source: 7d035f243dba -->
 # Клавиатуры и телевизоры
 
 Для тех, кому нужно набрать длинный пароль, ссылку или поисковый запрос на телевизоре,
@@ -69,7 +69,7 @@ echo 'the text' | sudo cbb keyboard type
 
 ## Nano ESP32 как клавиатура USB или Bluetooth
 
-Плата — лёгкий участник вашей группы. В её консоли:
+Плата — участник вашей группы. В её консоли:
 
 - `usb keyboard` делает её USB-порт клавиатурой, а консоль — вторым последовательным портом
   рядом с ним; подключите её к устройству. Она работает до запуска любой системы: в BIOS,
@@ -93,7 +93,7 @@ Android TV или Google TV сопрягаются один раз:
 
 ```sh
 sudo cbb remote add -name living-room-tv living-room-tv.lan   # the TV shows a six-digit code
-sudo cbb remote code 123456              # within two minutes
+sudo cbb remote code                     # type 123456 within two minutes
 ```
 
 Apple TV сопрягается так же, по четырёхзначному PIN-коду на экране. Сначала на Apple TV
@@ -102,7 +102,7 @@ Apple TV сопрягается так же, по четырёхзначному
 
 ```sh
 sudo cbb remote add -appletv -name lounge 192.168.1.30   # the Apple TV shows a four-digit PIN
-sudo cbb remote code 1234                # within two minutes
+sudo cbb remote code                     # type 1234 within two minutes
 ```
 
 У Roku нет ни сопряжения, ни шифрования: текст идёт по вашей домашней сети простым HTTP,

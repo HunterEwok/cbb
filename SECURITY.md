@@ -4,6 +4,9 @@
 
 The latest release receives security fixes; older releases do not. Fixes land on the
 `main` branch first and go out in the next release.
+From 0.6 on a device works in one group with devices of the release before it, so a group
+can move to the latest release one device at a time
+([versions and compatibility](docs/reference/compatibility.md)).
 
 ## Reporting a vulnerability
 

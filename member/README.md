@@ -83,10 +83,10 @@ cargo build --release --target arm-unknown-linux-musleabihf
 
 CI builds both for every pull request: the `cbb-linux-arm64` and `cbb-linux-armv6`
 artifacts of the `cbb (Rust)` job. A release builds cbb for each system and architecture
-(`member/packaging/build.sh`) and packs it into that system's archive (`packaging/archive.sh`),
+(`packaging/build.sh`) and packs it into that system's archive (`packaging/archive.sh`),
 `cbb-linux-<arch>.tar.gz` on Linux, with `cbb-helper` beside it on every architecture but MIPS
 and `THIRD_PARTY_NOTICES`, the licenses of the crates it is built from
-(`member/packaging/notices.sh`).
+(`packaging/notices.sh`).
 
 The e2e test runs `cbb` without its helper among other members: it joins through the
 phone's QR code and syncs both ways.

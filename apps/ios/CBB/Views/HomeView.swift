@@ -615,7 +615,9 @@ struct DeviceSubtitle: View {
         }
         .font(.caption)
         .foregroundStyle(palette.textDim)
-        .lineLimit(1)
+        // No line limit: the line is chosen to fit, and a word longer than
+        // the tile wraps instead of being cut.
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder private func parts(dots: Bool) -> some View {

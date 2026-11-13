@@ -262,6 +262,8 @@ struct PadDevices: View {
             return .handled
         }
         .onAppear { focused = true }
+        .background(DiagEscape())
+        .onReceive(NotificationCenter.default.publisher(for: DiagEscape.pressed)) { _ in selected = nil }
     }
 
     @ViewBuilder private var devices: some View {
@@ -481,4 +483,28 @@ extension View {
             self.searchable(text: query, placement: .toolbar, prompt: Text("Search devices"))
         }
     }
+}
+
+// DIAGNOSTIC ONLY (not for main): -padDiag uikit puts an Escape key command
+// with priority over the system's on the window's root view controller.
+struct DiagEscape: UIViewRepresentable {
+    static let pressed = Notification.Name("cbbDiagEscape")
+    func makeUIView(context: Context) -> DiagEscapeView { DiagEscapeView() }
+    func updateUIView(_ uiView: DiagEscapeView, context: Context) {}
+}
+
+final class DiagEscapeView: UIView {
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        guard (UserDefaults.standard.string(forKey: "padDiag") ?? "").contains("uikit"),
+              let root = window?.rootViewController,
+              !(root.keyCommands ?? []).contains(where: { $0.input == UIKeyCommand.inputEscape }) else { return }
+        let c = UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: #selector(UIViewController.cbbDiagEscape))
+        c.wantsPriorityOverSystemBehavior = true
+        root.addKeyCommand(c)
+    }
+}
+
+extension UIViewController {
+    @objc func cbbDiagEscape() { NotificationCenter.default.post(name: DiagEscape.pressed, object: nil) }
 }

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 9b05c71a6bfc -->
+<!-- source: 7d035f243dba -->
 # Teclados y televisores
 
 Para quien quiere escribir una contraseña larga, un enlace o una búsqueda en un televisor, una tableta, una consola o un ordenador que no tiene nada de Copy Beyond Borders. Un dispositivo de tu grupo escribe allí el texto como teclado o como mando a distancia del televisor, cuando tú lo pulsas o cuando un administrador envía un pegado remoto.
@@ -45,7 +45,7 @@ echo 'the text' | sudo cbb keyboard type
 
 ## La Nano ESP32 como teclado USB o Bluetooth
 
-La placa es un miembro ligero de tu grupo. En su consola:
+La placa es un miembro de tu grupo. En su consola:
 
 - `usb keyboard` convierte su puerto USB en un teclado, con la consola como segundo puerto serie a su lado; conéctala al dispositivo. Funciona antes de que arranque ningún sistema: en una BIOS, una configuración UEFI o una petición de cifrado de disco.
 - `ble on`, y después `ble pair`, la convierte en un teclado Bluetooth LE; añade «CBB Nano ESP32» en el dispositivo en dos minutos. Recuerda hasta cuatro dispositivos; `ble forget` los olvida.
@@ -62,14 +62,14 @@ Un Android TV o un Google TV se empareja una vez:
 
 ```sh
 sudo cbb remote add -name living-room-tv living-room-tv.lan   # the TV shows a six-digit code
-sudo cbb remote code 123456              # within two minutes
+sudo cbb remote code                     # type 123456 within two minutes
 ```
 
 Un Apple TV se empareja igual, con el PIN de cuatro cifras que muestra. Antes, en el Apple TV, pon Ajustes, AirPlay y HomeKit, Permitir acceso en "Todos en la misma red": con "Solo quienes comparten esta casa" rechaza cualquier emparejamiento.
 
 ```sh
 sudo cbb remote add -appletv -name lounge 192.168.1.30   # the Apple TV shows a four-digit PIN
-sudo cbb remote code 1234                # within two minutes
+sudo cbb remote code                     # type 1234 within two minutes
 ```
 
 Un Roku no tiene emparejamiento ni cifrado: el texto cruza tu red doméstica como HTTP sin cifrar, así que solo se añade cuando lo dices con `-consent`. En el Roku, pon antes Ajustes, Sistema, Ajustes avanzados del sistema, Control por aplicaciones móviles en Habilitado o Permisivo.

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 0dae45ee8ba4 -->
+<!-- source: 912064fc5262 -->
 # Instalación
 
 Copy Beyond Borders se ejecuta como un pequeño servicio en segundo plano en cada ordenador. Su comando es `cbb`. Todas las formas de abajo instalan el mismo programa; elige la que prefieras.
@@ -139,7 +139,11 @@ Todas las opciones del instalador están en la [referencia de comandos](../refer
 
 Las versiones están firmadas desde la 0.6. Para pasar a la 0.6 desde una versión anterior, ejecuta de nuevo el comando de instalación; a partir de entonces lo hace `cbb update`.
 
-`sudo cbb update` (en Windows, `cbb update` en una terminal abierta como administrador) instala la versión más reciente en un ordenador o miembro ligero instalado con `get.sh`, `get.ps1` o un archivo de versión; `cbb update -check` solo dice si hay una. Tus ajustes se conservan. Solo instala una versión firmada por el proyecto, y nunca una anterior. Si la versión nueva no arranca en un minuto, la anterior vuelve por sí sola. Cómo comprueba las firmas está en el [protocolo](../protocol.md), sección 16.
+Desde la 0.6, las actualizaciones nunca rompen tu grupo: un dispositivo funciona en un mismo grupo con dispositivos de la versión anterior, así que puedes actualizarlos de uno en uno, en cualquier orden. Un dispositivo que se encuentra con algo que solo entiende una versión más nueva lo dice y te pide actualizar. Un grupo creado con la 0.5 se vuelve a crear una vez en la 0.6.
+
+`sudo cbb update` (en Windows, `cbb update` en una terminal abierta como administrador) instala la versión más reciente en un ordenador o un dispositivo pequeño instalados con `get.sh`, `get.ps1` o un archivo de versión; `cbb update -check` solo dice si hay una. Tus ajustes se conservan. Solo instala una versión firmada por el proyecto, y nunca una anterior. Si la versión nueva no arranca en un minuto, la anterior vuelve por sí sola. Cómo comprueba las firmas está en el [protocolo](../protocol.md), sección 16.
+
+Qué versiones funcionan juntas y qué hace un dispositivo antiguo con algo más nuevo: [versiones y compatibilidad](../reference/compatibility.md).
 
 Los instaladores preguntan una vez si actualizar automáticamente (`--auto-update on|off`, o `-AutoUpdate on|off` y `$env:CBB_AUTO_UPDATE` en Windows, para responder de antemano); `sudo cbb update -auto on|off` lo cambia después. Activado, un temporizador comprueba una vez al día a una hora propia: un temporizador de systemd en Linux, una tarea de launchd en un Mac, una tarea programada como SYSTEM en Windows, cron en OpenWrt y FreeBSD. Cada comprobación descarga los mismos archivos pequeños de GitHub (o de `dl.cbb.tools` cuando GitHub no responde), así que GitHub conoce la dirección de este dispositivo y que usa Copy Beyond Borders, como con cualquier descarga; no envía nada sobre el grupo. `sudo cbb update -mirror https://...` toma las actualizaciones de otro espejo, lo que no requiere confianza, ya que las firmas se comprueban. El registro del temporizador es `update.log` en `/var/lib/cbb-update` (Linux), `/etc/cbb-update` (OpenWrt), `/var/db/cbb-update` (FreeBSD), `/Library/Application Support/cbb-update` (Mac) o `C:\Program Files\cbb-update` (Windows).
 
