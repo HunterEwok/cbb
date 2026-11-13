@@ -46,5 +46,24 @@ for n in 262144 262145; do
 		bad=1
 	fi
 done
+# Roots the tests name are said, and no roots is a refusal: a roots file
+# that reads empty, or is not there, never installs unchecked.
+"$sign" drill -version 0.6.0 "$rel" "$rel/roots.pem"
+sh packaging/get.sh --no-firewall --no-helper >"$rel/out" 2>&1 || true
+if ! grep -q "signature checks out" "$rel/out" || ! grep -qF "Checked against the roots in $rel/roots.pem, not the built-in ones." "$rel/out"; then
+	echo "get.sh: does not say the roots it checked against" >&2
+	sed 's/^/  /' "$rel/out" >&2
+	bad=1
+fi
+: >"$rel/empty.pem"
+for f in "$rel/empty.pem" "$rel/no-such.pem"; do
+	if CBB_RELEASE_ROOTS=$f sh packaging/get.sh --no-firewall --no-helper >"$rel/out" 2>&1 ||
+		! grep -qF "no root keys to check the release against in $f; not installing" "$rel/out" ||
+		grep -q "checks out\|Installing\|install.sh" "$rel/out"; then
+		echo "get.sh: roots from $f: not refused" >&2
+		sed 's/^/  /' "$rel/out" >&2
+		bad=1
+	fi
+done
 [ "$bad" -eq 0 ] || exit 1
 echo "get.sh reads the $(wc -l <"$envs/list") envelopes as Go and the core do, with $(openssl version)"

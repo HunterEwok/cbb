@@ -258,3 +258,5 @@ cbb for MIPS has no sync away from home yet (roadmap item 37).	cbb ya MIPS bado 
 cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	hapa cbb inaendeshwa pamoja na msaidizi wake, ambaye huenda anashikilia funguo zake; bila msaidizi cbb haiwezi kuzitumia. Iondoe kwanza: %s
 --uinput needs cbb's helper, which runs the desktop connector	--uinput inahitaji msaidizi wa cbb, unaoendesha kiunganishi cha eneo-kazi
 %s has SLH-DSA-SHA2-128s but does not check it as cbb signs it; update openssl (or CBB_VERIFY=skip to install unchecked)	%s ina SLH-DSA-SHA2-128s lakini haiikagui jinsi cbb inavyosaini; sasisha openssl (au CBB_VERIFY=skip kusakinisha bila kukagua)
+no root keys to check the release against in %s; not installing (CBB_VERIFY=skip installs it unchecked)	hakuna funguo za mzizi katika %s za kukagua toleo; halisakinishwi (CBB_VERIFY=skip hulisakinisha bila kukaguliwa)
+Checked against the roots in %s, not the built-in ones.	Imekaguliwa kwa mizizi iliyo katika %s, si ile iliyojengwa ndani.

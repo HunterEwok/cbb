@@ -205,15 +205,19 @@ jobs:
           done
       - name: no program of the release reads the test hooks
         # A build with them (member/src/testhooks.rs, internal/testhooks)
-        # carries the line it says them with; a release's never does.
+        # carries the line it says them with; a release's never does. CI's
+        # hooks job asks the same script to find the line in a build with
+        # them, and runs .github/release-ignores-hooks.sh on a build made
+        # as this one.
         run: |
-          for f in "$RUNNER_TEMP"/cbb "$RUNNER_TEMP"/cbb.exe "$RUNNER_TEMP"/cbbw.exe "$RUNNER_TEMP"/cbb-helper* "$RUNNER_TEMP"/cbb-forward* "$RUNNER_TEMP"/cbb-relay*; do
-            [ -f "$f" ] || continue
-            if grep -aqF "test hooks build: reads the test variables" "$f"; then
-              echo "$f was built with the test hooks" >&2
-              exit 1
-            fi
-          done
+          exe=; if [ "$GOOS" = windows ]; then exe=.exe; fi
+          set -- "$RUNNER_TEMP/cbb$exe" "$RUNNER_TEMP/cbb-relay$exe"
+          if [ "$GOOS" = windows ]; then set -- "$@" "$RUNNER_TEMP/cbbw.exe"; fi
+          case $GOARCH in
+          mips | mipsle) ;;
+          *) set -- "$@" "$RUNNER_TEMP/cbb-helper$exe" "$RUNNER_TEMP/cbb-forward$exe" ;;
+          esac
+          sh .github/hooks-marker.sh absent "$@"
       - name: archive
         run: |
           bin=$RUNNER_TEMP/cbb

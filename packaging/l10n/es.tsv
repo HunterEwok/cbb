@@ -258,3 +258,5 @@ cbb for MIPS has no sync away from home yet (roadmap item 37).	cbb para MIPS aú
 cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	aquí cbb funciona con su ayudante, que puede guardar sus claves; sin él cbb no puede usarlas. Elimínalo primero: %s
 --uinput needs cbb's helper, which runs the desktop connector	--uinput necesita el ayudante de cbb, que ejecuta el conector del escritorio
 %s has SLH-DSA-SHA2-128s but does not check it as cbb signs it; update openssl (or CBB_VERIFY=skip to install unchecked)	%s tiene SLH-DSA-SHA2-128s pero no la comprueba como la firma cbb; actualice openssl (o CBB_VERIFY=skip para instalar sin comprobar)
+no root keys to check the release against in %s; not installing (CBB_VERIFY=skip installs it unchecked)	no hay claves raíz en %s para comprobar la versión; no se instala (CBB_VERIFY=skip la instala sin comprobar)
+Checked against the roots in %s, not the built-in ones.	Comprobado con las raíces de %s, no con las incorporadas.

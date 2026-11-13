@@ -260,11 +260,13 @@ fDxsggXLisjwoCQoDM28pCYkIoZAfcjwR3aAGOAUWZX+L53og7/TLLpnfg==
 channel_files=https://raw.githubusercontent.com/HunterEwok/cbb/channel
 
 roots=$release_roots
+roots_file=
 if [ -n "${CBB_RELEASE_DIR:-}" ] && [ -n "${CBB_RELEASE_ROOTS:-}" ]; then
-	roots=$(cat "$CBB_RELEASE_ROOTS")
+	roots_file=$CBB_RELEASE_ROOTS
+	roots=$(cat "$roots_file" 2>/dev/null) || roots=
 fi
 # verifying tells whether the release's signature is checked.
-verifying() { [ "${CBB_VERIFY:-}" != skip ] && [ -n "$roots" ]; }
+verifying() { [ "${CBB_VERIFY:-}" != skip ]; }
 
 # field NAME FILE prints the string field NAME of the compact JSON in FILE,
 # number NAME FILE a number field: enough for the files Go's encoding/json
@@ -474,8 +476,10 @@ verify_release() {
 		say "Not checked: the release's signature (CBB_VERIFY=skip)."
 		return
 	fi
+	# No roots is a refusal, never a silent install: the built-in ones are
+	# always there, so only a roots file that reads empty gets here.
 	if [ -z "$roots" ]; then
-		return
+		fail "no root keys to check the release against in %s; not installing (CBB_VERIFY=skip installs it unchecked)" "$roots_file"
 	fi
 	command -v openssl >/dev/null 2>&1 ||
 		fail "openssl is required to check the release's signature (or CBB_VERIFY=skip to install it unchecked)"
@@ -539,6 +543,9 @@ verify_release() {
 		say "The release's signature checks out (%s): ES256 and SLH-DSA-SHA2-128s." "$got_version"
 	else
 		say "The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, it needs OpenSSL 3.5 or later." "$got_version"
+	fi
+	if [ -n "$roots_file" ]; then
+		say "Checked against the roots in %s, not the built-in ones." "$roots_file"
 	fi
 }
 

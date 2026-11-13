@@ -42,9 +42,9 @@ $lines[$from..$to] | Set-Content $funcs
 # Test-Taken runs get.ps1's check of the files in the release folder as
 # get.ps1 does for the latest release, and returns what it said: its
 # words when it took them, its refusal otherwise.
-function Test-Taken {
+function Test-Taken([string]$rootsPath = $roots) {
 	$env:CBB_RELEASE_DIR = $rel
-	$env:CBB_RELEASE_ROOTS = $roots
+	$env:CBB_RELEASE_ROOTS = $rootsPath
 	$tmp = Join-Path $work ('t' + [Guid]::NewGuid())
 	New-Item -ItemType Directory -Path $tmp | Out-Null
 	Copy-Item (Join-Path $rel $archive), (Join-Path $rel 'stable.json') $tmp
@@ -77,6 +77,23 @@ foreach ($n in 262144, 262145) {
 	$took = $said -match 'signature checks out'
 	if ($took -ne ($n -eq 262144)) {
 		Write-Host "get.ps1: keys.json with a body of $n bytes: taken $took; get.ps1 said: $said"
+		$bad++
+	}
+}
+# Roots the tests name are said, and no roots is a refusal: a roots file
+# that reads empty, or is not there, never installs unchecked.
+Invoke-Sign @('drill', '-version', '0.6.0', $rel, $roots)
+$said = Test-Taken
+if ($said -notmatch 'signature checks out' -or -not $said.Contains("Checked against the roots in $roots, not the built-in ones.")) {
+	Write-Host "get.ps1: does not say the roots it checked against; get.ps1 said: $said"
+	$bad++
+}
+$empty = Join-Path $work 'empty.pem'
+[IO.File]::WriteAllBytes($empty, [byte[]]@())
+foreach ($f in $empty, (Join-Path $work 'no-such.pem')) {
+	$said = Test-Taken $f
+	if (-not $said.StartsWith('refused: ') -or -not $said.Contains("no root keys to check the release against in $f; not installing")) {
+		Write-Host "get.ps1: roots from ${f}: not refused; get.ps1 said: $said"
 		$bad++
 	}
 }

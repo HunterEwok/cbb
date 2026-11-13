@@ -427,3 +427,35 @@ func TestHalfOfAnotherKey(t *testing.T) {
 		t.Errorf("a half of another key signed: %v", err)
 	}
 }
+
+// TestWeakPassphrase holds each of the three conditions on a new
+// passphrase: 24 bytes, five words, ten different characters. The cases
+// that fail one condition pass the other two.
+func TestWeakPassphrase(t *testing.T) {
+	for _, c := range []struct {
+		p    string
+		weak bool
+	}{
+		{"abcd efgh ijkl mnop qrs", true},     // 23 bytes
+		{"abcd efgh ijkl mnop qrst", false},   // 24 bytes
+		{"abcdefgh ijklmnop qrst uvwx", true}, // four words
+		{"abab abab abab abab abab", true},    // three different characters
+	} {
+		if err := weakPassphrase([]byte(c.p)); (err != nil) != c.weak {
+			t.Errorf("%q (%d bytes): %v", c.p, len(c.p), err)
+		}
+	}
+	// pq-new refuses the 23 bytes before it makes anything.
+	fakeAge(t)
+	dir := t.TempDir()
+	t.Setenv("CBB_RELEASE_PQ_DIR", filepath.Join(dir, "pq"))
+	id := write(t, filepath.Join(dir, "yubikey.identity"), []byte("age1yubikey1test\n"))
+	testPassphrase(t, "abcd efgh ijkl mnop qrs")
+	err := pqNew([]string{"-key", "file:" + ecFile(t, dir), "-to", "age1yubikey1test", "-identity", id})
+	if err == nil || !strings.Contains(err.Error(), "five random words") {
+		t.Errorf("pq-new with a passphrase of 23 bytes: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "pq", "passphrase.check")); !os.IsNotExist(err) {
+		t.Errorf("a refused passphrase wrote passphrase.check: %v", err)
+	}
+}

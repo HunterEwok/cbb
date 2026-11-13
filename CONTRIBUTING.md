@@ -155,8 +155,13 @@ build tag `testhooks`, which `benchtime` implies; `member/src/testhooks.rs`,
 `internal/testhooks`): only such a build reads the variables that change whom they trust or
 their clock (`CBB_TEST_AHEAD_FILE`, `CBB_RELEASE_ROOTS`, `CBB_HELPER`,
 `CBB_TEST_ATTEST_ROOTS`, `CBB_TEST_TPM_ROOTS`, `CBB_TEST_BLUEZ`, `CBB_TEST_LISTS_MIRROR`), and says so in `cbb version`
-and its log. Never install one; a release never has them (CI's `hooks` job and the release
-workflow check it). A new `CBB_TEST_` variable goes into one of the lists in those files.
+and its log. Never install one; a release never has them. CI's `hooks` job runs
+`.github/release-ignores-hooks.sh` on `cbb` and `cbb-helper` built as the release builds them:
+with every hook set they answer as without, and `tools/hookprobe` checks that the helper still
+refuses an attestation under the roots `CBB_TEST_ATTEST_ROOTS` names. The release workflow does
+not run them; it looks with `.github/hooks-marker.sh` for the line a hooks build says itself
+with in every program it publishes, and the `hooks` job checks that the same script finds that
+line in a hooks build. A new `CBB_TEST_` variable goes into one of the lists in those files.
 
 The Nano ESP32's network code on Linux (`embassy/`, root for the TAP interface):
 

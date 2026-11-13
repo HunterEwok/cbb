@@ -83,13 +83,18 @@
 
 	# The roots the release is checked against; none while CBB_VERIFY=skip.
 	$roots = $releaseRoots
+	$rootsFile = $null
 	if ($env:CBB_RELEASE_DIR -and $env:CBB_RELEASE_ROOTS) {
-		# Each block without its headers (Name), the ES256 halves only.
-		$roots = @(((Get-Content -Raw $env:CBB_RELEASE_ROOTS) -split '-----END PUBLIC KEY-----') |
+		$rootsFile = $env:CBB_RELEASE_ROOTS
+		# Each block without its headers (Name), the ES256 halves only. A
+		# file that cannot be read gives no roots, which Test-Release refuses.
+		$text = ''
+		try { $text = [string](Get-Content -Raw -LiteralPath $rootsFile -ErrorAction Stop) } catch { }
+		$roots = @(($text -split '-----END PUBLIC KEY-----') |
 			ForEach-Object { ($_ -replace '-----BEGIN PUBLIC KEY-----', '' -replace '(?m)^.*:.*$', '' -replace '\s', '') } |
 			Where-Object { $_.StartsWith('MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE') })
 	}
-	$verifying = $env:CBB_VERIFY -ne 'skip' -and $roots.Count -gt 0
+	$verifying = $env:CBB_VERIFY -ne 'skip'
 
 	# Invoke-Quietly runs a program without its output and returns its exit
 	# code. Windows PowerShell 5.1 turns a program's redirected stderr into
@@ -255,7 +260,11 @@
 			Write-Host (T 'Not checked: the release''s signature (CBB_VERIFY=skip).')
 			return
 		}
-		if (-not $verifying) { return }
+		# No roots is a refusal, never a silent install: the built-in ones
+		# are always there, so only a roots file that reads empty gets here.
+		if ($roots.Count -eq 0) {
+			throw (T 'no root keys to check the release against in %s; not installing (CBB_VERIFY=skip installs it unchecked)' $rootsFile)
+		}
 		try {
 			Get-ReleaseFile "$channelFiles/keys.json" (Join-Path $tmp 'keys.json')
 			Get-ReleaseFile "$base/release.json" (Join-Path $tmp 'release.json')
@@ -314,6 +323,7 @@
 		# PowerShell has no SLH-DSA: the post-quantum signature waits for a
 		# .NET that checks it, and the user is told so.
 		Write-Host (T 'The release''s signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, PowerShell cannot check it.' ($rel.Value.version))
+		if ($rootsFile) { Write-Host (T 'Checked against the roots in %s, not the built-in ones.' $rootsFile) }
 	}
 
 	try {

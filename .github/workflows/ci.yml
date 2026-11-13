@@ -2230,16 +2230,26 @@ jobs:
           exe=$(go env GOEXE)
           go build -trimpath -o "$RUNNER_TEMP/cbb-helper$exe" ./cmd/cbb-helper
           go build -o "$RUNNER_TEMP/release-sign$exe" ./tools/release-sign
-          sh .github/release-ignores-hooks.sh "target/release/cbb$exe" "$RUNNER_TEMP/cbb-helper$exe" "$RUNNER_TEMP/release-sign$exe"
-      - name: the same script fails a build with the hooks
+          go build -o "$RUNNER_TEMP/hookprobe$exe" ./tools/hookprobe
+          sh .github/hooks-marker.sh absent "target/release/cbb$exe" "$RUNNER_TEMP/cbb-helper$exe"
+          sh .github/release-ignores-hooks.sh "target/release/cbb$exe" "$RUNNER_TEMP/cbb-helper$exe" "$RUNNER_TEMP/release-sign$exe" "$RUNNER_TEMP/hookprobe$exe"
+      - name: a build with the hooks carries the release workflow's marker, and the checks refuse it
+        # The controls of the step above: each must fail for the hooks, not
+        # for another reason, so each looks for the words it fails with.
         run: |
           exe=$(go env GOEXE)
           cargo build --locked --release -p cbb-member --features "$E2E_FEATURES" --target-dir "$RUNNER_TEMP/hooks"
           go build -tags "$E2E_TAGS" -o "$RUNNER_TEMP/cbb-helper-hooks$exe" ./cmd/cbb-helper
-          if sh .github/release-ignores-hooks.sh "$RUNNER_TEMP/hooks/release/cbb$exe" "$RUNNER_TEMP/cbb-helper-hooks$exe" "$RUNNER_TEMP/release-sign$exe"; then
-            echo "the script took a build with the hooks" >&2
-            exit 1
+          cbb=$RUNNER_TEMP/hooks/release/cbb$exe helper=$RUNNER_TEMP/cbb-helper-hooks$exe
+          sh .github/hooks-marker.sh present "$cbb" "$helper"
+          if out=$(sh .github/release-ignores-hooks.sh "$cbb" "$helper" "$RUNNER_TEMP/release-sign$exe" "$RUNNER_TEMP/hookprobe$exe" 2>&1); then
+            echo "$out"; echo "the script took a build with the hooks" >&2; exit 1
           fi
+          echo "$out"
+          echo "$out" | grep -qF "the test hooks changed what it does" || { echo "the script failed for another reason" >&2; exit 1; }
+          said=$("$RUNNER_TEMP/hookprobe$exe" "$helper")
+          echo "$said"
+          case $said in *"cbb-helper took an attestation"*) ;; *) echo "hookprobe did not see the hook" >&2; exit 1 ;; esac
   service:
     name: service tests on the Rust cbb
     needs: changes

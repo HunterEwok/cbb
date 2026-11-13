@@ -258,3 +258,5 @@ cbb for MIPS has no sync away from home yet (roadmap item 37).	لا يدعم cbb
 cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	يعمل cbb هنا مع مساعده، الذي قد يحفظ مفاتيحه؛ ومن دونه لا يستطيع cbb استخدامها. أزِله أولًا: %s
 --uinput needs cbb's helper, which runs the desktop connector	‏--uinput يحتاج إلى مساعد cbb، الذي يشغّل موصل سطح المكتب
 %s has SLH-DSA-SHA2-128s but does not check it as cbb signs it; update openssl (or CBB_VERIFY=skip to install unchecked)	%s يدعم SLH-DSA-SHA2-128s لكنه لا يتحقق منه كما يوقّع cbb؛ حدِّث openssl (أو CBB_VERIFY=skip للتثبيت دون تحقق)
+no root keys to check the release against in %s; not installing (CBB_VERIFY=skip installs it unchecked)	لا توجد مفاتيح جذر في %s للتحقق من الإصدار؛ لن يُثبَّت (CBB_VERIFY=skip يثبّته دون تحقق)
+Checked against the roots in %s, not the built-in ones.	تم التحقق بالجذور الموجودة في %s، لا بالجذور المدمجة.

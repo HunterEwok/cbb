@@ -88,12 +88,38 @@ mod tests {
                     p.display()
                 );
             }
-            for v in super::VARS {
-                let read = format!("var_os(\"{v}\")");
-                assert!(!text.contains(&format!("std::env::{read}")), "{}: reads {v} outside the hooks", p.display());
+            if let Some(v) = named_outside_the_gate(&text) {
+                panic!("{}: names {v} outside a call of testhooks::var_os", p.display());
             }
         }
         assert!(seen.contains("CBB_TEST_RESOLVE"), "{seen:?}");
+    }
+
+    /// The first hook whose name, as a string, is anything but the
+    /// argument of testhooks::var_os in text: however the environment is
+    /// read (std::env::var, env::var_os after a use, a constant), the name
+    /// is then a string somewhere else.
+    fn named_outside_the_gate(text: &str) -> Option<&'static str> {
+        super::VARS
+            .iter()
+            .copied()
+            .find(|v| text.match_indices(&format!("\"{v}\"")).any(|(i, _)| !text[..i].ends_with("testhooks::var_os(")))
+    }
+
+    #[test]
+    fn a_hook_read_any_other_way_is_told() {
+        let v = super::VARS[0];
+        for read in [
+            format!("std::env::var_os(\"{v}\")"),
+            format!("std::env::var(\"{v}\")"),
+            format!("use std::env; env::var_os(\"{v}\")"),
+            format!("const R: &str = \"{v}\"; std::env::var(R)"),
+            format!("crate::testhooks::var_os(\"{v}\"); std::env::var(\"{v}\")"),
+        ] {
+            assert_eq!(named_outside_the_gate(&read), Some(v), "{read}");
+        }
+        assert_eq!(named_outside_the_gate(&format!("crate::testhooks::var_os(\"{v}\")")), None);
+        assert_eq!(named_outside_the_gate(&format!("testhooks::var_os(\"{v}\")")), None);
     }
 
     #[test]

@@ -73,3 +73,18 @@ func TestGetenv(t *testing.T) {
 	}()
 	Getenv("CBB_PORT")
 }
+
+// TestOpen holds the gate's four cases: only a build without the hooks,
+// outside go test, reads none of them.
+func TestOpen(t *testing.T) {
+	for _, c := range []struct{ enabled, underTest, want bool }{
+		{false, false, false},
+		{false, true, true},
+		{true, false, true},
+		{true, true, true},
+	} {
+		if got := open(c.enabled, c.underTest); got != c.want {
+			t.Errorf("open(%v, %v) = %v, want %v", c.enabled, c.underTest, got, c.want)
+		}
+	}
+}

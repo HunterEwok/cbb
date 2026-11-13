@@ -29,11 +29,17 @@ func Getenv(name string) string {
 	if !slices.Contains(Vars, name) {
 		panic(name + " is not a test hook")
 	}
-	if !Enabled && !testing.Testing() {
+	if !open(Enabled, testing.Testing()) {
 		return ""
 	}
 	return os.Getenv(name)
 }
+
+// open reports whether the hooks are read: in a build with them, or in a
+// binary go test built. A release helper is neither; tools/hookprobe asks
+// one, in CI's hooks job, whether it still refuses what a hook would let
+// through.
+func open(enabled, underTest bool) bool { return enabled || underTest }
 
 // Note is what cbb-helper version and its first log line say of the
 // hooks: "" in a release build.
