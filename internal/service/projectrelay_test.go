@@ -73,10 +73,11 @@ func (s *releaseSigner) signRelay(t *testing.T, seq uint64, endpoints []string, 
 func TestProjectRelayNewKey(t *testing.T) {
 	signer := newReleaseSigner(t)
 	var h hub
-	// The project relay's own name is kept on this machine too: when the
-	// test's relay drops the registration, the device looks the relay up
-	// again, and the live relay holds another key.
-	pi := startEnv(t, &h, "pi", signer.rootsEnv(t), "CBB_TEST_RESOLVE=relay.example.org=127.0.0.1,"+"cbb.tools=127.0.0.1")
+	// The project relay's own name resolves to nothing, as offline: when
+	// the test's relay drops the registration, the device looks the relay
+	// up again, and with a network it would reach the live relay, whose
+	// key is another.
+	pi := startEnv(t, &h, "pi", signer.rootsEnv(t), "CBB_TEST_RESOLVE=relay.example.org=127.0.0.1,cbb.tools=none")
 	deck := startService(t, &h, "deck")
 	pairWith(t, pi, deck)
 	group := pi.status(t).Group

@@ -455,7 +455,9 @@ fn project_relay_addrs(node: &Node, log: &dyn Fn(&str)) -> Vec<SocketAddr> {
     let mut out = Vec::new();
     for name in names {
         if let Some(a) = test_resolve(&name) {
-            if !out.contains(&a) {
+            if let Some(a) = a
+                && !out.contains(&a)
+            {
                 out.push(a);
             }
             continue;
@@ -476,14 +478,22 @@ fn project_relay_addrs(node: &Node, log: &dyn Fn(&str)) -> Vec<SocketAddr> {
 
 /// The address CBB_TEST_RESOLVE gives a relay's name, as Go's tests set
 /// lookupIP: "host=ip" pairs separated by commas, for the tests only, since
-/// entries.json names a relay only by a host name.
-fn test_resolve(name: &str) -> Option<SocketAddr> {
+/// entries.json names a relay only by a host name. "host=none" is a name
+/// that does not resolve (Some(None)); None is a name the variable leaves
+/// to the system.
+fn test_resolve(name: &str) -> Option<Option<SocketAddr>> {
     let v = std::env::var("CBB_TEST_RESOLVE").ok()?;
     let (host, port) = name.rsplit_once(':')?;
     let port: u16 = port.parse().ok()?;
     v.split(',').find_map(|pair| {
         let (h, ip) = pair.trim().split_once('=')?;
-        (h == host).then(|| ip.parse::<std::net::IpAddr>().ok()).flatten().map(|ip| SocketAddr::new(ip, port))
+        if h != host {
+            return None;
+        }
+        if ip == "none" {
+            return Some(None);
+        }
+        ip.parse::<std::net::IpAddr>().ok().map(|ip| Some(SocketAddr::new(ip, port)))
     })
 }
 
