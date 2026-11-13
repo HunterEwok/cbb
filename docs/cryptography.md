@@ -55,6 +55,10 @@ page only lists. Why each choice was made is in the [design](design.md) and the
 
 The interop vectors in `testdata/interop` pin the bytes of each signed object and of a
 CPace exchange, so the four implementations cannot drift apart ([testing](testing.md)).
+Two come from outside the project, so that the implementations cannot agree on a mistake:
+CPace is checked against the vectors of draft-irtf-cfrg-cpace-21, and sealing (HPKE with
+X-Wing, KEM `0x647a`) against the vector of draft-ietf-hpke-pq-05 for the same suite
+(`xwing-hpke-pq.json`, in Go and Rust).
 
 ## Keys
 

@@ -4,8 +4,10 @@
 
 # Builds cbb for 32-bit MIPS routers, without the tunnel:
 #
-#   sh member/packaging/mips.sh mips|mipsel
+#   sh member/packaging/mips.sh mips|mipsel [FEATURES]
 #
+# FEATURES are cargo's, such as testhooks for the service's tests under
+# qemu, whose hooks a build without it ignores (member/src/testbuild.rs).
 # mips-unknown-linux-musl (big-endian) and mipsel-unknown-linux-musl are
 # Tier 3 in Rust, so the standard library is built from source on nightly
 # Rust, and zig links the static musl binary (cargo-zigbuild); both soft
@@ -20,11 +22,11 @@ nightly="nightly-2026-10-26"
 case ${1:-} in
 mips | mipsel) target=$1-unknown-linux-musl ;;
 *)
-	echo "usage: sh member/packaging/mips.sh mips|mipsel" >&2
+	echo "usage: sh member/packaging/mips.sh mips|mipsel [FEATURES]" >&2
 	exit 2
 	;;
 esac
 cd "$(dirname "$0")/../.."
 RUSTFLAGS="-C relocation-model=static" cargo "+$nightly" zigbuild --locked --release \
-	-Zbuild-std=std,panic_abort --target "$target" --no-default-features
+	-Zbuild-std=std,panic_abort --target "$target" --no-default-features ${2:+--features "$2"}
 echo "target/$target/release/cbb"

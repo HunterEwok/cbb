@@ -36,6 +36,7 @@ jobs:
       android: ${{ steps.parts.outputs.android }}
       zxnext: ${{ steps.parts.outputs.zxnext }}
       silica: ${{ steps.parts.outputs.silica }}
+      harmony: ${{ steps.parts.outputs.harmony }}
       site: ${{ steps.parts.outputs.site }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -651,9 +652,10 @@ jobs:
         with:
           release: "15.1"
           usesh: true
-          # FreeBSD's go fetches the toolchain go.mod names; Xvfb, xclip
-          # and xterm are for the desktop connector's X11 tests.
-          prepare: pkg install -y go xorg-vfbserver xclip xterm
+          # FreeBSD's go fetches the toolchain go.mod names; git is for
+          # prcheck's test of a real repository; Xvfb, xclip and xterm are
+          # for the desktop connector's X11 tests.
+          prepare: pkg install -y go git xorg-vfbserver xclip xterm
           run: |
             set -e
             export GOTOOLCHAIN=auto GOFLAGS=-buildvcs=false
@@ -1099,16 +1101,33 @@ jobs:
       - name: cbb update installs a newer signed release, puts the old one back, and sets the timer
         run: |
           # cbb and its helper of one version: a release cbb takes only a
-          # helper of its own release.
+          # helper of its own release. The update takes its release from a
+          # folder and its roots from a file, hooks that only a build for
+          # tests reads (testhooks), so the steps below run such a build.
           version() {
-            CBB_VERSION=$1 cargo build --locked --release -p cbb-member
+            CBB_VERSION=$1 cargo build --locked --release -p cbb-member ${3:+--features "$3"}
             cp target/release/cbb "$2/cbb"
             CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v$1" -o "$2/cbb-helper" ./cmd/cbb-helper
           }
-          mkdir -p "$RUNNER_TEMP/v060" "$RUNNER_TEMP/v061"
-          version 0.6.0 "$RUNNER_TEMP/v060"
-          version 0.6.1 "$RUNNER_TEMP/v061"
+          mkdir -p "$RUNNER_TEMP/release060" "$RUNNER_TEMP/v060" "$RUNNER_TEMP/v061"
+          version 0.6.0 "$RUNNER_TEMP/release060"
+          version 0.6.0 "$RUNNER_TEMP/v060" testhooks
+          version 0.6.1 "$RUNNER_TEMP/v061" testhooks
+          # First a release's build: it ignores both hooks, so a release
+          # signed by other roots, in a folder, is never offered.
+          sudo CBB_FIREWALL=no sh packaging/linux/install.sh --auto-update off "$RUNNER_TEMP/release060/cbb"
+          other="$RUNNER_TEMP/other"
+          sh packaging/archive.sh "$RUNNER_TEMP/v061/cbb" linux amd64 "$other"
+          go run ./tools/release-sign drill -version 99.0.0 "$other" "$RUNNER_TEMP/other-roots.pem"
+          out=$(CBB_RELEASE_DIR="$other" CBB_RELEASE_ROOTS="$RUNNER_TEMP/other-roots.pem" cbb update -check 2>&1 || true)
+          echo "$out"
+          case $out in *99.0.0*)
+            echo "a release's cbb update took a release from CBB_RELEASE_DIR and CBB_RELEASE_ROOTS" >&2
+            exit 1
+            ;;
+          esac
           sudo CBB_FIREWALL=no sh packaging/linux/install.sh --auto-update off "$RUNNER_TEMP/v060/cbb"
+          cbb version | grep -q testhooks
           test "$(sudo cbb update -auto)" = off
           # 0.6.1, signed with throwaway keys (tools/release-sign drill),
           # which the pinned roots refuse.
@@ -1547,7 +1566,9 @@ jobs:
             New-Item -ItemType Directory -Force "$dir\packaging" | Out-Null
             $env:CBB_VERSION = $v
             $env:CBB_ARCH = 'amd64'
-            cargo build --locked -p cbb-member --features windowless --target-dir "$env:RUNNER_TEMP\target"
+            # testhooks: the update below takes its release from a folder
+            # and its roots from a file, hooks a release's build ignores.
+            cargo build --locked -p cbb-member --features windowless,testhooks --target-dir "$env:RUNNER_TEMP\target"
             if ($LASTEXITCODE -ne 0) { throw 'cargo build failed' }
             Copy-Item "$env:RUNNER_TEMP\target\debug\cbb.exe", "$env:RUNNER_TEMP\target\debug\cbbw.exe" $dir
             $ld = "-X github.com/HunterEwok/cbb/internal/version.Version=v$v"
@@ -1659,9 +1680,10 @@ jobs:
       - name: the Swift phone pairs both ways with the computers' cbb and syncs with it over TLS
         if: env.KIT == 'true' && runner.os == 'macOS'
         run: |
-          # The computer is the Rust cbb, with cbb-helper beside it.
-          cargo build --locked --release -p cbb-member
-          go build -o target/release/cbb-helper ./cmd/cbb-helper
+          # The computer is the Rust cbb, with cbb-helper beside it, both
+          # built for tests (testhooks: the tests' hooks, never a release's).
+          cargo build --locked --release -p cbb-member --features testhooks
+          go build -tags testhooks -o target/release/cbb-helper ./cmd/cbb-helper
           # A throwaway keychain for the tool's identity, unlocked and the default.
           security create-keychain -p ci ci.keychain
           security list-keychains -d user -s ci.keychain
@@ -2032,10 +2054,11 @@ jobs:
         run: |
           (cd apps/android && ./gradlew --no-daemon -p kit interopScript)
           tool="$PWD/apps/android/kit/build/interop/cbb-interop"
-          # The computer is the Rust cbb, with cbb-helper beside it.
+          # The computer is the Rust cbb, with cbb-helper beside it, both
+          # built for tests (testhooks: the tests' hooks, never a release's).
           rustup toolchain install stable --profile minimal
-          cargo +stable build --locked --release -p cbb-member
-          go build -o target/release/cbb-helper ./cmd/cbb-helper
+          cargo +stable build --locked --release -p cbb-member --features testhooks
+          go build -tags testhooks -o target/release/cbb-helper ./cmd/cbb-helper
           CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_SWIFT_INTEROP_TLS="$tool" go test -timeout 5m ./internal/service -run 'TestSwift' -v
 
   android:
@@ -2332,19 +2355,20 @@ jobs:
           printf '#include <ifaddrs.h>\n#include <stdio.h>\nint main(void){struct ifaddrs *a; if (getifaddrs(&a)) return 1; for (struct ifaddrs *p = a; p; p = p->ifa_next) puts(p->ifa_name); return 0;}\n' >"$RUNNER_TEMP/ifaddrs.c"
           python3 -m ziglang cc -target mips-linux-musleabi -msoft-float -static -o "$RUNNER_TEMP/ifaddrs" "$RUNNER_TEMP/ifaddrs.c"
           timeout 60 "$RUNNER_TEMP/qemu/bin/qemu-mips" "$RUNNER_TEMP/ifaddrs"
-      - name: build for mips and mipsel
+      # For the service's tests: their hooks (testhooks) steer the MIPS cbb too.
+      - name: build for mips and mipsel, for tests (testhooks)
         run: |
-          sh member/packaging/mips.sh mips
-          sh member/packaging/mips.sh mipsel
+          sh member/packaging/mips.sh mips testhooks
+          sh member/packaging/mips.sh mipsel testhooks
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: false
-      - name: the computers' cbb, and cbb-helper beside it
+      - name: the computers' cbb, and cbb-helper beside it, built for tests (testhooks)
         run: |
           rustup toolchain install stable --profile minimal
-          cargo +stable build --locked --release -p cbb-member
-          go build -o target/release/cbb-helper ./cmd/cbb-helper
+          cargo +stable build --locked --release -p cbb-member --features testhooks
+          go build -tags testhooks -o target/release/cbb-helper ./cmd/cbb-helper
       - name: the MIPS builds under qemu with computers, all but sync away from home
         # The hubs' and the invitations' tests need the tunnel, which the
         # MIPS build leaves out.
@@ -2412,19 +2436,20 @@ jobs:
       - name: the Rust cbb's own tests, instrumented
         run: |
           mkdir -p target
-          cargo test --locked --release -p cbb-member --no-run --message-format=json |
+          cargo test --locked --release -p cbb-member --features testhooks --no-run --message-format=json |
             jq -r 'select(.profile.test == true and .executable != null) | .executable' >target/own-tests.txt
-          cargo test --locked --release -p cbb-member
+          cargo test --locked --release -p cbb-member --features testhooks
       - name: the Rust cbb, the phone's member and tunnel on Linux, cbb-helper, and the Go tests' binaries
         run: |
-          cargo build --locked --release -p cbb-member
-          cargo build --locked --release -p cbb-ffi --features member,tunnel --example phone-on-linux
+          # testhooks: the tests below steer both through their hooks, CBB_TEST_* (never a release's build).
+          cargo build --locked --release -p cbb-member --features testhooks
+          cargo build --locked --release -p cbb-ffi --features member,tunnel,testhooks --example phone-on-linux
           cargo build --locked --release -p cbb-ffi --features tunnel --example tunnel-on-linux
           # Built with -cover: the Go side's coverage counts what the helper
           # does under these tests too; each part puts a script in the
           # helper's place that gives it GOCOVERDIR, since cbb hands its
           # helper only the environment it needs.
-          CGO_ENABLED=0 go build -trimpath -cover -coverpkg="$COVERPKG" -o target/release/cbb-helper.cover ./cmd/cbb-helper
+          CGO_ENABLED=0 go build -tags testhooks -trimpath -cover -coverpkg="$COVERPKG" -o target/release/cbb-helper.cover ./cmd/cbb-helper
           # Each Go package runs as a test binary built with -cover, with
           # GOCOVERDIR for it and the helpers it starts.
           mkdir -p target/go-tests
@@ -2651,6 +2676,7 @@ jobs:
         run: |
           cargo clippy --locked --workspace --all-targets -- -D warnings
           cargo clippy --locked -p cbb-member --features benchtime --all-targets -- -D warnings # the bench's time-scaled build
+          cargo clippy --locked -p cbb-member --features testhooks --all-targets -- -D warnings # the hooks of Go's service tests
           cargo clippy --locked -p cbb-embassy --features host --all-targets -- -D warnings
           cargo clippy --locked -p cbb-ffi --features member --all-targets -- -D warnings
           cargo clippy --locked -p cbb-ffi --features member,tunnel --all-targets -- -D warnings
@@ -2803,7 +2829,9 @@ jobs:
       - name: cbb update, of cbb without its helper, installs a newer signed release, puts the old one back, and sets the timer
         run: |
           for v in 0.6.0 0.6.1; do
-            CBB_VERSION=$v cargo build --locked
+            # testhooks: the update takes its release from a folder and its
+            # roots from a file, hooks a release's build ignores.
+            CBB_VERSION=$v cargo build --locked -p cbb-member --features testhooks
             mkdir -p "$RUNNER_TEMP/alone-$v"
             cp target/debug/cbb "$RUNNER_TEMP/alone-$v/cbb"
           done
@@ -2855,8 +2883,10 @@ jobs:
           sudo ip tuntap add name tap0 mode tap user "$USER"
           sudo ip addr add 192.168.69.1/24 dev tap0
           sudo ip link set tap0 up
-          # The computer it joins is a cbb, with cbb-helper beside it.
-          go build -o target/release/cbb-helper ./cmd/cbb-helper
+          # The computer it joins is a cbb, with cbb-helper beside it, both
+          # built for tests (testhooks).
+          cargo build --locked --release -p cbb-member --features testhooks
+          go build -tags testhooks -o target/release/cbb-helper ./cmd/cbb-helper
           CBB_ESP32_ON_LINUX="$PWD/target/release/esp32-on-linux" CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" \
             go test -race ./internal/service -run TestEmbassyJoiner -v
       - name: the phones' Rust tunnel and hub through ffi/ work with the Go hub and clients (WireGuard, AmneziaWG, VLESS with XHTTP)
@@ -2897,6 +2927,11 @@ jobs:
           cargo clippy --locked -p cbb-core --features tls --target riscv32imac-unknown-none-elf -- -D warnings
           cargo build --locked -p cbb-core --release --target riscv32imac-unknown-none-elf
           cargo build --locked -p cbb-core --features tls --release --target riscv32imac-unknown-none-elf
+      - name: what each part of the core costs in a small device's flash (tools/size), against its baseline
+        run: |
+          set -o pipefail
+          cargo clippy --locked -p cbb-size --release --target riscv32imac-unknown-none-elf --features p256,json,records,seal,copy,pair,tls,api -- -D warnings
+          sh tools/size/size.sh | tee -a "$GITHUB_STEP_SUMMARY"
       - name: the Rust toolchain for Xtensa
         working-directory: ${{ runner.temp }}
         run: |
@@ -3055,6 +3090,50 @@ jobs:
           rustup toolchain install stable --profile minimal
           rustup default stable
           apps/silica/ci.sh "$RUNNER_TEMP/psdk" "$ARCHS" "$RUNNER_TEMP/rpm"
+
+  harmony:
+    name: HarmonyOS app (native module)
+    needs: changes
+    if: needs.changes.outputs.harmony == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: OpenHarmony's SDK from the cache
+        # Its native and ArkTS parts, about 3 GB unpacked; ffi/ohos-sdk.sh
+        # downloads it when the cache has none and checks it against its
+        # SHA-256.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ runner.temp }}/ohos-sdk/native
+            ${{ runner.temp }}/ohos-sdk/ets
+            ${{ runner.temp }}/ohos-sdk/toolchains
+          key: ohos-sdk-ets-${{ hashFiles('ffi/ohos-sdk.sh') }}
+      - name: the core's library, the native module and its tests, the ArkTS
+        # The app itself needs the HarmonyOS command line tools, which a
+        # Huawei developer account downloads; this job builds and checks what
+        # it can without them: the Rust core for the phone (ffi/bind.sh
+        # harmony), libcbb_napi.so over it with -Werror, and the ArkTS
+        # through OpenHarmony's compiler and linter (apps/harmony/check.sh).
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          sudo apt-get update -q
+          sudo apt-get install -y -q ninja-build
+          OHOS_NDK_HOME=$(sh ffi/ohos-sdk.sh "$RUNNER_TEMP/ohos-sdk" ets | tail -n 1)
+          export OHOS_NDK_HOME
+          sh apps/harmony/build.sh
+          cmake -S apps/harmony/entry/src/main/cpp -B "$RUNNER_TEMP/napi" -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$OHOS_NDK_HOME/build/cmake/ohos.toolchain.cmake" -DOHOS_ARCH=arm64-v8a -DOHOS_STL=c++_shared
+          cmake --build "$RUNNER_TEMP/napi"
+          "$OHOS_NDK_HOME/llvm/bin/llvm-readelf" -d "$RUNNER_TEMP/napi/libcbb_napi.so" | grep NEEDED
+          c++ -std=c++17 -Wall -Wextra -Werror -I apps/harmony/entry/src/main/cpp \
+            apps/harmony/entry/src/main/cpp/der.cpp apps/harmony/entry/src/test/cpp/der_test.cpp -o "$RUNNER_TEMP/der_test"
+          "$RUNNER_TEMP/der_test"
+          sh apps/harmony/check.sh "$RUNNER_TEMP/ohos-sdk"
 
   phonecore:
     name: phone core (${{ matrix.target }})
@@ -3307,7 +3386,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, windows, kit, app, trayapp, androidkit, android, androidemu, fdroid, phonecore, service-build, service, service-coverage, rustcheck, rust, rustmips, esp32, zxnext, silica, advisories, docker, differential, model]
+    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, windows, kit, app, trayapp, androidkit, android, androidemu, fdroid, phonecore, service-build, service, service-coverage, rustcheck, rust, rustmips, esp32, zxnext, silica, harmony, advisories, docker, differential, model]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

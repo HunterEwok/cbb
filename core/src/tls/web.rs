@@ -200,6 +200,38 @@ impl SignatureVerificationAlgorithm for RsaPssRsae {
     }
 }
 
+/// Whether a key made signature over message with the certificate
+/// signature algorithm whose OID is algorithm (ECDSA or RSA PKCS #1 v1.5
+/// with SHA-256, SHA-384 or SHA-512), as an Android attestation chain is
+/// signed (crate::attest): key_alg and curve are the OIDs of the key's
+/// SubjectPublicKeyInfo, key its bits (a SEC 1 point or an RSAPublicKey).
+pub fn verify_signed(
+    key_alg: &str,
+    curve: &str,
+    key: &[u8],
+    algorithm: &str,
+    message: &[u8],
+    signature: &[u8],
+) -> bool {
+    let hash = match algorithm {
+        "1.2.840.10045.4.3.2" | "1.2.840.113549.1.1.11" => Hash::Sha256,
+        "1.2.840.10045.4.3.3" | "1.2.840.113549.1.1.12" => Hash::Sha384,
+        "1.2.840.10045.4.3.4" | "1.2.840.113549.1.1.13" => Hash::Sha512,
+        _ => return false,
+    };
+    let ecdsa = algorithm.starts_with("1.2.840.10045.4.3.");
+    match (key_alg, curve, ecdsa) {
+        ("1.2.840.10045.2.1", "1.2.840.10045.3.1.7", true) => {
+            Ecdsa(Curve::P256, hash).verify_signature(key, message, signature).is_ok()
+        }
+        ("1.2.840.10045.2.1", "1.3.132.0.34", true) => {
+            Ecdsa(Curve::P384, hash).verify_signature(key, message, signature).is_ok()
+        }
+        ("1.2.840.113549.1.1.1", _, false) => rsa_verify(Padding::Pkcs1, hash, key, message, signature).is_ok(),
+        _ => false,
+    }
+}
+
 const MIN_BITS: usize = 2048;
 const MAX_BITS: usize = 8192;
 

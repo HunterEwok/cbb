@@ -55,6 +55,8 @@ watch's state, content hashes, join QR codes and a CPace exchange.
   Go; the Kotlin kit writes the same files, so Go checks both phones against one set.
 - A Go test fails when a committed vector is out of date, and names the command that
   writes it again.
+- `xwing-hpke-pq.json` is the vector of draft-ietf-hpke-pq-05 for the sealing suite, copied
+  from the draft; Go and the Rust core open its messages, and no test writes it.
 
 A change to the wire format changes the vectors in the same pull request, together with
 [the protocol](protocol.md) and every implementation.
@@ -191,6 +193,15 @@ A9 and U14 to U18).
   button's) contrast is measured on the screen's picture instead: its darkest and lightest
   pixels at least 4.5:1. The iPhone's Start screen scrolls rather than squeeze its texts. The
   audit looks only at what a person can reach.
+- The iPad (`PadUITests`, skipped on an iPhone): Home with a made-up group, which a debug
+  build starts with when launched with `-showcase` (`App/Showcase.swift`; nothing leaves the
+  app): the sidebar's sections, a tile's card beside the tiles, the arrows and Escape, a
+  settings part, Command-1, portrait, the card at the left in Arabic, and clipped text at the
+  largest size; each screen's picture is attached.
+- The other big screens: on Android `TabletHomeTest` keeps the sidebar's sections across a
+  restart (their keys back to the same section); the HarmonyOS sidebar, keys and drops are
+  compiled and linted by `apps/harmony/check.sh`, and the Aurora layout by `qmllint`. None of
+  the three is yet run on a tablet.
 
 Screenshots are compared where a picture is the same on every machine that draws it: the
 tray window on Linux in the Noto fonts (`fonts-noto-core`, `fonts-noto-mono`,
@@ -267,12 +278,29 @@ network or a container with one of its own):
 ```sh
 eval "$(cargo llvm-cov show-env --sh)"
 cargo llvm-cov clean --workspace
-cargo test --release -p cbb-member && cargo build --release -p cbb-member
-CGO_ENABLED=0 go build -o target/release/cbb-helper ./cmd/cbb-helper
+cargo test --release -p cbb-member && cargo build --release -p cbb-member --features testhooks
+CGO_ENABLED=0 go build -tags testhooks -o target/release/cbb-helper ./cmd/cbb-helper
 CBB_TEST_RUST_SERVICE=$PWD/target/release/cbb CBB_TEST_ALONE=$PWD/target/release/cbb go test ./internal/service
 cargo llvm-cov report --release --json --summary-only --output-path service.json
 go run ./tools/coverage -llvm rust-service=service.json -floor tools/coverage/floor.json
 ```
+
+## Firmware size
+
+A small device takes only the parts of the core it calls, and the linker drops the rest, so
+what a part costs shows only in a linked program. `tools/size` is a program for the ESP32-C6's
+RISC-V (`riscv32imac-unknown-none-elf`, the workspace's release profile) that calls the parts
+its features name with input the linker cannot see through; it is never run. `sh
+tools/size/size.sh` builds it empty, once per part (`p256`: X.509 and a chain check; `json`;
+`records`: the group's records and their state; `seal`: opening a sealed message, X-Wing;
+`copy`: a copy read, checked and opened; `pair`: a joiner and CPace; `tls`: the member TLS),
+with all of them, and with the core's whole entry point (`api`), and prints each program's
+flash (`.text`, `.rodata` and `.data`) and its cost over the empty one against
+`tools/size/baseline.txt`. The `esp32` job runs it on every change to the Rust code and puts
+the table in the job's summary; it fails when everything together grows more than 10% over
+the baseline. A change that makes the core larger on purpose writes the baseline again with
+`sh tools/size/size.sh -update` in the same pull request. The parts overlap (`copy` holds
+`records`, `seal` and JSON), so the costs do not add up to `all`.
 
 ## Unsafe code
 

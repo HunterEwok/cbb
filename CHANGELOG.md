@@ -7,6 +7,81 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The CI measures what each part of the core costs in a small device's flash (`tools/size`,
+  for the ESP32-C6's RISC-V): X.509 and P-256, JSON, the group's records, sealing, a copy,
+  pairing, the member TLS and the core's whole entry point, each against today's baseline,
+  failing when the whole grows more than 10% (docs/testing.md, "Firmware size").
+- Sealing is checked against the vector of draft-ietf-hpke-pq-05 for X-Wing with
+  HKDF-SHA256 and ChaCha20-Poly1305, in Go and the Rust core.
+- The iPad has a Home of its own (docs/apps.md, "Big screens"): a sidebar with the group's
+  line and its switches, the devices' sections (all, needs attention, each collection) and the
+  settings' parts, the devices as tiles with the chosen one's card beside them, Command-1 to 9,
+  the arrows and Escape, a tile's menu that pastes and mutes, and text, pictures or files
+  dropped on a tile pasted on that device. A narrow window keeps the phone's page. The app is
+  no longer offered on a Mac or a Vision Pro as an iPad app.
+- Android tablets, foldables and wide windows get the iPad's Home: the sidebar (standing in
+  landscape, sliding in from the edge in portrait) with the devices' sections and the parts of
+  Settings, the tiles with the chosen device's details beside them, Ctrl+1 to 9, Ctrl+N,
+  Ctrl+F, the arrows and Esc, a right click for a tile's menu (which now also pastes on the
+  device and mutes it), and text, pictures or files dropped on a tile pasted there or beside
+  the tiles sent to the group. It starts from 600 dp instead of 720. An Android device
+  without its keys in secure hardware or without a strong fingerprint or face sensor says so
+  before it makes a group, restores one or takes one handed over.
+- The Aurora app on a tablet, or a phone turned on its side, shows the chosen device's card
+  beside the tiles, and on the widest screens a sidebar with all devices, the ones that need
+  attention, each collection and Settings. Making or restoring a group on Aurora says that
+  its keys, behind the app's PIN and no fingerprint, guard the group less well than a phone's.
+- HarmonyOS tablets and open foldables get the same Home: the sidebar (standing from 1040 vp,
+  sliding in behind ☰ below) with the devices' sections and the parts of Settings, the
+  chosen tile outlined beside its details, Ctrl+1 to 9, Ctrl+, Ctrl+N, the arrows and Esc, a
+  right click for a tile's menu, and drops on a tile pasted there or beside the tiles sent to
+  the group. A HarmonyOS device without a strong fingerprint or face sensor says so before it
+  makes a group, restores one or takes one over.
+- The app for HarmonyOS 5 and later (`apps/harmony`), in development: ArkTS around the same
+  Rust core as the Aurora app, through a Node-API module (`libcbb_napi.so`), with the keys in
+  HUKS and the admin key behind the user's face, fingerprint or PIN. It has the other phones'
+  screens: a new group, joining by QR code, as an admin or by an invitation, restoring, Home
+  with the tiles, the devices and the admin's actions, adding a device with Scan Kit,
+  invitations, the recovery key and the takeover, the arrangement, the notifications, and
+  why it does not sync; it sends with the system's Paste button and from the Share menu
+  without opening (a share extension, as on the iPhone), pastes
+  a text, pictures or files on another device as an admin, acts as a Bluetooth keyboard in
+  the lab (HID over GATT), which also types an admin's remote paste, and the member runs on
+  in the background as a continuous task (docs/apps.md, "HarmonyOS"). Its watch app
+  (`apps/harmony/wearable`, HarmonyOS 5 watches) shows the devices, sync, Everywhere and
+  the latest events through the phone over Wear Engine, and turns sync and Everywhere on or
+  off (docs/apps.md, "HarmonyOS watches"); the root makes it an admin with a key in its HUKS,
+  and it freezes, removes and turns things off from the wrist, signing on the watch each
+  record or command it checked (manage `add_watch` and `watch_actions`,
+  `cbb_member_manage_watch`, `ExternalKey::sign_data`; the core's `add_watch`,
+  `watch_actions` and `Change::Freeze`). The phone can be the group's hub or meet the
+  group at a blind relay, and the root phone signs the periods of the group's server keys
+  and records what the Android phones' attestations show, with Google's revocation list
+  (`cbb_core::attest`, Android Key Attestation in the core, checked against Go's vectors;
+  the ops `attest_status`, `attest` and the manage action `attest`). It puts the recovery key
+  on a YubiKey over NFC and restores the group with one, the core speaking PIV for it
+  (`cbb_piv`, `cbb_member_manage_card`, and `cbb_restore`'s `card`), as for any app without
+  a PIV of its own. Outside the app it has the home-screen widget "Sync clipboard", a
+  shortcut on its icon, the intents SyncClipboard and ToggleSync, and Live View for adding a
+  device and for sync away from home, as the iPhone's widget, App Intents and Live
+  Activities. On a tablet or an open foldable its Home shows the devices on orbits, as
+  tiles or a list, with a device's details beside them.
+  `cbb_member_manage` signs a remote paste (`paste`, `paste_off`), `actions_off`,
+  `away_off`, `action`, `freeze` and a period of the
+  server keys (`period`) for the apps that sign through the core, and `cbb_member_servers`
+  makes the phone member serve the group's servers itself (the ops `hub`, `hub_off`,
+  `relay`, `servers`). The
+  protocol names its system `harmonyos`, a phone's system like `ios`, `android`, `aurora`
+  and `sailfish` (docs/protocol.md, section 6), and a bug report may name it as its app.
+  `ffi/bind.sh harmony` builds the core for it with OpenHarmony's native SDK
+  (`ffi/ohos-sdk.sh`); `apps/harmony/check.sh` compiles and lints its ArkTS with
+  OpenHarmony's compiler, the abilities, intents and widgets as well as the pages; `tools/strings` writes its strings from `apps/l10n`,
+  `tools/tokens` its colours and `tools/icon` its icons, the watch's too. CI's `HarmonyOS app` job builds and links the native module and
+  runs the check.
+- `tools/prcheck` and its workflow check every pull request's commits for authors,
+  committers and co-authors outside a short list of known addresses, and its title and
+  description, which become the squash commit's message, for links to assistant
+  conversations and model names.
 - The Aurora app asks for a PIN of its own before its root or admin key signs, since Aurora OS
   gives an app neither its authentication service nor the fingerprint. The key moves to a
   second token of the app in the TEE, whose PIN the user chooses (at least four digits) and
@@ -1613,6 +1688,23 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- A member does not write to its clipboard a copy made before it last started, whatever its
+  age: the rule of incoming copies takes the clock mark saved before the start.
+- The core wipes device keys, a secret's text and a copy's key from memory once it is done
+  with them, and the service writes no core dump; on Linux other processes of its user cannot
+  read its memory.
+- Pairing codes are drawn with every code equally likely, and a device that listens for a
+  join stops taking an address's connections after three failed attempts from it.
+- Channel files (`stable.json`) are signed for 14 days instead of 30, and cbb.tools renews
+  them twice a week; the reminders and the monitor warn 5 days before the end.
+- Builds for tests only never ship: the tests' hooks (`CBB_TEST_*`, the test clock among them)
+  are read only by a `cbb` built with the feature `testhooks` and a `cbb-helper` built with
+  the tag `testhooks`; `CBB_STANDBY_GRACE`, `CBB_UP_CHECK` and `CBB_HUB_KEY_AHEAD` are now
+  `CBB_TEST_STANDBY_GRACE`, `CBB_TEST_UP_CHECK` and `CBB_TEST_HUB_KEY_AHEAD`, hooks too; a
+  release's `cbb` checks updates only against its pinned roots, whatever `CBB_RELEASE_DIR`
+  and `CBB_RELEASE_ROOTS` say. A test build does not compile in the release workflow, names
+  itself in `cbb version` and is refused by the release workflow, as is a Go program built
+  with the tag `benchtime` or `testhooks` (docs/maintaining.md, "Releases").
 - The Mac app's Settings are a sheet on its window, as the tray app's dialog, instead of a
   window of their own; "Settings…" in the menu bar item and Command-comma open the window
   with them.
@@ -2258,6 +2350,24 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- An admin phone pastes pictures and files on a device again: the iPhone and Android kits
+  sign the paste command of kind `media` that names the group's copy, which they refused to
+  build before.
+- Members given each other's addresses with `-peer` no longer reconnect to each other
+  several times a second: a member dialed a member it was connected to every second, and
+  when the member with the lower device ID did, its new connection replaced the old one on
+  the other side while it dropped the new one itself, so both ended. A member now remembers
+  which member it found at an address and leaves it alone while it is connected, and a
+  dialer keeps or drops its new connection by the same rule as the side that accepts it. A
+  member on one machine also took the address a dual-stack listener shows for 127.0.0.1
+  (`::ffff:127.0.0.1`) for one at home, so its dials to the loopback address replaced that
+  connection as a tunnel's would.
+- A root that got a member's key evidence over two connections at once signed two records
+  with the same number, which stopped the group as two histories of the root's key; a
+  member signs its records one at a time now.
+- `cbb pair -code ADDRESS` while the service runs joins through the service, as `cbb pair
+  -code` does, so the device takes the service's `-name` and capabilities (or those `cbb pair
+  -name` and `-caps` give); it joined by itself, under the computer's host name.
 - A hub that started serving in place of one above it ended its first clients' connections
   a moment later, when it made its key for the next period, and those clients then tried the
   hub above, which may be off, before it again. The hub makes those keys before it listens,

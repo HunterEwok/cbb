@@ -291,33 +291,132 @@ shows its code and the member's own words.
 Some things work but are no promise of 1.0: the ZX Spectrum Next, the Arduino Nano ESP32, a
 computer as a TV's remote and a phone or a Linux computer as a Bluetooth keyboard. In the apps
 they sit in a "Lab" section at the end of the advanced settings (the Bluetooth keyboard on
-Android and Aurora; the others have no screen in the apps). The settings show only what most
+Android, Aurora and HarmonyOS; the others have no screen in the apps). The settings show only what most
 people need: the hub is chosen by itself, so making a device the hub, the hub's tunnel and its
 forwarder show only with the advanced settings on, on every app.
 
 ## Big screens
 
-- **iPad** (the same app, universal): an iPad is a phone for the group. It joins as an
-  admin, or makes its own group, and its root key lives in its Secure Enclave. Its Home
-  shows the devices on **orbits** around it, or as tiles or a list (the "…" menu switches
-  them). Its centre is the sync button, the toolbar holds the sync button too, and a device
-  opens its details in a pane beside the devices, which a cross closes. With a keyboard,
-  Command-R sends or fetches, Command-N adds a device, Command-comma opens Settings from
-  the "…" menu, and Escape closes the details. An iPad pairs with no Apple Watch, so its
-  Settings leave the watch out.
+The layout follows the window's width, never the kind of device or its rights; the rights
+follow how the device keeps its key (docs/design.md: a key in a secure chip with strong
+biometrics gets a phone's set, else a computer's). An Android or HarmonyOS tablet whose key
+is in software gets the same big-screen layout with a computer's rights.
+
+- **iPad** (the same app, universal; `Views/PadHome.swift`): an iPad is a phone for the
+  group, with a phone's rights: it joins as an admin, or makes its own group, and its root
+  key lives in its Secure Enclave. On Start, under "Create a group", it says that the device
+  that makes the group holds its main key, best one always at hand, such as a phone. In a
+  regular-width window Home is a split view:
+  - **The sidebar** (280 to 400 points, 320 by default): the group's line, how many devices
+    are online with the two switches (the house and the globe, which go under the count when
+    the two do not fit); **Devices**: "All devices", "Needs attention" while a device does,
+    and each collection, each with its count (a collection's menu renames or ungroups it);
+    **Settings**: Appearance, Notifications, the recovery key (on the root), away from home
+    (the hub, moving it, Everywhere, the relay), the group's rules (for admins), why it does
+    not sync, and About with leaving the group. A part opens in the detail column; there is no
+    switch for the advanced settings, each has its own part. In portrait the sidebar folds
+    away behind its button, and "+" moves to the detail's toolbar.
+  - **The devices**: the alerts, then the section's devices as tiles (the default), a list or
+    orbits (the toolbar's view menu; the orbits only for all devices), with a search in the
+    toolbar. A tap chooses a device: its card stands at the trailing edge, 400 points wide
+    (growing with the text size, at most 520), and the chosen tile is outlined; when the window
+    leaves less than 360 points for the devices beside it, the card is the next page instead.
+    Another section closes the card.
+  - **The keyboard**: Command-1 to 9 open the sidebar's sections in its order, Command-comma
+    the settings, Command-N adds a device; the arrows choose the device before or after, as
+    they stand; Escape closes the card. Holding Command lists them.
+  - **The pointer**: a tile lifts under it; its menu (a right-click, or touch and hold) pastes
+    on the device and mutes or unmutes it for an admin, besides Arrange's moves.
+  - **Drag and drop**: text, a picture or files dropped on a tile of a device that takes remote
+    paste are pasted there, as from its card (an admin's); text or a picture dropped beside the
+    tiles goes to the group, as a copy on the iPad would.
+  - **A narrow window** (Slide Over, a third of the screen, a compact width in Stage Manager)
+    gets the phone's page, the card as the next page.
+  - Start and Join stand in a column at most 560 points wide. One window; the app is not
+    offered on a Mac or a Vision Pro as an iPad app (the Mac has its own). An iPad pairs with no
+    Apple Watch, so its Settings leave the watch out; nothing can paste on an iPad, as on an
+    iPhone.
 - **A foldable iPhone** (the iPhone duo): the outer screen is the phone's page. The inner
-  screen is a big screen like the iPad's: the orbits, the details beside them, and in
-  landscape the system moves the toolbar (sync, "+", the menu) to the strip at the right
-  edge. A phone's screen stays upright; a big one turns.
-- **Android tablets and foldables** do the same from 720 dp wide: the orbits (or tiles or a
-  list, which the view button switches), and a device's details in a pane beside them.
+  screen is a big screen like the iPad's: the sidebar, the devices and the card beside them,
+  and in landscape the system moves the toolbar to the strip at the right edge. A phone's screen stays upright; a big one turns.
+- **Android tablets, foldables and wide windows** (`TabletHome.kt`) follow the iPad from
+  600 dp wide (Material's medium width class): a tablet's half of a split screen at less gets
+  the phone's page.
+  - **The sidebar** (300 dp, a little wider with a larger font): the group's line with the two
+    switches; **Devices**: "All devices", "Needs attention" while a device does, each
+    collection, each with its count; **Settings**: Appearance, Notifications (with sending by
+    itself and the watch), the recovery key (on the root), away from home (the hub, the
+    relay), remote paste (what may paste here, Share's question and the lab), the group (the
+    copies' time, the admin keys, leaving), why it does not sync, and About with the update. A
+    part opens beside the sidebar; the phone's Settings page shows them all, the advanced ones
+    behind their switch. The sidebar stands while the window has room for it, 360 dp of devices
+    and the details (as in landscape); else it slides in from the edge behind ☰ (as in
+    portrait). A short line at its foot names the keys.
+  - **The devices**: the alerts, then the section's devices as tiles (the default), a list or
+    orbits (⋯; the orbits only for all devices; a collection's ⋯ also renames or ungroups it),
+    with + beside it on an admin. A tap chooses a device: its details stand at the trailing
+    edge, 400 dp wide (growing with the font, at most 520), and the chosen tile is outlined;
+    when the window leaves less than 360 dp for the devices beside them, the details are a
+    page of their own, which back closes. Another section closes them.
+  - **The keyboard**: Ctrl+1 to 9 open the sidebar's sections in its order, Ctrl+, the settings,
+    Ctrl+N adds a device, Ctrl+F finds one (once the search is offered); the arrows choose the
+    device before or after; Esc closes the details.
+  - **The pointer**: a right click on a tile (or a touch and hold, on a phone too) opens its
+    menu, which for an admin pastes on the device and mutes or unmutes it, besides Arrange's
+    moves.
+  - **Drag and drop**: text, a picture or files dropped on a tile of a device that takes remote
+    paste are pasted there (an admin's), as from its details; dropped beside the tiles they go
+    to the group, as Share sends them.
+  - **The rights** follow the keys, one rule for phones and tablets (`Keys.guardsLikeAPhone`):
+    the keys in secure hardware (StrongBox or the TEE) and a strong fingerprint or face sensor
+    make it a phone for the group; without one of them Start says, under "Create a group",
+    restoring with the recovery key and a handed-over group say, before it becomes the group's
+    main device, that it guards the group less well than a phone with both. A tablet that has
+    both says on Start, as an iPad does, that the main device is best one always at hand.
+
+- **Aurora tablets** (and an Aurora phone turned on its side, which is as wide), in
+  `MainPage.qml` by the page's width in Silica's units (`Theme.pixelRatio`): from 760 the
+  chosen device's card (`DeviceCard.qml`, the same card `DevicePage.qml` shows as a page)
+  stands at the trailing edge, 400 wide, with Close in its header and its pull-down menu, and
+  the chosen tile is lit; from 1060 the sidebar stands before the tiles too: "All devices",
+  "Needs attention" while a device does, each collection with its count, and Settings, which
+  opens as a page, since Aurora's Settings are one short page. Narrower, it is the phone's
+  page. Aurora gives an app no fingerprint (its keys wait for the app's own PIN), so making a
+  group and restoring one always say that the device guards the group less well than a phone
+  with both. No keyboard shortcuts or drag and drop: Silica has neither.
+
   Android draws the device icons itself (`DeviceGlyph`), on the same 24-unit grid as the
   system's line icons.
+- **HarmonyOS tablets and foldables** (a Mate X open, a MatePad) do the same from 720 vp wide
+  (`pages/Main.ets`): the orbits (only for all devices), tiles or a list, which the "…" menu
+  switches and the app keeps, and a device's details in a pane beside them, 400 vp, the page a
+  phone's screen opens (`DeviceDetail`), with the chosen tile outlined. Folding the phone closes
+  the pane and goes back to the phone's page.
+  - **The sidebar** (280 vp, ArkUI's `SideBarContainer`): the group's line; **Devices**: "All
+    devices", "Needs attention" while a device does, each collection, each with its count;
+    **Settings**: the language and the error details, notifications, the recovery key (on the
+    root) and this phone as the hub (each its own page), the group, the lab, why it does not
+    sync, and About; a part opens beside the sidebar (`components/SettingsBody.ets`, which the
+    phone's Settings page shows whole, the advanced parts behind their switch). It stands from
+    1040 vp (the sidebar, 360 of devices and the details); narrower it slides in behind ☰. A
+    short line at its foot names the keys. Another section closes the details.
+  - **The keyboard**: Ctrl+1 to 9 open the sidebar's rows in its order, Ctrl+, the settings,
+    Ctrl+N adds a device (an admin's scan), the arrows choose the device before or after, Esc
+    closes the details.
+  - **The pointer**: a right click on a tile opens its menu, which for an admin pastes on the
+    device and mutes or unmutes it, besides Arrange; a long press still arranges it.
+  - **Drag and drop**: text, a picture or files dropped on a tile of a device that takes remote
+    paste are pasted there (an admin's); dropped beside the tiles they go to the group.
+  - **The rights** follow the keys as on Android (`Keys.guardsLikeAPhone`): HUKS keeps them in
+    the TEE, so a fingerprint or face sensor at ATL3, enrolled or not yet, makes it a phone for
+    the group; without one Start under "Create a group", restoring and taking the group over say
+    that it guards the group less well than a phone with both, and a big screen that has one
+    says on Start that the main device is best one always at hand.
 
 ## Dynamic Island
 
-A Live Activity (iPhone, iOS 17) shows what runs in the Dynamic Island and on the Lock
-Screen, in the colour chosen in Settings, and never what was copied:
+A Live Activity (iPhone, iOS 17; Live View on HarmonyOS) shows what runs in the Dynamic
+Island and on the Lock Screen, in the colour chosen in Settings, and never what was copied:
 
 - **Adding a device**: from the scan until the device is in the group, with a timer; then
   "The device is in the group." or "The device was not added." for a moment.
@@ -333,8 +432,7 @@ in Settings, all on by default: a device joined or was removed, became an admin,
 or unfrozen, the group was taken over, and the hub does not answer through the tunnel for
 two minutes while away from home. The app compares the devices with what it saw last time
 (`GroupEvent`, `Notifier`), so it hears of an event while it runs and syncs. An iPhone app
-has no background sync: until it has push notifications, which need the Apple developer
-account, it asks iOS for background app refresh (`BackgroundRefresh`), and iOS runs it for a
+has no background sync: until it has push notifications (not built yet), it asks iOS for background app refresh (`BackgroundRefresh`), and iOS runs it for a
 few seconds now and then, at times it picks from how the phone is used. It then waits up to
 20 seconds for a computer, takes the records and notifies of what changed; it leaves the
 clipboard alone, which only the app in front may read. So an event may come within the
@@ -1012,6 +1110,139 @@ them), keeps it and answers as `view`; a change that does not fit is refused and
 nothing. Devices that left the group leave the arrangement when the member answers. No app
 keeps an order of its own or works one out.
 
+## HarmonyOS
+
+The app for HarmonyOS 5 and later (`apps/harmony`, in development), the system without
+Android's layer, is the Aurora app's twin and ported from it: its own interface around the
+Rust core, which does the protocol, the pairing, sync, the member's view of the tiles and the
+tunnel. ArkTS and ArkUI make the interface; `libcbb_napi.so` gives it each C function of
+`ffi/include/cbb_core.h`, the ones that block or sign on a worker thread with a Promise. Its
+system in the protocol is `harmonyos`. It has the other phones' screens: Start (a new group,
+joining by the phone's QR code, as an admin, by an invitation, restoring), Home with the tiles
+or the list, a device's page with the admin's actions, adding a device by its QR code,
+invitations, the recovery key, the takeover, the arrangement and collections, and Settings
+with the error details, the notifications, the root's settings and, under the advanced
+settings, why it does not sync and the lab.
+
+- **Keys**: P-256 keys in HUKS, in the TEE (level "hardware"). The member key signs without
+  asking; the admin key (the root's in a group the phone made) only after the user's face,
+  fingerprint or PIN through User Authentication Kit, and the consent lasts half a minute, so
+  that one action that signs several times (a new group signs three times) asks once.
+- **Clipboard**: the app writes an incoming copy freely (a secret only on this device, cleared
+  when its time ends unless the user copied something else), but reads the clipboard only
+  when the user taps the system's Paste button (`PasteButton`) on Home, or with the
+  restricted permission `ohos.permission.READ_PASTEBOARD`, which Huawei grants on request.
+  Sending is therefore a tap, as on the iPhone. **Share → CBB** from another app sends the
+  text, the link, or images and files (up to 50 MB together) without opening the app, as the
+  iPhone's share extension: a sheet in the share panel (`ShareExtensionAbility`,
+  `shareextability/`) starts the phone's member in a folder of its own beside the app's
+  (`model/OneShot.ets`), waits up to 8 seconds for a computer of the group, hands it the copy
+  (and for files up to a minute for the computers to fetch them), stops, and says how it went.
+  A single image that arrives goes into the clipboard, other images and files wait for the
+  user to save them where they choose.
+- **QR codes**: Scan Kit's scanner reads a computer's code and the recovery sheet; the
+  phone's own code for joining is drawn from the core's modules.
+- **Remote paste**: an admin phone pastes on a computer or another phone from the device's
+  page, pasted or typed, with Enter or as a secret, and pictures or files picked with the
+  system's picker, which go to the group as a copy first, as on the iPhone and Android; the core
+  signs the paste command (`cbb_member_manage`, `paste`). As a target, HarmonyOS lets no app
+  put keys into another app, so the phone types an admin's paste on its Bluetooth keyboard,
+  as Aurora does.
+- **Away from home**: as on the iPhone and Android, the phone reaches the group's hub, and in a
+  group without a computer the root or an admin phone is the hub itself (Settings, "This phone
+  as the hub"), registered with the project's forwarder or the user's own, its tunnel hidden for
+  strict networks (AmneziaWG, VLESS); a group without a hub meets at a blind relay once the
+  user read what it learns. The core runs both (`cbb_member_servers`, docs/core-api.md), with
+  the server and period keys in HUKS; the root phone signs the next period of the group's
+  server credentials (docs/protocol.md, section 18) with the root key when it renews the
+  certificates, after the face, fingerprint or PIN.
+- **Attestations**: as on the iPhone, the root phone checks the attestation an Android phone
+  sends of its member key, with the revocation list the app fetches from the mirror once a
+  day, and records whether its keys are proven in hardware (docs/protocol.md, section 17); the
+  core checks it (`cbb_core::attest`) when the root key signs the certificates' renewals.
+- **YubiKey**: as on the iPhone and Android, the root puts the group's recovery key on a
+  YubiKey held to the back of the phone (firmware 5.7 or later with the factory management key
+  and a free retired PIV slot), and a new phone restores the group with it and its PIN, the card
+  held once to find the group and once to sign the claim. HarmonyOS has no PIV of its own, so
+  the core speaks it (`cbb_piv`, `cbb_member_manage_card`, docs/core-api.md) and the app only
+  carries each APDU to the card's IsoDep tag in NFC reader mode (`ohos.permission.NFC_TAG`).
+- **Outside the app**: the home-screen widget "Sync clipboard" (Form Kit) has the iPhone's and
+  Android's Sync button, which opens the app and syncs, and a line with whether sync is on and
+  how many devices are online, whose tap turns sync on or off; the app icon's long-press menu
+  has "Sync clipboard"; and two intents (Intents Kit), SyncClipboard and ToggleSync, which
+  Celia and the system's suggestions offer, as the iPhone's App Intents. Each opens the app,
+  since HarmonyOS lets it read the clipboard only in front, and with the system's paste
+  button or `READ_PASTEBOARD` alone: without either, a quick sync takes what the group copied
+  and sends nothing. Live View (Live View Kit), the Live Activity's twin, shows adding a
+  device with a timer and its result, and sync away from home through the hub's tunnel with
+  the time since it connected (see "Dynamic Island"); Huawei grants Live View on request, and
+  until then it shows nothing.
+- **The lab's Bluetooth keyboard**: the app serves HID over GATT (`@ohos.bluetooth.ble`, a
+  GATT server and its advertising) with the core's report map and reports, as Aurora does
+  through BlueZ; a TV, a tablet or a computer pairs with the phone, which the system confirms,
+  and takes the clipboard at a tap or an admin's remote paste. HarmonyOS names a
+  characteristic by its UUID alone, so the service has the input report and not the LEDs'
+  output report. Whether the system lets an app serve the HID service is known only on a
+  phone.
+- **Background**: the system freezes an app soon after it leaves the screen. While the member
+  runs, the app keeps it going as a continuous task of the kind "multi-device connection",
+  with the system's notification; where the system or the store refuses that, it asks for the
+  short delay the system grants, so that a copy on its way arrives, and syncs while it is open,
+  as on the iPhone.
+- **Notifications**: the group's events as on the other phones (joined, removed, an admin, a
+  takeover, frozen), each kind with its switch, and the received files.
+- **Errors**: the core's message, and in debug mode its details under it; the details switch
+  in Settings turns them on in a release build. A member that panics is started again, and in
+  release mode the app asks to send the bug report (docs/core-api.md, "Bug reports").
+- **Building and signing**: the core builds with OpenHarmony's free native SDK; the app needs
+  DevEco Studio or the HarmonyOS command line tools, and a phone takes it only signed with a
+  profile from AppGallery Connect, so both need a Huawei developer account. `check.sh` checks
+  the ArkTS with OpenHarmony's compiler and linter without one. DevEco Studio's emulator runs
+  on a Mac with Apple silicon, and Huawei offers its ready-made images only in mainland China
+  for now; elsewhere the app is tested on a phone with HarmonyOS 5 or later (sold in China;
+  the same models elsewhere run HarmonyOS 4, where the Android app works).
+
+Not yet: a run on a phone.
+
+### HarmonyOS watches
+
+The watch app (`apps/harmony/wearable`, the module of the same project, for the watches with
+HarmonyOS 5 or later, such as the Huawei Watch 5) is the Apple Watch and Wear OS apps' twin:
+it works only through its phone, over Wear Engine's messages between the phone app and the
+watch app of the same name, and shows the same page in the dark palette: how many devices are
+online, the house (sync on the phone) and the globe (Everywhere) with where it stands, each
+device with its glyph and live dot by collection, the latest events.
+
+- The phone (`model/Watch.ets`) looks for a connected watch with the app every 30 seconds and
+  sends it the state (`common/WatchState.ets`: devices, away, sync, events; never the
+  clipboard) whenever it changes. A Wear Engine message carries about a kilobyte, so the
+  state that does not fit drops the events and then the last devices, and says how many it
+  left out.
+- The watch (`model/Link.ets`) asks for the state when it opens, keeps the last one it got,
+  and sends `sync` and `away` with on or off; the phone turns its sync or its Everywhere on or
+  off as Home's switches do, and the new state comes back. Without a phone in reach the watch
+  says so and shows the last state.
+- `common/WatchState.ets` and `common/Wear.ets`, the only caller of Wear Engine, are the
+  same file in both modules, which `check.sh` checks, with the stub of Wear Engine in `check/`.
+- Wear Engine needs the developer's access from Huawei, the app's client ID from AppGallery
+  Connect in `module.json5`, and the signing certificate's fingerprint in
+  `WatchState.FINGERPRINT`; all three come with the Huawei developer account.
+
+- The watch as an admin (docs/protocol.md, section 10, "Watches"): with a watch connected, the
+  root's Settings offer "Make the watch an admin". The watch asks its wearer, makes a P-256 key
+  in HUKS that needs the watch's screen lock (`model/AdminKey.ets`) and hands the phone its
+  public key; the root key certifies it (manage `add_watch`), and the phone keeps the watch's
+  device ID and admin CA and tells the watch its device ID, the group's tag and its key's hash.
+  The phone's state then carries, for each device, what the watch may do to it (manage
+  `watch_actions`: freeze an admin without `remove-admins`, remove a device that is no admin,
+  turn remote paste, quick actions and sync away from home off); the watch shows them under
+  the device, asks once, and sends `act`. The phone has the core sign it on the watch
+  (`cbb_member_manage_watch`): the record or command goes to the watch whole, in parts of 600
+  bytes, and the watch signs it only when it is that action, for that device, by this watch,
+  in this group; a second watch is replaced only after the first is removed.
+
+Not yet: a run on a watch.
+
 ## Releasing the Android app
 
 Each release carries `cbb-X.Y.Z.apk` and the Wear OS app,
@@ -1077,7 +1308,8 @@ the app on real devices.
 
 - Every user-facing string comes from the platform's catalog from the first screen on: a
   String Catalog (`Localizable.xcstrings`) on iOS and the Mac, `strings.xml` resources on
-  Android, Qt's `.ts` files on Aurora, `frontend/l10n` in the tray app. No string literal in
+  Android, Qt's `.ts` files on Aurora, `resources/*/element/string.json` on HarmonyOS,
+  `frontend/l10n` in the tray app. No string literal in
   views.
 - All of them are made from one source, `apps/l10n/<language>.json`, by `tools/strings`:
   `en.json` lists each string once with the apps that show it (`"in"`), each other language's

@@ -447,7 +447,17 @@ const COMMAND_FIELDS: &[&str] = &["v", "type", "group", "by", "to", "id", "time_
 pub fn valid_os(os: &str) -> bool {
     matches!(
         os,
-        "linux" | "windows" | "macos" | "ios" | "android" | "aurora" | "sailfish" | "watchos" | "wearos" | "none"
+        "linux"
+            | "windows"
+            | "macos"
+            | "ios"
+            | "android"
+            | "aurora"
+            | "sailfish"
+            | "harmonyos"
+            | "watchos"
+            | "wearos"
+            | "none"
     )
 }
 

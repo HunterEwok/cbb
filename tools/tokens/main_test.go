@@ -4,6 +4,8 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,6 +64,33 @@ func TestGenerate(t *testing.T) {
 		if _, _, _, err := generate([]byte(c.file)); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: got %v, want an error with %q", c.name, err, c.want)
 		}
+	}
+}
+
+// TestHarmony: the HarmonyOS app's colours are the default theme's, light
+// and dark.
+func TestHarmony(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", tokensFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	light, dark, err := generateHarmony(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tk Tokens
+	if err := json.Unmarshal(data, &tk); err != nil {
+		t.Fatal(err)
+	}
+	var def Theme
+	for _, th := range tk.Themes {
+		if th.Name == tk.Default {
+			def = th
+		}
+	}
+	want := func(hex string) string { return fmt.Sprintf(`{ "name": "accent", "value": %q }`, hex) }
+	if !strings.Contains(string(light), want(def.Light.Accent)) || !strings.Contains(string(dark), want(def.Dark.Accent)) {
+		t.Errorf("not the default theme's colours for HarmonyOS in\n%s\n%s", light, dark)
 	}
 }
 

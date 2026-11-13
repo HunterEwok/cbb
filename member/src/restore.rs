@@ -51,7 +51,8 @@ const MAX_RECORDS: usize = 4096;
 /// A restore under way: the recovery key from the sheet and the member
 /// certificate it issued this phone.
 pub struct Restore {
-    key: Arc<FileKey>,
+    /// The sheet's key; None for a key on a card, which signs elsewhere.
+    key: Option<Arc<FileKey>>,
     admin: [u8; 32],
     tag: String,
     /// The recovery key's admin CA, from the QR code.
@@ -99,17 +100,27 @@ impl Restore {
         let cert = cbb_core::issue::member(&device, point, &admin_ca, now, &mut |tbs: &[u8]| {
             cbb_core::identity::sign_external(&*key, tbs)
         })?;
-        Ok(Restore { key, admin, tag, admin_ca, device, cert })
+        Ok(Restore { key: Some(key), admin, tag, admin_ca, device, cert })
     }
 
-    /// The group's tag from the sheet, which browsing looks for.
+    /// A restore with the recovery key on a card (src/piv.rs): admin_ca is
+    /// the slot's certificate and cert the member certificate the card
+    /// issued this phone as device. A card carries no group tag, so any
+    /// group's members are asked, and the records say which group it is.
+    pub fn with_card(admin_ca: Cert, device: DeviceId, cert: Vec<u8>) -> Restore {
+        Restore { key: None, admin: admin_ca.key_hash(), tag: String::new(), admin_ca, device, cert }
+    }
+
+    /// The group's tag from the sheet, which browsing looks for; empty
+    /// for a card's key.
     pub fn tag(&self) -> &str {
         &self.tag
     }
 
-    /// The recovery key, which signs the claim and nothing else.
-    pub fn key(&self) -> Arc<dyn ExternalKey> {
-        self.key.clone()
+    /// The sheet's recovery key, which signs the claim and nothing else;
+    /// None for a card's.
+    pub fn key(&self) -> Option<Arc<dyn ExternalKey>> {
+        self.key.clone().map(|k| k as Arc<dyn ExternalKey>)
     }
 
     /// The chain this phone presents in TLS, leaf first.
@@ -171,7 +182,7 @@ impl Restore {
     pub fn check(&self, f: &Fetched, now: i64) -> Result<Restored> {
         let der = f.group_ca.as_deref().ok_or_else(|| Error::msg("the member did not send the group's first root"))?;
         let group_ca = Cert::parse(der).map_err(|e| e.context("the group's first root"))?;
-        if certs::tag(&group_ca) != self.tag {
+        if !self.tag.is_empty() && certs::tag(&group_ca) != self.tag {
             return Err(Error::msg("the member is of another group than the sheet"));
         }
         certs::check_root(&group_ca).map_err(|e| e.context("the group's first root is not a root"))?;
@@ -267,14 +278,51 @@ pub fn restore(
 ) -> Result<(Restore, Restored, SocketAddr)> {
     let now = crate::uptime::wall_ms() / 1000;
     let r = Restore::new(sheet, &member.public(), now)?;
-    let found = if addrs.is_empty() { crate::discovery::find_group(r.tag(), wait)? } else { vec![addrs.to_vec()] };
+    restore_with(vec![r], member, name, os, addrs, wait)
+}
+
+/// Restores with any of the restores tried (a card may hold several
+/// recovery keys, each of another group), as restore does: one with a tag
+/// asks the members of its group, one without asks every group's.
+pub fn restore_with(
+    tries: Vec<Restore>,
+    member: Arc<dyn ExternalKey>,
+    name: &str,
+    os: &str,
+    addrs: &[SocketAddr],
+    wait: Duration,
+) -> Result<(Restore, Restored, SocketAddr)> {
+    let now = crate::uptime::wall_ms() / 1000;
+    let tag = tries.first().map(|r| r.tag().to_string()).unwrap_or_default();
+    let found = if !addrs.is_empty() {
+        vec![addrs.to_vec()]
+    } else if tries.iter().all(|r| r.tag() == tag) && !tag.is_empty() {
+        crate::discovery::find_group(&tag, wait)?
+    } else {
+        crate::discovery::find_any_group(wait)?
+    };
     let mut last = Error::msg(NO_MEMBER);
+    let mut tries: Vec<Option<Restore>> = tries.into_iter().map(Some).collect();
     for addrs in found {
         for addr in addrs {
-            match r.fetch(addr, member.clone(), name, os, &[]).and_then(|f| r.check(&f, now)) {
-                Ok(g) => return Ok((r, g, addr)),
-                Err(e) if e.to_string().contains(NOT_THE_KEY) => return Err(e),
-                Err(e) => last = e,
+            for slot in tries.iter_mut() {
+                let Some(r) = slot.as_ref() else { continue };
+                match r.fetch(addr, member.clone(), name, os, &[]).and_then(|f| r.check(&f, now)) {
+                    Ok(g) => {
+                        let r = slot.take().ok_or_else(|| Error::msg(NO_MEMBER))?;
+                        return Ok((r, g, addr));
+                    }
+                    // The group of this key has another recovery key now:
+                    // this key restores nothing, the others may.
+                    Err(e) if e.to_string().contains(NOT_THE_KEY) => {
+                        last = e;
+                        *slot = None;
+                    }
+                    Err(e) => last = e,
+                }
+            }
+            if tries.iter().all(Option::is_none) {
+                return Err(last);
             }
         }
     }

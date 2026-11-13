@@ -149,6 +149,13 @@ pub fn find_group(tag: &str, wait: Duration) -> crate::error::Result<Vec<Vec<Soc
     Ok(found.into_values().map(|(a, ())| a).collect())
 }
 
+/// The members of any group that browsing finds for up to wait, by
+/// device, for a restore with a card's recovery key, which names no group.
+pub fn find_any_group(wait: Duration) -> crate::error::Result<Vec<Vec<SocketAddr>>> {
+    let found = browse_txt(wait, |info| info.get_property_val_str("g").filter(|g| !g.is_empty()).map(|_| ()))?;
+    Ok(found.into_values().map(|(a, ())| a).collect())
+}
+
 /// Browses for up to wait for the members whose TXT pick takes, then a
 /// moment more for the others; by instance name, their addresses and what
 /// pick made of them.
@@ -203,7 +210,7 @@ fn instance(fullname: &str) -> String {
 /// neither publishes itself nor dials what browsing finds, as the Go
 /// service's tests' hidden members.
 fn elsewhere(me: &DeviceId) -> bool {
-    std::env::var_os("CBB_TEST_ELSEWHERE").is_some_and(|d| std::path::Path::new(&d).join(me.as_str()).exists())
+    crate::testbuild::env_os("CBB_TEST_ELSEWHERE").is_some_and(|d| std::path::Path::new(&d).join(me.as_str()).exists())
 }
 
 const MAX_WAIT: Duration = Duration::from_secs(30);
@@ -217,7 +224,7 @@ const FALLBACK: Duration = Duration::from_secs(30);
 /// port, so that only their fallback dials connect.
 fn test_fallback() -> Option<Duration> {
     static AFTER: std::sync::OnceLock<Option<Duration>> = std::sync::OnceLock::new();
-    *AFTER.get_or_init(|| std::env::var("CBB_TEST_FALLBACK").ok()?.parse().ok().map(Duration::from_millis))
+    *AFTER.get_or_init(|| crate::testbuild::env("CBB_TEST_FALLBACK")?.parse().ok().map(Duration::from_millis))
 }
 /// At most this many connections may be in their TLS handshake at once.
 const MAX_HANDSHAKES: usize = 16;
@@ -272,6 +279,9 @@ fn dial_loop_as(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>, later: bo
     let mut redials = node.redials();
     let mut since = std::time::Instant::now();
     let mut last_failure = String::new();
+    // The device last found at an address given by hand (-peer), whose
+    // connection, while it is up, is left alone as one to peer is.
+    let mut found: Option<DeviceId> = None;
     loop {
         if node.is_closed() {
             return;
@@ -299,7 +309,10 @@ fn dial_loop_as(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>, later: bo
         }
         // A connection up to the peer is left alone; a loopback address
         // (the tunnel's, a relay's) replaces one at home (Node::connected_for).
-        if node.is_paused() || peer.as_ref().is_some_and(|p| list.first().is_some_and(|a| node.connected_for(p, a))) {
+        // Dialed again, the lower device ID's new connection would replace
+        // it every time.
+        let known = peer.as_ref().or(found.as_ref());
+        if node.is_paused() || known.is_some_and(|p| list.first().is_some_and(|a| node.connected_for(p, a))) {
             node.nap(Duration::from_secs(1));
             continue;
         }
@@ -310,6 +323,9 @@ fn dial_loop_as(node: Arc<Node>, addrs: Addrs, peer: Option<DeviceId>, later: bo
             match node.dial_ended(a, peer.clone()) {
                 Ok(d) => {
                     (up, again) = (d.up, d.again);
+                    if peer.is_none() && d.id.is_some() {
+                        found = d.id;
+                    }
                     failed.clear();
                     break;
                 }

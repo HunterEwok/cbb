@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -195,6 +196,62 @@ func portOf(t *testing.T, addr string) int {
 // rustService is the Rust cbb (member/) that CBB_TEST_RUST_SERVICE names,
 // with cbb-helper beside it: every service of the tests runs it.
 func rustService() string { return os.Getenv("CBB_TEST_RUST_SERVICE") }
+
+// testClock moves a service's wall clock through the file
+// CBB_TEST_AHEAD_FILE names, which the service reads each time, so that a
+// test can move it while the service runs. Only a cbb built with the
+// feature testhooks reads the file, never a release's.
+type testClock struct {
+	file string
+}
+
+// testHooksBuilt tells, once, whether the Rust cbb under test reads the
+// tests' hooks (CBB_TEST_*): its version names the feature testhooks.
+var testHooksBuilt = sync.OnceValues(func() (bool, error) {
+	out, err := exec.Command(rustService(), "version").Output()
+	if err != nil {
+		return false, err
+	}
+	first, _, _ := strings.Cut(string(out), "\n")
+	return strings.Contains(first, "testhooks"), nil
+})
+
+// needHooks fails the test unless the Rust cbb under test reads the tests'
+// hooks, which a release's build ignores.
+func needHooks(t *testing.T) {
+	t.Helper()
+	if ok, err := testHooksBuilt(); err != nil {
+		t.Fatalf("cbb version: %v", err)
+	} else if !ok {
+		t.Fatal("the service's tests steer cbb through their hooks: build it with cargo build --release -p cbb-member --features testhooks, and cbb-helper with go build -tags testhooks")
+	}
+}
+
+// newTestClock starts a clock ahead of the real time for a service the
+// test starts with the clock's env, after checking that the Rust cbb under
+// test reads the hook; without the Rust service the test is skipped, as
+// startService skips it.
+func newTestClock(t *testing.T, ahead time.Duration) *testClock {
+	t.Helper()
+	if rustService() == "" {
+		t.Skip("CBB_TEST_RUST_SERVICE is not set: the service's tests run the Rust cbb, with cbb-helper beside it")
+	}
+	needHooks(t)
+	c := &testClock{file: filepath.Join(t.TempDir(), "clock")}
+	c.set(t, ahead)
+	return c
+}
+
+// set moves the clock to ahead of the real time.
+func (c *testClock) set(t *testing.T, ahead time.Duration) {
+	t.Helper()
+	if err := os.WriteFile(c.file, []byte(strconv.FormatInt(ahead.Milliseconds(), 10)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// env is the Rust service's environment for the clock.
+func (c *testClock) env() string { return "CBB_TEST_AHEAD_FILE=" + c.file }
 
 // renewEvery is how often the services renew certificates, and hubKeyAhead
 // how long before its key's end a hub offers its next key: the Rust
@@ -1592,8 +1649,9 @@ func logTrace(t *testing.T, name, path string) {
 // of its own, which addr reads from its log once it is in a group.
 func startRust(t *testing.T, bin string, s *testService) *testService {
 	t.Helper()
+	needHooks(t)
 	trace := filepath.Join(s.dir, "mdns-trace.log")
-	env := append([]string{"CBB_TEST_ELSEWHERE=" + elsewhereDir(), fmt.Sprintf("CBB_TEST_RENEW_EVERY=%d", renewEvery.Milliseconds()), fmt.Sprintf("CBB_HUB_KEY_AHEAD=%d", int64(hubKeyAhead.Seconds())), "CBB_MDNS_TRACE=" + trace}, s.env...)
+	env := append([]string{"CBB_TEST_ELSEWHERE=" + elsewhereDir(), fmt.Sprintf("CBB_TEST_RENEW_EVERY=%d", renewEvery.Milliseconds()), fmt.Sprintf("CBB_TEST_HUB_KEY_AHEAD=%d", int64(hubKeyAhead.Seconds())), "CBB_MDNS_TRACE=" + trace}, s.env...)
 	r := startAloneEnv(t, bin, s.dir, env, "-port", strconv.Itoa(s.port), "-name", s.name)
 	t.Cleanup(func() { logTrace(t, s.name, trace) })
 	r.name, r.os, r.rust, r.env, r.port = s.name, s.os, true, s.env, s.port
@@ -1617,28 +1675,3 @@ func startRust(t *testing.T, bin string, s *testService) *testService {
 	}()
 	return r
 }
-
-// testClock moves a service's wall clock through the file
-// CBB_TEST_AHEAD_FILE names, which the service reads each time, so that a
-// test can move it while the service runs.
-type testClock struct {
-	file string
-}
-
-func newTestClock(t *testing.T, ahead time.Duration) *testClock {
-	t.Helper()
-	c := &testClock{file: filepath.Join(t.TempDir(), "clock")}
-	c.set(t, ahead)
-	return c
-}
-
-// set moves the clock to ahead of the real time.
-func (c *testClock) set(t *testing.T, ahead time.Duration) {
-	t.Helper()
-	if err := os.WriteFile(c.file, []byte(strconv.FormatInt(ahead.Milliseconds(), 10)), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// env is the Rust service's environment for the clock.
-func (c *testClock) env() string { return "CBB_TEST_AHEAD_FILE=" + c.file }

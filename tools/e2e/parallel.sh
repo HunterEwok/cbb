@@ -60,13 +60,13 @@ run() {
 echo "building in $image"
 # shellcheck disable=SC2016 # the container's shell expands it
 run "$tag-build" --rm "$image" sh -ec '
-	cargo build --locked --release -p cbb-member
-	cargo build --locked --release -p cbb-ffi --features member,tunnel --example phone-on-linux
+	cargo build --locked --release -p cbb-member --features testhooks
+	cargo build --locked --release -p cbb-ffi --features member,tunnel,testhooks --example phone-on-linux
 	b=target/parallel/bin
 	mkdir -p "$b"
 	cp target/parallel/cargo/release/cbb target/parallel/cargo/release/cbb-relay "$b/"
 	cp target/parallel/cargo/release/examples/phone-on-linux "$b/"
-	CGO_ENABLED=0 go build -trimpath -o "$b/cbb-helper" ./cmd/cbb-helper
+	CGO_ENABLED=0 go build -tags testhooks -trimpath -o "$b/cbb-helper" ./cmd/cbb-helper
 	go test -c -o "$b/service.test" ./internal/service
 	go build -o "$b/shard" ./tools/shard
 '

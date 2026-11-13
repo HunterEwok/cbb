@@ -80,9 +80,35 @@ final class CommandTests: XCTestCase {
         XCTAssertThrowsError(try Commands.paste(to: pc, text: String(repeating: "x", count: Commands.maxTypeText + 1), method: "type",
                                                 group: "tag", by: pc, now: now, signer: root))
         XCTAssertThrowsError(try Commands.paste(to: pc, text: "x", method: "drop", group: "tag", by: pc, now: now, signer: root))
+        // A paste of images or files names the copy by its event ID and is never typed.
+        let copy = "00112233445566778899aabbccddeeff"
+        let media = try JSONDecoder().decode(Commands.Body.self, from: Commands.paste(to: pc, text: copy, kind: "media", group: "tag",
+                                                                                      by: pc, now: now, signer: root).body)
+        XCTAssertEqual(media.kind, "media")
+        XCTAssertEqual(media.mode, "paste")
+        XCTAssertEqual(media.text, copy)
+        XCTAssertThrowsError(try Commands.paste(to: pc, text: copy, method: "type", kind: "media", group: "tag", by: pc, now: now, signer: root))
+        XCTAssertThrowsError(try Commands.paste(to: pc, text: "photo.png", kind: "media", group: "tag", by: pc, now: now, signer: root))
+        XCTAssertThrowsError(try Commands.paste(to: pc, text: copy.uppercased(), kind: "media", group: "tag", by: pc, now: now, signer: root))
+        XCTAssertThrowsError(try Commands.paste(to: pc, text: "x", kind: "file", group: "tag", by: pc, now: now, signer: root))
         let off = try JSONDecoder().decode(Commands.Body.self, from: Commands.pasteOff(to: pc, group: "tag", by: pc, now: now, signer: root).body)
         XCTAssertEqual(off.type, "paste-off")
         XCTAssertNil(off.text)
+    }
+
+    /// A phone group signs a paste of a copy of images or files with its
+    /// root key, and the device it names takes it.
+    func testPhoneGroupPasteCopyCommand() throws {
+        let rootKey = SoftwareSigner()
+        let g = try PhoneGroup.create(caSigner: rootKey, memberKey: SoftwareSigner().publicKeyDER, now: now)
+        let copy = "00112233445566778899aabbccddeeff"
+        let b = try Commands.verify(try g.pasteCopyCommand(to: pc, copyID: copy, enter: true, caSigner: rootKey, now: now),
+                                    records: g.records, me: pc, nowMS: Records.ms(now))
+        XCTAssertEqual(b.type, "paste")
+        XCTAssertEqual(b.mode, "paste")
+        XCTAssertEqual(b.kind, "media")
+        XCTAssertEqual(b.text, copy)
+        XCTAssertEqual(b.enter, true)
     }
 
     /// The public key of testdata/interop/go-sealed-commands.json, whose
@@ -254,6 +280,8 @@ final class CommandTests: XCTestCase {
                                seal: try Self.sealPublic()),
             try Commands.mute(to: pc, forMS: 3_600_000, group: tag, by: adminBy, now: now, signer: admin, adminCA: adminCA),
             try Commands.unmute(to: pc, group: tag, by: by, now: now, signer: root),
+            try Commands.paste(to: pc, text: "00112233445566778899aabbccddeeff", kind: "media", group: tag, by: adminBy, now: now,
+                               signer: admin, adminCA: adminCA),
         ])
         // The eighth is sealed, for Go to open: a phone opens none.
         for (i, c) in out.commands.enumerated() where i != 7 {

@@ -51,6 +51,18 @@ Dialog {
                 color: Theme.secondaryHighlightColor
                 text: qsTr("Make another phone an admin soon: if this phone is lost, an admin phone takes the group over.")
             }
+            // The rights follow how the keys are kept (docs/apps.md, "Big
+            // screens"): Aurora gives an app no fingerprint, so its keys
+            // wait for the app's own PIN only, which guards less than a phone
+            // with a strong fingerprint or face sensor.
+            Label {
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                font.pixelSize: Theme.fontSizeSmall
+                color: Theme.errorColor
+                text: qsTr("This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.")
+            }
         }
     }
 }

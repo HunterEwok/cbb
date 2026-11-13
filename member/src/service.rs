@@ -678,8 +678,7 @@ const CLAIM_CHECK: Duration = Duration::from_secs(2);
 /// months long, so twice a day is plenty, as Go's renewEvery. The Go
 /// service's tests shorten it with CBB_TEST_RENEW_EVERY (milliseconds).
 fn renew_every() -> Duration {
-    std::env::var("CBB_TEST_RENEW_EVERY")
-        .ok()
+    crate::testbuild::env("CBB_TEST_RENEW_EVERY")
         .and_then(|v| v.parse().ok())
         .map_or_else(scaled_twice_a_day, Duration::from_millis)
 }
@@ -2812,9 +2811,14 @@ impl Service {
             String::new()
         };
         let _one = self.creating.try_lock().map_err(|_| Error::msg("a join or a pairing is already running here"))?;
-        let (joiner, save) = crate::joiner(&self.state_dir, &self.name)?;
-        let joiner =
-            joiner.as_member(crate::admin::os_name(), &self.caps.iter().map(String::as_str).collect::<Vec<_>>());
+        // cbb pair's -name and -caps, when it gave them, else the service's.
+        let name = if h.name.is_empty() { &self.name } else { &h.name };
+        let caps = match &h.caps {
+            Some(c) => crate::parse_caps(&c.join(","))?,
+            None => self.caps.clone(),
+        };
+        let (joiner, save) = crate::joiner(&self.state_dir, name)?;
+        let joiner = joiner.as_member(crate::admin::os_name(), &caps.iter().map(String::as_str).collect::<Vec<_>>());
         let log = self.log.clone();
         let id = if !h.invite.is_empty() {
             // A remote invitation, as Go's joinInvite: sync away from home

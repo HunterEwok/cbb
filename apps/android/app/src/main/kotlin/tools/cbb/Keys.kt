@@ -54,6 +54,9 @@ object Keys {
 
     private const val PROVIDER = "AndroidKeyStore"
 
+    /** The throwaway key that tells whether the Keystore is in hardware (guardsLikeAPhone). */
+    private const val PROBE = "cbb.probe"
+
     /** The phone has no screen lock, which the root and admin keys need. */
     class NoScreenLock : Exception("set a screen lock first: the group's keys need it")
 
@@ -246,6 +249,50 @@ object Keys {
     }
 
     @Suppress("DEPRECATION")
+    /**
+     * Whether this device guards its keys as a phone does (docs/apps.md,
+     * "Big screens"): its keys in secure hardware (StrongBox or the TEE) and
+     * a strong fingerprint or face sensor, enrolled or not yet. One rule for
+     * phones and tablets alike: such a device gets the phone's set; another
+     * one the computer's, and the app warns before it becomes the group's
+     * main device. Null when the Keystore cannot tell, which says nothing
+     * either way.
+     */
+    fun guardsLikeAPhone(context: Context): Boolean? = keyInHardware()?.let { it && strongBiometric(context) }
+
+    /**
+     * Whether the Keystore keeps keys in secure hardware: the member key
+     * where there is one, else a throwaway key made and removed at once,
+     * which leaves the member key to be made with its group's challenge.
+     */
+    private fun keyInHardware(): Boolean? = try {
+        val k = load(MEMBER) ?: generate(PROBE, auth = false, strongBox = false, challenge = null)
+        val i = try {
+            info(k)
+        } finally {
+            remove(PROBE)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            i.securityLevel == KeyProperties.SECURITY_LEVEL_TRUSTED_ENVIRONMENT || i.securityLevel == KeyProperties.SECURITY_LEVEL_STRONGBOX
+        } else {
+            @Suppress("DEPRECATION")
+            i.isInsideSecureHardware
+        }
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun strongBiometric(context: Context): Boolean {
+        val m = context.getSystemService(BiometricManager::class.java) ?: return false
+        val r = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            m.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+        } else {
+            @Suppress("DEPRECATION")
+            m.canAuthenticate()
+        }
+        return r == BiometricManager.BIOMETRIC_SUCCESS || r == BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED
+    }
+
     private fun hasBiometric(context: Context): Boolean =
         context.getSystemService(BiometricManager::class.java).canAuthenticate() == BiometricManager.BIOMETRIC_SUCCESS
 

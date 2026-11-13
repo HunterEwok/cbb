@@ -166,8 +166,9 @@ Android and Windows not yet tried on real devices.
   as the root, the Mac app and the Apple Watch app, sync away from home through a Mac hub.
 - **Built and tested in CI**, not yet on real devices: Windows (in a virtual machine),
   Android, FreeBSD, OpenWrt, the tray app on Linux.
-- **Waiting for the project's keys and the Apple developer account**: signed releases and
-  `cbb update`, TestFlight and the signed macOS package; app stores are planned.
+- **Coming with the next release** (the project's keys and the Apple developer account are
+  there): signed releases and `cbb update`, TestFlight and the signed macOS package; app
+  stores are planned.
 
 Every part, and where it has run: [on real devices](docs/parity.md#on-real-devices).
 The order of what comes next is the [roadmap](docs/roadmap.md).

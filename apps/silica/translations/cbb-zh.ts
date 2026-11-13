@@ -369,14 +369,11 @@
     </message>
 </context>
 <context>
-    <name>DeviceItems</name>
+    <name>DeviceCard</name>
     <message>
-        <source>%1 of %2 online</source>
-        <translation>%2 台中 %1 台在线</translation>
+        <source>Close</source>
+        <translation>关闭</translation>
     </message>
-</context>
-<context>
-    <name>DevicePage</name>
     <message>
         <source>Device ID</source>
         <translation>设备 ID</translation>
@@ -503,6 +500,13 @@
     </message>
 </context>
 <context>
+    <name>DeviceItems</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%2 台中 %1 台在线</translation>
+    </message>
+</context>
+<context>
     <name>DeviceTile</name>
     <message>
         <source>Mute for 15 minutes</source>
@@ -543,10 +547,6 @@
     <message>
         <source>Turn sync on</source>
         <translation>开启同步</translation>
-    </message>
-    <message>
-        <source>Unmute</source>
-        <translation>取消静音</translation>
     </message>
 </context>
 <context>
@@ -1058,6 +1058,10 @@
         <translation>%2 台中 %1 台在线</translation>
     </message>
     <message>
+        <source>All devices</source>
+        <translation>所有设备</translation>
+    </message>
+    <message>
         <source>An admin muted this phone until %1: its copies do not reach the group.</source>
         <translation>管理员已将此手机静音至 %1：它的副本不会到达群组。</translation>
     </message>
@@ -1120,6 +1124,10 @@
     <message>
         <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
         <translation>让第二部手机成为管理员：先把它加入群组，然后在这里打开它并点按“设为管理员”。点按即可关闭。</translation>
+    </message>
+    <message>
+        <source>Needs attention</source>
+        <translation>需要关注</translation>
     </message>
     <message>
         <source>New collection…</source>
@@ -1266,6 +1274,10 @@
     <message>
         <source>The group's root key is made in the phone's secure element and never leaves it.</source>
         <translation>群组的根密钥在手机的安全元件中生成，永不离开。</translation>
+    </message>
+    <message>
+        <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
+        <translation>此设备没有安全密钥芯片，或没有可靠的指纹或面部传感器：作为群组的主设备，它对群组的保护不如同时具备两者的手机。</translation>
     </message>
     <message>
         <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
@@ -1484,6 +1496,10 @@
     <message>
         <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
         <translation>群组已在这部手机上恢复。等待时间结束后（%1 小时后），它将成为群组的根设备，除非根设备取消申请。</translation>
+    </message>
+    <message>
+        <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
+        <translation>此设备没有安全密钥芯片，或没有可靠的指纹或面部传感器：作为群组的主设备，它对群组的保护不如同时具备两者的手机。</translation>
     </message>
     <message>
         <source>This phone is the group's root now.</source>

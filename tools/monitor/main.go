@@ -60,9 +60,9 @@ var sites = []site{
 
 var files = []signed{
 	{"https://cbb.tools/channel/keys.json", 21 * 24 * time.Hour, "sign it again with a YubiKey: release-sign renew -new-keys"},
-	{"https://cbb.tools/channel/stable.json", 10 * 24 * time.Hour, "the cbb-channel timer on cbb.tools stopped: check it, or release-sign renew"},
+	{"https://cbb.tools/channel/stable.json", 5 * 24 * time.Hour, "the cbb-channel timer on cbb.tools stopped: check it, or release-sign renew"},
 	{"https://dl.cbb.tools/keys.json", 21 * 24 * time.Hour, "the mirror on cbb.tools stopped copying keys.json"},
-	{"https://dl.cbb.tools/stable.json", 10 * 24 * time.Hour, "the mirror on cbb.tools stopped copying stable.json"},
+	{"https://dl.cbb.tools/stable.json", 5 * 24 * time.Hour, "the mirror on cbb.tools stopped copying stable.json"},
 	{"https://cbb.tools/attest/attest-status.json", 5 * 24 * time.Hour, "the attest-status timer on cbb.tools stopped: check it"},
 }
 

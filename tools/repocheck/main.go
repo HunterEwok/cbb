@@ -9,7 +9,8 @@
 //     res/values-<language>/strings.xml, the tray app's
 //     frontend/l10n/<language>.json, the Aurora app's
 //     translations/cbb-<language>.ts, their source apps/l10n/<language>.json,
-//     the command line's
+//     the HarmonyOS app's resources/<language>/element/string.json, the
+//     command line's
 //     member/l10n/<language>.json, the installers' packaging/l10n/<language>.tsv,
 //     the localized keys of a .desktop file, such as Comment[ru]=,
 //     the website's site/l10n/<language>.json
@@ -215,6 +216,10 @@ var docTranslation = regexp.MustCompile(`^(site/docs/[a-z]{2,3}/.+\.md|docs/imag
 // the app for Aurora OS and Sailfish OS (Qt's .ts files).
 var silicaTranslation = regexp.MustCompile(`^apps/silica/translations/cbb-[a-z]{2,3}\.ts$`)
 
+// harmonyTranslation matches the strings of a language other than the
+// default one (resources/base) in the HarmonyOS app.
+var harmonyTranslation = regexp.MustCompile(`^apps/harmony/(entry/src/main|wearable/src/main|AppScope)/resources/[a-z]{2,3}(_[A-Za-z]+)?/element/string\.json$`)
+
 // appsTranslation matches the apps' strings of a language other than
 // English (tools/strings).
 var appsTranslation = regexp.MustCompile(`^apps/l10n/[a-z]{2,3}\.json$`)
@@ -237,7 +242,7 @@ func isTranslation(name string) bool {
 	if m := storeTranslation.FindStringSubmatch(name); m != nil && m[2] != "en" {
 		return true
 	}
-	return strings.HasSuffix(name, ".xcstrings") || androidTranslation.MatchString(name) || desktopTranslation.MatchString(name) || siteTranslation.MatchString(name) || docTranslation.MatchString(name) || silicaTranslation.MatchString(name) || (appsTranslation.MatchString(name) && name != "apps/l10n/en.json") || cliTranslation.MatchString(name) || installerTranslation.MatchString(name)
+	return strings.HasSuffix(name, ".xcstrings") || androidTranslation.MatchString(name) || desktopTranslation.MatchString(name) || siteTranslation.MatchString(name) || docTranslation.MatchString(name) || silicaTranslation.MatchString(name) || (appsTranslation.MatchString(name) && name != "apps/l10n/en.json") || harmonyTranslation.MatchString(name) || cliTranslation.MatchString(name) || installerTranslation.MatchString(name)
 }
 
 // check returns the rule violations in one file; listed holds the paths of
@@ -279,6 +284,52 @@ func check(name string, data []byte, listed map[string]bool) []string {
 	}
 	if !generated && !hasHeader(data) {
 		problems = append(problems, fmt.Sprintf("%s:1: missing license header; start the file with\n\t%s\n\t// Copyright (C) <year> HunterEwok", name, spdxLine))
+	}
+	return append(problems, testHookProblems(name, data)...)
+}
+
+// The tests' hooks (CBB_TEST_*, and the update's CBB_RELEASE_DIR and
+// CBB_RELEASE_ROOTS) are read only through the guards that keep
+// them out of a release (docs/maintaining.md, "Test builds"): Rust's
+// member/src/testbuild.rs and Go's internal/testhook, or a Go file built only
+// for the bench (the tag benchtime).
+var (
+	rustHookRead = regexp.MustCompile(`env::var(_os)?\(\s*"CBB_(TEST_|RELEASE_DIR"|RELEASE_ROOTS")`)
+	goHookRead   = regexp.MustCompile(`os\.(Getenv|LookupEnv)\(\s*"CBB_(TEST_|RELEASE_DIR"|RELEASE_ROOTS")`)
+	benchOnly    = regexp.MustCompile(`(?m)^//go:build .*\bbenchtime\b`)
+	// Rust's test-only files, and the attribute that opens a test module,
+	// which by custom ends the file.
+	rustTestFile = regexp.MustCompile(`(^|/)(tests?|nettest)(/|\.rs$)|_tests?\.rs$`)
+	rustTestMod  = regexp.MustCompile(`^#\[cfg\(.*\btest\b.*\)\]$`)
+)
+
+// testHookProblems reports a program's own code that reads a test hook
+// around those guards; tests, test data and tools may read them as they like.
+func testHookProblems(name string, data []byte) []string {
+	var re *regexp.Regexp
+	switch {
+	case strings.HasSuffix(name, ".rs") && (strings.HasPrefix(name, "member/src/") || strings.HasPrefix(name, "core/src/") || strings.HasPrefix(name, "ffi/src/")):
+		if name == "member/src/testbuild.rs" || rustTestFile.MatchString(name) {
+			return nil
+		}
+		re = rustHookRead
+	case strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go") && (strings.HasPrefix(name, "cmd/") || strings.HasPrefix(name, "internal/")):
+		if strings.HasPrefix(name, "internal/testhook/") || strings.Contains(name, "/testdata/") || benchOnly.Match(data) {
+			return nil
+		}
+		re = goHookRead
+	default:
+		return nil
+	}
+	var problems []string
+	lines := strings.Split(string(data), "\n")
+	for i, line := range lines {
+		if re == rustHookRead && rustTestMod.MatchString(line) && i+1 < len(lines) && strings.HasPrefix(lines[i+1], "mod ") {
+			break // the tests at the end of the file
+		}
+		if re.MatchString(line) {
+			problems = append(problems, fmt.Sprintf("%s:%d: reads a test hook directly; read it through the guard (member/src/testbuild.rs's env, internal/testhook), which a release build ignores", name, i+1))
+		}
 	}
 	return problems
 }
