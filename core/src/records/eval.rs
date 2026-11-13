@@ -1280,7 +1280,11 @@ pub(crate) fn checkpoint_ok<'r>(cp: &'r Record, get: impl Fn(&RecordId) -> Optio
 /// an admission of a key while it prunes a root's removal naming that key:
 /// it would bring a removed key back through an old record, which the
 /// core's writer never writes.
-pub(crate) fn revives<'r>(heads: &[Head], keep: &[RecordId], held: impl Iterator<Item = (&'r Record, Role)> + Clone) -> bool {
+pub(crate) fn revives<'r>(
+    heads: &[Head],
+    keep: &[RecordId],
+    held: impl Iterator<Item = (&'r Record, Role)> + Clone,
+) -> bool {
     let anchors = anchors_of(heads, keep);
     let removed: BTreeSet<KeyHash> = held
         .clone()
@@ -1292,38 +1296,11 @@ pub(crate) fn revives<'r>(heads: &[Head], keep: &[RecordId], held: impl Iterator
         .flatten()
         .collect();
     held.filter(|(r, _)| keep.binary_search(&r.id()).is_ok()).any(|(r, _)| match &r.body().kind {
-        Kind::Device(d) => removed.contains(&d.key.hash()) || d.admin.as_ref().is_some_and(|a| removed.contains(&a.hash())),
+        Kind::Device(d) => {
+            removed.contains(&d.key.hash()) || d.admin.as_ref().is_some_and(|a| removed.contains(&a.hash()))
+        }
         _ => false,
     })
-}
-
-/// Whether what cp keeps that `get` holds breaks nothing: none above its
-/// key's head, none at a head's seq but the head, no two at one seq. The
-/// IDs it does not hold are not judged (`checkpoint_ok` wants them all).
-pub(crate) fn held_part_ok<'r>(cp: &'r Record, get: impl Fn(&RecordId) -> Option<&'r Record>) -> bool {
-    let Kind::Checkpoint { heads, keep } = &cp.body().kind else { return false };
-    let mut at: BTreeMap<(KeyHash, u64), RecordId> = heads.iter().map(|h| ((h.key, h.seq), h.id)).collect();
-    keep.iter().filter_map(&get).all(|r| {
-        let b = r.body();
-        let above = heads.iter().any(|h| h.key == b.signer && b.seq > h.seq);
-        !above && at.insert((b.signer, b.seq), r.id()).is_none_or(|o| o == r.id())
-    })
-}
-
-/// What a root's newest checkpoint cp keeps first, of the records `get`
-/// holds (cp among them): cp and the held records it names when they
-/// break nothing and fit the rooms on their own (`held_part_ok`,
-/// `fits_alone`), whether or not it holds them all yet; else cp alone.
-pub(crate) fn first_of<'r>(
-    cp: &'r Record,
-    get: impl Fn(&RecordId) -> Option<(&'r Record, Role)>,
-    group_root: &KeyHash,
-    promoted: &BTreeSet<KeyHash>,
-) -> BTreeSet<RecordId> {
-    let named = named_first(cp, |id| get(id).is_some());
-    let ok = held_part_ok(cp, |id| get(id).map(|(r, _)| r))
-        && fits_alone(named.iter().filter_map(&get), group_root, promoted);
-    if ok { named } else { BTreeSet::from([cp.id()]) }
 }
 
 struct Rec<'a> {

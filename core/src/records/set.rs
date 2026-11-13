@@ -26,8 +26,10 @@ pub enum Added {
     NoRoom,
     /// Its signer is a root that a recovery record names while that
     /// record waits for its list: it is kept aside, within that root's
-    /// room, and taken when the list comes. Until then it counts for
-    /// nothing.
+    /// room, and taken when the list comes. Or a checkpoint of the current
+    /// root above its counting one keeps it while the set does not hold
+    /// it among the rest: it waits in the place aside until that
+    /// checkpoint may count. Until then it counts for nothing.
     Waiting,
     /// The group is halted here (`State::halted`): the set takes only the
     /// recovery key's records and what the newest list applied below the
@@ -184,6 +186,17 @@ pub struct RecordSet {
     bytes: usize,
     /// How many rounds each missing record was asked for (`missing`).
     asked: BTreeMap<RecordId, u32>,
+    /// The place aside: the records a checkpoint of the current root above
+    /// its counting one keeps that the set does not hold among the rest,
+    /// as the counting one pruned them or the rooms turned them away. With
+    /// each its role and whether it is held. They count for nothing, take
+    /// no unit and are not compacted; they are taken into the set when a
+    /// checkpoint that keeps them is whole with them and may count
+    /// (`switch`), and leave in the step that no such checkpoint keeps them
+    /// any more (`trim_aside`). At most one ROOM of units in all, the
+    /// highest (seq, ID) leaving first; local, outside the digest, never
+    /// stored or sent but to a peer that asks for one by its ID.
+    kept_aside: BTreeMap<RecordId, (Record, Role, bool)>,
 }
 
 /// The most removals of the roots before the current one a list carries:
@@ -271,6 +284,7 @@ impl RecordSet {
             records: BTreeMap::new(),
             bytes: 0,
             asked: BTreeMap::new(),
+            kept_aside: BTreeMap::new(),
         }
     }
 
@@ -338,12 +352,19 @@ impl RecordSet {
     /// kept aside for a root whose change waits. A peer asked for it gets
     /// it either way.
     pub fn contains(&self, id: &RecordId) -> bool {
-        self.records.contains_key(id) || self.early.contains_key(id)
+        self.records.contains_key(id) || self.early.contains_key(id) || self.kept_aside.contains_key(id)
     }
 
     /// The record, among what counts or what is kept aside.
     pub fn get(&self, id: &RecordId) -> Option<&Record> {
-        self.held(id).or_else(|| self.early.get(id))
+        self.held(id).or_else(|| self.early.get(id)).or_else(|| self.kept_aside.get(id).map(|(r, _, _)| r))
+    }
+
+    /// Whether the record waits in the place aside for a checkpoint of the
+    /// current root that keeps it (`kept_aside`): held, counting for
+    /// nothing, outside the digest.
+    pub fn waits_aside(&self, id: &RecordId) -> bool {
+        self.kept_aside.contains_key(id)
     }
 
     /// The record among what the state counts, not among what is kept
@@ -535,7 +556,7 @@ impl RecordSet {
             return Err(Refused::Group);
         }
         let id = r.id();
-        if self.records.contains_key(&id) {
+        if self.records.contains_key(&id) || self.kept_aside.contains_key(&id) {
             // One record, one place: another envelope of the same body (a
             // second signature by the key holder) changes nothing.
             return Ok(Added::Known);
@@ -572,8 +593,10 @@ impl RecordSet {
         // kept whatever a checkpoint says.
         let listed = self.cuts.get(&signer).is_some_and(|cut| cut.covers(&signer, r.body().seq) && cut.keeps(&id));
         let first = eval::is_first(&self.firsts, &r);
+        // What a checkpoint of the current root above the counting one
+        // keeps goes to the place aside, after the judgment of the pair.
         let waits = self.waits_for(&id);
-        if role == Role::Root && !listed && !first && !waits && !twin_of(self) && pruned(self) {
+        if role == Role::Root && !listed && !first && !twin_of(self) && pruned(self) {
             // A root's record a counting checkpoint settled: alone it is
             // refused, but two at one seq are a fork at any depth, so the
             // set keeps it a while to make the pair with the other.
@@ -583,16 +606,18 @@ impl RecordSet {
                 .get(&at)
                 .map(|(_, o)| o)
                 .or_else(|| self.halves.get(&at).map(|(_, o, _)| o))
+                .or_else(|| self.aside_at(&at))
                 .filter(|o| o.id() != id)
                 .cloned();
-            r.verify_marked(&key, mark).map_err(Refused::Broken)?;
+            let held = r.verify_marked(&key, mark).map_err(Refused::Broken)?;
             self.arrived = self.arrived.saturating_add(1);
             let n = self.arrived;
             match other {
                 Some(o) => {
                     self.settled.remove(&at);
                     self.halves.remove(&at);
-                    self.store(o, role, false);
+                    let o_held = self.kept_aside.remove(&o.id()).is_some_and(|(_, _, h)| h);
+                    self.store(o, role, o_held);
                 }
                 None => {
                     let seen = self.settled_ids.get(&at).map(|(_, i)| *i).filter(|i| *i != id);
@@ -607,12 +632,9 @@ impl RecordSet {
                             self.halves.remove(&old);
                         }
                     } else {
-                        self.settled_ids.insert(at, (n, id));
-                        while self.settled_ids.len() > SETTLED_IDS {
-                            let Some(old) = self.settled_ids.iter().min_by_key(|(_, v)| v.0).map(|(k, _)| *k) else {
-                                break;
-                            };
-                            self.settled_ids.remove(&old);
+                        self.remember(at, n, id);
+                        if waits {
+                            return Ok(self.put_aside(r, role, held));
                         }
                         self.settled.insert(at, (n, r));
                         while self.settled.len() > SETTLED_KEPT
@@ -630,7 +652,11 @@ impl RecordSet {
         }
         let twin = twin_of(self);
         let twin_checkpoint = twin && matches!(r.body().kind, Kind::Checkpoint { .. });
-        if !listed && !twin_checkpoint && !(twin && role == Role::Root) && !first && !waits && pruned(self) {
+        if !listed && !twin_checkpoint && !(twin && role == Role::Root) && !first && pruned(self) {
+            if waits && role != Role::Root {
+                let held = r.verify_marked(&key, mark).map_err(Refused::Broken)?;
+                return Ok(self.put_aside(r, role, held));
+            }
             // A counting checkpoint left it out.
             return Ok(Added::Settled { head: self.settled_head(&signer) });
         }
@@ -690,7 +716,52 @@ impl RecordSet {
             // a member is in one state whenever it compacts.
             self.settle();
         }
-        Ok(if self.records.contains_key(&id) { Added::Stored } else { Added::NoRoom })
+        if self.trusted.is_empty() {
+            self.trim_aside();
+        }
+        Ok(if self.records.contains_key(&id) {
+            Added::Stored
+        } else if self.kept_aside.contains_key(&id) {
+            Added::Waiting
+        } else {
+            Added::NoRoom
+        })
+    }
+
+    /// Remembers id, a settled root record verified at `at` (seq, key),
+    /// with the order n it came in (`settled_ids`).
+    fn remember(&mut self, at: (u64, KeyHash), n: u64, id: RecordId) {
+        self.settled_ids.insert(at, (n, id));
+        while self.settled_ids.len() > SETTLED_IDS {
+            let Some(old) = self.settled_ids.iter().min_by_key(|(_, v)| v.0).map(|(k, _)| *k) else {
+                break;
+            };
+            self.settled_ids.remove(&old);
+        }
+    }
+
+    /// The record of the place aside at `at` (seq, key), if any.
+    fn aside_at(&self, at: &(u64, KeyHash)) -> Option<&Record> {
+        self.kept_aside.values().map(|(r, _, _)| r).find(|r| (r.body().seq, r.body().signer) == *at)
+    }
+
+    /// Puts a verified record r, which role signed, in the place aside;
+    /// a checkpoint whole with it then may count (`switch`).
+    fn put_aside(&mut self, r: Record, role: Role, held: bool) -> Added {
+        let id = r.id();
+        self.kept_aside.insert(id, (r, role, held));
+        if self.trusted.is_empty() && self.switch() {
+            self.cut();
+            self.settle();
+        }
+        self.trim_aside();
+        if self.records.contains_key(&id) {
+            Added::Stored
+        } else if self.kept_aside.contains_key(&id) {
+            Added::Waiting
+        } else {
+            Added::NoRoom
+        }
     }
 
     /// The highest head the counting checkpoints name for signer.
@@ -1001,6 +1072,8 @@ impl RecordSet {
                 self.base = Some(Base { change: id, seq, before: devices });
             }
         }
+        // A root the path left has nothing aside, nor a halted set.
+        self.trim_aside();
     }
 
     /// The state as it was before the recovery records at seq and after:
@@ -1038,9 +1111,11 @@ impl RecordSet {
         let mut proof = self.proof();
         // Each root's checkpoint that may count is kept first with what it
         // names: the rooms are judged in the set it prunes, and it takes
-        // its part of them before the others (`keep::keep_with`). A newer
-        // one that waits keeps what it names past the rooms.
-        let (first, waiting) = self.first_named();
+        // its part of them before the others (`keep::keep_with`). What the
+        // rooms turn away that a checkpoint of the current root above the
+        // counting one keeps goes to the place aside.
+        let (first, above) = self.line();
+        let wanted = self.aside_wanted(&above);
         let mut pre: BTreeMap<KeyHash, u64> = BTreeMap::new();
         for id in first.iter().filter(|id| !proof.contains(*id)) {
             if let Some(e) = self.records.get(id) {
@@ -1076,14 +1151,14 @@ impl RecordSet {
                 self.role_of(e) != Role::Recovery
                     && !kept.contains(&e.record.id())
                     && !proof.contains(&e.record.id())
-                    && !waiting.contains(&e.record.id())
                     && !eval::is_first(&self.firsts, &e.record)
             })
             .map(|e| e.record.id())
             .collect();
         for id in drop {
-            self.remove(&id);
+            self.drop_or_aside(&id, &wanted);
         }
+        self.trim_aside();
     }
 
     /// Whether signer, which signs as role, is a root on the set's path.
@@ -1113,45 +1188,74 @@ impl RecordSet {
         newest.into_values().map(|(_, id)| id).collect()
     }
 
-    /// The records kept ahead of the rooms, and those kept aside past
-    /// them. Of each root on the path, the newest checkpoint that is whole
-    /// and whose named records fit the rooms on their own is the one that
-    /// may count: it and what it names are kept first (`eval::named_first`,
-    /// `eval::fits_alone`). The root's newest checkpoint above it, while
-    /// not whole, waits: it and the named records it holds (when that part
-    /// breaks nothing and fits on its own, `eval::first_of`) are never
-    /// dropped by the rooms, though they take their place in them as any
-    /// record does. So it counts once it is whole, whatever came between.
-    fn first_named(&self) -> (BTreeSet<RecordId>, BTreeSet<RecordId>) {
-        let (first, waiting, _) = self.first_and_waiting();
-        (first, waiting)
-    }
-
-    /// Whether the current root's checkpoint that waits to be whole keeps
-    /// id: it is taken though a counting checkpoint settled it, and waits
-    /// with it.
+    /// Whether a checkpoint of the current root above its counting one
+    /// keeps id: it is taken though the counting one settled it, into the
+    /// place aside (`kept_aside`).
     fn waits_for(&self, id: &RecordId) -> bool {
-        self.waiting_names().contains(id)
+        self.aside_wanted(&self.line().1).contains(id)
     }
 
-    /// What the current root's checkpoint that waits keeps (`waits_for`):
-    /// not an admin's, not a cut root's.
-    fn waiting_names(&self) -> BTreeSet<RecordId> {
-        let current = self.cuts.values().next().map_or(self.root.hash(), |c| c.current);
+    /// What the checkpoints `above` keep: the place aside may hold these.
+    fn aside_wanted(&self, above: &[RecordId]) -> BTreeSet<RecordId> {
         let mut out = BTreeSet::new();
-        for e in self.first_and_waiting().2.iter().filter_map(|cp| self.records.get(cp)) {
-            let b = e.record.body();
-            if let Kind::Checkpoint { keep, .. } = &b.kind
-                && b.signer == current
-            {
+        for cp in above {
+            if let Some(Kind::Checkpoint { keep, .. }) = self.held(cp).map(|r| &r.body().kind) {
                 out.extend(keep.iter().copied());
             }
         }
         out
     }
 
-    /// `first_named`, with the checkpoints that wait.
-    fn first_and_waiting(&self) -> (BTreeSet<RecordId>, BTreeSet<RecordId>, Vec<RecordId>) {
+    /// The current root: the root of the newest change applied, else the
+    /// group's first.
+    fn current_root(&self) -> KeyHash {
+        self.cuts.values().next().map_or(self.root.hash(), |c| c.current)
+    }
+
+    /// The lowest seq at which the set holds two records of key k: its
+    /// fork seq, when it holds the pair.
+    fn fork_seq(&self, k: &KeyHash) -> Option<u64> {
+        let mut at: BTreeMap<u64, RecordId> = BTreeMap::new();
+        let mut fork: Option<u64> = None;
+        for e in self.records.values().filter(|e| e.record.body().signer == *k) {
+            let seq = e.record.body().seq;
+            if at.insert(seq, e.record.id()).is_some_and(|o| o != e.record.id()) {
+                fork = Some(fork.map_or(seq, |f| f.min(seq)));
+            }
+        }
+        fork
+    }
+
+    /// Whether checkpoint cp may count on the records the set holds, with
+    /// those of the place aside when aside: whole (`eval::checkpoint_ok`)
+    /// and what it names fits the rooms on its own (`eval::fits_alone`).
+    fn may_count_with(&self, cp: &Record, aside: bool) -> bool {
+        let rec = |id: &RecordId| {
+            self.records
+                .get(id)
+                .map(|n| (&n.record, self.role_of(n)))
+                .or_else(|| aside.then(|| self.kept_aside.get(id).map(|(r, role, _)| (r, *role))).flatten())
+        };
+        let named = eval::named_first(cp, |id| rec(id).is_some());
+        eval::checkpoint_ok(cp, |id| rec(id).map(|(r, _)| r))
+            && eval::fits_alone(named.iter().filter_map(rec), &self.root.hash(), &self.promoted)
+    }
+
+    /// The records kept ahead of the rooms, and the current root's
+    /// checkpoints that may wait. Of each root on the path, the
+    /// newest checkpoint that is whole and whose named records fit the
+    /// rooms on their own is the one that may count: it and what it names
+    /// are kept first (`eval::named_first`, `eval::fits_alone`). The
+    /// root's newest checkpoint, while it does not count, is kept first
+    /// too, alone; the others above the counting one are ordinary records
+    /// in the root's room.
+    ///
+    /// What is kept first, and the current root's
+    /// checkpoints above its counting one, newest first, of two at one seq
+    /// the smaller ID first: those that may wait. None waits while the set
+    /// is halted, nor at or above the fork seq of the current root while
+    /// the set holds its pair.
+    fn line(&self) -> (BTreeSet<RecordId>, Vec<RecordId>) {
         let mut by_root: BTreeMap<KeyHash, Vec<(u64, RecordId)>> = BTreeMap::new();
         for e in self.records.values() {
             let b = e.record.body();
@@ -1168,31 +1272,133 @@ impl RecordSet {
             cps.retain(|(seq, _)| floor.get(k).is_none_or(|f| seq >= f));
             !cps.is_empty()
         });
-        let get = |id: &RecordId| self.records.get(id).map(|n| (&n.record, self.role_of(n)));
-        let (mut first, mut waiting, mut cps_waiting) = (BTreeSet::new(), BTreeSet::new(), Vec::new());
-        for cps in by_root.values_mut() {
+        let current = self.current_root();
+        let (mut first, mut above) = (BTreeSet::new(), Vec::new());
+        for (root, cps) in by_root.iter_mut() {
             // Newest first; of two at one seq the smaller ID.
             cps.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
-            let counts = |id: &RecordId| {
-                let Some(e) = self.records.get(id) else { return false };
-                let named = eval::named_first(&e.record, |id| self.records.contains_key(id));
-                eval::checkpoint_ok(&e.record, |id| self.records.get(id).map(|n| &n.record))
-                    && eval::fits_alone(named.iter().filter_map(get), &self.root.hash(), &self.promoted)
-            };
+            let counts = |id: &RecordId| self.held(id).is_some_and(|r| self.may_count_with(r, false));
             let at = cps.iter().position(|(_, id)| counts(id));
-            if let Some(i) = at
-                && let Some(e) = cps.get(i).and_then(|(_, id)| self.records.get(id))
-            {
-                first.extend(eval::named_first(&e.record, |id| self.records.contains_key(id)));
+            if let Some(e) = at.and_then(|i| cps.get(i)).and_then(|(_, id)| self.held(id)) {
+                first.extend(eval::named_first(e, |id| self.records.contains_key(id)));
             }
             if at != Some(0)
-                && let Some(e) = cps.first().and_then(|(_, id)| self.records.get(id))
+                && let Some((_, id)) = cps.first()
             {
-                waiting.extend(eval::first_of(&e.record, get, &self.root.hash(), &self.promoted));
-                cps_waiting.push(e.record.id());
+                first.insert(*id);
+            }
+            if *root == current && self.halted.is_none() {
+                let fork = self.fork_seq(root);
+                let end = at.unwrap_or(cps.len());
+                above.extend(cps.iter().take(end).filter(|(seq, _)| fork.is_none_or(|f| *seq < f)).map(|(_, id)| *id));
             }
         }
-        (first, waiting, cps_waiting)
+        (first, above)
+    }
+
+    /// Takes into the set what the place aside holds for the newest
+    /// checkpoint of the current root above its counting one that is whole
+    /// with it and may count: reports whether it took any. The set then
+    /// judges its rooms and compacts by that checkpoint.
+    fn switch(&mut self) -> bool {
+        if self.kept_aside.is_empty() {
+            return false;
+        }
+        let (_, above) = self.line();
+        let keep: Vec<RecordId> = above
+            .iter()
+            .filter_map(|id| self.held(id))
+            .find_map(|cp| match &cp.body().kind {
+                Kind::Checkpoint { keep, .. }
+                    if keep.iter().any(|id| self.kept_aside.contains_key(id)) && self.may_count_with(cp, true) =>
+                {
+                    Some(keep.clone())
+                }
+                _ => None,
+            })
+            .unwrap_or_default();
+        let mut todo: Vec<(Record, Role, bool)> = keep.iter().filter_map(|id| self.kept_aside.remove(id)).collect();
+        // Each after the record that names its signer.
+        todo.sort_by_key(|(r, _, _)| eval::order_key(r.body(), &r.id()));
+        let mut took = false;
+        loop {
+            let mut rest = Vec::new();
+            let mut progress = false;
+            for (r, role, held) in todo {
+                match self.keys.signer(&r.body().signer) {
+                    Some((_, now)) => {
+                        self.store(r, now, held);
+                        progress = true;
+                        took = true;
+                    }
+                    None => rest.push((r, role, held)),
+                }
+            }
+            if rest.is_empty() || !progress {
+                for (r, role, held) in rest {
+                    self.kept_aside.insert(r.id(), (r, role, held));
+                }
+                return took;
+            }
+            todo = rest;
+        }
+    }
+
+    /// Keeps the place aside to what a checkpoint of the current root
+    /// above its counting one keeps that the set does not hold among the
+    /// rest, within one ROOM of units, the lowest (seq, ID) first. A root
+    /// record that leaves it leaves its (seq, key, ID) remembered, so that
+    /// the other record at that seq still makes the pair.
+    fn trim_aside(&mut self) {
+        if self.kept_aside.is_empty() {
+            return;
+        }
+        let (_, above) = self.line();
+        let wanted = self.aside_wanted(&above);
+        let mut rank: Vec<(u64, RecordId, u64)> = self
+            .kept_aside
+            .iter()
+            .filter(|(id, _)| wanted.contains(*id) && !self.records.contains_key(*id))
+            .map(|(id, (r, role, _))| (r.body().seq, *id, eval::item(r, *role).units))
+            .collect();
+        rank.sort();
+        let mut units = 0u64;
+        let mut keep = BTreeSet::new();
+        for (_, id, u) in rank {
+            units = units.saturating_add(u);
+            if units <= keep::room() {
+                keep.insert(id);
+            }
+        }
+        let gone: Vec<RecordId> = self.kept_aside.keys().filter(|id| !keep.contains(*id)).copied().collect();
+        for id in gone {
+            if let Some((r, role, _)) = self.kept_aside.remove(&id)
+                && role == Role::Root
+                && !self.records.contains_key(&id)
+            {
+                let at = (r.body().seq, r.body().signer);
+                if self.settled_ids.get(&at).is_none_or(|(_, o)| *o == id) {
+                    self.arrived = self.arrived.saturating_add(1);
+                    let n = self.arrived;
+                    self.remember(at, n, id);
+                }
+            }
+        }
+    }
+
+    /// Takes id out of the rooms: into the place aside when a checkpoint of
+    /// the current root above its counting one keeps it (`wanted`), else
+    /// out of the set.
+    fn drop_or_aside(&mut self, id: &RecordId, wanted: &BTreeSet<RecordId>) {
+        if wanted.contains(id)
+            && let Some(e) = self.records.get(id)
+        {
+            let (r, role, held) = (e.record.clone(), self.role_of(e), e.held);
+            self.remove(id);
+            self.kept_aside.insert(*id, (r, role, held));
+            return;
+        }
+        self.remove(id);
     }
 
     /// Whether r, which role signed, would be its root's newest
@@ -1771,6 +1977,17 @@ impl RecordSet {
         if let Some(o) = own {
             heads.insert(h, super::body::Head { key: h, seq: o.seq, id: o.id });
         }
+        // No head goes down: a key's head in a counting checkpoint stays
+        // where the writer holds nothing above it (its record need not be
+        // held), or the records between the two would be settled no more.
+        for cp in state.checkpoints.iter().filter_map(|id| self.held(id)) {
+            let Kind::Checkpoint { heads: old, .. } = &cp.body().kind else { continue };
+            for o in old.iter().filter(|o| !path.contains(&o.key) && o.key != recovery) {
+                if heads.get(&o.key).is_none_or(|hd| hd.seq < o.seq) {
+                    heads.insert(o.key, *o);
+                }
+            }
+        }
         // A record of a root before the current one stays only while the
         // list keeps it and the current root's checkpoint keeps it in turn
         // (`eval::closed`): left out, it goes as a record under a head.
@@ -1928,7 +2145,7 @@ impl RecordSet {
             .chain(state.first_missing.iter())
             .chain(named.iter())
             .chain(self.halves.values().map(|(_, _, o)| o))
-            .filter(|id| !self.records.contains_key(*id) && !self.early.contains_key(*id))
+            .filter(|id| !self.contains(id))
             .copied()
             .collect();
         self.asked.retain(|id, _| want.contains(id));
@@ -1986,9 +2203,14 @@ impl RecordSet {
             let st = self.state();
             let before = self.checkpoints.clone();
             if self.compact(&st) == 0 && self.checkpoints == before {
+                if self.switch() {
+                    self.cut();
+                    continue;
+                }
                 break;
             }
         }
+        self.trim_aside();
     }
 
     /// Marks the keys of id, a root's removal a checkpoint prunes
@@ -2056,14 +2278,12 @@ impl RecordSet {
             })
             .collect();
         let proof = self.proof();
-        let waiting = self.waiting_names();
+        let wanted = self.aside_wanted(&self.line().1);
         let drop: Vec<RecordId> = self
             .records
             .values()
             .filter(|e| {
-                !eval::proof_stays(&proof, &e.record, self.role_of(e))
-                    && !eval::is_first(&self.firsts, &e.record)
-                    && !waiting.contains(&e.record.id())
+                !eval::proof_stays(&proof, &e.record, self.role_of(e)) && !eval::is_first(&self.firsts, &e.record)
             })
             .filter(|e| {
                 let b = e.record.body();
@@ -2079,7 +2299,7 @@ impl RecordSet {
             .collect();
         for id in &drop {
             self.mark(id);
-            self.remove(id);
+            self.drop_or_aside(id, &wanted);
         }
         // The checkpoint starts the count again; a key whose naming record
         // it left out is not known any more, nor kept.
