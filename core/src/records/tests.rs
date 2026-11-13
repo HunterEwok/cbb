@@ -1757,7 +1757,7 @@ fn a_record_counts_the_same_in_every_envelope() {
     let bytes = crate::format::cbor::Value::Map(entries).encode();
     let sig = key::sign_es256(&a, LABEL_RECORD, &bytes).unwrap();
     let two = |n: usize| Record::decode(&crate::format::envelope::write(&bytes, &sig, Some(&vec![0x55u8; n]))).unwrap();
-    let max = crate::format::envelope::MAX_SIG2;
+    let max = crate::format::envelope::MAX_SIG2_RECORD;
     let (short, long) = (two(1), two(max));
     assert!(
         Record::decode(&crate::format::envelope::write(&bytes, &sig, Some(&vec![0x55u8; max + 1])))
@@ -2037,6 +2037,48 @@ mod differential {
 
     /// A sequence once found by the property below: the set agrees with
     /// evaluate in both orders.
+    /// Two changes of root wait, each for a record of its group; the
+    /// earlier one's comes: it applies, and what it cuts goes at once.
+    #[test]
+    fn agrees_when_an_earlier_change_completes_first() {
+        let steps = [
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 6, 0),
+            (0, 2, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (3, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 74),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (2, 0, 0),
+            (0, 5, 91),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (1, 0, 0),
+            (0, 0, 9),
+            (2, 8, 198),
+            (1, 1, 79),
+        ];
+        let (g, recs) = build(&steps);
+        let m = agree(&g, &recs, 4, 11_910_324_720_339_346_978);
+        assert_eq!(m.state().roots.len(), 3);
+    }
+
     #[test]
     fn agrees_after_a_newer_checkpoint_of_the_old_root() {
         let steps = [
@@ -2523,7 +2565,7 @@ fn a_second_signer_costs_nine_units() {
     entries.push((8, crate::format::cbor::Value::Bytes(&second)));
     let bytes = crate::format::cbor::Value::Map(entries).encode();
     let sig = key::sign_es256(&a, LABEL_RECORD, &bytes).unwrap();
-    let max = crate::format::envelope::MAX_SIG2;
+    let max = crate::format::envelope::MAX_SIG2_RECORD;
     let r = Record::decode(&crate::format::envelope::write(&bytes, &sig, Some(&vec![0x55u8; max]))).unwrap();
     let plain = Record::sign(g.body(&a, Kind::Copies { incoming_ms: 60_000, seen: vec![] }), &a).unwrap();
     let units = |r: &Record| keep::units(r.size());
@@ -2994,6 +3036,7 @@ fn members_agree(g: &G) -> State {
 
 mod cap;
 mod insert_cost;
+mod lost_root;
 mod recovery;
 mod sync;
 mod traces;

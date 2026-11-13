@@ -35,6 +35,17 @@ fn write(g: &mut G, from: &[Record], new_root: &K, member: &K, remove: &[KeyHash
     w
 }
 
+/// Whether a change carries the removal rm: in its list, or re-issued
+/// by the new root among its first records (keys and seen alike).
+fn carried(w: &Written, rm: &Record) -> bool {
+    let Kind::Revoke(x) = &rm.body().kind else { return false };
+    w.list.0.contains(&rm.id())
+        || w.first.iter().any(|z| {
+            matches!(&z.body().kind, Kind::Revoke(z) if x.keys.iter().all(|k| z.keys.contains(k))
+                && x.seen.iter().all(|s| z.seen.contains(s)))
+        })
+}
+
 /// A head at seq of the recovery key naming root, with prev and list as
 /// given, whatever the chain holds.
 fn head_at(g: &G, seq: u64, prev: Option<RecordId>, root: &K, list: [u8; 32]) -> Record {
@@ -208,7 +219,8 @@ fn a_thiefs_removals_and_devices_on_a_member() {
     g.device(&k("root"), &k("thief"), "thief", |_| {});
     let from = g.recs.clone();
     let w = write(&mut g, &from, &k("n1"), &k("new phone"), &[k("thief").hash, k("old phone").hash]);
-    assert!(w.list.0.iter().any(|id| g.recs.iter().any(|r| r.id() == *id && matches!(r.body().kind, Kind::Revoke(_)))));
+    let rm = g.recs.iter().find(|r| matches!(&r.body().kind, Kind::Revoke(x) if x.keys == [k("laptop").hash])).unwrap();
+    assert!(carried(&w, rm), "the thief's removal is neither listed nor re-issued");
     let s = members_agree(&g);
     assert!(s.revoked.contains(&k("thief").hash) && !has(&s, &k("thief")));
     assert!(s.revoked.contains(&k("laptop").hash));
@@ -1003,32 +1015,32 @@ fn a_change_lists_no_checkpoint() {
     assert_eq!(a.state().checkpoints, c.state().checkpoints);
 }
 
-/// A change's list carries the earlier roots' removals that name a key
-/// some record names, at most their share, the newest first; of removals
-/// that name the same keys and saw the same, the newest alone (the fold).
+/// A change's list carries every counting removal of the earlier roots,
+/// also of a key no record the writer holds names (the writer may lack its
+/// admission); of removals that name the same keys and saw the same, the
+/// newest alone (the fold).
 #[test]
-fn a_change_lists_removals_that_name_someone_within_their_share() {
-    use crate::records::set::EARLIER_REMOVALS;
+fn a_change_lists_every_removal_that_counts() {
     let mut g = base();
     let ghosts: Vec<RecordId> = (0..40u32)
         .map(|i| g.root_rec(Kind::Revoke(removal(&[KeyHash(sha256(&i.to_be_bytes()))], vec![]))).id())
         .collect();
     let tv = k("tv");
-    let of_tv: Vec<RecordId> =
-        (0..EARLIER_REMOVALS + 40).map(|_| g.root_rec(Kind::Revoke(removal(&[tv.hash], vec![]))).id()).collect();
+    let of_tv: Vec<RecordId> = (0..300).map(|_| g.root_rec(Kind::Revoke(removal(&[tv.hash], vec![]))).id()).collect();
     let list = g.listing();
     let newest = *of_tv.last().unwrap();
     assert!(of_tv.iter().all(|id| list.contains(id) == (*id == newest)));
+    assert!(ghosts.iter().all(|id| list.contains(id)));
     g.change(&k("n1"), &list);
     // The new root admits the tv again; a second change follows.
     g.device(&k("n1"), &tv, "tv", |_| {});
     let list = g.listing();
-    assert!(ghosts.iter().all(|id| !list.contains(id)));
+    assert!(ghosts.iter().all(|id| list.contains(id)));
     let listed: Vec<&RecordId> = of_tv.iter().filter(|id| list.contains(id)).collect();
     assert_eq!(listed, vec![&newest]);
-    // Removals of different keys each keep their place, within the share.
+    // Removals of different keys each keep their place, however many.
     let mut g = base();
-    let devs: Vec<K> = (0..EARLIER_REMOVALS + 8).map(|i| k(&format!("dev {i}"))).collect();
+    let devs: Vec<K> = (0..300).map(|i| k(&format!("dev {i}"))).collect();
     let rms: Vec<RecordId> = devs
         .iter()
         .map(|d| {
@@ -1040,8 +1052,7 @@ fn a_change_lists_removals_that_name_someone_within_their_share() {
     g.change(&k("n1"), &list);
     g.device(&k("n1"), &k("tv 2"), "tv", |_| {});
     let list = g.listing();
-    let listed = rms.iter().filter(|id| list.contains(id)).count();
-    assert!(listed <= EARLIER_REMOVALS, "{listed}");
+    assert!(rms.iter().all(|id| list.contains(id)));
 }
 
 /// While halted a set takes the recovery key's records and what the list
@@ -1953,7 +1964,7 @@ fn the_new_roots_checkpoint_prunes_a_listed_removal() {
     let rv = g.root_rec(Kind::Revoke(removal(&[k("tv").hash], g.seen())));
     let from = g.recs.clone();
     let w = write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
-    assert!(w.list.0.contains(&rv.id()));
+    assert!(carried(&w, &rv));
     let set = set_with(&g.root.key, &g.recs, &g.lists);
     let before = set.state();
     assert!(before.revoked.contains(&k("tv").hash));
@@ -2340,6 +2351,11 @@ fn the_newest_heads_first_checkpoint_waits_whatever_else_does() {
             let _ = m.insert_list(l);
         }
     }
+    // A record of the newest head's group trimmed before its first
+    // checkpoint came is asked for again, and taken.
+    let asked = m.missing(&m.state());
+    let again: Vec<Record> = g.recs.iter().filter(|r| asked.contains(&r.id())).cloned().collect();
+    m.insert_all(again);
     assert_eq!(m.state().roots, vec![k("root").hash, n1.hash, k("n2").hash]);
     let restored = RecordSet::restore(g.root.key.clone(), crate::testkit::recovery(), &order, &g.lists);
     assert_eq!(restored.state().roots, m.state().roots);

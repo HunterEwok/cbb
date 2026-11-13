@@ -17,9 +17,9 @@ object Media {
     const val MAX_MEDIA = 1L shl 30
     const val MAX_PARTS = 10_000
     const val MAX_TYPES = 8
-    const val MAX_PATHS = 512 shl 10
-    const val MAX_PATH = 4096
-    const val MAX_NAME = 255
+    const val MAX_PATHS = 2 shl 20
+    const val MAX_PATH = 16 shl 10
+    const val MAX_NAME = 765
 
     /** The largest plain-text alternative of a media event, in bytes of UTF-8. */
     const val MAX_ALT_TEXT = 256 shl 10
@@ -202,7 +202,7 @@ object Media {
 
     /**
      * Whether a name of a path is one every system can hold, as Go's
-     * clip.CheckName decides: 1 to 255 bytes, as a receiver writes it too (saveName), not "." or "..", no control
+     * clip.CheckName decides: 1 to 765 bytes, as a receiver writes it too (saveName), not "." or "..", no control
      * characters, separators or characters Windows does not allow, no dot
      * or space at the end, no name Windows reserves.
      */

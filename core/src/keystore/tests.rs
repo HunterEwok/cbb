@@ -152,7 +152,12 @@ fn statement_vectors() {
             .unwrap();
     for t in v["take"].as_array().unwrap() {
         let env = unhex(t["envelope"].as_str().unwrap());
-        assert!(matches!(read_statement(&env), Ok(ReadStatement::Take(_))), "{}", t["name"]);
+        let Ok(ReadStatement::Take(st)) = read_statement(&env) else { panic!("{}", t["name"]) };
+        // Verified and passed on as it came, a second signature with it.
+        if st.body().signer == laptop.hash() {
+            assert_eq!(st.verify(&laptop), Ok(()), "{}", t["name"]);
+        }
+        assert_eq!(st.envelope(), env, "{}", t["name"]);
     }
     for r in v["refuse"].as_array().unwrap() {
         let env = unhex(r["envelope"].as_str().unwrap());

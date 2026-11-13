@@ -347,7 +347,7 @@ func (m *manifest) validate() string {
 		}
 		sum += p.size
 	}
-	if paths > 512<<10 || sum != m.size || sum > maxMedia {
+	if paths > 2<<20 || sum != m.size || sum > maxMedia {
 		return bad
 	}
 	if files {
@@ -566,7 +566,7 @@ func savePath(path string) string {
 }
 
 func fileNameOK(name string) bool {
-	if name == "" || len(name) > 255 || len(saveName(name)) > 255 || name == "." || name == ".." ||
+	if name == "" || len(name) > 765 || len(saveName(name)) > 765 || name == "." || name == ".." ||
 		strings.ContainsAny(name, "/\\:*?\"<>|") || strings.HasSuffix(name, ".") || strings.HasSuffix(name, " ") ||
 		reserved(name) {
 		return false
@@ -580,7 +580,7 @@ func fileNameOK(name string) bool {
 }
 
 func pathOK(path string) bool {
-	if path == "" || len(path) > 4096 || len(savePath(path)) > 4096 {
+	if path == "" || len(path) > 16384 || len(savePath(path)) > 16384 {
 		return false
 	}
 	for _, n := range strings.Split(path, "/") {
@@ -628,7 +628,7 @@ func commandVerdict(body []byte, m map[any]any) string {
 	if !ok {
 		return "commands/time"
 	}
-	if exp, ok := u(m, 7); !ok || exp <= at || exp-at > 30000 {
+	if exp, ok := u(m, 7); !ok || exp <= at || exp-at > 600000 {
 		return "commands/expires"
 	}
 	if !bs(m, 10, 16) {
@@ -742,7 +742,7 @@ func ordersVerdict(t uint64, b []byte) string {
 		txt, ok := o[uint64(13)].(string)
 		limit := 1 << 20
 		if way == 2 {
-			limit = 4096
+			limit = 16384
 		}
 		if !ok || hasCopy || len(txt) < 1 || len(txt) > limit {
 			return "orders/paste"
@@ -842,10 +842,11 @@ func hubOrders(o map[any]any) string {
 
 // statementVerdict: a keys statement (section 5). What every type has is
 // read first; a later type, a critical field this version does not define
-// or a second signer is held ("hold", passed on as it is, never used), and
-// so is a sealing key of a later algorithm; an algorithm this version
-// knows that is not X-Wing is refused.
-func statementVerdict(body []byte, m map[any]any, sig2 bool) string {
+// is held ("hold", passed on as it is, never used), and so is a sealing key
+// of a later algorithm; an algorithm this version knows that is not X-Wing
+// is refused. A second signer of a later version is taken on the first
+// signature alone.
+func statementVerdict(body []byte, m map[any]any) string {
 	if len(body) > 2048 {
 		return "env/size"
 	}
@@ -861,7 +862,10 @@ func statementVerdict(body []byte, m map[any]any, sig2 bool) string {
 	if e, ok := u(m, 4); !ok || e < 1 {
 		return "statements/epoch"
 	}
-	if t, _ := u(m, 1); t != 1 || !only(m, 1, 2, 3, 4, 6, 10) || sig2 {
+	if _, two := m[uint64(8)]; two && !bs(m, 8, 32) {
+		return "statements/signer2"
+	}
+	if t, _ := u(m, 1); t != 1 || !only(m, 1, 2, 3, 4, 6, 8, 10) {
 		return "hold"
 	}
 	if x, there := m[uint64(6)]; there {
@@ -911,8 +915,11 @@ func beaconVerdict(body []byte, m map[any]any) string {
 	if len(body) > 512 {
 		return "env/size"
 	}
-	if !only(m, 1, 2, 3, 4, 6, 10, 11) {
+	if !only(m, 1, 2, 3, 4, 6, 8, 10, 11) {
 		return "form/critical"
+	}
+	if _, two := m[uint64(8)]; two && !bs(m, 8, 32) {
+		return "beacons/signer2"
 	}
 	if t, _ := u(m, 1); t != 1 {
 		return "beacons/type"
@@ -971,7 +978,7 @@ func checkWave4(dir string) {
 			fail("wave4 statements %s: %v", h.Name, err)
 			continue
 		}
-		if got := statementVerdict(body, m, false); got != h.Verdict {
+		if got := statementVerdict(body, m); got != h.Verdict {
 			fail("wave4 statements %s: %q, want %q", h.Name, got, h.Verdict)
 		}
 		count++
@@ -979,7 +986,12 @@ func checkWave4(dir string) {
 	for _, b := range f.Beacons {
 		m, body, err := envelope(unhex(b.Envelope), f.Labels["beacon"], bySignerHash)
 		if err != nil {
-			fail("wave4 beacons %s: %v", b.Name, err)
+			// The envelope's own rules (a second signature over its
+			// ceiling) come before the beacon's.
+			if err.Error() != b.Verdict {
+				fail("wave4 beacons %s: %v", b.Name, err)
+			}
+			count++
 			continue
 		}
 		if got := beaconVerdict(body, m); got != b.Verdict {
@@ -1133,7 +1145,7 @@ func checkMutants(dir string, f *wave4File) {
 			case "commands":
 				return commandVerdict(body, m)
 			case "statements":
-				return statementVerdict(body, m, len(env) == 3)
+				return statementVerdict(body, m)
 			case "beacons":
 				return beaconVerdict(body, m)
 			}

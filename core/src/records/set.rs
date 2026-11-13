@@ -130,6 +130,9 @@ pub struct RecordSet {
     lists: BTreeMap<[u8; 32], (Vec<u8>, List)>,
     /// The list the next valid recovery record waits for.
     waiting: Option<[u8; 32]>,
+    /// The first record of each waiting change's group the set does not
+    /// hold (`eval::first_gap`): when one comes, that change may apply.
+    gaps: BTreeSet<RecordId>,
     /// The roots the held recovery records name that the path has not
     /// reached (their record waits for its list, or for the record before
     /// it), but for the two sides of a fork, by key hash.
@@ -232,10 +235,10 @@ pub struct RecordSet {
     no_room: BTreeSet<RecordId>,
 }
 
-/// The most removals of the roots before the current one a list carries:
-/// a share of its 1024 IDs, so that the current root's records always have
-/// room.
-pub const EARLIER_REMOVALS: usize = 256;
+/// The units of the new root's room a change's re-issued removals leave to
+/// its other first records: its device, settings and hubs records and the
+/// owner's removals.
+pub const REISSUE_KEPT_BACK: u64 = 256;
 
 /// Why the writer does not write a change of root while the set holds a
 /// recovery record it has not applied.
@@ -297,6 +300,7 @@ impl RecordSet {
             cuts: BTreeMap::new(),
             lists: BTreeMap::new(),
             waiting: None,
+            gaps: BTreeSet::new(),
             early_roots: BTreeMap::new(),
             halted: None,
             firsts: BTreeMap::new(),
@@ -756,8 +760,9 @@ impl RecordSet {
         if self.needs_cut(&signer) {
             self.cut();
         }
-        if first && self.trusted.is_empty() {
-            // A head's first checkpoint: the head may apply now.
+        if (first || self.gaps.contains(&id)) && self.trusted.is_empty() {
+            // A head's first checkpoint, or the record its group lacked:
+            // the head may apply now.
             self.rechain();
         }
         // A second history of a root halts the group and takes the
@@ -862,10 +867,11 @@ impl RecordSet {
             return Ok(Added::NoRoom);
         }
         // A head's first checkpoint: the head may apply now.
-        let names = self
-            .records
-            .values()
-            .any(|e| matches!(&e.record.body().kind, Kind::Recovery { first, .. } if *first == id));
+        let names = self.gaps.contains(&id)
+            || self
+                .records
+                .values()
+                .any(|e| matches!(&e.record.body().kind, Kind::Recovery { first, .. } if *first == id));
         if names {
             self.rechain();
             if self.records.contains_key(&id) {
@@ -882,7 +888,32 @@ impl RecordSet {
     /// in the set: without it the chain never applies, and the records of
     /// earlier roots that fill the room would hold it out for good.
     fn trim_early(&mut self) {
-        let rank = |r: &Record| self.early_roots.get(&r.body().signer).map_or(u64::MAX, |(s, _)| *s);
+        // The newest head's group goes first once its first checkpoint is
+        // held: the new root's records up to it. The chain applies only
+        // with the whole group (`eval::first_gap`), and it applies every
+        // head before it with it. A record of the group trimmed before
+        // the checkpoint came is asked for again (`State::first_missing`).
+        let newest = self
+            .records
+            .values()
+            .filter(|e| e.role == Role::Recovery)
+            .max_by_key(|e| (e.record.body().seq, e.record.id()))
+            .and_then(|e| match &e.record.body().kind {
+                Kind::Recovery { root, first, .. } => Some((root.hash(), *first)),
+                _ => None,
+            });
+        let group_top = newest.map(|(h, first)| {
+            let top = self.early.get(&first).or_else(|| self.held(&first)).map_or(0, |r| r.body().seq);
+            (h, top)
+        });
+        let in_group = |r: &Record| group_top.is_some_and(|(h, top)| r.body().signer == h && r.body().seq <= top);
+        let rank = |r: &Record| {
+            if in_group(r) {
+                0
+            } else {
+                self.early_roots.get(&r.body().signer).map_or(u64::MAX, |(s, _)| s.saturating_add(1))
+            }
+        };
         let mut all: Vec<(u64, u64, RecordId, u64)> = self
             .early
             .values()
@@ -1059,13 +1090,16 @@ impl RecordSet {
         let lists = self.list_refs();
         let held: BTreeMap<RecordId, &Record> =
             self.records.values().map(|e| &e.record).chain(self.early.values()).map(|r| (r.id(), r)).collect();
-        let chain =
-            eval::chain(&self.root_hash, self.records.values().map(|e| (&e.record, e.role)), &lists, |id, root| {
-                eval::first_held(&held, id, root)
-            });
+        let chain = eval::chain(
+            &self.root_hash,
+            self.records.values().map(|e| (&e.record, e.role)),
+            &lists,
+            |id, root, from| eval::first_gap(&held, &self.checkpoints, id, root, from),
+        );
         let promoted = chain.promoted();
         let mut cuts = chain.cuts();
         self.waiting = chain.waiting;
+        self.gaps = chain.gaps.clone();
         self.firsts = chain.firsts.clone();
         // Halted: what the set holds besides the recovery key's records is
         // what the newest list applied below the fork names, nothing else,
@@ -1778,10 +1812,9 @@ impl RecordSet {
     }
 
     /// The list a change of root carries (rule 33), not edited: every
-    /// record of every root on the path that counts in state; every root's
-    /// removal the set holds that names a key some record the set holds
-    /// names (of the roots before the current one at most
-    /// `EARLIER_REMOVALS`, the later root's and the newest first); what the
+    /// record of every root on the path that counts in state, every root's
+    /// removal among them (one whose admission the writer never got still
+    /// bars it); what the
     /// current list keeps that the set holds (lists do not add up, so each
     /// carries it forward, under the same rule for removals); and the
     /// heads the current root's counting checkpoint names, as anchors. No
@@ -1793,51 +1826,131 @@ impl RecordSet {
     /// The change's list, or None when its removals and the device records
     /// that count alone pass the cut roots' reserve. The devices the change
     /// removes need not be carried.
-    fn change_list_whole(&self, state: &State, remove: &[KeyHash]) -> Option<List> {
-        let (ids, whole) = self.within_ceiling(state, self.change_ids(state), remove);
+    fn change_list_whole(&self, state: &State, remove: &[KeyHash], covered: &BTreeSet<RecordId>) -> Option<List> {
+        let mut ids = self.change_ids(state);
+        ids.retain(|id| !covered.contains(id));
+        let (ids, whole) = self.within_ceiling(state, ids, remove);
         whole.then_some(List(ids))
+    }
+
+    /// The re-issue of a change of root: the counting removals of the
+    /// roots the change cuts (every root on the path), as removals of the
+    /// new root among its first records, so that the old ones fold into
+    /// them (`folded`) and the list carries none of them. Each old removal
+    /// goes whole into one new one, which names every key it names and
+    /// has its `seen` entries for every key it concerns; two old removals
+    /// that saw a key differently go into different new ones. Each new
+    /// one is at most MAX_KEYS keys, MAX_SEEN entries and MAX_BODY bytes,
+    /// and all of them at most the new root's room less what its other
+    /// first records need; an old removal that does not fit rides in the
+    /// list. It returns the new removals and the old ones they cover.
+    fn reissue(&self, state: &State, signer: KeyHash, time_ms: u64) -> (Vec<super::body::Removal>, BTreeSet<RecordId>) {
+        use super::body::{Removal, Seen};
+        struct Z {
+            keys: BTreeSet<KeyHash>,
+            seen: BTreeMap<KeyHash, Seen>,
+            concerned: BTreeSet<KeyHash>,
+            members: Vec<RecordId>,
+        }
+        let at = |k: &KeyHash| state.roots.iter().position(|r| r == k);
+        let mut old: Vec<(usize, u64, RecordId, &Removal)> = self
+            .records
+            .values()
+            .filter(|e| e.role == Role::Root && !e.held && state.counting.contains(&e.record.id()))
+            .filter_map(|e| match (&e.record.body().kind, at(&e.record.body().signer)) {
+                (Kind::Revoke(rm), Some(p)) => Some((p, e.record.body().seq, e.record.id(), rm)),
+                _ => None,
+            })
+            .collect();
+        old.sort_by_key(|(p, s, id, _)| (*p, *s, *id));
+        let removal_of =
+            |z: &Z| Removal { keys: z.keys.iter().copied().collect(), seen: z.seen.values().copied().collect() };
+        let bytes = |rm: Removal| {
+            Body {
+                group: self.group,
+                signer,
+                seq: super::MAX_SEQ,
+                prev: Some(RecordId([0; 32])),
+                time_ms,
+                kind: Kind::Revoke(rm),
+                held: false,
+            }
+            .encode()
+            .len()
+        };
+        let mut zs: Vec<Z> = Vec::new();
+        for (_, _, id, x) in old {
+            let concerns: BTreeSet<KeyHash> = x.keys.iter().copied().chain(x.seen.iter().map(|s| s.key)).collect();
+            let xs: BTreeMap<KeyHash, Seen> = x.seen.iter().map(|s| (s.key, *s)).collect();
+            let fits = |z: &Z| {
+                concerns.iter().filter(|k| z.concerned.contains(*k)).all(|k| z.seen.get(k) == xs.get(k))
+                    && z.keys.iter().chain(x.keys.iter()).collect::<BTreeSet<_>>().len() <= super::body::MAX_KEYS
+                    && z.seen.keys().chain(xs.keys()).collect::<BTreeSet<_>>().len() <= super::MAX_SEEN
+            };
+            let grown = |z: &Z| {
+                let mut rm = removal_of(z);
+                rm.keys.extend(x.keys.iter().copied());
+                rm.keys.sort();
+                rm.keys.dedup();
+                rm.seen.extend(xs.values().copied());
+                rm.seen.sort();
+                rm.seen.dedup();
+                bytes(rm) <= super::MAX_BODY
+            };
+            let z = match zs.iter_mut().find(|z| fits(z) && grown(z)) {
+                Some(z) => z,
+                None => {
+                    zs.push(Z {
+                        keys: BTreeSet::new(),
+                        seen: BTreeMap::new(),
+                        concerned: BTreeSet::new(),
+                        members: Vec::new(),
+                    });
+                    let Some(z) = zs.last_mut() else { break };
+                    z
+                }
+            };
+            z.keys.extend(x.keys.iter().copied());
+            z.seen.extend(xs);
+            z.concerned.extend(concerns);
+            z.members.push(id);
+        }
+        // Within the new root's room, with what its device, settings, hubs
+        // and the owner's removals take kept aside.
+        let room = (super::MAX_ROOT_RECORDS as u64).saturating_sub(REISSUE_KEPT_BACK);
+        let mut units = 0u64;
+        let mut out = Vec::new();
+        let mut covered = BTreeSet::new();
+        for z in &zs {
+            let rm = removal_of(z);
+            let u = keep::units(bytes(rm.clone()).saturating_add(super::ENVELOPE_ALLOWANCE));
+            if units.saturating_add(u) > room {
+                break;
+            }
+            units = units.saturating_add(u);
+            covered.extend(z.members.iter().copied());
+            out.push(rm);
+        }
+        (out, covered)
     }
 
     fn change_ids(&self, state: &State) -> BTreeSet<RecordId> {
         let roots: BTreeSet<&KeyHash> = state.roots.iter().collect();
         let cur = state.roots.last();
-        // The keys some record the set holds names: a removal of keys
-        // nobody names carries nothing.
-        let mut named: BTreeSet<KeyHash> = BTreeSet::new();
-        for e in self.records.values() {
-            named.insert(e.record.body().signer);
-            if let Kind::Device(d) = &e.record.body().kind {
-                named.insert(d.key.hash());
-                named.extend(d.admin.as_ref().map(Key::hash));
-            }
-        }
-        // A removal is listed only when it names a named key. The earlier
-        // roots' take at most their share: the later root's first, the
-        // newest by seq first.
-        let at = |k: &KeyHash| state.roots.iter().position(|r| r == k).unwrap_or(0);
-        let mut earlier: Vec<(usize, u64, RecordId)> = self
+        // Every root's removal that counts: one whose admission the writer
+        // never got still bars it, and nothing else would.
+        let earlier: BTreeSet<RecordId> = self
             .records
             .values()
             .filter(|e| roots.contains(&e.record.body().signer) && Some(&e.record.body().signer) != cur && !e.held)
-            .filter_map(|e| match &e.record.body().kind {
-                Kind::Revoke(rm) if rm.keys.iter().any(|k| named.contains(k)) => {
-                    Some((at(&e.record.body().signer), e.record.body().seq, e.record.id()))
-                }
-                _ => None,
-            })
+            .filter(|e| matches!(e.record.body().kind, Kind::Revoke(_)) && state.counting.contains(&e.record.id()))
+            .map(|e| e.record.id())
             .collect();
-        earlier.sort_by(|a, b| b.cmp(a));
-        let earlier: BTreeSet<RecordId> = earlier.into_iter().take(EARLIER_REMOVALS).map(|(_, _, id)| id).collect();
         let mut out: BTreeSet<RecordId> = earlier.clone();
         for e in self.records.values().filter(|e| Some(&e.record.body().signer) == cur && !e.held) {
             let b = e.record.body();
             let counts = state.counting.contains(&e.record.id());
             match &b.kind {
-                Kind::Revoke(rm) => {
-                    if rm.keys.iter().any(|k| named.contains(k)) {
-                        out.insert(e.record.id());
-                    }
-                }
                 Kind::Checkpoint { .. } => {}
                 _ if counts => {
                     out.insert(e.record.id());
@@ -1860,9 +1973,8 @@ impl RecordSet {
         let lines = self.lines(state);
         out.retain(|id| !self.left_out(&lines, id));
         // A checkpoint is never listed: what it pruned, the new root's
-        // first checkpoint prunes again.
-        // An earlier root's removal is listed only within the share, even
-        // when an earlier list named it.
+        // first checkpoint prunes again. An earlier root's removal is
+        // listed only while it counts.
         out.retain(|id| match self.held(id).map(|r| r.body()) {
             Some(b) if matches!(b.kind, Kind::Checkpoint { .. }) => false,
             Some(b) if matches!(b.kind, Kind::Revoke(_)) && roots.contains(&b.signer) && Some(&b.signer) != cur => {
@@ -2017,7 +2129,8 @@ impl RecordSet {
         if remove.iter().any(rank) {
             return Err(Error::msg("the new root, its device, the recovery key and the roots cannot be removed"));
         }
-        let Some(list) = self.change_list_whole(state, remove) else {
+        let (reissued, covered) = self.reissue(state, h, time_ms);
+        let Some(list) = self.change_list_whole(state, remove, &covered) else {
             return Err(Error::msg(
                 "the change would leave out devices that count: the root's removals and the devices' records pass what a change carries",
             ));
@@ -2075,6 +2188,9 @@ impl RecordSet {
                 n = n.div_ceil(2);
             }
             rest = rest.get(n..).unwrap_or_default();
+        }
+        for rm in reissued {
+            first.push(sign(Kind::Revoke(rm))?);
         }
         // The new root's first checkpoint, signed now so that the pruning
         // of the old root's counting checkpoint never lapses: the heads it
@@ -2952,7 +3068,18 @@ impl RecordSet {
             }
             if out.iter().any(|r| r.body().signer != self.root_hash) {
                 ids.extend(self.records.values().filter(|e| e.role == Role::Recovery).map(|e| e.record.id()));
-                ids.extend(self.firsts.keys().filter(|id| self.records.contains_key(*id)).copied());
+                // Each new root's first checkpoint with its whole group: a
+                // change applies whole or not at all (`eval::first_gap`).
+                for id in self.firsts.keys() {
+                    let Some(cp) = self.held(id) else { continue };
+                    let (h, top) = (cp.body().signer, cp.body().seq);
+                    ids.extend(
+                        self.records
+                            .values()
+                            .filter(|e| e.record.body().signer == h && e.record.body().seq <= top)
+                            .map(|e| e.record.id()),
+                    );
+                }
             }
             let admins: BTreeSet<KeyHash> =
                 out.iter().map(|r| r.body().signer).filter(|k| self.keys.is_admin(k)).collect();

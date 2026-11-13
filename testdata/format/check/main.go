@@ -214,9 +214,13 @@ func envelope(b []byte, label string, signerKey func(map[any]any) ([]byte, error
 	head := label == "cbb record v3" && m[uint64(1)] == uint64(13)
 	var sig2 []byte
 	if len(a) == 3 {
-		// sig2 is not fixed: a later algorithm's signature, up to 4 KiB,
-		// a recovery head's up to 32 KiB.
-		max := 4096
+		// sig2 is not fixed: a later algorithm's signature, up to 8 KiB
+		// (a record's up to 4 KiB until its count in units is decided), a
+		// recovery head's up to 32 KiB.
+		max := 8192
+		if label == "cbb record v3" {
+			max = 4096
+		}
 		if head {
 			max = 32 * 1024
 		}
@@ -526,7 +530,9 @@ func main() {
 	// after taking it. A kept grant of a lower recovery seq counts as
 	// none, but a guarded leaf stays guarded.
 	group := unhex(g.Group)
-	allowed := map[uint64]bool{1: true, 2: true, 3: true, 4: true, 6: true}
+	// 8, signer2: a second signer of a later version, taken on the first
+	// signature alone.
+	allowed := map[uint64]bool{1: true, 2: true, 3: true, 4: true, 6: true, 8: true}
 	for k := uint64(10); k <= 19; k++ {
 		allowed[k] = true
 	}
@@ -1074,6 +1080,7 @@ func main() {
 	checkSets(dir)
 	checkMessages(dir)
 	checkWave4(dir)
+	checkFuture(dir)
 	if bad > 0 {
 		fmt.Printf("%d failures\n", bad)
 		os.Exit(1)

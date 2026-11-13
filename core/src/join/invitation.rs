@@ -212,10 +212,12 @@ impl Invitation {
         Invitation::decode(&b)
     }
 
-    /// Reads the encoding and checks every field.
+    /// Reads the encoding and checks every field, as a reader of this
+    /// version does (`crate::msg::read_map`): unknown rights bits are
+    /// ignored, and a path whose settings this version cannot read is
+    /// unusable and skipped; an invitation with no usable path is refused.
     pub fn decode(b: &[u8]) -> Result<Invitation, Rule> {
-        let v = cbor::decode(b)?;
-        crate::msg::check_map(&crate::msg::tables::INVITE, &v)?;
+        let v = crate::msg::read_map(&crate::msg::tables::INVITE, &cbor::decode(b)?)?;
         let bytes_n = |k: u16, n: usize| -> Result<Vec<u8>, Rule> {
             v.get(k).and_then(Value::as_bytes).filter(|b| b.len() == n).map(<[u8]>::to_vec).ok_or(RULE_SHAPE)
         };
@@ -288,9 +290,14 @@ impl Invitation {
             let obfuscation = match p.get(6) {
                 None => None,
                 Some(_) if kind == PathKind::Home => return Err(RULE_OBFUSCATION),
+                // Settings of a later version: this way is unusable.
+                Some(o) if crate::msg::later::unusable(o) => continue,
                 Some(o) => Some(crate::msg::Obfuscation::read(o, "invite/obfuscation")?),
             };
             paths.push(Path { kind, endpoints, hub_key, guest, obfuscation });
+        }
+        if paths.is_empty() {
+            return Err(RULE_PATH);
         }
         let pv = v.get(4).ok_or(RULE_PROFILE)?;
         let role = pv.get(1).and_then(Value::as_uint).filter(|r| (1..=4).contains(r)).ok_or(RULE_PROFILE)?;

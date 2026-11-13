@@ -7,7 +7,6 @@
 
 use super::*;
 use crate::records::sync::{self, HAVE_IDS, PART_BYTES, PART_RECORDS, Part};
-use crate::wire::MAX_FRAME;
 
 /// A list of the most IDs a list holds: listed, then IDs nobody holds.
 fn full_list(listed: &[RecordId], salt: u64) -> Vec<RecordId> {
@@ -44,9 +43,9 @@ fn assert_fits(parts: &[Part<'_>], max_records: usize, max_bytes: usize) {
 /// The widest case: the recovery key changed the root 64 times, each with
 /// a full list and a first checkpoint that keeps it, and the last root's
 /// room and its 16 admins' rooms are full. It passes the count of one
-/// `records` message, and with its records twice over the bytes of a
-/// frame; the parts each fit, and a receiver that takes them ends with the
-/// sender's set.
+/// `records` message; split by count, and by bytes at 2 MiB a part, the
+/// parts each fit, and a receiver that takes them ends with the sender's
+/// set.
 #[test]
 fn the_widest_set_syncs_in_parts_that_each_fit_a_frame() {
     let mut g = G::new();
@@ -97,12 +96,12 @@ fn the_widest_set_syncs_in_parts_that_each_fit_a_frame() {
     assert!(parts.len() >= 2);
     let records = sender.for_peer(&st, &laptop);
     let lists = sender.lists_for_peer(&st, &laptop);
-    let twice: Vec<&Record> = records.iter().chain(records.iter()).copied().collect();
-    let by_bytes = sync::split(&twice, &lists, usize::MAX, PART_BYTES);
-    let over: usize = by_bytes.iter().map(Part::bytes).sum();
-    assert!(over > MAX_FRAME, "{over} bytes");
-    assert!(by_bytes.len() >= 2);
-    assert_fits(&by_bytes, usize::MAX, PART_BYTES);
+    let small = 2 << 20;
+    let by_bytes = sync::split(&records, &lists, usize::MAX, small);
+    assert!(by_bytes.len() >= 3);
+    assert_fits(&by_bytes, usize::MAX, small);
+    let receiver = take_all(&g.root.key, &by_bytes);
+    assert_eq!(receiver.digest(), sender.digest());
     let lists: usize = parts.iter().map(|p| p.lists.len()).sum();
     assert_eq!(lists, sender.lists().count());
     let receiver = take_all(&g.root.key, &parts);
@@ -141,8 +140,23 @@ fn any_cut_between_parts_ends_equal() {
                 let h = crate::records::body::list_hash(l);
                 assert!(p.records.iter().any(|r| matches!(&r.body().kind, Kind::Recovery { list, .. } if *list == h)));
             }
-            assert!(p.records.len() <= n);
-            assert!(p.records.len() == 1 || p.bytes() <= bytes);
+            // A change of root travels whole: its first records with it.
+            let head = p.records.iter().find_map(|r| match &r.body().kind {
+                Kind::Recovery { root, first, .. } => Some((root.hash(), *first)),
+                _ => None,
+            });
+            if let Some((root, first)) = head
+                && let Some(cp) = records.iter().find(|r| r.id() == first).map(|r| r.body().seq)
+            {
+                assert!(p.records.iter().any(|r| r.id() == first), "a head without its first checkpoint");
+                let firsts = records.iter().filter(|r| r.body().signer == root && r.body().seq <= cp);
+                for r in firsts {
+                    assert!(p.records.iter().any(|x| x.id() == r.id()));
+                }
+            } else {
+                assert!(p.records.len() <= n);
+                assert!(p.records.len() == 1 || p.bytes() <= bytes);
+            }
         }
         let receiver = take_all(&g.root.key, &parts);
         assert_eq!(receiver.digest(), sender.digest(), "cut by {n} records, {bytes} bytes");

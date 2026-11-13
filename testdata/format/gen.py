@@ -317,6 +317,23 @@ def envelope(kind, signer, body_map, body_raw=None):
     return enc([body, signer.sign(LABELS[kind], body)]), body
 
 
+# A second signer of a later version: its key's hash in signer2 (field 8),
+# its signature (here a stand-in of ML-DSA-44's 2420 bytes) beside the
+# first, which covers the body and the second's SHA-256 (audit Q-1). A
+# reader of this version takes the object on the first signature alone.
+SIG2_HASH = sha(b"a second key of a later version")
+SIG2 = fake("a second signature of a later version", 2420)
+
+
+def envelope2(kind, signer, body_map, sig2=SIG2):
+    """The envelope [body, sig, sig2] of body_map with signer2 set; its
+    damaged twin, whose sig2 was swapped on the way, is envelope2(...)[2]."""
+    body = enc({**body_map, 8: SIG2_HASH})
+    env = enc([body, signer.sign(LABELS[kind], body + sha(sig2)), sig2])
+    swapped = enc([body, signer.sign(LABELS[kind], body + sha(sig2)), fake("another second signature", 2420)])
+    return env, body, swapped
+
+
 # ---------------------------------------------------------------- vectors
 
 out = {}
@@ -578,8 +595,8 @@ def record_vectors():
     bad("trailing byte after the envelope", "cbor/trailing", enc([lap_body, sig]) + b"\x00")
     m2 = rec(ROOT, 91, 7, {14: 1}, extra={8: ADMIN.hash})
     b2 = enc(m2)
-    bad("second signature over 4096 bytes", "env/sig2",
-        enc([b2, ROOT.sign(LABELS["record"], b2), fake("later signature", 4097)]))
+    bad("second signature over 8192 bytes", "env/sig2",
+        enc([b2, ROOT.sign(LABELS["record"], b2), fake("later signature", 8193)]))
     # The first signature covers the second's SHA-256 (audit Q-1): a second
     # signature swapped, cut or removed on the way spoils the copy.
     s2a, s2b = fake("second signature a", 3000), fake("second signature b", 3000)
@@ -760,6 +777,19 @@ def statement_vectors():
         m, env, body = st(sg, ep, fake(name, 1216))
         take.append({"name": name, "verdict": "take", "diag": diag(m), "body": body.hex(),
                      "id": sha(body).hex(), "envelope": env.hex()})
+    m = {1: 1, 2: GROUP, 3: LAPTOP.hash, 4: 3, 6: T0 + 3, 10: [XWING, fake("with sig2", 1216)]}
+    env, body, swapped = envelope2("keys", LAPTOP, m)
+    take.append({"name": "a second signer of a later version, taken on the first signature alone",
+                 "verdict": "take", "diag": diag(dec(body)), "body": body.hex(), "id": sha(body).hex(),
+                 "envelope": env.hex()})
+    refuse.append({"name": "a second signature swapped on the way", "rule": "env/damaged", "verdict": "refuse",
+                   "envelope": swapped.hex()})
+    env, body, _ = envelope2("keys", LAPTOP, m, fake("sig2 8192", 8192))
+    take.append({"name": "a second signature of 8192 bytes", "verdict": "take", "diag": diag(dec(body)),
+                 "body": body.hex(), "id": sha(body).hex(), "envelope": env.hex()})
+    env, body, _ = envelope2("keys", LAPTOP, m, fake("sig2 8193", 8193))
+    refuse.append({"name": "a second signature of 8193 bytes", "rule": "env/sig2", "verdict": "refuse",
+                   "envelope": env.hex()})
     m, env, body = st(LAPTOP, 1, fake("short", 1215))
     refuse.append({"name": "seal key of 1215 bytes", "rule": "keys/xwing", "verdict": "refuse",
                    "envelope": env.hex()})
@@ -804,10 +834,29 @@ def command_vectors():
     take.append({"name": "device command to a guarded lock, with its nonce", "verdict": "take",
                  "diag": diag(m), "body": body.hex(), "envelope": env.hex(),
                  "orders": enc({10: "heat", 11: enc({1: 90})}).hex()})
-    m, _ = cmd(3, ADMIN, 9, LAPTOP.id16, {7: T0 + 5000 + 30001})
-    m[7] = T0 + 5000 + 30001
+    # A reader takes a life up to 600 s (room for a later writer); every
+    # 0.6 writer gives 30 s. The replay guard is the counter, not the life.
+    m, _ = cmd(4, ADMIN, 9, LAPTOP.id16, {}, sealed=False)
+    m[7] = m[6] + 600000
     env, body = envelope("command", ADMIN, m)
-    refuse.append({"name": "lifetime over 30 s", "rule": "commands/expires", "verdict": "refuse",
+    take.append({"name": "lifetime of 600 s, from a later writer", "verdict": "take", "diag": diag(m),
+                 "body": body.hex(), "envelope": env.hex()})
+    m, _ = cmd(4, ADMIN, 10, LAPTOP.id16, {}, sealed=False)
+    m[7] = m[6] + 600001
+    env, body = envelope("command", ADMIN, m)
+    refuse.append({"name": "lifetime over 600 s", "rule": "commands/expires", "verdict": "refuse",
+                   "envelope": env.hex()})
+    m, _ = cmd(4, ADMIN, 11, LAPTOP.id16, {}, sealed=False)
+    env, body, swapped = envelope2("command", ADMIN, m)
+    take.append({"name": "a second signer of a later version, taken on the first signature alone", "verdict": "take",
+                 "diag": diag(dec(body)), "body": body.hex(), "envelope": env.hex()})
+    refuse.append({"name": "a second signature swapped on the way", "rule": "env/damaged", "verdict": "refuse",
+                   "envelope": swapped.hex(), "signer": ADMIN.pub.hex()})
+    env, body, _ = envelope2("command", ADMIN, m, fake("sig2 8192", 8192))
+    take.append({"name": "a second signature of 8192 bytes", "verdict": "take", "diag": diag(dec(body)),
+                 "body": body.hex(), "envelope": env.hex()})
+    env, body, _ = envelope2("command", ADMIN, m, fake("sig2 8193", 8193))
+    refuse.append({"name": "a second signature of 8193 bytes", "rule": "env/sig2", "verdict": "refuse",
                    "envelope": env.hex()})
     m, _ = cmd(10, PHONE, 8, LOCK.id16, {})
     env, body = envelope("command", PHONE, m)
@@ -929,10 +978,17 @@ def grant_vectors(admin_record):
     _, genv, _ = signed(g, ROOT)
     row = bad("the old root's grant made before the change the leaf knows", "grants/recovery", message(genv), L)
     row.update({"recovery": 1, "root": ROOT2.hash.hex()})
-    g2 = {**g, 3: ROOT.hash, 8: ADMIN.hash}
-    gb2 = enc(g2)
-    bad("grant with a second signer", "form/critical",
-        message(enc([gb2, ROOT.sign(LABELS["grant"], gb2), ADMIN.sign(LABELS["grant"], gb2)])), L)
+    genv2, gb2, swapped = envelope2("grant", ROOT, {**g, 3: ROOT.hash})
+    take.append({"name": "guarded lock's grant with a second signer of a later version, taken on the first signature alone",
+                 "verdict": "take", "leaf": g[10].hex(), "grant_diag": diag(dec(gb2)), "grant": gb2.hex(),
+                 "envelope": genv2.hex(), "message": enc(message(genv2)).hex(), "frame": frame(message(genv2)).hex()})
+    bad("grant whose second signature was swapped on the way", "env/damaged", message(swapped), L)
+    genv2, gb2, _ = envelope2("grant", ROOT, {**g, 3: ROOT.hash}, fake("sig2 8192", 8192))
+    take.append({"name": "guarded lock's grant with a second signature of 8192 bytes",
+                 "verdict": "take", "leaf": g[10].hex(), "grant_diag": diag(dec(gb2)), "grant": gb2.hex(),
+                 "envelope": genv2.hex(), "message": enc(message(genv2)).hex(), "frame": frame(message(genv2)).hex()})
+    genv2, gb2, _ = envelope2("grant", ROOT, {**g, 3: ROOT.hash}, fake("sig2 8193", 8193))
+    bad("grant with a second signature of 8193 bytes", "env/sig2", message(genv2), L)
     _, genv, _ = signed({**kettle, 4: 2}, ADMIN)
     bad("admin's first grant without the root's record", "grants/admin", message(genv), K)
     root_bad("a reader under another device's ID", "grants/readers",
@@ -1103,6 +1159,19 @@ def credential_vectors():
     # The optional zone (section 3.3): skipped, the signature covers it.
     cred("period with an unknown optional field", ROOT,
          {1: 1, 2: GROUP, 3: ROOT.key, 4: 1, 7: exp, 10: tag, 11: PERIOD.key, 300: "later"})
+    m = {1: 1, 2: GROUP, 3: ROOT.key, 4: 2, 7: exp, 10: tag, 11: PERIOD.key}
+    env, body, swapped = envelope2("credential", ROOT, m)
+    take.append({"name": "period with a second signer of a later version, taken on the first signature alone",
+                 "verdict": "take", "diag": diag(dec(body)), "body": body.hex(), "id": sha(body).hex(),
+                 "envelope": env.hex()})
+    refuse.append({"name": "a second signature swapped on the way", "rule": "env/damaged", "verdict": "refuse",
+                   "envelope": swapped.hex()})
+    env, body, _ = envelope2("credential", ROOT, m, fake("sig2 8192", 8192))
+    take.append({"name": "a second signature of 8192 bytes", "verdict": "take", "diag": diag(dec(body)),
+                 "body": body.hex(), "id": sha(body).hex(), "envelope": env.hex()})
+    env, body, _ = envelope2("credential", ROOT, m, fake("sig2 8193", 8193))
+    refuse.append({"name": "a second signature of 8193 bytes", "rule": "env/sig2", "verdict": "refuse",
+                   "envelope": env.hex()})
     m = {1: 4, 2: tag, 3: PERIOD.key, 4: 1, 7: exp, 14: pad([SRVKEY.hash], 3)}
     env, _ = envelope("credential", PERIOD, m)
     refuse.append({"name": "members list of 3 (not a padded length)", "rule": "credentials/members/members",
@@ -1836,7 +1905,12 @@ def check_map(name, v):
                 return rule
         elif not ty_ok(ty, v[n]):
             return rule
-    # The one rule between fields of a map: AmneziaWG's junk sizes.
+    return between_rule(name, v)
+
+
+def between_rule(name, v):
+    """The rule between fields v breaks, its fields each in range, or None."""
+    # AmneziaWG's junk sizes.
     if name == "obfuscation" and v[2] > v[3]:
         return "obfuscation/jmax"
     if name == "offer" and 9 in v:
@@ -1850,6 +1924,197 @@ def check_map(name, v):
     if name == "welcome" and (3 in v or 8 in v):
         return "welcome/retired"
     return None
+
+
+# What a reader of this version does with an optional field whose value is
+# out of range (format 20.5): one row a field; every optional field not
+# listed refuses. core/src/msg/later.rs holds the same rows.
+LATER = {
+    ("welcome", 4): "absent", ("welcome", 7): "absent",
+    ("invite/path", 6): "unusable", ("invite/profile", 2): "bits 15",
+    ("offer", 3): "unusable", ("offer", 4): "unusable",
+    ("member-credentials", 3): "unusable", ("pair/info", 3): "bits 7",
+    ("forward/register", 4): "unusable", ("forward/registered", 4): "unusable",
+    ("guest", 7): "absent", ("result", 5): "absent", ("waiting/request", 5): "absent",
+}
+TRANSPORTS = ("obfuscation", "vless")
+
+
+class Refused(Exception):
+    pass
+
+
+ABSENT = object()
+
+
+def later_of(name, n):
+    return LATER.get((name, n), "refuse")
+
+
+def read_ty(ty, later, rule, v):
+    """A value as a reader of this version reads it: the value (lists
+    cleaned), ABSENT, or Refused(rule)."""
+    import unicodedata
+    w = ty.split(" ", 2)
+
+    def out():
+        if later == "absent":
+            return ABSENT
+        raise Refused(rule)
+
+    def shape(ok):
+        if not ok:
+            raise Refused(rule)
+
+    if w[0] == "uint":
+        shape(isinstance(v, int) and not isinstance(v, bool))
+        if later.startswith("bits "):
+            x = v & int(later[5:])
+            return x if x else ABSENT
+        lo, hi = map(int, w[1].split(".."))
+        return v if lo <= v <= hi else out()
+    if w[0] == "flag":
+        shape(isinstance(v, int))
+        return v if v == 1 else out()
+    if w[0] == "bytes" and ".." not in w[1]:
+        shape(isinstance(v, bytes) and len(v) == int(w[1]))
+        return v
+    if w[0] == "bytes":
+        shape(isinstance(v, bytes))
+        return v if 1 <= len(v) <= int(w[1].split("..")[1]) else out()
+    if w[0] == "id":
+        shape(isinstance(v, bytes) and len(v) == int(w[1]))
+        return v if any(v) else out()
+    if w[0] == "text":
+        shape(isinstance(v, str))
+        ok = 1 <= len(v.encode()) <= int(w[1].split("..")[1]) and \
+            not any(unicodedata.category(c) == "Cc" for c in v)
+        return v if ok else out()
+    if w[0] == "addr":
+        shape(isinstance(v, str))
+        return v if addr_ok(v) else out()
+    if w[0] == "key":
+        alg = int(w[1])
+        shape(isinstance(v, list) and len(v) == 2 and isinstance(v[0], int) and isinstance(v[1], bytes))
+        if v[0] != alg:
+            return out()
+        shape(key_ok(v, alg))
+        return v
+    if w[0] == "envelope":
+        shape(ty_ok(ty, v))
+        return v
+    if w[0] in ("array", "once", "set"):
+        n = int(w[1].split("..")[1])
+        inner = w[2][len("of "):]
+        shape(isinstance(v, list))
+        es = [enc(x) for x in v]
+        shape(not (w[0] == "once" and len(set(es)) != len(es)))
+        shape(not (w[0] == "set" and any(a >= b for a, b in zip(es, es[1:]))))
+        if len(v) > n:
+            return out()
+        el = "absent" if later == "absent" else "refuse"
+        kept = [x for x in (read_ty(inner, el, rule, e) for e in v) if x is not ABSENT]
+        return kept if kept else out()
+    if w[0] == "map" and later == "unusable":
+        shape(isinstance(v, dict))
+        known = {r[0] for r in TABLES[w[1]]}
+        try:
+            got = read_map(w[1], v)
+        except Refused:
+            return {}
+        return got if all(k in known for k in v) else {}
+    if w[0] == "map":
+        try:
+            return read_map(w[1], v)
+        except Refused:
+            raise Refused(rule)
+    raise ValueError(ty)
+
+
+def read_map(name, v):
+    """A map as a reader of this version reads it (core msg::read_map)."""
+    if not isinstance(v, dict):
+        raise Refused(name + "/shape")
+    rows = {r[0]: r for r in TABLES[name]}
+    out = {}
+    for k, x in v.items():
+        if k not in rows:
+            out[k] = x
+            continue
+        n, rule, ty, needed = rows[k]
+        got = read_ty(ty, "refuse" if needed else later_of(name, n), rule, x)
+        if got is not ABSENT:
+            out[k] = got
+    for n, rule, ty, needed in TABLES[name]:
+        if needed and n not in out:
+            raise Refused(rule)
+    rule = between_rule(name, out)
+    if rule:
+        raise Refused(rule)
+    return out
+
+
+def future_vectors():
+    """future.json: what a reader of this version reads a value from a later
+    version as, by each optional field's row."""
+    rows = []
+    for name, fields in TABLES.items():
+        for n, rule, ty, needed in fields:
+            if not needed:
+                rows.append({"table": name, "n": n, "later": later_of(name, n)})
+    obf = {1: 4, 2: 40, 3: 70, 4: [15, 20, 0, 0], 5: [[1000, 1100], [2000, 2100], [3000, 3100], [4000, 4100]]}
+    hub = [X25519, fake("hub wg key", 32)]
+    env = [enc({1: 1}), fake("sig", 64)]
+    welcome = {1: ROOT.key, 2: [env], 5: T0, 9: RECOVERY.key, 11: RECOVERY2.key}
+    info = {1: "kitchen tablet", 4: 1}
+    cases = []
+
+    def case(name, table, v):
+        try:
+            got = {"read": enc(read_map(table, v)).hex()}
+        except Refused as e:
+            got = {"rule": str(e)}
+        cases.append({"name": name, "table": table, "value": enc(v).hex(), **got})
+
+    case("an offer as written", "offer", {1: hub, 3: obf})
+    case("an offer, moved of a later version: refused", "offer", {1: hub, 6: 2})
+    case("an offer, settings out of range: unusable", "offer", {1: hub, 3: {**obf, 1: 0}})
+    case("an offer, settings with a later field: unusable", "offer", {1: hub, 3: {**obf, 7: 1}})
+    case("an offer, settings jmin above jmax: unusable", "offer", {1: hub, 3: {**obf, 2: 80}})
+    case("an offer, settings not a map: refused", "offer", {1: hub, 3: 1})
+    case("an offer, a VLESS way with a later port: unusable", "offer", {1: hub, 4: {1: fake("u", 16), 2: 70000}})
+    case("an offer, an endpoint out of range: refused", "offer", {1: hub, 2: ["host.example:1"]})
+    case("an offer, a field of a later version kept", "offer", {1: hub, 300: "later"})
+    case("a Welcome, 257 keys statements: none", "welcome", {**welcome, 4: [env] * 257})
+    case("a Welcome, 260 credentials: none", "welcome", {**welcome, 7: [env] * 260})
+    case("a Welcome, an empty list: refused", "welcome", {**welcome, 10: b""})
+    case("an info, unknown capability bits ignored", "pair/info", {**info, 3: 8 | 4})
+    case("an info, only unknown capability bits: none", "pair/info", {**info, 3: 8})
+    case("an info, the zero invitation ID: refused", "pair/info", {**info, 9: bytes(16)})
+    case("an info, a role of a later version: refused", "pair/info", {**info, 4: 5})
+    case("an info, an admin key of a later algorithm: refused", "pair/info", {**info, 5: [99, b"k"]})
+    case("a profile, unknown rights bits ignored", "invite/profile", {1: 1, 2: 16 | 2})
+    case("a profile, home only of a later version: refused", "invite/profile", {1: 1, 3: 2})
+    case("a path, settings of a later version: unusable", "invite/path", {1: 2, 6: {**obf, 3: 2000}})
+    case("a guest, a reason too long: none", "guest", {0: 17, 2: 3, 3: hub, 7: "x" * 257})
+    case("a guest, a reason with a control character: none", "guest", {0: 17, 2: 3, 3: hub, 7: "a\x07b"})
+    case("a result, a reason too long: none", "result",
+         {0: 10, 2: fake("cmd id", 16), 3: fake("by", 16), 4: 2, 5: "x" * 257})
+    case("a request, a wait over a day: none", "waiting/request",
+         {1: fake("invite id", 16), 2: TABLET.key, 3: {**info, 9: fake("invite id", 16)}, 4: 2,
+          5: 86_400_001, 6: 1})
+    case("a request, the zero invitation ID: refused", "waiting/request",
+         {1: bytes(16), 2: TABLET.key, 3: info, 4: 2, 6: 1})
+    case("relay online, 65 names: refused", "relay/online",
+         {0: 97, 2: sorted(fake("name %d" % i, 32) for i in range(65))})
+    case("a guest, a later op: refused", "guest", {0: 17, 2: 8, 3: hub})
+    case("a dismiss, the zero invitation ID: refused", "dismiss", {0: 27, 2: bytes(16)})
+    case("credentials, settings for later out of range: unusable", "member-credentials",
+         {0: 11, 2: [env], 3: {**obf, 2: 80}})
+    case("a key of the wrong length: refused", "tunnel", {0: 15, 2: [X25519, b"short"], 3: fake("c", 32)})
+    return {"note": "a reader of this version, by each optional field's row; shape always refuses, and so does a "
+                    "needed field; unusable reads as the empty map",
+            "rows": rows, "cases": cases}
 
 
 def check_message(m):
@@ -2056,21 +2321,31 @@ def invitation_vectors():
         take.append({"name": name, "invitation": enc(v).hex(),
                      "text": "cbb://join#" + __import__("base64").urlsafe_b64encode(enc(v)).decode().rstrip("=")})
 
-    def no(name, v, rule, cross=False):
+    def no(name, v, rule, cross=False, paths=None, rights=None):
         assert check_map("invite", v) is None if cross else True, name
         got = rule_of(v)
         assert got == rule, (name, got)
         e = {"name": name, "rule": rule, "invitation": enc(v).hex()}
         if cross:
             e["cross"] = "a rule between fields"
+        if paths is not None:
+            # The writer's check refuses it; a reader of this version takes
+            # it with the path whose settings it cannot read skipped
+            # (format 20.5: a transport's table makes only its way unusable).
+            e["reader_paths"] = paths
+        if rights is not None:
+            # Rights are bits: a reader of this version ignores those it
+            # does not know, and they grant nothing.
+            e["reader_rights"] = rights
         refuse.append(e)
 
     ok("home and away, plain WireGuard", base)
     ok("home and away, a group with AmneziaWG", {**base, 3: [home, {**guest, 6: obf}]})
     ok("a small device: a leaf, home only", {**base, 3: [home], 4: {1: 4, 3: 1}})
     no("settings on the home path", {**base, 3: [{1: 1, 6: obf}, guest]}, "invite/obfuscation", cross=True)
-    no("settings out of shape", {**base, 3: [home, {**guest, 6: {**obf, 3: 2000}}]}, "invite/path")
-    no("jmin above jmax", {**base, 3: [home, {**guest, 6: {**obf, 2: 80}}]}, "invite/path")
+    no("settings out of shape", {**base, 3: [home, {**guest, 6: {**obf, 3: 2000}}]}, "invite/path", paths=1)
+    no("jmin above jmax", {**base, 3: [home, {**guest, 6: {**obf, 2: 80}}]}, "invite/path", paths=1)
+    no("the only path's settings out of shape", {**base, 3: [{**guest, 6: {**obf, 3: 2000}}]}, "invite/path")
     no("a home path with an endpoint", {**base, 3: [{1: 1, 2: ["203.0.113.5:51820"]}, guest]}, "invite/path",
        cross=True)
     no("a guest key without its pre-shared key", {**base, 3: [home, {k: v for k, v in guest.items() if k != 5}]},
@@ -2090,7 +2365,8 @@ def invitation_vectors():
        "invite/path", cross=True)
     no("home only with a guest path", {**base, 4: {1: 1, 3: 1}}, "invite/profile", cross=True)
     no("guarded, not a leaf", {**base, 4: {1: 1, 4: 1}}, "invite/profile", cross=True)
-    no("rights 16", {**base, 4: {1: 1, 2: 16}}, "invite/profile")
+    no("rights 16", {**base, 4: {1: 1, 2: 16}}, "invite/profile", rights=0)
+    no("rights 16 and send", {**base, 4: {1: 1, 2: 18}}, "invite/profile", rights=2)
     no("a short secret", {**base, 2: fake("s", 16)}, "invite/shape")
     return take, refuse
 
@@ -2170,7 +2446,20 @@ def card_vectors():
         no(f"an endpoint {e}", card({11: [e]}), "card/endpoints")
     ok("an endpoint by IPv6 address", card({11: ["fwd.example.org:443", "[2001:db8::7]:443"]}))
     ok("an endpoint by NAT64 of a public address", card({11: ["[64:ff9b::c000:207]:443", "172.32.0.1:443"]}))
-    no("kinds 4", card({13: 4}), "card/kinds")
+    no("kinds of a later version only", card({13: 4}), "card/kinds")
+    # Bits this version does not know are ignored and grant nothing.
+    env, body = envelope("card", OPERATOR, card({13: 1 | 8, 14: 5 | 16}))
+    take.append({"name": "kinds and paths with bits of a later version", "envelope": env.hex(), "id": sha(body).hex(),
+                 "kinds": 1, "paths": 5})
+    no("paths of a later version only", card({14: 16}), "card/paths")
+    env, body, swapped = envelope2("card", OPERATOR, card())
+    take.append({"name": "a second signer of a later version, taken on the first signature alone",
+                 "envelope": env.hex(), "id": sha(body).hex()})
+    refuse.append({"name": "a second signature swapped on the way", "rule": "env/damaged", "envelope": swapped.hex()})
+    env, body, _ = envelope2("card", OPERATOR, card(), fake("sig2 8192", 8192))
+    take.append({"name": "a second signature of 8192 bytes", "envelope": env.hex(), "id": sha(body).hex()})
+    env, body, _ = envelope2("card", OPERATOR, card(), fake("sig2 8193", 8193))
+    refuse.append({"name": "a second signature of 8193 bytes", "rule": "env/sig2", "envelope": env.hex()})
     no("signed by another key than the operator it names", card(), "sig/verify", by=STRANGER)
     return take, refuse
 
@@ -2226,13 +2515,13 @@ def _save_path(path):
 
 def _name_ok(name):
     nb = len(name.encode())
-    return not (nb == 0 or nb > 255 or len(_save_name(name).encode()) > 255 or name in (".", "..")
+    return not (nb == 0 or nb > 765 or len(_save_name(name).encode()) > 765 or name in (".", "..")
                 or any(c in name for c in '/\\:*?"<>|') or name.endswith(".") or name.endswith(" ")
                 or _reserved(name) or any(c < " " or c == "\x7f" or "\x80" <= c < "\xa0" for c in name))
 
 
 def _path_ok(path):
-    return (0 < len(path.encode()) <= 4096 and len(_save_path(path).encode()) <= 4096
+    return (0 < len(path.encode()) <= 16384 and len(_save_path(path).encode()) <= 16384
             and all(_name_ok(n) for n in path.split("/")))
 
 
@@ -2295,7 +2584,7 @@ def manifest_ok(m):
         if 5 not in p or p.get(4, 0) > 1 << 30:
             return False
         total += p.get(4, 0)
-    if paths > 512 << 10 or total != m.get(1, 0) or total > 1 << 30:
+    if paths > 2 << 20 or total != m.get(1, 0) or total > 1 << 30:
         return False
     if files:
         kind = {_save_path(p[2]): 3 in p for p in parts}
@@ -2519,7 +2808,7 @@ def command_rule(env_b):
         return "commands/n"
     if not isinstance(m.get(6), int):
         return "commands/time"
-    if not (isinstance(m.get(7), int) and m[6] < m[7] <= m[6] + 30000):
+    if not (isinstance(m.get(7), int) and m[6] < m[7] <= m[6] + 600000):
         return "commands/expires"
     for f, rule in [(10, "commands/to"), (11, "commands/id")]:
         if not (isinstance(m.get(f), bytes) and len(m[f]) == 16):
@@ -2557,7 +2846,7 @@ def orders_rule(t, b):
             return "orders/paste"
         if kind in (1, 2):
             txt = o.get(13)
-            ok = isinstance(txt, str) and 14 not in o and 1 <= len(txt.encode()) <= (4096 if way == 2 else 1 << 20)
+            ok = isinstance(txt, str) and 14 not in o and 1 <= len(txt.encode()) <= (16384 if way == 2 else 1 << 20)
         else:
             ok = 13 not in o and isinstance(o.get(14), bytes) and len(o[14]) == 16 and way == 1
         return "take" if ok else "orders/paste"
@@ -2634,7 +2923,10 @@ def statement_rule(env_b):
         return "statements/signer"
     if not (isinstance(m.get(4), int) and m[4] >= 1):
         return "statements/epoch"
-    if m[1] != 1 or any(k < 256 and k not in (1, 2, 3, 4, 6, 10) for k in m) or len(env) == 3:
+    # A second signer of a later version: taken on the first signature alone.
+    if 8 in m and not (isinstance(m[8], bytes) and len(m[8]) == 32):
+        return "statements/signer2"
+    if m[1] != 1 or any(k < 256 and k not in (1, 2, 3, 4, 6, 8, 10) for k in m):
         return "hold"
     if m.get(6) == 0:
         return "form/default"
@@ -2661,8 +2953,14 @@ def beacon_rule(env_b):
     if len(env[0]) > 512:
         return "env/size"
     m = dec(env[0])
-    if any(k < 256 and k not in (1, 2, 3, 4, 6, 10, 11) for k in m):
+    if any(k < 256 and k not in (1, 2, 3, 4, 6, 8, 10, 11) for k in m):
         return "form/critical"
+    if (8 in m) != (len(env) == 3):
+        return "env/shape"
+    if len(env) == 3 and len(env[2]) > 8192:
+        return "env/sig2"
+    if 8 in m and not (isinstance(m[8], bytes) and len(m[8]) == 32):
+        return "beacons/signer2"
     if m.get(1) != 1:
         return "beacons/type"
     if not (isinstance(m.get(2), bytes) and len(m[2]) == 16):
@@ -2792,7 +3090,7 @@ def wave4_vectors():
         ("n 0", body(4, {4: 0})),
         ("no time", body(4, drop=(6,))),
         ("expires at its time", body(4, {7: T0})),
-        ("lifetime of 30 s and 1 ms", body(4, {7: T0 + 30001})),
+        ("lifetime of 600 s and 1 ms", body(4, {7: T0 + 600001})),
         ("to of 15 bytes", body(4, {10: bytes(15)})),
         ("nonce of 15 bytes", body(4, {13: bytes(15)})),
         ("epoch without sealed", body(1, {14: 2})),
@@ -2822,7 +3120,7 @@ def wave4_vectors():
         ("mode 3", 1, {10: 3}),
         ("mode with a later critical field", 1, {10: 1, 11: 1}),
         ("paste without text", 3, {10: 1, 12: 1}),
-        ("paste typed over 4 KiB", 3, {10: 2, 12: 1, 13: "x" * 4097}),
+        ("paste typed over 16 KiB", 3, {10: 2, 12: 1, 13: "x" * 16385}),
         ("paste of media with a text", 3, {10: 1, 12: 3, 13: "x"}),
         ("paste enter 2", 3, {10: 1, 11: 2, 12: 1, 13: "x"}),
         ("action with a capital", 5, {10: "Reboot"}),
@@ -2864,6 +3162,11 @@ def wave4_vectors():
     ]:
         env, b = envelope("keys", signer, m)
         statements.append({"name": name, "verdict": statement_rule(env), "diag": diag(m), "envelope": env.hex()})
+    for name, extra in [("a second signer of a later version, taken on the first signature alone", {}),
+                        ("a second signer of a later version and a later type: held", {1: 2})]:
+        m = {1: 1, 2: GROUP, 3: LAPTOP.hash, 4: 9, 6: T0, 10: [XWING, fake("sig2 statement", 1216)], **extra}
+        env, b, _ = envelope2("keys", LAPTOP, m)
+        statements.append({"name": name, "verdict": statement_rule(env), "diag": diag(dec(b)), "envelope": env.hex()})
     out["statements"] = statements
 
     # beacons
@@ -2883,6 +3186,14 @@ def wave4_vectors():
     ]:
         env, b = envelope("beacon", PHONE, m)
         beacons.append({"name": name, "verdict": beacon_rule(env), "diag": diag(m), "envelope": env.hex()})
+    env, b, _ = envelope2("beacon", PHONE, {1: 1, 2: GROUP, 3: PHONE.hash, 4: 5, 6: T0, 10: digest, 11: 12})
+    beacons.append({"name": "a second signer of a later version, taken on the first signature alone",
+                    "verdict": beacon_rule(env), "diag": diag(dec(b)), "envelope": env.hex()})
+    for n in (8192, 8193):
+        env, b, _ = envelope2("beacon", PHONE, {1: 1, 2: GROUP, 3: PHONE.hash, 4: 6, 6: T0, 10: digest, 11: 12},
+                              fake("sig2 %d" % n, n))
+        beacons.append({"name": "a second signature of %d bytes" % n, "verdict": beacon_rule(env), "diag": diag(dec(b)),
+                        "envelope": env.hex()})
     out["beacons"] = beacons
 
     # messages
@@ -2964,6 +3275,7 @@ def main():
         "codes": code_vectors(),
     }
     files["wave4.json"] = wave4_vectors()
+    files["future.json"] = future_vectors()
     # Each signature has one form: the high-S twin of a valid signature
     # (the same r, n - s) is refused for every kind.
     def twin(sig):

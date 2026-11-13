@@ -60,12 +60,12 @@
 pub const ENVELOPE_ALLOWANCE: usize = 1 + 9 + 9 + 64;
 
 /// The bytes counted for a second signature, whatever its length: nine
-/// units, which hold the largest one the format takes
-/// (`format::envelope::MAX_SIG2`) with its head. The count still depends
-/// on the body alone.
+/// units, which hold the largest one a record takes
+/// (`format::envelope::MAX_SIG2_RECORD`) with its head. The count still
+/// depends on the body alone.
 pub const SIG2_ALLOWANCE: usize = 9 * keep::UNIT;
 
-const _: () = assert!(SIG2_ALLOWANCE >= crate::format::envelope::MAX_SIG2 + 9);
+const _: () = assert!(SIG2_ALLOWANCE >= crate::format::envelope::MAX_SIG2_RECORD + 9);
 
 /// The bytes counted for a recovery head's second signature, K2's
 /// (`format::envelope::MAX_SIG2_HEAD` with its head). Heads are kept
@@ -353,6 +353,13 @@ impl Record {
         let max = if matches!(body.kind, Kind::Checkpoint { .. }) { MAX_CHECKPOINT_BODY } else { MAX_BODY };
         if e.body.len() > max {
             return Err(crate::format::Rule::ENV_SIZE.into());
+        }
+        // A record's second signature (a recovery head's has its own
+        // ceiling, checked with the envelope).
+        if !matches!(body.kind, Kind::Recovery { .. })
+            && e.sig2.is_some_and(|s| s.len() > crate::format::envelope::MAX_SIG2_RECORD)
+        {
+            return Err(crate::format::Rule::ENV_SIG2.into());
         }
         crate::format::sig::check_form(e.sig)?;
         body.check()?;

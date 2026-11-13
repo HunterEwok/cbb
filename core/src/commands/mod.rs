@@ -22,8 +22,8 @@
 //!   with a stale grant it obeys nobody.
 //!
 //! Every receiver keeps the last counter `n` of each signer and refuses one
-//! not above it ([`Counters`]); a receiver with a clock checks the 30 s
-//! lifetime too.
+//! not above it ([`Counters`]); a receiver with a clock checks the
+//! lifetime too: at most 600 s as read, 30 s as every 0.6 writer gives it.
 //!
 //! This is the new path beside the old one (`crate::command`); the service
 //! and the phones switch to it in wave 5.
@@ -53,8 +53,12 @@ pub const T_COMMAND: u64 = crate::msg::wave4::T_COMMAND;
 /// The message type of a one-time number.
 pub const T_NONCE: u64 = crate::msg::wave4::T_NONCE;
 
-/// A command's longest life: `expires_ms` is 1 ms to 30 s after `time_ms`.
-pub const LIFETIME_MS: u64 = 30_000;
+/// A command's longest life as a reader takes it: `expires_ms` is 1 ms to
+/// 600 s after `time_ms`. Room for a later writer; the replay guard is the
+/// per-signer counter, not the life.
+pub const MAX_LIFETIME_MS: u64 = 600_000;
+/// The life every 0.6 writer gives a command: 30 s.
+pub const WRITE_LIFETIME_MS: u64 = 30_000;
 /// How far a receiver's clock may be from its commander's.
 pub const SKEW_MS: u64 = 60_000;
 /// A command body's ceiling, and a `paste`'s.
@@ -128,16 +132,22 @@ fn fixed<const N: usize>(v: Option<&Value<'_>>, rule: Rule) -> Result<[u8; N], R
 impl<'a> Command<'a> {
     /// Reads a command from its envelope: the size, the envelope and the
     /// profile, each field's row (no critical field 0.6 does not define, so
-    /// no `class` and no `signer2`), the lifetime within 30 s, `epoch`
+    /// no `class`; a `signer2` with its second signature is taken on the
+    /// first alone), the lifetime within 600 s, `epoch`
     /// exactly with `sealed`, and `sealed` only on a type with orders. The
     /// signature's form is checked here, the signature itself by
     /// [`accept_member`] or [`accept_leaf`], which know the signer's key.
     pub fn read(b: &'a [u8]) -> Result<Command<'a>, Rule> {
         let e = Envelope::parse_limited(b, MAX_PASTE_BODY)?;
         let m = &e.map;
-        if m.as_map().unwrap_or(&[]).iter().any(|(k, _)| *k < 256 && !FIELDS.contains(k)) {
+        if m.as_map()
+            .unwrap_or(&[])
+            .iter()
+            .any(|(k, _)| *k < 256 && *k != crate::format::envelope::FIELD_SIGNER2 && !FIELDS.contains(k))
+        {
             return Err(Rule::FORM_CRITICAL);
         }
+        crate::format::envelope::signer2(m, Rule::field("commands/signer2"))?;
         let kind = m.get(1).and_then(Value::as_uint).filter(|t| (1..=10).contains(t)).ok_or(RULE_TYPE)?;
         let max = if kind == COMMAND_PASTE { MAX_PASTE_BODY } else { MAX_BODY };
         if e.body.len() > max {
@@ -149,7 +159,7 @@ impl<'a> Command<'a> {
         let n = m.get(4).and_then(Value::as_uint).filter(|n| *n >= 1).ok_or(RULE_N)?;
         let time_ms = m.get(6).and_then(Value::as_uint).ok_or(RULE_TIME)?;
         let expires_ms = m.get(7).and_then(Value::as_uint).ok_or(RULE_EXPIRES)?;
-        if expires_ms <= time_ms || expires_ms.saturating_sub(time_ms) > LIFETIME_MS {
+        if expires_ms <= time_ms || expires_ms.saturating_sub(time_ms) > MAX_LIFETIME_MS {
             return Err(RULE_EXPIRES);
         }
         let to = DeviceId(fixed(m.get(10), RULE_TO)?);
@@ -246,7 +256,7 @@ pub fn make(d: &Draft<'_>, signer: &dyn ExternalKey) -> Result<Vec<u8>, Error> {
         (3, Value::Bytes(&signer_hash.0)),
         (4, Value::Uint(d.n)),
         (6, Value::Uint(d.time_ms)),
-        (7, Value::Uint(d.time_ms.saturating_add(LIFETIME_MS))),
+        (7, Value::Uint(d.time_ms.saturating_add(WRITE_LIFETIME_MS))),
         (10, Value::Bytes(&d.to.0)),
         (11, Value::Bytes(&id)),
     ];
