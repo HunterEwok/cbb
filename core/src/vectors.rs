@@ -993,9 +993,9 @@ fn media_names() {
     }
     // The same as Go's TestCleanName and the kits' tests.
     for (given, want) in [
-        ("x".repeat(300), "x".repeat(255)),
-        (format!("CON.{}.x", "a".repeat(249)), format!("CON_.{}", "a".repeat(249))),
-        (format!("{}.", "a".repeat(254)), "a".repeat(254)),
+        ("x".repeat(800), "x".repeat(765)),
+        (format!("CON.{}.x", "a".repeat(759)), format!("CON_.{}", "a".repeat(759))),
+        (format!("{}.", "a".repeat(764)), "a".repeat(764)),
     ] {
         assert_eq!(crate::media::clean_name(&given), want, "{given:?}");
     }

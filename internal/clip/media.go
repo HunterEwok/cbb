@@ -34,10 +34,12 @@ const (
 	MaxTypes = 8
 	// MaxPaths bounds the bytes of all the paths of a manifest, so that a
 	// media event stays far below the frame limit.
-	MaxPaths = 512 << 10
-	// MaxPath and MaxName bound one path and each name in it.
-	MaxPath = 4096
-	MaxName = 255
+	MaxPaths = 2 << 20
+	// MaxPath and MaxName bound one path and each name in it: 255
+	// characters of three bytes each in a name. A name past what the
+	// receiver's file system takes is shortened when it is saved.
+	MaxPath = 16 << 10
+	MaxName = 765
 	// MaxAltText is the largest plain-text alternative of a media event.
 	MaxAltText = 256 << 10
 )

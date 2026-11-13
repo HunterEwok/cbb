@@ -347,7 +347,7 @@ func (m *manifest) validate() string {
 		}
 		sum += p.size
 	}
-	if paths > 512<<10 || sum != m.size || sum > maxMedia {
+	if paths > 2<<20 || sum != m.size || sum > maxMedia {
 		return bad
 	}
 	if files {
@@ -566,7 +566,7 @@ func savePath(path string) string {
 }
 
 func fileNameOK(name string) bool {
-	if name == "" || len(name) > 255 || len(saveName(name)) > 255 || name == "." || name == ".." ||
+	if name == "" || len(name) > 765 || len(saveName(name)) > 765 || name == "." || name == ".." ||
 		strings.ContainsAny(name, "/\\:*?\"<>|") || strings.HasSuffix(name, ".") || strings.HasSuffix(name, " ") ||
 		reserved(name) {
 		return false
@@ -580,7 +580,7 @@ func fileNameOK(name string) bool {
 }
 
 func pathOK(path string) bool {
-	if path == "" || len(path) > 4096 || len(savePath(path)) > 4096 {
+	if path == "" || len(path) > 16384 || len(savePath(path)) > 16384 {
 		return false
 	}
 	for _, n := range strings.Split(path, "/") {
@@ -742,7 +742,7 @@ func ordersVerdict(t uint64, b []byte) string {
 		txt, ok := o[uint64(13)].(string)
 		limit := 1 << 20
 		if way == 2 {
-			limit = 4096
+			limit = 16384
 		}
 		if !ok || hasCopy || len(txt) < 1 || len(txt) > limit {
 			return "orders/paste"

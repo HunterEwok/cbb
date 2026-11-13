@@ -219,10 +219,10 @@ func makeStrictVectors() strictVectors {
 		r("two names that are one once written", false, two("COM0.txt", "COM0_.txt")),
 		r("two names in other cases once written", true, two("COM0.txt", "com0_.txt")),
 		r("a file that another goes through once written", false, two("COM0", "COM0_/f")),
-		r("a name of 254 bytes that grows to 255", true, two(`COM0.`+strings.Repeat("a", 249), "f")),
-		r("a name of 255 bytes that grows to 256", false, two(`COM0.`+strings.Repeat("a", 250), "f")),
-		r("a path of 4096 bytes that grows past it", false, two(strings.Repeat("COM0/", 819)+"f", "g")),
-		r("a path of 4096 bytes that stays", true, two(strings.Repeat("COMX/", 819)+"f", "g")),
+		r("a name of 764 bytes that grows to 765", true, two(`COM0.`+strings.Repeat("a", 759), "f")),
+		r("a name of 765 bytes that grows to 766", false, two(`COM0.`+strings.Repeat("a", 760), "f")),
+		r("a path of 16384 bytes that grows past it", false, two(strings.Repeat("COM0/", 3275)+strings.Repeat("f", 9), "g")),
+		r("a path of 16384 bytes that stays", true, two(strings.Repeat("COMX/", 3275)+strings.Repeat("f", 9), "g")),
 		r("a slash before a combining mark", true, []byte(`{"size":0,"parts":[{"path":"a","dir":true},{"path":"a/\u0301b","dir":true}]}`)),
 	}
 	return v

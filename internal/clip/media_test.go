@@ -66,10 +66,10 @@ func TestManifestValidate(t *testing.T) {
 			t.Errorf("%s: Validate(%+v) succeeded", name, m.Parts)
 		}
 	}
-	// 140 folders of 15 names of 250 bytes: more than MaxPaths together.
+	// 140 folders of 60 names of 250 bytes: more than MaxPaths together.
 	var paths []Part
 	for i := range 140 {
-		names := make([]string, 15)
+		names := make([]string, 60)
 		for j := range names {
 			names[j] = strings.Repeat("d", 247) + fmt.Sprintf("%03d", i)
 		}
@@ -83,7 +83,7 @@ func TestManifestValidate(t *testing.T) {
 func TestNames(t *testing.T) {
 	for _, name := range []string{"a.txt", "R\u00e9sum\u00e9 2026.pdf", "con", "LPT9.log", "a.", "a ", "", ".", "..", "a/b", "a:b", "tab\there", strings.Repeat("\u00e9", 200), "\xff",
 		// Near the limit: a reserved base and a dot at the end both add to it.
-		"CON." + strings.Repeat("a", 249) + ".x", "con." + strings.Repeat("a", 250) + ".", strings.Repeat("a", 254) + ".", strings.Repeat("a", 255), strings.Repeat("\u00e9", 127) + " "} {
+		"CON." + strings.Repeat("a", 759) + ".x", "con." + strings.Repeat("a", 760) + ".", strings.Repeat("a", 764) + ".", strings.Repeat("a", 765), strings.Repeat("\u00e9", 382) + " "} {
 		clean := CleanName(name)
 		if err := CheckName(clean); err != nil {
 			t.Errorf("CleanName(%q) = %q: %v", name, clean, err)
@@ -94,9 +94,9 @@ func TestNames(t *testing.T) {
 	}
 	// The same as the kits' tests.
 	for given, want := range map[string]string{
-		strings.Repeat("x", 300):                 strings.Repeat("x", 255),
-		"CON." + strings.Repeat("a", 249) + ".x": "CON_." + strings.Repeat("a", 249),
-		strings.Repeat("a", 254) + ".":           strings.Repeat("a", 254),
+		strings.Repeat("x", 800):                 strings.Repeat("x", 765),
+		"CON." + strings.Repeat("a", 759) + ".x": "CON_." + strings.Repeat("a", 759),
+		strings.Repeat("a", 764) + ".":           strings.Repeat("a", 764),
 	} {
 		if got := CleanName(given); got != want {
 			t.Errorf("CleanName(%q) = %q, want %q", given, got, want)

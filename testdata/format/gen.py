@@ -2226,13 +2226,13 @@ def _save_path(path):
 
 def _name_ok(name):
     nb = len(name.encode())
-    return not (nb == 0 or nb > 255 or len(_save_name(name).encode()) > 255 or name in (".", "..")
+    return not (nb == 0 or nb > 765 or len(_save_name(name).encode()) > 765 or name in (".", "..")
                 or any(c in name for c in '/\\:*?"<>|') or name.endswith(".") or name.endswith(" ")
                 or _reserved(name) or any(c < " " or c == "\x7f" or "\x80" <= c < "\xa0" for c in name))
 
 
 def _path_ok(path):
-    return (0 < len(path.encode()) <= 4096 and len(_save_path(path).encode()) <= 4096
+    return (0 < len(path.encode()) <= 16384 and len(_save_path(path).encode()) <= 16384
             and all(_name_ok(n) for n in path.split("/")))
 
 
@@ -2295,7 +2295,7 @@ def manifest_ok(m):
         if 5 not in p or p.get(4, 0) > 1 << 30:
             return False
         total += p.get(4, 0)
-    if paths > 512 << 10 or total != m.get(1, 0) or total > 1 << 30:
+    if paths > 2 << 20 or total != m.get(1, 0) or total > 1 << 30:
         return False
     if files:
         kind = {_save_path(p[2]): 3 in p for p in parts}
@@ -2557,7 +2557,7 @@ def orders_rule(t, b):
             return "orders/paste"
         if kind in (1, 2):
             txt = o.get(13)
-            ok = isinstance(txt, str) and 14 not in o and 1 <= len(txt.encode()) <= (4096 if way == 2 else 1 << 20)
+            ok = isinstance(txt, str) and 14 not in o and 1 <= len(txt.encode()) <= (16384 if way == 2 else 1 << 20)
         else:
             ok = 13 not in o and isinstance(o.get(14), bytes) and len(o[14]) == 16 and way == 1
         return "take" if ok else "orders/paste"
@@ -2822,7 +2822,7 @@ def wave4_vectors():
         ("mode 3", 1, {10: 3}),
         ("mode with a later critical field", 1, {10: 1, 11: 1}),
         ("paste without text", 3, {10: 1, 12: 1}),
-        ("paste typed over 4 KiB", 3, {10: 2, 12: 1, 13: "x" * 4097}),
+        ("paste typed over 16 KiB", 3, {10: 2, 12: 1, 13: "x" * 16385}),
         ("paste of media with a text", 3, {10: 1, 12: 3, 13: "x"}),
         ("paste enter 2", 3, {10: 1, 11: 2, 12: 1, 13: "x"}),
         ("action with a capital", 5, {10: "Reboot"}),
