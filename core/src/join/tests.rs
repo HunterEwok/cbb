@@ -16,6 +16,7 @@ use super::invitation::{self, Invitation, Network, Open, Path, PathKind, Profile
 use super::welcome::{self, Joining, Welcome};
 use super::*;
 use crate::certs::sha256;
+use crate::format::DeviceId;
 use crate::format::{self, Alg};
 use crate::records::body::*;
 use crate::records::set::RecordSet;
@@ -277,7 +278,7 @@ fn the_short_code_opens_its_commitment() {
     let (mut j, joiner, c) = joiner_session();
     let nm = open.reply(n, c, 110).unwrap();
     assert_eq!(open.failures, 1, "counted once the member replied");
-    let (code, nj) = j.open(joiner, &e, &nm, &open.invitation.id);
+    let (code, nj, _) = j.open(joiner, &e, &nm, &open.invitation.id, DeviceId([1; 16]));
     assert_eq!(code.len(), 6);
     assert_eq!(open.short_code(n, &e, &nj, 120), Ok(code.clone()));
     open.end(n, true, 130);
@@ -293,7 +294,7 @@ fn the_short_code_opens_its_commitment() {
     // A second attempt while one is in progress: busy.
     assert_eq!(open.begin(Network::Home, 220), Err(PairError::Busy));
     // Walking away after the reply counts as a failed attempt.
-    let (_, nj2) = j2.open(joiner2, &e, &nm2, &open.invitation.id);
+    let (_, nj2, _) = j2.open(joiner2, &e, &nm2, &open.invitation.id, DeviceId([1; 16]));
     open.end(n2, false, 230);
     assert_eq!(open.failures, 1);
     assert_ne!(nj2, nj);
@@ -312,7 +313,7 @@ fn the_short_code_opens_its_commitment() {
     let n5 = open.begin(Network::Home, 1_000).unwrap();
     let (mut j5, joiner5, c5) = joiner_session();
     let nm5 = open.reply(n5, c5, 1_010).unwrap();
-    let (code5, nj5) = j5.open(joiner5, &e, &nm5, &open.invitation.id);
+    let (code5, nj5, _) = j5.open(joiner5, &e, &nm5, &open.invitation.id, DeviceId([1; 16]));
     assert_eq!(open.short_code(n5, &e, &nj5, 1_020), Ok(code5));
     let minutes = 1_020 + 5 * 60_000;
     assert_eq!(open.begin(Network::Home, minutes), Err(PairError::Busy), "still the open attempt");
@@ -323,7 +324,7 @@ fn the_short_code_opens_its_commitment() {
     let n6 = open.begin(Network::Home, 2_000_000).unwrap();
     let (mut j6, joiner6, c6) = joiner_session();
     let nm6 = open.reply(n6, c6, 2_000_010).unwrap();
-    let (_, nj6) = j6.open(joiner6, &e, &nm6, &open.invitation.id);
+    let (_, nj6, _) = j6.open(joiner6, &e, &nm6, &open.invitation.id, DeviceId([1; 16]));
     assert_eq!(open.short_code(n6, &e, &nj6, 2_000_000 + invitation::ATTEMPT_MS), Err(PairError::Closed));
     assert_eq!(open.failures, kept + 1);
     open.failures = kept;
@@ -331,7 +332,7 @@ fn the_short_code_opens_its_commitment() {
     let n7 = open.begin(Network::Home, 3_000_000).unwrap();
     let (mut j7, joiner7, c7) = joiner_session();
     let nm7 = open.reply(n7, c7, 3_000_010).unwrap();
-    let (_, nj7) = j7.open(joiner7, &e, &nm7, &open.invitation.id);
+    let (_, nj7, _) = j7.open(joiner7, &e, &nm7, &open.invitation.id, DeviceId([1; 16]));
     assert!(open.short_code(n7, &e, &nj7, 3_000_020).is_ok());
     open.end(n7, true, 3_000_020 + invitation::ANSWER_MS);
     assert_eq!(open.failures, kept + 1);
@@ -370,7 +371,7 @@ fn a_late_message_of_an_earlier_attempt_changes_nothing() {
     let first = open.begin(Network::Home, 0).unwrap();
     let (mut j1, joiner1, c1) = joiner_session();
     let nm1 = open.reply(first, c1, 10).unwrap();
-    let (_, nj1) = j1.open(joiner1, &e, &nm1, &open.invitation.id);
+    let (_, nj1, _) = j1.open(joiner1, &e, &nm1, &open.invitation.id, DeviceId([1; 16]));
     // The first attempt's time runs out; a second begins.
     let second = open.begin(Network::Home, invitation::ATTEMPT_MS).unwrap();
     let (_, _, c2) = joiner_session();
@@ -390,14 +391,14 @@ fn the_joiner_counts_its_sessions() {
     let e = [9u8; 32];
     // A session shows its code; until the person answers, no other starts.
     let (code, _) = j.start().unwrap();
-    let (shown, _) = j.open(code, &e, &[1; 32], &[3; 16]);
+    let (shown, _, _) = j.open(code, &e, &[1; 32], &[3; 16], DeviceId([1; 16]));
     assert_eq!(shown.len(), 6);
     assert_eq!(j.start().err(), Some(PairError::Busy), "the shown code stays until the person answers");
     // The session dropped before the person answered: it counted.
     j.answered();
     for _ in 1..invitation::MAX_FAILURES {
         let (code, _) = j.start().unwrap();
-        j.open(code, &e, &[2; 32], &[3; 16]);
+        j.open(code, &e, &[2; 32], &[3; 16], DeviceId([1; 16]));
         j.answered();
     }
     assert_eq!(j.start().err(), Some(PairError::TooMany), "three sessions per invitation");
@@ -425,7 +426,7 @@ fn the_code_takes_the_invitation_id() {
     let nm = open.reply(n, c, 110).unwrap();
     let mut other = open.invitation.id;
     other[0] ^= 1;
-    let (theirs, nj) = j.open(joiner, &e, &nm, &other);
+    let (theirs, nj, _) = j.open(joiner, &e, &nm, &other, DeviceId([1; 16]));
     let ours = open.short_code(n, &e, &nj, 120).unwrap();
     assert_ne!(theirs, ours);
     // The same session's code with the member's ID, at home without one.
@@ -1582,4 +1583,23 @@ fn every_gate_asks_whether_the_group_is_stopped() {
         w.check(&group, &point(&k("laptop")), &point(&tv), Joining::Ordinary).err(),
         Some(welcome::Refusal::Stopped)
     );
+}
+
+/// A guarded leaf waiting to be bound again gets its binding only from its
+/// own pairing session past the code step, naming the root its head named
+/// and its own key's ID; a leaf that waits for nothing gets none.
+#[test]
+fn only_the_leafs_own_session_past_its_code_makes_a_binding() {
+    use crate::format::grant::Kept;
+    let lock = k("lock").key.device_id();
+    let new_root = k("new root");
+    let waiting = Kept { guarded: true, ..Kept::default() }.changed(new_root.hash, 1);
+    let mut j = invitation::JoinerAttempts::default();
+    let (code, _) = j.start().unwrap();
+    let (_, _, shown) = j.open(code, &[9; 32], &[1; 32], &NO_INVITATION, lock);
+    assert!(shown.binding(&Kept::default()).is_none(), "nothing to bind");
+    let b = shown.binding(&waiting).unwrap();
+    assert_eq!(b, crate::format::grant::Binding::at_code_step(&waiting, lock).unwrap());
+    let other = crate::format::grant::Binding::at_code_step(&waiting, k("other lock").key.device_id()).unwrap();
+    assert_ne!(b, other);
 }

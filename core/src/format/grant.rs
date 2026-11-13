@@ -25,6 +25,13 @@
 //! recovery seq it knows as the newest, and never goes back to a lower one;
 //! a change starts its counters and commanders afresh.
 //!
+//! A guarded leaf that takes a change of root obeys nobody until it is
+//! bound again in person, by code, by the new root ([`Kept::changed`],
+//! [`read_bound`]): [`read`] takes no grant for it, the new root's
+//! included, and a kept grant made under a lower recovery seq than the one
+//! the leaf knows means the same, whatever the leaf remembers. An ordinary
+//! leaf follows a change of root: it takes the new root's grant.
+//!
 //! Two different records signed by the root the leaf keeps at one seq are
 //! a fork of that root (records rule 9): the leaf takes the pair from
 //! anyone ([`fork`]), stops obeying that root ([`Kept::fork`]) and takes no
@@ -131,6 +138,11 @@ pub const RULE_FORK: Rule = Rule::field("grants/fork");
 /// recovery seq it kept.
 pub const RULE_FORKED: Rule = Rule::field("grants/forked");
 
+/// A grant to a guarded leaf by any way but a binding in person by code
+/// after it took a change of root, or a binding that does not commit to
+/// this root, this leaf and this recovery seq.
+pub const RULE_REBIND: Rule = Rule::field("grants/rebind");
+
 /// A commander: its key hash and its uncompressed point.
 pub type Commander = (KeyHash, [u8; 65]);
 
@@ -153,6 +165,11 @@ pub struct Kept {
     /// Whether the leaf holds a fork of the root under that recovery seq:
     /// it then obeys nobody and takes no grant of that seq.
     pub forked: bool,
+    /// Whether the leaf, guarded, took a change of root, and the new
+    /// root's key hash and recovery seq from the head it verified: it obeys
+    /// nobody and takes a grant only by a binding in person by code
+    /// ([`read_bound`]).
+    pub rebind: Option<(KeyHash, u64)>,
 }
 
 impl Kept {
@@ -162,7 +179,35 @@ impl Kept {
     /// over, as at a change of root; guarded stays, and only a grant made
     /// under a higher recovery seq is taken again.
     pub fn fork(&self, recovery: u64) -> Kept {
-        Kept { guarded: self.guarded, recovery: recovery.max(self.recovery), forked: true, ..Kept::default() }
+        Kept {
+            guarded: self.guarded,
+            recovery: recovery.max(self.recovery),
+            forked: true,
+            rebind: self.rebind,
+            ..Kept::default()
+        }
+    }
+
+    /// The leaf's state once it verified a change of root to the root
+    /// with key hash `root` under recovery seq `recovery`: a guarded leaf's
+    /// grant is over, it obeys nobody and waits to be bound again in person
+    /// by that root ([`read_bound`]); an ordinary leaf keeps what it has
+    /// until the new root's grant comes, as its kept grant of a lower
+    /// recovery seq counts as none.
+    pub fn changed(&self, root: KeyHash, recovery: u64) -> Kept {
+        let newer = recovery > self.rebind.map_or(self.recovery, |(_, seq)| seq.max(self.recovery));
+        if !self.guarded || !newer {
+            return self.clone();
+        }
+        Kept { guarded: true, recovery: self.recovery, rebind: Some((root, recovery)), ..Kept::default() }
+    }
+
+    /// Whether the leaf, knowing `recovery` as the newest recovery seq,
+    /// waits to be bound again in person: it is guarded and took a change
+    /// of root, or keeps a grant made under a lower seq. The second needs
+    /// nothing remembered, so a leaf that lost the flag still waits.
+    pub fn needs_rebind(&self, recovery: u64) -> bool {
+        self.guarded && (self.rebind.is_some() || self.recovery < recovery)
     }
 
     /// The point of the commander with this key hash: the keys the leaf
@@ -207,8 +252,56 @@ impl Granted<'_> {
             grant_hash: sha256(&[self.grant.body]),
             recovery: self.recovery,
             forked: false,
+            rebind: None,
         }
     }
+}
+
+/// A binding in person by code: made only by the leaf's own pairing
+/// session once it passed its code step
+/// (`crate::join::invitation::Shown::binding`), for that session alone; no
+/// message carries it, it is never built from values a caller passes, and
+/// it is not kept past the session or a restart. It holds what the leaf
+/// knows by itself: the new root's key hash and the recovery seq from the
+/// head it verified ([`Kept::rebind`]) and its own device ID, the one of
+/// its TLS key in that session.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Binding {
+    root: KeyHash,
+    leaf: DeviceId,
+    recovery: u64,
+}
+
+impl Binding {
+    /// The binding a session of the leaf `leaf` makes at its code step,
+    /// from the leaf's kept state: none unless it waits to be bound again.
+    pub(crate) fn at_code_step(kept: &Kept, leaf: DeviceId) -> Option<Binding> {
+        kept.rebind.map(|(root, recovery)| Binding { root, leaf, recovery })
+    }
+}
+
+/// Reads a grant as [`read`] does, for a leaf bound in person by code:
+/// the binding must commit to this root, this leaf and `recovery`. It is
+/// the only way a guarded leaf that took a change of root takes a grant
+/// again; the grant must be the root's, guarded, under `recovery`, and it
+/// starts the counters afresh.
+pub fn read_bound<'a>(
+    msg: &Value<'a>,
+    root: &[u8],
+    leaf: &DeviceId,
+    group: &GroupId,
+    kept: Option<&Kept>,
+    recovery: u64,
+    binding: &Binding,
+) -> Result<Granted<'a>, Rule> {
+    if binding.root != Key::new(Alg::Es256, root).hash() || binding.leaf != *leaf || binding.recovery != recovery {
+        return Err(RULE_REBIND);
+    }
+    let got = read_any(msg, root, leaf, group, kept, recovery, true)?;
+    if !(got.by_root && got.guarded) {
+        return Err(RULE_REBIND);
+    }
+    Ok(got)
 }
 
 /// The admin key of the root's record in field 3, if it makes that key an
@@ -283,6 +376,9 @@ fn commanders(map: &Value<'_>) -> Result<Vec<Commander>, Rule> {
 /// (design-small-device section 15): a lifetime only in a guarded grant and
 /// within 40 days; at most eight commanders, four readers
 /// `[device ID, Key]` and eight neighbours, each list a set.
+///
+/// A guarded leaf that waits to be bound again ([`Kept::needs_rebind`])
+/// takes no grant here ([`RULE_REBIND`]): only [`read_bound`].
 pub fn read<'a>(
     msg: &Value<'a>,
     root: &[u8],
@@ -290,6 +386,18 @@ pub fn read<'a>(
     group: &GroupId,
     kept: Option<&Kept>,
     recovery: u64,
+) -> Result<Granted<'a>, Rule> {
+    read_any(msg, root, leaf, group, kept, recovery, false)
+}
+
+fn read_any<'a>(
+    msg: &Value<'a>,
+    root: &[u8],
+    leaf: &DeviceId,
+    group: &GroupId,
+    kept: Option<&Kept>,
+    recovery: u64,
+    bound: bool,
 ) -> Result<Granted<'a>, Rule> {
     let grant = Envelope::from_value(msg.get(FIELD_GRANT).ok_or(Rule::GRANTS_SHAPE)?)?;
     if grant.body.len() > MAX_GRANT {
@@ -316,6 +424,9 @@ pub fn read<'a>(
     }
     if kept.is_some_and(|k| k.forked && k.recovery == recovery) {
         return Err(RULE_FORKED);
+    }
+    if !bound && kept.is_some_and(|k| k.needs_rebind(recovery)) {
+        return Err(RULE_REBIND);
     }
     let was_guarded = kept.is_some_and(|k| k.guarded);
     let kept = kept.filter(|k| k.recovery == recovery);
