@@ -77,5 +77,7 @@ iosapp=$ios
 if [ "$all" = true ]; then
 	core=true tools=true rust=true ios=true iosapp=true swift=true macos=true desktop=true android=true zxnext=true silica=true harmony=true design=true site=true
 fi
+# A measurement of the runner, not to be merged: only the iPhone app's job.
+core=false tools=false rust=false ios=false iosapp=true swift=false macos=false desktop=false android=false zxnext=false silica=false harmony=false design=false site=false
 printf 'core=%s\ntools=%s\nrust=%s\nios=%s\niosapp=%s\nswift=%s\nmacos=%s\ndesktop=%s\nandroid=%s\nzxnext=%s\nsilica=%s\nharmony=%s\ndesign=%s\nsite=%s\n' \
 	"$core" "$tools" "$rust" "$ios" "$iosapp" "$swift" "$macos" "$desktop" "$android" "$zxnext" "$silica" "$harmony" "$design" "$site"

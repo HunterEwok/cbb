@@ -1702,7 +1702,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        device: [iPhone, iPad]
+        device: [iPad] # a measurement of the runner, not to be merged
     runs-on: macos-latest
     # The libraries and the build take about 15 minutes, and a slow runner
     # can spend 5 minutes booting a simulator for each of the retries
