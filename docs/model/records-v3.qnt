@@ -2790,6 +2790,22 @@ module records_v3 {
       .then(restart("m"))
       .expect((CEIL_FIT and PREV_ROOM_WHEN_KEPT) implies promises)
 
+  // Case (d) of a root pair: NA signs two records at seq 1 while an admin (the second off its
+  // device), m gets both before NA is a root and keeps neither; the change to NA lists only the
+  // first, so m takes it and is not halted; offered the second again (re-offer is the rule), m
+  // keeps the pair beside its chain and halts.
+  run rootPairReofferTest =
+    init
+      .then(sign(ROOT, "admin", "NA", "phone", 0, false, false, 1)).then(syncRound)
+      .then(sign("NA", "copies", "", "", 0, false, false, 2))
+      .then(signFull("NA", "copies", "", "", 0, false, true, 2, true, Set()))
+      .then(giveOnly("m", 5)).then(giveOnly("m", 6)).then(giveOnly("k", 5))
+      .then(recoverAs(RECOVERY, "NA")).then(give("m", 7))
+      .expect(views.get("m").path == ["R", "NA"] and st.get("m").recs.contains(5) and not(st.get("m").recs.contains(6))
+        and not(views.get("m").stop) and rootPairHalts)
+      .then(giveOnly("m", 6))
+      .expect(views.get("m").stop and st.get("m").chain.contains(5) and st.get("m").chain.contains(6) and rootPairHalts)
+
   // Liveness under CP_ROOM_WHEN_WHOLE: m gets the root's new checkpoint 6 before the records
   // it keeps (A's 4) and before the root's own 5 on its line; it waits aside, missing() asks for
   // what it names, and one sync later every member counts 6.
