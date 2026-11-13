@@ -449,10 +449,12 @@ struct PasteDrop: ViewModifier {
     /// A dropped item as a file: its bytes, read while the system keeps it,
     /// and its name.
     private static func file(_ p: NSItemProvider) async -> (name: String, data: Data)? {
-        await withCheckedContinuation { done in
+        // Read before the completion, which may not capture the provider.
+        let suggested = p.suggestedName
+        return await withCheckedContinuation { done in
             _ = p.loadFileRepresentation(forTypeIdentifier: UTType.data.identifier) { url, _ in
                 guard let url, let data = try? Data(contentsOf: url) else { return done.resume(returning: nil) }
-                done.resume(returning: (p.suggestedName.map { name in
+                done.resume(returning: (suggested.map { name in
                     url.pathExtension.isEmpty || name.hasSuffix("." + url.pathExtension) ? name : name + "." + url.pathExtension
                 } ?? url.lastPathComponent, data))
             }
