@@ -1278,7 +1278,9 @@ module records_v3 {
   // heads the list anchors (the replaced root's counting checkpoint's), keeping what the
   // writer counts under the new root. "nocp" is "honest" without that checkpoint; "from1" is
   // "honest" with from 1 (the key's admin records taken as a root's).
-  action signChain(k: Key, kind: str, target: Key, at: int, mode: str): bool = {
+  action signChain(k: Key, kind: str, target: Key, at: int, mode: str): bool = signChainG(k, kind, target, at, mode, Set())
+  // "given": the list is exactly `given` (a deviating recovery key's choice).
+  action signChainG(k: Key, kind: str, target: Key, at: int, mode: str, given: Set[Id]): bool = {
     val h = HOLDER.get(k)
     val s = st.get(h)
     val v = views.get(h)
@@ -1325,6 +1327,7 @@ module records_v3 {
     val keep = if (mode == "honest" or mode == "nocp" or mode == "from1") trimmed
       else if (mode == "literal") honest.filter(i => db.get(i).signer == cur or rootRemoval(db.get(i)) or cp.contains(i))
       else if (mode == "none") Set()
+      else if (mode == "given") given
       else db.keys().filter(i => onList(before, db.get(i).signer))
     val own = headLine(db.keys().map(i => db.get(i)), target)
     val from = if (mode == "from1") 1 else own.length() + 1
@@ -1452,7 +1455,7 @@ module records_v3 {
   // RESTART_REOFFERS: after the reload every record the member got is offered again, in ID
   // order, so what the old cut refused is judged under the new one (seed j.8004).
   pure val RESTART_KEEPS_CUT = false
-  pure val RESTART_REOFFERS = false
+  pure val RESTART_REOFFERS = true
   action restart(m: str): bool = {
     val s0 = recut({ ...st.get(m), cut: if (RESTART_KEEPS_CUT) st.get(m).cut else NOCUT }, db)
     val s1 = if (RESTART_REOFFERS) range(1, nextId).select(i => s0.got.contains(i)).foldl(s0, (s, i) => insertInto(s, db.get(i), db)) else s0
@@ -1561,8 +1564,34 @@ module records_v3 {
   }
   pure def listedTo(n: Store, s: Store, db: Id -> Record): Set[Id] =
     n.recs.union(n.chain).union(n.wait.intersect(missingOf(s, db)))
+  // SYNC_MEMBERS_ONLY: a member syncs only with a peer holding a key its state counts (a root
+  // on its path, an admin, a device of one, the recovery key); NEWEST_HEAD_ANY (the remedy for
+  // a recovery fork, simulator seed 5262): the newest recovery records of a peer's chain are
+  // handed to and taken from any peer holding a key the member's set ever knew, member or not;
+  // nothing else is.
+  pure val SYNC_MEMBERS_ONLY = false
+  pure val NEWEST_HEAD_ANY = false
+  // Members gone for good (a lost root device): they neither hand nor take anything.
+  pure val LOST = Set()
+  pure def keysOfMember(n: str): Set[Key] = {
+    val ks = HOLDER.keys().filter(k => HOLDER.get(k) == n)
+    ks.union(ks.filter(k => DEV.keys().contains(k)).map(k => DEV.get(k)))
+  }
+  def counts(m: str, n: str): bool = {
+    val v = views.get(m)
+    keysOfMember(n).exists(x => onList(v.path, x) or v.admins.keys().contains(x) or v.devices.contains(x))
+  }
+  def everKnew(m: str, n: str): bool = {
+    val known = recsOf(st.get(m).got, db).fold(Set(), (a, r) => a.union(Set(r.signer, r.target)))
+    keysOfMember(n).exists(x => known.contains(x) or ROOT == x)
+  }
+  def listedFrom(n: str, m: str): Set[Id] =
+    if (LOST.contains(n) or LOST.contains(m)) Set()
+    else if (not(SYNC_MEMBERS_ONLY) or counts(m, n)) listedTo(st.get(n), st.get(m), db)
+    else if (NEWEST_HEAD_ANY and everKnew(m, n)) st.get(n).chain.filter(i => isChain(db.get(i)))
+    else Set()
   def fetchable(m: str): Set[Id] =
-    MEMBERS.exclude(Set(m)).fold(Set(), (u, n) => u.union(listedTo(st.get(n), st.get(m), db))).exclude(heldBy(st.get(m)))
+    MEMBERS.exclude(Set(m)).fold(Set(), (u, n) => u.union(listedFrom(n, m))).exclude(heldBy(st.get(m)))
   action fetch = nondet m = MEMBERS.oneOf() nondet i = db.keys().oneOf() all {
     fetchable(m).contains(i),
     giveOnly(m, i),
@@ -2490,6 +2519,45 @@ module records_v3 {
       .then(syncRound).then(compactAt("a")).then(compactAt("c")).then(syncRound).then(syncRound)
       .expect(MEMBERS.forall(m => views.get(m).revoked.contains(DEVICE) and views.get(m) == views.get("r")
         and views.get(m).path == ["R", "NA", "NK"]) and promises)
+
+  // A recovery fork (simulator seed 5262): with the root's device lost, the recovery key
+  // writes two changes at seq 1, to NA listing only A's admission and to NK listing only C's
+  // and W's, so each side counts the other as no member. With SYNC_MEMBERS_ONLY and LOST =
+  // {r, k} (the root's device and the device that wrote the changes are gone) the sides never
+  // sync and neither a nor c halts: two live groups. With NEWEST_HEAD_ANY the
+  // newest heads cross anyway and every member halts, and nothing but chain records crosses.
+  run recForkSplitTest =
+    init
+      .then(signChainG(RECOVERY, "recover", "NA", 1, "given", Set(1)))
+      .then(signChainG(RECOVERY, "recover", "NK", 1, "given", Set(2, 3)))
+      .then(giveOnly("a", 4)).then(giveOnly("a", 5))
+      .then(giveOnly("c", 6)).then(giveOnly("c", 7))
+      .then(syncRound).then(syncRound).then(syncRound)
+      .expect((views.get("k").stop or LOST.contains("k")) and (
+        if (SYNC_MEMBERS_ONLY and LOST.contains("r") and LOST.contains("k") and not(NEWEST_HEAD_ANY))
+          not(views.get("a").stop) and not(views.get("c").stop) and views.get("a").path == ["R", "NA"] and views.get("c").path == ["R", "NK"]
+        else Set("a", "c").forall(m => views.get(m).stop)))
+
+  // The shape of simulator seed 47 (honest): NA, once an admin, becomes the root, admits X,
+  // freezes and thaws C and checkpoints; members compact; NK becomes the root and checkpoints.
+  // Every member restarted keeps the same records and state.
+  run restartAfterTwoChangesTest =
+    init
+      .then(sign(ROOT, "admin", "NA", "phone", 0, false, false, 1)).then(syncRound)
+      .then(sign("NA", "copies", "", "", 0, false, false, 1)).then(syncRound)
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound)
+      .then(sign("NA", "admin", "X", "phone", 0, false, false, 1)).then(syncRound)
+      .then(sign("NA", "freeze", COMPUTER, "", 0, false, false, 1)).then(syncRound)
+      .then(sign("NA", "thaw", "", "", 9, false, false, 1)).then(syncRound)
+      .then(sign("NA", "checkpoint", "", "", 0, false, false, 2)).then(syncRound)
+      .then(compactAt("a")).then(compactAt("c"))
+      .then(recoverAs(RECOVERY, "NK")).then(syncRound)
+      .then(sign("NK", "checkpoint", "", "", 0, false, false, 2)).then(syncRound)
+      .then(compactAt("m")).then(syncRound)
+      .expect(restartStable and promises)
+      .then(restart("r")).then(restart("a")).then(restart("c")).then(restart("k")).then(restart("m"))
+      .expect(MEMBERS.forall(m => views.get(m).path == ["R", "NA", "NK"] and views.get(m).checkpoint == 14
+        and views.get(m).frozen == Set() and st.get(m).recs == Set(1, 2, 3, 4, 5, 8, 9, 10, 14)) and promises)
 
   // --- (J): ceilings that fit the room -----------------------------------------------------
   // The cap: the root admits a fourth admin key (3 roots at 6 and 4 admins at 2 fill ROOM),
