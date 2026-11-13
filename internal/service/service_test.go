@@ -227,6 +227,10 @@ func needHooks(t *testing.T) {
 	}
 }
 
+// newTestClock starts a clock ahead of the real time for a service the
+// test starts with the clock's env, after checking that the Rust cbb under
+// test reads the hook; without the Rust service the test is skipped, as
+// startService skips it.
 func newTestClock(t *testing.T, ahead time.Duration) *testClock {
 	t.Helper()
 	if rustService() == "" {
