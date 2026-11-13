@@ -96,8 +96,9 @@ mod signed;
 pub mod sync;
 mod sys;
 pub mod takeover;
-pub mod tls;
 #[cfg(feature = "tunnel")]
+pub mod testhooks;
+pub mod tls;
 pub mod tunnel;
 mod update;
 mod update_os;
@@ -342,6 +343,9 @@ pub fn main() {
                     let scaled = if cbb_core::benchtime::ENABLED { " (time-scaled bench build)" } else { "" };
                     println!("cbb {} ({}/{}){scaled}", service::VERSION, std::env::consts::OS, std::env::consts::ARCH);
                     println!("{}", core_version());
+                    if let Some(n) = testhooks::note() {
+                        println!("{n}");
+                    }
                     Ok(())
                 }
                 "help" | "-h" | "-help" | "--help" => {
@@ -1715,7 +1719,7 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
     let res = (|| -> Result<()> {
         let (roots, sources) = match std::env::var_os("CBB_RELEASE_DIR") {
             Some(d) => {
-                let roots = match std::env::var_os("CBB_RELEASE_ROOTS") {
+                let roots = match testhooks::var_os("CBB_RELEASE_ROOTS") {
                     Some(f) => update::read_roots(std::path::Path::new(&f))?,
                     None => cbb_core::release::pinned_roots(),
                 };

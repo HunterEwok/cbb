@@ -1596,6 +1596,10 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The variables the end-to-end tests set to change whom `cbb` and `cbb-helper` trust or their
+  clock (`CBB_RELEASE_ROOTS`, `CBB_HELPER`, `CBB_TEST_AHEAD_FILE`, `CBB_TEST_ATTEST_ROOTS`,
+  `CBB_TEST_TPM_ROOTS`, `CBB_TEST_BLUEZ`) are read only by a build with the test hooks, which
+  says so in `cbb version` and its log; a release reads none of them.
 - The README leads with what Copy Beyond Borders is in one sentence, sums up its status in
   three lines (the full table moved to docs/parity.md, "On real devices") and lists what it
   also does. The keyboards, the TV remotes, the Nano ESP32 and the ZX Spectrum Next are on

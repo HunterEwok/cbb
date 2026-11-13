@@ -146,9 +146,17 @@ return an error. Where something truly cannot fail, allow the lint on that item 
 cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
 cargo build -p cbb-core --target riscv32imac-unknown-none-elf   # the core without an OS
 cargo deny --locked check licenses bans sources   # the crates' licenses and sources (deny.toml, CI's advisories job)
-cargo build --release && CBB_TEST_ALONE=$PWD/target/release/cbb \
-  go test ./internal/service -run TestAloneMember   # joins by the phone, syncs with Go members, and through the hub's tunnel
+cargo build --release -p cbb-member --features testhooks && go build -tags testhooks -o target/release/cbb-helper ./cmd/cbb-helper && \
+  CBB_TEST_ALONE=$PWD/target/release/cbb go test ./internal/service -run TestAloneMember   # joins by the phone, syncs with Go members, and through the hub's tunnel
 ```
+
+The end-to-end tests run `cbb` and `cbb-helper` built with the test hooks (the feature and
+build tag `testhooks`, which `benchtime` implies; `member/src/testhooks.rs`,
+`internal/testhooks`): only such a build reads the variables that change whom they trust or
+their clock (`CBB_TEST_AHEAD_FILE`, `CBB_RELEASE_ROOTS`, `CBB_HELPER`,
+`CBB_TEST_ATTEST_ROOTS`, `CBB_TEST_TPM_ROOTS`, `CBB_TEST_BLUEZ`), and says so in `cbb version`
+and its log. Never install one; a release never has them (CI's `hooks` job and the release
+workflow check it). A new `CBB_TEST_` variable goes into one of the lists in those files.
 
 The Nano ESP32's network code on Linux (`embassy/`, root for the TAP interface):
 

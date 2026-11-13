@@ -13,6 +13,14 @@ on:
 permissions:
   contents: read
 
+# The builds the end-to-end tests run read the test hooks, the variables that
+# change whom cbb and cbb-helper trust or their clock (member/src/testhooks.rs,
+# internal/testhooks); a release's never do, which the job "a release build
+# ignores the test hooks" shows. The packaging jobs install release builds.
+env:
+  E2E_FEATURES: testhooks
+  E2E_TAGS: testhooks
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -235,10 +243,10 @@ jobs:
         run: |
           rustup toolchain install stable --profile minimal
           rustup default stable
-          cargo build --locked --release -p cbb-member
+          cargo build --locked --release -p cbb-member --features "$E2E_FEATURES"
           mkdir -p "$RUNNER_TEMP/e2e"
           cp target/release/cbb "$RUNNER_TEMP/e2e/cbb"
-          go build -trimpath -cover -coverpkg="$COVERPKG" -o "$RUNNER_TEMP/e2e/cbb-helper" ./cmd/cbb-helper
+          go build -tags "$E2E_TAGS" -trimpath -cover -coverpkg="$COVERPKG" -o "$RUNNER_TEMP/e2e/cbb-helper" ./cmd/cbb-helper
           CBB_E2E_COVERDIR="$RUNNER_TEMP/e2e-cover" sh tools/e2e/e2e.sh "$RUNNER_TEMP/e2e/cbb"
           sudo chown -R "$(id -u)" "$RUNNER_TEMP/e2e-cover"
           go tool covdata textfmt -i "$RUNNER_TEMP/e2e-cover" -o cover-go-e2e.out
@@ -876,9 +884,9 @@ jobs:
           # cbb and its helper of one version: a release cbb takes only a
           # helper of its own release.
           version() {
-            CBB_VERSION=$1 cargo build --locked --release -p cbb-member
+            CBB_VERSION=$1 cargo build --locked --release -p cbb-member --features "$E2E_FEATURES"
             cp target/release/cbb "$2/cbb"
-            CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v$1" -o "$2/cbb-helper" ./cmd/cbb-helper
+            CGO_ENABLED=0 go build -tags "$E2E_TAGS" -trimpath -ldflags "-X github.com/HunterEwok/cbb/internal/version.Version=v$1" -o "$2/cbb-helper" ./cmd/cbb-helper
           }
           mkdir -p "$RUNNER_TEMP/v060" "$RUNNER_TEMP/v061"
           version 0.6.0 "$RUNNER_TEMP/v060"
@@ -1458,11 +1466,11 @@ jobs:
             New-Item -ItemType Directory -Force "$dir\packaging" | Out-Null
             $env:CBB_VERSION = $v
             $env:CBB_ARCH = 'amd64'
-            cargo build --locked -p cbb-member --features windowless --target-dir "$env:RUNNER_TEMP\target"
+            cargo build --locked -p cbb-member --features "windowless,$env:E2E_FEATURES" --target-dir "$env:RUNNER_TEMP\target"
             if ($LASTEXITCODE -ne 0) { throw 'cargo build failed' }
             Copy-Item "$env:RUNNER_TEMP\target\debug\cbb.exe", "$env:RUNNER_TEMP\target\debug\cbbw.exe" $dir
             $ld = "-X github.com/HunterEwok/cbb/internal/version.Version=v$v"
-            go build -trimpath -ldflags $ld -o "$dir\cbb-helper.exe" ./cmd/cbb-helper
+            go build -tags $env:E2E_TAGS -trimpath -ldflags $ld -o "$dir\cbb-helper.exe" ./cmd/cbb-helper
             if ($LASTEXITCODE -ne 0) { throw 'go build failed' }
             Copy-Item -Recurse packaging\windows "$dir\packaging\"
             Copy-Item -Recurse packaging\l10n "$dir\packaging\"
@@ -1561,8 +1569,8 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           # The computer is the Rust cbb, with cbb-helper beside it.
-          cargo build --locked --release -p cbb-member
-          go build -o target/release/cbb-helper ./cmd/cbb-helper
+          cargo build --locked --release -p cbb-member --features "$E2E_FEATURES"
+          go build -tags "$E2E_TAGS" -o target/release/cbb-helper ./cmd/cbb-helper
           # A throwaway keychain for the tool's identity, unlocked and the default.
           security create-keychain -p ci ci.keychain
           security list-keychains -d user -s ci.keychain
@@ -1905,8 +1913,8 @@ jobs:
           tool="$PWD/apps/android/kit/build/interop/cbb-interop"
           # The computer is the Rust cbb, with cbb-helper beside it.
           rustup toolchain install stable --profile minimal
-          cargo +stable build --locked --release -p cbb-member
-          go build -o target/release/cbb-helper ./cmd/cbb-helper
+          cargo +stable build --locked --release -p cbb-member --features "$E2E_FEATURES"
+          go build -tags "$E2E_TAGS" -o target/release/cbb-helper ./cmd/cbb-helper
           CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" CBB_SWIFT_INTEROP_TLS="$tool" go test -timeout 5m ./internal/service -run 'TestSwift' -v
       - name: the NDK the core is built with
         working-directory: apps/android
@@ -1968,11 +1976,11 @@ jobs:
       - name: the fleet's cbb, and cbb-helper, cbb-forward and cbb-relay beside it
         run: |
           rustup toolchain install stable --profile minimal
-          cargo +stable build --locked --release -p cbb-member
+          cargo +stable build --locked --release -p cbb-member --features "$E2E_FEATURES"
           mkdir -p "$RUNNER_TEMP/fleet"
           cp target/release/cbb target/release/cbb-relay "$RUNNER_TEMP/fleet/"
           for p in cbb-helper cbb-forward; do
-            CGO_ENABLED=0 go build -o "$RUNNER_TEMP/fleet/$p" "./cmd/$p"
+            CGO_ENABLED=0 go build -tags "$E2E_TAGS" -o "$RUNNER_TEMP/fleet/$p" "./cmd/$p"
           done
       - name: an emulator, with KVM
         # The runner has KVM for its user once udev lets it.
@@ -2173,8 +2181,8 @@ jobs:
       - name: the computers' cbb, and cbb-helper beside it
         run: |
           rustup toolchain install stable --profile minimal
-          cargo +stable build --locked --release -p cbb-member
-          go build -o target/release/cbb-helper ./cmd/cbb-helper
+          cargo +stable build --locked --release -p cbb-member --features "$E2E_FEATURES"
+          go build -tags "$E2E_TAGS" -o target/release/cbb-helper ./cmd/cbb-helper
       - name: the MIPS builds under qemu with computers, all but sync away from home
         # The hubs' and the invitations' tests need the tunnel, which the
         # MIPS build leaves out.
@@ -2193,6 +2201,45 @@ jobs:
   # The service's tests (internal/service) against the Rust service that
   # every release ships: each member is a Rust cbb with cbb-helper beside
   # it, a phone is phone-on-linux, and they find each other by mDNS.
+  hooks:
+    name: a release build ignores the test hooks
+    needs: changes
+    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.rust == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: cbb and cbb-helper as the release builds them, without the hooks, with all six set
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          cargo build --locked --release -p cbb-member
+          exe=$(go env GOEXE)
+          go build -trimpath -o "$RUNNER_TEMP/cbb-helper$exe" ./cmd/cbb-helper
+          go build -o "$RUNNER_TEMP/release-sign$exe" ./tools/release-sign
+          sh .github/release-ignores-hooks.sh "target/release/cbb$exe" "$RUNNER_TEMP/cbb-helper$exe" "$RUNNER_TEMP/release-sign$exe"
+      - name: the same script fails a build with the hooks
+        run: |
+          exe=$(go env GOEXE)
+          cargo build --locked --release -p cbb-member --features "$E2E_FEATURES" --target-dir "$RUNNER_TEMP/hooks"
+          go build -tags "$E2E_TAGS" -o "$RUNNER_TEMP/cbb-helper-hooks$exe" ./cmd/cbb-helper
+          if sh .github/release-ignores-hooks.sh "$RUNNER_TEMP/hooks/release/cbb$exe" "$RUNNER_TEMP/cbb-helper-hooks$exe" "$RUNNER_TEMP/release-sign$exe"; then
+            echo "the script took a build with the hooks" >&2
+            exit 1
+          fi
   service:
     name: service tests on the Rust cbb
     needs: changes
@@ -2225,9 +2272,9 @@ jobs:
         run: cargo test --locked --release -p cbb-member
       - name: the Rust cbb, cbb-helper beside it, and the phone's member on Linux
         run: |
-          cargo build --locked --release -p cbb-member
+          cargo build --locked --release -p cbb-member --features "$E2E_FEATURES"
           cargo build --locked --release -p cbb-ffi --features member,tunnel --example phone-on-linux
-          CGO_ENABLED=0 go build -trimpath -o target/release/cbb-helper ./cmd/cbb-helper
+          CGO_ENABLED=0 go build -tags "$E2E_TAGS" -trimpath -o target/release/cbb-helper ./cmd/cbb-helper
       - name: go test ./internal/service and the desktop connector with every Linux member a Rust cbb
         run: |
           Xvfb :5 -screen 0 640x480x24 >"$RUNNER_TEMP/xvfb.log" 2>&1 &
@@ -2403,7 +2450,7 @@ jobs:
       - name: cbb update, of cbb without its helper, installs a newer signed release, puts the old one back, and sets the timer
         run: |
           for v in 0.6.0 0.6.1; do
-            CBB_VERSION=$v cargo build --locked
+            CBB_VERSION=$v cargo build --locked --features "$E2E_FEATURES"
             mkdir -p "$RUNNER_TEMP/alone-$v"
             cp target/debug/cbb "$RUNNER_TEMP/alone-$v/cbb"
           done
@@ -2456,7 +2503,7 @@ jobs:
           sudo ip addr add 192.168.69.1/24 dev tap0
           sudo ip link set tap0 up
           # The computer it joins is a cbb, with cbb-helper beside it.
-          go build -o target/release/cbb-helper ./cmd/cbb-helper
+          go build -tags "$E2E_TAGS" -o target/release/cbb-helper ./cmd/cbb-helper
           CBB_ESP32_ON_LINUX="$PWD/target/release/esp32-on-linux" CBB_TEST_RUST_SERVICE="$PWD/target/release/cbb" \
             go test -race ./internal/service -run TestEmbassyJoiner -v
       - name: the phones' Rust tunnel and hub through ffi/ work with the Go hub and clients (WireGuard, AmneziaWG, VLESS with XHTTP)
@@ -2899,7 +2946,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonecore, service, rust, rustmips, esp32, zxnext, silica, advisories, docker, differential, model]
+    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, homebrew, windows, kit, app, macapp, trayapp, android, androidemu, fdroid, phonecore, hooks, service, rust, rustmips, esp32, zxnext, silica, advisories, docker, differential, model]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

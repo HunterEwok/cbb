@@ -22,6 +22,7 @@ import (
 	"github.com/HunterEwok/cbb/internal/control"
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/release"
+	"github.com/HunterEwok/cbb/internal/testhooks"
 	"github.com/HunterEwok/cbb/internal/tpmkey"
 )
 
@@ -190,11 +191,11 @@ type attestation struct {
 }
 
 // The roots attestations must lead to: Google's and the TPM makers', but
-// in tests the PEM files CBB_TEST_ATTEST_ROOTS (the roots' public keys,
+// in a build with the test hooks (internal/testhooks) the PEM files CBB_TEST_ATTEST_ROOTS (the roots' public keys,
 // as the policy takes them, or their certificates) and CBB_TEST_TPM_ROOTS
 // (certificates) name.
 func androidRoots() ([][]byte, error) {
-	f := os.Getenv("CBB_TEST_ATTEST_ROOTS")
+	f := testhooks.Getenv("CBB_TEST_ATTEST_ROOTS")
 	if f == "" {
 		return nil, nil
 	}
@@ -222,7 +223,7 @@ func androidRoots() ([][]byte, error) {
 }
 
 func tpmRoots() ([]*x509.Certificate, error) {
-	f := os.Getenv("CBB_TEST_TPM_ROOTS")
+	f := testhooks.Getenv("CBB_TEST_TPM_ROOTS")
 	if f == "" {
 		return nil, nil
 	}

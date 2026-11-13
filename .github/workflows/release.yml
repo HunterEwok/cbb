@@ -203,6 +203,17 @@ jobs:
             sh packaging/macos/sign.sh "$id" "$RUNNER_TEMP/$f"
             sh packaging/macos/notarize.sh "$RUNNER_TEMP/$f"
           done
+      - name: no program of the release reads the test hooks
+        # A build with them (member/src/testhooks.rs, internal/testhooks)
+        # carries the line it says them with; a release's never does.
+        run: |
+          for f in "$RUNNER_TEMP"/cbb "$RUNNER_TEMP"/cbb.exe "$RUNNER_TEMP"/cbbw.exe "$RUNNER_TEMP"/cbb-helper* "$RUNNER_TEMP"/cbb-forward* "$RUNNER_TEMP"/cbb-relay*; do
+            [ -f "$f" ] || continue
+            if grep -aqF "test hooks build: reads the test variables" "$f"; then
+              echo "$f was built with the test hooks" >&2
+              exit 1
+            fi
+          done
       - name: archive
         run: |
           bin=$RUNNER_TEMP/cbb

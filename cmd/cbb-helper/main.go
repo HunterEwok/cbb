@@ -20,6 +20,7 @@ import (
 	"github.com/HunterEwok/cbb/internal/group"
 	"github.com/HunterEwok/cbb/internal/helper"
 	"github.com/HunterEwok/cbb/internal/peripheral"
+	"github.com/HunterEwok/cbb/internal/testhooks"
 	"github.com/HunterEwok/cbb/internal/version"
 )
 
@@ -30,6 +31,9 @@ func main() {
 func run(args []string, in io.Reader, out, errw io.Writer, terminal bool) int {
 	if len(args) == 1 && (args[0] == "version" || args[0] == "-version" || args[0] == "--version") {
 		fmt.Fprintln(out, version.String())
+		if n := testhooks.Note(); n != "" {
+			fmt.Fprintln(out, n)
+		}
 		return 0
 	}
 	if len(args) == 1 && args[0] == "uinput" {
@@ -38,6 +42,9 @@ func run(args []string, in io.Reader, out, errw io.Writer, terminal bool) int {
 	if len(args) > 0 || terminal {
 		fmt.Fprintln(errw, "cbb-helper: the service cbb starts this program itself; run cbb instead")
 		return 2
+	}
+	if n := testhooks.Note(); n != "" {
+		fmt.Fprintln(errw, "cbb-helper:", n)
 	}
 	watchParent()
 	err := newServer().Serve(in, out)

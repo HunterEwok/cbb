@@ -120,10 +120,10 @@ impl std::fmt::Display for Remote {
 
 impl std::error::Error for Remote {}
 
-/// Where the helper is: CBB_HELPER if set (empty for none), else cbb-helper
-/// beside this program, if it is there.
+/// Where the helper is: in a build with the test hooks CBB_HELPER if set
+/// (empty for none), else cbb-helper beside this program, if it is there.
 pub fn locate() -> Option<PathBuf> {
-    if let Some(p) = std::env::var_os("CBB_HELPER") {
+    if let Some(p) = crate::testhooks::var_os("CBB_HELPER") {
         return if p.is_empty() { None } else { Some(PathBuf::from(p)) };
     }
     let exe = std::env::current_exe().ok()?;
@@ -574,7 +574,7 @@ mod tests {
     #[test]
     fn locate_takes_the_environment() {
         // Only CBB_HELPER's value is read here; the test sets nothing.
-        if std::env::var_os("CBB_HELPER").is_none() {
+        if crate::testhooks::var_os("CBB_HELPER").is_none() {
             let beside = std::env::current_exe().unwrap().with_file_name(PROGRAM);
             assert_eq!(locate(), beside.is_file().then_some(beside));
         }

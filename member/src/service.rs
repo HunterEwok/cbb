@@ -321,6 +321,9 @@ pub fn run(cfg: Config) -> Result<()> {
     }
     std::fs::create_dir_all(&cfg.state_dir).context(format!("cannot create {}", cfg.state_dir.display()))?;
     let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(log_line);
+    if let Some(n) = crate::testhooks::note() {
+        log(&format!("cbb: {n}"));
+    }
     // A panic ends the service (panic = "abort"); the hook keeps what broke
     // for the bug report after the restart (src/bugs.rs).
     crate::bugs::install(&cfg.state_dir);
