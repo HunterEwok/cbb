@@ -195,9 +195,12 @@ A9 and U14 to U18).
   audit looks only at what a person can reach.
 - The iPad (`PadUITests`, skipped on an iPhone): Home with a made-up group, which a debug
   build starts with when launched with `-showcase` (`App/Showcase.swift`; nothing leaves the
-  app): the sidebar's sections, a tile's card beside the tiles, the arrows and Escape, a
-  settings part, Command-1, portrait, the card at the left in Arabic, and clipped text at the
-  largest size; each screen's picture is attached.
+  app): the sidebar's sections, a tile's card beside the tiles, the arrows and Command-period
+  (the cancel that arrives as Escape), a settings part, Command-1, portrait, the card at the
+  left in Arabic, and clipped text at the largest size; each screen's picture is attached. The
+  Escape key itself reaches no app from XCUITest on the iPadOS 27 simulator, so it is checked
+  by hand: on the iPad simulator (or an iPad with a keyboard) a tap on a tile, then →, moves
+  the card to the next device, and Esc closes it; ← and → in the search field move its cursor.
 - The other big screens: on Android `TabletHomeTest` keeps the sidebar's sections across a
   restart (their keys back to the same section); the HarmonyOS sidebar, keys and drops are
   compiled and linted by `apps/harmony/check.sh`, and the Aurora layout by `qmllint`. None of

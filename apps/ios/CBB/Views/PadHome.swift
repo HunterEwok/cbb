@@ -378,6 +378,10 @@ struct PadDevices: View {
             Button { selected = nil } label: { Color.clear }
                 .keyboardShortcut(.escape, modifiers: [])
                 .disabled(selected == nil)
+            // Command-period, the iPad's other cancel.
+            Button { selected = nil } label: { Color.clear }
+                .keyboardShortcut(".", modifiers: .command)
+                .disabled(selected == nil)
         }
         .frame(width: 0, height: 0)
         .opacity(0)

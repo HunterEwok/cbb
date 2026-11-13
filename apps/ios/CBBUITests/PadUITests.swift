@@ -64,9 +64,18 @@ final class PadUITests: XCTestCase {
         XCTAssertTrue(thinkpad.waitForExistence(timeout: 5))
         XCTAssertTrue(thinkpad.isSelected, "the right arrow chooses the next device")
 
+        // Command-period, the iPad's cancel, which UIKit hands on as Escape
+        // (UIKeyCommand.inputEscape), so the card's Escape shortcut takes
+        // it. The Escape key itself is not sent: on the iPadOS 27
+        // simulator XCUITest's Escape reaches no app, not even a template
+        // app with nothing else in it (tried 2026-11-13, Xcode 27.2; the
+        // same seen in unwired-dev/product#1867). A real Escape is checked
+        // by hand (docs/testing.md, the iPad's UI tests). The period goes
+        // through the Mac's keyboard layout: on a Mac set to another
+        // layout than ABC or US it arrives as another key.
         app.settle("the next device's card")
-        app.typeKey(.escape, modifierFlags: [])
-        XCTAssertTrue(app.buttons["Close"].waitForNonExistence(timeout: 5), "Escape closes the card")
+        app.typeKey(".", modifierFlags: .command)
+        XCTAssertTrue(app.buttons["Close"].waitForNonExistence(timeout: 5), "Command-period, the cancel that arrives as Escape, closes the card")
 
         // The sidebar's row; the same words also stand on a button outside it.
         app.collectionViews["Sidebar"].staticTexts["Appearance"].tap()
