@@ -51,6 +51,7 @@ type pushFile struct {
 		Env       uint64 `json:"env"`
 		Token     string `json:"token"`
 		Slot      string `json:"slot"`
+		Face      string `json:"face"`
 		Seq       uint64 `json:"seq"`
 		Challenge string `json:"challenge"`
 	} `json:"sends"`
@@ -193,9 +194,9 @@ func pushOpen(labels map[string]string, pk []byte, seq uint64, sealed []byte) st
 }
 
 // pushSendVerdict checks the send key's signature over [env, token, slot,
-// seq] and the service's challenge when there is one, as the service does:
-// good, held (an algorithm 0.6 does not know) or the rule.
-func pushSendVerdict(label string, keyEnc, sig []byte, env uint64, token, slot []byte, seq uint64, challenge []byte) string {
+// face, seq] and the service's challenge when there is one, as the service
+// does: good, held (an algorithm 0.6 does not know) or the rule.
+func pushSendVerdict(label string, keyEnc, sig []byte, env uint64, token, slot, face []byte, seq uint64, challenge []byte) string {
 	k, err := strict(keyEnc)
 	if err != nil || !tyOK("signer 1..4096", k) {
 		return "push/send-sig"
@@ -204,7 +205,7 @@ func pushSendVerdict(label string, keyEnc, sig []byte, env uint64, token, slot [
 	if key[0].(uint64) != 1 {
 		return "held"
 	}
-	signed := []any{env, token, slot, seq}
+	signed := []any{env, token, slot, face, seq}
 	if challenge != nil {
 		signed = append(signed, challenge)
 	}
@@ -220,7 +221,7 @@ func pushRegistration(m any) string {
 	}
 	mm := m.(map[any]any)
 	n := 0
-	for _, k := range []uint64{2, 3, 4, 7, 8, 9} {
+	for _, k := range []uint64{2, 3, 4, 7, 8, 9, 11} {
 		if _, there := mm[k]; there {
 			n++
 		}
@@ -230,7 +231,7 @@ func pushRegistration(m any) string {
 	switch {
 	case kinds == 0 && n == 0 && !challenge:
 		return "off"
-	case kinds != 0 && n == 6:
+	case kinds != 0 && n == 7:
 		if bytes.Equal(mm[uint64(4)].([]byte), make([]byte, 32)) {
 			return "push/key"
 		}
@@ -358,7 +359,7 @@ func checkPush(dir string) {
 		count++
 	}
 	for _, x := range f.Sends {
-		got := pushSendVerdict(f.Labels["send"], unhex(x.Key), unhex(x.Sig), x.Env, unhex(x.Token), unhex(x.Slot), x.Seq,
+		got := pushSendVerdict(f.Labels["send"], unhex(x.Key), unhex(x.Sig), x.Env, unhex(x.Token), unhex(x.Slot), unhex(x.Face), x.Seq,
 			challengeOf(x.Challenge))
 		if got != x.Verdict {
 			fail("push send key %s: %q, want %q", x.Name, got, x.Verdict)

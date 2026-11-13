@@ -22,8 +22,12 @@
 //!   carries its record's own time. The service drops a repeat by the bytes,
 //!   and the phone's extension shows nothing it already showed.
 //! - With each token the phone draws a send key; each registration carries
-//!   its signature over the platform, the token and the registration's
-//!   number. The service keeps the newest number per token and refuses an
+//!   its signature over the platform, the token, the group's slot, the tag
+//!   of the group's face toward the service and the registration's number:
+//!   it holds only on a connection of that face, so a holder of one
+//!   registration sends nothing to the phone from a group of its own
+//!   making, and a new period (each removal starts one) asks for a new
+//!   registration. The service keeps the newest number per token and refuses an
 //!   older one: a member removed since the phone registered again holds
 //!   only older ones (until the first send under the new number, an old one
 //!   passes, and its bodies do not open under the new push key). A member
@@ -107,6 +111,10 @@ pub const SENT_KEY: u64 = 6;
 /// The send key, its signature or the registration's number does not hold
 /// for this token: the registration is an old one.
 pub const SENT_STALE: u64 = 7;
+/// The registration's number is more than [`MAX_SEQ_AHEAD_MS`] past the
+/// service's clock (rule S-1): its sender asks the phone, with
+/// `push-renew`'s `ahead`, to number its next registration by its clock.
+pub const SENT_AHEAD: u64 = 8;
 
 /// The longest wait a service asks of a sender: a day.
 pub const MAX_RETRY_MS: u64 = 86_400_000;
@@ -168,11 +176,15 @@ pub static PUSH: Table = Table {
         f(8, "push/send-sig", Ty::BytesUpTo(MAX_SEND_SIG), false),
         f(9, "push/slot", Ty::Bytes(16), false),
         f(10, "push/challenge", Ty::Bytes(16), false),
+        f(11, "push/face", Ty::Bytes(16), false),
     ],
 };
 
 /// Member message `push-renew` (t 29).
-pub static RENEW: Table = Table { shape: "push-renew/shape", fields: &[f(2, "push-renew/slot", Ty::Bytes(16), true)] };
+pub static RENEW: Table = Table {
+    shape: "push-renew/shape",
+    fields: &[f(2, "push-renew/slot", Ty::Bytes(16), true), f(3, "push-renew/ahead", Ty::Flag, false)],
+};
 
 /// The token of env 4 (UnifiedPush, RFC 8030 and 8291): the endpoint and
 /// the phone's keys for the message's encryption.
@@ -301,6 +313,12 @@ pub struct On {
     /// group's ID): the service keeps the highest seq per (token, slot),
     /// so one group's registrations never silence another's.
     pub slot: [u8; 16],
+    /// The tag of the group's face toward the push service (the `group`
+    /// of that face's hubs' and members' credentials) in the period the
+    /// phone registered in: the signature covers it, so the registration
+    /// is good only on a connection of that face, never from another
+    /// group's.
+    pub face: [u8; 16],
     /// The last challenge the push service sent to the token, which the
     /// send key's signature then covers: possession of the token, proved
     /// to the service, confirms its binding to this send key.
@@ -310,7 +328,14 @@ pub struct On {
 impl On {
     /// What its signature covers, under registration number `seq`.
     pub fn signed(&self, seq: u64) -> Signed<'_> {
-        Signed { env: self.env, token: &self.token, slot: &self.slot, seq, challenge: self.challenge.as_ref() }
+        Signed {
+            env: self.env,
+            token: &self.token,
+            slot: &self.slot,
+            face: &self.face,
+            seq,
+            challenge: self.challenge.as_ref(),
+        }
     }
 }
 
@@ -326,10 +351,19 @@ impl core::fmt::Debug for Registration {
 }
 
 /// What the send key signs, under the label `cbb push send v1`: the
-/// platform, the token, the registration's slot and its number, and the
-/// last challenge the service sent to the token when the phone has one.
-pub fn send_message(env: u64, token: &[u8], slot: &[u8; 16], seq: u64, challenge: Option<&[u8; 16]>) -> Vec<u8> {
-    let mut a = alloc::vec![Value::Uint(env), Value::Bytes(token), Value::Bytes(slot), Value::Uint(seq)];
+/// platform, the token, the registration's slot, the group's face toward
+/// the service, its number, and the last challenge the service sent to the
+/// token when the phone has one.
+pub fn send_message(
+    env: u64,
+    token: &[u8],
+    slot: &[u8; 16],
+    face: &[u8; 16],
+    seq: u64,
+    challenge: Option<&[u8; 16]>,
+) -> Vec<u8> {
+    let mut a =
+        alloc::vec![Value::Uint(env), Value::Bytes(token), Value::Bytes(slot), Value::Bytes(face), Value::Uint(seq)];
     if let Some(c) = challenge {
         a.push(Value::Bytes(c));
     }
@@ -360,13 +394,14 @@ pub struct Signed<'a> {
     pub env: u64,
     pub token: &'a [u8],
     pub slot: &'a [u8; 16],
+    pub face: &'a [u8; 16],
     pub seq: u64,
     pub challenge: Option<&'a [u8; 16]>,
 }
 
 impl Signed<'_> {
     fn message(&self) -> Vec<u8> {
-        send_message(self.env, self.token, self.slot, self.seq, self.challenge)
+        send_message(self.env, self.token, self.slot, self.face, self.seq, self.challenge)
     }
 }
 
@@ -386,27 +421,20 @@ pub fn sign_send(key: &dyn crate::identity::ExternalKey, s: &Signed<'_>) -> crat
     crate::records::key::sign_es256(key, LABEL_SEND, &s.message())
 }
 
-/// The number a phone gives its next registration: one more than the one
-/// it saved, and never less than its clock in milliseconds (a clock past
-/// [`MAX_CLOCK_MS`] read as that), so a phone restored from a backup with
-/// an older number still moves forward at the service. A saved number
-/// more than [`MAX_SEQ_AHEAD_MS`] ahead of the clock (saved while the
-/// clock was ahead) is one the service refuses, and so would be every one
-/// after it until the clock caught up: the next is the clock then
-/// ([`seq_was_ahead`]), which members take by [`Registration::replaced_by`].
-pub fn next_seq(saved: Option<u64>, now_ms: u64) -> u64 {
+/// The number a phone gives its next registration (rule S-1): one more
+/// than the highest it ever used, and never less than its clock in
+/// milliseconds (a clock past [`MAX_CLOCK_MS`] read as that), so a phone
+/// restored from a backup with an older number still moves forward at the
+/// service. After a `push-renew` with `ahead` for the slot (`restart`), its
+/// clock alone, once: the service found the held number more than a day
+/// past its own clock, and members take the next registration whatever its
+/// number. No clock is compared with another here.
+pub fn next_seq(highest: Option<u64>, now_ms: u64, restart: bool) -> u64 {
     let now = now_ms.min(MAX_CLOCK_MS);
-    match saved {
-        Some(s) if seq_was_ahead(s, now) => now,
-        _ => saved.map_or(1, |s| s.saturating_add(1)).max(now),
+    if restart {
+        return now.clamp(1, 1 << 53);
     }
-    .clamp(1, 1 << 53)
-}
-
-/// Whether a saved number is more than [`MAX_SEQ_AHEAD_MS`] ahead of the
-/// clock `now_ms`.
-pub fn seq_was_ahead(saved: u64, now_ms: u64) -> bool {
-    !seq_in_time(saved, now_ms.min(MAX_CLOCK_MS))
+    highest.map_or(1, |s| s.saturating_add(1)).max(now).clamp(1, 1 << 53)
 }
 
 /// Whether the service takes `seq` at its clock `now_ms`: seq is a clock
@@ -428,9 +456,11 @@ impl Registration {
             None => None,
             Some(c) => Some(<[u8; 16]>::try_from(c).map_err(|_| RULE_PUSH_SHAPE)?),
         };
-        let on = match (kinds, bytes(2), uint(3), bytes(4), m.get(7), bytes(8), bytes(9)) {
-            (0, None, None, None, None, None, None) if challenge.is_none() => None,
-            (k, Some(token), Some(env), Some(key), Some(send_key), Some(send_sig), Some(slot)) if k != 0 => {
+        let on = match (kinds, bytes(2), uint(3), bytes(4), m.get(7), bytes(8), bytes(9), bytes(11)) {
+            (0, None, None, None, None, None, None, None) if challenge.is_none() => None,
+            (k, Some(token), Some(env), Some(key), Some(send_key), Some(send_sig), Some(slot), Some(face))
+                if k != 0 =>
+            {
                 let key: [u8; 32] = key.try_into().map_err(|_| RULE_PUSH_SHAPE)?;
                 // A key of zeros is no key a phone drew.
                 if key == [0; 32] {
@@ -438,6 +468,7 @@ impl Registration {
                 }
                 let send_key = Key::read(send_key).map_err(|_| RULE_PUSH_SHAPE)?;
                 let slot = <[u8; 16]>::try_from(slot).map_err(|_| RULE_PUSH_SHAPE)?;
+                let face = <[u8; 16]>::try_from(face).map_err(|_| RULE_PUSH_SHAPE)?;
                 Some(On {
                     token: token.to_vec(),
                     env,
@@ -445,6 +476,7 @@ impl Registration {
                     send_key,
                     send_sig: send_sig.to_vec(),
                     slot,
+                    face,
                     challenge,
                 })
             }
@@ -470,6 +502,7 @@ impl Registration {
             if let Some(c) = &on.challenge {
                 m.push((10, Value::Bytes(c)));
             }
+            m.push((11, Value::Bytes(&on.face)));
         }
         let f = frame::write(&Value::Map(m));
         let back = frame::read(&f, frame::LIMIT_MEMBER).ok().and_then(|msg| Registration::read(&msg.map).ok());
@@ -481,26 +514,34 @@ impl Registration {
         self.on.is_some() && self.kinds & kind != 0
     }
 
-    /// Whether a member that holds `self` takes `newer` in its place, by
-    /// the member's clock `now_ms`: a higher number; or a lower one only
-    /// when both hold: the held number is more than a day ahead of the
-    /// clock (the service refuses it), and the newer one is within a day of
-    /// the clock either way (the phone's clock was set right again).
-    pub fn replaced_by(&self, newer: &Registration, now_ms: u64) -> bool {
+    /// Whether a member that holds `self` takes `newer` in its place: a
+    /// higher number. A lower one only by rule S-1's step 2, which the
+    /// member decides by the service's `ahead` answer, never by a clock.
+    pub fn replaced_by(&self, newer: &Registration) -> bool {
         newer.seq > self.seq
-            || (self.seq > now_ms.saturating_add(MAX_SEQ_AHEAD_MS) && newer.seq.abs_diff(now_ms) <= MAX_SEQ_AHEAD_MS)
     }
 }
 
-/// Message `push-renew` (t 29) for the registration with `slot`.
-pub fn renew(slot: &[u8; 16]) -> Vec<u8> {
-    frame::write(&Value::Map(alloc::vec![(frame::FIELD_T, Value::Uint(T_RENEW)), (2, Value::Bytes(slot))]))
+/// Message `push-renew` (t 29) for the registration with `slot`; `ahead`
+/// when the service answered it [`SENT_AHEAD`].
+pub fn renew(slot: &[u8; 16], ahead: bool) -> Vec<u8> {
+    let mut m = alloc::vec![(frame::FIELD_T, Value::Uint(T_RENEW)), (2, Value::Bytes(slot))];
+    if ahead {
+        m.push((3, Value::Uint(1)));
+    }
+    frame::write(&Value::Map(m))
 }
 
-/// Reads message `push-renew`: the slot of the registration to make again.
-pub fn read_renew(m: &Value<'_>) -> Result<[u8; 16], Rule> {
+/// Reads message `push-renew`: the slot of the registration to make again,
+/// and whether the service found its number ahead of its clock.
+pub fn read_renew(m: &Value<'_>) -> Result<([u8; 16], bool), Rule> {
     check_map(&RENEW, m)?;
-    m.get(2).and_then(Value::as_bytes).and_then(|b| <[u8; 16]>::try_from(b).ok()).ok_or(Rule::field("push-renew/shape"))
+    let slot = m
+        .get(2)
+        .and_then(Value::as_bytes)
+        .and_then(|b| <[u8; 16]>::try_from(b).ok())
+        .ok_or(Rule::field("push-renew/shape"))?;
+    Ok((slot, m.get(3).is_some()))
 }
 
 /// Who may register: the device itself over its own member connection, and
@@ -904,9 +945,18 @@ impl<'a> Send<'a> {
         (Send::read(&msg.map).ok().as_ref() == Some(self)).then_some(f)
     }
 
-    /// What its signature covers.
-    pub fn signed(&self) -> Signed<'_> {
-        Signed { env: self.env, token: self.token, slot: &self.slot, seq: self.seq, challenge: self.challenge.as_ref() }
+    /// What its signature covers, with the face of the connection that
+    /// brought it: the send carries none, so a registration signed for
+    /// another group's face does not hold.
+    pub fn signed<'b>(&'b self, face: &'b [u8; 16]) -> Signed<'b> {
+        Signed {
+            env: self.env,
+            token: self.token,
+            slot: &self.slot,
+            face,
+            seq: self.seq,
+            challenge: self.challenge.as_ref(),
+        }
     }
 
     /// Whether the body has its env's size. The service answers a body of
@@ -974,7 +1024,7 @@ impl Sent {
 /// is "failed, try later" (E-1).
 pub fn status(s: u64) -> u64 {
     match s {
-        SENT | SENT_GONE | SENT_BUDGET | SENT_REPEAT | SENT_KEY | SENT_STALE => s,
+        SENT | SENT_GONE | SENT_BUDGET | SENT_REPEAT | SENT_KEY | SENT_STALE | SENT_AHEAD => s,
         _ => SENT_FAILED,
     }
 }

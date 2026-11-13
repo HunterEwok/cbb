@@ -87,9 +87,14 @@ struct UpArgs {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RegistrationArgs {
-    /// The number of the last registration the phone saved, if any.
+    /// The highest number the phone ever gave a registration of this
+    /// group, if any.
     #[serde(default)]
-    saved_seq: Option<u64>,
+    highest_seq: Option<u64>,
+    /// A member's `push-renew` for this group said `ahead`: this one is
+    /// numbered by the clock alone (rule S-1).
+    #[serde(default)]
+    restart: bool,
     now_ms: u64,
     kinds: u64,
     #[serde(default)]
@@ -106,6 +111,9 @@ struct RegistrationArgs {
     /// The group's slot, 16 bytes.
     #[serde(default, with = "b64::opt")]
     slot: Option<Vec<u8>>,
+    /// The tag of the group's face toward the push service, 16 bytes.
+    #[serde(default, with = "b64::opt")]
+    face: Option<Vec<u8>>,
     /// The last challenge the push service sent to the token, 16 bytes,
     /// which the registration's signature then covers.
     #[serde(default, with = "b64::opt")]
@@ -113,12 +121,13 @@ struct RegistrationArgs {
 }
 
 /// `push_registration`: the frame of message `push` (t 28) the phone sends
-/// over each member connection of the group, and its number, which the
-/// phone saves, and with push on the send key's hint (`key_hint`, 8
-/// bytes); `kinds` 0 turns push off.
+/// over each member connection of the group, its number (`seq`, which the
+/// push key's bodies are sealed under) and the highest number given so far
+/// (`highest`), which the phone saves, and with push on the send key's hint
+/// (`key_hint`, 8 bytes); `kinds` 0 turns push off.
 fn registration(a: RegistrationArgs) -> Result<Vec<u8>, Refusal> {
     const BAD: &str = "The push registration cannot be made.";
-    let seq = push::next_seq(a.saved_seq, a.now_ms);
+    let seq = push::next_seq(a.highest_seq, a.now_ms, a.restart);
     let mut hint = None;
     let on = if a.kinds == 0 {
         None
@@ -151,12 +160,17 @@ fn registration(a: RegistrationArgs) -> Result<Vec<u8>, Refusal> {
             .as_deref()
             .and_then(|s| s.try_into().ok())
             .ok_or_else(|| refused("the slot is not 16 bytes", BAD))?;
+        let face: [u8; 16] = a
+            .face
+            .as_deref()
+            .and_then(|s| s.try_into().ok())
+            .ok_or_else(|| refused("the face is not 16 bytes", BAD))?;
         let challenge: Option<[u8; 16]> = match a.challenge.as_deref() {
             None => None,
             Some(c) => Some(c.try_into().map_err(|_| refused("the challenge is not 16 bytes", BAD))?),
         };
         hint = Some(Key::es256(public.clone()).hash().0);
-        let signed = push::Signed { env, token: &token, slot: &slot, seq, challenge: challenge.as_ref() };
+        let signed = push::Signed { env, token: &token, slot: &slot, face: &face, seq, challenge: challenge.as_ref() };
         let sig = push::sign_send(&Pkcs8Signer(signer), &signed).map_err(|e| refused(e, BAD))?;
         Some(On {
             token,
@@ -165,6 +179,7 @@ fn registration(a: RegistrationArgs) -> Result<Vec<u8>, Refusal> {
             send_key: Key::es256(public),
             send_sig: sig.to_vec(),
             slot,
+            face,
             challenge,
         })
     };
@@ -174,11 +189,9 @@ fn registration(a: RegistrationArgs) -> Result<Vec<u8>, Refusal> {
     let mut m = Map::new();
     m.insert("frame".into(), b64_value(&frame));
     m.insert("seq".into(), Value::from(seq));
-    // The saved number was more than a day ahead of the clock: this one
-    // starts at the clock (the app may log it; members take it).
-    if a.saved_seq.is_some_and(|s| push::seq_was_ahead(s, a.now_ms)) {
-        m.insert("ahead".into(), Value::Bool(true));
-    }
+    // A restart may number below the highest: the highest stays, so the
+    // next registration after it moves above again.
+    m.insert("highest".into(), Value::from(a.highest_seq.map_or(seq, |h| h.max(seq))));
     // The send key's hint, the first 8 bytes of its hash: the push service
     // puts it beside each challenge, so that the phone keeps only one sent
     // to its own key.

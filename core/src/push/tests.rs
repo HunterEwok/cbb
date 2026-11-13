@@ -16,10 +16,11 @@ use crate::testkit::{G, T0, k, sealing, store};
 
 const PK: [u8; 32] = [7; 32];
 const SLOT: [u8; 16] = [9; 16];
+const FACE: [u8; 16] = [5; 16];
 
 fn on_with(env: u64, seq: u64, token: &[u8]) -> Registration {
     let send = k("send key");
-    let sig = sign_send(&send, &Signed { env, token, slot: &SLOT, seq, challenge: None }).unwrap();
+    let sig = sign_send(&send, &Signed { env, token, slot: &SLOT, face: &FACE, seq, challenge: None }).unwrap();
     Registration {
         seq,
         kinds: KIND_COPIES | KIND_EVENTS,
@@ -30,6 +31,7 @@ fn on_with(env: u64, seq: u64, token: &[u8]) -> Registration {
             send_key: send.key.clone(),
             send_sig: sig.to_vec(),
             slot: SLOT,
+            face: FACE,
             challenge: None,
         }),
     }
@@ -55,7 +57,7 @@ fn a_registration_round_trips_and_push_off_carries_nothing() {
     let off = Registration { seq: 4, kinds: 0, on: None };
     let back = Registration::read(&read_frame(&off.write().unwrap())).unwrap();
     assert!(!back.wants(KIND_COPIES));
-    assert!(r.replaced_by(&back, 0) && !back.replaced_by(&r, 0));
+    assert!(r.replaced_by(&back) && !back.replaced_by(&r));
     // The push key is never printed.
     let printed = alloc::format!("{r:?}");
     assert!(!printed.contains("7, 7"), "{printed}");
@@ -75,21 +77,30 @@ fn a_registration_is_on_with_all_it_carries_or_off_with_none() {
     let r = on(ENV_APNS);
     let o = r.on.as_ref().unwrap();
     let kv = o.send_key.to_value();
-    // The fields push on needs, in key order around seq (5) and kinds (6).
-    let m = |kinds: u64, have: [bool; 6], challenge: bool| {
-        let fields: [(u16, Value<'_>); 6] = [
+    // The fields push on needs, in key order around seq (5), kinds (6)
+    // and the challenge (10).
+    let m = |kinds: u64, have: [bool; 7], challenge: bool| {
+        let fields: [(u16, Value<'_>); 7] = [
             (2, Value::Bytes(&o.token)),
             (3, Value::Uint(1)),
             (4, Value::Bytes(&o.key[..])),
             (7, kv.clone()),
             (8, Value::Bytes(&o.send_sig)),
             (9, Value::Bytes(&SLOT)),
+            (11, Value::Bytes(&FACE)),
         ];
         let mut v = vec![(0, Value::Uint(T_PUSH))];
         let mut late = vec![];
+        let mut last = vec![];
         for (i, (n, x)) in fields.into_iter().enumerate() {
             if have[i] {
-                if n < 5 { v.push((n, x)) } else { late.push((n, x)) }
+                if n < 5 {
+                    v.push((n, x))
+                } else if n < 10 {
+                    late.push((n, x))
+                } else {
+                    last.push((n, x))
+                }
             }
         }
         v.push((5, Value::Uint(1)));
@@ -98,18 +109,21 @@ fn a_registration_is_on_with_all_it_carries_or_off_with_none() {
         if challenge {
             v.push((10, Value::Bytes(&[3; 16])));
         }
+        v.extend(last);
         Value::Map(v)
     };
-    assert!(Registration::read(&m(1, [true; 6], false)).is_ok());
-    assert!(Registration::read(&m(1, [true; 6], true)).is_ok());
-    assert!(Registration::read(&m(0, [false; 6], false)).is_ok());
+    assert!(Registration::read(&m(1, [true; 7], false)).is_ok());
+    assert!(Registration::read(&m(1, [true; 7], true)).is_ok());
+    assert!(Registration::read(&m(0, [false; 7], false)).is_ok());
     // A challenge belongs to push on only.
-    assert_eq!(Registration::read(&m(0, [false; 6], true)).err(), Some(RULE_PUSH_SHAPE));
-    for i in 0..6 {
-        let mut have = [true; 6];
+    assert_eq!(Registration::read(&m(0, [false; 7], true)).err(), Some(RULE_PUSH_SHAPE));
+    // Each field push on carries, the face among them, is needed, and none
+    // goes with push off.
+    for i in 0..7 {
+        let mut have = [true; 7];
         have[i] = false;
         assert_eq!(Registration::read(&m(1, have, false)).err(), Some(RULE_PUSH_SHAPE), "without field {i}");
-        let mut only = [false; 6];
+        let mut only = [false; 7];
         only[i] = true;
         assert_eq!(Registration::read(&m(0, only, false)).err(), Some(RULE_PUSH_SHAPE), "off with field {i}");
     }
@@ -123,7 +137,7 @@ fn the_send_key_signs_the_token_and_the_number_and_a_later_algorithm_is_held() {
         check_send(
             &o.send_key,
             &o.send_sig,
-            &Signed { env: ENV_APNS, token: &o.token, slot: &SLOT, seq: 3, challenge: None }
+            &Signed { env: ENV_APNS, token: &o.token, slot: &SLOT, face: &FACE, seq: 3, challenge: None }
         ),
         Ok(SendCheck::Good)
     );
@@ -132,7 +146,7 @@ fn the_send_key_signs_the_token_and_the_number_and_a_later_algorithm_is_held() {
         check_send(
             &o.send_key,
             &o.send_sig,
-            &Signed { env: ENV_APNS, token: &o.token, slot: &SLOT, seq: 4, challenge: None }
+            &Signed { env: ENV_APNS, token: &o.token, slot: &SLOT, face: &FACE, seq: 4, challenge: None }
         ),
         Err(RULE_SEND_SIG)
     );
@@ -140,7 +154,7 @@ fn the_send_key_signs_the_token_and_the_number_and_a_later_algorithm_is_held() {
         check_send(
             &o.send_key,
             &o.send_sig,
-            &Signed { env: ENV_APNS, token: &[2; 32], slot: &SLOT, seq: 3, challenge: None }
+            &Signed { env: ENV_APNS, token: &[2; 32], slot: &SLOT, face: &FACE, seq: 3, challenge: None }
         ),
         Err(RULE_SEND_SIG)
     );
@@ -148,7 +162,7 @@ fn the_send_key_signs_the_token_and_the_number_and_a_later_algorithm_is_held() {
         check_send(
             &o.send_key,
             &o.send_sig,
-            &Signed { env: ENV_FCM, token: &o.token, slot: &SLOT, seq: 3, challenge: None }
+            &Signed { env: ENV_FCM, token: &o.token, slot: &SLOT, face: &FACE, seq: 3, challenge: None }
         ),
         Err(RULE_SEND_SIG)
     );
@@ -159,13 +173,13 @@ fn the_send_key_signs_the_token_and_the_number_and_a_later_algorithm_is_held() {
         check_send(
             &later,
             &[1; 3000],
-            &Signed { env: ENV_APNS, token: &o.token, slot: &SLOT, seq: 3, challenge: None }
+            &Signed { env: ENV_APNS, token: &o.token, slot: &SLOT, face: &FACE, seq: 3, challenge: None }
         ),
         Ok(SendCheck::Unknown)
     );
     let kem = Key { alg: crate::records::key::ALG_X25519, public: vec![1; 32] };
     assert_eq!(
-        check_send(&kem, &o.send_sig, &Signed { env: ENV_APNS, token: &o.token, slot: &SLOT, seq: 3, challenge: None }),
+        check_send(&kem, &o.send_sig, &Signed { env: ENV_APNS, token: &o.token, slot: &SLOT, face: &FACE, seq: 3, challenge: None }),
         Err(RULE_SEND_SIG)
     );
     let mut held = on(ENV_APNS);
@@ -177,81 +191,57 @@ fn the_send_key_signs_the_token_and_the_number_and_a_later_algorithm_is_held() {
     assert_eq!(back.on.unwrap().send_key, later);
 }
 
-/// A number saved while the phone's clock was ahead, then the clock set
-/// right: max(saved + 1, now) would stay ahead, and the service would
-/// refuse every registration until the clock caught up less a day. The
-/// next number is the clock instead, and the service takes it.
+/// Rule S-1: the phone's next number is one above the highest it ever
+/// used, or its clock when that is more; after a `push-renew` with
+/// `ahead`, its clock alone, once. No clock is compared with another.
 #[test]
-fn a_number_saved_while_the_clock_was_ahead_starts_again_at_the_clock() {
-    let now = 1_800_000_000_000u64;
-    for days in [2u64, 30, 365] {
-        let saved = now + days * 86_400_000;
-        assert!(seq_was_ahead(saved, now));
-        let next = next_seq(Some(saved), now);
-        assert_eq!(next, now, "{days} days");
-        assert!(seq_in_time(next, now));
-        // From there on, one more each time.
-        assert_eq!(next_seq(Some(next), now), now + 1);
-    }
-    // Ahead by less than a day: the service took it; one more than it.
-    let saved = now + MAX_SEQ_AHEAD_MS;
-    assert!(!seq_was_ahead(saved, now));
-    assert_eq!(next_seq(Some(saved), now), saved + 1);
-}
-
-/// A member takes a lower number only when the one it holds is more than a
-/// day ahead of its clock and the newer one is within a day of it.
-#[test]
-fn a_lower_number_replaces_only_one_out_of_time() {
-    let reg = |seq| Registration { seq, kinds: 0, on: None };
+fn the_next_number_falls_to_the_clock_only_when_the_service_says_ahead() {
     let day = MAX_SEQ_AHEAD_MS;
     let now = 1_800_000_000_000u64;
-    // A member with a right clock: the sender's clock jumped 30 days ahead
-    // and back. The member held the ahead one; the phone's next, at the
-    // clock, replaces it; one two days old does not.
-    let ahead = reg(now + 30 * day);
-    assert!(ahead.replaced_by(&reg(now), now));
-    assert!(ahead.replaced_by(&reg(now - day), now));
-    assert!(!ahead.replaced_by(&reg(now - 2 * day), now));
-    assert!(!ahead.replaced_by(&reg(now + 2 * day), now));
-    // Within a day ahead: a higher number only, as always.
-    let near = reg(now + day);
-    assert!(!near.replaced_by(&reg(now), now));
-    assert!(near.replaced_by(&reg(now + day + 1), now));
+    // The phone's clock two days behind the true time, its highest number
+    // true: the next is one above it, which the service and members take.
+    let truth = now + 2 * day;
+    assert_eq!(next_seq(Some(truth), now, false), truth + 1);
+    // A number given while the clock was ahead: the service answered
+    // `ahead`, a member renewed with it, and the next is the clock.
+    for days in [2u64, 30, 365] {
+        let high = now + days * day;
+        let next = next_seq(Some(high), now, true);
+        assert_eq!(next, now, "{days} days");
+        assert!(seq_in_time(next, now));
+    }
+    // A false `ahead` from a member costs one lower registration: the
+    // highest stays, and the next one without it is above it again.
+    let high = now + 1000;
+    let low = next_seq(Some(high), now - day, true);
+    assert_eq!(low, now - day);
+    assert_eq!(next_seq(Some(high.max(low)), now - day, false), high + 1);
+}
 
-    // A member whose own clock is a year behind: the phone's current
-    // registration (true time T) is "ahead" by that clock. An old
-    // registration from a year ago, replayed, is within a day of the
-    // member's clock, so the member takes it; it lasts only until the
-    // phone's true registration is seen again, which is higher and so
-    // replaces it. A replay of anything older is not taken.
-    let t = now;
-    let behind = t - 365 * day;
-    let current = reg(t);
-    let replayed = reg(behind + 1000);
-    assert!(current.replaced_by(&replayed, behind));
-    assert!(replayed.replaced_by(&current, behind));
-    assert!(replayed.replaced_by(&reg(t + 1), behind));
-    assert!(!current.replaced_by(&reg(behind - 2 * day), behind));
-    // The member's normal case, its clock behind: the phone's next number
-    // is higher, and taken.
-    assert!(current.replaced_by(&reg(t + 1), behind));
+/// A member keeps the higher number; a lower one only by step 2 of rule
+/// S-1, which the sender decides from the service's answer.
+#[test]
+fn a_member_keeps_the_higher_number() {
+    let reg = |seq| Registration { seq, kinds: 0, on: None };
+    assert!(reg(5).replaced_by(&reg(6)));
+    assert!(!reg(6).replaced_by(&reg(5)));
+    assert!(!reg(6).replaced_by(&reg(6)));
 }
 
 #[test]
 fn a_phone_restored_from_a_backup_still_moves_forward() {
     // The phone saved 9 before the backup and 12 after; restored, it holds
     // 9 again, and its clock has moved on: its next number passes 12.
-    let before = next_seq(Some(8), 1_000);
+    let before = next_seq(Some(8), 1_000, false);
     assert_eq!(before, 1_000);
-    let later = next_seq(Some(before), 5_000);
+    let later = next_seq(Some(before), 5_000, false);
     assert!(later > before);
-    let restored = next_seq(Some(before), 6_000);
+    let restored = next_seq(Some(before), 6_000, false);
     assert!(restored > later, "{restored} after {later}");
     // Without a clock that moved, one more than the saved one.
-    assert_eq!(next_seq(Some(41), 0), 42);
-    assert_eq!(next_seq(None, 0), 1);
-    assert!(next_seq(Some(1 << 53), 0) <= 1 << 53);
+    assert_eq!(next_seq(Some(41), 0, false), 42);
+    assert_eq!(next_seq(None, 0, false), 1);
+    assert!(next_seq(Some(1 << 53), 0, false) <= 1 << 53);
 }
 
 #[test]
@@ -460,8 +450,13 @@ fn the_services_messages_follow_their_tables() {
     }
     assert!(of(T_PUSH).is_some() && of(T_RENEW).is_some() && of(30).is_none());
     // Renew names the registration's slot, and nothing else.
-    let r = renew(&SLOT);
-    assert_eq!(read_renew(&read_frame(&r)), Ok(SLOT));
+    let r = renew(&SLOT, false);
+    assert_eq!(read_renew(&read_frame(&r)), Ok((SLOT, false)));
+    let r = renew(&SLOT, true);
+    assert_eq!(read_renew(&read_frame(&r)), Ok((SLOT, true)));
+    // Ahead is a flag: 1 or nothing.
+    let two = frame::write(&Value::Map(vec![(0, Value::Uint(T_RENEW)), (2, Value::Bytes(&SLOT)), (3, Value::Uint(2))]));
+    assert!(read_renew(&read_frame(&two)).is_err());
     let short = frame::write(&Value::Map(vec![(0, Value::Uint(T_RENEW)), (2, Value::Bytes(&[1; 15]))]));
     assert!(read_renew(&read_frame(&short)).is_err());
 }
@@ -641,11 +636,13 @@ fn the_vectors_are_what_the_readers_say() {
         let key = Key::read(&cbor::decode(&unhex(&r["key"])).unwrap()).unwrap();
         let token = unhex(&r["token"]);
         let slot: [u8; 16] = unhex(&r["slot"]).try_into().unwrap();
+        let face: [u8; 16] = unhex(&r["face"]).try_into().unwrap();
         let challenge: Option<[u8; 16]> = r.get("challenge").map(|c| unhex(c).try_into().unwrap());
         let signed = Signed {
             env: r["env"].as_u64().unwrap(),
             token: &token,
             slot: &slot,
+            face: &face,
             seq: r["seq"].as_u64().unwrap(),
             challenge: challenge.as_ref(),
         };
@@ -709,8 +706,8 @@ fn the_phone_registers_and_opens_a_body_through_the_core_api() {
 
     let reg = call(
         "push_registration",
-        serde_json::json!({ "saved_seq": 1, "now_ms": 0, "kinds": 3, "env": ENV_APNS, "token": b64(&[5; 32]),
-            "key": b64(&PK), "send_key": send_key, "slot": slot_b64 }),
+        serde_json::json!({ "highest_seq": 1, "now_ms": 0, "kinds": 3, "env": ENV_APNS, "token": b64(&[5; 32]),
+            "key": b64(&PK), "send_key": send_key, "slot": slot_b64, "face": b64(&FACE) }),
     );
     let frame = {
         use base64::Engine as _;
@@ -729,16 +726,27 @@ fn the_phone_registers_and_opens_a_body_through_the_core_api() {
         check_send(
             &o.send_key,
             &o.send_sig,
-            &Signed { env: ENV_APNS, token: &[5; 32], slot: &slot, seq: 2, challenge: None }
+            &Signed { env: ENV_APNS, token: &[5; 32], slot: &slot, face: &FACE, seq: 2, challenge: None }
         ),
         Ok(SendCheck::Good)
     );
+    // Another group's face: the signature does not hold, so the
+    // registration is good on its own group's connection only.
+    assert_eq!(
+        check_send(
+            &o.send_key,
+            &o.send_sig,
+            &Signed { env: ENV_APNS, token: &[5; 32], slot: &slot, face: &[6; 16], seq: 2, challenge: None }
+        ),
+        Err(RULE_SEND_SIG)
+    );
+    assert_eq!(o.face, FACE);
     // Another slot: the signature does not hold.
     assert_eq!(
         check_send(
             &o.send_key,
             &o.send_sig,
-            &Signed { env: ENV_APNS, token: &[5; 32], slot: &SLOT, seq: 2, challenge: None }
+            &Signed { env: ENV_APNS, token: &[5; 32], slot: &SLOT, face: &FACE, seq: 2, challenge: None }
         ),
         Err(RULE_SEND_SIG)
     );
@@ -746,8 +754,8 @@ fn the_phone_registers_and_opens_a_body_through_the_core_api() {
     // signature; without it the signature does not hold.
     let ch = call(
         "push_registration",
-        serde_json::json!({ "saved_seq": 2, "now_ms": 0, "kinds": 3, "env": ENV_APNS, "token": b64(&[5; 32]),
-            "key": b64(&PK), "send_key": send_key, "slot": slot_b64, "challenge": b64(&[4; 16]) }),
+        serde_json::json!({ "highest_seq": 2, "now_ms": 0, "kinds": 3, "env": ENV_APNS, "token": b64(&[5; 32]),
+            "key": b64(&PK), "send_key": send_key, "slot": slot_b64, "face": b64(&FACE), "challenge": b64(&[4; 16]) }),
     );
     let chf = {
         use base64::Engine as _;
@@ -762,24 +770,37 @@ fn the_phone_registers_and_opens_a_body_through_the_core_api() {
     let noslot = call(
         "push_registration",
         serde_json::json!({ "now_ms": 0, "kinds": 3, "env": ENV_APNS, "token": b64(&[5; 32]),
-            "key": b64(&PK), "send_key": send_key }),
+            "key": b64(&PK), "send_key": send_key, "face": b64(&FACE) }),
     );
     assert_eq!(noslot["error"]["code"], 18, "{noslot}");
+    // Push on without a face is refused too.
+    let noface = call(
+        "push_registration",
+        serde_json::json!({ "now_ms": 0, "kinds": 3, "env": ENV_APNS, "token": b64(&[5; 32]),
+            "key": b64(&PK), "send_key": send_key, "slot": slot_b64 }),
+    );
+    assert_eq!(noface["error"]["code"], 18, "{noface}");
     // A restored phone whose saved number went back still moves forward.
-    let restored = call("push_registration", serde_json::json!({ "saved_seq": 1, "now_ms": T0, "kinds": 0 }));
+    let restored = call("push_registration", serde_json::json!({ "highest_seq": 1, "now_ms": T0, "kinds": 0 }));
     assert!(restored["ok"].get("key_hint").is_none(), "push off carries no hint");
     assert_eq!(restored["ok"]["seq"], T0);
-    assert!(restored["ok"].get("ahead").is_none());
-    // A number saved while the clock was 30 days ahead: the next one is the
-    // clock, and the answer says so.
+    assert_eq!(restored["ok"]["highest"], T0);
+    // Without a restart a number given while the clock was ahead stays the
+    // floor; after a `push-renew` with `ahead` the next is the clock, and
+    // the highest is kept.
     let month = 30 * 86_400_000u64;
-    let back = call("push_registration", serde_json::json!({ "saved_seq": T0 + month, "now_ms": T0, "kinds": 0 }));
-    assert_eq!((back["ok"]["seq"].as_u64(), back["ok"]["ahead"].as_bool()), (Some(T0), Some(true)), "{back}");
+    let on = call("push_registration", serde_json::json!({ "highest_seq": T0 + month, "now_ms": T0, "kinds": 0 }));
+    assert_eq!(on["ok"]["seq"].as_u64(), Some(T0 + month + 1), "{on}");
+    let back = call(
+        "push_registration",
+        serde_json::json!({ "highest_seq": T0 + month, "now_ms": T0, "kinds": 0, "restart": true }),
+    );
+    assert_eq!((back["ok"]["seq"].as_u64(), back["ok"]["highest"].as_u64()), (Some(T0), Some(T0 + month)), "{back}");
     let up = call(
         "push_registration",
         serde_json::json!({ "now_ms": 0, "kinds": 1, "env": ENV_UNIFIEDPUSH,
             "unifiedpush": { "url": "http://up.example/x", "p256dh": b64(&point()), "auth": b64(&[1; 16]) },
-            "key": b64(&PK), "send_key": send_key, "slot": slot_b64 }),
+            "key": b64(&PK), "send_key": send_key, "slot": slot_b64, "face": b64(&FACE) }),
     );
     assert_eq!(up["error"]["name"], "push", "a plain-HTTP endpoint is refused: {up}");
     let bad = call("push_registration", serde_json::json!({ "now_ms": 0, "kinds": 1, "env": 1, "token": b64(&[1]) }));
@@ -900,8 +921,8 @@ fn a_copy_in_a_body_carries_no_age() {
 fn the_clock_is_bounded_both_ways() {
     // A phone clock past 2100 (a unit mistake) numbers as 2100, so seq
     // keeps room to move forward.
-    assert_eq!(next_seq(None, u64::MAX / 2), MAX_CLOCK_MS);
-    assert_eq!(next_seq(Some(MAX_CLOCK_MS), u64::MAX), MAX_CLOCK_MS + 1);
+    assert_eq!(next_seq(None, u64::MAX / 2, false), MAX_CLOCK_MS);
+    assert_eq!(next_seq(Some(MAX_CLOCK_MS), u64::MAX, false), MAX_CLOCK_MS + 1);
     // The service takes a seq up to a day ahead of its clock, no more.
     assert!(seq_in_time(T0 + MAX_SEQ_AHEAD_MS, T0));
     assert!(!seq_in_time(T0 + MAX_SEQ_AHEAD_MS + 1, T0));

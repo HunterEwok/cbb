@@ -43,8 +43,9 @@ TABLES = {
         (8, "push/send-sig", "bytes 1..4096", False),
         (9, "push/slot", "bytes 16", False),
         (10, "push/challenge", "bytes 16", False),
+        (11, "push/face", "bytes 16", False),
     ],
-    "push-renew": [(2, "push-renew/slot", "bytes 16", True)],
+    "push-renew": [(2, "push-renew/slot", "bytes 16", True), (3, "push-renew/ahead", "flag", False)],
     "push-up": [
         (1, "push-up/url", "text 1..4000", True),
         (2, "push-up/p256dh", "bytes 65", True),
@@ -106,18 +107,18 @@ def nonce_for(pk, seq, plain):
     return hmac.new(derive(pk, LABEL_NONCE), ad(seq) + plain, hashlib.sha256).digest()[:12]
 
 
-def send_message(env, token, slot, seq, challenge=None):
-    """[env, token, slot, seq], and the service's challenge when there is one."""
-    return enc([env, token, slot, seq] + ([challenge] if challenge is not None else []))
+def send_message(env, token, slot, face, seq, challenge=None):
+    """[env, token, slot, face, seq], and the service's challenge when there is one."""
+    return enc([env, token, slot, face, seq] + ([challenge] if challenge is not None else []))
 
 
-def send_verdict(key, sig, env, token, slot, seq, challenge=None):
+def send_verdict(key, sig, env, token, slot, face, seq, challenge=None):
     """good, held (an algorithm 0.6 does not know) or the rule."""
     if not gen.ty_ok("signer 1..4096", key):
         return "push/send-sig"
     if key[0] != 1:
         return "held"
-    return "good" if verify(key, LABEL_SEND, send_message(env, token, slot, seq, challenge), sig) else "push/send-sig"
+    return "good" if verify(key, LABEL_SEND, send_message(env, token, slot, face, seq, challenge), sig) else "push/send-sig"
 
 
 def ad(seq):
@@ -203,7 +204,7 @@ def registration(m):
     r = check_map("push", m)
     if r:
         return r
-    have = [n in m for n in (2, 3, 4, 7, 8, 9)]
+    have = [n in m for n in (2, 3, 4, 7, 8, 9, 11)]
     if m[6] == 0 and not any(have) and 10 not in m:
         return "off"
     if m[6] != 0 and all(have):
@@ -263,8 +264,9 @@ def main():
     token = fake("apns token", 32)
     slot = fake("slot", 16)
     challenge = fake("challenge", 16)
+    face = fake("face", 16)
     out = {
-        "draft": "format-0.6-bytes.md section 20.4, 2026-11-12",
+        "draft": "format-0.6-bytes.md section 20.4, 2026-11-13",
         "labels": {"body": LABEL_BODY.decode(), "nonce": LABEL_NONCE.decode(), "ad": LABEL_AD.decode(),
                    "send": LABEL_SEND},
         "tables": {name: [{"n": n, "rule": r, "type": t, "needed": nd} for n, r, t, nd in rows]
@@ -284,14 +286,18 @@ def main():
         regs.append(e)
 
     def signed(m):
-        """m with the send key and its signature over (env, token, slot, seq[, challenge])."""
-        return {**m, 7: SEND_KEY.key, 8: SEND_KEY.sign(LABEL_SEND, send_message(m[3], m[2], m[9], m[5], m.get(10)))}
+        """m with the send key and its signature over (env, token, slot, face, seq[, challenge])."""
+        sig = SEND_KEY.sign(LABEL_SEND, send_message(m[3], m[2], m[9], m[11], m[5], m.get(10)))
+        return {**m, 7: SEND_KEY.key, 8: sig}
 
-    on = signed({2: token, 3: 1, 4: pk, 5: 3, 6: 3, 9: slot})
+    on = signed({2: token, 3: 1, 4: pk, 5: 3, 6: 3, 9: slot, 11: face})
     reg("on, copies and events, APNs", on)
     reg("on with the service's challenge", signed({**on, 10: challenge}))
     reg("on without the slot", {k: v for k, v in on.items() if k != 9})
     reg("a slot of 15 bytes", {**on, 9: slot[:15]})
+    reg("on without the face", {k: v for k, v in on.items() if k != 11})
+    reg("a face of 15 bytes", {**on, 11: face[:15]})
+    reg("off with a face", {5: 4, 6: 0, 11: face})
     reg("off with a challenge", {5: 4, 6: 0, 10: challenge})
     reg("on without the send key", {k: v for k, v in on.items() if k != 7})
     reg("on without the send key's signature", {k: v for k, v in on.items() if k != 8})
@@ -317,29 +323,32 @@ def main():
     reg("env 0", {**on, 3: 0})
     reg("env 256", {**on, 3: 256})
     reg("without seq", {k: v for k, v in on.items() if k != 5})
-    reg("a field of a later version is skipped", {**on, 11: b"x"})
+    reg("a field of a later version is skipped", {**on, 12: b"x"})
     out["registrations"] = regs
 
     # the send key's signature, as the service checks it
     sends = []
     good = on[8]
-    with_ch = SEND_KEY.sign(LABEL_SEND, send_message(1, token, slot, 3, challenge))
+    with_ch = SEND_KEY.sign(LABEL_SEND, send_message(1, token, slot, face, 3, challenge))
     other_slot = fake("other slot", 16)
-    for name, key, sig, env, tok, sl, seq, ch in [
-        ("the phone's", SEND_KEY.key, good, 1, token, slot, 3, None),
-        ("another number", SEND_KEY.key, good, 1, token, slot, 4, None),
-        ("another token", SEND_KEY.key, good, 1, fake("other token", 32), slot, 3, None),
-        ("another platform", SEND_KEY.key, good, 3, token, slot, 3, None),
-        ("another slot", SEND_KEY.key, good, 1, token, other_slot, 3, None),
-        ("a challenge the signature does not cover", SEND_KEY.key, good, 1, token, slot, 3, challenge),
-        ("the phone's, over the service's challenge", SEND_KEY.key, with_ch, 1, token, slot, 3, challenge),
-        ("over a challenge, the challenge left out", SEND_KEY.key, with_ch, 1, token, slot, 3, None),
-        ("another key", Signer("not the phone").key, good, 1, token, slot, 3, None),
-        ("a later algorithm", [9, fake("later key", 2000)], fake("later sig", 3000), 1, token, slot, 3, None),
-        ("a key exchange's algorithm", [3, fake("x25519", 32)], good, 1, token, slot, 3, None),
+    other_face = fake("other face", 16)
+    for name, key, sig, env, tok, sl, fc, seq, ch in [
+        ("the phone's", SEND_KEY.key, good, 1, token, slot, face, 3, None),
+        ("another number", SEND_KEY.key, good, 1, token, slot, face, 4, None),
+        ("another token", SEND_KEY.key, good, 1, fake("other token", 32), slot, face, 3, None),
+        ("another platform", SEND_KEY.key, good, 3, token, slot, face, 3, None),
+        ("another slot", SEND_KEY.key, good, 1, token, other_slot, face, 3, None),
+        ("another group's face", SEND_KEY.key, good, 1, token, slot, other_face, 3, None),
+        ("a challenge the signature does not cover", SEND_KEY.key, good, 1, token, slot, face, 3, challenge),
+        ("the phone's, over the service's challenge", SEND_KEY.key, with_ch, 1, token, slot, face, 3, challenge),
+        ("over a challenge, the challenge left out", SEND_KEY.key, with_ch, 1, token, slot, face, 3, None),
+        ("another key", Signer("not the phone").key, good, 1, token, slot, face, 3, None),
+        ("a later algorithm", [9, fake("later key", 2000)], fake("later sig", 3000), 1, token, slot, face, 3, None),
+        ("a key exchange's algorithm", [3, fake("x25519", 32)], good, 1, token, slot, face, 3, None),
     ]:
         e = {"name": name, "key": enc(key).hex(), "sig": sig.hex(), "env": env, "token": tok.hex(),
-             "slot": sl.hex(), "seq": seq, "verdict": send_verdict(key, sig, env, tok, sl, seq, ch)}
+             "slot": sl.hex(), "face": fc.hex(), "seq": seq,
+             "verdict": send_verdict(key, sig, env, tok, sl, fc, seq, ch)}
         if ch is not None:
             e["challenge"] = ch.hex()
         sends.append(e)
@@ -453,10 +462,13 @@ def main():
     msg("ready", {0: 101, 2: 1200})
     msg("renew", {0: 29, 2: slot})
     msg("renew with a slot of 15 bytes", {0: 29, 2: slot[:15]})
+    msg("renew with ahead", {0: 29, 2: slot, 3: 1})
+    msg("renew with ahead 2", {0: 29, 2: slot, 3: 2})
     msg("sent", {0: 103, 2: 1, 3: 1})
     msg("sent over budget with a retry", {0: 103, 2: 2, 3: 3, 4: 60000})
     msg("sent with a retry of a day and a millisecond", {0: 103, 2: 2, 3: 3, 4: 86_400_001})
     msg("sent stale: the registration is an old one", {0: 103, 2: 4, 3: 7})
+    msg("sent ahead: the number is more than a day past the service's clock", {0: 103, 2: 4, 3: 8})
     msg("sent with a status of a later version", {0: 103, 2: 3, 3: 77})
     msg("sent with status 0", {0: 103, 2: 3, 3: 0})
     msg("error", {0: 104, 2: "the group's credentials do not verify"})
