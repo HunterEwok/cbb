@@ -95,6 +95,7 @@ final class ReadersUITests: XCTestCase {
         settle(app, screen)
         do {
             try app.performAccessibilityAudit(for: types) { issue in
+                self.trace(app, issue, screen)
                 guard let e = issue.element else {
                     self.fail("\(screen): \(issue.compactDescription) on no element: \(issue.detailedDescription)",
                               picture: XCUIScreen.main.screenshot(), screen)
@@ -115,6 +116,39 @@ final class ReadersUITests: XCTestCase {
             XCTFail("\(screen): \(error)")
         }
         contrast(app, screen)
+    }
+
+    /// Writes everything known about an audit's issue into the log, whether
+    /// it fails the test or is passed over: the issue, its element (frame,
+    /// whether a person can reach it, its own tree), the screen's window and
+    /// bars, the text size, the simulator and the whole element tree. A
+    /// failure seen only on CI's runner can then be read from the log.
+    private func trace(_ app: XCUIApplication, _ issue: XCUIAccessibilityAuditIssue, _ screen: String) {
+        var lines = ["AUDIT-TRACE begin: \(screen)",
+                     "type: \(issue.auditType.rawValue) \(issue.compactDescription)",
+                     "detail: \(issue.detailedDescription)"]
+        let env = ProcessInfo.processInfo.environment
+        for key in ["SIMULATOR_MODEL_IDENTIFIER", "SIMULATOR_RUNTIME_VERSION", "SIMULATOR_RUNTIME_BUILD_VERSION", "SIMULATOR_DEVICE_NAME", "SIMULATOR_MAINSCREEN_SCALE", "SIMULATOR_MAINSCREEN_WIDTH", "SIMULATOR_MAINSCREEN_HEIGHT"] {
+            lines.append("\(key): \(env[key] ?? "-")")
+        }
+        lines.append("orientation: \(XCUIDevice.shared.orientation.rawValue)")
+        lines.append("window: \(app.windows.firstMatch.frame)")
+        if app.navigationBars.firstMatch.exists { lines.append("navigation bar: \(app.navigationBars.firstMatch.frame)") }
+        if app.statusBars.firstMatch.exists { lines.append("status bar: \(app.statusBars.firstMatch.frame)") }
+        if let e = issue.element {
+            lines.append("element: type \(e.elementType.rawValue) label '\(e.label)' identifier '\(e.identifier)' value '\(String(describing: e.value))'")
+            lines.append("element frame: \(e.frame) hittable \(e.isHittable) exists \(e.exists)")
+            lines.append("element tree:\n\(e.debugDescription)")
+        } else {
+            lines.append("element: none")
+        }
+        lines.append("app tree:\n\(app.debugDescription)")
+        lines.append("AUDIT-TRACE end: \(screen)")
+        print(lines.joined(separator: "\n"))
+        let a = XCTAttachment(string: lines.joined(separator: "\n"))
+        a.name = "audit-trace-\(screen)"
+        a.lifetime = .keepAlways
+        add(a)
     }
 
     /// Fails with an issue, each on a line of its own, and attaches the

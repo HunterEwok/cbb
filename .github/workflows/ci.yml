@@ -1784,7 +1784,9 @@ jobs:
           }
           test_on() {
             log="${RUNNER_TEMP:-/tmp}/test-$1.log"
-            only=()
+            # A measurement of the runner, not to be merged: only the iPad's
+            # testLargestText, five times, with the audit's traces.
+            only=(-only-testing:CBBUITests/ReadersUITests/testLargestText -test-iterations 5)
             for attempt in 1 2 3; do
               xcrun simctl boot "$1" 2>/dev/null || true
               # A simulator can hang at boot ("Waiting on System App") for
@@ -1849,6 +1851,16 @@ jobs:
       # what the accessibility audit found; the English ones, the failed
       # audits' and the screens a lost tap met (ReadersUITests.lostTap) also
       # go into the log as small JPEGs when the tests fail.
+      - name: the audit's traces and the whole test log
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/ios-screens"
+          for f in "$RUNNER_TEMP"/test-*.log; do
+            [ -f "$f" ] || continue
+            cp "$f" "$RUNNER_TEMP/ios-screens/"
+            sed -n '/AUDIT-TRACE begin/,/AUDIT-TRACE end/p' "$f"
+            grep -E "settled in|Test Case .*(passed|failed)" "$f" || true
+          done
       - name: the screens' pictures
         if: always()
         run: |
