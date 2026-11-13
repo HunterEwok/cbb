@@ -138,6 +138,9 @@ module records_v3 {
     // head (format 20.3, field 13). Every head the model signs names one; 0 only in the
     // writer's own look ahead at what it will count.
     first: Id,
+    // (I): the ID of its key's record it follows (its key's last record its writer's set
+    // kept), -1 for none (it follows the head); 0 when the model does not use it.
+    follows: Id,
   }
 
   // What a member that drops records remembers of them (core keep::Cut): the level, which only
@@ -222,15 +225,32 @@ module records_v3 {
   // The rule as it stood at 1e9c92a1, for the record: only the newest waiting checkpoint waits
   // (ONE_SLOT), and missing() names only what the newest waiting checkpoint keeps (N-7).
   pure val ONE_SLOT = false
-  // The root's newest checkpoint is kept first beside the counting one only when both fit.
-  // Off (the text as it stands): when they do not, the rooms fall back to the plain rule and
-  // the counting one may be lost (everyWaitingTest). On: replay 0x9107 breaks oneState and
-  // converges (open with records and architecture).
-  pure val NEWEST_FIRST_IF_FITS = false
-  // No waiting checkpoint is kept first: they enter the rooms as ordinary records after the
-  // counting checkpoint and what it names, and one the rooms turn away waits aside, counted
-  // in the bound before what it names (architecture 14:02Z).
-  pure val NEWEST_ASIDE = false
+  // Nothing that waits is put ahead of the rooms: waiting checkpoints enter them as ordinary
+  // records after the counting checkpoint and what it names, and one the rooms turn away
+  // waits aside, counted in the bound before what it names (architecture 14:31Z). Off: the
+  // root's newest checkpoint is kept first beside the counting one, and when both do not fit
+  // the rooms fall back to the plain rule and the members count no checkpoint
+  // (everyWaitingTest).
+  pure val NEWEST_ASIDE = true
+  // A set's memory of what its rooms dropped: "mark" (a key that dropped records turns away
+  // its later ones and keeps claiming the dropped units), "none" (no memory: a record is judged
+  // against the rooms as they are, as a member given everything at once would judge it), or
+  // "lapse" (a key's mark is forgotten once the set holds no record of the key at or past it),
+  // or "heads" (the part of a key's mark at or below the head the counting checkpoint names
+  // for it lapses; architecture 14:42Z, (D)), or "gapless" (no marks; above the head of the
+  // set's checkpoint a key counts only its gap-free run; architecture 14:55Z, (G)), or
+  // "follows" (no marks; a record counts when what it follows is the head or counts, the
+  // higher seq of two that follow the same record wins; architecture 15:07Z, (I)).
+  pure val CUT_MODE = "mark"
+  // (E): an honest writer never signs a record its own set would not keep (architecture
+  // 14:46Z).
+  pure val WRITER_KEEPS = false
+  // (H): a writer signs only while its key's units above the counting checkpoint's head stay
+  // within FLOOR, and the root admits at most MAX_ADMINS admin keys (architecture 15:00Z).
+  pure val WRITER_FLOOR = false
+  pure val FLOOR = 2
+  pure val ROOT_FLOOR = 6
+  pure val MAX_ADMINS = 4
   pure val MISSING_NEWEST_ONLY = false
 
   pure val NONE = 10000000
@@ -321,7 +341,7 @@ module records_v3 {
   }
 
   pure val NONEREC: Record = {
-    id: 0, signer: "", seq: 0, line: [], kind: "", target: "", kit: "", targetRec: 0, seen: Map(), heads: Map(), keep: Set(), units: 0, first: 0,
+    id: 0, signer: "", seq: 0, line: [], kind: "", target: "", kit: "", targetRec: 0, seen: Map(), heads: Map(), keep: Set(), units: 0, first: 0, follows: 0,
   }
 
   // --- The recovery chain (rule 33) -------------------------------------------------------
@@ -476,7 +496,10 @@ module records_v3 {
     val path = keptPath(s, db)
     val cuts = keptCuts(s, db)
     val admins = learned(recsOf(s.got, db), path, cuts)
-    val shown = items.filter(r => within(cuts, r))
+    // "gapless": above the head the set's checkpoint names for a key, only the gap-free run
+    // of that key counts; a record past a gap has no count and no unit.
+    val shown0 = items.filter(r => within(cuts, r) and (CUT_MODE != "gapless" or gapFree(s, r, items, db)))
+    val shown = if (CUT_MODE == "follows") followsOk(s, shown0, db) else shown0
     val ceil = ceilings(path, admins)
     val plain = keepAfter(shown, ceil, cut, last(path), orderOf(s, db))
     // A record a held checkpoint names (its key's record below it, or one it keeps) settles
@@ -494,14 +517,9 @@ module records_v3 {
       else {
         val c = db.get(v.checkpoint)
         val left = shown.filter(r => not(prunedBy(c, r)))
-        // The root's newest checkpoint is kept first too, alone (not what it names).
+        // Off NEWEST_ASIDE, the root's newest checkpoint is kept first too, alone.
         val newest = cps.filter(x => cps.forall(o => o == x or x.seq > o.seq or (x.seq == o.seq and x.id < o.id)))
-        val first1 = left.filter(r => r == c or namedBy(c, r, shown))
-        // The newest goes first too only when it fits beside them (else it goes through the
-        // rooms like any record).
-        val firstN = first1.union(left.filter(r => newest.contains(r)))
-        val fitsN = sumUnits(firstN) <= ROOM and ceil.keys().forall(k => sumUnits(ofKey(firstN, k)) <= ceil.get(k))
-        val first = if (NEWEST_ASIDE or (NEWEST_FIRST_IF_FITS and not(fitsN))) first1 else firstN
+        val first = left.filter(r => r == c or namedBy(c, r, shown) or (not(NEWEST_ASIDE) and newest.contains(r)))
         val ceil2 = ceil.keys().mapBy(k => ceil.get(k) - sumUnits(ofKey(first, k)))
         val room2 = ROOM - sumUnits(first)
         if (room2 < 0 or ceil2.keys().exists(k => ceil2.get(k) < 0) or first.exists(r => not(ceil.keys().contains(r.signer)))) plain
@@ -532,8 +550,72 @@ module records_v3 {
   pure def namedBy(c: Record, r: Record, items: Set[Record]): bool = c.keep.contains(r.id) or waitedBy(c, items) == r
   // Drops what the set does not keep.
   pure def recut(s: Store, db: Id -> Record): Store = {
-    val res = settle(s, recsOf(s.recs, db), s.cut, db)
+    val res = settle(s, recsOf(s.recs, db), cutOf(s, db), db)
     { ...s, recs: res._1, cut: res._2 }
+  }
+  // (I): of items, those whose chain of follows reaches the head (or none) through held
+  // records; of two records of one key above its head that follow the same record, the
+  // higher seq wins and the lower is void. A record at or below the head is never void, and
+  // a record follows only its own key's records.
+  pure def followsOk(s: Store, items: Set[Record], db: Id -> Record): Set[Record] = {
+    val c0 = if (s.checkpoint == 0) NONEREC else db.get(s.checkpoint)
+    val c = if (c0 != NONEREC and c0.signer == last(keptPath(s, db))) c0 else NONEREC
+    pure def hd(k: Key): int = if (c != NONEREC and c.heads.keys().contains(k)) c.heads.get(k).length() else 0
+    val live = items.filter(r => r.follows == 0 or r.seq <= hd(r.signer) or not(items.exists(y => y != r
+      and y.signer == r.signer and y.follows == r.follows and y.seq > r.seq)))
+    pure def base(r: Record): bool = r.follows == 0 or r.follows == -1 or r.seq <= hd(r.signer)
+      or (db.keys().contains(r.follows) and db.get(r.follows).signer == r.signer
+        and db.get(r.follows).seq <= hd(r.signer))
+    val ok = range(0, MAXREC + 1).foldl(live.filter(r => base(r)), (acc, j) =>
+      acc.union(live.filter(r => acc.exists(x => x.id == r.follows and x.signer == r.signer and x.seq < r.seq))))
+    ok.union(items.filter(r => r.follows == 0))
+  }
+  // Every lower seq of r's key above the head the set's checkpoint names is among items.
+  pure def gapFree(s: Store, r: Record, items: Set[Record], db: Id -> Record): bool = {
+    // The head comes from the set's checkpoint when it is the current root's; a replaced
+    // root's records count by its list.
+    // A checkpoint of the current root is never past a gap: it is what moves the head over one.
+    val c0 = if (s.checkpoint == 0) NONEREC else db.get(s.checkpoint)
+    val c = if (c0 != NONEREC and c0.signer == last(keptPath(s, db))) c0 else NONEREC
+    val hd = if (c != NONEREC and c.heads.keys().contains(r.signer)) c.heads.get(r.signer).length() else 0
+    val ids = idsOf(items).union(s.chain).union(s.wait)
+    replaced(keptCuts(s, db), r.signer)
+      or (r.kind == "checkpoint" and r.signer == last(keptPath(s, db)))
+      or r.line.indices().forall(j => j < hd or j >= r.line.length() - 1 or ids.contains(r.line[j]))
+  }
+  // The units of key k's records in rs above the head view's checkpoint names for k (all of
+  // them with no checkpoint); checkpoints themselves not counted.
+  pure def unitsAbove(rs: Set[Record], v: View, k: Key, db: Id -> Record): int = {
+    val c = if (v.checkpoint == 0 or not(db.keys().contains(v.checkpoint))) NONEREC else db.get(v.checkpoint)
+    val hd = if (c != NONEREC and c.heads.keys().contains(k)) c.heads.get(k).length() else 0
+    sumUnits(rs.filter(r => r.signer == k and r.seq > hd and r.kind != "checkpoint" and not(isChain(r))))
+  }
+  // The memory of drops the set judges by (CUT_MODE).
+  pure def cutOf(s: Store, db: Id -> Record): Cut =
+    if (CUT_MODE == "none" or CUT_MODE == "gapless" or CUT_MODE == "follows") NOCUT
+    else if (CUT_MODE == "mark") s.cut
+    else {
+      val cur = last(keptPath(s, db))
+      val ord = orderOf(s, db)
+      val held = recsOf(s.recs.union(s.wait), db)
+      val marks = s.cut.marks.keys().filter(k => held.exists(r => past(s.cut, r, cur, ord) and r.signer == k))
+        .mapBy(k => s.cut.marks.get(k))
+      if (CUT_MODE == "lapse") { if (marks.keys() == Set()) NOCUT else { level: s.cut.level, marks: marks } }
+      else {
+        // "heads": the part of a key's mark at or below the head the counting checkpoint
+        // names for it lapses; above the heads the mark stays.
+        val v = fullEvaluate(recsOf(s.recs, db).union(firstsHeld(s, db)), chainState(s, db))
+        val c = if (v.checkpoint == 0) NONEREC else db.get(v.checkpoint)
+        val m2 = s.cut.marks.keys().fold(Map(), (acc, k) => {
+          val dropped = recsOf(s.got.exclude(s.recs).exclude(s.wait), db)
+            .filter(r => r.signer == k and past(s.cut, r, cur, ord))
+          val above = if (c != NONEREC and c.heads.keys().contains(k)) dropped.filter(r => r.seq > c.heads.get(k).length()) else dropped
+          if (c == NONEREC or not(c.heads.keys().contains(k))) acc.put(k, s.cut.marks.get(k))
+          else if (above == Set()) acc
+          else acc.put(k, (minPos(above, cur, ord), sumUnits(above)))
+        })
+        if (m2.keys() == Set()) NOCUT else { level: s.cut.level, marks: m2 }
+      }
   }
 
   // A record offered to the set: a recovery record is held always, whatever any root or admin
@@ -583,7 +665,7 @@ module records_v3 {
       val cps = pool.filter(c => c.kind == "checkpoint" and c.signer == last(keptPath(s, db)) and storableW(s, c, db))
       val back = pool.filter(x => (cps.contains(x) or cps.exists(c => namedBy(c, x, pool)))
         and not(s.recs.contains(x.id)) and storable(s, x, db))
-      val turned = past(s.cut, r, last(keptPath(s, db)), orderOf(s, db)) and not(back.contains(r))
+      val turned = past(cutOf(s, db), r, last(keptPath(s, db)), orderOf(s, db)) and not(back.contains(r))
       // A record the counting checkpoint settled never enters the rooms: it waits aside.
       val add = if (turned or not(storable(s, r, db))) idsOf(back) else idsOf(back).union(Set(r.id))
       val s1 = if (add == Set()) s else recut({ ...s, recs: s.recs.union(add) }, db)
@@ -1002,7 +1084,7 @@ module records_v3 {
   pure def rec(id: Id, signer: Key, line: List[Id], kind: str, target: Key, kit: str, targetRec: Id,
       seen: Key -> List[Id], heads: Key -> List[Id], keep: Set[Id], units: int): Record =
     { id: id, signer: signer, seq: line.length(), line: line, kind: kind, target: target, kit: kit, targetRec: targetRec,
-      seen: seen, heads: heads, keep: keep, units: units, first: 0 }
+      seen: seen, heads: heads, keep: keep, units: units, first: 0, follows: 0 }
 
   // The group as the root made it: A a phone admin, C a computer admin, W a watch admin; the
   // recovery key K is the group's own, known to every member from its admission.
@@ -1037,7 +1119,19 @@ module records_v3 {
   // The same, and a hidden record stays off its own device too (a root key used for a minute
   // by someone who keeps the record back); a checkpoint may name more records in its keep.
   action signFull(k: Key, kind: str, target: Key, kit: str, targetRec: Id, pretend: bool, fork: bool, units: int,
-      hidden: bool, extraKeep: Set[Id]): bool = {
+      hidden: bool, extraKeep: Set[Id]): bool =
+    signFullX(k, kind, target, kit, targetRec, pretend, fork, units, hidden, extraKeep, WRITER_KEEPS)
+  // A writer that publishes what its own set turned away (it does not follow (E)).
+  action signDeviant(k: Key, kind: str, target: Key, units: int): bool =
+    signFullX(k, kind, target, "deviant", 0, false, false, units, false, Set(), false)
+  // A deviating writer whose record names f as the record it follows (I).
+  action signFollowing(k: Key, kind: str, units: int, f: Id): bool =
+    signFullXF(k, kind, "", "deviant", 0, false, false, units, false, Set(), false, f)
+  action signFullX(k: Key, kind: str, target: Key, kit: str, targetRec: Id, pretend: bool, fork: bool, units: int,
+      hidden: bool, extraKeep: Set[Id], keeps: bool): bool =
+    signFullXF(k, kind, target, kit, targetRec, pretend, fork, units, hidden, extraKeep, keeps, 0)
+  action signFullXF(k: Key, kind: str, target: Key, kit: str, targetRec: Id, pretend: bool, fork: bool, units: int,
+      hidden: bool, extraKeep: Set[Id], keeps: bool, followsAs: Id): bool = {
     val h = HOLDER.get(k)
     val s = st.get(h)
     val mine = recsOf(s.recs, db)
@@ -1052,17 +1146,30 @@ module records_v3 {
     // writer's (kit "bent").
     val counted = recsOf(views.get(h).counting, db).filter(x => x.kind != "checkpoint")
     val honestKeep = idsOf(counted).exclude(if (ROOT_KEYS.contains(k)) droppedAt(mine, counted) else Set())
-    val r = rec(nextId, k, base.append(nextId), kind, target,
+    val r1 = rec(nextId, k, base.append(nextId), kind, target,
       if (isCp and not(extraKeep.subseteq(honestKeep))) "bent" else kit, targetRec,
       seen,
       if (isCp) seen else Map(),
       if (isCp) honestKeep.union(extraKeep) else Set(),
       units)
+    // (I): it follows its key's last record the writer's set keeps.
+    val lastKept = ofKey(mine, k).fold((0, 0), (b, x) => if (x.seq > b._1) (x.seq, x.id) else b)._2
+    val r = if (CUT_MODE == "follows" and not(isChain(r1)))
+      { ...r1, follows: if (followsAs != 0) followsAs else if (lastKept == 0) -1 else lastKept } else r1
     val db2 = db.put(nextId, r)
     all {
       SIGNERS.contains(k),
       nextId <= FIRST + MAXREC,
       not(fork) or own.length() > 0,
+      // (E): an honest writer publishes a record only when its own set keeps it; else the
+      // write fails and the seq is not used. (A hidden record stays off its device.)
+      not(keeps) or hidden or isChain(r) or insertInto(s, r, db2).recs.contains(r.id),
+      // (H): and only while its key's units above the head of the counting checkpoint stay
+      // within FLOOR; the root admits no admin key past MAX_ADMINS.
+      not(keeps) or not(WRITER_FLOOR) or hidden or isChain(r) or kind == "checkpoint"
+        or unitsAbove(recsOf(s.recs, db).union(Set(r)), views.get(h), k, db2) <= (if (onList(views.get(h).path, k)) ROOT_FLOOR else FLOOR),
+      not(keeps) or not(WRITER_FLOOR) or kind != "admin" or learned(recsOf(s.recs, db), views.get(h).path, views.get(h).cuts)
+        .union(Set(target)).size() <= MAX_ADMINS,
       commit(db2, nextId + 1, h, if (hidden) s else insertInto(s, r, db2)),
     }
   }
@@ -1247,6 +1354,8 @@ module records_v3 {
     giveOnly(m, i),
   }
 
+  // A member restarts: the core does not store the cut, so its marks are lost.
+  action restart(m: str): bool = commit(db, nextId, m, recut({ ...st.get(m), cut: NOCUT }, db))
   // A member compacts: it takes its state's checkpoint.
   action compact = nondet m = MEMBERS.oneOf() compactAt(m)
   action compactAt(m: str): bool = commit(db, nextId, m, compactStore(st.get(m), views.get(m), db))
@@ -1373,8 +1482,9 @@ module records_v3 {
     broadcast, broadcastNewest, broadcastNewest, broadcastNewest, broadcastNewest, fetch,
     compact, compact, syncRound, syncRound, oldRootThief, oldRootThief, oldRootThief, rootRemovesPhone,
     removedAdminThief, removedAdminThief, removedAdminThief, recoveryTwin, signRecover,
-    signThaw, signAfterThaw, welcomeNewcomer, signHidden, signCheckpointNaming, signBent,
+    signThaw, signAfterThaw, welcomeNewcomer, signHidden, signCheckpointNaming, signBent, restartAny,
   }
+  action restartAny = nondet m = MEMBERS.oneOf() restart(m)
 
   // Witnesses of a run (quint run --witnesses): how many traces reach these.
   val firstTakeover = MEMBERS.exists(m => views.get(m).path.length() >= 2)
@@ -1548,7 +1658,9 @@ module records_v3 {
       sumUnits(rs) <= ROOM,
       rs.map(r => r.signer).forall(k => ceil.keys().contains(k) and sumUnits(ofKey(rs, k)) <= ceil.get(k)),
       (saturated(m) and not(chainState(s, db).stop)) implies others.forall(k =>
-        sumUnits(ofKey(rs, k)) + MAXU - 1 >= min2(fair, min2(ceil.get(k), sumUnits(ofKey(got.filter(r => storable(s, r, db)), k))))),
+        sumUnits(ofKey(rs, k)) + MAXU - 1 >= min2(fair, min2(ceil.get(k), sumUnits(ofKey(got.filter(r => storable(s, r, db)
+          // Under "gapless" a record past a gap in what the set holds has no count.
+          and (CUT_MODE != "gapless" or gapFree(s, r, recsOf(heldBy(s), db), db))), k))))),
     }
   })
 
@@ -1633,9 +1745,21 @@ module records_v3 {
     ahead implies (vm.devices.subseteq(vn.devices) and vm.admins.keys().subseteq(vn.admins.keys()))
   }))
 
+  // (H). With honest writers no record is turned away by the rooms: a synced member holds
+  // every record some member holds that it may store and its counting checkpoint does not
+  // prune.
+  def honestW: bool = db.keys().forall(i => db.get(i).kit != "bent" and db.get(i).kit != "deviant")
+  val honestNeverDropped = (WRITER_FLOOR and honestW) implies MEMBERS.forall(m => {
+    val s = st.get(m)
+    val v = views.get(m)
+    val c = if (v.checkpoint == 0) NONEREC else db.get(v.checkpoint)
+    (syncedProto(m) and not(v.stop) and not(chainState(s, db).stop)) implies recsOf(heldAll, db).forall(r =>
+      isChain(r) or not(storable(s, r, db)) or (c != NONEREC and prunedBy(c, r)) or heldBy(s).contains(r.id))
+  })
+
   val promises = and {
     oneState, converges, convergesHonest, countsNewest, removedStayOut, oneChainOneState, stopRootOnly, fairRoom, followsRecovery, pathGrows, newcomerTakes,
-    oldRootListed, twinStops, removedGainsNothing, compactedAgree, F12 implies heldBackCountsLess,
+    oldRootListed, twinStops, removedGainsNothing, compactedAgree, F12 implies heldBackCountsLess, honestNeverDropped,
   }
 
   // --- Scenarios ---------------------------------------------------------------------------
@@ -1823,9 +1947,10 @@ module records_v3 {
       .then(give("m", 11)).then(give("m", 9)).then(give("m", 8)).then(give("m", 10))
       .expect(views.get("a").checkpoint == 9)
       .then(syncAll)
-      // 9 with what it names fills the root's ceiling; with 11 kept first beside it they do not
-      // fit, the rooms fall back to the plain rule and the members that took 9 count nothing.
-      .expect(if (NEWEST_FIRST_IF_FITS or NEWEST_ASIDE) MEMBERS.forall(m => views.get(m).checkpoint == 9) and promises
+      // 9 with what it names fills the root's ceiling; off NEWEST_ASIDE, with 11 kept first
+      // beside it they do not fit, the rooms fall back to the plain rule and the members that
+      // took 9 count nothing.
+      .expect(if (NEWEST_ASIDE) MEMBERS.forall(m => views.get(m).checkpoint == 9) and promises
         else views.get("a").checkpoint == 0 and views.get("m").checkpoint == 7)
 
   run prunedRemovalTest =
@@ -2028,6 +2153,80 @@ module records_v3 {
         if (not(ASIDE_TAKES_WAITED)) views.get("m").checkpoint == 13
         else if (MISSING_NEWEST_ONLY or ONE_SLOT) views.get("m").checkpoint == 13 and not(convergesAt("m"))
         else MEMBERS.forall(m => views.get(m).checkpoint == 14 and convergesAt(m)) and promises })
+
+  // --- The cut and a restart ------------------------------------------------------------------
+  // A, C and W sign within their share; the root admits X, and X's one record lowers the fair
+  // share: every member drops A's, C's and the root's newest record and holds a mark, though
+  // no writer signed past what its own set kept.
+  action shareFalls =
+    init
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 2)).then(syncRound)
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 2)).then(syncRound)
+      .then(sign(COMPUTER, "copies", "", "", 0, false, false, 2)).then(syncRound)
+      .then(sign(WATCH, "copies", "", "", 0, false, false, 2)).then(syncRound)
+      .then(sign(COMPUTER, "copies", "", "", 0, false, false, 2)).then(syncRound)
+      .then(sign(ROOT, "admin", "X", "phone", 0, false, false, 1)).then(syncRound)
+      .then(sign("X", "copies", "", "", 0, false, false, 2)).then(syncRound).then(syncRound)
+  run honestShareFallsTest = shareFalls
+      // (Under "gapless" and "follows" the level rises once the tails are dropped: X's
+      // admission stays.)
+      .expect(MEMBERS.forall(m => st.get(m).recs == (if (CUT_MODE == "gapless" or CUT_MODE == "follows") Set(1, 2, 3, 4, 6, 7, 9, 10) else Set(1, 2, 3, 4, 6, 7, 10))
+        and (CUT_MODE == "none" or CUT_MODE == "gapless" or CUT_MODE == "follows" or st.get(m).cut.marks.keys() == Set(PHONE, COMPUTER, ROOT))) and promises)
+  // Member a restarts (the core keeps no cut) and A writes again: a keeps it, the members
+  // with the mark turn it away, and synced members differ in A's record past the mark until
+  // the root's next checkpoint.
+  // Under "gapless" A's 11 follows a seq nobody holds: (E) refuses it; published anyway (a
+  // deviating writer), every member, restarted or not, turns it away alike.
+  // Under "follows" A's 11 follows 4 and voids 5: every member keeps it at once.
+  run restartSplitTest = shareFalls
+      .then(restart("a"))
+      .then(if (CUT_MODE == "gapless") signDeviant(PHONE, "copies", "", 2) else sign(PHONE, "copies", "", "", 0, false, false, 2))
+      .then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => syncedProto(m)) and
+        if (CUT_MODE == "gapless") MEMBERS.forall(m => not(st.get(m).recs.contains(11)) and convergesAt(m))
+        else if (CUT_MODE == "follows") MEMBERS.forall(m => st.get(m).recs == Set(1, 2, 3, 4, 6, 7, 9, 10, 11) and convergesAt(m))
+        else st.get("a").recs.contains(11)
+          and (CUT_MODE == "none" or (not(st.get("m").recs.contains(11)) and not(convergesAt("m")))))
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 1, false, Set()))
+      .then(syncRound).then(syncRound).then(syncRound)
+      // Under "gapless" the root's head for A stays at 4 (no member holds A's 5), so 11 still
+      // follows a gap: A stays mute, alike everywhere.
+      .expect(MEMBERS.forall(m => st.get(m).recs.contains(11) == (CUT_MODE != "gapless") and views.get(m).checkpoint == 12
+        and convergesAt(m)))
+
+  // (I): a replay of the void 5 or of C's dropped 8, by every member, changes nothing.
+  run followsReplayTest = shareFalls
+      .then(restart("a"))
+      .then(if (CUT_MODE == "gapless") signDeviant(PHONE, "copies", "", 2) else sign(PHONE, "copies", "", "", 0, false, false, 2))
+      .then(syncRound).then(syncRound)
+      .then(giveAll(MEMBERS, [5, 8])).then(syncRound)
+      .expect(CUT_MODE != "follows" or MEMBERS.forall(m => st.get(m).recs == Set(1, 2, 3, 4, 6, 7, 9, 10, 11)
+        and convergesAt(m)) and promises)
+  // (I): a key voids only its own tail above the head: once the root's checkpoint settles A's
+  // 4, A's record that follows what 4 follows leaves 4 in place.
+  run followsSettledTest = shareFalls
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 1, false, Set()))
+      .then(syncRound).then(syncRound)
+      .then(signFollowing(PHONE, "copies", 1, -1))
+      .then(syncRound).then(syncRound)
+      .expect(CUT_MODE != "follows" or MEMBERS.forall(m => st.get(m).recs.contains(4) and st.get(m).recs.contains(12)
+        and convergesAt(m)) and promises)
+
+  // (H): under WRITER_FLOOR the same group writes within FLOOR above the head: A's second
+  // record waits for the root's next checkpoint; X's admission and record drop nothing.
+  run floorShareTest =
+    init
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 2)).then(syncRound)
+      .then(sign(COMPUTER, "copies", "", "", 0, false, false, 2)).then(syncRound)
+      .then(sign(WATCH, "copies", "", "", 0, false, false, 2)).then(syncRound)
+      .then(sign(ROOT, "admin", "X", "phone", 0, false, false, 1)).then(syncRound)
+      .then(sign("X", "copies", "", "", 0, false, false, 2)).then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => st.get(m).recs == Set(1, 2, 3, 4, 5, 6, 7, 8)) and promises)
+      // The root's honest checkpoint keeps everything that counts (13 units with itself): A's
+      // next record is within FLOOR above the new head but its own set cannot keep it, so (E)
+      // refuses it; nobody writes again until a checkpoint prunes.
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 1, false, Set())).then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).checkpoint == 9 and sumUnits(recsOf(st.get(m).recs, db)) == 13) and promises)
 
   // --- F-12 -------------------------------------------------------------------------------
   // Every member counts checkpoint 5, which keeps device D's admission 4.
