@@ -279,6 +279,12 @@ pub struct State {
     /// and that are no device of the state, sorted. Each gets the proof
     /// (`root_pair`) and nothing else (`peer::Standing::ForkProof`).
     pub proof_to: Vec<KeyHash>,
+    /// A removed key that had two histories, with the keys its removals
+    /// on a whole chain named that no longer count (the removal of the key
+    /// saw one line) and that nothing else bars, sorted: a notice for the
+    /// app ("a forked key was removed; its removals on the other line no
+    /// longer count"). `RecordSet::write_removal` leaves none.
+    pub forked_removed: Vec<(KeyHash, Vec<KeyHash>)>,
 }
 
 impl State {
@@ -1882,13 +1888,16 @@ impl<'e, 'a> Epoch<'e, 'a> {
         if fork <= MAX_SEQ {
             self.forked.insert(signer, fork);
         }
-        // A root's removal on a whole chain counts at or above the fork
-        // too, on either history: the group stops, and what either history
+        // A removal on a whole chain counts at or above the fork too, on
+        // either history, whoever signed it (F-7 for every key): a key in
+        // two histories brings nothing back that it removed, and its
+        // admissions and other grants at or above the fork stop counting.
+        // For the current root the group stops, and what either history
         // removed stays out of the change of root that ends the stop.
         for (seq, l) in live {
             for i in l {
                 let r = self.r(i);
-                if (seq < fork || root && r.is_revoke()) && !self.voided.contains(&r.id) {
+                if (seq < fork || r.is_revoke()) && !self.voided.contains(&r.id) {
                     self.counted[i] = true;
                 }
             }
@@ -2655,6 +2664,21 @@ impl<'e, 'a> Epoch<'e, 'a> {
         s.nothing_to.sort();
         s.no_secrets_to.sort();
         s.revoked = self.revoked.iter().copied().collect();
+        for signer in self.forked.keys().filter(|k| self.revoked.contains(*k)) {
+            let mut lost: Vec<KeyHash> = self
+                .of(signer)
+                .iter()
+                .filter(|&&i| self.counted[i] && !self.counts(i))
+                .filter_map(|&i| self.r(i).removal().filter(|_| self.r(i).is_revoke()))
+                .flat_map(|rm| rm.keys.iter().copied())
+                .filter(|k| !self.revoked.contains(k))
+                .collect();
+            lost.sort();
+            lost.dedup();
+            if !lost.is_empty() {
+                s.forked_removed.push((*signer, lost));
+            }
+        }
         // A checkpoint may prune a removed device's record; its removal
         // still names its key.
         s.named.extend(self.revoked.iter().map(DeviceId::of));

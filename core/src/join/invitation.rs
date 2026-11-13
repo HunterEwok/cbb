@@ -29,7 +29,8 @@ use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use zeroize::Zeroize;
 
-use crate::format::{Alg, Rule, Value, cbor};
+use crate::format::grant::{Binding, Kept};
+use crate::format::{Alg, DeviceId, Rule, Value, cbor};
 use crate::records::State;
 use crate::records::body::{CAP_HUB, RIGHT_HUB, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND, ROLE_LEAF};
 
@@ -139,8 +140,17 @@ impl core::fmt::Debug for Invitation {
 
 impl Invitation {
     /// A new invitation with fresh one-time values.
+    /// A new invitation: its ID and secret drawn here, never all zero
+    /// bytes (the ID of a pairing at home without an invitation,
+    /// [`super::NO_INVITATION`], and a secret nobody keeps), which readers
+    /// refuse (`invite/shape`).
     pub fn new(paths: Vec<Path>, profile: Profile) -> Invitation {
-        Invitation { id: crate::certs::random_bytes(), secret: crate::certs::random_bytes(), paths, profile }
+        Invitation {
+            id: not_zero(crate::certs::random_bytes),
+            secret: not_zero(crate::certs::random_bytes),
+            paths,
+            profile,
+        }
     }
 
     /// The encoding.
@@ -503,8 +513,15 @@ fn within_one(a: &[char], b: &[char]) -> bool {
 /// The machine's steps have [`ATTEMPT_MS`]; the person's comparison and
 /// answer have [`ANSWER_MS`] of their own.
 /// The user answers "they match".
-fn short_code(exporter: &[u8], joiner_nonce: &[u8; 32], member_nonce: &[u8; 32]) -> String {
-    let h = crate::format::sha256(&[b"cbb short code v2\0", exporter, joiner_nonce, member_nonce]);
+/// The code takes the ID of the invitation each end believes it is using,
+/// so that two ends in the flows of two invitations show two codes.
+pub(crate) fn short_code(
+    exporter: &[u8],
+    joiner_nonce: &[u8; 32],
+    member_nonce: &[u8; 32],
+    invitation: &[u8; 16],
+) -> String {
+    let h = crate::format::sha256(&[b"cbb short code v3\0", exporter, joiner_nonce, member_nonce, invitation]);
     let n = u32::from_be_bytes([h[0], h[1], h[2], h[3]]) % 1_000_000;
     alloc::format!("{n:06}")
 }
@@ -514,10 +531,39 @@ fn code_commitment(joiner_nonce: &[u8; 32]) -> [u8; 32] {
     crate::format::sha256(&[b"cbb short code commitment v1\0", joiner_nonce])
 }
 
+/// What draw gives that is not all zero bytes, drawn again until it is.
+pub(crate) fn not_zero<const N: usize>(mut draw: impl FnMut() -> [u8; N]) -> [u8; N] {
+    loop {
+        let b = draw();
+        if b != [0; N] {
+            return b;
+        }
+    }
+}
+
 /// The joiner's side of the short code, for one session: its nonce, drawn
 /// here, used once. Only [`JoinerAttempts::start`] makes one.
 pub struct JoinerCode {
     nonce: [u8; 32],
+}
+
+/// A joiner's pairing session past its code step: the code is shown and
+/// the nonce opened. It lives with that session alone: it is neither
+/// cloned nor kept, and a restart has none.
+#[derive(Debug)]
+pub struct Shown {
+    local: DeviceId,
+}
+
+impl Shown {
+    /// A guarded leaf's binding in person by code (`grant::read_bound`):
+    /// the grant this session brings once the person confirmed the code,
+    /// and only it, binds the leaf to the root it waits for. None when the
+    /// leaf waits for no binding. What a binding names comes from the
+    /// leaf's own state and this session's own key, never from the peer.
+    pub fn binding(&self, kept: &Kept) -> Option<Binding> {
+        Binding::at_code_step(kept, self.local)
+    }
 }
 
 /// The joiner's sessions with one invitation (kept across restarts): at
@@ -551,13 +597,22 @@ impl JoinerAttempts {
         Ok((JoinerCode { nonce }, c))
     }
 
-    /// The code to show once `pair/reply` brought the member's nonce, and
-    /// the nonce that `pair/confirm` opens. It takes the session by value:
-    /// a nonce serves one session. The code stays shown until
-    /// [`JoinerAttempts::answered`].
-    pub fn open(&mut self, code: JoinerCode, exporter: &[u8], member_nonce: &[u8; 32]) -> (String, [u8; 32]) {
+    /// The code to show once `pair/reply` brought the member's nonce, the
+    /// nonce that `pair/confirm` opens, and the session's code step passed
+    /// at this end ([`Shown`]); invitation is the ID of the invitation the
+    /// joiner is using, local the device ID of the joiner's own TLS key in
+    /// this session. It takes the session by value: a nonce serves one
+    /// session. The code stays shown until [`JoinerAttempts::answered`].
+    pub fn open(
+        &mut self,
+        code: JoinerCode,
+        exporter: &[u8],
+        member_nonce: &[u8; 32],
+        invitation: &[u8; 16],
+        local: DeviceId,
+    ) -> (String, [u8; 32], Shown) {
         self.showing = true;
-        (short_code(exporter, &code.nonce, member_nonce), code.nonce)
+        (short_code(exporter, &code.nonce, member_nonce, invitation), code.nonce, Shown { local })
     }
 
     /// The person answered the shown code (they match, they do not, or
@@ -580,6 +635,11 @@ impl Open {
             return Err(PairError::Busy);
         }
         self.attempt = None;
+        // An ID of zero bytes is a pairing at home without an invitation:
+        // no invitation kept open has it.
+        if self.invitation.id == super::NO_INVITATION {
+            return Err(PairError::Refused);
+        }
         self.may_use(network, now_ms)?;
         let number = self.next_attempt;
         self.next_attempt = self.next_attempt.saturating_add(1);
@@ -629,7 +689,7 @@ impl Open {
         if let Some(a) = self.attempt.as_mut() {
             a.shown_ms = Some(now_ms);
         }
-        Ok(short_code(exporter, joiner_nonce, &nonce))
+        Ok(short_code(exporter, joiner_nonce, &nonce, &self.invitation.id))
     }
 
     /// The attempt ended at `now_ms`: `welcomed` when the joiner got its

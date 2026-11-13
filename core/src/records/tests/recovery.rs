@@ -2266,3 +2266,43 @@ fn a_head_names_the_groups_second_half() {
     let alone = Record::decode(&crate::format::envelope::write(held.body_bytes(), held.sig(), None));
     assert!(alone.is_err() || alone.unwrap().verify_head(&rk()).is_err());
 }
+
+/// A member restored, or handed the records in another order, with an
+/// earlier root's records filling what waits: the newest head's first
+/// checkpoint still waits beside them, so the chain applies and the set
+/// ends as the live one (simulator seed 47).
+#[test]
+fn the_newest_heads_first_checkpoint_waits_whatever_else_does() {
+    let mut g = base();
+    let from = g.recs.clone();
+    let w1 = write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
+    let from = g.recs.clone();
+    let w2 = write(&mut g, &from, &k("n2"), &k("phone 2"), &[]);
+    let n1 = k("n1");
+    let ceiling = crate::records::keep::ceiling(true);
+    let cp1 = w1.first.last().unwrap().id();
+    let many: Vec<Record> =
+        (0..ceiling).map(|_| g.rec(&n1, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] })).collect();
+    let mut live = set_of(&g.root.key);
+    sync_all(&mut live, &g.recs, &g.lists);
+    assert_eq!(live.state().roots, vec![k("root").hash, n1.hash, k("n2").hash]);
+    // The earlier first checkpoint is gone, n1's records come before n2's.
+    let w2_ids: Vec<RecordId> = w2.first.iter().map(Record::id).collect();
+    let mut order: Vec<Record> =
+        g.recs.iter().filter(|r| r.id() != cp1 && !w2_ids.contains(&r.id()) && !many.contains(r)).cloned().collect();
+    order.extend(many.iter().cloned());
+    order.extend(w2.first.iter().cloned());
+    let mut m = set_of(&g.root.key);
+    for l in &g.lists {
+        let _ = m.insert_list(l);
+    }
+    for r in &order {
+        let _ = m.insert(r.clone());
+        for l in &g.lists {
+            let _ = m.insert_list(l);
+        }
+    }
+    assert_eq!(m.state().roots, vec![k("root").hash, n1.hash, k("n2").hash]);
+    let restored = RecordSet::restore(g.root.key.clone(), crate::testkit::recovery(), &order, &g.lists);
+    assert_eq!(restored.state().roots, m.state().roots);
+}

@@ -1048,12 +1048,15 @@ fn a_removal_signed_again_keeps_what_it_saw() {
     g.device(&t, &k("d1"), "d1", |_| {});
     let rm = removal(&[t.hash], g.seen());
     let first = g.rec(&s_, Kind::Revoke(rm.clone()));
-    // S's key signs seq 1 twice: none of its records counts, T goes on.
+    // S's key signs seq 1 twice: of its records only the removal, on a
+    // whole chain, still counts (F-7 for every key); T stays out.
     let twin_body = Body { seq: 1, prev: None, ..g.body(&s_, Kind::Copies { incoming_ms: 6_000, seen: vec![] }) };
     let twin = g.push(Record::sign(twin_body, &s_).unwrap());
     let later: Vec<Record> = (2..5).map(|i| g.device(&t, &k(&format!("d{i}")), "d", |_| {})).collect();
     let s = g.state();
-    assert!(s.two_histories(&s_.hash) && !s.revoked.contains(&t.hash));
+    assert!(s.two_histories(&s_.hash) && s.revoked.contains(&t.hash));
+    assert!(later.iter().all(|r| !s.counting.contains(&r.id())));
+    // The root voids both: until the removal is signed again, T is back.
     let mut ids = vec![first.id(), twin.id()];
     ids.sort();
     g.root_rec(Kind::Resolve(ids));
@@ -2988,6 +2991,7 @@ fn members_agree(g: &G) -> State {
     s
 }
 
+mod insert_cost;
 mod recovery;
 mod traces;
 
@@ -4684,18 +4688,268 @@ fn a_removed_device_gets_its_removals_chain() {
     let mut both = set.clone();
     let _ = both.insert(twin.clone());
     let st2 = both.state();
-    // Two histories of the admin's key: its removal no longer counts, and
-    // the device is no removed one (it gets what a member gets).
-    assert!(st2.two_histories(&a.hash) && !st2.revoked.contains(&laptop.hash));
-    // With the twin held only as the proof, below a removal that counts:
-    // the removal's chain is still one line.
-    let mut proof_only = set.clone();
-    let _ = proof_only.insert_proof(twin.clone());
-    let st3 = proof_only.state();
-    let handed = if st3.revoked.contains(&laptop.hash) { proof_only.for_peer(&st3, &laptop.hash) } else { Vec::new() };
+    // Two histories of the admin's key: its removal on a whole chain still
+    // bars the device (F-7 for every key), and what is handed is the one
+    // line the removal's prev chain walks.
+    assert!(st2.two_histories(&a.hash) && st2.revoked.contains(&laptop.hash));
+    let handed = both.for_peer(&st2, &laptop.hash);
+    assert!(handed.iter().any(|r| r.id() == rv.id()));
     assert!(!handed.iter().any(|r| r.id() == twin.id()), "the twin is not handed");
     let mut seqs: Vec<u64> = handed.iter().filter(|r| r.body().signer == a.hash).map(|r| r.body().seq).collect();
     let n = seqs.len();
     seqs.dedup();
     assert_eq!(seqs.len(), n, "one record of the admin's key per seq");
+}
+
+/// A root checkpoint that pruned before its twin came (fuzz
+/// min-dev-twin-cp): the pair stops the group and the checkpoint below
+/// counts again, naming records the member dropped. It asks for them, takes
+/// them from a peer that holds them, and ends as one that took every
+/// record at once. When no peer holds them every member ends alike and is
+/// told; the recovery key's change of root, written from what the writer
+/// holds, is taken by every member and the group goes on.
+#[test]
+fn a_checkpoint_that_pruned_before_its_twin_gets_back_what_it_dropped() {
+    let mut g = G::new();
+    let d0 = g.device(&k("root"), &k("dev0"), "dev0", |_| {});
+    let d3 = g.device(&k("root"), &k("dev3"), "dev3", |_| {});
+    let d1 = g.device(&k("root"), &k("dev1"), "dev1", |_| {});
+    let c6 = root_cp(&mut g, vec![d0.id(), d3.id()]);
+    let c7 = root_cp(&mut g, vec![]);
+    let t7 = root_twin(&g, &c7, Kind::device(Device::new(k("dev9").key.clone(), "dev9", ROLE_MEMBER)));
+    let base: Vec<Record> = vec![d0.clone(), d3.clone(), d1.clone(), c6.clone()];
+    let pruned_first = || {
+        let mut a = set_with(&g.root.key, &base, &g.lists);
+        a.insert(c7.clone()).unwrap();
+        let _ = a.insert(t7.clone());
+        a
+    };
+    let mut a = pruned_first();
+    let mut b = set_with(&g.root.key, &base, &g.lists);
+    let _ = b.insert(t7.clone());
+    let _ = b.insert(c7.clone());
+    let mut all = base.clone();
+    all.extend([c7.clone(), t7.clone()]);
+    let whole = state_with(&g.root.key, &all, &g.lists);
+    assert!(whole.stopped() && whole.devices.len() == 3);
+    assert_eq!(b.state().devices, whole.devices);
+    assert!(!a.contains(&d0.id()) && !a.contains(&d3.id()));
+    // It asks for them, and the peer gives them by ID.
+    let st = a.state();
+    let asked = a.missing(&st);
+    assert!(asked.contains(&d0.id()) && asked.contains(&d3.id()));
+    let sb = b.state();
+    let given: Vec<Record> =
+        asked.iter().filter_map(|id| b.for_peer_by_id(&sb, &k("dev1").hash, id)).cloned().collect();
+    a.insert_all(given);
+    assert_eq!(a.digest(), b.digest());
+    assert_eq!(a.state().devices, whole.devices);
+
+    // Nobody holds them: the members end alike, and are told.
+    let (mut a1, mut a2) = (pruned_first(), pruned_first());
+    assert_eq!(a1.digest(), a2.digest());
+    assert_eq!(a1.state(), a2.state());
+    assert!(a1.state().stopped());
+    for _ in 0..=crate::records::set::MISSING_ROUNDS {
+        let st = a1.state();
+        a1.missing(&st);
+    }
+    assert!(a1.stuck_checkpoints().contains(&(c6.id(), Stuck::NeverOffered)));
+    // The recovery key changes the root from what a1 holds; a2 takes it and
+    // the group goes on, the same at both.
+    let st = a1.state();
+    let phone = Device::new(k("root2 phone").key.clone(), "root2 phone", ROLE_PHONE);
+    let w = a1.write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("root2"), phone, &[], false, 0).unwrap();
+    a2.insert(w.record.clone()).unwrap();
+    a2.insert_list(&w.list.encode()).unwrap();
+    a2.insert_all(w.first.iter().cloned());
+    let (s1, s2) = (a1.state(), a2.state());
+    assert_eq!(s1.roots.last(), Some(&k("root2").hash));
+    assert!(!s1.stopped());
+    assert_eq!(s1, s2);
+    assert_eq!(a1.digest(), a2.digest());
+}
+
+/// Fuzz min-dev-twin-cp: a whole checkpoint of the root at the seq where
+/// it has two histories never counts, so it does not hold back the one
+/// below it: what that one keeps again (a record an older one pruned) is
+/// taken, and the member ends as one that took every record at once.
+#[test]
+fn a_checkpoint_at_the_fork_seq_counts_for_nothing() {
+    let mut g = G::new();
+    let d0 = g.device(&k("root"), &k("dev0"), "dev0", |_| {});
+    let d3 = g.device(&k("root"), &k("dev3"), "dev3", |_| {});
+    let s3 = g.root_rec(Kind::settings(Settings { shared: true, ..Settings::default() }));
+    let c4 = root_cp(&mut g, vec![d3.id()]);
+    let d1 = g.device(&k("root"), &k("dev1"), "dev1", |_| {});
+    let c6 = root_cp(&mut g, vec![s3.id(), d0.id()]);
+    let c7 = root_cp(&mut g, vec![c4.id(), d3.id()]);
+    let t7 = root_twin(&g, &c7, Kind::device(Device::new(k("dev9").key.clone(), "dev9", ROLE_MEMBER)));
+    let all = vec![d0.clone(), d3.clone(), s3.clone(), c4.clone(), d1.clone(), c6.clone(), c7.clone(), t7.clone()];
+    let whole = state_with(&g.root.key, &all, &g.lists);
+    assert!(whole.stopped());
+    let mut m = set_with(&g.root.key, &all[..4], &g.lists);
+    for r in [&d1, &c6, &c7, &t7] {
+        let _ = m.insert(r.clone());
+    }
+    // What the checkpoint below the fork keeps again, asked for.
+    for _ in 0..4 {
+        let st = m.state();
+        let asked = m.missing(&st);
+        m.insert_all(all.iter().filter(|r| asked.contains(&r.id())).cloned());
+    }
+    let st = m.state();
+    assert!(m.contains(&d0.id()) && m.contains(&s3.id()));
+    assert_eq!(st.checkpoint, whole.checkpoint);
+    assert_eq!(st.devices, whole.devices);
+    assert_eq!(st.counting, whole.counting);
+}
+
+/// F-7 for every key: an admin key in two histories brings back nothing it
+/// removed. A twin at seq 1, or just below its oldest removal, leaves every
+/// removal on a whole chain barring; the removals of both histories count;
+/// one whose chain is not whole counts on neither.
+#[test]
+fn a_key_in_two_histories_brings_back_nothing_it_removed() {
+    let (pa, a) = (k("pa"), k("a"));
+    let (d1, d2, d3) = (k("d1"), k("d2"), k("d3"));
+    let base = |g: &mut G| -> (Record, Record, Record) {
+        g.admin(&pa, &a, POWER_ADMIT | POWER_REMOVE);
+        let x1 = g.device(&a, &d1, "d1", |_| {});
+        let x2 = g.device(&a, &d2, "d2", |_| {});
+        let rv = g.rec(&a, Kind::Revoke(removal(&[d1.hash], g.seen())));
+        (x1, x2, rv)
+    };
+    let twin_at = |g: &G, seq: u64, prev: Option<RecordId>, kind: Kind| {
+        let b = Body { group: g.gid, signer: a.hash, seq, prev, time_ms: 7, kind, held: false };
+        Record::sign(b, &a).unwrap()
+    };
+    let copies = || Kind::Copies { incoming_ms: 6_000, seen: vec![] };
+    // A twin at seq 1, and one just below the removal (at seq 2).
+    for at in [1u64, 2] {
+        let mut g = G::new();
+        let (x1, _, _) = base(&mut g);
+        let prev = if at == 1 { None } else { Some(x1.id()) };
+        let t = twin_at(&g, at, prev, copies());
+        g.push(t);
+        let s = g.state();
+        assert!(s.two_histories(&a.hash), "twin at {at}");
+        assert!(s.revoked.contains(&d1.hash), "twin at {at}: the removal still bars");
+        assert!(s.device_by_key(&d1.hash).is_none(), "twin at {at}");
+    }
+    // Each history removes a device: both stay out.
+    let mut g = G::new();
+    let (_, x2, _) = base(&mut g);
+    let t = twin_at(&g, 3, Some(x2.id()), Kind::Revoke(removal(&[d2.hash], g.seen())));
+    g.push(t);
+    let s = g.state();
+    assert!(s.two_histories(&a.hash));
+    assert!(s.revoked.contains(&d1.hash) && s.revoked.contains(&d2.hash), "both histories' removals count");
+    // A removal whose chain is not whole counts on neither history.
+    let mut g = G::new();
+    let (_, x2, rv) = base(&mut g);
+    let rv3 = g.rec(&a, Kind::Revoke(removal(&[d3.hash], g.seen())));
+    assert_eq!(rv3.body().prev, Some(rv.id()));
+    let t = twin_at(&g, 1, None, copies());
+    g.push(t);
+    let held: Vec<Record> = g.recs.iter().filter(|r| r.id() != x2.id()).cloned().collect();
+    let s = state_with(&g.root.key, &held, &g.lists);
+    assert!(s.two_histories(&a.hash));
+    assert!(!s.counting.contains(&rv3.id()) && !s.revoked.contains(&d3.hash), "a removal above a gap");
+}
+
+/// The root removes an admin key in two histories: its own removals of
+/// what that key's removals bar come first, so nothing the key barred on
+/// either line comes back in any order of arrival, and nothing the key
+/// signs after its removal counts. A removal that skips the writer is told.
+#[test]
+fn removing_a_key_in_two_histories_keeps_out_what_it_barred() {
+    let mut g = G::new();
+    let (pa, a) = (k("pa"), k("a"));
+    g.admin(&pa, &a, POWER_ADMIT | POWER_REMOVE);
+    let (d1, d2, d3) = (k("d1"), k("d2"), k("d3"));
+    let x1 = g.device(&a, &d1, "d1", |_| {});
+    let x2 = g.device(&a, &d2, "d2", |_| {});
+    g.device(&a, &d3, "d3", |_| {});
+    let seen = g.seen();
+    let rv1 = g.rec(&a, Kind::Revoke(removal(&[d1.hash], seen.clone())));
+    // The other line: at rv1's seq, after x2... no: after the record below rv1.
+    let below = g.recs.iter().find(|r| r.id() == rv1.body().prev.unwrap()).unwrap().clone();
+    let tb = Body {
+        group: g.gid,
+        signer: a.hash,
+        seq: rv1.body().seq,
+        prev: Some(below.id()),
+        time_ms: 9,
+        kind: Kind::Revoke(removal(&[d2.hash], seen)),
+        held: false,
+    };
+    let rv2 = g.push(Record::sign(tb, &a).unwrap());
+    let _ = (x1, x2);
+    let mut set = set_with(&g.root.key, &g.recs, &g.lists);
+    let st = set.state();
+    assert!(st.two_histories(&a.hash));
+    assert!(st.revoked.contains(&d1.hash) && st.revoked.contains(&d2.hash));
+    // write_record refuses, untouched.
+    let before = set.digest();
+    assert!(set.write_record(&st, &g.root, Kind::Revoke(removal(&[a.hash], Vec::new())), 0).is_err());
+    assert_eq!(set.digest(), before);
+    let written = set.write_removal(&st, &g.root, &[a.hash], 0).unwrap();
+    assert!(written.len() >= 2);
+    let s = set.state();
+    for key in [&a.hash, &d1.hash, &d2.hash] {
+        assert!(s.revoked.contains(key));
+    }
+    assert!(s.forked_removed.is_empty());
+    // In every order of arrival of both lines and the removal at a member
+    // that holds the rest, whichever line arrives first.
+    let rest: Vec<Record> = g.recs.iter().filter(|r| r.id() != rv1.id() && r.id() != rv2.id()).cloned().collect();
+    let mut late: Vec<Record> = vec![rv1.clone(), rv2.clone()];
+    late.extend(written.iter().cloned());
+    let mut idx: Vec<usize> = (0..late.len()).collect();
+    let mut orders = 0;
+    loop {
+        let mut m = set_with(&g.root.key, &rest, &g.lists);
+        for &i in &idx {
+            let _ = m.insert(late[i].clone());
+        }
+        let sm = m.state();
+        assert!(sm.revoked.contains(&d1.hash) && sm.revoked.contains(&d2.hash) && sm.revoked.contains(&a.hash));
+        assert!(sm.forked_removed.is_empty());
+        orders += 1;
+        // Next permutation.
+        let Some(i) = (0..idx.len().saturating_sub(1)).rev().find(|&i| idx[i] < idx[i + 1]) else { break };
+        let j = (i + 1..idx.len()).rev().find(|&j| idx[j] > idx[i]).unwrap();
+        idx.swap(i, j);
+        idx[i + 1..].reverse();
+    }
+    assert!(orders >= 24);
+    // Nothing A signs after its removal counts.
+    let head = g.heads[&a.hash];
+    let late = Body {
+        group: g.gid,
+        signer: a.hash,
+        seq: head.0 + 1,
+        prev: Some(head.1),
+        time_ms: 10,
+        kind: Kind::Revoke(removal(&[d3.hash], g.seen())),
+        held: false,
+    };
+    let late = Record::sign(late, &a).unwrap();
+    let _ = set.insert(late.clone());
+    let s = set.state();
+    assert!(!s.counting.contains(&late.id()) && !s.revoked.contains(&d3.hash));
+    // A removal of A that skips the writer, seeing one line: the other
+    // line's removal no longer counts, and the state tells it.
+    for (line, other) in [(&rv1, &d2), (&rv2, &d1)] {
+        let mut seen = g.seen();
+        seen.retain(|e| e.key != a.hash);
+        seen.push(Seen { key: a.hash, seq: line.body().seq, id: line.id() });
+        seen.sort_by_key(|e| e.key);
+        let mut h = G { root: k("root"), gid: g.gid, heads: g.heads.clone(), recs: g.recs.clone(), lists: Vec::new() };
+        h.root_rec(Kind::Revoke(removal(&[a.hash], seen)));
+        let s = h.state();
+        assert!(!s.revoked.contains(&other.hash));
+        assert_eq!(s.forked_removed, vec![(a.hash, vec![other.hash])]);
+    }
 }

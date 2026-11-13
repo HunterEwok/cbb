@@ -16,6 +16,7 @@ use super::invitation::{self, Invitation, Network, Open, Path, PathKind, Profile
 use super::welcome::{self, Joining, Welcome};
 use super::*;
 use crate::certs::sha256;
+use crate::format::DeviceId;
 use crate::format::{self, Alg};
 use crate::records::body::*;
 use crate::records::set::RecordSet;
@@ -180,10 +181,16 @@ fn info(name: &str, role: u64) -> Info {
 #[test]
 fn the_channel_binds_both_keys() {
     let (a, b) = (k("a"), k("b"));
-    let ab = channel_id(&fhash(&a), &fhash(&b));
-    assert_ne!(ab, channel_id(&fhash(&b), &fhash(&a)), "the member's key comes first");
-    assert_ne!(ab, channel_id(&fhash(&a), &fhash(&k("c"))));
-    assert!(ab.ends_with(&fhash(&b).0));
+    let id = [5u8; 16];
+    let ab = channel_id(&fhash(&a), &fhash(&b), &id);
+    assert_ne!(ab, channel_id(&fhash(&b), &fhash(&a), &id), "the member's key comes first");
+    assert_ne!(ab, channel_id(&fhash(&a), &fhash(&k("c")), &id));
+    assert!(ab.ends_with(&id));
+    assert_eq!(&ab[ab.len() - 48..ab.len() - 16], &fhash(&b).0);
+    // Two ends in the flows of two invitations, or one at home without
+    // one, get two identifiers.
+    assert_ne!(ab, channel_id(&fhash(&a), &fhash(&b), &[6u8; 16]));
+    assert_ne!(ab, channel_id(&fhash(&a), &fhash(&b), &NO_INVITATION));
 }
 
 #[test]
@@ -271,7 +278,7 @@ fn the_short_code_opens_its_commitment() {
     let (mut j, joiner, c) = joiner_session();
     let nm = open.reply(n, c, 110).unwrap();
     assert_eq!(open.failures, 1, "counted once the member replied");
-    let (code, nj) = j.open(joiner, &e, &nm);
+    let (code, nj, _) = j.open(joiner, &e, &nm, &open.invitation.id, DeviceId([1; 16]));
     assert_eq!(code.len(), 6);
     assert_eq!(open.short_code(n, &e, &nj, 120), Ok(code.clone()));
     open.end(n, true, 130);
@@ -287,7 +294,7 @@ fn the_short_code_opens_its_commitment() {
     // A second attempt while one is in progress: busy.
     assert_eq!(open.begin(Network::Home, 220), Err(PairError::Busy));
     // Walking away after the reply counts as a failed attempt.
-    let (_, nj2) = j2.open(joiner2, &e, &nm2);
+    let (_, nj2, _) = j2.open(joiner2, &e, &nm2, &open.invitation.id, DeviceId([1; 16]));
     open.end(n2, false, 230);
     assert_eq!(open.failures, 1);
     assert_ne!(nj2, nj);
@@ -306,7 +313,7 @@ fn the_short_code_opens_its_commitment() {
     let n5 = open.begin(Network::Home, 1_000).unwrap();
     let (mut j5, joiner5, c5) = joiner_session();
     let nm5 = open.reply(n5, c5, 1_010).unwrap();
-    let (code5, nj5) = j5.open(joiner5, &e, &nm5);
+    let (code5, nj5, _) = j5.open(joiner5, &e, &nm5, &open.invitation.id, DeviceId([1; 16]));
     assert_eq!(open.short_code(n5, &e, &nj5, 1_020), Ok(code5));
     let minutes = 1_020 + 5 * 60_000;
     assert_eq!(open.begin(Network::Home, minutes), Err(PairError::Busy), "still the open attempt");
@@ -317,7 +324,7 @@ fn the_short_code_opens_its_commitment() {
     let n6 = open.begin(Network::Home, 2_000_000).unwrap();
     let (mut j6, joiner6, c6) = joiner_session();
     let nm6 = open.reply(n6, c6, 2_000_010).unwrap();
-    let (_, nj6) = j6.open(joiner6, &e, &nm6);
+    let (_, nj6, _) = j6.open(joiner6, &e, &nm6, &open.invitation.id, DeviceId([1; 16]));
     assert_eq!(open.short_code(n6, &e, &nj6, 2_000_000 + invitation::ATTEMPT_MS), Err(PairError::Closed));
     assert_eq!(open.failures, kept + 1);
     open.failures = kept;
@@ -325,7 +332,7 @@ fn the_short_code_opens_its_commitment() {
     let n7 = open.begin(Network::Home, 3_000_000).unwrap();
     let (mut j7, joiner7, c7) = joiner_session();
     let nm7 = open.reply(n7, c7, 3_000_010).unwrap();
-    let (_, nj7) = j7.open(joiner7, &e, &nm7);
+    let (_, nj7, _) = j7.open(joiner7, &e, &nm7, &open.invitation.id, DeviceId([1; 16]));
     assert!(open.short_code(n7, &e, &nj7, 3_000_020).is_ok());
     open.end(n7, true, 3_000_020 + invitation::ANSWER_MS);
     assert_eq!(open.failures, kept + 1);
@@ -364,7 +371,7 @@ fn a_late_message_of_an_earlier_attempt_changes_nothing() {
     let first = open.begin(Network::Home, 0).unwrap();
     let (mut j1, joiner1, c1) = joiner_session();
     let nm1 = open.reply(first, c1, 10).unwrap();
-    let (_, nj1) = j1.open(joiner1, &e, &nm1);
+    let (_, nj1, _) = j1.open(joiner1, &e, &nm1, &open.invitation.id, DeviceId([1; 16]));
     // The first attempt's time runs out; a second begins.
     let second = open.begin(Network::Home, invitation::ATTEMPT_MS).unwrap();
     let (_, _, c2) = joiner_session();
@@ -384,17 +391,103 @@ fn the_joiner_counts_its_sessions() {
     let e = [9u8; 32];
     // A session shows its code; until the person answers, no other starts.
     let (code, _) = j.start().unwrap();
-    let (shown, _) = j.open(code, &e, &[1; 32]);
+    let (shown, _, _) = j.open(code, &e, &[1; 32], &[3; 16], DeviceId([1; 16]));
     assert_eq!(shown.len(), 6);
     assert_eq!(j.start().err(), Some(PairError::Busy), "the shown code stays until the person answers");
     // The session dropped before the person answered: it counted.
     j.answered();
     for _ in 1..invitation::MAX_FAILURES {
         let (code, _) = j.start().unwrap();
-        j.open(code, &e, &[2; 32]);
+        j.open(code, &e, &[2; 32], &[3; 16], DeviceId([1; 16]));
         j.answered();
     }
     assert_eq!(j.start().err(), Some(PairError::TooMany), "three sessions per invitation");
+}
+
+/// The short code takes the ID of the invitation each end is using: a
+/// joiner that uses another ID shows another code, and the member's end
+/// answers as for any code; nothing tells the two apart but the codes.
+#[test]
+fn the_code_takes_the_invitation_id() {
+    let mut open = Open {
+        invitation: Invitation::new(Vec::new(), Profile::small_device()),
+        name: "kettle".into(),
+        created_ms: 1,
+        expires_ms: 10_000_000,
+        used: false,
+        failures: 0,
+        allowed_key: None,
+        attempt: None,
+        next_attempt: 0,
+    };
+    let e = [9u8; 32];
+    let n = open.begin(Network::Home, 100).unwrap();
+    let (mut j, joiner, c) = joiner_session();
+    let nm = open.reply(n, c, 110).unwrap();
+    let mut other = open.invitation.id;
+    other[0] ^= 1;
+    let (theirs, nj, _) = j.open(joiner, &e, &nm, &other, DeviceId([1; 16]));
+    let ours = open.short_code(n, &e, &nj, 120).unwrap();
+    assert_ne!(theirs, ours);
+    // The same session's code with the member's ID, at home without one.
+    assert_eq!(invitation::short_code(&e, &nj, &nm, &open.invitation.id), ours);
+    assert_ne!(invitation::short_code(&e, &nj, &nm, &NO_INVITATION), ours);
+}
+
+/// No invitation has the ID of a pairing at home without one: a new one
+/// draws again, an open one with it takes no attempt, and a reader
+/// refuses it (`invite/shape`, the vector "an ID of zeros").
+#[test]
+fn no_invitation_has_the_id_of_none() {
+    let mut draws = [[0u8; 16], [0u8; 16], [7u8; 16]].into_iter();
+    assert_eq!(invitation::not_zero(|| draws.next().unwrap()), [7u8; 16]);
+    let home = Path { kind: PathKind::Home, endpoints: vec![], hub_key: None, guest: None, obfuscation: None };
+    let mut inv = Invitation::new(vec![home], Profile::small_device());
+    assert_ne!(inv.id, NO_INVITATION);
+    assert!(Invitation::decode(&inv.encode()).is_ok());
+    inv.id = NO_INVITATION;
+    let mut open = Open {
+        invitation: inv.clone(),
+        name: "kettle".into(),
+        created_ms: 1,
+        expires_ms: 10_000_000,
+        used: false,
+        failures: 0,
+        allowed_key: None,
+        attempt: None,
+        next_attempt: 0,
+    };
+    assert_eq!(open.begin(Network::Home, 100), Err(PairError::Refused));
+    assert_eq!(open.failures, 0);
+    assert_eq!(Invitation::decode(&inv.encode()).err(), Some(invitation::RULE_SHAPE));
+}
+
+/// The short code and CPace's channel identifier against the vectors
+/// (`testdata/format/messages3.json`, "codes"), which gen.py writes and
+/// the Go check computes on its own.
+#[test]
+fn the_codes_match_their_vectors() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/format/messages3.json");
+    let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let hex = |s: &serde_json::Value| -> Vec<u8> {
+        let s = s.as_str().unwrap();
+        (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+    };
+    let arr = |s: &serde_json::Value| -> [u8; 32] { hex(s).try_into().unwrap() };
+    let id = |s: &serde_json::Value| -> [u8; 16] { hex(s).try_into().unwrap() };
+    let codes = &v["codes"];
+    let short = codes["short_code"].as_array().unwrap();
+    assert!(short.len() >= 3);
+    for c in short {
+        let got = invitation::short_code(&hex(&c["exporter"]), &arr(&c["nj"]), &arr(&c["nm"]), &id(&c["invitation"]));
+        assert_eq!(got, c["code"].as_str().unwrap(), "{}", c["name"]);
+    }
+    let channel = codes["channel_id"].as_array().unwrap();
+    assert!(channel.len() >= 3);
+    for c in channel {
+        let ci = channel_id(&KeyHash(arr(&c["member"])), &KeyHash(arr(&c["joiner"])), &id(&c["invitation"]));
+        assert_eq!(crate::certs::hex(&ci), c["ci"].as_str().unwrap(), "{}", c["name"]);
+    }
 }
 
 #[test]
@@ -875,6 +968,64 @@ fn an_intro_proves_a_new_device() {
     let (envs, keys) = Intro::envelopes(&intro.message()).unwrap();
     assert_eq!(envs.len(), 2);
     assert!(keys.is_none());
+}
+
+/// The recovery heads ride beside the intro's 32 records and 16 KiB, at
+/// most 64 of them: three changes of root pass 16 KiB in their heads'
+/// envelopes alone, and the device admitted after them still proves
+/// itself. Sender and reader count alike, by the envelopes' bytes.
+#[test]
+fn an_intro_counts_the_recovery_heads_apart() {
+    let mut g = G::new();
+    let (n1, n2, n3, pa) = (k("root n1"), k("root n2"), k("root n3"), k("phone a"));
+    g.change(&n1);
+    g.change(&n2);
+    g.change(&n3);
+    phone_admin(&mut g, &n3, &pa, &k("admin a"), true);
+    let full = g.set();
+    let st = full.state();
+    let intro = Intro::of(&full, &st, &pa.hash, None).unwrap();
+    let heads: Vec<&Record> = intro.records.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).collect();
+    assert_eq!(heads.len(), 3);
+    assert!(heads.iter().map(|r| r.envelope().len()).sum::<usize>() > intro::MAX_BYTES);
+    assert!(intro::fits(&intro.records));
+
+    // A peer that holds everything but the phone's record takes it.
+    let mut old = g.empty();
+    old.insert_all(g.recs.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).cloned());
+    for l in &g.lists {
+        old.insert_list(l).unwrap();
+    }
+    old.insert_all(g.recs[..g.recs.len() - 1].iter().cloned());
+    let me = fhash(&k("phone"));
+    let new = intro.check(&old, &me, &point(&pa)).unwrap();
+    assert_eq!(new.len(), 1);
+
+    // The reader counts as the sender did.
+    let back = Intro::read(&intro.message()).unwrap();
+    assert_eq!(back, intro);
+    assert_eq!(back.check(&old, &me, &point(&pa)).unwrap().len(), 1);
+
+    // Up to 64 heads pass; one more does not, on either side.
+    let mut many = intro.clone();
+    while many.records.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).count() < intro::MAX_HEADS {
+        many.records.insert(0, heads[0].clone());
+    }
+    assert!(intro::fits(&many.records));
+    assert_eq!(Intro::read(&many.message()).map(|i| i.records.len()), Ok(many.records.len()));
+    many.records.insert(0, heads[0].clone());
+    assert!(!intro::fits(&many.records));
+    assert_eq!(many.check(&old, &me, &point(&pa)), Err(intro::Refusal::TooBig));
+    assert_eq!(Intro::read(&many.message()), Err(intro::RULE_SIZE));
+
+    // The others still at most 32 records and 16 KiB, by their envelopes.
+    let mut wide = intro.clone();
+    let own = wide.records.last().unwrap().clone();
+    while wide.records.len() - 3 <= intro::MAX_RECORDS {
+        wide.records.insert(3, own.clone());
+    }
+    assert_eq!(wide.check(&old, &me, &point(&pa)), Err(intro::Refusal::TooBig));
+    assert_eq!(Intro::read(&wide.message()), Err(intro::RULE_SIZE));
 }
 
 /// AmneziaWG settings: jc, jmin, jmax, the four sizes, the four header
@@ -1490,4 +1641,23 @@ fn every_gate_asks_whether_the_group_is_stopped() {
         w.check(&group, &point(&k("laptop")), &point(&tv), Joining::Ordinary).err(),
         Some(welcome::Refusal::Stopped)
     );
+}
+
+/// A guarded leaf waiting to be bound again gets its binding only from its
+/// own pairing session past the code step, naming the root its head named
+/// and its own key's ID; a leaf that waits for nothing gets none.
+#[test]
+fn only_the_leafs_own_session_past_its_code_makes_a_binding() {
+    use crate::format::grant::Kept;
+    let lock = k("lock").key.device_id();
+    let new_root = k("new root");
+    let waiting = Kept { guarded: true, ..Kept::default() }.changed(new_root.hash, 1);
+    let mut j = invitation::JoinerAttempts::default();
+    let (code, _) = j.start().unwrap();
+    let (_, _, shown) = j.open(code, &[9; 32], &[1; 32], &NO_INVITATION, lock);
+    assert!(shown.binding(&Kept::default()).is_none(), "nothing to bind");
+    let b = shown.binding(&waiting).unwrap();
+    assert_eq!(b, crate::format::grant::Binding::at_code_step(&waiting, lock).unwrap());
+    let other = crate::format::grant::Binding::at_code_step(&waiting, k("other lock").key.device_id()).unwrap();
+    assert_ne!(b, other);
 }
