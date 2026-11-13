@@ -34,7 +34,8 @@
 //! `SIM_WHOLE=1` hands the whole offer at once instead, as before, so that
 //! the seeds found that way replay; `SIM_TWINS=0` leaves out the root's
 //! twin records. With `SIM_SMALL`, `SIM_ROOT_LOST` and `SIM_ROOT_DEVIATES`
-//! see `small_seed`, `root_lost` and `checkpoint_kind`.
+//! see `small_seed`, `root_lost` and `deviating_checkpoint`. `SIM_CAP=1`
+//! caps a small-room seed's group so that every device's records fit.
 
 mod exchange;
 
@@ -275,7 +276,11 @@ fn rebuild(
 impl World {
     fn new(seed: u64) -> World {
         let mut rng = Rng(seed ^ 0x5157_0000_c0de);
-        let n = 3 + rng.below(10);
+        // With SIM_CAP=1 a small-room group stays within its rooms: at most
+        // 6 devices, whose device records (one unit each) the root signs
+        // with a checkpoint and one more record inside its ceiling of 8,
+        // and with up to 3 admin keys' records inside the room of 14.
+        let n = if small_seed(seed) && env("SIM_CAP") == Some(1) { 3 + rng.below(4) } else { 3 + rng.below(10) };
         let root_name = format!("sim{seed}/root");
         let recovery_name = format!("sim{seed}/recovery");
         let (root, recovery) = (k(&root_name), k(&recovery_name));
@@ -1060,9 +1065,14 @@ impl World {
     /// signer's record; only the root's own that no longer count go.
     fn checkpoint(&mut self) -> Check {
         let Some((by, key)) = self.signer(true) else { return Ok(()) };
-        let kind = self.checkpoint_kind(by, &key);
-        self.sign(by, &key, kind);
-        self.note(format!("m{by} checkpoints"));
+        if let Some(kind) = self.deviating_checkpoint(by, &key) {
+            self.sign(by, &key, kind);
+            self.note(format!("m{by} checkpoints, deviating"));
+        } else if self.write_checkpoint(by, &key).is_some() {
+            self.note(format!("m{by} checkpoints"));
+        } else {
+            return Ok(());
+        }
         if let Some((i, left)) = self.away
             && by != i
         {
@@ -1077,11 +1087,41 @@ impl World {
         self.after_save(by)
     }
 
-    /// The root's checkpoint on member by: it keeps what counts and every
-    /// other signer's record, its own that no longer count go. With
-    /// SIM_ROOT_DEVIATES=1 one in three keeps a free choice of the held
-    /// records instead.
-    fn checkpoint_kind(&mut self, by: usize, key: &str) -> Kind {
+    /// The honest root's checkpoint on member by, through the core's
+    /// writer: taken into its set like any record it signs. None when the
+    /// writer refuses.
+    fn write_checkpoint(&mut self, by: usize, key: &str) -> Option<Record> {
+        let now = self.now(by);
+        let m = &self.members[by].live;
+        let r = match m.set.write_checkpoint(&m.state, &k(key), now) {
+            Ok(r) => r,
+            Err(_) => {
+                CP_REFUSED.fetch_add(1, Ordering::Relaxed);
+                return None;
+            }
+        };
+        self.signed.insert(r.id());
+        let m = &mut self.members[by].live;
+        m.heads.insert(r.body().signer, (r.body().seq, r.id()));
+        let _ = m.set.insert(r.clone());
+        if !m.set.contains(&r.id()) {
+            NOT_KEPT.fetch_add(1, Ordering::Relaxed);
+        }
+        self.refresh(by);
+        self.save(by);
+        Some(r)
+    }
+
+    /// With SIM_ROOT_DEVIATES=1, one checkpoint in three is the root's own
+    /// making instead of the core writer's: half of them keep what counts
+    /// and every other signer's record under the root's own head alone
+    /// (past the root's ceiling when that is much), half a free choice of
+    /// the held records.
+    fn deviating_checkpoint(&mut self, by: usize, key: &str) -> Option<Kind> {
+        if env("SIM_ROOT_DEVIATES") != Some(1) || !self.rng.chance(1, 3) {
+            return None;
+        }
+        self.deviated = true;
         let h = k(key).hash;
         let live = &self.members[by].live;
         let mut keep: Vec<RecordId> = live
@@ -1090,10 +1130,9 @@ impl World {
             .filter(|id| live.state.counting.contains(id) || live.set.get(id).is_some_and(|r| r.body().signer != h))
             .copied()
             .collect();
-        if env("SIM_ROOT_DEVIATES") == Some(1) && self.rng.chance(1, 3) {
+        if self.rng.chance(1, 2) {
             let all: Vec<RecordId> = self.members[by].live.set.ids().copied().collect();
             keep = all.into_iter().filter(|_| self.rng.chance(1, 2)).collect();
-            self.deviated = true;
         }
         keep.sort();
         let heads = self.members[by]
@@ -1103,7 +1142,7 @@ impl World {
             .map(|(seq, id)| Head { key: h, seq: *seq, id: *id })
             .into_iter()
             .collect();
-        Kind::Checkpoint { heads, keep }
+        Some(Kind::Checkpoint { heads, keep })
     }
 
     fn is_gone(&self, i: usize) -> bool {
@@ -1119,8 +1158,7 @@ impl World {
         let others: Vec<usize> = self.in_group().into_iter().filter(|j| *j != by).collect();
         let Some(to) = self.rng.pick(&others) else { return Ok(()) };
         self.sign(by, &key, kind);
-        let cp = self.checkpoint_kind(by, &key);
-        let c = self.sign(by, &key, cp);
+        let Some(c) = self.write_checkpoint(by, &key) else { return Ok(()) };
         let _ = self.members[to].live.set.insert(c.clone());
         self.refresh(to);
         self.save(to);
@@ -1848,8 +1886,10 @@ static EVIDENCE_LOST: AtomicUsize = AtomicUsize::new(0);
 static ROOT_POWER: AtomicUsize = AtomicUsize::new(0);
 static CUT_SHAPE: AtomicUsize = AtomicUsize::new(0);
 static NOT_KEPT: AtomicUsize = AtomicUsize::new(0);
-const COUNTERS: [&AtomicUsize; 10] = [
+static CP_REFUSED: AtomicUsize = AtomicUsize::new(0);
+const COUNTERS: [&AtomicUsize; 11] = [
     &NOT_KEPT,
+    &CP_REFUSED,
     &FORKS_TWICE,
     &FORKS_SPLIT,
     &ASIDE_RUNS,
@@ -1921,7 +1961,7 @@ fn groups_under_faults_agree() {
         }
     }
     std::eprintln!(
-        "sim: {n} seeds; recovery forks: {} by the key used twice, {} by a split network; {} settled with records aside; {} with small rooms, {} members back after the checkpoints they were away for, {} runs kept a record aside on the way; {} runs where a root's twin lived only on removed devices; {} runs where a deviating root's checkpoint left nobody in; {} runs where an admin signed past its own room and later again beside a fresh member; {} records their writer's own set did not keep",
+        "sim: {n} seeds; recovery forks: {} by the key used twice, {} by a split network; {} settled with records aside; {} with small rooms, {} members back after the checkpoints they were away for, {} runs kept a record aside on the way; {} runs where a root's twin lived only on removed devices; {} runs where a deviating root's checkpoint left nobody in; {} runs where an admin signed past its own room and later again beside a fresh member; {} records their writer's own set did not keep; {} checkpoints the core's writer refused",
         FORKS_TWICE.load(Ordering::Relaxed),
         FORKS_SPLIT.load(Ordering::Relaxed),
         ASIDE_RUNS.load(Ordering::Relaxed),
@@ -1931,7 +1971,8 @@ fn groups_under_faults_agree() {
         EVIDENCE_LOST.load(Ordering::Relaxed),
         ROOT_POWER.load(Ordering::Relaxed),
         CUT_SHAPE.load(Ordering::Relaxed),
-        NOT_KEPT.load(Ordering::Relaxed)
+        NOT_KEPT.load(Ordering::Relaxed),
+        CP_REFUSED.load(Ordering::Relaxed)
     );
     assert!(failed.is_empty(), "{}", failed.join("\n\n"));
 }
