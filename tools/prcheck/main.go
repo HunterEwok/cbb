@@ -41,6 +41,14 @@ var allowedEmails = map[string]bool{
 	"49699333+dependabot[bot]@users.noreply.github.com": true,
 }
 
+// replaced are commits that were on main and were replaced there by a copy
+// with a corrected message; branches that merged them before still hold
+// them. Their authors are fine, only their messages carried what main must
+// not, and the squash takes its message from the pull request.
+var replaced = map[string]bool{
+	"aebe559c06164af5eac5d304b2962013c8ab829b": true, // replaced by fefe810a52261be2a6392dc4ae17279f8dc1bd91
+}
+
 // assistantEmail is the assistant's address; its name must be plain "Claude".
 const assistantEmail = "noreply@anthropic.com"
 
@@ -160,7 +168,9 @@ func main() {
 	}
 	var bad []string
 	for _, c := range list {
-		bad = append(bad, checkCommit(c)...)
+		if !replaced[c.hash] {
+			bad = append(bad, checkCommit(c)...)
+		}
 	}
 	bad = append(bad, checkText("the title", os.Getenv("PR_TITLE"))...)
 	bad = append(bad, checkText("the description", os.Getenv("PR_BODY"))...)
