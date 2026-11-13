@@ -51,11 +51,14 @@ fn changed(time_ms: u64) -> (G, Vec<Record>, Vec<Vec<u8>>) {
     let mut g = G::new();
     g.device("old phone", ROLE_PHONE, RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS, |d| d.holds_root = true);
     g.device("laptop", ROLE_MEMBER, RIGHT_READ | RIGHT_SEND, |_| {});
-    let set = set_of(&g.records(), &[]);
+    let mut set = set_of(&g.records(), &[]);
     let mut d = Device::new(k("new phone").key.clone(), "new phone", ROLE_PHONE);
     d.rights = RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS;
     #[allow(clippy::unwrap_used)]
-    let w = set.write_change(&set.state(), &k("recovery"), &k("new root"), d, &[], false, time_ms).unwrap();
+    let w = {
+        let st = set.state();
+        set.write_change(&st, &k("recovery"), &k("new root"), d, &[], false, time_ms).unwrap()
+    };
     let mut recs = g.records();
     recs.extend(w.first);
     recs.push(w.record);

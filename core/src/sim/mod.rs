@@ -41,7 +41,7 @@ use crate::format::cbor;
 use crate::hlc::Timestamp;
 use crate::keystore::{self, KeyStore as _, MemoryStore, ReadStatement};
 use crate::records::body::*;
-use crate::records::eval::{DeviceState, State};
+use crate::records::eval::{ConflictKind, DeviceState, State, Stop};
 use crate::records::statement::{self, Statement};
 use crate::records::{Body, DeviceId, GroupId, KeyHash, Record, RecordId, RecordSet};
 use crate::testkit::{K, T0, k};
@@ -188,6 +188,8 @@ struct World {
     lost: Vec<RecordId>,
     /// Twins of a root record made on purpose (two writers with one key).
     twins: usize,
+    /// The twins made, with the root key that signed them.
+    twin_pairs: Vec<(RecordId, RecordId, KeyHash)>,
     net: Vec<Msg>,
     side: Vec<bool>,
     changes: usize,
@@ -202,6 +204,19 @@ fn statement_of(env: &[u8]) -> Option<Statement> {
         Ok(ReadStatement::Take(st)) => Some(st),
         _ => None,
     }
+}
+
+/// Two histories of the current root: the group stops until the recovery
+/// key changes the root.
+fn root_forked(st: &State) -> bool {
+    st.stop == Stop::Full
+        && st.conflicts.iter().any(|c| c.kind == ConflictKind::TwoHistories && st.roots.last() == c.signers.first())
+}
+
+/// Stopped: for good by two changes of root at one seq, or until a change
+/// of root by two histories of the root.
+fn stopped(st: &State) -> bool {
+    st.halted() || root_forked(st)
 }
 
 /// What a restart does: the core's own restore from the saved records and
@@ -266,6 +281,7 @@ impl World {
             heads: Vec::new(),
             lost: Vec::new(),
             twins: 0,
+            twin_pairs: Vec::new(),
             net: Vec::new(),
             side: alloc::vec![false; n],
             changes: 0,
@@ -373,7 +389,20 @@ impl World {
     /// root by the recovery key.
     fn twin(&mut self) -> Check {
         let Some((i, key)) = self.signer(true) else { return Ok(()) };
-        let others: Vec<usize> = self.on_members().into_iter().filter(|j| *j != i && self.admitted[*j]).collect();
+        // The second reaches a member of the group that knows the root key
+        // (another refuses it, and it is lost): not one a removal named.
+        let rk = k(&key).hash;
+        let others: Vec<usize> = self
+            .on_members()
+            .into_iter()
+            .filter(|j| {
+                let x = &self.members[*j];
+                *j != i
+                    && self.admitted[*j]
+                    && !self.removed.contains(&x.key.hash)
+                    && x.live.state.roots.last() == Some(&rk)
+            })
+            .collect();
         let Some(j) = self.rng.pick(&others) else { return Ok(()) };
         let Some(kind) = self.own_device(i) else { return Ok(()) };
         let kk = k(&key);
@@ -383,10 +412,13 @@ impl World {
         let body =
             Body { group: self.gid, signer: kk.hash, seq, prev, time_ms: a.body().time_ms + 1, kind, held: false };
         let b = Record::sign(body, &kk).unwrap();
-        let _ = self.members[j].live.set.insert(b.clone());
+        if self.members[j].live.set.insert(b.clone()).is_err() {
+            return Err(format!("m{j} refused a root record of the root it knows"));
+        }
         self.refresh(j);
         self.save(j);
         self.forks.push((a.id(), b.id()));
+        self.twin_pairs.push((a.id(), b.id(), kk.hash));
         self.twins += 1;
         self.note(format!("two writers with m{i}'s root key sign at seq {seq}; m{j} takes the second"));
         self.after_save(i)?;
@@ -483,7 +515,7 @@ impl World {
             .into_iter()
             .filter(|i| {
                 let m = &self.members[*i];
-                m.live.state.device_by_key(&m.key.hash).is_some() && !m.live.state.halted()
+                m.live.state.device_by_key(&m.key.hash).is_some() && !stopped(&m.live.state)
             })
             .collect()
     }
@@ -680,7 +712,7 @@ impl World {
     fn after_save(&mut self, i: usize) -> Check {
         let m = &self.members[i].live;
         for (a, b) in &self.forks {
-            if m.set.contains(a) && m.set.contains(b) && !m.state.halted() {
+            if m.set.contains(a) && m.set.contains(b) && !stopped(&m.state) {
                 return Err(format!("m{i} holds both heads of a fork and is not halted"));
             }
         }
@@ -904,7 +936,11 @@ impl World {
         let g: Vec<usize> = if halted {
             self.on_members()
                 .into_iter()
-                .filter(|i| self.admitted[*i] && self.members[*i].live.state.halted())
+                .filter(|i| {
+                    self.admitted[*i]
+                        && !self.removed.contains(&self.members[*i].key.hash)
+                        && stopped(&self.members[*i].live.state)
+                })
                 .collect()
         } else {
             self.in_group()
@@ -957,6 +993,7 @@ impl World {
                 .map(|r| (r.body().seq, r.id()))
                 .collect();
             let unapplied = held.iter().any(|(_, id)| !chain.contains(id));
+            let set = &mut self.members[w].live.set;
             let written = match set.write_change(&st, &recovery, &new_root, device, &remove, false, now) {
                 Ok(x) => x,
                 Err(e) if halted => return Err(format!("the recovery key could not end the halt on m{w}: {e:?}")),
@@ -1161,8 +1198,12 @@ impl World {
         // A fork's proof reaches every member that took one of its heads.
         for (i, m) in self.members.iter().enumerate() {
             for (a, b) in &self.forks {
+                // Once a change of root ended them, a root's two histories
+                // decide nothing and need not reach anyone.
+                let ended =
+                    self.twin_pairs.iter().any(|(x, y, h)| (x, y) == (a, b) && m.live.state.roots.last() != Some(h));
                 let (ha, hb) = (m.live.set.contains(a), m.live.set.contains(b));
-                if ha != hb && m.live.state.device_by_key(&m.key.hash).is_some() {
+                if ha != hb && !ended && m.live.state.device_by_key(&m.key.hash).is_some() {
                     return Err(format!("m{i} took one head of a fork and never the other"));
                 }
             }
@@ -1296,13 +1337,13 @@ impl World {
                 Ok(()) => Ok(()),
             };
         }
-        if state.halted() {
+        if root_forked(&state) {
             // Halted, records are still taken: every member holds the
             // same records and the same state.
             let first = &self.members[group[0]].live;
             for i in &group {
                 let m = &self.members[*i].live;
-                if !m.state.halted() {
+                if !root_forked(&m.state) {
                     return Err(format!("m{i} is not halted with the group"));
                 }
                 if m.set.digest() != first.set.digest() || m.state != first.state {
@@ -1320,7 +1361,7 @@ impl World {
             self.quiet()?;
             self.no_twins()?;
             (group, state) = self.settled()?;
-            if state.halted() {
+            if stopped(&state) {
                 return Err(String::from("the group is still halted after a change of root"));
             }
         }
@@ -1356,13 +1397,12 @@ fn shrink(seed: u64, steps: usize) -> usize {
     hi
 }
 
-/// Root twins (two writers with one key) are made only with SIM_TWINS=1
-/// until the core halts on two histories of the root.
 static FORKS_TWICE: AtomicUsize = AtomicUsize::new(0);
 static FORKS_SPLIT: AtomicUsize = AtomicUsize::new(0);
 
+/// Root twins (two writers with one key) are made unless SIM_TWINS=0.
 fn twins_on() -> bool {
-    env("SIM_TWINS") == Some(1)
+    env("SIM_TWINS") != Some(0)
 }
 
 fn env(name: &str) -> Option<u64> {
