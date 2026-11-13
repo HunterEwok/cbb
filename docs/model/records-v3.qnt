@@ -1527,8 +1527,13 @@ module records_v3 {
     compact, compact, syncRound, syncRound, oldRootThief, oldRootThief, oldRootThief, rootRemovesPhone,
     removedAdminThief, removedAdminThief, removedAdminThief, recoveryTwin, signRecover,
     signThaw, signAfterThaw, welcomeNewcomer, signHidden, signCheckpointNaming, signBent, restartAny,
+    restartAny, deviateAny,
   }
   action restartAny = nondet m = MEMBERS.oneOf() restart(m)
+  // A key publishes past what its own set keeps (a deviating writer, kit "deviant").
+  action deviateAny = nondet k = Set(PHONE, COMPUTER, WATCH, "X", "NA", "NK", ROOT).oneOf() nondet u = 1.to(MAXU).oneOf()
+    nondet kind = Set("copies", "device").oneOf()
+    signDeviant(k, kind, if (kind == "device") DEVICE else "", u)
 
   // Witnesses of a run (quint run --witnesses): how many traces reach these.
   val firstTakeover = MEMBERS.exists(m => views.get(m).path.length() >= 2)
@@ -1622,7 +1627,12 @@ module records_v3 {
     val rs = recsOf(st.get(m).recs, db)
     val cseq = if (v.checkpoint == 0) 0 else db.get(v.checkpoint).seq
     val floor = rootFloor(rs.union(firstsHeld(st.get(m), db)), chainState(st.get(m), db), last(v.path))
-    v.stop or rs.forall(c => not(c.kind == "checkpoint" and c.signer == last(v.path) and c.seq > cseq and c.seq >= floor
+    // (A held root fork's pair, also one beside the rooms, bars the root's checkpoints at or
+    // above its seq, as in fullEvaluate.)
+    val all1 = rs.union(firstsHeld(st.get(m), db))
+    val forkS = all1.filter(a => a.signer == last(v.path) and all1.exists(b => b != a and b.signer == a.signer and b.seq == a.seq))
+      .fold(NONE, (x, r) => min2(x, r.seq))
+    v.stop or rs.forall(c => not(c.kind == "checkpoint" and c.signer == last(v.path) and c.seq > cseq and c.seq >= floor and c.seq < forkS
       and applyCheckpoint(v.path, v.cuts, c.id, (rs, Set(), epoch(rs, v.path, v.cuts, Set())))._3.checkpoint == c.id))
   })
 
@@ -1805,12 +1815,17 @@ module records_v3 {
         or heldBy(s).contains(r.id))
   })
 
+  // (J): with no bent checkpoint (deviating keys allowed), a mark never changes what a member
+  // keeps: the set it would keep from no cut is the set it keeps (so a restart, which forgets
+  // the cut, changes nothing).
+  val marksInert = (CEIL_FIT and db.keys().forall(i => db.get(i).kit != "bent")) implies
+    MEMBERS.forall(m => chainState(st.get(m), db).stop or recut({ ...st.get(m), cut: NOCUT }, db).recs == st.get(m).recs)
   // (J): with honest writers no member ever holds a mark.
   val honestNoMarks = (CEIL_FIT and honestW) implies MEMBERS.forall(m => st.get(m).cut.marks.keys() == Set())
 
   val promises = and {
     oneState, converges, convergesHonest, countsNewest, removedStayOut, oneChainOneState, stopRootOnly, fairRoom, followsRecovery, pathGrows, newcomerTakes,
-    oldRootListed, twinStops, removedGainsNothing, compactedAgree, F12 implies heldBackCountsLess, honestNeverDropped, honestNoMarks,
+    oldRootListed, twinStops, removedGainsNothing, compactedAgree, F12 implies heldBackCountsLess, honestNeverDropped, honestNoMarks, marksInert,
   }
 
   // --- Scenarios ---------------------------------------------------------------------------
