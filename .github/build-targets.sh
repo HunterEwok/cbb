@@ -61,7 +61,7 @@ EOF
 	done
 	# The Go programs by the release's own script, under a tag of CI's own
 	# with a pre-release part, as an rc's.
-	sh .github/release-go.sh "$out" "${CBB_TEST_TAG:-v0.0.0-rc.1}"
+	sh .github/release-go.sh "$out" v0.0.0-rc.1
 	# The release workflow's check that no program carries the test hooks,
 	# on the same list.
 	no_hooks "$out" "$os" "$arch"
