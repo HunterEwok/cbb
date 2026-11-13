@@ -236,6 +236,11 @@ module records_v3 {
   // the rooms fall back to the plain rule and the members count no checkpoint
   // (everyWaitingTest).
   pure val NEWEST_ASIDE = true
+  // A current root's checkpoint takes room only once it is whole for this purpose: every record
+  // it keeps is held, and every record of its line is held or pruned by a held checkpoint of
+  // its signer. Until then it waits aside (seed j.8004: a checkpoint that can never be whole
+  // evicted whole records of its key from the rooms of a fresh member).
+  pure val CP_ROOM_WHEN_WHOLE = false
   // A set's memory of what its rooms dropped: "mark" (a key that dropped records turns away
   // its later ones and keeps claiming the dropped units), "none" (no memory: a record is judged
   // against the rooms as they are, as a member given everything at once would judge it), or
@@ -530,7 +535,14 @@ module records_v3 {
     val admins = learned(recsOf(s.got, db), path, cuts)
     // "gapless": above the head the set's checkpoint names for a key, only the gap-free run
     // of that key counts; a record past a gap has no count and no unit.
-    val shown0 = items.filter(r => within(cuts, r) and (CUT_MODE != "gapless" or gapFree(s, r, items, db)))
+    val itemIds = idsOf(items)
+    val cpsHeld = items.filter(c => c.kind == "checkpoint")
+    pure def wholeForRoom(c: Record): bool =
+      c.keep.forall(i => itemIds.contains(i))
+        and c.line.indices().forall(j => itemIds.contains(c.line[j]) or (db.keys().contains(c.line[j])
+          and cpsHeld.exists(c2 => c2.signer == c.signer and c2.id != c.id and prunedBy(c2, db.get(c.line[j])))))
+    val shown0 = items.filter(r => within(cuts, r) and (CUT_MODE != "gapless" or gapFree(s, r, items, db))
+      and not(CP_ROOM_WHEN_WHOLE and r.kind == "checkpoint" and r.signer == last(path) and not(wholeForRoom(r))))
     val shown = if (CUT_MODE == "follows") followsOk(s, shown0, db) else shown0
     val ceil = ceilings(path, admins)
     val plain = keepAfter(shown, ceil, cut, last(path), orderOf(s, db))
@@ -2558,6 +2570,35 @@ module records_v3 {
       .then(restart("r")).then(restart("a")).then(restart("c")).then(restart("k")).then(restart("m"))
       .expect(MEMBERS.forall(m => views.get(m).path == ["R", "NA", "NK"] and views.get(m).checkpoint == 14
         and views.get(m).frozen == Set() and st.get(m).recs == Set(1, 2, 3, 4, 5, 8, 9, 10, 14)) and promises)
+
+  // Liveness under CP_ROOM_WHEN_WHOLE: m gets the root's new checkpoint 6 before the records
+  // it keeps (A's 4) and before the root's own 5 on its line; it waits aside, missing() asks for
+  // what it names, and one sync later every member counts 6.
+  run cpWholeLiveTest =
+    init
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 1)).then(giveOnly("r", 4))
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 2, false, Set()))
+      .then(giveOnly("m", 6))
+      .expect(views.get("m").checkpoint == 0 and (CP_ROOM_WHEN_WHOLE implies
+        (st.get("m").wait.contains(6) and missingOf(st.get("m"), db).contains(4))))
+      .then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).checkpoint == 6 and views.get(m) == views.get("r")
+        and st.get(m).recs == st.get("r").recs) and promises)
+
+  // The bound under CP_ROOM_WHEN_WHOLE: the root signs three checkpoints that can never be
+  // whole (each keeps a record that does not exist). None takes room at any member; what waits
+  // aside stays within ASIDE_ROOM, newest first, and all members agree.
+  run cpWholeBoundTest =
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(signCheckpointKeep(ROOT, Set(1, 2, 3, 99), "", 1)).then(offerEveryone(5))
+      .then(signCheckpointKeep(ROOT, Set(1, 2, 3, 99), "", 1)).then(offerEveryone(6))
+      .then(signCheckpointKeep(ROOT, Set(1, 2, 3, 99), "", 1)).then(offerEveryone(7))
+      .then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m) == views.get("a") and views.get(m).checkpoint == 0
+        and st.get(m).recs == st.get("a").recs and sumUnits(recsOf(st.get(m).wait, db)) <= ASIDE_ROOM
+        and (CP_ROOM_WHEN_WHOLE implies st.get(m).recs.intersect(Set(5, 6, 7)) == Set())))
 
   // --- (J): ceilings that fit the room -----------------------------------------------------
   // The cap: the root admits a fourth admin key (3 roots at 6 and 4 admins at 2 fill ROOM),
