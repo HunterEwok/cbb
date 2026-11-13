@@ -76,7 +76,7 @@ of service, **E**levation of privilege.
 | 9 | internet | I | a forwarder or relay learns who the devices are | short server credentials per period instead of the group's records: no device ID, name, system or role (D-67, D-75); the forwarder routes by `mac1` and keeps no group files | `internal/forward`, `member/src/relayd`, `internal/group/credential.go` |
 | 10 | internet | I | a relay learns who talks to whom and when | **accepted, told to the user**: the relay sees which devices are online, from where, and how much they send; `cbb global relay` and the apps say so and ask before it is used | `member/src/global_cli.rs` |
 | 11 | internet | D | a group, or a few hosts, fill a shared server | limits per group, per address and per network on the forwarder and an open relay | `internal/forward`, `member/src/relayd/limits.rs` |
-| 12 | device | I | a thief copies the keys from a disk | keys in hardware where the device has it (phones, Linux with a TPM), the files readable only by the service; **open**: the Secure Enclave on Macs and the TPM on Windows | `internal/tpmkey`, `internal/group/keys.go` |
+| 12 | device | I | a thief copies the keys from a disk | keys in hardware where the device has it (phones, Linux and Windows with a TPM 2.0, Macs with a Secure Enclave), the files readable only by the service | `internal/tpmkey`, `internal/group/keys.go` |
 | 13 | device | E | a thief uses a phone's root or admin key | the key signs only after the user's face, fingerprint or passcode; on Android the Keystore checks it for each signature, through the prompt's CryptoObject | the kits' `SecKeySigner`, Keystore (`Keys`, `Authenticator`) |
 | 14 | group | S | a removed device keeps acting | revocation records reach every member, which then refuse its certificate; the hub drops its tunnel key | `internal/group/records.go` |
 | 15 | group | E | a stolen admin computer signs records | any admin freezes it (nothing it signs counts from then on); only the root or an admin phone removes an admin; file-key admins need the user's explicit consent (key levels) | `internal/group`, `member/src/devices_cli.rs` |
@@ -102,7 +102,7 @@ of service, **E**levation of privilege.
   are sealed to reads every copy from then on, and whoever holds the root's or an admin's key
   can add such a device. Keep the group to devices you control, and the root's and admins'
   keys in hardware; a hub that only passes copies on reads none.
-- Keys in a file (Macs, Windows PCs and Linux computers without a TPM, the lite member) can be
+- Keys in a file (computers without a TPM 2.0 or a Secure Enclave, the lite member) can be
   copied by whoever reads the disk; encrypt the disk and remove a lost device at once.
 - A blind relay and the project's forwarder see addresses and times of activity (threat 10).
 - On the ZX Spectrum Next, the first `.http -h cbb.tools -u /zxnext -f CBB` trusts the
