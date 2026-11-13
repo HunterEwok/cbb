@@ -282,6 +282,64 @@ fn rebuild(
     RecordSet::restore(root.clone(), recovery.clone(), &records, lists)
 }
 
+/// SIM_TRACE_RESTART=1: what a member saved, what its live set held and
+/// what the restore of the saved bytes keeps, record by record.
+fn trace_restart(i: usize, records: &[Vec<u8>], lists: &[Vec<u8>], live: &RecordSet, restored: &RecordSet) {
+    let short = |b: &[u8]| b.iter().take(3).map(|x| alloc::format!("{x:02x}")).collect::<String>();
+    std::eprintln!(
+        "TRACE m{i}: {} saved records, {} lists; live digest {}, restored {}",
+        records.len(),
+        lists.len(),
+        short(&live.digest()),
+        short(&restored.digest())
+    );
+    for e in records {
+        let Ok(r) = Record::decode(e) else {
+            std::eprintln!("TRACE   (undecodable record)");
+            continue;
+        };
+        let b = r.body();
+        let kind = alloc::format!("{:?}", b.kind);
+        let kind: String = kind.chars().take(160).collect();
+        std::eprintln!(
+            "TRACE   id {} signer {} seq {} prev {} | live {} restored {} | {}",
+            short(&r.id().0),
+            short(&b.signer.0),
+            b.seq,
+            b.prev.map(|p| short(&p.0)).unwrap_or_else(|| String::from("-")),
+            if live.contains(&r.id()) { "kept" } else { "no" },
+            if restored.contains(&r.id()) { "kept" } else { "no" },
+            kind
+        );
+    }
+    for l in lists {
+        match crate::records::body::List::decode(l) {
+            Ok(list) => {
+                std::eprintln!("TRACE   list [{}]", list.0.iter().map(|x| short(&x.0)).collect::<Vec<_>>().join(" "))
+            }
+            Err(e) => std::eprintln!("TRACE   list undecodable: {e:?}"),
+        }
+    }
+    let ls = live.state();
+    let rs = restored.state();
+    std::eprintln!(
+        "TRACE   live state: roots {} chain {} counting {} devices {} stop {:?}",
+        ls.roots.len(),
+        ls.chain().len(),
+        ls.counting.len(),
+        ls.devices.len(),
+        ls.stop
+    );
+    std::eprintln!(
+        "TRACE   restored state: roots {} chain {} counting {} devices {} stop {:?}",
+        rs.roots.len(),
+        rs.chain().len(),
+        rs.counting.len(),
+        rs.devices.len(),
+        rs.stop
+    );
+}
+
 /// A seed's recovery key: K1 named by the seed, K2 the tests' fixed
 /// SLH-DSA key (the Group ID still differs by the root and K1).
 fn recovery_pair(name: &str) -> crate::records::Recovery {
@@ -983,6 +1041,9 @@ impl World {
         let m = &mut self.members[i];
         let set = rebuild(&root, &recovery, &m.saved.records, &m.saved.lists);
         if set.digest() != m.saved.mem.set.digest() {
+            if env("SIM_TRACE_RESTART") == Some(1) {
+                trace_restart(i, &m.saved.records, &m.saved.lists, &m.saved.mem.set, &set);
+            }
             return Err(format!("m{i} restarted with records other than it wrote"));
         }
         let state = set.state();

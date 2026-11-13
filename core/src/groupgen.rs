@@ -352,9 +352,10 @@ fn build_with(spec: Spec, remove_holder: bool) -> Group {
         }
         // An admin fills up to its ceiling, all of them leaving the set room
         // for the changes of root's records (the new root's phone, a copy of
-        // the settings, the writer's first checkpoint, the head), so that the set holds at most its 4096
+        // the settings, the writer's first checkpoint, the head with its
+        // SLH-DSA signature, some 16 units), so that the set holds at most its 4096
         // units and everything counts.
-        let end = takeovers as u64 * 20 + 8;
+        let end = takeovers as u64 * 30 + 8;
         for j in 0..spec.admin_fill {
             let mine = b.units.get(&a.hash).copied().unwrap_or(0);
             if mine + 1 > MAX_ADMIN_RECORDS as u64 || b.total + 1 + end > keep::ROOM {
