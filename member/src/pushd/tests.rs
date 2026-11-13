@@ -1402,6 +1402,47 @@ fn the_first_challenge_confirms_however_slow_the_platform() {
     w.service.stop();
 }
 
+/// Two first sends to one new token, from two groups of the phone under its
+/// one send key, begun on two sides of a second boundary and both on their
+/// way at once: both challenges are of the generation the binding gets, so
+/// the one the phone kept last confirms.
+#[test]
+fn two_first_sends_in_flight_together_carry_one_generation() {
+    let w = world(Budgets::default());
+    let phone = send_key(3);
+    let t0 = now_seq(0);
+    let token = [70u8; 32];
+    *w.fake.delay.lock().unwrap() = Duration::from_millis(1500);
+    // Begin the first just after a second boundary, the second just after
+    // the next one, while the first is still on its way.
+    let wait_boundary = || {
+        let ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().subsec_millis();
+        std::thread::sleep(Duration::from_millis(u64::from(1000 - ms) + 20));
+    };
+    wait_boundary();
+    let a = {
+        let mut c = conn(&w, 1, 1);
+        let k = send_key(3);
+        std::thread::spawn(move || send(&mut c, &k, push::ENV_APNS, &token, t0, &body(1)).status)
+    };
+    wait_boundary();
+    let mut c2 = conn(&w, 2, 2);
+    assert_eq!(send(&mut c2, &phone, push::ENV_APNS, &token, t0, &body(2)).status, push::SENT);
+    assert_eq!(a.join().unwrap(), push::SENT);
+    *w.fake.delay.lock().unwrap() = Duration::ZERO;
+    let got: Vec<[u8; 16]> = {
+        let g = w.fake.got.lock().unwrap();
+        g.iter().filter(|g| g.token == token).filter_map(|g| g.challenge).map(|c| c.value).collect()
+    };
+    assert_eq!(got.len(), 2);
+    assert_eq!(got[0], got[1], "the two first sends carried challenges of two generations");
+    let ch = challenge_for(&w, &token, hint_of(&phone)).unwrap();
+    let r = S { challenge: Some(ch), ..s(&phone, push::ENV_APNS, &token, t0 + 1) }.send(&mut c2, &body(3));
+    assert_eq!(r.status, push::SENT);
+    assert_eq!(confirmed(&w, &token), Some(true), "the challenge the phone got last confirmed nothing");
+    w.service.stop();
+}
+
 /// Past the unconfirmed ceiling a quiet group still sends one body, and
 /// the quiet passes of every group one payer brings to one token share a
 /// single bucket of the group's size: groups of one maker's making add
@@ -1481,4 +1522,85 @@ fn a_service_that_never_answers_holds_the_sender_only_until_the_deadline() {
     }
     assert!(sends.load(Ordering::SeqCst) >= 2, "the sender stayed held by one send");
     s.stop();
+}
+
+/// A fake push service on a pinned key that says ready and then gives each
+/// send its own answer one byte a second.
+fn a_service_that_answers_a_byte_a_second() -> (SocketAddr, [u8; 32]) {
+    let keys = Keys::new().unwrap();
+    let pin = cbb_core::certs::Cert::parse(&keys.cert).unwrap().key_hash();
+    let clock: cbb_core::tls::Clock = Arc::new(crate::forward::SystemClock);
+    let tls = Arc::new(cbb_core::tls::registration_server(&keys.cert, &keys.key, push::ALPN, &clock).unwrap());
+    let tcp = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = tcp.local_addr().unwrap();
+    std::thread::spawn(move || {
+        for c in tcp.incoming() {
+            let Ok(c) = c else { continue };
+            let tls = tls.clone();
+            std::thread::spawn(move || {
+                let Ok(conn) = ServerConnection::new(tls) else { return };
+                let mut s = StreamOwned::new(conn, c);
+                while s.conn.is_handshaking() {
+                    if s.conn.complete_io(&mut s.sock).is_err() {
+                        return;
+                    }
+                }
+                if read_frame(&mut s).is_err() || write_frame(&mut s, &push::ready(100)).is_err() {
+                    return;
+                }
+                let Ok(f) = read_frame(&mut s) else { return };
+                let Ok(m) = frame::read(&f, 1 << 16) else { return };
+                let n = m.map.get(2).and_then(Value::as_uint).unwrap_or(0);
+                for b in push::sent(n, push::SENT, None) {
+                    std::thread::sleep(Duration::from_secs(1));
+                    if s.write_all(&[b]).and_then(|()| s.flush()).is_err() {
+                        return;
+                    }
+                }
+            });
+        }
+    });
+    (addr, pin)
+}
+
+#[test]
+fn an_answer_that_comes_a_byte_at_a_time_holds_a_send_only_until_the_deadline() {
+    let (addr, pin) = a_service_that_answers_a_byte_a_second();
+    let (key, creds) = member([50; 16], 1, "period", 1, true);
+    let mut c = Client::connect(addr, pin, key, &refs(&creds)).unwrap();
+    let (phone, token, t0) = (send_key(1), [5u8; 32], now_seq(0));
+    let (k, sig) = signed_by(&phone, push::ENV_APNS, &token, SLOT, c.face, t0, None);
+    let start = Instant::now();
+    let r = c.send(push::Send {
+        n: 0,
+        token: &token,
+        env: push::ENV_APNS,
+        body: &body(7),
+        ttl: None,
+        key: k,
+        sig: &sig,
+        seq: t0,
+        slot: SLOT,
+        challenge: None,
+    });
+    let took = start.elapsed();
+    assert!(r.is_err(), "a send whose answer trickles in past the deadline is given up");
+    assert!(took < crate::push::ANSWER_WITHIN + Duration::from_secs(2), "the send was held {took:?}");
+}
+
+#[test]
+fn a_service_that_never_says_ready_holds_a_connect_only_until_the_deadline() {
+    // It takes the connection and never answers, not even the handshake.
+    let tcp = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = tcp.local_addr().unwrap();
+    std::thread::spawn(move || {
+        let held: Vec<_> = tcp.incoming().take(1).collect();
+        std::thread::sleep(Duration::from_secs(60));
+        drop(held);
+    });
+    let (key, creds) = member([50; 16], 1, "period", 1, true);
+    let start = Instant::now();
+    assert!(Client::connect(addr, [0; 32], key, &refs(&creds)).is_err());
+    let took = start.elapsed();
+    assert!(took < crate::push::ANSWER_WITHIN + Duration::from_secs(2), "the connect was held {took:?}");
 }

@@ -387,11 +387,20 @@ class PushTest {
         assertTrue(marks.hintsOnly("g", g))
         g.keyDrawnMs = 32_000
         assertFalse(marks.hintsOnly("g", g))
-        // Any mark ends after a week.
+        // A mark ends a week after the app first met a member other than
+        // the device it names; a phone that met none keeps it.
         g.halted = false
         marks.mark("g", 2, gone, g, 40_000)
         assertTrue(marks.hintsOnly("g", g))
-        clock = 40_000 + PushMarks.LIFE_MS
+        clock = 40_000 + 30 * PushMarks.LIFE_MS
+        assertTrue(marks.hintsOnly("g", g), "a phone that met no member keeps a true mark")
+        marks.synced("g", 50_000, listOf(gone), 45_000, g)
+        assertTrue(marks.hintsOnly("g", g), "the device a mark names starts no week")
+        marks.synced("g", 50_000, listOf(other), null, g)
+        clock = 50_000 + PushMarks.LIFE_MS - 1
+        assertTrue(marks.hintsOnly("g", g), "the week counts from the first meeting")
+        marks.synced("g", 60_000, listOf(other), null, g)
+        clock = 50_000 + PushMarks.LIFE_MS
         assertFalse(marks.hintsOnly("g", g))
         marks.forget("g")
         assertTrue(marks.of("g").isEmpty())

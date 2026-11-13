@@ -19,7 +19,9 @@ public enum PushMarks {
 
     static let key = "push.marks"
     static let max = 16
-    /// How long a mark lasts when nothing ends it before: a week.
+    /// How long a mark lasts, from the app's first meeting after it with a
+    /// member other than the device it names, when nothing ends it before:
+    /// a week.
     static let lifeMS: UInt64 = 7 * 24 * 3600 * 1000
     /// The clock the marks' age is read on; tests set another.
     static var clock: () -> Date = { Date() }
@@ -30,20 +32,27 @@ public enum PushMarks {
         public var device: Data?
         /// The phone's clock when it arrived.
         public var atMS: UInt64
+        /// When the app first synced, after the mark, with a member other
+        /// than the device it names: the week a mark lasts at most counts
+        /// from then, so a phone that met no member keeps a true mark.
+        public var metMS: UInt64?
 
-        public init(event: UInt64, device: Data?, atMS: UInt64) {
+        public init(event: UInt64, device: Data?, atMS: UInt64, metMS: UInt64? = nil) {
             self.event = event
             self.device = device
             self.atMS = atMS
+            self.metMS = metMS
         }
 
         /// Whether the change it tells of is still to be applied. Any mark
         /// ends with a push key drawn after it (the app draws one when it
-        /// applies a removal or a new root); before that, a removal of a
-        /// device the app no longer lists, or a new root the app already
-        /// knows, was applied before the event came.
+        /// applies a removal or a new root), and a week after the app first
+        /// met another member; before that, a removal of a device the app no
+        /// longer lists, or a new root the app already knows, was applied
+        /// before the event came.
         public func inForce(_ g: PushVault.Group) -> Bool {
-            guard atMS > (g.keyDrawnMS ?? 0), PushMarks.nowMS < atMS &+ PushMarks.lifeMS else { return false }
+            guard atMS > (g.keyDrawnMS ?? 0) else { return false }
+            if let met = metMS, PushMarks.nowMS >= met &+ PushMarks.lifeMS { return false }
             switch (event, device, g.members) {
             case let (2, d?, members?): return members.contains(d)
             case let (4, d?, _): return g.root != d
@@ -108,14 +117,20 @@ public enum PushMarks {
     /// heard of the change either, and spends nothing. That ends a mark of an
     /// event made by a holder of the push key that names a change which
     /// never comes. A mark whose change is there is spent once the app
-    /// applies it (`spend`); any mark ends after a week.
+    /// applies it (`spend`). A mark that stays and met a member other than
+    /// the device it names here has its week start (`Mark.metMS`).
     public static func synced(_ group: String, at: Date, peers: Set<Data>, recordsAt: Date?, state g: PushVault.Group,
                               in defaults: UserDefaults?) {
         var marks = all(defaults)
         guard let list = marks[group] else { return }
         let ms = UInt64(Swift.max(0, at.timeIntervalSince1970 * 1000))
         let newer = recordsAt.map { UInt64(Swift.max(0, $0.timeIntervalSince1970 * 1000)) } ?? 0
-        let left = list.filter { m in
+        var met = list
+        for i in met.indices where met[i].atMS < ms && met[i].metMS == nil
+            && !peers.subtracting(met[i].device.map { [$0] } ?? []).isEmpty {
+            met[i].metMS = ms
+        }
+        let left = met.filter { m in
             guard m.atMS < ms, newer > m.atMS else { return true }
             guard !peers.subtracting(m.device.map { [$0] } ?? []).isEmpty else { return true }
             return !m.contradicted(by: g)

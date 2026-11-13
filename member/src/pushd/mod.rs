@@ -313,6 +313,11 @@ struct State {
     bindings: Shared<Binding>,
     /// Bodies on their way to a platform.
     in_flight: HashSet<[u8; 32]>,
+    /// By token with no binding yet: the generation of the first sends on
+    /// their way to its platform, and how many there are. Another first send
+    /// meanwhile takes that generation, so every challenge they carry is of
+    /// the binding that the first of them to come back files.
+    first_born: HashMap<[u8; 32], (u32, u32)>,
     /// The bindings changed since the snapshot was last written.
     dirty: bool,
     /// The number of the last change to a binding.
@@ -590,7 +595,7 @@ impl Inner {
         // One read of the clock for a binding this send makes: the
         // challenge sent with it and the binding filed after the platform
         // answered are of the same generation.
-        let born = binding::clock_generation(now);
+        let mut born = binding::clock_generation(now);
         let life_s = push::life_s(s.ttl);
         let expires_s = now / 1000 + life_s;
         let plan = {
@@ -607,6 +612,10 @@ impl Inner {
                     return answer(push::SENT_REPEAT, None);
                 }
                 upgrade = true;
+            }
+            let first = st.bindings.get(&tok).is_none();
+            if first && let Some(&(b, _)) = st.first_born.get(&tok) {
+                born = b;
             }
             let mint = |k: &[u8; 32], g: u32, p: u64| self.challenge(&tok, k, g, p);
             let confirmed = st.bindings.get(&tok).is_some_and(Binding::confirmed);
@@ -632,7 +641,7 @@ impl Inner {
                 });
             }
             let Some(b) = st.tokens.get_mut(&tb) else { return answer(push::SENT_BUDGET, Some(60_000)) };
-            match verdict {
+            let plan = match verdict {
                 Verdict::Stale => return refused(push::SENT_STALE),
                 Verdict::Ahead => return refused(push::SENT_AHEAD),
                 Verdict::Challenge { value } => {
@@ -711,6 +720,21 @@ impl Inner {
                         }
                     }
                 }
+            };
+            // Whatever goes to the platform now: a first send to the token
+            // holds its generation until it is back.
+            if first {
+                st.first_born.entry(tok).or_insert((born, 0)).1 += 1;
+            }
+            (plan, first)
+        };
+        let (plan, first) = plan;
+        let first_back = |st: &mut State| {
+            if first && let Some(e) = st.first_born.get_mut(&tok) {
+                e.1 -= 1;
+                if e.1 == 0 {
+                    st.first_born.remove(&tok);
+                }
             }
         };
         let hint = |v: [u8; 16]| {
@@ -731,13 +755,15 @@ impl Inner {
                 // A challenge is computed again, not kept. A token with no
                 // binding yet gets one filed once its challenge went, so that
                 // the generation the challenge was made for stays.
-                if platform.send(&d) == Outcome::Sent
+                let out = platform.send(&d);
+                let mut st = self.lock();
+                first_back(&mut st);
+                if out == Outcome::Sent
                     && let Some(a) = file
+                    && st.bindings.get(&tok).is_none()
+                    && self.commit(&mut st, tok, payer, &a, born).is_err()
                 {
-                    let mut st = self.lock();
-                    if st.bindings.get(&tok).is_none() && self.commit(&mut st, tok, payer, &a, born).is_err() {
-                        return answer(push::SENT_FAILED, Some(JOURNAL_WAIT_MS));
-                    }
+                    return answer(push::SENT_FAILED, Some(JOURNAL_WAIT_MS));
                 }
                 then
             }
@@ -753,6 +779,7 @@ impl Inner {
                 let out = platform.send(&d);
                 let mut st = self.lock();
                 st.in_flight.remove(&repeat);
+                first_back(&mut st);
                 match out {
                     Outcome::Sent => {
                         self.sent.fetch_add(1, Ordering::Relaxed);
@@ -927,6 +954,7 @@ impl Service {
             repeats: Shared::new(REPEATS_MAX),
             bindings,
             in_flight: HashSet::new(),
+            first_born: HashMap::new(),
             dirty: cfg.state.is_some(),
             ver: loaded.ver,
             journal: None,

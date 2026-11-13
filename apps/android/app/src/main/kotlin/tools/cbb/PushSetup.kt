@@ -73,6 +73,12 @@ object PushSetup {
     /** At launch: the token when on. */
     fun start(c: Context) {
         if (!PushPlatform.available(c)) return
+        // The last group was left and the token's deletion failed: again,
+        // and nothing else (no group wants a token).
+        if (PushPlatform.owed(c)) {
+            PushPlatform.giveUp(c)
+            return
+        }
         if (on(c)) PushPlatform.start(c) else refresh(c)
     }
 

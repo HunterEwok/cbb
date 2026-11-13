@@ -5,6 +5,7 @@ package tools.cbb
 
 import android.content.Context
 import android.util.Log
+import androidx.core.content.edit
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.messaging.FirebaseMessaging
@@ -22,6 +23,9 @@ import tools.cbb.kit.Push
 object PushPlatform {
     private const val TAG = "cbb"
     const val env = Push.Env.FCM
+    private const val OWED = "push.give_up_owed"
+
+    private fun prefs(c: Context) = c.getSharedPreferences("push", Context.MODE_PRIVATE)
 
     private fun options(): FirebaseOptions? {
         if (BuildConfig.FIREBASE_APP_ID.isEmpty() || BuildConfig.FIREBASE_PROJECT_ID.isEmpty()) return null
@@ -43,6 +47,8 @@ object PushPlatform {
 
     fun start(c: Context) {
         app(c) ?: return
+        // A token is wanted again: a deletion still owed is moot.
+        prefs(c).edit { remove(OWED) }
         val m = FirebaseMessaging.getInstance()
         m.isAutoInitEnabled = true
         m.token.addOnCompleteListener { t ->
@@ -60,11 +66,21 @@ object PushPlatform {
      */
     fun newEndpoint(c: Context) = Unit
 
-    /** The phone left its last group: the token goes; the next group asks for a new one. */
+    /**
+     * The phone left its last group: the token goes; the next group asks for
+     * a new one. A deletion that fails (the phone offline) is owed and tried
+     * again at the next start ([owed]).
+     */
     fun giveUp(c: Context) {
         app(c) ?: return
-        FirebaseMessaging.getInstance().deleteToken().addOnFailureListener { Log.e(TAG, "push: the FCM token was not deleted", it) }
+        prefs(c).edit { putBoolean(OWED, true) }
+        FirebaseMessaging.getInstance().deleteToken()
+            .addOnSuccessListener { prefs(c).edit { remove(OWED) } }
+            .addOnFailureListener { Log.e(TAG, "push: the FCM token was not deleted; tried again at the next start", it) }
     }
+
+    /** Whether a deletion of the token is still owed from leaving the last group. */
+    fun owed(c: Context): Boolean = prefs(c).getBoolean(OWED, false)
 
     fun stop(c: Context) {
         app(c) ?: return

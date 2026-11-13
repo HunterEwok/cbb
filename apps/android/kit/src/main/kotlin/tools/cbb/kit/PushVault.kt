@@ -447,15 +447,22 @@ class PushVault(private val store: Store) {
  * beside the vault, nothing secret.
  */
 class PushMarks(private val store: PushVault.Store, private val clock: () -> Long = System::currentTimeMillis) {
-    class Mark(val event: Long, val device: ByteArray?, val atMs: Long) {
+    /**
+     * [metMs]: when the app first synced, after the mark, with a member other
+     * than the device it names; the week a mark lasts at most counts from
+     * then, so a phone that met no member keeps a true mark however long.
+     */
+    class Mark(val event: Long, val device: ByteArray?, val atMs: Long, var metMs: Long? = null) {
         /**
          * Whether the change it tells of is still to be applied. Any mark ends
-         * with a push key drawn after it; before that, a removal of a device
-         * the app no longer lists, or a new root the app already knows, was
-         * applied before the event came.
+         * with a push key drawn after it, and a week after the app first met
+         * another member; before that, a removal of a device the app no
+         * longer lists, or a new root the app already knows, was applied
+         * before the event came.
          */
         fun inForce(g: PushVault.Group, nowMs: Long = System.currentTimeMillis()): Boolean {
-            if (atMs <= (g.keyDrawnMs ?: 0) || nowMs >= atMs + LIFE_MS) return false
+            val met = metMs
+            if (atMs <= (g.keyDrawnMs ?: 0) || (met != null && nowMs >= met + LIFE_MS)) return false
             val d = device
             val members = g.members
             return when {
@@ -480,13 +487,13 @@ class PushMarks(private val store: PushVault.Store, private val clock: () -> Lon
     private fun all(): MutableMap<String, MutableList<Mark>> {
         val o = store.get(NAME)?.let { Json.parseToJsonElement(it.decodeToString()) as? JsonObject } ?: return mutableMapOf()
         return o.mapValues { (_, v) ->
-            (v as JsonArray).map { val m = it as JsonObject; Mark(m.optLong("event") ?: 0, m.optBytes("device"), m.optLong("at_ms") ?: 0) }.toMutableList()
+            (v as JsonArray).map { val m = it as JsonObject; Mark(m.optLong("event") ?: 0, m.optBytes("device"), m.optLong("at_ms") ?: 0, m.optLong("met_ms")) }.toMutableList()
         }.toMutableMap()
     }
 
     private fun save(marks: Map<String, List<Mark>>) =
         store.put(NAME, Wire.encode(JsonObject(marks.mapValues { (_, l) ->
-            JsonArray(l.map { Wire.obj("event" to Wire.num(it.event), "device" to Wire.bytes(it.device), "at_ms" to Wire.num(it.atMs)) })
+            JsonArray(l.map { Wire.obj("event" to Wire.num(it.event), "device" to Wire.bytes(it.device), "at_ms" to Wire.num(it.atMs), "met_ms" to Wire.num(it.metMs)) })
         })))
 
     /**
@@ -529,19 +536,25 @@ class PushMarks(private val store: PushVault.Store, private val clock: () -> Lon
      * member that brought nothing newer has not heard of the change either.
      * That ends a mark of an event made by a holder of the push key that names
      * a change which never comes. A mark whose change is there is spent once
-     * the app applies it ([spend]); any mark ends after a week.
+     * the app applies it ([spend]). A mark that stays and met a member other
+     * than the device it names here has its week start ([Mark.metMs]).
      */
     fun synced(group: String, atMs: Long, peers: List<ByteArray>, recordsAtMs: Long?, state: PushVault.Group) {
         synchronized(this) {
             val marks = all()
             val l = marks[group] ?: return
+            var met = false
             val left = l.filter { m ->
-                if (m.atMs >= atMs || (recordsAtMs ?: 0) <= m.atMs) return@filter true
+                if (m.atMs >= atMs) return@filter true
                 val d = m.device
                 if (peers.none { d == null || !it.contentEquals(d) }) return@filter true
-                !m.contradicted(state)
+                if (m.metMs == null) {
+                    m.metMs = atMs
+                    met = true
+                }
+                (recordsAtMs ?: 0) <= m.atMs || !m.contradicted(state)
             }
-            if (left.size == l.size) return
+            if (left.size == l.size && !met) return
             if (left.isEmpty()) marks.remove(group) else marks[group] = left.toMutableList()
             save(marks)
         }

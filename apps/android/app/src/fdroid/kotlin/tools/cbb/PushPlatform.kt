@@ -73,6 +73,9 @@ object PushPlatform {
     fun stop(c: Context) {
         UnifiedPush.unregister(c, instance(c))
     }
+
+    /** Never owed here: unregistering is the distributor's at once. */
+    fun owed(c: Context): Boolean = false
 }
 
 /** The distributor's events: a new endpoint, a message, the endpoint gone. */

@@ -483,11 +483,21 @@ final class PushTests: XCTestCase {
         XCTAssertTrue(PushMarks.hintsOnly("g", g, in: defaults))
         g.keyDrawnMS = 32_000
         XCTAssertFalse(PushMarks.hintsOnly("g", g, in: defaults))
-        // Any mark ends after a week.
+        // A mark ends a week after the app first met a member other than the
+        // device it names; a phone that met none keeps it.
         g.halted = false
+        let week: Double = 7 * 24 * 3600
         PushMarks.mark("g", event: 2, device: gone, state: g, now: at(40), in: defaults)
         XCTAssertTrue(PushMarks.hintsOnly("g", g, in: defaults))
-        PushMarks.clock = { Date(timeIntervalSince1970: 40 + 7 * 24 * 3600 + 1) }
+        PushMarks.clock = { Date(timeIntervalSince1970: 40 + 30 * week) }
+        XCTAssertTrue(PushMarks.hintsOnly("g", g, in: defaults), "a phone that met no member keeps a true mark")
+        PushMarks.synced("g", at: at(50), peers: [gone], recordsAt: at(45), state: g, in: defaults)
+        XCTAssertTrue(PushMarks.hintsOnly("g", g, in: defaults), "the device a mark names starts no week")
+        PushMarks.synced("g", at: at(50), peers: [other], recordsAt: nil, state: g, in: defaults)
+        PushMarks.clock = { Date(timeIntervalSince1970: 50 + week - 1) }
+        XCTAssertTrue(PushMarks.hintsOnly("g", g, in: defaults), "the week counts from the first meeting")
+        PushMarks.synced("g", at: at(60), peers: [other], recordsAt: nil, state: g, in: defaults)
+        PushMarks.clock = { Date(timeIntervalSince1970: 50 + week) }
         XCTAssertFalse(PushMarks.hintsOnly("g", g, in: defaults))
         PushMarks.clock = { Date(timeIntervalSince1970: 100) }
         PushMarks.forget("g", in: defaults)
