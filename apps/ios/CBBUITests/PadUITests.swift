@@ -112,7 +112,7 @@ final class PadUITests: XCTestCase {
             let a = XCTAttachment(screenshot: e.screenshot())
             a.name = "failed-pad-largest-text-\(e.label)"
             a.lifetime = .keepAlways
-            add(a)
+            self.add(a)
             return true
         }
     }
