@@ -110,6 +110,8 @@ jobs:
         run: go run ./tools/site check
       - name: shellcheck, every shell script
         run: sh .github/shellcheck.sh
+      - name: CI builds every target of the release by the release's list of programs
+        run: sh .github/release-targets.sh
       - name: typos, the spelling of the English text (_typos.toml)
         run: pipx run typos==1.51.1
       - name: Biome, the tray app's HTML, CSS and JavaScript (biome.json)
@@ -2170,10 +2172,20 @@ jobs:
           printf '#include <ifaddrs.h>\n#include <stdio.h>\nint main(void){struct ifaddrs *a; if (getifaddrs(&a)) return 1; for (struct ifaddrs *p = a; p; p = p->ifa_next) puts(p->ifa_name); return 0;}\n' >"$RUNNER_TEMP/ifaddrs.c"
           python3 -m ziglang cc -target mips-linux-musleabi -msoft-float -static -o "$RUNNER_TEMP/ifaddrs" "$RUNNER_TEMP/ifaddrs.c"
           timeout 60 "$RUNNER_TEMP/qemu/bin/qemu-mips" "$RUNNER_TEMP/ifaddrs"
-      - name: build for mips and mipsel
+      - name: build for mips and mipsel, as a release builds them, with the release's list of programs
+        # MIPS_TARGETS: the release's routers' targets, which
+        # .github/release-targets.sh finds built here.
+        env:
+          MIPS_TARGETS: linux/mips linux/mipsle
         run: |
-          sh member/packaging/mips.sh mips
-          sh member/packaging/mips.sh mipsel
+          for t in $MIPS_TARGETS; do
+            dir=$(sh member/packaging/build.sh "$t")
+            set --
+            for p in $(sh .github/release-programs.sh all linux "${t#linux/}"); do
+              set -- "$@" "$dir/$p"
+            done
+            sh .github/hooks-marker.sh absent "$@"
+          done
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod

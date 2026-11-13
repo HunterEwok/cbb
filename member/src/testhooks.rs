@@ -88,35 +88,62 @@ mod tests {
                     p.display()
                 );
             }
-            if let Some(v) = named_outside_the_gate(&text) {
-                panic!("{}: names {v} outside a call of testhooks::var_os", p.display());
+            if let Some(what) = named_outside_the_gate(&text) {
+                panic!("{}: names {what} outside a call of testhooks::var_os", p.display());
             }
         }
         assert!(seen.contains("CBB_TEST_RESOLVE"), "{seen:?}");
     }
 
-    /// The first hook whose name, as a string, is anything but the
-    /// argument of testhooks::var_os in text: however the environment is
-    /// read (std::env::var, env::var_os after a use, a constant), the name
-    /// is then a string somewhere else.
-    fn named_outside_the_gate(text: &str) -> Option<&'static str> {
-        super::VARS
-            .iter()
-            .copied()
-            .find(|v| text.match_indices(&format!("\"{v}\"")).any(|(i, _)| !text[..i].ends_with("testhooks::var_os(")))
+    /// What in text names a hook other than as the argument of
+    /// testhooks::var_os: however the environment is read (std::env::var,
+    /// env::var_os after a use, a constant), the name is then a string
+    /// somewhere else; one put together (concat!, format!) leaves its two
+    /// pieces as strings; one taken from the list leaves the list's name.
+    fn named_outside_the_gate(text: &str) -> Option<String> {
+        if text.contains("testhooks::VARS") || text.contains("VARS[") {
+            return Some("the list of hooks".into());
+        }
+        // The gated reads taken out, nothing of a hook's name may be left.
+        let mut rest = text.to_string();
+        for v in super::VARS {
+            rest = rest.replace(&format!("testhooks::var_os(\"{v}\")"), "");
+        }
+        for v in super::VARS {
+            if rest.contains(&format!("\"{v}\"")) {
+                return Some(v.to_string());
+            }
+            // Split anywhere after "CBB_", each piece a literal of its own
+            // or beside a format's {} (concat!, format! either way round).
+            for k in 4..v.len() - 1 {
+                let (head, tail) = v.split_at(k);
+                let head_there = rest.contains(&format!("\"{head}\"")) || rest.contains(&format!("\"{head}{{"));
+                let tail_there = rest.contains(&format!("\"{tail}\"")) || rest.contains(&format!("}}{tail}\""));
+                if head_there && tail_there {
+                    return Some(format!("{v} put together"));
+                }
+            }
+        }
+        None
     }
 
     #[test]
     fn a_hook_read_any_other_way_is_told() {
-        let v = super::VARS[0];
+        let v = super::VARS[1];
+        let (head, tail) = v.split_at(8);
         for read in [
             format!("std::env::var_os(\"{v}\")"),
             format!("std::env::var(\"{v}\")"),
             format!("use std::env; env::var_os(\"{v}\")"),
             format!("const R: &str = \"{v}\"; std::env::var(R)"),
             format!("crate::testhooks::var_os(\"{v}\"); std::env::var(\"{v}\")"),
+            format!("std::env::var(concat!(\"{head}\", \"{tail}\"))"),
+            format!("std::env::var(format!(\"{head}{{}}\", \"{tail}\"))"),
+            format!("std::env::var(format!(\"{{}}{tail}\", \"{head}\"))"),
+            "std::env::var(crate::testhooks::VARS[1])".to_string(),
+            "use crate::testhooks::VARS; std::env::var(VARS[1])".to_string(),
         ] {
-            assert_eq!(named_outside_the_gate(&read), Some(v), "{read}");
+            assert!(named_outside_the_gate(&read).is_some(), "{read}");
         }
         assert_eq!(named_outside_the_gate(&format!("crate::testhooks::var_os(\"{v}\")")), None);
         assert_eq!(named_outside_the_gate(&format!("testhooks::var_os(\"{v}\")")), None);

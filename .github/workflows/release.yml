@@ -108,14 +108,12 @@ jobs:
         run: |
           rustup toolchain install stable --profile minimal
           dir=$(CBB_VERSION="${GITHUB_REF_NAME#v}" sh member/packaging/build.sh "$GOOS/$GOARCH${GOARM:+/$GOARM}")
-          if [ "$GOOS" = windows ]; then
-            cp "$dir/cbb.exe" "$dir/cbbw.exe" "$dir/cbb-relay.exe" "$RUNNER_TEMP/"
-          elif [ -z "$GOMIPS" ]; then
-            # cbb-relay, the relay in Rust, a service of its own beside cbb.
-            cp "$dir/cbb" "$dir/cbb-relay" "$RUNNER_TEMP/"
-          else
-            cp "$dir/cbb" "$RUNNER_TEMP/"
-          fi
+          # The target's Rust programs (.github/release-programs.sh): cbb,
+          # cbb-relay, the relay in Rust, a service of its own beside it, but
+          # on the routers (MIPS), and cbbw.exe on Windows.
+          for p in $(sh .github/release-programs.sh rust "$GOOS" "$GOARCH"); do
+            cp "$dir/$p" "$RUNNER_TEMP/"
+          done
           sh member/packaging/notices.sh "$(basename "$(dirname "$dir")")" >"$RUNNER_TEMP/rust-notices"
       - name: cbb-helper and cbb-forward, the Go programs beside cbb
         run: |
@@ -128,17 +126,12 @@ jobs:
           # cbb-helper, the Go helper cbb starts as its child, with the same
           # version: a release cbb takes only a helper of its own release. The
           # routers' builds (mips) go without the Go programs, as cbb runs
-          # there alone.
-          case $GOARCH in
-          mips | mipsle) ;;
-          *)
-            for p in cbb-helper cbb-forward; do
-              go build -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/$p$exe" "./cmd/$p"
-              # -trimpath leaves -ldflags out of the build info, so the tag itself is looked for.
-              grep -aqF -- "$GITHUB_REF_NAME" "$RUNNER_TEMP/$p$exe"
-            done
-            ;;
-          esac
+          # there alone (.github/release-programs.sh).
+          for p in $(sh .github/release-programs.sh go "$GOOS" "$GOARCH"); do
+            go build -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/$p" "./cmd/${p%"$exe"}"
+            # -trimpath leaves -ldflags out of the build info, so the tag itself is looked for.
+            grep -aqF -- "$GITHUB_REF_NAME" "$RUNNER_TEMP/$p"
+          done
       - name: the tray app for Linux
         if: matrix.tray
         env:
@@ -210,13 +203,11 @@ jobs:
         # them, and runs .github/release-ignores-hooks.sh on a build made
         # as this one.
         run: |
-          exe=; if [ "$GOOS" = windows ]; then exe=.exe; fi
-          set -- "$RUNNER_TEMP/cbb$exe" "$RUNNER_TEMP/cbb-relay$exe"
-          if [ "$GOOS" = windows ]; then set -- "$@" "$RUNNER_TEMP/cbbw.exe"; fi
-          case $GOARCH in
-          mips | mipsle) ;;
-          *) set -- "$@" "$RUNNER_TEMP/cbb-helper$exe" "$RUNNER_TEMP/cbb-forward$exe" ;;
-          esac
+          # Every program of the target, by the list the steps above built by.
+          set --
+          for p in $(sh .github/release-programs.sh all "$GOOS" "$GOARCH"); do
+            set -- "$@" "$RUNNER_TEMP/$p"
+          done
           sh .github/hooks-marker.sh absent "$@"
       - name: archive
         run: |

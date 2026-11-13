@@ -15,6 +15,19 @@ set -eu
 dir=$1
 shift
 
+# no_hooks DIR GOOS GOARCH runs the release workflow's check on the
+# target's programs in DIR.
+no_hooks() {
+	d=$1
+	# shellcheck disable=SC2046 # the names are words
+	set -- $(sh .github/release-programs.sh all "$2" "$3")
+	for p in "$@"; do
+		shift
+		set -- "$@" "$d/$p"
+	done
+	sh .github/hooks-marker.sh absent "$@"
+}
+
 for t in "$@"; do
 	IFS=/ read -r os arch rest <<EOF
 $t
@@ -39,20 +52,20 @@ EOF
 	sh member/packaging/notices.sh "$(basename "$(dirname "$rust")")" >"$out/rust-notices"
 	exe=''
 	[ "$os" != windows ] || exe=.exe
-	cp "$rust/cbb$exe" "$out/"
-	# cbb-relay and the Go programs beside cbb; not for the routers (MIPS),
-	# where cbb runs alone.
-	goprograms='' servers=''
-	if [ -z "$GOMIPS" ]; then
-		goprograms='cbb-helper cbb-forward' servers=cbb-relay
-		cp "$rust/cbb-relay$exe" "$out/"
-	fi
-	for p in $goprograms; do
-		go build -trimpath -o "$out/$p$exe" "./cmd/$p"
+	# The target's programs by the release's own list
+	# (.github/release-programs.sh): cbb, cbb-relay and the Go programs
+	# beside it, cbbw.exe (cbb without a console window) on Windows; on the
+	# routers (MIPS) cbb alone.
+	for p in $(sh .github/release-programs.sh rust "$os" "$arch"); do
+		cp "$rust/$p" "$out/"
 	done
+	for p in $(sh .github/release-programs.sh go "$os" "$arch"); do
+		go build -trimpath -o "$out/$p" "./cmd/${p%"$exe"}"
+	done
+	# The release workflow's check that no program carries the test hooks,
+	# on the same list.
+	no_hooks "$out" "$os" "$arch"
 	if [ "$os" = windows ]; then
-		# cbbw.exe is the same program without a console window, for the agent.
-		cp "$rust/cbbw.exe" "$out/"
 		# The tray app goes in the archive too, as at a release.
 		(cd apps/desktop && go build -trimpath -ldflags=-H=windowsgui -o "$out/cbb-desktop.exe" .)
 		RUST_NOTICES=$out/rust-notices sh packaging/archive.sh "$out/cbb.exe" "$os" "$name" "$dir/dist"
@@ -67,7 +80,7 @@ EOF
 	else
 		RUST_NOTICES=$out/rust-notices sh packaging/archive.sh "$out/cbb" "$os" "$name" "$dir/dist"
 		tar -tzf "$dir/dist/cbb-$os-$name.tar.gz" >"$out/list"
-		for p in cbb $servers $goprograms; do
+		for p in $(sh .github/release-programs.sh all "$os" "$arch"); do
 			grep -qx "cbb/$p" "$out/list" || { echo "build-targets.sh: no $p in the $os/$name archive" >&2; exit 1; }
 		done
 		tar -xzOf "$dir/dist/cbb-$os-$name.tar.gz" cbb/THIRD_PARTY_NOTICES >"$out/notices"

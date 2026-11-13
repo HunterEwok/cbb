@@ -439,7 +439,8 @@ func TestWeakPassphrase(t *testing.T) {
 		{"abcd efgh ijkl mnop qrs", true},     // 23 bytes
 		{"abcd efgh ijkl mnop qrst", false},   // 24 bytes
 		{"abcdefgh ijklmnop qrst uvwx", true}, // four words
-		{"abab abab abab abab abab", true},    // three different characters
+		{"abcd efgh abcd efgh abcd", true},    // 24 bytes, five words, nine different characters
+		{"abcd efgh abci efgh abcd", false},   // ten
 	} {
 		if err := weakPassphrase([]byte(c.p)); (err != nil) != c.weak {
 			t.Errorf("%q (%d bytes): %v", c.p, len(c.p), err)
