@@ -150,6 +150,35 @@ func TestDrill(t *testing.T) {
 	call(t, verify, "-roots", roots+"1,"+roots+"2", dist)
 }
 
+// Each envelope of drill -envelopes is taken by verify as the readers'
+// vectors say.
+func TestDrillEnvelopes(t *testing.T) {
+	dist, roots, envs := t.TempDir(), filepath.Join(t.TempDir(), "roots.pem"), t.TempDir()
+	archives(t, dist)
+	call(t, drill, "-version", "0.6.0", "-envelopes", envs, dist, roots)
+	list := strings.Split(strings.TrimSpace(string(must(os.ReadFile(filepath.Join(envs, "list"))))), "\n")
+	if len(list) != 63 {
+		t.Fatalf("%d envelopes", len(list))
+	}
+	for _, line := range list {
+		f := strings.SplitN(line, " ", 3)
+		write(t, filepath.Join(dist, "release.json"), must(os.ReadFile(filepath.Join(envs, f[0]+".json"))))
+		if err := verify([]string{"-roots", roots, dist}); (err == nil) != (f[1] == "true") {
+			t.Errorf("%s: verify: %v", f[2], err)
+		}
+	}
+	// keys.json's body at the largest a reader takes, and one byte more.
+	for n, ok := range map[int]bool{release.MaxBody: true, release.MaxBody + 1: false} {
+		call(t, drill, "-version", "0.6.0", "-pad-keys", fmt.Sprint(n), dist, roots)
+		if err := verify([]string{"-roots", roots, dist}); (err == nil) != ok {
+			t.Errorf("a body of %d bytes: verify: %v", n, err)
+		}
+	}
+	if drill([]string{"-envelopes", envs, "-fault", "null", dist, roots}) == nil {
+		t.Error("drill took -envelopes with -fault")
+	}
+}
+
 // Each fault of drill -fault gives files that verify refuses, as the
 // installers' tests expect of get.sh and get.ps1.
 func TestDrillFaults(t *testing.T) {
@@ -157,10 +186,8 @@ func TestDrillFaults(t *testing.T) {
 		dist, roots := t.TempDir(), filepath.Join(t.TempDir(), "roots.pem")
 		archives(t, dist)
 		call(t, drill, "-version", "0.6.0", "-fault", fault, dist, roots)
-		data := must(os.ReadFile(roots))
-		r1, _ := pem.Decode(data)
-		write(t, roots+"1", pem.EncodeToMemory(r1))
-		if verify([]string{"-roots", roots + "1", dist}) == nil {
+		// Under all the drill's roots, so that only the fault refuses it.
+		if verify([]string{"-roots", roots, dist}) == nil {
 			t.Errorf("%s: verify took it", fault)
 		}
 	}

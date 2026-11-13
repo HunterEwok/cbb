@@ -1102,6 +1102,42 @@ mod tests {
 
     use super::*;
 
+    /// A file is read up to MAX_FILE bytes whole, its whitespace counted:
+    /// one byte more refuses it, whatever the byte.
+    #[test]
+    fn parse_counts_the_whole_file() {
+        use base64::Engine as _;
+        let b64 = |b: &[u8]| base64::engine::general_purpose::STANDARD.encode(b);
+        // An envelope padded to n bytes by a key of a later algorithm.
+        let file = |n: usize| {
+            let head = alloc::format!(r#"{{"body":"{}","sigs":[{{"alg":9,"key":""#, b64(b"{}"));
+            let tail = alloc::format!(r#"","sig":"{}"}}]}}"#, b64(&[7]));
+            let room = (n - head.len() - tail.len()) / 4 * 3;
+            let mut out = alloc::format!("{head}{}{tail}", b64(&alloc::vec![9u8; room]));
+            while out.len() < n {
+                out.push(' ');
+            }
+            out.into_bytes()
+        };
+        let exact = file(MAX_FILE);
+        assert_eq!(exact.len(), MAX_FILE);
+        assert!(File::parse(&exact).is_ok());
+        assert!(File::parse(&file(MAX_FILE + 1)).is_err());
+        let mut nl = exact.clone();
+        while nl.last() == Some(&b' ') {
+            nl.pop();
+        }
+        nl.resize(MAX_FILE + 1, b'\n');
+        assert!(File::parse(&nl).is_err());
+        // Around it only space, tab, CR and LF are passed over.
+        let small = file(200);
+        for (c, ok) in [(b' ', true), (b'\t', true), (b'\r', true), (b'\n', true), (0x0c, false), (0x0b, false)] {
+            let mut b = small.clone();
+            b.push(c);
+            assert_eq!(File::parse(&b).is_ok(), ok, "{c:#x}");
+        }
+    }
+
     /// A root is its halves under one Name, one of each algorithm.
     #[test]
     fn roots_one_half_each() {

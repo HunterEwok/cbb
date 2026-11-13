@@ -46,6 +46,10 @@ pub struct Entries {
 /// file is read as it was signed and sent (docs/protocol.md, section 16,
 /// "Two signatures").
 fn decode(v: &RawValue) -> Result<Set> {
+    // The set in the strict form of signed bodies, as the core's entry
+    // point reads it: no name twice or escaped.
+    cbb_core::strict::check(v.get().as_bytes(), &["keys", "entries"])
+        .map_err(|e| Error::msg(format!("the entry points: {}", e.message())))?;
     serde_json::from_str(v.get()).map_err(|_| Error::msg("the entry points do not decode"))
 }
 
@@ -208,6 +212,15 @@ mod tests {
         assert!(e.take(&same, now).unwrap());
         assert_eq!(std::fs::read(dir.join(FILE)).unwrap(), same.get().as_bytes());
         assert!(set_of(&[("keys", b"{} {}")]).is_err());
+        // A set not in the strict form: a name escaped, or twice.
+        let c = v["vectors"].as_array().unwrap().iter().find(|c| c["name"] == "valid").unwrap();
+        for bad in [
+            format!(r#"{{"k\u0065ys":{},"entries":{}}}"#, c["keys"], c["entries"]),
+            format!(r#"{{"keys":{},"entries":{},"entries":{}}}"#, c["keys"], c["entries"], c["entries"]),
+        ] {
+            let bad = RawValue::from_string(bad).unwrap();
+            assert!(e.take(&bad, now + 1).is_err());
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 

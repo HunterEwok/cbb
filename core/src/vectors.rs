@@ -567,7 +567,7 @@ fn go_release() {
     // it refuses.
     let ev = vectors("go-release-envelopes.json");
     let envelopes = ev["envelopes"].as_array().unwrap();
-    assert_eq!(envelopes.len(), 46);
+    assert_eq!(envelopes.len(), 61);
     let env_roots: Vec<release::Key> = serde_json::from_value(ev["roots"].clone()).unwrap();
     let keys: File = serde_json::from_value(ev["keys"].clone()).unwrap();
     let channel: File = serde_json::from_value(ev["channel_file"].clone()).unwrap();

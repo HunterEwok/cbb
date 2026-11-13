@@ -3425,7 +3425,10 @@ until the new root reaches it. The two roots sit on separate YubiKeys for this r
 `get.ps1` checks the ES256 ones and says that PowerShell cannot check SLH-DSA. Both pass over
 a signature they do not check, and the program they install checks both from then on. Both
 read the envelope by the rules above, as the programs do: they take and refuse the same
-shapes, including the other S of an ES256 signature and a ninth signature.
+shapes of the envelope, including the other S of an ES256 signature, another DER form of
+it and a ninth signature, and check every key of `keys.json`, whatever its use; what they
+cannot check, they cannot refuse, so a file without its SLH-DSA signature is taken where
+that signature is not checked. CI gives both every envelope of the interop vectors.
 
 ### Where the files are
 

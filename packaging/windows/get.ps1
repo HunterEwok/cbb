@@ -139,11 +139,18 @@
 		if ($der.Length -lt 8 -or $der[0] -ne 0x30 -or $der[1] -ne $der.Length - 2) { return $null }
 		$i = 2
 		foreach ($half in 0, 1) {
-			if ($der[$i] -ne 0x02) { return $null }
-			$n = $der[$i + 1]
+			if ($i + 2 -gt $der.Length -or $der[$i] -ne 0x02) { return $null }
+			$n = [int]$der[$i + 1]
+			if ($n -lt 1 -or $n -gt 33 -or $i + 2 + $n -gt $der.Length) { return $null }
 			$v = [byte[]]$der[($i + 2)..($i + 1 + $n)]
 			$i += 2 + $n
-			while ($v.Length -gt 32 -and $v[0] -eq 0) { $v = [byte[]]$v[1..($v.Length - 1)] }
+			# Each INTEGER in its one form, as every reader takes it: not
+			# negative, and a zero byte first only before a byte of 0x80 or more.
+			if ($v[0] -ge 0x80) { return $null }
+			if ($v[0] -eq 0) {
+				if ($n -eq 1 -or $v[1] -lt 0x80) { return $null }
+				$v = [byte[]]$v[1..($n - 1)]
+			}
 			if ($v.Length -gt 32) { return $null }
 			[Array]::Copy($v, 0, $out, $half * 32 + 32 - $v.Length, $v.Length)
 		}

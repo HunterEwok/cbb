@@ -151,6 +151,21 @@ const checkText = "the passphrase of the post-quantum halves"
 // minPassphrase is the shortest new passphrase, in bytes.
 const minPassphrase = 24
 
+// weakPassphrase tells why p will not do as a new passphrase, or nil:
+// it must be minPassphrase bytes or more, five words or more, of ten
+// different characters or more. The tool cannot judge whether the words
+// are random; the maintainer's guide asks for that.
+func weakPassphrase(p []byte) error {
+	distinct := map[rune]bool{}
+	for _, r := range string(p) {
+		distinct[r] = true
+	}
+	if len(p) < minPassphrase || len(bytes.Fields(p)) < 5 || len(distinct) < 10 {
+		return fmt.Errorf("the passphrase must be five random words or more, %d characters or more", minPassphrase)
+	}
+	return nil
+}
+
 // passphrase returns the run's passphrase, asking for it the first time
 // and checking it against passphrase.check when there is one.
 func passphrase() ([]byte, error) {
@@ -164,11 +179,18 @@ func passphrase() ([]byte, error) {
 	if len(p) == 0 {
 		return nil, errors.New("no passphrase")
 	}
-	if box, err := os.ReadFile(passphraseCheck()); err == nil {
+	box, err := os.ReadFile(passphraseCheck())
+	switch {
+	case err == nil:
 		if _, err := unseal(p, box, "check"); err != nil {
 			clear(p)
 			return nil, err
 		}
+	case sealedHalves():
+		// Without the check a wrong passphrase would cost the hardware's
+		// PIN and touch before the half names it.
+		clear(p)
+		return nil, fmt.Errorf("%s holds sealed halves but no passphrase.check: put it back from the backup", pqDir())
 	}
 	cachedPassphrase = p
 	return p, nil
@@ -204,8 +226,8 @@ func newPassphrase() ([]byte, error) {
 		return nil, err
 	}
 	defer clear(again)
-	if len(p) < minPassphrase {
-		return nil, fmt.Errorf("the passphrase must be %d characters or more: five random words or more", minPassphrase)
+	if err := weakPassphrase(p); err != nil {
+		return nil, err
 	}
 	if !bytes.Equal(p, again) {
 		return nil, errors.New("the two passphrases differ")

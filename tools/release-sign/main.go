@@ -664,6 +664,8 @@ func drill(args []string) error {
 	channelKey := fs.Bool("channel-key", false, "sign stable.json with a channel key, as the server renews it")
 	relChannel := fs.String("release-channel", "stable", "the channel release.json names, which stable.json names it under anyway, for the installers' tests")
 	fault := fs.String("fault", "", "a fault no reader takes, in keys.json or release.json, for the installers' tests: "+strings.Join(drillFaults, ", "))
+	padKeys := fs.Int("pad-keys", 0, "keys.json's body made up to this many bytes with spaces after it, for the installers' tests of the largest body")
+	envelopes := fs.String("envelopes", "", "a directory for release.json written in each way the readers must agree on (NN.json, and list: NN, whether it is taken, its name), for the installers' tests")
 	fs.Parse(args)
 	if fs.NArg() != 2 {
 		return errors.New("drill needs the directory and the file for the roots")
@@ -761,7 +763,13 @@ func drill(args []string) error {
 		k.Keys = append(k.Keys, release.Key{Alg: release.AlgES256, Key: spki, Name: "forwarder.example", Use: release.UseForwarder})
 	}
 	var keysFile release.File
-	if *fault == "same-name" || slices.Contains(pinFaults, *fault) {
+	if *padKeys > 0 {
+		data, _ := json.Marshal(k)
+		if *padKeys < len(data) {
+			return fmt.Errorf("keys.json's body is %d bytes already", len(data))
+		}
+		keysFile, err = signRaw(append(data, bytes.Repeat([]byte{' '}, *padKeys-len(data))...), ks[0])
+	} else if *fault == "same-name" || slices.Contains(pinFaults, *fault) {
 		data, _ := json.Marshal(k)
 		keysFile, err = signRaw(data, ks[0])
 	} else {
@@ -799,5 +807,28 @@ func drill(args []string) error {
 			return err
 		}
 	}
-	return os.WriteFile(rootsPath, roots, 0o644)
+	if err := os.WriteFile(rootsPath, roots, 0o644); err != nil {
+		return err
+	}
+	if *envelopes == "" {
+		return nil
+	}
+	if *fault != "" {
+		return errors.New("drill takes -envelopes or -fault, not both")
+	}
+	envs, err := release.Envelopes(func() (release.File, error) { return release.Sign(r, ks[2]) }, true)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(*envelopes, 0o755); err != nil {
+		return err
+	}
+	var list strings.Builder
+	for i, e := range envs {
+		if err := os.WriteFile(filepath.Join(*envelopes, fmt.Sprintf("%02d.json", i+1)), e.Raw, 0o644); err != nil {
+			return err
+		}
+		fmt.Fprintf(&list, "%02d %t %s\n", i+1, e.OK, e.Name)
+	}
+	return os.WriteFile(filepath.Join(*envelopes, "list"), []byte(list.String()), 0o644)
 }

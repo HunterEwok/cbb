@@ -374,6 +374,13 @@ func TestPassphraseFirst(t *testing.T) {
 	if err := os.Remove(passphraseCheck()); err != nil {
 		t.Fatal(err)
 	}
+	// A signer refuses too, without asking the hardware.
+	for _, spec := range []string{"piv:9c", "se:release"} {
+		testPassphrase(t, "not the owner's passphrase at all")
+		if _, err := signer(spec); err == nil || errors.Is(err, errPassphrase) || !strings.Contains(err.Error(), "passphrase.check") {
+			t.Errorf("%s without passphrase.check: %v", spec, err)
+		}
+	}
 	asked := testPassphrase(t, "another passphrase of five random words")
 	err := pqNew([]string{"-key", "file:" + ecFile(t, t.TempDir()), "-to", "age1yubikey1test", "-identity", id})
 	if err == nil || !strings.Contains(err.Error(), "passphrase.check") || *asked != 0 {
@@ -385,9 +392,11 @@ func TestPassphraseFirst(t *testing.T) {
 	// A short passphrase is refused however it comes: twelve of one letter.
 	empty := t.TempDir()
 	t.Setenv("CBB_RELEASE_PQ_DIR", filepath.Join(empty, "pq"))
-	testPassphrase(t, "aaaaaaaaaaaa")
-	if pqNew([]string{"-key", "file:" + ec, "-to", "age1yubikey1test", "-identity", id}) == nil {
-		t.Error("pq-new took aaaaaaaaaaaa")
+	for _, p := range []string{"aaaaaaaaaaaa", strings.Repeat("a", 24), strings.Repeat(" ", 24), "fourwords of twenty-four", "ab ab ab ab ab ab ab ab ab"} {
+		testPassphrase(t, p)
+		if pqNew([]string{"-key", "file:" + ec, "-to", "age1yubikey1test", "-identity", id}) == nil {
+			t.Errorf("pq-new took %q", p)
+		}
 	}
 }
 

@@ -9,7 +9,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/asn1"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -412,62 +411,13 @@ func makeVectors(t *testing.T) vectors {
 	spelled.Keys[1].Use = UseRelease
 	add("release.json under a key whose halves spell the release use apart", sign(t, spelled, root1), ch, rel, first, "0.6.0")
 
-	// The envelope as it comes: rel's, its members spelled otherwise.
-	body := base64.StdEncoding.EncodeToString(rel.Body)
-	sig := func(i int) string {
-		g := rel.Sigs[i]
-		return fmt.Sprintf(`{"alg":%d,"key":"%s","sig":"%s"}`, g.Alg, base64.StdEncoding.EncodeToString(g.Key), base64.StdEncoding.EncodeToString(g.Sig))
+	envs, err := Envelopes(func() (File, error) { return sign(t, releaseBody("0.6.0", "stable"), rk1), nil }, false)
+	if err != nil {
+		t.Fatal(err)
 	}
-	both := sig(0) + "," + sig(1)
-	env := func(name, raw string, ok bool) {
-		v.Envelopes = append(v.Envelopes, envelope{name, []byte(raw), ok})
+	for _, e := range envs {
+		v.Envelopes = append(v.Envelopes, envelope{e.Name, e.Raw, e.OK})
 	}
-	env("as signed", `{"body":"`+body+`","sigs":[`+both+`]}`, true)
-	env("with a member of a later version", `{"body":"`+body+`","sigs":[`+both+`],"later":{"a":[1]}}`, false)
-	env("with a signature of a later algorithm with a member of its own", `{"body":"`+body+`","sigs":[`+both+`,{"alg":9,"key":"CQ==","sig":"Bw==","later":true}]}`, false)
-	env("with its body named in capitals", `{"Body":"`+body+`","sigs":[`+both+`]}`, false)
-	env("with its body twice", `{"body":"`+body+`","body":"`+body+`","sigs":[`+both+`]}`, false)
-	env("with its body broken across lines", `{"body":"`+body[:4]+`\n`+body[4:]+`","sigs":[`+both+`]}`, false)
-	env("with sigs null", `{"body":"`+body+`","sigs":null}`, false)
-	env("with a signature of a later algorithm without a key", `{"body":"`+body+`","sigs":[`+both+`,{"alg":9,"sig":"Bw=="}]}`, false)
-	env("with a signature of a negative algorithm", `{"body":"`+body+`","sigs":[`+both+`,{"alg":-9,"key":"CQ==","sig":"Bw=="}]}`, false)
-	env("with a signature of algorithm 0", `{"body":"`+body+`","sigs":[`+both+`,{"alg":0,"key":"CQ==","sig":"Bw=="}]}`, false)
-	env("with a signature of algorithm 2147483648", `{"body":"`+body+`","sigs":[`+both+`,{"alg":2147483648,"key":"CQ==","sig":"Bw=="}]}`, false)
-	env("with a signature of algorithm 2147483647", `{"body":"`+body+`","sigs":[`+both+`,{"alg":2147483647,"key":"CQ==","sig":"Bw=="}]}`, true)
-	env("with a signature of algorithm 9.5", `{"body":"`+body+`","sigs":[`+both+`,{"alg":9.5,"key":"CQ==","sig":"Bw=="}]}`, false)
-	env("with a signature whose algorithm is a string", `{"body":"`+body+`","sigs":[`+both+`,{"alg":"9","key":"CQ==","sig":"Bw=="}]}`, false)
-	env("with a signature whose alg is named in capitals", `{"body":"`+body+`","sigs":[`+both+`,{"Alg":9,"key":"CQ==","sig":"Bw=="}]}`, false)
-	env("with a signature whose key is null", `{"body":"`+body+`","sigs":[`+both+`,{"alg":9,"key":null,"sig":"Bw=="}]}`, false)
-	env("with a signature whose alg is given twice", `{"body":"`+body+`","sigs":[{"alg":1,"alg":1,"key":"`+base64.StdEncoding.EncodeToString(rel.Sigs[0].Key)+`","sig":"`+base64.StdEncoding.EncodeToString(rel.Sigs[0].Sig)+`"},`+sig(1)+`]}`, false)
-	env("with a member of a later version whose name escapes a whole surrogate pair", `{"body":"`+body+`","sigs":[`+both+`],"later\ud83d\ude00":1}`, false)
-	env("with a member whose name escapes half a surrogate pair", `{"body":"`+body+`","sigs":[`+both+`],"bod\ud800":1}`, false)
-	env("with a signature with a member whose name escapes half a surrogate pair", `{"body":"`+body+`","sigs":[`+both+`,{"alg":9,"key":"CQ==","sig":"Bw==","\udc00":1}]}`, false)
-	env("with a member of a later version given twice", `{"body":"`+body+`","sigs":[`+both+`],"later":1,"later":1}`, false)
-	env("with a signature with a member of a later version given twice", `{"body":"`+body+`","sigs":[`+sig(0)[:len(sig(0))-1]+`,"later":1,"later":1},`+sig(1)+`]}`, false)
-	env("with a signature of a later algorithm with a member of its own given twice", `{"body":"`+body+`","sigs":[`+both+`,{"alg":9,"key":"CQ==","sig":"Bw==","later":1,"later":1}]}`, false)
-	env("with a member of a later version nested 17 deep, the file's object counted", `{"body":"`+body+`","sigs":[`+both+`],"later":`+strings.Repeat("[", 16)+strings.Repeat("]", 16)+`}`, false)
-	env("with a member of a later version nested 18 deep, the file's object counted", `{"body":"`+body+`","sigs":[`+both+`],"later":`+strings.Repeat("[", 17)+strings.Repeat("]", 17)+`}`, false)
-	env("with a member of a later version nested 10001 deep", `{"body":"`+body+`","sigs":[`+both+`],"later":`+strings.Repeat("[", 10000)+strings.Repeat("]", 10000)+`}`, false)
-	env("with a member of a later version whose name is not UTF-8", `{"body":"`+body+`","sigs":[`+both+`],"lat`+"\xff"+`er":1}`, false)
-	env("with a member of a later version whose value is not UTF-8", `{"body":"`+body+`","sigs":[`+both+`],"later":"`+"\xff"+`"}`, false)
-	env("with a member of a later version named in capitals", `{"body":"`+body+`","sigs":[`+both+`],"Later":1}`, false)
-	env("with a member of a later version that is null", `{"body":"`+body+`","sigs":[`+both+`],"later":null}`, false)
-	env("with a member of a later version that is a fraction", `{"body":"`+body+`","sigs":[`+both+`],"later":1.5}`, false)
-	env("with its body null", `{"body":null,"sigs":[`+both+`]}`, false)
-	env("with spaces between its members", `{ "body" : "`+body+`" , "sigs" : [ `+sig(0)+` , `+sig(1)+` ] }`, false)
-	env("with the members of a signature in another order", `{"sigs":[{"sig":"`+base64.StdEncoding.EncodeToString(rel.Sigs[0].Sig)+`","key":"`+base64.StdEncoding.EncodeToString(rel.Sigs[0].Key)+`","alg":1},`+sig(1)+`],"body":"`+body+`"}`, false)
-	env("with a signature of a later algorithm", `{"body":"`+body+`","sigs":[`+both+`,{"alg":9,"key":"CQ==","sig":"Bw=="}]}`, true)
-	env("with sigs before body", `{"sigs":[`+both+`],"body":"`+body+`"}`, false)
-	env("with the body's first character written as an escape", `{"body":"\u00`+fmt.Sprintf("%02x", body[0])+body[1:]+`","sigs":[`+both+`]}`, false)
-	env("with a line break after it", `{"body":"`+body+`","sigs":[`+both+`]}`+"\n", true)
-	env("with a carriage return and a line break after it", `{"body":"`+body+`","sigs":[`+both+`]}`+"\r\n", true)
-	env("with a carriage return between its members", `{"body":"`+body+`",`+"\r"+`"sigs":[`+both+`]}`, false)
-	env("with spaces and a line break before it", " \n"+`{"body":"`+body+`","sigs":[`+both+`]}`, true)
-	env("with a byte order mark", "\xef\xbb\xbf"+`{"body":"`+body+`","sigs":[`+both+`]}`, false)
-	env("with a second object after it", `{"body":"`+body+`","sigs":[`+both+`]}{}`, false)
-	env("inside a list", `[{"body":"`+body+`","sigs":[`+both+`]}]`, false)
-	env("with a comma before its closing brace", `{"body":"`+body+`","sigs":[`+both+`],}`, false)
-	env("with a signature that is not an object", `{"body":"`+body+`","sigs":[`+both+`,[9]]}`, false)
 
 	revoked := []string{"0", "1f", "9a", "c35a2e1e3b46b5a1", "15b3d8b2f3a0e3e3cc1d2a4e1f0b7c9d"}
 	addStatus := func(name string, k, st File, seen Seen, ok bool) {
@@ -545,7 +495,7 @@ func TestReleaseVectors(t *testing.T) {
 	if err := json.Unmarshal(compacted(t, envData), &env); err != nil {
 		t.Fatal(err)
 	}
-	if len(env.Envelopes) != 46 {
+	if len(env.Envelopes) != 61 {
 		t.Fatalf("%d envelopes", len(env.Envelopes))
 	}
 	for _, c := range env.Envelopes {

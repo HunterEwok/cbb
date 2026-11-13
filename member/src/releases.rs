@@ -82,7 +82,10 @@ impl Releases {
         if self.roots.is_empty() {
             return Err(Error::msg("this build pins no release keys"));
         }
-        // Each file read from the bytes that came, as it was signed.
+        // The set in the strict form of signed bodies, each file read from
+        // the bytes that came, as it was signed.
+        cbb_core::strict::check(v.get().as_bytes(), &["keys", "channel", "release"])
+            .map_err(|e| Error::msg(format!("the release: {}", e.message())))?;
         let set: Set = serde_json::from_str(v.get()).map_err(|_| Error::msg("the release does not decode"))?;
         let roots = &self.roots;
         let seen = Seen { version: String::new(), ..seen.clone() };
@@ -233,4 +236,49 @@ pub fn unhex(s: &str) -> Option<Vec<u8>> {
 pub fn offered(v: &str) -> bool {
     let own = crate::service::VERSION.trim_start_matches('v');
     own != "dev" && release::compare(v, own) == std::cmp::Ordering::Greater
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The release is read from the bytes that came: the valid one of the
+    // Go vectors is taken as signed, and the same files with release.json
+    // in an envelope no reader takes, or a set not in the strict form, are
+    // refused.
+    #[test]
+    fn takes_only_the_canonical_envelope() {
+        let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata/interop/go-release.json");
+        let v: serde_json::Value = serde_json::from_slice(&std::fs::read(p).unwrap()).unwrap();
+        let now = v["now_ms"].as_i64().unwrap();
+        let roots: Vec<cbb_core::release::Key> = serde_json::from_value(v["roots"].clone()).unwrap();
+        let c = &v["vectors"][0];
+        assert_eq!(c["name"], "valid");
+        let file = |n: &str| v["files"][c[n].as_u64().unwrap() as usize].clone();
+        let (keys, channel, rel) = (file("keys").to_string(), file("channel").to_string(), file("release"));
+        let set = |rel: &str| {
+            crate::entries::set_of(&[
+                ("keys", keys.as_bytes()),
+                ("channel", channel.as_bytes()),
+                ("release", rel.as_bytes()),
+            ])
+            .unwrap()
+        };
+        let dir = std::env::temp_dir().join(format!("cbb-releases-canonical-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let r = Releases::open(&dir, roots, now, &|_| {});
+        let (body, sigs) = (rel["body"].as_str().unwrap(), rel["sigs"].to_string());
+        for bad in [format!(r#"{{"sigs":{sigs},"body":"{body}"}}"#), format!(r#"{{ "body":"{body}","sigs":{sigs}}}"#)] {
+            assert!(r.take(&set(&bad), now).is_err(), "{bad:.40}");
+        }
+        let escaped = format!(r#"{{"k\u0065ys":{keys},"channel":{channel},"release":{rel}}}"#);
+        assert!(r.take(&RawValue::from_string(escaped).unwrap(), now).is_err());
+        assert_eq!(r.order(now), (0, 0));
+        let good = set(&rel.to_string());
+        assert!(r.take(&good, now).unwrap());
+        assert_eq!(std::fs::read(dir.join(FILE)).unwrap(), good.get().as_bytes());
+        assert_eq!(r.version(now).as_deref(), Some("0.6.0"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

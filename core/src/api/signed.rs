@@ -491,6 +491,19 @@ mod tests {
             serde_json::json!({"set": STANDARD.encode(twice), "roots": e["roots"], "now_ms": e["now_ms"]}),
         );
         assert_eq!(got["error"]["name"], "signed", "{got}");
+        // The set in the strict form of signed bodies: spaces between its
+        // members are that form, a name written with an escape is not.
+        assert_eq!(c["ok"], true);
+        for (set, ok) in [
+            (format!(r#"{{ "keys" : {} , "entries" : {} }}"#, c["keys"], c["entries"]), true),
+            (format!(r#"{{"k\u0065ys":{},"entries":{}}}"#, c["keys"], c["entries"]), false),
+        ] {
+            let got = run(
+                "release_check_entries",
+                serde_json::json!({"set": STANDARD.encode(&set), "roots": e["roots"], "now_ms": e["now_ms"]}),
+            );
+            assert_eq!(got.get("ok").is_some(), ok, "{set:.30}: {got}");
+        }
         let set = raw(&serde_json::json!({"keys": c["keys"], "entries": c["entries"]}));
         let got = run(
             "release_check_entries",
