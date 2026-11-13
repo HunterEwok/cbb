@@ -1663,7 +1663,32 @@ impl World {
         if evidence_lost {
             EVIDENCE_LOST.fetch_add(1, Ordering::Relaxed);
         }
-        let Some(digest) = count.keys().max_by_key(|d| rank(d)).copied() else {
+        // The reference is the root's own view: the member that holds the
+        // current root key (the newest chain among those that hold theirs)
+        // and whose state names at least one admitted member. Only without
+        // one (the root lost for good, or a root that left nobody in) are
+        // the members' sets ranked. A member the root's view names neither
+        // as a device nor as removed is unknown to the group: it is checked
+        // on its own (it must learn it is out), never counted toward the
+        // group's records.
+        let root_view = (0..self.members.len())
+            .filter(|i| self.admitted[*i] && !self.is_gone(*i))
+            .filter(|i| {
+                let m = &self.members[*i];
+                m.live.state.roots.last().is_some_and(|r| m.live.keys.iter().any(|n| k(n).hash == *r))
+            })
+            .filter(|i| {
+                let st = &self.members[*i].live.state;
+                st.halted()
+                    || (0..self.members.len())
+                        .any(|j| self.admitted[j] && st.device_by_key(&self.members[j].key.hash).is_some())
+            })
+            .max_by_key(|i| self.members[*i].live.state.chain().len())
+            .map(|i| self.members[i].live.set.digest());
+        if root_view.is_none() {
+            RANKED.fetch_add(1, Ordering::Relaxed);
+        }
+        let Some(digest) = root_view.or_else(|| count.keys().max_by_key(|d| rank(d)).copied()) else {
             // A free keep that dropped the device records leaves nobody in:
             // the root key's power. Nobody may talk to anyone then, so the
             // views cannot meet; what is required is that nobody acts on
@@ -1709,6 +1734,19 @@ impl World {
         for (i, m) in self.members.iter().enumerate() {
             if !state.halted() && state.revoked.contains(&m.key.hash) && !m.live.state.revoked.contains(&m.key.hash) {
                 return Err(format!("removed m{i} never learned its removal"));
+            }
+        }
+        // A member the group's view does not know (its admission dropped by
+        // a checkpoint, say) and that still counts itself in.
+        for (i, m) in self.members.iter().enumerate() {
+            let unknown = !state.halted()
+                && !group.contains(&i)
+                && !state.revoked.contains(&m.key.hash)
+                && !self.is_gone(i)
+                && self.admitted[i]
+                && m.live.state.device_by_key(&m.key.hash).is_some();
+            if unknown {
+                return Err(format!("m{i}, unknown to the group, never learned it is out"));
             }
         }
         for i in 0..self.members.len() {
@@ -1895,7 +1933,10 @@ static ROOT_POWER: AtomicUsize = AtomicUsize::new(0);
 static CUT_SHAPE: AtomicUsize = AtomicUsize::new(0);
 static NOT_KEPT: AtomicUsize = AtomicUsize::new(0);
 static CP_REFUSED: AtomicUsize = AtomicUsize::new(0);
-const COUNTERS: [&AtomicUsize; 11] = [
+/// Settled checks without a root's view to compare with (the sets ranked).
+static RANKED: AtomicUsize = AtomicUsize::new(0);
+const COUNTERS: [&AtomicUsize; 12] = [
+    &RANKED,
     &NOT_KEPT,
     &CP_REFUSED,
     &FORKS_TWICE,
@@ -1969,7 +2010,7 @@ fn groups_under_faults_agree() {
         }
     }
     std::eprintln!(
-        "sim: {n} seeds; recovery forks: {} by the key used twice, {} by a split network; {} settled with records aside; {} with small rooms, {} members back after the checkpoints they were away for, {} runs kept a record aside on the way; {} runs where a root's twin lived only on removed devices; {} runs where a deviating root's checkpoint left nobody in; {} runs where an admin signed past its own room and later again beside a fresh member; {} records their writer's own set did not keep; {} checkpoints the core's writer refused",
+        "sim: {n} seeds; recovery forks: {} by the key used twice, {} by a split network; {} settled with records aside; {} with small rooms, {} members back after the checkpoints they were away for, {} runs kept a record aside on the way; {} runs where a root's twin lived only on removed devices; {} runs where a deviating root's checkpoint left nobody in; {} runs where an admin signed past its own room and later again beside a fresh member; {} records their writer's own set did not keep; {} checkpoints the core's writer refused; {} settled checks without a root's view",
         FORKS_TWICE.load(Ordering::Relaxed),
         FORKS_SPLIT.load(Ordering::Relaxed),
         ASIDE_RUNS.load(Ordering::Relaxed),
@@ -1980,7 +2021,8 @@ fn groups_under_faults_agree() {
         ROOT_POWER.load(Ordering::Relaxed),
         CUT_SHAPE.load(Ordering::Relaxed),
         NOT_KEPT.load(Ordering::Relaxed),
-        CP_REFUSED.load(Ordering::Relaxed)
+        CP_REFUSED.load(Ordering::Relaxed),
+        RANKED.load(Ordering::Relaxed)
     );
     assert!(failed.is_empty(), "{}", failed.join("\n\n"));
 }
