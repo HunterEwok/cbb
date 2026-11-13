@@ -926,7 +926,7 @@ impl World {
             Says::Sync(offer) => {
                 // A peer that only gets the root's pair gives nothing but
                 // what makes or completes one.
-                let point: [u8; 65] = self.members[msg.from].key.key.public.clone().try_into().unwrap();
+                let point: [u8; 65] = self.members[msg.from].key.key.public().to_vec().try_into().unwrap();
                 let standing = crate::peer::standing(&self.members[j].live.state, &self.members[j].key.hash, &point);
                 if standing == crate::peer::Standing::ForkProof {
                     exchange::take_proof(&mut self.members[j].live.set, &offer);
@@ -1002,7 +1002,7 @@ impl World {
             }
             Says::Record(env) => {
                 if let Ok(r) = Record::decode(&env) {
-                    let point: [u8; 65] = self.members[msg.from].key.key.public.clone().try_into().unwrap();
+                    let point: [u8; 65] = self.members[msg.from].key.key.public().to_vec().try_into().unwrap();
                     let standing =
                         crate::peer::standing(&self.members[j].live.state, &self.members[j].key.hash, &point);
                     let set = &mut self.members[j].live.set;
