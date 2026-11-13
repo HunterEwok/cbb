@@ -34,4 +34,10 @@ for f in broken-pq no-pq same-name high-s broken-twin alg-zero; do
 	fi
 	grep -q "not signed by" "$rel/out" || { echo "get.sh did not refuse the signature for $f" >&2; cat "$rel/out"; exit 1; }
 done
+# A forwarder's pin that no reader takes refuses keys.json, whatever its use.
+for f in pin-alg-zero pin-not-p256; do
+	"$sign" drill -version 0.6.0 -fault "$f" "$rel" "$rel/roots.pem"
+	run
+	grep -q "keys.json is not valid\|keys.json holds a key that is not valid" "$rel/out" || { echo "get.sh took keys.json with the fault $f" >&2; cat "$rel/out"; exit 1; }
+done
 echo "get.sh checks both signatures with $(openssl version)"

@@ -850,7 +850,7 @@ jobs:
           CBB_RELEASE_ROOTS="$RUNNER_TEMP/other.pem" refused "keys.json from other roots"
           CBB_RELEASE_ROOTS='' refused "keys.json from throwaway roots instead of the pinned ones"
           # keys.json or release.json with each fault that no reader takes.
-          for f in empty-use upper-case twice null no-time status-brace high-s broken-twin alg-zero; do
+          for f in empty-use upper-case twice null no-time status-brace high-s broken-twin alg-zero pin-alg-zero pin-not-p256; do
             go run ./tools/release-sign drill -version 0.6.0 -fault "$f" "$rel" "$RUNNER_TEMP/roots.pem"
             refused "signed files with the fault $f"
           done
@@ -1277,7 +1277,7 @@ jobs:
             Write-Host $out
             if ($out -notmatch 'failed') { throw 'get.ps1 installed a release.json of another channel' }
             # keys.json or release.json with each fault that no reader takes.
-            foreach ($f in 'empty-use', 'upper-case', 'twice', 'null', 'no-time', 'status-brace', 'high-s', 'broken-twin', 'alg-zero') {
+            foreach ($f in 'empty-use', 'upper-case', 'twice', 'null', 'no-time', 'status-brace', 'high-s', 'broken-twin', 'alg-zero', 'pin-alg-zero', 'pin-not-p256') {
               cmd /c "go run ./tools/release-sign drill -version 0.6.0 -fault $f `"$rel`" `"$roots`" 2>&1"
               if ($LASTEXITCODE -ne 0) { throw 'release-sign drill failed' }
               $out = Get-Content packaging/windows/get.ps1 -Raw | Invoke-Expression 6>&1 | Out-String

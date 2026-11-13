@@ -344,6 +344,33 @@ one_b64() {
 # 1 MiB.
 small() { [ "$(wc -c <"$1" | tr -d ' ')" -le 1048576 ]; }
 
+# valid_key ALG KEY tells whether KEY, a SubjectPublicKeyInfo in base64, is
+# a key of ALG as every reader takes it: for 1 a P-256 point, uncompressed,
+# for 4 an SLH-DSA-SHA2-128s key, which this openssl must also read where
+# it checks that algorithm.
+valid_key() {
+	case $1 in
+	1)
+		case $2 in
+		MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE*) ;;
+		*) return 1 ;;
+		esac
+		[ ${#2} -eq 124 ] || return 1
+		;;
+	4)
+		case $2 in
+		MDAwCwYJYIZIAWUDBAMUAyEA*) ;;
+		*) return 1 ;;
+		esac
+		[ ${#2} -eq 68 ] || return 1
+		;;
+	*) return 0 ;;
+	esac
+	case " $checked " in
+	*" $1 "*) printf '%s' "$2" | openssl base64 -d -A | openssl pkey -pubin -inform DER -noout 2>/dev/null ;;
+	esac
+}
+
 # algs_valid tells whether every line of its input is an algorithm number
 # as the readers take it: 1 to 2^31-1, written without leading zeros.
 algs_valid() {
@@ -471,19 +498,17 @@ verify_release() {
 	: >"$tmp/keys.list"
 	while read -r entry; do
 		printf '%s\n' "$entry" >"$tmp/key"
+		# Every key is checked as the other readers check it, whatever its
+		# use: an algorithm number they take, a key of algorithm 1 that is
+		# P-256 and one of 4 that is SLH-DSA-SHA2-128s; a key of an
+		# algorithm no reader knows yet is kept unread.
+		alg=$(number alg "$tmp/key")
+		printf '%s\n' "$alg" | algs_valid || fail "keys.json is not valid; not installing"
+		valid_key "$alg" "$(field key "$tmp/key")" || fail "keys.json holds a key that is not valid"
 		case $(field use "$tmp/key") in
 		"" | release) use=release ;;
 		channel) use=channel ;;
 		*) continue ;;
-		esac
-		alg=$(number alg "$tmp/key")
-		printf '%s\n' "$alg" | algs_valid || fail "keys.json is not valid; not installing"
-		# A half this openssl checks must be a key it reads.
-		case " $checked " in
-		*" $alg "*)
-			field key "$tmp/key" | openssl base64 -d -A | openssl pkey -pubin -inform DER -noout 2>/dev/null ||
-				fail "keys.json holds a key that is not valid"
-			;;
 		esac
 		printf '%s %s %s %s\n' "$alg" "$use" "$(field key "$tmp/key")" "$(field name "$tmp/key")" >>"$tmp/keys.list"
 	done <"$tmp/keys.entries"

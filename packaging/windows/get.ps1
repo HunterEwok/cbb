@@ -268,6 +268,18 @@
 		if (@($keys.Value.keys | Where-Object { -not (Test-Alg $_.alg) }).Count -gt 0) {
 			throw (T '%s is not a valid release file; not installing' 'keys.json')
 		}
+		# Every key is checked as the other readers check it, whatever its use:
+		# a key of algorithm 1 is P-256 and one of 4 SLH-DSA-SHA2-128s; a key
+		# of an algorithm no reader knows yet is kept unread.
+		$slhPrefix = [Convert]::FromBase64String('MDAwCwYJYIZIAWUDBAMUAyEA')
+		foreach ($k in @($keys.Value.keys)) {
+			$spki = [Convert]::FromBase64String($k.key)
+			if ($k.alg -eq 1) {
+				$null = Get-P256Key $spki
+			} elseif ($k.alg -eq 4 -and ($spki.Length -ne 50 -or -not (Test-ByteEqual $spki[0..17] $slhPrefix))) {
+				throw (T '%s is not a valid release file; not installing' 'keys.json')
+			}
+		}
 		# The ES256 halves; a half of another algorithm is not checked here.
 		$es256 = @($keys.Value.keys | Where-Object { $_.alg -eq 1 })
 		$releaseKeys = @($es256 | Where-Object { $u = $_.PSObject.Properties['use']; -not $u -or $u.Value -ceq 'release' } |

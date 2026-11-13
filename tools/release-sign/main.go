@@ -40,7 +40,9 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto"
+	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
 	_ "embed"
@@ -603,7 +605,11 @@ func seHelper() (string, error) {
 
 // drillFaults are the faults drill -fault puts in keys.json, each a body
 // that every reader refuses (docs/protocol.md, section 16).
-var drillFaults = []string{"empty-use", "upper-case", "twice", "null", "no-time", "status-brace", "same-name", "broken-pq", "no-pq", "high-s", "broken-twin", "alg-zero"}
+var drillFaults = []string{"empty-use", "upper-case", "twice", "null", "no-time", "status-brace", "same-name", "broken-pq", "no-pq", "high-s", "broken-twin", "alg-zero", "pin-alg-zero", "pin-not-p256"}
+
+// pinFaults are the drill faults that add a forwarder's pin no reader
+// takes to keys.json, whatever its use.
+var pinFaults = []string{"pin-alg-zero", "pin-not-p256"}
 
 // relFaults are the drill faults put in release.json rather than keys.json.
 var relFaults = []string{"status-brace", "same-name", "broken-pq", "no-pq", "high-s", "broken-twin", "alg-zero"}
@@ -737,8 +743,24 @@ func drill(args []string) error {
 	case "alg-zero":
 		rel.Sigs = append(rel.Sigs, release.Sig{Alg: 0, Key: []byte{9}, Sig: []byte{7}})
 	}
+	switch *fault {
+	case "pin-alg-zero":
+		// A forwarder's pin of no algorithm.
+		k.Keys = append(k.Keys, release.Key{Alg: 0, Key: halves(ks[3], "pin", "")[0].Key, Name: "forwarder.example", Use: release.UseForwarder})
+	case "pin-not-p256":
+		// A forwarder's pin of algorithm 1 that is a P-384 key.
+		p384, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+		if err != nil {
+			return err
+		}
+		spki, err := x509.MarshalPKIXPublicKey(&p384.PublicKey)
+		if err != nil {
+			return err
+		}
+		k.Keys = append(k.Keys, release.Key{Alg: release.AlgES256, Key: spki, Name: "forwarder.example", Use: release.UseForwarder})
+	}
 	var keysFile release.File
-	if *fault == "same-name" {
+	if *fault == "same-name" || slices.Contains(pinFaults, *fault) {
 		data, _ := json.Marshal(k)
 		keysFile, err = signRaw(data, ks[0])
 	} else {
@@ -747,7 +769,7 @@ func drill(args []string) error {
 	if err != nil {
 		return err
 	}
-	if *fault != "" && !slices.Contains(relFaults, *fault) {
+	if *fault != "" && !slices.Contains(relFaults, *fault) && !slices.Contains(pinFaults, *fault) {
 		if keysFile, err = faultyKeys(keysFile.Body, *fault, ks[0]); err != nil {
 			return err
 		}
