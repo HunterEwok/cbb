@@ -443,9 +443,11 @@ def record_vectors():
         env, body = envelope("record", signer, m)
         if typ == 13:  # a recovery head: both halves of the recovery key
             env = head_envelope(body, sig2)
-        elif 8 in m:  # room for a second signature: [body, sig, sig2]
-            env = enc([body, signer.sign(LABELS["record"], body),
-                       sig2 if sig2 is not None else ADMIN.sign(LABELS["record"], body)])
+        elif 8 in m:  # room for a second signature: [body, sig, sig2]; the
+            # second signs first, and the first covers the body and the
+            # second's SHA-256 (audit Q-1)
+            s2 = sig2 if sig2 is not None else ADMIN.sign(LABELS["record"], body)
+            env = enc([body, signer.sign(LABELS["record"], body + sha(s2)), s2])
         rid = sha(body)
         if verdict == "take":
             chain[signer.name] = (seq, rid)
@@ -578,6 +580,15 @@ def record_vectors():
     b2 = enc(m2)
     bad("second signature over 4096 bytes", "env/sig2",
         enc([b2, ROOT.sign(LABELS["record"], b2), fake("later signature", 4097)]))
+    # The first signature covers the second's SHA-256 (audit Q-1): a second
+    # signature swapped, cut or removed on the way spoils the copy.
+    s2a, s2b = fake("second signature a", 3000), fake("second signature b", 3000)
+    sig_a = ROOT.sign(LABELS["record"], b2 + sha(s2a))
+    bad("second signature swapped on the way", "env/damaged", enc([b2, sig_a, s2b]))
+    bad("second signature cut on the way", "env/damaged", enc([b2, sig_a, s2a[:-1]]))
+    bad("second signature removed, signer2 left", "env/shape", enc([b2, sig_a]))
+    bad("first signature over the body alone beside a second", "env/damaged",
+        enc([b2, ROOT.sign(LABELS["record"], b2), s2a]))
 
     def bad_body(name, rule, m=None, raw=None):
         body = raw if raw is not None else enc(m)

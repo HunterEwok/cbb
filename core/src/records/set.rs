@@ -2487,8 +2487,26 @@ impl RecordSet {
         trial.insert(r.clone()).map_err(|e| Error::msg(alloc::format!("the set refuses the record: {e:?}")))?;
         let id = r.id();
         let after = trial.state();
+        if let Kind::Device(d) = &r.body().kind
+            && state.device(&d.id()).is_none()
+            && state.devices.len() >= super::MAX_DEVICES
+        {
+            return Err(Error::msg(alloc::format!(
+                "the group has {} devices already: remove one before adding another",
+                super::MAX_DEVICES
+            )));
+        }
         if !trial.records.contains_key(&id) || !after.counting.contains(&id) {
             return Err(Error::msg("the group's records have no room for the record: it would not count"));
+        }
+        // An admission never puts out a device that counted (the cap takes
+        // devices in the order of their first record, which a new one may
+        // come before).
+        if matches!(r.body().kind, Kind::Device(_)) && state.devices.iter().any(|d| after.device(&d.id).is_none()) {
+            return Err(Error::msg(alloc::format!(
+                "the group has {} devices already: remove one before adding another",
+                super::MAX_DEVICES
+            )));
         }
         if let Kind::Device(d) = &r.body().kind
             && let Some(a) = &d.admin

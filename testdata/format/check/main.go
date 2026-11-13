@@ -237,19 +237,25 @@ func envelope(b []byte, label string, signerKey func(map[any]any) ([]byte, error
 		return nil, nil, err
 	}
 	signed := body
+	if sig2 != nil {
+		// Beside a second signature the first covers the body and the
+		// second's SHA-256 (audit Q-1), for every kind.
+		d := sha256.Sum256(sig2)
+		signed = append(bytes.Clone(body), d[:]...)
+	}
+	if err := es256(pub, label, signed, sig); err != nil {
+		if sig2 != nil && err.Error() == "verify" {
+			return nil, nil, errors.New("env/damaged")
+		}
+		return nil, nil, fmt.Errorf("sig: %w", err)
+	}
 	if head && sig2 != nil {
-		// E-6: both halves sign every head. K2 signs the body; K1 signs the
-		// body and the SHA-256 of K2's signature (audit Q-1).
+		// E-6: both halves sign every head. K2 signs the body.
 		h2, _ := m[uint64(8)].([]byte)
 		k2, ok := recovery2ByHash[hex.EncodeToString(h2)]
 		if !ok || !slhVerify(k2, body, sig2, []byte("cbb record v3")) {
 			return nil, nil, errors.New("sig: sig/verify (K2)")
 		}
-		d := sha256.Sum256(sig2)
-		signed = append(bytes.Clone(body), d[:]...)
-	}
-	if err := es256(pub, label, signed, sig); err != nil {
-		return nil, nil, fmt.Errorf("sig: %w", err)
 	}
 	return m, body, nil
 }
@@ -373,6 +379,8 @@ func checkSigned(dir, file string, sk func(map[any]any) ([]byte, error)) {
 		if formatRule(r.Rule) {
 			if err == nil {
 				fail("%s / %s: taken, want refused (%s)", file, r.Name, r.Rule)
+			} else if r.Rule == "env/damaged" && err.Error() != r.Rule {
+				fail("%s / %s: %v, want %s", file, r.Name, err, r.Rule)
 			} else {
 				ok++
 			}

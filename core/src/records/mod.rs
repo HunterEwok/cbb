@@ -81,6 +81,7 @@ pub mod key;
 pub mod pq;
 pub mod set;
 pub mod statement;
+pub mod sync;
 
 #[cfg(test)]
 mod tests;
@@ -111,10 +112,7 @@ pub const LABEL_RECOVERY_FETCH: &str = "cbb recovery fetch v3";
 /// the signed bytes, then the SHA-256 of the second signature, so a second
 /// signature cannot be swapped on the way.
 pub fn with_sig2(data: &[u8], sig2: &[u8]) -> Vec<u8> {
-    let mut m = Vec::with_capacity(data.len().saturating_add(32));
-    m.extend_from_slice(data);
-    m.extend_from_slice(&sha256(sig2));
-    m
+    crate::format::envelope::signed_data(data, Some(sig2))
 }
 
 /// The recovery key's fetch proof over data (rule 33, E-6): K2 signs first,
@@ -416,7 +414,14 @@ impl Record {
         }
         #[cfg(test)]
         VERIFIED.with(|n| n.set(n.get().saturating_add(1)));
-        key::verify_es256(key, LABEL_RECORD, &self.bytes, &self.sig)?;
+        // Beside a second signature the first covers its SHA-256 too
+        // (audit Q-1): a copy whose second was swapped on the way is
+        // damaged.
+        match self.sig2.as_deref() {
+            None => key::verify_es256(key, LABEL_RECORD, &self.bytes, &self.sig)?,
+            Some(s2) => key::verify_es256(key, LABEL_RECORD, &with_sig2(&self.bytes, s2), &self.sig)
+                .map_err(|r| if r == Rule::new("sig/verify") { Rule::new("env/damaged") } else { r })?,
+        }
         Ok(held)
     }
 

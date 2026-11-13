@@ -1619,7 +1619,7 @@ mod vectors {
         let mut refused = 0;
         for t in v["refuse"].as_array().unwrap() {
             let (name, rule) = (t["name"].as_str().unwrap(), t["rule"].as_str().unwrap());
-            if rule == "sig/verify" || rule == "records/group" {
+            if rule == "sig/verify" || rule == "records/group" || rule == "env/damaged" {
                 continue;
             }
             let env = unhex(t["envelope"].as_str().unwrap());
@@ -2992,8 +2992,10 @@ fn members_agree(g: &G) -> State {
     s
 }
 
+mod cap;
 mod insert_cost;
 mod recovery;
+mod sync;
 mod traces;
 
 /// A checkpoint and the head below it that fills its key's room: the
