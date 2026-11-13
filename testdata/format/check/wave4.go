@@ -628,7 +628,7 @@ func commandVerdict(body []byte, m map[any]any) string {
 	if !ok {
 		return "commands/time"
 	}
-	if exp, ok := u(m, 7); !ok || exp <= at || exp-at > 30000 {
+	if exp, ok := u(m, 7); !ok || exp <= at || exp-at > 600000 {
 		return "commands/expires"
 	}
 	if !bs(m, 10, 16) {

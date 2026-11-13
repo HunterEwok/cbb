@@ -804,10 +804,17 @@ def command_vectors():
     take.append({"name": "device command to a guarded lock, with its nonce", "verdict": "take",
                  "diag": diag(m), "body": body.hex(), "envelope": env.hex(),
                  "orders": enc({10: "heat", 11: enc({1: 90})}).hex()})
-    m, _ = cmd(3, ADMIN, 9, LAPTOP.id16, {7: T0 + 5000 + 30001})
-    m[7] = T0 + 5000 + 30001
+    # A reader takes a life up to 600 s (room for a later writer); every
+    # 0.6 writer gives 30 s. The replay guard is the counter, not the life.
+    m, _ = cmd(4, ADMIN, 9, LAPTOP.id16, {}, sealed=False)
+    m[7] = m[6] + 600000
     env, body = envelope("command", ADMIN, m)
-    refuse.append({"name": "lifetime over 30 s", "rule": "commands/expires", "verdict": "refuse",
+    take.append({"name": "lifetime of 600 s, from a later writer", "verdict": "take", "diag": diag(m),
+                 "body": body.hex(), "envelope": env.hex()})
+    m, _ = cmd(4, ADMIN, 10, LAPTOP.id16, {}, sealed=False)
+    m[7] = m[6] + 600001
+    env, body = envelope("command", ADMIN, m)
+    refuse.append({"name": "lifetime over 600 s", "rule": "commands/expires", "verdict": "refuse",
                    "envelope": env.hex()})
     m, _ = cmd(10, PHONE, 8, LOCK.id16, {})
     env, body = envelope("command", PHONE, m)
@@ -2519,7 +2526,7 @@ def command_rule(env_b):
         return "commands/n"
     if not isinstance(m.get(6), int):
         return "commands/time"
-    if not (isinstance(m.get(7), int) and m[6] < m[7] <= m[6] + 30000):
+    if not (isinstance(m.get(7), int) and m[6] < m[7] <= m[6] + 600000):
         return "commands/expires"
     for f, rule in [(10, "commands/to"), (11, "commands/id")]:
         if not (isinstance(m.get(f), bytes) and len(m[f]) == 16):
@@ -2792,7 +2799,7 @@ def wave4_vectors():
         ("n 0", body(4, {4: 0})),
         ("no time", body(4, drop=(6,))),
         ("expires at its time", body(4, {7: T0})),
-        ("lifetime of 30 s and 1 ms", body(4, {7: T0 + 30001})),
+        ("lifetime of 600 s and 1 ms", body(4, {7: T0 + 600001})),
         ("to of 15 bytes", body(4, {10: bytes(15)})),
         ("nonce of 15 bytes", body(4, {13: bytes(15)})),
         ("epoch without sealed", body(1, {14: 2})),
