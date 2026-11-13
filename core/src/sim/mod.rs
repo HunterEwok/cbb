@@ -425,16 +425,34 @@ impl World {
         // An ordinary record goes through the core's writer, as a kit's
         // does; a checkpoint signed here is a deviating root's.
         if !matches!(kind, Kind::Checkpoint { .. } | Kind::Recovery { .. }) {
-            let m = &mut self.members[i].live;
-            let st = m.state.clone();
-            let r = match m.set.write_record(&st, &kk, kind, time_ms) {
+            let first = {
+                let m = &mut self.members[i].live;
+                let st = m.state.clone();
+                m.set.write_record(&st, &kk, kind.clone(), time_ms).map_err(|e| alloc::format!("{e:?}"))
+            };
+            let written = match first {
+                Err(e) if e.contains("would pass its room") => {
+                    // Checkpoint first, as the apps do: the root writes a
+                    // checkpoint and tries once more; an admin waits for the
+                    // root's checkpoint (here it arrives at once, when the
+                    // root is on) and tries once more.
+                    REFUSED_FIRST.fetch_add(1, Ordering::Relaxed);
+                    self.checkpoint_for(i, key_name);
+                    let m = &mut self.members[i].live;
+                    let st = m.state.clone();
+                    m.set.write_record(&st, &kk, kind, time_ms).map_err(|e| alloc::format!("{e:?}"))
+                }
+                x => x,
+            };
+            let r = match written {
                 Ok(r) => r,
                 Err(e) => {
                     REFUSED.fetch_add(1, Ordering::Relaxed);
-                    refused_why(&alloc::format!("{e:?}")).fetch_add(1, Ordering::Relaxed);
+                    refused_why(&e).fetch_add(1, Ordering::Relaxed);
                     return None;
                 }
             };
+            let m = &mut self.members[i].live;
             m.heads.insert(kk.hash, (r.body().seq, r.id()));
             self.signed.insert(r.id());
             self.refresh(i);
@@ -1141,6 +1159,22 @@ impl World {
     /// The honest root's checkpoint on member by, through the core's
     /// writer: taken into its set like any record it signs. None when the
     /// writer refuses.
+    /// The root's checkpoint that a refusal "checkpoint first" on member i
+    /// asks for: the root writes it, and an admin's member takes it.
+    fn checkpoint_for(&mut self, i: usize, key_name: &str) {
+        if self.root_key(i).as_deref() == Some(key_name) {
+            let _ = self.write_checkpoint(i, key_name);
+            return;
+        }
+        let root = (0..self.members.len())
+            .filter(|j| self.members[*j].on && !self.is_gone(*j))
+            .find_map(|j| self.root_key(j).map(|n| (j, n)));
+        let Some((j, name)) = root else { return };
+        let Some(c) = self.write_checkpoint(j, &name) else { return };
+        let _ = self.members[i].live.set.insert(c);
+        self.refresh(i);
+    }
+
     fn write_checkpoint(&mut self, by: usize, key: &str) -> Option<Record> {
         let now = self.now(by);
         let m = &self.members[by].live;
@@ -1725,6 +1759,28 @@ impl World {
                 }
             }
         }
+        // Two changes of root at one seq: no member may live on either
+        // head unhalted while another lives on the other. Each list may
+        // leave the other side out, so the proof needs a road of its own.
+        for (x, (sa, a)) in self.heads.iter().enumerate() {
+            for (sb, b) in self.heads.iter().skip(x + 1) {
+                if sa != sb {
+                    continue;
+                }
+                let live_on = |h: &RecordId| {
+                    (0..self.members.len()).find(|j| {
+                        let st = &self.members[*j].live.state;
+                        self.admitted[*j] && !self.is_gone(*j) && !st.halted() && st.chain().contains(h)
+                    })
+                };
+                if let (Some(i), Some(j)) = (live_on(a), live_on(b)) {
+                    RECOVERY_FORK_LIVE.fetch_add(1, Ordering::Relaxed);
+                    return Err(format!(
+                        "both heads of a recovery fork at seq {sa} live, nobody halted (m{i} on one, m{j} on the other)"
+                    ));
+                }
+            }
+        }
         let mut count: BTreeMap<[u8; 32], usize> = BTreeMap::new();
         // The members that count themselves in: a removed member that took
         // its removal does not.
@@ -2084,6 +2140,10 @@ static REFUSED_GROUP_FULL: AtomicUsize = AtomicUsize::new(0);
 static REFUSED_STOPPED: AtomicUsize = AtomicUsize::new(0);
 static REFUSED_TWO_HISTORIES: AtomicUsize = AtomicUsize::new(0);
 static REFUSED_OTHER: AtomicUsize = AtomicUsize::new(0);
+/// Runs where both heads of a recovery fork lived and nobody halted.
+static RECOVERY_FORK_LIVE: AtomicUsize = AtomicUsize::new(0);
+/// Ordinary records refused at the first try with "checkpoint first".
+static REFUSED_FIRST: AtomicUsize = AtomicUsize::new(0);
 /// Runs with a twin of an admin key after its removal (SIM_ADMIN_TWIN).
 static ADMIN_TWINS: AtomicUsize = AtomicUsize::new(0);
 
@@ -2104,7 +2164,9 @@ fn refused_why(e: &str) -> &'static AtomicUsize {
     }
 }
 
-const COUNTERS: [&AtomicUsize; 22] = [
+const COUNTERS: [&AtomicUsize; 24] = [
+    &RECOVERY_FORK_LIVE,
+    &REFUSED_FIRST,
     &ADMIN_TWINS,
     &REFUSED_CEILING,
     &REFUSED_NO_ROOM,
@@ -2207,7 +2269,8 @@ fn groups_under_faults_agree() {
         LEFT_OUT.load(Ordering::Relaxed)
     );
     std::eprintln!(
-        "sim refusals: {} past the key's ceiling (checkpoint first), {} a key without a room, {} the group's records full, {} a stopped group, {} a key with two histories, {} other; {} runs with an admin key's twin after its removal",
+        "sim refusals: {} first tries past the key's ceiling (then checkpoint and retry); standing: {} past the key's ceiling, {} a key without a room, {} the group's records full, {} a stopped group, {} a key with two histories, {} other; {} runs with an admin key's twin after its removal",
+        REFUSED_FIRST.load(Ordering::Relaxed),
         REFUSED_CEILING.load(Ordering::Relaxed),
         REFUSED_NO_ROOM.load(Ordering::Relaxed),
         REFUSED_GROUP_FULL.load(Ordering::Relaxed),
