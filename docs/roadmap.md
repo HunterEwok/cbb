@@ -145,9 +145,9 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
        canonical form that refuses unknown fields;
     2. the servers check only server credentials (section 18) and read no records; both stay
        open to every group;
-    3. one rules core, `cbb_core`, for the phones (through Swift and Kotlin bindings), the Rust
-       `cbb` and the Go service (natively on Linux, as WebAssembly elsewhere), which keeps
-       its own rules only as a test oracle;
+    3. one rules core, `cbb_core`, for the phones (through Swift and Kotlin bindings) and the
+       Rust service `cbb`; the Go programs (`cbb-helper`, `cbb-forward`) keep their own rules,
+       held to the core's by the interop vectors and the differential run (D-93);
     4. no CA keys between devices, and a Welcome without one;
     5. features instead of versions in the hello;
     6. one form for each thing: one framing, one fingerprint, one encoding of bytes;
@@ -170,6 +170,10 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
 
 ### Next
 
+- **70.** **Planned for 0.6.** The core and the format before the freeze (D-92): one binary
+    format, new record rules, members without certificates, content and keys, the session
+    in the core and the small device. Six waves, each with its own test of being done; the
+    format is frozen only after the last. See "The core and the format in 0.6" below.
 - **10.** **Console helper and auto-paste**: the double press that injects the member's own text
     on the text console (design.md, "3. Console helper"), and Shift+Insert after a copy from
     a phone through the uinput helper (design.md, "Auto-paste"). The helpers themselves are
@@ -1177,6 +1181,64 @@ where root is at hand and nothing of ours runs as root for it later:
 core's checks of the command; the Go service, its control operation and the installers;
 `cbb` on small devices; the phone kits and the apps' screens; then the guide (sync away from home) and
 its translations, and design.md in place of this section.
+
+## The core and the format in 0.6
+
+The format of the records and of the wire is frozen in 0.6 (D-92), and the groups of 0.5 are
+set up again, so everything that touches the core and the protocol is done before the freeze,
+in this order. The third and the fourth waves run side by side. The waves that change the
+format land in `main` together, from one shared branch, since between them nothing works.
+
+1. **At once, without the format.** The firmware's size measured in CI, part by part; a
+   member does not write a copy older than its own saved clock mark; secrets are erased
+   from memory; an outside test vector for X-Wing; a guard against a test build in a
+   release; the keys of a Windows PC in its TPM; a shorter life for the update channel's
+   file.
+2. **The format (D-100).** Strict CBOR for the messages and the records, one reader in the
+   core, a command of `cbb` that prints any of them as text; a number for the algorithm of
+   every key and signature; room for a second signature; frames padded to a grid. Done when
+   the vectors pass in Rust, Go, Swift and Kotlin and fuzzing finds one form for each value.
+3. **The records (D-101, D-102, D-103, D-104, D-113, D-114, D-115).** A record is its signed body and nothing
+   else, kept by the hash of that body and checked before it is kept. A device is its key.
+   An admin admits a device and never widens its rights. What a member keeps depends on the
+   set of records alone, not on the order they came in. No rule reads a clock: the wait of a
+   takeover is the time a device itself held the claim. Fields in two zones, so that a later
+   version adds to the format and an older one still applies every removal. A device's
+   rights as a list: what it reads and what it makes. Only the format's ceilings bound a
+   set, and a claim pays for the space of its new root. The apps write one of three sets
+   of an admin's powers, kept in the core. Done when any order of one set of records gives
+   one state, in a property test and in the model.
+4. **Members without certificates (D-105, D-106).** TLS proves the key, the key's hash is
+   the device, and the records say whether it is in the group; certificates, their chains,
+   their renewal and the admins' CAs go. No server name is sent. A forwarder and a relay
+   take a device by its period's credentials only. The post-quantum key exchange in the
+   core's TLS; the tunnel's key from the connection to its hub; one invitation for home and
+   away, admitted by matching the key (D-109).
+5. **Content, keys and commands (D-108).** The content's envelope of a type, flags and
+   data, so that a later type passes through an older device; a secret of any type; the
+   key a device's copies are sealed to in the device's own signed statement, changed every
+   week; one interface to a key store; commands as the only way to run anything on a
+   device; a guarded device takes each one only with its own one-time number and a
+   person's consent (D-112).
+6. **The session in the core and the small device (D-107, D-112).** The member's session without
+   I/O moves from the service into the core, so the service, the phones and a board run one
+   code. A small device keeps the root's key and a short grant in place of the records:
+   an ordinary one is admitted by any admin and obeys the admins, a guarded one is the
+   root's alone. Done when a real board in a real group took a command and a copy, sent its
+   state and took a new grant, and its size is a threshold in CI. About 512 KB for the part
+   of cbb is the aim, not a limit.
+7. **The freeze.** [protocol.md](protocol.md) written again from the core, with no
+   mechanism left that nothing uses; two audit passes in a row without a new finding of
+   high weight; a test stand where release N works with N-1.
+
+After 0.6, with no change to the core or the protocol: a locked build of the board's
+firmware, half of the copies' key in the Secure Enclave, a board with a hardware key, one
+place in the code that picks the way to a peer, the second signature switched on, the apps
+for several groups.
+
+Not planned: an end of life for records or rights (no rule reads a clock); rights across
+groups (a small shared group does it, D-111); a lighter channel of its own for small devices
+(D-107); a new kind of admin (D-102).
 
 ## Future research (not planned)
 

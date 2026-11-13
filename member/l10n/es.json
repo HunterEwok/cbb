@@ -77,6 +77,8 @@
  "{} is no longer muted: its copies reach the group again.": "{} ya no está silenciado: sus copias vuelven a llegar al grupo.",
  "{} is removed.": "{} se ha quitado.",
  "{} ran {}.": "{} ejecutó {}.",
+ "Confirm a change to your CBB group.": "Confirma un cambio en tu grupo de CBB.",
+ "Confirm an important change to your CBB group: it cannot be undone.": "Confirma un cambio importante en tu grupo de CBB: no se puede deshacer.",
  "This device is in no group.": "Este dispositivo no está en ningún grupo.",
  "Start a group or join one.": "Crea un grupo o únete a uno.",
  "This device was removed from the group.": "Este dispositivo se quitó del grupo.",

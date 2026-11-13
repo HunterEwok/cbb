@@ -24,8 +24,8 @@ here that replaces one there are in brackets, such as [C1].
 
 | Kind | What | Used for |
 |---|---|---|
-| **real** | the bench's devices (testbench.md, section 3): the Linux desktop, the Windows PC, the Mac, the lite board, the away computer, the router as a device under test, the relay server, the phones, the watches, a TV | everything a user does on a real system: clipboards, desktops, sessions, installers, sleep, the apps |
-| **fleet** | containers on the controller, each a member with its own network namespace and state volume: up to 32 computers and 8 small devices, a FreeBSD and an OpenWrt virtual machine in QEMU, and "phones" played by the kits' interop programs (`cbb-interop` in Go, the Kotlin kit on the JVM, the Swift kit on the Mac) | combinations that need many devices, groups made and thrown away by the hundred, faults that must not touch the real devices (netem, port blocks, a full disk, a clock far off, a killed process), several groups on one network |
+| **real** | the bench's devices (testbench.md, section 3): the Linux desktop, the Windows PC, the Mac, the small board, the away computer, the router as a device under test, the relay server, the phones, the watches, a TV | everything a user does on a real system: clipboards, desktops, sessions, installers, sleep, the apps |
+| **fleet** | containers on the controller, each a member with its own network namespace and state volume: up to 32 members with cbb-helper and 8 without, a FreeBSD and an OpenWrt virtual machine in QEMU, and "phones" played by the kits' interop programs (`cbb-interop` in Go, the Kotlin kit on the JVM, the Swift kit on the Mac) | combinations that need many devices, groups made and thrown away by the hundred, faults that must not touch the real devices (netem, port blocks, a full disk, a clock far off, a killed process), several groups on one network |
 | **time** | a test build (`cargo build --release --bin cbb --features benchtime`, never released; `cbb version` says so) in which the long times run 100000 times faster: certificate lives and renewal thresholds (a member certificate lasts about 10 minutes), the 12 h renewal timer (every 5 s), server-credential periods (about 30 s) and the hub key's handover; and `CBB_TEST_CLOCK` (a duration such as `3h`, or an RFC 3339 time; or a file named by `CBB_TEST_CLOCK_FILE`, read when the service starts), which moves one member's wall clock for its service, its hybrid clock, its hellos and its certificate checks. `CBB_TEST_SCALE` sets another scale, such as 1 for cases that only move a clock by hours or days. Short times (pairing windows, invitations, secrets' 60 s, the media cache, replay caches) keep their length and are waited out | expiry, renewal and every rule that waits for time, in minutes |
 | **feed** | a release feed on the controller signed with the bench's own test keys, in the format of the real one (protocol.md, section 16) | updates, rollbacks, refused downgrades, tampered and expired manifests, without the real release keys |
 | **ui** | UI Automator over adb (Android phone, Wear OS, Android TV), XCUITest (the iPhone app on a simulator and a real iPhone, the Mac app), WebDriver for the tray app | the apps' screens, buttons and notifications |
@@ -43,12 +43,12 @@ wrong". `tools/bench/errshow.go` does it for the command line.
 ### 0.3 Combinations
 
 Where a case says **every pair** it runs from each kind of sender to each kind of receiver
-the bench has: Linux on Wayland, Linux on X11, Linux without a desktop, Windows, macOS, the
-small device, a container, the router, FreeBSD, the Android app, the iPhone app, Android TV; and over each path: one LAN, across subnets (`-peer`), the hub's
+the bench has: Linux on Wayland, Linux on X11, Linux without a desktop, Windows, macOS, cbb
+without its helper, a container, the router, FreeBSD, the Android app, the iPhone app, Android TV; and over each path: one LAN, across subnets (`-peer`), the hub's
 tunnel directly, through the forwarder, with AmneziaWG, over VLESS, through the blind relay.
 
 Where it says **every role**: the root (a computer, a phone), an admin (a computer with a
-file key, a computer with a TPM key, a phone, a watch), a member, a small device,
+file key, a computer with a TPM key, a phone, a watch), a member, a member without cbb-helper,
 a frozen admin, a removed device.
 
 ### 0.4 The columns
@@ -75,13 +75,13 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | I10 | A new build that never becomes healthy is rolled back and listed as failed; the next check skips it | feed | |
 | I11 | Each install method: Homebrew and winget refresh the service's copy; Docker, apk, pkg and FreeBSD print their own command and change nothing | real, fleet | |
 | I12 | Automatic updates: the installers' question, the timer, `cbb update -auto on/off`; in a group one member fetches the signed manifest and archives and the others take them from it | feed, time | |
-| I13 | the small device updates itself on Linux; the Nano updates over the air from a member and rolls back after a bad image | feed, helper | Nano |
+| I13 | cbb without its helper updates itself on Linux; the Nano updates over the air from a member and rolls back after a bad image | feed, helper | Nano |
 | I14 | Android updates its sideloaded APK: the signing certificate is checked first, the update needs no tap, a wrong certificate is refused | ui | Google account |
 | I15 | The Mac app updates through Sparkle; the tray app and `cbb status` show that an update is ready | ui | Apple account |
 | I16 | The service manager restarts a killed service on each system and in the container [F1] | real, fleet | |
 | I17 | Reboot each device: it rejoins with no action beyond booting; Windows syncs before anyone signs in [F2] | real, person | smart plug |
 | I18 | Sleep and wake (macOS, the Windows VM, the Linux desktop through `rtcwake`): in sync within 30 s, the clock column right [F3] | real, helper | |
-| I19 | The service starts with no network and finds the group when it comes; a device without a real-time clock (the lite board, the router) waits for NTP before it checks certificates | fleet, real | |
+| I19 | The service starts with no network and finds the group when it comes; a device without a real-time clock (the small board, the router) waits for NTP before it checks certificates | fleet, real | |
 | I20 | The systemd units' hardening holds (`systemd-analyze security` at or below the recorded score); the TPM reached through `/dev/tpmrm0` only | real, fleet | |
 | I21 | Logs: rotated at 1 MiB on Windows and macOS, journald on Linux, syslog on the router; the agent's own log | real | |
 | I22 | The release: every archive's `SHA256SUMS`, attestation and signed manifest agree; the Docker image's digest matches the manifest | feed | |
@@ -97,7 +97,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 
 | ID | Case | How | Needs |
 |---|---|---|---|
-| G1 | `cbb new` on Linux, Windows, macOS, the router, FreeBSD; the small device and a container refuse it; a container with `CBB_KEYS_IN_FILE=yes` may [P35] | real, fleet | |
+| G1 | `cbb new` on Linux, Windows, macOS, the router, FreeBSD; a container refuses it, and a container with `CBB_KEYS_IN_FILE=yes` may; cbb without its helper makes one with its keys in files [P35] | real, fleet | |
 | G2 | A phone app makes the group: the root key in the Secure Enclave or the Keystore, made with an attestation challenge; the first-launch card | ui | iPhone, Android phone |
 | G3 | Each kind of device joins by code to each kind of admitter (root computer, admin computer, root phone, admin phone) [L1] | real, fleet, ui | |
 | G4 | Join paths: found by mDNS; by address; across subnets; through an SSH forward to 127.0.0.1; through the user's own VPN with private addresses; a 100.64/10 address refused unless `CBB_HOME_CGNAT=1` | fleet, real | |
@@ -106,7 +106,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | G7 | Two windows announced at once: the joiner asks for an address | fleet | |
 | G8 | A joiner that only pretends to pair gets one guess; a relay between two TLS sessions fails (CPace's channel binding) | fleet, helper | |
 | G9 | `cbb pair` on a member that is no admin names the devices that admit; on a device in a group it keeps its group | real | |
-| G10 | A computer joins a phone's group by QR code (the phone dials it; fingerprint and code checked); the small device and the Nano the same; a QR code of another session is refused | ui, fleet | |
+| G10 | A computer joins a phone's group by QR code (the phone dials it; fingerprint and code checked); cbb without its helper and the Nano the same; a QR code of another session is refused | ui, fleet | |
 | G11 | A second phone joins from its Start screen and becomes an admin; an iPad joins as a phone | ui | iPhone, iPad |
 | G12 | Remote invitation: `cbb invite` on the hub, `cbb pair -invite` away; both show the same fingerprint; `yes` admits; the guest tunnel reaches only the pairing [P11] | real | |
 | G13 | Invitation refused: answered `no`; used twice; after its time (1 h by default, `-for 24h`, more than 24 h refused); the hub off; three failed attempts; cancelled; a file of another group; nothing left on the hub after each [P21, S7] | real, time | |
@@ -119,15 +119,15 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 
 | ID | Case | How | Needs |
 |---|---|---|---|
-| G20 | `cbb admin NAME` on the root: refused for a file key without `-allow-file-key`, allowed for a TPM key; the target must be connected; refused for a container and a small device [L5] | real, fleet | |
+| G20 | `cbb admin NAME` on the root: refused for a file key without `-allow-file-key`, allowed for a TPM key; the target must be connected; refused for a container, and for cbb without its helper (keys in files) without `-allow-file-key` [L5] | real, fleet | |
 | G21 | An admin computer admits, renews, removes ordinary devices; it cannot make admins or remove the root or another admin [L5] | real, fleet | |
 | G22 | `cbb freeze` from any admin; a frozen admin's records, commands, pastes and connections refused everywhere; `cbb unfreeze` on the root; a mutual freeze keeps both frozen; a frozen admin cannot take over; the root and admin phones cannot be frozen | fleet | |
-| G23 | Remove by name and by device ID: a member, an admin (the devices it admitted stay), a phone (both keys), a watch; the removed device's connections close at once and every member, the small device and the hub refuse it [L3, L7] | real, fleet | |
+| G23 | Remove by name and by device ID: a member, an admin (the devices it admitted stay), a phone (both keys), a watch; the removed device's connections close at once and every member, with and without its helper, and the hub refuse it [L3, L7] | real, fleet | |
 | G25 | A device that was off during a removal gets the record from the first member it meets; a removed device that was off reaches nobody | fleet | |
 | G26 | `cbb takeover` when the root computer is lost; the new root admits and makes admins; the old root comes back and is refused [L6] | real, fleet | |
 | G27 | A takeover undone: the old root is still there and removes the admin that took over, before or after it hears of the takeover (its status names that admin); the takeover stops counting | fleet | |
 | G28 | A phone's group: an admin phone takes over from a lost root phone (`root` records); no device pairs again; members that were off follow | ui, fleet | |
-| G29 | The records `cbb upgrade` gave a group made before 0.4 (version 1) are refused, in Go and in the Rust core the phones and the small device use: legacy groups and `cbb upgrade` went with records version 2, and such a group is set up again [L9] | fleet | |
+| G29 | The records `cbb upgrade` gave a group made before 0.4 (version 1) are refused, in Go and in the Rust core the phones and cbb use: legacy groups and `cbb upgrade` went with records version 2, and such a group is set up again [L9] | fleet | |
 | G30 | `cbb rename` on an admin for any device, the root and itself; every device and app shows the new name; 1 and 64 characters taken, 0 and 65 refused, Unicode names | real, fleet | |
 | G31 | Records converge in any order: 200 records delivered to 10 members in random orders give one devices list | fleet | |
 | G32 | Record limits: 4096 records, 1024 per signer; an admin that floods records cannot push out the root's removal | fleet | |
@@ -152,7 +152,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | G41 | Every pair of joiner kind, admitter kind and path joins, syncs both ways, is removed and is then refused | fleet, real | |
 | G42 | Leave and come back: a device removed, reset and joined again under the same name gets a new device ID, and the old one stays removed | real, fleet | |
 | G43 | Groups side by side: two and ten groups on one network; no text, record or device crosses; neither pairs into the other without a code [S13] | fleet | |
-| G44 | A new device shows a code and a computer of the group types it: the device that waits announces itself by mDNS (TXT `j=1` and its fingerprint); `cbb pair -qr` with the six digits finds it and admits it; the small device, the iPhone, the Android phone and the Aurora phone announce themselves while they wait; a device of another fingerprint or a wrong code is refused | fleet, ui | |
+| G44 | A new device shows a code and a computer of the group types it: the device that waits announces itself by mDNS (TXT `j=1` and its fingerprint); `cbb pair -qr` with the six digits finds it and admits it; cbb without its helper, the iPhone, the Android phone and the Aurora phone announce themselves while they wait; a device of another fingerprint or a wrong code is refused | fleet, ui | |
 
 ## 3. Certificates and keys (K)
 
@@ -169,13 +169,13 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | K10 | Evidence: a phone's attestation (Android TEE and StrongBox, App Attest), TPM EK chains checked offline, the Intel and AMD fetch only at level 1; a bad chain refused; the revocation list marks a revoked chain `hardware` with the reason | fleet, ui | |
 | K11 | Old groups whose root or admins hold file keys are warned and offered a move to a proven root | fleet | |
 | K13 | The TPM evidence flow: AK made under the EK, credential activation, the result shown by `cbb status`; Windows through the platform crypto provider | real, helper | |
-| K14 | Chains through an admin CA: a device certified by an admin presents the admin CA in TLS; every member, the small device and both kits accept it, and still accept it once that admin is removed, since the removal keeps the devices it admitted | fleet | |
+| K14 | Chains through an admin CA: a device certified by an admin presents the admin CA in TLS; every member, with and without its helper, and both kits accept it, and still accept it once that admin is removed, since the removal keeps the devices it admitted | fleet | |
 
 ## 4. Discovery and connections (D)
 
 | ID | Case | How | Needs |
 |---|---|---|---|
-| D1 | mDNS: every computer and the small device publish and browse; avahi, systemd-resolved, mDNSResponder and the Windows DNS client keep working beside it; another group's records are ignored | real, fleet | |
+| D1 | mDNS: every member, with and without its helper, publishes and browses; avahi, systemd-resolved, mDNSResponder and the Windows DNS client keep working beside it; another group's records are ignored | real, fleet | |
 | D2 | Who dials: of two computers the lower ID dials; the other dials after 30 s when that is blocked; one connection per pair stays [P4] | fleet, real | |
 | D3 | Members that dial dial those that publish `r=listen` at once, whatever their device IDs; of two that dial, the lower device ID dials and the other does after 30 s; phones dial everyone; a phone that is the hub listens while its app is open | fleet, ui | |
 | D6 | Known networks: a member is quiet on a network it does not know; it learns one by making or joining a group, a pairing window or a member connection; `cbb status` names quiet networks; `sudo cbb network` after a new router | fleet | |
@@ -246,7 +246,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 
 | ID | Case | How | Needs |
 |---|---|---|---|
-| M1 | Sync on and off on every kind of member (Linux with and without a desktop, Windows, macOS, lite, container, router, phones, TV): with sync on both directions cross, with sync off neither [P34] | real, fleet, ui | |
+| M1 | Sync on and off on every kind of member (Linux with and without a desktop, Windows, macOS, without cbb-helper, container, router, phones, TV): with sync on both directions cross, with sync off neither [P34] | real, fleet, ui | |
 | M2 | Deliberate actions (`cbb copy`, a phone's button, remote paste) work with sync on and off | real, ui | |
 | M3 | `cbb paste` with sync off prints the group's text | real | |
 | M4 | Sync off survives a restart, reboot and update; the hello reports it; every devices list shows it | real, fleet | |
@@ -264,7 +264,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | O1 | Images: a PNG screenshot, a 5 MB JPEG, a TIFF on a Mac (sent as PNG), HEIC from an iPhone (sent as JPEG or PNG), between every pair of desktops and phones; JPEG turned into PNG for a receiver that asks [P2] | real, ui | |
 | O2 | Files and folders: a folder of 100 files with subfolders and an empty file; 10 000 entries; 10 001 refused; links and special files left out; names made safe (`..`, `/`, control characters, `CON`, `notes.`, 255 bytes); nothing executable; quarantine on macOS, Mark of the Web on Windows [P2] | real | |
 | O3 | `cbb copy FILE...`, `-text`, `-type png/jpeg/html`; `cbb paste -o DIR`: never replaces a file, waits for a copy still arriving, in `own` saves the group's copy | real | |
-| O4 | Formatted text: HTML from a browser and an office program arrives as HTML where a desktop takes it, as text on phones, the small device and older connectors; HTML over 8 MiB or text over 256 KiB goes as text alone; never with a secret | real, helper | |
+| O4 | Formatted text: HTML from a browser and an office program arrives as HTML where a desktop takes it, as text on phones, cbb without its helper and older connectors; HTML over 8 MiB or text over 256 KiB goes as text alone; never with a secret | real, helper | |
 | O5 | Limits: `max-copy` from 1 MiB to 1 GiB, `max-copy-away` up to `max-copy`, others refused; a copy over a receiver's limit is not fetched and is said once in `cbb status` and the log; the sender's own limit [P2] | real | |
 | O6 | Text-only devices (a small device's `cbb watch` and `cbb paste`, the Nano, the ZX Next) take the text that goes with a copy and keep their last text when none does; the file stays in the service's content cache (O9), never elsewhere | real, fleet | |
 | O7 | Transfer faults: a fetch cut in the middle resumes from its offset; the sender restarts mid-transfer; a newer copy stops the fetch; a corrupted chunk (hash mismatch) is refused and fetched again; a peer that stops answering is cancelled after 15 s | fleet | |
@@ -286,7 +286,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | T1 | Off by default on every target; `paste-receive on`, `on -enter`, `on -console`, `off`; only the device's own user turns it on | real, fleet | |
 | T2 | Linux targets paste and type: X11 (XTEST), wlroots' virtual keyboard, GNOME and KDE through the RemoteDesktop portal (the first paste opens the dialog and is refused, after consent it works, the restore token survives a sign-out), the uinput helper, tmux (the user's and root's), the text console helper | real, helper | |
 | T3 | Windows (Ctrl+V and SendInput's Unicode keys, an RDP session) and the Mac app (Cmd+V and Unicode key events) paste and type | real, helper | |
-| T4 | The Android accessibility target, the small device (tmux, console) and the Nano's USB keyboard paste and type | ui, helper | Nano |
+| T4 | The Android accessibility target, cbb without its helper (tmux, console) and the Nano's USB keyboard paste and type | ui, helper | Nano |
 | T5 | The text arrives exactly: Unicode, another keyboard layout active, 1 MiB pasted and 4 KiB typed, tabs and newlines; the clipboard's old text is put back after 500 ms unless the user copied meanwhile | real, helper | |
 | T6 | Refusals with the reason sent back: a locked session (logind, a screensaver, swaylock, macOS, Windows and its secure desktop), an elevated window on Windows, Secure Input on the Mac, no Accessibility permission, a Mac without the app, no tmux client attached, a login prompt on the console, Enter without `-enter`, root's console without `-console`, a newline to tmux or the console without `-enter` | real, helper | |
 | T7 | Who may send: the root, an admin computer, an admin phone; a watch may only turn it off; a member, a frozen admin and a removed admin are refused | fleet | |
@@ -311,7 +311,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 |---|---|---|---|
 | Q1 | `cbb action` lists the presets and who may run each; all off at first | real, fleet | |
 | Q2 | `enable` and `disable` with the explanation and `yes`; the polkit rule written and removed on Linux | real, helper | |
-| Q3 | Each preset on each system: lock, sleep, reboot (after a minute), shutdown, cancel-shutdown, restart the service; macOS and Windows through the agent, which needs someone signed in; the small device's reboot and restart | real, helper | |
+| Q3 | Each preset on each system: lock, sleep, reboot (after a minute), shutdown, cancel-shutdown, restart the service; macOS and Windows through the agent, which needs someone signed in; the reboot and restart of cbb without its helper | real, helper | |
 | Q4 | `-by root,phone,computer` and `-any-key`: reboot and shutdown refused to admins with file keys by default | fleet | |
 | Q5 | Own actions: `add NAME -- /full/path args` runs exactly that as the signed-in user, its exit status comes back, it is killed after 15 s; a relative path is refused; `remove` | real | |
 | Q6 | `-on DEVICE NAME` from each kind of admin, with the result back; a target where it is off says how to turn it on; a frozen or removed admin is refused | real, fleet | |
@@ -339,9 +339,9 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | W12 | The hub's key changes each credential period; the next key reaches clients 3 days ahead; a client offline across the change still connects | time | |
 | W13 | The hub down [F6], hung, rebooting: a client says the hub is unreachable and sends nothing elsewhere | real, fleet | |
 | W14 | Several hubs: the root and each admin with a hub; failover within about a minute; back within 5 min; no copy lost [P36] | real, fleet | |
-| W15 | `cbb global move` to an admin computer; refused for a small device and a container; clients follow without coming home [P37] | real, fleet | |
+| W15 | `cbb global move` to an admin computer; refused for a MIPS build (no tunnel) and a container; clients follow without coming home [P37] | real, fleet | |
 | W16 | The phone as the hub while its app is open: registering, registered, refused with the reason; "This is my home network"; clients retry every 5 s; Android keeps it in the background; moving the hub from the phone to a computer | ui | |
-| W17 | the small device as a client: plain WireGuard, then the hub obfuscated and reached with AmneziaWG (VLESS over XHTTP: `TestLiteMemberAwayXHTTP`) | real | |
+| W17 | cbb without its helper as a client: plain WireGuard, then the hub obfuscated and reached with AmneziaWG (VLESS over XHTTP: `TestAloneMemberAwayXHTTP`) | real | |
 | W18 | A client that has not met the hub since its obfuscation changed cannot reach it away until it comes home | fleet | |
 | W19 | Client isolation: from a client's tunnel nothing but the hub's member port answers; the hub opens one port [S3, S4] | real, fleet | |
 | W20 | A WireGuard key the group does not know gets no answer from the hub or the forwarder [S5] | real, fleet | |
@@ -365,7 +365,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | W40 | The servers keep nothing: no file or log line with addresses, tags, IDs, names or markers, in either mode; the units' exposure score [S18] | real | |
 | W41 | The push sender: an encrypted push reaches the iPhone and wakes it; cbb.tools stores nothing | ui, real | Apple account |
 | W42 | Phones away: the tunnel in the app's process (`RustTunnel`), the loopback port, the kits' member TLS to the hub; the Android foreground service away; the iPhone while the app runs; the devices list marks the hub, and a computer behind it shows online | ui | |
-| W44 | The ways out carry only cbb: a hostile client with a member's keys, sending everything to the hub directly and through the forwarder, reaches neither the internet nor the hub's home network nor its loopback, TCP or UDP, IPv4 or IPv6, and nothing reaches the stand-in for the internet; VLESS, the relay, the phones' hub and the small device's tunnel in unit tests (roadmap item 61) | fleet | |
+| W44 | The ways out carry only cbb: a hostile client with a member's keys, sending everything to the hub directly and through the forwarder, reaches neither the internet nor the hub's home network nor its loopback, TCP or UDP, IPv4 or IPv6, and nothing reaches the stand-in for the internet; VLESS, the relay, the phones' hub and cbb's tunnel in unit tests (roadmap item 61) | fleet | |
 | W45 | A hub on a network that lets only HTTPS through: with UDP and the forwarder's TCP port blocked, it registers inside VLESS and its client away syncs both ways | fleet | |
 | W46 | A forwarder whose VLESS runs over XHTTP behind its site's web server (`cbb forward -vless-xhttp`): with UDP and the forwarder's TCP port blocked, the hub registers through the web server and its client away syncs both ways through it; anyone else gets the site; in the time-scaled build at the real times, whose VLESS alone trusts the web server's own CA (`CBB_TEST_XHTTP_CA`) | time | |
 | W47 | `cbb update` on a client away whose hub uses VLESS asks the mirror on the forwarder's server (`cbb forward -vless-mirror`) only inside VLESS, the mirror's certificate checked on the way; as W46 | time | |
@@ -376,7 +376,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | ID | Case | How | Needs |
 |---|---|---|---|
 | U1 | `cbb status` matches the real state on every system: devices, systems, roles, root, admin and frozen marks, key store, last seen, clock skew, mode, quiet networks, dial-back warning, away state, transfers [P13] | real, fleet | |
-| U2 | `cbb version`, `help`, each command's `-h`; unknown flags and commands print the usage; the small device's help says it is the small device and a computer's command there says so | real | |
+| U2 | `cbb version`, `help`, each command's `-h`; unknown flags and commands print the usage; `cbb version` reads the same with and without the helper, and a command that needs the helper says so where it is missing | real | |
 | U3 | Local access: a user outside the `cbb` group is refused with the group named; a member of it cannot use the admin socket; the Windows socket's access list [S11] | real | |
 | U4 | Errors as 0.2 says for every refusal of this catalogue, in both modes; a development build shows details by default | real, fleet | |
 | U5 | The service stopped: every command says it is not running and how to start it, the cause only with details on [F14] | real | |
@@ -387,7 +387,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | U10 | Logs carry no texts, codes or keys, in either mode [S15] | real | |
 | U11 | The control socket's protocol: framing errors, each operation, the watcher protocol (a paste-only watch as the Mac app's), a second agent in one session exits | fleet | |
 | U12 | Error details in the apps: off in release builds, on in debug builds; seven taps on the version, the launch argument `ShowErrorDetails` and the tray and Mac apps' switch show the cause under each message | ui | |
-| U13 | the small device's `-state`, `-socket`, `-debug`, `CBB_STATE`, `CBB_SOCKET`; `CBB_SOCKET` for a second instance of a computer | real, fleet | |
+| U13 | cbb's `-state`, `-socket`, `-debug`, `CBB_STATE`, `CBB_SOCKET`; `CBB_SOCKET` for a second instance | real, fleet | |
 | U14 | Every control of the apps has a name a screen reader reads (VoiceOver, TalkBack, Narrator, Orca), in each of the eight languages, and is at least 48 dp to touch on Android | ui | |
 | U15 | Text keeps WCAG AA contrast: every palette of the design tokens, the tray window's every view in each colour and appearance, Xcode's audit on the iPhone and the Mac, the Android app's text colour in every palette | ui | |
 | U16 | Large text: the tray window at twice the size, Android at font scale 2, the iPhone at the largest accessibility size; nothing cut off | ui | |
@@ -402,13 +402,13 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | H2 | The Linux agent: one per session, started again after an update in every session, reconnects when the display goes, ends with the session | real | |
 | H3 | tmux: copy mode goes to the group; the paste key pastes `-terminal` text [P8] | real | |
 | H4 | The text console: the login snippet starts tmux; the console helper [P8] | real | |
-| H5 | the small device's options: `-peer`, `-no-mdns`, `-no-listen`, `-addr`, `-name`, `-port` [P5] | real | |
+| H5 | The service's options on a small device: `-peer`, `-no-mdns`, `-no-listen`, `-addr`, `-name`, `-port` [P5] | real | |
 | H6 | A container: locked down, restarted, recreated, an admin only by choice [P35] | real, fleet | |
 | H7 | Windows: before sign-in, fast user switching, lock, sign-out, RDP, ARM and x64, another port [P9, P16] | real, helper | |
 | H8 | macOS: Local Network refused and granted, the application firewall on and "block all", Universal Clipboard, the pasteboard privacy alert, Homebrew [P4, P7, P15, P23, P26] | real, helper, person | |
 | H9 | OpenWrt: procd, UCI, the NTP wait, `keep.d` across a sysupgrade, fw4 rules that live and die with the service, `GOMEMLIMIT` | fleet, real | |
 | H10 | FreeBSD and OPNsense: rc.d, the pf anchor and ipfw, the desktop connector under Xvfb, the mdns-repeater conflict; pfSense's printed rules | fleet | |
-| H11 | the small device on the Nano ESP32: joins by the phone, syncs at home, settings in flash, reset; the QEMU self-test | helper, fleet | Nano |
+| H11 | cbb on the Nano ESP32: joins by the phone, syncs at home, settings in flash, reset; the QEMU self-test | helper, fleet | Nano |
 | H12 | The ZX Spectrum Next's dot command over the UART | person | ZX Next |
 | H13 | Android TV: the leanback launcher, the D-pad, joining by the QR code on the TV | ui | TV |
 | H14 | The Steam Deck's Game Mode and gamescope [P17] | person | |
@@ -463,7 +463,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 | S18 | The servers keep nothing | real | |
 | S20 | Fuzzed member, pairing and control frames for an hour: no crash, no leak | fleet | |
 | S21 | A stranger on the LAN learns no names and no tag beyond the TXT `g=` | fleet | |
-| S22 | Signed releases: the envelope checks against the shared vectors on the devices themselves (Go, the small device, both kits) | fleet, ui | |
+| S22 | Signed releases: the envelope checks against the shared vectors on the devices themselves (Go, cbb, both kits) | fleet, ui | |
 | S23 | Commands passed on by a member cannot be changed or forged by it | fleet | |
 | S24 | A stolen admin computer (its state copied to a fresh container): it acts until frozen; after the freeze nothing it signs counts | fleet | |
 | S25 | Copies sealed end to end: through a hub that only passes them on, text and a 20 MB file arrive whole both ways, and neither the hub's memory nor its disk ever holds them in the clear, while a member that reads them does; that hub takes no paste | fleet | |
@@ -475,7 +475,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
 |---|---|---|---|
 | E1 | Latency: 200 copies from different members; p50 and p95 at each receiver (p95 at most 2 s at home, 5 s through the tunnel) | real, fleet | |
 | E2 | Throughput: every member copies every 100 ms for 3 minutes; all end on one text; no restarts; memory and descriptors back to where they started | real, fleet | |
-| E3 | Many members: 32 full and 8 small devices in one group; all join, a copy reaches all within 5 s, half are removed | fleet | |
+| E3 | Many members: 32 members with cbb-helper and 8 without in one group; all join, a copy reaches all within 5 s, half are removed | fleet | |
 | E4 | Big transfers at once: three members send 50 MB files while texts flow; all whole (SHA-256), texts on time | real, fleet | |
 | E5 | Many clients on one member: 100 `cbb status` and `paste` at once; 20 joiners with wrong codes at once | fleet | |
 | E6 | The hub under load: 16 clients away, each copying; the hub's CPU and memory on the router and a small board | fleet, real | |
@@ -493,7 +493,7 @@ account (`Apple account`, `Google account`, `signing`), or a device (`TV`, `Appl
   two virtual machines, a second controller (any x86 mini PC) takes the fleet.
 - The Mac runs the iPhone simulator and XCUITest, the Android emulator (phone, Wear OS, TV)
   and the Swift phone.
-- A smart plug for the lite board's power (I17); `rtcwake` on the Linux desktop.
+- A smart plug for the small board's power (I17); `rtcwake` on the Linux desktop.
 - The router as a device under test, with a timer that takes back every change.
 - A test signing key and feed on the controller.
 - Real phones and watches for what the simulators cannot do (Secure Enclave, Face ID,

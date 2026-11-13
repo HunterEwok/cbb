@@ -45,3 +45,114 @@ member/src/window.rs: replace match guard n > 0 with false in refuse
 member/src/window.rs: replace > with == in refuse
 member/src/window.rs: replace > with < in refuse
 member/src/window.rs: replace > with >= in refuse
+
+# Not yet caught: the v2 records' rules and strict form (nightly mutants-rust,
+# main of 2026-11-11), which the 0.6 core replaces; the baseline, so that no new
+# survivor slips in while each of these gets a test or a reason.
+core/src/authority.rs: delete ! in Epoch<'a>::do_label
+core/src/authority.rs: delete ! in Epoch<'a>::root_frozen
+core/src/authority.rs: delete ! in Epoch<'a>::root_frozen
+core/src/authority.rs: delete field hardware from struct Device expression in Epoch<'a>::device
+core/src/authority.rs: delete field proof from struct Device expression in Epoch<'a>::device
+core/src/authority.rs: delete match arm None in Epoch<'a>::decide_claims
+core/src/authority.rs: delete match arm TYPE_COPIES in Body::check
+core/src/authority.rs: delete match arm TYPE_HANDOVER in Body::check
+core/src/authority.rs: replace != with == in Epoch<'a>::newer_hubs
+core/src/authority.rs: replace && with || in Epoch<'a>::do_label
+core/src/authority.rs: replace && with || in Epoch<'a>::do_label
+core/src/authority.rs: replace && with || in Epoch<'a>::permitted
+core/src/authority.rs: replace && with || in Epoch<'a>::root_frozen
+core/src/authority.rs: replace && with || in Epoch<'a>::root_frozen
+core/src/authority.rs: replace && with || in Epoch<'a>::root_frozen
+core/src/authority.rs: replace && with || in Evaluation::group_roots
+core/src/authority.rs: replace && with || in Evaluation::limit
+core/src/authority.rs: replace && with || in Evaluation::seqs
+core/src/authority.rs: replace && with || in Evaluation::seqs
+core/src/authority.rs: replace && with || in evaluate_seqs
+core/src/authority.rs: replace && with || in evaluate_seqs
+core/src/authority.rs: replace * with +
+core/src/authority.rs: replace * with +
+core/src/authority.rs: replace * with /
+core/src/authority.rs: replace * with /
+core/src/authority.rs: replace < with <= in Epoch<'a>::newer_hubs
+core/src/authority.rs: replace < with <= in Evaluation::fail
+core/src/authority.rs: replace < with <= in Evaluation::limit
+core/src/authority.rs: replace < with <= in evaluate_seqs
+core/src/authority.rs: replace < with == in Epoch<'a>::newer_hubs
+core/src/authority.rs: replace < with == in Evaluation::fail
+core/src/authority.rs: replace < with == in evaluate_seqs
+core/src/authority.rs: replace < with > in Epoch<'a>::newer_hubs
+core/src/authority.rs: replace < with > in Evaluation::fail
+core/src/authority.rs: replace < with > in evaluate_seqs
+core/src/authority.rs: replace <impl core::fmt::Debug for Hash>::fmt -> core::fmt::Result with Ok(Default::default())
+core/src/authority.rs: replace == with != in Epoch<'a>::do_label
+core/src/authority.rs: replace == with != in Epoch<'a>::do_label
+core/src/authority.rs: replace == with != in Epoch<'a>::removals
+core/src/authority.rs: replace == with != in Epoch<'a>::root_frozen
+core/src/authority.rs: replace == with != in Epoch<'a>::thawed_by_root
+core/src/authority.rs: replace == with != in Evaluation::limit
+core/src/authority.rs: replace == with != in SigCache::is_empty
+core/src/authority.rs: replace == with != in evaluate_seqs
+core/src/authority.rs: replace == with != in evaluate_seqs
+core/src/authority.rs: replace > with < in Epoch<'a>::newer_hubs
+core/src/authority.rs: replace > with < in Epoch<'a>::root_device
+core/src/authority.rs: replace > with < in evaluate_seqs
+core/src/authority.rs: replace > with < in evaluate_seqs
+core/src/authority.rs: replace > with == in Epoch<'a>::newer_hubs
+core/src/authority.rs: replace > with == in Epoch<'a>::root_device
+core/src/authority.rs: replace > with == in Evaluation::limit
+core/src/authority.rs: replace > with == in evaluate_seqs
+core/src/authority.rs: replace > with == in evaluate_seqs
+core/src/authority.rs: replace > with == in newer
+core/src/authority.rs: replace > with >= in Epoch<'a>::handover
+core/src/authority.rs: replace > with >= in Epoch<'a>::newer
+core/src/authority.rs: replace > with >= in Epoch<'a>::newer
+core/src/authority.rs: replace > with >= in Epoch<'a>::newer_hubs
+core/src/authority.rs: replace > with >= in Epoch<'a>::newer_hubs
+core/src/authority.rs: replace > with >= in Epoch<'a>::root_device
+core/src/authority.rs: replace > with >= in Epoch<'a>::settings
+core/src/authority.rs: replace > with >= in Evaluation::limit
+core/src/authority.rs: replace > with >= in evaluate_seqs
+core/src/authority.rs: replace > with >= in evaluate_seqs
+core/src/authority.rs: replace > with >= in newer
+core/src/authority.rs: replace >= with < in SigCache::add
+core/src/authority.rs: replace Epoch<'a>::conflicts_of::find -> usize with 0
+core/src/authority.rs: replace Epoch<'a>::conflicts_of::find -> usize with 1
+core/src/authority.rs: replace Epoch<'a>::root_frozen -> bool with false
+core/src/authority.rs: replace Epoch<'a>::thawed_by_root -> BTreeSet<Hash> with BTreeSet::from_iter([Default::default()])
+core/src/authority.rs: replace Epoch<'a>::thawed_by_root -> BTreeSet<Hash> with BTreeSet::new()
+core/src/authority.rs: replace SigCache::add with ()
+core/src/authority.rs: replace SigCache::entries -> Vec<[u8; 32]> with vec![[0; 32]]
+core/src/authority.rs: replace SigCache::entries -> Vec<[u8; 32]> with vec![[1; 32]]
+core/src/authority.rs: replace SigCache::entries -> Vec<[u8; 32]> with vec![]
+core/src/authority.rs: replace SigCache::is_empty -> bool with false
+core/src/authority.rs: replace SigCache::is_empty -> bool with true
+core/src/authority.rs: replace SigCache::len -> usize with 0
+core/src/authority.rs: replace SigCache::len -> usize with 1
+core/src/authority.rs: replace match guard !self.e.roots.contains_key(&h) || h == self.path[0] with false in Epoch<'a>::decide_claims
+core/src/authority.rs: replace match guard !self.newer(i, old) with false in Epoch<'a>::find_admins
+core/src/authority.rs: replace match guard !thawed.contains(&self.r(i).s.id) with true in Epoch<'a>::collect
+core/src/authority.rs: replace match guard (MIN_INCOMING..=MAX_INCOMING).contains(&d) with true in Body::check
+core/src/authority.rs: replace match guard b.group == group with true in prune
+core/src/authority.rs: replace match guard self.on_path.contains_key(&h) with false in Epoch<'a>::decide_claims
+core/src/authority.rs: replace match guard state.roots.contains(&signer) with true in newer
+core/src/authority.rs: replace |= with &= in Evaluation::group_roots
+core/src/authority.rs: replace |= with &= in Evaluation::limit
+core/src/authority.rs: replace || with && in Body::check_device
+core/src/authority.rs: replace || with && in Body::check_device
+core/src/authority.rs: replace || with && in Body::check_device
+core/src/authority.rs: replace || with && in Epoch<'a>::chain
+core/src/authority.rs: replace || with && in Epoch<'a>::decide_claims
+core/src/authority.rs: replace || with && in Epoch<'a>::decide_claims
+core/src/authority.rs: replace || with && in Epoch<'a>::permitted
+core/src/authority.rs: replace || with && in Epoch<'a>::voids
+core/src/authority.rs: replace || with && in Epoch<'a>::voids
+core/src/authority.rs: replace || with && in Evaluation::issuer_of
+core/src/authority.rs: replace || with && in Evaluation::issuer_of
+core/src/authority.rs: replace || with && in Evaluation::issuer_of
+core/src/authority.rs: replace || with && in evaluate_seqs
+core/src/authority.rs: replace || with && in evaluate_seqs
+core/src/authority.rs: replace || with && in newer
+core/src/strict.rs: replace > with < in Parser<'_>::integer
+core/src/strict.rs: replace match guard c < 0x20 with false in Parser<'_>::string
+core/src/strict.rs: replace || with && in Parser<'_>::string

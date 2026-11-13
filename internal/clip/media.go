@@ -6,6 +6,7 @@ package clip
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -85,10 +86,37 @@ func ParseManifest(b []byte) (*Manifest, error) {
 	if err := d.Decode((*plain)(m)); err != nil {
 		return nil, fmt.Errorf("clip: a manifest: %w", err)
 	}
+	if err := canonicalHashes(b); err != nil {
+		return nil, err
+	}
 	if err := m.Validate(); err != nil {
 		return nil, err
 	}
 	return m, nil
+}
+
+// canonicalHashes checks that each part's sha256 is in canonical base64:
+// encoding/json takes bits after the last byte, which the Rust core and the
+// kits refuse, so one manifest would read as two.
+func canonicalHashes(b []byte) error {
+	var raw struct {
+		Parts []struct {
+			SHA256 *string `json:"sha256"`
+		} `json:"parts"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return fmt.Errorf("clip: a manifest: %w", err)
+	}
+	for _, p := range raw.Parts {
+		if p.SHA256 == nil {
+			continue
+		}
+		h, err := base64.StdEncoding.DecodeString(*p.SHA256)
+		if err != nil || base64.StdEncoding.EncodeToString(h) != *p.SHA256 {
+			return errors.New("clip: a part of a manifest has a SHA-256 not in canonical base64")
+		}
+	}
+	return nil
 }
 
 // Part is one item of a manifest: a piece of clipboard data of a Type, or a

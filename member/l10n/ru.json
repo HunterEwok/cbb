@@ -77,6 +77,8 @@
  "{} is no longer muted: its copies reach the group again.": "{} больше не заглушён: его копии снова доходят до группы.",
  "{} is removed.": "{} удалено.",
  "{} ran {}.": "{} выполнил {}.",
+ "Confirm a change to your CBB group.": "Подтвердите изменение в вашей группе CBB.",
+ "Confirm an important change to your CBB group: it cannot be undone.": "Подтвердите важное изменение в вашей группе CBB: его нельзя отменить.",
  "This device is in no group.": "Это устройство не в группе.",
  "Start a group or join one.": "Создайте группу или вступите в неё.",
  "This device was removed from the group.": "Это устройство удалено из группы.",

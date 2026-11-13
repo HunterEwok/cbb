@@ -52,6 +52,12 @@ func TestCheck(t *testing.T) {
 			want: []string{"strings.xml:1: Cyrillic letter"},
 		},
 		{name: "an Aurora app translation", file: "apps/silica/translations/cbb-ru.ts", content: "<translation>" + cyrillicWord + "</translation>\n"},
+		{name: "a HarmonyOS app translation", file: "apps/harmony/entry/src/main/resources/ru/element/string.json", content: "\"" + cyrillicWord + "\"\n"},
+		{name: "a HarmonyOS watch translation", file: "apps/harmony/wearable/src/main/resources/ru/element/string.json", content: "\"" + cyrillicWord + "\"\n"},
+		{
+			name: "the default HarmonyOS strings", file: "apps/harmony/entry/src/main/resources/base/element/string.json", content: "\"" + cyrillicWord + "\"\n",
+			want: []string{"string.json:1: Cyrillic letter"},
+		},
 		{name: "a command line translation", file: "member/l10n/ru.json", content: `{"online": "` + cyrillicWord + `"}` + "\n"},
 		{name: "a tray app translation", file: "apps/desktop/frontend/l10n/ru.json", content: `{"Fetch":"` + cyrillicWord + `"}`},
 		{name: "a website translation", file: "site/l10n/ru.json", content: `{"Download":"` + cyrillicWord + `"}`},

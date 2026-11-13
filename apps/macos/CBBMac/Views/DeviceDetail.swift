@@ -168,7 +168,7 @@ struct DeviceDetail: View {
             .toggleStyle(.switch)
             .disabled(!mayTurn || model.busy)
             .padding(Tokens.spacingMedium)
-            .glassTile(cornerRadius: Tokens.radiusCard)
+            .glassTile(.card)
         }
     }
 
@@ -178,7 +178,7 @@ struct DeviceDetail: View {
             HStack {
                 muteLine(d)
                     .padding(.vertical, 4)
-                    .glassTile(cornerRadius: Tokens.radiusCard)
+                    .glassTile(.card)
                     .disabled(model.busy)
             }
         }
@@ -220,7 +220,7 @@ struct DeviceDetail: View {
             line
             row(Text("Device ID"), Text(verbatim: d.id).monospaced())
         }
-        .glassTile(cornerRadius: Tokens.radiusCard)
+        .glassTile(.card)
     }
 
     private var line: some View { Divider().overlay(palette.line) }
@@ -257,7 +257,7 @@ struct DeviceDetail: View {
                 }
             }
             .padding(Tokens.spacingMedium)
-            .glassTile(cornerRadius: Tokens.radiusCard)
+            .glassTile(.card)
             .disabled(model.busy)
             .confirmationDialog(Text("Change how the hub's tunnel hides?"), isPresented: Binding(get: { tunnelTo != nil }, set: { if !$0 { tunnelTo = nil } })) {
                 Button {
@@ -317,7 +317,7 @@ struct DeviceDetail: View {
                     }
                     leaveAction
                 }
-                .glassTile(cornerRadius: Tokens.radiusCard)
+                .glassTile(.card)
                 .disabled(model.busy)
             }
         } else {
@@ -352,7 +352,7 @@ struct DeviceDetail: View {
                     leaveAction
                 }
             }
-            .glassTile(cornerRadius: Tokens.radiusCard)
+            .glassTile(.card)
             .disabled(model.busy)
             if let message = model.message {
                 Text(verbatim: message).font(.callout).foregroundStyle(palette.textDim).textSelection(.enabled)

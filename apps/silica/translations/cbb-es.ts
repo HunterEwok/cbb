@@ -503,6 +503,53 @@
     </message>
 </context>
 <context>
+    <name>DeviceTile</name>
+    <message>
+        <source>Mute for 15 minutes</source>
+        <translation>Silenciar 15 minutos</translation>
+    </message>
+    <message>
+        <source>Mute for 8 hours</source>
+        <translation>Silenciar 8 horas</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>Silenciar una hora</translation>
+    </message>
+    <message>
+        <source>Mute until unmuted</source>
+        <translation>Silenciar hasta reactivar</translation>
+    </message>
+    <message>
+        <source>Off for 15 minutes</source>
+        <translation>Desactivar 15 minutos</translation>
+    </message>
+    <message>
+        <source>Off for 8 hours</source>
+        <translation>Desactivar 8 horas</translation>
+    </message>
+    <message>
+        <source>Off for an hour</source>
+        <translation>Desactivar una hora</translation>
+    </message>
+    <message>
+        <source>Off until I turn it on</source>
+        <translation>Desactivar hasta que la active</translation>
+    </message>
+    <message>
+        <source>Turn sync off</source>
+        <translation>Desactivar la sincronización</translation>
+    </message>
+    <message>
+        <source>Turn sync on</source>
+        <translation>Activar la sincronización</translation>
+    </message>
+    <message>
+        <source>Unmute</source>
+        <translation>Reactivar</translation>
+    </message>
+</context>
+<context>
     <name>Errors</name>
     <message>
         <source>Adding a device needs the admin PIN.</source>

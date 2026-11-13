@@ -5,6 +5,9 @@ package tools.cbb
 
 import android.content.Context
 import android.content.res.Configuration
+import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -81,17 +84,17 @@ class ScreensTest {
             assertEquals(a, model.settings.appearance)
             compose.onNodeWithContentDescription(str(a.title)).assertIsSelected()
         }
-        val names = ColorChoice.offered
-        assertTrue("Settings offers ${names.size} colours", names.size >= 10)
+        val names = ThemeChoice.offered
+        assertTrue("Settings offers ${names.size} themes", names.size >= 10)
         for (name in names) {
-            compose.onNodeWithText(str(ColorChoice.title(name))).performScrollTo().performClick()
+            compose.onNodeWithText(str(ThemeChoice.title(name))).performScrollTo().performClick()
             compose.waitForIdle()
-            assertEquals(name, model.settings.color)
-            compose.onNodeWithText(str(ColorChoice.title(name))).assertIsSelected()
-            for (other in names) if (other != name) compose.onNodeWithText(str(ColorChoice.title(other))).assertIsNotSelected()
+            assertEquals(name, model.settings.theme)
+            compose.onNodeWithText(str(ThemeChoice.title(name))).assertIsSelected()
+            for (other in names) if (other != name) compose.onNodeWithText(str(ThemeChoice.title(other))).assertIsNotSelected()
         }
         // Kept for the next launch.
-        assertEquals(names.last(), Settings(context).color)
+        assertEquals(names.last(), Settings(context).theme)
     }
 
     /** U12: seven taps on the version show the error details switch, which sets the setting. */
@@ -107,6 +110,30 @@ class ScreensTest {
         compose.onNodeWithText(str(R.string.error_details_switch)).performClick()
         compose.waitForIdle()
         assertEquals(!before, model.settings.showsErrorDetails)
+    }
+
+    /**
+     * The mute button in a tile's corner: on this phone's own tile always,
+     * on another device's on an admin; with sync off, it says so.
+     */
+    @Test
+    fun tileCorner() {
+        model = AppModel(context)
+        val phone = LiveGroup.Device("self", "Pixel", online = true, role = "phone", os = "android", isSelf = true, syncOff = LiveGroup.Hold(null))
+        val mac = LiveGroup.Device("mac", "MacBook", online = true, os = "macos")
+        compose.setContent {
+            CompositionLocalProvider(LocalModel provides model) {
+                Column {
+                    DeviceTile(phone, Modifier, open = {})
+                    DeviceTile(mac, Modifier, open = {})
+                }
+            }
+        }
+        compose.onNodeWithContentDescription("${str(R.string.sync_off)}, Pixel").assertExists()
+        // Before a group the phone counts as its admin (it would make it):
+        // another device's tile has the button, unmuted.
+        compose.onNodeWithContentDescription("${str(R.string.mute)}, MacBook").assertExists()
+        assertTrue(model.isAdmin && model.mayMute(mac) && model.shownMuted(phone) && !model.shownMuted(mac))
     }
 
     /** A9: in Russian the Start screen is Russian. */

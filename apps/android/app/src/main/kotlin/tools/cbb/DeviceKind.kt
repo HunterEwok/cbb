@@ -60,6 +60,7 @@ val LiveGroup.Device.system: String?
         "android" -> "Android"
         "aurora" -> "Aurora OS"
         "sailfish" -> "Sailfish OS"
+        "harmonyos" -> "HarmonyOS"
         "watchos" -> "watchOS"
         "wearos" -> "Wear OS"
         else -> null

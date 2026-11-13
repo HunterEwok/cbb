@@ -5,7 +5,7 @@ import XCTest
 /// The Mac app's window driven as a person would (docs/maintainers/testbench-catalogue.md,
 /// A4, A9, U12), with its control socket pointed where no service answers
 /// (CBB_SOCKET): the stopped service explained in one line, the error
-/// underneath only with error details on, the Settings window's switch, and
+/// underneath only with error details on, the Settings sheet's switch, and
 /// Russian. A running service and the admin prompts are the bench's.
 final class MacUITests: XCTestCase {
     static let plain = "The CBB service is not running on this Mac. Install it, or start it with sudo launchctl kickstart system/tools.cbb."
@@ -44,7 +44,7 @@ final class MacUITests: XCTestCase {
         app.terminate()
     }
 
-    /// U12: the Settings window's switch shows the setting the app runs
+    /// U12: the Settings sheet's switch shows the setting the app runs
     /// with; while it is off, seven clicks on the version show it, as on the
     /// phones.
     func testSettingsSwitch() {
@@ -59,6 +59,8 @@ final class MacUITests: XCTestCase {
             } else {
                 app.typeKey(",", modifierFlags: .command)
             }
+            // Settings are a sheet on the window, not a window of their own.
+            XCTAssertTrue(app.sheets.firstMatch.waitForExistence(timeout: 10), "Settings open in no sheet in \(app.debugDescription)")
             let toggle = app.descendants(matching: .any).matching(identifier: "errorDetails").firstMatch
             if !want {
                 let version = app.descendants(matching: .any).matching(identifier: "version").firstMatch

@@ -246,7 +246,7 @@ impl Joiner {
         if !crate::command::valid_name(name) {
             return Err(Error::msg("the device name must be 1 to 64 bytes without control characters"));
         }
-        if !matches!(os, "ios" | "android" | "aurora" | "sailfish") {
+        if !matches!(os, "ios" | "android" | "aurora" | "sailfish" | "harmonyos") {
             return Err(Error::msg(format!("{os} is not a phone's system")));
         }
         let id = DeviceId::random();
@@ -293,7 +293,7 @@ impl Joiner {
     /// admins, on the group's root or an admin phone, admits it, and its
     /// Welcome carries the admin CA for that key.
     pub fn offering_admin_key(mut self, key: Arc<dyn ExternalKey>) -> Result<Joiner> {
-        if !matches!(self.os.as_str(), "ios" | "android" | "aurora" | "sailfish") {
+        if !matches!(self.os.as_str(), "ios" | "android" | "aurora" | "sailfish" | "harmonyos") {
             return Err(Error::msg("only a phone offers an admin key as it joins"));
         }
         self.admin = Some(key);

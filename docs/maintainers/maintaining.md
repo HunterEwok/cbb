@@ -32,8 +32,9 @@ a checked box means the setting is in place.
 - [x] **Secret scanning** and **Push protection**.
 - [ ] **CodeQL** default setup off: the workflows `.github/workflows/codeql.yml` (advanced
   setup) scan GitHub Actions, Go, Rust and Kotlin on every pull request, and
-  `codeql-swift.yml` scans the iPhone app and its kit when `apps/ios` changes, weekly, by
-  hand and before each release. GitHub rejects their results while the default setup is on.
+  `codeql-swift.yml` scans the iPhone app and its kit when `apps/ios` changes (on a pull
+  request called from `ci.yml` once the iPhone app's jobs are done), weekly, by hand and
+  before each release. GitHub rejects their results while the default setup is on.
   The default setup cannot build the Kotlin app and builds only the kit, not the iPhone app.
   OpenSSF Scorecard (`.github/workflows/scorecard.yml`) puts its findings there as well,
   weekly and on each push to `main`, and publishes the score for the README's badge.
@@ -85,7 +86,8 @@ reaches any workflow on any branch, so anyone who may push a branch could read i
 environment's **Deployment branches and tags** are *Selected branches and tags*: the tag
 pattern `v*` and the branch `main`. The jobs that sign (`build`, `android` and
 `openwrt-feed` in the release workflow, `homebrew` in the published workflow) name the
-environment; a run by hand to check a key therefore starts from `main`. No required
+environment; a run by hand to check a key therefore starts from `main`. `tools/repocheck` fails on
+a job of either workflow that reads a secret without naming the environment. No required
 reviewers: the release tag is the maintainer's decision already.
 
 | Secret | What it is | Section |
@@ -120,8 +122,8 @@ environment secret**.
   (`go run ./tools/tokens -check`), shellcheck on every shell script, the spelling of the
   English text (typos), the tray app's HTML, CSS and JavaScript (Biome), and every file's
   copyright and license (`reuse lint`);
-- **test**: `go test -race` on Linux x86-64, Linux ARM64, macOS and Windows, each with its
-  own files' coverage;
+- **test**: `go test -race` on Linux x86-64, Linux ARM64 and Windows, each with its own
+  files' coverage (macOS's runs in `test and build (macOS), homebrew, Mac app`);
 - **go coverage**: Go's tests across packages with `-coverpkg`, the desktop clipboards, the
   uinput keyboard, mDNS beside avahi and the e2e built with `-cover`;
 - **coverage**: the coverage of every part that ran, in the run's summary, held to
@@ -138,19 +140,27 @@ environment secret**.
   client under Xvfb, against wl-clipboard and xclip;
 - **packaging**: `systemd-analyze verify` and `security` for the unit, and the desktop
   entry;
-- **homebrew**: the formula written by `packaging/homebrew/formula.sh`, installed with
-  Homebrew on macOS;
+- **test and build (macOS), homebrew, Mac app**: `go test -race` on macOS, the macOS
+  release archives, then the formula written by `packaging/homebrew/formula.sh`, installed
+  with Homebrew, then the Mac app's tests and its `.pkg`, one after the other on one machine;
 - **windows installer**: `install.ps1`, the service, the agent and `uninstall.ps1` on
   windows-latest;
 - **phone kit**: CBBKit's tests on Linux and macOS, and its cross tests with the Go
   code (pairing over plain TCP on Linux; pairing and a member connection over TLS on macOS);
-- **iPhone app**: the Xcode project from XcodeGen, built and tested on an iPhone simulator
-  without signing;
-- **Android app**: the Kotlin kit's tests and its cross tests with the Go code, and the app
-  built, unit-tested and linted;
-- **cbb (Rust)**: `cargo fmt`, `clippy` and the tests of the Rust workspace, the ARM64 and
-  ARMv6 builds, the installers without the helper (`get.sh --no-helper`, rootless) and
-  `cbb update` there, and the tests of cbb without its helper among other members;
+  the macOS job also builds the iPhone's libraries with the latest Rust (the phone core);
+- **iPhone app**: the Xcode project from XcodeGen, built and tested without signing on an
+  iPhone and an iPad simulator, one job for each, at the same time;
+- **Android kit**: the Kotlin kit's tests and its cross tests with the Go code and the
+  computers' cbb;
+- **Android app**: the app and the Wear OS app built, unit-tested and linted;
+- **cbb (Rust), the checks and the Raspberry Pi builds**: `cargo check` on the oldest Rust,
+  `cargo fmt`, `clippy` for each system, and the ARM64 and ARMv6 builds;
+- **cbb (Rust)**: the tests of the Rust workspace, the installers without the helper
+  (`get.sh --no-helper`, rootless) and `cbb update` there, and the tests of cbb without its
+  helper among other members;
+- **service tests on the Rust cbb**: the build, six parts of `internal/service` and the part
+  `others` at the same time, and their coverage (docs/testing.md, "Running tests in
+  parallel");
 - **the core on the ESP32**: the protocol core with its TLS built for the ESP32-C6 (RISC-V) and the
   ESP32-S3 (Xtensa), and the Nano ESP32 firmware (`esp32/`) built, its console and
   flash settings tested and its self-test run in Espressif's QEMU (both downloaded by hash);
@@ -185,7 +195,7 @@ Rules for workflows:
 - Built by CI from a tag, never on a laptop: push a tag `vX.Y.Z` on main
   (`git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`), and
   `.github/workflows/release.yml` builds the archives, `SHA256SUMS` and the attestations and,
-  once the iPhone app's CodeQL analysis passes on the tag (about 45 minutes),
+  once the iPhone app's CodeQL analysis passes on the tag (about half an hour),
   makes a draft release, with notes generated from the merged pull requests. The maintainer
   signs and publishes it on their Mac with `release-sign publish` ("Signed releases" below).
   A tag `vX.Y.Z-rc.N` makes a pre-release, which `releases/latest` and so `get.sh` skip;
@@ -198,7 +208,10 @@ Rules for workflows:
   `member/packaging/notices.sh`) and `packaging/`, with `cbb-helper` beside `cbb` on every
   architecture but MIPS.
 - Published with `SHA256SUMS` and a build provenance attestation
-  (`actions/attest-build-provenance`), which users can check with `gh attestation verify`.
+  (`actions/attest-build-provenance`), which users can check with `gh attestation verify`;
+  the release carries the same signed attestation as `provenance.intoto.jsonl`, which
+  `release-sign` leaves out of `release.json` (it describes the files, and no attestation
+  covers it).
 - What a release is built from: a software bill of materials in CycloneDX 1.6 JSON for each
   part, made by `tools/sbom` and listed in `SHA256SUMS` and the signed `release.json` like the
   other files:
@@ -393,7 +406,7 @@ the one tap for all of the owner's formulae; CBB's is `Formula/cbb.rb`, and user
 pre-release) is published, `.github/workflows/published.yml` checks its signed files and writes the formula with
 `packaging/homebrew/formula.sh` from the release's `SHA256SUMS` and pushes it to the tap's
 `main`. The formula installs the release archives as they are, so it needs no Apple signing,
-and CI's `homebrew` job installs one with it on macOS on every pull request.
+and CI's `test and build (macOS), homebrew, Mac app` job installs one with it on macOS on every pull request.
 
 Setting it up, once:
 
@@ -571,7 +584,7 @@ package signed with the **Developer ID Installer** certificate (`packaging/macos
 notarized in turn, its ticket stapled. The package puts the app in `/Applications` and runs
 `install.sh` for the user signed in at the screen; without a terminal it keeps the answers
 given before about the firewall and automatic updates and asks nothing. Without the secrets
-the release has no `.pkg`. CI's `Mac app` job builds one unsigned, installs it with
+the release has no `.pkg`. CI's `test and build (macOS), homebrew, Mac app` job builds one unsigned, installs it with
 `installer`, and removes it with `uninstall.sh`.
 
 The iPhone app goes to TestFlight from the same environment (the job "the iPhone app, to

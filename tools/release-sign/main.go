@@ -130,7 +130,7 @@ func buildManifest(dir, version, ch, minFrom, docker string) (release.Release, e
 	}
 	for _, e := range entries {
 		name := e.Name()
-		if !e.Type().IsRegular() || describes(name) {
+		if !e.Type().IsRegular() || describes(name) || provenance(name) {
 			continue
 		}
 		data, err := os.ReadFile(filepath.Join(dir, name))
@@ -160,6 +160,13 @@ func buildManifest(dir, version, ch, minFrom, docker string) (release.Release, e
 // release's files.
 func describes(name string) bool {
 	return strings.HasSuffix(name, ".json") && !strings.HasSuffix(name, ".cdx.json")
+}
+
+// provenance tells the release workflow's copy of its build provenance
+// (provenance.intoto.jsonl), which GitHub signed and which describes the
+// release's files: it is not one of them, and no attestation covers it.
+func provenance(name string) bool {
+	return strings.HasSuffix(name, ".intoto.jsonl")
 }
 
 func hexSum(data []byte) string {

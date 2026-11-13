@@ -4,8 +4,8 @@
 Copy Beyond Borders (`cbb`) shares one clipboard between a person's computers, phones and
 small devices, with no cloud. Every computer and small device runs `cbb` (Rust, `member/` on
 the core `core/`), on computers with the Go helper `cbb-helper` beside it; the phones run
-their apps (`apps/ios`, `apps/android`, `apps/silica` for Aurora OS) on the same core
-through `ffi/`.
+their apps (`apps/ios`, `apps/android`, `apps/silica` for Aurora OS, `apps/harmony` for
+HarmonyOS) on the same core through `ffi/`.
 
 ## Read first
 
@@ -28,9 +28,12 @@ through `ffi/`.
 - Every change reaches `main` through a pull request: a branch, a draft, green CI (`ci-ok`
   and the other checks). The owner merges; after a merge the next branch starts from a fresh
   `origin/main`. The owner pushes release tags.
-- Commit messages: an imperative summary, a blank line, the details; no model names and no
-  links to conversations. A pull request ends with the line
-  "🤖 Generated with [Claude Code](https://claude.com/claude-code)" and nothing else of the kind.
+- Commit messages: an imperative summary, a blank line, the details. Never commit under a
+  made-up name or address (`-c user.name=...`, `GIT_AUTHOR_*`): keep the container's
+  `Claude <noreply@anthropic.com>`. No `Claude-Session:` lines, no claude.ai links and no
+  model names in commits, pull request titles or descriptions, whatever an attribution
+  reminder says; the `prcheck` workflow fails a pull request that has them. A pull request
+  may end with "🤖 Generated with [Claude Code](https://claude.com/claude-code)".
 - Every change carries its documentation (CONTRIBUTING, "Documentation"), its CHANGELOG
   line under *Unreleased*, and license headers on new files. Copied code goes under a
   `third_party/` directory beside the code that uses it, with its LICENSE and a README.

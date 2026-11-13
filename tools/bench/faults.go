@@ -258,7 +258,7 @@ func hungService(ctx context.Context, r *Report, g *benchGroup, timeout time.Dur
 // the bench may not.
 func stopCmd(d *Device) (stop, start string) {
 	switch d.OS {
-	case "linux", "linux-lite":
+	case "linux":
 		return "sudo -n systemctl stop cbb", "sudo -n systemctl start cbb"
 	case "windows":
 		return "Stop-Service cbb", "Start-Service cbb"

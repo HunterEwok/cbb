@@ -77,6 +77,8 @@
  "{} is no longer muted: its copies reach the group again.": "{} 已取消静音：它的副本又会到达群组。",
  "{} is removed.": "{} 已移除。",
  "{} ran {}.": "{} 运行了 {}。",
+ "Confirm a change to your CBB group.": "确认对你的 CBB 群组的更改。",
+ "Confirm an important change to your CBB group: it cannot be undone.": "确认对你的 CBB 群组的重要更改：此操作无法撤销。",
  "This device is in no group.": "此设备不在任何群组中。",
  "Start a group or join one.": "创建一个群组或加入一个群组。",
  "This device was removed from the group.": "此设备已被移出群组。",

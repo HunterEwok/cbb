@@ -28,8 +28,8 @@ const INVITE_FILE: &str = "cbb.cbbinvite";
 
 /// A request on its own connection, for the operations that answer more
 /// than once: the writer, the reader and the first answer.
-fn stream(g: &Global, h: Header) -> Result<(UnixStream, Reader<UnixStream>, Message)> {
-    let conn = open(g, &h)?;
+fn stream(g: &Global, mut h: Header) -> Result<(UnixStream, Reader<UnixStream>, Message)> {
+    let conn = open(g, &mut h)?;
     let mut w = conn.try_clone().context("cannot reach the service")?;
     control::write(&mut w, &Message::new(h, Vec::new()))?;
     let mut r = Reader::new(conn);

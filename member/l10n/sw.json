@@ -77,6 +77,8 @@
  "{} is no longer muted: its copies reach the group again.": "{} hakijanyamazishwa tena: nakala zake zinafika kwenye kikundi tena.",
  "{} is removed.": "{} kimeondolewa.",
  "{} ran {}.": "{} kiliendesha {}.",
+ "Confirm a change to your CBB group.": "Thibitisha badiliko katika kikundi chako cha CBB.",
+ "Confirm an important change to your CBB group: it cannot be undone.": "Thibitisha badiliko muhimu katika kikundi chako cha CBB: haliwezi kutenduliwa.",
  "This device is in no group.": "Kifaa hiki hakimo kwenye kikundi chochote.",
  "Start a group or join one.": "Anzisha kikundi au ujiunge na kimoja.",
  "This device was removed from the group.": "Kifaa hiki kiliondolewa kwenye kikundi.",
