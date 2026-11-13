@@ -3108,6 +3108,56 @@ fn older_settled_records_leave_a_waiting_one() {
     assert!(b.contains(&twin.id()) && b.contains(&x.id()));
 }
 
+/// Root records waiting for a partner the set remembers by ID are kept
+/// within their bound, the oldest going first: the newest still wait, the
+/// set asks for their partners, and one that comes halts it.
+#[test]
+fn records_waiting_for_their_pair_keep_within_their_bound() {
+    let mut g = G::new();
+    let root = k("root");
+    g.device(&root, &k("laptop"), "laptop", |_| {});
+    let (mut xs, mut twins, mut gone) = (vec![], vec![], vec![]);
+    for i in 0..18 {
+        let name = format!("d {i}");
+        let below = g.device(&root, &k(&name), &name, |_| {});
+        let x = g.root_rec(Kind::Revoke(removal(&[k(&name).hash], g.seen())));
+        let mut d = Device::new(k(&format!("other {i}")).key.clone(), "other", ROLE_MEMBER);
+        d.rights = RIGHT_READ;
+        let twin =
+            Record::sign(Body { seq: x.body().seq, prev: Some(below.id()), ..g.body(&root, Kind::device(d)) }, &root)
+                .unwrap();
+        gone.extend([below.id(), x.id()]);
+        xs.push(x);
+        twins.push(twin);
+    }
+    let mut old = vec![];
+    for i in 0..9 {
+        let name = format!("old {i}");
+        old.push(g.device(&root, &k(&name), &name, |_| {}));
+        old.push(g.root_rec(Kind::Revoke(removal(&[k(&name).hash], g.seen()))));
+    }
+    gone.extend(old.iter().map(Record::id));
+    g.device(&root, &k("phone"), "phone", |_| {});
+    let line: Vec<Record> = g.recs.clone();
+    let cp = root_checkpoint(&mut g, &line);
+    let without: Vec<Record> = g.recs.iter().filter(|r| !gone.contains(&r.id())).cloned().collect();
+    let mut b = set_with(&g.root.key, &without, &g.lists);
+    assert!(b.state().checkpoints.contains(&cp.id()));
+    for r in twins.iter().chain(&old) {
+        assert!(matches!(b.insert(r.clone()), Ok(Added::Settled { .. })));
+    }
+    for x in &xs {
+        assert!(matches!(b.insert(x.clone()), Ok(Added::Settled { .. })));
+    }
+    let st = b.state();
+    assert_eq!(st.stop, Stop::None);
+    let asked = b.missing(&st);
+    assert!(twins[..2].iter().all(|t| !asked.contains(&t.id())));
+    assert!(twins[2..].iter().all(|t| asked.contains(&t.id())));
+    b.insert(twins[17].clone()).unwrap();
+    assert_eq!(b.state().stop, Stop::Full);
+}
+
 /// A second admission of a key the root removed, which the root never
 /// saw, brings the device back after the prune; the member that dropped
 /// the removal tells it, and a new admission by the root is not told.

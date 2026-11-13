@@ -160,7 +160,9 @@ pub struct RecordSet {
     /// comes later is kept (`halves`) and the other asked for (`missing`).
     settled_ids: BTreeMap<(u64, KeyHash), (u64, RecordId)>,
     /// Settled root records whose seq holds another ID the set verified,
-    /// each with that ID: the pair waits for it. At most SETTLED_KEPT.
+    /// each with that ID: the pair waits for it. At most SETTLED_KEPT
+    /// records and SETTLED_BYTES, the oldest arrival going first. Only a
+    /// record the root signed at a seq where it signed another comes here.
     halves: BTreeMap<(u64, KeyHash), (u64, Record, RecordId)>,
     /// The order of arrival of settled records.
     arrived: u64,
@@ -597,7 +599,9 @@ impl RecordSet {
                         // The other at this seq was verified and is gone:
                         // this one waits for it, and the set asks for it.
                         self.halves.insert(at, (n, r, o));
-                        while self.halves.len() > SETTLED_KEPT {
+                        while self.halves.len() > SETTLED_KEPT
+                            || self.halves.values().map(|(_, r, _)| r.size()).sum::<usize>() > SETTLED_BYTES
+                        {
                             let Some(old) = self.halves.iter().min_by_key(|(_, v)| v.0).map(|(k, _)| *k) else { break };
                             self.halves.remove(&old);
                         }

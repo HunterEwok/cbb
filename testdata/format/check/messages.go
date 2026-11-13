@@ -198,6 +198,10 @@ func checkTable(name string, v any) string {
 			seen[e] = true
 		}
 	}
+	// A root's fork is two records.
+	if fork, ok := m[uint64(3)].([]any); ok && name == "roots" && len(fork) != 2 {
+		return "roots/fork"
+	}
 	// Fields 3 (claim ages) and 8 (counted claims) of earlier drafts.
 	if _, three := m[uint64(3)]; name == "welcome" && (three || m[uint64(8)] != nil) {
 		return "welcome/retired"

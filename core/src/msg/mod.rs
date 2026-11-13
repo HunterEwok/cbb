@@ -237,6 +237,10 @@ pub fn check_map(table: &Table, v: &Value<'_>) -> Result<(), Rule> {
             seen.push(e);
         }
     }
+    // A root's fork is two records.
+    if core::ptr::eq(table, &wave4::ROOTS) && v.get(3).and_then(Value::as_array).is_some_and(|a| a.len() != 2) {
+        return Err(Rule::field("roots/fork"));
+    }
     // Fields 3 (claim ages) and 8 (counted claims) of earlier drafts are
     // refused (rule 33).
     if core::ptr::eq(table, &tables::WELCOME) && (v.get(3).is_some() || v.get(8).is_some()) {
