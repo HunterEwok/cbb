@@ -576,12 +576,12 @@ mod tests {
         assert!(format!("{e:?}").contains("pass its room"), "{e:?}");
         assert_eq!(set.len(), before, "a refused record leaves the set as it was");
 
-        // With room in the root's ceiling: the 17th admin key is refused
-        // for itself.
-        let roomy = Spec { root_fill: 0, admin_fill: 0, removals: 0, ..spec };
+        // With room in the root's ceiling and for devices: the 17th admin
+        // key is refused for itself.
+        let roomy = Spec { root_fill: 0, admin_fill: 0, removals: 0, devices: MAX_DEVICES - 8, ..spec };
         let g = build(roomy);
         let (mut set, state) = g.set();
-        assert_eq!(state.devices.len(), MAX_DEVICES);
+        assert_eq!(state.devices.len(), MAX_DEVICES - 8);
         let newest = key(roomy.seed, &format!("new root {}", roomy.takeovers - 1));
         let extra = key(roomy.seed, "admin 16");
         let mut d = Device::new(key(roomy.seed, "admin phone 16").key.clone(), "admin phone 16", ROLE_PHONE);
@@ -593,7 +593,6 @@ mod tests {
     /// With 256 live devices the core's writer refuses a 257th, and no
     /// device that counts stops counting.
     #[test]
-    #[ignore = "waits for the records thread's change to the writer"]
     fn a_257th_device_is_refused() {
         let spec = Spec { root_fill: 0, admin_fill: 0, removals: 0, ..ceilings(1) };
         let g = build(spec);
