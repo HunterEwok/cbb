@@ -2063,21 +2063,31 @@ def invitation_vectors():
         take.append({"name": name, "invitation": enc(v).hex(),
                      "text": "cbb://join#" + __import__("base64").urlsafe_b64encode(enc(v)).decode().rstrip("=")})
 
-    def no(name, v, rule, cross=False):
+    def no(name, v, rule, cross=False, paths=None, rights=None):
         assert check_map("invite", v) is None if cross else True, name
         got = rule_of(v)
         assert got == rule, (name, got)
         e = {"name": name, "rule": rule, "invitation": enc(v).hex()}
         if cross:
             e["cross"] = "a rule between fields"
+        if paths is not None:
+            # The writer's check refuses it; a reader of this version takes
+            # it with the path whose settings it cannot read skipped
+            # (format 20.5: a transport's table makes only its way unusable).
+            e["reader_paths"] = paths
+        if rights is not None:
+            # Rights are bits: a reader of this version ignores those it
+            # does not know, and they grant nothing.
+            e["reader_rights"] = rights
         refuse.append(e)
 
     ok("home and away, plain WireGuard", base)
     ok("home and away, a group with AmneziaWG", {**base, 3: [home, {**guest, 6: obf}]})
     ok("a small device: a leaf, home only", {**base, 3: [home], 4: {1: 4, 3: 1}})
     no("settings on the home path", {**base, 3: [{1: 1, 6: obf}, guest]}, "invite/obfuscation", cross=True)
-    no("settings out of shape", {**base, 3: [home, {**guest, 6: {**obf, 3: 2000}}]}, "invite/path")
-    no("jmin above jmax", {**base, 3: [home, {**guest, 6: {**obf, 2: 80}}]}, "invite/path")
+    no("settings out of shape", {**base, 3: [home, {**guest, 6: {**obf, 3: 2000}}]}, "invite/path", paths=1)
+    no("jmin above jmax", {**base, 3: [home, {**guest, 6: {**obf, 2: 80}}]}, "invite/path", paths=1)
+    no("the only path's settings out of shape", {**base, 3: [{**guest, 6: {**obf, 3: 2000}}]}, "invite/path")
     no("a home path with an endpoint", {**base, 3: [{1: 1, 2: ["203.0.113.5:51820"]}, guest]}, "invite/path",
        cross=True)
     no("a guest key without its pre-shared key", {**base, 3: [home, {k: v for k, v in guest.items() if k != 5}]},
@@ -2097,7 +2107,8 @@ def invitation_vectors():
        "invite/path", cross=True)
     no("home only with a guest path", {**base, 4: {1: 1, 3: 1}}, "invite/profile", cross=True)
     no("guarded, not a leaf", {**base, 4: {1: 1, 4: 1}}, "invite/profile", cross=True)
-    no("rights 16", {**base, 4: {1: 1, 2: 16}}, "invite/profile")
+    no("rights 16", {**base, 4: {1: 1, 2: 16}}, "invite/profile", rights=0)
+    no("rights 16 and send", {**base, 4: {1: 1, 2: 18}}, "invite/profile", rights=2)
     no("a short secret", {**base, 2: fake("s", 16)}, "invite/shape")
     return take, refuse
 

@@ -14,6 +14,7 @@
 //! is listed must have its type and bounds, a needed field must be there,
 //! and a field at its default is left out (`form/default`).
 
+pub mod later;
 pub mod tables;
 pub mod wave4;
 
@@ -21,6 +22,8 @@ pub mod wave4;
 mod mutants;
 #[cfg(test)]
 mod tests;
+
+pub use later::Later;
 
 use crate::format::{Alg, Rule, Value, cbor, frame};
 
@@ -268,32 +271,37 @@ fn between(table: &Table, v: &Value<'_>) -> Result<(), Rule> {
 enum Got<'a> {
     /// In range: the value, its lists cleaned.
     Keep(Value<'a>),
-    /// Outside this version's range: read as absent.
+    /// Outside this version's range, in a field whose row reads it as
+    /// absent ([`later`]).
     Absent,
 }
 
-/// The maps whose problems make only that map unusable (a transport's
-/// table), never the message that carries it.
-fn transport(t: &Table) -> bool {
-    core::ptr::eq(t, &tables::OBFUSCATION)
-}
-
-/// Reads one value as a reader of this version does: a wrong shape (the
+/// Reads one value as a reader of this version does. A wrong shape (the
 /// CBOR type, the length of a fixed-size key or ID, a key off its curve,
-/// an envelope that does not parse, a list out of its order) refuses; a
-/// value outside this version's range reads as absent; a list keeps the
-/// elements it understands.
-fn read_ty<'a>(f: &Field, v: &Value<'a>) -> Result<Got<'a>, Rule> {
+/// an envelope that does not parse, a list out of its order) refuses. A
+/// value outside this version's range does what `l` says ([`Later`]): a
+/// needed field's is always [`Later::Refuse`].
+fn read_ty<'a>(f: &Field, l: Later, v: &Value<'a>) -> Result<Got<'a>, Rule> {
     use Got::{Absent, Keep};
     let bad = || Rule::field(f.rule);
+    // Out of range: refused, or read as absent.
+    let out = || if l == Later::Absent { Ok(Absent) } else { Err(bad()) };
     Ok(match f.ty {
         Ty::Uint { min, max } => {
             let n = v.as_uint().ok_or_else(bad)?;
-            if n < min || n > max { Absent } else { Keep(v.clone()) }
+            if let Later::Bits(mask) = l {
+                return Ok(if n & mask == 0 { Absent } else { Keep(Value::Uint(n & mask)) });
+            }
+            if n < min || n > max {
+                return out();
+            }
+            Keep(v.clone())
         }
         Ty::Flag => {
-            v.as_uint().ok_or_else(bad)?;
-            if v.as_uint() == Some(1) { Keep(v.clone()) } else { Absent }
+            if v.as_uint().ok_or_else(bad)? != 1 {
+                return out();
+            }
+            Keep(v.clone())
         }
         Ty::Bytes(n) => {
             if v.as_bytes().map(<[u8]>::len) != Some(n) {
@@ -303,29 +311,38 @@ fn read_ty<'a>(f: &Field, v: &Value<'a>) -> Result<Got<'a>, Rule> {
         }
         Ty::Id(n) => {
             let b = v.as_bytes().filter(|b| b.len() == n).ok_or_else(bad)?;
-            if b.iter().all(|&x| x == 0) { Absent } else { Keep(v.clone()) }
+            if b.iter().all(|&x| x == 0) {
+                return out();
+            }
+            Keep(v.clone())
         }
         Ty::BytesUpTo(n) => {
             let b = v.as_bytes().ok_or_else(bad)?;
-            if b.is_empty() || b.len() > n { Absent } else { Keep(v.clone()) }
+            if b.is_empty() || b.len() > n {
+                return out();
+            }
+            Keep(v.clone())
         }
         Ty::Text(n) => {
             let t = v.as_text().ok_or_else(bad)?;
-            if t.is_empty() || t.len() > n || t.chars().any(char::is_control) { Absent } else { Keep(v.clone()) }
+            if t.is_empty() || t.len() > n || t.chars().any(char::is_control) {
+                return out();
+            }
+            Keep(v.clone())
         }
         Ty::Addr => {
-            let t = v.as_text().ok_or_else(bad)?;
-            if valid_addr(t) { Keep(v.clone()) } else { Absent }
+            if !valid_addr(v.as_text().ok_or_else(bad)?) {
+                return out();
+            }
+            Keep(v.clone())
         }
         Ty::Key(alg) => {
             let k = crate::format::Key::from_value(v).map_err(|_| bad())?;
             if k.alg != alg {
-                Absent
-            } else if k.check().is_err() {
-                return Err(bad());
-            } else {
-                Keep(v.clone())
+                return out();
             }
+            k.check().map_err(|_| bad())?;
+            Keep(v.clone())
         }
         Ty::Envelope => {
             crate::format::Envelope::from_value(v).map_err(|_| bad())?;
@@ -339,41 +356,59 @@ fn read_ty<'a>(f: &Field, v: &Value<'a>) -> Result<Got<'a>, Rule> {
                 _ => {}
             }
             if a.len() > max {
-                return Ok(Absent);
+                return out();
             }
-            let inner = Field { n: f.n, rule: f.rule, ty: *of, needed: true };
+            // An entry out of range is skipped only where the field may
+            // read as absent; elsewhere it refuses.
+            let inner = Field { n: f.n, rule: f.rule, ty: *of, needed: false };
+            let el = if l == Later::Absent { Later::Absent } else { Later::Refuse };
             let mut kept = alloc::vec::Vec::new();
             for x in a {
-                if let Keep(c) = read_ty(&inner, x)? {
+                if let Keep(c) = read_ty(&inner, el, x)? {
                     kept.push(c);
                 }
             }
-            if kept.is_empty() { Absent } else { Keep(Value::Array(kept)) }
+            if kept.is_empty() {
+                return out();
+            }
+            Keep(Value::Array(kept))
         }
-        Ty::Map(t) if transport(t) => match read_map(t, v) {
-            Ok(c) => Keep(c),
-            Err(_) => Absent,
-        },
+        Ty::Map(t) if l == Later::Unusable => {
+            let m = v.as_map().ok_or_else(bad)?;
+            let known = m.iter().all(|(k, _)| t.fields.iter().any(|f| f.n == *k));
+            match read_map(t, v) {
+                Ok(c) if known => Keep(c),
+                _ => Keep(Value::Map(alloc::vec::Vec::new())),
+            }
+        }
         Ty::Map(t) => Keep(read_map(t, v).map_err(|_| bad())?),
     })
 }
 
 /// Reads a map against its table as a reader of this version does
-/// ([`read_ty`]): the map with every field outside this version's range
-/// left out and every list cleaned. A needed field that is wrong or left
-/// out refuses, and so does a rule between fields. [`check_map`] is the
-/// writer's strict form of the same table.
+/// ([`read_ty`], [`later`]): the map with each field outside this
+/// version's range read as its row says (left out, its unknown bits
+/// cleared, or a transport made unusable) and each list cleaned; a field
+/// that cannot be read so refuses, and so does a rule between fields.
+/// Fields the table does not list are kept as they are. [`check_map`] is
+/// the writer's strict form of the same table.
 pub fn read_map<'a>(table: &Table, v: &Value<'a>) -> Result<Value<'a>, Rule> {
+    read_map_by(table, v, later::of)
+}
+
+/// [`read_map`] with the rows of the table's optional fields from `rows`.
+fn read_map_by<'a>(table: &Table, v: &Value<'a>, rows: fn(&Table, u16) -> Later) -> Result<Value<'a>, Rule> {
     let entries = v.as_map().ok_or_else(|| Rule::field(table.shape))?;
     let mut out: alloc::vec::Vec<(u16, Value<'a>)> = alloc::vec::Vec::with_capacity(entries.len());
     for (k, x) in entries {
         match table.fields.iter().find(|f| f.n == *k) {
             None => out.push((*k, x.clone())),
-            Some(f) => match read_ty(f, x)? {
-                Got::Keep(c) => out.push((*k, c)),
-                Got::Absent if f.needed => return Err(Rule::field(f.rule)),
-                Got::Absent => {}
-            },
+            Some(f) => {
+                let l = if f.needed { Later::Refuse } else { rows(table, f.n) };
+                if let Got::Keep(c) = read_ty(f, l, x)? {
+                    out.push((*k, c));
+                }
+            }
         }
     }
     let read = Value::Map(out);
@@ -384,6 +419,18 @@ pub fn read_map<'a>(table: &Table, v: &Value<'a>) -> Result<Value<'a>, Rule> {
     }
     between(table, &read)?;
     Ok(read)
+}
+
+/// Reads a message as a reader of this version does: its type, and the
+/// message read against the table of its type ([`read_map`]), or as it is
+/// when this version does not number the type (the receiver ignores it).
+pub fn read(msg: &[u8]) -> Result<(u64, Value<'_>), Rule> {
+    let v = cbor::decode(msg)?;
+    let t = v.get(frame::FIELD_T).and_then(Value::as_uint).ok_or(Rule::FRAME_MESSAGE)?;
+    match tables::of(t).or_else(|| wave4::of(t)) {
+        Some(table) => Ok((t, read_map(table, &v)?)),
+        None => Ok((t, v)),
+    }
 }
 
 /// A group's AmneziaWG settings ([`tables::OBFUSCATION`]), kept as their
