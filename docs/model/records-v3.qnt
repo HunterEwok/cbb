@@ -300,6 +300,10 @@ module records_v3 {
   pure val REISSUE_REMOVALS = false
   pure val REISSUE_DROP_ONLY = false
   pure val REISSUE_PACK_ANY = false
+  // More mutations of the rule, each must fail (architecture 22:27Z): "newerSeen" (a Z's seen
+  // entry for its keys is the writer's line now, newer than its X's), "notKept" (the first
+  // checkpoint does not keep the Zs), "listX" (the list still names the Xs a Z covers).
+  pure val REISSUE_MUT = ""
   // (J): the units the cut roots' listed records may take together.
   pure val RESERVE = ROOTC
   pure val MISSING_NEWEST_ONLY = false
@@ -1167,7 +1171,12 @@ module records_v3 {
   pure def storeView(s: Store, db: Id -> Record): View =
     fullEvaluate(recsOf(settle(s, recsOf(s.recs, db), NOCUT, db)._1, db).union(firstsHeld(s, db)), chainState(s, db))
   // The first checkpoints of held heads, kept beside the chain and counted with the rooms.
-  pure def firstsHeld(s: Store, db: Id -> Record): Set[Record] = recsOf(s.chain, db).filter(c => not(isChain(c)))
+  // (A re-signed removal Z counts only when a first checkpoint beside the chain keeps it: what
+  // that checkpoint leaves out lies below its heads and is pruned, as in the core.)
+  pure def firstsHeld(s: Store, db: Id -> Record): Set[Record] = {
+    val side = recsOf(s.chain, db).filter(c => not(isChain(c)))
+    side.filter(c => c.kit != "z" or side.exists(f => f.kind == "checkpoint" and f.keep.contains(c.id)))
+  }
 
   // What a member given every record of got at once keeps, and its state.
   pure def pureKept(s: Store, db: Id -> Record): Set[Id] =
@@ -1455,7 +1464,8 @@ module records_v3 {
     val droppable = beforeRecs.filter(x => not(rootRemoval(x)) and not(live.contains(x)) and not(superseded.contains(x)))
     val trimmed = if (not(CEIL_FIT)) honest else honest.filter(i => not(superseded.contains(db.get(i))) and not(foldedRm.contains(db.get(i)))
       and (not(droppable.contains(db.get(i))) or fixedUnits + sumUnits(droppable.filter(d => notOlder(d, db.get(i)))) <= RESERVE))
-    val keep = if (mode == "honest" or mode == "nocp" or mode == "from1") trimmed.exclude(covered)
+    val keep = if (mode == "honest" or mode == "nocp" or mode == "from1")
+        (if (REISSUE_MUT == "listX") trimmed else trimmed.exclude(covered))
       else if (mode == "literal") honest.filter(i => db.get(i).signer == cur or rootRemoval(db.get(i)) or cp.contains(i))
       else if (mode == "none") Set()
       else if (mode == "given") given
@@ -1477,7 +1487,8 @@ module records_v3 {
       val xs = groups[j].foldl(Set(), (a, i) => a.union(Set(db.get(i))))
       val x0 = db.get(groups[j][0])
       val zKeys = xs.fold(Set(), (a, x) => a.union(x.seen.keys()))
-      val seenZ = zKeys.mapBy(k => xs.fold([], (l, x) => if (lineOf(x.seen, k).length() > l.length()) lineOf(x.seen, k) else l))
+      val seenZ = zKeys.mapBy(k => if (REISSUE_MUT == "newerSeen") headLine(recsOf(s.recs.union(s.got), db), k)
+        else xs.fold([], (l, x) => if (lineOf(x.seen, k).length() > l.length()) lineOf(x.seen, k) else l))
       val z = rec(nextId + 1 + j, target, own.concat(zIds.slice(0, j + 1)), "revoke", x0.target, "z", nextId,
         seenZ, Map(), Set(), sumUnits(xs))
       d.put(nextId + 1 + j, { ...z, also: xs.exclude(Set(x0)).fold(Set(), (a, x) => a.union(Set(x.target)).union(x.also)).union(x0.also) })
@@ -1489,7 +1500,8 @@ module records_v3 {
     val db20 = db.put(nextId, r0)
     val v1 = finish(insertInto(s, r0, db20), db20)._2
     val c = rec(cpId, target, ownZ.append(cpId), "checkpoint", "", "", 0, heads, heads,
-      v1.counting.filter(i => db2.get(i).kind != "checkpoint" and not(idsOf(leftOut).contains(i))).union(zIds.foldl(Set(), (a, i) => a.union(Set(i)))), 2)
+      v1.counting.filter(i => db2.get(i).kind != "checkpoint" and not(idsOf(leftOut).contains(i)))
+        .union(if (REISSUE_MUT == "notKept") Set() else zIds.foldl(Set(), (a, i) => a.union(Set(i)))), 2)
     val db3 = if (withCp) db2.put(cpId, c) else db2
     all {
       RKEYS.contains(k),
@@ -2124,8 +2136,12 @@ module records_v3 {
   // (A member that holds a checkpoint before the records of its line can sit over a ceiling,
   // with a mark, until it syncs: the writer counted its own set after the prune; seed j.8012.)
   // (Under UNKNOWN_HEADS a removed member is out of the group and takes heads alone, not the
-  // root's checkpoints: it may keep a mark; seed k.9501, a after R removed A.)
-  val honestNoMarks = (CEIL_FIT and honestW) implies MEMBERS.forall(m => (syncedProto(m) and inGroup(m)) implies st.get(m).cut.marks.keys() == Set())
+  // root's checkpoints: it may keep a mark; seed k.9501, a after R removed A. NOT a licence
+  // under the decided rule: k.9501 fails without this exemption whenever UNKNOWN_HEADS is on,
+  // and passes with PREV_ROOM_WHEN_KEPT + (J) without it. MARKS_GUARD turns it off.)
+  pure val MARKS_GUARD = false
+  val honestNoMarks = (CEIL_FIT and honestW) implies MEMBERS.forall(m =>
+    (syncedProto(m) and (MARKS_GUARD or inGroup(m))) implies st.get(m).cut.marks.keys() == Set())
 
   // A restart keeps the state: a member's saved set, reloaded with no cut, keeps the same
   // records and shows the same state (what the simulator checks with restore, seed 47).
