@@ -1642,8 +1642,10 @@ module records_v3 {
   // whose standing is Unknown or that a change cut (its state counts no key of the other), a
   // member hands only the recovery heads with their lists, and takes only those from it. A
   // member that holds a verified head above what it applied whose list does not name it is
-  // left out ("pair again"): it counts nobody and obeys nobody. The newcomer m's key is D.
+  // left out ("pair again"): it counts nobody and obeys nobody. The newcomer m's key is MDEV.
   pure val UNKNOWN_HEADS = false
+  // The newcomer m's device key under UNKNOWN_HEADS (no other scenario names it).
+  pure val MDEV = "dM"
   // With UNKNOWN_HEADS: the first checkpoints cross with the heads (random run u.9111: the new
   // root removes a member its list still admits; its peers then count it as no member and hand
   // it the heads alone, so it can never apply them, is not left out, and stays live on the old
@@ -1654,7 +1656,7 @@ module records_v3 {
   pure def keysOfMember(n: str): Set[Key] = {
     val ks = HOLDER.keys().filter(k => HOLDER.get(k) == n)
     ks.union(ks.filter(k => DEV.keys().contains(k)).map(k => DEV.get(k)))
-      .union(if (UNKNOWN_HEADS and n == "m") Set(DEVICE) else Set())
+      .union(if (UNKNOWN_HEADS and n == "m") Set(MDEV) else Set())
   }
   // Under UNKNOWN_HEADS: m holds a verified head (the recovery key's, on a valid chain) above
   // the chain it applied, and that head's list admits none of m's keys (or removes them), nor is one of them a
@@ -1663,17 +1665,25 @@ module records_v3 {
     val s = st.get(m)
     val raw = chainHeads(recsOf(s.chain, db))
     val applied = chainState(s, db).ids.length()
-    UNKNOWN_HEADS and keysOfMember(m) != Set() and raw.recs.length() > applied and {
+    val v = views.get(m)
+    UNKNOWN_HEADS and keysOfMember(m) != Set() and raw.recs.length() > 0 and {
       val h = raw.recs[raw.recs.length() - 1]
       val listed = recsOf(h.keep.filter(i => db.keys().contains(i)), db)
-      not(keysOfMember(m).exists(x => onList(pathCutsOf(raw.recs)._1, x)
-        or (admissionsOf(listed, x) != Set() and not(listed.exists(r => r.kind == "revoke" and withPair(r.target).contains(x))))))
+      val named = keysOfMember(m).exists(x => onList(pathCutsOf(raw.recs)._1, x)
+        or (admissionsOf(listed, x) != Set() and not(listed.exists(r => r.kind == "revoke" and withPair(r.target).contains(x)))))
+      // Once it applied every head, its own state decides (a new root's record may admit it).
+      val ownCounts = raw.recs.length() == applied and keysOfMember(m).exists(x =>
+        onList(v.path, x) or v.admins.keys().contains(x) or v.devices.contains(x))
+      not(named) and not(ownCounts)
     }
   }
   def counts(m: str, n: str): bool = {
     val v = views.get(m)
     keysOfMember(n).exists(x => onList(v.path, x) or v.admins.keys().contains(x) or v.devices.contains(x)
       or (UNKNOWN_HEADS and x == RECOVERY))
+      // The newcomer m stands for a device admitted outside the scenario: known on the first
+      // root while D is not removed; after a change only a list or a new root's record admits it.
+      or (UNKNOWN_HEADS and n == "m" and v.path.length() == 1 and not(v.revoked.contains(MDEV)))
   }
   def everKnew(m: str, n: str): bool = {
     val known = recsOf(st.get(m).got, db).fold(Set(), (a, r) => a.union(Set(r.signer, r.target)))
@@ -2031,6 +2041,11 @@ module records_v3 {
     (not(views.get(m).stop) and not(chainState(s, db).stop)) implies
       (s2.recs == s.recs and fullEvaluate(recsOf(s2.recs, db).union(firstsHeld(s2, db)), chainState(s2, db)) == views.get(m))
   })
+
+  // The members the root's device counts (all of them on the default road): under
+  // UNKNOWN_HEADS a removed member, or one no list admits, takes heads alone and is not
+  // expected to agree.
+  def inGroup(m: str): bool = not(UNKNOWN_HEADS) or m == "r" or counts("r", m)
 
   // Under UNKNOWN_HEADS: no member stays live on an older root once a member past the change
   // can reach it: a member every peer has offered all it would hand keeps a path no shorter
@@ -2596,7 +2611,7 @@ module records_v3 {
   run f7RootRemovesTest = f7RootRemovesBase
       .then(sign(PHONE, "revoke", "dC", "", 0, false, false, 1))
       .then(syncRound).then(syncRound)
-      .expect(MEMBERS.forall(m => views.get(m) == views.get("r") and views.get(m).revoked.contains(PHONE)
+      .expect(MEMBERS.filter(m => inGroup(m)).forall(m => views.get(m) == views.get("r") and views.get(m).revoked.contains(PHONE)
         and views.get(m).revoked.contains(DEVICE) == F7_SEEN_IGNORED
         and views.get(m).revoked.contains(COMPUTER) == F7_SEEN_IGNORED) and (promises or F7_SEEN_IGNORED))
   run f7RootFirstRemovesTest = f7Base
@@ -2605,7 +2620,7 @@ module records_v3 {
       .then(sign(ROOT, "revoke", PHONE, "", 0, false, false, 1))
       .then(sign(PHONE, "revoke", "dC", "", 0, false, false, 1))
       .then(syncRound).then(syncRound)
-      .expect(MEMBERS.forall(m => views.get(m) == views.get("r") and st.get(m).recs == st.get("r").recs
+      .expect(MEMBERS.filter(m => inGroup(m)).forall(m => views.get(m) == views.get("r") and st.get(m).recs == st.get("r").recs
         and views.get(m).revoked.contains(DEVICE) and views.get(m).revoked.contains(PHONE)
         and views.get(m).revoked.contains(COMPUTER) == F7_SEEN_IGNORED and not(views.get(m).stop))
         and (promises or F7_SEEN_IGNORED))
@@ -2641,9 +2656,9 @@ module records_v3 {
       .expect((CEIL_FIT and FOLD_REMOVALS) implies (not(db.get(8).keep.contains(4)) and db.get(8).keep.contains(7)))
       // a takes the change (holding R's 4, not NA's 7), c takes NA's 7 only.
       .then(giveOnly("a", 8)).then(giveOnly("a", 9)).then(giveOnly("c", 7))
-      .expect(MEMBERS.forall(m => views.get(m).revoked.contains(DEVICE)) and promises)
+      .expect(MEMBERS.filter(m => inGroup(m)).forall(m => views.get(m).revoked.contains(DEVICE)) and promises)
       .then(syncRound).then(compactAt("a")).then(compactAt("c")).then(syncRound).then(syncRound)
-      .expect(MEMBERS.forall(m => views.get(m).revoked.contains(DEVICE) and views.get(m) == views.get("r")
+      .expect(MEMBERS.filter(m => inGroup(m)).forall(m => views.get(m).revoked.contains(DEVICE) and views.get(m) == views.get("r")
         and views.get(m).path == ["R", "NA", "NK"]) and promises)
 
   // A recovery fork (simulator seed 5262): with the root's device lost, the recovery key
@@ -2683,7 +2698,7 @@ module records_v3 {
       .then(compactAt("m")).then(syncRound)
       .expect(restartStable and promises)
       .then(restart("r")).then(restart("a")).then(restart("c")).then(restart("k")).then(restart("m"))
-      .expect(MEMBERS.forall(m => views.get(m).path == ["R", "NA", "NK"] and views.get(m).checkpoint == 14
+      .expect(MEMBERS.filter(m => inGroup(m)).forall(m => views.get(m).path == ["R", "NA", "NK"] and views.get(m).checkpoint == 14
         and views.get(m).frozen == Set() and st.get(m).recs == Set(1, 2, 3, 4, 5, 8, 9, 10, 14)) and promises)
 
   // Seed 47's class: m gets the records of NA and NK, then NA's head without its first
@@ -2716,7 +2731,7 @@ module records_v3 {
         and st.get("m").recs == st.get("k").recs
         and (not(CEIL_FIT) implies st.get("m").recs == Set(1, 2, 3, 4, 7, 8, 9, 10, 11, 14, 15, 16, 17, 18)))
 
-  // Simulator 1460's shape: the root admits m's key D, and only m gets it; the recovery key,
+  // Simulator 1460's shape: the root admits m's key (MDEV), and only m gets it; the recovery key,
   // which never held that admission, makes NA the root, and its list does not name D. Every
   // other member moves to NA and counts no key of m. Under UNKNOWN_HEADS they hand m the head
   // alone: m holds a verified head it cannot apply whose list leaves it out, so it is left out
@@ -2724,12 +2739,13 @@ module records_v3 {
   run leftOutTest =
     init
       .then(sign(ROOT, "admin", "NA", "phone", 0, false, false, 1)).then(syncRound)
-      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(giveOnly("m", 5))
+      .then(sign(ROOT, "device", MDEV, "", 0, false, false, 1)).then(giveOnly("m", 5))
       .then(recoverAs(RECOVERY, "NA"))
       .then(syncRound).then(syncRound).then(syncRound)
       .expect(promises and MEMBERS.exclude(Set("m")).forall(n => views.get(n).path == ["R", "NA"])
-        and (if (UNKNOWN_HEADS) leftOut("m") and views.get("m").path == ["R"] and st.get("m").chain == Set(6)
-          else views.get("m").path == ["R", "NA"] and not(views.get("m").devices.contains(DEVICE))))
+        and (if (UNKNOWN_HEADS) leftOut("m") and not(views.get("m").devices.contains(MDEV))
+            and (if (HEADS_WITH_FIRSTS) views.get("m").path == ["R", "NA"] else views.get("m").path == ["R"] and st.get("m").chain == Set(6))
+          else views.get("m").path == ["R", "NA"] and not(views.get("m").devices.contains(MDEV))))
 
   // Seed j.8001 (Mac, (J)): the root signs a checkpoint that never becomes whole, ahead of its
   // copies record 5 in its order; at the root's own device the room turned it away and 5 with
