@@ -681,14 +681,38 @@ pub fn wait_healthy(status: &dyn Fn() -> Result<String>, version: &str, within: 
 }
 
 /// The release roots: those of the PEM file CBB_RELEASE_ROOTS names, in a
-/// build with the test hooks, else the pinned ones.
+/// build with the test hooks, else the pinned ones. A hooks build says
+/// once which roots it took; a file it cannot read gives no roots, so that
+/// every release file is refused rather than checked against the pinned
+/// roots as if the test had not named any.
 pub fn release_roots() -> Vec<release::Key> {
-    if let Some(f) = crate::testhooks::var_os("CBB_RELEASE_ROOTS")
-        && let Ok(r) = read_roots(Path::new(&f))
-    {
-        return r;
+    let (roots, said) = roots_of(crate::testhooks::var_os("CBB_RELEASE_ROOTS"));
+    static SAID: std::sync::Once = std::sync::Once::new();
+    if let Some(line) = said {
+        SAID.call_once(|| eprintln!("cbb: {line}"));
     }
-    release::pinned_roots()
+    roots
+}
+
+/// The roots for the hook's value, and what a hooks build says of them:
+/// nothing for the pinned roots.
+fn roots_of(hook: Option<std::ffi::OsString>) -> (Vec<release::Key>, Option<String>) {
+    let Some(f) = hook else { return (release::pinned_roots(), None) };
+    let path = Path::new(&f);
+    match read_roots(path) {
+        Ok(r) if !r.is_empty() => {
+            let line = format!(
+                "test hooks: release files are checked against the roots in {}, not the built-in ones",
+                path.display()
+            );
+            (r, Some(line))
+        }
+        Ok(_) => (
+            Vec::new(),
+            Some(format!("test hooks: {} holds no root key; every release file is refused", path.display())),
+        ),
+        Err(e) => (Vec::new(), Some(format!("test hooks: {}; every release file is refused", e.for_log()))),
+    }
 }
 
 /// Reads the root keys of a PEM file, for tests (CBB_RELEASE_ROOTS).
@@ -794,6 +818,33 @@ fn cron_timer(on: bool, exe: &Path) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    /// CBB_RELEASE_ROOTS in a hooks build: the roots it names, said; a file
+    /// that cannot be read or holds no key gives no roots, said, and never
+    /// the pinned ones; unset, the pinned ones, unsaid.
+    #[test]
+    fn named_roots_are_said_and_never_fall_back() {
+        let (r, said) = super::roots_of(None);
+        assert_eq!(r.len(), cbb_core::release::pinned_roots().len());
+        assert!(said.is_none());
+        let dir = std::env::temp_dir().join(format!("cbb-roots-of-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let missing = dir.join("no-such.pem");
+        let (r, said) = super::roots_of(Some(missing.clone().into_os_string()));
+        assert!(r.is_empty(), "a missing file gave {} roots", r.len());
+        assert!(said.unwrap().contains("every release file is refused"));
+        let empty = dir.join("empty.pem");
+        std::fs::write(&empty, "").unwrap();
+        let (r, said) = super::roots_of(Some(empty.clone().into_os_string()));
+        assert!(r.is_empty());
+        assert!(said.unwrap().contains("every release file is refused"));
+        let good = dir.join("roots.pem");
+        std::fs::write(&good, cbb_core::release::ROOTS_PEM).unwrap();
+        let (r, said) = super::roots_of(Some(good.clone().into_os_string()));
+        assert!(!r.is_empty());
+        assert!(said.unwrap().contains(&format!("checked against the roots in {}", good.display())));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     use super::*;
     use cbb_core::certs::b64;
     use cbb_core::release::testing::TestKey;

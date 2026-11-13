@@ -1720,7 +1720,15 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
         let (roots, sources) = match std::env::var_os("CBB_RELEASE_DIR") {
             Some(d) => {
                 let roots = match testhooks::var_os("CBB_RELEASE_ROOTS") {
-                    Some(f) => update::read_roots(std::path::Path::new(&f))?,
+                    Some(f) => {
+                        let f = std::path::Path::new(&f);
+                        let roots = update::read_roots(f)?;
+                        eprintln!(
+                            "cbb: test hooks: checking against the roots in {}, not the built-in ones",
+                            f.display()
+                        );
+                        roots
+                    }
                     None => cbb_core::release::pinned_roots(),
                 };
                 (roots, vec![update::Source::Dir(PathBuf::from(d))])
