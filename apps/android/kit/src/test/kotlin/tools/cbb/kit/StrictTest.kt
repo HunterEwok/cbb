@@ -169,14 +169,10 @@ class StrictTest {
                     if (section == "credentials") {
                         ServerCredentials.Body.parse(body)
                     } else {
-                        if (body.size > Releases.MAX_BODY) throw Releases.Refused("too large")
-                        when (val kind = o.str("kind")) {
-                            "keys" -> Releases.decodeKeys(body)
-                            "release" -> Releases.decodeRelease(body)
-                            "channel" -> Releases.decodeChannel(body)
-                            "attest-status" -> Releases.decodeStatus(body)
-                            else -> error("unknown kind $kind")
-                        }
+                        val kind = o.str("kind")
+                        if (kind !in listOf("keys", "release", "channel", "attest-status")) error("unknown kind $kind")
+                        // The core reads release files for the kit (docs/core-api.md).
+                        Core.bodyRefusal(kind, body)?.let { throw Releases.Refused(it) }
                     }
                 }
                 // A reader refuses with its own exception, never with another that escapes it.

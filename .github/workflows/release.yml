@@ -20,7 +20,18 @@ on:
   # Run by hand from main, it builds everything, the signed APK included, and
   # makes no release: a check that the release keys in the secrets work. The
   # environment release gives its secrets only to main and the tags v*.
+  # Run by hand with a tag, from any branch, it is a rehearsal: it builds and
+  # checks everything as a release of that tag would, without the environment
+  # release and its secrets, and leaves the release's files in the artifact
+  # release-files; it signs nothing and publishes nothing (docs/maintaining.md,
+  # "A rehearsal of a release").
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "A rehearsal: the tag to build as (vX.Y.Z or vX.Y.Z-rc.N); signs and publishes nothing. Empty from main: the keys check."
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -29,8 +40,90 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  # The release's tag: the pushed tag, or a rehearsal's (the roots job checks
+  # its form before anything is built).
+  TAG: ${{ inputs.tag || github.ref_name }}
+  # Empty but in a rehearsal; it only picks a rehearsal's version over the
+  # 0.0.0-dev of a run that is not a tag. What signs and what publishes is
+  # decided by positive conditions alone: the roots job's output sign, and
+  # "a tag pushed" on the jobs that publish.
+  REHEARSAL_TAG: ${{ inputs.tag }}
+
 jobs:
+  # Devices built here take keys.json only under the roots this tree pins;
+  # a root missing its post-quantum half would sign nothing they take
+  # (docs/maintaining.md, "Two signatures"). Every job that builds what a
+  # device runs waits for this one, on a tag and run by hand alike.
+  roots:
+    name: the pinned roots carry both halves of each root
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      # Whether this run may sign: the step mode below says it.
+      sign: ${{ steps.mode.outputs.sign }}
+    steps:
+      - name: the run's mode, and a rehearsal's tag
+        id: mode
+        # The one place that says who may sign: a tag pushed, or the keys
+        # check run by hand from main without a tag. A rehearsal is neither,
+        # so its jobs get no environment and no secret whatever its inputs.
+        # The shell compares exactly; GitHub's expressions compare without
+        # case. The environment's own rule (main and v*) stays as well.
+        run: |
+          if [ -n "$REHEARSAL_TAG" ]; then
+            case $REHEARSAL_TAG in
+            *[!0-9a-z.-]*)
+              echo "::error::the tag of a rehearsal has only 0-9, a-z, . and -"
+              exit 1
+              ;;
+            esac
+            if ! printf '%s\n' "$REHEARSAL_TAG" | grep -Eqx 'v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?'; then
+              echo "::error::the tag of a rehearsal is vX.Y.Z or vX.Y.Z-rc.N, not $REHEARSAL_TAG"
+              exit 1
+            fi
+          fi
+          sign=false
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_TYPE" = tag ]; then
+            sign=true
+          elif [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$GITHUB_REF" = refs/heads/main ] && [ -z "$REHEARSAL_TAG" ]; then
+            sign=true
+          fi
+          echo "sign=$sign" >>"$GITHUB_OUTPUT"
+          echo "this run signs: $sign"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - env:
+          CBB_RELEASE_TAG: ${{ env.TAG }}
+          SIGN: ${{ steps.mode.outputs.sign }}
+        # On a tag pushed and in the keys check a failure stops the run. Only
+        # a rehearsal (run by hand, not signing) goes on past it, with a loud
+        # warning, so it can run before the ceremony's roots are in the tree.
+        run: |
+          status=0
+          go test -count=1 -run '^TestPinnedRootsComplete$' ./internal/release >"$RUNNER_TEMP/roots.txt" 2>&1 || status=$?
+          cat "$RUNNER_TEMP/roots.txt"
+          if [ "$status" -ne 0 ] && [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$SIGN" = false ]; then
+            # What failed, in the test's own words.
+            why=$(grep -m 1 -E 'roots\.pem|FAIL|panic|cannot|error' "$RUNNER_TEMP/roots.txt" || echo "exit status $status")
+            echo "::warning::a release of this tree would stop at TestPinnedRootsComplete: $why; the rehearsal goes on"
+            {
+              printf '## A release of this tree would stop at the roots check\n\nThis rehearsal went on past it. The output of TestPinnedRootsComplete:\n\n```\n'
+              cat "$RUNNER_TEMP/roots.txt"
+              printf '```\n'
+            } >>"$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          exit "$status"
+
   build:
+    needs: [roots]
     name: build (${{ matrix.goos }}-${{ matrix.name }})
     strategy:
       fail-fast: true
@@ -56,7 +149,7 @@ jobs:
     timeout-minutes: 40
     # The Windows certificate's secrets live in the environment release, which
     # only release tags and main may use (docs/maintaining.md, "Release secrets").
-    environment: release
+    environment: ${{ needs.roots.outputs.sign == 'true' && 'release' || '' }}
     env:
       CGO_ENABLED: ${{ matrix.cgo }}
       GOOS: ${{ matrix.goos }}
@@ -86,38 +179,26 @@ jobs:
           CBB_SOURCE: ${{ github.sha }}
         run: |
           rustup toolchain install stable --profile minimal
-          dir=$(CBB_VERSION="${GITHUB_REF_NAME#v}" sh member/packaging/build.sh "$GOOS/$GOARCH${GOARM:+/$GOARM}")
-          if [ "$GOOS" = windows ]; then
-            cp "$dir/cbb.exe" "$dir/cbbw.exe" "$dir/cbb-relay.exe" "$RUNNER_TEMP/"
-          elif [ -z "$GOMIPS" ]; then
-            # cbb-relay, the relay in Rust, a service of its own beside cbb.
-            cp "$dir/cbb" "$dir/cbb-relay" "$RUNNER_TEMP/"
-          else
-            cp "$dir/cbb" "$RUNNER_TEMP/"
-          fi
+          dir=$(CBB_VERSION="${TAG#v}" sh member/packaging/build.sh "$GOOS/$GOARCH${GOARM:+/$GOARM}")
+          # The target's Rust programs (.github/release-programs.sh): cbb,
+          # cbb-relay, the relay in Rust, a service of its own beside it, but
+          # on the routers (MIPS), and cbbw.exe on Windows.
+          for p in $(sh .github/release-programs.sh rust "$GOOS" "$GOARCH"); do
+            cp "$dir/$p" "$RUNNER_TEMP/"
+          done
           sh member/packaging/notices.sh "$(basename "$(dirname "$dir")")" >"$RUNNER_TEMP/rust-notices"
       - name: cbb-helper and cbb-forward, the Go programs beside cbb
         run: |
-          ldflags="-s -w -X github.com/HunterEwok/cbb/internal/version.Version=$GITHUB_REF_NAME"
-          exe=; if [ "$GOOS" = windows ]; then exe=.exe; fi
           if [ "$GOOS" = windows ]; then
             # The tray app, a module of its own; on Windows it needs no cgo.
             (cd apps/desktop && go build -trimpath -ldflags "-s -w -H=windowsgui" -o "$RUNNER_TEMP/cbb-desktop.exe" .)
           fi
-          # cbb-helper, the Go helper cbb starts as its child, with the same
-          # version: a release cbb takes only a helper of its own release. The
-          # routers' builds (mips) go without the Go programs, as cbb runs
-          # there alone.
-          case $GOARCH in
-          mips | mipsle) ;;
-          *)
-            for p in cbb-helper cbb-forward; do
-              go build -trimpath -ldflags "$ldflags" -o "$RUNNER_TEMP/$p$exe" "./cmd/$p"
-              # -trimpath leaves -ldflags out of the build info, so the tag itself is looked for.
-              grep -aqF -- "$GITHUB_REF_NAME" "$RUNNER_TEMP/$p$exe"
-            done
-            ;;
-          esac
+          # cbb-helper, the Go helper cbb starts as its child, and
+          # cbb-forward, each with the release's version: a release cbb takes
+          # only a helper of its own release. The routers' builds (mips) go
+          # without the Go programs, as cbb runs there alone
+          # (.github/release-programs.sh). CI builds them by the same script.
+          sh .github/release-go.sh "$RUNNER_TEMP" "$TAG"
       - name: the tray app for Linux
         if: matrix.tray
         env:
@@ -134,8 +215,8 @@ jobs:
         # programs stay unsigned, as before.
         if: matrix.goos == 'windows'
         env:
-          CERT_BASE64: ${{ secrets.CBB_WINDOWS_CERT_BASE64 }}
-          CERT_PASSWORD: ${{ secrets.CBB_WINDOWS_CERT_PASSWORD }}
+          CERT_BASE64: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_WINDOWS_CERT_BASE64 || '' }}
+          CERT_PASSWORD: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_WINDOWS_CERT_PASSWORD || '' }}
         run: |
           if [ -z "$CERT_BASE64" ]; then
             echo "::warning::no CBB_WINDOWS_CERT_BASE64 in the secrets; the Windows programs are not signed"
@@ -162,11 +243,11 @@ jobs:
         # is signed ad hoc, as before, and Gatekeeper asks before it first runs.
         if: matrix.goos == 'darwin'
         env:
-          P12: ${{ secrets.CBB_APPLE_DEVID_APP_P12 }}
-          P12_PASSWORD: ${{ secrets.CBB_APPLE_DEVID_APP_PASSWORD }}
-          ASC_KEY: ${{ secrets.CBB_ASC_KEY }}
-          ASC_KEY_ID: ${{ secrets.CBB_ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.CBB_ASC_ISSUER_ID }}
+          P12: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_APPLE_DEVID_APP_P12 || '' }}
+          P12_PASSWORD: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_APPLE_DEVID_APP_PASSWORD || '' }}
+          ASC_KEY: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_ASC_KEY || '' }}
+          ASC_KEY_ID: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_ASC_KEY_ID || '' }}
+          ASC_ISSUER_ID: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_ASC_ISSUER_ID || '' }}
         run: |
           if [ -z "$P12" ] || [ -z "$ASC_KEY" ]; then
             echo "::warning::no CBB_APPLE_DEVID_APP_P12 or CBB_ASC_KEY in the secrets; cbb for macOS is not signed with the Developer ID"
@@ -182,6 +263,19 @@ jobs:
             sh packaging/macos/sign.sh "$id" "$RUNNER_TEMP/$f"
             sh packaging/macos/notarize.sh "$RUNNER_TEMP/$f"
           done
+      - name: no program of the release reads the test hooks
+        # A build with them (member/src/testhooks.rs, internal/testhooks)
+        # carries the line it says them with; a release's never does. CI's
+        # hooks job asks the same script to find the line in a build with
+        # them, and runs .github/release-ignores-hooks.sh on a build made
+        # as this one.
+        run: |
+          # Every program of the target, by the list the steps above built by.
+          set --
+          for p in $(sh .github/release-programs.sh all "$GOOS" "$GOARCH"); do
+            set -- "$@" "$RUNNER_TEMP/$p"
+          done
+          sh .github/hooks-marker.sh absent "$@"
       - name: archive
         run: |
           bin=$RUNNER_TEMP/cbb
@@ -197,12 +291,12 @@ jobs:
 
   macos-app:
     name: build (the Mac app and the .pkg)
-    needs: [build]
+    needs: [roots, build]
     runs-on: macos-latest
     timeout-minutes: 60
     # The Developer ID certificates and the App Store Connect key live in the
     # environment release (docs/maintaining.md, "Signing for macOS").
-    environment: release
+    environment: ${{ needs.roots.outputs.sign == 'true' && 'release' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -231,9 +325,11 @@ jobs:
         run: |
           set -o pipefail
           # The app's version is the tag's numbers (CFBundleShortVersionString has
-          # no -rc.1), the build number the run's; a run by hand from main is 0.0.0.
-          version=${GITHUB_REF_NAME#v}
-          if [ "$GITHUB_REF_TYPE" != tag ]; then version=0.0.0-dev; fi
+          # no -rc.1), the build number the run's; a run by hand from main is 0.0.0,
+          # a rehearsal its tag's.
+          version=${TAG#v}
+          if [ "$GITHUB_REF_TYPE" != tag ] && [ -z "$REHEARSAL_TAG" ]; then version=0.0.0-dev; fi
+          case $version in '' | *[!0-9a-z.-]*) echo "::error::not a version: $version"; exit 1 ;; esac
           echo "VERSION=$version" >>"$GITHUB_ENV"
           brew install xcodegen
           xcodegen generate
@@ -250,13 +346,13 @@ jobs:
         # Without the certificates and the key in the secrets, the app is
         # signed ad hoc and the package is unsigned, and neither is in the release.
         env:
-          APP_P12: ${{ secrets.CBB_APPLE_DEVID_APP_P12 }}
-          APP_P12_PASSWORD: ${{ secrets.CBB_APPLE_DEVID_APP_PASSWORD }}
-          INSTALLER_P12: ${{ secrets.CBB_APPLE_DEVID_INSTALLER_P12 }}
-          INSTALLER_P12_PASSWORD: ${{ secrets.CBB_APPLE_DEVID_INSTALLER_PASSWORD }}
-          ASC_KEY: ${{ secrets.CBB_ASC_KEY }}
-          ASC_KEY_ID: ${{ secrets.CBB_ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.CBB_ASC_ISSUER_ID }}
+          APP_P12: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_APPLE_DEVID_APP_P12 || '' }}
+          APP_P12_PASSWORD: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_APPLE_DEVID_APP_PASSWORD || '' }}
+          INSTALLER_P12: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_APPLE_DEVID_INSTALLER_P12 || '' }}
+          INSTALLER_P12_PASSWORD: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_APPLE_DEVID_INSTALLER_PASSWORD || '' }}
+          ASC_KEY: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_ASC_KEY || '' }}
+          ASC_KEY_ID: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_ASC_KEY_ID || '' }}
+          ASC_ISSUER_ID: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_ASC_ISSUER_ID || '' }}
         run: |
           mkdir -p "$RUNNER_TEMP/dist"
           pkg="$RUNNER_TEMP/dist/cbb-$VERSION.pkg"
@@ -287,13 +383,14 @@ jobs:
 
   testflight:
     name: build (the iPhone app, to TestFlight)
+    needs: [roots]
     runs-on: macos-latest
     timeout-minutes: 60
     # The Apple Distribution certificate, the App Store profiles and the App
     # Store Connect key live in the environment release (docs/maintaining.md,
     # "Signing for macOS"). A tag uploads the build to TestFlight; a run by
     # hand from main only builds and signs it.
-    environment: release
+    environment: ${{ needs.roots.outputs.sign == 'true' && 'release' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -311,12 +408,12 @@ jobs:
           xcodegen generate
       - name: sign the app for the App Store and upload it to TestFlight
         env:
-          P12: ${{ secrets.CBB_APPLE_DISTRIBUTION_P12 }}
-          P12_PASSWORD: ${{ secrets.CBB_APPLE_DISTRIBUTION_PASSWORD }}
-          PROFILES: ${{ secrets.CBB_APPLE_PROFILES }}
-          ASC_KEY: ${{ secrets.CBB_ASC_KEY }}
-          ASC_KEY_ID: ${{ secrets.CBB_ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.CBB_ASC_ISSUER_ID }}
+          P12: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_APPLE_DISTRIBUTION_P12 || '' }}
+          P12_PASSWORD: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_APPLE_DISTRIBUTION_PASSWORD || '' }}
+          PROFILES: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_APPLE_PROFILES || '' }}
+          ASC_KEY: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_ASC_KEY || '' }}
+          ASC_KEY_ID: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_ASC_KEY_ID || '' }}
+          ASC_ISSUER_ID: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_ASC_ISSUER_ID || '' }}
         run: |
           if [ -z "$P12" ] || [ -z "$PROFILES" ] || [ -z "$ASC_KEY" ]; then
             echo "::warning::no CBB_APPLE_DISTRIBUTION_P12, CBB_APPLE_PROFILES or CBB_ASC_KEY in the secrets; no TestFlight build"
@@ -336,9 +433,10 @@ jobs:
 
   android:
     name: build (android)
+    needs: [roots]
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: release # the Android release key
+    environment: ${{ needs.roots.outputs.sign == 'true' && 'release' || '' }} # the Android release key
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -348,10 +446,10 @@ jobs:
         # The release key lives in the environment release's secrets (docs/apps.md, "Releasing the
         # Android app"); without it the release has no APK rather than an unsigned one.
         env:
-          KEYSTORE_BASE64: ${{ secrets.CBB_ANDROID_KEYSTORE_BASE64 }}
-          CBB_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.CBB_ANDROID_KEYSTORE_PASSWORD }}
-          CBB_ANDROID_KEY_ALIAS: ${{ secrets.CBB_ANDROID_KEY_ALIAS }}
-          CBB_ANDROID_KEY_PASSWORD: ${{ secrets.CBB_ANDROID_KEY_PASSWORD }}
+          KEYSTORE_BASE64: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_ANDROID_KEYSTORE_BASE64 || '' }}
+          CBB_ANDROID_KEYSTORE_PASSWORD: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_ANDROID_KEYSTORE_PASSWORD || '' }}
+          CBB_ANDROID_KEY_ALIAS: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_ANDROID_KEY_ALIAS || '' }}
+          CBB_ANDROID_KEY_PASSWORD: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_ANDROID_KEY_PASSWORD || '' }}
         run: |
           mkdir -p "$RUNNER_TEMP/dist"
           if [ -z "$KEYSTORE_BASE64" ]; then
@@ -415,7 +513,7 @@ jobs:
   codeql-swift:
     # The iPhone app's CodeQL analysis must pass before a release; it runs on
     # pull requests only when the app changes.
-    if: github.ref_type == 'tag'
+    if: github.event_name == 'push' && github.ref_type == 'tag'
     uses: ./.github/workflows/codeql-swift.yml # zizmor: ignore[self-repository]
     permissions:
       actions: read
@@ -427,10 +525,10 @@ jobs:
     # the feed's ECDSA P-256 key (docs/maintaining.md, "The OpenWrt feed"),
     # as openwrt-feed.tar.gz, which goes to cbb.tools/openwrt/. Without the
     # key in the secrets there is no feed.
-    needs: [build]
+    needs: [roots, build]
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment: release # the feed's key
+    environment: ${{ needs.roots.outputs.sign == 'true' && 'release' || '' }} # the feed's key
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -442,7 +540,7 @@ jobs:
           merge-multiple: true
       - name: build and sign the feed in Alpine, whose apk has mkpkg
         env:
-          FEED_KEY: ${{ secrets.CBB_OPENWRT_FEED_KEY }}
+          FEED_KEY: ${{ needs.roots.outputs.sign == 'true' && secrets.CBB_OPENWRT_FEED_KEY || '' }}
         run: |
           if [ -z "$FEED_KEY" ]; then
             echo "::warning::no CBB_OPENWRT_FEED_KEY in the secrets; no OpenWrt feed"
@@ -514,15 +612,13 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  release:
-    if: github.ref_type == 'tag'
-    needs: [build, macos-app, android, zxnext, codeql-swift, openwrt-feed]
+  release-files:
+    # The release's files, all in one artifact: on a tag pushed for the
+    # release job below, in a rehearsal for whoever reads it. It only reads.
+    if: (github.event_name == 'push' && github.ref_type == 'tag') || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
+    needs: [build, macos-app, android, zxnext, openwrt-feed]
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    permissions:
-      contents: write # create the release
-      id-token: write # sign the attestations
-      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -541,16 +637,16 @@ jobs:
         # Rust core on their targets; the Swift kit's packages. The Android
         # apps' came with their APKs.
         run: |
-          go run ./tools/sbom go -o dist/sbom-go.cdx.json -version "$GITHUB_REF_NAME" \
+          go run ./tools/sbom go -o dist/sbom-go.cdx.json -version "$TAG" \
             dist/cbb-linux-*.tar.gz dist/cbb-darwin-*.tar.gz \
             dist/cbb-freebsd-*.tar.gz dist/cbb-windows-*.zip
-          go run ./tools/sbom cargo -o dist/sbom-member.cdx.json -version "$GITHUB_REF_NAME" -manifest Cargo.toml \
+          go run ./tools/sbom cargo -o dist/sbom-member.cdx.json -version "$TAG" -manifest Cargo.toml \
             -package cbb-member \
             -target x86_64-unknown-linux-musl,aarch64-unknown-linux-musl,armv7-unknown-linux-musleabihf,arm-unknown-linux-musleabihf,mips-unknown-linux-musl,mipsel-unknown-linux-musl,x86_64-unknown-freebsd,aarch64-unknown-freebsd,x86_64-apple-darwin,aarch64-apple-darwin,x86_64-pc-windows-gnu,aarch64-pc-windows-gnullvm
-          go run ./tools/sbom cargo -o dist/sbom-phone-core.cdx.json -version "$GITHUB_REF_NAME" -manifest Cargo.toml \
+          go run ./tools/sbom cargo -o dist/sbom-phone-core.cdx.json -version "$TAG" -manifest Cargo.toml \
             -package cbb-ffi \
             -target aarch64-apple-ios,aarch64-apple-ios-sim,aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
-          go run ./tools/sbom swift -o dist/sbom-ios-kit.cdx.json -version "$GITHUB_REF_NAME" apps/ios/CBBKit/Package.resolved
+          go run ./tools/sbom swift -o dist/sbom-ios-kit.cdx.json -version "$TAG" apps/ios/CBBKit/Package.resolved
       - name: checksums
         run: |
           # get.sh and get.ps1 run alone, so they carry their messages'
@@ -567,11 +663,37 @@ jobs:
         # immutable once published; it goes to microsoft/winget-pkgs by a pull
         # request (docs/maintaining.md, "winget"). A pre-release stays out, as
         # it does from the tap.
-        if: ${{ !contains(github.ref_name, '-') }}
+        if: ${{ !contains(env.TAG, '-') }}
         run: |
           out="$RUNNER_TEMP/winget"
-          sh packaging/winget/manifest.sh "$GITHUB_REF_NAME" dist/SHA256SUMS "$out"
+          sh packaging/winget/manifest.sh "$TAG" dist/SHA256SUMS "$out"
           (cd "$out" && zip -qX "$GITHUB_WORKSPACE/dist/winget-manifest.zip" ./*.yaml)
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-files
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    # Only a tag pushed makes the draft, whatever else ran: the positive
+    # condition, not "not a rehearsal".
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: [release-files, codeql-swift]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write # create the release
+      id-token: write # sign the attestations
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-files
+          path: dist
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: dist/*
@@ -594,7 +716,7 @@ jobs:
   docker:
     # The image of packaging/docker, from the release's own Linux archives, so
     # it holds the binaries the release attests.
-    if: github.ref_type == 'tag'
+    if: github.event_name == 'push' && github.ref_type == 'tag'
     needs: [release]
     runs-on: ubuntu-latest
     timeout-minutes: 15

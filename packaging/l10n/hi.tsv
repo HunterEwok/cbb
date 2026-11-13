@@ -78,7 +78,9 @@ release.json is not the release stable.json names; not installing	release.json �
 release.json is for %s, not %s	release.json %s के लिए है, %s के लिए नहीं
 release.json does not list %s	release.json में %s सूचीबद्ध नहीं है
 %s does not match the signed release.json; not installing it	%s हस्ताक्षरित release.json से मेल नहीं खाता; इसे इंस्टॉल नहीं किया जा रहा
-The release's signature checks out (%s).	रिलीज़ का हस्ताक्षर सही है (%s)।
+The release's signature checks out (%s): ES256 and SLH-DSA-SHA2-128s.	रिलीज़ का हस्ताक्षर सही है (%s): ES256 और SLH-DSA-SHA2-128s।
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, it needs OpenSSL 3.5 or later.	रिलीज़ का हस्ताक्षर सही है (%s): ES256; SLH-DSA-SHA2-128s की जाँच नहीं हुई, इसके लिए OpenSSL 3.5 या नया चाहिए।
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, PowerShell cannot check it.	रिलीज़ का हस्ताक्षर सही है (%s): ES256; SLH-DSA-SHA2-128s की जाँच नहीं हुई, PowerShell इसे जाँच नहीं सकता।
 could not download %s	%s डाउनलोड नहीं हो सका
 stable.json names no release	stable.json किसी रिलीज़ का नाम नहीं देता
 Downloading %s (%s)...	%s डाउनलोड हो रहा है (%s)...
@@ -255,3 +257,6 @@ cbb for MIPS has no sync away from home yet (roadmap item 37).	MIPS के ल�
 --no-helper is for Linux	--no-helper केवल Linux के लिए है
 cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	यहाँ cbb अपने सहायक के साथ चलता है, जिसमें इसकी कुंजियाँ हो सकती हैं; उसके बिना cbb उनका उपयोग नहीं कर सकता। पहले इसे हटाएँ: %s
 --uinput needs cbb's helper, which runs the desktop connector	--uinput को cbb का सहायक चाहिए, जो डेस्कटॉप कनेक्टर चलाता है
+%s has SLH-DSA-SHA2-128s but does not check it as cbb signs it; update openssl (or CBB_VERIFY=skip to install unchecked)	%s में SLH-DSA-SHA2-128s है, पर यह उसे उस तरह नहीं जाँचता जैसे cbb हस्ताक्षर करता है; openssl अपडेट करें (या बिना जाँच इंस्टॉल करने के लिए CBB_VERIFY=skip)
+no root keys to check the release against in %s; not installing (CBB_VERIFY=skip installs it unchecked)	%s में रिलीज़ की जाँच के लिए कोई रूट कुंजी नहीं; इसे इंस्टॉल नहीं किया जा रहा (CBB_VERIFY=skip इसे बिना जाँच इंस्टॉल करता है)
+Checked against the roots in %s, not the built-in ones.	%s की रूट कुंजियों से जाँचा गया, अंतर्निहित कुंजियों से नहीं।

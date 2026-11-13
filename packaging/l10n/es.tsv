@@ -78,7 +78,9 @@ release.json is not the release stable.json names; not installing	release.json n
 release.json is for %s, not %s	release.json es para %s, no para %s
 release.json does not list %s	release.json no incluye %s
 %s does not match the signed release.json; not installing it	%s no coincide con el release.json firmado; no se instala
-The release's signature checks out (%s).	La firma de la versión es correcta (%s).
+The release's signature checks out (%s): ES256 and SLH-DSA-SHA2-128s.	La firma de la versión es correcta (%s): ES256 y SLH-DSA-SHA2-128s.
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, it needs OpenSSL 3.5 or later.	La firma de la versión es correcta (%s): ES256; SLH-DSA-SHA2-128s no se comprobó, necesita OpenSSL 3.5 o posterior.
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, PowerShell cannot check it.	La firma de la versión es correcta (%s): ES256; SLH-DSA-SHA2-128s no se comprobó, PowerShell no puede comprobarla.
 could not download %s	no se pudo descargar %s
 stable.json names no release	stable.json no nombra ninguna versión
 Downloading %s (%s)...	Descargando %s (%s)...
@@ -255,3 +257,6 @@ cbb for MIPS has no sync away from home yet (roadmap item 37).	cbb para MIPS aú
 --no-helper is for Linux	--no-helper es solo para Linux
 cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	aquí cbb funciona con su ayudante, que puede guardar sus claves; sin él cbb no puede usarlas. Elimínalo primero: %s
 --uinput needs cbb's helper, which runs the desktop connector	--uinput necesita el ayudante de cbb, que ejecuta el conector del escritorio
+%s has SLH-DSA-SHA2-128s but does not check it as cbb signs it; update openssl (or CBB_VERIFY=skip to install unchecked)	%s tiene SLH-DSA-SHA2-128s pero no la comprueba como la firma cbb; actualice openssl (o CBB_VERIFY=skip para instalar sin comprobar)
+no root keys to check the release against in %s; not installing (CBB_VERIFY=skip installs it unchecked)	no hay claves raíz en %s para comprobar la versión; no se instala (CBB_VERIFY=skip la instala sin comprobar)
+Checked against the roots in %s, not the built-in ones.	Comprobado con las raíces de %s, no con las incorporadas.

@@ -14,7 +14,7 @@ import java.io.File
  */
 class EntriesFile(
     private val file: File,
-    private val roots: List<ByteArray> = Releases.roots,
+    private val roots: List<Releases.Key>? = null,
     private val now: () -> Long = System::currentTimeMillis,
     private val log: (String) -> Unit = {},
 ) : EntriesKeeper {
@@ -23,7 +23,7 @@ class EntriesFile(
     private val lock = Any()
     private var held: Held? = runCatching {
         if (!file.exists()) return@runCatching null
-        val set = Wire.parse(file.readBytes())?.let(Releases.EntriesSet::fromJson) ?: return@runCatching null
+        val set = Releases.EntriesSet(file.readBytes())
         val (e, seen) = Releases.checkEntries(set, roots, now(), Releases.Seen())
         Held(set, e, seen)
     }.onFailure { log("the entry points kept in ${file.name}: ${it.message}") }.getOrNull()
@@ -48,7 +48,7 @@ class EntriesFile(
                 val (e, seen) = Releases.checkEntries(set, roots, now(), h?.seen ?: Releases.Seen())
                 if (h != null && seen.keysSeq == h.seen.keysSeq && e.seq <= h.entries.seq) return
                 val tmp = File(file.path + ".tmp")
-                tmp.writeText(set.toJson().toString())
+                tmp.writeBytes(set.data)
                 tmp.renameTo(file)
                 held = Held(set, e, seen)
             } catch (e: Exception) {

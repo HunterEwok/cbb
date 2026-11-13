@@ -89,12 +89,12 @@ func (z ZXNext) File(name string) (ZXNextFile, bool) {
 // release older than installed, the version of the cbb that checks it
 // (none when empty). A clock that is not set yet takes keys.json as it
 // is, as VerifyKeys does.
-func CheckZXNext(keys, list File, roots [][]byte, now time.Time, installed string) (ZXNext, error) {
+func CheckZXNext(keys, list File, roots []Key, now time.Time, installed string) (ZXNext, error) {
 	k, err := VerifyKeys(keys, roots, now, Seen{})
 	if err != nil {
 		return ZXNext{}, fmt.Errorf("keys.json: %w", err)
 	}
-	if err := list.verify(k.spkis(UseRelease)); err != nil {
+	if err := list.verify(k.of(UseRelease)); err != nil {
 		return ZXNext{}, fmt.Errorf("zxnext.json: %w", err)
 	}
 	z, err := decodeZXNext(list.Body)

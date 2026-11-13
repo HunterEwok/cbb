@@ -48,7 +48,7 @@ func TestAloneRelease(t *testing.T) {
 		t.Error("the Rust member took an older channel file")
 	}
 	forged := signer.sign(t, "0.6.2", 3)
-	forged.Release.Sig[len(forged.Release.Sig)-1] ^= 1
+	forged.Release.Sigs[1].Sig[len(forged.Release.Sigs[1].Sig)-1] ^= 1
 	if _, err := rust.do(t, control.Header{Op: control.OpRelease}, releaseJSON(t, forged)); err == nil {
 		t.Error("the Rust member took a forged release")
 	}

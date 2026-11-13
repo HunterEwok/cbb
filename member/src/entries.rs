@@ -11,7 +11,7 @@ use std::sync::Mutex;
 
 use cbb_core::release::{self, File, Seen};
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::value::RawValue;
 
 use crate::error::{Error, Result};
 use crate::files::write_atomic;
@@ -19,8 +19,9 @@ use crate::files::write_atomic;
 /// The file it is kept in, in the state directory, as the full member's.
 pub const FILE: &str = "entries.json";
 
-/// The largest list taken: a keys.json and an entries.json are a few KB.
-const MAX: usize = 64 << 10;
+/// The largest set taken: its two files, each at most as large as any
+/// reader takes a release file, and the JSON around them.
+pub const MAX: usize = 2 * release::MAX_FILE + 64;
 
 #[derive(Deserialize)]
 struct Set {
@@ -29,7 +30,7 @@ struct Set {
 }
 
 struct Held {
-    set: Value,
+    set: Box<RawValue>,
     seen: Seen,
     expires_ms: i64,
 }
@@ -37,8 +38,37 @@ struct Held {
 /// The entry points this member holds.
 pub struct Entries {
     path: PathBuf,
-    roots: Vec<Vec<u8>>,
+    roots: Vec<cbb_core::release::Key>,
     held: Mutex<Option<Held>>,
+}
+
+/// Reads a set `{keys, entries}` from the bytes that came, so that each
+/// file is read as it was signed and sent (docs/protocol.md, section 16,
+/// "Two signatures").
+fn decode(v: &RawValue) -> Result<Set> {
+    // The set in the strict form of signed bodies, as the core's entry
+    // point reads it: no name twice or escaped.
+    cbb_core::strict::check(v.get().as_bytes(), &["keys", "entries"])
+        .map_err(|e| Error::msg(format!("the entry points: {}", e.message())))?;
+    serde_json::from_str(v.get()).map_err(|_| Error::msg("the entry points do not decode"))
+}
+
+/// A set of signed files, `{"NAME": FILE, ...}`, of the bytes of each file
+/// as fetched, which must each be one JSON value; the readers check them.
+pub fn set_of(files: &[(&str, &[u8])]) -> Result<Box<RawValue>> {
+    let mut out = String::from("{");
+    for (i, (name, data)) in files.iter().enumerate() {
+        let text = std::str::from_utf8(data).map_err(|_| Error::msg(format!("{name} is not UTF-8")))?;
+        let one: &RawValue = serde_json::from_str(text).map_err(|_| Error::msg(format!("{name} does not decode")))?;
+        if i > 0 {
+            out.push(',');
+        }
+        out.push_str(&serde_json::to_string(name).map_err(|_| Error::msg("cannot encode a name"))?);
+        out.push(':');
+        out.push_str(one.get());
+    }
+    out.push('}');
+    RawValue::from_string(out).map_err(|_| Error::msg("cannot encode the signed files"))
 }
 
 /// Reports whether the order (keys.json seq, entries.json seq) a is newer
@@ -50,30 +80,32 @@ pub fn newer(a: (u64, u64), b: (u64, u64)) -> bool {
 impl Entries {
     /// Opens the list kept in dir, checked again under roots; a list that
     /// no longer checks out is dropped, and logged.
-    pub fn open(dir: &Path, roots: Vec<Vec<u8>>, now_ms: i64, log: &dyn Fn(&str)) -> Entries {
+    pub fn open(dir: &Path, roots: Vec<cbb_core::release::Key>, now_ms: i64, log: &dyn Fn(&str)) -> Entries {
         let e = Entries { path: dir.join(FILE), roots, held: Mutex::new(None) };
         match std::fs::read(&e.path) {
-            Ok(data) => match serde_json::from_slice::<Value>(&data).map_err(|_| Error::msg("it does not decode")) {
-                Ok(v) => match e.check(&v, now_ms, &Seen::default()) {
-                    Ok(h) => *e.held.lock().unwrap() = Some(h),
+            Ok(data) => {
+                match serde_json::from_slice::<Box<RawValue>>(&data).map_err(|_| Error::msg("it does not decode")) {
+                    Ok(v) => match e.check(&v, now_ms, &Seen::default()) {
+                        Ok(h) => *e.held.lock().unwrap() = Some(h),
+                        Err(err) => log(&format!("cbb: the entry points kept in {FILE}: {}", err.for_log())),
+                    },
                     Err(err) => log(&format!("cbb: the entry points kept in {FILE}: {}", err.for_log())),
-                },
-                Err(err) => log(&format!("cbb: the entry points kept in {FILE}: {}", err.for_log())),
-            },
+                }
+            }
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
             Err(err) => log(&format!("cbb: cannot read {}: {err}", e.path.display())),
         }
         e
     }
 
-    fn check(&self, v: &Value, now_ms: i64, seen: &Seen) -> Result<Held> {
+    fn check(&self, v: &RawValue, now_ms: i64, seen: &Seen) -> Result<Held> {
         if self.roots.is_empty() {
             return Err(Error::msg("this build pins no release keys"));
         }
-        let set: Set = serde_json::from_value(v.clone()).map_err(|_| Error::msg("the entry points do not decode"))?;
-        let roots: Vec<&[u8]> = self.roots.iter().map(Vec::as_slice).collect();
-        let (e, next) = release::check_entries(&set.keys, &set.entries, &roots, now_ms, seen)?;
-        Ok(Held { set: v.clone(), seen: next, expires_ms: e.expires_ms })
+        let set = decode(v)?;
+        let roots = &self.roots;
+        let (e, next) = release::check_entries(&set.keys, &set.entries, roots, now_ms, seen)?;
+        Ok(Held { set: v.to_owned(), seen: next, expires_ms: e.expires_ms })
     }
 
     /// The keys.json and entries.json seqs of the list held, which a hello
@@ -86,7 +118,7 @@ impl Entries {
     }
 
     /// The list held, `{keys, entries}`, while it has not expired.
-    pub fn current(&self, now_ms: i64) -> Option<Value> {
+    pub fn current(&self, now_ms: i64) -> Option<Box<RawValue>> {
         self.held.lock().unwrap().as_ref().filter(|h| now_ms < h.expires_ms).map(|h| h.set.clone())
     }
 
@@ -95,19 +127,19 @@ impl Entries {
     /// expired; none when it names none.
     pub fn relay_keys(&self, name: &str, now_ms: i64) -> Vec<Vec<u8>> {
         let Some(set) = self.current(now_ms) else { return Vec::new() };
-        let Ok(set) = serde_json::from_value::<Set>(set) else { return Vec::new() };
-        let roots: Vec<&[u8]> = self.roots.iter().map(Vec::as_slice).collect();
-        let Ok(keys) = release::verify_keys(&set.keys, &roots, now_ms, &Seen::default()) else { return Vec::new() };
-        keys.keys.into_iter().filter(|k| k.usage == "relay" && k.name == name).map(|k| k.key).collect()
+        let Ok(set) = decode(&set) else { return Vec::new() };
+        let roots = &self.roots;
+        let Ok(keys) = release::verify_keys(&set.keys, roots, now_ms, &Seen::default()) else { return Vec::new() };
+        keys.relays(name)
     }
 
     /// Where the list held says the project's relay `name` is reached now,
     /// host:port, while the list has not expired; none when it names none.
     pub fn relay_endpoints(&self, name: &str, now_ms: i64) -> Vec<String> {
         let Some(set) = self.current(now_ms) else { return Vec::new() };
-        let Ok(set) = serde_json::from_value::<Set>(set) else { return Vec::new() };
-        let roots: Vec<&[u8]> = self.roots.iter().map(Vec::as_slice).collect();
-        match release::check_entries(&set.keys, &set.entries, &roots, now_ms, &Seen::default()) {
+        let Ok(set) = decode(&set) else { return Vec::new() };
+        let roots = &self.roots;
+        match release::check_entries(&set.keys, &set.entries, roots, now_ms, &Seen::default()) {
             Ok((e, _)) => e.relays.into_iter().find(|r| r.name == name).map(|r| r.endpoints).unwrap_or_default(),
             Err(_) => Vec::new(),
         }
@@ -115,8 +147,8 @@ impl Entries {
 
     /// Takes a list a peer sent when it checks out and is newer than the one
     /// held, keeps it in the file and reports whether it did.
-    pub fn take(&self, v: &Value, now_ms: i64) -> Result<bool> {
-        if serde_json::to_vec(v).map_or(true, |d| d.len() > MAX) {
+    pub fn take(&self, v: &RawValue, now_ms: i64) -> Result<bool> {
+        if v.get().len() > MAX {
             return Err(Error::msg("the entry points are too large"));
         }
         let mut held = self.held.lock().unwrap();
@@ -127,8 +159,7 @@ impl Entries {
         if !newer((h.seen.entries_keys_seq, h.seen.entries_seq), have) {
             return Ok(false);
         }
-        let data = serde_json::to_vec(v).map_err(|_| Error::msg("cannot encode the entry points"))?;
-        write_atomic(&self.path, &data, 0o644)?;
+        write_atomic(&self.path, v.get().as_bytes(), 0o644)?;
         *held = Some(h);
         Ok(true)
     }
@@ -137,21 +168,60 @@ impl Entries {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::Value;
 
     fn vectors() -> Value {
         let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata/interop/go-entries.json");
         serde_json::from_slice(&std::fs::read(p).unwrap()).unwrap()
     }
 
-    fn roots(v: &Value) -> Vec<Vec<u8>> {
-        #[derive(Deserialize)]
-        struct Der(#[serde(with = "cbb_core::certs::b64")] Vec<u8>);
-        v["roots"].as_array().unwrap().iter().map(|r| serde_json::from_value::<Der>(r.clone()).unwrap().0).collect()
+    fn roots(v: &Value) -> Vec<cbb_core::release::Key> {
+        serde_json::from_value(v["roots"].clone()).unwrap()
     }
 
-    fn case(v: &Value, name: &str) -> Value {
+    fn case(v: &Value, name: &str) -> Box<RawValue> {
         let c = v["vectors"].as_array().unwrap().iter().find(|c| c["name"] == name).unwrap();
-        serde_json::json!({"keys": c["keys"], "entries": c["entries"]})
+        serde_json::value::to_raw_value(&serde_json::json!({"keys": c["keys"], "entries": c["entries"]})).unwrap()
+    }
+
+    // The valid list with its keys.json written another way: the same body
+    // and signatures, in an envelope that no reader takes.
+    fn reworded(v: &Value, how: fn(&str, &str) -> String) -> Box<RawValue> {
+        let c = v["vectors"].as_array().unwrap().iter().find(|c| c["name"] == "valid").unwrap();
+        let keys = how(c["keys"]["body"].as_str().unwrap(), &c["keys"]["sigs"].to_string());
+        let entries = c["entries"].to_string();
+        set_of(&[("keys", keys.as_bytes()), ("entries", entries.as_bytes())]).unwrap()
+    }
+
+    #[test]
+    fn takes_only_the_canonical_envelope() {
+        let v = vectors();
+        let now = v["now_ms"].as_i64().unwrap();
+        let dir = std::env::temp_dir().join(format!("cbb-entries-canonical-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let e = Entries::open(&dir, roots(&v), now, &|_| {});
+        let spaced = reworded(&v, |b, s| format!(r#"{{ "body" : "{b}" , "sigs" : {s} }}"#));
+        let reordered = reworded(&v, |b, s| format!(r#"{{"sigs":{s},"body":"{b}"}}"#));
+        assert!(e.take(&spaced, now).is_err());
+        assert!(e.take(&reordered, now).is_err());
+        assert_eq!(e.order(now), (0, 0));
+        // Written as signed, with the space around it that readers pass
+        // over, the same list is taken, and kept as it came.
+        let same = reworded(&v, |b, s| format!("\n{{\"body\":\"{b}\",\"sigs\":{s}}}\r\n"));
+        assert!(e.take(&same, now).unwrap());
+        assert_eq!(std::fs::read(dir.join(FILE)).unwrap(), same.get().as_bytes());
+        assert!(set_of(&[("keys", b"{} {}")]).is_err());
+        // A set not in the strict form: a name escaped, or twice.
+        let c = v["vectors"].as_array().unwrap().iter().find(|c| c["name"] == "valid").unwrap();
+        for bad in [
+            format!(r#"{{"k\u0065ys":{},"entries":{}}}"#, c["keys"], c["entries"]),
+            format!(r#"{{"keys":{},"entries":{},"entries":{}}}"#, c["keys"], c["entries"], c["entries"]),
+        ] {
+            let bad = RawValue::from_string(bad).unwrap();
+            assert!(e.take(&bad, now + 1).is_err());
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -6,12 +6,10 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -57,7 +55,7 @@ func fetch(src string) ([]byte, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("%s: %s", src, resp.Status)
 	}
-	return io.ReadAll(io.LimitReader(resp.Body, 2*release.MaxBody))
+	return release.ReadAll(resp.Body)
 }
 
 func fetchFile(src string) (release.File, error) {
@@ -103,7 +101,7 @@ func current(from, releases string) (keys, ch, rel release.File, c release.Chann
 // (docs/maintaining.md, "Signed releases").
 func extend(args []string) error {
 	fs := flag.NewFlagSet("extend", flag.ExitOnError)
-	key := fs.String("key", "", "the channel key: file:KEY.pem")
+	key := fs.String("key", "", "the channel key: file:KEY.pem+slh:PQ.pem, its two halves")
 	out := fs.String("out", "", "the directory the files go to, served at https://cbb.tools/channel/")
 	from := fs.String("from", channelFiles, "where the current keys.json and channel file are")
 	releases := fs.String("releases", releaseFiles, "where each release's files are, under vX.Y.Z")
@@ -119,15 +117,21 @@ func extend(args []string) error {
 	if err != nil {
 		return err
 	}
-	spki, err := x509.MarshalPKIXPublicKey(k.Public())
+	pubs, err := k.PublicKeys()
 	if err != nil {
 		return err
 	}
 	var ks release.Keys
 	json.Unmarshal(keys.Body, &ks)
-	certified := false
+	halves := map[string]int{}
 	for _, key := range ks.Keys {
-		certified = certified || (key.Use == release.UseChannel && bytes.Equal(key.Key, spki))
+		if key.Use == release.UseChannel && bytes.Equal(key.Key, pubs[key.Alg]) {
+			halves[key.Name]++
+		}
+	}
+	certified := false
+	for _, n := range halves {
+		certified = certified || n == len(release.Required)
 	}
 	if !certified {
 		return errors.New("keys.json does not certify this channel key; release-sign publish -channel adds it")

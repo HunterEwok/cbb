@@ -554,14 +554,44 @@ fn go_actions() {
 fn go_release() {
     use crate::release::{self, File, Seen};
     let v = vectors("go-release.json");
-    let roots: Vec<Vec<u8>> = v["roots"].as_array().unwrap().iter().map(bytes).collect();
-    let roots: Vec<&[u8]> = roots.iter().map(|r| r.as_slice()).collect();
+    let roots: Vec<release::Key> = serde_json::from_value(v["roots"].clone()).unwrap();
     let name = v["channel"].as_str().unwrap();
     let now = v["now_ms"].as_i64().unwrap();
     let cases = v["vectors"].as_array().unwrap();
-    assert_eq!(cases.len(), 33);
+    assert_eq!(cases.len(), 53);
+    // Every reader of release files reads up to the same sizes.
+    assert_eq!(v["max_file"].as_u64(), Some(release::MAX_FILE as u64));
+    assert_eq!(v["max_body"].as_u64(), Some(release::MAX_BODY as u64));
+    // A release.json as it comes, under one keys.json and channel file
+    // (go-release-envelopes.json): an envelope read otherwise than Go reads
+    // it refuses.
+    let ev = vectors("go-release-envelopes.json");
+    let envelopes = ev["envelopes"].as_array().unwrap();
+    assert_eq!(envelopes.len(), 61);
+    let env_roots: Vec<release::Key> = serde_json::from_value(ev["roots"].clone()).unwrap();
+    let keys: File = serde_json::from_value(ev["keys"].clone()).unwrap();
+    let channel: File = serde_json::from_value(ev["channel_file"].clone()).unwrap();
+    for e in envelopes {
+        let label = e["name"].as_str().unwrap();
+        let raw = crate::certs::b64::decode_str(e["release"].as_str().unwrap()).unwrap();
+        let taken = File::parse(&raw).map_err(|e| alloc::format!("{e}")).and_then(|r| {
+            release::check(
+                &keys,
+                &channel,
+                &r,
+                &env_roots,
+                ev["channel"].as_str().unwrap(),
+                ev["now_ms"].as_i64().unwrap(),
+                &Seen::default(),
+            )
+            .map_err(|e| alloc::string::String::from(e.message()))
+        });
+        assert_eq!(taken.is_ok(), e["ok"].as_bool().unwrap(), "envelope {label}: {:?}", taken.err());
+    }
     for c in cases {
-        let file = |k: &str| -> File { serde_json::from_value(c[k].clone()).unwrap() };
+        // Each case names its files by their index in files.
+        let file =
+            |k: &str| -> File { serde_json::from_value(v["files"][c[k].as_u64().unwrap() as usize].clone()).unwrap() };
         let seen: Seen = serde_json::from_value(c["seen"].clone()).unwrap();
         let got = release::check(&file("keys"), &file("channel"), &file("release"), &roots, name, now, &seen);
         let label = c["name"].as_str().unwrap();
@@ -595,8 +625,7 @@ fn go_release() {
 fn go_entries() {
     use crate::release::{self, File, Seen};
     let v = vectors("go-entries.json");
-    let roots: Vec<Vec<u8>> = v["roots"].as_array().unwrap().iter().map(bytes).collect();
-    let roots: Vec<&[u8]> = roots.iter().map(|r| r.as_slice()).collect();
+    let roots: Vec<release::Key> = serde_json::from_value(v["roots"].clone()).unwrap();
     let now = v["now_ms"].as_i64().unwrap();
     let cases = v["vectors"].as_array().unwrap();
     assert_eq!(cases.len(), 14);
@@ -620,8 +649,7 @@ fn go_entries() {
 fn go_zxnext() {
     use crate::release::{self, File};
     let v = vectors("go-zxnext.json");
-    let roots: Vec<Vec<u8>> = v["roots"].as_array().unwrap().iter().map(bytes).collect();
-    let roots: Vec<&[u8]> = roots.iter().map(|r| r.as_slice()).collect();
+    let roots: Vec<release::Key> = serde_json::from_value(v["roots"].clone()).unwrap();
     let cases = v["vectors"].as_array().unwrap();
     assert_eq!(cases.len(), 18);
     for c in cases {
@@ -1050,5 +1078,24 @@ fn stop_exchange() {
     }
     for stop in ["none", "secrets", "full"] {
         assert!(seen.contains(stop), "no case with stop {stop}");
+    }
+}
+
+/// The SLH-DSA verifier against NIST's vectors for SLH-DSA-SHA2-128s
+/// (ACVP, external interface, pure, with a context), so that it answers
+/// as the standard and not only as the Go library that signs the other
+/// vectors.
+#[test]
+fn nist_slh_dsa() {
+    fn unhex(s: &str) -> Vec<u8> {
+        (0..s.len() / 2).map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap()).collect()
+    }
+    let v = vectors("nist-slh-dsa-sha2-128s.json");
+    let cases = v["cases"].as_array().unwrap();
+    assert_eq!(cases.len(), 17);
+    for c in cases {
+        let f = |k: &str| unhex(c[k].as_str().unwrap());
+        let got = crate::slhdsa::verify(&f("pk"), &f("msg"), &f("sig"), &f("ctx"));
+        assert_eq!(got, c["pass"].as_bool().unwrap(), "{} ({})", c["id"], c["reason"]);
     }
 }

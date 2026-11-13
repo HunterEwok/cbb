@@ -38,7 +38,7 @@ A variable set in the environment wins over the same name in the settings file.
 | `CBB_CONTAINER` | the service | Set by the Docker image: the service runs in a container, whose keys are in a file in its volume, so it makes no group (`cbb new`, `cbb takeover`) and offers no admin key, and the root cannot make it an admin. |
 | `CBB_KEYS_IN_FILE` | the service, in a container | `yes` allows a container to hold the group's keys anyway: to make the group, or to be made an admin and so the hub. Anyone who copies its volume then has those keys. |
 | `CBB_ROOTLESS` | `cbb` on Linux, the lite member too | `1`, set by the user units of a rootless install (`install.sh --rootless`), makes `cbb` use the user's own paths: the socket in `$XDG_RUNTIME_DIR/cbb`, the state, settings and update folder under the user's home; the service then refuses to be the root, an admin or a hub. Unset, `cbb` in `~/.local/bin` does the same. |
-| `CBB_HELPER` | the lite member | The Go helper `cbb-helper` to start, instead of the one beside the program; empty for none. Like the one beside it, it starts only if nobody but root or `cbb`'s user may change it (docs/design.md, "The service and its helper"). |
+| `CBB_HELPER` | the lite member built with the test hooks (`testhooks`) | For tests only, never read by a release: the Go helper `cbb-helper` to start, instead of the one beside the program; empty for none. Like the one beside it, it starts only if nobody but root or `cbb`'s user may change it (docs/design.md, "The service and its helper"). |
 | `CBB_SOCKET` | `cbb`, the lite member, the Mac app | Another control socket, for tests or a second instance. |
 | `CBB_ADMIN_SOCKET` | `cbb` | Another admin socket, the one for the commands that change the group; by default the admin socket next to the control socket. |
 | `CBB_STATE` | the lite member | Another state directory. |
@@ -50,7 +50,7 @@ A variable set in the environment wins over the same name in the settings file.
 | `CBB_MDNS_TRACE` | the lite member's `cbb service` | For tests only: a file to which the service appends, by the time of day in UTC, every event its mDNS browsing sees and mdns-sd's debug log (packets sent and received, the cache); the service tests set it and log the file when a test fails. |
 | `CBB_TEST_FALLBACK` | the lite member's `cbb service` | For tests only: milliseconds a member waits for one with a lower device ID to dial it before it dials that one itself (30 s otherwise); set, the member also dials the members with a greater device ID at port 1, as if a firewall there dropped the member port. |
 | `CBB_TEST_APPLETV_NAME` | `cbb-helper` | For tests only: the name an Apple TV announces by mDNS, which the helper then takes instead of browsing for it; empty for none. |
-| `CBB_TEST_BLUEZ` | cbb-helper on Linux | For tests only: the D-Bus address of a test's BlueZ (`bluetest`), which the Bluetooth keyboard registers with instead of the system bus. |
+| `CBB_TEST_BLUEZ` | cbb-helper on Linux built with the test hooks | For tests only, never read by a release: the D-Bus address of a test's BlueZ (`bluetest`), which the Bluetooth keyboard registers with instead of the system bus. |
 | `CBB_WRITE_MUTANTS` | the core's tests (`cargo test -p cbb-core`) | For development only: `1` writes `testdata/format/wave4-mutants.json` again from what the readers say, instead of failing when the file no longer matches them. |
 | `CBB_FORWARD_FLAGS` | `cbb-forward.service` | The flags of `cbb forward`, such as `-vless-xhttp vpn.example.org`. |
 | `CBB_RELAY_FLAGS` | `cbb-relay.service` | The flags of `cbb relay`: `-group TAG` or `-open`. |
@@ -76,7 +76,7 @@ A variable set in the environment wins over the same name in the settings file.
 | `CBB_PF_CONF` | the FreeBSD firewall script | Another `pf.conf` than `/etc/pf.conf`, for tests. |
 | `CBB_IMAGE`, `CBB_PREVIEW` | the lite member's tests | For a look by eye at what the ZX Spectrum Next would show: `cargo test -p cbb-member preview -- --ignored` reads the PNG or JPEG `CBB_IMAGE` names and writes what `cbb next image` makes of it to the PNG `CBB_PREVIEW` names. |
 | `CBB_RELEASE_DIR` | `get.sh`, `get.ps1` | For tests: takes the release's files from this directory instead of downloading them. |
-| `CBB_RELEASE_ROOTS` | `get.sh`, `get.ps1` | For tests, with `CBB_RELEASE_DIR`: a file with the root keys to check the release against instead of the project's own. |
+| `CBB_RELEASE_ROOTS` | `get.sh`, `get.ps1`; `cbb update` and the service built with the test hooks | For tests, with `CBB_RELEASE_DIR`: a file with the root keys to check the release against instead of the project's own; the installers say so when they use it, and refuse when the file gives no key. A release of `cbb` never reads it. |
 
 ### For tests and development
 
@@ -119,12 +119,14 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_INTEROP_OUT` | the Swift and Kotlin kits' tests, Go's interop tests | A directory where the kits write fresh interop vectors and Go reads them; without it Go reads `testdata/interop`. |
 | `CBB_VERDICTS` | the verdict tests of all four implementations (`TestVerdicts`, `command::verdicts`, `VerdictTest`, `VerdictTests`) | A corpus of `tools/difffuzz gen` to write the verdicts on ([differential fuzzing](../differential.md)); without it each runs on a small corpus of its own. |
 | `CBB_VERDICTS_OUT` | the same tests | The file the verdicts go to, one line per case. |
-| `CBB_TEST_AHEAD_FILE` | the Rust service, in the Go service's tests | A file holding the milliseconds the service's wall clock is moved by, read each time; the tests write it to move the clock while the service runs (as the Go service's settings for tests). Never set by hand. |
+| `CBB_TEST_AHEAD_FILE` | the Rust service built with the test hooks (`testhooks`), in the Go service's tests | A file holding the milliseconds the service's wall clock is moved by, read each time; the tests write it to move the clock while the service runs (as the Go service's settings for tests). Never set by hand. |
 | `CBB_TEST_RENEW_EVERY` | the Rust service, in the Go service's tests | How often, in milliseconds, the root and the admins look for certificates due for renewal, in place of twice a day. Never set by hand. |
-| `CBB_TEST_ATTEST_ROOTS` | `cbb-helper`, in the service's tests | A PEM file of the public keys (or certificates) of the roots an Android key attestation must chain to, in place of Google's; read at each check. Never set by hand. |
-| `CBB_TEST_TPM_ROOTS` | `cbb-helper`, in the service's tests | A PEM file of the TPM makers' roots an EK certificate must chain to, in place of the built-in ones. Never set by hand. |
+| `CBB_TEST_ATTEST_ROOTS` | `cbb-helper` built with the test hooks, in the service's tests | A PEM file of the public keys (or certificates) of the roots an Android key attestation must chain to, in place of Google's; read at each check. Never set by hand. |
+| `CBB_TEST_TPM_ROOTS` | `cbb-helper` built with the test hooks, in the service's tests | A PEM file of the TPM makers' roots an EK certificate must chain to, in place of the built-in ones. Never set by hand. |
 | `CBB_TEST_STATUS_URL` | `cbb-helper`, in the service's tests | Where the attestation status list and its keys are fetched from, in place of `https://cbb.tools/attest/`. Never set by hand. |
 | `CBB_TEST_STATUS_EVERY` | the Rust service, in the service's tests | How often, in milliseconds, the root fetches the attestation status list, in place of once a day. Never set by hand. |
+| `CBB_TEST_REFETCH_EVERY` | the Rust service, in the service's tests | How often, in milliseconds, a failing link to the project's relay fetches the signed lists again from the relay's server, in place of every ten minutes. Never set by hand. |
+| `CBB_TEST_LISTS_MIRROR` | the Rust service built with the test hooks, in the service's tests | `PORT CAFILE`: the port the mirror on the project relay's server is reached at and the only roots its certificate is checked against, a test's mirror on loopback beside its relay. Never set by hand. |
 | `CBB_TEST_DEAD_UDP` | the Rust service, in the service's tests | An address (host:port) that never answers, which replaces the hubs' UDP addresses, as on a network that blocks WireGuard, so that the tunnel goes over VLESS. Never set by hand. |
 | `CBB_UPDATE_VECTORS` | the lite core's keyboard tests | `1` writes the keyboard layouts' vectors again (`cargo test -p cbb-core keyboard`). |
 | `CBB_ARCH` | the build of `cbb` in Rust (`member/packaging/build.sh`) | The architecture as the release's archives name it (`amd64`, `arm64`, `armv7`, `armv6`, `mips`, `mipsle`), which `cbb update` downloads for; set by `build.sh`, and without it the one Rust names. |
@@ -142,3 +144,5 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_PI` | the ZX Next's `drvtest` install tests | The Pi's cbb that `build/CBB` was built with, when it is not `build/PIBRIDGE`. |
 | `CBB_UNLINKED` | the ZX Next's played card | A directory where a file `.cbb` deletes from the card is copied first, to look at it. |
 | `CBB_RELEASE_SIGN_DIR` | `tools/release-sign` | Another directory for the release signing tool's files than `tools/release-sign`. |
+| `CBB_RELEASE_PQ_DIR` | `tools/release-sign` | Where the post-quantum halves of the keys in hardware are kept, encrypted to that hardware (`HASH.age` and its `HASH.identity`): `~/.config/cbb-release/pq` by default (maintaining.md, "Two signatures"). |
+| `CBB_RELEASE_TAG` | `internal/release` tests | Set by the release workflow, on a tag and when run by hand: `TestPinnedRootsComplete` then fails unless every pinned root has both halves (maintaining.md, "Two signatures"); a tag and the keys check stop there, a rehearsal only warns (maintaining.md, "A rehearsal of a release"). |

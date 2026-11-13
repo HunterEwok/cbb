@@ -32,7 +32,7 @@ type zxnextVector struct {
 
 type zxnextVectors struct {
 	Comment string         `json:"comment"`
-	Roots   [][]byte       `json:"roots"`
+	Roots   []Key          `json:"roots"`
 	Vectors []zxnextVector `json:"vectors"`
 }
 
@@ -41,11 +41,11 @@ func makeZXNextVectors(t *testing.T) zxnextVectors {
 	rel, ch := newSigner(t), newSigner(t)
 	day := 24 * time.Hour
 	kb := keysBody(3, nowMS-1000, 90*day, rel)
-	kb.Keys = append(kb.Keys, Key{Key: ch.spki, Name: "channel key", Use: UseChannel})
+	kb.Keys = append(kb.Keys, ch.keys("channel key", UseChannel)...)
 	keys := sign(t, kb, root)
 	v := zxnextVectors{
 		Comment: "Written by internal/release's TestZXNextVectors -update. The Pi's cbb takes a list with ok before .cbb update takes a newer CBB (docs/protocol.md, section 16, \"The ZX Spectrum Next's files\").",
-		Roots:   [][]byte{root.spki},
+		Roots:   roots(root),
 	}
 	add := func(name string, k, l File, now int64, installed string, ok bool) {
 		v.Vectors = append(v.Vectors, zxnextVector{Name: name, Keys: k, List: l, NowMS: now, Installed: installed, OK: ok})
@@ -97,7 +97,7 @@ func TestZXNextVectors(t *testing.T) {
 		t.Fatal(err)
 	}
 	var v zxnextVectors
-	if err := json.Unmarshal(data, &v); err != nil {
+	if err := json.Unmarshal(compacted(t, data), &v); err != nil {
 		t.Fatal(err)
 	}
 	if len(v.Vectors) != 18 {

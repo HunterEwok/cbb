@@ -78,7 +78,9 @@ release.json is not the release stable.json names; not installing	release.json s
 release.json is for %s, not %s	release.json ni ya %s, si %s
 release.json does not list %s	release.json haiorodheshi %s
 %s does not match the signed release.json; not installing it	%s hailingani na release.json iliyosainiwa; haisakinishwi
-The release's signature checks out (%s).	Sahihi ya toleo ni sahihi (%s).
+The release's signature checks out (%s): ES256 and SLH-DSA-SHA2-128s.	Sahihi ya toleo ni sahihi (%s): ES256 na SLH-DSA-SHA2-128s.
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, it needs OpenSSL 3.5 or later.	Sahihi ya toleo ni sahihi (%s): ES256; SLH-DSA-SHA2-128s haikukaguliwa, inahitaji OpenSSL 3.5 au mpya zaidi.
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, PowerShell cannot check it.	Sahihi ya toleo ni sahihi (%s): ES256; SLH-DSA-SHA2-128s haikukaguliwa, PowerShell haiwezi kuikagua.
 could not download %s	imeshindwa kupakua %s
 stable.json names no release	stable.json haitaji toleo lolote
 Downloading %s (%s)...	Inapakua %s (%s)...
@@ -255,3 +257,6 @@ cbb for MIPS has no sync away from home yet (roadmap item 37).	cbb ya MIPS bado 
 --no-helper is for Linux	--no-helper ni kwa Linux pekee
 cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	hapa cbb inaendeshwa pamoja na msaidizi wake, ambaye huenda anashikilia funguo zake; bila msaidizi cbb haiwezi kuzitumia. Iondoe kwanza: %s
 --uinput needs cbb's helper, which runs the desktop connector	--uinput inahitaji msaidizi wa cbb, unaoendesha kiunganishi cha eneo-kazi
+%s has SLH-DSA-SHA2-128s but does not check it as cbb signs it; update openssl (or CBB_VERIFY=skip to install unchecked)	%s ina SLH-DSA-SHA2-128s lakini haiikagui jinsi cbb inavyosaini; sasisha openssl (au CBB_VERIFY=skip kusakinisha bila kukagua)
+no root keys to check the release against in %s; not installing (CBB_VERIFY=skip installs it unchecked)	hakuna funguo za mzizi katika %s za kukagua toleo; halisakinishwi (CBB_VERIFY=skip hulisakinisha bila kukaguliwa)
+Checked against the roots in %s, not the built-in ones.	Imekaguliwa kwa mizizi iliyo katika %s, si ile iliyojengwa ndani.

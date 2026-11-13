@@ -78,7 +78,9 @@ release.json is not the release stable.json names; not installing	release.json �
 release.json is for %s, not %s	release.json מיועד ל-%s, לא ל-%s
 release.json does not list %s	release.json אינו מפרט את %s
 %s does not match the signed release.json; not installing it	%s אינו תואם ל-release.json החתום; לא מתקין אותו
-The release's signature checks out (%s).	החתימה של הגרסה תקינה (%s).
+The release's signature checks out (%s): ES256 and SLH-DSA-SHA2-128s.	החתימה של הגרסה תקינה (%s): ES256 ו-SLH-DSA-SHA2-128s.
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, it needs OpenSSL 3.5 or later.	החתימה של הגרסה תקינה (%s): ES256; SLH-DSA-SHA2-128s לא נבדקה, נדרש OpenSSL 3.5 ומעלה.
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, PowerShell cannot check it.	החתימה של הגרסה תקינה (%s): ES256; SLH-DSA-SHA2-128s לא נבדקה, PowerShell אינו יכול לבדוק אותה.
 could not download %s	לא ניתן להוריד את %s
 stable.json names no release	stable.json אינו מציין גרסה
 Downloading %s (%s)...	מוריד את %s (%s)...
@@ -255,3 +257,6 @@ cbb for MIPS has no sync away from home yet (roadmap item 37).	ל־cbb עבור 
 --no-helper is for Linux	‏--no-helper מיועד ל־Linux בלבד
 cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	כאן cbb פועל עם העוזר שלו, שעשוי להחזיק את המפתחות שלו; בלעדיו cbb לא יכול להשתמש בהם. הסירו אותו קודם: %s
 --uinput needs cbb's helper, which runs the desktop connector	‏--uinput דורש את העוזר של cbb, שמריץ את המחבר של שולחן העבודה
+%s has SLH-DSA-SHA2-128s but does not check it as cbb signs it; update openssl (or CBB_VERIFY=skip to install unchecked)	%s כולל SLH-DSA-SHA2-128s אך אינו בודק אותו כפי ש-cbb חותם; עדכנו את openssl (או CBB_VERIFY=skip כדי להתקין בלי בדיקה)
+no root keys to check the release against in %s; not installing (CBB_VERIFY=skip installs it unchecked)	אין ב-%s מפתחות שורש לבדיקת הגרסה; לא מתקין אותה (CBB_VERIFY=skip מתקין אותה בלי בדיקה)
+Checked against the roots in %s, not the built-in ones.	נבדק מול השורשים שב-%s, לא מול המובנים.

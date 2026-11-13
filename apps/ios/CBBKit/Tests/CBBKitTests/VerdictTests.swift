@@ -66,16 +66,8 @@ final class VerdictTests: XCTestCase {
         case "manifest":
             return Media.Manifest.parse(body) != nil ? "taken" : "refused"
         case "keys", "release", "channel", "attest-status":
-            return refused {
-                guard body.count <= Releases.maxBody else { return "refused" }
-                switch c.kind {
-                case "keys": _ = try Releases.decodeKeys(body)
-                case "release": _ = try Releases.decodeRelease(body)
-                case "channel": _ = try Releases.decodeChannel(body)
-                default: _ = try Releases.decodeStatus(body)
-                }
-                return "taken"
-            }
+            // The core reads release files for the kit (docs/core-api.md).
+            return Core.bodyRefusal(c.kind, body) == nil ? "taken" : "refused"
         default:
             XCTFail("unknown kind \(c.kind)")
             return ""

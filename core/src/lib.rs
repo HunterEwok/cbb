@@ -83,6 +83,7 @@ pub mod release;
 pub mod root;
 pub mod rule;
 pub mod seal;
+pub mod slhdsa;
 pub mod secret;
 pub mod store;
 pub mod strict;

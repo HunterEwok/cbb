@@ -272,7 +272,6 @@ impl Attestations {
         let Ok(data) = std::fs::read(self.dir.join(STATUS_FILE)) else { return };
         let Ok(k) = serde_json::from_slice::<Kept>(&data) else { return };
         let roots = crate::update::release_roots();
-        let roots: Vec<&[u8]> = roots.iter().map(Vec::as_slice).collect();
         if let Ok((st, _)) =
             release::check_status(&k.keys, &k.status, &roots, crate::update::now_ms(), &Seen::default())
         {
@@ -298,7 +297,6 @@ impl Attestations {
         let f: Files = serde_json::from_slice(&call("attest-status", &serde_json::json!({}))?)
             .context("the revocation list's files do not decode")?;
         let roots = crate::update::release_roots();
-        let roots: Vec<&[u8]> = roots.iter().map(Vec::as_slice).collect();
         let (st, seen) = release::check_status(&f.keys, &f.status, &roots, crate::update::now_ms(), &kept_seen)?;
         if seen == kept_seen {
             return Ok(()); // the same list

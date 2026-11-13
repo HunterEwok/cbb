@@ -42,6 +42,12 @@ const CALLER_WAIT: Duration = Duration::from_secs(5);
 /// again, as Go's relayRefetch, and looks for another address after the
 /// same error.
 const REFETCH: Duration = Duration::from_secs(600);
+
+/// REFETCH, or what the service's tests shorten it to with
+/// CBB_TEST_REFETCH_EVERY (milliseconds).
+fn refetch_every() -> Duration {
+    std::env::var("CBB_TEST_REFETCH_EVERY").ok().and_then(|v| v.parse().ok()).map_or(REFETCH, Duration::from_millis)
+}
 const MOVE_AGAIN: Duration = Duration::from_secs(60);
 const MAX_CALLS: usize = 16;
 
@@ -312,7 +318,7 @@ impl Away {
     /// key this device does not know), keeps the next address it is reached
     /// at in the state, which starts the link there.
     fn project_relay_failed(&self, node: &Arc<Node>, at: &Forwarder, err: &str) {
-        let due = self.refetched.lock().unwrap().is_none_or(|t| t.elapsed() >= REFETCH);
+        let due = self.refetched.lock().unwrap().is_none_or(|t| t.elapsed() >= refetch_every());
         if due && !self.fetching.swap(true, Ordering::SeqCst) {
             *self.refetched.lock().unwrap() = Some(Instant::now());
             let (node, log, dir, ip) = (node.clone(), self.log.clone(), self.dir.clone(), at.endpoint.ip());
@@ -455,7 +461,9 @@ fn project_relay_addrs(node: &Node, log: &dyn Fn(&str)) -> Vec<SocketAddr> {
     let mut out = Vec::new();
     for name in names {
         if let Some(a) = test_resolve(&name) {
-            if !out.contains(&a) {
+            if let Some(a) = a
+                && !out.contains(&a)
+            {
                 out.push(a);
             }
             continue;
@@ -476,14 +484,22 @@ fn project_relay_addrs(node: &Node, log: &dyn Fn(&str)) -> Vec<SocketAddr> {
 
 /// The address CBB_TEST_RESOLVE gives a relay's name, as Go's tests set
 /// lookupIP: "host=ip" pairs separated by commas, for the tests only, since
-/// entries.json names a relay only by a host name.
-fn test_resolve(name: &str) -> Option<SocketAddr> {
+/// entries.json names a relay only by a host name. "host=none" is a name
+/// that does not resolve (Some(None)); None is a name the variable leaves
+/// to the system.
+fn test_resolve(name: &str) -> Option<Option<SocketAddr>> {
     let v = std::env::var("CBB_TEST_RESOLVE").ok()?;
     let (host, port) = name.rsplit_once(':')?;
     let port: u16 = port.parse().ok()?;
     v.split(',').find_map(|pair| {
         let (h, ip) = pair.trim().split_once('=')?;
-        (h == host).then(|| ip.parse::<std::net::IpAddr>().ok()).flatten().map(|ip| SocketAddr::new(ip, port))
+        if h != host {
+            return None;
+        }
+        if ip == "none" {
+            return Some(None);
+        }
+        ip.parse::<std::net::IpAddr>().ok().map(|ip| Some(SocketAddr::new(ip, port)))
     })
 }
 

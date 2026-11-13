@@ -78,7 +78,9 @@ release.json is not the release stable.json names; not installing	release.json �
 release.json is for %s, not %s	release.json 属于 %s，而不是 %s
 release.json does not list %s	release.json 中没有列出 %s
 %s does not match the signed release.json; not installing it	%s 与已签名的 release.json 不符；不安装
-The release's signature checks out (%s).	版本签名验证通过（%s）。
+The release's signature checks out (%s): ES256 and SLH-DSA-SHA2-128s.	版本签名验证通过（%s）：ES256 和 SLH-DSA-SHA2-128s。
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, it needs OpenSSL 3.5 or later.	版本签名验证通过（%s）：ES256；未检查 SLH-DSA-SHA2-128s，需要 OpenSSL 3.5 或更高版本。
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, PowerShell cannot check it.	版本签名验证通过（%s）：ES256；未检查 SLH-DSA-SHA2-128s，PowerShell 无法检查它。
 could not download %s	无法下载 %s
 stable.json names no release	stable.json 没有指定版本
 Downloading %s (%s)...	正在下载 %s（%s）...
@@ -255,3 +257,6 @@ cbb for MIPS has no sync away from home yet (roadmap item 37).	MIPS 版 cbb 暂�
 --no-helper is for Linux	--no-helper 仅适用于 Linux
 cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	这里的 cbb 与其辅助程序一起运行，辅助程序可能保存着它的密钥；没有辅助程序，cbb 无法使用这些密钥。请先将其移除：%s
 --uinput needs cbb's helper, which runs the desktop connector	--uinput 需要 cbb 的辅助程序，桌面连接器在其中运行
+%s has SLH-DSA-SHA2-128s but does not check it as cbb signs it; update openssl (or CBB_VERIFY=skip to install unchecked)	%s 支持 SLH-DSA-SHA2-128s，但不能按 cbb 的签名方式验证它；请更新 openssl（或用 CBB_VERIFY=skip 跳过验证安装）
+no root keys to check the release against in %s; not installing (CBB_VERIFY=skip installs it unchecked)	%s 中没有用于检查版本的根密钥；不安装（CBB_VERIFY=skip 会不经检查安装）
+Checked against the roots in %s, not the built-in ones.	已按 %s 中的根密钥检查，而非内置的根密钥。

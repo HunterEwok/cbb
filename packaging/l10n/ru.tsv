@@ -78,7 +78,9 @@ release.json is not the release stable.json names; not installing	release.json �
 release.json is for %s, not %s	release.json для %s, а не для %s
 release.json does not list %s	в release.json нет %s
 %s does not match the signed release.json; not installing it	%s не совпадает с подписанным release.json; установка отменена
-The release's signature checks out (%s).	Подпись выпуска верна (%s).
+The release's signature checks out (%s): ES256 and SLH-DSA-SHA2-128s.	Подпись выпуска верна (%s): ES256 и SLH-DSA-SHA2-128s.
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, it needs OpenSSL 3.5 or later.	Подпись выпуска верна (%s): ES256; SLH-DSA-SHA2-128s не проверена, для неё нужен OpenSSL 3.5 или новее.
+The release's signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, PowerShell cannot check it.	Подпись выпуска верна (%s): ES256; SLH-DSA-SHA2-128s не проверена, PowerShell не умеет её проверять.
 could not download %s	не удалось скачать %s
 stable.json names no release	stable.json не называет выпуск
 Downloading %s (%s)...	Скачивание %s (%s)...
@@ -255,3 +257,6 @@ cbb for MIPS has no sync away from home yet (roadmap item 37).	у cbb для MIP
 --no-helper is for Linux	--no-helper только для Linux
 cbb runs here with its helper, which may hold its keys; without it cbb cannot use them. Remove it first: %s	здесь cbb работает со своим помощником, который может хранить его ключи; без помощника cbb не сможет ими пользоваться. Сначала удалите его: %s
 --uinput needs cbb's helper, which runs the desktop connector	--uinput требует помощника cbb, в котором работает коннектор рабочего стола
+%s has SLH-DSA-SHA2-128s but does not check it as cbb signs it; update openssl (or CBB_VERIFY=skip to install unchecked)	%s знает SLH-DSA-SHA2-128s, но проверяет её не так, как подписывает cbb; обновите openssl (или CBB_VERIFY=skip, чтобы установить без проверки)
+no root keys to check the release against in %s; not installing (CBB_VERIFY=skip installs it unchecked)	в %s нет корневых ключей для проверки выпуска; установка отменена (CBB_VERIFY=skip устанавливает без проверки)
+Checked against the roots in %s, not the built-in ones.	Проверено по корням из %s, а не по встроенным.

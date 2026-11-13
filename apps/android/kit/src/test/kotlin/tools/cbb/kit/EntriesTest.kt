@@ -3,7 +3,6 @@
 
 package tools.cbb.kit
 
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -17,12 +16,12 @@ import kotlin.test.assertTrue
 
 class EntriesTest {
     private val v = Interop.read("go-entries.json").jsonObject
-    private val roots = v.getValue("roots").jsonArray.map { b64(it.jsonPrimitive.content) }
+    private val roots = v.getValue("roots").jsonArray.map { Releases.Key.fromJson(it.jsonObject) }
     private val now = v.getValue("now_ms").jsonPrimitive.long
 
     private fun case(name: String): Releases.EntriesSet {
         val c = v.getValue("vectors").jsonArray.map { it.jsonObject }.first { it.getValue("name").jsonPrimitive.content == name }
-        return Releases.EntriesSet.fromJson(c)!!
+        return entriesSet(c)
     }
 
     /** The phone keeps the newest list that checks out, across a restart, and stops using it once it expires. */
@@ -69,15 +68,9 @@ class EntriesTest {
         dir.deleteRecursively()
     }
 
-    /** The entries message and the hello's seqs go over the wire and come back the same. */
+    /** The phone's member in the core takes the entries message; the kit reads none, and the hello's seqs go over the wire and come back the same. */
     @Test
     fun wire() {
-        val set = case("valid")
-        val m = Member.decode(Member.encode(Member.Message.Entries(set)).let { it.copyOfRange(4, it.size) })
-        assertTrue(m is Member.Message.Entries)
-        assertEquals(set.toJson(), (m as Member.Message.Entries).set.toJson())
-        assertEquals(set.toJson(), Releases.EntriesSet.fromJson(set.toJson())!!.toJson())
-        assertNull(Releases.EntriesSet.fromJson(JsonObject(emptyMap())))
         assertEquals(Member.Message.Unknown("entries"), Member.decode("""{"t":"entries"}""".toByteArray()))
 
         val hello = Member.Hello(wallMS = 1, entriesSeq = 5, entriesKeysSeq = 3)

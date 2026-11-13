@@ -5,21 +5,24 @@ package release
 
 import (
 	"bytes"
-	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/x509"
+	"encoding/asn1"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"math"
+	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/cloudflare/circl/sign/slhdsa"
 )
 
 var update = flag.Bool("update", false, "rewrite testdata/interop/go-release.json")
@@ -27,21 +30,39 @@ var update = flag.Bool("update", false, "rewrite testdata/interop/go-release.jso
 const nowMS = int64(1_800_000_000_000)
 
 type signer struct {
-	key  *ecdsa.PrivateKey
-	spki []byte
+	key  Signer
+	pubs map[int][]byte
+	spki []byte // the ES256 half's
 }
 
 func newSigner(t *testing.T) signer {
 	t.Helper()
-	k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	k, err := GenerateSigner()
 	if err != nil {
 		t.Fatal(err)
 	}
-	spki, err := x509.MarshalPKIXPublicKey(&k.PublicKey)
+	pubs, err := k.PublicKeys()
 	if err != nil {
 		t.Fatal(err)
 	}
-	return signer{k, spki}
+	return signer{k, pubs, pubs[AlgES256]}
+}
+
+// keys returns the signer's halves as keys.json lists them.
+func (s signer) keys(name, use string) []Key {
+	return []Key{{Alg: AlgES256, Key: s.pubs[AlgES256], Name: name, Use: use}, {Alg: AlgSLHDSA, Key: s.pubs[AlgSLHDSA], Name: name, Use: use}}
+}
+
+// root returns the signer's halves as a pinned root.
+func (s signer) root(name string) []Key { return s.keys(name, UseRoot) }
+
+// roots pins each signer as a root.
+func roots(ss ...signer) []Key {
+	var out []Key
+	for i, s := range ss {
+		out = append(out, s.root("root-"+string(rune('1'+i)))...)
+	}
+	return out
 }
 
 func sign(t *testing.T, body any, s signer) File {
@@ -58,10 +79,18 @@ func sign(t *testing.T, body any, s signer) File {
 	return f
 }
 
+// otherAlg is the algorithm of Required that is not alg.
+func otherAlg(alg int) int {
+	if alg == AlgES256 {
+		return AlgSLHDSA
+	}
+	return AlgES256
+}
+
 func keysBody(seq uint64, at int64, life time.Duration, keys ...signer) Keys {
 	k := Keys{V: 1, Type: TypeKeys, Seq: seq, TimeMS: at, ExpiresMS: at + life.Milliseconds()}
 	for i, s := range keys {
-		k.Keys = append(k.Keys, Key{Key: s.spki, Name: "release key " + string(rune('1'+i))})
+		k.Keys = append(k.Keys, s.keys("release key "+string(rune('1'+i)), "")...)
 	}
 	return k
 }
@@ -103,12 +132,137 @@ type statusVector struct {
 	Revoked []string `json:"revoked,omitempty"`
 }
 
+// envelope is a release.json as it comes, its text in a string so that
+// no reader of the vectors file changes it, under the vectors' first
+// keys.json and channel file: whether the envelope is read, and the file
+// taken (docs/protocol.md, section 16, "Two signatures").
+type envelope struct {
+	Name string `json:"name"`
+	// Release is the release.json's bytes as they come, in base64: some
+	// are not UTF-8.
+	Release []byte `json:"release"`
+	OK      bool   `json:"ok"`
+}
+
 type vectors struct {
-	Roots   [][]byte       `json:"roots"`
-	NowMS   int64          `json:"now_ms"`
-	Name    string         `json:"channel"`
-	Vectors []vector       `json:"vectors"`
-	Status  []statusVector `json:"status"`
+	Roots     []Key          `json:"roots"`
+	NowMS     int64          `json:"now_ms"`
+	Name      string         `json:"channel"`
+	Vectors   []vector       `json:"vectors"`
+	Status    []statusVector `json:"status"`
+	Envelopes []envelope     `json:"envelopes"`
+}
+
+// The file on disk lists each signed file once, in files, and its cases
+// name them by their index there: an SLH-DSA signature is 7856 bytes, and
+// most cases share their keys.json.
+type vectorsFile struct {
+	Roots   []Key  `json:"roots"`
+	NowMS   int64  `json:"now_ms"`
+	Name    string `json:"channel"`
+	MaxFile int    `json:"max_file"`
+	MaxBody int    `json:"max_body"`
+	Files   []File `json:"files"`
+	Vectors []struct {
+		Name    string `json:"name"`
+		Keys    int    `json:"keys"`
+		Channel int    `json:"channel"`
+		Release int    `json:"release"`
+		Seen    Seen   `json:"seen"`
+		OK      bool   `json:"ok"`
+		Version string `json:"version,omitempty"`
+	} `json:"vectors"`
+	Status []struct {
+		Name    string   `json:"name"`
+		Keys    int      `json:"keys"`
+		Status  int      `json:"status"`
+		Seen    Seen     `json:"seen"`
+		OK      bool     `json:"ok"`
+		Revoked []string `json:"revoked,omitempty"`
+	} `json:"status"`
+}
+
+// envelopesFile is testdata/interop/go-release-envelopes.json: the
+// envelopes under one keys.json and channel file.
+type envelopesFile struct {
+	Roots     []Key      `json:"roots"`
+	NowMS     int64      `json:"now_ms"`
+	Name      string     `json:"channel"`
+	Keys      File       `json:"keys"`
+	Channel   File       `json:"channel_file"`
+	Envelopes []envelope `json:"envelopes"`
+}
+
+// fileTable numbers files as vectorsFile lists them, each once.
+type fileTable struct {
+	files []File
+	index map[string]int
+}
+
+func (t *fileTable) add(f File) int {
+	b, _ := json.Marshal(f)
+	if i, ok := t.index[string(b)]; ok {
+		return i
+	}
+	if t.index == nil {
+		t.index = map[string]int{}
+	}
+	t.index[string(b)] = len(t.files)
+	t.files = append(t.files, f)
+	return len(t.files) - 1
+}
+
+func (v vectors) MarshalJSON() ([]byte, error) {
+	var t fileTable
+	out := vectorsFile{Roots: v.Roots, NowMS: v.NowMS, Name: v.Name, MaxFile: MaxFile, MaxBody: MaxBody}
+	for _, c := range v.Vectors {
+		out.Vectors = append(out.Vectors, struct {
+			Name    string `json:"name"`
+			Keys    int    `json:"keys"`
+			Channel int    `json:"channel"`
+			Release int    `json:"release"`
+			Seen    Seen   `json:"seen"`
+			OK      bool   `json:"ok"`
+			Version string `json:"version,omitempty"`
+		}{c.Name, t.add(c.Keys), t.add(c.Channel), t.add(c.Release), c.Seen, c.OK, c.Version})
+	}
+	for _, c := range v.Status {
+		out.Status = append(out.Status, struct {
+			Name    string   `json:"name"`
+			Keys    int      `json:"keys"`
+			Status  int      `json:"status"`
+			Seen    Seen     `json:"seen"`
+			OK      bool     `json:"ok"`
+			Revoked []string `json:"revoked,omitempty"`
+		}{c.Name, t.add(c.Keys), t.add(c.Status), c.Seen, c.OK, c.Revoked})
+	}
+	out.Files = t.files
+	return json.Marshal(out)
+}
+
+func (v *vectors) UnmarshalJSON(b []byte) error {
+	var in vectorsFile
+	if err := json.Unmarshal(b, &in); err != nil {
+		return err
+	}
+	file := func(i int) File {
+		if i < 0 || i >= len(in.Files) {
+			return File{}
+		}
+		return in.Files[i]
+	}
+	// Every reader of release files reads up to the same sizes.
+	if in.MaxFile != MaxFile || in.MaxBody != MaxBody {
+		return fmt.Errorf("the file's limits are %d and %d, the reader's %d and %d", in.MaxFile, in.MaxBody, MaxFile, MaxBody)
+	}
+	*v = vectors{Roots: in.Roots, NowMS: in.NowMS, Name: in.Name}
+	for _, c := range in.Vectors {
+		v.Vectors = append(v.Vectors, vector{c.Name, file(c.Keys), file(c.Channel), file(c.Release), c.Seen, c.OK, c.Version})
+	}
+	for _, c := range in.Status {
+		v.Status = append(v.Status, statusVector{c.Name, file(c.Keys), file(c.Status), c.Seen, c.OK, c.Revoked})
+	}
+	return nil
 }
 
 func statusBody(seq uint64, at int64, life time.Duration, revoked ...string) Status {
@@ -137,15 +291,15 @@ func makeVectors(t *testing.T) vectors {
 	longKeys := sign(t, keysBody(3, nowMS-1000, 101*day, rk1), root1)
 	sk := newSigner(t)
 	withStatus := keysBody(5, nowMS-1000, 90*day, rk1)
-	withStatus.Keys = append(withStatus.Keys, Key{Key: sk.spki, Name: "status key", Use: UseStatus})
+	withStatus.Keys = append(withStatus.Keys, sk.keys("status key", UseStatus)...)
 	keysStatus := sign(t, withStatus, root1)
 	ck := newSigner(t)
 	withChannel := keysBody(6, nowMS-1000, 90*day, rk1)
-	withChannel.Keys = append(withChannel.Keys, Key{Key: ck.spki, Name: "channel key", Use: UseChannel})
+	withChannel.Keys = append(withChannel.Keys, ck.keys("channel key", UseChannel)...)
 	keysChannel := sign(t, withChannel, root1)
 	unknownUse := keysBody(5, nowMS-1000, 90*day)
-	unknownUse.Keys = []Key{{Key: rk1.spki, Name: "a key of a later use", Use: "later"}}
-	v := vectors{Roots: [][]byte{root1.spki, root2.spki}, NowMS: nowMS, Name: "stable"}
+	unknownUse.Keys = rk1.keys("a key of a later use", "later")
+	v := vectors{Roots: roots(root1, root2), NowMS: nowMS, Name: "stable"}
 	add := func(name string, k, c, r File, seen Seen, version string) {
 		v.Vectors = append(v.Vectors, vector{Name: name, Keys: k, Channel: c, Release: r, Seen: seen, OK: version != "", Version: version})
 	}
@@ -184,7 +338,86 @@ func makeVectors(t *testing.T) vectors {
 	add("the channel signed by the channel key", keysChannel, sign(t, channelBody("stable", 8, nowMS-1000, 30*day, rel, "0.6.0"), ck), rel, first, "0.6.0")
 	add("release.json signed by the channel key", keysChannel, sign(t, channelBody("stable", 8, nowMS-1000, 30*day, rel, "0.6.0"), ck),
 		sign(t, releaseBody("0.6.0", "stable"), ck), first, "")
+	// Two signatures (docs/protocol.md, section 16, "Two signatures").
+	only := func(f File, alg int) File {
+		var sigs []Sig
+		for _, sg := range f.Sigs {
+			if sg.Alg == alg {
+				sigs = append(sigs, sg)
+			}
+		}
+		f.Sigs = sigs
+		return f
+	}
+	mixed := func(a, b File, algB int) File {
+		out := only(a, otherAlg(algB))
+		out.Sigs = append(out.Sigs, only(b, algB).Sigs...)
+		return out
+	}
+	relBy2 := sign(t, releaseBody("0.6.0", "stable"), rk2)
+	twoKeys := sign(t, keysBody(9, nowMS-1000, 90*day, rk1, rk2), root1)
+	later := rel
+	later.Sigs = append(append([]Sig{}, rel.Sigs...), Sig{Alg: 9, Key: bytes.Repeat([]byte{9}, 32), Sig: bytes.Repeat([]byte{7}, 100)})
+	laterFirst := rel
+	laterFirst.Sigs = append([]Sig{{Alg: 9, Key: bytes.Repeat([]byte{9}, 32), Sig: []byte{1}}}, rel.Sigs...)
+	brokenPQ := rel
+	brokenPQ.Sigs = append([]Sig{}, rel.Sigs...)
+	brokenPQ.Sigs[1].Sig = append([]byte{}, rel.Sigs[1].Sig...)
+	brokenPQ.Sigs[1].Sig[100] ^= 1
+	strayPQ := rel
+	strayPQ.Sigs = append(append([]Sig{}, rel.Sigs...), only(sign(t, releaseBody("0.6.0", "stable"), other), AlgSLHDSA).Sigs...)
+	add("release.json with only its ES256 signature", keys, ch, only(rel, AlgES256), first, "")
+	add("release.json with only its SLH-DSA signature", keys, ch, only(rel, AlgSLHDSA), first, "")
+	add("keys.json with only the root's ES256 signature", only(keys, AlgES256), ch, rel, first, "")
+	add("keys.json with only the root's SLH-DSA signature", only(keys, AlgSLHDSA), ch, rel, first, "")
+	add("the channel with only its ES256 signature", keys, only(ch, AlgES256), rel, first, "")
+	add("release.json signed by two keys, one half each", twoKeys, ch, mixed(rel, relBy2, AlgSLHDSA), first, "")
+	add("keys.json signed by two roots, one half each", mixed(keys, sign(t, keysBody(3, nowMS-day.Milliseconds(), 90*day, rk1), root2), AlgSLHDSA), ch, rel, first, "")
+	add("release.json with a third signature of a later algorithm", keys, ch, later, first, "0.6.0")
+	add("release.json with a signature of a later algorithm first", keys, ch, laterFirst, first, "0.6.0")
+	add("release.json with a broken SLH-DSA signature", keys, ch, brokenPQ, first, "")
+	add("release.json with an SLH-DSA signature of a key not in keys.json beside", keys, ch, strayPQ, first, "0.6.0")
+	add("release.json without signatures", keys, ch, File{Body: rel.Body, Sigs: []Sig{}}, first, "")
+	longLater := rel
+	longLater.Sigs = append(append([]Sig{}, rel.Sigs...), Sig{Alg: 9, Key: bytes.Repeat([]byte{9}, 32), Sig: bytes.Repeat([]byte{7}, 40000)})
+	add("release.json with a signature of a later algorithm of 40000 bytes", keys, ch, longLater, first, "0.6.0")
+	laterKey := keysBody(3, nowMS-day.Milliseconds(), 90*day, rk1)
+	laterKey.Keys = append(laterKey.Keys, Key{Alg: 9, Key: bytes.Repeat([]byte{5}, 20000), Name: "release key 1"})
+	add("keys.json with a key of a later algorithm of 20000 bytes", sign(t, laterKey, root1), ch, rel, first, "0.6.0")
 	add("the channel signed by a channel key of another keys.json", keys, sign(t, channelBody("stable", 8, nowMS-1000, 30*day, rel, "0.6.0"), ck), rel, first, "")
+	sameName := keysBody(9, nowMS-1000, 90*day)
+	sameName.Keys = append(rk1.keys("release key 1", ""), rk2.keys("release key 1", "")...)
+	add("release.json signed by two keys under one name, one half each", sign(t, sameName, root1), ch, mixed(rel, relBy2, AlgSLHDSA), first, "")
+	twiceBroken := rel
+	twiceBroken.Sigs = append(append([]Sig{}, rel.Sigs...), Sig{Alg: AlgSLHDSA, Key: rel.Sigs[1].Key, Sig: brokenPQ.Sigs[1].Sig})
+	add("release.json with its pair and a broken second SLH-DSA signature of the same half", keys, ch, twiceBroken, first, "")
+	nine := rel
+	nine.Sigs = append([]Sig{}, rel.Sigs...)
+	for len(nine.Sigs) < 9 {
+		nine.Sigs = append(nine.Sigs, Sig{Alg: 9, Key: bytes.Repeat([]byte{9}, 32), Sig: []byte{byte(len(nine.Sigs))}})
+	}
+	add("release.json with nine signatures", keys, ch, nine, first, "")
+	oneName := keysBody(10, nowMS-1000, 90*day)
+	oneName.Keys = append(rk1.keys("k", ""), ck.keys("k", UseChannel)...)
+	chBody := channelBody("stable", 8, nowMS-1000, 30*day, rel, "0.6.0")
+	chFile := mixed(sign(t, chBody, rk1), sign(t, chBody, ck), AlgSLHDSA)
+	add("the channel signed by one half of a release key and one of a channel key of the same name", sign(t, oneName, root1), chFile, rel, first, "")
+	highS := rel
+	highS.Sigs = append([]Sig{}, rel.Sigs...)
+	highS.Sigs[0].Sig = otherS(t, rel.Sigs[0].Sig)
+	add("release.json whose ES256 signature has the other S", keys, ch, highS, first, "")
+	spelled := keysBody(3, nowMS-day.Milliseconds(), 90*day)
+	spelled.Keys = rk1.keys("release key 1", "")
+	spelled.Keys[1].Use = UseRelease
+	add("release.json under a key whose halves spell the release use apart", sign(t, spelled, root1), ch, rel, first, "0.6.0")
+
+	envs, err := Envelopes(func() (File, error) { return sign(t, releaseBody("0.6.0", "stable"), rk1), nil }, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range envs {
+		v.Envelopes = append(v.Envelopes, envelope{e.Name, e.Raw, e.OK})
+	}
 
 	revoked := []string{"0", "1f", "9a", "c35a2e1e3b46b5a1", "15b3d8b2f3a0e3e3cc1d2a4e1f0b7c9d"}
 	addStatus := func(name string, k, st File, seen Seen, ok bool) {
@@ -213,7 +446,7 @@ func makeVectors(t *testing.T) vectors {
 	addStatus("a serial with a leading zero", keysStatus, sign(t, statusBody(40, nowMS-1000, day, "01f"), sk), first, false)
 	addStatus("a serial in capitals", keysStatus, sign(t, statusBody(40, nowMS-1000, day, "1F"), sk), first, false)
 	withBoth := withStatus
-	withBoth.Keys = append(append([]Key{}, withStatus.Keys...), Key{Key: ck.spki, Name: "channel key", Use: UseChannel})
+	withBoth.Keys = append(append([]Key{}, withStatus.Keys...), ck.keys("channel key", UseChannel)...)
 	addStatus("signed by the channel key", sign(t, withBoth, root1), sign(t, statusBody(40, nowMS-3600_000, 8*day, revoked...), ck), first, false)
 	addStatus("a channel file where the list belongs", keysStatus, sign(t, channelBody("stable", 40, nowMS-1000, day, rel, "0.6.0"), sk), first, false)
 	return v
@@ -225,12 +458,21 @@ func makeVectors(t *testing.T) vectors {
 // section 16), for the Rust cbb and the phone kits to agree with.
 func TestReleaseVectors(t *testing.T) {
 	path := filepath.Join("..", "..", "testdata", "interop", "go-release.json")
+	envPath := filepath.Join("..", "..", "testdata", "interop", "go-release-envelopes.json")
 	if *update {
-		data, err := json.MarshalIndent(makeVectors(t), "", "\t")
+		made := makeVectors(t)
+		data, err := json.MarshalIndent(made, "", "\t")
 		if err != nil {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(path, append(data, '\n'), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		env := envelopesFile{made.Roots, made.NowMS, made.Name, made.Vectors[0].Keys, made.Vectors[0].Channel, made.Envelopes}
+		if data, err = json.MarshalIndent(env, "", "\t"); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(envPath, append(data, '\n'), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -239,11 +481,32 @@ func TestReleaseVectors(t *testing.T) {
 		t.Fatal(err)
 	}
 	var v vectors
-	if err := json.Unmarshal(data, &v); err != nil {
+	if err := json.Unmarshal(compacted(t, data), &v); err != nil {
 		t.Fatal(err)
 	}
-	if len(v.Vectors) != 33 || len(v.Status) != 18 {
+	if len(v.Vectors) != 53 || len(v.Status) != 18 {
 		t.Fatalf("the file has %d vectors and %d of the list", len(v.Vectors), len(v.Status))
+	}
+	envData, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var env envelopesFile
+	if err := json.Unmarshal(compacted(t, envData), &env); err != nil {
+		t.Fatal(err)
+	}
+	if len(env.Envelopes) != 61 {
+		t.Fatalf("%d envelopes", len(env.Envelopes))
+	}
+	for _, c := range env.Envelopes {
+		var rel File
+		err := json.Unmarshal(c.Release, &rel)
+		if err == nil {
+			_, _, err = Check(env.Keys, env.Channel, rel, env.Roots, env.Name, time.UnixMilli(env.NowMS), Seen{})
+		}
+		if (err == nil) != c.OK {
+			t.Errorf("envelope %s: %v, the file says ok %v", c.Name, err, c.OK)
+		}
 	}
 	for _, c := range v.Status {
 		st, seen, err := CheckStatus(c.Keys, c.Status, v.Roots, time.UnixMilli(v.NowMS), c.Seen)
@@ -366,7 +629,7 @@ func TestSignRefusesBadBodies(t *testing.T) {
 	s := newSigner(t)
 	for name, body := range map[string]any{
 		"no type":          map[string]any{"v": 1},
-		"unknown version":  Keys{V: 2, Type: TypeKeys, Seq: 1, TimeMS: 1, ExpiresMS: 2, Keys: []Key{{Key: s.spki, Name: "k"}}},
+		"unknown version":  Keys{V: 2, Type: TypeKeys, Seq: 1, TimeMS: 1, ExpiresMS: 2, Keys: s.keys("k", "")},
 		"no keys":          Keys{V: 1, Type: TypeKeys, Seq: 1, TimeMS: 1, ExpiresMS: 2},
 		"a bad version":    func() Release { r := releaseBody("0.6.0", "stable"); r.Version = "v0.6.0"; return r }(),
 		"a path as a name": func() Release { r := releaseBody("0.6.0", "stable"); r.Files[0].Name = "../cbb"; return r }(),
@@ -387,7 +650,7 @@ func TestSignRefusesBadBodies(t *testing.T) {
 
 func TestCheckPinned(t *testing.T) {
 	root, rk, other := newSigner(t), newSigner(t), newSigner(t)
-	roots := [][]byte{root.spki}
+	roots := roots(root)
 	now := time.UnixMilli(nowMS)
 	keys := sign(t, keysBody(2, nowMS-1000, 90*24*time.Hour, rk), root)
 	rel := sign(t, releaseBody("0.5.2", "stable"), rk)
@@ -500,10 +763,10 @@ func TestStrictFiles(t *testing.T) {
 func TestForwarderKeys(t *testing.T) {
 	root, rel, fwd := newSigner(t), newSigner(t), newSigner(t)
 	kb := keysBody(1, nowMS-1000, 90*24*time.Hour, rel)
-	kb.Keys = append(kb.Keys, Key{Key: fwd.spki, Name: "cbb.tools:8764", Use: UseForwarder})
+	kb.Keys = append(kb.Keys, Key{Alg: AlgES256, Key: fwd.spki, Name: "cbb.tools:8764", Use: UseForwarder})
 	keys := sign(t, kb, root)
 	now := time.UnixMilli(nowMS)
-	k, err := VerifyKeys(keys, [][]byte{root.spki}, now, Seen{})
+	k, err := VerifyKeys(keys, roots(root), now, Seen{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -515,7 +778,7 @@ func TestForwarderKeys(t *testing.T) {
 	}
 	r := sign(t, releaseBody("0.6.0", "stable"), fwd)
 	ch := sign(t, channelBody("stable", 1, nowMS-1000, 30*24*time.Hour, r, "0.6.0"), rel)
-	if _, _, err := Check(keys, ch, r, [][]byte{root.spki}, "stable", now, Seen{}); err == nil {
+	if _, _, err := Check(keys, ch, r, roots(root), "stable", now, Seen{}); err == nil {
 		t.Error("a forwarder's key signed a release")
 	}
 }
@@ -525,11 +788,11 @@ func TestForwarderKeys(t *testing.T) {
 func TestRelayEntries(t *testing.T) {
 	root, rel, relayKey := newSigner(t), newSigner(t), newSigner(t)
 	kb := keysBody(1, nowMS-1000, 90*24*time.Hour, rel)
-	kb.Keys = append(kb.Keys, Key{Key: relayKey.spki, Name: "cbb.tools:8765", Use: UseRelay},
-		Key{Key: root.spki, Name: "cbb.tools:8765", Use: UseForwarder})
+	kb.Keys = append(kb.Keys, Key{Alg: AlgES256, Key: relayKey.spki, Name: "cbb.tools:8765", Use: UseRelay},
+		Key{Alg: AlgES256, Key: root.spki, Name: "cbb.tools:8765", Use: UseForwarder})
 	keys := sign(t, kb, root)
 	now := time.UnixMilli(nowMS)
-	k, err := VerifyKeys(keys, [][]byte{root.spki}, now, Seen{})
+	k, err := VerifyKeys(keys, roots(root), now, Seen{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -538,7 +801,7 @@ func TestRelayEntries(t *testing.T) {
 	}
 	b := entriesBody(1, nowMS-1000, 30*24*time.Hour)
 	b.Relays = []EntryRelay{{Name: "cbb.tools:8765", Endpoints: []string{"relay.cbb.tools:8765", "cbb.tools:8765"}}}
-	e, _, err := CheckEntries(keys, sign(t, b, rel), [][]byte{root.spki}, now, Seen{})
+	e, _, err := CheckEntries(keys, sign(t, b, rel), roots(root), now, Seen{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -561,9 +824,9 @@ func entriesBody(seq uint64, at int64, life time.Duration) Entries {
 func TestCheckEntries(t *testing.T) {
 	root, rel, ch, other := newSigner(t), newSigner(t), newSigner(t), newSigner(t)
 	kb := keysBody(2, nowMS-1000, 90*24*time.Hour, rel)
-	kb.Keys = append(kb.Keys, Key{Key: ch.spki, Name: "channel key", Use: UseChannel})
+	kb.Keys = append(kb.Keys, ch.keys("channel key", UseChannel)...)
 	keys := sign(t, kb, root)
-	roots := [][]byte{root.spki}
+	roots := roots(root)
 	now := time.UnixMilli(nowMS)
 	e, seen, err := CheckEntries(keys, sign(t, entriesBody(5, nowMS-1000, 30*24*time.Hour), ch), roots, now, Seen{})
 	if err != nil {
@@ -616,7 +879,7 @@ type entriesVector struct {
 }
 
 type entriesVectors struct {
-	Roots   [][]byte        `json:"roots"`
+	Roots   []Key           `json:"roots"`
 	NowMS   int64           `json:"now_ms"`
 	Vectors []entriesVector `json:"vectors"`
 }
@@ -626,9 +889,9 @@ func makeEntriesVectors(t *testing.T) entriesVectors {
 	rel, ch, sk := newSigner(t), newSigner(t), newSigner(t)
 	day := 24 * time.Hour
 	kb := keysBody(3, nowMS-1000, 90*day, rel)
-	kb.Keys = append(kb.Keys, Key{Key: ch.spki, Name: "channel key", Use: UseChannel}, Key{Key: sk.spki, Name: "status key", Use: UseStatus})
+	kb.Keys = append(append(kb.Keys, ch.keys("channel key", UseChannel)...), sk.keys("status key", UseStatus)...)
 	keys := sign(t, kb, root)
-	v := entriesVectors{Roots: [][]byte{root.spki}, NowMS: nowMS}
+	v := entriesVectors{Roots: roots(root), NowMS: nowMS}
 	add := func(name string, k, e File, seen Seen, seq uint64) {
 		v.Vectors = append(v.Vectors, entriesVector{Name: name, Keys: k, Entries: e, Seen: seen, OK: seq != 0, Seq: seq})
 	}
@@ -672,7 +935,7 @@ func TestEntriesVectors(t *testing.T) {
 		t.Fatal(err)
 	}
 	var v entriesVectors
-	if err := json.Unmarshal(data, &v); err != nil {
+	if err := json.Unmarshal(compacted(t, data), &v); err != nil {
 		t.Fatal(err)
 	}
 	if len(v.Vectors) != 14 {
@@ -687,5 +950,116 @@ func TestEntriesVectors(t *testing.T) {
 		if err == nil && (e.Seq != c.Seq || seen.EntriesSeq != c.Seq || seen.EntriesKeys != 3 || seen.KeysSeq != 3) {
 			t.Errorf("%s: seq %d, seen %+v", c.Name, e.Seq, seen)
 		}
+	}
+}
+
+// ClearSLH leaves an SLH-DSA key without its secret.
+func TestClearSLH(t *testing.T) {
+	k, err := GenerateSLH(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ClearSLH(k)
+	b, err := MarshalSLH(k)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(b[:32], make([]byte, 32)) {
+		t.Errorf("the secret is still there: %x", b[:32])
+	}
+	if bytes.Equal(b[32:], make([]byte, 32)) {
+		t.Error("the public key went too")
+	}
+}
+
+// TestNISTSLHDSA checks the SLH-DSA library against NIST's vectors for
+// SLH-DSA-SHA2-128s (ACVP, external interface, pure, with a context), as
+// the Rust core's nist_slh_dsa does.
+func TestNISTSLHDSA(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", "interop", "nist-slh-dsa-sha2-128s.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v struct {
+		Cases []struct {
+			ID, PK, Msg, Ctx, Sig, Reason string
+			Pass                          bool
+		}
+	}
+	if err := json.Unmarshal(data, &v); err != nil || len(v.Cases) != 17 {
+		t.Fatalf("%d cases, %v", len(v.Cases), err)
+	}
+	unhex := func(s string) []byte {
+		b, err := hex.DecodeString(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	for _, c := range v.Cases {
+		spki := append(append([]byte{}, slhSPKIPrefix...), unhex(c.PK)...)
+		pk := slhdsa.PublicKey{ID: slhdsa.SHA2_128s}
+		if err := pk.UnmarshalBinary(spki[len(slhSPKIPrefix):]); err != nil {
+			t.Fatal(err)
+		}
+		got := slhdsa.Verify(&pk, slhdsa.NewMessage(unhex(c.Msg)), unhex(c.Sig), unhex(c.Ctx))
+		if got != c.Pass {
+			t.Errorf("%s (%s): %v, NIST says %v", c.ID, c.Reason, got, c.Pass)
+		}
+	}
+}
+
+// otherS returns the ES256 signature with S replaced by n - S, which
+// verifies as well and no reader takes.
+func otherS(t *testing.T, sig []byte) []byte {
+	var rs struct{ R, S *big.Int }
+	if _, err := asn1.Unmarshal(sig, &rs); err != nil {
+		t.Fatal(err)
+	}
+	rs.S.Sub(elliptic.P256().Params().N, rs.S)
+	out, err := asn1.Marshal(rs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// Signatures are made with S in the lower half, and the other S is refused.
+func TestLowS(t *testing.T) {
+	s := newSigner(t)
+	for range 20 {
+		f, err := Sign(releaseBody("0.6.0", "stable"), s.key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, low := lowS(f.Sigs[0].Sig); !low {
+			t.Fatal("a signature with the high S")
+		}
+		if !verifyHalf(AlgES256, s.pubs[AlgES256], f.Body, f.Sigs[0].Sig) || verifyHalf(AlgES256, s.pubs[AlgES256], f.Body, otherS(t, f.Sigs[0].Sig)) {
+			t.Fatal("the low S refused or the high S taken")
+		}
+	}
+}
+
+// compacted returns a vectors file without the whitespace it is indented
+// with: a release file is read in its canonical form, which an indented
+// file inside the vectors is not.
+func compacted(t *testing.T, data []byte) []byte {
+	var b bytes.Buffer
+	if err := json.Compact(&b, data); err != nil {
+		t.Fatal(err)
+	}
+	return b.Bytes()
+}
+
+// TestReadAll: a release file of MaxFile bytes is read whole, one byte more
+// is refused, never cut.
+func TestReadAll(t *testing.T) {
+	data := bytes.Repeat([]byte("a"), MaxFile)
+	if got, err := ReadAll(bytes.NewReader(data)); err != nil || len(got) != MaxFile {
+		t.Errorf("read %d bytes of %d: %v", len(got), MaxFile, err)
+	}
+	if got, err := ReadAll(bytes.NewReader(append(data, 'a'))); err == nil {
+		t.Errorf("read %d bytes of a file of %d", len(got), MaxFile+1)
 	}
 }

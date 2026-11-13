@@ -96,8 +96,9 @@ mod signed;
 pub mod sync;
 mod sys;
 pub mod takeover;
-pub mod tls;
 #[cfg(feature = "tunnel")]
+pub mod testhooks;
+pub mod tls;
 pub mod tunnel;
 mod update;
 mod update_os;
@@ -342,6 +343,9 @@ pub fn main() {
                     let scaled = if cbb_core::benchtime::ENABLED { " (time-scaled bench build)" } else { "" };
                     println!("cbb {} ({}/{}){scaled}", service::VERSION, std::env::consts::OS, std::env::consts::ARCH);
                     println!("{}", core_version());
+                    if let Some(n) = testhooks::note() {
+                        println!("{n}");
+                    }
                     Ok(())
                 }
                 "help" | "-h" | "-help" | "--help" => {
@@ -1715,13 +1719,21 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
     let res = (|| -> Result<()> {
         let (roots, sources) = match std::env::var_os("CBB_RELEASE_DIR") {
             Some(d) => {
-                let roots = match std::env::var_os("CBB_RELEASE_ROOTS") {
-                    Some(f) => update::read_roots(std::path::Path::new(&f))?,
-                    None => update::ROOTS.iter().map(|r| r.to_vec()).collect(),
+                let roots = match testhooks::var_os("CBB_RELEASE_ROOTS") {
+                    Some(f) => {
+                        let f = std::path::Path::new(&f);
+                        let roots = update::read_roots(f)?;
+                        eprintln!(
+                            "cbb: test hooks: checking against the roots in {}, not the built-in ones",
+                            f.display()
+                        );
+                        roots
+                    }
+                    None => cbb_core::release::pinned_roots(),
                 };
                 (roots, vec![update::Source::Dir(PathBuf::from(d))])
             }
-            None => (update::ROOTS.iter().map(|r| r.to_vec()).collect(), update::Source::defaults(&st.mirror)?),
+            None => (cbb_core::release::pinned_roots(), update::Source::defaults(&st.mirror)?),
         };
         let archive = update_os::archive_name().ok_or_else(|| {
             Error::msg(format!("the release has no archive for {}/{}", std::env::consts::OS, std::env::consts::ARCH))
@@ -1841,13 +1853,11 @@ impl ServiceLink<'_> {
 }
 
 impl update::Group for ServiceLink<'_> {
-    fn share(&self, set: &serde_json::Value) {
-        if let Ok(data) = serde_json::to_vec(set) {
-            let _ = self.ask("release", data);
-        }
+    fn share(&self, set: &serde_json::value::RawValue) {
+        let _ = self.ask("release", set.get().as_bytes().to_vec());
     }
 
-    fn held(&self) -> Result<serde_json::Value> {
+    fn held(&self) -> Result<Box<serde_json::value::RawValue>> {
         let m = self.ask("release_held", Vec::new())?;
         serde_json::from_slice(&m.payload).context("the service's release does not decode")
     }

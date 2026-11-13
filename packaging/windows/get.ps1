@@ -68,8 +68,9 @@
 	$step = T 'starting'
 
 	# The project's release root keys (docs/protocol.md, section 16), base64
-	# SubjectPublicKeyInfos, which sign keys.json: two YubiKeys, as
-	# internal/release/roots/roots.pem.
+	# SubjectPublicKeyInfos, which sign keys.json: the ES256 halves of the two
+	# YubiKeys, as internal/release/roots/roots.pem. Their SLH-DSA halves are
+	# left out, since PowerShell cannot check them (Test-Release says so).
 	$releaseRoots = @(
 		'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE9sLfrcGBi23XveQN8dK8Z+lbEuxTLOgnQ9s/gzp/k7xx88IFvkdMuyoL2K7j1necQGYLmq3ifie9wDrF69AO/A==',
 		'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAExGbAq55XGXip3Dtq6jsM2bOYUeoYfDxsggXLisjwoCQoDM28pCYkIoZAfcjwR3aAGOAUWZX+L53og7/TLLpnfg=='
@@ -82,11 +83,18 @@
 
 	# The roots the release is checked against; none while CBB_VERIFY=skip.
 	$roots = $releaseRoots
+	$rootsFile = $null
 	if ($env:CBB_RELEASE_DIR -and $env:CBB_RELEASE_ROOTS) {
-		$roots = @(((Get-Content -Raw $env:CBB_RELEASE_ROOTS) -split '-----END PUBLIC KEY-----') |
-			ForEach-Object { ($_ -replace '-----BEGIN PUBLIC KEY-----', '' -replace '\s', '') } | Where-Object { $_ })
+		$rootsFile = $env:CBB_RELEASE_ROOTS
+		# Each block without its headers (Name), the ES256 halves only. A
+		# file that cannot be read gives no roots, which Test-Release refuses.
+		$text = ''
+		try { $text = [string](Get-Content -Raw -LiteralPath $rootsFile -ErrorAction Stop) } catch { }
+		$roots = @(($text -split '-----END PUBLIC KEY-----') |
+			ForEach-Object { ($_ -replace '-----BEGIN PUBLIC KEY-----', '' -replace '(?m)^.*:.*$', '' -replace '\s', '') } |
+			Where-Object { $_.StartsWith('MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE') })
 	}
-	$verifying = $env:CBB_VERIFY -ne 'skip' -and $roots.Count -gt 0
+	$verifying = $env:CBB_VERIFY -ne 'skip'
 
 	# Invoke-Quietly runs a program without its output and returns its exit
 	# code. Windows PowerShell 5.1 turns a program's redirected stderr into
@@ -136,16 +144,36 @@
 		if ($der.Length -lt 8 -or $der[0] -ne 0x30 -or $der[1] -ne $der.Length - 2) { return $null }
 		$i = 2
 		foreach ($half in 0, 1) {
-			if ($der[$i] -ne 0x02) { return $null }
-			$n = $der[$i + 1]
+			if ($i + 2 -gt $der.Length -or $der[$i] -ne 0x02) { return $null }
+			$n = [int]$der[$i + 1]
+			if ($n -lt 1 -or $n -gt 33 -or $i + 2 + $n -gt $der.Length) { return $null }
 			$v = [byte[]]$der[($i + 2)..($i + 1 + $n)]
 			$i += 2 + $n
-			while ($v.Length -gt 32 -and $v[0] -eq 0) { $v = [byte[]]$v[1..($v.Length - 1)] }
+			# Each INTEGER in its one form, as every reader takes it: not
+			# negative, and a zero byte first only before a byte of 0x80 or more.
+			if ($v[0] -ge 0x80) { return $null }
+			if ($v[0] -eq 0) {
+				if ($n -eq 1 -or $v[1] -lt 0x80) { return $null }
+				$v = [byte[]]$v[1..($n - 1)]
+			}
 			if ($v.Length -gt 32) { return $null }
 			[Array]::Copy($v, 0, $out, $half * 32 + 32 - $v.Length, $v.Length)
 		}
 		if ($i -ne $der.Length) { return $null }
+		# Only the low S, at most half the order of P-256, the one form every
+		# reader takes.
+		$halfOrder = [Convert]::FromBase64String('f////4AAAAB//////////95zfVbTi89CedzlYX4xkqg=')
+		for ($j = 0; $j -lt 32; $j++) {
+			if ($out[32 + $j] -lt $halfOrder[$j]) { break }
+			if ($out[32 + $j] -gt $halfOrder[$j]) { return $null }
+		}
 		$out
+	}
+
+	# Test-Alg tells whether a, read from JSON, is an algorithm number as
+	# every reader takes it: a whole number 1 to 2^31-1.
+	function Test-Alg($a) {
+		($a -is [int] -or $a -is [long]) -and $a -ge 1 -and $a -le 2147483647
 	}
 
 	# Test-StrictBody tells whether text, a body, is in the strict form as far
@@ -166,22 +194,61 @@
 		$true
 	}
 
-	# Open-ReleaseFile checks the envelope at path with any of the keys and
-	# returns its body, decoded, or throws.
+	# Open-ReleaseFile checks the envelope at path with the ES256 keys (P-256
+	# SubjectPublicKeyInfos) and returns its body, decoded, or throws. Each
+	# file carries a signature of each algorithm (docs/protocol.md, section
+	# 16, "Two signatures"): the ES256 one of a listed key must verify, and a
+	# failed one refuses the file; the SLH-DSA one is passed over here, as a
+	# signature of an algorithm a reader does not check.
 	function Open-ReleaseFile($path, $type, $keys) {
-		$f = Get-Content -Raw $path | ConvertFrom-Json
-		$body = [Convert]::FromBase64String($f.body)
-		$sig = ConvertFrom-DerSignature ([Convert]::FromBase64String($f.sig))
-		foreach ($k in $keys) {
-			if ($sig -and (Get-P256Key $k).VerifyData($body, $sig, [Security.Cryptography.HashAlgorithmName]::SHA256)) {
-				$text = [Text.Encoding]::UTF8.GetString($body)
-				if (-not (Test-StrictBody $text)) { throw (T '%s is not a valid release file; not installing' (Split-Path $path -Leaf)) }
-				$b = $text | ConvertFrom-Json
-				if ($b.type -cne $type -or $b.v -ne 1 -or -not $b.PSObject.Properties['time_ms']) { break }
-				return @{ Bytes = $body; Value = $b }
-			}
+		$name = Split-Path $path -Leaf
+		# A release file is 1 MiB at most, its body 256 KiB, with 1 to 8
+		# signatures, each of an algorithm 1 to 2^31-1, as every reader takes.
+		if ((Get-Item $path).Length -gt 1048576) { throw (T '%s is not a valid release file; not installing' $name) }
+		# The file whole, as the signer writes it and every reader takes it
+		# (docs/protocol.md, section 16, "Two signatures"): whitespace around
+		# it, then the envelope in its canonical form, with only body and
+		# sigs, and in each signature only alg, key and sig, base64 in its one
+		# form; any other shape refuses the file.
+		# Its bytes as they came: Get-Content would drop a byte order mark.
+		$raw = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($path)).Trim(" `t`r`n".ToCharArray())
+		$b64 = '[A-Za-z0-9+/]*={0,2}'
+		$one = "\{`"alg`":[1-9][0-9]*,`"key`":`"($b64)`",`"sig`":`"($b64)`"\}"
+		if ($raw -cnotmatch "^\{`"body`":`"($b64)`",`"sigs`":\[$one(,$one)*\]\}\z") { throw (T '%s is not a valid release file; not installing' $name) }
+		foreach ($m in [regex]::Matches($raw, "`"(body|key|sig)`":`"($b64)`"")) {
+			$v = $m.Groups[2].Value
+			try { $same = [Convert]::ToBase64String([Convert]::FromBase64String($v)) -ceq $v } catch { $same = $false }
+			if (-not $same) { throw (T '%s is not a valid release file; not installing' $name) }
 		}
-		throw (T '%s is not signed by the project''s key; not installing' (Split-Path $path -Leaf))
+		$f = $raw | ConvertFrom-Json
+		$body = [Convert]::FromBase64String($f.body)
+		$sigs = @($f.sigs)
+		if ($body.Length -gt 262144 -or $sigs.Count -lt 1 -or $sigs.Count -gt 8 -or @($sigs | Where-Object { -not (Test-Alg $_.alg) }).Count -gt 0) {
+			throw (T '%s is not a valid release file; not installing' $name)
+		}
+		$sha = [Security.Cryptography.SHA256]::Create()
+		$ok = $false
+		foreach ($s in @($sigs | Where-Object { $_.alg -eq 1 })) {
+			$id = [Convert]::FromBase64String($s.key)
+			$k = $keys | Where-Object { Test-ByteEqual $sha.ComputeHash([byte[]]$_) $id } | Select-Object -First 1
+			if (-not $k) { continue }
+			$der = [Convert]::FromBase64String($s.sig)
+			# A signature longer than 16 KiB is passed over, as every reader does.
+			if ($der.Length -gt 16384) { continue }
+			$sig = ConvertFrom-DerSignature $der
+			if (-not $sig -or -not (Get-P256Key $k).VerifyData($body, $sig, [Security.Cryptography.HashAlgorithmName]::SHA256)) {
+				throw (T '%s is not signed by the project''s key; not installing' $name)
+			}
+			$ok = $true
+		}
+		if (-not $ok) { throw (T '%s is not signed by the project''s key; not installing' $name) }
+		$text = [Text.Encoding]::UTF8.GetString($body)
+		if (-not (Test-StrictBody $text)) { throw (T '%s is not a valid release file; not installing' $name) }
+		$b = $text | ConvertFrom-Json
+		if ($b.type -cne $type -or $b.v -ne 1 -or -not $b.PSObject.Properties['time_ms']) {
+			throw (T '%s is not signed by the project''s key; not installing' $name)
+		}
+		@{ Bytes = $body; Value = $b }
 	}
 
 	# Test-Release checks keys.json against the root keys, release.json and,
@@ -193,7 +260,11 @@
 			Write-Host (T 'Not checked: the release''s signature (CBB_VERIFY=skip).')
 			return
 		}
-		if (-not $verifying) { return }
+		# No roots is a refusal, never a silent install: the built-in ones
+		# are always there, so only a roots file that reads empty gets here.
+		if ($roots.Count -eq 0) {
+			throw (T 'no root keys to check the release against in %s; not installing (CBB_VERIFY=skip installs it unchecked)' $rootsFile)
+		}
 		try {
 			Get-ReleaseFile "$channelFiles/keys.json" (Join-Path $tmp 'keys.json')
 			Get-ReleaseFile "$base/release.json" (Join-Path $tmp 'release.json')
@@ -210,9 +281,26 @@
 		if (@($keys.Value.keys | Where-Object { $u = $_.PSObject.Properties['use']; $u -and $u.Value -ceq '' }).Count -gt 0) {
 			throw (T 'keys.json holds a key whose use is empty; not installing')
 		}
-		$releaseKeys = @($keys.Value.keys | Where-Object { $u = $_.PSObject.Properties['use']; -not $u -or $u.Value -ceq 'release' } |
+		if (@($keys.Value.keys | Where-Object { -not (Test-Alg $_.alg) }).Count -gt 0) {
+			throw (T '%s is not a valid release file; not installing' 'keys.json')
+		}
+		# Every key is checked as the other readers check it, whatever its use:
+		# a key of algorithm 1 is P-256 and one of 4 SLH-DSA-SHA2-128s; a key
+		# of an algorithm no reader knows yet is kept unread.
+		$slhPrefix = [Convert]::FromBase64String('MDAwCwYJYIZIAWUDBAMUAyEA')
+		foreach ($k in @($keys.Value.keys)) {
+			$spki = [Convert]::FromBase64String($k.key)
+			if ($k.alg -eq 1) {
+				$null = Get-P256Key $spki
+			} elseif ($k.alg -eq 4 -and ($spki.Length -ne 50 -or -not (Test-ByteEqual $spki[0..17] $slhPrefix))) {
+				throw (T '%s is not a valid release file; not installing' 'keys.json')
+			}
+		}
+		# The ES256 halves; a half of another algorithm is not checked here.
+		$es256 = @($keys.Value.keys | Where-Object { $_.alg -eq 1 })
+		$releaseKeys = @($es256 | Where-Object { $u = $_.PSObject.Properties['use']; -not $u -or $u.Value -ceq 'release' } |
 			ForEach-Object { , [Convert]::FromBase64String($_.key) })
-		$channelKeys = @($keys.Value.keys | Where-Object { $u = $_.PSObject.Properties['use']; $u -and $u.Value -ceq 'channel' } |
+		$channelKeys = @($es256 | Where-Object { $u = $_.PSObject.Properties['use']; $u -and $u.Value -ceq 'channel' } |
 			ForEach-Object { , [Convert]::FromBase64String($_.key) })
 		$rel = Open-ReleaseFile -path (Join-Path $tmp 'release.json') -type 'release' -keys $releaseKeys
 		if ($named) {
@@ -232,7 +320,10 @@
 		if ($entry.sha256 -cne $got -or -not $entry.PSObject.Properties['size'] -or [long]$entry.size -ne (Get-Item (Join-Path $tmp $archive)).Length) {
 			throw (T '%s does not match the signed release.json; not installing it' $archive)
 		}
-		Write-Host (T 'The release''s signature checks out (%s).' ($rel.Value.version))
+		# PowerShell has no SLH-DSA: the post-quantum signature waits for a
+		# .NET that checks it, and the user is told so.
+		Write-Host (T 'The release''s signature checks out (%s): ES256; SLH-DSA-SHA2-128s not checked, PowerShell cannot check it.' ($rel.Value.version))
+		if ($rootsFile) { Write-Host (T 'Checked against the roots in %s, not the built-in ones.' $rootsFile) }
 	}
 
 	try {
@@ -279,7 +370,10 @@
 				Get-ReleaseFile "$channelFiles/stable.json" (Join-Path $tmp 'stable.json')
 				$named = ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String((Get-Content -Raw (Join-Path $tmp 'stable.json') |
 								ConvertFrom-Json).body)) | ConvertFrom-Json).release
-				if ($named -notmatch '^\d+\.\d+\.\d+(-rc\.\d+)?$') { throw (T 'stable.json names no release') }
+				# A version as cbb reads one, X.Y.Z or X.Y.Z-rc.N, before it goes
+				# into the address: ASCII digits only, nothing after it.
+				$n = '(0|[1-9][0-9]{0,5})'
+				if ($named -isnot [string] -or $named -cnotmatch "\A$n\.$n\.$n(-rc\.[1-9][0-9]{0,5})?\z") { throw (T 'stable.json names no release') }
 				$version = "v$named"
 				if (-not $env:CBB_RELEASE_DIR) { $base = "$repo/releases/download/$version" }
 			}

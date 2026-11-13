@@ -30,10 +30,11 @@ import java.security.MessageDigest
  * question once this app installed the one before. A copy from a store is
  * updated by its store, and so is the F-Droid build wherever it came from:
  * it has no installer permission and leaves its updates to F-Droid
- * (docs/apps.md, "F-Droid"). It does nothing while no root keys are pinned
- * ([Releases.roots]).
+ * (docs/apps.md, "F-Droid"). The core checks the release files under the
+ * roots it pins; [roots] replaces them in tests, and an empty list leaves
+ * the app without updates.
  */
-class ApkUpdate(private val context: Context, private val roots: List<ByteArray> = Releases.roots) {
+class ApkUpdate(private val context: Context, private val roots: List<Releases.Key>? = null) {
     /** What the user sees in Settings. */
     sealed interface State {
         /** The app came from a store, which updates it; store is its package name. */
@@ -78,7 +79,7 @@ class ApkUpdate(private val context: Context, private val roots: List<ByteArray>
     private fun initial(): State {
         if (!BuildConfig.SELF_UPDATE) return State.Store(FDROID)
         installer(context)?.takeIf { it in STORES }?.let { return State.Store(it) }
-        if (roots.isEmpty()) return State.NoKeys
+        if (roots?.isEmpty() == true) return State.NoKeys
         prefs.getString(FAILED, null)?.let { return State.Failed(Exception(it)) }
         return State.Idle
     }
@@ -99,7 +100,7 @@ class ApkUpdate(private val context: Context, private val roots: List<ByteArray>
 
     /** Checks once a day while [automatic] is on, and installs a newer release it finds. */
     fun runIfDue() {
-        if (!automatic || state is State.Store || roots.isEmpty()) return
+        if (!automatic || state is State.Store || roots?.isEmpty() == true) return
         val now = System.currentTimeMillis()
         if (now - prefs.getLong(CHECKED, 0) < DAY_MS) return
         start(install = true)
@@ -153,10 +154,10 @@ class ApkUpdate(private val context: Context, private val roots: List<ByteArray>
     }
 
     private fun checkFrom(base: String): Found? {
-        val keys = file(get(url(base, KEYS_FILE, null), Releases.MAX_BODY), KEYS_FILE)
-        val channel = file(get(url(base, CHANNEL_FILE, null), Releases.MAX_BODY), CHANNEL_FILE)
+        val keys = Releases.File(get(url(base, KEYS_FILE, null), Releases.MAX_FILE))
+        val channel = Releases.File(get(url(base, CHANNEL_FILE, null), Releases.MAX_FILE))
         val named = Releases.named(channel) ?: throw Releases.Refused("$CHANNEL_FILE names no valid release")
-        val release = file(get(url(base, RELEASE_FILE, named), Releases.MAX_BODY), RELEASE_FILE)
+        val release = Releases.File(get(url(base, RELEASE_FILE, named), Releases.MAX_FILE))
         val (r, next) = Releases.check(keys, channel, release, roots, CHANNEL, System.currentTimeMillis(), seen())
         prefs.edit().putLong(KEYS_SEQ, next.keysSeq).putLong(CHANNEL_SEQ, next.channelSeq).putLong(CHANNEL_KEYS_SEQ, next.channelKeysSeq)
             .putString(SEEN_VERSION, next.version).apply()
@@ -342,8 +343,6 @@ class ApkUpdate(private val context: Context, private val roots: List<ByteArray>
                 context.packageManager.getInstallerPackageName(context.packageName)
             }
         }.getOrNull()
-
-        private fun file(data: ByteArray, name: String): Releases.File = Releases.File.parse(data) ?: throw Releases.Refused("$name is not valid")
 
         private fun open(url: String): HttpURLConnection {
             var u = URL(url)

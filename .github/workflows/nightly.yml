@@ -316,9 +316,9 @@ jobs:
           cargo +nightly test --locked -Zbuild-std --target x86_64-unknown-linux-gnu -p cbb-ffi --features member,tunnel
       - name: Go's tests of the service against the cbb built with it
         run: |
-          cargo +nightly build --locked -Zbuild-std --target x86_64-unknown-linux-gnu --release -p cbb-member
+          cargo +nightly build --locked -Zbuild-std --target x86_64-unknown-linux-gnu --release -p cbb-member --features testhooks
           bin="$PWD/target/x86_64-unknown-linux-gnu/release"
-          CGO_ENABLED=0 go build -trimpath -o "$bin/cbb-helper" ./cmd/cbb-helper
+          CGO_ENABLED=0 go build -tags testhooks -trimpath -o "$bin/cbb-helper" ./cmd/cbb-helper
           CBB_TEST_RUST_SERVICE="$bin/cbb" CBB_TEST_ALONE="$bin/cbb" go test -timeout 60m ./internal/service
 
   # A test that fails one run in ten never shows on a pull request's single run
@@ -345,7 +345,7 @@ jobs:
         if: matrix.member == 'rust'
         run: |
           rustup toolchain install stable --profile minimal && rustup default stable
-          cargo build --locked --release -p cbb-member
+          cargo build --locked --release -p cbb-member --features testhooks
       - name: each test ten times
         env:
           MEMBER: ${{ matrix.member }}

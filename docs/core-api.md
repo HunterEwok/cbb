@@ -333,6 +333,10 @@ the core's.
 | `group_command` | the set's arguments, `command` (`{body, sig, chain}`), `me` (the member's device), `secret` (optional, base64: the member's secret for sealed messages) | `{"command", "signer", "root", "sender", "verified", "opened"}`: the command's body as an object, with a sealed command's orders opened with `secret` and put in it (`opened`), the device that signed it, whether it signed as the root, and the device the limits count it for, `verified` when that device's own key signed; a command refused is code 15, as is a sealed one without `secret` or one that does not open with it, and a `paste` in the open for a member whose device record has a `seal` key |
 | `group_claim_times` | the set's arguments, `claim_times` (`[{record, ms}]`, from a Welcome) | `{"file"}`: the times earlier than the set's own and not in the future taken |
 | `parse_body` | `kind` (`command`, `credential`, `keys`, `release`, `channel`, `attest-status`, `entries`, `zxnext` or `manifest`), `body` (base64) | `{"kind", "value"}`: the body's fields as an object, once it checks; see "Signed bodies" |
+| `release_check` | `keys`, `channel`, `release` (each a release file's bytes as fetched, base64), `name` (the channel), `now_ms`, `seen` (what the device kept, optional), `roots` (optional, `[{alg, key, name, use}]`: other roots, for tests; the pinned ones when left out) | `{"value", "seen"}`: release.json's fields and the Seen to keep; a file refused, or one that does not read, is code 16. See "Release files" |
+| `release_check_status` | `keys`, `status` (attest-status.json), each its bytes in base64, `now_ms`, `seen`, `roots` as `release_check` | `{"value", "seen"}`: the revocation list's fields and the Seen to keep |
+| `release_check_entries` | `keys` and `entries` (entries.json), each its bytes in base64, or in their place `set`: the signed entry points as members pass them (`{"keys", "entries"}`), its bytes in base64; `now_ms`, `seen`, `roots` as `release_check` | `{"value", "seen"}`: the entry points' fields and the Seen to keep |
+| `release_named` | `channel` (a channel file's bytes, base64) | `{"release"}`: the version it names, read but not yet checked, so that a device knows which release.json to fetch; `release_check` then checks both |
 | `new_device_key` | none | `{"pkcs8", "public"}`: a new P-256 device key (base64 PKCS #8 and SEC1 uncompressed) for a phone that keeps its key in a file (level 3) |
 | `sign_digest` | `pkcs8`, `digest` (base64, 32 bytes) | `{"sig"}`: ECDSA P-256 over the SHA-256 digest with that key, DER, base64: what the phone's signing callback gives for a key in a file |
 | `why` | `facts` (what a member knows: `in_group`, `removed`, `frozen`, `taken_over_by`, `cert_ends_ms`, `stop`, `sync_off`, `sync_until_ms`, `muted`, `muted_until_ms`, `newer`, `update`, `connected`, `devices: [{name, online, sync_off, muted}]`, `quiet`, `unreached`, `away`, each optional), `now_ms` | `{"why"}`: the reasons, as the member's `why` gives them (`cbb_core::why`, checked against `testdata/why/vectors.json`) |
@@ -526,6 +530,21 @@ open each other's. A phone keeps a secret for sealed messages of its own (32 ran
 the keychain, or under a key of the Android Keystore), gives its public key from `seal_public`
 when it makes a group or joins one, and passes the secret to `group_command`, which opens the
 commands sealed to it.
+
+## Release files
+
+`release_check`, `release_check_status` and `release_check_entries` check the signed files of
+the releases as the Rust `cbb` does ([protocol.md](protocol.md), section 16): keys.json under
+the root keys, the file under the keys of its use that keys.json certifies, the two signatures
+of each (ES256 and SLH-DSA-SHA2-128s, "Two signatures"), the expiries, the clock and that no
+sequence number or version is older than `seen`. Each file goes in as the bytes the device
+fetched and the core reads it as every reader does (protocol.md, section 16, "Two signatures":
+the envelope in the strict form of signed bodies, then its members), so a kit decodes nothing
+of a release file and every program takes the same files. The pinned roots are the core's own copy of
+`internal/release/roots/roots.pem`, so the phone kits carry none; `roots` replaces them only in
+tests and drills. The kits keep the answer's `seen` and pass it to the next check. The
+interop vectors `testdata/interop/go-release.json`, `go-release-envelopes.json` (envelopes as
+they come, in base64) and `go-entries.json` are the cases every reader agrees on.
 
 ## Signatures already checked
 

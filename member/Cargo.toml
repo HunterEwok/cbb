@@ -42,7 +42,10 @@ default = ["tunnel"]
 # Builds cbbw as well; for Windows.
 windowless = []
 # The bench's time-scaled build (src/benchtime.rs), never a release's.
-benchtime = ["cbb-core/benchtime"]
+benchtime = ["cbb-core/benchtime", "testhooks"]
+# The test hooks (src/testhooks.rs): the end-to-end tests' variables that
+# change whom cbb trusts or its clock, never a release's.
+testhooks = []
 # fuzzing opens the service's readers of outside input to the cargo fuzz
 # targets in fuzz/ (src/fuzzing.rs).
 fuzzing = []

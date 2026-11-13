@@ -30,7 +30,7 @@ func TestAloneHelper(t *testing.T) {
 		t.Skip("the Rust member's tests run on Linux")
 	}
 	helper := filepath.Join(t.TempDir(), "cbb-helper")
-	if out, err := exec.Command("go", "build", "-o", helper, "github.com/HunterEwok/cbb/cmd/cbb-helper").CombinedOutput(); err != nil {
+	if out, err := exec.Command("go", "build", "-tags", "testhooks", "-o", helper, "github.com/HunterEwok/cbb/cmd/cbb-helper").CombinedOutput(); err != nil {
 		t.Fatalf("go build cbb-helper: %v\n%s", err, out)
 	}
 	s := startAloneEnv(t, bin, t.TempDir(), []string{"CBB_HELPER=" + helper})
@@ -85,7 +85,7 @@ func TestAloneTPM(t *testing.T) {
 	group.ReopenTPM()
 	t.Cleanup(group.ReopenTPM)
 	helper := filepath.Join(t.TempDir(), "cbb-helper")
-	if out, err := exec.Command("go", "build", "-o", helper, "github.com/HunterEwok/cbb/cmd/cbb-helper").CombinedOutput(); err != nil {
+	if out, err := exec.Command("go", "build", "-tags", "testhooks", "-o", helper, "github.com/HunterEwok/cbb/cmd/cbb-helper").CombinedOutput(); err != nil {
 		t.Fatalf("go build cbb-helper: %v\n%s", err, out)
 	}
 	t.Setenv("CBB_HELPER", helper)

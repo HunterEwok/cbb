@@ -29,7 +29,7 @@ import (
 func TestAlonePeripherals(t *testing.T) {
 	bin := aloneBin(t)
 	helper := filepath.Join(t.TempDir(), "cbb-helper")
-	if out, err := exec.Command("go", "build", "-o", helper, "github.com/HunterEwok/cbb/cmd/cbb-helper").CombinedOutput(); err != nil {
+	if out, err := exec.Command("go", "build", "-tags", "testhooks", "-o", helper, "github.com/HunterEwok/cbb/cmd/cbb-helper").CombinedOutput(); err != nil {
 		t.Fatalf("go build cbb-helper: %v\n%s", err, out)
 	}
 	f := bluetest.Start(t)
