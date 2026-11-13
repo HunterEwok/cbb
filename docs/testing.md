@@ -200,6 +200,10 @@ A9 and U14 to U18).
   largest size; each screen's picture is attached. Escape is sent as U+241B
   (`XCUIKeyboardKey.simulatorEscape`): the simulator's keyboard has no key for `.escape`'s
   "\u{1B}" and sends nothing for it.
+- In CI both run on GitHub's `xcode-27` image with Xcode 27.2 and the newest iOS, as on the
+  maintainers' Macs: Xcode 26.6's iOS 26.4 takes whole Devanagari and Chinese texts for clipped
+  (the clipped text check compares the first two and the last two letters' frames, which a
+  conjunct such as ग्स or a squeezed 「。」 at a line's end share).
 - The other big screens: on Android `TabletHomeTest` keeps the sidebar's sections across a
   restart (their keys back to the same section); the HarmonyOS sidebar, keys and drops are
   compiled and linted by `apps/harmony/check.sh`, and the Aurora layout by `qmllint`. None of

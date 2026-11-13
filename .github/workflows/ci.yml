@@ -1727,7 +1727,11 @@ jobs:
       fail-fast: false
       matrix:
         device: [iPhone, iPad]
-    runs-on: macos-latest
+    # Xcode 27.2 and its newest iOS, as on the maintainers' Macs (docs/testing.md,
+    # "The apps' languages, accessibility and screenshots"): macos-latest has
+    # Xcode 26.6 at most, whose iOS 26.4 reports whole Devanagari and Chinese
+    # texts as clipped.
+    runs-on: xcode-27
     # The libraries and the build take about 15 minutes, and a slow runner
     # can spend 5 minutes booting a simulator for each of the retries
     # below. The languages' and accessibility's UI tests (ReadersUITests)
@@ -1737,6 +1741,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Xcode 27.2
+        run: sudo xcode-select -s /Applications/Xcode_27.2.app
       - name: the simulator boots while Rust builds
         # A fresh runner's first boot spends minutes migrating its data; started
         # here, the boot runs beside the Rust build, and test_on below finds the
@@ -1744,11 +1750,15 @@ jobs:
         env:
           DEVICE: ${{ matrix.device }}
         run: |
-          # The first available iPhone or iPad simulator: the app is universal.
+          # An iPhone or iPad simulator of the newest iOS: the app is universal.
           device=$(xcrun simctl list devices available -j | python3 -c '
-          import json, sys
+          import json, re, sys
           devices = json.load(sys.stdin)["devices"]
-          print(next(d["udid"] for runtime, ds in devices.items() if "iOS" in runtime for d in ds if d["name"].startswith(sys.argv[1])))' "$DEVICE")
+          def version(runtime):
+              return [int(n) for n in re.findall(r"\d+", runtime.rsplit(".", 1)[-1])]
+          ios = sorted((r for r in devices if ".iOS-" in r), key=version, reverse=True)
+          print(next(d["udid"] for runtime in ios for d in devices[runtime] if d["name"].startswith(sys.argv[1])))' "$DEVICE")
+          echo "simulator: $(xcrun simctl list devices | grep "$device")"
           echo "SIMULATOR=$device" >>"$GITHUB_ENV"
           xcrun simctl boot "$device" || true
       - name: the Rust build from this pull request's cache
