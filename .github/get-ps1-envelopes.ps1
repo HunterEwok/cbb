@@ -51,7 +51,7 @@ function Test-Taken([string]$rootsPath = $roots) {
 	try {
 		. $funcs
 		$channelFiles = 'x'
-		return Test-Release -base 'x' -version 'v0.6.0' -named '0.6.0' -archive $archive -got $sum -tmp $tmp 6>&1 | Out-String
+		return Test-Release -base 'x' -version 'v0.6.0' -named '0.6.0' -archive $archive -got $sum -tmp $tmp 6>&1 | Out-String -Width 4096
 	} catch {
 		return "refused: $($_.Exception.Message)"
 	} finally {
