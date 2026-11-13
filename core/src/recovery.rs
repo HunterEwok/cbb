@@ -20,6 +20,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use p256::SecretKey;
 use p256::elliptic_curve::sec1::ToSec1Point as _;
 use p256::pkcs8::{EncodePrivateKey as _, EncodePublicKey as _};
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::certs::{Cert, sha256};
 
@@ -125,13 +126,16 @@ fn spki_hash(key: &SecretKey) -> Option<[u8; 32]> {
 
 /// Reads a private key of 32 bytes.
 pub fn secret_key(scalar: &[u8]) -> Option<SecretKey> {
-    let bytes: [u8; 32] = scalar.try_into().ok()?;
-    SecretKey::from_bytes(&bytes.into()).ok()
+    let bytes: Zeroizing<[u8; 32]> = Zeroizing::new(scalar.try_into().ok()?);
+    let mut field = (*bytes).into();
+    let key = SecretKey::from_bytes(&field).ok();
+    Zeroize::zeroize(field.as_mut_slice());
+    key
 }
 
 /// The key as the sheet's text: 14 groups of four characters.
 pub fn text(key: &SecretKey) -> String {
-    let scalar: [u8; 32] = key.to_bytes().into();
+    let scalar: Zeroizing<[u8; 32]> = Zeroizing::new(key.to_bytes().into());
     let mut chars = encode32(&scalar);
     chars.extend(check(&scalar));
     let mut out = String::with_capacity(chars.len().saturating_mul(5));
@@ -152,8 +156,9 @@ pub fn qr(key: &SecretKey, cert: &[u8], group: &str) -> Result<String, Reason> {
     if !is_tag(group) {
         return Err(Reason::Group);
     }
-    let scalar: [u8; 32] = key.to_bytes().into();
-    Ok(alloc::format!("{PREFIX}g={group}&k={}&c={}", URL_SAFE_NO_PAD.encode(scalar), URL_SAFE_NO_PAD.encode(cert)))
+    let scalar: Zeroizing<[u8; 32]> = Zeroizing::new(key.to_bytes().into());
+    let k = Zeroizing::new(URL_SAFE_NO_PAD.encode(*scalar));
+    Ok(alloc::format!("{PREFIX}g={group}&k={}&c={}", k.as_str(), URL_SAFE_NO_PAD.encode(cert)))
 }
 
 /// Reads a sheet's QR code or its text.
@@ -183,7 +188,7 @@ fn read_qr(query: &str) -> Result<Sheet, Reason> {
         }
     }
     let (g, k, c) = (g.ok_or(Reason::Damaged)?, k.ok_or(Reason::Damaged)?, c.ok_or(Reason::Damaged)?);
-    let scalar = URL_SAFE_NO_PAD.decode(k).map_err(|_| Reason::Damaged)?;
+    let scalar = Zeroizing::new(URL_SAFE_NO_PAD.decode(k).map_err(|_| Reason::Damaged)?);
     let cert = URL_SAFE_NO_PAD.decode(c).map_err(|_| Reason::Damaged)?;
     let key = secret_key(&scalar).ok_or(Reason::Key)?;
     check_cert(&key, &cert)?;
@@ -194,7 +199,9 @@ fn read_qr(query: &str) -> Result<Sheet, Reason> {
 }
 
 fn read_text(text: &str) -> Result<Sheet, Reason> {
-    let mut chars = Vec::with_capacity(KEY_CHARS.saturating_add(CHECK_CHARS));
+    // Room for one more than a sheet holds, so that the buffer never grows
+    // and leaves a copy behind.
+    let mut chars = Zeroizing::new(Vec::with_capacity(KEY_CHARS.saturating_add(CHECK_CHARS).saturating_add(1)));
     for c in text.chars() {
         if c == '-' || c.is_whitespace() {
             continue;
@@ -207,17 +214,20 @@ fn read_text(text: &str) -> Result<Sheet, Reason> {
         if !c.is_ascii() || !ALPHABET.contains(&(c as u8)) {
             return Err(if chars.is_empty() { Reason::NotSheet } else { Reason::Damaged });
         }
-        chars.push(c as u8);
+        // A text too long only counts past the sheet's length.
+        if chars.len() <= KEY_CHARS.saturating_add(CHECK_CHARS) {
+            chars.push(c as u8);
+        }
     }
     if chars.len() != KEY_CHARS.saturating_add(CHECK_CHARS) {
         return Err(Reason::NotSheet);
     }
     let (key_chars, check_chars) = chars.split_at(KEY_CHARS);
-    let scalar = decode32(key_chars).ok_or(Reason::Damaged)?;
+    let scalar = Zeroizing::new(decode32(key_chars).ok_or(Reason::Damaged)?);
     if check(&scalar).as_slice() != check_chars {
         return Err(Reason::Check);
     }
-    let key = secret_key(&scalar).ok_or(Reason::Key)?;
+    let key = secret_key(&scalar[..]).ok_or(Reason::Key)?;
     Ok(Sheet { key, cert: None, group: None })
 }
 
@@ -242,7 +252,7 @@ fn is_tag(s: &str) -> bool {
 /// The four check characters: the first 20 bits of SHA-256 over the
 /// context and the key.
 fn check(scalar: &[u8; 32]) -> [u8; CHECK_CHARS] {
-    let mut data = Vec::with_capacity(CHECK_CONTEXT.len().saturating_add(32));
+    let mut data = Zeroizing::new(Vec::with_capacity(CHECK_CONTEXT.len().saturating_add(32)));
     data.extend_from_slice(CHECK_CONTEXT);
     data.extend_from_slice(scalar);
     let h = sha256(&data);
@@ -268,8 +278,8 @@ fn value(c: u8) -> Option<u32> {
 }
 
 /// 32 bytes as 52 base32 characters, the last 4 bits zero.
-fn encode32(data: &[u8; 32]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(KEY_CHARS);
+fn encode32(data: &[u8; 32]) -> Zeroizing<Vec<u8>> {
+    let mut out = Zeroizing::new(Vec::with_capacity(KEY_CHARS.saturating_add(CHECK_CHARS)));
     let (mut acc, mut bits): (u32, u32) = (0, 0);
     for &b in data {
         acc = (acc << 8) | u32::from(b);
@@ -289,7 +299,7 @@ fn encode32(data: &[u8; 32]) -> Vec<u8> {
 /// 52 base32 characters as 32 bytes; None when the last 4 bits are not
 /// zero, so that each key has one text.
 fn decode32(chars: &[u8]) -> Option<[u8; 32]> {
-    let mut out = Vec::with_capacity(32);
+    let mut out = Zeroizing::new(Vec::with_capacity(chars.len()));
     let (mut acc, mut bits): (u32, u32) = (0, 0);
     for &c in chars {
         acc = (acc << 5) | value(c)?;
@@ -303,7 +313,7 @@ fn decode32(chars: &[u8]) -> Option<[u8; 32]> {
     if acc != 0 {
         return None;
     }
-    out.try_into().ok()
+    out.as_slice().try_into().ok()
 }
 
 #[cfg(test)]

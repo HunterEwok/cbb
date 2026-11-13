@@ -2770,7 +2770,7 @@ impl Service {
         let code = if h.invite.is_empty() {
             cbb_core::pair::normalize_code(&h.code).map_err(|r| Error::msg(r.message()))?
         } else {
-            String::new()
+            cbb_core::secret::Zeroizing::new(String::new())
         };
         let _one = self.creating.try_lock().map_err(|_| Error::msg("a join or a pairing is already running here"))?;
         let (joiner, save) = crate::joiner(&self.state_dir, &self.name)?;

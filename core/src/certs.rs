@@ -579,6 +579,36 @@ pub mod b64 {
         }
     }
 
+    /// A secret in base64, read into a buffer wiped when dropped; the
+    /// base64 text is wiped as well.
+    pub mod secret {
+        use super::*;
+        use zeroize::{Zeroize, Zeroizing};
+
+        pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Zeroizing<Vec<u8>>, D::Error> {
+            let mut s = Option::<String>::deserialize(d)?.unwrap_or_default();
+            let b = STANDARD.decode(&s).map(Zeroizing::new).map_err(serde::de::Error::custom);
+            s.zeroize();
+            b
+        }
+
+        /// The same for an optional secret.
+        pub mod opt {
+            use super::*;
+
+            pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Zeroizing<Vec<u8>>>, D::Error> {
+                match Option::<String>::deserialize(d)? {
+                    Some(mut s) => {
+                        let b = STANDARD.decode(&s).map(|b| Some(Zeroizing::new(b))).map_err(serde::de::Error::custom);
+                        s.zeroize();
+                        b
+                    }
+                    None => Ok(None),
+                }
+            }
+        }
+    }
+
     pub mod list {
         use super::*;
         use serde::ser::SerializeSeq;

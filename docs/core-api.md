@@ -388,6 +388,32 @@ same answer for `cbb_last_panic`. A panic in one of the member's own threads bec
 that the app goes on. The computers' `cbb` is built with `panic = "abort"`: the process ends,
 and the system's service manager starts it again.
 
+## Secrets
+
+The secrets the core holds itself are wiped when it lets them go (`zeroize`, or the
+libraries' own wiping types: p256's keys, x25519-dalek's secrets, HPKE's and ML-KEM's
+private keys, the ciphers' key schedules): the CPace password, its scalar, its shared point
+and the keys made from them, the TLS exporter's master secret and what it derives, a copy's
+derived keys, the recovery key and its text while they are read, an invitation's secrets, the
+clipboard engine's local key, the secrets in the arguments of a call (`secret`, `key`,
+`pkcs8`) and their base64 text. No `Debug` of the core prints a secret: such fields show as
+`<N secret bytes>` or `<hidden>`, and no error text carries one. `ffi/` wipes each answer in
+`cbb_free`, and copies an answer to its exact length rather than leave a shorter copy behind.
+
+A secret the core *returns* (a new key's PKCS #8, a seal secret, a WireGuard key, an
+answer's bytes once the app has read them) is the caller's to keep and wipe: in the apps the
+keys live in the keychain, the Secure Enclave, the Android Keystore, the TPM or a file, and
+the kits' copies of an answer are theirs.
+
+Every comparison one of whose sides is a secret or an authenticator is constant time
+(`cbb_core::secret::ct_eq`, on `subtle`) or is the library's own verify: the records' marks
+and the pinned keys' mark (rule 29), CPace's confirmation tag, the tunnel's confirmation tags,
+the short code's commitment, AmneziaWG's mac1 in `member/`. Public values (key hashes,
+device IDs, period tags a server sees) are compared with `==`. The timing tests in
+`core/src/secret.rs` measure the marks and the pairing confirmation in the manner of dudect;
+they are ignored by default: `cargo test -p cbb-core --release -- --ignored timing
+--test-threads=1`.
+
 ## Bug reports
 
 When something breaks (code 5, or an error the app did not expect), the app may send a short

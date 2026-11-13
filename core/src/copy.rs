@@ -19,6 +19,7 @@ use hmac::{Hmac, Mac};
 use serde::de::IgnoredAny;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::certs::{self, Cert, b64, is_id};
 use crate::clip::{Kind, MAX_TEXT, Via, check_text};
@@ -138,17 +139,22 @@ fn mac(key: &[u8]) -> Result<Hmac<Sha256>> {
     Hmac::<Sha256>::new_from_slice(key).map_err(|_| Error::msg("HMAC refused its key"))
 }
 
-fn hkdf(key: &[u8; KEY_SIZE], info: &[u8]) -> Result<[u8; 32]> {
+fn hkdf(key: &[u8; KEY_SIZE], info: &[u8]) -> Result<Zeroizing<[u8; 32]>> {
     // HKDF-SHA256 with no salt and one block. HMAC pads its key with zeros
     // to the block, so the empty key is the salt of 32 zero bytes that
     // RFC 5869 takes for none.
     let mut ext = mac(&[])?;
     ext.update(key);
-    let prk = ext.finalize().into_bytes();
-    let mut exp = mac(&prk)?;
+    let mut prk = ext.finalize().into_bytes();
+    let exp = mac(&prk);
+    prk.as_mut_slice().zeroize();
+    let mut exp = exp?;
     exp.update(info);
     exp.update(&[1]);
-    Ok(exp.finalize().into_bytes().into())
+    let mut okm = exp.finalize().into_bytes();
+    let out = Zeroizing::new(okm.as_slice().try_into().map_err(|_| Error::msg("HKDF gave another length"))?);
+    okm.as_mut_slice().zeroize();
+    Ok(out)
 }
 
 fn cipher(key: &[u8; 32]) -> ChaCha20Poly1305 {
@@ -185,7 +191,7 @@ pub fn seal_segment(key: &[u8; KEY_SIZE], i: u64, last: bool, plain: &[u8]) -> R
     let mut seg = Vec::with_capacity(SEGMENT);
     seg.extend_from_slice(plain);
     seg.resize(SEGMENT, 0);
-    cipher(&hkdf(key, BLOB_INFO)?)
+    cipher(&*hkdf(key, BLOB_INFO)?)
         .encrypt(&segment_nonce(i), Payload { msg: &seg, aad: &segment_aad(last) })
         .map_err(|_| Error::msg("a blob's segment cannot be sealed"))
 }
@@ -196,7 +202,7 @@ pub fn open_segment(key: &[u8; KEY_SIZE], i: u64, last: bool, sealed: &[u8]) -> 
     if sealed.len() != SEALED_SEGMENT {
         return Err(Error::msg("a blob's segment is not 65552 bytes"));
     }
-    cipher(&hkdf(key, BLOB_INFO)?)
+    cipher(&*hkdf(key, BLOB_INFO)?)
         .decrypt(&segment_nonce(i), Payload { msg: sealed, aad: &segment_aad(last) })
         .map_err(|_| Error::msg("a blob's segment does not open: it was changed or is from another copy"))
 }
@@ -500,7 +506,7 @@ impl Sealed {
         let k = seal::open(secret, &h, &w.key)
             .map_err(|_| Error::msg("the copy's key does not open with this device's key"))?;
         let k: [u8; KEY_SIZE] = k.as_slice().try_into().map_err(|_| Error::msg("the copy's key is not 32 bytes"))?;
-        let plain = cipher(&hkdf(&k, PAYLOAD_INFO)?)
+        let plain = cipher(&*hkdf(&k, PAYLOAD_INFO)?)
             .decrypt(&payload_nonce(), Payload { msg: &self.payload, aad: &h })
             .map_err(|_| Error::msg("the copy does not open: it was changed"))?;
         let c = Content::decode(&plain)?;
@@ -604,7 +610,7 @@ fn seal_with(
     let ids: Vec<&str> = readers.iter().map(|r| r.0.as_str()).collect();
     let h = header_hash(id, origin, &time, &ids, blob.as_ref());
     let plain = content.encode()?;
-    let payload = cipher(&hkdf(key, PAYLOAD_INFO)?)
+    let payload = cipher(&*hkdf(key, PAYLOAD_INFO)?)
         .encrypt(&payload_nonce(), Payload { msg: &plain, aad: &h })
         .map_err(|_| Error::msg("the copy cannot be sealed"))?;
     let mut wraps = Vec::with_capacity(readers.len());

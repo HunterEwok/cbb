@@ -13,7 +13,9 @@
 //! given: the system clock on Linux, the clock a microcontroller set from
 //! the network.
 
+pub mod bykey;
 mod exporter;
+mod hybrid;
 mod provider;
 mod session;
 #[cfg(feature = "web")]

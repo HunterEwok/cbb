@@ -17,6 +17,7 @@ use hpke::aead::ChaCha20Poly1305;
 use hpke::kdf::HkdfSha256;
 use hpke::kem::XWing;
 use hpke::{Deserializable, Kem, OpModeR, OpModeS, Serializable};
+use zeroize::Zeroize;
 
 use crate::error::Error;
 
@@ -86,9 +87,12 @@ pub fn seal(public: &[u8], aad: &[u8], msg: &[u8]) -> Result<Vec<u8>, Error> {
 /// seal with the randomness drawn from seed: for the vectors only, since the
 /// same seed twice gives the same encapsulated key.
 #[doc(hidden)]
-pub fn seal_with_seed(public: &[u8], aad: &[u8], msg: &[u8], seed: [u8; 32]) -> Result<Vec<u8>, Error> {
+pub fn seal_with_seed(public: &[u8], aad: &[u8], msg: &[u8], mut seed: [u8; 32]) -> Result<Vec<u8>, Error> {
     let pk = public_key_of(public)?;
+    // The generator and the seed are wiped: whoever knew the seed would
+    // open the message.
     let mut rng = ChaCha20Rng::from_seed(seed);
+    seed.zeroize();
     let (enc, ct) = hpke::single_shot_seal_with_rng::<ChaCha20Poly1305, HkdfSha256, XWing>(
         &OpModeS::Base,
         &pk,

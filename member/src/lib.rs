@@ -495,7 +495,7 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
         let mut line = String::new();
         std::io::stdin().read_line(&mut line).context("cannot read the code")?;
         let code = pair::normalize_code(line.trim())?;
-        let h = control::Header { op: "join".into(), code, ..Default::default() };
+        let h = control::Header { op: "join".into(), code: code.to_string(), ..Default::default() };
         request(g, &control::Message::new(h, Vec::new()))?;
         println!("{}", tr!("Joined the group."));
         return Ok(());
