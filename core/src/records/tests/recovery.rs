@@ -24,7 +24,9 @@ fn phone(member: &K) -> Device {
 fn write(g: &mut G, from: &[Record], new_root: &K, member: &K, remove: &[KeyHash]) -> Written {
     let mut set = set_with(&g.root.key, from, &g.lists);
     let st = set.state();
-    let w = set.write_change(&st, &k("recovery"), new_root, phone(member), remove, false, 0).unwrap();
+    let w = set
+        .write_change(&st, &k("recovery"), crate::testkit::rk2(), new_root, phone(member), remove, false, 0)
+        .unwrap();
     for r in &w.first {
         g.push(r.clone());
     }
@@ -39,9 +41,18 @@ fn head_at(g: &G, seq: u64, prev: Option<RecordId>, root: &K, list: [u8; 32]) ->
     let body = Body {
         seq,
         prev,
-        ..g.body(&k("recovery"), Kind::Recovery { root: root.key.clone(), list, from: 0, first: RecordId([0xf1; 32]) })
+        ..g.body(
+            &k("recovery"),
+            Kind::Recovery {
+                root: root.key.clone(),
+                list,
+                from: 0,
+                first: RecordId([0xf1; 32]),
+                signer2: crate::testkit::rk2().key().hash(),
+            },
+        )
     };
-    Record::sign(body, &k("recovery")).unwrap()
+    crate::testkit::sign_by(body, &k("recovery"))
 }
 
 /// The first root's group: its own phone (holds_root), a laptop and a TV.
@@ -104,7 +115,10 @@ fn two_heads_at_one_seq_stop_the_group_for_good() {
         // A writer refuses to write on a group stopped for good.
         let mut set = set_with(&g.root.key, &g.recs, &g.lists);
         let st = set.state();
-        assert!(set.write_change(&st, &k("recovery"), &k("n5"), phone(&k("p5")), &[], false, 0).is_err());
+        assert!(
+            set.write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("n5"), phone(&k("p5")), &[], false, 0)
+                .is_err()
+        );
     }
 }
 
@@ -119,7 +133,13 @@ fn a_head_the_device_cannot_read_stops_it_until_it_is_updated() {
     let later = raw(
         &g,
         &k("recovery"),
-        Kind::Recovery { root: k("n2").key.clone(), list: [5; 32], from: 0, first: RecordId([0xf1; 32]) },
+        Kind::Recovery {
+            root: k("n2").key.clone(),
+            list: [5; 32],
+            from: 0,
+            first: RecordId([0xf1; 32]),
+            signer2: crate::testkit::rk2().key().hash(),
+        },
         |m| m.push((99, crate::format::cbor::Value::Uint(1))),
     )
     .unwrap();
@@ -283,7 +303,16 @@ fn lists_naming_nothing_everything_or_ids_nobody_holds() {
     let junk = vec![0xff, 0x00, 0x01];
     let h = list_hash(&junk);
     let first = g.first_checkpoint(&k("n1"), &[]);
-    g.rec(&k("recovery"), Kind::Recovery { root: k("n1").key.clone(), list: h, from: 0, first });
+    g.rec(
+        &k("recovery"),
+        Kind::Recovery {
+            root: k("n1").key.clone(),
+            list: h,
+            from: 0,
+            first,
+            signer2: crate::testkit::rk2().key().hash(),
+        },
+    );
     g.lists.push(junk.clone());
     let s = g.state();
     assert_eq!(s.roots.len(), 2);
@@ -339,13 +368,22 @@ fn at_most_sixteen_heads() {
         prev: Some(tip),
         ..g.body(
             &k("recovery"),
-            Kind::Recovery { root: k("n17").key, list: [1; 32], from: 0, first: RecordId([0xf1; 32]) },
+            Kind::Recovery {
+                root: k("n17").key,
+                list: [1; 32],
+                from: 0,
+                first: RecordId([0xf1; 32]),
+                signer2: crate::testkit::rk2().key().hash(),
+            },
         )
     };
     assert!(Record::sign(body.clone(), &k("recovery")).is_err());
     let mut set = set_with(&g.root.key, &g.recs, &g.lists);
     let st = set.state();
-    assert!(set.write_change(&st, &k("recovery"), &k("n17"), phone(&k("p17")), &[], false, 0).is_err());
+    assert!(
+        set.write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("n17"), phone(&k("p17")), &[], false, 0)
+            .is_err()
+    );
 }
 
 /// A head naming an admin's key as the root: the chain wins, and what that
@@ -358,8 +396,14 @@ fn an_admin_key_named_as_the_root() {
     let by_admin = g.device(&k("admin a"), &k("lamp"), "lamp", |_| {});
     let mut set = set_with(&g.root.key, &g.recs, &g.lists);
     let st = set.state();
-    assert!(set.write_change(&st, &k("recovery"), &k("admin a"), phone(&k("p")), &[], false, 0).is_err());
-    assert!(set.write_change(&st, &k("recovery"), &k("laptop"), phone(&k("p")), &[], false, 0).is_err());
+    assert!(
+        set.write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("admin a"), phone(&k("p")), &[], false, 0)
+            .is_err()
+    );
+    assert!(
+        set.write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("laptop"), phone(&k("p")), &[], false, 0)
+            .is_err()
+    );
     // A head that names it anyway is valid, and the key is the root.
     let mut with = g.listing();
     with.push(by_admin.id());
@@ -395,13 +439,25 @@ fn a_head_names_where_the_new_roots_records_start() {
     let r = raw(
         &g,
         &k("recovery"),
-        Kind::Recovery { root: k("n9").key.clone(), list: [1; 32], from: 0, first: RecordId([0xf1; 32]) },
+        Kind::Recovery {
+            root: k("n9").key.clone(),
+            list: [1; 32],
+            from: 0,
+            first: RecordId([0xf1; 32]),
+            signer2: crate::testkit::rk2().key().hash(),
+        },
         |m| m.push((12, crate::format::cbor::Value::Uint(0))),
     );
     assert_eq!(r.map(|_| ()).unwrap_err(), Rule::new("form/default"));
     let body = g.body(
         &k("recovery"),
-        Kind::Recovery { root: k("n9").key.clone(), list: [1; 32], from: MAX_SEQ + 1, first: RecordId([0xf1; 32]) },
+        Kind::Recovery {
+            root: k("n9").key.clone(),
+            list: [1; 32],
+            from: MAX_SEQ + 1,
+            first: RecordId([0xf1; 32]),
+            signer2: crate::testkit::rk2().key().hash(),
+        },
     );
     assert!(body.check().unwrap_err().is("records/recovery/from"));
 }
@@ -495,7 +551,16 @@ fn the_writer_signs_the_new_roots_first_records() {
     let mut set = held.clone();
     let st = set.state();
     let w = set
-        .write_change(&st, &k("recovery"), &k("n1"), phone(&k("new phone")), &[k("old phone").hash], false, 7)
+        .write_change(
+            &st,
+            &k("recovery"),
+            crate::testkit::rk2(),
+            &k("n1"),
+            phone(&k("new phone")),
+            &[k("old phone").hash],
+            false,
+            7,
+        )
         .unwrap();
     assert!(!w.again && set.contains(&w.record.id()));
     let kinds: Vec<&Kind> = w.first.iter().map(|r| &r.body().kind).collect();
@@ -507,14 +572,31 @@ fn the_writer_signs_the_new_roots_first_records() {
     assert!(matches!(&w.record.body().kind, Kind::Recovery { list, .. } if *list == w.list.hash()));
     assert_eq!((w.record.body().seq, w.record.body().prev), (1, None));
     // Asked again, with other ticks: the change it holds, signed once.
-    let again = set.write_change(&st, &k("recovery"), &k("n1"), phone(&k("new phone")), &[], true, 7).unwrap();
+    let again = set
+        .write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("n1"), phone(&k("new phone")), &[], true, 7)
+        .unwrap();
     assert!(again.again && again.record.id() == w.record.id());
     // A writer that never wrote one drops the hubs record when asked.
     let mut other = held.clone();
-    let dropped = other.write_change(&st, &k("recovery"), &k("n1"), phone(&k("new phone")), &[], true, 7).unwrap();
+    let dropped = other
+        .write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("n1"), phone(&k("new phone")), &[], true, 7)
+        .unwrap();
     assert!(!dropped.first.iter().any(|r| matches!(r.body().kind, Kind::Hubs { .. })));
     let mut other = held.clone();
-    assert!(other.write_change(&st, &k("not the key"), &k("n1"), phone(&k("new phone")), &[], false, 7).is_err());
+    assert!(
+        other
+            .write_change(
+                &st,
+                &k("not the key"),
+                crate::testkit::rk2(),
+                &k("n1"),
+                phone(&k("new phone")),
+                &[],
+                false,
+                7
+            )
+            .is_err()
+    );
 }
 
 /// One state for one set in any order, over a group holding every kind of
@@ -573,16 +655,21 @@ fn a_device_pins_the_root_and_the_recovery_key() {
     let root = k("root").key;
     let mark = pin_mark(&local, &root, &rk());
     assert!(RecordSet::pinned(root.clone(), rk(), &local, &mark).is_some());
-    assert!(RecordSet::pinned(root.clone(), k("other").key, &local, &mark).is_none());
+    let other = Recovery { k1: k("other").key, ..rk() };
+    assert!(RecordSet::pinned(root.clone(), other, &local, &mark).is_none());
+    let other2 = Recovery { k2: crate::records::pq::PqKey::from_seeds(&[9; 16], &[9; 16], &[9; 16]).key(), ..rk() };
+    assert!(RecordSet::pinned(root.clone(), other2, &local, &mark).is_none());
     assert!(RecordSet::pinned(k("root 2").key, rk(), &local, &mark).is_none());
     assert!(RecordSet::pinned(root, rk(), &[4u8; 32], &mark).is_none());
 }
 
-/// The Group ID commits to both keys.
+/// The Group ID commits to the root and both halves of the recovery key.
 #[test]
 fn the_group_id_commits_to_both_keys() {
     let root = k("root").key;
-    assert_ne!(group_id(&root, &rk()), group_id(&root, &k("other").key));
+    assert_ne!(group_id(&root, &rk()), group_id(&root, &Recovery { k1: k("other").key, ..rk() }));
+    let k2 = crate::records::pq::PqKey::from_seeds(&[9; 16], &[9; 16], &[9; 16]).key();
+    assert_ne!(group_id(&root, &rk()), group_id(&root, &Recovery { k2, ..rk() }));
     assert_ne!(group_id(&root, &rk()), group_id(&k("root 2").key, &rk()));
     assert_ne!(group_id(&root, &rk()), root.device_id());
 }
@@ -632,16 +719,19 @@ fn a_fetch_proof_and_a_head_are_not_one_signature() {
     let g = base();
     let head = head_at(&g, 1, None, &k("root 2"), List(g.listing()).hash());
     let body = head.body_bytes().to_vec();
-    let fetch = crate::records::sign_fetch(&k("recovery"), &body).unwrap();
-    assert_eq!(crate::records::verify_fetch(&rk(), &body, &fetch), Ok(()));
-    // The fetch signature on the head's body is not the head.
-    let forged = Record::decode(&crate::format::envelope::write(&body, &fetch, None)).unwrap();
-    assert!(forged.verify(&rk()).is_err());
+    let (fetch, fetch2) = crate::records::sign_fetch(&k("recovery"), crate::testkit::rk2(), &body).unwrap();
+    assert_eq!(crate::records::verify_fetch(&rk(), &body, &fetch, &fetch2), Ok(()));
+    // The fetch signatures on the head's body are not the head.
+    let forged = Record::decode(&crate::format::envelope::write(&body, &fetch, Some(&fetch2))).unwrap();
+    assert!(forged.verify_head(&rk()).is_err());
     let mut set = set_of(&g.root.key);
     assert!(set.insert(forged).is_err());
-    // The head's signature is no fetch proof.
-    assert!(crate::records::verify_fetch(&rk(), &body, head.sig()).is_err());
-    assert!(head.verify(&rk()).is_ok());
+    // The head's signatures are no fetch proof, nor half of one.
+    let head2 = head.sig2().unwrap();
+    assert!(crate::records::verify_fetch(&rk(), &body, head.sig(), head2).is_err());
+    assert!(crate::records::verify_fetch(&rk(), &body, &fetch, head2).is_err());
+    assert!(crate::records::verify_fetch(&rk(), &body, head.sig(), &fetch2).is_err());
+    assert_eq!(head.verify_head(&rk()), Ok(false));
 }
 
 /// Two changes of root: the phone the first new root holds is not
@@ -682,7 +772,9 @@ fn a_writer_that_took_one_round_keeps_what_came_early() {
     }
     let st = set.state();
     assert!(!has(&st, &k("p1")) && st.roots.len() == 1);
-    let err = set.write_change(&st, &k("recovery"), &k("n2"), phone(&k("p2")), &[], false, 0).unwrap_err();
+    let err = set
+        .write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("n2"), phone(&k("p2")), &[], false, 0)
+        .unwrap_err();
     assert_eq!(err.to_string(), crate::records::set::CHANGE_WAITING);
     for l in &g.lists {
         set.insert_list(l).unwrap();
@@ -690,7 +782,8 @@ fn a_writer_that_took_one_round_keeps_what_came_early() {
     let st = set.state();
     assert!(has(&st, &k("p1")) && st.roots.len() == 2);
     assert!(w1.first.iter().all(|r| set.contains(&r.id())));
-    let w2 = set.write_change(&st, &k("recovery"), &k("n2"), phone(&k("p2")), &[], false, 0).unwrap();
+    let w2 =
+        set.write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("n2"), phone(&k("p2")), &[], false, 0).unwrap();
     let p1 = w1.first.iter().find(|r| matches!(&r.body().kind, Kind::Device(d) if d.key == k("p1").key)).unwrap();
     assert!(w2.list.0.contains(&p1.id()));
     for r in w2.first.iter().chain([&w2.record]) {
@@ -792,7 +885,9 @@ fn the_writer_waits_for_every_change_it_holds() {
     let refused = |g: &G, lists: &[Vec<u8>]| {
         let mut set = set_with(&g.root.key, &g.recs, lists);
         let st = set.state();
-        set.write_change(&st, &k("recovery"), &k("n9"), phone(&k("p9")), &[], false, 0).err().map(|e| e.to_string())
+        set.write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("n9"), phone(&k("p9")), &[], false, 0)
+            .err()
+            .map(|e| e.to_string())
     };
     // A head waiting for its list.
     let mut g = base();
@@ -805,7 +900,13 @@ fn the_writer_waits_for_every_change_it_holds() {
     let held = raw(
         &g,
         &k("recovery"),
-        Kind::Recovery { root: k("n1").key.clone(), list: [5; 32], from: 0, first: RecordId([0xf1; 32]) },
+        Kind::Recovery {
+            root: k("n1").key.clone(),
+            list: [5; 32],
+            from: 0,
+            first: RecordId([0xf1; 32]),
+            signer2: crate::testkit::rk2().key().hash(),
+        },
         |m| m.push((99, crate::format::cbor::Value::Uint(1))),
     )
     .unwrap();
@@ -858,8 +959,9 @@ fn the_writer_refuses_what_it_cannot_mean() {
     g.rec(&k("root"), Kind::Revoke(removal(&[k("laptop").hash], seen)));
     let mut set = set_with(&g.root.key, &g.recs, &g.lists);
     let st = set.state();
-    let mut w =
-        |dev: &K, remove: &[KeyHash]| set.write_change(&st, &k("recovery"), &k("n1"), phone(dev), remove, false, 0);
+    let mut w = |dev: &K, remove: &[KeyHash]| {
+        set.write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("n1"), phone(dev), remove, false, 0)
+    };
     for bad in [k("n1").hash, k("p1").hash, rk().hash(), k("root").hash] {
         assert!(w(&k("p1"), &[bad]).is_err());
     }
@@ -1175,7 +1277,7 @@ fn a_halted_set_restores_from_what_it_saved() {
     let mut reversed = saved.clone();
     reversed.reverse();
     for records in [saved, reversed] {
-        let back = RecordSet::restore(g.root.key.clone(), k("recovery").key, &records, &lists);
+        let back = RecordSet::restore(g.root.key.clone(), rk(), &records, &lists);
         assert_eq!(back.ids().collect::<Vec<_>>(), old.ids().collect::<Vec<_>>());
         assert_eq!(back.digest(), old.digest());
         assert_eq!(back.state(), s);
@@ -1348,7 +1450,9 @@ fn a_halted_state_is_for_display_only() {
     }
     // Two changes at one seq: the writer says the group stopped for good,
     // not that a change waits for a sync.
-    let err = m.write_change(&s, &k("recovery"), &k("n3"), phone(&k("p3")), &[], false, 0).unwrap_err();
+    let err = m
+        .write_change(&s, &k("recovery"), crate::testkit::rk2(), &k("n3"), phone(&k("p3")), &[], false, 0)
+        .unwrap_err();
     assert_eq!(err.to_string(), crate::records::set::CHANGE_STOPPED);
 }
 
@@ -1373,7 +1477,7 @@ fn leaving_a_halt_carries_nothing_over() {
     let mut saved: Vec<Record> = m.in_dependency_order().into_iter().filter(|r| r.id() != twin.id()).cloned().collect();
     saved.extend(g.recs.iter().cloned());
     let lists: Vec<Vec<u8>> = m.lists().map(<[u8]>::to_vec).collect();
-    let back = RecordSet::restore(g.root.key.clone(), k("recovery").key, &saved, &lists);
+    let back = RecordSet::restore(g.root.key.clone(), rk(), &saved, &lists);
     let never = set_with(&g.root.key, &g.recs, &g.lists);
     assert_eq!(back.digest(), never.digest());
     assert_eq!(back.state(), never.state());
@@ -1441,8 +1545,19 @@ fn removals_name_only_the_keys_they_concern() {
     let st = set.state();
     // Each from a writer that holds no change yet.
     let removals = |remove: &[KeyHash]| -> Vec<Removal> {
-        let w =
-            set.clone().write_change(&st, &k("recovery"), &k("n1"), phone(&k("new phone")), remove, false, 0).unwrap();
+        let w = set
+            .clone()
+            .write_change(
+                &st,
+                &k("recovery"),
+                crate::testkit::rk2(),
+                &k("n1"),
+                phone(&k("new phone")),
+                remove,
+                false,
+                0,
+            )
+            .unwrap();
         w.first
             .iter()
             .filter_map(|r| match &r.body().kind {
@@ -1584,7 +1699,13 @@ fn a_checkpoint_keeping_what_the_change_cut_counts_nowhere() {
     g.lists.push(l.encode());
     g.rec(
         &k("recovery"),
-        Kind::Recovery { root: k("admin a").key.clone(), list: l.hash(), from: seq + 1, first: cp.id() },
+        Kind::Recovery {
+            root: k("admin a").key.clone(),
+            list: l.hash(),
+            from: seq + 1,
+            first: cp.id(),
+            signer2: crate::testkit::rk2().key().hash(),
+        },
     );
     let without: Vec<Record> = g.recs.iter().filter(|r| r.id() != lamp.id()).cloned().collect();
     let all = state_with(&g.root.key, &g.recs, &g.lists);
@@ -1763,7 +1884,9 @@ fn a_change_of_root_leaves_out_what_either_history_pruned() {
     w.insert(admitted.clone()).unwrap();
     let st = w.state();
     assert_eq!(st.stop, Stop::Full);
-    let wr = w.write_change(&st, &k("recovery"), &k("n1"), phone(&k("new phone")), &[], false, 0).unwrap();
+    let wr = w
+        .write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("n1"), phone(&k("new phone")), &[], false, 0)
+        .unwrap();
     let mut after: Vec<Record> = w.in_dependency_order().into_iter().cloned().collect();
     after.extend(wr.first.iter().cloned());
     after.push(wr.record.clone());
@@ -1854,8 +1977,18 @@ fn a_change_asked_twice_gives_back_its_head() {
     let from = g.recs.clone();
     let w = write(&mut g, &from, &k("n1"), &k("new phone"), &[k("tv").hash]);
     let mut set = set_with(&g.root.key, &g.recs, &g.lists);
-    let again =
-        set.write_change(&set.state(), &k("recovery"), &k("n1"), phone(&k("new phone")), &[], false, 9).unwrap();
+    let again = set
+        .write_change(
+            &set.state(),
+            &k("recovery"),
+            crate::testkit::rk2(),
+            &k("n1"),
+            phone(&k("new phone")),
+            &[],
+            false,
+            9,
+        )
+        .unwrap();
     assert_eq!(again.record.id(), w.record.id());
     assert_eq!(again.list, w.list);
     assert_eq!(
@@ -1868,8 +2001,18 @@ fn a_change_asked_twice_gives_back_its_head() {
     held.insert(w.record.clone()).unwrap();
     held.insert_list(&w.list.encode()).unwrap();
     held.insert_all(w.first.iter().cloned());
-    let again =
-        held.write_change(&held.state(), &k("recovery"), &k("n1"), phone(&k("new phone")), &[], false, 9).unwrap();
+    let again = held
+        .write_change(
+            &held.state(),
+            &k("recovery"),
+            crate::testkit::rk2(),
+            &k("n1"),
+            phone(&k("new phone")),
+            &[],
+            false,
+            9,
+        )
+        .unwrap();
     assert_eq!(again.record.id(), w.record.id());
 }
 
@@ -1889,7 +2032,13 @@ fn a_halted_member_takes_back_a_listed_record_a_checkpoint_pruned() {
     g.lists.push(list.encode());
     let head = g.rec(
         &k("recovery"),
-        Kind::Recovery { root: k("n1").key.clone(), list: list.hash(), from: 0, first: RecordId([0xf1; 32]) },
+        Kind::Recovery {
+            root: k("n1").key.clone(),
+            list: list.hash(),
+            from: 0,
+            first: RecordId([0xf1; 32]),
+            signer2: crate::testkit::rk2().key().hash(),
+        },
     );
     let a = head_at(&g, 2, Some(head.id()), &k("n2"), [2; 32]);
     let b = head_at(&g, 2, Some(head.id()), &k("n3"), [3; 32]);
@@ -1947,8 +2096,12 @@ fn a_change_asked_again_at_once_is_the_same_change() {
         let g = base();
         let mut set = set_with(&g.root.key, &g.recs, &g.lists);
         let st = set.state();
-        let a = set.write_change(&st, &k("recovery"), &k("n1"), phone(&k("p1")), first, false, 0).unwrap();
-        let b = set.write_change(&st, &k("recovery"), &k("n1"), phone(&k("p1")), second, false, 1000).unwrap();
+        let a = set
+            .write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("n1"), phone(&k("p1")), first, false, 0)
+            .unwrap();
+        let b = set
+            .write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("n1"), phone(&k("p1")), second, false, 1000)
+            .unwrap();
         assert!(!a.again && b.again);
         assert_eq!(a.record.id(), b.record.id());
         let mut member = set_with(&g.root.key, &g.recs, &g.lists);
@@ -1972,14 +2125,21 @@ fn a_change_written_without_a_sync_says_so() {
     let recs: Vec<Record> = saved.in_dependency_order().into_iter().cloned().collect();
     let mut set = RecordSet::restore(g.root.key.clone(), rk(), &recs, &g.lists);
     let st = set.state();
-    let w = set.write_change(&st, &k("recovery"), &k("n1"), phone(&k("p1")), &[], false, 0).unwrap();
+    let w =
+        set.write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("n1"), phone(&k("p1")), &[], false, 0).unwrap();
     assert!(w.blind);
-    let again = set.write_change(&st, &k("recovery"), &k("n1"), phone(&k("p1")), &[], false, 0).unwrap();
+    let again =
+        set.write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("n1"), phone(&k("p1")), &[], false, 0).unwrap();
     assert!(again.again && again.blind);
     let mut synced = RecordSet::restore(g.root.key.clone(), rk(), &recs, &g.lists);
     synced.insert_all(g.recs.iter().cloned());
     let st = synced.state();
-    assert!(!synced.write_change(&st, &k("recovery"), &k("n1"), phone(&k("p1")), &[], false, 0).unwrap().blind);
+    assert!(
+        !synced
+            .write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("n1"), phone(&k("p1")), &[], false, 0)
+            .unwrap()
+            .blind
+    );
 }
 
 /// The way out of two histories of the root reaches a stopped member from
@@ -2040,4 +2200,69 @@ fn a_removed_device_gets_the_list_of_the_change_that_removed_it() {
     }
     assert_eq!(laptop.missing_list(), None);
     assert!(laptop.state().revoked.contains(&k("laptop").hash));
+}
+
+/// A head stands only with both halves of the recovery key: K1's signature
+/// with a K2 signature that does not hold is refused, and so is K2's with
+/// a K1 signature that does not hold; each is told by its own rule, K1's
+/// first, and neither half alone enters the set.
+#[test]
+fn a_head_needs_both_halves_of_the_recovery_key() {
+    let g = base();
+    let head = head_at(&g, 1, None, &k("root 2"), List(g.listing()).hash());
+    let (body, sig, sig2) = (head.body_bytes().to_vec(), head.sig().to_vec(), head.sig2().unwrap().to_vec());
+    let with =
+        |sig: &[u8], sig2: &[u8]| Record::decode(&crate::format::envelope::write(&body, sig, Some(sig2))).unwrap();
+    assert_eq!(with(&sig, &sig2).verify_head(&rk()), Ok(false));
+    // K2's signature broken, K1's over it: K1's covers its hash.
+    let mut bent2 = sig2.clone();
+    bent2[100] ^= 1;
+    assert_eq!(with(&sig, &bent2).verify_head(&rk()), Err(Rule::field("recovery", "damaged")));
+    // K2's made anew over the body, K1's still over the first: swapped.
+    let other2 = crate::records::pq::PqKey::from_seeds(&[7; 16], &[7; 16], &[0x23; 16]);
+    let swapped = other2.sign(&body, crate::records::pq::CONTEXT_RECORD).unwrap();
+    assert_eq!(with(&sig, &swapped).verify_head(&rk()), Err(Rule::field("recovery", "damaged")));
+    // K1's made over a K2 signature that does not hold.
+    let k1_over = crate::records::key::sign_es256(&k("recovery"), LABEL_RECORD, &with_sig2(&body, &bent2)).unwrap();
+    assert_eq!(with(&k1_over, &bent2).verify_head(&rk()), Err(Rule::new("sig/verify")));
+    // K2's good, K1's over the body alone (without K2's hash) or by another key.
+    let plain = crate::records::key::sign_es256(&k("recovery"), LABEL_RECORD, &body).unwrap();
+    assert_eq!(with(&plain, &sig2).verify_head(&rk()), Err(Rule::field("recovery", "damaged")));
+    let thief = crate::records::key::sign_es256(&k("thief"), LABEL_RECORD, &with_sig2(&body, &sig2)).unwrap();
+    assert_eq!(with(&thief, &sig2).verify_head(&rk()), Err(Rule::field("recovery", "damaged")));
+    for bad in [with(&sig, &bent2), with(&k1_over, &bent2), with(&plain, &sig2)] {
+        let mut set = set_of(&g.root.key);
+        assert!(set.insert(bad).is_err());
+    }
+}
+
+/// A head names the group's K2 as `signer2`: one naming another key, even
+/// signed by it, is refused, and K1 never signs a head alone.
+#[test]
+fn a_head_names_the_groups_second_half() {
+    let g = base();
+    let other2 = crate::records::pq::PqKey::from_seeds(&[7; 16], &[7; 16], &[7; 16]);
+    let body = g.body(
+        &k("recovery"),
+        Kind::Recovery {
+            root: k("root 2").key,
+            list: List(g.listing()).hash(),
+            from: 0,
+            first: RecordId([0xf1; 32]),
+            signer2: other2.key().hash(),
+        },
+    );
+    let r = Record::sign_head(body.clone(), &k("recovery"), &other2).unwrap();
+    assert_eq!(r.verify_head(&rk()), Err(Rule::field("recovery", "signer2")));
+    assert!(Record::sign_head(body.clone(), &k("recovery"), crate::testkit::rk2()).is_err(), "signer2 is not that key");
+    assert!(Record::sign(body, &k("recovery")).is_err(), "a head is never signed by K1 alone");
+    // A held record of the recovery key carries both signatures too.
+    let held = super::raw(&g, &k("recovery"), head_at(&g, 1, None, &k("root 2"), [1; 32]).body().kind.clone(), |m| {
+        m.push((99, crate::format::cbor::Value::Uint(1)));
+    })
+    .unwrap();
+    assert!(held.body().held);
+    assert_eq!(held.verify_head(&rk()), Ok(true));
+    let alone = Record::decode(&crate::format::envelope::write(held.body_bytes(), held.sig(), None));
+    assert!(alone.is_err() || alone.unwrap().verify_head(&rk()).is_err());
 }

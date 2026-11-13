@@ -77,6 +77,7 @@ pub static WELCOME: Table = Table {
         f(7, "welcome/credentials", Ty::Array { of: &ENV, max: 259 }, false),
         f(9, "welcome/recovery", MEMBER_KEY, true),
         f(10, "welcome/list", Ty::BytesUpTo(4 + 34 * 1024), false),
+        f(11, "welcome/recovery2", Ty::Key(Alg::SlhDsa), true),
     ],
 };
 

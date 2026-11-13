@@ -46,8 +46,8 @@ fn k(name: &str) -> K {
 }
 
 /// The group's recovery key in the tests.
-fn rk() -> Key {
-    k("recovery").key
+fn rk() -> Recovery {
+    crate::testkit::recovery()
 }
 
 /// An empty set of the tests' group whose first root is root.
@@ -89,7 +89,16 @@ impl G {
         let list = List(ids);
         self.lists.push(list.encode());
         let first = self.first_checkpoint(new_root, &list.0);
-        self.rec(&k("recovery"), Kind::Recovery { root: new_root.key.clone(), list: list.hash(), from, first })
+        self.rec(
+            &k("recovery"),
+            Kind::Recovery {
+                root: new_root.key.clone(),
+                list: list.hash(),
+                from,
+                first,
+                signer2: crate::testkit::rk2().key().hash(),
+            },
+        )
     }
 
     /// The first checkpoint of new_root a head names (`change_from`).
@@ -129,7 +138,7 @@ impl G {
     }
 
     fn rec(&mut self, by: &K, kind: Kind) -> Record {
-        let r = Record::sign(self.body(by, kind), by).unwrap();
+        let r = crate::testkit::sign_by(self.body(by, kind), by);
         self.push(r)
     }
 
@@ -941,10 +950,12 @@ fn the_set_stays_within_its_bytes_whatever_the_order() {
     b.insert_all(rev);
     assert!(a.bytes() <= MAX_SET_BYTES && a.len() < g.recs.len());
     assert_eq!(a.digest(), b.digest());
-    // The root's checkpoints come first, the newest first; the newest
-    // prunes the first device anyway.
+    // The root's checkpoints come first, the newest first; none counts,
+    // and the first device is out of the rooms: at most aside, as the
+    // record the oldest waiting checkpoint waits for.
     assert!(a.contains(&g.recs.last().unwrap().id()));
-    assert!(!a.contains(&first.id()));
+    assert!(!a.contains(&first.id()) || a.waits_aside(&first.id()));
+    assert!(!a.state().counting.contains(&first.id()));
 }
 
 /// A removed admin signs as much as it can, through recovery records of
@@ -965,7 +976,16 @@ fn limits_hold_for_any_signer() {
     let quiet = g.recs.clone();
     for i in 0..4 {
         let r = k(&format!("x root {i}"));
-        g.rec(&x, Kind::Recovery { root: r.key.clone(), list: [0; 32], from: 0, first: RecordId([0xf1; 32]) });
+        g.rec(
+            &x,
+            Kind::Recovery {
+                root: r.key.clone(),
+                list: [0; 32],
+                from: 0,
+                first: RecordId([0xf1; 32]),
+                signer2: crate::testkit::rk2().key().hash(),
+            },
+        );
         for j in 0..400 {
             g.device(&r, &k(&format!("x{i} {j}")), "flood", |_| {});
         }
@@ -1166,14 +1186,28 @@ fn who_may_command() {
     // Two recovery records at one seq: a full stop for good; nobody
     // commands, the root neither.
     let r = k("recovery");
-    let one =
-        g.body(&r, Kind::Recovery { root: k("nb").key.clone(), list: [1; 32], from: 0, first: RecordId([0xf1; 32]) });
+    let one = g.body(
+        &r,
+        Kind::Recovery {
+            root: k("nb").key.clone(),
+            list: [1; 32],
+            from: 0,
+            first: RecordId([0xf1; 32]),
+            signer2: crate::testkit::rk2().key().hash(),
+        },
+    );
     let two = Body {
-        kind: Kind::Recovery { root: k("nd").key.clone(), list: [2; 32], from: 0, first: RecordId([0xf1; 32]) },
+        kind: Kind::Recovery {
+            root: k("nd").key.clone(),
+            list: [2; 32],
+            from: 0,
+            first: RecordId([0xf1; 32]),
+            signer2: crate::testkit::rk2().key().hash(),
+        },
         ..one.clone()
     };
-    g.push(Record::sign(one, &r).unwrap());
-    g.push(Record::sign(two, &r).unwrap());
+    g.push(crate::testkit::sign_by(one, &r));
+    g.push(crate::testkit::sign_by(two, &r));
     let s = g.state();
     assert_eq!(s.stop, Stop::Full);
     assert!(s.conflicts.iter().any(|c| c.kind == ConflictKind::Fork));
@@ -1286,10 +1320,26 @@ fn the_three_kinds_of_admin() {
     let seen = g.seen();
     let removal = g.rec(&h, Kind::Revoke(removal(&[laptop.hash], seen)));
     // No admin takes the group over, a phone's included (rule 33).
-    let by_a =
-        g.rec(&a, Kind::Recovery { root: k("na").key.clone(), list: [0; 32], from: 0, first: RecordId([0xf1; 32]) });
-    let by_s =
-        g.rec(&s_, Kind::Recovery { root: k("ns").key.clone(), list: [0; 32], from: 0, first: RecordId([0xf1; 32]) });
+    let by_a = g.rec(
+        &a,
+        Kind::Recovery {
+            root: k("na").key.clone(),
+            list: [0; 32],
+            from: 0,
+            first: RecordId([0xf1; 32]),
+            signer2: crate::testkit::rk2().key().hash(),
+        },
+    );
+    let by_s = g.rec(
+        &s_,
+        Kind::Recovery {
+            root: k("ns").key.clone(),
+            list: [0; 32],
+            from: 0,
+            first: RecordId([0xf1; 32]),
+            signer2: crate::testkit::rk2().key().hash(),
+        },
+    );
     let st = g.state();
     assert!(!st.counting.contains(&by_helper.id()) && st.counting.contains(&by_admin.id()));
     assert!(st.counting.contains(&removal.id()));
@@ -1635,8 +1685,21 @@ fn raw(
     edit(&mut entries);
     entries.sort_by_key(|(k, _)| *k);
     let bytes = crate::format::cbor::Value::Map(entries).encode();
-    let sig = key::sign_es256(by, LABEL_RECORD, &bytes).unwrap();
-    Record::decode(&crate::format::envelope::write(&bytes, &sig, None))
+    Record::decode(&envelope_of(by, &bytes))
+}
+
+/// The envelope of body bytes signed by by: a body naming `signer2` (a
+/// recovery head) gets K2's signature first and K1's over the body and its
+/// hash, as `Record::sign_head` makes them.
+fn envelope_of(by: &K, bytes: &[u8]) -> Vec<u8> {
+    let named = crate::format::decode(bytes).unwrap().get(8).is_some();
+    if named {
+        let sig2 = crate::testkit::rk2().sign(bytes, pq::CONTEXT_RECORD).unwrap();
+        let sig = key::sign_es256(by, LABEL_RECORD, &with_sig2(bytes, &sig2)).unwrap();
+        return crate::format::envelope::write(bytes, &sig, Some(&sig2));
+    }
+    let sig = key::sign_es256(by, LABEL_RECORD, bytes).unwrap();
+    crate::format::envelope::write(bytes, &sig, None)
 }
 
 /// Settings take each value of their rows only: a level or a rules
@@ -1789,6 +1852,7 @@ mod differential {
                                 list: [arg; 32],
                                 from: 0,
                                 first: RecordId([0xf1; 32]),
+                                signer2: crate::testkit::rk2().key().hash(),
                             },
                         );
                         twin.seq -= 1;
@@ -3223,32 +3287,49 @@ fn what_waits_aside_still_makes_the_pair() {
     assert!(m.state().conflicts.iter().any(|c| c.kind == ConflictKind::TwoHistories && c.signers == vec![root]));
 }
 
-/// The place aside holds at most one ROOM, the lowest (seq, ID) first,
-/// whatever order the records came in.
+/// The place aside holds at most one ROOM: what the newest waiting
+/// checkpoint names first, then the next newest, each by the lowest
+/// (seq, ID), whatever order the records came in.
 #[test]
 fn the_place_aside_keeps_one_room_by_seq() {
     let mut g = G::new();
     let laptop = g.device(&k("root"), &k("laptop"), "laptop", |_| {});
-    let old: Vec<Record> = (0..20).map(|i| g.root_rec(Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] })).collect();
     let c7 = root_cp(&mut g, vec![laptop.id()]);
-    let mut keep: Vec<RecordId> = old.iter().map(Record::id).collect();
-    keep.extend([laptop.id(), c7.id(), RecordId([0x5b; 32])]);
-    root_cp(&mut g, keep);
+    let old: Vec<Record> = (0..20).map(|i| g.root_rec(Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] })).collect();
+    // Five checkpoints that never become whole (each keeps a record never
+    // released), each naming itself, its prev and five records: seven
+    // units, within the root's ceiling of eight.
+    let mut waiting = Vec::new();
+    for w in 0..5u8 {
+        let mut keep: Vec<RecordId> = old[usize::from(w) * 4..usize::from(w) * 4 + 4].iter().map(Record::id).collect();
+        keep.extend([laptop.id(), RecordId([0x50 + w; 32])]);
+        waiting.push(root_cp(&mut g, keep));
+    }
     let small = crate::records::keep::small::Small::new(14, 8, 5);
     for r in &g.recs {
         small.units(r.id(), 1);
     }
     let base: Vec<Record> = g.recs.iter().filter(|r| !old.iter().any(|o| o.id() == r.id())).cloned().collect();
+    // The rooms keep c7, the laptop and the five checkpoints (seven of the
+    // root's eight units) and the lowest old record; aside, by the newest
+    // checkpoint first: what the fifth, fourth and third keep (old 16..19,
+    // 12..15, 8..11), then the second's lowest two (old 4 and 5).
+    let mut want: Vec<RecordId> =
+        [16, 17, 18, 19, 12, 13, 14, 15, 8, 9, 10, 11, 4, 5].iter().map(|i: &usize| old[*i].id()).collect();
+    want.sort();
     let mut seen = Vec::new();
     for seed in [0, 1, 2] {
         let mut m = set_with(&g.root.key, &base, &g.lists);
         sync_all(&mut m, &[], &g.lists);
         assert_eq!(m.state().checkpoint, Some(c7.id()));
+        assert!(waiting.iter().all(|w| m.contains(&w.id()) && !m.waits_aside(&w.id())));
         let order = if seed == 0 { old.clone() } else { shuffled(&old, seed) };
         sync_all(&mut m, &order, &g.lists);
-        let aside: Vec<RecordId> = old.iter().map(Record::id).filter(|id| m.waits_aside(id)).collect();
+        let mut aside: Vec<RecordId> = old.iter().map(Record::id).filter(|id| m.waits_aside(id)).collect();
+        aside.sort();
         assert_eq!(aside.len(), 14, "order {seed}");
-        assert_eq!(aside, old[..14].iter().map(Record::id).collect::<Vec<_>>(), "order {seed}");
+        assert_eq!(aside, want, "order {seed}");
+        assert!(m.contains(&old[0].id()) && !m.waits_aside(&old[0].id()), "order {seed}: old 0 in the rooms");
         seen.push((m.digest(), m.state()));
     }
     assert!(seen.windows(2).all(|w| w[0] == w[1]));
@@ -3711,7 +3792,13 @@ fn a_first_that_is_no_checkpoint_keeps_nothing() {
     g.lists.push(list.encode());
     let head = g.rec(
         &k("recovery"),
-        Kind::Recovery { root: k("new root a").key.clone(), list: list.hash(), from: 0, first: d.id() },
+        Kind::Recovery {
+            root: k("new root a").key.clone(),
+            list: list.hash(),
+            from: 0,
+            first: d.id(),
+            signer2: crate::testkit::rk2().key().hash(),
+        },
     );
     let (s1, i1) = g.heads[&root.hash];
     let c2 = g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq: s1, id: i1 }], keep: vec![] });
@@ -4311,7 +4398,8 @@ fn the_recovery_key_is_never_removed() {
 #[test]
 fn a_set_whose_root_is_its_recovery_key_takes_nothing() {
     let root = k("root");
-    let gid = group_id(&root.key, &root.key);
+    let own = Recovery { k1: root.key.clone(), ..rk() };
+    let gid = group_id(&root.key, &own);
     let body = Body {
         group: gid,
         signer: root.hash,
@@ -4322,12 +4410,12 @@ fn a_set_whose_root_is_its_recovery_key_takes_nothing() {
         held: false,
     };
     let r = Record::sign(body, &root).unwrap();
-    let mut set = RecordSet::new(root.key.clone(), root.key.clone());
+    let mut set = RecordSet::new(root.key.clone(), own.clone());
     assert_eq!(set.insert(r), Err(Refused::Group));
     assert!(set.is_empty());
     let local = [7u8; 32];
-    let mark = pin_mark(&local, &root.key, &root.key);
-    assert!(RecordSet::pinned(root.key.clone(), root.key.clone(), &local, &mark).is_none());
+    let mark = pin_mark(&local, &root.key, &own);
+    assert!(RecordSet::pinned(root.key.clone(), own, &local, &mark).is_none());
 }
 
 /// Records 1 to 20 of the root that checkpoint 7 pruned; 8 keeps the

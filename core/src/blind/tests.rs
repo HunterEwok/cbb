@@ -64,12 +64,17 @@ fn credentials_of_the_vectors() {
     // first root and its recovery key.
     let root = period.signer.clone();
     let recovery = unhex(v["recovery"].as_str().unwrap());
+    let recovery2 = unhex(v["recovery2"].as_str().unwrap());
     let gid = period.group;
-    assert!(period.period_of_listed_group(&root, &recovery, &[gid]));
-    assert!(!period.period_of_listed_group(&root, &root, &[gid]));
-    assert!(!period.period_of_listed_group(&root, &recovery, &[[0; 16]]));
+    assert!(period.period_of_listed_group(&root, &recovery, &recovery2, &[gid]));
+    assert!(!period.period_of_listed_group(&root, &root, &recovery2, &[gid]));
+    assert!(!period.period_of_listed_group(&root, &recovery, &recovery2, &[[0; 16]]));
+    let mut other2 = recovery2.clone();
+    other2[31] ^= 1;
+    assert!(!period.period_of_listed_group(&root, &recovery, &other2, &[gid]), "K2 is in the Group ID");
+    assert!(!period.period_of_listed_group(&root, &recovery, &recovery2[..31], &[gid]));
     assert!(
-        !read[1].period_of_listed_group(&read[1].signer, &recovery, &[read[1].group]),
+        !read[1].period_of_listed_group(&read[1].signer, &recovery, &recovery2, &[read[1].group]),
         "a device's server credential is no period"
     );
     assert!(period.live(period.expires_ms - 1) && !period.live(period.expires_ms));

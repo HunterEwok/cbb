@@ -65,7 +65,7 @@ struct G {
 impl G {
     fn new() -> G {
         let root = k("root");
-        let gid = crate::records::group_id(&root.key, &k("recovery").key);
+        let gid = crate::records::group_id(&root.key, &crate::testkit::recovery());
         let mut g = G { root, gid, heads: BTreeMap::new(), recs: Vec::new(), lists: Vec::new() };
         let phone = k("phone");
         let mut d = Device::new(phone.key.clone(), "phone", ROLE_PHONE);
@@ -89,7 +89,7 @@ impl G {
             None => (1, None),
         };
         let body = Body { group: self.gid, signer: by.hash, seq, prev, time_ms: 0, kind, held: false };
-        let r = Record::sign(body, by).unwrap();
+        let r = crate::testkit::sign_by(body, by);
         self.heads.insert(by.hash, (seq, r.id()));
         self.recs.push(r.clone());
         r
@@ -101,7 +101,7 @@ impl G {
     }
 
     fn empty(&self) -> RecordSet {
-        RecordSet::new(self.root.key.clone(), k("recovery").key)
+        RecordSet::new(self.root.key.clone(), crate::testkit::recovery())
     }
 
     /// The set of a member that holds every record: the heads with their
@@ -136,7 +136,16 @@ impl G {
                 Kind::Checkpoint { heads: vec![Head { key: self.root.hash, seq, id }], keep: list.0.clone() },
             )
             .id();
-        self.rec(&k("recovery"), Kind::Recovery { root: new_root.key.clone(), list: list.hash(), from: 0, first })
+        self.rec(
+            &k("recovery"),
+            Kind::Recovery {
+                root: new_root.key.clone(),
+                list: list.hash(),
+                from: 0,
+                first,
+                signer2: crate::testkit::rk2().key().hash(),
+            },
+        )
     }
 
     fn seen(&self) -> Vec<Seen> {
@@ -621,9 +630,10 @@ fn the_joiner_checks_its_welcome() {
 
     // The encoding reads back.
     assert_eq!(Welcome::decode(&w.encode()).unwrap(), w);
-    let (root, envs, time, recovery) = Welcome::parts(&w.encode()).unwrap();
+    let (root, envs, time, recovery, recovery2) = Welcome::parts(&w.encode()).unwrap();
     assert_eq!(root, g.root.key.public);
     assert_eq!(recovery, k("recovery").key.public);
+    assert_eq!(recovery2, crate::testkit::rk2().public());
     assert_eq!(envs.len(), w.records.len());
     assert_eq!(time, 1_793_000_000_000);
     // A recovery key other than the group's gives another Group ID.
@@ -706,10 +716,11 @@ fn the_joiner_sees_a_fork_in_its_welcome() {
                 list: [7; 32],
                 from: 0,
                 first: RecordId([0xf1; 32]),
+                signer2: crate::testkit::rk2().key().hash(),
             },
             held: false,
         };
-        Record::sign(body, &k("recovery")).unwrap()
+        crate::testkit::sign_by(body, &k("recovery"))
     };
     g.recs.push(twin);
     phone_admin(&mut g, &k("root n1"), &k("phone b"), &k("admin b"), true);
@@ -741,15 +752,27 @@ fn the_joiner_does_not_join_over_a_head_it_cannot_read() {
         seq: 1,
         prev: None,
         time_ms: 0,
-        kind: Kind::Recovery { root: k("root n1").key.clone(), list: [5; 32], from: 0, first: RecordId([0xf1; 32]) },
+        kind: Kind::Recovery {
+            root: k("root n1").key.clone(),
+            list: [5; 32],
+            from: 0,
+            first: RecordId([0xf1; 32]),
+            signer2: crate::testkit::rk2().key().hash(),
+        },
         held: false,
     };
     let encoded = body.encode();
     let Ok(Value::Map(mut m)) = cbor::decode(&encoded) else { panic!("a body is a map") };
     m.push((99, Value::Uint(1)));
     let bytes = Value::Map(m).encode();
-    let sig = crate::records::key::sign_es256(&k("recovery"), crate::records::LABEL_RECORD, &bytes).unwrap();
-    let later = Record::decode(&crate::format::envelope::write(&bytes, &sig, None)).unwrap();
+    let sig2 = crate::testkit::rk2().sign(&bytes, crate::records::pq::CONTEXT_RECORD).unwrap();
+    let sig = crate::records::key::sign_es256(
+        &k("recovery"),
+        crate::records::LABEL_RECORD,
+        &crate::records::with_sig2(&bytes, &sig2),
+    )
+    .unwrap();
+    let later = Record::decode(&crate::format::envelope::write(&bytes, &sig, Some(&sig2))).unwrap();
     assert!(later.body().held);
     let mut w = w;
     w.records.insert(0, later);

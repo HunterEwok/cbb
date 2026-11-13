@@ -18,8 +18,11 @@ use cbb_core::records::body::{
     AdminKind, Device, Head, RIGHT_READ, RIGHT_SEND, ROLE_MEMBER, ROLE_PHONE, Removal, Seen,
 };
 use cbb_core::records::eval::{ChangeState, ConflictKind, Stop};
+use cbb_core::records::pq::PqKey;
 use cbb_core::records::set::Written;
-use cbb_core::records::{Body, GroupId, Key, KeyHash, Kind, List, Record, RecordId, RecordSet, State, group_id};
+use cbb_core::records::{
+    Body, GroupId, Key, KeyHash, Kind, List, Record, RecordId, RecordSet, Recovery, State, group_id,
+};
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner as _;
 
@@ -45,6 +48,18 @@ fn k(name: &str) -> K {
     let key = Key::es256(sk.verifying_key().to_sec1_point(false).as_bytes().to_vec());
     let hash = key.hash();
     K { sk, key, hash }
+}
+
+/// The recovery key's second half, of fixed seeds; signed heads are kept,
+/// as signing is slow and deterministic.
+fn k2() -> &'static PqKey {
+    static K2: std::sync::OnceLock<PqKey> = std::sync::OnceLock::new();
+    K2.get_or_init(|| PqKey::from_seeds(&[0x31; 16], &[0x32; 16], &[0x33; 16]))
+}
+
+/// The model's recovery key: K and k2.
+fn recovery() -> Recovery {
+    Recovery { k1: k("K").key, k2: k2().key() }
 }
 
 /// The model's group: R made A a phone admin, C a computer admin and W a
@@ -75,7 +90,7 @@ impl Group {
     }
 
     fn group(&self) -> GroupId {
-        group_id(&self.root.key, &k("K").key)
+        group_id(&self.root.key, &recovery())
     }
 
     /// What the signer's device holds: here, every record so far.
@@ -161,7 +176,7 @@ impl Group {
     /// their heads name, then the records again (a new root's records wait
     /// for the head's list).
     fn member(&self, recs: &[&Record]) -> RecordSet {
-        let mut set = RecordSet::new(self.root.key.clone(), k("K").key);
+        let mut set = RecordSet::new(self.root.key.clone(), recovery());
         take(&mut set, recs, &self.lists);
         set
     }
@@ -175,7 +190,7 @@ impl Group {
         let mut d = Device::new(k(&format!("{new_root} phone")).key, "new phone", ROLE_PHONE);
         d.rights = RIGHT_READ | RIGHT_SEND;
         let remove: Vec<KeyHash> = remove.iter().map(|r| k(r).hash).collect();
-        let w = set.write_change(&st, &k("K"), &k(new_root), d, &remove, false, 0).unwrap();
+        let w = set.write_change(&st, &k("K"), k2(), &k(new_root), d, &remove, false, 0).unwrap();
         for r in &w.first {
             self.push(r.clone());
         }
@@ -212,9 +227,9 @@ impl Group {
 
     fn head_naming(&mut self, seq: u64, root: &str, list: &List, first: RecordId) -> Record {
         let prev = self.recs.iter().find(|r| r.body().signer == k("K").hash && r.body().seq + 1 == seq).map(|r| r.id());
-        let kind = Kind::Recovery { root: k(root).key, list: list.hash(), from: 0, first };
+        let kind = Kind::Recovery { root: k(root).key, list: list.hash(), from: 0, first, signer2: k2().key().hash() };
         let body = Body { group: self.group(), signer: k("K").hash, seq, prev, time_ms: 0, kind, held: false };
-        let r = Record::sign(body, &k("K")).unwrap();
+        let r = Record::sign_head(body, &k("K"), k2()).unwrap();
         self.lists.push(list.encode());
         self.push(r)
     }

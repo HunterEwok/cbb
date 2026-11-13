@@ -39,6 +39,25 @@ impl ExternalKey for K {
     }
 }
 
+/// The tests' recovery key's second half, of fixed seeds.
+pub fn rk2() -> &'static crate::records::pq::PqKey {
+    static K2: std::sync::OnceLock<crate::records::pq::PqKey> = std::sync::OnceLock::new();
+    K2.get_or_init(|| crate::records::pq::PqKey::from_seeds(&[0x21; 16], &[0x22; 16], &[0x23; 16]))
+}
+
+/// The tests' recovery key: `k("recovery")` and [`rk2`].
+pub fn recovery() -> crate::records::Recovery {
+    crate::records::Recovery { k1: k("recovery").key, k2: rk2().key() }
+}
+
+/// Signs body with by: a recovery head with by and [`rk2`].
+pub fn sign_by(body: crate::records::body::Body, by: &dyn ExternalKey) -> Record {
+    match body.kind {
+        crate::records::body::Kind::Recovery { .. } => Record::sign_head(body, by, rk2()).unwrap(),
+        _ => Record::sign(body, by).unwrap(),
+    }
+}
+
 pub fn k(name: &str) -> K {
     let sk = SigningKey::from_slice(&sha256(name.as_bytes())).unwrap();
     let key = Key::es256(sk.verifying_key().to_sec1_point(false).as_bytes().to_vec());
@@ -56,10 +75,10 @@ pub struct G {
 
 impl G {
     pub fn new() -> G {
-        let (root, recovery) = (k("root"), k("recovery"));
+        let (root, rec) = (k("root"), recovery());
         G {
-            gid: crate::records::group_id(&root.key, &recovery.key),
-            set: RecordSet::new(root.key.clone(), recovery.key.clone()),
+            gid: crate::records::group_id(&root.key, &rec),
+            set: RecordSet::new(root.key.clone(), rec),
             heads: BTreeMap::new(),
         }
     }

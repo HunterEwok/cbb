@@ -27,7 +27,7 @@ use alloc::vec::Vec;
 use crate::format::{Alg, GroupId, Rule, Value, cbor};
 use crate::records::body::{Kind, POWER_ADMIT};
 use crate::records::set::RecordSet;
-use crate::records::{Key, KeyHash, Record, RecordId, State, group_id};
+use crate::records::{Key, KeyHash, Record, RecordId, Recovery, State, group_id};
 
 use super::intro::chain;
 
@@ -45,6 +45,8 @@ pub struct TooLarge;
 pub const RULE_SHAPE: Rule = Rule::field("welcome/shape");
 pub const RULE_ROOT: Rule = Rule::field("welcome/root");
 pub const RULE_RECOVERY: Rule = Rule::field("welcome/recovery");
+/// The recovery key's second half is missing or not a 32-byte SLH-DSA key.
+pub const RULE_RECOVERY2: Rule = Rule::field("welcome/recovery2");
 pub const RULE_LIST: Rule = Rule::field("welcome/list");
 /// A record of the Welcome that does not read (`Record::decode`).
 pub const RULE_RECORD: Rule = Rule::field("welcome/record");
@@ -66,8 +68,10 @@ pub struct Welcome {
     pub grant: Option<Vec<u8>>,
     /// The current period's server credentials, as envelopes.
     pub credentials: Vec<Vec<u8>>,
-    /// The group's recovery key, its point.
+    /// The group's recovery key: K1's point.
     pub recovery: Vec<u8>,
+    /// The recovery key's second half, K2: its 32 bytes (E-6).
+    pub recovery2: Vec<u8>,
     /// The newest recovery record's list, as its encoding.
     pub list: Option<Vec<u8>>,
 }
@@ -199,7 +203,8 @@ impl Welcome {
             time_ms,
             grant: None,
             credentials: Vec::new(),
-            recovery: set.recovery().public.clone(),
+            recovery: set.recovery().k1.public.clone(),
+            recovery2: set.recovery().k2.public.clone(),
             list,
         })
     }
@@ -232,37 +237,39 @@ impl Welcome {
         if let Some(l) = &self.list {
             m.push((10, Value::Bytes(l)));
         }
+        m.push((11, Value::Array(alloc::vec![Value::Uint(Alg::SlhDsa.number()), Value::Bytes(&self.recovery2)])));
         Value::Map(m).encode()
     }
 
     /// The parts of an encoded Welcome before each record is read: the
     /// root's point, the record envelopes, the time, the recovery key's
-    /// point.
+    /// point and its second half's 32 bytes.
     #[allow(clippy::type_complexity, reason = "the parts as they come")]
-    pub fn parts(b: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>, u64, Vec<u8>), Rule> {
+    pub fn parts(b: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>, u64, Vec<u8>, Vec<u8>), Rule> {
         let v = cbor::decode(b)?;
         crate::msg::check_map(&crate::msg::tables::WELCOME, &v)?;
-        let key = |n: u16, rule: Rule| -> Result<Vec<u8>, Rule> {
+        let key = |n: u16, alg: Alg, rule: Rule| -> Result<Vec<u8>, Rule> {
             let k = crate::format::Key::from_value(v.get(n).ok_or(rule)?).map_err(|_| rule)?;
-            if k.alg != Alg::Es256 || k.check().is_err() {
+            if k.alg != alg || k.check().is_err() {
                 return Err(rule);
             }
             Ok(k.public.to_vec())
         };
-        let root = key(1, RULE_ROOT)?;
-        let recovery = key(9, RULE_RECOVERY)?;
+        let root = key(1, Alg::Es256, RULE_ROOT)?;
+        let recovery = key(9, Alg::Es256, RULE_RECOVERY)?;
         if root == recovery {
             return Err(RULE_RECOVERY);
         }
+        let recovery2 = key(11, Alg::SlhDsa, RULE_RECOVERY2)?;
         let envs = v.get(2).and_then(Value::as_array).ok_or(RULE_SHAPE)?.iter().map(Value::encode).collect();
         let time = v.get(5).and_then(Value::as_uint).ok_or(RULE_SHAPE)?;
-        Ok((root, envs, time, recovery))
+        Ok((root, envs, time, recovery, recovery2))
     }
 
     /// Reads a Welcome: its fields, each record read with the records'
     /// reader (signatures are checked by [`Welcome::check`]).
     pub fn decode(b: &[u8]) -> Result<Welcome, Rule> {
-        let (root, envs, time_ms, recovery) = Welcome::parts(b)?;
+        let (root, envs, time_ms, recovery, recovery2) = Welcome::parts(b)?;
         let records = envs.iter().map(|e| Record::decode(e).map_err(|_| RULE_RECORD)).collect::<Result<Vec<_>, _>>()?;
         let v = cbor::decode(b)?;
         let list_of = |k: u16| -> Result<Vec<Vec<u8>>, Rule> {
@@ -281,7 +288,17 @@ impl Welcome {
             // Its hash is checked against the recovery record that names it.
             Some(l) => Some(l.as_bytes().ok_or(RULE_LIST)?.to_vec()),
         };
-        Ok(Welcome { root, records, keys: list_of(4)?, time_ms, grant, credentials: list_of(7)?, recovery, list })
+        Ok(Welcome {
+            root,
+            records,
+            keys: list_of(4)?,
+            time_ms,
+            grant,
+            credentials: list_of(7)?,
+            recovery,
+            recovery2,
+            list,
+        })
     }
 
     /// The joiner's checks. `group` is the group ID the code exchange gave
@@ -296,8 +313,11 @@ impl Welcome {
         joining: Joining,
     ) -> Result<(RecordSet, State), Refusal> {
         let root = Key::es256(self.root.clone());
-        let recovery = Key::es256(self.recovery.clone());
-        if root.check().is_err() || recovery.check().is_err() {
+        let k2 = Key { alg: crate::records::key::ALG_SLH_DSA, public: self.recovery2.clone() };
+        let Some(recovery) = Recovery::new(Key::es256(self.recovery.clone()), k2) else {
+            return Err(Refusal::Damaged);
+        };
+        if root.check().is_err() {
             return Err(Refusal::Damaged);
         }
         if group_id(&root, &recovery).0 != group.0 {
