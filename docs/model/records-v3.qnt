@@ -1147,6 +1147,15 @@ module records_v3 {
   action signFull(k: Key, kind: str, target: Key, kit: str, targetRec: Id, pretend: bool, fork: bool, units: int,
       hidden: bool, extraKeep: Set[Id]): bool =
     signFullX(k, kind, target, kit, targetRec, pretend, fork, units, hidden, extraKeep, WRITER_KEEPS)
+  // (J): the admission of target by the writer on member h keeps every ceiling within ROOM.
+  def capFits(h: str, target: Key): bool =
+    ROOTS_MAX * ROOTC + learned(recsOf(st.get(h).recs, db), views.get(h).path, views.get(h).cuts)
+      .union(Set(target)).filter(x => not(onList(views.get(h).path, x))).size() * ADMINC <= ROOM
+  // (J): a record of key k of the given units stays within k's ceiling on its writer's set.
+  def ceilFits(k: Key, units: int): bool = {
+    val h = HOLDER.get(k)
+    sumUnits(ofKey(recsOf(st.get(h).recs, db), k)) + units <= (if (onList(views.get(h).path, k)) ROOTC else ADMINC)
+  }
   // A writer that publishes what its own set turned away (it does not follow (E)).
   action signDeviant(k: Key, kind: str, target: Key, units: int): bool =
     signFullX(k, kind, target, "deviant", 0, false, false, units, false, Set(), false)
@@ -1197,8 +1206,7 @@ module records_v3 {
       not(keeps) or not(CEIL_FIT) or hidden or isChain(r)
         or sumUnits(ofKey(recsOf(s.recs, db).union(Set(r)).filter(x => not(isCp) or x == r or not(prunedBy(r, x))), k))
           <= (if (onList(views.get(h).path, k)) ROOTC else ADMINC),
-      not(keeps) or not(CEIL_FIT) or kind != "admin" or ROOTS_MAX * ROOTC + learned(recsOf(s.recs, db), views.get(h).path, views.get(h).cuts)
-        .union(Set(target)).filter(x => not(onList(views.get(h).path, x))).size() * ADMINC <= ROOM,
+      not(keeps) or not(CEIL_FIT) or kind != "admin" or capFits(h, target),
       not(keeps) or not(WRITER_FLOOR) or kind != "admin" or learned(recsOf(s.recs, db), views.get(h).path, views.get(h).cuts)
         .union(Set(target)).size() <= MAX_ADMINS,
       commit(db2, nextId + 1, h, if (hidden) s else insertInto(s, r, db2)),
@@ -2254,6 +2262,50 @@ module records_v3 {
       .then(syncRound).then(syncRound)
       .expect(CUT_MODE != "follows" or MEMBERS.forall(m => st.get(m).recs.contains(4) and st.get(m).recs.contains(12)
         and convergesAt(m)) and promises)
+
+  // --- (J): ceilings that fit the room -----------------------------------------------------
+  // The cap: the root admits a fourth admin key (3 roots at 6 and 4 admins at 2 fill ROOM),
+  // and refuses a fifth.
+  run jCapTest = init
+      .then(sign(ROOT, "admin", "X", "phone", 0, false, false, 1)).then(syncRound)
+      .expect(MEMBERS.forall(m => st.get(m).recs == Set(1, 2, 3, 4)) and promises
+        and (CEIL_FIT implies not(capFits("r", "C2"))))
+  // Every key with room writes to its ceiling, a member restarts and a newcomer is welcomed:
+  // nothing is dropped, nobody holds a mark, all converge.
+  action jFull =
+    init
+      .then(sign(ROOT, "admin", "X", "phone", 0, false, false, 1)).then(syncRound)
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 2)).then(syncRound)
+      .then(sign(COMPUTER, "copies", "", "", 0, false, false, 1)).then(syncRound)
+      .then(sign(COMPUTER, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(WATCH, "copies", "", "", 0, false, false, 2)).then(syncRound)
+      .then(sign("X", "copies", "", "", 0, false, false, 2)).then(syncRound)
+  run jHonestFullTest = jFull
+      .then(restart("c")).then(welcomeFrom("a")).then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => st.get(m).recs == Set(1, 2, 3, 4, 5, 6, 7, 8, 9) and convergesAt(m)
+        and st.get(m).cut.marks.keys() == Set()) and promises)
+  // Every key at its ceiling: an honest writer refuses its next record (a failed write uses no
+  // seq); the root's checkpoint that keeps all counts.
+  run jRefusedTest = jFull
+      .expect(CEIL_FIT implies not(ceilFits(PHONE, 1)))
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 2, false, Set())).then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).checkpoint == 10 and convergesAt(m) and st.get(m).cut.marks.keys() == Set())
+        and promises)
+  // One deviating key: X publishes past its ceiling. Every member drops it alike and marks X
+  // only; no other key's record differs. A member that restarts forgets the mark and keeps
+  // X's next deviating record that the others turn away: members differ in X's records only.
+  run jDeviantTest = jFull
+      .then(signDeviant("X", "copies", "", 1)).then(offerEveryone(10)).then(syncRound)
+      .expect(CEIL_FIT implies MEMBERS.forall(m => st.get(m).recs == Set(1, 2, 3, 4, 5, 6, 7, 8, 9)
+        and st.get(m).cut.marks.keys() == Set("X")))
+      .then(restart("m"))
+      .then(signDeviant("X", "copies", "", 1)).then(offerEveryone(11)).then(syncRound)
+      .expect(CEIL_FIT implies MEMBERS.forall(m => recsOf(st.get(m).recs, db).filter(r => r.signer != "X")
+        == recsOf(st.get("r").recs, db).filter(r => r.signer != "X")))
+      // The root's next checkpoint, keeping what it counts, ends any difference.
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 2, false, Set())).then(syncRound).then(syncRound)
+      .expect(CEIL_FIT implies MEMBERS.forall(m => st.get(m).recs == st.get("r").recs and views.get(m) == views.get("r")
+        and views.get(m).checkpoint == 12))
 
   // (H): under WRITER_FLOOR the same group writes within FLOOR above the head: A's second
   // record waits for the root's next checkpoint; X's admission and record drop nothing.
