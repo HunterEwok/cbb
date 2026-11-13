@@ -48,6 +48,12 @@ The maintainer follows these rules; they are written down to keep the history co
   squash. `main` is protected.
 - **Commit messages.** A short summary line in the imperative mood ("Add the pairing
   window"), then a blank line and the details, if any.
+  Every author, committer and co-author is one of the addresses in `tools/prcheck`
+  (the owner's GitHub address, `Claude <noreply@anthropic.com>`, GitHub's and Dependabot's):
+  GitHub lists any other address as a contributor of its own, for good. The pull request's
+  title and description become the squash commit's message, so they do not link to a
+  conversation with an assistant (`claude.ai/...`) or name a model. CI's `prcheck` workflow
+  checks both, again whenever the description is edited.
 - **Changelog.** User-visible changes go into [CHANGELOG.md](CHANGELOG.md) under
   *Unreleased*.
 - **Go code.** `gofmt`, `go vet`, `staticcheck` and `govulncheck` pass, and tests cover the
@@ -108,6 +114,7 @@ go tool staticcheck ./...
 go tool govulncheck ./...
 go tool actionlint             # GitHub Actions workflows
 pipx run zizmor==1.31.1 --offline --min-severity low .github/workflows   # their security
+go run ./tools/prcheck -base origin/main   # the branch's authors and co-authors (PR_TITLE, PR_BODY: the texts)
 go run ./tools/repocheck       # English only, license headers, copied code, no programs or files over 1 MiB, documentation links and names
 go run ./tools/tokens -check   # apps/design/tokens.json -> Swift and Kotlin, WCAG contrast
 go run ./tools/strings -check  # apps/l10n -> the apps' String Catalogs, strings.xml, .ts and tray l10n

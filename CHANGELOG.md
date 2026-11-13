@@ -7,6 +7,10 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- `tools/prcheck` and its workflow check every pull request's commits for authors,
+  committers and co-authors outside a short list of known addresses, and its title and
+  description, which become the squash commit's message, for links to assistant
+  conversations and model names.
 - The Aurora app asks for a PIN of its own before its root or admin key signs, since Aurora OS
   gives an app neither its authentication service nor the fingerprint. The key moves to a
   second token of the app in the TEE, whose PIN the user chooses (at least four digits) and
