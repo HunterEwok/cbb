@@ -2312,6 +2312,9 @@ All notable changes to cbb are documented in this file. The format follows
   member on one machine also took the address a dual-stack listener shows for 127.0.0.1
   (`::ffff:127.0.0.1`) for one at home, so its dials to the loopback address replaced that
   connection as a tunnel's would.
+- A root that got a member's key evidence over two connections at once signed two records
+  with the same number, which stopped the group as two histories of the root's key; a
+  member signs its records one at a time now.
 - `cbb pair -code ADDRESS` while the service runs joins through the service, as `cbb pair
   -code` does, so the device takes the service's `-name` and capabilities (or those `cbb pair
   -name` and `-caps` give); it joined by itself, under the computer's host name.

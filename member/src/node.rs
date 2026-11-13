@@ -189,6 +189,11 @@ pub struct Presence {
 }
 
 pub struct Node {
+    /// Held while this member signs a record of its own, from choosing
+    /// its seq until it is in the set: two signed at once, as the root's
+    /// records of two connections' evidence, took the same seq and stopped
+    /// the group with two histories of the signer.
+    pub signing: Mutex<()>,
     ident: RwLock<Arc<Identity>>,
     presence: Arc<Presence>,
     pub engine: Arc<Engine>,
@@ -427,6 +432,7 @@ impl Node {
         let releases = Arc::new(Releases::open(&state_dir, crate::update::release_roots(), uptime::wall_ms(), &*log));
         engine.set_live_window(live_window(&records));
         Node {
+            signing: Mutex::new(()),
             ident: RwLock::new(Arc::new(ident)),
             presence: Arc::new(Presence {
                 role: "member".into(),

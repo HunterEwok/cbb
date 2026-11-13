@@ -502,7 +502,13 @@ impl Admin<'_> {
     /// admin's powers unless body names them, and the root's record of its
     /// own device says it holds the root. The record goes into the set and
     /// to the group.
-    fn sign(&self, s: &Signing, mut b: Body) -> Result<Record> {
+    fn sign(&self, s: &Signing, b: Body) -> Result<Record> {
+        let _one = self.node.signing.lock().unwrap_or_else(|e| e.into_inner());
+        self.sign_locked(s, b)
+    }
+
+    /// As sign, with Node::signing already held.
+    fn sign_locked(&self, s: &Signing, mut b: Body) -> Result<Record> {
         let records = self.node.records();
         let r = {
             let rs = records.lock().unwrap();
@@ -541,6 +547,7 @@ impl Admin<'_> {
         make: impl FnOnce(&cbb_core::group::Records, &Signer, i64) -> cbb_core::error::Result<Record>,
     ) -> Result<Record> {
         let me = self.me();
+        let _one = self.node.signing.lock().unwrap_or_else(|e| e.into_inner());
         let records = self.node.records();
         let r = make(&records.lock().unwrap(), &Signer { ca: &s.ca, key: &*s.key, me: &me }, uptime::wall_ms())?;
         self.node.add_own_records(std::slice::from_ref(&r));
@@ -713,6 +720,9 @@ impl Admin<'_> {
         if self.root_device() != self.me() {
             return Ok(None);
         }
+        // The check and the record are one step: the evidence of two
+        // connections at once is recorded once.
+        let _one = self.node.signing.lock().unwrap_or_else(|e| e.into_inner());
         let Some(d) = self.node.devices().into_iter().find(|d| d.id == peer) else { return Ok(None) };
         if d.key != *key {
             return Ok(None); // not listed yet; it sends the evidence again when it next connects
@@ -748,7 +758,7 @@ impl Admin<'_> {
             forward_only: d.forward_only,
             ..Default::default()
         };
-        self.sign(&s, b).map_err(|e| e.context("recording what its attestation proves"))?;
+        self.sign_locked(&s, b).map_err(|e| e.context("recording what its attestation proves"))?;
         let why = if p.why.is_empty() { String::new() } else { format!(": {}", p.why) };
         Ok(Some(format!("cbb: the attestation of {} ({}) shows its keys {} ({kind}){why}", d.name, d.id, p.store)))
     }
