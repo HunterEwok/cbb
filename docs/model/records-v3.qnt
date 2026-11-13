@@ -285,6 +285,10 @@ module records_v3 {
   // (the units its own set holds of the key with the new record, after what a new checkpoint
   // prunes; with WRITER_KEEPS, nor what its own set would not keep). Sizes: ROOM above.
   pure val CEIL_FIT = false
+  // The core's change list today (architecture 11-13 20:42Z, break 1): a removal of keys no
+  // record the writer holds names is left off the list. Off: every held root removal is
+  // listed (the proposed rule, part a). On, a late admission makes a removed key count again.
+  pure val CORE_LIST_FILTER = false
   // (J): the units the cut roots' listed records may take together.
   pure val RESERVE = ROOTC
   pure val MISSING_NEWEST_ONLY = false
@@ -377,8 +381,14 @@ module records_v3 {
   pure def rootRemoval(r: Record): bool = r.kind == "revoke" and ROOT_KEYS.contains(r.signer)
   // A checkpoint prunes what is below its heads and not kept, a root's removal too: whether a
   // removal stays is the writer's choice in the signed keep (members follow it).
+  // (PREV_ROOM_WHEN_KEPT: the writer's own earlier checkpoint that c does not keep is pruned
+  // though it heads c's line: it takes no room, and offered again after c counts, as a restart
+  // does, it never enters the rooms; seed k.8702, where it left a mark that turned away the
+  // root's next record.)
   pure def prunedBy(c: Record, r: Record): bool =
-    c.heads.keys().contains(r.signer) and r.seq <= c.heads.get(r.signer).length() and not(anchorsOf(c).contains(r.id))
+    c.heads.keys().contains(r.signer) and r.seq <= c.heads.get(r.signer).length()
+      and (not(anchorsOf(c).contains(r.id))
+        or (PREV_ROOM_WHEN_KEPT and r.kind == "checkpoint" and r.signer == c.signer and not(c.keep.contains(r.id))))
   // The records that admitted key k among rs: a root's admin record naming it or its device,
   // or a device record.
   pure def admissionsOf(rs: Set[Record], k: Key): Set[Record] =
@@ -1374,8 +1384,11 @@ module records_v3 {
       .fold([], (l, c) => if (c.heads.get(k).length() > l.length()) c.heads.get(k) else l))
     val cp = heads.keys().filter(k => heads.get(k).length() > 0)
       .map(k => lastId(heads.get(k))).filter(i => onList(before, db.get(i).signer) and db.get(i).kind != "checkpoint")
-    val honest = idsOf(held.filter(r => (v.counting.contains(r.id) and r.kind != "checkpoint" and not(leftOut.contains(r)))
-      or rootRemoval(r))).union(cp)
+    // (CORE_LIST_FILTER: the core's list today drops a removal of keys no held record names.)
+    def unnamedRm(r: Record): bool = CORE_LIST_FILTER and rootRemoval(r)
+      and withPair(r.target).forall(t => admissionsOf(recsOf(s.recs, db), t) == Set())
+    val honest = idsOf(held.filter(r => ((v.counting.contains(r.id) and r.kind != "checkpoint" and not(leftOut.contains(r)))
+      or rootRemoval(r)) and not(unnamedRm(r)))).union(cp)
     // (J): the cut roots' listed records fit RESERVE (carry-over). Every root removal stays
     // listed, and every live admission (an admin or device record of a key not removed) unless
     // a newer listed admission of the same key supersedes it; superseded admissions are dropped;
@@ -1407,8 +1420,11 @@ module records_v3 {
     // "nocp": the head names a first checkpoint that is never released.
     val withCp = mode != "nocp"
     // A list the core does not write is marked "deviant" (the kit of a chain record is read nowhere else).
-    val r = { ...rec(nextId, k, base.append(nextId), kind, target, if (mode == "honest") "" else "deviant", from, Map(), Map(), keep, 0),
-      first: if (withCp) nextId + 1 else NEVER }
+    // (Ghost: the root removals the writer held, under "_rm" of the head's seen, which nothing
+    // else reads; removedStayOut does not excuse a cut-off removal an honest writer held.)
+    val heldRm = range(1, nextId).select(i => s.recs.contains(i) and rootRemoval(db.get(i)) and onList(before, db.get(i).signer))
+    val r = { ...rec(nextId, k, base.append(nextId), kind, target, if (mode == "honest") "" else "deviant", from,
+      Map("_rm" -> heldRm), Map(), keep, 0), first: if (withCp) nextId + 1 else NEVER }
     val db2 = db.put(nextId, r)
     val s1 = insertInto(s, r, db2)
     // The new root's first checkpoint: what the writer counts once the head applies (a look
@@ -1867,13 +1883,19 @@ module records_v3 {
     val ch = chainState(st.get(m), db).recs
     ch.indices().exists(j => not(within(pathCutsOf(ch.slice(0, j + 1))._2, r)))
   }
+  // An honest head on the member's chain whose writer held the removal (the ghost "_rm"): a
+  // list may leave out only what its writer never held (break 1 of 11-13 20:42Z: the core's
+  // list dropped a held removal of a key no held record named, and a late admission revived it).
+  def writerHeld(m: str, r: Record): bool = recsOf(st.get(m).chain, db).exists(h => isChain(h) and h.kit == ""
+    and h.seen.keys().contains("_rm") and h.seen.get("_rm").indices().exists(j => h.seen.get("_rm")[j] == r.id))
   val removedStayOut = MEMBERS.forall(m => synced(m) implies {
     val v = views.get(m)
     // Removals by the roots on the member's path (a key that is a root elsewhere, not here,
     // removes nothing).
     val removals = recsOf(st.get(m).got, db).filter(r => r.kind == "revoke" and onList(v.path, r.signer))
     v.stop or gone.get(m).forall(k =>
-      removals.filter(r => withPair(r.target).contains(k)).forall(r => cutOff(v, r) or (cutEarlier(m, r) and heldByNone(r)))
+      removals.filter(r => withPair(r.target).contains(k)).forall(r => not(writerHeld(m, r))
+          and (cutOff(v, r) or (cutEarlier(m, r) and heldByNone(r))))
         or (not(v.admins.keys().contains(k)) and not(v.devices.contains(k)))
         or recsOf(v.counting, db).exists(x => admissionsOf(Set(x), k) != Set()
           and removals.forall(r => not(withPair(r.target).contains(k)) or x.id > r.id))
@@ -2841,6 +2863,20 @@ module records_v3 {
       .expect(MEMBERS.filter(m => inGroup(m)).forall(m => views.get(m).path == ["R", "NA", "NK"]) and promises
         and (CEIL_FIT implies db.get(9).keep == Set(1, 2, 3, 4, 5, 6)))
 
+  // A late admission after a change (architecture 11-13 20:42Z, break 1): A admits D, the root
+  // removes D, the recovery key's member holds the removal but never A's admission and changes
+  // the root to NK; A's admission reaches everyone after the change. Every held removal is
+  // listed, so D stays out; with the core's list of today (CORE_LIST_FILTER) the removal of a
+  // key no held record names is left off and D counts again: removedStayOut fails.
+  run lateAdmissionTest =
+    init
+      .then(sign(PHONE, "device", DEVICE, "", 0, false, false, 1)).then(giveOnly("r", 4))
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(giveOnly("k", 5))
+      .then(recoverAs(RECOVERY, "NK")).then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).path == ["R", "NK"])
+        and (CORE_LIST_FILTER implies (not(removedStayOut) and views.get("r").devices.contains(DEVICE)))
+        and (not(CORE_LIST_FILTER) implies (promises and MEMBERS.forall(m => not(views.get(m).devices.contains(DEVICE))))))
+
   // The fold of an admin key's removals: R removes A, A signs on, R removes A again, and R's
   // checkpoint folds the first removal into the second. A's record after the first removal
   // never counts, before or after: the two removals saw A differently, so the first does not
@@ -2967,6 +3003,7 @@ module records_v3 {
   // (J) reserve: two changes of root. Under NK the cut roots R and NA would list 4 + 3 units,
   // past RESERVE 6: the writer keeps every root removal and every live admission (R's four
   // admins) and drops NA's copies (7). Nothing revives; every admin stays; all agree.
+  // (Under UNKNOWN_HEADS m's key is D, which NA removes: m is out of the group.)
   run jReserveTest =
     init
       .then(sign(ROOT, "admin", "X", "phone", 0, false, false, 1)).then(syncRound)
@@ -2975,7 +3012,7 @@ module records_v3 {
       .then(sign("NA", "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
       .then(recoverAs(RECOVERY, "NK")).then(syncRound).then(syncRound)
       .expect(CEIL_FIT implies (db.get(9).keep == Set(1, 2, 3, 4, 8)
-        and MEMBERS.forall(m => st.get(m).recs == st.get("r").recs and views.get(m) == views.get("r")
+        and MEMBERS.filter(m => inGroup(m)).forall(m => st.get(m).recs == st.get("r").recs and views.get(m) == views.get("r")
           and views.get(m).path == ["R", "NA", "NK"] and views.get(m).admins.keys() == Set(PHONE, COMPUTER, WATCH, "X")
           and views.get(m).revoked.contains(DEVICE))) and promises)
 
