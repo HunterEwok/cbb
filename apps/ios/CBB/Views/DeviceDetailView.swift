@@ -154,7 +154,7 @@ struct DeviceDetailView: View {
                     .accessibilityLabel(Text("Close"))
                     .accessibilityIdentifier("padCardClose")
                     // Escape on an iPad's keyboard closes the pane.
-                    .keyboardShortcut(.cancelAction)
+                    .keyboardShortcut((UserDefaults.standard.string(forKey: "padDiag") ?? "").contains("noshortcut") ? nil : .cancelAction)
                 }
             }
             title(d)

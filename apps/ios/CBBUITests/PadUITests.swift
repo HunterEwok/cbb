@@ -116,4 +116,29 @@ final class PadUITests: XCTestCase {
             return true
         }
     }
+
+    /// DIAGNOSTIC ONLY: which part takes Escape away from the card.
+    func testEscapeDiag() throws {
+        for variant in ["none", "nosearch", "noshortcut", "nosearch,noshortcut"] {
+            let app = try launch(extra: ["-padDiag", variant])
+            let mac = app.buttons.containing(NSPredicate(format: "label CONTAINS 'studio-mac'")).firstMatch
+            guard mac.waitForExistence(timeout: 30) else { print("PADDIAG \(variant): no tile"); continue }
+            mac.tap()
+            _ = app.buttons["Close"].waitForExistence(timeout: 10)
+            app.typeKey(.rightArrow, modifierFlags: [])
+            let thinkpad = app.buttons.containing(NSPredicate(format: "label CONTAINS 'thinkpad'")).firstMatch
+            let arrow = thinkpad.waitForExistence(timeout: 5) && thinkpad.isSelected
+            app.typeKey(.escape, modifierFlags: [])
+            let escape = app.buttons["Close"].waitForNonExistence(timeout: 5)
+            var tapEscape = false
+            if !escape {
+                // Escape again after tapping the empty space beside the tiles.
+                app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95)).tap()
+                app.typeKey(.escape, modifierFlags: [])
+                tapEscape = app.buttons["Close"].waitForNonExistence(timeout: 5)
+            }
+            print("PADDIAG \(variant): arrow=\(arrow) escape=\(escape) escapeAfterTap=\(tapEscape)")
+            app.terminate()
+        }
+    }
 }
