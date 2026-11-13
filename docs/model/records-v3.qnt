@@ -255,6 +255,10 @@ module records_v3 {
   // heads wait for stay beside the chain, outside that room (#530 c805311e, seed 47). Off:
   // they wait in got without bound.
   pure val EARLY_ROOM = false
+  // A waiting checkpoint the rooms turn away is skipped, not a stop: the records after it in its
+  // key's order are judged without it (seed j.8001: a bent checkpoint that never becomes whole,
+  // ahead of the root's newer records, took them out with it at the root's own device).
+  pure val WAIT_SKIP = false
   // A set's memory of what its rooms dropped: "mark" (a key that dropped records turns away
   // its later ones and keeps claiming the dropped units), "none" (no memory: a record is judged
   // against the rooms as they are, as a member given everything at once would judge it), or
@@ -595,8 +599,18 @@ module records_v3 {
         val room2 = ROOM - sumUnits(first)
         if (room2 < 0 or ceil2.keys().exists(k => ceil2.get(k) < 0) or first.exists(r => not(ceil.keys().contains(r.signer)))) plain
         else {
-          val rest = keepIn(left.exclude(first), ceil2, NOCUT, last(path), orderOf(s, db), room2,
+          // Under WAIT_SKIP the waiting checkpoints are judged after the other records: one the
+          // rooms cannot take is skipped (it waits aside), not a stop for the records after it.
+          val waits = if (WAIT_SKIP) left.exclude(first).filter(x => cps.contains(x)) else Set()
+          val rest0 = keepIn(left.exclude(first).exclude(waits), ceil2, NOCUT, last(path), orderOf(s, db), room2,
             ceil.keys().mapBy(k => sumUnits(ofKey(first, k))))
+          val base = recsOf(rest0._1, db).union(first)
+          val fitW = waits.filter(w => {
+            val upTo = waits.filter(o => o.seq > w.seq or (o.seq == w.seq and o.id <= w.id))
+            sumUnits(base) + sumUnits(upTo) <= ROOM
+              and sumUnits(ofKey(base, w.signer)) + sumUnits(upTo) <= ceil.get(w.signer)
+          })
+          val rest = (rest0._1.union(idsOf(fitW)), rest0._2)
           val res = (rest._1.union(idsOf(first)), rest._2)
           if (fullEvaluate(recsOf(res._1, db).union(firsts), chainState(s, db)).checkpoint == c.id) res else plain
         }
@@ -1630,6 +1644,11 @@ module records_v3 {
   // member that holds a verified head above what it applied whose list does not name it is
   // left out ("pair again"): it counts nobody and obeys nobody. The newcomer m's key is D.
   pure val UNKNOWN_HEADS = false
+  // With UNKNOWN_HEADS: the first checkpoints cross with the heads (random run u.9111: the new
+  // root removes a member its list still admits; its peers then count it as no member and hand
+  // it the heads alone, so it can never apply them, is not left out, and stays live on the old
+  // root).
+  pure val HEADS_WITH_FIRSTS = false
   // Members gone for good (a lost root device): they neither hand nor take anything.
   pure val LOST = Set()
   pure def keysOfMember(n: str): Set[Key] = {
@@ -1638,7 +1657,7 @@ module records_v3 {
       .union(if (UNKNOWN_HEADS and n == "m") Set(DEVICE) else Set())
   }
   // Under UNKNOWN_HEADS: m holds a verified head (the recovery key's, on a valid chain) above
-  // the chain it applied, and that head's list names none of m's keys, nor is one of them a
+  // the chain it applied, and that head's list admits none of m's keys (or removes them), nor is one of them a
   // root on the path the heads make. (The recovery key's holder is known to every member.)
   def leftOut(m: str): bool = {
     val s = st.get(m)
@@ -1646,7 +1665,9 @@ module records_v3 {
     val applied = chainState(s, db).ids.length()
     UNKNOWN_HEADS and keysOfMember(m) != Set() and raw.recs.length() > applied and {
       val h = raw.recs[raw.recs.length() - 1]
-      not(keysOfMember(m).exists(x => onList(pathCutsOf(raw.recs)._1, x) or admissionsOf(recsOf(h.keep.filter(i => db.keys().contains(i)), db), x) != Set()))
+      val listed = recsOf(h.keep.filter(i => db.keys().contains(i)), db)
+      not(keysOfMember(m).exists(x => onList(pathCutsOf(raw.recs)._1, x)
+        or (admissionsOf(listed, x) != Set() and not(listed.exists(r => r.kind == "revoke" and withPair(r.target).contains(x))))))
     }
   }
   def counts(m: str, n: str): bool = {
@@ -1660,7 +1681,7 @@ module records_v3 {
   }
   def listedFrom(n: str, m: str): Set[Id] =
     if (LOST.contains(n) or LOST.contains(m)) Set()
-    else if (UNKNOWN_HEADS and not(counts(m, n) and counts(n, m))) st.get(n).chain.filter(i => isChain(db.get(i)))
+    else if (UNKNOWN_HEADS and not(counts(m, n) and counts(n, m))) headsOf(st.get(n))
     else if (not(SYNC_MEMBERS_ONLY) or counts(m, n)) listedTo(st.get(n), st.get(m), db)
     else if (NEWEST_HEAD_ANY and everKnew(m, n)) st.get(n).chain.filter(i => isChain(db.get(i)))
     else Set()
@@ -1737,9 +1758,21 @@ module records_v3 {
     val s1 = { ...freshOf(s), checkpoint: c1 }
     settle(s1, recsOf(items, db).filter(r => storable(s1, r, db)), NOCUT, db)._1
   }
+  // What m can reach: everything under the default road; under UNKNOWN_HEADS its own, what the
+  // peers it and that count it hold, and the heads of every other peer.
+  def heldReach(m: str): Set[Id] =
+    if (not(UNKNOWN_HEADS)) heldAll
+    else MEMBERS.exclude(LOST).fold(heldBy(st.get(m)).union(st.get(m).chain), (u, n) =>
+      if (n == m) u
+      else if (counts(m, n) and counts(n, m)) u.union(st.get(n).recs).union(st.get(n).chain).union(st.get(n).wait)
+      else u.union(headsOf(st.get(n))))
+  // What crosses to and from an Unknown peer: the recovery heads (their lists ride in them),
+  // and under HEADS_WITH_FIRSTS what the set keeps beside its chain too, the heads' first
+  // checkpoints among it (each verifies under the key its head names).
+  def headsOf(s: Store): Set[Id] = if (HEADS_WITH_FIRSTS) s.chain else s.chain.filter(i => isChain(db.get(i)))
   def convergesAt(m: str): bool = {
     val s = st.get(m)
-    val k = freshKept(s, heldAll, db)
+    val k = freshKept(s, heldReach(m), db)
     // (A member left out under UNKNOWN_HEADS is to pair again: it takes heads alone.)
     (syncedProto(m) and not(chainState(s, db).stop) and not(views.get(m).stop) and not(leftOut(m))) implies (s.recs == k
       and views.get(m) == fullEvaluate(recsOf(k, db).union(firstsHeld(s, db)), chainState(s, db)))
@@ -2663,13 +2696,14 @@ module records_v3 {
       .then(giveOnly("m", 14)).then(giveOnly("m", 15)).then(giveOnly("m", 16)).then(giveOnly("m", 17)).then(giveOnly("m", 18))
       .then(giveOnly("m", 5)).then(give("m", 12))
       .expect(promises and (if (FIRST_NEWEST_ONLY) views.get("m").path == ["R", "NA", "NK"] and views.get("m").checkpoint == 13
-          and (EARLY_ROOM implies st.get("m").recs == Set(1, 2, 3, 4, 7, 8, 9, 10, 11, 14, 15, 16))
+          and ((EARLY_ROOM and not(CEIL_FIT)) implies st.get("m").recs == Set(1, 2, 3, 4, 7, 8, 9, 10, 11, 14, 15, 16))
         else views.get("m").path == ["R"]))
       .then(restart("m"))
       .expect(promises and (FIRST_NEWEST_ONLY implies views.get("m").path == ["R", "NA", "NK"] and views.get("m").checkpoint == 13))
       .then(syncRound)
       .expect(promises and views.get("m").path == ["R", "NA", "NK"] and views.get("m").checkpoint == 13
-        and st.get("m").recs == Set(1, 2, 3, 4, 7, 8, 9, 10, 11, 14, 15, 16, 17, 18))
+        and st.get("m").recs == st.get("k").recs
+        and (not(CEIL_FIT) implies st.get("m").recs == Set(1, 2, 3, 4, 7, 8, 9, 10, 11, 14, 15, 16, 17, 18)))
 
   // Simulator 1460's shape: the root admits m's key D, and only m gets it; the recovery key,
   // which never held that admission, makes NA the root, and its list does not name D. Every
@@ -2685,6 +2719,65 @@ module records_v3 {
       .expect(promises and MEMBERS.exclude(Set("m")).forall(n => views.get(n).path == ["R", "NA"])
         and (if (UNKNOWN_HEADS) leftOut("m") and views.get("m").path == ["R"] and st.get("m").chain == Set(6)
           else views.get("m").path == ["R", "NA"] and not(views.get("m").devices.contains(DEVICE))))
+
+  // Seed j.8001 (Mac, (J)): the root signs a checkpoint that never becomes whole, ahead of its
+  // copies record 5 in its order; at the root's own device the room turned it away and 5 with
+  // it, for good. Under WAIT_SKIP the device keeps 5 and every promise holds.
+  run waitSkipJ8001Test =
+    init
+      .then(syncRound)
+      .then(syncRound)
+      .then(sign("R", "checkpoint", "", "", 0, false, false, 2))
+      .then(giveOnly("c", 4))
+      .then(syncRound)
+      .then(syncRound)
+      .then(offerEveryone(4))
+      .then(restart("a"))
+      .then(sign("R", "copies", "", "", 0, false, false, 1))
+      .then(sign("A", "admin", "W", "computer", 0, false, false, 1))
+      .then(offerEveryone(6))
+      .then(compactAt("m"))
+      .then(syncRound)
+      .then(signCheckpointKeep("R", Set(5, 6, 99), "A", 2))
+      .expect((CEIL_FIT and WAIT_SKIP) implies promises)
+
+  // Seed j.8004 (Mac, (J)): a second writer on the root key signs 10, the root's room turns it
+  // away, and the root's honest checkpoint 11 prunes it as its prev. A member holding 10 found
+  // 11 over the root's ceiling and counted none. Under PREV_ROOM_WHEN_KEPT every promise holds.
+  run prevRoomJ8004Test =
+    init      
+      .then(sign("A", "copies", "", "", 0, false, false, 1))      
+      .then(signDeviant("C", "device", "D", 1))      
+      .then(signFull("NA", "admin", "C", "phone", 0, false, false, 1, true, Set()))      
+      .then(welcomeFrom("a"))      
+      .then(signFull("R", "checkpoint", "", "", 0, false, false, 2, false, Set(3)))      
+      .then(offerEveryone(7))      
+      .then(offerEveryone(5))      
+      .then(offerEveryone(7))      
+      .then(welcomeFrom("c"))      
+      .then(compactAt("m"))      
+      .then(sign("R", "copies", "", "", 0, false, false, 1))      
+      .then(compactAt("k"))      
+      .then(signFull("NA", "admin", "A", "phone", 0, false, false, 1, true, Set()))      
+      .then(restart("r"))      
+      .then(offerEveryone(9))      
+      .then(signFull("R", "admin", "X", "phone", 0, false, false, 1, true, Set()))      
+      .then(offerEveryone(10))      
+      .then(sign("R", "checkpoint", "", "", 0, false, false, 2))      
+      .then(offerEveryone(11))      
+      .then(giveOnly("m", 4))      
+      .then(offerEveryone(11))      
+      .then(sign("X", "device", "D", "", 0, false, false, 1))      
+      .then(restart("c"))      
+      .then(syncRound)      
+      .then(give("c", 11))      
+      .then(signCheckpointKeep("R", Set(3, 4, 5, 7, 8, 9, 10, 11, 99), "C", 2))      
+      .then(offerEveryone(13))      
+      .then(restart("r"))      
+      .then(offerEveryone(13))      
+      .then(sign("C", "copies", "", "", 0, false, false, 1))      
+      .then(restart("m"))
+      .expect((CEIL_FIT and PREV_ROOM_WHEN_KEPT) implies promises)
 
   // Liveness under CP_ROOM_WHEN_WHOLE: m gets the root's new checkpoint 6 before the records
   // it keeps (A's 4) and before the root's own 5 on its line; it waits aside, missing() asks for
