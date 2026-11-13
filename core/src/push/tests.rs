@@ -179,7 +179,11 @@ fn the_send_key_signs_the_token_and_the_number_and_a_later_algorithm_is_held() {
     );
     let kem = Key { alg: crate::records::key::ALG_X25519, public: vec![1; 32] };
     assert_eq!(
-        check_send(&kem, &o.send_sig, &Signed { env: ENV_APNS, token: &o.token, slot: &SLOT, face: &FACE, seq: 3, challenge: None }),
+        check_send(
+            &kem,
+            &o.send_sig,
+            &Signed { env: ENV_APNS, token: &o.token, slot: &SLOT, face: &FACE, seq: 3, challenge: None }
+        ),
         Err(RULE_SEND_SIG)
     );
     let mut held = on(ENV_APNS);

@@ -154,22 +154,23 @@ fn send_key(b: u8) -> ServerKey {
 const SLOT: [u8; 16] = [1; 16];
 
 /// The send key's half of a registration: the key and its signature over
-/// (env, token, slot, seq[, challenge]).
+/// (env, token, slot, face, seq[, challenge]).
 fn signed_by(
     k: &ServerKey,
     env: u64,
     token: &[u8],
     slot: [u8; 16],
+    face: [u8; 16],
     seq: u64,
     challenge: Option<[u8; 16]>,
 ) -> (cbb_core::records::key::Key, Vec<u8>) {
-    let s = push::Signed { env, token, slot: &slot, seq, challenge: challenge.as_ref() };
+    let s = push::Signed { env, token, slot: &slot, face: &face, seq, challenge: challenge.as_ref() };
     let sig = push::sign_send(k, &s).unwrap();
     (cbb_core::records::key::Key::es256(cbb_core::identity::ExternalKey::public(k)), sig.to_vec())
 }
 
-fn signed(k: &ServerKey, env: u64, token: &[u8], seq: u64) -> (cbb_core::records::key::Key, Vec<u8>) {
-    signed_by(k, env, token, SLOT, seq, None)
+fn signed(k: &ServerKey, env: u64, token: &[u8], face: [u8; 16], seq: u64) -> (cbb_core::records::key::Key, Vec<u8>) {
+    signed_by(k, env, token, SLOT, face, seq, None)
 }
 
 /// One send as a member makes it from a registration.
@@ -181,11 +182,14 @@ struct S<'a> {
     seq: u64,
     challenge: Option<[u8; 16]>,
     ttl: Option<u64>,
+    /// The face the registration names; None for the connection's own.
+    face: Option<[u8; 16]>,
 }
 
 impl S<'_> {
     fn send(&self, c: &mut Client, body: &[u8]) -> push::Sent {
-        let (key, sig) = signed_by(self.k, self.env, self.token, self.slot, self.seq, self.challenge);
+        let face = self.face.unwrap_or(c.face);
+        let (key, sig) = signed_by(self.k, self.env, self.token, self.slot, face, self.seq, self.challenge);
         c.send(push::Send {
             n: 0,
             token: self.token,
@@ -203,7 +207,7 @@ impl S<'_> {
 }
 
 fn s<'a>(k: &'a ServerKey, env: u64, token: &'a [u8], seq: u64) -> S<'a> {
-    S { k, env, token, slot: SLOT, seq, challenge: None, ttl: None }
+    S { k, env, token, slot: SLOT, seq, challenge: None, ttl: None, face: None }
 }
 
 /// Sends body to token of env under the phone's send key `k` and seq.
@@ -307,7 +311,7 @@ fn a_key_is_confirmed_by_its_challenge_and_then_only_it_sends() {
     assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, t0 + 1, &body(8)).status, push::SENT_STALE);
     // A seq more than a day ahead of the service's clock: refused.
     let ahead = t0 + push::MAX_SEQ_AHEAD_MS + 60_000;
-    assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, ahead, &body(9)).status, push::SENT_STALE);
+    assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, ahead, &body(9)).status, push::SENT_AHEAD);
     w.service.stop();
 }
 
@@ -353,7 +357,7 @@ fn a_send_that_does_not_hold_is_refused_and_too_many_close_the_connection() {
     for (env, slot, seq) in
         [(push::ENV_APNS, SLOT, t0 + 1), (push::ENV_APNS, [9; 16], t0), (push::ENV_APNS_SANDBOX, SLOT, t0)]
     {
-        let (k, sig) = signed_by(&phone, env, &token, slot, seq, None);
+        let (k, sig) = signed_by(&phone, env, &token, slot, c.face, seq, None);
         let r = c.send(push::Send {
             n: 0,
             token: &token,
@@ -389,7 +393,7 @@ fn a_send_that_does_not_hold_is_refused_and_too_many_close_the_connection() {
     for _ in 0..4 {
         assert_eq!(send(&mut c, &phone, push::ENV_APNS, &token, t0, &body(9)[..100]).status, push::SENT_FAILED);
     }
-    let (k, sig) = signed(&phone, push::ENV_APNS, &token, 1);
+    let (k, sig) = signed(&phone, push::ENV_APNS, &token, c.face, 1);
     let r = c.send(push::Send {
         n: 0,
         token: &token,
@@ -747,7 +751,8 @@ fn live_push_to_a_phone() {
         _ => push::Body::Event { id, event: push::EVENT_JOINED, device: None, time_ms: Some(now_ms()) },
     };
     let sealed = push::seal(&on.key, r.seq, on.env, &body).unwrap();
-    let tag: [u8; 16] = cbb_core::certs::random_bytes();
+    // The face the phone signed for (a debug build draws one per group).
+    let tag = on.face;
     let (key, creds) = member(tag, 1, &format!("live {}", STANDARD.encode(tag)), 1, true);
     let mut c = Client::connect(addr, pin, key, &refs(&creds)).unwrap();
     let sent = c
@@ -780,9 +785,9 @@ struct OneFace {
 }
 
 impl Faces for OneFace {
-    fn face(&self, _: &GroupId) -> Option<Face> {
+    fn faces(&self, _: &GroupId) -> Vec<Face> {
         let (key, credentials) = member(self.tag, 1, "period", 1, true);
-        Some(Face { addr: self.addr, pin: self.pin, key, credentials })
+        vec![Face { addr: self.addr, pin: self.pin, key, credentials, tag: self.tag, expires_ms: u64::MAX }]
     }
 }
 
@@ -795,14 +800,15 @@ impl Saved for Kept {
     }
 }
 
-/// The phone's registration frame, signed with its send key `send_key(1)`.
-fn registration(seq: u64, kinds: u64, key: [u8; 32]) -> Vec<u8> {
-    registration_in(SLOT, seq, kinds, key)
+/// The phone's registration frame under the face `[face; 16]`, signed
+/// with its send key `send_key(1)`.
+fn registration(face: u8, seq: u64, kinds: u64, key: [u8; 32]) -> Vec<u8> {
+    registration_in(SLOT, [face; 16], seq, kinds, key)
 }
 
-fn registration_in(slot: [u8; 16], seq: u64, kinds: u64, key: [u8; 32]) -> Vec<u8> {
+fn registration_in(slot: [u8; 16], face: [u8; 16], seq: u64, kinds: u64, key: [u8; 32]) -> Vec<u8> {
     let token = vec![5; 32];
-    let (send_key, send_sig) = signed_by(&send_key(1), push::ENV_APNS, &token, slot, seq, None);
+    let (send_key, send_sig) = signed_by(&send_key(1), push::ENV_APNS, &token, slot, face, seq, None);
     push::Registration {
         seq,
         kinds,
@@ -813,6 +819,7 @@ fn registration_in(slot: [u8; 16], seq: u64, kinds: u64, key: [u8; 32]) -> Vec<u
             send_key,
             send_sig,
             slot,
+            face,
             challenge: None,
         }),
     }
@@ -850,7 +857,7 @@ fn the_sender_wakes_a_phone_once_and_never_one_that_is_connected() {
     let (g, phone, laptop) = (DeviceId([1; 16]), DeviceId([2; 16]), DeviceId([3; 16]));
     let pk = [8u8; 32];
     let t0 = now_seq(0);
-    let f = registration(t0, push::KIND_COPIES | push::KIND_EVENTS, pk);
+    let f = registration(50, t0, push::KIND_COPIES | push::KIND_EVENTS, pk);
     s.registration(&g, &phone, PHONE, &read_reg(&f));
     assert_eq!(s.held(), 1);
     assert_eq!(kept.0.lock().unwrap().as_slice(), &[(phone, true)]);
@@ -888,9 +895,9 @@ fn the_sender_wakes_a_phone_once_and_never_one_that_is_connected() {
     s.event(&g, &[14; 16], push::EVENT_REMOVED, Some(laptop), false, Some(1));
     assert_eq!(s.waiting(), 0);
     // An older registration changes nothing; push off drops it.
-    s.registration(&g, &phone, PHONE, &read_reg(&registration(t0, 0, pk)));
+    s.registration(&g, &phone, PHONE, &read_reg(&registration(50, t0, 0, pk)));
     assert_eq!(s.held(), 1);
-    s.registration(&g, &phone, PHONE, &read_reg(&registration(t0 + 1, 0, pk)));
+    s.registration(&g, &phone, PHONE, &read_reg(&registration(50, t0 + 1, 0, pk)));
     assert_eq!(s.held(), 0);
     assert_eq!(kept.0.lock().unwrap().last(), Some(&(phone, false)));
     s.stop();
@@ -903,7 +910,7 @@ fn only_a_phone_or_a_computer_registers_and_only_for_the_kinds_it_asks() {
     let w = world(Budgets::default());
     let (s, _) = sender(&w, 52);
     let (g, phone) = (DeviceId([1; 16]), DeviceId([2; 16]));
-    let f = registration(1, push::KIND_EVENTS, [8; 32]);
+    let f = registration(52, 1, push::KIND_EVENTS, [8; 32]);
     for role in [ROLE_LEAF, ROLE_WATCH, 0, 99] {
         s.registration(&g, &phone, role, &read_reg(&f));
         assert_eq!(s.held(), 0, "role {role} registered");
@@ -916,7 +923,7 @@ fn only_a_phone_or_a_computer_registers_and_only_for_the_kinds_it_asks() {
     s.event(&g, &[1; 16], push::EVENT_JOINED, None, true, Some(5));
     assert_eq!(s.waiting(), 1);
     // A newer registration drops what waited under the older one.
-    s.registration(&g, &phone, ROLE_MEMBER, &read_reg(&registration(2, push::KIND_COPIES, [9; 32])));
+    s.registration(&g, &phone, ROLE_MEMBER, &read_reg(&registration(52, 2, push::KIND_COPIES, [9; 32])));
     assert_eq!(s.waiting(), 0);
     s.event(&g, &[2; 16], push::EVENT_JOINED, None, true, Some(5));
     assert_eq!(s.waiting(), 0);
@@ -932,8 +939,8 @@ fn a_removed_or_frozen_device_is_forgotten() {
     let w = world(Budgets::default());
     let (s, kept) = sender(&w, 53);
     let (g, other, phone) = (DeviceId([1; 16]), DeviceId([9; 16]), DeviceId([2; 16]));
-    s.registration(&g, &phone, PHONE, &read_reg(&registration(1, push::KIND_COPIES, [8; 32])));
-    s.registration(&other, &phone, PHONE, &read_reg(&registration(1, push::KIND_COPIES, [8; 32])));
+    s.registration(&g, &phone, PHONE, &read_reg(&registration(53, 1, push::KIND_COPIES, [8; 32])));
+    s.registration(&other, &phone, PHONE, &read_reg(&registration(53, 1, push::KIND_COPIES, [8; 32])));
     s.copy(&g, Role::Origin, &[phone], None, &|_| Some(push::Body::Unknown(9)));
     assert_eq!((s.held(), s.waiting()), (2, 1));
     s.forget(&g, &phone);
@@ -950,7 +957,7 @@ fn the_sender_drops_a_send_the_service_finds_stale() {
     let (g, phone) = (DeviceId([1; 16]), DeviceId([2; 16]));
     // A registration whose signature is over another seq than its own.
     let token = vec![5; 32];
-    let (send_key, send_sig) = signed(&send_key(1), push::ENV_APNS, &token, 2);
+    let (send_key, send_sig) = signed(&send_key(1), push::ENV_APNS, &token, [54; 16], 2);
     let r = push::Registration {
         seq: 3,
         kinds: push::KIND_COPIES,
@@ -961,6 +968,7 @@ fn the_sender_drops_a_send_the_service_finds_stale() {
             send_key,
             send_sig,
             slot: SLOT,
+            face: [54; 16],
             challenge: None,
         }),
     };
@@ -978,7 +986,7 @@ fn the_sender_drops_a_send_the_service_finds_stale() {
     assert_eq!(renew.len(), 1);
     assert_eq!(renew[0].0, g);
     let m = frame::read(&renew[0].1, 1 << 16).unwrap();
-    assert_eq!(push::read_renew(&m.map), Ok(SLOT));
+    assert_eq!(push::read_renew(&m.map), Ok((SLOT, false)));
     assert!(s.renewals(&phone).is_empty());
     s.stop();
     w.service.stop();
@@ -991,7 +999,7 @@ fn the_sender_drops_a_token_the_platform_says_is_gone() {
     let kept = Arc::new(Kept::default());
     let faces = Arc::new(OneFace { addr: w.service.addr(), pin: w.pin, tag: [51; 16] });
     let (g, phone) = (DeviceId([1; 16]), DeviceId([2; 16]));
-    let loaded = push::Registration::read(&read_reg(&registration(now_seq(0), 1, [7; 32]))).unwrap();
+    let loaded = push::Registration::read(&read_reg(&registration(51, now_seq(0), 1, [7; 32]))).unwrap();
     let s = pusher::Sender::start(faces, kept.clone(), vec![(g, phone, loaded)], Arc::new(|_| {}));
     assert_eq!(s.held(), 1, "the saved registration is back after a restart");
     s.copy(&g, Role::Origin, &[phone], Some(1), &|_| Some(push::Body::Unknown(9)));
@@ -1055,30 +1063,121 @@ fn other_keys_never_hold_off_the_phones_confirmation() {
 }
 
 /// While no key is confirmed, every group together may send the token a
-/// bounded number of bodies; past that a group's send carries only its
-/// challenge, alone, so the phone still confirms.
+/// bounded number of bodies. Past that a group that sent nothing lately
+/// (the phone's, which sends seldom) still sends one body; a group that
+/// keeps sending gets its challenge alone, so the phone still confirms.
 #[test]
 fn one_ceiling_for_every_unconfirmed_group_and_the_challenge_still_goes() {
     let w = world(Budgets { unconfirmed_token: (1.0, 3.0), ..Budgets::default() });
     let token = [7u8; 32];
     let t0 = now_seq(0);
-    for g in 0..3u8 {
-        let mut c = conn(&w, 10 + g, 10 + g);
-        assert_eq!(send(&mut c, &send_key(40 + g), push::ENV_APNS, &token, t0, &body(g)).status, push::SENT);
+    let mut others: Vec<Client> = (0..3u8).map(|g| conn(&w, 10 + g, 10 + g)).collect();
+    for (g, c) in others.iter_mut().enumerate() {
+        let g = g as u8;
+        assert_eq!(send(c, &send_key(40 + g), push::ENV_APNS, &token, t0, &body(g)).status, push::SENT);
     }
-    // A fourth group, the phone's: no body, its challenge alone.
+    // The ceiling is spent: those groups' next sends find it so.
+    let r = send(&mut others[0], &send_key(40), push::ENV_APNS, &token, t0, &body(20));
+    assert_eq!(r.status, push::SENT_BUDGET);
+    // A fourth group, the phone's, sent nothing lately: its body goes.
     let mut home = conn(&w, 1, 1);
     let phone = send_key(3);
-    let r = send(&mut home, &phone, push::ENV_APNS, &token, t0, &body(9));
+    let bodies = w.fake.bodies();
+    assert_eq!(send(&mut home, &phone, push::ENV_APNS, &token, t0, &body(9)).status, push::SENT);
+    assert_eq!(w.fake.bodies(), bodies + 1, "the quiet group's body reached the phone");
+    // Its next, at once: no body, its challenge alone.
+    let r = send(&mut home, &phone, push::ENV_APNS, &token, t0, &body(10));
     assert_eq!(r.status, push::SENT_BUDGET);
     assert!(r.retry_ms.is_some());
     let last = w.fake.got.lock().unwrap().last().cloned().unwrap();
     assert!(last.body.is_none() && last.challenge.is_some_and(|c| c.key == hint_of(&phone)));
     // The phone answers it: confirmed, and its group's send goes.
     let ch = challenge_for(&w, &token, hint_of(&phone)).unwrap();
-    let r = S { challenge: Some(ch), ..s(&phone, push::ENV_APNS, &token, t0 + 1) }.send(&mut home, &body(10));
+    let r = S { challenge: Some(ch), ..s(&phone, push::ENV_APNS, &token, t0 + 1) }.send(&mut home, &body(11));
     assert_eq!(r.status, push::SENT);
     assert_eq!(confirmed(&w, &token), Some(true));
+    w.service.stop();
+}
+
+/// A registration's signature names its group's face: the same bytes sent
+/// from a group of someone else's making do not hold, however many such
+/// groups there are.
+#[test]
+fn a_registration_holds_only_on_its_own_groups_connection() {
+    let w = world(Budgets::default());
+    let mut home = conn(&w, 1, 1);
+    let (phone, token) = (send_key(3), [7u8; 32]);
+    let t0 = now_seq(0);
+    send(&mut home, &phone, push::ENV_APNS, &token, t0, &body(1));
+    assert_eq!(confirm(&w, &mut home, &phone, &token, t0 + 1, 2).status, push::SENT);
+    let bodies = w.fake.bodies();
+    // The phone's registration (signed for the home group's face) from
+    // eight groups of a holder's own making: each send is refused.
+    for g in 0..8u8 {
+        let mut made_up = conn(&w, 100 + g, 100 + g);
+        let r =
+            S { face: Some([1; 16]), ..s(&phone, push::ENV_APNS, &token, t0 + 1) }.send(&mut made_up, &body(50 + g));
+        assert_eq!(r.status, push::SENT_STALE, "group {g}");
+    }
+    assert_eq!(w.fake.bodies(), bodies, "nothing reached the phone from them");
+    // At home it still goes.
+    assert_eq!(send(&mut home, &phone, push::ENV_APNS, &token, t0 + 1, &body(3)).status, push::SENT);
+    w.service.stop();
+}
+
+/// Under the confirmed key each group has its rate, and every group
+/// together one ceiling toward the token.
+#[test]
+fn one_ceiling_for_every_group_under_the_confirmed_key() {
+    let w = world(Budgets { per_token: (3600.0, 30.0), per_token_all: (1.0, 6.0), ..Budgets::default() });
+    let (phone, token) = (send_key(3), [7u8; 32]);
+    let t0 = now_seq(0);
+    let mut groups: Vec<Client> = (1..=3u8).map(|g| conn(&w, g, g)).collect();
+    send(&mut groups[0], &phone, push::ENV_APNS, &token, t0, &body(1));
+    confirm(&w, &mut groups[0], &phone, &token, t0 + 1, 2);
+    // The phone in three groups, a slot each; five more bodies each.
+    let mut sent = 0;
+    for (i, c) in groups.iter_mut().enumerate() {
+        for b in 0..5u8 {
+            let r = S { slot: [10 + i as u8; 16], ..s(&phone, push::ENV_APNS, &token, t0 + 2) }
+                .send(c, &body(10 * (i as u8 + 1) + b));
+            sent += usize::from(r.status == push::SENT);
+        }
+    }
+    // Six in the burst, the confirming one among them.
+    assert_eq!(sent, 5);
+    w.service.stop();
+}
+
+/// The platform says gone once: the binding is dropped, and a registration
+/// of the token's earlier key over a challenge of its first life confirms
+/// nothing in the binding made again.
+#[test]
+fn a_binding_made_again_takes_no_challenge_of_its_first_life() {
+    let w = world(Budgets::default());
+    let mut home = conn(&w, 1, 1);
+    let (old, phone, token) = (send_key(2), send_key(3), [7u8; 32]);
+    let t0 = now_seq(0);
+    send(&mut home, &old, push::ENV_APNS, &token, t0, &body(1));
+    let first = challenge_for(&w, &token, hint_of(&old)).unwrap();
+    assert_eq!(
+        S { challenge: Some(first), ..s(&old, push::ENV_APNS, &token, t0 + 1) }.send(&mut home, &body(2)).status,
+        push::SENT
+    );
+    // The phone reinstalls: its new key takes the binding.
+    assert_eq!(send(&mut home, &phone, push::ENV_APNS, &token, t0 + 2, &body(3)).status, push::SENT_STALE);
+    confirm(&w, &mut home, &phone, &token, t0 + 3, 4);
+    // Wait a second, so the clock moves past the first life's generations.
+    std::thread::sleep(Duration::from_millis(1100));
+    *w.fake.answer.lock().unwrap() = Some(Outcome::Gone);
+    assert_eq!(send(&mut home, &phone, push::ENV_APNS, &token, t0 + 3, &body(5)).status, push::SENT_GONE);
+    *w.fake.answer.lock().unwrap() = None;
+    assert_eq!(confirmed(&w, &token), None);
+    // The old key's registration over its first challenge: it passes as any
+    // unconfirmed send does, and confirms nothing.
+    let r = S { challenge: Some(first), ..s(&old, push::ENV_APNS, &token, t0 + 4) }.send(&mut home, &body(6));
+    assert_eq!(r.status, push::SENT);
+    assert_eq!(confirmed(&w, &token), Some(false));
     w.service.stop();
 }
 
@@ -1168,4 +1267,114 @@ fn a_journal_write_that_fails_is_not_answered_sent() {
     w.service.stop();
     assert_eq!(saved::load(&state, false).unwrap().bindings.len(), 3);
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Rule S-1 at a member: the service answers a number more than a day
+/// past its clock `ahead`; the sender asks the phone with `push-renew`'s
+/// `ahead`, and takes the phone's next registration in that group whatever
+/// its number, once, and only from that phone.
+#[test]
+fn after_ahead_the_sender_takes_the_phones_next_registration_once() {
+    let w = world(Budgets::default());
+    let (s, _) = sender(&w, 55);
+    let (g, phone, other) = (DeviceId([1; 16]), DeviceId([2; 16]), DeviceId([3; 16]));
+    let t0 = now_seq(0);
+    let ahead = t0 + 3 * push::MAX_SEQ_AHEAD_MS;
+    s.registration(&g, &phone, PHONE, &read_reg(&registration(55, ahead, push::KIND_COPIES, [8; 32])));
+    s.registration(&g, &other, PHONE, &read_reg(&registration(55, ahead, push::KIND_COPIES, [8; 32])));
+    s.copy(&g, Role::Origin, &[phone], None, &|_| Some(push::Body::Unknown(9)));
+    assert!(wait_for(|| w.service.stats().0 == 1 && s.waiting() == 0));
+    // The answer is read after the job leaves the queue.
+    std::thread::sleep(Duration::from_secs(1));
+    assert!(w.fake.got.lock().unwrap().is_empty());
+    // Before the renewal is given, a lower number is not taken.
+    s.registration(&g, &phone, PHONE, &read_reg(&registration(55, t0, push::KIND_COPIES, [9; 32])));
+    assert!(s.needs_face(&g, &[55; 16]));
+    let renew = s.renewals(&phone);
+    assert_eq!(renew.len(), 1);
+    let m = frame::read(&renew[0].1, 1 << 16).unwrap();
+    assert_eq!(push::read_renew(&m.map), Ok((SLOT, true)));
+    // Another phone's lower registration is still not taken.
+    s.registration(&g, &other, PHONE, &read_reg(&registration(55, t0, push::KIND_COPIES, [9; 32])));
+    // The phone's next, numbered by its clock: taken, and it sends.
+    s.registration(&g, &phone, PHONE, &read_reg(&registration(55, t0, push::KIND_COPIES, [10; 32])));
+    s.copy(&g, Role::Origin, &[phone], None, &|_| Some(push::Body::Unknown(10)));
+    assert!(wait_for(|| w.fake.bodies() == 1), "the registration after ahead was not taken");
+    // Once: a lower one after it is not taken.
+    s.registration(&g, &phone, PHONE, &read_reg(&registration(55, t0 - 10, push::KIND_COPIES, [11; 32])));
+    s.copy(&g, Role::Origin, &[phone], None, &|_| Some(push::Body::Unknown(11)));
+    assert!(wait_for(|| w.fake.bodies() == 2), "the held registration stopped sending");
+    let last = w.fake.got.lock().unwrap().last().cloned().unwrap();
+    assert_eq!(last.body, Some(push::MAX_BODY));
+    s.stop();
+    w.service.stop();
+}
+
+/// The current face and the previous one, whose expiry a test moves.
+struct TwoFaces {
+    addr: SocketAddr,
+    pin: [u8; 32],
+    current: [u8; 16],
+    previous: [u8; 16],
+    previous_expires: Mutex<u64>,
+}
+
+impl Faces for TwoFaces {
+    fn faces(&self, _: &GroupId) -> Vec<Face> {
+        let face = |tag: [u8; 16], expires_ms| {
+            let (key, credentials) = member(tag, 1, &format!("period {}", tag[0]), 1, true);
+            Face { addr: self.addr, pin: self.pin, key, credentials, tag, expires_ms }
+        };
+        vec![face(self.current, u64::MAX), face(self.previous, *self.previous_expires.lock().unwrap())]
+    }
+}
+
+/// A removal starts a new period. A member keeps the previous face for
+/// push only: a send to a remaining phone under it wakes the phone, which
+/// registers under the new face; the removed device's registration is
+/// dropped and nothing goes to it; once the previous face expires, nothing
+/// goes under it and the phone is asked to register again.
+#[test]
+fn the_previous_face_serves_push_only_until_the_phone_registers_again() {
+    let w = world(Budgets::default());
+    let faces = Arc::new(TwoFaces {
+        addr: w.service.addr(),
+        pin: w.pin,
+        current: [61; 16],
+        previous: [60; 16],
+        previous_expires: Mutex::new(u64::MAX),
+    });
+    let kept = Arc::new(Kept::default());
+    let s = pusher::Sender::start(faces.clone(), kept, Vec::new(), Arc::new(|_| {}));
+    let (g, phone, removed) = (DeviceId([1; 16]), DeviceId([2; 16]), DeviceId([3; 16]));
+    let t0 = now_seq(0);
+    // Both registered in the previous period.
+    s.registration(&g, &phone, PHONE, &read_reg(&registration(60, t0, push::KIND_EVENTS, [8; 32])));
+    s.registration(&g, &removed, PHONE, &read_reg(&registration_in([2; 16], [60; 16], t0, push::KIND_EVENTS, [7; 32])));
+    // The removal: its registration goes, and the event wakes the phone
+    // under the previous face.
+    s.forget(&g, &removed);
+    s.event(&g, &[1; 16], push::EVENT_REMOVED, Some(removed), true, Some(5));
+    assert!(wait_for(|| w.fake.bodies() == 1), "the remaining phone was not woken");
+    assert_eq!(w.fake.got.lock().unwrap().len(), 1, "something went to the removed device");
+    assert!(s.needs_face(&g, &[60; 16]));
+    // The phone registers under the new face: the previous one is needed
+    // no more, and sends go under the new one.
+    s.registration(&g, &phone, PHONE, &read_reg(&registration(61, t0 + 1, push::KIND_EVENTS, [9; 32])));
+    assert!(!s.needs_face(&g, &[60; 16]));
+    s.event(&g, &[2; 16], push::EVENT_JOINED, None, true, Some(6));
+    assert!(wait_for(|| w.fake.bodies() == 2));
+    // A phone still on the previous face once it expired: nothing goes,
+    // and it is asked to register again.
+    let late = DeviceId([4; 16]);
+    s.registration(&g, &late, PHONE, &read_reg(&registration_in([3; 16], [60; 16], t0, push::KIND_EVENTS, [6; 32])));
+    *faces.previous_expires.lock().unwrap() = 1;
+    s.event(&g, &[3; 16], push::EVENT_JOINED, None, true, Some(7));
+    assert!(wait_for(|| s.waiting() == 0));
+    std::thread::sleep(Duration::from_millis(300));
+    assert_eq!(w.fake.bodies(), 3, "only the phone on the current face got the event");
+    let renew = s.renewals(&late);
+    assert_eq!(renew.len(), 1);
+    s.stop();
+    w.service.stop();
 }

@@ -4,8 +4,9 @@
 //! The project's push service (`cbb-push`, format section 20.4,
 //! `cbb_core::push`): members of a group ask it to wake a phone whose app
 //! is closed, and it passes a sealed body of one size to the phone's
-//! platform (APNs for the iPhone and the iPad, UnifiedPush for Android
-//! without Play services; FCM and Push Kit follow). It holds the platforms' keys and none of a group's.
+//! platform (APNs for the iPhone and the iPad, FCM for Android with Play
+//! services, UnifiedPush for Android without; Push Kit follows). It holds
+//! the platforms' keys and none of a group's.
 //!
 //! - A member connects over TLS with ALPN `cbb-push/1` to the service's
 //!   pinned key, presenting the certificate of its server key for the
@@ -19,14 +20,17 @@
 //!   not sent again: several members sending one copy give one
 //!   notification.
 //! - Each send carries the phone's send key for the token, its signature
-//!   over (env, token, slot, seq, and the service's challenge when the
-//!   registration has one), the slot and seq. The token's binding
+//!   over (env, token, slot, the group's face, seq, and the service's
+//!   challenge when the registration has one), the slot and seq. The face
+//!   is not sent: the service checks the signature over the face of the
+//!   connection, so a registration holds only on its own group's. The token's binding
 //!   (`binding.rs`) says whether it passes: a key is confirmed only by a
 //!   challenge the service sent to the token (computed from the service's
 //!   secret, never kept, so no other key can push it out), and then only
 //!   that key sends; seq is kept per key and slot, one slot for each of
-//!   the phone's groups. A send it refuses is answered `stale`, one of a
-//!   key algorithm it does not take `key`.
+//!   the phone's groups. A send it refuses is answered `stale`, one whose
+//!   seq is more than a day past its clock `ahead`, one of a key algorithm
+//!   it does not take `key`.
 //! - What a send leaves (a binding, a repeat) is written only once the
 //!   platform took the body, judged again over the binding as it is then;
 //!   a second send of a body still on its way is answered `failed` with a
@@ -34,14 +38,16 @@
 //!   not sent. A repeat with a later expiry than the first passes once.
 //! - Every send costs its tag's budget, a refused one too, and a
 //!   connection is closed after a few refusals. What goes to one token is
-//!   budgeted per group: under the confirmed key, while no key is
+//!   budgeted per group and per token: under the confirmed key (a rate per
+//!   group and one ceiling for every group together), while no key is
 //!   confirmed (a small rate per group, and one ceiling for every group
-//!   together, past which a group's send carries only its challenge), and
-//!   for challenges alone. The tables everyone shares (repeats, bindings,
+//!   together, past which a group's send carries only its challenge,
+//!   unless the group sent nothing to the token lately), and for
+//!   challenges alone. The tables everyone shares (repeats, bindings,
 //!   the budgets) give each payer (an address, an IPv6 /64) a share: when
 //!   one is full, the payer with the most entries loses its oldest (an
-//!   unconfirmed binding before a confirmed one), and no one is refused
-//!   for it. Connections are counted per payer too.
+//!   unconfirmed binding before a confirmed one, and of the confirmed the
+//!   one used longest ago), and no one is refused for it. Connections are counted per payer too.
 //! - It sees its face's tag, server keys' hashes, tokens, times and one
 //!   size per platform. The tags, the budgets and the repeats stay in
 //!   memory (a repeat does not outlive a restart); the bindings are kept in
@@ -147,6 +153,9 @@ pub struct Budgets {
     /// Bodies to one token from one group, under the token's confirmed
     /// key (or the send that confirms it).
     pub per_token: (f64, f64),
+    /// Bodies to one token under its confirmed key from every group
+    /// together.
+    pub per_token_all: (f64, f64),
     pub per_tag: (f64, f64),
     /// Bodies to a token no key is confirmed for: from one group, and
     /// from every group together; past the second a group's send carries
@@ -166,6 +175,7 @@ impl Default for Budgets {
     fn default() -> Budgets {
         Budgets {
             per_token: (120.0, 30.0),
+            per_token_all: (360.0, 60.0),
             per_tag: (1200.0, 120.0),
             unconfirmed: (12.0, 4.0),
             unconfirmed_token: (30.0, 10.0),
@@ -232,6 +242,13 @@ impl Bucket {
         Bucket { left: burst, at }
     }
 
+    /// Whether the bucket is full at `now`: nothing was taken from it for
+    /// as long as it takes to fill.
+    fn full_at(&self, (per_hour, burst): (f64, f64), now: Instant) -> bool {
+        let rate = per_hour / 3600.0;
+        self.left + now.saturating_duration_since(self.at).as_secs_f64() * rate >= burst
+    }
+
     fn take(&mut self, (per_hour, burst): (f64, f64), now: Instant) -> std::result::Result<(), Duration> {
         let rate = per_hour / 3600.0;
         self.left = (self.left + now.saturating_duration_since(self.at).as_secs_f64() * rate).min(burst);
@@ -267,6 +284,13 @@ struct TokenBudget {
     challenge: Bucket,
 }
 
+/// What every group together may send to one token.
+#[derive(Clone, Copy, Debug)]
+struct Ceiling {
+    unconfirmed: Bucket,
+    confirmed: Bucket,
+}
+
 /// A body sent: when, how long the platform keeps it, and whether a
 /// longer life already passed once.
 #[derive(Clone, Copy, Debug)]
@@ -280,9 +304,9 @@ struct State {
     periods: HashMap<[u8; 32], Period>,
     /// By (token, group).
     tokens: Shared<TokenBudget>,
-    /// By token: what every group together may send while no key is
-    /// confirmed.
-    ceilings: Shared<Bucket>,
+    /// By token: what every group together may send, while no key is
+    /// confirmed and under the confirmed key.
+    ceilings: Shared<Ceiling>,
     repeats: Shared<Repeat>,
     bindings: Shared<Binding>,
     /// Bodies on their way to a platform.
@@ -354,10 +378,12 @@ enum Plan {
         challenge: Option<[u8; 16]>,
     },
     /// A challenge alone, and what the send is answered whatever the
-    /// platform did with it.
+    /// platform did with it; `file`, the send to file a binding by when the
+    /// token has none.
     Challenge {
         value: [u8; 16],
         answer: Answer,
+        file: Option<Ask>,
     },
 }
 
@@ -416,14 +442,15 @@ impl Inner {
     }
 
     /// Checks a hello: the face's hubs' and members' credentials and the
-    /// member's server key among the members. Returns the tag's keyed hash.
+    /// member's server key among the members. Returns the tag's keyed hash
+    /// and the face's tag itself, which a registration's signature covers.
     fn hello(
         &self,
         creds: &[&[u8]],
         server_key: &[u8],
         now: u64,
         payer: Payer,
-    ) -> std::result::Result<[u8; 32], &'static str> {
+    ) -> std::result::Result<([u8; 32], [u8; 16]), &'static str> {
         let mut hubs = None;
         let mut members = None;
         for c in creds {
@@ -488,7 +515,7 @@ impl Inner {
         p.members_version = members.version;
         p.seen = at;
         p.expires_ms = hubs.expires_ms.min(members.expires_ms);
-        Ok(tag)
+        Ok((tag, hubs.group))
     }
 
     /// Files a binding once the platform took what the send asked for:
@@ -503,7 +530,7 @@ impl Inner {
         let mint = |k: &[u8; 32], g: u32, p: u64| self.challenge(&tok, k, g, p);
         let then = match binding::judge(current.as_ref(), ask, now, &mint) {
             Verdict::Pass { then, .. } => then,
-            Verdict::Stale | Verdict::Challenge { .. } => return Ok(()),
+            Verdict::Stale | Verdict::Ahead | Verdict::Challenge { .. } => return Ok(()),
         };
         if current.as_ref() == Some(&then) {
             return Ok(());
@@ -518,6 +545,7 @@ impl Inner {
             payer,
             |b| !b.confirmed() && now.saturating_sub(b.used_ms) > binding::UNCONFIRMED_LIFE_MS,
             Binding::confirmed,
+            |b| b.used_ms,
         );
         st.dirty = true;
         if meaningful {
@@ -539,7 +567,7 @@ impl Inner {
     }
 
     /// Handles one `push/send`.
-    fn send(&self, tag: &[u8; 32], payer: Payer, s: &push::Send<'_>) -> Answer {
+    fn send(&self, tag: &[u8; 32], face: &[u8; 16], payer: Payer, s: &push::Send<'_>) -> Answer {
         let Some(platform) = self.cfg.platforms.get(&s.env).cloned() else { return refused(push::SENT_FAILED) };
         let at = Instant::now();
         let now = now_ms();
@@ -559,7 +587,7 @@ impl Inner {
         if !s.sized() || (s.env == push::ENV_UNIFIEDPUSH && push::UnifiedPush::read(s.token).is_err()) {
             return refused(push::SENT_FAILED);
         }
-        match push::check_send(&s.key, s.sig, &s.signed()) {
+        match push::check_send(&s.key, s.sig, &s.signed(face)) {
             Ok(push::SendCheck::Good) => {}
             Ok(push::SendCheck::Unknown) => return refused(push::SENT_KEY),
             Err(_) => return refused(push::SENT_STALE),
@@ -600,21 +628,37 @@ impl Inner {
                     .insert(tb, fresh, payer, |b| at.saturating_duration_since(b.send.at) > Duration::from_secs(3600));
             }
             if st.ceilings.get(&tok).is_none() {
-                let fresh = Bucket::full(budgets.unconfirmed_token.1, at);
-                st.ceilings
-                    .insert(tok, fresh, payer, |b| at.saturating_duration_since(b.at) > Duration::from_secs(3600));
+                let fresh = Ceiling {
+                    unconfirmed: Bucket::full(budgets.unconfirmed_token.1, at),
+                    confirmed: Bucket::full(budgets.per_token_all.1, at),
+                };
+                st.ceilings.insert(tok, fresh, payer, |c| {
+                    at.saturating_duration_since(c.unconfirmed.at.max(c.confirmed.at)) > Duration::from_secs(3600)
+                });
             }
             let Some(b) = st.tokens.get_mut(&tb) else { return answer(push::SENT_BUDGET, Some(60_000)) };
             match verdict {
                 Verdict::Stale => return refused(push::SENT_STALE),
+                Verdict::Ahead => return refused(push::SENT_AHEAD),
                 Verdict::Challenge { value } => {
                     if b.challenge.take(budgets.challenges, at).is_err() {
                         return refused(push::SENT_STALE);
                     }
-                    Plan::Challenge { value, answer: refused(push::SENT_STALE) }
+                    Plan::Challenge { value, answer: refused(push::SENT_STALE), file: None }
                 }
                 Verdict::Pass { challenge, confirms, .. } if confirmed || confirms => {
+                    // The group's rate, then one ceiling for every group
+                    // together: a holder of one registration gains nothing
+                    // from groups of its own making (the signature names the
+                    // face as well).
                     if let Err(wait) = b.send.take(budgets.per_token, at) {
+                        return answer(push::SENT_BUDGET, Some(wait.as_millis() as u64));
+                    }
+                    let all = st
+                        .ceilings
+                        .get_mut(&tok)
+                        .map_or(Err(Duration::from_secs(60)), |c| c.confirmed.take(budgets.per_token_all, at));
+                    if let Err(wait) = all {
                         return answer(push::SENT_BUDGET, Some(wait.as_millis() as u64));
                     }
                     st.in_flight.insert(repeat);
@@ -622,16 +666,22 @@ impl Inner {
                 }
                 Verdict::Pass { challenge, .. } => {
                     // No key confirmed: a small rate per group, and one ceiling
-                    // for every group together. Past the ceiling the group's
-                    // send still carries its challenge, alone, so that a flood
-                    // of other groups never keeps the phone from confirming.
+                    // for every group together. Past the ceiling a group that
+                    // sent nothing to this token lately (its own rate full)
+                    // still sends one body: the phone's own group, which
+                    // sends seldom, is not the one that waits behind groups
+                    // that keep the ceiling spent. Any other send carries its
+                    // challenge alone, so that a flood of other groups never
+                    // keeps the phone from confirming.
+                    let quiet = b.unconfirmed.full_at(budgets.unconfirmed, at);
                     if let Err(wait) = b.unconfirmed.take(budgets.unconfirmed, at) {
                         return answer(push::SENT_BUDGET, Some(wait.as_millis() as u64));
                     }
                     let ceiling = st
                         .ceilings
                         .get_mut(&tok)
-                        .map_or(Err(Duration::from_secs(60)), |c| c.take(budgets.unconfirmed_token, at));
+                        .map_or(Err(Duration::from_secs(60)), |c| c.unconfirmed.take(budgets.unconfirmed_token, at))
+                        .or_else(|wait| if quiet { Ok(()) } else { Err(wait) });
                     match ceiling {
                         Ok(()) => {
                             st.in_flight.insert(repeat);
@@ -641,9 +691,11 @@ impl Inner {
                             let wait = wait.as_millis() as u64;
                             let b = st.tokens.get_mut(&tb).map(|b| b.challenge.take(budgets.challenges, at).is_ok());
                             match (challenge, b) {
-                                (Some(value), Some(true)) => {
-                                    Plan::Challenge { value, answer: answer(push::SENT_BUDGET, Some(wait)) }
-                                }
+                                (Some(value), Some(true)) => Plan::Challenge {
+                                    value,
+                                    answer: answer(push::SENT_BUDGET, Some(wait)),
+                                    file: Some(ask),
+                                },
                                 _ => return answer(push::SENT_BUDGET, Some(wait)),
                             }
                         }
@@ -657,7 +709,7 @@ impl Inner {
             Challenge { value: v, key: k }
         };
         match plan {
-            Plan::Challenge { value, answer } => {
+            Plan::Challenge { value, answer: then, file } => {
                 let d = Delivery {
                     env: s.env,
                     token: s.token,
@@ -666,9 +718,18 @@ impl Inner {
                     expires_s: now / 1000 + 86_400,
                     tag: *tag,
                 };
-                // Nothing to file: a challenge is computed again, not kept.
-                let _ = platform.send(&d);
-                answer
+                // A challenge is computed again, not kept. A token with no
+                // binding yet gets one filed once its challenge went, so that
+                // the generation the challenge was made for stays.
+                if platform.send(&d) == Outcome::Sent
+                    && let Some(a) = file
+                {
+                    let mut st = self.lock();
+                    if st.bindings.get(&tok).is_none() && self.commit(&mut st, tok, payer, &a).is_err() {
+                        return answer(push::SENT_FAILED, Some(JOURNAL_WAIT_MS));
+                    }
+                }
+                then
             }
             Plan::Body { repeat, upgrade, challenge } => {
                 let d = Delivery {
@@ -769,7 +830,7 @@ impl Inner {
             _ => return write_frame(&mut s, &push::error("the first message is push/hello")),
         };
         let refs: Vec<&[u8]> = creds.iter().map(Vec::as_slice).collect();
-        let tag = match self.hello(&refs, &key, now_ms(), payer) {
+        let (tag, face) = match self.hello(&refs, &key, now_ms(), payer) {
             Ok(t) => t,
             Err(why) => return write_frame(&mut s, &push::error(why)),
         };
@@ -793,7 +854,7 @@ impl Inner {
             let Ok(send) = push::Send::read(&m.map) else {
                 return write_frame(&mut s, &push::error("push/send does not follow its table"));
             };
-            let a = self.send(&tag, payer, &send);
+            let a = self.send(&tag, &face, payer, &send);
             write_frame(&mut s, &push::sent(send.n, a.status, a.retry))?;
             if a.refused {
                 refusals += 1;

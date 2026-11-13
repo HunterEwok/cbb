@@ -20,10 +20,15 @@
 //! - Once a key is confirmed, only that key sends. Another key gets its
 //!   challenge on its own (a push with no body, within its group's budget
 //!   for them) and takes the binding only by confirming it; never by time.
+//! - A binding made anew (the token's first, or after one was dropped)
+//!   starts its generation at the clock in seconds, never at 0, and each
+//!   confirmation raises it to at least the clock: no challenge of an
+//!   earlier life of the token matches.
 //! - The highest seq is kept per (key, slot): each of the phone's groups
 //!   registers under a slot of its own, so one group's registration never
 //!   silences another's. A seq more than a day ahead of the service's
-//!   clock is refused: seq is a clock by rule.
+//!   clock is refused with its own verdict, `ahead` (rule S-1): seq is a
+//!   clock by rule.
 
 use cbb_core::push;
 
@@ -78,6 +83,8 @@ pub enum Verdict {
     Pass { challenge: Option<[u8; 16]>, confirms: bool, then: Binding },
     /// Refused (`stale`).
     Stale,
+    /// Refused (`ahead`): the seq is more than a day past the clock.
+    Ahead,
     /// Refused (`stale`), and the token may be sent this challenge on its
     /// own, for the send's key; the binding does not change.
     Challenge { value: [u8; 16] },
@@ -90,6 +97,12 @@ pub type Mint<'a> = &'a dyn Fn(&[u8; 32], u32, u64) -> [u8; 16];
 /// The period of `now_ms`.
 pub fn period(now_ms: u64) -> u64 {
     now_ms / CHALLENGE_PERIOD_MS
+}
+
+/// The generation a binding made at `now_ms` starts at: the clock in
+/// seconds (u32 holds it until 2106).
+pub fn clock_generation(now_ms: u64) -> u32 {
+    u32::try_from(now_ms / 1000).unwrap_or(u32::MAX)
 }
 
 /// Compares two challenges in time that does not depend on where they
@@ -151,9 +164,10 @@ impl Binding {
 /// the token's challenges.
 pub fn judge(old: Option<&Binding>, a: &Ask, now_ms: u64, mint: Mint<'_>) -> Verdict {
     if !push::seq_in_time(a.seq, now_ms) {
-        return Verdict::Stale;
+        return Verdict::Ahead;
     }
-    let mut b = old.cloned().unwrap_or_default();
+    let clock = clock_generation(now_ms);
+    let mut b = old.cloned().unwrap_or_else(|| Binding { generation: clock, ..Binding::default() });
     b.clamp(now_ms);
     let p = period(now_ms);
     // The challenge made for this token, this key and this generation, in
@@ -179,7 +193,7 @@ pub fn judge(old: Option<&Binding>, a: &Ask, now_ms: u64, mint: Mint<'_>) -> Ver
             // Confirmed: the key's own slots stay, the others' go, and every
             // challenge made so far is dead.
             b.key = Some(a.key);
-            b.generation = b.generation.wrapping_add(1);
+            b.generation = b.generation.wrapping_add(1).max(clock);
             b.slots.retain(|s| s.key == a.key);
             b.raise(a.key, a.slot, a.seq);
             b.used_ms = now_ms;
@@ -272,7 +286,8 @@ mod tests {
         let (cp, b) = pass(j(None, &ask(PHONE, A, T, None), T));
         let (cs, b) = pass(j(Some(&b), &ask(STRANGER, B, T, None), T));
         let (_, b) = pass(j(Some(&b), &ask(PHONE, A, T + 1, cp), T + 1));
-        assert_eq!(b.generation, 1);
+        let g0 = clock_generation(T);
+        assert_eq!(b.generation, g0 + 1);
         // The stranger's challenge (had it seen it) confirms nothing now.
         assert!(matches!(j(Some(&b), &ask(STRANGER, B, T + 2, cs), T + 2), Verdict::Challenge { .. }));
         // The phone reinstalls with a new key, which takes the binding by
@@ -280,12 +295,39 @@ mod tests {
         let new = [4u8; 32];
         let Verdict::Challenge { value } = j(Some(&b), &ask(new, A, T + 3, None), T + 3) else { panic!() };
         let (_, b2) = pass(j(Some(&b), &ask(new, A, T + 4, Some(value)), T + 4));
-        assert_eq!((b2.key, b2.generation), (Some(new), 2));
+        assert_eq!((b2.key, b2.generation), (Some(new), g0 + 2));
         // Every challenge of the phone's old key made before, of either
         // generation, is dead under the new binding.
-        for old in [cp.unwrap(), mint(&PHONE, 1, period(T))] {
+        for old in [cp.unwrap(), mint(&PHONE, g0 + 1, period(T))] {
             assert!(matches!(j(Some(&b2), &ask(PHONE, A, T + 5, Some(old)), T + 5), Verdict::Challenge { .. }));
         }
+    }
+
+    /// A binding dropped (the platform said gone once, or it was pushed out
+    /// of a full table) and made again: its generation starts at the clock,
+    /// so a registration of an earlier key over a challenge of the token's
+    /// first life confirms nothing.
+    #[test]
+    fn a_binding_made_again_never_takes_a_challenge_of_its_earlier_life() {
+        let old_key = [5u8; 32];
+        let (c_first, b) = pass(j(None, &ask(old_key, A, T, None), T));
+        let (_, b) = pass(j(Some(&b), &ask(old_key, A, T + 1, c_first), T + 1));
+        assert!(b.confirmed());
+        // The phone's key now; then the binding is dropped, a minute later.
+        let Verdict::Challenge { value } = j(Some(&b), &ask(PHONE, A, T + 2, None), T + 2) else { panic!() };
+        let (_, b) = pass(j(Some(&b), &ask(PHONE, A, T + 3, Some(value)), T + 3));
+        assert_eq!(b.key, Some(PHONE));
+        let later = T + 60_000;
+        // The old key's registration over its first challenge, sent to the
+        // binding made again: it passes as any unconfirmed send does, and
+        // confirms nothing.
+        let v = j(None, &ask(old_key, A, later, c_first), later);
+        assert!(matches!(v, Verdict::Pass { confirms: false, .. }), "{v:?}");
+        let (_, again) = pass(v);
+        assert!(!again.confirmed());
+        assert!(again.generation >= clock_generation(later));
+        // The generation of the token's first life is far below it.
+        assert!(clock_generation(T) < again.generation);
     }
 
     #[test]
@@ -310,7 +352,7 @@ mod tests {
 
     #[test]
     fn a_seq_more_than_a_day_ahead_is_refused() {
-        assert_eq!(j(None, &ask(PHONE, A, T + push::MAX_SEQ_AHEAD_MS + 1, None), T), Verdict::Stale);
+        assert_eq!(j(None, &ask(PHONE, A, T + push::MAX_SEQ_AHEAD_MS + 1, None), T), Verdict::Ahead);
         assert!(matches!(j(None, &ask(PHONE, A, T + push::MAX_SEQ_AHEAD_MS, None), T), Verdict::Pass { .. }));
     }
 

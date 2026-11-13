@@ -60,6 +60,9 @@ pub struct Client {
     next: u64,
     /// Sends left this hour for the face's tag, as the service said.
     pub left: u64,
+    /// The face's tag, as its hubs' credential names it: a registration's
+    /// signature must cover it to hold on this connection.
+    pub face: [u8; 16],
 }
 
 fn read_frame(s: &mut impl std::io::Read) -> Result<Vec<u8>> {
@@ -90,6 +93,12 @@ impl Client {
         while tls.conn.is_handshaking() {
             tls.conn.complete_io(&mut tls.sock).context("TLS to the push service failed")?;
         }
+        let face = credentials
+            .iter()
+            .filter_map(|c| cbb_core::blind::credential::Credential::read(c).ok())
+            .find(|c| c.kind == cbb_core::blind::credential::TYPE_HUBS)
+            .map(|c| c.group)
+            .ok_or_else(|| Error::msg("the face's hubs' credential is missing"))?;
         let hello = push::hello(credentials)
             .map_err(|r| Error::msg(format!("a credential is not in the profile ({})", r.name())))?;
         tls.write_all(&hello).and_then(|()| tls.flush()).context("cannot write to the push service")?;
@@ -98,7 +107,7 @@ impl Client {
         match m.t {
             push::T_READY => {
                 let left = m.map.get(2).and_then(cbb_core::format::Value::as_uint).unwrap_or(0);
-                Ok(Client { tls, next: 1, left })
+                Ok(Client { tls, next: 1, left, face })
             }
             push::T_ERROR => {
                 let why = m.map.get(2).and_then(cbb_core::format::Value::as_text).unwrap_or("refused");

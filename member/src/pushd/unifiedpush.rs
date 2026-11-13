@@ -21,9 +21,11 @@
 //!   a stranger's sends to a distributor's host nor many names at one
 //!   address starve the others;
 //! - a host that answered 429 waits as long as it asked (at most a day),
-//!   for the group that asked only; the address waits for everyone only
-//!   when three groups were told so within ten minutes, and then at most
-//!   five minutes, so one name's answer never closes an address;
+//!   for the group that asked only; that name at that address waits for
+//!   everyone only when three groups were told so within ten minutes, and
+//!   then at most five minutes; no other name at the address ever waits
+//!   for it, so names of a stranger's own never close the address of the
+//!   phone's distributor;
 //! - keeps its tables as the service keeps its own (`shares.rs`), each
 //!   group a share: when one is full, the group with the most entries
 //!   loses its oldest, and no one is refused for it.
@@ -64,8 +66,8 @@ const PER_TAG_ADDRESS: (f64, f64) = (300.0, 30.0);
 const PER_ADDRESS: (f64, f64) = (6000.0, 600.0);
 /// Entries held at most in each table.
 const TABLE_MAX: usize = 65_536;
-/// How long an address waits for everyone at most, and how many groups'
-/// 429s within the window it takes.
+/// How long a name at an address waits for everyone at most, and how many
+/// groups' 429s from it within the window it takes.
 const ADDRESS_WAIT_MAX: Duration = Duration::from_secs(300);
 const ADDRESS_WAIT_GROUPS: usize = 3;
 const ADDRESS_WAIT_WINDOW: Duration = Duration::from_secs(600);
@@ -204,7 +206,7 @@ impl Bucket {
     }
 }
 
-/// An address's recent 429s: by which groups, and when.
+/// A name's recent 429s at one address: by which groups, and when.
 #[derive(Clone, Default)]
 struct Told {
     by: Vec<(Payer, Instant)>,
@@ -240,9 +242,10 @@ struct Budgets {
     addresses: Shared<Bucket>,
     /// Until when a group leaves a host alone, by (group, host).
     waits: Shared<Instant>,
-    /// Until when everyone leaves an address alone, by address.
+    /// Until when everyone leaves a name at an address alone, by (address,
+    /// host).
     closed: Shared<Instant>,
-    /// The recent 429s by address.
+    /// The recent 429s by (address, host).
     told: Shared<Told>,
 }
 
@@ -373,17 +376,19 @@ impl UnifiedPush {
     }
 
     /// Takes one send from the group's share of the address and from the
-    /// address's budget, unless the address is closed for everyone; the
-    /// wait. When the address's budget is spent, only the groups that sent
-    /// there most (half their share spent or more) wait for it.
-    fn address(&self, tag: &[u8; 32], ip: IpAddr) -> Option<Duration> {
+    /// address's budget, unless host at the address is closed for
+    /// everyone; the wait. When the address's budget is spent, only the
+    /// groups that sent there most (half their share spent or more) wait
+    /// for it.
+    fn address(&self, tag: &[u8; 32], host: &str, ip: IpAddr) -> Option<Duration> {
         let now = Instant::now();
         let ipb = ip_bytes(ip);
         let ka = key(b"address", &[&ipb]);
+        let kc = key(b"closed", &[&ipb, host.to_ascii_lowercase().as_bytes()]);
         let ks = key(b"share", &[tag, &ipb]);
         let payer = share(tag);
         let mut b = self.lock();
-        if let Some(w) = waiting(&mut b.closed, &ka, now) {
+        if let Some(w) = waiting(&mut b.closed, &kc, now) {
             return Some(w);
         }
         if let Some(w) = take(&mut b.shares, ks, payer, PER_TAG_ADDRESS, now) {
@@ -397,14 +402,16 @@ impl UnifiedPush {
     }
 
     /// The host at ip answered the group 429 with wait d: the group leaves
-    /// the host alone that long; the address closes for everyone (five
-    /// minutes at most) once three groups were told so within ten minutes.
+    /// the host alone that long; that name at that address closes for
+    /// everyone (five minutes at most) once three groups were told so
+    /// within ten minutes. Other names at the address go on.
     fn told_to_wait(&self, tag: &[u8; 32], host: &str, ip: IpAddr, d: Duration) {
         let now = Instant::now();
         let ipb = ip_bytes(ip);
         let payer = share(tag);
-        let kw = key(b"host", &[tag, host.to_ascii_lowercase().as_bytes()]);
-        let ka = key(b"address", &[&ipb]);
+        let host = host.to_ascii_lowercase();
+        let kw = key(b"host", &[tag, host.as_bytes()]);
+        let ka = key(b"closed", &[&ipb, host.as_bytes()]);
         let mut b = self.lock();
         b.waits.insert(kw, now + d, payer, |u| *u <= now);
         if b.told.get(&ka).is_none() {
@@ -521,7 +528,7 @@ impl Platform for UnifiedPush {
         // Resolved once: the address checked is the one connected to.
         let addrs = resolve_within(&self.resolve, &host, DEADLINE / 2);
         let Some(addr) = pick(addrs, &*self.allowed) else { return Outcome::NoPath };
-        if let Some(wait) = self.address(&d.tag, addr.ip()) {
+        if let Some(wait) = self.address(&d.tag, &host, addr.ip()) {
             return Outcome::Later(wait);
         }
         let secret = p256::SecretKey::from_bytes(&cbb_core::certs::random_bytes::<32>().into());
@@ -753,25 +760,25 @@ mod tests {
         let ip: IpAddr = "93.184.216.34".parse().unwrap();
         // One group's share of the address: its burst, then it waits.
         for _ in 0..PER_TAG_ADDRESS.1 as usize {
-            assert!(up.address(&[1; 32], ip).is_none());
+            assert!(up.address(&[1; 32], "up.example.org", ip).is_none());
         }
-        assert!(up.address(&[1; 32], ip).is_some());
+        assert!(up.address(&[1; 32], "up.example.org", ip).is_some());
         // Enough groups to spend the address's budget for every group...
         let groups = (PER_ADDRESS.1 / PER_TAG_ADDRESS.1) as u8;
         for g in 2..2 + groups {
             for _ in 0..PER_TAG_ADDRESS.1 as usize {
-                let _ = up.address(&[g; 32], ip);
+                let _ = up.address(&[g; 32], "up.example.org", ip);
             }
         }
         // ...and a group that has not sent there still goes, while one that
         // sent most waits.
-        assert!(up.address(&[200; 32], ip).is_none());
+        assert!(up.address(&[200; 32], "up.example.org", ip).is_none());
         let mut heavy = [7u8; 32];
         heavy[0] = 201;
         for _ in 0..(PER_TAG_ADDRESS.1 / 2.0) as usize + 1 {
-            let _ = up.address(&heavy, ip);
+            let _ = up.address(&heavy, "up.example.org", ip);
         }
-        assert!(up.address(&heavy, ip).is_some());
+        assert!(up.address(&heavy, "up.example.org", ip).is_some());
     }
 
     #[test]
@@ -783,21 +790,28 @@ mod tests {
         assert!(up.budget(&[9; 32], "MINE.example").is_some_and(|w| w > Duration::from_secs(86_000)));
         // The phone's group, at its distributor's name at that address: goes.
         assert!(up.budget(&[1; 32], "up.example.org").is_none());
-        assert!(up.address(&[1; 32], ip).is_none());
+        assert!(up.address(&[1; 32], "up.example.org", ip).is_none());
         // Even at that same name, another group goes.
         assert!(up.budget(&[2; 32], "mine.example").is_none());
-        // Three groups told within ten minutes close the address for
-        // everyone, for five minutes at most.
+        // Three groups of one maker, each told 429 by a name of its own at
+        // that address: the phone's distributor's name there goes on.
         up.told_to_wait(&[10; 32], "a.example", ip, Duration::from_secs(86_400));
         up.told_to_wait(&[11; 32], "b.example", ip, Duration::from_secs(86_400));
-        let w = up.address(&[1; 32], ip).expect("closed");
+        assert!(up.address(&[1; 32], "up.example.org", ip).is_none());
+        assert!(up.address(&[1; 32], "a.example", ip).is_none(), "two groups at a name close nothing");
+        // Three groups told by the same name within ten minutes close that
+        // name at that address for everyone, for five minutes at most.
+        up.told_to_wait(&[13; 32], "a.example", ip, Duration::from_secs(86_400));
+        up.told_to_wait(&[14; 32], "a.example", ip, Duration::from_secs(86_400));
+        let w = up.address(&[1; 32], "a.example", ip).expect("closed");
         assert!(w <= ADDRESS_WAIT_MAX && w > ADDRESS_WAIT_MAX - Duration::from_secs(5), "{w:?}");
+        assert!(up.address(&[1; 32], "up.example.org", ip).is_none(), "another name is not closed");
         // One group told three times is one group.
         let other: IpAddr = "93.184.216.35".parse().unwrap();
         for _ in 0..3 {
             up.told_to_wait(&[12; 32], "c.example", other, Duration::from_secs(86_400));
         }
-        assert!(up.address(&[1; 32], other).is_none());
+        assert!(up.address(&[1; 32], "c.example", other).is_none());
     }
 
     #[test]
@@ -808,12 +822,12 @@ mod tests {
         for i in 0..TABLE_MAX as u32 {
             assert!(up.budget(&[1; 32], &format!("n{i}.example")).is_none());
             let ip = IpAddr::from(std::net::Ipv4Addr::from(0x5d00_0000 + i));
-            assert!(up.address(&[1; 32], ip).is_none());
+            assert!(up.address(&[1; 32], "up.example.org", ip).is_none());
         }
         // A group that has not sent in this hour goes, to a name and an
         // address not among them.
         assert!(up.budget(&[2; 32], "up.example.org").is_none());
-        assert!(up.address(&[2; 32], "203.0.113.200".parse().unwrap()).is_none());
+        assert!(up.address(&[2; 32], "up.example.org", "203.0.113.200".parse().unwrap()).is_none());
         let b = up.lock();
         assert_eq!((b.hosts.len(), b.shares.len(), b.addresses.len()), (TABLE_MAX, TABLE_MAX, TABLE_MAX));
     }

@@ -84,11 +84,12 @@ impl<V> Shared<V> {
     /// Files `v` under `k`: an entry already there keeps its payer; a new
     /// one in a full table first makes room (after `stale` had its say).
     pub(super) fn insert(&mut self, k: [u8; 32], v: V, payer: Payer, stale: impl Fn(&V) -> bool) {
-        self.insert_keeping(k, v, payer, stale, |_| false);
+        self.insert_keeping(k, v, payer, stale, |_| false, |_| 0);
     }
 
     /// As `insert`, and when room is made the payer that gives way loses
-    /// an entry `keep` does not hold to before one it does.
+    /// an entry `keep` does not hold to before one it does (its oldest),
+    /// and of those it holds to, the one `used` says was used longest ago.
     pub(super) fn insert_keeping(
         &mut self,
         k: [u8; 32],
@@ -96,6 +97,7 @@ impl<V> Shared<V> {
         payer: Payer,
         stale: impl Fn(&V) -> bool,
         keep: impl Fn(&V) -> bool,
+        used: impl Fn(&V) -> u64,
     ) {
         if let Some(e) = self.map.get_mut(&k) {
             e.v = v;
@@ -105,7 +107,7 @@ impl<V> Shared<V> {
             self.prune(stale);
         }
         while self.map.len() >= self.cap.max(1) {
-            if !self.evict_one(&keep) {
+            if !self.evict_one(&keep, &used) {
                 break;
             }
         }
@@ -123,8 +125,9 @@ impl<V> Shared<V> {
     }
 
     /// Drops an entry of the payer with the most entries: its oldest that
-    /// `keep` does not hold to, else its oldest.
-    fn evict_one(&mut self, keep: &dyn Fn(&V) -> bool) -> bool {
+    /// `keep` does not hold to, else the one `used` says was used longest
+    /// ago (the oldest among equals).
+    fn evict_one(&mut self, keep: &dyn Fn(&V) -> bool, used: &dyn Fn(&V) -> u64) -> bool {
         let Some(payer) = self.counts.iter().max_by_key(|(p, n)| (**n, **p)).map(|(p, _)| *p) else { return false };
         let loose = self.order.get(&payer).and_then(|q| {
             q.iter()
@@ -132,6 +135,18 @@ impl<V> Shared<V> {
                 .map(|(k, _)| *k)
         });
         if let Some(k) = loose {
+            self.remove(&k);
+            return true;
+        }
+        let idle = self.order.get(&payer).and_then(|q| {
+            q.iter()
+                .filter_map(|(k, s)| {
+                    self.map.get(k).filter(|e| e.serial == *s && e.payer == payer).map(|e| (used(&e.v), e.serial, *k))
+                })
+                .min()
+                .map(|(_, _, k)| k)
+        });
+        if let Some(k) = idle {
             self.remove(&k);
             return true;
         }
@@ -200,16 +215,31 @@ mod tests {
         let (home, other): (Payer, Payer) = ([1; 16], [2; 16]);
         let mut t: Shared<bool> = Shared::new(8);
         // The home's one confirmed entry, oldest of all.
-        t.insert_keeping(k(0), true, home, |_| false, |v| *v);
+        t.insert_keeping(k(0), true, home, |_| false, |v| *v, |_| 0);
         for i in 1..4 {
-            t.insert_keeping(k(i), true, other, |_| false, |v| *v);
+            t.insert_keeping(k(i), true, other, |_| false, |v| *v, |_| 0);
         }
         // More from the home, unconfirmed, until it is the fullest payer.
         for i in 10..20 {
-            t.insert_keeping(k(i), false, home, |_| false, |v| *v);
+            t.insert_keeping(k(i), false, home, |_| false, |v| *v, |_| 0);
         }
         assert_eq!(t.get(&k(0)), Some(&true), "the confirmed entry stays while there are others to lose");
         assert_eq!((1..4).filter(|i| t.get(&k(*i)).is_some()).count(), 3);
         assert_eq!(t.len(), 8);
+    }
+
+    #[test]
+    fn of_the_entries_it_holds_to_the_payer_loses_the_one_used_longest_ago() {
+        let mut t: Shared<(bool, u64)> = Shared::new(4);
+        let p = [1; 16];
+        // The phone's binding filed first and still used now; three others
+        // filed after it and not used since.
+        t.insert_keeping(k(0), (true, 1000), p, |_| false, |v| v.0, |v| v.1);
+        for i in 1..4 {
+            t.insert_keeping(k(i), (true, i as u64), p, |_| false, |v| v.0, |v| v.1);
+        }
+        t.insert_keeping(k(9), (true, 2000), p, |_| false, |v| v.0, |v| v.1);
+        assert!(t.get(&k(0)).is_some(), "the one in use stays");
+        assert!(t.get(&k(1)).is_none(), "the one idle longest goes");
     }
 }

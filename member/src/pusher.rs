@@ -19,8 +19,8 @@
 //!   opened or closed;
 //! - [`Sender::renewals`]: when a peer's member connection opens, the
 //!   `push-renew` messages (t 29) to send it, one per group in which the
-//!   service found its registration stale, so that its app registers
-//!   again there;
+//!   service found its registration stale or ahead, so that its app
+//!   registers again there;
 //! - [`Sender::copy`]: a copy was made here or received, with its readers
 //!   and how to make the body for one reader (`cbb_core::push::copy_body`,
 //!   None for a device the copy is not sealed to);
@@ -28,7 +28,10 @@
 //!   33's events), with the record's own time;
 //! - [`Faces`]: how the member gives the sender, per group, the push
 //!   service's address and pin, its server key for the service's face and
-//!   the face's hubs' and members' credentials;
+//!   the face's hubs' and members' credentials: the current period's face
+//!   first, and the previous period's while [`Sender::needs_face`] says a
+//!   registration still names it (the one thing of an ended period a member
+//!   keeps, for push only, docs/design.md "Push");
 //! - [`Saved`]: where the registrations are kept across a restart, in the
 //!   group's section of the member's state.
 //!
@@ -53,8 +56,14 @@
 //! service answers `stale` (an older registration than one it saw, or a
 //! send key the token's confirmed binding does not take) is dropped, the
 //! registration kept, and the phone is asked to register again at its next
-//! connection; one answered `key` (a send key algorithm the service does
-//! not take) is dropped.
+//! connection; one answered `ahead` (its number more than a day past the
+//! service's clock) the same, the renewal saying `ahead`, after which this
+//! sender takes the phone's next registration for that group whatever its
+//! number, once (rule S-1); one answered `key` (a send key algorithm the
+//! service does not take) is dropped. A registration names the group's face
+//! toward the service in the period it was made: it is sent under that
+//! face only. Under a face this member no longer has, or one past its
+//! expiry, nothing goes, and the phone is asked to register again.
 
 use std::collections::{BTreeMap, HashMap};
 use std::net::SocketAddr;
@@ -69,17 +78,22 @@ use cbb_core::records::key::{DeviceId, GroupId};
 use crate::push::{Client, ServerKey};
 
 /// The push service of a group's face: where it is, its pin, this device's
-/// server key for the face and the face's hubs' and members' credentials.
+/// server key for the face, the face's hubs' and members' credentials, the
+/// face's tag and when its credentials expire (Unix milliseconds).
 pub struct Face {
     pub addr: SocketAddr,
     pub pin: [u8; 32],
     pub key: Arc<ServerKey>,
     pub credentials: Vec<Vec<u8>>,
+    pub tag: [u8; 16],
+    pub expires_ms: u64,
 }
 
-/// The member gives the sender each group's face (it changes each period).
+/// The member gives the sender each group's faces (they change each
+/// period): the current one, and the previous one while
+/// [`Sender::needs_face`] says so and its credentials have not expired.
 pub trait Faces: Send + Sync {
-    fn face(&self, group: &GroupId) -> Option<Face>;
+    fn faces(&self, group: &GroupId) -> Vec<Face>;
 }
 
 /// Where the registrations are kept: the group's section of the member's
@@ -120,6 +134,7 @@ struct Job {
     send_sig: Vec<u8>,
     seq: u64,
     slot: [u8; 16],
+    face: [u8; 16],
     challenge: Option<[u8; 16]>,
     at: Instant,
     tries: u32,
@@ -130,10 +145,14 @@ struct State {
     regs: BTreeMap<(GroupId, DeviceId), Registration>,
     connected: HashMap<DeviceId, usize>,
     jobs: Vec<Job>,
-    /// The registrations the service found stale, by their slot: the phone
-    /// is asked to register again.
-    renew: BTreeMap<(GroupId, DeviceId), [u8; 16]>,
-    clients: HashMap<GroupId, Client>,
+    /// The registrations the service found stale (false) or ahead (true),
+    /// by their slot: the phone is asked to register again.
+    renew: BTreeMap<(GroupId, DeviceId), ([u8; 16], bool)>,
+    /// The phones told `ahead`: the next registration of each in the group
+    /// is taken whatever its number, once.
+    restart: std::collections::BTreeSet<(GroupId, DeviceId)>,
+    /// One connection per group and face.
+    clients: HashMap<(GroupId, [u8; 16]), Client>,
     stop: bool,
 }
 
@@ -181,9 +200,11 @@ impl Sender {
         }
         let Ok(r) = Registration::read(msg) else { return };
         let mut st = self.lock();
-        let now =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64);
-        if st.regs.get(&(*group, *device)).is_some_and(|old| !old.replaced_by(&r, now)) {
+        let key = (*group, *device);
+        // Rule S-1: a higher number; a lower one only once after this
+        // member told the phone `ahead`.
+        let restart = st.restart.remove(&key);
+        if !restart && st.regs.get(&key).is_some_and(|old| !old.replaced_by(&r)) {
             return;
         }
         if r.on.is_none() {
@@ -200,15 +221,28 @@ impl Sender {
 
     /// The `push-renew` frames for `device`, whose member connection just
     /// opened: one for each group where the service found its registration
-    /// stale. Each is given once.
+    /// stale or ahead. Each is given once; after one that says `ahead`, the
+    /// phone's next registration in that group is taken whatever its
+    /// number.
     pub fn renewals(&self, device: &DeviceId) -> Vec<(GroupId, Vec<u8>)> {
         let mut st = self.lock();
-        let due: Vec<(GroupId, [u8; 16])> =
-            st.renew.iter().filter(|((_, d), _)| d == device).map(|((g, _), s)| (*g, *s)).collect();
-        for (g, _) in &due {
+        let due: Vec<(GroupId, [u8; 16], bool)> =
+            st.renew.iter().filter(|((_, d), _)| d == device).map(|((g, _), (s, a))| (*g, *s, *a)).collect();
+        for (g, _, ahead) in &due {
             st.renew.remove(&(*g, *device));
+            if *ahead {
+                st.restart.insert((*g, *device));
+            }
         }
-        due.into_iter().map(|(g, s)| (g, push::renew(&s))).collect()
+        due.into_iter().map(|(g, s, a)| (g, push::renew(&s, a))).collect()
+    }
+
+    /// Whether a registration held for `group` still names the face with
+    /// `tag`: the member keeps the previous period's face (its server key
+    /// and credentials) for push only while this holds and its credentials
+    /// have not expired, and drops it then.
+    pub fn needs_face(&self, group: &GroupId, tag: &[u8; 16]) -> bool {
+        self.lock().regs.iter().any(|((g, _), r)| g == group && r.on.as_ref().is_some_and(|o| &o.face == tag))
     }
 
     /// A device was removed or frozen: its registration goes.
@@ -217,6 +251,7 @@ impl Sender {
         st.regs.remove(&(*group, *device));
         st.jobs.retain(|j| !(j.group == *group && j.phone == *device));
         st.renew.remove(&(*group, *device));
+        st.restart.remove(&(*group, *device));
         self.inner.saved.save(group, device, None);
     }
 
@@ -261,6 +296,7 @@ impl Sender {
             send_sig: on.send_sig.clone(),
             seq: r.seq,
             slot: on.slot,
+            face: on.face,
             challenge: on.challenge,
             at: Instant::now() + WAIT,
             tries: 0,
@@ -351,11 +387,18 @@ impl Inner {
             if st.connected.contains_key(&job.phone) {
                 continue;
             }
-            // The connection to the service, made outside the lock.
-            let client = st.clients.remove(&job.group);
+            // The connection to the service under the face the registration
+            // names, made outside the lock.
+            let client = st.clients.remove(&(job.group, job.face));
             drop(st);
-            let mut client = client.or_else(|| {
-                let f = self.faces.face(&job.group)?;
+            // The face is looked up for every body, a kept connection too:
+            // one past its expiry, or no longer given, sends nothing more.
+            let now =
+                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64);
+            let face = self.faces.faces(&job.group).into_iter().find(|f| f.tag == job.face && f.expires_ms > now);
+            let gone_face = face.is_none();
+            let mut client = if gone_face { None } else { client }.or_else(|| {
+                let f = face?;
                 let refs: Vec<&[u8]> = f.credentials.iter().map(Vec::as_slice).collect();
                 match Client::connect(f.addr, f.pin, f.key, &refs) {
                     Ok(c) => Some(c),
@@ -365,6 +408,16 @@ impl Inner {
                     }
                 }
             });
+            if gone_face {
+                // A face this member no longer has, or past its expiry: the
+                // phone registers under the current one when it connects.
+                st = self.state.lock().unwrap_or_else(|e| e.into_inner());
+                let key = (job.group, job.phone);
+                if st.regs.get(&key).is_some_and(|r| r.seq == job.seq) {
+                    st.renew.entry(key).or_insert((job.slot, false));
+                }
+                continue;
+            }
             let result = client.as_mut().map(|c| {
                 c.send(push::Send {
                     n: 0,
@@ -383,7 +436,7 @@ impl Inner {
             let retry = match result {
                 Some(Ok(sent)) => {
                     if let Some(c) = client {
-                        st.clients.insert(job.group, c);
+                        st.clients.insert((job.group, job.face), c);
                     }
                     match sent.status {
                         // Sent, or a repeat of what another sender sent; or
@@ -392,10 +445,10 @@ impl Inner {
                         push::SENT | push::SENT_REPEAT | push::SENT_KEY => None,
                         // An older registration than one the service saw:
                         // the phone registers again when it next connects.
-                        push::SENT_STALE => {
+                        push::SENT_STALE | push::SENT_AHEAD => {
                             let key = (job.group, job.phone);
                             if st.regs.get(&key).is_some_and(|r| r.seq == job.seq) {
-                                st.renew.insert(key, job.slot);
+                                st.renew.insert(key, (job.slot, sent.status == push::SENT_AHEAD));
                             }
                             None
                         }

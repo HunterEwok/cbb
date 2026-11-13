@@ -104,19 +104,21 @@ pub fn message(token: &[u8], body: Option<&[u8]>, challenge: Option<&[u8; 24]>, 
     Some(m.to_string())
 }
 
-/// What an answer from FCM means.
+/// What an answer from FCM means. Only FCM's own `UNREGISTERED` says the
+/// token is gone; any other 404 (a project ID that is not the service's, a
+/// path mistyped, an answer that is not FCM's) or a sender mismatch is the
+/// service's own setting, and a wrong setting must not drop every Android
+/// phone's binding: those are tried later.
 pub fn outcome(a: &Answer) -> Outcome {
     let v = serde_json::from_slice::<serde_json::Value>(&a.body).unwrap_or_default();
-    let code = v["error"]["details"]
-        .as_array()
-        .and_then(|d| d.iter().find_map(|x| x["errorCode"].as_str()))
-        .or_else(|| v["error"]["status"].as_str())
-        .unwrap_or_default();
+    let detail = v["error"]["details"].as_array().and_then(|d| d.iter().find_map(|x| x["errorCode"].as_str()));
+    let code = detail.or_else(|| v["error"]["status"].as_str()).unwrap_or_default();
     match (a.status, code) {
         (Some(200), _) => Outcome::Sent,
-        (_, "UNREGISTERED" | "SENDER_ID_MISMATCH") | (Some(404), _) => Outcome::Gone,
+        (_, "UNREGISTERED") => Outcome::Gone,
         (_, "QUOTA_EXCEEDED") | (Some(429), _) => Outcome::Later(Duration::from_secs(60)),
         (Some(401), _) => Outcome::Later(Duration::from_secs(5)),
+        (Some(404), _) | (_, "SENDER_ID_MISMATCH") => Outcome::Later(Duration::from_secs(600)),
         _ => Outcome::Later(Duration::from_secs(30)),
     }
 }
@@ -272,8 +274,12 @@ mod tests {
         assert_eq!(outcome(&a(Some(200), r#"{"name":"projects/p/messages/1"}"#)), Outcome::Sent);
         let gone = r#"{"error":{"code":404,"status":"NOT_FOUND","details":[{"errorCode":"UNREGISTERED"}]}}"#;
         assert_eq!(outcome(&a(Some(404), gone)), Outcome::Gone);
+        // The service's own setting wrong: the token stays.
         let other = r#"{"error":{"code":403,"details":[{"errorCode":"SENDER_ID_MISMATCH"}]}}"#;
-        assert_eq!(outcome(&a(Some(403), other)), Outcome::Gone);
+        assert_eq!(outcome(&a(Some(403), other)), Outcome::Later(Duration::from_secs(600)));
+        let path = r#"{"error":{"code":404,"message":"Requested entity was not found.","status":"NOT_FOUND"}}"#;
+        assert_eq!(outcome(&a(Some(404), path)), Outcome::Later(Duration::from_secs(600)));
+        assert_eq!(outcome(&a(Some(404), "<html>Not Found</html>")), Outcome::Later(Duration::from_secs(600)));
         let quota = r#"{"error":{"code":429,"details":[{"errorCode":"QUOTA_EXCEEDED"}]}}"#;
         assert_eq!(outcome(&a(Some(429), quota)), Outcome::Later(Duration::from_secs(60)));
         assert_eq!(outcome(&a(Some(503), "")), Outcome::Later(Duration::from_secs(30)));

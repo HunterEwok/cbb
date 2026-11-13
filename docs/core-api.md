@@ -346,7 +346,7 @@ the core's.
 | `bug_pending` | `state`, `now_ms` | `{"queue", "state"}`: the reports waiting (`[{fingerprint, version, post, at_ms}]`), without those older than seven days |
 | `push_key` | none | `{"key", "send_key", "slot"}`, base64: a new push key (32 random bytes), send key (P-256, PKCS #8) and slot (16 random bytes). The push key and the slot are one per group, the push key drawn again after a membership change and the slot kept; the send key is one per token for every group, drawn again with each new token (see "Push") |
 | `push_limits` | `env` (the platform, as the env registry numbers it) | `{"known", "body", "token", "kinds"}`: whether this core knows the platform, the size of its sealed bodies, the longest token, the bits of `kinds` it defines; the apps hold no number of the format |
-| `push_registration` | `now_ms` (the phone's clock), `saved_seq` (the last seq the app saved, left out when none), `kinds` (0 turns push off), and with `kinds` ≠ 0 `env`, `key` (the push key, base64), `send_key` (the token's send key from `push_key`, base64), `slot` (the group's, base64), `challenge` (the last one the push service sent for this send key, base64, left out when none) and either `token` (base64, as the platform gave it) or `unifiedpush` (`{url, p256dh, auth}`, the last two base64) | `{"frame", "seq", "key_hint"}`: message `push` (t 28) as a frame, base64, for every member connection of the group, signed with the send key; its seq, max(`saved_seq` + 1, `now_ms`), which the app saves before it sends the frame, so that a phone restored from a backup still moves forward, or `now_ms` when `saved_seq` is more than a day ahead of it (saved while the clock was ahead, which the service would refuse; the answer then also has `"ahead": true`, and members take the lower number by their own clock); and with push on the send key's hint (the first 8 bytes of its hash, base64), which the push service puts beside each challenge. Code 18 when a field breaks its row (a UnifiedPush endpoint that is not `https` on port 443 with a DNS name, a key not 32 bytes, a slot or challenge not 16) |
+| `push_registration` | `now_ms` (the phone's clock), `highest_seq` (the highest seq the app ever gave this group's registrations, left out when none), `restart` (true once after a member's `push-renew` said `ahead`), `kinds` (0 turns push off), and with `kinds` ≠ 0 `env`, `key` (the push key, base64), `send_key` (the token's send key from `push_key`, base64), `slot` (the group's, base64), `face` (the group's face for the push service: the `group` of its hubs credential, base64, 16 bytes), `challenge` (the last one the push service sent for this send key, base64, left out when none) and either `token` (base64, as the platform gave it) or `unifiedpush` (`{url, p256dh, auth}`, the last two base64) | `{"frame", "seq", "highest", "key_hint"}`: message `push` (t 28) as a frame, base64, for every member connection of the group, signed with the send key over [env, token, slot, face, seq] and the challenge when there is one; its seq, max(`highest_seq` + 1, `now_ms`), so that a phone restored from a backup still moves forward, or `now_ms` with `restart` (the service found the number more than a day ahead of its clock, and the member that said so takes this one registration whatever its number); `highest`, the larger of `highest_seq` and seq, which the app saves before it sends the frame; and with push on the send key's hint (the first 8 bytes of its hash, base64), which the push service puts beside each challenge. Code 18 when a field breaks its row (a UnifiedPush endpoint that is not `https` on port 443 with a DNS name, a key not 32 bytes, a slot, face or challenge not 16, push on without `face`) |
 | `push_open` | `keys` (`[{key, seq}]`: the group's push keys the phone holds, the current one first), `body` (base64, the sealed body as the notification carries it), `me` (the phone's device ID), `origins` (`[{key, rights, frozen}]`: the devices the app last saved, each member key as the records encode it, base64), `sealing` (`[{epoch, secret}]`: the phone's sealing secrets of the epochs in the group's window), `too_old`, `halted`, `hints_only` (booleans; one left out gives the neutral `hint`: `halted` opens nothing, `hints_only` after an event of removal, a new root or a stop until the app has applied it and drawn a new push key), `now_ms` and `window_ms` (the extension's clock and how old a copy may be) | `{"kind", "key_index", ...}`: `copy` with `id`, `origin`, `type` (`text`, `media`, `files` or `other`), `secret`, `ttl_ms` and `text` once the origin, its signature and `commit` hold and the copy is within the window; `waits` with `id` and `origin` when the copy did not fit, does not open here or is older; `event` with `id`, `event`, `device`, `time_ms` for an event less than a day old; `hint` for anything else. Only `copy` states a fact; the rest the app shows as "open the app". The extension keeps the IDs it showed and shows none twice. Code 18 when no key opens the body |
 
 The arguments of `evaluate` are a case of `testdata/interop/v2-records.json` as it is.
@@ -419,7 +419,8 @@ On the members the sender is `member/src/pusher.rs`, and the project's push serv
 head of `pusher.rs`: `registration` (message `push` arrived from the device itself),
 `connected` and `left` (a peer's member connection opened or closed), `renewals` (the
 `push-renew` messages, t 29, to send a peer whose connection opened: one per group where the
-service found its registration stale), `forget` (a device removed or frozen), `copy` (with the copy's readers and `cbb_core::push::copy_body` for each),
+service found its registration stale, with `ahead` when it found its number more than a day past
+its clock), `forget` (a device removed or frozen), `copy` (with the copy's readers and `cbb_core::push::copy_body` for each),
 `event`, and the traits `Faces` (the push service's address, pin, server key and credentials
 of the group's face) and `Saved` (where the registrations are kept).
 
@@ -431,7 +432,7 @@ and a second send of a body still on its way is answered `failed` with a short w
 platform never loses a body. A repeat does not outlive a restart of the service.
 
 The phone keeps one send key per token, for all its groups, and draws a slot (16 random bytes,
-never the group's ID) per group; the send key signs [env, token, slot, seq], and the last
+never the group's ID) per group; the send key signs [env, token, slot, face, seq], and the last
 challenge the service sent to the token when the phone has one. The service keeps, per token, a
 binding (`member/src/pushd/binding.rs`), across restarts (the state file and its journal, written
 before a send that changed a binding is answered `sent`, a send whose change could not be written
@@ -454,17 +455,23 @@ answered `failed` with a wait; a missing state file stops a start that is not th
   binding only by confirming it, never by time. A member that binds first so causes no refusal
   of the phone's own sends, only the wait until the phone confirms.
 - The highest seq is kept per key and slot, so one group's registration never silences
-  another's; a seq more than a day ahead of the service's clock is refused. A member keeps the
-  highest seq a device registered with, and takes a lower one only when, by its own clock, the
-  one it holds is more than a day ahead and the newer one within a day
-  (`Registration::replaced_by`).
+  another's; a seq more than a day ahead of the service's clock is refused with `ahead` (8). A
+  member keeps the highest seq a device registered with (`Registration::replaced_by`), and after
+  an `ahead` it sends that device `push-renew` with `ahead` and takes the device's next
+  registration whatever its number, once. A reader that does not know a status maps it to
+  `failed`, retried after 30 s, at most five tries per body.
+- The service holds a registration to the face of the connection it came on: the signature
+  covers the face, and a registration signed for another face is refused. A member keeps the
+  previous face's key and credentials for push only, and only for registrations that name it,
+  until they expire or the phone registers under the new face.
 
 A send key of an algorithm the service does not take is answered `key` (6), and the sender drops
 it; one answered `stale` is dropped too, and the phone is sent `push-renew` with the
 registration's slot at its next connection, so its app registers again. Until the first send
 under a new seq, the old seq passes, and its bodies open nothing. Every send costs its tag's
 budget, a refused one too, and the service closes a connection after eight refusals. What goes
-to one token is budgeted per group: under the confirmed key; while no key is confirmed, a small
+to one token is budgeted per group: under the confirmed key, with one ceiling for every group
+together; while no key is confirmed, a small
 rate per group and one ceiling for every group together, past which a group's send carries only
 its challenge, alone; and challenges alone. The tables
 everyone shares give each payer (an address, an IPv6 /64, an IPv4 client on an IPv6 socket read
