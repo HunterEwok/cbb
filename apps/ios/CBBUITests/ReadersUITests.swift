@@ -52,19 +52,24 @@ final class ReadersUITests: XCTestCase {
         add(a)
     }
 
+    /// The app's element tree without the addresses its lines name each
+    /// element by, which can change between snapshots of the same element.
+    private func plainTree(_ app: XCUIApplication) -> String {
+        let address = try! NSRegularExpression(pattern: "0x[0-9a-fA-F]+")
+        let d = app.debugDescription
+        return address.stringByReplacingMatches(in: d, range: NSRange(d.startIndex..., in: d), withTemplate: "")
+    }
+
+    /// When the audit running now began (a measurement of the runner).
+    private var auditBegan = Date()
+
     /// Waits until the screen has stopped changing: its element tree, every
     /// element's frame and text, the same in three snapshots in a row a
     /// third of a second apart. A screen still laying out or animating in
     /// gives the audit a picture of nothing a person sees, so a screen that
     /// does not settle in 20 seconds fails rather than being audited.
     private func settle(_ app: XCUIApplication, _ screen: String) {
-        // The tree's lines name each element by an address that can change
-        // between snapshots of the same element.
-        let address = try! NSRegularExpression(pattern: "0x[0-9a-fA-F]+")
-        func tree() -> String {
-            let d = app.debugDescription
-            return address.stringByReplacingMatches(in: d, range: NSRange(d.startIndex..., in: d), withTemplate: "")
-        }
+        func tree() -> String { plainTree(app) }
         let start = Date()
         let deadline = start.addingTimeInterval(20)
         var last = tree()
@@ -93,8 +98,25 @@ final class ReadersUITests: XCTestCase {
     /// sizes. Contrast is measured on the screen's picture (`contrast`).
     private func audit(_ app: XCUIApplication, _ types: XCUIAccessibilityAuditType, _ screen: String) {
         settle(app, screen)
+        let before = plainTree(app)
+        auditBegan = Date()
+        defer {
+            // A measurement of the runner: did the screen change while the
+            // audit ran?
+            let after = plainTree(app)
+            let took = String(format: "%.1f", Date().timeIntervalSince(auditBegan))
+            if before == after {
+                print("AUDIT-TREE \(screen): unchanged during the audit (\(took) s)")
+            } else {
+                let b = Set(before.split(separator: "\n")), a = Set(after.split(separator: "\n"))
+                print("AUDIT-TREE \(screen): CHANGED during the audit (\(took) s): \(b.subtracting(a).count) lines gone, \(a.subtracting(b).count) new")
+                for line in b.subtracting(a).prefix(15) { print("AUDIT-TREE - \(line)") }
+                for line in a.subtracting(b).prefix(15) { print("AUDIT-TREE + \(line)") }
+            }
+        }
         do {
             try app.performAccessibilityAudit(for: types) { issue in
+                print("AUDIT-ISSUE \(screen) at +\(String(format: "%.1f", Date().timeIntervalSince(self.auditBegan))) s: \(issue.compactDescription) on \(issue.element.map { "\($0.elementType.rawValue) '\($0.label)' \($0.frame)" } ?? "no element")")
                 self.trace(app, issue, screen)
                 guard let e = issue.element else {
                     self.fail("\(screen): \(issue.compactDescription) on no element: \(issue.detailedDescription)",
@@ -287,61 +309,49 @@ final class ReadersUITests: XCTestCase {
         }
     }
 
-    /// Whether this run of the test bundle has warmed the screens up yet.
-    private static var warmedUp = false
-
-    /// A measurement of the runner, not to be merged: before the first
-    /// iteration, walks the same screens at the largest text and runs the
-    /// same audit on each once, its issues only printed (WARMUP-ISSUE), so
-    /// the fonts and the screens are drawn once on the fresh simulator
-    /// before the audits that count.
-    private func warmUpLargestText() {
-        if Self.warmedUp { return }
-        Self.warmedUp = true
-        let start = Date()
-        for language in Self.largestText {
-            let app = launch(language: language, extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
-            XCTAssertTrue(app.buttons[tr("Create a group", language)].waitForExistence(timeout: 30))
-            warmUpAudit(app, "the Start screen in \(language)")
-            app.buttons[tr("Settings", language)].tap()
-            XCTAssertTrue(app.navigationBars[tr("Settings", language)].waitForExistence(timeout: 10))
-            warmUpAudit(app, "Settings in \(language)")
-            app.terminate()
-        }
-        print("ReadersUITests: warmed up in \(String(format: "%.1f", Date().timeIntervalSince(start))) s")
-    }
-
-    private func warmUpAudit(_ app: XCUIApplication, _ screen: String) {
-        settle(app, "warm-up: \(screen)")
-        do {
-            try app.performAccessibilityAudit(for: [.textClipped, .dynamicType]) { issue in
-                var on = "no element"
-                if let e = issue.element {
-                    on = "\(e.elementType.rawValue) '\(e.label)' at \(e.frame) hittable \(e.isHittable)"
-                }
-                print("WARMUP-ISSUE \(screen): \(issue.compactDescription) on \(on)")
-                return true
-            }
-        } catch {
-            print("WARMUP-ISSUE \(screen): \(error)")
-        }
-    }
-
     /// U16: at the largest accessibility text size, in English, in
     /// Swahili, among the longest of the eight, and in Hindi, the tallest
     /// script, no text is clipped and the screens follow Dynamic Type.
     func testLargestText() {
-        warmUpLargestText()
         for language in Self.largestText {
-            let app = launch(language: language, extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
-            XCTAssertTrue(app.buttons[tr("Create a group", language)].waitForExistence(timeout: 30))
-            picture("start-\(language)-largest-text")
-            audit(app, [.textClipped, .dynamicType], "the Start screen in \(language) at the largest text")
-            app.buttons[tr("Settings", language)].tap()
-            XCTAssertTrue(app.navigationBars[tr("Settings", language)].waitForExistence(timeout: 10))
-            picture("settings-\(language)-largest-text")
-            audit(app, [.textClipped, .dynamicType], "Settings in \(language) at the largest text")
-            app.terminate()
+            // A measurement of the runner, not to be merged: Settings with
+            // its refresh every two seconds and without it, each audited
+            // as it opens and with Notifications in the middle.
+            for refresh in [true, false] {
+                let label = refresh ? "refresh on" : "refresh off"
+                let app = launch(language: language, extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] + (refresh ? [] : ["-CBBMeasureNoRefresh"]))
+                XCTAssertTrue(app.buttons[tr("Create a group", language)].waitForExistence(timeout: 30))
+                if refresh {
+                    picture("start-\(language)-largest-text")
+                    audit(app, [.textClipped, .dynamicType], "the Start screen in \(language) at the largest text")
+                }
+                app.buttons[tr("Settings", language)].tap()
+                XCTAssertTrue(app.navigationBars[tr("Settings", language)].waitForExistence(timeout: 10))
+                picture("settings-\(language)-largest-text-\(label)")
+                audit(app, [.textClipped, .dynamicType], "Settings in \(language) at the largest text, \(label)")
+                let middle = "Settings in \(language) at the largest text, \(label), Notifications in the middle"
+                scrollToMiddle(app, tr("Notifications", language), middle)
+                audit(app, [.textClipped, .dynamicType], middle)
+                app.terminate()
+            }
         }
+    }
+
+    /// Scrolls the screen's list until the text is near the middle of the
+    /// window, with slow drags that do not fling the list.
+    private func scrollToMiddle(_ app: XCUIApplication, _ label: String, _ screen: String) {
+        let text = app.staticTexts[label].firstMatch
+        let list = app.collectionViews.firstMatch
+        let height = app.windows.firstMatch.frame.height
+        for _ in 0..<8 {
+            guard text.exists else { break }
+            let shift = text.frame.midY - height / 2
+            if abs(shift) < 100 { break }
+            let from = list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
+            let to = from.withOffset(CGVector(dx: 0, dy: -max(-400, min(400, shift))))
+            from.press(forDuration: 0.1, thenDragTo: to, withVelocity: .slow, thenHoldForDuration: 0.5)
+        }
+        print("ReadersUITests: \(screen): '\(label)' at \(text.exists ? "\(text.frame)" : "nowhere") in a window \(height) high")
+        picture("scrolled-\(screen)")
     }
 }

@@ -134,6 +134,9 @@ struct SettingsView: View {
         .background(AppBackground())
         .navigationTitle(Text("Settings"))
         .task {
+            // A measurement of CI's runner, not to be merged: a UI test can
+            // turn the refresh off to see whether it disturbs the audit.
+            if ProcessInfo.processInfo.arguments.contains("-CBBMeasureNoRefresh") { return }
             // Where sync away from home stands, as it changes.
             while !Task.isCancelled {
                 await model.refresh()

@@ -1859,7 +1859,7 @@ jobs:
             [ -f "$f" ] || continue
             cp "$f" "$RUNNER_TEMP/ios-screens/"
             sed -n '/AUDIT-TRACE begin/,/AUDIT-TRACE end/p' "$f"
-            grep -E "settled in|warmed up|WARMUP-ISSUE|Test Case .*(passed|failed)" "$f" || true
+            grep -E "settled in|AUDIT-ISSUE|AUDIT-TREE|in the middle|Test Case .*(passed|failed)" "$f" || true
           done
       - name: the screens' pictures
         if: always()
