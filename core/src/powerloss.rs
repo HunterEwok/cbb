@@ -29,7 +29,7 @@ use crate::records::body::*;
 use crate::records::set::RecordSet;
 use crate::records::{Key, KeyHash, Record};
 use crate::store::{self, Fields};
-use crate::testkit::{G, k};
+use crate::testkit::{G, k, recovery, rk2};
 
 const SLOT: usize = 32 << 10;
 
@@ -125,11 +125,7 @@ struct Done {
 
 impl Member {
     fn new(root: &Key) -> Member {
-        Member {
-            set: RecordSet::new(root.clone(), k("recovery").key.clone()),
-            counters: Counters::default(),
-            marks: Marks::default(),
-        }
+        Member { set: RecordSet::new(root.clone(), recovery()), counters: Counters::default(), marks: Marks::default() }
     }
 
     fn fields(&self) -> Fields {
@@ -236,7 +232,7 @@ fn life() -> (Key, Vec<Event>) {
     let root = g.set.root().clone();
     let mut d = Device::new(k("new phone").key.clone(), "new phone", ROLE_PHONE);
     d.rights = RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS;
-    let w = g.set.write_change(&g.state(), &k("recovery"), &k("new root"), d, &[], false, 0).unwrap();
+    let w = g.set.write_change(&g.state(), &k("recovery"), rk2(), &k("new root"), d, &[], false, 0).unwrap();
     let ts = |w: i64| Timestamp { wall: w, logical: 0 };
     let (r, adm) = (k("root").hash, k("admin a").hash);
     let mut ev: Vec<Event> = g.records().into_iter().map(|r| Event::Record(alloc::boxed::Box::new(r))).collect();

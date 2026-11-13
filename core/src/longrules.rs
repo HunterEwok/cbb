@@ -26,7 +26,7 @@ use crate::records::Record;
 use crate::records::body::*;
 use crate::records::eval::State;
 use crate::records::set::RecordSet;
-use crate::testkit::{G, K, T0, k, sealing, statement_of, store};
+use crate::testkit::{G, K, T0, k, recovery, rk2, sealing, statement_of, store};
 
 const HOUR: u64 = 3_600_000;
 const DAY: u64 = 24 * HOUR;
@@ -34,7 +34,7 @@ const DAY: u64 = 24 * HOUR;
 /// A member's records as its service keeps them: the records and the
 /// lists of the changes of root, from which a restart builds the set again.
 fn set_of(records: &[Record], lists: &[Vec<u8>]) -> RecordSet {
-    let mut set = RecordSet::new(k("root").key.clone(), k("recovery").key.clone());
+    let mut set = RecordSet::new(k("root").key.clone(), recovery());
     for _ in 0..2 {
         set.insert_all(records.iter().cloned());
         for l in lists {
@@ -57,7 +57,7 @@ fn changed(time_ms: u64) -> (G, Vec<Record>, Vec<Vec<u8>>) {
     #[allow(clippy::unwrap_used)]
     let w = {
         let st = set.state();
-        set.write_change(&st, &k("recovery"), &k("new root"), d, &[], false, time_ms).unwrap()
+        set.write_change(&st, &k("recovery"), rk2(), &k("new root"), d, &[], false, time_ms).unwrap()
     };
     let mut recs = g.records();
     recs.extend(w.first);

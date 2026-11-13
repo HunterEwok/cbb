@@ -15,11 +15,40 @@
 # OUT/NAME-FIRST.txt, and a file that already ends with the test result
 # is not run again. One runner per OUT: a second start exits at once.
 # OUT/summary.txt counts the batches' failures by their first line.
+#
+# A batch waits before it starts while OUT/.pause exists or another
+# program that bears no load beside it runs (a Simulator, xcodebuild, an
+# emulator). To give the machine back at once:
+#
+#   sh tools/sim/seeds.sh pause BIN OUT    # stops the running batches
+#   sh tools/sim/seeds.sh resume BIN OUT   # lets them go on
 set -eu
+
+# busy: whether another thread's simulator, build or emulator runs.
+busy() {
+	pgrep -f 'Simulator\.app|xcodebuild|qemu-system|/emulator/emulator' >/dev/null 2>&1
+}
+
+case "${1:-}" in
+pause)
+	: >"$3/.pause"
+	pkill -STOP -f "$2 sim::groups_under_faults_agree" || true
+	exit 0
+	;;
+resume)
+	rm -f "$3/.pause"
+	pkill -CONT -f "$2 sim::groups_under_faults_agree" || true
+	exit 0
+	;;
+esac
 
 if [ "${1:-}" = one ]; then
 	# one batch: BIN FILE FIRST VARS
 	bin=$2 file=$3 first=$4 vars=$5
+	[ -n "$file" ] || exit 2
+	while [ -e "$(dirname "$file")/.pause" ] || busy; do
+		sleep 20
+	done
 	# shellcheck disable=SC2086 # the variables are split on purpose
 	env SIM_ALL=1 SIM_FIRST="$first" SIM_SEEDS=100 $(echo "$vars" | tr ',' ' ') \
 		nice -n 19 "$bin" sim::groups_under_faults_agree --exact >"$file.part" 2>&1 || true

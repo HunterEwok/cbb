@@ -40,9 +40,11 @@ use crate::certs::sha256;
 use crate::identity::ExternalKey;
 use crate::records::body::*;
 use crate::records::eval::{Input, State, evaluate};
+use crate::records::pq::PqKey;
 use crate::records::set::RecordSet;
 use crate::records::{
-    Body, GroupId, Key, KeyHash, MAX_ADMIN_RECORDS, MAX_DEVICES, MAX_ROOT_RECORDS, Record, RecordId, group_id, keep,
+    Body, GroupId, Key, KeyHash, MAX_ADMIN_RECORDS, MAX_DEVICES, MAX_ROOT_RECORDS, Record, RecordId, Recovery,
+    group_id, keep,
 };
 
 /// A key made from a name.
@@ -61,6 +63,17 @@ impl ExternalKey for NamedKey {
             self.sk.sign_prehash(digest).map_err(|_| crate::error::Error::msg("groupgen: sign"))?;
         Ok(sig.to_der().as_bytes().to_vec())
     }
+}
+
+/// The second half of the recovery key of the groups of seed (SLH-DSA, E-6).
+pub fn pq_key(seed: u64) -> PqKey {
+    let s = |part: &str| -> [u8; 16] {
+        let d = sha256(format!("cbb groupgen {seed} recovery {part}").as_bytes());
+        let mut out = [0u8; 16];
+        out.copy_from_slice(&d[..16]);
+        out
+    };
+    PqKey::from_seeds(&s("sk_seed"), &s("sk_prf"), &s("pk_seed"))
 }
 
 /// The key named name in the groups of seed.
@@ -106,7 +119,7 @@ pub struct Group {
     /// The group's first root key.
     pub root: Key,
     /// The group's recovery key.
-    pub recovery: Key,
+    pub recovery: Recovery,
     /// The records, each after the records that name its signer.
     pub records: Vec<Record>,
     /// The lists the changes of root carry, as their bytes.
@@ -248,7 +261,9 @@ pub fn build(spec: Spec) -> Group {
 fn build_with(spec: Spec, remove_holder: bool) -> Group {
     let root = key(spec.seed, "root");
     let recovery = key(spec.seed, "recovery");
-    let gid = group_id(&root.key, &recovery.key);
+    let recovery2 = pq_key(spec.seed);
+    let recovery_pair = Recovery { k1: recovery.key.clone(), k2: recovery2.key() };
+    let gid = group_id(&root.key, &recovery_pair);
     let mut b = Builder {
         seed: spec.seed,
         gid,
@@ -361,7 +376,7 @@ fn build_with(spec: Spec, remove_holder: bool) -> Group {
         let phone = key(spec.seed, &format!("new root phone {t}"));
         let mut d = Device::new(phone.key.clone(), &format!("new root phone {t}"), ROLE_PHONE);
         d.rights = RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS;
-        let mut set = RecordSet::new(root.key.clone(), recovery.key.clone());
+        let mut set = RecordSet::new(root.key.clone(), recovery_pair.clone());
         // Records, lists, then the records again: a new root's first
         // records wait for its head's list. Nothing may be refused then.
         set.insert_all(b.records.iter().cloned());
@@ -374,7 +389,7 @@ fn build_with(spec: Spec, remove_holder: bool) -> Group {
         // A change written from a valid group never fails.
         let lost: Vec<KeyHash> = holder.take().into_iter().filter(|_| remove_holder).collect();
         #[allow(clippy::unwrap_used)]
-        let w = set.write_change(&state, &recovery, &n, d, &lost, false, 0).unwrap();
+        let w = set.write_change(&state, &recovery, &recovery2, &n, d, &lost, false, 0).unwrap();
         removed.extend(lost);
         holder = Some(phone.hash);
         for r in w.first {
@@ -385,7 +400,7 @@ fn build_with(spec: Spec, remove_holder: bool) -> Group {
         new_roots.push(n.hash);
     }
 
-    Group { spec, root: root.key, recovery: recovery.key, records: b.records, lists, new_roots, removed }
+    Group { spec, root: root.key, recovery: recovery_pair, records: b.records, lists, new_roots, removed }
 }
 
 /// A root checkpoint at the root's head that keeps the live devices'

@@ -265,12 +265,18 @@ fn stopped(st: &State) -> bool {
 /// lists, in any order.
 fn rebuild(
     root: &crate::records::Key,
-    recovery: &crate::records::Key,
+    recovery: &crate::records::Recovery,
     records: &[Vec<u8>],
     lists: &[Vec<u8>],
 ) -> RecordSet {
     let records: Vec<Record> = records.iter().filter_map(|e| Record::decode(e).ok()).collect();
     RecordSet::restore(root.clone(), recovery.clone(), &records, lists)
+}
+
+/// A seed's recovery key: K1 named by the seed, K2 the tests' fixed
+/// SLH-DSA key (the Group ID still differs by the root and K1).
+fn recovery_pair(name: &str) -> crate::records::Recovery {
+    crate::records::Recovery { k1: k(name).key, k2: crate::testkit::rk2().key() }
 }
 
 impl World {
@@ -283,8 +289,9 @@ impl World {
         let n = if small_seed(seed) && env("SIM_CAP") == Some(1) { 3 + rng.below(4) } else { 3 + rng.below(10) };
         let root_name = format!("sim{seed}/root");
         let recovery_name = format!("sim{seed}/recovery");
-        let (root, recovery) = (k(&root_name), k(&recovery_name));
-        let gid = crate::records::group_id(&root.key, &recovery.key);
+        let root = k(&root_name);
+        let pair = recovery_pair(&recovery_name);
+        let gid = crate::records::group_id(&root.key, &pair);
         let mut members = Vec::new();
         for i in 0..n {
             let name = format!("sim{seed}/m{i}");
@@ -292,7 +299,7 @@ impl World {
             let id = key.key.device_id();
             let mut store = MemoryStore::new(k(&name));
             keystore::rotate(&mut store, &gid, T0, Some(T0)).unwrap();
-            let set = RecordSet::new(root.key.clone(), recovery.key.clone());
+            let set = RecordSet::new(root.key.clone(), pair.clone());
             let mem = Mem {
                 state: set.state(),
                 set,
@@ -919,7 +926,7 @@ impl World {
         if self.gone.is_some_and(|(g, _, _)| g == i) {
             return Ok(());
         }
-        let (root, recovery) = (k(&self.root_name).key, k(&self.recovery_name).key);
+        let (root, recovery) = (k(&self.root_name).key, recovery_pair(&self.recovery_name));
         let m = &mut self.members[i];
         let set = rebuild(&root, &recovery, &m.saved.records, &m.saved.lists);
         if set.digest() != m.saved.mem.set.digest() {
@@ -1406,15 +1413,16 @@ impl World {
                 .collect();
             let unapplied = held.iter().any(|(_, id)| !chain.contains(id));
             let set = &mut self.members[w].live.set;
-            let written = match set.write_change(&st, &recovery, &new_root, device, &remove, false, now) {
-                Ok(x) => x,
-                Err(e) if halted => return Err(format!("the recovery key could not end the halt on m{w}: {e:?}")),
-                Err(_) if unapplied => {
-                    self.note(format!("m{w} refuses a change over a change it does not apply"));
-                    continue;
-                }
-                Err(e) => return Err(format!("m{w} could not write a change of root: {e:?}")),
-            };
+            let written =
+                match set.write_change(&st, &recovery, crate::testkit::rk2(), &new_root, device, &remove, false, now) {
+                    Ok(x) => x,
+                    Err(e) if halted => return Err(format!("the recovery key could not end the halt on m{w}: {e:?}")),
+                    Err(_) if unapplied => {
+                        self.note(format!("m{w} refuses a change over a change it does not apply"));
+                        continue;
+                    }
+                    Err(e) => return Err(format!("m{w} could not write a change of root: {e:?}")),
+                };
             if let Some((s, _)) = held.iter().find(|(s, _)| *s == written.record.body().seq) {
                 return Err(format!("m{w} wrote a second change at seq {s}, where it holds one"));
             }
