@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -29,6 +30,9 @@ func TestNotReadInAProgram(t *testing.T) {
 		tags, want string
 	}{{"", ""}, {"testhooks", "relay.example.org=127.0.0.1"}} {
 		bin := filepath.Join(dir, "prog"+c.tags)
+		if runtime.GOOS == "windows" {
+			bin += ".exe"
+		}
 		build := exec.Command("go", "build", "-tags="+c.tags, "-o", bin, "./testdata/prog")
 		if out, err := build.CombinedOutput(); err != nil {
 			t.Fatalf("go build -tags=%q: %v\n%s", c.tags, err, out)
