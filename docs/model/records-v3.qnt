@@ -141,6 +141,8 @@ module records_v3 {
     // (I): the ID of its key's record it follows (its key's last record its writer's set
     // kept), -1 for none (it follows the head); 0 when the model does not use it.
     follows: Id,
+    // Signed off its key's device (a second writer on the key: signHidden); the model's mark.
+    off: bool,
   }
 
   // What a member that drops records remembers of them (core keep::Cut): the level, which only
@@ -349,7 +351,7 @@ module records_v3 {
   }
 
   pure val NONEREC: Record = {
-    id: 0, signer: "", seq: 0, line: [], kind: "", target: "", kit: "", targetRec: 0, seen: Map(), heads: Map(), keep: Set(), units: 0, first: 0, follows: 0,
+    id: 0, signer: "", seq: 0, line: [], kind: "", target: "", kit: "", targetRec: 0, seen: Map(), heads: Map(), keep: Set(), units: 0, first: 0, follows: 0, off: false,
   }
 
   // --- The recovery chain (rule 33) -------------------------------------------------------
@@ -730,7 +732,10 @@ module records_v3 {
     if (v2.checkpoint != 0 and v2.checkpoint != v.checkpoint) {
       val c = db.get(v2.checkpoint)
       val take = aside.filter(i => i == c.id or namedBy(c, db.get(i), all1))
-      val s2 = recut({ ...s1, recs: s1.recs.union(take), checkpoint: c.id }, db)
+      // It compacts on it as any set would: what c prunes goes, even when an older checkpoint
+      // c names keeps it (nothing is kept first by transitivity).
+      val s1c = { ...s1, recs: s1.recs.union(take), checkpoint: c.id }
+      val s2 = recut({ ...s1c, recs: s1c.recs.filter(i => storable(s1c, db.get(i), db)) }, db)
       { ...s2, wait: asideOf(s2, pool, db) }
     } else { ...s1, wait: aside }
   }
@@ -1105,7 +1110,7 @@ module records_v3 {
   pure def rec(id: Id, signer: Key, line: List[Id], kind: str, target: Key, kit: str, targetRec: Id,
       seen: Key -> List[Id], heads: Key -> List[Id], keep: Set[Id], units: int): Record =
     { id: id, signer: signer, seq: line.length(), line: line, kind: kind, target: target, kit: kit, targetRec: targetRec,
-      seen: seen, heads: heads, keep: keep, units: units, first: 0, follows: 0 }
+      seen: seen, heads: heads, keep: keep, units: units, first: 0, follows: 0, off: false }
 
   // The group as the root made it: A a phone admin, C a computer admin, W a watch admin; the
   // recovery key K is the group's own, known to every member from its admission.
@@ -1177,7 +1182,7 @@ module records_v3 {
     val lastKept = ofKey(mine, k).fold((0, 0), (b, x) => if (x.seq > b._1) (x.seq, x.id) else b)._2
     val r = if (CUT_MODE == "follows" and not(isChain(r1)))
       { ...r1, follows: if (followsAs != 0) followsAs else if (lastKept == 0) -1 else lastKept } else r1
-    val db2 = db.put(nextId, r)
+    val db2 = db.put(nextId, { ...r, off: hidden })
     all {
       SIGNERS.contains(k),
       nextId <= FIRST + MAXREC,
@@ -1772,17 +1777,21 @@ module records_v3 {
   }))
 
   // (H). With honest writers no record is turned away by the rooms: a synced member holds
-  // every record some member holds that it may store and its counting checkpoint does not
-  // prune.
-  // (No bent or deviating record, and no recovery twin: two recovery records at one seq.)
-  def honestW: bool = db.keys().forall(i => db.get(i).kit != "bent" and db.get(i).kit != "deviant"
-    and not(isChain(db.get(i)) and db.keys().exists(j => j != i and isChain(db.get(j)) and db.get(j).seq == db.get(i).seq)))
+  // every record it got that it may store and its counting checkpoint does not prune (that
+  // it gets every record is converges').
+  // (No bent, deviating or hidden record, no recovery twin (two recovery records at one seq),
+  // and no change of root back to a key that was root before.)
+  def honestW: bool = db.keys().forall(i => db.get(i).kit != "bent" and db.get(i).kit != "deviant" and not(db.get(i).off)
+    and not(isChain(db.get(i)) and db.keys().exists(j => j != i and isChain(db.get(j)) and db.get(j).seq == db.get(i).seq))
+    and not(isChain(db.get(i)) and (db.get(i).target == ROOT or db.keys().exists(j => j != i and isChain(db.get(j))
+      and db.get(j).target == db.get(i).target))))
   val honestNeverDropped = ((WRITER_FLOOR or CEIL_FIT) and honestW) implies MEMBERS.forall(m => {
     val s = st.get(m)
     val v = views.get(m)
     val c = if (v.checkpoint == 0) NONEREC else db.get(v.checkpoint)
     (syncedProto(m) and not(v.stop) and not(chainState(s, db).stop)) implies recsOf(heldAll, db).forall(r =>
-      isChain(r) or not(storable(s, r, db)) or (c != NONEREC and prunedBy(c, r)) or heldBy(s).contains(r.id))
+      isChain(r) or not(s.got.contains(r.id)) or not(storable(s, r, db)) or (c != NONEREC and prunedBy(c, r))
+        or heldBy(s).contains(r.id))
   })
 
   // (J): with honest writers no member ever holds a mark.
