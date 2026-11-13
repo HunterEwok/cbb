@@ -49,6 +49,7 @@ Complete and exact, without the reasons.
 | [Settings and environment variables](reference/config.md) | the settings files and every `CBB_*` variable |
 | [Devices, ports and files](reference/devices.md) | what each device can do, the ports, where the keys and logs are |
 | [Limits and lifetimes](reference/limits.md) | sizes, rates, timeouts, certificate lifetimes, the servers' limits |
+| [Versions and compatibility](reference/compatibility.md) | which releases work together in one group, and what an update keeps |
 | [Error messages and details](reference/errors.md) | how each part shows errors and the switch that shows their details |
 | [Glossary](reference/glossary.md) | the words the documentation and the apps use |
 | [Changelog](../CHANGELOG.md) | what changed in each release |

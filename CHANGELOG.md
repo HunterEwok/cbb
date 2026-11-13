@@ -6,6 +6,15 @@ All notable changes to cbb are documented in this file. The format follows
 
 ## [Unreleased]
 
+In short, for 0.6: every computer and small device runs one `cbb` in Rust on the same core as
+the phones' apps, with the Go helper beside it on computers; the group's signed records are
+new (version 2, in one strict form of CBOR) and a phone can be the group's root; there are
+apps for the iPhone, Android, Aurora OS and HarmonyOS, the Mac, and a tray app for Linux and
+Windows; devices sync away from home through a hub, a forwarder or a blind relay; releases are
+signed and `cbb update` installs them. From 0.6 on a device works in one group with devices of
+the release before it ([versions and compatibility](docs/reference/compatibility.md)); a group
+made with 0.5 is set up again once. The details follow.
+
 ### Added
 - The CI measures what each part of the core costs in a small device's flash (`tools/size`,
   for the ESP32-C6's RISC-V): X.509 and P-256, JSON, the group's records, sealing, a copy,
@@ -1664,6 +1673,9 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- Versions and compatibility (`docs/reference/compatibility.md`): which releases work
+  together in one group, how to update a group, and what an older device does with something
+  newer.
 - The notes for coding agents are in `AGENTS.md`, short and pointing to the documents
   instead of repeating them; `CLAUDE.md` only includes it.
 - Copied code may sit in a `third_party` directory beside the code that uses it, and
