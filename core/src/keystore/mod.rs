@@ -135,7 +135,7 @@ pub fn rotate(store: &mut dyn KeyStore, group: &GroupId, now_ms: u64, wall_ms: O
     if due {
         let epoch = newest.map_or(Some(1), |(e, _)| e.checked_add(1)).ok_or_else(|| Error::msg("no epoch is left"))?;
         let secret = crate::seal::generate_secret()?;
-        let seal = Key { alg: ALG_XWING, public: crate::seal::public_key(&secret)? };
+        let seal = Key::new(ALG_XWING, crate::seal::public_key(&secret)?);
         let signer = Key::es256(store.member().public()).hash();
         let body = Body { group: *group, signer, epoch, time_ms: wall_ms.unwrap_or(0), seal, held: false };
         let st = Statement::sign(body, store.member())?;
@@ -222,8 +222,7 @@ pub fn read_statement(envelope: &[u8]) -> core::result::Result<ReadStatement, Ru
     if seal.alg != crate::format::Alg::XWing || seal.public.len() != XWING_PUBLIC {
         return Err(Rule::KEYS_XWING);
     }
-    let body =
-        Body { group, signer, epoch, time_ms, seal: Key { alg: ALG_XWING, public: seal.public.to_vec() }, held: false };
+    let body = Body { group, signer, epoch, time_ms, seal: Key::new(ALG_XWING, seal.public.to_vec()), held: false };
     Ok(ReadStatement::Take(Statement::from_read(e.body.to_vec(), e.sig.to_vec(), body)))
 }
 

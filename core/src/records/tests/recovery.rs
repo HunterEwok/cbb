@@ -1075,7 +1075,7 @@ fn a_halted_member_shows_the_chain_below_the_fork() {
     // Every peer gets the two heads and nothing else.
     let me = crate::format::KeyHash(k("laptop").hash.0);
     for peer in ["thief", "tablet", "laptop", "old phone", "stranger"] {
-        let p: [u8; 65] = k(peer).key.public.clone().try_into().unwrap();
+        let p: [u8; 65] = k(peer).key.public().to_vec().try_into().unwrap();
         if peer != "laptop" {
             assert_eq!(crate::peer::standing(&s, &me, &p), crate::peer::Standing::Halted);
         }
@@ -1471,7 +1471,7 @@ fn a_halted_state_is_for_display_only() {
     for d in &s.devices {
         assert!(!holder_may_send(&s, &d.id));
         assert!(!admin_may_take(&s, &d.id));
-        let p: [u8; 65] = d.key.public.clone().try_into().unwrap();
+        let p: [u8; 65] = d.key.public().to_vec().try_into().unwrap();
         if d.key.hash() != k("laptop").hash {
             assert_eq!(crate::peer::standing(&s, &f(k("laptop").hash), &p), crate::peer::Standing::Halted);
         }

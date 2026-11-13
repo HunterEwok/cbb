@@ -199,7 +199,8 @@ impl Intro {
         self.check_size()?;
         // Before any work on the set: the records end in the record of the
         // sender's key.
-        let ends_in_peer = matches!(self.records.last().map(|r| &r.body().kind), Some(Kind::Device(d)) if d.key.public.as_slice() == peer);
+        let ends_in_peer =
+            matches!(self.records.last().map(|r| &r.body().kind), Some(Kind::Device(d)) if d.key.public() == peer);
         if !ends_in_peer {
             return Err(Refusal::NotMember);
         }

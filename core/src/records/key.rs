@@ -39,8 +39,11 @@ pub const XWING_PUBLIC: usize = 1216;
 /// A key as the format writes it: `[alg, pub]`.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct Key {
-    pub alg: u64,
-    pub public: Vec<u8>,
+    alg: u64,
+    public: Vec<u8>,
+    /// SHA-256 over the key's encoding, taken once when the key is made:
+    /// the fields are private and never change, so it cannot go stale.
+    hash: KeyHash,
 }
 
 /// What reading a key found.
@@ -54,14 +57,31 @@ pub enum KeyCheck {
 }
 
 impl Key {
+    /// The key of algorithm `alg` with public bytes `public`; its hash is
+    /// taken here, once.
+    pub fn new(alg: u64, public: Vec<u8>) -> Key {
+        let hash = fkey::Key::new(Alg::from_number(alg), &public).hash();
+        Key { alg, public, hash }
+    }
+
     pub fn es256(public: Vec<u8>) -> Key {
-        Key { alg: ALG_ES256, public }
+        Key::new(ALG_ES256, public)
     }
 
     /// The key a reader found in a body.
     pub fn read(v: &Value<'_>) -> Result<Key, Rule> {
         let k = fkey::Key::from_value(v)?;
-        Ok(Key { alg: k.alg.number(), public: k.public.to_vec() })
+        Ok(Key::new(k.alg.number(), k.public.to_vec()))
+    }
+
+    /// The key's algorithm number.
+    pub fn alg(&self) -> u64 {
+        self.alg
+    }
+
+    /// The key's public bytes.
+    pub fn public(&self) -> &[u8] {
+        &self.public
     }
 
     /// The format's view of the key.
@@ -79,9 +99,9 @@ impl Key {
         self.format().encode()
     }
 
-    /// SHA-256 over the key's encoding.
+    /// SHA-256 over the key's encoding, taken when the key was made.
     pub fn hash(&self) -> KeyHash {
-        self.format().hash()
+        self.hash
     }
 
     /// The first 16 bytes of the key's hash: a device ID.
@@ -276,5 +296,31 @@ pub mod tests_hook {
         for b in id.iter_mut().skip(n) {
             *b = 0;
         }
+    }
+}
+
+#[cfg(test)]
+mod hash_tests {
+    use super::*;
+
+    /// The hash a key keeps is the hash of its encoding, however the key
+    /// was made: by its parts, as ES256, read from a body, or cloned.
+    #[test]
+    fn a_keys_kept_hash_is_its_encodings_hash() {
+        let es = crate::testkit::k("some key").key;
+        let keys = [
+            es.clone(),
+            Key::new(ALG_XWING, alloc::vec![3; XWING_PUBLIC]),
+            Key::new(ALG_SLH_DSA, alloc::vec![9; SLH_DSA_PUBLIC]),
+            Key::new(77, alloc::vec![1, 2, 3]),
+            Key::read(&crate::format::cbor::decode(&es.encode()).unwrap()).unwrap(),
+            Key::es256(es.public().to_vec()),
+        ];
+        for k in keys.iter().chain(keys.clone().iter()) {
+            assert_eq!(k.hash(), KeyHash(crate::certs::sha256(&k.encode())));
+            assert_eq!(k.hash(), k.format().hash());
+        }
+        assert_eq!(keys[0], keys[4]);
+        assert_eq!(keys[0], keys[5]);
     }
 }
