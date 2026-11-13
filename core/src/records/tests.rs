@@ -5044,3 +5044,103 @@ fn the_cut_roots_share_one_reserve() {
     }
     assert!(seen.windows(2).all(|w| w[0] == w[1]));
 }
+
+/// The fold: a root removal that a newer one covers (every key it names,
+/// the same seen of them) is left out of the next checkpoint and of a
+/// change's list, by subset for many keys; the state is the same, and the
+/// removal offered again counts for nothing new. One whose keys signed
+/// more by the newer one does not fold.
+#[test]
+fn a_removal_a_newer_one_covers_folds() {
+    let mut g = G::new();
+    let s: Vec<K> = (0..10).map(|i| k(&format!("stranger {i}"))).collect();
+    let singles: Vec<Record> = s.iter().map(|x| g.root_rec(Kind::Revoke(removal(&[x.hash], Vec::new())))).collect();
+    let mut all: Vec<KeyHash> = s.iter().map(|x| x.hash).collect();
+    all.sort();
+    let cover = g.root_rec(Kind::Revoke(removal(&all, Vec::new())));
+    // An admin removed, then signing on, then removed again with a device.
+    let (pa, a) = (k("phone a"), k("admin a"));
+    g.admin(&pa, &a, POWER_ADMIT);
+    g.device(&a, &k("t1"), "t1", |_| {});
+    let first = g.root_rec(Kind::Revoke(removal(&[a.hash], g.seen())));
+    g.rec(&a, Kind::Copies { incoming_ms: 6_000, seen: vec![] });
+    let mut both = vec![a.hash, k("t9").hash];
+    both.sort();
+    let again = g.root_rec(Kind::Revoke(removal(&both, g.seen())));
+    g.device(&k("root"), &k("laptop"), "laptop", |_| {});
+    let before = state_with(&g.root.key, &g.recs, &g.lists);
+    let recs = g.recs.clone();
+    let cp = root_checkpoint(&mut g, &recs);
+    let Kind::Checkpoint { keep, .. } = &cp.body().kind else { panic!() };
+    for r in &singles {
+        assert!(!keep.contains(&r.id()), "a single removal the cover names is folded");
+    }
+    assert!(keep.contains(&cover.id()));
+    assert!(keep.contains(&first.id()) && keep.contains(&again.id()), "seen differ: no fold");
+    let after = state_with(&g.root.key, &g.recs, &g.lists);
+    assert_eq!(after.checkpoint, Some(cp.id()));
+    assert_eq!(before.revoked, after.revoked);
+    let mut set = set_with(&g.root.key, &g.recs, &g.lists);
+    for r in &singles {
+        assert!(!set.contains(&r.id()));
+        let _ = set.insert(r.clone());
+    }
+    assert_eq!(set.state().revoked, before.revoked);
+    // A change's list carries none of the singles.
+    let list = set.change_list(&set.state());
+    assert!(singles.iter().all(|r| !list.0.contains(&r.id())));
+}
+
+/// The fold in a change's list: the root's removals of devices an admin
+/// admitted (named, so listed), the older ones covered by a newer one,
+/// are carried as the newer one alone, and the new root keeps them out.
+#[test]
+fn a_change_carries_the_newer_removal_alone() {
+    let mut g = G::new();
+    let (pa, a) = (k("phone a"), k("admin a"));
+    g.admin(&pa, &a, POWER_ADMIT);
+    let ts: Vec<K> = (0..4).map(|i| k(&format!("t{i}"))).collect();
+    for t in &ts {
+        g.device(&a, t, "t", |_| {});
+    }
+    let one = g.root_rec(Kind::Revoke(removal(&[ts[0].hash], g.seen())));
+    let mut keys: Vec<KeyHash> = ts.iter().map(|t| t.hash).collect();
+    keys.sort();
+    let mut rm = removal(&keys, Vec::new());
+    rm.seen = match &one.body().kind {
+        Kind::Revoke(r) => r.seen.clone(),
+        _ => unreachable!(),
+    };
+    let cover = g.root_rec(Kind::Revoke(rm));
+    let set = set_with(&g.root.key, &g.recs, &g.lists);
+    let st = set.state();
+    let list = set.change_list(&st);
+    assert!(list.0.contains(&cover.id()));
+    assert!(!list.0.contains(&one.id()));
+    let mut set = set;
+    let w = set
+        .write_change(
+            &st,
+            &k("recovery"),
+            crate::testkit::rk2(),
+            &k("n1"),
+            {
+                let mut d = Device::new(k("new phone").key.clone(), "new phone", ROLE_PHONE);
+                d.rights = RIGHT_READ | RIGHT_SEND;
+                d
+            },
+            &[],
+            false,
+            0,
+        )
+        .unwrap();
+    let mut all = g.recs.clone();
+    all.extend(w.first.iter().cloned());
+    all.push(w.record.clone());
+    let mut lists = g.lists.clone();
+    lists.push(w.list.encode());
+    let s = state_with(&g.root.key, &all, &lists);
+    for t in &ts {
+        assert!(s.revoked.contains(&t.hash) && s.device_by_key(&t.hash).is_none());
+    }
+}

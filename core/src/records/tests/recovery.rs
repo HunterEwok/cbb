@@ -1004,7 +1004,8 @@ fn a_change_lists_no_checkpoint() {
 }
 
 /// A change's list carries the earlier roots' removals that name a key
-/// some record names, at most their share, the newest first.
+/// some record names, at most their share, the newest first; of removals
+/// that name the same keys and saw the same, the newest alone (the fold).
 #[test]
 fn a_change_lists_removals_that_name_someone_within_their_share() {
     use crate::records::set::EARLIER_REMOVALS;
@@ -1016,14 +1017,31 @@ fn a_change_lists_removals_that_name_someone_within_their_share() {
     let of_tv: Vec<RecordId> =
         (0..EARLIER_REMOVALS + 40).map(|_| g.root_rec(Kind::Revoke(removal(&[tv.hash], vec![]))).id()).collect();
     let list = g.listing();
-    assert!(of_tv.iter().all(|id| list.contains(id)));
+    let newest = *of_tv.last().unwrap();
+    assert!(of_tv.iter().all(|id| list.contains(id) == (*id == newest)));
     g.change(&k("n1"), &list);
     // The new root admits the tv again; a second change follows.
     g.device(&k("n1"), &tv, "tv", |_| {});
     let list = g.listing();
     assert!(ghosts.iter().all(|id| !list.contains(id)));
     let listed: Vec<&RecordId> = of_tv.iter().filter(|id| list.contains(id)).collect();
-    assert_eq!(listed, of_tv[of_tv.len() - EARLIER_REMOVALS..].iter().collect::<Vec<_>>());
+    assert_eq!(listed, vec![&newest]);
+    // Removals of different keys each keep their place, within the share.
+    let mut g = base();
+    let devs: Vec<K> = (0..EARLIER_REMOVALS + 8).map(|i| k(&format!("dev {i}"))).collect();
+    let rms: Vec<RecordId> = devs
+        .iter()
+        .map(|d| {
+            g.device(&k("root"), d, "d", |_| {});
+            g.root_rec(Kind::Revoke(removal(&[d.hash], vec![]))).id()
+        })
+        .collect();
+    let list = g.listing();
+    g.change(&k("n1"), &list);
+    g.device(&k("n1"), &k("tv 2"), "tv", |_| {});
+    let list = g.listing();
+    let listed = rms.iter().filter(|id| list.contains(id)).count();
+    assert!(listed <= EARLIER_REMOVALS, "{listed}");
 }
 
 /// While halted a set takes the recovery key's records and what the list
@@ -2325,4 +2343,51 @@ fn the_newest_heads_first_checkpoint_waits_whatever_else_does() {
     assert_eq!(m.state().roots, vec![k("root").hash, n1.hash, k("n2").hash]);
     let restored = RecordSet::restore(g.root.key.clone(), crate::testkit::recovery(), &order, &g.lists);
     assert_eq!(restored.state().roots, m.state().roots);
+}
+
+/// A change never leaves out a device that counts: when the removals and
+/// the device records that count pass what a change carries, the writer
+/// refuses and the set stays as it was; within it, every device stays.
+#[test]
+fn a_change_carries_every_device_that_counts_or_is_not_written() {
+    let small = crate::records::keep::small::Small::new(40, 8, 4);
+    let mut g = base();
+    let from = g.recs.clone();
+    write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
+    let n1 = k("n1");
+    for i in 0..5 {
+        g.rec(&n1, Kind::device(Device::new(k(&format!("e{i}")).key.clone(), "e", ROLE_MEMBER)));
+    }
+    for r in &g.recs {
+        small.units(r.id(), 1);
+    }
+    let mut set = set_with(&g.root.key, &g.recs, &g.lists);
+    let st = set.state();
+    let before = set.digest();
+    let devices = st.devices.len();
+    assert!(devices > 8, "{devices} devices");
+    let err = set
+        .write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("n2"), phone(&k("phone 2")), &[], false, 0)
+        .unwrap_err();
+    assert!(alloc::format!("{err}").contains("leave out devices"), "{err}");
+    assert_eq!(set.digest(), before);
+    // Removing enough of them, the change is written and keeps the rest.
+    let gone = [k("e0").hash, k("e1").hash, k("tv").hash];
+    let w = set
+        .write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("n2"), phone(&k("phone 2")), &gone, false, 0)
+        .unwrap();
+    let mut all = g.recs.clone();
+    all.extend(w.first.iter().cloned());
+    all.push(w.record.clone());
+    let mut lists = g.lists.clone();
+    lists.push(w.list.encode());
+    for r in w.first.iter().chain([&w.record]) {
+        small.units(r.id(), 1);
+    }
+    let s = state_with(&g.root.key, &all, &lists);
+    assert_eq!(s.roots.last(), Some(&k("n2").hash));
+    for d in &st.devices {
+        let key = d.key.hash();
+        assert_eq!(s.device_by_key(&key).is_some(), !gone.contains(&key), "{}", d.name);
+    }
 }
