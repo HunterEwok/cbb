@@ -417,6 +417,27 @@ mod reading {
         );
         assert_eq!(read_map(&tables::WELCOME, &with_keys(257)).unwrap().get(4), None);
         assert_eq!(check_map(&tables::WELCOME, &with_keys(257)), Err(Rule::field("welcome/keys")));
+        // A reason this version cannot read reads as none, and the reader
+        // says it dropped one, so a log tells it from "no reason sent".
+        let long = "x".repeat(257);
+        let result = |reason: Option<&str>| {
+            let mut e = vec![
+                (0, Value::Uint(tables::T_RESULT)),
+                (2, Value::Bytes(&[1; 16])),
+                (3, Value::Bytes(&[2; 16])),
+                (4, Value::Uint(2)),
+            ];
+            if let Some(r) = reason {
+                e.push((5, Value::Text(r)));
+            }
+            m(e).encode()
+        };
+        let sent = result(Some(&long));
+        let (_, read, dropped) = super::super::read_noted(&sent).unwrap();
+        assert_eq!(read.get(5), None);
+        assert_eq!(dropped, vec![super::super::Dropped { rule: "result/reason", n: 5, bytes: 260 }]);
+        let none = result(None);
+        assert_eq!(super::super::read_noted(&none).unwrap().2, vec![]);
         // The zero invitation ID refuses, as a dismiss without its key would
         // reach every request.
         let dismiss = m(vec![(0, Value::Uint(tables::T_DISMISS)), (2, Value::Bytes(&[0; 16]))]);

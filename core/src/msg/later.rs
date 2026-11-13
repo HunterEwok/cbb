@@ -10,10 +10,19 @@
 //! For an optional field the answer is in [`OPTIONAL`], one row a field,
 //! with the reason. The default is to refuse: a value reads as absent only
 //! where absent is neutral or stricter, never where absent would grant
-//! more, change the mode, or change what the person is shown (an
-//! invitation's ID, an admin key and its proof, a flag that allows, an
-//! expiry, an address whose absence falls back to another). A test walks
-//! every table and finds each optional field here exactly once.
+//! more, change the mode, or change what the person compares or approves
+//! (a code, who is joining, a mode): an invitation's ID, an admin key and
+//! its proof, a flag that allows, an expiry, an address whose absence falls
+//! back to another. Free text beside a result the reader understands (a
+//! reason) reads as absent: the app shows its own text, and the reader
+//! notes what it dropped ([`super::Dropped`]) so that a log can tell "none
+//! sent" from "one this version could not read". A test walks every table
+//! and finds each optional field here exactly once.
+//!
+//! A field number a table does not list is kept for its own reader and
+//! skipped by this one in every message table (messages are not signed and
+//! have no zones), except in a transport's table, where it makes the way
+//! unusable.
 
 use super::{Table, tables as t, wave4 as w};
 
@@ -90,14 +99,14 @@ pub static OPTIONAL: &[Optional] = &[
     o(&t::GUEST, 4, Refuse, "the guest's pre-shared key"),
     o(&t::GUEST, 5, Refuse, "an expiry"),
     o(&t::GUEST, 6, Refuse, "the offer"),
-    o(&t::GUEST, 7, Refuse, "a reason the person is shown"),
+    o(&t::GUEST, 7, Absent, "a reason beside an op it understands: the app shows its own text"),
     o(&t::GUEST, 8, Refuse, "the connection it belongs to"),
     o(&t::GUEST, 9, Refuse, "the data"),
     o(&t::GUEST, 10, Refuse, "the device"),
     o(&t::GUEST, 11, Refuse, "an invitation's ID"),
     o(&t::CREDENTIALS, 3, Unusable, "settings for a later version: never applied by 0.6"),
     // Requests that wait.
-    o(&t::REQUEST, 5, Refuse, "how long it waited: the person is shown it"),
+    o(&t::REQUEST, 5, Absent, "how long it waited: the request is shown without it"),
     o(&t::INFO, 2, Refuse, "the system: a registry number, any in range kept"),
     o(&t::INFO, 3, Bits(0x07), "capabilities: unknown bits grant nothing"),
     o(&t::INFO, 5, Refuse, "an admin key"),
@@ -113,7 +122,7 @@ pub static OPTIONAL: &[Optional] = &[
     o(&t::RELAY_CHALLENGE, 3, Refuse, "root: a mode"),
     o(&t::RELAY_REGISTER, 5, Refuse, "the root's key"),
     o(&t::RELAY_ONLINE, 2, Refuse, "who is online: the person is shown it"),
-    o(&t::RESULT, 5, Refuse, "a reason the person is shown"),
+    o(&t::RESULT, 5, Absent, "a reason beside a status it understands: the app shows its own text"),
     o(&t::RESULT, 6, Refuse, "the offer"),
     // Wave 4.
     o(&w::NONCE, 2, Refuse, "the one-time number"),

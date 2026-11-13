@@ -93,7 +93,8 @@ pub struct Seen {
     pub key: Vec<u8>,
     pub info: Info,
     pub network: Network,
-    /// How long it has waited when the holder sent it.
+    /// How long it has waited when the holder sent it; 0 when not said (or
+    /// said in a form this version cannot read).
     pub waited_ms: u64,
     pub attempts: u8,
 }

@@ -1873,6 +1873,7 @@ LATER = {
     ("offer", 3): "unusable", ("offer", 4): "unusable",
     ("member-credentials", 3): "unusable", ("pair/info", 3): "bits 7",
     ("forward/register", 4): "unusable", ("forward/registered", 4): "unusable",
+    ("guest", 7): "absent", ("result", 5): "absent", ("waiting/request", 5): "absent",
 }
 TRANSPORTS = ("obfuscation", "vless")
 
@@ -2033,7 +2034,17 @@ def future_vectors():
     case("a profile, unknown rights bits ignored", "invite/profile", {1: 1, 2: 16 | 2})
     case("a profile, home only of a later version: refused", "invite/profile", {1: 1, 3: 2})
     case("a path, settings of a later version: unusable", "invite/path", {1: 2, 6: {**obf, 3: 2000}})
-    case("a guest, a reason too long: refused", "guest", {0: 17, 2: 7, 3: hub, 7: "x" * 257})
+    case("a guest, a reason too long: none", "guest", {0: 17, 2: 3, 3: hub, 7: "x" * 257})
+    case("a guest, a reason with a control character: none", "guest", {0: 17, 2: 3, 3: hub, 7: "a\x07b"})
+    case("a result, a reason too long: none", "result",
+         {0: 10, 2: fake("cmd id", 16), 3: fake("by", 16), 4: 2, 5: "x" * 257})
+    case("a request, a wait over a day: none", "waiting/request",
+         {1: fake("invite id", 16), 2: TABLET.key, 3: {**info, 9: fake("invite id", 16)}, 4: 2,
+          5: 86_400_001, 6: 1})
+    case("a request, the zero invitation ID: refused", "waiting/request",
+         {1: bytes(16), 2: TABLET.key, 3: info, 4: 2, 6: 1})
+    case("relay online, 65 names: refused", "relay/online",
+         {0: 97, 2: sorted(fake("name %d" % i, 32) for i in range(65))})
     case("a guest, a later op: refused", "guest", {0: 17, 2: 8, 3: hub})
     case("a dismiss, the zero invitation ID: refused", "dismiss", {0: 27, 2: bytes(16)})
     case("credentials, settings for later out of range: unusable", "member-credentials",
