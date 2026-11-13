@@ -370,6 +370,10 @@ module records_v3 {
   // What a checkpoint keeps as anchors, and which records it prunes.
   pure def anchorsOf(c: Record): Set[Id] =
     c.heads.keys().filter(k => c.heads.get(k).length() > 0).map(k => lastId(c.heads.get(k))).union(c.keep)
+  // Two removals see alike every key either names (the core, #530 2bccc9ef): only then may the
+  // older fold into the newer, or a record of the key signed between them would count.
+  pure def sameSeen(r: Record, n: Record): bool =
+    withPair(r.target).union(withPair(n.target)).forall(k => lineOf(r.seen, k) == lineOf(n.seen, k))
   pure def rootRemoval(r: Record): bool = r.kind == "revoke" and ROOT_KEYS.contains(r.signer)
   // A checkpoint prunes what is below its heads and not kept, a root's removal too: whether a
   // removal stays is the writer's choice in the signed keep (members follow it).
@@ -391,7 +395,8 @@ module records_v3 {
       and not(mine.exists(x => withPair(r.target).contains(x.signer))))
     val gone = rms.fold(Set(), (a, r) => a.union(withPair(r.target)))
     val folded = if (not(FOLD_REMOVALS)) Set() else counted.filter(r => rootRemoval(r) and counted.exists(n => rootRemoval(n)
-      and n.signer == r.signer and n.seq > r.seq and not(rms.contains(n)) and withPair(r.target).subseteq(withPair(n.target))))
+      and n.signer == r.signer and n.seq > r.seq and not(rms.contains(n)) and withPair(r.target).subseteq(withPair(n.target))
+      and sameSeen(r, n)))
     idsOf(rms).union(idsOf(folded)).union(idsOf(mine.filter(x => gone.contains(x.signer) or gone.exists(k => admissionsOf(Set(x), k) != Set()))))
   }
 
@@ -1385,7 +1390,8 @@ module records_v3 {
     val live = beforeRecs.filter(x => isAdm(x) and not(superseded.contains(x))
       and not(withPair(x.target).exists(t => v.revoked.contains(t))))
     val foldedRm = if (not(FOLD_REMOVALS)) Set() else beforeRecs.filter(x => rootRemoval(x)
-      and beforeRecs.exists(n => n != x and rootRemoval(n) and notOlder(n, x) and withPair(x.target).subseteq(withPair(n.target))))
+      and beforeRecs.exists(n => n != x and rootRemoval(n) and notOlder(n, x) and withPair(x.target).subseteq(withPair(n.target))
+        and sameSeen(x, n)))
     val remUnits = sumUnits(beforeRecs.filter(x => rootRemoval(x) and not(foldedRm.contains(x))))
     val fixedUnits = remUnits + sumUnits(live)
     val droppable = beforeRecs.filter(x => not(rootRemoval(x)) and not(live.contains(x)) and not(superseded.contains(x)))
@@ -2821,6 +2827,37 @@ module records_v3 {
         and not(views.get("m").stop) and rootPairHalts)
       .then(giveOnly("m", 6))
       .expect(views.get("m").stop and st.get("m").chain.contains(5) and st.get("m").chain.contains(6) and rootPairHalts)
+
+  // The reserve and lost roots: R fills its ceiling (its fourth removal is refused) and is lost
+  // without a checkpoint; the recovery key changes to NA, which is lost after its first
+  // checkpoint, then to NK. Each list carries R's records, which fit R's ceiling and so the
+  // reserve (RESERVE = ROOTC; checkpoints are never listed): neither change is refused.
+  run reserveLostRootsTest =
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1))
+      .then(sign(ROOT, "revoke", "dC", "", 0, false, false, 1)).then(syncRound)
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound)
+      .then(recoverAs(RECOVERY, "NK")).then(syncRound)
+      .expect(MEMBERS.filter(m => inGroup(m)).forall(m => views.get(m).path == ["R", "NA", "NK"]) and promises
+        and (CEIL_FIT implies db.get(9).keep == Set(1, 2, 3, 4, 5, 6)))
+
+  // The fold of an admin key's removals: R removes A, A signs on, R removes A again, and R's
+  // checkpoint folds the first removal into the second. A's record after the first removal
+  // never counts, before or after: the two removals saw A differently, so the first does not
+  // fold (the core's "same seen entries"; without it, at the default sizes, the fold let A's
+  // record count).
+  run foldAdminTest =
+    init
+      .then(sign(ROOT, "revoke", PHONE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 1)).then(syncRound)
+      .then(sign(ROOT, "revoke", PHONE, "", 0, false, false, 1)).then(syncRound)
+      .expect(MEMBERS.exclude(Set("a")).forall(m => not(views.get(m).counting.contains(5))) and promises)
+      // (Under (J) R, at its ceiling with both removals kept, cannot write the checkpoint.)
+      .then(if (CEIL_FIT) syncRound else sign(ROOT, "checkpoint", "", "", 0, false, false, 2).then(giveOnly("c", 7)).then(compactAt("c")))
+      .expect((not(CEIL_FIT) implies db.get(7).keep.contains(4))
+        and MEMBERS.exclude(Set("a")).forall(m => not(views.get(m).counting.contains(5))) and promises)
+      .then(syncRound).then(syncRound)
+      .expect(MEMBERS.exclude(Set("a")).forall(m => not(views.get(m).counting.contains(5))) and promises)
 
   // Liveness under CP_ROOM_WHEN_WHOLE: m gets the root's new checkpoint 6 before the records
   // it keeps (A's 4) and before the root's own 5 on its line; it waits aside, missing() asks for
