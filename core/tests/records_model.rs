@@ -747,8 +747,12 @@ fn compacting_on_the_roots_checkpoint_changes_nothing() {
     // The newest checkpoint compacted both when it came.
     assert!(!a.contains(&older.id()) && !b.contains(&older.id()), "the checkpoint compacts as it counts");
     assert_eq!(a.digest(), b.digest());
+    // Until the root's room has turned records away for a while.
     let mut dropped = 0;
-    for i in 0..400 {
+    for i in 0..cbb_core::records::MAX_ROOT_RECORDS + 100 {
+        if dropped >= 20 {
+            break;
+        }
         let r = g.sign("NK", Kind::Copies { incoming_ms: 5_000, seen: vec![] });
         a.insert(r.clone()).unwrap();
         b.insert(r.clone()).unwrap();

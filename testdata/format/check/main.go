@@ -48,8 +48,8 @@ func init() {
 		IndefLength:      cbor.IndefLengthForbidden,
 		TagsMd:           cbor.TagsForbidden,
 		MaxNestedLevels:  9, // our own walk enforces 8
-		MaxArrayElements: 4096,
-		MaxMapPairs:      4096,
+		MaxArrayElements: 65535,
+		MaxMapPairs:      65535,
 		UTF8:             cbor.UTF8RejectInvalid,
 		IntDec:           cbor.IntDecConvertNone,
 		DefaultMapType:   nil,
@@ -564,7 +564,7 @@ func main() {
 							}
 							madeAfter = n
 						}
-						if madeAfter != recovery || recovery > 16 || st != nil && st.recovery > recovery {
+						if madeAfter != recovery || recovery > 64 || st != nil && st.recovery > recovery {
 							return nil, errors.New("grants/recovery")
 						}
 						if gv, ok := pre[uint64(15)]; ok && gv != uint64(1) {

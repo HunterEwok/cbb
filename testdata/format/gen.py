@@ -76,7 +76,7 @@ class Bad(Exception):
         self.rule = rule
 
 
-def dec(b, max_depth=8, max_count=4096):
+def dec(b, max_depth=8, max_count=65535):
     """The profile's strict reader. Returns the value or raises Bad(rule)."""
     pos = 0
 
@@ -382,7 +382,8 @@ def profile_vectors():
     bad("two items", "cbor/trailing", bytes.fromhex("8000"))
     bad("cut bytes", "cbor/truncated", bytes.fromhex("430102"))
     bad("cut map", "cbor/truncated", bytes.fromhex("a201"))
-    bad("array of 4097", "cbor/count", head(4, 4097) + b"\x00" * 4097)
+    bad("array of 65536", "cbor/count", head(4, 65536) + b"\x00" * 65536)
+    ok("array of 4097 (over the old count)", [0] * 4097)
     bad("empty input", "cbor/truncated", b"")
     # check our own reader against the list
     for t in v:
@@ -703,8 +704,8 @@ def record_vectors():
     cp = sha(b"a first checkpoint")
     bad_signed("recovery head naming the recovery key as the root", "records/recovery/root", RECOVERY,
                rec(RECOVERY, 2, 13, {10: RECOVERY.key, 11: some, 13: cp}))
-    bad_signed("recovery head at seq 17 (at most 16 for the group's life)", "records/recovery/seq", RECOVERY,
-               rec(RECOVERY, 17, 13, {10: Signer("root 17").key, 11: some, 13: cp}))
+    bad_signed("recovery head at seq 65 (at most 64 for the group's life)", "records/recovery/seq", RECOVERY,
+               rec(RECOVERY, 65, 13, {10: Signer("root 65").key, 11: some, 13: cp}))
     bad_signed("recovery head without its list", "records/recovery/list", RECOVERY,
                rec(RECOVERY, 2, 13, {10: Signer("root 3").key, 13: cp}))
     bad_signed("recovery head with a list hash of 31 bytes", "records/recovery/list", RECOVERY,
@@ -905,9 +906,9 @@ def grant_vectors(admin_record):
     root_bad("grant with recovery seq 0 written", "form/default", {**g, 19: 0})
     root_bad("grant made under a recovery seq the leaf does not know", "grants/recovery", {**g, 19: 1})
     root_bad("grant with a recovery seq as text", "grants/shape", {**g, 19: "1"})
-    _, genv, _ = signed({**g, 19: 17}, ROOT2)
-    row = bad("grant made under recovery seq 17 (at most 16 heads)", "grants/recovery", message(genv), L)
-    row.update({"recovery": 17, "root": ROOT2.hash.hex()})
+    _, genv, _ = signed({**g, 19: 65}, ROOT2)
+    row = bad("grant made under recovery seq 65 (at most 64 heads)", "grants/recovery", message(genv), L)
+    row.update({"recovery": 65, "root": ROOT2.hash.hex()})
     _, genv, _ = signed(g, ROOT)
     row = bad("the old root's grant made before the change the leaf knows", "grants/recovery", message(genv), L)
     row.update({"recovery": 1, "root": ROOT2.hash.hex()})
@@ -1492,7 +1493,7 @@ TABLES = {
     ],
     "welcome": [
         (1, "welcome/root", "key 1", True),
-        (2, "welcome/records", "array 1..4096 of envelope", True),
+        (2, "welcome/records", "array 1..8192 of envelope", True),
         (4, "welcome/keys", "array 1..256 of envelope", False),
         (5, "welcome/time", "uint 1..9223372036854775807", True),
         (6, "welcome/grant", "map welcome/grant", False),
@@ -1516,7 +1517,7 @@ TABLES = {
         (6, "pair/info/admin-pop", "bytes 64", False),
         (7, "pair/info/keys", "envelope", False),
         (8, "pair/info/device", "map pair/info/device", False),
-        (9, "pair/info/invite", "bytes 16", False),
+        (9, "pair/info/invite", "id 16", False),
     ],
     "pair/info/device": [],
     "invite": [
@@ -1585,10 +1586,10 @@ TABLES = {
         (8, "guest/conn", "uint 1..4294967295", False),
         (9, "guest/data", "bytes 1..16384", False),
         (10, "guest/device", "bytes 16", False),
-        (11, "guest/invite", "bytes 16", False),
+        (11, "guest/invite", "id 16", False),
     ],
     "waiting/request": [
-        (1, "waiting/request/invite", "bytes 16", True),
+        (1, "waiting/request/invite", "id 16", True),
         (2, "waiting/request/key", "key 1", True),
         (3, "waiting/request/info", "map pair/info", True),
         (4, "waiting/request/network", "uint 1..3", True),
@@ -1599,7 +1600,7 @@ TABLES = {
         (2, "waiting/requests", "once 1..48 of map waiting/request", True),
     ],
     "dismiss": [
-        (2, "dismiss/invite", "bytes 16", True),
+        (2, "dismiss/invite", "id 16", True),
         (3, "dismiss/key", "bytes 32", False),
     ],
     "forward/challenge": [
@@ -1776,6 +1777,8 @@ def ty_ok(ty, v):
         if ".." in w[1]:
             return 1 <= len(v) <= int(w[1].split("..")[1])
         return len(v) == int(w[1])
+    if w[0] == "id":
+        return isinstance(v, bytes) and len(v) == int(w[1]) and any(v)
     if w[0] == "text":
         return (isinstance(v, str) and 1 <= len(v.encode()) <= int(w[1].split("..")[1])
                 and not any(unicodedata.category(c) == "Cc" for c in v))
@@ -1945,6 +1948,14 @@ def wave3_vectors(records_take):
               "[2001:db8:0::1]:443", "[2001:db8::1:1:1:1:1]:443", "192.0.2.1:0", "0.0.0.0:443", "[::]:443"]:
         bad(f"forwarder seen: {a}", {0: 84, 2: a}, "forward/seen/addr")
     bad("relay error: empty reason", {0: 93, 2: ""}, "server/error/reason")
+    # "No invitation" has one spelling, the field left out: the zero ID is refused.
+    zero_id = bytes(16)
+    bad("dismiss: the zero invitation ID", {0: 27, 2: zero_id}, "dismiss/invite")
+    bad("guest open: the zero invitation ID", {0: 17, 2: 1, 3: guest_key, 4: fake("guest psk", 32),
+                                                5: T0 + 86400000, 11: zero_id}, "guest/invite")
+    bad("waiting: a request with the zero invitation ID", {0: 26, 2: [{**request, 1: zero_id}]}, "waiting/requests")
+    bad("waiting: a request whose info has the zero invitation ID",
+        {0: 26, 2: [{**request, 3: {**info, 9: zero_id}}]}, "waiting/requests")
 
     mp("an info with the hello's device map", "pair/info", {1: "tv", 4: 1, 8: {1: 1}})
     mp("an info: device not a map", "pair/info", {1: "tv", 4: 1, 8: 5}, "pair/info/device")
@@ -1967,6 +1978,8 @@ def wave3_vectors(records_take):
     mp("ADb", "pair/adb", adb)
     mp("ADb without a name", "pair/adb", {1: GROUP, 2: PHONE.id16}, "pair/adb/name")
     mp("a request", "waiting/request", request)
+    mp("a request with the zero invitation ID", "waiting/request", {**request, 1: bytes(16)}, "waiting/request/invite")
+    mp("an info with the zero invitation ID", "pair/info", {**info, 9: bytes(16)}, "pair/info/invite")
     mp("a Welcome", "welcome", welcome)
     mp("a Welcome without its time", "welcome", {1: ROOT.key, 2: welcome[2]}, "welcome/time")
     mp("a Welcome without the recovery key", "welcome", {k: v for k, v in welcome.items() if k != 9},
@@ -2157,7 +2170,7 @@ TABLES4 = {
     "reseal": [(2, "reseal/copy", "bytes 16", True), (3, "reseal/epoch", "uint 1..9223372036854775807", True)],
     # To a leaf: the recovery heads it needs, and its root's fork (two
     # records of the root at one seq, exactly two).
-    "roots": [(2, "roots/heads", "array 1..16 of envelope", False), (3, "roots/fork", "array 1..2 of envelope", False)],
+    "roots": [(2, "roots/heads", "array 1..64 of envelope", False), (3, "roots/fork", "array 1..2 of envelope", False)],
 }
 MESSAGE_TYPES4 = {7: "keys-message", 9: "command", 21: "nonce", 22: "beacon", 23: "reseal", 24: "roots"}
 TABLES.update(TABLES4)
@@ -2645,7 +2658,7 @@ def beacon_rule(env_b):
         return "beacons/time"
     if not (isinstance(m.get(10), bytes) and len(m[10]) == 32):
         return "beacons/digest"
-    if not (isinstance(m.get(11), int) and 1 <= m[11] <= 4096):
+    if not (isinstance(m.get(11), int) and 1 <= m[11] <= 7168):
         return "beacons/count"
     return "take"
 
@@ -2845,7 +2858,7 @@ def wave4_vectors():
         ("type 2", {1: 2, 2: GROUP, 3: PHONE.hash, 4: 3, 6: T0, 10: digest, 11: 12}),
         ("no time", {1: 1, 2: GROUP, 3: PHONE.hash, 4: 3, 10: digest, 11: 12}),
         ("count 0", {1: 1, 2: GROUP, 3: PHONE.hash, 4: 3, 6: T0, 10: digest, 11: 0}),
-        ("count over a set", {1: 1, 2: GROUP, 3: PHONE.hash, 4: 3, 6: T0, 10: digest, 11: 4097}),
+        ("count over a set", {1: 1, 2: GROUP, 3: PHONE.hash, 4: 3, 6: T0, 10: digest, 11: 7169}),
         ("no count", {1: 1, 2: GROUP, 3: PHONE.hash, 4: 3, 6: T0, 10: digest}),
         ("digest of 31 bytes", {1: 1, 2: GROUP, 3: PHONE.hash, 4: 3, 6: T0, 10: digest[:31], 11: 12}),
         ("a critical field of a later version", {1: 1, 2: GROUP, 3: PHONE.hash, 4: 3, 6: T0, 10: digest, 11: 12, 12: 1}),
@@ -2910,6 +2923,12 @@ def main():
         "credentials.json": {"label": LABELS["credential"], "take": kt, "refuse": kr,
                              "recovery": RECOVERY.pub.hex(), "recovery2": RECOVERY2.pub.hex()},
         "frames.json": {"grid": "64, 256, 1024, 4096, 16384, then multiples of 16384",
+                        "limits": {"member": 7 << 20, "pairing": 1 << 20, "leaf": 16 << 10,
+                                   "welcome": 7 << 20,
+                                   "welcome_note": "message 67 is read with the member limit, only "
+                                                   "after the code is confirmed; every other pairing "
+                                                   "message, and any before the confirm, with the "
+                                                   "pairing limit"},
                         "take": mv, "refuse": mb, "refuse_fields": mf,
                         "set_digest_of_records_take": digest},
         "copy.json": copy_vector(),

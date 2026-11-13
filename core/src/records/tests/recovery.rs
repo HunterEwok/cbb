@@ -351,25 +351,26 @@ fn the_recovery_key_signs_heads_only() {
     assert!(!has(&s, &k("sneaky")));
 }
 
-/// At most 16 heads for the group's life: a 17th is not signed, not
-/// stored, and a writer at 16 refuses.
+/// At most MAX_RECOVERY (64) heads for the group's life: the next is not
+/// signed, not stored, and a writer at the cap refuses.
 #[test]
-fn at_most_sixteen_heads() {
+fn at_most_max_recovery_heads() {
     let mut g = base();
-    for i in 1..=16 {
+    let max = crate::records::body::MAX_RECOVERY;
+    for i in 1..=max {
         let list = g.listing();
         g.change(&k(&format!("n{i}")), &list);
     }
     let s = g.state();
-    assert_eq!(s.roots.len(), 17);
+    assert_eq!(s.roots.len() as u64, max + 1);
     let (_, tip) = g.heads[&rk().hash()];
     let body = Body {
-        seq: 17,
+        seq: max + 1,
         prev: Some(tip),
         ..g.body(
             &k("recovery"),
             Kind::Recovery {
-                root: k("n17").key,
+                root: k(&format!("n{}", max + 1)).key,
                 list: [1; 32],
                 from: 0,
                 first: RecordId([0xf1; 32]),
@@ -381,8 +382,17 @@ fn at_most_sixteen_heads() {
     let mut set = set_with(&g.root.key, &g.recs, &g.lists);
     let st = set.state();
     assert!(
-        set.write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("n17"), phone(&k("p17")), &[], false, 0)
-            .is_err()
+        set.write_change(
+            &st,
+            &k("recovery"),
+            crate::testkit::rk2(),
+            &k(&format!("n{}", max + 1)),
+            phone(&k(&format!("p{}", max + 1))),
+            &[],
+            false,
+            0
+        )
+        .is_err()
     );
 }
 
@@ -994,7 +1004,8 @@ fn a_change_lists_no_checkpoint() {
 }
 
 /// A change's list carries the earlier roots' removals that name a key
-/// some record names, at most their share, the newest first.
+/// some record names, at most their share, the newest first; of removals
+/// that name the same keys and saw the same, the newest alone (the fold).
 #[test]
 fn a_change_lists_removals_that_name_someone_within_their_share() {
     use crate::records::set::EARLIER_REMOVALS;
@@ -1006,14 +1017,31 @@ fn a_change_lists_removals_that_name_someone_within_their_share() {
     let of_tv: Vec<RecordId> =
         (0..EARLIER_REMOVALS + 40).map(|_| g.root_rec(Kind::Revoke(removal(&[tv.hash], vec![]))).id()).collect();
     let list = g.listing();
-    assert!(of_tv.iter().all(|id| list.contains(id)));
+    let newest = *of_tv.last().unwrap();
+    assert!(of_tv.iter().all(|id| list.contains(id) == (*id == newest)));
     g.change(&k("n1"), &list);
     // The new root admits the tv again; a second change follows.
     g.device(&k("n1"), &tv, "tv", |_| {});
     let list = g.listing();
     assert!(ghosts.iter().all(|id| !list.contains(id)));
     let listed: Vec<&RecordId> = of_tv.iter().filter(|id| list.contains(id)).collect();
-    assert_eq!(listed, of_tv[of_tv.len() - EARLIER_REMOVALS..].iter().collect::<Vec<_>>());
+    assert_eq!(listed, vec![&newest]);
+    // Removals of different keys each keep their place, within the share.
+    let mut g = base();
+    let devs: Vec<K> = (0..EARLIER_REMOVALS + 8).map(|i| k(&format!("dev {i}"))).collect();
+    let rms: Vec<RecordId> = devs
+        .iter()
+        .map(|d| {
+            g.device(&k("root"), d, "d", |_| {});
+            g.root_rec(Kind::Revoke(removal(&[d.hash], vec![]))).id()
+        })
+        .collect();
+    let list = g.listing();
+    g.change(&k("n1"), &list);
+    g.device(&k("n1"), &k("tv 2"), "tv", |_| {});
+    let list = g.listing();
+    let listed = rms.iter().filter(|id| list.contains(id)).count();
+    assert!(listed <= EARLIER_REMOVALS, "{listed}");
 }
 
 /// While halted a set takes the recovery key's records and what the list
@@ -1401,7 +1429,7 @@ fn a_large_first_checkpoint_applies() {
 #[test]
 fn a_checkpoint_over_its_ceiling_is_not_signed() {
     let g = base();
-    let mut keep: Vec<RecordId> = (0..5000u32).map(|i| RecordId(crate::certs::sha256(&i.to_be_bytes()))).collect();
+    let mut keep: Vec<RecordId> = (0..9000u32).map(|i| RecordId(crate::certs::sha256(&i.to_be_bytes()))).collect();
     keep.sort();
     let root = k("root");
     let head = Head { key: root.hash, seq: g.heads[&root.hash].0, id: g.heads[&root.hash].1 };
@@ -1492,7 +1520,7 @@ fn leaving_a_halt_carries_nothing_over() {
 fn a_full_set_names_more_ids_than_its_rooms_hold() {
     let mut g = base();
     let root = k("root");
-    let admins: Vec<K> = (0..12).map(|i| k(&format!("admin {i}"))).collect();
+    let admins: Vec<K> = (0..crate::records::ADMIN_KEYS_MAX).map(|i| k(&format!("admin {i}"))).collect();
     for (i, a) in admins.iter().enumerate() {
         g.admin(&k(&format!("admin device {i}")), a, POWER_ADMIT | POWER_MANAGE);
     }
@@ -1507,7 +1535,9 @@ fn a_full_set_names_more_ids_than_its_rooms_hold() {
     let from = g.recs.clone();
     let mut m = set_of(&g.root.key);
     m.insert_all(from.iter().cloned());
-    assert_eq!(m.len(), crate::records::MAX_RECORDS);
+    // The current root and every admin key full: the cut roots' reserve
+    // is the rest of the room.
+    assert_eq!(m.len(), crate::records::MAX_RECORDS - crate::records::CUT_ROOTS_RESERVE);
     let w = write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
     m.insert(w.record.clone()).unwrap();
     let n1 = k("n1");
@@ -1518,8 +1548,15 @@ fn a_full_set_names_more_ids_than_its_rooms_hold() {
         let r = g.rec(&n1, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
         assert_eq!(m.insert(r), Ok(Added::Waiting));
     }
-    let n = m.ids().count();
-    assert!(n > crate::format::cbor::MAX_COUNT, "{n}");
+    // More IDs than the old profile's 4096 items, and they go as one
+    // array: the profile's count holds them.
+    let ids: Vec<crate::format::Value> = m.ids().map(|id| crate::format::Value::Bytes(&id.0[..])).collect();
+    assert!(ids.len() > 4096, "{}", ids.len());
+    let one = crate::format::Value::Array(ids).encode();
+    assert_eq!(
+        crate::format::cbor::decode(&one).ok().and_then(|v| v.as_array().map(<[_]>::len)),
+        Some(m.ids().count())
+    );
 }
 
 /// A group of 250 admin keys, each of which has signed.
@@ -1537,7 +1574,8 @@ fn many_admins() -> (G, Vec<K>) {
 /// concern, the removed keys and their admin or member key: removing a
 /// plain device names none and weighs one unit, removing an admin's
 /// device names its admin key, and removing 256 keys of a group of 250
-/// admin keys fits, in as many records as their bodies need.
+/// devices made admins (of which 16, the cap, count) fits, in as many
+/// records as their bodies need.
 #[test]
 fn removals_name_only_the_keys_they_concern() {
     let (g, admins) = many_admins();
@@ -1583,7 +1621,7 @@ fn removals_name_only_the_keys_they_concern() {
     many.extend((0..4).map(|i| k(&format!("stranger {i}")).hash));
     assert_eq!(many.len(), 256);
     let all = removals(&many);
-    assert!(all.len() > 1);
+    assert!(!all.is_empty());
     let mut named: Vec<KeyHash> = all.iter().flat_map(|rm| rm.keys.iter().copied()).collect();
     named.sort();
     many.sort();
@@ -2305,4 +2343,51 @@ fn the_newest_heads_first_checkpoint_waits_whatever_else_does() {
     assert_eq!(m.state().roots, vec![k("root").hash, n1.hash, k("n2").hash]);
     let restored = RecordSet::restore(g.root.key.clone(), crate::testkit::recovery(), &order, &g.lists);
     assert_eq!(restored.state().roots, m.state().roots);
+}
+
+/// A change never leaves out a device that counts: when the removals and
+/// the device records that count pass what a change carries, the writer
+/// refuses and the set stays as it was; within it, every device stays.
+#[test]
+fn a_change_carries_every_device_that_counts_or_is_not_written() {
+    let small = crate::records::keep::small::Small::new(40, 8, 4);
+    let mut g = base();
+    let from = g.recs.clone();
+    write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
+    let n1 = k("n1");
+    for i in 0..5 {
+        g.rec(&n1, Kind::device(Device::new(k(&format!("e{i}")).key.clone(), "e", ROLE_MEMBER)));
+    }
+    for r in &g.recs {
+        small.units(r.id(), 1);
+    }
+    let mut set = set_with(&g.root.key, &g.recs, &g.lists);
+    let st = set.state();
+    let before = set.digest();
+    let devices = st.devices.len();
+    assert!(devices > 8, "{devices} devices");
+    let err = set
+        .write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("n2"), phone(&k("phone 2")), &[], false, 0)
+        .unwrap_err();
+    assert!(alloc::format!("{err}").contains("leave out devices"), "{err}");
+    assert_eq!(set.digest(), before);
+    // Removing enough of them, the change is written and keeps the rest.
+    let gone = [k("e0").hash, k("e1").hash, k("tv").hash];
+    let w = set
+        .write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("n2"), phone(&k("phone 2")), &gone, false, 0)
+        .unwrap();
+    let mut all = g.recs.clone();
+    all.extend(w.first.iter().cloned());
+    all.push(w.record.clone());
+    let mut lists = g.lists.clone();
+    lists.push(w.list.encode());
+    for r in w.first.iter().chain([&w.record]) {
+        small.units(r.id(), 1);
+    }
+    let s = state_with(&g.root.key, &all, &lists);
+    assert_eq!(s.roots.last(), Some(&k("n2").hash));
+    for d in &st.devices {
+        let key = d.key.hash();
+        assert_eq!(s.device_by_key(&key).is_some(), !gone.contains(&key), "{}", d.name);
+    }
 }

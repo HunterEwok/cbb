@@ -326,8 +326,58 @@ fn a_full_group_fills_in_about_the_time_of_its_signatures() {
         g.recs.len(),
         set.len()
     );
-    assert!(units > keep::room() * 3 / 4, "the set is near its room: {units} units");
+    // The twelve admins that sign (every fourth record is the root's)
+    // fill their ceilings, and the root keeps its newest devices.
+    assert!(units > 12 * crate::records::MAX_ADMIN_RECORDS as u64, "the set is near its room: {units} units");
     assert!(fill < verify * 2, "fill {fill:?} against verifying all {verify:?}");
     let (first, last) = (laps[0], laps[laps.len() - 1]);
     assert!(last < first * 4, "the last quarter {last:?} against the first {first:?}");
+}
+
+/// An admin's record that the counting checkpoint left out (the set
+/// compacted by it), while a newer
+/// root checkpoint keeps it and waits for it, goes aside rather than away:
+/// the newer checkpoint then counts with it. The set decides it where the
+/// record is pruned, asking only there whether a checkpoint above keeps it.
+#[test]
+fn a_record_the_counting_checkpoint_left_out_waits_for_the_one_above_that_keeps_it() {
+    let mut g = G::new();
+    let root = k("root");
+    let admin = k("admin 0");
+    let admission = g.admin(&k("phone 0"), &admin, POWER_ADMIT);
+    let copies = g.rec(&admin, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
+    // The admin's head, an anchor of both checkpoints.
+    let newer = g.rec(&admin, Kind::Copies { incoming_ms: MIN_INCOMING_MS + 1, seen: vec![] });
+    // Each checkpoint covers the root's line and the admin's.
+    let checkpoint = |g: &mut G, keep: Vec<RecordId>| {
+        let mut heads: Vec<Head> = [root.hash, admin.hash]
+            .iter()
+            .map(|h| (h, g.heads[h]))
+            .map(|(h, (seq, id))| Head { key: *h, seq, id })
+            .collect();
+        heads.sort_by_key(|h| h.key);
+        let mut keep = keep;
+        keep.sort();
+        g.rec(&root, Kind::Checkpoint { heads, keep })
+    };
+    let first = checkpoint(&mut g, vec![admission.id()]);
+    let second = checkpoint(&mut g, vec![admission.id(), copies.id()]);
+    for old in [false, true] {
+        let mut set = set_of(&g.root.key);
+        let run = |set: &mut RecordSet| {
+            for r in [&admission, &newer, &first, &second] {
+                let _ = set.insert(r.clone());
+            }
+            let st = set.state();
+            assert_eq!(st.checkpoint, Some(first.id()), "the first counts, the second waits");
+            // The member compacts by the first: the admin's record is pruned.
+            let _ = set.compact(&st);
+            let got = set.insert(copies.clone());
+            (got, set.state().checkpoint)
+        };
+        let (got, counting) = if old { the_old_way(|| run(&mut set)) } else { run(&mut set) };
+        assert!(matches!(got, Ok(Added::Stored | Added::Waiting)), "{got:?}");
+        assert_eq!(counting, Some(second.id()), "the second counts with it");
+        assert!(set.get(&copies.id()).is_some());
+    }
 }

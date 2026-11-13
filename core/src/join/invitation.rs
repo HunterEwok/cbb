@@ -30,7 +30,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use zeroize::Zeroize;
 
 use crate::format::grant::{Binding, Kept};
-use crate::format::{Alg, DeviceId, Rule, Value, cbor};
+use crate::format::{Alg, DeviceId, KeyHash, Rule, Value, cbor};
 use crate::records::State;
 use crate::records::body::{CAP_HUB, RIGHT_HUB, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND, ROLE_LEAF};
 
@@ -548,22 +548,81 @@ pub struct JoinerCode {
 }
 
 /// A joiner's pairing session past its code step: the code is shown and
-/// the nonce opened. It lives with that session alone: it is neither
-/// cloned nor kept, and a restart has none.
+/// the nonce opened, the person has not answered yet. It lives with that
+/// session alone: it is neither cloned nor kept, and a restart has none.
+/// It gives nothing by itself: only the person's "they match"
+/// ([`JoinerAttempts::answered`]) turns it into a [`Matched`].
 #[derive(Debug)]
 pub struct Shown {
     local: DeviceId,
+    session: [u8; 32],
+    member: KeyHash,
 }
 
-impl Shown {
+/// A joiner's pairing session whose code the person said matches, at the
+/// joiner: the proof a Welcome needs at home without an invitation
+/// (`welcome::Way::Home`), where nothing secret binds the member, and the
+/// only source of a guarded leaf's binding. Like [`Shown`] it lives with
+/// that session alone.
+#[derive(Debug)]
+pub struct Matched {
+    local: DeviceId,
+    /// The session's mark (`grant::session_mark` of its exporter): the
+    /// answer names that session and serves no other.
+    session: [u8; 32],
+    /// The hash of the member's key the session's handshake proved: the
+    /// answer is of that member and no other.
+    member: KeyHash,
+}
+
+impl Matched {
     /// A guarded leaf's binding in person by code (`grant::read_bound`):
-    /// the grant this session brings once the person confirmed the code,
-    /// and only it, binds the leaf to the root it waits for. None when the
-    /// leaf waits for no binding. What a binding names comes from the
-    /// leaf's own state and this session's own key, never from the peer.
-    pub fn binding(&self, kept: &Kept) -> Option<Binding> {
-        Binding::at_code_step(kept, self.local)
+    /// the grant this session brings, and only it, binds the leaf to the
+    /// root it waits for; `kept` and `head` are what the leaf stored
+    /// (`Kept::start`). None when the leaf waits for no binding. What a
+    /// binding names comes from the leaf's own state and this session's
+    /// own key, never from the peer. `exporter` is the current session's:
+    /// none for an answer given in another session. It takes the answer by
+    /// value: one answer serves one grant.
+    pub fn binding(self, kept: &Kept, head: Option<(KeyHash, u64)>, exporter: &[u8]) -> Option<Binding> {
+        if !self.of(exporter) {
+            return None;
+        }
+        Binding::matched(kept, head, self.local, self.session)
     }
+
+    /// The device ID of the joiner's own key in this session.
+    pub(crate) fn local(&self) -> DeviceId {
+        self.local
+    }
+
+    /// Whether the answer was given in the session with this exporter.
+    pub(crate) fn of(&self, exporter: &[u8]) -> bool {
+        crate::secret::ct_eq(&self.session, &crate::format::grant::session_mark(exporter))
+    }
+
+    /// Whether the answer was given to the member with this key.
+    pub(crate) fn to(&self, member: &[u8; 65]) -> bool {
+        crate::format::Key::new(Alg::Es256, member).hash() == self.member
+    }
+}
+
+/// The code at the member's end of a pairing at home without an
+/// invitation: a function of its own, so that no invitation flow ([`Open`])
+/// ever runs with the ID of none. `commitment` is what `pair/start`
+/// carried, `joiner_nonce` what `pair/confirm` opened; a nonce that does
+/// not open the commitment is [`PairError::WrongCode`], which ends the
+/// attempt.
+pub fn home_code(
+    commitment: &[u8; 32],
+    exporter: &[u8],
+    joiner_nonce: &[u8; 32],
+    member_nonce: &[u8; 32],
+) -> Result<String, PairError> {
+    if !crate::secret::ct_eq(&code_commitment(joiner_nonce), commitment) {
+        return Err(PairError::WrongCode);
+    }
+    Ok(short_code(exporter, joiner_nonce, member_nonce, &super::NO_INVITATION))
 }
 
 /// The joiner's sessions with one invitation (kept across restarts): at
@@ -598,26 +657,47 @@ impl JoinerAttempts {
     }
 
     /// The code to show once `pair/reply` brought the member's nonce, the
-    /// nonce that `pair/confirm` opens, and the session's code step passed
-    /// at this end ([`Shown`]); invitation is the ID of the invitation the
-    /// joiner is using, local the device ID of the joiner's own TLS key in
-    /// this session. It takes the session by value: a nonce serves one
-    /// session. The code stays shown until [`JoinerAttempts::answered`].
+    /// nonce that `pair/confirm` opens, and the session past its code step
+    /// at this end ([`Shown`]); invitation is the invitation the joiner is
+    /// using, none at home without one, local the device ID of the
+    /// joiner's own TLS key in this session, member the member's key its
+    /// handshake proved. It takes the session by
+    /// value: a nonce serves one session. An invitation with the ID of
+    /// none is refused ([`PairError::Refused`]). The code stays shown
+    /// until [`JoinerAttempts::answered`] or [`JoinerAttempts::gave_up`].
     pub fn open(
         &mut self,
         code: JoinerCode,
         exporter: &[u8],
         member_nonce: &[u8; 32],
-        invitation: &[u8; 16],
+        invitation: Option<&Invitation>,
         local: DeviceId,
-    ) -> (String, [u8; 32], Shown) {
+        member: &[u8; 65],
+    ) -> Result<(String, [u8; 32], Shown), PairError> {
+        let id = match invitation {
+            Some(i) if i.id == super::NO_INVITATION => return Err(PairError::Refused),
+            Some(i) => i.id,
+            None => super::NO_INVITATION,
+        };
         self.showing = true;
-        (short_code(exporter, &code.nonce, member_nonce, invitation), code.nonce, Shown { local })
+        let session = crate::format::grant::session_mark(exporter);
+        let member = crate::format::Key::new(Alg::Es256, member).hash();
+        Ok((short_code(exporter, &code.nonce, member_nonce, &id), code.nonce, Shown { local, session, member }))
     }
 
-    /// The person answered the shown code (they match, they do not, or
-    /// give up): only now may the person start another session.
-    pub fn answered(&mut self) {
+    /// The person answered the shown code: only now may the person start
+    /// another session. The session's proof of the match ([`Matched`])
+    /// comes only when they said the codes match; "they do not" gives
+    /// nothing, and that session ends.
+    pub fn answered(&mut self, shown: Shown, matched: bool) -> Option<Matched> {
+        self.showing = false;
+        matched.then_some(Matched { local: shown.local, session: shown.session, member: shown.member })
+    }
+
+    /// The person gave up, or the session that showed the code is gone (a
+    /// restart has no [`Shown`]): another session may start, and nothing is
+    /// proven.
+    pub fn gave_up(&mut self) {
         self.showing = false;
     }
 }

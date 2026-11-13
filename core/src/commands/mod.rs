@@ -415,6 +415,11 @@ pub struct Leaf<'a> {
     pub me: DeviceId,
     pub group: GroupId,
     pub kept: &'a Kept,
+    /// The newest recovery seq the leaf knows, from the newest head it
+    /// stored: a guarded leaf whose kept grant was made under a lower one
+    /// obeys nobody, whatever its kept state remembers
+    /// (`Kept::needs_rebind`).
+    pub recovery: u64,
     pub stale: bool,
     pub now_ms: Option<u64>,
 }
@@ -441,9 +446,13 @@ pub fn accept_leaf(
     store: &dyn KeyStore,
 ) -> Result<Option<Vec<u8>>, Refusal> {
     // A leaf that holds a fork of its root obeys nobody (`Kept::fork`), nor
-    // a guarded leaf that waits to be bound again (`Kept::changed`).
-    let point =
-        at.kept.commander(&c.signer).filter(|_| !at.kept.forked && at.kept.rebind.is_none()).ok_or(Refusal::SILENT)?;
+    // a guarded leaf that waits to be bound again (`Kept::changed`), which
+    // its kept grant under a lower recovery seq than it knows says alone.
+    let point = at
+        .kept
+        .commander(&c.signer)
+        .filter(|_| !at.kept.forked && !at.kept.needs_rebind(at.recovery))
+        .ok_or(Refusal::SILENT)?;
     c.envelope.verify(point, sig::LABEL_COMMAND).map_err(|_| Refusal::SILENT)?;
     let refuse = |r| Err(Refusal::signed(r));
     if c.group != at.group {

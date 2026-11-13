@@ -29,8 +29,18 @@
 //! bound again in person, by code, by the new root ([`Kept::changed`],
 //! [`read_bound`]): [`read`] takes no grant for it, the new root's
 //! included, and a kept grant made under a lower recovery seq than the one
-//! the leaf knows means the same, whatever the leaf remembers. An ordinary
-//! leaf follows a change of root: it takes the new root's grant.
+//! the leaf knows means the same, whatever the leaf remembers: it takes
+//! no command either (`commands::accept_leaf` asks [`Kept::needs_rebind`]
+//! of the recovery seq the leaf knows). An ordinary leaf follows a change
+//! of root: it takes the new root's grant.
+//!
+//! A leaf stores the newest recovery head it verified apart from its kept
+//! state, so a power cut between the two writes can leave a head newer than
+//! the kept state. At every start, before it reads a grant or a command,
+//! it calls [`Kept::start`] with that head; and since a leaf that skips it
+//! must still neither obey nor be stuck, the commands ask the recovery seq
+//! itself, and a binding ([`Binding`]) and [`read_bound`] apply the head
+//! themselves.
 //!
 //! Two different records signed by the root the leaf keeps at one seq are
 //! a fork of that root (records rule 9): the leaf takes the pair from
@@ -39,7 +49,7 @@
 
 use alloc::vec::Vec;
 
-use super::cbor::{Value, is_set};
+use super::cbor::{self, Value, is_set};
 use super::envelope::Envelope;
 use super::key::{Alg, DeviceId, GroupId, Key, KeyHash};
 use super::{Rule, sha256, sig};
@@ -72,9 +82,8 @@ pub const FIELD_REPLACES: u16 = 18;
 /// The grant's field of the recovery seq it was made under (absent: 0,
 /// before any change of root).
 pub const FIELD_RECOVERY: u16 = 19;
-/// The highest recovery seq (a group's recovery key signs at most 16
-/// heads).
-pub const MAX_RECOVERY: u64 = 16;
+/// The highest recovery seq: the records' one constant (records rule 33).
+pub const MAX_RECOVERY: u64 = crate::records::body::MAX_RECOVERY;
 /// The grant's field of its type (1).
 pub const FIELD_TYPE: u16 = 1;
 /// The grant's field of its group.
@@ -126,7 +135,7 @@ pub const RULE_COUNTER: Rule = Rule::field("grants/counter");
 pub const RULE_REPLACES: Rule = Rule::field("grants/replaces");
 
 /// A grant made under another recovery seq than the newest the leaf knows,
-/// one above 16, or a leaf asked to read grants under a recovery seq below
+/// one above MAX_RECOVERY, or a leaf asked to read grants under a recovery seq below
 /// the one it kept.
 pub const RULE_RECOVERY: Rule = Rule::field("grants/recovery");
 
@@ -202,6 +211,16 @@ impl Kept {
         Kept { guarded: true, recovery: self.recovery, rebind: Some((root, recovery)), ..Kept::default() }
     }
 
+    /// The leaf's state at a start, from what it stored: its kept state and
+    /// the newest recovery head it verified, the head's new root key hash
+    /// and recovery seq (none before any change of root). It is
+    /// [`Kept::changed`] by that head, so a head stored without the kept
+    /// state that should have followed it counts all the same. A leaf calls
+    /// it at every start, before it reads anything.
+    pub fn start(&self, head: Option<(KeyHash, u64)>) -> Kept {
+        head.map_or_else(|| self.clone(), |(root, recovery)| self.changed(root, recovery))
+    }
+
     /// Whether the leaf, knowing `recovery` as the newest recovery seq,
     /// waits to be bound again in person: it is guarded and took a change
     /// of root, or keeps a grant made under a lower seq. The second needs
@@ -215,6 +234,236 @@ impl Kept {
     /// grant.
     pub fn commander(&self, hash: &KeyHash) -> Option<&[u8; 65]> {
         self.commanders.iter().find(|(h, _)| h == hash).map(|(_, p)| p)
+    }
+}
+
+/// A malformed stored leaf state ([`Stored::decode`]): not a map of the
+/// fields below in their one spelling, another version, or a critical
+/// field this version does not know.
+pub const RULE_STATE: Rule = Rule::field("grants/state");
+
+/// A stored leaf state of a later version, or with a recovery seq above
+/// this version's [`MAX_RECOVERY`]: the firmware needs an update.
+pub const RULE_STATE_NEWER: Rule = Rule::field("grants/state-newer");
+
+/// The version of the stored leaf state's encoding.
+pub const STATE_VERSION: u64 = 1;
+
+/// What a leaf stores across restarts, in one write: its kept state and the
+/// newest recovery head it verified (the head's new root key hash and
+/// recovery seq). Its one reader is [`Stored::start`], which applies the
+/// head ([`Kept::start`]), so a leaf cannot take the kept state without it.
+///
+/// The bytes ([`Stored::encode`]) are a canonical CBOR map, every field in
+/// its one spelling (a default is left out): 1 the version (1), 2 guarded
+/// (flag), 3 the root counter, 4 the admin counter, 5 the commanders
+/// (`[key hash, point]` sorted by key hash, at most eight), 6 the grant's
+/// hash (bytes 32), 7 the recovery seq of the grant, 8 forked (flag), 9 the
+/// wait to be bound again (`[root key hash, recovery seq]`), 10 the newest
+/// head (`[root key hash, recovery seq]`). Fields from 256 on are a later
+/// version's: kept as they are and written back; another field below 256
+/// is refused. Recovery seqs are 1 to [`MAX_RECOVERY`].
+///
+/// The reader takes only what a writer makes: the wait (9) only on a
+/// guarded leaf, the wait and the fork (8) only without a grant (no
+/// commanders, counters or grant hash), commanders and counters only with
+/// a grant hash, and the head (10) at or above every other seq.
+///
+/// A leaf loads its state with [`Stored::load`] and never treats bytes
+/// that are there and do not read as no state: they give
+/// [`Stored::unreadable`], which obeys nobody and takes no grant until the
+/// leaf is set up again in person. A state of a later version, or with a
+/// recovery seq above this version's [`MAX_RECOVERY`], is the same, with
+/// [`Stored::update_needed`]. The bytes go in the store's frames
+/// (`crate::store`), which are required, not a convenience: two slots keep
+/// the last whole copy while the next is written, and the SHA-256 of each
+/// frame catches a torn write or a flipped bit, so a cut write gives the
+/// older state and never a freed lock.
+///
+/// The named limit: the state is not signed or authenticated at rest.
+/// Whoever can write the leaf's flash owns the leaf: the bytes of before a
+/// change of root, put back whole, read, and the leaf obeys the old
+/// commanders again, which a MAC would not stop (they carry a right one
+/// too). Only the chip guards against it: flash encryption, secure boot
+/// and a counter in hardware are the firmware's.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Stored {
+    kept: Kept,
+    head: Option<(KeyHash, u64)>,
+    later: Vec<(u16, Vec<u8>)>,
+    update: bool,
+}
+
+impl Stored {
+    /// What the leaf stores once it took `kept`, knowing `head` as the
+    /// newest recovery head; a later version's fields of `before` stay.
+    pub fn new(kept: Kept, head: Option<(KeyHash, u64)>, before: Option<&Stored>) -> Stored {
+        Stored { kept, head, later: before.map(|b| b.later.clone()).unwrap_or_default(), update: false }
+    }
+
+    /// The state of a leaf whose store holds bytes that do not read: guarded
+    /// and forked under the highest recovery seq, so it obeys nobody, takes
+    /// no grant by [`read`] or [`read_bound`] and can be bound by no root,
+    /// until it is set up again in person. Never written.
+    pub fn unreadable(update: bool) -> Stored {
+        let kept = Kept { guarded: true, forked: true, recovery: MAX_RECOVERY, ..Kept::default() };
+        Stored { kept, head: None, later: Vec::new(), update }
+    }
+
+    /// The leaf's state from its store: `None` when the store holds no state
+    /// at all (a leaf never set up, or erased on purpose), the bytes of the
+    /// newest whole frame otherwise. Bytes that do not read are never no
+    /// state ([`Stored::unreadable`]).
+    pub fn load(bytes: Option<&[u8]>) -> Stored {
+        match bytes {
+            None => Stored::default(),
+            Some(b) => Stored::decode(b).unwrap_or_else(|r| Stored::unreadable(r == RULE_STATE_NEWER)),
+        }
+    }
+
+    /// Whether the state is of a later version than this firmware reads:
+    /// the leaf obeys nobody until it is updated.
+    pub fn update_needed(&self) -> bool {
+        self.update
+    }
+
+    /// The leaf's kept state at a start ([`Kept::start`] by the stored head)
+    /// and the newest recovery seq it knows, for `commands::Leaf` and the
+    /// grant readers.
+    pub fn start(&self) -> (Kept, u64) {
+        let recovery = self.head.map_or(self.kept.recovery, |(_, seq)| seq.max(self.kept.recovery));
+        (self.kept.start(self.head), recovery)
+    }
+
+    /// The newest recovery head the leaf stored.
+    pub fn head(&self) -> Option<(KeyHash, u64)> {
+        self.head
+    }
+
+    pub fn encode(&self) -> Vec<u8> {
+        let k = &self.kept;
+        fn pair((h, seq): &(KeyHash, u64)) -> Value<'_> {
+            Value::Array(alloc::vec![Value::Bytes(&h.0), Value::Uint(*seq)])
+        }
+        let later: Vec<(u16, Value<'_>)> =
+            self.later.iter().filter_map(|(n, b)| cbor::decode(b).ok().map(|v| (*n, v))).collect();
+        let mut m = alloc::vec![(1u16, Value::Uint(STATE_VERSION))];
+        if k.guarded {
+            m.push((2, Value::Uint(1)));
+        }
+        for (n, v) in [(3u16, k.root_counter), (4, k.admin_counter)] {
+            if v > 0 {
+                m.push((n, Value::Uint(v)));
+            }
+        }
+        if !k.commanders.is_empty() {
+            let cs = k.commanders.iter().map(|(h, p)| Value::Array(alloc::vec![Value::Bytes(&h.0), Value::Bytes(p)]));
+            m.push((5, Value::Array(cs.collect())));
+        }
+        if k.grant_hash != [0; 32] {
+            m.push((6, Value::Bytes(&k.grant_hash)));
+        }
+        if k.recovery > 0 {
+            m.push((7, Value::Uint(k.recovery)));
+        }
+        if k.forked {
+            m.push((8, Value::Uint(1)));
+        }
+        if let Some(r) = &k.rebind {
+            m.push((9, pair(r)));
+        }
+        if let Some(h) = &self.head {
+            m.push((10, pair(h)));
+        }
+        m.extend(later);
+        Value::Map(m).encode()
+    }
+
+    pub fn decode(b: &[u8]) -> Result<Stored, Rule> {
+        let v = cbor::decode(b).map_err(|_| RULE_STATE)?;
+        let map = v.as_map().ok_or(RULE_STATE)?;
+        match v.get(1).and_then(Value::as_uint) {
+            Some(STATE_VERSION) => {}
+            Some(n) if n > STATE_VERSION => return Err(RULE_STATE_NEWER),
+            _ => return Err(RULE_STATE),
+        }
+        if map.iter().any(|(n, _)| *n < 256 && *n > 10) {
+            return Err(Rule::FORM_CRITICAL);
+        }
+        let flag = |n| match v.get(n) {
+            None => Ok(false),
+            Some(Value::Uint(1)) => Ok(true),
+            Some(_) => Err(RULE_STATE),
+        };
+        let count = |n| match v.get(n) {
+            None => Ok(0),
+            Some(Value::Uint(0)) => Err(Rule::FORM_DEFAULT),
+            Some(x) => x.as_uint().ok_or(RULE_STATE),
+        };
+        let hash = |x: &Value<'_>| x.as_bytes().and_then(KeyHash::from_slice).ok_or(RULE_STATE);
+        let pair = |n| -> Result<Option<(KeyHash, u64)>, Rule> {
+            let Some(x) = v.get(n) else { return Ok(None) };
+            match x.as_array() {
+                Some([h, Value::Uint(seq)]) if (1..=MAX_RECOVERY).contains(seq) => Ok(Some((hash(h)?, *seq))),
+                Some([_, Value::Uint(seq)]) if *seq > MAX_RECOVERY => Err(RULE_STATE_NEWER),
+                _ => Err(RULE_STATE),
+            }
+        };
+        let mut commanders: Vec<Commander> = Vec::new();
+        if let Some(cs) = v.get(5) {
+            let cs = cs.as_array().filter(|cs| !cs.is_empty() && cs.len() <= MAX_COMMANDERS).ok_or(RULE_STATE)?;
+            for c in cs {
+                let Some([h, p]) = c.as_array() else { return Err(RULE_STATE) };
+                let point: [u8; 65] = p.as_bytes().and_then(|p| p.try_into().ok()).ok_or(RULE_STATE)?;
+                let h = hash(h)?;
+                if Key::new(Alg::Es256, &point).hash() != h || commanders.last().is_some_and(|(last, _)| *last >= h) {
+                    return Err(RULE_STATE);
+                }
+                commanders.push((h, point));
+            }
+        }
+        let grant_hash = match v.get(6) {
+            None => [0; 32],
+            Some(x) => {
+                x.as_bytes().and_then(|b| <[u8; 32]>::try_from(b).ok()).filter(|h| *h != [0; 32]).ok_or(RULE_STATE)?
+            }
+        };
+        let recovery = count(7)?;
+        if recovery > MAX_RECOVERY {
+            return Err(RULE_STATE_NEWER);
+        }
+        let kept = Kept {
+            guarded: flag(2)?,
+            root_counter: count(3)?,
+            admin_counter: count(4)?,
+            commanders,
+            grant_hash,
+            recovery,
+            forked: flag(8)?,
+            rebind: pair(9)?,
+        };
+        let head = pair(10)?;
+        // Only what a writer makes: the wait on a guarded leaf, the wait and
+        // the fork without a grant, a grant's parts with its hash, the head
+        // at or above every other seq.
+        let k = &kept;
+        let has_grant = k.grant_hash != [0; 32];
+        let grant_parts = !k.commanders.is_empty() || k.root_counter > 0 || k.admin_counter > 0;
+        let seqs_ok = head.is_none_or(|(_, h)| h >= k.recovery && k.rebind.is_none_or(|(_, r)| h >= r));
+        if (k.rebind.is_some() && !k.guarded)
+            || ((k.rebind.is_some() || k.forked) && (has_grant || grant_parts))
+            || (grant_parts && !has_grant)
+            || !seqs_ok
+        {
+            return Err(RULE_STATE);
+        }
+        let later = map.iter().filter(|(n, _)| *n >= 256).map(|(n, x)| (*n, x.encode())).collect();
+        let stored = Stored { kept, head, later, update: false };
+        // One spelling: the bytes are the ones this state writes.
+        if stored.encode() != b {
+            return Err(RULE_STATE);
+        }
+        Ok(stored)
     }
 }
 
@@ -258,8 +507,8 @@ impl Granted<'_> {
 }
 
 /// A binding in person by code: made only by the leaf's own pairing
-/// session once it passed its code step
-/// (`crate::join::invitation::Shown::binding`), for that session alone; no
+/// session once the person said its code matches
+/// (`crate::join::invitation::Matched::binding`), for that session alone; no
 /// message carries it, it is never built from values a caller passes, and
 /// it is not kept past the session or a restart. It holds what the leaf
 /// knows by itself: the new root's key hash and the recovery seq from the
@@ -270,21 +519,41 @@ pub struct Binding {
     root: KeyHash,
     leaf: DeviceId,
     recovery: u64,
+    session: [u8; 32],
+}
+
+/// The mark of a pairing session: the hash of its TLS exporter, which is
+/// local to the session's two ends and new for each session.
+pub fn session_mark(exporter: &[u8]) -> [u8; 32] {
+    sha256(&[b"cbb pairing session mark v1\0", exporter])
 }
 
 impl Binding {
-    /// The binding a session of the leaf `leaf` makes at its code step,
-    /// from the leaf's kept state: none unless it waits to be bound again.
-    pub(crate) fn at_code_step(kept: &Kept, leaf: DeviceId) -> Option<Binding> {
-        kept.rebind.map(|(root, recovery)| Binding { root, leaf, recovery })
+    /// The binding a session of the leaf `leaf` makes once the person said
+    /// the codes match, from the leaf's stored state ([`Kept::start`]):
+    /// none unless it waits to be bound again.
+    pub(crate) fn matched(
+        kept: &Kept,
+        head: Option<(KeyHash, u64)>,
+        leaf: DeviceId,
+        session: [u8; 32],
+    ) -> Option<Binding> {
+        kept.start(head).rebind.map(|(root, recovery)| Binding { root, leaf, recovery, session })
     }
 }
 
 /// Reads a grant as [`read`] does, for a leaf bound in person by code:
-/// the binding must commit to this root, this leaf and `recovery`. It is
-/// the only way a guarded leaf that took a change of root takes a grant
-/// again; the grant must be the root's, guarded, under `recovery`, and it
-/// starts the counters afresh.
+/// the binding must commit to this root, this leaf and `recovery`, and to
+/// the wait the kept state holds (with the head `root` under `recovery`
+/// applied, [`Kept::start`]), so a binding made before a later change of
+/// root clears nothing. It is the only way a guarded leaf that took a
+/// change of root takes a grant again; the grant must be the root's,
+/// guarded, under `recovery`, and it starts the counters afresh. The
+/// binding is taken by value: one binding reads one grant, and only one
+/// that came over the very pairing session whose code the person
+/// confirmed: `exporter` is the TLS exporter of the session the grant
+/// arrived on, and a grant by sync or by another session is refused.
+#[allow(clippy::too_many_arguments, reason = "the grant, the leaf's state and the session it came on")]
 pub fn read_bound<'a>(
     msg: &Value<'a>,
     root: &[u8],
@@ -292,12 +561,22 @@ pub fn read_bound<'a>(
     group: &GroupId,
     kept: Option<&Kept>,
     recovery: u64,
-    binding: &Binding,
+    binding: Binding,
+    exporter: &[u8],
 ) -> Result<Granted<'a>, Rule> {
-    if binding.root != Key::new(Alg::Es256, root).hash() || binding.leaf != *leaf || binding.recovery != recovery {
+    let root_hash = Key::new(Alg::Es256, root).hash();
+    if binding.root != root_hash
+        || binding.leaf != *leaf
+        || binding.recovery != recovery
+        || !crate::secret::ct_eq(&binding.session, &session_mark(exporter))
+    {
         return Err(RULE_REBIND);
     }
-    let got = read_any(msg, root, leaf, group, kept, recovery, true)?;
+    let kept = kept.map(|k| k.start(Some((root_hash, recovery))));
+    if kept.as_ref().and_then(|k| k.rebind) != Some((binding.root, binding.recovery)) {
+        return Err(RULE_REBIND);
+    }
+    let got = read_any(msg, root, leaf, group, kept.as_ref(), recovery, true)?;
     if !(got.by_root && got.guarded) {
         return Err(RULE_REBIND);
     }
