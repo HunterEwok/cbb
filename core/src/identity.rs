@@ -89,6 +89,12 @@ pub trait ExternalKey: Send + Sync {
     fn public(&self) -> Vec<u8>;
     /// ECDSA P-256 over a SHA-256 digest, DER.
     fn sign_digest(&self, digest: &[u8; 32]) -> Result<Vec<u8>>;
+    /// ECDSA P-256 over data, DER: by default over its SHA-256 digest; a
+    /// key whose holder must see what it signs, such as a watch's admin key
+    /// (docs/protocol.md, section 10, "Watches"), takes the data itself.
+    fn sign_data(&self, data: &[u8]) -> Result<Vec<u8>> {
+        self.sign_digest(&certs::sha256(data))
+    }
     /// Where the identity file keeps the key, for a key that the machine's
     /// hardware holds; None for a key the file cannot name, such as a
     /// phone app's.
@@ -140,7 +146,7 @@ pub type OpenHeld<'a> = &'a dyn Fn(&HeldKey) -> Result<Arc<dyn ExternalKey>>;
 pub fn sign_external(key: &dyn ExternalKey, data: &[u8]) -> Result<Vec<u8>> {
     use p256::ecdsa::signature::hazmat::PrehashVerifier as _;
     let digest = certs::sha256(data);
-    let sig = key.sign_digest(&digest)?;
+    let sig = key.sign_data(data)?;
     let public = p256::ecdsa::VerifyingKey::from_sec1_bytes(&key.public())
         .map_err(|_| Error::msg("the device key is not a P-256 key"))?;
     let parsed =

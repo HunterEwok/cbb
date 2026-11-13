@@ -43,6 +43,8 @@ extern crate alloc;
 pub mod admit;
 pub mod api;
 pub mod arrange;
+#[cfg(feature = "web")]
+pub mod attest;
 pub mod authority;
 pub mod benchtime;
 pub mod bug;

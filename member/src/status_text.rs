@@ -251,6 +251,7 @@ pub fn os_name(os: &str) -> &'static str {
         "android" => "Android",
         "aurora" => "Aurora OS",
         "sailfish" => "Sailfish OS",
+        "harmonyos" => "HarmonyOS",
         "watchos" => "watchOS",
         "wearos" => "Wear OS",
         "none" => "device",

@@ -119,8 +119,8 @@ pub const CAPS: [&str; 3] = [CAP_ADMIN, CAP_DIALS, CAP_HUB];
 pub fn has_cap(caps: &[String], c: &str) -> bool {
     caps.iter().any(|x| x == c)
 }
-const OSES: [&str; 10] =
-    ["linux", "windows", "macos", "ios", "android", "aurora", "sailfish", "watchos", "wearos", "none"];
+const OSES: [&str; 11] =
+    ["linux", "windows", "macos", "ios", "android", "aurora", "sailfish", "harmonyos", "watchos", "wearos", "none"];
 
 /// A key hash (SHA-256 of a SubjectPublicKeyInfo) or a record ID (SHA-256
 /// of a body). In JSON it is standard base64, and hashes sort by that

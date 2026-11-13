@@ -2,8 +2,9 @@
 // Copyright (C) 2026 HunterEwok
 
 // Command tokens turns the apps' design tokens (apps/design/tokens.json)
-// into Swift for the iPhone and Mac apps, Kotlin for the Android app and
-// JavaScript for the tray app. Each theme has a style (faces, corners,
+// into Swift for the iPhone and Mac apps, Kotlin for the Android app,
+// JavaScript for the tray app and the HarmonyOS app's colour resources (the
+// default theme, light and dark). Each theme has a style (faces, corners,
 // lines, material) and a palette for the dark and the light appearance;
 // every palette must meet WCAG AA contrast for text, 4.5:1, on the
 // background and on a surface, the accent included, which the apps write
@@ -31,6 +32,12 @@ const (
 	swiftFile  = "apps/ios/CBB/Theme/Tokens.swift"
 	kotlinFile = "apps/android/shared/src/main/kotlin/tools/cbb/Tokens.kt"
 	jsFile     = "apps/desktop/frontend/tokens.js"
+	// The HarmonyOS app's colours, the light ones by default and the dark
+	// ones in the dark theme.
+	harmonyLight = "apps/harmony/entry/src/main/resources/base/element/color.json"
+	harmonyDark  = "apps/harmony/entry/src/main/resources/dark/element/color.json"
+	// The watch's, the dark ones only, as watches show.
+	harmonyWatch = "apps/harmony/wearable/src/main/resources/base/element/color.json"
 )
 
 // Palette is one theme's colours for the dark or the light appearance,
@@ -114,10 +121,14 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
+	light, dark, err := generateHarmony(data)
+	if err != nil {
+		fail(err)
+	}
 	for _, f := range []struct {
 		path string
 		out  []byte
-	}{{swiftFile, swift}, {kotlinFile, kotlin}, {jsFile, js}} {
+	}{{swiftFile, swift}, {kotlinFile, kotlin}, {jsFile, js}, {harmonyLight, light}, {harmonyDark, dark}, {harmonyWatch, dark}} {
 		if *check {
 			have, _ := os.ReadFile(f.path)
 			if !bytes.Equal(have, f.out) {
@@ -203,6 +214,40 @@ const header = "// SPDX-" + "License-Identifier: AGPL-3.0-only\n" +
 type half struct {
 	field string
 	p     Palette
+}
+
+// generateHarmony returns the HarmonyOS app's colour resources of the
+// default theme: its light palette and its dark one. JSON takes no
+// comment, so they do not say that they are generated.
+func generateHarmony(data []byte) (light, dark []byte, err error) {
+	if _, _, _, err := generate(data); err != nil {
+		return nil, nil, err
+	}
+	var t Tokens
+	if err := json.Unmarshal(data, &t); err != nil {
+		return nil, nil, err
+	}
+	at := slices.IndexFunc(t.Themes, func(th Theme) bool { return th.Name == t.Default })
+	return harmonyColours(t.Themes[at].Light), harmonyColours(t.Themes[at].Dark), nil
+}
+
+// harmonyColours writes a palette as the app's colour names: online and
+// offline are the accent and the dim text.
+func harmonyColours(p Palette) []byte {
+	var b strings.Builder
+	b.WriteString("{\n  \"color\": [\n")
+	for i, c := range [][2]string{
+		{"start_window_background", p.Background}, {"background", p.Background}, {"surface", p.Surface},
+		{"grid", p.Grid}, {"text", p.Text}, {"secondary", p.TextDim}, {"accent", p.Accent},
+		{"on_accent", p.OnAccent}, {"error", p.Danger}, {"online", p.Accent}, {"offline", p.TextDim},
+	} {
+		if i > 0 {
+			b.WriteString(",\n")
+		}
+		fmt.Fprintf(&b, "    { \"name\": %q, \"value\": %q }", c[0], c[1])
+	}
+	b.WriteString("\n  ]\n}\n")
+	return []byte(b.String())
 }
 
 func halves(th Theme) []half { return []half{{"dark", th.Dark}, {"light", th.Light}} }

@@ -36,6 +36,7 @@ jobs:
       android: ${{ steps.parts.outputs.android }}
       zxnext: ${{ steps.parts.outputs.zxnext }}
       silica: ${{ steps.parts.outputs.silica }}
+      harmony: ${{ steps.parts.outputs.harmony }}
       site: ${{ steps.parts.outputs.site }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -651,9 +652,10 @@ jobs:
         with:
           release: "15.1"
           usesh: true
-          # FreeBSD's go fetches the toolchain go.mod names; Xvfb, xclip
-          # and xterm are for the desktop connector's X11 tests.
-          prepare: pkg install -y go xorg-vfbserver xclip xterm
+          # FreeBSD's go fetches the toolchain go.mod names; git is for
+          # prcheck's test of a real repository; Xvfb, xclip and xterm are
+          # for the desktop connector's X11 tests.
+          prepare: pkg install -y go git xorg-vfbserver xclip xterm
           run: |
             set -e
             export GOTOOLCHAIN=auto GOFLAGS=-buildvcs=false
@@ -3088,6 +3090,50 @@ jobs:
           rustup default stable
           apps/silica/ci.sh "$RUNNER_TEMP/psdk" "$ARCHS" "$RUNNER_TEMP/rpm"
 
+  harmony:
+    name: HarmonyOS app (native module)
+    needs: changes
+    if: needs.changes.outputs.harmony == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: OpenHarmony's SDK from the cache
+        # Its native and ArkTS parts, about 3 GB unpacked; ffi/ohos-sdk.sh
+        # downloads it when the cache has none and checks it against its
+        # SHA-256.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ runner.temp }}/ohos-sdk/native
+            ${{ runner.temp }}/ohos-sdk/ets
+            ${{ runner.temp }}/ohos-sdk/toolchains
+          key: ohos-sdk-ets-${{ hashFiles('ffi/ohos-sdk.sh') }}
+      - name: the core's library, the native module and its tests, the ArkTS
+        # The app itself needs the HarmonyOS command line tools, which a
+        # Huawei developer account downloads; this job builds and checks what
+        # it can without them: the Rust core for the phone (ffi/bind.sh
+        # harmony), libcbb_napi.so over it with -Werror, and the ArkTS
+        # through OpenHarmony's compiler and linter (apps/harmony/check.sh).
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          sudo apt-get update -q
+          sudo apt-get install -y -q ninja-build
+          OHOS_NDK_HOME=$(sh ffi/ohos-sdk.sh "$RUNNER_TEMP/ohos-sdk" ets | tail -n 1)
+          export OHOS_NDK_HOME
+          sh apps/harmony/build.sh
+          cmake -S apps/harmony/entry/src/main/cpp -B "$RUNNER_TEMP/napi" -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$OHOS_NDK_HOME/build/cmake/ohos.toolchain.cmake" -DOHOS_ARCH=arm64-v8a -DOHOS_STL=c++_shared
+          cmake --build "$RUNNER_TEMP/napi"
+          "$OHOS_NDK_HOME/llvm/bin/llvm-readelf" -d "$RUNNER_TEMP/napi/libcbb_napi.so" | grep NEEDED
+          c++ -std=c++17 -Wall -Wextra -Werror -I apps/harmony/entry/src/main/cpp \
+            apps/harmony/entry/src/main/cpp/der.cpp apps/harmony/entry/src/test/cpp/der_test.cpp -o "$RUNNER_TEMP/der_test"
+          "$RUNNER_TEMP/der_test"
+          sh apps/harmony/check.sh "$RUNNER_TEMP/ohos-sdk"
+
   phonecore:
     name: phone core (${{ matrix.target }})
     needs: changes
@@ -3339,7 +3385,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, windows, kit, app, trayapp, androidkit, android, androidemu, fdroid, phonecore, service-build, service, service-coverage, rustcheck, rust, rustmips, esp32, zxnext, silica, advisories, docker, differential, model]
+    needs: [changes, check, website, test, gocover, coverage, build, buildmac, mips, freebsd, openwrt, avahi, e2e, upgrade, desktop, packaging, windows, kit, app, trayapp, androidkit, android, androidemu, fdroid, phonecore, service-build, service, service-coverage, rustcheck, rust, rustmips, esp32, zxnext, silica, harmony, advisories, docker, differential, model]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

@@ -13,6 +13,51 @@ All notable changes to cbb are documented in this file. The format follows
   failing when the whole grows more than 10% (docs/testing.md, "Firmware size").
 - Sealing is checked against the vector of draft-ietf-hpke-pq-05 for X-Wing with
   HKDF-SHA256 and ChaCha20-Poly1305, in Go and the Rust core.
+- The app for HarmonyOS 5 and later (`apps/harmony`), in development: ArkTS around the same
+  Rust core as the Aurora app, through a Node-API module (`libcbb_napi.so`), with the keys in
+  HUKS and the admin key behind the user's face, fingerprint or PIN. It has the other phones'
+  screens: a new group, joining by QR code, as an admin or by an invitation, restoring, Home
+  with the tiles, the devices and the admin's actions, adding a device with Scan Kit,
+  invitations, the recovery key and the takeover, the arrangement, the notifications, and
+  why it does not sync; it sends with the system's Paste button and from the Share menu
+  without opening (a share extension, as on the iPhone), pastes
+  a text, pictures or files on another device as an admin, acts as a Bluetooth keyboard in
+  the lab (HID over GATT), which also types an admin's remote paste, and the member runs on
+  in the background as a continuous task (docs/apps.md, "HarmonyOS"). Its watch app
+  (`apps/harmony/wearable`, HarmonyOS 5 watches) shows the devices, sync, Everywhere and
+  the latest events through the phone over Wear Engine, and turns sync and Everywhere on or
+  off (docs/apps.md, "HarmonyOS watches"); the root makes it an admin with a key in its HUKS,
+  and it freezes, removes and turns things off from the wrist, signing on the watch each
+  record or command it checked (manage `add_watch` and `watch_actions`,
+  `cbb_member_manage_watch`, `ExternalKey::sign_data`; the core's `add_watch`,
+  `watch_actions` and `Change::Freeze`). The phone can be the group's hub or meet the
+  group at a blind relay, and the root phone signs the periods of the group's server keys
+  and records what the Android phones' attestations show, with Google's revocation list
+  (`cbb_core::attest`, Android Key Attestation in the core, checked against Go's vectors;
+  the ops `attest_status`, `attest` and the manage action `attest`). It puts the recovery key
+  on a YubiKey over NFC and restores the group with one, the core speaking PIV for it
+  (`cbb_piv`, `cbb_member_manage_card`, and `cbb_restore`'s `card`), as for any app without
+  a PIV of its own. Outside the app it has the home-screen widget "Sync clipboard", a
+  shortcut on its icon, the intents SyncClipboard and ToggleSync, and Live View for adding a
+  device and for sync away from home, as the iPhone's widget, App Intents and Live
+  Activities. On a tablet or an open foldable its Home shows the devices on orbits, as
+  tiles or a list, with a device's details beside them.
+  `cbb_member_manage` signs a remote paste (`paste`, `paste_off`), `actions_off`,
+  `away_off`, `action`, `freeze` and a period of the
+  server keys (`period`) for the apps that sign through the core, and `cbb_member_servers`
+  makes the phone member serve the group's servers itself (the ops `hub`, `hub_off`,
+  `relay`, `servers`). The
+  protocol names its system `harmonyos`, a phone's system like `ios`, `android`, `aurora`
+  and `sailfish` (docs/protocol.md, section 6), and a bug report may name it as its app.
+  `ffi/bind.sh harmony` builds the core for it with OpenHarmony's native SDK
+  (`ffi/ohos-sdk.sh`); `apps/harmony/check.sh` compiles and lints its ArkTS with
+  OpenHarmony's compiler, the abilities, intents and widgets as well as the pages; `tools/strings` writes its strings from `apps/l10n`,
+  `tools/tokens` its colours and `tools/icon` its icons, the watch's too. CI's `HarmonyOS app` job builds and links the native module and
+  runs the check.
+- `tools/prcheck` and its workflow check every pull request's commits for authors,
+  committers and co-authors outside a short list of known addresses, and its title and
+  description, which become the squash commit's message, for links to assistant
+  conversations and model names.
 - The Aurora app asks for a PIN of its own before its root or admin key signs, since Aurora OS
   gives an app neither its authentication service nor the fingerprint. The key moves to a
   second token of the app in the TEE, whose PIN the user chooses (at least four digits) and

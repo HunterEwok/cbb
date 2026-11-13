@@ -14,6 +14,9 @@
 #                         swift test -Xlinker -LOUT
 #   bind.sh aurora OUT    OUT/arm/libcbb_ffi.a and OUT/arm64/libcbb_ffi.a, for the
 #                         Aurora and Sailfish app (apps/silica/build.sh)
+#   bind.sh harmony OUT   OUT/arm64-v8a/libcbb_ffi.a, for the HarmonyOS app's native
+#                         module (apps/harmony; needs OHOS_NDK_HOME, OpenHarmony's
+#                         native SDK, which ffi/ohos-sdk.sh downloads)
 # OUT is made absolute; nothing it writes belongs in git. The Kotlin kit's
 # tests build the host's shared library themselves (apps/android/kit). Every
 # library carries the member (the feature member, docs/core-api.md, "The
@@ -21,7 +24,7 @@
 # tunnel), which takes them to the hub away from home.
 set -eu
 if [ $# -ne 2 ]; then
-	echo "usage: bind.sh ios|ios-sim|android|host|aurora OUT" >&2
+	echo "usage: bind.sh ios|ios-sim|android|host|aurora|harmony OUT" >&2
 	exit 2
 fi
 target=$1
@@ -99,6 +102,24 @@ aurora)
 		mkdir -p "$out/$arch"
 		cp "target/$t/release/libcbb_ffi.a" "$out/$arch/"
 	done
+	;;
+harmony)
+	# The HarmonyOS app's static library (HarmonyOS 5 and later, without
+	# Android's layer), linked into its Node-API module; with member and
+	# tunnel, as Aurora's. The target's libc is musl; the SDK's clang
+	# wrappers pass the target and the sysroot, to cargo as the linker
+	# (GotaTun's shared library needs one even here) and to cc as the C
+	# compiler.
+	ndk=${OHOS_NDK_HOME:?"set OHOS_NDK_HOME to the OpenHarmony native SDK (ffi/ohos-sdk.sh)"}
+	t=aarch64-unknown-linux-ohos
+	export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_OHOS_LINKER="$ndk/llvm/bin/$t-clang"
+	export CC_aarch64_unknown_linux_ohos="$ndk/llvm/bin/$t-clang"
+	export CXX_aarch64_unknown_linux_ohos="$ndk/llvm/bin/$t-clang++"
+	export AR_aarch64_unknown_linux_ohos="$ndk/llvm/bin/llvm-ar"
+	rustup target add "$t" >/dev/null
+	cargo rustc --locked -p cbb-ffi --features member,tunnel --lib --release --target "$t" --crate-type staticlib
+	mkdir -p "$out/arm64-v8a"
+	cp "target/$t/release/libcbb_ffi.a" "$out/arm64-v8a/"
 	;;
 *)
 	echo "bind.sh: unknown target $target" >&2
