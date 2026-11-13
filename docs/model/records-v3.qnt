@@ -13,9 +13,14 @@
 //  2. A device or admin a root removed never returns through an old record: once a root's
 //     removal of a key counts on a member, the key (and the other key of its device) counts
 //     there again only by an admission newer than that removal, whatever comes, unless a change
-//     of root left the removal off its list (rule 33, point 6). A counting checkpoint may prune
-//     the removal with the key's records; replaying them is refused. A removal by an admin is
-//     not final: a root may void it.
+//     of root left the removal off its list (rule 33, point 6), or the current root's counting
+//     checkpoint keeps an old admission of the key and leaves out every root removal naming it
+//     (the root brought it back itself). A counting checkpoint may prune the removal with the
+//     key's records; a replay of them is refused unless the waiting checkpoint names it. A
+//     removal by an admin is not final: a root may void it.
+//  1b. Sync converges: a member offered, to no change, every record some member holds keeps
+//     what a member given all those records at once keeps.
+//  1c. A newer checkpoint that is not whole takes nothing from the counting one.
 //  3. One chain, one state: two members that hold the same recovery chain and keep the same
 //     records are in one state.
 //  5. During a stop of the admins only the current root's commands run, and its records still
@@ -144,6 +149,7 @@ module records_v3 {
     path: List[Key], // the path its rooms were last cut by
     cuts: Key -> List[Id], // and the list of each replaced root on it
     checkpoint: Id, // the checkpoint it compacted on, or 0
+    wait: Set[Id], // the newest checkpoint of the current root that does not count yet, and the records it names that the rooms turned away
   }
 
   type View = {
@@ -198,6 +204,9 @@ module records_v3 {
 
   // In a full root's order, its removals, freezes and resolves before its checkpoints.
   pure val EARLY_BEFORE_CHECKPOINTS = true
+  // A set takes a record its counting checkpoint settled when the waiting checkpoint names it
+  // (review C, 11:33Z).
+  pure val WAIT_TAKES_SETTLED = true
 
   pure val NONE = 10000000
   // A record's ID as the hash orders it: not the order it was signed in.
@@ -422,6 +431,12 @@ module records_v3 {
   // replaced root keeps nothing else), and the checkpoint the set compacted on does not prune
   // it (unless a replaced root signed that checkpoint).
   pure def storable(s: Store, r: Record, db: Id -> Record): bool = {
+    val cuts = keptCuts(s, db)
+    storableBut(s, r, db)
+      and (s.checkpoint == 0 or replaced(cuts, db.get(s.checkpoint).signer) or not(prunedBy(db.get(s.checkpoint), r)))
+  }
+  // The same without the checkpoint the set compacted on.
+  pure def storableBut(s: Store, r: Record, db: Id -> Record): bool = {
     val got = recsOf(s.got, db)
     val path = keptPath(s, db)
     val cuts = keptCuts(s, db)
@@ -429,7 +444,6 @@ module records_v3 {
     not(isChain(r)) and not(s.chain.contains(r.id))
       and (admins.contains(r.signer) or onList(path, r.signer))
       and within(cuts, r)
-      and (s.checkpoint == 0 or replaced(cuts, db.get(s.checkpoint).signer) or not(prunedBy(db.get(s.checkpoint), r)))
   }
 
   // What a set keeps of items: of those within the lists, what the rooms keep.
@@ -525,20 +539,46 @@ module records_v3 {
     below <= ch.ids.length() and ch.ids.slice(0, below) == h.line.slice(0, below)
       and validAt(h, pathCutsOf(ch.recs.slice(0, below))._1)
   }
+  // A set holds only its rooms, its chain and its waiting place: what the rooms turned away
+  // comes back only when it is offered again.
   pure def storeOne(s: Store, r: Record, db: Id -> Record): Store =
-    if (s.recs.contains(r.id) or not(storable(s, r, db))) s
+    if (s.recs.contains(r.id) or s.wait.contains(r.id) or not(storableW(s, r, db))) s
     else {
-      // The current root's checkpoints the set got, and the records they name, are not turned
-      // away for their keys' earlier drops: they are offered again, all at once, with each
-      // record, since a checkpoint may count only with all of them.
-      val got1 = recsOf(s.got, db)
-      val cps = got1.filter(c => c.kind == "checkpoint" and c.signer == last(keptPath(s, db)) and storable(s, c, db))
-      val back = got1.filter(x => (cps.contains(x) or cps.exists(c => namedBy(c, x, got1)))
-        and not(s.recs.contains(x.id)) and storable(s, x, db))
+      // The current root's checkpoints the set holds, and the records they name, are not
+      // turned away for their keys' earlier drops: they are judged again, all at once, with
+      // each record, since a checkpoint may count only with all of them.
+      val pool = recsOf(s.recs.union(s.wait), db).union(Set(r))
+      val cps = pool.filter(c => c.kind == "checkpoint" and c.signer == last(keptPath(s, db)) and storableW(s, c, db))
+      val back = pool.filter(x => (cps.contains(x) or cps.exists(c => namedBy(c, x, pool)))
+        and not(s.recs.contains(x.id)) and storableW(s, x, db))
       val turned = past(s.cut, r, last(keptPath(s, db)), orderOf(s, db)) and not(back.contains(r))
       val add = if (turned) idsOf(back) else idsOf(back).union(Set(r.id))
-      if (add == Set()) s else recut({ ...s, recs: s.recs.union(add) }, db)
+      val s1 = if (add == Set()) s else recut({ ...s, recs: s.recs.union(add) }, db)
+      withWait(s1, pool, db)
     }
+  // The waiting place: the newest checkpoint of the current root above the counting one, when
+  // it does not count yet and its held named records fit on their own, with those of them the
+  // rooms turned away. One per set; an older one goes when a newer one comes.
+  pure def withWait(s1: Store, pool: Set[Record], db: Id -> Record): Store = {
+    val cur = last(keptPath(s1, db))
+    val v = fullEvaluate(recsOf(s1.recs, db).union(firstsHeld(s1, db)), chainState(s1, db))
+    val cseq = if (v.checkpoint == 0) 0 else db.get(v.checkpoint).seq
+    val cands = pool.filter(c => c.kind == "checkpoint" and c.signer == cur and c.seq > cseq and storableW(s1, c, db))
+    val c = cands.filter(x => cands.forall(o => o == x or x.seq > o.seq or (x.seq == o.seq and x.id < o.id))).fold(NONEREC, (a, x) => x)
+    if (c == NONEREC or not(fitsAlone(c, pool, keptPath(s1, db), keptCuts(s1, db)))) { ...s1, wait: Set() }
+    else { ...s1, wait: idsOf(pool.filter(x => (x == c or namedBy(c, x, pool)) and not(s1.recs.contains(x.id)) and storableW(s1, x, db))) }
+  }
+  // Storable, or settled by the counting checkpoint but named by the waiting one.
+  pure def storableW(s: Store, r: Record, db: Id -> Record): bool =
+    storable(s, r, db) or (WAIT_TAKES_SETTLED and storableBut(s, r, db)
+      and waitingCp(s, db).keep.contains(r.id))
+  // The waiting checkpoint: the newest of the current root the set holds above the one it
+  // compacted on.
+  pure def waitingCp(s: Store, db: Id -> Record): Record = {
+    val cseq = if (s.checkpoint == 0) 0 else db.get(s.checkpoint).seq
+    val cands = recsOf(s.recs.union(s.wait), db).filter(c => c.kind == "checkpoint" and c.signer == last(keptPath(s, db)) and c.seq > cseq)
+    cands.filter(x => cands.forall(o => o == x or x.seq > o.seq or (x.seq == o.seq and x.id < o.id))).fold(NONEREC, (a, x) => x)
+  }
   // The set cuts by the path its chain gives; the records of a root the change made, which the
   // set got while the change waited, it takes now (format 20.3, records of a waiting root).
   // The first checkpoints of the held heads that may extend the chain go beside it; each
@@ -581,8 +621,8 @@ module records_v3 {
   // compaction, and when a root fork's pair leaves the rooms for the proof.
   pure def reopen(s2: Store, db: Id -> Record): Store = {
     val s3 = recut({ ...s2, cut: NOCUT, recs: s2.recs.filter(i => storable(s2, db.get(i), db)) }, db)
-    val left = recsOf(s3.got, db).filter(x => not(isChain(x)) and not(s3.recs.contains(x.id)))
-    toList(idsOf(left)).foldl(s3, (x, i) => storeOne(x, db.get(i), db))
+    val left = recsOf(s2.wait, db).filter(x => not(isChain(x)) and not(s3.recs.contains(x.id)))
+    toList(idsOf(left)).foldl({ ...s3, wait: Set() }, (x, i) => storeOne(x, db.get(i), db))
   }
 
   // --- Evaluation --------------------------------------------------------------------------
@@ -771,8 +811,16 @@ module records_v3 {
     // A holder of a root fork's pair counts no checkpoint of the root at or above the fork.
     val forkS = rs.filter(a => a.signer == cur and rs.exists(b => b != a and b.signer == cur and b.seq == a.seq))
       .fold(NONE, (m, r) => min2(m, r.seq))
-    val c = newestCheckpoint(rs.filter(r => not(r.signer == cur and r.kind == "checkpoint" and r.seq >= forkS)), plain, cur)
-    val v = applyCheckpoint(pc._1, pc._2, c, (rs, Set(), plain))._3
+    // The candidate is the newest checkpoint of the current root that counts (whole, fits):
+    // a newer one that does not count yet takes nothing from it.
+    val cs = rs.filter(r => r.signer == cur and r.kind == "checkpoint" and within(plain.cuts, r) and r.seq < forkS)
+    val v = range(0, MAXREC + 2).foldl((rs, Set(), plain), (acc, j) =>
+      if (acc._3.checkpoint != 0) acc
+      else {
+        val at = cs.filter(x => x.seq == MAXREC + 1 - j)
+        val c = at.filter(x => at.forall(o => x.id <= o.id)).fold(0, (m, x) => x.id)
+        applyCheckpoint(pc._1, pc._2, c, acc)
+      })._3
     if (ch.stop) { ...v, stop: true, commanders: Set() } else v
   }
 
@@ -803,7 +851,7 @@ module records_v3 {
   var welcomed: List[Key]
 
   pure val EMPTY: Store = {
-    recs: Set(), got: Set(), chain: Set(), cut: NOCUT, path: [ROOT], cuts: Map(), checkpoint: 0,
+    recs: Set(), got: Set(), chain: Set(), cut: NOCUT, path: [ROOT], cuts: Map(), checkpoint: 0, wait: Set(),
   }
 
   pure def rootRemoved(v: View, db: Id -> Record): Set[Key] =
@@ -1151,7 +1199,7 @@ module records_v3 {
   action broadcastNewest = offerEveryone(nextId - 1)
   // Sync with fairness: every member is offered, in ID order, every record some member holds.
   action syncAll = {
-    val held = MEMBERS.fold(Set(), (u, n) => u.union(st.get(n).recs).union(st.get(n).chain))
+    val held = MEMBERS.fold(Set(), (u, n) => u.union(st.get(n).recs).union(st.get(n).chain).union(st.get(n).wait))
     val order = range(1, nextId).select(i => held.contains(i))
     commitAll(MEMBERS.mapBy(m => finish(order.foldl(st.get(m), (s, i) => insertInto(s, db.get(i), db)), db)))
   }
@@ -1179,7 +1227,7 @@ module records_v3 {
   // A member that every record it was offered would leave as it is.
   def saturated(m: str): bool = {
     val s = st.get(m)
-    s.got.forall(i => insertInto(s, db.get(i), db).recs == s.recs)
+    s.got.forall(i => { val s2 = insertInto(s, db.get(i), db) s2.recs == s.recs and s2.wait == s.wait })
   }
 
   // 1. One set, one state. (A halted set keeps what it had and takes recovery records only;
@@ -1189,14 +1237,42 @@ module records_v3 {
     (saturated(m) and not(chainState(s, db).stop)) implies (s.recs == pureKept(s, db) and views.get(m) == pureView(s, db))
   })
 
+  // 1b. Sync converges: a member offered, to no change, every record some member holds keeps
+  // what a member given all those records at once keeps, and shows the same state.
+  pure def freshOf(s: Store): Store = { ...s, checkpoint: 0, cut: NOCUT, wait: Set() }
+  // The member given at once every record some member holds, after it compacts on the
+  // checkpoint it counts.
+  def heldAll: Set[Id] = MEMBERS.fold(Set(), (u, n) => u.union(st.get(n).recs).union(st.get(n).chain).union(st.get(n).wait))
+  pure def freshKept(s: Store, items: Set[Id], db: Id -> Record): Set[Id] = {
+    val k1 = settle(freshOf(s), recsOf(items, db).filter(r => storable(freshOf(s), r, db)), NOCUT, db)._1
+    val c1 = fullEvaluate(recsOf(k1, db).union(firstsHeld(s, db)), chainState(s, db)).checkpoint
+    val s1 = { ...freshOf(s), checkpoint: c1 }
+    settle(s1, recsOf(items, db).filter(r => storable(s1, r, db)), NOCUT, db)._1
+  }
+  val converges = MEMBERS.forall(m => {
+    val s = st.get(m)
+    val k = freshKept(s, heldAll, db)
+    (synced(m) and not(chainState(s, db).stop) and not(views.get(m).stop)) implies (s.recs == k
+      and views.get(m) == fullEvaluate(recsOf(k, db).union(firstsHeld(s, db)), chainState(s, db)))
+  })
+  // 1c. No checkpoint of the current root newer than the counting one counts on the set alone:
+  // a newer one that is not whole takes nothing from the counting one.
+  val countsNewest = MEMBERS.forall(m => {
+    val v = views.get(m)
+    val rs = recsOf(st.get(m).recs, db)
+    val cseq = if (v.checkpoint == 0) 0 else db.get(v.checkpoint).seq
+    v.stop or rs.forall(c => not(c.kind == "checkpoint" and c.signer == last(v.path) and c.seq > cseq
+      and applyCheckpoint(v.path, v.cuts, c.id, (rs, Set(), epoch(rs, v.path, v.cuts, Set())))._3.checkpoint == c.id))
+  })
+
   // 2. A key a root removed stays removed, unless a change of root left the removal off its
   // list.
   pure def cutOff(v: View, r: Record): bool = not(within(v.cuts, r))
   // A gap is liveness, not a rule: an honest peer that holds a line serves it, so a member is
   // checked once it was offered, to no change, every record some member holds.
-  def synced(m: str): bool = MEMBERS.forall(n => st.get(n).recs.union(st.get(n).chain).forall(i => {
+  def synced(m: str): bool = MEMBERS.forall(n => st.get(n).recs.union(st.get(n).chain).union(st.get(n).wait).forall(i => {
     val s2 = insertInto(st.get(m), db.get(i), db)
-    s2.recs == st.get(m).recs and s2.chain == st.get(m).chain
+    s2.recs == st.get(m).recs and s2.chain == st.get(m).chain and s2.wait == st.get(m).wait
   }))
   // A removal some earlier change of the member's chain cut off: the sets dropped it then, and
   // a later list that names it again (a recovery key may list what nobody holds) cannot bring
@@ -1216,7 +1292,13 @@ module records_v3 {
       removals.filter(r => withPair(r.target).contains(k)).forall(r => cutOff(v, r) or (cutEarlier(m, r) and heldByNone(r)))
         or (not(v.admins.keys().contains(k)) and not(v.devices.contains(k)))
         or recsOf(v.counting, db).exists(x => admissionsOf(Set(x), k) != Set()
-          and removals.forall(r => not(withPair(r.target).contains(k)) or x.id > r.id)))
+          and removals.forall(r => not(withPair(r.target).contains(k)) or x.id > r.id))
+        // The current root brought it back itself: its counting checkpoint keeps the admission
+        // and leaves out every root removal naming the key (review C, 11:54Z).
+        or (v.checkpoint != 0 and db.get(v.checkpoint).signer == last(v.path) and recsOf(v.counting, db).exists(x =>
+          admissionsOf(Set(x), k) != Set() and db.get(v.checkpoint).keep.contains(x.id)
+            and removals.forall(r => not(withPair(r.target).contains(k)) or not(rootRemoval(r))
+              or prunedBy(db.get(v.checkpoint), r)))))
   })
 
   // 3. Two members that hold the same recovery chain and keep the same records are in one
@@ -1331,7 +1413,7 @@ module records_v3 {
   }))
 
   val promises = and {
-    oneState, removedStayOut, oneChainOneState, stopRootOnly, fairRoom, followsRecovery, pathGrows, newcomerTakes,
+    oneState, converges, countsNewest, removedStayOut, oneChainOneState, stopRootOnly, fairRoom, followsRecovery, pathGrows, newcomerTakes,
     oldRootListed, twinStops, removedGainsNothing, compactedAgree,
   }
 
@@ -1438,6 +1520,69 @@ module records_v3 {
       .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 2, false, Set(1, 2, 3, 4, 5, 6)))
       .then(syncAll)
       .expect(MEMBERS.forall(m => views.get(m).checkpoint != 7) and promises)
+
+  // Review B: checkpoint 6 waits, 8 comes before it is whole, 6's records come later; after a
+  // sync every member counts 8.
+  run waitingNewerTest =
+    init
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1))
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .then(give("m", 6))
+      .expect(st.get("m").recs.contains(6) and views.get("m").checkpoint == 0)
+      .then(give("m", 8))
+      .expect(st.get("m").recs.contains(8) and views.get("m").checkpoint == 0)
+      .then(give("m", 4))
+      .then(give("m", 5))
+      .then(syncAll)
+      .expect(MEMBERS.forall(m => views.get(m).checkpoint == 8) and promises)
+
+  // Review C: the root names again, in checkpoint 8, the device's admission that checkpoint 7
+  // pruned with its removal; member k never compacted on 7 and holds the admission. Every member
+  // takes it (the waiting checkpoint names it) and counts 8: the device counts again, brought
+  // back by the root.
+  run rootNamesPrunedTest =
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
+      .then(signAs(ROOT, "revoke", DEVICE, 0))
+      .then(syncAll)
+      .then(signAs(ROOT, "copies", "", 0))
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 1, false, Set()))
+      .then(give("a", 6)).then(give("a", 7)).then(give("c", 6)).then(give("c", 7)).then(give("m", 6)).then(give("m", 7))
+      .expect(views.get("m").checkpoint == 7 and not(st.get("m").recs.contains(4)) and st.get("k").recs.contains(4))
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 1, false, Set(4)))
+      .then(syncAll)
+      .then(syncAll)
+      .expect(MEMBERS.forall(m => views.get(m).checkpoint == 8 and views.get(m).devices.contains(DEVICE)) and promises)
+  // The same with nobody holding the admission but the member it is given to.
+  run rootNamesPrunedGivenTest =
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
+      .then(signAs(ROOT, "revoke", DEVICE, 0))
+      .then(syncAll)
+      .then(signAs(ROOT, "copies", "", 0))
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 1, false, Set()))
+      .then(syncAll)
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 1, false, Set(4)))
+      .then(syncAll)
+      .then(give("m", 4))
+      .then(syncAll)
+      .expect(MEMBERS.forall(m => views.get(m).checkpoint == 8 and views.get(m).devices.contains(DEVICE)) and promises)
+  // The root keeps both the old admission and the removal: the device stays out.
+  run rootKeepsBothTest =
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
+      .then(signAs(ROOT, "revoke", DEVICE, 0))
+      .then(syncAll)
+      .then(signAs(ROOT, "copies", "", 0))
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 1, false, Set()))
+      .then(give("a", 6)).then(give("a", 7)).then(give("c", 6)).then(give("c", 7)).then(give("m", 6)).then(give("m", 7))
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 1, false, Set(4, 5)))
+      .then(syncAll)
+      .then(syncAll)
+      .expect(MEMBERS.forall(m => views.get(m).checkpoint == 8 and not(views.get(m).devices.contains(DEVICE))) and promises)
 
   run prunedRemovalTest =
     init
