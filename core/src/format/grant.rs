@@ -135,7 +135,7 @@ pub const RULE_COUNTER: Rule = Rule::field("grants/counter");
 pub const RULE_REPLACES: Rule = Rule::field("grants/replaces");
 
 /// A grant made under another recovery seq than the newest the leaf knows,
-/// one above 16, or a leaf asked to read grants under a recovery seq below
+/// one above MAX_RECOVERY, or a leaf asked to read grants under a recovery seq below
 /// the one it kept.
 pub const RULE_RECOVERY: Rule = Rule::field("grants/recovery");
 

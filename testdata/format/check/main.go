@@ -564,7 +564,7 @@ func main() {
 							}
 							madeAfter = n
 						}
-						if madeAfter != recovery || recovery > 16 || st != nil && st.recovery > recovery {
+						if madeAfter != recovery || recovery > 64 || st != nil && st.recovery > recovery {
 							return nil, errors.New("grants/recovery")
 						}
 						if gv, ok := pre[uint64(15)]; ok && gv != uint64(1) {

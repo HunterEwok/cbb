@@ -703,8 +703,8 @@ def record_vectors():
     cp = sha(b"a first checkpoint")
     bad_signed("recovery head naming the recovery key as the root", "records/recovery/root", RECOVERY,
                rec(RECOVERY, 2, 13, {10: RECOVERY.key, 11: some, 13: cp}))
-    bad_signed("recovery head at seq 17 (at most 16 for the group's life)", "records/recovery/seq", RECOVERY,
-               rec(RECOVERY, 17, 13, {10: Signer("root 17").key, 11: some, 13: cp}))
+    bad_signed("recovery head at seq 65 (at most 64 for the group's life)", "records/recovery/seq", RECOVERY,
+               rec(RECOVERY, 65, 13, {10: Signer("root 65").key, 11: some, 13: cp}))
     bad_signed("recovery head without its list", "records/recovery/list", RECOVERY,
                rec(RECOVERY, 2, 13, {10: Signer("root 3").key, 13: cp}))
     bad_signed("recovery head with a list hash of 31 bytes", "records/recovery/list", RECOVERY,
@@ -905,9 +905,9 @@ def grant_vectors(admin_record):
     root_bad("grant with recovery seq 0 written", "form/default", {**g, 19: 0})
     root_bad("grant made under a recovery seq the leaf does not know", "grants/recovery", {**g, 19: 1})
     root_bad("grant with a recovery seq as text", "grants/shape", {**g, 19: "1"})
-    _, genv, _ = signed({**g, 19: 17}, ROOT2)
-    row = bad("grant made under recovery seq 17 (at most 16 heads)", "grants/recovery", message(genv), L)
-    row.update({"recovery": 17, "root": ROOT2.hash.hex()})
+    _, genv, _ = signed({**g, 19: 65}, ROOT2)
+    row = bad("grant made under recovery seq 65 (at most 64 heads)", "grants/recovery", message(genv), L)
+    row.update({"recovery": 65, "root": ROOT2.hash.hex()})
     _, genv, _ = signed(g, ROOT)
     row = bad("the old root's grant made before the change the leaf knows", "grants/recovery", message(genv), L)
     row.update({"recovery": 1, "root": ROOT2.hash.hex()})
@@ -2169,7 +2169,7 @@ TABLES4 = {
     "reseal": [(2, "reseal/copy", "bytes 16", True), (3, "reseal/epoch", "uint 1..9223372036854775807", True)],
     # To a leaf: the recovery heads it needs, and its root's fork (two
     # records of the root at one seq, exactly two).
-    "roots": [(2, "roots/heads", "array 1..16 of envelope", False), (3, "roots/fork", "array 1..2 of envelope", False)],
+    "roots": [(2, "roots/heads", "array 1..64 of envelope", False), (3, "roots/fork", "array 1..2 of envelope", False)],
 }
 MESSAGE_TYPES4 = {7: "keys-message", 9: "command", 21: "nonce", 22: "beacon", 23: "reseal", 24: "roots"}
 TABLES.update(TABLES4)

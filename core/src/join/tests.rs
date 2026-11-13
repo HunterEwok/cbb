@@ -1002,8 +1002,46 @@ fn an_intro_proves_a_new_device() {
     assert!(keys.is_none());
 }
 
+/// At the most changes of root a group may have, the Welcome still carries
+/// every head (each near 8 KiB with the recovery key's second signature)
+/// with the newest root's list and first checkpoint under its budget, and
+/// the joiner takes it; the intro of a device admitted after them fits too.
+#[test]
+fn the_joiner_takes_the_most_changes_of_root() {
+    let mut g = G::new();
+    let max = crate::records::body::MAX_RECOVERY;
+    let mut last = k("root");
+    for i in 1..=max {
+        last = k(&format!("root n{i}"));
+        g.change(&last);
+    }
+    let (pa, slate) = (k("phone a"), k("slate"));
+    phone_admin(&mut g, &last, &pa, &k("admin a"), true);
+    let mut d = Device::new(slate.key.clone(), "slate", ROLE_MEMBER);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    g.rec(&last, Kind::device(d));
+    let set = g.set();
+    let st = set.state();
+    assert_eq!(st.roots.len() as u64, max + 1);
+    let w = Welcome::build(&set, &st, &pa.hash, &slate.hash, 1_793_000_000_000).unwrap();
+    let heads = w.records.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).count();
+    assert_eq!(heads as u64, max);
+    let bytes = w.encode();
+    assert!(bytes.len() <= crate::format::frame::LIMIT_PAIRING, "{}", bytes.len());
+    let back = Welcome::decode(&bytes).unwrap();
+    let group = format::DeviceId(g.gid.0);
+    let (mine, st2) = back
+        .check(&group, &point(&pa), &point(&slate), Joining::Ordinary, Way::Invited(&invitation()))
+        .unwrap_or_else(|e| panic!("{e:?}"));
+    assert_eq!(st2.roots, st.roots);
+    assert_eq!(mine.len(), set.len());
+    let intro = Intro::of(&set, &st, &slate.hash, None).unwrap();
+    assert!(intro::fits(&intro.records));
+    assert!(intro.message().len() <= crate::format::frame::LIMIT_MEMBER);
+}
+
 /// The recovery heads ride beside the intro's 32 records and 16 KiB, at
-/// most 64 of them: three changes of root pass 16 KiB in their heads'
+/// most MAX_HEADS of them: three changes of root pass 16 KiB in their heads'
 /// envelopes alone, and the device admitted after them still proves
 /// itself. Sender and reader count alike, by the envelopes' bytes.
 #[test]
@@ -1038,7 +1076,7 @@ fn an_intro_counts_the_recovery_heads_apart() {
     assert_eq!(back, intro);
     assert_eq!(back.check(&old, &me, &point(&pa)).unwrap().len(), 1);
 
-    // Up to 64 heads pass; one more does not, on either side.
+    // Up to MAX_HEADS heads pass; one more does not, on either side.
     let mut many = intro.clone();
     while many.records.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).count() < intro::MAX_HEADS {
         many.records.insert(0, heads[0].clone());
@@ -1569,8 +1607,9 @@ fn a_welcome_carries_what_it_must_first() {
     assert!(st.revoked.contains(&tv.hash));
     let admitter = k("phone b").hash;
     let all = Welcome::build(&set, &st, &admitter, &slate.hash, 1).unwrap();
-    let full: usize = all.records.iter().map(Record::size).sum::<usize>() + all.list.as_ref().map_or(0, Vec::len);
-    let some = full - 30 * set.get(&filler[0]).unwrap().size();
+    let full: usize =
+        all.records.iter().map(|r| r.envelope().len()).sum::<usize>() + all.list.as_ref().map_or(0, Vec::len);
+    let some = full - 30 * set.get(&filler[0]).unwrap().envelope().len();
     let w = Welcome::build_within(&set, &st, &admitter, &slate.hash, 1, some).unwrap();
     let has = |id: &RecordId| w.records.iter().any(|r| r.id() == *id);
     let heads: Vec<RecordId> =
@@ -1607,7 +1646,8 @@ fn a_welcome_carries_the_chain_of_the_joiners_record() {
     let st = set.state();
     let admitter = k("phone").hash;
     let all = Welcome::build(&set, &st, &admitter, &slate.hash, 1).unwrap();
-    let full: usize = all.records.iter().map(Record::size).sum::<usize>() + all.list.as_ref().map_or(0, Vec::len);
+    let full: usize =
+        all.records.iter().map(|r| r.envelope().len()).sum::<usize>() + all.list.as_ref().map_or(0, Vec::len);
     let group = format::DeviceId(g.gid.0);
     assert!(
         all.check(&group, &point(&k("phone")), &point(&slate), Joining::Ordinary, Way::Invited(&invitation())).is_ok()

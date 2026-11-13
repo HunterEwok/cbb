@@ -32,8 +32,9 @@ use crate::records::{Key, KeyHash, Record, RecordId, Recovery, State, group_id};
 use super::intro::chain;
 
 /// What a Welcome may take of a pairing frame (1 MiB) for its records and
-/// its list: the rest is left for its keys, the grant, the credentials and
-/// the padding.
+/// its list, counted by the bytes they take in it (the envelopes, not the
+/// allowances a set counts them for): the rest is left for its keys, the
+/// grant, the credentials and the padding.
 pub const RECORDS_BUDGET: usize = crate::format::frame::LIMIT_PAIRING - 64 * 1024;
 
 /// The set's must-carry (its recovery records and list, first checkpoints,
@@ -203,7 +204,7 @@ impl Welcome {
         let mut used: usize = order
             .iter()
             .filter(|r| must.contains(&r.id()))
-            .map(|r| r.size())
+            .map(|r| r.envelope().len())
             .fold(list.as_ref().map_or(0, Vec::len), usize::saturating_add);
         if used > budget {
             return Err(TooLarge);
@@ -211,7 +212,7 @@ impl Welcome {
         // Then the rest, while it fits.
         let mut take = must;
         for r in order.iter().filter(|r| !take.contains(&r.id())).collect::<Vec<_>>() {
-            let n = used.saturating_add(r.size());
+            let n = used.saturating_add(r.envelope().len());
             if n > budget {
                 continue;
             }

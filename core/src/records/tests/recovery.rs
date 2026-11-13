@@ -351,25 +351,26 @@ fn the_recovery_key_signs_heads_only() {
     assert!(!has(&s, &k("sneaky")));
 }
 
-/// At most 16 heads for the group's life: a 17th is not signed, not
-/// stored, and a writer at 16 refuses.
+/// At most MAX_RECOVERY (64) heads for the group's life: the next is not
+/// signed, not stored, and a writer at the cap refuses.
 #[test]
-fn at_most_sixteen_heads() {
+fn at_most_max_recovery_heads() {
     let mut g = base();
-    for i in 1..=16 {
+    let max = crate::records::body::MAX_RECOVERY;
+    for i in 1..=max {
         let list = g.listing();
         g.change(&k(&format!("n{i}")), &list);
     }
     let s = g.state();
-    assert_eq!(s.roots.len(), 17);
+    assert_eq!(s.roots.len() as u64, max + 1);
     let (_, tip) = g.heads[&rk().hash()];
     let body = Body {
-        seq: 17,
+        seq: max + 1,
         prev: Some(tip),
         ..g.body(
             &k("recovery"),
             Kind::Recovery {
-                root: k("n17").key,
+                root: k(&format!("n{}", max + 1)).key,
                 list: [1; 32],
                 from: 0,
                 first: RecordId([0xf1; 32]),
@@ -381,8 +382,17 @@ fn at_most_sixteen_heads() {
     let mut set = set_with(&g.root.key, &g.recs, &g.lists);
     let st = set.state();
     assert!(
-        set.write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("n17"), phone(&k("p17")), &[], false, 0)
-            .is_err()
+        set.write_change(
+            &st,
+            &k("recovery"),
+            crate::testkit::rk2(),
+            &k(&format!("n{}", max + 1)),
+            phone(&k(&format!("p{}", max + 1))),
+            &[],
+            false,
+            0
+        )
+        .is_err()
     );
 }
 

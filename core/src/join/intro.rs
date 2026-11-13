@@ -31,13 +31,18 @@ pub const MAX_RECORDS: usize = 32;
 /// The most bytes its records take together.
 pub const MAX_BYTES: usize = 16 * 1024;
 /// The most recovery heads an intro carries, counted apart from
-/// [`MAX_RECORDS`] and [`MAX_BYTES`].
-pub const MAX_HEADS: usize = 64;
+/// [`MAX_RECORDS`] and [`MAX_BYTES`]: one for each seq of the group's life
+/// and one more, for the second head of a fork at one seq. At the widest
+/// head the intro stays near 3.1 MiB, under the member frame.
+pub const MAX_HEADS: usize = crate::records::body::MAX_RECOVERY as usize + 1;
 /// The most bytes one head's envelope can take: its body, the envelope's
 /// heads and signature, and K2's second signature.
 const HEAD_BYTES: usize = crate::records::MAX_BODY
     .saturating_add(crate::records::ENVELOPE_ALLOWANCE)
     .saturating_add(crate::records::HEAD_SIG2_ALLOWANCE);
+// The widest intro, every head at its widest and the others full, with room
+// for the keys statement and the map, fits the member frame.
+const _: () = assert!(MAX_HEADS * HEAD_BYTES + MAX_BYTES + 64 * 1024 <= crate::format::frame::LIMIT_MEMBER);
 
 pub const RULE_SHAPE: Rule = Rule::field("intro/shape");
 pub const RULE_SIZE: Rule = Rule::field("intro/size");
