@@ -64,7 +64,7 @@ final class PadUITests: XCTestCase {
 
         // The sidebar's row; the same words also stand on a button outside it.
         app.collectionViews["Sidebar"].staticTexts["Appearance"].tap()
-        XCTAssertTrue(app.buttons["Ocean"].waitForExistence(timeout: 10), "the look opens beside the sidebar")
+        XCTAssertTrue(app.buttons["Blueprint"].waitForExistence(timeout: 10), "the look opens beside the sidebar")
         picture("pad-settings")
 
         app.typeKey("1", modifierFlags: .command)
@@ -105,7 +105,15 @@ final class PadUITests: XCTestCase {
         try app.performAccessibilityAudit(for: [.textClipped]) { issue in
             // The system's own bars are not the app's to fix.
             guard let e = issue.element, e.isHittable else { return true }
-            return app.navigationBars.allElementsBoundByIndex.contains { $0.frame.contains(e.frame) }
+            if app.navigationBars.allElementsBoundByIndex.contains(where: { $0.frame.contains(e.frame) }) { return true }
+            // Every other issue fails, named with its element, frame and
+            // the audit's words, and with the element's picture.
+            XCTFail("\(issue.compactDescription) on \(e.elementType.rawValue) '\(e.label)' at \(e.frame): \(issue.detailedDescription)")
+            let a = XCTAttachment(screenshot: e.screenshot())
+            a.name = "failed-pad-largest-text-\(e.label)"
+            a.lifetime = .keepAlways
+            add(a)
+            return true
         }
     }
 }
