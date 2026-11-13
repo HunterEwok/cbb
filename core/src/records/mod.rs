@@ -59,13 +59,22 @@
 /// array head, the heads of body and sig, and the 64-byte signature.
 pub const ENVELOPE_ALLOWANCE: usize = 1 + 9 + 9 + 64;
 
-/// The bytes counted for a second signature, whatever its length: nine
-/// units, which hold the largest one a record takes
-/// (`format::envelope::MAX_SIG2_RECORD`) with its head. The count still
-/// depends on the body alone.
-pub const SIG2_ALLOWANCE: usize = 9 * keep::UNIT;
+/// What the second signatures of a set's records take at most, apart
+/// from its units: a record's second signature takes no units, so that
+/// every room holds as many twice-signed records as plain ones. No rule
+/// refuses a record for it; the bound follows from how many records a
+/// set holds: its rooms ([`MAX_RECORDS`] units, a record at least one),
+/// as many again aside for a checkpoint above the counting one, a
+/// waiting root's records within a root's room, the settled records and
+/// the halves of a pair, each with the largest second signature
+/// (`format::envelope::MAX_SIG2`) and its head. A record that goes takes
+/// its second signature with it.
+pub const MAX_SET_SIG2_BYTES: usize = 128 << 20;
 
-const _: () = assert!(SIG2_ALLOWANCE >= crate::format::envelope::MAX_SIG2_RECORD + 9);
+const _: () = assert!(
+    (2 * MAX_RECORDS + MAX_ROOT_RECORDS + 2 * set::SETTLED_KEPT + 64) * (crate::format::envelope::MAX_SIG2 + 9)
+        <= MAX_SET_SIG2_BYTES
+);
 
 /// The bytes counted for a recovery head's second signature, K2's
 /// (`format::envelope::MAX_SIG2_HEAD` with its head). Heads are kept
@@ -168,6 +177,9 @@ pub fn pin_mark(local: &[u8; 32], root: &Key, recovery: &Recovery) -> Mark {
 
 /// The label of the set digest.
 pub const LABEL_SET: &str = "cbb set v3";
+
+/// The label of the digest a Welcome names of the set it sends in parts.
+pub const LABEL_WELCOME_SET: &str = "cbb welcome set v1";
 
 /// The rules version this code implements (section 3.3).
 pub const RULES_VERSION: u64 = 1;
@@ -354,13 +366,6 @@ impl Record {
         if e.body.len() > max {
             return Err(crate::format::Rule::ENV_SIZE.into());
         }
-        // A record's second signature (a recovery head's has its own
-        // ceiling, checked with the envelope).
-        if !matches!(body.kind, Kind::Recovery { .. })
-            && e.sig2.is_some_and(|s| s.len() > crate::format::envelope::MAX_SIG2_RECORD)
-        {
-            return Err(crate::format::Rule::ENV_SIG2.into());
-        }
         crate::format::sig::check_form(e.sig)?;
         body.check()?;
         let id = RecordId(sha256(e.body));
@@ -390,13 +395,12 @@ impl Record {
 
     /// The bytes the record is counted for in a set: its body's and one
     /// fixed allowance for the rest of its envelope ([`ENVELOPE_ALLOWANCE`],
-    /// and [`SIG2_ALLOWANCE`] when the body names `signer2`, or
+    /// and none for a second signature, which takes no units, or
     /// [`HEAD_SIG2_ALLOWANCE`] for a recovery head). The count depends on
     /// the body alone, so every envelope of one record ID counts the same.
     pub fn size(&self) -> usize {
         let rest = match (&self.body.kind, self.sig2.is_some()) {
             (Kind::Recovery { .. }, true) => ENVELOPE_ALLOWANCE + HEAD_SIG2_ALLOWANCE,
-            (_, true) => ENVELOPE_ALLOWANCE + SIG2_ALLOWANCE,
             _ => ENVELOPE_ALLOWANCE,
         };
         self.bytes.len().saturating_add(rest)
