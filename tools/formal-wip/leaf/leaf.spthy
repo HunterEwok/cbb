@@ -1,0 +1,327 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 HunterEwok
+/*
+ * CBB 0.6: binding a guarded leaf (a lock) and obeying it.
+ * Sources: plans/design-small-device-ru.md sections 15-17, design-records-v3
+ * rules 9, 28 and rule 33's leaf part (rule33-brief v2 section 6),
+ * format-0.6-bytes section 7 and 21 (commands), core/src/format/grant.rs
+ * and core/src/commands/mod.rs (accept_leaf, Nonces) at #530 16b2883.
+ *
+ * Models the design's rule 28 (bound again in person after a change of
+ * root), as built in core/src/format/grant.rs (Kept::rebind, read_bound)
+ * and core/src/join/invitation.rs (Matched::binding).
+ *
+ * What is modelled
+ *   - A group: the root key under recovery seq s, the recovery pair
+ *     (k1, k2) pinned by the leaf, heads signed by both halves naming the
+ *     next root (model 2 proves who can make such a head).
+ *   - A guarded leaf: state <recovery seq, root, commander, counters>, or
+ *     "waiting" (after a change of root, not bound yet).
+ *   - Binding in person: the leaf shows a short code; only a person at the
+ *     leaf reads it (!ShownTo: the network never gets it). The root's
+ *     device and the leaf run an ideal PAKE keyed by the code over the
+ *     network: key = H(code, nl, nr, both nonces seen). The grant goes
+ *     inside, MACed with that key. Six digits guessed online are not
+ *     symbolic (the attempts bound is the counting model's question).
+ *   - A grant: sign(<'cbb grant v1', G, leaf, recovery seq, counter,
+ *     commander>, root key). A bound leaf takes a later root grant of the
+ *     same recovery seq from anywhere (refresh) with a higher counter.
+ *   - A command: sign(<'cbb command v3', G, leaf, n, nonce, order>,
+ *     commander key); the leaf gives a fresh one-time nonce per commander
+ *     and uses it up (Nonces::take), n above the last.
+ *   - A head at seq s+1 moves the leaf to "waiting" at s+1 with the new
+ *     root: it obeys nobody until bound in person at s+1.
+ *
+ * Left out: staleness after 35 days of running time (a timer; the
+ * attacker withholding grants makes the leaf stale, see the README),
+ * several commanders (each is the same case), readers and copies,
+ * ordinary leaves and admin grants (a guarded leaf refuses any grant not
+ * signed by the root: grant::read RULE_GUARDED), root forks (rule 9,
+ * grant::fork), clocks.
+ *
+ * Attacker: the network and every neighbour of the leaf; any admin key;
+ * the root key of any recovery seq (RevealRoot); a commander's key
+ * (RevealCommander, a stolen member device); the recovery pair
+ * (RevealRecovery) only where a lemma says so. It never reads the code.
+ */
+
+theory CBB_Leaf_v1
+begin
+
+builtins: hashing, signing, natural-numbers
+functions: mac/2
+
+// The leaf uses up a nonce once (Nonces::take) and never reissues it.
+restriction NonceOnce:
+  "All L C n #i #j. UseNonce(L, C, n) @ #i & UseNonce(L, C, n) @ #j ==> #i = #j"
+// Counters: a later command of a commander has a higher n (Counters).
+restriction CommandCounter:
+  "All L C n1 n2 x1 x2 #i #j. Obeys(L, C, n1, x1) @ #i & Obeys(L, C, n2, x2) @ #j & #i < #j ==> n1 << n2"
+
+/* ---------------- The group ---------------- */
+
+rule Group:
+    [ Fr(~g), Fr(~r0), Fr(~k1), Fr(~k2) ]
+  --[ GroupMade(~g), RootOf(~g, %1, pk(~r0)) ]->
+    [ !Group(~g, pk(~k1), pk(~k2)), !Recovery(~g, ~k1, ~k2), !Root(~g, %1, ~r0),
+      Out(pk(~r0)), Out(pk(~k1)), Out(pk(~k2)) ]
+
+rule Reveal_Root:     [ !Root(G, s, r) ]       --[ RevealRoot(G, s, pk(r)) ]-> [ Out(r) ]
+rule Reveal_Recovery: [ !Recovery(G, k1, k2) ] --[ RevealRecovery(G) ]->      [ Out(<k1, k2>) ]
+rule Reveal_Admin:    [ Fr(~a) ] --[ RevealAdmin(pk(~a)) ]-> [ Out(~a), Out(pk(~a)) ]
+
+// The owner writes the next head (model 2): a new root at seq s+1.
+rule Head:
+  let body = <'recovery', G, %s %+ %1, pk(~nr)>
+  in
+    [ !Recovery(G, k1, k2), !Root(G, %s, r), Fr(~nr) ]
+  --[ HonestHead(G, %s %+ %1, pk(~nr)), RootOf(G, %s %+ %1, pk(~nr)) ]->
+    [ !Root(G, %s %+ %1, ~nr), Out(pk(~nr)),
+      Out(<body, sign(<'k2', body>, k2), sign(<'k1', body>, k1)>) ]
+
+// A commander: a member device the root names; its key may be stolen.
+rule Commander:
+    [ Fr(~c) ] --[ CommanderKey(pk(~c)) ]-> [ !Cmd(~c), Out(pk(~c)) ]
+rule Reveal_Commander:
+    [ !Cmd(c) ] --[ RevealCommander(pk(c)) ]-> [ Out(c) ]
+
+/* ---------------- The leaf ---------------- */
+
+// A guarded leaf, flashed for group G with its pinned recovery pair; it
+// starts waiting at seq 1 under the first root and is bound in person.
+rule Leaf_New:
+    [ !Group(G, p1, p2), !Root(G, %1, r0), Fr(~l) ]
+  --[ LeafMade(~l, G), LeafWaits(~l, G, %1, pk(r0)), WaitMade(~l, G, %1) ]->
+    [ Waiting(~l, G, %1, pk(r0)), !LeafGroup(~l, G, p1, p2) ]
+
+// The leaf shows a short code; only the person at the leaf reads it.
+rule Leaf_Show:
+    [ Waiting(L, G, s, R), Fr(~code), Fr(~nl) ]
+  --[ CodeShown(L, ~code), ShowAt(L, G, s), ShowFor(L, G, s, R) ]->
+    [ BindL(L, G, s, R, ~code, ~nl), !ShownTo(L, G, s, ~code), Out(<'bind1', L, ~nl>) ]
+
+// The root's device (the person typed the code from the leaf's screen)
+// answers with its nonce and the grant, under the PAKE key.
+rule Root_Bind:
+  let key = h(<'pake', code, nl, ~nr>)
+      gr = <'cbb grant v1', G, L, s, ~ctr, pk(c)>
+      sg = sign(gr, r)
+  in
+    [ !ShownTo(L, G, s, code), !Root(G, s, r), !Cmd(c), In(<'bind1', L, nl>), Fr(~nr), Fr(~ctr) ]
+  --[ RootBinds(G, s, pk(r), L), BindMac(key, <gr, sg>), GrantIssued(G, s, pk(r), L, ~ctr, pk(c)) ]->
+    [ Out(<'bind2', ~nr, gr, sg, mac(key, <gr, sg>)>) ]
+
+// The leaf takes the grant: the PAKE key, the root it waits for at this
+// seq, its group and its own ID.
+rule Leaf_Bind:
+  let key = h(<'pake', ~code, ~nl, nr>)
+      gr = <'cbb grant v1', G, L, s, ctr, C>
+  in
+    [ BindL(L, G, s, pk(r), ~code, ~nl), In(<'bind2', nr, gr, sign(gr, r), mac(key, <gr, sign(gr, r)>)>) ]
+  --[ BoundTo(L, G, s, pk(r), C), Takes(L, G, s, ctr), LeafKey(key, ~code) ]->
+    [ !BoundRoot(L, G, s, pk(r)), !Grant(L, G, s, pk(r), ctr, C) ]
+
+// A refresh: a later grant of the same root and recovery seq, from anyone.
+rule Root_Regrant:
+  let gr = <'cbb grant v1', G, L, s, ~ctr, pk(c)>
+  in
+    [ !Root(G, s, r), !Cmd(c), Fr(~ctr), In(L) ]
+  --[ GrantIssued(G, s, pk(r), L, ~ctr, pk(c)) ]->
+    [ Out(<'grant', gr, sign(gr, r)>) ]
+
+rule Leaf_Refresh:
+  let gr = <'cbb grant v1', G, L, s, ctr2, C2>
+  in
+    [ !BoundRoot(L, G, s, pk(r)), !Grant(L, G, s, pk(r), ctr, C), In(<'grant', gr, sign(gr, r)>) ]
+  --[ Neq2(ctr, ctr2), UseGrant(L, G, s, ctr), Supersede(L, G, s, ctr), Takes(L, G, s, ctr2),
+      Regrant(L, G, s, pk(r), C2) ]->
+    [ !Grant(L, G, s, pk(r), ctr2, C2) ]
+
+// A grant stops counting once replaced or once the leaf leaves its seq.
+restriction GrantSuperseded:
+  "All L G s c #i #j. UseGrant(L, G, s, c) @ #i & Supersede(L, G, s, c) @ #j & #j < #i ==> F"
+restriction GrantLeftSeq:
+  "All L G s c #i #j. UseGrant(L, G, s, c) @ #i & LeaveSeq(L, G, s) @ #j & #j < #i ==> F"
+restriction LeaveOnce:
+  "All L G s #i #j. LeaveSeq(L, G, s) @ #i & LeaveSeq(L, G, s) @ #j ==> #i = #j"
+restriction SupersedeOnce:
+  "All L G s c #i #j. Supersede(L, G, s, c) @ #i & Supersede(L, G, s, c) @ #j ==> #i = #j"
+restriction Neq2: "All x #i. Neq2(x, x) @ #i ==> F"
+// A grant counter is taken once per leaf and seq (grant::read: above the kept).
+restriction GrantOnce:
+  "All L G s c #i #j. Takes(L, G, s, c) @ #i & Takes(L, G, s, c) @ #j ==> #i = #j"
+
+// A head at the next seq (taken from anyone, checked with the pinned pair):
+// the leaf stops obeying and waits to be bound in person by the new root.
+rule Leaf_Head_Bound:
+  let body = <'recovery', G, %s %+ %1, nr>
+  in
+    [ !BoundRoot(L, G, %s, R), !Grant(L, G, %s, R, ctr, C), !LeafGroup(L, G, pk(k1), pk(k2)),
+      In(<body, sign(<'k2', body>, k2), sign(<'k1', body>, k1)>) ]
+  --[ UseGrant(L, G, %s, ctr), LeaveSeq(L, G, %s), LeafHead(L, G, %s %+ %1, nr), WaitMade(L, G, %s %+ %1) ]->
+    [ Waiting(L, G, %s %+ %1, nr) ]
+
+rule Leaf_Head_Waiting:
+  let body = <'recovery', G, %s %+ %1, nr>
+  in
+    [ Waiting(L, G, %s, R), !LeafGroup(L, G, pk(k1), pk(k2)),
+      In(<body, sign(<'k2', body>, k2), sign(<'k1', body>, k1)>) ]
+  --[ LeaveSeq(L, G, %s), LeafHead(L, G, %s %+ %1, nr), WaitMade(L, G, %s %+ %1) ]->
+    [ Waiting(L, G, %s %+ %1, nr) ]
+
+rule Leaf_Head_Binding:
+  let body = <'recovery', G, %s %+ %1, nr>
+  in
+    [ BindL(L, G, %s, R, code, nl), !LeafGroup(L, G, pk(k1), pk(k2)),
+      In(<body, sign(<'k2', body>, k2), sign(<'k1', body>, k1)>) ]
+  --[ LeaveSeq(L, G, %s), LeafHead(L, G, %s %+ %1, nr), WaitMade(L, G, %s %+ %1) ]->
+    [ Waiting(L, G, %s %+ %1, nr) ]
+
+/* ---------------- Commands ---------------- */
+
+rule Leaf_Nonce:
+    [ !BoundRoot(L, G, s, R), !Grant(L, G, s, R, ctr, C), Fr(~n) ]
+  --[ UseGrant(L, G, s, ctr) ]->
+    [ Out(<'nonce', L, C, ~n>), Nonce(L, C, ~n) ]
+
+// The commander's phone: the person confirms, it signs with the nonce.
+rule Commander_Sends:
+  let cmd = <'cbb command v3', G, L, n, nonce, ~order>
+  in
+    [ !Cmd(c), In(<'nonce', L, pk(c), nonce>), In(<G, n>), Fr(~order) ]
+  --[ CmdSigned(pk(c), L, ~order) ]->
+    [ Out(<cmd, sign(cmd, c)>) ]
+
+rule Leaf_Obeys:
+  let cmd = <'cbb command v3', G, L, n, nonce, order>
+  in
+    [ !BoundRoot(L, G, s, R), !Grant(L, G, s, R, ctr, pk(c)), Nonce(L, pk(c), nonce), In(<cmd, sign(cmd, c)>) ]
+  --[ UseGrant(L, G, s, ctr), UseNonce(L, pk(c), nonce), Obeys(L, pk(c), n, order), ObeysUnder(L, G, s, R, pk(c), order) ]->
+    [ ]
+
+
+tactic: leafs
+presort: s
+prio:
+  regex ".*!BoundRoot\(.*"
+  regex ".*LeafHead\(.*"
+  regex ".*LeafForked\(.*"
+  regex ".*BindL\(.*"
+  regex ".*Waiting\(.*"
+  regex ".*Forked\(.*"
+deprio:
+  regex ".*!Grant\(.*"
+  regex ".*!Root\(.*"
+  regex ".*!Recovery\(.*"
+
+/* ---------------- Lemmas ---------------- */
+
+// Helpers: the code never reaches the network; a binding mac under a key
+// made from a code comes from the root device that typed that code.
+lemma code_secret [reuse]:
+  "All L c #i #j. CodeShown(L, c) @ #i & KU(c) @ #j ==> F"
+
+lemma code_secret_bind [reuse, heuristic=S]:
+  "All key c #i #j. LeafKey(key, c) @ #i & KU(c) @ #j ==> F"
+
+lemma bind_key_secret [reuse]:
+  "All c nl nr #i #j. LeafKey(h(<'pake', c, nl, nr>), c) @ #i & KU(h(<'pake', c, nl, nr>)) @ #j ==> F"
+
+lemma bind_mac_origin [reuse]:
+  "All c nl nr x #i #j. LeafKey(h(<'pake', c, nl, nr>), c) @ #i & KU(mac(h(<'pake', c, nl, nr>), x)) @ #j
+     ==> Ex #k. BindMac(h(<'pake', c, nl, nr>), x) @ #k & #k < #j"
+
+
+lemma exec_bind_and_obey:
+  exists-trace
+  "Ex L G R C o #i. ObeysUnder(L, G, %1, R, C, o) @ #i
+     & not (Ex G2 s r #j. RevealRoot(G2, s, r) @ #j) & not (Ex x #j. RevealCommander(x) @ #j)"
+
+lemma exec_rebind_after_head:
+  exists-trace
+  "Ex L G R C o #i. ObeysUnder(L, G, %1 %+ %1, R, C, o) @ #i
+     & not (Ex G2 s r #j. RevealRoot(G2, s, r) @ #j) & not (Ex x #j. RevealCommander(x) @ #j)
+     & not (Ex G2 #j. RevealRecovery(G2) @ #j)"
+
+// 1. A guarded leaf obeys a command only under a grant of the root it was
+//    bound to in person at that recovery seq (or a later grant of that same
+//    root), signed by a commander of that grant, unless that root's key or
+//    that commander's key was taken.
+lemma obeys_only_bound_root [heuristic={leafs}]:
+  "All L G s R C o #i. ObeysUnder(L, G, s, R, C, o) @ #i
+     ==> (Ex C0 #b. BoundTo(L, G, s, R, C0) @ #b & #b < #i)
+       & ((Ex ctr #g. GrantIssued(G, s, R, L, ctr, C) @ #g) | (Ex #r. RevealRoot(G, s, R) @ #r))
+       & ((Ex #c. CmdSigned(C, L, o) @ #c & #c < #i) | (Ex #r. RevealCommander(C) @ #r))"
+
+// Binding needs the code: the leaf is bound only to a root whose device ran
+// the binding with the code read at the leaf. Holds even with the recovery
+// pair and every root key taken: watching the whole session gives nothing.
+lemma bind_needs_code [heuristic={leafs}]:
+  "All L G s R C #i. BoundTo(L, G, s, R, C) @ #i
+     ==> Ex #j. RootBinds(G, s, R, L) @ #j & #j < #i"
+
+// 2. After a change of root it obeys nobody until bound again in person at
+//    the new seq.
+lemma obeys_nobody_until_rebound [heuristic={leafs}]:
+  "All L G s nr R C o #h #i. LeafHead(L, G, s, nr) @ #h & ObeysUnder(L, G, s, R, C, o) @ #i
+     ==> R = nr & (Ex C0 #b. BoundTo(L, G, s, nr, C0) @ #b & #h < #b & #b < #i)"
+
+// The new root it waits for is the one a head signed by both recovery
+// halves named, unless the pair leaked.
+lemma head_from_recovery [heuristic={leafs}]:
+  "All L G s nr #h. LeafHead(L, G, s, nr) @ #h
+     ==> (Ex #j. HonestHead(G, s, nr) @ #j) | (Ex #r. RevealRecovery(G) @ #r)"
+
+// 3. Replay: no grant is taken twice and a nonce opens one command only;
+//    a grant of an earlier recovery seq is never taken after a later head.
+lemma no_command_replay [heuristic={leafs}]:
+  "All L C n n2 o o2 #i #j. Obeys(L, C, n, o) @ #i & Obeys(L, C, n2, o2) @ #j & o = o2 ==> #i = #j"
+
+lemma no_older_seq_grant [heuristic={leafs}]:
+  "All L G s s2 nr c #h #i. LeafHead(L, G, s2, nr) @ #h & Takes(L, G, s, c) @ #i & #h < #i
+     ==> not (s << s2)"
+
+// 5. Withholding: with only the attacker as neighbour and the leaked pair,
+//    the attacker can stop a bound lock for good (it waits for a binding
+//    nobody can do without the code). Expected to be found.
+lemma leaked_pair_stops_lock [heuristic={leafs}]:
+  exists-trace
+  "Ex L G s nr #b #h. BoundTo(L, G, %1, s, nr) @ #b & LeafHead(L, G, %1 %+ %1, nr) @ #h
+     & not (Ex #j. HonestHead(G, %1 %+ %1, nr) @ #j)"
+
+// The fixed form of the rule (audit 11-13): a binding exists only after the
+// root's device answered with the code read at the leaf (a shown code alone
+// binds nothing), is used once, and is valid only for the (root, seq) the
+// leaf keeps: the first root at seq 1 or the new root a head named.
+lemma binding_after_answer [heuristic={leafs}]:
+  "All L G s R C #i. BoundTo(L, G, s, R, C) @ #i
+     ==> Ex c #a #j. CodeShown(L, c) @ #a & RootBinds(G, s, R, L) @ #j & #a < #j & #j < #i"
+
+
+// Helper (label ShowFor added): a code is shown only for the (root, seq)
+// the leaf waits for.
+lemma show_for_kept [reuse, heuristic=c]:
+  "All L G s R #i. ShowFor(L, G, s, R) @ #i
+     ==> (Ex #w. LeafWaits(L, G, s, R) @ #w & #w < #i) | (Ex #h. LeafHead(L, G, s, R) @ #h & #h < #i)"
+
+lemma binding_for_kept_root [heuristic={leafs}]:
+  "All L G s R C #i. BoundTo(L, G, s, R, C) @ #i
+     ==> (Ex #w. LeafWaits(L, G, s, R) @ #w & #w < #i) | (Ex #h. LeafHead(L, G, s, R) @ #h & #h < #i)"
+
+// A binding does not outlive a later change of root: after a head at s+1
+// no grant of seq s is used (obeyed, refreshed or answered with a nonce).
+lemma binding_ends_at_head [heuristic={leafs}]:
+  "All L G %s nr c #h #u. LeafHead(L, G, %s %+ %1, nr) @ #h & UseGrant(L, G, %s, c) @ #u ==> not (#h < #u)"
+
+// Helpers for binding_once (labels WaitMade and ShowAt added; no rule
+// changed): the leaf waits at a seq once, and shows a code at a seq once.
+lemma wait_once [reuse, heuristic=c]:
+  "All L G s #i #j. WaitMade(L, G, s) @ #i & WaitMade(L, G, s) @ #j ==> #i = #j"
+
+lemma show_once [reuse, heuristic=c]:
+  "All L G s #i #j. ShowAt(L, G, s) @ #i & ShowAt(L, G, s) @ #j ==> #i = #j"
+
+lemma binding_once [heuristic={leafs}]:
+  "All L G s R R2 C C2 #i #j. BoundTo(L, G, s, R, C) @ #i & BoundTo(L, G, s, R2, C2) @ #j ==> #i = #j"
+
+end

@@ -1,0 +1,209 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 HunterEwok
+/*
+ * CBB 0.6: the change of root by the recovery key (rule 33, brief v2;
+ * root-fork-rank-rule.md section 1; E-6), as built at #530 16b2883:
+ * core/src/records (type 13 Recovery, sign/verify with sig2, verify_fetch),
+ * key.rs group_id, pq.rs.
+ *
+ * What is modelled
+ *   - A group: the first root key r0 and the recovery key, a PAIR (k1 ES256,
+ *     k2 SLH-DSA). Group ID G = H('cbb group v3', pk(r0), pk(k1), pk(k2)).
+ *   - A head (record type 13): body = <'recovery', G, seq, prev, newroot,
+ *     list hash, H(pk(k2))>; its ID = H(body). k2 signs the body under
+ *     context 'cbb record v3'; k1 signs <body, H(sig2)> under label
+ *     'cbb record v3' (with_sig2). Both are checked.
+ *   - A fetch proof: the same pair over data the asker chooses, under
+ *     'cbb recovery fetch v3' for both halves. The honest holder signs
+ *     ANY data the attacker asks for (worst case).
+ *   - A member: pinned keys (rule 29), a tip <seq, head ID, root>; it
+ *     applies a head whose both signatures verify with the pinned pair,
+ *     whose group is G, whose seq is tip + 1 and whose prev is the tip's
+ *     ID, and whose new root is not the recovery key's half. It keeps
+ *     every head it applied; a second validly signed head at a seq it
+ *     holds is a fork and halts it for good (rule 33 "FORK").
+ *   - A newcomer takes the keys from its admitter's Welcome and checks
+ *     them against G, which the entry gave it (joiner_agreement in the
+ *     entry model); then heads from anyone.
+ *   - The writer: any device that is given the recovery sheet writes the
+ *     next head over the tip it holds. Two such devices can write two heads
+ *     at one seq (the brief's "what still makes recovery forks").
+ *
+ * Abstractions: the list's content and the records it keeps (only its
+ * hash is in the head), the new root's first checkpoint, the 64-head
+ * bound, "a root that differs from every earlier root", unreadable heads,
+ * and leaves (model 3) are left out. Signatures are ideal (EUF-CMA); the
+ * PQ half is modelled as a second ideal signature.
+ *
+ * Attacker: the network; the first root's key and any root key a head
+ * named (RevealRoot); an admitter with the admit power writes any Welcome
+ * (the network can); k1 and k2 leak separately (RevealK1, RevealK2) and
+ * only lemmas that allow it say so.
+ */
+
+theory CBB_Recovery_v1
+begin
+
+builtins: hashing, signing, natural-numbers
+
+restriction Equality: "All x y #i. Eq(x, y) @ #i ==> x = y"
+restriction Inequality: "All x #i. Neq(x, x) @ #i ==> F"
+restriction NoFollowAfterHalt:
+  "All M G #i #j. Follow(M, G) @ #i & Halt(M, G) @ #j ==> #i < #j"
+restriction JoinOnce:
+  "All M #i #j. Joined(M) @ #i & Joined(M) @ #j ==> #i = #j"
+
+/* ---------------- The group and its keys ---------------- */
+
+rule Create_Group:
+  let G = h(<'cbb group v3', pk(~r0), pk(~k1), pk(~k2)>)
+  in
+    [ Fr(~r0), Fr(~k1), Fr(~k2) ]
+  --[ GroupMade(G, pk(~r0), pk(~k1), pk(~k2)), RootKey(G, pk(~r0)) ]->
+    [ !Group(G, pk(~r0), pk(~k1), pk(~k2)), !RootSecret(G, ~r0), !Sheet(G, ~k1, ~k2),
+      !GroupID(G), Out(pk(~r0)), Out(pk(~k1)), Out(pk(~k2)),
+      // every honest device starts at the first root, no head
+      FirstTip(G, pk(~r0)) ]
+
+rule Reveal_Root: [ !RootSecret(G, r) ] --[ RevealRoot(G, pk(r)) ]-> [ Out(r) ]
+rule Reveal_K1: [ !Sheet(G, k1, k2) ] --[ RevealK1(G) ]-> [ Out(k1) ]
+rule Reveal_K2: [ !Sheet(G, k1, k2) ] --[ RevealK2(G) ]-> [ Out(k2) ]
+
+/* ---------------- Members ---------------- */
+
+// The group's first device (the root's device) pins the keys it made.
+rule First_Member:
+    [ !Group(G, r0, p1, p2), FirstTip(G, r0), Fr(~mid) ]
+  --[ Joined(~mid), Pins(~mid, G, p1, p2) ]->
+    [ !Pin(~mid, G, p1, p2), Tip(~mid, G, %1, 'none', r0), !Was(~mid, G, %1, 'none') ]
+
+// A newcomer: G from the entry; the keys from its admitter's Welcome,
+// checked against G; it starts at the first root the Welcome names.
+rule Newcomer:
+    [ !GroupID(G), Fr(~mid), In(<'welcome', r0, p1, p2>) ]
+  --[ Eq(G, h(<'cbb group v3', r0, p1, p2>)), Joined(~mid), Pins(~mid, G, p1, p2) ]->
+    [ !Pin(~mid, G, p1, p2), Tip(~mid, G, %1, 'none', r0), !Was(~mid, G, %1, 'none') ]
+
+/* ---------------- Heads ---------------- */
+
+// A device given the recovery sheet writes the next head over its tip.
+rule Write_Head:
+  let body = <'recovery', G, s %+ %1, prev, pk(~nr), ~lh, h(p2)>
+      sig2 = sign(<'cbb record v3', body>, k2)
+      sig1 = sign(<'cbb record v3', body, h(sig2)>, k1)
+  in
+    [ !Sheet(G, k1, k2), !Pin(M, G, p1, p2), !Was(M, G, s, prev), Fr(~nr), Fr(~lh) ]
+  --[ HonestHead(G, s %+ %1, h(body), pk(~nr)), RootKey(G, pk(~nr)) ]->
+    [ !RootSecret(G, ~nr), Out(pk(~nr)),
+      Out(<body, sig1, sig2>) ]
+
+// The fetch proof: the holder signs whatever the asker gives it.
+rule Fetch_Proof:
+  let sig2 = sign(<'cbb recovery fetch v3', d>, k2)
+      sig1 = sign(<'cbb recovery fetch v3', d, h(sig2)>, k1)
+  in
+    [ !Sheet(G, k1, k2), In(d) ]
+  --[ FetchSigned(G, d) ]->
+    [ Out(<d, sig1, sig2>) ]
+
+// A fetch proof is checked by both halves.
+rule Check_Fetch:
+  let sig2 = sign(<'cbb recovery fetch v3', d>, k2)
+      sig1 = sign(<'cbb recovery fetch v3', d, h(sig2)>, k1)
+  in
+    [ !Pin(M, G, pk(k1), pk(k2)), In(<d, sig1, sig2>) ]
+  --[ FetchAccepted(G, d) ]->
+    [ ]
+
+// A member applies the next head: both signatures, group, seq, prev.
+rule Apply_Head:
+  let body = <'recovery', G, s %+ %1, prev, nr, lh, h(pk(k2))>
+      sig2 = sign(<'cbb record v3', body>, k2)
+      sig1 = sign(<'cbb record v3', body, h(sig2)>, k1)
+  in
+    [ !Pin(M, G, pk(k1), pk(k2)), Tip(M, G, s, prev, root), In(<body, sig1, sig2>) ]
+  --[ Neq(nr, pk(k1)), Neq(nr, pk(k2)),
+      Follow(M, G), Follows(M, G, s %+ %1, h(body), nr), Holds(M, G, s %+ %1, h(body)) ]->
+    [ Tip(M, G, s %+ %1, h(body), nr), !Held(M, G, s %+ %1, h(body)), !Was(M, G, s %+ %1, h(body)) ]
+
+// A second validly signed head at a seq the member holds: a fork, it halts.
+rule Fork_Halt:
+  let body = <'recovery', G, s, prev2, nr2, lh2, h(pk(k2))>
+      sig2 = sign(<'cbb record v3', body>, k2)
+      sig1 = sign(<'cbb record v3', body, h(sig2)>, k1)
+  in
+    [ !Pin(M, G, pk(k1), pk(k2)), !Held(M, G, s, hid), In(<body, sig1, sig2>) ]
+  --[ Neq(hid, h(body)), Halt(M, G), HaltAt(M, G, s, hid, h(body)) ]->
+    [ ]
+
+/* ---------------- Lemmas ---------------- */
+
+lemma exec_follow:
+  exists-trace
+  "Ex M G hid nr #i. Follows(M, G, %1 %+ %1, hid, nr) @ #i
+     & not (Ex #r. RevealK1(G) @ #r) & not (Ex #r. RevealK2(G) @ #r)"
+
+lemma exec_two_heads:
+  exists-trace
+  "Ex M G hid1 hid2 nr1 nr2 #i #j. Follows(M, G, %1 %+ %1, hid1, nr1) @ #i
+     & Follows(M, G, %1 %+ %1 %+ %1, hid2, nr2) @ #j
+     & not (Ex #r. RevealK1(G) @ #r) & not (Ex #r. RevealK2(G) @ #r)"
+
+// 1+2. A member follows a new root only on a head the recovery key (both
+// halves) signed for this group at this seq: without both halves nobody
+// (not the old root, not an admin, not an admitter) makes it follow.
+lemma follow_needs_recovery:
+  "All M G s hid nr #i. Follows(M, G, s, hid, nr) @ #i
+     ==> (Ex #j. HonestHead(G, s, hid, nr) @ #j & #j < #i)
+       | ((Ex #r. RevealK1(G) @ #r & #r < #i) & (Ex #r. RevealK2(G) @ #r & #r < #i))"
+
+// E-6: one half leaked is not enough.
+lemma one_half_is_not_enough:
+  "All M G s hid nr #i. Follows(M, G, s, hid, nr) @ #i & not (Ex #j. HonestHead(G, s, hid, nr) @ #j)
+     ==> (Ex #r. RevealK1(G) @ #r) & (Ex #r. RevealK2(G) @ #r)"
+
+// 3. A newcomer pins exactly the recovery key the Group ID commits to,
+// whatever its admitter sent.
+lemma newcomer_pins_committed_key:
+  "All M G p1 p2 #i. Pins(M, G, p1, p2) @ #i
+     ==> Ex r0 #j. GroupMade(G, r0, p1, p2) @ #j"
+
+// 4. Two members holding the same newest head agree on the root.
+lemma same_head_same_root:
+  "All M1 M2 G s hid nr1 nr2 #i #j. Follows(M1, G, s, hid, nr1) @ #i & Follows(M2, G, s, hid, nr2) @ #j
+     ==> nr1 = nr2"
+
+// 5. A fetch proof is never a head and a head is never a fetch proof,
+// even though the holder signs any data asked for a fetch.
+lemma fetch_proof_never_head:
+  "All M G s hid nr #i. Follows(M, G, s, hid, nr) @ #i
+     ==> (Ex #j. HonestHead(G, s, hid, nr) @ #j)
+       | ((Ex #r. RevealK1(G) @ #r) & (Ex #r. RevealK2(G) @ #r))"
+
+lemma head_never_fetch_proof:
+  "All G d #i. FetchAccepted(G, d) @ #i
+     ==> (Ex #j. FetchSigned(G, d) @ #j & #j < #i)
+       | ((Ex #r. RevealK1(G) @ #r) & (Ex #r. RevealK2(G) @ #r))"
+
+// 6. A halt comes only from two different heads the recovery key signed
+// at one seq: two honest writers, or the leaked pair. Nobody else can stop
+// the group with a forged fork.
+lemma halt_needs_recovery:
+  "All M G s h1 h2 #i. HaltAt(M, G, s, h1, h2) @ #i
+     ==> (Ex nr1 nr2 #a #b. HonestHead(G, s, h1, nr1) @ #a & HonestHead(G, s, h2, nr2) @ #b)
+       | ((Ex #r. RevealK1(G) @ #r) & (Ex #r. RevealK2(G) @ #r))"
+
+// 6'. With the leaked pair, the price: the attacker makes a member follow
+// a root of its own (expected to be found).
+lemma leaked_pair_takes_group:
+  exists-trace
+  "Ex M G hid nr #i. Follows(M, G, %1 %+ %1, hid, nr) @ #i & not (Ex #j. HonestHead(G, %1 %+ %1, hid, nr) @ #j)"
+
+// 6''. ... and an honest second head at that seq stops the member that
+// sees both (expected to be found).
+lemma honest_second_head_halts:
+  exists-trace
+  "Ex M G h1 h2 nr #i #a. HaltAt(M, G, %1 %+ %1, h1, h2) @ #i & HonestHead(G, %1 %+ %1, h2, nr) @ #a
+     & not (Ex nr1 #b. HonestHead(G, %1 %+ %1, h1, nr1) @ #b)"
+
+end

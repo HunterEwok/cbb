@@ -1,0 +1,388 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 HunterEwok
+/*
+ * CBB 0.6 entry without certificates: pairing by invitation with the
+ * committed short code (format-0.6-bytes sections 11 and 19 W.3,
+ * design-no-certificates-ru section 4, core/src/join at #518 e259672).
+ *
+ * Parties
+ *   - The group: a root key rk; the group ID is h(pk(rk)). An admitter has a
+ *     member key kM (its TLS key) and an admin key kD; the root's record
+ *     names both and the right to admit. The root may admit too.
+ *   - The joiner: a fresh member key kJ (its TLS key); its device ID is
+ *     h(pk(kJ)). It may offer an admin key kO with a proof over the
+ *     session's exporter (Info fields 5 and 6).
+ *   - The attacker: Dolev-Yao on the network, can be the hub or relay, can
+ *     hold the invitation (LeakInvitation), runs its own groups with its own
+ *     keys.
+ *
+ * TLS and CPace (as audit-0.6/formal): key transport TLS whose server signs
+ * the transcript, exporter sid = h('exp', k); CPace as the ideal balanced
+ * PAKE keyed by (s, CI, sid), CI = the hashes of both TLS keys.
+ *
+ * The short code (W.3): the joiner commits to nj in start, the member
+ * answers nm in reply, the joiner opens nj in confirm; both show
+ * code(sid, nj, nm). The user compares the two screens at the admitter
+ * (UserMatch). Six digits collide by chance: a symbolic model cannot say
+ * "one chance in a million", so a member session that sent its reply gives
+ * the attacker one chance (Chance), spent by Collide. How many chances one
+ * invitation gives is the counting model's question (join_counting.qnt).
+ *
+ * Modes of the admitter's confirmation: 'match' (the short code compared)
+ * and 'none' (a device with a camera or the typed secret: no code).
+ */
+
+theory CBB_Join_v3
+begin
+
+builtins: hashing, signing, symmetric-encryption, asymmetric-encryption, diffie-hellman
+functions: mac/2, code/3
+
+restriction OneGroupPerName:
+  "All G #i #j. GroupName(G) @ #i & GroupName(G) @ #j ==> #i = #j"
+
+// A group: its root, and one admitter whose record (signed by the root)
+// names its member key, its admin key and `admit`.
+rule Group_Setup:
+  let rec = sign(<'rec', pk(~kM), pk(~kD), 'admit'>, ~rk)
+  in
+    [ Fr(~rk), Fr(~kM), Fr(~kD) ]
+  --[ GroupName($G), AdmitterName($G, pk(~kM)) ]->
+    [ !Admitter($G, ~rk, ~kM, ~kD, rec), Out(pk(~rk)), Out(pk(~kM)), Out(pk(~kD)), Out(rec) ]
+
+// A stolen admin key: the attacker can sign admissions with it.
+rule Reveal_AdminKey:
+    [ !Admitter($G, rk, kM, kD, rec) ] --[ RevealAdmin(pk(kD)) ]-> [ Out(kD) ]
+
+// A stolen member key of the admitter (its TLS key), the admin key safe.
+rule Reveal_MemberKey:
+    [ !Admitter($G, rk, kM, kD, rec) ] --[ RevealMember(pk(kM)) ]-> [ Out(kM) ]
+
+// cbb invite: a one-time ID and a 256-bit secret; no group in the text.
+rule Invite:
+    [ !Admitter($G, rk, kM, kD, rec), Fr(~s), Fr(~id) ]
+  --[ Invited(h(pk(rk)), ~s) ]->
+    [ !Open($G, ~s, ~id), !InvText(~s, ~id), Unused($G, ~s) ]
+
+rule LeakInvitation:
+    [ !InvText(~s, ~id) ] --[ Leak(~s) ]-> [ Out(<~s, ~id>) ]
+
+/* ---------------- The joiner ---------------- */
+
+// TLS 1.3 with an ephemeral exchange: the joiner's share 'g'^~x in its hello.
+rule J_Start:
+    [ !InvText(~s, ~id), Fr(~kJ), Fr(~kO), Fr(~nc), Fr(~x) ]
+  --[ JoinerKey(pk(~kJ), ~s), JoinerAdminKey(pk(~kJ), pk(~kO)) ]->
+    [ J1(~kJ, ~kO, ~s, ~id, ~nc, ~x), Out(<'ch', ~nc, 'g'^~x>) ]
+
+/* ---------------- The member (TLS server) ---------------- */
+
+// The member's share 'g'^~y; its static key signs the transcript with both shares.
+rule M_Hello:
+    [ !Open($G, ~s, ~id), !Admitter($G, rk, kM, kD, rec), In(<'ch', nc, X>), Fr(~ns), Fr(~y) ]
+  -->
+    [ M1($G, ~s, ~id, nc, ~ns, X, ~y),
+      Out(<'sh', ~ns, 'g'^~y, pk(kM), sign(<'sv', nc, ~ns, X, 'g'^~y, pk(kM)>, kM)>) ]
+
+// The joiner: TLS client key exchange, then start = Ya, ADa (its Info with
+// the invitation's ID and its admin key with the proof), commitment.
+rule J_Start2:
+  let pkC = pk(~kJ)
+      X = 'g'^~x
+      k = h(<'tls', Y^~x, ~nc, ns, X, Y, pkS, pkC>)
+      sid = h(<'exp', k>)
+      ci = <'ci', h(pkS), h(pkC)>
+      ya = senc(<'ya', ~ca>, h(<'cpg', ~s, ~id, ci, sid>))
+      pop = sign(<'pop', sid>, ~kO)
+      ada = <~id, pk(~kO), pop>
+      cm = h(<'commit', ~nj>)
+  in
+    [ J1(~kJ, ~kO, ~s, ~id, ~nc, ~x), In(<'sh', ns, Y, pkS, sign(<'sv', ~nc, ns, X, Y, pkS>, skS)>),
+      Fr(~ca), Fr(~nj) ]
+  --[ JoinerPop(pkC, pk(~kO), sid), JCa(~ca, ~s) ]->
+    [ J2(~kJ, ~kO, ~s, ~id, pkS, k, sid, ya, ada, ~ca, ~nj),
+      Out(<'cc', pkC, sign(<'cv', ~nc, ns, X, Y, pkS, pkC>, ~kJ), senc(<'start', ya, ada, cm>, k)>) ]
+
+// The member: reply = Yb, ADb (the group ID and its device ID), nm.
+rule M_Reply:
+  let pkS = pk(kM)
+      pkC = pk(skC)
+      Y = 'g'^~y
+      k = h(<'tls', X^~y, nc, ~ns, X, Y, pkS, pkC>)
+      sid = h(<'exp', k>)
+      ci = <'ci', h(pkS), h(pkC)>
+      ya = senc(<'ya', ca>, h(<'cpg', ~s, ~id, ci, sid>))
+      yb = senc(<'yb', ~cb>, h(<'cpg', ~s, ~id, ci, sid>))
+      g = h(pk(rk))
+      adb = <g, h(pkS)>
+      mk = h(<'mk', sid, ca, ~cb, ada, adb>)
+  in
+    [ M1($G, ~s, ~id, nc, ~ns, X, ~y), !Admitter($G, rk, kM, kD, rec),
+      In(<'cc', pkC, sign(<'cv', nc, ~ns, X, Y, pkS, pkC>, skC), senc(<'start', ya, ada, cm>, k)>),
+      Fr(~cb), Fr(~nm) ]
+  --[ MemberReplied($G, ~s, pkC, sid, ~nm), MCb(~cb, ~s) ]->
+    [ M2($G, ~s, ~id, pkC, k, sid, ya, yb, ada, cm, mk, ~nm), Chance($G, ~s, sid),
+      Out(senc(<'reply', yb, adb, ~nm>, k)) ]
+
+// The joiner: confirm = Ta, nj; it shows its code.
+rule J_Confirm:
+  let pkC = pk(~kJ)
+      ci = <'ci', h(pkS), h(pkC)>
+      yb = senc(<'yb', cb>, h(<'cpg', ~s, ~id, ci, sid>))
+      adb = <g, hm>
+      mk = h(<'mk', sid, ~ca, cb, ada, adb>)
+      c = code(<sid, ~id>, ~nj, nm)
+  in
+    [ J2(~kJ, ~kO, ~s, ~id, pkS, k, sid, ya, ada, ~ca, ~nj), In(senc(<'reply', yb, adb, nm>, k)) ]
+  --[ JoinerRunning(pkC, g, pkS, ~s, sid), JoinerShows(pkC, c), JMk(mk, ~s), MacSent(mk, <ya, ada>) ]->
+    [ J3(~kJ, ~s, pkS, k, sid, yb, ada, adb, mk, g), !JScreen(pkC, pkS, c),
+      Out(senc(<'confirm', mac(mk, <ya, ada>), ~nj>, k)) ]
+
+// The member: Ta verifies, the nonce opens the commitment; it shows its code.
+rule M_Confirm:
+  let c = code(<sid, ~id>, nj, ~nm)
+  in
+    [ M2($G, ~s, ~id, pkC, k, sid, ya, yb, ada, cm, mk, ~nm),
+      In(senc(<'confirm', mac(mk, <ya, ada>), nj>, k)) ]
+  --[ Eq(cm, h(<'commit', nj>)), MemberShows($G, pkC, c) ]->
+    [ Asking($G, ~s, pkC, k, sid, yb, ada, mk, c) ]
+
+restriction Equality: "All x y #i. Eq(x, y) @ #i ==> x = y"
+
+// The user compares the two screens: the joiner's screen shows the same code.
+rule UserMatch:
+    [ Asking($G, ~s, pkC, k, sid, yb, ada, mk, c), !JScreen(pkJ, pkS, c) ]
+  --[ Matched($G, pkC, pkJ, pkS, sid), Confirmed($G, ~s, pkC, 'match'), ConfirmedIn($G, ~s, pkC, sid, 'match') ]->
+    [ Approved($G, ~s, pkC, k, sid, yb, ada, mk) ]
+
+// Six digits collide: the attacker spends this session's chance.
+rule Collide:
+    [ Asking($G, ~s, pkC, k, sid, yb, ada, mk, c), Chance($G, ~s, sid), !JScreen(pkJ, pkS, c2) ]
+  --[ Collided($G, ~s, sid), Matched($G, pkC, pkJ, pkS, sid), Confirmed($G, ~s, pkC, 'match'),
+      ConfirmedIn($G, ~s, pkC, sid, 'match') ]->
+    [ Approved($G, ~s, pkC, k, sid, yb, ada, mk) ]
+
+// No code (a camera, or the secret typed on the device itself).
+rule NoCode:
+    [ Asking($G, ~s, pkC, k, sid, yb, ada, mk, c) ]
+  --[ Confirmed($G, ~s, pkC, 'none'), ConfirmedIn($G, ~s, pkC, sid, 'none') ]->
+    [ Approved($G, ~s, pkC, k, sid, yb, ada, mk) ]
+
+// The Welcome: the root key, the admitter's record, the joiner's record
+// signed by the admin key (with the offered admin key only when its proof
+// checks over this session's exporter); the invitation is used up.
+rule M_Welcome:
+  let ada = <id, pkO, pop>
+      g = h(pk(rk))
+      jrec = sign(<'jrec', pkC, pkO>, kD)
+  in
+    [ Approved($G, ~s, pkC, k, sid, yb, ada, mk), Unused($G, ~s), !Admitter($G, rk, kM, kD, rec) ]
+  --[ Eq(verify(pop, <'pop', sid>, pkO), true), Admitted(g, pk(kM), pkC, ~s, sid),
+      AdmittedAdmin(g, pkC, pkO, sid), WelcomeSent(~s, k), MacSent(mk, <yb, 'tb'>),
+      WelcomeMac(mk, g, pk(kM), pkC, ~s, sid, k) ]->
+    [ Out(senc(<'welcome', mac(mk, <yb, 'tb'>), pk(rk), rec, jrec>, k)) ]
+
+// The joiner checks: the group ID from the code exchange is the root key's,
+// the admitter's record is signed by that root and names the TLS key and
+// `admit`, its own record carries its own key and is signed by that
+// admitter's admin key.
+rule J_Welcome:
+  let pkC = pk(~kJ)
+      adb = <g, hm>
+      rec = sign(<'rec', pkS, pkD, 'admit'>, rkx)
+      jrec = sign(<'jrec', pkC, pkO>, kDx)
+  in
+    [ J3(~kJ, ~s, pkS, k, sid, yb, ada, adb, mk, g),
+      In(senc(<'welcome', mac(mk, <yb, 'tb'>), pkR, rec, jrec>, k)) ]
+  --[ Eq(g, h(pkR)), Eq(verify(rec, <'rec', pkS, pkD, 'admit'>, pkR), true),
+      Eq(verify(jrec, <'jrec', pkC, pkO>, pkD), true),
+      JoinerAccepts(pkC, g, pkS, ~s, sid), JoinerKeys(~s, k), JAccMk(mk, ~s, k) ]->
+    [ ]
+
+/* ---------------- Lemmas ---------------- */
+
+
+
+// Helpers for the search (labels JCa and MCb added; no rule changed).
+lemma secret_s [reuse]:
+  "All g s #i #j. Invited(g, s) @ #i & KU(s) @ #j ==> Ex #l. Leak(s) @ #l"
+
+lemma secret_ca [reuse]:
+  "All ca s #i #j. JCa(ca, s) @ #i & KU(ca) @ #j ==> Ex #l. Leak(s) @ #l"
+
+lemma secret_mk [reuse]:
+  "All mk s #i #j. JMk(mk, s) @ #i & KU(mk) @ #j ==> Ex #l. Leak(s) @ #l"
+
+lemma secret_cb [reuse]:
+  "All cb s #i #j. MCb(cb, s) @ #i & KU(cb) @ #j ==> Ex #l. Leak(s) @ #l"
+
+// Helpers (reused): what the joiner ran fixes the member's session.
+lemma joiner_reply_origin [reuse]:
+  "All pkC g pkS s sid #i. JoinerRunning(pkC, g, pkS, s, sid) @ #i
+     ==> (Ex G nm #j. MemberReplied(G, s, pkC, sid, nm) @ #j & #j < #i) | (Ex #l. Leak(s) @ #l)"
+
+lemma same_sid_same_invitation [reuse]:
+  "All pkJ g pkS s sid G s2 nm #i #j. JoinerRunning(pkJ, g, pkS, s, sid) @ #i & MemberReplied(G, s2, pkJ, sid, nm) @ #j
+     ==> s = s2 | (Ex #l. Leak(s2) @ #l) | (Ex k #r. RevealMember(k) @ #r)"
+
+lemma welcome_origin [reuse]:
+  "All pkC g pkS s sid #i. JoinerAccepts(pkC, g, pkS, s, sid) @ #i
+     ==> (Ex k #j. WelcomeSent(s, k) @ #j & #j < #i) | (Ex #l. Leak(s) @ #l)"
+
+lemma joiner_key_origin [reuse]:
+  "All pkJ g pkS s sid #i. JoinerRunning(pkJ, g, pkS, s, sid) @ #i ==> Ex #j. JoinerKey(pkJ, s) @ #j"
+
+lemma one_code_one_pair [reuse]:
+  "All G pkC pkJ pkS sid #m. Matched(G, pkC, pkJ, pkS, sid) @ #m
+     ==> (pkC = pkJ & (Ex #a. AdmitterName(G, pkS) @ #a))
+       | (Ex s #l. Collided(G, s, sid) @ #l)"
+
+
+// Helper (labels MacSent and WelcomeMac added; no rule changed): a mac under
+// a joiner's mk is the attacker's only when it was sent by an honest party,
+// unless the invitation leaked.
+lemma mac_origin [reuse]:
+  "All mk s x #i #j. JMk(mk, s) @ #i & KU(mac(mk, x)) @ #j
+     ==> (Ex #k. MacSent(mk, x) @ #k & #k < #j) | (Ex #l. Leak(s) @ #l)"
+
+// Helper: the Welcome a joiner accepts carries the mac of a member session
+// that sent a Welcome under the same mk and the same TLS key.
+lemma welcome_mac [reuse]:
+  "All mk s k #i. JAccMk(mk, s, k) @ #i
+     ==> (Ex g2 pkS2 pkC2 s2 sid2 #j. WelcomeMac(mk, g2, pkS2, pkC2, s2, sid2, k) @ #j & #j < #i)
+       | (Ex #l. Leak(s) @ #l)"
+
+lemma exec_match:
+  exists-trace
+  "Ex G g pkS pkC s sid #i #j #c.
+      Admitted(g, pkS, pkC, s, sid) @ #i & Confirmed(G, s, pkC, 'match') @ #c
+    & JoinerAccepts(pkC, g, pkS, s, sid) @ #j
+    & not (Ex s2 #l. Leak(s2) @ #l) & not (Ex G s2 sid2 #l. Collided(G, s2, sid2) @ #l)"
+
+lemma exec_none:
+  exists-trace
+  "Ex G g pkS pkC s sid #i #j #c.
+      Admitted(g, pkS, pkC, s, sid) @ #i & Confirmed(G, s, pkC, 'none') @ #c
+    & JoinerAccepts(pkC, g, pkS, s, sid) @ #j & not (Ex s2 #l. Leak(s2) @ #l)"
+
+// The secret never reaches the relay or the network but by a leak.
+lemma secret_only_by_leak:
+  "All g s #i #k. Invited(g, s) @ #i & K(s) @ #k ==> Ex #l. Leak(s) @ #l"
+
+// Promise 1, without a code: a device joins only with the key of a device
+// that holds the invitation, unless the invitation leaked.
+lemma admitted_holder_none:
+  "All G g pkS pkC s sid #i #c. Admitted(g, pkS, pkC, s, sid) @ #i & Confirmed(G, s, pkC, 'none') @ #c
+     ==> (Ex #j. JoinerKey(pkC, s) @ #j) | (Ex #l. Leak(s) @ #l)"
+
+// Promise 1, with the code: even with a leaked invitation, only the device
+// whose screen matched in this session is admitted (a joiner's own key),
+// unless six digits collided in this session. Confirmed carries no session,
+// so the statement below is the first wording, kept as it was: FALSIFIED.
+// Its trace (62 steps): the invitation leaks; session sid is admitted after
+// NoCode, while another session of the same invitation and the same key gets
+// 'match' through Collide, which the lemma excludes only for sid. That is the
+// statement, not the protocol: the 'match' it quotes was in another session.
+// The promise is admitted_holder_match_same_session, below.
+lemma admitted_holder_match_even_if_leaked:
+  "All G g pkS pkC s sid #i #c. Admitted(g, pkS, pkC, s, sid) @ #i & Confirmed(G, s, pkC, 'match') @ #c
+     ==> (Ex #j. JoinerKey(pkC, s) @ #j) | (Ex G2 #l. Collided(G2, s, sid) @ #l)"
+
+
+// Helper: the joiner's Welcome came from the member session with the very TLS key.
+lemma welcome_key_origin [reuse]:
+  "All s k #i. JoinerKeys(s, k) @ #i
+     ==> (Ex #j. WelcomeSent(s, k) @ #j & #j < #i) | (Ex #l. Leak(s) @ #l)"
+
+// The same promise with the stolen-key case named: if no admin key was stolen,
+// the admitted device is a joiner of this very invitation.
+lemma admitted_holder_match_unless_revealed:
+  "All G g pkS pkC s sid #i #c. Admitted(g, pkS, pkC, s, sid) @ #i & Confirmed(G, s, pkC, 'match') @ #c
+     ==> (Ex #j. JoinerKey(pkC, s) @ #j) | (Ex G2 #l. Collided(G2, s, sid) @ #l) | (Ex k #r. RevealAdmin(k) @ #r)"
+
+// The case the comment above describes: with leaks and a stolen member key, a
+// joiner of another invitation is admitted under this one.
+lemma other_invitation_admitted:
+  exists-trace
+  "Ex G g pkS pkC s s2 sid #i #c #j. Admitted(g, pkS, pkC, s, sid) @ #i & Confirmed(G, s, pkC, 'match') @ #c
+     & JoinerKey(pkC, s2) @ #j & not(s = s2) & not(Ex G2 #l. Collided(G2, s, sid) @ #l)"
+
+// The joiner joins the admitter that admitted it in this TLS session,
+// unless the invitation leaked (then whoever holds the secret is the group).
+lemma joiner_agreement:
+  "All pkC g pkS s sid #i. JoinerAccepts(pkC, g, pkS, s, sid) @ #i
+     ==> (Ex #j. Admitted(g, pkS, pkC, s, sid) @ #j & #j < #i) | (Ex #l. Leak(s) @ #l)"
+
+// The offered admin key goes in only with its holder's proof over this
+// very session.
+lemma admin_key_proven_here:
+  "All g pkC pkO sid #i. AdmittedAdmin(g, pkC, pkO, sid) @ #i
+     ==> (Ex pkJ #j. JoinerPop(pkJ, pkO, sid) @ #j) | (Ex #r. RevealAdmin(pkO) @ #r)
+       | (Ex s #l. Leak(s) @ #l)"
+
+// Single use.
+lemma single_use:
+  "All g pkS pkC pkC2 s sid sid2 #i #j. Admitted(g, pkS, pkC, s, sid) @ #i & Admitted(g, pkS, pkC2, s, sid2) @ #j
+     ==> #i = #j"
+
+
+// Variants of the trace search: which attacker powers it needs.
+lemma other_invitation_no_reveal:
+  exists-trace
+  "Ex G g pkS pkC s s2 sid #i #c #j. Admitted(g, pkS, pkC, s, sid) @ #i & Confirmed(G, s, pkC, 'match') @ #c
+     & JoinerKey(pkC, s2) @ #j & not(s = s2) & not(Ex G2 #l. Collided(G2, s, sid) @ #l)
+     & not(Ex k #r. RevealAdmin(k) @ #r)"
+
+lemma other_invitation_s_kept:
+  exists-trace
+  "Ex G g pkS pkC s s2 sid #i #c #j. Admitted(g, pkS, pkC, s, sid) @ #i & Confirmed(G, s, pkC, 'match') @ #c
+     & JoinerKey(pkC, s2) @ #j & not(s = s2) & not(Ex G2 #l. Collided(G2, s, sid) @ #l)
+     & not(Ex #l. Leak(s) @ #l)"
+
+lemma other_invitation_no_leak:
+  exists-trace
+  "Ex G g pkS pkC s s2 sid #i #c #j. Admitted(g, pkS, pkC, s, sid) @ #i & Confirmed(G, s, pkC, 'match') @ #c
+     & JoinerKey(pkC, s2) @ #j & not(s = s2) & not(Ex G2 #l. Collided(G2, s, sid) @ #l)
+     & not(Ex x #l. Leak(x) @ #l)"
+
+
+// Promise 1, with the code, for the session that admitted: the admission
+// approved by a matched code in this very session is of a joiner of this
+// invitation, unless six digits collided in this session.
+lemma admitted_holder_match_same_session:
+  "All G g pkS pkC s sid #i #c. Admitted(g, pkS, pkC, s, sid) @ #i & ConfirmedIn(G, s, pkC, sid, 'match') @ #c
+     ==> (Ex #j. JoinerKey(pkC, s) @ #j) | (Ex G2 #l. Collided(G2, s, sid) @ #l)"
+
+// The same with the stolen-key case named, should the first not hold.
+lemma admitted_holder_match_same_session_unless_revealed:
+  "All G g pkS pkC s sid #i #c. Admitted(g, pkS, pkC, s, sid) @ #i & ConfirmedIn(G, s, pkC, sid, 'match') @ #c
+     ==> (Ex #j. JoinerKey(pkC, s) @ #j) | (Ex G2 #l. Collided(G2, s, sid) @ #l) | (Ex k #r. RevealAdmin(k) @ #r)"
+
+
+// With the admitter's member (TLS) key stolen and its admin key safe.
+lemma same_session_member_key_only:
+  exists-trace
+  "Ex G g pkS pkC s sid #i #c. Admitted(g, pkS, pkC, s, sid) @ #i & ConfirmedIn(G, s, pkC, sid, 'match') @ #c
+     & not(Ex #j. JoinerKey(pkC, s) @ #j) & not(Ex G2 #l. Collided(G2, s, sid) @ #l)
+     & not(Ex k #r. RevealAdmin(k) @ #r)"
+
+lemma same_session_admin_key_only:
+  exists-trace
+  "Ex G g pkS pkC s sid #i #c. Admitted(g, pkS, pkC, s, sid) @ #i & ConfirmedIn(G, s, pkC, sid, 'match') @ #c
+     & not(Ex #j. JoinerKey(pkC, s) @ #j) & not(Ex G2 #l. Collided(G2, s, sid) @ #l)
+     & not(Ex k #r. RevealMember(k) @ #r)"
+
+
+lemma member_key_only_own_kept:
+  exists-trace
+  "Ex G g pkS pkC s s2 sid #i #c #j. Admitted(g, pkS, pkC, s, sid) @ #i & ConfirmedIn(G, s, pkC, sid, 'match') @ #c
+     & JoinerKey(pkC, s2) @ #j & not(s = s2) & not(Ex #l. Leak(s2) @ #l)
+     & not(Ex G2 #l. Collided(G2, s, sid) @ #l) & not(Ex k #r. RevealAdmin(k) @ #r)"
+
+lemma member_key_only_same_group:
+  exists-trace
+  "Ex G g pkS pkC s s2 sid g2 #i #c #j #k. Admitted(g, pkS, pkC, s, sid) @ #i & ConfirmedIn(G, s, pkC, sid, 'match') @ #c
+     & JoinerKey(pkC, s2) @ #j & Invited(g2, s2) @ #k & g2 = g & not(s = s2)
+     & not(Ex G2 #l. Collided(G2, s, sid) @ #l) & not(Ex k #r. RevealAdmin(k) @ #r)"
+
+end
