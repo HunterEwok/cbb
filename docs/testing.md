@@ -197,7 +197,9 @@ A9 and U14 to U18).
   build starts with when launched with `-showcase` (`App/Showcase.swift`; nothing leaves the
   app): the sidebar's sections, a tile's card beside the tiles, the arrows and Escape, a
   settings part, Command-1, portrait, the card at the left in Arabic, and clipped text at the
-  largest size; each screen's picture is attached. Its Escape step is a known failure (below).
+  largest size; each screen's picture is attached. Escape is sent as U+241B
+  (`XCUIKeyboardKey.simulatorEscape`): the simulator's keyboard has no key for `.escape`'s
+  "\u{1B}" and sends nothing for it.
 - The other big screens: on Android `TabletHomeTest` keeps the sidebar's sections across a
   restart (their keys back to the same section); the HarmonyOS sidebar, keys and drops are
   compiled and linted by `apps/harmony/check.sh`, and the Aurora layout by `qmllint`. None of
@@ -363,9 +365,7 @@ still run, it still fails the test the day it starts passing, and the tag `KNOWN
 finds it again (`git grep KNOWN-ISSUE`). What it checks is checked by hand until then. The owner
 decides each entry.
 
-| Test | Step | Why | Evidence | Checked by hand | Again in |
-|---|---|---|---|---|---|
-| `PadUITests.testSidebarAndCard` | Escape closes the card | the Escape that `XCUIElement.typeKey` sends reaches no app on the iPadOS 27 simulator (Xcode 27.2) | a template app with nothing else in it gets no Escape either (2026-11-13); the same in nylon-impossible PR 508, unwired-dev/product PR 1867, Clubhouse-Go issue 366 | on the iPad simulator or an iPad with a keyboard: a tap on a tile, then →, moves the card to the next device, and Esc closes it; ← and → in the search field move its cursor | 0.7 |
+No step is marked at the moment.
 
 ## Unstable tests
 

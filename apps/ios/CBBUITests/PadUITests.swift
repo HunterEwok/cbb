@@ -64,22 +64,9 @@ final class PadUITests: XCTestCase {
         XCTAssertTrue(thinkpad.waitForExistence(timeout: 5))
         XCTAssertTrue(thinkpad.isSelected, "the right arrow chooses the next device")
 
-        // KNOWN-ISSUE(0.7): on the iPadOS 27 simulator (Xcode 27.2) the
-        // Escape that XCUIElement.typeKey sends reaches no app, not even a
-        // template app with nothing else in it (tried 2026-11-13; the same
-        // seen in nylon-impossible PR 508, unwired-dev/product PR 1867 and
-        // Clubhouse-Go issue 366). Escape pressed on a keyboard closes the
-        // card, checked by hand (docs/testing.md, "Known failures"). The
-        // step stays and is expected to fail; the expectation is strict, so
-        // the day the key arrives this fails and the wrapper goes. To be
-        // looked at again in 0.7.
         app.settle("the next device's card")
-        app.typeKey(.escape, modifierFlags: [])
-        let options = XCTExpectedFailure.Options()
-        options.isStrict = true
-        XCTExpectFailure("KNOWN-ISSUE(0.7): XCUITest's Escape reaches no app on the iPadOS 27 simulator", options: options) {
-            XCTAssertTrue(app.buttons["Close"].waitForNonExistence(timeout: 5), "Escape closes the card")
-        }
+        app.typeKey(.simulatorEscape, modifierFlags: [])
+        XCTAssertTrue(app.buttons["Close"].waitForNonExistence(timeout: 5), "Escape closes the card")
 
         // The sidebar's row; the same words also stand on a button outside it.
         app.collectionViews["Sidebar"].staticTexts["Appearance"].tap()
@@ -137,4 +124,13 @@ final class PadUITests: XCTestCase {
             return true
         }
     }
+}
+
+extension XCUIKeyboardKey {
+    /// Escape as the iOS simulator's hardware keyboard knows it. `.escape`
+    /// is "\u{1B}", which the simulator's table of keys does not hold: it
+    /// files Escape (HID usage 0x29) under U+241B, SYMBOL FOR ESCAPE, so
+    /// `.escape` sends no key at all (Xcode 27.2, iPadOS 27.2; a template
+    /// app shows the same, and U+241B closes its card, 2026-11-13).
+    static let simulatorEscape = XCUIKeyboardKey(rawValue: "\u{241B}")
 }
