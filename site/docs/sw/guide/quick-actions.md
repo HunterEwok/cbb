@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 9311cbfc4998 -->
+<!-- source: 6a71bf33d8c9 -->
 # Vitendo vya haraka
 
 Kwa yeyote anayetaka kufunga, kulaza au kuwasha upya kompyuta kutoka kwenye simu au kompyuta nyingine ya kikundi. Msimamizi huendesha kitendo kwa mguso mmoja au amri moja; kifaa hukiendesha tu ikiwa mtumiaji wake mwenyewe aliwasha kitendo hicho hapo.
@@ -8,14 +8,14 @@ Kwa yeyote anayetaka kufunga, kulaza au kuwasha upya kompyuta kutoka kwenye simu
 
 | Kitendo | Kinafanya nini | Wapi |
 |---|---|---|
-| `lock` | hufunga skrini | kompyuta |
-| `sleep` | hulaza kompyuta | kompyuta |
-| `reboot` | huwasha upya kompyuta dakika moja baadaye | kompyuta, mwanachama mwepesi |
-| `shutdown` | huzima kompyuta dakika moja baadaye | kompyuta |
-| `cancel-shutdown` | hughairi kuwasha upya au kuzima kunakosubiri | kompyuta, mwanachama mwepesi |
-| `restart` | huwasha upya huduma ya Copy Beyond Borders | kompyuta, mwanachama mwepesi |
+| `lock` | hufunga skrini | kompyuta, vifaa vidogo |
+| `sleep` | hulaza kompyuta | kompyuta, vifaa vidogo |
+| `reboot` | huwasha upya kompyuta dakika moja baadaye | kompyuta, vifaa vidogo |
+| `shutdown` | huzima kompyuta dakika moja baadaye | kompyuta, vifaa vidogo |
+| `cancel-shutdown` | hughairi kuwasha upya au kuzima kunakosubiri | kompyuta, vifaa vidogo |
+| `restart` | huwasha upya huduma ya Copy Beyond Borders | kompyuta, vifaa vidogo |
 | `keyboard-layout` | hubadilisha mpangilio ambao [kibodi yake ya Bluetooth](keyboards-and-tvs.md) huandika nao hadi unaofuata, baada ya kubadilisha ule wa kifaa chenyewe | kompyuta za Linux zenye kibodi imewashwa |
-| chako mwenyewe | huendesha programu uliyoichagua, kama mtumiaji aliyeingia | kompyuta |
+| chako mwenyewe | huendesha programu uliyoichagua, kama mtumiaji aliyeingia | kompyuta; kifaa kidogo chenye wakala wa CBB |
 
 Onyo la dakika moja kabla ya kuwasha upya au kuzima humpa yeyote aliye kwenye kompyuta muda wa kuhifadhi kazi yake au kuendesha `cancel-shutdown`. Windows pia huwaonya watumiaji walioingia.
 

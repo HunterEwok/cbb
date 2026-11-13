@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 0dae45ee8ba4 -->
+<!-- source: b1fa5d2433a5 -->
 # 安装
 
 Copy Beyond Borders 在每台电脑上作为一个小型后台服务运行，它的命令是 `cbb`。下面每种方式安装的都是同一个程序，选你喜欢的即可。
@@ -138,7 +138,9 @@ nftables 和 iptables 总是只给出命令，因为运行时添加的规则在�
 
 从 0.6 起，发布的版本都带有签名。要从更早的版本升级到 0.6，请再运行一次安装命令；此后由 `cbb update` 完成。
 
-`sudo cbb update`（在 Windows 上，是在以管理员身份打开的终端中运行 `cbb update`）会在通过 `get.sh`、`get.ps1` 或发布压缩包安装的电脑或轻量成员上安装最新版本；`cbb update -check` 只告诉你是否有新版本。你的设置会保留。它只安装项目签名过的版本，也绝不安装旧版本。如果新版本在一分钟内没有启动，上一个版本会自动恢复。它如何校验签名，见[协议](../protocol.md)第 16 节。
+从 0.6 起，更新绝不会破坏你的群组：一台设备可以和上一个版本的设备在同一个群组中工作，所以你可以逐台更新，顺序不限。设备遇到只有更新版本才能理解的内容时，会说明情况并请你更新。用 0.5 创建的群组需要在 0.6 上重新建立一次。
+
+`sudo cbb update`（在 Windows 上，是在以管理员身份打开的终端中运行 `cbb update`）会在通过 `get.sh`、`get.ps1` 或发布压缩包安装的电脑或小设备上安装最新版本；`cbb update -check` 只告诉你是否有新版本。你的设置会保留。它只安装项目签名过的版本，也绝不安装旧版本。如果新版本在一分钟内没有启动，上一个版本会自动恢复。它如何校验签名，见[协议](../protocol.md)第 16 节。
 
 安装程序会问一次是否自动更新（`--auto-update on|off`；在 Windows 上是 `-AutoUpdate on|off` 和 `$env:CBB_AUTO_UPDATE`，可以事先回答）；之后可用 `sudo cbb update -auto on|off` 更改。开启后，定时器每天在各自的时间检查一次：Linux 上是 systemd 定时器，Mac 上是 launchd 任务，Windows 上是以 SYSTEM 身份运行的计划任务，OpenWrt 和 FreeBSD 上是 cron。每次检查都会从 GitHub（GitHub 无响应时从 `dl.cbb.tools`）下载同样的几个小文件，所以和任何下载一样，GitHub 会知道这台设备的地址以及它在使用 Copy Beyond Borders；它不会发送任何关于群组的信息。`sudo cbb update -mirror https://...` 则改从另一个镜像获取更新，这无需任何信任，因为签名会被校验。定时器的日志是 `update.log`，位于 `/var/lib/cbb-update`（Linux）、`/etc/cbb-update`（OpenWrt）、`/var/db/cbb-update`（FreeBSD）、`/Library/Application Support/cbb-update`（Mac）或 `C:\Program Files\cbb-update`（Windows）。
 

@@ -1195,7 +1195,7 @@ All notable changes to cbb are documented in this file. The format follows
 - On the website the pictures of the documentation are drawn in chalk on a board in a walnut
   frame, like every other picture of the site, in every language, and are drawn in once as
   they come into view. The files in `docs/images` are unchanged, so GitHub shows them as before.
-- The users' guides (`docs/guide`) in Chinese, Hindi, Spanish, Russian, Arabic, Swahili and
+- The users' guides (`docs/guide`), the lab among them, in Chinese, Hindi, Spanish, Russian, Arabic, Swahili and
   Hebrew, opening inside the website's own layout with its header and language menu, with
   the text inside their pictures translated; the index's descriptions are translated too.
   Every other page of the documentation stays English and opens on GitHub from the index.
