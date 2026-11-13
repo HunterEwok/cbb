@@ -1673,9 +1673,11 @@ fn every_gate_asks_whether_the_group_is_stopped() {
 
 /// A guarded leaf waiting to be bound again gets its binding only from its
 /// own pairing session once the person said the codes match, naming the
-/// root its head named and its own key's ID; a session the person did not
-/// confirm, or said does not match, gives none, nor does a leaf that waits
-/// for nothing. A head stored without the kept state still gives one.
+/// root its head named, its own key's ID and that session; a session the
+/// person did not confirm, or said does not match, gives none, nor does a
+/// leaf that waits for nothing, nor an answer given in another session.
+/// One answer gives one binding. A head stored without the kept state
+/// still gives one.
 #[test]
 fn only_the_leafs_own_matched_session_makes_a_binding() {
     use crate::format::grant::Kept;
@@ -1683,24 +1685,33 @@ fn only_the_leafs_own_matched_session_makes_a_binding() {
     let new_root = k("new root");
     let plain = Kept { guarded: true, ..Kept::default() };
     let waiting = plain.changed(new_root.hash, 1);
-    let session = |j: &mut invitation::JoinerAttempts, local| {
+    let session = |j: &mut invitation::JoinerAttempts, exporter: &[u8], local| {
         let (code, _) = j.start().unwrap();
-        j.open(code, &[9; 32], &[1; 32], None, local).unwrap().2
+        j.open(code, exporter, &[1; 32], None, local).unwrap().2
     };
     let mut j = invitation::JoinerAttempts::default();
     // "They do not match": nothing, and the session is over.
-    let shown = session(&mut j, lock);
+    let shown = session(&mut j, b"session a", lock);
     assert!(j.answered(shown, false).is_none());
-    // "They match".
-    let shown = session(&mut j, lock);
+    // "They match" in session b.
+    let shown = session(&mut j, b"session b", lock);
     let matched = j.answered(shown, true).unwrap();
-    assert!(matched.binding(&Kept::default(), None).is_none(), "nothing to bind");
-    let b = matched.binding(&waiting, None).unwrap();
+    assert!(matched.binding(&Kept::default(), None, b"session b").is_none(), "nothing to bind");
+    let mut j = invitation::JoinerAttempts::default();
+    let answer = |j: &mut invitation::JoinerAttempts, exporter: &[u8], local| {
+        let shown = session(j, exporter, local);
+        j.answered(shown, true).unwrap()
+    };
+    let b = answer(&mut j, b"session c", lock).binding(&waiting, None, b"session c").unwrap();
     // The head stored, the kept state not: the same binding.
-    assert_eq!(matched.binding(&plain, Some((new_root.hash, 1))), Some(b));
-    let shown = session(&mut j, k("other lock").key.device_id());
-    let other = j.answered(shown, true).unwrap().binding(&waiting, None).unwrap();
-    assert_ne!(matched.binding(&waiting, None).unwrap(), other);
+    let from_head = answer(&mut j, b"session c", lock).binding(&plain, Some((new_root.hash, 1)), b"session c");
+    assert_eq!(from_head, Some(b));
+    // An answer of session c offered in session d gives nothing; another
+    // leaf's session gives another binding.
+    let mut j = invitation::JoinerAttempts::default();
+    assert!(answer(&mut j, b"session c", lock).binding(&waiting, None, b"session d").is_none());
+    let other = answer(&mut j, b"session c", k("other lock").key.device_id()).binding(&waiting, None, b"session c");
+    assert_ne!(other, answer(&mut j, b"session c", lock).binding(&waiting, None, b"session c"));
     // An invitation with the ID of none is no invitation.
     let mut none = invitation();
     none.id = NO_INVITATION;
@@ -1710,7 +1721,7 @@ fn only_the_leafs_own_matched_session_makes_a_binding() {
 }
 
 /// At home without an invitation the joiner takes a Welcome only with the
-/// person's "they match" from its own session; with an invitation the
+/// person's "they match" from this very session; with an invitation the
 /// invitation binds the member as before. The member's end computes the
 /// same code by its own function, from the joiner's commitment.
 #[test]
@@ -1729,16 +1740,18 @@ fn at_home_the_joiner_takes_a_welcome_only_after_the_person_matched() {
     wrong[0] ^= 1;
     assert_eq!(invitation::home_code(&commitment, &e, &wrong, &nm), Err(PairError::WrongCode));
     let matched = j.answered(shown, true).unwrap();
-    assert!(w.check(&group, &point(&k("laptop")), &point(&tv), Joining::Ordinary, Way::Home(&matched)).is_ok());
-    // A proof of another session (another key) takes nothing.
+    let take = |m, exporter: &[u8], own: &K| {
+        w.check(&group, &point(&k("laptop")), &point(own), Joining::Ordinary, Way::Home { matched: m, exporter })
+    };
+    assert!(take(&matched, &e, &tv).is_ok());
+    // The same answer offered in another session takes nothing.
+    assert_eq!(take(&matched, &[8; 32], &tv).err(), Some(welcome::Refusal::Unconfirmed));
+    // An answer for another key takes nothing.
     let (code, _) = j.start().unwrap();
     let (_, _, other) = j.open(code, &e, &nm, None, k("someone").key.device_id()).unwrap();
     let other = j.answered(other, true).unwrap();
-    assert_eq!(
-        w.check(&group, &point(&k("laptop")), &point(&tv), Joining::Ordinary, Way::Home(&other)).err(),
-        Some(welcome::Refusal::Unconfirmed)
-    );
-    // "They do not match" leaves no proof to show: the session ends there.
+    assert_eq!(take(&other, &e, &tv).err(), Some(welcome::Refusal::Unconfirmed));
+    // "They do not match" leaves no answer to show: the session ends there.
     let (code, _) = j.start().unwrap();
     let (_, _, shown) = j.open(code, &e, &nm, None, tv.key.device_id()).unwrap();
     assert!(j.answered(shown, false).is_none());

@@ -82,9 +82,8 @@ pub const FIELD_REPLACES: u16 = 18;
 /// The grant's field of the recovery seq it was made under (absent: 0,
 /// before any change of root).
 pub const FIELD_RECOVERY: u16 = 19;
-/// The highest recovery seq (a group's recovery key signs at most 16
-/// heads).
-pub const MAX_RECOVERY: u64 = 16;
+/// The highest recovery seq: the records' one constant (records rule 33).
+pub const MAX_RECOVERY: u64 = crate::records::body::MAX_RECOVERY;
 /// The grant's field of its type (1).
 pub const FIELD_TYPE: u16 = 1;
 /// The grant's field of its group.
@@ -259,7 +258,12 @@ pub const STATE_VERSION: u64 = 1;
 /// wait to be bound again (`[root key hash, recovery seq]`), 10 the newest
 /// head (`[root key hash, recovery seq]`). Fields from 256 on are a later
 /// version's: kept as they are and written back; another field below 256
-/// is refused.
+/// is refused. Recovery seqs are 1 to [`MAX_RECOVERY`].
+///
+/// The state is not signed or authenticated at rest: whoever can write the
+/// leaf's flash owns the leaf, and the chip's flash encryption and secure
+/// boot (the firmware's) are what guard it; the store's SHA-256 frame
+/// (`crate::store`) only catches a torn write.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Stored {
     kept: Kept,
@@ -448,14 +452,26 @@ pub struct Binding {
     root: KeyHash,
     leaf: DeviceId,
     recovery: u64,
+    session: [u8; 32],
+}
+
+/// The mark of a pairing session: the hash of its TLS exporter, which is
+/// local to the session's two ends and new for each session.
+pub fn session_mark(exporter: &[u8]) -> [u8; 32] {
+    sha256(&[b"cbb pairing session mark v1\0", exporter])
 }
 
 impl Binding {
     /// The binding a session of the leaf `leaf` makes once the person said
     /// the codes match, from the leaf's stored state ([`Kept::start`]):
     /// none unless it waits to be bound again.
-    pub(crate) fn matched(kept: &Kept, head: Option<(KeyHash, u64)>, leaf: DeviceId) -> Option<Binding> {
-        kept.start(head).rebind.map(|(root, recovery)| Binding { root, leaf, recovery })
+    pub(crate) fn matched(
+        kept: &Kept,
+        head: Option<(KeyHash, u64)>,
+        leaf: DeviceId,
+        session: [u8; 32],
+    ) -> Option<Binding> {
+        kept.start(head).rebind.map(|(root, recovery)| Binding { root, leaf, recovery, session })
     }
 }
 
@@ -466,7 +482,11 @@ impl Binding {
 /// root clears nothing. It is the only way a guarded leaf that took a
 /// change of root takes a grant again; the grant must be the root's,
 /// guarded, under `recovery`, and it starts the counters afresh. The
-/// binding is taken by value: one binding reads one grant.
+/// binding is taken by value: one binding reads one grant, and only one
+/// that came over the very pairing session whose code the person
+/// confirmed: `exporter` is the TLS exporter of the session the grant
+/// arrived on, and a grant by sync or by another session is refused.
+#[allow(clippy::too_many_arguments, reason = "the grant, the leaf's state and the session it came on")]
 pub fn read_bound<'a>(
     msg: &Value<'a>,
     root: &[u8],
@@ -475,9 +495,14 @@ pub fn read_bound<'a>(
     kept: Option<&Kept>,
     recovery: u64,
     binding: Binding,
+    exporter: &[u8],
 ) -> Result<Granted<'a>, Rule> {
     let root_hash = Key::new(Alg::Es256, root).hash();
-    if binding.root != root_hash || binding.leaf != *leaf || binding.recovery != recovery {
+    if binding.root != root_hash
+        || binding.leaf != *leaf
+        || binding.recovery != recovery
+        || !crate::secret::ct_eq(&binding.session, &session_mark(exporter))
+    {
         return Err(RULE_REBIND);
     }
     let kept = kept.map(|k| k.start(Some((root_hash, recovery))));

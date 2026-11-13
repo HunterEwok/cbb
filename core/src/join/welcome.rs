@@ -95,7 +95,9 @@ pub enum Way<'a> {
     /// the person's "they match" at the joiner, in this session
     /// (`invitation::JoinerAttempts::answered`). Without it, or after "they
     /// do not match", there is no Welcome to take, and the session ends.
-    Home(&'a super::invitation::Matched),
+    /// `exporter` is the TLS exporter of the session the Welcome came on:
+    /// an answer given in another session takes nothing.
+    Home { matched: &'a super::invitation::Matched, exporter: &'a [u8] },
 }
 
 /// Why the joiner does not take a Welcome.
@@ -112,7 +114,8 @@ pub enum Refusal {
     /// The Welcome is damaged.
     Damaged,
     /// At home without an invitation, the person's "they match" is of
-    /// another session than the one with the joiner's own key.
+    /// another session than this one, or of another key than the
+    /// joiner's own.
     Unconfirmed,
     /// The group is stopped (`State::stopped`): two recovery records at
     /// one seq, one this version cannot read, or two histories of the
@@ -330,8 +333,8 @@ impl Welcome {
         joining: Joining,
         way: Way<'_>,
     ) -> Result<(RecordSet, State), Refusal> {
-        if let Way::Home(m) = way
-            && m.local() != Key::es256(own.to_vec()).device_id()
+        if let Way::Home { matched, exporter } = way
+            && (matched.local() != Key::es256(own.to_vec()).device_id() || !matched.of(exporter))
         {
             return Err(Refusal::Unconfirmed);
         }

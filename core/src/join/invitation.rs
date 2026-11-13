@@ -555,6 +555,7 @@ pub struct JoinerCode {
 #[derive(Debug)]
 pub struct Shown {
     local: DeviceId,
+    session: [u8; 32],
 }
 
 /// A joiner's pairing session whose code the person said matches, at the
@@ -565,6 +566,9 @@ pub struct Shown {
 #[derive(Debug)]
 pub struct Matched {
     local: DeviceId,
+    /// The session's mark (`grant::session_mark` of its exporter): the
+    /// answer names that session and serves no other.
+    session: [u8; 32],
 }
 
 impl Matched {
@@ -573,14 +577,24 @@ impl Matched {
     /// root it waits for; `kept` and `head` are what the leaf stored
     /// (`Kept::start`). None when the leaf waits for no binding. What a
     /// binding names comes from the leaf's own state and this session's
-    /// own key, never from the peer.
-    pub fn binding(&self, kept: &Kept, head: Option<(KeyHash, u64)>) -> Option<Binding> {
-        Binding::matched(kept, head, self.local)
+    /// own key, never from the peer. `exporter` is the current session's:
+    /// none for an answer given in another session. It takes the answer by
+    /// value: one answer serves one grant.
+    pub fn binding(self, kept: &Kept, head: Option<(KeyHash, u64)>, exporter: &[u8]) -> Option<Binding> {
+        if !self.of(exporter) {
+            return None;
+        }
+        Binding::matched(kept, head, self.local, self.session)
     }
 
     /// The device ID of the joiner's own key in this session.
     pub(crate) fn local(&self) -> DeviceId {
         self.local
+    }
+
+    /// Whether the answer was given in the session with this exporter.
+    pub(crate) fn of(&self, exporter: &[u8]) -> bool {
+        crate::secret::ct_eq(&self.session, &crate::format::grant::session_mark(exporter))
     }
 }
 
@@ -655,7 +669,8 @@ impl JoinerAttempts {
             None => super::NO_INVITATION,
         };
         self.showing = true;
-        Ok((short_code(exporter, &code.nonce, member_nonce, &id), code.nonce, Shown { local }))
+        let session = crate::format::grant::session_mark(exporter);
+        Ok((short_code(exporter, &code.nonce, member_nonce, &id), code.nonce, Shown { local, session }))
     }
 
     /// The person answered the shown code: only now may the person start
@@ -664,7 +679,7 @@ impl JoinerAttempts {
     /// nothing, and that session ends.
     pub fn answered(&mut self, shown: Shown, matched: bool) -> Option<Matched> {
         self.showing = false;
-        matched.then_some(Matched { local: shown.local })
+        matched.then_some(Matched { local: shown.local, session: shown.session })
     }
 
     /// The person gave up, or the session that showed the code is gone (a
