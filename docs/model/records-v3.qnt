@@ -207,6 +207,23 @@ module records_v3 {
   // A set takes a record its counting checkpoint settled when the waiting checkpoint names it
   // (review C, 11:33Z).
   pure val WAIT_TAKES_SETTLED = true
+  // The bound of the place aside, in units (the core: one ROOM in all).
+  pure val ASIDE_ROOM = ROOM
+  // The place aside also takes the record a waiting checkpoint waits for (its key's record
+  // just below it), not only what it keeps (proposed; off is the text as it stands).
+  pure val ASIDE_TAKES_WAITED = false
+  // F-12: a held checkpoint above the counting one holds out the devices whose admissions it
+  // prunes (architecture 13:09Z; proposed, off is the text as it stands).
+  pure val F12 = false
+  // The rule as it stood at 1e9c92a1, for the record: only the newest waiting checkpoint waits
+  // (ONE_SLOT), and missing() names only what the newest waiting checkpoint keeps (N-7).
+  pure val ONE_SLOT = false
+  // The root's newest checkpoint is kept first beside the counting one only when both fit.
+  // Off (the text as it stands): when they do not, the rooms fall back to the plain rule and
+  // the counting one may be lost (everyWaitingTest). On: replay 0x9107 breaks oneState and
+  // converges (open with records and architecture).
+  pure val NEWEST_FIRST_IF_FITS = false
+  pure val MISSING_NEWEST_ONLY = false
 
   pure val NONE = 10000000
   // A record's ID as the hash orders it: not the order it was signed in.
@@ -469,7 +486,14 @@ module records_v3 {
       else {
         val c = db.get(v.checkpoint)
         val left = shown.filter(r => not(prunedBy(c, r)))
-        val first = left.filter(r => r == c or namedBy(c, r, shown))
+        // The root's newest checkpoint is kept first too, alone (not what it names).
+        val newest = cps.filter(x => cps.forall(o => o == x or x.seq > o.seq or (x.seq == o.seq and x.id < o.id)))
+        val first1 = left.filter(r => r == c or namedBy(c, r, shown))
+        // The newest goes first too only when it fits beside them (else it goes through the
+        // rooms like any record).
+        val firstN = first1.union(left.filter(r => newest.contains(r)))
+        val fitsN = sumUnits(firstN) <= ROOM and ceil.keys().forall(k => sumUnits(ofKey(firstN, k)) <= ceil.get(k))
+        val first = if (NEWEST_FIRST_IF_FITS and not(fitsN)) first1 else firstN
         val ceil2 = ceil.keys().mapBy(k => ceil.get(k) - sumUnits(ofKey(first, k)))
         val room2 = ROOM - sumUnits(first)
         if (room2 < 0 or ceil2.keys().exists(k => ceil2.get(k) < 0) or first.exists(r => not(ceil.keys().contains(r.signer)))) plain
@@ -570,10 +594,30 @@ module records_v3 {
     val forkS = pool.filter(a => a.signer == cur and pool.exists(b => b != a and b.signer == cur and b.seq == a.seq))
       .fold(NONE, (m, x) => min2(m, x.seq))
     val floor = rootFloor(pool.union(firstsHeld(s1, db)), chainState(s1, db), cur)
-    val cands = pool.filter(c => c.kind == "checkpoint" and c.signer == cur and c.seq > cseq and c.seq < forkS
+    val cands0 = pool.filter(c => c.kind == "checkpoint" and c.signer == cur and c.seq > cseq and c.seq < forkS
       and c.seq >= floor and storableW(s1, c, db) and fitsAlone(c, pool, keptPath(s1, db), keptCuts(s1, db)))
-    idsOf(pool.filter(x => not(s1.recs.contains(x.id)) and storableW(s1, x, db)
-      and cands.exists(c => x == c or namedBy(c, x, pool))))
+    // ONE_SLOT (the rule at 1e9c92a1): only the newest candidate waits.
+    val topC = cands0.fold(0, (x, c) => max2(x, c.seq))
+    val cands = if (ONE_SLOT) cands0.filter(c => c.seq == topC) else cands0
+    val all1 = pool.filter(x => not(s1.recs.contains(x.id)) and storableW(s1, x, db)
+      and cands.exists(c => c.keep.contains(x.id) or (ASIDE_TAKES_WAITED and namedBy(c, x, pool))))
+    // At most ASIDE_ROOM units, nothing while halted. Who stays: what the newest waiting
+    // checkpoint keeps, then the next newest; inside one checkpoint by (seq, ID); never by
+    // arrival.
+    if (chainState(s1, db).stop) Set()
+    else idsOf(all1.filter(x => sumUnits(all1.filter(y => asideBefore(y, x, cands))) <= ASIDE_ROOM))
+  }
+  // The newest candidate that keeps x: (seq, ID), the higher seq first, the smaller ID at one seq.
+  pure def asideGroup(x: Record, cands: Set[Record]): (int, int) = {
+    val ks = cands.filter(c => c.keep.contains(x.id))
+    val top = ks.fold(0, (m, c) => max2(m, c.seq))
+    (top, ks.filter(c => c.seq == top).fold(NONE, (m, c) => min2(m, c.id)))
+  }
+  pure def asideBefore(y: Record, x: Record, cands: Set[Record]): bool = {
+    val gy = asideGroup(y, cands)
+    val gx = asideGroup(x, cands)
+    gy._1 > gx._1 or (gy._1 == gx._1 and gy._2 < gx._2)
+      or (gy == gx and (y.seq < x.seq or (y.seq == x.seq and y.id <= x.id)))
   }
   pure def withWait(s1: Store, pool: Set[Record], db: Id -> Record): Store = {
     val aside = asideOf(s1, pool, db)
@@ -622,7 +666,8 @@ module records_v3 {
     val pc = pathCuts(chainState(s, db))
     if (pc._1 == s.path and pc._2 == s.cuts) s
     else {
-      val s2 = { ...s, path: pc._1, cuts: pc._2, cut: NOCUT }
+      // A change of root empties the place aside.
+      val s2 = { ...s, path: pc._1, cuts: pc._2, cut: NOCUT, wait: Set() }
       recut({ ...s2, recs: s2.recs.filter(i => storable(s2, db.get(i), db)) }, db)
     }
   }
@@ -852,7 +897,26 @@ module records_v3 {
         val c = at.filter(x => at.forall(o => x.id <= o.id)).fold(0, (m, x) => x.id)
         applyCheckpoint(pc._1, pc._2, c, acc)
       })._3
-    if (ch.stop) { ...v, stop: true, commanders: Set() } else v
+    if (ch.stop) { ...v, stop: true, commanders: Set() }
+    else if (not(F12)) v
+    else {
+      // F-12: a device key, and the admin key an admission names, does not count while a
+      // held checkpoint of the current root above the counting one (the candidates for
+      // waiting, all of them) prunes every admission of it that counts. Nothing is masked:
+      // what counts, removals, pairs and chains are read as before.
+      val cseq = if (v.checkpoint == 0) 0 else rs.filter(c => c.id == v.checkpoint).fold(0, (m, c) => c.seq)
+      // (One the member knows does not fit alone takes nothing away there; a member that
+      // lacks some of its named records cannot know.)
+      val above = cs.filter(c => c.seq > cseq and fitsAlone(c, rs, pc._1, pc._2))
+      val adm = rs.filter(r => v.counting.contains(r.id) and (r.kind == "admin" or r.kind == "device"))
+      pure def heldOut(k: Key): bool = {
+        val ad = adm.filter(r => r.target == k or devOf(r) == k)
+        ad != Set() and ad.forall(r => above.exists(c => prunedBy(c, r)))
+      }
+      { ...v, devices: v.devices.filter(d => not(heldOut(d))),
+        admins: v.admins.keys().filter(a => not(heldOut(a))).mapBy(a => v.admins.get(a)),
+        commanders: v.commanders.filter(k => k == cur or not(heldOut(k))) }
+    }
   }
 
   // A member's state: its set evaluated (the evaluation keeps again what the set holds).
@@ -974,15 +1038,15 @@ module records_v3 {
     // A removal's seen names only the keys it takes, each with its pair (format 20.2).
     val seen = if (kind == "revoke" or kind == "freeze") seen1.keys().filter(x => withPair(target).contains(x)).mapBy(x => seen1.get(x)) else seen1
     val isCp = kind == "checkpoint"
-    val r = rec(nextId, k, base.append(nextId), kind, target, kit, targetRec,
+    // A checkpoint keeps what its signer counts; one that keeps more is not the honest
+    // writer's (kit "bent").
+    val counted = recsOf(views.get(h).counting, db).filter(x => x.kind != "checkpoint")
+    val honestKeep = idsOf(counted).exclude(if (ROOT_KEYS.contains(k)) droppedAt(mine, counted) else Set())
+    val r = rec(nextId, k, base.append(nextId), kind, target,
+      if (isCp and not(extraKeep.subseteq(honestKeep))) "bent" else kit, targetRec,
       seen,
       if (isCp) seen else Map(),
-      // A checkpoint keeps what its signer counts.
-      if (isCp) {
-        val counted = recsOf(views.get(h).counting, db).filter(x => x.kind != "checkpoint")
-        val out = if (ROOT_KEYS.contains(k)) droppedAt(mine, counted) else Set()
-        idsOf(counted).exclude(out).union(extraKeep)
-      } else Set(),
+      if (isCp) honestKeep.union(extraKeep) else Set(),
       units)
     val db2 = db.put(nextId, r)
     all {
@@ -992,6 +1056,32 @@ module records_v3 {
       commit(db2, nextId + 1, h, if (hidden) s else insertInto(s, r, db2)),
     }
   }
+
+  // A root key signs a checkpoint with a keep of its choosing, and may lower one key's head by
+  // one record: not the honest writer's (kit "bent").
+  action signCheckpointKeep(k: Key, keep: Set[Id], lower: Key, units: int): bool = {
+    val h = HOLDER.get(k)
+    val s = st.get(h)
+    val mine = recsOf(s.recs, db)
+    val own = headLine(db.keys().map(i => db.get(i)), k)
+    // Each key's head: the longer of what the signer holds and what the keep names.
+    val kept = recsOf(keep.filter(i => db.keys().contains(i)), db)
+    val seen0 = SIGNERS.mapBy(x => if (x == k) own else {
+      val a = headLine(mine, x)
+      val b = headLine(kept, x)
+      if (b.length() > a.length()) b else a })
+    val seen = seen0.keys().mapBy(x => if (x == lower and seen0.get(x).length() > 0)
+      seen0.get(x).slice(0, seen0.get(x).length() - 1) else seen0.get(x))
+    val r = rec(nextId, k, own.append(nextId), "checkpoint", "", "bent", 0, seen, seen, keep, units)
+    val db2 = db.put(nextId, r)
+    all {
+      ROOT_KEYS.contains(k),
+      nextId <= FIRST + MAXREC,
+      commit(db2, nextId + 1, h, insertInto(s, r, db2)),
+    }
+  }
+  action signBent = nondet k = ROOT_KEYS.oneOf() nondet keep = db.keys().union(Set(NEVER)).powerset().oneOf()
+    nondet lower = Set("", PHONE, COMPUTER, WATCH).oneOf() nondet u = Set(1, 2).oneOf() signCheckpointKeep(k, keep, lower, u)
 
   // The recovery key k (or a thief holding it) signs a recovery record at seq `at` of the
   // chain its member follows (at its end, or at a seq that chain already has: a twin). The
@@ -1154,7 +1244,7 @@ module records_v3 {
   action step = any {
     signDevice, signDemote, signAdmin, signRevoke, signFreeze, signThaw, signResolve, signCheckpoint, signCopies,
     signUseKey, signAfterThaw, signHidden, signCheckpointNaming, signRecover, welcomeNewcomer,
-    deliver, deliver, deliver, deliver, compact,
+    deliver, fetch, fetch, fetch, compact,
   }
 
   // --- Guided steps ------------------------------------------------------------------------
@@ -1234,12 +1324,46 @@ module records_v3 {
     val order = range(1, nextId).select(i => held.contains(i))
     commitAll(MEMBERS.mapBy(m => finish(order.foldl(st.get(m), (s, i) => insertInto(s, db.get(i), db)), db)))
   }
+  // --- Protocol-shaped sync -----------------------------------------------------------------
+  // A peer lists what it keeps in its rooms and its chain. A member asks for what its missing()
+  // names: what the current root's first checkpoint and the checkpoints that wait keep, which it
+  // does not hold; a record so named is taken from anyone, from a peer's place aside too. One
+  // record at a time, in any order. (The core gives a named record up after MISSING_ROUNDS
+  // rounds and raises a local notice: liveness, not a rule; the model asks again.)
+  pure def heldBy(s: Store): Set[Id] = s.recs.union(s.chain).union(s.wait)
+  pure def missingOf(s: Store, db: Id -> Record): Set[Id] = {
+    val cur = last(keptPath(s, db))
+    val ws = waitingCps(s, db)
+    val top = ws.fold(0, (x, c) => max2(x, c.seq))
+    firstsHeld(s, db).filter(c => c.signer == cur).union(if (MISSING_NEWEST_ONLY) ws.filter(c => c.seq == top) else ws)
+      .fold(Set(), (u, c) => u.union(c.keep)).exclude(heldBy(s)).filter(i => db.keys().contains(i))
+  }
+  pure def listedTo(n: Store, s: Store, db: Id -> Record): Set[Id] =
+    n.recs.union(n.chain).union(n.wait.intersect(missingOf(s, db)))
+  def fetchable(m: str): Set[Id] =
+    MEMBERS.exclude(Set(m)).fold(Set(), (u, n) => u.union(listedTo(st.get(n), st.get(m), db))).exclude(heldBy(st.get(m)))
+  action fetch = nondet m = MEMBERS.oneOf() nondet i = db.keys().oneOf() all {
+    fetchable(m).contains(i),
+    giveOnly(m, i),
+  }
+  // One round for every member: it takes, in ID order, what its peers listed to it when the
+  // round began.
+  action syncRound = commitAll(MEMBERS.mapBy(m => {
+    val order = range(1, nextId).select(i => fetchable(m).contains(i))
+    finish(order.foldl(st.get(m), (s, i) => insertInto(s, db.get(i), db)), db)
+  }))
+  // A member whose fetches would all leave it as it is.
+  def syncedProto(m: str): bool = fetchable(m).forall(i => {
+    val s2 = insertInto(st.get(m), db.get(i), db)
+    s2.recs == st.get(m).recs and s2.chain == st.get(m).chain and s2.wait == st.get(m).wait
+  })
+
   action guided = any {
     step, signChange, signChange, signChange, signNewRoot, signNewRoot, signNewRoot, signCopies, signCheckpoint,
-    broadcast, broadcastNewest, broadcastNewest, broadcastNewest, broadcastNewest, deliver,
-    compact, compact, syncAll, syncAll, oldRootThief, oldRootThief, oldRootThief, rootRemovesPhone,
+    broadcast, broadcastNewest, broadcastNewest, broadcastNewest, broadcastNewest, fetch,
+    compact, compact, syncRound, syncRound, oldRootThief, oldRootThief, oldRootThief, rootRemovesPhone,
     removedAdminThief, removedAdminThief, removedAdminThief, recoveryTwin, signRecover,
-    signThaw, signAfterThaw, welcomeNewcomer, signHidden, signCheckpointNaming,
+    signThaw, signAfterThaw, welcomeNewcomer, signHidden, signCheckpointNaming, signBent,
   }
 
   // Witnesses of a run (quint run --witnesses): how many traces reach these.
@@ -1265,7 +1389,10 @@ module records_v3 {
   // what it shows then is promise 11's.)
   val oneState = MEMBERS.forall(m => {
     val s = st.get(m)
-    (saturated(m) and not(chainState(s, db).stop)) implies (s.recs == pureKept(s, db) and views.get(m) == pureView(s, db))
+    // With the honest writer always; otherwise under the place aside's assumption (1b) on
+    // what the member got.
+    ((honestOnly or asideAssumed(m, s.got)) and saturated(m) and not(chainState(s, db).stop))
+      implies (s.recs == pureKept(s, db) and views.get(m) == pureView(s, db))
   })
 
   // 1b. Sync converges: a member offered, to no change, every record some member holds keeps
@@ -1280,12 +1407,50 @@ module records_v3 {
     val s1 = { ...freshOf(s), checkpoint: c1 }
     settle(s1, recsOf(items, db).filter(r => storable(s1, r, db)), NOCUT, db)._1
   }
-  val converges = MEMBERS.forall(m => {
+  def convergesAt(m: str): bool = {
     val s = st.get(m)
     val k = freshKept(s, heldAll, db)
-    (synced(m) and not(chainState(s, db).stop) and not(views.get(m).stop)) implies (s.recs == k
+    (syncedProto(m) and not(chainState(s, db).stop) and not(views.get(m).stop)) implies (s.recs == k
       and views.get(m) == fullEvaluate(recsOf(k, db).union(firstsHeld(s, db)), chainState(s, db)))
-  })
+  }
+  // What users get: with the honest writer (it never keeps what it pruned, never lowers a head,
+  // keeps what counts) sync converges with no assumption.
+  def honestOnly: bool = db.keys().forall(i => db.get(i).kit != "bent")
+  val convergesHonest = honestOnly implies MEMBERS.forall(m => convergesAt(m))
+  // In general, under a stated assumption on the place aside: a holder of the root key that
+  // signs a checkpoint which can never be whole and keeps more old records than the place
+  // aside holds can keep a member at an older checkpoint than its peers. The assumption: what
+  // the checkpoints of the current root above the member's that some member holds, from the
+  // newest one that can become whole on, keep outside the member's rooms fits the place aside. (A checkpoint can become whole when some
+  // member holds every record it names.)
+  pure def wholeableIn(c: Record, items: Set[Id]): bool = c.keep.subseteq(items)
+    and (c.line.length() < 2 or items.contains(c.line[c.line.length() - 2]))
+  def asideFits(m: str): bool = asideFitsIn(m, heldAll)
+  def asideFitsIn(m: str, items: Set[Id]): bool = {
+    val s = st.get(m)
+    val cseq = if (s.checkpoint == 0) 0 else db.get(s.checkpoint).seq
+    val ws = recsOf(items, db).filter(c => c.kind == "checkpoint" and c.signer == last(keptPath(s, db)) and c.seq > cseq)
+    val top = ws.filter(c => wholeableIn(c, items)).fold(0, (x, c) => max2(x, c.seq))
+    val over = ws.filter(c => c.seq >= top).fold(Set(), (u, c) =>
+      u.union(c.keep).union(if (c.line.length() < 2) Set() else Set(c.line[c.line.length() - 2])))
+      .exclude(s.recs).filter(i => db.keys().contains(i))
+    top == 0 or sumUnits(recsOf(over, db)) <= ASIDE_ROOM
+  }
+  // Without the waited record aside, an older waiting checkpoint the rooms turn away is held
+  // nowhere aside; the assumption then: the newest checkpoint of the current root above the
+  // member's that some member holds can become whole.
+  def newestWholeable(m: str): bool = newestWholeableIn(m, heldAll)
+  def newestWholeableIn(m: str, items: Set[Id]): bool = {
+    val s = st.get(m)
+    val cseq = if (s.checkpoint == 0) 0 else db.get(s.checkpoint).seq
+    val ws = recsOf(items, db).filter(c => c.kind == "checkpoint" and c.signer == last(keptPath(s, db)) and c.seq > cseq)
+    val top = ws.fold(0, (x, c) => max2(x, c.seq))
+    ws.filter(c => c.seq == top).forall(c => wholeableIn(c, items))
+  }
+  // The assumption on the records items.
+  def asideAssumed(m: str, items: Set[Id]): bool =
+    if (ASIDE_TAKES_WAITED) asideFitsIn(m, items) else newestWholeableIn(m, items)
+  val converges = MEMBERS.forall(m => asideAssumed(m, heldAll) implies convergesAt(m))
   // 1c. No checkpoint of the current root newer than the counting one counts on the set alone:
   // a newer one that is not whole takes nothing from the counting one.
   val countsNewest = MEMBERS.forall(m => {
@@ -1444,9 +1609,23 @@ module records_v3 {
       and saturated(m1) and saturated(m2)
   }))
 
+  // F-12. A member held back counts no device or admin key that a member further on does not:
+  // one with the same path that counts a checkpoint the first holds above its own, and holds
+  // the same removals and freezes.
+  val heldBackCountsLess = MEMBERS.forall(m => MEMBERS.forall(n => {
+    val vm = views.get(m)
+    val vn = views.get(n)
+    val rm = recsOf(st.get(m).recs, db).filter(r => r.kind == "revoke" or r.kind == "freeze")
+    val rn = recsOf(st.get(n).recs, db).filter(r => r.kind == "revoke" or r.kind == "freeze")
+    val cm = if (vm.checkpoint == 0) 0 else db.get(vm.checkpoint).seq
+    val ahead = not(vm.stop) and not(vn.stop) and vm.path == vn.path and vn.checkpoint != 0
+      and st.get(m).recs.contains(vn.checkpoint) and db.get(vn.checkpoint).seq > cm and rm == rn
+    ahead implies (vm.devices.subseteq(vn.devices) and vm.admins.keys().subseteq(vn.admins.keys()))
+  }))
+
   val promises = and {
-    oneState, converges, countsNewest, removedStayOut, oneChainOneState, stopRootOnly, fairRoom, followsRecovery, pathGrows, newcomerTakes,
-    oldRootListed, twinStops, removedGainsNothing, compactedAgree,
+    oneState, converges, convergesHonest, countsNewest, removedStayOut, oneChainOneState, stopRootOnly, fairRoom, followsRecovery, pathGrows, newcomerTakes,
+    oldRootListed, twinStops, removedGainsNothing, compactedAgree, F12 implies heldBackCountsLess,
   }
 
   // --- Scenarios ---------------------------------------------------------------------------
@@ -1634,7 +1813,10 @@ module records_v3 {
       .then(give("m", 11)).then(give("m", 9)).then(give("m", 8)).then(give("m", 10))
       .expect(views.get("a").checkpoint == 9)
       .then(syncAll)
-      .expect(MEMBERS.forall(m => views.get(m).checkpoint == 9) and promises)
+      // 9 with what it names fills the root's ceiling; with 11 kept first beside it they do not
+      // fit, the rooms fall back to the plain rule and the members that took 9 count nothing.
+      .expect(if (NEWEST_FIRST_IF_FITS) MEMBERS.forall(m => views.get(m).checkpoint == 9) and promises
+        else views.get("a").checkpoint == 0 and views.get("m").checkpoint == 7)
 
   run prunedRemovalTest =
     init
@@ -1737,6 +1919,154 @@ module records_v3 {
       .then(give("a", 8)).then(give("a", 7)).then(give("a", 6))
       .then(syncAll)
       .expect(MEMBERS.forall(m => views.get(m).stop and views.get(m) == views.get("r")) and promises)
+
+  // --- The place aside's bound (N-1) ---------------------------------------------------------
+  action giveAll(ms: Set[str], ids: List[Id]): bool =
+    commitAll(MEMBERS.mapBy(m => if (ms.contains(m)) finish(ids.foldl(st.get(m), (s, i) => insertInto(s, db.get(i), db)), db)
+      else (st.get(m), views.get(m))))
+  // Three admins sign three 3-unit records each; the rooms keep the first of each, and every
+  // member counts checkpoint 13.
+  action asideBase =
+    init
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 3))
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 3))
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 3))
+      .then(sign(COMPUTER, "copies", "", "", 0, false, false, 3))
+      .then(sign(COMPUTER, "copies", "", "", 0, false, false, 3))
+      .then(sign(COMPUTER, "copies", "", "", 0, false, false, 3))
+      .then(sign(WATCH, "copies", "", "", 0, false, false, 3))
+      .then(sign(WATCH, "copies", "", "", 0, false, false, 3))
+      .then(sign(WATCH, "copies", "", "", 0, false, false, 3))
+      .then(giveAll(MEMBERS, [4, 5, 6, 7, 8, 9, 10, 11, 12]))
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 1, false, Set()))
+      .then(syncRound)
+      .then(compactAt("r")).then(compactAt("a")).then(compactAt("c")).then(compactAt("m")).then(compactAt("k"))
+      .expect(MEMBERS.forall(m => views.get(m).checkpoint == 13 and st.get(m).recs == Set(1, 2, 3, 4, 7, 10, 13)))
+  // The root key signs 14, which can become whole, and 15, which never can (it names a record
+  // nobody has) and keeps 9 units the rooms turn away. Member a gets 14 first and counts it; m
+  // gets 15 first: what 15 keeps fills the place aside first, 14's records do not fit, and after
+  // sync m still counts 13 while its peers count 14. Neither assumption holds there.
+  run asideFullTest = asideBase
+      .then(signCheckpointKeep(ROOT, Set(1, 2, 3, 5, 8), "", 1))
+      .then(signCheckpointKeep(ROOT, Set(1, 2, 3, 6, 9, 12, NEVER), "", 1))
+      .then(giveAll(Set("a"), [14, 5, 8]))
+      .then(giveAll(Set("m"), [15, 6, 9, 12, 14, 5, 8]))
+      .then(syncRound).then(syncRound).then(syncRound).then(syncRound)
+      .expect(and { views.get("a").checkpoint == 14, views.get("m").checkpoint == 13, syncedProto("m"),
+        not(convergesAt("m")), not(asideFits("m")), not(newestWholeable("m")), not(convergesHonest) or not(honestOnly),
+        promises })
+  // The same with 15 keeping 3 units only: the place aside has room, but 14 itself (the record
+  // 15 waits for, which 15 does not keep) is turned away by the full rooms and goes nowhere, so
+  // the members that got 15 first stay at 13. With ASIDE_TAKES_WAITED every member counts 14.
+  run olderWaitingTurnedAwayTest = asideBase
+      .then(signCheckpointKeep(ROOT, Set(1, 2, 3, 5, 8), "", 1))
+      .then(signCheckpointKeep(ROOT, Set(1, 2, 3, 6, NEVER), "", 1))
+      .then(giveAll(Set("a"), [14, 5, 8]))
+      .then(giveAll(Set("m"), [15, 6, 14, 5, 8]))
+      .then(syncRound).then(syncRound).then(syncRound).then(syncRound)
+      .expect(and { asideFits("m"), not(newestWholeable("m")),
+        if (ASIDE_TAKES_WAITED) MEMBERS.forall(m => views.get(m).checkpoint == 14 and convergesAt(m))
+        else views.get("m").checkpoint == 13 and not(convergesAt("m")),
+        promises })
+
+  // --- The rule at 1e9c92a1 (ONE_SLOT, N-7) ---------------------------------------------------
+  // As asideBase, with the watch's records of 2 units: the rooms have room for one more
+  // checkpoint beside the newest.
+  action slotBase =
+    init
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 3))
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 3))
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 3))
+      .then(sign(COMPUTER, "copies", "", "", 0, false, false, 3))
+      .then(sign(COMPUTER, "copies", "", "", 0, false, false, 3))
+      .then(sign(COMPUTER, "copies", "", "", 0, false, false, 3))
+      .then(sign(WATCH, "copies", "", "", 0, false, false, 2))
+      .then(sign(WATCH, "copies", "", "", 0, false, false, 2))
+      .then(sign(WATCH, "copies", "", "", 0, false, false, 2))
+      .then(giveAll(MEMBERS, [4, 5, 6, 7, 8, 9, 10, 11, 12]))
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 1, false, Set()))
+      .then(syncRound)
+      .then(compactAt("r")).then(compactAt("a")).then(compactAt("c")).then(compactAt("m")).then(compactAt("k"))
+      .then(signCheckpointKeep(ROOT, Set(1, 2, 3, 5, 8), "", 1))
+      .then(signCheckpointKeep(ROOT, Set(1, 2, 3, 6, NEVER), "", 1))
+      .expect(MEMBERS.forall(m => views.get(m).checkpoint == 13
+        and st.get(m).recs == Set(1, 2, 3, 4, 7, 10, 13).union(if (m == "r") Set(14, 15) else Set())))
+  // 7/8/9: 14 can become whole, the newer 15 never. Member m gets 15 first: with one slot only
+  // 15 waits, 14's records go nowhere, and m stays at 13 while a counts 14. Without
+  // ASIDE_TAKES_WAITED the same happens for another reason: 14 itself is turned away (the
+  // root is over its fair share) and nothing aside holds it.
+  run oneSlotTest = slotBase
+      .then(giveAll(Set("a"), [14, 5, 8]))
+      .then(giveAll(Set("m"), [15, 6, 14, 5, 8]))
+      .then(syncRound).then(syncRound).then(syncRound)
+      .expect(and { views.get("a").checkpoint == 14, syncedProto("m"),
+        if (ONE_SLOT or not(ASIDE_TAKES_WAITED)) views.get("m").checkpoint == 13 and not(convergesAt("m"))
+        else MEMBERS.forall(m => views.get(m).checkpoint == 14 and convergesAt(m)) and promises })
+  // N-7: 14's records wait aside on a (5) and c (8), whole nowhere; only missing() brings them.
+  // Naming only the newest waiting checkpoint's records (15's), nobody asks for them.
+  run missingNewestTest = slotBase
+      .then(giveAll(Set("a"), [15, 14, 5]))
+      .then(giveAll(Set("c"), [15, 14, 8]))
+      .then(giveAll(Set("m"), [15, 14]))
+      .expect(st.get("a").wait.contains(5) and st.get("c").wait.contains(8) and views.get("m").checkpoint == 13)
+      .then(syncRound).then(syncRound).then(syncRound)
+      .expect(and { syncedProto("m") or not(ASIDE_TAKES_WAITED),
+        // Without ASIDE_TAKES_WAITED nobody keeps 14 and 5, 8 at once: m, r and k take 14 and
+        // lose it again, round after round (never synced).
+        if (not(ASIDE_TAKES_WAITED)) views.get("m").checkpoint == 13
+        else if (MISSING_NEWEST_ONLY or ONE_SLOT) views.get("m").checkpoint == 13 and not(convergesAt("m"))
+        else MEMBERS.forall(m => views.get(m).checkpoint == 14 and convergesAt(m)) and promises })
+
+  // --- F-12 -------------------------------------------------------------------------------
+  // Every member counts checkpoint 5, which keeps device D's admission 4.
+  action f12Base =
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
+      .then(syncRound)
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .then(syncRound)
+      .then(compactAt("r")).then(compactAt("a")).then(compactAt("c")).then(compactAt("m")).then(compactAt("k"))
+      .expect(MEMBERS.forall(m => views.get(m).checkpoint == 5 and views.get(m).devices.contains(DEVICE)))
+  // The root removes D and checkpoint 8 prunes the removal with the admission. Member a counts
+  // 8; m holds 8 without the record 8 waits for. Today m still counts D; with F-12 it does not.
+  run f12HeldBackTest = f12Base
+      .then(signAs(ROOT, "revoke", DEVICE, 0))
+      .then(signAs(ROOT, "copies", "", 0))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .then(giveAll(Set("a"), [6, 7, 8]))
+      .then(giveAll(Set("m"), [8]))
+      .expect(and { views.get("a").checkpoint == 8, not(views.get("a").devices.contains(DEVICE)),
+        views.get("m").checkpoint == 5, views.get("m").devices.contains(DEVICE) == not(F12),
+        heldBackCountsLess == F12 })
+      .then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).checkpoint == 8 and not(views.get(m).devices.contains(DEVICE))) and promises)
+  // Two waiting checkpoints: 7 leaves D's admission out, 8 keeps it; neither is whole on m
+  // (both wait for the record 6). With F-12, D is out on m while 7 is held; a member that
+  // counts 8 counts D.
+  run f12TwoWaitingTest = f12Base
+      .then(signAs(ROOT, "copies", "", 0))
+      .then(signCheckpointKeep(ROOT, Set(1, 2, 3, 6), "", 1))
+      .then(signCheckpointKeep(ROOT, Set(1, 2, 3, 4, 6), "", 1))
+      .then(giveAll(Set("m"), [7, 8]))
+      .then(giveAll(Set("a"), [6, 7, 8]))
+      .expect(and { views.get("a").checkpoint == 8, views.get("a").devices.contains(DEVICE),
+        views.get("m").checkpoint == 5, views.get("m").devices.contains(DEVICE) == not(F12),
+        // The root counts 7 (it dropped 4 there): today m, held back, counts D and r does not.
+        views.get("r").checkpoint == 7, heldBackCountsLess == F12 })
+      .then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).checkpoint == 8 and views.get(m).devices.contains(DEVICE)) and promises)
+  // The price (P-8): the root signs a newer admission of D (6) and a checkpoint keeping it and
+  // pruning the older one (4); m lacks 6. With F-12 the honest device D does not count on m
+  // until 8 is whole there.
+  run f12PriceTest = f12Base
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
+      .then(signCheckpointKeep(ROOT, Set(1, 2, 3, 6), "", 1))
+      .then(giveAll(Set("a"), [6, 7]))
+      .then(giveAll(Set("m"), [7]))
+      .expect(and { views.get("a").checkpoint == 7, views.get("a").devices.contains(DEVICE),
+        views.get("m").checkpoint == 5, views.get("m").devices.contains(DEVICE) == not(F12) })
+      .then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).checkpoint == 7 and views.get(m).devices.contains(DEVICE)) and promises)
 
   run recoveryChangesRootTest =
     init
