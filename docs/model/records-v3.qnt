@@ -246,6 +246,15 @@ module records_v3 {
   // it fits (seed j.8004: a fresh member holding a prev the checkpoint prunes found the counting
   // checkpoint over its signer's ceiling and counted none; one that had dropped it counted it).
   pure val PREV_ROOM_WHEN_KEPT = false
+  // The chain applies its newest head whose first checkpoint is held; the heads below it need
+  // none (the core, #530 c805311e). Off: every head needs its own.
+  pure val FIRST_NEWEST_ONLY = false
+  // Records of the roots that held heads name, got before the path reaches them, wait in one
+  // root's room (ROOTC units), the root of the lowest recovery seq first, each root's records
+  // in its own order; the rest are turned away until offered again. The first checkpoints the
+  // heads wait for stay beside the chain, outside that room (#530 c805311e, seed 47). Off:
+  // they wait in got without bound.
+  pure val EARLY_ROOM = false
   // A set's memory of what its rooms dropped: "mark" (a key that dropped records turns away
   // its later ones and keeps claiming the dropped units), "none" (no memory: a record is judged
   // against the rooms as they are, as a member given everything at once would judge it), or
@@ -401,19 +410,32 @@ module records_v3 {
   // whose previous ID is the member's tip extends it; a gap ends the chain. Any two records the
   // recovery key signed at one seq, at any depth, valid or not, are a fork: the member stops
   // for good.
-  pure def chainOf(rs: Set[Record]): Chain =
+  pure def chainOf(rs: Set[Record]): Chain = chainRaw(rs).newestWithFirst(rs)
+  // The chain by the records alone; under FIRST_NEWEST_ONLY no head needs its first checkpoint.
+  pure def chainRaw(rs: Set[Record]): Chain = chainBy(rs, not(FIRST_NEWEST_ONLY))
+  // The verified heads: the chain the recovery key's records make, firsts or not.
+  pure def chainHeads(rs: Set[Record]): Chain = chainBy(rs, false)
+  pure def chainBy(rs: Set[Record], needFirst: bool): Chain =
     range(1, MAXCHAIN + 1).foldl({ ids: [], recs: [], key: RECOVERY, stop: false, open: true }, (acc, i) =>
       if (not(acc.open)) acc
       else {
         val path = pathCutsOf(acc.recs)._1
         val cands = rs.filter(r => isChain(r) and r.seq == i and validAt(r, path) and r.line.slice(0, i - 1) == acc.ids
-          and hasFirst(r, rs))
+          and (not(needFirst) or hasFirst(r, rs)))
         if (cands.size() != 1) { ...acc, open: false }
         else {
           val c = cands.fold(NONEREC, (a, r) => r)
           { ...acc, ids: acc.ids.append(c.id), recs: acc.recs.append(c) }
         }
       })
+  // Under FIRST_NEWEST_ONLY the chain ends at its newest head whose first checkpoint is held;
+  // the heads below it need none.
+  pure def newestWithFirst(ch: Chain, rs: Set[Record]): Chain =
+    if (not(FIRST_NEWEST_ONLY)) ch
+    else {
+      val n = ch.recs.indices().filter(j => hasFirst(ch.recs[j], rs)).fold(0, (m, j) => max2(m, j + 1))
+      { ...ch, ids: ch.ids.slice(0, n), recs: ch.recs.slice(0, n) }
+    }
   pure def forked(rs: Set[Record]): bool =
     rs.exists(a => rs.exists(b => isChain(a) and isChain(b) and a != b and a.signer == RECOVERY and b.signer == RECOVERY
       and a.seq == b.seq))
@@ -700,7 +722,7 @@ module records_v3 {
   // A head that may extend the set's chain: it follows the chain's records below its seq and
   // names a key no root before it was (a head that is not valid keeps no checkpoint aside).
   pure def validHead(s: Store, h: Record, db: Id -> Record): bool = {
-    val ch = chainState(s, db)
+    val ch = if (FIRST_NEWEST_ONLY) chainRaw(recsOf(s.chain, db)) else chainState(s, db)
     val below = h.seq - 1
     below <= ch.ids.length() and ch.ids.slice(0, below) == h.line.slice(0, below)
       and validAt(h, pathCutsOf(ch.recs.slice(0, below))._1)
@@ -802,8 +824,21 @@ module records_v3 {
   pure def applyChain(s: Store, db: Id -> Record): Store = {
     val s1 = range(0, MAXCHAIN).foldl(s, (x, j) => gather(x, db))
     val s2 = pathed({ ...s1, recs: s1.recs.exclude(s1.chain) }, db)
-    val fresh = recsOf(s2.got, db).filter(x => not(isChain(x)) and onList(s2.path, x.signer) and not(onList(s.path, x.signer)))
+    val fresh = recsOf(s2.got, db).filter(x => not(isChain(x)) and onList(s2.path, x.signer) and not(onList(s.path, x.signer))
+      and (not(EARLY_ROOM) or s1.chain.contains(x.id) or earlyKept(s1, db).contains(x.id)))
     toList(idsOf(fresh)).foldl(s2, (x, i) => storeOne(x, db.get(i), db))
+  }
+  // What the room of early roots keeps: the records got of the roots the held heads name and
+  // the path does not reach yet, the root of the lowest recovery seq first, each root's in seq
+  // order, within one root's room; the first checkpoints beside the chain are not in it.
+  pure def earlyKept(s: Store, db: Id -> Record): Set[Id] = {
+    val heads = recsOf(s.chain, db).filter(h => isChain(h) and not(onList(s.path, h.target)))
+    pure def rank(k: Key): int = heads.filter(h => h.target == k).fold(NONE, (m, h) => min2(m, h.seq))
+    val early = recsOf(s.got, db).filter(r => not(isChain(r)) and not(s.chain.contains(r.id)) and rank(r.signer) < NONE)
+    pure def before(x: Record, r: Record): bool =
+      rank(x.signer) < rank(r.signer) or (rank(x.signer) == rank(r.signer)
+        and (x.seq < r.seq or (x.seq == r.seq and x.id <= r.id)))
+    idsOf(early.filter(r => sumUnits(early.filter(x => before(x, r))) <= ROOTC))
   }
 
   // When the chain changes the path, the set cuts its rooms again by the new path: the new
@@ -1589,15 +1624,35 @@ module records_v3 {
   // nothing else is.
   pure val SYNC_MEMBERS_ONLY = false
   pure val NEWEST_HEAD_ANY = false
+  // The road for recovery heads (architecture 18:25Z, simulator 1460 and seed 5262): to a peer
+  // whose standing is Unknown or that a change cut (its state counts no key of the other), a
+  // member hands only the recovery heads with their lists, and takes only those from it. A
+  // member that holds a verified head above what it applied whose list does not name it is
+  // left out ("pair again"): it counts nobody and obeys nobody. The newcomer m's key is D.
+  pure val UNKNOWN_HEADS = false
   // Members gone for good (a lost root device): they neither hand nor take anything.
   pure val LOST = Set()
   pure def keysOfMember(n: str): Set[Key] = {
     val ks = HOLDER.keys().filter(k => HOLDER.get(k) == n)
     ks.union(ks.filter(k => DEV.keys().contains(k)).map(k => DEV.get(k)))
+      .union(if (UNKNOWN_HEADS and n == "m") Set(DEVICE) else Set())
+  }
+  // Under UNKNOWN_HEADS: m holds a verified head (the recovery key's, on a valid chain) above
+  // the chain it applied, and that head's list names none of m's keys, nor is one of them a
+  // root on the path the heads make. (The recovery key's holder is known to every member.)
+  def leftOut(m: str): bool = {
+    val s = st.get(m)
+    val raw = chainHeads(recsOf(s.chain, db))
+    val applied = chainState(s, db).ids.length()
+    UNKNOWN_HEADS and keysOfMember(m) != Set() and raw.recs.length() > applied and {
+      val h = raw.recs[raw.recs.length() - 1]
+      not(keysOfMember(m).exists(x => onList(pathCutsOf(raw.recs)._1, x) or admissionsOf(recsOf(h.keep.filter(i => db.keys().contains(i)), db), x) != Set()))
+    }
   }
   def counts(m: str, n: str): bool = {
     val v = views.get(m)
-    keysOfMember(n).exists(x => onList(v.path, x) or v.admins.keys().contains(x) or v.devices.contains(x))
+    keysOfMember(n).exists(x => onList(v.path, x) or v.admins.keys().contains(x) or v.devices.contains(x)
+      or (UNKNOWN_HEADS and x == RECOVERY))
   }
   def everKnew(m: str, n: str): bool = {
     val known = recsOf(st.get(m).got, db).fold(Set(), (a, r) => a.union(Set(r.signer, r.target)))
@@ -1605,6 +1660,7 @@ module records_v3 {
   }
   def listedFrom(n: str, m: str): Set[Id] =
     if (LOST.contains(n) or LOST.contains(m)) Set()
+    else if (UNKNOWN_HEADS and not(counts(m, n) and counts(n, m))) st.get(n).chain.filter(i => isChain(db.get(i)))
     else if (not(SYNC_MEMBERS_ONLY) or counts(m, n)) listedTo(st.get(n), st.get(m), db)
     else if (NEWEST_HEAD_ANY and everKnew(m, n)) st.get(n).chain.filter(i => isChain(db.get(i)))
     else Set()
@@ -1684,7 +1740,8 @@ module records_v3 {
   def convergesAt(m: str): bool = {
     val s = st.get(m)
     val k = freshKept(s, heldAll, db)
-    (syncedProto(m) and not(chainState(s, db).stop) and not(views.get(m).stop)) implies (s.recs == k
+    // (A member left out under UNKNOWN_HEADS is to pair again: it takes heads alone.)
+    (syncedProto(m) and not(chainState(s, db).stop) and not(views.get(m).stop) and not(leftOut(m))) implies (s.recs == k
       and views.get(m) == fullEvaluate(recsOf(k, db).union(firstsHeld(s, db)), chainState(s, db)))
   }
   // What users get: with the honest writer (it never keeps what it pruned, never lowers a head,
@@ -1942,10 +1999,17 @@ module records_v3 {
       (s2.recs == s.recs and fullEvaluate(recsOf(s2.recs, db).union(firstsHeld(s2, db)), chainState(s2, db)) == views.get(m))
   })
 
+  // Under UNKNOWN_HEADS: no member stays live on an older root once a member past the change
+  // can reach it: a member every peer has offered all it would hand keeps a path no shorter
+  // than any reachable member's, unless it is left out or stopped.
+  val noLiveOldRoot = UNKNOWN_HEADS implies MEMBERS.forall(m => syncedProto(m) implies MEMBERS.forall(n =>
+    LOST.contains(n) or LOST.contains(m) or views.get(n).path.length() <= views.get(m).path.length()
+      or leftOut(m) or chainState(st.get(m), db).stop or chainState(st.get(n), db).stop))
+
   val promises = and {
     oneState, converges, convergesHonest, countsNewest, removedStayOut, oneChainOneState, stopRootOnly, fairRoom, followsRecovery, pathGrows, newcomerTakes,
     oldRootListed, twinStops, removedGainsNothing, compactedAgree, F12 implies heldBackCountsLess, honestNeverDropped, honestNoMarks, marksInert,
-    restartStable,
+    restartStable, noLiveOldRoot,
   }
 
   // --- Scenarios ---------------------------------------------------------------------------
@@ -2543,7 +2607,8 @@ module records_v3 {
   // and W's, so each side counts the other as no member. With SYNC_MEMBERS_ONLY and LOST =
   // {r, k} (the root's device and the device that wrote the changes are gone) the sides never
   // sync and neither a nor c halts: two live groups. With NEWEST_HEAD_ANY the
-  // newest heads cross anyway and every member halts, and nothing but chain records crosses.
+  // newest heads cross anyway and every member halts, and nothing but chain records crosses;
+  // under UNKNOWN_HEADS too, as each side's state counts no key of the other.
   run recForkSplitTest =
     init
       .then(signChainG(RECOVERY, "recover", "NA", 1, "given", Set(1)))
@@ -2552,7 +2617,7 @@ module records_v3 {
       .then(giveOnly("c", 6)).then(giveOnly("c", 7))
       .then(syncRound).then(syncRound).then(syncRound)
       .expect((views.get("k").stop or LOST.contains("k")) and (
-        if (SYNC_MEMBERS_ONLY and LOST.contains("r") and LOST.contains("k") and not(NEWEST_HEAD_ANY))
+        if (SYNC_MEMBERS_ONLY and LOST.contains("r") and LOST.contains("k") and not(NEWEST_HEAD_ANY) and not(UNKNOWN_HEADS))
           not(views.get("a").stop) and not(views.get("c").stop) and views.get("a").path == ["R", "NA"] and views.get("c").path == ["R", "NK"]
         else Set("a", "c").forall(m => views.get(m).stop)))
 
@@ -2576,6 +2641,50 @@ module records_v3 {
       .then(restart("r")).then(restart("a")).then(restart("c")).then(restart("k")).then(restart("m"))
       .expect(MEMBERS.forall(m => views.get(m).path == ["R", "NA", "NK"] and views.get(m).checkpoint == 14
         and views.get(m).frozen == Set() and st.get(m).recs == Set(1, 2, 3, 4, 5, 8, 9, 10, 14)) and promises)
+
+  // Seed 47's class: m gets the records of NA and NK, then NA's head without its first
+  // checkpoint and NK's head with NK's. Under FIRST_NEWEST_ONLY both heads apply at once; under
+  // EARLY_ROOM the early roots' records wait in one root's room, NA's (the lower recovery seq)
+  // first, so NK's last two are turned away, while NK's first checkpoint, beside the chain, is
+  // never trimmed. A restart keeps it; one sync brings the rest.
+  run earlyRoomTest =
+    init
+      .then(sign(ROOT, "admin", "NA", "phone", 0, false, false, 1)).then(syncRound)
+      .then(recoverAs(RECOVERY, "NA")).then(give("a", 5))
+      .then(sign("NA", "copies", "", "", 0, false, false, 1)).then(sign("NA", "copies", "", "", 0, false, false, 1))
+      .then(sign("NA", "copies", "", "", 0, false, false, 1)).then(sign("NA", "copies", "", "", 0, false, false, 1))
+      .then(sign("NA", "copies", "", "", 0, false, false, 1))
+      .then(giveOnly("k", 7)).then(giveOnly("k", 8)).then(giveOnly("k", 9)).then(giveOnly("k", 10)).then(giveOnly("k", 11))
+      .then(recoverAs(RECOVERY, "NK"))
+      .then(sign("NK", "copies", "", "", 0, false, false, 1)).then(sign("NK", "copies", "", "", 0, false, false, 1))
+      .then(sign("NK", "copies", "", "", 0, false, false, 1)).then(sign("NK", "copies", "", "", 0, false, false, 1))
+      .then(sign("NK", "copies", "", "", 0, false, false, 1))
+      .then(giveOnly("m", 7)).then(giveOnly("m", 8)).then(giveOnly("m", 9)).then(giveOnly("m", 10)).then(giveOnly("m", 11))
+      .then(giveOnly("m", 14)).then(giveOnly("m", 15)).then(giveOnly("m", 16)).then(giveOnly("m", 17)).then(giveOnly("m", 18))
+      .then(giveOnly("m", 5)).then(give("m", 12))
+      .expect(promises and (if (FIRST_NEWEST_ONLY) views.get("m").path == ["R", "NA", "NK"] and views.get("m").checkpoint == 13
+          and (EARLY_ROOM implies st.get("m").recs == Set(1, 2, 3, 4, 7, 8, 9, 10, 11, 14, 15, 16))
+        else views.get("m").path == ["R"]))
+      .then(restart("m"))
+      .expect(promises and (FIRST_NEWEST_ONLY implies views.get("m").path == ["R", "NA", "NK"] and views.get("m").checkpoint == 13))
+      .then(syncRound)
+      .expect(promises and views.get("m").path == ["R", "NA", "NK"] and views.get("m").checkpoint == 13
+        and st.get("m").recs == Set(1, 2, 3, 4, 7, 8, 9, 10, 11, 14, 15, 16, 17, 18))
+
+  // Simulator 1460's shape: the root admits m's key D, and only m gets it; the recovery key,
+  // which never held that admission, makes NA the root, and its list does not name D. Every
+  // other member moves to NA and counts no key of m. Under UNKNOWN_HEADS they hand m the head
+  // alone: m holds a verified head it cannot apply whose list leaves it out, so it is left out
+  // instead of staying live on the old root. (Under SYNC_MEMBERS_ONLY m would hear nothing.)
+  run leftOutTest =
+    init
+      .then(sign(ROOT, "admin", "NA", "phone", 0, false, false, 1)).then(syncRound)
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(giveOnly("m", 5))
+      .then(recoverAs(RECOVERY, "NA"))
+      .then(syncRound).then(syncRound).then(syncRound)
+      .expect(promises and MEMBERS.exclude(Set("m")).forall(n => views.get(n).path == ["R", "NA"])
+        and (if (UNKNOWN_HEADS) leftOut("m") and views.get("m").path == ["R"] and st.get("m").chain == Set(6)
+          else views.get("m").path == ["R", "NA"] and not(views.get("m").devices.contains(DEVICE))))
 
   // Liveness under CP_ROOM_WHEN_WHOLE: m gets the root's new checkpoint 6 before the records
   // it keeps (A's 4) and before the root's own 5 on its line; it waits aside, missing() asks for
