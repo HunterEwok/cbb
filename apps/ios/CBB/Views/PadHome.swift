@@ -265,7 +265,9 @@ struct PadDevices: View {
         // while Command-1 did; a probe logging every key showed none
         // reaching the focused view unless the window also had a key
         // command. Not understood yet; worth trying again with a newer
-        // Xcode: if testSidebarAndCard passes without `keys`, they can go.
+        // Xcode: if testSidebarAndCard passes without `keys`, they can go. The
+        // Escape that typeKey sends reaches no app at all there
+        // (KNOWN-ISSUE(0.7) in PadUITests).
         // A text field keeps its own arrows and Escape (UIKeyCommand gives
         // the system's text editing the first turn).
         .focusable()
@@ -377,10 +379,6 @@ struct PadDevices: View {
             Button { _ = move(by: 1) } label: { Color.clear }.keyboardShortcut(.downArrow, modifiers: [])
             Button { selected = nil } label: { Color.clear }
                 .keyboardShortcut(.escape, modifiers: [])
-                .disabled(selected == nil)
-            // Command-period, the iPad's other cancel.
-            Button { selected = nil } label: { Color.clear }
-                .keyboardShortcut(".", modifiers: .command)
                 .disabled(selected == nil)
         }
         .frame(width: 0, height: 0)

@@ -64,18 +64,22 @@ final class PadUITests: XCTestCase {
         XCTAssertTrue(thinkpad.waitForExistence(timeout: 5))
         XCTAssertTrue(thinkpad.isSelected, "the right arrow chooses the next device")
 
-        // Command-period, the iPad's cancel, which UIKit hands on as Escape
-        // (UIKeyCommand.inputEscape), so the card's Escape shortcut takes
-        // it. The Escape key itself is not sent: on the iPadOS 27
-        // simulator XCUITest's Escape reaches no app, not even a template
-        // app with nothing else in it (tried 2026-11-13, Xcode 27.2; the
-        // same seen in unwired-dev/product#1867). A real Escape is checked
-        // by hand (docs/testing.md, the iPad's UI tests). The period goes
-        // through the Mac's keyboard layout: on a Mac set to another
-        // layout than ABC or US it arrives as another key.
+        // KNOWN-ISSUE(0.7): on the iPadOS 27 simulator (Xcode 27.2) the
+        // Escape that XCUIElement.typeKey sends reaches no app, not even a
+        // template app with nothing else in it (tried 2026-11-13; the same
+        // seen in nylon-impossible PR 508, unwired-dev/product PR 1867 and
+        // Clubhouse-Go issue 366). Escape pressed on a keyboard closes the
+        // card, checked by hand (docs/testing.md, "Known failures"). The
+        // step stays and is expected to fail; the expectation is strict, so
+        // the day the key arrives this fails and the wrapper goes. To be
+        // looked at again in 0.7.
         app.settle("the next device's card")
-        app.typeKey(".", modifierFlags: .command)
-        XCTAssertTrue(app.buttons["Close"].waitForNonExistence(timeout: 5), "Command-period, the cancel that arrives as Escape, closes the card")
+        app.typeKey(.escape, modifierFlags: [])
+        let options = XCTExpectedFailure.Options()
+        options.isStrict = true
+        XCTExpectFailure("KNOWN-ISSUE(0.7): XCUITest's Escape reaches no app on the iPadOS 27 simulator", options: options) {
+            XCTAssertTrue(app.buttons["Close"].waitForNonExistence(timeout: 5), "Escape closes the card")
+        }
 
         // The sidebar's row; the same words also stand on a button outside it.
         app.collectionViews["Sidebar"].staticTexts["Appearance"].tap()

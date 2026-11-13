@@ -195,12 +195,9 @@ A9 and U14 to U18).
   audit looks only at what a person can reach.
 - The iPad (`PadUITests`, skipped on an iPhone): Home with a made-up group, which a debug
   build starts with when launched with `-showcase` (`App/Showcase.swift`; nothing leaves the
-  app): the sidebar's sections, a tile's card beside the tiles, the arrows and Command-period
-  (the cancel that arrives as Escape), a settings part, Command-1, portrait, the card at the
-  left in Arabic, and clipped text at the largest size; each screen's picture is attached. The
-  Escape key itself reaches no app from XCUITest on the iPadOS 27 simulator, so it is checked
-  by hand: on the iPad simulator (or an iPad with a keyboard) a tap on a tile, then →, moves
-  the card to the next device, and Esc closes it; ← and → in the search field move its cursor.
+  app): the sidebar's sections, a tile's card beside the tiles, the arrows and Escape, a
+  settings part, Command-1, portrait, the card at the left in Arabic, and clipped text at the
+  largest size; each screen's picture is attached. Its Escape step is a known failure (below).
 - The other big screens: on Android `TabletHomeTest` keeps the sidebar's sections across a
   restart (their keys back to the same section); the HarmonyOS sidebar, keys and drops are
   compiled and linted by `apps/harmony/check.sh`, and the Aurora layout by `qmllint`. None of
@@ -357,6 +354,18 @@ these before the bench has run them.
 
 A failing test is a finding, never noise: find the cause before running it again. A test is
 never skipped, disabled or retried until green to make CI pass.
+
+## Known failures
+
+A step that fails for a reason outside the project, shown with evidence, is not skipped: it
+stays, wrapped in a strict expected failure (`XCTExpectFailure` with `isStrict`), so it is
+still run, it still fails the test the day it starts passing, and the tag `KNOWN-ISSUE(<release>)`
+finds it again (`git grep KNOWN-ISSUE`). What it checks is checked by hand until then. The owner
+decides each entry.
+
+| Test | Step | Why | Evidence | Checked by hand | Again in |
+|---|---|---|---|---|---|
+| `PadUITests.testSidebarAndCard` | Escape closes the card | the Escape that `XCUIElement.typeKey` sends reaches no app on the iPadOS 27 simulator (Xcode 27.2) | a template app with nothing else in it gets no Escape either (2026-11-13); the same in nylon-impossible PR 508, unwired-dev/product PR 1867, Clubhouse-Go issue 366 | on the iPad simulator or an iPad with a keyboard: a tap on a tile, then →, moves the card to the next device, and Esc closes it; ← and → in the search field move its cursor | 0.7 |
 
 ## Unstable tests
 
