@@ -203,6 +203,10 @@ struct PadDevices: View {
     @Environment(\.palette) private var palette
     @AppStorage(DeviceLayout.wideKey) private var layout = DeviceLayout.tiles
     @State private var query = ""
+    @FocusState private var focused: Bool
+    /// When a key last moved the choice: a key that both the devices'
+    /// handler and the window's shortcut see moves it once.
+    @State private var lastKey = Date.distantPast
     /// Whether something dragged from another app is over the devices.
     @State private var dropping = false
     /// The card's width, as the text size grows.
@@ -247,22 +251,35 @@ struct PadDevices: View {
             ToolbarItem(placement: .secondaryAction) { viewMenu }
         }
         .sensoryFeedback(.success, trigger: model.message)
-        // The arrow keys choose the next device and Escape closes the card
-        // as the window's own shortcuts, as Command-1 opens a section: they
-        // work wherever the keyboard's focus stands, which a tap on a tile
-        // or a button of the card moves away from the devices. A text field
-        // keeps its own arrows and Escape (UIKeyCommand gives the system's
-        // text editing the first turn).
+        // The keys are taken twice, and both ways are needed.
         //
-        // Why not .focusable() with .onKeyPress on the devices, the plainer
-        // SwiftUI way: by hand on the simulator those worked, but in
-        // PadUITests (2026-11, Xcode 27.2, iPadOS 27.2) the right arrow and
-        // Escape that XCUIElement.typeKey sends never reached them, while
-        // Command-1, a window shortcut, did. Not understood yet; a probe
-        // logging every key showed none reaching the focused view unless
-        // the window also had a key command. Worth trying again with a
-        // newer Xcode: if testSidebarAndCard passes with the handlers, they
-        // can come back.
+        // While the devices hold the keyboard's focus, their own handlers
+        // take the arrows and Escape: there the system's focus movement
+        // would otherwise win over a window shortcut and send an arrow to
+        // the search field (seen by hand on the simulator, 2026-11).
+        //
+        // The window's shortcuts (`keys`), as Command-1 opens a section,
+        // take them wherever the focus stands. They are there because in
+        // PadUITests (2026-11, Xcode 27.2, iPadOS 27.2) the keys that
+        // XCUIElement.typeKey sends never reached the devices' handlers,
+        // while Command-1 did; a probe logging every key showed none
+        // reaching the focused view unless the window also had a key
+        // command. Not understood yet; worth trying again with a newer
+        // Xcode: if testSidebarAndCard passes without `keys`, they can go.
+        // A text field keeps its own arrows and Escape (UIKeyCommand gives
+        // the system's text editing the first turn).
+        .focusable()
+        .focused($focused)
+        .focusEffectDisabled()
+        .onKeyPress(keys: [.leftArrow, .upArrow, .rightArrow, .downArrow]) { press in
+            move(by: press.key == .leftArrow || press.key == .upArrow ? -1 : 1)
+        }
+        .onKeyPress(.escape) {
+            guard selected != nil else { return .ignored }
+            selected = nil
+            return .handled
+        }
+        .onAppear { focused = true }
         .background { keys }
     }
 
@@ -345,6 +362,9 @@ struct PadDevices: View {
     /// window too narrow for both.
     private func choose(_ id: AppModel.Computer.ID) {
         if beside { selected = id } else { pushed = PadCard(id: id) }
+        // A tap moves the keyboard's focus to the tile; the arrow keys and
+        // Escape are the devices' own, so the focus comes back to them.
+        focused = true
     }
 
     /// The keys of the devices, as buttons nobody sees: their shortcuts
@@ -366,6 +386,9 @@ struct PadDevices: View {
 
     /// Moves the choice to the device before or after it, as they stand.
     private func move(by step: Int) -> KeyPress.Result {
+        // The same press seen by the handler and by the shortcut.
+        if Date().timeIntervalSince(lastKey) < 0.05 { return .handled }
+        defer { lastKey = Date() }
         let ids = (query.isEmpty ? shown : shown.filter { $0.matches(query) }).map(\.id)
         guard beside, !ids.isEmpty, !arrange.on else { return .ignored }
         guard let at = selected.flatMap(ids.firstIndex(of:)) else {
