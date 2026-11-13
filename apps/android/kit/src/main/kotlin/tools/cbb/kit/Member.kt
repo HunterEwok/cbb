@@ -268,7 +268,7 @@ object Member {
         val records: String? = null,
         /** The sender's device name. */
         val name: String? = null,
-        /** The sender's operating system: "linux", "windows", "macos", "ios", "android", "aurora", "sailfish" or "none"; shown, never trusted. */
+        /** The sender's operating system: "linux", "windows", "macos", "ios", "android", "aurora", "sailfish", "harmonyos" or "none"; shown, never trusted. */
         val os: String? = null,
         /**
          * From a computer that is no admin yet: the SubjectPublicKeyInfo of

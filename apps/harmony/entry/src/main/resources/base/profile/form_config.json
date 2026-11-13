@@ -1,0 +1,18 @@
+{
+  "forms": [
+    {
+      "name": "sync",
+      "displayName": "$string:widget_name",
+      "description": "$string:widget_description",
+      "src": "./ets/widget/pages/SyncCard.ets",
+      "uiSyntax": "arkts",
+      "window": { "designWidth": 720, "autoDesignWidth": true },
+      "colorMode": "auto",
+      "isDynamic": true,
+      "isDefault": true,
+      "updateEnabled": false,
+      "defaultDimension": "2*2",
+      "supportDimensions": ["2*2"]
+    }
+  ]
+}

@@ -230,7 +230,7 @@ public enum Member {
         /// The sender's device name.
         public var name: String?
         /// The sender's operating system: "linux", "windows", "macos",
-        /// "ios", "android", "aurora", "sailfish" or "none"; shown, never trusted.
+        /// "ios", "android", "aurora", "sailfish", "harmonyos" or "none"; shown, never trusted.
         public var os: String?
         /// From a computer that is no admin yet: the SubjectPublicKeyInfo of
         /// its admin key, for the root to certify (section 10, "A computer

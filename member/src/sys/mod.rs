@@ -259,11 +259,15 @@ pub fn local_time() -> LocalTime {
 
 /// The local clock's time at ms, milliseconds since 1970 (UTC).
 #[cfg(unix)]
+// libc deprecates time_t on musl and OpenHarmony (whose libc is musl) ahead of
+// its change to 64 bits; it is the type localtime_r takes either way.
+#[cfg_attr(target_env = "ohos", allow(deprecated))]
 pub fn local_time_at(ms: i64) -> LocalTime {
     local_time_at_secs(ms.div_euclid(1000) as libc::time_t)
 }
 
 #[cfg(unix)]
+#[cfg_attr(target_env = "ohos", allow(deprecated))]
 fn local_time_at_secs(now: libc::time_t) -> LocalTime {
     // SAFETY: localtime_r writes into tm, which is a valid tm.
     unsafe {

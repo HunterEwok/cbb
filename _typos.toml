@@ -7,6 +7,8 @@ extend-exclude = [
   "**/l10n/*.json",
   "**/l10n/*.tsv",
   "apps/silica/translations/*.ts",
+  "apps/harmony/entry/src/main/resources/{ar,es,he,hi,ru,sw,zh_CN}/element/string.json",
+  "apps/harmony/wearable/src/main/resources/{ar,es,he,hi,ru,sw,zh_CN}/element/string.json",
   "fastlane/metadata/android/*/",
   "site/docs/*/",
   "testdata/",

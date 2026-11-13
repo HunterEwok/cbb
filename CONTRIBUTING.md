@@ -48,6 +48,12 @@ The maintainer follows these rules; they are written down to keep the history co
   squash. `main` is protected.
 - **Commit messages.** A short summary line in the imperative mood ("Add the pairing
   window"), then a blank line and the details, if any.
+  Every author, committer and co-author is one of the addresses in `tools/prcheck`
+  (the owner's GitHub address, `Claude <noreply@anthropic.com>`, GitHub's and Dependabot's):
+  GitHub lists any other address as a contributor of its own, for good. The pull request's
+  title and description become the squash commit's message, so they do not link to a
+  conversation with an assistant (`claude.ai/...`) or name a model. CI's `prcheck` workflow
+  checks both, again whenever the description is edited.
 - **Changelog.** User-visible changes go into [CHANGELOG.md](CHANGELOG.md) under
   *Unreleased*.
 - **Go code.** `gofmt`, `go vet`, `staticcheck` and `govulncheck` pass, and tests cover the
@@ -108,9 +114,10 @@ go tool staticcheck ./...
 go tool govulncheck ./...
 go tool actionlint             # GitHub Actions workflows
 pipx run zizmor==1.31.1 --offline --min-severity low .github/workflows   # their security
+go run ./tools/prcheck -base origin/main   # the branch's authors and co-authors (PR_TITLE, PR_BODY: the texts)
 go run ./tools/repocheck       # English only, license headers, copied code, no programs or files over 1 MiB, documentation links and names
 go run ./tools/tokens -check   # apps/design/tokens.json -> Swift and Kotlin, WCAG contrast
-go run ./tools/strings -check  # apps/l10n -> the apps' String Catalogs, strings.xml, .ts and tray l10n
+go run ./tools/strings -check  # apps/l10n -> the apps' String Catalogs, strings.xml, .ts, string.json and tray l10n
 go run ./tools/icon -check     # the apps' icons
 sh .github/shellcheck.sh       # every shell script
 pipx run typos==1.51.1         # spelling of the English text (_typos.toml)
@@ -241,6 +248,27 @@ sudo SYSTEM=sailfish apps/silica/psdk.sh /srv/sfos setup armv7hl
 sudo SYSTEM=sailfish apps/silica/psdk.sh /srv/sfos run '~/silica/build.sh rpm SailfishOS-4.6.0.13-armv7hl.default sailfish'
 ```
 
+The app for HarmonyOS 5 and later (`apps/harmony`, in development; the plan is
+[docs/apps.md](docs/apps.md)): ArkTS and ArkUI in `entry/src/main/ets`, over the Rust core
+through the Node-API module in `entry/src/main/cpp` (`napi_init.cpp`, one function for each
+C function of `ffi/include/cbb_core.h`; `keys.cpp`, the keys in HUKS). `build.sh` builds the
+core's static library with OpenHarmony's native SDK, which `ffi/ohos-sdk.sh` downloads (no
+account, about 2.5 GB); the app itself builds in DevEco Studio or with `hvigorw` from the
+HarmonyOS command line tools, both of which need a Huawei developer account, as does
+signing it for a phone. `check.sh` compiles the ArkTS and runs the ArkTS linter with
+OpenHarmony's own compiler, which needs no account, so that a change to the app is checked
+before it reaches DevEco Studio. CI's `HarmonyOS app` job builds and links the native module,
+runs its host test and `check.sh`, which checks both modules, the phone's `entry` and the
+watch's `wearable`. The tests in `entry/src/ohosTest` (Hypium) run on a phone
+or the emulator.
+
+```sh
+apps/harmony/build.sh             # the core for arm64-v8a, into apps/harmony/build/ffi
+apps/harmony/build.sh hap         # also the app, with hvigorw on PATH and a signing config
+sh ffi/ohos-sdk.sh ~/ohos-sdk ets # the SDK's native and ArkTS parts, once
+apps/harmony/check.sh ~/ohos-sdk  # the ArkTS through the compiler and the linter (Node.js, Python 3)
+```
+
 The differential run of all four implementations (Go, Rust, JDK 17 and Docker for the Swift
 container; [docs/differential.md](docs/differential.md)):
 
@@ -322,9 +350,11 @@ xcodebuild test -project CBBMac.xcodeproj -scheme CBBMac \
 The apps' strings have one source, `apps/l10n/<language>.json` (English and the seven
 languages of the website), and `tools/strings` writes every app's files from it: the String
 Catalogs of the iPhone, Watch and Mac apps, Android's `res/values*/strings.xml`, Aurora's
-`translations/cbb-<language>.ts` and the tray's `frontend/l10n`. Edit only the source:
+`translations/cbb-<language>.ts`, the HarmonyOS app's `resources/*/element/string.json` and
+the tray's `frontend/l10n`. Edit only the source:
 `en.json` gives each string's ID (its English text) and the places that show it, such as
-`ios`, `mac`, `tray`, `aurora:MainPage` or `android:settings`
+`ios`, `mac`, `tray`, `aurora:MainPage`, `android:settings`, `harmony:settings_title` or
+`harmony-wear:sync` (the HarmonyOS watch)
 ([tools/strings/catalog](tools/strings/catalog/catalog.go) lists them), and each language's
 file has its translation under that ID. Texts are plain; the tool escapes them for Android
 and Qt. When Xcode adds a new key to a catalog, move it into the source.

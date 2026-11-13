@@ -291,7 +291,7 @@ shows its code and the member's own words.
 Some things work but are no promise of 1.0: the ZX Spectrum Next, the Arduino Nano ESP32, a
 computer as a TV's remote and a phone or a Linux computer as a Bluetooth keyboard. In the apps
 they sit in a "Lab" section at the end of the advanced settings (the Bluetooth keyboard on
-Android and Aurora; the others have no screen in the apps). The settings show only what most
+Android, Aurora and HarmonyOS; the others have no screen in the apps). The settings show only what most
 people need: the hub is chosen by itself, so making a device the hub, the hub's tunnel and its
 forwarder show only with the advanced settings on, on every app.
 
@@ -313,11 +313,15 @@ forwarder show only with the advanced settings on, on every app.
   list, which the view button switches), and a device's details in a pane beside them.
   Android draws the device icons itself (`DeviceGlyph`), on the same 24-unit grid as the
   system's line icons.
+- **HarmonyOS tablets and foldables** (a Mate X open, a MatePad) do the same from 720 vp wide:
+  the orbits, tiles or a list, which the "…" menu switches and the app keeps, and a device's
+  details in a pane beside them, the page a phone's screen opens (`DeviceDetail`). Folding
+  the phone closes the pane and goes back to the phone's page.
 
 ## Dynamic Island
 
-A Live Activity (iPhone, iOS 17) shows what runs in the Dynamic Island and on the Lock
-Screen, in the colour chosen in Settings, and never what was copied:
+A Live Activity (iPhone, iOS 17; Live View on HarmonyOS) shows what runs in the Dynamic
+Island and on the Lock Screen, in the colour chosen in Settings, and never what was copied:
 
 - **Adding a device**: from the scan until the device is in the group, with a timer; then
   "The device is in the group." or "The device was not added." for a moment.
@@ -1012,6 +1016,139 @@ them), keeps it and answers as `view`; a change that does not fit is refused and
 nothing. Devices that left the group leave the arrangement when the member answers. No app
 keeps an order of its own or works one out.
 
+## HarmonyOS
+
+The app for HarmonyOS 5 and later (`apps/harmony`, in development), the system without
+Android's layer, is the Aurora app's twin and ported from it: its own interface around the
+Rust core, which does the protocol, the pairing, sync, the member's view of the tiles and the
+tunnel. ArkTS and ArkUI make the interface; `libcbb_napi.so` gives it each C function of
+`ffi/include/cbb_core.h`, the ones that block or sign on a worker thread with a Promise. Its
+system in the protocol is `harmonyos`. It has the other phones' screens: Start (a new group,
+joining by the phone's QR code, as an admin, by an invitation, restoring), Home with the tiles
+or the list, a device's page with the admin's actions, adding a device by its QR code,
+invitations, the recovery key, the takeover, the arrangement and collections, and Settings
+with the error details, the notifications, the root's settings and, under the advanced
+settings, why it does not sync and the lab.
+
+- **Keys**: P-256 keys in HUKS, in the TEE (level "hardware"). The member key signs without
+  asking; the admin key (the root's in a group the phone made) only after the user's face,
+  fingerprint or PIN through User Authentication Kit, and the consent lasts half a minute, so
+  that one action that signs several times (a new group signs three times) asks once.
+- **Clipboard**: the app writes an incoming copy freely (a secret only on this device, cleared
+  when its time ends unless the user copied something else), but reads the clipboard only
+  when the user taps the system's Paste button (`PasteButton`) on Home, or with the
+  restricted permission `ohos.permission.READ_PASTEBOARD`, which Huawei grants on request.
+  Sending is therefore a tap, as on the iPhone. **Share → CBB** from another app sends the
+  text, the link, or images and files (up to 50 MB together) without opening the app, as the
+  iPhone's share extension: a sheet in the share panel (`ShareExtensionAbility`,
+  `shareextability/`) starts the phone's member in a folder of its own beside the app's
+  (`model/OneShot.ets`), waits up to 8 seconds for a computer of the group, hands it the copy
+  (and for files up to a minute for the computers to fetch them), stops, and says how it went.
+  A single image that arrives goes into the clipboard, other images and files wait for the
+  user to save them where they choose.
+- **QR codes**: Scan Kit's scanner reads a computer's code and the recovery sheet; the
+  phone's own code for joining is drawn from the core's modules.
+- **Remote paste**: an admin phone pastes on a computer or another phone from the device's
+  page, pasted or typed, with Enter or as a secret, and pictures or files picked with the
+  system's picker, which go to the group as a copy first, as on the iPhone and Android; the core
+  signs the paste command (`cbb_member_manage`, `paste`). As a target, HarmonyOS lets no app
+  put keys into another app, so the phone types an admin's paste on its Bluetooth keyboard,
+  as Aurora does.
+- **Away from home**: as on the iPhone and Android, the phone reaches the group's hub, and in a
+  group without a computer the root or an admin phone is the hub itself (Settings, "This phone
+  as the hub"), registered with the project's forwarder or the user's own, its tunnel hidden for
+  strict networks (AmneziaWG, VLESS); a group without a hub meets at a blind relay once the
+  user read what it learns. The core runs both (`cbb_member_servers`, docs/core-api.md), with
+  the server and period keys in HUKS; the root phone signs the next period of the group's
+  server credentials (docs/protocol.md, section 18) with the root key when it renews the
+  certificates, after the face, fingerprint or PIN.
+- **Attestations**: as on the iPhone, the root phone checks the attestation an Android phone
+  sends of its member key, with the revocation list the app fetches from the mirror once a
+  day, and records whether its keys are proven in hardware (docs/protocol.md, section 17); the
+  core checks it (`cbb_core::attest`) when the root key signs the certificates' renewals.
+- **YubiKey**: as on the iPhone and Android, the root puts the group's recovery key on a
+  YubiKey held to the back of the phone (firmware 5.7 or later with the factory management key
+  and a free retired PIV slot), and a new phone restores the group with it and its PIN, the card
+  held once to find the group and once to sign the claim. HarmonyOS has no PIV of its own, so
+  the core speaks it (`cbb_piv`, `cbb_member_manage_card`, docs/core-api.md) and the app only
+  carries each APDU to the card's IsoDep tag in NFC reader mode (`ohos.permission.NFC_TAG`).
+- **Outside the app**: the home-screen widget "Sync clipboard" (Form Kit) has the iPhone's and
+  Android's Sync button, which opens the app and syncs, and a line with whether sync is on and
+  how many devices are online, whose tap turns sync on or off; the app icon's long-press menu
+  has "Sync clipboard"; and two intents (Intents Kit), SyncClipboard and ToggleSync, which
+  Celia and the system's suggestions offer, as the iPhone's App Intents. Each opens the app,
+  since HarmonyOS lets it read the clipboard only in front, and with the system's paste
+  button or `READ_PASTEBOARD` alone: without either, a quick sync takes what the group copied
+  and sends nothing. Live View (Live View Kit), the Live Activity's twin, shows adding a
+  device with a timer and its result, and sync away from home through the hub's tunnel with
+  the time since it connected (see "Dynamic Island"); Huawei grants Live View on request, and
+  until then it shows nothing.
+- **The lab's Bluetooth keyboard**: the app serves HID over GATT (`@ohos.bluetooth.ble`, a
+  GATT server and its advertising) with the core's report map and reports, as Aurora does
+  through BlueZ; a TV, a tablet or a computer pairs with the phone, which the system confirms,
+  and takes the clipboard at a tap or an admin's remote paste. HarmonyOS names a
+  characteristic by its UUID alone, so the service has the input report and not the LEDs'
+  output report. Whether the system lets an app serve the HID service is known only on a
+  phone.
+- **Background**: the system freezes an app soon after it leaves the screen. While the member
+  runs, the app keeps it going as a continuous task of the kind "multi-device connection",
+  with the system's notification; where the system or the store refuses that, it asks for the
+  short delay the system grants, so that a copy on its way arrives, and syncs while it is open,
+  as on the iPhone.
+- **Notifications**: the group's events as on the other phones (joined, removed, an admin, a
+  takeover, frozen), each kind with its switch, and the received files.
+- **Errors**: the core's message, and in debug mode its details under it; the details switch
+  in Settings turns them on in a release build. A member that panics is started again, and in
+  release mode the app asks to send the bug report (docs/core-api.md, "Bug reports").
+- **Building and signing**: the core builds with OpenHarmony's free native SDK; the app needs
+  DevEco Studio or the HarmonyOS command line tools, and a phone takes it only signed with a
+  profile from AppGallery Connect, so both need a Huawei developer account. `check.sh` checks
+  the ArkTS with OpenHarmony's compiler and linter without one. DevEco Studio's emulator runs
+  on a Mac with Apple silicon, and Huawei offers its ready-made images only in mainland China
+  for now; elsewhere the app is tested on a phone with HarmonyOS 5 or later (sold in China;
+  the same models elsewhere run HarmonyOS 4, where the Android app works).
+
+Not yet: a run on a phone.
+
+### HarmonyOS watches
+
+The watch app (`apps/harmony/wearable`, the module of the same project, for the watches with
+HarmonyOS 5 or later, such as the Huawei Watch 5) is the Apple Watch and Wear OS apps' twin:
+it works only through its phone, over Wear Engine's messages between the phone app and the
+watch app of the same name, and shows the same page in the dark palette: how many devices are
+online, the house (sync on the phone) and the globe (Everywhere) with where it stands, each
+device with its glyph and live dot by collection, the latest events.
+
+- The phone (`model/Watch.ets`) looks for a connected watch with the app every 30 seconds and
+  sends it the state (`common/WatchState.ets`: devices, away, sync, events; never the
+  clipboard) whenever it changes. A Wear Engine message carries about a kilobyte, so the
+  state that does not fit drops the events and then the last devices, and says how many it
+  left out.
+- The watch (`model/Link.ets`) asks for the state when it opens, keeps the last one it got,
+  and sends `sync` and `away` with on or off; the phone turns its sync or its Everywhere on or
+  off as Home's switches do, and the new state comes back. Without a phone in reach the watch
+  says so and shows the last state.
+- `common/WatchState.ets` and `common/Wear.ets`, the only caller of Wear Engine, are the
+  same file in both modules, which `check.sh` checks, with the stub of Wear Engine in `check/`.
+- Wear Engine needs the developer's access from Huawei, the app's client ID from AppGallery
+  Connect in `module.json5`, and the signing certificate's fingerprint in
+  `WatchState.FINGERPRINT`; all three come with the Huawei developer account.
+
+- The watch as an admin (docs/protocol.md, section 10, "Watches"): with a watch connected, the
+  root's Settings offer "Make the watch an admin". The watch asks its wearer, makes a P-256 key
+  in HUKS that needs the watch's screen lock (`model/AdminKey.ets`) and hands the phone its
+  public key; the root key certifies it (manage `add_watch`), and the phone keeps the watch's
+  device ID and admin CA and tells the watch its device ID, the group's tag and its key's hash.
+  The phone's state then carries, for each device, what the watch may do to it (manage
+  `watch_actions`: freeze an admin without `remove-admins`, remove a device that is no admin,
+  turn remote paste, quick actions and sync away from home off); the watch shows them under
+  the device, asks once, and sends `act`. The phone has the core sign it on the watch
+  (`cbb_member_manage_watch`): the record or command goes to the watch whole, in parts of 600
+  bytes, and the watch signs it only when it is that action, for that device, by this watch,
+  in this group; a second watch is replaced only after the first is removed.
+
+Not yet: a run on a watch.
+
 ## Releasing the Android app
 
 Each release carries `cbb-X.Y.Z.apk` and the Wear OS app,
@@ -1077,7 +1214,8 @@ the app on real devices.
 
 - Every user-facing string comes from the platform's catalog from the first screen on: a
   String Catalog (`Localizable.xcstrings`) on iOS and the Mac, `strings.xml` resources on
-  Android, Qt's `.ts` files on Aurora, `frontend/l10n` in the tray app. No string literal in
+  Android, Qt's `.ts` files on Aurora, `resources/*/element/string.json` on HarmonyOS,
+  `frontend/l10n` in the tray app. No string literal in
   views.
 - All of them are made from one source, `apps/l10n/<language>.json`, by `tools/strings`:
   `en.json` lists each string once with the apps that show it (`"in"`), each other language's

@@ -60,7 +60,7 @@ pub struct Input {
     pub message: String,
     #[serde(default)]
     pub details: String,
-    /// `ios`, `android`, `aurora`, `mac`, `tray` or `cbb`.
+    /// `ios`, `android`, `aurora`, `harmonyos`, `mac`, `tray` or `cbb`.
     pub app: String,
     pub version: String,
     #[serde(default)]
@@ -314,7 +314,7 @@ pub fn report(i: &Input) -> Result<Report, Error> {
     if i.kind != "panic" && i.kind != "error" {
         return Err(Error::msg(alloc::format!("a report is of a panic or an error, not {:?}", i.kind)));
     }
-    if !matches!(i.app.as_str(), "ios" | "android" | "aurora" | "mac" | "tray" | "cbb") {
+    if !matches!(i.app.as_str(), "ios" | "android" | "aurora" | "harmonyos" | "mac" | "tray" | "cbb") {
         return Err(Error::msg(alloc::format!("a report names the app, not {:?}", i.app)));
     }
     let f = |s: &str| redact(&cut(s, MAX_FIELD), &i.names);
@@ -632,6 +632,12 @@ mod tests {
         let mut i = input();
         i.app = "web".into();
         assert!(report(&i).is_err());
+        // Every app that reports, the HarmonyOS one too.
+        for app in ["ios", "android", "aurora", "harmonyos", "mac", "tray", "cbb"] {
+            let mut i = input();
+            i.app = app.into();
+            assert!(report(&i).is_ok(), "{app}");
+        }
         assert!(build(&input()).is_err() || !ROBOT_KEY_B64.is_empty());
     }
 
