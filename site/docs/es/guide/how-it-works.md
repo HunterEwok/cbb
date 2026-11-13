@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 1e2dc830708b -->
+<!-- source: 99a8e99d0146 -->
 # Cómo funciona
 
 Esta página explica Copy Beyond Borders con imágenes: quién forma parte de un grupo, cómo se encuentran los dispositivos en casa y todas las formas en que pueden seguir en contacto cuando están fuera. Las reglas exactas están en el [diseño](../design.md); no las necesitas para usarlo.
@@ -16,12 +16,13 @@ tiene un rol:
 |---|---|---|
 | **Raíz** | el teléfono que creó el grupo (o el ordenador, [sin la app](without-app.md)) | guarda la clave del grupo, añade y quita dispositivos, nombra administradores |
 | **Administrador** | un segundo teléfono, o un ordenador que elige la raíz | añade y quita dispositivos, como la raíz |
-| **Miembro** | cada ordenador y cada teléfono | sincroniza el portapapeles |
-| **Miembro ligero** | un dispositivo Linux pequeño: un router, una Raspberry Pi Zero | sincroniza, nunca añade a nadie ([miembro ligero](../../member/README.md)) |
+| **Miembro** | cada ordenador, teléfono y dispositivo pequeño (un router, una Raspberry Pi: [dispositivos pequeños](../../member/README.md)) | sincroniza el portapapeles |
 | **Miembro sin root** | un ordenador Linux instalado sin `sudo` | sincroniza como un miembro, pero nunca es la raíz, un administrador ni un hub ([más abajo](#rootless-members)) |
 | **Hub** | un ordenador en casa, o un teléfono mientras su app está abierta, si quieres uno | permite que tus dispositivos sincronicen cuando están fuera de casa; uno que solo pasa las copias no lee ninguna |
 
 Las claves del teléfono se crean en su chip de seguridad (el Secure Enclave, el Keystore de Android) y nunca salen de él; cada firma con la clave raíz del grupo o con una clave de administrador pide tu cara, tu huella o tu código, mientras que la clave con la que sincroniza funciona sin preguntar. Un ordenador guarda sus claves en archivos que solo lee Copy Beyond Borders.
+
+Un grupo son los dispositivos de una persona, que comparten un portapapeles. Dos personas que quieran portapapeles propios crean dos grupos.
 
 ### Miembros sin root
 
@@ -46,7 +47,7 @@ En una misma red doméstica, los dispositivos se encuentran solos (mDNS) y se co
 
 ![En casa, cada dispositivo habla directamente con todos los demás, sin servidor](../images/at-home.svg)
 
-**Dos redes en casa**, por ejemplo una red aparte para dispositivos inteligentes: mDNS no cruza el router, así que los dispositivos de redes distintas no se encuentran solos. Las apps de teléfono recuerdan las direcciones de cada ordenador a partir de su código QR y aun así llegan a él; a un miembro ligero se le puede indicar la dirección de un ordenador ([`-peer`](../../member/README.md#install)); y para todo lo demás, un hub (más abajo) une ambos lados.
+**Dos redes en casa**, por ejemplo una red aparte para dispositivos inteligentes: mDNS no cruza el router, así que los dispositivos de redes distintas no se encuentran solos. Las apps de teléfono recuerdan las direcciones de cada ordenador a partir de su código QR y aun así llegan a él; a un dispositivo pequeño se le puede indicar la dirección de un ordenador ([`-peer`](../../member/README.md#install)); y para todo lo demás, un hub (más abajo) une ambos lados.
 
 ## Fuera de casa: el hub
 
@@ -81,18 +82,18 @@ Los dispositivos prueban primero la dirección propia del hub y el reenviador en
 
 ## Cuando la red bloquea WireGuard
 
-Algunas redes (hoteles, oficinas, algunos países) bloquean el tráfico de VPN. El hub puede disfrazar el túnel del grupo:
+Algunas redes (hoteles, oficinas, algunos países) bloquean el tráfico de VPN. El hub disfraza el túnel del grupo salvo que lo desactives:
 
-- **Ofuscación** (`-obfuscate`): el túnel habla AmneziaWG, que en la red no se parece a WireGuard. Los ordenadores y las dos apps de teléfono lo admiten.
-- **VLESS** (`-vless`, a través de un reenviador): los dispositivos llegan al reenviador dentro de lo que parece una conexión HTTPS corriente al sitio web del reenviador. Para redes que bloquean las dos opciones anteriores. Los ordenadores y las dos apps de teléfono lo admiten.
+- **Ofuscación**: el túnel habla AmneziaWG, que en la red no se parece a WireGuard. Los ordenadores, los dispositivos pequeños y las dos apps de teléfono lo admiten.
+- **VLESS** (a través de un reenviador): los dispositivos llegan al reenviador dentro de lo que parece una conexión HTTPS corriente al sitio web del reenviador. Para redes que bloquean las dos opciones anteriores. Los ordenadores, los dispositivos pequeños y las dos apps de teléfono lo admiten.
 
-El miembro ligero solo habla WireGuard normal, así que con cualquiera de estas dos opciones solo sincroniza en casa.
+`cbb global hub -no-vless` desactiva VLESS, y `-no-obfuscate` junto con él deja WireGuard normal.
 
 ## Solo teléfonos: el teléfono como hub
 
 Un grupo de solo teléfonos, o de teléfonos y un Mac, no tiene un ordenador que haga de hub. Hay dos maneras de mantenerlo sincronizando fuera de casa:
 
-- **El teléfono como hub**, mientras su app está abierta (Ajustes, **This phone as the hub**; activado desde el principio en un grupo creado en un teléfono). Los demás teléfonos, televisores y miembros ligeros se conectan a él en casa y, con un reenviador, también llegan a él desde lejos. En Android puede seguir funcionando en segundo plano; un iPhone solo atiende mientras la app está abierta.
+- **El teléfono como hub**, mientras su app está abierta (Ajustes, **This phone as the hub**; activado desde el principio en un grupo creado en un teléfono). Los demás teléfonos, televisores y dispositivos pequeños se conectan a él en casa y, con un reenviador, también llegan a él desde lejos. En Android puede seguir funcionando en segundo plano; un iPhone solo atiende mientras la app está abierta.
 - **Un relé ciego propio** (`cbb relay` en tu servidor). Hace de punto de encuentro en lugar del hub, pero no es un miembro: el cifrado de los dispositivos va de extremo a extremo a través de él, así que no puede leer el portapapeles. Sí ve cuáles de tus dispositivos se comunican y cuándo. Los ordenadores y las dos apps de teléfono pueden usarlo.
 
 ![Un relé ciego une el portátil que está fuera y el Mac que está en casa; el cifrado va de extremo a extremo a través de él](../images/relay.svg)

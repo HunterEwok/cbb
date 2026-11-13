@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 9b05c71a6bfc -->
+<!-- source: 1b77d3ce22fc -->
 # Kibodi na televisheni
 
 Kwa yeyote anayetaka kuandika nenosiri refu, kiungo au utafutaji kwenye televisheni, kompyuta kibao, kiweko cha michezo au kompyuta ambayo haina chochote cha Copy Beyond Borders. Kifaa kimoja cha kikundi chako huandika maandishi hayo pale kama kibodi au kama rimoti ya televisheni, unapogusa wewe au msimamizi anapotuma ubandikaji wa mbali.
@@ -45,7 +45,7 @@ echo 'the text' | sudo cbb keyboard type
 
 ## Nano ESP32 kama kibodi ya USB au ya Bluetooth
 
-Bodi hii ni mwanachama mwepesi wa kikundi chako. Kwenye kiweko chake:
+Bodi hii ni mwanachama wa kikundi chako. Kwenye kiweko chake:
 
 - `usb keyboard` hufanya mlango wake wa USB kuwa kibodi, na kiweko kama mlango wa pili wa serial kando yake; ichomeke kwenye kifaa. Hufanya kazi kabla mfumo wowote haujaanza: kwenye BIOS, mipangilio ya UEFI au ombi la usimbaji fiche wa diski.
 - `ble on`, kisha `ble pair`, huifanya kibodi ya Bluetooth LE; ongeza "CBB Nano ESP32" kwenye kifaa ndani ya dakika mbili. Hukumbuka hadi vifaa vinne; `ble forget` huvisahau.

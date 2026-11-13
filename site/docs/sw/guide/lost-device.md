@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 61154bf5c46c -->
+<!-- source: e2e81b2b8ff6 -->
 # Kifaa kikipotea au kuibwa
 
 Kwa yeyote ambaye simu, kompyuta au kifaa kingine cha kikundi chake kimepotea. Kiondoe kwenye kikundi haraka iwezekanavyo; vifaa vingine hubaki kwenye kikundi na kuendelea kusawazisha.
@@ -52,6 +52,6 @@ Simu ya msimamizi hutoa hayo hayo kwenye ukurasa wa kifaa, na saa ya msimamizi i
 Inategemea mahali kifaa kilipoweka funguo zake ([funguo na uthibitisho](keys.md)):
 
 - **Funguo kwenye maunzi** (simu, Mac zenye Secure Enclave, kompyuta zenye TPM): hakuna cha kunakili. Funguo husaini kwenye kifaa hicho tu, na funguo za mzizi na msimamizi za simu husaini tu baada ya uso wako, alama ya kidole au nambari ya siri.
-- **Funguo kwenye faili** (Mac za Intel bila chipu ya T2, na Windows PC na kompyuta za Linux bila TPM, mwanachama mwepesi): yeyote anayenakili faili anaweza kutenda kama kifaa hicho hadi utakapokiondoa. Simba diski (FileVault, BitLocker, LUKS) ili kifaa kilichoibwa kisitoe chochote.
+- **Funguo kwenye faili** (Mac za Intel bila chipu ya T2, na Windows PC na kompyuta za Linux bila TPM, vifaa vidogo): yeyote anayenakili faili anaweza kutenda kama kifaa hicho hadi utakapokiondoa. Simba diski (FileVault, BitLocker, LUKS) ili kifaa kilichoibwa kisitoe chochote.
 
 Historia ya ubao wa kunakili haihifadhiwi kwenye vifaa, na siri hupotea sekunde 60 baada ya kunakiliwa.

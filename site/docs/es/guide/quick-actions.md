@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 9311cbfc4998 -->
+<!-- source: 6a71bf33d8c9 -->
 # Acciones rápidas
 
 Para quien quiere bloquear, suspender o reiniciar un ordenador desde un teléfono u otro ordenador del grupo. Un administrador ejecuta la acción con una pulsación o un comando; el dispositivo solo la ejecuta si su propio usuario activó esa acción allí.
@@ -8,14 +8,14 @@ Para quien quiere bloquear, suspender o reiniciar un ordenador desde un teléfon
 
 | Acción | Qué hace | Dónde |
 |---|---|---|
-| `lock` | bloquea la pantalla | ordenadores |
-| `sleep` | suspende el ordenador | ordenadores |
-| `reboot` | reinicia el ordenador un minuto después | ordenadores, el miembro ligero |
-| `shutdown` | apaga el ordenador un minuto después | ordenadores |
-| `cancel-shutdown` | cancela un reinicio o apagado pendiente | ordenadores, el miembro ligero |
-| `restart` | reinicia el servicio de Copy Beyond Borders | ordenadores, el miembro ligero |
+| `lock` | bloquea la pantalla | ordenadores, dispositivos pequeños |
+| `sleep` | suspende el ordenador | ordenadores, dispositivos pequeños |
+| `reboot` | reinicia el ordenador un minuto después | ordenadores, dispositivos pequeños |
+| `shutdown` | apaga el ordenador un minuto después | ordenadores, dispositivos pequeños |
+| `cancel-shutdown` | cancela un reinicio o apagado pendiente | ordenadores, dispositivos pequeños |
+| `restart` | reinicia el servicio de Copy Beyond Borders | ordenadores, dispositivos pequeños |
 | `keyboard-layout` | cambia la distribución en la que escribe su [teclado Bluetooth](keyboards-and-tvs.md) a la siguiente, después de que cambies la del propio dispositivo | ordenadores Linux con el teclado activado |
-| la tuya | ejecuta un programa que tú elijas, como el usuario con sesión iniciada | ordenadores |
+| la tuya | ejecuta un programa que tú elijas, como el usuario con sesión iniciada | ordenadores; un dispositivo pequeño con el agente de CBB |
 
 Un minuto de aviso antes de un reinicio o un apagado da a quien esté ante el ordenador tiempo para guardar su trabajo o ejecutar `cancel-shutdown`. Windows además avisa a los usuarios con sesión iniciada.
 

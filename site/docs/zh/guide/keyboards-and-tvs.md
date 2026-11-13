@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 9b05c71a6bfc -->
+<!-- source: 1b77d3ce22fc -->
 # 键盘与电视
 
 适合想往电视、平板、游戏机，或没有安装 Copy Beyond Borders 的电脑里输入长密码、链接或搜索词的人。群组中的一台设备以键盘或电视遥控器的身份把文本输入到那里，由你点一下触发，或在管理员发送远程粘贴时触发。
@@ -45,7 +45,7 @@ echo 'the text' | sudo cbb keyboard type
 
 ## Nano ESP32 作为 USB 或蓝牙键盘
 
-这块板子是你群组中的一个轻量成员。在它的控制台上：
+这块板子是你群组中的一个成员。在它的控制台上：
 
 - `usb keyboard` 让它的 USB 口成为键盘，控制台则作为旁边的第二个串口；把它插到设备上。它在任何系统启动之前就能工作：在 BIOS、UEFI 设置或磁盘加密提示中也可以。
 - `ble on`，然后 `ble pair`，让它成为蓝牙 LE 键盘；在两分钟内到设备上添加“CBB Nano ESP32”。它最多记住四台设备；`ble forget` 会忘记它们。
