@@ -77,6 +77,8 @@
  "{} is no longer muted: its copies reach the group again.": "{} כבר לא מושתק: העותקים שלו שוב מגיעים לקבוצה.",
  "{} is removed.": "{} הוסר.",
  "{} ran {}.": "{} הריץ את {}.",
+ "Confirm a change to your CBB group.": "אשרו שינוי בקבוצת ה-CBB שלכם.",
+ "Confirm an important change to your CBB group: it cannot be undone.": "אשרו שינוי חשוב בקבוצת ה-CBB שלכם: אי אפשר לבטל אותו.",
  "This device is in no group.": "המכשיר הזה לא בשום קבוצה.",
  "Start a group or join one.": "צרו קבוצה או הצטרפו לאחת.",
  "This device was removed from the group.": "המכשיר הזה הוסר מהקבוצה.",

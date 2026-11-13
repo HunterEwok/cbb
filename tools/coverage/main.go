@@ -16,8 +16,28 @@
 // (Gradle's jacoco plugin). A part with no input is not measured and not
 // checked, as when CI skipped its jobs.
 //
-// It prints a Markdown table (for $GITHUB_STEP_SUMMARY with -summary) and
-// exits 1 when a part falls more than -slack points below its floor.
+// It counts lines in every part, and branches where the input has them
+// (JaCoCo always, llvm-cov when the build counted them: Swift, and Rust on
+// a nightly compiler with -Zcoverage-options=branch); Go counts statements
+// only. A part's branches are the row "PART/branches", in the table and in
+// floor.json.
+//
+// It prints a Markdown table, coverage by kind (for $GITHUB_STEP_SUMMARY
+// with -summary), and exits 1 when a row falls more than -slack points
+// below its floor. With -target (lines) and -branch-target (branches;
+// -core-branch-target for the cores, whose every branch is a decision to
+// take or refuse), the coverage the project aims at above the floors, a row
+// below it is marked in the table and warned of (a GitHub annotation),
+// without failing: the floor is where CI stops, the target where the tests
+// are written up to again (plans of 0.6: lines 90, branches 80, a core's
+// branches 90).
+//
+// Below the table are the hard gates, which have no floor and fail at once:
+// -audit, every closed audit finding's tests still exist; -rules with
+// -vectors, every rule a format reader names with Rule::field is refused by
+// some vector (not measured until the 0.6 core's readers are in the tree);
+// -mutants, cargo mutants left no survivor tools/mutants/missed.txt does not
+// name.
 // docs/testing.md, "Coverage", says what each part counts.
 package main
 
@@ -78,10 +98,17 @@ var testFakes = []string{
 	"internal/vless/vlesstest",
 }
 
+// rustTestOnly are the files of core/src that only tests compile (a
+// #[cfg(test)] module under a name of its own, which llvm-cov does not leave
+// out as it does tests.rs): the interop vectors' checks and the verdicts of
+// tools/difffuzz.
+var rustTestOnly = []string{"/core/src/vectors.rs", "/core/src/verdicts.rs"}
+
 // llvmParts says which files of an llvm-cov export count for each part.
 var llvmParts = map[string]func(file string) bool{
 	"rust-core": func(f string) bool {
-		return strings.Contains(f, "/core/src/") && !strings.Contains(f, "/third_party/") && !strings.Contains(f, "/tests/")
+		return strings.Contains(f, "/core/src/") && !strings.Contains(f, "/third_party/") && !strings.Contains(f, "/tests/") &&
+			!slices.ContainsFunc(rustTestOnly, func(t string) bool { return strings.HasSuffix(f, t) })
 	},
 	"rust-member": inMember,
 	// rust-service is member/src again, measured with Go's tests of the
@@ -110,22 +137,65 @@ type multi []string
 func (m *multi) String() string     { return strings.Join(*m, ",") }
 func (m *multi) Set(s string) error { *m = append(*m, s); return nil }
 
+// corePart tells a part whose branches are held to -core-branch-target.
+func corePart(part string) bool { return part == "rust-core" || part == "go-core" }
+
+// branchesOf is the row of a part's branches.
+func branchesOf(part string) string { return part + "/branches" }
+
+// options are the command's flags.
+type options struct {
+	goFiles, llvmFiles, jacocoFiles []string
+	floorFile                       string
+	slack                           float64
+	target                          float64 // lines
+	branchTarget, coreBranchTarget  float64
+	summary                         string
+	audit, root                     string // the closed findings, and where their tests' paths start
+	rules, vectors                  string // the readers' sources and the format's vectors
+	mutants, knownMutants           string // cargo mutants' missed.txt and the known list
+}
+
 func main() {
+	var o options
 	var goFiles, llvmFiles, jacocoFiles multi
 	flag.Var(&goFiles, "go", "a Go cover profile (repeatable)")
 	flag.Var(&llvmFiles, "llvm", "PART=FILE, llvm-cov's JSON export (repeatable)")
 	flag.Var(&jacocoFiles, "jacoco", "PART=FILE, a JaCoCo XML report (repeatable)")
-	floorFile := flag.String("floor", "", "the floors, a JSON object of part to percent")
-	slack := flag.Float64("slack", 1, "how many points a part may fall below its floor")
-	summary := flag.String("summary", "", "also append the table to this file")
+	flag.StringVar(&o.floorFile, "floor", "", "the floors, a JSON object of row (PART or PART/branches) to percent")
+	flag.Float64Var(&o.slack, "slack", 1, "how many points a row may fall below its floor")
+	flag.Float64Var(&o.target, "target", 0, "the line coverage aimed at above the floors: a part below it is warned of, not failed")
+	flag.Float64Var(&o.branchTarget, "branch-target", 0, "the branch coverage aimed at, as -target")
+	flag.Float64Var(&o.coreBranchTarget, "core-branch-target", 0, "the branch coverage aimed at in the cores (rust-core, go-core); 0 takes -branch-target")
+	flag.StringVar(&o.summary, "summary", "", "also append the table to this file")
+	flag.StringVar(&o.audit, "audit", "", "the closed audit findings and their tests (testdata/audit/closed.json): fail when a test is gone")
+	flag.StringVar(&o.root, "root", ".", "the repository, where -audit's test paths start")
+	flag.StringVar(&o.rules, "rules", "", "the format readers' Rust sources (core/src): with -vectors, fail when a rule named by Rule::field has no refused vector")
+	flag.StringVar(&o.vectors, "vectors", "", "the format's vectors (testdata/format)")
+	flag.StringVar(&o.mutants, "mutants", "", "cargo mutants' missed.txt: with -known-mutants, fail on a survivor the list does not name")
+	flag.StringVar(&o.knownMutants, "known-mutants", "tools/mutants/missed.txt", "the survivors the tests do not catch yet, each with why")
 	flag.Parse()
-	if err := run(goFiles, llvmFiles, jacocoFiles, *floorFile, *slack, *summary, os.Stdout); err != nil {
+	o.goFiles, o.llvmFiles, o.jacocoFiles = goFiles, llvmFiles, jacocoFiles
+	if err := run(o, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, "coverage:", err)
 		os.Exit(1)
 	}
 }
 
-func run(goFiles, llvmFiles, jacocoFiles []string, floorFile string, slack float64, summary string, stdout io.Writer) error {
+// targetOf is the target of a row: lines, branches, or a core's branches.
+func (o options) targetOf(row string) float64 {
+	part, isBranches := strings.CutSuffix(row, "/branches")
+	switch {
+	case !isBranches:
+		return o.target
+	case corePart(part) && o.coreBranchTarget > 0:
+		return o.coreBranchTarget
+	}
+	return o.branchTarget
+}
+
+func run(o options, stdout io.Writer) error {
+	goFiles, llvmFiles, jacocoFiles, floorFile, summary := o.goFiles, o.llvmFiles, o.jacocoFiles, o.floorFile, o.summary
 	parts := map[string]tally{}
 	var packages map[string]tally
 	if len(goFiles) > 0 {
@@ -147,22 +217,28 @@ func run(goFiles, llvmFiles, jacocoFiles []string, floorFile string, slack float
 		if !ok || in == nil {
 			return fmt.Errorf("-llvm %q: want PART=FILE with PART one of %s", arg, keys(llvmParts))
 		}
-		t, err := readLLVM(file, in)
+		t, br, err := readLLVM(file, in)
 		if err != nil {
 			return err
 		}
 		parts[part] = add(parts[part], t)
+		if br.total > 0 {
+			parts[branchesOf(part)] = add(parts[branchesOf(part)], br)
+		}
 	}
 	for _, arg := range jacocoFiles {
 		part, file, ok := strings.Cut(arg, "=")
 		if !ok {
 			return fmt.Errorf("-jacoco %q: want PART=FILE", arg)
 		}
-		t, err := readJaCoCo(file)
+		t, br, err := readJaCoCo(file)
 		if err != nil {
 			return err
 		}
 		parts[part] = add(parts[part], t)
+		if br.total > 0 {
+			parts[branchesOf(part)] = add(parts[branchesOf(part)], br)
+		}
 	}
 	floors := map[string]float64{}
 	if floorFile != "" {
@@ -174,8 +250,21 @@ func run(goFiles, llvmFiles, jacocoFiles []string, floorFile string, slack float
 			return fmt.Errorf("%s: %w", floorFile, err)
 		}
 	}
-	text, failed := report(parts, packages, floors, slack)
+	text, failed, short := report(parts, packages, floors, o)
+	gates, err := runGates(o)
+	if err != nil {
+		return err
+	}
+	text += gatesReport(gates)
+	for _, g := range gates {
+		if g.failed() {
+			failed = append(failed, fmt.Sprintf("%s %d/%d", g.name, g.met, g.of))
+		}
+	}
 	fmt.Fprint(stdout, text)
+	for _, s := range short {
+		fmt.Fprintf(stdout, "::warning title=coverage below the target::%s\n", s)
+	}
 	if summary != "" {
 		f, err := os.OpenFile(summary, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 		if err != nil {
@@ -190,9 +279,39 @@ func run(goFiles, llvmFiles, jacocoFiles []string, floorFile string, slack float
 		}
 	}
 	if len(failed) > 0 {
-		return fmt.Errorf("below the floor: %s", strings.Join(failed, ", "))
+		return fmt.Errorf("below the floor or a gate: %s", strings.Join(failed, ", "))
 	}
 	return nil
+}
+
+// runGates checks the gates whose inputs are given.
+func runGates(o options) ([]gate, error) {
+	var gates []gate
+	if o.audit != "" {
+		g, err := auditGate(o.audit, o.root)
+		if err != nil {
+			return nil, err
+		}
+		gates = append(gates, g)
+	}
+	if o.rules != "" || o.vectors != "" {
+		if o.rules == "" || o.vectors == "" {
+			return nil, errors.New("-rules and -vectors go together")
+		}
+		g, err := formatGate(o.rules, o.vectors)
+		if err != nil {
+			return nil, err
+		}
+		gates = append(gates, g)
+	}
+	if o.mutants != "" {
+		g, err := mutantsGate(o.mutants, o.knownMutants)
+		if err != nil {
+			return nil, err
+		}
+		gates = append(gates, g)
+	}
+	return gates, nil
 }
 
 func add(a, b tally) tally { return tally{a.total + b.total, a.covered + b.covered} }
@@ -276,72 +395,90 @@ func sumGo(blocks map[string]block) (parts, packages map[string]tally) {
 	return parts, packages
 }
 
-// readLLVM sums the lines of the files of an llvm-cov JSON export that in
-// accepts.
-func readLLVM(name string, in func(string) bool) (tally, error) {
+// readLLVM sums the lines and the branches of the files of an llvm-cov
+// JSON export that in accepts; the branches are none when the build did
+// not count them.
+func readLLVM(name string, in func(string) bool) (lines, branches tally, err error) {
 	b, err := os.ReadFile(name)
 	if err != nil {
-		return tally{}, err
+		return tally{}, tally{}, err
 	}
 	var export struct {
 		Data []struct {
 			Files []struct {
 				Filename string `json:"filename"`
 				Summary  struct {
-					Lines struct {
-						Count   int `json:"count"`
-						Covered int `json:"covered"`
-					} `json:"lines"`
+					Lines    llvmCount `json:"lines"`
+					Branches llvmCount `json:"branches"`
 				} `json:"summary"`
 			} `json:"files"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(b, &export); err != nil {
-		return tally{}, fmt.Errorf("%s: %w", name, err)
+		return tally{}, tally{}, fmt.Errorf("%s: %w", name, err)
 	}
-	var t tally
 	for _, d := range export.Data {
 		for _, f := range d.Files {
 			if in(f.Filename) {
-				t = add(t, tally{f.Summary.Lines.Count, f.Summary.Lines.Covered})
+				lines = add(lines, tally{f.Summary.Lines.Count, f.Summary.Lines.Covered})
+				branches = add(branches, tally{f.Summary.Branches.Count, f.Summary.Branches.Covered})
 			}
 		}
 	}
-	if t.total == 0 {
-		return t, fmt.Errorf("%s: no file of the part", name)
+	if lines.total == 0 {
+		return lines, branches, fmt.Errorf("%s: no file of the part", name)
 	}
-	return t, nil
+	return lines, branches, nil
 }
 
-// readJaCoCo takes the lines of a JaCoCo XML report's own totals.
-func readJaCoCo(name string) (tally, error) {
+type llvmCount struct {
+	Count   int `json:"count"`
+	Covered int `json:"covered"`
+}
+
+// readJaCoCo takes the lines and the branches of a JaCoCo XML report's own
+// totals.
+func readJaCoCo(name string) (lines, branches tally, err error) {
 	f, err := os.Open(name)
 	if err != nil {
-		return tally{}, err
+		return tally{}, tally{}, err
 	}
 	defer f.Close()
 	d := xml.NewDecoder(f)
 	d.Strict = false
 	depth := 0
+	found := false
 	for {
 		tok, err := d.Token()
 		if errors.Is(err, io.EOF) {
-			return tally{}, fmt.Errorf("%s: no line counter for the report", name)
+			if !found {
+				return tally{}, tally{}, fmt.Errorf("%s: no line counter for the report", name)
+			}
+			return lines, branches, nil
 		}
 		if err != nil {
-			return tally{}, fmt.Errorf("%s: %w", name, err)
+			return tally{}, tally{}, fmt.Errorf("%s: %w", name, err)
 		}
 		switch e := tok.(type) {
 		case xml.StartElement:
 			depth++
 			// The report's own counters are its direct children.
-			if depth == 2 && e.Name.Local == "counter" && attr(e, "type") == "LINE" {
-				missed, err1 := strconv.Atoi(attr(e, "missed"))
-				covered, err2 := strconv.Atoi(attr(e, "covered"))
-				if err1 != nil || err2 != nil {
-					return tally{}, fmt.Errorf("%s: a bad line counter", name)
-				}
-				return tally{missed + covered, covered}, nil
+			if depth != 2 || e.Name.Local != "counter" {
+				continue
+			}
+			typ := attr(e, "type")
+			if typ != "LINE" && typ != "BRANCH" {
+				continue
+			}
+			missed, err1 := strconv.Atoi(attr(e, "missed"))
+			covered, err2 := strconv.Atoi(attr(e, "covered"))
+			if err1 != nil || err2 != nil {
+				return tally{}, tally{}, fmt.Errorf("%s: a bad %s counter", name, strings.ToLower(typ))
+			}
+			if typ == "LINE" {
+				lines, found = tally{missed + covered, covered}, true
+			} else {
+				branches = tally{missed + covered, covered}
 			}
 		case xml.EndElement:
 			depth--
@@ -359,11 +496,13 @@ func attr(e xml.StartElement, name string) string {
 }
 
 // report writes the table of parts and, for Go, of packages; failed names
-// the parts more than slack points below their floor.
-func report(parts, packages map[string]tally, floors map[string]float64, slack float64) (string, []string) {
+// the parts more than slack points below their floor, short those above it
+// but below target (when target is set).
+func report(parts, packages map[string]tally, floors map[string]float64, o options) (string, []string, []string) {
+	slack := o.slack
 	var b strings.Builder
-	var failed []string
-	b.WriteString("## Test coverage\n\n| Part | Covered | Of | % | Floor | |\n|---|---:|---:|---:|---:|---|\n")
+	var failed, short []string
+	b.WriteString("## Test coverage by kind\n\n| Part | Kind | Covered | Of | % | Floor | Target | |\n|---|---|---:|---:|---:|---:|---:|---|\n")
 	names := make([]string, 0, len(parts))
 	for k := range parts {
 		names = append(names, k)
@@ -375,25 +514,38 @@ func report(parts, packages map[string]tally, floors map[string]float64, slack f
 	}
 	sort.Strings(names)
 	for _, n := range names {
+		target := o.targetOf(n)
+		part, kind := n, "lines"
+		if p, ok := strings.CutSuffix(n, "/branches"); ok {
+			part, kind = p, "branches"
+		}
 		t, measured := parts[n]
 		floor, hasFloor := floors[n]
-		floorText, verdict := "-", ""
+		floorText, targetText, verdict := "-", "-", ""
 		if hasFloor {
 			floorText = fmt.Sprintf("%.1f", floor)
 		}
+		if target > 0 {
+			targetText = fmt.Sprintf("%.0f", target)
+		}
 		switch {
 		case !measured:
-			fmt.Fprintf(&b, "| %s | | | not measured | %s | |\n", n, floorText)
+			fmt.Fprintf(&b, "| %s | %s | | | not measured | %s | %s | |\n", part, kind, floorText, targetText)
 			continue
 		case hasFloor && t.pct() < floor-slack:
 			verdict = "below the floor"
 			failed = append(failed, fmt.Sprintf("%s %.1f%% < %.1f%%", n, t.pct(), floor))
+		case target > 0 && t.pct() < target:
+			verdict = fmt.Sprintf("below the target of %.0f", target)
+			short = append(short, fmt.Sprintf("%s %.1f%% < %.0f%%", n, t.pct(), target))
+		case target > 0:
+			verdict = "ok"
 		case hasFloor && t.pct() >= floor+2:
 			verdict = fmt.Sprintf("raise the floor to %.1f", math.Floor(t.pct()*10)/10)
 		case hasFloor:
 			verdict = "ok"
 		}
-		fmt.Fprintf(&b, "| %s | %d | %d | %.1f | %s | %s |\n", n, t.covered, t.total, t.pct(), floorText, verdict)
+		fmt.Fprintf(&b, "| %s | %s | %d | %d | %.1f | %s | %s | %s |\n", part, kind, t.covered, t.total, t.pct(), floorText, targetText, verdict)
 	}
 	if len(packages) > 0 {
 		b.WriteString("\n<details><summary>Go packages, least covered first</summary>\n\n| Package | Statements | % |\n|---|---:|---:|\n")
@@ -413,5 +565,5 @@ func report(parts, packages map[string]tally, floors map[string]float64, slack f
 		}
 		b.WriteString("\n</details>\n")
 	}
-	return b.String(), failed
+	return b.String(), failed, short
 }

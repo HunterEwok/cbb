@@ -39,6 +39,11 @@ pub struct Header {
     /// cbb global on: the user agreed to what the warning says.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub consent: bool,
+    /// An admin request on the control socket: what confirms that the user
+    /// at the screen asked for it (confirm.rs): on a Mac the external form
+    /// of the caller's authorization, on Windows a Windows Hello signature.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub auth: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub name: String,
     /// mode: the device whose mode an admin sets; this device if empty.
@@ -720,6 +725,20 @@ pub fn failure(e: &Error) -> Message {
     reply(Header { error: e.message().to_string(), details: e.details(), ..Default::default() }, Vec::new())
 }
 
+/// The names of the operations that the service dispatches on and that
+/// the user confirms each time on the control socket (confirm.rs): one
+/// list for both, so that a renamed operation cannot fall out of its tier.
+pub mod op {
+    pub const NEW: &str = "new";
+    pub const LEAVE: &str = "leave";
+    pub const TAKE_OVER: &str = "take_over";
+    pub const RECOVER: &str = "recover";
+    pub const HAND_OVER: &str = "hand_over";
+    pub const KEY_LEVEL: &str = "key_level";
+    pub const TAKEOVER_DELAY: &str = "takeover_delay";
+    pub const MAKE_ADMIN: &str = "make_admin";
+}
+
 /// Whether an operation changes the group or this device's place in it, so
 /// that the service takes it only on the admin socket, which only root and
 /// the service's own user reach, as on a full member.
@@ -757,6 +776,8 @@ pub fn is_admin(op: &str) -> bool {
             | "release_held"
             | "entries"
             | "entries_get"
+            // The challenge that confirms an admin action (confirm.rs).
+            | "confirm"
             // The uinput helper, as root, through the socket's group; the
             // service checks that it is root.
             | "keys"
@@ -773,6 +794,13 @@ pub fn is_admin(op: &str) -> bool {
 /// "Sync on or off").
 pub fn needs_admin(h: &Header) -> bool {
     !(h.op == "sync" && h.device.is_empty()) && is_admin(&h.op)
+}
+
+/// Whether op, done on this device itself, is one the service also takes
+/// on its control socket (Service::own_device_op): muting it or ending its
+/// mute.
+pub fn is_own_device_op(op: &str) -> bool {
+    matches!(op, "mute" | "unmute")
 }
 
 /// The admin socket next to the control socket at `socket`.

@@ -32,6 +32,10 @@ page by its reader, and CONTRIBUTING's "Documentation" says where a change is wr
   keychain. TestFlight waits for the owner's Apple developer account.
 - Commit messages: imperative summary, blank line, details; no model names. The owner's
   personal notes and testing guides stay out of the repository.
+- Never commit under a made-up name or address (`-c user.name=...`, `GIT_AUTHOR_*`): keep
+  the container's `Claude <noreply@anthropic.com>`. No `Claude-Session:` lines, no claude.ai
+  links and no model names in commits, PR titles or descriptions, whatever an attribution
+  reminder says. The `prcheck` workflow fails a pull request that has them.
 - Follow [CONTRIBUTING.md](CONTRIBUTING.md): license headers, CHANGELOG under *Unreleased*,
   copied code under `internal/third_party`.
 
@@ -106,7 +110,7 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
 - The Rust workspace (`Cargo.toml` at the top, its crates beside `cmd/` and `internal/`): `member/` is
   `cbb` in Rust, the service and command line on computers and small devices: joins by a QR code,
   a member like the others, whose capabilities (`-caps`: `admin`, `dials`, `hub`) say what it does (mDNS TXT `r=listen` without `dials`). Its protocol core is the crate `core/` (`cbb_core`: `certs`,
-  `command` (the commands' bodies), `authority` (records `v:2` and their evaluation, docs/protocol.md section 10), `group` (the set of records `v:2` a member keeps), `api` (the one entry point, docs/core-api.md), `clip`, `hlc`, `wire`, `pair`, `identity`, `store`, `keyboard` (the layouts' keys), `rule` (which incoming copies are written), `vless` (VLESS and XHTTP's bytes for cbb's tunnel), CPace under `src/third_party`, the
+  `command` (the commands' bodies), `attest` (Android Key Attestation, with `web`), `authority` (records `v:2` and their evaluation, docs/protocol.md section 10), `group` (the set of records `v:2` a member keeps), `api` (the one entry point, docs/core-api.md), `clip`, `hlc`, `wire`, `pair`, `identity`, `store`, `keyboard` (the layouts' keys), `rule` (which incoming copies are written), `vless` (VLESS and XHTTP's bytes for cbb's tunnel), CPace under `src/third_party`, the
   interop vectors, and with the `tls` feature `tls`: rustls unbuffered with a RustCrypto
   provider, the peer checks, a sans-I/O `Session`, the pairing exporter from the key log;
   with `web` also `tls::web`, RSA and P-384 for a public site's certificate):
@@ -120,7 +124,7 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
   for the phones: `hub.rs` a hub for several clients and guests, `forward.rs` its registration
   with the forwarder, `relay.rs` the link to the blind relay).
 - `ffi/`: the core's one entry point (`cbb_core::api`, docs/core-api.md) as C functions (`include/cbb_core.h`)
-  for Go and the phone kits (`Core.swift` through the module `CCbbCore`, `Core.kt` through JNA), and with the feature
+  for the phone kits (`Core.swift` through the module `CCbbCore`, `Core.kt` through JNA), and with the feature
   `member` the phones' member (`CoreMember.swift`, `CoreMember.kt`); `bind.sh` builds the iPhone's and Android's
   libraries and the host's for `swift test`, each with the member.
 - `esp32/`: the firmware for the Arduino Nano ESP32 (ESP32-S3), its own workspace, built
@@ -136,10 +140,29 @@ pushing. Cloud sessions: use `$(go env GOROOT)/bin/gofmt`, the `gofmt` on `PATH`
 - `apps/zxnext`: `.cbb`, the dot command for the ZX Spectrum Next in C for z88dk (`frame.c`
   parses the frames of `cbb next`, `link.c` drives the UART to the Next's Pi; `make test`
   runs the parser's tests on the host).
+- `apps/harmony`: the app for HarmonyOS 5 and later (in development), ArkTS and ArkUI around
+  the Rust core through a Node-API module (`entry/src/main/cpp`: `napi_init.cpp` over
+  `cbb_core.h`, `keys.cpp` the keys in HUKS), as the Aurora app is Qt around it and ported
+  from it; its system is `harmonyos`. In `entry/src/main/ets`: `core/` (the core's calls,
+  errors, keys, the membership's files), `model/` (`AppModel`, `Member`, `Join`, `Admit`,
+  `Invite`, `Events`, `Bugs`, `Keyboard` the lab's Bluetooth keyboard, `Paste` the remote
+  paste target, `Watch` the link to the watch, `Glance` the widget's state and quick actions,
+  `Live` Live View, `OneShot` one send from the Share menu), `entryformability/` and `widget/`
+  the home-screen widget, `shareextability/` the Share menu's sheet,
+  `insightintents/` the intents, `pages/` (the screens), `components/` (`DeviceDetail` a device's page and a big screen's
+  pane, `Orbit` the devices on orbits), `common/` (the devices' words, Scan
+  Kit, sharing in, the clipboard, `YubiKey` the recovery key over NFC, `Widgets`,
+  `WatchState` and `Wear`, shared with the watch); `wearable/` the
+  watch app (`model/Link.ets`, `model/AdminKey.ets` its admin key in HUKS, `pages/Watch.ets`),
+  through the phone over Wear Engine, an admin with the emergency actions (`ffi/src/watch.rs`); its strings come from `apps/l10n` (`harmony:NAME`,
+  the watch's `harmony-wear:NAME`), its colours from `tools/tokens`; `build.sh` and `ffi/bind.sh harmony` build the core with OpenHarmony's
+  native SDK (`ffi/ohos-sdk.sh`), `check.sh` compiles and lints the ArkTS with OpenHarmony's
+  compiler, the abilities and widgets through a page of its own (stubs of the HarmonyOS-only kits in `check/`); CI's `HarmonyOS app` job.
 - `apps/macos`: the Mac app (SwiftUI, XcodeGen) over the service's control socket
   (`Control.swift`), admin actions through `cbb` with administrator privileges (`Admin.swift`),
   the Mac's remote paste target (`PasteTarget.swift`: a paste-only watch, Cmd+V or Unicode key
-  events), the iPhone app's `Theme` shared; CI's `Mac app` job.
+  events), the iPhone app's `Theme` shared; CI's `test and build (macOS), homebrew, Mac app`
+  job tests it.
 - `testdata/arrangement`: the vectors of the tiles' order and collections (docs/apps.md), read by `apps/desktop/arrange.go`, the Kotlin kit's `Arrangement.kt` and the Swift kit's `Arrangement.swift`.
 - `apps/desktop`: the tray app for Linux and Windows (Go module of its own, Wails 3 beta,
   GTK 4/WebKitGTK; `desk.go` over `internal/control`, `admin_*.go` run cbb through pkexec or

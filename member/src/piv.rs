@@ -106,6 +106,11 @@ pub fn select(c: &mut dyn Card) -> Result<()> {
 
 /// Reads a retired slot's certificate; None if it holds none.
 pub fn certificate(c: &mut dyn Card, slot: u8) -> Result<Option<Cert>> {
+    certificate_der(c, slot)?.map(|der| Cert::parse(&der)).transpose()
+}
+
+/// A retired slot's certificate, DER, unparsed.
+fn certificate_der(c: &mut dyn Card, slot: u8) -> Result<Option<Vec<u8>>> {
     if !(FIRST_SLOT..=LAST_SLOT).contains(&slot) {
         return Err(Error::msg("not a retired PIV slot"));
     }
@@ -127,7 +132,7 @@ pub fn certificate(c: &mut dyn Card, slot: u8) -> Result<Option<Cert>> {
     {
         return Err(bad("is compressed"));
     }
-    Ok(Some(Cert::parse(der)?))
+    Ok(Some(der.to_vec()))
 }
 
 /// Checks the PIN, which the card then takes as given until the connection
@@ -170,6 +175,174 @@ pub fn sign(c: &mut dyn Card, slot: u8, public: &[u8], digest: &[u8; 32]) -> Res
     vk.verify_prehash(digest, &s)
         .map_err(|_| Error::msg("the YubiKey's signature does not match its certificate's key"))?;
     Ok(sig.to_vec())
+}
+
+/// The management key's slot and the key a YubiKey has from the factory:
+/// 3DES before firmware 5.7, AES-192 from it.
+const MANAGEMENT_SLOT: u8 = 0x9b;
+pub const DEFAULT_MANAGEMENT_KEY: [u8; 24] = [1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8];
+/// The recovery key's policies: the PIN and a touch before each signature.
+const PIN_ALWAYS: u8 = 0x03;
+const TOUCH_ALWAYS: u8 = 0x02;
+
+pub const MANAGEMENT_KEY: &str = "this YubiKey's management key is not the factory one, so a key cannot be put on it";
+pub const OLD_FIRMWARE: &str =
+    "this YubiKey's management key is 3DES, as before firmware 5.7: a key cannot be put on it";
+pub const NO_FREE_SLOT: &str = "every retired PIV slot of this YubiKey is in use";
+
+/// A slot's metadata (YubiKey 5.3 and later): its algorithm, None when the
+/// card keeps none for it or has no metadata.
+fn metadata_alg(c: &mut dyn Card, slot: u8) -> Result<Option<u8>> {
+    let (data, sw) = command(c, 0xf7, 0x00, slot, &[])?;
+    if sw != 0x9000 {
+        return Ok(None);
+    }
+    let mut rest = data.as_slice();
+    while let Some(&tag) = rest.first() {
+        let Some((v, next)) = read_tlv(rest, tag) else { break };
+        if tag == 0x01 && v.len() == 1 {
+            return Ok(v.first().copied());
+        }
+        rest = next;
+    }
+    Ok(None)
+}
+
+/// Whether a retired slot is free: no certificate and no key, as the card's
+/// metadata says; a card without metadata counts a slot without a
+/// certificate as free.
+fn is_free(c: &mut dyn Card, slot: u8) -> Result<bool> {
+    if certificate_der(c, slot)?.is_some() {
+        return Ok(false);
+    }
+    Ok(matches!(command(c, 0xf7, 0x00, slot, &[])?.1, 0x6a82 | 0x6d00 | 0x6a81))
+}
+
+/// The first free retired slot.
+pub fn free_slot(c: &mut dyn Card) -> Result<u8> {
+    for slot in FIRST_SLOT..=LAST_SLOT {
+        if is_free(c, slot)? {
+            return Ok(slot);
+        }
+    }
+    Err(Error::msg(NO_FREE_SLOT))
+}
+
+/// One AES block with the management key: CBC with a zero IV, which on one
+/// block is the block cipher itself.
+fn crypt(key: &[u8], block: &[u8], encrypt: bool) -> Result<[u8; 16]> {
+    use aes::cipher::{Array, BlockCipherDecrypt as _, BlockCipherEncrypt as _, KeyInit as _};
+    let mut b: [u8; 16] = block.try_into().map_err(|_| Error::msg("the YubiKey's challenge is not one block"))?;
+    let bad = || Error::msg(MANAGEMENT_KEY);
+    macro_rules! run {
+        ($c:ty) => {{
+            let c = <$c>::new_from_slice(key).map_err(|_| bad())?;
+            let mut blk: Array<u8, _> = b.into();
+            if encrypt {
+                c.encrypt_block(&mut blk)
+            } else {
+                c.decrypt_block(&mut blk)
+            }
+            b = blk.into();
+        }};
+    }
+    match key.len() {
+        16 => run!(aes::Aes128),
+        24 => run!(aes::Aes192),
+        32 => run!(aes::Aes256),
+        _ => return Err(bad()),
+    }
+    Ok(b)
+}
+
+/// Authenticates with the management key, which making a key and storing
+/// its certificate need; the algorithm is the one the card's metadata
+/// names, AES only: a card with a 3DES key, or without metadata (firmware
+/// before 5.3), is refused with OLD_FIRMWARE.
+pub fn authenticate(c: &mut dyn Card, key: &[u8]) -> Result<()> {
+    let alg = metadata_alg(c, MANAGEMENT_SLOT)?.unwrap_or(0);
+    let len = match alg {
+        0x0a => 16,
+        0x0b => 24,
+        0x0c => 32,
+        0x03 | 0 => return Err(Error::msg(OLD_FIRMWARE)),
+        _ => return Err(Error::msg("the YubiKey's management key has an unknown algorithm")),
+    };
+    if key.len() != len {
+        return Err(Error::msg(MANAGEMENT_KEY));
+    }
+    let (w, sw) = command(c, 0x87, alg, MANAGEMENT_SLOT, &tlv(0x7c, &tlv(0x80, &[])))?;
+    if sw != 0x9000 {
+        return Err(refused(sw));
+    }
+    let bad = || Error::msg("the YubiKey's answer to the management key does not parse");
+    let (inner, _) = read_tlv(&w, 0x7c).ok_or_else(bad)?;
+    let (witness, _) = read_tlv(inner, 0x80).ok_or_else(bad)?;
+    let challenge: [u8; 16] = cbb_core::certs::random_bytes();
+    let decrypted = crypt(key, witness, false)?;
+    let data = tlv(0x7c, &[tlv(0x80, &decrypted), tlv(0x81, &challenge)].concat());
+    let (r, sw) = command(c, 0x87, alg, MANAGEMENT_SLOT, &data)?;
+    match sw {
+        0x9000 => {}
+        0x6982 | 0x6a80 => return Err(Error::msg(MANAGEMENT_KEY)),
+        sw => return Err(refused(sw)),
+    }
+    let (inner, _) = read_tlv(&r, 0x7c).ok_or_else(bad)?;
+    let (answer, _) = read_tlv(inner, 0x82).ok_or_else(bad)?;
+    if answer != crypt(key, &challenge, true)? {
+        return Err(Error::msg("the YubiKey did not prove the management key"));
+    }
+    Ok(())
+}
+
+/// Has the card make a P-256 key in slot, which asks for the PIN and a
+/// touch before each signature, and returns its point, uncompressed;
+/// authenticate must come first.
+pub fn generate(c: &mut dyn Card, slot: u8) -> Result<Vec<u8>> {
+    if !(FIRST_SLOT..=LAST_SLOT).contains(&slot) {
+        return Err(Error::msg("not a retired PIV slot"));
+    }
+    let spec = tlv(0xac, &[tlv(0x80, &[ALG_ECC_P256]), tlv(0xaa, &[PIN_ALWAYS]), tlv(0xab, &[TOUCH_ALWAYS])].concat());
+    let data = match command(c, 0x47, 0x00, slot, &spec)? {
+        (_, 0x6982) => return Err(Error::msg("the YubiKey wants its management key first")),
+        (d, 0x9000) => d,
+        (_, sw) => return Err(refused(sw)),
+    };
+    let bad = || Error::msg("the YubiKey's new key does not parse");
+    // 7F49 is a two-byte tag.
+    let inner = match data.as_slice() {
+        [0x7f, rest @ ..] => read_tlv(rest, 0x49).ok_or_else(bad)?.0,
+        _ => return Err(bad()),
+    };
+    let (point, _) = read_tlv(inner, 0x86).ok_or_else(bad)?;
+    p256::ecdsa::VerifyingKey::from_sec1_bytes(point).map_err(|_| Error::msg("the YubiKey's new key is not P-256"))?;
+    Ok(point.to_vec())
+}
+
+/// Stores cert, DER, as slot's certificate; authenticate must come first.
+pub fn put_certificate(c: &mut dyn Card, slot: u8, cert: &[u8]) -> Result<()> {
+    if !(FIRST_SLOT..=LAST_SLOT).contains(&slot) {
+        return Err(Error::msg("not a retired PIV slot"));
+    }
+    let obj = tlv(0x53, &[tlv(0x70, cert), tlv(0x71, &[0]), tlv(0xfe, &[])].concat());
+    let data = [tlv(0x5c, &cert_object(slot)), obj].concat();
+    match command(c, 0xdb, 0x3f, 0xff, &data)?.1 {
+        0x9000 => Ok(()),
+        sw => Err(refused(sw)),
+    }
+}
+
+/// The recovery keys the card may hold: each retired slot whose certificate
+/// is a P-256 key's and not signed by its own key, as an admin CA under a root is.
+pub fn recovery_keys(c: &mut dyn Card) -> Result<Vec<(u8, Cert)>> {
+    let mut out = Vec::new();
+    for slot in FIRST_SLOT..=LAST_SLOT {
+        let Ok(Some(cert)) = certificate(c, slot) else { continue };
+        if cert.p256 && !cert.signed_by(&cert) {
+            out.push((slot, cert));
+        }
+    }
+    Ok(out)
 }
 
 /// Encodes tag, length (BER) and value.
@@ -551,6 +724,11 @@ pub(crate) mod tests {
         verified: bool,
         chain: Vec<u8>,
         pending: Vec<u8>,
+        /// The management key's algorithm in its metadata (0 for none) and
+        /// key; the witness sent and whether it was proven.
+        pub management: (u8, Vec<u8>),
+        witness: Option<[u8; 16]>,
+        authed: bool,
     }
 
     /// A shared fake, so that a test sees it after find took the card.
@@ -652,6 +830,59 @@ pub(crate) mod tests {
                     self.tries -= 1;
                     Ok(sw(vec![], 0x63c0 | u16::from(self.tries)))
                 }
+                0xf7 => {
+                    if p2 == MANAGEMENT_SLOT {
+                        if self.management.0 == 0 {
+                            return Ok(sw(vec![], 0x6d00));
+                        }
+                        return Ok(self.send(tlv(0x01, &[self.management.0])));
+                    }
+                    match self.slots.get(&p2) {
+                        Some(_) => Ok(self.send(tlv(0x01, &[ALG_ECC_P256]))),
+                        None => Ok(sw(vec![], 0x6a82)),
+                    }
+                }
+                0x87 if p2 == MANAGEMENT_SLOT => {
+                    let (outer, _) = read_tlv(&data, 0x7c).unwrap();
+                    let key = self.management.1.clone();
+                    let (first, rest) = read_tlv(outer, 0x80).unwrap();
+                    if first.is_empty() {
+                        let w: [u8; 16] = cbb_core::certs::random_bytes();
+                        self.witness = Some(w);
+                        let enc = crypt(&key, &w, true).unwrap();
+                        return Ok(self.send(tlv(0x7c, &tlv(0x80, &enc))));
+                    }
+                    if Some(first) != self.witness.as_ref().map(|w| &w[..]) {
+                        return Ok(sw(vec![], 0x6982));
+                    }
+                    let (challenge, _) = read_tlv(rest, 0x81).unwrap();
+                    self.authed = true;
+                    let enc = crypt(&key, challenge, true).unwrap();
+                    Ok(self.send(tlv(0x7c, &tlv(0x82, &enc))))
+                }
+                0x47 => {
+                    if !self.authed {
+                        return Ok(sw(vec![], 0x6982));
+                    }
+                    let k = SigningKey::from_bytes(&cbb_core::certs::random_bytes::<32>().into()).unwrap();
+                    let point = public(&k);
+                    self.slots.insert(p2, (k, None));
+                    let mut out = vec![0x7f];
+                    out.extend(tlv(0x49, &tlv(0x86, &point)));
+                    Ok(self.send(out))
+                }
+                0xdb => {
+                    if !self.authed {
+                        return Ok(sw(vec![], 0x6982));
+                    }
+                    let (obj_id, rest) = read_tlv(&data, 0x5c).unwrap();
+                    let slot = 0x82 + obj_id[2] - 0x0d;
+                    let (obj, _) = read_tlv(rest, 0x53).unwrap();
+                    let (der, _) = read_tlv(obj, 0x70).unwrap();
+                    let Some(entry) = self.slots.get_mut(&slot) else { return Ok(sw(vec![], 0x6a82)) };
+                    entry.1 = Some(der.to_vec());
+                    Ok(sw(vec![], 0x9000))
+                }
                 0x87 => {
                     if !self.verified {
                         return Ok(sw(vec![], 0x6982));
@@ -690,7 +921,7 @@ pub(crate) mod tests {
     /// A card whose slot 84 holds a key and its certificate; 82 holds a key
     /// of something else.
     pub fn new_card(n: u8) -> Shared {
-        let mut f = Fake { tries: 3, ..Fake::default() };
+        let mut f = Fake { tries: 3, management: (0x0b, DEFAULT_MANAGEMENT_KEY.to_vec()), ..Fake::default() };
         let k = key(n);
         let c = cert(&k);
         f.slots.insert(0x84, (k, Some(c)));
@@ -776,6 +1007,63 @@ pub(crate) mod tests {
         let mut c = one.clone();
         select(&mut c).unwrap();
         assert!(certificate(&mut c, 0x9c).is_err(), "a slot that is not retired");
+    }
+
+    /// The root phone's steps: the PIN, the management key, a free slot, a
+    /// new key there and its admin CA as the slot's certificate, which a new
+    /// phone then finds and signs with.
+    #[test]
+    fn makes_a_recovery_key() {
+        let mut card = new_card(14);
+        select(&mut card).unwrap();
+        verify(&mut card, "123456").unwrap();
+        assert_eq!(generate(&mut card, 0x83).unwrap_err().message(), "the YubiKey wants its management key first");
+        assert_eq!(authenticate(&mut card, &[0; 24]).unwrap_err().message(), MANAGEMENT_KEY);
+        authenticate(&mut card, &DEFAULT_MANAGEMENT_KEY).unwrap();
+        let slot = free_slot(&mut card).unwrap();
+        assert_eq!(slot, 0x83, "82 and 84 are taken");
+        let point = generate(&mut card, slot).unwrap();
+        let now = crate::uptime::wall_ms() / 1000;
+        let root = key(60);
+        let root_ca = Cert::parse(
+            &cbb_core::issue::root_ca(&public(&root), now, &mut |b| {
+                Ok(p256::ecdsa::signature::Signer::<p256::ecdsa::Signature>::sign(&root, b)
+                    .to_der()
+                    .as_bytes()
+                    .to_vec())
+            })
+            .unwrap(),
+        )
+        .unwrap();
+        let ca = cbb_core::issue::admin_ca(&cbb_core::certs::DeviceId::random(), &point, &root_ca, now, &mut |b| {
+            Ok(p256::ecdsa::signature::Signer::<p256::ecdsa::Signature>::sign(&root, b).to_der().as_bytes().to_vec())
+        })
+        .unwrap();
+        put_certificate(&mut card, slot, &ca).unwrap();
+        let keys = recovery_keys(&mut card).unwrap();
+        assert_eq!(
+            keys.iter().map(|(s, _)| *s).collect::<Vec<_>>(),
+            vec![slot],
+            "self-signed certificates are no recovery keys"
+        );
+        let digest = cbb_core::certs::sha256(b"a claim");
+        verify(&mut card, "123456").unwrap();
+        sign(&mut card, slot, &point, &digest).unwrap();
+
+        // A YubiKey before 5.7, and one without metadata.
+        for alg in [0x03, 0] {
+            let mut old = new_card(15);
+            old.0.lock().unwrap().management.0 = alg;
+            select(&mut old).unwrap();
+            assert_eq!(authenticate(&mut old, &DEFAULT_MANAGEMENT_KEY).unwrap_err().message(), OLD_FIRMWARE);
+        }
+        // Every slot taken.
+        let mut full = new_card(16);
+        for s in FIRST_SLOT..=LAST_SLOT {
+            full.0.lock().unwrap().slots.entry(s).or_insert_with(|| (key(s), None));
+        }
+        select(&mut full).unwrap();
+        assert_eq!(free_slot(&mut full).unwrap_err().message(), NO_FREE_SLOT);
     }
 
     #[test]

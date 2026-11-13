@@ -257,7 +257,10 @@ its new device ID as the instance, its listening port in the SRV record and `v=1
 member publishes and browses with the `mdns-sd` crate (`member/src/discovery.rs`), which
 follows the same RFCs but not every detail below: it publishes the PTR, SRV, TXT and A/AAAA
 records of the table (the TXT with `r=listen` when it does not dial), with the addresses of its interfaces except
-loopback. The phones browse with the system's DNS-SD (iOS: `BonjourBrowser`, Android: NSD),
+loopback. A member it resolves without a TXT record (its responder sends a record it multicast
+within the last second no more) it neither dials nor drops: it browses again from a second
+daemon, whose first query carries no known answers, after 1.5 s and then every 5 s, doubled up
+to 60 s, until the TXT comes. The phones browse with the system's DNS-SD (iOS: `BonjourBrowser`, Android: NSD),
 resolve the members to their addresses and hand those to the member in the Rust core, which
 starts with its own mDNS off; a phone that is the hub publishes its home port the same way
 (`BonjourPublisher`, `NsdPublisher`).
@@ -534,7 +537,7 @@ depends on a version number.
 | `current` | Event or absent | the sender's current event with its age as of sending; for a secret a reader sends only its mark (section 5, "Secrets"), whatever its age; absent when there is none |
 | `records` | string or absent | the digest of the sender's records (section 10) |
 | `name` | string or absent | the sender's device name, 1-64 bytes; a receiver ignores an invalid one |
-| `os` | string or absent | the sender's operating system: `linux`, `windows`, `macos`, `ios`, `android`, `aurora`, `sailfish` or `none` (firmware without one); shown, never trusted; a receiver ignores an unknown one. A watch's device record says `watchos` or `wearos` (section 10) |
+| `os` | string or absent | the sender's operating system: `linux`, `windows`, `macos`, `ios`, `android`, `aurora`, `sailfish`, `harmonyos` or `none` (firmware without one); shown, never trusted; a receiver ignores an unknown one. A watch's device record says `watchos`, `wearos` or `harmonyos` (section 10) |
 | `admin_key` | string or absent | from a member with the capability `admin` that is neither the root nor an admin yet, or an admin whose admin CA is from a root before the current one: the SubjectPublicKeyInfo of its admin key, DER in base64 (section 10, "Admins") |
 | `tunnel_key` | string or absent | the sender's WireGuard public key, 32 bytes in base64, for the group's hubs (section 11) |
 | `tunnel_psk` | string or absent | always with `tunnel_key`, which a receiver ignores without it: the WireGuard preshared key the sender chose for its tunnels, 32 bytes in base64, which every hub of the group uses for it (section 11, "Several hubs") |
@@ -1008,14 +1011,14 @@ Suite CPACE-X25519-SHA512 of draft-irtf-cfrg-cpace-21, as implemented in
 | PRS (password) | the six ASCII digits of the code, or a remote invitation's secret (its raw bytes) |
 | CI (channel identifier) | `"cbb pair v2"` + one zero byte + SHA-256(member certificate DER) + SHA-256(joiner certificate DER); 23 + 1 + 32 + 32 = 88 bytes |
 | sid | 32 bytes of TLS exporter output, label `EXPERIMENTAL-cbb-pair-v2`, empty context |
-| ADa (joiner) | JSON `{"name":"<device name>","os":"linux"\|"windows"\|"macos"\|"ios"\|"android"\|"aurora"\|"sailfish"}`; a phone with the app (`ios` for an iPhone, `android` for an Android phone, `aurora` for Aurora OS, `sailfish` for Sailfish OS) adds `"admin_key"`, its admin key's SubjectPublicKeyInfo (bytes, DER), and `"admin_proof"`, that key's ECDSA signature (SHA-256, DER; bytes) over the ASCII `cbb pairing admin key`, a zero byte and `sid`; a member adds `"caps"`, its capabilities (section 4, "Capabilities"), sorted, unless it has none, and firmware without a system says `"os":"none"`; every joiner adds `"seal"`, its public key for sealed messages (bytes, 1216, as `seal` of the hello, section 4), which the admitting member puts in its device record (a phone puts its own in the record of itself it signs when it makes the group). A phone admits the phones' systems (`ios`, `android`, `aurora`, `sailfish`) as phones and records any other joiner with role `member` and its `caps`; a computer admits `linux`, `windows`, `macos` and `none` as members with their `caps`, phones that offer no admin key as members, and, only on the group's root, phones that offer one ("A phone joins a computer's group" below) |
+| ADa (joiner) | JSON `{"name":"<device name>","os":"linux"\|"windows"\|"macos"\|"ios"\|"android"\|"aurora"\|"sailfish"\|"harmonyos"}`; a phone with the app (`ios` for an iPhone, `android` for an Android phone, `aurora` for Aurora OS, `sailfish` for Sailfish OS, `harmonyos` for HarmonyOS 5 and later) adds `"admin_key"`, its admin key's SubjectPublicKeyInfo (bytes, DER), and `"admin_proof"`, that key's ECDSA signature (SHA-256, DER; bytes) over the ASCII `cbb pairing admin key`, a zero byte and `sid`; a member adds `"caps"`, its capabilities (section 4, "Capabilities"), sorted, unless it has none, and firmware without a system says `"os":"none"`; every joiner adds `"seal"`, its public key for sealed messages (bytes, 1216, as `seal` of the hello, section 4), which the admitting member puts in its device record (a phone puts its own in the record of itself it signs when it makes the group). A phone admits the phones' systems (`ios`, `android`, `aurora`, `sailfish`, `harmonyos`) as phones and records any other joiner with role `member` and its `caps`; a computer admits `linux`, `windows`, `macos` and `none` as members with their `caps`, phones that offer no admin key as members, and, only on the group's root, phones that offer one ("A phone joins a computer's group" below) |
 | ADb (member) | JSON `{"device":"<member device ID>","group":"<group tag>"}` |
 | Ya, Yb | 32-byte X25519 u-coordinates |
 | Tags Ta, Tb | HMAC-SHA-512, 64 bytes |
 
 The AD bytes are used exactly as they travel in the `ad` field. The member MUST check ADa: `os`
 is `linux`, `windows`, `macos`, `none`, or one of the phones' `ios`,
-`android`, `aurora` and `sailfish`; `name` is 1 to 64 bytes of
+`android`, `aurora`, `sailfish` and `harmonyos`; `name` is 1 to 64 bytes of
 printable UTF-8; `admin_key`, when present, comes with a phone's system and is a P-256 key, and
 `admin_proof` comes with it; `caps`,
 when present, is a sorted list of distinct known capabilities and comes from no phone; `seal`, when present, comes from no phone and is 1216 bytes. A member is recorded
@@ -1067,7 +1070,7 @@ peer cannot put words in front of the user.
 | `roots` | array of bytes, DER | only in a group that claims handed to new roots (section 10, "Handing the group over"): those roots in order, the current one last |
 | `records` | array of record envelopes (section 10) | the group's records (section 10), so the new device takes its peers at once; always with `roots`, which they must lead to; otherwise left out when they do not fit in the frame, and the new device gets them over connections that carry records only |
 | `claim_times` | array of `{record, ms}` | with `records` that hold a claim: when the admitting member first held each claim, in Unix milliseconds; the joiner takes a time that is earlier than its own and not in the future, so a claim that took effect there takes effect on the joiner too (section 10, "Handing the group over") |
-| `admin_ca` | bytes, DER | only to a phone (`ios`, `android`, `aurora` or `sailfish`) that sent `admin_key`, from the root phone or the root computer: the joiner's admin CA for that key (section 10) |
+| `admin_ca` | bytes, DER | only to a phone (`ios`, `android`, `aurora`, `sailfish` or `harmonyos`) that sent `admin_key`, from the root phone or the root computer: the joiner's admin CA for that key (section 10) |
 
 The joiner MUST check: the tag of `group_ca` equals ADb `group`; `issuer`, when present, is an
 admin CA under `group_ca` or one of `roots` (section 10); the member's TLS certificate is
@@ -1215,13 +1218,33 @@ socket's and makes again at each start unless the system, the administrators or 
 it), with mode 0600: only root and the
 service's user (on Windows the system, administrators and the service's account) can
 connect. `CBB_ADMIN_SOCKET` overrides its path for clients. The control socket takes only
-`copy`, `paste`, `copy_media`, `copied_media`, `paste_media`, `config`, `status`, `devices`, `muted`, `sync` without `device`, `release`, `release_get`, `release_held`, `entries`, `entries_get`, `keys` (from root only) and `watch` (with
-the watcher's `copied`, `clipboard`, `injected` and `acted`) and refuses every other operation with an error; the admin socket takes them
-all, and MUST be the only way to them. So a program of a user in the group can use the clipboard but cannot admit, remove,
+`copy`, `paste`, `copy_media`, `copied_media`, `paste_media`, `config`, `status`, `devices`, `muted`, `sync` without `device`, `release`, `release_get`, `release_held`, `entries`, `entries_get`, `keys` (from root only), `confirm` and `watch` (with
+the watcher's `copied`, `clipboard`, `injected` and `acted`), and every other operation only once the user at the screen
+confirmed it with the system's prompt, which the service checks itself (below); the admin socket takes them
+all without one, and MUST be the only other way to them. So a program of a user in the group can use the clipboard but cannot admit, remove,
 rename, freeze or make admin a device, take over, or change sync away from home. `cbb` dials the socket each operation needs. The lite member does the same
 with its own two sockets, but its control socket takes fewer: no `copy_media`, `copied_media`,
 `paste_media`, `config`, `release`, `release_get`, `entries`, `entries_get` or `keys`, and of the watcher's reports no
 `acted`.
+
+An admin operation on the control socket carries `auth` in its `args` where the system needs
+it, and the service takes it only when the confirmation holds (docs/design.md, "Confirming admin
+actions"): on macOS `auth` is the base64 external form (32 bytes) of the caller's authorization,
+which must hold the right `tools.cbb.admin` for five minutes, or `tools.cbb.admin.each`. One
+confirmation covers the group's everyday changes for five minutes (`sync` of another device,
+`mute`, `unmute`, `rename`, `remove`, `freeze`, `thaw`, `resolve`, `incoming`, `pair`, `join`,
+`invite`, `network`, `away`, `hubs`, `paste_on`, `paste_receive`, `keyboard`, `remote`, the
+quick actions' operations, `release_file`, `release_want` and `update_way`); every other
+operation, such as `new`, `leave`, `take_over`, `recover`, `hand_over`, `key_level`,
+`takeover_delay` and `make_admin`, is confirmed each time, and `confirm_key` only on the admin
+socket. On Linux polkit
+must authorize the calling process for the action of the same name, and `auth` is empty; on
+Windows `auth` is `CHALLENGE.SIGNATURE`, both base64: the RSASSA-PKCS1-v1_5 SHA-256 signature,
+by the user's registered Windows Hello key, of `cbb confirm v1\n`, the operation, `\n` and the
+challenge's 32 bytes. `mute` and `unmute` of the device itself need no `auth`. A refusal says
+`the confirmation was cancelled` when the user cancelled the prompt, and `this computer cannot
+confirm the admin action for this user, so only the administrator may run it` when nothing
+confirms it.
 
 ### Framing
 
@@ -1536,7 +1559,7 @@ and `a`-`f`.
 | `name` | string | `device` | 1 to 64 bytes of UTF-8, no control character (U+0000 to U+001F, U+007F to U+009F) |
 | `role` | string | `device` | `member`, `phone` or `watch` |
 | `caps` | array of strings | none | sorted, each once; from `admin`, `dials`, `hub` (section 4, "Capabilities"); only with role `member`. A `member` record that names `admin` MUST have `admin` in `caps` |
-| `os` | string | none | `linux`, `windows`, `macos`, `ios`, `android`, `aurora`, `sailfish`, `watchos`, `wearos` or `none` |
+| `os` | string | none | `linux`, `windows`, `macos`, `ios`, `android`, `aurora`, `sailfish`, `harmonyos`, `watchos`, `wearos` or `none` |
 | `key` | string | `device` | a key hash: the member key (for a watch, its admin key) |
 | `admin` | string | `recovery`, `handover` | a key hash: the admin key its admin CA certifies; only in a record a root's own key signed |
 | `powers` | array of strings | none | sorted; from `admit`, `renew`, `remove`, `remove-admins`, `freeze`, `thaw`, `takeover`, `hub`; only with `admin` |
@@ -1609,7 +1632,7 @@ makes the admin, not by each member from other records.
 
 #### Watches
 
-A watch's admin key sits in its Secure Enclave or Keystore, but a watch on the wrist signs
+A watch's admin key sits in its Secure Enclave, Keystore or HUKS, but a watch on the wrist signs
 without Face ID or a fingerprint, so its powers are few: the root's `device` record for it
 has role `watch`, `powers` `freeze` and `remove`, and `commands` `paste-off`, `actions-off`,
 `away-off` and `action` (the table above). So it removes devices but no admin, freezes
@@ -3905,7 +3928,7 @@ frames (section 4, "Content"); `records`, `admin` (section 10); `tunnel`, `hubs`
 | Role (hello) | `member`, `phone` | 4 |
 | Role (device record) | `member`, `phone`, `watch` | 10 |
 | Capabilities (hello `caps`, record `caps`, ADa `caps`) | `admin`, `dials`, `hub` | 4 |
-| System (`os`) | `linux`, `windows`, `macos`, `ios`, `android`, `aurora`, `sailfish`, `watchos`, `wearos`, `none` | 4, 10 |
+| System (`os`) | `linux`, `windows`, `macos`, `ios`, `android`, `aurora`, `sailfish`, `harmonyos`, `watchos`, `wearos`, `none` | 4, 10 |
 | Device form | `laptop`, `desktop`, `phone`, `tablet`, `tv`, `board`, `server`, `router`, `console`, `watch`, `retro`, `other` | 4 |
 | Event `kind` | `text`, `secret`, `media` | 4 |
 | Event `via` | `copy`, `phone`, `universal-clipboard` | 4 |

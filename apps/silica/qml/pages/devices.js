@@ -27,6 +27,7 @@ function system(d) {
     case "android": return "Android"
     case "aurora": return "Aurora OS"
     case "sailfish": return "Sailfish OS"
+    case "harmonyos": return "HarmonyOS"
     case "watchos": return "watchOS"
     case "wearos": return "Wear OS"
     case "": return ""

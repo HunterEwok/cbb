@@ -200,6 +200,38 @@ impl SignatureVerificationAlgorithm for RsaPssRsae {
     }
 }
 
+/// Whether a key made signature over message with the certificate
+/// signature algorithm whose OID is algorithm (ECDSA or RSA PKCS #1 v1.5
+/// with SHA-256, SHA-384 or SHA-512), as an Android attestation chain is
+/// signed (crate::attest): key_alg and curve are the OIDs of the key's
+/// SubjectPublicKeyInfo, key its bits (a SEC 1 point or an RSAPublicKey).
+pub fn verify_signed(
+    key_alg: &str,
+    curve: &str,
+    key: &[u8],
+    algorithm: &str,
+    message: &[u8],
+    signature: &[u8],
+) -> bool {
+    let hash = match algorithm {
+        "1.2.840.10045.4.3.2" | "1.2.840.113549.1.1.11" => Hash::Sha256,
+        "1.2.840.10045.4.3.3" | "1.2.840.113549.1.1.12" => Hash::Sha384,
+        "1.2.840.10045.4.3.4" | "1.2.840.113549.1.1.13" => Hash::Sha512,
+        _ => return false,
+    };
+    let ecdsa = algorithm.starts_with("1.2.840.10045.4.3.");
+    match (key_alg, curve, ecdsa) {
+        ("1.2.840.10045.2.1", "1.2.840.10045.3.1.7", true) => {
+            Ecdsa(Curve::P256, hash).verify_signature(key, message, signature).is_ok()
+        }
+        ("1.2.840.10045.2.1", "1.3.132.0.34", true) => {
+            Ecdsa(Curve::P384, hash).verify_signature(key, message, signature).is_ok()
+        }
+        ("1.2.840.113549.1.1.1", _, false) => rsa_verify(Padding::Pkcs1, hash, key, message, signature).is_ok(),
+        _ => false,
+    }
+}
+
 const MIN_BITS: usize = 2048;
 const MAX_BITS: usize = 8192;
 
@@ -245,6 +277,14 @@ fn rsa_verify(padding: Padding, hash: Hash, key: &[u8], message: &[u8], sig: &[u
         Padding::Pss => pss_matches(hash, &em, mod_bits, message),
     };
     if ok { Ok(()) } else { Err(InvalidSignature) }
+}
+
+/// Whether sig is an RSASSA-PKCS1-v1_5 signature with SHA-256 of message by
+/// the RSA public key key (PKCS #1 RSAPublicKey, DER): how a Windows Hello
+/// key signs, which confirms an admin action on Windows (the lite member's
+/// confirm.rs).
+pub fn verify_rsa_pkcs1_sha256(key: &[u8], message: &[u8], sig: &[u8]) -> bool {
+    rsa_verify(Padding::Pkcs1, Hash::Sha256, key, message, sig).is_ok()
 }
 
 /// sig^e mod n, big-endian in as many bytes as n.
@@ -361,6 +401,25 @@ mod tests {
 
     fn hex(s: &str) -> Vec<u8> {
         (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+    }
+
+    /// A Windows Hello signature as cbb checks it: RSASSA-PKCS1-v1_5 with
+    /// SHA-256 by a 2048-bit key (made with openssl for this test).
+    #[test]
+    fn hello_signature() {
+        let key = hex(
+            "3082010a0282010100ec5f381b47645a4642c2d4bd006005d24f142f23a82a9db0329e66bc60d16e0d10ded77b5c88ecedffee053cc986cdf0cbbae0240a65541b0d0a5e92cd4ef9e0fb1f4b235116255b0a7cc3d41d0be90ee94be6bd0dbdeed47c27c399c25a9853792bc875343c68bc3267977e76b3755c26cbda4fca2eada8b2b9fe220c74a0d354c8596e37f8ae79ab0275d5e8b183cc248d2b8ef1c6c9c95729c2301749cf1ba32f2dc51c60ea867a1bcc676d0139597d766dfeec89155232e8eef5b2ef1cd5a6fac556d2331630f8a4e049662b616d78dcaa8eb1eca77d096334223f4993190a0310c6b258b6f78c419a885801c06e2aca40baa9b3fdf025b4e9399c7525850203010001",
+        );
+        let sig = hex(
+            "856feb00c07a4c7b96145fe29a4515baa137781575cd6fbe3207e0690cee353c0f5afb9bc059908a3981ace2b7701a0c8134aa02cd43c7ea845ea6e7b50dfab6346497497279a1e00628d038bfb4824c2d4e368a33c1428e1e648212445e26ee9f14437d2228165313a3acfcbf1532cc518d4ac08b08c7a98a2e60d5926a3a2a0c8e0260764a121b9ecd0c29df2a2940d6749e79d15df3ca6679a74b12960d2fd30fe29b70465ae45c59a7901094c6dab9f33bd3cdc93cc85d4aed9373e269737f47618f555c9a8cbf98c3a2d7442b725db10656b243261392d150e5341b1992ff23188204da58845822fb4b8fa99a2e3e2e5dc62ebc4212fb56208bfb9714be",
+        );
+        let msg = b"cbb confirm v1\nremove\n0123456789abcdef0123456789abcdef";
+        assert!(verify_rsa_pkcs1_sha256(&key, msg, &sig));
+        assert!(!verify_rsa_pkcs1_sha256(&key, b"cbb confirm v1\nrevoke\n0123456789abcdef0123456789abcdef", &sig));
+        let mut bad = sig.clone();
+        bad[10] ^= 1;
+        assert!(!verify_rsa_pkcs1_sha256(&key, msg, &bad));
+        assert!(!verify_rsa_pkcs1_sha256(&key[1..], msg, &sig));
     }
 
     fn algorithm(name: &str) -> &'static dyn SignatureVerificationAlgorithm {

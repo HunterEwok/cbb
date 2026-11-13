@@ -83,6 +83,16 @@ pub fn is_guest(a: &Ipv6Addr) -> bool {
     a.octets()[..4] == GUEST_PREFIX
 }
 
+/// Whether ip, a packet from a client, opens a connection to the member
+/// port: an IPv6 packet without extension headers whose TCP segment is a
+/// SYN to that port.
+fn opens_member_port(ip: &[u8]) -> bool {
+    const SYN: u8 = 0x02;
+    const ACK: u8 = 0x10;
+    let (Some(&6), Some(port), Some(&flags)) = (ip.get(6), ip.get(42..44), ip.get(53)) else { return false };
+    port == MEMBER_PORT.to_be_bytes() && flags & (SYN | ACK) == SYN
+}
+
 /// The running hub. Dropping it stops it and every connection through it.
 pub struct Hub {
     port: u16,
@@ -108,11 +118,13 @@ impl Hub {
         log: Arc<dyn Fn(&str) + Send + Sync>,
     ) -> Result<Hub> {
         let own = crate::tunnel::addr(device).ok_or_else(|| Error::msg(format!("{device} is not a device ID")))?;
-        Hub::start_at(key, own, obfuscation, peers, listen, target, log)
+        Hub::start_at(key, own, obfuscation, peers, listen, target, MAX_BRIDGES, log)
     }
 
     /// Starts the hub as start does, at the tunnel address own in place of
-    /// a device's: the blind relay's.
+    /// a device's: the blind relay's, which passes the connections of many
+    /// devices at once, at most max_bridges of them.
+    #[allow(clippy::too_many_arguments)]
     pub fn start_at(
         key: &[u8; 32],
         own: Ipv6Addr,
@@ -120,6 +132,7 @@ impl Hub {
         peers: Vec<Peer>,
         listen: SocketAddr,
         target: Target,
+        max_bridges: usize,
         log: Arc<dyn Fn(&str) + Send + Sync>,
     ) -> Result<Hub> {
         check_peers(&peers, own)?;
@@ -158,6 +171,7 @@ impl Hub {
             sockets: SocketSet::new(Vec::new()),
             listening: Vec::new(),
             bridges: Vec::new(),
+            max_bridges,
             target,
             dialed: dialed.clone(),
             log,
@@ -273,6 +287,9 @@ struct Pump {
     sockets: SocketSet<'static>,
     listening: Vec<Listening>,
     bridges: Vec<Bridge>,
+    /// The most connections it passes at once, the ones being opened
+    /// counted.
+    max_bridges: usize,
     target: Target,
     dialed: Dialed,
     log: Arc<dyn Fn(&str) + Send + Sync>,
@@ -491,9 +508,27 @@ impl Pump {
         busy
     }
 
-    /// Keeps LISTENERS sockets listening on the member port.
+    /// Keeps LISTENERS sockets listening on the member port, and one more
+    /// for each connection the clients just opened, so that none of them
+    /// finds the port closed; all within max_bridges.
     fn listen(&mut self) {
-        while self.listening.len() < LISTENERS && self.bridges.len() + self.listening.len() < MAX_BRIDGES {
+        let opening = self.dev.rx.iter().filter(|ip| opens_member_port(ip)).count();
+        let want = LISTENERS.max(opening);
+        let sockets = &mut self.sockets;
+        let mut free = 0;
+        // The sockets a burst left listening go once it is over.
+        self.listening.retain(|l| {
+            if sockets.get::<tcp::Socket>(l.handle).state() != tcp::State::Listen {
+                return true;
+            }
+            free += 1;
+            if free > want {
+                sockets.remove(l.handle);
+                return false;
+            }
+            true
+        });
+        while free < want && self.bridges.len() + self.listening.len() < self.max_bridges {
             let mut sock = tcp::Socket::new(
                 tcp::SocketBuffer::new(vec![0; TCP_BUFFER]),
                 tcp::SocketBuffer::new(vec![0; TCP_BUFFER]),
@@ -505,6 +540,7 @@ impl Pump {
             }
             let handle = self.sockets.add(sock);
             self.listening.push(Listening { handle });
+            free += 1;
         }
     }
 
@@ -553,6 +589,7 @@ impl Pump {
                 up: Vec::new(),
                 down: Vec::new(),
                 local_eof: false,
+                ending: None,
                 done: false,
             });
         }

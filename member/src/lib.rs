@@ -31,6 +31,7 @@ pub mod bugd;
 mod bugs;
 pub mod button;
 mod cli;
+mod confirm;
 pub mod content;
 pub mod control;
 mod copies;
@@ -60,6 +61,8 @@ mod leave;
 mod logfile;
 mod media_cli;
 mod mute;
+#[cfg(all(test, feature = "tunnel"))]
+mod nettest;
 pub mod networks;
 mod next;
 mod nextimage;
@@ -72,7 +75,9 @@ mod pastehelper;
 pub mod peer;
 mod peripheral;
 pub mod phone;
-mod piv;
+#[cfg(feature = "tunnel")]
+mod phone_attest;
+pub mod piv;
 pub mod records;
 #[cfg(feature = "tunnel")]
 pub mod relay;
@@ -336,6 +341,10 @@ pub fn main() {
                 "network" => cli::network(&g, rest),
                 "forward" | "relay" => servers::run(&g, cmd, rest),
                 "install" => servers::install(rest),
+                // Run by cbb itself as the administrator, through UAC.
+                "confirm-key" => confirm::register_cli(rest, &|q| {
+                    request(&g, &control::Message::new(q, Vec::new())).map(|m| m.header)
+                }),
                 "version" | "-version" | "--version" => {
                     // Never to be mistaken for a release: its certificates
                     // last minutes.
@@ -366,7 +375,7 @@ pub fn main() {
                 Ok(()) => 0,
                 Err(e) => {
                     eprintln!("cbb: {}", e.for_user());
-                    if cli::is_usage(&e) { 2 } else { 1 }
+                    if cli::is_usage(&e) { 2 } else { confirm::exit_code(&e).unwrap_or(1) }
                 }
             }
         }
@@ -977,19 +986,34 @@ fn in_group(g: &Global) -> bool {
 
 /// Sends one request to the service and returns its answer.
 pub(crate) fn request(g: &Global, m: &control::Message) -> Result<control::Message> {
-    let conn = open(g, &m.header)?;
+    let mut m = m.clone();
+    let conn = open(g, &mut m.header)?;
     let mut w = conn.try_clone().context("cannot reach the service")?;
-    control::write(&mut w, m)?;
+    control::write(&mut w, &m)?;
     let answer = control::Reader::new(conn).read()?.ok_or_else(|| Error::msg("the service closed the connection"))?;
     check(answer)
 }
 
 /// Connects to the socket for a request with the header h: the
 /// administrator's for what changes the group, the control socket else.
-pub(crate) fn open(g: &Global, h: &control::Header) -> Result<UnixStream> {
+/// Without the administrator's, an admin request goes on the control
+/// socket, where the user confirms it with the system's prompt
+/// (confirm.rs), which fills in h.auth.
+pub(crate) fn open(g: &Global, h: &mut control::Header) -> Result<UnixStream> {
     Ok(if control::needs_admin(h) {
         let path = control::admin_socket(&g.socket);
         match UnixStream::connect(&path) {
+            // Muting or unmuting this device itself the service also takes
+            // on the control socket, and says no there for another device.
+            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied && control::is_own_device_op(&h.op) => {
+                connect(g)?
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied && confirm::supported() => {
+                // Confirmed first: the service waits a short time only for
+                // a connection's first request.
+                confirm::prepare(h, &|q| request(g, &control::Message::new(q, Vec::new())).map(|m| m.header))?;
+                connect(g)?
+            }
             Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
                 return Err(Error::msg(tr!(
                     "this command changes the group, so only the administrator may run it; run it with sudo"

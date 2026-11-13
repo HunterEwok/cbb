@@ -816,7 +816,10 @@ func TestControlSocketMode(t *testing.T) {
 }
 
 // TestAdminOpsOnlyOnTheAdminSocket checks that the control socket, which the
-// members of the service's group reach, refuses what changes the group.
+// members of the service's group reach, refuses what changes the group
+// unless the user at the screen confirmed it, which nobody does here (no
+// polkit agent in the test's session; docs/design.md, "Confirming admin
+// actions").
 func TestAdminOpsOnlyOnTheAdminSocket(t *testing.T) {
 	var h hub
 	pi := startService(t, &h, "pi")
@@ -827,7 +830,7 @@ func TestAdminOpsOnlyOnTheAdminSocket(t *testing.T) {
 		}
 		_, err = c.Do(&control.Message{Header: control.Header{Op: op, Name: "x"}})
 		c.Close()
-		if err == nil || !strings.Contains(err.Error(), "admin socket") {
+		if err == nil || !strings.Contains(err.Error(), "administrator") {
 			t.Errorf("%s on the control socket: %v", op, err)
 		}
 	}

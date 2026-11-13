@@ -31,6 +31,9 @@ pub enum Change<'a> {
     Rename(&'a str),
     /// End every freeze of a frozen admin.
     Thaw,
+    /// Freeze an admin computer's admin key, as a watch does from the
+    /// wrist (docs/protocol.md, section 10, "Watches").
+    Freeze,
     /// As the root, void the records an alert names: both histories of a
     /// key, or a claim (docs/protocol.md, section 10, "Stopping the
     /// exchange"). It names no device.
@@ -182,6 +185,17 @@ fn change_body(rs: &Records, s: &Signer, device: &str, c: &Change, now_ms: i64) 
             b.kind = authority::TYPE_THAW.into();
             b.records = freezes;
         }
+        Change::Freeze => {
+            let Some(admin) = d.admin_key else { return Err(Error::msg("only an admin is frozen")) };
+            if d.frozen {
+                return Err(Error::msg("the device is frozen already"));
+            }
+            if d.powers.iter().any(|p| p == authority::POWER_REMOVE_ADMINS) {
+                return Err(Error::msg("an admin that removes admins is frozen only by the root, who removes it"));
+            }
+            b.kind = authority::TYPE_FREEZE.into();
+            b.keys = alloc::vec![Hash(admin)];
+        }
         Change::Resolve(_) => {}
     }
     Ok(b)
@@ -195,6 +209,72 @@ pub fn change(rs: &Records, s: &Signer, device: &str, c: &Change, now_ms: i64) -
     let body = rs.next_body(change_body(rs, s, device, c, now_ms)?)?;
     let sig = identity::sign_external(s.key, &body)?;
     Ok(Record::new(body, sig, s.chain(rs)))
+}
+
+/// What an attestation showed of a key: the store and kind a device record
+/// names and the proof it keeps (docs/protocol.md, section 10).
+#[derive(Debug, Clone, Copy)]
+pub struct Attested<'a> {
+    pub store: &'a str,
+    pub kind: &'a str,
+    pub proof: &'a str,
+}
+
+/// Signs, as the group's root, a device record of device that says what an
+/// attestation of its member key (key, as the record lists it) showed
+/// (docs/protocol.md, section 17, "Evidence"). An
+/// attestation that no longer counts because its chain was revoked comes
+/// as store "hardware" with no kind, and changes only a record that says
+/// "proven". None when the records already say it, or list another key for
+/// the device (it sends the evidence again when it next connects).
+pub fn evidence(
+    rs: &Records,
+    s: &Signer,
+    device: &str,
+    key: &KeyHash,
+    shown: &Attested<'_>,
+    now_ms: i64,
+) -> Result<Option<Record>> {
+    let Attested { store, kind, proof } = *shown;
+    s.check(rs)?;
+    if !rs.state().roots.contains(&s.hash()) {
+        return Err(Error::msg("only the group's root records what an attestation shows"));
+    }
+    let Some(d) = rs.devices().into_iter().find(|d| d.id == device) else { return Ok(None) };
+    if d.key != *key {
+        return Ok(None);
+    }
+    let mut kind = String::from(kind);
+    if kind.is_empty() && store == "hardware" {
+        if d.store != "proven" {
+            return Ok(None);
+        }
+        kind = d.kind.clone();
+    } else if d.store == store && d.kind == kind {
+        return Ok(None);
+    }
+    let mut b =
+        Body { v: 2, alg: authority::ALG_ES256.into(), signer: s.hash(), time_ms: now_ms, ..Default::default() };
+    b.kind = authority::TYPE_DEVICE.into();
+    b.device = d.id.clone();
+    b.name = d.name.clone();
+    b.role = d.role.clone();
+    b.caps = d.caps.clone();
+    b.os = d.os.clone();
+    b.key = Some(Hash(d.key));
+    b.admin = d.admin_key.map(Hash);
+    if d.admin_key.is_some() {
+        b.powers = d.powers.clone();
+        b.commands = d.commands.clone();
+    }
+    b.store = String::from(store);
+    b.hardware = kind;
+    b.proof = String::from(proof);
+    b.seal = d.seal.clone();
+    b.forward_only = d.forward_only;
+    let body = rs.next_body(b)?;
+    let sig = identity::sign_external(s.key, &body)?;
+    Ok(Some(Record::new(body, sig, s.chain(rs))))
 }
 
 /// Signs a command for device, sealed to its key for sealed messages when
@@ -463,6 +543,93 @@ pub fn make_admin(
     let body = rs.next_body(b)?;
     let sig = identity::sign_external(s.key, &body)?;
     Ok(NewAdmin { admin_ca: ca, record: Record::new(body, sig, None) })
+}
+
+/// The systems a watch's device record may name.
+pub const WATCH_SYSTEMS: [&str; 3] = ["watchos", "wearos", "harmonyos"];
+
+/// Makes a watch an admin of the group with the admin key point it made,
+/// as the group's root (docs/protocol.md, section 10, "Watches"): its admin
+/// CA and its device record, role watch, whose powers are freeze and remove
+/// and whose commands are those that turn things off or run a quick action.
+/// device is the ID the watch picked, new to the group.
+pub fn add_watch(
+    rs: &Records,
+    s: &Signer,
+    device: &str,
+    name: &str,
+    os: &str,
+    point: &[u8],
+    now_ms: i64,
+) -> Result<NewAdmin> {
+    if !rs.state().roots.contains(&s.hash()) {
+        return Err(Error::msg("only the group's root makes a watch an admin"));
+    }
+    if !WATCH_SYSTEMS.contains(&os) {
+        return Err(Error::msg("a watch runs watchOS, Wear OS or HarmonyOS"));
+    }
+    if rs.devices().iter().any(|d| d.id == device) {
+        return Err(Error::msg("the watch's device ID is in the group already"));
+    }
+    let name = name.trim();
+    if !authority::valid_name(name) {
+        return Err(Error::msg("a name has 1 to 64 bytes and no control characters"));
+    }
+    let id = certs::DeviceId::parse(device)?;
+    let ca = issue::admin_ca(&id, point, s.ca, now_ms / 1000, &mut |tbs| identity::sign_external(s.key, tbs))?;
+    let admin = Hash(Cert::parse(&ca)?.key_hash());
+    let b = Body {
+        v: 2,
+        alg: authority::ALG_ES256.into(),
+        kind: authority::TYPE_DEVICE.into(),
+        signer: s.hash(),
+        time_ms: now_ms,
+        device: id.to_string(),
+        name: name.to_string(),
+        role: authority::ROLE_WATCH.into(),
+        os: os.to_string(),
+        key: Some(admin),
+        admin: Some(admin),
+        powers: WATCH_POWERS.iter().map(|p| (*p).into()).collect(),
+        commands: WATCH_COMMANDS.iter().map(|c| (*c).into()).collect(),
+        store: "hardware".into(),
+        ..Default::default()
+    };
+    let body = rs.next_body(b)?;
+    let sig = identity::sign_external(s.key, &body)?;
+    Ok(NewAdmin { admin_ca: ca, record: Record::new(body, sig, None) })
+}
+
+/// A watch's powers and commands, sorted (docs/protocol.md, section 10,
+/// "Watches").
+pub const WATCH_POWERS: [&str; 2] = [authority::POWER_FREEZE, authority::POWER_REMOVE];
+pub const WATCH_COMMANDS: [&str; 4] = ["action", "actions-off", "away-off", "paste-off"];
+
+/// What a watch may do to device from the wrist: freeze it when it is an
+/// admin that removes no admins (another watch, say a lost one), remove it
+/// when it is no admin, and send a member the commands that turn things
+/// off or run a quick action; nothing to the root or a phone.
+pub fn watch_actions(rs: &Records, device: &str) -> Vec<&'static str> {
+    let Some(d) = rs.devices().into_iter().find(|d| d.id == device) else { return Vec::new() };
+    if rs.root_member().is_some_and(|(r, _)| r == device) {
+        return Vec::new();
+    }
+    let watch = d.role == "watch";
+    if d.role != authority::ROLE_MEMBER && !watch {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    if d.admin_key.is_some() && !d.frozen && !d.powers.iter().any(|p| p == authority::POWER_REMOVE_ADMINS) {
+        out.push("freeze");
+    }
+    if watch {
+        return out;
+    }
+    if d.admin_key.is_none() && !d.admin {
+        out.push("remove");
+    }
+    out.extend(["paste-off", "actions-off", "away-off", "action"]);
+    out
 }
 
 /// A renewed member certificate for a peer's chain (leaf first), when the

@@ -3,10 +3,9 @@
 
 //! The Rust core's one entry point as C functions (docs/core-api.md), for
 //! every program that links the core: `cbb_call`, `cbb_free` and `cbb_abi`,
-//! declared in `include/cbb_core.h`. Go links them through cgo, the Swift
-//! kit through that header and the Kotlin kit through JNA, so the phones
-//! do not write the group's rules again and none of them needs generated
-//! bindings. A request and its answer are JSON bytes, so the binding stays
+//! declared in `include/cbb_core.h`. The Swift kit links them through that
+//! header and the Kotlin kit through JNA, so the phones do not write the
+//! group's rules again and none of them needs generated bindings. A request and its answer are JSON bytes, so the binding stays
 //! one function wide and each caller decodes with its own JSON reader.
 
 // As in the core: nothing outside the tests may panic, since a panic here is
@@ -134,12 +133,16 @@ pub mod invite;
 pub mod join;
 #[cfg(feature = "member")]
 pub mod member;
+#[cfg(feature = "member")]
+pub mod piv;
 #[cfg(feature = "join")]
 pub mod qr;
 #[cfg(feature = "member")]
 pub mod restore;
 #[cfg(feature = "tunnel")]
 pub mod tunnel;
+#[cfg(feature = "member")]
+pub mod watch;
 
 /// Hands an answer to C: its bytes, which the caller gives back with
 /// `cbb_free`, their length written to `answer_len` when not null.
@@ -435,6 +438,32 @@ pub unsafe extern "C" fn cbb_restore(
     to_c(restore::restore(req, sign, ctx as usize), answer_len)
 }
 
+/// Runs one step with the group's recovery key on a YubiKey (src/piv.rs):
+/// `request` is `{"op", ...}` (make, put, issue or sign) and `transmit`
+/// with `ctx` carries each APDU to the card during this call only. Returns
+/// the answer, `{"ok"}` or `{"error"}`, with its length in `answer_len`.
+///
+/// # Safety
+///
+/// `request` must point to `len` readable bytes, `answer_len` must be
+/// writable, and `transmit` must be callable with `ctx` until it returns.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_piv(
+    request: *const u8,
+    len: usize,
+    transmit: piv::TransmitFn,
+    ctx: *mut core::ffi::c_void,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    if request.is_null() || answer_len.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    to_c(guard::answer(|| piv::run(req, transmit, ctx as usize)), answer_len)
+}
+
 /// Asks the member: `request` is `{"op", "args"}` (src/member.rs,
 /// docs/core-api.md, "The member"), the answer `{"ok"}` or `{"error"}`.
 /// It may block: `fetch`, `command` and `wait` wait for the network, so the
@@ -460,6 +489,32 @@ pub unsafe extern "C" fn cbb_member_call(
     // SAFETY: the caller gives len readable bytes at request.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
     to_c(guard::answer(|| m.call(req)), answer_len)
+}
+
+/// Makes the member keep the group's server credentials and serve as one
+/// of the group's hubs or meet it at a blind relay, as the service does
+/// (src/member.rs, servers), with the app's keys for the servers behind
+/// `keys` (member::KeysFn), which must work with `ctx` from any thread for
+/// the rest of the process. The answer is `{"ok"}` or `{"error"}`.
+///
+/// # Safety
+///
+/// `m` must be a member of `cbb_member_start`, not stopped, and
+/// `answer_len` writable.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_member_servers(
+    m: *const member::Member,
+    keys: member::KeysFn,
+    ctx: *mut core::ffi::c_void,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    // SAFETY: as the function's contract says.
+    let Some(m) = (unsafe { m.as_ref() }) else { return core::ptr::null_mut() };
+    if answer_len.is_null() {
+        return core::ptr::null_mut();
+    }
+    to_c(guard::answer(|| m.servers(keys, ctx as usize)), answer_len)
 }
 
 /// Signs an admin's change to a device of the group, or a command for it
@@ -492,6 +547,65 @@ pub unsafe extern "C" fn cbb_member_manage(
     // SAFETY: the caller gives len readable bytes at request.
     let req = unsafe { core::slice::from_raw_parts(request, len) };
     to_c(guard::answer(|| m.manage(req, sign, ctx as usize)), answer_len)
+}
+
+/// Signs a manage request as `cbb_member_manage` does, with a slot's key on
+/// the app's YubiKey (src/piv.rs): `request` adds `pin` and `slot` to
+/// manage's fields, `public` the slot's key point, and `transmit` with
+/// `ctx` carries each APDU to the card during this call only.
+///
+/// # Safety
+///
+/// As `cbb_member_manage`, with `transmit` callable with `ctx` until the
+/// call returns.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_member_manage_card(
+    m: *const member::Member,
+    request: *const u8,
+    len: usize,
+    transmit: piv::TransmitFn,
+    ctx: *mut core::ffi::c_void,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    // SAFETY: as the function's contract says.
+    let Some(m) = (unsafe { m.as_ref() }) else { return core::ptr::null_mut() };
+    if request.is_null() || answer_len.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    to_c(guard::answer(|| piv::manage(m, req, transmit, ctx as usize)), answer_len)
+}
+
+/// Does what the app's watch asked from the wrist (src/watch.rs): as
+/// `cbb_member_manage`, signed by the watch's admin key, which `sign_body`
+/// with `ctx` reaches over the app's link to the watch and which is shown
+/// each record or command whole. `request` is
+/// `{"action","device","watch","public","admin_ca","name"}`.
+///
+/// # Safety
+///
+/// As `cbb_member_manage`, with `sign_body` callable with `ctx` until the
+/// call returns.
+#[cfg(feature = "member")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn cbb_member_manage_watch(
+    m: *const member::Member,
+    request: *const u8,
+    len: usize,
+    sign_body: watch::SignBodyFn,
+    ctx: *mut core::ffi::c_void,
+    answer_len: *mut usize,
+) -> *mut u8 {
+    // SAFETY: as the function's contract says.
+    let Some(m) = (unsafe { m.as_ref() }) else { return core::ptr::null_mut() };
+    if request.is_null() || answer_len.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: the caller gives len readable bytes at request.
+    let req = unsafe { core::slice::from_raw_parts(request, len) };
+    to_c(guard::answer(|| m.manage_watch(req, sign_body, ctx as usize)), answer_len)
 }
 
 /// Starts admitting a device by its QR code, as an admin of the group
