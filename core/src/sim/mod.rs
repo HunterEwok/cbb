@@ -32,6 +32,7 @@ use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::content::Content;
 use crate::copies::fresh::{Fresh, Marks, Seen as SeenCopy};
@@ -974,10 +975,19 @@ impl World {
             // Any two changes at one seq are a fork, whether written at
             // once on purpose or by members that did not know each other's.
             let (seq, id) = (written.record.body().seq, written.record.id());
+            let mut forked = false;
             for (s, other) in &self.heads {
                 if *s == seq {
                     self.forks.push((*other, id));
+                    forked = true;
                 }
+            }
+            if forked {
+                // By which act: the recovery key used twice on purpose
+                // (a change asked twice, two carriers), or by members of
+                // a split network that did not know each other's change.
+                let n = if fork { &FORKS_TWICE } else { &FORKS_SPLIT };
+                n.fetch_add(1, Ordering::Relaxed);
             }
             self.heads.push((seq, id));
             let mut records = alloc::vec![written.record.clone()];
@@ -1248,6 +1258,44 @@ impl World {
         self.quiet()?;
         self.no_twins()?;
         let (mut group, mut state) = self.settled()?;
+        let recovery_fork = state.fork.is_some_and(|(_, a, b)| {
+            self.members.iter().any(|m| {
+                [a, b]
+                    .iter()
+                    .any(|id| m.live.set.get(id).is_some_and(|r| matches!(r.body().kind, Kind::Recovery { .. })))
+            })
+        });
+        if state.halted() && recovery_fork {
+            // Two changes of root at one seq stop the group for good (rule
+            // 33): every member that holds both heads is halted and seals
+            // nothing, the recovery key cannot write past it, and the group
+            // is made again.
+            let (_, a, b) = state.fork.unwrap();
+            for i in 0..self.members.len() {
+                let m = &self.members[i].live;
+                if m.set.contains(&a) && m.set.contains(&b) {
+                    if !m.state.halted() {
+                        return Err(format!("m{i} holds both changes of root at one seq and is not halted"));
+                    }
+                    if self.copy(i, None).is_some() {
+                        return Err(format!("halted m{i} sealed a copy"));
+                    }
+                }
+            }
+            return match self.change_root(false, true) {
+                Err(e) if e.starts_with("the recovery key could not end the halt") => Ok(()),
+                Err(e) => Err(e),
+                Ok(())
+                    if self
+                        .on_members()
+                        .iter()
+                        .all(|i| !self.admitted[*i] || !self.members[*i].live.state.halted()) =>
+                {
+                    Err(String::from("a change of root was written past two changes at one seq"))
+                }
+                Ok(()) => Ok(()),
+            };
+        }
         if state.halted() {
             // Halted, records are still taken: every member holds the
             // same records and the same state.
@@ -1310,6 +1358,9 @@ fn shrink(seed: u64, steps: usize) -> usize {
 
 /// Root twins (two writers with one key) are made only with SIM_TWINS=1
 /// until the core halts on two histories of the root.
+static FORKS_TWICE: AtomicUsize = AtomicUsize::new(0);
+static FORKS_SPLIT: AtomicUsize = AtomicUsize::new(0);
+
 fn twins_on() -> bool {
     env("SIM_TWINS") == Some(1)
 }
@@ -1331,9 +1382,13 @@ fn groups_under_faults_agree() {
     // SIM_ALL=1 runs every seed and lists each failure, for a nightly run.
     let all = env("SIM_ALL") == Some(1);
     let mut failed = Vec::new();
+    let n = seeds.len();
     for seed in seeds {
         if let Err(e) = run(seed, steps) {
+            let counted = (FORKS_TWICE.load(Ordering::Relaxed), FORKS_SPLIT.load(Ordering::Relaxed));
             let small = shrink(seed, steps);
+            FORKS_TWICE.store(counted.0, Ordering::Relaxed);
+            FORKS_SPLIT.store(counted.1, Ordering::Relaxed);
             let e = run(seed, small).err().unwrap_or(e);
             failed.push(format!(
                 "sim seed {seed} failed: {e}\nreplay: SIM_SEED={seed} SIM_STEPS={small} cargo test -p cbb-core --lib sim::"
@@ -1343,6 +1398,11 @@ fn groups_under_faults_agree() {
             }
         }
     }
+    std::eprintln!(
+        "sim: {n} seeds; recovery forks: {} by the key used twice, {} by a split network",
+        FORKS_TWICE.load(Ordering::Relaxed),
+        FORKS_SPLIT.load(Ordering::Relaxed)
+    );
     assert!(failed.is_empty(), "{}", failed.join("\n\n"));
 }
 
