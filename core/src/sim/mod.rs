@@ -1487,6 +1487,7 @@ impl World {
             self.restart(i)?;
         }
         // A fork's proof reaches every member that took one of its heads.
+        let mut evidence_lost = false;
         for (i, m) in self.members.iter().enumerate() {
             for (a, b) in &self.forks {
                 // Once a change of root ended them, a root's two histories
@@ -1494,7 +1495,19 @@ impl World {
                 let ended =
                     self.twin_pairs.iter().any(|(x, y, h)| (x, y) == (a, b) && m.live.state.roots.last() != Some(h));
                 let (ha, hb) = (m.live.set.contains(a), m.live.set.contains(b));
-                if ha != hb && !ended && m.live.state.device_by_key(&m.key.hash).is_some() {
+                if ha != hb && !ended && !self.is_gone(i) && m.live.state.device_by_key(&m.key.hash).is_some() {
+                    // A head that only removed devices hold makes no split:
+                    // a removed device is never handed the pair; nor one that
+                    // only a root lost for good held. Counted, as
+                    // the evidence dies there.
+                    let other = if ha { b } else { a };
+                    let removed_only = self.members.iter().enumerate().all(|(k, x)| {
+                        !x.live.set.contains(other) || m.live.state.revoked.contains(&x.key.hash) || self.is_gone(k)
+                    });
+                    if removed_only {
+                        evidence_lost = true;
+                        continue;
+                    }
                     return Err(format!("m{i} took one head of a fork and never the other"));
                 }
             }
@@ -1514,7 +1527,24 @@ impl World {
             let m = self.members.iter().find(|m| m.live.set.digest() == *d).unwrap();
             (m.live.state.chain().len(), count[d], m.live.set.len())
         };
+        if evidence_lost {
+            EVIDENCE_LOST.fetch_add(1, Ordering::Relaxed);
+        }
         let Some(digest) = count.keys().max_by_key(|d| rank(d)).copied() else {
+            // A free keep that dropped the device records leaves nobody in:
+            // the root key's power. Nobody may talk to anyone then, so the
+            // views cannot meet; what is required is that nobody acts on
+            // its own: no member seals a copy.
+            if self.deviated {
+                let held: Vec<usize> = (0..self.members.len()).filter(|i| self.admitted[*i]).collect();
+                for i in held {
+                    if self.copy(i, None).is_some() {
+                        return Err(format!("m{i} sealed a copy after the root's checkpoint left nobody in"));
+                    }
+                }
+                ROOT_POWER.fetch_add(1, Ordering::Relaxed);
+                return Ok((Vec::new(), State::default()));
+            }
             return Err(String::from("no member is in the group"));
         };
         let at = self.members.iter().position(|m| m.live.set.digest() == digest).unwrap();
@@ -1599,6 +1629,9 @@ impl World {
         self.quiet()?;
         self.no_twins()?;
         let (mut group, mut state) = self.settled()?;
+        if group.is_empty() {
+            return Ok(());
+        }
         self.lost_root_holds(&group)?;
         let recovery_fork = state.fork.is_some_and(|(_, a, b)| {
             self.members.iter().any(|m| {
@@ -1724,7 +1757,10 @@ static ASIDE_RUNS: AtomicUsize = AtomicUsize::new(0);
 static SMALL_RUNS: AtomicUsize = AtomicUsize::new(0);
 static CAME_BACK: AtomicUsize = AtomicUsize::new(0);
 static ASIDE_SEEN: AtomicUsize = AtomicUsize::new(0);
-const COUNTERS: [&AtomicUsize; 6] = [&FORKS_TWICE, &FORKS_SPLIT, &ASIDE_RUNS, &SMALL_RUNS, &CAME_BACK, &ASIDE_SEEN];
+static EVIDENCE_LOST: AtomicUsize = AtomicUsize::new(0);
+static ROOT_POWER: AtomicUsize = AtomicUsize::new(0);
+const COUNTERS: [&AtomicUsize; 8] =
+    [&FORKS_TWICE, &FORKS_SPLIT, &ASIDE_RUNS, &SMALL_RUNS, &CAME_BACK, &ASIDE_SEEN, &EVIDENCE_LOST, &ROOT_POWER];
 
 /// Root twins (two writers with one key) are made unless SIM_TWINS=0.
 /// Every SIM_SMALL-th seed (4 by default, 0 for none) runs with small
@@ -1786,13 +1822,15 @@ fn groups_under_faults_agree() {
         }
     }
     std::eprintln!(
-        "sim: {n} seeds; recovery forks: {} by the key used twice, {} by a split network; {} settled with records aside; {} with small rooms, {} members back after the checkpoints they were away for, {} runs kept a record aside on the way",
+        "sim: {n} seeds; recovery forks: {} by the key used twice, {} by a split network; {} settled with records aside; {} with small rooms, {} members back after the checkpoints they were away for, {} runs kept a record aside on the way; {} runs where a root's twin lived only on removed devices; {} runs where a deviating root's checkpoint left nobody in",
         FORKS_TWICE.load(Ordering::Relaxed),
         FORKS_SPLIT.load(Ordering::Relaxed),
         ASIDE_RUNS.load(Ordering::Relaxed),
         SMALL_RUNS.load(Ordering::Relaxed),
         CAME_BACK.load(Ordering::Relaxed),
-        ASIDE_SEEN.load(Ordering::Relaxed)
+        ASIDE_SEEN.load(Ordering::Relaxed),
+        EVIDENCE_LOST.load(Ordering::Relaxed),
+        ROOT_POWER.load(Ordering::Relaxed)
     );
     assert!(failed.is_empty(), "{}", failed.join("\n\n"));
 }
