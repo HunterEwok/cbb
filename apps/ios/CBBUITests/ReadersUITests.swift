@@ -88,9 +88,8 @@ final class ReadersUITests: XCTestCase {
 
     /// Runs Xcode's accessibility audit on the screen once it has settled
     /// (`settle`), on what a person can reach. Only an
-    /// element of the system's own may fail it: the status bar, and the
-    /// navigation bar's buttons, whose text iOS keeps from the largest
-    /// sizes. Contrast is measured on the screen's picture (`contrast`).
+    /// element of the system's own may fail it: the status bar. Contrast is
+    /// measured on the screen's picture (`contrast`).
     private func audit(_ app: XCUIApplication, _ types: XCUIAccessibilityAuditType, _ screen: String) {
         settle(app, screen)
         do {
@@ -106,7 +105,6 @@ final class ReadersUITests: XCTestCase {
                 if !e.isHittable { return true }
                 // The system's status bar is not the app's to fix.
                 if e.elementType == .statusBar || app.statusBars.firstMatch.exists && app.statusBars.firstMatch.frame.contains(e.frame) { return true }
-                if issue.auditType == .dynamicType && app.navigationBars.firstMatch.exists && app.navigationBars.firstMatch.frame.contains(e.frame) { return true }
                 self.fail("\(screen): \(issue.compactDescription) on \(e.elementType.rawValue) '\(e.label)' at \(e.frame): \(issue.detailedDescription)",
                           picture: e.screenshot(), screen)
                 return true
@@ -253,19 +251,70 @@ final class ReadersUITests: XCTestCase {
         }
     }
 
+    /// Every text on the screen with a label and its height, from one
+    /// snapshot of the app; a text the window does not hold whole is left
+    /// out.
+    private func textHeights(_ app: XCUIApplication) -> [String: CGFloat] {
+        var heights: [String: CGFloat] = [:]
+        guard let root = try? app.snapshot() else {
+            XCTFail("no snapshot of the app")
+            return heights
+        }
+        let window = app.windows.firstMatch.frame
+        var stack = [root]
+        while let e = stack.popLast() {
+            if e.elementType == .staticText, !e.label.isEmpty, window.contains(e.frame) {
+                heights[e.label] = max(heights[e.label] ?? 0, e.frame.height)
+            }
+            stack.append(contentsOf: e.children)
+        }
+        return heights
+    }
+
+    /// The screens follow the text size: every text seen at the default
+    /// size and at the largest is at least half as tall again at the
+    /// largest. Xcode's own dynamic type audit is not used for this: on
+    /// SwiftUI's text it judges by a UIKit property the text does not
+    /// always show, and on CI's runner it reported texts that grow at every
+    /// size (Settings' Notifications header, at random, and a theme's
+    /// name, always, after a change that moved nothing on the screen). In
+    /// the same runs every text of Settings grew 1.7 times or more, and a
+    /// text of a fixed size, put there to be caught, 1.1 times.
+    private func assertGrows(_ small: [String: CGFloat], _ large: [String: CGFloat], _ screen: String) {
+        let both = large.keys.filter { (small[$0] ?? 0) > 0 }
+        XCTAssertGreaterThanOrEqual(both.count, 2, "\(screen): too few texts seen at both sizes to tell")
+        for label in both.sorted() where large[label]! < small[label]! * 1.5 {
+            XCTFail("\(screen): '\(label)' is \(small[label]!) high at the default text size and only \(large[label]!) at the largest")
+        }
+    }
+
     /// U16: at the largest accessibility text size, in English, in
     /// Swahili, among the longest of the eight, and in Hindi, the tallest
-    /// script, no text is clipped and the screens follow Dynamic Type.
+    /// script, no text is clipped and the screens follow the text size
+    /// (`assertGrows`).
     func testLargestText() {
         for language in Self.largestText {
-            let app = launch(language: language, extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
+            // The texts' heights at the default size first.
+            var app = launch(language: language, extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"])
+            XCTAssertTrue(app.buttons[tr("Create a group", language)].waitForExistence(timeout: 30))
+            settle(app, "the Start screen in \(language) at the default text size")
+            let start = textHeights(app)
+            app.buttons[tr("Settings", language)].tap()
+            XCTAssertTrue(app.navigationBars[tr("Settings", language)].waitForExistence(timeout: 10))
+            settle(app, "Settings in \(language) at the default text size")
+            let settings = textHeights(app)
+            app.terminate()
+
+            app = launch(language: language, extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
             XCTAssertTrue(app.buttons[tr("Create a group", language)].waitForExistence(timeout: 30))
             picture("start-\(language)-largest-text")
-            audit(app, [.textClipped, .dynamicType], "the Start screen in \(language) at the largest text")
+            audit(app, .textClipped, "the Start screen in \(language) at the largest text")
+            assertGrows(start, textHeights(app), "the Start screen in \(language)")
             app.buttons[tr("Settings", language)].tap()
             XCTAssertTrue(app.navigationBars[tr("Settings", language)].waitForExistence(timeout: 10))
             picture("settings-\(language)-largest-text")
-            audit(app, [.textClipped, .dynamicType], "Settings in \(language) at the largest text")
+            audit(app, .textClipped, "Settings in \(language) at the largest text")
+            assertGrows(settings, textHeights(app), "Settings in \(language)")
             app.terminate()
         }
     }
