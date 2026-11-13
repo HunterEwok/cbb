@@ -486,7 +486,7 @@ struct ThemeSwatches: View {
         .padding(.vertical, Tokens.spacingSmall)
     }
 
-    @ViewBuilder private func cell(_ theme: Tokens.Theme) -> some View {
+    @ViewBuilder private func cell(_ theme: Theme) -> some View {
         let swatch = palette.dark ? theme.dark : theme.light
         let chosen = theme.name == selection
         Button { selection = theme.name } label: {
