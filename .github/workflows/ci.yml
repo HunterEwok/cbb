@@ -101,8 +101,8 @@ jobs:
         run: go run ./tools/tokens -check
       - name: app icon up to date
         run: go run ./tools/icon -check
-      - name: website pages and translations
-        run: go run ./tools/site check
+      - name: website pages, and translations that follow their originals
+        run: go run ./tools/site check -strict
       - name: shellcheck, every shell script
         run: sh .github/shellcheck.sh
       - name: typos, the spelling of the English text (_typos.toml)
@@ -327,7 +327,7 @@ jobs:
           "$RUNNER_TEMP/zig/bin/pip" install -q ziglang==0.16.0 cargo-zigbuild==0.24.0
           echo "$RUNNER_TEMP/zig/bin" >>"$GITHUB_PATH"
       - name: cbb and the Go programs beside it, and the release archive of each target, as at a release
-        # Two jobs, each building cbb (Rust, member/packaging/build.sh) and the
+        # Two jobs, each building cbb (Rust, packaging/build.sh) and the
         # Go programs for its targets: Rust builds each target from the start.
         # go vet runs once per operating system: the code differs by system,
         # not by architecture, and the check job vets Linux. ARMv6 is for the
@@ -643,7 +643,7 @@ jobs:
           "$RUNNER_TEMP/zig/bin/pip" install -q ziglang==0.16.0 cargo-zigbuild==0.24.0
           export PATH="$RUNNER_TEMP/zig/bin:$PATH"
           rustup toolchain install stable --profile minimal
-          dir=$(sh member/packaging/build.sh freebsd/amd64)
+          dir=$(sh packaging/build.sh freebsd/amd64)
           mkdir -p freebsd-bin
           cp "$dir/cbb" freebsd-bin/cbb
           CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -trimpath -o freebsd-bin/cbb-helper ./cmd/cbb-helper
@@ -2365,8 +2365,8 @@ jobs:
       # For the service's tests: their hooks (testhooks) steer the MIPS cbb too.
       - name: build for mips and mipsel, for tests (testhooks)
         run: |
-          sh member/packaging/mips.sh mips testhooks
-          sh member/packaging/mips.sh mipsel testhooks
+          sh packaging/mips.sh mips testhooks
+          sh packaging/mips.sh mipsel testhooks
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -2700,7 +2700,7 @@ jobs:
       - name: cargo build for the Raspberry Pi Zero (ARMv6, static; see .cargo/config.toml)
         run: cargo build --locked --release --target arm-unknown-linux-musleabihf
       - name: the crates' licenses, as the release archives carry them
-        run: sh member/packaging/notices.sh arm-unknown-linux-musleabihf | grep -q '^rustls '
+        run: sh packaging/notices.sh arm-unknown-linux-musleabihf | grep -q '^rustls '
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cbb-linux-arm64
@@ -3278,7 +3278,7 @@ jobs:
             t=$name goarch=$name goarm=
             if [ "$name" = armv7 ]; then t=arm/7 goarch=arm goarm=7; fi
             mkdir -p "$RUNNER_TEMP/$name"
-            rust=$(sh member/packaging/build.sh "linux/$t")
+            rust=$(sh packaging/build.sh "linux/$t")
             cp "$rust/cbb" "$rust/cbb-relay" "$RUNNER_TEMP/$name/"
             for p in cbb-helper cbb-forward; do
               GOARCH=$goarch GOARM=$goarm go build -trimpath -o "$RUNNER_TEMP/$name/$p" "./cmd/$p"

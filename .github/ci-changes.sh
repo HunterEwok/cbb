@@ -39,6 +39,7 @@ for f in $files; do
 	.github/workflows/ci.yml | .github/actions/* | .github/ci-changes.sh | .github/differential.sh | go.mod | go.sum | testdata/*) all=true ;;
 	packaging/zxnext/*) zxnext=true ;; # the Next's files for the site, not the members' packages
 	packaging/macos/*) core=true; macos=true ;; # the Mac app's job tests the .pkg
+	packaging/build.sh | packaging/mips.sh | packaging/notices.sh) core=true; rust=true ;; # cbb in Rust, built for the release
 	cmd/* | internal/* | packaging/* | tools/e2e/*) core=true ;;
 	tools/tokens/* | tools/icon/* | apps/design/*) design=true; tools=true ;;
 	tools/site/*) site=true; tools=true ;;

@@ -21,7 +21,7 @@
 # and its helper"); so do cbb-forward and cbb-relay, the servers that cbb
 # forward and cbb relay run. Each Go program packed adds its modules' notices.
 # The binary is the Rust cbb. With RUST_NOTICES naming a file, the notices
-# of the Rust cbb's crates (member/packaging/notices.sh TARGET) come first.
+# of the Rust cbb's crates (packaging/notices.sh TARGET) come first.
 set -eu
 
 if [ $# -ne 4 ]; then

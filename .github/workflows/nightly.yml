@@ -2,7 +2,8 @@
 # fresh seed and more cases than a pull request's run, the native fuzz
 # targets of the readers of network input (docs/differential.md),
 # mutation testing of the records' code (docs/testing.md, "Mutation
-# testing"), the Rust core's branch coverage, and the members' tests run many times over, to find the ones
+# testing"), the Rust core's branch coverage, a check that cbb and cbb-helper build
+# the same bytes twice (.github/reproducible.sh), and the members' tests run many times over, to find the ones
 # that fail only now and then (docs/testing.md, "Unstable tests"). It only
 # reads the repository; a failure prints the cases, which become vectors of
 # testdata/interop.
@@ -285,6 +286,28 @@ jobs:
   # pointer by pointer; AddressSanitizer runs the Rust tests and Go's tests
   # of the service against a cbb built with it, which reaches the system
   # calls Miri cannot.
+  reproducible:
+    name: reproducible build (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [linux/amd64, linux/arm64]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: cbb and cbb-helper built twice, in two folders, the same bytes
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          rustup toolchain install stable --profile minimal
+          sh .github/reproducible.sh "$TARGET"
   miri:
     name: miri (the C functions of ffi)
     runs-on: ubuntu-latest

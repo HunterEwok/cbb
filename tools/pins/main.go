@@ -68,7 +68,9 @@ type release struct {
 // files are the files that carry pins.
 var files = []string{
 	".github/workflows/*.yml",
-	"member/packaging/*.sh",
+	"packaging/build.sh",
+	"packaging/mips.sh",
+	"packaging/notices.sh",
 	"packaging/fdroid/*.yml",
 	"go.mod",
 	"esp32/Cargo.toml",

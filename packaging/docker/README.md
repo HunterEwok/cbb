@@ -67,7 +67,7 @@ docker compose -f compose.server.yaml exec forward cbb forward -show-key
 ## Building it
 
 ```sh
-rust=$(sh member/packaging/build.sh linux/amd64)
+rust=$(sh packaging/build.sh linux/amd64)
 mkdir -p bin-amd64 && cp "$rust/cbb" "$rust/cbb-relay" bin-amd64/
 for p in cbb-helper cbb-forward; do
 	CGO_ENABLED=0 GOARCH=amd64 go build -trimpath -o "bin-amd64/$p" "./cmd/$p"

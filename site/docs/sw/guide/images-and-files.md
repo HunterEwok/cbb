@@ -1,16 +1,16 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 6f28736f9b01 -->
+<!-- source: d53ae85ecc83 -->
 # Picha, faili na maandishi yenye muundo
 
 Kwa mtu yeyote anayenakili zaidi ya maandishi matupu. Picha, faili kutoka kwenye kidhibiti faili au maandishi yenye muundo wake, vilivyonakiliwa kwenye kifaa kimoja, vinaweza kubandikwa kwenye vingine kama vilivyo.
 
 ## Nini kinakwenda wapi
 
-| Kilichonakiliwa | Kompyuta zenye eneo-kazi | Simu | Kompyuta isiyo na eneo-kazi | Mwanachama mwepesi |
-|---|---|---|---|---|
-| Maandishi yenye muundo wake (kivinjari, programu ya ofisi) | hubandikwa na muundo wake | hubandikwa kama maandishi matupu | maandishi matupu | maandishi matupu |
-| Picha (PNG, JPEG; TIFF kwenye Mac na HEIC kwenye simu hubadilishwa) | hubandikwa kama picha | kitufe cha programu hukibandika; pia huja chenyewe, kwenye iPhone programu ikiendeshwa | maandishi yake tu; `cbb paste -o DIR` huhifadhi picha | maandishi yake tu; hupitisha picha |
-| Faili na folda | hubandikwa kama faili zilizonakiliwa | programu huzihifadhi: Vipakuliwa kwenye Android, folda ya programu katika Files kwenye iPhone | `cbb paste -o DIR` huzihifadhi | huzipitisha, haihifadhi yoyote |
+| Kilichonakiliwa | Kompyuta zenye eneo-kazi | Simu | Kompyuta au kifaa kidogo kisicho na eneo-kazi |
+|---|---|---|---|
+| Maandishi yenye muundo wake (kivinjari, programu ya ofisi) | hubandikwa na muundo wake | hubandikwa kama maandishi matupu | maandishi matupu |
+| Picha (PNG, JPEG; TIFF kwenye Mac na HEIC kwenye simu hubadilishwa) | hubandikwa kama picha | kitufe cha programu hukibandika; pia huja chenyewe, kwenye iPhone programu ikiendeshwa | maandishi yake tu; `cbb paste -o DIR` huhifadhi picha |
+| Faili na folda | hubandikwa kama faili zilizonakiliwa | programu huzihifadhi: Vipakuliwa kwenye Android, folda ya programu katika Files kwenye iPhone | `cbb paste -o DIR` huzihifadhi |
 
 Nakala yenye maandishi na picha hutumwa kama maandishi. Kukata kwenye kidhibiti faili huchukuliwa kama kunakili: hakuna kinachofutwa popote.
 

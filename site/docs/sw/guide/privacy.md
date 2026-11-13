@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 8cc314e35203 -->
+<!-- source: e2b4fea9b2db -->
 # Faragha: nani anaona nini
 
 Kwa yeyote anayetaka kujua kinachotoka kwenye vifaa vyake. Copy Beyond Borders haina akaunti, wingu wala telemetri: unachonakili kimesimbwa mwisho hadi mwisho, kimefungwa kwenye kifaa kinachokinakili kwa ajili ya vifaa vya kikundi chako vinavyosoma nakala, na hakuna kingine kinachoweza kukifungua: wala seva, wala mtandao, wala kifaa kilicho katikati. Ukurasa huu unaeleza kile ambacho vifaa vinavyopitisha nakala bado vinaweza kuona, na kila kitu ambacho mtu nje ya kikundi anaweza kuona, na jinsi ya kukizima.
@@ -30,7 +30,7 @@ Vyote viwili ni chaguo lako:
 
 | Nani | Anachoweza kuona | Jinsi ya kuepuka |
 |---|---|---|
-| Wengine kwenye mtandao wako wa nyumbani | kwamba vifaa vilivyopo vinaendesha Copy Beyond Borders, vitambulisho vyao vya kifaa vya nasibu na lebo ya kikundi chako katika mDNS, na ni vipi vinavyozungumza na kwa kiasi gani; kamwe si majina ya vifaa wala maudhui | hakuna cha kufanya; kompyuta huchapisha tu kwenye mitandao ya nyumbani inayoijua (mwanachama mwepesi kwenye kila mtandao) |
+| Wengine kwenye mtandao wako wa nyumbani | kwamba vifaa vilivyopo vinaendesha Copy Beyond Borders, vitambulisho vyao vya kifaa vya nasibu na lebo ya kikundi chako katika mDNS, na ni vipi vinavyozungumza na kwa kiasi gani; kamwe si majina ya vifaa wala maudhui | hakuna cha kufanya; kompyuta huchapisha tu kwenye mitandao ya nyumbani inayoijua |
 | Wengine kwenye mtandao ulio mbali na nyumbani (mkahawa, hoteli) | kwamba kifaa kinazungumza WireGuard, au kwa VLESS kwamba kinafungua muunganisho wa TLS kwenda kwenye kitovu au kisambazaji chako, lini na kwa kiasi gani | VPN ya mfumo huficha hata hilo |
 | Kisambazaji (chako, au cha mradi kwenye `cbb.tools`) | anwani ambazo pakiti zilizosimbwa hutoka na zinazoelekea kwenye kitovu chako, lini na ukubwa wake; si kikundi au kifaa kipi zinakomilikiwa | endesha chako mwenyewe, au elekeza mlango kwenye kitovu chako na usitumie chochote |
 | Relei pofu | ni vifaa vipi vya kikundi vilivyo mtandaoni sasa na vinavyozungumza, lini na kwa kiasi gani; haihifadhi chochote kati ya hayo | endesha yako mwenyewe, au tumia kitovu |

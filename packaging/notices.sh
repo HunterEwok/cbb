@@ -6,7 +6,7 @@
 # of the workspace, is built from, for one target, so that a release archive
 # carries their notices:
 #
-#   sh member/packaging/notices.sh TARGET [PACKAGE] >THIRD_PARTY_NOTICES
+#   sh packaging/notices.sh TARGET [PACKAGE] >THIRD_PARTY_NOTICES
 #
 # PACKAGE is cbb-member by default.
 #
@@ -17,12 +17,12 @@
 set -eu
 
 if [ $# -lt 1 ] || [ $# -gt 2 ]; then
-	echo "usage: sh member/packaging/notices.sh TARGET [PACKAGE]" >&2
+	echo "usage: sh packaging/notices.sh TARGET [PACKAGE]" >&2
 	exit 2
 fi
 target=$1
 package=${2:-cbb-member}
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")/.."
 
 meta=$(mktemp)
 trap 'rm -f "$meta"' EXIT

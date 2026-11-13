@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: bb4c4f917772 -->
+<!-- source: fc79c2973911 -->
 # Funguo na uthibitisho
 
 Kila kifaa katika kikundi kina funguo: kimoja huthibitisha kwa vingine kifaa ni nani, na funguo za mzizi na wasimamizi huongeza na kuondoa vifaa. Mahali kifaa kinapoweka funguo zake huamua mwizi anapata nini pamoja na kifaa. Ukurasa huu unasema kila aina ya kifaa huziweka wapi, kikundi kinawezaje kukagua, na kiwango gani cha ukali cha kuchagua. Kanuni kamili ziko katika [itifaki](../protocol.md), sehemu ya 17.
@@ -10,7 +10,7 @@ Kila kifaa katika kikundi kina funguo: kimoja huthibitisha kwa vingine kifaa ni 
 
 | Wapi | Vifaa | Mwizi anapata nini |
 |---|---|---|
-| **Kwenye faili** | Mac za Intel bila chipu ya T2, na Windows PC na kompyuta za Linux bila TPM, mwanachama mwepesi | nakala ya faili, inayofanya kazi popote hadi msimamizi aondoe kifaa |
+| **Kwenye faili** | Mac za Intel bila chipu ya T2, na Windows PC na kompyuta za Linux bila TPM, vifaa vidogo | nakala ya faili, inayofanya kazi popote hadi msimamizi aondoe kifaa |
 | **Kwenye maunzi** | iPhone (Secure Enclave), simu za Android (Keystore: StrongBox au TEE), Mac zenye Apple silicon au chipu ya T2 (Secure Enclave), kompyuta za Linux na Windows PC zenye TPM | hakuna cha kunakili: ufunguo husaini kwenye kifaa hicho tu, na kwenye simu funguo za mzizi na wasimamizi husaini tu baada ya uso wako, alama ya kidole au nambari ya siri |
 | **Maunzi yaliyothibitishwa** | simu ya Android ambayo mzizi wa kikundi ulikagua ufunguo wake | sawa na maunzi, na kikundi kinajua ni kweli, si tu kwamba kifaa kinasema hivyo |
 

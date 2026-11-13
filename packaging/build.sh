@@ -5,7 +5,7 @@
 # Builds cbb, the Rust program, for one of the release's targets, named as
 # Go names it, and prints the folder that holds it:
 #
-#   sh member/packaging/build.sh GOOS/GOARCH[/GOARM]
+#   sh packaging/build.sh GOOS/GOARCH[/GOARM]
 #
 # For Windows the folder holds cbb.exe and cbbw.exe, the same program
 # without a console window. Linux's builds are static musl binaries linked
@@ -17,8 +17,8 @@
 # name the version and the commit that cbb version prints.
 set -eu
 
-cd "$(dirname "$0")/../.."
-nightly=$(sed -n 's/^nightly="\(.*\)"$/\1/p' member/packaging/mips.sh)
+cd "$(dirname "$0")/.."
+nightly=$(sed -n 's/^nightly="\(.*\)"$/\1/p' packaging/mips.sh)
 tool=build toolchain=stable std='' features=''
 case ${1:-} in
 linux/amd64) target=x86_64-unknown-linux-musl ;;
@@ -28,7 +28,7 @@ linux/arm/6) target=arm-unknown-linux-musleabihf ;;
 linux/mips | linux/mipsle)
 	arch=mips
 	[ "$1" = linux/mips ] || arch=mipsel
-	bin=$(sh member/packaging/mips.sh "$arch" | tail -n 1)
+	bin=$(sh packaging/mips.sh "$arch" | tail -n 1)
 	dirname "$bin"
 	exit 0
 	;;
@@ -39,7 +39,7 @@ darwin/arm64) target=aarch64-apple-darwin ;;
 windows/amd64) target=x86_64-pc-windows-gnu tool=zigbuild features=windowless ;;
 windows/arm64) target=aarch64-pc-windows-gnullvm tool=zigbuild features=windowless ;;
 *)
-	echo "usage: sh member/packaging/build.sh GOOS/GOARCH[/GOARM]" >&2
+	echo "usage: sh packaging/build.sh GOOS/GOARCH[/GOARM]" >&2
 	exit 2
 	;;
 esac
@@ -53,7 +53,13 @@ if [ -n "$std" ]; then
 else
 	rustup target add --toolchain "$toolchain" "$target" >&2
 fi
+# The crates' sources are named from /cargo, not from this computer's cargo
+# home, so the same commit builds the same bytes anywhere (docs/own-build.md,
+# "Checking a release"); the workspace's own paths are relative already. An
+# array in --config joins the target's rustflags of .cargo/config.toml.
+remap="--remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo"
 # shellcheck disable=SC2086 # std and the features are one word or none
 cargo "+$toolchain" "$tool" --locked --release -p cbb-member --target "$target" \
+	--config "target.$target.rustflags=[\"$remap\"]" \
 	${std} ${features:+--features "$features"} >&2
 echo "target/$target/release"

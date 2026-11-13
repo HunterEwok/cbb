@@ -79,16 +79,16 @@ jobs:
           "$RUNNER_TEMP/zig/bin/pip" install -q ziglang==0.16.0 cargo-zigbuild==0.24.0
           echo "$RUNNER_TEMP/zig/bin" >>"$GITHUB_PATH"
           if [ -n "$GOMIPS" ]; then
-            rustup toolchain install "$(sed -n 's/^nightly="\(.*\)"$/\1/p' member/packaging/mips.sh)" --profile minimal --component rust-src
+            rustup toolchain install "$(sed -n 's/^nightly="\(.*\)"$/\1/p' packaging/mips.sh)" --profile minimal --component rust-src
           fi
-      - name: cbb, the Rust program (member/packaging/build.sh), with its crates' notices
+      - name: cbb, the Rust program (packaging/build.sh), with its crates' notices
         env:
           CBB_SOURCE: ${{ github.sha }}
           # A build for tests only does not compile with it (member/src/testbuild.rs).
           CBB_RELEASE_BUILD: "1"
         run: |
           rustup toolchain install stable --profile minimal
-          dir=$(CBB_VERSION="${GITHUB_REF_NAME#v}" sh member/packaging/build.sh "$GOOS/$GOARCH${GOARM:+/$GOARM}")
+          dir=$(CBB_VERSION="${GITHUB_REF_NAME#v}" sh packaging/build.sh "$GOOS/$GOARCH${GOARM:+/$GOARM}")
           if [ "$GOOS" = windows ]; then
             cp "$dir/cbb.exe" "$dir/cbbw.exe" "$dir/cbb-relay.exe" "$RUNNER_TEMP/"
           elif [ -z "$GOMIPS" ]; then
@@ -97,7 +97,7 @@ jobs:
           else
             cp "$dir/cbb" "$RUNNER_TEMP/"
           fi
-          sh member/packaging/notices.sh "$(basename "$(dirname "$dir")")" >"$RUNNER_TEMP/rust-notices"
+          sh packaging/notices.sh "$(basename "$(dirname "$dir")")" >"$RUNNER_TEMP/rust-notices"
           # The second guard: a build for tests only carries this text
           # (member/src/testbuild.rs), a release's never.
           for f in "$dir"/cbb "$dir"/cbb.exe "$dir"/cbbw.exe "$dir"/cbb-relay "$dir"/cbb-relay.exe; do
