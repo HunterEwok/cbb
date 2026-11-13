@@ -2018,7 +2018,7 @@ module records_v3 {
     val s = st.get(m)
     val v = views.get(m)
     val c = if (v.checkpoint == 0) NONEREC else db.get(v.checkpoint)
-    (syncedProto(m) and not(v.stop) and not(chainState(s, db).stop)) implies recsOf(heldAll, db).forall(r =>
+    (syncedProto(m) and not(v.stop) and not(chainState(s, db).stop) and not(leftOut(m))) implies recsOf(heldAll, db).forall(r =>
       isChain(r) or not(s.got.contains(r.id)) or not(storable(s, r, db)) or (c != NONEREC and prunedBy(c, r))
         or heldBy(s).contains(r.id))
   })
