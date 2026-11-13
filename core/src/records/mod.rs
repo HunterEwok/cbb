@@ -28,10 +28,13 @@
 //! 7. No rule reads a clock.
 //! 8. A root's own records count during a stop, and only a root resolves
 //!    a conflict between admins.
-//! 9. A root's removal is final: a resolve never voids a revoke signed by
-//!    a root, and the device comes back only by a new admission with a new
-//!    key. A root's resolve may void an admin's revoke; the device then
-//!    counts again with its key and ID.
+//! 9. A root's removal counts for good while it is kept: a resolve never
+//!    voids a root's record, and the root's checkpoint leaves a removal out
+//!    only with the admissions of the keys it names, so no old record
+//!    brings the device back; only a new record admits it again. A root's
+//!    resolve may void an admin's revoke; the device then counts again
+//!    with its key and ID. Two histories of the current root stop the
+//!    group until the recovery key changes the root.
 //! 10. The root changes only by a takeover the group's recovery key
 //!     signs, at once: no delay, no cancel, no objection, and no admin
 //!     takes the group over (rule 33). The recovery chain, walked from the
@@ -147,10 +150,18 @@ pub const MAX_SEEN: usize = 1024;
 
 // The ceilings frozen in the format (section 13).
 
-/// A record body, and a checkpoint's (whose list of kept records may name
-/// 1024 IDs). A recovery record is small: its list rides beside it.
-pub const MAX_BODY: usize = 8 << 10;
-pub const MAX_CHECKPOINT_BODY: usize = 64 << 10;
+/// A record body, and a checkpoint's. A recovery record is small: its list
+/// rides beside it.
+pub const MAX_BODY: usize = 16 << 10;
+/// A checkpoint names records of a full set: at most one head per key that
+/// signs (the roots on the path and 256 admin keys, about 76 bytes each)
+/// and the other records it keeps, one per seq of a key, all of them in
+/// the set's 4096 records or among the first checkpoints outside the
+/// rooms, 34 bytes each: 321 * 76 + (4096 + 65 - 321) * 34 + the fixed
+/// fields is about 155 000 bytes. The new root's first checkpoint, which
+/// keeps the whole list besides what the old root's checkpoint kept, is
+/// such a checkpoint too.
+pub const MAX_CHECKPOINT_BODY: usize = 160 << 10;
 /// Records of one root key.
 pub const MAX_ROOT_RECORDS: usize = 1024;
 /// Records of one admin key.
@@ -164,6 +175,9 @@ pub const MAX_DEVICES: usize = 256;
 pub const MAX_PATH: usize = 1 + body::MAX_RECOVERY as usize;
 /// Held records a state lists.
 pub const MAX_NEWER: usize = 16;
+/// Notices a set keeps of removals the newest list dropped, and of
+/// notices dismissed (`RecordSet::notices`).
+pub const MAX_NOTICES: usize = 256;
 
 /// Why an object is refused: the name of the rule it breaks, as the
 /// vectors cite it ("sig/low-s", "records/device/name").
@@ -230,6 +244,13 @@ impl Record {
             return Err(crate::error::Error::msg("the record's signer is not the key that signs it"));
         }
         let bytes = body.encode();
+        let max = if matches!(body.kind, Kind::Checkpoint { .. }) { MAX_CHECKPOINT_BODY } else { MAX_BODY };
+        if bytes.len() > max {
+            return Err(crate::error::Error::msg(alloc::format!(
+                "a record body of {} bytes is over its ceiling of {max}",
+                bytes.len()
+            )));
+        }
         let sig = key::sign_es256(key, LABEL_RECORD, &bytes)?.to_vec();
         let id = RecordId(sha256(&bytes));
         Ok(Record { bytes, sig, sig2: None, body, id })

@@ -858,3 +858,76 @@ fn the_admins_record_of_a_grant_is_read_as_a_record() {
         assert_eq!(grant_of(&rec), Err("grants/admin"), "{change:?}");
     }
 }
+
+/// A leaf handed two records of its root at one seq stops obeying that
+/// root: its grant is over, and it takes a grant again only one made under
+/// a higher recovery seq.
+#[test]
+fn a_leaf_handed_two_records_of_its_root_at_one_seq_stops() {
+    use crate::records::body::{Device, ROLE_MEMBER};
+    use crate::records::{Body, Kind as RecordKind, Record, group_id};
+    use crate::testkit::{G, k};
+    let mut g = G::new();
+    let root = k("root");
+    let point = root.key.public.clone();
+    let device = |name: &str| RecordKind::device(Device::new(k(name).key.clone(), name, ROLE_MEMBER));
+    g.rec(&root, device("laptop"));
+    let a = g.rec(&root, device("lamp"));
+    let b = Record::sign(Body { kind: device("thief"), ..a.body().clone() }, &root).unwrap();
+    let later = g.rec(&root, device("tv"));
+    let (ea, eb) = (a.envelope(), b.envelope());
+    assert_eq!(grant::fork(&ea, &eb, &point, &g.gid), Ok(a.body().seq));
+    assert_eq!(grant::fork(&eb, &ea, &point, &g.gid), Ok(a.body().seq));
+    let no = Err(grant::RULE_FORK);
+    // One record twice, two seqs, another group, another signer: no fork.
+    assert_eq!(grant::fork(&ea, &ea, &point, &g.gid), no);
+    assert_eq!(grant::fork(&ea, &later.envelope(), &point, &g.gid), no);
+    let other = group_id(&root.key, &k("other recovery").key);
+    let elsewhere = Record::sign(Body { group: other, ..b.body().clone() }, &root).unwrap();
+    assert_eq!(grant::fork(&ea, &elsewhere.envelope(), &point, &g.gid), no);
+    assert_eq!(grant::fork(&ea, &eb, &point, &other), no);
+    let thief = k("thief");
+    let by_thief = Record::sign(Body { signer: thief.hash, ..b.body().clone() }, &thief).unwrap();
+    assert_eq!(grant::fork(&ea, &by_thief.envelope(), &point, &g.gid), no);
+    assert_eq!(grant::fork(&ea, &eb, &thief.key.public, &g.gid), no);
+    // A signature that is not the root's over the root's body.
+    let mut forged = cbor::Encoder::new();
+    forged.array(2).bytes(b.body_bytes()).bytes(by_thief.sig());
+    let forged = forged.finish();
+    assert!(Record::decode(&forged).is_ok());
+    assert_eq!(grant::fork(&ea, &forged, &point, &g.gid), no);
+
+    // The lamp's grants from the root.
+    let lamp = k("lamp").key.device_id();
+    let phone_point = k("phone").key.public;
+    let phone = Key::new(Alg::Es256, &phone_point);
+    let grant_msg = |counter: u64, recovery: u64| {
+        let mut m = vec![
+            (1, Value::Uint(1)),
+            (2, Value::Bytes(&g.gid.0)),
+            (3, Value::Bytes(&root.hash.0)),
+            (4, Value::Uint(counter)),
+            (10, Value::Bytes(&lamp.0)),
+            (12, Value::Array(vec![phone.to_value()])),
+        ];
+        if recovery > 0 {
+            m.push((19, Value::Uint(recovery)));
+        }
+        let env = envelope::sign(&root.sk, sig::LABEL_GRANT, &Value::Map(m).encode());
+        let mut e = cbor::Encoder::new();
+        e.map(1).uint(2).raw(&env);
+        e.finish()
+    };
+    let read = |msg: &[u8], kept: Option<&grant::Kept>, recovery| {
+        let v = cbor::decode(msg).unwrap();
+        grant::read(&v, &point, &lamp, &g.gid, kept, recovery).map(|got| got.keep(kept))
+    };
+    let kept = read(&grant_msg(1, 0), None, 0).unwrap();
+    assert!(kept.commander(&phone.hash()).is_some() && !kept.forked);
+    let forked = kept.fork();
+    assert!(forked.forked && forked.commanders.is_empty() && forked.recovery == 0);
+    assert_eq!(read(&grant_msg(2, 0), Some(&forked), 0), Err(grant::RULE_FORKED));
+    // After a recovery head, a grant of its seq is taken.
+    let after = read(&grant_msg(1, 1), Some(&forked), 1).unwrap();
+    assert!(!after.forked && after.commander(&phone.hash()).is_some());
+}

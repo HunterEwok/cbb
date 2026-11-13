@@ -459,18 +459,14 @@ fn a_key_a_root_off_the_path_names_teaches_nothing() {
 }
 
 /// checkpointTest: the root's checkpoint gives the state on a member that
-/// compacted on it.
+/// holds it, which compacted on it as it came.
 #[test]
 fn the_roots_checkpoint_gives_the_state() {
     let mut g = Group::new();
     g.device("R");
     let s = g.member(&g.all()).state();
     let cp = g.checkpoint("R", &s);
-    let mut m = g.member(&g.all());
-    let s = m.state();
-    assert_eq!(s.checkpoint, Some(cp.id()));
-    assert!(has(&s, "D"));
-    m.compact(&s);
+    let m = g.member(&g.all());
     let s = m.state();
     assert_eq!(s.checkpoint, Some(cp.id()));
     assert!(has(&s, "D") && s.may_command(&k("A").hash));
@@ -712,11 +708,12 @@ fn any_order_gives_one_state() {
     }
 }
 
-/// compactedAgree's trace, by the room: two members take the same records,
-/// one compacts on the new root's newest checkpoint and one does not; the
-/// newest checkpoint prunes an older one of the same root, and a counting
-/// checkpoint compacts as it comes. As the new root fills its room, both
-/// keep the same records and have the same state.
+/// compactedAgree's trace, by the room: in the model one member compacts
+/// on the new root's newest checkpoint and one does not; here a counting
+/// checkpoint compacts as it comes, so two members that take the same
+/// records hold the same, and the newest checkpoint prunes an older one
+/// of the same root. As the new root fills its room, both keep the same
+/// records and have the same state.
 #[test]
 fn compacting_on_the_roots_checkpoint_changes_nothing() {
     let mut g = Group::new();
@@ -732,9 +729,7 @@ fn compacting_on_the_roots_checkpoint_changes_nothing() {
     let mut b = g.member(&g.all());
     let st = a.state();
     assert_eq!(st.checkpoint, Some(newest.id()));
-    a.compact(&st);
-    // The newest checkpoint compacted both when it came: compacting again
-    // changes nothing.
+    // The newest checkpoint compacted both when it came.
     assert!(!a.contains(&older.id()) && !b.contains(&older.id()), "the checkpoint compacts as it counts");
     assert_eq!(a.digest(), b.digest());
     let mut dropped = 0;

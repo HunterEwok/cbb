@@ -7,8 +7,9 @@
 //! owner's decisions of 2026-11-11):
 //!
 //! - The joiner's device ID is its key's hash. An ID that a kept record
-//!   names, a removed device's included, is taken for good: the device
-//!   comes back only by a new admission with a new key.
+//!   names, a removed device's included, is taken while that record is
+//!   kept: the device comes back only by a new admission, never by an old
+//!   record.
 //! - A root admits anyone. An admin with `admit` admits any device with
 //!   base rights (read and send, secrets only when its own device has
 //!   them), an ordinary leaf included; a guarded leaf only a root admits.
