@@ -60,11 +60,38 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
-      # The one place that says who may sign: a tag pushed, or the keys
-      # check run by hand from main without a tag. A rehearsal is neither, so
-      # its jobs get no environment and no secret whatever its inputs.
-      sign: ${{ (github.event_name == 'push' && github.ref_type == 'tag') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.tag == '') }}
+      # Whether this run may sign: the step mode below says it.
+      sign: ${{ steps.mode.outputs.sign }}
     steps:
+      - name: the run's mode, and a rehearsal's tag
+        id: mode
+        # The one place that says who may sign: a tag pushed, or the keys
+        # check run by hand from main without a tag. A rehearsal is neither,
+        # so its jobs get no environment and no secret whatever its inputs.
+        # The shell compares exactly; GitHub's expressions compare without
+        # case. The environment's own rule (main and v*) stays as well.
+        run: |
+          if [ -n "$REHEARSAL_TAG" ]; then
+            case $REHEARSAL_TAG in
+            *[!0-9a-z.-]*)
+              echo "::error::the tag of a rehearsal has only 0-9, a-z, . and -"
+              exit 1
+              ;;
+            esac
+            if ! printf '%s\n' "$REHEARSAL_TAG" | grep -Eqx 'v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?'; then
+              echo "::error::the tag of a rehearsal is vX.Y.Z or vX.Y.Z-rc.N, not $REHEARSAL_TAG"
+              exit 1
+            fi
+          fi
+          sign=false
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_TYPE" = tag ]; then
+            sign=true
+          elif [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$GITHUB_REF" = refs/heads/main ] && [ -z "$REHEARSAL_TAG" ]; then
+            sign=true
+          fi
+          echo "sign=$sign" >>"$GITHUB_OUTPUT"
+          echo "this run signs: $sign"
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -72,16 +99,21 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: a rehearsal's tag is a release tag
-        if: inputs.tag != ''
-        run: |
-          if ! printf '%s\n' "$REHEARSAL_TAG" | grep -Eqx 'v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?'; then
-            echo "::error::the tag of a rehearsal is vX.Y.Z or vX.Y.Z-rc.N, not $REHEARSAL_TAG"
-            exit 1
-          fi
       - env:
           CBB_RELEASE_TAG: ${{ env.TAG }}
-        run: go test -count=1 -run '^TestPinnedRootsComplete$' ./internal/release
+          SIGN: ${{ steps.mode.outputs.sign }}
+        # On a tag pushed and in the keys check a failure stops the run. Only
+        # a rehearsal (run by hand, not signing) goes on past it, with a loud
+        # warning, so it can run before the ceremony's roots are in the tree.
+        run: |
+          status=0
+          go test -count=1 -run '^TestPinnedRootsComplete$' ./internal/release || status=$?
+          if [ "$status" -ne 0 ] && [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$SIGN" = false ]; then
+            echo "::warning::the pinned roots lack a half: a release of this tree would stop here; the rehearsal goes on"
+            printf '## The pinned roots lack a half\n\nA release of this tree stops at this check (roots/roots.pem, TestPinnedRootsComplete); this rehearsal went on past it.\n' >>"$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          exit "$status"
 
   build:
     needs: [roots]
@@ -290,6 +322,7 @@ jobs:
           # a rehearsal its tag's.
           version=${TAG#v}
           if [ "$GITHUB_REF_TYPE" != tag ] && [ -z "$REHEARSAL_TAG" ]; then version=0.0.0-dev; fi
+          case $version in '' | *[!0-9a-z.-]*) echo "::error::not a version: $version"; exit 1 ;; esac
           echo "VERSION=$version" >>"$GITHUB_ENV"
           brew install xcodegen
           xcodegen generate

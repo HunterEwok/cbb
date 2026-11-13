@@ -231,11 +231,15 @@ everything as a release of that tag would and leaves the release's files (the ar
 `SHA256SUMS`, the bills of materials, `get.sh` and `get.ps1`, the winget manifest) in the
 artifact `release-files` for a week. It signs nothing and publishes nothing, whatever its
 inputs: the jobs name the environment **release** and read its secrets only when the
-`roots` job's output `sign` is true, which is only for a tag pushed or the keys check from
-`main` without a tag, so a rehearsal's programs are signed ad hoc or not at all and it has
+`roots` job's output `sign` is true, which its shell step sets, comparing exactly, only for a
+tag pushed or the keys check from `main` without a tag, so a rehearsal's programs are signed ad hoc or not at all and it has
 no APK, no `.pkg`, no TestFlight build and no OpenWrt feed; the draft, the iPhone app's
 CodeQL analysis and the Docker image run only on a tag pushed. The steps are the release's
-own, with the tag from `TAG` (the pushed tag, or the rehearsal's).
+own, with the tag from `TAG` (the pushed tag, or the rehearsal's), whose characters the
+`roots` job checks first (0-9, a-z, `.` and `-`, in the form above). When the pinned roots lack
+a half, a rehearsal does not stop at `TestPinnedRootsComplete`: it writes a warning and a
+note in the run's summary and goes on, so it can run before the ceremony's roots are in
+the tree; a tag pushed and the keys check stop there as before.
 
 ## Signed releases
 
