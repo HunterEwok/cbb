@@ -59,20 +59,10 @@ struct SettingsView: View {
                     .accessibilityLabel(Text("Language"))
                     .accessibilityValue(Text(verbatim: language.title))
                 }
-                if Measure.on("FixedText") {
-                    // The positive control: a text that does not follow the
-                    // text size, which every check of it must report.
-                    Text(verbatim: "Fixed size text").font(.system(size: 17))
-                }
-                if Measure.on("NoSwatches") {
-                } else if Measure.on("PlainGrid") {
-                    PlainThemeSwatches(selection: $theme)
-                } else {
-                    ThemeSwatches(selection: $theme)
-                }
+                ThemeSwatches(selection: $theme)
             }
             .listRowBackground(palette.surface)
-            if !Measure.on("NoNotifications") { NotificationSettings() }
+            NotificationSettings()
             if model.devices.contains(where: { $0.isSelf && $0.isRoot }), WatchLink.shared.watchApp {
                 watchSection
             }
@@ -140,11 +130,10 @@ struct SettingsView: View {
             }
             .listRowBackground(palette.surface)
         }
-        .measurePlainList()
-        .measureBackground()
+        .scrollContentBackground(.hidden)
+        .background(AppBackground())
         .navigationTitle(Text("Settings"))
         .task {
-            if Measure.on("NoRefresh") { return }
             // Where sync away from home stands, as it changes.
             while !Task.isCancelled {
                 await model.refresh()
@@ -491,7 +480,7 @@ struct ThemeSwatches: View {
                         // A hair space on each side: some names' last letter draws a
                         // little past the text's own width (the Hindi names of Swiss and
                         // Hardware), which the accessibility audit reports as clipped text.
-                        (Measure.on("NoHairSpace") ? Text(ThemeChoice.title(theme.name)) : (Text(verbatim: "\u{200A}") + Text(ThemeChoice.title(theme.name)) + Text(verbatim: "\u{200A}")))
+                        (Text(verbatim: "\u{200A}") + Text(ThemeChoice.title(theme.name)) + Text(verbatim: "\u{200A}"))
                             .font(.caption2).multilineTextAlignment(.center)
                             .foregroundStyle(chosen ? palette.text : palette.textDim)
                     }
@@ -503,94 +492,6 @@ struct ThemeSwatches: View {
             }
         }
         .padding(.vertical, Tokens.spacingSmall)
-    }
-}
-
-/// A measurement of CI's runner, not to be merged: the themes in a plain
-/// stack of rows, three to a row, for the lazy grid.
-struct PlainThemeSwatches: View {
-    @Binding var selection: String
-    @Environment(\.palette) private var palette
-    /// A swatch's least width, growing with the text size so that a
-    /// theme's name ("Liquid Glass" and its longer translations) breaks between words,
-    /// never inside one.
-    @ScaledMetric(relativeTo: .caption2) private var width: CGFloat = 76
-    /// The swatch grows with the text, as its name and checkmark do: at the
-    /// largest sizes a fixed swatch left the checkmark wider than it.
-    @ScaledMetric(relativeTo: .caption2) private var swatchSize: CGFloat = 36
-
-    var body: some View {
-        VStack(spacing: Tokens.spacingMedium) {
-            ForEach(0..<(Tokens.themes.count + 2) / 3, id: \.self) { r in
-            HStack(alignment: .top, spacing: Tokens.spacingSmall) {
-            ForEach(Array(Tokens.themes[(r * 3)..<min(r * 3 + 3, Tokens.themes.count)]), id: \.name) { theme in
-                let swatch = palette.dark ? theme.dark : theme.light
-                let chosen = theme.name == selection
-                Button { selection = theme.name } label: {
-                    VStack(spacing: 6) {
-                        ThemeSwatch(palette: swatch)
-                            .frame(width: swatchSize, height: swatchSize)
-                            .overlay {
-                                if chosen {
-                                    Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(swatch.text)
-                                }
-                            }
-                            .padding(3)
-                            .overlay(Circle().stroke(chosen ? palette.accent : palette.line, lineWidth: 2))
-                        // A hair space on each side: some names' last letter draws a
-                        // little past the text's own width (the Hindi names of Swiss and
-                        // Hardware), which the accessibility audit reports as clipped text.
-                        (Measure.on("NoHairSpace") ? Text(ThemeChoice.title(theme.name)) : (Text(verbatim: "\u{200A}") + Text(ThemeChoice.title(theme.name)) + Text(verbatim: "\u{200A}")))
-                            .font(.caption2).multilineTextAlignment(.center)
-                            .foregroundStyle(chosen ? palette.text : palette.textDim)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text(ThemeChoice.title(theme.name)))
-                .accessibilityAddTraits(chosen ? .isSelected : [])
-            }
-            }
-            }
-        }
-        .padding(.vertical, Tokens.spacingSmall)
-    }
-}
-
-/// A measurement of CI's runner, not to be merged: launch arguments a UI
-/// test passes to change one thing on the screen.
-enum Measure {
-    static func on(_ flag: String) -> Bool { ProcessInfo.processInfo.arguments.contains("-CBBMeasure" + flag) }
-}
-
-/// A measurement of CI's runner, not to be merged: a UIKit label that
-/// follows the text size as UIKit's own do.
-struct MeasureLabel: UIViewRepresentable {
-    let text: String
-
-    func makeUIView(context: Context) -> UILabel {
-        let label = UILabel()
-        label.font = .preferredFont(forTextStyle: .footnote)
-        label.adjustsFontForContentSizeCategory = true
-        label.numberOfLines = 0
-        label.text = text
-        return label
-    }
-
-    func updateUIView(_ label: UILabel, context: Context) { label.text = text }
-
-    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UILabel, context: Context) -> CGSize? {
-        uiView.sizeThatFits(CGSize(width: proposal.width ?? .greatestFiniteMagnitude, height: .greatestFiniteMagnitude))
-    }
-}
-
-extension View {
-    @ViewBuilder func measurePlainList() -> some View {
-        if Measure.on("PlainList") { listStyle(.plain) } else { self }
-    }
-
-    @ViewBuilder func measureBackground() -> some View {
-        if Measure.on("NoBackground") { self } else { scrollContentBackground(.hidden).background(AppBackground()) }
     }
 }
 
@@ -628,30 +529,12 @@ struct NotificationSettings: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        if Measure.on("HeaderAsRow") {
-            Section {
-                Text("Notifications").font(.headline)
-                ForEach(GroupEvent.Kind.allCases) { NotifyToggle(kind: $0) }
-            }
-            .listRowBackground(palette.surface)
-        } else {
-            Section {
-                ForEach(GroupEvent.Kind.allCases) { NotifyToggle(kind: $0) }
-            } header: {
-                if Measure.on("HeaderNoTextCase") {
-                    Text("Notifications").textCase(nil)
-                } else if Measure.on("HeaderFont") {
-                    Text("Notifications").font(.footnote)
-                } else if Measure.on("HeaderCustomFont") {
-                    Text("Notifications").font(.custom("Georgia", size: 13, relativeTo: .footnote))
-                } else if Measure.on("HeaderUILabel") {
-                    MeasureLabel(text: String(localized: "Notifications"))
-                } else {
-                    Text("Notifications")
-                }
-            }
-            .listRowBackground(palette.surface)
+        Section {
+            ForEach(GroupEvent.Kind.allCases) { NotifyToggle(kind: $0) }
+        } header: {
+            Text("Notifications")
         }
+        .listRowBackground(palette.surface)
     }
 }
 

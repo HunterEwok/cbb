@@ -1702,7 +1702,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        device: [iPad] # a measurement of the runner, not to be merged
+        device: [iPhone, iPad]
     runs-on: macos-latest
     # The libraries and the build take about 15 minutes, and a slow runner
     # can spend 5 minutes booting a simulator for each of the retries
@@ -1784,9 +1784,7 @@ jobs:
           }
           test_on() {
             log="${RUNNER_TEMP:-/tmp}/test-$1.log"
-            # A measurement of the runner, not to be merged: only the iPad's
-            # testDynamicTypeProbe, which runs for 40 minutes.
-            only=(-only-testing:CBBUITests/ReadersUITests/testDynamicTypeProbe)
+            only=()
             for attempt in 1 2 3; do
               xcrun simctl boot "$1" 2>/dev/null || true
               # A simulator can hang at boot ("Waiting on System App") for
@@ -1802,14 +1800,9 @@ jobs:
                 "${sign[@]}" "${only[@]}" >"$log" 2>&1 &
               pid=$!
               killed=
-              # The measurement's lines as they come, so that the step shows
-              # its progress.
-              (tail -n +1 -F "$log" 2>/dev/null | grep --line-buffered -E "MEASURE-(AUDIT|PROGRESS|SUMMARY|GROWTH |RETRY|CROSS|LADDER round [0-9]+: [0-9])|^Test Case") &
-              follow=$!
-              started=$SECONDS
-              while [ $((SECONDS - started)) -lt 2880 ]; do
+              for second in $(seq 1200); do
                 kill -0 "$pid" 2>/dev/null || break
-                if [ $((SECONDS - started)) -ge 150 ] && ! grep -q "^Test Suite " "$log"; then killed=1; break; fi
+                if [ "$second" -ge 150 ] && ! grep -q "^Test Suite " "$log"; then killed=1; break; fi
                 sleep 1
               done
               kill -0 "$pid" 2>/dev/null && killed=1
@@ -1822,8 +1815,6 @@ jobs:
                 status=0
                 wait "$pid" || status=$?
               fi
-              pkill -f "tail -n +1 -F $log" || true
-              kill "$follow" 2>/dev/null || true
               xcrun simctl shutdown "$1" || true
               if [ "$status" -ne 0 ] && [ -z "$killed" ] && [ "$attempt" -lt 3 ] && only_launches "$log"; then
                 grep -E "error: |^Test Case .* failed" "$log" || true
@@ -1837,7 +1828,7 @@ jobs:
                 # long before the tail: show those lines first.
                 grep -E "error: |^Test Case .* failed" "$log" || true
                 tail -n 100 "$log"
-                [ -n "$killed" ] && echo "::error::the tests on $1 did not finish in 48 minutes"
+                [ -n "$killed" ] && echo "::error::the tests on $1 did not finish in 20 minutes"
                 return "$status"
               fi
               tail -n 30 "$log"
@@ -1858,16 +1849,6 @@ jobs:
       # what the accessibility audit found; the English ones, the failed
       # audits' and the screens a lost tap met (ReadersUITests.lostTap) also
       # go into the log as small JPEGs when the tests fail.
-      - name: the audit's traces and the whole test log
-        if: always()
-        run: |
-          mkdir -p "$RUNNER_TEMP/ios-screens"
-          for f in "$RUNNER_TEMP"/test-*.log; do
-            [ -f "$f" ] || continue
-            cp "$f" "$RUNNER_TEMP/ios-screens/"
-            grep -E "MEASURE-SUMMARY" "$f" || true
-            grep -E "MEASURE|Test Case .*(passed|failed)" "$f" || true
-          done
       - name: the screens' pictures
         if: always()
         run: |
