@@ -551,9 +551,6 @@ fn resolve_addr_port(s: &str) -> Result<String> {
 /// to another (docs/protocol.md, section 16, "Entry points").
 const ENTRIES_PREFIX: &str = "cbb-entries:";
 
-/// The largest body of a signed file.
-const MAX_BODY: usize = cbb_core::release::MAX_BODY;
-
 /// cbb global entries: shows the signed entry points this device holds,
 /// gives them as a string or a QR code for another device, or takes them
 /// from one.
@@ -563,7 +560,8 @@ fn entries(g: &Global, args: &[String]) -> Result<()> {
        cbb global entries import STRING  take them from another device's string";
     match args {
         [] => {
-            let set = held_entries(g)?;
+            let set: serde_json::Value = serde_json::from_slice(&held_entries(g)?)
+                .map_err(|_| Error::msg("the service sent entry points that do not decode"))?;
             let body = set["entries"]["body"].as_str().and_then(|b| STANDARD.decode(b).ok()).unwrap_or_default();
             let e: serde_json::Value =
                 serde_json::from_slice(&body).map_err(|_| Error::msg("the entry points held do not decode"))?;
@@ -597,8 +595,9 @@ fn entries(g: &Global, args: &[String]) -> Result<()> {
             Ok(())
         }
         [i, s] if i == "import" => {
-            let set = parse_entries(s)?;
-            let data = serde_json::to_vec(&set).context("cannot encode the entry points")?;
+            // The bytes as the string gives them: the service reads each
+            // file as it was signed.
+            let data = parse_entries(s)?;
             request(g, &Message::new(Header { op: "entries".into(), ..Default::default() }, data))?;
             println!(
                 "The signed entry points check out; this device keeps the newest it has and passes them to its group."
@@ -609,34 +608,34 @@ fn entries(g: &Global, args: &[String]) -> Result<()> {
     }
 }
 
-/// The signed entry points the service holds.
-fn held_entries(g: &Global) -> Result<serde_json::Value> {
+/// The signed entry points the service holds, the bytes it keeps.
+fn held_entries(g: &Global) -> Result<Vec<u8>> {
     let m = request(g, &Message::new(Header { op: "entries_get".into(), ..Default::default() }, Vec::new()))?;
-    serde_json::from_slice(&m.payload).map_err(|_| Error::msg("the service sent entry points that do not decode"))
+    Ok(m.payload)
 }
 
-/// The signed entry points as a string: the prefix and their JSON in
-/// unpadded base64url.
-fn entries_string(set: &serde_json::Value) -> Result<String> {
-    let data = serde_json::to_vec(set).context("cannot encode the entry points")?;
-    Ok(format!("{ENTRIES_PREFIX}{}", URL_SAFE_NO_PAD.encode(data)))
+/// The signed entry points as a string: the prefix and their JSON, as
+/// held, in unpadded base64url.
+fn entries_string(set: &[u8]) -> Result<String> {
+    Ok(format!("{ENTRIES_PREFIX}{}", URL_SAFE_NO_PAD.encode(set)))
 }
 
-/// Reads such a string; the service checks the signatures.
-fn parse_entries(s: &str) -> Result<serde_json::Value> {
+/// Reads such a string into the bytes of its JSON, an object; the service
+/// checks the signatures.
+fn parse_entries(s: &str) -> Result<Vec<u8>> {
     let b64 = s.trim().strip_prefix(ENTRIES_PREFIX).ok_or_else(|| {
         Error::msg(format!("that is not a string of signed entry points, which starts with {ENTRIES_PREFIX:?}"))
     })?;
     let damaged = || Error::msg("the string of signed entry points is damaged");
     let data = URL_SAFE_NO_PAD.decode(b64).map_err(|_| damaged())?;
-    if data.len() > 2 * MAX_BODY {
+    if data.len() > crate::entries::MAX {
         return Err(damaged());
     }
     let set: serde_json::Value = serde_json::from_slice(&data).map_err(|_| damaged())?;
     if !set.is_object() {
         return Err(damaged());
     }
-    Ok(set)
+    Ok(data)
 }
 
 /// A wall-clock time in milliseconds as a UTC date, YYYY-MM-DD.
@@ -704,8 +703,9 @@ mod tests {
 
     #[test]
     fn entries_round_trip() {
-        let set = serde_json::json!({"keys": {"body": "e30="}, "entries": {"body": "e30="}});
-        let s = entries_string(&set).unwrap();
+        // The bytes go through as they are, spaces and order kept.
+        let set = br#"{ "keys": {"body": "e30="}, "entries": {"body": "e30="} }"#;
+        let s = entries_string(set).unwrap();
         assert!(s.starts_with(ENTRIES_PREFIX));
         assert_eq!(parse_entries(&format!("  {s}\n")).unwrap(), set);
         for bad in ["", "entries", &format!("entries:{s}"), "cbb-entries:!!", "cbb-entries:e30x"] {

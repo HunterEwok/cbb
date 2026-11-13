@@ -101,7 +101,8 @@ fn check_signed(
 ) -> Result<()> {
     use cbb_core::release::{self, File};
     let text = std::str::from_utf8(data).map_err(|_| Error::msg("the signed list is not text"))?;
-    let mut lines = text.lines().map(str::trim).filter(|l| !l.is_empty());
+    // Only the space every reader passes over: space, tab, CR and LF.
+    let mut lines = text.lines().map(|l| l.trim_matches([' ', '\t', '\r', '\n'])).filter(|l| !l.is_empty());
     let (Some(keys), Some(list), None) = (lines.next(), lines.next(), lines.next()) else {
         return Err(Error::msg("the signed list is not keys.json and zxnext.json"));
     };
@@ -800,6 +801,18 @@ mod tests {
         assert!(data.len() > 16 << 10, "{}", data.len());
         let mut out = Vec::new();
         check_signed(&data, &roots, c["now_ms"].as_i64().unwrap(), c["installed"].as_str().unwrap(), &mut out).unwrap();
+        // Space, tab, CR and LF around a line are passed over, as every
+        // reader does; other white space is not.
+        let (now, installed) = (c["now_ms"].as_i64().unwrap(), c["installed"].as_str().unwrap());
+        let around = format!(" \t{}\t \r\n\n{} \r\n", c["keys"], c["list"]);
+        assert!(check_signed(around.as_bytes(), &roots, now, installed, &mut Vec::new()).is_ok());
+        for space in ["\u{a0}", "\u{3000}", "\u{b}", "\u{85}"] {
+            for data in
+                [format!("{space}{}\n{}\n", c["keys"], c["list"]), format!("{}\n{}{space}\n", c["keys"], c["list"])]
+            {
+                assert!(check_signed(data.as_bytes(), &roots, now, installed, &mut Vec::new()).is_err(), "{space:?}");
+            }
+        }
         std::fs::write(&path, vec![b' '; MAX_CHECK_LIST as usize + 1]).unwrap();
         assert!(read_list(path.to_str().unwrap()).is_err());
         std::fs::remove_file(&path).unwrap();

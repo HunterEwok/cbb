@@ -340,7 +340,7 @@ enum Out {
     Event(Event, Duration),
     Records(Vec<Record>),
     Result(wire::CommandResult),
-    Entries(serde_json::Value),
+    Entries(Box<serde_json::value::RawValue>),
     /// A message made before it was queued: a command, a cert, an offer.
     Message(Message),
     Wake, // makes the writer look at the closed flag
@@ -2177,13 +2177,13 @@ impl Node {
 
     /// Takes the entry points a peer sent when they check out and are newer
     /// than those held, and passes them on to the other peers.
-    fn add_entries(&self, set: &serde_json::Value, from: &DeviceId) {
+    fn add_entries(&self, set: &serde_json::value::RawValue, from: &DeviceId) {
         match self.entries.take(set, uptime::wall_ms()) {
             Ok(true) => {
                 self.logf(&format!("cbb: took newer entry points from {from}"));
                 let conns: Vec<Arc<Conn>> = self.conns.lock().unwrap().values().cloned().collect();
                 for c in conns.iter().filter(|c| &c.id != from && !c.records_only) {
-                    self.enqueue(c, Out::Entries(set.clone()));
+                    self.enqueue(c, Out::Entries(set.to_owned()));
                 }
             }
             Ok(false) => {}
@@ -2193,7 +2193,7 @@ impl Node {
 
     /// Takes the release a peer sent when it checks out and is newer than
     /// the one held, and passes it on to the other computers.
-    fn add_release(&self, set: &serde_json::Value, from: &DeviceId) {
+    fn add_release(&self, set: &serde_json::value::RawValue, from: &DeviceId) {
         match self.releases.take(set, uptime::wall_ms()) {
             Ok(true) => {
                 self.release_taken();
@@ -2207,7 +2207,7 @@ impl Node {
     /// Takes a release cbb update fetched, as Go's putRelease: kept when it
     /// checks out and is newer than the one held, and passed on to the
     /// peers.
-    pub fn put_release(&self, set: &serde_json::Value) -> Result<()> {
+    pub fn put_release(&self, set: &serde_json::value::RawValue) -> Result<()> {
         if self.releases.take(set, uptime::wall_ms()).map_err(|e| e.context("the release does not check out"))? {
             self.release_taken();
             self.send_release(set, None);
@@ -2224,7 +2224,7 @@ impl Node {
     }
 
     /// Sends the release to the computers connected, but from.
-    fn send_release(&self, set: &serde_json::Value, from: Option<&DeviceId>) {
+    fn send_release(&self, set: &serde_json::value::RawValue, from: Option<&DeviceId>) {
         let conns: Vec<Arc<Conn>> = self.conns.lock().unwrap().values().cloned().collect();
         for c in conns.iter().filter(|c| Some(&c.id) != from && !c.records_only) {
             let computer = c.peer.lock().unwrap().as_ref().is_some_and(|p| p.role == cbb_core::authority::ROLE_MEMBER);
@@ -2237,13 +2237,13 @@ impl Node {
     /// Takes entry points this device fetched or the user gave, as Go's
     /// putEntries: kept when they check out and are newer than those held,
     /// and passed on to the peers; reports whether they were newer.
-    pub fn put_entries(&self, set: &serde_json::Value) -> Result<bool> {
+    pub fn put_entries(&self, set: &serde_json::value::RawValue) -> Result<bool> {
         let newer =
             self.entries.take(set, uptime::wall_ms()).map_err(|e| e.context("the entry points do not check out"))?;
         if newer {
             let conns: Vec<Arc<Conn>> = self.conns.lock().unwrap().values().cloned().collect();
             for c in conns.iter().filter(|c| !c.records_only) {
-                self.enqueue(c, Out::Entries(set.clone()));
+                self.enqueue(c, Out::Entries(set.to_owned()));
             }
         }
         Ok(newer)

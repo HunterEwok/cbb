@@ -242,23 +242,23 @@ fn fetch_via(url: &str, path: &Path, max: u64, resolve: Option<&str>, time: Dura
 /// address at, the project's relay's server, where the mirror is too, as
 /// Go's fetchProjectLists: `{keys, entries}`, which the node checks.
 #[cfg(feature = "tunnel")]
-pub fn fetch_lists_at(at: std::net::IpAddr, work: &Path) -> Result<serde_json::Value> {
+pub fn fetch_lists_at(at: std::net::IpAddr, work: &Path) -> Result<Box<serde_json::value::RawValue>> {
     let host = MIRROR.trim_start_matches("https://");
     let ip = match at {
         std::net::IpAddr::V6(v6) => format!("[{v6}]"),
         v4 => v4.to_string(),
     };
     let resolve = format!("{host}:443:{ip}");
-    let mut set = serde_json::Map::new();
-    for (key, name) in [("keys", "keys.json"), ("entries", "entries.json")] {
+    let mut got = Vec::new();
+    for name in ["keys.json", "entries.json"] {
         let path = work.join(format!(".{name}.relay.part"));
-        let got = fetch_via(&format!("{MIRROR}/{name}"), &path, MAX_MANIFEST, Some(&resolve), LISTS_TIME)
+        let data = fetch_via(&format!("{MIRROR}/{name}"), &path, MAX_MANIFEST, Some(&resolve), LISTS_TIME)
             .and_then(|()| fs::read(&path).context(format!("cannot read the downloaded {name}")));
         let _ = fs::remove_file(&path);
-        let v: serde_json::Value = serde_json::from_slice(&got?).context(format!("{name} does not decode"))?;
-        set.insert(key.into(), v);
+        got.push(data?);
     }
-    Ok(serde_json::Value::Object(set))
+    // The files as fetched, which the node reads as every reader does.
+    crate::entries::set_of(&[("keys", &got[0]), ("entries", &got[1])])
 }
 
 /// The longest fetching the signed lists from the relay's server may take.
@@ -323,9 +323,9 @@ fn fetch_with(tool: &str, url: &str, mut child: std::process::Child, path: &Path
 pub trait Group {
     /// Hands the service the release, `{keys, channel, release}`, that a
     /// server gave, for the group.
-    fn share(&self, set: &serde_json::Value);
+    fn share(&self, set: &serde_json::value::RawValue);
     /// The release the service holds, for when no server answers.
-    fn held(&self) -> Result<serde_json::Value>;
+    fn held(&self) -> Result<Box<serde_json::value::RawValue>>;
     /// Writes the archive with the SHA-256 sha and size bytes to path, from
     /// the service, which holds it or fetches it from its peers.
     fn get(&self, sha: &str, size: i64, path: &Path) -> Result<()>;
@@ -424,8 +424,13 @@ impl Updater<'_> {
                     continue;
                 }
             };
-            if let Some(g) = self.group {
-                g.share(&serde_json::json!({"keys": keys, "channel": ch, "release": rel}));
+            // Each file as it was read, in the canonical envelope that
+            // every reader takes.
+            if let Some(g) = self.group
+                && let Ok(set) =
+                    serde_json::value::to_raw_value(&serde_json::json!({"keys": keys, "channel": ch, "release": rel}))
+            {
+                g.share(&set);
             }
             return Ok(self.found(st, r, seen, i));
         }
@@ -438,7 +443,8 @@ impl Updater<'_> {
                     channel: File,
                     release: File,
                 }
-                let set: Set = serde_json::from_value(v).context("the service's release does not decode")?;
+                // Each file read from the bytes the service sent.
+                let set: Set = serde_json::from_str(v.get()).context("the service's release does not decode")?;
                 release::check(&set.keys, &set.channel, &set.release, roots, CHANNEL, self.now_ms, &st.seen)
             });
             match held {
@@ -891,21 +897,22 @@ mod tests {
     /// archive, and notes what cbb update hands it.
     struct FakeGroup {
         dir: PathBuf,
-        shared: RefCell<Vec<serde_json::Value>>,
+        shared: RefCell<Vec<Box<serde_json::value::RawValue>>>,
         kept: RefCell<Vec<(String, i64)>>,
         want: Vec<String>,
     }
 
     impl Group for FakeGroup {
-        fn share(&self, set: &serde_json::Value) {
-            self.shared.borrow_mut().push(set.clone());
+        fn share(&self, set: &serde_json::value::RawValue) {
+            self.shared.borrow_mut().push(set.to_owned());
         }
-        fn held(&self) -> Result<serde_json::Value> {
-            let read =
-                |n: &str| serde_json::from_slice::<serde_json::Value>(&fs::read(self.dir.join(n)).unwrap()).unwrap();
-            Ok(
-                serde_json::json!({"keys": read("keys.json"), "channel": read("stable.json"), "release": read("release.json")}),
-            )
+        fn held(&self) -> Result<Box<serde_json::value::RawValue>> {
+            let read = |n: &str| fs::read(self.dir.join(n)).unwrap();
+            crate::entries::set_of(&[
+                ("keys", &read("keys.json")),
+                ("channel", &read("stable.json")),
+                ("release", &read("release.json")),
+            ])
         }
         fn get(&self, _: &str, _: i64, path: &Path) -> Result<()> {
             fs::copy(self.dir.join(ARCHIVE), path).map(|_| ()).context("no archive")

@@ -3554,6 +3554,9 @@ the project, where it is reached now (section 14, "The project's relay").
   sends it to the peer in an `entries` message:
   `{"t":"entries","entries":{"keys":...,"entries":...}}`. A member takes it with the check
   above, keeps it and sends it on to its other peers; it drops one that fails, and logs why.
+  Each file in it is read, kept and sent on as the bytes that came, in the one envelope every
+  reader takes ("Two signatures"), never decoded and written again; the same holds for the
+  `release` message ("In the group") and for the string of `cbb global entries`.
   A phone takes it the same way and keeps it in its own files, but passes none on: its hello
   carries the seqs it holds, so that a computer does not send the same list again, and its
   hub registers through the ways it names (section 13). The lite member, which is no hub,

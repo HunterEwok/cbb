@@ -1841,13 +1841,11 @@ impl ServiceLink<'_> {
 }
 
 impl update::Group for ServiceLink<'_> {
-    fn share(&self, set: &serde_json::Value) {
-        if let Ok(data) = serde_json::to_vec(set) {
-            let _ = self.ask("release", data);
-        }
+    fn share(&self, set: &serde_json::value::RawValue) {
+        let _ = self.ask("release", set.get().as_bytes().to_vec());
     }
 
-    fn held(&self) -> Result<serde_json::Value> {
+    fn held(&self) -> Result<Box<serde_json::value::RawValue>> {
         let m = self.ask("release_held", Vec::new())?;
         serde_json::from_slice(&m.payload).context("the service's release does not decode")
     }

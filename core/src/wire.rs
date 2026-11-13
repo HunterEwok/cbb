@@ -4,6 +4,8 @@
 //! The frames of the member protocol (docs/protocol.md, section 4): a
 //! 4-byte big-endian length and a JSON message.
 
+use alloc::borrow::ToOwned;
+use alloc::boxed::Box;
 use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
@@ -11,6 +13,7 @@ use alloc::vec::Vec;
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use serde_json::value::RawValue;
 
 use crate::authority::Record;
 use crate::certs::b64;
@@ -53,13 +56,15 @@ pub struct Message {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result: Option<CommandResult>,
     /// In an entries message, the signed entry points `{keys, entries}`
-    /// (section 16, "Entry points"), decoded on their own.
+    /// (section 16, "Entry points"), kept as the bytes that came, so that
+    /// each file is read as every reader reads it, decoded on their own.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub entries: Option<Value>,
+    pub entries: Option<Box<RawValue>>,
     /// In a release message, the signed release `{keys, channel, release}`
-    /// (section 16, "In the group"), decoded on their own.
+    /// (section 16, "In the group"), kept as the bytes that came, decoded
+    /// on their own.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub release: Option<Value>,
+    pub release: Option<Box<RawValue>>,
     /// In a reach message, the members a computer is connected to (section
     /// 4, "Reach"), kept as it came.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -570,13 +575,13 @@ pub fn event(s: &Sealed) -> Message {
 }
 
 /// An entries message, which passes the signed entry points on.
-pub fn entries(set: &Value) -> Message {
-    Message { kind: "entries".into(), entries: Some(set.clone()), ..Default::default() }
+pub fn entries(set: &RawValue) -> Message {
+    Message { kind: "entries".into(), entries: Some(set.to_owned()), ..Default::default() }
 }
 
 /// A release message, which passes the signed release on.
-pub fn release(set: &Value) -> Message {
-    Message { kind: "release".into(), release: Some(set.clone()), ..Default::default() }
+pub fn release(set: &RawValue) -> Message {
+    Message { kind: "release".into(), release: Some(set.to_owned()), ..Default::default() }
 }
 
 /// A command message: a command an admin signed for its receiver
@@ -773,5 +778,21 @@ mod tests {
         let again = serde_json::to_value(&r).unwrap();
         assert_eq!(again["tunnel"]["hub_key"], "x");
         assert!(serde_json::to_value(CommandResult::default()).unwrap().get("tunnel").is_none());
+    }
+    // The signed files of an entries or release message are kept as the
+    // bytes that came, so that a member reads and passes on each file as
+    // it was signed (docs/protocol.md, section 16, "Two signatures").
+    #[test]
+    fn signed_sets_keep_their_bytes() {
+        let set = r#"{ "keys" : {"sigs":[],"body":"e30="} ,"entries":{"body":"e30=", "sigs":[]}}"#;
+        for kind in ["entries", "release"] {
+            let m = decode(format!(r#"{{"t":"{kind}","{kind}":{set}}}"#).as_bytes()).unwrap();
+            let got = if kind == "entries" { m.entries.as_ref() } else { m.release.as_ref() };
+            assert_eq!(got.unwrap().get(), set);
+            let raw: &serde_json::value::RawValue = serde_json::from_str(set).unwrap();
+            let out = if kind == "entries" { super::entries(raw) } else { super::release(raw) };
+            let again = String::from_utf8(serde_json::to_vec(&out).unwrap()).unwrap();
+            assert!(again.contains(set), "{again}");
+        }
     }
 }
