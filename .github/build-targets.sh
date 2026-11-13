@@ -4,7 +4,7 @@
 #
 # CI's build for each target, as a release builds it: build-targets.sh
 # DIR TARGET... builds cbb, the Rust program
-# (member/packaging/build.sh) with cbb-relay, the relay in Rust, and beside
+# (packaging/build.sh) with cbb-relay, the relay in Rust, and beside
 # them the Go programs cbb-helper and cbb-forward for each TARGET,
 # GOOS/GOARCH with /N for GOARM and /vet to run go vet first, into
 # DIR/GOOS-ARCH, makes the release archive in DIR/dist with
@@ -35,8 +35,8 @@ EOF
 	export GOOS="$os" GOARCH="$arch" GOARM="$arm" GOMIPS=
 	case $arch in mips | mipsle) GOMIPS=softfloat ;; esac
 	[ -z "$vet" ] || go vet ./...
-	rust=$(sh member/packaging/build.sh "$os/$arch${arm:+/$arm}")
-	sh member/packaging/notices.sh "$(basename "$(dirname "$rust")")" >"$out/rust-notices"
+	rust=$(sh packaging/build.sh "$os/$arch${arm:+/$arm}")
+	sh packaging/notices.sh "$(basename "$(dirname "$rust")")" >"$out/rust-notices"
 	exe=''
 	[ "$os" != windows ] || exe=.exe
 	cp "$rust/cbb$exe" "$out/"

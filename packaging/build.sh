@@ -5,7 +5,7 @@
 # Builds cbb, the Rust program, for one of the release's targets, named as
 # Go names it, and prints the folder that holds it:
 #
-#   sh member/packaging/build.sh GOOS/GOARCH[/GOARM]
+#   sh packaging/build.sh GOOS/GOARCH[/GOARM]
 #
 # For Windows the folder holds cbb.exe and cbbw.exe, the same program
 # without a console window. Linux's builds are static musl binaries linked
@@ -17,8 +17,8 @@
 # name the version and the commit that cbb version prints.
 set -eu
 
-cd "$(dirname "$0")/../.."
-nightly=$(sed -n 's/^nightly="\(.*\)"$/\1/p' member/packaging/mips.sh)
+cd "$(dirname "$0")/.."
+nightly=$(sed -n 's/^nightly="\(.*\)"$/\1/p' packaging/mips.sh)
 tool=build toolchain=stable std='' features=''
 case ${1:-} in
 linux/amd64) target=x86_64-unknown-linux-musl ;;
@@ -28,7 +28,7 @@ linux/arm/6) target=arm-unknown-linux-musleabihf ;;
 linux/mips | linux/mipsle)
 	arch=mips
 	[ "$1" = linux/mips ] || arch=mipsel
-	bin=$(sh member/packaging/mips.sh "$arch" | tail -n 1)
+	bin=$(sh packaging/mips.sh "$arch" | tail -n 1)
 	dirname "$bin"
 	exit 0
 	;;
@@ -39,7 +39,7 @@ darwin/arm64) target=aarch64-apple-darwin ;;
 windows/amd64) target=x86_64-pc-windows-gnu tool=zigbuild features=windowless ;;
 windows/arm64) target=aarch64-pc-windows-gnullvm tool=zigbuild features=windowless ;;
 *)
-	echo "usage: sh member/packaging/build.sh GOOS/GOARCH[/GOARM]" >&2
+	echo "usage: sh packaging/build.sh GOOS/GOARCH[/GOARM]" >&2
 	exit 2
 	;;
 esac

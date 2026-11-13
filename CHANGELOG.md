@@ -1673,6 +1673,8 @@ made with 0.5 is set up again once. The details follow.
   `cbb.sh`.
 
 ### Changed
+- The build scripts of `cbb` in Rust (`build.sh`, `mips.sh`, `notices.sh`) moved from
+  `member/packaging/` to `packaging/`, beside the installers and archives of the same program.
 - Versions and compatibility (`docs/reference/compatibility.md`): which releases work
   together in one group, how to update a group, and what an older device does with something
   newer.
