@@ -85,7 +85,8 @@ reaches any workflow on any branch, so anyone who may push a branch could read i
 environment's **Deployment branches and tags** are *Selected branches and tags*: the tag
 pattern `v*` and the branch `main`. The jobs that sign (`build`, `android` and
 `openwrt-feed` in the release workflow, `homebrew` in the published workflow) name the
-environment; a run by hand to check a key therefore starts from `main`. No required
+environment; a run by hand to check a key therefore starts from `main`, without a tag (a run
+with one is a rehearsal, which takes no secret: "A rehearsal of a release" below). No required
 reviewers: the release tag is the maintainer's decision already.
 
 | Secret | What it is | Section |
@@ -221,6 +222,20 @@ Rules for workflows:
   `ghcr.io/hunterewok/cbb` as `X.Y.Z` (and `latest`, but not for a pre-release),
   attests it in the registry and adds its digest to the release notes. The first push makes
   the package private: once, in the package's settings on GitHub, make it public.
+
+### A rehearsal of a release
+
+Run by hand with a tag (Actions, "release", "Run workflow", **tag** `vX.Y.Z` or
+`vX.Y.Z-rc.N`), from any branch, `.github/workflows/release.yml` builds and checks
+everything as a release of that tag would and leaves the release's files (the archives,
+`SHA256SUMS`, the bills of materials, `get.sh` and `get.ps1`, the winget manifest) in the
+artifact `release-files` for a week. It signs nothing and publishes nothing, whatever its
+inputs: the jobs name the environment **release** and read its secrets only when the
+`roots` job's output `sign` is true, which is only for a tag pushed or the keys check from
+`main` without a tag, so a rehearsal's programs are signed ad hoc or not at all and it has
+no APK, no `.pkg`, no TestFlight build and no OpenWrt feed; the draft, the iPhone app's
+CodeQL analysis and the Docker image run only on a tag pushed. The steps are the release's
+own, with the tag from `TAG` (the pushed tag, or the rehearsal's).
 
 ## Signed releases
 
