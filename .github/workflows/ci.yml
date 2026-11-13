@@ -2443,7 +2443,7 @@ jobs:
         run: |
           # testhooks: the tests below steer both through their hooks, CBB_TEST_* (never a release's build).
           cargo build --locked --release -p cbb-member --features testhooks
-          cargo build --locked --release -p cbb-ffi --features member,tunnel --example phone-on-linux
+          cargo build --locked --release -p cbb-ffi --features member,tunnel,testhooks --example phone-on-linux
           cargo build --locked --release -p cbb-ffi --features tunnel --example tunnel-on-linux
           # Built with -cover: the Go side's coverage counts what the helper
           # does under these tests too; each part puts a script in the

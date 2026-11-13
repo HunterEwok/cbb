@@ -121,7 +121,7 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_TEST_IPV6` | the lite member's tests | `1` makes the tests of the tunnel and the relay over IPv6 fail where the system has no IPv6 loopback, instead of skipping them; the bench sets it. |
 | `CBB_TEST_RUST_SERVICE` | Go tests of the service | The Rust service's binary: the tests that start a Linux member with the default configuration run it in place of the Go service, finding their peers by mDNS. |
 | `CBB_ESP32_ON_LINUX` | `TestEmbassyJoiner` | The `esp32-on-linux` binary of `embassy/`, run over a TAP interface. |
-| `CBB_PHONE_ON_LINUX` | `TestFFIJoiner` | The example `phone-on-linux` of `ffi/` (feature `member`): the Aurora app's joining and syncing with a software key. |
+| `CBB_PHONE_ON_LINUX` | `TestFFIJoiner` | The example `phone-on-linux` of `ffi/` (features `member` and `testhooks`, so it reads the tests' hooks): the Aurora app's joining and syncing with a software key. |
 | `CBB_TUNNEL_ON_LINUX` | `TestRustPhoneTunnel` | The example `tunnel-on-linux` of `ffi/` (feature `tunnel`): the phones' Rust tunnel to a Go hub. |
 | `CBB_REAL_FORWARDER` | `TestRustPhoneThroughRealForwarder` | A forwarder on the internet, host:port (`cbb.tools:8764` for the project's): the phones' Rust hub registers with it and a Rust client reaches the hub over VLESS with XHTTP, a check from a network that blocks WireGuard; without it the test is skipped. |
 | `CBB_REAL_FORWARDER_PIN` | `TestRustPhoneThroughRealForwarder` | That forwarder's pin, base64, when it is not the project's. |
