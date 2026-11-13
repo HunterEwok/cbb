@@ -755,6 +755,12 @@ fn the_joiner_checks_its_welcome() {
     assert_eq!(recovery2, crate::testkit::rk2().public());
     assert_eq!(envs.len(), w.records.len());
     assert_eq!(time, 1_793_000_000_000);
+    // Up to 8192 records, past the old profile's 4096 items; not one more.
+    let mut wide = w.clone();
+    wide.records = vec![w.records[0].clone(); 8192];
+    assert_eq!(Welcome::parts(&wide.encode()).map(|p| p.1.len()), Ok(8192));
+    wide.records.push(w.records[0].clone());
+    assert_eq!(Welcome::parts(&wide.encode()).err().map(|r| r.name()), Some("welcome/records"));
     // A recovery key other than the group's gives another Group ID.
     let mut false_key = w.clone();
     false_key.recovery = k("not the recovery key").key.public.clone();
@@ -1027,7 +1033,11 @@ fn the_joiner_takes_the_most_changes_of_root() {
     let heads = w.records.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).count();
     assert_eq!(heads as u64, max);
     let bytes = w.encode();
-    assert!(bytes.len() <= crate::format::frame::LIMIT_PAIRING, "{}", bytes.len());
+    assert!(
+        bytes.len() <= crate::format::frame::LIMIT_PAIRING,
+        "a realistic Welcome stays under 1 MiB: {}",
+        bytes.len()
+    );
     let back = Welcome::decode(&bytes).unwrap();
     let group = format::DeviceId(g.gid.0);
     let (mine, st2) = back
@@ -1627,6 +1637,72 @@ fn a_welcome_carries_what_it_must_first() {
     assert!(back.revoked.contains(&tv.hash));
     // Too small for what it must carry: no Welcome.
     assert_eq!(Welcome::build_within(&set, &st, &admitter, &slate.hash, 1, 600), Err(welcome::TooLarge));
+}
+
+/// A Welcome that leaves the rest to sync ends, after one sync of
+/// everything the admitter holds, in the admitter's state.
+#[test]
+fn a_welcome_that_leaves_the_rest_to_sync_ends_in_the_same_state() {
+    let mut g = G::new();
+    let (n1, slate) = (k("root n1"), k("slate"));
+    g.change(&n1);
+    phone_admin(&mut g, &n1, &k("phone b"), &k("admin b"), true);
+    let mut d = Device::new(slate.key.clone(), "slate", ROLE_MEMBER);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    g.rec(&n1, Kind::device(d));
+    for i in 0..40u64 {
+        g.rec(&n1, Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] });
+    }
+    let set = g.set();
+    let st = set.state();
+    let admitter = k("phone b").hash;
+    let all = Welcome::build(&set, &st, &admitter, &slate.hash, 1).unwrap();
+    let full: usize =
+        all.records.iter().map(|r| r.envelope().len()).sum::<usize>() + all.list.as_ref().map_or(0, Vec::len);
+    let w = Welcome::build_within(&set, &st, &admitter, &slate.hash, 1, full - 20 * 200).unwrap();
+    assert!(w.records.len() < all.records.len());
+    let group = format::DeviceId(g.gid.0);
+    let (mut mine, _) = Welcome::decode(&w.encode())
+        .unwrap()
+        .check(&group, &point(&k("phone b")), &point(&slate), Joining::Ordinary, Way::Invited(&invitation()))
+        .unwrap();
+    assert!(mine.len() < set.len());
+    // One sync: the admitter sends what it holds.
+    let (_, refused) = mine.insert_all(set.in_dependency_order().into_iter().cloned());
+    assert!(refused.is_empty(), "{refused:?}");
+    assert_eq!(mine.state(), st);
+    assert_eq!(mine.len(), set.len());
+}
+
+/// Pairing frames: before the confirm every message takes the pairing
+/// limit and a Welcome is refused; after it the Welcome alone takes the
+/// member limit.
+#[test]
+fn only_a_confirmed_welcome_takes_the_member_frame() {
+    use crate::format::frame::{self, LIMIT_MEMBER, LIMIT_PAIRING};
+    let big = |t: u64, size: usize| {
+        let filler = vec![7u8; size];
+        frame::write(&crate::format::Value::Map(vec![
+            (0, crate::format::Value::Uint(t)),
+            (2, crate::format::Value::Bytes(&filler)),
+        ]))
+    };
+    let large_welcome = big(T_WELCOME, 2 * LIMIT_PAIRING);
+    let small_welcome = big(T_WELCOME, 100);
+    let large_other = big(T_CONFIRM, 2 * LIMIT_PAIRING);
+    let too_large = big(T_WELCOME, LIMIT_MEMBER);
+    assert!(large_welcome.len() - 4 > LIMIT_PAIRING && large_welcome.len() - 4 <= LIMIT_MEMBER);
+    assert_eq!(read_pairing(&large_welcome, true).map(|m| m.t), Ok(T_WELCOME));
+    assert_eq!(read_pairing(&large_welcome, false).map(|m| m.t), Err(crate::format::Rule::FRAME_GRID));
+    assert_eq!(read_pairing(&small_welcome, false).map(|m| m.t), Err(RULE_EARLY_WELCOME));
+    assert_eq!(read_pairing(&small_welcome, true).map(|m| m.t), Ok(T_WELCOME));
+    assert_eq!(read_pairing(&large_other, true).map(|m| m.t), Err(crate::format::Rule::FRAME_GRID));
+    assert_eq!(read_pairing(&large_other, false).map(|m| m.t), Err(crate::format::Rule::FRAME_GRID));
+    assert_eq!(read_pairing(&too_large, true).map(|m| m.t), Err(crate::format::Rule::FRAME_GRID));
+    let head = |f: &[u8]| <[u8; 4]>::try_from(&f[..4]).unwrap();
+    assert_eq!(pairing_length(head(&large_welcome), true), Ok(large_welcome.len() - 4));
+    assert!(pairing_length(head(&large_welcome), false).is_err());
+    assert!(pairing_length(head(&too_large), true).is_err());
 }
 
 /// The joiner's record comes with its signer's chain below it: a budget

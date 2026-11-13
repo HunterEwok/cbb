@@ -23,8 +23,9 @@ pub const FIELD_PAD: u16 = 1;
 
 /// The largest frame of the member protocol: 7 MiB, 448 · 16384.
 pub const LIMIT_MEMBER: usize = 7 * 1024 * 1024;
-/// The largest frame of pairing: 1 MiB, so that a Welcome carries every
-/// change of root with both its signatures.
+/// The largest frame of pairing: 1 MiB. The Welcome alone, after the code
+/// is confirmed, takes [`LIMIT_MEMBER`] (`join::read_pairing`), so that it
+/// carries what the joiner must evaluate at the widest group.
 pub const LIMIT_PAIRING: usize = 1024 * 1024;
 /// The largest frame a leaf takes.
 pub const LIMIT_LEAF: usize = 16 * 1024;

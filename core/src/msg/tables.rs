@@ -73,7 +73,7 @@ pub static WELCOME: Table = Table {
     shape: "welcome/shape",
     fields: &[
         f(1, "welcome/root", MEMBER_KEY, true),
-        f(2, "welcome/records", Ty::Array { of: &ENV, max: 4096 }, true),
+        f(2, "welcome/records", Ty::Array { of: &ENV, max: 8192 }, true),
         f(4, "welcome/keys", Ty::Array { of: &ENV, max: 256 }, false),
         f(5, "welcome/time", MS, true),
         f(6, "welcome/grant", Ty::Map(&GRANT), false),

@@ -37,7 +37,7 @@ pub const MAX_BYTES: usize = 16 * 1024;
 pub const MAX_HEADS: usize = crate::records::body::MAX_RECOVERY as usize + 1;
 /// The most bytes one head's envelope can take: its body, the envelope's
 /// heads and signature, and K2's second signature.
-const HEAD_BYTES: usize = crate::records::MAX_BODY
+pub(crate) const HEAD_BYTES: usize = crate::records::MAX_BODY
     .saturating_add(crate::records::ENVELOPE_ALLOWANCE)
     .saturating_add(crate::records::HEAD_SIG2_ALLOWANCE);
 // The widest intro, every head at its widest and the others full, with room

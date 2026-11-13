@@ -4,7 +4,8 @@
 //! The strict CBOR profile (format section 1): unsigned integers below
 //! 2^63, bytes, UTF-8 text, arrays and maps with unsigned keys up to 65535
 //! in increasing order; definite lengths in their shortest form; at most 8
-//! containers deep and 4096 elements each. Every value has exactly one
+//! containers deep and 65 535 elements each (a field's own row is the
+//! real bound; a leaf is bounded by its frame). Every value has exactly one
 //! encoding, so a reader that checks these rules knows that encoding what it
 //! read gives back the bytes it got.
 
@@ -15,7 +16,7 @@ use super::Rule;
 /// How deeply containers nest: an item inside 8 containers is the deepest.
 pub const MAX_DEPTH: usize = 8;
 /// The most elements of one array or map.
-pub const MAX_COUNT: usize = 4096;
+pub const MAX_COUNT: usize = 65_535;
 /// The largest integer of the profile, 2^63 − 1.
 pub const MAX_INT: u64 = i64::MAX as u64;
 
