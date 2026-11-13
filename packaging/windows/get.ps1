@@ -353,7 +353,10 @@
 				Get-ReleaseFile "$channelFiles/stable.json" (Join-Path $tmp 'stable.json')
 				$named = ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String((Get-Content -Raw (Join-Path $tmp 'stable.json') |
 								ConvertFrom-Json).body)) | ConvertFrom-Json).release
-				if ($named -notmatch '^\d+\.\d+\.\d+(-rc\.\d+)?$') { throw (T 'stable.json names no release') }
+				# A version as cbb reads one, X.Y.Z or X.Y.Z-rc.N, before it goes
+				# into the address: ASCII digits only, nothing after it.
+				$n = '(0|[1-9][0-9]{0,5})'
+				if ($named -isnot [string] -or $named -cnotmatch "\A$n\.$n\.$n(-rc\.[1-9][0-9]{0,5})?\z") { throw (T 'stable.json names no release') }
 				$version = "v$named"
 				if (-not $env:CBB_RELEASE_DIR) { $base = "$repo/releases/download/$version" }
 			}

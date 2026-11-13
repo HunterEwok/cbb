@@ -552,10 +552,12 @@ if [ "$version" = latest ] && verifying; then
 		fail "openssl is required to check the release's signature (or CBB_VERIFY=skip to install it unchecked)"
 	fetch "$channel_files/stable.json" "$tmp/stable.json" || fail "could not download %s" "$channel_files/stable.json"
 	named=$(field body "$tmp/stable.json" | openssl base64 -d -A 2>/dev/null | sed -n 's/.*"release":"\([^"]*\)".*/\1/p')
-	case $named in
-	[0-9]*.[0-9]*.[0-9]*) ;;
-	*) fail "stable.json names no release" ;;
-	esac
+	# A version as cbb reads one, X.Y.Z or X.Y.Z-rc.N, on one line, before
+	# it goes into the address.
+	n='(0|[1-9][0-9]{0,5})'
+	[ "$(printf '%s\n' "$named" | wc -l)" -eq 1 ] &&
+		printf '%s\n' "$named" | LC_ALL=C grep -Eqx "$n\.$n\.$n(-rc\.[1-9][0-9]{0,5})?" ||
+		fail "stable.json names no release"
 	version=v$named
 	[ -n "${CBB_RELEASE_DIR:-}" ] || base=$repo/releases/download/$version
 fi

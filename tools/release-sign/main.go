@@ -605,14 +605,15 @@ func seHelper() (string, error) {
 
 // drillFaults are the faults drill -fault puts in keys.json, each a body
 // that every reader refuses (docs/protocol.md, section 16).
-var drillFaults = []string{"empty-use", "upper-case", "twice", "null", "no-time", "status-brace", "same-name", "broken-pq", "no-pq", "high-s", "broken-twin", "alg-zero", "pin-alg-zero", "pin-not-p256"}
+var drillFaults = []string{"empty-use", "upper-case", "twice", "null", "no-time", "status-brace", "same-name", "broken-pq", "no-pq", "high-s", "broken-twin", "alg-zero", "pin-alg-zero", "pin-not-p256", "path-version"}
 
 // pinFaults are the drill faults that add a forwarder's pin no reader
 // takes to keys.json, whatever its use.
 var pinFaults = []string{"pin-alg-zero", "pin-not-p256"}
 
-// relFaults are the drill faults put in release.json rather than keys.json.
-var relFaults = []string{"status-brace", "same-name", "broken-pq", "no-pq", "high-s", "broken-twin", "alg-zero"}
+// relFaults are the drill faults put in release.json or stable.json rather
+// than keys.json.
+var relFaults = []string{"status-brace", "same-name", "broken-pq", "no-pq", "high-s", "broken-twin", "alg-zero", "path-version"}
 
 // otherS returns an ES256 signature with S replaced by n - S: it verifies
 // as well, and no reader takes it.
@@ -775,8 +776,17 @@ func drill(args []string) error {
 		}
 	}
 	h := rel.Hash()
-	ch, err := release.Sign(release.Channel{V: 1, Type: release.TypeChannel, Channel: "stable", Seq: 1, TimeMS: t,
-		ExpiresMS: t + 30*24*time.Hour.Milliseconds(), Release: r.Version, ReleaseSHA256: hex.EncodeToString(h[:])}, chSigner)
+	c := release.Channel{V: 1, Type: release.TypeChannel, Channel: "stable", Seq: 1, TimeMS: t,
+		ExpiresMS: t + 30*24*time.Hour.Milliseconds(), Release: r.Version, ReleaseSHA256: hex.EncodeToString(h[:])}
+	var ch release.File
+	if *fault == "path-version" {
+		// stable.json names a release that is no version but a path.
+		c.Release += "/../" + r.Version
+		data, _ := json.Marshal(c)
+		ch, err = signRaw(data, chSigner)
+	} else {
+		ch, err = release.Sign(c, chSigner)
+	}
 	if err != nil {
 		return err
 	}

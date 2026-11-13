@@ -40,4 +40,9 @@ for f in pin-alg-zero pin-not-p256; do
 	run
 	grep -q "keys.json is not valid\|keys.json holds a key that is not valid" "$rel/out" || { echo "get.sh took keys.json with the fault $f" >&2; cat "$rel/out"; exit 1; }
 done
+# stable.json that names a path rather than a version stops before any
+# download.
+"$sign" drill -version 0.6.0 -fault path-version "$rel" "$rel/roots.pem"
+run
+grep -q "stable.json names no release" "$rel/out" || { echo "get.sh took a release named by a path" >&2; cat "$rel/out"; exit 1; }
 echo "get.sh checks both signatures with $(openssl version)"
