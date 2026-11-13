@@ -115,6 +115,27 @@ cbb_member *cbb_member_start(const uint8_t *request, size_t len, cbb_sign_fn sig
  */
 uint8_t *cbb_member_call(const cbb_member *m, const uint8_t *request, size_t len, size_t *answer_len);
 /*
+ * The app's keys for the servers (docs/protocol.md, section 18), by name
+ * ("server TAG" or "period TAG"): op 0 answers 0 when the app holds the key
+ * name, 1 writes its public point (SEC1, 65 bytes) to out, making the key
+ * first, 2 writes its signature (DER) of the 32-byte digest to out, 3 drops
+ * every key but those name lists, one a line. out has room for 72 bytes and
+ * out_len gets how many it holds; any answer but 0 is a failure. ctx must
+ * stay valid, and the callback callable from any thread, for the rest of
+ * the process.
+ */
+typedef int32_t (*cbb_keys_fn)(void *ctx, int32_t op, const uint8_t *name, size_t name_len, const uint8_t *digest,
+                               uint8_t *out, size_t *out_len);
+/*
+ * Makes the member do what the service does for the servers: it keeps the
+ * group's server credentials with its keys for them behind keys, signs its
+ * server key and, on the root, the hubs' and members' credentials and the
+ * period the app hands the root key for (cbb_member_manage, period); it may
+ * then be one of the group's hubs (the ops hub, hub_off) or meet the group at
+ * a blind relay (relay). The answer is {"ok"} or {"error"}.
+ */
+uint8_t *cbb_member_servers(const cbb_member *m, cbb_keys_fn keys, void *ctx, size_t *answer_len);
+/*
  * Stops the member. It stays valid for the rest of the process: another
  * thread may still call it, and a call after the stop answers that the
  * member stopped; stopping it again does nothing.
@@ -130,7 +151,9 @@ void cbb_member_stop(cbb_member *m);
  * connected), mute, unmute, sync_on, sync_off (the device's house, a mode
  * command), paste ("text" put where the device's focus is, "mode" paste or
  * type, "kind" text, secret or media, the last with "text" the event ID of
- * a copy of images or files the phone made just before), renew (every
+ * a copy of images or files the phone made just before), paste_off,
+ * actions_off, away_off, action (name the quick action), freeze (an admin
+ * that removes no admins), renew (every
  * member certificate due, and as the root every admin CA from an earlier root;
  * no device) or resolve (the root voids the records an alert of the member's
  * alerts op names); the answer {}, {"result"} for a command, or {"renewed":
@@ -143,7 +166,14 @@ void cbb_member_stop(cbb_member *m);
  * {"state":"effective","cert"} once it made the phone the root.
  * recover_with_sheet with "sheet" (the recovery sheet's QR code) and
  * "root_ca" claims the group for a phone that restored it (cbb_restore): the
- * sheet's key signs the claim, sign is not called.
+ * sheet's key signs the claim, sign is not called. period, on the root of a
+ * member that serves the servers (cbb_member_servers), signs the next period
+ * of the server credentials with the root key, when one is due, and answers
+ * {"period_due"}. add_watch, the root with "key" (the watch's admin key's
+ * SubjectPublicKeyInfo), "name", "os" and an optional "device", makes a watch
+ * an admin and answers {"device","admin_ca","group","signer"} for the watch;
+ * watch_actions (nothing signed) answers {"actions"}, what a watch may do to
+ * device: freeze, remove, paste-off, actions-off, away-off, action.
  */
 uint8_t *cbb_member_manage(const cbb_member *m, const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx,
                            size_t *answer_len);
@@ -156,8 +186,62 @@ uint8_t *cbb_member_manage(const cbb_member *m, const uint8_t *request, size_t l
  * the sheet's tag (or asks addrs, "host:port") and takes the records from a member on a connection that
  * carries records only, checked; the answer {"device","cert","issuer",
  * "group_ca","roots","records","addr"} is what the app starts its member with.
+ * In place of sheet, "card" is the keys cbb_piv's issue answers (the recovery
+ * keys on a YubiKey): it then browses for any group and tries each.
  */
 uint8_t *cbb_restore(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx, size_t *answer_len);
+
+/*
+ * The app's YubiKey (src/piv.rs), only with the feature member: sends apdu
+ * (len bytes) to the card and writes its answer, the status word last, to
+ * out (at most out_cap bytes) and the length to out_len; returns 0, or
+ * another value when the card left.
+ */
+typedef int32_t (*cbb_transmit_fn)(void *ctx, const uint8_t *apdu, size_t len, uint8_t *out, size_t out_cap,
+                                   size_t *out_len);
+
+/*
+ * One step with the group's recovery key on a YubiKey (src/piv.rs): the core
+ * speaks PIV and transmit carries each APDU, during this call only. request
+ * is {"op",...}: "make" {"pin"} makes a key in a free retired slot and
+ * answers {"slot","key"} (its SubjectPublicKeyInfo, for manage's
+ * recovery_for); "put" {"slot","cert"} stores the admin CA; "issue"
+ * {"pin","public"} has each recovery key on the card issue a member
+ * certificate for public, {"keys":[{"slot","admin_ca","device","cert","public"}]}
+ * (public the slot's key point);
+ * "sign" {"pin","slot","public","digest"} answers {"sig"}, DER.
+ */
+uint8_t *cbb_piv(const uint8_t *request, size_t len, cbb_transmit_fn transmit, void *ctx, size_t *answer_len);
+
+/*
+ * Signs a manage request as cbb_member_manage does, with a slot's key on the
+ * app's YubiKey (src/piv.rs), as the recovery key claims the group
+ * (action recover): request adds "pin" and "slot" to manage's fields,
+ * public the slot's key point, and transmit carries each APDU to the card
+ * during this call only. When the card refused, the answer is its error.
+ */
+uint8_t *cbb_member_manage_card(const cbb_member *m, const uint8_t *request, size_t len, cbb_transmit_fn transmit,
+                                void *ctx, size_t *answer_len);
+
+/*
+ * The app's link to its watch (src/watch.rs), only with the feature member:
+ * sends body (len bytes), a record or command the watch is shown whole, to
+ * the watch and writes its ECDSA P-256 signature over the body's SHA-256,
+ * DER, to sig (72 bytes of room) and the length to sig_len; returns 0, or
+ * another value when the watch refused or went away.
+ */
+typedef int32_t (*cbb_sign_body_fn)(void *ctx, const uint8_t *body, size_t len, uint8_t *sig, size_t *sig_len);
+
+/*
+ * Does what the app's watch asked from the wrist, signed by the watch's admin
+ * key through sign_body during this call only: request is {"action","device",
+ * "watch","public","admin_ca","name","timeout_ms"}, action one of
+ * watch_actions for device (freeze, remove, paste_off, actions_off, away_off,
+ * action), watch the watch's device ID, public its key point and admin_ca
+ * what add_watch made. The answer is as cbb_member_manage's.
+ */
+uint8_t *cbb_member_manage_watch(const cbb_member *m, const uint8_t *request, size_t len, cbb_sign_body_fn sign_body,
+                                 void *ctx, size_t *answer_len);
 
 /*
  * The texts of the QR codes in a grey camera frame (src/qr.rs), only with the

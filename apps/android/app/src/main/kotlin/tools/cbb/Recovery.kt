@@ -181,7 +181,7 @@ private fun RecoverySheetDialog(sheet: Core.RecoverySheet, made: Instant, done: 
         ) {
             Text(stringResource(R.string.recovery_title), style = MaterialTheme.typography.titleLarge, color = palette.text)
             Text(stringResource(R.string.recovery_show_once), textAlign = TextAlign.Center, color = palette.textDim)
-            RecoveryPage(sheet, made, Modifier.widthIn(max = 520.dp).clip(RoundedCornerShape(Tokens.radiusCard)))
+            RecoveryPage(sheet, made, Modifier.widthIn(max = 520.dp).clip(RoundedCornerShape(LocalStyle.current.radiusCard)))
             AccentButton(stringResource(R.string.recovery_print), onClick = {
                 failure = try {
                     printSheet(context, sheet, made)

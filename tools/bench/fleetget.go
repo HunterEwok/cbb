@@ -135,30 +135,17 @@ func getScript(ctx context.Context, r *Report, f *Fleet, fd *feed, builds map[st
 			return runsVersion(ctx, d, "0.6.1")
 		})
 	}
-	getLite(ctx, r, f, fd, builds)
+	getNoHelper(ctx, r, f, fd, builds)
 }
 
-// getLite (I1): get.sh --lite on a computer with nothing installed takes
-// the lite member's archive from a release that holds both, checks its
-// signature and leaves the lite member running under systemd. It packs
-// the archive from the fleet's cbb with member/packaging/archive.sh, which
-// needs cargo and jq for the crates' notices.
-func getLite(ctx context.Context, r *Report, f *Fleet, fd *feed, builds map[string]string) {
-	const p = "fleet/I1-get-lite/"
-	var built string
+// getNoHelper (I1): get.sh --no-helper on a computer with nothing
+// installed takes the system's one archive, checks its signature and
+// leaves cbb running alone under systemd: no cbb-helper beside it, and the
+// installer's small.conf drop-in for a small device.
+func getNoHelper(ctx context.Context, r *Report, f *Fleet, fd *feed, builds map[string]string) {
+	const p = "fleet/I1-get-no-helper/"
 	var d *Device
 	if r.Do(p+"setup", func() error {
-		built = filepath.Join(fd.dir, "built-lite")
-		if err := os.MkdirAll(built, 0o755); err != nil {
-			return err
-		}
-		if out, err := exec.CommandContext(ctx, "sh", "-c", "cp \"$1\"/* \"$2\"/", "sh", builds["0.6.1"], built).CombinedOutput(); err != nil {
-			return fmt.Errorf("%v: %s", err, out)
-		}
-		target := map[string]string{"amd64": "x86_64-unknown-linux-gnu", "arm64": "aarch64-unknown-linux-gnu"}[goarchOf()]
-		if out, err := exec.CommandContext(ctx, "sh", "member/packaging/archive.sh", f.cbb, target, goarchOf(), built).CombinedOutput(); err != nil {
-			return fmt.Errorf("member/packaging/archive.sh: %v: %s", err, out)
-		}
 		var err error
 		if d, err = f.AddSystemd(ctx, f.net); err != nil {
 			return err
@@ -168,8 +155,8 @@ func getLite(ctx context.Context, r *Report, f *Fleet, fd *feed, builds map[stri
 	}) != nil {
 		return
 	}
-	if r.Do(p+"installs", func() error {
-		dir, err := fd.publish(ctx, built, "get-lite", "0.6.1", releaseOpts{})
+	r.Do(p+"installs", func() error {
+		dir, err := fd.publish(ctx, builds["0.6.1"], "get-no-helper", "0.6.1", releaseOpts{})
 		if err != nil {
 			return err
 		}
@@ -177,26 +164,29 @@ func getLite(ctx context.Context, r *Report, f *Fleet, fd *feed, builds map[stri
 		if err != nil {
 			return err
 		}
-		out, err := runOut(ctx, d, feedEnv(at)+" sh /tmp/get.sh --lite --no-firewall --no-pair", 3*time.Minute)
-		fmt.Fprintf(r.out, "I1 get.sh --lite: %s\n", strings.Join(strings.Fields(out), " "))
+		out, err := runOut(ctx, d, feedEnv(at)+" sh /tmp/get.sh --no-helper --no-firewall --no-pair", 3*time.Minute)
+		fmt.Fprintf(r.out, "I1 get.sh --no-helper: %s\n", strings.Join(strings.Fields(out), " "))
 		if err != nil {
 			return err
 		}
 		if !strings.Contains(out, "The release's signature checks out (0.6.1).") {
-			return fmt.Errorf("get.sh --lite printed %q, without that the signature checks out", out)
+			return fmt.Errorf("get.sh --no-helper printed %q, without that the signature checks out", out)
 		}
-		if out, err := Run(ctx, d, "cbb version", ""); err != nil || !strings.Contains(out, "the lite member") {
-			return fmt.Errorf("cbb version after get.sh --lite: %q (%v)", out, err)
+		if out, err := Run(ctx, d, "cbb version", ""); err != nil || !strings.Contains(out, "0.6.1") {
+			return fmt.Errorf("cbb version after get.sh --no-helper: %q (%v)", out, err)
+		}
+		if out, err := Run(ctx, d, "ls /usr/local/bin/cbb-helper 2>/dev/null; ls "+smallConf, ""); err != nil || strings.TrimSpace(out) != smallConf {
+			return fmt.Errorf("after get.sh --no-helper, want only %s and no cbb-helper: %q (%v)", smallConf, out, err)
 		}
 		return eventually(ctx, 30*time.Second, func() error {
 			out, err := Run(ctx, d, "systemctl is-active cbb; cbb status 2>&1; true", "")
-			if err == nil && (!strings.HasPrefix(out, "active") || !strings.Contains(out, "Not in a group.")) {
-				err = fmt.Errorf("the lite member after get.sh --lite: %q", out)
+			if err == nil && (!strings.HasPrefix(out, "active") || !strings.Contains(out, "in no group")) {
+				err = fmt.Errorf("cbb after get.sh --no-helper: %q", out)
 			}
 			return err
 		})
-	}) != nil {
-		return
-	}
-
+	})
 }
+
+// smallConf is the drop-in install.sh writes for cbb without its helper.
+const smallConf = "/etc/systemd/system/cbb.service.d/small.conf"

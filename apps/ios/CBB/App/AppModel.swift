@@ -309,6 +309,17 @@ final class AppModel: ObservableObject {
         init(until: Date?) { self.until = until }
     }
 
+    /// Whether a device's tile shows it muted: the answer the group is
+    /// waiting on, else its mute; for this phone, sync turned off.
+    func shownMuted(_ d: Computer) -> Bool {
+        if d.isSelf { return d.syncOff != nil }
+        return pendingMute[d.id] ?? (d.muted != nil)
+    }
+
+    /// Whether this phone may mute the device from its tile: its own sync
+    /// always, another device only as an admin.
+    func mayMute(_ d: Computer) -> Bool { d.isSelf || isAdmin }
+
     /// Sync turned off on this phone; nil while it is on.
     var syncOff: Hold? { devices.first(where: \.isSelf)?.syncOff }
 
@@ -369,6 +380,9 @@ final class AppModel: ObservableObject {
     @Published private(set) var customOrder = false
     /// One line about the last action, in plain words.
     @Published var message: String?
+    /// The mutes asked for and not yet answered, by device: the tile shows
+    /// the new state at once and goes back only when the group refuses it.
+    @Published private(set) var pendingMute: [String: Bool] = [:]
     /// The bug report to ask about in release mode ("Oops, something
     /// broke"); in debug mode a break shows whole in `message` instead.
     @Published private(set) var bug: BugReports.Offer?
@@ -1344,6 +1358,8 @@ final class AppModel: ObservableObject {
 
     /// Mutes a device for the whole group, or unmutes it.
     func setMuted(_ id: String, _ on: Bool, forMS: Int64 = 0) async {
+        pendingMute[id] = on
+        defer { pendingMute[id] = nil }
         do {
             try await group.setMuted(id, on, forMS: forMS)
             message = on ? String(localized: "The device is muted: its copies stay its own.", bundle: .app)

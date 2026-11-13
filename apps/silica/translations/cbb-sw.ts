@@ -507,6 +507,49 @@
     </message>
 </context>
 <context>
+    <name>DeviceTile</name>
+    <message>
+        <source>Mute for 15 minutes</source>
+        <translation>Nyamazisha kwa dakika 15</translation>
+    </message>
+    <message>
+        <source>Mute for 8 hours</source>
+        <translation>Nyamazisha kwa saa 8</translation>
+    </message>
+    <message>
+        <source>Mute for an hour</source>
+        <translation>Nyamazisha kwa saa moja</translation>
+    </message>
+    <message>
+        <source>Mute until unmuted</source>
+        <translation>Nyamazisha hadi uondoe</translation>
+    </message>
+    <message>
+        <source>Off for 15 minutes</source>
+        <translation>Zima kwa dakika 15</translation>
+    </message>
+    <message>
+        <source>Off for 8 hours</source>
+        <translation>Zima kwa saa 8</translation>
+    </message>
+    <message>
+        <source>Off for an hour</source>
+        <translation>Zima kwa saa moja</translation>
+    </message>
+    <message>
+        <source>Off until I turn it on</source>
+        <translation>Zima hadi niiwashe</translation>
+    </message>
+    <message>
+        <source>Turn sync off</source>
+        <translation>Zima usawazishaji</translation>
+    </message>
+    <message>
+        <source>Turn sync on</source>
+        <translation>Washa usawazishaji</translation>
+    </message>
+</context>
+<context>
     <name>Errors</name>
     <message>
         <source>Adding a device needs the admin PIN.</source>

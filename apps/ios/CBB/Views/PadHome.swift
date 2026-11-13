@@ -199,6 +199,7 @@ struct PadDevices: View {
     @Binding var selected: AppModel.Computer.ID?
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var arrange: ArrangeState
+    @Environment(\.themeStyle) private var style
     @Environment(\.palette) private var palette
     @AppStorage(DeviceLayout.wideKey) private var layout = DeviceLayout.tiles
     @State private var query = ""
@@ -289,7 +290,7 @@ struct PadDevices: View {
         }
         .overlay {
             if dropping {
-                RoundedRectangle(cornerRadius: Tokens.radiusCard, style: .continuous)
+                RoundedRectangle(cornerRadius: style.radiusCard, style: .continuous)
                     .strokeBorder(palette.accent, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
                     .padding(Tokens.spacingSmall)
                     .allowsHitTesting(false)
@@ -378,6 +379,7 @@ private struct PadCard: Hashable {
 struct PasteDrop: ViewModifier {
     let device: AppModel.Computer
     @EnvironmentObject private var model: AppModel
+    @Environment(\.themeStyle) private var style
     @Environment(\.palette) private var palette
     @State private var over = false
 
@@ -394,7 +396,7 @@ struct PasteDrop: ViewModifier {
                 }
                 .overlay {
                     if over {
-                        RoundedRectangle(cornerRadius: Tokens.radiusTile, style: .continuous)
+                        RoundedRectangle(cornerRadius: style.radiusTile, style: .continuous)
                             .strokeBorder(palette.accent, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
                             .allowsHitTesting(false)
                     }

@@ -103,13 +103,14 @@ struct ArrangedTile<Content: View>: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var arrange: ArrangeState
     @Environment(\.palette) private var palette
+    @Environment(\.themeStyle) private var style
 
     var body: some View {
         Group {
             if arrange.on {
                 label()
                     .overlay {
-                        RoundedRectangle(cornerRadius: Tokens.radiusTile, style: .continuous)
+                        RoundedRectangle(cornerRadius: style.radiusTile, style: .continuous)
                             .strokeBorder(palette.accent, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
                     }
                     .opacity(arrange.dragging == ref ? 0.4 : 1)

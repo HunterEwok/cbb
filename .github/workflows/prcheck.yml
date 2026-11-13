@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# What a pull request puts on main besides its tree (tools/prcheck): every author,
+# committer and co-author of its commits is one of the known addresses, so GitHub
+# lists no stray contributor, and its title and description, the squash commit's
+# message, neither link to a conversation with an assistant nor name a model.
+# A separate workflow so that editing the description runs only this check, not CI;
+# it takes seconds. Main's ruleset requires the job "prcheck" next to "ci-ok".
+name: prcheck
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prcheck-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  prcheck:
+    name: prcheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: the repository's squash message setting
+        id: repo
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: echo "squash=$(gh api "repos/$REPO" --jq '.squash_merge_commit_message // ""')" >> "$GITHUB_OUTPUT"
+      - name: the commits' people, the title and the description
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          SQUASH_MESSAGE: ${{ steps.repo.outputs.squash }}
+        run: go run ./tools/prcheck -base "$BASE" -head "$HEAD"

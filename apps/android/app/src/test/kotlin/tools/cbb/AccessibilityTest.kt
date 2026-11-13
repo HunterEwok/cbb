@@ -72,7 +72,7 @@ class AccessibilityTest {
     fun textColour() {
         val wrong = mutableListOf<String>()
         compose.setContent {
-            for (name in ColorChoice.offered) for (appearance in listOf(Appearance.DARK, Appearance.LIGHT)) {
+            for (name in ThemeChoice.offered) for (appearance in listOf(Appearance.DARK, Appearance.LIGHT)) {
                 AppTheme(name, appearance) {
                     if (LocalContentColor.current != LocalPalette.current.text) wrong += "$name ${appearance.key}: ${LocalContentColor.current}"
                 }

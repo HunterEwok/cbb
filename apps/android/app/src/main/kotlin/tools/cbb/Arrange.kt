@@ -63,6 +63,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import kotlinx.coroutines.launch
@@ -294,7 +295,7 @@ private fun Arrangeable(
                 }
             },
     ) {
-        val outline = if (arrange.on) Modifier.dashedOutline(if (target) palette.accent else palette.textDim) else Modifier
+        val outline = if (arrange.on) Modifier.dashedOutline(if (target) palette.accent else palette.textDim, LocalStyle.current.radiusTile) else Modifier
         content(outline.semantics { customActions = actions }, !arrange.on) { menu = true }
         if (arrange.on) {
             Box(Modifier.align(Alignment.BottomEnd)) {
@@ -306,8 +307,8 @@ private fun Arrangeable(
 }
 
 /** A dashed outline around a tile in Arrange mode. */
-private fun Modifier.dashedOutline(color: Color): Modifier = drawBehind {
-    val r = Tokens.radiusTile.toPx()
+internal fun Modifier.dashedOutline(color: Color, radius: Dp): Modifier = drawBehind {
+    val r = radius.toPx()
     drawRoundRect(
         color,
         cornerRadius = CornerRadius(r, r),

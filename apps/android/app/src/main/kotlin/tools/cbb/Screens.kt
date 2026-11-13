@@ -66,7 +66,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
@@ -112,7 +111,7 @@ private const val PROJECT_TERMS = "https://cbb.tools/?p=terms.html"
 /** Picks the screen, and asks once for the local network, which finding the computers needs on Android 17. */
 @Composable
 fun Root(model: AppModel) {
-    AppTheme(model.color, model.appearance) {
+    AppTheme(model.theme, model.appearance) {
         AppBackground {
             LocalNetworkPermission(model)
             BugDialog(model)
@@ -289,7 +288,7 @@ private fun JoinScreen(model: AppModel) {
             QrCode(
                 code.qrText,
                 Modifier.widthIn(max = 280.dp).fillMaxWidth().aspectRatio(1f)
-                    .clip(RoundedCornerShape(Tokens.radiusCard)).background(Color.White).padding(Tokens.spacingMedium)
+                    .clip(RoundedCornerShape(LocalStyle.current.radiusCard)).background(Color.White).padding(Tokens.spacingMedium)
                     .semantics { contentDescription = label },
             )
             Text(
@@ -391,7 +390,7 @@ private fun InvitationScreen(model: AppModel, close: () -> Unit) {
         if (hasCamera && allowed && cameraError == null) {
             QrScanner(
                 onCode = { text -> read(text) },
-                modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(Tokens.radiusCard)),
+                modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(LocalStyle.current.radiusCard)),
                 onError = { cameraError = it },
             )
             Text(stringResource(R.string.invitation_scan_hint), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
@@ -574,7 +573,7 @@ internal fun AddDeviceScreen(model: AppModel, restore: Boolean = false, close: (
         if (hasCamera && allowed && cameraError == null) {
             QrScanner(
                 onCode = { text -> scope.launch { if (!model.busy) add(text) } },
-                modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(Tokens.radiusCard)),
+                modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(LocalStyle.current.radiusCard)),
                 onError = { cameraError = it },
             )
             Text(stringResource(if (restore) R.string.restore_hint else R.string.scan_hint), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
@@ -1225,7 +1224,7 @@ private fun InviteFromAfar(model: AppModel) {
         QrCode(
             invite.text,
             Modifier.widthIn(max = 280.dp).fillMaxWidth().aspectRatio(1f)
-                .clip(RoundedCornerShape(Tokens.radiusCard)).background(Color.White).padding(Tokens.spacingMedium)
+                .clip(RoundedCornerShape(LocalStyle.current.radiusCard)).background(Color.White).padding(Tokens.spacingMedium)
                 .semantics { contentDescription = label },
         )
         Text(stringResource(R.string.invite_open_until, until), style = MaterialTheme.typography.bodyMedium, color = palette.textDim)
@@ -1321,7 +1320,7 @@ internal fun Tip(@StringRes text: Int, modifier: Modifier = Modifier) {
     if (closed) return
     val palette = LocalPalette.current
     Row(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(Tokens.radiusCard)).background(palette.accent.copy(alpha = 0.10f)).padding(Tokens.spacingSmall),
+        modifier.fillMaxWidth().clip(RoundedCornerShape(LocalStyle.current.radiusCard)).background(palette.accent.copy(alpha = 0.10f)).padding(Tokens.spacingSmall),
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(Tokens.spacingSmall),
     ) {
@@ -1361,7 +1360,7 @@ private fun Appearance(model: AppModel) {
             Box {
                 val chosen = model.settings.language
                 TextButton(onClick = { open = true }) {
-                    Text("🌐 " + (chosen.ownName ?: stringResource(R.string.language_system)), color = palette.text)
+                    Text("文A " + (chosen.ownName ?: stringResource(R.string.language_system)), color = palette.text)
                 }
                 DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
                     for (l in LanguageChoice.entries) {
@@ -1376,7 +1375,7 @@ private fun Appearance(model: AppModel) {
                 }
             }
         }
-        ColorSwatches(model.color) { model.choose(it) }
+        ThemeSwatches(model.theme) { model.choose(it) }
     }
 }
 
@@ -1391,21 +1390,25 @@ internal fun NoteText(note: AppModel.Note, dim: Boolean = false) {
     }
 }
 
-/** The colours as round swatches, five a row, the chosen one ringed and ticked; Material You as a swatch of the wallpaper's colours. */
+/**
+ * The themes as swatches, five a row: each its background and its accent,
+ * the chosen one ringed and ticked; Material You as a swatch of the
+ * themes' accents.
+ */
 @Composable
-private fun ColorSwatches(selection: String, choose: (String) -> Unit) {
+private fun ThemeSwatches(selection: String, choose: (String) -> Unit) {
     val palette = LocalPalette.current
     Column(Modifier.padding(Tokens.spacingMedium), verticalArrangement = Arrangement.spacedBy(Tokens.spacingMedium)) {
-        for (row in ColorChoice.offered.chunked(5)) {
+        for (row in ThemeChoice.offered.chunked(5)) {
             Row(Modifier.fillMaxWidth()) {
                 for (name in row) {
                     val chosen = name == selection
-                    val pair = paletteNamed(name)
-                    val swatch = if (palette.dark) pair.dark else pair.light
-                    val fill = if (name == ColorChoice.MATERIAL) {
-                        Brush.sweepGradient(Tokens.colors.map { (if (palette.dark) it.dark else it.light).accent })
+                    val theme = themeNamed(name)
+                    val swatch = if (palette.dark) theme.dark else theme.light
+                    val fill = if (name == ThemeChoice.MATERIAL) {
+                        Brush.sweepGradient(Tokens.themes.map { (if (palette.dark) it.dark else it.light).accent })
                     } else {
-                        SolidColor(swatch.accent)
+                        Brush.linearGradient(0.5f to swatch.background, 0.5f to swatch.accent)
                     }
                     Column(
                         Modifier.weight(1f).focusRing().clickable(role = Role.RadioButton) { choose(name) }
@@ -1414,14 +1417,14 @@ private fun ColorSwatches(selection: String, choose: (String) -> Unit) {
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Box(
-                            Modifier.size(42.dp).border(2.dp, if (chosen) swatch.accent else Color.Transparent, CircleShape).padding(3.dp)
+                            Modifier.size(42.dp).border(2.dp, if (chosen) palette.accent else palette.line, CircleShape).padding(3.dp)
                                 .clip(CircleShape).background(fill),
                             contentAlignment = Alignment.Center,
                         ) {
-                            if (chosen) Text("✓", color = swatch.onAccent, fontWeight = FontWeight.Bold, style = glyph(16.dp))
+                            if (chosen) Text("✓", color = if (name == ThemeChoice.MATERIAL) swatch.onAccent else swatch.text, fontWeight = FontWeight.Bold, style = glyph(16.dp))
                         }
                         // As many lines as it takes: "Material You", the longer names in Spanish and Swahili, and large text.
-                        Text(stringResource(ColorChoice.title(name)), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, color = palette.textDim)
+                        Text(stringResource(ThemeChoice.title(name)), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, color = palette.textDim)
                     }
                 }
                 repeat(5 - row.size) { Spacer(Modifier.weight(1f)) }

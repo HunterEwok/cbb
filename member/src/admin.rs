@@ -326,6 +326,17 @@ pub fn become_admin(dir: &Path, node: &Node, der: &[u8]) -> Result<()> {
 /// level waits for that, as Go does both under one lock.
 static TAKEOVER: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+/// Holds off a takeover that would finish while the caller signs with the
+/// key signer reads. finish_takeover saves the claim's key as the root key
+/// before it adds the records the new root starts with, so a signer read in
+/// between would sign as the new root ahead of those records, at a number
+/// they take too: two histories of the root key, which stop the group.
+/// What signs on its own, as the service's loop does, holds this from
+/// reading the signer until its records are added.
+pub fn no_takeover_finishing() -> std::sync::MutexGuard<'static, ()> {
+    TAKEOVER.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 /// The group's key level, hardware when no record sets it, once a takeover
 /// that is finishing has signed the settings again.
 fn settled_level(node: &Node) -> String {
@@ -395,6 +406,7 @@ static ADMIN_CAS_SENT: Mutex<std::collections::BTreeMap<String, crate::takeover:
 /// ADMIN_CAS_SENT remembers, by device, the root each got one from.
 pub fn renew_admin_cas(dir: &Path, node: &Node) {
     let sent = &ADMIN_CAS_SENT;
+    let _settled = no_takeover_finishing();
     let ident = node.identity();
     let Ok(Some(s)) = signer(dir, &ident) else { return };
     if !s.root {

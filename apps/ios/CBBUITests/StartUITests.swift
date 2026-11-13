@@ -9,8 +9,12 @@ import XCTest
 /// on the version, and Russian. A group needs the Secure Enclave and a
 /// computer, which the bench's devices give.
 final class StartUITests: XCTestCase {
-    /// The ten colours of apps/design/tokens.json, by their English names.
-    static let colours = ["Terminal", "Midnight", "Amber", "Ocean", "Teal", "Coral", "Rose", "Lime", "Graphite", "Ruby"]
+    /// The colours, the themes of apps/design/tokens.json, by their English
+    /// names (ThemeChoice.title), Chalkboard first and the default.
+    static let colours = [
+        "Chalkboard", "Blueprint", "Precise", "Glass", "Soft", "Swiss", "Hardware", "Art Deco", "Liquid Glass", "Terminal",
+        "Retro",
+    ]
 
     override func setUp() {
         continueAfterFailure = false
@@ -47,7 +51,7 @@ final class StartUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Join a group"].waitForExistence(timeout: 10))
     }
 
-    /// A15, A14: Settings before a group: each of the ten colours and the
+    /// A15, A14: Settings before a group: each of the colours and the
     /// three themes can be chosen, and the choice is kept across a launch.
     func testColoursAndThemes() {
         var app = launch()
@@ -68,16 +72,16 @@ final class StartUITests: XCTestCase {
                 XCTAssertFalse(app.buttons[other].isSelected, "\(other) is still chosen with \(colour)")
             }
         }
-        XCTAssertTrue(choose(app.buttons["Ocean"]), "Ocean is not chosen after a tap")
+        XCTAssertTrue(choose(app.buttons["Blueprint"]), "Blueprint is not chosen after a tap")
         app.terminate()
 
         app = launch()
         openSettings(app)
-        XCTAssertTrue(app.buttons["Ocean"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["Ocean"].isSelected, "the colour was not kept")
+        XCTAssertTrue(app.buttons["Blueprint"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Blueprint"].isSelected, "the colour was not kept")
         XCTAssertTrue(app.segmentedControls.buttons["Dark"].isSelected, "the theme was not kept")
         // Back to the defaults for the other tests.
-        XCTAssertTrue(choose(app.buttons["Terminal"]), "Terminal is not chosen after a tap")
+        XCTAssertTrue(choose(app.buttons["Chalkboard"]), "Chalkboard is not chosen after a tap")
         XCTAssertTrue(choose(app.segmentedControls.buttons["System"]), "System is not chosen after a tap")
     }
 
@@ -119,7 +123,7 @@ final class StartUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts[ru("One clipboard for this phone and your computers.")].exists)
         XCTAssertTrue(app.buttons[ru("Join a group")].exists)
         app.buttons[ru("Settings")].tap()
-        XCTAssertTrue(app.buttons[ru("Ocean")].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons[ru("Blueprint")].waitForExistence(timeout: 10))
         XCTAssertTrue(app.segmentedControls.buttons[ru("Dark")].exists)
         XCTAssertTrue(app.buttons[ru("Done")].exists)
     }

@@ -9,7 +9,8 @@
 //     res/values-<language>/strings.xml, the tray app's
 //     frontend/l10n/<language>.json, the Aurora app's
 //     translations/cbb-<language>.ts, their source apps/l10n/<language>.json,
-//     the command line's
+//     the HarmonyOS app's resources/<language>/element/string.json, the
+//     command line's
 //     member/l10n/<language>.json, the installers' packaging/l10n/<language>.tsv,
 //     the localized keys of a .desktop file, such as Comment[ru]=,
 //     the website's site/l10n/<language>.json
@@ -33,6 +34,8 @@
 //     (version.go);
 //   - the apps' translations are what tools/strings makes of apps/l10n
 //     (l10n.go);
+//   - every job of the release workflows that reads a secret runs in the
+//     deployment environment release (secrets.go);
 //   - no compiled program (ELF, Mach-O, PE) and no file over 1 MiB is
 //     committed: build output belongs outside the repository, and a large
 //     file stays in git's history for good;
@@ -142,6 +145,7 @@ func checkRepo(testsSince string) (problems []string, checked int, err error) {
 	problems = append(problems, checkPlanned(contents)...)
 	problems = append(problems, checkAndroidVersion(contents)...)
 	problems = append(problems, checkSpecVersions(contents)...)
+	problems = append(problems, checkReleaseSecrets(contents)...)
 	problems = append(problems, checkAppTranslations(contents)...)
 	problems = append(problems, checkInstallerL10n(contents)...)
 	problems = append(problems, checkAppStrings(contents)...)
@@ -212,6 +216,10 @@ var docTranslation = regexp.MustCompile(`^(site/docs/[a-z]{2,3}/.+\.md|docs/imag
 // the app for Aurora OS and Sailfish OS (Qt's .ts files).
 var silicaTranslation = regexp.MustCompile(`^apps/silica/translations/cbb-[a-z]{2,3}\.ts$`)
 
+// harmonyTranslation matches the strings of a language other than the
+// default one (resources/base) in the HarmonyOS app.
+var harmonyTranslation = regexp.MustCompile(`^apps/harmony/(entry/src/main|wearable/src/main|AppScope)/resources/[a-z]{2,3}(_[A-Za-z]+)?/element/string\.json$`)
+
 // appsTranslation matches the apps' strings of a language other than
 // English (tools/strings).
 var appsTranslation = regexp.MustCompile(`^apps/l10n/[a-z]{2,3}\.json$`)
@@ -234,7 +242,7 @@ func isTranslation(name string) bool {
 	if m := storeTranslation.FindStringSubmatch(name); m != nil && m[2] != "en" {
 		return true
 	}
-	return strings.HasSuffix(name, ".xcstrings") || androidTranslation.MatchString(name) || desktopTranslation.MatchString(name) || siteTranslation.MatchString(name) || docTranslation.MatchString(name) || silicaTranslation.MatchString(name) || (appsTranslation.MatchString(name) && name != "apps/l10n/en.json") || cliTranslation.MatchString(name) || installerTranslation.MatchString(name)
+	return strings.HasSuffix(name, ".xcstrings") || androidTranslation.MatchString(name) || desktopTranslation.MatchString(name) || siteTranslation.MatchString(name) || docTranslation.MatchString(name) || silicaTranslation.MatchString(name) || (appsTranslation.MatchString(name) && name != "apps/l10n/en.json") || harmonyTranslation.MatchString(name) || cliTranslation.MatchString(name) || installerTranslation.MatchString(name)
 }
 
 // check returns the rule violations in one file; listed holds the paths of

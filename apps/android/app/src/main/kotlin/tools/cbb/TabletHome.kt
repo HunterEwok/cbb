@@ -321,7 +321,7 @@ private fun SidebarHeading(text: String) {
 @Composable
 private fun SidebarRow(symbol: String, title: String, count: Int?, chosen: Boolean, danger: Boolean = false, onClick: () -> Unit) {
     val palette = LocalPalette.current
-    val shape = RoundedCornerShape(Tokens.radiusCard)
+    val shape = RoundedCornerShape(LocalStyle.current.radiusCard)
     Row(
         Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(shape)
             .background(if (chosen) palette.accent.copy(alpha = 0.16f) else palette.background.copy(alpha = 0f))
@@ -619,7 +619,7 @@ private fun Modifier.groupDrop(model: AppModel): Modifier {
         }
     }
     return dragAndDropTarget(shouldStartDragAndDrop = ::acceptsDrop, target = target)
-        .then(if (over) Modifier.border(2.dp, palette.accent, RoundedCornerShape(Tokens.radiusCard)) else Modifier)
+        .then(if (over) Modifier.border(2.dp, palette.accent, RoundedCornerShape(LocalStyle.current.radiusCard)) else Modifier)
 }
 
 /**
@@ -651,14 +651,14 @@ internal fun Modifier.pasteDrop(d: LiveGroup.Device): Modifier {
         }
     }
     return dragAndDropTarget(shouldStartDragAndDrop = ::acceptsDrop, target = target)
-        .then(if (over) Modifier.border(2.dp, palette.accent, RoundedCornerShape(Tokens.radiusTile)) else Modifier)
+        .then(if (over) Modifier.border(2.dp, palette.accent, RoundedCornerShape(LocalStyle.current.radiusTile)) else Modifier)
 }
 
 /** The tile of the device whose details stand beside: the accent's outline, and selected for TalkBack. */
 @Composable
 internal fun Modifier.chosen(d: LiveGroup.Device): Modifier {
     if (LocalChosenDevice.current != d.id) return this
-    return border(2.dp, LocalPalette.current.accent, RoundedCornerShape(Tokens.radiusTile)).semantics { selected = true }
+    return border(2.dp, LocalPalette.current.accent, RoundedCornerShape(LocalStyle.current.radiusTile)).semantics { selected = true }
 }
 
 /** Whether it takes remote paste: members, and Android and Aurora phones; iPhones and iPads cannot. */

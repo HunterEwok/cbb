@@ -1,6 +1,6 @@
 module github.com/HunterEwok/cbb
 
-go 1.27.0
+go 1.27.3
 
 toolchain go1.27.4
 
@@ -23,7 +23,7 @@ require (
 	golang.org/x/sys v0.49.0
 	golang.org/x/term v0.47.0
 	google.golang.org/protobuf v1.36.12
-	gvisor.dev/gvisor v0.0.0-20260122175437-89a5d21be8f0
+	gvisor.dev/gvisor v0.0.0-20261112174234-86745ec8b802
 )
 
 require (
@@ -54,13 +54,13 @@ require (
 	go.yaml.in/yaml/v4 v4.0.0-rc.3 // indirect
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba // indirect
 	golang.org/x/crypto/x509roots/fallback v0.0.0-20261020153306-9f2b28d4331a // indirect
-	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect
+	golang.org/x/exp v0.0.0-20250711185948-6ae5c78190dc // indirect
 	golang.org/x/exp/typeparams v0.0.0-20231108232855-2478ac86f678 // indirect
 	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/telemetry v0.0.0-20261010193011-f71dc92da45e // indirect
 	golang.org/x/text v0.43.0 // indirect
-	golang.org/x/time v0.14.0 // indirect
+	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.52.0 // indirect
 	golang.org/x/vuln v1.9.0 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect

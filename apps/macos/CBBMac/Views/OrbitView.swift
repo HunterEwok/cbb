@@ -90,7 +90,7 @@ struct OrbitNode: View {
                 DeviceIcon(device: device, size: 48)
                     .overlay(alignment: .topTrailing) { OnlineDot(online: device.online).offset(x: 3, y: -3) }
                     .padding(6)
-                    .glassTile(cornerRadius: 20)
+                    .glassTile(.fixed(20))
                     .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(chosen ? palette.accent : .clear, lineWidth: 2))
                 Text(verbatim: device.name).font(.system(.caption, design: .monospaced).weight(.semibold)).lineLimit(1)
             }
