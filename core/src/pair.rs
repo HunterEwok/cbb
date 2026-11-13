@@ -34,6 +34,50 @@ const CHANNEL_PREFIX: &[u8] = b"cbb pair v2\x00";
 pub const MAX_FRAME: usize = 64 << 10;
 /// How many wrong codes a listening join takes.
 pub const MAX_FAILURES: u32 = 3;
+/// How many failed attempts a listening join takes from one address before
+/// it refuses that address's connections for the rest of its window.
+pub const MAX_PER_ADDRESS: u8 = 3;
+/// How many addresses a listening join keeps the attempts of.
+const ADDRESSES_KEPT: usize = 32;
+
+/// Whether e is a wrong code, which counts toward MAX_FAILURES: told by the
+/// refusal the error carries, never by its text.
+pub fn is_wrong_code(e: &Error) -> bool {
+    e.find::<Refusal>() == Some(&Refusal::WrongCode)
+}
+
+/// The failed attempts of a listening join by address, so that one
+/// address cannot keep it busy for its whole window.
+pub struct Attempts<A> {
+    failed: Vec<(A, u8)>,
+}
+
+impl<A: PartialEq + Copy> Default for Attempts<A> {
+    fn default() -> Self {
+        Attempts { failed: Vec::new() }
+    }
+}
+
+impl<A: PartialEq + Copy> Attempts<A> {
+    /// Whether a connection from a may try.
+    pub fn allowed(&self, a: A) -> bool {
+        self.failed.iter().all(|(b, n)| *b != a || *n < MAX_PER_ADDRESS)
+    }
+
+    /// Counts a failed attempt from a; past ADDRESSES_KEPT addresses the
+    /// one heard of longest ago is forgotten.
+    pub fn failed(&mut self, a: A) {
+        if let Some(i) = self.failed.iter().position(|(b, _)| *b == a) {
+            let (_, n) = self.failed.remove(i);
+            self.failed.push((a, n.saturating_add(1)));
+            return;
+        }
+        if self.failed.len() >= ADDRESSES_KEPT {
+            self.failed.remove(0);
+        }
+        self.failed.push((a, 1));
+    }
+}
 
 /// The joiner's CPace associated data. The caps tell the admitting member
 /// what this member can do, which its device record names; a phone has
@@ -183,10 +227,23 @@ pub fn normalize_code(s: &str) -> Result<String> {
     Ok(c)
 }
 
-/// A random six-digit code.
+/// A random six-digit code, each of the million equally likely
+/// (docs/protocol.md, section 7).
 pub fn new_code() -> String {
-    let n = u32::from_le_bytes(certs::random_bytes::<4>()) % 1_000_000;
-    format!("{n:06}")
+    code_from(|| u32::from_le_bytes(certs::random_bytes::<4>()))
+}
+
+/// The code of the first number next gives below the largest multiple of a
+/// million that fits in a u32: a number above it would make the low codes
+/// a little more likely than the others.
+fn code_from(mut next: impl FnMut() -> u32) -> String {
+    const LIMIT: u32 = u32::MAX - u32::MAX % 1_000_000;
+    loop {
+        let n = next();
+        if n < LIMIT {
+            return format!("{:06}", n % 1_000_000);
+        }
+    }
 }
 
 /// A device that joins: its new device ID, its key and the self-signed
@@ -212,6 +269,13 @@ pub struct Joiner {
     /// A phone's admin key, which its info offers so that the root makes it
     /// an admin.
     admin: Option<Arc<dyn ExternalKey>>,
+}
+
+impl Drop for Joiner {
+    /// The new device key does not outlive the joiner in memory.
+    fn drop(&mut self) {
+        zeroize::Zeroize::zeroize(&mut self.key);
+    }
 }
 
 impl Joiner {
@@ -691,6 +755,46 @@ mod tests {
         assert!(normalize_code("12345").is_err());
         assert!(normalize_code("12345a").is_err());
         assert_eq!(new_code().len(), 6);
+    }
+
+    #[test]
+    fn a_wrong_code_by_its_type() {
+        let wrong =
+            Error::with(format!("pair: {}", Refusal::WrongCode), Refusal::WrongCode).context("the pairing failed");
+        assert!(is_wrong_code(&wrong));
+        // The words alone, as a peer could send them, are not a wrong code.
+        let words = Error::msg(format!("pair: {}", Refusal::WrongCode.message())).context("the pairing failed");
+        assert!(!is_wrong_code(&words));
+        assert!(!is_wrong_code(&Error::with("pair: closed", Refusal::Closed)));
+    }
+
+    #[test]
+    fn attempts_by_address() {
+        let mut a = Attempts::default();
+        for _ in 0..MAX_PER_ADDRESS {
+            assert!(a.allowed(1u32));
+            a.failed(1);
+        }
+        assert!(!a.allowed(1));
+        assert!(a.allowed(2));
+        // Past the addresses it keeps, the oldest is forgotten.
+        for b in 2..=ADDRESSES_KEPT as u32 + 1 {
+            a.failed(b);
+        }
+        assert!(a.allowed(1));
+        assert_eq!(a.failed.len(), ADDRESSES_KEPT);
+    }
+
+    #[test]
+    fn every_code_equally_likely() {
+        // The numbers at and above the last whole million are drawn again.
+        let limit = u32::MAX - u32::MAX % 1_000_000;
+        let mut drawn = [u32::MAX, limit, limit - 1].into_iter();
+        assert_eq!(code_from(|| drawn.next().unwrap()), format!("{:06}", (limit - 1) % 1_000_000));
+        assert_eq!(drawn.next(), None);
+        let mut low = [limit + 5, 7].into_iter();
+        assert_eq!(code_from(|| low.next().unwrap()), "000007");
+        assert_eq!(limit % 1_000_000, 0);
     }
 
     #[test]

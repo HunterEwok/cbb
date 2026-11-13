@@ -206,7 +206,7 @@ fn an_admin_admits_with_its_admin_ca() {
     let (admitted, joined, member_err, joiner_err, _) = run(&mut adm, &mut joining);
     assert!(member_err.is_none() && joiner_err.is_none(), "{member_err:?} {joiner_err:?}");
     let j = joined.unwrap();
-    assert_eq!(j.identity.issuer.map(|c| c.der), Some(ca));
+    assert_eq!(j.identity.issuer.clone().map(|c| c.der), Some(ca));
     assert!(admitted.is_some());
 }
 

@@ -250,7 +250,7 @@ pub enum Failure {
 /// of grant lets the service's user do exactly the presets that are on.
 /// Restart and the keyboard's layout are the service's own.
 pub fn run(name: &str) -> std::result::Result<(), Failure> {
-    if let Some(dir) = std::env::var_os("CBB_TEST_ACTIONS") {
+    if let Some(dir) = crate::testbuild::env_os("CBB_TEST_ACTIONS") {
         return run_in_test(Path::new(&dir), name);
     }
     let (tool, args): (&str, &[&str]) = match name {

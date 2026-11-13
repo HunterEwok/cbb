@@ -837,8 +837,8 @@ func TestSeveralHubs(t *testing.T) {
 	t.Setenv("CBB_DEBUG", "1")
 	// The deck stays on the Mac, below the pi, for upCheck, then dials the
 	// pi for up to handshakeTimeout: long enough to sync on a slow runner.
-	t.Setenv("CBB_UP_CHECK", "20")
-	t.Setenv("CBB_STANDBY_GRACE", "2")
+	t.Setenv("CBB_TEST_UP_CHECK", "20")
+	t.Setenv("CBB_TEST_STANDBY_GRACE", "2")
 	var h hub
 	pi := startService(t, &h, "pi")
 	mac := startService(t, &h, "mac")

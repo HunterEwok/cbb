@@ -678,8 +678,7 @@ const CLAIM_CHECK: Duration = Duration::from_secs(2);
 /// months long, so twice a day is plenty, as Go's renewEvery. The Go
 /// service's tests shorten it with CBB_TEST_RENEW_EVERY (milliseconds).
 fn renew_every() -> Duration {
-    std::env::var("CBB_TEST_RENEW_EVERY")
-        .ok()
+    crate::testbuild::env("CBB_TEST_RENEW_EVERY")
         .and_then(|v| v.parse().ok())
         .map_or_else(scaled_twice_a_day, Duration::from_millis)
 }

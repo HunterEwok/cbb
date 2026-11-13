@@ -151,6 +151,25 @@ func TestCheck(t *testing.T) {
 		},
 		{name: "copied Rust code", file: "internal/third_party/cpace/mod.rs", content: copied},
 		{
+			name: "a test hook read around the guard", file: "member/src/x.rs", content: header + "fn f() {\n    std::env::var_os(\"CBB_TEST_X\");\n}\n",
+			want: []string{"member/src/x.rs:5: reads a test hook directly"},
+		},
+		{
+			name: "the update's roots read around the guard", file: "member/src/x.rs", content: header + "fn f() {\n    std::env::var_os(\"CBB_RELEASE_ROOTS\");\n}\n",
+			want: []string{"member/src/x.rs:5: reads a test hook directly"},
+		},
+		{name: "a test hook through the guard", file: "member/src/x.rs", content: header + "fn f() {\n    crate::testbuild::env_os(\"CBB_TEST_X\");\n}\n"},
+		{name: "a Rust test module reads hooks", file: "member/src/x.rs", content: header + "fn f() {}\n\n#[cfg(all(test, target_os = \"linux\"))]\nmod tests {\n    fn t() { std::env::var_os(\"CBB_TEST_X\"); }\n}\n"},
+		{name: "a Rust test-only folder reads hooks", file: "member/src/nettest/ipv6.rs", content: header + "fn t() { std::env::var(\"CBB_TEST_X\"); }\n"},
+		{name: "the Rust guard itself", file: "member/src/testbuild.rs", content: header + "fn f() { std::env::var_os(\"CBB_TEST_X\"); }\n"},
+		{
+			name: "a Go test hook read around the guard", file: "internal/x/x.go", content: header + "package x\n\nvar v = os.Getenv(\"CBB_TEST_X\")\n",
+			want: []string{"internal/x/x.go:6: reads a test hook directly"},
+		},
+		{name: "a Go test reads hooks", file: "internal/x/x_test.go", content: header + "package x\n\nvar v = os.Getenv(\"CBB_TEST_X\")\n"},
+		{name: "a Go file of the bench only", file: "internal/x/on.go", content: header + "//go:build benchtime\n\npackage x\n\nvar v = os.Getenv(\"CBB_TEST_X\")\n"},
+		{name: "a tool reads hooks", file: "tools/bench/x.go", content: header + "package x\n\nvar v = os.Getenv(\"CBB_TEST_X\")\n"},
+		{
 			name: "copied Rust code without its notice", file: "internal/third_party/cpace/x.rs", content: "fn f() {}\n",
 			want: []string{"x.rs:1: copied code must keep its copyright notice"},
 		},

@@ -674,10 +674,11 @@ pub fn wait_healthy(status: &dyn Fn() -> Result<String>, version: &str, within: 
     }
 }
 
-/// The release roots: those of the PEM file CBB_RELEASE_ROOTS names, for
-/// tests, else the pinned ones.
+/// The release roots: in a build for tests, those of the PEM file the hook
+/// CBB_RELEASE_ROOTS names (crate::testbuild::env_os); else, and always in a
+/// release, the pinned ones.
 pub fn release_roots() -> Vec<Vec<u8>> {
-    if let Some(f) = std::env::var_os("CBB_RELEASE_ROOTS")
+    if let Some(f) = crate::testbuild::env_os("CBB_RELEASE_ROOTS")
         && let Ok(r) = read_roots(Path::new(&f))
     {
         return r;
