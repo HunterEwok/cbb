@@ -18,8 +18,12 @@
 //     (the root brought it back itself). A counting checkpoint may prune the removal with the
 //     key's records; a replay of them is refused unless the waiting checkpoint names it. A
 //     removal by an admin is not final: a root may void it.
-//  1b. Sync converges: a member offered, to no change, every record some member holds keeps
-//     what a member given all those records at once keeps.
+//  1b. Sync converges: a member that fetched, to no change, what its peers list and what its
+//     missing() names keeps what a member given at once every record some member holds keeps.
+//     With the honest writer (it never keeps what it pruned, never lowers a head, keeps what
+//     counts) this holds with no assumption. Otherwise it holds when, from the newest checkpoint
+//     of the current root that can become whole on, what the waiting checkpoints name outside
+//     the rooms fits one ROOM.
 //  1c. A newer checkpoint that is not whole takes nothing from the counting one.
 //  3. One chain, one state: two members that hold the same recovery chain and keep the same
 //     records are in one state.
@@ -209,9 +213,9 @@ module records_v3 {
   pure val WAIT_TAKES_SETTLED = true
   // The bound of the place aside, in units (the core: one ROOM in all).
   pure val ASIDE_ROOM = ROOM
-  // The place aside also takes the record a waiting checkpoint waits for (its key's record
-  // just below it), not only what it keeps (proposed; off is the text as it stands).
-  pure val ASIDE_TAKES_WAITED = false
+  // The place aside holds what a waiting checkpoint names: its keep and the record just below it
+  // that it waits for (architecture 14:02Z; off: its keep only).
+  pure val ASIDE_TAKES_WAITED = true
   // F-12: a held checkpoint above the counting one holds out the devices whose admissions it
   // prunes (architecture 13:09Z; proposed, off is the text as it stands).
   pure val F12 = false
@@ -223,6 +227,10 @@ module records_v3 {
   // the counting one may be lost (everyWaitingTest). On: replay 0x9107 breaks oneState and
   // converges (open with records and architecture).
   pure val NEWEST_FIRST_IF_FITS = false
+  // No waiting checkpoint is kept first: they enter the rooms as ordinary records after the
+  // counting checkpoint and what it names, and one the rooms turn away waits aside, counted
+  // in the bound before what it names (architecture 14:02Z).
+  pure val NEWEST_ASIDE = false
   pure val MISSING_NEWEST_ONLY = false
 
   pure val NONE = 10000000
@@ -493,7 +501,7 @@ module records_v3 {
         // rooms like any record).
         val firstN = first1.union(left.filter(r => newest.contains(r)))
         val fitsN = sumUnits(firstN) <= ROOM and ceil.keys().forall(k => sumUnits(ofKey(firstN, k)) <= ceil.get(k))
-        val first = if (NEWEST_FIRST_IF_FITS and not(fitsN)) first1 else firstN
+        val first = if (NEWEST_ASIDE or (NEWEST_FIRST_IF_FITS and not(fitsN))) first1 else firstN
         val ceil2 = ceil.keys().mapBy(k => ceil.get(k) - sumUnits(ofKey(first, k)))
         val room2 = ROOM - sumUnits(first)
         if (room2 < 0 or ceil2.keys().exists(k => ceil2.get(k) < 0) or first.exists(r => not(ceil.keys().contains(r.signer)))) plain
@@ -600,7 +608,8 @@ module records_v3 {
     val topC = cands0.fold(0, (x, c) => max2(x, c.seq))
     val cands = if (ONE_SLOT) cands0.filter(c => c.seq == topC) else cands0
     val all1 = pool.filter(x => not(s1.recs.contains(x.id)) and storableW(s1, x, db)
-      and cands.exists(c => c.keep.contains(x.id) or (ASIDE_TAKES_WAITED and namedBy(c, x, pool))))
+      and (cands.exists(c => c.keep.contains(x.id) or (ASIDE_TAKES_WAITED and namedBy(c, x, pool)))
+        or (NEWEST_ASIDE and cands.contains(x))))
     // At most ASIDE_ROOM units, nothing while halted. Who stays: what the newest waiting
     // checkpoint keeps, then the next newest; inside one checkpoint by (seq, ID); never by
     // arrival.
@@ -609,7 +618,7 @@ module records_v3 {
   }
   // The newest candidate that keeps x: (seq, ID), the higher seq first, the smaller ID at one seq.
   pure def asideGroup(x: Record, cands: Set[Record]): (int, int) = {
-    val ks = cands.filter(c => c.keep.contains(x.id))
+    val ks = cands.filter(c => c.keep.contains(x.id) or c.line.length() >= 2 and c.line[c.line.length() - 2] == x.id or c == x)
     val top = ks.fold(0, (m, c) => max2(m, c.seq))
     (top, ks.filter(c => c.seq == top).fold(NONE, (m, c) => min2(m, c.id)))
   }
@@ -617,7 +626,8 @@ module records_v3 {
     val gy = asideGroup(y, cands)
     val gx = asideGroup(x, cands)
     gy._1 > gx._1 or (gy._1 == gx._1 and gy._2 < gx._2)
-      or (gy == gx and (y.seq < x.seq or (y.seq == x.seq and y.id <= x.id)))
+      // Inside a group the checkpoint that heads it first, then by (seq, ID).
+      or (gy == gx and (gy == (y.seq, y.id) or (gx != (x.seq, x.id) and (y.seq < x.seq or (y.seq == x.seq and y.id <= x.id)))))
   }
   pure def withWait(s1: Store, pool: Set[Record], db: Id -> Record): Store = {
     val aside = asideOf(s1, pool, db)
@@ -1815,7 +1825,7 @@ module records_v3 {
       .then(syncAll)
       // 9 with what it names fills the root's ceiling; with 11 kept first beside it they do not
       // fit, the rooms fall back to the plain rule and the members that took 9 count nothing.
-      .expect(if (NEWEST_FIRST_IF_FITS) MEMBERS.forall(m => views.get(m).checkpoint == 9) and promises
+      .expect(if (NEWEST_FIRST_IF_FITS or NEWEST_ASIDE) MEMBERS.forall(m => views.get(m).checkpoint == 9) and promises
         else views.get("a").checkpoint == 0 and views.get("m").checkpoint == 7)
 
   run prunedRemovalTest =
@@ -1943,18 +1953,20 @@ module records_v3 {
       .then(compactAt("r")).then(compactAt("a")).then(compactAt("c")).then(compactAt("m")).then(compactAt("k"))
       .expect(MEMBERS.forall(m => views.get(m).checkpoint == 13 and st.get(m).recs == Set(1, 2, 3, 4, 7, 10, 13)))
   // The root key signs 14, which can become whole, and 15, which never can (it names a record
-  // nobody has) and keeps 9 units the rooms turn away. Member a gets 14 first and counts it; m
+  // nobody has) and names 10 units the rooms turn away. Member a gets 14 first and counts it; m
   // gets 15 first: what 15 keeps fills the place aside first, 14's records do not fit, and after
   // sync m still counts 13 while its peers count 14. Neither assumption holds there.
   run asideFullTest = asideBase
-      .then(signCheckpointKeep(ROOT, Set(1, 2, 3, 5, 8), "", 1))
+      .then(signCheckpointKeep(ROOT, Set(1, 2, 3, 5, 8, 11), "", 1))
       .then(signCheckpointKeep(ROOT, Set(1, 2, 3, 6, 9, 12, NEVER), "", 1))
-      .then(giveAll(Set("a"), [14, 5, 8]))
-      .then(giveAll(Set("m"), [15, 6, 9, 12, 14, 5, 8]))
+      .then(giveAll(Set("a"), [14, 5, 8, 11]))
+      .then(giveAll(Set("m"), [15, 6, 9, 12, 14, 5, 8, 11]))
       .then(syncRound).then(syncRound).then(syncRound).then(syncRound)
-      .expect(and { views.get("a").checkpoint == 14, views.get("m").checkpoint == 13, syncedProto("m"),
-        not(convergesAt("m")), not(asideFits("m")), not(newestWholeable("m")), not(convergesHonest) or not(honestOnly),
-        promises })
+      .expect(if (NEWEST_ASIDE) and { views.get("a").checkpoint == 14, views.get("m").checkpoint == 13, syncedProto("m"),
+          not(convergesAt("m")), not(asideFits("m")), not(newestWholeable("m")), not(honestOnly), promises }
+        // With 15 kept first beside 14 and what it names (14 units), the rooms overflow and fall
+        // back to the plain rule: a member counts no checkpoint (the finding of everyWaitingTest).
+        else views.get("a").checkpoint == 0)
   // The same with 15 keeping 3 units only: the place aside has room, but 14 itself (the record
   // 15 waits for, which 15 does not keep) is turned away by the full rooms and goes nowhere, so
   // the members that got 15 first stay at 13. With ASIDE_TAKES_WAITED every member counts 14.
