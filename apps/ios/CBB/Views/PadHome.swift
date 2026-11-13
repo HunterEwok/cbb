@@ -253,6 +253,16 @@ struct PadDevices: View {
         // or a button of the card moves away from the devices. A text field
         // keeps its own arrows and Escape (UIKeyCommand gives the system's
         // text editing the first turn).
+        //
+        // Why not .focusable() with .onKeyPress on the devices, the plainer
+        // SwiftUI way: by hand on the simulator those worked, but in
+        // PadUITests (2026-11, Xcode 27.2, iPadOS 27.2) the right arrow and
+        // Escape that XCUIElement.typeKey sends never reached them, while
+        // Command-1, a window shortcut, did. Not understood yet; a probe
+        // logging every key showed none reaching the focused view unless
+        // the window also had a key command. Worth trying again with a
+        // newer Xcode: if testSidebarAndCard passes with the handlers, they
+        // can come back.
         .background { keys }
     }
 
