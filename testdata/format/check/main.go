@@ -620,6 +620,9 @@ func main() {
 		if err != nil {
 			return nil, err
 		}
+		if len(gbody) > 4096 {
+			return nil, errors.New("env/size")
+		}
 		counter, _ := body[uint64(4)].(uint64)
 		madeUnder, named := body[uint64(17)].(uint64)
 		_, guarded := body[uint64(15)]
@@ -1170,11 +1173,11 @@ func onceSet(a []any) bool {
 	return true
 }
 
-// grantSets checks a grant body's lists: commanders by key hash, at most 8;
-// readers sorted, at most 4; neighbors sorted, at most 8.
+// grantSets checks a grant body's lists: commanders by key hash, at most 16;
+// readers sorted, at most 16; neighbors sorted, at most 8.
 func grantSets(body map[any]any) error {
 	cs, _ := body[uint64(12)].([]any)
-	if len(cs) > 8 {
+	if len(cs) > 16 {
 		return errors.New("grants/commanders")
 	}
 	for i := 1; i < len(cs); i++ {
@@ -1190,7 +1193,7 @@ func grantSets(body map[any]any) error {
 			return errors.New("grants/readers")
 		}
 	}
-	if len(rs) > 4 || !sortedSet(rs) {
+	if len(rs) > 16 || !sortedSet(rs) {
 		return errors.New("grants/readers")
 	}
 	for _, r := range rs {
