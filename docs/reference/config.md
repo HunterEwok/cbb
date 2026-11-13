@@ -145,4 +145,4 @@ These change nothing in a normal installation. How the tests use them is in
 | `CBB_UNLINKED` | the ZX Next's played card | A directory where a file `.cbb` deletes from the card is copied first, to look at it. |
 | `CBB_RELEASE_SIGN_DIR` | `tools/release-sign` | Another directory for the release signing tool's files than `tools/release-sign`. |
 | `CBB_RELEASE_PQ_DIR` | `tools/release-sign` | Where the post-quantum halves of the keys in hardware are kept, encrypted to that hardware (`HASH.age` and its `HASH.identity`): `~/.config/cbb-release/pq` by default (maintaining.md, "Two signatures"). |
-| `CBB_RELEASE_TAG` | `internal/release` tests | Set by the release workflow, on a tag and when run by hand: `TestPinnedRootsComplete` then fails unless every pinned root has both halves (maintaining.md, "Two signatures"). |
+| `CBB_RELEASE_TAG` | `internal/release` tests | Set by the release workflow, on a tag and when run by hand: `TestPinnedRootsComplete` then fails unless every pinned root has both halves (maintaining.md, "Two signatures"); a tag and the keys check stop there, a rehearsal only warns (maintaining.md, "A rehearsal of a release"). |

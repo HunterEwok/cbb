@@ -237,9 +237,9 @@ no APK, no `.pkg`, no TestFlight build and no OpenWrt feed; the draft, the iPhon
 CodeQL analysis and the Docker image run only on a tag pushed. The steps are the release's
 own, with the tag from `TAG` (the pushed tag, or the rehearsal's), whose characters the
 `roots` job checks first (0-9, a-z, `.` and `-`, in the form above). When the pinned roots lack
-a half, a rehearsal does not stop at `TestPinnedRootsComplete`: it writes a warning and a
-note in the run's summary and goes on, so it can run before the ceremony's roots are in
-the tree; a tag pushed and the keys check stop there as before.
+a half, a rehearsal does not stop at `TestPinnedRootsComplete`: it writes a warning with what
+failed and the test's output in the run's summary and goes on, so it can run before the
+ceremony's roots are in the tree; a tag pushed and the keys check stop there as before.
 
 ## Signed releases
 
@@ -370,7 +370,8 @@ root's post-quantum half is made and committed there, a build pins P-256 halves 
 takes no `keys.json`, so that commit must be merged before the first release candidate.
 Three checks stop a release with incomplete roots: `release-sign publish` refuses at once
 (`release.CompleteRoots`), the release workflow's first job runs `TestPinnedRootsComplete`
-before anything is built (on a tag and when run by hand), and `publish` checks everything
+before anything is built (on a tag and in the keys check run by hand; a rehearsal only
+warns there, "A rehearsal of a release"), and `publish` checks everything
 it signed under the pinned roots as a device would.
 
 A key is its halves under one name and use, one of each algorithm: every reader refuses a

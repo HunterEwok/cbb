@@ -107,10 +107,17 @@ jobs:
         # warning, so it can run before the ceremony's roots are in the tree.
         run: |
           status=0
-          go test -count=1 -run '^TestPinnedRootsComplete$' ./internal/release || status=$?
+          go test -count=1 -run '^TestPinnedRootsComplete$' ./internal/release >"$RUNNER_TEMP/roots.txt" 2>&1 || status=$?
+          cat "$RUNNER_TEMP/roots.txt"
           if [ "$status" -ne 0 ] && [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$SIGN" = false ]; then
-            echo "::warning::the pinned roots lack a half: a release of this tree would stop here; the rehearsal goes on"
-            printf '## The pinned roots lack a half\n\nA release of this tree stops at this check (roots/roots.pem, TestPinnedRootsComplete); this rehearsal went on past it.\n' >>"$GITHUB_STEP_SUMMARY"
+            # What failed, in the test's own words.
+            why=$(grep -m 1 -E 'roots\.pem|FAIL|panic|cannot|error' "$RUNNER_TEMP/roots.txt" || echo "exit status $status")
+            echo "::warning::a release of this tree would stop at TestPinnedRootsComplete: $why; the rehearsal goes on"
+            {
+              printf '## A release of this tree would stop at the roots check\n\nThis rehearsal went on past it. The output of TestPinnedRootsComplete:\n\n```\n'
+              cat "$RUNNER_TEMP/roots.txt"
+              printf '```\n'
+            } >>"$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           exit "$status"
