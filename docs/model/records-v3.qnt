@@ -278,6 +278,10 @@ module records_v3 {
   // the root's removal saw. Off: the root's removal cuts off what it did not see (remedy (c) is
   // the root's writer's, a scenario).
   pure val F7_SEEN_IGNORED = false
+  // The fold: a root's checkpoint, and the list of a change of root, leave out an older root
+  // removal when a newer kept root removal (of the same root, or of a later one on the path
+  // for the list) names every key the older one names.
+  pure val FOLD_REMOVALS = true
 
   pure val NONE = 10000000
   // A record's ID as the hash orders it: not the order it was signed in.
@@ -363,7 +367,9 @@ module records_v3 {
         and admissionsOf(mine, k).forall(a => headLine(mine, a.signer) != a.line))
       and not(mine.exists(x => withPair(r.target).contains(x.signer))))
     val gone = rms.fold(Set(), (a, r) => a.union(withPair(r.target)))
-    idsOf(rms).union(idsOf(mine.filter(x => gone.contains(x.signer) or gone.exists(k => admissionsOf(Set(x), k) != Set()))))
+    val folded = if (not(FOLD_REMOVALS)) Set() else counted.filter(r => rootRemoval(r) and counted.exists(n => rootRemoval(n)
+      and n.signer == r.signer and n.seq > r.seq and not(rms.contains(n)) and withPair(r.target).subseteq(withPair(n.target))))
+    idsOf(rms).union(idsOf(folded)).union(idsOf(mine.filter(x => gone.contains(x.signer) or gone.exists(k => admissionsOf(Set(x), k) != Set()))))
   }
 
   pure val NONEREC: Record = {
@@ -1309,10 +1315,12 @@ module records_v3 {
       and beforeRecs.exists(y => y != x and isAdm(y) and y.target == x.target and notOlder(y, x)))
     val live = beforeRecs.filter(x => isAdm(x) and not(superseded.contains(x))
       and not(withPair(x.target).exists(t => v.revoked.contains(t))))
-    val remUnits = sumUnits(beforeRecs.filter(x => rootRemoval(x)))
+    val foldedRm = if (not(FOLD_REMOVALS)) Set() else beforeRecs.filter(x => rootRemoval(x)
+      and beforeRecs.exists(n => n != x and rootRemoval(n) and notOlder(n, x) and withPair(x.target).subseteq(withPair(n.target))))
+    val remUnits = sumUnits(beforeRecs.filter(x => rootRemoval(x) and not(foldedRm.contains(x))))
     val fixedUnits = remUnits + sumUnits(live)
     val droppable = beforeRecs.filter(x => not(rootRemoval(x)) and not(live.contains(x)) and not(superseded.contains(x)))
-    val trimmed = if (not(CEIL_FIT)) honest else honest.filter(i => not(superseded.contains(db.get(i)))
+    val trimmed = if (not(CEIL_FIT)) honest else honest.filter(i => not(superseded.contains(db.get(i))) and not(foldedRm.contains(db.get(i)))
       and (not(droppable.contains(db.get(i))) or fixedUnits + sumUnits(droppable.filter(d => notOlder(d, db.get(i)))) <= RESERVE))
     val keep = if (mode == "honest" or mode == "nocp" or mode == "from1") trimmed
       else if (mode == "literal") honest.filter(i => db.get(i).signer == cur or rootRemoval(db.get(i)) or cp.contains(i))
@@ -2446,6 +2454,42 @@ module records_v3 {
         and views.get(m).revoked.contains(DEVICE) and views.get(m).revoked.contains(PHONE)
         and views.get(m).revoked.contains(COMPUTER) == F7_SEEN_IGNORED and not(views.get(m).stop))
         and (promises or F7_SEEN_IGNORED))
+
+  // The fold: the root removes D twice (4, 5); its checkpoint 6 leaves out the older 4, which 5
+  // supersedes. a holds only the old removal, c only the fold (5 and 6), k both, m gets the
+  // checkpoint before the old removal. D stays out at every member in every order, before and
+  // after compaction and sync.
+  run foldRemovalsTest =
+    init
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1))
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1))
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 2, false, Set()))
+      .expect(FOLD_REMOVALS implies not(db.get(6).keep.contains(4)) and db.get(6).keep.contains(5))
+      .then(giveOnly("a", 4))
+      .then(giveOnly("c", 5)).then(giveOnly("c", 6)).then(compactAt("c"))
+      .then(giveOnly("k", 4)).then(giveOnly("k", 5)).then(giveOnly("k", 6)).then(compactAt("k"))
+      .then(giveOnly("m", 5)).then(giveOnly("m", 6)).then(compactAt("m")).then(giveOnly("m", 4))
+      .expect(Set("a", "c", "k", "m", "r").forall(m => views.get(m).revoked.contains(DEVICE)) and promises)
+      .then(syncRound).then(compactAt("a")).then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).revoked.contains(DEVICE) and views.get(m) == views.get("r")
+        and st.get(m).recs == st.get("r").recs and not(st.get(m).recs.contains(4)) == FOLD_REMOVALS) and promises)
+
+  // The fold in a change's list: R and NA both remove D; the list of the change to NK leaves
+  // out R's older removal (4), which NA's (7) supersedes. Whichever removals a member got
+  // first, D stays out everywhere.
+  run foldListTest =
+    init
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound)
+      .then(sign("NA", "revoke", DEVICE, "", 0, false, false, 1)).then(giveOnly("k", 7))
+      .then(recoverAs(RECOVERY, "NK"))
+      .expect((CEIL_FIT and FOLD_REMOVALS) implies (not(db.get(8).keep.contains(4)) and db.get(8).keep.contains(7)))
+      // a takes the change (holding R's 4, not NA's 7), c takes NA's 7 only.
+      .then(giveOnly("a", 8)).then(giveOnly("a", 9)).then(giveOnly("c", 7))
+      .expect(MEMBERS.forall(m => views.get(m).revoked.contains(DEVICE)) and promises)
+      .then(syncRound).then(compactAt("a")).then(compactAt("c")).then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).revoked.contains(DEVICE) and views.get(m) == views.get("r")
+        and views.get(m).path == ["R", "NA", "NK"]) and promises)
 
   // --- (J): ceilings that fit the room -----------------------------------------------------
   // The cap: the root admits a fourth admin key (3 roots at 6 and 4 admins at 2 fill ROOM),
