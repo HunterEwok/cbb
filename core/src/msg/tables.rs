@@ -16,7 +16,8 @@ const ID16: Ty = Ty::Bytes(16);
 /// "no invitation" is the field left out.
 const INVITE_ID: Ty = Ty::Id(16);
 const B32: Ty = Ty::Bytes(32);
-const TEXT64: Ty = Ty::Text(64);
+/// A name: 1 to 128 bytes of UTF-8 (format 20.6).
+const NAME: Ty = Ty::Text(128);
 const REASON: Ty = Ty::Text(256);
 const WG_KEY: Ty = Ty::Key(Alg::X25519);
 const MEMBER_KEY: Ty = Ty::Key(Alg::Es256);
@@ -35,7 +36,7 @@ pub static ADB: Table = Table {
     fields: &[
         f(1, "pair/adb/group", ID16, true),
         f(2, "pair/adb/device", ID16, true),
-        f(3, "pair/adb/name", TEXT64, true),
+        f(3, "pair/adb/name", NAME, true),
     ],
 };
 
@@ -143,7 +144,7 @@ pub static OBFUSCATION: Table = Table {
         f(1, "obfuscation/jc", Ty::Uint { min: 1, max: 128 }, true),
         f(2, "obfuscation/jmin", Ty::Uint { min: 0, max: 1280 }, true),
         f(3, "obfuscation/jmax", Ty::Uint { min: 1, max: 1280 }, true),
-        f(4, "obfuscation/s", Ty::Array { of: &Ty::Uint { min: 0, max: 64 }, max: 4 }, true),
+        f(4, "obfuscation/s", Ty::Array { of: &Ty::Uint { min: 0, max: 1280 }, max: 4 }, true),
         f(5, "obfuscation/h", Ty::Array { of: &Ty::Array { of: &U32, max: 2 }, max: 4 }, true),
         f(6, "obfuscation/key", B32, false),
     ],
@@ -259,12 +260,12 @@ pub static REQUEST: Table = Table {
 pub static INFO: Table = Table {
     shape: "pair/info/shape",
     fields: &[
-        f(1, "pair/info/name", TEXT64, true),
+        f(1, "pair/info/name", NAME, true),
         f(2, "pair/info/os", Ty::Uint { min: 1, max: u32::MAX as u64 }, false),
         f(3, "pair/info/caps", Ty::Uint { min: 1, max: 7 }, false),
         f(4, "pair/info/role", Ty::Uint { min: 1, max: 4 }, true),
         f(5, "pair/info/admin", MEMBER_KEY, false),
-        f(6, "pair/info/admin-pop", Ty::Bytes(64), false),
+        f(6, "pair/info/admin-pop", Ty::BytesUpTo(8192), false),
         f(7, "pair/info/keys", ENV, false),
         f(8, "pair/info/device", Ty::Map(&INFO_DEVICE), false),
         f(9, "pair/info/invite", INVITE_ID, false),
@@ -337,7 +338,7 @@ pub static RELAY_REGISTERED: Table = Table {
     fields: &[
         f(2, "relay/registered/key", WG_KEY, true),
         f(3, "relay/registered/psk", B32, true),
-        f(4, "relay/registered/addr", Ty::Text(64), true),
+        f(4, "relay/registered/addr", Ty::Text(261), true),
     ],
 };
 pub static RELAY_WATCH: Table = Table { shape: "relay/watch/shape", fields: &[] };

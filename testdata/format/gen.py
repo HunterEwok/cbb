@@ -1466,7 +1466,7 @@ TABLES = {
     "pair/adb": [
         (1, "pair/adb/group", "bytes 16", True),
         (2, "pair/adb/device", "bytes 16", True),
-        (3, "pair/adb/name", "text 1..64", True),
+        (3, "pair/adb/name", "text 1..128", True),
     ],
     "pair/start": [
         (2, "pair/start/ya", "bytes 1..256", True),
@@ -1509,12 +1509,12 @@ TABLES = {
         (5, "welcome/grant", "uint 1..4294967295", False),
     ],
     "pair/info": [
-        (1, "pair/info/name", "text 1..64", True),
+        (1, "pair/info/name", "text 1..128", True),
         (2, "pair/info/os", "uint 1..4294967295", False),
         (3, "pair/info/caps", "uint 1..7", False),
         (4, "pair/info/role", "uint 1..4", True),
         (5, "pair/info/admin", "key 1", False),
-        (6, "pair/info/admin-pop", "bytes 64", False),
+        (6, "pair/info/admin-pop", "bytes 1..8192", False),
         (7, "pair/info/keys", "envelope", False),
         (8, "pair/info/device", "map pair/info/device", False),
         (9, "pair/info/invite", "id 16", False),
@@ -1544,7 +1544,7 @@ TABLES = {
         (1, "obfuscation/jc", "uint 1..128", True),
         (2, "obfuscation/jmin", "uint 0..1280", True),
         (3, "obfuscation/jmax", "uint 1..1280", True),
-        (4, "obfuscation/s", "array 1..4 of uint 0..64", True),
+        (4, "obfuscation/s", "array 1..4 of uint 0..1280", True),
         (5, "obfuscation/h", "array 1..4 of array 1..2 of uint 0..4294967295", True),
         (6, "obfuscation/key", "bytes 32", False),
     ],
@@ -1637,7 +1637,7 @@ TABLES = {
     "relay/registered": [
         (2, "relay/registered/key", "key 3", True),
         (3, "relay/registered/psk", "bytes 32", True),
-        (4, "relay/registered/addr", "text 1..64", True),
+        (4, "relay/registered/addr", "text 1..261", True),
     ],
     "relay/watch": [
     ],
