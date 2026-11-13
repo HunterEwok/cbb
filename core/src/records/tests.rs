@@ -2992,6 +2992,7 @@ fn members_agree(g: &G) -> State {
     s
 }
 
+mod cap;
 mod insert_cost;
 mod recovery;
 mod sync;

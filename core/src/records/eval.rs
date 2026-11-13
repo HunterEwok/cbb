@@ -1470,8 +1470,6 @@ struct Evaluation<'a> {
     /// The chains walked from listed heads, by head (`on_chain`).
     chains: RefCell<BTreeMap<RecordId, BTreeMap<u64, RecordId>>>,
     devices: BTreeMap<DeviceId, Vec<usize>>,
-    /// Device records over MAX_DEVICES; of the same length as recs.
-    capped_devices: Vec<bool>,
 }
 
 // The evaluation keeps its records in one Vec and refers to them by their
@@ -1527,7 +1525,6 @@ impl<'a> Evaluation<'a> {
             by_id: BTreeMap::new(),
             chains: RefCell::new(BTreeMap::new()),
             devices: BTreeMap::new(),
-            capped_devices: Vec::new(),
         };
         for (i, c) in checked.iter().enumerate() {
             let b = c.r.body();
@@ -1542,12 +1539,6 @@ impl<'a> Evaluation<'a> {
             }
             e.recs.push(Rec { r: c.r, id: c.r.id(), role: c.role, held: c.held, device });
         }
-        // Over MAX_DEVICES: devices are taken in the order of their first
-        // record (the records are in order_key order).
-        let mut first: Vec<(usize, DeviceId)> = e.devices.iter().map(|(d, rs)| (rs[0], *d)).collect();
-        first.sort();
-        let over: BTreeSet<DeviceId> = first.into_iter().skip(MAX_DEVICES).map(|(_, d)| d).collect();
-        e.capped_devices = e.recs.iter().map(|r| r.device.is_some_and(|d| over.contains(&d))).collect();
         e
     }
 
@@ -1660,6 +1651,10 @@ enum Label {
     Undecided,
 }
 
+/// A signer's place for the device cap (`Epoch::over_cap`): its place on
+/// the path, or after it by the admission of its admin key.
+type SignerRank = (usize, (usize, u64, RecordId));
+
 /// The evaluation under one path of roots.
 struct Epoch<'e, 'a> {
     e: &'e Evaluation<'a>,
@@ -1668,8 +1663,11 @@ struct Epoch<'e, 'a> {
     cuts: BTreeMap<KeyHash, Cut>,
     cur: KeyHash,
     /// Records past a limit in this epoch: the per-key ceilings, the
-    /// settings' admin limit, the future root's, and MAX_DEVICES.
+    /// settings' admin limit and the future root's.
     capped: Vec<bool>,
+    /// The devices past MAX_DEVICES (`over_cap`): their records count for
+    /// nothing, and nothing else depends on them.
+    over: BTreeSet<DeviceId>,
     voided: BTreeSet<RecordId>,
     counted: Vec<bool>,
     forked: BTreeMap<KeyHash, u64>,
@@ -1715,7 +1713,8 @@ impl<'e, 'a> Epoch<'e, 'a> {
             on_path,
             cuts,
             cur,
-            capped: e.capped_devices.clone(),
+            capped: vec![false; n],
+            over: BTreeSet::new(),
             voided: BTreeSet::new(),
             counted: vec![false; n],
             forked: BTreeMap::new(),
@@ -1758,7 +1757,57 @@ impl<'e, 'a> Epoch<'e, 'a> {
         ep.find_pairs();
         ep.admit_and_label();
         ep.collect();
+        ep.over = ep.over_cap();
         ep
+    }
+
+    /// The devices past MAX_DEVICES. The cap comes last and decides
+    /// nothing before it: every signer's power (the roots on the path,
+    /// the admin keys and their cap of 16), every removal and admission is
+    /// judged without it, so no loop runs through it. Then the cap is
+    /// taken among the devices that count (a removed device holds no
+    /// place, whatever records of it the set still holds): the root's own
+    /// device and the admins' devices first, at most 17 places, then the
+    /// rest by their earliest record that counts, in the order the
+    /// records' limits take them: by seq, then the signer's place (the
+    /// roots by the path, then each admin by its admission), then ID. By
+    /// seq first, a key that floods takes its own first places only and
+    /// never the others' first ones (a flood keeps the others). A device
+    /// past the cap is not a device of the group until one before it is
+    /// removed; its records say why (`Why::Limit`), and the device sees
+    /// its record held but not counted, as a record over a ceiling. A
+    /// writer never makes a 257th device and never puts one out
+    /// (`RecordSet::write_record`); only admissions written at once pass
+    /// the cap, and every member places them alike.
+    fn over_cap(&self) -> BTreeSet<DeviceId> {
+        let root = self.root_device().and_then(|i| self.r(i).dev()).map(|d| d.id());
+        let n = self.path.len();
+        // The rank of a record's signer: its place on the path, or after
+        // the path by the admission of its admin key.
+        let rank_of = |i: usize| -> (usize, u64, RecordId) {
+            let b = self.r(i).b();
+            (self.on_path.get(&b.signer).copied().unwrap_or(n), b.seq, self.r(i).id)
+        };
+        let signer_rank = |k: &KeyHash| -> SignerRank {
+            match self.on_path.get(k) {
+                Some(&p) => (p, (0, 0, RecordId::default())),
+                None => (n, self.admins.get(k).map_or((usize::MAX, 0, RecordId::default()), |&a| rank_of(a))),
+            }
+        };
+        let mut live: Vec<(bool, u64, SignerRank, RecordId, DeviceId)> = Vec::new();
+        for (id, rs) in &self.e.devices {
+            let Some(d) = self.device(id, rs) else { continue };
+            let first = rs
+                .iter()
+                .copied()
+                .filter(|&i| self.counts(i))
+                .map(|i| (self.r(i).b().seq, signer_rank(&self.r(i).b().signer), self.r(i).id))
+                .min();
+            let Some((seq, sr, rid)) = first else { continue };
+            live.push((!(d.admin.is_some() || root == Some(*id)), seq, sr, rid, *id));
+        }
+        live.sort();
+        live.into_iter().skip(MAX_DEVICES).map(|(.., d)| d).collect()
     }
 
     fn r(&self, i: usize) -> &'e Rec<'a> {
@@ -2693,7 +2742,9 @@ impl<'e, 'a> Epoch<'e, 'a> {
                 s.conflicts.push(c);
                 continue;
             }
-            if let Some(d) = self.device(id, rs) {
+            if let Some(d) = self.device(id, rs)
+                && !self.over.contains(id)
+            {
                 s.devices.push(d);
             }
             // The devices that an admin with two histories alone admitted
@@ -2766,7 +2817,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
             conflicted.extend(self.role_off(rs));
         }
         for i in self.all() {
-            if self.counts(i) && !conflicted.contains(&i) {
+            if self.counts(i) && !conflicted.contains(&i) && !self.r(i).device.is_some_and(|d| self.over.contains(&d)) {
                 s.counting.insert(self.r(i).id);
             }
         }
@@ -2787,7 +2838,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
             .is_some_and(|d| self.e.devices.get(&d).is_some_and(|rs| self.role_off(rs).contains(&i)))
         {
             Why::Role
-        } else if self.capped[i] {
+        } else if self.capped[i] || r.device.is_some_and(|d| self.over.contains(&d)) {
             Why::Limit
         } else if !self.counted[i] {
             Why::History
