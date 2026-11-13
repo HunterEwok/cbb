@@ -132,14 +132,18 @@ final class PadUITests: XCTestCase {
             let escape = app.buttons["Close"].waitForNonExistence(timeout: 5)
             var tapEscape = false
             if !escape {
-                // Escape again after tapping the empty space beside the tiles.
-                app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95)).tap()
-                app.typeKey(.escape, modifierFlags: [])
+                // The escape character typed as text instead of the key.
+                app.typeText("\u{1B}")
                 tapEscape = app.buttons["Close"].waitForNonExistence(timeout: 5)
+            }
+            if !escape && !tapEscape {
+                // Command-period, the iPad's other cancel.
+                app.typeKey(".", modifierFlags: .command)
+                print("PADDIAG \(variant): cmd-period closed=\(app.buttons["Close"].waitForNonExistence(timeout: 5))")
             }
             Thread.sleep(forTimeInterval: 1)
             let keys = app.staticTexts["padDiagKeys"]
-            print("PADDIAG \(variant): arrow=\(arrow) escape=\(escape) escapeAfterTap=\(tapEscape) log=[\(keys.exists ? keys.label : "no log")]")
+            print("PADDIAG \(variant): arrow=\(arrow) escape=\(escape) typedEscape=\(tapEscape) log=[\(keys.exists ? keys.label : "no log")]")
             app.terminate()
         }
     }
