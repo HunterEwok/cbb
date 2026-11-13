@@ -2353,6 +2353,21 @@ All notable changes to cbb are documented in this file. The format follows
 - An admin phone pastes pictures and files on a device again: the iPhone and Android kits
   sign the paste command of kind `media` that names the group's copy, which they refused to
   build before.
+- Members given each other's addresses with `-peer` no longer reconnect to each other
+  several times a second: a member dialed a member it was connected to every second, and
+  when the member with the lower device ID did, its new connection replaced the old one on
+  the other side while it dropped the new one itself, so both ended. A member now remembers
+  which member it found at an address and leaves it alone while it is connected, and a
+  dialer keeps or drops its new connection by the same rule as the side that accepts it. A
+  member on one machine also took the address a dual-stack listener shows for 127.0.0.1
+  (`::ffff:127.0.0.1`) for one at home, so its dials to the loopback address replaced that
+  connection as a tunnel's would.
+- A root that got a member's key evidence over two connections at once signed two records
+  with the same number, which stopped the group as two histories of the root's key; a
+  member signs its records one at a time now.
+- `cbb pair -code ADDRESS` while the service runs joins through the service, as `cbb pair
+  -code` does, so the device takes the service's `-name` and capabilities (or those `cbb pair
+  -name` and `-caps` give); it joined by itself, under the computer's host name.
 - A hub that started serving in place of one above it ended its first clients' connections
   a moment later, when it made its key for the next period, and those clients then tried the
   hub above, which may be off, before it again. The hub makes those keys before it listens,

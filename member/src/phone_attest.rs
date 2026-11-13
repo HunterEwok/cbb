@@ -187,6 +187,8 @@ impl Attestations {
             Err(i) if i.revoked => (attest::STORE_HARDWARE.to_string(), String::new(), String::new(), i.reason),
             Err(i) => return Err(Error::msg(i.to_string())),
         };
+        // One record per evidence, whichever connections bring it at once.
+        let _one = node.signing.lock().unwrap_or_else(|e| e.into_inner());
         let records = node.records();
         let shown = Attested { store: &store, kind: &kind, proof: &proof };
         let Some(r) = manage::evidence(
