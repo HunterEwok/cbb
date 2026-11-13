@@ -197,8 +197,8 @@ module records_v3 {
   pure val DEV = Map("A" -> "dA", "C" -> "dC", "C2" -> "dC", "W" -> "dW", "X" -> "dX", "NA" -> "dN")
   pure val DEVS = Set("dA", "dC", "dW", "dX", "dN")
 
-  pure val ROOM = if (CEIL_FIT) 20 else 14
-  pure val ROOTC = if (CEIL_FIT) 4 else 8
+  pure val ROOM = if (CEIL_FIT) 26 else 14
+  pure val ROOTC = if (CEIL_FIT) 6 else 8
   pure val ADMINC = if (CEIL_FIT) 2 else 5
   pure val MAXU = 2
   pure val TOP = ROOTC
@@ -253,9 +253,10 @@ module records_v3 {
   pure val MAX_ADMINS = 4
   // (J): the ceilings of every key with room fit ROOM together, so the level never falls:
   // the writer of an admission refuses one that would break it (room reserved for ROOTS_MAX
-  // roots on the path), and no writer signs past its own ceiling above the counting
-  // checkpoint's head (with WRITER_KEEPS, nor what its own set would not keep). Sizes under
-  // CEIL_FIT: ROOM 20 = 3 roots at 4 + 4 admins at 2 (architecture 15:43Z).
+  // roots on the path), and no writer signs past its own ceiling
+  // (the units its own set holds of the key with the new record, after what a new checkpoint
+  // prunes; with WRITER_KEEPS, nor what its own set would not keep). Sizes under CEIL_FIT:
+  // ROOM 26 = 3 roots at 6 + 4 admins at 2 (architecture 15:43Z).
   pure val CEIL_FIT = false
   pure val ROOTS_MAX = 3
   pure val MISSING_NEWEST_ONLY = false
@@ -1188,8 +1189,9 @@ module records_v3 {
       // within FLOOR; the root admits no admin key past MAX_ADMINS.
       not(keeps) or not(WRITER_FLOOR) or hidden or isChain(r) or kind == "checkpoint"
         or unitsAbove(recsOf(s.recs, db).union(Set(r)), views.get(h), k, db2) <= (if (onList(views.get(h).path, k)) ROOT_FLOOR else FLOOR),
-      not(keeps) or not(CEIL_FIT) or hidden or isChain(r) or kind == "checkpoint"
-        or unitsAbove(recsOf(s.recs, db).union(Set(r)), views.get(h), k, db2) <= (if (onList(views.get(h).path, k)) ROOTC else ADMINC),
+      not(keeps) or not(CEIL_FIT) or hidden or isChain(r)
+        or sumUnits(ofKey(recsOf(s.recs, db).union(Set(r)).filter(x => not(isCp) or x == r or not(prunedBy(r, x))), k))
+          <= (if (onList(views.get(h).path, k)) ROOTC else ADMINC),
       not(keeps) or not(CEIL_FIT) or kind != "admin" or ROOTS_MAX * ROOTC + learned(recsOf(s.recs, db), views.get(h).path, views.get(h).cuts)
         .union(Set(target)).filter(x => not(onList(views.get(h).path, x))).size() * ADMINC <= ROOM,
       not(keeps) or not(WRITER_FLOOR) or kind != "admin" or learned(recsOf(s.recs, db), views.get(h).path, views.get(h).cuts)
@@ -1772,7 +1774,9 @@ module records_v3 {
   // (H). With honest writers no record is turned away by the rooms: a synced member holds
   // every record some member holds that it may store and its counting checkpoint does not
   // prune.
-  def honestW: bool = db.keys().forall(i => db.get(i).kit != "bent" and db.get(i).kit != "deviant")
+  // (No bent or deviating record, and no recovery twin: two recovery records at one seq.)
+  def honestW: bool = db.keys().forall(i => db.get(i).kit != "bent" and db.get(i).kit != "deviant"
+    and not(isChain(db.get(i)) and db.keys().exists(j => j != i and isChain(db.get(j)) and db.get(j).seq == db.get(i).seq)))
   val honestNeverDropped = ((WRITER_FLOOR or CEIL_FIT) and honestW) implies MEMBERS.forall(m => {
     val s = st.get(m)
     val v = views.get(m)
