@@ -1,8 +1,8 @@
 #!/bin/bash
 # watch.sh <container>: on the Mac host. Every 30 s: while another
 # thread's xcodebuild or a booted simulator runs, the container is paused,
-# and resumed after. A trip pauses it: free memory under 3 GB, swap over
-# 7 GB, or swap grown by more than 256 MB since this watch started. After
+# and resumed after. A trip pauses it: free memory under 3 GB or swap over
+# 7 GB (other threads' builds move swap, so growth alone is no trip). After
 # a trip it resumes only once all three are clear again, checked every
 # 10 minutes; two trips within an hour keep it paused for good (STOPPED
 # beside this script). Logs to watch.log every 10 minutes and on changes.
@@ -15,7 +15,7 @@ s0=$(swap); last_trip=0; tripped=0; byapple=0; n=0
 log "watch start swap=${s0}M"
 while docker inspect "$c" >/dev/null 2>&1; do
   f=$(free_mb); s=$(swap); st=$(docker inspect -f '{{.State.Status}}' "$c"); now=$(date +%s)
-  bad=0; { [ "$f" -lt 3072 ] || [ "$s" -gt 7000 ] || [ $((s - s0)) -gt 256 ]; } && bad=1
+  bad=0; { [ "$f" -lt 3072 ] || [ "$s" -gt 7000 ]; } && bad=1
   if [ $((n % 20)) -eq 0 ]; then
     log "free=${f}M swap=${s}M (start ${s0}M) $st $(docker stats --no-stream --format '{{.CPUPerc}} {{.MemUsage}}' "$c")"
   fi

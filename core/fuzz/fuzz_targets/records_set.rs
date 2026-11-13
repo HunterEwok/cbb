@@ -312,7 +312,7 @@ fn build(data: &[u8]) -> (G, u8) {
                     .filter(|r| r.body().signer == by.hash && r.body().seq < seq && (r.id().0[0] ^ x) % 2 == 0)
                     .map(Record::id)
                     .collect();
-                if x & 0x80 != 0 {
+                if x & 0x80 != 0 && std::env::var_os("FZ_NO_BIG").is_none() {
                     // A large checkpoint (a first checkpoint over 64 KiB):
                     // IDs nobody holds, about 2100 to 2600 of them.
                     let more = 2100 + usize::from(arg) * 2;
@@ -627,6 +627,47 @@ libfuzzer_sys::fuzz_target!(|data: &[u8]| {
         aeq!(aside(&a), aside(&b), "two members that swapped hold different records aside");
     } else {
         aeq!(a.state().roots, b.state().roots, "halted: two members that swapped differ in roots");
+    }
+    // Sync by parts (records::sync): everything a holds, split into small
+    // parts, taken by fresh members in three orders (as sent, reversed, by
+    // the input's seed): each ends with one set and one state, and the
+    // same as a's.
+    if !lax {
+        use cbb_core::records::sync;
+        let recs: Vec<&Record> = a.in_dependency_order();
+        let lists: Vec<&[u8]> = a.lists().collect();
+        let k = 1 + (seed as usize >> 8) % 7;
+        let parts = sync::split(&recs, &lists, k, 1 << 20);
+        let take = |order: &[usize]| {
+            let mut m = RecordSet::new(keys()[0].key.clone(), recov());
+            for &i in order {
+                let p = &parts[i];
+                let rs: Vec<Record> = p.records.iter().map(|r| (*r).clone()).collect();
+                m.take_part(&rs, &p.lists);
+            }
+            // The take of a part may wait for a later one; one more round.
+            for &i in order {
+                let p = &parts[i];
+                let rs: Vec<Record> = p.records.iter().map(|r| (*r).clone()).collect();
+                m.take_part(&rs, &p.lists);
+            }
+            m
+        };
+        let n = parts.len();
+        let fwd: Vec<usize> = (0..n).collect();
+        let rev: Vec<usize> = (0..n).rev().collect();
+        let mut mix = fwd.clone();
+        let mut x = seed;
+        for i in (1..n).rev() {
+            x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            mix.swap(i, (x >> 33) as usize % (i + 1));
+        }
+        let (p1, p2, p3) = (take(&fwd), take(&rev), take(&mix));
+        aeq!(p1.digest(), p2.digest(), "sync by parts: two orders of the parts, two sets");
+        aeq!(p1.digest(), p3.digest(), "sync by parts: two orders of the parts, two sets");
+        aeq!(p1.state(), p2.state(), "sync by parts: two orders of the parts, two states");
+        aeq!(p1.state(), p3.state(), "sync by parts: two orders of the parts, two states");
+        aeq!(p1.state(), a.state(), "sync by parts: the member that took every part differs from the sender");
     }
     // A member that takes from a ForkProof peer (insert_proof): from a set
     // holding only the proof, it stores nothing but the current root's
