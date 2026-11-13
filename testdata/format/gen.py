@@ -595,8 +595,8 @@ def record_vectors():
     bad("trailing byte after the envelope", "cbor/trailing", enc([lap_body, sig]) + b"\x00")
     m2 = rec(ROOT, 91, 7, {14: 1}, extra={8: ADMIN.hash})
     b2 = enc(m2)
-    bad("second signature over 4096 bytes", "env/sig2",
-        enc([b2, ROOT.sign(LABELS["record"], b2), fake("later signature", 4097)]))
+    bad("second signature over 8192 bytes", "env/sig2",
+        enc([b2, ROOT.sign(LABELS["record"], b2), fake("later signature", 8193)]))
     # The first signature covers the second's SHA-256 (audit Q-1): a second
     # signature swapped, cut or removed on the way spoils the copy.
     s2a, s2b = fake("second signature a", 3000), fake("second signature b", 3000)
@@ -784,6 +784,12 @@ def statement_vectors():
                  "envelope": env.hex()})
     refuse.append({"name": "a second signature swapped on the way", "rule": "env/damaged", "verdict": "refuse",
                    "envelope": swapped.hex()})
+    env, body, _ = envelope2("keys", LAPTOP, m, fake("sig2 8192", 8192))
+    take.append({"name": "a second signature of 8192 bytes", "verdict": "take", "diag": diag(dec(body)),
+                 "body": body.hex(), "id": sha(body).hex(), "envelope": env.hex()})
+    env, body, _ = envelope2("keys", LAPTOP, m, fake("sig2 8193", 8193))
+    refuse.append({"name": "a second signature of 8193 bytes", "rule": "env/sig2", "verdict": "refuse",
+                   "envelope": env.hex()})
     m, env, body = st(LAPTOP, 1, fake("short", 1215))
     refuse.append({"name": "seal key of 1215 bytes", "rule": "keys/xwing", "verdict": "refuse",
                    "envelope": env.hex()})
@@ -846,6 +852,12 @@ def command_vectors():
                  "diag": diag(dec(body)), "body": body.hex(), "envelope": env.hex()})
     refuse.append({"name": "a second signature swapped on the way", "rule": "env/damaged", "verdict": "refuse",
                    "envelope": swapped.hex(), "signer": ADMIN.pub.hex()})
+    env, body, _ = envelope2("command", ADMIN, m, fake("sig2 8192", 8192))
+    take.append({"name": "a second signature of 8192 bytes", "verdict": "take", "diag": diag(dec(body)),
+                 "body": body.hex(), "envelope": env.hex()})
+    env, body, _ = envelope2("command", ADMIN, m, fake("sig2 8193", 8193))
+    refuse.append({"name": "a second signature of 8193 bytes", "rule": "env/sig2", "verdict": "refuse",
+                   "envelope": env.hex()})
     m, _ = cmd(10, PHONE, 8, LOCK.id16, {})
     env, body = envelope("command", PHONE, m)
     refuse.append({"name": "command to a guarded lock without a nonce", "rule": "commands/nonce", "verdict": "refuse",
@@ -971,6 +983,12 @@ def grant_vectors(admin_record):
                  "verdict": "take", "leaf": g[10].hex(), "grant_diag": diag(dec(gb2)), "grant": gb2.hex(),
                  "envelope": genv2.hex(), "message": enc(message(genv2)).hex(), "frame": frame(message(genv2)).hex()})
     bad("grant whose second signature was swapped on the way", "env/damaged", message(swapped), L)
+    genv2, gb2, _ = envelope2("grant", ROOT, {**g, 3: ROOT.hash}, fake("sig2 8192", 8192))
+    take.append({"name": "guarded lock's grant with a second signature of 8192 bytes",
+                 "verdict": "take", "leaf": g[10].hex(), "grant_diag": diag(dec(gb2)), "grant": gb2.hex(),
+                 "envelope": genv2.hex(), "message": enc(message(genv2)).hex(), "frame": frame(message(genv2)).hex()})
+    genv2, gb2, _ = envelope2("grant", ROOT, {**g, 3: ROOT.hash}, fake("sig2 8193", 8193))
+    bad("grant with a second signature of 8193 bytes", "env/sig2", message(genv2), L)
     _, genv, _ = signed({**kettle, 4: 2}, ADMIN)
     bad("admin's first grant without the root's record", "grants/admin", message(genv), K)
     root_bad("a reader under another device's ID", "grants/readers",
@@ -1148,6 +1166,12 @@ def credential_vectors():
                  "envelope": env.hex()})
     refuse.append({"name": "a second signature swapped on the way", "rule": "env/damaged", "verdict": "refuse",
                    "envelope": swapped.hex()})
+    env, body, _ = envelope2("credential", ROOT, m, fake("sig2 8192", 8192))
+    take.append({"name": "a second signature of 8192 bytes", "verdict": "take", "diag": diag(dec(body)),
+                 "body": body.hex(), "id": sha(body).hex(), "envelope": env.hex()})
+    env, body, _ = envelope2("credential", ROOT, m, fake("sig2 8193", 8193))
+    refuse.append({"name": "a second signature of 8193 bytes", "rule": "env/sig2", "verdict": "refuse",
+                   "envelope": env.hex()})
     m = {1: 4, 2: tag, 3: PERIOD.key, 4: 1, 7: exp, 14: pad([SRVKEY.hash], 3)}
     env, _ = envelope("credential", PERIOD, m)
     refuse.append({"name": "members list of 3 (not a padded length)", "rule": "credentials/members/members",
@@ -2432,6 +2456,10 @@ def card_vectors():
     take.append({"name": "a second signer of a later version, taken on the first signature alone",
                  "envelope": env.hex(), "id": sha(body).hex()})
     refuse.append({"name": "a second signature swapped on the way", "rule": "env/damaged", "envelope": swapped.hex()})
+    env, body, _ = envelope2("card", OPERATOR, card(), fake("sig2 8192", 8192))
+    take.append({"name": "a second signature of 8192 bytes", "envelope": env.hex(), "id": sha(body).hex()})
+    env, body, _ = envelope2("card", OPERATOR, card(), fake("sig2 8193", 8193))
+    refuse.append({"name": "a second signature of 8193 bytes", "rule": "env/sig2", "envelope": env.hex()})
     no("signed by another key than the operator it names", card(), "sig/verify", by=STRANGER)
     return take, refuse
 
@@ -2929,6 +2957,8 @@ def beacon_rule(env_b):
         return "form/critical"
     if (8 in m) != (len(env) == 3):
         return "env/shape"
+    if len(env) == 3 and len(env[2]) > 8192:
+        return "env/sig2"
     if 8 in m and not (isinstance(m[8], bytes) and len(m[8]) == 32):
         return "beacons/signer2"
     if m.get(1) != 1:
@@ -3159,6 +3189,11 @@ def wave4_vectors():
     env, b, _ = envelope2("beacon", PHONE, {1: 1, 2: GROUP, 3: PHONE.hash, 4: 5, 6: T0, 10: digest, 11: 12})
     beacons.append({"name": "a second signer of a later version, taken on the first signature alone",
                     "verdict": beacon_rule(env), "diag": diag(dec(b)), "envelope": env.hex()})
+    for n in (8192, 8193):
+        env, b, _ = envelope2("beacon", PHONE, {1: 1, 2: GROUP, 3: PHONE.hash, 4: 6, 6: T0, 10: digest, 11: 12},
+                              fake("sig2 %d" % n, n))
+        beacons.append({"name": "a second signature of %d bytes" % n, "verdict": beacon_rule(env), "diag": diag(dec(b)),
+                        "envelope": env.hex()})
     out["beacons"] = beacons
 
     # messages

@@ -986,7 +986,12 @@ func checkWave4(dir string) {
 	for _, b := range f.Beacons {
 		m, body, err := envelope(unhex(b.Envelope), f.Labels["beacon"], bySignerHash)
 		if err != nil {
-			fail("wave4 beacons %s: %v", b.Name, err)
+			// The envelope's own rules (a second signature over its
+			// ceiling) come before the beacon's.
+			if err.Error() != b.Verdict {
+				fail("wave4 beacons %s: %v", b.Name, err)
+			}
+			count++
 			continue
 		}
 		if got := beaconVerdict(body, m); got != b.Verdict {

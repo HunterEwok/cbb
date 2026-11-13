@@ -214,9 +214,13 @@ func envelope(b []byte, label string, signerKey func(map[any]any) ([]byte, error
 	head := label == "cbb record v3" && m[uint64(1)] == uint64(13)
 	var sig2 []byte
 	if len(a) == 3 {
-		// sig2 is not fixed: a later algorithm's signature, up to 4 KiB,
-		// a recovery head's up to 32 KiB.
-		max := 4096
+		// sig2 is not fixed: a later algorithm's signature, up to 8 KiB
+		// (a record's up to 4 KiB until its count in units is decided), a
+		// recovery head's up to 32 KiB.
+		max := 8192
+		if label == "cbb record v3" {
+			max = 4096
+		}
 		if head {
 			max = 32 * 1024
 		}

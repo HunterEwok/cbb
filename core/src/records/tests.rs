@@ -1757,7 +1757,7 @@ fn a_record_counts_the_same_in_every_envelope() {
     let bytes = crate::format::cbor::Value::Map(entries).encode();
     let sig = key::sign_es256(&a, LABEL_RECORD, &bytes).unwrap();
     let two = |n: usize| Record::decode(&crate::format::envelope::write(&bytes, &sig, Some(&vec![0x55u8; n]))).unwrap();
-    let max = crate::format::envelope::MAX_SIG2;
+    let max = crate::format::envelope::MAX_SIG2_RECORD;
     let (short, long) = (two(1), two(max));
     assert!(
         Record::decode(&crate::format::envelope::write(&bytes, &sig, Some(&vec![0x55u8; max + 1])))
@@ -2523,7 +2523,7 @@ fn a_second_signer_costs_nine_units() {
     entries.push((8, crate::format::cbor::Value::Bytes(&second)));
     let bytes = crate::format::cbor::Value::Map(entries).encode();
     let sig = key::sign_es256(&a, LABEL_RECORD, &bytes).unwrap();
-    let max = crate::format::envelope::MAX_SIG2;
+    let max = crate::format::envelope::MAX_SIG2_RECORD;
     let r = Record::decode(&crate::format::envelope::write(&bytes, &sig, Some(&vec![0x55u8; max]))).unwrap();
     let plain = Record::sign(g.body(&a, Kind::Copies { incoming_ms: 60_000, seen: vec![] }), &a).unwrap();
     let units = |r: &Record| keep::units(r.size());

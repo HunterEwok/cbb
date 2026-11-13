@@ -34,10 +34,16 @@ pub fn signer2(map: &Value<'_>, rule: Rule) -> Result<Option<[u8; 32]>, Rule> {
     }
 }
 
-/// The largest second signature: room for a later algorithm's, a
-/// post-quantum one among them. Its length is not fixed at 64, and it is
-/// outside the record's ID, so a record's size is counted from its body.
-pub const MAX_SIG2: usize = 4096;
+/// The largest second signature of a statement, command, grant,
+/// credential, card or beacon: room for every ML-DSA level, Falcon and
+/// SLH-DSA-128s. Its length is not fixed at 64, and it is outside the
+/// object's ID.
+pub const MAX_SIG2: usize = 8192;
+/// The largest second signature of a record other than a recovery head,
+/// read by the records' reader: kept at 4096 until what a twice-signed
+/// record costs in units is decided, and tied to that count by an assert
+/// on `records::SIG2_ALLOWANCE`, so the two cannot drift apart unnoticed.
+pub const MAX_SIG2_RECORD: usize = 4096;
 /// The largest second signature of a recovery head (record type 13): the
 /// recovery key's K2 signs every head (E-6), an SLH-DSA-SHA2-128s
 /// signature of 7856 bytes, with room for a larger parameter set.
