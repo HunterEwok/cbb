@@ -30,32 +30,8 @@ final class PadUITests: XCTestCase {
         return app
     }
 
-    /// Waits until the element tree stays the same in three snapshots a
-    /// third of a second apart: the screen has stopped moving.
-    private func settle(_ app: XCUIApplication) {
-        let address = try! NSRegularExpression(pattern: "0x[0-9a-fA-F]+")
-        func tree() -> String {
-            let d = app.debugDescription
-            return address.stringByReplacingMatches(in: d, range: NSRange(d.startIndex..., in: d), withTemplate: "")
-        }
-        let deadline = Date().addingTimeInterval(20)
-        var last = tree()
-        var same = 0
-        while Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.33)
-            let now = tree()
-            if now == last {
-                same += 1
-                if same == 2 { return }
-            } else {
-                same = 0
-                last = now
-            }
-        }
-        XCTFail("the screen was still changing after 20 seconds")
-    }
-
     private func picture(_ name: String) {
+        XCUIApplication().settle("the picture \(name)")
         let a = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         a.name = name
         a.lifetime = .keepAlways
@@ -82,13 +58,13 @@ final class PadUITests: XCTestCase {
         // A key pressed while the card still slides in can land before the
         // devices have the keyboard's focus back: each key waits for the
         // screen to stand still, as a person sees it before pressing.
-        settle(app)
+        app.settle("the card")
         app.typeKey(.rightArrow, modifierFlags: [])
         let thinkpad = app.buttons.containing(NSPredicate(format: "label CONTAINS 'thinkpad'")).firstMatch
         XCTAssertTrue(thinkpad.waitForExistence(timeout: 5))
         XCTAssertTrue(thinkpad.isSelected, "the right arrow chooses the next device")
 
-        settle(app)
+        app.settle("the next device's card")
         app.typeKey(.escape, modifierFlags: [])
         XCTAssertTrue(app.buttons["Close"].waitForNonExistence(timeout: 5), "Escape closes the card")
 
@@ -97,6 +73,7 @@ final class PadUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Blueprint"].waitForExistence(timeout: 10), "the look opens beside the sidebar")
         picture("pad-settings")
 
+        app.settle("the look")
         app.typeKey("1", modifierFlags: .command)
         XCTAssertTrue(mac.waitForExistence(timeout: 5), "Command-1 goes back to all devices")
     }
@@ -132,6 +109,7 @@ final class PadUITests: XCTestCase {
         let app = try launch(extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
         XCTAssertTrue(app.staticTexts["All devices"].waitForExistence(timeout: 30))
         picture("pad-home-largest-text")
+        app.settle("Home at the largest text")
         try app.performAccessibilityAudit(for: [.textClipped]) { issue in
             // The system's own bars are not the app's to fix.
             guard let e = issue.element, e.isHittable else { return true }

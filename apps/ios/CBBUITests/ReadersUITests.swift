@@ -46,44 +46,11 @@ final class ReadersUITests: XCTestCase {
 
     /// Attaches a picture of the screen to the test's result.
     private func picture(_ name: String) {
+        XCUIApplication().settle("the picture \(name)")
         let a = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         a.name = name
         a.lifetime = .keepAlways
         add(a)
-    }
-
-    /// Waits until the screen has stopped changing: its element tree, every
-    /// element's frame and text, the same in three snapshots in a row a
-    /// third of a second apart. A screen still laying out or animating in
-    /// gives the audit a picture of nothing a person sees, so a screen that
-    /// does not settle in 20 seconds fails rather than being audited.
-    private func settle(_ app: XCUIApplication, _ screen: String) {
-        // The tree's lines name each element by an address that can change
-        // between snapshots of the same element.
-        let address = try! NSRegularExpression(pattern: "0x[0-9a-fA-F]+")
-        func tree() -> String {
-            let d = app.debugDescription
-            return address.stringByReplacingMatches(in: d, range: NSRange(d.startIndex..., in: d), withTemplate: "")
-        }
-        let start = Date()
-        let deadline = start.addingTimeInterval(20)
-        var last = tree()
-        var same = 0
-        while Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.33)
-            let now = tree()
-            if now == last {
-                same += 1
-                if same == 2 {
-                    print("ReadersUITests: \(screen) settled in \(String(format: "%.1f", Date().timeIntervalSince(start))) s")
-                    return
-                }
-            } else {
-                same = 0
-                last = now
-            }
-        }
-        XCTFail("\(screen): the screen was still changing after 20 seconds")
     }
 
     /// Runs Xcode's accessibility audit on the screen once it has settled
@@ -91,7 +58,7 @@ final class ReadersUITests: XCTestCase {
     /// element of the system's own may fail it: the status bar. Contrast is
     /// measured on the screen's picture (`contrast`).
     private func audit(_ app: XCUIApplication, _ types: XCUIAccessibilityAuditType, _ screen: String) {
-        settle(app, screen)
+        app.settle(screen)
         do {
             try app.performAccessibilityAudit(for: types) { issue in
                 guard let e = issue.element else {
@@ -297,11 +264,11 @@ final class ReadersUITests: XCTestCase {
             // The texts' heights at the default size first.
             var app = launch(language: language, extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL"])
             XCTAssertTrue(app.buttons[tr("Create a group", language)].waitForExistence(timeout: 30))
-            settle(app, "the Start screen in \(language) at the default text size")
+            app.settle("the Start screen in \(language) at the default text size")
             let start = textHeights(app)
             app.buttons[tr("Settings", language)].tap()
             XCTAssertTrue(app.navigationBars[tr("Settings", language)].waitForExistence(timeout: 10))
-            settle(app, "Settings in \(language) at the default text size")
+            app.settle("Settings in \(language) at the default text size")
             let settings = textHeights(app)
             app.terminate()
 
