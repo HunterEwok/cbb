@@ -149,3 +149,10 @@ path = "fuzz_targets/pq_verify.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "grant_seq"
+path = "fuzz_targets/grant_seq.rs"
+test = false
+doc = false
+bench = false

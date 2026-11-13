@@ -8,7 +8,7 @@ set -u
 cd /work/core/fuzz
 mkdir -p /out/logs
 log() { echo "$(date -u +%FT%TZ) $*" >> /out/logs/queue.log; }
-ALL="records_set records_group join records_decode pq_verify format format_guarded msg content commands beacon record_body command credential release wire api vless"
+ALL="records_set records_group grant_seq join records_decode pq_verify format format_guarded msg content commands beacon record_body command credential release wire api vless"
 log "build"
 cargo +nightly fuzz build -O >> /out/logs/build.log 2>&1 || { log "build failed"; exit 1; }
 BIN=$(cd "$(dirname "$(ls target/*/release/records_set)")" && pwd)
@@ -39,7 +39,7 @@ while [ ! -e /out/STOP ] && disk_ok; do
   run records_set 14400 2 & run records_group 14400 2 120 & wait
   [ -e /out/STOP ] || ! disk_ok && break
   # Phase B, 2 h: the readers next to the records.
-  run join 7200 1 & run records_decode 7200 1 & run pq_verify 7200 1 & run format_guarded 7200 1 & wait
+  run join 7200 1 & run records_decode 7200 1 & run pq_verify 7200 1 & run format_guarded 7200 1 & run grant_seq 7200 1 & wait
   [ -e /out/STOP ] || ! disk_ok && break
   # Phase C, 2 h: the rest, two at a time.
   for pair in "msg content" "commands beacon" "record_body command" "credential release" "wire api" "vless format"; do
