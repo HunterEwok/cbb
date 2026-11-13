@@ -105,7 +105,7 @@ class ReleasesTest {
         val keys = rawFile(v.getValue("keys"))
         val channel = rawFile(v.getValue("channel_file"))
         val cases = v.getValue("envelopes").jsonArray.map { it.jsonObject }
-        assertEquals(46, cases.size)
+        assertEquals(61, cases.size)
         for (c in cases) {
             val name = c.str("name")
             val release = Releases.File(Base64.getDecoder().decode(c.str("release")))
