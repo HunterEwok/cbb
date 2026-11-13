@@ -868,7 +868,7 @@ its time yet, refuses nothing.
   max(last.logical, r.logical) + 1`; else if `w == last.wall`, `logical + 1`; else if
   `w == r.wall`, `last = r` then `logical + 1`; else `last = (w, 0)`.
 - Persistence: a member MUST NOT issue a timestamp below one it issued before, also after a
-  restart or a crash. The Go service does it so: before the clock reaches the last saved
+  restart or a crash. `cbb` does it so: before the clock reaches the last saved
   mark, it saves a new mark 10 000 ms ahead (file `hlc.mark` in the state directory, text
   form) and uses it as the floor after a restart. A saved mark more than MaxAhead ahead of
   a wall clock that reads 2026 or later is dropped at the restart, and the clock starts

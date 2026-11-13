@@ -154,13 +154,12 @@ The containers (C4 level 2): the programs of a group and how they talk.
 
 ### The service and its helper
 
-The Rust program `cbb` (`member/`) becomes the one member on every device, a computer as
+The Rust program `cbb` (`member/`) is the one member on every device, a computer as
 much as a router: the group, sync, records, seals, admitting devices, commands and the
 control socket. What needs Go stays in Go, in `cbb-helper` (`cmd/cbb-helper`,
 `internal/helper`): keys in the TPM, the Secure Enclave and on a YubiKey, the hub's and the
 forwarder's tunnel with VLESS, the relay, remote paste into desktop sessions and
-Windows, quick actions, TVs and the Bluetooth keyboard. The move happens in steps; until it
-ends, the Go service described below is still the computers' member.
+Windows, quick actions, TVs and the Bluetooth keyboard.
 
 - **Started by `cbb` only.** `cbb` starts `cbb-helper` as its child, from beside its own
   program or from `CBB_HELPER` (empty for none), and talks to it only over the child's
@@ -204,7 +203,7 @@ ends, the Go service described below is still the computers' member.
   Windows): it finds the slot by its certificate's key hash, takes the PIN and signs.
 - **The keyboard and the TVs.** `keyboard`, `remote`, `peripheral-status`,
   `peripheral-paste`, `peripheral-stop` and `keyboard-layout` run Go's `internal/peripheral`,
-  the code the Go service runs too, with the state folder and the device's name in each
+  with the state folder and the device's name in each
   request: the helper keeps the Bluetooth keyboard on BlueZ and a TV pairing between requests,
   and `cbb` asks it only once the keyboard or a TV was set up there (`keyboard`, `tvs.json`).
   A remote paste goes to the keyboard's host or the TV the user sends pastes to before the
