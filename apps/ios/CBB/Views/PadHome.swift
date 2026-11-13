@@ -261,7 +261,8 @@ struct PadDevices: View {
             selected = nil
             return .handled
         }
-        .onAppear { focused = true }
+        .defaultFocus($focused, true)
+        .onAppear { Task { @MainActor in focused = true } }
     }
 
     @ViewBuilder private var devices: some View {
@@ -343,9 +344,13 @@ struct PadDevices: View {
     /// window too narrow for both.
     private func choose(_ id: AppModel.Computer.ID) {
         if beside { selected = id } else { pushed = PadCard(id: id) }
-        // A tap moves the keyboard's focus to the tile; the arrow keys and
-        // Escape are the devices' own, so the focus comes back to them.
-        focused = true
+        // A tap moves the keyboard's focus to the tile, and the card that
+        // opens changes the view around the devices; the arrow keys and
+        // Escape are the devices' own, so the focus comes back to them once
+        // both are done. Set to true while it still reads true, it would not
+        // change and the focus would stay where the tap left it.
+        focused = false
+        Task { @MainActor in focused = true }
     }
 
     /// Moves the choice to the device before or after it, as they stand.
