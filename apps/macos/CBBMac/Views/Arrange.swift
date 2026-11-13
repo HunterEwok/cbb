@@ -70,7 +70,7 @@ struct ArrangedDevices: View {
                             }
                         }
                     }
-                    .glassTile(cornerRadius: Tokens.radiusCard)
+                    .glassTile(.card)
                 } else {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: Tokens.spacingMedium)], spacing: Tokens.spacingMedium) {
                         ForEach(items) { item in
@@ -99,6 +99,7 @@ struct ArrangedTile<Tile: View>: View {
     @EnvironmentObject private var model: MacModel
     @EnvironmentObject private var arrange: ArrangeState
     @Environment(\.palette) private var palette
+    @Environment(\.themeStyle) private var style
 
     var body: some View {
         let moves = Moves(ref: ref, level: level, model: model)
@@ -106,7 +107,7 @@ struct ArrangedTile<Tile: View>: View {
             if arrange.on {
                 label()
                     .overlay {
-                        RoundedRectangle(cornerRadius: Tokens.radiusTile, style: .continuous)
+                        RoundedRectangle(cornerRadius: style.radiusTile, style: .continuous)
                             .strokeBorder(palette.accent, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
                     }
                     .opacity(arrange.dragging == ref ? 0.4 : 1)
@@ -394,7 +395,7 @@ struct CollectionPage: View {
                                 ArrangedTile(ref: .device(d.id), level: refs, select: select) { DeviceRow(device: d, selected: d.id == selected) }
                             }
                         }
-                        .glassTile(cornerRadius: Tokens.radiusCard)
+                        .glassTile(.card)
                     } else {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: Tokens.spacingMedium)], spacing: Tokens.spacingMedium) {
                             ForEach(devices) { d in

@@ -73,3 +73,35 @@ func TestRunAdminWithoutRootsCbb(t *testing.T) {
 		t.Errorf("cbbPath = %q, want the place root owns", p)
 	}
 }
+
+// TestRunAsUser: cbb run as the user; its exit codes say a cancelled
+// prompt and an action only the administrator may take, and its last line
+// is the error.
+func TestRunAsUser(t *testing.T) {
+	fake := func(script string) string {
+		p := filepath.Join(t.TempDir(), "cbb")
+		if err := os.WriteFile(p, []byte("#!/bin/sh\n"+script+"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	if err := runAsUser(fake(`[ "$1 $2 $CBB_DEBUG" = "remove ab12 1" ] && read l && [ "$l" = yes ]`), []string{"remove", "ab12"}, "yes\n", true); err != nil {
+		t.Fatalf("a run that succeeds: %v", err)
+	}
+	if err := runAsUser(fake("exit 75"), nil, "", false); !errors.Is(err, errCancelled) {
+		t.Fatalf("a cancelled prompt: %v", err)
+	}
+	if err := runAsUser(fake("exit 77"), nil, "", false); !errors.Is(err, errNeedsAdmin) {
+		t.Fatalf("an action for the administrator: %v", err)
+	}
+	var ae *adminError
+	if err := runAsUser(fake(`echo "cbb: no device \"x\" in the group" >&2; exit 1`), nil, "", false); !errors.As(err, &ae) || ae.msg != `no device "x" in the group` {
+		t.Fatalf("a failure: %v", err)
+	}
+	if err := runAsUser("", nil, "", false); !errors.Is(err, errNeedsAdmin) {
+		t.Fatalf("no cbb: %v", err)
+	}
+	if !needsRoot([]string{"update"}) || !needsRoot([]string{"pair", "-app", "f"}) || needsRoot([]string{"pair", "-qr"}) || needsRoot(nil) {
+		t.Fatal("needsRoot")
+	}
+}

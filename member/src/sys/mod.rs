@@ -259,11 +259,15 @@ pub fn local_time() -> LocalTime {
 
 /// The local clock's time at ms, milliseconds since 1970 (UTC).
 #[cfg(unix)]
+// libc deprecates time_t on musl and OpenHarmony (whose libc is musl) ahead of
+// its change to 64 bits; it is the type localtime_r takes either way.
+#[cfg_attr(target_env = "ohos", allow(deprecated))]
 pub fn local_time_at(ms: i64) -> LocalTime {
     local_time_at_secs(ms.div_euclid(1000) as libc::time_t)
 }
 
 #[cfg(unix)]
+#[cfg_attr(target_env = "ohos", allow(deprecated))]
 fn local_time_at_secs(now: libc::time_t) -> LocalTime {
     // SAFETY: localtime_r writes into tm, which is a valid tm.
     unsafe {
@@ -493,5 +497,35 @@ impl Drop for NoEcho {
             // SAFETY: puts back the console mode that new read.
             unsafe { windows_sys::Win32::System::Console::SetConsoleMode(h, mode) };
         }
+    }
+}
+
+#[cfg(all(test, any(target_os = "linux", target_os = "freebsd")))]
+mod tests {
+    /// cbb service -user gives up root for good: run in a copy of this
+    /// test's process, which becomes nobody and cannot become root again.
+    #[test]
+    fn gives_up_root() {
+        if std::env::var_os("CBB_TEST_RUN_AS").is_some() {
+            super::run_as("nobody").unwrap();
+            // SAFETY: plain system calls.
+            assert_ne!(unsafe { libc::getuid() }, 0);
+            assert_eq!(std::env::var("USER").as_deref(), Ok("nobody"));
+            assert!(super::run_as("nobody").unwrap_err().to_string().contains("needs root"));
+            return;
+        }
+        if !super::is_root() {
+            assert!(super::run_as("nobody").unwrap_err().to_string().contains("needs root"));
+            return;
+        }
+        assert!(super::run_as("no-such-user-of-cbb").unwrap_err().to_string().contains("no user"));
+        assert!(super::run_as("a\0b").is_err());
+        let out = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "sys::tests::gives_up_root", "--nocapture"])
+            .env("CBB_TEST_RUN_AS", "1")
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stdout));
+        assert!(String::from_utf8_lossy(&out.stdout).contains("1 passed"));
     }
 }

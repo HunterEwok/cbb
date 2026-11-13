@@ -26,11 +26,12 @@ type Inventory struct {
 // Device is one device under test.
 type Device struct {
 	Name      string   `toml:"-"`
-	OS        string   `toml:"os"`        // linux, linux-lite, darwin, windows, docker, netns, openwrt, freebsd
+	OS        string   `toml:"os"`        // linux, darwin, windows, docker, netns, openwrt, freebsd
 	SSH       string   `toml:"ssh"`       // user@host; the user is the one signed in on the desktop
 	Clipboard string   `toml:"clipboard"` // wayland, x11, none, macos, windows
 	Roles     []string `toml:"roles"`     // member, hub, away
 	Address   string   `toml:"address"`   // host:port others dial to pair with it, when mDNS cannot find it
+	Peer      bool     `toml:"peer"`      // linux, in another subnet: its service gets -peer to the hub's address for the run, and it joins at the address cbb pair prints
 	VM        *VM      `toml:"vm"`
 	Container string   `toml:"container"` // os docker: the container's name on the host ssh reaches
 	Firewall  string   `toml:"firewall"`  // linux and windows, for reset: "yes" lets the installer open the member port, "no" leaves the firewall alone
@@ -62,7 +63,7 @@ type Host struct {
 var netnsName = regexp.MustCompile(`^[a-z0-9]{1,10}$`)
 
 var (
-	knownOS        = []string{"linux", "linux-lite", "darwin", "windows", "docker", "netns", "openwrt", "freebsd"}
+	knownOS        = []string{"linux", "darwin", "windows", "docker", "netns", "openwrt", "freebsd"}
 	knownClipboard = []string{"wayland", "x11", "none", "macos", "windows"}
 )
 
@@ -92,6 +93,11 @@ func LoadInventory(path string) (*Inventory, error) {
 		}
 		if !slices.Contains(knownClipboard, d.Clipboard) {
 			return nil, fmt.Errorf("device %s: clipboard %q is not one of %s", name, d.Clipboard, strings.Join(knownClipboard, ", "))
+		}
+		if d.Peer && d.OS != "linux" {
+			// The bench tells the service of a Linux device where the hub is
+			// with a systemd drop-in.
+			return nil, fmt.Errorf("device %s: peer is only for os linux", name)
 		}
 		if d.OS == "docker" {
 			// A container has no desktop: the bench copies and pastes with

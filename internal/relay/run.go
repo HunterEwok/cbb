@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -230,7 +231,17 @@ func (p *Process) Exited() bool {
 
 // Close stops the relay and waits for it.
 func (p *Process) Close() {
-	_ = p.cmd.Process.Kill()
-	<-p.done
+	// SIGTERM first, which cbb-relay takes as an exit, so that a build with
+	// instrument-coverage writes what it ran; a kill if it does not end, or
+	// where there is no SIGTERM (Windows).
+	if err := p.cmd.Process.Signal(syscall.SIGTERM); err != nil {
+		_ = p.cmd.Process.Kill()
+	}
+	select {
+	case <-p.done:
+	case <-time.After(5 * time.Second):
+		_ = p.cmd.Process.Kill()
+		<-p.done
+	}
 	_ = p.cmd.Wait()
 }

@@ -6,10 +6,15 @@
 // actions, Go modules, crates, Gradle, npm and Swift packages): qemu, zig,
 // the ESP32 toolchain, z88dk, the cargo tools CI installs, the pinned
 // nightly Rust, Xray-core (whose tags are not versions Go modules accept,
-// so go.mod pins a tag's commit and names the tag in a comment) and so on. For each pin it asks the tool's own registry or
+// so go.mod pins a tag's commit and names the tag in a comment), the Go
+// modules that go.mod pins at a commit and the code copied under
+// third_party, whose newer versions Dependabot never proposes, the ESP32
+// firmware's esp-hal commit, and so on. For each pin it asks the tool's own registry or
 // release page for its latest stable version and prints one line; it
 // exits 1 when a pin is behind, when one tool is pinned at two versions,
-// or when the pinned nightly Rust is older than -nightly-days, so that the
+// when the pinned nightly Rust is older than -nightly-days, when a module or
+// copy is more than -lag-days behind a newer version upstream, or when the
+// esp-hal commit is older than -esp-days, so that the
 // weekly run of the pins workflow fails and mails the maintainer. As
 // Dependabot's cooldown, a version counts only once it has been out for
 // -cooldown days: a release that turns out bad is mostly withdrawn in its
@@ -17,7 +22,7 @@
 //
 // Usage:
 //
-//	go run ./tools/pins [-cooldown 7] [-nightly-days 60]
+//	go run ./tools/pins [-cooldown 7] [-nightly-days 60] [-lag-days 30] [-esp-days 90]
 //
 // GH_TOKEN, when set, is sent to GitHub's API, whose limit without a
 // token is 60 requests an hour.
@@ -66,6 +71,10 @@ var files = []string{
 	"member/packaging/*.sh",
 	"packaging/fdroid/*.yml",
 	"go.mod",
+	"esp32/Cargo.toml",
+	"internal/third_party/*/README.md",
+	"core/src/third_party/*/README.md",
+	"member/src/third_party/*/README.md",
 }
 
 var pins = []pin{
@@ -96,6 +105,31 @@ const xrayRepo = "XTLS/Xray-core"
 
 var xrayRe = regexp.MustCompile(`(?m)^\s+github\.com/xtls/xray-core v\S+-([0-9a-f]{12}) // v([0-9][0-9.]*)\s*$`)
 
+// modulePins are Go modules whose pins Dependabot does not follow: the
+// direct requirements go.mod pins at a commit (a pseudo-version, as for a
+// project with no tagged versions), and the code copied under third_party,
+// whose README names the version it came from. The last group of each
+// pattern is the version. Go's module proxy gives the latest version and
+// when it came out; a pin is behind when that version is newer by more
+// than -lag-days and has been out for the cooldown. Only the lag counts,
+// not the pin's age: gVisor commits every day, amneziawg-go rarely.
+// gVisor's race build on ARM64 kept its network stack from sleeping until
+// a fix of August 2026, which a pin from January went without for months.
+var modulePins = []struct {
+	name, module string
+	re           *regexp.Regexp
+}{
+	{"gVisor (go.mod)", "gvisor.dev/gvisor", regexp.MustCompile(`(?m)^\s+gvisor\.dev/gvisor (v\S+)\s*$`)},
+	{"amneziawg-go (go.mod, internal/third_party)", "github.com/amnezia-vpn/amneziawg-go",
+		regexp.MustCompile(`(?m)^\s+github\.com/amnezia-vpn/amneziawg-go (v\S+)\s*$|^(v0\.[0-9]+\.[0-9]+-0\.[0-9]{14}-[0-9a-f]{12}) \(module checksum`)},
+	{"go-libpcsclite (member/src/third_party)", "github.com/gballet/go-libpcsclite", regexp.MustCompile(`go-libpcsclite at (v\S+?)\.\s`)},
+	{"mote, for CPace (core/src/third_party)", "rsc.io/cmd/mote", regexp.MustCompile(`rsc\.io/cmd/mote\) (v[0-9.]*[0-9])`)},
+}
+
+// espRe finds the esp-hal commit the firmware builds; its age is the
+// reminder, since Dependabot leaves esp-hal alone on purpose.
+var espRe = regexp.MustCompile(`git = "https://github\.com/esp-rs/esp-hal", rev = "([0-9a-f]{40})"`)
+
 // nightlyRe finds a pinned nightly Rust.
 var nightlyRe = regexp.MustCompile(`nightly-(\d{4}-\d{2}-\d{2})`)
 
@@ -121,6 +155,8 @@ func scan(re *regexp.Regexp, paths []string) (found, error) {
 func main() {
 	nightlyDays := flag.Int("nightly-days", 60, "the oldest a pinned nightly Rust may be, in days")
 	cooldown := flag.Int("cooldown", 7, "the days a new version waits before a pin counts as behind")
+	lagDays := flag.Int("lag-days", 30, "the most a module or copy may be behind its newest version, in days")
+	espDays := flag.Int("esp-days", 90, "the oldest the firmware's esp-hal commit may be, in days")
 	flag.Parse()
 	var paths []string
 	for _, g := range files {
@@ -198,9 +234,127 @@ func main() {
 			fmt.Printf("ok   nightly Rust: nightly-%s, %d days old\n", v, age)
 		}
 	}
+	cutoff := time.Now().Add(-time.Duration(*cooldown) * 24 * time.Hour)
+	for _, m := range modulePins {
+		f, err := scanAny(m.re, paths)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "pins:", err)
+			os.Exit(2)
+		}
+		if len(f) == 0 {
+			fmt.Printf("FAIL %s: no pin found; the pattern no longer matches the files\n", m.name)
+			bad = true
+			continue
+		}
+		latest, err := proxyInfo(ctx, m.module, "@latest")
+		if err != nil {
+			fmt.Printf("FAIL %s: the latest version: %v\n", m.name, err)
+			bad = true
+			continue
+		}
+		for _, v := range sortedKeys(f) {
+			where := strings.Join(f[v], ", ")
+			pinned, err := proxyInfo(ctx, m.module, "@v/"+v+".info")
+			if err != nil {
+				fmt.Printf("FAIL %s: %s (%s): %v\n", m.name, v, where, err)
+				bad = true
+				continue
+			}
+			if behind, lag := lagging(pinned, latest, cutoff, *lagDays); len(f) > 1 || behind {
+				fmt.Printf("FAIL %s: %s of %s, %d days behind %s of %s, of %d pinned (%s)\n", m.name, v,
+					pinned.Time.Format("2006-01-02"), lag, latest.Version, latest.Time.Format("2006-01-02"), len(f), where)
+				bad = true
+			} else {
+				fmt.Printf("ok   %s: %s of %s; newest %s of %s\n", m.name, v, pinned.Time.Format("2006-01-02"), latest.Version, latest.Time.Format("2006-01-02"))
+			}
+		}
+	}
+	f, err = scan(espRe, paths)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "pins:", err)
+		os.Exit(2)
+	}
+	for _, rev := range sortedKeys(f) {
+		var c struct {
+			Commit struct {
+				Committer struct {
+					Date time.Time `json:"date"`
+				} `json:"committer"`
+			} `json:"commit"`
+		}
+		if err := getJSON(ctx, "https://api.github.com/repos/esp-rs/esp-hal/commits/"+rev, &c); err != nil {
+			fmt.Printf("FAIL esp-hal: the commit %s: %v\n", rev, err)
+			bad = true
+			continue
+		}
+		age := int(time.Since(c.Commit.Committer.Date).Hours() / 24)
+		if len(f) > 1 || age > *espDays {
+			fmt.Printf("FAIL esp-hal: the commit %.12s is %d days old, of %d pinned; see whether a release carries what it waits for\n", rev, age, len(f))
+			bad = true
+		} else {
+			fmt.Printf("ok   esp-hal: the commit %.12s, %d days old\n", rev, age)
+		}
+	}
 	if bad {
 		os.Exit(1)
 	}
+}
+
+// modInfo is what Go's module proxy says of a version.
+type modInfo struct {
+	Version string
+	Time    time.Time
+}
+
+func proxyInfo(ctx context.Context, module, what string) (modInfo, error) {
+	var i modInfo
+	err := getJSON(ctx, "https://proxy.golang.org/"+escapeModule(module)+"/"+what, &i)
+	return i, err
+}
+
+// escapeModule writes a module path as the proxy wants it: an upper-case
+// letter as ! and the lower-case one.
+func escapeModule(m string) string {
+	var b strings.Builder
+	for _, r := range m {
+		if 'A' <= r && r <= 'Z' {
+			b.WriteByte('!')
+			r += 'a' - 'A'
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+// lagging reports whether the latest version is newer than the pinned one
+// by more than days and came out by cutoff, and by how many days it is
+// newer.
+func lagging(pinned, latest modInfo, cutoff time.Time, days int) (bool, int) {
+	lag := int(latest.Time.Sub(pinned.Time).Hours() / 24)
+	return latest.Version != pinned.Version && lag > days && !latest.Time.After(cutoff), lag
+}
+
+// scanAny is scan for a pattern with alternatives: the version is the last
+// group that matched.
+func scanAny(re *regexp.Regexp, paths []string) (found, error) {
+	f := found{}
+	for _, p := range paths {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range re.FindAllSubmatchIndex(b, -1) {
+			for g := len(m)/2 - 1; g > 0; g-- {
+				if m[2*g] >= 0 {
+					line := 1 + strings.Count(string(b[:m[0]]), "\n")
+					v := string(b[m[2*g]:m[2*g+1]])
+					f[v] = append(f[v], fmt.Sprintf("%s:%d", p, line))
+					break
+				}
+			}
+		}
+	}
+	return f, nil
 }
 
 // choose picks due, the newest release published by cutoff, and the

@@ -5,7 +5,8 @@ Devices of one class can do the same things. A difference is allowed only where 
 system itself forces it, and then it is written here with the reason. The classes:
 
 - **Computers**: Linux, macOS, Windows (`cbb`).
-- **Phones**: Android, iPhone, Aurora OS (the apps; the Aurora app also builds for Sailfish OS).
+- **Phones**: Android, iPhone, Aurora OS (the apps; the Aurora app also builds for Sailfish OS),
+  HarmonyOS 5 and later (`apps/harmony`, in development, ported from the Aurora app).
 - **Lite devices**: the lite member (`cbb` in Rust) on small Linux devices, the ESP32 firmware, the ZX Spectrum
   Next through its Pi.
 

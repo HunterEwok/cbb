@@ -56,10 +56,10 @@ func hubCases(ctx context.Context, r *Report, g *benchGroup, fwd *Host, joined [
 		return
 	}
 
-	// P37: the lite member and the container cannot be the hub; the admin
-	// computer can, and the away devices follow it.
+	// P37: the container and a build without the tunnel (MIPS) cannot be
+	// the hub; the admin computer can, and the away devices follow it.
 	for _, d := range g.members[1:] {
-		if d.OS != "linux-lite" && d.OS != "docker" {
+		if d.OS != "docker" && !noTunnel(ctx, d) {
 			continue
 		}
 		r.Do("away/P37/move-"+d.Name+"/refused", func() error {

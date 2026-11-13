@@ -59,8 +59,9 @@ fun FormGlyph(form: String, color: Color, size: Dp) {
 }
 
 /**
- * The two switches' outlines on the same grid (docs/apps.md, Home): "house"
- * for sync on this device, "globe" for Everywhere, sync away from home.
+ * The switches' outlines on the same grid (docs/apps.md, Home): "house"
+ * for sync on this device, "globe" for Everywhere, sync away from home,
+ * "speaker" and "speaker-off" for the mute button in a tile's corner.
  */
 @Composable
 fun SwitchGlyph(name: String, color: Color, size: Dp) {
@@ -73,6 +74,15 @@ fun SwitchGlyph(name: String, color: Color, size: Dp) {
                 line(3f, 11.5f, 12f, 3.5f); line(12f, 3.5f, 21f, 11.5f)
                 line(5.5f, 9.5f, 5.5f, 20.5f); line(18.5f, 9.5f, 18.5f, 20.5f); line(5.5f, 20.5f, 18.5f, 20.5f)
                 line(10f, 20.5f, 10f, 15f); line(10f, 15f, 14f, 15f); line(14f, 15f, 14f, 20.5f)
+            }
+            "speaker", "speaker-off" -> {
+                line(4f, 9f, 8f, 9f); line(8f, 9f, 13f, 5f); line(13f, 5f, 13f, 19f)
+                line(13f, 19f, 8f, 15f); line(8f, 15f, 4f, 15f); line(4f, 15f, 4f, 9f)
+                if (name == "speaker") {
+                    drawArc(color, -50f, 100f, false, Offset(12.5f * u, 8f * u), Size(8f * u, 8f * u), style = stroke)
+                } else {
+                    line(16f, 9f, 21f, 15f); line(21f, 9f, 16f, 15f)
+                }
             }
             else -> {
                 drawCircle(color, 9f * u, Offset(12f * u, 12f * u), style = stroke)

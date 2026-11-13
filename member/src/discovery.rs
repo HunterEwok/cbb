@@ -149,6 +149,13 @@ pub fn find_group(tag: &str, wait: Duration) -> crate::error::Result<Vec<Vec<Soc
     Ok(found.into_values().map(|(a, ())| a).collect())
 }
 
+/// The members of any group that browsing finds for up to wait, by
+/// device, for a restore with a card's recovery key, which names no group.
+pub fn find_any_group(wait: Duration) -> crate::error::Result<Vec<Vec<SocketAddr>>> {
+    let found = browse_txt(wait, |info| info.get_property_val_str("g").filter(|g| !g.is_empty()).map(|_| ()))?;
+    Ok(found.into_values().map(|(a, ())| a).collect())
+}
+
 /// Browses for up to wait for the members whose TXT pick takes, then a
 /// moment more for the others; by instance name, their addresses and what
 /// pick made of them.
@@ -158,12 +165,7 @@ fn browse_txt<T>(
 ) -> crate::error::Result<std::collections::BTreeMap<String, (Vec<SocketAddr>, T)>> {
     use crate::error::Error;
     let daemon = mdns_sd::ServiceDaemon::new().map_err(|e| Error::with("cannot browse with mDNS", e))?;
-    let _ = daemon.disable_interface(vec![mdns_sd::IfKind::LoopbackV4, mdns_sd::IfKind::LoopbackV6]);
-    let only = interfaces::only();
-    if !only.is_empty() {
-        let _ = daemon.disable_interface(mdns_sd::IfKind::All);
-        let _ = daemon.enable_interface(only.iter().map(|n| mdns_sd::IfKind::Name(n.clone())).collect::<Vec<_>>());
-    }
+    set_interfaces(&daemon);
     start_trace();
     let rx = daemon.browse(SERVICE).map_err(|e| Error::with("cannot browse with mDNS", e))?;
     let mut found = std::collections::BTreeMap::new();
@@ -567,6 +569,109 @@ pub fn start_as_phone(node: Arc<Node>, tag: String, log: Arc<dyn Fn(&str) + Send
     });
 }
 
+/// Sets the interfaces a daemon uses: as Go's responder, no loopback
+/// interfaces, and on a router only the devices of the interface list.
+fn set_interfaces(daemon: &mdns_sd::ServiceDaemon) {
+    let _ = daemon.disable_interface(vec![mdns_sd::IfKind::LoopbackV4, mdns_sd::IfKind::LoopbackV6]);
+    let only = interfaces::only();
+    if !only.is_empty() {
+        let _ = daemon.disable_interface(mdns_sd::IfKind::All);
+        let _ = daemon.enable_interface(only.iter().map(|n| mdns_sd::IfKind::Name(n.clone())).collect::<Vec<_>>());
+    }
+}
+
+/// How long after the first member found without its TXT record browsing
+/// asks for it, past the second in which mdns-sd's responder sends a record
+/// it has just multicast no more.
+const ASK_FIRST: Duration = Duration::from_millis(1500);
+
+/// The wait between later asks, doubled each time up to ASK_MAX; longer
+/// than ASK_FOR, so that one asker runs at a time.
+const ASK_GAP: Duration = Duration::from_secs(5);
+const ASK_MAX: Duration = Duration::from_secs(60);
+
+/// How long an asker browses.
+const ASK_FOR: Duration = Duration::from_secs(3);
+
+/// The members browsing found without their TXT record, and when to ask
+/// for it again.
+///
+/// mdns-sd resolves a member from its SRV and address records alone. A
+/// responder that multicast its TXT record within the last second leaves it
+/// out of its answer (mdns-sd's rate limit), so a daemon that started
+/// browsing just then resolves the member with no TXT, no group tag and no
+/// role. It never asks for the TXT again: it asks only for what has no SRV,
+/// and its own browse queries carry the PTR as a known answer, which the
+/// responders do not answer again; the TXT lives 75 minutes, and a member
+/// that dials never found the other.
+#[derive(Default)]
+struct Untold {
+    names: std::collections::HashSet<String>,
+    next: Option<Instant>,
+    gap: Duration,
+}
+
+impl Untold {
+    /// Notes a member resolved with no TXT record; true when it is new.
+    /// Anyone on the network can announce names, so they are bounded as
+    /// the members dialed are.
+    fn add(&mut self, fullname: &str, now: Instant) -> bool {
+        if self.names.len() >= MAX_FOUND && !self.names.contains(fullname) {
+            return false;
+        }
+        if self.names.is_empty() {
+            self.next = Some(now + ASK_FIRST);
+            self.gap = ASK_GAP;
+        }
+        self.names.insert(fullname.to_string())
+    }
+
+    /// Notes a member resolved with its TXT record, or gone.
+    fn remove(&mut self, fullname: &str) {
+        self.names.remove(fullname);
+        if self.names.is_empty() {
+            self.next = None;
+        }
+    }
+
+    /// Reports whether to ask now, and if so when to ask next.
+    fn due(&mut self, now: Instant) -> bool {
+        match self.next {
+            Some(t) if now >= t => {
+                self.next = Some(now + self.gap);
+                self.gap = (self.gap * 2).min(ASK_MAX);
+                true
+            }
+            _ => false,
+        }
+    }
+}
+
+/// Asks the members for their records again, from a daemon of its own:
+/// its first browse query carries no known answers, so every member answers
+/// it with its PTR, SRV, TXT and address records, multicast, which the
+/// browsing daemon takes too and resolves the members again with their TXT.
+fn ask_again() {
+    std::thread::spawn(|| {
+        let daemon = match mdns_sd::ServiceDaemon::new() {
+            Ok(d) => d,
+            Err(e) => return trace(&format!("asking for the TXT records: {e}")),
+        };
+        set_interfaces(&daemon);
+        match daemon.browse(SERVICE) {
+            Ok(rx) => {
+                let end = Instant::now() + ASK_FOR;
+                while let Some(left) = end.checked_duration_since(Instant::now()) {
+                    let Ok(ev) = rx.recv_timeout(left) else { break };
+                    trace(&format!("asking for the TXT records: {ev:?}"));
+                }
+            }
+            Err(e) => trace(&format!("asking for the TXT records: {e}")),
+        }
+        let _ = daemon.shutdown();
+    });
+}
+
 fn browse(
     node: Arc<Node>,
     tag: &str,
@@ -579,14 +684,7 @@ fn browse(
         Some(d) => d,
         None => mdns_sd::ServiceDaemon::new()?,
     };
-    // As Go's responder: no loopback interfaces.
-    let _ = daemon.disable_interface(vec![mdns_sd::IfKind::LoopbackV4, mdns_sd::IfKind::LoopbackV6]);
-    // On a router, only the devices of the interface list.
-    let only = interfaces::only();
-    if !only.is_empty() {
-        let _ = daemon.disable_interface(mdns_sd::IfKind::All);
-        let _ = daemon.enable_interface(only.iter().map(|n| mdns_sd::IfKind::Name(n.clone())).collect::<Vec<_>>());
-    }
+    set_interfaces(&daemon);
     start_trace();
     let me = node.identity().id.clone();
     if let Ok(events) = daemon.monitor() {
@@ -683,12 +781,16 @@ fn browse(
     let mut published = Instant::now();
     let events = daemon.browse(SERVICE)?;
     let mut found: HashMap<DeviceId, Addrs> = HashMap::new();
+    let mut untold = Untold::default();
     loop {
         let ev = events.recv_timeout(Duration::from_secs(1));
         if node.is_closed() {
             break;
         }
         let away = elsewhere(&me);
+        if !away && untold.due(Instant::now()) {
+            ask_again();
+        }
         if away && !found.is_empty() {
             for (_, a) in found.drain() {
                 *a.lock().unwrap() = None;
@@ -723,6 +825,15 @@ fn browse(
                 if away {
                     continue;
                 }
+                // One resolved without its TXT record is asked for it
+                // again rather than taken for another group's.
+                if info.get_properties().is_empty() {
+                    if id != me && untold.add(&info.fullname, Instant::now()) {
+                        log(&format!("cbb: found {id} by mDNS without its TXT record; asking for it again"));
+                    }
+                    continue;
+                }
+                untold.remove(&info.fullname);
                 // Members of another group, or of a replaced CA, are ignored.
                 let r = info.get_property_val_str("r");
                 if id == me || info.get_property_val_str("g") != Some(tag) {
@@ -785,6 +896,7 @@ fn browse(
                 }
             }
             mdns_sd::ServiceEvent::ServiceRemoved(_, fullname) => {
+                untold.remove(&fullname);
                 if let Some(id) = instance_id(&fullname) {
                     node.found(&id, false);
                     if let Some(cur) = found.remove(&id) {
@@ -937,6 +1049,127 @@ mod tests {
             w = next_wait(w, true, false);
         }
         assert_eq!(w, FIRST_WAIT);
+    }
+
+    /// A member resolved without its TXT record is asked for it after
+    /// ASK_FIRST, then again with a doubling wait up to ASK_MAX, until every
+    /// such member has its TXT or is gone.
+    #[test]
+    fn asks_again_for_a_missing_txt() {
+        let t0 = Instant::now();
+        let mut u = Untold::default();
+        assert!(!u.due(t0 + ASK_MAX * 10), "nothing to ask for");
+        assert!(u.add("a", t0));
+        assert!(!u.add("a", t0), "the same member again");
+        assert!(!u.due(t0));
+        assert!(u.due(t0 + ASK_FIRST));
+        assert!(!u.due(t0 + ASK_FIRST), "once per wait");
+        let mut at = t0 + ASK_FIRST;
+        let mut gap = ASK_GAP;
+        for _ in 0..8 {
+            assert!(!u.due(at + gap - Duration::from_millis(1)));
+            at += gap;
+            assert!(u.due(at));
+            gap = (gap * 2).min(ASK_MAX);
+        }
+        assert_eq!(gap, ASK_MAX);
+        assert!(ASK_GAP > ASK_FOR, "one asker at a time");
+        // A second member keeps the schedule; asking stops when both are told.
+        assert!(u.add("b", at));
+        u.remove("a");
+        assert!(u.due(at + ASK_MAX));
+        u.remove("b");
+        assert!(!u.due(at + ASK_MAX * 10));
+        // At most MAX_FOUND of them.
+        let mut many = Untold::default();
+        for i in 0..MAX_FOUND {
+            assert!(many.add(&i.to_string(), t0));
+        }
+        assert!(!many.add("one more", t0));
+        assert_eq!(many.names.len(), MAX_FOUND);
+        // A member found without TXT later starts again from ASK_FIRST.
+        let t1 = at + ASK_MAX * 20;
+        assert!(u.add("c", t1));
+        assert!(!u.due(t1 + ASK_FIRST - Duration::from_millis(1)));
+        assert!(u.due(t1 + ASK_FIRST));
+        assert!(u.due(t1 + ASK_FIRST + ASK_GAP));
+    }
+
+    /// A daemon that starts browsing within the second after a member
+    /// multicast its TXT record resolves it without one, since mdns-sd's
+    /// responder leaves the TXT out of its answer, and never asks for it;
+    /// ask_again gets it. TestFreezeAnAdmin failed so on the Rust cbb once:
+    /// a member restarted browsing just after another asked for the root's
+    /// TXT, and never dialed the root.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_missing_txt_comes_when_asked() {
+        use std::net::{Ipv4Addr, SocketAddrV4};
+        start_trace();
+        let Some(ip) = if_addrs::get_if_addrs().unwrap_or_default().into_iter().find_map(|f| match f.ip() {
+            IpAddr::V4(v4) if !f.is_loopback() && interfaces::allowed(&f.name) => Some(v4),
+            _ => None,
+        }) else {
+            eprintln!("no interface for mDNS; skipped");
+            return;
+        };
+        let daemon = || {
+            let d = mdns_sd::ServiceDaemon::new().unwrap();
+            set_interfaces(&d);
+            d
+        };
+        let responder = daemon();
+        let nanos = std::time::SystemTime::UNIX_EPOCH.elapsed().unwrap_or_default().as_nanos() as u64;
+        let name = format!("{:016x}{nanos:016x}", std::process::id());
+        let txt = [("v", "1"), ("g", "txt-test")];
+        let info =
+            mdns_sd::ServiceInfo::new(SERVICE, &name, "cb-txt-test.local.", IpAddr::V4(ip), 4242, &txt[..]).unwrap();
+        let fullname = info.get_fullname().to_string();
+        responder.register(info).unwrap();
+        // Past its announcements and their second.
+        std::thread::sleep(Duration::from_millis(3500));
+        // Another device asks for the TXT record alone, as a daemon does
+        // that has the member's PTR and not its SRV, from port 5353, so that
+        // the answer is multicast.
+        let sock = socket2::Socket::new(socket2::Domain::IPV4, socket2::Type::DGRAM, None).unwrap();
+        sock.set_reuse_address(true).unwrap();
+        sock.set_reuse_port(true).unwrap();
+        sock.bind(&SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 5353).into()).unwrap();
+        sock.set_multicast_if_v4(&ip).unwrap();
+        let mut q = vec![0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0];
+        for label in fullname.trim_end_matches('.').split('.') {
+            q.push(label.len() as u8);
+            q.extend_from_slice(label.as_bytes());
+        }
+        q.extend_from_slice(&[0, 0, 16, 0, 1]);
+        sock.send_to(&q, &SocketAddrV4::new(Ipv4Addr::new(224, 0, 0, 251), 5353).into()).unwrap();
+        drop(sock);
+        std::thread::sleep(Duration::from_millis(300));
+        // A daemon that starts browsing now: resolved with no TXT.
+        let browser = daemon();
+        let rx = browser.browse(SERVICE).unwrap();
+        let resolved = |wait: Duration| {
+            let end = Instant::now() + wait;
+            let mut txt = None;
+            while let Some(left) = end.checked_duration_since(Instant::now()) {
+                let Ok(ev) = rx.recv_timeout(left) else { break };
+                if let mdns_sd::ServiceEvent::ServiceResolved(i) = ev
+                    && i.fullname == fullname
+                {
+                    txt = Some(i.get_property_val_str("g").map(str::to_string));
+                    if txt == Some(Some("txt-test".into())) {
+                        break;
+                    }
+                }
+            }
+            txt
+        };
+        assert_eq!(resolved(Duration::from_secs(4)), Some(None), "resolved at first without the TXT");
+        ask_again();
+        assert_eq!(resolved(ASK_FOR + Duration::from_secs(2)), Some(Some("txt-test".into())), "the TXT after asking");
+        for d in [browser, responder] {
+            let _ = d.shutdown();
+        }
     }
 
     #[test]

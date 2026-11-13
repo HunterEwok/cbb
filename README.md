@@ -1,6 +1,7 @@
 # Copy Beyond Borders
 
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/HunterEwok/cbb/badge)](https://securityscorecards.dev/viewer/?uri=github.com/HunterEwok/cbb)
+[![REUSE status](https://api.reuse.software/badge/github.com/HunterEwok/cbb)](https://api.reuse.software/info/github.com/HunterEwok/cbb)
 
 **One encrypted clipboard for all your devices, with no cloud.**
 
