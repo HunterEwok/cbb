@@ -263,9 +263,11 @@ pub struct State {
     /// A recovery record this version cannot read: the device stops by
     /// itself until it is updated (not a fork, not final).
     pub update_needed: bool,
-    /// The new root's first checkpoint the next valid recovery record
-    /// names, which the device does not hold yet: the change waits for
-    /// it; ask the peers.
+    /// The first record of the change's group the device does not hold
+    /// yet: the new root's first checkpoint the next valid recovery record
+    /// names, or a record of the new root below it (its re-issued
+    /// removals among them). The change waits for the whole group; ask the
+    /// peers. Apps show "a change of root is arriving".
     pub first_missing: Option<RecordId>,
     /// The lowest seq at which the set holds two recovery records, and
     /// the two (the smaller ID first): the proof of a fork.
@@ -699,8 +701,43 @@ pub(crate) fn first_floor<'r>(
 /// Whether held has a head's first checkpoint: a checkpoint of root with
 /// that ID, verified (a set verifies what it holds, `check_all` what it
 /// takes).
-pub(crate) fn first_held(held: &BTreeMap<RecordId, &Record>, id: &RecordId, root: &Key) -> bool {
-    held.get(id).is_some_and(|r| r.body().signer == root.hash() && matches!(r.body().kind, Kind::Checkpoint { .. }))
+/// The first record of a change's group the set does not hold, or None
+/// when it holds them all: the new root's first checkpoint id and every
+/// record of root's line below it, down to the record at `from` (seq 1
+/// for a new key). A change applies whole or not at all: the first
+/// checkpoint keeps the re-issued removals, and with one of them missing
+/// the old removals it covers would stop barring with nothing in their
+/// place. A record a checkpoint the member compacted by settled (below
+/// that checkpoint's head of root, `proven`) is accounted for: a later
+/// checkpoint of the new root may prune its first records once the change
+/// applied.
+pub(crate) fn first_gap(
+    held: &BTreeMap<RecordId, &Record>,
+    proven: &[(Vec<Head>, BTreeSet<RecordId>)],
+    id: &RecordId,
+    root: &Key,
+    from: u64,
+) -> Option<RecordId> {
+    let h = root.hash();
+    let settled = |below: u64| {
+        proven.iter().any(|(heads, _)| heads.iter().any(|hd| hd.key == h && hd.seq.saturating_add(1) >= below))
+    };
+    let Some(cp) = held.get(id).filter(|r| r.body().signer == h && matches!(r.body().kind, Kind::Checkpoint { .. }))
+    else {
+        return Some(*id);
+    };
+    let low = from.max(1);
+    let mut r = *cp;
+    while r.body().seq > low {
+        let p = r.body().prev?;
+        match held.get(&p) {
+            Some(x) if x.body().signer == h && x.body().seq < r.body().seq => r = x,
+            Some(_) => return None,
+            None if settled(r.body().seq) => return None,
+            None => return Some(p),
+        }
+    }
+    None
 }
 
 /// What the recovery chain comes to (rule 33): the roots it put on the
@@ -723,6 +760,10 @@ pub(crate) struct Chain {
     /// The first checkpoint of the new root the next valid record names,
     /// which it waits for.
     pub first_missing: Option<RecordId>,
+    /// The first record each record past the applied ones lacks of its
+    /// group, where its list is held: when one comes, that record, and
+    /// every one before it, may apply.
+    pub gaps: BTreeSet<RecordId>,
     /// The chain's records that count.
     pub records: BTreeSet<RecordId>,
     /// The first checkpoints kept outside the rooms: the newest applied
@@ -803,7 +844,7 @@ pub(crate) fn chain<'r>(
     group_root: &KeyHash,
     records: impl Iterator<Item = (&'r Record, Role)>,
     lists: &BTreeMap<[u8; 32], &List>,
-    held_first: impl Fn(&RecordId, &Key) -> bool,
+    first_gap: impl Fn(&RecordId, &Key, u64) -> Option<RecordId>,
 ) -> Chain {
     let mut by: BTreeMap<u64, Vec<&Record>> = BTreeMap::new();
     let mut out = Chain::default();
@@ -864,15 +905,26 @@ pub(crate) fn chain<'r>(
     // state is shown as it stood, nothing is compacted or commanded by it,
     // and the first checkpoint of a record a later one followed is gone.
     let halted = !out.fork.is_empty() || out.unreadable;
-    let ready =
-        |list: &[u8; 32], root: &Key, first: &RecordId| lists.contains_key(list) && (halted || held_first(first, root));
-    let applied =
-        valid.iter().rposition(|(_, root, list, _, first)| ready(list, root, first)).map_or(0, |i| i.saturating_add(1));
+    let ready = |list: &[u8; 32], root: &Key, from: u64, first: &RecordId| {
+        lists.contains_key(list) && (halted || first_gap(first, root, from).is_none())
+    };
+    let applied = valid
+        .iter()
+        .rposition(|(_, root, list, from, first)| ready(list, root, *from, first))
+        .map_or(0, |i| i.saturating_add(1));
+    if !halted {
+        out.gaps = valid
+            .iter()
+            .skip(applied)
+            .filter(|(_, _, list, _, _)| lists.contains_key(*list))
+            .filter_map(|(_, root, _, from, first)| first_gap(first, root, *from))
+            .collect();
+    }
     if applied < valid.len()
-        && let Some((_, root, list, _, first)) = valid.last()
+        && let Some((_, root, list, from, first)) = valid.last()
     {
         out.waiting = (!lists.contains_key(*list)).then_some(**list);
-        out.first_missing = (!halted && !held_first(first, root)).then_some(*first);
+        out.first_missing = if halted { None } else { first_gap(first, root, *from) };
     }
     if let Some((_, root, _, _, first)) = applied.checked_sub(1).and_then(|i| valid.get(i))
         && !halted
@@ -1145,7 +1197,9 @@ pub(crate) fn evaluate_checked(
     let chain = {
         let held: BTreeMap<RecordId, &Record> =
             checked.iter().map(|c| c.r).chain(early.iter().copied()).map(|r| (r.id(), r)).collect();
-        chain(&group_root, checked.iter().map(|c| (c.r, c.role)), lists, |id, root| first_held(&held, id, root))
+        chain(&group_root, checked.iter().map(|c| (c.r, c.role)), lists, |id, root, from| {
+            first_gap(&held, by.proven, id, root, from)
+        })
     };
     // The records of a root only a waiting record names stay aside, as
     // in the set (Chain::waiting_roots).

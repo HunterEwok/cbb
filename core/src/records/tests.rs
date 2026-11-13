@@ -2037,6 +2037,48 @@ mod differential {
 
     /// A sequence once found by the property below: the set agrees with
     /// evaluate in both orders.
+    /// Two changes of root wait, each for a record of its group; the
+    /// earlier one's comes: it applies, and what it cuts goes at once.
+    #[test]
+    fn agrees_when_an_earlier_change_completes_first() {
+        let steps = [
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 6, 0),
+            (0, 2, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (3, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 74),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (2, 0, 0),
+            (0, 5, 91),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (1, 0, 0),
+            (0, 0, 9),
+            (2, 8, 198),
+            (1, 1, 79),
+        ];
+        let (g, recs) = build(&steps);
+        let m = agree(&g, &recs, 4, 11_910_324_720_339_346_978);
+        assert_eq!(m.state().roots.len(), 3);
+    }
+
     #[test]
     fn agrees_after_a_newer_checkpoint_of_the_old_root() {
         let steps = [
@@ -2994,6 +3036,7 @@ fn members_agree(g: &G) -> State {
 
 mod cap;
 mod insert_cost;
+mod lost_root;
 mod recovery;
 mod sync;
 mod traces;

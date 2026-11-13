@@ -56,37 +56,66 @@ impl Part<'_> {
 }
 
 /// Splits records (in the order they are sent) and lists into parts of at
-/// most max_records records and max_bytes bytes each. A list goes in the
-/// part of the first recovery head that names it; lists no head among the
-/// records names go after the records, packed by the same bytes.
+/// most max_records records and max_bytes bytes each. A change of root
+/// travels whole in one part: its head, the list it names and the new
+/// root's records up to the first checkpoint the head names, which move up
+/// to right after the head (they depend on it alone), so that a receiver
+/// never holds a head without the means to apply it. Lists no head among
+/// the records names go after the records, packed by the same bytes.
 pub fn split<'a>(records: &[&'a Record], lists: &[&'a [u8]], max_records: usize, max_bytes: usize) -> Vec<Part<'a>> {
     let mut placed = alloc::vec![false; lists.len()];
     let hash_of: Vec<[u8; 32]> = lists.iter().map(|l| list_hash(l)).collect();
+    let size = |r: &Record| r.envelope().len().saturating_add(ITEM_HEAD);
+    // The groups: a change of root with its list and first records, or a
+    // record alone.
+    let mut taken: alloc::collections::BTreeSet<RecordId> = alloc::collections::BTreeSet::new();
+    let mut groups: Vec<(Vec<&'a Record>, Option<usize>)> = Vec::new();
+    for &r in records {
+        if taken.contains(&r.id()) {
+            continue;
+        }
+        let mut group = alloc::vec![r];
+        let mut with = None;
+        if let Kind::Recovery { root, list, first, .. } = &r.body().kind {
+            if let Some(i) = hash_of.iter().position(|h| h == list)
+                && placed.get(i) == Some(&false)
+            {
+                if let Some(p) = placed.get_mut(i) {
+                    *p = true;
+                }
+                with = Some(i);
+            }
+            let h = root.hash();
+            if let Some(cp) = records.iter().find(|x| x.id() == *first).map(|x| x.body().seq) {
+                let mut firsts: Vec<&'a Record> = records
+                    .iter()
+                    .copied()
+                    .filter(|x| x.body().signer == h && x.body().seq <= cp && !taken.contains(&x.id()))
+                    .collect();
+                firsts.sort_by_key(|x| x.body().seq);
+                taken.extend(firsts.iter().map(|x| x.id()));
+                group.extend(firsts);
+            }
+        }
+        taken.insert(r.id());
+        groups.push((group, with));
+    }
     let mut parts: Vec<Part<'a>> = Vec::new();
     let mut cur = Part::default();
     let mut used = 0usize;
-    for r in records {
-        let mut item = r.envelope().len().saturating_add(ITEM_HEAD);
-        let mut with: Option<usize> = None;
-        if let Kind::Recovery { list, .. } = &r.body().kind
-            && let Some(i) = hash_of.iter().position(|h| h == list)
-            && placed.get(i) == Some(&false)
-            && let Some(l) = lists.get(i)
-        {
-            with = Some(i);
-            item = item.saturating_add(l.len()).saturating_add(ITEM_HEAD);
-        }
-        if !cur.records.is_empty() && (cur.records.len() >= max_records || used.saturating_add(item) > max_bytes) {
+    for (group, with) in groups {
+        let list = with.and_then(|i| lists.get(i).copied());
+        let item = group
+            .iter()
+            .fold(0usize, |n, r| n.saturating_add(size(r)))
+            .saturating_add(list.map_or(0, |l| l.len().saturating_add(ITEM_HEAD)));
+        let count = cur.records.len().saturating_add(group.len());
+        if !cur.records.is_empty() && (count > max_records || used.saturating_add(item) > max_bytes) {
             parts.push(core::mem::take(&mut cur));
             used = 0;
         }
-        cur.records.push(r);
-        if let Some(i) = with
-            && let (Some(p), Some(l)) = (placed.get_mut(i), lists.get(i))
-        {
-            *p = true;
-            cur.lists.push(l);
-        }
+        cur.records.extend(group);
+        cur.lists.extend(list);
         used = used.saturating_add(item);
     }
     for l in lists.iter().zip(&placed).filter(|(_, p)| !**p).map(|(l, _)| l) {
