@@ -126,6 +126,33 @@ pub fn check(b: &[u8]) -> Result<(), Rule> {
     decode(b).map(|_| ())
 }
 
+/// The bytes of field key of the map b, exactly as they stand in b; None
+/// when the map has no such field. b must read as one item of the profile
+/// (the frame's reader has checked it); the walk reads only the items'
+/// heads to find where each value starts and ends, and keeps none of them,
+/// so a caller can check a tag over a field before reading what it holds.
+pub fn raw_field(b: &[u8], key: u16) -> Result<Option<&[u8]>, Rule> {
+    let mut r = Reader { b, pos: 0 };
+    let ib = r.peek()?;
+    r.pos = r.pos.checked_add(1).ok_or(Rule::TRUNCATED)?;
+    if ib >> 5 != 5 {
+        return Err(Rule::MAP_KEY);
+    }
+    let n = r.arg(ib & 31)?;
+    for _ in 0..n {
+        let k = match r.item(1)? {
+            Value::Uint(k) => k,
+            _ => return Err(Rule::MAP_KEY),
+        };
+        let start = r.pos;
+        r.skip(1)?;
+        if k == u64::from(key) {
+            return Ok(b.get(start..r.pos));
+        }
+    }
+    Ok(None)
+}
+
 struct Reader<'a> {
     b: &'a [u8],
     pos: usize,
@@ -170,6 +197,31 @@ impl<'a> Reader<'a> {
             return Err(Rule::SHORTEST);
         }
         Ok(v)
+    }
+
+    /// Steps over one item by its heads, keeping nothing.
+    fn skip(&mut self, depth: usize) -> Result<(), Rule> {
+        let ib = self.peek()?;
+        self.pos = self.pos.checked_add(1).ok_or(Rule::TRUNCATED)?;
+        let (major, ai) = (ib >> 5, ib & 31);
+        let n = self.arg(ai)?;
+        match major {
+            0 => Ok(()),
+            2 | 3 => self.take(n).map(|_| ()),
+            4 | 5 => {
+                if depth >= MAX_DEPTH {
+                    return Err(Rule::DEPTH);
+                }
+                let items = if major == 5 { n.checked_mul(2).ok_or(Rule::COUNT)? } else { n };
+                for _ in 0..items {
+                    self.skip(depth.saturating_add(1))?;
+                }
+                Ok(())
+            }
+            1 => Err(Rule::NEGATIVE),
+            6 => Err(Rule::TAG),
+            _ => Err(Rule::SIMPLE),
+        }
     }
 
     fn item(&mut self, depth: usize) -> Result<Value<'a>, Rule> {

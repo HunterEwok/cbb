@@ -263,6 +263,15 @@ fn between(table: &Table, v: &Value<'_>) -> Result<(), Rule> {
     if core::ptr::eq(table, &tables::WELCOME) && (v.get(3).is_some() || v.get(8).is_some()) {
         return Err(Rule::field("welcome/retired"));
     }
+    // A Welcome's records ride in it or in parts; a leaf's has neither
+    // digest nor parts.
+    if core::ptr::eq(table, &tables::WELCOME) {
+        crate::join::welcome::between(v)?;
+    }
+    // A records message carries records, lists, or both.
+    if core::ptr::eq(table, &tables::RECORDS) && v.get(2).is_none() && v.get(3).is_none() {
+        return Err(Rule::field("records/shape"));
+    }
     Ok(())
 }
 

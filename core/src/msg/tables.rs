@@ -60,9 +60,15 @@ pub static PAIR_CONFIRM: Table = Table {
     shape: "pair/confirm/shape",
     fields: &[f(2, "pair/confirm/ta", Ty::BytesUpTo(64), true), f(3, "pair/confirm/nonce", B32, true)],
 };
+/// Message 67: CPace's Tb, the Welcome, and `Tw`, the Welcome's tag from
+/// the session's ISK over field 3's bytes (`join::welcome::tag`).
 pub static PAIR_WELCOME: Table = Table {
     shape: "pair/welcome/shape",
-    fields: &[f(2, "pair/welcome/tb", Ty::BytesUpTo(64), true), f(3, "pair/welcome/welcome", Ty::Map(&WELCOME), true)],
+    fields: &[
+        f(2, "pair/welcome/tb", Ty::BytesUpTo(64), true),
+        f(3, "pair/welcome/welcome", Ty::Map(&WELCOME), true),
+        f(4, "pair/welcome/tw", Ty::Bytes(64), true),
+    ],
 };
 pub static PAIR_DONE: Table = Table { shape: "pair/done/shape", fields: &[] };
 pub static PAIR_ERROR: Table =
@@ -74,14 +80,31 @@ pub static WELCOME: Table = Table {
     shape: "welcome/shape",
     fields: &[
         f(1, "welcome/root", MEMBER_KEY, true),
-        f(2, "welcome/records", Ty::Array { of: &ENV, max: 8192 }, true),
+        f(2, "welcome/records", Ty::Array { of: &ENV, max: 8192 }, false),
         f(4, "welcome/keys", Ty::Array { of: &ENV, max: 256 }, false),
         f(5, "welcome/time", MS, true),
         f(6, "welcome/grant", Ty::Map(&GRANT), false),
         f(7, "welcome/credentials", Ty::Array { of: &ENV, max: 259 }, false),
         f(9, "welcome/recovery", MEMBER_KEY, true),
-        f(10, "welcome/list", Ty::BytesUpTo(4 + 34 * 1024), false),
+        f(10, "welcome/list", LIST, false),
         f(11, "welcome/recovery2", Ty::Key(Alg::SlhDsa), true),
+        f(12, "welcome/digest", B32, false),
+        f(13, "welcome/parts", Ty::Uint { min: 1, max: crate::join::welcome::MAX_PARTS }, false),
+    ],
+};
+
+/// A change of root's list in a message: its count and up to
+/// [`crate::records::LIST_MAX`] IDs of 34 bytes each.
+const LIST: Ty = Ty::BytesUpTo(4 + 34 * crate::records::LIST_MAX);
+
+/// Message `records` (t 5, format 9.2): record envelopes in the order a
+/// receiver takes them, and the lists the recovery records among them name
+/// (`records::sync::Part`): a part of sync, or of a Welcome.
+pub static RECORDS: Table = Table {
+    shape: "records/shape",
+    fields: &[
+        f(2, "records/records", Ty::Array { of: &ENV, max: crate::records::sync::PART_RECORDS }, false),
+        f(3, "records/lists", Ty::Array { of: &LIST, max: crate::records::body::MAX_RECOVERY as usize }, false),
     ],
 };
 
@@ -400,6 +423,7 @@ pub static ALL: &[&Table] = &[
     &PAIR_DONE,
     &PAIR_ERROR,
     &WELCOME,
+    &RECORDS,
     &GRANT,
     &INFO,
     &INFO_DEVICE,
@@ -444,6 +468,7 @@ pub fn of(t: u64) -> Option<&'static Table> {
         T_GUEST => &GUEST,
         T_WAITING => &WAITING,
         T_DISMISS => &DISMISS,
+        5 => &RECORDS,
         64 => &PAIR_START,
         65 => &PAIR_REPLY,
         66 => &PAIR_CONFIRM,
