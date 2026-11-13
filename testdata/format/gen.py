@@ -845,11 +845,11 @@ def grant_vectors(admin_record):
             msg[3] = dec(admin)
         return msg
 
-    def signed(g, signer):
+    def signed(g, signer, big=False):
         g = dict(g)
         g[3] = signer.hash
         genv, gbody = envelope("grant", signer, g)
-        assert len(gbody) <= 2048
+        assert big or len(gbody) <= 4096
         return g, genv, gbody
 
     def ok(name, g, signer, admin=None):
@@ -875,6 +875,9 @@ def grant_vectors(admin_record):
     g = ok("guarded lock, grant signed by the root", lock, ROOT)
     ok("guarded lock, lifetime of 40 days", {**lock, 11: 3456000000}, ROOT)
     ok("guarded lock, an optional field from a later version", {**lock, 300: "later"}, ROOT)
+    sixteen = {**lock, 12: by_hash([Signer(f"c{i}").key for i in range(16)]),
+               13: sorted([[Signer(f"r{i}").id16, Signer(f"r{i}").key] for i in range(16)], key=lambda a: a[0])}
+    ok("guarded lock, sixteen commanders and sixteen readers", sixteen, ROOT)
     L, K = LOCK.id16, BOARD.id16
 
     def root_bad(name, rule, fields, leaf=L):
@@ -889,9 +892,12 @@ def grant_vectors(admin_record):
     root_bad("guarded lifetime 0", "grants/life", {**g, 11: 0})
     root_bad("guarded lifetime over 40 days", "grants/life", {**g, 11: 3456000001})
     root_bad("guarded lifetime as text", "grants/life", {**g, 11: "forever"})
-    root_bad("nine commanders", "grants/commanders", {**g, 12: by_hash([Signer(f"c{i}").key for i in range(9)])})
-    root_bad("five readers", "grants/readers",
-             {**g, 13: sorted([[Signer(f"r{i}").id16, Signer(f"r{i}").key] for i in range(5)], key=lambda a: a[0])})
+    root_bad("seventeen commanders", "grants/commanders",
+             {**g, 12: by_hash([Signer(f"c{i}").key for i in range(17)])})
+    root_bad("seventeen readers", "grants/readers",
+             {**g, 13: sorted([[Signer(f"r{i}").id16, Signer(f"r{i}").key] for i in range(17)], key=lambda a: a[0])})
+    _, genv, _ = signed({**g, 300: fake("later", 4096)}, ROOT, big=True)
+    bad("grant body over 4096 bytes", "env/size", message(genv), L)
     root_bad("readers as a number", "grants/readers", {**g, 13: 5})
     root_bad("a reader without its key", "grants/readers", {**g, 13: [[LAPTOP.id16]]})
     root_bad("a reader with text for its key", "grants/readers", {**g, 13: [[LAPTOP.id16, "key"]]})
