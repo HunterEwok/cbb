@@ -797,11 +797,22 @@ module records_v3 {
     pure def early(r: Record): bool = onPath(r) and (r.kind == "revoke" or r.kind == "freeze" or r.kind == "resolve")
     // A whole chain: every record of its line is here, or down to an anchor; a replaced root's
     // listed record counts by the list; of a current root with a from, its line from there.
-    pure def whole(r: Record): bool = {
+    pure def floorAt(r: Record): int = {
       val top = r.line.indices().fold(-1, (m, j) => if (anchors.contains(r.line[j])) max2(m, j) else m)
       val low = if (cuts.keys().contains(r.signer)) floorOf(cuts.get(r.signer)) - 2 else -1
-      early(r) or replaced(cuts, r.signer) or r.line.indices().forall(i => i <= max2(top, low) or ids.contains(r.line[i]))
+      max2(top, low)
     }
+    // (I): a record that names what it follows needs only its line up to that record (the
+    // records between are its key's void tail), and that record whole in turn.
+    pure def followsAt(r: Record): int = r.line.indices().fold(-1, (f, i) => if (r.line[i] == r.follows) i else f)
+    val fwhole = if (CUT_MODE != "follows") Set() else range(0, MAXREC + 1).foldl(
+      rs.filter(r => r.follows != 0 and (r.follows == -1 or followsAt(r) <= floorAt(r))),
+      (acc, j) => acc.union(rs.filter(r => r.follows > 0 and acc.exists(x => x.id == r.follows and x.signer == r.signer)
+        and r.line.indices().forall(i => i <= floorAt(r) or i >= followsAt(r) or ids.contains(r.line[i])))))
+    pure def whole(r: Record): bool =
+      early(r) or replaced(cuts, r.signer)
+        or (if (CUT_MODE == "follows" and r.follows != 0) fwhole.contains(r)
+            else r.line.indices().forall(i => i <= floorAt(r) or ids.contains(r.line[i])))
     // The resolves of every root on the path; they void only admins' records, never a root's.
     val voids = rs.filter(r => onPath(r) and r.kind == "resolve" and whole(r)).map(r => r.targetRec)
       .filter(i => not(rs.exists(x => x.id == i and onList(path, x.signer) and not(isAdmin(x)))))
