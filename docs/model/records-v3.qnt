@@ -274,6 +274,10 @@ module records_v3 {
   // counting, except its removals on a whole chain, which keep barring on either history (as a
   // root's do). Off: only a root's removals keep barring.
   pure val F7_EVERY_KEY = true
+  // Remedy (a) for a forked key the root removes: its removals on a whole chain count whatever
+  // the root's removal saw. Off: the root's removal cuts off what it did not see (remedy (c) is
+  // the root's writer's, a scenario).
+  pure val F7_SEEN_IGNORED = false
 
   pure val NONE = 10000000
   // A record's ID as the hash orders it: not the order it was signed in.
@@ -932,7 +936,8 @@ module records_v3 {
       and (r.kind == "revoke" or r.kind == "thaw" or (r.kind == "freeze" and not(rootThawed.contains(r.id)))))
     val toLabel = rs.filter(r => isAdmin(r) and counted(r))
     val outFirst = toLabel.filter(b => not(permitted(b)) or (b.kind == "freeze" and rootThawed.contains(b.id))
-      or rootActs.exists(a => cutsOff(a, b)) or replacers(b.signer).exists(a => not(saw(a, b))))
+      or rootActs.exists(a => cutsOff(a, b) and not(F7_SEEN_IGNORED and b.kind == "revoke" and forkAt(b.signer) < NONE))
+      or replacers(b.signer).exists(a => not(saw(a, b))))
     pure def attackers(b: Record): Set[Record] =
       toLabel.filter(a => not(outFirst.contains(a))
         and (cutsOff(a, b) or (b.kind == "freeze" and a.kind == "thaw" and a.targetRec == b.id)))
@@ -1291,16 +1296,24 @@ module records_v3 {
       .map(k => lastId(heads.get(k))).filter(i => onList(before, db.get(i).signer) and db.get(i).kind != "checkpoint")
     val honest = idsOf(held.filter(r => (v.counting.contains(r.id) and r.kind != "checkpoint" and not(leftOut.contains(r)))
       or rootRemoval(r))).union(cp)
-    // (J): the cut roots' listed records fit RESERVE. Every root removal stays listed; of the
-    // other records of the roots so far the newest are kept (by place on the path, then seq)
-    // while they fit, and the older ones are dropped.
+    // (J): the cut roots' listed records fit RESERVE (carry-over). Every root removal stays
+    // listed, and every live admission (an admin or device record of a key not removed) unless
+    // a newer listed admission of the same key supersedes it; superseded admissions are dropped;
+    // of the other records the newest are kept (by place on the path, then seq) while they fit.
+    // The honest writer refuses a change whose removals and live admissions alone pass RESERVE.
     val beforeRecs = recsOf(honest, db).filter(x => onList(before, x.signer))
-    val remUnits = sumUnits(beforeRecs.filter(x => rootRemoval(x)))
-    val droppable = beforeRecs.filter(x => not(rootRemoval(x)))
     def notOlder(a: Record, b: Record): bool =
       indexOf(before, a.signer) > indexOf(before, b.signer) or (a.signer == b.signer and a.seq >= b.seq)
-    val trimmed = if (not(CEIL_FIT)) honest else honest.filter(i => not(droppable.contains(db.get(i)))
-      or remUnits + sumUnits(droppable.filter(d => notOlder(d, db.get(i)))) <= RESERVE)
+    def isAdm(x: Record): bool = x.kind == "admin" or x.kind == "device"
+    val superseded = beforeRecs.filter(x => isAdm(x)
+      and beforeRecs.exists(y => y != x and isAdm(y) and y.target == x.target and notOlder(y, x)))
+    val live = beforeRecs.filter(x => isAdm(x) and not(superseded.contains(x))
+      and not(withPair(x.target).exists(t => v.revoked.contains(t))))
+    val remUnits = sumUnits(beforeRecs.filter(x => rootRemoval(x)))
+    val fixedUnits = remUnits + sumUnits(live)
+    val droppable = beforeRecs.filter(x => not(rootRemoval(x)) and not(live.contains(x)) and not(superseded.contains(x)))
+    val trimmed = if (not(CEIL_FIT)) honest else honest.filter(i => not(superseded.contains(db.get(i)))
+      and (not(droppable.contains(db.get(i))) or fixedUnits + sumUnits(droppable.filter(d => notOlder(d, db.get(i)))) <= RESERVE))
     val keep = if (mode == "honest" or mode == "nocp" or mode == "from1") trimmed
       else if (mode == "literal") honest.filter(i => db.get(i).signer == cur or rootRemoval(db.get(i)) or cp.contains(i))
       else if (mode == "none") Set()
@@ -1332,8 +1345,9 @@ module records_v3 {
       // (The new root's own device signs its first checkpoint, so its own set counts too.)
       not(CEIL_FIT) or mode != "honest"
         or sumUnits(ofKey(recsOf(s.recs.union(st.get(HOLDER.get(target)).recs), db), target)) + 2 <= ROOTC,
-      // (J): the root removals alone fit the reserve (else the writer cannot list them all).
-      not(CEIL_FIT) or mode != "honest" or remUnits <= RESERVE,
+      // (J): the root removals and the live admissions fit the reserve (else the writer cannot
+      // list them all and refuses).
+      not(CEIL_FIT) or mode != "honest" or fixedUnits <= RESERVE,
       commit(db3, if (withCp) nextId + 2 else nextId + 1, h, if (withCp) insertInto(s1, c, db3) else s1),
     }
   }
@@ -1426,7 +1440,16 @@ module records_v3 {
   }
 
   // A member restarts: the core does not store the cut, so its marks are lost.
-  action restart(m: str): bool = commit(db, nextId, m, recut({ ...st.get(m), cut: NOCUT }, db))
+  // A restart reloads the saved set. RESTART_KEEPS_CUT: the cut (its marks) is saved too.
+  // RESTART_REOFFERS: after the reload every record the member got is offered again, in ID
+  // order, so what the old cut refused is judged under the new one (seed j.8004).
+  pure val RESTART_KEEPS_CUT = false
+  pure val RESTART_REOFFERS = false
+  action restart(m: str): bool = {
+    val s0 = recut({ ...st.get(m), cut: if (RESTART_KEEPS_CUT) st.get(m).cut else NOCUT }, db)
+    val s1 = if (RESTART_REOFFERS) range(1, nextId).select(i => s0.got.contains(i)).foldl(s0, (s, i) => insertInto(s, db.get(i), db)) else s0
+    commit(db, nextId, m, s1)
+  }
   // A member compacts: it takes its state's checkpoint.
   action compact = nondet m = MEMBERS.oneOf() compactAt(m)
   action compactAt(m: str): bool = commit(db, nextId, m, compactStore(st.get(m), views.get(m), db))
@@ -1855,9 +1878,19 @@ module records_v3 {
   // with a mark, until it syncs: the writer counted its own set after the prune; seed j.8012.)
   val honestNoMarks = (CEIL_FIT and honestW) implies MEMBERS.forall(m => syncedProto(m) implies st.get(m).cut.marks.keys() == Set())
 
+  // A restart keeps the state: a member's saved set, reloaded with no cut, keeps the same
+  // records and shows the same state (what the simulator checks with restore, seed 47).
+  val restartStable = MEMBERS.forall(m => {
+    val s = st.get(m)
+    val s2 = recut({ ...s, cut: NOCUT }, db)
+    (not(views.get(m).stop) and not(chainState(s, db).stop)) implies
+      (s2.recs == s.recs and fullEvaluate(recsOf(s2.recs, db).union(firstsHeld(s2, db)), chainState(s2, db)) == views.get(m))
+  })
+
   val promises = and {
     oneState, converges, convergesHonest, countsNewest, removedStayOut, oneChainOneState, stopRootOnly, fairRoom, followsRecovery, pathGrows, newcomerTakes,
     oldRootListed, twinStops, removedGainsNothing, compactedAgree, F12 implies heldBackCountsLess, honestNeverDropped, honestNoMarks, marksInert,
+    restartStable,
   }
 
   // --- Scenarios ---------------------------------------------------------------------------
@@ -2283,13 +2316,18 @@ module records_v3 {
       .expect(MEMBERS.forall(m => syncedProto(m)) and
         if (CUT_MODE == "gapless") MEMBERS.forall(m => not(st.get(m).recs.contains(11)) and convergesAt(m))
         else if (CUT_MODE == "follows") MEMBERS.forall(m => st.get(m).recs == Set(1, 2, 3, 4, 6, 7, 9, 10, 11) and convergesAt(m))
+        // RESTART_REOFFERS: the restarted a, offered again what it got, builds the same marks,
+        // so it turns 11 away like the others: no split.
+        else if (RESTART_REOFFERS and CUT_MODE != "none") MEMBERS.forall(m => not(st.get(m).recs.contains(11)) and convergesAt(m))
         else st.get("a").recs.contains(11)
           and (CUT_MODE == "none" or (not(st.get("m").recs.contains(11)) and not(convergesAt("m")))))
       .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 1, false, Set()))
       .then(syncRound).then(syncRound).then(syncRound)
       // Under "gapless" the root's head for A stays at 4 (no member holds A's 5), so 11 still
       // follows a gap: A stays mute, alike everywhere.
-      .expect(MEMBERS.forall(m => st.get(m).recs.contains(11) == (CUT_MODE != "gapless") and views.get(m).checkpoint == 12
+      // (With RESTART_REOFFERS nobody kept 11, so it is gone for good, alike everywhere.)
+      .expect(MEMBERS.forall(m => st.get(m).recs.contains(11) == (CUT_MODE != "gapless" and not(RESTART_REOFFERS and CUT_MODE != "none"))
+        and views.get(m).checkpoint == 12
         and convergesAt(m)))
 
   // (I): a replay of the void 5 or of C's dropped 8, by every member, changes nothing.
@@ -2385,6 +2423,30 @@ module records_v3 {
       .expect(MEMBERS.forall(m => views.get(m) == views.get("r") and st.get(m).recs == st.get("r").recs
         and views.get(m).revoked.contains(DEVICE) == F7_EVERY_KEY and not(views.get(m).stop)) and promises)
 
+  // F-7 when the root removes the forked A: the root's removal sees one of A's lines (6), so
+  // A's removal of D on the other line stops counting and D comes back (as in the core). (a)
+  // F7_SEEN_IGNORED keeps D out, but then A's key, after its removal, still bars a live device
+  // (dC) for good. (c) The root's writer first removes D itself, then A: D stays out, nothing A
+  // signs later counts, and members that held only one of A's lines agree after a sync.
+  action f7RootRemovesBase =
+    f7Base.then(giveOnly("r", 6)).then(sign(ROOT, "revoke", PHONE, "", 0, false, false, 1))
+  run f7RootRemovesTest = f7RootRemovesBase
+      .then(sign(PHONE, "revoke", "dC", "", 0, false, false, 1))
+      .then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m) == views.get("r") and views.get(m).revoked.contains(PHONE)
+        and views.get(m).revoked.contains(DEVICE) == F7_SEEN_IGNORED
+        and views.get(m).revoked.contains(COMPUTER) == F7_SEEN_IGNORED) and (promises or F7_SEEN_IGNORED))
+  run f7RootFirstRemovesTest = f7Base
+      .then(giveOnly("a", 5)).then(giveOnly("c", 6)).then(giveOnly("r", 6)).then(giveOnly("r", 5))
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1))
+      .then(sign(ROOT, "revoke", PHONE, "", 0, false, false, 1))
+      .then(sign(PHONE, "revoke", "dC", "", 0, false, false, 1))
+      .then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m) == views.get("r") and st.get(m).recs == st.get("r").recs
+        and views.get(m).revoked.contains(DEVICE) and views.get(m).revoked.contains(PHONE)
+        and views.get(m).revoked.contains(COMPUTER) == F7_SEEN_IGNORED and not(views.get(m).stop))
+        and (promises or F7_SEEN_IGNORED))
+
   // --- (J): ceilings that fit the room -----------------------------------------------------
   // The cap: the root admits a fourth admin key (3 roots at 6 and 4 admins at 2 fill ROOM),
   // and refuses a fifth.
@@ -2461,8 +2523,8 @@ module records_v3 {
         and promises)
 
   // (J) reserve: two changes of root. Under NK the cut roots R and NA would list 4 + 3 units,
-  // past RESERVE 6: the writer keeps every root removal and the newest records, and drops R's
-  // oldest (1, A's admission). Nothing revives; A is no admin under NK; all agree.
+  // past RESERVE 6: the writer keeps every root removal and every live admission (R's four
+  // admins) and drops NA's copies (7). Nothing revives; every admin stays; all agree.
   run jReserveTest =
     init
       .then(sign(ROOT, "admin", "X", "phone", 0, false, false, 1)).then(syncRound)
@@ -2470,9 +2532,9 @@ module records_v3 {
       .then(sign("NA", "copies", "", "", 0, false, false, 2)).then(syncRound)
       .then(sign("NA", "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
       .then(recoverAs(RECOVERY, "NK")).then(syncRound).then(syncRound)
-      .expect(CEIL_FIT implies (db.get(9).keep == Set(2, 3, 4, 7, 8)
+      .expect(CEIL_FIT implies (db.get(9).keep == Set(1, 2, 3, 4, 8)
         and MEMBERS.forall(m => st.get(m).recs == st.get("r").recs and views.get(m) == views.get("r")
-          and views.get(m).path == ["R", "NA", "NK"] and not(views.get(m).admins.keys().contains(PHONE))
+          and views.get(m).path == ["R", "NA", "NK"] and views.get(m).admins.keys() == Set(PHONE, COMPUTER, WATCH, "X")
           and views.get(m).revoked.contains(DEVICE))) and promises)
 
   // (H): under WRITER_FLOOR the same group writes within FLOOR above the head: A's second
