@@ -2602,6 +2602,30 @@ impl RecordSet {
             // Nothing else: no copies, no settings, no other member.
             let own: BTreeSet<RecordId> = out.iter().map(|r| r.id()).collect();
             let mut ids = own.clone();
+            // An admin's removal counts only on its whole chain, which the
+            // device may not hold (it never got its own admission, or lost
+            // it): the removal's own prev chain goes with it, down to seq 1
+            // or to a counting checkpoint's anchor (which then goes too).
+            // Only that key's records below the removal, one line: a twin
+            // at some seq is on no prev chain. A root's removal counts by
+            // itself and needs none.
+            for r in out.iter().filter(|r| self.keys.is_admin(&r.body().signer)) {
+                let (signer, mut seq) = (r.body().signer, r.body().seq);
+                let mut prev = r.body().prev;
+                while let Some(p) = prev {
+                    match self.held(&p) {
+                        Some(x) if x.body().signer == signer && x.body().seq < seq => {
+                            ids.insert(p);
+                            seq = x.body().seq;
+                            prev = x.body().prev;
+                        }
+                        _ => {
+                            ids.extend(state.checkpoints.iter().copied());
+                            break;
+                        }
+                    }
+                }
+            }
             if out.iter().any(|r| r.body().signer != self.root.hash()) {
                 ids.extend(self.records.values().filter(|e| e.role == Role::Recovery).map(|e| e.record.id()));
                 ids.extend(self.firsts.keys().filter(|id| self.records.contains_key(*id)).copied());

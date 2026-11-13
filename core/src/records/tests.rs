@@ -4627,3 +4627,75 @@ fn the_writer_refuses_a_record_that_would_not_count() {
     assert!(set.write_record(&st, &a, Kind::device(d), 0).is_err());
     assert_eq!(set.digest(), before);
 }
+
+/// An admin's removal reaches a device that lacks the admin's records
+/// below it (here its own admission): it is handed the removal's chain,
+/// the removal counts there, and nothing above the removal nor another
+/// line of the admin's key is handed (simulator seed 766).
+#[test]
+fn a_removed_device_gets_its_removals_chain() {
+    let mut g = G::new();
+    let (pa, a) = (k("pa"), k("a"));
+    g.admin(&pa, &a, POWER_ADMIT | POWER_REMOVE);
+    let at_root = g.recs.clone();
+    let (laptop, tablet) = (k("laptop"), k("tablet"));
+    let admitted = g.device(&a, &laptop, "laptop", |_| {});
+    let other = g.device(&a, &tablet, "tablet", |_| {});
+    let rv = g.rec(&a, Kind::Revoke(removal(&[laptop.hash], g.seen())));
+    let after = g.device(&a, &k("phone"), "phone", |_| {});
+    let set = set_with(&g.root.key, &g.recs, &g.lists);
+    let st = set.state();
+    assert!(st.revoked.contains(&laptop.hash));
+    let given: Vec<RecordId> = set.for_peer(&st, &laptop.hash).iter().map(|r| r.id()).collect();
+    for r in [&admitted, &other, &rv] {
+        assert!(given.contains(&r.id()), "the removal and its chain");
+    }
+    assert!(!given.contains(&after.id()), "nothing above the removal");
+    // The device holds the root's records and the removal, not its own
+    // admission: with what it is handed, it knows it is removed.
+    let mut mine = set_with(&g.root.key, &at_root, &g.lists);
+    mine.insert(rv.clone()).unwrap();
+    assert!(!mine.state().revoked.contains(&laptop.hash));
+    mine.insert_all(set.for_peer(&st, &laptop.hash).into_iter().cloned());
+    assert!(mine.state().revoked.contains(&laptop.hash));
+    // By ID too, as `missing()` asks.
+    assert_eq!(set.for_peer_by_id(&st, &laptop.hash, &admitted.id()).map(Record::id), Some(admitted.id()));
+    assert!(set.for_peer_by_id(&st, &laptop.hash, &after.id()).is_none());
+    // What is handed of the admin's key is one line, within its ceiling.
+    let units: u64 = set
+        .for_peer(&st, &laptop.hash)
+        .iter()
+        .filter(|r| r.body().signer == a.hash)
+        .map(|r| crate::records::keep::units(r.envelope().len()))
+        .sum();
+    assert!(units <= crate::records::keep::ceiling(false));
+    // A twin of the chain (a second record of the admin's key at the
+    // tablet's seq) is on no prev chain of the removal: never handed.
+    let twin = Body {
+        group: g.gid,
+        signer: a.hash,
+        seq: other.body().seq,
+        prev: other.body().prev,
+        time_ms: 1,
+        kind: Kind::device(Device::new(k("tv").key.clone(), "tv", ROLE_MEMBER)),
+        held: false,
+    };
+    let twin = Record::sign(twin, &a).unwrap();
+    let mut both = set.clone();
+    let _ = both.insert(twin.clone());
+    let st2 = both.state();
+    // Two histories of the admin's key: its removal no longer counts, and
+    // the device is no removed one (it gets what a member gets).
+    assert!(st2.two_histories(&a.hash) && !st2.revoked.contains(&laptop.hash));
+    // With the twin held only as the proof, below a removal that counts:
+    // the removal's chain is still one line.
+    let mut proof_only = set.clone();
+    let _ = proof_only.insert_proof(twin.clone());
+    let st3 = proof_only.state();
+    let handed = if st3.revoked.contains(&laptop.hash) { proof_only.for_peer(&st3, &laptop.hash) } else { Vec::new() };
+    assert!(!handed.iter().any(|r| r.id() == twin.id()), "the twin is not handed");
+    let mut seqs: Vec<u64> = handed.iter().filter(|r| r.body().signer == a.hash).map(|r| r.body().seq).collect();
+    let n = seqs.len();
+    seqs.dedup();
+    assert_eq!(seqs.len(), n, "one record of the admin's key per seq");
+}
