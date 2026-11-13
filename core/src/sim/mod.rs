@@ -509,7 +509,12 @@ impl World {
         for ak in &admins {
             let mut f = 0u64;
             while units.get(&ak.hash).copied().unwrap_or(0) + 4 < keep::ceiling(false) {
-                rec(ak, Kind::Copies { incoming_ms: MIN_INCOMING_MS + f % 1000, seen: Vec::new() }, &mut out, &mut units);
+                rec(
+                    ak,
+                    Kind::Copies { incoming_ms: MIN_INCOMING_MS + f % 1000, seen: Vec::new() },
+                    &mut out,
+                    &mut units,
+                );
                 f += 1;
             }
         }
@@ -1335,6 +1340,61 @@ impl World {
         (newest.values().map(|(_, u)| u).sum(), newest.len())
     }
 
+    /// SIM_TRACE_CHANGE: a refused change of root's room, the roots'
+    /// removals in the writer's set with their seen entries, and which of
+    /// them a newer removal names.
+    fn trace_change(&self, w: usize, st: &State, remove: &[KeyHash], dev: (u64, usize), rm: (u64, usize)) {
+        let set = &self.members[w].live.set;
+        let short = |h: &KeyHash| h.0[..3].iter().map(|b| format!("{b:02x}")).collect::<String>();
+        let name = |h: &KeyHash| {
+            self.members.iter().position(|m| m.key.hash == *h).map(|i| format!("m{i}")).unwrap_or_else(|| short(h))
+        };
+        let root_at = |h: &KeyHash| st.roots.iter().position(|r| r == h);
+        std::eprintln!(
+            "CHANGE m{w} refused: rooms {:?}, reserve {}, live admissions {} units / {} records, roots' removals {} units / {} records; roots {:?}; the owner's removals {:?}",
+            (crate::records::keep::room(), crate::records::keep::ceiling(true), crate::records::keep::ceiling(false)),
+            crate::records::keep::reserve(),
+            dev.0,
+            dev.1,
+            rm.0,
+            rm.1,
+            st.roots.iter().map(short).collect::<Vec<_>>(),
+            remove.iter().map(name).collect::<Vec<_>>()
+        );
+        let rms: Vec<&Record> = set
+            .ids()
+            .filter_map(|id| set.get(id))
+            .filter(|r| matches!(r.body().kind, Kind::Revoke(_)) && st.roots.contains(&r.body().signer))
+            .collect();
+        for r in &rms {
+            let b = r.body();
+            let Kind::Revoke(rm) = &b.kind else { continue };
+            let newer: Vec<String> = rms
+                .iter()
+                .filter(|o| {
+                    let ob = o.body();
+                    matches!(&ob.kind, Kind::Revoke(x) if x.keys.iter().any(|k| rm.keys.contains(k)))
+                        && (root_at(&ob.signer), ob.seq) > (root_at(&b.signer), b.seq)
+                })
+                .map(|o| format!("{:?}", o.id()))
+                .collect();
+            std::eprintln!(
+                "CHANGE   removal {:?} by root {:?} seq {} units {} counting {} keys {:?} seen {:?} named by newer {:?}",
+                r.id(),
+                root_at(&b.signer),
+                b.seq,
+                crate::records::keep::units(r.size()),
+                st.counting.contains(&r.id()),
+                rm.keys.iter().map(name).collect::<Vec<_>>(),
+                rm.seen.iter().map(|x| format!("{}@{}", name(&x.key), x.seq)).collect::<Vec<_>>(),
+                newer
+            );
+        }
+        for d in &st.devices {
+            std::eprintln!("CHANGE   device {} admin {} frozen {}", name(&d.key.hash()), d.admin.is_some(), d.frozen);
+        }
+    }
+
     /// The units and the number of the roots' removals in m{w}'s set, which
     /// a change of root carries before the devices' admissions.
     fn root_removals(&self, w: usize, st: &State) -> (u64, usize) {
@@ -1736,6 +1796,9 @@ impl World {
                         CHANGE_TOO_BIG.fetch_add(1, Ordering::Relaxed);
                         self.note(format!("m{w} refuses a change whose live devices pass the reserve"));
                         continue;
+                    }
+                    if std::env::var("SIM_TRACE_CHANGE").is_ok() {
+                        self.trace_change(w, &st, &remove, (units, n), (ru, rn));
                     }
                     if units + ru > reserve || n + rn > max {
                         CHANGE_TOO_BIG_REMOVALS.fetch_add(1, Ordering::Relaxed);
