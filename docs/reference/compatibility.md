@@ -22,6 +22,27 @@ device, a phone, a tablet and a watch.
 An update never breaks a group and never makes you set it up again. Before 1.0.0 the
 promise covers one release back; it does not wait for 1.0.0.
 
+## Version numbers
+
+Releases follow [Semantic Versioning](https://semver.org/). Before 1.0.0 the middle number
+(0.6, 0.7) marks a release with new features, and the last (0.6.1) a release with fixes
+only, which works with every device of its own release. Security fixes go into the latest
+release only ([SECURITY.md](../../SECURITY.md), "Supported versions"), so keep every device
+on it; the promise above is what lets you update them one at a time.
+
+The formats on the wire have numbers of their own, which change far less often than the
+release and never because of it:
+
+| Format | In 0.6 | Where |
+|---|---|---|
+| The member protocol | ALPN `cbb/3` | [protocol](../protocol.md), section 4, "Hello" |
+| Pairing | ALPN `cbb-pair/2` | [protocol](../protocol.md), section 6 |
+| The group's signed records | `v` 2 | [protocol](../protocol.md), section 10 |
+| mDNS | TXT `v=1` | [protocol](../protocol.md), section 3 |
+
+A change that a device of the release before could not read takes a new record version,
+message field or feature name, never a new meaning for an old one.
+
 ## Updating a group
 
 Update the devices in any order. A computer or a small device updates with `cbb update` or
