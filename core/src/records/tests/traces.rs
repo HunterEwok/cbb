@@ -703,6 +703,31 @@ fn a_drop_nobody_else_holds_does_not_turn_away_a_later_record() {
     }
 }
 
+/// Run 1301 up to the key's later record, then a restart of the member
+/// that dropped two of the key's records: the restarted member and the
+/// live one take the key's later record alike.
+#[test]
+#[ignore = "waits for the rule on what a member remembers of its drops"]
+fn a_restart_does_not_change_what_a_later_record_meets() {
+    let mut r = Run::new();
+    let (before, after) = T_SEED_1301.split_at(T_SEED_1301.find("\n22. ").unwrap());
+    r.steps(before);
+    r.settle();
+    let live = r.sets["k"].clone();
+    let held: Vec<Record> = live.in_dependency_order().into_iter().cloned().collect();
+    let lists: Vec<Vec<u8>> = live.lists().map(<[u8]>::to_vec).collect();
+    let mut back = RecordSet::restore(live.root().clone(), live.recovery().clone(), &held, &lists);
+    assert_eq!(back.digest(), live.digest(), "restored");
+    r.steps(after);
+    let later = r.by_n[&17].clone();
+    let mut live = live;
+    let _ = live.insert(later.clone());
+    let _ = back.insert(later.clone());
+    assert_eq!(back.contains(&later.id()), live.contains(&later.id()), "the later record");
+    assert_eq!(back.digest(), live.digest(), "the records held");
+    assert_eq!(back.state(), live.state(), "the state");
+}
+
 /// A checkpoint that may count, and a newer one that waits and keeps it:
 /// members that get the two in either order, and one that gets the newer
 /// before what the older names, end alike, counting the older (simulator
