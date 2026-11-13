@@ -187,8 +187,9 @@ minutes, go into windows of an hour, and a window's floor is its least RSS and o
 `soak.sh verdict` prints the pass or fail line so far, and `soak.sh stop` ends with it: PASS when
 no copy was missed, every start was whole, no member's RSS floor grew over its first window's by
 more than 1 MiB on the calm stand or 4 MiB on the loaded one, no member's RSS floor rose in three
-windows in a row (a rise being at least 64 KiB over the previous window's floor), no member's floor of open files rose over its first window's, and the delivery
-time's p95 is at most 10 s. The bounds were fixed before any long run was measured: a run over
+windows in a row (a rise being at least 64 KiB over the previous window's floor), no member's floor of open files rose over its first window's, the members' folders (state, records
+and logs) grew by at most 20 MiB a day each (measured from six hours after the first sample), and
+the delivery time's p95 is at most 10 s. The bounds were fixed before any long run was measured: a run over
 them is a finding, not a reason to move them. Beside the verdict the single samples' numbers are
 printed as `raw_*`, for reading. A checked copy that is not on every member within 60 s counts as
 missed, also when it was sent just after a kill: a restarted member is back and has it within a
@@ -198,9 +199,13 @@ they are set again when the reconnect work (#539) changes either. A third profil
 process in two groups (the family case), waits for wave 5, when one service holds several
 groups.
 
+One member of each stand is never killed, so that a slow leak inside one long-lived process shows.
+
 A release candidate's build runs seven days on the shared bench's Raspberry Pi 4, the calm and
 the load stand side by side, before the release (a release condition), and goes on to thirty.
-A counted run reports, for each stand: the days, the commit, the hardware (`soak start` writes
+Both stands run the candidate's build, and the count of days starts again with any change to the
+code in the candidate: a fix makes a new candidate and a new seven days. Only changes to the
+documents and the site leave the count running. A counted run reports, for each stand: the days, the commit, the hardware (`soak start` writes
 the machine and its cores), copies sent, checked and missed, kills and broken starts, the
 delivery times, the memory and open files with their growth, and the verdict. The documents
 give only numbers measured that way.

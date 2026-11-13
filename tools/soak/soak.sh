@@ -39,6 +39,10 @@
 # and go, a leak raises the floor. SOAK_GROW_MAX_KB bounds the floor's growth:
 # 1024 (1 MiB) for calm, 4096 (4 MiB) for load, fixed before any long run was
 # measured; a run over it is a finding, not a reason to move the number.
+# Member 1 is never killed (SOAK_KEEP=1; 0 kills any member), so that one
+# process lives the whole run. SOAK_DISK_MAX_KB (20480, 20 MiB) bounds how
+# much each member's folder may grow a day, judged from SOAK_DISK_AFTER
+# (21600 s) after the first measure on.
 #
 # A line of soak.log: the time, "soak", then key=value: day, copies sent,
 # checked, arrived on every member, missed, kills, starts after a kill whose
@@ -55,7 +59,8 @@
 # floor grew more than SOAK_GROW_MAX_KB over its first window's without a
 # restart, no member's RSS floor rose in three windows in a row (a rise is
 # a floor at least 64 KiB above the previous window's), and no
-# member's floor of open files rose over the first window's; else FAIL with
+# member's floor of open files rose over the first window's, and the
+# members' folders grew by at most SOAK_DISK_MAX_KB a day each; else FAIL with
 # why. Beside it the raw numbers of single samples (the growth of a member's
 # RSS over its first sample after warm-up, and the samples whose open files
 # differed from it) are printed as raw_*, for reading, not judged.
@@ -107,6 +112,15 @@ grow_max_default=1024
 [ "$profile" = load ] && grow_max_default=4096
 grow_max=${SOAK_GROW_MAX_KB:-$grow_max_default}
 p95_max=${SOAK_P95_MAX_MS:-10000}
+# Member 1 is never killed (SOAK_KEEP=0 kills any member): a slow leak
+# inside one long-lived process shows only in a process that lives the
+# whole run.
+keep=${SOAK_KEEP:-1}
+# The members' folders (state, records, logs) may grow by at most
+# SOAK_DISK_MAX_KB a day each, judged once SOAK_DISK_AFTER seconds have
+# passed since the first measure after warm-up.
+disk_max=${SOAK_DISK_MAX_KB:-20480}
+disk_after=${SOAK_DISK_AFTER:-21600}
 cbb=$dir/bin/cbb
 log=$dir/soak.log
 counts=$dir/counts
@@ -382,9 +396,29 @@ usage() {
 		"raw_rss_grow_kb=$raw_grow raw_fds_moved=${raw_fds:-none}"
 }
 
+# How fast the members' folders grow, in KiB a day: 0 until SOAK_DISK_AFTER
+# has passed since the first measure.
+disk_rate() {
+	d=$(du -sk "$dir"/m* 2>/dev/null | awk '{s += $1} END {print s + 0}')
+	t=$(secs)
+	if [ ! -e "$dir/disk0" ]; then
+		echo "$t $d" >"$dir/disk0"
+		echo 0
+		return
+	fi
+	read -r dt0 d0 <"$dir/disk0"
+	if [ $((t - dt0)) -lt "$disk_after" ]; then
+		echo 0
+		return
+	fi
+	echo $(((d - d0) * day / (t - dt0)))
+}
+
 # usage, counted for the verdict: every sample, and every day's line, is one.
 sample() {
-	u=$(usage)
+	u="$(usage) disk_kb_day=$(disk_rate)"
+	g=$(echo "$u" | sed -n 's/.*disk_kb_day=\(-*[0-9]*\).*/\1/p')
+	[ "${g:-0}" -le "$max_disk" ] || max_disk=$g
 	g=$(echo "$u" | sed -n 's/.* rss_grow_kb=\([0-9]*\).*/\1/p')
 	[ "${g:-0}" -le "$max_grow" ] || max_grow=$g
 	n=$(echo "$u" | sed -n 's/.*rss_rises=\([0-9]*\).*/\1/p')
@@ -399,11 +433,13 @@ sample() {
 save_counts() {
 	echo "copies=$copies checked=$checked arrived=$arrived missed=$missed kills=$kills whole=$whole_n" \
 		"broken=$broken max_grow=$max_grow max_rises=$max_rises fds_bad=$fds_bad" \
-		"raw_grow=$raw_grow raw_fds=$raw_fds" >"$counts"
+		"raw_grow=$raw_grow raw_fds=$raw_fds max_disk=$max_disk" >"$counts"
 }
 
 kill_one() {
-	victim=$(rand 1 "$members")
+	first=1
+	[ "$keep" -eq 1 ] && [ "$members" -gt 1 ] && first=2
+	victim=$(rand "$first" "$members")
 	kill -9 "$(cat "$dir/m$victim/pid")" 2>/dev/null || true
 	kills=$((kills + 1))
 	sleep 2
@@ -485,7 +521,7 @@ file_copy() {
 
 loop() {
 	confine
-	copies=0 checked=0 arrived=0 missed=0 kills=0 whole_n=0 broken=0 days=0 max_grow=0 max_rises=0 fds_bad=0 raw_grow=0 raw_fds=0
+	copies=0 checked=0 arrived=0 missed=0 kills=0 whole_n=0 broken=0 days=0 max_grow=0 max_rises=0 fds_bad=0 raw_grow=0 raw_fds=0 max_disk=0
 	t0=$(secs)
 	next_copy=$((t0 + copy_every))
 	next_kill=$((t0 + $(rand "$kill_min" "$kill_max")))
@@ -539,6 +575,7 @@ verdict() {
 	[ "$max_grow" -le "$grow_max" ] || why="$why rss_grow_kb=$max_grow>$grow_max"
 	[ "${max_rises:-0}" -lt 3 ] || why="$why rss_rises=$max_rises"
 	[ "$fds_bad" -eq 0 ] || why="$why fds_moved_samples=$fds_bad"
+	[ "${max_disk:-0}" -le $((disk_max * members)) ] || why="$why disk_kb_day=$max_disk>$((disk_max * members))"
 	raw="raw_rss_grow_kb=${raw_grow:-0} raw_fds_moved_samples=${raw_fds:-0}"
 	p95=$(percentiles | sed -n 's/.*delivery_ms_p95=\([0-9]*\).*/\1/p')
 	[ "${p95:-0}" -le "$p95_max" ] || why="$why delivery_ms_p95=$p95>$p95_max"
