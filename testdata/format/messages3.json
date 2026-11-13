@@ -108,7 +108,7 @@
    {
     "n": 2,
     "rule": "welcome/records",
-    "type": "array 1..4096 of envelope",
+    "type": "array 1..8192 of envelope",
     "needed": true
    },
    {

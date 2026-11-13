@@ -1,6 +1,13 @@
 {
  "draft": "format-0.6-bytes.md, draft of 2026-11-11",
  "grid": "64, 256, 1024, 4096, 16384, then multiples of 16384",
+ "limits": {
+  "member": 7340032,
+  "pairing": 1048576,
+  "leaf": 16384,
+  "welcome": 7340032,
+  "welcome_note": "message 67 is read with the member limit, only after the code is confirmed; every other pairing message, and any before the confirm, with the pairing limit"
+ },
  "take": [
   {
    "name": "ping",

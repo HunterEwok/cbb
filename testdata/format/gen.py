@@ -76,7 +76,7 @@ class Bad(Exception):
         self.rule = rule
 
 
-def dec(b, max_depth=8, max_count=4096):
+def dec(b, max_depth=8, max_count=65535):
     """The profile's strict reader. Returns the value or raises Bad(rule)."""
     pos = 0
 
@@ -382,7 +382,8 @@ def profile_vectors():
     bad("two items", "cbor/trailing", bytes.fromhex("8000"))
     bad("cut bytes", "cbor/truncated", bytes.fromhex("430102"))
     bad("cut map", "cbor/truncated", bytes.fromhex("a201"))
-    bad("array of 4097", "cbor/count", head(4, 4097) + b"\x00" * 4097)
+    bad("array of 65536", "cbor/count", head(4, 65536) + b"\x00" * 65536)
+    ok("array of 4097 (over the old count)", [0] * 4097)
     bad("empty input", "cbor/truncated", b"")
     # check our own reader against the list
     for t in v:
@@ -1492,7 +1493,7 @@ TABLES = {
     ],
     "welcome": [
         (1, "welcome/root", "key 1", True),
-        (2, "welcome/records", "array 1..4096 of envelope", True),
+        (2, "welcome/records", "array 1..8192 of envelope", True),
         (4, "welcome/keys", "array 1..256 of envelope", False),
         (5, "welcome/time", "uint 1..9223372036854775807", True),
         (6, "welcome/grant", "map welcome/grant", False),
@@ -2922,6 +2923,12 @@ def main():
         "credentials.json": {"label": LABELS["credential"], "take": kt, "refuse": kr,
                              "recovery": RECOVERY.pub.hex(), "recovery2": RECOVERY2.pub.hex()},
         "frames.json": {"grid": "64, 256, 1024, 4096, 16384, then multiples of 16384",
+                        "limits": {"member": 7 << 20, "pairing": 1 << 20, "leaf": 16 << 10,
+                                   "welcome": 7 << 20,
+                                   "welcome_note": "message 67 is read with the member limit, only "
+                                                   "after the code is confirmed; every other pairing "
+                                                   "message, and any before the confirm, with the "
+                                                   "pairing limit"},
                         "take": mv, "refuse": mb, "refuse_fields": mf,
                         "set_digest_of_records_take": digest},
         "copy.json": copy_vector(),

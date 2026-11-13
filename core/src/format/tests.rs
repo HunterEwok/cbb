@@ -123,13 +123,16 @@ fn profile() {
 fn deep_and_wide_inputs_are_refused_quickly() {
     // A count over the limit is refused before any element is read.
     assert_eq!(cbor::decode(&[0x9a, 0, 1, 0, 0]), Err(Rule::COUNT));
-    assert_eq!(cbor::decode(&[0xb9, 0x10, 0x01]), Err(Rule::COUNT));
+    assert_eq!(cbor::decode(&[0xba, 0, 1, 0, 0]), Err(Rule::COUNT));
     assert_eq!(cbor::decode(&[0x5b, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]), Err(Rule::TRUNCATED));
     // Map key 65535 is the last one allowed.
     assert!(cbor::decode(&[0xa1, 0x19, 0xff, 0xff, 0x00]).is_ok());
-    // 4096 elements are allowed.
+    // 4096 elements are allowed, and 65 535, the profile's count.
     let mut a = vec![0x99, 0x10, 0x00];
     a.extend(std::iter::repeat_n(0u8, 4096));
+    assert!(cbor::decode(&a).is_ok());
+    let mut a = vec![0x99, 0xff, 0xff];
+    a.extend(std::iter::repeat_n(0u8, 65_535));
     assert!(cbor::decode(&a).is_ok());
 }
 

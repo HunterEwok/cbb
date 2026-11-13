@@ -1530,8 +1530,15 @@ fn a_full_set_names_more_ids_than_its_rooms_hold() {
         let r = g.rec(&n1, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
         assert_eq!(m.insert(r), Ok(Added::Waiting));
     }
-    let n = m.ids().count();
-    assert!(n > crate::format::cbor::MAX_COUNT, "{n}");
+    // More IDs than the old profile's 4096 items, and they go as one
+    // array: the profile's count holds them.
+    let ids: Vec<crate::format::Value> = m.ids().map(|id| crate::format::Value::Bytes(&id.0[..])).collect();
+    assert!(ids.len() > 4096, "{}", ids.len());
+    let one = crate::format::Value::Array(ids).encode();
+    assert_eq!(
+        crate::format::cbor::decode(&one).ok().and_then(|v| v.as_array().map(<[_]>::len)),
+        Some(m.ids().count())
+    );
 }
 
 /// A group of 250 admin keys, each of which has signed.
