@@ -190,6 +190,8 @@ struct World {
     twins: usize,
     /// The twins made, with the root key that signed them.
     twin_pairs: Vec<(RecordId, RecordId, KeyHash)>,
+    /// Every record signed in the run, to find what a set keeps aside.
+    signed: BTreeSet<RecordId>,
     net: Vec<Msg>,
     side: Vec<bool>,
     changes: usize,
@@ -282,6 +284,7 @@ impl World {
             lost: Vec::new(),
             twins: 0,
             twin_pairs: Vec::new(),
+            signed: BTreeSet::new(),
             net: Vec::new(),
             side: alloc::vec![false; n],
             changes: 0,
@@ -347,6 +350,8 @@ impl World {
         let (seq, prev) = m.heads.get(&kk.hash).map_or((1, None), |(s, id)| (s + 1, Some(*id)));
         let body = Body { group: self.gid, signer: kk.hash, seq, prev, time_ms, kind, held: false };
         let r = Record::sign(body, &kk).unwrap();
+        self.signed.insert(r.id());
+        let m = &mut self.members[i].live;
         m.heads.insert(kk.hash, (seq, r.id()));
         let _ = m.set.insert(r.clone());
         self.refresh(i);
@@ -412,6 +417,7 @@ impl World {
         let body =
             Body { group: self.gid, signer: kk.hash, seq, prev, time_ms: a.body().time_ms + 1, kind, held: false };
         let b = Record::sign(body, &kk).unwrap();
+        self.signed.insert(b.id());
         if self.members[j].live.set.insert(b.clone()).is_err() {
             return Err(format!("m{j} refused a root record of the root it knows"));
         }
@@ -423,6 +429,12 @@ impl World {
         self.note(format!("two writers with m{i}'s root key sign at seq {seq}; m{j} takes the second"));
         self.after_save(i)?;
         self.after_save(j)
+    }
+
+    /// The records member i keeps aside for a later checkpoint.
+    fn aside(&self, i: usize) -> BTreeSet<RecordId> {
+        let set = &self.members[i].live.set;
+        self.signed.iter().filter(|id| set.waits_aside(id)).copied().collect()
     }
 
     /// No member holds a lost record, nor two records of a root key at
@@ -645,7 +657,15 @@ impl World {
         let mut fx = Vec::new();
         match msg.says {
             Says::Sync(offer) => {
-                exchange::take(&mut self.members[j].live.set, &offer);
+                // A peer that only gets the root's pair gives nothing but
+                // what makes or completes one.
+                let point: [u8; 65] = self.members[msg.from].key.key.public.clone().try_into().unwrap();
+                let standing = crate::peer::standing(&self.members[j].live.state, &self.members[j].key.hash, &point);
+                if standing == crate::peer::Standing::ForkProof {
+                    exchange::take_proof(&mut self.members[j].live.set, &offer);
+                } else {
+                    exchange::take(&mut self.members[j].live.set, &offer);
+                }
                 self.refresh(j);
                 let m = &mut self.members[j].live;
                 for s in offer.statements {
@@ -1029,6 +1049,7 @@ impl World {
             self.heads.push((seq, id));
             let mut records = alloc::vec![written.record.clone()];
             records.extend(written.first.iter().cloned());
+            self.signed.extend(records.iter().map(Record::id));
             let m = &mut self.members[w].live;
             m.set.insert_all(records.iter().cloned());
             let _ = m.set.insert_list(&written.list.encode());
@@ -1245,7 +1266,12 @@ impl World {
                 }
             } else if self.members[*i].live.set.digest() != digest {
                 return Err(format!("m{i} holds other records than the group after the network went quiet"));
+            } else if self.aside(*i) != self.aside(at) {
+                return Err(format!("m{i} keeps other records aside than m{at} after the network went quiet"));
             }
+        }
+        if !self.aside(at).is_empty() {
+            ASIDE_RUNS.fetch_add(1, Ordering::Relaxed);
         }
         for (i, m) in self.members.iter().enumerate() {
             if !state.halted() && state.revoked.contains(&m.key.hash) && !m.live.state.revoked.contains(&m.key.hash) {
@@ -1399,6 +1425,8 @@ fn shrink(seed: u64, steps: usize) -> usize {
 
 static FORKS_TWICE: AtomicUsize = AtomicUsize::new(0);
 static FORKS_SPLIT: AtomicUsize = AtomicUsize::new(0);
+/// Settled runs whose sets keep records aside for a later checkpoint.
+static ASIDE_RUNS: AtomicUsize = AtomicUsize::new(0);
 
 /// Root twins (two writers with one key) are made unless SIM_TWINS=0.
 fn twins_on() -> bool {
@@ -1425,10 +1453,11 @@ fn groups_under_faults_agree() {
     let n = seeds.len();
     for seed in seeds {
         if let Err(e) = run(seed, steps) {
-            let counted = (FORKS_TWICE.load(Ordering::Relaxed), FORKS_SPLIT.load(Ordering::Relaxed));
+            let counted = [&FORKS_TWICE, &FORKS_SPLIT, &ASIDE_RUNS].map(|c| c.load(Ordering::Relaxed));
             let small = shrink(seed, steps);
-            FORKS_TWICE.store(counted.0, Ordering::Relaxed);
-            FORKS_SPLIT.store(counted.1, Ordering::Relaxed);
+            for (c, v) in [&FORKS_TWICE, &FORKS_SPLIT, &ASIDE_RUNS].into_iter().zip(counted) {
+                c.store(v, Ordering::Relaxed);
+            }
             let e = run(seed, small).err().unwrap_or(e);
             failed.push(format!(
                 "sim seed {seed} failed: {e}\nreplay: SIM_SEED={seed} SIM_STEPS={small} cargo test -p cbb-core --lib sim::"
@@ -1439,9 +1468,10 @@ fn groups_under_faults_agree() {
         }
     }
     std::eprintln!(
-        "sim: {n} seeds; recovery forks: {} by the key used twice, {} by a split network",
+        "sim: {n} seeds; recovery forks: {} by the key used twice, {} by a split network; {} settled with records aside",
         FORKS_TWICE.load(Ordering::Relaxed),
-        FORKS_SPLIT.load(Ordering::Relaxed)
+        FORKS_SPLIT.load(Ordering::Relaxed),
+        ASIDE_RUNS.load(Ordering::Relaxed)
     );
     assert!(failed.is_empty(), "{}", failed.join("\n\n"));
 }

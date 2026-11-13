@@ -75,3 +75,14 @@ pub fn take(set: &mut RecordSet, offer: &Offer) -> Took {
     took.records = set.len().saturating_sub(before);
     took
 }
+
+/// Takes from a peer that gets the root's pair only
+/// (`peer::Standing::ForkProof`): each record through `insert_proof`,
+/// which keeps what makes or completes a pair of the current root.
+pub fn take_proof(set: &mut RecordSet, offer: &Offer) -> usize {
+    let before = set.len();
+    for r in offer.records.iter().filter_map(|e| Record::decode(e).ok()) {
+        let _ = set.insert_proof(r);
+    }
+    set.len().saturating_sub(before)
+}
