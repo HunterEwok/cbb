@@ -267,9 +267,9 @@ module records_v3 {
   pure val MISSING_NEWEST_ONLY = false
   // A root pair held halts by the signatures alone: two records of the current root's key at one
   // seq within its stretch of the path halt the member whether or not either line is whole (the
-  // reading of 11-13 16:51Z). Off: the halt needs both lines whole; a pair held but not whole
-  // only bars checkpoints at or above its seq.
-  pure val HALT_ON_HELD_PAIR = false
+  // reading of 11-13 16:51Z, and the core's eval). Off: the halt needs both lines whole; a pair
+  // held but not whole only bars checkpoints at or above its seq.
+  pure val HALT_ON_HELD_PAIR = true
   // F-7 for every key: a key in two histories has its records at or above the fork stop
   // counting, except its removals on a whole chain, which keep barring on either history (as a
   // root's do). Off: only a root's removals keep barring.
@@ -1611,7 +1611,9 @@ module records_v3 {
   }
   // What users get: with the honest writer (it never keeps what it pruned, never lowers a head,
   // keeps what counts) sync converges with no assumption.
-  def honestOnly: bool = db.keys().forall(i => db.get(i).kit != "bent")
+  // (No bent checkpoint and no recovery list the core does not write: seed j.8015, a change
+  // back to the root at "from1" past the new root's ceiling.)
+  def honestOnly: bool = db.keys().forall(i => db.get(i).kit != "bent" and not(isChain(db.get(i)) and db.get(i).kit == "deviant"))
   val convergesHonest = honestOnly implies MEMBERS.forall(m => convergesAt(m))
   // In general, under a stated assumption on the place aside: a holder of the root key that
   // signs a checkpoint which can never be whole and keeps more old records than the place
@@ -1830,7 +1832,8 @@ module records_v3 {
   // every record it got that it may store and its counting checkpoint does not prune (that
   // it gets every record is converges').
   // (No bent, deviating or hidden record, and no recovery twin: two recovery records at one
-  // seq.)
+  // seq. An honest recovery writer is the core's write_change: the list it builds from its own
+  // set, mode "honest" in signChain; any other list is a deviating recovery key.)
   def honestW: bool = db.keys().forall(i => db.get(i).kit != "bent" and db.get(i).kit != "deviant" and not(db.get(i).off)
     and not(isChain(db.get(i)) and db.keys().exists(j => j != i and isChain(db.get(j)) and db.get(j).seq == db.get(i).seq)))
   val honestNeverDropped = ((WRITER_FLOOR or CEIL_FIT) and honestW) implies MEMBERS.forall(m => {
@@ -1848,7 +1851,9 @@ module records_v3 {
   val marksInert = (CEIL_FIT and db.keys().forall(i => db.get(i).kit != "bent")) implies
     MEMBERS.forall(m => chainState(st.get(m), db).stop or recut({ ...st.get(m), cut: NOCUT }, db).recs == st.get(m).recs)
   // (J): with honest writers no member ever holds a mark.
-  val honestNoMarks = (CEIL_FIT and honestW) implies MEMBERS.forall(m => st.get(m).cut.marks.keys() == Set())
+  // (A member that holds a checkpoint before the records of its line can sit over a ceiling,
+  // with a mark, until it syncs: the writer counted its own set after the prune; seed j.8012.)
+  val honestNoMarks = (CEIL_FIT and honestW) implies MEMBERS.forall(m => syncedProto(m) implies st.get(m).cut.marks.keys() == Set())
 
   val promises = and {
     oneState, converges, convergesHonest, countsNewest, removedStayOut, oneChainOneState, stopRootOnly, fairRoom, followsRecovery, pathGrows, newcomerTakes,
@@ -2423,6 +2428,24 @@ module records_v3 {
       .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 2, false, Set())).then(syncRound).then(syncRound)
       .expect(CEIL_FIT implies MEMBERS.forall(m => st.get(m).recs == st.get("r").recs and views.get(m) == views.get("r")
         and views.get(m).checkpoint == 12))
+
+  // (J) a deviating admin's admissions: X has one unit left and signs two device records past
+  // its ceiling; a and c get them in opposite orders. Its line orders them, so every member
+  // keeps the same prefix (10) and refuses 11: the devices are equal everywhere; only a and c
+  // hold a mark for X, which changes nothing.
+  run jDeviantDevicesTest =
+    init
+      .then(sign(ROOT, "admin", "X", "phone", 0, false, false, 1)).then(syncRound)
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 2)).then(syncRound)
+      .then(sign(COMPUTER, "copies", "", "", 0, false, false, 1)).then(syncRound)
+      .then(sign(COMPUTER, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(WATCH, "copies", "", "", 0, false, false, 2)).then(syncRound)
+      .then(sign("X", "copies", "", "", 0, false, false, 1)).then(syncRound)
+      .then(signDeviant("X", "device", DEVICE, 1)).then(signDeviant("X", "device", "dN", 1))
+      .then(giveOnly("a", 10)).then(giveOnly("a", 11)).then(giveOnly("c", 11)).then(giveOnly("c", 10))
+      .then(syncRound).then(syncRound)
+      .expect(CEIL_FIT implies MEMBERS.forall(m => st.get(m).recs == Set(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+        and views.get(m) == views.get("r") and not(views.get(m).devices.contains("dN"))) and promises)
 
   // (J) cap race: the root admits a fourth admin key while admin A, on another device, names
   // C2. Only the current root's admissions count, and the root key has one holder whose own set
