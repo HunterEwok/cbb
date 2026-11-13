@@ -2994,6 +2994,7 @@ fn members_agree(g: &G) -> State {
 
 mod insert_cost;
 mod recovery;
+mod sync;
 mod traces;
 
 /// A checkpoint and the head below it that fills its key's room: the
