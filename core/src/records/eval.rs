@@ -1882,13 +1882,16 @@ impl<'e, 'a> Epoch<'e, 'a> {
         if fork <= MAX_SEQ {
             self.forked.insert(signer, fork);
         }
-        // A root's removal on a whole chain counts at or above the fork
-        // too, on either history: the group stops, and what either history
+        // A removal on a whole chain counts at or above the fork too, on
+        // either history, whoever signed it (F-7 for every key): a key in
+        // two histories brings nothing back that it removed, and its
+        // admissions and other grants at or above the fork stop counting.
+        // For the current root the group stops, and what either history
         // removed stays out of the change of root that ends the stop.
         for (seq, l) in live {
             for i in l {
                 let r = self.r(i);
-                if (seq < fork || root && r.is_revoke()) && !self.voided.contains(&r.id) {
+                if (seq < fork || r.is_revoke()) && !self.voided.contains(&r.id) {
                     self.counted[i] = true;
                 }
             }
