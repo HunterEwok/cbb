@@ -199,7 +199,9 @@ module records_v3 {
   pure val DEV = Map("A" -> "dA", "C" -> "dC", "C2" -> "dC", "W" -> "dW", "X" -> "dX", "NA" -> "dN")
   pure val DEVS = Set("dA", "dC", "dW", "dX", "dN")
 
-  pure val ROOM = if (CEIL_FIT) 26 else 14
+  // Under CEIL_FIT: ROOM 20 = the current root's 6 + the cut roots' reserve 6 + 4 admins at 2
+  // (the records' 4096 = 1024 + 1024 + 8 x 256, scaled; architecture 16:50Z).
+  pure val ROOM = if (CEIL_FIT) 20 else 14
   pure val ROOTC = if (CEIL_FIT) 6 else 8
   pure val ADMINC = if (CEIL_FIT) 2 else 5
   pure val MAXU = 2
@@ -254,14 +256,24 @@ module records_v3 {
   pure val ROOT_FLOOR = 6
   pure val MAX_ADMINS = 4
   // (J): the ceilings of every key with room fit ROOM together, so the level never falls:
-  // the writer of an admission refuses one that would break it (room reserved for ROOTS_MAX
-  // roots on the path), and no writer signs past its own ceiling
+  // the writer of an admission refuses one that would break it (room for the current root
+  // and RESERVE for the cut roots), the writer of a change of root lists the cut roots' records
+  // within RESERVE (signChain), and no writer signs past its own ceiling
   // (the units its own set holds of the key with the new record, after what a new checkpoint
-  // prunes; with WRITER_KEEPS, nor what its own set would not keep). Sizes under CEIL_FIT:
-  // ROOM 26 = 3 roots at 6 + 4 admins at 2 (architecture 15:43Z).
+  // prunes; with WRITER_KEEPS, nor what its own set would not keep). Sizes: ROOM above.
   pure val CEIL_FIT = false
-  pure val ROOTS_MAX = 3
+  // (J): the units the cut roots' listed records may take together.
+  pure val RESERVE = ROOTC
   pure val MISSING_NEWEST_ONLY = false
+  // A root pair held halts by the signatures alone: two records of the current root's key at one
+  // seq within its stretch of the path halt the member whether or not either line is whole (the
+  // reading of 11-13 16:51Z). Off: the halt needs both lines whole; a pair held but not whole
+  // only bars checkpoints at or above its seq.
+  pure val HALT_ON_HELD_PAIR = false
+  // F-7 for every key: a key in two histories has its records at or above the fork stop
+  // counting, except its removals on a whole chain, which keep barring on either history (as a
+  // root's do). Off: only a root's removals keep barring.
+  pure val F7_EVERY_KEY = true
 
   pure val NONE = 10000000
   // A record's ID as the hash orders it: not the order it was signed in.
@@ -844,8 +856,10 @@ module records_v3 {
     // A root fork (two records of the root at one seq, at any depth): from its seq on the root
     // key has no power on either line, and the group halts until the recovery key changes the
     // root. A root's removal held on any line still bars its device.
-    val rootForked = forkAt(cur) < NONE
-    pure def belowFork(r: Record): bool = r.seq < forkAt(r.signer) or (r.kind == "revoke" and onPath(r))
+    val heldPair = rs.exists(r => r.signer == cur and onPath(r) and within(cuts, r)
+      and rs.exists(o => o != r and o.signer == cur and o.seq == r.seq))
+    val rootForked = forkAt(cur) < NONE or (HALT_ON_HELD_PAIR and heldPair)
+    pure def belowFork(r: Record): bool = r.seq < forkAt(r.signer) or (r.kind == "revoke" and (onPath(r) or F7_EVERY_KEY))
     pure def counted(r: Record): bool =
       lives.contains(r) and not(voids.contains(r.id)) and belowFork(r)
     pure def rootRec(r: Record): bool = onPath(r) and counted(r)
@@ -1149,7 +1163,7 @@ module records_v3 {
     signFullX(k, kind, target, kit, targetRec, pretend, fork, units, hidden, extraKeep, WRITER_KEEPS)
   // (J): the admission of target by the writer on member h keeps every ceiling within ROOM.
   def capFits(h: str, target: Key): bool =
-    ROOTS_MAX * ROOTC + learned(recsOf(st.get(h).recs, db), views.get(h).path, views.get(h).cuts)
+    ROOTC + RESERVE + learned(recsOf(st.get(h).recs, db), views.get(h).path, views.get(h).cuts)
       .union(Set(target)).filter(x => not(onList(views.get(h).path, x))).size() * ADMINC <= ROOM
   // (J): a record of key k of the given units stays within k's ceiling on its writer's set.
   def ceilFits(k: Key, units: int): bool = {
@@ -1277,7 +1291,17 @@ module records_v3 {
       .map(k => lastId(heads.get(k))).filter(i => onList(before, db.get(i).signer) and db.get(i).kind != "checkpoint")
     val honest = idsOf(held.filter(r => (v.counting.contains(r.id) and r.kind != "checkpoint" and not(leftOut.contains(r)))
       or rootRemoval(r))).union(cp)
-    val keep = if (mode == "honest" or mode == "nocp" or mode == "from1") honest
+    // (J): the cut roots' listed records fit RESERVE. Every root removal stays listed; of the
+    // other records of the roots so far the newest are kept (by place on the path, then seq)
+    // while they fit, and the older ones are dropped.
+    val beforeRecs = recsOf(honest, db).filter(x => onList(before, x.signer))
+    val remUnits = sumUnits(beforeRecs.filter(x => rootRemoval(x)))
+    val droppable = beforeRecs.filter(x => not(rootRemoval(x)))
+    def notOlder(a: Record, b: Record): bool =
+      indexOf(before, a.signer) > indexOf(before, b.signer) or (a.signer == b.signer and a.seq >= b.seq)
+    val trimmed = if (not(CEIL_FIT)) honest else honest.filter(i => not(droppable.contains(db.get(i)))
+      or remUnits + sumUnits(droppable.filter(d => notOlder(d, db.get(i)))) <= RESERVE)
+    val keep = if (mode == "honest" or mode == "nocp" or mode == "from1") trimmed
       else if (mode == "literal") honest.filter(i => db.get(i).signer == cur or rootRemoval(db.get(i)) or cp.contains(i))
       else if (mode == "none") Set()
       else db.keys().filter(i => onList(before, db.get(i).signer))
@@ -1285,7 +1309,8 @@ module records_v3 {
     val from = if (mode == "from1") 1 else own.length() + 1
     // "nocp": the head names a first checkpoint that is never released.
     val withCp = mode != "nocp"
-    val r = { ...rec(nextId, k, base.append(nextId), kind, target, "", from, Map(), Map(), keep, 0),
+    // A list the core does not write is marked "deviant" (the kit of a chain record is read nowhere else).
+    val r = { ...rec(nextId, k, base.append(nextId), kind, target, if (mode == "honest") "" else "deviant", from, Map(), Map(), keep, 0),
       first: if (withCp) nextId + 1 else NEVER }
     val db2 = db.put(nextId, r)
     val s1 = insertInto(s, r, db2)
@@ -1307,6 +1332,8 @@ module records_v3 {
       // (The new root's own device signs its first checkpoint, so its own set counts too.)
       not(CEIL_FIT) or mode != "honest"
         or sumUnits(ofKey(recsOf(s.recs.union(st.get(HOLDER.get(target)).recs), db), target)) + 2 <= ROOTC,
+      // (J): the root removals alone fit the reserve (else the writer cannot list them all).
+      not(CEIL_FIT) or mode != "honest" or remUnits <= RESERVE,
       commit(db3, if (withCp) nextId + 2 else nextId + 1, h, if (withCp) insertInto(s1, c, db3) else s1),
     }
   }
@@ -2304,6 +2331,55 @@ module records_v3 {
       .then(syncRound).then(syncRound)
       .expect(MEMBERS.forall(m => views.get(m) == views.get("c") and st.get(m).recs == st.get("c").recs) and promises)
 
+  // The limit of the healing: every member, the root's own included, compacted on 7 before the
+  // twin 8 came, so nobody holds the voided 5 any more. All halt alike and hold the same records:
+  // 5 is lost and nobody splits.
+  run twinCheckpointAllPrunedTest =
+    init
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 1))
+      .then(sign(PHONE, "device", DEVICE, "", 0, false, true, 1)).then(syncRound)
+      .then(sign(ROOT, "resolve", "", "", 5, false, false, 1)).then(syncRound)
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 2, true, Set()))
+      .then(offerEveryone(7))
+      .then(compactAt("r")).then(compactAt("a")).then(compactAt("c")).then(compactAt("k")).then(compactAt("m"))
+      .expect(MEMBERS.forall(m => not(heldBy(st.get(m)).contains(5))))
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, true, 1))
+      .then(offerEveryone(8)).then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).stop and views.get(m) == views.get("c")
+        and st.get(m).recs == st.get("c").recs and not(heldBy(st.get(m)).contains(5))) and promises)
+
+  // A root pair held but not whole: the root signs 4, then 5 (an admin) and a twin 6 at 5's seq;
+  // a gets 5 and 6 without 4. With HALT_ON_HELD_PAIR a halts at once; without it a goes on
+  // (neither line is whole) until 4 comes; after a sync every member halts alike either way.
+  run heldPairNotWholeTest =
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
+      .then(sign(ROOT, "admin", "X", "phone", 0, false, false, 1))
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, true, 1))
+      .then(giveOnly("a", 5)).then(giveOnly("a", 6))
+      .expect(not(heldBy(st.get("a")).contains(4)) and views.get("r").stop
+        and views.get("a").stop == HALT_ON_HELD_PAIR and promises)
+      .then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).stop and views.get(m) == views.get("r")) and promises)
+
+  // F-7 for every key: A removes the root's device D, then a thief with A's key signs a twin at
+  // A's seq 1. A's records from the fork on stop counting, but its removal on a whole chain
+  // keeps barring D on either history, whichever order a member gets them in (off: D comes back).
+  action f7Base =
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(PHONE, "revoke", DEVICE, "", 0, false, false, 1))
+      .then(sign(PHONE, "copies", "", "", 0, false, true, 1))
+  run f7AdminTwinTest = f7Base
+      .then(giveOnly("a", 5)).then(giveOnly("a", 6))
+      .then(giveOnly("c", 6)).then(giveOnly("c", 5))
+      .then(giveOnly("k", 6))
+      .expect(views.get("a") == views.get("c") and views.get("a").revoked.contains(DEVICE) == F7_EVERY_KEY
+        and not(views.get("k").revoked.contains(DEVICE)) and promises)
+      .then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m) == views.get("r") and st.get(m).recs == st.get("r").recs
+        and views.get(m).revoked.contains(DEVICE) == F7_EVERY_KEY and not(views.get(m).stop)) and promises)
+
   // --- (J): ceilings that fit the room -----------------------------------------------------
   // The cap: the root admits a fourth admin key (3 roots at 6 and 4 admins at 2 fill ROOM),
   // and refuses a fifth.
@@ -2347,6 +2423,34 @@ module records_v3 {
       .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 2, false, Set())).then(syncRound).then(syncRound)
       .expect(CEIL_FIT implies MEMBERS.forall(m => st.get(m).recs == st.get("r").recs and views.get(m) == views.get("r")
         and views.get(m).checkpoint == 12))
+
+  // (J) cap race: the root admits a fourth admin key while admin A, on another device, names
+  // C2. Only the current root's admissions count, and the root key has one holder whose own set
+  // refuses a fifth (a second holder signing is a root fork, which halts): A's record names no
+  // admin, so no two admissions can pass the cap together.
+  run jCapRaceTest =
+    init
+      .then(sign(ROOT, "admin", "X", "phone", 0, false, false, 1))
+      .then(sign(PHONE, "admin", "C2", "computer", 0, false, false, 1))
+      .then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => st.get(m).recs == Set(1, 2, 3, 4, 5)
+        and views.get(m).admins.keys() == Set(PHONE, COMPUTER, WATCH, "X") and st.get(m).cut.marks.keys() == Set())
+        and promises)
+
+  // (J) reserve: two changes of root. Under NK the cut roots R and NA would list 4 + 3 units,
+  // past RESERVE 6: the writer keeps every root removal and the newest records, and drops R's
+  // oldest (1, A's admission). Nothing revives; A is no admin under NK; all agree.
+  run jReserveTest =
+    init
+      .then(sign(ROOT, "admin", "X", "phone", 0, false, false, 1)).then(syncRound)
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound)
+      .then(sign("NA", "copies", "", "", 0, false, false, 2)).then(syncRound)
+      .then(sign("NA", "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(recoverAs(RECOVERY, "NK")).then(syncRound).then(syncRound)
+      .expect(CEIL_FIT implies (db.get(9).keep == Set(2, 3, 4, 7, 8)
+        and MEMBERS.forall(m => st.get(m).recs == st.get("r").recs and views.get(m) == views.get("r")
+          and views.get(m).path == ["R", "NA", "NK"] and not(views.get(m).admins.keys().contains(PHONE))
+          and views.get(m).revoked.contains(DEVICE))) and promises)
 
   // (H): under WRITER_FLOOR the same group writes within FLOOR above the head: A's second
   // record waits for the root's next checkpoint; X's admission and record drop nothing.
