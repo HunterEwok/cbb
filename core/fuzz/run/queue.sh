@@ -2,7 +2,8 @@
 # queue.sh: long cargo-fuzz runs, one phase after another, in the container.
 # /work is a checkout with this core/fuzz; /out keeps corpus/, art/, logs/
 # across restarts, so every run resumes from its corpus. Touch /out/STOP to
-# end after the current phase.
+# end after the current phase. A build in 3 GB runs out of memory: build
+# once in a container with 5 GB and CARGO_BUILD_JOBS=1, then run here.
 set -u
 cd /work/core/fuzz
 mkdir -p /out/logs
@@ -10,7 +11,8 @@ log() { echo "$(date -u +%FT%TZ) $*" >> /out/logs/queue.log; }
 ALL="records_set records_group join records_decode pq_verify format format_guarded msg content commands beacon record_body command credential release wire api vless"
 log "build"
 cargo +nightly fuzz build -O >> /out/logs/build.log 2>&1 || { log "build failed"; exit 1; }
-BIN=$(dirname "$(ls target/*/release/records_set)")
+BIN=$(cd "$(dirname "$(ls target/*/release/records_set)")" && pwd)
+[ -x "$BIN/records_set" ] || { log "no binaries in $BIN"; exit 1; }
 
 # run <target> <seconds> <workers> [timeout]
 run() {
@@ -26,7 +28,9 @@ run() {
     -ignore_crashes=1 -ignore_ooms=1 -ignore_timeouts=1 -max_total_time=$secs \
     -max_len=131072 -malloc_limit_mb=128 -rss_limit_mb=1536 -timeout=$to \
     -artifact_prefix=/out/art/$t/ -print_final_stats=1 >> /out/logs/$t.log 2>&1)
-  log "end $t exit $? crashes=$(ls /out/art/$t | grep -c crash) timeouts=$(ls /out/art/$t | grep -c timeout)"
+  rc=$?
+  [ -x "$BIN/$t" ] || { log "no binary for $t"; exit 1; }
+  log "end $t exit $rc crashes=$(ls /out/art/$t | grep -c crash) timeouts=$(ls /out/art/$t | grep -c timeout)"
 }
 disk_ok() { [ "$(df -Pm /out | awk 'NR==2{print $4}')" -gt 5120 ]; }
 
