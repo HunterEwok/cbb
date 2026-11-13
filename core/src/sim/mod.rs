@@ -33,7 +33,8 @@
 //! and the records come one by one, lost or reordered like any message.
 //! `SIM_WHOLE=1` hands the whole offer at once instead, as before, so that
 //! the seeds found that way replay; `SIM_TWINS=0` leaves out the root's
-//! twin records.
+//! twin records. With `SIM_SMALL`, `SIM_ROOT_LOST` and `SIM_ROOT_DEVIATES`
+//! see `small_seed`, `root_lost` and `checkpoint_kind`.
 
 mod exchange;
 
@@ -217,6 +218,21 @@ struct World {
     admins: usize,
     days_off: u64,
     copies_made: usize,
+    /// A member kept off while the root checkpoints, and how many
+    /// checkpoints it still waits for (small-room seeds only).
+    away: Option<(usize, u32)>,
+    /// The seed runs with small rooms (`small_seed`).
+    small: bool,
+    /// Members that came back after the checkpoints they were away for.
+    came_back: usize,
+    /// Some member kept a record aside at some point of the run.
+    aside_seen: bool,
+    /// The root lost for good (SIM_ROOT_LOST): the member, the checkpoint
+    /// that left without the record it names, and the changes of root
+    /// written by then.
+    gone: Option<(usize, RecordId, usize)>,
+    /// The root wrote a checkpoint with a free keep (SIM_ROOT_DEVIATES).
+    deviated: bool,
     log: Vec<String>,
 }
 
@@ -310,6 +326,12 @@ impl World {
             admins: 0,
             days_off: 0,
             copies_made: 0,
+            away: None,
+            small: small_seed(seed),
+            came_back: 0,
+            aside_seen: false,
+            gone: None,
+            deviated: false,
             log: Vec::new(),
         };
         // The root's phone is member 0; it admits a first few.
@@ -343,6 +365,10 @@ impl World {
     fn refresh(&mut self, i: usize) {
         let m = &mut self.members[i].live;
         m.state = m.set.state();
+        if !self.aside_seen {
+            let set = &self.members[i].live.set;
+            self.aside_seen = self.signed.iter().any(|id| set.waits_aside(id));
+        }
     }
 
     fn save(&mut self, i: usize) {
@@ -733,17 +759,21 @@ impl World {
             }
             Says::Want { ids, list } => {
                 let a = msg.from;
-                let mine: BTreeSet<RecordId> = self.ids_for(j, a).into_iter().collect();
+                // Asked by ID, a record goes out only as for_peer_by_id
+                // allows, never straight from get().
+                let peer = self.members[a].key.hash;
                 let m = &self.members[j].live;
-                for id in ids.iter().filter(|id| mine.contains(id)) {
-                    if let Some(r) = m.set.get(id) {
+                for id in &ids {
+                    if let Some(r) = m.set.for_peer_by_id(&m.state, &peer, id) {
                         fx.push(Effect::Send(Msg { from: j, to: a, says: Says::Record(r.envelope()) }));
                     }
                 }
-                // As the whole offer does, a list goes to whoever asks for
-                // it: a removed member needs it to read its own removal.
+                // A list goes out as lists_for_peer allows: every list to
+                // a device, to a removed device or a proof-only peer the
+                // lists of the recovery records it is given.
                 if let Some(h) = list
-                    && let Some(l) = m.set.lists().find(|l| List::of(l, &h).is_some())
+                    && let Some(l) =
+                        m.set.lists_for_peer(&m.state, &peer).into_iter().find(|l| List::of(l, &h).is_some())
                 {
                     fx.push(Effect::Send(Msg { from: j, to: a, says: Says::List(l.to_vec()) }));
                 }
@@ -872,6 +902,9 @@ impl World {
     /// Member i comes back from what it wrote: the set built again from
     /// its records and lists must be the one it saved.
     fn restart(&mut self, i: usize) -> Check {
+        if self.gone.is_some_and(|(g, _, _)| g == i) {
+            return Ok(());
+        }
         let (root, recovery) = (k(&self.root_name).key, k(&self.recovery_name).key);
         let m = &mut self.members[i];
         let set = rebuild(&root, &recovery, &m.saved.records, &m.saved.lists);
@@ -999,39 +1032,20 @@ impl World {
                     self.after_save(by)?;
                 }
             }
-            24..=25 => {
-                if let Some((by, key)) = self.signer(true) {
-                    let h = k(&key).hash;
-                    // It keeps what counts and every other signer's
-                    // record: only the root's own that no longer count go.
-                    let live = &self.members[by].live;
-                    let mut keep: Vec<RecordId> = live
-                        .set
-                        .ids()
-                        .filter(|id| {
-                            live.state.counting.contains(id) || live.set.get(id).is_some_and(|r| r.body().signer != h)
-                        })
-                        .copied()
-                        .collect();
-                    keep.sort();
-                    let heads = self.members[by]
-                        .live
-                        .heads
-                        .get(&h)
-                        .map(|(seq, id)| Head { key: h, seq: *seq, id: *id })
-                        .into_iter()
-                        .collect();
-                    self.sign(by, &key, Kind::Checkpoint { heads, keep });
-                    self.note(format!("m{by} checkpoints"));
-                    self.after_save(by)?;
-                }
-            }
+            24..=25 => self.checkpoint()?,
             26 if self.changes < MAX_CHANGES => self.change_root(false, false)?,
             27 if self.changes < MAX_CHANGES && self.rng.chance(1, 3) => self.change_root(true, false)?,
             29 => self.power_loss(),
             30 if twins_on() && self.twins == 0 && self.changes < MAX_CHANGES && self.rng.chance(1, 4) => {
                 self.twin()?
             }
+            // A member away over two or three checkpoints, so that it
+            // comes back to a checkpoint that may not be whole for it yet.
+            31 if self.small && self.away.is_none() => self.go_away(),
+            42 if env("SIM_ROOT_LOST") == Some(1) && self.gone.is_none() && self.rng.chance(1, 2) => {
+                self.root_lost()?
+            }
+            32..=41 if self.away.is_some() => self.checkpoint()?,
             28 if self.days_off < MAX_DAYS_OFF => {
                 let on = self.on_members();
                 if on.len() > 2
@@ -1048,6 +1062,158 @@ impl World {
             _ => {}
         }
         Ok(())
+    }
+
+    /// The root writes a checkpoint: it keeps what counts and every other
+    /// signer's record; only the root's own that no longer count go.
+    fn checkpoint(&mut self) -> Check {
+        let Some((by, key)) = self.signer(true) else { return Ok(()) };
+        let kind = self.checkpoint_kind(by, &key);
+        self.sign(by, &key, kind);
+        self.note(format!("m{by} checkpoints"));
+        if let Some((i, left)) = self.away
+            && by != i
+        {
+            if left <= 1 {
+                self.away = None;
+                self.came_back += 1;
+                self.members[i].back_at = Some(self.step + 1 + self.rng.below(20));
+            } else {
+                self.away = Some((i, left - 1));
+            }
+        }
+        self.after_save(by)
+    }
+
+    /// The root's checkpoint on member by: it keeps what counts and every
+    /// other signer's record, its own that no longer count go. With
+    /// SIM_ROOT_DEVIATES=1 one in three keeps a free choice of the held
+    /// records instead.
+    fn checkpoint_kind(&mut self, by: usize, key: &str) -> Kind {
+        let h = k(key).hash;
+        let live = &self.members[by].live;
+        let mut keep: Vec<RecordId> = live
+            .set
+            .ids()
+            .filter(|id| live.state.counting.contains(id) || live.set.get(id).is_some_and(|r| r.body().signer != h))
+            .copied()
+            .collect();
+        if env("SIM_ROOT_DEVIATES") == Some(1) && self.rng.chance(1, 3) {
+            let all: Vec<RecordId> = self.members[by].live.set.ids().copied().collect();
+            keep = all.into_iter().filter(|_| self.rng.chance(1, 2)).collect();
+            self.deviated = true;
+        }
+        keep.sort();
+        let heads = self.members[by]
+            .live
+            .heads
+            .get(&h)
+            .map(|(seq, id)| Head { key: h, seq: *seq, id: *id })
+            .into_iter()
+            .collect();
+        Kind::Checkpoint { heads, keep }
+    }
+
+    fn is_gone(&self, i: usize) -> bool {
+        self.gone.is_some_and(|(g, _, _)| g == i)
+    }
+
+    /// SIM_ROOT_LOST=1: the root signs a record and a checkpoint that
+    /// names it, the checkpoint alone reaches one member, and the root is
+    /// lost for good before the record leaves.
+    fn root_lost(&mut self) -> Check {
+        let Some((by, key)) = self.signer(true) else { return Ok(()) };
+        let Some(kind) = self.own_device(by) else { return Ok(()) };
+        let others: Vec<usize> = self.in_group().into_iter().filter(|j| *j != by).collect();
+        let Some(to) = self.rng.pick(&others) else { return Ok(()) };
+        self.sign(by, &key, kind);
+        let cp = self.checkpoint_kind(by, &key);
+        let c = self.sign(by, &key, cp);
+        let _ = self.members[to].live.set.insert(c.clone());
+        self.refresh(to);
+        self.save(to);
+        self.crash(by);
+        self.members[by].back_at = None;
+        self.admitted[by] = false;
+        self.gone = Some((by, c.id(), self.changes));
+        self.note(format!("the root m{by} is lost; its checkpoint reached m{to} without the record it names"));
+        self.after_save(to)
+    }
+
+    /// With the root lost and no change of root since: every member that
+    /// holds the checkpoint counts the one before, and once missing()
+    /// gives up it tells the checkpoint as waiting for records nobody has.
+    fn lost_root_holds(&mut self, group: &[usize]) -> Check {
+        let Some((_, c, changes)) = self.gone else { return Ok(()) };
+        if self.changes != changes {
+            return Ok(());
+        }
+        for i in group {
+            let m = &mut self.members[*i].live;
+            if !m.set.contains(&c) {
+                continue;
+            }
+            if m.state.counting.contains(&c) {
+                return Err(format!("m{i} counts a checkpoint whose named record was lost with the root"));
+            }
+            let state = m.state.clone();
+            for _ in 0..=crate::records::set::MISSING_ROUNDS {
+                m.set.missing(&state);
+            }
+            if !m
+                .set
+                .stuck_checkpoints()
+                .iter()
+                .any(|(id, why)| *id == c && *why == crate::records::Stuck::NeverOffered)
+            {
+                return Err(format!("m{i} raised no notice for a checkpoint waiting for a record nobody has"));
+            }
+        }
+        Ok(())
+    }
+
+    /// Whether what the waiting checkpoints of the current root keep
+    /// passes one ROOM aside on member i: the stated limit N-1.
+    fn past_one_room(&self, i: usize) -> bool {
+        let m = &self.members[i].live;
+        let Some(root) = m.state.roots.last() else { return false };
+        let mut kept: BTreeSet<RecordId> = BTreeSet::new();
+        for id in m.set.ids() {
+            let Some(r) = m.set.get(id) else { continue };
+            if r.body().signer != *root || m.state.counting.contains(id) {
+                continue;
+            }
+            if let Kind::Checkpoint { keep, .. } = &r.body().kind {
+                kept.extend(keep.iter().copied());
+            }
+        }
+        let units: u64 = kept
+            .iter()
+            .filter_map(|id| self.members.iter().find_map(|x| x.live.set.get(id)))
+            .map(|r| crate::records::keep::units(r.envelope().len()))
+            .sum();
+        units > crate::records::keep::room()
+    }
+
+    /// An admitted member goes off until the root has checkpointed two or
+    /// three times.
+    fn go_away(&mut self) {
+        let root = self.signer(true).map(|(by, _)| by);
+        let on: Vec<usize> = self
+            .on_members()
+            .into_iter()
+            .filter(|i| self.admitted[*i] && Some(*i) != root && self.members[*i].back_at.is_none())
+            .collect();
+        if on.len() < 2 {
+            return;
+        }
+        let Some(i) = self.rng.pick(&on) else { return };
+        let left = self.rng.range(2, 4) as u32;
+        self.crash(i);
+        // Back on its own only if the checkpoints never come.
+        self.members[i].back_at = Some(self.step + 400);
+        self.away = Some((i, left));
+        self.note(format!("m{i} is away over {left} checkpoints"));
     }
 
     /// The owner enters the recovery key on a member and makes it the
@@ -1225,8 +1391,9 @@ impl World {
                 }
             }
             90..=94 => {
-                let down: Vec<usize> =
-                    (0..n).filter(|i| !self.members[*i].on && self.members[*i].back_at.is_none()).collect();
+                let down: Vec<usize> = (0..n)
+                    .filter(|i| !self.members[*i].on && self.members[*i].back_at.is_none() && !self.is_gone(*i))
+                    .collect();
                 if let Some(i) = self.rng.pick(&down) {
                     self.restart(i)?;
                     self.note(format!("m{i} restarts"));
@@ -1397,8 +1564,12 @@ impl World {
             .collect();
         let Some(i) = self.rng.pick(&senders) else { return Ok(()) };
         let newest = self.members.iter().map(|m| m.live.last.wall).max().unwrap_or(0).max(self.time as i64);
+        // A root lost for good is still a device to the others: the copy
+        // is sealed to it too, and it never shows it.
+        let gone = self.gone.map(|(g, _, _)| g);
         let expect: BTreeSet<DeviceId> = group
             .iter()
+            .chain(gone.iter())
             .filter(|j| **j != i)
             .filter_map(|j| state.device(&self.members[*j].id))
             .filter(|d| !d.frozen && d.rights & RIGHT_READ != 0 && !state.nothing_to.contains(&d.id))
@@ -1428,6 +1599,7 @@ impl World {
         self.quiet()?;
         self.no_twins()?;
         let (mut group, mut state) = self.settled()?;
+        self.lost_root_holds(&group)?;
         let recovery_fork = state.fork.is_some_and(|(_, a, b)| {
             self.members.iter().any(|m| {
                 [a, b]
@@ -1503,8 +1675,21 @@ impl World {
 
 /// One seed's run: Ok, or what failed with the last events.
 fn run(seed: u64, steps: usize) -> Result<(), String> {
+    let _rooms = small_seed(seed).then(small_rooms);
     let mut w = World::new(seed);
     let r = w.run(steps).and_then(|()| w.finish());
+    // A split after a deviating checkpoint is the stated limit N-1 when
+    // the waiting checkpoints keep more than one ROOM aside.
+    let r = r.map_err(|e| {
+        if !w.deviated {
+            return e;
+        }
+        let n1 = (0..w.members.len()).any(|i| w.past_one_room(i));
+        if n1 { format!("N-1: {e}") } else { format!("finding with a deviating root: {e}") }
+    });
+    SMALL_RUNS.fetch_add(usize::from(w.small), Ordering::Relaxed);
+    CAME_BACK.fetch_add(w.came_back, Ordering::Relaxed);
+    ASIDE_SEEN.fetch_add(usize::from(w.aside_seen), Ordering::Relaxed);
     r.map_err(|e| format!("{e}\n  at step {} of {steps}; last events:\n{}", w.step, w.log.join("\n")))
 }
 
@@ -1536,8 +1721,32 @@ static FORKS_TWICE: AtomicUsize = AtomicUsize::new(0);
 static FORKS_SPLIT: AtomicUsize = AtomicUsize::new(0);
 /// Settled runs whose sets keep records aside for a later checkpoint.
 static ASIDE_RUNS: AtomicUsize = AtomicUsize::new(0);
+static SMALL_RUNS: AtomicUsize = AtomicUsize::new(0);
+static CAME_BACK: AtomicUsize = AtomicUsize::new(0);
+static ASIDE_SEEN: AtomicUsize = AtomicUsize::new(0);
+const COUNTERS: [&AtomicUsize; 6] = [&FORKS_TWICE, &FORKS_SPLIT, &ASIDE_RUNS, &SMALL_RUNS, &CAME_BACK, &ASIDE_SEEN];
 
 /// Root twins (two writers with one key) are made unless SIM_TWINS=0.
+/// Every SIM_SMALL-th seed (4 by default, 0 for none) runs with small
+/// rooms, SIM_ROOMS="room,root,admin" (14,8,5 by default, as the records
+/// model's traces), and with a member away over checkpoints.
+fn small_seed(seed: u64) -> bool {
+    let k = env("SIM_SMALL").unwrap_or(4);
+    k != 0 && seed % k == k - 1
+}
+
+fn small_rooms() -> crate::records::keep::small::Small {
+    let v: Vec<u64> = std::env::var("SIM_ROOMS")
+        .ok()
+        .map(|s| s.split(',').filter_map(|x| x.trim().parse().ok()).collect())
+        .unwrap_or_default();
+    let (room, root, admin) = match v[..] {
+        [a, b, c] => (a, b, c),
+        _ => (14, 8, 5),
+    };
+    crate::records::keep::small::Small::new(room, root, admin)
+}
+
 fn twins_on() -> bool {
     env("SIM_TWINS") != Some(0)
 }
@@ -1562,9 +1771,9 @@ fn groups_under_faults_agree() {
     let n = seeds.len();
     for seed in seeds {
         if let Err(e) = run(seed, steps) {
-            let counted = [&FORKS_TWICE, &FORKS_SPLIT, &ASIDE_RUNS].map(|c| c.load(Ordering::Relaxed));
+            let counted = COUNTERS.map(|c| c.load(Ordering::Relaxed));
             let small = shrink(seed, steps);
-            for (c, v) in [&FORKS_TWICE, &FORKS_SPLIT, &ASIDE_RUNS].into_iter().zip(counted) {
+            for (c, v) in COUNTERS.into_iter().zip(counted) {
                 c.store(v, Ordering::Relaxed);
             }
             let e = run(seed, small).err().unwrap_or(e);
@@ -1577,10 +1786,13 @@ fn groups_under_faults_agree() {
         }
     }
     std::eprintln!(
-        "sim: {n} seeds; recovery forks: {} by the key used twice, {} by a split network; {} settled with records aside",
+        "sim: {n} seeds; recovery forks: {} by the key used twice, {} by a split network; {} settled with records aside; {} with small rooms, {} members back after the checkpoints they were away for, {} runs kept a record aside on the way",
         FORKS_TWICE.load(Ordering::Relaxed),
         FORKS_SPLIT.load(Ordering::Relaxed),
-        ASIDE_RUNS.load(Ordering::Relaxed)
+        ASIDE_RUNS.load(Ordering::Relaxed),
+        SMALL_RUNS.load(Ordering::Relaxed),
+        CAME_BACK.load(Ordering::Relaxed),
+        ASIDE_SEEN.load(Ordering::Relaxed)
     );
     assert!(failed.is_empty(), "{}", failed.join("\n\n"));
 }

@@ -37,16 +37,12 @@ pub struct Offer {
 /// is peer; statements and copies are the sender's to give.
 pub fn offer(set: &RecordSet, state: &State, peer: &KeyHash, statements: &[Vec<u8>], copies: &[Vec<u8>]) -> Offer {
     let records = set.for_peer(state, peer).into_iter().map(Record::envelope).collect();
+    let lists = set.lists_for_peer(state, peer).into_iter().map(<[u8]>::to_vec).collect();
     let device = state.device_by_key(peer).is_some();
     if !device {
-        return Offer { records, ..Offer::default() };
+        return Offer { records, lists, ..Offer::default() };
     }
-    Offer {
-        records,
-        lists: set.lists().map(<[u8]>::to_vec).collect(),
-        statements: statements.to_vec(),
-        copies: copies.to_vec(),
-    }
+    Offer { records, lists, statements: statements.to_vec(), copies: copies.to_vec() }
 }
 
 /// What taking an offer did to the set.
