@@ -628,6 +628,23 @@ pub(crate) fn is_first(firsts: &Firsts, r: &Record) -> bool {
     firsts.get(&r.id()) == Some(&r.body().signer) && matches!(r.body().kind, Kind::Checkpoint { .. })
 }
 
+/// Of each root a head named, the seq of its first checkpoint (of several
+/// heads naming that root, the highest): no checkpoint of that root below
+/// it may count, since it was signed before the root took the group.
+pub(crate) fn first_floor<'r>(
+    firsts: &Firsts,
+    get: impl Fn(&RecordId) -> Option<&'r Record>,
+) -> BTreeMap<KeyHash, u64> {
+    let mut out: BTreeMap<KeyHash, u64> = BTreeMap::new();
+    for (id, root) in firsts {
+        if let Some(r) = get(id).filter(|r| is_first(firsts, r)) {
+            let e = out.entry(*root).or_default();
+            *e = (*e).max(r.body().seq);
+        }
+    }
+    out
+}
+
 /// Whether held has a head's first checkpoint: a checkpoint of root with
 /// that ID, verified (a set verifies what it holds, `check_all` what it
 /// takes).
@@ -1004,8 +1021,9 @@ fn still_known<'a>(root: &Key, recovery: &Key, checked: Vec<Checked<'a>>) -> Vec
     checked.into_iter().filter(|c| keys.signer(&c.r.body().signer).is_some()).collect()
 }
 
-/// The newest checkpoint of each root on the path among checked, held or
-/// not past the rooms, in the order of the path; a checkpoint of a root
+/// The checkpoints of each root on the path among checked, held or not
+/// past the rooms, in the order of the path and of each root the newest
+/// first (the newest that counts is the root's); a checkpoint of a root
 /// the path left (or of the current root below its `from`) is an anchor
 /// only, listed or not: the new root's first checkpoint is what prunes.
 fn checkpoints_of<'r>(
@@ -1014,25 +1032,24 @@ fn checkpoints_of<'r>(
     on_path: &BTreeMap<KeyHash, usize>,
     cuts: &BTreeMap<KeyHash, Cut>,
 ) -> Vec<&'r Record> {
-    let mut newest: BTreeMap<KeyHash, &'r Record> = BTreeMap::new();
-    for c in checked {
-        let b = c.r.body();
-        if c.held
-            || c.role != Role::Root
-            || !matches!(b.kind, Kind::Checkpoint { .. })
-            || !path.contains(&b.signer)
-            || cuts.get(&b.signer).is_some_and(|cut| cut.covers(&b.signer, b.seq))
-        {
-            continue;
-        }
-        let better =
-            newest.get(&b.signer).is_none_or(|o| b.seq > o.body().seq || b.seq == o.body().seq && c.r.id() < o.id());
-        if better {
-            newest.insert(b.signer, c.r);
-        }
-    }
-    let mut out: Vec<&'r Record> = newest.into_values().collect();
-    out.sort_by_key(|r| on_path.get(&r.body().signer).copied().unwrap_or(0));
+    let mut out: Vec<&'r Record> = checked
+        .iter()
+        .filter(|c| {
+            let b = c.r.body();
+            !c.held
+                && c.role == Role::Root
+                && matches!(b.kind, Kind::Checkpoint { .. })
+                && path.contains(&b.signer)
+                && !cuts.get(&b.signer).is_some_and(|cut| cut.covers(&b.signer, b.seq))
+        })
+        .map(|c| c.r)
+        .collect();
+    // In the order of the path; of each root the newest first, of two at
+    // one seq the smaller ID.
+    out.sort_by(|a, b| {
+        let at = |r: &Record| on_path.get(&r.body().signer).copied().unwrap_or(0);
+        at(a).cmp(&at(b)).then(b.body().seq.cmp(&a.body().seq)).then(a.id().cmp(&b.id()))
+    });
     out
 }
 
@@ -1119,8 +1136,16 @@ pub(crate) fn evaluate_checked(
     let mut anchors_all: BTreeSet<RecordId> = BTreeSet::new();
     let mut applied: Vec<RecordId> = Vec::new();
     let mut best: Option<State> = None;
+    // Of each root the newest checkpoint that counts; a newer one that
+    // does not (yet) waits, and the one below it may still count.
+    let mut counted: BTreeSet<KeyHash> = BTreeSet::new();
+    let by_id: BTreeMap<RecordId, &Record> = checked.iter().map(|c| (c.r.id(), c.r)).collect();
+    let floor = first_floor(&chain.firsts, |id| by_id.get(id).copied());
     for x in cands {
         let (Kind::Checkpoint { heads, keep }, id) = (&x.body().kind, x.id()) else { continue };
+        if counted.contains(&x.body().signer) || floor.get(&x.body().signer).is_some_and(|f| x.body().seq < *f) {
+            continue;
+        }
         // A checkpoint at or above its root's pair counts for nobody that
         // holds the pair, whatever it pruned before.
         let pair = fork_proof(kept.iter().map(|c| (c.r, c.role)));
@@ -1140,8 +1165,10 @@ pub(crate) fn evaluate_checked(
                 continue;
             }
         }
-        // What it names is kept first and must fit the rooms by itself.
-        let by_id: BTreeMap<RecordId, &Checked> = kept.iter().map(|c| (c.r.id(), c)).collect();
+        // What it names is kept first and must fit the rooms by itself; a
+        // record the cut drops is not named.
+        let by_id: BTreeMap<RecordId, &Checked> =
+            kept.iter().filter(|c| !off_cut(&cuts, c.r)).map(|c| (c.r.id(), c)).collect();
         let first = named_first(x, |id| by_id.contains_key(id));
         let named = first.iter().filter_map(|id| by_id.get(id)).map(|c| (c.r, c.role));
         if !fits_alone(named, &root.hash(), &chain.promoted()) {
@@ -1175,6 +1202,7 @@ pub(crate) fn evaluate_checked(
             continue;
         }
         applied.push(id);
+        counted.insert(x.body().signer);
         let mut state = ep.finish();
         state.checkpoint = Some(id);
         state.checkpoints = applied.clone();
@@ -1246,6 +1274,33 @@ pub(crate) fn checkpoint_ok<'r>(cp: &'r Record, get: impl Fn(&RecordId) -> Optio
         }
     }
     true
+}
+
+/// Whether a checkpoint with heads and keep, among the records held, keeps
+/// an admission of a key while it prunes a root's removal naming that key:
+/// it would bring a removed key back through an old record, which the
+/// core's writer never writes.
+pub(crate) fn revives<'r>(
+    heads: &[Head],
+    keep: &[RecordId],
+    held: impl Iterator<Item = (&'r Record, Role)> + Clone,
+) -> bool {
+    let anchors = anchors_of(heads, keep);
+    let removed: BTreeSet<KeyHash> = held
+        .clone()
+        .filter(|(r, role)| *role == Role::Root && pruned_by(r, *role, heads, &anchors))
+        .filter_map(|(r, _)| match &r.body().kind {
+            Kind::Revoke(rm) => Some(rm.keys.iter().copied()),
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    held.filter(|(r, _)| keep.binary_search(&r.id()).is_ok()).any(|(r, _)| match &r.body().kind {
+        Kind::Device(d) => {
+            removed.contains(&d.key.hash()) || d.admin.as_ref().is_some_and(|a| removed.contains(&a.hash()))
+        }
+        _ => false,
+    })
 }
 
 struct Rec<'a> {

@@ -1735,6 +1735,9 @@ def check_map(name, v):
         named = [k[1] for k in v[9]]
         if len(set(named)) != len(named) or any(n not in v.get(2, []) for n in named):
             return "offer/endpoint-keys"
+    # A root's fork is two records.
+    if name == "roots" and 3 in v and len(v[3]) != 2:
+        return "roots/fork"
     # Fields 3 (claim ages) and 8 (counted claims) of earlier drafts.
     if name == "welcome" and (3 in v or 8 in v):
         return "welcome/retired"
@@ -2018,8 +2021,11 @@ TABLES4 = {
     "nonce": [(2, "nonce/nonce", "bytes 16", False)],
     "beacon": [(2, "beacon/envelope", "envelope", True)],
     "reseal": [(2, "reseal/copy", "bytes 16", True), (3, "reseal/epoch", "uint 1..9223372036854775807", True)],
+    # To a leaf: the recovery heads it needs, and its root's fork (two
+    # records of the root at one seq, exactly two).
+    "roots": [(2, "roots/heads", "array 1..16 of envelope", False), (3, "roots/fork", "array 1..2 of envelope", False)],
 }
-MESSAGE_TYPES4 = {7: "keys-message", 9: "command", 21: "nonce", 22: "beacon", 23: "reseal"}
+MESSAGE_TYPES4 = {7: "keys-message", 9: "command", 21: "nonce", 22: "beacon", 23: "reseal", 24: "roots"}
 TABLES.update(TABLES4)
 
 MEDIA_TYPES = 4
@@ -2718,6 +2724,8 @@ def wave4_vectors():
     # messages
     good_cmd = dec(bytes.fromhex(commands[0]["envelope"]))
     good_beacon = dec(bytes.fromhex(beacons[0]["envelope"]))
+    good_rec = dec(envelope("record", ROOT, {1: 1, 2: GROUP, 3: ROOT.hash, 4: 2, 5: sha(b"prev"), 10: 5000})[0])
+    good_rec2 = dec(envelope("record", ROOT, {1: 1, 2: GROUP, 3: ROOT.hash, 4: 2, 5: sha(b"prev"), 10: 6000})[0])
     msgs = []
     for name, m in [
         ("keys with one statement", {0: 7, 2: [dec(envelope("keys", LAPTOP, {1: 1, 2: GROUP, 3: LAPTOP.hash, 4: 1, 10: [XWING, fake("k", 1216)]})[0])]}),
@@ -2732,6 +2740,14 @@ def wave4_vectors():
         ("beacon not an envelope", {0: 22, 2: b"x"}),
         ("reseal at epoch 0", {0: 23, 2: fake("copy", 16), 3: 0}),
         ("reseal without its copy", {0: 23, 3: 4}),
+        ("roots with a head", {0: 24, 2: [good_rec]}),
+        ("roots with the root's fork", {0: 24, 3: [good_rec, good_rec2]}),
+        ("roots with a head and the fork", {0: 24, 2: [good_rec], 3: [good_rec, good_rec2]}),
+        ("roots with a later field", {0: 24, 2: [good_rec], 300: 1}),
+        ("roots fork of one record", {0: 24, 3: [good_rec]}),
+        ("roots fork of three records", {0: 24, 3: [good_rec, good_rec2, good_rec]}),
+        ("roots with 17 heads", {0: 24, 2: [good_rec] * 17}),
+        ("roots head not an envelope", {0: 24, 2: [b"x"]}),
     ]:
         rule = check_map(MESSAGE_TYPES4[m[0]], m)
         f = frame(m)

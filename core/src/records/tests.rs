@@ -2234,6 +2234,48 @@ mod differential {
         agree(&g, &recs, 3, 0);
     }
 
+    /// A new root's checkpoint signed before it took the group, whole
+    /// with an empty keep, never counts in its place: in any order the
+    /// set holds what its first checkpoint keeps, as evaluate does.
+    #[test]
+    fn a_checkpoint_from_before_the_change_never_counts() {
+        let steps: Vec<(u8, u8, u8)> = vec![
+            (0, 6, 0),
+            (0, 0, 0),
+            (0, 6, 0),
+            (0, 6, 0),
+            (0, 6, 0),
+            (0, 6, 0),
+            (3, 6, 0),
+            (3, 8, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 0),
+            (0, 2, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 72),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 63),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+        ];
+        let (g, recs) = build(&steps);
+        let m1 = agree(&g, &recs, 4, 0);
+        let m2 = agree(&g, &recs, 6, 1_319_781_888_007_025_613);
+        assert_eq!(m1.digest(), m2.digest());
+        assert_eq!(m1.state(), m2.state());
+        assert!(!m1.state().devices.is_empty());
+    }
+
     proptest! {
         #![proptest_config(ProptestConfig { cases: 96, failure_persistence: None, ..ProptestConfig::default() })]
 
@@ -2812,6 +2854,7 @@ fn members_agree(g: &G) -> State {
 }
 
 mod recovery;
+mod traces;
 
 /// A checkpoint and the head below it that fills its key's room: the
 /// checkpoint prunes before the room is judged, so a member that took the
@@ -2844,27 +2887,323 @@ fn a_checkpoint_prunes_before_the_room_is_judged() {
     assert_eq!(sets[0], sets[1]);
 }
 
-/// A checkpoint that cannot count (it keeps an ID nobody holds) carries
-/// no record past its key's room: the record it names goes as any other.
+/// A newer checkpoint that cannot count (it keeps an ID nobody holds)
+/// waits: the one below it keeps counting with everything it names, and
+/// what the newer one keeps that the rooms turn away waits in the place
+/// aside without counting, in any order.
 #[test]
-fn a_checkpoint_that_cannot_count_carries_nothing_past_the_room() {
+fn a_checkpoint_naming_an_unheld_id_leaves_the_counting_one_counting() {
     let mut g = G::new();
     let root = k("root");
     g.device(&root, &k("laptop"), "laptop", |_| {});
-    for i in 1..MAX_ROOT_RECORDS as u64 {
+    for i in 0..5 {
         g.root_rec(Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] });
     }
-    let late = g.root_rec(Kind::Copies { incoming_ms: 9_999, seen: vec![] });
     let (seq, id) = g.heads[&root.hash];
-    let mut keep = vec![late.id(), RecordId([0x5a; 32])];
+    let below: Vec<RecordId> = g.recs.iter().filter(|r| r.id() != id).map(Record::id).collect();
+    let mut keep = below.clone();
     keep.sort();
-    let cp = g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep });
-    let mut set = set_of(&g.root.key.clone());
-    set.insert_all(g.recs[..MAX_ROOT_RECORDS].to_vec());
-    assert_eq!(set.insert(cp.clone()), Ok(Added::Stored));
-    assert_eq!(set.insert(late.clone()), Ok(Added::NoRoom));
-    assert!(!set.contains(&late.id()));
-    assert_eq!(set.state().checkpoint, None);
+    let counting = g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep });
+    let late: Vec<Record> = (0..2).map(|i| g.root_rec(Kind::Copies { incoming_ms: 9_000 + i, seen: vec![] })).collect();
+    let (seq, id) = g.heads[&root.hash];
+    let mut keep: Vec<RecordId> = below.iter().copied().chain([late[0].id(), RecordId([0x5a; 32])]).collect();
+    keep.sort();
+    let waits = g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep });
+    let small = crate::records::keep::small::Small::new(14, 8, 5);
+    for r in &g.recs {
+        small.units(r.id(), 1);
+    }
+    let mut sets = Vec::new();
+    for seed in [0, 1, 2, 3, 4] {
+        let order = if seed == 0 { g.recs.clone() } else { shuffled(&g.recs, seed) };
+        let set = set_with(&g.root.key, &order, &g.lists);
+        let st = set.state();
+        assert_eq!(st.checkpoint, Some(counting.id()), "order {seed}");
+        assert!(below.iter().all(|id| set.contains(id) && st.counting.contains(id)), "order {seed}");
+        // The newer one is kept first; what it keeps that the rooms turn
+        // away waits aside, counting for nothing and outside the digest.
+        assert!(set.contains(&waits.id()) && set.waits_aside(&late[0].id()), "order {seed}");
+        assert!(set.ids().all(|id| *id != late[0].id()), "order {seed}");
+        let held: Vec<Record> = set.ids().map(|id| set.get(id).unwrap().clone()).collect();
+        assert_eq!(st, state_with(&g.root.key, &held, &g.lists), "order {seed}");
+        sets.push((set.digest(), st));
+    }
+    assert!(sets.windows(2).all(|w| w[0] == w[1]));
+}
+
+/// A record a counting checkpoint pruned, which the root's newer
+/// checkpoint keeps again, is taken back by a member that pruned it, which
+/// then counts the newer one: it ends as a member handed everything at
+/// once.
+#[test]
+fn a_record_a_newer_checkpoint_keeps_again_comes_back() {
+    let mut g = G::new();
+    let root = k("root");
+    let laptop = g.device(&root, &k("laptop"), "laptop", |_| {});
+    let x = g.device(&root, &k("x"), "x", |_| {});
+    let phone = g.device(&root, &k("phone"), "phone", |_| {});
+    let (seq, id) = g.heads[&root.hash];
+    let older = g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep: vec![laptop.id()] });
+    let tv = g.device(&root, &k("tv"), "tv", |_| {});
+    let (seq, id) = g.heads[&root.hash];
+    let mut keep = vec![laptop.id(), x.id(), phone.id(), older.id()];
+    keep.sort();
+    let newer = g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep });
+    let at_once = set_with(&g.root.key, &g.recs, &g.lists);
+    assert_eq!(at_once.state().checkpoint, Some(newer.id()));
+    for late_first in [false, true] {
+        let mut m = set_with(&g.root.key, &g.recs[..4], &g.lists);
+        let st = m.state();
+        m.compact(&st);
+        assert_eq!(m.state().checkpoint, Some(older.id()));
+        assert!(!m.contains(&x.id()), "the older checkpoint pruned it");
+        let mut rest = vec![tv.clone(), newer.clone(), x.clone()];
+        if late_first {
+            rest.reverse();
+        }
+        sync_all(&mut m, &rest, &g.lists);
+        sync_all(&mut m, &g.recs, &g.lists);
+        assert_eq!(m.state().checkpoint, Some(newer.id()), "late first {late_first}");
+        assert_eq!(m.digest(), at_once.digest(), "late first {late_first}");
+        assert_eq!(m.state(), at_once.state(), "late first {late_first}");
+    }
+}
+
+/// A checkpoint that waits below a newer one that waits too counts once
+/// it is whole, the newer one still waiting; once the member is synced
+/// with one that holds everything, both count the newer.
+#[test]
+fn only_the_newest_checkpoint_waits() {
+    let mut g = G::new();
+    let root = k("root");
+    g.device(&root, &k("laptop"), "laptop", |_| {});
+    for i in 0..4 {
+        g.root_rec(Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] });
+    }
+    let (seq, id) = g.heads[&root.hash];
+    let mut keep: Vec<RecordId> = g.recs.iter().filter(|r| r.id() != id).map(Record::id).collect();
+    keep.sort();
+    let counting = g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep: keep.clone() });
+    let y = g.root_rec(Kind::Copies { incoming_ms: 7_000, seen: vec![] });
+    let z = g.root_rec(Kind::Copies { incoming_ms: 7_001, seen: vec![] });
+    let (seq, id) = g.heads[&root.hash];
+    let mut k18 = keep.clone();
+    k18.push(y.id());
+    k18.sort();
+    let c18 = g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep: k18 });
+    let w = g.root_rec(Kind::Copies { incoming_ms: 7_002, seen: vec![] });
+    let (seq, id) = g.heads[&root.hash];
+    let mut k19 = keep.clone();
+    k19.extend([z.id(), c18.id()]);
+    k19.sort();
+    let c19 = g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep: k19 });
+    let small = crate::records::keep::small::Small::new(14, 9, 5);
+    for r in &g.recs {
+        small.units(r.id(), 1);
+    }
+    let base: Vec<Record> =
+        g.recs.iter().filter(|r| ![&y, &z, &w, &c18, &c19].iter().any(|o| o.id() == r.id())).cloned().collect();
+    let mut m = set_with(&g.root.key, &base, &g.lists);
+    assert_eq!(m.state().checkpoint, Some(counting.id()));
+    // 18 waits for y; 19 comes, waiting for z, w and 18's being held;
+    // y comes after: 18, whole now, counts below 19, which still waits.
+    sync_all(&mut m, &[c18.clone(), c19.clone()], &g.lists);
+    assert_eq!(m.state().checkpoint, Some(counting.id()));
+    sync_all(&mut m, core::slice::from_ref(&y), &g.lists);
+    assert_eq!(m.state().checkpoint, Some(c18.id()));
+    assert!(m.contains(&c19.id()));
+    let peer = set_with(&g.root.key, &g.recs, &g.lists);
+    assert_eq!(peer.state().checkpoint, Some(c19.id()));
+    let theirs: Vec<Record> = peer.ids().map(|id| peer.get(id).unwrap().clone()).collect();
+    sync_all(&mut m, &theirs, &g.lists);
+    assert_eq!(m.state().checkpoint, Some(c19.id()));
+    assert_eq!(m.digest(), peer.digest());
+    assert_eq!(m.state(), peer.state());
+}
+
+/// A second record of the root at r's seq, on r's prev: not pushed.
+fn root_twin(g: &G, r: &Record, kind: Kind) -> Record {
+    let b = r.body();
+    let body = Body { group: g.gid, signer: b.signer, seq: b.seq, prev: b.prev, time_ms: 0, kind, held: false };
+    Record::sign(body, &k("root")).unwrap()
+}
+
+/// The root's checkpoint at its head now, keeping keep.
+fn root_cp(g: &mut G, mut keep: Vec<RecordId>) -> Record {
+    let root = k("root");
+    let (seq, id) = g.heads[&root.hash];
+    keep.sort();
+    g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep })
+}
+
+/// Checkpoints 7, 8 and 9 of the root: 7 prunes x's admission, 8 keeps it
+/// again, 9 keeps an ID nobody holds and is never whole. A member that
+/// counted 8 before 9 came and one that counted 7 and was handed 9 first
+/// end alike after a sync: every checkpoint above the counting one may
+/// count, and what any of them keeps comes back.
+#[test]
+fn a_checkpoint_that_is_never_whole_holds_back_nobody() {
+    let mut g = G::new();
+    let laptop = g.device(&k("root"), &k("laptop"), "laptop", |_| {});
+    let x = g.device(&k("root"), &k("x"), "x", |_| {});
+    g.root_rec(Kind::Copies { incoming_ms: 5_000, seen: vec![] });
+    let c7 = root_cp(&mut g, vec![laptop.id()]);
+    let c8 = root_cp(&mut g, vec![laptop.id(), x.id(), c7.id()]);
+    let c9 = root_cp(&mut g, vec![laptop.id(), c8.id(), RecordId([0x59; 32])]);
+    let upto = |r: &Record| g.recs.iter().position(|o| o.id() == r.id()).unwrap() + 1;
+    let mut m1 = set_with(&g.root.key, &g.recs[..upto(&c8)], &g.lists);
+    assert_eq!(m1.state().checkpoint, Some(c8.id()));
+    sync_all(&mut m1, core::slice::from_ref(&c9), &g.lists);
+    let mut m2 = set_with(&g.root.key, &g.recs[..upto(&c7)], &g.lists);
+    sync_all(&mut m2, &[], &g.lists);
+    assert_eq!(m2.state().checkpoint, Some(c7.id()));
+    assert!(!m2.contains(&x.id()));
+    sync_all(&mut m2, core::slice::from_ref(&c9), &g.lists);
+    for _ in 0..2 {
+        let theirs: Vec<Record> = m1.ids().map(|id| m1.get(id).unwrap().clone()).collect();
+        sync_all(&mut m2, &theirs, &g.lists);
+        sync_all(&mut m2, &[c8.clone(), x.clone()], &g.lists);
+        let mine: Vec<Record> = m2.ids().map(|id| m2.get(id).unwrap().clone()).collect();
+        sync_all(&mut m1, &mine, &g.lists);
+    }
+    for m in [&m1, &m2] {
+        let st = m.state();
+        assert_eq!(st.checkpoint, Some(c8.id()));
+        assert!(st.device_by_key(&k("x").hash).is_some());
+    }
+    assert_eq!(m1.digest(), m2.digest());
+    assert_eq!(m1.state(), m2.state());
+}
+
+/// A record the counting checkpoint pruned that a newer one keeps waits
+/// aside while that one is not whole: it counts for nothing, takes no
+/// place in the digest, stays when the set compacts, and goes in the step
+/// a checkpoint that counts prunes the one that kept it.
+#[test]
+fn what_waits_aside_counts_for_nothing_and_goes_with_its_checkpoint() {
+    let mut g = G::new();
+    let laptop = g.device(&k("root"), &k("laptop"), "laptop", |_| {});
+    let x = g.device(&k("root"), &k("x"), "x", |_| {});
+    g.root_rec(Kind::Copies { incoming_ms: 5_000, seen: vec![] });
+    let c7 = root_cp(&mut g, vec![laptop.id()]);
+    let w = root_cp(&mut g, vec![laptop.id(), x.id(), c7.id(), RecordId([0x5a; 32])]);
+    let others: Vec<Record> = g.recs.iter().filter(|r| r.id() != x.id()).cloned().collect();
+    let mut m = set_with(&g.root.key, &others, &g.lists);
+    sync_all(&mut m, &[], &g.lists);
+    assert_eq!(m.state().checkpoint, Some(c7.id()));
+    let without = m.digest();
+    assert_eq!(m.insert(x.clone()), Ok(Added::Waiting));
+    sync_all(&mut m, &[], &g.lists);
+    assert!(m.waits_aside(&x.id()) && m.get(&x.id()).is_some());
+    assert!(m.ids().all(|id| *id != x.id()));
+    assert_eq!(m.digest(), without);
+    assert!(m.state().device_by_key(&k("x").hash).is_none());
+    let n = root_cp(&mut g, vec![laptop.id(), c7.id(), w.id()]);
+    assert_eq!(m.insert(n.clone()), Ok(Added::Stored));
+    sync_all(&mut m, &[], &g.lists);
+    assert_eq!(m.state().checkpoint, Some(n.id()));
+    assert!(!m.contains(&x.id()), "nothing above the counting one keeps it");
+    assert_eq!(m.insert(x.clone()), Ok(Added::Settled { head: w.body().seq }));
+}
+
+/// A record taken for a waiting checkpoint is judged first as any settled
+/// root record: with the other record of its seq it makes the pair in
+/// either order, after which nothing at or above the fork waits; and one
+/// that left the place aside is remembered, so the other one waits for it.
+#[test]
+fn what_waits_aside_still_makes_the_pair() {
+    let mut g = G::new();
+    let laptop = g.device(&k("root"), &k("laptop"), "laptop", |_| {});
+    let x = g.device(&k("root"), &k("x"), "x", |_| {});
+    let x2 = root_twin(&g, &x, Kind::device(Device::new(k("y").key.clone(), "y", ROLE_MEMBER)));
+    g.root_rec(Kind::Copies { incoming_ms: 5_000, seen: vec![] });
+    let c7 = root_cp(&mut g, vec![laptop.id()]);
+    let w = root_cp(&mut g, vec![laptop.id(), x.id(), c7.id(), RecordId([0x5a; 32])]);
+    let base = || {
+        let mut m = set_with(&g.root.key, &g.recs, &g.lists);
+        sync_all(&mut m, &[], &g.lists);
+        assert_eq!(m.state().checkpoint, Some(c7.id()));
+        m
+    };
+    let mut states = Vec::new();
+    for order in [[&x, &x2], [&x2, &x]] {
+        let mut m = base();
+        for r in order {
+            m.insert((*r).clone()).unwrap();
+        }
+        let st = m.state();
+        let root = k("root").hash;
+        assert!(st.conflicts.iter().any(|c| c.kind == ConflictKind::TwoHistories && c.signers == vec![root]));
+        assert!(!m.waits_aside(&x.id()) && !m.waits_aside(&x2.id()));
+        states.push((m.digest(), st));
+    }
+    assert_eq!(states[0], states[1]);
+    // x waits, then a counting checkpoint takes its place: x is
+    // remembered, and its twin waits for it.
+    let mut m = base();
+    m.insert(x.clone()).unwrap();
+    let n = root_cp(&mut g, vec![laptop.id(), c7.id(), w.id()]);
+    m.insert(n).unwrap();
+    assert!(!m.contains(&x.id()));
+    let _ = m.insert(x2.clone());
+    assert!(m.missing(&m.state()).contains(&x.id()));
+    m.insert(x.clone()).unwrap();
+    let root = k("root").hash;
+    assert!(m.state().conflicts.iter().any(|c| c.kind == ConflictKind::TwoHistories && c.signers == vec![root]));
+}
+
+/// The place aside holds at most one ROOM, the lowest (seq, ID) first,
+/// whatever order the records came in.
+#[test]
+fn the_place_aside_keeps_one_room_by_seq() {
+    let mut g = G::new();
+    let laptop = g.device(&k("root"), &k("laptop"), "laptop", |_| {});
+    let old: Vec<Record> = (0..20).map(|i| g.root_rec(Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] })).collect();
+    let c7 = root_cp(&mut g, vec![laptop.id()]);
+    let mut keep: Vec<RecordId> = old.iter().map(Record::id).collect();
+    keep.extend([laptop.id(), c7.id(), RecordId([0x5b; 32])]);
+    root_cp(&mut g, keep);
+    let small = crate::records::keep::small::Small::new(14, 8, 5);
+    for r in &g.recs {
+        small.units(r.id(), 1);
+    }
+    let base: Vec<Record> = g.recs.iter().filter(|r| !old.iter().any(|o| o.id() == r.id())).cloned().collect();
+    let mut seen = Vec::new();
+    for seed in [0, 1, 2] {
+        let mut m = set_with(&g.root.key, &base, &g.lists);
+        sync_all(&mut m, &[], &g.lists);
+        assert_eq!(m.state().checkpoint, Some(c7.id()));
+        let order = if seed == 0 { old.clone() } else { shuffled(&old, seed) };
+        sync_all(&mut m, &order, &g.lists);
+        let aside: Vec<RecordId> = old.iter().map(Record::id).filter(|id| m.waits_aside(id)).collect();
+        assert_eq!(aside.len(), 14, "order {seed}");
+        assert_eq!(aside, old[..14].iter().map(Record::id).collect::<Vec<_>>(), "order {seed}");
+        seen.push((m.digest(), m.state()));
+    }
+    assert!(seen.windows(2).all(|w| w[0] == w[1]));
+}
+
+/// What waits aside for the current root goes when a change of root
+/// applies: a root the path left has nothing aside.
+#[test]
+fn a_change_of_root_empties_the_place_aside() {
+    let mut g = G::new();
+    let laptop = g.device(&k("root"), &k("laptop"), "laptop", |_| {});
+    let x = g.device(&k("root"), &k("x"), "x", |_| {});
+    g.root_rec(Kind::Copies { incoming_ms: 5_000, seen: vec![] });
+    let c7 = root_cp(&mut g, vec![laptop.id()]);
+    root_cp(&mut g, vec![laptop.id(), x.id(), c7.id(), RecordId([0x5c; 32])]);
+    let mut m = set_with(&g.root.key, &g.recs, &g.lists);
+    sync_all(&mut m, &[], &g.lists);
+    m.insert(x.clone()).unwrap();
+    assert!(m.waits_aside(&x.id()));
+    let list = g.listing();
+    let before = g.recs.len();
+    g.change(&k("root2"), &list);
+    let rest: Vec<Record> = g.recs[before..].to_vec();
+    sync_all(&mut m, &rest, &g.lists);
+    assert_eq!(m.state().roots.last(), Some(&k("root2").hash));
+    assert!(!m.waits_aside(&x.id()));
 }
 
 /// The root's checkpoint, written by the set that holds recs.
@@ -3108,6 +3447,56 @@ fn older_settled_records_leave_a_waiting_one() {
     assert!(b.contains(&twin.id()) && b.contains(&x.id()));
 }
 
+/// Root records waiting for a partner the set remembers by ID are kept
+/// within their bound, the oldest going first: the newest still wait, the
+/// set asks for their partners, and one that comes halts it.
+#[test]
+fn records_waiting_for_their_pair_keep_within_their_bound() {
+    let mut g = G::new();
+    let root = k("root");
+    g.device(&root, &k("laptop"), "laptop", |_| {});
+    let (mut xs, mut twins, mut gone) = (vec![], vec![], vec![]);
+    for i in 0..18 {
+        let name = format!("d {i}");
+        let below = g.device(&root, &k(&name), &name, |_| {});
+        let x = g.root_rec(Kind::Revoke(removal(&[k(&name).hash], g.seen())));
+        let mut d = Device::new(k(&format!("other {i}")).key.clone(), "other", ROLE_MEMBER);
+        d.rights = RIGHT_READ;
+        let twin =
+            Record::sign(Body { seq: x.body().seq, prev: Some(below.id()), ..g.body(&root, Kind::device(d)) }, &root)
+                .unwrap();
+        gone.extend([below.id(), x.id()]);
+        xs.push(x);
+        twins.push(twin);
+    }
+    let mut old = vec![];
+    for i in 0..9 {
+        let name = format!("old {i}");
+        old.push(g.device(&root, &k(&name), &name, |_| {}));
+        old.push(g.root_rec(Kind::Revoke(removal(&[k(&name).hash], g.seen()))));
+    }
+    gone.extend(old.iter().map(Record::id));
+    g.device(&root, &k("phone"), "phone", |_| {});
+    let line: Vec<Record> = g.recs.clone();
+    let cp = root_checkpoint(&mut g, &line);
+    let without: Vec<Record> = g.recs.iter().filter(|r| !gone.contains(&r.id())).cloned().collect();
+    let mut b = set_with(&g.root.key, &without, &g.lists);
+    assert!(b.state().checkpoints.contains(&cp.id()));
+    for r in twins.iter().chain(&old) {
+        assert!(matches!(b.insert(r.clone()), Ok(Added::Settled { .. })));
+    }
+    for x in &xs {
+        assert!(matches!(b.insert(x.clone()), Ok(Added::Settled { .. })));
+    }
+    let st = b.state();
+    assert_eq!(st.stop, Stop::None);
+    let asked = b.missing(&st);
+    assert!(twins[..2].iter().all(|t| !asked.contains(&t.id())));
+    assert!(twins[2..].iter().all(|t| asked.contains(&t.id())));
+    b.insert(twins[17].clone()).unwrap();
+    assert_eq!(b.state().stop, Stop::Full);
+}
+
 /// A second admission of a key the root removed, which the root never
 /// saw, brings the device back after the prune; the member that dropped
 /// the removal tells it, and a new admission by the root is not told.
@@ -3142,6 +3531,78 @@ fn an_unseen_admission_after_a_prune_is_a_notice() {
     n.insert(again).unwrap();
     let s = n.state();
     assert!(has_key(&s, &k("d")) && n.notices(&s).is_empty());
+}
+
+/// An old admission a newer checkpoint of the root keeps again, while it
+/// prunes the removal: the key counts again, and a member that dropped the
+/// removal tells it. While a removal naming the key is kept, the key stays
+/// out whatever the keep says.
+#[test]
+fn an_admission_kept_again_counts_only_past_every_removal() {
+    for keep_removal in [false, true] {
+        let mut g = G::new();
+        let root = k("root");
+        let laptop = g.device(&root, &k("laptop"), "laptop", |_| {});
+        let x = g.device(&root, &k("d"), "d", |_| {});
+        let rm = g.root_rec(Kind::Revoke(removal(&[k("d").hash], Vec::new())));
+        g.device(&root, &k("tv"), "tv", |_| {});
+        let line = g.recs.clone();
+        let older = root_checkpoint(&mut g, &line);
+        let Kind::Checkpoint { keep, .. } = &older.body().kind else { unreachable!() };
+        assert!(!keep.contains(&x.id()) && !keep.contains(&rm.id()), "the writer prunes both");
+        let phone = g.device(&root, &k("phone"), "phone", |_| {});
+        let (seq, id) = g.heads[&root.hash];
+        let mut keep: Vec<RecordId> = keep.iter().copied().chain([x.id(), older.id()]).collect();
+        if keep_removal {
+            keep.push(rm.id());
+        }
+        keep.sort();
+        let newer = g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep });
+        let mut m = set_with(&g.root.key, &line, &g.lists);
+        m.insert(older.clone()).unwrap();
+        let st = m.state();
+        m.compact(&st);
+        assert!(!m.contains(&x.id()) && !has_key(&m.state(), &k("d")));
+        sync_all(&mut m, &[phone.clone(), newer.clone()], &g.lists);
+        sync_all(&mut m, &g.recs, &g.lists);
+        let s = m.state();
+        assert_eq!(s.checkpoint, Some(newer.id()), "removal kept {keep_removal}");
+        assert_eq!(has_key(&s, &k("d")), !keep_removal, "removal kept {keep_removal}");
+        let told = m.notices(&s);
+        assert_eq!(told.is_empty(), keep_removal, "{told:?}");
+        let at_once = set_with(&g.root.key, &g.recs, &g.lists);
+        assert_eq!(m.digest(), at_once.digest());
+        assert_eq!(s, at_once.state());
+        let _ = laptop;
+    }
+}
+
+/// The writer's check: a checkpoint that keeps an admission while it
+/// prunes the root's removal of that key is one the writer refuses; the
+/// one the writer writes passes it.
+#[test]
+fn keeping_an_admission_while_pruning_its_removal_is_refused() {
+    let mut g = G::new();
+    let root = k("root");
+    g.device(&root, &k("laptop"), "laptop", |_| {});
+    let x = g.device(&root, &k("d"), "d", |_| {});
+    let rm = g.root_rec(Kind::Revoke(removal(&[k("d").hash], Vec::new())));
+    g.device(&root, &k("tv"), "tv", |_| {});
+    let set = set_with(&g.root.key, &g.recs, &g.lists);
+    let recs: Vec<(&Record, crate::records::eval::Role)> =
+        set.ids().map(|id| (set.get(id).unwrap(), crate::records::eval::Role::Root)).collect();
+    let held = || recs.iter().copied();
+    let cp = set.write_checkpoint(&set.state(), &root, 0).unwrap();
+    let Kind::Checkpoint { heads, keep } = &cp.body().kind else { unreachable!() };
+    assert!(!crate::records::eval::revives(heads, keep, held()));
+    let mut with_x = keep.clone();
+    with_x.push(x.id());
+    with_x.sort();
+    assert!(crate::records::eval::revives(heads, &with_x, held()));
+    let mut both = with_x.clone();
+    both.push(rm.id());
+    both.sort();
+    assert!(!crate::records::eval::revives(heads, &both, held()), "the removal kept too");
 }
 
 fn has_key(s: &State, member: &K) -> bool {
@@ -3234,6 +3695,7 @@ fn a_pair_out_of_the_room_lets_back_what_it_turned_away() {
 /// The root's newest checkpoint, kept first, takes its part of the room
 /// and of its key's ceiling: the root keeps no more than its ceiling, the
 /// set no more than its room, and an admin its fair share of the rest.
+/// What waits aside for it takes no unit.
 #[test]
 fn a_checkpoint_kept_first_takes_its_part_of_the_room() {
     let mut g = G::new();
@@ -3258,7 +3720,7 @@ fn a_checkpoint_kept_first_takes_its_part_of_the_room() {
     let units = |s: &RecordSet, key: &KeyHash| -> u64 {
         g.recs
             .iter()
-            .filter(|r| r.body().signer == *key && s.contains(&r.id()))
+            .filter(|r| r.body().signer == *key && s.ids().any(|id| *id == r.id()))
             .map(|r| if r.id() == cp.id() { 2 } else { 1 })
             .sum()
     };
@@ -3443,4 +3905,146 @@ fn the_roots_pair_halts_whatever_came_between() {
     assert!(m.missing(&st).contains(&twin.id()));
     let _ = m.insert(twin.clone());
     assert!(halted(&m));
+}
+
+/// One sync between two members as the protocol runs it: each offers the
+/// IDs it holds, then each asks for what it misses and gets it by ID.
+fn sync_pair(a: &mut RecordSet, b: &mut RecordSet, lists: &[Vec<u8>]) {
+    for _ in 0..2 {
+        let from_b: Vec<Record> = b.ids().map(|id| b.get(id).unwrap().clone()).collect();
+        sync_all(a, &from_b, lists);
+        let from_a: Vec<Record> = a.ids().map(|id| a.get(id).unwrap().clone()).collect();
+        sync_all(b, &from_a, lists);
+        let asked: Vec<Record> = a.missing(&a.state()).iter().filter_map(|id| b.get(id).cloned()).collect();
+        sync_all(a, &asked, lists);
+        let asked: Vec<Record> = b.missing(&b.state()).iter().filter_map(|id| a.get(id).cloned()).collect();
+        sync_all(b, &asked, lists);
+    }
+}
+
+/// The formal model's three scenarios of a root record pruned and named
+/// again: records 1 to 6 of the root (4 admits x, 5 removes it), 7 prunes
+/// 4 and 5, 8 keeps 4 again, and in the third 5 too. Members that held
+/// different parts end alike: x counts by 8 alone, and stays out when 8
+/// keeps the removal as well.
+#[test]
+fn the_models_pruned_and_named_again_scenarios_end_alike() {
+    for (case, keeps_removal, given_only_to_m) in [(1, false, false), (2, false, true), (3, true, false)] {
+        let mut g = G::new();
+        let r1 = g.device(&k("root"), &k("laptop"), "laptop", |_| {});
+        let r2 = g.root_rec(Kind::Copies { incoming_ms: 5_000, seen: vec![] });
+        let r3 = g.root_rec(Kind::Copies { incoming_ms: 5_001, seen: vec![] });
+        let r4 = g.device(&k("root"), &k("x"), "x", |_| {});
+        let r5 = g.root_rec(Kind::Revoke(removal(&[k("x").hash], g.seen())));
+        let r6 = g.root_rec(Kind::Copies { incoming_ms: 5_002, seen: vec![] });
+        let c7 = root_cp(&mut g, vec![r1.id(), r2.id(), r3.id()]);
+        let mut keep8 = vec![r1.id(), r2.id(), r3.id(), r4.id(), r6.id()];
+        if keeps_removal {
+            keep8.push(r5.id());
+        }
+        let c8 = root_cp(&mut g, keep8);
+        let upto7: Vec<Record> = g.recs.iter().take_while(|r| r.id() != c8.id()).cloned().collect();
+        let no4: Vec<Record> = upto7.iter().filter(|r| r.id() != r4.id()).cloned().collect();
+        let (mut a, mut c, mut m) = if given_only_to_m {
+            (set_with(&g.root.key, &no4, &g.lists), set_with(&g.root.key, &no4, &g.lists), {
+                set_with(&g.root.key, &no4, &g.lists)
+            })
+        } else {
+            let s = || set_with(&g.root.key, &upto7, &g.lists);
+            (s(), s(), s())
+        };
+        let mut kk = set_with(&g.root.key, &upto7[..upto7.len() - 1], &g.lists);
+        for s in [&mut a, &mut c, &mut m] {
+            sync_all(s, &[], &g.lists);
+            assert_eq!(s.state().checkpoint, Some(c7.id()), "case {case}");
+        }
+        sync_all(&mut a, core::slice::from_ref(&c8), &g.lists);
+        if given_only_to_m {
+            sync_all(&mut m, &[c8.clone(), r4.clone()], &g.lists);
+        }
+        for _ in 0..2 {
+            sync_pair(&mut a, &mut c, &g.lists);
+            sync_pair(&mut c, &mut m, &g.lists);
+            sync_pair(&mut m, &mut kk, &g.lists);
+            sync_pair(&mut kk, &mut a, &g.lists);
+            sync_pair(&mut a, &mut m, &g.lists);
+            sync_pair(&mut c, &mut kk, &g.lists);
+        }
+        let once = set_with(&g.root.key, &g.recs, &g.lists);
+        for (name, s) in [("a", &a), ("c", &c), ("m", &m), ("k", &kk)] {
+            let st = s.state();
+            assert_eq!(st.checkpoint, Some(c8.id()), "case {case} member {name}");
+            assert_eq!(st.device_by_key(&k("x").hash).is_some(), !keeps_removal, "case {case} member {name}");
+            assert_eq!(s.digest(), once.digest(), "case {case} member {name}");
+            assert_eq!(st, once.state(), "case {case} member {name}");
+        }
+    }
+}
+
+/// The writer never names a head below the one its counting checkpoint
+/// names for that key, also when it does not hold that head's record:
+/// what was settled stays settled.
+#[test]
+fn a_new_checkpoint_names_no_lower_head() {
+    let mut g = G::new();
+    let (pa, a) = (k("phone a"), k("admin a"));
+    let grant = g.admin(&pa, &a, POWER_ADMIT);
+    let a1 = g.rec(&a, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
+    let a2 = g.rec(&a, Kind::Copies { incoming_ms: MIN_INCOMING_MS + 1, seen: vec![] });
+    let a3 = g.rec(&a, Kind::Copies { incoming_ms: MIN_INCOMING_MS + 2, seen: vec![] });
+    let root = k("root");
+    let (seq, id) = g.heads[&root.hash];
+    let mut keep = vec![grant.id(), a1.id()];
+    keep.sort();
+    let mut heads = vec![Head { key: root.hash, seq, id }, Head { key: a.hash, seq: a3.body().seq, id: a3.id() }];
+    heads.sort_by_key(|h| h.key);
+    let c7 = g.root_rec(Kind::Checkpoint { heads, keep });
+    // The writer holds the checkpoint and what it keeps, not the head's
+    // record, nor what is between.
+    let held: Vec<Record> = g.recs.iter().filter(|r| ![a2.id(), a3.id()].contains(&r.id())).cloned().collect();
+    let set = set_with(&g.root.key, &held, &g.lists);
+    let st = set.state();
+    assert_eq!(st.checkpoint, Some(c7.id()));
+    let cp = set.write_checkpoint(&st, &root, 0).unwrap();
+    let Kind::Checkpoint { heads, .. } = &cp.body().kind else { unreachable!() };
+    let h = heads.iter().find(|h| h.key == a.hash).expect("a head for the admin");
+    assert!(h.seq >= a3.body().seq);
+}
+
+/// A checkpoint the core's writer never writes, which names a lower head
+/// for a key than the counting one: a member follows it as any member
+/// handed the same records does, and a record between the two heads that
+/// a peer still holds is taken and counts when its chain reaches the
+/// lower head.
+#[test]
+fn a_checkpoint_with_a_lower_head_is_followed_as_written() {
+    let mut g = G::new();
+    let (pa, a) = (k("phone a"), k("admin a"));
+    let grant = g.admin(&pa, &a, POWER_ADMIT);
+    let a1 = g.rec(&a, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
+    let a2 = g.rec(&a, Kind::Copies { incoming_ms: MIN_INCOMING_MS + 1, seen: vec![] });
+    let a3 = g.rec(&a, Kind::Copies { incoming_ms: MIN_INCOMING_MS + 2, seen: vec![] });
+    let root = k("root");
+    let with_heads = |g: &mut G, admin: Head, keep: Vec<RecordId>| {
+        let (seq, id) = g.heads[&root.hash];
+        let mut heads = vec![Head { key: root.hash, seq, id }, admin];
+        heads.sort_by_key(|h| h.key);
+        let mut keep = keep;
+        keep.sort();
+        g.root_rec(Kind::Checkpoint { heads, keep })
+    };
+    let c7 = with_heads(&mut g, Head { key: a.hash, seq: a3.body().seq, id: a3.id() }, vec![grant.id()]);
+    let c8 = with_heads(&mut g, Head { key: a.hash, seq: a1.body().seq, id: a1.id() }, vec![grant.id(), c7.id()]);
+    let upto7: Vec<Record> = g.recs.iter().filter(|r| r.id() != c8.id()).cloned().collect();
+    let mut m = set_with(&g.root.key, &upto7, &g.lists);
+    sync_all(&mut m, &[], &g.lists);
+    assert_eq!(m.state().checkpoint, Some(c7.id()));
+    assert!(!m.contains(&a2.id()), "settled under the counting checkpoint");
+    sync_all(&mut m, core::slice::from_ref(&c8), &g.lists);
+    assert_eq!(m.state().checkpoint, Some(c8.id()));
+    sync_all(&mut m, core::slice::from_ref(&a2), &g.lists);
+    let st = m.state();
+    assert!(m.contains(&a2.id()) && st.counting.contains(&a2.id()));
+    let held: Vec<Record> = m.ids().map(|id| m.get(id).unwrap().clone()).collect();
+    assert_eq!(st, state_with(&g.root.key, &held, &g.lists));
 }

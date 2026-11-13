@@ -3,7 +3,8 @@
 
 //! The tables of the messages wave 4 adds (format sections 9.2 and 9.4):
 //! a device's keys statements, a command, a guarded leaf's one-time number,
-//! the freshness beacon, and the request to seal a copy again. What each
+//! the freshness beacon, the request to seal a copy again, and the roots a
+//! leaf needs. What each
 //! carries (a statement, a command, a beacon) is read by its own reader;
 //! the copy (t 2) is read by the copy's (`crate::format::copy`).
 
@@ -18,6 +19,7 @@ pub const T_COMMAND: u64 = 9;
 pub const T_NONCE: u64 = 21;
 pub const T_BEACON: u64 = 22;
 pub const T_RESEAL: u64 = 23;
+pub const T_ROOTS: u64 = 24;
 
 /// Message `keys`: up to 256 statements, the sender's own and those it
 /// passes on.
@@ -40,9 +42,19 @@ pub static RESEAL: Table = Table {
         f(3, "reseal/epoch", Ty::Uint { min: 1, max: (1 << 63) - 1 }, true),
     ],
 };
+/// Message `roots`, to a leaf: 2 the recovery heads it needs, at most
+/// MAX_RECOVERY; 3 two records of its root at one seq, the root's fork,
+/// which stops the leaf obeying that root (`grant::fork`). Exactly two.
+pub static ROOTS: Table = Table {
+    shape: "roots/shape",
+    fields: &[
+        f(2, "roots/heads", Ty::Array { of: &Ty::Envelope, max: crate::format::grant::MAX_RECOVERY as usize }, false),
+        f(3, "roots/fork", Ty::Array { of: &Ty::Envelope, max: 2 }, false),
+    ],
+};
 
 /// Every table of this file, for the vectors.
-pub static ALL: [&Table; 5] = [&KEYS, &COMMAND, &NONCE, &BEACON, &RESEAL];
+pub static ALL: [&Table; 6] = [&KEYS, &COMMAND, &NONCE, &BEACON, &RESEAL, &ROOTS];
 
 /// The table of message type t, if wave 4 numbers it.
 pub fn of(t: u64) -> Option<&'static Table> {
@@ -52,6 +64,7 @@ pub fn of(t: u64) -> Option<&'static Table> {
         T_NONCE => &NONCE,
         T_BEACON => &BEACON,
         T_RESEAL => &RESEAL,
+        T_ROOTS => &ROOTS,
         _ => return None,
     })
 }
