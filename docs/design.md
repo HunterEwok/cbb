@@ -274,7 +274,7 @@ Windows, quick actions, TVs and the Bluetooth keyboard.
   starts or stops serving or admits a client; it takes the clients and the offer another hub
   shares, and a device that stopped being a hub tells the computers and the possible hubs
   so. The run loop serves only while no hub above answers: starting, it tries them once;
-  having lost the hub above, for a minute (`CBB_STANDBY_GRACE` in tests); while it serves,
+  having lost the hub above, for a minute (`CBB_TEST_STANDBY_GRACE` in tests); while it serves,
   every 15 minutes, and when a hub above shares that it serves, after passing that hub's
   offer on to its clients and waiting for those in its tunnel to leave (`TestAloneHubs`). Hub
   commands (`away/movehub.rs`, Go's `movehub.go` and `stophub.go`) go through the core's
@@ -2296,10 +2296,10 @@ docs/protocol.md, section 16.
 - Each release gets `release.json`: the version, the date, the channel, the lowest version
   that may update to it directly, and the SHA-256 and size of every file, with the hashes of
   the binaries inside each archive and the Docker image's digest. A small `stable.json`
-  names the current release of the channel with a sequence number and an expiry of 30 days,
+  names the current release of the channel with a sequence number and an expiry of 14 days,
   so a mirror cannot freeze a device on an old release. GitHub releases are immutable, so it
   lives with the current `keys.json` in the repository's branch `channel`. A **channel key**
-  on cbb.tools, which `keys.json` certifies for channel files only, signs it again every
+  on cbb.tools, which `keys.json` certifies for channel files only, signs it again twice a
   week with the same release, and a scheduled workflow checks it and commits it to the
   branch: GitHub holds no key and cbb.tools no GitHub token. A stolen channel key can only
   hold the channel on a release the project signed; the next `keys.json` drops it.

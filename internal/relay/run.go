@@ -19,6 +19,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/HunterEwok/cbb/internal/testhook"
 )
 
 // Config says how Start runs cbb-relay.
@@ -58,7 +60,7 @@ const StatsInterval = 20 * time.Millisecond
 // one beside the cbb of CBB_TEST_ALONE or CBB_TEST_RUST_SERVICE, or "" when
 // there is none.
 func Binary() string {
-	if bin := os.Getenv("CBB_TEST_RUST_RELAY"); bin != "" {
+	if bin := testhook.Getenv("CBB_TEST_RUST_RELAY"); bin != "" {
 		return bin
 	}
 	name := "cbb-relay"
@@ -66,7 +68,7 @@ func Binary() string {
 		name += ".exe"
 	}
 	for _, env := range []string{"CBB_TEST_ALONE", "CBB_TEST_RUST_SERVICE"} {
-		if cbb := os.Getenv(env); cbb != "" {
+		if cbb := testhook.Getenv(env); cbb != "" {
 			bin := filepath.Join(filepath.Dir(cbb), name)
 			if _, err := os.Stat(bin); err == nil {
 				return bin

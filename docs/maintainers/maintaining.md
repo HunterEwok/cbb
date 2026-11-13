@@ -201,6 +201,18 @@ Rules for workflows:
   A tag `vX.Y.Z-rc.N` makes a pre-release, which `releases/latest` and so `get.sh` skip;
   it needs no pull request first: its notes take CHANGELOG's *Unreleased*, and the Android apps
   take the tag's version.
+- **Test builds** never ship. The bench's time-scaled build (feature `benchtime`, Go's tag
+  `benchtime`), the build that Go's service tests steer through their hooks (feature and Go
+  tag `testhooks`) and the fuzzing build (`fuzzing`) are kept out three ways
+  (`member/src/testbuild.rs`): with `CBB_RELEASE_BUILD=1`, which the release workflow sets,
+  such a build of `cbb` does not compile; its `cbb version` names its features; and its
+  binary carries a marker the release workflow looks for in every Rust program it publishes,
+  as it looks for the tags `benchtime` and `testhooks` in the Go programs' build information
+  (`go version -m`). The tests' hooks, the variables `CBB_TEST_*` (docs/reference/config.md)
+  and the update's `CBB_RELEASE_DIR` and `CBB_RELEASE_ROOTS`, are read only through
+  `testbuild::env` in Rust and `internal/testhook` in Go, which a release build ignores (a Go
+  test binary reads them too); `tools/repocheck` refuses a program that reads one around
+  them, and CI's `packaging` job checks that a release's `cbb update` ignores the two.
 - The archives are `cbb-<os>-<arch>.tar.gz` without the version, so that
   `releases/latest/download/` has fixed names for `get.sh`; each holds `cbb/` with the
   binary, `LICENSE`, `THIRD_PARTY_NOTICES` (the licenses of the Go modules, the copied code
@@ -264,11 +276,11 @@ the maintainer's Mac; the keys never reach CI. The roots were made on 2026-10-28
   `openssl ecparam -name prime256v1 -genkey -noout -out /etc/cbb-channel/channel-key.pem`
   and its public key `openssl ec -in channel-key.pem -pubout -out channel.pem`, copied to the
   Mac. The first `release-sign publish` certifies it with `-channel cbb.tools=channel.pem`;
-  later ones keep it. A weekly systemd timer on cbb.tools
+  later ones keep it. A systemd timer on cbb.tools, twice a week
   (`site/deploy/cbb-channel.service` and `.timer`, as the user `cbb-channel`, which gets the
   root-only key as a credential for the run) runs `release-sign extend -key
   file:channel-key.pem -out /srv/cbb.tools/channel`, which reads the
-  branch, checks it, signs `stable.json` again for 30 days with the same release and a
+  branch, checks it, signs `stable.json` again for 14 days with the same release and a
   higher number, and serves it with `keys.json` at `https://cbb.tools/channel/` (build it
   with `GOOS=linux GOARCH=amd64 go build ./tools/release-sign`). The daily `channel`
   workflow (`.github/workflows/channel.yml`) takes it into the branch with `release-sign
@@ -348,7 +360,7 @@ when:
 - the forwarder's port (TCP 8764) or the project's relay's (TCP 8765) refuses a
   connection; UDP cannot be checked from outside without a group's keys;
 - a signed file the devices fetch is close to its expiry: the channel's `keys.json` (21
-  days: `release-sign renew -new-keys`) and `stable.json` (10 days: the `cbb-channel` timer
+  days: `release-sign renew -new-keys`) and `stable.json` (5 days: the `cbb-channel` timer
   stopped), the same two at `dl.cbb.tools`, and `attest/attest-status.json` (5 days: the
   `attest-status` timer stopped);
 - the server moved more than 1 TB in the last 24 hours, half of what its plan allows before
@@ -507,7 +519,7 @@ mirror is not trusted. It runs on cbb.tools beside the site, on a name of its ow
 `release-sign mirror` keeps it, from an hourly systemd timer (`site/deploy/cbb-mirror.service`
 and `.timer`, as the user `cbb-mirror`, which holds no key). Each run takes the newest
 `keys.json` and `stable.json` that check out from the branch `channel`, from
-`/srv/cbb.tools/channel` (renewed there every week) and from the mirror itself, so it never
+`/srv/cbb.tools/channel` (renewed there twice a week) and from the mirror itself, so it never
 goes back. Then it downloads the release `stable.json` names, and the `min_from` of each
 release in turn, checks each file against its `release.json` as a device does and only then
 moves the release into place, and writes the top files last. Releases once mirrored stay,

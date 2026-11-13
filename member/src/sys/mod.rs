@@ -371,6 +371,29 @@ pub fn has_stderr() -> bool {
     !h.is_null() && h != INVALID_HANDLE_VALUE
 }
 
+/// Keeps the service's memory, where its keys and the copies' texts pass,
+/// out of core dumps; on Linux also from other processes of its user,
+/// which may no longer attach to it or read its memory. A failure leaves
+/// the service running as before, and says so.
+#[cfg(unix)]
+pub fn no_dumps() {
+    let none = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+    // SAFETY: a plain system call with a valid limit.
+    if unsafe { libc::setrlimit(libc::RLIMIT_CORE, &none) } != 0 {
+        eprintln!("cbb: cannot turn core dumps off: {}", std::io::Error::last_os_error());
+    }
+    #[cfg(target_os = "linux")]
+    // SAFETY: a plain system call with valid arguments.
+    if unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) } != 0 {
+        eprintln!("cbb: cannot keep the service's memory from other processes: {}", std::io::Error::last_os_error());
+    }
+}
+
+/// Windows writes no dump of a service unless its administrator asked
+/// Windows Error Reporting for one.
+#[cfg(not(unix))]
+pub fn no_dumps() {}
+
 /// Gives up root for the user name, with its groups, as Go's runAs (cbb
 /// service -user, which FreeBSD's rc script passes): root must not come
 /// back. HOME, USER and LOGNAME become the user's.
@@ -527,5 +550,18 @@ mod tests {
             .unwrap();
         assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stdout));
         assert!(String::from_utf8_lossy(&out.stdout).contains("1 passed"));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn no_dumps_turns_them_off() {
+        super::no_dumps();
+        let mut lim = libc::rlimit { rlim_cur: 1, rlim_max: 1 };
+        // SAFETY: plain system calls with valid arguments.
+        unsafe {
+            assert_eq!(libc::getrlimit(libc::RLIMIT_CORE, &mut lim), 0);
+            assert_eq!(libc::prctl(libc::PR_GET_DUMPABLE, 0, 0, 0, 0), 0);
+        }
+        assert_eq!((lim.rlim_cur, lim.rlim_max), (0, 0));
     }
 }

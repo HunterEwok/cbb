@@ -101,6 +101,7 @@ mod signed;
 pub mod sync;
 mod sys;
 pub mod takeover;
+pub mod testbuild;
 pub mod tls;
 #[cfg(feature = "tunnel")]
 pub mod tunnel;
@@ -346,10 +347,17 @@ pub fn main() {
                     request(&g, &control::Message::new(q, Vec::new())).map(|m| m.header)
                 }),
                 "version" | "-version" | "--version" => {
-                    // Never to be mistaken for a release: its certificates
-                    // last minutes.
+                    // A build for tests only is never to be mistaken for a
+                    // release: the time-scaled one's certificates last
+                    // minutes, and the test clock moves at a file's word.
                     let scaled = if cbb_core::benchtime::ENABLED { " (time-scaled bench build)" } else { "" };
-                    println!("cbb {} ({}/{}){scaled}", service::VERSION, std::env::consts::OS, std::env::consts::ARCH);
+                    println!(
+                        "cbb {} ({}/{}){scaled}{}",
+                        service::VERSION,
+                        std::env::consts::OS,
+                        std::env::consts::ARCH,
+                        testbuild::version_note()
+                    );
                     println!("{}", core_version());
                     Ok(())
                 }
@@ -885,6 +893,9 @@ fn cmd_service(g: &Global, args: &[String]) -> Result<()> {
         }
         sys::run_as(&u)?;
     }
+    // After the user: a change of user resets what a process lets others
+    // read of it.
+    sys::no_dumps();
     #[cfg(windows)]
     {
         // Under the service manager, which gives it no standard error, the
@@ -1739,9 +1750,9 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
         return Ok(());
     }
     let res = (|| -> Result<()> {
-        let (roots, sources) = match std::env::var_os("CBB_RELEASE_DIR") {
+        let (roots, sources) = match testbuild::env_os("CBB_RELEASE_DIR") {
             Some(d) => {
-                let roots = match std::env::var_os("CBB_RELEASE_ROOTS") {
+                let roots = match testbuild::env_os("CBB_RELEASE_ROOTS") {
                     Some(f) => update::read_roots(std::path::Path::new(&f))?,
                     None => update::ROOTS.iter().map(|r| r.to_vec()).collect(),
                 };

@@ -927,6 +927,9 @@ when the records set none. A write increments the write sequence number (section
   count durations, never by comparing the sender's clock with this one; so a member that
   wakes from sleep, starts, or reconnects after the window has passed keeps what it copied
   itself and never takes an old copy of the group.
+- A member that started with a saved clock mark (section 5) also never writes an event whose
+  `time` is not after that mark: it was made before the member last stopped, whatever its
+  age. The event still becomes current for ordering.
 - Once the window has passed the copy is gone for this member: its own clipboard stays as it
   is, and what it copies next, however old, goes to the group (a phone's button sends it,
   unless it is the group's text already or what the phone itself sent or took last).
@@ -1147,7 +1150,10 @@ the QR code dials the computer, and nothing is announced:
 
 - A device that does not know the code gets the joiner's refusal and nothing to test
   guesses with, so a failed attempt never spends the code: the joiner takes further
-  attempts, one at a time, and gives up after the third wrong code or the 5 minutes.
+  attempts, one at a time, and gives up after the third wrong code or the 5 minutes. It
+  counts a wrong code by the refusal itself (frame 3's or the member's `wrong-code`), never by
+  the words of an error, and refuses for the rest of the window the connections of an address
+  whose attempts failed three times for any reason.
 - On the member the window counts attempts as above. It is not announced (`p` stays unset)
   and takes no pairing connections on the member port, so the code is good only against the
   device whose certificate `fp` names.

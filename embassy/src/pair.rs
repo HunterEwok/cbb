@@ -72,6 +72,7 @@ impl Pairing {
     ) -> Result<Identity> {
         let end = Instant::now() + WAIT;
         let mut failures = 0;
+        let mut tries = pair::Attempts::default();
         let mut rx = vec![0u8; 4096];
         let mut tx = vec![0u8; 4096];
         loop {
@@ -86,8 +87,12 @@ impl Pairing {
                 Ok(Err(e)) => return Err(Error::with("cannot listen for the phone", Debug(format!("{e:?}")))),
                 Ok(Ok(())) => {}
             }
-            let from = sock.remote_endpoint().map(|e| e.addr);
-            if !from.is_some_and(home_address) {
+            let Some(from) = sock.remote_endpoint().map(|e| e.addr).filter(|a| home_address(*a)) else {
+                sock.abort();
+                continue;
+            };
+            // One address that keeps failing does not hold the window.
+            if !tries.allowed(from) {
                 sock.abort();
                 continue;
             }
@@ -98,7 +103,8 @@ impl Pairing {
                 Ok(id) => return Ok(id),
                 Err(e) => {
                     log(&format!("a pairing attempt failed: {}", e.for_user()));
-                    if e.details().contains(Refusal::WrongCode.message()) {
+                    tries.failed(from);
+                    if pair::is_wrong_code(&e) {
                         failures += 1;
                         if failures >= MAX_FAILURES {
                             return Err(Error::with("the pairing failed", Refusal::TooMany));

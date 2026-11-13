@@ -243,6 +243,9 @@ func TestPublish(t *testing.T) {
 		r.MinFrom != "0.5.0" || r.Docker == nil || len(r.Files) != 4 {
 		t.Fatalf("keys %+v, channel %+v, release %+v", ks, c, r)
 	}
+	if life := time.Duration(c.ExpiresMS-c.TimeMS) * time.Millisecond; life != 14*24*time.Hour {
+		t.Errorf("the published channel file lives %v", life)
+	}
 	g.verifyPublished("v0.6.0")
 
 	// cbb.tools renews the channel; the workflow takes it into the branch.
@@ -251,6 +254,10 @@ func TestPublish(t *testing.T) {
 	call(t, extend, "-key", "file:"+k.channel, "-out", served, "-from", g.channel(), "-releases", g.dir)
 	if out := string(call(t, take, "-new", filepath.Join(served, "stable.json"), "-releases", g.dir, g.channel())); !strings.Contains(out, "took stable.json 2") {
 		t.Errorf("take printed %q", out)
+	}
+	g.file(g.channel(), "stable.json", &c)
+	if life := time.Duration(c.ExpiresMS-c.TimeMS) * time.Millisecond; life != 14*24*time.Hour {
+		t.Errorf("the renewed channel file lives %v", life)
 	}
 	if out := string(call(t, take, "-new", filepath.Join(served, "stable.json"), "-releases", g.dir, g.channel())); !strings.Contains(out, "is the newest") {
 		t.Errorf("take again printed %q", out)

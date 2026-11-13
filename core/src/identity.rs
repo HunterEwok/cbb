@@ -47,6 +47,13 @@ pub struct Identity {
     pub roots: Vec<Cert>,
 }
 
+impl Drop for Identity {
+    /// The device key does not outlive the identity in memory.
+    fn drop(&mut self) {
+        zeroize::Zeroize::zeroize(&mut self.key);
+    }
+}
+
 /// Makes a new P-256 key, PKCS #8.
 pub fn new_key() -> Result<Vec<u8>> {
     let key = loop {

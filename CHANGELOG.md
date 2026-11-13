@@ -7,6 +7,12 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The CI measures what each part of the core costs in a small device's flash (`tools/size`,
+  for the ESP32-C6's RISC-V): X.509 and P-256, JSON, the group's records, sealing, a copy,
+  pairing, the member TLS and the core's whole entry point, each against today's baseline,
+  failing when the whole grows more than 10% (docs/testing.md, "Firmware size").
+- Sealing is checked against the vector of draft-ietf-hpke-pq-05 for X-Wing with
+  HKDF-SHA256 and ChaCha20-Poly1305, in Go and the Rust core.
 - The app for HarmonyOS 5 and later (`apps/harmony`), in development: ArkTS around the same
   Rust core as the Aurora app, through a Node-API module (`libcbb_napi.so`), with the keys in
   HUKS and the admin key behind the user's face, fingerprint or PIN. It has the other phones'
@@ -1672,6 +1678,23 @@ All notable changes to cbb are documented in this file. The format follows
   member", and pages that set the two programs apart (the device table, the design's routers,
   the protocol's notes on what one of them lacked) say what holds now. `tools/repocheck`
   refuses the old words outside the changelog and the decisions.
+- A member does not write to its clipboard a copy made before it last started, whatever its
+  age: the rule of incoming copies takes the clock mark saved before the start.
+- The core wipes device keys, a secret's text and a copy's key from memory once it is done
+  with them, and the service writes no core dump; on Linux other processes of its user cannot
+  read its memory.
+- Pairing codes are drawn with every code equally likely, and a device that listens for a
+  join stops taking an address's connections after three failed attempts from it.
+- Channel files (`stable.json`) are signed for 14 days instead of 30, and cbb.tools renews
+  them twice a week; the reminders and the monitor warn 5 days before the end.
+- Builds for tests only never ship: the tests' hooks (`CBB_TEST_*`, the test clock among them)
+  are read only by a `cbb` built with the feature `testhooks` and a `cbb-helper` built with
+  the tag `testhooks`; `CBB_STANDBY_GRACE`, `CBB_UP_CHECK` and `CBB_HUB_KEY_AHEAD` are now
+  `CBB_TEST_STANDBY_GRACE`, `CBB_TEST_UP_CHECK` and `CBB_TEST_HUB_KEY_AHEAD`, hooks too; a
+  release's `cbb` checks updates only against its pinned roots, whatever `CBB_RELEASE_DIR`
+  and `CBB_RELEASE_ROOTS` say. A test build does not compile in the release workflow, names
+  itself in `cbb version` and is refused by the release workflow, as is a Go program built
+  with the tag `benchtime` or `testhooks` (docs/maintainers/maintaining.md, "Releases").
 - The Mac app's Settings are a sheet on its window, as the tray app's dialog, instead of a
   window of their own; "Settings…" in the menu bar item and Command-comma open the window
   with them.
@@ -2317,6 +2340,9 @@ All notable changes to cbb are documented in this file. The format follows
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- An admin phone pastes pictures and files on a device again: the iPhone and Android kits
+  sign the paste command of kind `media` that names the group's copy, which they refused to
+  build before.
 - A hub that started serving in place of one above it ended its first clients' connections
   a moment later, when it made its key for the next period, and those clients then tried the
   hub above, which may be off, before it again. The hub makes those keys before it listens,

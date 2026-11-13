@@ -34,7 +34,7 @@ func entries(args []string) error {
 	fs := flag.NewFlagSet("entries", flag.ExitOnError)
 	key := fs.String("key", "", "the signer: the release key or a channel key (file:, piv: or se:)")
 	in := fs.String("in", "", "the entry points to sign, a JSON object with forwarders and relays")
-	days := fs.Int("days", int(channelLife.Hours()/24), "how many days the list is valid, at most 100")
+	days := fs.Int("days", int(entriesLife.Hours()/24), "how many days the list is valid, at most 100")
 	fs.Parse(args)
 	if *key == "" || *in == "" || fs.NArg() != 1 {
 		return errors.New("entries needs -key, -in and the branch's directory")
@@ -116,7 +116,7 @@ func renewEntries(from, out string, keys release.File, k crypto.Signer) error {
 	}
 	e.Seq++
 	e.TimeMS = now().UnixMilli()
-	e.ExpiresMS = e.TimeMS + channelLife.Milliseconds()
+	e.ExpiresMS = e.TimeMS + entriesLife.Milliseconds()
 	n, err := signWith(k, e)
 	if err != nil {
 		return err

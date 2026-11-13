@@ -326,9 +326,9 @@ jobs:
           cargo +nightly test --locked -Zbuild-std --target x86_64-unknown-linux-gnu -p cbb-ffi --features member,tunnel
       - name: Go's tests of the service against the cbb built with it
         run: |
-          cargo +nightly build --locked -Zbuild-std --target x86_64-unknown-linux-gnu --release -p cbb-member
+          cargo +nightly build --locked -Zbuild-std --target x86_64-unknown-linux-gnu --release -p cbb-member --features testhooks
           bin="$PWD/target/x86_64-unknown-linux-gnu/release"
-          CGO_ENABLED=0 go build -trimpath -o "$bin/cbb-helper" ./cmd/cbb-helper
+          CGO_ENABLED=0 go build -tags testhooks -trimpath -o "$bin/cbb-helper" ./cmd/cbb-helper
           CBB_TEST_RUST_SERVICE="$bin/cbb" CBB_TEST_ALONE="$bin/cbb" go test -timeout 60m ./internal/service
 
   # The Rust core's branches, which only a nightly compiler counts
@@ -384,8 +384,9 @@ jobs:
       - name: the Rust cbb and its helper
         run: |
           rustup toolchain install stable --profile minimal && rustup default stable
-          cargo build --locked --release -p cbb-member
-          CGO_ENABLED=0 go build -trimpath -o target/release/cbb-helper ./cmd/cbb-helper
+          # testhooks: the tests steer it through their hooks (never a release's build).
+          cargo build --locked --release -p cbb-member --features testhooks
+          CGO_ENABLED=0 go build -tags testhooks -trimpath -o target/release/cbb-helper ./cmd/cbb-helper
       - name: each test ten times
         env:
           MEMBER: ${{ matrix.member }}
