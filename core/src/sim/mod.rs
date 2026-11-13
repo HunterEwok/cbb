@@ -1992,6 +1992,28 @@ impl World {
                 // with the pruned removals, a notice question for wave 5.
                 LEFT_OUT.fetch_add(1, Ordering::Relaxed);
             } else if unknown {
+                // Admitted by an admin key the group's view has frozen:
+                // its records stop counting, and the device with them.
+                let by_frozen = self
+                    .admission
+                    .get(&i)
+                    .and_then(|r| self.members[at].live.set.get(r))
+                    .map(|r| r.body().signer)
+                    .is_some_and(|signer| state.devices.iter().any(|d| d.frozen && d.admin.as_ref() == Some(&signer)));
+                if by_frozen {
+                    return Err(format!("m{i}, admitted by an admin the group froze, never learned it is out"));
+                }
+                // Admitted by an admin whose phone the group removed.
+                let signer =
+                    self.admission.get(&i).and_then(|r| self.members[at].live.set.get(r)).map(|r| r.body().signer);
+                let by_removed = signer.is_some_and(|signer| {
+                    self.members
+                        .iter()
+                        .any(|x| state.revoked.contains(&x.key.hash) && x.live.keys.iter().any(|n| k(n).hash == signer))
+                });
+                if by_removed {
+                    return Err(format!("m{i}, admitted by an admin the group removed, never learned it is out"));
+                }
                 return Err(format!("m{i}, unknown to the group, never learned it is out"));
             }
         }
