@@ -468,6 +468,16 @@ module records_v3 {
       }
     }
   }
+  // A root's checkpoint can count only when it and the records it names fit the rooms among
+  // themselves: each key within its ceiling and all within ROOM, judged on that set alone (the
+  // admin keys it knows are those its own records name), so that whether it counts never
+  // depends on what else a set holds or the order it came in.
+  pure def fitsAlone(c: Record, items: Set[Record], path: List[Key], cuts: Key -> List[Id]): bool = {
+    val named = items.filter(r => r == c or namedBy(c, r, items))
+    val ceil = ceilings(path, learned(named, path, cuts))
+    sumUnits(named) <= ROOM and named.map(r => r.signer).forall(k =>
+      ceil.keys().contains(k) and sumUnits(ofKey(named, k)) <= ceil.get(k))
+  }
   // The record checkpoint c waits for: its key's record just below it, among items.
   pure def waitedBy(c: Record, items: Set[Record]): Record =
     if (c.line.length() < 2) NONEREC
@@ -749,7 +759,7 @@ module records_v3 {
       val whole = cp.keep.forall(i => ids.contains(i)) and kept.forall(r =>
         (not(cp.heads.keys().contains(r.signer)) or r.seq <= cp.heads.get(r.signer).length())
           and kept.forall(o => o == r or o.signer != r.signer or o.seq != r.seq))
-      if (cp != NONEREC and whole and v.counting.contains(c)) (pruned, anchors, { ...v, checkpoint: c }) else acc
+      if (cp != NONEREC and whole and fitsAlone(cp, acc._1, path, cuts) and v.counting.contains(c)) (pruned, anchors, { ...v, checkpoint: c }) else acc
     }
 
   // The state: the path from the recovery chain; the current root's newest checkpoint
@@ -928,12 +938,18 @@ module records_v3 {
     val cur = last(before)
     val held = recsOf(s.recs, db).filter(r => onList(before, r.signer) or r.signer == target)
     val oldCp = if (v.checkpoint != 0 and db.get(v.checkpoint).signer == cur) db.get(v.checkpoint) else NONEREC
-    val cp = oldCp.heads.keys().filter(k => oldCp.heads.get(k).length() > 0)
-      .map(k => lastId(oldCp.heads.get(k))).filter(i => onList(before, db.get(i).signer) and db.get(i).kind != "checkpoint")
     // Every root removal held, on any line, is listed; a checkpoint is never listed; nothing a
     // held checkpoint of the root left out is listed (a root fork's lines included).
     val rootCps = held.filter(x => x.signer == cur and x.kind == "checkpoint")
     val leftOut = held.filter(x => rootCps.exists(c => prunedBy(c, x)))
+    // The first checkpoint's heads: for each key the highest any held checkpoint of the root
+    // named (the counting one's when it holds no other).
+    val headKeys = rootCps.fold(oldCp.heads.keys(), (a, c) => a.union(c.heads.keys()))
+    val heads = headKeys.mapBy(k => rootCps.union(if (oldCp == NONEREC) Set() else Set(oldCp))
+      .filter(c => c.heads.keys().contains(k))
+      .fold([], (l, c) => if (c.heads.get(k).length() > l.length()) c.heads.get(k) else l))
+    val cp = heads.keys().filter(k => heads.get(k).length() > 0)
+      .map(k => lastId(heads.get(k))).filter(i => onList(before, db.get(i).signer) and db.get(i).kind != "checkpoint")
     val honest = idsOf(held.filter(r => (v.counting.contains(r.id) and r.kind != "checkpoint" and not(leftOut.contains(r)))
       or rootRemoval(r))).union(cp)
     val keep = if (mode == "honest" or mode == "nocp" or mode == "from1") honest
@@ -953,8 +969,8 @@ module records_v3 {
     val r0 = { ...r, first: 0 }
     val db20 = db.put(nextId, r0)
     val v1 = finish(insertInto(s, r0, db20), db20)._2
-    val c = rec(nextId + 1, target, own.append(nextId + 1), "checkpoint", "", "", 0, oldCp.heads, oldCp.heads,
-      v1.counting.filter(i => db2.get(i).kind != "checkpoint"), 2)
+    val c = rec(nextId + 1, target, own.append(nextId + 1), "checkpoint", "", "", 0, heads, heads,
+      v1.counting.filter(i => db2.get(i).kind != "checkpoint" and not(idsOf(leftOut).contains(i))), 2)
     val db3 = if (withCp) db2.put(nextId + 1, c) else db2
     all {
       RKEYS.contains(k),
@@ -1412,6 +1428,17 @@ module records_v3 {
   // admission (the writer holds it below its head; a removal that is the root's head stays as
   // its anchor): a replay of either is refused, and the device counts again only by a new
   // admission.
+  // A root's checkpoint whose named records do not fit the rooms on their own (A's three
+  // records, 6 units, over an admin's ceiling of 5) counts for nobody, whatever the order.
+  run namedOverCeilingTest =
+    init
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 2))
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 2))
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 2))
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 2, false, Set(1, 2, 3, 4, 5, 6)))
+      .then(syncAll)
+      .expect(MEMBERS.forall(m => views.get(m).checkpoint != 7) and promises)
+
   run prunedRemovalTest =
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
