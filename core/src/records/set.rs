@@ -112,7 +112,10 @@ pub struct RecordSet {
     /// The first checkpoints kept outside the rooms (`eval::Chain::firsts`):
     /// the newest applied recovery record's and that of the one the chain
     /// waits for; never cut off or pruned while they are.
-    firsts: BTreeSet<RecordId>,
+    firsts: eval::Firsts,
+    /// The units each key's records kept first took when the rooms were
+    /// last judged (`cut`).
+    pre: BTreeMap<KeyHash, u64>,
     /// The records set aside that the chain now applies, verified when
     /// they came: taken without verifying again.
     trusted: BTreeSet<RecordId>,
@@ -172,6 +175,11 @@ pub const EARLIER_REMOVALS: usize = 256;
 /// recovery record it has not applied.
 pub const CHANGE_WAITING: &str = "a change of root is waiting here: sync with the group, then try again";
 
+/// Why the writer does not write a change of root after two recovery
+/// records at one seq: the group has no way on (rule 33) and is made again.
+pub const CHANGE_STOPPED: &str =
+    "this group has stopped for good: two changes of root were signed at one number; make the group again";
+
 /// Whether k is a root on the state's path.
 fn path_has(state: &State, k: &KeyHash) -> bool {
     state.roots.contains(k)
@@ -216,7 +224,8 @@ impl RecordSet {
             waiting: None,
             early_roots: BTreeMap::new(),
             halted: None,
-            firsts: BTreeSet::new(),
+            firsts: BTreeMap::new(),
+            pre: BTreeMap::new(),
             trusted: BTreeSet::new(),
             early: BTreeMap::new(),
             notices: BTreeMap::new(),
@@ -337,7 +346,7 @@ impl RecordSet {
     }
 
     /// The first checkpoints kept outside the rooms (`eval::Chain::firsts`).
-    pub(crate) fn firsts(&self) -> &BTreeSet<RecordId> {
+    pub(crate) fn firsts(&self) -> &eval::Firsts {
         &self.firsts
     }
 
@@ -525,7 +534,11 @@ impl RecordSet {
         };
         let pruned =
             |set: &RecordSet| set.checkpoints.iter().any(|(heads, anchors)| eval::pruned_by(&r, role, heads, anchors));
-        if role == Role::Root && !twin_of(self) && pruned(self) {
+        // What the newest list names, and a head's first checkpoint, are
+        // kept whatever a checkpoint says.
+        let listed = self.cuts.get(&signer).is_some_and(|cut| cut.covers(&signer, r.body().seq) && cut.keeps(&id));
+        let first = eval::is_first(&self.firsts, &r);
+        if role == Role::Root && !listed && !first && !twin_of(self) && pruned(self) {
             // A root's record a counting checkpoint settled: alone it is
             // refused, but two at one seq are a fork at any depth, so the
             // set keeps it a while to make the pair with the other.
@@ -549,10 +562,7 @@ impl RecordSet {
             }
         }
         let twin = twin_of(self);
-        let listed = self.cuts.get(&signer).is_some_and(|cut| cut.covers(&signer, r.body().seq) && cut.keeps(&id));
         let twin_checkpoint = twin && matches!(r.body().kind, Kind::Checkpoint { .. });
-        // A head's first checkpoint is kept whatever cut or checkpoint.
-        let first = self.firsts.contains(&id);
         if !listed && !twin_checkpoint && !(twin && role == Role::Root) && !first && pruned(self) {
             // A counting checkpoint left it out.
             return Ok(Added::Settled { head: self.settled_head(&signer) });
@@ -581,6 +591,12 @@ impl RecordSet {
             r.verify_marked(&key, mark).map_err(Refused::Broken)?
         };
         self.store(r, role, held);
+        if twin && role == Role::Root {
+            // The pair leaves the rooms: what they turned away before is
+            // judged again from no cut, and taken when offered again.
+            self.cut = keep::Cut::default();
+            self.cut();
+        }
         // A checkpoint that may count now, or a record it names, compacts
         // before the rooms are judged: what it prunes takes no room, so
         // what stays does not depend on the order the two came in. A
@@ -837,7 +853,7 @@ impl RecordSet {
         // chain below the fork needs it to apply.
         self.halted = chain.halted().then(|| {
             let mut keep = chain.cut.as_ref().map(|c| c.keep.clone()).unwrap_or_default();
-            keep.extend(chain.firsts.iter().copied());
+            keep.extend(chain.firsts.keys().copied());
             keep
         });
         if let Some(keep) = self.halted.clone() {
@@ -856,8 +872,10 @@ impl RecordSet {
         // record off the chain (one side of a fork, past a gap, after a
         // void one) has nothing kept aside.
         self.early_roots = if self.halted.is_some() { BTreeMap::new() } else { chain.waiting_roots(&self.root.hash()) };
+        // Halted, no checkpoint counts: the cut is the list as it stands.
         if let (Some(old), Some(new)) = (self.cuts.values().next(), cuts.values().next())
             && old.record == new.record
+            && self.halted.is_none()
         {
             cuts = self.cuts.clone();
         }
@@ -936,22 +954,37 @@ impl RecordSet {
     fn cut(&mut self) {
         self.drop_off_cuts();
         let mut proof = self.proof();
-        // Each root's newest checkpoint is kept first, outside the rooms:
-        // the rooms are judged in the set it prunes (`eval::checkpoints_of`).
-        proof.extend(self.kept_first());
+        // Each root's newest checkpoint is kept first: the rooms are
+        // judged in the set it prunes (`eval::checkpoints_of`), and it
+        // takes its part of them before the others (`keep::keep_with`).
+        let first = self.kept_first();
+        let mut pre: BTreeMap<KeyHash, u64> = BTreeMap::new();
+        for id in first.iter().filter(|id| !proof.contains(*id)) {
+            if let Some(e) = self.records.get(id) {
+                let u = pre.entry(e.record.body().signer).or_default();
+                *u = u.saturating_add(eval::item(&e.record, self.role_of(e)).units);
+            }
+        }
+        // What is kept first changed: the rooms are judged again from no
+        // cut, and what they turned away is taken when offered again.
+        if pre != self.pre {
+            self.cut = keep::Cut::default();
+            self.pre = pre.clone();
+        }
+        proof.extend(first);
         let items: Vec<keep::Item> = self
             .records
             .values()
             .filter(|e| {
                 self.role_of(e) != Role::Recovery
                     && !proof.contains(&e.record.id())
-                    && !self.firsts.contains(&e.record.id())
+                    && !eval::is_first(&self.firsts, &e.record)
             })
             .map(|e| eval::item(&e.record, self.role_of(e)))
             .collect();
         let ceilings: BTreeMap<KeyHash, Option<u64>> =
             items.iter().map(|it| (it.signer, self.ceiling(&it.signer))).collect();
-        let (kept, cut) = keep::keep_after(&items, |k| ceilings.get(k).copied().flatten(), &self.cut);
+        let (kept, cut) = keep::keep_with(&items, |k| ceilings.get(k).copied().flatten(), &self.cut, &pre);
         self.cut = cut;
         let drop: Vec<RecordId> = self
             .records
@@ -960,7 +993,7 @@ impl RecordSet {
                 self.role_of(e) != Role::Recovery
                     && !kept.contains(&e.record.id())
                     && !proof.contains(&e.record.id())
-                    && !self.firsts.contains(&e.record.id())
+                    && !eval::is_first(&self.firsts, &e.record)
             })
             .map(|e| e.record.id())
             .collect();
@@ -1021,7 +1054,7 @@ impl RecordSet {
     /// list does not name; a removal among them stays as a notice.
     fn drop_off_cuts(&mut self) {
         let mut off = eval::off_cuts(&self.cuts, self.records.values().map(|e| &e.record));
-        off.retain(|id| !self.firsts.contains(id));
+        off.retain(|id| !self.held(id).is_some_and(|r| eval::is_first(&self.firsts, r)));
         for id in &off {
             if let Some(r) = self.held(id).filter(|r| self.is_notice(r)).cloned() {
                 self.notice(r);
@@ -1101,7 +1134,7 @@ impl RecordSet {
         let units = |k: &KeyHash| self.units.get(k).copied().unwrap_or(0);
         if self.cut.is_empty() {
             let total: u64 = self.units.values().sum();
-            return self.ceiling(signer).is_none_or(|c| units(signer) > c) || total > keep::ROOM;
+            return self.ceiling(signer).is_none_or(|c| units(signer) > c) || total > keep::room();
         }
         let Some(ceiling) = self.ceiling(signer) else { return true };
         let level = self.cut.level();
@@ -1122,7 +1155,7 @@ impl RecordSet {
                 demand = demand.saturating_add(u.min(c).min(level));
             }
         }
-        demand > keep::ROOM
+        demand > keep::room()
     }
 
     /// A key's ceiling: a root's on the path, an admin key's, or None for
@@ -1335,15 +1368,17 @@ impl RecordSet {
         // waits for its list or for the record before it, one this device
         // cannot read, a void one) means a change is on its way: writing
         // now would sign a second record at its seq.
+        // Two recovery records at one seq: nothing writes on, and syncing
+        // changes nothing.
+        if state.fork.is_some() || state.conflicts.iter().any(|c| c.kind == eval::ConflictKind::Fork) {
+            return Err(Error::msg(CHANGE_STOPPED));
+        }
         let applied: BTreeSet<RecordId> = state.chain().into_iter().collect();
         let unapplied = self.waiting.is_some()
             || state.update_needed
             || self.records.values().any(|e| e.role == Role::Recovery && !applied.contains(&e.record.id()));
         if unapplied {
             return Err(Error::msg(CHANGE_WAITING));
-        }
-        if state.conflicts.iter().any(|c| c.kind == eval::ConflictKind::Fork) {
-            return Err(Error::msg("the group is stopped for good: two recovery records at one seq"));
         }
         if Key::es256(recovery.public()) != self.recovery {
             return Err(Error::msg("this is not the group's recovery key"));
@@ -1832,7 +1867,9 @@ impl RecordSet {
         let drop: Vec<RecordId> = self
             .records
             .values()
-            .filter(|e| !eval::proof_stays(&proof, &e.record, self.role_of(e)) && !self.firsts.contains(&e.record.id()))
+            .filter(|e| {
+                !eval::proof_stays(&proof, &e.record, self.role_of(e)) && !eval::is_first(&self.firsts, &e.record)
+            })
             .filter(|e| {
                 let b = e.record.body();
                 let listed =

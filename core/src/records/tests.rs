@@ -3157,3 +3157,109 @@ fn a_waiting_checkpoint_asks_for_what_it_keeps() {
     set.insert(laptop).unwrap();
     assert_eq!(set.state().checkpoint, Some(cp.id()));
 }
+
+/// A head's first that names a record which is no checkpoint of its new
+/// root keeps nothing outside the rooms: a checkpoint that leaves the
+/// record out prunes it, whatever order the records came in.
+#[test]
+fn a_first_that_is_no_checkpoint_keeps_nothing() {
+    let mut g = G::new();
+    let root = k("root");
+    let d = g.device(&root, &k("dev 1"), "dev", |_| {});
+    let list = List(vec![d.id()]);
+    g.lists.push(list.encode());
+    let head = g.rec(
+        &k("recovery"),
+        Kind::Recovery { root: k("new root a").key.clone(), list: list.hash(), from: 0, first: d.id() },
+    );
+    let (s1, i1) = g.heads[&root.hash];
+    let c2 = g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq: s1, id: i1 }], keep: vec![] });
+    let (s2, i2) = g.heads[&root.hash];
+    let c3 = g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq: s2, id: i2 }], keep: vec![] });
+    let orders: [[&Record; 4]; 3] = [[&d, &head, &c2, &c3], [&head, &c3, &d, &c2], [&c3, &c2, &d, &head]];
+    let mut digests = alloc::collections::BTreeSet::new();
+    for o in orders {
+        let recs: Vec<Record> = o.iter().map(|r| (*r).clone()).collect();
+        let s = set_with(&root.key, &recs, &g.lists);
+        assert!(!s.contains(&d.id()) && s.contains(&c3.id()));
+        let saved: Vec<Record> = s.ids().map(|id| s.get(id).unwrap().clone()).collect();
+        let back = RecordSet::restore(root.key.clone(), rk(), &saved, &g.lists);
+        assert_eq!(back.digest(), s.digest());
+        digests.insert(s.digest());
+    }
+    assert_eq!(digests.len(), 1);
+}
+
+/// The root's two records at one seq leave its room: what the room
+/// turned away before the second came is taken when offered again, as by
+/// a member that got all at once.
+#[test]
+fn a_pair_out_of_the_room_lets_back_what_it_turned_away() {
+    let mut g = G::new();
+    let root = k("root");
+    let mut own = vec![];
+    for i in 0..9 {
+        own.push(g.root_rec(Kind::Copies { incoming_ms: MIN_INCOMING_MS + i, seen: vec![] }));
+    }
+    let twin = Record::sign(
+        Body { kind: Kind::Copies { incoming_ms: MIN_INCOMING_MS + 99, seen: vec![] }, ..own[2].body().clone() },
+        &root,
+    )
+    .unwrap();
+    let small = crate::records::keep::small::Small::new(14, 8, 5);
+    for r in g.recs.iter().chain([&twin]) {
+        small.units(r.id(), 1);
+    }
+    let mut member = set_with(&g.root.key, &g.recs, &g.lists);
+    assert!(!member.contains(&own[8].id()));
+    member.insert(twin.clone()).unwrap();
+    let _ = member.insert(own[8].clone());
+    let mut all = vec![twin];
+    all.extend(g.recs.iter().cloned());
+    let fresh = set_with(&g.root.key, &all, &g.lists);
+    assert!(fresh.contains(&own[8].id()));
+    assert_eq!(member.digest(), fresh.digest());
+    assert_eq!(member.state(), fresh.state());
+}
+
+/// The root's newest checkpoint, kept first, takes its part of the room
+/// and of its key's ceiling: the root keeps no more than its ceiling, the
+/// set no more than its room, and an admin its fair share of the rest.
+#[test]
+fn a_checkpoint_kept_first_takes_its_part_of_the_room() {
+    let mut g = G::new();
+    let root = k("root");
+    let (pa, a) = (k("phone a"), k("admin a"));
+    g.admin(&pa, &a, POWER_ADMIT);
+    for i in 0..8 {
+        g.root_rec(Kind::Copies { incoming_ms: MIN_INCOMING_MS + i, seen: vec![] });
+    }
+    for i in 0..8 {
+        g.rec(&a, Kind::Copies { incoming_ms: MIN_INCOMING_MS + i, seen: vec![] });
+    }
+    let (seq, id) = g.heads[&root.hash];
+    let mut keep: Vec<RecordId> = g.recs.iter().filter(|r| r.body().signer == root.hash).map(Record::id).collect();
+    keep.retain(|k| *k != id);
+    keep.sort();
+    let cp = g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep });
+    let small = crate::records::keep::small::Small::new(14, 8, 5);
+    for r in &g.recs {
+        small.units(r.id(), if r.id() == cp.id() { 2 } else { 1 });
+    }
+    let units = |s: &RecordSet, key: &KeyHash| -> u64 {
+        g.recs
+            .iter()
+            .filter(|r| r.body().signer == *key && s.contains(&r.id()))
+            .map(|r| if r.id() == cp.id() { 2 } else { 1 })
+            .sum()
+    };
+    for seed in [0, 1, 2] {
+        let order = if seed == 0 { g.recs.clone() } else { shuffled(&g.recs, seed) };
+        let s = set_with(&g.root.key, &order, &g.lists);
+        assert!(s.contains(&cp.id()));
+        let (r, ad) = (units(&s, &root.hash), units(&s, &a.hash));
+        assert!(r <= 8, "the root keeps {r} units");
+        assert!(r + ad <= 14, "the set keeps {} units", r + ad);
+        assert_eq!(ad, 5, "the admin keeps {ad} units");
+    }
+}

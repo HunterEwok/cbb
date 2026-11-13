@@ -537,6 +537,15 @@ pub(crate) fn order_key(b: &Body, id: &RecordId) -> (u64, KeyHash, RecordId) {
 }
 
 /// The record as the keeping sees it (`keep`).
+/// The units r takes in the rooms (a test's small rooms may say).
+fn units_of(r: &Record) -> u64 {
+    #[cfg(test)]
+    if let Some(u) = super::keep::small::units_of(&r.id()) {
+        return u;
+    }
+    super::keep::units(r.size())
+}
+
 pub(crate) fn item(r: &Record, role: Role) -> super::keep::Item {
     let early = role == Role::Root && matches!(r.body().kind, Kind::Revoke(_) | Kind::Freeze(_) | Kind::Resolve(_));
     super::keep::Item {
@@ -544,7 +553,7 @@ pub(crate) fn item(r: &Record, role: Role) -> super::keep::Item {
         signer: r.body().signer,
         seq: r.body().seq,
         id: r.id(),
-        units: super::keep::units(r.size()),
+        units: units_of(r),
         checkpoint: matches!(r.body().kind, Kind::Checkpoint { .. }),
     }
 }
@@ -608,6 +617,17 @@ pub(crate) fn fork_proof<'r>(checked: impl Iterator<Item = (&'r Record, Role)>) 
         .collect()
 }
 
+/// The first checkpoints the recovery chain names, each with the root
+/// whose checkpoint it must be (`Chain::firsts`).
+pub(crate) type Firsts = BTreeMap<RecordId, KeyHash>;
+
+/// Whether r is a first checkpoint the chain names: that ID, a checkpoint
+/// of the root the head names. Another record with that ID is no first
+/// checkpoint and is kept, pruned or dropped as any other.
+pub(crate) fn is_first(firsts: &Firsts, r: &Record) -> bool {
+    firsts.get(&r.id()) == Some(&r.body().signer) && matches!(r.body().kind, Kind::Checkpoint { .. })
+}
+
 /// Whether held has a head's first checkpoint: a checkpoint of root with
 /// that ID, verified (a set verifies what it holds, `check_all` what it
 /// takes).
@@ -641,7 +661,7 @@ pub(crate) struct Chain {
     /// record's, and the one of the record the chain waits for. A record
     /// off the chain keeps none, and an earlier first goes when a later
     /// record applies.
-    pub firsts: BTreeSet<RecordId>,
+    pub firsts: Firsts,
     /// The roots of the chain's records that have not applied yet, each
     /// with its record's seq: what the set keeps aside is theirs.
     pub pending: Vec<(u64, Key)>,
@@ -786,16 +806,16 @@ pub(crate) fn chain<'r>(
         out.waiting = (!lists.contains_key(*list)).then_some(**list);
         out.first_missing = (!halted && !held_first(first, root)).then_some(*first);
     }
-    if let Some((_, _, _, _, first)) = applied.checked_sub(1).and_then(|i| valid.get(i))
+    if let Some((_, root, _, _, first)) = applied.checked_sub(1).and_then(|i| valid.get(i))
         && !halted
     {
-        out.firsts.insert(*first);
+        out.firsts.insert(*first, root.hash());
     }
     if applied < valid.len()
         && !halted
-        && let Some((_, _, _, _, first)) = valid.last()
+        && let Some((_, root, _, _, first)) = valid.last()
     {
-        out.firsts.insert(*first);
+        out.firsts.insert(*first, root.hash());
     }
     out.pending = valid.iter().skip(applied).map(|(r, root, _, _, _)| (r.body().seq, (*root).clone())).collect();
     let mut path = vec![*group_root];
@@ -834,7 +854,8 @@ pub(crate) fn kept_of(
     group_root: &KeyHash,
     promoted: &BTreeSet<KeyHash>,
     cuts: &BTreeMap<KeyHash, Cut>,
-    firsts: &BTreeSet<RecordId>,
+    is_first: impl Fn(&Record) -> bool,
+    kept_first: &BTreeSet<RecordId>,
     checked: &[Checked<'_>],
 ) -> BTreeSet<RecordId> {
     let admins: BTreeSet<KeyHash> =
@@ -843,14 +864,26 @@ pub(crate) fn kept_of(
     let items: Vec<super::keep::Item> = checked
         .iter()
         .filter(|c| {
-            c.role != Role::Recovery && !off_cut(cuts, c.r) && !proof.contains(&c.r.id()) && !firsts.contains(&c.r.id())
+            c.role != Role::Recovery
+                && !off_cut(cuts, c.r)
+                && !proof.contains(&c.r.id())
+                && !is_first(c.r)
+                && !kept_first.contains(&c.r.id())
         })
         .map(|c| item(c.r, c.role))
         .collect();
-    let mut kept = super::keep::keep(&items, |k| ceiling_of(group_root, promoted, &admins, k));
+    // The checkpoint kept first takes its part of the rooms before them.
+    let mut pre: BTreeMap<KeyHash, u64> = BTreeMap::new();
+    for c in checked.iter().filter(|c| kept_first.contains(&c.r.id()) && !proof.contains(&c.r.id())) {
+        let u = pre.entry(c.r.body().signer).or_default();
+        *u = u.saturating_add(item(c.r, c.role).units);
+    }
+    let ceiling = |k: &KeyHash| ceiling_of(group_root, promoted, &admins, k);
+    let mut kept = super::keep::keep_with(&items, ceiling, &super::keep::Cut::default(), &pre).0;
+    kept.extend(checked.iter().filter(|c| kept_first.contains(&c.r.id())).map(|c| c.r.id()));
     kept.extend(chain_kept(checked.iter().map(|c| (c.r, c.role))));
     kept.extend(proof);
-    kept.extend(checked.iter().map(|c| c.r.id()).filter(|id| firsts.contains(id)));
+    kept.extend(checked.iter().filter(|c| is_first(c.r)).map(|c| c.r.id()));
     kept
 }
 
@@ -1078,7 +1111,7 @@ pub(crate) fn evaluate_checked(
             .filter(|c| {
                 listed(c.r)
                     || proof_stays(&proof, c.r, c.role)
-                    || firsts.contains(&c.r.id())
+                    || is_first(firsts, c.r)
                     || !pruned_by(c.r, c.role, heads, &anchors)
             })
             .collect();
@@ -1260,8 +1293,7 @@ impl<'a> Evaluation<'a> {
         let promoted = &chain.promoted();
         // The checkpoint being judged is kept first, outside the rooms, as
         // a head's first checkpoint is.
-        let firsts: BTreeSet<RecordId> = chain.firsts.union(first).copied().collect();
-        let kept = kept_of(&group_root, promoted, cuts, &firsts, &checked);
+        let kept = kept_of(&group_root, promoted, cuts, |r: &Record| is_first(&chain.firsts, r), first, &checked);
         // What a takeover keeps of the root it cut counts by itself, as a
         // checkpoint's anchor does: not by that root's chain.
         let mut anchors = anchors;

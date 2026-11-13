@@ -129,7 +129,12 @@ impl Welcome {
         // the counting checkpoints.
         let mut must: BTreeSet<RecordId> = chain(set, state, admitter);
         must.extend(chain(set, state, joiner));
-        must.extend(set.firsts().iter().copied().filter(|id| set.contains(id)));
+        must.extend(
+            set.firsts()
+                .keys()
+                .copied()
+                .filter(|id| set.get(id).is_some_and(|r| crate::records::eval::is_first(set.firsts(), r))),
+        );
         must.extend(
             order
                 .iter()

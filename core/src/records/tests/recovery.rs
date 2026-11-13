@@ -1334,8 +1334,10 @@ fn a_halted_state_is_for_display_only() {
             assert_eq!(crate::peer::standing(&s, &f(k("laptop").hash), &p), crate::peer::Standing::Halted);
         }
     }
+    // Two changes at one seq: the writer says the group stopped for good,
+    // not that a change waits for a sync.
     let err = m.write_change(&s, &k("recovery"), &k("n3"), phone(&k("p3")), &[], false, 0).unwrap_err();
-    assert_eq!(err.to_string(), crate::records::set::CHANGE_WAITING);
+    assert_eq!(err.to_string(), crate::records::set::CHANGE_STOPPED);
 }
 
 /// Nothing computed while halted is carried over: a member that halted
@@ -1855,4 +1857,69 @@ fn a_change_asked_twice_gives_back_its_head() {
     let again =
         held.write_change(&held.state(), &k("recovery"), &k("n1"), phone(&k("new phone")), &[], false, 9).unwrap();
     assert_eq!(again.record.id(), w.record.id());
+}
+
+/// Two heads at one seq above a head whose list names a root record a
+/// checkpoint had pruned: halted, the member takes that record again and
+/// shows what the list below the fork names, as a member that got all at
+/// once.
+#[test]
+fn a_halted_member_takes_back_a_listed_record_a_checkpoint_pruned() {
+    let mut g = G::new();
+    let root = k("root");
+    let laptop = g.device(&root, &k("laptop"), "laptop", |_| {});
+    let tv = g.device(&root, &k("tv"), "tv", |_| {});
+    let (seq, id) = g.heads[&root.hash];
+    g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep: vec![tv.id()] });
+    let list = List(vec![laptop.id()]);
+    g.lists.push(list.encode());
+    let head = g.rec(
+        &k("recovery"),
+        Kind::Recovery { root: k("n1").key.clone(), list: list.hash(), from: 0, first: RecordId([0xf1; 32]) },
+    );
+    let a = head_at(&g, 2, Some(head.id()), &k("n2"), [2; 32]);
+    let b = head_at(&g, 2, Some(head.id()), &k("n3"), [3; 32]);
+    let mut all = g.recs.clone();
+    all.extend([a, b]);
+    let mut member = set_of(&g.root.key);
+    for r in &all {
+        let _ = member.insert(r.clone());
+    }
+    sync_all(&mut member, &all, &g.lists);
+    let s = member.state();
+    assert!(s.halted());
+    assert!(s.device_by_key(&k("laptop").hash).is_some());
+    let fresh = set_with(&g.root.key, &all, &g.lists);
+    assert_eq!(fresh.digest(), member.digest());
+    assert_eq!(fresh.state(), s);
+    assert_eq!(s.devices, state_with(&g.root.key, &all, &g.lists).devices);
+}
+
+/// The new root's checkpoint that narrowed the list counts no more once
+/// two heads at a later seq halt the group: the member takes back what the
+/// list names.
+#[test]
+fn a_halted_member_takes_back_what_the_new_roots_checkpoint_left_out() {
+    let mut g = G::new();
+    let root = k("root");
+    let n1 = k("n1");
+    let laptop = g.device(&root, &k("laptop"), "laptop", |_| {});
+    let list = g.listing();
+    let head = g.change(&n1, &list);
+    let (seq, id) = g.heads[&n1.hash];
+    g.rec(&n1, Kind::Checkpoint { heads: vec![Head { key: n1.hash, seq, id }], keep: vec![] });
+    let mut member = set_of(&g.root.key);
+    sync_all(&mut member, &g.recs, &g.lists);
+    assert!(!member.contains(&laptop.id()));
+    let a = head_at(&g, 2, Some(head.id()), &k("n2"), [2; 32]);
+    let b = head_at(&g, 2, Some(head.id()), &k("n3"), [3; 32]);
+    let mut all = g.recs.clone();
+    all.extend([a, b]);
+    sync_all(&mut member, &all, &g.lists);
+    let s = member.state();
+    assert!(s.halted());
+    assert!(member.contains(&laptop.id()) && s.device_by_key(&k("laptop").hash).is_some());
+    let fresh = set_with(&g.root.key, &all, &g.lists);
+    assert_eq!(fresh.digest(), member.digest());
+    assert_eq!(fresh.state(), s);
 }

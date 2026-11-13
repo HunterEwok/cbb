@@ -1370,7 +1370,7 @@ fn a_welcome_carries_what_it_must_first() {
     let heads: Vec<RecordId> =
         g.recs.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).map(Record::id).collect();
     assert!(heads.iter().all(has) && w.list.is_some());
-    assert!(set.firsts().iter().all(has));
+    assert!(set.firsts().keys().all(has));
     assert!(has(&removal.id()) && has(&own.id()));
     assert!(filler.iter().filter(|id| has(id)).count() <= 10);
     let group = format::DeviceId(g.gid.0);
