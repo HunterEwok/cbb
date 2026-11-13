@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: b1fa5d2433a5 -->
+<!-- source: 912064fc5262 -->
 # Установка
 
 Copy Beyond Borders работает как небольшая фоновая служба на каждом компьютере. Его команда —

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: b1fa5d2433a5 -->
+<!-- source: 912064fc5262 -->
 # التثبيت
 
 يعمل Copy Beyond Borders كخدمة صغيرة في الخلفية على كل حاسوب. وأمره هو `cbb`. كل طريقة أدناه تثبّت البرنامج نفسه؛ فاختر ما يعجبك.
