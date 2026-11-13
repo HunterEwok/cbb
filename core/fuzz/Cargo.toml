@@ -17,6 +17,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 cbb-core = { path = "..", features = ["std", "fuzzing"] }
+p256 = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "ecdsa", "pkcs8"] }
 
 # Not a member of the top workspace.
 [workspace]
@@ -78,9 +79,17 @@ test = false
 doc = false
 bench = false
 
+# --- long fuzzing of the 0.6 readers (local) ---
 [[bin]]
 name = "records_decode"
 path = "fuzz_targets/records_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "records_set"
+path = "fuzz_targets/records_set.rs"
 test = false
 doc = false
 bench = false
@@ -116,6 +125,27 @@ bench = false
 [[bin]]
 name = "beacon"
 path = "fuzz_targets/beacon.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "records_group"
+path = "fuzz_targets/records_group.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "format_guarded"
+path = "fuzz_targets/format_guarded.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "pq_verify"
+path = "fuzz_targets/pq_verify.rs"
 test = false
 doc = false
 bench = false

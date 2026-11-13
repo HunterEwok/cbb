@@ -1,8 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (C) 2026 HunterEwok
-
-//! A command's envelope, the counters and the orders of each type.
-
+// Long fuzzing of the 0.6 readers (not for the repository as is).
 #![no_main]
 #[path = "alloc_guard.rs"]
 mod alloc_guard;

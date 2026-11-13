@@ -1,8 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (C) 2026 HunterEwok
-
-//! An admin's beacon.
-
+// Long fuzzing of the 0.6 readers (not for the repository as is).
 #![no_main]
 #[path = "alloc_guard.rs"]
 mod alloc_guard;
@@ -16,7 +12,8 @@ fn one(data: &[u8]) {
         let st = cbb_core::records::eval::State::default();
         let _ = beacon::check(data, &st);
         let mut f = beacon::Beacons::default();
-        let _ = f.take(b);
+        let _ = f.take(b.clone(), None);
+        let _ = f.take(b, Some(1_800_000_000_000));
         let _ = beacon::message(data);
     }
 }

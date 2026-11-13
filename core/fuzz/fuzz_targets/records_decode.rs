@@ -1,9 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (C) 2026 HunterEwok
-
-//! A record's envelope: what Record::decode takes writes back, its body
-//! reads one way, and a set with a foreign root takes it without a panic.
-
+// Long fuzzing of the 0.6 readers (not for the repository as is).
 #![no_main]
 #[path = "alloc_guard.rs"]
 mod alloc_guard;
@@ -17,6 +12,10 @@ fn v_high(b: &[u8]) -> bool {
 }
 
 fn one(data: &[u8]) {
+    // A recovery head's list (rule 33): one form.
+    if let Ok(l) = cbb_core::records::body::List::decode(data) {
+        assert_eq!(l.encode(), data, "a list does not encode back");
+    }
     if let Ok(r) = Record::decode(data) {
         assert_eq!(r.envelope(), data, "a record's envelope does not write back");
         // A held body (a later type or critical field) keeps its bytes; its
@@ -41,10 +40,10 @@ fn one(data: &[u8]) {
                 0x2b, 0xce, 0x33, 0x57, 0x6b, 0x31, 0x5e, 0xce, 0xcb, 0xb6, 0x40, 0x68, 0x37, 0xbf, 0x51, 0xf5]);
             p
         });
-        let mut set = cbb_core::records::set::RecordSet::new(root);
+        let mut set = cbb_core::records::set::RecordSet::new(root.clone(), cbb_core::records::Recovery { k1: root, k2: cbb_core::records::Key { alg: cbb_core::records::key::ALG_SLH_DSA, public: vec![0x5a; 32] } });
         let _ = set.insert(r);
-        let st = set.state(&Default::default());
-        let _ = set.compact(&st);
+        let st = set.state();
+        drop(st);
     }
 }
 

@@ -1,8 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (C) 2026 HunterEwok
-
-//! A copy's content, the freshness marks and the copy's checks.
-
+// Long fuzzing of the 0.6 readers (not for the repository as is).
 #![no_main]
 #[path = "alloc_guard.rs"]
 mod alloc_guard;

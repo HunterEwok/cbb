@@ -1,9 +1,5 @@
-// SPDX-License-Identifier: AGPL-3.0-only
-// Copyright (C) 2026 HunterEwok
-
-//! A counting allocator: the peak of live bytes during one input, checked
-//! against a bound linear in the input's size.
-
+// A counting allocator: the peak of live bytes during one input, checked
+// against a bound linear in the input's size (local fuzzing only).
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 
