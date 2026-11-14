@@ -151,7 +151,7 @@ impl Group {
         let checkpoints: Vec<RecordId> =
             self.recs.iter().filter(|r| matches!(r.body().kind, Kind::Checkpoint { .. })).map(|r| r.id()).collect();
         let keep = state.counting.iter().copied().filter(|id| !checkpoints.contains(id)).collect();
-        self.sign(by, Kind::Checkpoint { heads, keep })
+        self.sign(by, Kind::Checkpoint { heads, keep, drops: 0 })
     }
 
     /// The root's record of an admin's device again: with another admin key,
@@ -229,7 +229,7 @@ impl Group {
             keep.sort();
             keep.dedup();
         }
-        let first = self.sign(root, Kind::Checkpoint { heads, keep });
+        let first = self.sign(root, Kind::Checkpoint { heads, keep, drops: 0 });
         (self.head_naming(seq, root, list, first.id()), first)
     }
 

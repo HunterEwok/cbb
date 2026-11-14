@@ -162,7 +162,7 @@ impl G {
         keep.sort();
         let heads =
             self.heads.get(&root.hash).map(|(s, id)| Head { key: root.hash, seq: *s, id: *id }).into_iter().collect();
-        self.rec_at(&root, Kind::Checkpoint { heads, keep }, time_ms)
+        self.rec_at(&root, Kind::Checkpoint { heads, keep, drops: 0 }, time_ms)
     }
 
     pub fn state(&self) -> State {

@@ -95,6 +95,20 @@ impl G {
             Some((s, id)) => (s + 1, Some(*id)),
             None => (1, None),
         };
+        // A device record carries the epoch of the checkpoints held, as the
+        // core's writer signs it.
+        let mut kind = kind;
+        if let Kind::Device(d) = &mut kind {
+            d.epoch = self
+                .recs
+                .iter()
+                .filter_map(|r| match &r.body().kind {
+                    Kind::Checkpoint { drops, .. } => Some(*drops),
+                    _ => None,
+                })
+                .max()
+                .unwrap_or(0);
+        }
         let body = Body { group: self.gid, signer: by.hash, seq, prev, time_ms: 0, kind, held: false };
         let r = crate::testkit::sign_by(body, by);
         self.heads.insert(by.hash, (seq, r.id()));
@@ -140,7 +154,7 @@ impl G {
         let first = self
             .rec(
                 new_root,
-                Kind::Checkpoint { heads: vec![Head { key: self.root.hash, seq, id }], keep: list.0.clone() },
+                Kind::Checkpoint { heads: vec![Head { key: self.root.hash, seq, id }], keep: list.0.clone(), drops: 0 },
             )
             .id();
         self.rec(
@@ -2209,6 +2223,7 @@ fn an_invitation_at_its_bounds() {
 /// everything the admitter holds adds nothing.
 #[test]
 fn a_join_in_parts_after_two_changes_and_a_pruning_checkpoint_ends_equal() {
+    let _drop = crate::records::set::drop_settled();
     let mut g = G::new();
     let (n1, n2, tv, slate) = (k("root n1"), k("root n2"), k("tv"), k("slate"));
     let mut d = Device::new(tv.key.clone(), "tv", ROLE_MEMBER);
@@ -2229,7 +2244,7 @@ fn a_join_in_parts_after_two_changes_and_a_pruning_checkpoint_ends_equal() {
     let before = g.set();
     assert!(before.contains(&tv_admission.id()));
     let cp = before.write_checkpoint(&before.state(), &n2, 0).unwrap();
-    let crate::records::Kind::Checkpoint { heads: _, keep } = &cp.body().kind else { panic!("not a checkpoint") };
+    let crate::records::Kind::Checkpoint { heads: _, keep, .. } = &cp.body().kind else { panic!("not a checkpoint") };
     assert!(!keep.contains(&tv_admission.id()), "the checkpoint keeps the removed device's admission");
     g.heads.insert(n2.hash, (cp.body().seq, cp.id()));
     g.recs.push(cp.clone());

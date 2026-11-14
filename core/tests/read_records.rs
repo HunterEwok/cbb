@@ -89,7 +89,7 @@ fn root_with_dead_checkpoints(n: usize, ids: usize) -> (RecordSet, K, G) {
             v.sort();
             v
         };
-        let r = g.sign(&root, Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep });
+        let r = g.sign(&root, Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep, drops: 0 });
         let _ = set.insert(r);
     }
     for i in 0..100u32 {
@@ -261,7 +261,7 @@ fn a_restored_set_is_the_live_set_after_every_insert() {
                 })
                 .collect();
             keep.sort();
-            let r = g.sign(&root, Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep });
+            let r = g.sign(&root, Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep, drops: 0 });
             let _ = set.insert(r);
             run.check("dead checkpoints", &format!("checkpoint {c}"), &set);
         }
@@ -729,15 +729,16 @@ fn bench_recovery() -> cbb_core::records::Recovery {
 
 /// Five hundred honest checkpoints in a row, each after a device comes and
 /// the oldest goes: every one is written and counts, what each keeps stays
-/// as large as the group, the set's bytes stay flat, and a member that
-/// takes what the root's set gives it ends on each checkpoint too. With
-/// `restart`, the root's set is rebuilt from its records halfway.
+/// within the root's room (a settled removal stays until the room asks for
+/// it: section 10, "Epochs"), the group stays as large, and a member that takes what the root's set gives it ends on
+/// each checkpoint too. With `restart`, the root's set is rebuilt from its
+/// records halfway.
 fn checkpoints_in_a_row(rounds: u32, restart: bool) {
     let (mut set, root, mut g) = root_with_dead_checkpoints(0, 0);
     let phone = k("phone a").hash;
     let mut other = RecordSet::new(root.key.clone(), bench_recovery());
     let mut live: std::collections::VecDeque<KeyHash> = std::collections::VecDeque::new();
-    let (mut first_keep, mut first_bytes) = (0usize, 0usize);
+    let (mut first_devices, mut first_bytes) = (0usize, 0usize);
     for round in 0..rounds {
         let dk = k(&format!("flat dev {round}"));
         set.insert(g.sign(&root, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)))).unwrap();
@@ -766,13 +767,16 @@ fn checkpoints_in_a_row(rounds: u32, restart: bool) {
         let sent: Vec<Record> = set.for_peer(&st, &phone).into_iter().cloned().collect();
         other.insert_all(sent);
         assert_eq!(other.state().checkpoint, Some(cp.id()), "round {round}: the other member");
+        let devices = st.devices.len();
         if round == 30 {
-            (first_keep, first_bytes) = (kept, set.bytes());
+            (first_devices, first_bytes) = (devices, set.bytes());
         }
         if round > 30 {
-            assert!(kept <= first_keep, "round {round}: keeps {kept}, at round 30 {first_keep}");
+            assert!(devices <= first_devices, "round {round}: {devices} devices, at round 30 {first_devices}");
+            let room = cbb_core::records::MAX_ROOT_RECORDS;
+            assert!(kept <= room, "round {round}: keeps {kept}, past the root's room");
             assert!(
-                set.bytes() <= first_bytes + 4096,
+                set.bytes() <= first_bytes + room * 512,
                 "round {round}: {} bytes, at round 30 {first_bytes}",
                 set.bytes()
             );

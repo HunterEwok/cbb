@@ -417,7 +417,7 @@ fn checkpoint(b: &mut Builder, root: &NamedKey, live: &[RecordId]) {
     let mut keep: Vec<RecordId> = live.to_vec();
     keep.sort();
     keep.dedup();
-    b.rec(root, Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep });
+    b.rec(root, Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep, drops: 0 });
 }
 
 /// About 5, 100 and 1000 records.

@@ -525,7 +525,13 @@ def record_vectors():
     add("thaw", ROOT, 4, {10: [bytes.fromhex(thaw_target)], 11: seen_of(ADMIN)})
     add("resolve", ROOT, 6, {10: [bytes.fromhex(take[-1]["id"])]})
     add("checkpoint", ROOT, 9, {10: srt([[ADMIN.hash, *chain[ADMIN.name]], [ROOT.hash, *chain[ROOT.name]]]),
-                                11: srt([bytes.fromhex(take[0]["id"]), bytes.fromhex(take[1]["id"])])})
+                                11: srt([bytes.fromhex(take[0]["id"]), bytes.fromhex(take[1]["id"])]),
+                                12: 2},
+        note="drops 2: two of the root's checkpoints left a removal out (section 10)")
+    # a device record carries the epoch its signer held (field 27)
+    add("lamp admitted by an admin at epoch 2", ADMIN, 1,
+        {10: Signer("lamp member key").key, 11: "Lamp", 12: 1, 13: 0b0011, 27: 2},
+        note="of an epoch below the member's checkpoint, it counts only where that checkpoint keeps it")
     # the change of root by the recovery key (rule 33): a small head that
     # names its list by hash; the list rides beside it
     listed = sorted(bytes.fromhex(t["id"]) for t in take if t["signer"] == ROOT.name)
@@ -701,6 +707,9 @@ def record_vectors():
     m = dict(lap_m)
     m[24] = LAPTOP.hash
     bad_body("replaces itself", "records/device/replaces", m)
+    # the epoch and drops (section 10): 0 is left out; an integer
+    bad_body("device epoch 0 written (default)", "form/default", {**lap_m, 27: 0})
+    bad_body("device epoch not an integer", "records/device/epoch", {**lap_m, 27: b"\x02"})
     # sets (section 1): sorted by the element's encoding (an array element
     # by its first element's), each value once; hubs each once, in order
     a, b = srt([STRANGER.hash, Signer("stranger 2").hash])
@@ -728,6 +737,10 @@ def record_vectors():
          {10: srt([[ADMIN.hash, 3, i1], [ROOT.hash, 88, i2]]), 5: i2}),
         ("checkpoint above seq 1 without its own head", "records/checkpoint/own-prev", 9,
          {10: [[ADMIN.hash, 3, i1]], 5: i2}),
+        ("checkpoint drops 0 written (default)", "form/default", 9,
+         {10: srt([[ADMIN.hash, 3, i1], [ROOT.hash, 89, i2]]), 5: i2, 12: 0}),
+        ("checkpoint drops not an integer", "records/checkpoint/drops", 9,
+         {10: srt([[ADMIN.hash, 3, i1], [ROOT.hash, 89, i2]]), 5: i2, 12: b"\x02"}),
         ("hubs with one device twice", "records/hubs/hubs", 10, {10: [LAPTOP.id16, LAPTOP.id16], 11: [sa]}),
         ("device seen out of order", "records/device/seen", 1, {**{k: lap_m[k] for k in (10, 11, 12)}, 26: [sb, sa]}),
         ("thaw seen out of order", "records/thaw/seen", 4, {10: [i1], 11: [sb, sa]}),

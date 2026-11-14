@@ -16,7 +16,7 @@ use super::super::{Kind, Record};
 use super::{Added, RecordSet};
 
 /// Which tier of the rooms a key is in (docs/protocol.md, section 10,
-/// "Tiers inside the rooms").
+/// "Caps inside the rooms").
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Tier {
     /// The root, the roots a change cut, and the live admin keys.

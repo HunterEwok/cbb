@@ -337,7 +337,7 @@ pub fn build(data: &[u8], big: bool) -> (G, u8) {
                 }
                 keep.sort();
                 keep.dedup();
-                Kind::Checkpoint { heads: vec![Head { key: by.hash, seq, id }], keep }
+                Kind::Checkpoint { heads: vec![Head { key: by.hash, seq, id }], keep, drops: 0 }
             }
             11 => Kind::Copies { incoming_ms: MIN_INCOMING_MS + u64::from(x) * 1000, seen: g.seen(arg) },
             12 => {

@@ -125,7 +125,7 @@ impl Run {
                     heads.sort_by_key(|h| h.key);
                     let mut keep: Vec<RecordId> = named.into_iter().map(|i| self.id(i)).collect();
                     keep.sort();
-                    Kind::Checkpoint { heads, keep }
+                    Kind::Checkpoint { heads, keep, drops: 0 }
                 }
                 "recover" => {
                     let w: Vec<&str> = kind_text.split_whitespace().collect();
@@ -153,9 +153,9 @@ impl Run {
             // `records/checkpoint/own-prev`): one the model names of its own
             // key is replaced by its prev.
             let kind = match kind {
-                Kind::Checkpoint { mut heads, keep } => {
+                Kind::Checkpoint { mut heads, keep, .. } => {
                     heads.retain(|h| h.key != by.hash);
-                    self.g.with_own_head(&by, Kind::Checkpoint { heads, keep })
+                    self.g.with_own_head(&by, Kind::Checkpoint { heads, keep, drops: 0 })
                 }
                 other => other,
             };

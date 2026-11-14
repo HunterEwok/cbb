@@ -287,6 +287,14 @@ pub struct State {
     /// app ("a forked key was removed; its removals on the other line no
     /// longer count"). `RecordSet::write_removal` leaves none.
     pub forked_removed: Vec<(KeyHash, Vec<KeyHash>)>,
+    /// The `drops` of the current root's newest checkpoint the member
+    /// holds, counting or not: the epoch (section 10).
+    pub drops: u64,
+    /// Device records of an older epoch than drops that neither the
+    /// counting checkpoint nor the change's list keeps: they do not
+    /// count, sorted. A notice for their signer's app: the devices they
+    /// admit or change are admitted or changed again.
+    pub stale: Vec<RecordId>,
 }
 
 impl State {
@@ -768,7 +776,7 @@ pub(crate) fn first_gap(
             if !by.settlers.contains(&r.body().signer) || !later(r) {
                 continue;
             }
-            let Kind::Checkpoint { heads, keep } = &r.body().kind else { continue };
+            let Kind::Checkpoint { heads, keep, .. } = &r.body().kind else { continue };
             if !names(heads, below) || keep.contains(gone) {
                 continue;
             }
@@ -1373,6 +1381,37 @@ fn checkpoints_of<'r>(
     out
 }
 
+/// Of checked, the records as far as the epoch goes, and the IDs of the
+/// device records that do not count by it: one of an epoch below drops
+/// counts only where anchors (the current root's newest checkpoint's heads
+/// and keep) or a cut's list keep it (section 10); a cut root's record the cut
+/// decides alone. It stays on its signer's chain,
+/// as a held record does, so what its signer signed after it counts.
+fn epoch_filter<'r>(
+    checked: &[Checked<'r>],
+    drops: u64,
+    anchors: &BTreeSet<RecordId>,
+    cuts: &BTreeMap<KeyHash, Cut>,
+) -> (Vec<Checked<'r>>, BTreeSet<RecordId>) {
+    let mut gone = BTreeSet::new();
+    let out = checked
+        .iter()
+        .map(|c| {
+            let old = !c.held && matches!(&c.r.body().kind, Kind::Device(d) if d.epoch < drops);
+            let id = c.r.id();
+            // A cut root's record counts only as the list keeps it: the cut
+            // decides it, listed or not.
+            let b = c.r.body();
+            if old && !anchors.contains(&id) && !cuts.values().any(|cut| cut.covers(&b.signer, b.seq)) {
+                gone.insert(id);
+                return Checked { r: c.r, role: c.role, held: true };
+            }
+            *c
+        })
+        .collect();
+    (out, gone)
+}
+
 /// What a member's compactions left it with: the checkpoints it pruned by
 /// (`RecordSet`).
 pub(crate) struct Compacted<'c> {
@@ -1440,8 +1479,32 @@ pub(crate) fn evaluate_checked(
             fail(&mut failed, c.r.id(), why);
         }
     }
+    let path = chain.path(&group_root);
+    // The epoch: the drops of the current root's newest checkpoint the
+    // member holds, counting or not (a change's first checkpoint
+    // included), 0 with none; a device record of an older one counts only
+    // where that checkpoint keeps or anchors it, or the list keeps it. Of
+    // a root with two histories it is the newest below the pair, as the
+    // checkpoints that may count are judged.
+    let pair = fork_proof(checked.iter().map(|c| (c.r, c.role)));
+    let cur_root = path.last().copied().unwrap_or(group_root);
+    let fork_at = root_fork(&pair, &cur_root, checked.iter().map(|c| (c.r, c.role)));
+    let newest = checked
+        .iter()
+        .filter(|c| !c.held && c.role == Role::Root && c.r.body().signer == cur_root)
+        .filter(|c| matches!(c.r.body().kind, Kind::Checkpoint { .. }))
+        .filter(|c| !cuts.get(&cur_root).is_some_and(|cut| cut.covers(&cur_root, c.r.body().seq)))
+        .filter(|c| fork_at.is_none_or(|f| c.r.body().seq < f))
+        .map(|c| c.r)
+        .min_by(|a, b| b.body().seq.cmp(&a.body().seq).then(a.id().cmp(&b.id())));
+    let (drops, epoch_anchors) = match newest.map(|r| &r.body().kind) {
+        Some(Kind::Checkpoint { heads, keep, drops }) => (*drops, anchors_of(heads, keep)),
+        _ => (0, BTreeSet::new()),
+    };
     let none = BTreeSet::new();
-    let full = Evaluation::new(root, recovery, checked.clone(), failed.clone(), BTreeSet::new(), &chain, &cuts, &none);
+    let (fresh, gone) = epoch_filter(&checked, drops, &epoch_anchors, &cuts);
+    let mut stale_all = gone;
+    let full = Evaluation::new(root, recovery, fresh, failed.clone(), BTreeSet::new(), &chain, &cuts, &none);
     // The set a root's checkpoint prunes is evaluated as if the member had
     // dropped what it leaves out. The roots' checkpoints are taken in the
     // order of the path, each the newest of its root (a cut root's,
@@ -1465,7 +1528,7 @@ pub(crate) fn evaluate_checked(
     let by_id: BTreeMap<RecordId, &Record> = checked.iter().map(|c| (c.r.id(), c.r)).collect();
     let floor = first_floor(&chain.firsts, |id| by_id.get(id).copied());
     for x in cands {
-        let (Kind::Checkpoint { heads, keep }, id) = (&x.body().kind, x.id()) else { continue };
+        let (Kind::Checkpoint { heads, keep, .. }, id) = (&x.body().kind, x.id()) else { continue };
         if counted.contains(&x.body().signer) || floor.get(&x.body().signer).is_some_and(|f| x.body().seq < *f) {
             continue;
         }
@@ -1517,7 +1580,8 @@ pub(crate) fn evaluate_checked(
                     || !pruned_by(c.r, c.role, heads, &anchors)
             })
             .collect();
-        let known = still_known(root, recovery, pruned.clone());
+        let (fresh, gone) = epoch_filter(&pruned, drops, &epoch_anchors, &these);
+        let known = still_known(root, recovery, fresh);
         let e = Evaluation::new(root, recovery, known, failed.clone(), all.clone(), &chain, &these, &first);
         let ep = e.run(&chain, &these);
         let Some(i) = e.recs.iter().position(|r| r.id == id) else { continue };
@@ -1530,11 +1594,15 @@ pub(crate) fn evaluate_checked(
         state.checkpoint = Some(id);
         state.checkpoints = applied.clone();
         best = Some(state);
+        stale_all = gone;
         kept = pruned;
         anchors_all = all;
         cuts = these;
     }
     let mut state = best.unwrap_or_else(|| plain.finish());
+    state.drops = drops;
+    state.newer.retain(|id| !stale_all.contains(id));
+    state.stale = stale_all.into_iter().collect();
     state.group = super::key::group_id(root, recovery);
     state.list_missing = chain.waiting;
     state.first_missing = chain.first_missing;
@@ -1619,7 +1687,7 @@ pub(crate) fn anchors_of(heads: &[Head], keep: &[RecordId]) -> BTreeSet<RecordId
 /// with the proof kept outside the rooms (`proof_stays`). Only the root
 /// signs checkpoints.
 pub(crate) fn checkpoint_ok<'r>(cp: &'r Record, get: impl Fn(&RecordId) -> Option<&'r Record>) -> bool {
-    let Kind::Checkpoint { heads, keep } = &cp.body().kind else { return false };
+    let Kind::Checkpoint { heads, keep, .. } = &cp.body().kind else { return false };
     let head_of = |k: &KeyHash| heads.binary_search_by(|h| h.key.cmp(k)).ok().and_then(|i| heads.get(i));
     let mut named: BTreeMap<KeyHash, BTreeMap<u64, RecordId>> = BTreeMap::new();
     for h in heads {
@@ -1639,15 +1707,25 @@ pub(crate) fn checkpoint_ok<'r>(cp: &'r Record, get: impl Fn(&RecordId) -> Optio
 
 /// Whether a checkpoint with heads and keep, among the records held, keeps
 /// an admission of a key while it prunes a root's removal, or an admin's
-/// that counts, naming that key:
+/// that counts, naming that key, or keeps a device record of an epoch
+/// below drops that does not count:
 /// it would bring a removed key back through an old record, which the
 /// core's writer never writes.
 pub(crate) fn revives<'r>(
     heads: &[Head],
     keep: &[RecordId],
+    drops: u64,
     held: impl Iterator<Item = (&'r Record, Role)> + Clone,
     counts: impl Fn(&RecordId) -> bool,
 ) -> bool {
+    let kept_old = held.clone().any(|(r, _)| {
+        keep.binary_search(&r.id()).is_ok()
+            && matches!(&r.body().kind, Kind::Device(d) if d.epoch < drops)
+            && !counts(&r.id())
+    });
+    if kept_old {
+        return true;
+    }
     let anchors = anchors_of(heads, keep);
     let removed: BTreeSet<KeyHash> = held
         .clone()

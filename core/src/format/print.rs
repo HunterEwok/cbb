@@ -181,6 +181,7 @@ fn record_field(typ: u64, k: u16) -> Option<&'static str> {
         "replaces",
         "guarded",
         "seen",
+        "epoch",
     ];
     let i = usize::from(k.checked_sub(10)?);
     match typ {
@@ -194,7 +195,7 @@ fn record_field(typ: u64, k: u16) -> Option<&'static str> {
             .copied()
             .filter(|n| !n.is_empty()),
         8 => ["incoming_ms", "seen"].get(i).copied(),
-        9 => ["heads", "keep"].get(i).copied(),
+        9 => ["heads", "keep", "drops"].get(i).copied(),
         10 => ["hubs", "seen"].get(i).copied(),
         11 | 12 => ["admin"].get(i).copied(),
         13 => ["root", "list", "from", "first"].get(i).copied(),

@@ -169,4 +169,5 @@ pub fn name_ok(name: &str) -> bool {
 /// device's own without `accepts` (15, gone). Any other field below 256
 /// makes a reader hold the record. The record reader and the admin's
 /// record in a grant both read this one list.
-pub const DEVICE_FIELDS: [u16; 22] = [1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26];
+pub const DEVICE_FIELDS: [u16; 23] =
+    [1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27];

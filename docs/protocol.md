@@ -1897,7 +1897,7 @@ of its own. Any other key has no room and keeps nothing. A record body is at mos
 `records::MAX_DEVICES` (256) devices.
 
 A key keeps the longest start of its own order (below), in whole records, within its cap less
-what the checkpoints that may count keep first of it ("Tiers inside the rooms" gives the caps).
+what the checkpoints that may count keep first of it ("Caps inside the rooms" gives the caps).
 Nothing is remembered between two judgments. With f the caps' judgment of a set of records:
 what a set holds is f of it; an insert answers as f of what is held and the new record; a live
 set and the same set restarted are equal and answer every record alike; two members that give
@@ -1922,7 +1922,7 @@ checkpoint is its key's newest, never on anything else the set holds (`keep::Ite
 Of a root that a change cut, only what the change's list names is kept, within the reserve.
 The recovery chain is kept outside the rooms.
 
-#### Tiers inside the rooms
+#### Caps inside the rooms
 
 There is no level. Each key has a fixed cap, read from the roster in the root's kept records
 alone: the current root `records::MAX_ROOT_RECORDS` (1536) units, the roots a change cut
@@ -2198,7 +2198,7 @@ and `a`-`f`.
 | `resolve` | `records` | the current root voids the records it names: a cancelled claim, one side of a conflict, one of two records with one number |
 | `settings` | `takeover_delay_ms`, `key_level` | the root's settings for the group |
 | `copies` | `incoming_ms` | how long a copy from another device stays live ("The copies setting") |
-| `checkpoint` | `heads`, `keep` | a root's checkpoint: the records it covers and does not keep may be dropped |
+| `checkpoint` | `heads`, `keep`, `drops` | a root's checkpoint: the records it covers and does not keep may be dropped |
 | `hubs` | `hubs` | the user's main hubs for sync away from home, in the order they serve |
 | `recovery` | `admin`, `cert` | names the group's recovery key, an offline admin key that may only claim the group ("The recovery key") |
 | `handover` | `admin` | the current root hands the group to an admin, whose claim then takes effect without the delay ("Handing the group over") |
@@ -2230,6 +2230,8 @@ and `a`-`f`.
 | `incoming_ms` | integer | `copies` | from 5 000 to 3 600 000 (1 hour): how long a copy from another device stays live on each member (section 5, "Writing the member's own clipboard"); without a `copies` record that counts, 60 000 |
 | `heads` | array of objects | `checkpoint`, one at least | sorted by `key`, each key once: `{"key": key hash of a signer, "seq": 1 or more, "id": the ID of that signer's record with that seq}`; above seq 1 its own key's head is its `prev`, at seq 1 it names no head of its own key |
 | `keep` | array of strings | none | sorted record IDs: the records below the heads that still count |
+| `drops` | integer | none | 1 or more: how many times the root's checkpoints left a removal out ("Epochs"); absent means 0 |
+| `epoch` | integer | none | in a `device` record, 1 or more: the `drops` its writer held ("Epochs"); absent means 0 |
 | `hubs` | array of strings | `hubs`, one at least | 1 to 16 device IDs, each once, in the user's order (not sorted) |
 
 A field that a type does not list is refused in it (`form/unknown`), and so is a field
@@ -2374,6 +2376,31 @@ names the checkpoint that counts in `checkpoint`.
 A member may delete the records the checkpoint that counts leaves out. A checkpoint that
 leaves out a record that mattered changes the state for every member alike; only a root signs
 one, and the root always wins.
+
+#### Epochs
+
+A checkpoint carries `drops` and a `device` record carries `epoch`, each 0 when left out. A
+member's epoch is the `drops` of the current root's newest checkpoint it holds, counting or not
+(a change's first checkpoint included; of a root with two histories, the newest below the pair),
+and 0 with none: a function of the records held, never of what a member once held. A `device`
+record whose `epoch` is below the member's counts only where that checkpoint keeps it or names
+it as a head, or the change's list keeps it. Otherwise it stays on its signer's chain as a held
+record does, so what its signer signed after it counts, but it counts for nothing itself, and
+the state names it in `stale`: the app tells its signer that the device joins again.
+
+A writer signs each `device` record at the epoch it holds. A checkpoint's `drops` is at least the
+highest `drops` of any checkpoint of a root on the path that its writer holds, and one more when
+it leaves out a removal of a key that the state removes (no removal that stays after it names
+the key); a change's first checkpoint likewise. A writer leaves a settled removal out only when
+its room asks for it: when the room holds more than three quarters of its cap, its oldest settled
+removals go first, until it holds at most half. A writer never keeps, lists or re-issues a
+`device` record of an older epoch that does not count, and refuses a checkpoint that would
+(`eval::revives`).
+
+So a record signed without knowing of a removal that went never brings the removed device back,
+below its signer's head, above it or with no head, nor across a change of root. The price: an
+admission signed before the epoch moved, which the root's writer had not got, counts no more,
+and its device joins again. Across a change of root the epoch is the one the change's writer held.
 
 #### Limits
 

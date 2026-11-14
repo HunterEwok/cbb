@@ -144,6 +144,27 @@ std::thread_local! {
     /// Tests only: true while the state is checked after every insert,
     /// whatever the set's size (`check_every_insert`).
     static STATE_EVERY: core::cell::Cell<bool> = const { core::cell::Cell::new(false) };
+    /// Tests only: true while a checkpoint leaves out every settled
+    /// removal, whatever its room holds (`drop_settled`).
+    static DROP_SETTLED: core::cell::Cell<bool> = const { core::cell::Cell::new(false) };
+}
+
+/// While it lives, the checkpoints written on this thread leave out every
+/// settled removal, as if each room asked for it: for the tests of what
+/// follows a removal that goes, in groups too small to fill a room.
+#[cfg(test)]
+pub(crate) struct DropSettled(bool);
+
+#[cfg(test)]
+pub(crate) fn drop_settled() -> DropSettled {
+    DropSettled(DROP_SETTLED.with(|c| c.replace(true)))
+}
+
+#[cfg(test)]
+impl Drop for DropSettled {
+    fn drop(&mut self) {
+        DROP_SETTLED.with(|c| c.set(self.0));
+    }
 }
 
 /// While it lives, the debug check that a set's state is the evaluation
@@ -552,7 +573,9 @@ impl RecordSet {
 
     /// The notices to show with state: each dropped removal with the keys
     /// it names that state has not removed again, by record ID. A removal
-    /// whose keys are all removed again shows nothing.
+    /// whose keys are all removed again shows nothing. Then each device
+    /// record of an older epoch that nothing keeps (`State::stale`), with
+    /// the device it names that is no device of state: it joins again.
     pub fn notices(&self, state: &State) -> Vec<(RecordId, Vec<KeyHash>)> {
         let removals = self.notices.iter().filter_map(|(id, r)| match &r.body().kind {
             Kind::Revoke(rm) => Some((*id, rm.keys.as_slice())),
@@ -567,6 +590,13 @@ impl RecordSet {
         // A device one notice tells of is not told again: removals first,
         // then what came in through a change, then the marked keys.
         let mut told: BTreeSet<KeyHash> = out.iter().flat_map(|(_, keys)| keys.iter().copied()).collect();
+        for id in &state.stale {
+            let Some(Kind::Device(d)) = self.held(id).map(|r| &r.body().kind) else { continue };
+            let key = d.key.hash();
+            if state.device_by_key(&key).is_none() && !self.dismissed.contains(id) && told.insert(key) {
+                out.push((*id, alloc::vec![key]));
+            }
+        }
         let live = self.base.as_ref().map(|b| (b.change, self.came_in(state, &b.before)));
         let fixed = self.arrivals.iter().map(|(id, (_, keys))| (*id, keys.clone()));
         for (id, keys) in fixed.chain(live).chain(self.marked_back(state)) {
@@ -2133,7 +2163,7 @@ impl RecordSet {
             return false;
         }
         lines.iter().filter_map(|cp| self.held(cp)).any(|cp| match &cp.body().kind {
-            Kind::Checkpoint { heads, keep } => {
+            Kind::Checkpoint { heads, keep, .. } => {
                 eval::pruned_by(&e.record, e.role, heads, &eval::anchors_of(heads, keep))
             }
             _ => false,
@@ -2344,6 +2374,9 @@ impl RecordSet {
         out.remove(&RecordId::default());
         let lines = self.lines(state);
         out.retain(|id| !self.left_out(&lines, id));
+        // A device record of an older epoch is listed only while it counts:
+        // listed, it would count again (section 10).
+        out.retain(|id| self.held(id).is_none_or(|r| !self.old_epoch(state, r)));
         // A checkpoint is never listed: what it pruned, the new root's
         // first checkpoint prunes again. An earlier root's removal is
         // listed only while it counts.
@@ -2518,6 +2551,7 @@ impl RecordSet {
         };
         let mut device = device;
         device.holds_root = true;
+        device.epoch = state.drops;
         let mut first = alloc::vec![sign(Kind::device(device))?];
         if state.settings != Settings::default() {
             first.push(sign(Kind::settings(state.settings.clone()))?);
@@ -2582,7 +2616,7 @@ impl RecordSet {
         cps.extend(lines.iter().copied());
         for cp in &cps {
             let Some(r) = self.held(cp) else { continue };
-            let Kind::Checkpoint { heads: hs, keep: kept } = &r.body().kind else { continue };
+            let Kind::Checkpoint { heads: hs, keep: kept, .. } = &r.body().kind else { continue };
             if Some(&r.body().signer) != cur {
                 continue;
             }
@@ -2614,8 +2648,10 @@ impl RecordSet {
         if let (Some(id), Some(last)) = (own_head, first.last()) {
             heads.insert(h, super::body::Head { key: h, seq: last.body().seq, id });
         }
-        let checkpoint =
-            sign(Kind::Checkpoint { heads: heads.into_values().collect(), keep: keep.into_iter().collect() })?;
+        let heads: Vec<super::body::Head> = heads.into_values().collect();
+        let keep: Vec<RecordId> = keep.into_iter().collect();
+        let drops = self.drops_of(state, &h, &heads, &keep, &first);
+        let checkpoint = sign(Kind::Checkpoint { heads, keep, drops })?;
         let first_id = checkpoint.id();
         first.push(checkpoint);
         let body = Body {
@@ -2800,14 +2836,47 @@ impl RecordSet {
         let mut dropped: BTreeSet<RecordId> = BTreeSet::new();
         let mut gone: BTreeSet<KeyHash> = BTreeSet::new();
         // A removal by an admin goes as a root's does: what it removed is
-        // settled below the heads, and a replayed admission is refused.
+        // settled below the heads, and a replayed admission is refused. A
+        // settled removal goes only when its room asks for it: past three
+        // quarters of the room's cap, the oldest first, until the room is
+        // at most half full. Each one that goes moves the epoch (`drops`),
+        // so an admission signed before it went counts only as kept.
+        // By room: each settled removal's seq, ID, units and keys.
+        type Settled = (u64, RecordId, u64, Vec<KeyHash>);
+        let mut settled_of: BTreeMap<KeyHash, Vec<Settled>> = BTreeMap::new();
         for e in entries().filter(|e| state.counting.contains(&e.record.id())) {
             if let Kind::Revoke(rm) = &e.record.body().kind
                 && under(&e.record)
                 && rm.keys.iter().all(settled)
             {
-                dropped.insert(e.record.id());
-                gone.extend(rm.keys.iter().copied());
+                let b = e.record.body();
+                let units = eval::item(&e.record, self.role_of(e)).units;
+                settled_of.entry(self.room_key(&b.signer)).or_default().push((
+                    b.seq,
+                    e.record.id(),
+                    units,
+                    rm.keys.clone(),
+                ));
+            }
+        }
+        #[cfg(test)]
+        let always = DROP_SETTLED.with(core::cell::Cell::get);
+        #[cfg(not(test))]
+        let always = false;
+        for (room, mut list) in settled_of {
+            let cap = self.ceiling(&room).unwrap_or(0);
+            let mut used: u64 = self.units.iter().filter(|(k, _)| self.room_key(k) == room).map(|(_, u)| *u).sum();
+            if !always && (cap == 0 || used.saturating_mul(4) <= cap.saturating_mul(3)) {
+                continue;
+            }
+            list.sort();
+            for (_, id, units, keys) in list {
+                if !always && used.saturating_mul(2) <= cap {
+                    break;
+                }
+                dropped.insert(id);
+                gone.extend(keys);
+                used = used.saturating_sub(units);
             }
         }
         // A removal a newer kept one covers goes too (the fold).
@@ -2850,6 +2919,11 @@ impl RecordSet {
                 _ => false,
             };
             let own = r.body().signer == h && !past_cap(r);
+            // A device record of an older epoch is kept only while it
+            // counts: kept, it would count again (section 10).
+            if self.old_epoch(state, r) {
+                continue;
+            }
             if e.held || state.counting.contains(&id) || listed(r) || own {
                 keep.insert(id);
             }
@@ -2874,26 +2948,84 @@ impl RecordSet {
             keep.remove(&id);
         }
         let (seq, prev) = own.map_or((1, None), |o| (o.seq.saturating_add(1), Some(o.id)));
+        let heads: Vec<super::body::Head> = heads.into_values().collect();
+        let keep: Vec<RecordId> = keep.into_iter().collect();
+        let drops = self.drops_of(state, &h, &heads, &keep, &[]);
         let body = Body {
             group: self.group,
             signer: h,
             seq,
             prev,
             time_ms,
-            kind: Kind::Checkpoint { heads: heads.into_values().collect(), keep: keep.into_iter().collect() },
+            kind: Kind::Checkpoint { heads, keep, drops },
             held: false,
         };
         if body.encode().len() > super::MAX_CHECKPOINT_BODY {
             return Err(Error::msg("the checkpoint would be larger than a checkpoint may be"));
         }
-        if let Kind::Checkpoint { heads, keep } = &body.kind
-            && eval::revives(heads, keep, self.records.values().map(|e| (&e.record, self.role_of(e))), |id| {
-                state.counting.contains(id)
-            })
+        if let Kind::Checkpoint { heads, keep, .. } = &body.kind
+            && eval::revives(
+                heads,
+                keep,
+                state.drops,
+                self.records.values().map(|e| (&e.record, self.role_of(e))),
+                |id| state.counting.contains(id),
+            )
         {
             return Err(Error::msg("the checkpoint would keep a removed key's admission"));
         }
         Ok(body)
+    }
+
+    /// Whether r is a device record of an epoch below state's that does
+    /// not count: a writer never keeps, lists or re-issues one.
+    fn old_epoch(&self, state: &State, r: &Record) -> bool {
+        matches!(&r.body().kind, Kind::Device(d) if d.epoch < state.drops) && !state.counting.contains(&r.id())
+    }
+
+    /// The `drops` a checkpoint of root h with heads and keep carries,
+    /// with the records first signed beside it: the highest of a path
+    /// root's checkpoint the writer holds, and one more
+    /// when a key state removes is named by no removal that stays after
+    /// it (a removal it leaves out), so that a device record signed
+    /// without knowing of the removal counts no more unless kept
+    /// (section 10).
+    fn drops_of(
+        &self,
+        state: &State,
+        h: &KeyHash,
+        heads: &[super::body::Head],
+        keep: &[RecordId],
+        first: &[Record],
+    ) -> u64 {
+        let anchors = eval::anchors_of(heads, keep);
+        let others: BTreeSet<&KeyHash> = state.roots.iter().filter(|k| *k != h).collect();
+        let mut named: BTreeSet<KeyHash> = BTreeSet::new();
+        for e in self.records.values().filter(|e| state.counting.contains(&e.record.id())) {
+            let Kind::Revoke(rm) = &e.record.body().kind else { continue };
+            let b = e.record.body();
+            let stays = anchors.contains(&e.record.id())
+                || (!others.contains(&b.signer) && !eval::pruned_by(&e.record, self.role_of(e), heads, &anchors));
+            if stays {
+                named.extend(rm.keys.iter().copied());
+            }
+        }
+        for r in first {
+            if let Kind::Revoke(rm) = &r.body().kind {
+                named.extend(rm.keys.iter().copied());
+            }
+        }
+        // Never below any checkpoint of a root on the path the writer holds.
+        let held = self
+            .records
+            .values()
+            .filter(|e| e.role == Role::Root && !e.held && state.roots.contains(&e.record.body().signer))
+            .filter_map(|e| match &e.record.body().kind {
+                Kind::Checkpoint { drops, .. } => Some(*drops),
+                _ => None,
+            })
+            .fold(state.drops, u64::max);
+        held.saturating_add(u64::from(state.revoked.iter().any(|k| !named.contains(k))))
     }
 
     /// The current root h's own records under its head (`under`) that a
@@ -3171,6 +3303,11 @@ impl RecordSet {
         if matches!(kind, Kind::Checkpoint { .. } | Kind::Recovery { .. }) {
             return Err(Error::msg("a checkpoint or a change of root has its own writer"));
         }
+        // A device record carries the epoch its writer holds.
+        let mut kind = kind;
+        if let Kind::Device(d) = &mut kind {
+            d.epoch = state.drops;
+        }
         if state.stop == eval::Stop::Full || state.halted() {
             return Err(Error::msg("the group is stopped: no record counts until the root is changed"));
         }
@@ -3374,7 +3511,7 @@ impl RecordSet {
             .iter()
             .filter(|id| !state.checkpoints.contains(id))
             .filter_map(|id| match self.get(id).map(|r| &r.body().kind) {
-                Some(Kind::Checkpoint { heads, keep }) => {
+                Some(Kind::Checkpoint { heads, keep, .. }) => {
                     Some(heads.iter().map(|h| h.id).chain(keep.iter().copied()).chain(self.get(id)?.body().prev))
                 }
                 _ => None,
@@ -3388,7 +3525,7 @@ impl RecordSet {
         // records a peer may still hold.
         let names = |r: &Record| -> Vec<RecordId> {
             match &r.body().kind {
-                Kind::Checkpoint { heads, keep } => {
+                Kind::Checkpoint { heads, keep, .. } => {
                     heads.iter().map(|h| h.id).chain(keep.iter().copied()).chain(r.body().prev).collect()
                 }
                 _ => Vec::new(),
@@ -3499,7 +3636,7 @@ impl RecordSet {
     /// (a head or a kept record). It only triggers a compaction.
     fn wanted(&self, id: &RecordId) -> bool {
         self.records.values().any(|e| {
-            let Kind::Checkpoint { heads, keep } = &e.record.body().kind else { return false };
+            let Kind::Checkpoint { heads, keep, .. } = &e.record.body().kind else { return false };
             e.role == Role::Root
                 && (heads.iter().any(|h| h.id == *id) || keep.binary_search(id).is_ok())
                 && !self.checkpoints.iter().any(|(s, h, _)| *s == e.record.body().signer && h == heads)
@@ -3513,7 +3650,7 @@ impl RecordSet {
     fn links(&self, id: &RecordId) -> bool {
         self.records.values().any(|e| {
             let b = e.record.body();
-            let Kind::Checkpoint { heads, keep } = &b.kind else { return false };
+            let Kind::Checkpoint { heads, keep, .. } = &b.kind else { return false };
             if e.role != Role::Root {
                 return false;
             }
@@ -3537,7 +3674,7 @@ impl RecordSet {
         let (signer, seq) = (r.body().signer, r.body().seq);
         self.records.values().any(|e| {
             let b = e.record.body();
-            let Kind::Checkpoint { heads, keep } = &b.kind else { return false };
+            let Kind::Checkpoint { heads, keep, .. } = &b.kind else { return false };
             if e.role != Role::Root {
                 return false;
             }
@@ -3635,7 +3772,9 @@ impl RecordSet {
             .filter_map(|cp| {
                 let b = self.held(cp)?.body();
                 match &b.kind {
-                    Kind::Checkpoint { heads, keep } => Some((b.signer, heads.clone(), eval::anchors_of(heads, keep))),
+                    Kind::Checkpoint { heads, keep, .. } => {
+                        Some((b.signer, heads.clone(), eval::anchors_of(heads, keep)))
+                    }
                     _ => None,
                 }
             })
@@ -3801,7 +3940,7 @@ impl RecordSet {
                         if !settlers.contains(&b.signer) || (b.signer == h && b.seq <= top) {
                             continue;
                         }
-                        if let Kind::Checkpoint { heads, keep } = &b.kind
+                        if let Kind::Checkpoint { heads, keep, .. } = &b.kind
                             && heads.iter().any(|hd| hd.key == h)
                         {
                             ids.insert(e.record.id());

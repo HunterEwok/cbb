@@ -210,7 +210,7 @@ fn random_group(seed: u64) -> G {
                 }
                 keep.sort();
                 keep.dedup();
-                g.rec(&root, Kind::Checkpoint { heads, keep });
+                g.rec(&root, Kind::Checkpoint { heads, keep, drops: 0 });
             }
         }
     }
@@ -286,7 +286,7 @@ fn a_full_group_fills_in_about_the_time_of_its_signatures() {
                 let mut keep: Vec<RecordId> = root_devices.iter().rev().take(100).map(Record::id).collect();
                 keep.extend(admitted.iter().copied());
                 keep.sort();
-                g.rec(&root, Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep });
+                g.rec(&root, Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep, drops: 0 });
             }
         } else {
             let a = &admins[i % admins.len()];
@@ -377,7 +377,7 @@ fn a_record_the_counting_checkpoint_left_out_waits_for_the_one_above_that_keeps_
         heads.sort_by_key(|h| h.key);
         let mut keep = keep;
         keep.sort();
-        g.rec(&root, Kind::Checkpoint { heads, keep })
+        g.rec(&root, Kind::Checkpoint { heads, keep, drops: 0 })
     };
     let first = checkpoint(&mut g, vec![admission.id()]);
     let second = checkpoint(&mut g, vec![admission.id(), copies.id()]);

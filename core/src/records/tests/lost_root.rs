@@ -452,7 +452,7 @@ fn a_first_record_a_later_checkpoint_settled_arrives_late() {
     let mut keep = keep;
     keep.sort();
     let head = Head { key: n.hash, seq: newer.body().seq, id: newer.id() };
-    let cp = g.rec(&n, Kind::Checkpoint { heads: vec![head], keep });
+    let cp = g.rec(&n, Kind::Checkpoint { heads: vec![head], keep, drops: 0 });
     let whole = g.state();
     assert_eq!(whole.roots.len(), 2);
     assert!(!whole.counting.contains(&old.id()));

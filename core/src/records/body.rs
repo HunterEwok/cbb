@@ -177,9 +177,13 @@ pub enum Kind {
         incoming_ms: u64,
         seen: Vec<Seen>,
     },
+    /// `drops` (field 12): how many times a root's checkpoint left out
+    /// a removal; a device record of an older epoch counts only where the
+    /// counting checkpoint keeps it (section 10).
     Checkpoint {
         heads: Vec<Head>,
         keep: Vec<RecordId>,
+        drops: u64,
     },
     Hubs {
         hubs: Vec<DeviceId>,
@@ -293,6 +297,10 @@ pub struct Device {
     /// Field 26: when a root's record takes the admin key away or names
     /// another, what the old key signed up to these heads still counts.
     pub seen: Vec<Seen>,
+    /// Field 27: the `drops` its signer held when it signed. Of an older
+    /// epoch than the member's, it counts only where the counting
+    /// checkpoint or the change's list keeps it.
+    pub epoch: u64,
 }
 
 impl Device {
@@ -315,6 +323,7 @@ impl Device {
             replaces: None,
             guarded: false,
             seen: Vec::new(),
+            epoch: 0,
         }
     }
 
@@ -471,7 +480,7 @@ impl Body {
                 }
                 check_seen(seen, t)?;
             }
-            Kind::Checkpoint { heads, keep } => {
+            Kind::Checkpoint { heads, keep, .. } => {
                 let keys: Vec<KeyHash> = heads.iter().map(|h| h.key).collect();
                 if heads.is_empty() || !strictly_sorted(&keys) || heads.iter().any(|h| h.seq == 0 || h.seq > MAX_SEQ) {
                     return Err(field(t, "heads"));
@@ -572,13 +581,16 @@ impl Body {
                 m.push((10, Value::Uint(*incoming_ms)));
                 m.push((11, seen(s)));
             }
-            Kind::Checkpoint { heads, keep } => {
+            Kind::Checkpoint { heads, keep, drops } => {
                 let heads = heads
                     .iter()
                     .map(|h| Value::Array(vec![Value::Bytes(&h.key.0), Value::Uint(h.seq), Value::Bytes(&h.id.0)]));
                 m.push((10, Value::Array(heads.collect())));
                 if !keep.is_empty() {
                     m.push((11, ids(keep)));
+                }
+                if *drops != 0 {
+                    m.push((12, Value::Uint(*drops)));
                 }
             }
             Kind::Hubs { hubs, seen: s } => {
@@ -655,7 +667,8 @@ impl Body {
                     _ => None,
                 })?;
                 let keep = r.opt_list(11, f("keep"), |v| v.as_bytes().and_then(RecordId::from_slice))?;
-                (Kind::Checkpoint { heads, keep }, &[10, 11], &[])
+                let drops = r.opt_uint(12, 0, f("drops"))?;
+                (Kind::Checkpoint { heads, keep, drops }, &[10, 11, 12], &[])
             }
             TYPE_HUBS => {
                 let hubs = r.need_list(10, f("hubs"), |v| v.as_bytes().and_then(DeviceId::from_slice))?;
@@ -810,6 +823,7 @@ fn read_device(r: &Read<'_, '_>) -> Result<Device, Rule> {
         replaces,
         guarded: r.flag(25, f("guarded"))?,
         seen: r.opt_list(26, f("seen"), seen_entry_of)?,
+        epoch: r.opt_uint(27, 0, f("epoch"))?,
     })
 }
 
@@ -841,7 +855,7 @@ pub(crate) const COMMON_FIELDS: [u16; 6] = [1, 2, 3, 4, 5, 6];
 
 /// A device record's own fields; with COMMON_FIELDS they are the format's
 /// `DEVICE_FIELDS` (a test holds the two lists equal).
-pub(crate) const DEVICE_OWN: &[u16] = &[10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26];
+pub(crate) const DEVICE_OWN: &[u16] = &[10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27];
 
 fn check_device(d: &Device) -> Result<bool, Rule> {
     let t = "device";
@@ -923,6 +937,9 @@ fn encode_device<'a>(m: &mut Vec<(u16, Value<'a>)>, d: &'a Device) {
     }
     if !d.seen.is_empty() {
         m.push((26, seen(&d.seen)));
+    }
+    if d.epoch != 0 {
+        m.push((27, Value::Uint(d.epoch)));
     }
 }
 

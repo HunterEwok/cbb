@@ -505,7 +505,7 @@ fn members_that_did_and_did_not_compact_end_equal() {
     keep.sort();
     let mut heads = vec![Head { key: a.hash, seq: aseq, id: aid }, Head { key: root.hash, seq: rseq, id: rid }];
     heads.sort();
-    g.root_rec(Kind::Checkpoint { heads, keep });
+    g.root_rec(Kind::Checkpoint { heads, keep, drops: 0 });
     let before = g.state();
     assert!(!has(&before, &k("lamp")) && has(&before, &k("bulb")));
     let old = g.recs.clone();
@@ -552,7 +552,7 @@ fn the_new_roots_first_checkpoint_closes_the_list() {
     let mut keep: Vec<RecordId> = g.listing().into_iter().filter(|x| *x != late.id()).collect();
     keep.sort();
     keep.retain(|x| g.recs.iter().any(|r| r.id() == *x && r.body().signer != n1.hash));
-    g.rec(&n1, Kind::Checkpoint { heads: vec![Head { key: n1.hash, seq, id }], keep });
+    g.rec(&n1, Kind::Checkpoint { heads: vec![Head { key: n1.hash, seq, id }], keep, drops: 0 });
     let without: Vec<Record> = g.recs.iter().filter(|r| r.id() != late.id()).cloned().collect();
     let mut m = set_with(&g.root.key, &without, &g.lists);
     assert!(!m.missing(&m.state()).contains(&late.id()));
@@ -1189,7 +1189,7 @@ fn a_dropped_removal_brings_no_admin_admission_back() {
     let mut keep: Vec<RecordId> =
         st.counting.iter().copied().filter(|id| *id != admitted.id() && *id != aid && *id != rid).collect();
     keep.sort();
-    g.root_rec(Kind::Checkpoint { heads, keep });
+    g.root_rec(Kind::Checkpoint { heads, keep, drops: 0 });
     let mut writer = set_of(&g.root.key);
     sync_all(&mut writer, &g.recs, &g.lists);
     assert!(!writer.contains(&admitted.id()));
@@ -1425,7 +1425,7 @@ fn a_large_first_checkpoint_applies() {
     let mut heads: Vec<Head> =
         admins.iter().map(|a| Head { key: a.hash, seq: g.heads[&a.hash].0, id: g.heads[&a.hash].1 }).collect();
     heads.sort_by_key(|h| h.key);
-    let cp = g.root_rec(Kind::Checkpoint { heads, keep });
+    let cp = g.root_rec(Kind::Checkpoint { heads, keep, drops: 0 });
     let from = g.recs.clone();
     assert_eq!(set_with(&g.root.key, &from, &g.lists).state().checkpoint, Some(cp.id()));
     let w = write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
@@ -1444,7 +1444,7 @@ fn a_checkpoint_over_its_ceiling_is_not_signed() {
     keep.sort();
     let root = k("root");
     let head = Head { key: root.hash, seq: g.heads[&root.hash].0, id: g.heads[&root.hash].1 };
-    let body = g.body(&root, Kind::Checkpoint { heads: vec![head], keep });
+    let body = g.body(&root, Kind::Checkpoint { heads: vec![head], keep, drops: 0 });
     assert!(body.encode().len() > crate::records::MAX_CHECKPOINT_BODY);
     assert!(Record::sign(body, &root).is_err());
 }
@@ -1743,7 +1743,10 @@ fn a_checkpoint_keeping_what_the_change_cut_counts_nowhere() {
     let mut keep: Vec<RecordId> = list.iter().copied().filter(|id| *id != tv).chain([lamp.id()]).collect();
     keep.sort();
     let (rs, rid) = g.heads[&g.root.hash];
-    let cp = g.rec(&k("admin a"), Kind::Checkpoint { heads: vec![Head { key: g.root.hash, seq: rs, id: rid }], keep });
+    let cp = g.rec(
+        &k("admin a"),
+        Kind::Checkpoint { heads: vec![Head { key: g.root.hash, seq: rs, id: rid }], keep, drops: 0 },
+    );
     let l = List(list.clone());
     g.lists.push(l.encode());
     g.rec(
@@ -1907,6 +1910,7 @@ fn a_change_of_root_ends_two_histories_of_the_root() {
 /// admission again, never the removal.
 #[test]
 fn a_change_of_root_leaves_out_what_either_history_pruned() {
+    let _drop = crate::records::set::drop_settled();
     let mut g = base();
     let root = k("root");
     let (pa, a) = (k("phone a"), k("admin a"));
@@ -1921,7 +1925,7 @@ fn a_change_of_root_leaves_out_what_either_history_pruned() {
     let one = set.write_checkpoint(&st, &root, 1).unwrap();
     let two = set.write_checkpoint(&st, &root, 2).unwrap();
     for cp in [&one, &two] {
-        let Kind::Checkpoint { keep, heads } = &cp.body().kind else { panic!() };
+        let Kind::Checkpoint { keep, heads, .. } = &cp.body().kind else { panic!() };
         assert!(!keep.contains(&rv.id()) && !keep.contains(&admitted.id()) && !heads.iter().any(|h| h.id == rv.id()));
     }
     // Each history compacted by its own checkpoint; the removal is gone
@@ -1954,6 +1958,7 @@ fn a_change_of_root_leaves_out_what_either_history_pruned() {
 /// the list carries.
 #[test]
 fn the_new_roots_checkpoint_prunes_a_listed_removal() {
+    let _drop = crate::records::set::drop_settled();
     let mut g = base();
     let tv = g
         .recs
@@ -1988,6 +1993,7 @@ fn the_new_roots_checkpoint_prunes_a_listed_removal() {
 /// goes when the new root removes the device.
 #[test]
 fn a_device_that_comes_in_through_the_list_is_a_notice() {
+    let _drop = crate::records::set::drop_settled();
     let mut g = base();
     let root = k("root");
     g.device(&root, &k("d"), "d", |_| {});
@@ -2076,7 +2082,7 @@ fn a_halted_member_takes_back_a_listed_record_a_checkpoint_pruned() {
     let laptop = g.device(&root, &k("laptop"), "laptop", |_| {});
     let tv = g.device(&root, &k("tv"), "tv", |_| {});
     let (seq, id) = g.heads[&root.hash];
-    g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep: vec![tv.id()] });
+    g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep: vec![tv.id()], drops: 0 });
     let list = List(vec![laptop.id()]);
     g.lists.push(list.encode());
     let head = g.rec(
@@ -2119,7 +2125,7 @@ fn a_halted_member_takes_back_what_the_new_roots_checkpoint_left_out() {
     let list = g.listing();
     let head = g.change(&n1, &list);
     let (seq, id) = g.heads[&n1.hash];
-    g.rec(&n1, Kind::Checkpoint { heads: vec![Head { key: n1.hash, seq, id }], keep: vec![] });
+    g.rec(&n1, Kind::Checkpoint { heads: vec![Head { key: n1.hash, seq, id }], keep: vec![], drops: 0 });
     let mut member = set_of(&g.root.key);
     sync_all(&mut member, &g.recs, &g.lists);
     assert!(!member.contains(&laptop.id()));
@@ -2490,6 +2496,7 @@ fn a_checkpoint_that_keeps_what_its_change_cuts_settles_nothing() {
                 id: first,
             }],
             keep: vec![x.id()],
+            drops: 0,
         },
     );
     let recs: Vec<Record> = g.recs.iter().filter(|r| r.id() != below.id()).cloned().collect();
