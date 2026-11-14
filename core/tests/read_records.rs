@@ -688,7 +688,6 @@ fn an_honest_checkpoint_keeps_none_of_its_root_s_older_checkpoints() {
 /// An honest root writes checkpoints in a row, a few devices admitted
 /// between each, and the writer never refuses one.
 #[test]
-#[ignore = "being settled at records: a checkpoint names every device past the cap and stops fitting its room; run with --ignored --release --nocapture"]
 fn honest_checkpoints_in_a_row() {
     let (mut set, root, mut g) = root_with_dead_checkpoints(0, 0);
     for round in 0..700u32 {
@@ -1258,7 +1257,6 @@ fn an_admin_admitted_after_an_admin_removal_is_in_the_first_tier() {
 /// Y, so the tiers differ while they hold different records. After they
 /// give each other all they hold, they are equal.
 #[test]
-#[ignore = "being settled at records: after sync the member that held the take-back first keeps fewer records; run with --ignored --release"]
 fn members_with_different_root_records_agree_after_sync() {
     let (recs, root, _admins, mut g) = full_group("a", 8);
     // The root takes admin key 3 back: its phone's newest record names none.
@@ -1398,7 +1396,6 @@ fn same(a: &RecordSet, b: &RecordSet) -> bool {
 /// before or after D's admission, or shuffled with eight seeds and offered
 /// three times) ends with the same set and state.
 #[test]
-#[ignore = "being settled at records: the take-back before D's admission ends with fewer records; run with --ignored --release"]
 fn one_member_ends_equal_whatever_the_order() {
     for ex in [0u32, 6, 7, 8] {
         let c = take_back("o", ex);
@@ -1462,7 +1459,6 @@ fn a_restore_in_any_order_equals_the_member() {
 /// A live member that held the take-back first takes, offered again, the
 /// records it turned away while it was the only one to hold it.
 #[test]
-#[ignore = "being settled at records: the live member keeps turning them away until a restart; run with --ignored --release"]
 fn a_live_member_takes_what_it_turned_away_when_offered_again() {
     for ex in [0u32, 6, 7, 8] {
         let c = take_back("l", ex);
@@ -1592,7 +1588,7 @@ fn until_stable(set: &mut RecordSet, records: &[Record], lists: &[Vec<u8>]) -> u
 /// with the set the signing order settles at, and offering again changes
 /// nothing.
 #[test]
-#[ignore = "being settled at records: one offer ends with a set that depends on the order; run with --ignored --release --nocapture"]
+#[ignore = "slow (about five minutes in release); run with --ignored --release --nocapture"]
 fn records_that_move_the_tiers_end_equal_whatever_the_order() {
     let m = moving_records("m");
     let mut bad = Vec::new();
