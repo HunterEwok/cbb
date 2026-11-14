@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (C) 2026 HunterEwok
 
-//! Which records a set keeps (rule 6): a ceiling for each key, then the
-//! set's room shared fairly between keys, so that no key, an old root's
-//! included, can push another key's records out by making many of its own.
+//! Which records a set keeps (rule 6): a cap for each key, fixed by the
+//! roster, so that no key, an old root's included, can push another key's
+//! records out by making many of its own.
 //!
 //! The room is counted in units: a record takes one unit for each 512
 //! bytes it starts (3.5 MiB over 7168 units). 7168 units hold at most
@@ -20,24 +20,23 @@
 //! takeover lists is kept, within that root's ceiling (rule 32), and the
 //! recovery chain is kept outside the rooms (rule 33). The order is each
 //! record's own and which checkpoint is its key's newest, never anything
-//! else the set holds, so that a set that drops records as they come keeps
-//! what one that saw them all at once keeps. At level s a
-//! key keeps the longest start of that order within min(s, its ceiling)
-//! units. A key's demand at s is min(s, its ceiling, all its units); s is
-//! the highest level at which the demands fit in 7168 units. So a key whose
-//! records take few units keeps them all whatever the others make: another
-//! key's records only lower the level down to the first key's own.
+//! else the set holds. A key keeps the longest start of that order, in
+//! whole records, within its cap less what it holds first (`keep_tiers`).
+//! The cap is fixed by the roster alone, never by what other keys hold,
+//! so a key whose records stay within its cap keeps them all whatever
+//! the others make.
 //!
 //! The ceilings: the group's first root's 1536 units, and a root the
 //! member's evaluation put on the path (`RecordSet::compact`) the same;
 //! the roots a takeover cut 1536 together (the reserve); an admin key's
 //! 256. Any other key has no room and keeps nothing.
 //!
-//! What is kept depends on the records alone, never on the order they came
-//! in. A member that drops records as they come remembers a little of what
-//! it dropped (`Cut`: the level, which only falls as records are added, and
-//! for each key the first record it dropped), and so keeps exactly what one
-//! that saw them all at once keeps.
+//! A set holds the records it would keep of what it holds (each insert
+//! ends judged), and two members that exchange everything both end at
+//! what one would keep of both sets. With records of unequal sizes a key
+//! that passed its cap may keep other records than one that saw them all
+//! at once would: what a member ends with can hang on the order the
+//! records came in. A key that never passes its cap loses nothing.
 
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::vec::Vec;
@@ -277,9 +276,9 @@ pub fn keep_with(
 /// tier leaves, in equal caps of at most an admin key's ceiling. Each key
 /// keeps the longest run of its first records, whole, within its cap less
 /// what it holds first. So what a key keeps hangs on its own records and
-/// the roster only: the same records in any order, offered once or again,
-/// keep the same, and a set that keeps some and takes more keeps what it
-/// would keep of all of them at once, while the roster stays.
+/// the roster only, never on what other keys hold. A key that passed its
+/// cap with records of unequal sizes may keep other records after it
+/// dropped some than at once (see the module's last paragraph).
 pub fn keep_tiers(
     items: &[Item],
     ceiling_of: impl Fn(&KeyHash) -> Option<u64>,

@@ -2936,6 +2936,37 @@ impl RecordSet {
         moved.is_some_and(|m| at.is_none_or(|a| m > a))
     }
 
+    /// The live admin keys (`eval::not_live`) that an admin's removal
+    /// removed in state, when a root record naming admin key `new`, not
+    /// named yet, would be past the first ADMIN_KEYS_MAX: what the root
+    /// removes before it names `new`.
+    fn live_removed_by_admins(&self, state: &State, new: &KeyHash) -> Vec<KeyHash> {
+        let recs = || {
+            self.records
+                .values()
+                .filter(|e| !eval::off_cut(&self.cuts, &e.record))
+                .map(|e| (&e.record, self.role_of(e)))
+        };
+        let named: BTreeSet<KeyHash> = recs()
+            .filter(|(r, role)| *role == Role::Root && self.path.contains(&r.body().signer))
+            .filter_map(|(r, _)| match &r.body().kind {
+                Kind::Device(d) => d.admin.as_ref().map(Key::hash),
+                _ => None,
+            })
+            .collect();
+        if named.contains(new) {
+            return Vec::new();
+        }
+        let (second, _, live) = eval::not_live(&self.path, &self.cuts, recs());
+        if live < super::ADMIN_KEYS_MAX {
+            return Vec::new();
+        }
+        let mut out: Vec<KeyHash> =
+            named.into_iter().filter(|k| !second.contains(k) && state.revoked.contains(k)).collect();
+        out.sort();
+        out
+    }
+
     /// Writes signer's next ordinary record of kind (every type but a
     /// checkpoint, which `write_checkpoint` writes, and a change of root,
     /// which `write_change` writes): its seq and prev follow the key's
@@ -3063,6 +3094,25 @@ impl RecordSet {
         let Some(ceiling) = self.ceiling(&h) else {
             return Err(Error::msg("this key has no room in the group's records"));
         };
+        // The 17th admin key the root names: a live key an admin removed
+        // still holds one of the 16 places, since who is an admin is read
+        // from root records alone (`eval::not_live`). The root removes it
+        // first, so the new key is live (all or nothing).
+        if state.roots.last() == Some(&h)
+            && let Kind::Device(d) = &kind
+            && let Some(a) = d.admin.as_ref().map(Key::hash)
+        {
+            let removed = self.live_removed_by_admins(state, &a);
+            if !removed.is_empty() {
+                let mut trial = self.clone();
+                let rm = super::body::Removal { seen: trial.heads_of(state, &removed), keys: removed };
+                trial.write_one(state, signer, Kind::Revoke(rm), time_ms)?;
+                let now = trial.state();
+                let r = trial.write_one(&now, signer, kind, time_ms)?;
+                *self = trial;
+                return Ok(r);
+            }
+        }
         let own = self.heads_where(|k| *k == h).into_iter().next();
         let (seq, prev) = own.map_or((1, None), |o| (o.seq.saturating_add(1), Some(o.id)));
         let body = Body { group: self.group, signer: h, seq, prev, time_ms, kind, held: false };

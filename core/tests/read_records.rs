@@ -1219,12 +1219,12 @@ fn new_set() -> RecordSet {
     RecordSet::new(k("root").key, recovery)
 }
 
-/// Being settled: a key an admin removed. Admin A removes admin B (an
-/// admin removal, not the root's), then the root admits C, the 17th key it
-/// names; C fills its room. Wanted: C is in the first tier and keeps what
-/// a live admin keeps.
+/// A key an admin removed. Admin A removes admin B (an admin removal, not
+/// the root's), then the root admits C, the 17th key it names, through its
+/// writer: the writer first writes the root's own removal of B, so that C
+/// is among the 16 live keys, in the first tier, and keeps what a live
+/// admin keeps when it fills its room.
 #[test]
-#[ignore = "being settled at records: a key an admin removed still takes a live admin's place in the tiers"]
 fn an_admin_admitted_after_an_admin_removal_is_in_the_first_tier() {
     let (recs, root, admins, mut g) = full_group("b", 8);
     let mut set = new_set();
@@ -1233,22 +1233,22 @@ fn an_admin_admitted_after_an_admin_removal_is_in_the_first_tier() {
         &admins[0],
         Kind::Revoke(cbb_core::records::body::Removal { keys: vec![admins[1].hash], seen: Vec::new() }),
     );
-    let _ = set.insert(rm);
+    set.insert(rm).unwrap();
+    assert!(set.state().revoked.contains(&admins[1].hash));
     let (c, r) = admit_admin(&mut g, &root, "b admin C");
-    let _ = set.insert(r);
+    let st = set.state();
+    let written = set.write_record(&st, &root, r.body().kind.clone(), g.t + 1).unwrap();
+    assert!(set.contains(&written.id()));
     let mut ids = Vec::new();
     for n in 0..16u32 {
         let r = wide_removal(&mut g, &c, "b C", n);
         ids.push(r.id());
         let _ = set.insert(r);
     }
-    let live_keeps = 14usize;
     let kept = ids.iter().filter(|id| set.contains(id)).count();
-    println!(
-        "C keeps {kept} of 16 (a live admin keeps {live_keeps}); B removed: {}",
-        set.state().revoked.contains(&admins[1].hash)
-    );
-    assert_eq!(kept, live_keeps, "C is squeezed as if no longer an admin");
+    // As a live admin key of this group keeps of its 16 (`full_group`).
+    let live_keeps = set.in_dependency_order().iter().filter(|r| r.body().signer == admins[2].hash).count();
+    assert_eq!(kept, live_keeps, "C keeps {kept} of 16: squeezed as if no longer an admin");
 }
 
 /// Two members holding different subsets of the root's records: X holds
@@ -1394,7 +1394,9 @@ fn same(a: &RecordSet, b: &RecordSet) -> bool {
 
 /// One member given the same records in other orders (the take-back
 /// before or after D's admission, or shuffled with eight seeds and offered
-/// three times) ends with the same set and state.
+/// three times) ends with the same set and state. This holds here
+/// because no key passes its cap; a key past its cap with records of
+/// unequal sizes may end with other records in another order.
 #[test]
 fn one_member_ends_equal_whatever_the_order() {
     for ex in [0u32, 6, 7, 8] {
