@@ -594,7 +594,7 @@ service and command line, the kits are the phones' Swift and Kotlin kits, and th
 | `records::RecordSet::change_arriving` (from `State::first_missing`, `list_missing`) | a change of root waits for the new root's first records or its list | the apps, which show "a change of root is arriving" | to add |
 | `records::RecordSet::room_of`, `root_room` | a key's room: its tier, its fixed cap, the units its records take and `left()`; `full_for(units)` when the key's next record would not fit (a per-key "this key's room is full", never a flag for the whole group) | the apps, beside each admin key and the root | to add |
 | `records::RecordSet::would_take` | what the rooms would do with a record now, on a copy: kept, kept and pushing out some of the same key's newest records, or turned away with the room and the record's units. Nothing changes | the writer before it signs; the apps, to say why a record of theirs did not stay | to add |
-| `records::RecordSet::removal_warning` | before an admin removal is signed: the devices that would leave the group and those that would no longer hold an admin key, exactly as the written removal would be judged | the admin's app, in the confirmation | to add |
+| `records::RecordSet::removal_warning` | before an admin removal is signed: the devices that would leave the group and those that would no longer hold an admin key. Being settled: today it judges the removal alone, without the checkpoint the root's writer writes first, so it can name devices that checkpoint keeps; it is to judge what writing the removal now would really leave out | the admin's app, in the confirmation | to add |
 
 ### Sync of records: what a driver must do
 

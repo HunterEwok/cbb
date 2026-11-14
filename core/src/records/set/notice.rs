@@ -15,23 +15,14 @@ use super::super::key::{DeviceId, KeyHash, RecordId};
 use super::super::{Kind, Record};
 use super::{Added, RecordSet};
 
-/// Which tier of the rooms a key is in (docs/protocol.md, section 10,
-/// "Tiers inside the rooms").
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Tier {
-    /// The root, the roots a change cut, and the live admin keys.
-    First,
-    /// The keys that are no longer admins: they share what the first tier's
-    /// caps leave.
-    Second,
-}
-
-/// A key's room: its fixed cap and what its records take now.
+/// A key's room: its fixed cap and what its records take now. The cap is
+/// the root's, the reserve of the roots a change cut, a live admin key's,
+/// or 0 for a key that is no longer an admin (docs/protocol.md, section
+/// 10, "Tiers inside the rooms").
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Room {
     /// The key whose room it is (the roots a change cut share one).
     pub key: KeyHash,
-    pub tier: Tier,
     /// The units of 512 bytes the room holds at most, read from the roster
     /// (what is kept first included).
     pub cap: u64,
@@ -106,14 +97,14 @@ impl RecordSet {
     }
 
     /// The room of a key that may sign records (the root, an admin key, a
-    /// key no longer an admin, a cut root); None for a key with no room.
+    /// key no longer an admin with cap 0, a cut root); None for any other
+    /// key.
     pub fn room_of(&self, key: &KeyHash) -> Option<Room> {
         let k = self.room_key(key);
         let cap = self.cap_of(&k)?;
-        let tier = if self.second.contains(&k) { Tier::Second } else { Tier::First };
         let used =
             self.units.iter().filter(|(s, _)| self.room_key(s) == k).fold(0u64, |t, (_, u)| t.saturating_add(*u));
-        Some(Room { key: k, tier, cap, used })
+        Some(Room { key: k, cap, used })
     }
 
     /// The current root's room (`room_of` of the last root of the path).
@@ -162,6 +153,9 @@ impl RecordSet {
     /// would no longer hold an admin key, from the records the set holds.
     /// Nothing is signed or written; the removal is evaluated as if it
     /// were the remover's next record.
+    /// Being settled: the root's writer writes a checkpoint before such a
+    /// removal; this judges the removal without it, so it can name devices
+    /// that checkpoint would keep.
     pub fn removal_warning(
         &self,
         state: &State,
