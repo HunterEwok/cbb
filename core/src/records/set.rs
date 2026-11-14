@@ -441,6 +441,7 @@ impl RecordSet {
     }
 
     /// The first checkpoints kept outside the rooms (`eval::Chain::firsts`).
+    #[allow(dead_code, reason = "the tests read it; the Welcome in parts no longer does")]
     pub(crate) fn firsts(&self) -> &eval::Firsts {
         &self.firsts
     }
@@ -760,7 +761,9 @@ impl RecordSet {
         if self.needs_cut(&signer) {
             self.cut();
         }
-        if (first || self.gaps.contains(&id)) && self.trusted.is_empty() {
+        let settles = !self.gaps.is_empty()
+            && matches!(self.records.get(&id).map(|e| &e.record.body().kind), Some(Kind::Checkpoint { .. }));
+        if (first || settles || self.gaps.contains(&id)) && self.trusted.is_empty() {
             // A head's first checkpoint, or the record its group lacked:
             // the head may apply now.
             self.rechain();
@@ -867,7 +870,11 @@ impl RecordSet {
             return Ok(Added::NoRoom);
         }
         // A head's first checkpoint: the head may apply now.
+        // A later checkpoint may settle the record a change lacks.
+        let settles = !self.gaps.is_empty()
+            && matches!(self.early.get(&id).map(|r| &r.body().kind), Some(Kind::Checkpoint { .. }));
         let names = self.gaps.contains(&id)
+            || settles
             || self
                 .records
                 .values()

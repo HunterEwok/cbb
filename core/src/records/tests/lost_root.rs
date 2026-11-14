@@ -418,3 +418,71 @@ fn a_restart_after_two_changes_and_a_checkpoint() {
         assert_eq!(joiner.state(), st, "round {rounds}: a joiner");
     }
 }
+
+/// A new root signs records before its first checkpoint, then a later
+/// checkpoint that settles one of them (it keeps the newer record of that
+/// device, not the older). A
+/// member that never gets that record applies the change once the later
+/// checkpoint comes, whatever came first, as it does after a restart; the
+/// settled record arriving afterwards from a slow peer changes nothing.
+#[test]
+fn a_first_record_a_later_checkpoint_settled_arrives_late() {
+    let mut g = G::new();
+    for i in 0..2 {
+        g.device(&k("root"), &k(&format!("d{i}")), "d", |_| {});
+    }
+    let n = k("n1");
+    g.device(&n, &k("a"), "a", |_| {});
+    let old = g.device(&n, &k("b"), "b", |d| d.rights = RIGHT_READ);
+    let list = g.listing();
+    g.change(&n, &list);
+    let newer = g.device(&n, &k("b"), "b", |_| {});
+    let counting = g.state().counting;
+    let keep: Vec<RecordId> = g
+        .recs
+        .iter()
+        .filter(|r| {
+            r.body().signer == n.hash
+                && r.body().seq < newer.body().seq + 1
+                && counting.contains(&r.id())
+                && r.id() != old.id()
+        })
+        .map(Record::id)
+        .collect();
+    let mut keep = keep;
+    keep.sort();
+    let head = Head { key: n.hash, seq: newer.body().seq, id: newer.id() };
+    let cp = g.rec(&n, Kind::Checkpoint { heads: vec![head], keep });
+    let whole = g.state();
+    assert_eq!(whole.roots.len(), 2);
+    assert!(!whole.counting.contains(&old.id()));
+    let without: Vec<Record> = g.recs.iter().filter(|r| r.id() != old.id()).cloned().collect();
+    for (i, order) in
+        [without.clone(), without.iter().rev().cloned().collect(), shuffled(&without, 3)].into_iter().enumerate()
+    {
+        let mut m = set_of(&g.root.key);
+        for _ in 0..3 {
+            for r in &order {
+                let _ = m.insert(r.clone());
+            }
+            for l in &g.lists {
+                let _ = m.insert_list(l);
+            }
+        }
+        let st = m.state();
+        assert_eq!(st.roots, whole.roots, "order {i}");
+        assert_eq!(st.devices, whole.devices, "order {i}");
+        assert!(st.counting.contains(&cp.id()), "order {i}");
+        let saved: Vec<Record> = m.in_dependency_order().into_iter().cloned().collect();
+        let lists: Vec<Vec<u8>> = m.lists().map(<[u8]>::to_vec).collect();
+        let back = RecordSet::restore(m.root().clone(), m.recovery().clone(), &saved, &lists);
+        assert_eq!(back.state(), st, "order {i}: a restart");
+        // The settled record, late.
+        let _ = m.insert(old.clone());
+        assert_eq!(m.state().devices, st.devices, "order {i}: the late record");
+        assert!(!m.state().counting.contains(&old.id()), "order {i}: the late record counts");
+        let saved: Vec<Record> = m.in_dependency_order().into_iter().cloned().collect();
+        let back = RecordSet::restore(m.root().clone(), m.recovery().clone(), &saved, &lists);
+        assert_eq!(back.state(), m.state(), "order {i}: a restart after the late record");
+    }
+}

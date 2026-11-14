@@ -1869,6 +1869,16 @@ mod differential {
                             g.recs.push(r);
                         }
                     } else {
+                        if arg % 7 == 5 || arg % 7 == 4 {
+                            // A first record before the first checkpoint,
+                            // which a later device record of the same key
+                            // replaces and a checkpoint may then prune.
+                            let mut d = Device::new(target.key.clone(), "first", ROLE_MEMBER);
+                            d.rights = RIGHT_READ;
+                            if let Ok(r) = Record::sign(g.body(new_root, Kind::device(d)), new_root) {
+                                g.push(r);
+                            }
+                        }
                         g.change(new_root, &list);
                     }
                     continue;
@@ -1885,11 +1895,13 @@ mod differential {
                         .recs
                         .iter()
                         // A checkpoint keeps what counts, as a real one
-                        // does, and of the rest some.
+                        // does, and of the rest some; now and then it
+                        // leaves out one that counts, as a root may.
                         .filter(|r| {
                             r.body().signer == by.hash
                                 && r.body().seq < seq
-                                && (counting.contains(&r.id()) || r.id().0[0] % 2 == arg % 2)
+                                && (counting.contains(&r.id()) && (arg % 3 != 0 || r.id().0[1] % 2 != 0)
+                                    || r.id().0[0] % 2 == arg % 2)
                         })
                         .map(Record::id)
                         .collect();
@@ -1957,6 +1969,18 @@ mod differential {
             assert_eq!(back.ids().collect::<Vec<_>>(), set.ids().collect::<Vec<_>>(), "restored IDs");
             assert_eq!(back.digest(), set.digest());
             assert_eq!(back.state(), st, "restored state");
+        }
+        // A device that joins gets the same in parts, as the Welcome sends
+        // them.
+        if let Some(peer) = st.devices.first().map(|d| d.key.hash()) {
+            let mut joiner = RecordSet::new(set.root().clone(), set.recovery().clone());
+            for _ in 0..3 {
+                for p in set.parts_for_peer(&st, &peer) {
+                    let records: Vec<Record> = p.records.iter().map(|r| (*r).clone()).collect();
+                    joiner.take_part(&records, &p.lists);
+                }
+            }
+            assert_eq!(joiner.state(), st, "a joiner's state");
         }
     }
 
