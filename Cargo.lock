@@ -247,6 +247,7 @@ dependencies = [
 name = "cbb-member"
 version = "0.1.0"
 dependencies = [
+ "aes",
  "aes-gcm",
  "base64 0.23.1",
  "blake2 0.11.0",
@@ -254,6 +255,7 @@ dependencies = [
  "cbb-core",
  "chacha20 0.10.2",
  "chacha20poly1305 0.11.0",
+ "des",
  "getrandom 0.4.3",
  "gotatun",
  "hkdf",
@@ -650,6 +652,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "des"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "916a94e407b54f9034d71dd748234cd1e516ced6284009906ae246f177eafe5a"
+dependencies = [
+ "cipher 0.5.2",
 ]
 
 [[package]]

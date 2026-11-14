@@ -80,6 +80,11 @@ pub const MAX_PARTS_BYTES: usize = {
     let firsts = super::intro::MAX_HEADS * (MAX_CHECKPOINT_BODY + ENVELOPE_ALLOWANCE + MAX_SIG2);
     MAX_SET_BYTES + waiting + sig2s + lists + heads + firsts + (1 << 20)
 };
+// The second signatures a Welcome carries are among those the set holds.
+const _: () = assert!(
+    (crate::records::MAX_RECORDS + crate::records::MAX_ROOT_RECORDS) * (crate::format::envelope::MAX_SIG2 + 9)
+        <= crate::records::MAX_SET_SIG2_BYTES
+);
 // The parts' bytes fit the parts' count, each part a frame.
 const _: () = assert!(MAX_PARTS_BYTES <= MAX_PARTS as usize * crate::records::sync::PART_BYTES);
 const _: () = assert!(RECORDS_BUDGET + STATEMENTS_BUDGET + 64 * 1024 <= crate::format::frame::LIMIT_MEMBER);
