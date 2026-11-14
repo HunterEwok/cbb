@@ -501,3 +501,97 @@ fn a_frozen_admin_with_nothing_waiting_stays_and_thaws() {
     assert!(st.device_by_key(&pa.hash).is_some_and(|d| !d.frozen && d.admin == Some(a.hash)));
     assert!(has(&st, &k("x")), "what it signed before the freeze is back");
 }
+
+/// Wide removals by one admin and a removal by another, half the admins
+/// acknowledge, a checkpoint, a take-back of one lagging admin
+/// (`silence`: for its silence; else for a freeze), and another
+/// checkpoint: removals whose signers are still live admins stay held and
+/// count while a live admin has not acknowledged them; once all have, a
+/// removal under its signer's head goes. An admin's removal
+/// of another admin's key never counted (only a root removes an admin
+/// key), so the checkpoints are free to leave it out.
+fn after_a_take_back_other_admins_removals_stay(silence: bool) {
+    let mut g = G::new();
+    let root = k("root");
+    let all = POWER_ADMIT | POWER_MANAGE | POWER_REMOVE;
+    let admins: Vec<(K, K)> =
+        (0..6).map(|i| (k(&alloc::format!("phone {i}")), k(&alloc::format!("admin {i}")))).collect();
+    for (p, a) in &admins {
+        g.admin(p, a, all);
+    }
+    let (a2, a4) = (&admins[2].1, &admins[4].1);
+    let wide: Vec<K> = (0..4).map(|i| k(&alloc::format!("wide {i}"))).collect();
+    for d in &wide {
+        g.device(a2, d, "wide", |_| {});
+    }
+    g.device(a4, &k("e"), "e", |_| {});
+    let seen = g.seen();
+    let r2 = g.rec(a2, Kind::Revoke(removal(&wide.iter().map(|d| d.hash).collect::<Vec<_>>(), seen)));
+    let seen = g.seen();
+    let r4 = g.rec(a4, Kind::Revoke(removal(&[k("e").hash], seen)));
+    let seen = g.seen();
+    let r45 = g.rec(a4, Kind::Revoke(removal(&[admins[5].1.hash], seen)));
+    for (_, a) in admins.iter().take(3) {
+        ack(&mut g, a);
+    }
+    let s0 = g.state();
+    assert!(s0.counting.contains(&r2.id()) && s0.counting.contains(&r4.id()));
+    assert!(
+        !s0.counting.contains(&r45.id()) && !s0.revoked.contains(&admins[5].1.hash),
+        "no admin removes an admin key"
+    );
+    let mut mine = g.recs.clone();
+    mine.push(root_checkpoint(&mut g, &mine));
+    let lagging = &admins[3];
+    if !silence {
+        let seen = g.seen();
+        mine.push(g.root_rec(Kind::Freeze(removal(&[lagging.1.hash], seen))));
+    }
+    let mut set = set_with(&g.root.key, &mine, &g.lists);
+    let st = set.state();
+    assert!(st.counting.contains(&r2.id()) && st.counting.contains(&r4.id()), "both wait after the first checkpoint");
+    let mut heard: BTreeMap<KeyHash, u64> = admins.iter().map(|(_, a)| (a.hash, ADMIN_SILENCE_MS)).collect();
+    if silence {
+        heard.insert(lagging.1.hash, 0);
+    }
+    let back = set.take_back_lagging(&st, &root, &heard, ADMIN_SILENCE_MS).unwrap();
+    let why = if silence { TakeBack::Silence } else { TakeBack::Frozen };
+    assert_eq!(back.len(), 1);
+    assert!(back[0].0 == why && matches!(&back[0].1.body().kind, Kind::Device(d) if d.key.hash() == lagging.0.hash));
+    let st = set.state();
+    let cp = set.write_checkpoint(&st, &root, ADMIN_SILENCE_MS).unwrap();
+    set.insert(cp).unwrap();
+    let st = set.state();
+    // Admin 5 has acknowledged neither; admin 4 saw admin 2's.
+    for r in [&r2, &r4] {
+        assert!(set.contains(&r.id()) && st.counting.contains(&r.id()), "a removal waits for live admins");
+    }
+    for d in wide.iter().chain([&k("e")]) {
+        assert!(st.revoked.contains(&d.hash));
+    }
+    // Once every live admin acknowledges, the next checkpoint lets both go.
+    for i in [0, 1, 2, 4, 5] {
+        let a = &admins[i].1;
+        let st = set.state();
+        if set.ack_due(&st, &a.hash) {
+            set.write_ack(&st, a, ADMIN_SILENCE_MS).unwrap();
+        }
+    }
+    let st = set.state();
+    assert!(set.unacknowledged(&st).values().all(|n| *n == 0), "{:?}", set.unacknowledged(&st));
+    let cp = set.write_checkpoint(&st, &root, ADMIN_SILENCE_MS).unwrap();
+    let Kind::Checkpoint { keep, .. } = &cp.body().kind else { panic!() };
+    assert!(!keep.contains(&r2.id()), "every live admin saw admin 2's removal");
+    let Kind::Checkpoint { heads, .. } = &cp.body().kind else { panic!() };
+    assert!(heads.iter().any(|h| h.id == r4.id()), "admin 4's removal stays as its head until it signs again");
+}
+
+#[test]
+fn after_a_silence_take_back_other_admins_removals_stay() {
+    after_a_take_back_other_admins_removals_stay(true);
+}
+
+#[test]
+fn after_a_frozen_take_back_other_admins_removals_stay() {
+    after_a_take_back_other_admins_removals_stay(false);
+}
