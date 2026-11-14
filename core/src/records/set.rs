@@ -139,6 +139,31 @@ std::thread_local! {
     static STATE_CHECKS: core::cell::Cell<u64> = const { core::cell::Cell::new(0) };
 }
 
+#[cfg(test)]
+std::thread_local! {
+    /// Tests only: true while the state is checked after every insert,
+    /// whatever the set's size (`check_every_insert`).
+    static STATE_EVERY: core::cell::Cell<bool> = const { core::cell::Cell::new(false) };
+}
+
+/// While it lives, the debug check that a set's state is the evaluation
+/// of what it holds runs after every insert of this thread, not only at
+/// the usual intervals (`RecordSet::check_state`).
+#[cfg(test)]
+pub(super) struct EveryInsert(bool);
+
+#[cfg(test)]
+pub(super) fn check_every_insert() -> EveryInsert {
+    EveryInsert(STATE_EVERY.with(|c| c.replace(true)))
+}
+
+#[cfg(test)]
+impl Drop for EveryInsert {
+    fn drop(&mut self) {
+        STATE_EVERY.with(|c| c.set(self.0));
+    }
+}
+
 /// While it lives, the debug check that what a set holds is what its
 /// rooms keep (`RecordSet::check_judged`), which judges the rooms again
 /// after every insert, is off on this thread: for the tests that time a
@@ -1469,9 +1494,10 @@ impl RecordSet {
     }
 
     /// Debug builds: the set's state is the evaluation from scratch of
-    /// every record it holds (those aside too) and its lists. Every time
-    /// while the set is small, then every 64th time, since the evaluation
-    /// verifies every signature again.
+    /// every record it holds (those aside too) and its lists. After every
+    /// insert under `check_every_insert` and while the set is small; then
+    /// every 64th time up to 1024 records, aside ones included, and every
+    /// 4096th beyond, since the evaluation verifies every signature again.
     #[cfg(all(debug_assertions, feature = "std"))]
     fn check_state(&self) {
         let n = STATE_CHECKS.with(|c| {
@@ -1479,7 +1505,16 @@ impl RecordSet {
             c.set(n);
             n
         });
-        if self.records.len() > 32 && !n.is_multiple_of(64) {
+        #[cfg(test)]
+        let every = STATE_EVERY.with(core::cell::Cell::get);
+        #[cfg(not(test))]
+        let every = false;
+        let due = match self.records.len().saturating_add(self.early.len()) {
+            0..=32 => true,
+            33..=1024 => n.is_multiple_of(64),
+            _ => n.is_multiple_of(4096),
+        };
+        if !every && !due {
             return;
         }
         let counted: Vec<Record> =

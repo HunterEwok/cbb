@@ -1948,6 +1948,7 @@ mod differential {
     /// in rounds of sync until one changes nothing: a record it could not
     /// take yet comes again.
     fn fill(root: &Key, recs: &[Record], lists: &[Vec<u8>], every: usize) -> RecordSet {
+        let _every_insert = crate::records::set::check_every_insert();
         let mut m = set_of(&root.clone());
         let mut last = None;
         for _ in 0..12 {
@@ -2609,6 +2610,7 @@ mod differential {
     /// every insert of the first round that its state is evaluate's of all
     /// it holds and that it restores to itself.
     fn small_rooms(g: &G, recs: &[Record], seed: u64) -> ([u8; 32], State) {
+        let _every_insert = crate::records::set::check_every_insert();
         let order = if seed == 0 { recs.to_vec() } else { shuffled(recs, seed) };
         let mut m = set_of(&g.root.key);
         for round in 0..6 {
@@ -2678,6 +2680,205 @@ mod differential {
         }
         let (x, y) = (small_rooms(&g, &recs, 0), small_rooms(&g, &recs, 2_307_232_806_983_518_351));
         assert_eq!(x, y);
+    }
+
+    /// A fixed input of `a_set_agrees_with_evaluate`: two orders of the
+    /// same records keep the same set, a new root's first records included.
+    #[test]
+    fn a_set_agrees_with_evaluate_fixed_5() {
+        let steps = [
+            (2, 0, 190),
+            (3, 1, 33),
+            (0, 5, 75),
+            (0, 4, 101),
+            (0, 5, 103),
+            (4, 8, 3),
+            (0, 5, 43),
+            (0, 0, 0),
+            (0, 0, 0),
+            (4, 8, 162),
+            (0, 6, 0),
+            (0, 5, 187),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+        ];
+        let (g, recs) = build(&steps);
+        let m1 = agree(&g, &recs, 1, 0);
+        let m2 = agree(&g, &recs, 3, 11_318_229_803_502_088_410);
+        assert_eq!(m1.digest(), m2.digest());
+        assert_eq!(m1.state(), m2.state());
+    }
+
+    /// A fixed input of `a_set_agrees_with_evaluate` found by the long
+    /// random runs: the set's state is evaluate's of what it keeps.
+    #[test]
+    fn a_set_agrees_with_evaluate_fixed_6() {
+        let steps =
+            [(4, 1, 214), (0, 5, 173), (4, 8, 141), (0, 5, 1), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 4, 0), (0, 4, 0)];
+        let (g, recs) = build(&steps);
+        let m1 = agree(&g, &recs, 1, 0);
+        let m2 = agree(&g, &recs, 3, 92_239_891_633_715_189);
+        assert_eq!(m1.digest(), m2.digest());
+        assert_eq!(m1.state(), m2.state());
+    }
+
+    /// A fixed input of `a_set_agrees_with_evaluate` found by the long
+    /// random runs: the set's state is evaluate's of what it keeps.
+    #[test]
+    fn a_set_agrees_with_evaluate_fixed_7() {
+        let steps = [
+            (0, 0, 0),
+            (4, 0, 29),
+            (4, 4, 57),
+            (0, 0, 0),
+            (0, 5, 103),
+            (4, 8, 6),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 85),
+        ];
+        let (g, recs) = build(&steps);
+        let m1 = agree(&g, &recs, 1, 0);
+        let m2 = agree(&g, &recs, 3, 4_777_382_074_353_279_197);
+        assert_eq!(m1.digest(), m2.digest());
+        assert_eq!(m1.state(), m2.state());
+    }
+
+    /// A fixed input of `a_set_agrees_with_evaluate` found by the long
+    /// random runs: a member that never compacts ends with the same set.
+    #[test]
+    fn a_set_agrees_with_evaluate_fixed_8() {
+        let steps = [
+            (1, 6, 162),
+            (2, 1, 103),
+            (1, 1, 48),
+            (0, 2, 29),
+            (1, 0, 22),
+            (1, 7, 240),
+            (1, 0, 237),
+            (4, 7, 34),
+            (0, 5, 71),
+            (0, 5, 1),
+            (0, 5, 31),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (4, 8, 27),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 21),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+        ];
+        let (g, recs) = build(&steps);
+        let m1 = agree(&g, &recs, 1, 0);
+        let m2 = agree(&g, &recs, 3, 225_776_739_655_793_442);
+        assert_eq!(m1.digest(), m2.digest());
+        assert_eq!(m1.state(), m2.state());
+    }
+
+    /// A fixed input of `a_set_agrees_with_evaluate` found by the long
+    /// random runs: compacting drops nothing the state counts.
+    #[test]
+    fn a_set_agrees_with_evaluate_fixed_9() {
+        let steps = [
+            (0, 0, 0),
+            (3, 0, 28),
+            (0, 5, 80),
+            (3, 8, 123),
+            (0, 0, 0),
+            (0, 2, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 134),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 50),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (3, 8, 4),
+            (0, 5, 109),
+            (3, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+        ];
+        let (g, recs) = build(&steps);
+        let m1 = agree(&g, &recs, 1, 0);
+        let m2 = agree(&g, &recs, 3, 17_822_396_194_695_716_128);
+        assert_eq!(m1.digest(), m2.digest());
+        assert_eq!(m1.state(), m2.state());
+    }
+
+    /// A fixed input of `a_set_agrees_with_evaluate` found by the long
+    /// random runs: compacting drops nothing the state counts.
+    #[test]
+    fn a_set_agrees_with_evaluate_fixed_10() {
+        let steps = [
+            (0, 5, 67),
+            (0, 0, 0),
+            (0, 6, 0),
+            (4, 4, 9),
+            (0, 5, 95),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 6, 0),
+            (0, 6, 0),
+            (3, 6, 0),
+            (4, 8, 6),
+            (2, 0, 0),
+            (4, 8, 151),
+            (2, 0, 0),
+            (2, 0, 0),
+            (0, 5, 19),
+            (0, 5, 49),
+            (0, 0, 0),
+            (0, 6, 0),
+            (0, 0, 0),
+            (0, 5, 21),
+            (2, 0, 0),
+            (0, 6, 0),
+            (0, 5, 7),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 53),
+            (0, 0, 0),
+            (0, 0, 0),
+        ];
+        let (g, recs) = build(&steps);
+        let m1 = agree(&g, &recs, 1, 0);
+        let m2 = agree(&g, &recs, 3, 10_328_183_375_542_841_891);
+        assert_eq!(m1.digest(), m2.digest());
+        assert_eq!(m1.state(), m2.state());
     }
 
     /// A fixed input of `a_set_agrees_with_evaluate`: a device the root
