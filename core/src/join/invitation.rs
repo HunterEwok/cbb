@@ -34,9 +34,9 @@ use crate::format::{Alg, DeviceId, KeyHash, Rule, Value, cbor};
 use crate::records::State;
 use crate::records::body::{CAP_HUB, RIGHT_HUB, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND, ROLE_LEAF};
 
-use super::PairError;
 use super::approve::{Approved, MemberShown};
 use super::info::Info;
+use super::{PairError, PairExporter};
 
 /// The start of an invitation's text.
 pub const PREFIX: &str = "cbb://join#";
@@ -592,7 +592,7 @@ impl Matched {
     /// own key, never from the peer. `exporter` is the current session's:
     /// none for an answer given in another session. It takes the answer by
     /// value: one answer serves one grant.
-    pub fn binding(self, kept: &Kept, head: Option<(KeyHash, u64)>, exporter: &[u8]) -> Option<Binding> {
+    pub fn binding(self, kept: &Kept, head: Option<(KeyHash, u64)>, exporter: &PairExporter) -> Option<Binding> {
         if !self.of(exporter) {
             return None;
         }
@@ -605,8 +605,8 @@ impl Matched {
     }
 
     /// Whether the answer was given in the session with this exporter.
-    pub(crate) fn of(&self, exporter: &[u8]) -> bool {
-        crate::secret::ct_eq(&self.session, &crate::format::grant::session_mark(exporter))
+    pub(crate) fn of(&self, exporter: &PairExporter) -> bool {
+        crate::secret::ct_eq(&self.session, &crate::format::grant::session_mark(exporter.bytes()))
     }
 
     /// Whether the answer was given to the member with this key.
@@ -625,7 +625,7 @@ impl Matched {
 /// message 67 ([`super::approve::answered_at_home`]).
 pub fn home_code(
     commitment: &[u8; 32],
-    exporter: &[u8],
+    exporter: &PairExporter,
     joiner_nonce: &[u8; 32],
     member_nonce: &[u8; 32],
     joiner: &[u8; 65],
@@ -633,7 +633,7 @@ pub fn home_code(
     if !crate::secret::ct_eq(&code_commitment(joiner_nonce), commitment) {
         return Err(PairError::WrongCode);
     }
-    let code = short_code(exporter, joiner_nonce, member_nonce, &super::NO_INVITATION);
+    let code = short_code(exporter.bytes(), joiner_nonce, member_nonce, &super::NO_INVITATION);
     Ok((code, MemberShown::new(None, exporter, joiner)))
 }
 
@@ -680,7 +680,7 @@ impl JoinerAttempts {
     pub fn open(
         &mut self,
         code: JoinerCode,
-        exporter: &[u8],
+        exporter: &PairExporter,
         member_nonce: &[u8; 32],
         invitation: Option<&Invitation>,
         local: DeviceId,
@@ -692,9 +692,9 @@ impl JoinerAttempts {
             None => super::NO_INVITATION,
         };
         self.showing = true;
-        let session = crate::format::grant::session_mark(exporter);
+        let session = crate::format::grant::session_mark(exporter.bytes());
         let member = crate::format::Key::new(Alg::Es256, member).hash();
-        Ok((short_code(exporter, &code.nonce, member_nonce, &id), code.nonce, Shown { local, session, member }))
+        Ok((short_code(exporter.bytes(), &code.nonce, member_nonce, &id), code.nonce, Shown { local, session, member }))
     }
 
     /// The person answered the shown code: only now may the person start
@@ -763,7 +763,7 @@ impl Open {
     pub fn short_code(
         &mut self,
         number: u64,
-        exporter: &[u8],
+        exporter: &PairExporter,
         joiner_nonce: &[u8; 32],
         joiner: &[u8; 65],
         now_ms: u64,
@@ -784,7 +784,7 @@ impl Open {
         if let Some(a) = self.attempt.as_mut() {
             a.shown_ms = Some(now_ms);
         }
-        let code = short_code(exporter, joiner_nonce, &nonce, &self.invitation.id);
+        let code = short_code(exporter.bytes(), joiner_nonce, &nonce, &self.invitation.id);
         Ok((code, MemberShown::new(Some(number), exporter, joiner)))
     }
 

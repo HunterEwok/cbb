@@ -278,13 +278,13 @@ fn a_pairing_session_takes_the_v3_exporter() {
     let (c, cx, s, sx) = session(alpn::PAIR);
     assert_eq!(c.alpn_protocol(), Some(alpn::PAIR));
     let ours = pairing_exporter(&c, &cx).unwrap();
-    assert_eq!(pairing_exporter(&s, &sx).unwrap(), ours, "both ends export one value");
+    assert_eq!(pairing_exporter(&s, &sx).unwrap().bytes(), ours.bytes(), "both ends export one value");
     let mut by_hand = [0u8; 32];
     cx.export(b"EXPERIMENTAL-cbb-pair-v3", &[], &mut by_hand).unwrap();
-    assert_eq!(by_hand, ours);
+    assert_eq!(&by_hand[..], ours.bytes());
     let mut v2 = [0u8; 32];
     cx.export(crate::pair::EXPORTER_LABEL, &[], &mut v2).unwrap();
-    assert_ne!(v2, ours, "0.5's label gives another value of the same session");
+    assert_ne!(&v2[..], ours.bytes(), "0.5's label gives another value of the same session");
     let (c, cx, _, _) = session(alpn::MEMBER);
     assert!(pairing_exporter(&c, &cx).is_err(), "a member session is no pairing session");
 }

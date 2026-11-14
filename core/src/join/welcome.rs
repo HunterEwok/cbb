@@ -195,7 +195,7 @@ pub enum Way<'a> {
     /// an answer given in another session, or to another member than the
     /// admitter, takes nothing. The answer is taken by value: one answer,
     /// one Welcome.
-    Home { matched: super::invitation::Matched, exporter: &'a [u8] },
+    Home { matched: super::invitation::Matched, exporter: &'a super::PairExporter },
 }
 
 /// Why the joiner does not take a Welcome.

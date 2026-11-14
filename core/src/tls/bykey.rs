@@ -291,16 +291,15 @@ pub fn exporting_server(mut cfg: rustls::ServerConfig) -> (rustls::ServerConfig,
 /// `cbb-pair/3`; any other session gives none. `exporter` is the one
 /// [`exporting_client`] or [`exporting_server`] gave with that session's
 /// configuration.
-pub fn pairing_exporter(
-    session: &super::Session,
-    exporter: &super::Exporter,
-) -> Result<[u8; crate::alpn::PAIR_EXPORTER_LEN]> {
+pub fn pairing_exporter(session: &super::Session, exporter: &super::Exporter) -> Result<crate::join::PairExporter> {
     if session.is_handshaking() || !crate::alpn::is_pair(session.alpn_protocol()) {
         return Err(Error::msg("not a pairing session"));
     }
     let mut out = [0u8; crate::alpn::PAIR_EXPORTER_LEN];
     exporter.export(crate::alpn::PAIR_EXPORTER, &[], &mut out)?;
-    Ok(out)
+    let made = crate::join::PairExporter::from_core_tls(out);
+    zeroize::Zeroize::zeroize(&mut out);
+    Ok(made)
 }
 
 /// A judge that takes every well-formed key: for pairing, where CPace bound
