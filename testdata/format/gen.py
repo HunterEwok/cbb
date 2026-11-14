@@ -731,6 +731,15 @@ def record_vectors():
         ("copies without its seen", "records/copies/seen", 8, {10: 30000}),
     ]:
         bad_body(name, rule, rec(ROOT, 90, typ, fields))
+    # the bounds of a copies record's incoming time and of settings'
+    # servers (the registry, bounds.json): one past each is refused
+    for name, ms in [("copies incoming_ms one below its least", BOUND["records::body::MIN_INCOMING_MS"] - 1),
+                     ("copies incoming_ms one past its most", BOUND["records::body::MAX_INCOMING_MS"] + 1)]:
+        bad_body(name, "records/copies/incoming_ms", rec(ROOT, 90, 8, {10: ms, 11: [sa]}))
+    servers = [[1, f"fwd{i}.example.org:443", Signer(f"server {i}").key]
+               for i in range(BOUND["records::body::MAX_SERVERS"] + 1)]
+    bad_body("settings with one server past its most", "records/settings/servers",
+             rec(ROOT, 90, 7, {15: servers}))
     # what rule 33 retired (format 0.6 freezes): the claim, the root's
     # recovery record and the handover; the takeover power; settings'
     # takeover delay
@@ -1272,6 +1281,38 @@ def pad_content(content):
     raise ValueError("content over 4 MiB")
 
 
+def fresh_vectors():
+    """Whether a reader writes a copy as new, from signed fields only
+    (core/src/copies/fresh.rs): a copy signed more than ALLOWANCE_MS ahead
+    of the reader's clock, or at a wall time past MAX_WALL, is "ahead" (not
+    written, not taken as the newest); without a clock only MAX_WALL counts.
+    The age a reader uses is the larger of age_ms and the time since the
+    signed wall time less the allowance: ALLOWANCE_MS, at most a quarter of
+    the lifetime when there is one."""
+    allow = BOUND["copies::fresh::ALLOWANCE_MS"]
+    max_wall = 253402300799999  # crate::hlc::MAX_WALL, 9999-12-31T23:59:59.999Z
+    out = []
+
+    def add(name, wall, now, age=0, ttl=None):
+        a = wall > max_wall or (now is not None and wall > now + allow)
+        e = {"name": name, "wall": wall, "now_ms": now, "age_ms": age, "ttl_ms": ttl,
+             "verdict": "ahead" if a else "new"}
+        if not a:
+            allowance = allow if ttl is None else min(allow, ttl // 4)
+            since = 0 if now is None else max(0, max(0, now - wall) - allowance)
+            e["effective_age_ms"] = max(age, since)
+        out.append(e)
+
+    add("signed the allowance ahead", T0 + allow, T0)
+    add("signed one millisecond past the allowance", T0 + allow + 1, T0)
+    add("a year ahead, without a clock", T0 + 365 * 86400000, None)
+    add("past MAX_WALL, without a clock", max_wall + 1, None)
+    add("an hour old", T0, T0 + 3600000)
+    add("an hour old with a lifetime of a minute", T0, T0 + 3600000, ttl=60000)
+    add("its age_ms larger than the time since", T0, T0 + 1000, age=600000)
+    return out
+
+
 def copy_vector():
     K = sha(b"test copy key")
     readers = sorted([[LAPTOP.id16, 2], [PHONE.id16, 1], [BOARD.id16, 1]], key=lambda a: a[0])
@@ -1345,6 +1386,7 @@ def copy_vector():
                 ("a pad of ones", enc({**content, 1: b"\x01" * len(content[1])})),
             ]
         ],
+        "fresh": fresh_vectors(),
         "content_plaintext": enc(content).hex(), "content_diag": diag({k: v for k, v in content.items() if k != 1}) + " with pad to 1024",
         "frame": frame({0: 2, 2: full}).hex(),
         "content_edges": [
@@ -1535,7 +1577,7 @@ def container_vector():
         {"name": "one integer", "cert": cont(p, tlv(0x03, b"\x00" + tlv(0x30, tlv(0x02, b"\x01")))).hex()},
         {"name": "three integers", "cert": cont(p, tlv(0x03, b"\x00" + tlv(0x30, tlv(0x02, b"\x01") * 3))).hex()},
         {"name": "empty integer", "cert": cont(p, sigbits(b"", b"\x01")).hex()},
-        {"name": "integer of 34 bytes", "cert": cont(p, sigbits(b"\x00" * 2 + b"\xff" * 32, b"\x01")).hex()},
+        {"name": "integer of 34 bytes (73 in all, past 72)", "cert": cont(p, sigbits(b"\x00" * 2 + b"\xff" * 32, b"\x01")).hex()},
         {"name": "integer with a needless zero in front", "cert": cont(p, sigbits(b"\x00\x01", b"\x01")).hex()},
         {"name": "negative integer", "cert": cont(p, sigbits(b"\x01", b"\x80")).hex()},
         {"name": "not an integer", "cert": cont(p, tlv(0x03, b"\x00" + tlv(0x30, tlv(0x04, b"\x01") + tlv(0x02, b"\x01")))).hex()},
@@ -1547,6 +1589,7 @@ def container_vector():
     for r in refuse:
         if "cert" in r:
             assert r["cert"] != c.hex()
+            r["rule"] = "container/template"
     return {
         "source": "the template task 2 tested on five TLS stacks (research-0.6/key-container/report-ru.md, sections 2 and 7)",
         "reader": "the TBS byte for byte the template with the point and its serial; the point on the curve; ecdsa-with-SHA256; the signature a BIT STRING with no unused bits holding SEQUENCE { INTEGER, INTEGER }, each integer 1 to 33 bytes in DER (no needless zero in front, not negative), every length exact, at most 72 bytes; its value is not read",
@@ -2375,6 +2418,58 @@ def yubikey_vectors():
         "refuse": [{"name": n, "object": o.hex(), "card": c.hex(), "z": z_.hex(), "reason": r}
                    for n, o, c, z_, r in refuse],
     }
+
+
+def intro_vectors(records_take):
+    """Intros at their bounds (core/src/join/intro.rs, the registry's
+    join::intro rows): each message is t 8 with its records, written short
+    as runs of one envelope (`runs`: [envelope, count]); the reader builds
+    the message. The verdict is computed here: more envelopes than
+    MAX_RECORDS + MAX_HEADS is intro/size before any record is read; then
+    the recovery heads count apart (at most MAX_HEADS) and the others at
+    most MAX_RECORDS and MAX_BYTES by their envelopes' bytes."""
+    max_records = BOUND["join::intro::MAX_RECORDS"]
+    max_bytes = BOUND["join::intro::MAX_BYTES"]
+    max_heads = BOUND["join::intro::MAX_HEADS"]
+
+    def typ(r):
+        return dec(bytes.fromhex(r["body"]))[1]
+
+    others = [r for r in records_take if r["verdict"] in ("take", "hold") and typ(r) != 13]
+    small = min(others, key=lambda r: len(r["envelope"]))
+    big = max(others, key=lambda r: len(r["envelope"]))
+    head = next(r for r in records_take if r["verdict"] == "take" and typ(r) == 13)
+
+    def verdict(runs):
+        if sum(n for _, n in runs) > max_records + max_heads:
+            return "intro/size"
+        heads = sum(n for r, n in runs if typ(r) == 13)
+        rest = [(r, n) for r, n in runs if typ(r) != 13]
+        if heads > max_heads or sum(n for _, n in rest) > max_records:
+            return "intro/size"
+        if sum(len(r["envelope"]) // 2 * n for r, n in rest) > max_bytes:
+            return "intro/size"
+        return None
+
+    out = []
+
+    def add(name, runs, want):
+        got = verdict(runs)
+        assert got == want, (name, got, want)
+        e = {"name": name, "runs": [[r["envelope"], n] for r, n in runs]}
+        if want:
+            e["rule"] = want
+        out.append(e)
+
+    fit = max_bytes // (len(big["envelope"]) // 2)
+    add(f"{max_records} records and {max_heads} heads", [(small, max_records), (head, max_heads)], None)
+    add(f"{max_records + 1} records", [(small, max_records + 1)], "intro/size")
+    add(f"{max_heads + 1} heads", [(head, max_heads + 1)], "intro/size")
+    add(f"{fit} records of {len(big['envelope']) // 2} bytes", [(big, fit)], None)
+    add(f"{fit + 1} records of {len(big['envelope']) // 2} bytes, past {max_bytes}", [(big, fit + 1)], "intro/size")
+    add(f"{max_records + max_heads + 1} envelopes, refused before any is read",
+        [(small, max_records + max_heads + 1)], "intro/size")
+    return out
 
 
 def wave3_vectors(records_take):
@@ -3609,6 +3704,7 @@ def main():
         "cards": {"label": LABELS["card"], "take": cdt, "refuse": cdr},
         "codes": code_vectors(),
         "welcome_parts": welcome_parts_vectors(),
+        "intros": intro_vectors(rt),
     }
     files["wave4.json"] = wave4_vectors()
     files["future.json"] = future_vectors()

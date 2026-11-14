@@ -64,7 +64,7 @@
       "class": "frozen",
       "name": "format::container::MAX_SIG",
       "reached": [
-        "vec:container.json:integer of 34 bytes"
+        "vec:container.json:integer of 34 bytes (73 in all, past 72)"
       ],
       "refusal": "container/template",
       "value": 72,
@@ -146,11 +146,12 @@
       "name": "copies::fresh::ALLOWANCE_MS",
       "reached": [
         "a_copy_dated_ahead_stops_no_reader",
-        "freshness_is_decided_from_signed_fields"
+        "freshness_is_decided_from_signed_fields",
+        "freshness_matches_its_vectors"
       ],
-      "refusal": "copy/time",
+      "refusal": "ahead",
       "value": 300000,
-      "widest": "an origin's clock 5 minutes ahead"
+      "widest": "an origin's clock 5 minutes ahead; past it a copy is the verdict `ahead` (not written, not the newest), which depends on the reader's clock, so its vectors give the clock"
     },
     {
       "class": "reader",
@@ -553,14 +554,14 @@
       "widest": "2^31 − 1"
     },
     {
-      "class": "frozen",
+      "class": "reader",
       "name": "records::MAX_SEEN",
       "reached": [
-        "gap"
+        "the_body_binds_before_max_seen"
       ],
       "refusal": "records/revoke/seen",
       "value": 1024,
-      "widest": "a `seen` list; not reached on the wire: 1024 entries of about 73 bytes pass MAX_BODY, which binds first"
+      "widest": "a `seen` list; the body's bound comes first: 1024 of the smallest entries pass MAX_BODY, so the count is a reader's guard that already stands if a later version widens the body"
     },
     {
       "class": "stated",
@@ -841,7 +842,8 @@
       "class": "frozen",
       "name": "join::intro::MAX_RECORDS",
       "reached": [
-        "an_intro_counts_the_recovery_heads_apart"
+        "an_intro_counts_the_recovery_heads_apart",
+        "intros_match_their_vectors"
       ],
       "refusal": "intro/size",
       "value": 32,
@@ -851,7 +853,8 @@
       "class": "frozen",
       "name": "join::intro::MAX_BYTES",
       "reached": [
-        "an_intro_counts_the_recovery_heads_apart"
+        "an_intro_counts_the_recovery_heads_apart",
+        "intros_match_their_vectors"
       ],
       "refusal": "intro/size",
       "value": 16384,
@@ -861,7 +864,8 @@
       "class": "frozen",
       "name": "join::intro::MAX_HEADS",
       "reached": [
-        "an_intro_counts_the_recovery_heads_apart"
+        "an_intro_counts_the_recovery_heads_apart",
+        "intros_match_their_vectors"
       ],
       "refusal": "intro/size",
       "value": 65,
