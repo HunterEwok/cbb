@@ -205,8 +205,12 @@ module records_v3 {
 
   // Under CEIL_FIT: ROOM 20 = the current root's 6 + the cut roots' reserve 6 + 4 admins at 2
   // (the records' 4096 = 1024 + 1024 + 8 x 256, scaled; architecture 16:50Z).
-  pure val ROOM = if (CEIL_FIT) 20 else 14
-  pure val ROOTC = if (CEIL_FIT) 6 else 8
+  // WIDE_ROOT: the root's room and the room 6 units wider, for the writer floor's promises: at
+  // ROOTC 8 the floor (checkpoint 2 + margin 1, three admissions held) leaves 2 free units, so a
+  // scenario that stops there says nothing about the core's 1536.
+  pure val WIDE_ROOT = false
+  pure val ROOM = (if (CEIL_FIT) 20 else 14) + (if (WIDE_ROOT) 6 else 0)
+  pure val ROOTC = (if (CEIL_FIT) 6 else 8) + (if (WIDE_ROOT) 6 else 0)
   pure val ADMINC = if (CEIL_FIT) 2 else 5
   pure val MAXU = 2
   pure val TOP = ROOTC
@@ -314,6 +318,20 @@ module records_v3 {
   // that a waiting head names as root sit aside whatever order they came in, and are saved
   // (the model keeps them in got; a restart from what the set saves now keeps them too).
   pure val HELD_ADMISSIONS = false
+  // Core #530 5eb8ab55 (architecture 11-14 08:43Z), all four decided:
+  // EARLY_ASIDE: a record of a root that a held head names and the path does not list yet is held
+  // aside (Waiting), not refused, and saved (`earlyAside`); this was HELD_ADMISSIONS' (b).
+  pure val EARLY_ASIDE = false
+  // SAVE_FIRSTS: the set always saves the first checkpoint of every change it holds, outside the
+  // rooms; the new root's records below it (the Zs) a later counting checkpoint may prune, and a
+  // settler covers that gap on restore (eval.rs first_gap).
+  pure val SAVE_FIRSTS = false
+  // FIRST_REQUIRED (eval.rs first_gap): the change's first checkpoint itself must be held; a
+  // settler stands in only for the head's first records below it (the Zs).
+  pure val FIRST_REQUIRED = false
+  // SETTLER_HELD: a head's first records and their settlers count only among held records (rooms,
+  // place aside, early records held aside), never among all the set got.
+  pure val SETTLER_HELD = false
   // Architecture 11-14 03:00Z (records to word it): a root's room keeps removals and resolves
   // first, then the key's NEWEST checkpoint (and one newer being judged), then everything else
   // by seq; today every checkpoint of the current root goes first, so checkpoints that never
@@ -328,8 +346,17 @@ module records_v3 {
   // Architecture 11-14 06:08Z (records to word it): a floor in the writer: a root's record (not a
   // removal) is refused when, after it, the root's records other than checkpoints plus its next
   // checkpoint would pass the root's ceiling, so the root can always checkpoint.
+  // DECIDED 11-14 08:28Z (records aeeb8a85): a margin of the root's ceiling stays for removals
+  // (1/24 of 1536 in the core; one removal's unit here), so a removal is always possible.
   pure val WRITER_CP_FLOOR = false
   pure val CP_UNITS = 2
+  pure val REMOVAL_MARGIN = 1
+  // CP_KEEP_LIVE, PROVISIONAL (architecture 11-14 09:14Z, until records sends the code's words):
+  // an honest root checkpoint keeps the admissions of live admins, the newest record of each live
+  // device, the removals of admin keys, the records that are neither admissions, removals nor
+  // resolves, and the resolves of what it keeps; it drops removed keys' admissions, older device
+  // records, device removals and resolves whose target it drops.
+  pure val CP_KEEP_LIVE = false
   // Records 11-13 21:12Z: the change re-signs the cut roots' counting removals as the new
   // root's first records (signChainG). REISSUE_DROP_ONLY: the mutation that leaves the old
   // removals off the list without the new ones; it must fail.
@@ -484,7 +511,7 @@ module records_v3 {
   pure def hasFirst(r: Record, rs: Set[Record]): bool = r.first == 0 or
     (if (WHOLE_BY_SETTLER and r.first <= r.id + MAXREC)
       (r.id + 1).to(r.first).forall(i => rs.exists(x => x.id == i and (namesFirst(r, x) or namesZ(r, x)))
-        or settledFirst(r, i, rs))
+        or ((not(FIRST_REQUIRED) or i < r.first) and settledFirst(r, i, rs)))
     else (rs.exists(c => namesFirst(r, c))
     and (if (not(REISSUE_REMOVALS) or r.first > r.id + MAXREC) true
       else (r.id + 1).to(r.first - 1).forall(i => rs.exists(z => z.id == i and namesZ(r, z))))))
@@ -637,8 +664,9 @@ module records_v3 {
   pure def chainState(s: Store, db: Id -> Record): Chain =
     // (WHOLE_BY_SETTLER: the checkpoints the set got count toward a head's first records, so a
     // settler counts before the set keeps it.)
-    chainOfAll(recsOf(s.chain, db).union(if (WHOLE_BY_SETTLER)
-      recsOf(s.got, db).filter(c => not(isChain(c))) else Set()))
+    chainOfAll(recsOf(s.chain, db).union(if (not(WHOLE_BY_SETTLER)) Set()
+      else if (SETTLER_HELD) recsOf(s.recs.union(s.wait).union(earlyAside(s, db)), db).filter(c => not(isChain(c)))
+      else recsOf(s.got, db).filter(c => not(isChain(c)))))
   pure def keptPath(s: Store, db: Id -> Record): List[Key] = pathCuts(chainState(s, db))._1
   pure def keptCuts(s: Store, db: Id -> Record): Key -> List[Id] = pathCuts(chainState(s, db))._2
   pure def orderOf(s: Store, db: Id -> Record): Order =
@@ -1422,7 +1450,8 @@ module records_v3 {
     // A checkpoint keeps what its signer counts; one that keeps more is not the honest
     // writer's (kit "bent").
     val counted = recsOf(vh.counting, db).filter(x => x.kind != "checkpoint")
-    val honestKeep = idsOf(counted).exclude(if (ROOT_KEYS.contains(k)) droppedAt(mine, counted) else Set())
+    val honestKeep = if (CP_KEEP_LIVE and ROOT_KEYS.contains(k)) liveKeep(counted, vh)
+      else idsOf(counted).exclude(if (ROOT_KEYS.contains(k)) droppedAt(mine, counted) else Set())
     val r1 = rec(nextId, k, base.append(nextId), kind, target,
       if (isCp and not(extraKeep.subseteq(honestKeep))) "bent" else kit, targetRec,
       seen,
@@ -1443,8 +1472,13 @@ module records_v3 {
       // (J, core write_checkpoint: the honest checkpoint fits by itself and the trial set takes it
       // as the counting checkpoint; else the write is refused.)
       not(keeps) or not(isCp) or hidden or storeView(insertInto(s, r, db2), db2).checkpoint == r.id,
-      not(WRITER_CP_FLOOR) or not(keeps) or hidden or isChain(r) or isCp or rootRemoval(r) or not(onList(vh.path, k))
-        or sumUnits(ofKey(recsOf(s.recs, db), k).filter(x => x.kind != "checkpoint")) + r.units + CP_UNITS <= ROOTC,
+      not(WRITER_CP_FLOOR) or kit == "deviant" or hidden or isChain(r) or isCp or not(onList(vh.path, k))
+        or rootUnits(s, k) + r.units + CP_UNITS <= ROOTC - (if (floorExempt(r)) 0 else REMOVAL_MARGIN),
+      // (WRITER_CP_FLOOR, architecture 11-14 09:03Z: the honest writer never spends the margin
+      // down: an exempt record that would leave less than one more exempt record and the next
+      // checkpoint waits for a checkpoint first, which the writer signs by itself.)
+      not(WRITER_CP_FLOOR) or kit == "deviant" or hidden or not(floorExempt(r)) or not(onList(vh.path, k))
+        or rootUnits(s, k) + r.units + REMOVAL_MARGIN + CP_UNITS <= ROOTC,
       // (E): an honest writer publishes a record only when its own set keeps it; else the
       // write fails and the seq is not used. (A hidden record stays off its device.)
       not(keeps) or hidden or isChain(r) or insertInto(s, r, db2).recs.contains(r.id),
@@ -1462,6 +1496,37 @@ module records_v3 {
     }
   }
 
+  pure def liveKeep(counted: Set[Record], v: View): Set[Id] = {
+    val adm = counted.filter(x => x.kind == "admin" and v.admins.keys().contains(x.target))
+    val dev = counted.filter(x => x.kind == "device" and v.devices.contains(x.target)
+      and not(counted.exists(y => y.kind == "device" and y.target == x.target and y.id > x.id)))
+    val rem = counted.filter(x => x.kind == "revoke" and tgt(x).exists(t => SIGNERS.contains(t)))
+    val other = counted.filter(x => not(Set("admin", "device", "revoke", "resolve").contains(x.kind)))
+    val base = adm.union(dev).union(rem).union(other)
+    idsOf(base.union(counted.filter(x => x.kind == "resolve" and base.exists(b => b.id == x.targetRec))))
+  }
+  // (WRITER_CP_FLOOR: a root's removal and its resolve share the margin; architecture 11-14
+  // 08:30Z, the resolve provisional until records confirms.)
+  pure def floorExempt(r: Record): bool = rootRemoval(r) or (r.kind == "resolve" and ROOT_KEYS.contains(r.signer))
+  // (Promise rootCanRemove, under WRITER_CP_FLOOR: the current root can always write a removal,
+  // or a resolve of its own removal, and still its next checkpoint.)
+  // The honest writer may checkpoint first: the root's records its checkpoint would keep then
+  // stand in for what it holds. A break is a state where even that checkpoint's keep leaves no
+  // room for a removal, the margin and the next checkpoint.
+  def rootCanRemove: bool = ROOT_KEYS.forall(k => {
+    val h = HOLDER.get(k)
+    val s = if (WRITER_LAST_ROOT) withOwn(st.get(h), k, db) else st.get(h)
+    val v = if (WRITER_LAST_ROOT) storeView(s, db) else views.get(h)
+    val mine = recsOf(s.recs, db)
+    val counted = recsOf(v.counting, db).filter(x => x.kind != "checkpoint")
+    val kept = counted.filter(x => x.signer == k
+      and (if (CP_KEEP_LIVE) liveKeep(counted, v).contains(x.id) else not(droppedAt(mine, counted).contains(x.id))))
+    v.stop or last(v.path) != k
+      or rootUnits(s, k) + 1 + REMOVAL_MARGIN + CP_UNITS <= ROOTC
+      or sumUnits(kept) + 1 + REMOVAL_MARGIN + CP_UNITS <= ROOTC
+  })
+  // (WRITER_CP_FLOOR: the units of root k's records its set holds, its checkpoints left out.)
+  def rootUnits(s: Store, k: Key): int = sumUnits(ofKey(recsOf(s.recs, db), k).filter(x => x.kind != "checkpoint"))
   pure def withOwn(s: Store, k: Key, db: Id -> Record): Store = {
     val heads = db.keys().filter(i => isChain(db.get(i)) and db.get(i).target == k)
     val ids = db.keys().filter(i => db.get(i).signer == k and not(db.get(i).off))
@@ -1478,7 +1543,7 @@ module records_v3 {
     val v = if (WRITER_LAST_ROOT) storeView(s, db) else views.get(h)
     val mine = recsOf(s.recs, db)
     val counted = recsOf(v.counting, db).filter(x => x.kind != "checkpoint")
-    val keep = idsOf(counted).exclude(droppedAt(mine, counted))
+    val keep = if (CP_KEEP_LIVE) liveKeep(counted, v) else idsOf(counted).exclude(droppedAt(mine, counted))
     val seen = SIGNERS.mapBy(x => if (x == k) headLine(db.keys().map(i => db.get(i)), k) else headLine(mine, x))
     val r = rec(nextId, k, headLine(db.keys().map(i => db.get(i)), k).append(nextId), "checkpoint", "", "", 0, seen, seen, keep, 2)
     val db2 = db.put(nextId, r)
@@ -1779,7 +1844,8 @@ module records_v3 {
     // Only the checkpoint the set compacted on drops first records (the core's compact uses the
     // counting checkpoints), not any checkpoint it merely holds (k.10967: a bent one).
     val cps = if (s.checkpoint == 0) Set() else Set(db.get(s.checkpoint))
-    s.chain.filter(i => isChain(db.get(i)) or not(cps.exists(c => prunedBy(c, db.get(i)))))
+    s.chain.filter(i => isChain(db.get(i)) or not(cps.exists(c => prunedBy(c, db.get(i))))
+      or (SAVE_FIRSTS and s.chain.exists(h => isChain(db.get(h)) and namesFirst(db.get(h), db.get(i)))))
   }
   pure def rebuiltFromSaved(s: Store, db: Id -> Record): (Store, View) = {
     val ch = savedChain(s, db)
@@ -1789,10 +1855,10 @@ module records_v3 {
     // record names (a root fork's proof, kept beside the chain) is taken once its signer is known.
     finish(toList(ch.union(s.recs).union(s.wait).union(earlyAside(s, db))).foldl(s2, (x, i) => insertInto(x, db.get(i), db)), db)
   }
-  // (HELD_ADMISSIONS (b): what the set saves aside of the roots its held heads name and its path
-  // does not reach yet: under EARLY_ROOM what that room keeps, else all it got of them.)
+  // (EARLY_ASIDE: what the set holds aside, and saves, of the roots its held heads name and its
+  // path does not reach yet: under EARLY_ROOM what that room keeps, else all it got of them.)
   pure def earlyAside(s: Store, db: Id -> Record): Set[Id] =
-    if (not(HELD_ADMISSIONS)) Set()
+    if (not(EARLY_ASIDE)) Set()
     else if (EARLY_ROOM) earlyKept(s, db).exclude(s.chain)
     else {
       val early = recsOf(s.chain, db).filter(h => isChain(h) and not(onList(s.path, h.target))).map(h => h.target)
@@ -3205,7 +3271,8 @@ module records_v3 {
       .then(if (NEW_ROOT_ONLY) syncRound else signChain(RECOVERY, "recover", "NA", 3, "honest"))
       .then(sign("NA", "copies", "", "", 0, false, false, 2))
       .then(offerEveryone(nextId - 1))
-      .then(sign("NA", "copies", "", "", 0, false, false, 1))
+      // (Under WRITER_CP_FLOOR at ROOTC 8 NA's room has no unit left for this record.)
+      .then(if (WRITER_CP_FLOOR and not(WIDE_ROOT)) offerEveryone(0) else sign("NA", "copies", "", "", 0, false, false, 1))
       .then(if (NEW_ROOT_ONLY) syncRound else giveOnly("a", 18))
       .then(syncRound)
       .then(offerEveryone(nextId - 1))
@@ -3318,7 +3385,7 @@ module records_v3 {
       .then(signCheckpointKeep("NA", Set(1, 2, 3), "X", 2))
       .expect((WHOLE_BY_SETTLER implies (views.get("a").path == ["R", "NK"] and savedStable)) and promises)
 
-  // HELD_ADMISSIONS (b), core 066addaf: a record of the new root NA that comes while the head
+  // EARLY_ASIDE (was HELD_ADMISSIONS (b)), core 066addaf: a record of the new root NA that comes while the head
   // to NA waits for its first checkpoint sits aside and is saved, so a member restarted from
   // what it saves still takes it once the head applies.
   run earlyAsideSavedTest =
@@ -3326,7 +3393,7 @@ module records_v3 {
       .then(recoverAs(RECOVERY, "NA")).then(giveOnly("a", 4)).then(giveOnly("a", 5))
       .then(sign("NA", "copies", "", "", 0, false, false, 1))
       .then(giveOnly("c", 4)).then(giveOnly("c", 6)).then(restartSaved("c")).then(giveOnly("c", 5))
-      .expect(views.get("c").path == ["R", "NA"] and (HELD_ADMISSIONS iff st.get("c").recs.contains(6)) and promises)
+      .expect(views.get("c").path == ["R", "NA"] and (EARLY_ASIDE iff st.get("c").recs.contains(6)) and promises)
 
   // NEWEST_CP_FIRST (architecture 11-14 03:00Z): R signs three checkpoints that never count.
   // Today they go before R's admission records and push one out; under the switch only the
@@ -3671,14 +3738,18 @@ module records_v3 {
       .expect(views.get("m") == views.get("c") and st.get("m").recs == st.get("c").recs and promises)
 
   // A device the root removed does not come back by a new record for its key.
+  // (Under WRITER_CP_FLOOR the root checkpoints after the removal, dropping the removed device's
+  // admission, so that its next record leaves room for its next checkpoint.)
   run removedDeviceStaysOutTest =
     init
       .then(signAs(ROOT, "device", DEVICE, 0))
       .then(signAs(ROOT, "revoke", DEVICE, 0))
+      .then(if (WRITER_CP_FLOOR) signAs(ROOT, "checkpoint", "", 0) else offerEveryone(0))
       .then(signAs(ROOT, "device", DEVICE, 0))
       .then(give("m", 4))
       .then(give("m", 5))
       .then(give("m", 6))
+      .then(give("m", 7))
       .expect(not(views.get("m").devices.contains(DEVICE)) and views.get("m").revoked.contains(DEVICE)
         and gone.get("m").contains(DEVICE) and promises)
 
