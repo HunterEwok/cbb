@@ -3084,12 +3084,16 @@ impl RecordSet {
             let tight = self
                 .checkpoint_units(state, h, time_ms)
                 .is_some_and(|cp| used.saturating_add(one.saturating_mul(2)).saturating_add(cp) > ceiling);
-            if tight
-                && let Ok(cp) = self.write_checkpoint(state, signer, time_ms)
-                && self.insert(cp).is_ok()
-            {
-                let now = self.state();
-                return self.write_one(&now, signer, body.kind, time_ms);
+            // All or nothing: where the record is refused after all, the
+            // checkpoint is not kept either.
+            if tight && let Ok(cp) = self.write_checkpoint(state, signer, time_ms) {
+                let mut trial = self.clone();
+                if trial.insert(cp).is_ok() {
+                    let now = trial.state();
+                    let r = trial.write_one(&now, signer, body.kind, time_ms)?;
+                    *self = trial;
+                    return Ok(r);
+                }
             }
         }
         let r = Record::sign(body, signer)?;
