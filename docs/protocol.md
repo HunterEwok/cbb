@@ -1887,9 +1887,8 @@ exactly what a member that saw them all at once keeps.
 
 #### The order inside a room
 
-Being settled: the order below is what the code holds today, and it is changing.
-
-Each key's records are taken in an order that depends on each record alone (`keep::Item::pos`):
+Each key's records are taken in an order that depends on each record alone and on which
+checkpoint is its key's newest, never on anything else the set holds (`keep::Item::pos`):
 
 1. a root's removals, freezes and resolves, by seq, so that nothing else of the root's drops
    them;
@@ -1971,7 +1970,9 @@ checkpoint and a change of root within their rooms.
 #### Checkpoints
 
 Only the current root writes a checkpoint. A checkpoint names the heads it settles and the
-records it keeps; a root's removal counts for good while it is kept, and the writer leaves one
+records it keeps. An honest checkpoint keeps the root's own records under its head, so that it
+mends the root's chain where the rooms turned a record away; an older checkpoint of the root
+it keeps only as a record that counts; a root's removal counts for good while it is kept, and the writer leaves one
 out, with the records of the keys it names, only when every key it names is a plain device key
 whose admissions it holds below their signer's head. An admin key whose admission the rooms
 keep out is no key of the set. A waiting root's records, and records that a checkpoint of the
