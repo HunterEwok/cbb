@@ -1419,9 +1419,11 @@ impl RecordSet {
                 .map(|n| (&n.record, self.role_of(n)))
                 .or_else(|| aside.then(|| self.kept_aside.get(id).map(|(r, role, _)| (r, *role))).flatten())
         };
-        let named = eval::named_first(cp, |id| rec(id).is_some());
-        eval::checkpoint_ok(cp, |id| rec(id).map(|(r, _)| r))
-            && eval::fits_alone(named.iter().filter_map(rec), &self.root_hash, &self.promoted, &self.cuts)
+        // Whole first: a record it keeps that the set lacks ends it there.
+        eval::checkpoint_ok(cp, |id| rec(id).map(|(r, _)| r)) && {
+            let named = self.named_held(cp, aside, |id| rec(id).is_some());
+            eval::fits_alone(named.iter().filter_map(rec), &self.root_hash, &self.promoted, &self.cuts)
+        }
     }
 
     /// Whether what a checkpoint names, of what the set holds or keeps
@@ -1435,8 +1437,24 @@ impl RecordSet {
                 .or_else(|| self.kept_aside.get(id).map(|(r, role, _)| (r, *role)))
                 .or_else(|| (*id == cp.id()).then_some((cp, Role::Root)))
         };
-        let named = eval::named_first(cp, |id| rec(id).is_some());
+        let named = self.named_held(cp, true, |id| rec(id).is_some());
         eval::fits_alone(named.iter().filter_map(rec), &self.root_hash, &self.promoted, &self.cuts)
+    }
+
+    /// `eval::named_first` of what the set holds (and with aside, of what
+    /// it keeps aside), held telling which: a checkpoint that keeps more
+    /// IDs than the set has records is read from the records' side.
+    fn named_held(&self, cp: &Record, aside: bool, held: impl Fn(&RecordId) -> bool) -> BTreeSet<RecordId> {
+        let Kind::Checkpoint { keep, .. } = &cp.body().kind else { return eval::named_first(cp, held) };
+        let ours = self.records.len().saturating_add(if aside { self.kept_aside.len() } else { 0 });
+        if keep.len() <= ours {
+            return eval::named_first(cp, held);
+        }
+        let mut out = BTreeSet::from([cp.id()]);
+        let mine = self.records.keys().chain(self.kept_aside.keys().filter(|_| aside));
+        out.extend(mine.filter(|id| keep.binary_search(id).is_ok() && held(id)).copied());
+        out.extend(cp.body().prev.filter(|id| held(id)));
+        out
     }
 
     /// The records kept ahead of the rooms, and the current root's
@@ -1742,7 +1760,7 @@ impl RecordSet {
         }
         let Some(ceiling) = self.ceiling(signer) else { return true };
         let level = self.cut.level();
-        if self.cut.dropped(signer).is_some() || units(signer) > level.min(ceiling) {
+        if units(signer) > level.min(ceiling) {
             return true;
         }
         let mut demand = 0u64;
@@ -2491,8 +2509,10 @@ impl RecordSet {
             }
             // The root's own records under its head stay too: it signed
             // them, so its checkpoint mends its own chain where the rooms
-            // turned a record of it away.
-            if e.held || state.counting.contains(&id) || listed(r) || r.body().signer == h {
+            // turned a record of it away. Its own older checkpoints do not:
+            // this one takes their place.
+            let own = r.body().signer == h && !matches!(r.body().kind, Kind::Checkpoint { .. });
+            if e.held || state.counting.contains(&id) || listed(r) || own {
                 keep.insert(id);
             }
         }
@@ -2895,7 +2915,7 @@ impl RecordSet {
         self.records.values().any(|e| {
             let Kind::Checkpoint { heads, keep } = &e.record.body().kind else { return false };
             e.role == Role::Root
-                && (heads.iter().any(|h| h.id == *id) || keep.contains(id))
+                && (heads.iter().any(|h| h.id == *id) || keep.binary_search(id).is_ok())
                 && !self.checkpoints.iter().any(|(h, _)| h == heads)
         })
     }
@@ -2911,14 +2931,11 @@ impl RecordSet {
             if e.role != Role::Root {
                 return false;
             }
-            let anchors = eval::anchors_of(heads, keep);
-            if self.checkpoints.iter().any(|(h, a)| h == heads && *a == anchors) {
-                return false;
-            }
             let mut at = b.prev;
             while let Some(p) = at {
                 if p == *id {
-                    return true;
+                    let anchors = eval::anchors_of(heads, keep);
+                    return !self.checkpoints.iter().any(|(h, a)| h == heads && *a == anchors);
                 }
                 at = self.records.get(&p).and_then(|e| e.record.body().prev);
             }
@@ -2938,11 +2955,12 @@ impl RecordSet {
             if e.role != Role::Root {
                 return false;
             }
-            let anchors = eval::anchors_of(heads, keep);
-            if self.checkpoints.iter().any(|(h, a)| h == heads && *a == anchors) {
-                return false;
-            }
-            e.record.id() == *id || anchors.contains(id) || b.signer == signer && seq < b.seq
+            let names = e.record.id() == *id
+                || heads.iter().any(|h| h.id == *id)
+                || keep.binary_search(id).is_ok()
+                || b.signer == signer && seq < b.seq;
+            // Compacted by already: only then are its anchors worth making.
+            names && !self.checkpoints.iter().any(|(h, a)| h == heads && *a == eval::anchors_of(heads, keep))
         })
     }
 

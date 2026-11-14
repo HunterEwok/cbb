@@ -3471,10 +3471,11 @@ fn what_waits_aside_still_makes_the_pair() {
 }
 
 /// The root fills its own room with checkpoints that never count (each
-/// keeps IDs nobody holds), ten of about 81 KiB, past its 1536 units:
-/// only the newest goes before the rest of the room, so its devices stay
-/// held, in any order and after a restart, and the checkpoint it can
-/// still write counts and brings them back.
+/// keeps IDs nobody holds), ten of about 81 KiB, past its 1536 units,
+/// then 100 devices: only the newest goes before the rest of the room, so
+/// its devices stay held, in any order and after a restart, without
+/// counting (the state says their chain is broken); the checkpoint it can
+/// still write leaves its older ones out, counts and brings them back.
 #[test]
 fn checkpoints_that_never_count_leave_the_root_its_devices() {
     let mut g = G::new();
@@ -3489,7 +3490,7 @@ fn checkpoints_that_never_count_leave_the_root_its_devices() {
     }
     let units: u64 = big.iter().map(|r| keep::units(r.envelope().len())).sum();
     assert!(units > keep::ceiling(true), "{units}");
-    let devices: Vec<Record> = (0..20).map(|i| g.device(&root, &k(&format!("dev {i}")), "dev", |_| {})).collect();
+    let devices: Vec<Record> = (0..100).map(|i| g.device(&root, &k(&format!("dev {i}")), "dev", |_| {})).collect();
     let mut rev = g.recs.clone();
     rev.reverse();
     let mut set = set_with(&g.root.key, &g.recs, &g.lists);
@@ -3502,6 +3503,9 @@ fn checkpoints_that_never_count_leave_the_root_its_devices() {
     assert!(devices.iter().all(|d| set.contains(&d.id())));
     assert!(set.contains(&big[9].id()));
     assert!(st.counting.contains(&laptop.id()));
+    assert!(!st.counting.contains(&devices[0].id()));
+    // The state says why: their chain is broken.
+    assert!(st.ignored.iter().any(|i| i.record == devices[0].id() && i.why == Why::History));
     assert_eq!(st.stop, Stop::None);
     let restore = |set: &RecordSet| {
         let saved: Vec<Record> = set.in_dependency_order().into_iter().cloned().collect();
@@ -3515,7 +3519,7 @@ fn checkpoints_that_never_count_leave_the_root_its_devices() {
     set.insert(cp.clone()).unwrap();
     let now = set.state();
     assert_eq!(now.checkpoint, Some(cp.id()));
-    assert_eq!(now.devices.len(), 21);
+    assert_eq!(now.devices.len(), 101);
     assert!(devices.iter().chain([&laptop]).all(|d| now.counting.contains(&d.id())));
     assert_eq!(restore(&set).state(), now);
 }
