@@ -2407,3 +2407,59 @@ fn a_change_carries_every_device_that_counts_or_is_not_written() {
         assert_eq!(s.device_by_key(&key).is_some(), !gone.contains(&key), "{}", d.name);
     }
 }
+
+/// An admin's key that a waiting head names as the new root: its records
+/// are kept aside whether they came before the head or after it, so two
+/// members that took them in either order hold the same.
+#[test]
+fn an_admin_named_root_by_a_waiting_head_has_its_records_aside_in_any_order() {
+    let mut g = G::new();
+    let (pb, b) = (k("phone b"), k("admin b"));
+    g.admin(&pb, &b, POWER_ADMIT);
+    g.device(&b, &k("dev 1"), "dev", |_| {});
+    let list = g.listing();
+    let head = g.change_from(&b, &list, 1);
+    // The new root's first checkpoint never comes: the head waits.
+    let Kind::Recovery { first, .. } = head.body().kind else { unreachable!() };
+    let recs: Vec<Record> = g.recs.iter().filter(|r| r.id() != first).cloned().collect();
+    let late: Vec<Record> = recs.iter().filter(|r| r.id() != head.id()).cloned().chain([head.clone()]).collect();
+    let mut early = vec![head.clone()];
+    early.extend(recs.iter().filter(|r| r.id() != head.id()).cloned());
+    let a = set_with(&g.root.key, &early, &g.lists);
+    let z = set_with(&g.root.key, &late, &g.lists);
+    assert_eq!(a.state().first_missing, Some(first));
+    assert!(a.aside().count() > 0);
+    assert_eq!(a.aside().collect::<Vec<_>>(), z.aside().collect::<Vec<_>>());
+    assert_eq!(a.digest(), z.digest());
+    assert_eq!(a.state(), z.state());
+}
+
+/// A key a head off the chain names as root signs as a root but has no
+/// room: the rooms turn its records away, the one that made another key
+/// an admin among them. That key's records then have no known signer in
+/// the set, as in an evaluation of what the set keeps.
+#[test]
+fn an_admin_made_by_a_record_the_rooms_turned_away_is_no_key_of_the_set() {
+    let mut g = G::new();
+    let (pb, b, na) = (k("phone b"), k("admin b"), k("new root a"));
+    g.admin(&pb, &b, POWER_ADMIT);
+    let list = g.listing();
+    // The first head waits for a first checkpoint that never comes; the
+    // second names the same root again and is void; the third, past it,
+    // is off the chain and names admin b.
+    let mut gone = Vec::new();
+    for root in [&na, &na, &b] {
+        let head = g.change(root, &list);
+        let Kind::Recovery { first, .. } = head.body().kind else { unreachable!() };
+        gone.push(first);
+    }
+    g.device(&b, &k("phone a"), "admin", |d| {
+        d.admin = Some(k("admin a").key.clone());
+        d.powers = POWER_ADMIT;
+    });
+    g.device(&k("admin a"), &k("dev 0"), "dev", |_| {});
+    let recs: Vec<Record> = g.recs.iter().filter(|r| !gone.contains(&r.id())).cloned().collect();
+    let set = set_with(&g.root.key, &recs, &g.lists);
+    let kept: Vec<Record> = set.ids().filter_map(|id| set.get(id)).cloned().collect();
+    assert_eq!(set.state(), state_with(&g.root.key, &kept, &g.lists));
+}
