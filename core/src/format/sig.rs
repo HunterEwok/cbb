@@ -40,6 +40,8 @@ pub const LABEL_COPY_BLOB: &str = "cbb copy blob v2";
 pub const LABEL_COPY_COMMIT: &str = "cbb copy commit v2";
 /// The set digest.
 pub const LABEL_SET: &str = "cbb set v3";
+/// The digest a Welcome names of the set it sends in parts.
+pub const LABEL_WELCOME_SET: &str = "cbb welcome set v1";
 
 /// The order n of P-256, big-endian.
 const N: [u8; 32] = [
