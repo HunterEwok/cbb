@@ -1786,6 +1786,9 @@ fn a_change_whose_first_checkpoint_never_comes_completes_alike_in_any_order() {
     }
     println!("after asking: path {}", m.state().roots.len());
     assert_eq!(ends[0].state().roots.len(), 1, "the change completed without its first checkpoint");
+    let st = ends[0].state();
+    let arriving = ends[0].change_arriving(&st).expect("the set tells that a change of root is arriving");
+    assert_eq!(arriving.first_missing, Some(first_cp.id()));
     // The state still tells the app the change is arriving after the
     // asking gave up.
     assert_eq!(m.state().first_missing, Some(first_cp.id()), "the state does not tell the change is arriving");
@@ -1814,4 +1817,119 @@ fn a_change_whose_first_checkpoint_never_comes_completes_alike_in_any_order() {
     println!("the first checkpoint at last: {got:?}; path {}", m.state().roots.len());
     assert_eq!(m.state().roots.len(), 2, "the first checkpoint did not complete the change");
     assert!(same(&restarted(&m), &m), "a restore after the change is not the live set");
+}
+
+/// Members that take the records one by one, each in its own order, may
+/// end with different sets (an insert holds what the rooms keep of what
+/// is held and the record); after they sync, each giving the others what
+/// it holds in one batch, they all hold the same, at every stage.
+#[test]
+#[ignore = "slow; run with --ignored --release --nocapture"]
+fn members_taking_records_one_by_one_agree_after_sync() {
+    let m = moving_records("m");
+    for (stage, end) in m.stages.clone() {
+        let records = &m.records[..end];
+        let lists: &[Vec<u8>] = if end == m.records.len() { &m.lists } else { &[] };
+        let mut seed = 0x1234_5678_9abc_def1u64 ^ (end as u64);
+        let mut members = Vec::new();
+        for _ in 0..4 {
+            let mut v = records.to_vec();
+            for i in (1..v.len()).rev() {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                v.swap(i, (seed % (i as u64 + 1)) as usize);
+            }
+            let mut one = new_set();
+            for _ in 0..5 {
+                for r in &v {
+                    let _ = one.insert(r.clone());
+                }
+                for l in lists {
+                    let _ = one.insert_list(l);
+                }
+            }
+            members.push(one);
+        }
+        let mut batch = new_set();
+        offer(&mut batch, records, lists);
+        members.push(batch);
+        let lens: Vec<usize> = members.iter().map(RecordSet::len).collect();
+        let mut rounds = 0;
+        loop {
+            let before: Vec<[u8; 32]> = members.iter().map(RecordSet::digest).collect();
+            for i in 0..members.len() {
+                for j in 0..members.len() {
+                    if i != j {
+                        let give: Vec<Record> = members[j].in_dependency_order().into_iter().cloned().collect();
+                        let lists: Vec<Vec<u8>> = members[j].lists().map(<[u8]>::to_vec).collect();
+                        offer(&mut members[i], &give, &lists);
+                    }
+                }
+            }
+            rounds += 1;
+            if members.iter().map(RecordSet::digest).collect::<Vec<_>>() == before || rounds == 6 {
+                break;
+            }
+        }
+        println!("{stage}: before sync {lens:?}, after {rounds} rounds {}", members[0].len());
+        assert!(members.iter().all(|x| same(x, &members[0])), "{stage}: members differ after sync");
+        assert!(rounds <= 3, "{stage}: {rounds} rounds of sync");
+    }
+}
+
+/// The writer's warning before an admin removal tells exactly what the
+/// removal, once written, takes from the group: the devices that leave
+/// and those that no longer hold an admin key.
+#[test]
+fn the_warning_before_an_admin_removal_tells_what_it_takes() {
+    let (mut set, root, mut g) = root_with_dead_checkpoints(0, 0);
+    let admin = k("admin a");
+    let mut admitted = Vec::new();
+    for i in 0..3u32 {
+        let dk = k(&format!("warn dev {i}"));
+        let r = g.sign(&admin, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)));
+        admitted.push(r.id());
+        set.insert(r).expect("an admin's admission");
+    }
+    let st = set.state();
+    let warning = set.removal_warning(&st, &root.hash, &[admin.hash], g.t + 1);
+    let removal =
+        g.sign(&root, Kind::Revoke(cbb_core::records::body::Removal { keys: vec![admin.hash], seen: Vec::new() }));
+    let mut after = set.clone();
+    after.insert(removal).expect("the root's removal");
+    let now = after.state();
+    let out: Vec<_> = st.devices.iter().filter(|d| now.device(&d.id).is_none()).map(|d| d.id).collect();
+    let no_admin: Vec<_> = st
+        .devices
+        .iter()
+        .filter(|d| d.admin.is_some() && now.device(&d.id).is_some_and(|a| a.admin.is_none()))
+        .map(|d| d.id)
+        .collect();
+    println!("warning {warning:?}; written: out {out:?}, no longer admin {no_admin:?}");
+    assert_eq!(warning.out, out, "the warning and the written removal differ on who leaves");
+    assert_eq!(warning.no_longer_admin, no_admin, "the warning and the written removal differ on admin keys");
+    assert!(!warning.out.is_empty() || !warning.no_longer_admin.is_empty(), "the removal takes nothing");
+    assert_eq!(set.state(), st, "the warning changed the set");
+}
+
+/// A live set and the same set restarted (equal records, state and
+/// digest) answer every insert alike: what the rooms keep hangs on what is
+/// held alone. After a batch the live set must not judge by the levels of
+/// the batch it turned records away from.
+#[test]
+#[ignore = "being settled at records: after a batch the live set turns away records its restarted twin takes"]
+fn a_live_set_and_its_restart_answer_inserts_alike() {
+    let (recs, ..) = full_group("w", 16);
+    let mut live = new_set();
+    live.insert_all(recs.clone());
+    let mut back = restarted(&live);
+    assert!(same(&back, &live), "the restart is not the live set");
+    let dropped: Vec<Record> = recs.iter().filter(|r| !live.contains(&r.id())).cloned().collect();
+    for r in &dropped {
+        let a = live.insert(r.clone()).map(|x| format!("{x:?}"));
+        let b = back.insert(r.clone()).map(|x| format!("{x:?}"));
+        assert_eq!(a, b, "live and restarted answer differently");
+        assert!(same(&back, &live), "live and restarted differ after an insert");
+    }
 }

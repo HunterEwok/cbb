@@ -14,6 +14,9 @@ use super::key::{GroupId, Key, KeyHash, RecordId, Recovery, group_id};
 use super::{Kind, MAX_NOTICES, Mark, Record, Rule, keep};
 use crate::identity::ExternalKey;
 
+mod notice;
+pub use notice::{ChangeArriving, Fullness, RemovalWarning, Room, Tier, TurnedAway};
+
 /// The units the current root's writer keeps back below its ceiling, past
 /// its records and its next checkpoint, for its removals, freezes and
 /// resolves (`write_one`'s floor): a 24th of the root's ceiling, 64 such
