@@ -59,17 +59,26 @@ pub const RECORDS_BUDGET: usize = crate::format::frame::LIMIT_MEMBER - STATEMENT
 pub const MAX_PARTS: u64 = 64;
 
 /// What the parts of one Welcome may take together, their messages' bytes:
-/// the widest set the format allows, each record with the widest second
-/// signature, every list, every head and every first checkpoint, and a MiB
-/// for the arrays' heads and the messages' maps: 87.6 MB (about 84 MiB) at
-/// table A's ceilings. A joiner refuses as soon as the parts pass it.
+/// what `RecordSet::for_peer` gives a device at the widest, that is the
+/// set's rooms, the records that wait for a new root's list (within one
+/// root's room), each of those records with the widest second signature
+/// and its head, every list, every head and every first checkpoint, and a
+/// MiB for the arrays' heads and the messages' maps: 101.0 MB (about
+/// 96.4 MiB) at table A's ceilings. The records kept aside for a later
+/// checkpoint and the settled ones are never sent, so this stays below the
+/// set's own bound on second signatures. A joiner refuses as soon as the
+/// parts pass it.
 pub const MAX_PARTS_BYTES: usize = {
     use crate::format::envelope::MAX_SIG2;
-    use crate::records::{ENVELOPE_ALLOWANCE, LIST_MAX, MAX_CHECKPOINT_BODY, MAX_RECORDS, MAX_SET_BYTES};
+    use crate::records::{
+        ENVELOPE_ALLOWANCE, LIST_MAX, MAX_CHECKPOINT_BODY, MAX_RECORDS, MAX_ROOT_RECORDS, MAX_SET_BYTES,
+    };
+    let waiting = MAX_ROOT_RECORDS * crate::records::keep::UNIT;
+    let sig2s = (MAX_RECORDS + MAX_ROOT_RECORDS) * (MAX_SIG2 + 9);
     let lists = crate::records::body::MAX_RECOVERY as usize * (4 + 34 * LIST_MAX);
     let heads = super::intro::MAX_HEADS * super::intro::HEAD_BYTES;
     let firsts = super::intro::MAX_HEADS * (MAX_CHECKPOINT_BODY + ENVELOPE_ALLOWANCE + MAX_SIG2);
-    MAX_SET_BYTES + MAX_RECORDS * MAX_SIG2 + lists + heads + firsts + (1 << 20)
+    MAX_SET_BYTES + waiting + sig2s + lists + heads + firsts + (1 << 20)
 };
 // The parts' bytes fit the parts' count, each part a frame.
 const _: () = assert!(MAX_PARTS_BYTES <= MAX_PARTS as usize * crate::records::sync::PART_BYTES);
@@ -82,8 +91,11 @@ const _: () = assert!(RECORDS_BUDGET + STATEMENTS_BUDGET + 64 * 1024 <= crate::f
 pub const PART_MS: u64 = 120_000;
 
 /// The longest a joiner waits for every part after message 67: the
-/// [`MAX_PARTS_BYTES`] of the widest set in 20 minutes is 0.58 Mbit/s.
-pub const PARTS_MS: u64 = 1_200_000;
+/// [`MAX_PARTS_BYTES`] of the widest set in 25 minutes is 0.54 Mbit/s,
+/// near a single part's slowest ([`PART_MS`]).
+pub const PARTS_MS: u64 = 1_500_000;
+// The widest parts arrive in time at 0.6 Mbit/s.
+const _: () = assert!(MAX_PARTS_BYTES as u64 * 8 * 1000 / 600_000 <= PARTS_MS);
 
 /// The label of the Welcome's digest ([`digest_of`]).
 pub const LABEL_DIGEST: &str = "cbb welcome digest v1";
