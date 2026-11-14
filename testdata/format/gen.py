@@ -2832,8 +2832,22 @@ def code_vectors():
     ]:
         channel.append({"name": name, "member": m.hex(), "joiner": j.hex(), "invitation": i.hex(),
                         "ci": ci(m, j, i).hex()})
+    # CPace's password with the invitation ID: both zero at home without an
+    # invitation (a public password, which authenticates nothing), neither
+    # with one; one without the other is refused.
+    secret, zero = h("vector invitation secret"), bytes(32)
+    passwords = [
+        {"name": "at home without an invitation", "invitation": home.hex(), "password": zero.hex(),
+         "keyed": False},
+        {"name": "an invitation", "invitation": inv.hex(), "password": secret.hex(), "keyed": True},
+        {"name": "an invitation ID with the zero password", "invitation": inv.hex(), "password": zero.hex(),
+         "error": "refused"},
+        {"name": "a secret with the ID of none", "invitation": home.hex(), "password": secret.hex(),
+         "error": "refused"},
+    ]
     return {"short_code_label": "cbb short code v3", "channel_prefix": "cbb pair channel v3",
-            "no_invitation": home.hex(), "short_code": short, "channel_id": channel}
+            "no_invitation": home.hex(), "no_secret": zero.hex(), "short_code": short, "channel_id": channel,
+            "passwords": passwords}
 
 
 def card_vectors():

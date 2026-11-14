@@ -1866,6 +1866,7 @@
   "short_code_label": "cbb short code v3",
   "channel_prefix": "cbb pair channel v3",
   "no_invitation": "00000000000000000000000000000000",
+  "no_secret": "0000000000000000000000000000000000000000000000000000000000000000",
   "short_code": [
    {
     "name": "an invitation",
@@ -1936,6 +1937,32 @@
     "joiner": "c2d7bf88433548096ef034517b51abbbe031994042ba7b3b4176d745ef0dedfe",
     "invitation": "41ae9daa27bdce27129416d54cdd4e42",
     "ci": "6362622070616972206368616e6e656c207633008ba406934518282d540c1ec1a8c5146fce3f533dd75415c7e741759184348853c2d7bf88433548096ef034517b51abbbe031994042ba7b3b4176d745ef0dedfe41ae9daa27bdce27129416d54cdd4e42"
+   }
+  ],
+  "passwords": [
+   {
+    "name": "at home without an invitation",
+    "invitation": "00000000000000000000000000000000",
+    "password": "0000000000000000000000000000000000000000000000000000000000000000",
+    "keyed": false
+   },
+   {
+    "name": "an invitation",
+    "invitation": "41ae9daa27bdce27129416d54cdd4e42",
+    "password": "7adcd98f682f379687195b038655efca03b62adce9f23da455f2fe72c0e37fa7",
+    "keyed": true
+   },
+   {
+    "name": "an invitation ID with the zero password",
+    "invitation": "41ae9daa27bdce27129416d54cdd4e42",
+    "password": "0000000000000000000000000000000000000000000000000000000000000000",
+    "error": "refused"
+   },
+   {
+    "name": "a secret with the ID of none",
+    "invitation": "00000000000000000000000000000000",
+    "password": "7adcd98f682f379687195b038655efca03b62adce9f23da455f2fe72c0e37fa7",
+    "error": "refused"
    }
   ]
  },

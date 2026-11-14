@@ -338,7 +338,15 @@ func checkMessages(dir string) {
 			Label        string `json:"short_code_label"`
 			Prefix       string `json:"channel_prefix"`
 			NoInvitation string `json:"no_invitation"`
-			Short        []struct {
+			NoSecret     string `json:"no_secret"`
+			Passwords    []struct {
+				Name       string `json:"name"`
+				Invitation string `json:"invitation"`
+				Password   string `json:"password"`
+				Keyed      *bool  `json:"keyed"`
+				Error      string `json:"error"`
+			} `json:"passwords"`
+			Short []struct {
 				Name, Exporter, Nj, Nm, Invitation, Code string
 			} `json:"short_code"`
 			Channel []struct {
@@ -500,6 +508,28 @@ func checkMessages(dir string) {
 		ci = append(ci, unhex(c.Invitation)...)
 		return c.Name, unhex(c.Invitation), hex.EncodeToString(ci) + "|" + c.Ci
 	})
+	// CPace's password goes with the invitation ID: both zero at home
+	// without an invitation, neither with one; one without the other is
+	// refused.
+	if f.Codes.NoSecret != strings.Repeat("00", 32) || len(f.Codes.Passwords) < 4 {
+		fail("codes: no secret %q, %d password cases", f.Codes.NoSecret, len(f.Codes.Passwords))
+	}
+	for _, c := range f.Codes.Passwords {
+		id, pw := unhex(c.Invitation), unhex(c.Password)
+		if len(id) != 16 || len(pw) != 32 {
+			fail("codes %s: an ID of %d bytes, a password of %d", c.Name, len(id), len(pw))
+		}
+		zeroID, zeroPw := bytes.Equal(id, make([]byte, 16)), bytes.Equal(pw, make([]byte, 32))
+		switch {
+		case zeroID != zeroPw:
+			if c.Error != "refused" || c.Keyed != nil {
+				fail("codes %s: want refused", c.Name)
+			}
+		case c.Error != "" || c.Keyed == nil || *c.Keyed == zeroID:
+			fail("codes %s: want keyed %v", c.Name, !zeroID)
+		}
+		count++
+	}
 	count += checkWelcomeParts(f.WelcomeParts.DigestLabel, f.WelcomeParts.KeyLabel, f.WelcomeParts.TagLabel,
 		len(f.WelcomeParts.Digest), func(i int) (string, []byte, [][]byte, string) {
 			c := f.WelcomeParts.Digest[i]

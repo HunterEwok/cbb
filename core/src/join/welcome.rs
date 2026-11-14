@@ -273,8 +273,25 @@ pub fn tag(isk: &[u8], welcome: &[u8]) -> Option<[u8; 64]> {
 }
 
 /// Message 67 as an admitter sends it: CPace's Tb, the Welcome's bytes and
-/// their tag under the session's ISK, framed.
-pub fn message(tb: &[u8], welcome: &[u8], isk: &[u8]) -> Result<Vec<u8>, Rule> {
+/// their tag under the session's ISK, framed. It is made only with an
+/// approval that names this exchange's session and joiner
+/// (`approve::Approved`: the joiner's Ta under an invitation's secret, or
+/// the member's person's "they match"), and both are taken by value: one
+/// approval, one message 67. Without one it is [`PairError::Refused`].
+pub fn message(
+    exchange: super::approve::MemberExchange,
+    approved: super::approve::Approved,
+    welcome: &[u8],
+) -> Result<Vec<u8>, super::PairError> {
+    if !exchange.allows(&approved) {
+        return Err(super::PairError::Refused);
+    }
+    let tb = exchange.tb().ok_or(super::PairError::Refused)?;
+    frame(&tb, welcome, exchange.isk()).map_err(|_| super::PairError::Refused)
+}
+
+/// Message 67's frame from its parts, for [`message`] and the tests.
+pub(crate) fn frame(tb: &[u8], welcome: &[u8], isk: &[u8]) -> Result<Vec<u8>, Rule> {
     let tw = tag(isk, welcome).ok_or(RULE_TAG)?;
     let w = cbor::decode(welcome)?;
     let m = Value::Map(alloc::vec![
