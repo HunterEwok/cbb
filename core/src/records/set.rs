@@ -333,6 +333,27 @@ pub struct RecordSet {
 /// The units of the new root's room a change's re-issued removals leave to
 /// its other first records: its device, settings and hubs records and the
 /// owner's removals.
+/// How long an admin key may stay silent: the root takes it back when it
+/// has received no acknowledgement of the key for this long, on the root
+/// device's own clock (a device silent for 35 days, as copies'
+/// statements). Not a rule members judge: the root's record decides.
+pub const ADMIN_SILENCE_MS: u64 = crate::copies::STATEMENT_MAX_AGE_MS;
+
+/// The writer's refusal to name an admin key a root took back: what the
+/// key signed that the root never got would count again.
+pub const ADMIN_KEY_TAKEN_BACK: &str =
+    "this admin key was taken back: the device makes a new admin key before it is an admin again";
+
+/// Why the root takes an admin key back (`RecordSet::take_back_lagging`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TakeBack {
+    /// The root's room passed three quarters of its cap while the key held
+    /// removals back.
+    Room,
+    /// The root received nothing of the key for ADMIN_SILENCE_MS.
+    Silence,
+}
+
 pub const REISSUE_KEPT_BACK: u64 = 256;
 
 /// Why the writer does not write a change of root while the set holds a
@@ -2674,6 +2695,166 @@ impl RecordSet {
         Some(Written { record, list, first, again: false, blind: false })
     }
 
+    /// The live admin keys: those a device of state holds.
+    fn live_admins(state: &State) -> BTreeSet<KeyHash> {
+        state.devices.iter().filter_map(|d| d.admin).collect()
+    }
+
+    /// Whether admin key a has acknowledged signer's records up to seq: a
+    /// record of a that counts names signer at seq or above in its seen.
+    fn acked_by(&self, state: &State, a: &KeyHash, signer: &KeyHash, seq: u64) -> bool {
+        self.records.values().filter(|e| !e.held && e.record.body().signer == *a).any(|e| {
+            state.counting.contains(&e.record.id())
+                && seen_of(&e.record.body().kind).iter().any(|x| x.key == *signer && x.seq >= seq)
+        })
+    }
+
+    /// Whether every live admin key but signer has acknowledged signer's
+    /// records up to seq. With no admin keys, at once.
+    fn acked(&self, state: &State, signer: &KeyHash, seq: u64) -> bool {
+        Self::live_admins(state).iter().filter(|a| *a != signer).all(|a| self.acked_by(state, a, signer, seq))
+    }
+
+    /// The counting removals each live admin key has not acknowledged,
+    /// by key: what waits for it in the rooms. Read-only, for the app
+    /// (which admin keys hold removals back, and how many).
+    pub fn unacknowledged(&self, state: &State) -> BTreeMap<KeyHash, usize> {
+        let removals: Vec<&Record> = self
+            .records
+            .values()
+            .filter(|e| !e.held && state.counting.contains(&e.record.id()))
+            .filter(|e| matches!(e.record.body().kind, Kind::Revoke(_)))
+            .map(|e| &e.record)
+            .collect();
+        Self::live_admins(state)
+            .into_iter()
+            .map(|a| {
+                let n = removals
+                    .iter()
+                    .filter(|r| r.body().signer != a && !self.acked_by(state, &a, &r.body().signer, r.body().seq))
+                    .count();
+                (a, n)
+            })
+            .collect()
+    }
+
+    /// Whether admin key a holds a removal it has not acknowledged: its
+    /// device then writes an acknowledgement (`write_ack`), once after
+    /// the sync that brought it, so that acknowledgements never flood.
+    pub fn ack_due(&self, state: &State, a: &KeyHash) -> bool {
+        self.unacknowledged(state).get(a).is_some_and(|n| *n > 0)
+    }
+
+    /// The newest acknowledgement of admin key a the set holds that
+    /// counts: its seq and the time its signer wrote in it (the signer's
+    /// claim; the app keeps when the root received it).
+    pub fn last_ack(&self, state: &State, a: &KeyHash) -> Option<(u64, u64)> {
+        self.records
+            .values()
+            .filter(|e| !e.held && e.record.body().signer == *a && state.counting.contains(&e.record.id()))
+            .filter(|e| matches!(e.record.body().kind, Kind::Ack { .. }))
+            .map(|e| (e.record.body().seq, e.record.body().time_ms))
+            .max()
+    }
+
+    /// The time the newest counting root record that names admin key a
+    /// carries: when the root named it, on the root's own clock.
+    fn named_at(&self, state: &State, a: &KeyHash) -> Option<u64> {
+        self.records
+            .values()
+            .filter(|e| e.role == Role::Root && !e.held && state.counting.contains(&e.record.id()))
+            .filter(|e| matches!(&e.record.body().kind, Kind::Device(d) if d.admin.as_ref().map(Key::hash) == Some(*a)))
+            .map(|e| e.record.body().time_ms)
+            .max()
+    }
+
+    /// The admin keys a root took back or removed, from the root records
+    /// the set holds: a key a root's device record named that no device
+    /// of state holds now. Such a key is never an admin again.
+    fn taken_back(&self, state: &State) -> BTreeSet<KeyHash> {
+        let live = Self::live_admins(state);
+        self.records
+            .values()
+            .filter(|e| e.role == Role::Root && !e.held)
+            .filter_map(|e| match &e.record.body().kind {
+                Kind::Device(d) => d.admin.as_ref().map(Key::hash),
+                _ => None,
+            })
+            .filter(|a| !live.contains(a))
+            .collect()
+    }
+
+    /// Writes admin key signer's acknowledgement: the heads it holds of the
+    /// current root and of the other live admin keys.
+    pub fn write_ack(&mut self, state: &State, signer: &dyn ExternalKey, time_ms: u64) -> crate::error::Result<Record> {
+        let me = Key::es256(signer.public()).hash();
+        let admins = Self::live_admins(state);
+        let root = state.roots.last().copied();
+        let seen = self.heads_where(|k| *k != me && (Some(*k) == root || admins.contains(k)));
+        if seen.is_empty() {
+            return Err(crate::error::Error::msg("there is nothing to acknowledge"));
+        }
+        self.write_record(state, signer, Kind::Ack { seen, spare: None }, time_ms)
+    }
+
+    /// The root takes live admin keys back: when its room passes three
+    /// quarters of its cap, each key that holds removals back
+    /// (`unacknowledged`), and each key the root received nothing of for
+    /// ADMIN_SILENCE_MS (heard_ms: when the root device last received a
+    /// record of each key, on its own clock; time_ms, its now). Its
+    /// checkpoint goes first, as before any take-back, so what the key
+    /// signed that the root holds and counts stays, and what it signed
+    /// that the root never got counts for nothing for good; the key is
+    /// never an admin again (`write_record` refuses it), its device makes
+    /// a new one. Removals are never blocked. It returns each record
+    /// with its reason, none when nothing is due.
+    pub fn take_back_lagging(
+        &mut self,
+        state: &State,
+        root: &dyn ExternalKey,
+        heard_ms: &BTreeMap<KeyHash, u64>,
+        time_ms: u64,
+    ) -> crate::error::Result<Vec<(TakeBack, Record)>> {
+        let h = Key::es256(root.public()).hash();
+        if state.roots.last() != Some(&h) {
+            return Ok(Vec::new());
+        }
+        let cap = self.ceiling(&h).unwrap_or(0);
+        let used = self.units.get(&h).copied().unwrap_or(0);
+        let full = used.saturating_mul(4) > cap.saturating_mul(3);
+        let mut lagging: BTreeMap<KeyHash, TakeBack> = BTreeMap::new();
+        for (a, n) in self.unacknowledged(state) {
+            if full && n > 0 {
+                lagging.insert(a, TakeBack::Room);
+            }
+        }
+        for a in Self::live_admins(state) {
+            // A key the root device never heard from counts from the root
+            // record that named it, on the root's own clock.
+            let since = heard_ms.get(&a).copied().or_else(|| self.named_at(state, &a));
+            if since.is_some_and(|t| time_ms.saturating_sub(t) >= ADMIN_SILENCE_MS) {
+                lagging.insert(a, TakeBack::Silence);
+            }
+        }
+        let mut out = Vec::new();
+        for (a, why) in lagging {
+            let now = self.state();
+            let Some(d) = now.devices.iter().find(|d| d.admin == Some(a)) else { continue };
+            let mut back = super::body::Device::new(d.key.clone(), &d.name, d.role);
+            back.rights = d.rights;
+            back.skip = d.skip;
+            back.caps = d.caps;
+            back.os = d.os;
+            back.store = d.store;
+            back.proof = d.proof;
+            back.replaces = d.replaces;
+            back.guarded = d.guarded;
+            back.seen = self.heads_where(|k| *k == a);
+            out.push((why, self.write_record(&now, root, Kind::device(back), time_ms)?));
+        }
+        Ok(out)
+    }
+
     /// Writes the current root's checkpoint (section 10, "Checkpoints"):
     /// for every key but the roots' and the recovery key's, a head at its
     /// highest record that counts, and the root's own head; it keeps every
@@ -2801,10 +2982,14 @@ impl RecordSet {
         let mut gone: BTreeSet<KeyHash> = BTreeSet::new();
         // A removal by an admin goes as a root's does: what it removed is
         // settled below the heads, and a replayed admission is refused.
+        // And only once every live admin key but its signer has
+        // acknowledged it (`acked`): an admin that has not seen the
+        // removal may still sign for the key, so the removal waits.
         for e in entries().filter(|e| state.counting.contains(&e.record.id())) {
             if let Kind::Revoke(rm) = &e.record.body().kind
                 && under(&e.record)
                 && rm.keys.iter().all(settled)
+                && self.acked(state, &e.record.body().signer, e.record.body().seq)
             {
                 dropped.insert(e.record.id());
                 gone.extend(rm.keys.iter().copied());
@@ -2818,6 +3003,20 @@ impl RecordSet {
                 .filter(|id| self.records.get(id).is_some_and(|e| under(&e.record) && state.counting.contains(id))),
         );
         dropped.extend(self.superseded(state, h, &under));
+        // An admin's acknowledgement under its head that a newer one of
+        // the same key stands for: the newer holds at least as much.
+        let mut newest_ack: BTreeMap<KeyHash, u64> = BTreeMap::new();
+        for e in entries().filter(|e| matches!(e.record.body().kind, Kind::Ack { .. })) {
+            let b = e.record.body();
+            let n = newest_ack.entry(b.signer).or_insert(b.seq);
+            *n = (*n).max(b.seq);
+        }
+        dropped.extend(
+            entries()
+                .filter(|e| matches!(e.record.body().kind, Kind::Ack { .. }) && under(&e.record))
+                .filter(|e| newest_ack.get(&e.record.body().signer).is_some_and(|n| *n > e.record.body().seq))
+                .map(|e| e.record.id()),
+        );
         let head_ids: BTreeSet<RecordId> = heads.values().map(|hd| hd.id).collect();
         let mut keep: BTreeSet<RecordId> = BTreeSet::new();
         // A head stays as its key's anchor in the key's room. An admin key's
@@ -3066,6 +3265,12 @@ impl RecordSet {
             && rm.keys.iter().any(|k| state.two_histories(k))
         {
             return Err(crate::error::Error::msg("a removal of a key in two histories is written with write_removal"));
+        }
+        if let Kind::Device(d) = &kind
+            && let Some(a) = d.admin.as_ref().map(Key::hash)
+            && self.taken_back(state).contains(&a)
+        {
+            return Err(crate::error::Error::msg(ADMIN_KEY_TAKEN_BACK));
         }
         self.write_one(state, signer, kind, time_ms)
     }
@@ -3938,5 +4143,15 @@ impl RecordSet {
             out.entry(i.why).or_default().insert(i.record);
         }
         out
+    }
+}
+
+/// The heads a record names in its seen, of any kind that carries one.
+fn seen_of(k: &Kind) -> &[super::body::Seen] {
+    match k {
+        Kind::Revoke(r) | Kind::Freeze(r) => &r.seen,
+        Kind::Thaw { seen, .. } | Kind::Hubs { seen, .. } | Kind::Copies { seen, .. } | Kind::Ack { seen, .. } => seen,
+        Kind::Device(d) => &d.seen,
+        _ => &[],
     }
 }

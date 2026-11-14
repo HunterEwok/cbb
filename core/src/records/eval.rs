@@ -1716,7 +1716,9 @@ impl Rec<'_> {
     fn seen_entry(&self, k: &KeyHash) -> Option<Seen> {
         match &self.b().kind {
             Kind::Revoke(r) | Kind::Freeze(r) => body::seen_entry(&r.seen, k),
-            Kind::Thaw { seen, .. } | Kind::Hubs { seen, .. } | Kind::Copies { seen, .. } => body::seen_entry(seen, k),
+            Kind::Thaw { seen, .. } | Kind::Hubs { seen, .. } | Kind::Copies { seen, .. } | Kind::Ack { seen, .. } => {
+                body::seen_entry(seen, k)
+            }
             Kind::Device(d) => body::seen_entry(&d.seen, k),
             _ => None,
         }
@@ -2545,6 +2547,8 @@ impl<'e, 'a> Epoch<'e, 'a> {
             Kind::Hubs { .. } => self.has(a, POWER_HUB),
             // Any admin sets how long incoming copies stay live.
             Kind::Copies { .. } => true,
+            // Any admin acknowledges what it holds; it changes no state.
+            Kind::Ack { .. } => true,
             _ => false,
         }
     }

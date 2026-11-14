@@ -1872,6 +1872,7 @@ the order in which they came, and no rule reads a clock.
 | 7 | `settings`, 8 `copies`, 10 `hubs` | a root |
 | 9 | `checkpoint`: the heads it settles and the records it keeps | the current root |
 | 13 | `recovery`: a change of root | the group's recovery key |
+| 14 | `ack`: the heads an admin holds (`seen`, field 10, not empty), so that a removal may be settled ("Checkpoints") | an admin |
 
 Types 5, 11 and 12 of earlier drafts are refused (`records/retired`): the root changes only by
 the recovery key.
@@ -2028,7 +2029,15 @@ mends the root's chain where the rooms turned a record away; an older checkpoint
 it keeps none (the new one carries their heads); a removal, the root's or an admin's, counts
 for good while it is kept, and the writer leaves one out, with the records of the keys it names,
 only when every key it names is a plain device key whose admissions it holds below their
-signer's head (a removal of a key never admitted stays: it bars the key). Of the root's own
+signer's head (a removal of a key never admitted stays: it bars the key), and every live admin
+key but the removal's signer has an `ack` that counts whose `seen` holds that signer at or
+above the removal's seq: an `ack` sits on its signer's whole chain, so the root then holds every
+admission that admin signed. An admin's device writes one `ack` after a sync brings a removal it
+has not acknowledged; the checkpoint keeps only each key's newest. The root takes back an admin
+key that holds a removal back once its room passes three quarters of its cap, and one its device
+received nothing of for `records::set::ADMIN_SILENCE_MS` (35 days, on the root device's clock),
+its checkpoint first; what that key signed and the root never got counts for nothing, and the
+writer never grants that key again: the device makes a new admin key. Of the root's own
 settings, hubs and copies records it keeps only the newest of each type, and of its records of
 one device the oldest and the newest, where the newest counts and names no admin key and those
 left out name the same key and no admin key; a resolve whose every target it leaves out goes
@@ -4712,6 +4721,7 @@ table, against the registry (`CBB_WRITE_BOUNDS=1` writes the table again).
 | `records::MAX_NOTICES` | 256 | reader | notices a set keeps |  |
 | `records::eval::MAX_IGNORED` | 64 | reader | records a state lists in ignored |  |
 | `records::set::REISSUE_KEPT_BACK` | 256 | frozen | the new root's room left to its other first records |  |
+| `records::set::ADMIN_SILENCE_MS` | 3024000000 | stated | an admin's device silent for 35 days before the root takes its key back |  |
 | `records::set::MISSING_ROUNDS` | 16 | reader | rounds a member asks for a missing record |  |
 | `records::sync::PART_RECORDS` | 4096 | frozen | record envelopes of one part | `records/records` |
 | `records::sync::HAVE_IDS` | 4096 | frozen | IDs of one `have` |  |

@@ -1,0 +1,347 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 HunterEwok
+
+//! Acknowledgements (section 10): the root's checkpoint lets a removal go
+//! only once every live admin key but its signer has acknowledged it, so
+//! a removal is forgotten only when everyone who could bring the device
+//! back has seen it. An admin's acknowledgement sits on its whole chain:
+//! a root that holds it holds all the admin signed before.
+
+use super::*;
+use crate::records::set::{ADMIN_KEY_TAKEN_BACK, ADMIN_SILENCE_MS, TakeBack};
+
+fn has(s: &State, member: &K) -> bool {
+    s.device_by_key(&member.hash).is_some()
+}
+
+/// An acknowledgement of by: the heads it holds but its own.
+fn ack(g: &mut G, by: &K) -> Record {
+    let seen: Vec<Seen> = g.seen().into_iter().filter(|s| s.key != by.hash).collect();
+    g.rec(by, Kind::Ack { seen, spare: None })
+}
+
+/// The root admits d and removes it; the admin signs a record for d (an
+/// admission or a change, the same bytes) that the root's writer never
+/// got; when `admin_first`, the admin admits x before. The root writes
+/// tv and a checkpoint from what it holds.
+fn late_record(admin_first: bool) -> (G, Record, Vec<Record>) {
+    let mut g = G::new();
+    let root = k("root");
+    let (pa, a) = (k("phone a"), k("admin a"));
+    g.admin(&pa, &a, POWER_ADMIT | POWER_MANAGE | POWER_REMOVE);
+    if admin_first {
+        g.device(&a, &k("x"), "x", |_| {});
+    }
+    g.device(&root, &k("d"), "d", |_| {});
+    let late = g.device(&a, &k("d"), "d by the admin", |_| {});
+    let mut mine: Vec<Record> = g.recs.iter().filter(|r| r.id() != late.id()).cloned().collect();
+    let mut set = set_with(&g.root.key, &mine, &g.lists);
+    let st = set.state();
+    for r in set.write_removal(&st, &root, &[k("d").hash], 0).unwrap() {
+        mine.push(g.push(r));
+    }
+    mine.push(g.device(&root, &k("tv"), "tv", |_| {}));
+    mine.push(root_checkpoint(&mut g, &mine));
+    (g, late, mine)
+}
+
+fn removal_of(g: &G, key: &K) -> RecordId {
+    g.recs.iter().find(|r| matches!(&r.body().kind, Kind::Revoke(rm) if rm.keys.contains(&key.hash))).unwrap().id()
+}
+
+/// The admin has not acknowledged the removal, so the checkpoint keeps it;
+/// the admin's late record, admission or change, finds the key removed.
+fn a_late_record_waits_for_the_removal(admin_first: bool) {
+    let (g, late, mine) = late_record(admin_first);
+    let Some(Kind::Checkpoint { keep, .. }) = mine.last().map(|r| &r.body().kind) else { panic!() };
+    assert!(keep.contains(&removal_of(&g, &k("d"))), "the removal waits for the admin");
+    let mut set = set_with(&g.root.key, &mine, &g.lists);
+    assert!(set.state().revoked.contains(&k("d").hash));
+    assert_eq!(set.unacknowledged(&set.state()).get(&k("admin a").hash), Some(&1));
+    let _ = set.insert(late.clone());
+    assert!(!has(&set.state(), &k("d")), "the removed device stays out at the writer");
+    assert!(!has(&g.state(), &k("d")), "and in the evaluation of every record");
+}
+
+#[test]
+fn a_late_record_without_a_head_finds_the_removal_waiting() {
+    a_late_record_waits_for_the_removal(false);
+}
+
+#[test]
+fn a_late_record_above_its_signers_head_finds_the_removal_waiting() {
+    a_late_record_waits_for_the_removal(true);
+}
+
+/// Once the admin acknowledges, the root holds its whole chain, the late
+/// record too: the next checkpoint lets the removal go with every
+/// admission of the key, and a copy of the admin's record that comes
+/// again is refused as settled.
+#[test]
+fn an_acknowledged_removal_goes_with_every_admission() {
+    let (mut g, late, mut mine) = late_record(false);
+    let a = k("admin a");
+    mine.push(late.clone());
+    mine.push(ack(&mut g, &a));
+    let set = set_with(&g.root.key, &mine, &g.lists);
+    let st = set.state();
+    assert_eq!(set.unacknowledged(&st).get(&a.hash), Some(&0));
+    assert!(!set.ack_due(&st, &a.hash));
+    mine.push(root_checkpoint(&mut g, &mine));
+    let Some(Kind::Checkpoint { keep, .. }) = mine.last().map(|r| &r.body().kind) else { panic!() };
+    assert!(!keep.contains(&removal_of(&g, &k("d"))), "every live admin saw it");
+    let mut set = set_with(&g.root.key, &mine, &g.lists);
+    let st = set.state();
+    assert!(!st.revoked.contains(&k("d").hash) && !has(&st, &k("d")));
+    assert!(!set.contains(&late.id()));
+    let _ = set.insert(late.clone());
+    assert!(!has(&set.state(), &k("d")), "the admin's record is settled");
+    assert!(!has(&g.state(), &k("d")));
+}
+
+/// With no admin keys, a removal goes at the next checkpoint, as before.
+#[test]
+fn without_admins_a_removal_goes_at_once() {
+    let mut g = G::new();
+    let root = k("root");
+    g.device(&root, &k("d"), "d", |_| {});
+    let rv = g.root_rec(Kind::Revoke(removal(&[k("d").hash], g.seen())));
+    g.device(&root, &k("tv"), "tv", |_| {});
+    let recs = g.recs.clone();
+    let cp = root_checkpoint(&mut g, &recs);
+    let Kind::Checkpoint { keep, .. } = &cp.body().kind else { panic!() };
+    assert!(!keep.contains(&rv.id()));
+}
+
+/// The writer's acknowledgement: due after a removal arrives, written
+/// once, then no longer due; it names the root's head.
+#[test]
+fn an_admin_acknowledges_once_after_a_removal_arrives() {
+    let mut g = G::new();
+    let root = k("root");
+    let (pa, a) = (k("phone a"), k("admin a"));
+    g.admin(&pa, &a, POWER_ADMIT | POWER_MANAGE | POWER_REMOVE);
+    g.device(&root, &k("d"), "d", |_| {});
+    let mut set = set_with(&g.root.key, &g.recs, &g.lists);
+    assert!(!set.ack_due(&set.state(), &a.hash), "nothing to acknowledge");
+    let rv = g.root_rec(Kind::Revoke(removal(&[k("d").hash], g.seen())));
+    set.insert(rv.clone()).unwrap();
+    let st = set.state();
+    assert!(set.ack_due(&st, &a.hash));
+    let r = set.write_ack(&st, &a, 0).unwrap();
+    let Kind::Ack { seen, spare: None } = &r.body().kind else { panic!() };
+    assert!(seen.iter().any(|s| s.key == root.hash && s.seq >= rv.body().seq));
+    assert!(!set.ack_due(&set.state(), &a.hash));
+}
+
+/// A removed admin key holds nothing back: only live admin keys must
+/// acknowledge.
+#[test]
+fn a_removed_admin_holds_no_removal_back() {
+    let mut g = G::new();
+    let root = k("root");
+    let (pa, a) = (k("phone a"), k("admin a"));
+    g.admin(&pa, &a, POWER_ADMIT | POWER_MANAGE | POWER_REMOVE);
+    g.device(&root, &k("d"), "d", |_| {});
+    g.root_rec(Kind::Revoke(removal(&[a.hash], g.seen())));
+    let rv = g.root_rec(Kind::Revoke(removal(&[k("d").hash], g.seen())));
+    g.device(&root, &k("tv"), "tv", |_| {});
+    let recs = g.recs.clone();
+    let cp = root_checkpoint(&mut g, &recs);
+    let Kind::Checkpoint { keep, .. } = &cp.body().kind else { panic!() };
+    assert!(!keep.contains(&rv.id()), "the lost admin is no live admin");
+}
+
+/// Sixteen live admin keys: the removal waits until the last of them
+/// acknowledges.
+#[test]
+fn sixteen_admins_each_hold_a_removal_back_until_they_acknowledge() {
+    let mut g = G::new();
+    let root = k("root");
+    let admins: Vec<(K, K)> =
+        (0..16).map(|i| (k(&alloc::format!("phone {i}")), k(&alloc::format!("admin {i}")))).collect();
+    for (p, a) in &admins {
+        g.admin(p, a, POWER_ADMIT);
+    }
+    g.device(&root, &k("d"), "d", |_| {});
+    let rv = g.root_rec(Kind::Revoke(removal(&[k("d").hash], g.seen())));
+    g.device(&root, &k("tv"), "tv", |_| {});
+    for (_, a) in admins.iter().take(15) {
+        ack(&mut g, a);
+    }
+    let set = set_with(&g.root.key, &g.recs, &g.lists);
+    let waiting = set.unacknowledged(&set.state());
+    assert_eq!(waiting.values().filter(|n| **n > 0).count(), 1);
+    let recs = g.recs.clone();
+    let cp = root_checkpoint(&mut g, &recs);
+    let Kind::Checkpoint { keep, .. } = &cp.body().kind else { panic!() };
+    assert!(keep.contains(&rv.id()), "one admin still holds it back");
+    ack(&mut g, &admins[15].1);
+    let recs = g.recs.clone();
+    let cp = root_checkpoint(&mut g, &recs);
+    let Kind::Checkpoint { keep, .. } = &cp.body().kind else { panic!() };
+    assert!(!keep.contains(&rv.id()), "all sixteen saw it");
+}
+
+/// A lagging admin and a full room: the root takes the admin key back
+/// (its checkpoint first), its next checkpoint lets the removal go, and
+/// the admin's record signed before, delivered after, counts for nothing.
+#[test]
+fn a_lagging_admin_is_taken_back_when_the_room_needs_it() {
+    let small = crate::records::keep::small::Small::new(64, 16, 8);
+    let (g, late, mine) = late_record(true);
+    let root = k("root");
+    for r in &mine {
+        small.units(r.id(), 1);
+    }
+    let mut set = set_with(&g.root.key, &mine, &g.lists);
+    let st = set.state();
+    assert!(set.take_back_lagging(&st, &root, &BTreeMap::new(), 0).unwrap().is_empty(), "the room has space");
+    // Fill the root's room past three quarters.
+    let mut g = g;
+    let mut extra = Vec::new();
+    for i in 0..9 {
+        let r = g.root_rec(Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] });
+        small.units(r.id(), 1);
+        extra.push(r);
+    }
+    for r in &extra {
+        let _ = set.insert(r.clone());
+    }
+    let st = set.state();
+    let written = set.take_back_lagging(&st, &root, &BTreeMap::new(), 0).unwrap();
+    assert!(!written.is_empty() && written.iter().all(|(why, _)| *why == TakeBack::Room));
+    for (_, r) in &written {
+        small.units(r.id(), 1);
+    }
+    let st = set.state();
+    assert!(st.device_by_key(&k("phone a").hash).is_some_and(|d| d.admin.is_none()), "taken back");
+    assert!(has(&st, &k("x")), "what the admin admitted that counted stays");
+    let cp = set.write_checkpoint(&st, &root, 0).unwrap();
+    let Kind::Checkpoint { keep, .. } = &cp.body().kind else { panic!() };
+    assert!(!keep.contains(&removal_of(&g, &k("d"))), "no live admin holds it back");
+    set.insert(cp).unwrap();
+    let _ = set.insert(late.clone());
+    let st = set.state();
+    assert!(!has(&st, &k("d")), "the late record of the taken-back key counts for nothing");
+}
+
+/// The sizes a waiting removal and an acknowledgement take: one unit of
+/// 512 bytes each for a plain removal and an acknowledgement of a root
+/// and sixteen admin keys.
+#[test]
+fn a_removal_and_an_acknowledgement_take_a_unit_each() {
+    let mut g = G::new();
+    let root = k("root");
+    let admins: Vec<(K, K)> =
+        (0..16).map(|i| (k(&alloc::format!("phone {i}")), k(&alloc::format!("admin {i}")))).collect();
+    for (p, a) in &admins {
+        g.admin(p, a, POWER_ADMIT);
+    }
+    g.device(&root, &k("d"), "d", |_| {});
+    let rv = g.root_rec(Kind::Revoke(removal(&[k("d").hash], Vec::new())));
+    let ak = ack(&mut g, &admins[0].1);
+    let units = |r: &Record| crate::records::keep::units(r.bytes.len() + crate::records::ENVELOPE_ALLOWANCE);
+    assert_eq!(units(&rv), 1);
+    assert!(units(&ak) <= 3, "{}", units(&ak));
+}
+
+const DAY_MS: u64 = 24 * 60 * 60 * 1000;
+
+/// An admin key the root received nothing of for ADMIN_SILENCE_MS, on the
+/// root device's clock, is taken back whatever the room; a day less is
+/// not enough.
+#[test]
+fn a_silent_admin_is_taken_back_after_the_silence() {
+    let (g, _, mine) = late_record(false);
+    let root = k("root");
+    let a = k("admin a");
+    let mut set = set_with(&g.root.key, &mine, &g.lists);
+    let heard: BTreeMap<KeyHash, u64> = [(a.hash, 1_000)].into();
+    let st = set.state();
+    let early = 1_000 + ADMIN_SILENCE_MS - DAY_MS;
+    assert!(set.take_back_lagging(&st, &root, &heard, early).unwrap().is_empty(), "not silent long enough");
+    let written = set.take_back_lagging(&st, &root, &heard, 1_000 + ADMIN_SILENCE_MS).unwrap();
+    assert_eq!(written.len(), 1);
+    assert_eq!(written[0].0, TakeBack::Silence);
+    let st = set.state();
+    assert!(st.device_by_key(&k("phone a").hash).is_some_and(|d| d.admin.is_none()), "taken back");
+    assert!(st.device_by_key(&k("phone a").hash).is_some(), "the device stays a device");
+}
+
+/// A key the root device never heard from counts from the root record
+/// that named it.
+#[test]
+fn an_admin_never_heard_from_counts_from_its_naming() {
+    let (g, _, mine) = late_record(false);
+    let root = k("root");
+    let mut set = set_with(&g.root.key, &mine, &g.lists);
+    let named = mine
+        .iter()
+        .filter(
+            |r| matches!(&r.body().kind, Kind::Device(d) if d.admin.as_ref().map(Key::hash) == Some(k("admin a").hash)),
+        )
+        .map(|r| r.body().time_ms)
+        .max()
+        .unwrap();
+    let st = set.state();
+    let none = BTreeMap::new();
+    assert!(set.take_back_lagging(&st, &root, &none, named + ADMIN_SILENCE_MS - 1).unwrap().is_empty());
+    let written = set.take_back_lagging(&st, &root, &none, named + ADMIN_SILENCE_MS).unwrap();
+    assert_eq!(written.len(), 1);
+    assert_eq!(written[0].0, TakeBack::Silence);
+}
+
+/// last_ack gives the newest acknowledgement of a key that counts; one
+/// above a record of its chain the set lacks counts for nothing yet.
+#[test]
+fn the_last_acknowledgement_is_the_newest() {
+    let (mut g, late, mut mine) = late_record(false);
+    let a = k("admin a");
+    let set = set_with(&g.root.key, &mine, &g.lists);
+    assert_eq!(set.last_ack(&set.state(), &a.hash), None);
+    let first = ack(&mut g, &a);
+    mine.push(first.clone());
+    let set = set_with(&g.root.key, &mine, &g.lists);
+    assert_eq!(set.last_ack(&set.state(), &a.hash), None, "its chain has a gap");
+    mine.push(late);
+    mine.push(g.device(&k("root"), &k("tv2"), "tv2", |_| {}));
+    let second = ack(&mut g, &a);
+    mine.push(second.clone());
+    let set = set_with(&g.root.key, &mine, &g.lists);
+    assert_eq!(set.last_ack(&set.state(), &a.hash), Some((second.body().seq, second.body().time_ms)));
+}
+
+/// A key taken back is never an admin again: the root's writer refuses
+/// to grant it, grants a new key of the same device, and the old key's
+/// admission the root never got counts for nothing.
+#[test]
+fn a_taken_back_key_is_never_granted_again() {
+    let (g, late, mine) = late_record(false);
+    let root = k("root");
+    let (pa, a, a2) = (k("phone a"), k("admin a"), k("admin a new"));
+    let mut set = set_with(&g.root.key, &mine, &g.lists);
+    let heard: BTreeMap<KeyHash, u64> = [(a.hash, 0)].into();
+    let st = set.state();
+    for (_, r) in set.take_back_lagging(&st, &root, &heard, ADMIN_SILENCE_MS).unwrap() {
+        let _ = set.insert(r);
+    }
+    let st = set.state();
+    let cp = set.write_checkpoint(&st, &root, ADMIN_SILENCE_MS).unwrap();
+    set.insert(cp).unwrap();
+    let grant = |key: &K| {
+        let mut d = Device::new(pa.key.clone(), "admin", ROLE_MEMBER);
+        d.admin = Some(key.key.clone());
+        d.powers = POWER_ADMIT | POWER_MANAGE | POWER_REMOVE;
+        Kind::device(d)
+    };
+    let st = set.state();
+    let err = set.write_record(&st, &root, grant(&a), ADMIN_SILENCE_MS).unwrap_err();
+    assert!(alloc::format!("{err}").contains(ADMIN_KEY_TAKEN_BACK), "{err}");
+    let r = set.write_record(&st, &root, grant(&a2), ADMIN_SILENCE_MS).unwrap();
+    let _ = set.insert(r);
+    let st = set.state();
+    assert!(st.device_by_key(&pa.hash).is_some_and(|d| d.admin == Some(a2.hash)));
+    let _ = set.insert(late);
+    assert!(!has(&set.state(), &k("d")), "the old key's admission counts for nothing");
+}

@@ -3645,6 +3645,7 @@ fn full_size(name: &str) -> bool {
     on
 }
 
+mod ack;
 mod cap;
 mod insert_cost;
 mod lost_root;
@@ -4574,9 +4575,11 @@ fn records_waiting_for_their_pair_keep_within_their_bound() {
     assert_eq!(b.state().stop, Stop::Full);
 }
 
-/// A second admission of a key the root removed, which the root never
-/// saw, brings the device back after the prune; the member that dropped
-/// the removal tells it, and a new admission by the root is not told.
+/// An admission of a key the root removed, signed after the admin
+/// acknowledged the removal and never seen by the root, brings the device
+/// back after the prune; the member that dropped the removal tells it,
+/// and a new admission by the root is not told. (One the admin signed
+/// before acknowledging keeps the removal: `tests::ack`.)
 #[test]
 fn an_unseen_admission_after_a_prune_is_a_notice() {
     let mut g = G::new();
@@ -4585,9 +4588,11 @@ fn an_unseen_admission_after_a_prune_is_a_notice() {
     g.admin(&pa, &a, POWER_ADMIT);
     g.rec(&a, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
     g.device(&root, &k("d"), "d", |_| {});
-    let unseen = g.device(&a, &k("d"), "d", |_| {});
     g.root_rec(Kind::Revoke(removal(&[k("d").hash], Vec::new())));
     g.device(&root, &k("tv"), "tv", |_| {});
+    let seen: Vec<Seen> = g.seen().into_iter().filter(|s| s.key != a.hash).collect();
+    g.rec(&a, Kind::Ack { seen, spare: None });
+    let unseen = g.device(&a, &k("d"), "d", |_| {});
     let rootside: Vec<Record> = g.recs.iter().filter(|r| r.id() != unseen.id()).cloned().collect();
     let cp = root_checkpoint(&mut g, &rootside);
     let mut m = set_with(&g.root.key, &rootside, &g.lists);

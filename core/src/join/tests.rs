@@ -2225,6 +2225,12 @@ fn a_join_in_parts_after_two_changes_and_a_pruning_checkpoint_ends_equal() {
     g.rec(&n2, Kind::Revoke(Removal { keys: vec![tv.hash], seen }));
     // The removal is not the root's head when it checkpoints.
     g.rec(&n2, Kind::Copies { incoming_ms: 9_000, seen: vec![] });
+    // Every live admin acknowledges the removal, so a checkpoint may let
+    // it go.
+    for a in [k("laptop admin"), k("admin b"), k("admin c")] {
+        let seen: Vec<_> = g.seen().into_iter().filter(|s| s.key != a.hash).collect();
+        g.rec(&a, Kind::Ack { seen, spare: None });
+    }
     // The current root's later checkpoint, as a member writes it.
     let before = g.set();
     assert!(before.contains(&tv_admission.id()));

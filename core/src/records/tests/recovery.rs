@@ -1915,6 +1915,9 @@ fn a_change_of_root_leaves_out_what_either_history_pruned() {
     g.device(&a, &k("e"), "e", |_| {});
     let rv = g.root_rec(Kind::Revoke(removal(&[k("d").hash], g.seen())));
     g.device(&root, &k("x"), "x", |_| {});
+    // The admin acknowledges the removal, so a checkpoint may let it go.
+    let seen: Vec<Seen> = g.seen().into_iter().filter(|s| s.key != a.hash).collect();
+    g.rec(&a, Kind::Ack { seen, spare: None });
     let line = g.recs.clone();
     let set = set_with(&g.root.key, &line, &g.lists);
     let st = set.state();

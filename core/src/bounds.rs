@@ -715,6 +715,14 @@ pub const BOUNDS: &[Bound] = &[
         &["a_full_set_keeps_the_roots_removals"],
     ),
     b(
+        "records::set::ADMIN_SILENCE_MS",
+        crate::records::set::ADMIN_SILENCE_MS,
+        Stated,
+        "an admin's device silent for 35 days before the root takes its key back",
+        "",
+        &["a_silent_admin_is_taken_back_after_the_silence"],
+    ),
+    b(
         "records::set::MISSING_ROUNDS",
         crate::records::set::MISSING_ROUNDS as u64,
         Reader,

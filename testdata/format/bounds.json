@@ -800,6 +800,16 @@
       "widest": "the new root's room left to its other first records"
     },
     {
+      "class": "stated",
+      "name": "records::set::ADMIN_SILENCE_MS",
+      "reached": [
+        "a_silent_admin_is_taken_back_after_the_silence"
+      ],
+      "refusal": "",
+      "value": 3024000000,
+      "widest": "an admin's device silent for 35 days before the root takes its key back"
+    },
+    {
       "class": "reader",
       "name": "records::set::MISSING_ROUNDS",
       "reached": [
