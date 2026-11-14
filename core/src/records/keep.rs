@@ -304,10 +304,8 @@ pub fn keep_tiers(
         let cap = if second.contains(&hash) { ceiling.min(cap2) } else { ceiling };
         let mut room = cap.saturating_sub(pre_of(&hash));
         for it in items {
-            if it.units > room {
-                break;
-            }
-            room -= it.units;
+            let Some(left) = room.checked_sub(it.units) else { break };
+            room = left;
             kept.insert(it.id);
         }
     }
@@ -325,7 +323,7 @@ pub fn second_cap(n2: usize, live: usize) -> u64 {
         .saturating_sub(reserve())
         .saturating_sub(ceiling(false).saturating_mul(live as u64));
     match u64::try_from(n2) {
-        Ok(n) if n > 0 => (rest / n).min(ceiling(false)),
+        Ok(n) if n > 0 => rest.checked_div(n).unwrap_or(0).min(ceiling(false)),
         _ => ceiling(false),
     }
 }
