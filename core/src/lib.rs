@@ -41,6 +41,7 @@ extern crate alloc;
 
 #[cfg(feature = "tls")]
 pub mod admit;
+pub mod alpn;
 pub mod api;
 pub mod arrange;
 pub mod authority;

@@ -488,7 +488,7 @@ impl Admission {
     /// pairing protocol, exactly one certificate, the QR code's
     /// fingerprint, a P-256 key and a device ID other than this one's.
     fn handshake_done(&mut self) -> Result<()> {
-        if self.session.alpn_protocol() != Some(tls::PAIR_PROTOCOL) {
+        if !crate::alpn::is_pair(self.session.alpn_protocol()) {
             return Err(Error::msg("the device does not offer pairing"));
         }
         let certs_in = self.session.peer_certificates().unwrap_or_default();

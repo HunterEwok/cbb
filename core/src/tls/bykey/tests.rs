@@ -10,11 +10,12 @@ use rustls::pki_types::UnixTime;
 use rustls::time_provider::TimeProvider;
 
 use super::*;
+use crate::alpn;
 use crate::identity::new_key;
 use crate::records::Key as RKey;
 use crate::records::State;
 use crate::records::eval::DeviceState;
-use crate::tls::{MEMBER_PROTOCOL, Session};
+use crate::tls::Session;
 
 #[derive(Debug)]
 struct SystemClock;
@@ -78,8 +79,8 @@ fn device(key: &OwnKey) -> DeviceState {
 }
 
 fn pair(a: &OwnKey, b: &OwnKey, expect: Option<DeviceId>, ja: Judge, jb: Judge) -> (Session, Session) {
-    let c = client(a, expect, ja, MEMBER_PROTOCOL, &clock()).unwrap();
-    let s = server(b, jb, MEMBER_PROTOCOL, &clock()).unwrap();
+    let c = client(a, expect, ja, alpn::MEMBER, &clock()).unwrap();
+    let s = server(b, jb, alpn::MEMBER, &clock()).unwrap();
     (Session::client(Arc::new(c), unsent_name()).unwrap(), Session::server(Arc::new(s)).unwrap())
 }
 
@@ -90,7 +91,7 @@ fn members_by_their_keys() {
     let (mut c, mut s) = pair(&a, &b, Some(want), any_key(), any_key());
     let (up, down) = shuttle(&mut c, &mut s);
     assert!(!c.is_handshaking() && !s.is_handshaking());
-    assert_eq!(c.alpn_protocol(), Some(MEMBER_PROTOCOL));
+    assert_eq!(c.alpn_protocol(), Some(alpn::MEMBER));
     assert_eq!(c.kx_group(), Some(NamedGroup::X25519MLKEM768));
     assert_eq!(s.kx_group(), Some(NamedGroup::X25519MLKEM768));
     assert_eq!(peer_key(c.peer_certificates()), Some(*b.point()));
@@ -150,8 +151,8 @@ fn falls_back_to_x25519_without_a_retry() {
         .unwrap()
         .with_client_cert_verifier(Arc::new(DialerVerifier { judge: any_key() }))
         .with_cert_resolver(Arc::new(OneCert(b.certified())));
-    scfg.alpn_protocols = vec![MEMBER_PROTOCOL.to_vec()];
-    let c = client(&a, None, any_key(), MEMBER_PROTOCOL, &clock()).unwrap();
+    scfg.alpn_protocols = vec![alpn::MEMBER.to_vec()];
+    let c = client(&a, None, any_key(), alpn::MEMBER, &clock()).unwrap();
     let mut c = Session::client(Arc::new(c), unsent_name()).unwrap();
     let mut s = Session::server(Arc::new(scfg)).unwrap();
     let first = c.take_outgoing();
@@ -187,9 +188,9 @@ fn an_ordinary_certificate_is_refused() {
             .unwrap();
     let (ccfg, _) = crate::tls::pair_client(&cert, &key, &clock()).unwrap();
     let mut ccfg = ccfg;
-    ccfg.alpn_protocols = vec![MEMBER_PROTOCOL.to_vec()];
+    ccfg.alpn_protocols = vec![alpn::MEMBER.to_vec()];
     let mut c = Session::client(Arc::new(ccfg), unsent_name()).unwrap();
-    let mut s = Session::server(Arc::new(server(&b, any_key(), MEMBER_PROTOCOL, &clock()).unwrap())).unwrap();
+    let mut s = Session::server(Arc::new(server(&b, any_key(), alpn::MEMBER, &clock()).unwrap())).unwrap();
     shuttle(&mut c, &mut s);
     assert!(s.is_handshaking(), "the server must refuse an ordinary certificate");
 }
@@ -241,8 +242,8 @@ fn the_tunnel_key_comes_from_the_connection_with_each_hub() {
     let (dev, hub, hub2) = (own(), own(), own());
     let id = |k: &OwnKey| Key::new(Alg::Es256, k.point()).device_id();
     let psk_with = |h: &OwnKey| {
-        let (c, cx) = exporting_client(client(&dev, None, any_key(), MEMBER_PROTOCOL, &clock()).unwrap());
-        let (s, sx) = exporting_server(server(h, any_key(), MEMBER_PROTOCOL, &clock()).unwrap());
+        let (c, cx) = exporting_client(client(&dev, None, any_key(), alpn::MEMBER, &clock()).unwrap());
+        let (s, sx) = exporting_server(server(h, any_key(), alpn::MEMBER, &clock()).unwrap());
         let mut c = Session::client(Arc::new(c), unsent_name()).unwrap();
         let mut s = Session::server(Arc::new(s)).unwrap();
         shuttle(&mut c, &mut s);

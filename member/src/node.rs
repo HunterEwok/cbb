@@ -1734,7 +1734,7 @@ impl Node {
         let mut conn = tls::Session::server(Arc::new(cfg))?;
         let res = tls::handshake(&mut conn, &sock, &format!("the TLS handshake with {addr} failed"));
         if res.is_ok()
-            && conn.alpn_protocol() == Some(tls::PAIR_PROTOCOL)
+            && cbb_core::alpn::is_pair(conn.alpn_protocol())
             && let Some(serve) = pairing
         {
             handshaken();
@@ -1782,7 +1782,7 @@ impl Node {
     /// Checks the peer of a connection whose handshake is done: the member
     /// protocol, and a member chain the records take.
     fn check(&self, conn: tls::Session, addr: SocketAddr, usage: Usage) -> Result<(tls::Session, DeviceId, Vec<Cert>)> {
-        if conn.alpn_protocol() != Some(tls::MEMBER_PROTOCOL)
+        if !cbb_core::alpn::is_member(conn.alpn_protocol())
             || conn.protocol_version() != Some(tls::rustls::ProtocolVersion::TLSv1_3)
         {
             return Err(Error::msg(format!("{addr} does not speak the member protocol")));

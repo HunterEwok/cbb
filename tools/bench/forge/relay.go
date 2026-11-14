@@ -108,4 +108,4 @@ func insecureRelayConfig(cert tls.Certificate) *tls.Config {
 }
 
 // pairProtocol is the pairing's ALPN (docs/protocol.md, section 6).
-const pairProtocol = "cbb-pair/2"
+const pairProtocol = "cbb-pair/3"

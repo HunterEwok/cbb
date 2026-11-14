@@ -8,7 +8,7 @@ import Foundation
 /// in frames of a 4-byte big-endian length.
 public enum Pairing {
     /// The ALPN protocol of pairing connections.
-    public static let alpn = "cbb-pair/2"
+    public static let alpn = "cbb-pair/3"
     /// The TLS exporter label for the CPace session ID.
     public static let exporterLabel = "EXPERIMENTAL-cbb-pair-v2"
     /// Frames larger than this are refused.
