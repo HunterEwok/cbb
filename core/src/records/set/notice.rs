@@ -90,6 +90,20 @@ pub struct RemovalWarning {
     pub no_longer_admin: Vec<DeviceId>,
 }
 
+/// What a root's record that makes admin keys no longer admins (a removal
+/// naming them, or a device record that takes one back) would do if the
+/// root wrote it now, as `RecordSet::write_record` writes it
+/// (`RecordSet::removal_outcome`).
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub struct RemovalOutcome {
+    /// The devices of the state that would stop counting.
+    pub out: Vec<DeviceId>,
+    /// The writer would write the root's checkpoint first, which keeps
+    /// what counts of the keys going; false when none can be written and
+    /// the record would go alone.
+    pub checkpoint_first: bool,
+}
+
 impl RecordSet {
     /// The fixed cap of the room key's records go to.
     fn cap_of(&self, key: &KeyHash) -> Option<u64> {
@@ -146,6 +160,66 @@ impl RecordSet {
     pub fn change_arriving(&self, state: &State) -> Option<ChangeArriving> {
         (state.first_missing.is_some() || state.list_missing.is_some())
             .then_some(ChangeArriving { first_missing: state.first_missing, list_missing: state.list_missing })
+    }
+
+    /// What root's record of kind would do if written now: the trial of
+    /// `write_record`, the checkpoint first where one can be written and
+    /// counts, then the record, and the devices of state that stop
+    /// counting. Nothing is signed or stored.
+    pub fn removal_outcome(&self, state: &State, root: &KeyHash, kind: &Kind, time_ms: u64) -> RemovalOutcome {
+        let Some((_, role)) = self.keys.signer(root) else { return RemovalOutcome::default() };
+        let unsigned = |body: Body| {
+            let bytes = body.encode();
+            let id = RecordId(crate::certs::sha256(&bytes));
+            Record { bytes, sig: vec![], sig2: None, body, id }
+        };
+        let lists = self.list_refs();
+        let by = eval::Compacted { proven: &self.checkpoints };
+        let early: Vec<&Record> = self.early.values().collect();
+        let judge = |extra: &[Record]| {
+            let mut checked: Vec<Checked<'_>> = self.checked();
+            checked.extend(extra.iter().map(|r| Checked { r, role, held: false }));
+            eval::evaluate_checked(
+                &self.root,
+                &self.recovery,
+                checked,
+                alloc::collections::BTreeMap::new(),
+                &lists,
+                &by,
+                &early,
+            )
+        };
+        let own = self.heads_where(|k| k == root).into_iter().next();
+        let mut next = own.map_or((1, None), |o| (o.seq.saturating_add(1), Some(o.id)));
+        let mut extra: Vec<Record> = Vec::new();
+        let mut checkpoint_first = false;
+        if state.roots.last() == Some(root)
+            && !Self::admins_going(state, kind).is_empty()
+            && let Ok(body) = self.checkpoint_body(state, *root, time_ms)
+        {
+            let cp = unsigned(body);
+            if judge(core::slice::from_ref(&cp)).checkpoint == Some(cp.id) {
+                next = (cp.body.seq.saturating_add(1), Some(cp.id));
+                extra.push(cp);
+                checkpoint_first = true;
+            }
+        }
+        let (seq, prev) = next;
+        extra.push(unsigned(Body {
+            group: self.group,
+            signer: *root,
+            seq,
+            prev,
+            time_ms,
+            kind: kind.clone(),
+            held: false,
+        }));
+        let after = judge(&extra);
+        let stays: BTreeSet<DeviceId> = after.devices.iter().map(|d| d.id).collect();
+        RemovalOutcome {
+            out: state.devices.iter().map(|d| d.id).filter(|d| !stays.contains(d)).collect(),
+            checkpoint_first,
+        }
     }
 
     /// The writer's warning before remover removes the admin keys in

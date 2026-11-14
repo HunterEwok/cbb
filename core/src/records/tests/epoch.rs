@@ -131,13 +131,6 @@ fn an_admission_at_the_current_epoch_counts() {
     // The admin's chain runs through its late record, which stays held
     // and is named in the notice; the new admission counts.
     let st = set_with(&g.root.key, &g.recs, &g.lists).state();
-    std::eprintln!(
-        "ignored {:?} revoked {} stale {:?} fresh {:?}",
-        st.ignored,
-        st.revoked.contains(&k("d").hash),
-        st.stale,
-        fresh.id()
-    );
     assert!(has(&st, &k("d")), "a user admitted it again");
     assert_eq!(st.stale, vec![late.id()]);
     assert_eq!(g.state(), st);
@@ -371,4 +364,57 @@ fn a_full_room_leaves_out_its_oldest_settled_removals() {
     assert!(gone[0], "the oldest goes first: {gone:?}");
     assert!(!gone.iter().all(|g| *g), "only as many as the room asks for: {gone:?}");
     assert!(gone.windows(2).all(|w| w[0] || !w[1]), "oldest first: {gone:?}");
+}
+
+/// The trial of a take-back where the root's checkpoint can be written:
+/// the checkpoint keeps what the admin key signed that counts, so no
+/// device stops counting, and the record written then agrees.
+#[test]
+fn a_removal_outcome_with_the_checkpoint_first_names_nobody() {
+    let mut g = G::new();
+    let root = k("root");
+    let (pa, a) = (k("phone a"), k("admin a"));
+    g.admin(&pa, &a, POWER_ADMIT);
+    let x = g.device(&a, &k("x"), "x", |_| {});
+    g.device(&root, &k("tv"), "tv", |_| {});
+    let at = g.seen_at(&a.hash, x.body().seq);
+    let mut set = set_with(&g.root.key, &g.recs, &g.lists);
+    let st = set.state();
+    let mut back = Device::new(pa.key.clone(), "admin", ROLE_MEMBER);
+    back.rights = RIGHT_READ | RIGHT_SEND;
+    back.seen = vec![at];
+    let kind = Kind::device(back);
+    let outcome = set.removal_outcome(&st, &root.hash, &kind, 0);
+    assert!(outcome.checkpoint_first);
+    set.write_record(&st, &root, kind, 0).unwrap();
+    let after = set.state();
+    assert!(outcome.out.is_empty(), "{:?}", outcome.out);
+    assert!(st.devices.iter().all(|d| after.device(&d.id).is_some()));
+    assert!(after.device_by_key(&pa.hash).is_some_and(|d| d.admin.is_none()));
+}
+
+/// The trial where no checkpoint of the root counts before the record (its
+/// room has no place for one): the record goes alone, and the devices
+/// the admin key admitted are named.
+#[test]
+fn a_removal_outcome_without_a_checkpoint_names_the_devices() {
+    let small = crate::records::keep::small::Small::new(32, 3, 4);
+    let mut g = G::new();
+    let root = k("root");
+    let (pa, a) = (k("phone a"), k("admin a"));
+    g.admin(&pa, &a, POWER_ADMIT);
+    g.device(&a, &k("x"), "x", |_| {});
+    g.device(&root, &k("tv"), "tv", |_| {});
+    g.device(&root, &k("lamp"), "lamp", |_| {});
+    for r in &g.recs {
+        small.units(r.id(), 1);
+    }
+    let set = set_with(&g.root.key, &g.recs, &g.lists);
+    let st = set.state();
+    assert!(st.device_by_key(&k("x").hash).is_some());
+    let kind = Kind::Revoke(removal(&[a.hash], Vec::new()));
+    let outcome = set.removal_outcome(&st, &root.hash, &kind, 0);
+    assert!(!outcome.checkpoint_first);
+    let x = st.device_by_key(&k("x").hash).unwrap().id;
+    assert!(outcome.out.contains(&x), "{:?}", outcome.out);
 }

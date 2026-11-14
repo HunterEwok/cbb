@@ -1948,7 +1948,9 @@ record of the keys going that counts, so what counted of them keeps counting on 
 that holds the checkpoint; a change's first checkpoint likewise keeps what counts of the admin
 keys the change removes. When no such checkpoint can be written (the root has two histories),
 the record goes alone, and what the root's newest checkpoint does not keep of those keys is
-lost. A record of a key the root took back counts no more in the state whether it is held or
+lost; before writing, the app asks `RecordSet::removal_outcome`, which tries the checkpoint and
+the record unsigned and names the devices that would fall out, so the user is warned by name.
+A record of a key the root took back counts no more in the state whether it is held or
 not (the writer refuses a take-back that would put a device out), so a removal among them that
 is lost changes nothing: the device it names stays until someone removes it again.
 
