@@ -104,8 +104,11 @@ pub struct Item {
     pub seq: u64,
     pub id: RecordId,
     pub units: u64,
-    /// A checkpoint: it comes after a root's removals, before the rest.
+    /// Its key's newest checkpoint (`newest_only`): it comes after a
+    /// root's removals, before the rest.
     pub checkpoint: bool,
+    /// An older checkpoint of its key (`newest_only`): it comes last.
+    pub older: bool,
     /// A root's revoke, freeze or resolve: it comes first.
     pub early: bool,
 }
@@ -115,18 +118,42 @@ pub type Pos = (u8, u64, RecordId);
 
 impl Item {
     /// Its place in its key's order: a root's removals and resolves first,
-    /// by seq; then checkpoints, the newest first; then the rest by seq
-    /// and ID. (A root a takeover cut keeps only what the takeover lists:
+    /// by seq; then the key's newest checkpoint; then the rest by seq and
+    /// ID; then its older checkpoints, the newest first. (A root a takeover cut keeps only what the takeover lists:
     /// `eval::kept_of`.)
     pub fn pos(&self) -> Pos {
         if self.early {
             (0, self.seq, self.id)
         } else if self.checkpoint {
             (1, u64::MAX.saturating_sub(self.seq), self.id)
+        } else if self.older {
+            (3, u64::MAX.saturating_sub(self.seq), self.id)
         } else {
             (2, self.seq, self.id)
         }
     }
+}
+
+/// Keeps the checkpoint mark on each key's newest checkpoint alone: the
+/// highest seq, of two at one seq the smaller ID (two at one seq are a
+/// root's two histories, which halt the group), among items and those
+/// kept first (`first`, which take their part of the rooms before them).
+/// Older checkpoints come after the rest of the room, so that checkpoints
+/// that never count cannot push a key's other records out of it, while
+/// the newest still finds a place. It returns each key's newest.
+pub fn newest_only(items: &mut [Item], first: &[Item]) -> BTreeMap<KeyHash, RecordId> {
+    let mut newest: BTreeMap<KeyHash, (u64, RecordId)> = BTreeMap::new();
+    for it in items.iter().chain(first).filter(|it| it.checkpoint) {
+        let n = newest.entry(it.signer).or_insert((it.seq, it.id));
+        if (it.seq, core::cmp::Reverse(it.id)) > (n.0, core::cmp::Reverse(n.1)) {
+            *n = (it.seq, it.id);
+        }
+    }
+    for it in items.iter_mut().filter(|it| it.checkpoint) {
+        it.checkpoint = newest.get(&it.signer).is_some_and(|n| n.1 == it.id);
+        it.older = !it.checkpoint;
+    }
+    newest.into_iter().map(|(k, (_, id))| (k, id)).collect()
 }
 
 /// The units of a record of size bytes.
@@ -325,6 +352,7 @@ mod tests {
             id: RecordId(id),
             units: units(size),
             checkpoint: false,
+            older: false,
             early: false,
         }
     }

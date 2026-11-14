@@ -149,6 +149,10 @@ pub struct RecordSet {
     /// The units each key's records kept first took when the rooms were
     /// last judged (`cut`).
     pre: BTreeMap<KeyHash, u64>,
+    /// Each room's newest checkpoint when the rooms were last judged
+    /// (`keep::newest_only`): the order in a room, and so the cut, hangs
+    /// on it.
+    newest: BTreeMap<KeyHash, RecordId>,
     /// The records set aside that the chain now applies, verified when
     /// they came: taken without verifying again.
     trusted: BTreeSet<RecordId>,
@@ -305,6 +309,7 @@ impl RecordSet {
             halted: None,
             firsts: BTreeMap::new(),
             pre: BTreeMap::new(),
+            newest: BTreeMap::new(),
             trusted: BTreeSet::new(),
             early: BTreeMap::new(),
             notices: BTreeMap::new(),
@@ -652,7 +657,7 @@ impl RecordSet {
             }
             set.waits_for(&id)
         };
-        if role == Role::Root && !listed && !first && !twin_of(self) && pruned(self) {
+        if role == Role::Root && !listed && !first && !twin_of(self) && pruned(self) && !self.links(&id) {
             // A root's record a counting checkpoint settled: alone it is
             // refused, but two at one seq are a fork at any depth, so the
             // set keeps it a while to make the pair with the other.
@@ -714,7 +719,7 @@ impl RecordSet {
         }
         let twin = twin_of(self);
         let twin_checkpoint = twin && matches!(r.body().kind, Kind::Checkpoint { .. });
-        if !listed && !twin_checkpoint && !(twin && role == Role::Root) && !first && pruned(self) {
+        if !listed && !twin_checkpoint && !(twin && role == Role::Root) && !first && pruned(self) && !self.links(&id) {
             if role != Role::Root && waits(self) {
                 let held = r.verify_marked(&key, mark).map_err(Refused::Broken)?;
                 return Ok(self.put_aside(r, role, held));
@@ -736,7 +741,20 @@ impl RecordSet {
         // count, is taken whatever the rooms say; they are judged after
         // the checkpoint's pruning.
         let wanted = self.wanted(&id) || self.newest_checkpoint(&r, role);
-        if !twin && !first && !wanted && self.cut.past(&eval::room_item(&r, role, &self.cuts)) && !waits(self) {
+        // A checkpoint goes before the rest of its room only as its newest
+        // (`keep::newest_only`).
+        let mut item = eval::room_item(&r, role, &self.cuts);
+        if item.checkpoint {
+            let at = (item.seq, core::cmp::Reverse(item.id));
+            item.checkpoint = self.records.values().all(|e| {
+                let o = eval::room_item(&e.record, e.role, &self.cuts);
+                !o.checkpoint || o.signer != item.signer || (o.seq, core::cmp::Reverse(o.id)) < at
+            });
+            item.older = !item.checkpoint;
+        }
+        // An older checkpoint is judged by the rooms after it is stored:
+        // one that counts is kept first there, whatever came before it.
+        if !twin && !first && !wanted && !item.older && self.cut.past(&item) && !waits(self) {
             // Its key dropped a record before it: it would not be kept.
             return Ok(Added::NoRoom);
         }
@@ -1251,11 +1269,13 @@ impl RecordSet {
         let (first, above) = self.line();
         let wanted = self.aside_wanted(&above);
         let mut pre: BTreeMap<KeyHash, u64> = BTreeMap::new();
+        let mut firsts: Vec<keep::Item> = Vec::new();
         for id in first.iter().filter(|id| !proof.contains(*id)) {
             if let Some(e) = self.records.get(id) {
                 let it = eval::room_item(&e.record, self.role_of(e), &self.cuts);
                 let u = pre.entry(it.signer).or_default();
                 *u = u.saturating_add(it.units);
+                firsts.push(it);
             }
         }
         // What is kept first changed: the rooms are judged again from no
@@ -1275,6 +1295,14 @@ impl RecordSet {
             })
             .map(|e| eval::room_item(&e.record, self.role_of(e), &self.cuts))
             .collect();
+        let mut items = items;
+        let newest = keep::newest_only(&mut items, &firsts);
+        // A room's newest checkpoint changed: the order in it changed, so
+        // the rooms are judged again from no cut.
+        if newest != self.newest {
+            self.cut = keep::Cut::default();
+            self.newest = newest;
+        }
         let ceilings: BTreeMap<KeyHash, Option<u64>> =
             items.iter().map(|it| (it.signer, self.ceiling(&it.signer))).collect();
         let (kept, cut) = keep::keep_with(&items, |k| ceilings.get(k).copied().flatten(), &self.cut, &pre);
@@ -2461,7 +2489,10 @@ impl RecordSet {
             if names(r).iter().any(|k| gone.contains(k)) {
                 continue;
             }
-            if e.held || state.counting.contains(&id) || listed(r) {
+            // The root's own records under its head stay too: it signed
+            // them, so its checkpoint mends its own chain where the rooms
+            // turned a record of it away.
+            if e.held || state.counting.contains(&id) || listed(r) || r.body().signer == h {
                 keep.insert(id);
             }
         }
@@ -2866,6 +2897,32 @@ impl RecordSet {
             e.role == Role::Root
                 && (heads.iter().any(|h| h.id == *id) || keep.contains(id))
                 && !self.checkpoints.iter().any(|(h, _)| h == heads)
+        })
+    }
+
+    /// Whether the record id is the first link a held checkpoint of a root
+    /// lacks down its own chain, one the set has not compacted by: without
+    /// it that checkpoint never counts, so an older checkpoint's pruning
+    /// does not turn it away.
+    fn links(&self, id: &RecordId) -> bool {
+        self.records.values().any(|e| {
+            let b = e.record.body();
+            let Kind::Checkpoint { heads, keep } = &b.kind else { return false };
+            if e.role != Role::Root {
+                return false;
+            }
+            let anchors = eval::anchors_of(heads, keep);
+            if self.checkpoints.iter().any(|(h, a)| h == heads && *a == anchors) {
+                return false;
+            }
+            let mut at = b.prev;
+            while let Some(p) = at {
+                if p == *id {
+                    return true;
+                }
+                at = self.records.get(&p).and_then(|e| e.record.body().prev);
+            }
+            false
         })
     }
 
