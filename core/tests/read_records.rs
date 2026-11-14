@@ -1483,3 +1483,111 @@ fn checkpoints_in_a_row_shuffled_end_equal() {
     }
     assert!(same(&m, &set), "reversed: {} records against {}", m.len(), set.len());
 }
+
+/// A change of root whose new root's first checkpoint has not come: the
+/// member holds the old root's records and is given the recovery record
+/// with its list, then the new root's device record, its later checkpoint
+/// and a device it admits, in every order. The path never grows to the new
+/// root without a checkpoint of it held, nor shrinks; a restore after
+/// every step is the live set; every order ends alike, still on the old
+/// root and asking for the first checkpoint; a second offer of everything
+/// changes nothing; an honest member that took the change still holds the
+/// first checkpoint to give; and once it comes the change completes.
+#[test]
+fn a_change_whose_first_checkpoint_never_comes_completes_alike_in_any_order() {
+    let (set, _root, mut g) = root_with_dead_checkpoints(0, 0);
+    let rk = k("recovery");
+    let rk2 = cbb_core::records::pq::PqKey::from_seeds(&[0x31; 16], &[0x32; 16], &[0x33; 16]);
+    let nk = k("unfirst new root");
+    let phone = k("unfirst new phone");
+    let st = set.state();
+    let mut writer = set.clone();
+    let w = writer
+        .write_change(&st, &rk, &rk2, &nk, Device::new(phone.key.clone(), "phone", ROLE_PHONE), &[], false, g.t + 1)
+        .expect("a change of root");
+    let list = w.list.encode();
+    let _ = writer.insert(w.record.clone());
+    let _ = writer.insert_list(&list);
+    writer.insert_all(w.first.clone());
+    assert_eq!(writer.state().roots.len(), 2, "the writer is on the new root");
+    let first_cp = w.first.last().expect("the new root's first checkpoint").clone();
+    assert!(matches!(first_cp.body().kind, Kind::Checkpoint { .. }), "the last first record is a checkpoint");
+    let device = w.first.iter().find(|r| matches!(r.body().kind, Kind::Device(_))).expect("its device record").clone();
+    g.heads.insert(nk.hash, (first_cp.body().seq, first_cp.id()));
+    g.t += 1000;
+    let six = g.sign(&nk, Kind::device(Device::new(k("unfirst dev 6").key.clone(), "dev", ROLE_MEMBER)));
+    let _ = writer.insert(six.clone());
+    let st = writer.state();
+    let seven = writer.write_checkpoint(&st, &nk, g.t + 1).expect("the new root's later checkpoint");
+    let _ = writer.insert(seven.clone());
+    println!(
+        "writer after 7: path {}, holds the first checkpoint {}, holds the device record {}, checkpoint counting is 7 {}",
+        writer.state().roots.len(),
+        writer.contains(&first_cp.id()),
+        writer.contains(&device.id()),
+        writer.state().checkpoint == Some(seven.id())
+    );
+    let items = [("device", device.clone()), ("7", seven.clone()), ("6", six.clone())];
+    let orders: [[usize; 3]; 6] = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
+    let mut ends: Vec<RecordSet> = Vec::new();
+    for order in orders {
+        let name: Vec<&str> = order.iter().map(|i| items[*i].0).collect();
+        let mut m = set.clone();
+        let mut path = m.state().roots.len();
+        let mut steps: Vec<(String, Record)> = vec![("the recovery record".into(), w.record.clone())];
+        steps.extend(order.iter().map(|i| (items[*i].0.to_string(), items[*i].1.clone())));
+        for (n, (step, r)) in steps.into_iter().enumerate() {
+            let got = m.insert(r).map(|a| format!("{a:?}"));
+            if n == 0 {
+                let _ = m.insert_list(&list);
+            }
+            let now = m.state().roots.len();
+            let asks: Vec<String> = m.missing(&m.state()).iter().map(|i| format!("{:02x?}", &i.0[..2])).collect();
+            println!("{name:?} {step}: {got:?}; path {now}, holds 7 {}; asks {asks:?}", m.contains(&seven.id()));
+            assert!(now >= path, "{name:?} after {step}: the path shrank");
+            if now == 2 {
+                assert!(
+                    m.contains(&seven.id()),
+                    "{name:?} after {step}: on the new root without the checkpoint that settles it"
+                );
+            }
+            let back = restarted(&m);
+            assert!(back.state().roots.len() >= now, "{name:?} after {step}: a restore shortened the path");
+            assert!(same(&back, &m), "{name:?} after {step}: a restore is not the live set");
+            path = now;
+        }
+        let before = (m.digest(), m.state());
+        let _ = m.insert(w.record.clone());
+        let _ = m.insert_list(&list);
+        m.insert_all(vec![device.clone(), seven.clone(), six.clone()]);
+        assert!((m.digest(), m.state()) == before, "{name:?}: a second offer changed the set");
+        ends.push(m);
+    }
+    for (i, e) in ends.iter().enumerate() {
+        assert!(same(e, &ends[0]), "order {:?} ends elsewhere", orders[i]);
+    }
+    println!(
+        "end: path {}, holds the first checkpoint {}",
+        ends[0].state().roots.len(),
+        ends[0].contains(&first_cp.id())
+    );
+    // An honest member that took the change keeps the new root's first
+    // checkpoint (outside the rooms) after a later one counts: a peer
+    // always has it to give.
+    assert!(writer.contains(&first_cp.id()), "the writer dropped the new root's first checkpoint");
+    let mut m = ends[0].clone();
+    for round in 0..40 {
+        let st = m.state();
+        let asks = m.missing(&st);
+        println!("round {round}: asks {}, stuck {}", asks.len(), m.stuck_checkpoints().len());
+        if asks.is_empty() {
+            break;
+        }
+    }
+    println!("after asking: path {}", m.state().roots.len());
+    assert_eq!(ends[0].state().roots.len(), 1, "the change completed without its first checkpoint");
+    let got = m.insert(first_cp.clone()).map(|a| format!("{a:?}"));
+    println!("the first checkpoint at last: {got:?}; path {}", m.state().roots.len());
+    assert_eq!(m.state().roots.len(), 2, "the first checkpoint did not complete the change");
+    assert!(same(&restarted(&m), &m), "a restore after the change is not the live set");
+}
