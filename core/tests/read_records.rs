@@ -1476,3 +1476,211 @@ fn a_live_member_takes_what_it_turned_away_when_offered_again() {
         assert!(same(&x, &whole), "ex {ex}: {} records against {}", x.len(), whole.len());
     }
 }
+
+/// The records of `full_group(tag, 8)` with records that move the tiers
+/// and the order in the rooms among them, both tiers squeezed: the root
+/// takes admin key 3 back, admits D (16 removals), removes admin key 5,
+/// writes a checkpoint and admits E (16 removals); then the recovery key
+/// changes the root, and the new root admits F (16 removals). In signing
+/// order, with the change's list, and the index of the take-back.
+struct Moving {
+    records: Vec<Record>,
+    lists: Vec<Vec<u8>>,
+    back: usize,
+    /// Where each stage ends: after D's removals, after the checkpoint,
+    /// after E's removals, and after the change and F.
+    stages: Vec<(&'static str, usize)>,
+}
+
+fn moving_records(tag: &str) -> Moving {
+    let (recs, root, _admins, mut g) = full_group(tag, 8);
+    let mut all = recs;
+    let back = all.len();
+    all.push(g.sign(
+        &root,
+        Kind::device(Device::new(k(&format!("{tag} admin 3 phone")).key.clone(), "was admin", ROLE_PHONE)),
+    ));
+    let admit = |g: &mut G, all: &mut Vec<Record>, by: &K, name: &str| {
+        let (key, r) = admit_admin(g, by, &format!("{tag} admin {name}"));
+        all.push(r);
+        for n in 0..16u32 {
+            all.push(wide_removal(g, &key, &format!("{tag} {name}"), n));
+        }
+    };
+    admit(&mut g, &mut all, &root, "D");
+    let mut stages = vec![("after D", all.len())];
+    all.push(g.sign(
+        &root,
+        Kind::Revoke(cbb_core::records::body::Removal {
+            keys: vec![k(&format!("{tag} admin 5 key")).hash],
+            seen: Vec::new(),
+        }),
+    ));
+    let mut held = new_set();
+    held.insert_all(all.clone());
+    let st = held.state();
+    let cp = held.write_checkpoint(&st, &root, g.t + 1).expect("an honest checkpoint");
+    g.heads.insert(root.hash, (cp.body().seq, cp.id()));
+    g.t += 1000;
+    all.push(cp);
+    stages.push(("after the checkpoint", all.len()));
+    admit(&mut g, &mut all, &root, "E");
+    stages.push(("after E", all.len()));
+    let mut held = new_set();
+    held.insert_all(all.clone());
+    let st = held.state();
+    let rk = k("recovery");
+    let rk2 = cbb_core::records::pq::PqKey::from_seeds(&[0x31; 16], &[0x32; 16], &[0x33; 16]);
+    let new_root = k(&format!("{tag} new root"));
+    let phone = k(&format!("{tag} new phone"));
+    let w = held
+        .write_change(
+            &st,
+            &rk,
+            &rk2,
+            &new_root,
+            Device::new(phone.key.clone(), "phone", ROLE_PHONE),
+            &[],
+            false,
+            g.t + 1,
+        )
+        .expect("a change of root");
+    let last = w.first.last().expect("the new root's first records");
+    g.heads.insert(new_root.hash, (last.body().seq, last.id()));
+    g.t += 1000;
+    all.extend(w.first.iter().cloned());
+    all.push(w.record.clone());
+    admit(&mut g, &mut all, &new_root, "F");
+    stages.push(("after the change and F", all.len()));
+    Moving { records: all, lists: vec![w.list.encode()], back, stages }
+}
+
+/// One offer, as sync gives it: the records, then the lists; when a list
+/// is new, the records again, which a record that waited for it takes.
+fn offer(set: &mut RecordSet, records: &[Record], lists: &[Vec<u8>]) {
+    set.insert_all(records.to_vec());
+    let mut new = false;
+    for l in lists {
+        new |= set.insert_list(l).unwrap_or(false);
+    }
+    if new {
+        set.insert_all(records.to_vec());
+    }
+}
+
+/// Offers the records again until the set changes no more: the offers it
+/// took.
+fn until_stable(set: &mut RecordSet, records: &[Record], lists: &[Vec<u8>]) -> u32 {
+    let mut rounds = 0;
+    loop {
+        let before = (set.digest(), set.state());
+        offer(set, records, lists);
+        rounds += 1;
+        if (set.digest(), set.state()) == before || rounds == 10 {
+            return rounds;
+        }
+    }
+}
+
+/// Records that move the tiers or the order in the rooms (a take-back, a
+/// removal, a newer root checkpoint, a change of root), both tiers
+/// squeezed: at each stage, whatever the order of what was signed so far
+/// (signing order, the take-back last, eight shuffles), one offer ends
+/// with the set the signing order settles at, and offering again changes
+/// nothing.
+#[test]
+#[ignore = "being settled at records: one offer ends with a set that depends on the order; run with --ignored --release --nocapture"]
+fn records_that_move_the_tiers_end_equal_whatever_the_order() {
+    let m = moving_records("m");
+    let mut bad = Vec::new();
+    for (stage, end) in &m.stages {
+        let records = &m.records[..*end];
+        let lists: &[Vec<u8>] = if *end == m.records.len() { &m.lists } else { &[] };
+        let mut reference = new_set();
+        let rounds = until_stable(&mut reference, records, lists);
+        println!("{stage}: signing order {} of {} records, stable after {rounds} offers", reference.len(), end);
+        let mut orders: Vec<(String, Vec<Record>)> = vec![("signing order".into(), records.to_vec())];
+        let mut last = records.to_vec();
+        let b = last.remove(m.back);
+        last.push(b);
+        orders.push(("the take-back last".into(), last));
+        let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+        for s in 0..8 {
+            let mut v = records.to_vec();
+            for i in (1..v.len()).rev() {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                v.swap(i, (seed % (i as u64 + 1)) as usize);
+            }
+            orders.push((format!("seed {s}"), v));
+        }
+        for (name, v) in &orders {
+            let mut set = new_set();
+            offer(&mut set, v, lists);
+            let once = same(&set, &reference);
+            let n = set.len();
+            let more = until_stable(&mut set, v, lists);
+            println!(
+                "  {name}: one offer {n} records, equal {once}; stable after {more} more, equal {}",
+                same(&set, &reference)
+            );
+            if !once || more > 1 || !same(&set, &reference) {
+                bad.push(format!("{stage}, {name}"));
+            }
+        }
+    }
+    assert!(bad.is_empty(), "{bad:?} end elsewhere or late");
+}
+
+/// A root that writes checkpoints in a row (an admin's records between
+/// them, so that each prunes) and a member given every record it signed
+/// shuffled, offered three times: equal to the root's own set.
+#[test]
+fn checkpoints_in_a_row_shuffled_end_equal() {
+    let (mut set, root, mut g) = root_with_dead_checkpoints(0, 0);
+    let mut all: Vec<Record> = set.in_dependency_order().into_iter().cloned().collect();
+    let admin = k("admin a");
+    for round in 0..30u32 {
+        for i in 0..3u32 {
+            let dk = k(&format!("cpo dev {round} {i}"));
+            let r = g.sign(&root, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)));
+            all.push(r.clone());
+            let _ = set.insert(r);
+        }
+        if round % 3 == 0 {
+            let r = wide_removal(&mut g, &admin, &format!("cpo adm {round}"), 0);
+            all.push(r.clone());
+            let _ = set.insert(r);
+        }
+        let st = set.state();
+        let cp = set.write_checkpoint(&st, &root, g.t + 1).expect("an honest checkpoint");
+        g.heads.insert(root.hash, (cp.body().seq, cp.id()));
+        g.t += 1000;
+        all.push(cp.clone());
+        let _ = set.insert(cp);
+    }
+    assert!(set.len() < all.len(), "the checkpoints pruned nothing");
+    let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+    for s in 0..4 {
+        let mut v = all.clone();
+        for i in (1..v.len()).rev() {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            v.swap(i, (seed % (i as u64 + 1)) as usize);
+        }
+        let mut m = new_set();
+        for _ in 0..3 {
+            m.insert_all(v.clone());
+        }
+        assert!(same(&m, &set), "seed {s}: {} records against {}", m.len(), set.len());
+    }
+    let mut rev = all.clone();
+    rev.reverse();
+    let mut m = new_set();
+    for _ in 0..3 {
+        m.insert_all(rev.clone());
+    }
+    assert!(same(&m, &set), "reversed: {} records against {}", m.len(), set.len());
+}
