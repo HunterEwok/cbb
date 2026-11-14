@@ -2463,3 +2463,52 @@ fn an_admin_made_by_a_record_the_rooms_turned_away_is_no_key_of_the_set() {
     let kept: Vec<Record> = set.ids().filter_map(|id| set.get(id)).cloned().collect();
     assert_eq!(set.state(), state_with(&g.root.key, &kept, &g.lists));
 }
+
+/// A later checkpoint of the new root that keeps a record of the old root
+/// the change itself cuts settles nothing of the change's group: no
+/// honest root writes one (it writes only where the change applied, and
+/// there the cut record is gone), and if it settled the group, the cut
+/// record would go and with it the settling after a restart.
+#[test]
+fn a_checkpoint_that_keeps_what_its_change_cuts_settles_nothing() {
+    let mut g = G::new();
+    let root = k("root");
+    let nr = k("new root");
+    let x = g.device(&root, &k("laptop"), "laptop", |_| {});
+    let list: Vec<RecordId> = g.listing().into_iter().filter(|id| *id != x.id()).collect();
+    // The new root's record below its first checkpoint, which the late
+    // checkpoint leaves out.
+    let below = g.device(&nr, &k("tablet"), "tablet", |_| {});
+    let head = g.change(&nr, &list);
+    let Kind::Recovery { first, .. } = head.body().kind else { unreachable!() };
+    let late = g.rec(
+        &nr,
+        Kind::Checkpoint {
+            heads: vec![Head {
+                key: nr.hash,
+                seq: g.recs.iter().find(|r| r.id() == first).unwrap().body().seq,
+                id: first,
+            }],
+            keep: vec![x.id()],
+        },
+    );
+    let recs: Vec<Record> = g.recs.iter().filter(|r| r.id() != below.id()).cloned().collect();
+    // Evaluated whole, the old root's record is there for the late
+    // checkpoint to keep, and still the change waits.
+    let whole = state_with(&g.root.key, &recs, &g.lists);
+    assert!(whole.changes.iter().all(|c| c.state != eval::ChangeState::Effective), "{:?}", whole.changes);
+    let set = set_with(&g.root.key, &recs, &g.lists);
+    let st = set.state();
+    assert!(set.contains(&late.id()));
+    assert!(st.changes.iter().all(|c| c.state != eval::ChangeState::Effective), "{:?}", st.changes);
+    assert_eq!(st.first_missing, Some(below.id()));
+    // Restored from what it saved, it reads the same.
+    let saved: Vec<Record> = set.in_dependency_order().into_iter().cloned().collect();
+    let lists: Vec<Vec<u8>> = set.lists().map(<[u8]>::to_vec).collect();
+    let back = RecordSet::restore(set.root().clone(), set.recovery().clone(), &saved, &lists);
+    assert_eq!(back.state(), st);
+    // With the record below, the change applies and cuts the laptop.
+    let all = set_with(&g.root.key, &g.recs, &g.lists);
+    assert!(all.state().changes.iter().any(|c| c.state == eval::ChangeState::Effective));
+    assert!(!all.contains(&x.id()));
+}

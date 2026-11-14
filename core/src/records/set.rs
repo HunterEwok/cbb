@@ -1105,7 +1105,7 @@ impl RecordSet {
             &self.root_hash,
             self.records.values().map(|e| (&e.record, e.role)),
             &lists,
-            |id, root, from, settlers| eval::first_gap(&held, &self.checkpoints, settlers, id, root, from),
+            |id, root, from, settle| eval::first_gap(&held, &self.checkpoints, settle, id, root, from),
         );
         let promoted = chain.promoted();
         let mut cuts = chain.cuts();
