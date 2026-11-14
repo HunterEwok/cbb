@@ -25,7 +25,23 @@ pub use notice::{ChangeArriving, Offer, RemovalWarning, Room, Tier, TurnedAway};
 /// by it.
 /// How many times a batch (`insert_all`) offers again, one by one, what
 /// its judgment turned away; a round that changes nothing ends it sooner.
+/// Rounds of offering again what a batch's judgment turned away: only a
+/// checkpoint that waits needs it, for its place aside.
 const REOFFER_ROUNDS: usize = 4;
+
+/// The rooms judged over what a set holds (`RecordSet::judge`).
+struct Judged {
+    /// What the rooms turn away.
+    drop: Vec<RecordId>,
+    /// The units kept first, by key.
+    pre: BTreeMap<KeyHash, u64>,
+    /// The levels over what is held with it.
+    cut: keep::Cut,
+    /// The keys no longer admins (`eval::not_live`).
+    second: BTreeSet<KeyHash>,
+    /// What the checkpoints above the counting one keep.
+    wanted: BTreeSet<RecordId>,
+}
 
 fn root_floor_margin() -> u64 {
     keep::ceiling(true) / 24
@@ -122,6 +138,37 @@ std::thread_local! {
     pub(super) static OLD_WAITS: core::cell::Cell<bool> = const { core::cell::Cell::new(false) };
 }
 
+#[cfg(all(debug_assertions, feature = "std"))]
+std::thread_local! {
+    /// Debug builds: true while a test that times the set runs without
+    /// the check after every insert (`check_judged`, `unchecked`).
+    static UNCHECKED: core::cell::Cell<bool> = const { core::cell::Cell::new(false) };
+}
+
+/// While it lives, the debug check that what a set holds is what its
+/// rooms keep (`RecordSet::check_judged`), which judges the rooms again
+/// after every insert, is off on this thread: for the tests that time a
+/// set.
+#[cfg(all(test, feature = "std"))]
+pub(super) struct Unchecked;
+
+#[cfg(all(test, feature = "std"))]
+impl Unchecked {
+    pub(super) fn new() -> Unchecked {
+        #[cfg(debug_assertions)]
+        UNCHECKED.with(|u| u.set(true));
+        Unchecked
+    }
+}
+
+#[cfg(all(test, feature = "std"))]
+impl Drop for Unchecked {
+    fn drop(&mut self) {
+        #[cfg(debug_assertions)]
+        UNCHECKED.with(|u| u.set(false));
+    }
+}
+
 /// A member's record set.
 #[derive(Clone)]
 pub struct RecordSet {
@@ -169,12 +216,8 @@ pub struct RecordSet {
     /// waits for; never cut off or pruned while they are.
     firsts: eval::Firsts,
     /// The units each key's records kept first took when the rooms were
-    /// last judged (`cut`).
+    /// last judged (`cut`): outside the rooms, within the key's cap.
     pre: BTreeMap<KeyHash, u64>,
-    /// Each room's newest checkpoint when the rooms were last judged
-    /// (`keep::newest_only`): the order in a room, and so the cut, hangs
-    /// on it.
-    newest: BTreeMap<KeyHash, RecordId>,
     /// The records set aside that the chain now applies, verified when
     /// they came: taken without verifying again.
     trusted: BTreeSet<RecordId>,
@@ -338,7 +381,6 @@ impl RecordSet {
             halted: None,
             firsts: BTreeMap::new(),
             pre: BTreeMap::new(),
-            newest: BTreeMap::new(),
             trusted: BTreeSet::new(),
             early: BTreeMap::new(),
             notices: BTreeMap::new(),
@@ -625,7 +667,9 @@ impl RecordSet {
     /// place; then the set is cut back to its ceilings.
     pub fn insert(&mut self, r: Record) -> Result<Added, Refused> {
         self.reached = true;
-        self.insert_only(r, None)
+        let added = self.insert_only(r, None);
+        self.check_judged();
+        added
     }
 
     fn insert_only(&mut self, r: Record, mark: Option<(&[u8; 32], &Mark)>) -> Result<Added, Refused> {
@@ -1058,7 +1102,9 @@ impl RecordSet {
     /// from another of them are tried again until none is left that can be
     /// taken. It returns how many were stored and the refusals.
     pub fn insert_all(&mut self, records: impl IntoIterator<Item = Record>) -> (usize, Vec<(RecordId, Refused)>) {
-        self.insert_all_marked(records.into_iter().map(|r| (r, None)), None)
+        let out = self.insert_all_marked(records.into_iter().map(|r| (r, None)), None);
+        self.check_judged();
+        out
     }
 
     /// insert_all for the records of the device's own store, each with the
@@ -1071,7 +1117,9 @@ impl RecordSet {
         local: &[u8; 32],
         records: impl IntoIterator<Item = (Record, Option<Mark>)>,
     ) -> (usize, Vec<(RecordId, Refused)>) {
-        self.insert_all_marked(records, Some(local))
+        let out = self.insert_all_marked(records, Some(local));
+        self.check_judged();
+        out
     }
 
     /// The records to save in the device's own store, in dependency order,
@@ -1132,9 +1180,11 @@ impl RecordSet {
             // What the judgment turned away is offered again, one by one: a
             // checkpoint that waits may have a place aside only once the
             // rooms let its prev go, as when the two come apart.
+            // Not what was refused (a broken record is verified once).
+            let no: BTreeSet<RecordId> = refused.iter().map(|(id, _)| *id).collect();
             for _ in 0..REOFFER_ROUNDS {
                 let again: Vec<(Record, Option<Mark>)> =
-                    batch.iter().filter(|(r, _)| !self.contains(&r.id())).cloned().collect();
+                    batch.iter().filter(|(r, _)| !self.contains(&r.id()) && !no.contains(&r.id())).cloned().collect();
                 let before = self.digest();
                 let aside = self.kept_aside.len();
                 for (r, mark) in again {
@@ -1337,6 +1387,34 @@ impl RecordSet {
             return;
         }
         self.drop_off_cuts();
+        let j = self.judge();
+        // Who is no longer an admin, as the rooms just read it (`beyond`).
+        self.second = j.second;
+        // A record the rooms turned away may be the only one that named an
+        // admin key: that key's records then have no known signer, as in
+        // an evaluation of what the set keeps, and go too.
+        let names_key = j
+            .drop
+            .iter()
+            .any(|id| self.held(id).is_some_and(|r| matches!(&r.body().kind, Kind::Device(d) if d.admin.is_some())));
+        let dropped = !j.drop.is_empty();
+        for id in j.drop {
+            self.drop_or_aside(&id, &j.wanted);
+        }
+        if names_key {
+            self.relearn();
+        }
+        // The caps hang on the roster alone, which the roots' rooms keep
+        // whatever goes of the others: they stand after the drop.
+        let _ = dropped;
+        self.cut = j.cut;
+        self.pre = j.pre;
+        self.trim_aside();
+    }
+
+    /// The rooms judged over what the set holds now, without changing it
+    /// (`cut` applies it): what goes, the levels, and what they read.
+    fn judge(&self) -> Judged {
         let mut proof = self.proof();
         // Each root's checkpoint that may count is kept first with what it
         // names: the rooms are judged in the set it prunes, and it takes
@@ -1355,14 +1433,8 @@ impl RecordSet {
                 firsts.push(it);
             }
         }
-        // What is kept first changed: the rooms are judged again from no
-        // cut, and what they turned away is taken when offered again.
-        if pre != self.pre {
-            self.cut = keep::Cut::default();
-            self.pre = pre.clone();
-        }
         proof.extend(first);
-        let items: Vec<keep::Item> = self
+        let mut items: Vec<keep::Item> = self
             .records
             .values()
             .filter(|e| {
@@ -1372,11 +1444,15 @@ impl RecordSet {
             })
             .map(|e| eval::room_item(&e.record, self.role_of(e), &self.cuts))
             .collect();
-        let mut items = items;
-        let newest = keep::newest_only(&mut items, &firsts);
-        // Who is no longer an admin is read from the root records alone,
-        // before the rooms judge (`eval::not_live`).
-        let (second, back) = eval::not_live(
+        keep::newest_only(&mut items, &firsts);
+        // Who is no longer an admin is read from the root records the
+        // roots' rooms keep (`eval::rooms`).
+        let ceilings: BTreeMap<KeyHash, Option<u64>> =
+            items.iter().map(|it| (it.signer, self.ceiling(&it.signer))).collect();
+        let (kept, cut, second) = eval::rooms(
+            &mut items,
+            |k| ceilings.get(k).copied().flatten(),
+            &pre,
             &self.path,
             &self.cuts,
             self.records
@@ -1384,22 +1460,6 @@ impl RecordSet {
                 .filter(|e| !eval::off_cut(&self.cuts, &e.record))
                 .map(|e| (&e.record, self.role_of(e))),
         );
-        eval::takes_back_first(&mut items, &back);
-        if second != self.second {
-            self.cut = keep::Cut::default();
-            self.second = second;
-        }
-        // A room's newest checkpoint changed: the order in it changed, so
-        // the rooms are judged again from no cut.
-        if newest != self.newest {
-            self.cut = keep::Cut::default();
-            self.newest = newest;
-        }
-        let ceilings: BTreeMap<KeyHash, Option<u64>> =
-            items.iter().map(|it| (it.signer, self.ceiling(&it.signer))).collect();
-        let (kept, cut) =
-            keep::keep_tiers(&items, |k| ceilings.get(k).copied().flatten(), &self.cut, &pre, &self.second);
-        let fresh = cut;
         let drop: Vec<RecordId> = self
             .records
             .values()
@@ -1411,21 +1471,20 @@ impl RecordSet {
             })
             .map(|e| e.record.id())
             .collect();
-        // A record the rooms turned away may be the only one that named an
-        // admin key: that key's records then have no known signer, as in
-        // an evaluation of what the set keeps, and go too.
-        let names_key = drop
-            .iter()
-            .any(|id| self.held(id).is_some_and(|r| matches!(&r.body().kind, Kind::Device(d) if d.admin.is_some())));
-        for id in drop {
-            self.drop_or_aside(&id, &wanted);
+        Judged { drop, pre, cut, second, wanted }
+    }
+
+    /// Checks, in debug builds, that what the set holds is what the rooms
+    /// keep of it (held == f(held)): any path that stores a record
+    /// without judging the rooms where they would turn something away
+    /// fails at once. Not inside a batch, which is judged when it is in,
+    /// nor while trusted records are restored.
+    fn check_judged(&self) {
+        #[cfg(all(debug_assertions, feature = "std"))]
+        if self.batch.is_none() && self.trusted.is_empty() && !UNCHECKED.with(core::cell::Cell::get) {
+            let j = self.judge();
+            debug_assert!(j.drop.is_empty(), "the set holds {} records the rooms would turn away", j.drop.len());
         }
-        if names_key {
-            self.relearn();
-        }
-        // The levels of what is now held, unless relearning took more.
-        self.cut = if names_key { keep::Cut::default() } else { fresh };
-        self.trim_aside();
     }
 
     /// Whether signer, which signs as role, is a root on the set's path.
@@ -1858,6 +1917,8 @@ impl RecordSet {
         }
         match &r.body().kind {
             Kind::Revoke(_) => true,
+            // A new admin key lowers every second-tier cap.
+            Kind::Device(d) if d.admin.is_some() => true,
             Kind::Device(d) => {
                 let a = d.admin.as_ref().map(Key::hash);
                 self.records.values().any(|e| {
@@ -1881,8 +1942,7 @@ impl RecordSet {
             return false;
         }
         let k = self.room_key(&item.signer);
-        let Some(ceiling) = self.ceiling(&k) else { return false };
-        let share = self.cut.level(self.second.contains(&k)).min(ceiling);
+        let Some(share) = self.cap(&k) else { return false };
         // All the key holds, first records too: if even that fits, it does.
         let all = self.units.iter().filter(|(s, _)| self.room_key(s) == k).fold(0u64, |t, (_, u)| t.saturating_add(*u));
         if all.saturating_add(item.units) <= share {
@@ -1906,6 +1966,10 @@ impl RecordSet {
         held.saturating_add(item.units) > share && mine.iter().all(|it| it.pos() < pos)
     }
 
+    /// Whether the rooms must be judged after signer's record is stored:
+    /// its room passes its cap. Each key's cap hangs on the roster alone
+    /// (`keep::keep_tiers`), so below it the key keeps all it holds and no
+    /// other key is touched.
     fn needs_cut(&self, signer: &KeyHash) -> bool {
         // By room: the cut roots share one.
         let mut by_room: BTreeMap<KeyHash, u64> = BTreeMap::new();
@@ -1914,32 +1978,19 @@ impl RecordSet {
             *e = e.saturating_add(*u);
         }
         let signer = &self.room_key(signer);
-        let units = |k: &KeyHash| by_room.get(k).copied().unwrap_or(0);
-        if self.cut.is_empty() {
-            let total: u64 = by_room.values().sum();
-            return self.ceiling(signer).is_none_or(|c| units(signer) > c) || total > keep::room();
-        }
-        let Some(ceiling) = self.ceiling(signer) else { return true };
-        // Each key at its tier's level (`keep::keep_tiers`).
-        let level = |k: &KeyHash| self.cut.level(self.second.contains(k));
-        if units(signer) > level(signer).min(ceiling) {
-            return true;
-        }
-        let mut demand = 0u64;
-        for (k, u) in &by_room {
-            if let Some(c) = self.ceiling(k) {
-                let total = u.saturating_add(self.cut.dropped(k).unwrap_or(0));
-                demand = demand.saturating_add(total.min(c).min(level(k)));
-            }
-        }
-        for (k, u) in self.cut.dropped_all() {
-            if !by_room.contains_key(k)
-                && let Some(c) = self.ceiling(k)
-            {
-                demand = demand.saturating_add(u.min(c).min(level(k)));
-            }
-        }
-        demand > keep::room()
+        let units = by_room.get(signer).copied().unwrap_or(0);
+        self.cap(signer).is_none_or(|c| units > c)
+    }
+
+    /// The cap in units of the room key's records go to (the cut roots
+    /// share one, `room_key`), from the roster the rooms last read: a
+    /// root's or the reserve's ceiling, a live admin key's ceiling, the
+    /// equal share of a key no longer an admin (`keep::second_cap`); None
+    /// for a key with no room. What it holds first (`pre`) counts in it.
+    fn cap(&self, key: &KeyHash) -> Option<u64> {
+        let k = self.room_key(key);
+        let ceiling = self.ceiling(&k)?;
+        Some(ceiling.min(self.cut.level(self.second.contains(&k))))
     }
 
     /// A key's ceiling: a root's on the path, an admin key's, or None for
@@ -2668,8 +2719,9 @@ impl RecordSet {
         };
         let mut dropped: BTreeSet<RecordId> = BTreeSet::new();
         let mut gone: BTreeSet<KeyHash> = BTreeSet::new();
-        for e in entries().filter(|e| path.contains(&e.record.body().signer) && state.counting.contains(&e.record.id()))
-        {
+        // A removal by an admin goes as a root's does: what it removed is
+        // settled below the heads, and a replayed admission is refused.
+        for e in entries().filter(|e| state.counting.contains(&e.record.id())) {
             if let Kind::Revoke(rm) = &e.record.body().kind
                 && under(&e.record)
                 && rm.keys.iter().all(settled)
@@ -2685,6 +2737,7 @@ impl RecordSet {
                 .into_iter()
                 .filter(|id| self.records.get(id).is_some_and(|e| under(&e.record) && state.counting.contains(id))),
         );
+        dropped.extend(self.superseded(state, h, &under));
         let head_ids: BTreeSet<RecordId> = heads.values().map(|hd| hd.id).collect();
         let mut keep: BTreeSet<RecordId> = BTreeSet::new();
         for e in entries() {
@@ -2716,6 +2769,25 @@ impl RecordSet {
                 keep.insert(id);
             }
         }
+        // A resolve whose every target goes stays no longer: it voids
+        // nothing that is left. Its targets are held records below their
+        // heads that the checkpoint does not keep, so none comes back.
+        let goes = |id: &RecordId| {
+            !keep.contains(id) && !head_ids.contains(id) && self.records.get(id).is_some_and(|t| below(&t.record))
+        };
+        let void: Vec<RecordId> = keep
+            .iter()
+            .copied()
+            .filter(|id| {
+                self.records.get(id).is_some_and(|e| {
+                    under(&e.record)
+                        && matches!(&e.record.body().kind, Kind::Resolve(ids) if !ids.is_empty() && ids.iter().all(goes))
+                })
+            })
+            .collect();
+        for id in void {
+            keep.remove(&id);
+        }
         let (seq, prev) = own.map_or((1, None), |o| (o.seq.saturating_add(1), Some(o.id)));
         let body = Body {
             group: self.group,
@@ -2730,11 +2802,84 @@ impl RecordSet {
             return Err(Error::msg("the checkpoint would be larger than a checkpoint may be"));
         }
         if let Kind::Checkpoint { heads, keep } = &body.kind
-            && eval::revives(heads, keep, self.records.values().map(|e| (&e.record, self.role_of(e))))
+            && eval::revives(heads, keep, self.records.values().map(|e| (&e.record, self.role_of(e))), |id| {
+                state.counting.contains(id)
+            })
         {
             return Err(Error::msg("the checkpoint would keep a removed key's admission"));
         }
         Ok(body)
+    }
+
+    /// The current root h's own records under its head (`under`) that a
+    /// newer record of it stands for in full, so its checkpoint leaves
+    /// them out and a long-lived group does not fill its root's room with
+    /// old values: of its settings, hubs and copies records, all but the
+    /// newest of each type, where that one counts; of its records of one
+    /// device, those between the oldest (whether the device is the root's
+    /// and a leaf) and the newest, where the newest counts and each left
+    /// out names the same key and no admin key and guards the leaf only
+    /// where the newest does too. What names an admin key stays: older
+    /// root records that name one tell which admin keys are live.
+    /// The state is the same before and after: a device of a root is its
+    /// newest record, guarded if any of them is, a leaf by its oldest.
+    fn superseded(&self, state: &State, h: KeyHash, under: &dyn Fn(&Record) -> bool) -> BTreeSet<RecordId> {
+        let mine: Vec<&Record> = self
+            .records
+            .values()
+            .filter(|e| !e.held && e.role == Role::Root && e.record.body().signer == h)
+            .map(|e| &e.record)
+            .collect();
+        let counts = |r: &Record| state.counting.contains(&r.id());
+        let mut out = BTreeSet::new();
+        // The values: one type each.
+        let tag = |k: &Kind| match k {
+            Kind::Settings(_) => Some(0u8),
+            Kind::Hubs { .. } => Some(1),
+            Kind::Copies { .. } => Some(2),
+            _ => None,
+        };
+        for t in 0u8..3 {
+            let of: Vec<&&Record> = mine.iter().filter(|r| tag(&r.body().kind) == Some(t)).collect();
+            let Some(newest) = of.iter().max_by_key(|r| r.body().seq) else { continue };
+            if !counts(newest) {
+                continue;
+            }
+            out.extend(of.iter().filter(|r| r.body().seq < newest.body().seq && under(r)).map(|r| r.id()));
+        }
+        // The devices.
+        let mut by_device: BTreeMap<super::DeviceId, Vec<(&Record, &super::body::Device)>> = BTreeMap::new();
+        for r in &mine {
+            if let Kind::Device(d) = &r.body().kind {
+                by_device.entry(d.id()).or_default().push((r, d));
+            }
+        }
+        for rs in by_device.values() {
+            let (Some(&(newest, nd)), Some(&(oldest, od))) =
+                (rs.iter().max_by_key(|(r, _)| r.body().seq), rs.iter().min_by_key(|(r, _)| r.body().seq))
+            else {
+                continue;
+            };
+            if !counts(newest) || nd.admin.is_some() {
+                continue;
+            }
+            let leaf = od.role == super::body::ROLE_LEAF;
+            for &(r, d) in rs {
+                let id = r.id();
+                if id != newest.id()
+                    && id != oldest.id()
+                    && under(r)
+                    && counts(r)
+                    && d.admin.is_none()
+                    && d.key == nd.key
+                    && (d.role == super::body::ROLE_LEAF) == leaf
+                    && (!d.guarded || nd.guarded)
+                {
+                    out.insert(id);
+                }
+            }
+        }
+        out
     }
 
     /// The units the current root's checkpoint would take if written now,
@@ -2745,17 +2890,50 @@ impl RecordSet {
         Some(keep::units(body.encode().len().saturating_add(super::ENVELOPE_ALLOWANCE).saturating_add(16)))
     }
 
-    /// Whether the current root should write a checkpoint now: one more
+    /// Whether the current root should write a checkpoint now: a record of
+    /// it that moved the roster is newer than its counting checkpoint
+    /// (`roster_moved`); or one more
     /// ordinary record of one unit (and its ID in the checkpoint, which may
     /// take one unit more) would reach its floor (`root_floor_margin` below
     /// its ceiling), where the writer takes only its removals, freezes and
     /// resolves. True too when no checkpoint of it would fit.
     pub fn checkpoint_due(&self, state: &State, time_ms: u64) -> bool {
         let Some(h) = state.roots.last().copied() else { return false };
+        if self.roster_moved(state, h) {
+            return true;
+        }
         let Some(ceiling) = self.ceiling(&h) else { return false };
         let used = self.units.get(&h).copied().unwrap_or(0);
         self.checkpoint_units(state, h, time_ms)
             .is_none_or(|cp| used.saturating_add(cp).saturating_add(root_floor_margin()).saturating_add(2) > ceiling)
+    }
+
+    /// Whether a record of the current root h that takes an admin key
+    /// back or makes a new one is newer than h's counting checkpoint: it
+    /// moved the caps of the keys no longer admins (`keep::second_cap`),
+    /// to 0 beside 16 live admin keys, and a checkpoint written after it
+    /// keeps first what h holds of those keys that counts, so their
+    /// devices stay.
+    fn roster_moved(&self, state: &State, h: KeyHash) -> bool {
+        let (_, back, _) = eval::not_live(
+            &self.path,
+            &self.cuts,
+            self.records
+                .values()
+                .filter(|e| !eval::off_cut(&self.cuts, &e.record))
+                .map(|e| (&e.record, self.role_of(e))),
+        );
+        let moved = self
+            .records
+            .values()
+            .filter(|e| e.role == Role::Root && e.record.body().signer == h)
+            .filter(|e| {
+                back.contains(&e.record.id()) || matches!(&e.record.body().kind, Kind::Device(d) if d.admin.is_some())
+            })
+            .map(|e| e.record.body().seq)
+            .max();
+        let at = state.checkpoint.and_then(|id| self.held(&id)).filter(|r| r.body().signer == h).map(|r| r.body().seq);
+        moved.is_some_and(|m| at.is_none_or(|a| m > a))
     }
 
     /// Writes signer's next ordinary record of kind (every type but a
@@ -2890,6 +3068,33 @@ impl RecordSet {
         let body = Body { group: self.group, signer: h, seq, prev, time_ms, kind, held: false };
         if body.encode().len() > super::MAX_BODY {
             return Err(Error::msg("the record would be larger than a record may be"));
+        }
+        // Checkpoint first: a removal, freeze or resolve of the current
+        // root passes the floor, but where it would leave no room for one
+        // more of its size and the root's next checkpoint, the root writes
+        // that checkpoint before it (unless its newest record is one), so
+        // what the checkpoint settles frees room and removals go on.
+        // Decided before signing, so the record is signed once.
+        let early = matches!(body.kind, Kind::Revoke(_) | Kind::Freeze(_) | Kind::Resolve(_));
+        let newest_is_checkpoint =
+            own.and_then(|o| self.held(&o.id)).is_some_and(|r| matches!(r.body().kind, Kind::Checkpoint { .. }));
+        if early && state.roots.last() == Some(&h) && !newest_is_checkpoint {
+            let one = keep::units(body.encode().len().saturating_add(super::ENVELOPE_ALLOWANCE));
+            let used = self.units.get(&h).copied().unwrap_or(0);
+            let tight = self
+                .checkpoint_units(state, h, time_ms)
+                .is_some_and(|cp| used.saturating_add(one.saturating_mul(2)).saturating_add(cp) > ceiling);
+            // All or nothing: where the record is refused after all, the
+            // checkpoint is not kept either.
+            if tight && let Ok(cp) = self.write_checkpoint(state, signer, time_ms) {
+                let mut trial = self.clone();
+                if trial.insert(cp).is_ok() {
+                    let now = trial.state();
+                    let r = trial.write_one(&now, signer, body.kind, time_ms)?;
+                    *self = trial;
+                    return Ok(r);
+                }
+            }
         }
         let r = Record::sign(body, signer)?;
         let role = self.keys.signer(&h).map_or(Role::Admin, |(_, role)| role);
@@ -3199,6 +3404,9 @@ impl RecordSet {
                 }
                 break;
             }
+            // What the checkpoints keep first changed with what they
+            // prune: the rooms are judged again over what is held.
+            self.cut();
         }
         self.trim_aside();
     }

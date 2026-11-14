@@ -1086,10 +1086,16 @@ pub(crate) fn kept_of(
     }
     let mut items = items;
     super::keep::newest_only(&mut items, &firsts);
-    let (second, back) = not_live(path, cuts, checked.iter().filter(|c| !off_cut(cuts, c.r)).map(|c| (c.r, c.role)));
-    takes_back_first(&mut items, &back);
     let ceiling = |k: &KeyHash| ceiling_of(group_root, promoted, &admins, k);
-    let mut kept = super::keep::keep_tiers(&items, ceiling, &super::keep::Cut::default(), &pre, &second).0;
+    let mut kept = rooms(
+        &mut items,
+        ceiling,
+        &pre,
+        path,
+        cuts,
+        checked.iter().filter(|c| !off_cut(cuts, c.r)).map(|c| (c.r, c.role)),
+    )
+    .0;
     kept.extend(checked.iter().filter(|c| first(c)).map(|c| c.r.id()));
     kept.extend(chain_kept(checked.iter().map(|c| (c.r, c.role))));
     kept.extend(proof);
@@ -1097,8 +1103,38 @@ pub(crate) fn kept_of(
     kept
 }
 
+/// The rooms over items (`keep::keep_tiers`), the set's and the
+/// evaluation's alike: the records that take an admin key back come first
+/// in their root's room; the roots' rooms, whose caps hang on nothing
+/// else, are judged first, and the roster is read from the root records
+/// they keep (and those kept outside the rooms); then every key is judged
+/// within its cap. It returns what is kept, the caps, and the keys no
+/// longer admins.
+pub(crate) fn rooms<'r>(
+    items: &mut [super::keep::Item],
+    ceiling: impl Fn(&KeyHash) -> Option<u64>,
+    pre: &BTreeMap<KeyHash, u64>,
+    path: &[KeyHash],
+    cuts: &BTreeMap<KeyHash, Cut>,
+    recs: impl Iterator<Item = (&'r Record, Role)> + Clone,
+) -> (BTreeSet<RecordId>, super::keep::Cut, BTreeSet<KeyHash>) {
+    let (_, back, _) = not_live(path, cuts, recs.clone());
+    takes_back_first(items, &back);
+    let none = super::keep::Cut::default();
+    let (roots, _) = super::keep::keep_tiers(items, &ceiling, &none, pre, &BTreeSet::new(), 0);
+    let judged: BTreeSet<RecordId> = items.iter().map(|it| it.id).collect();
+    let (second, _, live) = not_live(
+        path,
+        cuts,
+        recs.filter(|(r, role)| *role != Role::Root || !judged.contains(&r.id()) || roots.contains(&r.id())),
+    );
+    let (kept, cut) = super::keep::keep_tiers(items, &ceiling, &none, pre, &second, live);
+    (kept, cut, second)
+}
+
 /// The admin keys that are no longer admins, for the rooms' second tier
-/// (`keep::keep_tiers`), and the root records that take an admin key back.
+/// (`keep::keep_tiers`), the root records that take an admin key back, and
+/// how many admin keys are live.
 /// Of the admin keys the path's roots name, a key is no longer an admin
 /// when a root's removal names it, when the newest root record of its
 /// device names another key or none, or when it comes after the first
@@ -1111,7 +1147,7 @@ pub(crate) fn not_live<'r>(
     path: &[KeyHash],
     cuts: &BTreeMap<KeyHash, Cut>,
     recs: impl Iterator<Item = (&'r Record, Role)>,
-) -> (BTreeSet<KeyHash>, BTreeSet<RecordId>) {
+) -> (BTreeSet<KeyHash>, BTreeSet<RecordId>, usize) {
     let at = |k: &KeyHash| path.iter().position(|p| p == k);
     let mut named: BTreeMap<KeyHash, (usize, u64, core::cmp::Reverse<RecordId>)> = BTreeMap::new();
     let mut removed: BTreeSet<KeyHash> = BTreeSet::new();
@@ -1165,7 +1201,8 @@ pub(crate) fn not_live<'r>(
         .collect();
     live.sort();
     let live: BTreeSet<KeyHash> = live.into_iter().take(super::ADMIN_KEYS_MAX).map(|(_, a)| a).collect();
-    (named.into_keys().filter(|a| !live.contains(a)).collect(), back)
+    let n = live.len();
+    (named.into_keys().filter(|a| !live.contains(a)).collect(), back, n)
 }
 
 /// A root record that takes an admin key back works as a removal of it:
@@ -1592,18 +1629,22 @@ pub(crate) fn checkpoint_ok<'r>(cp: &'r Record, get: impl Fn(&RecordId) -> Optio
 }
 
 /// Whether a checkpoint with heads and keep, among the records held, keeps
-/// an admission of a key while it prunes a root's removal naming that key:
+/// an admission of a key while it prunes a root's removal, or an admin's
+/// that counts, naming that key:
 /// it would bring a removed key back through an old record, which the
 /// core's writer never writes.
 pub(crate) fn revives<'r>(
     heads: &[Head],
     keep: &[RecordId],
     held: impl Iterator<Item = (&'r Record, Role)> + Clone,
+    counts: impl Fn(&RecordId) -> bool,
 ) -> bool {
     let anchors = anchors_of(heads, keep);
     let removed: BTreeSet<KeyHash> = held
         .clone()
-        .filter(|(r, role)| *role == Role::Root && pruned_by(r, *role, heads, &anchors))
+        .filter(|(r, role)| {
+            (*role == Role::Root || (*role == Role::Admin && counts(&r.id()))) && pruned_by(r, *role, heads, &anchors)
+        })
         .filter_map(|(r, _)| match &r.body().kind {
             Kind::Revoke(rm) => Some(rm.keys.iter().copied()),
             _ => None,
@@ -2063,7 +2104,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
         let mut path: Vec<(usize, KeyHash)> = self.on_path.iter().map(|(k, p)| (*p, *k)).collect();
         path.sort();
         let path: Vec<KeyHash> = path.into_iter().map(|(_, k)| k).collect();
-        let (_, back) = not_live(&path, &self.cuts, self.e.recs.iter().map(|r| (r.r, r.role)));
+        let (_, back, _) = not_live(&path, &self.cuts, self.e.recs.iter().map(|r| (r.r, r.role)));
         for k in roots {
             let rs: Vec<usize> = self.of(&k).iter().copied().filter(|&i| !proof.contains(&self.r(i).id)).collect();
             let mut its: Vec<super::keep::Item> = rs.iter().map(|&i| item(self.r(i).r, self.r(i).role)).collect();
