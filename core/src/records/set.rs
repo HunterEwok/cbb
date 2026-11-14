@@ -2890,17 +2890,50 @@ impl RecordSet {
         Some(keep::units(body.encode().len().saturating_add(super::ENVELOPE_ALLOWANCE).saturating_add(16)))
     }
 
-    /// Whether the current root should write a checkpoint now: one more
+    /// Whether the current root should write a checkpoint now: a record of
+    /// it that moved the roster is newer than its counting checkpoint
+    /// (`roster_moved`); or one more
     /// ordinary record of one unit (and its ID in the checkpoint, which may
     /// take one unit more) would reach its floor (`root_floor_margin` below
     /// its ceiling), where the writer takes only its removals, freezes and
     /// resolves. True too when no checkpoint of it would fit.
     pub fn checkpoint_due(&self, state: &State, time_ms: u64) -> bool {
         let Some(h) = state.roots.last().copied() else { return false };
+        if self.roster_moved(state, h) {
+            return true;
+        }
         let Some(ceiling) = self.ceiling(&h) else { return false };
         let used = self.units.get(&h).copied().unwrap_or(0);
         self.checkpoint_units(state, h, time_ms)
             .is_none_or(|cp| used.saturating_add(cp).saturating_add(root_floor_margin()).saturating_add(2) > ceiling)
+    }
+
+    /// Whether a record of the current root h that takes an admin key
+    /// back or makes a new one is newer than h's counting checkpoint: it
+    /// moved the caps of the keys no longer admins (`keep::second_cap`),
+    /// to 0 beside 16 live admin keys, and a checkpoint written after it
+    /// keeps first what h holds of those keys that counts, so their
+    /// devices stay.
+    fn roster_moved(&self, state: &State, h: KeyHash) -> bool {
+        let (_, back, _) = eval::not_live(
+            &self.path,
+            &self.cuts,
+            self.records
+                .values()
+                .filter(|e| !eval::off_cut(&self.cuts, &e.record))
+                .map(|e| (&e.record, self.role_of(e))),
+        );
+        let moved = self
+            .records
+            .values()
+            .filter(|e| e.role == Role::Root && e.record.body().signer == h)
+            .filter(|e| {
+                back.contains(&e.record.id()) || matches!(&e.record.body().kind, Kind::Device(d) if d.admin.is_some())
+            })
+            .map(|e| e.record.body().seq)
+            .max();
+        let at = state.checkpoint.and_then(|id| self.held(&id)).filter(|r| r.body().signer == h).map(|r| r.body().seq);
+        moved.is_some_and(|m| at.is_none_or(|a| m > a))
     }
 
     /// Writes signer's next ordinary record of kind (every type but a
@@ -3116,22 +3149,7 @@ impl RecordSet {
                 super::ADMIN_KEYS_MAX
             )));
         }
-        let (second, cap2) = (self.second.clone(), self.cut.level(true));
         *self = trial;
-        // A root record that takes an admin key back moves that key to the
-        // second tier, and one that makes a new admin key lowers every cap
-        // there, which may reach 0: the root's checkpoint, written right
-        // after it, keeps what those keys signed that counts, outside the
-        // caps, so their devices and removals stay.
-        if state.roots.last() == Some(&h)
-            && matches!(r.body().kind, Kind::Device(_))
-            && (self.second.iter().any(|k| !second.contains(k)) || self.cut.level(true) < cap2)
-        {
-            let now = self.state();
-            if let Ok(cp) = self.write_checkpoint(&now, signer, time_ms) {
-                let _ = self.insert(cp);
-            }
-        }
         Ok(r)
     }
 

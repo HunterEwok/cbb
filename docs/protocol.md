@@ -1936,14 +1936,14 @@ each key: its root's place on the path, then its seq, then the smaller ID. A roo
 come first in its room, and so does a root record that takes an admin key back, so the caps
 never drop a record that decides who is an admin.
 
-The root's writer writes a checkpoint right after a root record that makes a key no longer an
-admin, and after one that makes a new admin key (which lowers every cap of the keys no longer
-admins), so that what the root holds of those keys is kept first by its checkpoint. A record of
-such a key that the root did not hold when it wrote that checkpoint is lost while the key's cap
-is 0, as it is beside 16 live admin keys. A record of a key the root took back counts no more in
-the state whether it is held or not (the writer refuses a take-back that would put a device out),
-so a removal among them that is lost changes nothing: the device it names stays until someone
-removes it again.
+The root writes a checkpoint right after a root record that makes a key no longer an admin, and
+after one that makes a new admin key, which lowers every cap of the keys no longer admins (its
+set says so: `RecordSet::checkpoint_due`), so that what the root holds of those keys is kept
+first by its checkpoint. A record of such a key that the root did not hold when it wrote that
+checkpoint is lost while the key's cap is 0, as it is beside 16 live admin keys. A record of a
+key the root took back counts no more in the state whether it is held or not (the writer refuses
+a take-back that would put a device out), so a removal among them that is lost changes nothing:
+the device it names stays until someone removes it again.
 
 Being settled: a key an admin removed.
 

@@ -2028,8 +2028,8 @@ fn members_reading_different_rosters_agree_after_one_exchange() {
 /// What a taken-back admin key signed that the root never held. The 16
 /// admin keys are live; admin key 0 removes a device the root admitted,
 /// and the root does not hear of it. The root takes admin key 0 back (15
-/// live: the key's cap is a whole admin room) and its writer writes a
-/// checkpoint right after; offered then, the removal is held, but counts
+/// live: the key's cap is a whole admin room), its set says a checkpoint
+/// is due, and the root writes it; offered then, the removal is held, but counts
 /// no more than any record of a key that is no longer an admin: the device
 /// stays (`fifteen`). Or the root first makes a new admin key D, 16 live again,
 /// and the cap of a key no longer an admin is 0: offered after that, the
@@ -2049,8 +2049,9 @@ fn a_taken_back_admin_s_removal(fifteen: bool) -> (bool, bool) {
     t += 1000;
     let back = Device::new(k("z admin 0 phone").key.clone(), "was admin", ROLE_PHONE);
     set.write_record(&st, &root, Kind::device(back), t).unwrap();
-    let after_back = set.state().checkpoint;
-    assert!(after_back.is_some(), "no checkpoint after the take-back");
+    assert!(set.checkpoint_due(&set.state(), t), "no checkpoint due after the take-back");
+    checkpoint_counts(&mut set, &root, &mut t, "after the take-back");
+    assert!(!set.checkpoint_due(&set.state(), t));
     if !fifteen {
         let (dk, ak) = (k("z admin D phone"), k("z admin D key"));
         let mut d = Device::new(dk.key.clone(), "admin", ROLE_PHONE);
@@ -2060,7 +2061,8 @@ fn a_taken_back_admin_s_removal(fifteen: bool) -> (bool, bool) {
         let st = set.state();
         t += 1000;
         set.write_record(&st, &root, Kind::device(d), t).unwrap();
-        assert_ne!(set.state().checkpoint, after_back, "no checkpoint after the admission that lowers the caps");
+        assert!(set.checkpoint_due(&set.state(), t), "no checkpoint due after the admission");
+        checkpoint_counts(&mut set, &root, &mut t, "after the admission");
     }
     let _ = set.insert(rm.clone());
     let st = set.state();
