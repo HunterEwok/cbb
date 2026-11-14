@@ -2302,3 +2302,63 @@ fn three_members_syncing_in_any_order_reach_one_set_and_stop() {
         println!("{stage}: before {lens:?}, one set of {} after {steps} pairwise syncs", end_set.len());
     }
 }
+
+/// Nothing silent: each key's room tells its fixed cap and what it holds,
+/// and the set tells what it would do with a record before taking it. A
+/// full admin key and a key no longer an admin are turned away with why;
+/// a record that fits is kept; asking changes nothing.
+#[test]
+fn the_rooms_tell_why_a_record_is_turned_away() {
+    use cbb_core::records::set::{Offer, Tier};
+    let (recs, root, admins, mut g) = full_group("w", 16);
+    let mut set = new_set();
+    set.insert_all(recs.clone());
+    let set = restarted(&set);
+    let st = set.state();
+    let root_room = set.root_room(&st).expect("the root's room");
+    assert_eq!(root_room.tier, Tier::First);
+    assert_eq!(root_room.key, root.hash);
+    assert!(root_room.used <= root_room.cap, "{root_room:?}");
+    let before = set.digest();
+    // A full admin key: its next record is turned away, with why.
+    let late = wide_removal(&mut g, &admins[2], "w admin 2 late", 0);
+    let Some(Offer::TurnedAway(why)) = set.would_take(&late) else {
+        panic!("a record past a full admin key's cap is turned away: {:?}", set.would_take(&late))
+    };
+    assert_eq!(why.record, late.id());
+    assert_eq!(why.room.tier, Tier::First);
+    assert_eq!(why.room.key, admins[2].hash);
+    assert!(why.room.full_for(why.units), "it would have fit: {why:?}");
+    // Admin key 0 left its room empty: its record is kept and nothing leaves.
+    let fits = wide_removal(&mut g, &admins[0], "w admin 0 late", 0);
+    assert_eq!(set.would_take(&fits), Some(Offer::Kept));
+    let room = set.room_of(&admins[0].hash).expect("admin key 0's room");
+    assert_eq!((room.tier, room.used), (Tier::First, 0));
+    assert!(!room.full_for(18), "an empty admin room takes a wide removal: {room:?}");
+    // Held already: nothing to tell.
+    assert_eq!(set.would_take(&recs[0]), None);
+    assert_eq!(set.digest(), before, "asking changed the set");
+    // A key with no room.
+    assert_eq!(set.room_of(&k("stranger").hash), None);
+}
+
+/// With the fixed caps, a key no longer an admin beside 16 live admins
+/// has a cap of 0: its next record is turned away, with why.
+#[test]
+#[ignore = "waits for the fixed caps at records"]
+fn a_key_no_longer_an_admin_beside_sixteen_live_admins_is_turned_away() {
+    use cbb_core::records::set::{Offer, Tier};
+    let (recs, _root, _admins, mut g) = full_group("w", 16);
+    let mut set = new_set();
+    set.insert_all(recs);
+    let set = restarted(&set);
+    let ex = k("w ex admin 0 key");
+    let late = wide_removal(&mut g, &ex, "w ex late", 0);
+    let Some(Offer::TurnedAway(why)) = set.would_take(&late) else {
+        panic!("a record past a second-tier key's cap is turned away: {:?}", set.would_take(&late))
+    };
+    assert_eq!(why.room.tier, Tier::Second);
+    assert_eq!(why.room.key, ex.hash);
+    assert!(why.room.full_for(why.units), "it would have fit: {why:?}");
+    assert_eq!(why.room.cap, 0, "{why:?}");
+}

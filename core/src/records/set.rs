@@ -15,7 +15,7 @@ use super::{Kind, MAX_NOTICES, Mark, Record, Rule, keep};
 use crate::identity::ExternalKey;
 
 mod notice;
-pub use notice::{ChangeArriving, Fullness, RemovalWarning, Room, Tier, TurnedAway};
+pub use notice::{ChangeArriving, Offer, RemovalWarning, Room, Tier, TurnedAway};
 
 /// The units the current root's writer keeps back below its ceiling, past
 /// its records and its next checkpoint, for its removals, freezes and

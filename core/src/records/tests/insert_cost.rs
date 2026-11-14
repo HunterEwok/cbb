@@ -18,6 +18,7 @@ use crate::records::keep::small::Small;
 use crate::records::set::OLD_WAITS;
 use alloc::format;
 use alloc::string::String;
+use core::time::Duration;
 
 /// A step of a member: a record, a list, or a compaction by its own state.
 #[derive(Clone)]
@@ -256,9 +257,11 @@ fn the_pool_ends_alike_the_old_way_and_the_new() {
 
 /// A group at the ceilings: the root at its 1024 units, admins up to
 /// theirs, the set at its 4096, with the root's checkpoints. One record
-/// costs the set little more than its signature: the whole fill takes
-/// less than verifying every record twice, and the last quarter of the
-/// records costs no more than four times the first.
+/// costs the set little more than its signature: the fill checks no
+/// signature twice, takes less than verifying every record twice, and the
+/// last quarter of the records, against its own signatures, costs no more
+/// than four times the first. The times are taken side by side in one
+/// loop, so a loaded machine changes neither bound.
 #[test]
 fn a_full_group_fills_in_about_the_time_of_its_signatures() {
     // Timed: without the debug check after every insert.
@@ -294,24 +297,33 @@ fn a_full_group_fills_in_about_the_time_of_its_signatures() {
         }
         admins.iter().find(|a| a.hash == r.body().signer).map_or(root.key.clone(), |a| a.key.clone())
     };
-    let t = Instant::now();
-    for r in &g.recs {
-        let _ = r.verify(&key_of(r));
-    }
-    let verify = t.elapsed();
+    // Each record is inserted and its signature verified alone side by
+    // side, timed in the same loop, so that a loaded machine slows both
+    // alike: the bounds compare the two, never a time with a constant.
     let mut set = set_of(&g.root.key);
     let quarter = g.recs.len() / 4;
-    let t = Instant::now();
-    let mut laps = Vec::new();
-    let mut lap = Instant::now();
+    let (mut fill, mut verify) = (Duration::ZERO, Duration::ZERO);
+    let mut laps: Vec<(Duration, Duration)> = Vec::new();
+    let (mut lap_fill, mut lap_verify) = (Duration::ZERO, Duration::ZERO);
+    let verified = super::super::VERIFIED.with(|n| n.get());
+    let mut alone = 0usize;
     for (i, r) in g.recs.iter().enumerate() {
+        let t = Instant::now();
         let _ = set.insert(r.clone());
+        let f = t.elapsed();
+        let t = Instant::now();
+        let _ = r.verify(&key_of(r));
+        let v = t.elapsed();
+        alone += 1;
+        (fill, verify, lap_fill, lap_verify) = (fill + f, verify + v, lap_fill + f, lap_verify + v);
         if (i + 1).is_multiple_of(quarter) {
-            laps.push(lap.elapsed());
-            lap = Instant::now();
+            laps.push((lap_fill, lap_verify));
+            (lap_fill, lap_verify) = (Duration::ZERO, Duration::ZERO);
         }
     }
-    let fill = t.elapsed();
+    // The work, counted: the fill checks no signature twice.
+    let by_fill = super::super::VERIFIED.with(|n| n.get()) - verified - alone;
+    assert!(by_fill <= g.recs.len(), "the fill checked {by_fill} signatures for {} records", g.recs.len());
     // The same fill asking what waits before every record, as before.
     let mut before = set_of(&g.root.key);
     let t = Instant::now();
@@ -332,8 +344,11 @@ fn a_full_group_fills_in_about_the_time_of_its_signatures() {
     // fill their ceilings, and the root keeps its newest devices.
     assert!(units > 12 * crate::records::MAX_ADMIN_RECORDS as u64, "the set is near its room: {units} units");
     assert!(fill < verify * 2, "fill {fill:?} against verifying all {verify:?}");
-    let (first, last) = (laps[0], laps[laps.len() - 1]);
-    assert!(last < first * 4, "the last quarter {last:?} against the first {first:?}");
+    // Each quarter against its own signatures: the last no dearer than
+    // four times the first.
+    let ratio = |(f, v): (Duration, Duration)| f.as_secs_f64() / v.as_secs_f64().max(1e-9);
+    let (first, last) = (ratio(laps[0]), ratio(laps[laps.len() - 1]));
+    assert!(last < first * 4.0, "the last quarter {last:.2} times its signatures against the first {first:.2}");
 }
 
 /// An admin's record that the counting checkpoint left out (the set
