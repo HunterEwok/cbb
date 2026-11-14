@@ -309,3 +309,118 @@ fn a_fresh_removal_past_three_quarters_does_not_take_every_admin_back() {
         back.len()
     );
 }
+
+/// Records' limit, tried on an honest path: the root changes the device
+/// many times (rights, name, the admin key set, cleared by hand, more
+/// changes), with a checkpoint after each; the record that named the
+/// admin key is a middle record. The checkpoints never drop it, and the
+/// writer refuses the key again.
+#[test]
+fn a_key_named_only_in_a_middle_record_stays_known() {
+    let root = k("root");
+    let (p, a) = (k("phone p"), k("admin a"));
+    let recovery = cbb_core::records::Recovery {
+        k1: k("recovery").key,
+        k2: cbb_core::records::pq::PqKey::from_seeds(&[0x31; 16], &[0x32; 16], &[0x33; 16]).key(),
+    };
+    let mut set = RecordSet::new(root.key.clone(), recovery);
+    let mut t = 1000u64;
+    let write = |set: &mut RecordSet, kind: Kind, t: &mut u64| {
+        *t += 1000;
+        let st = set.state();
+        let r = set.write_record(&st, &root, kind, *t).unwrap();
+        *t += 1000;
+        let st = set.state();
+        let cp = set.write_checkpoint(&st, &root, *t).unwrap();
+        let _ = set.insert(cp);
+        r
+    };
+    write(&mut set, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] }, &mut t);
+    let plain = |name: &str, rights: u64| {
+        let mut d = Device::new(p.key.clone(), name, ROLE_MEMBER);
+        d.rights = rights;
+        Kind::device(d)
+    };
+    write(&mut set, plain("p", RIGHT_READ), &mut t);
+    write(&mut set, plain("p", RIGHT_READ | RIGHT_SEND), &mut t);
+    write(&mut set, plain("p renamed", RIGHT_READ | RIGHT_SEND), &mut t);
+    let naming = write(&mut set, device(&p, "p renamed", Some(&a)), &mut t);
+    // Cleared by an ordinary update, as a root that takes the key back by hand.
+    write(&mut set, plain("p renamed", RIGHT_READ | RIGHT_SEND), &mut t);
+    write(&mut set, plain("p again", RIGHT_READ | RIGHT_SEND), &mut t);
+    write(&mut set, plain("p again", RIGHT_READ), &mut t);
+    write(&mut set, plain("p last", RIGHT_READ), &mut t);
+    let held = set.contains(&naming.id());
+    let devices_of_p = set
+        .in_dependency_order()
+        .into_iter()
+        .filter(|r| matches!(&r.body().kind, Kind::Device(d) if d.key.hash() == p.hash))
+        .count();
+    eprintln!("the naming record held: {held}; records of p held: {devices_of_p}");
+    let st = set.state();
+    assert!(st.device_by_key(&p.hash).is_some_and(|d| d.admin.is_none()));
+    let err = set
+        .write_record(&st, &root, device(&p, "p", Some(&a)), t + 1000)
+        .expect_err("the writer named a key the root had cleared, after checkpoints dropped the middle records");
+    assert!(format!("{err}").contains(ADMIN_KEY_TAKEN_BACK), "{err}");
+    assert!(held, "the record that named the admin key was dropped");
+}
+
+/// The notices on acknowledgements: a removal waits for the admin key,
+/// its device owes an acknowledgement, the key is silent past the
+/// threshold; after the acknowledgement nothing waits or is owed.
+#[test]
+fn the_notices_tell_what_waits_for_whom() {
+    let root = k("root");
+    let (p, a) = (k("phone p"), k("admin a"));
+    let recovery = cbb_core::records::Recovery {
+        k1: k("recovery").key,
+        k2: cbb_core::records::pq::PqKey::from_seeds(&[0x31; 16], &[0x32; 16], &[0x33; 16]).key(),
+    };
+    let mut set = RecordSet::new(root.key.clone(), recovery);
+    let mut t = 1000u64;
+    for kind in [
+        Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] },
+        device(&p, "phone", Some(&a)),
+        device(&k("victim"), "victim", None),
+    ] {
+        t += 1000;
+        let st = set.state();
+        set.write_record(&st, &root, kind, t).unwrap();
+    }
+    let named = t - 1000;
+    let st = set.state();
+    assert!(set.removals_waiting(&st).is_empty() && set.ack_owed(&st, &a.hash, t).is_none());
+    t += 1000;
+    for r in set.write_removal(&st, &root, &[k("victim").hash], t).unwrap() {
+        let _ = set.insert(r);
+    }
+    let st = set.state();
+    let waiting = set.removals_waiting(&st);
+    assert_eq!(waiting.len(), 1);
+    assert_eq!(waiting[0].keys, vec![k("victim").hash]);
+    assert_eq!(waiting[0].waits_for, vec![a.hash]);
+    let owed = set.ack_owed(&st, &a.hash, t).expect("an acknowledgement is owed");
+    assert_eq!((owed.removals, owed.days_left), (1, 35));
+    assert!(set.root_room_waiting(&st, 1).is_none(), "one unit is under 1% of the root's room");
+    assert!(set.root_room_waiting(&st, 0).is_some_and(|w| w.waiting == 1 && w.waiting_units >= 1));
+    let heard = BTreeMap::new();
+    let day = 86_400_000;
+    assert!(set.admins_silent(&st, &heard, named + 6 * day, 7 * day).is_empty());
+    let silent = set.admins_silent(&st, &heard, named + 34 * day, 7 * day);
+    assert_eq!(silent.len(), 1);
+    assert_eq!((silent[0].key, silent[0].since_ms, silent[0].days_left, silent[0].holds_back), (a.hash, named, 1, 1));
+    let due = set.admins_silent(&st, &heard, named + ADMIN_SILENCE_MS, 7 * day);
+    assert_eq!(due[0].days_left, 0, "due on the day take_back_lagging takes it");
+    // Heard from yesterday: not silent for a week.
+    let heard = BTreeMap::from([(a.hash, named + 33 * day)]);
+    assert!(set.admins_silent(&st, &heard, named + 34 * day, 7 * day).is_empty());
+    let before = set.in_dependency_order().into_iter().map(Record::id).collect::<Vec<_>>();
+    t += 1000;
+    set.write_ack(&st, &a, t).unwrap();
+    let st = set.state();
+    assert!(set.removals_waiting(&st).is_empty());
+    assert!(set.ack_owed(&st, &a.hash, t).is_none());
+    assert!(set.root_room_waiting(&st, 0).is_none());
+    assert_eq!(set.in_dependency_order().len(), before.len() + 1, "the notices changed nothing");
+}
