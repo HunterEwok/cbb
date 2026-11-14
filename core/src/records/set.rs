@@ -77,7 +77,7 @@ pub struct Base {
 /// The settled root records a set keeps a while (`RecordSet::settled`):
 /// at most this many, and at most SETTLED_BYTES of their envelopes, the
 /// oldest arrival going first.
-const SETTLED_KEPT: usize = 16;
+pub(super) const SETTLED_KEPT: usize = 16;
 const SETTLED_BYTES: usize = 256 << 10;
 /// The IDs of settled root records a set remembers by seq and key
 /// (`RecordSet::settled_ids`), the oldest arrival going first.
@@ -432,6 +432,24 @@ impl RecordSet {
     /// the records kept aside among them.
     pub fn digest(&self) -> [u8; 32] {
         super::digest(self.records.keys().chain(self.early.keys()))
+    }
+
+    /// The digest a Welcome names of the set it sends in parts: over the
+    /// set digest and the hashes of the lists the set holds, in order, so
+    /// that a joiner that ends with it holds every record, the heads, the
+    /// first checkpoints and the proof of a fork among them, and every
+    /// list the heads name.
+    pub fn welcome_digest(&self) -> [u8; 32] {
+        let mut m = Vec::with_capacity(
+            super::LABEL_WELCOME_SET.len().saturating_add(33).saturating_add(self.lists.len().saturating_mul(32)),
+        );
+        m.extend_from_slice(super::LABEL_WELCOME_SET.as_bytes());
+        m.push(0);
+        m.extend_from_slice(&self.digest());
+        for h in self.lists.keys() {
+            m.extend_from_slice(h);
+        }
+        crate::certs::sha256(&m)
     }
 
     /// The lists the set holds, as their bytes, which a sender sends

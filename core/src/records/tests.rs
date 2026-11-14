@@ -1757,7 +1757,7 @@ fn a_record_counts_the_same_in_every_envelope() {
     let bytes = crate::format::cbor::Value::Map(entries).encode();
     let sig = key::sign_es256(&a, LABEL_RECORD, &bytes).unwrap();
     let two = |n: usize| Record::decode(&crate::format::envelope::write(&bytes, &sig, Some(&vec![0x55u8; n]))).unwrap();
-    let max = crate::format::envelope::MAX_SIG2_RECORD;
+    let max = crate::format::envelope::MAX_SIG2;
     let (short, long) = (two(1), two(max));
     assert!(
         Record::decode(&crate::format::envelope::write(&bytes, &sig, Some(&vec![0x55u8; max + 1])))
@@ -1766,7 +1766,7 @@ fn a_record_counts_the_same_in_every_envelope() {
     );
     assert_eq!(short.id(), long.id());
     assert_eq!(short.size(), long.size());
-    assert_eq!(short.size(), bytes.len() + ENVELOPE_ALLOWANCE + SIG2_ALLOWANCE);
+    assert_eq!(short.size(), bytes.len() + ENVELOPE_ALLOWANCE);
     g.push(short.clone());
     let mut later = Vec::new();
     for i in 0..200 {
@@ -2552,10 +2552,10 @@ fn many_removals_of_one_key_evaluate_quickly() {
     assert!(took.as_secs_f64() < 4.0, "evaluate took {took:?}");
 }
 
-/// A record whose body names a second signer is counted for the largest
-/// second signature: nine units more than without it.
+/// A record whose body names a second signer takes no more units than
+/// without it: its second signature is bounded apart from the rooms.
 #[test]
-fn a_second_signer_costs_nine_units() {
+fn a_second_signer_takes_no_units() {
     let g = G::new();
     let a = k("admin a");
     let second = [7u8; 32];
@@ -2565,12 +2565,12 @@ fn a_second_signer_costs_nine_units() {
     entries.push((8, crate::format::cbor::Value::Bytes(&second)));
     let bytes = crate::format::cbor::Value::Map(entries).encode();
     let sig = key::sign_es256(&a, LABEL_RECORD, &bytes).unwrap();
-    let max = crate::format::envelope::MAX_SIG2_RECORD;
+    let max = crate::format::envelope::MAX_SIG2;
     let r = Record::decode(&crate::format::envelope::write(&bytes, &sig, Some(&vec![0x55u8; max]))).unwrap();
     let plain = Record::sign(g.body(&a, Kind::Copies { incoming_ms: 60_000, seen: vec![] }), &a).unwrap();
     let units = |r: &Record| keep::units(r.size());
-    assert_eq!(units(&r), units(&plain) + 9);
-    assert!(r.size() >= r.envelope().len());
+    assert!(units(&r) <= units(&plain) + 1, "{} and {}", units(&r), units(&plain));
+    assert!(r.size() + max + 9 >= r.envelope().len());
 }
 
 /// The device record's fields here are the format's list.
