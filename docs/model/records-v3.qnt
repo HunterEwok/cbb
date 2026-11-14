@@ -2805,9 +2805,12 @@ module records_v3 {
     (chainTwin or (HALT_ON_HELD_PAIR and rootTwin)) implies (views.get(m).stop and views.get(m).commanders == Set())
   })
   // Two members, each offered to no change what it got, that got the same records count the same
-  // state, whoever signed them (convergence on equal sets, not on honest chains only).
+  // state, whoever signed them (convergence on equal sets, not on honest chains only). A halted
+  // member is twinHalts' (what it counts while halted depends on when the pair came: random run
+  // seed 777, four members halted at R's checkpoint 8 and R's own holder at 13 it signed first).
+  def running(m: str): bool = not(views.get(m).stop) and not(chainState(st.get(m), db).stop)
   val sameGotSameState = MEMBERS.forall(m => MEMBERS.forall(n => (m == n
-    or not(st.get(m).got == st.get(n).got and saturated(m) and saturated(n)))
+    or not(st.get(m).got == st.get(n).got and saturated(m) and saturated(n) and running(m) and running(n)))
     or (st.get(m).recs == st.get(n).recs and views.get(m) == views.get(n))))
   val decidedInv = and { promises, tiersPure, cpFirstKeepsDevices, ownCpsNoCrowd, twinHalts, sameGotSameState }
 
