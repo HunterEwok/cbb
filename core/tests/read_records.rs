@@ -1586,6 +1586,9 @@ fn a_change_whose_first_checkpoint_never_comes_completes_alike_in_any_order() {
     }
     println!("after asking: path {}", m.state().roots.len());
     assert_eq!(ends[0].state().roots.len(), 1, "the change completed without its first checkpoint");
+    // The state still tells the app the change is arriving after the
+    // asking gave up.
+    assert_eq!(m.state().first_missing, Some(first_cp.id()), "the state does not tell the change is arriving");
     // After a restart the member asks again: what it asked is not saved.
     let mut again = restarted(&m);
     let st = again.state();
