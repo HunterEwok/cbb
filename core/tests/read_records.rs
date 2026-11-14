@@ -840,3 +840,113 @@ fn a_pile_of_older_checkpoints_goes_when_a_new_one_counts() {
         assert!(!other.contains(id), "the other member still holds checkpoint {i}");
     }
 }
+
+/// A removal of 256 random keys by `by`, about 17 units.
+fn wide_removal(g: &mut G, by: &K, tag: &str, n: u32) -> Record {
+    let mut keys: Vec<KeyHash> = (0..256u32)
+        .map(|i| {
+            KeyHash(cbb_core::certs::sha256(&[tag.as_bytes(), &n.to_le_bytes()[..], &i.to_le_bytes()[..]].concat()))
+        })
+        .collect();
+    keys.sort();
+    g.sign(by, Kind::Revoke(cbb_core::records::body::Removal { keys, seen: Vec::new() }))
+}
+
+/// Keys that are no longer admins against a full honest group: 16 live
+/// admin keys and the root each fill their room, then 12 admin keys made
+/// and unmade fill theirs. The live admins keep every record they kept before (no squeeze
+/// from the second tier), and after every insert a restored set is the
+/// live one.
+#[test]
+#[ignore = "slow (a restore per step); run with --ignored --release"]
+fn keys_no_longer_admins_squeeze_no_live_admin() {
+    let (mut set, root, mut g) = root_with_dead_checkpoints(0, 0);
+    let mut run = Run { steps: 0, found: Vec::new() };
+    let mut live: Vec<(K, Vec<RecordId>)> = Vec::new();
+    for a in 0..15u32 {
+        // The phone of root_with_dead_checkpoints is admin 16.
+        let ak = k(&format!("live admin {a}"));
+        let pk = k(&format!("live admin phone {a}"));
+        let mut d = Device::new(pk.key.clone(), "admin", ROLE_PHONE);
+        d.rights = RIGHT_READ | RIGHT_SEND;
+        d.admin = Some(ak.key.clone());
+        d.powers = 0x1ff & !64;
+        let r = g.sign(&root, Kind::device(d));
+        let _ = set.insert(r);
+        let mut mine = Vec::new();
+        for n in 0..16u32 {
+            let r = wide_removal(&mut g, &ak, &format!("live {a}"), n);
+            let id = r.id();
+            let _ = set.insert(r);
+            if set.contains(&id) {
+                mine.push(id);
+            }
+        }
+        live.push((ak, mine));
+    }
+    // The root fills its room too, so that the first tier asks for all of
+    // ROOM but the reserve, and the second tier gets only the reserve's
+    // unused part.
+    // About 19 units each: 72 leave room for the root's own 118 or so
+    // records (100 devices, the admissions), which come after its
+    // removals in its room.
+    for n in 0..72u32 {
+        let r = wide_removal(&mut g, &root, "root", n);
+        let _ = set.insert(r);
+    }
+    run.check("full group", "16 live admins and the root filled", &set);
+    {
+        let st = set.state();
+        let still: usize = live.iter().map(|(_, m)| m.iter().filter(|id| set.contains(id)).count()).sum();
+        println!(
+            "after the root filled: set {} records, live admins keep {still}, devices {}, admins in state {}",
+            set.len(),
+            st.devices.len(),
+            st.devices.iter().filter(|d| d.admin.is_some()).count()
+        );
+    }
+    let kept_before: usize = live.iter().map(|(_, m)| m.len()).sum();
+    for a in 0..12u32 {
+        let ak = k(&format!("gone admin {a}"));
+        let pk = k(&format!("gone admin phone {a}"));
+        let mut d = Device::new(pk.key.clone(), "admin", ROLE_PHONE);
+        d.rights = RIGHT_READ | RIGHT_SEND;
+        d.admin = Some(ak.key.clone());
+        d.powers = 0x1ff & !64;
+        // Made an admin in place of nobody: the 17th admin key counts as
+        // no longer an admin from the start (ADMIN_KEYS_MAX).
+        let r = g.sign(&root, Kind::device(d));
+        let _ = set.insert(r);
+        if a == 0 {
+            let still: usize = live.iter().map(|(_, m)| m.iter().filter(|id| set.contains(id)).count()).sum();
+            println!("after the 17th admin key made: set {} records, live admins keep {still}", set.len());
+        }
+        run.check("full group", &format!("admin {a} made"), &set);
+        for n in 0..16u32 {
+            let r = wide_removal(&mut g, &ak, &format!("gone {a}"), n);
+            let _ = set.insert(r);
+            run.check("full group", &format!("admin {a} removal {n}"), &set);
+        }
+        let r = g.sign(&root, Kind::device(Device::new(pk.key.clone(), "was admin", ROLE_PHONE)));
+        let _ = set.insert(r);
+        run.check("full group", &format!("admin {a} unmade"), &set);
+        let still: usize = live.iter().map(|(_, m)| m.iter().filter(|id| set.contains(id)).count()).sum();
+        if still != kept_before {
+            run.found.push(format!(
+                "step {}: after admin {a} unmade, the live admins keep {still} of the {kept_before} records they kept",
+                run.steps
+            ));
+        }
+    }
+    println!(
+        "full group: {} steps, live admins kept {kept_before} records, set {} records, {} of {} bytes",
+        run.steps,
+        set.len(),
+        set.bytes(),
+        cbb_core::records::MAX_SET_BYTES
+    );
+    for f in &run.found {
+        println!("  {f}");
+    }
+    assert!(run.found.is_empty(), "{} of {} steps:\n{}", run.found.len(), run.steps, run.found.join("\n"));
+}
