@@ -1018,7 +1018,10 @@ pub(crate) mod tests {
         select(&mut card).unwrap();
         verify(&mut card, "123456").unwrap();
         assert_eq!(generate(&mut card, 0x83).unwrap_err().message(), "the YubiKey wants its management key first");
-        assert_eq!(authenticate(&mut card, &[0; 24]).unwrap_err().message(), MANAGEMENT_KEY);
+        // The factory key with its last byte changed is refused.
+        let mut wrong = DEFAULT_MANAGEMENT_KEY;
+        wrong[23] ^= 1;
+        assert_eq!(authenticate(&mut card, &wrong).unwrap_err().message(), MANAGEMENT_KEY);
         authenticate(&mut card, &DEFAULT_MANAGEMENT_KEY).unwrap();
         let slot = free_slot(&mut card).unwrap();
         assert_eq!(slot, 0x83, "82 and 84 are taken");
