@@ -588,3 +588,38 @@ service and command line, the kits are the phones' Swift and Kotlin kits, and th
 | `join::welcome::Welcome::build`, `part_message` | the Welcome and the parts that follow it when the set does not fit one frame | the same | to add |
 | `join::welcome::Assembly` (`new`, `due`, `late`, `take`, `finish`) | the joiner takes the parts after message 67 within `join::welcome::MAX_PARTS_BYTES` and their time limits, then gives the whole Welcome to `Welcome::check` | every program that joins: `member/`, the kits, the boards | to add |
 | `bounds::BOUNDS` | every number of the format with its rule, refusal and the vector that reaches it ([protocol.md](protocol.md), section 19) | no driver; the tests and the docs check against it | none |
+| `records::RecordSet::parts_for_peer` | what a peer gets in sync (`for_peer` and its lists), as parts that each fit one frame, every change of root's list beside its head | every program that syncs: `member/`, the kits, the boards; today only the Welcome | to add |
+| `records::RecordSet::digest` | the set's digest, which a hello and each sync round carry | the same | to add |
+| `records::RecordSet::missing` | the record IDs to ask the peers for in this round; each ID is given up after `records::set::MISSING_ROUNDS` (16) rounds | the same | to add |
+| `records::State::first_missing`, `list_missing` | a change of root waits for the new root's first records or its list | the apps, which show "a change of root is arriving" | to add |
+
+### Sync of records: what a driver must do
+
+The record set decides what is held; the driver decides when records travel. A driver that
+gets this wrong leaves two members connected with different sets. So, once wave 5 moves the
+programs to the core:
+
+- **Send while the digests differ.** A member sends `parts_for_peer` whenever its digest and
+  the peer's differ: when the connection opens, and after every insert that leaves them
+  different, not only at the hello. A receiver takes each part as records, lists, records.
+- **Stop only on equal digests.** Equal digests end a round, never "nothing was asked". The
+  rounds on one connection are bounded; a connection that passes the bound is a fault of the
+  core, which the driver reports (in debug mode with both digests) instead of looping.
+- **`missing` is a hint.** Asking by ID speeds sync up; giving an ID up after
+  `MISSING_ROUNDS` never stops the sending above. What was asked is not saved, so a restarted
+  member asks again.
+- **A waiting change is shown.** While `State::first_missing` or `list_missing` is set, the
+  app shows "a change of root is arriving" and the driver sends again on every connection.
+  `RecordSet::stuck_checkpoints` covers only the current root's checkpoints, not a waiting
+  change.
+- **Offering again changes nothing.** `insert_all` of records the set already took leaves it
+  as it was. Being settled: today a second offer can still change what the rooms keep; the
+  test `records_that_move_the_tiers_end_equal_whatever_the_order` in
+  `core/tests/read_records.rs` states the wanted result.
+
+#### Until the switch to the core (wave 5)
+
+`member/` syncs 0.5's records (`cbb_core::group::Records`, version 2). Each hello carries the
+set's digest; a member whose digest differs from the peer's sends all its records once, then
+passes on only records that are new to it (`member/src/node.rs`). Two connected members whose
+sets differ without a new record exchange nothing more until one of them connects again.
