@@ -259,3 +259,32 @@ fn the_tunnel_key_comes_from_the_connection_with_each_hub() {
     assert_ne!(p1, p1_again, "a new connection, a new key");
     assert_ne!(p1, p2, "each hub its own");
 }
+
+/// A pairing session of 0.6 takes the exporter labelled
+/// `EXPERIMENTAL-cbb-pair-v3`, both ends the same; it differs from 0.5's
+/// label of the same session, and a member session gives none.
+#[test]
+fn a_pairing_session_takes_the_v3_exporter() {
+    let (a, b) = (own(), own());
+    let session = |name: &[u8]| {
+        let (c, cx) = exporting_client(client(&a, None, any_key(), name, &clock()).unwrap());
+        let (s, sx) = exporting_server(server(&b, any_key(), name, &clock()).unwrap());
+        let mut c = Session::client(Arc::new(c), unsent_name()).unwrap();
+        let mut s = Session::server(Arc::new(s)).unwrap();
+        assert!(pairing_exporter(&c, &cx).is_err(), "none before the handshake ends");
+        shuttle(&mut c, &mut s);
+        (c, cx, s, sx)
+    };
+    let (c, cx, s, sx) = session(alpn::PAIR);
+    assert_eq!(c.alpn_protocol(), Some(alpn::PAIR));
+    let ours = pairing_exporter(&c, &cx).unwrap();
+    assert_eq!(pairing_exporter(&s, &sx).unwrap(), ours, "both ends export one value");
+    let mut by_hand = [0u8; 32];
+    cx.export(b"EXPERIMENTAL-cbb-pair-v3", &[], &mut by_hand).unwrap();
+    assert_eq!(by_hand, ours);
+    let mut v2 = [0u8; 32];
+    cx.export(crate::pair::EXPORTER_LABEL, &[], &mut v2).unwrap();
+    assert_ne!(v2, ours, "0.5's label gives another value of the same session");
+    let (c, cx, _, _) = session(alpn::MEMBER);
+    assert!(pairing_exporter(&c, &cx).is_err(), "a member session is no pairing session");
+}

@@ -77,7 +77,8 @@ impl Rule {
     pub const ENV_SHAPE: Rule = Rule("env/shape");
     /// A body over its kind's ceiling (section 13).
     pub const ENV_SIZE: Rule = Rule("env/size");
-    /// A second signature over its ceiling of 4 KiB.
+    /// A second signature over its ceiling (`envelope::MAX_SIG2`, or
+    /// `envelope::MAX_SIG2_HEAD` for a recovery head).
     pub const ENV_SIG2: Rule = Rule("env/sig2");
     /// A signature that is not 64 bytes.
     pub const SIG_SIZE: Rule = Rule("sig/size");

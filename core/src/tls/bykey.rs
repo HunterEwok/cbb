@@ -286,6 +286,23 @@ pub fn exporting_server(mut cfg: rustls::ServerConfig) -> (rustls::ServerConfig,
     (cfg, x)
 }
 
+/// The exporter of a pairing session of 0.6: [`crate::alpn::PAIR_EXPORTER`]
+/// with an empty context, from a session whose handshake is over and took
+/// `cbb-pair/3`; any other session gives none. `exporter` is the one
+/// [`exporting_client`] or [`exporting_server`] gave with that session's
+/// configuration.
+pub fn pairing_exporter(
+    session: &super::Session,
+    exporter: &super::Exporter,
+) -> Result<[u8; crate::alpn::PAIR_EXPORTER_LEN]> {
+    if session.is_handshaking() || !crate::alpn::is_pair(session.alpn_protocol()) {
+        return Err(Error::msg("not a pairing session"));
+    }
+    let mut out = [0u8; crate::alpn::PAIR_EXPORTER_LEN];
+    exporter.export(crate::alpn::PAIR_EXPORTER, &[], &mut out)?;
+    Ok(out)
+}
+
 /// A judge that takes every well-formed key: for pairing, where CPace bound
 /// to both keys authenticates the peer, and for a server's own client
 /// checks.
