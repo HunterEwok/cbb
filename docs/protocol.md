@@ -958,9 +958,157 @@ when the records set none. A write increments the write sequence number (section
 
 ## 6. Pairing a computer
 
-Source: `core/src/pair.rs`, `core/src/admit`, `core/src/third_party/cpace`, `member/src/pair.rs`.
+Source: `core/src/join` (0.6: `mod.rs`, `info.rs`, `invitation.rs`, `welcome.rs`, `intro.rs`),
+`core/src/msg/tables.rs` (the messages' tables), `core/src/pair.rs`, `core/src/admit`,
+`core/src/third_party/cpace`, `member/src/pair.rs`.
 
-### Window
+This section first gives pairing as the 0.6 format has it, in the core. The service in
+`member/` and the apps still pair as the subsection "Until the switch to the core (wave 5)"
+describes, until wave 5 moves them onto the core; that subsection goes with that code.
+
+### Pairing in 0.6
+
+Pairing runs over TLS 1.3 with ALPN `cbb-pair/3` (section 19), each side presenting its key
+container (format section 12) for the key it keeps. Its messages are CBOR maps in frames
+(section 4, "Framing"), the type in field 0 (section 19, "Member protocol messages"). Before the
+code is confirmed every frame takes the pairing limit, `format::frame::LIMIT_PAIRING` (1048576);
+after it, message 67 alone may take the member limit, `format::frame::LIMIT_MEMBER` (7340032),
+and every other message still the pairing limit. A message 67 before the confirm is refused
+whatever its size (`pair/early-welcome`).
+
+| `t` | Direction | Fields |
+|---|---|---|
+| 64 `pair/start` | joiner to member | 2 `Ya` bytes, at most 256; 3 `ADa` bytes, at most 16 KiB: the encoding of the joiner's Info; 4 `commitment` bytes 32 |
+| 65 `pair/reply` | member to joiner | 2 `Yb` bytes, at most 256; 3 `ADb` bytes, at most 1 KiB: `{1 group ID (16), 2 the member's device ID (16), 3 its name}`; 4 `nonce` bytes 32 |
+| 66 `pair/confirm` | joiner to member | 2 `Ta` bytes, at most 64; 3 the joiner's nonce, bytes 32 |
+| 67 `pair/welcome` | member to joiner | 2 `Tb` bytes, at most 64; 3 the Welcome; 4 `Tw` bytes 64 |
+| 68 `pair/done` | joiner to member | none: the joiner kept its identity |
+| 69 `pair/error` | either | 2 `code`: 1 wrong-code, 2 closed, 3 busy, 4 expired, 5 too-many, 6 refused, 7 declined, 8 taken |
+
+Every field is needed. An error code this version does not know is taken as `refused`.
+
+**CPace.** Suite CPACE-X25519-SHA512 of draft-irtf-cfrg-cpace-21 with explicit key
+confirmation (Ta, Tb), the joiner the initiator. Its channel identifier is `cbb pair channel v3`
+0x00 ‖ the key hash of the member's TLS key ‖ that of the joiner's ‖ the ID of the invitation
+each side believes it is using, 16 bytes, all zero at home without an invitation (an ID no
+invitation has). The keys are those of the key containers the handshake saw, so a party in the
+middle with keys of its own gets another identifier and the exchange fails, and two ends in the
+flows of two invitations get two identifiers. With an invitation the password is its 32-byte
+secret (section 12). The vectors are `testdata/format/messages3.json`, `codes`.
+
+**The short code**, for a device with a screen and no camera, is a committed one. The joiner
+draws a nonce `nj` of 32 bytes and sends `commitment` = SHA-256(`cbb short code commitment v1`
+0x00 ‖ `nj`) in message 64; the member answers with its own nonce `nm` in message 65; the
+joiner opens `nj` in message 66. Both show six digits: the first 4 bytes of SHA-256(`cbb short
+code v3` 0x00 ‖ the session's TLS exporter ‖ `nj` ‖ `nm` ‖ the invitation ID) as a big-endian
+number mod 1 000 000, zero-padded. Neither end can choose its part after it has seen the
+other's, so the codes of two sessions match by chance only, one in a million. Each nonce is new
+for its session, drawn by the core at each end and never kept. A nonce that does not open the
+commitment ends the attempt (`wrong-code`).
+
+**Attempts.** An invitation takes one attempt at a time (another gets `busy`). The machine's
+steps, from message 64 to the opening of `nj`, have `join::invitation::ATTEMPT_MS` (30000) at
+each end; once the codes are shown the person has `join::invitation::ANSWER_MS` (600000) of
+their own to compare and answer, and the attempt stays the open one meanwhile. An attempt counts
+as failed once the member has sent message 65, unless it ends in a Welcome; after
+`join::invitation::MAX_FAILURES` (3) failures the invitation answers `too-many`. The joiner
+counts too: at most three sessions per invitation, each started only by the person; a code once
+shown stays until the person answers; the app never retries by itself. Each attempt at the
+member has a number from its start, which the later steps name, so a late message of an earlier
+attempt changes nothing.
+
+#### Info
+
+The joiner's Info is the map `ADa` carries:
+
+| # | Field | Type | Needed | Meaning |
+|---|---|---|---|---|
+| 1 | `name` | text, 1 to 128 bytes | yes | the device's name |
+| 2 | `os` | uint | no | its system |
+| 3 | `caps` | uint, bits 1 to 7 | no | its capabilities (section 4) |
+| 4 | `role` | uint 1 to 4 | yes | as the device record's |
+| 5 | `admin` | key, ES256 | no | a joiner with `admin` in `caps`, or a phone: its admin key |
+| 6 | `admin_pop` | bytes | with 5 | the admin key's signature over `cbb admin pop v1` 0x00 ‖ the session's TLS exporter |
+| 7 | `keys` | envelope | no | the joiner's keys statement, epoch 1 |
+| 8 | `device` | map | no | as the hello's `device` |
+| 9 | `invite` | bytes 16 | no | the invitation's one-time ID, when it joins by one; never the zero ID |
+
+#### The Welcome
+
+Field 3 of message 67:
+
+| # | Field | Type | Present | Meaning |
+|---|---|---|---|---|
+| 1 | `root` | key, ES256 | always | the group's first root key; its Group ID must be `ADb` field 1 |
+| 2 | `records` | array of envelopes, at most 8192 | without parts | the whole set, in the order a receiver takes it: the root changes, the admitter's record with its rights, the joiner's own record, then the others |
+| 4 | `keys` | array of envelopes, at most 256 | no | statements of the group's devices, the two devices' own first; with field 7 within `join::welcome::STATEMENTS_BUDGET` (2097152), the rest coming with the first sync |
+| 5 | `time_ms` | time | always | the admitter's clock, for a joiner without one |
+| 6 | `grant` | map | to a leaf | its first grant: fields 2 to 5 of message `grant` |
+| 7 | `credentials` | array of envelopes, at most 259 | no | the current period's server credentials (section 18) |
+| 9 | `recovery` | key, ES256 | always | the recovery key's first half |
+| 10 | `list` | bytes | without parts | the newest recovery record's list: its count and at most `records::LIST_MAX` (1536) IDs of 34 bytes |
+| 11 | `recovery2` | key, SLH-DSA | always | the recovery key's second half |
+| 12 | `digest` | bytes 32 | every Welcome but a leaf's | SHA-256(`cbb welcome digest v1` 0x00 ‖ the set digest (32) ‖ the count of lists, 4 bytes big-endian ‖ each list's hash under `cbb recovery list v3`, sorted) |
+| 13 | `parts` | uint 1 to `join::welcome::MAX_PARTS` (64) | when the set does not fit | how many `records` messages follow |
+
+Rules between fields: with 13, neither 2 nor 10 (`welcome/parts`); without 13, field 2
+(`welcome/shape`); a leaf's Welcome (with 6) has neither 12 nor 13 (`welcome/parts`,
+`welcome/digest`); every other has 12 (`welcome/digest`).
+
+**The Welcome's tag.** Every Welcome, a leaf's too, carries `Tw` in field 4 of message 67:
+K_w = HMAC-SHA-512(ISK, `cbb welcome key v1` 0x00), and `Tw` = HMAC-SHA-512(K_w, `cbb welcome
+v1` 0x00 ‖ the bytes of field 3 exactly as they stand in message 67). ISK is CPace's
+intermediate session key; K_w is its only use besides Ta and Tb, under a label nothing else
+uses. The joiner checks `Tw` in constant time over the bytes as received, before it reads
+anything of field 3 beyond where it starts and ends; a message 67 without `Tw`, or with another,
+is a failed pairing (`pair/welcome/tw`), with nothing read and nothing kept. `Tb` alone does not
+cover the Welcome. `Tw` covers every field, so it binds field 12, and through it every part.
+
+**The Welcome in parts.** A set that fits the Welcome (within
+`join::welcome::RECORDS_BUDGET` (5177344), with at most one list) rides in field 2. A wider one
+rides whole in `records` messages (t 5: field 2 record envelopes, at most
+`records::sync::PART_RECORDS` (4096); field 3 lists, at most 64; at least one of the two) right
+after message 67, as many as field 13 says, at most `join::welcome::MAX_PARTS_BYTES`
+(101039910) together. Each part comes within `join::welcome::PART_MS` (120000) of the one
+before, and all within `join::welcome::PARTS_MS` (1500000) of message 67 (`welcome/late`);
+these are the core's ceilings, and a service may be stricter. A message other than `records`
+before the last part, or a part after it, is refused (`welcome/parts`).
+
+The joiner holds each part as it comes, reading each record's envelope and refusing at once on
+one that does not read; it evaluates nothing. After the last part it takes every part into a
+new set, where each signature is verified, and refuses unless the set's digest with its lists
+is field 12 (`welcome/digest`); it refuses a stopped group; and it refuses unless every record
+and list it was sent is held (`welcome/digest`): a record whose first signature does not cover
+its second is not held. On any failure the joiner drops the parts, the set and the Welcome, and
+keeps nothing.
+
+**The joiner's checks.** With the whole set, the joiner checks that the two keys' Group ID is
+`ADb` field 1; that the admitter's key, from the TLS handshake, is a device of the group; that
+the records hold its own record with its own key, signed by the root or by the admitter's admin
+key with the power to admit; and the path of roots the records lead to. What binds the member:
+with an invitation, its secret, CPace's password; at home without one, only the person's "they
+match" in this session, at the joiner, for this admitter (the core takes the answer once, with
+the session's TLS exporter; an answer of another session or another member takes nothing). A
+guarded leaf takes only a record the root signed itself. Only then does the joiner store the
+set and its identity, and send message 68.
+
+#### The intro
+
+The first message to a peer that does not know the sender's key yet is the intro (t 8): field
+2, record envelopes in the order a receiver takes them (the root changes, the records that
+prove the admitter's rights, the sender's own record); field 3, the sender's keys statement.
+The recovery heads count apart, at most `join::intro::MAX_HEADS` (65); the other records at
+most `join::intro::MAX_RECORDS` (32) and `join::intro::MAX_BYTES` (16384) by their envelopes'
+bytes (`intro/size`; vectors: `messages3.json`, `intros`). The receiver checks every signature
+up to the root it holds before it keeps any, then goes on; anything that does not check closes
+the connection and keeps nothing.
+
+### Until the switch to the core (wave 5)
+
+What follows is pairing as the service in `member/`, the Go helper and the apps speak it today:
+JSON frames and a member certificate in the Welcome. It goes with that code in wave 5.
+
+#### Window
 
 The root or an admin (section 10, "Admins") opens a window with a six-digit code. The code MUST be drawn
 uniformly at random, and MUST NOT be taken from a command line, where other users of the
@@ -987,7 +1135,7 @@ A window for a remote invitation (design.md, "Joining from another network") dif
   only after a yes; a no sends `{"error": "declined"}` and counts as a failed attempt.
 - Each attempt then has 30 s plus the time allowed for the admin's answer, on both sides.
 
-### TLS
+#### TLS
 
 - Joiner (client): TLS 1.3, ALPN `cbb-pair/3`, presents its self-signed certificate
   (section 2) for the P-256 key it will keep, with its new device ID as CN; it does not
@@ -997,7 +1145,7 @@ A window for a remote invitation (design.md, "Joining from another network") dif
   unless the client sent exactly one certificate with a P-256 key and a device ID as CN that
   differs from its own.
 
-### Channel binding and CPace
+#### Channel binding and CPace
 
 Suite CPACE-X25519-SHA512 of draft-irtf-cfrg-cpace-21, as implemented in
 `core/src/third_party/cpace`, with explicit key confirmation.
@@ -1022,7 +1170,7 @@ when present, is a sorted list of distinct known capabilities and comes from no 
 with role `member` and the `caps` its Info says. A Go member that is not the root
 refuses a phone that offers `admin_key`: only the root makes a phone an admin.
 
-### Frames
+#### Frames
 
 Frames are a 4-byte big-endian length and a JSON object of at most 64 KiB (65 536 bytes).
 Fields, all optional, each frame using some: `msg` (bytes), `ad` (bytes), `tag` (bytes),
@@ -1057,7 +1205,7 @@ code MUST be treated as `refused`. Errors carry no free text, and an implementat
 show free text from a peer that has not proved it knows the code, so an unauthenticated
 peer cannot put words in front of the user.
 
-### Welcome
+#### Welcome
 
 | Field | Type | Present |
 |-------|------|---------|
@@ -1088,14 +1236,14 @@ A phone that joins MUST check the same, and also: `group_ca` is a phone's root (
 there are no CA keys; `admin_ca`, when present, is an admin CA under `group_ca` for the key
 it sent in `admin_key`, its CN naming its own device ID.
 
-### Joining side behaviour
+#### Joining side behaviour
 
 Without an address the joiner browses up to 10 s for a member with `p=1`, refuses when more
 than one announces a window, and tries that member's addresses in order, at most three,
 stopping after the first attempt whose code was spent. A whole join is bounded by 2 minutes
 plus the browse time.
 
-### A phone joins a computer's group
+#### A phone joins a computer's group
 
 A phone joins a group that a computer created through the group's root, as a computer joins
 (the joiner dials, above): `cbb pair -admin` on the root opens a window that may make admins,
@@ -1117,7 +1265,7 @@ connection, never becomes an admin; the root computer also refuses a key its rec
 it joins, the root names its admin key in a `handover` record (`cbb handover`, section 10,
 "Handing the group over"), and its claim takes effect at once.
 
-### The joiner listens (for the phone)
+#### The joiner listens (for the phone)
 
 `cbb pair` without `-code`, on a device in no group, turns the direction round, so that the device that scans
 the QR code dials the computer, and nothing is announced:
@@ -3918,6 +4066,132 @@ frames (section 4, "Content"); `records`, `admin` (section 10); `tunnel`, `hubs`
 | A relay's own tunnel address | `fd00:cbb::1` | 14 |
 | Join QR code | `cbb://join?code=...&addr=...&fp=...` | 6, 7 |
 | Remote invitation | `cbb://invite#...`, file `.cbbinvite` | 12 |
+
+### Bounds
+
+Every limit of the 0.6 format, from the core's registry (`core/src/bounds.rs`, written out as
+`testdata/format/bounds.json`). The class says what a later version may do with it: a
+**frozen** number never changes, because readers depend on it; a **stated** limit is the
+writer's promise to the person and may be raised only up to what the previous version's
+reader takes; a **reader** budget is one device's own and never on the wire. "Refused as"
+names the rule a reader gives one past the bound (empty for a budget nothing reads back).
+Where the text of this document names a bound, it writes the registry's name with its value,
+as `records::MAX_SEEN` (1024); a test of the core checks every such name and value, and this
+table, against the registry (`CBB_WRITE_BOUNDS=1` writes the table again).
+
+<!-- bounds:begin -->
+| Bound | Value | Class | Widest case | Refused as |
+|---|---|---|---|---|
+| `format::cbor::MAX_DEPTH` | 8 | frozen | an item inside 8 containers | `cbor/depth` |
+| `format::cbor::MAX_COUNT` | 65535 | frozen | 65 535 elements of one array or map | `cbor/count` |
+| `format::cbor::MAX_INT` | 9223372036854775807 | frozen | 2^63 − 1 | `cbor/int-range` |
+| `format::frame::LIMIT_MEMBER` | 7340032 | frozen | message 67 or one part of a set, 448 · 16 KiB | `frame/grid` |
+| `format::frame::LIMIT_PAIRING` | 1048576 | frozen | a pairing message before the code is confirmed | `frame/grid` |
+| `format::frame::LIMIT_LEAF` | 16384 | frozen | a leaf's widest message | `frame/grid` |
+| `format::container::MAX_SIG` | 72 | frozen | two integers of 33 bytes | `container/template` |
+| `format::envelope::MAX_SIG2` | 8192 | frozen | ML-DSA-87 and a later algorithm | `env/sig2` |
+| `format::envelope::MAX_SIG2_HEAD` | 32768 | frozen | K2's SLH-DSA-SHA2-128s, 7856 bytes, and a larger set | `env/sig2` |
+| `format::copy::WRAP_SIZE` | 1168 | frozen | a wrap to an X-Wing key | `copy/shape` |
+| `format::copy::MIN_WRAP` | 49 | frozen | K and its tag after one byte of encapsulation | `copy/shape` |
+| `format::copy::MAX_READERS` | 256 | frozen | every device of the widest group | `copy/readers` |
+| `copies::MAX_RESEALS` | 2 | reader | two asks of one reader | `reseal/limit` |
+| `copies::STATEMENT_MAX_AGE_MS` | 3024000000 | frozen | a device away for 35 days |  |
+| `copies::fresh::ALLOWANCE_MS` | 300000 | frozen | an origin's clock 5 minutes ahead; past it a copy is the verdict `ahead` (not written, not the newest), which depends on the reader's clock, so its vectors give the clock | `ahead` |
+| `copies::fresh::MAX_SECRETS` | 1024 | reader | secrets listed by ID above the floor |  |
+| `copies::fresh::MAX_ORIGINS` | 1024 | reader | origins with a newest time |  |
+| `content::MAX_STATE` | 4096 | frozen | a device's state | `content/data` |
+| `media::MAX_NAME` | 765 | stated | a file name of 255 characters of 3 bytes | `content/manifest` |
+| `media::MAX_PATH` | 16384 | stated | one path | `content/manifest` |
+| `media::MAX_PATHS` | 2097152 | stated | every path of a manifest | `content/manifest` |
+| `media::MAX_MEDIA` | 1073741824 | stated | files of 1 GiB | `content/manifest` |
+| `media::MAX_PARTS` | 10000 | frozen | parts of a manifest | `content/manifest` |
+| `media::MAX_TYPES` | 8 | frozen | types of one media copy | `content/manifest` |
+| `media::MAX_ALT_TEXT` | 262144 | stated | an image's text | `content/text` |
+| `commands::MAX_LIFETIME_MS` | 600000 | frozen | a later writer's command of 600 s | `commands/expires` |
+| `commands::WRITE_LIFETIME_MS` | 30000 | stated | every 0.6 writer's command |  |
+| `commands::SKEW_MS` | 60000 | frozen | a commander's clock a minute off | `commands/time` |
+| `commands::MAX_BODY` | 65536 | frozen | a command with its widest orders | `env/size` |
+| `commands::MAX_PASTE_BODY` | 2097152 | frozen | a paste of 1 MiB of text | `env/size` |
+| `commands::DEFAULT_LIFE_MS` | 3024000000 | reader | a guarded leaf's grant that says nothing |  |
+| `commands::MAX_NONCES` | 16 | reader | one-time numbers out at once | `commands/nonce` |
+| `commands::orders::MAX_PASTE_TEXT` | 1048576 | stated | a paste's text | `orders/paste` |
+| `commands::orders::MAX_TYPED_TEXT` | 16384 | stated | text typed out on a member | `orders/paste` |
+| `commands::orders::MAX_MUTE_MS` | 2592000000 | stated | a mute of 30 days | `orders/mute` |
+| `commands::orders::MAX_ARGS` | 4096 | frozen | a device command's arguments | `orders/device` |
+| `format::grant::MAX_GRANT` | 4096 | frozen | 16 commanders, 16 readers and a later key's fields | `env/size` |
+| `format::grant::MAX_LIFE_MS` | 3456000000 | stated | a guarded grant of 40 days | `grants/life` |
+| `format::grant::MAX_READERS` | 16 | stated | a leaf's readers | `grants/readers` |
+| `format::grant::MAX_COMMANDERS` | 16 | stated | a leaf's commanders | `grants/commanders` |
+| `format::grant::MAX_NEIGHBORS` | 8 | stated | a leaf's neighbours | `grants/neighbors` |
+| `format::grant::MAX_RECOVERY` | 64 | frozen | the group's 64 recovery records | `grants/recovery` |
+| `records::statement::MAX_STATEMENT_BODY` | 32768 | frozen | X-Wing and the seal keys of later algorithms | `env/size` |
+| `records::statement::KEYS_PER_MESSAGE` | 256 | frozen | a message `keys` of a full group | `keys-message/list` |
+| `beacon::MAX_BEACON` | 512 | frozen | a beacon body | `env/size` |
+| `beacon::MAX_COUNT` | 7168 | frozen | the records of a full set | `beacons/count` |
+| `beacon::ALLOWANCE_MS` | 300000 | frozen | a sender's clock 5 minutes ahead | `beacons/time` |
+| `beacon::MAX_AGE_MS` | 3024000000 | frozen | a beacon as old as a statement | `beacons/time` |
+| `blind::card::MAX_BODY` | 16384 | frozen | a card | `env/size` |
+| `blind::card::MAX_ENDPOINTS` | 8 | frozen | a server's endpoints | `card/endpoints` |
+| `blind::card::MAX_KEYS` | 4 | frozen | a server's keys | `card/keys` |
+| `blind::credential::MAX_BODY` | 16384 | frozen | a credential | `env/size` |
+| `records::MAX_BODY` | 16384 | frozen | a record body | `env/size` |
+| `records::MAX_CHECKPOINT_BODY` | 262144 | frozen | a checkpoint naming a full set | `env/size` |
+| `records::MAX_SEQ` | 2147483647 | frozen | 2^31 − 1 | `records/seq` |
+| `records::MAX_SEEN` | 1024 | reader | a `seen` list; the body's bound comes first: 1024 of the smallest entries pass MAX_BODY, so the count is a reader's guard that already stands if a later version widens the body | `records/revoke/seen` |
+| `records::body::MAX_RECOVERY` | 64 | stated | 64 recovery records for the group's life | `records/recovery/seq` |
+| `records::body::MAX_KEYS` | 256 | frozen | keys of a settings record | `records/revoke/keys` |
+| `records::body::MAX_HUBS` | 16 | stated | hubs of a group | `records/hubs/hubs` |
+| `records::body::MAX_SERVERS` | 16 | stated | servers of a group | `records/settings/servers` |
+| `records::body::MIN_INCOMING_MS` | 5000 | frozen | the shortest incoming window | `records/copies/incoming_ms` |
+| `records::body::MAX_INCOMING_MS` | 3600000 | frozen | the longest incoming window | `records/copies/incoming_ms` |
+| `records::ADMIN_KEYS_MAX` | 16 | stated | the owner's cap of 16 admins |  |
+| `records::MAX_DEVICES` | 256 | stated | 256 devices with a device record |  |
+| `records::MAX_ROOT_RECORDS` | 1536 | frozen | a full checkpoint, a second waiting one and the devices |  |
+| `records::MAX_ADMIN_RECORDS` | 256 | frozen | one admin's records |  |
+| `records::CUT_ROOTS_RESERVE` | 1536 | frozen | the roots before the current one |  |
+| `bounds::LIST_FIELD` | 52228 | frozen | a change's list as a field of `records` | `records/lists` |
+| `records::LIST_MAX` | 1536 | frozen | a change's list naming the whole reserve | `records/lists` |
+| `records::MAX_RECORDS` | 7168 | frozen | the set's room in units of 512 bytes |  |
+| `records::MAX_SET_BYTES` | 3670016 | frozen | the room's bytes |  |
+| `records::MAX_SET_SIG2_BYTES` | 134217728 | reader | both rooms, a waiting root and the settled records, each twice signed |  |
+| `records::HEAD_SIG2_ALLOWANCE` | 33280 | frozen | K2's signature on a head with its head |  |
+| `records::ENVELOPE_ALLOWANCE` | 83 | frozen | the envelope beyond a record's body |  |
+| `records::MAX_PATH` | 65 | frozen | the first root and one per recovery record |  |
+| `records::MAX_NEWER` | 16 | reader | held records a state lists |  |
+| `records::MAX_NOTICES` | 256 | reader | notices a set keeps |  |
+| `records::eval::MAX_IGNORED` | 64 | reader | records a state lists in ignored |  |
+| `records::set::REISSUE_KEPT_BACK` | 256 | frozen | the new root's room left to its other first records |  |
+| `records::set::MISSING_ROUNDS` | 16 | reader | rounds a member asks for a missing record |  |
+| `records::sync::PART_RECORDS` | 4096 | frozen | record envelopes of one part | `records/records` |
+| `records::sync::HAVE_IDS` | 4096 | frozen | IDs of one `have` |  |
+| `records::sync::PART_BYTES` | 7323648 | frozen | a part's items in one frame |  |
+| `join::intro::MAX_RECORDS` | 32 | frozen | an intro's records | `intro/size` |
+| `join::intro::MAX_BYTES` | 16384 | frozen | an intro's records' bytes | `intro/size` |
+| `join::intro::MAX_HEADS` | 65 | frozen | a head for each recovery seq and the first | `intro/size` |
+| `join::intro::MAX_PER_WINDOW` | 4 | reader | intros of one address in a window |  |
+| `join::intro::MAX_PER_NETWORK` | 256 | reader | intros of one network in a window |  |
+| `join::intro::WINDOW_MS` | 60000 | reader | the window |  |
+| `join::intro::MAX_ADDRESSES` | 256 | reader | addresses a limiter tracks |  |
+| `join::invitation::MAX_ENDPOINTS` | 8 | frozen | endpoints of one path | `invite/path` |
+| `join::invitation::MAX_PATHS` | 4 | frozen | paths of an invitation | `invite/shape` |
+| `join::invitation::MAX_FAILURES` | 3 | reader | failed attempts before an open invitation closes |  |
+| `join::invitation::ATTEMPT_MS` | 30000 | reader | the machine's steps of one attempt |  |
+| `join::invitation::ANSWER_MS` | 600000 | reader | the person comparing the codes |  |
+| `join::waiting::MAX_WAIT_MS` | 86400000 | frozen | a request held a day | `waiting/requests` |
+| `join::waiting::MAX_REQUESTS` | 16 | frozen | requests by guest paths | `waiting/requests` |
+| `join::waiting::MAX_PER_INVITATION` | 2 | reader | requests of one invitation |  |
+| `join::waiting::MAX_HOME` | 32 | frozen | requests from home | `waiting/requests` |
+| `join::waiting::MAX_MESSAGE` | 48 | frozen | requests of one `waiting` | `waiting/requests` |
+| `join::welcome::STATEMENTS_BUDGET` | 2097152 | frozen | a Welcome's statements and credentials |  |
+| `join::welcome::RECORDS_BUDGET` | 5177344 | frozen | a Welcome's records when the set rides in it |  |
+| `join::welcome::MAX_PARTS` | 64 | frozen | the widest set in about 14 parts | `welcome/parts` |
+| `join::welcome::MAX_PARTS_BYTES` | 101039910 | frozen | what for_peer gives a device at the widest | `welcome/parts` |
+| `join::welcome::PART_MS` | 120000 | reader | a 7 MiB part at 0.49 Mbit/s | `welcome/late` |
+| `join::welcome::PARTS_MS` | 1500000 | reader | the widest parts at 0.54 Mbit/s | `welcome/late` |
+| `keystore::AHEAD_MS` | 86400000 | reader | a newest epoch a day ahead |  |
+| `store::HEADER` | 12 | frozen | a store frame's header |  |
+| `sheet::MAX_INPUT` | 512 | reader | a sheet typed with spaces and line ends | `length` |
+<!-- bounds:end -->
 
 ## 20. Security considerations
 
