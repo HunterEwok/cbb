@@ -271,3 +271,37 @@ pub fn read_content(b: &[u8]) -> Result<Value<'_>, Rule> {
     }
     Ok(v)
 }
+
+#[cfg(test)]
+mod bound_tests {
+    use alloc::vec;
+
+    use super::*;
+
+    /// A header names at most MAX_READERS readers (the registry,
+    /// `bounds.rs`); one more is `copy/readers`.
+    #[test]
+    fn a_header_reads_at_most_max_readers() {
+        let ids: Vec<[u8; 16]> = (0..=MAX_READERS as u32)
+            .map(|i| {
+                let mut id = [0u8; 16];
+                id[12..].copy_from_slice(&i.to_be_bytes());
+                id
+            })
+            .collect();
+        let header = |n: usize| {
+            let readers = ids[..n].iter().map(|id| Value::Array(vec![Value::Bytes(id), Value::Uint(1)])).collect();
+            Value::Map(vec![
+                (1, Value::Bytes(&[1; 16])),
+                (2, Value::Bytes(&[2; 16])),
+                (3, Value::Array(vec![Value::Uint(5), Value::Uint(0)])),
+                (HDR_READERS, Value::Array(readers)),
+                (6, Value::Bytes(&[6; 32])),
+            ])
+            .encode()
+        };
+        let read = |b: &[u8]| check_header(&cbor::decode(b).unwrap());
+        assert_eq!(read(&header(MAX_READERS)), Ok(MAX_READERS));
+        assert_eq!(read(&header(MAX_READERS + 1)), Err(RULE_READERS));
+    }
+}

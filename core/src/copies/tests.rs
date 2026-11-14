@@ -741,3 +741,22 @@ fn a_leaf_checks_a_copy_by_the_origins_it_knows() {
     wrong.insert(w.laptop.key.clone(), RIGHT_SEND, false);
     assert_eq!(check(&v, &wrong).err(), Some(RULE_ORIGIN));
 }
+
+/// Marks keep at most MAX_ORIGINS origins (the registry, `bounds.rs`): the
+/// oldest gives way, and saved marks with one more are not read back.
+#[test]
+fn marks_keep_at_most_max_origins() {
+    let mut m = Marks::default();
+    for i in 0..=fresh::MAX_ORIGINS as u64 {
+        let mut o = [0u8; 16];
+        o[..8].copy_from_slice(&i.to_be_bytes());
+        m.wrote(&crate::records::key::DeviceId(o), Timestamp { wall: (T0 + i) as i64, logical: 0 });
+    }
+    assert_eq!(m.written.len(), fresh::MAX_ORIGINS);
+    assert!(!m.written.contains_key(&crate::records::key::DeviceId([0; 16])));
+    let back = Marks::decode(&m.encode()).unwrap();
+    assert_eq!(back.written.len(), fresh::MAX_ORIGINS);
+    let mut wide = m.clone();
+    wide.written.insert(crate::records::key::DeviceId([0xff; 16]), Timestamp { wall: T0 as i64, logical: 0 });
+    assert!(Marks::decode(&wide.encode()).is_err());
+}

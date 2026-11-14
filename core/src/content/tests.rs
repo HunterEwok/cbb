@@ -184,3 +184,26 @@ fn ttl_names_one_of_four_lifetimes() {
         assert_eq!(c.ttl_ms(), Some(*ms));
     }
 }
+
+/// A media copy's plain-text alternative takes at most MAX_ALT_TEXT bytes
+/// (the registry, `bounds.rs`); one more is `content/text`.
+#[test]
+fn a_media_text_at_its_bound() {
+    use crate::media::{MAX_ALT_TEXT, Manifest, Part};
+    let media = |n: usize| Content {
+        kind: TYPE_MEDIA,
+        text: Some("t".repeat(n)),
+        manifest: Some(Manifest {
+            size: 1,
+            parts: alloc::vec![Part {
+                kind: "image/png".into(),
+                size: 1,
+                sha256: Some(alloc::vec![9; 32]),
+                ..Part::default()
+            }],
+        }),
+        ..Content::default()
+    };
+    assert_eq!(media(MAX_ALT_TEXT).check(), Ok(()));
+    assert_eq!(media(MAX_ALT_TEXT + 1).check(), Err(RULE_TEXT));
+}

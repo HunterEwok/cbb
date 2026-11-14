@@ -95,7 +95,7 @@ pub static WELCOME: Table = Table {
 
 /// A change of root's list in a message: its count and up to
 /// [`crate::records::LIST_MAX`] IDs of 34 bytes each.
-const LIST: Ty = Ty::BytesUpTo(4 + 34 * crate::records::LIST_MAX);
+const LIST: Ty = Ty::BytesUpTo(crate::bounds::LIST_FIELD);
 
 /// Message `records` (t 5, format 9.2): record envelopes in the order a
 /// receiver takes them, and the lists the recovery records among them name
