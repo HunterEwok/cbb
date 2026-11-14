@@ -98,6 +98,21 @@ fn command(c: &mut dyn Card, ins: u8, p1: u8, p2: u8, mut data: &[u8]) -> Result
     transmit(c, &apdu)
 }
 
+/// Yubico's factory management key, which every YubiKey leaves the factory
+/// with: the bytes 1 to 8, three times. It is public, printed in Yubico's
+/// documentation, and no secret; cbb uses it only to find out whether a
+/// card still has it (`piv::recovery`). Computed here, once for all of
+/// cbb's Rust, rather than written out.
+pub const fn factory_management_key() -> [u8; 24] {
+    let mut k = [0u8; 24];
+    let mut i = 0;
+    while i < 24 {
+        k[i] = (i % 8) as u8 + 1;
+        i += 1;
+    }
+    k
+}
+
 /// Selects the PIV application.
 pub fn select(c: &mut dyn Card) -> Result<()> {
     match command(c, 0xa4, 0x04, 0x00, AID)? {

@@ -12,9 +12,16 @@
 //! value. Every refusal comes before the first write; 0.6 has no
 //! overwrite, reset or delete. A card that holds cbb's object is opened,
 //! never sealed again. The management key, which GENERATE and PUT DATA
-//! need, is used as the card keeps it: the default as it is, a
-//! PIN-protected one read from PRINTED (5FC109), a changed one asked of the
-//! person; a PIN-derived one is refused. cbb never changes it.
+//! need, is used as the card keeps it: a PIN-protected one read from
+//! PRINTED (5FC109), a changed one asked of the person; a PIN-derived one
+//! is refused. The factory default is publicly known, so with it anyone
+//! holding the card could write over cbb's slot and object without the
+//! PIN: `inspect` tells it before anything is written, and `seal` replaces
+//! it, only when the person agreed, by a random key of the same kind kept
+//! PIN-protected (Yubico's PIN-protected mode: the key in PRINTED, the flag
+//! in ADMIN DATA). That is the one step in which cbb changes the
+//! management key; without consent the card is sealed as it is, and the
+//! warning goes back to the caller.
 //!
 //! Sources: Yubico's "PIV data objects", "The PIV PIN, PUK, and management
 //! key", "PIV PIN-only mode" (docs.yubico.com, YubiKey SDK user's manual)
@@ -39,6 +46,12 @@ pub const HOLDS_ONE: &str = "this YubiKey already holds a recovery key: cbb open
 pub const NONE: &str = "this YubiKey holds no recovery key of cbb";
 pub const PIN_DERIVED: &str = "set a PIN-protected management key in YubiKey Manager first";
 pub const KEY_TRIES: &str = "three wrong management keys: cbb stops here";
+/// What the caller shows when the card still has the factory management
+/// key, before asking whether cbb may replace it.
+pub const DEFAULT_KEY: &str = "this YubiKey still has its factory management key, which anyone can look up: whoever holds the card could erase or overwrite the recovery key on it without the PIN. cbb can replace it with a random key that the PIN protects; your other uses of the card that need the management key will then ask for the PIN";
+/// What the caller shows beside the sheet: the two copies back each other.
+pub const DUPLICATES: &str = "the YubiKey and the recovery sheet hold the same recovery key: if one is lost or spoiled, the other still recovers the group; keep both, in different places";
+pub const PRINTED_TAKEN: &str = "this YubiKey's place for a PIN-protected management key holds something else: cbb leaves its management key as it is";
 pub const NOT_AS_ASKED: &str =
     "the YubiKey did not make the key as cbb asks (the PIN and a touch every time): nothing more is written to it";
 
@@ -51,8 +64,6 @@ const ALG_AES192: u8 = 0x0a;
 const ALG_AES256: u8 = 0x0c;
 /// The management key's slot.
 const SLOT_MGMT: u8 = 0x9b;
-/// The default management key, of either algorithm.
-const DEFAULT_KEY: [u8; 24] = [1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8];
 /// Yubico's ADMIN DATA and PRINTED objects.
 const ADMIN_DATA: [u8; 3] = [0x5f, 0xff, 0x00];
 const PRINTED: [u8; 3] = [0x5f, 0xc1, 0x09];
@@ -240,17 +251,17 @@ fn authenticate(c: &mut dyn Card, alg: u8, key: &[u8]) -> Result<bool> {
 
 /// Authenticates with the management key as the card keeps it; ask gives
 /// a changed key, typed by the person, for try 1, 2 or 3, None if they
-/// give up. Returns whether the key is still the default.
-fn unlock(c: &mut dyn Card, ask: &mut dyn FnMut(u8) -> Option<Zeroizing<Vec<u8>>>) -> Result<bool> {
+/// give up. Returns the key's algorithm when it is still the default.
+fn unlock(c: &mut dyn Card, ask: &mut dyn FnMut(u8) -> Option<Zeroizing<Vec<u8>>>) -> Result<Option<u8>> {
     match management(c)? {
-        Management::Default(alg) => match authenticate(c, alg, &DEFAULT_KEY)? {
-            true => Ok(true),
+        Management::Default(alg) => match authenticate(c, alg, &super::factory_management_key())? {
+            true => Ok(Some(alg)),
             false => Err(Error::msg("the YubiKey turned down its default management key")),
         },
         Management::Protected(alg) => {
             let key = protected_key(c)?;
             match authenticate(c, alg, &key)? {
-                true => Ok(false),
+                true => Ok(None),
                 false => Err(Error::msg("the YubiKey turned down its PIN-protected management key")),
             }
         }
@@ -258,7 +269,7 @@ fn unlock(c: &mut dyn Card, ask: &mut dyn FnMut(u8) -> Option<Zeroizing<Vec<u8>>
             for n in 1..=3 {
                 let Some(key) = ask(n) else { return Err(Error::msg("no management key given")) };
                 if authenticate(c, alg, &key)? {
-                    return Ok(false);
+                    return Ok(None);
                 }
             }
             Err(Error::msg(KEY_TRIES))
@@ -274,26 +285,164 @@ fn new_point(b: &[u8]) -> Option<Vec<u8>> {
     read_tlv(v, 0x86).map(|(p, _)| p.to_vec())
 }
 
-/// What sealing did.
+/// What the card is like before sealing (`inspect`).
 #[derive(Debug, PartialEq, Eq)]
-pub struct Sealed {
-    /// The card's management key is still the default: the app says once
-    /// that a changed, PIN-protected one is safer.
+pub struct Inspected {
+    /// The card still has the factory management key: the caller shows
+    /// `DEFAULT_KEY` and asks whether cbb may replace it.
     pub default_key: bool,
 }
 
-/// Seals secret onto a YubiKey: the checks, the management key, then
-/// GENERATE in slot 95 (checked by GET METADATA), then PUT DATA of 5FC121,
-/// read back.
+/// The checks of sealing, and how the card keeps its management key, with
+/// nothing written: the caller runs it first, shows `DEFAULT_KEY` when
+/// the key is the default and passes the person's answer to `seal`.
+pub fn inspect(c: &mut dyn Card, pin: &str) -> Result<Inspected> {
+    may_seal(c, pin)?;
+    Ok(Inspected { default_key: matches!(management(c)?, Management::Default(_)) })
+}
+
+/// What sealing did.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Sealed {
+    /// The card's management key is still the factory one: the person did
+    /// not agree to replace it, or cbb could not (`warning`). The caller
+    /// shows the warning.
+    pub default_key: bool,
+    /// cbb replaced the factory key with a PIN-protected random one.
+    pub replaced: bool,
+    /// What the caller shows after sealing, when the card keeps its
+    /// factory key: `DEFAULT_KEY`, or `PRINTED_TAKEN` when cbb would have
+    /// replaced it but the card's place for it holds something else.
+    pub warning: Option<&'static str>,
+}
+
+/// SET MANAGEMENT KEY (Yubico's INS FF), no touch: the algorithm, then 9B
+/// and the new key.
+fn set_management_key(c: &mut dyn Card, alg: u8, key: &[u8]) -> Result<()> {
+    let len = u8::try_from(key.len()).map_err(|_| Error::msg("a management key is at most 32 bytes"))?;
+    let data = [&[alg, SLOT_MGMT, len][..], key].concat();
+    match command(c, 0xff, 0xff, 0xff, &data)? {
+        (_, 0x9000) => Ok(()),
+        (_, sw) => Err(refused(sw)),
+    }
+}
+
+fn put_data(c: &mut dyn Card, object: &[u8; 3], value: &[u8]) -> Result<()> {
+    let put = [tlv(0x5c, object), tlv(0x53, value)].concat();
+    match command(c, 0xdb, 0x3f, 0xff, &put)? {
+        (_, 0x9000) => Ok(()),
+        (_, sw) => Err(refused(sw)),
+    }
+}
+
+/// ADMIN DATA with the flag "the management key is PIN-protected" set and
+/// every other field kept: 53 { 80 { 81 flags, ... } }.
+fn admin_data_protected(old: Option<&[u8]>) -> Result<Vec<u8>> {
+    let bad = || Error::msg("the YubiKey's admin data does not parse");
+    let mut fields: Vec<(u8, Vec<u8>)> = Vec::new();
+    if let Some(old) = old {
+        let (mut inner, _) = read_tlv(old, 0x80).ok_or_else(bad)?;
+        while let Some(&tag) = inner.first() {
+            let (v, r) = read_tlv(inner, tag).ok_or_else(bad)?;
+            fields.push((tag, v.to_vec()));
+            inner = r;
+        }
+    }
+    match fields.iter_mut().find(|(t, _)| *t == 0x81) {
+        Some((_, v)) if !v.is_empty() => v[0] |= 0x02,
+        Some((_, v)) => *v = vec![0x02],
+        None => fields.insert(0, (0x81, vec![0x02])),
+    }
+    let inner: Vec<u8> = fields.iter().flat_map(|(t, v)| tlv(*t, v)).collect();
+    Ok(tlv(0x80, &inner))
+}
+
+/// Replaces the factory management key by a random key of the same kind,
+/// kept PIN-protected, while the card is authenticated with the factory
+/// key and the PIN verified. The writes go in the order that leaves the
+/// card usable if one fails: PRINTED with the new key, then ADMIN DATA's
+/// flag, then the key itself. Until the last write the card still answers
+/// to its factory key, which GET METADATA reports, so the key cbb reads
+/// from PRINTED is used only after the card took it; the last write is
+/// one command. If it fails, PRINTED and ADMIN DATA are put back as they
+/// were (best effort; the error says when that fails too). Afterwards cbb
+/// authenticates again with the new key.
+/// Returns false, with nothing written, when PRINTED holds anything but a
+/// PIN-protected key of an earlier try.
+fn protect(c: &mut dyn Card, alg: u8) -> Result<bool> {
+    if let Some(old) = get_data(c, &PRINTED)? {
+        let ours = read_tlv(&old, 0x88)
+            .and_then(|(v, _)| read_tlv(v, 0x89))
+            .is_some_and(|(k, _)| block(alg).is_some() && !k.is_empty());
+        if !ours {
+            return Ok(false);
+        }
+    }
+    let admin = get_data(c, &ADMIN_DATA)?;
+    if let Some(a) = admin.as_deref() {
+        // A PIN-derived key's salt: not a card cbb sets up.
+        let (mut inner, _) = read_tlv(a, 0x80).ok_or_else(|| Error::msg("the YubiKey's admin data does not parse"))?;
+        while let Some(&tag) = inner.first() {
+            let Some((_, r)) = read_tlv(inner, tag) else { break };
+            if tag == 0x82 {
+                return Ok(false);
+            }
+            inner = r;
+        }
+    }
+    let len = match alg {
+        ALG_3DES | ALG_AES192 => 24,
+        ALG_AES128 => 16,
+        ALG_AES256 => 32,
+        _ => return Ok(false),
+    };
+    let mut key = Zeroizing::new(vec![0u8; len]);
+    getrandom::fill(key.as_mut_slice()).map_err(|e| Error::msg(format!("no randomness: {e}")))?;
+    let old_printed = Zeroizing::new(get_data(c, &PRINTED)?);
+    let printed = Zeroizing::new(tlv(0x88, &tlv(0x89, &key)));
+    put_data(c, &PRINTED, &printed)?;
+    put_data(c, &ADMIN_DATA, &admin_data_protected(admin.as_deref())?)?;
+    if let Err(e) = set_management_key(c, alg, &key) {
+        // The card kept its factory key: PRINTED and ADMIN DATA go back to
+        // what they held, so that no other tool takes the card for
+        // PIN-protected. An empty value deletes an object.
+        let back = put_data(c, &PRINTED, old_printed.as_deref().unwrap_or(&[]))
+            .and_then(|()| put_data(c, &ADMIN_DATA, admin.as_deref().unwrap_or(&[])));
+        return Err(match back {
+            Ok(()) => e,
+            Err(b) => Error::msg(format!(
+                "{e}; the YubiKey keeps its factory management key, but cbb could not put back its PIN-protected key's place ({b}): another tool may take the card for PIN-protected and ask for the key, which is still the factory one"
+            )),
+        });
+    }
+    if !authenticate(c, alg, &key)? {
+        return Err(Error::msg("the YubiKey turned down the management key cbb just gave it"));
+    }
+    Ok(true)
+}
+
+/// Seals secret onto a YubiKey: the checks, the management key (replaced
+/// first when it is the factory one and replace_default says the person
+/// agreed), then GENERATE in slot 95 (checked by GET METADATA), then PUT
+/// DATA of 5FC121, read back.
 pub fn seal(
     c: &mut dyn Card,
     pin: &str,
     secret: &[u8; 32],
     ask: &mut dyn FnMut(u8) -> Option<Zeroizing<Vec<u8>>>,
+    replace_default: bool,
 ) -> Result<Sealed> {
     may_seal(c, pin)?;
-    let default_key = unlock(c, ask)?;
-    // The first write: the card's key.
+    let mut out = Sealed { default_key: false, replaced: false, warning: None };
+    if let Some(alg) = unlock(c, ask)? {
+        if replace_default && protect(c, alg)? {
+            out.replaced = true;
+        } else {
+            out.default_key = true;
+            out.warning = Some(if replace_default { PRINTED_TAKEN } else { DEFAULT_KEY });
+        }
+    }
+    // The first write of the recovery key: the card's key.
     let spec = tlv(0xac, &[tlv(0x80, &[ALG_P256]), tlv(0xaa, &[PIN_ALWAYS]), tlv(0xab, &[TOUCH_ALWAYS])].concat());
     let made = match command(c, 0x47, 0x00, yk::SLOT, &spec)? {
         (d, 0x9000) => d,
@@ -317,15 +466,11 @@ pub fn seal(
     };
     let object = yk::seal(secret, &point, &e).map_err(|r| Error::msg(r.message()))?;
     drop(e);
-    let put = [tlv(0x5c, &yk::OBJECT), tlv(0x53, &object)].concat();
-    match command(c, 0xdb, 0x3f, 0xff, &put)? {
-        (_, 0x9000) => {}
-        (_, sw) => return Err(refused(sw)),
-    }
+    put_data(c, &yk::OBJECT, &object)?;
     if get_data(c, &yk::OBJECT)?.as_deref() != Some(object.as_slice()) {
         return Err(Error::msg("the YubiKey does not read back what cbb wrote"));
     }
-    Ok(Sealed { default_key })
+    Ok(out)
 }
 
 /// Opens the secret on a YubiKey: its key in slot 95 must be one cbb asked

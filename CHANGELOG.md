@@ -15,7 +15,10 @@ All notable changes to cbb are documented in this file. The format follows
   card makes in retired PIV slot 95, which needs the PIN and a touch for every use, and kept
   in the PIN-protected object 5FC121 (`cbb_core::sheet::yubikey`, the card's commands in
   `cbb`). cbb never overwrites anything on the card: a key or a value already in either place
-  stops it before the first write, and it never changes the card's management key.
+  stops it before the first write. A card still on its factory management key, which anyone
+  could use to spoil the recovery key without the PIN, is named before anything is written,
+  and cbb replaces that key by a random PIN-protected one only when the person agrees; without
+  consent it seals as it is and keeps the warning.
 - One table of the format's bounds (`cbb_core::bounds`, `testdata/format/bounds.json`): each
   limit with its value, whether a later version may change it, the widest case it allows and
   the rule that refuses one more. Tests keep it complete: every number of the format is in it,
