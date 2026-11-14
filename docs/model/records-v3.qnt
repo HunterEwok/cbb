@@ -494,6 +494,11 @@ module records_v3 {
   // the last root's record naming it. No kind is exempt; the honest writer signs a removal,
   // freeze or thaw only above such a record (its ack).
   pure val SEEN_POS = false
+  // POS_HEADS_COUNTING (a fix to try for branch (b), off): the honest checkpoint names for an
+  // admin key only a head that counts at its writer, never a void record.
+  pure val POS_HEADS_COUNTING = false
+  // (Void records still link their line; the model's rooms charge them like any held record
+  // until a checkpoint leaves them out: the core does not charge them.)
   // GRANT_ABOVE (records' refinement of ROOT_WAITS, 11-14 21:37Z): a removal's settle does not
   // wait for an admin key named only by records of the removal's root above its seq (who holds
   // the grant holds the removal, the claim checked by grantHoldsRemoval).
@@ -1375,8 +1380,13 @@ module records_v3 {
       if (not(adm.keys().contains(r.signer))) false
       else if (SEEN_HOLDS_ROOT and not(Set("revoke", "freeze", "thaw").contains(r.kind))
         and not(adminRecs.exists(g => g.target == r.signer and g.signer == cur and inLine(lineOf(r.seen, cur), g.id)))) false
+      // (SEEN_POS, the core's final wording: (a) r or a record of its key below it on its line has
+      // seen holding the last root at or above the seq of any record of that root naming the key,
+      // or (b) r sits at or above a record the counting checkpoint names for its key, a head or a
+      // kept record.)
       else if (SEEN_POS and not(rs.exists(b => b.signer == r.signer and b.seq <= r.seq and inLine(r.line, b.id)
-        and adminRecs.exists(g => g.target == r.signer and g.signer == cur and inLine(lineOf(b.seen, cur), g.id))))) false
+          and adminRecs.exists(g => g.target == r.signer and g.signer == cur and lineOf(b.seen, cur).length() >= g.seq))
+        or anchors.exists(i => inLine(r.line, i)))) false
       else if (r.kind == "device") {
         val first = admittedBy(r.target)
         not(rootHas(r.target)) and (first == r.id or (first != NONE and first != -1 and has(r.signer, "manage")
@@ -1725,7 +1735,10 @@ module records_v3 {
     val r1 = rec(nextId, k, base.append(nextId), kind, target,
       if (isCp and not(extraKeep.subseteq(honestKeep))) "bent" else if (warned) "warned" else kit, targetRec,
       seen,
-      if (isCp) seen else Map(),
+      // (POS_HEADS_COUNTING: an admin key's head is its newest record that counts at the writer.)
+      if (isCp and POS_HEADS_COUNTING) seen.keys().mapBy(x => if (x == k or ROOT_KEYS.contains(x)) seen.get(x)
+        else headLine(recsOf(vh.counting, db), x))
+      else if (isCp) seen else Map(),
       if (isCp) honestKeep.union(extraKeep) else Set(),
       units)
     // (I): it follows its key's last record the writer's set keeps.
@@ -1947,7 +1960,8 @@ module records_v3 {
     def spareFor(a: Key): Key = {
       val sps = recsOf(v.counting, db).filter(y => y.kind == "ack" and y.signer == a and y.target != "").map(y => y.target)
         .filter(t => not(db.keys().exists(i => db.get(i).kind == "admin" and db.get(i).target == t)))
-      if (not(SPARE) or v.path != before or sps.size() != 1) "" else sps.fold("", (z, t) => t)
+      // (Never for a frozen admin.)
+      if (not(SPARE) or v.path != before or sps.size() != 1 or v.frozen.contains(a)) "" else sps.fold("", (z, t) => t)
     }
     // (CORE_LIST_FILTER: the core's list today drops a removal of keys no held record names.)
     def unnamedRm(r: Record): bool = CORE_LIST_FILTER and rootRemoval(r)
@@ -1985,10 +1999,17 @@ module records_v3 {
     // (REISSUE_STATE: the state Ys, oldest first while they fit beside the Zs and a checkpoint.)
     val ySrcAll = if (not(REISSUE_STATE) or mode != "honest") [] else {
       val cps = beforeRecs.filter(x => x.kind == "copies")
-      range(1, nextId).select(i => db.keys().contains(i) and beforeRecs.contains(db.get(i)) and {
+      // (LAST_ROOT_ONLY: an admin's freeze that counts is carried too, as the new root's own.)
+      val heldRecs = recsOf(s.recs, db).filter(r => v.counting.contains(r.id) and not(leftOut.contains(r)))
+      range(1, nextId).select(i => db.keys().contains(i) and {
+        val x = db.get(i)
+        beforeRecs.contains(x) or (LAST_ROOT_ONLY and x.kind == "freeze" and heldRecs.contains(x))
+      } and {
         val x = db.get(i)
         (live.contains(x) and not(LAST_ROOT_ONLY and x.kind == "admin" and not(DEV.keys().contains(x.target))))
-          or (x.kind == "freeze" and not(LAST_ROOT_ONLY))
+          // (LAST_ROOT_ONLY, architecture 22:45Z: every freeze that counts is carried as the new
+          // root's own; only the new root thaws.)
+          or (x.kind == "freeze" and (not(LAST_ROOT_ONLY) or (v.counting.contains(x.id) and tgt(x).exists(t => v.frozen.contains(t)))))
           or (x.kind == "copies" and cps.forall(y => y.signer != x.signer or y.seq <= x.seq))
       })
     }
@@ -2060,8 +2081,10 @@ module records_v3 {
         and ((KEPT_ADMINS and NEWKEY.keys().contains(x.target)) or (SPARE and sp != ""))
       val newKey = if (SPARE and sp != "") sp else if (NEWKEY.keys().contains(x.target)) NEWKEY.get(x.target) else x.target
       val asDev = LAST_ROOT_ONLY and x.kind == "admin" and not(kept)
+      // (A carried freeze of a wiped admin freezes its device.)
+      val frzDev = LAST_ROOT_ONLY and x.kind == "freeze" and DEV.keys().contains(x.target)
       d.put(yIds[j], rec(yIds[j], target, own.concat(zIds).concat(yIds.slice(0, j + 1)),
-        if (asDev) "device" else x.kind, if (asDev) DEV.get(x.target) else if (kept) newKey else x.target,
+        if (asDev) "device" else x.kind, if (asDev or frzDev) DEV.get(x.target) else if (kept) newKey else x.target,
         if (asDev) "" else x.kit, nextId,
         x.seen, Map(), Set(), x.units))
     })
@@ -2083,6 +2106,8 @@ module records_v3 {
       at >= 1,
       at <= ch.ids.length() + 1,
       cpId <= FIRST + MAXREC,
+      // (LAST_ROOT_ONLY: every new root is a fresh key, never a former admin key.)
+      not(LAST_ROOT_ONLY) or mode != "honest" or not(db.keys().exists(i => db.get(i).kind == "admin" and db.get(i).target == target)),
       // (REISSUE_REMOVALS: the writer's own check, as write_change's tests should assert: the
       // list names no removal a Z covers; listed twice it would take reserve for nothing.)
       not(REISSUE_REMOVALS) or mode != "honest" or keep.intersect(covered).size() == 0,
@@ -6052,6 +6077,91 @@ module records_v3 {
       .then(signDeviant("A1", "revoke", DEVICE, 1)).then(syncRound).then(syncRound)
       .expect(notM.forall(m => views.get(m).devices.contains(DEVICE) and not(views.get(m).counting.contains(nextId - 1)))
         and spareSafe)
+
+  // SEEN_POS final wording. 1: A1 anchors (ack 12-ish) and admits E; NA names A1 again with
+  // another kit (an update after the anchor) and its checkpoint drops the first grant: A1's
+  // earlier records still count (by branch (b): the checkpoint keeps them).
+  run posUpdateTest = if (not(onS and SEEN_POS)) init else
+    spareStart
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound).then(syncRound)
+      .then(ackS("A1")).then(sign("A1", "device", "E", "", 0, false, false, 1)).then(syncRound)
+      .then(sign("NA", "admin", "A1", "computer", 0, false, false, 1)).then(syncRound)
+      .then(sign("NA", "copies", "", "", 0, false, false, 1)).then(syncRound)
+      .then(signAs("NA", "checkpoint", "", 0))
+      .then(syncRound).then(syncRound).then(compactAt("r")).then(compactAt("c")).then(syncRound)
+      .expect(notM.forall(m => views.get(m).devices.contains("E") and views.get(m).admins.keys().contains("A1"))
+        and promises and spareSafe)
+  // 2. Branch (b) against pre-signed records. (i) C's spare C2 pre-signs a freeze of A1 and a
+  // removal of D (not delivered to NA's holder a); C acks; the change names C2 and A1; NA
+  // checkpoints before C2's first good record; then everything is delivered.
+  run posBranchBTest = if (not(onS and SEEN_POS)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(signDeviant("C2", "revoke", DEVICE, 1)).then(signDeviant("C2", "freeze", "A1", 1))
+      .then(ackS(PHONE)).then(ackS(COMPUTER)).then(giveAll(Set("r", "a", "k", "m"), [7, 8]))
+      .then(recoverAs(RECOVERY, "NA")).then(giveAll(Set("r", "a", "k", "m"), range(recId, firstOfChange + 1)))
+      .then(sign("NA", "copies", "", "", 0, false, false, 1)).then(giveAll(Set("r", "a", "k", "m"), [nextId - 1]))
+      .then(signAs("NA", "checkpoint", "", 0))
+      .then(syncRound).then(syncRound).then(giveAll(MEMBERS, [5, 6])).then(syncRound)
+      .expect(notM.forall(m => views.get(m).devices.contains(DEVICE) and not(views.get(m).frozen.contains("A1"))
+        and not(views.get(m).counting.contains(5)) and not(views.get(m).counting.contains(6))) and spareSafe)
+  // (ii) The same with the pre-signed records delivered to the root's holder before its
+  // checkpoint: the checkpoint names a head for C2 (6, a void record); does 6 count?
+  run posBranchBDeliveredTest = if (not(onS and SEEN_POS)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(signDeviant("C2", "revoke", DEVICE, 1)).then(signDeviant("C2", "freeze", "A1", 1))
+      .then(ackS(PHONE)).then(ackS(COMPUTER)).then(syncRound)
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound).then(syncRound)
+      .then(giveAll(MEMBERS, [5, 6])).then(syncRound)
+      .then(sign("NA", "copies", "", "", 0, false, false, 1)).then(syncRound)
+      .then(signAs("NA", "checkpoint", "", 0))
+      .expect(lastCpKeep("NA").contains(5) == false and lastCpKeep("NA").contains(6) == false)
+      .then(syncRound).then(syncRound).then(compactAt("r")).then(syncRound)
+      .expect(notM.forall(m => views.get(m).devices.contains(DEVICE) and not(views.get(m).frozen.contains("A1"))
+        and not(views.get(m).counting.contains(5)) and not(views.get(m).counting.contains(6))) and spareSafe)
+  // 3. A member holding the checkpoint but not the anchor: m gets NA's checkpoint (which keeps
+  // A1's ack and E) without A1's ack itself; with all of them it counts E like the others.
+  run posCpNoAnchorTest = if (not(onS and SEEN_POS)) init else
+    spareStart
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound).then(syncRound)
+      .then(ackS("A1")).then(sign("A1", "device", "E", "", 0, false, false, 1))
+      .then(giveAll(Set("r", "a", "c", "k"), [nextId - 2, nextId - 1]))
+      .then(sign("NA", "copies", "", "", 0, false, false, 1)).then(giveAll(Set("r", "a", "c", "k"), [nextId - 1]))
+      .then(signAs("NA", "checkpoint", "", 0))
+      .then(giveAll(Set("m"), [nextId - 1]))
+      .then(syncRound).then(syncRound)
+      .expect(notM.forall(m => views.get(m).devices.contains("E")) and promises and spareSafe)
+
+  // BREAK of branch (b) (11-14 23:00): C's spare C2 pre-signs a removal of D (5) and an
+  // admission of E (6); both reach NA's holder before NA's checkpoint, which names C2's head
+  // 6. Record 6 sits at that head, so it counts and E is in; spareSafe breaks. With
+  // POS_HEADS_COUNTING the checkpoint names no void head and nothing counts.
+  run posBranchBBreakTest = if (not(onS and SEEN_POS)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(signDeviant("C2", "revoke", DEVICE, 1)).then(signDeviant("C2", "device", "E", 1))
+      .then(ackS(PHONE)).then(ackS(COMPUTER)).then(syncRound)
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound).then(syncRound)
+      .then(giveAll(MEMBERS, [5, 6])).then(syncRound)
+      .then(sign("NA", "copies", "", "", 0, false, false, 1)).then(syncRound)
+      .then(signAs("NA", "checkpoint", "", 0))
+      .then(syncRound).then(syncRound).then(compactAt("r")).then(syncRound)
+      .expect(if (POS_HEADS_COUNTING) notM.forall(m => not(views.get(m).devices.contains("E"))) and spareSafe
+        else views.get("r").counting.contains(6) and views.get("r").devices.contains("E") and not(spareSafe))
+  // L carries freezes. A root's freeze of A and C's freeze of W: frozen before the change, and
+  // after it their devices dA and dW are frozen (wiped admins re-issued as frozen plain
+  // devices); under SPARE a frozen admin (A acked first) is not kept.
+  run lFreezeTest = if (not(onL)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(if (SPARE) ackS(PHONE) else syncRound).then(if (SPARE) ackS(COMPUTER) else syncRound).then(syncRound)
+      .then(sign(ROOT, "freeze", PHONE, "", 0, false, false, 1))
+      .then(sign(COMPUTER, "freeze", WATCH, "", 0, false, false, 1)).then(syncRound)
+      .expect(notM.forall(m => Set(PHONE, WATCH).subseteq(views.get(m).frozen)))
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound).then(syncRound)
+      .expect(notM.forall(m => views.get(m).path == [ROOT, "NA"] and Set("dA", "dW").subseteq(views.get(m).frozen)
+        and not(views.get(m).admins.keys().contains("A1"))) and promises)
 
   // REISSUE_STATE: the change to NA re-issues R's live admissions (A, C, W and D) as NA's first
   // records 6 to 9; the list keeps none of R's records, the first checkpoint keeps the Ys, and
