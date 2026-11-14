@@ -1810,6 +1810,23 @@ ciphertext (49 bytes), 119 bytes in all.
   with the card's key, or opens to a secret whose K1 and K2 are not the group's recovery keys,
   is another recovery key. A card key that is not a P-256 point is not one cbb uses.
 
+- **The management key.** Making the key and writing the object need the card's management
+  key. A device uses it as the card keeps it: one that the PIN protects (Yubico's PIN-protected
+  mode, the key in `PRINTED` 5FC109 and the flag in `ADMIN DATA` 5FFF00), one the person types,
+  or the factory key, of either kind (Triple DES or AES-192); a key derived from the PIN is
+  refused. The factory key is publicly known: with it anyone holding the card could write over
+  slot 0x95 and `5FC121` without the PIN. The secret cannot be read that way, but it can be
+  spoiled without a word. So before anything is written the device says that the card still has
+  its factory key and asks whether it may replace it. Only with the person's consent it writes,
+  in this order, `PRINTED` with a random key of the same kind, the flag in `ADMIN DATA` (its
+  other fields kept), then the key itself; until the last write the card still answers to its
+  factory key, so a failure in between leaves it usable and a second try finishes the change.
+  Without consent the card is sealed as it is and the device keeps the warning on screen.
+  Nothing else on the card changes, and a `PRINTED` that holds anything but such a key is left
+  alone, with the factory key. This is the one step in which a device changes the management
+  key (`member/src/piv/recovery.rs`: `inspect`, `seal`). The YubiKey and the sheet hold the same
+  secret: one lost or spoiled does no harm while the other is whole.
+
 The vectors are in `testdata/format/sheet.json`, `yubikey`.
 
 ## 10. Admin CAs, device records and revocation
@@ -2549,7 +2566,9 @@ reads the retired slots' certificates and takes the one whose key hash the state
 Nothing else on the card is changed, since it may be in use for other things. Making the key
 needs the card's management key: the phones use the factory one with AES only (a YubiKey
 from firmware 5.7), and refuse a card whose management key is 3DES or that does not say;
-signing needs only the PIN.
+signing needs only the PIN. 0.6's recovery key on a YubiKey takes every kind of management key
+and replaces a factory one only by consent (section 9, "The recovery key on a YubiKey (0.6)");
+the phones take the same kinds once wave 5 moves them to the core.
 
 A newer `recovery` record replaces the older one: the key the older one named is no admin
 any more, and its claims do not count. A `revoke` of the key removes it (a root's own key, or
