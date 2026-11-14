@@ -309,6 +309,22 @@ module records_v3 {
   // count as held, so a member restarted from what it saves (which drops pruned first records)
   // rebuilds the same chain. `firstPrunedTest`, promise-like check `savedStable`.
   pure val WHOLE_BY_SETTLER = false
+  // Core 066addaf: (a) a key whose admission the rooms turned away is no key of the set (the
+  // store learns admin keys from what it holds, not from all it got); (b) the records of a key
+  // that a waiting head names as root sit aside whatever order they came in, and are saved
+  // (the model keeps them in got; a restart from what the set saves now keeps them too).
+  pure val HELD_ADMISSIONS = false
+  // Architecture 11-14 03:00Z (records to word it): a root's room keeps removals and resolves
+  // first, then the key's NEWEST checkpoint (and one newer being judged), then everything else
+  // by seq; today every checkpoint of the current root goes first, so checkpoints that never
+  // count could push out the root's device records. The marks compare positions, so a key's
+  // marks reset when a newer checkpoint of it arrives. Promise `ownCpsNoCrowd`.
+  pure val NEWEST_CP_FIRST = false
+  // Records 066addaf: the core's write_checkpoint signs only as the set's last root. The model's
+  // honest writer of a checkpoint first takes its own key's records and the recovery records
+  // that made its key a root (the model hands a key's records to one member, its holder to
+  // another), then signs only if its key is the set's last root.
+  pure val WRITER_LAST_ROOT = false
   // Records 11-13 21:12Z: the change re-signs the cut roots' counting removals as the new
   // root's first records (signChainG). REISSUE_DROP_ONLY: the mutation that leaves the old
   // removals off the list without the new ones; it must fail.
@@ -476,13 +492,16 @@ module records_v3 {
       // (records 9dd3d9c8 (a): the settling checkpoint's own keep still counts: the change
       // waits for what that checkpoint keeps too.)
       and l.keep.forall(k => rs.exists(x => x.id == k))
-      // And L keeps no record of an old root that r itself cuts: such an L does not follow r
-      // (its writer had not applied r). A search found it settling r live, r then cutting what
-      // L keeps, and a restart rebuilding without r; with this, neither does.
+      // And L keeps no record that r itself cuts: such an L does not follow r. Only a bent
+      // writer signs one (the core's write_checkpoint signs only as the set's last root). A
+      // search found it settling r live, r then cutting what L keeps, and a restart rebuilding
+      // without r; with this, neither does.
       and not(rs.exists(x => l.keep.contains(x.id) and cutByChange(r, x))))
-  // A record r's list cuts: an old root's record other than a checkpoint that r does not keep.
+  // A record r's list cuts: an earlier root's record, or the new root's below r's from, that r's
+  // list does not keep (core: a_checkpoint_that_keeps_what_its_change_cuts_settles_nothing).
   pure def cutByChange(r: Record, x: Record): bool =
-    ROOT_KEYS.contains(x.signer) and x.signer != r.target and x.kind != "checkpoint" and not(r.keep.contains(x.id))
+    ROOT_KEYS.contains(x.signer) and not(r.keep.contains(x.id))
+      and (x.signer != r.target or x.seq < r.targetRec)
   // The chain a member follows among the recovery records rs: from seq 1, a valid record
   // whose previous ID is the member's tip extends it; a gap ends the chain. Any two records the
   // recovery key signed at one seq, at any depth, valid or not, are a fork: the member stops
@@ -537,7 +556,7 @@ module records_v3 {
   // checkpoints, so that a full root can still checkpoint, and any root's removals, freezes
   // and resolves, so that a full set never drops one while it keeps a record of that root.
   // A replaced root keeps what its recovery record lists, before anything else of it.
-  type Order = { roots: Set[Key], cuts: Key -> List[Id] }
+  type Order = { roots: Set[Key], cuts: Key -> List[Id], top: int }
   pure def pos(r: Record, cur: Key, ord: Order): int = {
     val cp = r.signer == cur and r.kind == "checkpoint"
     val early = ord.roots.contains(r.signer) and (r.kind == "revoke" or r.kind == "freeze" or r.kind == "resolve")
@@ -546,6 +565,8 @@ module records_v3 {
       if (inLine(ord.cuts.get(r.signer), r.id)) 10000 + r.seq * 100 + hid(r.id)
       else 200000 + r.seq * 100 + hid(r.id)
     }
+    // (NEWEST_CP_FIRST, records' order: older checkpoints last, newest first among them.)
+    else if (cp and NEWEST_CP_FIRST and r.seq < ord.top) 300000 + (MAXREC + 4 - r.seq) * 100 + hid(r.id)
     else if (cp) (if (EARLY_BEFORE_CHECKPOINTS) 10000 else 0) + (MAXREC + 4 - r.seq) * 100 + hid(r.id)
     else if (early) (if (EARLY_BEFORE_CHECKPOINTS) 0 else 10000) + r.seq * 100 + hid(r.id)
     else 100000 + r.seq * 100 + hid(r.id)
@@ -615,7 +636,12 @@ module records_v3 {
       recsOf(s.got, db).filter(c => not(isChain(c))) else Set()))
   pure def keptPath(s: Store, db: Id -> Record): List[Key] = pathCuts(chainState(s, db))._1
   pure def keptCuts(s: Store, db: Id -> Record): Key -> List[Id] = pathCuts(chainState(s, db))._2
-  pure def orderOf(s: Store, db: Id -> Record): Order = { roots: rootsOf(keptPath(s, db)), cuts: keptCuts(s, db) }
+  pure def orderOf(s: Store, db: Id -> Record): Order =
+    { roots: rootsOf(keptPath(s, db)), cuts: keptCuts(s, db), top: topCp(s, db) }
+  // (NEWEST_CP_FIRST: the seq of the current root's newest checkpoint the set holds.)
+  pure def topCp(s: Store, db: Id -> Record): int =
+    recsOf(s.recs.union(s.wait), db).filter(c => c.kind == "checkpoint" and c.signer == last(keptPath(s, db)))
+      .fold(0, (m, c) => max2(m, c.seq))
 
   // Whether a set stores r at all: its signer is known, it is within its root's list (a
   // replaced root keeps nothing else), and the checkpoint the set compacted on does not prune
@@ -630,14 +656,26 @@ module records_v3 {
     val got = recsOf(s.got, db)
     val path = keptPath(s, db)
     val cuts = keptCuts(s, db)
-    val admins = learned(got, path, cuts)
+    val admins = learned(if (HELD_ADMISSIONS) recsOf(s.recs.union(s.wait), db) else got, path, cuts)
     not(isChain(r)) and not(s.chain.contains(r.id))
       and (admins.contains(r.signer) or onList(path, r.signer))
       and within(cuts, r)
   }
 
   // What a set keeps of items: of those within the lists, what the rooms keep.
-  pure def settle(s: Store, items: Set[Record], cut: Cut, db: Id -> Record): (Set[Id], Cut) = {
+  pure def settle(s: Store, items: Set[Record], cut: Cut, db: Id -> Record): (Set[Id], Cut) =
+    if (not(HELD_ADMISSIONS)) settle0(s, items, cut, db)
+    else {
+      // (HELD_ADMISSIONS: the records of a key whose admission the rooms did not keep leave. The
+      // rooms are not judged again: the level only goes down and the marks keep out what they
+      // dropped, so the admission stays out too until the cut resets (records, 11-14).)
+      val path = keptPath(s, db)
+      val cuts = keptCuts(s, db)
+      val r1 = settle0(s, items, cut, db)
+      val ok = learned(recsOf(r1._1, db), path, cuts)
+      (r1._1.filter(i => onList(path, db.get(i).signer) or ok.contains(db.get(i).signer)), r1._2)
+    }
+  pure def settle0(s: Store, items: Set[Record], cut: Cut, db: Id -> Record): (Set[Id], Cut) = {
     val path = keptPath(s, db)
     val cuts = keptCuts(s, db)
     val admins = learned(recsOf(s.got, db), path, cuts)
@@ -827,9 +865,15 @@ module records_v3 {
   }
   // A set holds only its rooms, its chain and its waiting place: what the rooms turned away
   // comes back only when it is offered again.
-  pure def storeOne(s: Store, r: Record, db: Id -> Record): Store =
-    if (s.recs.contains(r.id) or s.wait.contains(r.id) or not(storableW(s, r, db))) s
+  pure def storeOne(s0: Store, r: Record, db: Id -> Record): Store =
+    if (s0.recs.contains(r.id) or s0.wait.contains(r.id) or not(storableW(s0, r, db))) s0
     else {
+      // (NEWEST_CP_FIRST: a newer checkpoint of the current root moves its key's positions, so
+      // the key's marks reset.)
+      val cur0 = last(keptPath(s0, db))
+      val s = if (NEWEST_CP_FIRST and r.kind == "checkpoint" and r.signer == cur0 and r.seq > topCp(s0, db))
+        { ...s0, cut: { ...s0.cut, marks: s0.cut.marks.keys().exclude(Set(cur0)).mapBy(k => s0.cut.marks.get(k)) } }
+        else s0
       // The current root's checkpoints the set holds, and the records they name, are not
       // turned away for their keys' earlier drops: they are judged again, all at once, with
       // each record, since a checkpoint may count only with all of them.
@@ -1356,7 +1400,12 @@ module records_v3 {
   action signFullXF(k: Key, kind: str, target: Key, kit: str, targetRec: Id, pretend: bool, fork: bool, units: int,
       hidden: bool, extraKeep: Set[Id], keeps: bool, followsAs: Id): bool = {
     val h = HOLDER.get(k)
-    val s = st.get(h)
+    // (WRITER_LAST_ROOT: the honest writer of a checkpoint holds its own key's records and the
+    // recovery records that made its key a root, and signs only as its set's last root, as the
+    // core's write_checkpoint does; the model's holder may not have been given them.)
+    val aug = WRITER_LAST_ROOT and kind == "checkpoint" and kit != "deviant" and not(hidden)
+    val s = if (aug) withOwn(st.get(h), k, db) else st.get(h)
+    val vh = if (aug) storeView(s, db) else views.get(h)
     val mine = recsOf(s.recs, db)
     val own = headLine(db.keys().map(i => db.get(i)), k)
     val base = if (fork and own.length() > 0) own.slice(0, own.length() - 1) else own
@@ -1367,7 +1416,7 @@ module records_v3 {
     val isCp = kind == "checkpoint"
     // A checkpoint keeps what its signer counts; one that keeps more is not the honest
     // writer's (kit "bent").
-    val counted = recsOf(views.get(h).counting, db).filter(x => x.kind != "checkpoint")
+    val counted = recsOf(vh.counting, db).filter(x => x.kind != "checkpoint")
     val honestKeep = idsOf(counted).exclude(if (ROOT_KEYS.contains(k)) droppedAt(mine, counted) else Set())
     val r1 = rec(nextId, k, base.append(nextId), kind, target,
       if (isCp and not(extraKeep.subseteq(honestKeep))) "bent" else kit, targetRec,
@@ -1384,22 +1433,50 @@ module records_v3 {
       SIGNERS.contains(k),
       nextId <= FIRST + MAXREC,
       not(fork) or own.length() > 0,
+      // The core's write_checkpoint signs only as the set's last root (state.roots.last()).
+      not(aug) or last(vh.path) == k,
       // (E): an honest writer publishes a record only when its own set keeps it; else the
       // write fails and the seq is not used. (A hidden record stays off its device.)
       not(keeps) or hidden or isChain(r) or insertInto(s, r, db2).recs.contains(r.id),
       // (H): and only while its key's units above the head of the counting checkpoint stay
       // within FLOOR; the root admits no admin key past MAX_ADMINS.
       not(keeps) or not(WRITER_FLOOR) or hidden or isChain(r) or kind == "checkpoint"
-        or unitsAbove(recsOf(s.recs, db).union(Set(r)), views.get(h), k, db2) <= (if (onList(views.get(h).path, k)) ROOT_FLOOR else FLOOR),
+        or unitsAbove(recsOf(s.recs, db).union(Set(r)), vh, k, db2) <= (if (onList(vh.path, k)) ROOT_FLOOR else FLOOR),
       not(keeps) or not(CEIL_FIT) or hidden or isChain(r)
         or sumUnits(ofKey(recsOf(s.recs, db).union(Set(r)).filter(x => not(isCp) or x == r or not(prunedBy(r, x))), k))
-          <= (if (onList(views.get(h).path, k)) ROOTC else ADMINC),
+          <= (if (onList(vh.path, k)) ROOTC else ADMINC),
       not(keeps) or not(CEIL_FIT) or kind != "admin" or capFits(h, target),
-      not(keeps) or not(WRITER_FLOOR) or kind != "admin" or learned(recsOf(s.recs, db), views.get(h).path, views.get(h).cuts)
+      not(keeps) or not(WRITER_FLOOR) or kind != "admin" or learned(recsOf(s.recs, db), vh.path, vh.cuts)
         .union(Set(target)).size() <= MAX_ADMINS,
       commit(db2, nextId + 1, h, if (hidden) s else insertInto(s, r, db2)),
     }
   }
+
+  pure def withOwn(s: Store, k: Key, db: Id -> Record): Store = {
+    val heads = db.keys().filter(i => isChain(db.get(i)) and db.get(i).target == k)
+    val ids = db.keys().filter(i => db.get(i).signer == k and not(db.get(i).off))
+      .union(heads.fold(Set(), (u, i) => u.union(db.get(i).line.indices().map(x => db.get(i).line[x]))))
+    toList(ids.exclude(s.got)).foldl(s, (x, i) => insertInto(x, db.get(i), db))
+  }
+
+  // (Promise cpWritable, architecture 11-14 04:42Z: while the current root's holder follows it,
+  // an honest checkpoint it signs now is not refused for room, and after it every admission
+  // record of that root its set held counts.)
+  def cpWritable: bool = ROOT_KEYS.forall(k => {
+    val h = HOLDER.get(k)
+    val s = if (WRITER_LAST_ROOT) withOwn(st.get(h), k, db) else st.get(h)
+    val v = if (WRITER_LAST_ROOT) storeView(s, db) else views.get(h)
+    val mine = recsOf(s.recs, db)
+    val counted = recsOf(v.counting, db).filter(x => x.kind != "checkpoint")
+    val keep = idsOf(counted).exclude(droppedAt(mine, counted))
+    val seen = SIGNERS.mapBy(x => if (x == k) headLine(db.keys().map(i => db.get(i)), k) else headLine(mine, x))
+    val r = rec(nextId, k, headLine(db.keys().map(i => db.get(i)), k).append(nextId), "checkpoint", "", "", 0, seen, seen, keep, 2)
+    val db2 = db.put(nextId, r)
+    val s2 = insertInto(s, r, db2)
+    val held = mine.filter(x => x.signer == k and (x.kind == "admin" or x.kind == "device"))
+    v.stop or last(v.path) != k or nextId > FIRST + MAXREC
+      or (s2.recs.contains(r.id) and idsOf(held).subseteq(storeView(s2, db2).counting))
+  })
 
   // A root key signs a checkpoint with a keep of its choosing, and may lower one key's head by
   // one record: not the honest writer's (kit "bent").
@@ -1698,11 +1775,20 @@ module records_v3 {
   pure def rebuiltFromSaved(s: Store, db: Id -> Record): (Store, View) = {
     val ch = savedChain(s, db)
     val s1 = toList(ch).foldl(EMPTY, (x, i) => insertInto(x, db.get(i), db))
-    val s2 = toList(s.recs.union(s.wait).exclude(ch)).foldl(s1, (x, i) => insertInto(x, db.get(i), db))
+    val s2 = toList(s.recs.union(s.wait).union(earlyAside(s, db)).exclude(ch)).foldl(s1, (x, i) => insertInto(x, db.get(i), db))
     // A second pass, as the core loads in dependency order: a record whose signer only a later
     // record names (a root fork's proof, kept beside the chain) is taken once its signer is known.
-    finish(toList(ch.union(s.recs).union(s.wait)).foldl(s2, (x, i) => insertInto(x, db.get(i), db)), db)
+    finish(toList(ch.union(s.recs).union(s.wait).union(earlyAside(s, db))).foldl(s2, (x, i) => insertInto(x, db.get(i), db)), db)
   }
+  // (HELD_ADMISSIONS (b): what the set saves aside of the roots its held heads name and its path
+  // does not reach yet: under EARLY_ROOM what that room keeps, else all it got of them.)
+  pure def earlyAside(s: Store, db: Id -> Record): Set[Id] =
+    if (not(HELD_ADMISSIONS)) Set()
+    else if (EARLY_ROOM) earlyKept(s, db).exclude(s.chain)
+    else {
+      val early = recsOf(s.chain, db).filter(h => isChain(h) and not(onList(s.path, h.target))).map(h => h.target)
+      idsOf(recsOf(s.got, db).filter(r => not(isChain(r)) and not(s.chain.contains(r.id)) and early.contains(r.signer)))
+    }
   action restartSaved(m: str): bool = commit(db, nextId, m, rebuiltFromSaved(st.get(m), db)._1)
   // Every member that is not halted shows, rebuilt from what it saves, the view it shows.
   // (A member halted on a root fork is exempt: it takes nothing more, and the counting
@@ -1724,6 +1810,19 @@ module records_v3 {
     signUseKey, signAfterThaw, signHidden, signCheckpointNaming, signRecover, welcomeNewcomer,
     deliver, fetch, fetch, fetch, compact,
   }
+
+  // Only the honest writers and the network (no hidden, thief or bent record), for searches of
+  // what honest groups reach.
+  action stepHonest = any {
+    signDevice, signDemote, signAdmin, signRevoke, signFreeze, signThaw, signResolve, signCheckpoint, signCopies,
+    deliver, fetch, fetch, fetch, compact,
+  }
+  // (HELD_ADMISSIONS (a), a check, not a promise: every admin key's record a member holds has
+  // its admission held beside it.)
+  val admissionHeld = MEMBERS.forall(m => views.get(m).stop or {
+    val rs = recsOf(st.get(m).recs, db)
+    rs.forall(r => onList(views.get(m).path, r.signer) or admissionsOf(rs, r.signer) != Set())
+  })
 
   // --- Guided steps ------------------------------------------------------------------------
 
@@ -2276,6 +2375,22 @@ module records_v3 {
     oldRootListed, twinStops, removedGainsNothing, compactedAgree, F12 implies heldBackCountsLess, honestNeverDropped, honestNoMarks, marksInert,
     restartStable, noLiveOldRoot,
   }
+  // (NEWEST_CP_FIRST's promise, architecture 11-14: a root's device records are never pushed out
+  // of its room by its own checkpoints that do not count.) A member that got an admission record
+  // of its current root within the lists, not pruned by its counting checkpoint, and does not
+  // hold it, holds no later checkpoint of that root (by seq) other than the counting one and
+  // the newest.
+  val ownCpsNoCrowd = MEMBERS.forall(m => {
+    val s = st.get(m)
+    val v = views.get(m)
+    val cur = last(v.path)
+    val cps = recsOf(s.recs, db).filter(c => c.kind == "checkpoint" and c.signer == cur)
+    val top = cps.fold(0, (x, c) => max2(x, c.seq))
+    v.stop or recsOf(s.got, db).forall(d => not(d.signer == cur and (d.kind == "admin" or d.kind == "device")
+      and within(v.cuts, d) and not(s.recs.contains(d.id))
+      and (v.checkpoint == 0 or not(prunedBy(db.get(v.checkpoint), d))))
+      or cps.forall(c => c.id == v.checkpoint or c.seq == top or c.seq < d.seq))
+  })
 
   // --- Scenarios ---------------------------------------------------------------------------
 
@@ -3182,8 +3297,8 @@ module records_v3 {
         and st.get(m).recs == st.get("r").recs and st.get(m).cut.marks.keys() == Set()) and promises
         and (WHOLE_BY_SETTLER implies savedStable))
 
-  // A search's trace (seed 77007): a checkpoint of the new root NA, written on a set that has not
-  // applied the change to NA, keeps R's records 1 and 2, which that change cuts. It must not
+  // A search's trace (seed 77007): a bent checkpoint of the new root NA keeps R's records 1 and
+  // 2, which the change to NA cuts (the honest writer signs only as its set's last root). It must not
   // settle the change: else the set applies it live, the change cuts 1 and 2, and a restart
   // rebuilds without it.
   run settlerKeepsWhatChangeCutsTest =
@@ -3191,8 +3306,41 @@ module records_v3 {
       .then(offerEveryone(1)).then(recoverAs(RECOVERY, "NK")).then(syncRound)
       .then(signCheckpointKeep("NK", Set(4), "A", 1)).then(syncRound)
       .then(recoverAs(RECOVERY, "NA")).then(restart("r")).then(giveOnly("a", 7))
-      .then(signFullX("NA", "checkpoint", "", "", 0, false, false, 2, false, Set(), false))
+      .then(signCheckpointKeep("NA", Set(1, 2, 3), "X", 2))
       .expect((WHOLE_BY_SETTLER implies (views.get("a").path == ["R", "NK"] and savedStable)) and promises)
+
+  // HELD_ADMISSIONS (b), core 066addaf: a record of the new root NA that comes while the head
+  // to NA waits for its first checkpoint sits aside and is saved, so a member restarted from
+  // what it saves still takes it once the head applies.
+  run earlyAsideSavedTest =
+    init
+      .then(recoverAs(RECOVERY, "NA")).then(giveOnly("a", 4)).then(giveOnly("a", 5))
+      .then(sign("NA", "copies", "", "", 0, false, false, 1))
+      .then(giveOnly("c", 4)).then(giveOnly("c", 6)).then(restartSaved("c")).then(giveOnly("c", 5))
+      .expect(views.get("c").path == ["R", "NA"] and (HELD_ADMISSIONS iff st.get("c").recs.contains(6)) and promises)
+
+  // NEWEST_CP_FIRST (architecture 11-14 03:00Z): R signs three checkpoints that never count.
+  // Today they go before R's admission records and push one out; under the switch only the
+  // newest goes first and the others take their place by seq.
+  run ownCheckpointsCrowdTest =
+    init
+      .then(signCheckpointKeep(ROOT, Set(NEVER), "", 2)).then(signCheckpointKeep(ROOT, Set(NEVER), "", 2))
+      .then(signCheckpointKeep(ROOT, Set(NEVER), "", 2)).then(syncRound)
+      .expect(NEWEST_CP_FIRST iff ownCpsNoCrowd)
+
+  // An honest-only search (seed 77101, J and the decided set): at a, R's checkpoints 8 and 13
+  // are held but none counts (a lacks 4 and the resolve 6 their keep needs); they go first in R's
+  // room, so R's newest admission (3, of W) is cut while W's freeze 5 stays. Under
+  // NEWEST_CP_FIRST only the newest goes first and every admission stays.
+  run honestCheckpointsCutAdmissionTest =
+    init
+      .then(sign("R", "checkpoint", "", "", 0, false, false, 2)).then(sign("W", "freeze", "dW", "", 0, false, false, 1))
+      .then(sign("R", "resolve", "", "", 4, false, false, 1)).then(giveOnly("a", 5))
+      .then(sign("A", "admin", "NA", "phone", 0, false, false, 1)).then(sign("R", "checkpoint", "", "", 0, false, false, 2))
+      .then(sign("W", "revoke", "dA", "", 0, false, false, 1)).then(sign("C", "copies", "", "", 0, false, false, 2))
+      .then(sign("A", "thaw", "", "", 5, false, false, 1)).then(sign("R", "checkpoint", "", "", 0, false, false, 2))
+      .then(sign("R", "checkpoint", "", "", 0, false, false, 2)).then(giveOnly("a", 13)).then(give("a", 8))
+      .expect((NEWEST_CP_FIRST implies admissionHeld) and ((CEIL_FIT and not(NEWEST_CP_FIRST)) implies not(admissionHeld)))
 
   // The exhaustive-check thread's probe (11-13 23:56Z): the change to NK re-signs R's removal
   // of D (Z 7) beside its first checkpoint 8; NK's checkpoint 9 keeps 7 and prunes 8; then m
