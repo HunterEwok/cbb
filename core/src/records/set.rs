@@ -14,6 +14,13 @@ use super::key::{GroupId, Key, KeyHash, RecordId, Recovery, group_id};
 use super::{Kind, MAX_NOTICES, Mark, Record, Rule, keep};
 use crate::identity::ExternalKey;
 
+/// The units the current root's writer keeps back below its ceiling, past
+/// its records and its next checkpoint, for its removals, freezes and
+/// resolves (`write_one`'s floor): 64 such records of one unit each, four
+/// for every admin key the group may have. A writer's number only: no
+/// member judges a record by it.
+pub const ROOT_FLOOR_MARGIN: u64 = 64;
+
 /// What inserting a record did.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Added {
@@ -2462,6 +2469,30 @@ impl RecordSet {
         if state.stop == eval::Stop::Full || state.stopped() {
             return Err(Error::msg("the group is stopped: no root action works until the root is changed"));
         }
+        let body = self.checkpoint_body(state, h, time_ms)?;
+        let cp = Record::sign(body, root)?;
+        // What it names must fit the rooms by itself, or it would count
+        // for nobody (`eval::fits_alone`).
+        let named = eval::named_first(&cp, |id| self.records.contains_key(id));
+        let others = named.iter().filter_map(|id| self.records.get(id)).map(|e| (&e.record, self.role_of(e)));
+        if !eval::fits_alone(others.chain([(&cp, Role::Root)]), &self.root_hash, &self.promoted, &self.cuts) {
+            return Err(Error::msg("what the checkpoint names would not fit the rooms by itself"));
+        }
+        // The writer's own set keeps it and counts it, or it reaches
+        // nobody for sure.
+        let mut trial = self.clone();
+        let _ = trial.insert(cp.clone());
+        if trial.state().checkpoint != Some(cp.id()) {
+            return Err(Error::msg("the checkpoint would not count in the writer's own records"));
+        }
+        Ok(cp)
+    }
+
+    /// The body of the checkpoint root h would write now, unsigned: its
+    /// heads, what it keeps, its seq and prev. `write_checkpoint` signs it;
+    /// the floor in `write_one` reads its size.
+    fn checkpoint_body(&self, state: &State, h: KeyHash, time_ms: u64) -> crate::error::Result<Body> {
+        use crate::error::Error;
         let path: BTreeSet<&KeyHash> = state.roots.iter().collect();
         let recovery = self.recovery.hash();
         let entries = || self.records.values().filter(|e| e.role != Role::Recovery);
@@ -2589,22 +2620,28 @@ impl RecordSet {
         {
             return Err(Error::msg("the checkpoint would keep a removed key's admission"));
         }
-        let cp = Record::sign(body, root)?;
-        // What it names must fit the rooms by itself, or it would count
-        // for nobody (`eval::fits_alone`).
-        let named = eval::named_first(&cp, |id| self.records.contains_key(id));
-        let others = named.iter().filter_map(|id| self.records.get(id)).map(|e| (&e.record, self.role_of(e)));
-        if !eval::fits_alone(others.chain([(&cp, Role::Root)]), &self.root_hash, &self.promoted, &self.cuts) {
-            return Err(Error::msg("what the checkpoint names would not fit the rooms by itself"));
-        }
-        // The writer's own set keeps it and counts it, or it reaches
-        // nobody for sure.
-        let mut trial = self.clone();
-        let _ = trial.insert(cp.clone());
-        if trial.state().checkpoint != Some(cp.id()) {
-            return Err(Error::msg("the checkpoint would not count in the writer's own records"));
-        }
-        Ok(cp)
+        Ok(body)
+    }
+
+    /// The units the current root's checkpoint would take if written now,
+    /// from its body (`checkpoint_body`), with room for a few bytes more
+    /// of time; None when the root could not write one.
+    fn checkpoint_units(&self, state: &State, h: KeyHash, time_ms: u64) -> Option<u64> {
+        let body = self.checkpoint_body(state, h, time_ms).ok()?;
+        Some(keep::units(body.encode().len().saturating_add(super::ENVELOPE_ALLOWANCE).saturating_add(16)))
+    }
+
+    /// Whether the current root should write a checkpoint now: one more
+    /// ordinary record of one unit (and its ID in the checkpoint, which may
+    /// take one unit more) would reach its floor (`ROOT_FLOOR_MARGIN` below
+    /// its ceiling), where the writer takes only its removals, freezes and
+    /// resolves. True too when no checkpoint of it would fit.
+    pub fn checkpoint_due(&self, state: &State, time_ms: u64) -> bool {
+        let Some(h) = state.roots.last().copied() else { return false };
+        let Some(ceiling) = self.ceiling(&h) else { return false };
+        let used = self.units.get(&h).copied().unwrap_or(0);
+        self.checkpoint_units(state, h, time_ms)
+            .is_none_or(|cp| used.saturating_add(cp).saturating_add(ROOT_FLOOR_MARGIN).saturating_add(2) > ceiling)
     }
 
     /// Writes signer's next ordinary record of kind (every type but a
@@ -2761,6 +2798,23 @@ impl RecordSet {
         }
         if !trial.records.contains_key(&id) || !after.counting.contains(&id) {
             return Err(Error::msg("the group's records have no room for the record: it would not count"));
+        }
+        // The floor: the current root never writes itself out of its own
+        // next checkpoint. After an ordinary record of it, its records and
+        // the checkpoint it would then write stay ROOT_FLOOR_MARGIN below
+        // its ceiling; the margin is for its removals, freezes and
+        // resolves, which pass the floor, as a lost device is removed
+        // whatever the room says.
+        if state.roots.last() == Some(&h) && !eval::item(&r, Role::Root).early {
+            let used = trial.units.get(&h).copied().unwrap_or(0);
+            let fits = trial
+                .checkpoint_units(&after, h, time_ms)
+                .is_some_and(|cp| used.saturating_add(cp).saturating_add(ROOT_FLOOR_MARGIN) <= ceiling);
+            if !fits {
+                return Err(Error::msg(
+                    "the root's records would leave no room for its next checkpoint: write a checkpoint first",
+                ));
+            }
         }
         // An admission never puts out a device that counted (the cap takes
         // devices in the order of their first record, which a new one may

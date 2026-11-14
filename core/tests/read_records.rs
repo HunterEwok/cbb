@@ -840,3 +840,184 @@ fn a_pile_of_older_checkpoints_goes_when_a_new_one_counts() {
         assert!(!other.contains(id), "the other member still holds checkpoint {i}");
     }
 }
+
+/// The root's admin device in a test of the floor: a phone with admin key
+/// `admin`.
+fn admin_device(phone: &K, admin: &K) -> Device {
+    let mut d = Device::new(phone.key.clone(), "admin", ROLE_PHONE);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    d.admin = Some(admin.key.clone());
+    d.powers = 0x1ff & !64;
+    d
+}
+
+/// Fills the root's room with devices that come and go, through the
+/// writer, until the writer refuses a device for the floor; returns how
+/// many came and went. With `admins`, each device has an admin key, so its
+/// admission and its removal stay for good; without, a checkpoint lets
+/// both go.
+fn fill_to_the_floor(set: &mut RecordSet, root: &K, t: &mut u64, admins: bool) -> usize {
+    for i in 0.. {
+        let (dk, ak) = (k(&format!("floor dev {i}")), k(&format!("floor admin {i}")));
+        let d = if admins { admin_device(&dk, &ak) } else { Device::new(dk.key.clone(), "dev", ROLE_MEMBER) };
+        let st = set.state();
+        *t += 1000;
+        if let Err(e) = set.write_record(&st, root, Kind::device(d), *t) {
+            let e = format!("{e:?}");
+            assert!(e.contains("no room for its next checkpoint"), "device {i}: {e}");
+            return i;
+        }
+        let mut keys = if admins { vec![dk.hash, ak.hash] } else { vec![dk.hash] };
+        keys.sort();
+        let st = set.state();
+        *t += 1000;
+        let rm = cbb_core::records::body::Removal { keys, seen: Vec::new() };
+        set.write_record(&st, root, Kind::Revoke(rm), *t).unwrap_or_else(|e| panic!("removal {i}: {e:?}"));
+    }
+    unreachable!()
+}
+
+/// The root writes its checkpoint; it counts, and so does every record it
+/// keeps.
+fn checkpoint_counts(set: &mut RecordSet, root: &K, t: &mut u64, what: &str) {
+    let st = set.state();
+    *t += 1000;
+    let cp = set.write_checkpoint(&st, root, *t).unwrap_or_else(|e| panic!("{what}: {e:?}"));
+    set.insert(cp.clone()).unwrap();
+    let st = set.state();
+    assert_eq!(st.checkpoint, Some(cp.id()), "{what}");
+    let Kind::Checkpoint { keep, .. } = &cp.body().kind else { unreachable!() };
+    for id in keep {
+        assert!(st.counting.contains(id), "{what}: a kept record does not count");
+    }
+}
+
+/// The root at its floor: the writer refuses its next ordinary record and
+/// says so, the set says a checkpoint is due, and the checkpoint the root
+/// then writes counts with everything it keeps; after it the root writes
+/// again. With `restart`, the root's set is rebuilt from its records at
+/// the floor first; with `admins`, what fills the room stays for good.
+fn at_the_floor_a_checkpoint_counts(restart: bool, admins: bool) {
+    let (mut set, root, g) = root_with_dead_checkpoints(0, 0);
+    let mut t = g.t;
+    let n = fill_to_the_floor(&mut set, &root, &mut t, admins);
+    assert!(n > 100, "only {n} devices came and went");
+    let st = set.state();
+    assert!(set.checkpoint_due(&st, t));
+    if restart {
+        let records: Vec<Record> = set.in_dependency_order().into_iter().cloned().collect();
+        let lists: Vec<Vec<u8>> = set.lists().map(<[u8]>::to_vec).collect();
+        set = RecordSet::restore(root.key.clone(), bench_recovery(), &records, &lists);
+        assert_eq!(set.state(), st);
+        assert!(set.checkpoint_due(&st, t));
+    }
+    checkpoint_counts(&mut set, &root, &mut t, "at the floor");
+    if !admins {
+        let st = set.state();
+        assert!(!set.checkpoint_due(&st, t));
+        let dk = k("after the floor");
+        t += 1000;
+        set.write_record(&st, &root, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)), t).unwrap();
+    }
+}
+
+#[test]
+fn at_the_floor_the_root_s_checkpoint_counts() {
+    at_the_floor_a_checkpoint_counts(false, false);
+}
+
+#[test]
+fn at_the_floor_the_root_s_checkpoint_counts_after_a_restart() {
+    at_the_floor_a_checkpoint_counts(true, false);
+}
+
+#[test]
+fn at_the_floor_of_records_that_stay_the_root_s_checkpoint_counts() {
+    at_the_floor_a_checkpoint_counts(false, true);
+}
+
+#[test]
+fn at_the_floor_of_records_that_stay_the_root_s_checkpoint_counts_after_a_restart() {
+    at_the_floor_a_checkpoint_counts(true, true);
+}
+
+/// Removals pass the floor: at it the root removes its admin and twenty
+/// devices, and its checkpoint still counts with everything it keeps.
+#[test]
+fn removals_at_the_floor_leave_room_for_the_checkpoint() {
+    let (mut set, root, g) = root_with_dead_checkpoints(0, 0);
+    let mut t = g.t;
+    fill_to_the_floor(&mut set, &root, &mut t, true);
+    let st = set.state();
+    t += 1000;
+    let mut keys = vec![k("phone a").hash, k("admin a").hash];
+    keys.sort();
+    let rm = cbb_core::records::body::Removal { keys, seen: Vec::new() };
+    set.write_record(&st, &root, Kind::Revoke(rm), t).unwrap();
+    for i in 0..20u32 {
+        let st = set.state();
+        t += 1000;
+        let rm = cbb_core::records::body::Removal { keys: vec![k(&format!("bench dev {i}")).hash], seen: Vec::new() };
+        set.write_record(&st, &root, Kind::Revoke(rm), t).unwrap_or_else(|e| panic!("removal {i}: {e:?}"));
+    }
+    let st = set.state();
+    assert!(st.devices.iter().all(|d| d.admin.is_none()));
+    checkpoint_counts(&mut set, &root, &mut t, "after removals at the floor");
+}
+
+/// The end of the road: each admin key the root makes and removes leaves
+/// its admission and its removal for good, with a checkpoint after each.
+/// Printed: how many before the writer refuses the next admin, and what
+/// the set says then. A change of root then frees the room: the new root
+/// makes an admin again.
+#[test]
+#[ignore = "slow (hundreds of checkpoints); run with --ignored --release --nocapture"]
+fn admin_keys_made_and_removed_until_the_floor() {
+    let (mut set, root, g) = root_with_dead_checkpoints(0, 0);
+    let mut t = g.t;
+    let mut n = 0usize;
+    loop {
+        let (phone, admin) = (k(&format!("road phone {n}")), k(&format!("road admin {n}")));
+        let st = set.state();
+        t += 1000;
+        if let Err(e) = set.write_record(&st, &root, Kind::device(admin_device(&phone, &admin)), t) {
+            let e = format!("{e:?}");
+            assert!(e.contains("write a checkpoint first"), "admin {n}: {e}");
+            break;
+        }
+        let st = set.state();
+        t += 1000;
+        let mut keys = vec![phone.hash, admin.hash];
+        keys.sort();
+        let rm = cbb_core::records::body::Removal { keys, seen: Vec::new() };
+        set.write_record(&st, &root, Kind::Revoke(rm), t).unwrap_or_else(|e| panic!("removal {n}: {e:?}"));
+        checkpoint_counts(&mut set, &root, &mut t, &format!("after admin {n}"));
+        n += 1;
+    }
+    let st = set.state();
+    println!(
+        "{n} admin keys made and removed; then the writer refuses; checkpoint due {}; devices {}; set {} bytes",
+        set.checkpoint_due(&st, t),
+        st.devices.len(),
+        set.bytes()
+    );
+    // At the end of the road a checkpoint still counts.
+    checkpoint_counts(&mut set, &root, &mut t, "at the end of the road");
+    // The way out: a change of root.
+    let st = set.state();
+    let pq = cbb_core::records::pq::PqKey::from_seeds(&[0x31; 16], &[0x32; 16], &[0x33; 16]);
+    let root2 = k("road root 2");
+    let phone2 = Device::new(k("road root 2 phone").key.clone(), "root2 phone", ROLE_PHONE);
+    t += 1000;
+    set.write_change(&st, &k("recovery"), &pq, &root2, phone2, &[], false, t).unwrap();
+    let st = set.state();
+    assert_eq!(st.roots.last(), Some(&root2.hash));
+    for i in 0..4u32 {
+        let (phone, admin) = (k(&format!("road2 phone {i}")), k(&format!("road2 admin {i}")));
+        let st = set.state();
+        t += 1000;
+        set.write_record(&st, &root2, Kind::device(admin_device(&phone, &admin)), t)
+            .unwrap_or_else(|e| panic!("new root, admin {i}: {e:?}"));
+    }
+    println!("after the change of root: devices {}, set {} bytes", set.state().devices.len(), set.bytes());
+}
