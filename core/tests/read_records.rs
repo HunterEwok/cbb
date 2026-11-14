@@ -1275,3 +1275,137 @@ fn a_live_member_takes_what_it_turned_away_when_offered_again() {
         assert!(same(&x, &whole), "ex {ex}: {} records against {}", x.len(), whole.len());
     }
 }
+
+/// The records of `full_group(tag, 8)` with records that move the tiers
+/// and the order in the rooms among them, both tiers squeezed: the root
+/// takes admin key 3 back, admits D (16 removals), removes admin key 5,
+/// writes a checkpoint, and admits E (16 removals). In signing order.
+fn moving_records(tag: &str) -> Vec<Record> {
+    let (recs, root, _admins, mut g) = full_group(tag, 8);
+    let mut all = recs;
+    all.push(g.sign(
+        &root,
+        Kind::device(Device::new(k(&format!("{tag} admin 3 phone")).key.clone(), "was admin", ROLE_PHONE)),
+    ));
+    for name in ["D", "E"] {
+        if name == "E" {
+            all.push(g.sign(
+                &root,
+                Kind::Revoke(cbb_core::records::body::Removal {
+                    keys: vec![k(&format!("{tag} admin 5 key")).hash],
+                    seen: Vec::new(),
+                }),
+            ));
+            let mut held = new_set();
+            held.insert_all(all.clone());
+            let st = held.state();
+            let cp = held.write_checkpoint(&st, &root, g.t + 1).expect("an honest checkpoint");
+            g.heads.insert(root.hash, (cp.body().seq, cp.id()));
+            g.t += 1000;
+            all.push(cp);
+        }
+        let (key, r) = admit_admin(&mut g, &root, &format!("{tag} admin {name}"));
+        all.push(r);
+        for n in 0..16u32 {
+            all.push(wide_removal(&mut g, &key, &format!("{tag} {name}"), n));
+        }
+    }
+    all
+}
+
+/// Offers `records` again until the set changes no more: the rounds it
+/// took.
+fn until_stable(set: &mut RecordSet, records: &[Record]) -> u32 {
+    let mut rounds = 0;
+    loop {
+        let before = (set.digest(), set.state());
+        set.insert_all(records.to_vec());
+        rounds += 1;
+        if (set.digest(), set.state()) == before || rounds == 10 {
+            return rounds;
+        }
+    }
+}
+
+/// Records that move the tiers or the order in the rooms (a take-back, a
+/// removal, a newer root checkpoint), among shuffled ones with both tiers
+/// squeezed: every order ends with the member that took them in signing
+/// order, within two rounds of offering them again.
+#[test]
+#[ignore = "slow; run with --ignored --release --nocapture"]
+fn records_that_move_the_tiers_among_shuffled_ones_end_equal() {
+    let all = moving_records("m");
+    let mut reference = new_set();
+    let first = until_stable(&mut reference, &all);
+    println!("in signing order: {} of {} records, stable after {first} rounds", reference.len(), all.len());
+    let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+    let mut bad = Vec::new();
+    for s in 0..8 {
+        let mut v = all.clone();
+        for i in (1..v.len()).rev() {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            v.swap(i, (seed % (i as u64 + 1)) as usize);
+        }
+        let mut m = new_set();
+        let rounds = until_stable(&mut m, &v);
+        println!("seed {s}: {} records, stable after {rounds} rounds, equal {}", m.len(), same(&m, &reference));
+        if !same(&m, &reference) || rounds > 3 {
+            bad.push(s);
+        }
+    }
+    assert!(bad.is_empty(), "seeds {bad:?} end elsewhere or late");
+}
+
+/// A root that writes checkpoints in a row (an admin's records between
+/// them, so that each prunes) and a member given every record it signed
+/// shuffled, offered three times: equal to the root's own set.
+#[test]
+fn checkpoints_in_a_row_shuffled_end_equal() {
+    let (mut set, root, mut g) = root_with_dead_checkpoints(0, 0);
+    let mut all: Vec<Record> = set.in_dependency_order().into_iter().cloned().collect();
+    let admin = k("admin a");
+    for round in 0..30u32 {
+        for i in 0..3u32 {
+            let dk = k(&format!("cpo dev {round} {i}"));
+            let r = g.sign(&root, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)));
+            all.push(r.clone());
+            let _ = set.insert(r);
+        }
+        if round % 3 == 0 {
+            let r = wide_removal(&mut g, &admin, &format!("cpo adm {round}"), 0);
+            all.push(r.clone());
+            let _ = set.insert(r);
+        }
+        let st = set.state();
+        let cp = set.write_checkpoint(&st, &root, g.t + 1).expect("an honest checkpoint");
+        g.heads.insert(root.hash, (cp.body().seq, cp.id()));
+        g.t += 1000;
+        all.push(cp.clone());
+        let _ = set.insert(cp);
+    }
+    assert!(set.len() < all.len(), "the checkpoints pruned nothing");
+    let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+    for s in 0..4 {
+        let mut v = all.clone();
+        for i in (1..v.len()).rev() {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            v.swap(i, (seed % (i as u64 + 1)) as usize);
+        }
+        let mut m = new_set();
+        for _ in 0..3 {
+            m.insert_all(v.clone());
+        }
+        assert!(same(&m, &set), "seed {s}: {} records against {}", m.len(), set.len());
+    }
+    let mut rev = all.clone();
+    rev.reverse();
+    let mut m = new_set();
+    for _ in 0..3 {
+        m.insert_all(rev.clone());
+    }
+    assert!(same(&m, &set), "reversed: {} records against {}", m.len(), set.len());
+}
