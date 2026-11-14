@@ -1586,6 +1586,27 @@ fn a_change_whose_first_checkpoint_never_comes_completes_alike_in_any_order() {
     }
     println!("after asking: path {}", m.state().roots.len());
     assert_eq!(ends[0].state().roots.len(), 1, "the change completed without its first checkpoint");
+    // After a restart the member asks again: what it asked is not saved.
+    let mut again = restarted(&m);
+    let st = again.state();
+    let asks_again = again.missing(&st);
+    println!("restarted after giving up: asks {}", asks_again.len());
+    assert_eq!(asks_again, vec![first_cp.id()], "a restarted member does not ask for the first checkpoint again");
+    // A peer that took the change gives it in sync whatever was asked: what
+    // a device of the group gets holds the new root's first checkpoint.
+    let peer = k("bench dev 0").hash;
+    let st = writer.state();
+    let given: Vec<Record> = writer.for_peer(&st, &peer).into_iter().cloned().collect();
+    println!(
+        "for_peer gives {} records, the first checkpoint among them {}",
+        given.len(),
+        given.iter().any(|r| r.id() == first_cp.id())
+    );
+    assert!(given.iter().any(|r| r.id() == first_cp.id()), "sync does not give the first checkpoint");
+    let mut synced = m.clone();
+    synced.insert_all(given);
+    println!("after sync with that peer: path {}", synced.state().roots.len());
+    assert_eq!(synced.state().roots.len(), 2, "sync with a peer that took the change does not complete it");
     let got = m.insert(first_cp.clone()).map(|a| format!("{a:?}"));
     println!("the first checkpoint at last: {got:?}; path {}", m.state().roots.len());
     assert_eq!(m.state().roots.len(), 2, "the first checkpoint did not complete the change");
