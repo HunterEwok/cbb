@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Checks the Android app's gradle-wrapper.jar against the checksums of
+# Gradle's own releases on each push to main, as ci.yml's Android jobs do on
+# a pull request. gradlew runs that jar before anything else, so a changed
+# jar would run in every build.
+#
+# OpenSSF Scorecard (scorecard.yml) lets the jar pass its Binary-Artifacts
+# check only when the first workflow it finds with this step has a
+# successful run on main's latest commit. ci.yml runs on pull requests only,
+# and a squashed merge makes a new commit, so this workflow runs on main
+# itself; its name sorts before ci.yml's so that Scorecard finds it first.
+name: android-wrapper
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wrapper:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: the Gradle wrapper's jar is one Gradle published
+        uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1

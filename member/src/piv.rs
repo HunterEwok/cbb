@@ -177,10 +177,23 @@ pub fn sign(c: &mut dyn Card, slot: u8, public: &[u8], digest: &[u8; 32]) -> Res
     Ok(sig.to_vec())
 }
 
-/// The management key's slot and the key a YubiKey has from the factory:
-/// 3DES before firmware 5.7, AES-192 from it.
+/// The management key's slot.
 const MANAGEMENT_SLOT: u8 = 0x9b;
-pub const DEFAULT_MANAGEMENT_KEY: [u8; 24] = [1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8];
+/// The management key a YubiKey has from the factory (3DES before firmware
+/// 5.7, AES-192 from it): the bytes 1 to 8 three times, as Yubico publishes
+/// it. It is no secret; it is made from that rule rather than written out,
+/// as the kits' Piv makes it.
+pub const DEFAULT_MANAGEMENT_KEY: [u8; 24] = factory_management_key();
+
+const fn factory_management_key() -> [u8; 24] {
+    let mut key = [0u8; 24];
+    let mut i = 0;
+    while i < key.len() {
+        key[i] = (i % 8) as u8 + 1;
+        i += 1;
+    }
+    key
+}
 /// The recovery key's policies: the PIN and a touch before each signature.
 const PIN_ALWAYS: u8 = 0x03;
 const TOUCH_ALWAYS: u8 = 0x02;
@@ -1009,6 +1022,13 @@ pub(crate) mod tests {
         assert!(certificate(&mut c, 0x9c).is_err(), "a slot that is not retired");
     }
 
+    /// The factory key is Yubico's published one.
+    #[test]
+    fn factory_management_key_is_yubicos() {
+        let hex: String = DEFAULT_MANAGEMENT_KEY.iter().map(|b| format!("{b:02x}")).collect();
+        assert_eq!(hex, "010203040506070801020304050607080102030405060708");
+    }
+
     /// The root phone's steps: the PIN, the management key, a free slot, a
     /// new key there and its admin CA as the slot's certificate, which a new
     /// phone then finds and signs with.
@@ -1018,7 +1038,10 @@ pub(crate) mod tests {
         select(&mut card).unwrap();
         verify(&mut card, "123456").unwrap();
         assert_eq!(generate(&mut card, 0x83).unwrap_err().message(), "the YubiKey wants its management key first");
-        assert_eq!(authenticate(&mut card, &[0; 24]).unwrap_err().message(), MANAGEMENT_KEY);
+        // The factory key with its last byte changed is refused.
+        let mut wrong = DEFAULT_MANAGEMENT_KEY;
+        wrong[23] ^= 1;
+        assert_eq!(authenticate(&mut card, &wrong).unwrap_err().message(), MANAGEMENT_KEY);
         authenticate(&mut card, &DEFAULT_MANAGEMENT_KEY).unwrap();
         let slot = free_slot(&mut card).unwrap();
         assert_eq!(slot, 0x83, "82 and 84 are taken");
