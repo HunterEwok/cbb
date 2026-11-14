@@ -261,6 +261,8 @@ fn the_pool_ends_alike_the_old_way_and_the_new() {
 /// records costs no more than four times the first.
 #[test]
 fn a_full_group_fills_in_about_the_time_of_its_signatures() {
+    // Timed: without the debug check after every insert.
+    let _unchecked = crate::records::set::Unchecked::new();
     let mut g = G::new();
     let root = k("root");
     let admins: Vec<K> = (0..16).map(|i| k(&format!("admin {i}"))).collect();

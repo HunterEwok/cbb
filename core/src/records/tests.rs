@@ -4284,15 +4284,15 @@ fn keeping_an_admission_while_pruning_its_removal_is_refused() {
     let held = || recs.iter().copied();
     let cp = set.write_checkpoint(&set.state(), &root, 0).unwrap();
     let Kind::Checkpoint { heads, keep } = &cp.body().kind else { unreachable!() };
-    assert!(!crate::records::eval::revives(heads, keep, held()));
+    assert!(!crate::records::eval::revives(heads, keep, held(), |_| true));
     let mut with_x = keep.clone();
     with_x.push(x.id());
     with_x.sort();
-    assert!(crate::records::eval::revives(heads, &with_x, held()));
+    assert!(crate::records::eval::revives(heads, &with_x, held(), |_| true));
     let mut both = with_x.clone();
     both.push(rm.id());
     both.sort();
-    assert!(!crate::records::eval::revives(heads, &both, held()), "the removal kept too");
+    assert!(!crate::records::eval::revives(heads, &both, held(), |_| true), "the removal kept too");
 }
 
 fn has_key(s: &State, member: &K) -> bool {
@@ -5756,4 +5756,39 @@ fn the_body_binds_before_max_seen() {
             .unwrap_err()
             .is("records/revoke/seen")
     );
+}
+
+/// The root voids an admin's removal, the admin writes on, and the root's
+/// checkpoint leaves out both the voided removal (below the admin's head,
+/// counting nowhere) and the resolve, which voids nothing that is left;
+/// the state is the same, and neither comes back when offered again.
+#[test]
+fn a_checkpoint_leaves_out_a_resolve_whose_target_goes() {
+    let mut g = G::new();
+    let root = k("root");
+    let (pa, a) = (k("phone a"), k("admin a"));
+    g.admin(&pa, &a, POWER_ADMIT | POWER_REMOVE);
+    g.device(&root, &k("d"), "d", |_| {});
+    let rv = g.rec(&a, Kind::Revoke(removal(&[k("d").hash], g.seen())));
+    let resolve = g.root_rec(Kind::Resolve(vec![rv.id()]));
+    g.device(&a, &k("e"), "e", |_| {});
+    // The root's newest record is its head, which stays as an anchor.
+    g.device(&root, &k("f"), "f", |_| {});
+    let mut set = set_of(&root.key);
+    set.insert_all(g.recs.clone());
+    let st = set.state();
+    assert!(st.device(&k("d").key.device_id()).is_some() && st.counting.contains(&resolve.id()));
+    let cp = set.write_checkpoint(&st, &root, 0).unwrap();
+    let Kind::Checkpoint { keep, .. } = &cp.body().kind else { unreachable!() };
+    assert!(!keep.contains(&rv.id()) && !keep.contains(&resolve.id()));
+    set.insert(cp.clone()).unwrap();
+    let now = set.state();
+    assert_eq!(now.checkpoint, Some(cp.id()));
+    assert_eq!(now.devices, st.devices);
+    assert!(!set.contains(&rv.id()), "the voided removal");
+    assert!(!set.contains(&resolve.id()), "the resolve");
+    let _ = set.insert(rv.clone());
+    let _ = set.insert(resolve.clone());
+    assert!(!set.contains(&rv.id()) && !set.contains(&resolve.id()));
+    assert_eq!(set.state().devices, st.devices);
 }

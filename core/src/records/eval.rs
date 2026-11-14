@@ -1592,18 +1592,22 @@ pub(crate) fn checkpoint_ok<'r>(cp: &'r Record, get: impl Fn(&RecordId) -> Optio
 }
 
 /// Whether a checkpoint with heads and keep, among the records held, keeps
-/// an admission of a key while it prunes a root's removal naming that key:
+/// an admission of a key while it prunes a root's removal, or an admin's
+/// that counts, naming that key:
 /// it would bring a removed key back through an old record, which the
 /// core's writer never writes.
 pub(crate) fn revives<'r>(
     heads: &[Head],
     keep: &[RecordId],
     held: impl Iterator<Item = (&'r Record, Role)> + Clone,
+    counts: impl Fn(&RecordId) -> bool,
 ) -> bool {
     let anchors = anchors_of(heads, keep);
     let removed: BTreeSet<KeyHash> = held
         .clone()
-        .filter(|(r, role)| *role == Role::Root && pruned_by(r, *role, heads, &anchors))
+        .filter(|(r, role)| {
+            (*role == Role::Root || (*role == Role::Admin && counts(&r.id()))) && pruned_by(r, *role, heads, &anchors)
+        })
         .filter_map(|(r, _)| match &r.body().kind {
             Kind::Revoke(rm) => Some(rm.keys.iter().copied()),
             _ => None,

@@ -1815,3 +1815,187 @@ fn a_change_whose_first_checkpoint_never_comes_completes_alike_in_any_order() {
     assert_eq!(m.state().roots.len(), 2, "the first checkpoint did not complete the change");
     assert!(same(&restarted(&m), &m), "a restore after the change is not the live set");
 }
+
+/// What the state shows of a set, the parts a checkpoint must leave as
+/// they were. Not the removed keys: a removal a checkpoint settles goes,
+/// with the admissions of the keys it names, as the fold always did.
+fn shown(set: &RecordSet) -> String {
+    let s = set.state();
+    format!("{:?} {:?} {:?} {:?} {:?} {:?}", s.devices, s.settings, s.incoming_ms, s.hubs, s.stop, s.conflicts)
+}
+
+/// The root renames one device thirty times and sets how long copies stay
+/// ten times. Its checkpoint keeps the device's oldest and newest records
+/// and the newest of the copies records, the state shows the same, and
+/// what it left out never comes back: offered again one by one, in
+/// reverse after a restart, or held before by a member that then takes
+/// what the root's set gives it.
+#[test]
+fn a_checkpoint_keeps_the_newest_of_what_the_root_set_again() {
+    let (mut set, root, g) = root_with_dead_checkpoints(0, 0);
+    let mut t = g.t;
+    let phone = k("phone a").hash;
+    let dk = k("renamed dev");
+    let mut write = |set: &mut RecordSet, kind: Kind| {
+        let st = set.state();
+        t += 1000;
+        set.write_record(&st, &root, kind, t).unwrap()
+    };
+    let names: Vec<Record> = (0..30)
+        .map(|i| write(&mut set, Kind::device(Device::new(dk.key.clone(), &format!("name {i}"), ROLE_MEMBER))))
+        .collect();
+    let copies: Vec<Record> =
+        (0..10).map(|i| write(&mut set, Kind::Copies { incoming_ms: MIN_INCOMING_MS + i, seen: vec![] })).collect();
+    // The root's newest record is its head; one more puts these below it.
+    write(&mut set, Kind::device(Device::new(k("one more").key.clone(), "dev", ROLE_MEMBER)));
+    let before = shown(&set);
+    let mut other = RecordSet::new(root.key.clone(), bench_recovery());
+    let st = set.state();
+    other.insert_all(set.for_peer(&st, &phone).into_iter().cloned());
+    assert_eq!(shown(&other), before);
+    let mut t2 = t;
+    checkpoint_counts(&mut set, &root, &mut t2, "after the renames");
+    assert_eq!(shown(&set), before);
+    let gone: Vec<&Record> = names[1..29].iter().chain(&copies[..9]).collect();
+    for r in [&names[0], &names[29], &copies[9]] {
+        assert!(set.contains(&r.id()), "a record that stands for the rest");
+    }
+    for r in &gone {
+        assert!(!set.contains(&r.id()), "a record set again later stays");
+    }
+    let after_bytes = set.bytes();
+    for r in &gone {
+        let _ = set.insert((*r).clone());
+        assert!(!set.contains(&r.id()), "offered again, it came back");
+    }
+    assert_eq!(shown(&set), before);
+    assert_eq!(set.bytes(), after_bytes);
+    let mut back = restarted(&set);
+    assert_eq!(shown(&back), before);
+    for r in gone.iter().rev() {
+        let _ = back.insert((*r).clone());
+    }
+    back.insert_all(gone.iter().map(|r| (*r).clone()));
+    assert!(gone.iter().all(|r| !back.contains(&r.id())), "after a restart, it came back");
+    assert_eq!(shown(&back), before);
+    let st = set.state();
+    other.insert_all(set.for_peer(&st, &phone).into_iter().cloned());
+    assert_eq!(other.state().checkpoint, st.checkpoint);
+    assert!(gone.iter().all(|r| !other.contains(&r.id())), "the other member still holds it");
+    assert_eq!(shown(&other), before);
+}
+
+/// The admin admits plain devices and removes them while the root is
+/// away, until its writer refuses for its room. The root's checkpoint
+/// then leaves out the admin's admissions and removals below its head:
+/// the state shows the same, the admin writes again, and none of them
+/// comes back when offered again, before or after a restart.
+#[test]
+fn an_admin_s_removals_go_at_the_root_s_checkpoint() {
+    let (mut set, root, g) = root_with_dead_checkpoints(0, 0);
+    let mut t = g.t;
+    let admin = k("admin a");
+    let mut written: Vec<Record> = Vec::new();
+    let mut refused = String::new();
+    'fill: for i in 0.. {
+        let dk = k(&format!("admin's dev {i}"));
+        for kind in [
+            Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)),
+            Kind::Revoke(cbb_core::records::body::Removal { keys: vec![dk.hash], seen: Vec::new() }),
+        ] {
+            let st = set.state();
+            t += 1000;
+            match set.write_record(&st, &admin, kind, t) {
+                Ok(r) => written.push(r),
+                Err(e) => {
+                    refused = format!("{e:?}");
+                    break 'fill;
+                }
+            }
+        }
+    }
+    assert!(written.len() > 20, "only {} records", written.len());
+    assert!(refused.contains("ceiling") || refused.contains("room"), "{refused}");
+    let before = shown(&set);
+    checkpoint_counts(&mut set, &root, &mut t, "after the admin's removals");
+    assert_eq!(shown(&set), before);
+    // The admin's head stays as an anchor, with what it names.
+    let gone: Vec<&Record> = written[..written.len() - 2].iter().collect();
+    for r in &gone {
+        assert!(!set.contains(&r.id()), "an admin's settled record stays");
+    }
+    for r in &gone {
+        let _ = set.insert((*r).clone());
+    }
+    assert!(gone.iter().all(|r| !set.contains(&r.id())), "offered again, it came back");
+    let mut back = restarted(&set);
+    back.insert_all(gone.iter().map(|r| (*r).clone()));
+    assert!(gone.iter().all(|r| !back.contains(&r.id())), "after a restart, it came back");
+    assert_eq!(shown(&back), before);
+    let st = set.state();
+    t += 1000;
+    let dk = k("admin's dev after");
+    set.write_record(&st, &admin, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)), t)
+        .expect("the admin writes again");
+}
+
+/// Removals past the floor: the root's room holds records that stay for
+/// good up to its floor, then the root removes its hundred plain devices
+/// one by one. Each removal is written; where one more would leave no room
+/// for the root's checkpoint, the writer writes that checkpoint first,
+/// which settles the removals before it, and at the end a checkpoint
+/// still counts.
+#[test]
+fn removals_past_the_floor_write_the_checkpoint_first() {
+    let (mut set, root, g) = root_with_dead_checkpoints(0, 0);
+    let mut t = g.t;
+    fill_to_the_floor(&mut set, &root, &mut t, true);
+    let first = set.state().checkpoint;
+    let mut checkpoints = std::collections::BTreeSet::new();
+    for i in 0..100u32 {
+        let st = set.state();
+        t += 1000;
+        let rm = cbb_core::records::body::Removal { keys: vec![k(&format!("bench dev {i}")).hash], seen: Vec::new() };
+        set.write_record(&st, &root, Kind::Revoke(rm), t).unwrap_or_else(|e| panic!("removal {i}: {e:?}"));
+        let st = set.state();
+        assert!(st.revoked.contains(&k(&format!("bench dev {i}")).hash) || st.checkpoint != first);
+        assert!(st.device(&k(&format!("bench dev {i}")).key.device_id()).is_none(), "removal {i}");
+        checkpoints.extend(st.checkpoint);
+    }
+    assert!(!checkpoints.is_empty(), "no checkpoint was written first");
+    let st = set.state();
+    assert!(st.devices.iter().all(|d| !d.name.starts_with("bench")));
+    checkpoint_counts(&mut set, &root, &mut t, "after the removals");
+}
+
+/// The take-back case with sixteen keys no longer admins squeezing the
+/// second tier, taken in two offers (the group, then the tail): what the
+/// member holds is what the rooms keep of it (checked after every insert
+/// in debug builds), and offered everything again it comes to rest: a
+/// third offer changes nothing. Where it rests may differ from a member
+/// that took everything at once (the first offer turned records away by
+/// what it held then), only in records of keys no longer admins past
+/// their share.
+#[test]
+fn a_member_comes_to_rest_when_offered_everything_again() {
+    let tb = take_back("s", 16);
+    let mut x = new_set();
+    x.insert_all(tb.recs.clone());
+    x.insert_all(tb.back_first()[tb.recs.len()..].iter().cloned());
+    x.insert_all(tb.back_first());
+    let (digest, state, n) = (x.digest(), x.state(), x.len());
+    x.insert_all(tb.back_first());
+    assert_eq!(x.len(), n, "held {n}, then {}", x.len());
+    assert!(x.digest() == digest && x.state() == state, "a third offer changed the set");
+    let mut once = new_set();
+    once.insert_all(tb.back_first());
+    assert_eq!(once.state().devices, x.state().devices, "the devices differ from a member that took all at once");
+    let ex: Vec<KeyHash> =
+        (0..16).map(|e| k(&format!("s ex admin {e} key")).hash).chain([k("s admin 3 key").hash]).collect();
+    let ids = |s: &RecordSet| {
+        s.in_dependency_order().iter().map(|r| (r.id(), r.body().signer)).collect::<std::collections::BTreeSet<_>>()
+    };
+    for (_, signer) in ids(&once).symmetric_difference(&ids(&x)) {
+        assert!(ex.contains(signer), "a record of a live key differs");
+    }
+}
