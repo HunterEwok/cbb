@@ -1921,10 +1921,9 @@ The recovery chain is kept outside the rooms.
 
 There is no level. Each key has a fixed cap, read from the roster in the root's kept records
 alone: the current root `records::MAX_ROOT_RECORDS` (1536) units, the roots a change cut
-together `records::CUT_ROOTS_RESERVE` (1536), each live admin key `records::MAX_ADMIN_RECORDS`
-(256), and each key that is no longer an admin min(256, ⌊rest / n⌋), where rest is
-`records::MAX_RECORDS` (7168) less the root's, the reserve's and the live admin keys' caps, and
-n is the number of keys that are no longer admins.
+together `records::CUT_ROOTS_RESERVE` (1536), and each live admin key `records::MAX_ADMIN_RECORDS`
+(256). A key that is no longer an admin has cap 0: what it signed stays only as far as a root's
+checkpoint keeps it, and what a checkpoint keeps comes first in the rooms.
 
 Who is no longer an admin is read from the root records of the path that the roots' rooms keep
 (`eval::rooms`, `eval::not_live`; of a root that a change cut, only what its list names): the
@@ -1936,14 +1935,17 @@ each key: its root's place on the path, then its seq, then the smaller ID. A roo
 come first in its room, and so does a root record that takes an admin key back, so the caps
 never drop a record that decides who is an admin.
 
-A checkpoint of the root is due after a root record that makes a key no longer an admin, and
-after one that makes a new admin key, which lowers every cap of the keys no longer admins (the
-root's set says so: `RecordSet::checkpoint_due`), so that what the root holds of those keys is kept
-first by its checkpoint. A record of such a key that the root did not hold when it wrote that
-checkpoint is lost while the key's cap is 0, as it is beside 16 live admin keys. A record of a
-key the root took back counts no more in the state whether it is held or not (the writer refuses
-a take-back that would put a device out), so a removal among them that is lost changes nothing:
-the device it names stays until someone removes it again.
+Before a root record that makes an admin key no longer an admin (a removal that names the key
+or the key of a device that holds it, or a device record that takes the key back), the root's
+writer writes a checkpoint of the root first, then the record (`RecordSet::write_record`). That
+checkpoint keeps every record of a key that is no root that counts and is a head, and every
+record of the keys going that counts, so what counted of them keeps counting on every member
+that holds the checkpoint; a change's first checkpoint likewise keeps what counts of the admin
+keys the change removes. When no such checkpoint can be written (the root has two histories),
+the record goes alone, and what the root's newest checkpoint does not keep of those keys is
+lost. A record of a key the root took back counts no more in the state whether it is held or
+not (the writer refuses a take-back that would put a device out), so a removal among them that
+is lost changes nothing: the device it names stays until someone removes it again.
 
 The 16 live admin keys can include keys an admin removed: those count among the 16 until the
 root removes them too. Before the root names a 17th admin key while 16 are live, its writer
@@ -2221,7 +2223,7 @@ and `a`-`f`.
 | `takeover_delay_ms` | integer | none | from 0 to 604 800 000 (7 days); absent means 259 200 000 (72 hours) |
 | `key_level` | string | none | `proven`, `hardware` or `files`: which devices may be the group's root, an admin or a trusted hub, which is an admin ([roadmap](roadmap.md), "Key levels"); absent means `hardware`. The state carries it; the rules do not check it yet, the apps and `cbb` do when they make an admin or a hub |
 | `incoming_ms` | integer | `copies` | from 5 000 to 3 600 000 (1 hour): how long a copy from another device stays live on each member (section 5, "Writing the member's own clipboard"); without a `copies` record that counts, 60 000 |
-| `heads` | array of objects | `checkpoint`, one at least | sorted by `key`, each key once: `{"key": key hash of a signer, "seq": 1 or more, "id": the ID of that signer's record with that seq}` |
+| `heads` | array of objects | `checkpoint`, one at least | sorted by `key`, each key once: `{"key": key hash of a signer, "seq": 1 or more, "id": the ID of that signer's record with that seq}`; above seq 1 its own key's head is its `prev`, at seq 1 it names no head of its own key |
 | `keep` | array of strings | none | sorted record IDs: the records below the heads that still count |
 | `hubs` | array of strings | `hubs`, one at least | 1 to 16 device IDs, each once, in the user's order (not sorted) |
 
@@ -2339,6 +2341,11 @@ heads that still count: the newest `device` record of each device, the `revoke`,
 `thaw` records that count, the newest `settings`, the `hubs` and `copies` records that count, the `recovery` record that counts, every claim not yet decided and the records
 its `seen` and its disputes need, and the `resolve` records that end them. The apps sign one
 by themselves when the records pass three quarters of either limit.
+
+A checkpoint above seq 1 names its own key's head, and that head is its `prev`: the record one
+seq below it, by its ID; a checkpoint at seq 1 names no head of its own key. A body that does
+otherwise is refused (`records/checkpoint/own-prev`), so a checkpoint always settles its own
+key's records below it, and a newer one never takes back what an older one settled of its key.
 
 A checkpoint leaves out of a set each record of the group whose body reads, of a signer in
 `heads`, with a `seq` at or below that head's, other than the heads and the records in `keep`,

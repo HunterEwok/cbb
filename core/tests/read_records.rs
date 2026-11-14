@@ -2027,16 +2027,13 @@ fn members_reading_different_rosters_agree_after_one_exchange() {
     assert!(same(&all, &x), "the exchange ends elsewhere than all at once");
 }
 
-/// What a taken-back admin key signed that the root never held. The 16
-/// admin keys are live; admin key 0 removes a device the root admitted,
-/// and the root does not hear of it. The root takes admin key 0 back (15
-/// live: the key's cap is a whole admin room), its set says a checkpoint
-/// is due, and the root writes it; offered then, the removal is held, but counts
-/// no more than any record of a key that is no longer an admin: the device
-/// stays (`fifteen`). Or the root first makes a new admin key D, 16 live again,
-/// and the cap of a key no longer an admin is 0: offered after that, the
-/// removal is lost and the device stays until someone removes it again.
-fn a_taken_back_admin_s_removal(fifteen: bool) -> (bool, bool) {
+/// A take-back writes the root's checkpoint first: the root takes admin
+/// key 0 back and its writer puts a checkpoint that counts right before
+/// the take-back. A removal admin key 0 signed that the root never held,
+/// offered after, is lost (the key has no room) and counts no more anyway
+/// (a taken-back key's records do not count): the device it names stays.
+#[test]
+fn a_take_back_writes_the_root_s_checkpoint_first() {
     let (recs, root, admins, mut g) = full_group("z", 0);
     let mut set = new_set();
     set.insert_all(recs);
@@ -2050,39 +2047,38 @@ fn a_taken_back_admin_s_removal(fifteen: bool) -> (bool, bool) {
     let st = set.state();
     t += 1000;
     let back = Device::new(k("z admin 0 phone").key.clone(), "was admin", ROLE_PHONE);
-    set.write_record(&st, &root, Kind::device(back), t).unwrap();
-    assert!(set.checkpoint_due(&set.state(), t), "no checkpoint due after the take-back");
-    checkpoint_counts(&mut set, &root, &mut t, "after the take-back");
-    assert!(!set.checkpoint_due(&set.state(), t));
-    if !fifteen {
-        let (dk, ak) = (k("z admin D phone"), k("z admin D key"));
-        let mut d = Device::new(dk.key.clone(), "admin", ROLE_PHONE);
-        d.rights = RIGHT_READ | RIGHT_SEND;
-        d.admin = Some(ak.key.clone());
-        d.powers = 0x1ff & !64;
-        let st = set.state();
-        t += 1000;
-        set.write_record(&st, &root, Kind::device(d), t).unwrap();
-        assert!(set.checkpoint_due(&set.state(), t), "no checkpoint due after the admission");
-        checkpoint_counts(&mut set, &root, &mut t, "after the admission");
-    }
+    let r = set.write_record(&st, &root, Kind::device(back), t).unwrap();
+    let st = set.state();
+    let cp = set.get(&r.body().prev.unwrap()).unwrap().clone();
+    assert!(matches!(cp.body().kind, Kind::Checkpoint { .. }), "no checkpoint right before the take-back");
+    assert_eq!(st.checkpoint, Some(cp.id()));
     let _ = set.insert(rm.clone());
     let st = set.state();
-    (set.contains(&rm.id()), st.device(&dev.key.device_id()).is_some())
+    assert!(!set.contains(&rm.id()), "a record of a key with no room is held");
+    assert!(st.device(&dev.key.device_id()).is_some(), "the device left");
 }
 
+/// A root's removal of an admin key writes the checkpoint first too: a
+/// device admin key 0 admitted, which the removal has seen, stays though
+/// the key has no room now: the checkpoint keeps its admission.
 #[test]
-fn a_taken_back_admin_s_removal_is_held_while_its_cap_has_room() {
-    let (held, stays) = a_taken_back_admin_s_removal(true);
-    assert!(held, "the removal is not held");
-    assert!(stays, "a removal of a key no longer an admin counts");
-}
-
-#[test]
-fn a_taken_back_admin_s_removal_is_lost_while_its_cap_is_0() {
-    let (held, stays) = a_taken_back_admin_s_removal(false);
-    assert!(!held, "the removal is held");
-    assert!(stays, "the device left");
+fn a_removal_of_an_admin_key_writes_the_root_s_checkpoint_first() {
+    let (recs, root, admins, mut g) = full_group("y", 0);
+    let mut set = new_set();
+    set.insert_all(recs);
+    let theirs = k("y admin 0 dev");
+    let admitted = g.sign(&admins[0], Kind::device(Device::new(theirs.key.clone(), "theirs", ROLE_MEMBER)));
+    set.insert(admitted.clone()).unwrap();
+    let st = set.state();
+    let out = set.write_removal(&st, &root, &[admins[0].hash], g.t + 1000).unwrap();
+    let st = set.state();
+    let r = out.last().unwrap();
+    let cp = set.get(&r.body().prev.unwrap()).unwrap().clone();
+    assert!(matches!(cp.body().kind, Kind::Checkpoint { .. }), "no checkpoint right before the removal");
+    assert_eq!(st.checkpoint, Some(cp.id()));
+    assert!(st.revoked.contains(&admins[0].hash));
+    assert!(st.device(&theirs.key.device_id()).is_some(), "the device admin key 0 admitted left");
+    assert!(set.contains(&admitted.id()));
 }
 
 /// Members that take the records one by one, each in its own order, may

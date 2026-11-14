@@ -149,6 +149,16 @@ impl Run {
                 }
                 other => panic!("kind {other}"),
             };
+            // The core wants a checkpoint's own head to be its prev (rule
+            // `records/checkpoint/own-prev`): one the model names of its own
+            // key is replaced by its prev.
+            let kind = match kind {
+                Kind::Checkpoint { mut heads, keep } => {
+                    heads.retain(|h| h.key != by.hash);
+                    self.g.with_own_head(&by, Kind::Checkpoint { heads, keep })
+                }
+                other => other,
+            };
             let body = self.g.body(&by, kind);
             assert_eq!(body.seq, seq, "#{n}");
             let r = crate::testkit::sign_by(body, &by);

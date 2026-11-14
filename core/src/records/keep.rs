@@ -190,8 +190,6 @@ pub fn reserve() -> u64 {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Cut {
     level: u64,
-    /// The level of the keys that are no longer admins (`keep_tiers`).
-    level2: u64,
     /// For each key, the first record of its order it dropped and the
     /// units of the records dropped from there: nothing after it is kept,
     /// and the units still count in the key's demand.
@@ -205,7 +203,7 @@ fn top() -> u64 {
 
 impl Default for Cut {
     fn default() -> Cut {
-        Cut { level: top(), level2: top(), marks: BTreeMap::new() }
+        Cut { level: top(), marks: BTreeMap::new() }
     }
 }
 
@@ -215,10 +213,10 @@ impl Cut {
         self.marks.is_empty()
     }
 
-    /// The level the shares stand at: the first tier's, or with second
-    /// the level of the keys that are no longer admins (`keep_tiers`).
-    pub fn level(&self, second: bool) -> u64 {
-        if second { self.level2.min(top()) } else { self.level.min(top()) }
+    /// The level the shares stand at: past every ceiling, as caps are
+    /// fixed (`keep_tiers`).
+    pub fn level(&self) -> u64 {
+        self.level.min(top())
     }
 
     /// The units key dropped, when it dropped any.
@@ -265,30 +263,27 @@ pub fn keep_with(
     cut: &Cut,
     pre: &BTreeMap<KeyHash, u64>,
 ) -> (BTreeSet<RecordId>, Cut) {
-    keep_tiers(items, ceiling_of, cut, pre, &BTreeSet::new(), 0)
+    keep_tiers(items, ceiling_of, cut, pre, &BTreeSet::new())
 }
 
-/// keep_with in two tiers, each key within a cap fixed by the roster
-/// alone, never by what other keys hold. The first tier: the roots'
-/// rooms, the cut roots' reserve and each of the `live` admin keys at its
-/// ceiling; these add up to the set's room. The keys of `second` (admin
-/// keys that are no longer admins, `eval::not_live`) share what the first
-/// tier leaves, in equal caps of at most an admin key's ceiling. Each key
-/// keeps the longest run of its first records, whole, within its cap less
-/// what it holds first. So what a key keeps hangs on its own records and
-/// the roster only, never on what other keys hold. A key that passed its
-/// cap with records of unequal sizes may keep other records after it
-/// dropped some than at once (see the module's last paragraph).
+/// keep_with with each key within a cap fixed by the roster alone, never
+/// by what other keys hold: the roots' rooms, the cut roots' reserve and
+/// each live admin key at its ceiling, which add up to the set's room;
+/// the keys of `second` (admin keys that are no longer admins or not
+/// among the live ones, `eval::rooms`) have no room. Each key keeps the
+/// longest run of its first records, whole, within its cap less what it
+/// holds first. So what a key keeps hangs on its own records and the
+/// roster only, never on what other keys hold. A key that passed its cap
+/// with records of unequal sizes may keep other records after it dropped
+/// some than at once (see the module's last paragraph).
 pub fn keep_tiers(
     items: &[Item],
     ceiling_of: impl Fn(&KeyHash) -> Option<u64>,
     _cut: &Cut,
     pre: &BTreeMap<KeyHash, u64>,
     second: &BTreeSet<KeyHash>,
-    live: usize,
 ) -> (BTreeSet<RecordId>, Cut) {
     let pre_of = |k: &KeyHash| pre.get(k).copied().unwrap_or(0);
-    let cap2 = second_cap(second.len(), live);
     let mut by_key: BTreeMap<KeyHash, Vec<&Item>> = BTreeMap::new();
     for it in items {
         if ceiling_of(&it.signer).is_some() {
@@ -300,7 +295,7 @@ pub fn keep_tiers(
         items.sort_by_key(|it| it.pos());
         items.dedup_by_key(|it| it.id);
         let ceiling = ceiling_of(&hash).unwrap_or(0);
-        let cap = if second.contains(&hash) { ceiling.min(cap2) } else { ceiling };
+        let cap = if second.contains(&hash) { 0 } else { ceiling };
         let mut room = cap.saturating_sub(pre_of(&hash));
         for it in items {
             let Some(left) = room.checked_sub(it.units) else { break };
@@ -308,23 +303,7 @@ pub fn keep_tiers(
             kept.insert(it.id);
         }
     }
-    (kept, Cut { level: top(), level2: cap2, marks: BTreeMap::new() })
-}
-
-/// The cap of each admin key that is no longer an admin, with `n2` such
-/// keys and `live` live admin keys: the set's room less the roots' room,
-/// the cut roots' reserve and the live keys' rooms, shared equally, at
-/// most an admin key's ceiling. With 16 live admin keys it is 0: what such
-/// a key signed stays only as far as a root's checkpoint keeps it.
-pub fn second_cap(n2: usize, live: usize) -> u64 {
-    let rest = room()
-        .saturating_sub(ceiling(true))
-        .saturating_sub(reserve())
-        .saturating_sub(ceiling(false).saturating_mul(live as u64));
-    match u64::try_from(n2) {
-        Ok(n) if n > 0 => rest.checked_div(n).unwrap_or(0).min(ceiling(false)),
-        _ => ceiling(false),
-    }
+    (kept, Cut { level: top(), marks: BTreeMap::new() })
 }
 
 #[cfg(test)]

@@ -1400,7 +1400,7 @@ fn records_of_a_late_chain_record_are_taken_when_it_joins() {
 #[test]
 fn a_large_first_checkpoint_applies() {
     let mut g = base();
-    let admins: Vec<K> = (0..6).map(|i| k(&format!("admin {i}"))).collect();
+    let admins: Vec<K> = (0..9).map(|i| k(&format!("admin {i}"))).collect();
     let grants: Vec<Record> = admins
         .iter()
         .enumerate()

@@ -430,6 +430,45 @@ fn own_head_before(m: &Value<'_>) -> bool {
     })
 }
 
+/// Whether a checkpoint's own head is its prev, one seq below it, and it
+/// names none at seq 1.
+fn own_head_is_prev(m: &Value<'_>) -> bool {
+    let (Some(signer), Some(seq)) = (m.get(3).and_then(Value::as_bytes), m.get(4).and_then(Value::as_uint)) else {
+        return false;
+    };
+    let prev = m.get(5).and_then(Value::as_bytes);
+    let own = m.get(10).and_then(Value::as_array).unwrap_or(&[]).iter().find_map(|h| match h.as_array() {
+        Some([Value::Bytes(k), Value::Uint(n), Value::Bytes(id)]) if k == &signer => Some((*n, *id)),
+        _ => None,
+    });
+    match (own, prev) {
+        (Some((n, id)), Some(p)) => n.checked_add(1) == Some(seq) && id == p,
+        (None, None) => seq == 1,
+        _ => false,
+    }
+}
+
+#[test]
+fn checkpoints_name_their_prev_as_their_own_head() {
+    let r = load("records.json");
+    let mut refused = 0;
+    for (verdict, list) in [("take", &r["take"]), ("refuse", &r["refuse"])] {
+        for t in list.as_array().unwrap() {
+            let b = unhex(s(t, "envelope"));
+            let Ok(e) = Envelope::parse(&b) else { continue };
+            if e.map.get(1) != Some(&Value::Uint(9)) {
+                continue;
+            }
+            let own = verdict == "refuse" && s(t, "rule") == "records/checkpoint/own-prev";
+            if verdict == "take" || own {
+                assert_eq!(own_head_is_prev(&e.map), !own, "{}", s(t, "name"));
+                refused += usize::from(own);
+            }
+        }
+    }
+    assert_eq!(refused, 2);
+}
+
 #[test]
 fn checkpoints_name_heads_before_themselves() {
     let r = load("records.json");
