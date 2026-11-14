@@ -7,6 +7,10 @@ All notable changes to cbb are documented in this file. The format follows
 ## [Unreleased]
 
 ### Added
+- The 0.6 recovery sheet in the Rust core (`cbb_core::sheet`): the 32-byte recovery secret as
+  4 lines of 16 characters with a check on each line and one on the whole sheet, so a typing
+  mistake is told apart from a sheet of another group, and as a QR code with the Group ID;
+  both carry a version, and a later one says the sheet needs a newer cbb.
 - The Rust core wipes the secrets it holds when it lets them go, prints none in `Debug` or
   an error, and compares every mark and confirmation tag in constant time; the C library
   wipes each answer as it is given back (docs/core-api.md, "Secrets"). Timing tests of the

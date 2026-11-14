@@ -2158,6 +2158,129 @@ def check_message(m):
     return check_map(MESSAGE_TYPES[t], m) if t in MESSAGE_TYPES else None
 
 
+# The 0.6 recovery sheet (core/src/sheet.rs): text and QR of a 32-byte
+# secret, written here apart from the core.
+B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+
+def b32(b):
+    bits = "".join(f"{x:08b}" for x in b)
+    bits += "0" * (-len(bits) % 5)
+    return "".join(B32[int(bits[i:i + 5], 2)] for i in range(0, len(bits), 5))
+
+
+def sheet_check(digest, n):
+    v = int.from_bytes(digest[:2], "big") >> (16 - n)
+    return "".join(B32[(v >> (5 * i)) & 31] for i in reversed(range(n // 5)))
+
+
+def sheet_line_check(i, data):
+    return sheet_check(sha(b"cbb recovery sheet v1\x00", bytes([i + 1]), data.encode()), 10)
+
+
+def sheet_lines(data):
+    return [data[i:i + 14] + sheet_line_check(i // 14, data[i:i + 14]) for i in range(0, 56, 14)]
+
+
+def sheet_text(secret):
+    data = "1" + b32(secret) + sheet_check(sha(b"cbb recovery sheet v1 whole\x00", b"1", secret), 15)
+    assert len(data) == 56
+    return "\n".join(" ".join(l[j:j + 4] for j in range(0, 16, 4)) for l in sheet_lines(data))
+
+
+def sheet_keys(secret):
+    """K1's point and K2's public key from the secret (records/pq.rs)."""
+    for counter in range(256):
+        d = int.from_bytes(sha(b"cbb recovery key es256 v1\x00", secret, bytes([counter])), "big")
+        if 1 <= d < N:
+            break
+    k1 = ec.derive_private_key(d, ec.SECP256R1()).public_key().public_bytes(
+        serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+    seeds = hashlib.sha512(b"cbb recovery key slh-dsa-sha2-128s v1\x00" + secret).digest()[:48]
+    k2, _ = slh_sign(seeds, [])
+    return k1, k2
+
+
+def sheet_vectors():
+    group = sha(b"sheet vector group")[:16]
+    take = []
+    for name, secret in [("all zero", bytes(32)), ("all 0xff", b"\xff" * 32),
+                         ("a random secret", sha(b"sheet vector secret"))]:
+        k1, k2 = sheet_keys(secret)
+        take.append({"name": name, "secret": secret.hex(), "group": group.hex(), "k1": k1.hex(), "k2": k2.hex(),
+                     "text": sheet_text(secret), "qr": "CBBR1" + b32(secret + group)})
+    secret = sha(b"sheet vector secret")
+    t = sheet_text(secret)
+    lines = [l.replace(" ", "") for l in t.split("\n")]
+
+    def edit(line, at, c):
+        ls = list(lines)
+        ls[line] = ls[line][:at] + c + ls[line][at + 1:]
+        return "\n".join(ls)
+
+    def other(c):
+        return "Z" if c != "Z" else "Y"
+
+    g = t.split("\n")[1].split(" ")
+    swapped_groups = t.split("\n")
+    swapped_groups[1] = " ".join([g[1], g[0], g[2], g[3]])
+    swapped_lines = list(lines)
+    swapped_lines[1], swapped_lines[2] = swapped_lines[2], swapped_lines[1]
+    # a mistake that line 2's check misses and the whole check catches
+    d, chk = lines[1][:14], lines[1][14:]
+    missed = None
+    for n in range(32 ** 3):
+        x = list(d)
+        x[2], x[6], x[9] = B32[n // 1024], B32[n // 32 % 32], B32[n % 32]
+        x = "".join(x)
+        if x != d and sheet_line_check(1, x) == chk:
+            missed = x
+            break
+    assert missed
+    ml = list(lines)
+    ml[1] = missed + chk
+    # non-zero padding: the secret's last character carries 1 bit and 4 zeros
+    data = "".join(l[:14] for l in lines)
+    last = B32[B32.index(data[52]) | 1]
+    padded = "\n".join(sheet_lines(data[:52] + last + data[53:]))
+    qr = take[2]["qr"]
+    qpad = qr[:-1] + B32[B32.index(qr[-1]) | 1]
+    refuse = [
+        ("a mistyped character in line 3", edit(2, 5, other(lines[2][5])), "lines:4"),
+        ("two groups swapped in line 2", "\n".join(swapped_groups), "lines:2"),
+        ("lines 2 and 3 swapped", "\n".join(swapped_lines), "lines:6"),
+        ("a mistake line 2's check misses", "\n".join(ml), "whole"),
+        ("padding bits that are not zero", padded, "padding"),
+        ("63 characters", "\n".join(lines)[:-1], "length"),
+        ("version 2", "2" + "\n".join(lines)[1:], "newer"),
+        ("a character outside the alphabet", edit(1, 3, "*"), "damaged"),
+        ("words", "https://example.com/", "not_sheet"),
+        ("a sheet of 0.5 (56 characters)", "-".join([b32(secret)[i:i + 4] for i in range(0, 52, 4)] + ["ABCD"]), "earlier"),
+        ("a QR code of 0.5", "cbb://recover?g=0011223344556677&k=AA&c=BB", "earlier"),
+        ("a QR code of version 2", "CBBR2" + qr[5:], "newer"),
+        ("a QR code one character short", qr[:-1], "length"),
+        ("a QR code with its spare bit set", qpad, "padding"),
+    ]
+    reads = [
+        ("lower case with I, L and O for 1, 1 and 0",
+         t.lower().replace("1", "l").replace("0", "o"), secret.hex(), None),
+        ("a QR code in lower case", qr.lower(), secret.hex(), group.hex()),
+    ]
+    other_group = sha(b"another group")[:16]
+    checks = [
+        ("a QR code of another group", "CBBR1" + b32(secret + other_group), "other_group"),
+        ("a QR code of this group with keys that are not its", "CBBR1" + b32(bytes(32) + group), "damaged"),
+        ("a text whose keys are not the group's", sheet_text(bytes(32)), "other_group"),
+    ]
+    return {
+        "note": "the group of every check is `group` with the recovery keys k1, k2 of 'a random secret'",
+        "take": take,
+        "read": [{"name": n, "input": i, "secret": s_, "group": g_} for n, i, s_, g_ in reads],
+        "refuse": [{"name": n, "input": i, "reason": r} for n, i, r in refuse],
+        "check": [{"name": n, "input": i, "reason": r} for n, i, r in checks],
+    }
+
+
 def wave3_vectors(records_take):
     take, refuse, maps = [], [], []
     wg = lambda label: [X25519, fake(label, 32)]
@@ -3393,6 +3516,7 @@ def main():
     }
     files["wave4.json"] = wave4_vectors()
     files["future.json"] = future_vectors()
+    files["sheet.json"] = sheet_vectors()
     # Each signature has one form: the high-S twin of a valid signature
     # (the same r, n - s) is refused for every kind.
     def twin(sig):

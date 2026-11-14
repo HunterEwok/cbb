@@ -1,0 +1,136 @@
+{
+ "draft": "format-0.6-bytes.md, draft of 2026-11-11",
+ "note": "the group of every check is `group` with the recovery keys k1, k2 of 'a random secret'",
+ "take": [
+  {
+   "name": "all zero",
+   "secret": "0000000000000000000000000000000000000000000000000000000000000000",
+   "group": "07e3f8c07b91759d0460143e253adfb6",
+   "k1": "04592268d64b6838a8e9f73a719a411567182d912fd25f7da8fa892453d67c47fbdffd40da10eb32da626dc0ea9638337fd192c4522e2abfd393b2b333acab8e89",
+   "k2": "b1b2b09da3052f4583e1fa590b433c78fba697b0651f51096beb4cc2ba92c293",
+   "text": "1000 0000 0000 001X\n0000 0000 0000 00BW\n0000 0000 0000 00AW\n0000 0000 0005 J5ZM",
+   "qr": "CBBR10000000000000000000000000000000000000000000000000000FRZRR1XS2XCX0HG18FH57BFVC"
+  },
+  {
+   "name": "all 0xff",
+   "secret": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "group": "07e3f8c07b91759d0460143e253adfb6",
+   "k1": "0466ddf756b59f907815b309ffaeee14ca098bd8afd496069795e4bf3d15172e0c8c2fa4340683de88b021b507f2a2bab5b677112de7a41a645cfad25278ac1b0d",
+   "k2": "a19c9cfd60c346ae3643dbfb713ff27cf39beb781eb02cd8c19f8e3eb13366ac",
+   "text": "1ZZZ ZZZZ ZZZZ ZZR5\nZZZZ ZZZZ ZZZZ ZZJ0\nZZZZ ZZZZ ZZZZ ZZA0\nZZZZ ZZZZ ZZGE P91C",
+   "qr": "CBBR1ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZGFRZRR1XS2XCX0HG18FH57BFVC"
+  },
+  {
+   "name": "a random secret",
+   "secret": "2a9183f932f8dcc72bf18246c1f7aae805420bb2f9a9bb37ae6e0f76c5126181",
+   "group": "07e3f8c07b91759d0460143e253adfb6",
+   "k1": "0448747b4993fc197b2349f51c5889f9e3ef5ec8aa9d7ceefe43462d53eab058970dfd37a5c6ab58231a5375e695a46839936076c5889b9c0c8be3e22e57066871",
+   "k2": "4f02b04bdfe0241b7a2a02ae8b7f6ddb8adcb8f8b32b033ae793de7b0930c5a6",
+   "text": "15A8 R7Y9 JZ3E CE09\nAZHG 93C3 XXAX 02GW\nM42X JZ6M VPDX ED7K\nR7QD H8JC 60GD A63D",
+   "qr": "CBBR15A8R7Y9JZ3ECEAZHG93C3XXAX02M42XJZ6MVPDXEDR7QDH8JC60GFRZRR1XS2XCX0HG18FH57BFVC"
+  }
+ ],
+ "read": [
+  {
+   "name": "lower case with I, L and O for 1, 1 and 0",
+   "input": "l5a8 r7y9 jz3e ceo9\nazhg 93c3 xxax o2gw\nm42x jz6m vpdx ed7k\nr7qd h8jc 6ogd a63d",
+   "secret": "2a9183f932f8dcc72bf18246c1f7aae805420bb2f9a9bb37ae6e0f76c5126181",
+   "group": null
+  },
+  {
+   "name": "a QR code in lower case",
+   "input": "cbbr15a8r7y9jz3eceazhg93c3xxax02m42xjz6mvpdxedr7qdh8jc60gfrzrr1xs2xcx0hg18fh57bfvc",
+   "secret": "2a9183f932f8dcc72bf18246c1f7aae805420bb2f9a9bb37ae6e0f76c5126181",
+   "group": "07e3f8c07b91759d0460143e253adfb6"
+  }
+ ],
+ "refuse": [
+  {
+   "name": "a mistyped character in line 3",
+   "input": "15A8R7Y9JZ3ECE09\nAZHG93C3XXAX02GW\nM42XJY6MVPDXED7K\nR7QDH8JC60GDA63D",
+   "reason": "lines:4"
+  },
+  {
+   "name": "two groups swapped in line 2",
+   "input": "15A8 R7Y9 JZ3E CE09\n93C3 AZHG XXAX 02GW\nM42X JZ6M VPDX ED7K\nR7QD H8JC 60GD A63D",
+   "reason": "lines:2"
+  },
+  {
+   "name": "lines 2 and 3 swapped",
+   "input": "15A8R7Y9JZ3ECE09\nM42XJZ6MVPDXED7K\nAZHG93C3XXAX02GW\nR7QDH8JC60GDA63D",
+   "reason": "lines:6"
+  },
+  {
+   "name": "a mistake line 2's check misses",
+   "input": "15A8R7Y9JZ3ECE09\nAZ1G93K3XRAX02GW\nM42XJZ6MVPDXED7K\nR7QDH8JC60GDA63D",
+   "reason": "whole"
+  },
+  {
+   "name": "padding bits that are not zero",
+   "input": "15A8R7Y9JZ3ECE09\nAZHG93C3XXAX02GW\nM42XJZ6MVPDXED7K\nR7QDH8JC60HDA6CA",
+   "reason": "padding"
+  },
+  {
+   "name": "63 characters",
+   "input": "15A8R7Y9JZ3ECE09\nAZHG93C3XXAX02GW\nM42XJZ6MVPDXED7K\nR7QDH8JC60GDA63",
+   "reason": "length"
+  },
+  {
+   "name": "version 2",
+   "input": "25A8R7Y9JZ3ECE09\nAZHG93C3XXAX02GW\nM42XJZ6MVPDXED7K\nR7QDH8JC60GDA63D",
+   "reason": "newer"
+  },
+  {
+   "name": "a character outside the alphabet",
+   "input": "15A8R7Y9JZ3ECE09\nAZH*93C3XXAX02GW\nM42XJZ6MVPDXED7K\nR7QDH8JC60GDA63D",
+   "reason": "damaged"
+  },
+  {
+   "name": "words",
+   "input": "https://example.com/",
+   "reason": "not_sheet"
+  },
+  {
+   "name": "a sheet of 0.5 (56 characters)",
+   "input": "5A8R-7Y9J-Z3EC-EAZH-G93C-3XXA-X02M-42XJ-Z6MV-PDXE-DR7Q-DH8J-C60G-ABCD",
+   "reason": "earlier"
+  },
+  {
+   "name": "a QR code of 0.5",
+   "input": "cbb://recover?g=0011223344556677&k=AA&c=BB",
+   "reason": "earlier"
+  },
+  {
+   "name": "a QR code of version 2",
+   "input": "CBBR25A8R7Y9JZ3ECEAZHG93C3XXAX02M42XJZ6MVPDXEDR7QDH8JC60GFRZRR1XS2XCX0HG18FH57BFVC",
+   "reason": "newer"
+  },
+  {
+   "name": "a QR code one character short",
+   "input": "CBBR15A8R7Y9JZ3ECEAZHG93C3XXAX02M42XJZ6MVPDXEDR7QDH8JC60GFRZRR1XS2XCX0HG18FH57BFV",
+   "reason": "length"
+  },
+  {
+   "name": "a QR code with its spare bit set",
+   "input": "CBBR15A8R7Y9JZ3ECEAZHG93C3XXAX02M42XJZ6MVPDXEDR7QDH8JC60GFRZRR1XS2XCX0HG18FH57BFVD",
+   "reason": "padding"
+  }
+ ],
+ "check": [
+  {
+   "name": "a QR code of another group",
+   "input": "CBBR15A8R7Y9JZ3ECEAZHG93C3XXAX02M42XJZ6MVPDXEDR7QDH8JC60T5EFW5JW4KARH2XG4815831G4W",
+   "reason": "other_group"
+  },
+  {
+   "name": "a QR code of this group with keys that are not its",
+   "input": "CBBR10000000000000000000000000000000000000000000000000000FRZRR1XS2XCX0HG18FH57BFVC",
+   "reason": "damaged"
+  },
+  {
+   "name": "a text whose keys are not the group's",
+   "input": "1000 0000 0000 001X\n0000 0000 0000 00BW\n0000 0000 0000 00AW\n0000 0000 0005 J5ZM",
+   "reason": "other_group"
+  }
+ ]
+}
