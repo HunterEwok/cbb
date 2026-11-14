@@ -344,14 +344,17 @@ pub const ADMIN_SILENCE_MS: u64 = crate::copies::STATEMENT_MAX_AGE_MS;
 pub const ADMIN_KEY_TAKEN_BACK: &str =
     "this admin key was taken back: the device makes a new admin key before it is an admin again";
 
-/// Why the root takes an admin key back (`RecordSet::take_back_lagging`).
+/// Why the root's writer takes an admin key back by itself
+/// (`RecordSet::take_back_lagging`). A full room is not one: there the
+/// person chooses whom to take back (`RecordSet::take_back`), from what
+/// `unacknowledged_units` shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TakeBack {
-    /// The root's room passed three quarters of its cap while the key held
-    /// removals back.
-    Room,
     /// The root received nothing of the key for ADMIN_SILENCE_MS.
     Silence,
+    /// The key is frozen, so it cannot acknowledge, and it held a removal
+    /// back.
+    Frozen,
 }
 
 pub const REISSUE_KEPT_BACK: u64 = 256;
@@ -2719,13 +2722,7 @@ impl RecordSet {
     /// by key: what waits for it in the rooms. Read-only, for the app
     /// (which admin keys hold removals back, and how many).
     pub fn unacknowledged(&self, state: &State) -> BTreeMap<KeyHash, usize> {
-        let removals: Vec<&Record> = self
-            .records
-            .values()
-            .filter(|e| !e.held && state.counting.contains(&e.record.id()))
-            .filter(|e| matches!(e.record.body().kind, Kind::Revoke(_)))
-            .map(|e| &e.record)
-            .collect();
+        let removals = self.waiting(state);
         Self::live_admins(state)
             .into_iter()
             .map(|a| {
@@ -2736,6 +2733,47 @@ impl RecordSet {
                 (a, n)
             })
             .collect()
+    }
+
+    /// The counting removals a checkpoint could let go but for the admins'
+    /// acknowledgements: every key they name is a plain device key whose
+    /// admissions the set holds, none names an admin key, and nothing the
+    /// key signed counts. A removal of an admin key, or of a device that
+    /// had one, is kept for good whatever the admins saw, so it waits for
+    /// nobody.
+    fn waiting(&self, state: &State) -> Vec<&Record> {
+        self.records
+            .values()
+            .filter(|e| e.role != Role::Recovery && !e.held && state.counting.contains(&e.record.id()))
+            .filter(|e| matches!(&e.record.body().kind, Kind::Revoke(rm) if rm.keys.iter().all(|k| self.settleable(state, k))))
+            .map(|e| &e.record)
+            .collect()
+    }
+
+    /// The device records the set holds that name key k, as its member key
+    /// or its admin key.
+    fn admissions_of(&self, k: &KeyHash) -> impl Iterator<Item = &Record> {
+        self.records.values().filter(|e| e.role != Role::Recovery).map(|e| &e.record).filter(move |r| {
+            match &r.body().kind {
+                Kind::Device(d) => d.key.hash() == *k || d.admin.as_ref().map(Key::hash) == Some(*k),
+                _ => false,
+            }
+        })
+    }
+
+    /// Whether a removal of key k may ever go (`settleable`): k is a plain
+    /// device key whose admissions the set holds, none of them names an
+    /// admin key, and nothing k signed counts. The checkpoint's settle
+    /// adds that every admission sits below its signer's head, and the
+    /// admins' acknowledgements; `waiting`, `unacknowledged`,
+    /// `unacknowledged_units`, `ack_due` and `take_back_lagging` count
+    /// only removals of such keys.
+    fn settleable(&self, state: &State, k: &KeyHash) -> bool {
+        self.admissions_of(k).next().is_some()
+            && !self.admissions_of(k).any(|r| matches!(&r.body().kind, Kind::Device(d) if d.admin.is_some()))
+            && !self.records.values().any(|e| {
+                e.role != Role::Recovery && e.record.body().signer == *k && state.counting.contains(&e.record.id())
+            })
     }
 
     /// Whether admin key a holds a removal it has not acknowledged: its
@@ -2797,17 +2835,33 @@ impl RecordSet {
         self.write_record(state, signer, Kind::Ack { seen, spare: None }, time_ms)
     }
 
-    /// The root takes live admin keys back: when its room passes three
-    /// quarters of its cap, each key that holds removals back
-    /// (`unacknowledged`), and each key the root received nothing of for
+    /// The root's units each live admin key holds back: the sizes of the
+    /// root's own waiting removals (`waiting`) the key has not
+    /// acknowledged. Read-only, for the app, which shows them when the
+    /// root's room fills, so that the person chooses whom to take back.
+    pub fn unacknowledged_units(&self, state: &State) -> BTreeMap<KeyHash, u64> {
+        let Some(h) = state.roots.last().copied() else { return BTreeMap::new() };
+        let own: Vec<&Record> = self.waiting(state).into_iter().filter(|r| r.body().signer == h).collect();
+        Self::live_admins(state)
+            .into_iter()
+            .map(|a| {
+                let units = own
+                    .iter()
+                    .filter(|r| !self.acked_by(state, &a, &h, r.body().seq))
+                    .map(|r| eval::item(r, Role::Root).units)
+                    .sum();
+                (a, units)
+            })
+            .collect()
+    }
+
+    /// The root's writer takes live admin keys back by itself, for two
+    /// reasons only: a key the root received nothing of for
     /// ADMIN_SILENCE_MS (heard_ms: when the root device last received a
-    /// record of each key, on its own clock; time_ms, its now). Its
-    /// checkpoint goes first, as before any take-back, so what the key
-    /// signed that the root holds and counts stays, and what it signed
-    /// that the root never got counts for nothing for good; the key is
-    /// never an admin again (`write_record` refuses it), its device makes
-    /// a new one. Removals are never blocked. It returns each record
-    /// with its reason, none when nothing is due.
+    /// record of each key, on its own clock; time_ms, its now), and a
+    /// frozen key that holds a removal back. A full room takes nobody
+    /// back by itself: the person does (`take_back`). It returns each
+    /// record with its reason, none when nothing is due.
     pub fn take_back_lagging(
         &mut self,
         state: &State,
@@ -2819,13 +2873,18 @@ impl RecordSet {
         if state.roots.last() != Some(&h) {
             return Ok(Vec::new());
         }
-        let cap = self.ceiling(&h).unwrap_or(0);
-        let used = self.units.get(&h).copied().unwrap_or(0);
-        let full = used.saturating_mul(4) > cap.saturating_mul(3);
         let mut lagging: BTreeMap<KeyHash, TakeBack> = BTreeMap::new();
-        for (a, n) in self.unacknowledged(state) {
-            if full && n > 0 {
-                lagging.insert(a, TakeBack::Room);
+        let waiting = self.waiting(state);
+        // A frozen admin key cannot acknowledge (its records do not count
+        // while it is frozen), and a thaw would bring back what it signed:
+        // when it holds a removal back, the root takes it back at once.
+        for d in state.devices.iter().filter(|d| d.frozen) {
+            if let Some(a) = d.admin
+                && waiting
+                    .iter()
+                    .any(|r| r.body().signer != a && !self.acked_by(state, &a, &r.body().signer, r.body().seq))
+            {
+                lagging.insert(a, TakeBack::Frozen);
             }
         }
         for a in Self::live_admins(state) {
@@ -2839,20 +2898,41 @@ impl RecordSet {
         let mut out = Vec::new();
         for (a, why) in lagging {
             let now = self.state();
-            let Some(d) = now.devices.iter().find(|d| d.admin == Some(a)) else { continue };
-            let mut back = super::body::Device::new(d.key.clone(), &d.name, d.role);
-            back.rights = d.rights;
-            back.skip = d.skip;
-            back.caps = d.caps;
-            back.os = d.os;
-            back.store = d.store;
-            back.proof = d.proof;
-            back.replaces = d.replaces;
-            back.guarded = d.guarded;
-            back.seen = self.heads_where(|k| *k == a);
-            out.push((why, self.write_record(&now, root, Kind::device(back), time_ms)?));
+            out.push((why, self.take_back(&now, root, &a, time_ms)?));
         }
         Ok(out)
+    }
+
+    /// The root takes live admin key a back: its device stays, without
+    /// the key. The root's checkpoint goes first, as before any record of
+    /// it, so what the key signed that the root holds and counts stays,
+    /// and what it signed that the root never got counts for nothing for
+    /// good; the key is never an admin again (`write_record` refuses it),
+    /// its device makes a new one. It passes the root's floor, as a
+    /// removal does. The person calls it when the root's room fills
+    /// (`unacknowledged_units`), the writer when a key is silent or frozen
+    /// (`take_back_lagging`).
+    pub fn take_back(
+        &mut self,
+        state: &State,
+        root: &dyn ExternalKey,
+        a: &KeyHash,
+        time_ms: u64,
+    ) -> crate::error::Result<Record> {
+        let Some(d) = state.devices.iter().find(|d| d.admin == Some(*a)) else {
+            return Err(crate::error::Error::msg("no device holds this admin key"));
+        };
+        let mut back = super::body::Device::new(d.key.clone(), &d.name, d.role);
+        back.rights = d.rights;
+        back.skip = d.skip;
+        back.caps = d.caps;
+        back.os = d.os;
+        back.store = d.store;
+        back.proof = d.proof;
+        back.replaces = d.replaces;
+        back.guarded = d.guarded;
+        back.seen = self.heads_where(|k| k == a);
+        self.write_record(state, root, Kind::device(back), time_ms)
     }
 
     /// Writes the current root's checkpoint (section 10, "Checkpoints"):
@@ -2965,19 +3045,11 @@ impl RecordSet {
                 _ => Vec::new(),
             }
         };
-        let signed_counts =
-            |k: &KeyHash| entries().any(|e| e.record.body().signer == *k && state.counting.contains(&e.record.id()));
-        // Only a plain device key's removal goes: one that names an admin
-        // key, or a device that has one, is kept for good, since a key
-        // that may sign could bring back what it signed while removed.
-        let has_admin = |r: &Record| matches!(&r.body().kind, Kind::Device(d) if d.admin.is_some());
-        let settled = |k: &KeyHash| {
-            let admissions: Vec<&Record> = entries().map(|e| &e.record).filter(|r| names(r).contains(k)).collect();
-            !admissions.is_empty()
-                && !admissions.iter().any(|r| has_admin(r))
-                && admissions.iter().all(|r| under(r))
-                && !signed_counts(k)
-        };
+        // Only a plain device key's removal goes (`settleable`): one that
+        // names an admin key, or a device that has one, is kept for good,
+        // since a key that may sign could bring back what it signed while
+        // removed.
+        let settled = |k: &KeyHash| self.settleable(state, k) && self.admissions_of(k).all(&under);
         let mut dropped: BTreeSet<RecordId> = BTreeSet::new();
         let mut gone: BTreeSet<KeyHash> = BTreeSet::new();
         // A removal by an admin goes as a root's does: what it removed is
@@ -3488,7 +3560,7 @@ impl RecordSet {
         // and take-backs, which pass the floor, as a lost device is removed
         // whatever the room says.
         // Taking an admin key back passes the floor too: it is how the root
-        // frees removals its admins hold back (`take_back_lagging`).
+        // frees removals its admins hold back (`take_back`).
         let takes_back = matches!(&r.body().kind, Kind::Device(d)
             if d.admin.is_none() && state.device_by_key(&d.key.hash()).is_some_and(|x| x.admin.is_some()));
         if state.roots.last() == Some(&h) && !eval::item(&r, Role::Root).early && !takes_back {

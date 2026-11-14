@@ -889,10 +889,12 @@ fn acknowledge(set: &mut RecordSet, t: u64) {
     }
 }
 
-/// At the floor with an admin that never acknowledges: the checkpoint
-/// frees nothing the removals hold, the root still removes a device, takes
-/// the silent admin key back past the floor, and its next checkpoint frees
-/// the room.
+/// The root at its floor while an admin is silent and holds every removal
+/// back, and nobody acts: the writer takes nobody back for the room; the
+/// root's ordinary records are refused with the floor's message, a
+/// removal still goes in. Then either the person takes the admin back,
+/// which passes the floor too, or the 35 days of silence pass and the
+/// writer does; either way the next checkpoint frees the room.
 #[test]
 fn at_the_floor_a_lagging_admin_is_taken_back_and_the_room_freed() {
     let (mut set, root, g) = root_with_dead_checkpoints(0, 0);
@@ -902,20 +904,34 @@ fn at_the_floor_a_lagging_admin_is_taken_back_and_the_room_freed() {
     assert!(set.checkpoint_due(&st, t));
     checkpoint_counts(&mut set, &root, &mut t, "at the floor, the admin silent");
     let st = set.state();
+    let a = k("admin a").hash;
     assert!(set.checkpoint_due(&st, t), "the waiting removals stay");
-    assert_eq!(set.unacknowledged(&st).get(&k("admin a").hash), Some(&n));
-    // A removal is never blocked.
+    assert_eq!(set.unacknowledged(&st).get(&a), Some(&n));
+    assert!(set.unacknowledged_units(&st).get(&a).is_some_and(|u| *u >= n as u64));
     let dk = k("removed at the floor");
     t += 1000;
-    set.write_record(&st, &root, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)), t).unwrap_err();
+    let err =
+        set.write_record(&st, &root, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)), t).unwrap_err();
+    assert!(format!("{err}").contains("write a checkpoint first"), "{err}");
+    // A removal is never blocked.
     let st = set.state();
     let rm = cbb_core::records::body::Removal { keys: vec![k("a stranger at the floor").hash], seen: Vec::new() };
     t += 1000;
     set.write_record(&st, &root, Kind::Revoke(rm), t).unwrap();
+    let heard = std::collections::BTreeMap::from([(a, t)]);
     let st = set.state();
     t += 1000;
-    let back = set.take_back_lagging(&st, &root, &std::collections::BTreeMap::new(), t).unwrap();
-    assert_eq!(back.len(), 1, "the lagging admin key is taken back past the floor");
+    assert!(set.take_back_lagging(&st, &root, &heard, t).unwrap().is_empty(), "nobody by the room alone");
+    // The 35 days of silence free it with nobody acting.
+    let mut later = set.clone();
+    let mut t2 = t + cbb_core::records::set::ADMIN_SILENCE_MS;
+    let back = later.take_back_lagging(&st, &root, &heard, t2).unwrap();
+    assert_eq!(back.len(), 1, "the silent admin key is taken back past the floor");
+    checkpoint_counts(&mut later, &root, &mut t2, "after the silence");
+    let st2 = later.state();
+    assert!(!later.checkpoint_due(&st2, t2), "the room is free again");
+    // Or the person takes it back at once.
+    set.take_back(&st, &root, &a, t).unwrap();
     checkpoint_counts(&mut set, &root, &mut t, "after the take-back");
     let st = set.state();
     assert!(!set.checkpoint_due(&st, t), "the room is free again");

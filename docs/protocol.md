@@ -2033,11 +2033,16 @@ signer's head (a removal of a key never admitted stays: it bars the key), and ev
 key but the removal's signer has an `ack` that counts whose `seen` holds that signer at or
 above the removal's seq: an `ack` sits on its signer's whole chain, so the root then holds every
 admission that admin signed. An admin's device writes one `ack` after a sync brings a removal it
-has not acknowledged; the checkpoint keeps only each key's newest. The root takes back an admin
-key that holds a removal back once its room passes three quarters of its cap, and one its device
-received nothing of for `records::set::ADMIN_SILENCE_MS` (35 days, on the root device's clock),
-its checkpoint first; what that key signed and the root never got counts for nothing, and the
-writer never grants that key again: the device makes a new admin key. Of the root's own
+has not acknowledged; the checkpoint keeps only each key's newest. The root's writer takes back
+by itself an admin key its device received nothing of for `records::set::ADMIN_SILENCE_MS`
+(35 days, on the root device's clock) and a frozen admin key that holds a removal back; a full
+room takes nobody back by itself: the app shows the root's units each admin key holds back and
+the person chooses whom to take back. A take-back is one record of the root, its checkpoint
+first, and passes the floor as a removal does; what that key signed and the root never got
+counts for nothing, and the writer never grants that key again: the device makes a new admin
+key. With nobody acting, a root whose admins hold removals back passes three quarters of its room
+only after more than 440 removals inside the 35 days (16 admins, 256 devices); there its ordinary records are
+refused, its removals and take-backs still go in up to its cap, and the silence frees it. Of the root's own
 settings, hubs and copies records it keeps only the newest of each type, and of its records of
 one device the oldest and the newest, where the newest counts and names no admin key and those
 left out name the same key and no admin key; a resolve whose every target it leaves out goes
@@ -2045,7 +2050,7 @@ too. The state is the same before and after, and what it leaves out sits below a
 refused when offered again. These are the writer's choices: a member counts any checkpoint that
 keeps more. The root's writer stops its ordinary records where they would leave no room for
 its next checkpoint (a margin of a twenty-fourth of its ceiling below that is for removals,
-freezes and resolves), and writes that checkpoint first before a removal, freeze or resolve
+freezes, resolves and take-backs), and writes that checkpoint first before a removal, freeze or resolve
 where one more would leave none. An admin key whose admission the rooms
 keep out is no key of the set. A waiting root's records, and records that a checkpoint of the
 current root above the counting one keeps, sit aside, outside the count, in any order, within
