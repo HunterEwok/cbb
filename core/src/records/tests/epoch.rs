@@ -418,3 +418,88 @@ fn a_removal_outcome_without_a_checkpoint_names_the_devices() {
     let x = st.device_by_key(&k("x").hash).unwrap().id;
     assert!(outcome.out.contains(&x), "{:?}", outcome.out);
 }
+
+/// The root's twin at the seq of its checkpoint that left a removal out:
+/// the checkpoint no longer counts for a member holding both, the group
+/// halts, and the admin's late record must still not bring the removed
+/// device back, whether the member pruned by the checkpoint before the
+/// twin came or got the twin first.
+#[test]
+fn a_twin_of_the_pruning_checkpoint_brings_no_removed_device_back() {
+    let _drop = crate::records::set::drop_settled();
+    let (mut g, late, mine) = late_record(false);
+    let root = k("root");
+    let x = mine.last().unwrap().clone();
+    let b = x.body();
+    let twin = Record::sign(
+        Body { seq: b.seq, prev: b.prev, ..g.body(&root, Kind::Copies { incoming_ms: 60_000, seen: vec![] }) },
+        &root,
+    )
+    .unwrap();
+    g.recs.push(twin.clone());
+    // Pruned by the checkpoint first, then the twin, then the late record.
+    let mut pruned = set_with(&g.root.key, &mine, &g.lists);
+    assert_eq!(pruned.state().drops, 1);
+    let _ = pruned.insert(twin.clone());
+    let _ = pruned.insert(late.clone());
+    let a = pruned.state();
+    assert_eq!(a.drops, 1, "the epoch stays where the checkpoint put it");
+    // The twin first, then the checkpoint, then the late record.
+    let before: Vec<Record> = mine.iter().filter(|r| r.id() != x.id()).cloned().chain([twin.clone()]).collect();
+    let mut first = set_with(&g.root.key, &before, &g.lists);
+    let _ = first.insert(x.clone());
+    let _ = first.insert(late.clone());
+    let f = first.state();
+    let whole = g.state();
+    assert!(!has(&a, &k("d")), "pruned first");
+    assert!(!has(&f, &k("d")), "twin first");
+    assert!(!has(&whole, &k("d")));
+}
+
+/// A root's resolve that names its own checkpoint voids nothing: a
+/// root's record is never voided, so the checkpoint that left a removal
+/// out still counts, the epoch stays, and the late record stays out.
+#[test]
+fn a_resolve_naming_the_root_s_checkpoint_changes_no_epoch() {
+    let _drop = crate::records::set::drop_settled();
+    let (mut g, late, mut mine) = late_record(false);
+    let x = mine.last().unwrap().id();
+    mine.push(g.root_rec(Kind::Resolve(vec![x])));
+    let mut set = set_with(&g.root.key, &mine, &g.lists);
+    let st = set.state();
+    assert_eq!(st.checkpoint, Some(x));
+    assert_eq!(st.drops, 1);
+    let _ = set.insert(late.clone());
+    assert!(!has(&set.state(), &k("d")));
+    assert!(!has(&g.state(), &k("d")));
+}
+
+/// A stale record held aside on its signer's chain: the admin signs on
+/// after it, the root's writer checkpoints, and neither keeps nor names
+/// the stale record, while what the admin signed after it counts at the
+/// writer, at a member that gets only what the checkpoint keeps, and in
+/// the evaluation of every record alike.
+#[test]
+fn a_record_held_aside_is_never_kept_and_what_follows_it_counts() {
+    let _drop = crate::records::set::drop_settled();
+    let (mut g, late, _) = late_record(false);
+    let a = k("admin a");
+    let y = g.device(&a, &k("y"), "y", |_| {});
+    let st = g.state();
+    assert!(st.stale.contains(&late.id()) && has(&st, &k("y")) && !has(&st, &k("d")));
+    let recs = g.recs.clone();
+    let cp = root_checkpoint(&mut g, &recs);
+    let Kind::Checkpoint { heads, keep, drops } = &cp.body().kind else { unreachable!() };
+    assert!(!keep.contains(&late.id()), "the stale record is not kept");
+    assert!(heads.iter().all(|h| h.id != late.id()), "nor named as a head");
+    assert_eq!(*drops, 1, "nothing more left out");
+    let writer = set_with(&g.root.key, &g.recs, &g.lists).state();
+    assert_eq!(writer.checkpoint, Some(cp.id()));
+    assert!(has(&writer, &k("y")) && !has(&writer, &k("d")));
+    let kept: Vec<Record> =
+        g.recs.iter().filter(|r| r.id() == cp.id() || keep.contains(&r.id()) || r.id() == y.id()).cloned().collect();
+    let fresh = set_with(&g.root.key, &kept, &g.lists).state();
+    assert!(has(&fresh, &k("y")) && !has(&fresh, &k("d")));
+    let whole = g.state();
+    assert!(has(&whole, &k("y")) && !has(&whole, &k("d")));
+}

@@ -1484,17 +1484,15 @@ pub(crate) fn evaluate_checked(
     // member holds, counting or not (a change's first checkpoint
     // included), 0 with none; a device record of an older one counts only
     // where that checkpoint keeps or anchors it, or the list keeps it. Of
-    // a root with two histories it is the newest below the pair, as the
-    // checkpoints that may count are judged.
-    let pair = fork_proof(checked.iter().map(|c| (c.r, c.role)));
+    // a root with two histories too: a member may have pruned by a
+    // checkpoint at or above the pair before the pair came, and the epoch
+    // keeps what it pruned out for every member alike.
     let cur_root = path.last().copied().unwrap_or(group_root);
-    let fork_at = root_fork(&pair, &cur_root, checked.iter().map(|c| (c.r, c.role)));
     let newest = checked
         .iter()
         .filter(|c| !c.held && c.role == Role::Root && c.r.body().signer == cur_root)
         .filter(|c| matches!(c.r.body().kind, Kind::Checkpoint { .. }))
         .filter(|c| !cuts.get(&cur_root).is_some_and(|cut| cut.covers(&cur_root, c.r.body().seq)))
-        .filter(|c| fork_at.is_none_or(|f| c.r.body().seq < f))
         .map(|c| c.r)
         .min_by(|a, b| b.body().seq.cmp(&a.body().seq).then(a.id().cmp(&b.id())));
     let (drops, epoch_anchors) = match newest.map(|r| &r.body().kind) {
