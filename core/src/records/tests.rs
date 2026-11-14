@@ -2881,6 +2881,54 @@ mod differential {
         assert_eq!(m1.state(), m2.state());
     }
 
+    /// A fixed input of `a_set_agrees_with_evaluate` found by the second
+    /// builder's long runs: a device the root admitted first is kept in
+    /// both orders.
+    #[test]
+    fn a_set_agrees_with_evaluate_fixed_11() {
+        let steps = [
+            (1, 0, 91),
+            (4, 4, 115),
+            (4, 6, 6),
+            (0, 5, 81),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (2, 8, 0),
+            (0, 3, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (4, 8, 66),
+            (0, 5, 5),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 1),
+            (3, 2, 17),
+            (4, 4, 72),
+            (4, 3, 218),
+            (2, 3, 249),
+            (2, 7, 162),
+            (0, 7, 222),
+        ];
+        let (g, recs) = build(&steps);
+        let m1 = agree(&g, &recs, 5, 0);
+        let m2 = agree(&g, &recs, 7, 15_296_354_729_590_925_987);
+        assert_eq!(m1.digest(), m2.digest());
+        assert_eq!(m1.state(), m2.state());
+    }
+
     /// A fixed input of `a_set_agrees_with_evaluate`: a device the root
     /// admitted as a new root's first record stays, with a checkpoint of
     /// that new root.
