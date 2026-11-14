@@ -325,6 +325,11 @@ module records_v3 {
   // that made its key a root (the model hands a key's records to one member, its holder to
   // another), then signs only if its key is the set's last root.
   pure val WRITER_LAST_ROOT = false
+  // Architecture 11-14 06:08Z (records to word it): a floor in the writer: a root's record (not a
+  // removal) is refused when, after it, the root's records other than checkpoints plus its next
+  // checkpoint would pass the root's ceiling, so the root can always checkpoint.
+  pure val WRITER_CP_FLOOR = false
+  pure val CP_UNITS = 2
   // Records 11-13 21:12Z: the change re-signs the cut roots' counting removals as the new
   // root's first records (signChainG). REISSUE_DROP_ONLY: the mutation that leaves the old
   // removals off the list without the new ones; it must fail.
@@ -1435,6 +1440,11 @@ module records_v3 {
       not(fork) or own.length() > 0,
       // The core's write_checkpoint signs only as the set's last root (state.roots.last()).
       not(aug) or last(vh.path) == k,
+      // (J, core write_checkpoint: the honest checkpoint fits by itself and the trial set takes it
+      // as the counting checkpoint; else the write is refused.)
+      not(keeps) or not(isCp) or hidden or storeView(insertInto(s, r, db2), db2).checkpoint == r.id,
+      not(WRITER_CP_FLOOR) or not(keeps) or hidden or isChain(r) or isCp or rootRemoval(r) or not(onList(vh.path, k))
+        or sumUnits(ofKey(recsOf(s.recs, db), k).filter(x => x.kind != "checkpoint")) + r.units + CP_UNITS <= ROOTC,
       // (E): an honest writer publishes a record only when its own set keeps it; else the
       // write fails and the seq is not used. (A hidden record stays off its device.)
       not(keeps) or hidden or isChain(r) or insertInto(s, r, db2).recs.contains(r.id),
@@ -1459,9 +1469,9 @@ module records_v3 {
     toList(ids.exclude(s.got)).foldl(s, (x, i) => insertInto(x, db.get(i), db))
   }
 
-  // (Promise cpWritable, architecture 11-14 04:42Z: while the current root's holder follows it,
-  // an honest checkpoint it signs now is not refused for room, and after it every admission
-  // record of that root its set held counts.)
+  // (Promise cpWritable, architecture 11-14: while the current root's holder follows it, an
+  // honest checkpoint it signs now is not refused: its set keeps it and counts it. Expected to
+  // hold under WRITER_CP_FLOOR.)
   def cpWritable: bool = ROOT_KEYS.forall(k => {
     val h = HOLDER.get(k)
     val s = if (WRITER_LAST_ROOT) withOwn(st.get(h), k, db) else st.get(h)
@@ -1473,9 +1483,8 @@ module records_v3 {
     val r = rec(nextId, k, headLine(db.keys().map(i => db.get(i)), k).append(nextId), "checkpoint", "", "", 0, seen, seen, keep, 2)
     val db2 = db.put(nextId, r)
     val s2 = insertInto(s, r, db2)
-    val held = mine.filter(x => x.signer == k and (x.kind == "admin" or x.kind == "device"))
     v.stop or last(v.path) != k or nextId > FIRST + MAXREC
-      or (s2.recs.contains(r.id) and idsOf(held).subseteq(storeView(s2, db2).counting))
+      or (s2.recs.contains(r.id) and storeView(s2, db2).checkpoint == r.id)
   })
 
   // A root key signs a checkpoint with a keep of its choosing, and may lower one key's head by
@@ -3341,6 +3350,32 @@ module records_v3 {
       .then(sign("A", "thaw", "", "", 5, false, false, 1)).then(sign("R", "checkpoint", "", "", 0, false, false, 2))
       .then(sign("R", "checkpoint", "", "", 0, false, false, 2)).then(giveOnly("a", 13)).then(give("a", 8))
       .expect((NEWEST_CP_FIRST implies admissionHeld) and ((CEIL_FIT and not(NEWEST_CP_FIRST)) implies not(admissionHeld)))
+
+  // Records 11-14: an honest checkpoint keeps what counts, not its root's older checkpoints, so
+  // its keep stays flat however many the root signs (the core's keep grew until the ~70th
+  // checkpoint was refused). As many in a row as the model's IDs allow. (Without
+  // PREV_ROOM_WHEN_KEPT the pruned previous checkpoints still take room: the members stop
+  // taking R's checkpoints after the 14th, 17 counts.)
+  run checkpointKeepFlatTest =
+    init
+      .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2))
+      .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2))
+      .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2))
+      .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2))
+      .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2))
+      .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2))
+      .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2))
+      .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2))
+      .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2))
+      .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2))
+      .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2))
+      .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2))
+      .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2))
+      .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2))
+      .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2))
+      .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2)).then(syncRound)
+      .expect(db.keys().forall(i => db.get(i).kind != "checkpoint" or db.get(i).keep == Set(1, 2, 3))
+        and (PREV_ROOM_WHEN_KEPT implies MEMBERS.forall(m => views.get(m).checkpoint == FIRST + 15)) and promises)
 
   // The exhaustive-check thread's probe (11-13 23:56Z): the change to NK re-signs R's removal
   // of D (Z 7) beside its first checkpoint 8; NK's checkpoint 9 keeps 7 and prunes 8; then m
