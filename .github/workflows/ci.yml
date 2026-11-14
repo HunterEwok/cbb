@@ -1743,10 +1743,15 @@ jobs:
           persist-credentials: false
       - name: Xcode 27.2
         run: sudo xcode-select -s /Applications/Xcode_27.2.app
+      - name: the Rust build from this pull request's cache
+        uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
+        with:
+          name: ios-sim
       - name: the simulator boots while Rust builds
         # A fresh runner's first boot spends minutes migrating its data; started
         # here, the boot runs beside the Rust build, and test_on below finds the
-        # simulator up.
+        # simulator up. After the cache's key: the boot's disk work slowed the
+        # key's hashFiles past its 120 seconds on the xcode-27 image.
         env:
           DEVICE: ${{ matrix.device }}
         run: |
@@ -1771,10 +1776,6 @@ jobs:
           echo "simulator: $(xcrun simctl list devices | grep "$device")"
           echo "SIMULATOR=$device" >>"$GITHUB_ENV"
           xcrun simctl boot "$device" || true
-      - name: the Rust build from this pull request's cache
-        uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
-        with:
-          name: ios-sim
       - name: build the Rust core, which the kit links
         # Only the simulator's library for this Mac's processor, which is all
         # the tests link; the phone core job builds every library of the
