@@ -1804,6 +1804,20 @@ fn the_welcome_tag_binds_every_byte() {
     assert!(!a.late(welcome::PART_MS) && a.late(welcome::PART_MS + 1));
     let mut a = welcome::Assembly::new(decoded.clone(), 0).unwrap();
     assert_eq!(a.take(&first, welcome::PART_MS + 1), Err(welcome::RULE_LATE));
+    // Every part in time, all of them not: PARTS_MS after message 67 the
+    // parts still due are late, however close each came to the one before.
+    let mut many = decoded.clone();
+    many.parts = welcome::MAX_PARTS;
+    let mut a = welcome::Assembly::new(many, 0).unwrap();
+    let step = welcome::PART_MS;
+    let mut t = 0;
+    while t + step <= welcome::PARTS_MS {
+        t += step;
+        a.take(&first, t).unwrap();
+    }
+    assert!(!a.late(welcome::PARTS_MS));
+    assert!(a.late(welcome::PARTS_MS + 1));
+    assert_eq!(a.take(&first, welcome::PARTS_MS + 1), Err(welcome::RULE_LATE));
     assert_eq!(welcome::Assembly::new(decoded, 0).unwrap().finish().err(), Some(welcome::RULE_PARTS));
 }
 
@@ -2132,4 +2146,84 @@ fn at_home_the_joiner_takes_a_welcome_only_after_the_person_matched() {
         w.check(&group, &laptop, &point(&tv), Joining::Ordinary, Way::Invited(&none)).err(),
         Some(welcome::Refusal::Unconfirmed)
     );
+}
+
+/// An invitation at its bounds (the registry, `bounds.rs`): MAX_PATHS paths
+/// of MAX_ENDPOINTS endpoints read; one path or one endpoint more does not.
+#[test]
+fn an_invitation_at_its_bounds() {
+    let path = |n: usize| Path {
+        kind: PathKind::Guest,
+        endpoints: (0..n).map(|i| alloc::format!("203.0.113.{}:51820", i + 1)).collect(),
+        hub_key: Some([5; 32]),
+        guest: Some(([6; 32], [7; 32])),
+        obfuscation: None,
+    };
+    let away = Profile { role: ROLE_MEMBER, rights: RIGHT_READ | RIGHT_SEND, home_only: false, guarded: false };
+    let read = |paths: Vec<Path>| Invitation::decode(&Invitation::new(paths, away).encode());
+    let full: Vec<Path> = (0..invitation::MAX_PATHS).map(|_| path(invitation::MAX_ENDPOINTS)).collect();
+    assert!(read(full.clone()).is_ok(), "{:?}", read(full.clone()).err());
+    let mut more = full.clone();
+    more.push(path(1));
+    assert_eq!(read(more).err(), Some(invitation::RULE_PATH));
+    let mut wider = full;
+    wider[0] = path(invitation::MAX_ENDPOINTS + 1);
+    assert_eq!(read(wider).err(), Some(invitation::RULE_PATH));
+}
+
+/// A join in parts after two changes of root and a later checkpoint that
+/// prunes a record the first change carried forward (a removed device's
+/// admission by the first root): the joiner takes the Welcome and its
+/// parts and ends with the admitter's set and state, and one sync of
+/// everything the admitter holds adds nothing.
+#[test]
+fn a_join_in_parts_after_two_changes_and_a_pruning_checkpoint_ends_equal() {
+    let mut g = G::new();
+    let (n1, n2, tv, slate) = (k("root n1"), k("root n2"), k("tv"), k("slate"));
+    let mut d = Device::new(tv.key.clone(), "tv", ROLE_MEMBER);
+    d.rights = RIGHT_READ;
+    let tv_admission = g.rec_root(Kind::device(d));
+    g.change(&n1);
+    phone_admin(&mut g, &n1, &k("phone b"), &k("admin b"), true);
+    g.change(&n2);
+    phone_admin(&mut g, &n2, &k("phone c"), &k("admin c"), true);
+    for i in 0..30u64 {
+        g.rec(&n2, Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] });
+    }
+    let seen = g.seen();
+    g.rec(&n2, Kind::Revoke(Removal { keys: vec![tv.hash], seen }));
+    // The removal is not the root's head when it checkpoints.
+    g.rec(&n2, Kind::Copies { incoming_ms: 9_000, seen: vec![] });
+    // The current root's later checkpoint, as a member writes it.
+    let before = g.set();
+    assert!(before.contains(&tv_admission.id()));
+    let cp = before.write_checkpoint(&before.state(), &n2, 0).unwrap();
+    let crate::records::Kind::Checkpoint { heads: _, keep } = &cp.body().kind else { panic!("not a checkpoint") };
+    assert!(!keep.contains(&tv_admission.id()), "the checkpoint keeps the removed device's admission");
+    g.heads.insert(n2.hash, (cp.body().seq, cp.id()));
+    g.recs.push(cp.clone());
+    let mut d = Device::new(slate.key.clone(), "slate", ROLE_MEMBER);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    g.rec(&n2, Kind::device(d));
+
+    let set = g.set();
+    let st = set.state();
+    assert_eq!(st.roots, vec![g.root.hash, n1.hash, n2.hash]);
+    assert_eq!(st.checkpoint, Some(cp.id()));
+    assert!(!set.contains(&tv_admission.id()), "the later checkpoint pruned the first root's record");
+    let admitter = k("phone c").hash;
+    let (w, parts) = Welcome::build_within(&set, &st, &admitter, &slate.hash, 1, 20 * 200).unwrap();
+    // The set rides in a part, not in the Welcome.
+    assert!(!parts.is_empty() && w.records.len() < set.len());
+    let group = format::DeviceId(g.gid.0);
+    let (mut mine, theirs) = carried(&w, &parts)
+        .check(&group, &point(&k("phone c")), &point(&slate), Joining::Ordinary, Way::Invited(&invitation()))
+        .unwrap_or_else(|e| panic!("{e:?}"));
+    assert_eq!(theirs, st);
+    assert_eq!(mine.len(), set.len());
+    assert_eq!(mine.digest(), set.digest());
+    assert_eq!(mine.state(), st);
+    let (stored, refused) = mine.insert_all(g.recs.iter().cloned());
+    assert_eq!(stored, 0, "refused: {refused:?}");
+    assert_eq!(mine.digest(), set.digest());
 }

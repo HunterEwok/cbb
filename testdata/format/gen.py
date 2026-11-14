@@ -293,6 +293,29 @@ CTX_RECORD = b"cbb record v3"
 CTX_FETCH = b"cbb recovery fetch v3"
 T0 = 1793000000000  # 2026-10-26, display only
 
+
+def _bounds():
+    """The core's registry of bounds (core/src/bounds.rs, written out as bounds.json):
+    the numbers the vectors below are built at."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bounds.json")
+    with open(path, encoding="utf-8") as f:
+        return {b["name"]: b["value"] for b in json.load(f)["bounds"]}
+
+
+BOUND = _bounds()
+MAX_SIG2 = BOUND["format::envelope::MAX_SIG2"]
+MAX_SIG2_HEAD = BOUND["format::envelope::MAX_SIG2_HEAD"]
+MAX_COUNT = BOUND["format::cbor::MAX_COUNT"]
+MAX_LIFETIME_MS = BOUND["commands::MAX_LIFETIME_MS"]
+MAX_GRANT = BOUND["format::grant::MAX_GRANT"]
+WRAP_SIZE = BOUND["format::copy::WRAP_SIZE"]
+MAX_STATE = BOUND["content::MAX_STATE"]
+MAX_PATH = BOUND["media::MAX_PATH"]
+MAX_TYPED_TEXT = BOUND["commands::orders::MAX_TYPED_TEXT"]
+MAX_PASTE_TEXT = BOUND["commands::orders::MAX_PASTE_TEXT"]
+MAX_ARGS = BOUND["commands::orders::MAX_ARGS"]
+PART_RECORDS = BOUND["records::sync::PART_RECORDS"]
+
 LABELS = {
     "record": "cbb record v3",
     "keys": "cbb keys v1",
@@ -399,7 +422,7 @@ def profile_vectors():
     bad("two items", "cbor/trailing", bytes.fromhex("8000"))
     bad("cut bytes", "cbor/truncated", bytes.fromhex("430102"))
     bad("cut map", "cbor/truncated", bytes.fromhex("a201"))
-    bad("array of 65536", "cbor/count", head(4, 65536) + b"\x00" * 65536)
+    bad("array of 65536", "cbor/count", head(4, MAX_COUNT + 1) + b"\x00" * (MAX_COUNT + 1))
     ok("array of 4097 (over the old count)", [0] * 4097)
     bad("empty input", "cbor/truncated", b"")
     # check our own reader against the list
@@ -596,7 +619,7 @@ def record_vectors():
     m2 = rec(ROOT, 91, 7, {14: 1}, extra={8: ADMIN.hash})
     b2 = enc(m2)
     bad("second signature over 8192 bytes", "env/sig2",
-        enc([b2, ROOT.sign(LABELS["record"], b2), fake("later signature", 8193)]))
+        enc([b2, ROOT.sign(LABELS["record"], b2), fake("later signature", MAX_SIG2 + 1)]))
     # The first signature covers the second's SHA-256 (audit Q-1): a second
     # signature swapped, cut or removed on the way spoils the copy.
     s2a, s2b = fake("second signature a", 3000), fake("second signature b", 3000)
@@ -755,7 +778,7 @@ def record_vectors():
                rec(RECOVERY, 2, 13, {10: Signer("root 3").key, 11: some, 13: cp}) | {10: RECOVERY2.key})
     hb = enc(rec(RECOVERY, 2, 13, {10: Signer("root 3").key, 11: some, 13: cp}))
     bad("recovery head whose second signature is over 32 KiB", "env/sig2",
-        head_envelope(hb, fake("later signature", 32 * 1024 + 1)))
+        head_envelope(hb, fake("later signature", MAX_SIG2_HEAD + 1)))
     bad("recovery head with K2's signature over another body", "sig/verify",
         head_envelope(hb, RECOVERY2.sign(enc(rec(RECOVERY, 3, 13, {10: Signer("root 3").key, 11: some,
                                                                    13: cp})), CTX_RECORD)))
@@ -784,10 +807,10 @@ def statement_vectors():
                  "envelope": env.hex()})
     refuse.append({"name": "a second signature swapped on the way", "rule": "env/damaged", "verdict": "refuse",
                    "envelope": swapped.hex()})
-    env, body, _ = envelope2("keys", LAPTOP, m, fake("sig2 8192", 8192))
+    env, body, _ = envelope2("keys", LAPTOP, m, fake("sig2 8192", MAX_SIG2))
     take.append({"name": "a second signature of 8192 bytes", "verdict": "take", "diag": diag(dec(body)),
                  "body": body.hex(), "id": sha(body).hex(), "envelope": env.hex()})
-    env, body, _ = envelope2("keys", LAPTOP, m, fake("sig2 8193", 8193))
+    env, body, _ = envelope2("keys", LAPTOP, m, fake("sig2 8193", MAX_SIG2 + 1))
     refuse.append({"name": "a second signature of 8193 bytes", "rule": "env/sig2", "verdict": "refuse",
                    "envelope": env.hex()})
     m, env, body = st(LAPTOP, 1, fake("short", 1215))
@@ -837,7 +860,7 @@ def command_vectors():
     # A reader takes a life up to 600 s (room for a later writer); every
     # 0.6 writer gives 30 s. The replay guard is the counter, not the life.
     m, _ = cmd(4, ADMIN, 9, LAPTOP.id16, {}, sealed=False)
-    m[7] = m[6] + 600000
+    m[7] = m[6] + MAX_LIFETIME_MS
     env, body = envelope("command", ADMIN, m)
     take.append({"name": "lifetime of 600 s, from a later writer", "verdict": "take", "diag": diag(m),
                  "body": body.hex(), "envelope": env.hex()})
@@ -852,10 +875,10 @@ def command_vectors():
                  "diag": diag(dec(body)), "body": body.hex(), "envelope": env.hex()})
     refuse.append({"name": "a second signature swapped on the way", "rule": "env/damaged", "verdict": "refuse",
                    "envelope": swapped.hex(), "signer": ADMIN.pub.hex()})
-    env, body, _ = envelope2("command", ADMIN, m, fake("sig2 8192", 8192))
+    env, body, _ = envelope2("command", ADMIN, m, fake("sig2 8192", MAX_SIG2))
     take.append({"name": "a second signature of 8192 bytes", "verdict": "take", "diag": diag(dec(body)),
                  "body": body.hex(), "envelope": env.hex()})
-    env, body, _ = envelope2("command", ADMIN, m, fake("sig2 8193", 8193))
+    env, body, _ = envelope2("command", ADMIN, m, fake("sig2 8193", MAX_SIG2 + 1))
     refuse.append({"name": "a second signature of 8193 bytes", "rule": "env/sig2", "verdict": "refuse",
                    "envelope": env.hex()})
     m, _ = cmd(10, PHONE, 8, LOCK.id16, {})
@@ -909,7 +932,7 @@ def grant_vectors(admin_record):
         g = dict(g)
         g[3] = signer.hash
         genv, gbody = envelope("grant", signer, g)
-        assert big or len(gbody) <= 4096
+        assert big or len(gbody) <= MAX_GRANT
         return g, genv, gbody
 
     def ok(name, g, signer, admin=None):
@@ -956,13 +979,14 @@ def grant_vectors(admin_record):
              {**g, 12: by_hash([Signer(f"c{i}").key for i in range(17)])})
     root_bad("seventeen readers", "grants/readers",
              {**g, 13: sorted([[Signer(f"r{i}").id16, Signer(f"r{i}").key] for i in range(17)], key=lambda a: a[0])})
-    _, genv, _ = signed({**g, 300: fake("later", 4096)}, ROOT, big=True)
+    _, genv, _ = signed({**g, 300: fake("later", MAX_GRANT)}, ROOT, big=True)
     bad("grant body over 4096 bytes", "env/size", message(genv), L)
     root_bad("readers as a number", "grants/readers", {**g, 13: 5})
     root_bad("a reader without its key", "grants/readers", {**g, 13: [[LAPTOP.id16]]})
     root_bad("a reader with text for its key", "grants/readers", {**g, 13: [[LAPTOP.id16, "key"]]})
     root_bad("neighbors as text", "grants/neighbors", {**g, 14: "peers"})
     root_bad("a neighbour of 16 bytes", "grants/neighbors", {**g, 14: [LAPTOP.id16]})
+    root_bad("nine neighbours", "grants/neighbors", {**g, 14: sorted(Signer(f"n{i}").hash for i in range(9))})
     root_bad("grant for another leaf", "grants/shape", {**g, 10: Signer("lamp member key").id16})
     root_bad("grant for another group", "grants/shape", {**g, 2: ROOT2.id16})
     root_bad("grant of another type", "grants/shape", {**g, 1: 2})
@@ -983,11 +1007,11 @@ def grant_vectors(admin_record):
                  "verdict": "take", "leaf": g[10].hex(), "grant_diag": diag(dec(gb2)), "grant": gb2.hex(),
                  "envelope": genv2.hex(), "message": enc(message(genv2)).hex(), "frame": frame(message(genv2)).hex()})
     bad("grant whose second signature was swapped on the way", "env/damaged", message(swapped), L)
-    genv2, gb2, _ = envelope2("grant", ROOT, {**g, 3: ROOT.hash}, fake("sig2 8192", 8192))
+    genv2, gb2, _ = envelope2("grant", ROOT, {**g, 3: ROOT.hash}, fake("sig2 8192", MAX_SIG2))
     take.append({"name": "guarded lock's grant with a second signature of 8192 bytes",
                  "verdict": "take", "leaf": g[10].hex(), "grant_diag": diag(dec(gb2)), "grant": gb2.hex(),
                  "envelope": genv2.hex(), "message": enc(message(genv2)).hex(), "frame": frame(message(genv2)).hex()})
-    genv2, gb2, _ = envelope2("grant", ROOT, {**g, 3: ROOT.hash}, fake("sig2 8193", 8193))
+    genv2, gb2, _ = envelope2("grant", ROOT, {**g, 3: ROOT.hash}, fake("sig2 8193", MAX_SIG2 + 1))
     bad("grant with a second signature of 8193 bytes", "env/sig2", message(genv2), L)
     _, genv, _ = signed({**kettle, 4: 2}, ADMIN)
     bad("admin's first grant without the root's record", "grants/admin", message(genv), K)
@@ -1166,10 +1190,10 @@ def credential_vectors():
                  "envelope": env.hex()})
     refuse.append({"name": "a second signature swapped on the way", "rule": "env/damaged", "verdict": "refuse",
                    "envelope": swapped.hex()})
-    env, body, _ = envelope2("credential", ROOT, m, fake("sig2 8192", 8192))
+    env, body, _ = envelope2("credential", ROOT, m, fake("sig2 8192", MAX_SIG2))
     take.append({"name": "a second signature of 8192 bytes", "verdict": "take", "diag": diag(dec(body)),
                  "body": body.hex(), "id": sha(body).hex(), "envelope": env.hex()})
-    env, body, _ = envelope2("credential", ROOT, m, fake("sig2 8193", 8193))
+    env, body, _ = envelope2("credential", ROOT, m, fake("sig2 8193", MAX_SIG2 + 1))
     refuse.append({"name": "a second signature of 8193 bytes", "rule": "env/sig2", "verdict": "refuse",
                    "envelope": env.hex()})
     m = {1: 4, 2: tag, 3: PERIOD.key, 4: 1, 7: exp, 14: pad([SRVKEY.hash], 3)}
@@ -1255,7 +1279,7 @@ def copy_vector():
     hdr = {1: sha(b"copy id")[:16], 2: LAPTOP.id16, 3: [T0 + 1234, 0], 4: readers, 6: commit}
     hb = enc(hdr)
     h = sha(b"cbb copy v2\x00" + hb)
-    wraps = [fake("wrap " + r[0].hex(), 1168) for r in readers]
+    wraps = [fake("wrap " + r[0].hex(), WRAP_SIZE) for r in readers]
     payload = fake("payload", 1024 + 16)
     W = sha(b"".join(sha(w) for w in wraps))
     P = sha(payload)
@@ -2760,9 +2784,9 @@ def card_vectors():
     take.append({"name": "a second signer of a later version, taken on the first signature alone",
                  "envelope": env.hex(), "id": sha(body).hex()})
     refuse.append({"name": "a second signature swapped on the way", "rule": "env/damaged", "envelope": swapped.hex()})
-    env, body, _ = envelope2("card", OPERATOR, card(), fake("sig2 8192", 8192))
+    env, body, _ = envelope2("card", OPERATOR, card(), fake("sig2 8192", MAX_SIG2))
     take.append({"name": "a second signature of 8192 bytes", "envelope": env.hex(), "id": sha(body).hex()})
-    env, body, _ = envelope2("card", OPERATOR, card(), fake("sig2 8193", 8193))
+    env, body, _ = envelope2("card", OPERATOR, card(), fake("sig2 8193", MAX_SIG2 + 1))
     refuse.append({"name": "a second signature of 8193 bytes", "rule": "env/sig2", "envelope": env.hex()})
     no("signed by another key than the operator it names", card(), "sig/verify", by=STRANGER)
     return take, refuse
@@ -2825,7 +2849,7 @@ def _name_ok(name):
 
 
 def _path_ok(path):
-    return (0 < len(path.encode()) <= 16384 and len(_save_path(path).encode()) <= 16384
+    return (0 < len(path.encode()) <= MAX_PATH and len(_save_path(path).encode()) <= MAX_PATH
             and all(_name_ok(n) for n in path.split("/")))
 
 
@@ -3070,7 +3094,7 @@ def content_rule(b):
             return "content/text"
     if t == 4:
         d = c.get(7)
-        if not isinstance(d, bytes) or not 1 <= len(d) <= 4096:
+        if not isinstance(d, bytes) or not 1 <= len(d) <= MAX_STATE:
             return "content/data"
         try:
             dec(d)
@@ -3112,7 +3136,7 @@ def command_rule(env_b):
         return "commands/n"
     if not isinstance(m.get(6), int):
         return "commands/time"
-    if not (isinstance(m.get(7), int) and m[6] < m[7] <= m[6] + 600000):
+    if not (isinstance(m.get(7), int) and m[6] < m[7] <= m[6] + MAX_LIFETIME_MS):
         return "commands/expires"
     for f, rule in [(10, "commands/to"), (11, "commands/id")]:
         if not (isinstance(m.get(f), bytes) and len(m[f]) == 16):
@@ -3150,7 +3174,7 @@ def orders_rule(t, b):
             return "orders/paste"
         if kind in (1, 2):
             txt = o.get(13)
-            ok = isinstance(txt, str) and 14 not in o and 1 <= len(txt.encode()) <= (16384 if way == 2 else 1 << 20)
+            ok = isinstance(txt, str) and 14 not in o and 1 <= len(txt.encode()) <= (MAX_TYPED_TEXT if way == 2 else MAX_PASTE_TEXT)
         else:
             ok = 13 not in o and isinstance(o.get(14), bytes) and len(o[14]) == 16 and way == 1
         return "take" if ok else "orders/paste"
@@ -3168,7 +3192,7 @@ def orders_rule(t, b):
             return "orders/device"
         if 11 in o:
             a = o[11]
-            if not (isinstance(a, bytes) and 1 <= len(a) <= 4096):
+            if not (isinstance(a, bytes) and 1 <= len(a) <= MAX_ARGS):
                 return "orders/device"
             try:
                 dec(a)
@@ -3261,7 +3285,7 @@ def beacon_rule(env_b):
         return "form/critical"
     if (8 in m) != (len(env) == 3):
         return "env/shape"
-    if len(env) == 3 and len(env[2]) > 8192:
+    if len(env) == 3 and len(env[2]) > MAX_SIG2:
         return "env/sig2"
     if 8 in m and not (isinstance(m[8], bytes) and len(m[8]) == 32):
         return "beacons/signer2"

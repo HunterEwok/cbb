@@ -235,7 +235,6 @@ func (m *manifest) files() bool { return len(m.parts) > 0 && m.parts[0].path != 
 // maps of 1 type 1..4, 2 path, 3 dir 1, 4 size, 5 sha256 of 32 bytes).
 func readManifest(x any) (*manifest, string) {
 	const bad = "content/manifest"
-	const maxInt = 1<<63 - 1
 	m, ok := x.(map[any]any)
 	if !ok || !only(m, 1, 2) {
 		return nil, bad
@@ -310,7 +309,6 @@ func readManifest(x any) (*manifest, string) {
 // whole is at most 1 GiB.
 func (m *manifest) validate() string {
 	const bad = "manifest"
-	const maxMedia = 1 << 30
 	files := m.files()
 	if len(m.parts) == 0 || len(m.parts) > 10000 || (!files && len(m.parts) > 8) {
 		return bad
@@ -740,9 +738,9 @@ func ordersVerdict(t uint64, b []byte) string {
 			return "take"
 		}
 		txt, ok := o[uint64(13)].(string)
-		limit := 1 << 20
+		limit := maxPasteText
 		if way == 2 {
-			limit = 16384
+			limit = maxTypedText
 		}
 		if !ok || hasCopy || len(txt) < 1 || len(txt) > limit {
 			return "orders/paste"
