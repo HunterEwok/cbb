@@ -472,7 +472,17 @@ module records_v3 {
   // line, its heads reach the record for the new root, and it does not keep it.)
   pure def settledFirst(r: Record, i: Id, rs: Set[Record]): bool =
     rs.exists(l => l.kind == "checkpoint" and l.signer == r.target and l.id != i and inLine(l.line, r.first)
-      and l.heads.keys().contains(r.target) and inLine(l.heads.get(r.target), i) and not(l.keep.contains(i)))
+      and l.heads.keys().contains(r.target) and inLine(l.heads.get(r.target), i) and not(l.keep.contains(i))
+      // (records 9dd3d9c8 (a): the settling checkpoint's own keep still counts: the change
+      // waits for what that checkpoint keeps too.)
+      and l.keep.forall(k => rs.exists(x => x.id == k))
+      // And L keeps no record of an old root that r itself cuts: such an L does not follow r
+      // (its writer had not applied r). A search found it settling r live, r then cutting what
+      // L keeps, and a restart rebuilding without r; with this, neither does.
+      and not(rs.exists(x => l.keep.contains(x.id) and cutByChange(r, x))))
+  // A record r's list cuts: an old root's record other than a checkpoint that r does not keep.
+  pure def cutByChange(r: Record, x: Record): bool =
+    ROOT_KEYS.contains(x.signer) and x.signer != r.target and x.kind != "checkpoint" and not(r.keep.contains(x.id))
   // The chain a member follows among the recovery records rs: from seq 1, a valid record
   // whose previous ID is the member's tip extends it; a gap ends the chain. Any two records the
   // recovery key signed at one seq, at any depth, valid or not, are a fork: the member stops
@@ -602,7 +612,7 @@ module records_v3 {
     // (WHOLE_BY_SETTLER: the checkpoints the set got count toward a head's first records, so a
     // settler counts before the set keeps it.)
     chainOfAll(recsOf(s.chain, db).union(if (WHOLE_BY_SETTLER)
-      recsOf(s.got, db).filter(c => c.kind == "checkpoint" and not(isChain(c))) else Set()))
+      recsOf(s.got, db).filter(c => not(isChain(c))) else Set()))
   pure def keptPath(s: Store, db: Id -> Record): List[Key] = pathCuts(chainState(s, db))._1
   pure def keptCuts(s: Store, db: Id -> Record): Key -> List[Id] = pathCuts(chainState(s, db))._2
   pure def orderOf(s: Store, db: Id -> Record): Order = { roots: rootsOf(keptPath(s, db)), cuts: keptCuts(s, db) }
@@ -799,7 +809,11 @@ module records_v3 {
           and o.seq == r.seq and r.signer == last(keptPath(s, db)))
         val s1 = if (twin == Set()) s
           else reopen({ ...s, chain: s.chain.union(idsOf(twin)).union(Set(r.id)), recs: s.recs.exclude(idsOf(twin)) }, db)
-        storeOne(if (isFirst) applyChain(s1, db) else s1, r, db)
+        val s3 = storeOne(if (isFirst) applyChain(s1, db) else s1, r, db)
+        // (records 9dd3d9c8 (b): a change may be completed by another record than the one it
+        // asked for: while a held head waits, any record re-chains the set.)
+        if (WHOLE_BY_SETTLER and recsOf(s3.chain, db).exists(h => isChain(h) and not(chainState(s3, db).ids.indices().exists(j => chainState(s3, db).ids[j] == h.id))))
+          applyChain(s3, db) else s3
       }
     }
   }
@@ -1676,17 +1690,24 @@ module records_v3 {
   // the core's restore broke): the chain's heads, its first records unless a held checkpoint
   // prunes them, then the rooms and the place aside; got and the cut are forgotten.
   pure def savedChain(s: Store, db: Id -> Record): Set[Id] = {
-    val cps = recsOf(s.recs, db).filter(c => c.kind == "checkpoint")
+    // Only the checkpoint the set compacted on drops first records (the core's compact uses the
+    // counting checkpoints), not any checkpoint it merely holds (k.10967: a bent one).
+    val cps = if (s.checkpoint == 0) Set() else Set(db.get(s.checkpoint))
     s.chain.filter(i => isChain(db.get(i)) or not(cps.exists(c => prunedBy(c, db.get(i)))))
   }
   pure def rebuiltFromSaved(s: Store, db: Id -> Record): (Store, View) = {
     val ch = savedChain(s, db)
     val s1 = toList(ch).foldl(EMPTY, (x, i) => insertInto(x, db.get(i), db))
-    finish(toList(s.recs.union(s.wait).exclude(ch)).foldl(s1, (x, i) => insertInto(x, db.get(i), db)), db)
+    val s2 = toList(s.recs.union(s.wait).exclude(ch)).foldl(s1, (x, i) => insertInto(x, db.get(i), db))
+    // A second pass, as the core loads in dependency order: a record whose signer only a later
+    // record names (a root fork's proof, kept beside the chain) is taken once its signer is known.
+    finish(toList(ch.union(s.recs).union(s.wait)).foldl(s2, (x, i) => insertInto(x, db.get(i), db)), db)
   }
   action restartSaved(m: str): bool = commit(db, nextId, m, rebuiltFromSaved(st.get(m), db)._1)
   // Every member that is not halted shows, rebuilt from what it saves, the view it shows.
-  val savedStable = MEMBERS.forall(m => chainState(st.get(m), db).stop
+  // (A member halted on a root fork is exempt: it takes nothing more, and the counting
+  // checkpoint it shows while halted depends on when the fork's proof came.)
+  val savedStable = MEMBERS.forall(m => chainState(st.get(m), db).stop or views.get(m).stop
     or rebuiltFromSaved(st.get(m), db)._2 == views.get(m))
 
   action restart(m: str): bool = {
@@ -3160,6 +3181,18 @@ module records_v3 {
         and views.get(m).checkpoint == views.get("r").checkpoint
         and st.get(m).recs == st.get("r").recs and st.get(m).cut.marks.keys() == Set()) and promises
         and (WHOLE_BY_SETTLER implies savedStable))
+
+  // A search's trace (seed 77007): a checkpoint of the new root NA, written on a set that has not
+  // applied the change to NA, keeps R's records 1 and 2, which that change cuts. It must not
+  // settle the change: else the set applies it live, the change cuts 1 and 2, and a restart
+  // rebuilds without it.
+  run settlerKeepsWhatChangeCutsTest =
+    init
+      .then(offerEveryone(1)).then(recoverAs(RECOVERY, "NK")).then(syncRound)
+      .then(signCheckpointKeep("NK", Set(4), "A", 1)).then(syncRound)
+      .then(recoverAs(RECOVERY, "NA")).then(restart("r")).then(giveOnly("a", 7))
+      .then(signFullX("NA", "checkpoint", "", "", 0, false, false, 2, false, Set(), false))
+      .expect((WHOLE_BY_SETTLER implies (views.get("a").path == ["R", "NK"] and savedStable)) and promises)
 
   // The exhaustive-check thread's probe (11-13 23:56Z): the change to NK re-signs R's removal
   // of D (Z 7) beside its first checkpoint 8; NK's checkpoint 9 keeps 7 and prunes 8; then m
