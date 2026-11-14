@@ -137,6 +137,8 @@ std::thread_local! {
     /// Debug builds: true while a test that times the set runs without
     /// the check after every insert (`check_judged`, `unchecked`).
     static UNCHECKED: core::cell::Cell<bool> = const { core::cell::Cell::new(false) };
+    /// The state checks this thread made (`check_state`).
+    static STATE_CHECKS: core::cell::Cell<u64> = const { core::cell::Cell::new(0) };
 }
 
 /// While it lives, the debug check that what a set holds is what its
@@ -276,7 +278,7 @@ pub struct RecordSet {
     marked: u64,
     /// The checkpoints that counted when the set last compacted: what
     /// they prune is not taken again.
-    checkpoints: Vec<(Vec<Head>, BTreeSet<RecordId>)>,
+    checkpoints: Vec<(KeyHash, Vec<Head>, BTreeSet<RecordId>)>,
     records: BTreeMap<RecordId, Entry>,
     bytes: usize,
     /// How many rounds each missing record was asked for (`missing`).
@@ -712,8 +714,9 @@ impl RecordSet {
         };
         // Compaction memory decides here only whether the record is stored,
         // never the state: what it prunes, the evaluation leaves out too.
-        let pruned =
-            |set: &RecordSet| set.checkpoints.iter().any(|(heads, anchors)| eval::pruned_by(&r, role, heads, anchors));
+        let pruned = |set: &RecordSet| {
+            set.checkpoints.iter().any(|(_, heads, anchors)| eval::pruned_by(&r, role, heads, anchors))
+        };
         // What the newest list names, and a head's first checkpoint, are
         // kept whatever a checkpoint says.
         let listed = self.cuts.get(&signer).is_some_and(|cut| cut.covers(&signer, r.body().seq) && cut.keeps(&id));
@@ -937,7 +940,7 @@ impl RecordSet {
     fn settled_head(&self, signer: &KeyHash) -> u64 {
         self.checkpoints
             .iter()
-            .filter_map(|(heads, _)| heads.iter().find(|h| h.key == *signer).map(|h| h.seq))
+            .filter_map(|(_, heads, _)| heads.iter().find(|h| h.key == *signer).map(|h| h.seq))
             .max()
             .unwrap_or(0)
     }
@@ -1474,7 +1477,39 @@ impl RecordSet {
         if self.batch.is_none() && self.trusted.is_empty() && !UNCHECKED.with(core::cell::Cell::get) {
             let j = self.judge();
             debug_assert!(j.drop.is_empty(), "the set holds {} records the rooms would turn away", j.drop.len());
+            self.check_state();
         }
+    }
+
+    /// Debug builds: the set's state is the evaluation from scratch of
+    /// every record it holds (those aside too) and its lists. Every time
+    /// while the set is small, then every 64th time, since the evaluation
+    /// verifies every signature again.
+    #[cfg(all(debug_assertions, feature = "std"))]
+    fn check_state(&self) {
+        let n = STATE_CHECKS.with(|c| {
+            let n = c.get().wrapping_add(1);
+            c.set(n);
+            n
+        });
+        if self.records.len() > 32 && !n.is_multiple_of(64) {
+            return;
+        }
+        let counted: Vec<Record> =
+            self.records.values().map(|e| e.record.clone()).chain(self.early.values().cloned()).collect();
+        let lists: Vec<Vec<u8>> = self.lists.values().map(|(b, _)| b.clone()).collect();
+        #[cfg(test)]
+        let verified = super::VERIFIED.with(core::cell::Cell::get);
+        let fresh = eval::evaluate(&eval::Input {
+            root: &self.root,
+            recovery: &self.recovery,
+            records: &counted,
+            lists: &lists,
+        });
+        // The tests that count signatures count the set's own.
+        #[cfg(test)]
+        super::VERIFIED.with(|v| v.set(verified));
+        debug_assert_eq!(self.state(), fresh, "the set's state is not the evaluation of what it holds");
     }
 
     /// Whether signer, which signs as role, is a root on the set's path.
@@ -3457,7 +3492,7 @@ impl RecordSet {
             let Kind::Checkpoint { heads, keep } = &e.record.body().kind else { return false };
             e.role == Role::Root
                 && (heads.iter().any(|h| h.id == *id) || keep.binary_search(id).is_ok())
-                && !self.checkpoints.iter().any(|(h, _)| h == heads)
+                && !self.checkpoints.iter().any(|(s, h, _)| *s == e.record.body().signer && h == heads)
         })
     }
 
@@ -3476,7 +3511,7 @@ impl RecordSet {
             while let Some(p) = at {
                 if p == *id {
                     let anchors = eval::anchors_of(heads, keep);
-                    return !self.checkpoints.iter().any(|(h, a)| h == heads && *a == anchors);
+                    return !self.checkpoints.iter().any(|(s, h, a)| *s == b.signer && h == heads && *a == anchors);
                 }
                 at = self.records.get(&p).and_then(|e| e.record.body().prev);
             }
@@ -3501,7 +3536,11 @@ impl RecordSet {
                 || keep.binary_search(id).is_ok()
                 || b.signer == signer && seq < b.seq;
             // Compacted by already: only then are its anchors worth making.
-            names && !self.checkpoints.iter().any(|(h, a)| h == heads && *a == eval::anchors_of(heads, keep))
+            names
+                && !self
+                    .checkpoints
+                    .iter()
+                    .any(|(s, h, a)| *s == b.signer && h == heads && *a == eval::anchors_of(heads, keep))
         })
     }
 
@@ -3533,7 +3572,7 @@ impl RecordSet {
         let head = self
             .checkpoints
             .iter()
-            .filter_map(|(heads, _)| heads.iter().find(|h| h.key == root).map(|h| h.seq))
+            .filter_map(|(_, heads, _)| heads.iter().find(|h| h.key == root).map(|h| h.seq))
             .max()
             .unwrap_or(0);
         for k in rm.keys.clone() {
@@ -3583,9 +3622,12 @@ impl RecordSet {
         self.checkpoints = state
             .checkpoints
             .iter()
-            .filter_map(|cp| match self.held(cp).map(|r| &r.body().kind) {
-                Some(Kind::Checkpoint { heads, keep }) => Some((heads.clone(), eval::anchors_of(heads, keep))),
-                _ => None,
+            .filter_map(|cp| {
+                let b = self.held(cp)?.body();
+                match &b.kind {
+                    Kind::Checkpoint { heads, keep } => Some((b.signer, heads.clone(), eval::anchors_of(heads, keep))),
+                    _ => None,
+                }
             })
             .collect();
         let proof = self.proof();
@@ -3604,7 +3646,7 @@ impl RecordSet {
                     && self
                         .checkpoints
                         .iter()
-                        .any(|(heads, anchors)| eval::pruned_by(&e.record, self.role_of(e), heads, anchors))
+                        .any(|(_, heads, anchors)| eval::pruned_by(&e.record, self.role_of(e), heads, anchors))
             })
             .map(|e| e.record.id())
             .collect();

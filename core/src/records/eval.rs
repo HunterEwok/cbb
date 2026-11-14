@@ -739,7 +739,7 @@ impl Settle<'_> {
 /// a checkpoint keeps still counts, so the group waits for that too.
 pub(crate) fn first_gap(
     held: &BTreeMap<RecordId, &Record>,
-    proven: &[(Vec<Head>, BTreeSet<RecordId>)],
+    proven: &[(KeyHash, Vec<Head>, BTreeSet<RecordId>)],
     by: &Settle<'_>,
     id: &RecordId,
     root: &Key,
@@ -760,7 +760,7 @@ pub(crate) fn first_gap(
     // comes first, then the first record each such checkpoint keeps and
     // the device lacks: any of them may complete the group.
     let settled = |below: u64, gone: &RecordId| -> Vec<RecordId> {
-        if proven.iter().any(|(heads, _)| names(heads, below)) {
+        if proven.iter().any(|(_, heads, _)| names(heads, below)) {
             return Vec::new();
         }
         let mut lacks = alloc::vec![*gone];
@@ -1377,7 +1377,7 @@ fn checkpoints_of<'r>(
 /// What a member's compactions left it with: the checkpoints it pruned by
 /// (`RecordSet`).
 pub(crate) struct Compacted<'c> {
-    pub proven: &'c [(Vec<Head>, BTreeSet<RecordId>)],
+    pub proven: &'c [(KeyHash, Vec<Head>, BTreeSet<RecordId>)],
 }
 
 /// The cuts with the list narrowed to what the current root's checkpoint
@@ -1482,7 +1482,7 @@ pub(crate) fn evaluate_checked(
         // record the cut drops (a cut root's, or the current root's below
         // its `from`, unlisted) is not held for it: nothing below the line
         // the recovery record starts is followed.
-        if !proven.iter().any(|(h, a)| h == heads && *a == anchors) {
+        if !proven.iter().any(|(s, h, a)| *s == x.body().signer && h == heads && *a == anchors) {
             let held: BTreeMap<RecordId, &Record> =
                 kept.iter().filter(|c| !off_cut(&cuts, c.r)).map(|c| (c.r.id(), c.r)).collect();
             if !checkpoint_ok(x, |id| held.get(id).copied()) {
