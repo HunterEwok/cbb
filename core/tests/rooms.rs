@@ -301,3 +301,29 @@ fn a_step_can_take_a_member_down() {
     assert_eq!(f(&y, &caps, &pre), y);
     assert_eq!(f(&x.union(&y).copied().collect(), &caps, &pre), [recs[0]].into());
 }
+
+/// Two checkpoints of one key at one seq (a root's two histories): the
+/// smaller ID is the newest, whichever comes first and whether it comes
+/// among the items or among those kept first; the other is an older one,
+/// at the end of the key's order.
+#[test]
+fn of_two_checkpoints_at_one_seq_the_smaller_id_is_the_newest() {
+    let cp = |n: u8| R { key: 0, seq: 5, n, units: 1, early: false, checkpoint: true };
+    let (small, big) = (cp(1), cp(2));
+    assert!(small.id() < big.id());
+    for order in [[small, big], [big, small]] {
+        let mut items: Vec<Item> = order.iter().map(R::item).collect();
+        let newest = keep::newest_only(&mut items, &[]);
+        assert_eq!(newest.get(&KeyHash([0; 32])), Some(&small.id()), "{order:?}");
+        for it in &items {
+            assert_eq!((it.checkpoint, it.older), (it.id == small.id(), it.id != small.id()), "{order:?}");
+        }
+        // One of them kept first, the other among the items.
+        let (mut one, first) = (vec![order[0].item()], vec![order[1].item()]);
+        assert_eq!(keep::newest_only(&mut one, &first).get(&KeyHash([0; 32])), Some(&small.id()), "{order:?}");
+        assert_eq!(one[0].checkpoint, order[0].id() == small.id());
+        // Room for one: the newest stays.
+        let caps = BTreeMap::from([(0u8, 1u64)]);
+        assert_eq!(f(&order.into(), &caps, &BTreeMap::new()), [small].into());
+    }
+}
