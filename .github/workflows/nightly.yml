@@ -87,7 +87,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [record_body, command, credential, release, wire, vless, api, format, welcome_message]
+        target: [record_body, command, credential, release, wire, vless, api, format, welcome_message, sheet, yubikey_object, welcome_parts, welcome_fields]
     defaults:
       run:
         working-directory: core/
