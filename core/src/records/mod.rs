@@ -178,9 +178,6 @@ pub fn pin_mark(local: &[u8; 32], root: &Key, recovery: &Recovery) -> Mark {
 /// The label of the set digest.
 pub const LABEL_SET: &str = "cbb set v3";
 
-/// The label of the digest a Welcome names of the set it sends in parts.
-pub const LABEL_WELCOME_SET: &str = "cbb welcome set v1";
-
 /// The rules version this code implements (section 3.3).
 pub const RULES_VERSION: u64 = 1;
 

@@ -2275,6 +2275,8 @@ jobs:
       - name: cargo-llvm-cov, for the tests' coverage
         run: cargo install --locked cargo-llvm-cov@0.9.1
       - name: cargo test (the interop vectors in testdata/interop too), with coverage
+        env:
+          CBB_FULL_SIZE: "1" # the records' tests at real size too
         run: cargo llvm-cov --locked --workspace --json --summary-only --output-path "$GITHUB_WORKSPACE/coverage-rust.json"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

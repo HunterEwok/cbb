@@ -144,6 +144,7 @@ return an error. Where something truly cannot fail, allow the lint on that item 
 
 ```sh
 cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
+CBB_FULL_SIZE=1 cargo test -p cbb-core --features std,tls,web records   # the records' tests at real size too (minutes; CI's rust job)
 cargo build -p cbb-core --target riscv32imac-unknown-none-elf   # the core without an OS
 cargo deny --locked check licenses bans sources   # the crates' licenses and sources (deny.toml, CI's advisories job)
 cargo build --release && CBB_TEST_ALONE=$PWD/target/release/cbb \

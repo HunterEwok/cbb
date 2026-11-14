@@ -434,24 +434,6 @@ impl RecordSet {
         super::digest(self.records.keys().chain(self.early.keys()))
     }
 
-    /// The digest a Welcome names of the set it sends in parts: over the
-    /// set digest and the hashes of the lists the set holds, in order, so
-    /// that a joiner that ends with it holds every record, the heads, the
-    /// first checkpoints and the proof of a fork among them, and every
-    /// list the heads name.
-    pub fn welcome_digest(&self) -> [u8; 32] {
-        let mut m = Vec::with_capacity(
-            super::LABEL_WELCOME_SET.len().saturating_add(33).saturating_add(self.lists.len().saturating_mul(32)),
-        );
-        m.extend_from_slice(super::LABEL_WELCOME_SET.as_bytes());
-        m.push(0);
-        m.extend_from_slice(&self.digest());
-        for h in self.lists.keys() {
-            m.extend_from_slice(h);
-        }
-        crate::certs::sha256(&m)
-    }
-
     /// The lists the set holds, as their bytes, which a sender sends
     /// with the records that name them.
     pub fn lists(&self) -> impl Iterator<Item = &[u8]> {
@@ -459,6 +441,7 @@ impl RecordSet {
     }
 
     /// The first checkpoints kept outside the rooms (`eval::Chain::firsts`).
+    #[allow(dead_code, reason = "the tests read it; the Welcome in parts no longer does")]
     pub(crate) fn firsts(&self) -> &eval::Firsts {
         &self.firsts
     }
@@ -778,7 +761,9 @@ impl RecordSet {
         if self.needs_cut(&signer) {
             self.cut();
         }
-        if (first || self.gaps.contains(&id)) && self.trusted.is_empty() {
+        let settles = !self.gaps.is_empty()
+            && matches!(self.records.get(&id).map(|e| &e.record.body().kind), Some(Kind::Checkpoint { .. }));
+        if (first || settles || self.gaps.contains(&id)) && self.trusted.is_empty() {
             // A head's first checkpoint, or the record its group lacked:
             // the head may apply now.
             self.rechain();
@@ -885,7 +870,11 @@ impl RecordSet {
             return Ok(Added::NoRoom);
         }
         // A head's first checkpoint: the head may apply now.
+        // A later checkpoint may settle the record a change lacks.
+        let settles = !self.gaps.is_empty()
+            && matches!(self.early.get(&id).map(|r| &r.body().kind), Some(Kind::Checkpoint { .. }));
         let names = self.gaps.contains(&id)
+            || settles
             || self
                 .records
                 .values()
@@ -1112,7 +1101,7 @@ impl RecordSet {
             &self.root_hash,
             self.records.values().map(|e| (&e.record, e.role)),
             &lists,
-            |id, root, from| eval::first_gap(&held, &self.checkpoints, id, root, from),
+            |id, root, from, settlers| eval::first_gap(&held, &self.checkpoints, settlers, id, root, from),
         );
         let promoted = chain.promoted();
         let mut cuts = chain.cuts();
@@ -3097,6 +3086,24 @@ impl RecordSet {
                             .filter(|e| e.record.body().signer == h && e.record.body().seq <= top)
                             .map(|e| e.record.id()),
                     );
+                    // A record of the group a later checkpoint settled may
+                    // be gone: the checkpoints that may settle it go too,
+                    // with what they keep (`eval::first_gap`), those of the
+                    // new root above the first and of the roots after it.
+                    let settlers: BTreeSet<KeyHash> =
+                        core::iter::once(h).chain(state.roots.iter().copied().skip_while(|k| *k != h)).collect();
+                    for e in self.records.values() {
+                        let b = e.record.body();
+                        if !settlers.contains(&b.signer) || (b.signer == h && b.seq <= top) {
+                            continue;
+                        }
+                        if let Kind::Checkpoint { heads, keep } = &b.kind
+                            && heads.iter().any(|hd| hd.key == h)
+                        {
+                            ids.insert(e.record.id());
+                            ids.extend(keep.iter().filter(|k| self.held(k).is_some()).copied());
+                        }
+                    }
                 }
             }
             let admins: BTreeSet<KeyHash> =

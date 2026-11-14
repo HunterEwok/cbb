@@ -1869,6 +1869,16 @@ mod differential {
                             g.recs.push(r);
                         }
                     } else {
+                        if arg % 7 == 5 || arg % 7 == 4 {
+                            // A first record before the first checkpoint,
+                            // which a later device record of the same key
+                            // replaces and a checkpoint may then prune.
+                            let mut d = Device::new(target.key.clone(), "first", ROLE_MEMBER);
+                            d.rights = RIGHT_READ;
+                            if let Ok(r) = Record::sign(g.body(new_root, Kind::device(d)), new_root) {
+                                g.push(r);
+                            }
+                        }
                         g.change(new_root, &list);
                     }
                     continue;
@@ -1885,11 +1895,13 @@ mod differential {
                         .recs
                         .iter()
                         // A checkpoint keeps what counts, as a real one
-                        // does, and of the rest some.
+                        // does, and of the rest some; now and then it
+                        // leaves out one that counts, as a root may.
                         .filter(|r| {
                             r.body().signer == by.hash
                                 && r.body().seq < seq
-                                && (counting.contains(&r.id()) || r.id().0[0] % 2 == arg % 2)
+                                && (counting.contains(&r.id()) && (arg % 3 != 0 || r.id().0[1] % 2 != 0)
+                                    || r.id().0[0] % 2 == arg % 2)
                         })
                         .map(Record::id)
                         .collect();
@@ -1957,6 +1969,18 @@ mod differential {
             assert_eq!(back.ids().collect::<Vec<_>>(), set.ids().collect::<Vec<_>>(), "restored IDs");
             assert_eq!(back.digest(), set.digest());
             assert_eq!(back.state(), st, "restored state");
+        }
+        // A device that joins gets the same in parts, as the Welcome sends
+        // them.
+        if let Some(peer) = st.devices.first().map(|d| d.key.hash()) {
+            let mut joiner = RecordSet::new(set.root().clone(), set.recovery().clone());
+            for _ in 0..3 {
+                for p in set.parts_for_peer(&st, &peer) {
+                    let records: Vec<Record> = p.records.iter().map(|r| (*r).clone()).collect();
+                    joiner.take_part(&records, &p.lists);
+                }
+            }
+            assert_eq!(joiner.state(), st, "a joiner's state");
         }
     }
 
@@ -2033,6 +2057,89 @@ mod differential {
             (&st.roots, &st.devices, &st.revoked, &st.stop, &st.changes)
         );
         m
+    }
+
+    /// A change waits for a record a later checkpoint keeps, and its
+    /// group's own first record comes instead and completes it by the
+    /// walk: the set takes the change at once, and cuts what it cuts.
+    #[test]
+    fn a_change_completed_by_another_record_than_the_one_it_asked_for() {
+        let steps = [
+            (2, 2, 56),
+            (4, 0, 64),
+            (2, 3, 86),
+            (3, 0, 188),
+            (0, 5, 6),
+            (4, 2, 0),
+            (2, 1, 10),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 2),
+            (0, 5, 159),
+            (0, 0, 17),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 6),
+            (0, 0, 9),
+            (0, 0, 0),
+            (0, 5, 38),
+            (0, 2, 0),
+            (0, 0, 124),
+            (2, 0, 0),
+            (0, 1, 17),
+            (0, 1, 5),
+            (0, 0, 2),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 122),
+            (4, 4, 145),
+            (0, 1, 79),
+            (4, 3, 139),
+            (0, 6, 54),
+            (2, 4, 85),
+            (4, 8, 27),
+            (0, 8, 183),
+        ];
+        let (g, recs) = build(&steps);
+        agree(&g, &recs, 3, 6_206_621_366_530_526_364);
+    }
+
+    /// A later checkpoint of the new root leaves a record of its line
+    /// below the first checkpoint out but keeps one under it: restored in
+    /// an order where the kept one comes last, the change waits for it
+    /// and never applies before, so that no record taken later takes the
+    /// change back.
+    #[test]
+    fn a_change_waits_for_what_a_settling_checkpoint_keeps() {
+        let steps = [
+            (0, 1, 6),
+            (3, 4, 134),
+            (4, 4, 27),
+            (0, 2, 36),
+            (2, 2, 0),
+            (3, 1, 131),
+            (2, 1, 158),
+            (4, 1, 179),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 213),
+            (0, 0, 0),
+            (0, 0, 0),
+            (4, 8, 33),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 157),
+            (0, 5, 7),
+        ];
+        let (g, recs) = build(&steps);
+        let m = agree(&g, &recs, 1, 4_683_705_582_638_160_295);
+        assert_eq!(m.state().changes.iter().filter(|c| c.state == ChangeState::Effective).count(), 1);
     }
 
     /// A sequence once found by the property below: the set agrees with
@@ -3032,6 +3139,17 @@ fn members_agree(g: &G) -> State {
         );
     }
     s
+}
+
+/// Whether the tests at real size run: they take minutes, so the default
+/// run leaves them out and CI's rust job sets CBB_FULL_SIZE=1. A test
+/// left out says so.
+fn full_size(name: &str) -> bool {
+    let on = std::env::var("CBB_FULL_SIZE").is_ok_and(|v| v == "1");
+    if !on {
+        std::eprintln!("{name}: at real size, runs with CBB_FULL_SIZE=1");
+    }
+    on
 }
 
 mod cap;

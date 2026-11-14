@@ -701,43 +701,74 @@ pub(crate) fn first_floor<'r>(
 /// Whether held has a head's first checkpoint: a checkpoint of root with
 /// that ID, verified (a set verifies what it holds, `check_all` what it
 /// takes).
-/// The first record of a change's group the set does not hold, or None
-/// when it holds them all: the new root's first checkpoint id and every
+/// The records of a change's group the set lacks, the one to ask for
+/// first, then each other one whose coming could complete it; empty when
+/// it holds them all: the new root's first checkpoint id and every
 /// record of root's line below it, down to the record at `from` (seq 1
 /// for a new key). A change applies whole or not at all: the first
 /// checkpoint keeps the re-issued removals, and with one of them missing
 /// the old removals it covers would stop barring with nothing in their
-/// place. A record a checkpoint the member compacted by settled (below
-/// that checkpoint's head of root, `proven`) is accounted for: a later
-/// checkpoint of the new root may prune its first records once the change
-/// applied.
+/// place. A record a later checkpoint settled is accounted for: one the
+/// member compacted by (`proven`), or one it holds of the new root or of
+/// a root after it on the chain (`settlers`) that names a head of root at
+/// or above it and does not keep it. Such a checkpoint prunes the first
+/// records once the change applied, and the member that compacted by it
+/// saved what remains: what it restores from must apply alike. What such
+/// a checkpoint keeps still counts, so the group waits for that too.
 pub(crate) fn first_gap(
     held: &BTreeMap<RecordId, &Record>,
     proven: &[(Vec<Head>, BTreeSet<RecordId>)],
+    settlers: &BTreeSet<KeyHash>,
     id: &RecordId,
     root: &Key,
     from: u64,
-) -> Option<RecordId> {
+) -> Vec<RecordId> {
     let h = root.hash();
-    let settled = |below: u64| {
-        proven.iter().any(|(heads, _)| heads.iter().any(|hd| hd.key == h && hd.seq.saturating_add(1) >= below))
-    };
+    let names = |heads: &[Head], below: u64| heads.iter().any(|hd| hd.key == h && hd.seq.saturating_add(1) >= below);
     let Some(cp) = held.get(id).filter(|r| r.body().signer == h && matches!(r.body().kind, Kind::Checkpoint { .. }))
     else {
-        return Some(*id);
+        return alloc::vec![*id];
+    };
+    // A later checkpoint: of root above the first, or of a root after it.
+    let later = |r: &Record| r.body().signer != h || r.body().seq > cp.body().seq;
+    // A later checkpoint that leaves gone out settles it and what lies
+    // below it, but what it keeps still counts: the group waits for that
+    // too, whether or not the walk would reach it, so that a record that
+    // comes later never takes back a change that applied. Lacking, gone
+    // comes first, then the first record each such checkpoint keeps and
+    // the device lacks: any of them may complete the group.
+    let settled = |below: u64, gone: &RecordId| -> Vec<RecordId> {
+        if proven.iter().any(|(heads, _)| names(heads, below)) {
+            return Vec::new();
+        }
+        let mut lacks = alloc::vec![*gone];
+        for r in held.values() {
+            if !settlers.contains(&r.body().signer) || !later(r) {
+                continue;
+            }
+            let Kind::Checkpoint { heads, keep } = &r.body().kind else { continue };
+            if !names(heads, below) || keep.contains(gone) {
+                continue;
+            }
+            match keep.iter().find(|k| !held.contains_key(*k)) {
+                None => return Vec::new(),
+                Some(k) if !lacks.contains(k) => lacks.push(*k),
+                Some(_) => {}
+            }
+        }
+        lacks
     };
     let low = from.max(1);
     let mut r = *cp;
     while r.body().seq > low {
-        let p = r.body().prev?;
+        let Some(p) = r.body().prev else { return Vec::new() };
         match held.get(&p) {
             Some(x) if x.body().signer == h && x.body().seq < r.body().seq => r = x,
-            Some(_) => return None,
-            None if settled(r.body().seq) => return None,
-            None => return Some(p),
+            Some(_) => return Vec::new(),
+            None => return settled(r.body().seq, &p),
         }
     }
-    None
+    Vec::new()
 }
 
 /// What the recovery chain comes to (rule 33): the roots it put on the
@@ -844,7 +875,7 @@ pub(crate) fn chain<'r>(
     group_root: &KeyHash,
     records: impl Iterator<Item = (&'r Record, Role)>,
     lists: &BTreeMap<[u8; 32], &List>,
-    first_gap: impl Fn(&RecordId, &Key, u64) -> Option<RecordId>,
+    first_gap: impl Fn(&RecordId, &Key, u64, &BTreeSet<KeyHash>) -> Vec<RecordId>,
 ) -> Chain {
     let mut by: BTreeMap<u64, Vec<&Record>> = BTreeMap::new();
     let mut out = Chain::default();
@@ -905,8 +936,15 @@ pub(crate) fn chain<'r>(
     // state is shown as it stood, nothing is compacted or commanded by it,
     // and the first checkpoint of a record a later one followed is gone.
     let halted = !out.fork.is_empty() || out.unreadable;
+    // Who may settle a record of a new root's group: that root, and the
+    // roots after it on the chain.
+    let settlers = |root: &Key| -> BTreeSet<KeyHash> {
+        let h = root.hash();
+        valid.iter().map(|(_, k, _, _, _)| k.hash()).skip_while(|k| *k != h).collect()
+    };
+    let gap = |first: &RecordId, root: &Key, from: u64| first_gap(first, root, from, &settlers(root));
     let ready = |list: &[u8; 32], root: &Key, from: u64, first: &RecordId| {
-        lists.contains_key(list) && (halted || first_gap(first, root, from).is_none())
+        lists.contains_key(list) && (halted || gap(first, root, from).is_empty())
     };
     let applied = valid
         .iter()
@@ -917,14 +955,14 @@ pub(crate) fn chain<'r>(
             .iter()
             .skip(applied)
             .filter(|(_, _, list, _, _)| lists.contains_key(*list))
-            .filter_map(|(_, root, _, from, first)| first_gap(first, root, *from))
+            .flat_map(|(_, root, _, from, first)| gap(first, root, *from))
             .collect();
     }
     if applied < valid.len()
         && let Some((_, root, list, from, first)) = valid.last()
     {
         out.waiting = (!lists.contains_key(*list)).then_some(**list);
-        out.first_missing = if halted { None } else { first_gap(first, root, *from) };
+        out.first_missing = if halted { None } else { gap(first, root, *from).first().copied() };
     }
     if let Some((_, root, _, _, first)) = applied.checked_sub(1).and_then(|i| valid.get(i))
         && !halted
@@ -1197,8 +1235,8 @@ pub(crate) fn evaluate_checked(
     let chain = {
         let held: BTreeMap<RecordId, &Record> =
             checked.iter().map(|c| c.r).chain(early.iter().copied()).map(|r| (r.id(), r)).collect();
-        chain(&group_root, checked.iter().map(|c| (c.r, c.role)), lists, |id, root, from| {
-            first_gap(&held, by.proven, id, root, from)
+        chain(&group_root, checked.iter().map(|c| (c.r, c.role)), lists, |id, root, from, settlers| {
+            first_gap(&held, by.proven, settlers, id, root, from)
         })
     };
     // The records of a root only a waiting record names stay aside, as
