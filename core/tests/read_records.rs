@@ -1021,3 +1021,26 @@ fn admin_keys_made_and_removed_until_the_floor() {
     }
     println!("after the change of root: devices {}, set {} bytes", set.state().devices.len(), set.bytes());
 }
+
+/// Devices a root signs past the cap of devices do not count, and its
+/// checkpoints do not keep them: 700 rounds of three devices and a
+/// checkpoint, each written and counting, keep no more than the devices
+/// the group may have and the root's first records.
+#[test]
+fn checkpoints_keep_no_more_than_the_devices_the_group_may_have() {
+    let (mut set, root, mut g) = root_with_dead_checkpoints(0, 0);
+    for round in 0..700u32 {
+        for i in 0..3u32 {
+            let dk = k(&format!("cap dev {round} {i}"));
+            let _ = set.insert(g.sign(&root, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER))));
+        }
+        let st = set.state();
+        let cp = set.write_checkpoint(&st, &root, g.t + 1).unwrap_or_else(|e| panic!("round {round}: {e:?}"));
+        let Kind::Checkpoint { keep, .. } = &cp.body().kind else { unreachable!() };
+        assert!(keep.len() <= 256 + 2, "round {round}: keeps {}", keep.len());
+        g.heads.insert(root.hash, (cp.body().seq, cp.id()));
+        g.t += 1000;
+        set.insert(cp.clone()).unwrap();
+        assert_eq!(set.state().checkpoint, Some(cp.id()), "round {round}");
+    }
+}

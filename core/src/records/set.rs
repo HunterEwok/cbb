@@ -16,10 +16,13 @@ use crate::identity::ExternalKey;
 
 /// The units the current root's writer keeps back below its ceiling, past
 /// its records and its next checkpoint, for its removals, freezes and
-/// resolves (`write_one`'s floor): 64 such records of one unit each, four
-/// for every admin key the group may have. A writer's number only: no
-/// member judges a record by it.
-pub const ROOT_FLOOR_MARGIN: u64 = 64;
+/// resolves (`write_one`'s floor): a 24th of the root's ceiling, 64 such
+/// records of one unit each at the real rooms, four for every admin key
+/// the group may have. A writer's number only: no member judges a record
+/// by it.
+fn root_floor_margin() -> u64 {
+    keep::ceiling(true) / 24
+}
 
 /// What inserting a record did.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -2596,8 +2599,14 @@ impl RecordSet {
             }
             // The root's own records under its head stay too: it signed
             // them, so its checkpoint mends its own chain where the rooms
-            // turned a record of it away.
-            let own = r.body().signer == h;
+            // turned a record of it away. Not an admission past the cap of
+            // devices, which would not count: what the checkpoint keeps
+            // stays bounded by the devices the group may have.
+            let past_cap = |r: &Record| match &r.body().kind {
+                Kind::Device(d) => state.device(&d.id()).is_none() && state.devices.len() >= super::MAX_DEVICES,
+                _ => false,
+            };
+            let own = r.body().signer == h && !past_cap(r);
             if e.held || state.counting.contains(&id) || listed(r) || own {
                 keep.insert(id);
             }
@@ -2633,7 +2642,7 @@ impl RecordSet {
 
     /// Whether the current root should write a checkpoint now: one more
     /// ordinary record of one unit (and its ID in the checkpoint, which may
-    /// take one unit more) would reach its floor (`ROOT_FLOOR_MARGIN` below
+    /// take one unit more) would reach its floor (`root_floor_margin` below
     /// its ceiling), where the writer takes only its removals, freezes and
     /// resolves. True too when no checkpoint of it would fit.
     pub fn checkpoint_due(&self, state: &State, time_ms: u64) -> bool {
@@ -2641,7 +2650,7 @@ impl RecordSet {
         let Some(ceiling) = self.ceiling(&h) else { return false };
         let used = self.units.get(&h).copied().unwrap_or(0);
         self.checkpoint_units(state, h, time_ms)
-            .is_none_or(|cp| used.saturating_add(cp).saturating_add(ROOT_FLOOR_MARGIN).saturating_add(2) > ceiling)
+            .is_none_or(|cp| used.saturating_add(cp).saturating_add(root_floor_margin()).saturating_add(2) > ceiling)
     }
 
     /// Writes signer's next ordinary record of kind (every type but a
@@ -2801,7 +2810,7 @@ impl RecordSet {
         }
         // The floor: the current root never writes itself out of its own
         // next checkpoint. After an ordinary record of it, its records and
-        // the checkpoint it would then write stay ROOT_FLOOR_MARGIN below
+        // the checkpoint it would then write stay root_floor_margin() below
         // its ceiling; the margin is for its removals, freezes and
         // resolves, which pass the floor, as a lost device is removed
         // whatever the room says.
@@ -2809,7 +2818,7 @@ impl RecordSet {
             let used = trial.units.get(&h).copied().unwrap_or(0);
             let fits = trial
                 .checkpoint_units(&after, h, time_ms)
-                .is_some_and(|cp| used.saturating_add(cp).saturating_add(ROOT_FLOOR_MARGIN) <= ceiling);
+                .is_some_and(|cp| used.saturating_add(cp).saturating_add(root_floor_margin()) <= ceiling);
             if !fits {
                 return Err(Error::msg(
                     "the root's records would leave no room for its next checkpoint: write a checkpoint first",
