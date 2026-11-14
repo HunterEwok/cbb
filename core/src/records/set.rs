@@ -22,12 +22,16 @@ use crate::identity::ExternalKey;
 /// by it.
 /// How many times a batch (`insert_all`) offers again, one by one, what
 /// its judgment turned away; a round that changes nothing ends it sooner.
+/// Rounds of offering again what a batch's judgment turned away: only a
+/// checkpoint that waits needs it, for its place aside.
 const REOFFER_ROUNDS: usize = 4;
 
 /// The rooms judged over what a set holds (`RecordSet::judge`).
 struct Judged {
     /// What the rooms turn away.
     drop: Vec<RecordId>,
+    /// The units kept first, by key.
+    pre: BTreeMap<KeyHash, u64>,
     /// The levels over what is held with it.
     cut: keep::Cut,
     /// The keys no longer admins (`eval::not_live`).
@@ -208,6 +212,9 @@ pub struct RecordSet {
     /// the newest applied recovery record's and that of the one the chain
     /// waits for; never cut off or pruned while they are.
     firsts: eval::Firsts,
+    /// The units each key's records kept first took when the rooms were
+    /// last judged (`cut`): outside the rooms, within the key's cap.
+    pre: BTreeMap<KeyHash, u64>,
     /// The records set aside that the chain now applies, verified when
     /// they came: taken without verifying again.
     trusted: BTreeSet<RecordId>,
@@ -370,6 +377,7 @@ impl RecordSet {
             early_roots: BTreeMap::new(),
             halted: None,
             firsts: BTreeMap::new(),
+            pre: BTreeMap::new(),
             trusted: BTreeSet::new(),
             early: BTreeMap::new(),
             notices: BTreeMap::new(),
@@ -1391,10 +1399,11 @@ impl RecordSet {
         if names_key {
             self.relearn();
         }
-        // The levels of what is held, known only when nothing went: with
-        // less held they may stand higher, and a level kept past a drop
-        // would turn away what the rooms over what is held keep.
-        self.cut = if dropped { keep::Cut::default() } else { j.cut };
+        // The caps hang on the roster alone, which the roots' rooms keep
+        // whatever goes of the others: they stand after the drop.
+        let _ = dropped;
+        self.cut = j.cut;
+        self.pre = j.pre;
         self.trim_aside();
     }
 
@@ -1431,9 +1440,14 @@ impl RecordSet {
             .map(|e| eval::room_item(&e.record, self.role_of(e), &self.cuts))
             .collect();
         keep::newest_only(&mut items, &firsts);
-        // Who is no longer an admin is read from the root records alone,
-        // before the rooms judge (`eval::not_live`).
-        let (second, back) = eval::not_live(
+        // Who is no longer an admin is read from the root records the
+        // roots' rooms keep (`eval::rooms`).
+        let ceilings: BTreeMap<KeyHash, Option<u64>> =
+            items.iter().map(|it| (it.signer, self.ceiling(&it.signer))).collect();
+        let (kept, cut, second) = eval::rooms(
+            &mut items,
+            |k| ceilings.get(k).copied().flatten(),
+            &pre,
             &self.path,
             &self.cuts,
             self.records
@@ -1441,11 +1455,6 @@ impl RecordSet {
                 .filter(|e| !eval::off_cut(&self.cuts, &e.record))
                 .map(|e| (&e.record, self.role_of(e))),
         );
-        eval::takes_back_first(&mut items, &back);
-        let ceilings: BTreeMap<KeyHash, Option<u64>> =
-            items.iter().map(|it| (it.signer, self.ceiling(&it.signer))).collect();
-        let (kept, cut) =
-            keep::keep_tiers(&items, |k| ceilings.get(k).copied().flatten(), &keep::Cut::default(), &pre, &second);
         let drop: Vec<RecordId> = self
             .records
             .values()
@@ -1457,7 +1466,7 @@ impl RecordSet {
             })
             .map(|e| e.record.id())
             .collect();
-        Judged { drop, cut, second, wanted }
+        Judged { drop, pre, cut, second, wanted }
     }
 
     /// Checks, in debug builds, that what the set holds is what the rooms
@@ -1903,6 +1912,8 @@ impl RecordSet {
         }
         match &r.body().kind {
             Kind::Revoke(_) => true,
+            // A new admin key lowers every second-tier cap.
+            Kind::Device(d) if d.admin.is_some() => true,
             Kind::Device(d) => {
                 let a = d.admin.as_ref().map(Key::hash);
                 self.records.values().any(|e| {
@@ -1926,8 +1937,7 @@ impl RecordSet {
             return false;
         }
         let k = self.room_key(&item.signer);
-        let Some(ceiling) = self.ceiling(&k) else { return false };
-        let share = self.cut.level(self.second.contains(&k)).min(ceiling);
+        let Some(share) = self.cap(&k) else { return false };
         // All the key holds, first records too: if even that fits, it does.
         let all = self.units.iter().filter(|(s, _)| self.room_key(s) == k).fold(0u64, |t, (_, u)| t.saturating_add(*u));
         if all.saturating_add(item.units) <= share {
@@ -1952,8 +1962,9 @@ impl RecordSet {
     }
 
     /// Whether the rooms must be judged after signer's record is stored:
-    /// its room passes its ceiling, or all held passes the set's room.
-    /// Below both, every key keeps all it holds (`keep::keep_tiers`).
+    /// its room passes its cap. Each key's cap hangs on the roster alone
+    /// (`keep::keep_tiers`), so below it the key keeps all it holds and no
+    /// other key is touched.
     fn needs_cut(&self, signer: &KeyHash) -> bool {
         // By room: the cut roots share one.
         let mut by_room: BTreeMap<KeyHash, u64> = BTreeMap::new();
@@ -1963,8 +1974,18 @@ impl RecordSet {
         }
         let signer = &self.room_key(signer);
         let units = by_room.get(signer).copied().unwrap_or(0);
-        let total: u64 = by_room.values().sum();
-        self.ceiling(signer).is_none_or(|c| units > c) || total > keep::room()
+        self.cap(signer).is_none_or(|c| units > c)
+    }
+
+    /// The cap in units of the room key's records go to (the cut roots
+    /// share one, `room_key`), from the roster the rooms last read: a
+    /// root's or the reserve's ceiling, a live admin key's ceiling, the
+    /// equal share of a key no longer an admin (`keep::second_cap`); None
+    /// for a key with no room. What it holds first (`pre`) counts in it.
+    fn cap(&self, key: &KeyHash) -> Option<u64> {
+        let k = self.room_key(key);
+        let ceiling = self.ceiling(&k)?;
+        Some(ceiling.min(self.cut.level(self.second.contains(&k))))
     }
 
     /// A key's ceiling: a root's on the path, an admin key's, or None for
@@ -3090,7 +3111,22 @@ impl RecordSet {
                 super::ADMIN_KEYS_MAX
             )));
         }
+        let (second, cap2) = (self.second.clone(), self.cut.level(true));
         *self = trial;
+        // A root record that takes an admin key back moves that key to the
+        // second tier, and one that makes a new admin key lowers every cap
+        // there, which may reach 0: the root's checkpoint, written right
+        // after it, keeps what those keys signed that counts, outside the
+        // caps, so their devices and removals stay.
+        if state.roots.last() == Some(&h)
+            && matches!(r.body().kind, Kind::Device(_))
+            && (self.second.iter().any(|k| !second.contains(k)) || self.cut.level(true) < cap2)
+        {
+            let now = self.state();
+            if let Ok(cp) = self.write_checkpoint(&now, signer, time_ms) {
+                let _ = self.insert(cp);
+            }
+        }
         Ok(r)
     }
 

@@ -266,89 +266,68 @@ pub fn keep_with(
     cut: &Cut,
     pre: &BTreeMap<KeyHash, u64>,
 ) -> (BTreeSet<RecordId>, Cut) {
-    keep_tiers(items, ceiling_of, cut, pre, &BTreeSet::new())
+    keep_tiers(items, ceiling_of, cut, pre, &BTreeSet::new(), 0)
 }
 
-/// keep_with in two tiers: the keys of `second` (admin keys that are no
-/// longer admins, `eval::not_live`) share only what the others leave, at a
-/// level of their own. The root's room, the cut roots' reserve and the
-/// live admin keys' rooms add up to the set's room, so among honest
-/// writers the first tier never squeezes, and no record of a key that is
-/// no longer an admin pushes out a live one's.
+/// keep_with in two tiers, each key within a cap fixed by the roster
+/// alone, never by what other keys hold. The first tier: the roots'
+/// rooms, the cut roots' reserve and each of the `live` admin keys at its
+/// ceiling; these add up to the set's room. The keys of `second` (admin
+/// keys that are no longer admins, `eval::not_live`) share what the first
+/// tier leaves, in equal caps of at most an admin key's ceiling. Each key
+/// keeps the longest run of its first records, whole, within its cap less
+/// what it holds first. So what a key keeps hangs on its own records and
+/// the roster only: the same records in any order, offered once or again,
+/// keep the same, and a set that keeps some and takes more keeps what it
+/// would keep of all of them at once, while the roster stays.
 pub fn keep_tiers(
     items: &[Item],
     ceiling_of: impl Fn(&KeyHash) -> Option<u64>,
     _cut: &Cut,
     pre: &BTreeMap<KeyHash, u64>,
     second: &BTreeSet<KeyHash>,
+    live: usize,
 ) -> (BTreeSet<RecordId>, Cut) {
     let pre_of = |k: &KeyHash| pre.get(k).copied().unwrap_or(0);
-    let room = room().saturating_sub(pre.values().fold(0u64, |a, u| a.saturating_add(*u)));
+    let cap2 = second_cap(second.len(), live);
     let mut by_key: BTreeMap<KeyHash, Vec<&Item>> = BTreeMap::new();
     for it in items {
         if ceiling_of(&it.signer).is_some() {
             by_key.entry(it.signer).or_default().push(it);
         }
     }
-    struct Key<'a> {
-        hash: KeyHash,
-        ceiling: u64,
-        items: Vec<&'a Item>,
-        /// The units of its first records in its order, one sum per record.
-        sums: Vec<u64>,
-    }
-    let keys: Vec<Key> = by_key
-        .into_iter()
-        .map(|(hash, mut items)| {
-            items.sort_by_key(|it| it.pos());
-            items.dedup_by_key(|it| it.id);
-            let sums = items
-                .iter()
-                .scan(0u64, |t, it| {
-                    *t = t.saturating_add(it.units);
-                    Some(*t)
-                })
-                .collect();
-            let ceiling = ceiling_of(&hash).unwrap_or(0).saturating_sub(pre_of(&hash));
-            Key { hash, ceiling, items, sums }
-        })
-        .collect();
-    // What a key keeps at level s: its first records, whole, within its
-    // share (s less what it holds first) and its ceiling.
-    let share = |k: &Key, s: u64| s.saturating_sub(pre_of(&k.hash)).min(k.ceiling);
-    let kept_at = |k: &Key, s: u64| {
-        let cap = share(k, s);
-        let n = k.sums.partition_point(|t| *t <= cap);
-        n.checked_sub(1).and_then(|i| k.sums.get(i)).copied().unwrap_or(0)
-    };
-    let demand = |tier: bool, s: u64| {
-        keys.iter().filter(|k| second.contains(&k.hash) == tier).fold(0u64, |d, k| d.saturating_add(kept_at(k, s)))
-    };
-    // The highest level at or below top at which the tier fits in room.
-    let fill = |tier: bool, top: u64, room: u64| {
-        if demand(tier, top) <= room {
-            return top;
-        }
-        let (mut lo, mut hi) = (0u64, top);
-        // demand(lo) fits (nothing at 0), demand(hi) does not.
-        while hi.saturating_sub(lo) > 1 {
-            let mid = lo.saturating_add(hi.saturating_sub(lo) / 2);
-            if demand(tier, mid) <= room { lo = mid } else { hi = mid }
-        }
-        lo
-    };
-    // The rooms are judged from what is held alone: nothing a set did
-    // before narrows them (no level that only falls, no mark), so every
-    // order of the same records keeps the same.
-    let level = fill(false, top(), room);
-    let level2 = fill(true, top(), room.saturating_sub(demand(false, level)));
     let mut kept = BTreeSet::new();
-    for k in &keys {
-        let at = if second.contains(&k.hash) { level2 } else { level };
-        let n = k.sums.partition_point(|t| *t <= share(k, at));
-        kept.extend(k.items.iter().take(n).map(|it| it.id));
+    for (hash, mut items) in by_key {
+        items.sort_by_key(|it| it.pos());
+        items.dedup_by_key(|it| it.id);
+        let ceiling = ceiling_of(&hash).unwrap_or(0);
+        let cap = if second.contains(&hash) { ceiling.min(cap2) } else { ceiling };
+        let mut room = cap.saturating_sub(pre_of(&hash));
+        for it in items {
+            if it.units > room {
+                break;
+            }
+            room -= it.units;
+            kept.insert(it.id);
+        }
     }
-    (kept, Cut { level, level2, marks: BTreeMap::new() })
+    (kept, Cut { level: top(), level2: cap2, marks: BTreeMap::new() })
+}
+
+/// The cap of each admin key that is no longer an admin, with `n2` such
+/// keys and `live` live admin keys: the set's room less the roots' room,
+/// the cut roots' reserve and the live keys' rooms, shared equally, at
+/// most an admin key's ceiling. With 16 live admin keys it is 0: what such
+/// a key signed stays only as far as a root's checkpoint keeps it.
+pub fn second_cap(n2: usize, live: usize) -> u64 {
+    let rest = room()
+        .saturating_sub(ceiling(true))
+        .saturating_sub(reserve())
+        .saturating_sub(ceiling(false).saturating_mul(live as u64));
+    match u64::try_from(n2) {
+        Ok(n) if n > 0 => (rest / n).min(ceiling(false)),
+        _ => ceiling(false),
+    }
 }
 
 #[cfg(test)]
