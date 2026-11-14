@@ -1116,7 +1116,8 @@ pub(crate) fn not_live<'r>(
     let mut named: BTreeMap<KeyHash, (usize, u64, core::cmp::Reverse<RecordId>)> = BTreeMap::new();
     let mut removed: BTreeSet<KeyHash> = BTreeSet::new();
     // Each device's root records: (place on the path, seq, ID, admin).
-    let mut devices: BTreeMap<DeviceId, Vec<(usize, u64, RecordId, Option<KeyHash>)>> = BTreeMap::new();
+    type Admission = (usize, u64, RecordId, Option<KeyHash>);
+    let mut devices: BTreeMap<DeviceId, Vec<Admission>> = BTreeMap::new();
     for (r, role) in recs {
         let b = r.body();
         let Some(p) = at(&b.signer) else { continue };
