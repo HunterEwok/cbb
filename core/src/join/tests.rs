@@ -285,7 +285,7 @@ fn the_short_code_opens_its_commitment() {
     let (code, nj, _) =
         j.open(joiner, &e, &nm, Some(&open.invitation), DeviceId([1; 16]), &point(&k("laptop"))).unwrap();
     assert_eq!(code.len(), 6);
-    assert_eq!(open.short_code(n, &e, &nj, 120), Ok(code.clone()));
+    assert_eq!(open.short_code(n, &e, &nj, &point(&k("tv")), 120).map(|(c, _)| c), Ok(code.clone()));
     open.end(n, true, 130);
     assert_eq!(open.failures, 0);
 
@@ -309,7 +309,7 @@ fn the_short_code_opens_its_commitment() {
     let n3 = open.begin(Network::Home, 300).unwrap();
     let (_, _, c3) = joiner_session();
     open.reply(n3, c3, 310).unwrap();
-    assert_eq!(open.short_code(n3, &e, &nj, 320), Err(PairError::WrongCode));
+    assert_eq!(open.short_code(n3, &e, &nj, &point(&k("tv")), 320).map(|(c, _)| c), Err(PairError::WrongCode));
     assert_eq!(open.failures, 2);
     assert!(open.attempt.is_none());
 
@@ -321,7 +321,7 @@ fn the_short_code_opens_its_commitment() {
     let nm5 = open.reply(n5, c5, 1_010).unwrap();
     let (code5, nj5, _) =
         j5.open(joiner5, &e, &nm5, Some(&open.invitation), DeviceId([1; 16]), &point(&k("laptop"))).unwrap();
-    assert_eq!(open.short_code(n5, &e, &nj5, 1_020), Ok(code5));
+    assert_eq!(open.short_code(n5, &e, &nj5, &point(&k("tv")), 1_020).map(|(c, _)| c), Ok(code5));
     let minutes = 1_020 + 5 * 60_000;
     assert_eq!(open.begin(Network::Home, minutes), Err(PairError::Busy), "still the open attempt");
     open.end(n5, true, minutes);
@@ -333,7 +333,10 @@ fn the_short_code_opens_its_commitment() {
     let nm6 = open.reply(n6, c6, 2_000_010).unwrap();
     let (_, nj6, _) =
         j6.open(joiner6, &e, &nm6, Some(&open.invitation), DeviceId([1; 16]), &point(&k("laptop"))).unwrap();
-    assert_eq!(open.short_code(n6, &e, &nj6, 2_000_000 + invitation::ATTEMPT_MS), Err(PairError::Closed));
+    assert_eq!(
+        open.short_code(n6, &e, &nj6, &point(&k("tv")), 2_000_000 + invitation::ATTEMPT_MS).map(|(c, _)| c),
+        Err(PairError::Closed)
+    );
     assert_eq!(open.failures, kept + 1);
     open.failures = kept;
     // An answer after the person's time takes nothing back.
@@ -342,7 +345,7 @@ fn the_short_code_opens_its_commitment() {
     let nm7 = open.reply(n7, c7, 3_000_010).unwrap();
     let (_, nj7, _) =
         j7.open(joiner7, &e, &nm7, Some(&open.invitation), DeviceId([1; 16]), &point(&k("laptop"))).unwrap();
-    assert!(open.short_code(n7, &e, &nj7, 3_000_020).is_ok());
+    assert!(open.short_code(n7, &e, &nj7, &point(&k("tv")), 3_000_020).map(|(c, _)| c).is_ok());
     open.end(n7, true, 3_000_020 + invitation::ANSWER_MS);
     assert_eq!(open.failures, kept + 1);
     open.failures = kept;
@@ -388,7 +391,10 @@ fn a_late_message_of_an_earlier_attempt_changes_nothing() {
     // The first attempt's late messages name it, and change nothing.
     assert_eq!(open.reply(first, c2, invitation::ATTEMPT_MS + 1), Err(PairError::Closed));
     open.reply(second, c2, invitation::ATTEMPT_MS + 2).unwrap();
-    assert_eq!(open.short_code(first, &e, &nj1, invitation::ATTEMPT_MS + 3), Err(PairError::Closed));
+    assert_eq!(
+        open.short_code(first, &e, &nj1, &point(&k("tv")), invitation::ATTEMPT_MS + 3).map(|(c, _)| c),
+        Err(PairError::Closed)
+    );
     open.end(first, true, invitation::ATTEMPT_MS + 4);
     assert_eq!(open.attempt.as_ref().map(|a| a.number), Some(second), "the second attempt still runs");
     assert_eq!(open.begin(Network::Home, invitation::ATTEMPT_MS + 5), Err(PairError::Busy));
@@ -440,7 +446,7 @@ fn the_code_takes_the_invitation_id() {
     other.id = open.invitation.id;
     other.id[0] ^= 1;
     let (theirs, nj, _) = j.open(joiner, &e, &nm, Some(&other), DeviceId([1; 16]), &point(&k("laptop"))).unwrap();
-    let ours = open.short_code(n, &e, &nj, 120).unwrap();
+    let ours = open.short_code(n, &e, &nj, &point(&k("tv")), 120).map(|(c, _)| c).unwrap();
     assert_ne!(theirs, ours);
     // The same session's code with the member's ID, at home without one.
     assert_eq!(invitation::short_code(&e, &nj, &nm, &open.invitation.id), ours);
@@ -500,6 +506,19 @@ fn the_codes_match_their_vectors() {
     for c in channel {
         let ci = channel_id(&KeyHash(arr(&c["member"])), &KeyHash(arr(&c["joiner"])), &id(&c["invitation"]));
         assert_eq!(crate::certs::hex(&ci), c["ci"].as_str().unwrap(), "{}", c["name"]);
+    }
+    assert_eq!(arr(&codes["no_secret"]), NO_SECRET);
+    let passwords = codes["passwords"].as_array().unwrap();
+    assert!(passwords.len() >= 4);
+    for c in passwords {
+        let got = super::approve::inputs(&id(&c["invitation"]), &arr(&c["password"]));
+        match c.get("error") {
+            Some(e) => {
+                assert_eq!(e, "refused", "{}", c["name"]);
+                assert_eq!(got, Err(PairError::Refused), "{}", c["name"]);
+            }
+            None => assert_eq!(got, Ok(c["keyed"].as_bool().unwrap()), "{}", c["name"]),
+        }
     }
 }
 
@@ -1664,7 +1683,7 @@ fn redigest(w: &mut Welcome, root: &Key, recovery: &crate::records::Recovery) {
 /// `records` message into the assembly, the whole Welcome back.
 fn carried(w: &Welcome, parts: &[crate::records::sync::Part<'_>]) -> Welcome {
     let isk = [0x15u8; 64];
-    let frame = welcome::message(&[0x7b; 64], &w.encode(), &isk).unwrap();
+    let frame = welcome::frame(&[0x7b; 64], &w.encode(), &isk).unwrap();
     let opened = welcome::open(&frame[4..], &isk).unwrap();
     let mut a = welcome::Assembly::new(Welcome::decode(opened).unwrap(), 1_000).unwrap();
     assert_eq!(a.due(), parts.len() as u64);
@@ -1748,7 +1767,7 @@ fn the_welcome_tag_binds_every_byte() {
     assert!(w.parts >= 1);
     let (isk, other) = ([0x15u8; 64], [0x16u8; 64]);
     let bytes = w.encode();
-    let good = welcome::message(&[0x7b; 64], &bytes, &isk).unwrap();
+    let good = welcome::frame(&[0x7b; 64], &bytes, &isk).unwrap();
     assert_eq!(welcome::open(&good[4..], &isk), Ok(&bytes[..]));
     assert_eq!(welcome::open(&good[4..], &other), Err(welcome::RULE_TAG));
     // The same tag over other bytes.
@@ -2119,10 +2138,13 @@ fn at_home_the_joiner_takes_a_welcome_only_after_the_person_matched() {
     let mut j = invitation::JoinerAttempts::default();
     let (code, commitment) = j.start().unwrap();
     let (shown_code, nj, shown) = j.open(code, &e, &nm, None, tv.key.device_id(), &laptop).unwrap();
-    assert_eq!(invitation::home_code(&commitment, &e, &nj, &nm), Ok(shown_code.clone()));
+    assert_eq!(invitation::home_code(&commitment, &e, &nj, &nm, &point(&tv)).map(|(c, _)| c), Ok(shown_code.clone()));
     let mut wrong = nj;
     wrong[0] ^= 1;
-    assert_eq!(invitation::home_code(&commitment, &e, &wrong, &nm), Err(PairError::WrongCode));
+    assert_eq!(
+        invitation::home_code(&commitment, &e, &wrong, &nm, &point(&tv)).map(|(c, _)| c),
+        Err(PairError::WrongCode)
+    );
     assert!(take(j.answered(shown, true).unwrap(), &e, &laptop).is_ok());
     // The same answer offered in another session takes nothing.
     assert_eq!(take(answer(&e, &laptop), &[8; 32], &laptop).err(), Some(welcome::Refusal::Unconfirmed));
@@ -2264,4 +2286,203 @@ fn intros_match_their_vectors() {
             None => assert_eq!(got, Ok(n), "{}", c["name"]),
         }
     }
+}
+
+/// A pairing session's CPace between the member "laptop" and the joiner
+/// "tv" over `exporter`: the member answers with `member_pw`, the joiner
+/// uses `joiner_secret` and `joiner_id`. Returns the member's exchange,
+/// the joiner's `Ta` and the joiner's ISK.
+fn session(
+    member_pw: super::approve::Password<'_>,
+    joiner_secret: &[u8],
+    joiner_id: &[u8; 16],
+    exporter: &[u8],
+) -> Result<(super::approve::MemberExchange, Vec<u8>, Vec<u8>), PairError> {
+    use crate::third_party::cpace;
+    let (member, joiner) = (k("laptop"), k("tv"));
+    let ci = channel_id(&fhash(&member), &fhash(&joiner), joiner_id);
+    let (mut js, ya) = cpace::start(&cpace::Config {
+        role: cpace::Role::Initiator,
+        password: joiner_secret,
+        channel_id: &ci,
+        session_id: exporter,
+        ad: b"ada",
+    })
+    .unwrap();
+    let (ex, yb) = super::approve::MemberExchange::respond(
+        member_pw,
+        &fhash(&member),
+        &point(&joiner),
+        exporter,
+        b"adb",
+        &ya,
+        b"ada",
+    )?;
+    let isk = js.finish(&yb, b"adb").unwrap().to_vec();
+    Ok((ex, js.tag().unwrap(), isk))
+}
+
+/// The member makes message 67 only from an approval of that session and
+/// that joiner: the joiner's Ta under an invitation's own secret, or its
+/// person's "they match". Under the zero password a Ta that verifies
+/// approves nothing; an approval of another session, of another joiner,
+/// or before the Ta verified makes no message; one approval makes one.
+#[test]
+fn the_member_sends_a_welcome_only_when_approved() {
+    use super::approve::{self, Password};
+    let mut g = G::new();
+    let tv = k("tv");
+    let welcome = admit(&mut g, true, &tv, "tv").encode();
+    let e = [9u8; 32];
+    let opens = |frame: &[u8], isk: &[u8]| welcome::open(&frame[4..], isk).map(<[u8]>::to_vec);
+
+    // (a) An invitation's secret: the verified Ta approves.
+    let inv = invitation();
+    let (mut ex, ta, isk) = session(Password::Invitation(&inv), &inv.secret, &inv.id, &e).unwrap();
+    let approved = ex.confirm(&ta).unwrap().expect("a Ta under the invitation's secret approves");
+    let frame = welcome::message(ex, approved, &welcome).unwrap();
+    assert_eq!(opens(&frame, &isk), Ok(welcome.clone()));
+
+    // A Ta under another secret is a wrong code, and a Ta is taken once.
+    let mut other = invitation();
+    other.id = inv.id;
+    let (mut ex, ta, _) = session(Password::Invitation(&inv), &other.secret, &inv.id, &e).unwrap();
+    assert_eq!(ex.confirm(&ta).err(), Some(PairError::WrongCode));
+    let (mut ex, ta, _) = session(Password::Invitation(&inv), &inv.secret, &inv.id, &e).unwrap();
+    assert!(ex.confirm(&ta).unwrap().is_some());
+    assert_eq!(ex.confirm(&ta).err(), Some(PairError::WrongCode));
+
+    // (b) At home the zero password approves nothing, even with a Ta that
+    // verifies: only the person's "they match" does.
+    let (mut ex, ta, isk) = session(Password::Home, &NO_SECRET, &NO_INVITATION, &e).unwrap();
+    assert!(matches!(ex.confirm(&ta), Ok(None)), "a Ta under the zero password proves nothing");
+    let (mut j, joiner) = (invitation::JoinerAttempts::default(), point(&tv));
+    let (code, commitment) = j.start().unwrap();
+    let (_, nj, _) = j.open(code, &e, &[4; 32], None, tv.key.device_id(), &point(&k("laptop"))).unwrap();
+    let shown = |exporter: &[u8], joiner: &[u8; 65]| {
+        invitation::home_code(&commitment, exporter, &nj, &[4; 32], joiner).unwrap().1
+    };
+    assert!(approve::answered_at_home(shown(&e, &joiner), false).is_none(), "they do not match");
+    let approved = approve::answered_at_home(shown(&e, &joiner), true).unwrap();
+    let frame = welcome::message(ex, approved, &welcome).unwrap();
+    assert_eq!(opens(&frame, &isk), Ok(welcome.clone()));
+
+    // An answer of another session, or for another joiner, makes nothing.
+    let (mut ex, ta, _) = session(Password::Home, &NO_SECRET, &NO_INVITATION, &e).unwrap();
+    ex.confirm(&ta).unwrap();
+    let elsewhere = approve::answered_at_home(shown(&[8; 32], &joiner), true).unwrap();
+    assert_eq!(welcome::message(ex, elsewhere, &welcome).err(), Some(PairError::Refused));
+    let (mut ex, ta, _) = session(Password::Home, &NO_SECRET, &NO_INVITATION, &e).unwrap();
+    ex.confirm(&ta).unwrap();
+    let someone = approve::answered_at_home(shown(&e, &point(&k("someone"))), true).unwrap();
+    assert_eq!(welcome::message(ex, someone, &welcome).err(), Some(PairError::Refused));
+    // An approval of an invitation's session serves no other session.
+    let (mut a, ta_a, _) = session(Password::Invitation(&inv), &inv.secret, &inv.id, &e).unwrap();
+    let from_a = a.confirm(&ta_a).unwrap().unwrap();
+    let (mut b, ta_b, _) = session(Password::Invitation(&inv), &inv.secret, &inv.id, &[8; 32]).unwrap();
+    b.confirm(&ta_b).unwrap();
+    assert_eq!(welcome::message(b, from_a, &welcome).err(), Some(PairError::Refused));
+    // The person's answer before the joiner's Ta verified makes nothing.
+    let (ex, _, _) = session(Password::Home, &NO_SECRET, &NO_INVITATION, &e).unwrap();
+    let early = approve::answered_at_home(shown(&e, &joiner), true).unwrap();
+    assert_eq!(welcome::message(ex, early, &welcome).err(), Some(PairError::Refused));
+
+    // Each end must hold the same password and ID: a joiner with the
+    // invitation's secret against a member at home fails at the Ta.
+    let (mut ex, ta, _) = session(Password::Home, &inv.secret, &inv.id, &e).unwrap();
+    assert_eq!(ex.confirm(&ta).err(), Some(PairError::WrongCode));
+    // An invitation with a zero secret, or a zero ID, is no invitation.
+    let mut zero = invitation();
+    zero.secret = NO_SECRET;
+    assert_eq!(session(Password::Invitation(&zero), &NO_SECRET, &zero.id, &e).err(), Some(PairError::Refused));
+    let mut zero = invitation();
+    zero.id = NO_INVITATION;
+    assert_eq!(session(Password::Invitation(&zero), &zero.secret, &NO_INVITATION, &e).err(), Some(PairError::Refused));
+}
+
+/// On an open invitation the person's answer approves message 67 only for
+/// "they match", within its time, on the attempt still open: "they do not
+/// match" and a late answer end the attempt, a token of an earlier attempt
+/// gives nothing, an attempt shows one code, and the token of an open
+/// invitation is not answered as one of home.
+#[test]
+fn an_open_invitation_approves_only_its_attempts_match() {
+    use super::approve;
+    let mut open = Open {
+        invitation: invitation(),
+        name: "tv".into(),
+        created_ms: 1,
+        expires_ms: 100_000_000,
+        used: false,
+        failures: 0,
+        allowed_key: None,
+        attempt: None,
+        next_attempt: 0,
+    };
+    let (e, laptop, tv) = ([9u8; 32], point(&k("laptop")), point(&k("tv")));
+    let code = |open: &mut Open, at: u64| {
+        // The counts are another test's: each attempt here starts afresh.
+        open.failures = 0;
+        let n = open.begin(Network::Home, at).unwrap();
+        let (mut j, joiner, c) = joiner_session();
+        let nm = open.reply(n, c, at + 1).unwrap();
+        let (_, nj, _) = j.open(joiner, &e, &nm, Some(&open.invitation), DeviceId([1; 16]), &laptop).unwrap();
+        let (_, shown) = open.short_code(n, &e, &nj, &tv, at + 2).unwrap();
+        (n, shown, nj)
+    };
+
+    // They match, in time: approved; the attempt stays open for its Welcome.
+    let (n, shown, _) = code(&mut open, 100);
+    assert!(open.answered(shown, true, 100 + invitation::ANSWER_MS).is_some());
+    assert_eq!(open.attempt.as_ref().map(|a| a.number), Some(n));
+    open.end(n, true, 200 + invitation::ANSWER_MS);
+
+    // They do not match: nothing, and the attempt ends.
+    let (_, shown, _) = code(&mut open, 1_000_000);
+    assert!(open.answered(shown, false, 1_000_010).is_none());
+    assert!(open.attempt.is_none());
+
+    // Too late: nothing, and the attempt ends.
+    let (_, shown, _) = code(&mut open, 2_000_000);
+    assert!(open.answered(shown, true, 2_000_002 + invitation::ANSWER_MS).is_none());
+    assert!(open.attempt.is_none());
+
+    // One code per attempt: asking for a second ends the attempt, and its
+    // first token then gives nothing.
+    let (n, shown, nj) = code(&mut open, 3_000_000);
+    assert_eq!(open.short_code(n, &e, &nj, &tv, 3_000_003).err(), Some(PairError::Closed));
+    assert!(open.attempt.is_none());
+    assert!(open.answered(shown, true, 3_000_004).is_none());
+
+    // A token of an earlier attempt gives nothing and leaves the open one.
+    let (first, old, _) = code(&mut open, 4_000_000);
+    open.end(first, false, 4_000_010);
+    let (second, _, _) = code(&mut open, 5_000_000);
+    assert!(open.answered(old, true, 5_000_010).is_none());
+    assert_eq!(open.attempt.as_ref().map(|a| a.number), Some(second));
+    open.end(second, false, 5_000_020);
+
+    // An open invitation's token is not answered as one of home.
+    let (n, shown, _) = code(&mut open, 6_000_000);
+    assert!(approve::answered_at_home(shown, true).is_none());
+    open.end(n, false, 6_000_010);
+}
+
+/// An invitation ID and CPace's password go together: both all zero bytes
+/// at home without an invitation (`join::NO_SECRET`), neither with one; one
+/// without the other is refused. No invitation's secret is zero.
+#[test]
+fn an_invitation_id_and_its_password_go_together() {
+    use super::approve::inputs;
+    let mut draws = [[0u8; 32], [5u8; 32]].into_iter();
+    assert_eq!(invitation::not_zero(|| draws.next().unwrap()), [5u8; 32]);
+    let inv = invitation();
+    assert_ne!(inv.secret, NO_SECRET);
+    assert_eq!(inputs(&NO_INVITATION, &NO_SECRET), Ok(false));
+    assert_eq!(inputs(&inv.id, &inv.secret), Ok(true));
+    assert_eq!(inputs(&inv.id, &NO_SECRET), Err(PairError::Refused));
+    assert_eq!(inputs(&NO_INVITATION, &inv.secret), Err(PairError::Refused));
+    let mut zero = inv.clone();
+    zero.secret = NO_SECRET;
+    assert_eq!(Invitation::decode(&zero.encode()).err(), Some(invitation::RULE_SHAPE));
 }

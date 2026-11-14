@@ -35,6 +35,7 @@ use crate::records::State;
 use crate::records::body::{CAP_HUB, RIGHT_HUB, RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND, ROLE_LEAF};
 
 use super::PairError;
+use super::approve::{Approved, MemberShown};
 use super::info::Info;
 
 /// The start of an invitation's text.
@@ -617,19 +618,23 @@ impl Matched {
 /// The code at the member's end of a pairing at home without an
 /// invitation: a function of its own, so that no invitation flow ([`Open`])
 /// ever runs with the ID of none. `commitment` is what `pair/start`
-/// carried, `joiner_nonce` what `pair/confirm` opened; a nonce that does
-/// not open the commitment is [`PairError::WrongCode`], which ends the
-/// attempt.
+/// carried, `joiner_nonce` what `pair/confirm` opened, `joiner` the key the
+/// session's handshake proved; a nonce that does not open the commitment
+/// is [`PairError::WrongCode`], which ends the attempt. With the code comes
+/// the token that only the person's answer turns into the approval of
+/// message 67 ([`super::approve::answered_at_home`]).
 pub fn home_code(
     commitment: &[u8; 32],
     exporter: &[u8],
     joiner_nonce: &[u8; 32],
     member_nonce: &[u8; 32],
-) -> Result<String, PairError> {
+    joiner: &[u8; 65],
+) -> Result<(String, MemberShown), PairError> {
     if !crate::secret::ct_eq(&code_commitment(joiner_nonce), commitment) {
         return Err(PairError::WrongCode);
     }
-    Ok(short_code(exporter, joiner_nonce, member_nonce, &super::NO_INVITATION))
+    let code = short_code(exporter, joiner_nonce, member_nonce, &super::NO_INVITATION);
+    Ok((code, MemberShown::new(None, exporter, joiner)))
 }
 
 /// The joiner's sessions with one invitation (kept across restarts): at
@@ -752,14 +757,17 @@ impl Open {
     /// The member's short code once the joiner opened its nonce in
     /// `pair/confirm`; [`PairError::WrongCode`] when the nonce does not
     /// open the commitment, which ends the attempt. From here the person
-    /// has [`ANSWER_MS`] to answer.
+    /// has [`ANSWER_MS`] to answer, through [`Open::answered`] with the
+    /// token that comes with the code; an attempt shows one code and gives
+    /// one token. `joiner` is the key the session's handshake proved.
     pub fn short_code(
         &mut self,
         number: u64,
         exporter: &[u8],
         joiner_nonce: &[u8; 32],
+        joiner: &[u8; 65],
         now_ms: u64,
-    ) -> Result<String, PairError> {
+    ) -> Result<(String, MemberShown), PairError> {
         if self.attempt.as_ref().is_none_or(|a| a.number != number) {
             return Err(PairError::Closed);
         }
@@ -776,7 +784,26 @@ impl Open {
         if let Some(a) = self.attempt.as_mut() {
             a.shown_ms = Some(now_ms);
         }
-        Ok(short_code(exporter, joiner_nonce, &nonce, &self.invitation.id))
+        let code = short_code(exporter, joiner_nonce, &nonce, &self.invitation.id);
+        Ok((code, MemberShown::new(Some(number), exporter, joiner)))
+    }
+
+    /// The member's person answered the code of attempt `shown` at
+    /// `now_ms`: the approval of message 67 ([`Approved`]) only for "they
+    /// match", within [`ANSWER_MS`], on the attempt still open. "They do not
+    /// match" or an answer past its time ends the attempt (its failure was
+    /// counted at the reply); a token of another attempt changes nothing
+    /// and gives nothing.
+    pub fn answered(&mut self, shown: MemberShown, matched: bool, now_ms: u64) -> Option<Approved> {
+        let ours = self.attempt.as_ref().is_some_and(|a| Some(a.number) == shown.attempt() && a.shown_ms.is_some());
+        if !ours {
+            return None;
+        }
+        if !matched || !self.attempt.as_ref().is_some_and(|a| a.open_at(now_ms)) {
+            self.attempt = None;
+            return None;
+        }
+        Some(Approved::by_answer(shown))
     }
 
     /// The attempt ended at `now_ms`: `welcomed` when the joiner got its

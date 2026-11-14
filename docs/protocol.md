@@ -993,8 +993,20 @@ confirmation (Ta, Tb), the joiner the initiator. Its channel identifier is `cbb 
 each side believes it is using, 16 bytes, all zero at home without an invitation (an ID no
 invitation has). The keys are those of the key containers the handshake saw, so a party in the
 middle with keys of its own gets another identifier and the exchange fails, and two ends in the
-flows of two invitations get two identifiers. With an invitation the password is its 32-byte
-secret (section 12). The vectors are `testdata/format/messages3.json`, `codes`.
+flows of two invitations get two identifiers. Its session identifier is the session's TLS
+exporter, the same 32 bytes the short code takes. With an invitation the password is its 32-byte
+secret (section 12); at home without one it is 32 zero bytes (`NO_SECRET`), which no
+invitation's secret is. An invitation ID and a password go together: both zero or neither, and
+one without the other is `refused`. The zero password is public, so CPace authenticates nothing
+by itself at home: there the pairing rests on the short code both people compare. The member
+sends message 67 only with an approval of this session for this joiner: either the joiner's `Ta`
+verified under an invitation's own secret (the joiner showed that it holds it), or the member's
+person said the codes match on the code of this attempt. A `Ta` that verifies under the zero
+password approves nothing. "They do not match", an answer past its time, and a second code for
+the same attempt give no approval and end the attempt; one approval makes one message 67. The
+joiner takes the Welcome at home only after its own person said the codes match (below, "The
+joiner's checks"). The vectors are `testdata/format/messages3.json`, `codes` (the passwords
+too).
 
 **The short code**, for a device with a screen and no camera, is a committed one. The joiner
 draws a nonce `nj` of 32 bytes and sends `commitment` = SHA-256(`cbb short code commitment v1`

@@ -14,6 +14,7 @@
 //! ID is its key's hash, so nobody can join as a device ID it does not hold
 //! the key of, and a removed device's ID is never given again.
 
+pub mod approve;
 pub mod decide;
 pub mod info;
 pub mod intro;
@@ -122,6 +123,14 @@ impl PairError {
 /// The invitation ID of a pairing at home without an invitation: 16 zero
 /// bytes, which no invitation has (`invite/shape`).
 pub const NO_INVITATION: [u8; 16] = [0; 16];
+
+/// CPace's password at home without an invitation: 32 zero bytes, which no
+/// invitation's secret is (`invite/shape`). It is public, so CPace
+/// authenticates nothing by itself there: the member sends message 67 only
+/// with the approval of its person's "they match" (`approve::Approved`),
+/// and the joiner takes the Welcome only after its own person's
+/// (`welcome::Way::Home`).
+pub const NO_SECRET: [u8; invitation::SECRET] = [0; invitation::SECRET];
 
 /// CPace's channel identifier: the prefix, the key hashes of the member's
 /// TLS key and the joiner's, the member's first, and the ID of the
