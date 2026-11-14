@@ -347,15 +347,19 @@ module records_v3 {
   // removal) is refused when, after it, the root's records other than checkpoints plus its next
   // checkpoint would pass the root's ceiling, so the root can always checkpoint.
   // DECIDED 11-14 08:28Z (records aeeb8a85): a margin of the root's ceiling stays for removals
-  // (1/24 of 1536 in the core; one removal's unit here), so a removal is always possible.
+  // (1/24 of 1536 in the core, at least two exempt records; two units here).
   pure val WRITER_CP_FLOOR = false
   pure val CP_UNITS = 2
-  pure val REMOVAL_MARGIN = 1
-  // CP_KEEP_LIVE, PROVISIONAL (architecture 11-14 09:14Z, until records sends the code's words):
-  // an honest root checkpoint keeps the admissions of live admins, the newest record of each live
-  // device, the removals of admin keys, the records that are neither admissions, removals nor
-  // resolves, and the resolves of what it keeps; it drops removed keys' admissions, older device
-  // records, device removals and resolves whose target it drops.
+  pure val REMOVAL_MARGIN = 2
+  // The model's honest keep without switches is the code's at aeeb8a85 (records 11-14 09:17Z):
+  // every counting record below its key's head, minus the folded root removals (droppedAt), the
+  // older removals a kept one covers and the admissions they removed; device versions, settings
+  // history, admins' removals, resolves and freezes all stay.
+  // CP_KEEP_LIVE (records' proposal, not decided): the honest root checkpoint also keeps only the
+  // newest record of each device and of each writer's settings, and folds admins' removals with
+  // the device records they removed.
+  // Floor: the core's ordinary-record floor keeps 64 units (1/24 of the root's ceiling) beyond the
+  // next checkpoint, at least two exempt records; the model's REMOVAL_MARGIN is two units.
   pure val CP_KEEP_LIVE = false
   // Records 11-13 21:12Z: the change re-signs the cut roots' counting removals as the new
   // root's first records (signChainG). REISSUE_DROP_ONLY: the mutation that leaves the old
@@ -1450,7 +1454,7 @@ module records_v3 {
     // A checkpoint keeps what its signer counts; one that keeps more is not the honest
     // writer's (kit "bent").
     val counted = recsOf(vh.counting, db).filter(x => x.kind != "checkpoint")
-    val honestKeep = if (CP_KEEP_LIVE and ROOT_KEYS.contains(k)) liveKeep(counted, vh)
+    val honestKeep = if (CP_KEEP_LIVE and ROOT_KEYS.contains(k)) liveKeep(counted, mine)
       else idsOf(counted).exclude(if (ROOT_KEYS.contains(k)) droppedAt(mine, counted) else Set())
     val r1 = rec(nextId, k, base.append(nextId), kind, target,
       if (isCp and not(extraKeep.subseteq(honestKeep))) "bent" else kit, targetRec,
@@ -1478,7 +1482,7 @@ module records_v3 {
       // down: an exempt record that would leave less than one more exempt record and the next
       // checkpoint waits for a checkpoint first, which the writer signs by itself.)
       not(WRITER_CP_FLOOR) or kit == "deviant" or hidden or not(floorExempt(r)) or not(onList(vh.path, k))
-        or rootUnits(s, k) + r.units + REMOVAL_MARGIN + CP_UNITS <= ROOTC,
+        or rootUnits(s, k) + r.units + 1 + CP_UNITS <= ROOTC,
       // (E): an honest writer publishes a record only when its own set keeps it; else the
       // write fails and the seq is not used. (A hidden record stays off its device.)
       not(keeps) or hidden or isChain(r) or insertInto(s, r, db2).recs.contains(r.id),
@@ -1496,14 +1500,14 @@ module records_v3 {
     }
   }
 
-  pure def liveKeep(counted: Set[Record], v: View): Set[Id] = {
-    val adm = counted.filter(x => x.kind == "admin" and v.admins.keys().contains(x.target))
-    val dev = counted.filter(x => x.kind == "device" and v.devices.contains(x.target)
-      and not(counted.exists(y => y.kind == "device" and y.target == x.target and y.id > x.id)))
-    val rem = counted.filter(x => x.kind == "revoke" and tgt(x).exists(t => SIGNERS.contains(t)))
-    val other = counted.filter(x => not(Set("admin", "device", "revoke", "resolve").contains(x.kind)))
-    val base = adm.union(dev).union(rem).union(other)
-    idsOf(base.union(counted.filter(x => x.kind == "resolve" and base.exists(b => b.id == x.targetRec))))
+  pure def liveKeep(counted: Set[Record], mine: Set[Record]): Set[Id] = {
+    val k0 = counted.filter(x => not(droppedAt(mine, counted).contains(x.id)))
+    // Admins' removals fold, with the device records they removed.
+    val admRm = k0.filter(x => x.kind == "revoke" and not(ROOT_KEYS.contains(x.signer)))
+    val k1 = k0.filter(x => not(admRm.contains(x))
+      and not(x.kind == "device" and admRm.exists(a => tgt(a).contains(x.target))))
+    idsOf(k1.filter(x => not(x.kind == "device" and k1.exists(y => y.kind == "device" and y.target == x.target and y.id > x.id))
+      and not(x.kind == "copies" and k1.exists(y => y.kind == "copies" and y.signer == x.signer and y.id > x.id))))
   }
   // (WRITER_CP_FLOOR: a root's removal and its resolve share the margin; architecture 11-14
   // 08:30Z, the resolve provisional until records confirms.)
@@ -1520,10 +1524,10 @@ module records_v3 {
     val mine = recsOf(s.recs, db)
     val counted = recsOf(v.counting, db).filter(x => x.kind != "checkpoint")
     val kept = counted.filter(x => x.signer == k
-      and (if (CP_KEEP_LIVE) liveKeep(counted, v).contains(x.id) else not(droppedAt(mine, counted).contains(x.id))))
+      and (if (CP_KEEP_LIVE) liveKeep(counted, mine).contains(x.id) else not(droppedAt(mine, counted).contains(x.id))))
     v.stop or last(v.path) != k
-      or rootUnits(s, k) + 1 + REMOVAL_MARGIN + CP_UNITS <= ROOTC
-      or sumUnits(kept) + 1 + REMOVAL_MARGIN + CP_UNITS <= ROOTC
+      or rootUnits(s, k) + 1 + 1 + CP_UNITS <= ROOTC
+      or sumUnits(kept) + 1 + 1 + CP_UNITS <= ROOTC
   })
   // (WRITER_CP_FLOOR: the units of root k's records its set holds, its checkpoints left out.)
   def rootUnits(s: Store, k: Key): int = sumUnits(ofKey(recsOf(s.recs, db), k).filter(x => x.kind != "checkpoint"))
@@ -1543,7 +1547,7 @@ module records_v3 {
     val v = if (WRITER_LAST_ROOT) storeView(s, db) else views.get(h)
     val mine = recsOf(s.recs, db)
     val counted = recsOf(v.counting, db).filter(x => x.kind != "checkpoint")
-    val keep = if (CP_KEEP_LIVE) liveKeep(counted, v) else idsOf(counted).exclude(droppedAt(mine, counted))
+    val keep = if (CP_KEEP_LIVE) liveKeep(counted, mine) else idsOf(counted).exclude(droppedAt(mine, counted))
     val seen = SIGNERS.mapBy(x => if (x == k) headLine(db.keys().map(i => db.get(i)), k) else headLine(mine, x))
     val r = rec(nextId, k, headLine(db.keys().map(i => db.get(i)), k).append(nextId), "checkpoint", "", "", 0, seen, seen, keep, 2)
     val db2 = db.put(nextId, r)
