@@ -685,13 +685,13 @@ fn an_honest_checkpoint_keeps_none_of_its_root_s_older_checkpoints() {
     }
 }
 
-/// How many honest checkpoints a root writes in a row (a few devices
-/// between each) before the writer refuses: printed, for the reading.
+/// An honest root writes checkpoints in a row, a few devices admitted
+/// between each, and the writer never refuses one.
 #[test]
-#[ignore = "information for the reading; run with --ignored --nocapture"]
+#[ignore = "being settled at records: a checkpoint names every device past the cap and stops fitting its room; run with --ignored --release --nocapture"]
 fn honest_checkpoints_in_a_row() {
     let (mut set, root, mut g) = root_with_dead_checkpoints(0, 0);
-    for round in 0..400u32 {
+    for round in 0..700u32 {
         for i in 0..3u32 {
             let dk = k(&format!("row dev {round} {i}"));
             let r = g.sign(&root, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)));
@@ -715,13 +715,9 @@ fn honest_checkpoints_in_a_row() {
                 g.t += 1000;
                 let _ = set.insert(cp);
             }
-            Err(e) => {
-                println!("round {round}: refused: {e:?}; devices {}", st.devices.len());
-                return;
-            }
+            Err(e) => panic!("round {round}: an honest checkpoint refused: {e:?}; devices {}", st.devices.len()),
         }
     }
-    println!("400 rounds written");
 }
 
 /// The recovery key `root_with_dead_checkpoints` gives its group.
@@ -1042,5 +1038,441 @@ fn checkpoints_keep_no_more_than_the_devices_the_group_may_have() {
         g.t += 1000;
         set.insert(cp.clone()).unwrap();
         assert_eq!(set.state().checkpoint, Some(cp.id()), "round {round}");
+/// A removal of 256 random keys by `by`, about 17 units.
+fn wide_removal(g: &mut G, by: &K, tag: &str, n: u32) -> Record {
+    let mut keys: Vec<KeyHash> = (0..256u32)
+        .map(|i| {
+            KeyHash(cbb_core::certs::sha256(&[tag.as_bytes(), &n.to_le_bytes()[..], &i.to_le_bytes()[..]].concat()))
+        })
+        .collect();
+    keys.sort();
+    g.sign(by, Kind::Revoke(cbb_core::records::body::Removal { keys, seen: Vec::new() }))
+}
+
+/// Keys that are no longer admins against a full honest group: 16 live
+/// admin keys and the root each fill their room, then 12 admin keys made
+/// and unmade fill theirs. The live admins keep every record they kept before (no squeeze
+/// from the second tier), and after every insert a restored set is the
+/// live one.
+#[test]
+#[ignore = "slow (a restore per step); run with --ignored --release"]
+fn keys_no_longer_admins_squeeze_no_live_admin() {
+    let (mut set, root, mut g) = root_with_dead_checkpoints(0, 0);
+    let mut run = Run { steps: 0, found: Vec::new() };
+    let mut live: Vec<(K, Vec<RecordId>)> = Vec::new();
+    for a in 0..15u32 {
+        // The phone of root_with_dead_checkpoints is admin 16.
+        let ak = k(&format!("live admin {a}"));
+        let pk = k(&format!("live admin phone {a}"));
+        let mut d = Device::new(pk.key.clone(), "admin", ROLE_PHONE);
+        d.rights = RIGHT_READ | RIGHT_SEND;
+        d.admin = Some(ak.key.clone());
+        d.powers = 0x1ff & !64;
+        let r = g.sign(&root, Kind::device(d));
+        let _ = set.insert(r);
+        let mut mine = Vec::new();
+        for n in 0..16u32 {
+            let r = wide_removal(&mut g, &ak, &format!("live {a}"), n);
+            let id = r.id();
+            let _ = set.insert(r);
+            if set.contains(&id) {
+                mine.push(id);
+            }
+        }
+        live.push((ak, mine));
+    }
+    // The root fills its room too, so that the first tier asks for all of
+    // ROOM but the reserve, and the second tier gets only the reserve's
+    // unused part.
+    // About 19 units each: 72 leave room for the root's own 118 or so
+    // records (100 devices, the admissions), which come after its
+    // removals in its room.
+    for n in 0..72u32 {
+        let r = wide_removal(&mut g, &root, "root", n);
+        let _ = set.insert(r);
+    }
+    run.check("full group", "16 live admins and the root filled", &set);
+    {
+        let st = set.state();
+        let still: usize = live.iter().map(|(_, m)| m.iter().filter(|id| set.contains(id)).count()).sum();
+        println!(
+            "after the root filled: set {} records, live admins keep {still}, devices {}, admins in state {}",
+            set.len(),
+            st.devices.len(),
+            st.devices.iter().filter(|d| d.admin.is_some()).count()
+        );
+    }
+    let kept_before: usize = live.iter().map(|(_, m)| m.len()).sum();
+    for a in 0..12u32 {
+        let ak = k(&format!("gone admin {a}"));
+        let pk = k(&format!("gone admin phone {a}"));
+        let mut d = Device::new(pk.key.clone(), "admin", ROLE_PHONE);
+        d.rights = RIGHT_READ | RIGHT_SEND;
+        d.admin = Some(ak.key.clone());
+        d.powers = 0x1ff & !64;
+        // Made an admin in place of nobody: the 17th admin key counts as
+        // no longer an admin from the start (ADMIN_KEYS_MAX).
+        let r = g.sign(&root, Kind::device(d));
+        let _ = set.insert(r);
+        if a == 0 {
+            let still: usize = live.iter().map(|(_, m)| m.iter().filter(|id| set.contains(id)).count()).sum();
+            println!("after the 17th admin key made: set {} records, live admins keep {still}", set.len());
+        }
+        run.check("full group", &format!("admin {a} made"), &set);
+        for n in 0..16u32 {
+            let r = wide_removal(&mut g, &ak, &format!("gone {a}"), n);
+            let _ = set.insert(r);
+            run.check("full group", &format!("admin {a} removal {n}"), &set);
+        }
+        let r = g.sign(&root, Kind::device(Device::new(pk.key.clone(), "was admin", ROLE_PHONE)));
+        let _ = set.insert(r);
+        run.check("full group", &format!("admin {a} unmade"), &set);
+        let still: usize = live.iter().map(|(_, m)| m.iter().filter(|id| set.contains(id)).count()).sum();
+        if still != kept_before {
+            run.found.push(format!(
+                "step {}: after admin {a} unmade, the live admins keep {still} of the {kept_before} records they kept",
+                run.steps
+            ));
+        }
+    }
+    println!(
+        "full group: {} steps, live admins kept {kept_before} records, set {} records, {} of {} bytes",
+        run.steps,
+        set.len(),
+        set.bytes(),
+        cbb_core::records::MAX_SET_BYTES
+    );
+    for f in &run.found {
+        println!("  {f}");
+    }
+    assert!(run.found.is_empty(), "{} of {} steps:\n{}", run.found.len(), run.steps, run.found.join("\n"));
+}
+
+/// Admits an admin key with its phone by the root: the key, the record.
+fn admit_admin(g: &mut G, root: &K, name: &str) -> (K, Record) {
+    let ak = k(&format!("{name} key"));
+    let pk = k(&format!("{name} phone"));
+    let mut d = Device::new(pk.key.clone(), "admin", ROLE_PHONE);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    d.admin = Some(ak.key.clone());
+    d.powers = 0x1ff & !64;
+    let r = g.sign(root, Kind::device(d));
+    (ak, r)
+}
+
+/// A group whose root and 16 admin keys fill their rooms, then `ex` admin
+/// keys made and unmade fill theirs (the second tier, which shares the
+/// 1536 units the first tier leaves while no change of root fills the
+/// reserve): the records, in order, the root, the admin keys and G. Admin
+/// key 0 leaves its room empty and admin key 1 has no power to remove
+/// admins, so that admin key 0 may still remove it.
+fn full_group(tag: &str, ex: u32) -> (Vec<Record>, K, Vec<K>, G) {
+    let root = k("root");
+    let recovery = cbb_core::records::Recovery {
+        k1: k("recovery").key,
+        k2: cbb_core::records::pq::PqKey::from_seeds(&[0x31; 16], &[0x32; 16], &[0x33; 16]).key(),
+    };
+    let mut g = G { gid: group_id(&root.key, &recovery), heads: BTreeMap::new(), t: 0 };
+    let mut recs = Vec::new();
+    let mut admins = Vec::new();
+    for a in 0..16u32 {
+        let (ak, mut r) = admit_admin(&mut g, &root, &format!("{tag} admin {a}"));
+        if a == 1 {
+            // Signed again without the power to remove admins.
+            let Kind::Device(mut d) = r.body().kind.clone() else { unreachable!() };
+            d.powers &= !cbb_core::records::body::POWER_REMOVE_ADMINS;
+            let b = r.body();
+            r = sign_at(&g, &root, b.seq, b.prev, Kind::device(*d), b.time_ms);
+            g.heads.insert(root.hash, (r.body().seq, r.id()));
+        }
+        recs.push(r);
+        admins.push(ak);
+    }
+    // Admin key 0 keeps its room empty, so that it can still remove.
+    for (a, ak) in admins.iter().enumerate().skip(1) {
+        for n in 0..16u32 {
+            recs.push(wide_removal(&mut g, ak, &format!("{tag} {a}"), n));
+        }
+    }
+    for n in 0..76u32 {
+        recs.push(wide_removal(&mut g, &root, &format!("{tag} root"), n));
+    }
+    for e in 0..ex {
+        let (ak, r) = admit_admin(&mut g, &root, &format!("{tag} ex admin {e}"));
+        recs.push(r);
+        for n in 0..16u32 {
+            recs.push(wide_removal(&mut g, &ak, &format!("{tag} ex {e}"), n));
+        }
+        let pk = k(&format!("{tag} ex admin {e} phone"));
+        recs.push(g.sign(&root, Kind::device(Device::new(pk.key.clone(), "was admin", ROLE_PHONE))));
+    }
+    (recs, root, admins, g)
+}
+
+fn new_set() -> RecordSet {
+    let recovery = cbb_core::records::Recovery {
+        k1: k("recovery").key,
+        k2: cbb_core::records::pq::PqKey::from_seeds(&[0x31; 16], &[0x32; 16], &[0x33; 16]).key(),
+    };
+    RecordSet::new(k("root").key, recovery)
+}
+
+/// Being settled: a key an admin removed. Admin A removes admin B (an
+/// admin removal, not the root's), then the root admits C, the 17th key it
+/// names; C fills its room. Wanted: C is in the first tier and keeps what
+/// a live admin keeps.
+#[test]
+#[ignore = "being settled at records: a key an admin removed still takes a live admin's place in the tiers"]
+fn an_admin_admitted_after_an_admin_removal_is_in_the_first_tier() {
+    let (recs, root, admins, mut g) = full_group("b", 8);
+    let mut set = new_set();
+    set.insert_all(recs);
+    let rm = g.sign(
+        &admins[0],
+        Kind::Revoke(cbb_core::records::body::Removal { keys: vec![admins[1].hash], seen: Vec::new() }),
+    );
+    let _ = set.insert(rm);
+    let (c, r) = admit_admin(&mut g, &root, "b admin C");
+    let _ = set.insert(r);
+    let mut ids = Vec::new();
+    for n in 0..16u32 {
+        let r = wide_removal(&mut g, &c, "b C", n);
+        ids.push(r.id());
+        let _ = set.insert(r);
+    }
+    let live_keeps = 14usize;
+    let kept = ids.iter().filter(|id| set.contains(id)).count();
+    println!(
+        "C keeps {kept} of 16 (a live admin keeps {live_keeps}); B removed: {}",
+        set.state().revoked.contains(&admins[1].hash)
+    );
+    assert_eq!(kept, live_keeps, "C is squeezed as if no longer an admin");
+}
+
+/// Two members holding different subsets of the root's records: X holds
+/// the root's record that takes admin key 3 back, Y does not. A 17th admin
+/// key D the root admits after it is live for X and past the first 16 for
+/// Y, so the tiers differ while they hold different records. After they
+/// give each other all they hold, they are equal.
+#[test]
+#[ignore = "being settled at records: after sync the member that held the take-back first keeps fewer records; run with --ignored --release"]
+fn members_with_different_root_records_agree_after_sync() {
+    let (recs, root, _admins, mut g) = full_group("a", 8);
+    // The root takes admin key 3 back: its phone's newest record names none.
+    let back = g.sign(&root, Kind::device(Device::new(k("a admin 3 phone").key.clone(), "was admin", ROLE_PHONE)));
+    let (d, rd) = admit_admin(&mut g, &root, "a admin D");
+    let mut d_recs = Vec::new();
+    for n in 0..16u32 {
+        d_recs.push(wide_removal(&mut g, &d, "a D", n));
+    }
+    let mut x = new_set();
+    let mut y = new_set();
+    x.insert_all(recs.clone());
+    y.insert_all(recs);
+    let _ = x.insert(back.clone());
+    for r in std::iter::once(rd).chain(d_recs.iter().cloned()) {
+        let _ = x.insert(r.clone());
+        let _ = y.insert(r);
+    }
+    let d_kept = |s: &RecordSet| d_recs.iter().filter(|r| s.contains(&r.id())).count();
+    println!(
+        "before sync: X keeps {} of D's 16, Y keeps {}; equal {}",
+        d_kept(&x),
+        d_kept(&y),
+        x.state() == y.state() && x.digest() == y.digest()
+    );
+    for _ in 0..3 {
+        let from_x: Vec<Record> = x.in_dependency_order().into_iter().cloned().collect();
+        let from_y: Vec<Record> = y.in_dependency_order().into_iter().cloned().collect();
+        x.insert_all(from_y);
+        y.insert_all(from_x);
+    }
+    println!("after sync: X keeps {} of D's 16, Y keeps {}", d_kept(&x), d_kept(&y));
+    let ids = |s: &RecordSet| {
+        s.in_dependency_order()
+            .into_iter()
+            .map(|r| (r.id(), r.body().signer, r.body().seq))
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    let (ix, iy) = (ids(&x), ids(&y));
+    let name = |h: &KeyHash| {
+        (0..16)
+            .map(|a| format!("a admin {a}"))
+            .chain((0..8).map(|e| format!("a ex admin {e}")))
+            .chain(["a admin D".to_string()])
+            .find(|n| k(&format!("{n} key")).hash == *h)
+            .unwrap_or_else(|| if *h == root.hash { "root".into() } else { "?".into() })
+    };
+    for (id, sg, seq) in ix.difference(&iy) {
+        println!("  only X: {} seq {seq} {:02x?}", name(sg), &id.0[..3]);
+    }
+    for (id, sg, seq) in iy.difference(&ix) {
+        println!("  only Y: {} seq {seq} {:02x?}", name(sg), &id.0[..3]);
+        if let Some(r) = y.in_dependency_order().into_iter().find(|r| r.id() == *id).cloned() {
+            let mut x2 = x.clone();
+            println!("    offered to X again: {:?}", x2.insert(r).map(|a| format!("{a:?}")));
+        }
+    }
+    assert_eq!(x.digest(), y.digest(), "different records after sync");
+    assert_eq!(x.state(), y.state(), "different states after sync");
+    // A member given every record at once holds the same.
+    let mut all = new_set();
+    let every: Vec<Record> = y
+        .in_dependency_order()
+        .into_iter()
+        .cloned()
+        .chain(std::iter::once(back.clone()))
+        .chain(d_recs.iter().cloned())
+        .collect();
+    all.insert_all(every);
+    assert_eq!(all.digest(), x.digest(), "sync ends elsewhere than all at once");
+    assert_eq!(all.state(), x.state(), "sync ends in another state than all at once");
+}
+
+/// The records of the take-back case: `full_group(tag, ex)`, the root's
+/// record that takes admin key 3 back, a 17th admin key D the root admits
+/// after it, and D's 16 removals. Ex-admins 7 and 8 squeeze the second
+/// tier; up to 6 they do not.
+struct TakeBack {
+    recs: Vec<Record>,
+    back: Record,
+    rd: Record,
+    d_recs: Vec<Record>,
+}
+
+fn take_back(tag: &str, ex: u32) -> TakeBack {
+    let (recs, root, _admins, mut g) = full_group(tag, ex);
+    let back = g.sign(
+        &root,
+        Kind::device(Device::new(k(&format!("{tag} admin 3 phone")).key.clone(), "was admin", ROLE_PHONE)),
+    );
+    let (d, rd) = admit_admin(&mut g, &root, &format!("{tag} admin D"));
+    let d_recs = (0..16u32).map(|n| wide_removal(&mut g, &d, &format!("{tag} D"), n)).collect();
+    TakeBack { recs, back, rd, d_recs }
+}
+
+impl TakeBack {
+    /// Every record, the take-back before D's admission.
+    fn back_first(&self) -> Vec<Record> {
+        let mut v = self.recs.clone();
+        v.push(self.back.clone());
+        v.push(self.rd.clone());
+        v.extend(self.d_recs.iter().cloned());
+        v
+    }
+
+    /// Members X and Y after three rounds of sync: X took every record,
+    /// the take-back before D's admission; Y took them without it.
+    fn synced(&self) -> (RecordSet, RecordSet) {
+        let (mut x, mut y) = (new_set(), new_set());
+        x.insert_all(self.back_first());
+        y.insert_all(self.recs.clone());
+        y.insert_all(core::iter::once(self.rd.clone()).chain(self.d_recs.iter().cloned()));
+        for _ in 0..3 {
+            let from_x: Vec<Record> = x.in_dependency_order().into_iter().cloned().collect();
+            let from_y: Vec<Record> = y.in_dependency_order().into_iter().cloned().collect();
+            x.insert_all(from_y);
+            y.insert_all(from_x);
+        }
+        (x, y)
+    }
+
+    /// Every record, the take-back last.
+    fn back_last(&self) -> Vec<Record> {
+        let mut v = self.recs.clone();
+        v.push(self.rd.clone());
+        v.extend(self.d_recs.iter().cloned());
+        v.push(self.back.clone());
+        v
+    }
+}
+
+fn same(a: &RecordSet, b: &RecordSet) -> bool {
+    a.digest() == b.digest() && a.state() == b.state()
+}
+
+/// One member given the same records in other orders (the take-back
+/// before or after D's admission, or shuffled with eight seeds and offered
+/// three times) ends with the same set and state.
+#[test]
+#[ignore = "being settled at records: the take-back before D's admission ends with fewer records; run with --ignored --release"]
+fn one_member_ends_equal_whatever_the_order() {
+    for ex in [0u32, 6, 7, 8] {
+        let c = take_back("o", ex);
+        let (mut first, mut last) = (new_set(), new_set());
+        first.insert_all(c.back_first());
+        last.insert_all(c.back_last());
+        assert!(same(&first, &last), "ex {ex}: {} records against {}", first.len(), last.len());
+        let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+        for s in 0..8 {
+            let mut v = c.back_first();
+            for i in (1..v.len()).rev() {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                v.swap(i, (seed % (i as u64 + 1)) as usize);
+            }
+            let mut shuffled = new_set();
+            for _ in 0..3 {
+                shuffled.insert_all(v.clone());
+            }
+            assert!(same(&shuffled, &last), "ex {ex}, seed {s}: {} records against {}", shuffled.len(), last.len());
+        }
+    }
+}
+
+/// A restore from a member's records in any order (here shuffled, eight
+/// seeds) equals the member; what the member holds, offered again to the
+/// restored set, is taken.
+#[test]
+#[ignore = "slow; run with --ignored --release"]
+fn a_restore_in_any_order_equals_the_member() {
+    for ex in [0u32, 6, 7, 8] {
+        let c = take_back("s", ex);
+        let (_, member) = c.synced();
+        let every: Vec<Record> = member.in_dependency_order().into_iter().cloned().collect();
+        let lists: Vec<Vec<u8>> = member.lists().map(<[u8]>::to_vec).collect();
+        let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+        for s in 0..8 {
+            let mut v = every.clone();
+            for i in (1..v.len()).rev() {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                v.swap(i, (seed % (i as u64 + 1)) as usize);
+            }
+            let mut back = RecordSet::restore(member.root().clone(), member.recovery().clone(), &v, &lists);
+            for r in &every {
+                if !back.contains(&r.id()) {
+                    let got = back.insert(r.clone());
+                    assert!(
+                        !format!("{got:?}").contains("NoRoom"),
+                        "ex {ex}, seed {s}: a record the member holds turned away"
+                    );
+                }
+            }
+            assert!(same(&back, &member), "ex {ex}, seed {s}: {} records against {}", back.len(), member.len());
+        }
+    }
+}
+
+/// A live member that held the take-back first takes, offered again, the
+/// records it turned away while it was the only one to hold it.
+#[test]
+#[ignore = "being settled at records: the live member keeps turning them away until a restart; run with --ignored --release"]
+fn a_live_member_takes_what_it_turned_away_when_offered_again() {
+    for ex in [0u32, 6, 7, 8] {
+        let c = take_back("l", ex);
+        let mut x = new_set();
+        x.insert_all(c.back_first());
+        let mut whole = new_set();
+        whole.insert_all(c.back_last());
+        for r in whole.in_dependency_order() {
+            if !x.contains(&r.id()) {
+                let got = x.insert(r.clone());
+                assert!(!format!("{got:?}").contains("NoRoom"), "ex {ex}: turned away again");
+            }
+        }
+        assert!(same(&x, &whole), "ex {ex}: {} records against {}", x.len(), whole.len());
     }
 }
