@@ -958,9 +958,157 @@ when the records set none. A write increments the write sequence number (section
 
 ## 6. Pairing a computer
 
-Source: `core/src/pair.rs`, `core/src/admit`, `core/src/third_party/cpace`, `member/src/pair.rs`.
+Source: `core/src/join` (0.6: `mod.rs`, `info.rs`, `invitation.rs`, `welcome.rs`, `intro.rs`),
+`core/src/msg/tables.rs` (the messages' tables), `core/src/pair.rs`, `core/src/admit`,
+`core/src/third_party/cpace`, `member/src/pair.rs`.
 
-### Window
+This section first gives pairing as the 0.6 format has it, in the core. The service in
+`member/` and the apps still pair as the subsection "Until the switch to the core (wave 5)"
+describes, until wave 5 moves them onto the core; that subsection goes with that code.
+
+### Pairing in 0.6
+
+Pairing runs over TLS 1.3 with ALPN `cbb-pair/3` (section 19), each side presenting its key
+container (format section 12) for the key it keeps. Its messages are CBOR maps in frames
+(section 4, "Framing"), the type in field 0 (section 19, "Member protocol messages"). Before the
+code is confirmed every frame takes the pairing limit, `format::frame::LIMIT_PAIRING` (1048576);
+after it, message 67 alone may take the member limit, `format::frame::LIMIT_MEMBER` (7340032),
+and every other message still the pairing limit. A message 67 before the confirm is refused
+whatever its size (`pair/early-welcome`).
+
+| `t` | Direction | Fields |
+|---|---|---|
+| 64 `pair/start` | joiner to member | 2 `Ya` bytes, at most 256; 3 `ADa` bytes, at most 16 KiB: the encoding of the joiner's Info; 4 `commitment` bytes 32 |
+| 65 `pair/reply` | member to joiner | 2 `Yb` bytes, at most 256; 3 `ADb` bytes, at most 1 KiB: `{1 group ID (16), 2 the member's device ID (16), 3 its name}`; 4 `nonce` bytes 32 |
+| 66 `pair/confirm` | joiner to member | 2 `Ta` bytes, at most 64; 3 the joiner's nonce, bytes 32 |
+| 67 `pair/welcome` | member to joiner | 2 `Tb` bytes, at most 64; 3 the Welcome; 4 `Tw` bytes 64 |
+| 68 `pair/done` | joiner to member | none: the joiner kept its identity |
+| 69 `pair/error` | either | 2 `code`: 1 wrong-code, 2 closed, 3 busy, 4 expired, 5 too-many, 6 refused, 7 declined, 8 taken |
+
+Every field is needed. An error code this version does not know is taken as `refused`.
+
+**CPace.** Suite CPACE-X25519-SHA512 of draft-irtf-cfrg-cpace-21 with explicit key
+confirmation (Ta, Tb), the joiner the initiator. Its channel identifier is `cbb pair channel v3`
+0x00 ‖ the key hash of the member's TLS key ‖ that of the joiner's ‖ the ID of the invitation
+each side believes it is using, 16 bytes, all zero at home without an invitation (an ID no
+invitation has). The keys are those of the key containers the handshake saw, so a party in the
+middle with keys of its own gets another identifier and the exchange fails, and two ends in the
+flows of two invitations get two identifiers. With an invitation the password is its 32-byte
+secret (section 12). The vectors are `testdata/format/messages3.json`, `codes`.
+
+**The short code**, for a device with a screen and no camera, is a committed one. The joiner
+draws a nonce `nj` of 32 bytes and sends `commitment` = SHA-256(`cbb short code commitment v1`
+0x00 ‖ `nj`) in message 64; the member answers with its own nonce `nm` in message 65; the
+joiner opens `nj` in message 66. Both show six digits: the first 4 bytes of SHA-256(`cbb short
+code v3` 0x00 ‖ the session's TLS exporter ‖ `nj` ‖ `nm` ‖ the invitation ID) as a big-endian
+number mod 1 000 000, zero-padded. Neither end can choose its part after it has seen the
+other's, so the codes of two sessions match by chance only, one in a million. Each nonce is new
+for its session, drawn by the core at each end and never kept. A nonce that does not open the
+commitment ends the attempt (`wrong-code`).
+
+**Attempts.** An invitation takes one attempt at a time (another gets `busy`). The machine's
+steps, from message 64 to the opening of `nj`, have `join::invitation::ATTEMPT_MS` (30000) at
+each end; once the codes are shown the person has `join::invitation::ANSWER_MS` (600000) of
+their own to compare and answer, and the attempt stays the open one meanwhile. An attempt counts
+as failed once the member has sent message 65, unless it ends in a Welcome; after
+`join::invitation::MAX_FAILURES` (3) failures the invitation answers `too-many`. The joiner
+counts too: at most three sessions per invitation, each started only by the person; a code once
+shown stays until the person answers; the app never retries by itself. Each attempt at the
+member has a number from its start, which the later steps name, so a late message of an earlier
+attempt changes nothing.
+
+#### Info
+
+The joiner's Info is the map `ADa` carries:
+
+| # | Field | Type | Needed | Meaning |
+|---|---|---|---|---|
+| 1 | `name` | text, 1 to 128 bytes | yes | the device's name |
+| 2 | `os` | uint | no | its system |
+| 3 | `caps` | uint, bits 1 to 7 | no | its capabilities (section 4) |
+| 4 | `role` | uint 1 to 4 | yes | as the device record's |
+| 5 | `admin` | key, ES256 | no | a joiner with `admin` in `caps`, or a phone: its admin key |
+| 6 | `admin_pop` | bytes | with 5 | the admin key's signature over `cbb admin pop v1` 0x00 ‖ the session's TLS exporter |
+| 7 | `keys` | envelope | no | the joiner's keys statement, epoch 1 |
+| 8 | `device` | map | no | as the hello's `device` |
+| 9 | `invite` | bytes 16 | no | the invitation's one-time ID, when it joins by one; never the zero ID |
+
+#### The Welcome
+
+Field 3 of message 67:
+
+| # | Field | Type | Present | Meaning |
+|---|---|---|---|---|
+| 1 | `root` | key, ES256 | always | the group's first root key; its Group ID must be `ADb` field 1 |
+| 2 | `records` | array of envelopes, at most 8192 | without parts | the whole set, in the order a receiver takes it: the root changes, the admitter's record with its rights, the joiner's own record, then the others |
+| 4 | `keys` | array of envelopes, at most 256 | no | statements of the group's devices, the two devices' own first; with field 7 within `join::welcome::STATEMENTS_BUDGET` (2097152), the rest coming with the first sync |
+| 5 | `time_ms` | time | always | the admitter's clock, for a joiner without one |
+| 6 | `grant` | map | to a leaf | its first grant: fields 2 to 5 of message `grant` |
+| 7 | `credentials` | array of envelopes, at most 259 | no | the current period's server credentials (section 18) |
+| 9 | `recovery` | key, ES256 | always | the recovery key's first half |
+| 10 | `list` | bytes | without parts | the newest recovery record's list: its count and at most `records::LIST_MAX` (1536) IDs of 34 bytes |
+| 11 | `recovery2` | key, SLH-DSA | always | the recovery key's second half |
+| 12 | `digest` | bytes 32 | every Welcome but a leaf's | SHA-256(`cbb welcome digest v1` 0x00 ‖ the set digest (32) ‖ the count of lists, 4 bytes big-endian ‖ each list's hash under `cbb recovery list v3`, sorted) |
+| 13 | `parts` | uint 1 to `join::welcome::MAX_PARTS` (64) | when the set does not fit | how many `records` messages follow |
+
+Rules between fields: with 13, neither 2 nor 10 (`welcome/parts`); without 13, field 2
+(`welcome/shape`); a leaf's Welcome (with 6) has neither 12 nor 13 (`welcome/parts`,
+`welcome/digest`); every other has 12 (`welcome/digest`).
+
+**The Welcome's tag.** Every Welcome, a leaf's too, carries `Tw` in field 4 of message 67:
+K_w = HMAC-SHA-512(ISK, `cbb welcome key v1` 0x00), and `Tw` = HMAC-SHA-512(K_w, `cbb welcome
+v1` 0x00 ‖ the bytes of field 3 exactly as they stand in message 67). ISK is CPace's
+intermediate session key; K_w is its only use besides Ta and Tb, under a label nothing else
+uses. The joiner checks `Tw` in constant time over the bytes as received, before it reads
+anything of field 3 beyond where it starts and ends; a message 67 without `Tw`, or with another,
+is a failed pairing (`pair/welcome/tw`), with nothing read and nothing kept. `Tb` alone does not
+cover the Welcome. `Tw` covers every field, so it binds field 12, and through it every part.
+
+**The Welcome in parts.** A set that fits the Welcome (within
+`join::welcome::RECORDS_BUDGET` (5177344), with at most one list) rides in field 2. A wider one
+rides whole in `records` messages (t 5: field 2 record envelopes, at most
+`records::sync::PART_RECORDS` (4096); field 3 lists, at most 64; at least one of the two) right
+after message 67, as many as field 13 says, at most `join::welcome::MAX_PARTS_BYTES`
+(101039910) together. Each part comes within `join::welcome::PART_MS` (120000) of the one
+before, and all within `join::welcome::PARTS_MS` (1500000) of message 67 (`welcome/late`);
+these are the core's ceilings, and a service may be stricter. A message other than `records`
+before the last part, or a part after it, is refused (`welcome/parts`).
+
+The joiner holds each part as it comes, reading each record's envelope and refusing at once on
+one that does not read; it evaluates nothing. After the last part it takes every part into a
+new set, where each signature is verified, and refuses unless the set's digest with its lists
+is field 12 (`welcome/digest`); it refuses a stopped group; and it refuses unless every record
+and list it was sent is held (`welcome/digest`): a record whose first signature does not cover
+its second is not held. On any failure the joiner drops the parts, the set and the Welcome, and
+keeps nothing.
+
+**The joiner's checks.** With the whole set, the joiner checks that the two keys' Group ID is
+`ADb` field 1; that the admitter's key, from the TLS handshake, is a device of the group; that
+the records hold its own record with its own key, signed by the root or by the admitter's admin
+key with the power to admit; and the path of roots the records lead to. What binds the member:
+with an invitation, its secret, CPace's password; at home without one, only the person's "they
+match" in this session, at the joiner, for this admitter (the core takes the answer once, with
+the session's TLS exporter; an answer of another session or another member takes nothing). A
+guarded leaf takes only a record the root signed itself. Only then does the joiner store the
+set and its identity, and send message 68.
+
+#### The intro
+
+The first message to a peer that does not know the sender's key yet is the intro (t 8): field
+2, record envelopes in the order a receiver takes them (the root changes, the records that
+prove the admitter's rights, the sender's own record); field 3, the sender's keys statement.
+The recovery heads count apart, at most `join::intro::MAX_HEADS` (65); the other records at
+most `join::intro::MAX_RECORDS` (32) and `join::intro::MAX_BYTES` (16384) by their envelopes'
+bytes (`intro/size`; vectors: `messages3.json`, `intros`). The receiver checks every signature
+up to the root it holds before it keeps any, then goes on; anything that does not check closes
+the connection and keeps nothing.
+
+### Until the switch to the core (wave 5)
+
+What follows is pairing as the service in `member/`, the Go helper and the apps speak it today:
+JSON frames and a member certificate in the Welcome. It goes with that code in wave 5.
+
+#### Window
 
 The root or an admin (section 10, "Admins") opens a window with a six-digit code. The code MUST be drawn
 uniformly at random, and MUST NOT be taken from a command line, where other users of the
@@ -987,7 +1135,7 @@ A window for a remote invitation (design.md, "Joining from another network") dif
   only after a yes; a no sends `{"error": "declined"}` and counts as a failed attempt.
 - Each attempt then has 30 s plus the time allowed for the admin's answer, on both sides.
 
-### TLS
+#### TLS
 
 - Joiner (client): TLS 1.3, ALPN `cbb-pair/3`, presents its self-signed certificate
   (section 2) for the P-256 key it will keep, with its new device ID as CN; it does not
@@ -997,7 +1145,7 @@ A window for a remote invitation (design.md, "Joining from another network") dif
   unless the client sent exactly one certificate with a P-256 key and a device ID as CN that
   differs from its own.
 
-### Channel binding and CPace
+#### Channel binding and CPace
 
 Suite CPACE-X25519-SHA512 of draft-irtf-cfrg-cpace-21, as implemented in
 `core/src/third_party/cpace`, with explicit key confirmation.
@@ -1022,7 +1170,7 @@ when present, is a sorted list of distinct known capabilities and comes from no 
 with role `member` and the `caps` its Info says. A Go member that is not the root
 refuses a phone that offers `admin_key`: only the root makes a phone an admin.
 
-### Frames
+#### Frames
 
 Frames are a 4-byte big-endian length and a JSON object of at most 64 KiB (65 536 bytes).
 Fields, all optional, each frame using some: `msg` (bytes), `ad` (bytes), `tag` (bytes),
@@ -1057,7 +1205,7 @@ code MUST be treated as `refused`. Errors carry no free text, and an implementat
 show free text from a peer that has not proved it knows the code, so an unauthenticated
 peer cannot put words in front of the user.
 
-### Welcome
+#### Welcome
 
 | Field | Type | Present |
 |-------|------|---------|
@@ -1088,14 +1236,14 @@ A phone that joins MUST check the same, and also: `group_ca` is a phone's root (
 there are no CA keys; `admin_ca`, when present, is an admin CA under `group_ca` for the key
 it sent in `admin_key`, its CN naming its own device ID.
 
-### Joining side behaviour
+#### Joining side behaviour
 
 Without an address the joiner browses up to 10 s for a member with `p=1`, refuses when more
 than one announces a window, and tries that member's addresses in order, at most three,
 stopping after the first attempt whose code was spent. A whole join is bounded by 2 minutes
 plus the browse time.
 
-### A phone joins a computer's group
+#### A phone joins a computer's group
 
 A phone joins a group that a computer created through the group's root, as a computer joins
 (the joiner dials, above): `cbb pair -admin` on the root opens a window that may make admins,
@@ -1117,7 +1265,7 @@ connection, never becomes an admin; the root computer also refuses a key its rec
 it joins, the root names its admin key in a `handover` record (`cbb handover`, section 10,
 "Handing the group over"), and its claim takes effect at once.
 
-### The joiner listens (for the phone)
+#### The joiner listens (for the phone)
 
 `cbb pair` without `-code`, on a device in no group, turns the direction round, so that the device that scans
 the QR code dials the computer, and nothing is announced:
