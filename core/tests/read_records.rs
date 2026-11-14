@@ -103,7 +103,6 @@ fn root_with_dead_checkpoints(n: usize, ids: usize) -> (RecordSet, K, G) {
 /// After its own checkpoints that never count, the current root can still
 /// write an honest checkpoint, and it counts.
 #[test]
-#[ignore = "fails at 7d9fa7f1: write_checkpoint keeps the root's own dead checkpoints and refuses for room"]
 fn an_honest_checkpoint_after_dead_ones_is_written_and_counts() {
     for n in [9, 10, 16] {
         let (mut set, root, _) = root_with_dead_checkpoints(n, 2385);
@@ -657,13 +656,12 @@ fn a_restored_set_is_the_live_set_after_every_insert() {
     );
 }
 
-/// An honest checkpoint keeps of its root's older checkpoints only the one
-/// that counts, as a record that counts; none before it. Without that,
-/// each keeps all before it, and after some 70 a root's own checkpoint
-/// no longer fits its room (`honest_checkpoints_in_a_row`).
+/// An honest checkpoint keeps none of its root's older checkpoints, the
+/// counting one neither: it carries their heads and takes their place.
+/// Were each to keep those before it, after some 70 a root's own
+/// checkpoint would no longer fit its room (`honest_checkpoints_in_a_row`).
 #[test]
-#[ignore = "fails at 3ae25564: each honest checkpoint keeps every older one of its root"]
-fn an_honest_checkpoint_keeps_only_the_counting_older_checkpoint() {
+fn an_honest_checkpoint_keeps_none_of_its_root_s_older_checkpoints() {
     let (mut set, root, mut g) = root_with_dead_checkpoints(0, 0);
     let mut cps = Vec::new();
     for round in 0..3u32 {
@@ -677,10 +675,8 @@ fn an_honest_checkpoint_keeps_only_the_counting_older_checkpoint() {
         g.heads.insert(root.hash, (cp.body().seq, cp.id()));
         g.t += 1000;
         if let Kind::Checkpoint { keep, .. } = &cp.body().kind {
-            let n = cps.len();
             for (i, old) in cps.iter().enumerate() {
-                let counting = i + 1 == n;
-                assert_eq!(keep.contains(old), counting, "round {round}, checkpoint {i}");
+                assert!(!keep.contains(old), "round {round}, checkpoint {i}");
             }
         }
         cps.push(cp.id());
@@ -726,4 +722,121 @@ fn honest_checkpoints_in_a_row() {
         }
     }
     println!("400 rounds written");
+}
+
+/// The recovery key `root_with_dead_checkpoints` gives its group.
+fn bench_recovery() -> cbb_core::records::Recovery {
+    cbb_core::records::Recovery {
+        k1: k("recovery").key,
+        k2: cbb_core::records::pq::PqKey::from_seeds(&[0x31; 16], &[0x32; 16], &[0x33; 16]).key(),
+    }
+}
+
+/// Five hundred honest checkpoints in a row, each after a device comes and
+/// the oldest goes: every one is written and counts, what each keeps stays
+/// as large as the group, the set's bytes stay flat, and a member that
+/// takes what the root's set gives it ends on each checkpoint too. With
+/// `restart`, the root's set is rebuilt from its records halfway.
+fn checkpoints_in_a_row(rounds: u32, restart: bool) {
+    let (mut set, root, mut g) = root_with_dead_checkpoints(0, 0);
+    let phone = k("phone a").hash;
+    let mut other = RecordSet::new(root.key.clone(), bench_recovery());
+    let mut live: std::collections::VecDeque<KeyHash> = std::collections::VecDeque::new();
+    let (mut first_keep, mut first_bytes) = (0usize, 0usize);
+    for round in 0..rounds {
+        let dk = k(&format!("flat dev {round}"));
+        set.insert(g.sign(&root, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)))).unwrap();
+        live.push_back(dk.hash);
+        if live.len() > 20 {
+            let gone = live.pop_front().unwrap();
+            let rm = cbb_core::records::body::Removal { keys: vec![gone], seen: Vec::new() };
+            set.insert(g.sign(&root, Kind::Revoke(rm))).unwrap();
+        }
+        if restart && round == rounds / 2 {
+            let records: Vec<Record> = set.in_dependency_order().into_iter().cloned().collect();
+            let lists: Vec<Vec<u8>> = set.lists().map(<[u8]>::to_vec).collect();
+            let before = set.state();
+            set = RecordSet::restore(root.key.clone(), bench_recovery(), &records, &lists);
+            assert_eq!(set.state(), before, "round {round}: the restored set");
+        }
+        let st = set.state();
+        let cp = set.write_checkpoint(&st, &root, g.t + 1).unwrap_or_else(|e| panic!("round {round}: {e:?}"));
+        g.heads.insert(root.hash, (cp.body().seq, cp.id()));
+        g.t += 1000;
+        let Kind::Checkpoint { keep, .. } = &cp.body().kind else { unreachable!() };
+        let kept = keep.len();
+        set.insert(cp.clone()).unwrap();
+        let st = set.state();
+        assert_eq!(st.checkpoint, Some(cp.id()), "round {round}");
+        let sent: Vec<Record> = set.for_peer(&st, &phone).into_iter().cloned().collect();
+        other.insert_all(sent);
+        assert_eq!(other.state().checkpoint, Some(cp.id()), "round {round}: the other member");
+        if round == 30 {
+            (first_keep, first_bytes) = (kept, set.bytes());
+        }
+        if round > 30 {
+            assert!(kept <= first_keep, "round {round}: keeps {kept}, at round 30 {first_keep}");
+            assert!(
+                set.bytes() <= first_bytes + 4096,
+                "round {round}: {} bytes, at round 30 {first_bytes}",
+                set.bytes()
+            );
+        }
+    }
+}
+
+#[test]
+fn five_hundred_checkpoints_in_a_row_stay_flat() {
+    checkpoints_in_a_row(500, false);
+}
+
+#[test]
+fn five_hundred_checkpoints_in_a_row_with_a_restart() {
+    checkpoints_in_a_row(500, true);
+}
+
+/// A member that holds a root's checkpoints each keeping all before it, as
+/// a writer did before, lets them all go once a checkpoint that keeps none
+/// of them counts, but the one just below it; so does a member that takes
+/// what the first one gives.
+#[test]
+fn a_pile_of_older_checkpoints_goes_when_a_new_one_counts() {
+    let (mut set, root, mut g) = root_with_dead_checkpoints(0, 0);
+    let phone = k("phone a").hash;
+    let mut other = RecordSet::new(root.key.clone(), bench_recovery());
+    let mut pile: Vec<RecordId> = Vec::new();
+    for round in 0..20u32 {
+        let dk = k(&format!("pile dev {round}"));
+        set.insert(g.sign(&root, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)))).unwrap();
+        let st = set.state();
+        let cp = set.write_checkpoint(&st, &root, g.t + 1).unwrap();
+        let mut body = cp.body().clone();
+        if let Kind::Checkpoint { keep, .. } = &mut body.kind {
+            keep.extend(pile.iter().copied());
+            keep.sort();
+            keep.dedup();
+        }
+        let cp = Record::sign(body, &root).unwrap();
+        g.heads.insert(root.hash, (cp.body().seq, cp.id()));
+        g.t += 1000;
+        set.insert(cp.clone()).unwrap();
+        assert_eq!(set.state().checkpoint, Some(cp.id()), "round {round}");
+        pile.push(cp.id());
+    }
+    let st = set.state();
+    other.insert_all(set.for_peer(&st, &phone).into_iter().cloned());
+    assert!(pile.iter().all(|id| set.contains(id) && other.contains(id)));
+    let cp = set.write_checkpoint(&st, &root, g.t + 1).unwrap();
+    set.insert(cp.clone()).unwrap();
+    let st = set.state();
+    assert_eq!(st.checkpoint, Some(cp.id()));
+    other.insert_all(set.for_peer(&st, &phone).into_iter().cloned());
+    assert_eq!(other.state().checkpoint, Some(cp.id()));
+    // The last of them is the new one's prev, the record its chain
+    // follows, and stays with it; the others go.
+    assert_eq!(cp.body().prev.as_ref(), pile.last());
+    for (i, id) in pile[..pile.len() - 1].iter().enumerate() {
+        assert!(!set.contains(id), "the writer still holds checkpoint {i}");
+        assert!(!other.contains(id), "the other member still holds checkpoint {i}");
+    }
 }
