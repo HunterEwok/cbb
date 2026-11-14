@@ -489,10 +489,21 @@ module records_v3 {
   // SEEN_HOLDS_ROOT (with SPARE): an admin's record other than a removal, freeze or thaw counts
   // only if its seen holds a record of the last root that names its key.
   pure val SEEN_HOLDS_ROOT = false
+  // SEEN_POS (the core's wording, architecture 11-14 21:53Z; beside SEEN_HOLDS_ROOT): an admin
+  // key's records count only at or above a record of that key, on its line, whose seen holds
+  // the last root's record naming it. No kind is exempt; the honest writer signs a removal,
+  // freeze or thaw only above such a record (its ack).
+  pure val SEEN_POS = false
   // GRANT_ABOVE (records' refinement of ROOT_WAITS, 11-14 21:37Z): a removal's settle does not
   // wait for an admin key named only by records of the removal's root above its seq (who holds
   // the grant holds the removal, the claim checked by grantHoldsRemoval).
   pure val GRANT_ABOVE = false
+  pure def posAnchored(mine: Set[Record], v: View, k: Key, kind: str): bool = {
+    val cur = last(v.path)
+    val gs = mine.filter(g => g.kind == "admin" and g.target == k and g.signer == cur)
+    (gs != Set() and not(Set("revoke", "freeze", "thaw").contains(kind)))
+      or mine.exists(b => b.signer == k and gs.exists(g => inLine(lineOf(b.seen, cur), g.id)))
+  }
   pure def regrant(rs: Set[Record], a: Key): bool =
     rs.exists(v => v.kind == "revoke" and tgt(v).contains(a))
     or (DEV.keys().contains(a) and rs.exists(x => x.kind == "device" and ROOT_KEYS.contains(x.signer) and x.target == DEV.get(a)
@@ -1364,6 +1375,8 @@ module records_v3 {
       if (not(adm.keys().contains(r.signer))) false
       else if (SEEN_HOLDS_ROOT and not(Set("revoke", "freeze", "thaw").contains(r.kind))
         and not(adminRecs.exists(g => g.target == r.signer and g.signer == cur and inLine(lineOf(r.seen, cur), g.id)))) false
+      else if (SEEN_POS and not(rs.exists(b => b.signer == r.signer and b.seq <= r.seq and inLine(r.line, b.id)
+        and adminRecs.exists(g => g.target == r.signer and g.signer == cur and inLine(lineOf(b.seen, cur), g.id))))) false
       else if (r.kind == "device") {
         val first = admittedBy(r.target)
         not(rootHas(r.target)) and (first == r.id or (first != NONE and first != -1 and has(r.signer, "manage")
@@ -1736,6 +1749,9 @@ module records_v3 {
       not(ROOT_WAITS) or kit == "deviant" or kind != "admin" or not(regrant(mine, target)),
       not(LAST_ROOT_ONLY) or kit == "deviant" or kind != "admin"
         or not(db.keys().exists(i => db.get(i).kind == "admin" and db.get(i).target == target and db.get(i).signer != k)),
+      // (SEEN_POS: an honest admin signs a removal, freeze or thaw only above its own record whose
+      // seen holds its grant; any other record of it holds the grant in its own seen.)
+      not(SEEN_POS) or kit == "deviant" or not(vh.admins.keys().contains(k)) or onList(vh.path, k) or posAnchored(mine, vh, k, kind),
       // (FRESH_KEY: an honest writer admits only a key no record names yet.)
       not(FRESH_KEY) or kit == "deviant" or dk == "" or vh.devices.contains(dk)
         or not(db.keys().exists(i => devOf(db.get(i)) == dk)),
@@ -5964,7 +5980,7 @@ module records_v3 {
       .then(recoverAs(RECOVERY, "NA")).then(syncRound).then(syncRound)
       .then(giveAll(MEMBERS, [5])).then(syncRound)
       .expect(notM.forall(m => views.get(m).admins.keys().contains("A1")))
-      .expect(if (SEEN_HOLDS_ROOT) notM.forall(m => not(views.get(m).devices.contains("E"))) and spareSafe
+      .expect(if (SEEN_HOLDS_ROOT or SEEN_POS) notM.forall(m => not(views.get(m).devices.contains("E"))) and spareSafe
         else notM.forall(m => views.get(m).devices.contains("E")) and not(spareSafe))
   // 6. NA removes D while the kept C2 has not shown up (c asleep; A1 acked): the removal
   // waits; NA takes C2 back (a root device record of dC; the 35-day step is the same) and then
@@ -5984,6 +6000,58 @@ module records_v3 {
       .expect(not(keepsRemovalOfD("NA")))
       .then(syncRound).then(syncRound).then(compactAt("m")).then(syncRound)
       .expect(dOutL and spareSafe)
+
+  // SEEN_POS under S. 1: the deviant spare A1 pre-signs a removal of D (5) and a freeze of C
+  // (6) as its first records; A acks (spare A1) and the change names A1 (and C2). Offered after
+  // the naming, nothing of them counts, also after A1's honest ack above them.
+  run posPresignTest = if (not(onS and SEEN_POS)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(signDeviant("A1", "revoke", DEVICE, 1)).then(signDeviant("A1", "freeze", "C2", 1))
+      .then(ackS(PHONE)).then(ackS(COMPUTER)).then(syncRound)
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound).then(syncRound)
+      .then(giveAll(MEMBERS, [5, 6])).then(syncRound)
+      .expect(notM.forall(m => views.get(m).admins.keys() == Set("A1", "C2") and views.get(m).devices.contains(DEVICE)
+        and not(views.get(m).frozen.contains("C2"))) and spareSafe)
+      .then(ackS("A1")).then(syncRound).then(syncRound)
+      .expect(notM.forall(m => views.get(m).devices.contains(DEVICE) and not(views.get(m).frozen.contains("C2"))
+        and not(views.get(m).counting.contains(5)) and not(views.get(m).counting.contains(6))) and spareSafe and promises)
+  // 2. The void records take no part in later records' room: A1 acks, admits E and the root's
+  // checkpoint keeps neither 5 nor 6; after compaction the sets drop them, and E counts.
+  run posRoomTest = if (not(onS and SEEN_POS)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(signDeviant("A1", "revoke", DEVICE, 1)).then(signDeviant("A1", "freeze", "C2", 1))
+      .then(ackS(PHONE)).then(ackS(COMPUTER)).then(syncRound)
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound).then(syncRound)
+      .then(giveAll(MEMBERS, [5, 6])).then(syncRound)
+      .then(ackS("A1")).then(sign("A1", "device", "E", "", 0, false, false, 1)).then(syncRound)
+      .then(sign("NA", "copies", "", "", 0, false, false, 1)).then(syncRound)
+      .then(signAs("NA", "checkpoint", "", 0))
+      .expect(not(lastCpKeep("NA").contains(5)) and not(lastCpKeep("NA").contains(6)))
+      .then(syncRound).then(syncRound).then(compactAt("m")).then(compactAt("r")).then(syncRound)
+      .expect(notM.forall(m => views.get(m).devices.contains("E")) and not(st.get("r").recs.contains(5))
+        and not(st.get("r").recs.contains(6)) and promises and spareSafe)
+  // 3. The honest path: A1 acks, then removes D: counts. Before the ack the writer's guard
+  // refuses A1's removal (asserted on a's set).
+  run posHonestTest = if (not(onS and SEEN_POS)) init else
+    spareStart
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound).then(syncRound)
+      .expect(not(posAnchored(recsOf(st.get("a").recs, db), views.get("a"), "A1", "revoke"))
+        and posAnchored(recsOf(st.get("a").recs, db), views.get("a"), "A1", "ack"))
+      .then(ackS("A1")).then(syncRound)
+      .expect(posAnchored(recsOf(st.get("a").recs, db), views.get("a"), "A1", "revoke"))
+      .then(sign("A1", "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound).then(syncRound)
+      .expect(dOutL and spareSafe)
+  // 4. Positions are per key: A's ack under R holds R's grant of A; after the change names A1,
+  // A1's (deviant) removal of D without an A1 record holding NA's grant below it counts for
+  // nothing.
+  run posPerKeyTest = if (not(onS and SEEN_POS)) init else
+    spareStart
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound).then(syncRound)
+      .then(signDeviant("A1", "revoke", DEVICE, 1)).then(syncRound).then(syncRound)
+      .expect(notM.forall(m => views.get(m).devices.contains(DEVICE) and not(views.get(m).counting.contains(nextId - 1)))
+        and spareSafe)
 
   // REISSUE_STATE: the change to NA re-issues R's live admissions (A, C, W and D) as NA's first
   // records 6 to 9; the list keeps none of R's records, the first checkpoint keeps the Ys, and
