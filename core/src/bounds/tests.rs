@@ -94,6 +94,48 @@ fn every_refusal_is_in_the_vectors() {
     assert_eq!(missing, UNVECTORED, "the refusals of the format no vector shows yet");
 }
 
+fn named<'a>(v: &'a serde_json::Value, name: &str) -> Option<&'a serde_json::Value> {
+    match v {
+        serde_json::Value::Object(m) => {
+            if m.get("name").and_then(|n| n.as_str()) == Some(name) {
+                return Some(v);
+            }
+            m.values().find_map(|x| named(x, name))
+        }
+        serde_json::Value::Array(a) => a.iter().find_map(|x| named(x, name)),
+        _ => None,
+    }
+}
+
+/// The verdict fields a vector of a refusal carries.
+const VERDICTS: &[&str] = &["rule", "reason", "error", "verdict"];
+
+/// A vector that reaches a bound and refuses gives that bound's refusal: a
+/// row is never satisfied by the refusal's name in some other vector of
+/// the file. A reaching vector that takes (no verdict) is the bound's
+/// widest case and checks nothing here.
+#[test]
+fn the_vectors_that_reach_a_bound_refuse_as_its_row_says() {
+    let vecs = vectors();
+    let mut wrong = Vec::new();
+    for b in BOUNDS.iter().filter(|b| !b.refusal.is_empty()) {
+        for r in b.reached {
+            let Some((file, name)) = r.strip_prefix("vec:").and_then(|v| v.split_once(':')) else { continue };
+            let Some(v) = vecs.iter().filter(|(f, _, _)| f == file).find_map(|(_, j, _)| named(j, name)) else {
+                continue;
+            };
+            let said: Vec<&str> = VERDICTS.iter().filter_map(|k| v.get(*k).and_then(|x| x.as_str())).collect();
+            if v.get("verdict").and_then(|x| x.as_str()) == Some("take") {
+                continue;
+            }
+            if !said.is_empty() && !said.iter().any(|s| s == &b.refusal || s.starts_with(&format!("{}:", b.refusal))) {
+                wrong.push(format!("{}: row {}, vector {r} {said:?}", b.name, b.refusal));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "refused otherwise than the row says:\n{}", wrong.join("\n"));
+}
+
 /// The modules of the 0.6 format whose public numbers are bounds or
 /// exempted.
 const MODULES: &[&str] = &[

@@ -1833,6 +1833,169 @@ JSON array, or, on a computer, its group CA has path length 0, section 2) leaves
 keeps its settings, and says so in its log and, on a computer, in `cbb status`; CI's upgrade
 job checks it from 0.5.0.
 
+### Records in 0.6
+
+Source: `core/src/records` (`eval.rs` the evaluation, `keep.rs` the rooms, `set.rs` the set and
+its writers, `sync.rs` sync by parts, `pq.rs` the recovery key), and their tests. A record is a
+signed object of the conventions (section "Conventions", "Signed objects (0.6)") under the
+label `cbb record v3`. The kept set and the state depend on the set of records alone, never on
+the order in which they came, and no rule reads a clock.
+
+#### Types
+
+| `type` | Record | Signed by |
+|---|---|---|
+| 1 | `device`: a device's key, name, role, rights and powers | a root, or an admin with the power to admit (its first record only, base rights) or manage |
+| 2 | `revoke`: a removal of keys, with what its author saw of them | a root or an admin |
+| 3 | `freeze`, 4 `thaw` | a root or an admin |
+| 6 | `resolve`: a root voids an admin's record in a conflict | a root |
+| 7 | `settings`, 8 `copies`, 10 `hubs` | a root |
+| 9 | `checkpoint`: the heads it settles and the records it keeps | the current root |
+| 13 | `recovery`: a change of root | the group's recovery key |
+
+Types 5, 11 and 12 of earlier drafts are refused (`records/retired`): the root changes only by
+the recovery key.
+
+#### Rooms and units
+
+A set's room is `records::MAX_RECORDS` (7168) units of 512 bytes, and
+its records take at most `records::MAX_SET_BYTES` (3670016) bytes. A record takes one unit for
+each 512 bytes its body and `records::ENVELOPE_ALLOWANCE` (83) start, at least one. A second
+signature takes no units, so every room holds as many twice-signed records as plain ones. The
+second signatures of a set take at most `records::MAX_SET_SIG2_BYTES` (134217728) bytes beside
+the rooms, and a recovery head's second signature is counted as
+`records::HEAD_SIG2_ALLOWANCE` (33280) bytes. The first signature covers the body and the
+SHA-256 of the second, so a second signature cannot be swapped on the way.
+
+Each key has a ceiling: the current root `records::MAX_ROOT_RECORDS` (1536) units, the roots
+before it together `records::CUT_ROOTS_RESERVE` (1536), and each admin key
+`records::MAX_ADMIN_RECORDS` (256), for at most `records::ADMIN_KEYS_MAX` (16) admin keys. The
+ceilings add up to the room exactly, so no key pushes out another key's records by making many
+of its own. Any other key has no room and keeps nothing. A record body is at most
+`records::MAX_BODY` (16384) bytes, a checkpoint's at most `records::MAX_CHECKPOINT_BODY`
+(262144), and a change's list names at most `records::LIST_MAX` (1536) IDs. A set has at most
+`records::MAX_DEVICES` (256) devices.
+
+At level s a key keeps the longest start of its own order (below) within min(s, its ceiling)
+units, and s is the highest level at which the keys' demands fit the room. So a key whose
+records take few units keeps them all, whatever the others make. A member that drops records
+as they come remembers the level and, for each key, the first record it dropped, so it keeps
+exactly what a member that saw them all at once keeps.
+
+#### The order inside a room
+
+Each key's records are taken in an order that depends on each record alone (`keep::Item::pos`):
+
+1. a root's removals, freezes and resolves, by seq, so that nothing else of the root's drops
+   them;
+2. the key's newest checkpoint (the highest seq; of two at one seq, the smaller ID);
+3. the rest, by seq and then ID (records of one seq with other IDs count against the same
+   ceiling);
+4. the key's older checkpoints, the newest first.
+
+Of a root that a change cut, only what the change's list names is kept, within the reserve.
+The recovery chain is kept outside the rooms.
+
+#### Tiers inside the rooms
+
+Being settled.
+
+#### What a writer refuses
+
+A writer refuses a record past its key's own ceiling, and a record that its own set would not
+keep or would not count: a record that its writer drops reaches nobody for sure, and one that
+passes the key's ceiling pushes the key's own older records out (`RecordSet::write_record`).
+Such a refusal leaves the set as it was and uses no seq. A writer never makes a 257th device
+and never puts a device out.
+
+#### Two histories
+
+A key with two records at one seq has two histories. For an admin key, no secrets are sealed
+while it lasts. Two records of a root at one seq, whether or not their chains are whole here,
+stop the group until the recovery key changes the root: a member hands the proof (the pair)
+to the keys that a record of that root admits on either line, and to nobody else. A removal on
+a whole chain counts at or above the fork too, on either history, whoever signed it, so a key
+in two histories brings nothing back that it removed. Removals have no limit.
+
+#### A change of root
+
+The root changes only by a `recovery` record that the group's recovery key signs, at once: no
+delay, no cancel, no objection, and no admin takes the group over. The recovery key is K1 (ES256)
+and K2 (SLH-DSA-SHA2-128s): K2 signs every head first, and K1 signs the body and the SHA-256 of
+K2's signature. A group has at most `records::body::MAX_RECOVERY` (64) changes, and their heads
+are kept outside the rooms. The recovery chain, walked from the recovery key the device was
+given with the group, gives the path of roots before anything else; no root's or admin's record
+changes it. Each change hands the chain to the next recovery key, whose records start again at
+seq 1. Two recovery records at one step stop the group for good.
+
+A change names the new root and the hash of its list: the records of the roots it cuts that
+stay, which ride beside the head outside the rooms. It applies whole or not at all: the new
+root's first checkpoint keeps the re-issued removals, and with one of them missing the old
+removals it covers would stop barring with nothing in their place. A record of the change's
+group that the device lacks is settled by a later checkpoint (of the new root above the first,
+or of a root after it on the chain) that names a head at or above it and does not keep it; what
+that checkpoint keeps must be held too. A checkpoint that keeps what the change itself cuts
+settles nothing, since no honest root writes one. Until the group is whole the change waits,
+and the apps say that a change of root is arriving.
+
+The writer of a change refuses a set that still waits for an earlier change's list ("a change
+of root is waiting here: sync with the group, then try again"), a group stopped for good, a
+65th change, a key that is not the group's recovery key, and a new root key the state already
+knows.
+
+#### Re-issue and fold
+
+A new root re-issues the counting removals of the roots the change cuts as removals of its own
+among its first records, each old removal whole in one new one with its `seen` entries, so the
+list carries none of them. All of them fit the new root's room less
+`records::set::REISSUE_KEPT_BACK` (256) units for its other first records; an old removal that
+does not fit rides in the list. A root's removal on the path folds into a newer one (a later
+root, else a higher seq) that names every key it names and saw the same of them; what it bars,
+the newer one bars. Removals are the only records that grow without bound, so the fold keeps a
+checkpoint and a change of root within their rooms.
+
+#### Checkpoints
+
+Only the current root writes a checkpoint. A checkpoint names the heads it settles and the
+records it keeps; a root's removal counts for good while it is kept, and the writer leaves one
+out, with the records of the keys it names, only when every key it names is a plain device key
+whose admissions it holds below their signer's head. An admin key whose admission the rooms
+keep out is no key of the set. A waiting root's records, and records that a checkpoint of the
+current root above the counting one keeps, sit aside, outside the count, in any order, within
+one root's room; a member asks its peers for a missing record for
+`records::set::MISSING_ROUNDS` (16) rounds before it shows a notice.
+
+#### Devices
+
+The device cap comes last and decides nothing before it: every signer's power, every removal
+and every admission is judged without it. Then the cap is taken among the devices that count (a
+removed device holds no place): the root's own device and the admins' devices first, then the
+rest by their earliest record that counts, by seq, then the signer's place (the roots by the
+path, then each admin by its admission), then ID. So a key that floods takes only its own first
+places. A device past the cap is not a device of the group until one before it is removed, and
+its records say why.
+
+#### Sync
+
+Members sync by parts (`records::sync`): message `records` (section 4) carries at most
+`records::sync::PART_RECORDS` (4096) records and `records::sync::PART_BYTES` (7323648) bytes,
+each change of root's list beside the head that names it, in the order a peer is given its
+records, so a receiver that takes the parts one by one ends with what one message of everything
+would give. Message `have` carries at most `records::sync::HAVE_IDS` (4096) IDs and is split
+alike. A full set with the records outside the rooms and up to 64 lists does not fit one frame,
+so nothing assumes it does. A Welcome carries the set whole, in parts when it does not fit, with
+its digest (section 6, "The Welcome").
+
+#### What is offered again after a restart
+
+Being settled.
+
+### Until the switch to the core (wave 5)
+
+The subsections that follow, from "Admin CA and chains" to "Exchange in the member protocol",
+describe 0.5's records (`v:2`, JSON) and certificates, which `internal/authority`,
+`cbb_core::authority` and `member/` implement until wave 5.
+
 ### Admin CA and chains
 
 | Certificate | Subject CN | Validity | Extensions |

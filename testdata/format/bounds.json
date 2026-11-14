@@ -517,7 +517,8 @@
       "class": "frozen",
       "name": "blind::credential::MAX_BODY",
       "reached": [
-        "vec:credentials.json:a second signature of 8193 bytes"
+        "vec:credentials.json:a body of exactly 16 KiB",
+        "vec:credentials.json:a body one byte over 16 KiB"
       ],
       "refusal": "env/size",
       "value": 16384,

@@ -1205,6 +1205,22 @@ def credential_vectors():
     env, body, _ = envelope2("credential", ROOT, m, fake("sig2 8193", MAX_SIG2 + 1))
     refuse.append({"name": "a second signature of 8193 bytes", "rule": "env/sig2", "verdict": "refuse",
                    "envelope": env.hex()})
+    # The body's ceiling, 16 KiB: a text in the optional zone fills it.
+    def sized(n):
+        base = {1: 1, 2: GROUP, 3: ROOT.key, 4: 3, 7: exp, 10: tag, 11: PERIOD.key, 300: ""}
+        fill = n - len(enc(base))
+        for k in range(fill - 4, fill + 1):
+            m = {**base, 300: "x" * k}
+            if len(enc(m)) == n:
+                return m
+        raise ValueError(n)
+    m = sized(16384)
+    env, body = envelope("credential", ROOT, m)
+    take.append({"name": "a body of exactly 16 KiB", "verdict": "take", "diag": diag(dec(body)),
+                 "body": body.hex(), "id": sha(body).hex(), "envelope": env.hex()})
+    env, _ = envelope("credential", ROOT, sized(16385))
+    refuse.append({"name": "a body one byte over 16 KiB", "rule": "env/size", "verdict": "refuse",
+                   "envelope": env.hex()})
     m = {1: 4, 2: tag, 3: PERIOD.key, 4: 1, 7: exp, 14: pad([SRVKEY.hash], 3)}
     env, _ = envelope("credential", PERIOD, m)
     refuse.append({"name": "members list of 3 (not a padded length)", "rule": "credentials/members/members",
