@@ -656,3 +656,74 @@ fn a_restored_set_is_the_live_set_after_every_insert() {
         run.found.join("\n")
     );
 }
+
+/// An honest checkpoint keeps of its root's older checkpoints only the one
+/// that counts, as a record that counts; none before it. Without that,
+/// each keeps all before it, and after some 70 a root's own checkpoint
+/// no longer fits its room (`honest_checkpoints_in_a_row`).
+#[test]
+#[ignore = "fails at 3ae25564: each honest checkpoint keeps every older one of its root"]
+fn an_honest_checkpoint_keeps_only_the_counting_older_checkpoint() {
+    let (mut set, root, mut g) = root_with_dead_checkpoints(0, 0);
+    let mut cps = Vec::new();
+    for round in 0..3u32 {
+        for i in 0..3u32 {
+            let dk = k(&format!("keep dev {round} {i}"));
+            let r = g.sign(&root, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)));
+            set.insert(r).unwrap();
+        }
+        let st = set.state();
+        let cp = set.write_checkpoint(&st, &root, g.t + 1).unwrap();
+        g.heads.insert(root.hash, (cp.body().seq, cp.id()));
+        g.t += 1000;
+        if let Kind::Checkpoint { keep, .. } = &cp.body().kind {
+            let n = cps.len();
+            for (i, old) in cps.iter().enumerate() {
+                let counting = i + 1 == n;
+                assert_eq!(keep.contains(old), counting, "round {round}, checkpoint {i}");
+            }
+        }
+        cps.push(cp.id());
+        set.insert(cp.clone()).unwrap();
+        assert_eq!(set.state().checkpoint, Some(cp.id()), "round {round}");
+    }
+}
+
+/// How many honest checkpoints a root writes in a row (a few devices
+/// between each) before the writer refuses: printed, for the reading.
+#[test]
+#[ignore = "information for the reading; run with --ignored --nocapture"]
+fn honest_checkpoints_in_a_row() {
+    let (mut set, root, mut g) = root_with_dead_checkpoints(0, 0);
+    for round in 0..400u32 {
+        for i in 0..3u32 {
+            let dk = k(&format!("row dev {round} {i}"));
+            let r = g.sign(&root, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)));
+            let _ = set.insert(r);
+        }
+        let st = set.state();
+        match set.write_checkpoint(&st, &root, g.t + 1) {
+            Ok(cp) => {
+                let kept = match &cp.body().kind {
+                    Kind::Checkpoint { keep, .. } => keep.len(),
+                    _ => 0,
+                };
+                if round % 25 == 0 {
+                    println!(
+                        "round {round}: checkpoint {} bytes, keeps {kept}, devices {}",
+                        cp.body().encode().len(),
+                        st.devices.len()
+                    );
+                }
+                g.heads.insert(root.hash, (cp.body().seq, cp.id()));
+                g.t += 1000;
+                let _ = set.insert(cp);
+            }
+            Err(e) => {
+                println!("round {round}: refused: {e:?}; devices {}", st.devices.len());
+                return;
+            }
+        }
+    }
+    println!("400 rounds written");
+}
