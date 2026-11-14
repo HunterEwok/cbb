@@ -463,6 +463,12 @@ module records_v3 {
       and not(DEV.keys().contains(a) and counted.exists(x => x.kind == "device" and ROOT_KEYS.contains(x.signer)
         and x.target == DEV.get(a) and named.forall(n => n.target != a or n.id < x.id))))
   }
+  // An admin record for key a would grant it again: a was removed, or a root device record of
+  // its device came after a record naming it (a take-back).
+  pure def regrant(rs: Set[Record], a: Key): bool =
+    rs.exists(v => v.kind == "revoke" and tgt(v).contains(a))
+    or (DEV.keys().contains(a) and rs.exists(x => x.kind == "device" and ROOT_KEYS.contains(x.signer) and x.target == DEV.get(a)
+      and rs.exists(n => n.kind == "admin" and n.target == a and n.id < x.id)))
   pure def ackedAll(counted: Set[Record], r: Record): bool =
     liveAdmins(counted).forall(a => counted.exists(x => x.signer == a and lineOf(x.seen, r.signer).length() >= r.seq))
   // An admission under FLAG (every admin and device record without it).
@@ -1680,6 +1686,9 @@ module records_v3 {
     val db2 = db.put(nextId, { ...r3, off: hidden })
     all {
       SIGNERS.contains(k),
+      // (ROOT_WAITS, code fact 11-14 21:04Z: the root never grants admin again to a key it
+      // removed or took back; a returning device gets a new admin key.)
+      not(ROOT_WAITS) or kit == "deviant" or kind != "admin" or not(regrant(mine, target)),
       // (FRESH_KEY: an honest writer admits only a key no record names yet.)
       not(FRESH_KEY) or kit == "deviant" or dk == "" or vh.devices.contains(dk)
         or not(db.keys().exists(i => devOf(db.get(i)) == dk)),
@@ -1743,7 +1752,10 @@ module records_v3 {
     val devGo = counted.filter(x => x.signer == k and x.kind == "device"
       and counted.exists(y => y.signer == k and y.kind == "device" and y.target == x.target and y.seq < x.seq)
       and counted.exists(y => y.signer == k and y.kind == "device" and y.target == x.target and y.seq > x.seq))
-    val go1 = idsOf(rmGo.union(folded).union(admGo).union(copiesGo).union(devGo))
+    // (ROOT_WAITS: an admin's ack that a newer ack of its key supersedes goes.)
+    val ackGo = if (not(ROOT_WAITS)) Set() else counted.filter(x => x.kind == "ack"
+      and counted.exists(y => y.signer == x.signer and y.kind == "ack" and y.seq > x.seq))
+    val go1 = idsOf(rmGo.union(folded).union(admGo).union(copiesGo).union(devGo).union(ackGo))
     val resGo = counted.filter(x => x.kind == "resolve" and go1.contains(x.targetRec))
     idsOf(counted).exclude(go1).exclude(idsOf(resGo))
   }
@@ -5343,13 +5355,15 @@ module records_v3 {
         else not(CP_KEEP) or DROPS_EPOCH or (MEMBERS.forall(m => views.get(m).devices.contains(DEVICE)) and not(removedStayOut)))
 
   // ROOT_WAITS (candidate W), each run only under it. dOut: no member counts D, promises hold.
+  // (The directed W runs need the real root ratio and wider admin rooms; see wScaledTakeBackTest.)
+  pure val wideW = ROOT_RATIO and WIDE_ADMIN
   val dOut = MEMBERS.forall(m => not(views.get(m).devices.contains(DEVICE))) and promises
   action acksAll = sign(PHONE, "ack", "", "", 0, false, false, 1)
     .then(sign(COMPUTER, "ack", "", "", 0, false, false, 1)).then(sign(WATCH, "ack", "", "", 0, false, false, 1))
   // sh1 under W: R's checkpoint 8 keeps the removal 6 (no admin acked it), so A's true
   // admission 5 arriving late changes nothing. After the three acks (A's line carries 5) the
   // checkpoint 13 settles the removal; 5 lies below A's head there and is gone with it.
-  run wSh1Test = if (not(ROOT_WAITS)) init else
+  run wSh1Test = if (not(ROOT_WAITS) or not(wideW)) init else
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
       .then(sign(PHONE, "device", DEVICE, "", 0, false, false, 1))
@@ -5369,7 +5383,7 @@ module records_v3 {
       .expect(dOut)
   // sh2 under W: A admits D (9) after R's checkpoint 8, which kept the removal; the removal
   // still counts, and after the acks the settling checkpoint prunes 9 below A's head.
-  run wSh2Test = if (not(ROOT_WAITS)) init else
+  run wSh2Test = if (not(ROOT_WAITS) or not(wideW)) init else
     init
       .then(sign(PHONE, "copies", "", "", 0, false, false, 1))
       .then(giveAll(Set("r"), [4]))
@@ -5390,7 +5404,7 @@ module records_v3 {
       .expect(dOut)
   // The narrowing update under W: A holds R's admission 4 when it signs 5; R's checkpoint keeps
   // the removal until every admin acked; 5 never brings D back.
-  run wNarrowTest = if (not(ROOT_WAITS)) init else
+  run wNarrowTest = if (not(ROOT_WAITS) or not(wideW)) init else
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
       .then(giveAll(Set("a"), [4]))
@@ -5410,7 +5424,7 @@ module records_v3 {
       .expect(dOut)
   // E's shape under W: A and C both truly admit D; the root never holds C's 6 until C's ack
   // carries it. Checkpoint 9 keeps the removal; the settling checkpoint 14 prunes 4 and 6.
-  run wAdminsTwiceTest = if (not(ROOT_WAITS)) init else
+  run wAdminsTwiceTest = if (not(ROOT_WAITS) or not(wideW)) init else
     init
       .then(sign(PHONE, "device", DEVICE, "", 0, false, false, 1))
       .then(sign(PHONE, "copies", "", "", 0, false, false, 1))
@@ -5439,7 +5453,7 @@ module records_v3 {
     if (c == 0) Set() else db.get(c).keep
   }
   def keepsRemovalOfD(k: Key): bool = lastCpKeep(k).exists(i => db.get(i).kind == "revoke" and tgt(db.get(i)).contains(DEVICE))
-  run wChangeRootTest = if (not(ROOT_WAITS)) init else
+  run wChangeRootTest = if (not(ROOT_WAITS) or not(wideW)) init else
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
       .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
@@ -5456,9 +5470,99 @@ module records_v3 {
       .then(signAs("NA", "checkpoint", "", 0))
       .then(syncRound).then(syncRound).then(compactAt("m")).then(syncRound)
       .expect(dOut)
+  // W at the scaled rooms (no widening; run it on decided + ROOT_WAITS): R removes D, A and C
+  // ack, W lags. The checkpoint that keeps the removal does not fit R's room, so the honest
+  // root cannot sign it; it takes W back (9) and its checkpoint (10) settles and fits.
+  run wScaledTakeBackTest = if (not(ROOT_WAITS) or ROOT_RATIO or WIDE_ROOT) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(PHONE, "ack", "", "", 0, false, false, 1)).then(sign(COMPUTER, "ack", "", "", 0, false, false, 1))
+      .then(syncRound)
+      .expect(sumUnits(ofKey(recsOf(st.get("r").recs, db), ROOT)) + CP_UNITS > ROOTC)
+      .then(sign(ROOT, "device", "dW", "", 0, false, false, 1)).then(syncRound)
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(db.get(9).kind == "checkpoint" and not(db.get(9).keep.contains(5)))
+      .then(syncRound).then(syncRound).then(compactAt("m")).then(syncRound)
+      .expect(dOut)
+  // An admin always fits one more ack at the scaled rooms: three acks of A (ADMINC 2), the
+  // root's checkpoints between them leave out the superseded one.
+  run wAckFitsTest = if (not(ROOT_WAITS)) init else
+    init
+      .then(sign(PHONE, "ack", "", "", 0, false, false, 1)).then(syncRound)
+      .then(signAs(ROOT, "checkpoint", "", 0)).then(syncRound)
+      .then(sign(PHONE, "ack", "", "", 0, false, false, 1)).then(syncRound)
+      .then(signAs(ROOT, "checkpoint", "", 0)).then(syncRound).then(compactAt("a")).then(syncRound)
+      .expect(not(db.get(7).keep.contains(4)))
+      .then(sign(PHONE, "ack", "", "", 0, false, false, 1)).then(syncRound)
+      .then(signAs(ROOT, "checkpoint", "", 0)).then(syncRound).then(compactAt("a")).then(syncRound)
+      .then(sign(PHONE, "ack", "", "", 0, false, false, 1)).then(syncRound)
+      .expect(promises)
+  // A deviant root grants admin again to W after taking it back: W's record 4, cut off by the
+  // take-back, counts again once offered (a stated limit; the honest writer refuses it).
+  run wRegrantLimitTest = if (not(ROOT_WAITS) or not(wideW)) init else
+    init
+      .then(sign(WATCH, "copies", "", "", 0, false, false, 1)).then(syncRound)
+      .then(sign(ROOT, "device", "dW", "", 0, false, false, 1)).then(syncRound)
+      .expect(MEMBERS.forall(m => not(views.get(m).counting.contains(4))))
+      // (The honest writer's guard refuses the re-grant on R's set.)
+      .expect(regrant(recsOf(st.get("r").recs, db), WATCH))
+      .then(signFullX(ROOT, "admin", WATCH, "deviant", 0, false, false, 1, false, Set(), false)).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).admins.keys().contains(WATCH)))
+      // (The sets dropped 4 at the take-back; anyone who kept it offers it again.)
+      .then(giveAll(MEMBERS, [4])).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).counting.contains(4)))
+  // A root twin around the settle: 10, R's checkpoint, settles the removal after all acks; 11,
+  // a copies record at 10's seq, does not. A member that gets both, in either order, halts, and
+  // the two orders give one state; D counts nowhere.
+  run wTwinSettleTest = if (not(ROOT_WAITS) or not(wideW)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(acksAll).then(syncRound)
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(not(db.get(10).keep.contains(5)))
+      .then(signFull(ROOT, "copies", "", "", 0, false, true, 1, true, Set()))
+      .expect(db.get(11).seq == db.get(10).seq)
+      .then(giveAll(Set("m"), [9, 10])).then(giveAll(Set("c"), [9, 11]))
+      .then(giveAll(Set("m"), [11])).then(giveAll(Set("c"), [10]))
+      .expect(views.get("m").stop and views.get("c").stop and views.get("m").devices == views.get("c").devices
+        and not(views.get("m").devices.contains(DEVICE)))
+      .then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => not(views.get(m).devices.contains(DEVICE))) and promises)
+  // A change of root while a removal waits: W never acked R's removal 5; the change to NA
+  // writes NA's first checkpoint, which keeps the re-issued removal; D stays out.
+  run wChangeWaitingTest = if (not(ROOT_WAITS) or not(wideW)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(PHONE, "ack", "", "", 0, false, false, 1)).then(sign(COMPUTER, "ack", "", "", 0, false, false, 1))
+      .then(syncRound)
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).path == [ROOT, "NA"]) and keepsRemovalOfD("NA") and dOut)
+      .then(sign(WATCH, "ack", "", "", 0, false, false, 1)).then(syncRound).then(syncRound)
+      .expect(dOut)
+  // An admin named after the removal is live at the settle and must ack too: R names X (8)
+  // after the acks; the checkpoint keeps the removal until X acks.
+  run wNamedAfterTest = if (not(ROOT_WAITS) or not(wideW)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(acksAll).then(syncRound)
+      .then(sign(ROOT, "admin", "X", "phone", 0, false, false, 1)).then(syncRound)
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(db.get(10).keep.contains(5))
+      .then(syncRound)
+      .then(sign("X", "ack", "", "", 0, false, false, 1)).then(syncRound)
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(not(db.get(13).keep.contains(5)))
+      .then(syncRound).then(syncRound).then(compactAt("m")).then(syncRound)
+      .expect(dOut)
   // A lagging admin: W never acks. R checkpoints first (8 keeps the removal), takes W back
   // (9, a root device record of W's device), and its next checkpoint settles the removal.
-  run wLagTakeBackTest = if (not(ROOT_WAITS)) init else
+  run wLagTakeBackTest = if (not(ROOT_WAITS) or not(wideW)) init else
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
       .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
@@ -5474,7 +5578,7 @@ module records_v3 {
       .expect(dOut and MEMBERS.forall(m => not(views.get(m).admins.keys().contains(WATCH))))
   // An admin removed between the acks and the settle: R removes W (9) after the acks; W is
   // not live, the others acked, and the checkpoint settles.
-  run wAdminRemovedTest = if (not(ROOT_WAITS)) init else
+  run wAdminRemovedTest = if (not(ROOT_WAITS) or not(wideW)) init else
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
       .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
@@ -5491,7 +5595,7 @@ module records_v3 {
   // A record in flight: A admits D (6) holding nothing of R's removal, then gets 4 and 5 and
   // acks (7). The root gets only 7: it does not count it without 6 below it on A's line, so its
   // checkpoint keeps the removal; 6 then arrives and D stays out; after it the root settles.
-  run wInFlightTest = if (not(ROOT_WAITS)) init else
+  run wInFlightTest = if (not(ROOT_WAITS) or not(wideW)) init else
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
       .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1))
