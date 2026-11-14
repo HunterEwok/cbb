@@ -1117,11 +1117,10 @@ pub(crate) fn rooms<'r>(
     path: &[KeyHash],
     cuts: &BTreeMap<KeyHash, Cut>,
     recs: impl Iterator<Item = (&'r Record, Role)> + Clone,
-) -> (BTreeSet<RecordId>, super::keep::Cut, BTreeSet<KeyHash>) {
+) -> (BTreeSet<RecordId>, BTreeSet<KeyHash>) {
     let (_, back, _) = not_live(path, cuts, recs.clone());
     takes_back_first(items, &back);
-    let none = super::keep::Cut::default();
-    let (roots, _) = super::keep::keep_tiers(items, &ceiling, &none, pre, &BTreeSet::new());
+    let roots = super::keep::keep_tiers(items, &ceiling, pre, &BTreeSet::new());
     let judged: BTreeSet<RecordId> = items.iter().map(|it| it.id).collect();
     let (mut second, _, live) = not_live(
         path,
@@ -1139,8 +1138,8 @@ pub(crate) fn rooms<'r>(
             .filter(|k| !root(k) && !live.contains(k) && ceiling(k).is_some())
             .collect::<Vec<_>>(),
     );
-    let (kept, cut) = super::keep::keep_tiers(items, &ceiling, &none, pre, &second);
-    (kept, cut, second)
+    let kept = super::keep::keep_tiers(items, &ceiling, pre, &second);
+    (kept, second)
 }
 
 /// The admin keys that are no longer admins, which have no room

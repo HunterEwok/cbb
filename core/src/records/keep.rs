@@ -186,88 +186,16 @@ pub fn reserve() -> u64 {
     CUT_ROOTS_RESERVE as u64
 }
 
-/// What a set that drops records as they come remembers of them.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Cut {
-    level: u64,
-    /// For each key, the first record of its order it dropped and the
-    /// units of the records dropped from there: nothing after it is kept,
-    /// and the units still count in the key's demand.
-    marks: BTreeMap<KeyHash, (Pos, u64)>,
-}
-
-/// The highest level: past it no ceiling binds.
-fn top() -> u64 {
-    ceiling(true).max(reserve())
-}
-
-impl Default for Cut {
-    fn default() -> Cut {
-        Cut { level: top(), marks: BTreeMap::new() }
-    }
-}
-
-impl Cut {
-    /// Reports whether the set dropped nothing yet.
-    pub fn is_empty(&self) -> bool {
-        self.marks.is_empty()
-    }
-
-    /// The level the shares stand at: past every ceiling, as caps are
-    /// fixed (`keep_tiers`).
-    pub fn level(&self) -> u64 {
-        self.level.min(top())
-    }
-
-    /// The units key dropped, when it dropped any.
-    pub fn dropped(&self, key: &KeyHash) -> Option<u64> {
-        self.marks.get(key).map(|(_, u)| *u)
-    }
-
-    /// The keys that dropped records, with their units.
-    pub fn dropped_all(&self) -> impl Iterator<Item = (&KeyHash, u64)> {
-        self.marks.iter().map(|(k, (_, u))| (k, *u))
-    }
-
-    /// Reports whether a record comes at or after the first record its key
-    /// dropped: it is not kept.
-    pub fn past(&self, it: &Item) -> bool {
-        self.marks.get(&it.signer).is_some_and(|(m, _)| it.pos() >= *m)
-    }
-}
-
 /// The IDs of the records a set keeps. ceiling_of gives a key's ceiling
 /// when it has room of its own, None for a key that keeps nothing.
 pub fn keep(items: &[Item], ceiling_of: impl Fn(&KeyHash) -> Option<u64>) -> BTreeSet<RecordId> {
-    keep_after(items, ceiling_of, &Cut::default()).0
+    keep_tiers(items, ceiling_of, &BTreeMap::new(), &BTreeSet::new())
 }
 
-/// keep for a set that already dropped records: cut is what it remembers
-/// of them; the new cut comes back.
-pub fn keep_after(
-    items: &[Item],
-    ceiling_of: impl Fn(&KeyHash) -> Option<u64>,
-    cut: &Cut,
-) -> (BTreeSet<RecordId>, Cut) {
-    keep_with(items, ceiling_of, cut, &BTreeMap::new())
-}
-
-/// keep_after where each key already holds `pre` units before the rooms
-/// are judged (each root's newest checkpoint, kept first): they take
-/// their part of the set's room and of their key's ceiling, and a key's
-/// level counts them, so every other key keeps its fair share of what is
-/// left.
-pub fn keep_with(
-    items: &[Item],
-    ceiling_of: impl Fn(&KeyHash) -> Option<u64>,
-    cut: &Cut,
-    pre: &BTreeMap<KeyHash, u64>,
-) -> (BTreeSet<RecordId>, Cut) {
-    keep_tiers(items, ceiling_of, cut, pre, &BTreeSet::new())
-}
-
-/// keep_with with each key within a cap fixed by the roster alone, never
-/// by what other keys hold: the roots' rooms, the cut roots' reserve and
+/// The IDs of the records a set keeps, each key within a cap fixed by the
+/// roster alone, never by what other keys hold, where each key already
+/// holds `pre` units before the rooms are judged (each root's newest
+/// checkpoint, kept first): the roots' rooms, the cut roots' reserve and
 /// each live admin key at its ceiling, which add up to the set's room;
 /// the keys of `second` (admin keys that are no longer admins or not
 /// among the live ones, `eval::rooms`) have no room. Each key keeps the
@@ -279,10 +207,9 @@ pub fn keep_with(
 pub fn keep_tiers(
     items: &[Item],
     ceiling_of: impl Fn(&KeyHash) -> Option<u64>,
-    _cut: &Cut,
     pre: &BTreeMap<KeyHash, u64>,
     second: &BTreeSet<KeyHash>,
-) -> (BTreeSet<RecordId>, Cut) {
+) -> BTreeSet<RecordId> {
     let pre_of = |k: &KeyHash| pre.get(k).copied().unwrap_or(0);
     let mut by_key: BTreeMap<KeyHash, Vec<&Item>> = BTreeMap::new();
     for it in items {
@@ -303,7 +230,7 @@ pub fn keep_tiers(
             kept.insert(it.id);
         }
     }
-    (kept, Cut { level: top(), marks: BTreeMap::new() })
+    kept
 }
 
 #[cfg(test)]
@@ -411,8 +338,7 @@ mod tests {
         items.push(old);
         let kept = keep(&items, ceil);
         assert!(kept.contains(&cp.id) && kept.contains(&old.id));
-        let (_, cut) = keep_after(&items[..300], ceil, &Cut::default());
-        let (kept, _) = keep_after(&[cp], ceil, &cut);
+        let kept = keep(&[cp], ceil);
         assert!(kept.contains(&cp.id));
     }
 
@@ -442,17 +368,16 @@ mod tests {
 
     /// What sync brings: a peer offers again every record the set dropped
     /// without remembering it, until nothing changes.
-    fn synced(mut held: Vec<Item>, mut cut: Cut, all: &[Item]) -> Vec<Item> {
+    fn synced(mut held: Vec<Item>, all: &[Item]) -> Vec<Item> {
         loop {
             let ids: BTreeSet<RecordId> = held.iter().map(|it| it.id).collect();
-            let more: Vec<Item> = all.iter().filter(|it| !ids.contains(&it.id) && !cut.past(it)).copied().collect();
+            let more: Vec<Item> = all.iter().filter(|it| !ids.contains(&it.id)).copied().collect();
             let before = ids.len();
             held.extend(more);
-            let (k, c) = keep_after(&held, ceil, &cut);
+            let k = keep(&held, ceil);
             held.retain(|it| k.contains(&it.id));
             held.sort_by_key(|it| it.id);
             held.dedup_by_key(|it| it.id);
-            cut = c;
             if held.len() == before {
                 return held;
             }
@@ -463,8 +388,8 @@ mod tests {
         #![proptest_config(ProptestConfig { cases: 128, failure_persistence: None, ..ProptestConfig::default() })]
 
         /// Keeping in two steps, or one record at a time, dropping what is
-        /// not kept and remembering the cut, keeps what one step keeps: so
-        /// the order records come in does not matter.
+        /// not kept, then offered again what was dropped, keeps what one
+        /// step keeps.
         #[test]
         fn any_order_keeps_the_same(a in arb_items(), b in arb_items()) {
             let all: Vec<Item> = a.iter().chain(b.iter()).copied().collect();
@@ -477,23 +402,22 @@ mod tests {
                 .values()
                 .sum();
             prop_assert!(units <= ROOM);
-            let (first, cut) = keep_after(&a, ceil, &Cut::default());
+            let first = keep(&a, ceil);
             let mut again: Vec<Item> = a.iter().filter(|it| first.contains(&it.id)).copied().collect();
             again.extend(b.iter().copied());
-            let (k, cut) = keep_after(&again, ceil, &cut);
+            let k = keep(&again, ceil);
             again.retain(|it| k.contains(&it.id));
-            let ids: BTreeSet<RecordId> = synced(again, cut, &all).iter().map(|it| it.id).collect();
+            let ids: BTreeSet<RecordId> = synced(again, &all).iter().map(|it| it.id).collect();
             prop_assert_eq!(&ids, &want);
             for order in 0..2 {
-                let (mut held, mut cut) = (Vec::<Item>::new(), Cut::default());
+                let mut held = Vec::<Item>::new();
                 let seq: Vec<Item> = if order == 0 { all.iter().rev().copied().collect() } else { all.clone() };
                 for it in seq {
                     held.push(it);
-                    let (k, c) = keep_after(&held, ceil, &cut);
+                    let k = keep(&held, ceil);
                     held.retain(|it| k.contains(&it.id));
-                    cut = c;
                 }
-                let held = synced(held, cut, &all);
+                let held = synced(held, &all);
                 let ids: BTreeSet<RecordId> = held.iter().map(|it| it.id).collect();
                 prop_assert_eq!(&ids, &want);
             }

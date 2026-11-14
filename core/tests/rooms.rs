@@ -28,7 +28,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use cbb_core::records::keep::{self, Cut, Item};
+use cbb_core::records::keep::{self, Item};
 use cbb_core::records::{KeyHash, RecordId};
 use proptest::prelude::*;
 
@@ -74,7 +74,7 @@ fn f(s: &Set, caps: &BTreeMap<u8, u64>, pre: &BTreeMap<u8, u64>) -> Set {
     let mut items: Vec<Item> = s.iter().map(R::item).collect();
     keep::newest_only(&mut items, &[]);
     let pre: BTreeMap<KeyHash, u64> = pre.iter().map(|(k, u)| (KeyHash([*k; 32]), *u)).collect();
-    let (kept, _) = keep::keep_with(&items, |k| caps.get(&k.0[0]).copied(), &Cut::default(), &pre);
+    let kept = keep::keep_tiers(&items, |k| caps.get(&k.0[0]).copied(), &pre, &BTreeSet::new());
     s.iter().filter(|r| kept.contains(&r.id())).copied().collect()
 }
 

@@ -23,8 +23,6 @@ struct Judged {
     drop: Vec<RecordId>,
     /// The units kept first, by key.
     pre: BTreeMap<KeyHash, u64>,
-    /// The levels over what is held with it.
-    cut: keep::Cut,
     /// The keys with no room (`eval::rooms`).
     second: BTreeSet<KeyHash>,
     /// What the checkpoints above the counting one keep.
@@ -176,8 +174,6 @@ pub struct RecordSet {
     keys: Keys,
     /// Each signer's units, to know when one is past its ceiling.
     units: BTreeMap<KeyHash, u64>,
-    /// What the set remembers of the records it dropped.
-    cut: keep::Cut,
     /// The roots after the first that the recovery chain put on the path:
     /// they have a root's room.
     promoted: BTreeSet<KeyHash>,
@@ -370,7 +366,6 @@ impl RecordSet {
             group,
             keys,
             units: BTreeMap::new(),
-            cut: keep::Cut::default(),
             promoted: BTreeSet::new(),
             path: alloc::vec![root_hash],
             second: BTreeSet::new(),
@@ -835,7 +830,7 @@ impl RecordSet {
         // rooms after it is stored too (`eval::not_live`).
         let tiers = self.moves_tiers(&r, role);
         if !twin && !first && !wanted && !item.older && !tiers && self.beyond(&item) && !waits(self) {
-            // Past its key's last record, over its key's share: the rooms
+            // Past its key's last record, over its key's cap: the rooms
             // would not keep it.
             return Ok(Added::NoRoom);
         }
@@ -847,8 +842,7 @@ impl RecordSet {
         self.store(r, role, held);
         if twin && role == Role::Root {
             // The pair leaves the rooms: what they turned away before is
-            // judged again from no cut, and taken when offered again.
-            self.cut = keep::Cut::default();
+            // taken when offered again.
             self.cut();
         }
         // A checkpoint that may count now, or a record it names, compacts
@@ -1364,16 +1358,14 @@ impl RecordSet {
             // dropped record named is then no key of the set.
             self.drop_off_cuts();
             self.relearn();
-            self.cut = keep::Cut::default();
             self.cut();
         }
     }
 
     /// Drops the records the set does not keep (`keep`): each key within
-    /// its ceiling, the set's ceilings shared fairly between keys. What is
-    /// kept depends on the records alone, and dropping what is not kept
-    /// changes nothing, so the set is the same whatever order the records
-    /// came in. The recovery key's records are outside the rooms.
+    /// its cap, which the roster fixes. What is kept depends on the records
+    /// held alone, and dropping what is not kept changes nothing. The
+    /// recovery key's records are outside the rooms.
     fn cut(&mut self) {
         if let Some(due) = self.batch.as_mut() {
             *due = true;
@@ -1390,28 +1382,23 @@ impl RecordSet {
             .drop
             .iter()
             .any(|id| self.held(id).is_some_and(|r| matches!(&r.body().kind, Kind::Device(d) if d.admin.is_some())));
-        let dropped = !j.drop.is_empty();
         for id in j.drop {
             self.drop_or_aside(&id, &j.wanted);
         }
         if names_key {
             self.relearn();
         }
-        // The caps hang on the roster alone, which the roots' rooms keep
-        // whatever goes of the others: they stand after the drop.
-        let _ = dropped;
-        self.cut = j.cut;
         self.pre = j.pre;
         self.trim_aside();
     }
 
     /// The rooms judged over what the set holds now, without changing it
-    /// (`cut` applies it): what goes, the levels, and what they read.
+    /// (`cut` applies it): what goes, and what the caps read.
     fn judge(&self) -> Judged {
         let mut proof = self.proof();
         // Each root's checkpoint that may count is kept first with what it
         // names: the rooms are judged in the set it prunes, and it takes
-        // its part of them before the others (`keep::keep_with`). What the
+        // its part of them before the others (`keep::keep_tiers`). What the
         // rooms turn away that a checkpoint of the current root above the
         // counting one keeps goes to the place aside.
         let (first, above) = self.line();
@@ -1442,7 +1429,7 @@ impl RecordSet {
         // roots' rooms keep (`eval::rooms`).
         let ceilings: BTreeMap<KeyHash, Option<u64>> =
             items.iter().map(|it| (it.signer, self.ceiling(&it.signer))).collect();
-        let (kept, cut, second) = eval::rooms(
+        let (kept, second) = eval::rooms(
             &mut items,
             |k| ceilings.get(k).copied().flatten(),
             &pre,
@@ -1464,7 +1451,7 @@ impl RecordSet {
             })
             .map(|e| e.record.id())
             .collect();
-        Judged { drop, pre, cut, second, wanted }
+        Judged { drop, pre, second, wanted }
     }
 
     /// Checks, in debug builds, that what the set holds is what the rooms
@@ -1960,13 +1947,6 @@ impl RecordSet {
         }
     }
 
-    /// Reports whether a record of signer just stored may change what the
-    /// set keeps. Before the set dropped anything, only a key past its
-    /// ceiling or a set past its room does. After, the units it dropped
-    /// still count in the shares, so the level can bind while the stored
-    /// units fit: the record is kept as it is only when its key dropped
-    /// nothing, stays within the level, and the shares, dropped units
-    /// included, still fit.
     /// Whether a root's record may change who is an admin: a removal, or
     /// a device record whose admin key differs from another root record's
     /// of the same device (`eval::not_live`).
@@ -1991,10 +1971,8 @@ impl RecordSet {
 
     /// Whether the rooms would turn item away, told before its signature
     /// is checked: it comes after every record its key holds, and with it
-    /// the key would pass its share at the level of what is held. More
-    /// records only lower the levels, so the rooms over what is held and
-    /// item would not keep it either. The level is known only right after
-    /// the rooms were judged (`cut`), and none is after a record goes.
+    /// the key would pass its cap, which the roster fixes, so the rooms
+    /// over what is held and item would not keep it either.
     fn beyond(&self, item: &keep::Item) -> bool {
         // A batch is judged once, when it is in: nothing before.
         if item.checkpoint || item.early || self.batch.is_some() {
@@ -2049,7 +2027,7 @@ impl RecordSet {
     fn cap(&self, key: &KeyHash) -> Option<u64> {
         let k = self.room_key(key);
         let ceiling = self.ceiling(&k)?;
-        Some(if self.second.contains(&k) { 0 } else { ceiling.min(self.cut.level()) })
+        Some(if self.second.contains(&k) { 0 } else { ceiling })
     }
 
     /// A key's ceiling: a root's on the path, an admin key's, or None for
@@ -2063,9 +2041,6 @@ impl RecordSet {
     }
 
     fn remove(&mut self, id: &RecordId) {
-        // The levels were those of what was held: with less held they may
-        // stand higher, so none is known until the rooms are judged again.
-        self.cut = keep::Cut::default();
         if let Some(e) = self.records.remove(id) {
             self.bytes = self.bytes.saturating_sub(e.record.size());
             if e.role != Role::Recovery
@@ -3654,10 +3629,9 @@ impl RecordSet {
             self.mark(id);
             self.drop_or_aside(id, &wanted);
         }
-        // The checkpoint starts the count again; a key whose naming record
-        // it left out is not known any more, nor kept.
+        // A key whose naming record the checkpoint left out is not known
+        // any more, nor kept.
         if !drop.is_empty() {
-            self.cut = keep::Cut::default();
             self.relearn();
         }
         drop.len()
