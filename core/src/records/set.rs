@@ -3086,6 +3086,24 @@ impl RecordSet {
                             .filter(|e| e.record.body().signer == h && e.record.body().seq <= top)
                             .map(|e| e.record.id()),
                     );
+                    // A record of the group a later checkpoint settled may
+                    // be gone: the checkpoints that may settle it go too,
+                    // with what they keep (`eval::first_gap`), those of the
+                    // new root above the first and of the roots after it.
+                    let settlers: BTreeSet<KeyHash> =
+                        core::iter::once(h).chain(state.roots.iter().copied().skip_while(|k| *k != h)).collect();
+                    for e in self.records.values() {
+                        let b = e.record.body();
+                        if !settlers.contains(&b.signer) || (b.signer == h && b.seq <= top) {
+                            continue;
+                        }
+                        if let Kind::Checkpoint { heads, keep } = &b.kind
+                            && heads.iter().any(|hd| hd.key == h)
+                        {
+                            ids.insert(e.record.id());
+                            ids.extend(keep.iter().filter(|k| self.held(k).is_some()).copied());
+                        }
+                    }
                 }
             }
             let admins: BTreeSet<KeyHash> =

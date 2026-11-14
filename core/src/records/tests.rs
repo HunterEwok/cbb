@@ -2059,6 +2059,89 @@ mod differential {
         m
     }
 
+    /// A change waits for a record a later checkpoint keeps, and its
+    /// group's own first record comes instead and completes it by the
+    /// walk: the set takes the change at once, and cuts what it cuts.
+    #[test]
+    fn a_change_completed_by_another_record_than_the_one_it_asked_for() {
+        let steps = [
+            (2, 2, 56),
+            (4, 0, 64),
+            (2, 3, 86),
+            (3, 0, 188),
+            (0, 5, 6),
+            (4, 2, 0),
+            (2, 1, 10),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 2),
+            (0, 5, 159),
+            (0, 0, 17),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 6),
+            (0, 0, 9),
+            (0, 0, 0),
+            (0, 5, 38),
+            (0, 2, 0),
+            (0, 0, 124),
+            (2, 0, 0),
+            (0, 1, 17),
+            (0, 1, 5),
+            (0, 0, 2),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 122),
+            (4, 4, 145),
+            (0, 1, 79),
+            (4, 3, 139),
+            (0, 6, 54),
+            (2, 4, 85),
+            (4, 8, 27),
+            (0, 8, 183),
+        ];
+        let (g, recs) = build(&steps);
+        agree(&g, &recs, 3, 6_206_621_366_530_526_364);
+    }
+
+    /// A later checkpoint of the new root leaves a record of its line
+    /// below the first checkpoint out but keeps one under it: restored in
+    /// an order where the kept one comes last, the change waits for it
+    /// and never applies before, so that no record taken later takes the
+    /// change back.
+    #[test]
+    fn a_change_waits_for_what_a_settling_checkpoint_keeps() {
+        let steps = [
+            (0, 1, 6),
+            (3, 4, 134),
+            (4, 4, 27),
+            (0, 2, 36),
+            (2, 2, 0),
+            (3, 1, 131),
+            (2, 1, 158),
+            (4, 1, 179),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 213),
+            (0, 0, 0),
+            (0, 0, 0),
+            (4, 8, 33),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 157),
+            (0, 5, 7),
+        ];
+        let (g, recs) = build(&steps);
+        let m = agree(&g, &recs, 1, 4_683_705_582_638_160_295);
+        assert_eq!(m.state().changes.iter().filter(|c| c.state == ChangeState::Effective).count(), 1);
+    }
+
     /// A sequence once found by the property below: the set agrees with
     /// evaluate in both orders.
     /// Two changes of root wait, each for a record of its group; the
