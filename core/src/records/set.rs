@@ -631,6 +631,8 @@ impl RecordSet {
                     b.signer == signer && b.seq == r.body().seq && e.record.id() != id
                 })
         };
+        // Compaction memory decides here only whether the record is stored,
+        // never the state: what it prunes, the evaluation leaves out too.
         let pruned =
             |set: &RecordSet| set.checkpoints.iter().any(|(heads, anchors)| eval::pruned_by(&r, role, heads, anchors));
         // What the newest list names, and a head's first checkpoint, are
@@ -772,6 +774,7 @@ impl RecordSet {
         // checkpoints above its fork out of the count: the set settles
         // again. It keeps them: what any of them left out stays out of the
         // change of root (`change_list`, `write_change`).
+        // Compaction memory here only triggers a compaction (`settle`).
         let unsettles = role == Role::Root && twin && !self.checkpoints.is_empty();
         if self.trusted.is_empty() && self.records.contains_key(&id) && (unsettles || !early && self.may_count(&id)) {
             // A counting checkpoint compacts at once: what it leaves out
@@ -833,7 +836,8 @@ impl RecordSet {
         }
     }
 
-    /// The highest head the counting checkpoints name for signer.
+    /// The highest head the counting checkpoints name for signer. Only the
+    /// caller reads it (`Added::Settled`), never the state.
     fn settled_head(&self, signer: &KeyHash) -> u64 {
         self.checkpoints
             .iter()
@@ -1101,7 +1105,7 @@ impl RecordSet {
             &self.root_hash,
             self.records.values().map(|e| (&e.record, e.role)),
             &lists,
-            |id, root, from, settlers| eval::first_gap(&held, &self.checkpoints, settlers, id, root, from),
+            |id, root, from, settle| eval::first_gap(&held, &self.checkpoints, settle, id, root, from),
         );
         let promoted = chain.promoted();
         let mut cuts = chain.cuts();
@@ -1160,6 +1164,27 @@ impl RecordSet {
             .filter(|r| self.early_roots.contains_key(&r.body().signer))
             .map(|r| (r.id(), r))
             .collect();
+        // A key a waiting record now names as root (an admin's, say) has
+        // its records kept aside, as they are when they come after that
+        // record: where they stay does not depend on the order.
+        let aside: Vec<RecordId> = self
+            .records
+            .values()
+            .filter(|e| {
+                let k = e.record.body().signer;
+                e.role != Role::Recovery && self.early_roots.contains_key(&k) && !self.promoted.contains(&k)
+            })
+            .map(|e| e.record.id())
+            .collect();
+        for id in &aside {
+            if let Some(r) = self.held(id).cloned() {
+                self.remove(id);
+                self.early.insert(*id, r);
+            }
+        }
+        if !aside.is_empty() {
+            self.relearn();
+        }
         self.trim_early();
         if !now.is_empty() {
             self.trusted = now.iter().map(Record::id).collect();
@@ -1265,8 +1290,17 @@ impl RecordSet {
             })
             .map(|e| e.record.id())
             .collect();
+        // A record the rooms turned away may be the only one that named an
+        // admin key: that key's records then have no known signer, as in
+        // an evaluation of what the set keeps, and go too.
+        let names_key = drop
+            .iter()
+            .any(|id| self.held(id).is_some_and(|r| matches!(&r.body().kind, Kind::Device(d) if d.admin.is_some())));
         for id in drop {
             self.drop_or_aside(&id, &wanted);
+        }
+        if names_key {
+            self.relearn();
         }
         self.trim_aside();
     }
@@ -2824,11 +2858,8 @@ impl RecordSet {
         self.waiting
     }
 
-    /// Whether the record id may make a root's checkpoint the set has not
-    /// compacted by count: it is such a checkpoint, a record it names, or
-    /// a record of its key below it.
     /// Whether a held root's checkpoint that does not count yet names id
-    /// (a head or a kept record).
+    /// (a head or a kept record). It only triggers a compaction.
     fn wanted(&self, id: &RecordId) -> bool {
         self.records.values().any(|e| {
             let Kind::Checkpoint { heads, keep } = &e.record.body().kind else { return false };
@@ -2838,6 +2869,9 @@ impl RecordSet {
         })
     }
 
+    /// Whether the record id may make a root's checkpoint the set has not
+    /// compacted by count: it is such a checkpoint, a record it names, or
+    /// a record of its key below it. It only triggers a compaction.
     fn may_count(&self, id: &RecordId) -> bool {
         let Some(r) = self.held(id) else { return false };
         let (signer, seq) = (r.body().signer, r.body().seq);
