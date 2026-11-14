@@ -1735,6 +1735,83 @@ has a root of the same form, which the computer holds in a file (section 10, "Ad
   once the user confirms it, the next time the app is open. Revocation and the devices list are section 10, and a second admin
   phone is the way back when a phone is lost.
 
+### The recovery sheet (0.6)
+
+Source: `core/src/sheet.rs`, `core/src/records/pq.rs`. The recovery sheet holds a 0.6 group's
+recovery secret on paper, as text a person types and as a QR code, each with its version. The
+secret is 32 random bytes. The recovery key's two halves come from it as `records::pq`
+derives them: K1, an ES256 key, under the label `cbb recovery key es256 v1`, and K2, an
+SLH-DSA-SHA2-128s key, under `cbb recovery key slh-dsa-sha2-128s v1`. The sheet adds no
+derivation of its own.
+
+**The text, version 1.** The text is Crockford's base32 (`0123456789ABCDEFGHJKMNPQRSTVWXYZ`). It
+is read in its canonical form: upper case, `I` and `L` read as `1`, `O` as `0`, and spaces,
+line ends and hyphens dropped. Every check is over that form, and an input longer than
+`sheet::MAX_INPUT` (512) characters is no sheet. A sheet has 56 data characters:
+
+- the version, `1`;
+- the secret, 52 characters, the last 4 bits zero;
+- a whole-sheet check, 3 characters: the first 15 bits of SHA-256(`cbb recovery sheet v1 whole`
+  ‖ 0x00 ‖ the version character ‖ the secret).
+
+It is written as 4 lines of 4 groups of 4, 64 characters. Each line of 16
+characters is 14 data characters and 2 check characters: the first 10
+bits of SHA-256(`cbb recovery sheet v1` ‖ 0x00 ‖ the line number, 1 byte from 1 to 4 ‖ the
+line's 14 data characters). So a reader says which line holds a mistake, and when every line
+check holds but the whole check does not, that the typing has a mistake rather than that the
+sheet is another group's.
+
+A reader gives its verdicts in this order:
+
+1. no sheet: not base32, or characters outside the alphabet at another length;
+2. a sheet of an earlier cbb: 56 characters, or 0.5's QR prefix (0.6 groups are made anew);
+3. needs a newer cbb: a first character other than `1`, and nothing else of the sheet is read;
+4. a character outside the alphabet in a text of 64 characters;
+5. not 4 lines of 16 characters;
+6. which lines fail their check;
+7. padding bits that are not zero;
+8. a mistake in the typing: the whole check fails.
+
+**The QR code, version 1.** The QR code is text in QR's alphanumeric mode: `CBBR`, the version
+character, then the base32 of the secret and the Group ID (77 characters with one zero spare
+bit), 82 characters in all, read in canonical form. Another version character
+means it needs a newer cbb.
+
+**Against the group.** K1 and K2 from the secret must be the group's recovery keys. A QR code
+that names another Group ID is another group's sheet. One that names this group but gives other
+keys is damaged. A text that gives other keys is another group's, since its checks held.
+
+The vectors are in `testdata/format/sheet.json`: sheets with their K1, K2, text and QR code,
+reads, refusals, and checks against a group.
+
+### The recovery key on a YubiKey (0.6)
+
+Source: `core/src/sheet/yubikey.rs`; the card's commands are each device's own
+(`member/src/piv.rs`, the phone kits). A YubiKey 5 holds what the sheet holds: the version
+and the 32-byte secret. They are sealed to a P-256 key that the card made in PIV's retired slot
+0x95, which never leaves the card and does ECDH only after the PIN and a touch. The sealed bytes
+are the value of PIV's data object `5FC121`, which the card shows only after the PIN.
+
+The value is `CBBR` ‖ the version (1 byte, 1) ‖ E (65 bytes, an uncompressed P-256 point) ‖ the
+ciphertext (49 bytes), 119 bytes in all.
+
+- **Sealing**, on the phone, from the sheet or when the group is made. The phone draws a fresh
+  key e with its point E. Z is the x coordinate of e times the card's point. K =
+  HKDF-SHA256(salt E ‖ the card's point, Z, info `cbb recovery yubikey v1`, 32 bytes). The
+  ciphertext is ChaCha20-Poly1305 under K, with a nonce of 12 zero bytes (K seals once), and
+  associated data `cbb recovery yubikey v1` ‖ 0x00 ‖ the version byte ‖ the card's point. It seals
+  the sheet's version character `1` and the secret.
+- **Opening.** The card gives Z for E after the PIN and a touch, and the device does the rest.
+  The secret serves one signing.
+- **Reading.** A value that does not start with `CBBR` is not cbb's, whatever follows: the card
+  holds something else in that place, and a device writes nothing over it. A later version is
+  "this YubiKey needs a newer cbb", and nothing else of it is read. cbb's prefix and version
+  with bytes that do not read, or a point off the curve, is damaged. A value that does not open
+  with the card's key, or opens to a secret whose K1 and K2 are not the group's recovery keys,
+  is another recovery key. A card key that is not a P-256 point is not one cbb uses.
+
+The vectors are in `testdata/format/sheet.json`, `yubikey`.
+
 ## 10. Admin CAs, device records and revocation
 
 The wire side of "Admin phones, the devices list and revocation" in
@@ -4416,7 +4493,7 @@ table, against the registry (`CBB_WRITE_BOUNDS=1` writes the table again).
 | `join::welcome::PARTS_MS` | 1500000 | reader | the widest parts at 0.54 Mbit/s | `welcome/late` |
 | `keystore::AHEAD_MS` | 86400000 | reader | a newest epoch a day ahead |  |
 | `store::HEADER` | 12 | frozen | a store frame's header |  |
-| `sheet::MAX_INPUT` | 512 | reader | a sheet typed with spaces and line ends | `length` |
+| `sheet::MAX_INPUT` | 512 | reader | a sheet typed with spaces and line ends | `not_sheet` |
 <!-- bounds:end -->
 
 ## 20. Security considerations

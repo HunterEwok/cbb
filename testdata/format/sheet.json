@@ -91,6 +91,11 @@
    "reason": "not_sheet"
   },
   {
+   "name": "a valid sheet past 512 characters",
+   "input": "15A8 R7Y9 JZ3E CE09\nAZHG 93C3 XXAX 02GW\nM42X JZ6M VPDX ED7K\nR7QD H8JC 60GD A63D                                                                                                                                                                                                                                                                                                                                                                                                                                                  ",
+   "reason": "not_sheet"
+  },
+  {
    "name": "a sheet of 0.5 (56 characters)",
    "input": "5A8R-7Y9J-Z3EC-EAZH-G93C-3XXA-X02M-42XJ-Z6MV-PDXE-DR7Q-DH8J-C60G-ABCD",
    "reason": "earlier"

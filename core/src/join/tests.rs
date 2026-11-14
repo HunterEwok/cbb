@@ -49,6 +49,12 @@ fn point(k: &K) -> [u8; 65] {
     k.key.public().to_vec().try_into().unwrap()
 }
 
+/// A test exporter named by `name`.
+#[allow(non_snake_case)]
+fn X(name: &str) -> &'static PairExporter {
+    Box::leak(Box::new(PairExporter::for_tests(sha256(name.as_bytes()))))
+}
+
 fn fhash(k: &K) -> format::KeyHash {
     format::Key::new(Alg::Es256, k.key.public()).hash()
 }
@@ -196,10 +202,10 @@ fn the_channel_binds_both_keys() {
 #[test]
 fn an_admin_key_needs_its_proof() {
     let admin = k("phone admin");
-    let exporter = [7u8; 32];
+    let exporter = PairExporter::for_tests([7u8; 32]);
     let pop = sign_admin_pop(&admin, &exporter).unwrap();
     assert!(verify_admin_pop(&admin.key, &exporter, &pop));
-    assert!(!verify_admin_pop(&admin.key, &[8u8; 32], &pop), "another session's proof");
+    assert!(!verify_admin_pop(&admin.key, &PairExporter::for_tests([8u8; 32]), &pop), "another session's proof");
     assert!(!verify_admin_pop(&k("other").key, &exporter, &pop), "another key's proof");
 
     // In the Info, a key and its proof come together, from a phone or an admin member.
@@ -275,7 +281,7 @@ fn the_short_code_opens_its_commitment() {
         attempt: None,
         next_attempt: 0,
     };
-    let e = [9u8; 32];
+    let e = PairExporter::for_tests([9u8; 32]);
     // One attempt to the end: both ends show one code, and the Welcome
     // takes back the count.
     let n = open.begin(Network::Home, 100).unwrap();
@@ -379,7 +385,7 @@ fn a_late_message_of_an_earlier_attempt_changes_nothing() {
         attempt: None,
         next_attempt: 0,
     };
-    let e = [9u8; 32];
+    let e = PairExporter::for_tests([9u8; 32]);
     let first = open.begin(Network::Home, 0).unwrap();
     let (mut j1, joiner1, c1) = joiner_session();
     let nm1 = open.reply(first, c1, 10).unwrap();
@@ -404,7 +410,7 @@ fn a_late_message_of_an_earlier_attempt_changes_nothing() {
 #[test]
 fn the_joiner_counts_its_sessions() {
     let mut j = invitation::JoinerAttempts::default();
-    let e = [9u8; 32];
+    let e = PairExporter::for_tests([9u8; 32]);
     // A session shows its code; until the person answers, no other starts.
     let inv = invitation();
     let (code, _) = j.start().unwrap();
@@ -438,7 +444,7 @@ fn the_code_takes_the_invitation_id() {
         attempt: None,
         next_attempt: 0,
     };
-    let e = [9u8; 32];
+    let e = PairExporter::for_tests([9u8; 32]);
     let n = open.begin(Network::Home, 100).unwrap();
     let (mut j, joiner, c) = joiner_session();
     let nm = open.reply(n, c, 110).unwrap();
@@ -449,8 +455,8 @@ fn the_code_takes_the_invitation_id() {
     let ours = open.short_code(n, &e, &nj, &point(&k("tv")), 120).map(|(c, _)| c).unwrap();
     assert_ne!(theirs, ours);
     // The same session's code with the member's ID, at home without one.
-    assert_eq!(invitation::short_code(&e, &nj, &nm, &open.invitation.id), ours);
-    assert_ne!(invitation::short_code(&e, &nj, &nm, &NO_INVITATION), ours);
+    assert_eq!(invitation::short_code(e.bytes(), &nj, &nm, &open.invitation.id), ours);
+    assert_ne!(invitation::short_code(e.bytes(), &nj, &nm, &NO_INVITATION), ours);
 }
 
 /// No invitation has the ID of a pairing at home without one: a new one
@@ -2072,40 +2078,40 @@ fn only_the_leafs_own_matched_session_makes_a_binding() {
     let new_root = k("new root");
     let plain = Kept { guarded: true, ..Kept::default() };
     let waiting = plain.changed(new_root.hash, 1);
-    let session = |j: &mut invitation::JoinerAttempts, exporter: &[u8], local| {
+    let session = |j: &mut invitation::JoinerAttempts, exporter: &PairExporter, local| {
         let (code, _) = j.start().unwrap();
         j.open(code, exporter, &[1; 32], None, local, &point(&k("laptop"))).unwrap().2
     };
     let mut j = invitation::JoinerAttempts::default();
     // "They do not match": nothing, and the session is over.
-    let shown = session(&mut j, b"session a", lock);
+    let shown = session(&mut j, X("session a"), lock);
     assert!(j.answered(shown, false).is_none());
     // "They match" in session b.
-    let shown = session(&mut j, b"session b", lock);
+    let shown = session(&mut j, X("session b"), lock);
     let matched = j.answered(shown, true).unwrap();
-    assert!(matched.binding(&Kept::default(), None, b"session b").is_none(), "nothing to bind");
+    assert!(matched.binding(&Kept::default(), None, X("session b")).is_none(), "nothing to bind");
     let mut j = invitation::JoinerAttempts::default();
-    let answer = |j: &mut invitation::JoinerAttempts, exporter: &[u8], local| {
+    let answer = |j: &mut invitation::JoinerAttempts, exporter: &PairExporter, local| {
         let shown = session(j, exporter, local);
         j.answered(shown, true).unwrap()
     };
-    let b = answer(&mut j, b"session c", lock).binding(&waiting, None, b"session c").unwrap();
+    let b = answer(&mut j, X("session c"), lock).binding(&waiting, None, X("session c")).unwrap();
     // The head stored, the kept state not: the same binding.
-    let from_head = answer(&mut j, b"session c", lock).binding(&plain, Some((new_root.hash, 1)), b"session c");
+    let from_head = answer(&mut j, X("session c"), lock).binding(&plain, Some((new_root.hash, 1)), X("session c"));
     assert_eq!(from_head, Some(b));
     // An answer of session c offered in session d gives nothing; another
     // leaf's session gives another binding.
     let mut j = invitation::JoinerAttempts::default();
-    assert!(answer(&mut j, b"session c", lock).binding(&waiting, None, b"session d").is_none());
-    let other = answer(&mut j, b"session c", k("other lock").key.device_id()).binding(&waiting, None, b"session c");
-    assert_ne!(other, answer(&mut j, b"session c", lock).binding(&waiting, None, b"session c"));
+    assert!(answer(&mut j, X("session c"), lock).binding(&waiting, None, X("session d")).is_none());
+    let other = answer(&mut j, X("session c"), k("other lock").key.device_id()).binding(&waiting, None, X("session c"));
+    assert_ne!(other, answer(&mut j, X("session c"), lock).binding(&waiting, None, X("session c")));
     // An invitation with the ID of none is no invitation.
     let mut none = invitation();
     none.id = NO_INVITATION;
     let mut j = invitation::JoinerAttempts::default();
     let (code, _) = j.start().unwrap();
     assert_eq!(
-        j.open(code, &[9; 32], &[1; 32], Some(&none), lock, &point(&k("laptop"))).err(),
+        j.open(code, &PairExporter::for_tests([9; 32]), &[1; 32], Some(&none), lock, &point(&k("laptop"))).err(),
         Some(PairError::Refused)
     );
 }
@@ -2122,17 +2128,17 @@ fn at_home_the_joiner_takes_a_welcome_only_after_the_person_matched() {
     let w = admit(&mut g, true, &tv, "tv");
     let group = format::DeviceId(g.gid.0);
     let laptop = point(&k("laptop"));
-    let e = [9u8; 32];
+    let e = PairExporter::for_tests([9u8; 32]);
     let nm = [4u8; 32];
     // A session with the member `member` over exporter `exporter`, whose
     // code the person said matches.
-    let answer = |exporter: &[u8], member: &[u8; 65]| {
+    let answer = |exporter: &PairExporter, member: &[u8; 65]| {
         let mut j = invitation::JoinerAttempts::default();
         let (code, _) = j.start().unwrap();
         let (_, _, shown) = j.open(code, exporter, &nm, None, tv.key.device_id(), member).unwrap();
         j.answered(shown, true).unwrap()
     };
-    let take = |matched, exporter: &[u8], admitter: &[u8; 65]| {
+    let take = |matched, exporter: &PairExporter, admitter: &[u8; 65]| {
         w.check(&group, admitter, &point(&tv), Joining::Ordinary, Way::Home { matched, exporter })
     };
     let mut j = invitation::JoinerAttempts::default();
@@ -2147,7 +2153,10 @@ fn at_home_the_joiner_takes_a_welcome_only_after_the_person_matched() {
     );
     assert!(take(j.answered(shown, true).unwrap(), &e, &laptop).is_ok());
     // The same answer offered in another session takes nothing.
-    assert_eq!(take(answer(&e, &laptop), &[8; 32], &laptop).err(), Some(welcome::Refusal::Unconfirmed));
+    assert_eq!(
+        take(answer(&e, &laptop), &PairExporter::for_tests([8; 32]), &laptop).err(),
+        Some(welcome::Refusal::Unconfirmed)
+    );
     // An answer from session A, with the exporter of A, offered with the
     // admitter of session B takes nothing.
     let phone = point(&k("phone"));
@@ -2296,7 +2305,7 @@ fn session(
     member_pw: super::approve::Password<'_>,
     joiner_secret: &[u8],
     joiner_id: &[u8; 16],
-    exporter: &[u8],
+    exporter: &PairExporter,
 ) -> Result<(super::approve::MemberExchange, Vec<u8>, Vec<u8>), PairError> {
     use crate::third_party::cpace;
     let (member, joiner) = (k("laptop"), k("tv"));
@@ -2305,7 +2314,7 @@ fn session(
         role: cpace::Role::Initiator,
         password: joiner_secret,
         channel_id: &ci,
-        session_id: exporter,
+        session_id: exporter.bytes(),
         ad: b"ada",
     })
     .unwrap();
@@ -2333,7 +2342,7 @@ fn the_member_sends_a_welcome_only_when_approved() {
     let mut g = G::new();
     let tv = k("tv");
     let welcome = admit(&mut g, true, &tv, "tv").encode();
-    let e = [9u8; 32];
+    let e = PairExporter::for_tests([9u8; 32]);
     let opens = |frame: &[u8], isk: &[u8]| welcome::open(&frame[4..], isk).map(<[u8]>::to_vec);
 
     // (a) An invitation's secret: the verified Ta approves.
@@ -2359,7 +2368,7 @@ fn the_member_sends_a_welcome_only_when_approved() {
     let (mut j, joiner) = (invitation::JoinerAttempts::default(), point(&tv));
     let (code, commitment) = j.start().unwrap();
     let (_, nj, _) = j.open(code, &e, &[4; 32], None, tv.key.device_id(), &point(&k("laptop"))).unwrap();
-    let shown = |exporter: &[u8], joiner: &[u8; 65]| {
+    let shown = |exporter: &PairExporter, joiner: &[u8; 65]| {
         invitation::home_code(&commitment, exporter, &nj, &[4; 32], joiner).unwrap().1
     };
     assert!(approve::answered_at_home(shown(&e, &joiner), false).is_none(), "they do not match");
@@ -2370,7 +2379,7 @@ fn the_member_sends_a_welcome_only_when_approved() {
     // An answer of another session, or for another joiner, makes nothing.
     let (mut ex, ta, _) = session(Password::Home, &NO_SECRET, &NO_INVITATION, &e).unwrap();
     ex.confirm(&ta).unwrap();
-    let elsewhere = approve::answered_at_home(shown(&[8; 32], &joiner), true).unwrap();
+    let elsewhere = approve::answered_at_home(shown(&PairExporter::for_tests([8; 32]), &joiner), true).unwrap();
     assert_eq!(welcome::message(ex, elsewhere, &welcome).err(), Some(PairError::Refused));
     let (mut ex, ta, _) = session(Password::Home, &NO_SECRET, &NO_INVITATION, &e).unwrap();
     ex.confirm(&ta).unwrap();
@@ -2379,7 +2388,8 @@ fn the_member_sends_a_welcome_only_when_approved() {
     // An approval of an invitation's session serves no other session.
     let (mut a, ta_a, _) = session(Password::Invitation(&inv), &inv.secret, &inv.id, &e).unwrap();
     let from_a = a.confirm(&ta_a).unwrap().unwrap();
-    let (mut b, ta_b, _) = session(Password::Invitation(&inv), &inv.secret, &inv.id, &[8; 32]).unwrap();
+    let (mut b, ta_b, _) =
+        session(Password::Invitation(&inv), &inv.secret, &inv.id, &PairExporter::for_tests([8; 32])).unwrap();
     b.confirm(&ta_b).unwrap();
     assert_eq!(welcome::message(b, from_a, &welcome).err(), Some(PairError::Refused));
     // The person's answer before the joiner's Ta verified makes nothing.
@@ -2419,7 +2429,7 @@ fn an_open_invitation_approves_only_its_attempts_match() {
         attempt: None,
         next_attempt: 0,
     };
-    let (e, laptop, tv) = ([9u8; 32], point(&k("laptop")), point(&k("tv")));
+    let (e, laptop, tv) = (PairExporter::for_tests([9u8; 32]), point(&k("laptop")), point(&k("tv")));
     let code = |open: &mut Open, at: u64| {
         // The counts are another test's: each attempt here starts afresh.
         open.failures = 0;

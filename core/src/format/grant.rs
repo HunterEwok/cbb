@@ -563,13 +563,13 @@ pub fn read_bound<'a>(
     kept: Option<&Kept>,
     recovery: u64,
     binding: Binding,
-    exporter: &[u8],
+    exporter: &crate::join::PairExporter,
 ) -> Result<Granted<'a>, Rule> {
     let root_hash = Key::new(Alg::Es256, root).hash();
     if binding.root != root_hash
         || binding.leaf != *leaf
         || binding.recovery != recovery
-        || !crate::secret::ct_eq(&binding.session, &session_mark(exporter))
+        || !crate::secret::ct_eq(&binding.session, &session_mark(exporter.bytes()))
     {
         return Err(RULE_REBIND);
     }

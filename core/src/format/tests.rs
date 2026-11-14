@@ -103,6 +103,8 @@ fn verify_signed(e: &Envelope<'_>, public: &[u8], label: &str) -> Result<(), Rul
     }
 }
 
+/// The pairing exporter of the session in the grant tests.
+const SESSION: [u8; 32] = [0x5e; 32];
 #[test]
 fn profile() {
     let p = load("profile.json");
@@ -1036,7 +1038,17 @@ fn a_guarded_leaf_waits_to_be_bound_again_after_a_change_of_root() {
     };
     let bound = |msg: &[u8], by: &crate::testkit::K, kept: Option<&grant::Kept>, recovery, b: grant::Binding| {
         let v = cbor::decode(msg).unwrap();
-        grant::read_bound(&v, by.key.public(), &lock, &group, kept, recovery, b, b"session").map(|got| got.keep(kept))
+        grant::read_bound(
+            &v,
+            by.key.public(),
+            &lock,
+            &group,
+            kept,
+            recovery,
+            b,
+            &crate::join::PairExporter::for_tests(SESSION),
+        )
+        .map(|got| got.keep(kept))
     };
     let kept = read(&grant_msg(&root, 1, 0, true), &root, None, 0).unwrap();
     assert!(kept.guarded && kept.commander(&phone.hash()).is_some());
@@ -1061,18 +1073,18 @@ fn a_guarded_leaf_waits_to_be_bound_again_after_a_change_of_root() {
     let later = waiting.changed(k("third root").hash, 2);
     assert_eq!(later.rebind, Some((k("third root").hash, 2)));
     assert_eq!(later.changed(new_root.hash, 1), later, "an older head changes nothing");
-    let late = grant::Binding::matched(&later, None, lock, grant::session_mark(b"session")).unwrap();
+    let late = grant::Binding::matched(&later, None, lock, grant::session_mark(&SESSION)).unwrap();
     assert!(bound(&grant_msg(&new_root, 1, 1, true), &new_root, Some(&later), 1, late).is_err());
     // A binding is made from what the leaf knows: none for a leaf that
     // waits for nothing; another leaf's session, or a grant of another
     // root than the head named, does nothing.
     let msg = grant_msg(&new_root, 1, 1, true);
-    assert!(grant::Binding::matched(&kept, None, lock, grant::session_mark(b"session")).is_none());
+    assert!(grant::Binding::matched(&kept, None, lock, grant::session_mark(&SESSION)).is_none());
     let elsewhere =
-        grant::Binding::matched(&waiting, None, k("other lock").key.device_id(), grant::session_mark(b"session"))
+        grant::Binding::matched(&waiting, None, k("other lock").key.device_id(), grant::session_mark(&SESSION))
             .unwrap();
     assert_eq!(bound(&msg, &new_root, Some(&waiting), 1, elsewhere), Err(grant::RULE_REBIND));
-    let binding = || grant::Binding::matched(&waiting, None, lock, grant::session_mark(b"session")).unwrap();
+    let binding = || grant::Binding::matched(&waiting, None, lock, grant::session_mark(&SESSION)).unwrap();
     let thief = k("thief");
     assert_eq!(bound(&grant_msg(&thief, 1, 1, true), &thief, Some(&waiting), 1, binding()), Err(grant::RULE_REBIND));
     // The binding by code takes the new root's guarded grant, afresh.
@@ -1092,12 +1104,21 @@ fn a_guarded_leaf_waits_to_be_bound_again_after_a_change_of_root() {
     // A grant right in every byte that came by sync or another session than
     // the one whose code the person confirmed: refused while the lock waits.
     let v = cbor::decode(&msg).unwrap();
-    let other = grant::read_bound(&v, new_root.key.public(), &lock, &group, Some(&waiting), 1, binding(), b"another");
+    let other = grant::read_bound(
+        &v,
+        new_root.key.public(),
+        &lock,
+        &group,
+        Some(&waiting),
+        1,
+        binding(),
+        &crate::join::PairExporter::for_tests([0xa0; 32]),
+    );
     assert_eq!(other.err(), Some(grant::RULE_REBIND));
     // A head stored without the kept state that should follow it: the
     // binding is made from the head and the grant is taken.
     let head = Some((new_root.hash, 1));
-    let from_head = grant::Binding::matched(&kept, head, lock, grant::session_mark(b"session")).unwrap();
+    let from_head = grant::Binding::matched(&kept, head, lock, grant::session_mark(&SESSION)).unwrap();
     assert_eq!(kept.start(head), waiting);
     let rebound2 = bound(&msg, &new_root, Some(&kept), 1, from_head).unwrap();
     assert_eq!(rebound2, rebound);
@@ -1110,7 +1131,7 @@ fn a_guarded_leaf_waits_to_be_bound_again_after_a_change_of_root() {
     assert!(read(&grant_msg(&new_root, 3, 1, true), &new_root, Some(&again), 2).is_err());
     assert!(bound(&msg, &new_root, Some(&again), 2, binding()).is_err());
     assert!(read(&grant_msg(&new_root, 3, 2, true), &new_root, Some(&again), 2).is_err());
-    let binding2 = grant::Binding::matched(&again, None, lock, grant::session_mark(b"session")).unwrap();
+    let binding2 = grant::Binding::matched(&again, None, lock, grant::session_mark(&SESSION)).unwrap();
     assert!(bound(&grant_msg(&new_root, 1, 2, true), &new_root, Some(&again), 2, binding2).is_ok());
 
     // An ordinary leaf follows the change: the new root's grant is taken.

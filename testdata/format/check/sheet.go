@@ -83,6 +83,11 @@ func sheetCheck(n int, parts ...[]byte) string {
 }
 
 func sheetParse(in string) (sheetRead, string) {
+	// A reader takes at most 512 bytes of input: a sheet typed with spaces
+	// and line ends fits, and anything longer is no sheet.
+	if len(in) > 512 {
+		return sheetRead{}, "not_sheet"
+	}
 	c := sheetCanonical(in)
 	if strings.HasPrefix(c, "CBB://REC0VER?") {
 		return sheetRead{}, "earlier"

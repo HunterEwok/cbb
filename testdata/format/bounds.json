@@ -1095,9 +1095,9 @@
       "class": "reader",
       "name": "sheet::MAX_INPUT",
       "reached": [
-        "vec:sheet.json:63 characters"
+        "vec:sheet.json:a valid sheet past 512 characters"
       ],
-      "refusal": "length",
+      "refusal": "not_sheet",
       "value": 512,
       "widest": "a sheet typed with spaces and line ends"
     }

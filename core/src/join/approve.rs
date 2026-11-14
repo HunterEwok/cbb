@@ -26,7 +26,7 @@ use alloc::vec::Vec;
 use zeroize::Zeroizing;
 
 use super::invitation::{Invitation, SECRET};
-use super::{NO_INVITATION, NO_SECRET, PairError, channel_id};
+use super::{NO_INVITATION, NO_SECRET, PairError, PairExporter, channel_id};
 use crate::format::{Alg, Key, KeyHash};
 use crate::third_party::cpace;
 
@@ -68,10 +68,10 @@ pub struct MemberShown {
 }
 
 impl MemberShown {
-    pub(super) fn new(attempt: Option<u64>, exporter: &[u8], joiner: &[u8; 65]) -> MemberShown {
+    pub(super) fn new(attempt: Option<u64>, exporter: &PairExporter, joiner: &[u8; 65]) -> MemberShown {
         MemberShown {
             attempt,
-            session: crate::format::grant::session_mark(exporter),
+            session: crate::format::grant::session_mark(exporter.bytes()),
             joiner: Key::new(Alg::Es256, joiner).hash(),
         }
     }
@@ -139,13 +139,13 @@ impl MemberExchange {
     /// Answers message 64: `ya` and `ada` are its `Ya` and `ADa`, `adb` what
     /// message 65 carries as `ADb`. `member` is the hash of the member's own
     /// TLS key, `joiner` the joiner's key the handshake proved, `exporter`
-    /// the session's TLS exporter, CPace's session identifier. Returns the
+    /// the session's pairing exporter, CPace's session identifier. Returns the
     /// exchange and `Yb`.
     pub fn respond(
         password: Password<'_>,
         member: &KeyHash,
         joiner: &[u8; 65],
-        exporter: &[u8],
+        exporter: &PairExporter,
         adb: &[u8],
         ya: &[u8],
         ada: &[u8],
@@ -160,12 +160,12 @@ impl MemberExchange {
             role: cpace::Role::Responder,
             password: secret,
             channel_id: &ci,
-            session_id: exporter,
+            session_id: exporter.bytes(),
             ad: adb,
         })
         .map_err(|_| PairError::Refused)?;
         let isk = state.finish(ya, ada).map_err(|_| PairError::Refused)?;
-        let session = crate::format::grant::session_mark(exporter);
+        let session = crate::format::grant::session_mark(exporter.bytes());
         Ok((MemberExchange { state, isk, keyed, confirmed: false, session, joiner }, yb))
     }
 
