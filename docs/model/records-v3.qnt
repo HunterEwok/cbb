@@ -447,6 +447,24 @@ module records_v3 {
   // writer admits a key that does not count at it only if no record anywhere names that key
   // yet. Off, a device may offer one key twice (a phone retrying through another admitter).
   pure val FRESH_KEY = false
+  // ROOT_WAITS (candidate W, architecture 11-14 20:54Z; FLAG and DROPS_EPOCH off): an admin key
+  // may sign an acknowledgement ("ack", a record that only says what its writer saw). The
+  // root's honest checkpoint settles a removal (leaves it out with its keys' admissions) only
+  // when every live admin key has a counting record whose seen holds the removal's signer at
+  // the removal's seq or later. The ack sits on the admin's own line, so a root that counts it
+  // holds everything that admin signed before it. No change to evaluation.
+  pure val ROOT_WAITS = false
+  // The admin keys live in a writer's counted records: named by a root's admin record, not
+  // removed, not taken back by a newer root device record of their device.
+  pure def liveAdmins(counted: Set[Record]): Set[Key] = {
+    val named = counted.filter(x => x.kind == "admin" and ROOT_KEYS.contains(x.signer))
+    named.map(x => x.target).filter(a =>
+      not(counted.exists(v => v.kind == "revoke" and tgt(v).contains(a)))
+      and not(DEV.keys().contains(a) and counted.exists(x => x.kind == "device" and ROOT_KEYS.contains(x.signer)
+        and x.target == DEV.get(a) and named.forall(n => n.target != a or n.id < x.id))))
+  }
+  pure def ackedAll(counted: Set[Record], r: Record): bool =
+    liveAdmins(counted).forall(a => counted.exists(x => x.signer == a and lineOf(x.seen, r.signer).length() >= r.seq))
   // An admission under FLAG (every admin and device record without it).
   pure def isAdmission(r: Record): bool = not(FLAG) or r.flag == 0
   pure def admitsOf(rs: Set[Record], k: Key): Set[Record] = admissionsOf(rs, k).filter(a => isAdmission(a))
@@ -572,7 +590,8 @@ module records_v3 {
       and tgt(r).forall(k => not(DEV.keys().contains(k)) and not(SIGNERS.contains(k))
         and admitsOf(mine, k) != Set()
         and admitsOf(mine, k).forall(a => headLine(mine, a.signer) != a.line))
-      and not(mine.exists(x => tgt(r).contains(x.signer))))
+      and not(mine.exists(x => tgt(r).contains(x.signer)))
+      and (not(ROOT_WAITS) or ackedAll(counted, r)))
     val gone = rms.fold(Set(), (a, r) => a.union(tgt(r)))
     val folded = if (not(FOLD_REMOVALS)) Set() else counted.filter(r => rootRemoval(r) and counted.exists(n => rootRemoval(n)
       and n.signer == r.signer and n.seq > r.seq and not(rms.contains(n)) and tgt(r).subseteq(tgt(n))
@@ -1320,6 +1339,7 @@ module records_v3 {
           and tgt(r).forall(t => not(has(t, "removeAdmins")))
       else if (r.kind == "thaw") has(r.signer, "thaw") and has(r.signer, "removeAdmins")
       else if (r.kind == "copies") true
+      else if (r.kind == "ack") ROOT_WAITS
       else false
     // a, a removal or freeze, cuts off b: it names a key of b's signer's device and did not
     // see b; of its own signer's key, it cuts off only what that key signs after it. A thaw of
@@ -1712,7 +1732,8 @@ module records_v3 {
       and admitsOf(mine, t) != Set()
       and admitsOf(mine, t).forall(a => headLine(mine, a.signer) != a.line)
       and not(mine.exists(x => x.signer == t))
-    val rmGo = counted.filter(r => r.kind == "revoke" and r.seq < top(r.signer) and tgt(r).forall(t => plain(t)))
+    val rmGo = counted.filter(r => r.kind == "revoke" and r.seq < top(r.signer) and tgt(r).forall(t => plain(t))
+      and (not(ROOT_WAITS) or ackedAll(counted, r)))
     val gone = rmGo.fold(Set(), (a, r) => a.union(tgt(r)))
     val folded = if (not(FOLD_REMOVALS)) Set() else counted.filter(r => rootRemoval(r) and counted.exists(n => rootRemoval(n)
       and n.signer == r.signer and n.seq > r.seq and not(rmGo.contains(n)) and tgt(r).subseteq(tgt(n)) and sameSeen(r, n)))
@@ -2033,6 +2054,8 @@ module records_v3 {
   // An admin key uses a later root's key as a device's member key.
   action signUseKey = nondet k = Set(PHONE, COMPUTER, WATCH, MINTED).oneOf() nondet t = Set("NA", "NK", MINTED).oneOf()
     sign(k, "device", t, "", 0, false, false, 1)
+  // (ROOT_WAITS: a live admin key acknowledges what it holds.)
+  action signAck = nondet k = Set(PHONE, COMPUTER, WATCH).oneOf() all { ROOT_WAITS, sign(k, "ack", "", "", 0, false, false, 1) }
   action signCopies = nondet k = SIGNERS.oneOf() nondet u = Set(1, 2).oneOf() sign(k, "copies", "", "", 0, false, false, u)
   // Any recovery record at any place: a new root (or a key that was one, which is not
   // valid), any list.
@@ -2137,7 +2160,7 @@ module records_v3 {
 
   action step = any {
     signDevice, signDemote, signAdmin, signRevoke, signFreeze, signThaw, signResolve, signCheckpoint, signCopies,
-    signUseKey, signAfterThaw, signHidden, signCheckpointNaming, signRecover, welcomeNewcomer,
+    signAck, signUseKey, signAfterThaw, signHidden, signCheckpointNaming, signRecover, welcomeNewcomer,
     deliver, fetch, fetch, fetch, compact,
   }
 
@@ -2145,7 +2168,7 @@ module records_v3 {
   // what honest groups reach.
   action stepHonest = any {
     signDevice, signDemote, signAdmin, signRevoke, signFreeze, signThaw, signResolve, signCheckpoint, signCopies,
-    deliver, fetch, fetch, fetch, compact,
+    signAck, deliver, fetch, fetch, fetch, compact,
   }
   // (HELD_ADMISSIONS (a), a check, not a promise: every admin key's record a member holds has
   // its admission held beside it.)
@@ -2371,7 +2394,7 @@ module records_v3 {
     compact, compact, syncRound, syncRound, oldRootThief, oldRootThief, oldRootThief, rootRemovesPhone,
     removedAdminThief, removedAdminThief, removedAdminThief, recoveryTwin, signRecover,
     signThaw, signAfterThaw, welcomeNewcomer, signHidden, signCheckpointNaming, signBent, restartAny,
-    restartAny, deviateAny, rootRemovesNoCp,
+    restartAny, deviateAny, rootRemovesNoCp, signAck, signAck,
   }
   action restartAny = nondet m = MEMBERS.oneOf() restart(m)
   // A key publishes past what its own set keeps (a deviating writer, kit "deviant").
@@ -5251,7 +5274,8 @@ module records_v3 {
   // the removal (6 was signed before 7, so no later admission excuses it). With DROPS_EPOCH, 9
   // carries drops 1, 6 epoch 0, and no list keeps 6: D stays out and the promises hold.
   // (FRESH_KEY: C's second admission of D is never signed.)
-  run droppedRemovalLateAdmissionTest = if (FRESH_KEY) init else
+  // (ROOT_WAITS: wAdminsTwiceTest.)
+  run droppedRemovalLateAdmissionTest = if (FRESH_KEY or ROOT_WAITS) init else
     init
       .then(sign("A", "device", "D", "", 0, false, false, 1))
       .then(sign("A", "copies", "", "", 0, false, false, 1))
@@ -5274,7 +5298,7 @@ module records_v3 {
   // removes D, and its checkpoint prunes the removal with R's admission. A's admission then
   // counts and D is back: the kept gap, which the flag does not close. Under FRESH_KEY A's
   // admission is never signed (D's key was offered once), so these runs start nothing there.
-  run flagGapSh1Test = if (FRESH_KEY) init else
+  run flagGapSh1Test = if (FRESH_KEY or ROOT_WAITS) init else
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
       .then(sign("A", "device", DEVICE, "", 0, false, false, 1))
@@ -5285,7 +5309,7 @@ module records_v3 {
       .then(giveAll(MEMBERS, [4, 6, 7, 8])).then(giveAll(MEMBERS, [5]))
       .then(syncRound).then(syncRound)
       .expect(not(CP_KEEP) or DROPS_EPOCH or (MEMBERS.forall(m => views.get(m).devices.contains(DEVICE)) and not(removedStayOut)))
-  run flagGapSh2Test = if (FRESH_KEY) init else
+  run flagGapSh2Test = if (FRESH_KEY or ROOT_WAITS) init else
     init
       .then(sign("A", "copies", "", "", 0, false, false, 1))
       .then(giveAll(Set("r"), [4]))
@@ -5304,7 +5328,7 @@ module records_v3 {
   // D, an update), never delivered to R. R removes D and its checkpoint prunes the removal with
   // its admission; 5 arrives. Without the flag 5 is read as the first admission and D is back;
   // with it 5 is an update with no admission under it, and D stays out.
-  run flagNarrowTest =
+  run flagNarrowTest = if (ROOT_WAITS) init else
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
       .then(giveAll(Set("a"), [4]))
@@ -5317,6 +5341,177 @@ module records_v3 {
       .then(syncRound).then(syncRound)
       .expect(if (FLAG) MEMBERS.forall(m => not(views.get(m).devices.contains(DEVICE))) and promises
         else not(CP_KEEP) or DROPS_EPOCH or (MEMBERS.forall(m => views.get(m).devices.contains(DEVICE)) and not(removedStayOut)))
+
+  // ROOT_WAITS (candidate W), each run only under it. dOut: no member counts D, promises hold.
+  val dOut = MEMBERS.forall(m => not(views.get(m).devices.contains(DEVICE))) and promises
+  action acksAll = sign(PHONE, "ack", "", "", 0, false, false, 1)
+    .then(sign(COMPUTER, "ack", "", "", 0, false, false, 1)).then(sign(WATCH, "ack", "", "", 0, false, false, 1))
+  // sh1 under W: R's checkpoint 8 keeps the removal 6 (no admin acked it), so A's true
+  // admission 5 arriving late changes nothing. After the three acks (A's line carries 5) the
+  // checkpoint 13 settles the removal; 5 lies below A's head there and is gone with it.
+  run wSh1Test = if (not(ROOT_WAITS)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
+      .then(sign(PHONE, "device", DEVICE, "", 0, false, false, 1))
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1))
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(db.get(8).keep.contains(6) and db.get(8).keep.contains(4))
+      .then(giveAll(MEMBERS, [4, 6, 7, 8])).then(giveAll(MEMBERS, [5]))
+      .then(syncRound).then(syncRound)
+      .expect(dOut)
+      .then(acksAll).then(syncRound)
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(db.get(13).kind == "checkpoint" and not(db.get(13).keep.contains(6)) and not(db.get(13).keep.contains(4))
+        and not(db.get(13).keep.contains(5)))
+      .then(syncRound).then(syncRound).then(compactAt("m")).then(syncRound)
+      .expect(dOut)
+  // sh2 under W: A admits D (9) after R's checkpoint 8, which kept the removal; the removal
+  // still counts, and after the acks the settling checkpoint prunes 9 below A's head.
+  run wSh2Test = if (not(ROOT_WAITS)) init else
+    init
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 1))
+      .then(giveAll(Set("r"), [4]))
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1))
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(db.get(8).keep.contains(6))
+      .then(sign(PHONE, "device", DEVICE, "", 0, false, false, 1))
+      .then(giveAll(MEMBERS, [4, 5, 6, 7, 8])).then(giveAll(MEMBERS, [9]))
+      .then(syncRound).then(syncRound)
+      .expect(dOut)
+      .then(acksAll).then(syncRound)
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(db.get(14).kind == "checkpoint" and not(db.get(14).keep.contains(6)) and not(db.get(14).keep.contains(9)))
+      .then(syncRound).then(syncRound).then(compactAt("m")).then(syncRound)
+      .expect(dOut)
+  // The narrowing update under W: A holds R's admission 4 when it signs 5; R's checkpoint keeps
+  // the removal until every admin acked; 5 never brings D back.
+  run wNarrowTest = if (not(ROOT_WAITS)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
+      .then(giveAll(Set("a"), [4]))
+      .then(sign(PHONE, "device", DEVICE, "", 0, false, false, 1))
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1))
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(db.get(8).keep.contains(6))
+      .then(giveAll(MEMBERS, [4, 6, 7, 8])).then(giveAll(MEMBERS, [5]))
+      .then(syncRound).then(syncRound)
+      .expect(dOut)
+      .then(acksAll).then(syncRound)
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(not(db.get(13).keep.contains(6)))
+      .then(syncRound).then(syncRound).then(compactAt("m")).then(syncRound)
+      .expect(dOut)
+  // E's shape under W: A and C both truly admit D; the root never holds C's 6 until C's ack
+  // carries it. Checkpoint 9 keeps the removal; the settling checkpoint 14 prunes 4 and 6.
+  run wAdminsTwiceTest = if (not(ROOT_WAITS)) init else
+    init
+      .then(sign(PHONE, "device", DEVICE, "", 0, false, false, 1))
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 1))
+      .then(sign(COMPUTER, "device", DEVICE, "", 0, false, false, 1))
+      .then(giveAll(Set("r", "c", "m", "k"), [4, 5]))
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1))
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(db.get(9).keep.contains(7))
+      .then(giveAll(Set("a", "c", "m", "k"), [7, 8, 9]))
+      .then(compactAt("m"))
+      .then(giveAll(MEMBERS, [6]))
+      .then(syncRound).then(syncRound)
+      .expect(dOut)
+      .then(acksAll).then(syncRound)
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(db.get(14).kind == "checkpoint" and not(db.get(14).keep.contains(7)) and not(db.get(14).keep.contains(4))
+        and not(db.get(14).keep.contains(6)))
+      .then(syncRound).then(syncRound).then(compactAt("m")).then(syncRound)
+      .expect(dOut)
+  // A change of root after the acks: the acks hold R's head, not NA's; NA's re-issued removal
+  // of D (a Z) waits for new acks; D stays out throughout.
+  def lastCpKeep(k: Key): Set[Id] = {
+    val c = db.keys().filter(i => db.get(i).signer == k and db.get(i).kind == "checkpoint").fold(0, (m, i) => max2(m, i))
+    if (c == 0) Set() else db.get(c).keep
+  }
+  def keepsRemovalOfD(k: Key): bool = lastCpKeep(k).exists(i => db.get(i).kind == "revoke" and tgt(db.get(i)).contains(DEVICE))
+  run wChangeRootTest = if (not(ROOT_WAITS)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(acksAll).then(syncRound)
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).path == [ROOT, "NA"]) and dOut)
+      .then(sign("NA", "copies", "", "", 0, false, false, 1)).then(syncRound)
+      .then(signAs("NA", "checkpoint", "", 0))
+      .expect(keepsRemovalOfD("NA"))
+      .then(syncRound).then(syncRound).expect(dOut)
+      // (The decided rule itself never settles a Z in this shape, W or not: NA keeps it.)
+      .then(acksAll).then(syncRound)
+      .then(sign("NA", "copies", "", "", 0, false, false, 1)).then(syncRound)
+      .then(signAs("NA", "checkpoint", "", 0))
+      .then(syncRound).then(syncRound).then(compactAt("m")).then(syncRound)
+      .expect(dOut)
+  // A lagging admin: W never acks. R checkpoints first (8 keeps the removal), takes W back
+  // (9, a root device record of W's device), and its next checkpoint settles the removal.
+  run wLagTakeBackTest = if (not(ROOT_WAITS)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(PHONE, "ack", "", "", 0, false, false, 1)).then(sign(COMPUTER, "ack", "", "", 0, false, false, 1))
+      .then(syncRound)
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(db.get(8).keep.contains(5))
+      .then(syncRound)
+      .then(sign(ROOT, "device", "dW", "", 0, false, false, 1)).then(syncRound)
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(not(db.get(10).keep.contains(5)))
+      .then(syncRound).then(syncRound).then(compactAt("m")).then(syncRound)
+      .expect(dOut and MEMBERS.forall(m => not(views.get(m).admins.keys().contains(WATCH))))
+  // An admin removed between the acks and the settle: R removes W (9) after the acks; W is
+  // not live, the others acked, and the checkpoint settles.
+  run wAdminRemovedTest = if (not(ROOT_WAITS)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(PHONE, "ack", "", "", 0, false, false, 1)).then(sign(COMPUTER, "ack", "", "", 0, false, false, 1))
+      .then(syncRound)
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(db.get(8).keep.contains(5))
+      .then(syncRound)
+      .then(sign(ROOT, "revoke", WATCH, "", 0, false, false, 1)).then(syncRound)
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(not(db.get(10).keep.contains(5)))
+      .then(syncRound).then(syncRound).then(compactAt("m")).then(syncRound)
+      .expect(dOut)
+  // A record in flight: A admits D (6) holding nothing of R's removal, then gets 4 and 5 and
+  // acks (7). The root gets only 7: it does not count it without 6 below it on A's line, so its
+  // checkpoint keeps the removal; 6 then arrives and D stays out; after it the root settles.
+  run wInFlightTest = if (not(ROOT_WAITS)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1))
+      .then(sign(PHONE, "device", DEVICE, "", 0, false, false, 1))
+      .then(giveAll(Set("a"), [4, 5]))
+      .then(sign(PHONE, "ack", "", "", 0, false, false, 1))
+      .then(giveAll(Set("c", "m", "k"), [4, 5])).then(giveAll(Set("r"), [7]))
+      .then(sign(COMPUTER, "ack", "", "", 0, false, false, 1)).then(sign(WATCH, "ack", "", "", 0, false, false, 1))
+      .then(giveAll(Set("r"), [8, 9]))
+      .expect(not(views.get("r").counting.contains(7)))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(db.get(10).keep.contains(5))
+      .then(giveAll(MEMBERS, [4, 5, 7, 8, 9, 10])).then(giveAll(MEMBERS, [6]))
+      .then(syncRound).then(syncRound)
+      .expect(dOut and views.get("r").counting.contains(7))
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(not(db.get(12).keep.contains(5)) and not(db.get(12).keep.contains(6)))
+      .then(syncRound).then(syncRound).then(compactAt("m")).then(syncRound)
+      .expect(dOut)
 
   // REISSUE_STATE: the change to NA re-issues R's live admissions (A, C, W and D) as NA's first
   // records 6 to 9; the list keeps none of R's records, the first checkpoint keeps the Ys, and
