@@ -1000,6 +1000,7 @@ pub const EXEMPT: &[(&str, &str)] = &[
     ("format::container::LEN", "the container's layout"),
     ("records::key::SLH_DSA_PUBLIC", "an algorithm's size, fixed by its standard"),
     ("records::key::XWING_PUBLIC", "an algorithm's size"),
+    ("alpn::PAIR_EXPORTER_LEN", "the pairing exporter's length, fixed with its label"),
     ("seal::", "X-Wing's sizes, fixed by its standard"),
     ("slhdsa::", "SLH-DSA-SHA2-128s's sizes, fixed by FIPS 205"),
     ("sheet::LINE", "the sheet's layout, frozen with its version"),

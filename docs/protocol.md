@@ -1106,7 +1106,9 @@ each side believes it is using, 16 bytes, all zero at home without an invitation
 invitation has). The keys are those of the key containers the handshake saw, so a party in the
 middle with keys of its own gets another identifier and the exchange fails, and two ends in the
 flows of two invitations get two identifiers. Its session identifier is the session's TLS
-exporter, the same 32 bytes the short code takes. With an invitation the password is its 32-byte
+exporter: 32 bytes of the label `EXPERIMENTAL-cbb-pair-v3` with an empty context, exported only
+from a session that took `cbb-pair/3`. The short code and the session mark take the same 32
+bytes, kept apart by their own labels inside the hashes. With an invitation the password is its 32-byte
 secret (section 12); at home without one it is 32 zero bytes (`NO_SECRET`), which no
 invitation's secret is. An invitation ID and a password go together: both zero or neither, and
 one without the other is `refused`. The zero password is public, so CPace authenticates nothing
@@ -4118,8 +4120,10 @@ does not know unless its section says it refuses it.
 
 | String | Use | Section |
 |---|---|---|
-| `EXPERIMENTAL-cbb-pair-v2` | TLS exporter label: CPace's `sid` | 6 |
-| `cbb pair v2` + `0x00` | CPace's channel identifier prefix | 6 |
+| `EXPERIMENTAL-cbb-pair-v3` | TLS exporter label of a 0.6 pairing: CPace's `sid`, the exporter of the short code and of the session mark | 6 |
+| `cbb pair channel v3` + `0x00` | CPace's channel identifier prefix in 0.6 | 6 |
+| `EXPERIMENTAL-cbb-pair-v2` | TLS exporter label: CPace's `sid` (0.5's pairing, until wave 5) | 6 |
+| `cbb pair v2` + `0x00` | CPace's channel identifier prefix (0.5's pairing, until wave 5) | 6 |
 | `cbb forwarder key` | TLS exporter label: a hub's proof of its WireGuard key | 13 |
 | `cbb forwarder admin` | TLS exporter label: the root's or an admin's signature of a registration | 13 |
 | `cbb forwarder hello` | TLS exporter label: the MAC key of a hub's hellos | 13 |

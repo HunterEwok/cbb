@@ -20,6 +20,16 @@ pub const MEMBER: &[u8] = b"cbb/4";
 /// The pairing protocol of 0.6.
 pub const PAIR: &[u8] = b"cbb-pair/3";
 
+/// The TLS exporter label of a pairing session of 0.6 (`cbb-pair/3`): 32
+/// bytes with an empty context, exported once ([`PAIR_EXPORTER_LEN`]).
+/// That one value is CPace's session identifier and the exporter that the
+/// short code and the session mark take; their own labels inside the hashes
+/// keep those uses apart. `crate::tls::bykey::pairing_exporter` exports it
+/// only from a session that took `cbb-pair/3`.
+pub const PAIR_EXPORTER: &[u8] = b"EXPERIMENTAL-cbb-pair-v3";
+/// The length of the pairing exporter.
+pub const PAIR_EXPORTER_LEN: usize = 32;
+
 /// The member protocols this version speaks, the highest first.
 pub const MEMBERS: &[&[u8]] = &[MEMBER];
 /// The pairing protocols this version speaks, the highest first.
