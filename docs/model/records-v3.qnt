@@ -471,12 +471,25 @@ module records_v3 {
   // carries over only as the new root's re-issue (Ys), admins wiped (their devices re-issued as
   // plain devices); the writer never grants a key that was an admin key under another root.
   pure val LAST_ROOT_ONLY = false
+  // KEPT_ADMINS (owner's idea, architecture 11-14 21:37Z; under LAST_ROOT_ONLY): at a change
+  // the writer may name some devices as admins again, each under a new key, among the new
+  // root's first records. In the model C's device is kept, as C2.
+  pure val KEPT_ADMINS = false
+  pure val NEWKEY = Map("C" -> "C2")
+  // GRANT_ABOVE (records' refinement of ROOT_WAITS, 11-14 21:37Z): a removal's settle does not
+  // wait for an admin key named only by records of the removal's root above its seq (who holds
+  // the grant holds the removal, the claim checked by grantHoldsRemoval).
+  pure val GRANT_ABOVE = false
   pure def regrant(rs: Set[Record], a: Key): bool =
     rs.exists(v => v.kind == "revoke" and tgt(v).contains(a))
     or (DEV.keys().contains(a) and rs.exists(x => x.kind == "device" and ROOT_KEYS.contains(x.signer) and x.target == DEV.get(a)
       and rs.exists(n => n.kind == "admin" and n.target == a and n.id < x.id)))
+  pure def grantedAbove(counted: Set[Record], a: Key, r: Record): bool = {
+    val gs = counted.filter(n => n.kind == "admin" and n.target == a and ROOT_KEYS.contains(n.signer))
+    GRANT_ABOVE and gs != Set() and gs.forall(n => n.signer == r.signer and n.seq > r.seq)
+  }
   pure def ackedAll(counted: Set[Record], r: Record): bool =
-    liveAdmins(counted).forall(a => counted.exists(x => x.signer == a and lineOf(x.seen, r.signer).length() >= r.seq))
+    liveAdmins(counted).filter(a => not(grantedAbove(counted, a, r))).forall(a => counted.exists(x => x.signer == a and lineOf(x.seen, r.signer).length() >= r.seq))
   // An admission under FLAG (every admin and device record without it).
   pure def isAdmission(r: Record): bool = not(FLAG) or r.flag == 0
   pure def admitsOf(rs: Set[Record], k: Key): Set[Record] = admissionsOf(rs, k).filter(a => isAdmission(a))
@@ -2003,9 +2016,12 @@ module records_v3 {
       val x = db.get(ySrc[j])
       // (LAST_ROOT_ONLY: admins are wiped at a change; an admin's device is re-issued as a plain
       // device.)
-      val asDev = LAST_ROOT_ONLY and x.kind == "admin"
+      // (KEPT_ADMINS: a device the writer keeps as an admin is named again under a new key.)
+      val kept = LAST_ROOT_ONLY and KEPT_ADMINS and x.kind == "admin" and NEWKEY.keys().contains(x.target)
+      val asDev = LAST_ROOT_ONLY and x.kind == "admin" and not(kept)
       d.put(yIds[j], rec(yIds[j], target, own.concat(zIds).concat(yIds.slice(0, j + 1)),
-        if (asDev) "device" else x.kind, if (asDev) DEV.get(x.target) else x.target, if (asDev) "" else x.kit, nextId,
+        if (asDev) "device" else x.kind, if (asDev) DEV.get(x.target) else if (kept) NEWKEY.get(x.target) else x.target,
+        if (asDev) "" else x.kit, nextId,
         x.seen, Map(), Set(), x.units))
     })
     val s1 = zIds.concat(yIds).foldl(insertInto(s, r, dbH), (x, i) => insertInto(x, db2y.get(i), db2y))
@@ -2902,7 +2918,24 @@ module records_v3 {
   val sameGotSameState = MEMBERS.forall(m => MEMBERS.forall(n => (m == n
     or not(st.get(m).got == st.get(n).got and saturated(m) and saturated(n) and running(m) and running(n)))
     or (st.get(m).recs == st.get(n).recs and views.get(m) == views.get(n))))
-  val decidedInv = and { promises, tiersPure, cpFirstKeepsDevices, ownCpsNoCrowd, twinHalts, sameGotSameState }
+  val decidedInv = and { promises, tiersPure, cpFirstKeepsDevices, ownCpsNoCrowd, twinHalts, sameGotSameState,
+    not(GRANT_ABOVE) or grantHoldsRemoval }
+  // (GRANT_ABOVE's claim: a member that counts the root's grant of an admin key held by it, above
+  // a removal of the same root on the grant's line, holds that removal, unless the counting
+  // checkpoint it holds settled it.)
+  val grantHoldsRemoval = MEMBERS.forall(m => views.get(m).stop or {
+    val rs = recsOf(st.get(m).recs, db)
+    val cp = views.get(m).checkpoint
+    rs.forall(g => not(g.kind == "admin" and views.get(m).counting.contains(g.id) and ROOT_KEYS.contains(g.signer)
+        and HOLDER.keys().contains(g.target)
+        and HOLDER.get(g.target) == m) or
+      db.keys().forall(i => {
+        val r = db.get(i)
+        not(r.kind == "revoke" and r.signer == g.signer and r.seq < g.seq and inLine(g.line, r.id))
+          or st.get(m).recs.contains(r.id)
+          or (cp != 0 and db.get(cp).signer == r.signer and db.get(cp).seq > r.seq and not(db.get(cp).keep.contains(r.id)))
+      }))
+  })
 
   // --- Scenarios ---------------------------------------------------------------------------
 
@@ -5382,6 +5415,7 @@ module records_v3 {
   // ROOT_WAITS (candidate W), each run only under it. dOut: no member counts D, promises hold.
   // (The directed W runs need the real root ratio and wider admin rooms; see wScaledTakeBackTest.)
   pure val wideW = ROOT_RATIO and WIDE_ADMIN
+  val dOutL = MEMBERS.exclude(Set("m")).forall(m => not(views.get(m).devices.contains(DEVICE))) and promises
   val dOut = MEMBERS.forall(m => not(views.get(m).devices.contains(DEVICE))) and promises
   action acksAll = sign(PHONE, "ack", "", "", 0, false, false, 1)
     .then(sign(COMPUTER, "ack", "", "", 0, false, false, 1)).then(sign(WATCH, "ack", "", "", 0, false, false, 1))
@@ -5570,7 +5604,7 @@ module records_v3 {
       .expect(dOut)
   // An admin named after the removal is live at the settle and must ack too: R names X (8)
   // after the acks; the checkpoint keeps the removal until X acks.
-  run wNamedAfterTest = if (not(ROOT_WAITS) or not(wideW)) init else
+  run wNamedAfterTest = if (not(ROOT_WAITS) or not(wideW) or GRANT_ABOVE) init else
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
       .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
@@ -5649,7 +5683,7 @@ module records_v3 {
   pure val onL = LAST_ROOT_ONLY and ROOT_WAITS and REISSUE_STATE and wideW
   // 1. An old admin's admission (5) and removal (6) and the old root's grant (7) reach no one
   // before the change; after it nothing of them counts: E out, D (re-issued) in, no admins.
-  run lLateOldTest = if (not(onL)) init else
+  run lLateOldTest = if (not(onL) or KEPT_ADMINS) init else
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
       .then(sign(PHONE, "device", "E", "", 0, false, false, 1))
@@ -5662,7 +5696,7 @@ module records_v3 {
         and not(views.get(m).revoked.contains(DEVICE))) and promises)
   // 2. A member that holds the change but only part of the re-issue stays on R and counts R's
   // group, whole; with all of it it moves to NA. Never empty, never mixed.
-  run lHalfReissueTest = if (not(onL)) init else
+  run lHalfReissueTest = if (not(onL) or KEPT_ADMINS) init else
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
       .then(recoverAs(RECOVERY, "NA"))
@@ -5688,7 +5722,7 @@ module records_v3 {
         and views.get(m).admins.keys() == Set()) and promises)
   // 4. A change while W lags on R's removal of D: D is not re-issued, so it is out; W's late
   // ack changes nothing.
-  run lChangeWaitingTest = if (not(onL)) init else
+  run lChangeWaitingTest = if (not(onL) or KEPT_ADMINS) init else
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
       .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
@@ -5722,6 +5756,111 @@ module records_v3 {
       // hands it anything after the change; it is not D's member.)
       .expect(MEMBERS.exclude(Set("m")).forall(m => views.get(m).devices.contains(DEVICE)))
       .expect(promises)
+
+  // KEPT_ADMINS under L: C's device is kept as admin C2. 1: after the change every member
+  // counts C2 as the only admin and dC as a device; C's record E, signed under the old key
+  // before the change and delivered after, counts for nothing; C2 admits E2.
+  run kaFreshKeyTest = if (not(onL and KEPT_ADMINS)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(COMPUTER, "device", "E", "", 0, false, false, 1))
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound).then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).path == [ROOT, "NA"] and views.get(m).admins.keys() == Set("C2")
+        and Set("dA", "dC", "dW", DEVICE).subseteq(views.get(m).devices) and not(views.get(m).devices.contains("E")))
+        and promises)
+      .then(sign("C2", "device", "E2", "", 0, false, false, 1)).then(syncRound).then(syncRound)
+      // (m, the outside device no record admits, is out after the change under L: peers hand it
+      // nothing, as in lRejoinTest.)
+      .expect(MEMBERS.exclude(Set("m")).forall(m => views.get(m).devices.contains("E2")) and promises)
+  // 2: with the head and part of the re-issue a member still counts R's group whole.
+  run kaHalfTest = if (not(onL and KEPT_ADMINS)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(recoverAs(RECOVERY, "NA"))
+      .then(giveAll(Set("m"), [recId])).then(giveAll(Set("m"), range(recId + 1, recId + 3)))
+      .expect(views.get("m").path == [ROOT] and views.get("m").admins.keys() == Set(PHONE, COMPUTER, WATCH)
+        and views.get("m").devices == Set("dA", "dC", "dW", DEVICE))
+      .then(giveAll(Set("m"), range(recId + 3, firstOfChange + 1)))
+      .expect(views.get("m").path == [ROOT, "NA"] and views.get("m").admins.keys() == Set("C2")
+        and views.get("m").devices == Set("dA", "dC", "dW", DEVICE))
+  // 3 (W): NA removes D; its checkpoint keeps the removal until C2 acks, then settles it.
+  run kaWaitTest = if (not(onL and KEPT_ADMINS)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound).then(syncRound)
+      .then(sign("NA", "revoke", DEVICE, "", 0, false, false, 1)).then(sign("NA", "copies", "", "", 0, false, false, 1))
+      .then(syncRound).then(signAs("NA", "checkpoint", "", 0))
+      .expect(keepsRemovalOfD("NA"))
+      .then(syncRound).expect(dOutL)
+      .then(sign("C2", "ack", "", "", 0, false, false, 1)).then(syncRound)
+      .then(sign("NA", "copies", "", "", 0, false, false, 1)).then(syncRound)
+      .then(signAs("NA", "checkpoint", "", 0))
+      .expect(not(keepsRemovalOfD("NA")))
+      .then(syncRound).then(syncRound).then(compactAt("m")).then(syncRound)
+      .expect(dOutL)
+
+  // GRANT_ABOVE (on W). X, named by R above R's removal 5, is not waited for; A, C, W are.
+  run gaAboveTest = if (not(ROOT_WAITS and GRANT_ABOVE and wideW)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(acksAll).then(syncRound)
+      .then(sign(ROOT, "admin", MINTED, "phone", 0, false, false, 1)).then(syncRound)
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(not(db.get(11).keep.contains(5)) and grantHoldsRemoval)
+      .then(syncRound).then(syncRound).then(compactAt("m")).then(syncRound)
+      .expect(dOut and grantHoldsRemoval)
+  // Two admins, one below and one above: A (below) has not acked, so 5 waits though X (above)
+  // never acks; after A's ack it settles.
+  run gaBelowAboveTest = if (not(ROOT_WAITS and GRANT_ABOVE and wideW)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(COMPUTER, "ack", "", "", 0, false, false, 1)).then(sign(WATCH, "ack", "", "", 0, false, false, 1))
+      .then(sign(ROOT, "admin", MINTED, "phone", 0, false, false, 1)).then(syncRound)
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(db.get(10).keep.contains(5))
+      .then(syncRound)
+      .then(sign(PHONE, "ack", "", "", 0, false, false, 1)).then(syncRound)
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(not(db.get(13).keep.contains(5)))
+      .then(syncRound).then(syncRound).then(compactAt("m")).then(syncRound)
+      .expect(dOut and grantHoldsRemoval)
+  // The grant through a checkpoint: X's holder a gets only R's checkpoint 9 (which keeps the
+  // grant 6 and the removal 5) and compacts on it; it holds the removal with the grant.
+  run gaThroughCpTest = if (not(ROOT_WAITS and GRANT_ABOVE and wideW)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(giveAll(Set("a", "c", "k", "m"), [4]))
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1))
+      .then(sign(ROOT, "admin", MINTED, "phone", 0, false, false, 1))
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(db.get(8).keep.contains(5) and db.get(8).keep.contains(6))
+      .then(giveAll(Set("a"), [8])).then(compactAt("a"))
+      .expect(grantHoldsRemoval)
+      .then(giveAll(Set("a"), [6])).expect(grantHoldsRemoval)
+      .then(giveAll(Set("a"), [5, 7])).expect(grantHoldsRemoval)
+      .then(sign(MINTED, "device", DEVICE, "", 0, false, false, 1))
+      .then(syncRound).then(syncRound)
+      .expect(grantHoldsRemoval and promises)
+  // A device whose old key C was taken back (5), R removes D (6), then names its new key C2
+  // above (7). c, which still holds the old state where D counts, gets only 7.
+  run gaNewKeyTest = if (not(ROOT_WAITS and GRANT_ABOVE and wideW)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(ROOT, "device", "dC", "", 0, false, false, 1))
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1))
+      .then(sign(ROOT, "admin", "C2", "computer", 0, false, false, 1))
+      .then(giveAll(Set("c"), [7]))
+      .expect(grantHoldsRemoval)
+      .then(giveAll(Set("c"), [5])).expect(grantHoldsRemoval)
+      .then(giveAll(Set("c"), [6])).expect(grantHoldsRemoval)
+      .then(syncRound).then(syncRound)
+      .then(sign("C2", "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .expect(grantHoldsRemoval and promises)
 
   // REISSUE_STATE: the change to NA re-issues R's live admissions (A, C, W and D) as NA's first
   // records 6 to 9; the list keeps none of R's records, the first checkpoint keeps the Ys, and
