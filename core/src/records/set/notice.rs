@@ -12,67 +12,64 @@ use alloc::vec::Vec;
 use super::super::body::{Body, Removal};
 use super::super::eval::{self, Checked, Role, State};
 use super::super::key::{DeviceId, KeyHash, RecordId};
-use super::super::{Kind, Record, keep};
+use super::super::{Kind, Record};
 use super::{Added, RecordSet};
 
 /// Which tier of the rooms a key is in (docs/protocol.md, section 10,
 /// "Tiers inside the rooms").
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Tier {
-    /// The root, the live admin keys and the cut roots' room.
+    /// The root, the roots a change cut, and the live admin keys.
     First,
-    /// The keys that are no longer admins: they share what the first tier
-    /// leaves.
+    /// The keys that are no longer admins: they share what the first tier's
+    /// caps leave.
     Second,
 }
 
-/// A key's room, as the rooms judge what the set holds now.
+/// A key's room: its fixed cap and what its records take now.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Room {
-    /// The key whose room it is (the cut roots share one).
+    /// The key whose room it is (the roots a change cut share one).
     pub key: KeyHash,
     pub tier: Tier,
-    /// The units of 512 bytes the key may hold at most (its ceiling).
-    pub ceiling: u64,
-    /// What the key may hold at its tier's level now, its ceiling at most;
-    /// with the units its records kept first take.
-    pub share: u64,
-    /// The units the key's records take, kept first ones included.
+    /// The units of 512 bytes the room holds at most, read from the roster
+    /// (what is kept first included).
+    pub cap: u64,
+    /// The units its records take now, those kept first included.
     pub used: u64,
 }
 
 impl Room {
-    /// The units the key may still add at the level now. While the group
-    /// is full (`Fullness::squeezed`) a new record of any key lowers the
-    /// level, so this is the most it may add, not a promise.
+    /// The units the key may still add. Exact: caps do not move with what
+    /// other keys hold, only with the roster.
     pub fn left(&self) -> u64 {
-        self.share.saturating_sub(self.used)
+        self.cap.saturating_sub(self.used)
+    }
+
+    /// No record of the key's next in its order fits any more: a record of
+    /// `units` past the key's last would be turned away. The app shows
+    /// "this key's room is full".
+    pub fn full_for(&self, units: u64) -> bool {
+        self.left() < units
     }
 }
 
-/// How full the rooms are, from what the set holds.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct Fullness {
-    /// The units all the rooms' records take.
-    pub used: u64,
-    /// The units the rooms have in all.
-    pub room: u64,
-    /// Fewer units are left than a record of the largest size takes: the
-    /// next record may be turned away, whatever its key's share. The app
-    /// shows "the group is full". Whether one given record would be is
-    /// `RecordSet::turned_away`.
-    pub full: bool,
+/// What the rooms would do with a record that came now, told without
+/// taking it (`RecordSet::would_take`).
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum Offer {
+    /// Kept, and nothing of what the set holds leaves for it.
+    Kept,
+    /// Kept, and these records of the same room leave for it: it comes
+    /// earlier in the key's order than they do, and with it they no longer
+    /// fit.
+    PushesOut(Vec<RecordId>),
+    /// Turned away by the rooms, with why.
+    TurnedAway(TurnedAway),
 }
 
-impl Fullness {
-    /// The units left in all the rooms.
-    pub fn free(&self) -> u64 {
-        self.room.saturating_sub(self.used)
-    }
-}
-
-/// Why the rooms turn a record away: its key's room once the record is
-/// counted in, and the record's own units.
+/// Why the rooms turn a record away: its room once the record is counted
+/// in, and the record's own units.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct TurnedAway {
     pub record: RecordId,
@@ -103,31 +100,23 @@ pub struct RemovalWarning {
 }
 
 impl RecordSet {
-    /// A copy of the set whose rooms are judged afresh over what it holds:
-    /// the levels of what is held, whatever the set did before.
-    fn judged(&self) -> RecordSet {
-        let mut t = self.clone();
-        t.batch = None;
-        t.cut = keep::Cut::default();
-        t.cut();
-        t
-    }
-
-    fn room_in(&self, key: &KeyHash) -> Option<Room> {
+    /// The fixed cap of the room key's records go to.
+    fn cap_of(&self, key: &KeyHash) -> Option<u64> {
+        // Until the fixed caps are in: the ceiling under the level the
+        // last judgment left, which is what the rooms allow today.
         let k = self.room_key(key);
-        let ceiling = self.ceiling(&k)?;
-        let tier = if self.second.contains(&k) { Tier::Second } else { Tier::First };
-        let level = self.cut.level(tier == Tier::Second);
-        let used =
-            self.units.iter().filter(|(s, _)| self.room_key(s) == k).fold(0u64, |t, (_, u)| t.saturating_add(*u));
-        Some(Room { key: k, tier, ceiling, share: level.min(ceiling), used })
+        Some(self.ceiling(&k)?.min(self.cut.level(self.second.contains(&k))))
     }
 
     /// The room of a key that may sign records (the root, an admin key, a
-    /// cut root), as the rooms judge what the set holds now; None for a
-    /// key with no room.
+    /// key no longer an admin, a cut root); None for a key with no room.
     pub fn room_of(&self, key: &KeyHash) -> Option<Room> {
-        self.judged().room_in(key)
+        let k = self.room_key(key);
+        let cap = self.cap_of(&k)?;
+        let tier = if self.second.contains(&k) { Tier::Second } else { Tier::First };
+        let used =
+            self.units.iter().filter(|(s, _)| self.room_key(s) == k).fold(0u64, |t, (_, u)| t.saturating_add(*u));
+        Some(Room { key: k, tier, cap, used })
     }
 
     /// The current root's room (`room_of` of the last root of the path).
@@ -135,32 +124,33 @@ impl RecordSet {
         state.roots.last().and_then(|r| self.room_of(r))
     }
 
-    /// How full the rooms are now.
-    pub fn fullness(&self) -> Fullness {
-        let used = self.units.values().fold(0u64, |a, u| a.saturating_add(*u));
-        let room = keep::room();
-        let largest = keep::units(super::super::MAX_BODY.saturating_add(super::super::ENVELOPE_ALLOWANCE));
-        Fullness { used, room, full: room.saturating_sub(used) < largest }
-    }
-
-    /// Why the rooms would turn record r away if it came now, or None when
-    /// they would keep it, the set holds it already, or it is refused for
-    /// another reason (its signature, its signer, its place in a chain):
-    /// the record is tried on a copy of the set.
-    pub fn turned_away(&self, r: &Record) -> Option<TurnedAway> {
+    /// What the rooms would do with record r if it came now, tried on a
+    /// copy of the set: None when the set holds it already or refuses it
+    /// for another reason than room (its signature, its signer, its place
+    /// in a chain), or when it waits for something before it is judged.
+    pub fn would_take(&self, r: &Record) -> Option<Offer> {
         if self.contains(&r.id()) {
             return None;
         }
         let mut t = self.clone();
         let got = t.insert(r.clone()).ok()?;
-        let away = matches!(got, Added::NoRoom) || (got == Added::Stored && !t.contains(&r.id()));
-        if !away {
+        if !matches!(got, Added::NoRoom | Added::Stored) {
             return None;
         }
-        let role = self.keys.signer(&r.body().signer).map_or(Role::Admin, |(_, role)| role);
-        let units = eval::item(r, role).units;
-        let room = t.judged().room_in(&r.body().signer)?;
-        Some(TurnedAway { record: r.id(), units, room })
+        if !t.contains(&r.id()) {
+            let role = self.keys.signer(&r.body().signer).map_or(Role::Admin, |(_, role)| role);
+            let units = eval::item(r, role).units;
+            let room = t.room_of(&r.body().signer)?;
+            return Some(Offer::TurnedAway(TurnedAway { record: r.id(), units, room }));
+        }
+        let k = self.room_key(&r.body().signer);
+        let out: Vec<RecordId> = self
+            .records
+            .values()
+            .filter(|e| self.room_key(&e.record.body().signer) == k && !t.contains(&e.record.id()))
+            .map(|e| e.record.id())
+            .collect();
+        Some(if out.is_empty() { Offer::Kept } else { Offer::PushesOut(out) })
     }
 
     /// The change of root the set waits for, if any: the new root's first
