@@ -949,6 +949,30 @@ pub const BOUNDS: &[Bound] = &[
         &["a_clock_moved_back_and_forth_makes_one_epoch_a_week"],
     ),
     b(
+        "keystore::WEEK_MS",
+        crate::keystore::WEEK_MS,
+        Frozen,
+        "a sealing epoch, the newest for a week and kept a week after",
+        "",
+        &["the_sealing_key_changes_once_a_week_and_the_old_one_stays_a_week"],
+    ),
+    b(
+        "credential::PERIOD_RENEW_MS",
+        crate::credential::PERIOD_RENEW_MS as u64,
+        Stated,
+        "a period 30 days old, when the root starts the next",
+        "",
+        &["periods_last_as_go_says"],
+    ),
+    b(
+        "credential::PERIOD_LIFETIME_MS",
+        crate::credential::PERIOD_LIFETIME_MS as u64,
+        Stated,
+        "a period lasting 35 days, its renewal and 5 days",
+        "",
+        &["periods_last_as_go_says"],
+    ),
+    b(
         "store::HEADER",
         crate::store::HEADER as u64,
         Frozen,
@@ -1019,7 +1043,6 @@ pub const EXEMPT: &[(&str, &str)] = &[
     ("records::keep::ROOM", "MAX_RECORDS in units, derived"),
     ("records::pq::VERIFY_STACK", "a measured stack size, not a format number"),
     ("blind::alias::DAY_MS", "a day"),
-    ("keystore::WEEK_MS", "a week, the epoch's length by the format's definition"),
     ("join::invitation::SECRET", "a secret's length, fixed by its label"),
 ];
 
