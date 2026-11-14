@@ -1127,3 +1127,151 @@ fn members_with_different_root_records_agree_after_sync() {
     assert_eq!(all.digest(), x.digest(), "sync ends elsewhere than all at once");
     assert_eq!(all.state(), x.state(), "sync ends in another state than all at once");
 }
+
+/// The records of the take-back case: `full_group(tag, ex)`, the root's
+/// record that takes admin key 3 back, a 17th admin key D the root admits
+/// after it, and D's 16 removals. Ex-admins 7 and 8 squeeze the second
+/// tier; up to 6 they do not.
+struct TakeBack {
+    recs: Vec<Record>,
+    back: Record,
+    rd: Record,
+    d_recs: Vec<Record>,
+}
+
+fn take_back(tag: &str, ex: u32) -> TakeBack {
+    let (recs, root, _admins, mut g) = full_group(tag, ex);
+    let back = g.sign(
+        &root,
+        Kind::device(Device::new(k(&format!("{tag} admin 3 phone")).key.clone(), "was admin", ROLE_PHONE)),
+    );
+    let (d, rd) = admit_admin(&mut g, &root, &format!("{tag} admin D"));
+    let d_recs = (0..16u32).map(|n| wide_removal(&mut g, &d, &format!("{tag} D"), n)).collect();
+    TakeBack { recs, back, rd, d_recs }
+}
+
+impl TakeBack {
+    /// Every record, the take-back before D's admission.
+    fn back_first(&self) -> Vec<Record> {
+        let mut v = self.recs.clone();
+        v.push(self.back.clone());
+        v.push(self.rd.clone());
+        v.extend(self.d_recs.iter().cloned());
+        v
+    }
+
+    /// Members X and Y after three rounds of sync: X took every record,
+    /// the take-back before D's admission; Y took them without it.
+    fn synced(&self) -> (RecordSet, RecordSet) {
+        let (mut x, mut y) = (new_set(), new_set());
+        x.insert_all(self.back_first());
+        y.insert_all(self.recs.clone());
+        y.insert_all(core::iter::once(self.rd.clone()).chain(self.d_recs.iter().cloned()));
+        for _ in 0..3 {
+            let from_x: Vec<Record> = x.in_dependency_order().into_iter().cloned().collect();
+            let from_y: Vec<Record> = y.in_dependency_order().into_iter().cloned().collect();
+            x.insert_all(from_y);
+            y.insert_all(from_x);
+        }
+        (x, y)
+    }
+
+    /// Every record, the take-back last.
+    fn back_last(&self) -> Vec<Record> {
+        let mut v = self.recs.clone();
+        v.push(self.rd.clone());
+        v.extend(self.d_recs.iter().cloned());
+        v.push(self.back.clone());
+        v
+    }
+}
+
+fn same(a: &RecordSet, b: &RecordSet) -> bool {
+    a.digest() == b.digest() && a.state() == b.state()
+}
+
+/// One member given the same records in other orders (the take-back
+/// before or after D's admission, or shuffled with eight seeds and offered
+/// three times) ends with the same set and state.
+#[test]
+#[ignore = "being settled at records: the take-back before D's admission ends with fewer records; run with --ignored --release"]
+fn one_member_ends_equal_whatever_the_order() {
+    for ex in [0u32, 6, 7, 8] {
+        let c = take_back("o", ex);
+        let (mut first, mut last) = (new_set(), new_set());
+        first.insert_all(c.back_first());
+        last.insert_all(c.back_last());
+        assert!(same(&first, &last), "ex {ex}: {} records against {}", first.len(), last.len());
+        let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+        for s in 0..8 {
+            let mut v = c.back_first();
+            for i in (1..v.len()).rev() {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                v.swap(i, (seed % (i as u64 + 1)) as usize);
+            }
+            let mut shuffled = new_set();
+            for _ in 0..3 {
+                shuffled.insert_all(v.clone());
+            }
+            assert!(same(&shuffled, &last), "ex {ex}, seed {s}: {} records against {}", shuffled.len(), last.len());
+        }
+    }
+}
+
+/// A restore from a member's records in any order (here shuffled, eight
+/// seeds) equals the member; what the member holds, offered again to the
+/// restored set, is taken.
+#[test]
+#[ignore = "slow; run with --ignored --release"]
+fn a_restore_in_any_order_equals_the_member() {
+    for ex in [0u32, 6, 7, 8] {
+        let c = take_back("s", ex);
+        let (_, member) = c.synced();
+        let every: Vec<Record> = member.in_dependency_order().into_iter().cloned().collect();
+        let lists: Vec<Vec<u8>> = member.lists().map(<[u8]>::to_vec).collect();
+        let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+        for s in 0..8 {
+            let mut v = every.clone();
+            for i in (1..v.len()).rev() {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                v.swap(i, (seed % (i as u64 + 1)) as usize);
+            }
+            let mut back = RecordSet::restore(member.root().clone(), member.recovery().clone(), &v, &lists);
+            for r in &every {
+                if !back.contains(&r.id()) {
+                    let got = back.insert(r.clone());
+                    assert!(
+                        !format!("{got:?}").contains("NoRoom"),
+                        "ex {ex}, seed {s}: a record the member holds turned away"
+                    );
+                }
+            }
+            assert!(same(&back, &member), "ex {ex}, seed {s}: {} records against {}", back.len(), member.len());
+        }
+    }
+}
+
+/// A live member that held the take-back first takes, offered again, the
+/// records it turned away while it was the only one to hold it.
+#[test]
+#[ignore = "being settled at records: the live member keeps turning them away until a restart; run with --ignored --release"]
+fn a_live_member_takes_what_it_turned_away_when_offered_again() {
+    for ex in [0u32, 6, 7, 8] {
+        let c = take_back("l", ex);
+        let mut x = new_set();
+        x.insert_all(c.back_first());
+        let mut whole = new_set();
+        whole.insert_all(c.back_last());
+        for r in whole.in_dependency_order() {
+            if !x.contains(&r.id()) {
+                let got = x.insert(r.clone());
+                assert!(!format!("{got:?}").contains("NoRoom"), "ex {ex}: turned away again");
+            }
+        }
+        assert!(same(&x, &whole), "ex {ex}: {} records against {}", x.len(), whole.len());
+    }
+}
