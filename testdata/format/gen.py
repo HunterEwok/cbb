@@ -2278,6 +2278,78 @@ def sheet_vectors():
         "read": [{"name": n, "input": i, "secret": s_, "group": g_} for n, i, s_, g_ in reads],
         "refuse": [{"name": n, "input": i, "reason": r} for n, i, r in refuse],
         "check": [{"name": n, "input": i, "reason": r} for n, i, r in checks],
+        "yubikey": yubikey_vectors(),
+    }
+
+
+def yubikey_point(d):
+    return ec.derive_private_key(d, ec.SECP256R1()).public_key().public_bytes(
+        serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+
+
+def yubikey_z(d, point):
+    peer = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), point)
+    return ec.derive_private_key(d, ec.SECP256R1()).exchange(ec.ECDH(), peer)
+
+
+def yubikey_seal(secret, card, e):
+    """The object's value: CBBR, 1, E, ChaCha20-Poly1305 of '1' and the secret (core/src/sheet/yubikey.rs)."""
+    from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+    label = b"cbb recovery yubikey v1"
+    ep = yubikey_point(e)
+    z = yubikey_z(e, card)
+    k = HKDF(algorithm=hashes.SHA256(), length=32, salt=ep + card, info=label).derive(z)
+    ct = ChaCha20Poly1305(k).encrypt(bytes(12), b"1" + secret, label + b"\x00\x01" + card)
+    return b"CBBR\x01" + ep + ct
+
+
+def yubikey_vectors():
+    """The recovery secret on a YubiKey: sealed objects, each opened with the Z the card gives."""
+    scalar = lambda label: int.from_bytes(sha(label.encode()), "big") % (N - 1) + 1
+    take = []
+    for name, secret in [("all zero", bytes(32)), ("all 0xff", b"\xff" * 32),
+                         ("a random secret", sha(b"sheet vector secret"))]:
+        d, e = scalar("yubikey card " + name), scalar("yubikey e " + name)
+        card = yubikey_point(d)
+        obj = yubikey_seal(secret, card, e)
+        z = yubikey_z(d, obj[5:70])
+        assert z == yubikey_z(e, card)
+        take.append({"name": name, "secret": secret.hex(), "card_scalar": "%064x" % d, "card": card.hex(),
+                     "e_scalar": "%064x" % e, "z": z.hex(), "object": obj.hex()})
+    t = take[2]
+    obj, card, z = bytes.fromhex(t["object"]), bytes.fromhex(t["card"]), bytes.fromhex(t["z"])
+    other = yubikey_point(scalar("yubikey another card"))
+    flip = bytearray(obj)
+    flip[-1] ^= 1
+    off = bytearray(obj)
+    off[5 + 1] ^= 0x55  # E's x no longer on the curve, most likely; checked below
+    try:
+        ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), bytes(off[5:70]))
+        raise AssertionError("the changed point is on the curve")
+    except ValueError:
+        pass
+    refuse = [
+        ("an empty object", b"", card, z, "not_cbb"),
+        ("another program's object", b"\x30\x82" + bytes(117), card, z, "not_cbb"),
+        ("a prefix of another letter", b"CBBQ" + obj[4:], card, z, "not_cbb"),
+        ("version 2", b"CBBR\x02" + obj[5:], card, z, "newer"),
+        ("version 2, short", b"CBBR\x02", card, z, "newer"),
+        ("the prefix alone", b"CBBR", card, z, "damaged"),
+        ("one byte short", obj[:-1], card, z, "damaged"),
+        ("one byte over", obj + b"\x00", card, z, "damaged"),
+        ("E not on the curve", bytes(off), card, z, "damaged"),
+        ("a changed ciphertext", bytes(flip), card, z, "other_key"),
+        ("the Z of another card", obj, card, yubikey_z(scalar("yubikey another card"), obj[5:70]), "other_key"),
+        ("another card's point", obj, other, z, "other_key"),
+        ("a card point that is not a point", obj, b"\x04" + bytes(64), z, "card_key"),
+    ]
+    return {
+        "note": "each object is opened with z, what the card with card_scalar gives for the object's E; "
+                "the check of an opened secret is the sheet's",
+        "take": take,
+        "refuse": [{"name": n, "object": o.hex(), "card": c.hex(), "z": z_.hex(), "reason": r}
+                   for n, o, c, z_, r in refuse],
     }
 
 

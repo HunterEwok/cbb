@@ -5,7 +5,9 @@ package main
 
 import (
 	"bytes"
+	"crypto/cipher"
 	"crypto/ecdh"
+	"crypto/hkdf"
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/hex"
@@ -13,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/cloudflare/circl/sign/slhdsa"
+	"golang.org/x/crypto/chacha20poly1305"
 )
 
 // The 0.6 recovery sheet (sheet.json), read here apart from the core and
@@ -162,8 +165,16 @@ func checkSheet(dir string) {
 			Name, Input, Secret string
 			Group               *string
 		}
-		Refuse []struct{ Name, Input, Reason string }
-		Check  []struct{ Name, Input, Reason string }
+		Refuse  []struct{ Name, Input, Reason string }
+		Check   []struct{ Name, Input, Reason string }
+		YubiKey struct {
+			Take []struct {
+				Name, Secret, Card, Z, Object string
+				CardScalar                    string `json:"card_scalar"`
+				EScalar                       string `json:"e_scalar"`
+			}
+			Refuse []struct{ Name, Object, Card, Z, Reason string }
+		}
 	}
 	load(dir, "sheet.json", &v)
 	var k1, k2, group []byte
@@ -217,5 +228,98 @@ func checkSheet(dir string) {
 			fail("sheet check %s: %q, want %s", t.Name, got, t.Reason)
 		}
 	}
-	fmt.Printf("%-18s %d checked\n", "sheet.json", len(v.Take)+len(v.Read)+len(v.Refuse)+len(v.Check))
+	for _, t := range v.YubiKey.Take {
+		card, err := ecdh.P256().NewPrivateKey(unhex(t.CardScalar))
+		if err != nil || hex.EncodeToString(card.PublicKey().Bytes()) != t.Card {
+			fail("yubikey %s: card key", t.Name)
+			continue
+		}
+		e, err := ecdh.P256().NewPrivateKey(unhex(t.EScalar))
+		if err != nil {
+			fail("yubikey %s: e", t.Name)
+			continue
+		}
+		if obj := yubikeySeal(unhex(t.Secret), card.PublicKey(), e); hex.EncodeToString(obj) != t.Object {
+			fail("yubikey %s: sealed differently", t.Name)
+		}
+		obj := unhex(t.Object)
+		ep, err := ecdh.P256().NewPublicKey(obj[5:70])
+		if err != nil {
+			fail("yubikey %s: E", t.Name)
+			continue
+		}
+		z, _ := card.ECDH(ep)
+		if hex.EncodeToString(z) != t.Z {
+			fail("yubikey %s: z", t.Name)
+		}
+		if s, why := yubikeyOpen(z, card.PublicKey().Bytes(), obj); why != "" || hex.EncodeToString(s) != t.Secret {
+			fail("yubikey %s: opened as %q", t.Name, why)
+		}
+	}
+	for _, t := range v.YubiKey.Refuse {
+		if _, why := yubikeyOpen(unhex(t.Z), unhex(t.Card), unhex(t.Object)); why != t.Reason {
+			fail("yubikey refuse %s: %q, want %s", t.Name, why, t.Reason)
+		}
+	}
+	fmt.Printf("%-18s %d checked\n", "sheet.json",
+		len(v.Take)+len(v.Read)+len(v.Refuse)+len(v.Check)+len(v.YubiKey.Take)+len(v.YubiKey.Refuse))
+}
+
+const yubikeyLabel = "cbb recovery yubikey v1"
+
+func yubikeyAEAD(z, e, card []byte) (cipher.AEAD, []byte) {
+	k, err := hkdf.Key(sha256.New, z, append(append([]byte{}, e...), card...), yubikeyLabel, 32)
+	if err != nil {
+		panic(err)
+	}
+	a, err := chacha20poly1305.New(k)
+	if err != nil {
+		panic(err)
+	}
+	return a, append(append([]byte(yubikeyLabel), 0, 1), card...)
+}
+
+// yubikeySeal writes the object's value: CBBR, 1, E, the sealed '1' and
+// secret.
+func yubikeySeal(secret []byte, card *ecdh.PublicKey, e *ecdh.PrivateKey) []byte {
+	z, err := e.ECDH(card)
+	if err != nil {
+		panic(err)
+	}
+	ep := e.PublicKey().Bytes()
+	a, ad := yubikeyAEAD(z, ep, card.Bytes())
+	out := append([]byte("CBBR\x01"), ep...)
+	return a.Seal(out, make([]byte, 12), append([]byte("1"), secret...), ad)
+}
+
+// yubikeyOpen reads an object's value in the core's order: prefix, version,
+// length and point, the card's point, then the seal.
+func yubikeyOpen(z, card, obj []byte) ([]byte, string) {
+	if !bytes.HasPrefix(obj, []byte("CBBR")) {
+		return nil, "not_cbb"
+	}
+	if len(obj) < 5 {
+		return nil, "damaged"
+	}
+	if obj[4] != 1 {
+		return nil, "newer"
+	}
+	if len(obj) != 119 {
+		return nil, "damaged"
+	}
+	if _, err := ecdh.P256().NewPublicKey(obj[5:70]); err != nil {
+		return nil, "damaged"
+	}
+	if _, err := ecdh.P256().NewPublicKey(card); err != nil || len(card) != 65 {
+		return nil, "card_key"
+	}
+	a, ad := yubikeyAEAD(z, obj[5:70], card)
+	p, err := a.Open(nil, make([]byte, 12), obj[70:], ad)
+	if err != nil {
+		return nil, "other_key"
+	}
+	if len(p) != 33 || p[0] != '1' {
+		return nil, "damaged"
+	}
+	return p[1:], ""
 }
