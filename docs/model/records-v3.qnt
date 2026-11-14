@@ -2408,7 +2408,12 @@ module records_v3 {
   // What crosses to and from an Unknown peer: the recovery heads (their lists ride in them),
   // and under HEADS_WITH_FIRSTS what the set keeps beside its chain too, the heads' first
   // checkpoints among it (each verifies under the key its head names).
-  def headsOf(s: Store): Set[Id] = if (HEADS_WITH_FIRSTS) s.chain else s.chain.filter(i => isChain(db.get(i)))
+  // (REISSUE_STATE: a head's Ys are its first records too, though the set keeps them in the new
+  // root's room: they cross with the head.)
+  def headsOf(s: Store): Set[Id] = if (HEADS_WITH_FIRSTS) s.chain.union({
+      val hs = recsOf(s.chain, db).filter(h => isChain(h))
+      idsOf(recsOf(s.recs.union(s.wait), db).filter(y => hs.exists(h => namesZ(h, y)))) })
+    else s.chain.filter(i => isChain(db.get(i)))
   def convergesAt(m: str): bool = {
     val s = st.get(m)
     val k = freshKept(s, heldReach(m), db)
@@ -2756,7 +2761,11 @@ module records_v3 {
     val cnt = recsOf(v.counting, db)
     v.stop or not(synced(m)) or cnt.forall(r => not(r.kind == "revoke" and r.kit == "" and r.signer == last(v.path))
       or tgt(r).forall(a => recsOf(st.get(m).got, db).forall(d => not(d.kind == "device" and d.signer == a
-        and inLine(lineOf(r.seen, a), d.id) and not(cnt.exists(o => o.kind == "revoke" and o != r and tgt(o).contains(d.target))))
+        and inLine(lineOf(r.seen, a), d.id) and not(cnt.exists(o => o.kind == "revoke" and o != r
+          // (A device of a key another counting removal already removed never counted before r:
+          // dec seed 11418, a re-issued removal of A by the new root, then A's device, then the
+          // new root's own removal of A.)
+          and (tgt(o).contains(d.target) or tgt(o).contains(a)))))
         or v.devices.contains(d.target))))
   })
 
@@ -4039,29 +4048,42 @@ module records_v3 {
       .expect((OWN_HEAD implies MEMBERS.forall(m => convergesAt(m) and views.get(m).checkpoint == 7))
         and ((WIDE_ROOT and not(OWN_HEAD) and not(CEIL_FIT) and not(FIXED_CAPS))
           implies not(MEMBERS.forall(m => convergesAt(m)))))
-  // decW seed 11419, minimised: the old root key signs a checkpoint that can never be whole after
+  // decW seed 11419 (decided set + WIDE_ROOT; at ROOTC 6 the old root's third checkpoint does
+  // not fit), minimised: the old root key signs a checkpoint that can never be whole after
   // a change, member a (which never took the heads) holds a removed admin's record aside for it,
   // and k (two changes on) must not be held to that place aside (fuzz replay at 9e20ec86: a
   // drops it once it takes the heads).
-  run oldRootAsideDecidedTest =
+  run oldRootAsideTest = if (CEIL_FIT and not(WIDE_ROOT)) init else
+      init
+        .then(signFull("R", "checkpoint", "", "", 0, false, false, 2, false, Set(3)))
+        .then(signFull("R", "checkpoint", "", "", 0, false, false, 2, false, Set(1)))
+        .then(sign("R", "revoke", "A", "", 0, false, false, 1))
+        .then(sign("R", "checkpoint", "", "", 0, false, false, 2))
+        .then(sign("A", "revoke", "D", "", 0, false, false, 1))
+        .then(syncRound)
+        .then(recoverAs(RECOVERY, "NA"))
+        .then(sign("R", "revoke", "A", "", 0, false, false, 1))
+        .then(offerEveryone(12))
+        .then(sign("R", "revoke", "D", "", 0, false, false, 1))
+        .then(signCheckpointKeep("R", Set(1, 2, 6, 7, 8, 9, 10, 11, 12, 13, NEVER), "W", 1))
+        .then(offerEveryone(14))
+        .then(recoverAs(RECOVERY, "NK"))
+        .then(restart("a"))
+        .expect(promises)
+        .then(syncRound).then(syncRound)
+        .expect(promises and not(st.get("a").wait.contains(8)))
+  // dec seed 11418, minimised: an admin key removed by a re-issued removal (a Z) admits a device
+  // that never counts; the new root's own removal of it later loses nothing.
+  run removedAdminDeviceDecidedTest =
     init
-      .then(signFull("R", "checkpoint", "", "", 0, false, false, 2, false, Set(3)))
-      .then(signFull("R", "checkpoint", "", "", 0, false, false, 2, false, Set(1)))
-      .then(sign("R", "revoke", "A", "", 0, false, false, 1))
-      .then(sign("R", "checkpoint", "", "", 0, false, false, 2))
-      .then(sign("A", "revoke", "D", "", 0, false, false, 1))
-      .then(syncRound)
+      .then(signChain(RECOVERY, "recover", "NK", 1, "from1"))
+      .then(sign("NK", "revoke", "A", "", 0, false, false, 1))
       .then(recoverAs(RECOVERY, "NA"))
-      .then(sign("R", "revoke", "A", "", 0, false, false, 1))
-      .then(offerEveryone(12))
-      .then(sign("R", "revoke", "D", "", 0, false, false, 1))
-      .then(signCheckpointKeep("R", Set(1, 2, 6, 7, 8, 9, 10, 11, 12, 13, NEVER), "W", 1))
-      .then(offerEveryone(14))
-      .then(recoverAs(RECOVERY, "NK"))
-      .then(restart("a"))
-      .expect(promises)
-      .then(syncRound).then(syncRound)
-      .expect(promises and not(st.get("a").wait.contains(8)))
+      .then(sign("A", "device", "D", "", 0, false, false, 1))
+      .then(syncRound)
+      .expect(MEMBERS.forall(m => not(views.get(m).devices.contains(DEVICE))))
+      .then(sign("NA", "revoke", "A", "", 0, false, false, 1))
+      .expect(promises and cpFirstKeepsDevices)
   run recoveryChangesRootTest =
     init
       .then(recoverAs(RECOVERY, "NK"))
