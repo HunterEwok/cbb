@@ -591,7 +591,10 @@ service and command line, the kits are the phones' Swift and Kotlin kits, and th
 | `records::RecordSet::parts_for_peer` | what a peer gets in sync (`for_peer` and its lists), as parts that each fit one frame, every change of root's list beside its head | every program that syncs: `member/`, the kits, the boards; today only the Welcome | to add |
 | `records::RecordSet::digest` | the set's digest, which a hello and each sync round carry | the same | to add |
 | `records::RecordSet::missing` | the record IDs to ask the peers for in this round; each ID is given up after `records::set::MISSING_ROUNDS` (16) rounds | the same | to add |
-| `records::State::first_missing`, `list_missing` | a change of root waits for the new root's first records or its list | the apps, which show "a change of root is arriving" | to add |
+| `records::RecordSet::change_arriving` (from `State::first_missing`, `list_missing`) | a change of root waits for the new root's first records or its list | the apps, which show "a change of root is arriving" | to add |
+| `records::RecordSet::room_of`, `root_room` | a key's room: its tier, its fixed cap, the units its records take and `left()`; `full_for(units)` when the key's next record would not fit (a per-key "this key's room is full", never a flag for the whole group) | the apps, beside each admin key and the root | to add |
+| `records::RecordSet::would_take` | what the rooms would do with a record now, on a copy: kept, kept and pushing out some of the same key's newest records, or turned away with the room and the record's units. Nothing changes | the writer before it signs; the apps, to say why a record of theirs did not stay | to add |
+| `records::RecordSet::removal_warning` | before an admin removal is signed: the devices that would leave the group and those that would no longer hold an admin key, exactly as the written removal would be judged | the admin's app, in the confirmation | to add |
 
 ### Sync of records: what a driver must do
 
@@ -612,6 +615,9 @@ programs to the core:
   app shows "a change of root is arriving" and the driver sends again on every connection.
   `RecordSet::stuck_checkpoints` covers only the current root's checkpoints, not a waiting
   change.
+- **Nothing is silent.** A record the rooms turned away is reported with `would_take`'s
+  reason, and a full room with `room_of`, never as a generic failure; in debug mode the
+  numbers (cap, units held, the record's units) are shown under the message.
 - **Offering again changes nothing.** `insert_all` of records the set already took leaves it
   as it was. Being settled: today a second offer can still change what the rooms keep; the
   test `records_that_move_the_tiers_end_equal_whatever_the_order` in
@@ -623,3 +629,6 @@ programs to the core:
 set's digest; a member whose digest differs from the peer's sends all its records once, then
 passes on only records that are new to it (`member/src/node.rs`). Two connected members whose
 sets differ without a new record exchange nothing more until one of them connects again.
+None of the notices above (`change_arriving`, `room_of`, `would_take`, `removal_warning`)
+reaches an app yet: an admin removal is confirmed without this warning, and a record a room turned
+away is not told.
