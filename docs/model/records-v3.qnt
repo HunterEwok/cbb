@@ -159,6 +159,9 @@ module records_v3 {
     // checkpoints; a device record's epoch, the highest count its writer held.)
     drops: int,
     epoch: int,
+    // (FLAG: an admin or device record says 0, an admission, or 1, an update of a key that
+    // already counted at its writer.)
+    flag: int,
   }
 
   // What a member that drops records remembers of them (core keep::Cut): the level, which only
@@ -432,6 +435,21 @@ module records_v3 {
   // or the chain's list keeps it. (Against an admin's device record the root never held that
   // arrives after the checkpoint that dropped the removal of its device.)
   pure val DROPS_EPOCH = false
+  // FLAG (candidate, architecture 11-14 20:39Z): every admin and device record carries a flag,
+  // 0 an admission, 1 an update. An update never admits, whoever signs it: the first-admission
+  // search, rootHas and the checkpoint's settled keys read admissions only; an update counts
+  // only while some admission of its key counts, and an admin's update only narrows (units no
+  // higher than the admission's). The honest writer writes 1 for a key that already counts at
+  // it; a new root's re-issue (REISSUE_STATE's Ys) is an admission. No drops, no epoch.
+  pure val FLAG = false
+  // FRESH_KEY (environment, architecture 11-14 20:46Z): an honest device offers its key to one
+  // admitter once (computers and boards make a fresh member key at every join), so an honest
+  // writer admits a key that does not count at it only if no record anywhere names that key
+  // yet. Off, a device may offer one key twice (a phone retrying through another admitter).
+  pure val FRESH_KEY = false
+  // An admission under FLAG (every admin and device record without it).
+  pure def isAdmission(r: Record): bool = not(FLAG) or r.flag == 0
+  pure def admitsOf(rs: Set[Record], k: Key): Set[Record] = admissionsOf(rs, k).filter(a => isAdmission(a))
   pure def dropsIn(rs: Set[Record]): int = rs.fold(0, (a, c) => if (c.kind == "checkpoint") max2(a, c.drops) else a)
   pure val REISSUE_DROP_ONLY = false
   pure val REISSUE_PACK_ANY = false
@@ -552,8 +570,8 @@ module records_v3 {
   pure def droppedAt(mine: Set[Record], counted: Set[Record]): Set[Id] = {
     val rms = counted.filter(r => rootRemoval(r)
       and tgt(r).forall(k => not(DEV.keys().contains(k)) and not(SIGNERS.contains(k))
-        and admissionsOf(mine, k) != Set()
-        and admissionsOf(mine, k).forall(a => headLine(mine, a.signer) != a.line))
+        and admitsOf(mine, k) != Set()
+        and admitsOf(mine, k).forall(a => headLine(mine, a.signer) != a.line))
       and not(mine.exists(x => tgt(r).contains(x.signer))))
     val gone = rms.fold(Set(), (a, r) => a.union(tgt(r)))
     val folded = if (not(FOLD_REMOVALS)) Set() else counted.filter(r => rootRemoval(r) and counted.exists(n => rootRemoval(n)
@@ -563,7 +581,7 @@ module records_v3 {
   }
 
   pure val NONEREC: Record = {
-    id: 0, signer: "", seq: 0, line: [], kind: "", target: "", kit: "", targetRec: 0, seen: Map(), heads: Map(), keep: Set(), units: 0, first: 0, follows: 0, off: false, also: Set(), drops: 0, epoch: 0,
+    id: 0, signer: "", seq: 0, line: [], kind: "", target: "", kit: "", targetRec: 0, seen: Map(), heads: Map(), keep: Set(), units: 0, first: 0, follows: 0, off: false, also: Set(), drops: 0, epoch: 0, flag: 0,
   }
 
   // --- The recovery chain (rule 33) -------------------------------------------------------
@@ -1264,7 +1282,7 @@ module records_v3 {
     pure def has(a: Key, p: str): bool = adm.keys().contains(a) and powersOf(adm.get(a)).contains(p)
     pure def isAdminKey(k: Key): bool = withPair(k).exists(x => adm.keys().contains(x))
     pure def isRootKey(k: Key): bool = onList(path, k)
-    pure def rootHas(d: Key): bool = rs.exists(r => devOf(r) == d and rootRec(r))
+    pure def rootHas(d: Key): bool = rs.exists(r => devOf(r) == d and rootRec(r) and isAdmission(r))
     // An admin key acts only by its device's newest root record: a newer root record of the
     // device that names no admin key, or another one, replaces it, and works as a removal of
     // the old key: what it signed and the replacing record saw counts, the rest not.
@@ -1279,7 +1297,8 @@ module records_v3 {
     // The admin record that admits a device no root recorded: each admin's first, the
     // smallest ID.
     pure def admittedBy(d: Key): Id = {
-      val ok = rs.filter(r => r.kind == "device" and r.target == d and isAdmin(r) and counted(r) and has(r.signer, "admit"))
+      val ok = rs.filter(r => r.kind == "device" and r.target == d and isAdmin(r) and counted(r) and has(r.signer, "admit")
+        and isAdmission(r))
       val firsts = ok.filter(r => not(ok.exists(o => o.signer == r.signer and o.seq < r.seq)))
       if (rootHas(d)) -1 else firsts.fold(NONE, (m, r) => min2(m, r.id))
     }
@@ -1288,7 +1307,9 @@ module records_v3 {
       if (not(adm.keys().contains(r.signer))) false
       else if (r.kind == "device") {
         val first = admittedBy(r.target)
-        not(rootHas(r.target)) and (first == r.id or (first != NONE and first != -1 and has(r.signer, "manage")))
+        not(rootHas(r.target)) and (first == r.id or (first != NONE and first != -1 and has(r.signer, "manage")
+          // (FLAG: an admin's update only narrows.)
+          and (isAdmission(r) or rs.forall(a => a.id != first or r.units <= a.units))))
       }
       else if (r.kind == "revoke")
         if (tgt(r).exists(t => isRootKey(t))) false
@@ -1333,7 +1354,10 @@ module records_v3 {
     val ins = labels._1
     val undecided = toLabel.exclude(ins).exclude(labels._2)
     val adminConflict = undecided.exists(r => r.kind == "revoke" or r.kind == "freeze" or r.kind == "thaw")
-    pure def counts(r: Record): bool = rootRec(r) or (isAdmin(r) and ins.contains(r))
+    pure def counts0(r: Record): bool = rootRec(r) or (isAdmin(r) and ins.contains(r))
+    // (FLAG: an update counts only while some admission of its key counts.)
+    pure def counts(r: Record): bool = counts0(r) and (isAdmission(r) or devOf(r) == ""
+      or rs.exists(a => devOf(a) == devOf(r) and isAdmission(a) and counts0(a)))
     val revoked = rs.filter(r => r.kind == "revoke" and counts(r)).fold(Set(), (s, r) => s.union(tgt(r)))
     val frozen = rs.filter(r => r.kind == "freeze" and counts(r) and not(rootThawed.contains(r.id)))
       .fold(Set(), (s, r) => s.union(tgt(r)))
@@ -1526,7 +1550,7 @@ module records_v3 {
   pure def rec(id: Id, signer: Key, line: List[Id], kind: str, target: Key, kit: str, targetRec: Id,
       seen: Key -> List[Id], heads: Key -> List[Id], keep: Set[Id], units: int): Record =
     { id: id, signer: signer, seq: line.length(), line: line, kind: kind, target: target, kit: kit, targetRec: targetRec,
-      seen: seen, heads: heads, keep: keep, units: units, first: 0, follows: 0, off: false, also: Set(), drops: 0, epoch: 0 }
+      seen: seen, heads: heads, keep: keep, units: units, first: 0, follows: 0, off: false, also: Set(), drops: 0, epoch: 0, flag: 0 }
 
   // The group as the root made it: A a phone admin, C a computer admin, W a watch admin; the
   // recovery key K is the group's own, known to every member from its admission.
@@ -1630,16 +1654,22 @@ module records_v3 {
       else if (isCp) { ...r2, drops: dH + (if (counted.exists(x => x.kind == "revoke" and not(r2.keep.contains(x.id)))) 1 else 0) }
       else if (kind == "device") { ...r2, epoch: dH }
       else r2
-    val db2 = db.put(nextId, { ...r, off: hidden })
+    // (FLAG: the writer marks an update of a key that already counts at it.)
+    val dk = devOf(r)
+    val r3 = if (FLAG and dk != "" and vh.devices.contains(dk)) { ...r, flag: 1 } else r
+    val db2 = db.put(nextId, { ...r3, off: hidden })
     all {
       SIGNERS.contains(k),
+      // (FRESH_KEY: an honest writer admits only a key no record names yet.)
+      not(FRESH_KEY) or kit == "deviant" or dk == "" or vh.devices.contains(dk)
+        or not(db.keys().exists(i => devOf(db.get(i)) == dk)),
       nextId <= FIRST + MAXREC,
       not(fork) or own.length() > 0,
       // The core's write_checkpoint signs only as the set's last root (state.roots.last()).
       not(aug) or last(vh.path) == k,
       // (J, core write_checkpoint: the honest checkpoint fits by itself and the trial set takes it
       // as the counting checkpoint; else the write is refused.)
-      not(keeps) or not(isCp) or hidden or storeView(insertInto(s, r, db2), db2).checkpoint == r.id,
+      not(keeps) or not(isCp) or hidden or storeView(insertInto(s, r3, db2), db2).checkpoint == r.id,
       not(WRITER_CP_FLOOR) or kit == "deviant" or hidden or isChain(r) or isCp or not(onList(vh.path, k))
         or rootUnits(s, k) + r.units + CP_UNITS <= ROOTC - (if (floorExempt(r)) 0 else REMOVAL_MARGIN),
       // (WRITER_CP_FLOOR, architecture 11-14 09:03Z: the honest writer never spends the margin
@@ -1650,18 +1680,18 @@ module records_v3 {
         or rootUnits(s, k) + r.units + 1 + CP_UNITS <= ROOTC,
       // (E): an honest writer publishes a record only when its own set keeps it; else the
       // write fails and the seq is not used. (A hidden record stays off its device.)
-      not(keeps) or hidden or isChain(r) or insertInto(s, r, db2).recs.contains(r.id),
+      not(keeps) or hidden or isChain(r) or insertInto(s, r3, db2).recs.contains(r.id),
       // (H): and only while its key's units above the head of the counting checkpoint stay
       // within FLOOR; the root admits no admin key past MAX_ADMINS.
       not(keeps) or not(WRITER_FLOOR) or hidden or isChain(r) or kind == "checkpoint"
-        or unitsAbove(recsOf(s.recs, db).union(Set(r)), vh, k, db2) <= (if (onList(vh.path, k)) ROOT_FLOOR else FLOOR),
+        or unitsAbove(recsOf(s.recs, db).union(Set(r3)), vh, k, db2) <= (if (onList(vh.path, k)) ROOT_FLOOR else FLOOR),
       not(keeps) or not(CEIL_FIT) or hidden or isChain(r)
-        or sumUnits(ofKey(recsOf(s.recs, db).union(Set(r)).filter(x => not(isCp) or x == r or not(prunedBy(r, x))), k))
+        or sumUnits(ofKey(recsOf(s.recs, db).union(Set(r3)).filter(x => not(isCp) or x == r3 or not(prunedBy(r, x))), k))
           <= (if (onList(vh.path, k)) ROOTC else ADMINC),
       not(keeps) or not(CEIL_FIT) or kind != "admin" or capFits(h, target),
       not(keeps) or not(WRITER_FLOOR) or kind != "admin" or learned(recsOf(s.recs, db), vh.path, vh.cuts)
         .union(Set(target)).size() <= MAX_ADMINS,
-      commit(db2, nextId + 1, h, if (hidden) s else insertInto(s, r, db2)),
+      commit(db2, nextId + 1, h, if (hidden) s else insertInto(s, r3, db2)),
     }
   }
 
@@ -1679,8 +1709,8 @@ module records_v3 {
     // Settled plain device keys: not a signer, admitted by a held record under its signer's
     // head, nothing they signed held.
     pure def plain(t: Key): bool = not(DEV.keys().contains(t)) and not(SIGNERS.contains(t))
-      and admissionsOf(mine, t) != Set()
-      and admissionsOf(mine, t).forall(a => headLine(mine, a.signer) != a.line)
+      and admitsOf(mine, t) != Set()
+      and admitsOf(mine, t).forall(a => headLine(mine, a.signer) != a.line)
       and not(mine.exists(x => x.signer == t))
     val rmGo = counted.filter(r => r.kind == "revoke" and r.seq < top(r.signer) and tgt(r).forall(t => plain(t)))
     val gone = rmGo.fold(Set(), (a, r) => a.union(tgt(r)))
@@ -5220,7 +5250,8 @@ module records_v3 {
   // none for C), and D counts again everywhere. removedStayOut catches it at r, which counted
   // the removal (6 was signed before 7, so no later admission excuses it). With DROPS_EPOCH, 9
   // carries drops 1, 6 epoch 0, and no list keeps 6: D stays out and the promises hold.
-  run droppedRemovalLateAdmissionTest =
+  // (FRESH_KEY: C's second admission of D is never signed.)
+  run droppedRemovalLateAdmissionTest = if (FRESH_KEY) init else
     init
       .then(sign("A", "device", "D", "", 0, false, false, 1))
       .then(sign("A", "copies", "", "", 0, false, false, 1))
@@ -5237,6 +5268,55 @@ module records_v3 {
       .expect(if (DROPS_EPOCH) MEMBERS.forall(m => not(views.get(m).devices.contains(DEVICE))) and promises
         else if (CP_KEEP) MEMBERS.forall(m => views.get(m).devices.contains(DEVICE)) and not(removedStayOut)
         else true)
+
+  // FLAG and FRESH_KEY, the 2x2 (architecture 11-14 20:46Z, E off). Shapes sh1 and sh2 of the
+  // exhaustive check (traces-1514): A truly admits D without holding R's admission 4; R
+  // removes D, and its checkpoint prunes the removal with R's admission. A's admission then
+  // counts and D is back: the kept gap, which the flag does not close. Under FRESH_KEY A's
+  // admission is never signed (D's key was offered once), so these runs start nothing there.
+  run flagGapSh1Test = if (FRESH_KEY) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
+      .then(sign("A", "device", DEVICE, "", 0, false, false, 1))
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1))
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(db.get(5).flag == 0 and not(db.get(8).keep.contains(4)) and not(db.get(8).keep.contains(6)))
+      .then(giveAll(MEMBERS, [4, 6, 7, 8])).then(giveAll(MEMBERS, [5]))
+      .then(syncRound).then(syncRound)
+      .expect(not(CP_KEEP) or DROPS_EPOCH or (MEMBERS.forall(m => views.get(m).devices.contains(DEVICE)) and not(removedStayOut)))
+  run flagGapSh2Test = if (FRESH_KEY) init else
+    init
+      .then(sign("A", "copies", "", "", 0, false, false, 1))
+      .then(giveAll(Set("r"), [4]))
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1))
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .then(sign("A", "device", DEVICE, "", 0, false, false, 1))
+      .expect(db.get(9).flag == 0)
+      .then(giveAll(MEMBERS, [4, 5, 6, 7, 8])).then(giveAll(MEMBERS, [9]))
+      .then(syncRound).then(syncRound)
+      // (A's 9 is signed after R's removal 6, so removedStayOut reads it as a new admission and
+      // holds; D is back all the same.)
+      .expect(not(CP_KEEP) or DROPS_EPOCH or MEMBERS.forall(m => views.get(m).devices.contains(DEVICE)))
+  // The shape the flag is for: A holds R's admission 4 when it signs D's record 5 (it narrows
+  // D, an update), never delivered to R. R removes D and its checkpoint prunes the removal with
+  // its admission; 5 arrives. Without the flag 5 is read as the first admission and D is back;
+  // with it 5 is an update with no admission under it, and D stays out.
+  run flagNarrowTest =
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
+      .then(giveAll(Set("a"), [4]))
+      .then(sign("A", "device", DEVICE, "", 0, false, false, 1))
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1))
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .expect((db.get(5).flag == 1) == FLAG and not(db.get(8).keep.contains(4)) and not(db.get(8).keep.contains(6)))
+      .then(giveAll(MEMBERS, [4, 6, 7, 8])).then(giveAll(MEMBERS, [5]))
+      .then(syncRound).then(syncRound)
+      .expect(if (FLAG) MEMBERS.forall(m => not(views.get(m).devices.contains(DEVICE))) and promises
+        else not(CP_KEEP) or DROPS_EPOCH or (MEMBERS.forall(m => views.get(m).devices.contains(DEVICE)) and not(removedStayOut)))
 
   // REISSUE_STATE: the change to NA re-issues R's live admissions (A, C, W and D) as NA's first
   // records 6 to 9; the list keeps none of R's records, the first checkpoint keeps the Ys, and
