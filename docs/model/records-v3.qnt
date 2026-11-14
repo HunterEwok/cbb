@@ -155,6 +155,10 @@ module records_v3 {
     off: bool,
     // A removal's further keys beside target (REISSUE_REMOVALS packs several removals into one).
     also: Set[Key],
+    // (DROPS_EPOCH, candidate E: a checkpoint's count of the removals left out along its root's
+    // checkpoints; a device record's epoch, the highest count its writer held.)
+    drops: int,
+    epoch: int,
   }
 
   // What a member that drops records remembers of them (core keep::Cut): the level, which only
@@ -222,13 +226,18 @@ module records_v3 {
   // WIDE_ADMIN: sizes only, for scenarios whose admin records do not fit ADMINC 2 under
   // CEIL_FIT: each admin cap grows by 3 and the room by 3 for each live admin.
   pure val WIDE_ADMIN = false
-  pure val ROOM = (if (CEIL_FIT) 20 else 14) + (if (WIDE_ROOT) 6 else 0) + (if (WIDE_ADMIN) 12 else 0)
-  pure val ROOTC = (if (CEIL_FIT) 6 else 8) + (if (WIDE_ROOT) 6 else 0)
+  // ROOT_RATIO: sizes only, for REISSUE_STATE: the real root room against the state a change
+  // re-issues is 1536 : (about 256 devices + 16 admin keys + the folded removals), about 5 : 1;
+  // the model re-issues up to about 4-5 units (three admissions, a device, a freeze), so the
+  // root's room (and with it the cut roots' reserve) is 24 at that ratio, the room 36 wider.
+  pure val ROOT_RATIO = false
+  pure val ROOM = (if (CEIL_FIT) 20 else 14) + (if (WIDE_ROOT) 6 else 0) + (if (WIDE_ADMIN) 12 else 0) + (if (ROOT_RATIO) 36 else 0)
+  pure val ROOTC = (if (CEIL_FIT) 6 else 8) + (if (WIDE_ROOT) 6 else 0) + (if (ROOT_RATIO) 18 else 0)
   pure val ADMINC = (if (CEIL_FIT) 2 else 5) + (if (WIDE_ADMIN) 3 else 0)
   pure val MAXU = 2
   pure val TOP = ROOTC
   // (REISSUE_REMOVALS: the new roots' re-signed removals take IDs too.)
-  pure val MAXREC = if (REISSUE_REMOVALS) 20 else 16
+  pure val MAXREC = if (REISSUE_STATE) 28 else if (REISSUE_REMOVALS) 20 else 16
   pure val MAXCHAIN = 3
 
   // An ID no record ever has: a first checkpoint named and never released.
@@ -409,6 +418,21 @@ module records_v3 {
   // root's first records (signChainG). REISSUE_DROP_ONLY: the mutation that leaves the old
   // removals off the list without the new ones; it must fail.
   pure val REISSUE_REMOVALS = false
+  // REISSUE_STATE (architecture 11-14 16:50Z, question B; needs REISSUE_REMOVALS): a new root
+  // re-issues among its first records, beside the Zs, the whole state of the cut roots that
+  // counts: their live admissions (admin and device records of keys not removed, the newest of
+  // each key), their freezes and the newest copies record of each cut root, as records Y of
+  // the new root (same kind, target, kit and units; targetRec names the head, as a Z's does).
+  // The list carries only what is not state plus the removals and state that did not fit.
+  pure val REISSUE_STATE = false
+  // DROPS_EPOCH (candidate E, architecture 11-14 16:50Z): a checkpoint carries drops, the
+  // highest drops its writer holds, plus one when it leaves a removal out; every device record
+  // carries epoch, the highest drops its writer holds. A member's drops is the highest of the
+  // checkpoints it holds; a device record with epoch below it counts only if a held checkpoint
+  // or the chain's list keeps it. (Against an admin's device record the root never held that
+  // arrives after the checkpoint that dropped the removal of its device.)
+  pure val DROPS_EPOCH = false
+  pure def dropsIn(rs: Set[Record]): int = rs.fold(0, (a, c) => if (c.kind == "checkpoint") max2(a, c.drops) else a)
   pure val REISSUE_DROP_ONLY = false
   pure val REISSUE_PACK_ANY = false
   // More mutations of the rule, each must fail (architecture 22:27Z): "newerSeen" (a Z's seen
@@ -539,7 +563,7 @@ module records_v3 {
   }
 
   pure val NONEREC: Record = {
-    id: 0, signer: "", seq: 0, line: [], kind: "", target: "", kit: "", targetRec: 0, seen: Map(), heads: Map(), keep: Set(), units: 0, first: 0, follows: 0, off: false, also: Set(),
+    id: 0, signer: "", seq: 0, line: [], kind: "", target: "", kit: "", targetRec: 0, seen: Map(), heads: Map(), keep: Set(), units: 0, first: 0, follows: 0, off: false, also: Set(), drops: 0, epoch: 0,
   }
 
   // --- The recovery chain (rule 33) -------------------------------------------------------
@@ -555,7 +579,11 @@ module records_v3 {
   // (REISSUE_REMOVALS: the head's re-signed removals Z, kit "z" naming the head in targetRec,
   // are its first records with the first checkpoint: the head counts as having its first only
   // with every Z too. The honest writer gives them the IDs between the head and the first.)
-  pure def namesZ(h: Record, z: Record): bool = isChain(h) and z.kit == "z" and z.targetRec == h.id and z.signer == h.target
+  pure def namesZ(h: Record, z: Record): bool = isChain(h) and reMark(z) and z.targetRec == h.id and z.signer == h.target
+  // A re-signed first record: a Z, or under REISSUE_STATE a Y (state kinds, targetRec naming
+  // its head; these kinds carry no targetRec otherwise).
+  pure def reMark(z: Record): bool = z.kit == "z"
+    or (REISSUE_STATE and z.targetRec > 0 and Set("admin", "device", "freeze", "copies").contains(z.kind))
   pure def hasFirst(r: Record, rs: Set[Record]): bool = r.first == 0 or
     (if (WHOLE_BY_SETTLER and r.first <= r.id + MAXREC)
       (r.id + 1).to(r.first).forall(i => rs.exists(x => x.id == i and (namesFirst(r, x) or namesZ(r, x)))
@@ -1095,7 +1123,10 @@ module records_v3 {
   // head the chain takes may let the next one in.
   pure def gather(s: Store, db: Id -> Record): Store = {
     val heads = recsOf(s.chain, db).filter(h => isChain(h) and validHead(s, h, db))
-    val firsts = idsOf(recsOf(s.got, db).filter(c => heads.exists(h => namesFirst(h, c) or namesZ(h, c))))
+    // (REISSUE_STATE: a Y is the new root's own record in its own room, counted like any root
+    // record; the head applies only with it (hasFirst reads the set's records and what waits
+    // aside), but it is not kept beside the chain as a Z is.)
+    val firsts = idsOf(recsOf(s.got, db).filter(c => heads.exists(h => namesFirst(h, c) or (namesZ(h, c) and c.kit == "z"))))
     { ...s, chain: s.chain.union(firsts) }
   }
   // The chain applies whole: the set cuts once, by the path of every head it can take now.
@@ -1366,7 +1397,15 @@ module records_v3 {
       rs.filter(c => c.id == h.first).fold(max2(h.targetRec, 1), (m, c) => c.seq)
     }
   }
-  pure def fullEvaluate(rs: Set[Record], ch: Chain): View = {
+  // (DROPS_EPOCH: a device record with epoch below the highest drops of the checkpoints held
+  // counts only if a held checkpoint or a chain record's list keeps it.)
+  pure def fullEvaluate(rs: Set[Record], ch: Chain): View =
+    if (not(DROPS_EPOCH)) fullEvaluate0(rs, ch) else {
+      val d = dropsIn(rs)
+      val lists = rs.union(ch.recs.foldl(Set(), (a, c) => a.union(Set(c)))).filter(c => c.kind == "checkpoint" or isChain(c))
+      fullEvaluate0(rs.filter(r => r.kind != "device" or r.epoch >= d or lists.exists(c => c.keep.contains(r.id))), ch)
+    }
+  pure def fullEvaluate0(rs: Set[Record], ch: Chain): View = {
     val pc = pathCuts(ch)
     val cur = last(pc._1)
     val plain = epoch(rs, pc._1, pc._2, Set())
@@ -1414,7 +1453,7 @@ module records_v3 {
   // that checkpoint leaves out lies below its heads and is pruned, as in the core.)
   pure def firstsHeld(s: Store, db: Id -> Record): Set[Record] = {
     val side = recsOf(s.chain, db).filter(c => not(isChain(c)))
-    side.filter(c => c.kit != "z" or side.exists(f => f.kind == "checkpoint" and f.keep.contains(c.id))
+    side.filter(c => not(reMark(c)) or side.exists(f => f.kind == "checkpoint" and f.keep.contains(c.id))
       // (WHOLE_BY_SETTLER: or a held checkpoint in the rooms keeps it.)
       or (WHOLE_BY_SETTLER and recsOf(s.recs, db).exists(f => f.kind == "checkpoint" and f.keep.contains(c.id))))
   }
@@ -1486,7 +1525,7 @@ module records_v3 {
   pure def rec(id: Id, signer: Key, line: List[Id], kind: str, target: Key, kit: str, targetRec: Id,
       seen: Key -> List[Id], heads: Key -> List[Id], keep: Set[Id], units: int): Record =
     { id: id, signer: signer, seq: line.length(), line: line, kind: kind, target: target, kit: kit, targetRec: targetRec,
-      seen: seen, heads: heads, keep: keep, units: units, first: 0, follows: 0, off: false, also: Set() }
+      seen: seen, heads: heads, keep: keep, units: units, first: 0, follows: 0, off: false, also: Set(), drops: 0, epoch: 0 }
 
   // The group as the root made it: A a phone admin, C a computer admin, W a watch admin; the
   // recovery key K is the group's own, known to every member from its admission.
@@ -1582,8 +1621,14 @@ module records_v3 {
       units)
     // (I): it follows its key's last record the writer's set keeps.
     val lastKept = ofKey(mine, k).fold((0, 0), (b, x) => if (x.seq > b._1) (x.seq, x.id) else b)._2
-    val r = if (CUT_MODE == "follows" and not(isChain(r1)))
+    val r2 = if (CUT_MODE == "follows" and not(isChain(r1)))
       { ...r1, follows: if (followsAs != 0) followsAs else if (lastKept == 0) -1 else lastKept } else r1
+    // (DROPS_EPOCH: the writer's drops, plus one for a checkpoint that leaves a removal out.)
+    val dH = dropsIn(mine)
+    val r = if (not(DROPS_EPOCH)) r2
+      else if (isCp) { ...r2, drops: dH + (if (counted.exists(x => x.kind == "revoke" and not(r2.keep.contains(x.id)))) 1 else 0) }
+      else if (kind == "device") { ...r2, epoch: dH }
+      else r2
     val db2 = db.put(nextId, { ...r, off: hidden })
     all {
       SIGNERS.contains(k),
@@ -1802,7 +1847,20 @@ module records_v3 {
         and onList(before, db.get(i).signer) and not(foldedRm.contains(db.get(i))))
     val zSrc = reC.foldl(([], ownUnits), (a, i) =>
       if (a._2 + db.get(i).units + 2 <= ROOTC) (a._1.append(i), a._2 + db.get(i).units) else a)._1
-    val covered = zSrc.foldl(Set(), (a, i) => a.union(Set(i)))
+    val zUnits = zSrc.foldl(ownUnits, (a, i) => a + db.get(i).units)
+    // (REISSUE_STATE: the state Ys, oldest first while they fit beside the Zs and a checkpoint.)
+    val ySrcAll = if (not(REISSUE_STATE) or mode != "honest") [] else {
+      val cps = beforeRecs.filter(x => x.kind == "copies")
+      range(1, nextId).select(i => db.keys().contains(i) and beforeRecs.contains(db.get(i)) and {
+        val x = db.get(i)
+        live.contains(x) or x.kind == "freeze"
+          or (x.kind == "copies" and cps.forall(y => y.signer != x.signer or y.seq <= x.seq))
+      })
+    }
+    val ySrc = ySrcAll.foldl(([], zUnits), (a, i) =>
+      if (a._2 + db.get(i).units + 2 <= ROOTC) (a._1.append(i), a._2 + db.get(i).units) else a)._1
+    val yCovered = ySrc.foldl(Set(), (a, i) => a.union(Set(i)))
+    val covered = zSrc.foldl(yCovered, (a, i) => a.union(Set(i)))
     // Packing (the core, architecture 22:00Z): each X goes whole into the first Z whose Xs agree
     // with it on the seen entries of every key both concern (their keys and their seen keys);
     // two Xs that saw a shared key differently go to different Zs. A Z's units are its Xs'.
@@ -1818,7 +1876,7 @@ module records_v3 {
     })
     val zIds = if (REISSUE_DROP_ONLY) [] else range(0, groups.length()).foldl([], (l, j) => l.append(nextId + 1 + j))
     val remUnits = sumUnits(beforeRecs.filter(x => rootRemoval(x) and not(foldedRm.contains(x)) and not(covered.contains(x.id))))
-    val fixedUnits = remUnits + sumUnits(live)
+    val fixedUnits = remUnits + sumUnits(live.filter(x => not(covered.contains(x.id))))
     val droppable = beforeRecs.filter(x => not(rootRemoval(x)) and not(live.contains(x)) and not(superseded.contains(x)))
     val trimmed = if (not(CEIL_FIT)) honest else honest.filter(i => not(superseded.contains(db.get(i))) and not(foldedRm.contains(db.get(i)))
       and (not(droppable.contains(db.get(i))) or fixedUnits + sumUnits(droppable.filter(d => notOlder(d, db.get(i)))) <= RESERVE))
@@ -1840,10 +1898,11 @@ module records_v3 {
     // (Ghost: the root removals the writer held, under "_rm" of the head's seen, which nothing
     // else reads; removedStayOut does not excuse a cut-off removal an honest writer held.)
     val heldRm = range(1, nextId).select(i => s.recs.contains(i) and rootRemoval(db.get(i)) and onList(before, db.get(i).signer))
-    val cpId = nextId + 1 + zIds.length()
+    val yIds = range(0, ySrc.length()).foldl([], (l, j) => l.append(nextId + 1 + zIds.length() + j))
+    val cpId = nextId + 1 + zIds.length() + yIds.length()
     val r = { ...rec(nextId, k, base.append(nextId), kind, target, if (mode == "honest") "" else "deviant", from,
       Map("_rm" -> heldRm), Map(), keep, 0), first: if (withCp) cpId else NEVER }
-    val ownZ = own.concat(zIds)
+    val ownZ = own.concat(zIds).concat(yIds)
     val dbH = db.put(nextId, r)
     val db2 = range(0, zIds.length()).foldl(dbH, (d, j) => {
       val xs = groups[j].foldl(Set(), (a, i) => a.union(Set(db.get(i))))
@@ -1855,7 +1914,12 @@ module records_v3 {
         seenZ, Map(), Set(), sumUnits(xs))
       d.put(nextId + 1 + j, { ...z, also: xs.exclude(Set(x0)).fold(Set(), (a, x) => a.union(Set(x.target)).union(x.also)).union(x0.also) })
     })
-    val s1 = zIds.foldl(insertInto(s, r, dbH), (x, i) => insertInto(x, db2.get(i), db2))
+    val db2y = range(0, yIds.length()).foldl(db2, (d, j) => {
+      val x = db.get(ySrc[j])
+      d.put(yIds[j], rec(yIds[j], target, own.concat(zIds).concat(yIds.slice(0, j + 1)), x.kind, x.target, x.kit, nextId,
+        x.seen, Map(), Set(), x.units))
+    })
+    val s1 = zIds.concat(yIds).foldl(insertInto(s, r, dbH), (x, i) => insertInto(x, db2y.get(i), db2y))
     // The new root's first checkpoint: what the writer counts once the head applies (a look
     // ahead with the head as if its checkpoint were held).
     val r0 = { ...r, first: 0 }
@@ -1865,9 +1929,9 @@ module records_v3 {
     // prev: the new root's earlier records and the Zs.)
     val cHeads = if (OWN_HEAD and ownZ.length() > 0) heads.put(target, ownZ) else heads
     val c = rec(cpId, target, ownZ.append(cpId), "checkpoint", "", "", 0, cHeads, cHeads,
-      v1.counting.filter(i => db2.get(i).kind != "checkpoint" and not(idsOf(leftOut).contains(i)))
-        .union(if (REISSUE_MUT == "notKept") Set() else zIds.foldl(Set(), (a, i) => a.union(Set(i)))), 2)
-    val db3 = if (withCp) db2.put(cpId, c) else db2
+      v1.counting.filter(i => db2y.get(i).kind != "checkpoint" and not(idsOf(leftOut).contains(i)))
+        .union(if (REISSUE_MUT == "notKept") Set() else zIds.concat(yIds).foldl(Set(), (a, i) => a.union(Set(i)))), 2)
+    val db3 = if (withCp) db2y.put(cpId, c) else db2y
     all {
       RKEYS.contains(k),
       at >= 1,
@@ -1879,7 +1943,8 @@ module records_v3 {
       // (J): the honest writer of a change refuses one whose new root's records and first
       // checkpoint would not fit the new root's ceiling.
       // (The new root's own device signs its first checkpoint, so its own set counts too.)
-      not(CEIL_FIT) or mode != "honest"
+      // (A void change, NEW_ROOT_ONLY, writes no first checkpoint: nothing to fit.)
+      not(CEIL_FIT) or mode != "honest" or not(withCp)
         or sumUnits(ofKey(recsOf(s.recs.union(st.get(HOLDER.get(target)).recs), db), target)) + 2 <= ROOTC,
       // (J): the root removals and the live admissions fit the reserve (else the writer cannot
       // list them all and refuses).
@@ -2330,7 +2395,15 @@ module records_v3 {
     if (not(UNKNOWN_HEADS)) heldAll
     else MEMBERS.exclude(LOST).fold(heldBy(st.get(m)).union(st.get(m).chain), (u, n) =>
       if (n == m) u
-      else if (counts(m, n) and counts(n, m)) u.union(st.get(n).recs).union(st.get(n).chain).union(st.get(n).wait)
+      // (A peer's place aside holds records for a checkpoint of its current root; at the
+      // exchange the member with the shorter chain takes the other's heads and judges its place
+      // aside again, and a checkpoint of a root no longer current waits for nothing (the one
+      // judgment, D1; fuzz replay of decW 11419 at 9e20ec86). So the place aside reaches m only
+      // from a peer whose path m's path starts: its current root stays current at the exchange.)
+      else if (counts(m, n) and counts(n, m)) u.union(st.get(n).recs).union(st.get(n).chain).union({
+        val pm = keptPath(st.get(m), db)
+        val pn = keptPath(st.get(n), db)
+        if (pn.length() >= pm.length() and pn.slice(0, pm.length()) == pm) st.get(n).wait else Set() })
       else u.union(headsOf(st.get(n))))
   // What crosses to and from an Unknown peer: the recovery heads (their lists ride in them),
   // and under HEADS_WITH_FIRSTS what the set keeps beside its chain too, the heads' first
@@ -3966,6 +4039,29 @@ module records_v3 {
       .expect((OWN_HEAD implies MEMBERS.forall(m => convergesAt(m) and views.get(m).checkpoint == 7))
         and ((WIDE_ROOT and not(OWN_HEAD) and not(CEIL_FIT) and not(FIXED_CAPS))
           implies not(MEMBERS.forall(m => convergesAt(m)))))
+  // decW seed 11419, minimised: the old root key signs a checkpoint that can never be whole after
+  // a change, member a (which never took the heads) holds a removed admin's record aside for it,
+  // and k (two changes on) must not be held to that place aside (fuzz replay at 9e20ec86: a
+  // drops it once it takes the heads).
+  run oldRootAsideDecidedTest =
+    init
+      .then(signFull("R", "checkpoint", "", "", 0, false, false, 2, false, Set(3)))
+      .then(signFull("R", "checkpoint", "", "", 0, false, false, 2, false, Set(1)))
+      .then(sign("R", "revoke", "A", "", 0, false, false, 1))
+      .then(sign("R", "checkpoint", "", "", 0, false, false, 2))
+      .then(sign("A", "revoke", "D", "", 0, false, false, 1))
+      .then(syncRound)
+      .then(recoverAs(RECOVERY, "NA"))
+      .then(sign("R", "revoke", "A", "", 0, false, false, 1))
+      .then(offerEveryone(12))
+      .then(sign("R", "revoke", "D", "", 0, false, false, 1))
+      .then(signCheckpointKeep("R", Set(1, 2, 6, 7, 8, 9, 10, 11, 12, 13, NEVER), "W", 1))
+      .then(offerEveryone(14))
+      .then(recoverAs(RECOVERY, "NK"))
+      .then(restart("a"))
+      .expect(promises)
+      .then(syncRound).then(syncRound)
+      .expect(promises and not(st.get("a").wait.contains(8)))
   run recoveryChangesRootTest =
     init
       .then(recoverAs(RECOVERY, "NK"))
@@ -4936,4 +5032,130 @@ module records_v3 {
       // (Under "gapless" and "follows" the level rises once the tails are dropped: X's
       // admission stays.)
       .expect(promises)
+
+  // The place aside at the decided set (ADMINC 2): as asideBase, with 2-unit admin records
+  // (one per admin fits its cap; the second and third come from a writer that skips its own
+  // checks). Every member counts checkpoint 13.
+  action asideBaseDecided =
+    init
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 2))
+      .then(signW(PHONE, "copies", "", "", 0, false, false, 2))
+      .then(signW(PHONE, "copies", "", "", 0, false, false, 2))
+      .then(sign(COMPUTER, "copies", "", "", 0, false, false, 2))
+      .then(signW(COMPUTER, "copies", "", "", 0, false, false, 2))
+      .then(signW(COMPUTER, "copies", "", "", 0, false, false, 2))
+      .then(sign(WATCH, "copies", "", "", 0, false, false, 2))
+      .then(signW(WATCH, "copies", "", "", 0, false, false, 2))
+      .then(signW(WATCH, "copies", "", "", 0, false, false, 2))
+      .then(giveAll(MEMBERS, [4, 5, 6, 7, 8, 9, 10, 11, 12]))
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 1, false, Set()))
+      .then(syncRound)
+      .then(compactAt("r")).then(compactAt("a")).then(compactAt("c")).then(compactAt("m")).then(compactAt("k"))
+      .expect(MEMBERS.forall(m => views.get(m).checkpoint == 13 and st.get(m).recs == Set(1, 2, 3, 4, 7, 10, 13)))
+  // asideFullTest at the decided set: 15 (never whole) keeps the third records at 7 units each,
+  // past every admin's cap. The rooms turn them away before anything goes aside, so m, which
+  // gets 15 first, counts 14 at once (nothing waits) and every member ends at 14.
+  // (The overflow of the place aside itself needs two waiting checkpoints naming in-cap records
+  // past ASIDE_ROOM together; not covered here.)
+  run asideFullDecidedTest =
+    init
+      .then(sign(PHONE, "copies", "", "", 0, false, false, 2))
+      .then(signW(PHONE, "copies", "", "", 0, false, false, 2))
+      .then(signW(PHONE, "copies", "", "", 0, false, false, 7))
+      .then(sign(COMPUTER, "copies", "", "", 0, false, false, 2))
+      .then(signW(COMPUTER, "copies", "", "", 0, false, false, 2))
+      .then(signW(COMPUTER, "copies", "", "", 0, false, false, 7))
+      .then(sign(WATCH, "copies", "", "", 0, false, false, 2))
+      .then(signW(WATCH, "copies", "", "", 0, false, false, 2))
+      .then(signW(WATCH, "copies", "", "", 0, false, false, 7))
+      .then(giveAll(MEMBERS, [4, 5, 6, 7, 8, 9, 10, 11, 12]))
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 1, false, Set()))
+      .then(syncRound)
+      .then(compactAt("r")).then(compactAt("a")).then(compactAt("c")).then(compactAt("m")).then(compactAt("k"))
+      .expect(MEMBERS.forall(m => views.get(m).checkpoint == 13 and st.get(m).recs == Set(1, 2, 3, 4, 7, 10, 13)))
+      .then(signCheckpointKeep(ROOT, Set(1, 2, 3, 5, 8, 11), "", 1))
+      .then(signCheckpointKeep(ROOT, Set(1, 2, 3, 6, 9, 12, NEVER), "", 1))
+      .then(giveAll(Set("a"), [14, 5, 8, 11]))
+      .then(giveAll(Set("m"), [15, 6, 9, 12, 14, 5, 8, 11]))
+      .expect(views.get("m").checkpoint == 14 and st.get("m").wait == Set())
+      .then(syncRound).then(syncRound).then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).checkpoint == 14 and convergesAt(m)) and promises)
+  // olderWaitingTurnedAwayTest at the decided set: 15 keeps one record; the place aside has
+  // room, 14 is not turned away, and every member counts 14 (ASIDE_TAKES_WAITED).
+  run olderWaitingTurnedAwayDecidedTest = asideBaseDecided
+      .then(signCheckpointKeep(ROOT, Set(1, 2, 3, 5, 8), "", 1))
+      .then(signCheckpointKeep(ROOT, Set(1, 2, 3, 6, NEVER), "", 1))
+      .then(giveAll(Set("a"), [14, 5, 8]))
+      .then(giveAll(Set("m"), [15, 6, 14, 5, 8]))
+      .then(syncRound).then(syncRound).then(syncRound).then(syncRound)
+      .expect(and { asideFits("m"), not(newestWholeable("m")),
+        if (ASIDE_TAKES_WAITED) MEMBERS.forall(m => views.get(m).checkpoint == 14 and convergesAt(m))
+        else views.get("m").checkpoint == 13 and not(convergesAt("m")),
+        promises })
+  // oneSlotTest at the decided set (one slot is not decided): m gets 15 first, every member
+  // ends at 14.
+  run oneSlotDecidedTest = asideBaseDecided
+      .then(signCheckpointKeep(ROOT, Set(1, 2, 3, 5, 8), "", 1))
+      .then(signCheckpointKeep(ROOT, Set(1, 2, 3, 6, NEVER), "", 1))
+      .expect(MEMBERS.forall(m => views.get(m).checkpoint == 13
+        and st.get(m).recs == Set(1, 2, 3, 4, 7, 10, 13).union(if (m == "r") Set(14, 15) else Set())))
+      .then(giveAll(Set("a"), [14, 5, 8]))
+      .then(giveAll(Set("m"), [15, 6, 14, 5, 8]))
+      .then(syncRound).then(syncRound).then(syncRound)
+      .expect(and { views.get("a").checkpoint == 14, syncedProto("m"),
+        if (ONE_SLOT or not(ASIDE_TAKES_WAITED)) views.get("m").checkpoint == 13 and not(convergesAt("m"))
+        else MEMBERS.forall(m => views.get(m).checkpoint == 14 and convergesAt(m)) and promises })
+  // missingNewestTest at the decided set: 14's records wait aside on a (5) and c (8), whole
+  // nowhere; missing() brings them and every member counts 14.
+  run missingNewestDecidedTest = asideBaseDecided
+      .then(signCheckpointKeep(ROOT, Set(1, 2, 3, 5, 8), "", 1))
+      .then(signCheckpointKeep(ROOT, Set(1, 2, 3, 6, NEVER), "", 1))
+      .then(giveAll(Set("a"), [15, 14, 5]))
+      .then(giveAll(Set("c"), [15, 14, 8]))
+      .then(giveAll(Set("m"), [15, 14]))
+      .expect(not(CEIL_FIT) or st.get("a").wait.contains(5) and st.get("c").wait.contains(8) and views.get("m").checkpoint == 13)
+      .then(syncRound).then(syncRound).then(syncRound)
+      // (The sizes are the decided set's; at others the shape differs and missingNewestTest covers it.)
+      .expect(not(CEIL_FIT) or and { syncedProto("m") or not(ASIDE_TAKES_WAITED),
+        if (not(ASIDE_TAKES_WAITED)) views.get("m").checkpoint == 13
+        else if (MISSING_NEWEST_ONLY or ONE_SLOT) views.get("m").checkpoint == 13 and not(convergesAt("m"))
+        else MEMBERS.forall(m => views.get(m).checkpoint == 14 and convergesAt(m)) and promises })
+
+  // Candidate E (architecture 11-14 16:50Z, found by the exhaustive check on the honest writer):
+  // A admits D (4) and signs on (5); C admits D too (6), a record the root never holds. The
+  // root removes D (7), signs on (8) and checkpoints (9): CP_KEEP drops the removal with A's
+  // admission (D is a settled plain device). C's 6 then arrives, above C's head (the root named
+  // none for C), and D counts again everywhere. removedStayOut catches it at r, which counted
+  // the removal (6 was signed before 7, so no later admission excuses it). With DROPS_EPOCH, 9
+  // carries drops 1, 6 epoch 0, and no list keeps 6: D stays out and the promises hold.
+  run droppedRemovalLateAdmissionTest =
+    init
+      .then(sign("A", "device", "D", "", 0, false, false, 1))
+      .then(sign("A", "copies", "", "", 0, false, false, 1))
+      .then(sign("C", "device", "D", "", 0, false, false, 1))
+      .then(giveAll(Set("r", "c", "m", "k"), [4, 5]))
+      .then(sign("R", "revoke", "D", "", 0, false, false, 1))
+      .then(sign("R", "copies", "", "", 0, false, false, 1))
+      .then(signAs("R", "checkpoint", "", 0))
+      .expect(not(CP_KEEP) or (not(db.get(9).keep.contains(4)) and not(db.get(9).keep.contains(7))))
+      .then(giveAll(Set("a", "c", "m", "k"), [7, 8, 9]))
+      .then(compactAt("m"))
+      .then(giveAll(MEMBERS, [6]))
+      .then(syncRound).then(syncRound)
+      .expect(if (DROPS_EPOCH) MEMBERS.forall(m => not(views.get(m).devices.contains(DEVICE))) and promises
+        else if (CP_KEEP) MEMBERS.forall(m => views.get(m).devices.contains(DEVICE)) and not(removedStayOut)
+        else true)
+
+  // REISSUE_STATE: the change to NA re-issues R's live admissions (A, C, W and D) as NA's first
+  // records 6 to 9; the list keeps none of R's records, the first checkpoint keeps the Ys, and
+  // every member counts the same admins and devices under NA.
+  run reissueStateTest =
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).path == [ROOT, "NA"] and views.get(m).devices.contains(DEVICE)
+        and views.get(m).admins.keys() == Set(PHONE, COMPUTER, WATCH)) and promises
+        and ((REISSUE_STATE and REISSUE_REMOVALS) implies (db.get(5).keep == Set()
+          and Set(6, 7, 8, 9).forall(i => db.get(i).signer == "NA" and db.get(i).targetRec == 5)
+          and db.get(10).keep == Set(6, 7, 8, 9))))
 }
