@@ -1814,6 +1814,9 @@ The vectors are in `testdata/format/sheet.json`, `yubikey`.
 
 ## 10. Admin CAs, device records and revocation
 
+0.6's records are described in "Records in 0.6" below. The rest of this introduction, and
+the subsections under "Until the switch to the core (wave 5)", describe 0.5's version 2.
+
 The wire side of "Admin phones, the devices list and revocation" in
 [design.md](design.md). The group's authority records are of version 2: one rule evaluates
 a set of them into the group's state ("The state"), and it is written twice, in Go
@@ -1883,6 +1886,8 @@ as they come remembers the level and, for each key, the first record it dropped,
 exactly what a member that saw them all at once keeps.
 
 #### The order inside a room
+
+Being settled: the order below is what the code holds today, and it is changing.
 
 Each key's records are taken in an order that depends on each record alone (`keep::Item::pos`):
 
