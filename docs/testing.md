@@ -386,4 +386,4 @@ fix that removes the cause. The bench finds them too: `go run ./tools/bench -rep
 |---|---|---|---|
 | `TestSeveralHubs` | `internal/service` | about one run in six, 2026-11 | not yet found |
 | `TestAloneHubs` | `internal/service`, against the Rust service | about two runs in five in CI, 2026-11 | after the first hub stops, the client's tunnel connection to the second hub ends right after it comes up, and the copy made then is lost |
-| `TestWindow` | `apps/desktop`, Windows | rarely, 2026-11 | Chrome gave no DevTools port within 30 seconds; the test now prints Chrome's error output, to be read when it fails again |
+| `TestWindow` | `apps/desktop`, Windows and Linux | rarely: once on Linux in some 300 runs, 2026-11 | Chrome runs but gives no DevTools port within 30 seconds; on Linux its last line came 5 seconds after the start, after failed D-Bus calls to the desktop portal. The test now writes how long each start took to the job's summary and keeps the last 200 lines of Chrome's detailed log (`--v=1`), to be read when it fails again |
