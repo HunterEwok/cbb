@@ -847,6 +847,12 @@ impl Chain {
         self.steps.iter().map(|(_, k)| k.hash()).collect()
     }
 
+    /// The path of roots: the group's root, then the roots the chain put
+    /// on it, in their order.
+    pub fn path(&self, group_root: &KeyHash) -> Vec<KeyHash> {
+        core::iter::once(*group_root).chain(self.steps.iter().map(|(_, k)| k.hash())).collect()
+    }
+
     /// The roots whose records wait aside, each with the lowest seq of a
     /// record that names it: the roots of the chain's records that have
     /// not applied yet, not a root of the path. A halted group keeps
@@ -1043,9 +1049,11 @@ pub(crate) fn chain<'r>(
 /// none. cuts are the takeovers' cuts of the roots before them: of such a
 /// root only the records its takeover lists may stay, within that root's
 /// own room (rule 32).
+#[allow(clippy::too_many_arguments, reason = "the parts of one judgment of the rooms")]
 pub(crate) fn kept_of(
     group_root: &KeyHash,
     promoted: &BTreeSet<KeyHash>,
+    path: &[KeyHash],
     cuts: &BTreeMap<KeyHash, Cut>,
     is_first: impl Fn(&Record) -> bool,
     kept_first: &BTreeSet<RecordId>,
@@ -1078,13 +1086,94 @@ pub(crate) fn kept_of(
     }
     let mut items = items;
     super::keep::newest_only(&mut items, &firsts);
+    let (second, back) = not_live(path, cuts, checked.iter().filter(|c| !off_cut(cuts, c.r)).map(|c| (c.r, c.role)));
+    takes_back_first(&mut items, &back);
     let ceiling = |k: &KeyHash| ceiling_of(group_root, promoted, &admins, k);
-    let mut kept = super::keep::keep_with(&items, ceiling, &super::keep::Cut::default(), &pre).0;
+    let mut kept = super::keep::keep_tiers(&items, ceiling, &super::keep::Cut::default(), &pre, &second).0;
     kept.extend(checked.iter().filter(|c| first(c)).map(|c| c.r.id()));
     kept.extend(chain_kept(checked.iter().map(|c| (c.r, c.role))));
     kept.extend(proof);
     kept.extend(checked.iter().filter(|c| is_first(c.r)).map(|c| c.r.id()));
     kept
+}
+
+/// The admin keys that are no longer admins, for the rooms' second tier
+/// (`keep::keep_tiers`), and the root records that take an admin key back.
+/// Of the admin keys the path's roots name, a key is no longer an admin
+/// when a root's removal names it, when the newest root record of its
+/// device names another key or none, or when it comes after the first
+/// ADMIN_KEYS_MAX (a root earlier on the path, then a lower seq, then the
+/// smaller ID), as the evaluation counts them. It reads only root records:
+/// removals come first in the root's room, and so does a record that takes
+/// an admin key back (`takes_back_first`), so what the rooms decide does
+/// not change who is an admin.
+pub(crate) fn not_live<'r>(
+    path: &[KeyHash],
+    cuts: &BTreeMap<KeyHash, Cut>,
+    recs: impl Iterator<Item = (&'r Record, Role)>,
+) -> (BTreeSet<KeyHash>, BTreeSet<RecordId>) {
+    let at = |k: &KeyHash| path.iter().position(|p| p == k);
+    let mut named: BTreeMap<KeyHash, (usize, u64, core::cmp::Reverse<RecordId>)> = BTreeMap::new();
+    let mut removed: BTreeSet<KeyHash> = BTreeSet::new();
+    // Each device's root records: (place on the path, seq, ID, admin).
+    type Admission = (usize, u64, RecordId, Option<KeyHash>);
+    let mut devices: BTreeMap<DeviceId, Vec<Admission>> = BTreeMap::new();
+    for (r, role) in recs {
+        let b = r.body();
+        let Some(p) = at(&b.signer) else { continue };
+        if role != Role::Root || b.held || cuts.get(&b.signer).is_some_and(|c| !c.lets(r)) {
+            continue;
+        }
+        match &b.kind {
+            Kind::Revoke(rm) => removed.extend(rm.keys.iter().copied()),
+            Kind::Device(d) => {
+                let a = d.admin.as_ref().map(Key::hash);
+                if let Some(a) = a {
+                    let o = (p, b.seq, core::cmp::Reverse(r.id()));
+                    let n = named.entry(a).or_insert(o);
+                    if o > *n {
+                        *n = o;
+                    }
+                }
+                devices.entry(d.id()).or_default().push((p, b.seq, r.id(), a));
+            }
+            _ => {}
+        }
+    }
+    let mut current: BTreeSet<KeyHash> = BTreeSet::new();
+    let mut taken: BTreeSet<KeyHash> = BTreeSet::new();
+    let mut back: BTreeSet<RecordId> = BTreeSet::new();
+    for rs in devices.values() {
+        let Some(&(_, _, newest, now)) = rs.iter().max_by_key(|(p, seq, id, _)| (*p, *seq, core::cmp::Reverse(*id)))
+        else {
+            continue;
+        };
+        current.extend(now);
+        for (_, _, _, a) in rs {
+            if let Some(a) = a
+                && Some(*a) != now
+            {
+                taken.insert(*a);
+                back.insert(newest);
+            }
+        }
+    }
+    let mut live: Vec<((usize, u64, RecordId), KeyHash)> = named
+        .iter()
+        .filter(|(a, _)| !removed.contains(*a) && (current.contains(*a) || !taken.contains(*a)))
+        .map(|(a, (p, seq, id))| ((*p, *seq, id.0), *a))
+        .collect();
+    live.sort();
+    let live: BTreeSet<KeyHash> = live.into_iter().take(super::ADMIN_KEYS_MAX).map(|(_, a)| a).collect();
+    (named.into_keys().filter(|a| !live.contains(a)).collect(), back)
+}
+
+/// A root record that takes an admin key back works as a removal of it:
+/// it comes first in the root's room, as removals do (`not_live`).
+pub(crate) fn takes_back_first(items: &mut [super::keep::Item], back: &BTreeSet<RecordId>) {
+    for it in items.iter_mut().filter(|it| back.contains(&it.id)) {
+        it.early = true;
+    }
 }
 
 /// The records of a root a takeover cut that it does not list.
@@ -1623,7 +1712,9 @@ impl<'a> Evaluation<'a> {
         let promoted = &chain.promoted();
         // The checkpoint being judged and what it names are kept first,
         // ahead of the rooms (`named_first`).
-        let kept = kept_of(&group_root, promoted, cuts, |r: &Record| is_first(&chain.firsts, r), first, &checked);
+        let path = chain.path(&group_root);
+        let kept =
+            kept_of(&group_root, promoted, &path, cuts, |r: &Record| is_first(&chain.firsts, r), first, &checked);
         // What a takeover keeps of the root it cut counts by itself, as a
         // checkpoint's anchor does: not by that root's chain.
         let mut anchors = anchors;
@@ -1969,10 +2060,15 @@ impl<'e, 'a> Epoch<'e, 'a> {
         let roots: Vec<KeyHash> = self.on_path.keys().copied().collect();
         // The proof of two histories is outside the rooms, as in the set.
         let proof = fork_proof(self.e.recs.iter().map(|r| (r.r, r.role)));
+        let mut path: Vec<(usize, KeyHash)> = self.on_path.iter().map(|(k, p)| (*p, *k)).collect();
+        path.sort();
+        let path: Vec<KeyHash> = path.into_iter().map(|(_, k)| k).collect();
+        let (_, back) = not_live(&path, &self.cuts, self.e.recs.iter().map(|r| (r.r, r.role)));
         for k in roots {
             let rs: Vec<usize> = self.of(&k).iter().copied().filter(|&i| !proof.contains(&self.r(i).id)).collect();
             let mut its: Vec<super::keep::Item> = rs.iter().map(|&i| item(self.r(i).r, self.r(i).role)).collect();
             super::keep::newest_only(&mut its, &[]);
+            takes_back_first(&mut its, &back);
             let mut order: Vec<(super::keep::Pos, usize)> = its.iter().map(|it| it.pos()).zip(rs).collect();
             order.sort();
             for (_, i) in order.into_iter().skip(MAX_ROOT_RECORDS) {
