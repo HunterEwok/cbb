@@ -22,7 +22,8 @@ pub const T_RESEAL: u64 = 23;
 pub const T_ROOTS: u64 = 24;
 
 /// Message `keys`: up to 256 statements, the sender's own and those it
-/// passes on.
+/// passes on, as many as fit one frame
+/// (`records::statement::keys_messages`).
 pub static KEYS: Table = Table {
     shape: "keys-message/shape",
     fields: &[f(2, "keys-message/list", Ty::Array { of: &Ty::Envelope, max: 256 }, true)],

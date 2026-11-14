@@ -1268,6 +1268,13 @@ def copy_vector():
     content = dec(pad_content({0: 1, 5: "hello"}))
     assert len(enc(content)) == 1024
     assert verify(LAPTOP.key, "cbb copy sig v2", h + W + P, sig)
+    # a group moving to another sealing algorithm device by device: the
+    # phone's wrap is of a later algorithm (1500 bytes), the others X-Wing's
+    pi = [r[0] for r in readers].index(PHONE.id16)
+    mixed_wraps = [fake("later wrap", 1500) if i == pi else w for i, w in enumerate(wraps)]
+    mixed_W = sha(b"".join(sha(w) for w in mixed_wraps))
+    mixed_sig = LAPTOP.sign("cbb copy sig v2", h + mixed_W + P)
+    mixed = {1: hb, 2: 15, 3: mixed_wraps, 4: payload, 6: mixed_sig}
     return {
         "name": "a text copy for three readers",
         "hdr_diag": diag(hdr), "hdr": hb.hex(), "h": h.hex(), "K": K.hex(), "commit": commit.hex(),
@@ -1275,11 +1282,17 @@ def copy_vector():
         "blob_key": hkdf(K, h, b"cbb copy blob v2").hex(),
         "W": W.hex(), "P": P.hex(), "sig": sig.hex(),
         "copy": enc(full).hex(), "reduced_copy_for_board": enc(reduced).hex(),
+        "mixed_copy": enc(mixed).hex(), "mixed_W": mixed_W.hex(),
+        "mixed_note": "wraps of two algorithms in one copy: a whole wrap of any length over 48 bytes is hashed into W; a reader checks its own wrap's length only",
         "refuse_copies": [
             {"name": name, "rule": rule, "copy": enc(c).hex()}
             for name, rule, c in [
                 ("three readers, no wraps", "copy/shape", {**full, 3: []}),
                 ("three readers, five wraps", "copy/shape", {**full, 3: wraps + wraps[:2]}),
+                ("a wrap of 48 bytes, too short for K and its tag", "copy/shape",
+                 {**full, 3: [fake("short wrap", 48) if i == pi else w for i, w in enumerate(wraps)]}),
+                ("a wrap of 33 bytes", "copy/shape",
+                 {**full, 3: [fake("short wrap", 33) if i == pi else w for i, w in enumerate(wraps)]}),
                 ("reuse in the header", "copy/reuse", {**full, 1: enc({**hdr, 7: [sha(b"copy")[:16], 1]})}),
                 ("unknown critical field in the header", "form/critical", {**full, 1: enc({**hdr, 200: 1})}),
                 ("a header of readers only", "copy/shape", {**full, 1: enc({4: readers})}),
@@ -3008,7 +3021,7 @@ def statement_rule(env_b):
     """A keys statement (section 5): "take", "hold" or the rule."""
     env = dec(env_b)
     body = env[0]
-    if len(body) > 2048:
+    if len(body) > 32768:
         return "env/size"
     m = dec(body)
     if not (isinstance(m.get(1), int) and m[1] >= 1):
@@ -3263,6 +3276,13 @@ def wave4_vectors():
         m = {1: 1, 2: GROUP, 3: LAPTOP.hash, 4: 9, 6: T0, 10: [XWING, fake("sig2 statement", 1216)], **extra}
         env, b, _ = envelope2("keys", LAPTOP, m)
         statements.append({"name": name, "verdict": statement_rule(env), "diag": diag(dec(b)), "envelope": env.hex()})
+    # further seal keys of later algorithms in the optional zone (field 256),
+    # which this version skips (the 32 KiB ceiling is tested in the core)
+    m = {1: 1, 2: GROUP, 3: LAPTOP.hash, 4: 7, 6: T0, 10: [XWING, fake("s8", 1216)],
+         256: [[9, fake("later seal 1", 1568)], [XWING, fake("later seal 2", 1216)]]}
+    env, b = envelope("keys", LAPTOP, m)
+    statements.append({"name": "further seal keys of later algorithms in the optional zone",
+                       "verdict": statement_rule(env), "diag": diag(m), "envelope": env.hex()})
     out["statements"] = statements
 
     # beacons

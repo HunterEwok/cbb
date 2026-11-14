@@ -111,3 +111,16 @@ pub fn vless(data: &[u8]) {
     let read: Vec<Vec<u8>> = wire.chunks(step).flat_map(|c| back.push(c).expect("framed packets read")).collect();
     assert_eq!(read, packets, "framed packets did not read back");
 }
+
+/// Message 67 before its tag is checked: any bytes are read as a pairing
+/// frame after the confirm and their Welcome opened under a fixed ISK. No
+/// bytes panic, and none pass the tag (the fuzzer cannot forge
+/// HMAC-SHA-512), so nothing past the frame's walk is ever read of them.
+pub fn welcome_message(data: &[u8]) {
+    let Ok(m) = crate::join::read_pairing(data, true) else { return };
+    if m.t != crate::join::T_WELCOME {
+        return;
+    }
+    let body = data.get(4..).unwrap_or_default();
+    assert!(crate::join::welcome::open(body, &[7; 64]).is_err(), "a Welcome passed a tag nobody made");
+}

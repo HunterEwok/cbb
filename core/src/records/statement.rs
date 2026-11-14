@@ -17,8 +17,18 @@ use crate::identity::ExternalKey;
 
 /// The label statements are signed under.
 pub const LABEL_KEYS: &str = "cbb keys v1";
-/// The ceiling on a statement's body.
-pub const MAX_STATEMENT_BODY: usize = 2 << 10;
+/// The ceiling on a statement's body: room for the seal keys of later
+/// algorithms beside X-Wing's 1216 bytes ([`FIELD_SEALS`]).
+pub const MAX_STATEMENT_BODY: usize = 32 << 10;
+
+/// Field 10, `seal`: the X-Wing key every 0.6 sender seals to; a later
+/// version keeps writing it there.
+pub const FIELD_SEAL: u16 = 10;
+
+/// Field 256, `seals`, in the optional zone: further seal keys of later
+/// algorithms, which a 0.6 device skips. A sender seals to the first key it
+/// knows of field 10 and then this list.
+pub const FIELD_SEALS: u16 = 256;
 
 /// A statement's body.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -55,7 +65,7 @@ impl Body {
         if self.time_ms != 0 {
             m.push((6, Value::Uint(self.time_ms)));
         }
-        m.push((10, self.seal.to_value()));
+        m.push((FIELD_SEAL, self.seal.to_value()));
         if self.held {
             m.push((250, Value::Uint(1)));
         }
@@ -182,4 +192,56 @@ pub fn choose<'a>(state: &State, statements: impl IntoIterator<Item = &'a Statem
         }
     }
     out
+}
+
+/// The most statements one message `keys` carries (field 2).
+pub const KEYS_PER_MESSAGE: usize = 256;
+
+/// Splits statements' envelopes, in the order they are sent, into messages
+/// `keys` of at most [`KEYS_PER_MESSAGE`] each that fit a frame: 256
+/// statements at their widest (a 32 KiB body and a second signature) are
+/// over 10 MiB, more than one frame holds.
+pub fn keys_messages<'a>(envelopes: &[&'a [u8]]) -> Vec<Vec<&'a [u8]>> {
+    let mut out: Vec<Vec<&'a [u8]>> = Vec::new();
+    let mut cur: Vec<&'a [u8]> = Vec::new();
+    let mut used = 0usize;
+    for &e in envelopes {
+        let item = e.len().saturating_add(9);
+        if !cur.is_empty()
+            && (cur.len() >= KEYS_PER_MESSAGE || used.saturating_add(item) > crate::records::sync::PART_BYTES)
+        {
+            out.push(core::mem::take(&mut cur));
+            used = 0;
+        }
+        cur.push(e);
+        used = used.saturating_add(item);
+    }
+    if !cur.is_empty() {
+        out.push(cur);
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 256 statements at their widest go in two messages, each inside a
+    /// frame; 300 small ones in two of at most 256.
+    #[test]
+    fn statements_are_split_into_messages_that_fit_a_frame() {
+        let wide = alloc::vec![0u8; MAX_STATEMENT_BODY + 8192 + 128];
+        let all: Vec<&[u8]> = (0..256).map(|_| wide.as_slice()).collect();
+        let msgs = keys_messages(&all);
+        assert_eq!(msgs.len(), 2);
+        assert_eq!(msgs.iter().map(Vec::len).sum::<usize>(), 256);
+        for m in &msgs {
+            assert!(m.iter().map(|e| e.len() + 9).sum::<usize>() <= crate::records::sync::PART_BYTES);
+        }
+        let small = [0u8; 100];
+        let all: Vec<&[u8]> = (0..300).map(|_| small.as_slice()).collect();
+        let msgs = keys_messages(&all);
+        assert_eq!(msgs.iter().map(Vec::len).collect::<Vec<_>>(), [256, 44]);
+        assert!(keys_messages(&[]).is_empty());
+    }
 }

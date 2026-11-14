@@ -284,6 +284,9 @@ pub fn open<'a>(body: &'a [u8], isk: &[u8]) -> Result<&'a [u8], Rule> {
         Ok(Value::Bytes(b)) => b,
         _ => return Err(RULE_TAG),
     };
+    // Load-bearing: the Tamarin lemmas `parts_exact` and `parts_ids_exact`
+    // (audit-0.6/formal-join/parts) fall without Tw over the digest and the
+    // count of parts, both inside field 3. Do not narrow what it covers.
     if !tag(isk, welcome).is_some_and(|t| crate::secret::ct_eq(tw, &t)) {
         return Err(RULE_TAG);
     }
@@ -556,6 +559,8 @@ impl Welcome {
         set.take_part(&self.records, &lists);
         set.take_part(&self.records, &lists);
         // The set is the one the admitter sent: its IDs and lists.
+        // Load-bearing with the tag: `parts_ids_exact` and `parts_exact`
+        // (audit-0.6/formal-join/parts) fall without it.
         if let Some(d) = &self.digest
             && !crate::secret::ct_eq(&digest_of(&set), d)
         {
@@ -571,6 +576,8 @@ impl Welcome {
             // covers, is not, and its ID alone would not change the digest.
             // (A stopped group keeps only the recovery key's records, and is
             // refused above.) Nothing is kept on a refusal.
+            // Load-bearing: `parts_exact` (audit-0.6/formal-join/parts)
+            // falls without it, to a swapped second signature.
             let held: BTreeSet<&RecordId> = set.ids().collect();
             let lists: BTreeSet<&[u8]> = set.lists().collect();
             let all_lists = self.list.iter().chain(&self.lists).all(|l| lists.contains(l.as_slice()));

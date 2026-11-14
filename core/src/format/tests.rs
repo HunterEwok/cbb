@@ -602,6 +602,13 @@ fn copies() {
         assert!(print::describe(Kind::Copy, &v).contains("hdr(1)"));
         assert!(print::describe(Kind::CopyHeader, &cp.header).contains("origin(2)"));
     }
+    // Wraps of two algorithms in one copy.
+    let b = unhex(s(&c, "mixed_copy"));
+    let v = cbor::decode(&b).unwrap();
+    let cp = copy::Copy::from_value(&v).unwrap();
+    assert_eq!(hex(&cp.w), s(&c, "mixed_W"));
+    assert!(cp.wraps.iter().any(|w| w.len() != copy::WRAP_SIZE));
+    cp.verify(&laptop).unwrap();
     let twin = unhex(s(&c, "copy_high_s_twin"));
     let tv = cbor::decode(&twin).unwrap();
     assert_eq!(copy::Copy::from_value(&tv).unwrap().verify(&laptop), Err(Rule::SIG_LOW_S));

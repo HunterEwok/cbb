@@ -867,12 +867,14 @@ func main() {
 		var w []byte
 		for _, x := range m[uint64(3)].([]any) {
 			xb := x.([]byte)
-			switch len(xb) {
-			case 1168:
+			// A wrap's length follows its reader's algorithm: any whole
+			// wrap (over 48 bytes) is hashed, 32 bytes are a hash already.
+			switch {
+			case len(xb) == 32:
+				w = append(w, xb...)
+			case len(xb) >= minWrap:
 				s := sha256.Sum256(xb)
 				w = append(w, s[:]...)
-			case 32:
-				w = append(w, xb...)
 			default:
 				fail("copy %s: wrap size %d", name, len(xb))
 			}
@@ -892,6 +894,7 @@ func main() {
 	}
 	checkCopy("full", unhex(c["copy"]))
 	checkCopy("reduced", unhex(c["reduced_copy_for_board"]))
+	checkCopy("mixed", unhex(c["mixed_copy"]))
 	if cv, err := strict(unhex(c["content_plaintext"])); err != nil || len(c["content_plaintext"]) != 2048 {
 		fail("copy content: %v", err)
 	} else {
@@ -1452,8 +1455,17 @@ func copyRule(c []byte) string {
 	if !ok || len(ws) != len(rs) {
 		return "copy/shape"
 	}
+	for _, x := range ws {
+		if b, ok := x.([]byte); !ok || (len(b) != 32 && len(b) < minWrap) {
+			return "copy/shape"
+		}
+	}
 	return ""
 }
+
+// minWrap is the shortest whole wrap: K and its tag after an encapsulation
+// of at least one byte.
+const minWrap = 32 + 16 + 1
 
 // checkSets reads every set the vectors hold and checks its order by
 // itself, apart from gen.py's own.

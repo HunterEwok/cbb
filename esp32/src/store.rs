@@ -142,7 +142,10 @@ impl Store {
         let mut s = Store { flash, part, fields: Fields::default(), newest: None };
         let a = s.read_slot(0)?;
         let b = s.read_slot(1)?;
-        if let Some(n) = store::newest(&a, &b) {
+        let newest = store::load(&a, &b).map_err(|store::Newer| {
+            Error::msg("the saved settings are of a newer firmware: flash it again, or erase the settings to start anew")
+        })?;
+        if let Some(n) = newest {
             s.newest = Some((n.slot, n.seq));
             s.fields = Fields::decode(n.payload).ok_or_else(|| Error::msg("the saved settings are damaged"))?;
         }

@@ -11,6 +11,13 @@
 //! A frame is the magic "cbb1", a sequence number (u32, little-endian), the
 //! payload's length (u32, little-endian), the payload and the SHA-256 of all
 //! that came before it. Erased flash (all 0xff) is no frame.
+//!
+//! Versions: the magic's digit is the frame's layout, and the field
+//! [`FIELD_VERSION`] the oldest version of this store that reads the fields
+//! (absent: 1). A later program reads every earlier store. An earlier one
+//! that finds a later frame or a later version stops ([`load`] gives
+//! [`Newer`]) and changes nothing: it never takes the store for empty and
+//! starts as new.
 
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
@@ -18,6 +25,20 @@ use alloc::vec::Vec;
 use crate::certs::sha256;
 
 const MAGIC: &[u8; 4] = b"cbb1";
+
+/// The version of the store this program writes and reads.
+pub const VERSION: u32 = 1;
+
+/// The reserved field 0: the oldest version of the store that reads these
+/// fields, a u32 little-endian; absent, 1. A program writes it only when it
+/// changes the fields so that an earlier one would misread them.
+pub const FIELD_VERSION: u8 = 0;
+
+/// A store of a later program: a frame of a later layout in either slot,
+/// or fields whose [`FIELD_VERSION`] is above [`VERSION`]. The program
+/// stops with a clear message and writes nothing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Newer;
 /// The length of a frame's header: the magic, the sequence number and the
 /// payload's length.
 pub const HEADER: usize = 12;
@@ -88,6 +109,32 @@ pub fn newest<'a>(a: &'a [u8], b: &'a [u8]) -> Option<Newest<'a>> {
     }
 }
 
+/// Whether slot starts with the magic of a later layout ("cbb" and a digit
+/// above 1), intact or not: torn or whole, it is a later program's.
+fn later_frame(slot: &[u8]) -> bool {
+    match slot.get(..4) {
+        Some([b'c', b'b', b'b', d]) => d.is_ascii_digit() && *d > MAGIC[3],
+        _ => false,
+    }
+}
+
+/// The store at a start: the newest intact copy among the two slots, or
+/// none, unless a later program wrote either slot or its fields ask for a
+/// later version ([`Newer`]). Fields that do not decode are the caller's to
+/// report as damaged.
+pub fn load<'a>(a: &'a [u8], b: &'a [u8]) -> Result<Option<Newest<'a>>, Newer> {
+    if later_frame(a) || later_frame(b) {
+        return Err(Newer);
+    }
+    let n = newest(a, b);
+    if let Some(f) = n.as_ref().and_then(|n| Fields::decode(n.payload))
+        && f.version() > VERSION
+    {
+        return Err(Newer);
+    }
+    Ok(n)
+}
+
 /// Where the next save goes, and its sequence number: the other slot than
 /// the newest copy's, one number on.
 pub fn next(newest: Option<(usize, u32)>) -> (usize, u32) {
@@ -120,6 +167,16 @@ impl Fields {
         self.0.is_empty()
     }
 
+    /// The oldest version of the store that reads these fields
+    /// ([`FIELD_VERSION`]): 1 when absent, and above any version when it is
+    /// not four bytes.
+    pub fn version(&self) -> u32 {
+        match self.get(FIELD_VERSION) {
+            None => 1,
+            Some(v) => <[u8; 4]>::try_from(v).map_or(u32::MAX, u32::from_le_bytes),
+        }
+    }
+
     /// Each field as its tag, its length (u32, little-endian) and its bytes.
     pub fn encode(&self) -> Vec<u8> {
         let mut out = Vec::new();
@@ -148,6 +205,36 @@ impl Fields {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// An earlier program that finds a later program's store stops and
+    /// never takes it for empty; a later program reads this one's.
+    #[test]
+    fn a_later_store_stops_an_earlier_program() {
+        let empty = slot(&[]);
+        let ours = slot(&frame(3, &Fields::default().encode()));
+        assert_eq!(load(&empty, &empty), Ok(None));
+        assert_eq!(load(&ours, &empty).unwrap().unwrap().seq, 3);
+        // A frame of a later layout, whole or torn, in either slot.
+        let mut later = frame(9, b"later");
+        later[3] = b'2';
+        let torn = slot(&later[..10]);
+        for s in [slot(&later), torn] {
+            assert_eq!(read(&s), None);
+            assert_eq!(load(&s, &empty), Err(Newer));
+            assert_eq!(load(&ours, &s), Err(Newer));
+        }
+        // Fields that ask for a later version, or say it in another form.
+        for v in [2u32.to_le_bytes().to_vec(), vec![1]] {
+            let mut f = Fields::default();
+            f.set(1, b"wifi".to_vec());
+            f.set(FIELD_VERSION, v);
+            assert_eq!(load(&slot(&frame(4, &f.encode())), &empty), Err(Newer));
+        }
+        // Version 1 written is this program's.
+        let mut f = Fields::default();
+        f.set(FIELD_VERSION, VERSION.to_le_bytes().to_vec());
+        assert_eq!(load(&slot(&frame(5, &f.encode())), &ours).unwrap().unwrap().seq, 5);
+    }
 
     fn slot(frame: &[u8]) -> Vec<u8> {
         let mut s = frame.to_vec();
