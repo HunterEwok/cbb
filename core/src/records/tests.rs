@@ -2680,6 +2680,51 @@ mod differential {
         assert_eq!(x, y);
     }
 
+    /// A fixed input of `a_set_agrees_with_evaluate`: a device the root
+    /// admitted as a new root's first record stays, with a checkpoint of
+    /// that new root.
+    #[test]
+    fn a_set_agrees_with_evaluate_fixed_4() {
+        let steps = [
+            (3, 7, 237),
+            (0, 4, 142),
+            (3, 4, 3),
+            (2, 4, 71),
+            (3, 6, 233),
+            (0, 0, 184),
+            (1, 0, 40),
+            (2, 2, 29),
+            (3, 4, 30),
+            (0, 4, 48),
+            (4, 2, 0),
+            (2, 4, 35),
+            (0, 1, 37),
+            (3, 1, 42),
+            (4, 1, 97),
+            (0, 4, 253),
+            (3, 2, 29),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 166),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 42),
+            (0, 0, 0),
+            (3, 8, 3),
+            (1, 5, 246),
+            (0, 6, 84),
+        ];
+        let (g, recs) = build(&steps);
+        let m1 = agree(&g, &recs, 3, 0);
+        let m2 = agree(&g, &recs, 5, 917_099_298_476_788_905);
+        assert_eq!(m1.digest(), m2.digest());
+        assert_eq!(m1.state(), m2.state());
+    }
+
     /// A fixed input of `a_set_agrees_with_evaluate`: a new root's first
     /// checkpoint names the same heads and anchors as the old root's
     /// checkpoint the set compacted by. It counts as the evaluation of what
