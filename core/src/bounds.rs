@@ -953,8 +953,8 @@ pub const BOUNDS: &[Bound] = &[
         crate::sheet::MAX_INPUT as u64,
         Reader,
         "a sheet typed with spaces and line ends",
-        "length",
-        &["vec:sheet.json:63 characters"],
+        "not_sheet",
+        &["vec:sheet.json:a valid sheet past 512 characters"],
     ),
 ];
 

@@ -2322,6 +2322,7 @@ def sheet_vectors():
         ("version 2", "2" + "\n".join(lines)[1:], "newer"),
         ("a character outside the alphabet", edit(1, 3, "*"), "damaged"),
         ("words", "https://example.com/", "not_sheet"),
+        ("a valid sheet past 512 characters", t + " " * (513 - len(t)), "not_sheet"),
         ("a sheet of 0.5 (56 characters)", "-".join([b32(secret)[i:i + 4] for i in range(0, 52, 4)] + ["ABCD"]), "earlier"),
         ("a QR code of 0.5", "cbb://recover?g=0011223344556677&k=AA&c=BB", "earlier"),
         ("a QR code of version 2", "CBBR2" + qr[5:], "newer"),
