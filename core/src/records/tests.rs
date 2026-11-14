@@ -950,12 +950,15 @@ fn the_set_stays_within_its_bytes_whatever_the_order() {
     b.insert_all(rev);
     assert!(a.bytes() <= MAX_SET_BYTES && a.len() < g.recs.len());
     assert_eq!(a.digest(), b.digest());
-    // The root's checkpoints come first, the newest first; none counts,
-    // and the first device is out of the rooms: at most aside, as the
-    // record the oldest waiting checkpoint waits for.
+    // None counts. Only the newest checkpoint comes before the rest of
+    // the root's room; the older ones come after it, the newest first, so
+    // the first device stays and counts, and the oldest checkpoints go.
     assert!(a.contains(&g.recs.last().unwrap().id()));
-    assert!(!a.contains(&first.id()) || a.waits_aside(&first.id()));
-    assert!(!a.state().counting.contains(&first.id()));
+    assert!(a.contains(&first.id()) && !a.waits_aside(&first.id()));
+    assert!(a.state().counting.contains(&first.id()));
+    assert!(a.contains(&g.recs[g.recs.len() - 2].id()) && !a.waits_aside(&g.recs[g.recs.len() - 2].id()));
+    let oldest = g.recs.iter().find(|r| matches!(r.body().kind, Kind::Checkpoint { .. })).unwrap();
+    assert!(!a.contains(&oldest.id()) || a.waits_aside(&oldest.id()));
 }
 
 /// A removed admin signs as much as it can, through recovery records of
@@ -2564,6 +2567,18 @@ mod differential {
         assert!(!m1.state().devices.is_empty());
     }
 
+    /// A sequence once found by the property below: what the set saves
+    /// restores to the same set in both orders.
+    #[test]
+    fn restores_what_a_change_left_after_a_checkpoint() {
+        let steps = [(2, 6, 166), (4, 0, 159), (0, 5, 107), (0, 5, 173), (4, 8, 63), (1, 0, 0), (0, 5, 29), (3, 0, 0)];
+        let (g, recs) = build(&steps);
+        let m1 = agree(&g, &recs, 1, 0);
+        let m2 = agree(&g, &recs, 3, 8_569_011_808_961_159_343);
+        assert_eq!(m1.digest(), m2.digest());
+        assert_eq!(m1.state(), m2.state());
+    }
+
     proptest! {
         #![proptest_config(ProptestConfig { cases: 96, failure_persistence: None, ..ProptestConfig::default() })]
 
@@ -3455,6 +3470,110 @@ fn what_waits_aside_still_makes_the_pair() {
     assert!(m.state().conflicts.iter().any(|c| c.kind == ConflictKind::TwoHistories && c.signers == vec![root]));
 }
 
+/// The root fills its own room with checkpoints that never count (each
+/// keeps IDs nobody holds), ten of about 81 KiB, past its 1536 units:
+/// only the newest goes before the rest of the room, so its devices stay
+/// held, in any order and after a restart, and the checkpoint it can
+/// still write counts and brings them back.
+#[test]
+fn checkpoints_that_never_count_leave_the_root_its_devices() {
+    let mut g = G::new();
+    let root = k("root");
+    let laptop = g.device(&root, &k("laptop"), "laptop", |_| {});
+    let mut fill: Vec<RecordId> = (0..2385u32).map(|i| RecordId(sha256(&i.to_be_bytes()))).collect();
+    fill.sort();
+    let mut big = Vec::new();
+    for _ in 0..10 {
+        let (seq, id) = g.heads[&root.hash];
+        big.push(g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep: fill.clone() }));
+    }
+    let units: u64 = big.iter().map(|r| keep::units(r.envelope().len())).sum();
+    assert!(units > keep::ceiling(true), "{units}");
+    let devices: Vec<Record> = (0..20).map(|i| g.device(&root, &k(&format!("dev {i}")), "dev", |_| {})).collect();
+    let mut rev = g.recs.clone();
+    rev.reverse();
+    let mut set = set_with(&g.root.key, &g.recs, &g.lists);
+    let other = set_with(&g.root.key, &rev, &g.lists);
+    assert_eq!(set.digest(), other.digest());
+    let st = set.state();
+    assert_eq!(other.state(), st);
+    // The rooms keep the devices and turn older checkpoints away, which
+    // breaks the root's chain: only what comes before it counts.
+    assert!(devices.iter().all(|d| set.contains(&d.id())));
+    assert!(set.contains(&big[9].id()));
+    assert!(st.counting.contains(&laptop.id()));
+    assert_eq!(st.stop, Stop::None);
+    let restore = |set: &RecordSet| {
+        let saved: Vec<Record> = set.in_dependency_order().into_iter().cloned().collect();
+        let lists: Vec<Vec<u8>> = set.lists().map(<[u8]>::to_vec).collect();
+        RecordSet::restore(set.root().clone(), set.recovery().clone(), &saved, &lists)
+    };
+    assert_eq!(restore(&set).state(), st);
+    // The root writes a checkpoint of what it holds: it counts at once,
+    // and mends the chain, so the devices count with it.
+    let cp = set.write_checkpoint(&st, &root, 0).unwrap();
+    set.insert(cp.clone()).unwrap();
+    let now = set.state();
+    assert_eq!(now.checkpoint, Some(cp.id()));
+    assert_eq!(now.devices.len(), 21);
+    assert!(devices.iter().chain([&laptop]).all(|d| now.counting.contains(&d.id())));
+    assert_eq!(restore(&set).state(), now);
+}
+
+/// Two checkpoints of the root at one seq are its two histories: the
+/// group halts in full, whichever of the two the room puts first, and in
+/// any order the members end alike.
+#[test]
+fn two_checkpoints_of_the_root_at_one_seq_halt_the_group() {
+    let mut g = G::new();
+    let root = k("root");
+    let laptop = g.device(&root, &k("laptop"), "laptop", |_| {});
+    let head = Head { key: root.hash, seq: g.heads[&root.hash].0, id: g.heads[&root.hash].1 };
+    let one = g.body(&root, Kind::Checkpoint { heads: vec![head], keep: vec![] });
+    let two = g.body(&root, Kind::Checkpoint { heads: vec![head], keep: vec![laptop.id()] });
+    let one = g.push(crate::testkit::sign_by(one, &root));
+    let two = crate::testkit::sign_by(two, &root);
+    g.recs.push(two.clone());
+    g.device(&root, &k("tablet"), "tablet", |_| {});
+    let mut rev = g.recs.clone();
+    rev.reverse();
+    let a = set_with(&g.root.key, &g.recs, &g.lists);
+    let b = set_with(&g.root.key, &rev, &g.lists);
+    assert_eq!(a.digest(), b.digest());
+    let st = a.state();
+    assert_eq!(b.state(), st);
+    assert_eq!(st.stop, Stop::Full);
+    let pair = st.root_pair.map(|(seq, x, y)| (seq, alloc::collections::BTreeSet::from([x, y])));
+    assert_eq!(pair, Some((one.body().seq, alloc::collections::BTreeSet::from([one.id(), two.id()]))));
+}
+
+/// A root's records past its room: the count of records the evaluation
+/// caps a root at (MAX_ROOT_RECORDS) never takes what the rooms, which
+/// count units of at least one a record, keep; the set and the evaluation
+/// of every record agree.
+#[test]
+fn a_root_s_count_of_records_never_takes_what_its_room_keeps() {
+    if !full_size("a_root_s_count_of_records_never_takes_what_its_room_keeps") {
+        return;
+    }
+    let mut g = G::new();
+    let root = k("root");
+    let n = MAX_ROOT_RECORDS + 64;
+    for i in 0..n {
+        let key = KeyHash(sha256(&(i as u64).to_be_bytes()));
+        g.root_rec(Kind::Revoke(removal(&[key], vec![])));
+    }
+    let set = set_with(&g.root.key, &g.recs, &g.lists);
+    let st = set.state();
+    let whole = g.state();
+    assert_eq!(st.revoked, whole.revoked);
+    assert_eq!(st.counting, whole.counting);
+    let kept: Vec<Record> = set.ids().filter_map(|id| set.get(id)).cloned().collect();
+    assert_eq!(st, state_with(&g.root.key, &kept, &g.lists));
+    assert!(st.counting.len() <= MAX_ROOT_RECORDS && st.counting.len() < n);
+    let _ = root;
+}
+
 /// The place aside holds at most one ROOM: what the newest waiting
 /// checkpoint names first, then the next newest, each by the lowest
 /// (seq, ID), whatever order the records came in.
@@ -3478,12 +3597,14 @@ fn the_place_aside_keeps_one_room_by_seq() {
         small.units(r.id(), 1);
     }
     let base: Vec<Record> = g.recs.iter().filter(|r| !old.iter().any(|o| o.id() == r.id())).cloned().collect();
-    // The rooms keep c7, the laptop and the five checkpoints (seven of the
-    // root's eight units) and the lowest old record; aside, by the newest
-    // checkpoint first: what the fifth, fourth and third keep (old 16..19,
-    // 12..15, 8..11), then the second's lowest two (old 4 and 5).
-    let mut want: Vec<RecordId> =
-        [16, 17, 18, 19, 12, 13, 14, 15, 8, 9, 10, 11, 4, 5].iter().map(|i: &usize| old[*i].id()).collect();
+    // The rooms keep c7 (it counts, kept first), then the newest
+    // checkpoint (the fifth), then the rest by seq: the laptop and old
+    // 0..4, the root's eight units. The older waiting checkpoints come
+    // after them by seq and leave the rooms. Aside, one room of fourteen
+    // by the newest checkpoint first: what the fifth keeps (old 16..19),
+    // the fourth with what it keeps (old 12..15), the third with what it
+    // keeps (old 8..11); the second and the first find no place.
+    let mut want: Vec<RecordId> = (8..20).map(|i: usize| old[i].id()).collect();
     want.sort();
     let mut seen = Vec::new();
     for seed in [0, 1, 2] {
@@ -3495,9 +3616,13 @@ fn the_place_aside_keeps_one_room_by_seq() {
         sync_all(&mut m, &order, &g.lists);
         let mut aside: Vec<RecordId> = old.iter().map(Record::id).filter(|id| m.waits_aside(id)).collect();
         aside.sort();
-        assert_eq!(aside.len(), 14, "order {seed}");
+        assert_eq!(aside.len(), 12, "order {seed}");
         assert_eq!(aside, want, "order {seed}");
-        assert!(m.contains(&old[0].id()) && !m.waits_aside(&old[0].id()), "order {seed}: old 0 in the rooms");
+        let rooms = |r: &Record| m.contains(&r.id()) && !m.waits_aside(&r.id());
+        assert!(old[..5].iter().all(rooms), "order {seed}: old 0..4 in the rooms");
+        assert!(rooms(&waiting[4]) && rooms(&laptop) && rooms(&c7), "order {seed}");
+        assert!(m.waits_aside(&waiting[3].id()) && m.waits_aside(&waiting[2].id()), "order {seed}");
+        assert!(!m.contains(&waiting[1].id()) && !m.contains(&waiting[0].id()), "order {seed}");
         seen.push((m.digest(), m.state()));
     }
     assert!(seen.windows(2).all(|w| w[0] == w[1]));

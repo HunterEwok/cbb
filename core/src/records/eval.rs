@@ -608,6 +608,7 @@ pub(crate) fn item(r: &Record, role: Role) -> super::keep::Item {
         id: r.id(),
         units: units_of(r),
         checkpoint: matches!(r.body().kind, Kind::Checkpoint { .. }),
+        older: false,
     }
 }
 
@@ -1068,11 +1069,15 @@ pub(crate) fn kept_of(
         .collect();
     // The checkpoint kept first takes its part of the rooms before them.
     let mut pre: BTreeMap<KeyHash, u64> = BTreeMap::new();
+    let mut firsts: Vec<super::keep::Item> = Vec::new();
     for c in checked.iter().filter(|c| first(c) && !proof.contains(&c.r.id())) {
         let it = room_item(c.r, c.role, cuts);
         let u = pre.entry(it.signer).or_default();
         *u = u.saturating_add(it.units);
+        firsts.push(it);
     }
+    let mut items = items;
+    super::keep::newest_only(&mut items, &firsts);
     let ceiling = |k: &KeyHash| ceiling_of(group_root, promoted, &admins, k);
     let mut kept = super::keep::keep_with(&items, ceiling, &super::keep::Cut::default(), &pre).0;
     kept.extend(checked.iter().filter(|c| first(c)).map(|c| c.r.id()));
@@ -1957,15 +1962,20 @@ impl<'e, 'a> Epoch<'e, 'a> {
     }
 
     /// A root's ceiling, its records taken in the keeping's order: its
-    /// checkpoints first, so that a full root can still checkpoint.
+    /// newest checkpoint first, so that a full root can still checkpoint
+    /// (`keep::newest_only`). The rooms count units, at least one a
+    /// record, so this count of records never takes what they keep.
     fn cap_roots(&mut self) {
         let roots: Vec<KeyHash> = self.on_path.keys().copied().collect();
         // The proof of two histories is outside the rooms, as in the set.
         let proof = fork_proof(self.e.recs.iter().map(|r| (r.r, r.role)));
         for k in roots {
-            let mut rs: Vec<usize> = self.of(&k).iter().copied().filter(|&i| !proof.contains(&self.r(i).id)).collect();
-            rs.sort_by_key(|&i| item(self.r(i).r, self.r(i).role).pos());
-            for i in rs.into_iter().skip(MAX_ROOT_RECORDS) {
+            let rs: Vec<usize> = self.of(&k).iter().copied().filter(|&i| !proof.contains(&self.r(i).id)).collect();
+            let mut its: Vec<super::keep::Item> = rs.iter().map(|&i| item(self.r(i).r, self.r(i).role)).collect();
+            super::keep::newest_only(&mut its, &[]);
+            let mut order: Vec<(super::keep::Pos, usize)> = its.iter().map(|it| it.pos()).zip(rs).collect();
+            order.sort();
+            for (_, i) in order.into_iter().skip(MAX_ROOT_RECORDS) {
                 self.capped[i] = true;
             }
         }
