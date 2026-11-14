@@ -575,7 +575,8 @@ impl RecordSet {
     /// it names that state has not removed again, by record ID. A removal
     /// whose keys are all removed again shows nothing. Then each device
     /// record of an older epoch that nothing keeps (`State::stale`), with
-    /// the device it names that is no device of state: it joins again.
+    /// the device it names that is no device of state and not removed: it
+    /// joins again.
     pub fn notices(&self, state: &State) -> Vec<(RecordId, Vec<KeyHash>)> {
         let removals = self.notices.iter().filter_map(|(id, r)| match &r.body().kind {
             Kind::Revoke(rm) => Some((*id, rm.keys.as_slice())),
@@ -593,7 +594,9 @@ impl RecordSet {
         for id in &state.stale {
             let Some(Kind::Device(d)) = self.held(id).map(|r| &r.body().kind) else { continue };
             let key = d.key.hash();
-            if state.device_by_key(&key).is_none() && !self.dismissed.contains(id) && told.insert(key) {
+            let out_for_good = state.revoked.contains(&key);
+            if state.device_by_key(&key).is_none() && !out_for_good && !self.dismissed.contains(id) && told.insert(key)
+            {
                 out.push((*id, alloc::vec![key]));
             }
         }

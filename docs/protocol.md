@@ -2383,12 +2383,16 @@ one, and the root always wins.
 
 A checkpoint carries `drops` and a `device` record carries `epoch`, each 0 when left out. A
 member's epoch is the `drops` of the current root's newest checkpoint it holds, counting or not
-(a change's first checkpoint included, and of a root with two histories also one at or above the
-pair, since a member may have pruned by it before the pair came), and 0 with none: a function of the records held, never of what a member once held. A `device`
-record whose `epoch` is below the member's counts only where that checkpoint keeps it or names
-it as a head, or the change's list keeps it. Otherwise it stays on its signer's chain as a held
-record does, so what its signer signed after it counts, but it counts for nothing itself, and
-the state names it in `stale`: the app tells its signer that the device joins again.
+(a change's first checkpoint included), and 0 with none. Of a root with two histories, every
+checkpoint of it at or above the pair and the newest below decide together, since a member may
+have pruned by any of them before the pair came: the highest `drops`, and what any of them keeps
+or names as a head, so neither side of a fork empties the group. Either way it is a function
+of the records held, never of what a member once held. A `device` record whose `epoch` is below
+the member's counts only where that checkpoint keeps it or names it as a head, or the change's
+list keeps it. Otherwise it stays stored on its signer's chain as a held record does, is passed
+on in sync and takes its signer's room until a checkpoint prunes it, so what its signer signed
+after it counts, but it counts for nothing itself, and the state names it in `stale`: the app
+tells its signer that the device joins again, unless the device is removed.
 
 A writer signs each `device` record at the epoch it holds. A checkpoint's `drops` is at least the
 highest `drops` of any checkpoint of a root on the path that its writer holds, and one more when

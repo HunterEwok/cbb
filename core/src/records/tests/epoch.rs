@@ -488,12 +488,17 @@ fn a_record_held_aside_is_never_kept_and_what_follows_it_counts() {
     let st = g.state();
     assert!(st.stale.contains(&late.id()) && has(&st, &k("y")) && !has(&st, &k("d")));
     let recs = g.recs.clone();
+    let stored = set_with(&g.root.key, &recs, &g.lists);
+    assert!(stored.contains(&late.id()), "stored, not counting");
+    assert!(stored.for_peer(&stored.state(), &k("tv").hash).iter().any(|r| r.id() == late.id()), "offered on");
     let cp = root_checkpoint(&mut g, &recs);
     let Kind::Checkpoint { heads, keep, drops } = &cp.body().kind else { unreachable!() };
     assert!(!keep.contains(&late.id()), "the stale record is not kept");
     assert!(heads.iter().all(|h| h.id != late.id()), "nor named as a head");
     assert_eq!(*drops, 1, "nothing more left out");
-    let writer = set_with(&g.root.key, &g.recs, &g.lists).state();
+    let held = set_with(&g.root.key, &g.recs, &g.lists);
+    assert!(!held.contains(&late.id()), "the checkpoint above its signer's head prunes it");
+    let writer = held.state();
     assert_eq!(writer.checkpoint, Some(cp.id()));
     assert!(has(&writer, &k("y")) && !has(&writer, &k("d")));
     let kept: Vec<Record> =
@@ -502,4 +507,64 @@ fn a_record_held_aside_is_never_kept_and_what_follows_it_counts() {
     assert!(has(&fresh, &k("y")) && !has(&fresh, &k("d")));
     let whole = g.state();
     assert!(has(&whole, &k("y")) && !has(&whole, &k("d")));
+}
+
+/// A bent twin of the root's checkpoint that keeps nothing and carries a
+/// high drops: a member holding both sides halts with the same devices
+/// as with a twin that is no checkpoint (what the halt shows; a member
+/// that pruned by the checkpoint loses the root's records it pruned the
+/// chain under), none of them stale, and the recovery key's change
+/// carries them on.
+#[test]
+fn a_bent_twin_checkpoint_that_keeps_nothing_empties_no_group() {
+    let _drop = crate::records::set::drop_settled();
+    let (mut g, _late, mine) = late_record(true);
+    let root = k("root");
+    let x = mine.last().unwrap().clone();
+    let b = x.body();
+    let Kind::Checkpoint { heads, .. } = &b.kind else { unreachable!() };
+    let twin = |kind: Kind| Record::sign(Body { seq: b.seq, prev: b.prev, ..g.body(&root, kind) }, &root).unwrap();
+    let bent = twin(Kind::Checkpoint { heads: heads.clone(), keep: Vec::new(), drops: 99 });
+    let plain = twin(Kind::Copies { incoming_ms: 60_000, seen: vec![] });
+    let devices = |s: &State| s.devices.iter().map(|d| d.id).collect::<BTreeSet<_>>();
+    let before = set_with(&g.root.key, &mine, &g.lists).state();
+    assert!(has(&before, &k("x")) && has(&before, &k("tv")) && !has(&before, &k("d")));
+    // At members that pruned by the checkpoint, then got a twin.
+    let halt = |t: &Record| {
+        let mut m = set_with(&g.root.key, &mine, &g.lists);
+        let _ = m.insert(t.clone());
+        let s = m.state();
+        assert!(s.conflicts.iter().any(|c| c.kind == ConflictKind::TwoHistories));
+        (m, s)
+    };
+    let (_, shows) = halt(&plain);
+    let (mut m, halted) = halt(&bent);
+    assert_eq!(devices(&halted), devices(&shows), "the bent twin takes no device more than the halt");
+    assert!(has(&halted, &k("x")) && !has(&halted, &k("d")));
+    assert!(halted.stale.is_empty(), "{:?}", halted.stale);
+    // At a member that got the twin with the rest, before pruning.
+    let all: Vec<Record> = mine.iter().cloned().chain([bent.clone()]).collect();
+    let ws = set_with(&g.root.key, &all, &g.lists);
+    let whole = ws.state();
+    assert_eq!(devices(&whole), devices(&before));
+    // What it holds of the removed device is stale, and the removal tells
+    // of it: no notice says the removed device joins again.
+    assert!(ws.notices(&whole).iter().all(|(_, keys)| !keys.contains(&k("d").hash)), "{:?}", ws.notices(&whole));
+    // The recovery key's change, written at the member that pruned.
+    g.recs.push(bent);
+    let mut phone = Device::new(k("phone 1").key.clone(), "new phone", ROLE_PHONE);
+    phone.rights = RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS;
+    let w = m.write_change(&halted, &k("recovery"), crate::testkit::rk2(), &k("n1"), phone, &[], false, 0).unwrap();
+    for r in &w.first {
+        g.push(r.clone());
+    }
+    g.push(w.record.clone());
+    g.lists.push(w.list.encode());
+    let after = set_with(&g.root.key, &g.recs, &g.lists).state();
+    assert_eq!(after.roots.last(), Some(&k("n1").hash));
+    // Under a halt the change leaves out what any of the halted root's
+    // checkpoints leaves out (`lines`), the bent one's too: the admin's
+    // line goes, with or without epochs.
+    assert!(!has(&after, &k("x")) && !has(&after, &k("phone a")));
+    assert!(!has(&after, &k("d")));
 }

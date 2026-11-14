@@ -1412,6 +1412,11 @@ fn epoch_filter<'r>(
     (out, gone)
 }
 
+/// The newest of records: the highest seq, the smallest ID among twins.
+fn newest_of<'r>(rs: impl Iterator<Item = &'r Record>) -> Option<&'r Record> {
+    rs.min_by(|a, b| b.body().seq.cmp(&a.body().seq).then(a.id().cmp(&b.id())))
+}
+
 /// What a member's compactions left it with: the checkpoints it pruned by
 /// (`RecordSet`).
 pub(crate) struct Compacted<'c> {
@@ -1484,21 +1489,37 @@ pub(crate) fn evaluate_checked(
     // member holds, counting or not (a change's first checkpoint
     // included), 0 with none; a device record of an older one counts only
     // where that checkpoint keeps or anchors it, or the list keeps it. Of
-    // a root with two histories too: a member may have pruned by a
-    // checkpoint at or above the pair before the pair came, and the epoch
-    // keeps what it pruned out for every member alike.
+    // a root with two histories, every checkpoint of it at or above the
+    // pair and the newest below: a member may have pruned by any of them
+    // before the pair came. The highest drops and what any of them keeps
+    // or anchors, so no side of the fork empties the group.
     let cur_root = path.last().copied().unwrap_or(group_root);
-    let newest = checked
+    let pair = fork_proof(checked.iter().map(|c| (c.r, c.role)));
+    let fork_at = root_fork(&pair, &cur_root, checked.iter().map(|c| (c.r, c.role)));
+    let of_cur: Vec<&Record> = checked
         .iter()
         .filter(|c| !c.held && c.role == Role::Root && c.r.body().signer == cur_root)
         .filter(|c| matches!(c.r.body().kind, Kind::Checkpoint { .. }))
         .filter(|c| !cuts.get(&cur_root).is_some_and(|cut| cut.covers(&cur_root, c.r.body().seq)))
         .map(|c| c.r)
-        .min_by(|a, b| b.body().seq.cmp(&a.body().seq).then(a.id().cmp(&b.id())));
-    let (drops, epoch_anchors) = match newest.map(|r| &r.body().kind) {
-        Some(Kind::Checkpoint { heads, keep, drops }) => (*drops, anchors_of(heads, keep)),
-        _ => (0, BTreeSet::new()),
+        .collect();
+    let deciding: Vec<&Record> = match fork_at {
+        None => newest_of(of_cur.iter().copied()).into_iter().collect(),
+        Some(f) => of_cur
+            .iter()
+            .copied()
+            .filter(|r| r.body().seq >= f)
+            .chain(newest_of(of_cur.iter().copied().filter(|r| r.body().seq < f)))
+            .collect(),
     };
+    let mut drops = 0;
+    let mut epoch_anchors = BTreeSet::new();
+    for r in &deciding {
+        if let Kind::Checkpoint { heads, keep, drops: d } = &r.body().kind {
+            drops = drops.max(*d);
+            epoch_anchors.extend(anchors_of(heads, keep));
+        }
+    }
     let none = BTreeSet::new();
     let (fresh, gone) = epoch_filter(&checked, drops, &epoch_anchors, &cuts);
     let mut stale_all = gone;
