@@ -1081,6 +1081,7 @@ func main() {
 	fmt.Printf("%-18s checked\n", "container.json")
 
 	checkSets(dir)
+	checkSheet(dir)
 	checkMessages(dir)
 	checkWave4(dir)
 	checkFuture(dir)
