@@ -109,7 +109,16 @@ impl G {
             .find(|key| *key != new_root.hash && self.heads.contains_key(key))
             .expect("a key with a record");
         let (seq, id) = self.heads[&other];
-        self.rec(new_root, Kind::Checkpoint { heads: vec![Head { key: other, seq, id }], keep: keep.to_vec() }).id()
+        // As write_change: the new root's records before it are kept, its
+        // newest one is the checkpoint's own head (`with_own_head`).
+        let own_head = self.heads.get(&new_root.hash).map(|(_, id)| *id);
+        let mut keep = keep.to_vec();
+        keep.extend(
+            self.recs.iter().filter(|r| r.body().signer == new_root.hash && Some(r.id()) != own_head).map(Record::id),
+        );
+        keep.sort();
+        keep.dedup();
+        self.rec(new_root, Kind::Checkpoint { heads: vec![Head { key: other, seq, id }], keep }).id()
     }
 
     /// The IDs of the records of the roots on the path that count now,
@@ -138,8 +147,23 @@ impl G {
     }
 
     fn rec(&mut self, by: &K, kind: Kind) -> Record {
-        let r = crate::testkit::sign_by(self.body(by, kind), by);
+        let r = crate::testkit::sign_by(self.body(by, self.with_own_head(by, kind)), by);
         self.push(r)
+    }
+
+    /// A checkpoint of by names its own key's head, its prev, when it has
+    /// a record (rule `records/checkpoint/own-prev`): added where the
+    /// checkpoint names none.
+    fn with_own_head(&self, by: &K, kind: Kind) -> Kind {
+        let (Kind::Checkpoint { mut heads, keep }, Some(&(seq, id))) = (kind.clone(), self.heads.get(&by.hash)) else {
+            return kind;
+        };
+        if heads.iter().any(|h| h.key == by.hash) {
+            return Kind::Checkpoint { heads, keep };
+        }
+        heads.push(Head { key: by.hash, seq, id });
+        heads.sort_by_key(|h| h.key);
+        Kind::Checkpoint { heads, keep }
     }
 
     /// A record of the root's own key.
@@ -1924,6 +1948,7 @@ mod differential {
     /// in rounds of sync until one changes nothing: a record it could not
     /// take yet comes again.
     fn fill(root: &Key, recs: &[Record], lists: &[Vec<u8>], every: usize) -> RecordSet {
+        let _every_insert = crate::records::set::check_every_insert();
         let mut m = set_of(&root.clone());
         let mut last = None;
         for _ in 0..12 {
@@ -2149,6 +2174,7 @@ mod differential {
     /// evaluate in both orders.
     /// Two changes of root wait, each for a record of its group; the
     /// earlier one's comes: it applies, and what it cuts goes at once.
+
     #[test]
     fn agrees_when_an_earlier_change_completes_first() {
         let steps = [
@@ -2584,6 +2610,7 @@ mod differential {
     /// every insert of the first round that its state is evaluate's of all
     /// it holds and that it restores to itself.
     fn small_rooms(g: &G, recs: &[Record], seed: u64) -> ([u8; 32], State) {
+        let _every_insert = crate::records::set::check_every_insert();
         let order = if seed == 0 { recs.to_vec() } else { shuffled(recs, seed) };
         let mut m = set_of(&g.root.key);
         for round in 0..6 {
@@ -2623,10 +2650,9 @@ mod differential {
         assert_eq!(small_rooms(&g, &recs, 0), small_rooms(&g, &recs, 2_969_525_165_867_318_566));
     }
 
-    /// A sequence once found by the property below: the level falls when
-    /// the admin keys' records come, the root's admissions go, and their
-    /// admins' records with them; in another order the level falls less.
-    /// The whole evaluation counts those admins' records in the shares.
+    /// A sequence once found by the property below: the root's admissions
+    /// go when the admin keys' records come, and their admins' records go
+    /// with them, in either order.
     #[test]
     #[ignore = "the rooms after a dropped admission: open, see the records thread"]
     fn small_rooms_end_alike_when_an_admission_goes() {
@@ -2654,6 +2680,356 @@ mod differential {
         }
         let (x, y) = (small_rooms(&g, &recs, 0), small_rooms(&g, &recs, 2_307_232_806_983_518_351));
         assert_eq!(x, y);
+    }
+
+    /// A fixed input of `a_set_agrees_with_evaluate`: two orders of the
+    /// same records keep the same set, a new root's first records included.
+    #[test]
+    fn a_set_agrees_with_evaluate_fixed_5() {
+        let steps = [
+            (2, 0, 190),
+            (3, 1, 33),
+            (0, 5, 75),
+            (0, 4, 101),
+            (0, 5, 103),
+            (4, 8, 3),
+            (0, 5, 43),
+            (0, 0, 0),
+            (0, 0, 0),
+            (4, 8, 162),
+            (0, 6, 0),
+            (0, 5, 187),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+        ];
+        let (g, recs) = build(&steps);
+        let m1 = agree(&g, &recs, 1, 0);
+        let m2 = agree(&g, &recs, 3, 11_318_229_803_502_088_410);
+        assert_eq!(m1.digest(), m2.digest());
+        assert_eq!(m1.state(), m2.state());
+    }
+
+    /// A fixed input of `a_set_agrees_with_evaluate` found by the long
+    /// random runs: the set's state is evaluate's of what it keeps.
+    #[test]
+    fn a_set_agrees_with_evaluate_fixed_6() {
+        let steps =
+            [(4, 1, 214), (0, 5, 173), (4, 8, 141), (0, 5, 1), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 4, 0), (0, 4, 0)];
+        let (g, recs) = build(&steps);
+        let m1 = agree(&g, &recs, 1, 0);
+        let m2 = agree(&g, &recs, 3, 92_239_891_633_715_189);
+        assert_eq!(m1.digest(), m2.digest());
+        assert_eq!(m1.state(), m2.state());
+    }
+
+    /// A fixed input of `a_set_agrees_with_evaluate` found by the long
+    /// random runs: the set's state is evaluate's of what it keeps.
+    #[test]
+    fn a_set_agrees_with_evaluate_fixed_7() {
+        let steps = [
+            (0, 0, 0),
+            (4, 0, 29),
+            (4, 4, 57),
+            (0, 0, 0),
+            (0, 5, 103),
+            (4, 8, 6),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 85),
+        ];
+        let (g, recs) = build(&steps);
+        let m1 = agree(&g, &recs, 1, 0);
+        let m2 = agree(&g, &recs, 3, 4_777_382_074_353_279_197);
+        assert_eq!(m1.digest(), m2.digest());
+        assert_eq!(m1.state(), m2.state());
+    }
+
+    /// A fixed input of `a_set_agrees_with_evaluate` found by the long
+    /// random runs: a member that never compacts ends with the same set.
+    #[test]
+    fn a_set_agrees_with_evaluate_fixed_8() {
+        let steps = [
+            (1, 6, 162),
+            (2, 1, 103),
+            (1, 1, 48),
+            (0, 2, 29),
+            (1, 0, 22),
+            (1, 7, 240),
+            (1, 0, 237),
+            (4, 7, 34),
+            (0, 5, 71),
+            (0, 5, 1),
+            (0, 5, 31),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (4, 8, 27),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 21),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+        ];
+        let (g, recs) = build(&steps);
+        let m1 = agree(&g, &recs, 1, 0);
+        let m2 = agree(&g, &recs, 3, 225_776_739_655_793_442);
+        assert_eq!(m1.digest(), m2.digest());
+        assert_eq!(m1.state(), m2.state());
+    }
+
+    /// A fixed input of `a_set_agrees_with_evaluate` found by the long
+    /// random runs: compacting drops nothing the state counts.
+    #[test]
+    fn a_set_agrees_with_evaluate_fixed_9() {
+        let steps = [
+            (0, 0, 0),
+            (3, 0, 28),
+            (0, 5, 80),
+            (3, 8, 123),
+            (0, 0, 0),
+            (0, 2, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 134),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 50),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (3, 8, 4),
+            (0, 5, 109),
+            (3, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+        ];
+        let (g, recs) = build(&steps);
+        let m1 = agree(&g, &recs, 1, 0);
+        let m2 = agree(&g, &recs, 3, 17_822_396_194_695_716_128);
+        assert_eq!(m1.digest(), m2.digest());
+        assert_eq!(m1.state(), m2.state());
+    }
+
+    /// A fixed input of `a_set_agrees_with_evaluate` found by the long
+    /// random runs: compacting drops nothing the state counts.
+    #[test]
+    fn a_set_agrees_with_evaluate_fixed_10() {
+        let steps = [
+            (0, 5, 67),
+            (0, 0, 0),
+            (0, 6, 0),
+            (4, 4, 9),
+            (0, 5, 95),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 6, 0),
+            (0, 6, 0),
+            (3, 6, 0),
+            (4, 8, 6),
+            (2, 0, 0),
+            (4, 8, 151),
+            (2, 0, 0),
+            (2, 0, 0),
+            (0, 5, 19),
+            (0, 5, 49),
+            (0, 0, 0),
+            (0, 6, 0),
+            (0, 0, 0),
+            (0, 5, 21),
+            (2, 0, 0),
+            (0, 6, 0),
+            (0, 5, 7),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 53),
+            (0, 0, 0),
+            (0, 0, 0),
+        ];
+        let (g, recs) = build(&steps);
+        let m1 = agree(&g, &recs, 1, 0);
+        let m2 = agree(&g, &recs, 3, 10_328_183_375_542_841_891);
+        assert_eq!(m1.digest(), m2.digest());
+        assert_eq!(m1.state(), m2.state());
+    }
+
+    /// A fixed input of `a_set_agrees_with_evaluate`: a device the root
+    /// admitted as a new root's first record stays, with a checkpoint of
+    /// that new root.
+    #[test]
+    fn a_set_agrees_with_evaluate_fixed_4() {
+        let steps = [
+            (3, 7, 237),
+            (0, 4, 142),
+            (3, 4, 3),
+            (2, 4, 71),
+            (3, 6, 233),
+            (0, 0, 184),
+            (1, 0, 40),
+            (2, 2, 29),
+            (3, 4, 30),
+            (0, 4, 48),
+            (4, 2, 0),
+            (2, 4, 35),
+            (0, 1, 37),
+            (3, 1, 42),
+            (4, 1, 97),
+            (0, 4, 253),
+            (3, 2, 29),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 166),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 42),
+            (0, 0, 0),
+            (3, 8, 3),
+            (1, 5, 246),
+            (0, 6, 84),
+        ];
+        let (g, recs) = build(&steps);
+        let m1 = agree(&g, &recs, 3, 0);
+        let m2 = agree(&g, &recs, 5, 917_099_298_476_788_905);
+        assert_eq!(m1.digest(), m2.digest());
+        assert_eq!(m1.state(), m2.state());
+    }
+
+    /// A fixed input of `a_set_agrees_with_evaluate`: a new root's first
+    /// checkpoint names the same heads and anchors as the old root's
+    /// checkpoint the set compacted by. It counts as the evaluation of what
+    /// the set holds says, after every insert (the debug check), not as the
+    /// old one did.
+    #[test]
+    fn a_set_agrees_with_evaluate_fixed_3() {
+        let steps = [
+            (0, 6, 0),
+            (1, 2, 0),
+            (1, 0, 0),
+            (1, 0, 0),
+            (0, 5, 13),
+            (0, 8, 0),
+            (0, 0, 0),
+            (0, 5, 119),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 0),
+        ];
+        let (g, recs) = build(&steps);
+        let m1 = agree(&g, &recs, 1, 0);
+        let m2 = agree(&g, &recs, 3, 14_921_967_507_290_258_315);
+        assert_eq!(m1.digest(), m2.digest());
+        assert_eq!(m1.state(), m2.state());
+    }
+
+    /// A fixed input of `a_set_agrees_with_evaluate`, compacting after
+    /// every record, then shuffled and compacting every three.
+    #[test]
+    fn a_set_agrees_with_evaluate_fixed_2() {
+        let steps = [
+            (1, 1, 83),
+            (2, 4, 0),
+            (1, 7, 177),
+            (1, 2, 36),
+            (3, 0, 87),
+            (1, 3, 127),
+            (0, 5, 13),
+            (4, 7, 71),
+            (4, 3, 32),
+            (0, 5, 45),
+            (4, 8, 63),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 103),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+        ];
+        let (g, recs) = build(&steps);
+        let m1 = agree(&g, &recs, 1, 0);
+        let m2 = agree(&g, &recs, 3, 268_542_393_699_777_410);
+        assert_eq!(m1.digest(), m2.digest());
+        assert_eq!(m1.state(), m2.state());
+    }
+
+    /// A fixed input of `a_set_agrees_with_evaluate`, shuffled and
+    /// compacting every three records.
+    #[test]
+    fn a_set_agrees_with_evaluate_fixed_1() {
+        let steps = [
+            (1, 2, 11),
+            (2, 6, 6),
+            (2, 6, 93),
+            (2, 0, 6),
+            (0, 6, 17),
+            (3, 2, 14),
+            (0, 4, 106),
+            (4, 1, 126),
+            (0, 3, 20),
+            (0, 5, 17),
+            (2, 4, 202),
+            (1, 4, 42),
+            (1, 2, 0),
+            (0, 3, 32),
+            (4, 3, 12),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 189),
+            (0, 0, 0),
+            (4, 8, 237),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 5, 103),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 0),
+            (0, 0, 1),
+            (2, 4, 7),
+        ];
+        let (g, recs) = build(&steps);
+        let m1 = agree(&g, &recs, 1, 0);
+        let m2 = agree(&g, &recs, 3, 15_967_675_729_292_482_522);
+        assert_eq!(m1.digest(), m2.digest());
+        assert_eq!(m1.state(), m2.state());
     }
 
     proptest! {
@@ -2919,6 +3295,10 @@ fn an_admin_key_counts_from_its_device_s_newest_root_record() {
     g.device(&k("root"), &k("laptop"), "laptop", |_| {});
     let before = g.device(&t, &k("kept"), "kept", |_| {});
     let at = g.seen_at(&t.hash, before.body().seq);
+    // The root's checkpoint first, as its writer puts one before a
+    // take-back: the key has no room after it.
+    let so_far = g.recs.clone();
+    root_checkpoint(&mut g, &so_far);
     g.device(&k("root"), &pt, "phone t", |d| d.seen = vec![at]);
     let admitted = g.device(&t, &k("late"), "late", |_| {});
     let seen = g.seen();
@@ -2994,7 +3374,10 @@ fn a_root_s_checkpoints_never_push_out_its_removals() {
             prev: Some(RecordId([7; 32])),
             ..g.body(
                 &root,
-                Kind::Checkpoint { heads: vec![Head { key: root.hash, seq: 1, id: RecordId([8; 32]) }], keep },
+                Kind::Checkpoint {
+                    heads: vec![Head { key: root.hash, seq: 999 + u64::from(i), id: RecordId([7; 32]) }],
+                    keep,
+                },
             )
         };
         let r = Record::sign(body, &root).unwrap();
@@ -3967,6 +4350,10 @@ fn a_checkpoint_keeps_a_removal_while_what_the_key_signed_counts() {
     let (pa, a) = (k("phone a"), k("admin a"));
     g.admin(&pa, &a, POWER_ADMIT | POWER_REMOVE);
     let tv = g.device(&a, &k("tv"), "tv", |_| {});
+    // The root's checkpoint first, as its writer puts one before a
+    // removal of an admin key: the key has no room after it.
+    let so_far = g.recs.clone();
+    root_checkpoint(&mut g, &so_far);
     let rv = g.root_rec(Kind::Revoke(removal(&[a.hash], g.seen())));
     g.device(&k("root"), &k("laptop"), "laptop", |_| {});
     let recs = g.recs.clone();
@@ -5473,8 +5860,11 @@ fn removing_a_key_in_two_histories_keeps_out_what_it_barred() {
     let _ = set.insert(late.clone());
     let s = set.state();
     assert!(!s.counting.contains(&late.id()) && !s.revoked.contains(&d3.hash));
-    // A removal of A that skips the writer, seeing one line: the other
-    // line's removal no longer counts, and the state tells it.
+    // A removal of A that skips the writer, seeing one line: A has no room
+    // after it and no checkpoint of the root keeps what A signed (none can
+    // count while A has two histories), so neither line counts: the other
+    // line's removal no longer counts, and the devices A admitted go with
+    // A. The writer's removal above re-issues what A's removals barred.
     for (line, other) in [(&rv1, &d2), (&rv2, &d1)] {
         let mut seen = g.seen();
         seen.retain(|e| e.key != a.hash);
@@ -5484,7 +5874,8 @@ fn removing_a_key_in_two_histories_keeps_out_what_it_barred() {
         h.root_rec(Kind::Revoke(removal(&[a.hash], seen)));
         let s = h.state();
         assert!(!s.revoked.contains(&other.hash));
-        assert_eq!(s.forked_removed, vec![(a.hash, vec![other.hash])]);
+        assert!(s.device_by_key(&d1.hash).is_none() && s.device_by_key(&d2.hash).is_none());
+        assert!(s.device_by_key(&d3.hash).is_none());
     }
 }
 
@@ -5791,4 +6182,115 @@ fn a_checkpoint_leaves_out_a_resolve_whose_target_goes() {
     let _ = set.insert(resolve.clone());
     assert!(!set.contains(&rv.id()) && !set.contains(&resolve.id()));
     assert_eq!(set.state().devices, st.devices);
+}
+
+/// Two members that give each other what they hold end equal in one
+/// exchange, also where a key passes its cap with records of unequal
+/// sizes: one admin key, cap 2, records of 1, 2 and 1 units. One member
+/// holds the first and the third, the other the second; after one
+/// exchange both hold what one member given all three at once holds (the
+/// first alone: the second does not fit after it, and nothing after the
+/// second is kept). A batch is judged once and nothing it turned away is
+/// offered again.
+#[test]
+fn members_end_equal_in_one_exchange_past_a_cap_of_unequal_sizes() {
+    let small = crate::records::keep::small::Small::new(14, 8, 2);
+    let mut g = G::new();
+    let a = k("admin a");
+    let admission = g.admin(&k("phone a"), &a, POWER_ADMIT);
+    let r: Vec<Record> =
+        (0..3u64).map(|i| g.rec(&a, Kind::Copies { incoming_ms: MIN_INCOMING_MS + i, seen: vec![] })).collect();
+    for x in &g.recs {
+        small.units(x.id(), 1);
+    }
+    small.units(r[1].id(), 2);
+    let base: Vec<Record> = g.recs.iter().filter(|x| !r.iter().any(|y| y.id() == x.id())).cloned().collect();
+    assert!(base.iter().any(|x| x.id() == admission.id()));
+    let mut m = set_of(&g.root.key);
+    m.insert_all(base.iter().cloned().chain([r[0].clone(), r[2].clone()]));
+    let mut n = set_of(&g.root.key);
+    n.insert_all(base.iter().cloned().chain([r[1].clone()]));
+    let from_m: Vec<Record> = m.in_dependency_order().into_iter().cloned().collect();
+    let from_n: Vec<Record> = n.in_dependency_order().into_iter().cloned().collect();
+    m.insert_all(from_n);
+    n.insert_all(from_m);
+    let mut all = set_of(&g.root.key);
+    all.insert_all(g.recs.iter().cloned());
+    let held = |s: &RecordSet| r.iter().map(|x| s.contains(&x.id())).collect::<Vec<bool>>();
+    assert_eq!(held(&all), [true, false, false]);
+    assert_eq!(held(&m), held(&all), "m after one exchange");
+    assert_eq!(held(&n), held(&all), "n after one exchange");
+    assert_eq!((m.digest(), m.state()), (n.digest(), n.state()));
+}
+
+/// A newer checkpoint of the root that names an admin key's head below the
+/// one an older checkpoint named leaves that key's records above it
+/// unsettled. A set handed both checkpoints in one batch, the older first,
+/// turns such a record away while the older one prunes and does not take
+/// it again in that batch; the next exchange with a member that holds it
+/// brings it back, and the members end alike, as evaluate of all the
+/// records says.
+#[test]
+fn records_above_a_lowered_head_come_back_in_the_next_exchange() {
+    let mut g = G::new();
+    let root = k("root");
+    let a = k("admin a");
+    g.admin(&k("phone a"), &a, POWER_ADMIT);
+    let devs: Vec<Record> = (0..5).map(|i| g.device(&a, &k(&format!("member {i}")), "member", |_| {})).collect();
+    let head_of = |r: &Record| Head { key: r.body().signer, seq: r.body().seq, id: r.id() };
+    let root_ids = |g: &G| -> Vec<RecordId> {
+        g.recs.iter().filter(|r| r.body().signer == root.hash).map(Record::id).collect::<Vec<_>>()
+    };
+    // The older checkpoint names a's head at its fifth record and keeps all
+    // but its fourth.
+    let mut keep: Vec<RecordId> = root_ids(&g);
+    keep.pop();
+    keep.extend(devs[..3].iter().map(Record::id));
+    keep.sort();
+    let older = g.root_rec(Kind::Checkpoint { heads: vec![head_of(&devs[4])], keep });
+    // A member that compacted by it.
+    let mut n = set_of(&g.root.key);
+    n.insert_all(g.recs.iter().cloned());
+    assert_eq!(n.state().checkpoint, Some(older.id()));
+    n.compact(&n.state());
+    assert!(!n.contains(&devs[3].id()));
+    // The newer one names a's head at its third record.
+    let mut keep: Vec<RecordId> = root_ids(&g);
+    keep.retain(|id| *id != older.id());
+    keep.extend(devs[..2].iter().map(Record::id));
+    keep.sort();
+    let newer = g.root_rec(Kind::Checkpoint { heads: vec![head_of(&devs[2])], keep });
+    let whole = g.state();
+    assert_eq!(whole.checkpoint, Some(newer.id()));
+    assert!(devs.iter().all(|d| whole.counting.contains(&d.id())));
+    // A member handed everything in one batch.
+    let mut m = set_of(&g.root.key);
+    m.insert_all(g.recs.iter().cloned());
+    assert_eq!(m.state().checkpoint, Some(newer.id()));
+    assert!(!m.contains(&devs[3].id()));
+    assert_eq!(m.state(), state_with(&g.root.key, &counting(&m), &g.lists));
+    // A member that had the newer checkpoint before the older one.
+    let mut o = set_of(&g.root.key);
+    for r in g.recs.iter().filter(|r| r.id() != older.id()).chain([&older]) {
+        let _ = o.insert(r.clone());
+    }
+    assert!(o.state().counting.contains(&devs[3].id()));
+    let offer = |from: &RecordSet, to: &mut RecordSet| {
+        to.insert_all(from.in_dependency_order().into_iter().cloned());
+    };
+    // One exchange: n and m each with o, then with each other.
+    offer(&o, &mut m);
+    offer(&m, &mut o);
+    offer(&o, &mut n);
+    offer(&n, &mut o);
+    offer(&m, &mut n);
+    offer(&n, &mut m);
+    for (name, s) in [("m", &m), ("n", &n), ("o", &o)] {
+        let st = s.state();
+        assert_eq!(st.checkpoint, Some(newer.id()), "{name}");
+        assert!(devs.iter().all(|d| st.counting.contains(&d.id())), "{name}");
+        assert_eq!((&st.roots, &st.devices, &st.revoked), (&whole.roots, &whole.devices, &whole.revoked), "{name}");
+    }
+    assert_eq!((m.digest(), m.state()), (n.digest(), n.state()));
+    assert_eq!((m.digest(), m.state()), (o.digest(), o.state()));
 }

@@ -264,7 +264,9 @@ fn the_pool_ends_alike_the_old_way_and_the_new() {
 /// loop, so a loaded machine changes neither bound.
 #[test]
 fn a_full_group_fills_in_about_the_time_of_its_signatures() {
-    // Timed: without the debug check after every insert.
+    // Timed: without the debug check after every insert (which only a
+    // build with std makes).
+    #[cfg(feature = "std")]
     let _unchecked = crate::records::set::Unchecked::new();
     let mut g = G::new();
     let root = k("root");

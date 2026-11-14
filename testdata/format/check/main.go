@@ -336,6 +336,9 @@ func checkSigned(dir, file string, sk func(map[any]any) ([]byte, error)) {
 		if typ, _ := m[uint64(1)].(uint64); f.Label == "cbb record v3" && typ == 1 && !nameOK(m[uint64(11)]) {
 			fail("%s / %s: its name is refused", file, t.Name)
 		}
+		if typ, _ := m[uint64(1)].(uint64); f.Label == "cbb record v3" && typ == 9 && !ownHeadIsPrev(m) {
+			fail("%s / %s: its own head is not its prev", file, t.Name)
+		}
 		if typ, _ := m[uint64(1)].(uint64); f.Label == "cbb record v3" && typ == 9 && !ownHeadBefore(m) {
 			fail("%s / %s: it names its own key at or above its seq", file, t.Name)
 		}
@@ -370,6 +373,14 @@ func checkSigned(dir, file string, sk func(map[any]any) ([]byte, error)) {
 	for _, r := range f.Refuse {
 		m, rbody, err := envelope(unhex(r.Envelope), f.Label, sk)
 		err = overCeiling(f.Label, rbody, err)
+		if r.Rule == "records/checkpoint/own-prev" {
+			if err != nil || !ownHeadBefore(m) || ownHeadIsPrev(m) {
+				fail("%s / %s: its own head holds", file, r.Name)
+			} else {
+				ok++
+			}
+			continue
+		}
 		if r.Rule == "records/checkpoint/own-head" {
 			if err != nil || ownHeadBefore(m) {
 				fail("%s / %s: its heads hold", file, r.Name)
@@ -1648,4 +1659,27 @@ func ownHeadBefore(m map[any]any) bool {
 		}
 	}
 	return true
+}
+
+// ownHeadIsPrev: a checkpoint names its own key's head exactly when its
+// seq is above 1, at seq-1 and with its prev's ID.
+func ownHeadIsPrev(m map[any]any) bool {
+	signer, _ := m[uint64(3)].([]byte)
+	seq, _ := m[uint64(4)].(uint64)
+	prev, hasPrev := m[uint64(5)].([]byte)
+	heads, _ := m[uint64(10)].([]any)
+	for _, h := range heads {
+		e, _ := h.([]any)
+		if len(e) != 3 {
+			continue
+		}
+		k, _ := e[0].([]byte)
+		if !bytes.Equal(k, signer) {
+			continue
+		}
+		n, _ := e[1].(uint64)
+		id, _ := e[2].([]byte)
+		return hasPrev && n+1 == seq && bytes.Equal(id, prev)
+	}
+	return !hasPrev && seq == 1
 }

@@ -218,10 +218,18 @@ impl Group {
     /// that applies. Returns the head and the checkpoint.
     fn head_applying(&mut self, seq: u64, root: &str, list: &List) -> (Record, Record) {
         let (rs, rid) = self.heads[&k("R").hash];
-        let first = self.sign(
-            root,
-            Kind::Checkpoint { heads: vec![Head { key: k("R").hash, seq: rs, id: rid }], keep: list.0.clone() },
-        );
+        // As write_change: its own head when root has a record (rule
+        // `records/checkpoint/own-prev`), its records before it kept.
+        let mut heads = vec![Head { key: k("R").hash, seq: rs, id: rid }];
+        let mut keep = list.0.clone();
+        if let Some(&(s, id)) = self.heads.get(&k(root).hash) {
+            heads.push(Head { key: k(root).hash, seq: s, id });
+            heads.sort_by_key(|h| h.key);
+            keep.extend(self.recs.iter().filter(|r| r.body().signer == k(root).hash && r.id() != id).map(Record::id));
+            keep.sort();
+            keep.dedup();
+        }
+        let first = self.sign(root, Kind::Checkpoint { heads, keep });
         (self.head_naming(seq, root, list, first.id()), first)
     }
 
