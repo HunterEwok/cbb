@@ -2614,7 +2614,19 @@ module records_v3 {
   // (Made stricter 11-13 22:10Z, with removedStayOut: a removal a change cut off though an
   // honest writer on the member's chain held it still bars, as if it counted; packing two
   // removals that saw a key differently into one, REISSUE_PACK_ANY, fails here.)
-  val removedGainsNothing = MEMBERS.forall(m => {
+  // (Architecture 11-14 20:06Z, limit A: the promise holds while the recovery key and every root
+  // sign no twin and no checkpoint that omits a removal they count; deviant admins and former
+  // admins stay inside it. A twin head at one seq, a list the core does not write (kit
+  // "deviant", which also covers its first checkpoint), and a bent root checkpoint are outside.
+  // dec seed 11422: a "literal" twin head of the recovery key, whose first checkpoint, signed
+  // with the named root's key, leaves out that root's re-signed removal.)
+  def topKeysHonest: bool = {
+    val chains = db.keys().map(i => db.get(i)).filter(r => isChain(r))
+    chains.forall(a => a.kit != "deviant" and chains.forall(b => b == a or b.seq != a.seq))
+      and db.keys().forall(i => not(ROOT_KEYS.contains(db.get(i).signer) and db.get(i).kind == "checkpoint"
+        and db.get(i).kit == "bent"))
+  }
+  val removedGainsNothing = not(topKeysHonest) or MEMBERS.forall(m => {
     val v = views.get(m)
     val cnt = recsOf(v.counting, db)
     val cutHeld = recsOf(st.get(m).got, db).filter(r => r.kind == "revoke" and cutOff(v, r) and writerHeld(m, r))
@@ -2779,7 +2791,25 @@ module records_v3 {
   val tiersPure = not(FIXED_CAPS) or MEMBERS.forall(m => recut(st.get(m), db).recs == st.get(m).recs)
   // The invariant of the long random runs at the decided set: the promises and the decided
   // switches' own promises.
-  val decidedInv = and { promises, tiersPure, cpFirstKeepsDevices, ownCpsNoCrowd }
+  // (Under a deviant top key too, architecture 11-14 20:06Z.) A member that holds two recovery
+  // records at one seq, or two records of its current root at one seq, is halted: it shows a
+  // stopped state with no commanders. (The pair is held beside the rooms and never dropped, so
+  // the halt lasts until a change.)
+  val twinHalts = MEMBERS.forall(m => {
+    val s = st.get(m)
+    val held = recsOf(heldBy(s), db)
+    val cur = last(views.get(m).path)
+    val chainTwin = held.exists(a => isChain(a) and held.exists(b => b != a and isChain(b) and b.seq == a.seq))
+    val rootTwin = held.exists(a => a.signer == cur and not(isChain(a))
+      and held.exists(b => b != a and b.signer == cur and not(isChain(b)) and b.seq == a.seq))
+    (chainTwin or (HALT_ON_HELD_PAIR and rootTwin)) implies (views.get(m).stop and views.get(m).commanders == Set())
+  })
+  // Two members, each offered to no change what it got, that got the same records count the same
+  // state, whoever signed them (convergence on equal sets, not on honest chains only).
+  val sameGotSameState = MEMBERS.forall(m => MEMBERS.forall(n => (m == n
+    or not(st.get(m).got == st.get(n).got and saturated(m) and saturated(n)))
+    or (st.get(m).recs == st.get(n).recs and views.get(m) == views.get(n))))
+  val decidedInv = and { promises, tiersPure, cpFirstKeepsDevices, ownCpsNoCrowd, twinHalts, sameGotSameState }
 
   // --- Scenarios ---------------------------------------------------------------------------
 
