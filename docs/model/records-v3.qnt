@@ -778,7 +778,8 @@ module records_v3 {
 
   // The ceilings: a root's on the path, an admin key's.
   pure def ceilings(path: List[Key], admins: Set[Key]): Key -> int =
-    SIGNERS.filter(k => onList(path, k) or admins.contains(k)).mapBy(k => if (onList(path, k)) ROOTC else ADMINC)
+    // (Every root key: under REISSUE_STATE the third new root, NB, signs records in its room too.)
+    SIGNERS.union(ROOT_KEYS).filter(k => onList(path, k) or admins.contains(k)).mapBy(k => if (onList(path, k)) ROOTC else ADMINC)
 
   pure def rootsOf(path: List[Key]): Set[Key] = path.indices().map(i => path[i])
 
@@ -2759,14 +2760,17 @@ module records_v3 {
   val cpFirstKeepsDevices = not(CP_FIRST) or MEMBERS.forall(m => {
     val v = views.get(m)
     val cnt = recsOf(v.counting, db)
-    v.stop or not(synced(m)) or cnt.forall(r => not(r.kind == "revoke" and r.kit == "" and r.signer == last(v.path))
-      or tgt(r).forall(a => recsOf(st.get(m).got, db).forall(d => not(d.kind == "device" and d.signer == a
-        and inLine(lineOf(r.seen, a), d.id) and not(cnt.exists(o => o.kind == "revoke" and o != r
-          // (A device of a key another counting removal already removed never counted before r:
-          // dec seed 11418, a re-issued removal of A by the new root, then A's device, then the
-          // new root's own removal of A.)
-          and (tgt(o).contains(d.target) or tgt(o).contains(a)))))
-        or v.devices.contains(d.target))))
+    // (What the member got, not what it keeps now: a device the removal made it drop counted.)
+    val held = recsOf(st.get(m).got, db).filter(x => not(isChain(x))).union(firstsHeld(st.get(m), db))
+    v.stop or not(synced(m)) or cnt.forall(r => not(r.kind == "revoke" and r.kit == "" and r.signer == last(v.path)) or {
+      // What counted just before r: the member's state without r (dec seed 11418: a device its
+      // admitter signed after another counting removal of it never counted, so r loses nothing).
+      val before = fullEvaluate(held.exclude(Set(r)), chainState(st.get(m), db)).devices
+      tgt(r).forall(a => recsOf(st.get(m).got, db).forall(d => not(d.kind == "device" and d.signer == a
+        and inLine(lineOf(r.seen, a), d.id) and before.contains(d.target)
+        and not(cnt.exists(o => o.kind == "revoke" and o != r and tgt(o).contains(d.target))))
+        or v.devices.contains(d.target)))
+    })
   })
 
   // (FIXED_CAPS, records b37218ee P1: what a set holds is what the rooms keep of it, asserted in
@@ -4084,6 +4088,19 @@ module records_v3 {
       .expect(MEMBERS.forall(m => not(views.get(m).devices.contains(DEVICE))))
       .then(sign("NA", "revoke", "A", "", 0, false, false, 1))
       .expect(promises and cpFirstKeepsDevices)
+  // The twin of seed 11418: A admits D while A is live, D counts, the root removes A with a seen
+  // that covers D's admission, and its checkpoint first: D still counts.
+  run liveAdminDeviceDecidedTest =
+    init
+      .then(sign("A", "device", "D", "", 0, false, false, 1))
+      .then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).devices.contains(DEVICE)))
+      .then(sign("R", "checkpoint", "", "", 0, false, false, 2))
+      .then(syncRound)
+      .then(sign("R", "revoke", "A", "", 0, false, false, 1))
+      .then(syncRound)
+      .expect(db.get(6).seen.get("A") == [4] and db.get(6).kit == "" and promises and cpFirstKeepsDevices
+        and (CP_FIRST implies MEMBERS.forall(m => views.get(m).devices.contains(DEVICE))))
   run recoveryChangesRootTest =
     init
       .then(recoverAs(RECOVERY, "NK"))
