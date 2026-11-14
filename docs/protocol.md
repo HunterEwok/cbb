@@ -184,8 +184,8 @@ these words depends on it.
 | Service instance | `<device ID>._cbb._tcp.local` | `internal/mdns/zone.go` |
 | Member port | TCP 8764, or `CBB_PORT` (the Linux installer's `--port`), when free, otherwise one the OS chooses, all addresses; published in the SRV record. Members listen on it; phones only while they are the hub. CBB's only port: it also serves pairing, and a listening join waits there | `internal/service/service.go`, `internal/service/members.go` |
 | mDNS | UDP 5353, groups 224.0.0.251 and ff02::fb | `internal/mdns/mdns.go` |
-| Member ALPN | `cbb/3` | `group.MemberProtocol` |
-| Pairing ALPN | `cbb-pair/2` | `pair.Protocol` |
+| Member ALPN | `cbb/4` | `cbb_core::alpn`, `group.MemberProtocol` |
+| Pairing ALPN | `cbb-pair/3` | `cbb_core::alpn` |
 | Forwarder | UDP and TCP 8764 on the forwarder's own server (`cbb forward -listen`); ALPN `cbb-forward/2` (section 13) | `internal/forward` |
 | Blind relay | UDP and TCP 8764 on the user's own server (`cbb relay -listen`); ALPN `cbb-relay/2`; tunnel address `fd00:cbb::1` (section 14) | `member/src/relayd` (`cbb-relay`) |
 | Pairing code | six ASCII digits; users may type spaces and dashes, which are removed | `pair.NormalizeCode` |
@@ -394,7 +394,7 @@ phones' `member/src/node.rs` and `member/src/phone.rs`.
 ### TLS
 
 - TLS 1.3 only ([RFC 8446](https://www.rfc-editor.org/rfc/rfc8446)): an implementation MUST
-  NOT negotiate an earlier version. ALPN `cbb/3` on both sides. Both sides
+  NOT negotiate an earlier version. ALPN `cbb/4` on both sides. Both sides
   present their member certificate (leaf only), with the admin CA's certificate after it
   when an admin issued it (section 10).
 - Every implementation MUST support the key exchange group `x25519`, the cipher suite
@@ -408,16 +408,16 @@ phones' `member/src/node.rs` and `member/src/phone.rs`.
   where the peer ID is the one found in discovery, and MUST check that the certificate names
   exactly that device.
 - Both sides MUST check the peer as in section 2 and against the records (section 10), and
-  that the negotiated version is TLS 1.3 and the ALPN protocol is `cbb/3`. A
+  that the negotiated version is TLS 1.3 and the ALPN protocol is `cbb/4`. A
   connection to one's own device ID is closed.
 - The handshake must finish within 10 s, counted from its start rather than from each read;
   an implementation SHOULD close one that does not.
 - A lite member listens on the member port for the member protocol only: TLS with ALPN
-  `cbb/3`, from home network addresses, at most 16 handshakes at once. It has
+  `cbb/4`, from home network addresses, at most 16 handshakes at once. It has
   no pairing window.
-- The member port takes TLS only. A ClientHello that offers `cbb-pair/2` gets the pairing
+- The member port takes TLS only. A ClientHello that offers `cbb-pair/3` gets the pairing
   configuration (section 6), whether or not a window is open; any other the member
-  configuration, and a connection that does not negotiate `cbb/3` is closed.
+  configuration, and a connection that does not negotiate `cbb/4` is closed.
 
 ### Framing
 
@@ -518,10 +518,13 @@ MUST ignore a capability it does not know in a hello; a record or Info with one 
 
 ### Hello
 
-A member speaks one version of the member protocol, the one its ALPN names
-(`cbb/3`); a release that changes the protocol so that an older member cannot
-read it takes the next ALPN version, which is the oldest peer it takes, and a peer of
-another version fails at the handshake. Within a version the hello says what the sender
+A member speaks the versions of the member protocol its ALPN names (`cbb/4` in 0.6)
+and offers every one of them, the highest first; the server takes the first of its own
+list that the client offers, names it does not know are ignored, and with no common name
+the handshake fails (`no_application_protocol`) and the apps say the other device runs
+another version of cbb. A new key container, or a change of what the handshake's bytes
+mean, takes a new name; a new message inside the protocol does not. 0.5's names are
+never offered. Within a version the hello says what the sender
 supports by its fields and by `features`, never by the sender's release, so no rule here
 depends on a version number.
 
@@ -986,10 +989,10 @@ A window for a remote invitation (design.md, "Joining from another network") dif
 
 ### TLS
 
-- Joiner (client): TLS 1.3, ALPN `cbb-pair/2`, presents its self-signed certificate
+- Joiner (client): TLS 1.3, ALPN `cbb-pair/3`, presents its self-signed certificate
   (section 2) for the P-256 key it will keep, with its new device ID as CN; it does not
   verify the server's certificate during the handshake.
-- Member (server): TLS 1.3, ALPN `cbb-pair/2`, presents its member certificate (leaf
+- Member (server): TLS 1.3, ALPN `cbb-pair/3`, presents its member certificate (leaf
   only), requires any client certificate, session tickets off. It MUST reject the connection
   unless the client sent exactly one certificate with a P-256 key and a device ID as CN that
   differs from its own.
@@ -2513,7 +2516,7 @@ and joins only once the user accepts; declining sends nothing.
   so a guest address never names a member. Peers that stay when the hub's peers change
   keep their sessions.
 - Inside the tunnel, a connection from a guest address to TCP 8764 gets the pairing
-  (ALPN `cbb-pair/2`, section 6) of that invitation's window and nothing else,
+  (ALPN `cbb-pair/3`, section 6) of that invitation's window and nothing else,
   except, once the window admitted a device, member TLS from that device alone, for its
   first hello (below). Any other connection MUST be closed.
 - The hub drops the guest peer when the invitation ends without a device, and once the
@@ -3830,8 +3833,8 @@ does not know unless its section says it refuses it.
 
 | ID | Port | Section |
 |---|---|---|
-| `cbb/3` | TCP 8764, the member port; TCP 8764 inside the tunnel | 4 |
-| `cbb-pair/2` | the member port; a listening joiner's port; TCP 8764 inside a guest tunnel | 6, 12 |
+| `cbb/4` | TCP 8764, the member port; TCP 8764 inside the tunnel | 4 |
+| `cbb-pair/3` | the member port; a listening joiner's port; TCP 8764 inside a guest tunnel | 6, 12 |
 | `http/1.1` (or none) | the member port, on a member that serves the iPhone | 7 |
 | `cbb-forward/2` | TCP on the forwarder's port (8764 by default) | 13 |
 | `cbb-relay/2` | TCP on the relay's port (8764 by default) | 14 |

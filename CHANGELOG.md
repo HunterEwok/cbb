@@ -1581,6 +1581,10 @@ All notable changes to cbb are documented in this file. The format follows
   `cbb.sh`.
 
 ### Changed
+- The member protocol is `cbb/4` and pairing `cbb-pair/3`, named once in the Rust core
+  (`cbb_core::alpn`) and taken by the Go service and both phone kits. A device offers every
+  name it speaks, the highest first; a peer's unknown names are ignored, and a device with no
+  common name is told the other one runs another version of cbb.
 - The README leads with what Copy Beyond Borders is in one sentence, sums up its status in
   three lines (the full table moved to docs/parity.md, "On real devices") and lists what it
   also does. The keyboards, the TV remotes, the Nano ESP32 and the ZX Spectrum Next are on

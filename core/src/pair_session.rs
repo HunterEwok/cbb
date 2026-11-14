@@ -154,7 +154,7 @@ impl Attempt {
             if self.session.is_handshaking() {
                 return Ok(Outcome::Pending);
             }
-            if self.session.alpn_protocol() != Some(tls::PAIR_PROTOCOL) {
+            if !crate::alpn::is_pair(self.session.alpn_protocol()) {
                 return Err(Error::msg("the device does not offer pairing"));
             }
             let member_der = self

@@ -30,9 +30,6 @@ use crate::format::{KeyHash, Rule};
 use crate::identity::ExternalKey;
 use crate::records::Key;
 
-/// The ALPN protocol of pairing in 0.6.
-pub const PAIR_PROTOCOL: &[u8] = b"cbb-pair/3";
-
 /// The pairing messages (format 11.1).
 pub const T_START: u64 = 64;
 pub const T_REPLY: u64 = 65;

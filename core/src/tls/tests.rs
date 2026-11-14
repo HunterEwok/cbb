@@ -73,7 +73,7 @@ fn handshake_data_and_close() {
     assert!(c.write(b"early").is_err(), "no data before the handshake");
     shuttle(&mut c, &mut s);
     assert!(!c.is_handshaking() && !s.is_handshaking());
-    assert_eq!(c.alpn_protocol(), Some(PAIR_PROTOCOL));
+    assert_eq!(c.alpn_protocol(), Some(alpn::PAIR));
     assert_eq!(s.protocol_version(), Some(rustls::ProtocolVersion::TLSv1_3));
     assert_eq!(s.peer_certificates().map(|c| c.len()), Some(1), "the client certificate");
 
@@ -162,13 +162,29 @@ fn wrong_protocol_fails() {
     let ((jc, jk), (mc, mk)) = (device(), device());
     let (scfg, _) = pair_server(&jc, &jk, &clock()).unwrap();
     let (mut ccfg, _) = pair_client(&mc, &mk, &clock()).unwrap();
-    ccfg.alpn_protocols = vec![MEMBER_PROTOCOL.to_vec()];
+    ccfg.alpn_protocols = vec![alpn::MEMBER.to_vec()];
     let mut c = Session::client(Arc::new(ccfg), server_name(None)).unwrap();
     let mut s = Session::server(Arc::new(scfg)).unwrap();
     assert!(s.feed(&c.take_outgoing()).is_err());
     // The alert follows the server hello, encrypted; the client learns why.
     let err = c.feed(&s.take_outgoing()).unwrap_err();
     assert!(err.details().contains("NoApplicationProtocol"), "{}", err.details());
+    assert!(err.to_string().contains(alpn::OTHER_VERSION), "{err}");
+}
+
+/// A peer that offers a name this version does not know beside ours
+/// connects on ours.
+#[test]
+fn an_unknown_name_beside_ours_is_ignored() {
+    let ((jc, jk), (mc, mk)) = (device(), device());
+    let (scfg, _) = pair_server(&jc, &jk, &clock()).unwrap();
+    let (mut ccfg, _) = pair_client(&mc, &mk, &clock()).unwrap();
+    ccfg.alpn_protocols = vec![b"cbb-pair/9".to_vec(), alpn::PAIR.to_vec(), b"h2".to_vec()];
+    let mut c = Session::client(Arc::new(ccfg), server_name(None)).unwrap();
+    let mut s = Session::server(Arc::new(scfg)).unwrap();
+    shuttle(&mut c, &mut s);
+    assert_eq!(c.alpn_protocol(), Some(alpn::PAIR));
+    assert_eq!(s.alpn_protocol(), Some(alpn::PAIR));
 }
 
 /// Both cipher suites work, whichever the client prefers.
@@ -187,7 +203,7 @@ fn both_cipher_suites() {
             .with_client_auth_cert(vec![CertificateDer::from(mc)], PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(mk)))
             .unwrap();
         let mut ccfg = ccfg;
-        ccfg.alpn_protocols = vec![PAIR_PROTOCOL.to_vec()];
+        ccfg.alpn_protocols = vec![alpn::PAIR.to_vec()];
         let mut c = Session::client(Arc::new(ccfg), server_name(None)).unwrap();
         let mut s = Session::server(Arc::new(scfg)).unwrap();
         shuttle(&mut c, &mut s);
@@ -252,7 +268,7 @@ fn a_refused_client_certificate_fails_without_a_panic() {
         .with_client_cert_verifier(Arc::new(NoPeer))
         .with_single_cert(chain, key)
         .unwrap();
-    scfg.alpn_protocols = vec![PAIR_PROTOCOL.to_vec()];
+    scfg.alpn_protocols = vec![alpn::PAIR.to_vec()];
     let (ccfg, _) = pair_client(&mc, &mk, &clock()).unwrap();
     let mut c = Session::client(Arc::new(ccfg), server_name(None)).unwrap();
     let mut s = Session::server(Arc::new(scfg)).unwrap();
