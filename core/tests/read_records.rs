@@ -1392,13 +1392,13 @@ fn same(a: &RecordSet, b: &RecordSet) -> bool {
     a.digest() == b.digest() && a.state() == b.state()
 }
 
-/// One member given the same records in other orders (the take-back
-/// before or after D's admission, or shuffled with eight seeds and offered
-/// three times) ends with the same set and state. This holds here
-/// because no key passes its cap; a key past its cap with records of
-/// unequal sizes may end with other records in another order.
+/// One member given these records in other orders (the take-back before
+/// or after D's admission, or shuffled with eight seeds and offered three
+/// times) ends with the same set and state. A property of these records,
+/// not of all: a key past its cap may end by the order its records came in
+/// (core/tests/rooms.rs pins such a case).
 #[test]
-fn one_member_ends_equal_whatever_the_order() {
+fn one_member_ends_equal_in_the_orders_tried() {
     for ex in [0u32, 6, 7, 8] {
         let c = take_back("o", ex);
         let (mut first, mut last) = (new_set(), new_set());
@@ -1585,13 +1585,13 @@ fn until_stable(set: &mut RecordSet, records: &[Record], lists: &[Vec<u8>]) -> u
 
 /// Records that move the tiers or the order in the rooms (a take-back, a
 /// removal, a newer root checkpoint, a change of root), both tiers
-/// squeezed: at each stage, whatever the order of what was signed so far
+/// squeezed: at each stage, in the orders tried of what was signed so far
 /// (signing order, the take-back last, eight shuffles), one offer ends
 /// with the set the signing order settles at, and offering again changes
-/// nothing.
+/// nothing. A property of these records, not a promise for any order.
 #[test]
 #[ignore = "slow (about five minutes in release); run with --ignored --release --nocapture"]
-fn records_that_move_the_tiers_end_equal_whatever_the_order() {
+fn records_that_move_the_tiers_end_equal_in_the_orders_tried() {
     let m = moving_records("m");
     let mut bad = Vec::new();
     for (stage, end) in &m.stages {
@@ -2343,7 +2343,6 @@ fn the_rooms_tell_why_a_record_is_turned_away() {
 /// With the fixed caps, a key no longer an admin beside 16 live admins
 /// has a cap of 0: its next record is turned away, with why.
 #[test]
-#[ignore = "waits for the fixed caps at records"]
 fn a_key_no_longer_an_admin_beside_sixteen_live_admins_is_turned_away() {
     use cbb_core::records::set::{Offer, Tier};
     let (recs, _root, _admins, mut g) = full_group("w", 16);
