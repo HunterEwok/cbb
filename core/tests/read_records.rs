@@ -1038,6 +1038,9 @@ fn checkpoints_keep_no_more_than_the_devices_the_group_may_have() {
         g.t += 1000;
         set.insert(cp.clone()).unwrap();
         assert_eq!(set.state().checkpoint, Some(cp.id()), "round {round}");
+    }
+}
+
 /// A removal of 256 random keys by `by`, about 17 units.
 fn wide_removal(g: &mut G, by: &K, tag: &str, n: u32) -> Record {
     let mut keys: Vec<KeyHash> = (0..256u32)

@@ -278,7 +278,7 @@ pub fn keep_with(
 pub fn keep_tiers(
     items: &[Item],
     ceiling_of: impl Fn(&KeyHash) -> Option<u64>,
-    cut: &Cut,
+    _cut: &Cut,
     pre: &BTreeMap<KeyHash, u64>,
     second: &BTreeSet<KeyHash>,
 ) -> (BTreeSet<RecordId>, Cut) {
@@ -286,7 +286,7 @@ pub fn keep_tiers(
     let room = room().saturating_sub(pre.values().fold(0u64, |a, u| a.saturating_add(*u)));
     let mut by_key: BTreeMap<KeyHash, Vec<&Item>> = BTreeMap::new();
     for it in items {
-        if !cut.past(it) && ceiling_of(&it.signer).is_some() {
+        if ceiling_of(&it.signer).is_some() {
             by_key.entry(it.signer).or_default().push(it);
         }
     }
@@ -294,24 +294,35 @@ pub fn keep_tiers(
         hash: KeyHash,
         ceiling: u64,
         items: Vec<&'a Item>,
-        /// All its units, those of the records it dropped included.
-        total: u64,
+        /// The units of its first records in its order, one sum per record.
+        sums: Vec<u64>,
     }
     let keys: Vec<Key> = by_key
         .into_iter()
         .map(|(hash, mut items)| {
             items.sort_by_key(|it| it.pos());
             items.dedup_by_key(|it| it.id);
-            let dropped = cut.marks.get(&hash).map_or(0, |(_, u)| *u);
-            let total = items.iter().fold(dropped, |t, it| t.saturating_add(it.units));
+            let sums = items
+                .iter()
+                .scan(0u64, |t, it| {
+                    *t = t.saturating_add(it.units);
+                    Some(*t)
+                })
+                .collect();
             let ceiling = ceiling_of(&hash).unwrap_or(0).saturating_sub(pre_of(&hash));
-            Key { hash, ceiling, items, total }
+            Key { hash, ceiling, items, sums }
         })
         .collect();
+    // What a key keeps at level s: its first records, whole, within its
+    // share (s less what it holds first) and its ceiling.
+    let share = |k: &Key, s: u64| s.saturating_sub(pre_of(&k.hash)).min(k.ceiling);
+    let kept_at = |k: &Key, s: u64| {
+        let cap = share(k, s);
+        let n = k.sums.partition_point(|t| *t <= cap);
+        if n == 0 { 0 } else { k.sums[n - 1] }
+    };
     let demand = |tier: bool, s: u64| {
-        keys.iter()
-            .filter(|k| second.contains(&k.hash) == tier)
-            .fold(0u64, |d, k| d.saturating_add(s.saturating_sub(pre_of(&k.hash)).min(k.ceiling).min(k.total)))
+        keys.iter().filter(|k| second.contains(&k.hash) == tier).fold(0u64, |d, k| d.saturating_add(kept_at(k, s)))
     };
     // The highest level at or below top at which the tier fits in room.
     let fill = |tier: bool, top: u64, room: u64| {
@@ -326,42 +337,18 @@ pub fn keep_tiers(
         }
         lo
     };
-    let level = fill(false, cut.level.min(top()), room);
-    let level2 = fill(true, cut.level2.min(top()), room.saturating_sub(demand(false, level)));
+    // The rooms are judged from what is held alone: nothing a set did
+    // before narrows them (no level that only falls, no mark), so every
+    // order of the same records keeps the same.
+    let level = fill(false, top(), room);
+    let level2 = fill(true, top(), room.saturating_sub(demand(false, level)));
     let mut kept = BTreeSet::new();
-    let mut next = Cut { level, level2, marks: BTreeMap::new() };
     for k in &keys {
         let at = if second.contains(&k.hash) { level2 } else { level };
-        let cap = at.saturating_sub(pre_of(&k.hash)).min(k.ceiling);
-        let mut used = 0u64;
-        let mut first_out: Option<Pos> = None;
-        let mut out_units = 0u64;
-        for it in &k.items {
-            let u = used.saturating_add(it.units);
-            if first_out.is_none() && u <= cap {
-                used = u;
-                kept.insert(it.id);
-            } else {
-                first_out.get_or_insert(it.pos());
-                out_units = out_units.saturating_add(it.units);
-            }
-        }
-        let old = cut.marks.get(&k.hash);
-        let mark = match (first_out, old) {
-            (Some(f), Some((m, u))) => Some((f.min(*m), out_units.saturating_add(*u))),
-            (Some(f), None) => Some((f, out_units)),
-            (None, Some(m)) => Some(*m),
-            (None, None) => None,
-        };
-        if let Some(m) = mark {
-            next.marks.insert(k.hash, m);
-        }
+        let n = k.sums.partition_point(|t| *t <= share(k, at));
+        kept.extend(k.items[..n].iter().map(|it| it.id));
     }
-    // Keys with no record left keep what they dropped.
-    for (h, m) in &cut.marks {
-        next.marks.entry(*h).or_insert(*m);
-    }
-    (kept, next)
+    (kept, Cut { level, level2, marks: BTreeMap::new() })
 }
 
 #[cfg(test)]

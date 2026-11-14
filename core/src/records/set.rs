@@ -20,6 +20,10 @@ use crate::identity::ExternalKey;
 /// records of one unit each at the real rooms, four for every admin key
 /// the group may have. A writer's number only: no member judges a record
 /// by it.
+/// How many times a batch (`insert_all`) offers again, one by one, what
+/// its judgment turned away; a round that changes nothing ends it sooner.
+const REOFFER_ROUNDS: usize = 4;
+
 fn root_floor_margin() -> u64 {
     keep::ceiling(true) / 24
 }
@@ -244,6 +248,10 @@ pub struct RecordSet {
     /// outside the digest, never stored or sent but to a peer that asks
     /// for one by its ID (`for_peer_by_id`).
     kept_aside: BTreeMap<RecordId, (Record, Role, bool)>,
+    /// While a batch goes in (`insert_all`): the rooms are judged once,
+    /// over what is held and the whole batch, when it ends. Some(true)
+    /// when a judgment is due then.
+    batch: Option<bool>,
     /// The current root's checkpoints that wait for records nobody gave
     /// in MISSING_ROUNDS rounds (`missing`): a notice, once per checkpoint,
     /// at most MAX_NOTICES, the oldest going first. Local, never on the
@@ -346,6 +354,7 @@ impl RecordSet {
             bytes: 0,
             asked: BTreeMap::new(),
             kept_aside: BTreeMap::new(),
+            batch: None,
             stuck: BTreeMap::new(),
             no_room: BTreeSet::new(),
         }
@@ -775,8 +784,9 @@ impl RecordSet {
         // A root record that may change who is an admin is judged by the
         // rooms after it is stored too (`eval::not_live`).
         let tiers = self.moves_tiers(&r, role);
-        if !twin && !first && !wanted && !item.older && !tiers && self.cut.past(&item) && !waits(self) {
-            // Its key dropped a record before it: it would not be kept.
+        if !twin && !first && !wanted && !item.older && !tiers && self.beyond(&item) && !waits(self) {
+            // Past its key's last record, over its key's share: the rooms
+            // would not keep it.
             return Ok(Added::NoRoom);
         }
         let held = if self.trusted.contains(&id) {
@@ -1076,12 +1086,13 @@ impl RecordSet {
         if local.is_none() {
             self.reached = true;
         }
-        let mut stored = 0usize;
+        let mut stored: Vec<RecordId> = Vec::new();
         let mut refused = Vec::new();
         // Two records of one key at one seq that come together are judged
         // together, first and one after the other: whatever the set pruned
         // and whatever it remembers, the second makes the pair.
         let mut records: Vec<(Record, Option<Mark>)> = records.into_iter().collect();
+        let batch: Vec<(Record, Option<Mark>)> = if self.batch.is_none() { records.clone() } else { Vec::new() };
         let mut ids_at: BTreeMap<(KeyHash, u64), BTreeSet<RecordId>> = BTreeMap::new();
         for (r, _) in &records {
             ids_at.entry((r.body().signer, r.body().seq)).or_default().insert(r.id());
@@ -1093,12 +1104,48 @@ impl RecordSet {
         // Only the records that wait for their signer are held aside; the
         // others go straight in.
         let mut waiting = Vec::new();
+        // The rooms are a function of what is held: judged once, over the
+        // set and the whole batch, the batch ends where the same records
+        // at once would, whatever their order.
+        let outer = self.batch.is_some();
+        if !outer {
+            self.batch = Some(false);
+        }
         let mut progress = self.insert_each(records, local, &mut waiting, &mut stored, &mut refused);
         while progress && !waiting.is_empty() {
             let todo = core::mem::take(&mut waiting);
             progress = self.insert_each(todo, local, &mut waiting, &mut stored, &mut refused);
         }
+        if !outer && self.batch.take() == Some(true) {
+            self.cut();
+            if self.trusted.is_empty() {
+                self.settle();
+                if self.switch() {
+                    self.cut();
+                    self.settle();
+                }
+                self.trim_aside();
+            }
+            // What the judgment turned away is offered again, one by one: a
+            // checkpoint that waits may have a place aside only once the
+            // rooms let its prev go, as when the two come apart.
+            for _ in 0..REOFFER_ROUNDS {
+                let again: Vec<(Record, Option<Mark>)> =
+                    batch.iter().filter(|(r, _)| !self.contains(&r.id())).cloned().collect();
+                let before = self.digest();
+                let aside = self.kept_aside.len();
+                for (r, mark) in again {
+                    let with = local.zip(mark.as_ref());
+                    let _ = self.insert_only(r, with);
+                }
+                if self.digest() == before && self.kept_aside.len() == aside {
+                    break;
+                }
+            }
+        }
         refused.extend(waiting.iter().map(|(r, _)| (r.id(), Refused::UnknownSigner)));
+        // What the judgment turned away is not stored.
+        let stored = stored.iter().filter(|id| self.records.contains_key(*id)).count();
         (stored, refused)
     }
 
@@ -1108,7 +1155,7 @@ impl RecordSet {
         records: impl IntoIterator<Item = (Record, Option<Mark>)>,
         local: Option<&[u8; 32]>,
         waiting: &mut Vec<(Record, Option<Mark>)>,
-        stored: &mut usize,
+        stored: &mut Vec<RecordId>,
         refused: &mut Vec<(RecordId, Refused)>,
     ) -> bool {
         let mut progress = false;
@@ -1121,7 +1168,7 @@ impl RecordSet {
             let with = local.zip(mark.as_ref());
             match self.insert_only(r, with) {
                 Ok(Added::Stored) => {
-                    *stored = stored.saturating_add(1);
+                    stored.push(id);
                     progress = true;
                 }
                 Ok(_) => {}
@@ -1282,6 +1329,10 @@ impl RecordSet {
     /// changes nothing, so the set is the same whatever order the records
     /// came in. The recovery key's records are outside the rooms.
     fn cut(&mut self) {
+        if let Some(due) = self.batch.as_mut() {
+            *due = true;
+            return;
+        }
         self.drop_off_cuts();
         let mut proof = self.proof();
         // Each root's checkpoint that may count is kept first with what it
@@ -1345,7 +1396,7 @@ impl RecordSet {
             items.iter().map(|it| (it.signer, self.ceiling(&it.signer))).collect();
         let (kept, cut) =
             keep::keep_tiers(&items, |k| ceilings.get(k).copied().flatten(), &self.cut, &pre, &self.second);
-        self.cut = cut;
+        let fresh = cut;
         let drop: Vec<RecordId> = self
             .records
             .values()
@@ -1369,6 +1420,8 @@ impl RecordSet {
         if names_key {
             self.relearn();
         }
+        // The levels of what is now held, unless relearning took more.
+        self.cut = if names_key { keep::Cut::default() } else { fresh };
         self.trim_aside();
     }
 
@@ -1572,6 +1625,10 @@ impl RecordSet {
         if self.kept_aside.is_empty() {
             return false;
         }
+        if let Some(due) = self.batch.as_mut() {
+            *due = true;
+            return false;
+        }
         let (_, above) = self.line();
         let keep: Vec<RecordId> = above
             .iter()
@@ -1619,6 +1676,11 @@ impl RecordSet {
     /// the other record at that seq still makes the pair.
     fn trim_aside(&mut self) {
         if self.kept_aside.is_empty() {
+            return;
+        }
+        // The place aside is judged with the rooms, once a batch is in.
+        if let Some(due) = self.batch.as_mut() {
+            *due = true;
             return;
         }
         let (_, above) = self.line();
@@ -1804,6 +1866,43 @@ impl RecordSet {
         }
     }
 
+    /// Whether the rooms would turn item away, told before its signature
+    /// is checked: it comes after every record its key holds, and with it
+    /// the key would pass its share at the level of what is held. More
+    /// records only lower the levels, so the rooms over what is held and
+    /// item would not keep it either. The level is known only right after
+    /// the rooms were judged (`cut`), and none is after a record goes.
+    fn beyond(&self, item: &keep::Item) -> bool {
+        // A batch is judged once, when it is in: nothing before.
+        if item.checkpoint || item.early || self.batch.is_some() {
+            return false;
+        }
+        let k = self.room_key(&item.signer);
+        let Some(ceiling) = self.ceiling(&k) else { return false };
+        let share = self.cut.level(self.second.contains(&k)).min(ceiling);
+        // All the key holds, first records too: if even that fits, it does.
+        let all = self.units.iter().filter(|(s, _)| self.room_key(s) == k).fold(0u64, |t, (_, u)| t.saturating_add(*u));
+        if all.saturating_add(item.units) <= share {
+            return false;
+        }
+        // The key's records in its room, as the rooms count them (a fork's
+        // proof is of one signer's records, so it is read from these).
+        let of_key: Vec<&Entry> = self
+            .records
+            .values()
+            .filter(|e| e.role != Role::Recovery && self.room_key(&e.record.body().signer) == k)
+            .collect();
+        let proof = eval::fork_proof(of_key.iter().map(|e| (&e.record, self.role_of(e))));
+        let mine: Vec<keep::Item> = of_key
+            .iter()
+            .filter(|e| !proof.contains(&e.record.id()) && !eval::is_first(&self.firsts, &e.record))
+            .map(|e| eval::room_item(&e.record, self.role_of(e), &self.cuts))
+            .collect();
+        let held = mine.iter().fold(0u64, |t, it| t.saturating_add(it.units));
+        let pos = item.pos();
+        held.saturating_add(item.units) > share && mine.iter().all(|it| it.pos() < pos)
+    }
+
     fn needs_cut(&self, signer: &KeyHash) -> bool {
         // By room: the cut roots share one.
         let mut by_room: BTreeMap<KeyHash, u64> = BTreeMap::new();
@@ -1851,6 +1950,9 @@ impl RecordSet {
     }
 
     fn remove(&mut self, id: &RecordId) {
+        // The levels were those of what was held: with less held they may
+        // stand higher, so none is known until the rooms are judged again.
+        self.cut = keep::Cut::default();
         if let Some(e) = self.records.remove(id) {
             self.bytes = self.bytes.saturating_sub(e.record.size());
             if e.role != Role::Recovery
