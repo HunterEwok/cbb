@@ -206,18 +206,20 @@ module records_v3 {
   pure val DEVICE = "D"
   pure val MINTED = "X"
   // The keys whose records live in the rooms.
-  pure val SIGNERS = Set("R", "A", "C", "C2", "W", "NA", "NK", "X")
+  pure val SIGNERS = Set("R", "A", "C", "C2", "W", "NA", "NK", "X").union(if (SPARE) Set("A1", "A2", "C3") else Set())
   // NB: a fourth root key, only for a third change in the scenarios (it signs nothing else and
   // is not among SIGNERS; the random steps never name it).
   pure val ROOT_KEYS = Set("R", "NA", "NK", "NB")
   pure val RKEYS = Set("K")
   pure val THIEVES = Set("A", "C", "C2", "W", "X")
   pure val HOLDER = Map("R" -> "r", "A" -> "a", "NA" -> "a", "X" -> "a", "C" -> "c", "C2" -> "c", "W" -> "c",
+    "A1" -> "a", "A2" -> "a", "C3" -> "c",
     "K" -> "k", "NK" -> "k", "NB" -> "k")
   pure val MEMBERS = Set("r", "a", "c", "k", "m")
   // The device (its member key) of each admin key: C2 is a second admin key the root may name
   // for C's device in place of C.
-  pure val DEV = Map("A" -> "dA", "C" -> "dC", "C2" -> "dC", "W" -> "dW", "X" -> "dX", "NA" -> "dN")
+  pure val DEV = Map("A" -> "dA", "C" -> "dC", "C2" -> "dC", "W" -> "dW", "X" -> "dX", "NA" -> "dN",
+    "A1" -> "dA", "A2" -> "dA", "C3" -> "dC")
   pure val DEVS = Set("dA", "dC", "dW", "dX", "dN")
 
   // Under CEIL_FIT: ROOM 20 = the current root's 6 + the cut roots' reserve 6 + 4 admins at 2
@@ -476,6 +478,17 @@ module records_v3 {
   // root's first records. In the model C's device is kept, as C2.
   pure val KEPT_ADMINS = false
   pure val NEWKEY = Map("C" -> "C2")
+  // SPARE (candidate S, architecture 11-14 21:43Z; under LAST_ROOT_ONLY): an admin's ack
+  // carries (as its target) a spare admin key its device made and never signed with. At a
+  // change the writer names an old admin's device with that spare, taken only from an ack that
+  // counts under the root being replaced and never named before (S1), and keeps no admins
+  // while it holds an earlier change not yet applied (S2). Spares: A, A1, A2 and C, C2, C3.
+  pure val SPARE = false
+  pure val SPARE_OF = Map("A" -> "A1", "A1" -> "A2", "C" -> "C2", "C2" -> "C3")
+  pure def spareOf(k: Key): Key = if (SPARE and SPARE_OF.keys().contains(k)) SPARE_OF.get(k) else ""
+  // SEEN_HOLDS_ROOT (with SPARE): an admin's record other than a removal, freeze or thaw counts
+  // only if its seen holds a record of the last root that names its key.
+  pure val SEEN_HOLDS_ROOT = false
   // GRANT_ABOVE (records' refinement of ROOT_WAITS, 11-14 21:37Z): a removal's settle does not
   // wait for an admin key named only by records of the removal's root above its seq (who holds
   // the grant holds the removal, the claim checked by grantHoldsRemoval).
@@ -1349,6 +1362,8 @@ module records_v3 {
     // What an admin's record may do.
     pure def permitted(r: Record): bool =
       if (not(adm.keys().contains(r.signer))) false
+      else if (SEEN_HOLDS_ROOT and not(Set("revoke", "freeze", "thaw").contains(r.kind))
+        and not(adminRecs.exists(g => g.target == r.signer and g.signer == cur and inLine(lineOf(r.seen, cur), g.id)))) false
       else if (r.kind == "device") {
         val first = admittedBy(r.target)
         not(rootHas(r.target)) and (first == r.id or (first != NONE and first != -1 and has(r.signer, "manage")
@@ -1911,6 +1926,13 @@ module records_v3 {
       .fold([], (l, c) => if (c.heads.get(k).length() > l.length()) c.heads.get(k) else l))
     val cp = heads.keys().filter(k => heads.get(k).length() > 0)
       .map(k => lastId(heads.get(k))).filter(i => onList(before, db.get(i).signer) and db.get(i).kind != "checkpoint")
+    // (SPARE: the spare a counting ack of admin key a carries under the root being replaced,
+    // never named before (S1); none while the writer has not applied the chain below (S2).)
+    def spareFor(a: Key): Key = {
+      val sps = recsOf(v.counting, db).filter(y => y.kind == "ack" and y.signer == a and y.target != "").map(y => y.target)
+        .filter(t => not(db.keys().exists(i => db.get(i).kind == "admin" and db.get(i).target == t)))
+      if (not(SPARE) or v.path != before or sps.size() != 1) "" else sps.fold("", (z, t) => t)
+    }
     // (CORE_LIST_FILTER: the core's list today drops a removal of keys no held record names.)
     def unnamedRm(r: Record): bool = CORE_LIST_FILTER and rootRemoval(r)
       and tgt(r).forall(t => admissionsOf(recsOf(s.recs, db), t) == Set())
@@ -2017,10 +2039,13 @@ module records_v3 {
       // (LAST_ROOT_ONLY: admins are wiped at a change; an admin's device is re-issued as a plain
       // device.)
       // (KEPT_ADMINS: a device the writer keeps as an admin is named again under a new key.)
-      val kept = LAST_ROOT_ONLY and KEPT_ADMINS and x.kind == "admin" and NEWKEY.keys().contains(x.target)
+      val sp = spareFor(x.target)
+      val kept = LAST_ROOT_ONLY and x.kind == "admin"
+        and ((KEPT_ADMINS and NEWKEY.keys().contains(x.target)) or (SPARE and sp != ""))
+      val newKey = if (SPARE and sp != "") sp else if (NEWKEY.keys().contains(x.target)) NEWKEY.get(x.target) else x.target
       val asDev = LAST_ROOT_ONLY and x.kind == "admin" and not(kept)
       d.put(yIds[j], rec(yIds[j], target, own.concat(zIds).concat(yIds.slice(0, j + 1)),
-        if (asDev) "device" else x.kind, if (asDev) DEV.get(x.target) else if (kept) NEWKEY.get(x.target) else x.target,
+        if (asDev) "device" else x.kind, if (asDev) DEV.get(x.target) else if (kept) newKey else x.target,
         if (asDev) "" else x.kit, nextId,
         x.seen, Map(), Set(), x.units))
     })
@@ -2108,7 +2133,10 @@ module records_v3 {
   action signUseKey = nondet k = Set(PHONE, COMPUTER, WATCH, MINTED).oneOf() nondet t = Set("NA", "NK", MINTED).oneOf()
     sign(k, "device", t, "", 0, false, false, 1)
   // (ROOT_WAITS: a live admin key acknowledges what it holds.)
-  action signAck = nondet k = Set(PHONE, COMPUTER, WATCH).oneOf() all { ROOT_WAITS, sign(k, "ack", "", "", 0, false, false, 1) }
+  action signAck = nondet k = Set(PHONE, COMPUTER, WATCH).union(if (SPARE) Set("A1", "A2", "C2", "C3") else Set()).oneOf()
+    all { ROOT_WAITS, ackS(k) }
+  // (SPARE: the ack carries the signer's spare.)
+  action ackS(k: Key): bool = sign(k, "ack", spareOf(k), "", 0, false, false, 1)
   action signCopies = nondet k = SIGNERS.oneOf() nondet u = Set(1, 2).oneOf() sign(k, "copies", "", "", 0, false, false, u)
   // Any recovery record at any place: a new root (or a key that was one, which is not
   // valid), any list.
@@ -2919,7 +2947,21 @@ module records_v3 {
     or not(st.get(m).got == st.get(n).got and saturated(m) and saturated(n) and running(m) and running(n)))
     or (st.get(m).recs == st.get(n).recs and views.get(m) == views.get(n))))
   val decidedInv = and { promises, tiersPure, cpFirstKeepsDevices, ownCpsNoCrowd, twinHalts, sameGotSameState,
-    not(GRANT_ABOVE) or grantHoldsRemoval }
+    not(GRANT_ABOVE) or grantHoldsRemoval, not(SPARE) or spareSafe }
+  // (SPARE's promise: no key is named an admin key by two roots on the honest path, and no
+  // record an admin key signed before its naming counts anywhere.)
+  val spareSafe = and {
+    db.keys().forall(i => db.keys().forall(j => {
+      val a = db.get(i)
+      val b = db.get(j)
+      not(a.kind == "admin" and b.kind == "admin" and a.target == b.target and a.signer != b.signer
+        and ROOT_KEYS.contains(a.signer) and ROOT_KEYS.contains(b.signer) and a.kit != "deviant" and b.kit != "deviant")
+    })),
+    MEMBERS.forall(m => views.get(m).stop or recsOf(views.get(m).counting, db).forall(x =>
+      not(views.get(m).admins.keys().contains(x.signer)) or onList(views.get(m).path, x.signer)
+      or recsOf(views.get(m).counting, db).exists(g => g.kind == "admin" and g.target == x.signer
+        and g.signer == last(views.get(m).path) and g.id < x.id))),
+  }
   // (GRANT_ABOVE's claim: a member that counts the root's grant of an admin key held by it, above
   // a removal of the same root on the grant's line, holds that removal, unless the counting
   // checkpoint it holds settled it.)
@@ -5861,6 +5903,87 @@ module records_v3 {
       .then(syncRound).then(syncRound)
       .then(sign("C2", "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
       .expect(grantHoldsRemoval and promises)
+
+  // SPARE (candidate S) under L, W, REISSUE_STATE (+ sizes). A and C ack under R with spares
+  // A1 and C2; W never acks. The sleeper is c (C's device; NA's holder is a).
+  pure val onS = onL and SPARE
+  val notM = MEMBERS.exclude(Set("m"))
+  pure val AWAKE = Set("r", "a", "k", "m")
+  action spareStart = init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(ackS(PHONE)).then(ackS(COMPUTER)).then(syncRound)
+  // 1. Asleep through one change, then wakes: A1 and C2 are the admins everywhere; C2 acks
+  // (spare C3) and admits E.
+  run sAsleepOneTest = if (not(onS)) init else
+    spareStart
+      .then(recoverAs(RECOVERY, "NA"))
+      .then(giveAll(AWAKE, range(recId, firstOfChange + 1)))
+      .expect(Set("r", "a", "k").forall(m => views.get(m).path == [ROOT, "NA"] and views.get(m).admins.keys() == Set("A1", "C2"))
+        and views.get("c").path == [ROOT])
+      .then(syncRound).then(syncRound)
+      .expect(notM.forall(m => views.get(m).admins.keys() == Set("A1", "C2")) and spareSafe)
+      .then(ackS("C2")).then(sign("C2", "device", "E", "", 0, false, false, 1)).then(syncRound).then(syncRound)
+      .expect(notM.forall(m => views.get(m).devices.contains("E")) and promises and spareSafe)
+  // 2. Asleep through two changes: C2 never acked under NA, so NK keeps A (as A2, from A1's
+  // ack under NA) but not C; C2 counts for nothing when c wakes.
+  run sAsleepTwoTest = if (not(onS)) init else
+    spareStart
+      .then(recoverAs(RECOVERY, "NA"))
+      .then(giveAll(AWAKE, range(recId, firstOfChange + 1)))
+      .then(ackS("A1"))
+      .then(giveAll(AWAKE, [nextId - 1]))
+      .then(recoverAs(RECOVERY, "NK"))
+      .then(syncRound).then(syncRound).then(syncRound)
+      .expect(notM.forall(m => views.get(m).path == [ROOT, "NA", "NK"] and views.get(m).admins.keys() == Set("A2"))
+        and promises and spareSafe)
+  // 3. A second change before the first spread: no ack counts under NA, so NK keeps no admins.
+  run sSecondChangeTest = if (not(onS)) init else
+    spareStart
+      .then(recoverAs(RECOVERY, "NA")).then(recoverAs(RECOVERY, "NK"))
+      .then(syncRound).then(syncRound).then(syncRound)
+      .expect(notM.forall(m => views.get(m).path == [ROOT, "NA", "NK"] and views.get(m).admins.keys() == Set())
+        and promises and spareSafe)
+  // 4. A stale ack at the writer: C2 acks under NA (spare C3), but k never gets it; k holds
+  // only C's ack under R, which does not count under NA: NK does not keep C.
+  run sStaleAckTest = if (not(onS)) init else
+    spareStart
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound).then(syncRound)
+      .then(ackS("C2"))
+      .then(recoverAs(RECOVERY, "NK"))
+      .then(syncRound).then(syncRound).then(syncRound)
+      .expect(notM.forall(m => views.get(m).path == [ROOT, "NA", "NK"] and not(views.get(m).admins.keys().contains("C3"))
+        and not(views.get(m).admins.keys().contains("C2"))) and promises and spareSafe)
+  // 5. A deviant pre-signs with its spare A1 (E, 5, before the naming); after the naming 5 is
+  // offered to everyone again. Without SEEN_HOLDS_ROOT E counts (spareSafe breaks); with it
+  // E counts nowhere.
+  run sPresignTest = if (not(onS)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(signDeviant("A1", "device", "E", 1))
+      .then(ackS(PHONE)).then(syncRound)
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound).then(syncRound)
+      .then(giveAll(MEMBERS, [5])).then(syncRound)
+      .expect(notM.forall(m => views.get(m).admins.keys().contains("A1")))
+      .expect(if (SEEN_HOLDS_ROOT) notM.forall(m => not(views.get(m).devices.contains("E"))) and spareSafe
+        else notM.forall(m => views.get(m).devices.contains("E")) and not(spareSafe))
+  // 6. NA removes D while the kept C2 has not shown up (c asleep; A1 acked): the removal
+  // waits; NA takes C2 back (a root device record of dC; the 35-day step is the same) and then
+  // settles.
+  run sTakeBackTest = if (not(onS)) init else
+    spareStart
+      .then(recoverAs(RECOVERY, "NA"))
+      .then(giveAll(AWAKE, range(recId, firstOfChange + 1)))
+      .then(sign("NA", "revoke", DEVICE, "", 0, false, false, 1)).then(sign("NA", "copies", "", "", 0, false, false, 1))
+      .then(giveAll(AWAKE, [nextId - 2, nextId - 1]))
+      .then(ackS("A1")).then(giveAll(AWAKE, [nextId - 1]))
+      .then(signAs("NA", "checkpoint", "", 0))
+      .expect(keepsRemovalOfD("NA"))
+      .then(giveAll(AWAKE, [nextId - 1]))
+      .then(sign("NA", "device", "dC", "", 0, false, false, 1)).then(giveAll(AWAKE, [nextId - 1]))
+      .then(signAs("NA", "checkpoint", "", 0))
+      .expect(not(keepsRemovalOfD("NA")))
+      .then(syncRound).then(syncRound).then(compactAt("m")).then(syncRound)
+      .expect(dOutL and spareSafe)
 
   // REISSUE_STATE: the change to NA re-issues R's live admissions (A, C, W and D) as NA's first
   // records 6 to 9; the list keeps none of R's records, the first checkpoint keeps the Ys, and
