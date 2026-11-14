@@ -268,6 +268,10 @@
 <context>
     <name>ChangePinDialog</name>
     <message>
+        <source>At least six digits, and not an easy one such as 123456 or 111111.</source>
+        <translation>कम से कम छह अंक, और 123456 या 111111 जैसा आसान नहीं।</translation>
+    </message>
+    <message>
         <source>Change</source>
         <translation>बदलें</translation>
     </message>
@@ -369,14 +373,11 @@
     </message>
 </context>
 <context>
-    <name>DeviceItems</name>
+    <name>DeviceCard</name>
     <message>
-        <source>%1 of %2 online</source>
-        <translation>%2 में से %1 ऑनलाइन</translation>
+        <source>Close</source>
+        <translation>बंद करें</translation>
     </message>
-</context>
-<context>
-    <name>DevicePage</name>
     <message>
         <source>Device ID</source>
         <translation>डिवाइस ID</translation>
@@ -503,6 +504,13 @@
     </message>
 </context>
 <context>
+    <name>DeviceItems</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%2 में से %1 ऑनलाइन</translation>
+    </message>
+</context>
+<context>
     <name>DeviceTile</name>
     <message>
         <source>Mute for 15 minutes</source>
@@ -544,10 +552,6 @@
         <source>Turn sync on</source>
         <translation>सिंक चालू करें</translation>
     </message>
-    <message>
-        <source>Unmute</source>
-        <translation>म्यूट हटाएँ</translation>
-    </message>
 </context>
 <context>
     <name>Errors</name>
@@ -558,6 +562,10 @@
     <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
         <translation>कोड के पते पर किसी दूसरे डिवाइस ने जवाब दिया। कोड फिर से स्कैन करें।</translation>
+    </message>
+    <message>
+        <source>Choose a PIN of at least six digits that is not easy to guess.</source>
+        <translation>कम से कम छह अंकों का ऐसा PIN चुनें जिसका अनुमान लगाना आसान न हो।</translation>
     </message>
     <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
@@ -877,8 +885,8 @@
         <translation>यह नहीं</translation>
     </message>
     <message>
-        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. It works once, until %1.</source>
-        <translation>नए फ़ोन पर CBB खोलें, निमंत्रण से जुड़ें पर टैप करें और कोड स्कैन करें। कंप्यूटर पर इसके पाठ के साथ cbb pair -invite चलाएँ। यह एक बार, %1 तक काम करता है।</translation>
+        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite - and paste its text. It works once, until %1.</source>
+        <translation>नए फ़ोन पर CBB खोलें, निमंत्रण से जुड़ें पर टैप करें और कोड स्कैन करें। कंप्यूटर पर cbb pair -invite - चलाएँ और इसका पाठ पेस्ट करें। यह एक बार, %1 तक काम करता है।</translation>
     </message>
     <message>
         <source>Opening the invitation on the group's hub…</source>
@@ -1058,6 +1066,10 @@
         <translation>%2 में से %1 ऑनलाइन</translation>
     </message>
     <message>
+        <source>All devices</source>
+        <translation>सभी डिवाइस</translation>
+    </message>
+    <message>
         <source>An admin muted this phone until %1: its copies do not reach the group.</source>
         <translation>एक एडमिन ने इस फ़ोन को %1 तक म्यूट किया है: इसकी कॉपियाँ समूह तक नहीं पहुँचतीं।</translation>
     </message>
@@ -1120,6 +1132,10 @@
     <message>
         <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
         <translation>दूसरे फ़ोन को एडमिन बनाएँ: उसे समूह में जोड़ें, फिर उसे यहाँ खोलें और “एडमिन बनाएँ” टैप करें। बंद करने के लिए टैप करें।</translation>
+    </message>
+    <message>
+        <source>Needs attention</source>
+        <translation>ध्यान चाहिए</translation>
     </message>
     <message>
         <source>New collection…</source>
@@ -1268,6 +1284,10 @@
         <translation>समूह की रूट कुंजी फ़ोन के सुरक्षित तत्व में बनती है और कभी उससे बाहर नहीं जाती।</translation>
     </message>
     <message>
+        <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
+        <translation>इस डिवाइस में कुंजियों के लिए सुरक्षित चिप या भरोसेमंद फ़िंगरप्रिंट या चेहरा सेंसर नहीं है: समूह के मुख्य डिवाइस के रूप में यह समूह की रक्षा उस फ़ोन से कम करता है जिसमें दोनों हों।</translation>
+    </message>
+    <message>
         <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
         <translation>यह फ़ोन समूह का रूट बनेगा: यह बाकी डिवाइसों को उनके QR कोड से जोड़ता है और माँगने वाले फ़ोनों को एडमिन बनाता है।</translation>
     </message>
@@ -1345,8 +1365,12 @@
         <translation>एडमिन PIN</translation>
     </message>
     <message>
-        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
-        <translation>CBB का अपना PIN, कम से कम चार अंक। फ़ोन का अनलॉक कोड इस्तेमाल न करें। फ़ोन का सुरक्षित तत्व हर एडमिन कार्य से पहले इसे जाँचता है; सात गलत PIN एडमिन कुंजी को हमेशा के लिए लॉक कर देते हैं, और कोई इसे अनलॉक नहीं कर सकता।</translation>
+        <source>At least six digits, and not an easy one such as 123456 or 111111.</source>
+        <translation>कम से कम छह अंक, और 123456 या 111111 जैसा आसान नहीं।</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least six digits and not an easy one such as 123456. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>CBB का अपना PIN, कम से कम छह अंक और 123456 जैसा आसान नहीं। फ़ोन का अनलॉक कोड इस्तेमाल न करें। फ़ोन का सुरक्षित तत्व हर एडमिन कार्य से पहले इसे जाँचता है; सात गलत PIN एडमिन कुंजी को हमेशा के लिए लॉक कर देते हैं, और कोई इसे अनलॉक नहीं कर सकता।</translation>
     </message>
     <message>
         <source>Choose the admin PIN</source>
@@ -1383,6 +1407,10 @@
     <message>
         <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
         <translation>गलत PIN। एक प्रयास बचा है: अगला गलत PIN एडमिन कुंजी को हमेशा के लिए लॉक कर देगा।</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Some tries are used up; seven wrong PINs lock the admin key for good.</source>
+        <translation>गलत PIN। कुछ प्रयास पहले ही खर्च हो चुके हैं; सात गलत PIN एडमिन कुंजी को हमेशा के लिए लॉक कर देते हैं।</translation>
     </message>
     <message>
         <source>Wrong PIN. Tries left: %1.</source>
@@ -1484,6 +1512,10 @@
     <message>
         <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
         <translation>समूह इस फ़ोन पर बहाल हो गया है। प्रतीक्षा समय ख़त्म होने पर, %1 घंटे में, यह समूह का रूट बन जाएगा, जब तक रूट अनुरोध रद्द न करे।</translation>
+    </message>
+    <message>
+        <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
+        <translation>इस डिवाइस में कुंजियों के लिए सुरक्षित चिप या भरोसेमंद फ़िंगरप्रिंट या चेहरा सेंसर नहीं है: समूह के मुख्य डिवाइस के रूप में यह समूह की रक्षा उस फ़ोन से कम करता है जिसमें दोनों हों।</translation>
     </message>
     <message>
         <source>This phone is the group's root now.</source>
@@ -1707,6 +1739,10 @@
     <message>
         <source>Version</source>
         <translation>संस्करण</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Some tries are used up; seven wrong PINs lock the admin key for good.</source>
+        <translation>गलत PIN। कुछ प्रयास पहले ही खर्च हो चुके हैं; सात गलत PIN एडमिन कुंजी को हमेशा के लिए लॉक कर देते हैं।</translation>
     </message>
     <message>
         <source>Wrong PIN. Tries left: %1.</source>

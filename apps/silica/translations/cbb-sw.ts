@@ -268,6 +268,10 @@
 <context>
     <name>ChangePinDialog</name>
     <message>
+        <source>At least six digits, and not an easy one such as 123456 or 111111.</source>
+        <translation>Angalau tarakimu sita, na isiyo rahisi kama 123456 au 111111.</translation>
+    </message>
+    <message>
         <source>Change</source>
         <translation>Badilisha</translation>
     </message>
@@ -369,14 +373,11 @@
     </message>
 </context>
 <context>
-    <name>DeviceItems</name>
+    <name>DeviceCard</name>
     <message>
-        <source>%1 of %2 online</source>
-        <translation>%1 kati ya %2 mtandaoni</translation>
+        <source>Close</source>
+        <translation>Funga</translation>
     </message>
-</context>
-<context>
-    <name>DevicePage</name>
     <message>
         <source>Device ID</source>
         <translation>Kitambulisho cha kifaa</translation>
@@ -503,6 +504,13 @@
     </message>
 </context>
 <context>
+    <name>DeviceItems</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 kati ya %2 mtandaoni</translation>
+    </message>
+</context>
+<context>
     <name>DeviceTile</name>
     <message>
         <source>Mute for 15 minutes</source>
@@ -544,10 +552,6 @@
         <source>Turn sync on</source>
         <translation>Washa usawazishaji</translation>
     </message>
-    <message>
-        <source>Unmute</source>
-        <translation>Ondoa unyamazishaji</translation>
-    </message>
 </context>
 <context>
     <name>Errors</name>
@@ -558,6 +562,10 @@
     <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
         <translation>Kifaa kingine kilijibu kwenye anwani ya msimbo. Changanua msimbo tena.</translation>
+    </message>
+    <message>
+        <source>Choose a PIN of at least six digits that is not easy to guess.</source>
+        <translation>Chagua PIN ya angalau tarakimu sita ambayo si rahisi kukisia.</translation>
     </message>
     <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
@@ -877,8 +885,8 @@
         <translation>Si hiki</translation>
     </message>
     <message>
-        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. It works once, until %1.</source>
-        <translation>Kwenye simu mpya, fungua CBB, gusa Jiunge kwa mwaliko na uchanganue msimbo. Kwenye kompyuta, endesha cbb pair -invite ukitumia maandishi yake. Unafanya kazi mara moja, hadi %1.</translation>
+        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite - and paste its text. It works once, until %1.</source>
+        <translation>Kwenye simu mpya, fungua CBB, gusa Jiunge kwa mwaliko na uchanganue msimbo. Kwenye kompyuta, endesha cbb pair -invite - na ubandike maandishi yake. Unafanya kazi mara moja, hadi %1.</translation>
     </message>
     <message>
         <source>Opening the invitation on the group's hub…</source>
@@ -1058,6 +1066,10 @@
         <translation>%1 kati ya %2 mtandaoni</translation>
     </message>
     <message>
+        <source>All devices</source>
+        <translation>Vifaa vyote</translation>
+    </message>
+    <message>
         <source>An admin muted this phone until %1: its copies do not reach the group.</source>
         <translation>Msimamizi amenyamazisha simu hii hadi %1: nakala zake hazifiki kwenye kikundi.</translation>
     </message>
@@ -1120,6 +1132,10 @@
     <message>
         <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
         <translation>Fanya simu ya pili kuwa msimamizi: iongeze kwenye kikundi, kisha ifungue hapa na uguse Fanya msimamizi. Gusa ili kufunga.</translation>
+    </message>
+    <message>
+        <source>Needs attention</source>
+        <translation>Inahitaji uangalifu</translation>
     </message>
     <message>
         <source>New collection…</source>
@@ -1268,6 +1284,10 @@
         <translation>Ufunguo wa mzizi wa kikundi unaundwa kwenye kipengele salama cha simu na hautoki humo kamwe.</translation>
     </message>
     <message>
+        <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
+        <translation>Kifaa hiki hakina chipu salama ya funguo au kihisi cha kuaminika cha alama ya kidole au uso: kama kifaa kikuu cha kikundi kinakilinda kikundi chini ya simu yenye vyote viwili.</translation>
+    </message>
+    <message>
         <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
         <translation>Simu hii inakuwa mzizi wa kikundi: inaongeza vifaa vingine kwa misimbo yao ya QR na kuzifanya simu zinazoomba kuwa wasimamizi.</translation>
     </message>
@@ -1345,8 +1365,12 @@
         <translation>PIN ya msimamizi</translation>
     </message>
     <message>
-        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
-        <translation>PIN ya CBB yenyewe, angalau tarakimu nne. Usitumie msimbo wa kufungua simu. Kipengele salama cha simu huikagua kabla ya kila kitendo cha msimamizi; PIN saba zisizo sahihi hufunga ufunguo wa msimamizi kabisa, na hakuna anayeweza kuufungua.</translation>
+        <source>At least six digits, and not an easy one such as 123456 or 111111.</source>
+        <translation>Angalau tarakimu sita, na isiyo rahisi kama 123456 au 111111.</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least six digits and not an easy one such as 123456. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>PIN ya CBB yenyewe, angalau tarakimu sita na isiyo rahisi kama 123456. Usitumie msimbo wa kufungua simu. Kipengele salama cha simu huikagua kabla ya kila kitendo cha msimamizi; PIN saba zisizo sahihi hufunga ufunguo wa msimamizi kabisa, na hakuna anayeweza kuufungua.</translation>
     </message>
     <message>
         <source>Choose the admin PIN</source>
@@ -1383,6 +1407,10 @@
     <message>
         <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
         <translation>PIN si sahihi. Imebaki jaribio moja: PIN nyingine isiyo sahihi itafunga ufunguo wa msimamizi kabisa.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Some tries are used up; seven wrong PINs lock the admin key for good.</source>
+        <translation>PIN si sahihi. Baadhi ya majaribio yameshatumika; PIN saba zisizo sahihi hufunga ufunguo wa msimamizi kabisa.</translation>
     </message>
     <message>
         <source>Wrong PIN. Tries left: %1.</source>
@@ -1484,6 +1512,10 @@
     <message>
         <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
         <translation>Kikundi kimerejeshwa kwenye simu hii. Inakuwa mzizi wa kikundi muda wa kusubiri ukiisha, baada ya saa %1, isipokuwa mzizi ukighairi ombi.</translation>
+    </message>
+    <message>
+        <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
+        <translation>Kifaa hiki hakina chipu salama ya funguo au kihisi cha kuaminika cha alama ya kidole au uso: kama kifaa kikuu cha kikundi kinakilinda kikundi chini ya simu yenye vyote viwili.</translation>
     </message>
     <message>
         <source>This phone is the group's root now.</source>
@@ -1707,6 +1739,10 @@
     <message>
         <source>Version</source>
         <translation>Toleo</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Some tries are used up; seven wrong PINs lock the admin key for good.</source>
+        <translation>PIN si sahihi. Baadhi ya majaribio yameshatumika; PIN saba zisizo sahihi hufunga ufunguo wa msimamizi kabisa.</translation>
     </message>
     <message>
         <source>Wrong PIN. Tries left: %1.</source>

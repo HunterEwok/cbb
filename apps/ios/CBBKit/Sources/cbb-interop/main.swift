@@ -240,7 +240,8 @@ func inviteWindow(secret: Data, yes: Bool) async throws {
         return yes
     }
     let (ended, cont) = AsyncStream<Result<PairingMember.Admitted, Error>>.makeStream()
-    let window = try InvitationWindow(identity: identity, expires: now.addingTimeInterval(60), admit: { t, joinerCert, sid in
+    // Go's joiner dials the window itself, without a hub in between.
+    let window = try InvitationWindow(identity: identity, expires: now.addingTimeInterval(60), fromGuest: { _ in true }, admit: { t, joinerCert, sid in
         var g = box.group
         let a = try await g.admit(over: t, code: "", joinerCert: joinerCert, sessionID: sid, caSigner: caSigner, invitation: invitation, now: Date())
         box.group = g

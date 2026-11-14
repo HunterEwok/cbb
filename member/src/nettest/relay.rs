@@ -67,6 +67,7 @@ fn server(open: bool, groups: Vec<String>) -> (Server, Vec<certs::KeyHash>) {
         limits: Limits::default(),
         log: Arc::new(|_| {}),
         verbose: true,
+        refused: None,
     })
     .unwrap();
     (s, vec![pin])

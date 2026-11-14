@@ -6,53 +6,103 @@ import UniformTypeIdentifiers
 /// Tiles or a list, as the menu sets it; on a big screen also the orbit.
 enum DeviceLayout: String {
     static let key = "deviceLayout"
-    /// The choice on a big screen, which starts with the orbit.
+    /// The choice on a big screen, which starts with the tiles and the
+    /// chosen device's card beside them.
     static let wideKey = "deviceLayoutWide"
 
     case tiles, list, orbit
 }
 
-/// The one page: how many devices are online with the two switches, sync
-/// (the house) and Everywhere (the globe), an alert only when there is one,
-/// and every device of the group as tiles or a list; a device opens its
-/// card. What was copied goes out as the app opens (AppModel.sendOnOpen).
-/// On a big screen (an iPad, a foldable iPhone's inner screen) the devices
-/// may stand on orbits around this phone, and the card opens beside them.
+/// Home: the phone's one page, or on a big screen (an iPad, a foldable
+/// iPhone's inner screen) the sidebar and the devices (PadHome). Both share
+/// the sheets: adding a device, an invitation, the paste note, and remote
+/// paste from a tile's menu. What was copied goes out as the app opens
+/// (AppModel.sendOnOpen).
 struct HomeView: View {
     @EnvironmentObject private var model: AppModel
-    @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
-    @AppStorage(DeviceLayout.key) private var layout = DeviceLayout.tiles
-    @AppStorage(DeviceLayout.wideKey) private var wideLayout = DeviceLayout.orbit
     @State private var adding = false
     @State private var inviting = false
-    @State private var settings = false
-    @AppStorage("LostPhoneCardClosed") private var lostPhoneClosed = false
     @AppStorage(AppModel.pasteChoiceKey) private var pasteChoice: String?
-    /// The device whose details stand beside the devices on a big screen.
-    @State private var selected: AppModel.Computer.ID?
     @StateObject private var arrange = ArrangeState()
+
+    /// The big screen's layout follows the window's width, not the device:
+    /// an iPad in Slide Over or a third of the screen gets the phone's page.
+    private var wide: Bool { sizeClass == .regular }
+
+    var body: some View {
+        Group {
+            if wide {
+                PadHome(adding: $adding, inviting: $inviting)
+            } else {
+                PhoneHome(adding: $adding, inviting: $inviting)
+            }
+        }
+        .sheet(isPresented: $inviting) { InviteSheet() }
+        .sheet(isPresented: Binding(get: { pasteChoice == nil && model.phase == .home }, set: { _ in })) { PasteNote() }
+        .sheet(isPresented: $adding) { AddDeviceView() }
+        .sheet(item: Binding(get: { arrange.pasting.flatMap { id in model.devices.first { $0.id == id } } },
+                             set: { if $0 == nil { arrange.pasting = nil } })) { d in
+            PasteView(device: d)
+        }
+        .modifier(ArrangePrompts())
+        .task {
+            // The live dots: which devices are connected now.
+            while !Task.isCancelled {
+                await model.refresh()
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
+        .environmentObject(arrange)
+    }
+}
+
+/// The phone's page: how many devices are online with the two switches,
+/// sync (the house) and Everywhere (the globe), an alert only when there is
+/// one, and every device of the group as tiles or a list; a device opens
+/// its card on the next page.
+struct PhoneHome: View {
+    @Binding var adding: Bool
+    @Binding var inviting: Bool
+    @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var arrange: ArrangeState
+    @Environment(\.palette) private var palette
+    @AppStorage(DeviceLayout.key) private var layout = DeviceLayout.tiles
+    @State private var settings = false
     @State private var query = ""
     @State private var filter: DeviceFilter?
 
-    private var wide: Bool { sizeClass == .regular }
     /// With more devices than fit a screen, Home offers a search and filters.
     private var many: Bool { model.devices.count > 12 }
     private var searching: Bool { many && (!query.isEmpty || filter != nil) }
 
-    /// The devices the search and the filter leave, flat.
-    private var found: [AppModel.Computer] {
-        model.devices.filter { d in
-            (query.isEmpty || d.name.localizedCaseInsensitiveContains(query) || (d.system?.localizedCaseInsensitiveContains(query) ?? false))
-                && (filter != .online || d.online) && (filter != .attention || d.needsAttention)
-        }
-    }
-
     var body: some View {
         NavigationStack {
-            Group {
-                if wide { wideBody } else { compactBody }
+            ScrollView {
+                VStack(alignment: .leading, spacing: Tokens.spacingLarge) {
+                    GroupHeader()
+                    AlertsCard()
+                    FallbackPaste()
+                    if let message = model.message {
+                        Text(message).foregroundStyle(palette.textDim)
+                    }
+                    if arrange.on { ArrangeBar() }
+                    if many { DeviceFilters(filter: $filter) }
+                    if searching {
+                        let found = model.devices.filter { $0.matches(query) && filter.passes($0) }
+                        if found.isEmpty {
+                            Text("No devices match.").foregroundStyle(palette.textDim)
+                        } else {
+                            DeviceCollection(devices: found, layout: layout == .orbit ? .tiles : layout)
+                        }
+                    } else {
+                        ArrangedDevices(layout: layout == .orbit ? .tiles : layout)
+                    }
+                    LostPhoneCard()
+                }
+                .padding(Tokens.spacingLarge)
             }
+            .sensoryFeedback(.success, trigger: model.message)
             .modifier(DeviceSearch(on: many, query: $query))
             .background(AppBackground())
             .navigationTitle(Text("CBB"))
@@ -61,139 +111,124 @@ struct HomeView: View {
             .navigationDestination(isPresented: $settings) { SettingsView() }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { menu }
-                ToolbarItem(placement: .primaryAction) {
-                    if model.isAdmin {
-                        Menu {
-                            Button { adding = true } label: {
-                                Label { Text("Scan a code") } icon: { Image(systemName: "qrcode.viewfinder") }
-                            }
-                            Button { inviting = true } label: {
-                                Label { Text("Send an invitation") } icon: { Image(systemName: "envelope") }
-                            }
-                        } label: {
-                            Image(systemName: "plus").accessibilityLabel(Text("Add a device"))
-                        } primaryAction: {
-                            adding = true
-                        }
-                        .keyboardShortcut("n")
-                    }
-                }
+                ToolbarItem(placement: .primaryAction) { AddMenu(adding: $adding, inviting: $inviting) }
             }
-            .sheet(isPresented: $inviting) { InviteSheet() }
-            .sheet(isPresented: Binding(get: { pasteChoice == nil && model.phase == .home }, set: { _ in })) { PasteNote() }
-            .sheet(isPresented: $adding) { AddDeviceView() }
-            .modifier(ArrangePrompts())
             // Arrange mode is off while a search or a filter is on.
             .onChange(of: searching) { _, on in if on { arrange.on = false } }
-            .task {
-                // The live dots: which devices are connected now.
-                while !Task.isCancelled {
-                    await model.refresh()
-                    try? await Task.sleep(for: .seconds(2))
+        }
+    }
+
+    private var menu: some View {
+        Menu {
+            Picker(selection: $layout) {
+                Label { Text("Tiles") } icon: { Image(systemName: "square.grid.2x2") }.tag(DeviceLayout.tiles)
+                Label { Text("List") } icon: { Image(systemName: "list.bullet") }.tag(DeviceLayout.list)
+            } label: {
+                Text("View")
+            }
+            .pickerStyle(.inline)
+            ArrangeMenuItems(disabled: searching)
+            Button { settings = true } label: {
+                Label { Text("Settings") } icon: { Image(systemName: "gearshape") }
+            }
+            .keyboardShortcut(",")
+        } label: {
+            Image(systemName: "ellipsis").accessibilityLabel(Text("Menu"))
+        }
+    }
+}
+
+/// "+" for an admin: scan a device's code, or send an invitation.
+struct AddMenu: View {
+    @Binding var adding: Bool
+    @Binding var inviting: Bool
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        if model.isAdmin {
+            Menu {
+                Button { adding = true } label: {
+                    Label { Text("Scan a code") } icon: { Image(systemName: "qrcode.viewfinder") }
+                }
+                Button { inviting = true } label: {
+                    Label { Text("Send an invitation") } icon: { Image(systemName: "envelope") }
+                }
+            } label: {
+                Image(systemName: "plus").accessibilityLabel(Text("Add a device"))
+            } primaryAction: {
+                adding = true
+            }
+            .keyboardShortcut("n")
+        }
+    }
+}
+
+/// Arrange mode on or off, and back to the group's order, in a menu.
+struct ArrangeMenuItems: View {
+    var disabled = false
+    @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var arrange: ArrangeState
+
+    var body: some View {
+        if model.group.hasGroup {
+            Button { arrange.on.toggle() } label: {
+                Label { arrange.on ? Text("Done arranging") : Text("Arrange devices") } icon: { Image(systemName: "square.grid.3x3.square") }
+            }
+            .disabled(disabled)
+            if model.customOrder {
+                Button { model.arrange(.reset) } label: {
+                    Label { Text("Back to the group's order") } icon: { Image(systemName: "arrow.counterclockwise") }
                 }
             }
         }
-        .environmentObject(arrange)
+    }
+}
+
+extension AppModel.Computer {
+    /// Whether the search's text is in its name or its system.
+    func matches(_ query: String) -> Bool {
+        query.isEmpty || name.localizedCaseInsensitiveContains(query) || (system?.localizedCaseInsensitiveContains(query) ?? false)
     }
 
-    /// The phone's page.
-    private var compactBody: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Tokens.spacingLarge) {
-                header
-                AlertsCard()
-                fallbackPaste
-                if let message = model.message {
-                    Text(message).foregroundStyle(palette.textDim)
-                }
-                devicesView(layout: layout == .orbit ? .tiles : layout, select: nil)
-                lostPhoneCard
-            }
-            .padding(Tokens.spacingLarge)
-        }
-        .sensoryFeedback(.success, trigger: model.message)
+    /// Whether it takes remote paste: members, and Android and Aurora
+    /// phones; iPhones and iPads cannot.
+    var takesPaste: Bool {
+        !isSelf && (role == "member" || (role == "phone" && ["android", "aurora", "sailfish"].contains(os)))
     }
+}
 
-    /// The big screen's page: the devices, and the chosen one's card
-    /// beside them.
-    private var wideBody: some View {
-        HStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: Tokens.spacingMedium) {
-                header
-                AlertsCard()
-                fallbackPaste
-                if let message = model.message {
-                    Text(message).foregroundStyle(palette.textDim)
-                }
-                if wideLayout == .orbit && !arrange.on && !searching {
-                    if many { DeviceFilters(filter: $filter) }
-                    OrbitView(devices: model.devices, selected: selected, select: { selected = $0 })
-                } else {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: Tokens.spacingMedium) {
-                            devicesView(layout: wideLayout == .orbit ? .tiles : wideLayout, select: { selected = $0 })
-                        }
-                    }
-                }
-                lostPhoneCard
-            }
-            .padding(Tokens.spacingLarge)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            if let id = selected {
-                Divider().overlay(palette.line)
-                DeviceDetailView(id: id, close: { selected = nil })
-                    .frame(width: 400)
-                    .transition(.move(edge: .trailing))
-            }
-        }
-        .animation(.smooth, value: selected)
-        .sensoryFeedback(.success, trigger: model.message)
-    }
-
-    /// The system's paste button, only when iOS refused the app the
-    /// clipboard or its user chose not to let it read it: it hands the
-    /// clipboard over without asking (UIPasteControl).
-    @ViewBuilder private var fallbackPaste: some View {
-        if model.pasteRefused, model.syncOff == nil {
-            PasteButton(supportedContentTypes: [.plainText, .image]) { providers in
-                Task { @MainActor in await model.sync(board: await AppModel.Board.load(providers)) }
-            }
-            .labelStyle(.iconOnly)
-            .buttonBorderShape(.capsule)
-            .controlSize(.large)
-            .tint(palette.accent)
-            .frame(maxWidth: .infinity)
-            .disabled(model.busy)
-            .accessibilityLabel(Text("Send what you copied"))
+extension Optional where Wrapped == DeviceFilter {
+    /// Whether a device passes the filter, or there is none.
+    func passes(_ d: AppModel.Computer) -> Bool {
+        switch self {
+        case .some(.online): d.online
+        case .some(.attention): d.needsAttention
+        case .none: true
         }
     }
+}
 
-    /// The devices: in the user's order with the collections, or flat while
-    /// a search or a filter is on.
-    @ViewBuilder private func devicesView(layout: DeviceLayout, select: ((AppModel.Computer.ID) -> Void)?) -> some View {
-        if arrange.on { ArrangeBar() }
-        if many { DeviceFilters(filter: $filter) }
-        if searching {
-            if found.isEmpty {
-                Text("No devices match.").foregroundStyle(palette.textDim)
-            } else {
-                DeviceCollection(devices: found, layout: layout, select: select)
-            }
-        } else {
-            ArrangedDevices(layout: layout, select: select)
-        }
-    }
+/// How many devices are online, of how many, with the two switches; under
+/// it what holds now: this phone as the hub, an admin's mute.
+struct GroupHeader: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.palette) private var palette
 
-    /// How many devices are online, of how many, with the two switches;
-    /// under it what holds now: this phone as the hub, an admin's mute.
-    private var header: some View {
+    var body: some View {
         let online = model.devices.filter { $0.online || $0.isSelf }.count
-        return VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: Tokens.spacingMedium) {
-                Text("\(online) of \(model.devices.count) online")
-                    .font(.title3.weight(.semibold))
-                Spacer()
-                SyncSwitches()
+        VStack(alignment: .leading, spacing: 2) {
+            // The count above the switches when the two do not fit in a
+            // line: a narrow sidebar, the largest text sizes.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Tokens.spacingMedium) {
+                    Text("\(online) of \(model.devices.count) online").font(.title3.weight(.semibold))
+                    Spacer()
+                    SyncSwitches()
+                }
+                VStack(alignment: .leading, spacing: Tokens.spacingSmall) {
+                    Text("\(online) of \(model.devices.count) online").font(.title3.weight(.semibold))
+                    SyncSwitches()
+                }
             }
             // The phone as the hub works while the app is open: Home says so, as a fact, not a fault.
             if model.hub?.on == true {
@@ -210,43 +245,40 @@ struct HomeView: View {
             }
         }
     }
+}
 
-    private var menu: some View {
-        Menu {
-            Picker(selection: wide ? $wideLayout : $layout) {
-                if wide {
-                    Label { Text("Orbit") } icon: { Image(systemName: "circle.circle") }.tag(DeviceLayout.orbit)
-                }
-                Label { Text("Tiles") } icon: { Image(systemName: "square.grid.2x2") }.tag(DeviceLayout.tiles)
-                Label { Text("List") } icon: { Image(systemName: "list.bullet") }.tag(DeviceLayout.list)
-            } label: {
-                Text("View")
+/// The system's paste button, only when iOS refused the app the clipboard
+/// or its user chose not to let it read it: it hands the clipboard over
+/// without asking (UIPasteControl).
+struct FallbackPaste: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        if model.pasteRefused, model.syncOff == nil {
+            PasteButton(supportedContentTypes: [.plainText, .image]) { providers in
+                Task { @MainActor in await model.sync(board: await AppModel.Board.load(providers)) }
             }
-            .pickerStyle(.inline)
-            if model.group.hasGroup {
-                Button { arrange.on.toggle() } label: {
-                    Label { arrange.on ? Text("Done arranging") : Text("Arrange devices") } icon: { Image(systemName: "square.grid.3x3.square") }
-                }
-                .disabled(searching)
-                if model.customOrder {
-                    Button { model.arrange(.reset) } label: {
-                        Label { Text("Back to the group's order") } icon: { Image(systemName: "arrow.counterclockwise") }
-                    }
-                }
-            }
-            Button { settings = true } label: {
-                Label { Text("Settings") } icon: { Image(systemName: "gearshape") }
-            }
-            .keyboardShortcut(",")
-        } label: {
-            Image(systemName: "ellipsis").accessibilityLabel(Text("Menu"))
+            .labelStyle(.iconOnly)
+            .buttonBorderShape(.capsule)
+            .controlSize(.large)
+            .tint(palette.accent)
+            .frame(maxWidth: .infinity)
+            .disabled(model.busy)
+            .accessibilityLabel(Text("Send what you copied"))
         }
     }
+}
 
-    /// The one admin of the group is told, once, how not to lose the group
-    /// with this phone: a card it closes for good.
-    @ViewBuilder private var lostPhoneCard: some View {
-        if model.isAdmin, !lostPhoneClosed, model.devices.filter({ $0.admin }).count == 1 {
+/// The one admin of the group is told, once, how not to lose the group
+/// with this phone: a card it closes for good.
+struct LostPhoneCard: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.palette) private var palette
+    @AppStorage("LostPhoneCardClosed") private var closed = false
+
+    var body: some View {
+        if model.isAdmin, !closed, model.devices.filter({ $0.admin }).count == 1 {
             HStack(alignment: .top, spacing: Tokens.spacingSmall) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Lost a phone?").font(.headline)
@@ -255,7 +287,7 @@ struct HomeView: View {
                         .foregroundStyle(palette.textDim)
                 }
                 Spacer()
-                Button { lostPhoneClosed = true } label: {
+                Button { closed = true } label: {
                     Image(systemName: "xmark").foregroundStyle(palette.textDim)
                 }
                 .accessibilityLabel(Text("Close"))
@@ -367,6 +399,16 @@ struct DeviceCollection: View {
     let layout: DeviceLayout
     var select: ((AppModel.Computer.ID) -> Void)?
     @Environment(\.palette) private var palette
+    /// The narrowest a tile may be, as the text size grows.
+    @ScaledMetric(relativeTo: .body) private var tileWidth: CGFloat = 150
+
+    /// The tiles' columns: at least 150 points wide at the usual text
+    /// size and wider as the text grows, so that a device's name stays
+    /// whole; a screen narrower than one column still gets one, as wide as
+    /// the screen.
+    static func columns(_ width: CGFloat) -> [GridItem] {
+        [GridItem(.adaptive(minimum: width), spacing: Tokens.spacingMedium)]
+    }
 
     var body: some View {
         if devices.isEmpty {
@@ -376,20 +418,62 @@ struct DeviceCollection: View {
                 ForEach(devices) { d in Self.open(d, select: select) { DeviceRow(device: d) } }
             }
         } else {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: Tokens.spacingMedium)], spacing: Tokens.spacingMedium) {
+            LazyVGrid(columns: DeviceCollection.columns(tileWidth), spacing: Tokens.spacingMedium) {
                 ForEach(devices) { d in Self.open(d, select: select) { DeviceTile(device: d) } }
             }
         }
     }
 
     /// The device's tile or row as a way to its details.
-    @ViewBuilder static func open<Content: View>(_ d: AppModel.Computer, select: ((AppModel.Computer.ID) -> Void)?,
-                                                 @ViewBuilder label: () -> Content) -> some View {
-        if let select {
-            Button { select(d.id) } label: { label() }.buttonStyle(.plain)
-        } else {
-            NavigationLink(value: d.id) { label() }.buttonStyle(.plain)
+    static func open<Content: View>(_ d: AppModel.Computer, select: ((AppModel.Computer.ID) -> Void)?,
+                                    @ViewBuilder label: () -> Content) -> some View {
+        DeviceLink(device: d, select: select, label: label())
+    }
+}
+
+/// A device's tile or row as a way to its card: the next page on a phone,
+/// the pane beside on a big screen, where the chosen one is outlined. The
+/// pointer lifts it, and text, a picture or files dropped on it are pasted
+/// there (PasteDrop).
+struct DeviceLink<Content: View>: View {
+    let device: AppModel.Computer
+    let select: ((AppModel.Computer.ID) -> Void)?
+    let label: Content
+    @Environment(\.chosenDevice) private var chosen
+    @Environment(\.themeStyle) private var style
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Group {
+            if let select {
+                Button { select(device.id) } label: {
+                    label.overlay {
+                        if chosen == device.id {
+                            RoundedRectangle(cornerRadius: style.radiusTile, style: .continuous)
+                                .strokeBorder(palette.accent, lineWidth: 2)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(chosen == device.id ? .isSelected : [])
+            } else {
+                NavigationLink(value: device.id) { label }.buttonStyle(.plain)
+            }
         }
+        .hoverEffect(.lift)
+        .modifier(PasteDrop(device: device))
+    }
+}
+
+private struct ChosenDeviceKey: EnvironmentKey {
+    static let defaultValue: AppModel.Computer.ID? = nil
+}
+
+extension EnvironmentValues {
+    /// The device whose card stands beside the devices on a big screen.
+    var chosenDevice: AppModel.Computer.ID? {
+        get { self[ChosenDeviceKey.self] }
+        set { self[ChosenDeviceKey.self] = newValue }
     }
 }
 
@@ -519,19 +603,30 @@ struct DeviceRow: View {
 
 /// The system (or kind) of a device, then where it stands: on one line
 /// when it fits, else one under the other, so a narrow tile cuts nothing.
+/// At the accessibility text sizes always one under the other, each part
+/// free to wrap: a part held to one line has no room to grow, which the
+/// accessibility audit reports as clipped text (seen on the phone's own
+/// tile, whose "This phone · admin" is the longest).
 struct DeviceSubtitle: View {
     let device: AppModel.Computer
     @EnvironmentObject private var model: AppModel
     @Environment(\.palette) private var palette
+    @Environment(\.dynamicTypeSize) private var textSize
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 4) { parts(dots: true) }
-            VStack(alignment: .leading, spacing: 2) { parts(dots: false) }
+        Group {
+            if textSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 2) { parts(dots: false) }
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 4) { parts(dots: true) }
+                    VStack(alignment: .leading, spacing: 2) { parts(dots: false) }
+                }
+                .lineLimit(1)
+            }
         }
         .font(.caption)
         .foregroundStyle(palette.textDim)
-        .lineLimit(1)
     }
 
     @ViewBuilder private func parts(dots: Bool) -> some View {

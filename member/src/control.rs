@@ -140,6 +140,11 @@ pub struct Header {
     pub expires: i64,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub address: String,
+    /// In join: the capabilities cbb pair -caps gave, in place of the
+    /// service's (name, if not empty, is cbb pair -name's in place of the
+    /// service's -name).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caps: Option<Vec<String>>,
     /// In join: wait for a member to dial this device, rather than dial
     /// the member whose code it was given.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]

@@ -268,6 +268,10 @@
 <context>
     <name>ChangePinDialog</name>
     <message>
+        <source>At least six digits, and not an easy one such as 123456 or 111111.</source>
+        <translation>至少六位数字，且不能是 123456 或 111111 这样简单的数字。</translation>
+    </message>
+    <message>
         <source>Change</source>
         <translation>更改</translation>
     </message>
@@ -369,14 +373,11 @@
     </message>
 </context>
 <context>
-    <name>DeviceItems</name>
+    <name>DeviceCard</name>
     <message>
-        <source>%1 of %2 online</source>
-        <translation>%2 台中 %1 台在线</translation>
+        <source>Close</source>
+        <translation>关闭</translation>
     </message>
-</context>
-<context>
-    <name>DevicePage</name>
     <message>
         <source>Device ID</source>
         <translation>设备 ID</translation>
@@ -503,6 +504,13 @@
     </message>
 </context>
 <context>
+    <name>DeviceItems</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%2 台中 %1 台在线</translation>
+    </message>
+</context>
+<context>
     <name>DeviceTile</name>
     <message>
         <source>Mute for 15 minutes</source>
@@ -544,10 +552,6 @@
         <source>Turn sync on</source>
         <translation>开启同步</translation>
     </message>
-    <message>
-        <source>Unmute</source>
-        <translation>取消静音</translation>
-    </message>
 </context>
 <context>
     <name>Errors</name>
@@ -558,6 +562,10 @@
     <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
         <translation>二维码中的地址由另一台设备应答。请重新扫描。</translation>
+    </message>
+    <message>
+        <source>Choose a PIN of at least six digits that is not easy to guess.</source>
+        <translation>请选择至少六位、不易被猜到的 PIN。</translation>
     </message>
     <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
@@ -877,8 +885,8 @@
         <translation>不是这个</translation>
     </message>
     <message>
-        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. It works once, until %1.</source>
-        <translation>在新手机上打开 CBB，点按“通过邀请加入”并扫描二维码。在电脑上用其文本运行 cbb pair -invite。只能使用一次，有效期至 %1。</translation>
+        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite - and paste its text. It works once, until %1.</source>
+        <translation>在新手机上打开 CBB，点按“通过邀请加入”并扫描二维码。在电脑上运行 cbb pair -invite - 并粘贴其文本。只能使用一次，有效期至 %1。</translation>
     </message>
     <message>
         <source>Opening the invitation on the group's hub…</source>
@@ -1058,6 +1066,10 @@
         <translation>%2 台中 %1 台在线</translation>
     </message>
     <message>
+        <source>All devices</source>
+        <translation>所有设备</translation>
+    </message>
+    <message>
         <source>An admin muted this phone until %1: its copies do not reach the group.</source>
         <translation>管理员已将此手机静音至 %1：它的副本不会到达群组。</translation>
     </message>
@@ -1120,6 +1132,10 @@
     <message>
         <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
         <translation>让第二部手机成为管理员：先把它加入群组，然后在这里打开它并点按“设为管理员”。点按即可关闭。</translation>
+    </message>
+    <message>
+        <source>Needs attention</source>
+        <translation>需要关注</translation>
     </message>
     <message>
         <source>New collection…</source>
@@ -1268,6 +1284,10 @@
         <translation>群组的根密钥在手机的安全元件中生成，永不离开。</translation>
     </message>
     <message>
+        <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
+        <translation>此设备没有安全密钥芯片，或没有可靠的指纹或面部传感器：作为群组的主设备，它对群组的保护不如同时具备两者的手机。</translation>
+    </message>
+    <message>
         <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
         <translation>这台手机将成为群组的根：它通过二维码添加其他设备，并将提出请求的手机设为管理员。</translation>
     </message>
@@ -1345,8 +1365,12 @@
         <translation>管理员 PIN</translation>
     </message>
     <message>
-        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
-        <translation>CBB 自己的 PIN，至少四位数字。请勿使用手机的解锁密码。每次管理员操作前由手机的安全元件验证；七次输错将永久锁定管理员密钥，任何人都无法解锁。</translation>
+        <source>At least six digits, and not an easy one such as 123456 or 111111.</source>
+        <translation>至少六位数字，且不能是 123456 或 111111 这样简单的数字。</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least six digits and not an easy one such as 123456. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>CBB 自己的 PIN，至少六位数字，且不能是 123456 这样简单的数字。请勿使用手机的解锁密码。每次管理员操作前由手机的安全元件验证；七次输错将永久锁定管理员密钥，任何人都无法解锁。</translation>
     </message>
     <message>
         <source>Choose the admin PIN</source>
@@ -1383,6 +1407,10 @@
     <message>
         <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
         <translation>PIN 错误。只剩一次机会：再输错一次将永久锁定管理员密钥。</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Some tries are used up; seven wrong PINs lock the admin key for good.</source>
+        <translation>PIN 错误。已用掉部分尝试次数；七次输错将永久锁定管理员密钥。</translation>
     </message>
     <message>
         <source>Wrong PIN. Tries left: %1.</source>
@@ -1484,6 +1512,10 @@
     <message>
         <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
         <translation>群组已在这部手机上恢复。等待时间结束后（%1 小时后），它将成为群组的根设备，除非根设备取消申请。</translation>
+    </message>
+    <message>
+        <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
+        <translation>此设备没有安全密钥芯片，或没有可靠的指纹或面部传感器：作为群组的主设备，它对群组的保护不如同时具备两者的手机。</translation>
     </message>
     <message>
         <source>This phone is the group's root now.</source>
@@ -1707,6 +1739,10 @@
     <message>
         <source>Version</source>
         <translation>版本</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Some tries are used up; seven wrong PINs lock the admin key for good.</source>
+        <translation>PIN 错误。已用掉部分尝试次数；七次输错将永久锁定管理员密钥。</translation>
     </message>
     <message>
         <source>Wrong PIN. Tries left: %1.</source>

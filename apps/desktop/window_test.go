@@ -1079,6 +1079,9 @@ func startBrowser(t *testing.T, exe string) *cdpPage {
 		// Chrome on Windows logs nothing to stderr unless asked: its log
 		// says why it would not listen.
 		"--enable-logging=stderr",
+		// Its detailed log, so that a start that gives no address (seen
+		// rarely on Windows and Linux runners, 2026-11) shows where it stood.
+		"--v=1",
 		"--remote-debugging-port=0", "--user-data-dir="+profile, "about:blank")
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
@@ -1100,7 +1103,7 @@ func startBrowser(t *testing.T, exe string) *cdpPage {
 			line := sc.Text()
 			errMu.Lock()
 			errTail = append(errTail, line)
-			if len(errTail) > 60 {
+			if len(errTail) > 200 {
 				errTail = errTail[1:]
 			}
 			errMu.Unlock()
@@ -1140,7 +1143,8 @@ func startBrowser(t *testing.T, exe string) *cdpPage {
 	// rights and ends, so its stderr never names the address; the profile's
 	// DevToolsActivePort does in both cases.
 	var host string
-	deadline := time.Now().Add(30 * time.Second)
+	started := time.Now()
+	deadline := started.Add(30 * time.Second)
 	for host == "" {
 		select {
 		case ws := <-found:
@@ -1165,6 +1169,7 @@ func startBrowser(t *testing.T, exe string) *cdpPage {
 			}
 		}
 	}
+	logBrowserStart(t, exe, time.Since(started))
 	req, _ := http.NewRequest(http.MethodPut, "http://"+host+"/json/new?about:blank", nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -1184,6 +1189,25 @@ func startBrowser(t *testing.T, exe string) *cdpPage {
 	c.SetReadLimit(64 << 20)
 	page = &cdpPage{c: c}
 	return page
+}
+
+// logBrowserStart notes how long the browser took to give its DevTools
+// address, in the test's log and, in CI, in the job's summary, which a
+// passing package's log does not reach: how close a start comes to the
+// 30 seconds the test waits.
+func logBrowserStart(t *testing.T, exe string, took time.Duration) {
+	t.Logf("%s gave its DevTools address in %s", exe, took.Round(time.Millisecond))
+	summary := os.Getenv("GITHUB_STEP_SUMMARY")
+	if summary == "" {
+		return
+	}
+	f, err := os.OpenFile(summary, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Logf("the job's summary: %v", err)
+		return
+	}
+	defer f.Close()
+	fmt.Fprintf(f, "TestWindow: %s gave its DevTools address in %s\n", filepath.Base(exe), took.Round(time.Millisecond))
 }
 
 // call sends one DevTools command and decodes its result into out.

@@ -164,7 +164,9 @@ pub fn failure(out: &str, script: &str) -> String {
 /// Unpacks the archive file into the folder out: tar, which on Windows
 /// (bsdtar) opens a zip file too.
 pub fn unpack(file: &Path, out: &Path) -> Result<std::process::Output> {
-    let flags = if cfg!(windows) { "-xf" } else { "-xzf" };
+    // -o: the files are this user's (root's), never those of the uid that
+    // packed them, which may be a user of this device.
+    let flags = if cfg!(windows) { "-xf" } else { "-xzof" };
     Command::new("tar").arg(flags).arg(file).arg("-C").arg(out).output().context("cannot run tar")
 }
 

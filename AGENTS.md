@@ -40,7 +40,11 @@ HarmonyOS) on the same core through `ffi/`.
 - Never skip, disable or weaken a test or a check to get CI green, and never write a red
   test off; fix the cause.
 - No old names come back: no aliases, no "formerly", no retired words (`repocheck` checks).
-- Apple signing never blocks development: CI signs ad hoc (`CODE_SIGN_IDENTITY=-`).
+- Apple signing never blocks development: CI signs ad hoc (`CODE_SIGN_IDENTITY=-`). The
+  project's Apple developer account exists: the release workflow signs and notarizes with it
+  and sends the iPhone app to TestFlight ([maintaining](docs/maintainers/maintaining.md),
+  "Signing for macOS"). Never register anything in the account yourself; give the owner the
+  steps.
 - Security findings: no details of a vulnerability in commits, pull requests, the
   changelog, tests or branch names, and no real keys anywhere ([SECURITY.md](SECURITY.md)).
 

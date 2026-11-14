@@ -53,8 +53,9 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
 
 - **7.** Installers: the Linux, macOS, FreeBSD, OpenWrt and Windows installers, Homebrew, winget
    and releases with checksums and attestations are done; on SteamOS the Linux installer
-   uses `/opt` and SteamOS's keep list (not yet run on a real Steam Deck); the signed
-   `.pkg` for macOS waits for the Apple developer account.
+   uses `/opt` and SteamOS's keep list (not yet run on a real Steam Deck); the release
+   workflow makes the signed and notarized `.pkg` for macOS
+   ([maintaining](maintainers/maintaining.md#signing-for-macos)), first with 0.6.
 - **11.** `cbb` in Rust: done on Linux and OpenWrt. On the Arduino Nano ESP32 see item
     15; other ESP32 boards follow on the same `core/`.
 - **13.** Device keys in hardware: done for Linux and Windows with a TPM (Windows not yet
@@ -91,8 +92,9 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     it by the phone. Next: sync on the board, OTA updates (item 29), and a library for one's
     own Arduino sketches may follow. It ships as a ready firmware flashed over USB with one
     command.
-- **22.** **A Mac app** signed with Developer ID and notarized, when the Apple developer account
-    is there, that carries the service and a Network Extension (a content filter): the
+- **22.** **A Mac app** that carries the service and a Network Extension (a content filter); the
+    release workflow already signs the Mac app with the Developer ID and notarizes it
+    ([maintaining](maintainers/maintaining.md#signing-for-macos)), so what is left is the extension: the
     system then keeps the service on the home network until sync away from home is on, and
     lets only the home network reach its port, as the systemd unit does on Linux and Windows
     Firewall on Windows. Until then the Mac has the service's own limit only
@@ -109,8 +111,8 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     (`cbb remote`) are done; the Apple TV, Samsung and LG remotes, and the remotes in the
     phones' apps, follow. See "Devices that are hard to type into" below.
 - **26.** Watches: the notifications, both watch apps, the watch's admin key and its emergency
-    actions are done ([design](design.md#watches)); prompt delivery on the iPhone waits for
-    the Apple account.
+    actions are done ([design](design.md#watches)); prompt delivery on the iPhone needs push
+    notifications (item 57; the Apple developer account and its APNs keys are there).
 - **28.** The blind relay: the open relay (`cbb relay -open`) with its limits, the choice in `cbb
     global relay` and in both phone apps, and the guide ([running your own
     servers](admin/self-hosting.md)) and the project's open relay on `cbb.tools` (`cbb global
@@ -218,7 +220,7 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     after a warning. It loses what the system install has: its own account, which keeps its
     keys from the user's other programs, systemd's sandbox and address limits, the TPM, the
     uinput and console helpers, the polkit rule of the quick actions, and the firewall rules.
-- **40.** **Planned, after the Apple developer account.** Apple Vision Pro (visionOS):
+- **40.** **Planned** (the Apple developer account is there). Apple Vision Pro (visionOS):
     1. The iPad app on Vision Pro, in its compatibility mode, through TestFlight and the App
        Store; nothing to build.
     2. A visionOS build of the app: the kit and the app with visionOS among their platforms,
@@ -309,13 +311,14 @@ them; a done item keeps one line and points to where [design.md](design.md) desc
     client speaks both ways; `cbb` on Linux speaks AmneziaWG and VLESS over XHTTP
     in 0.6 (the owner, 2026-11-07); the ESP32 and the blind relay come later
     ([below](#vless-behind-a-web-server)).
-- **47.** **After TestFlight.** Back Tap on the iPhone in two taps: iOS lets no app make a
+- **47.** **Planned.** Back Tap on the iPhone in two taps: iOS lets no app make a
     shortcut or set Back Tap, so the app carries a signed shortcut file (`shortcuts sign
     --mode anyone` on a Mac) that runs its Sync clipboard action. A button "Add the
     double-tap shortcut", in Settings and after the first computer connects, opens it and iOS
     asks to add it; a card then gives the steps to Settings, Accessibility, Touch, Back Tap,
-    Double Tap. The file names the release bundle identifier, so it waits for TestFlight; a
-    copy for a Personal Team build tests it before.
+    Double Tap. The file names the release bundle identifier, so it goes with the TestFlight
+    builds the release workflow makes (`apps/ios/testflight.sh`); a copy for a Personal Team
+    build tests it before.
 - **49.** **Done in 0.6.** One set of languages across the project: every app (the
     phones, the watches, the Mac app, the tray app) speaks the languages of the website
     (Chinese, English, Spanish, Russian, Arabic, Swahili, Hebrew, Hindi) and offers a choice

@@ -9,6 +9,7 @@ import android.app.NotificationManager
 import android.appwidget.AppWidgetManager
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ContentValues
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Uri
@@ -38,7 +39,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.MethodSorters
-import java.io.File
 
 /**
  * The phone makes its own group and admits a computer of the bench's fleet
@@ -367,11 +367,23 @@ class GroupTest {
     @Test
     fun b1_files() {
         val stamp = System.currentTimeMillis()
-        val dir = File(context.cacheDir, "bench").apply { mkdirs() }
-        val sent = File(dir, "o11-$stamp.txt").apply { writeText("cbb-bench phone O11 from the phone $stamp\n") }
+        // Shared as another app shares a file: through a provider's content
+        // URI (here Downloads'), never a file:// path the app would read itself.
+        val sent = context.contentResolver.insert(
+            MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+            ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, "o11-$stamp.txt")
+                put(MediaStore.Downloads.MIME_TYPE, "text/plain")
+            },
+        ) ?: throw AssertionError("cannot add o11-$stamp.txt to Downloads")
+        context.contentResolver.openOutputStream(sent)!!.use { it.write("cbb-bench phone O11 from the phone $stamp\n".toByteArray()) }
         // The phone's node as the test began: one made while it runs starts without the copies before it.
         val nodeAtStart = model.group.nodeNumber
-        val note = runBlocking { model.sendShared(listOf(Uri.fromFile(sent))) }
+        val note = try {
+            runBlocking { model.sendShared(listOf(sent)) }
+        } finally {
+            context.contentResolver.delete(sent, null, null)
+        }
         assertEquals("Share says ${model.message}; ${phoneSide(nodeAtStart)}", R.string.files_sent, note.text)
         var saved = ""
         try {

@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 1b77d3ce22fc -->
+<!-- source: 7d035f243dba -->
 # Kibodi na televisheni
 
 Kwa yeyote anayetaka kuandika nenosiri refu, kiungo au utafutaji kwenye televisheni, kompyuta kibao, kiweko cha michezo au kompyuta ambayo haina chochote cha Copy Beyond Borders. Kifaa kimoja cha kikundi chako huandika maandishi hayo pale kama kibodi au kama rimoti ya televisheni, unapogusa wewe au msimamizi anapotuma ubandikaji wa mbali.
@@ -62,14 +62,14 @@ Android TV au Google TV huoanishwa mara moja:
 
 ```sh
 sudo cbb remote add -name living-room-tv living-room-tv.lan   # the TV shows a six-digit code
-sudo cbb remote code 123456              # within two minutes
+sudo cbb remote code                     # type 123456 within two minutes
 ```
 
 Apple TV huoanishwa vivyo hivyo, kwa PIN ya tarakimu nne inayoonyesha. Kwanza kwenye Apple TV, weka Settings, AirPlay and HomeKit, Allow Access kuwa "Everyone on the Same Network": ikiwa "Only People Sharing This Home" inakataa kila uoanishaji.
 
 ```sh
 sudo cbb remote add -appletv -name lounge 192.168.1.30   # the Apple TV shows a four-digit PIN
-sudo cbb remote code 1234                # within two minutes
+sudo cbb remote code                     # type 1234 within two minutes
 ```
 
 Roku haina uoanishaji wala usimbaji fiche: maandishi hupita kwenye mtandao wako wa nyumbani kama HTTP wazi, kwa hivyo huongezwa tu unaposema hivyo kwa `-consent`. Kwenye Roku, kwanza weka Mipangilio, Mfumo, Mipangilio ya hali ya juu ya mfumo, Udhibiti kwa programu za simu kuwa Imewezeshwa au Ruhusu.

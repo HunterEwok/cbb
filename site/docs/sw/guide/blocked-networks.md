@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 93e712ad5209 -->
+<!-- source: 5a06c8a1fa53 -->
 # Mitandao inayozuia VPN
 
 Ukiwa mbali na nyumbani, vifaa vyako hufikia kitovu kupitia handaki la WireGuard la kikundi chenyewe. Baadhi ya mitandao huzuia WireGuard: Wi-Fi ya hoteli na ofisi, baadhi ya waendeshaji wa simu, na nchi nzima zinazochuja VPN. Copy Beyond Borders ina njia mbili za kukwepa hilo, na kitovu hutumia zote mbili usipozizima; vifaa hupokea badiliko wakati ujao vitakapokutana na kitovu nyumbani.
@@ -26,7 +26,7 @@ Kitovu huzungumza AmneziaWG mara tu kinapokuwa kitovu:
 sudo cbb global hub 203.0.113.7:8764
 ```
 
-Hutengeneza mipangilio ya kikundi mara moja, kwa nasibu, na kuihifadhi. Kwenye mtandao ambapo hakuna kinachozuiwa, WireGuard ya kawaida ni ya haraka kidogo:
+Hutengeneza mipangilio ya kikundi kwa nasibu na kuibadilisha takriban mara moja kwa mwezi, likiviambia vifaa mipangilio inayofuata mapema. Kwenye mtandao ambapo hakuna kinachozuiwa, WireGuard ya kawaida ni ya haraka kidogo:
 
 ```sh
 sudo cbb global hub -no-obfuscate -no-vless 203.0.113.7:8764

@@ -931,9 +931,44 @@ fn pair_with_a_code() {
                 stdout: "Joined the group",
                 ..Case::default()
             },
+            // With the service running, it joins, at the address, and
+            // takes the service's -name and -caps unless cbb pair gives them.
             Case {
                 name: "pair -code ADDRESS",
                 args: &["pair", "-code", "127.0.0.1:1"],
+                stdin: "123 456\n",
+                sent: Some((
+                    "join",
+                    Some(|s| {
+                        s.s("code") == "123456"
+                            && s.s("address") == "127.0.0.1:1"
+                            && s.s("name").is_empty()
+                            && s.h.get("caps").is_none()
+                    }),
+                )),
+                stdout: "Joined the group",
+                ..Case::default()
+            },
+            Case {
+                name: "pair -name -caps -code ADDRESS",
+                args: &["pair", "-name", "den", "-caps", "dials", "-code", "127.0.0.1:1"],
+                stdin: "123 456\n",
+                sent: Some(("join", Some(|s| s.s("name") == "den" && s.h.get("caps") == Some(&json!(["dials"]))))),
+                stdout: "Joined the group",
+                ..Case::default()
+            },
+            Case {
+                name: "pair -caps none -code",
+                args: &["pair", "-caps", "none", "-code"],
+                stdin: "123 456\n",
+                sent: Some(("join", Some(|s| s.h.get("caps") == Some(&json!([]))))),
+                stdout: "Joined the group",
+                ..Case::default()
+            },
+            // Without a service, cbb joins by itself.
+            Case {
+                name: "pair -code ADDRESS, no service",
+                args: &["-socket", "no-service.sock", "pair", "-code", "127.0.0.1:1"],
                 stdin: "123 456\n",
                 code: 1,
                 stderr: "cannot connect to 127.0.0.1:1",
@@ -965,6 +1000,23 @@ fn pair_with_a_code() {
                 args: &["pair", "-invite", "x", "-code"],
                 code: 2,
                 stderr: "usage",
+                ..Case::default()
+            },
+            // The invitation is a secret: never on the command line, where
+            // other users and the system's log see it.
+            Case {
+                name: "an invitation's text as an argument",
+                args: &["pair", "-invite", "cbb://invite#abc"],
+                code: 1,
+                stderr: "never on the command line",
+                ..Case::default()
+            },
+            Case {
+                name: "an invitation on standard input",
+                args: &["pair", "-invite", "-"],
+                stdin: "cbb://invite#not-one\n",
+                code: 1,
+                stderr: "invitation",
                 ..Case::default()
             },
             // A bad code fails before the service is asked or the address
@@ -1298,7 +1350,8 @@ fn remote_commands() {
             },
             Case {
                 name: "code",
-                args: &["remote", "code", "A1B2C3"],
+                args: &["remote", "code"],
+                stdin: "A1B2C3\n",
                 sent: Some(("remote", Some(|s| s.s("name") == "code" && s.s("code") == "A1B2C3"))),
                 ..Case::default()
             },
@@ -1337,7 +1390,8 @@ fn remote_commands() {
             },
             Case {
                 name: "refused",
-                args: &["remote", "code", "000000"],
+                args: &["remote", "code"],
+                stdin: "000000\n",
                 answer: err("the TV took no code"),
                 sent: Some(("remote", None)),
                 code: 1,
@@ -1373,6 +1427,7 @@ fn remote_commands() {
                 ..Case::default()
             },
             Case { name: "code without one", args: &["remote", "code"], code: 2, ..Case::default() },
+            Case { name: "code on the command line", args: &["remote", "code", "A1B2C3"], code: 2, ..Case::default() },
             Case { name: "cancel with an argument", args: &["remote", "cancel", "x"], code: 2, ..Case::default() },
             Case { name: "remove without a TV", args: &["remote", "remove"], code: 2, ..Case::default() },
             Case { name: "type with two texts", args: &["remote", "type", "a", "b"], code: 2, ..Case::default() },
@@ -2627,6 +2682,52 @@ fn pair_waits_on_the_service_port() {
     let _ = std::fs::remove_dir_all(&dir);
     let j: Value = serde_json::from_str(written.trim()).unwrap_or_else(|e| panic!("the file holds {written:?}: {e}"));
     assert_eq!(j["port"].as_u64(), Some(u64::from(port)), "the file holds {j}");
+}
+
+/// cbb own-command writes the user's own command in the user's settings
+/// folder, refuses a link there, and under sudo writes only as the user
+/// who ran it: what that user cannot write stays unwritten.
+#[test]
+fn own_command_as_the_user() {
+    let dir = tempdir("own-command");
+    let config = dir.join(".config");
+    let env = [("XDG_CONFIG_HOME", config.to_str().unwrap())];
+    let none = || always(json!({}), b"");
+    let r = run_with(&dir, &["own-command", "backup", "--", "/usr/local/bin/backup", "--quick"], "", none(), &env);
+    want("own-command", &r, 0, "", "");
+    let raw: Value = serde_json::from_slice(&std::fs::read(config.join("cbb/own-actions.json")).unwrap()).unwrap();
+    assert_eq!(raw["backup"], json!(["/usr/local/bin/backup", "--quick"]));
+    let r = run_with(&dir, &["own-command", "backup", "--"], "", none(), &env);
+    want("own-command removing", &r, 0, "", "");
+    let raw: Value = serde_json::from_slice(&std::fs::read(config.join("cbb/own-actions.json")).unwrap()).unwrap();
+    assert!(raw.get("backup").is_none());
+    let r = run_with(&dir, &["own-command", "backup"], "", none(), &env);
+    assert_eq!(r.code, 2, "{}", r.stderr);
+
+    // A link in place of the folder is not followed.
+    let elsewhere = dir.join("elsewhere");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    let linked = dir.join("linked");
+    std::fs::create_dir_all(&linked).unwrap();
+    std::os::unix::fs::symlink(&elsewhere, linked.join("cbb")).unwrap();
+    let env = [("XDG_CONFIG_HOME", linked.to_str().unwrap())];
+    let r = run_with(&dir, &["own-command", "backup", "--", "/usr/bin/true"], "", none(), &env);
+    assert_ne!(r.code, 0);
+    assert!(!elsewhere.join("own-actions.json").exists());
+
+    // As root under sudo, the write is the other user's: nobody cannot
+    // create a folder in its own (missing) home, and root does not either.
+    // SAFETY: geteuid has no preconditions.
+    if unsafe { libc::geteuid() } == 0 {
+        let home = Path::new("/nonexistent");
+        if !home.exists() {
+            let env = [("SUDO_USER", "nobody"), ("SUDO_UID", "65534"), ("SUDO_GID", "65534")];
+            let r = run_with(&dir, &["own-command", "backup", "--", "/usr/bin/true"], "", none(), &env);
+            assert_ne!(r.code, 0, "{}", r.stderr);
+            assert!(!home.exists());
+        }
+    }
+    std::fs::remove_dir_all(&dir).unwrap();
 }
 
 /// The ZX Spectrum Next's commands (member/README.md, "ZX Spectrum Next"):

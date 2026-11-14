@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.hardware.biometrics.BiometricManager
 import android.os.Build
+import android.os.SystemClock
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyInfo
 import android.security.keystore.KeyProperties
@@ -54,6 +55,9 @@ object Keys {
 
     private const val PROVIDER = "AndroidKeyStore"
 
+    /** The throwaway key that tells whether the Keystore is in hardware (guardsLikeAPhone). */
+    private const val PROBE = "cbb.probe"
+
     /** The phone has no screen lock, which the root and admin keys need. */
     class NoScreenLock : Exception("set a screen lock first: the group's keys need it")
 
@@ -84,13 +88,18 @@ object Keys {
      * is none, which asks the user through authorize: once for KEEP_SECONDS
      * for a key made so, or for each signature for one an earlier version
      * made. A key made without authentication (a debug build on a phone
-     * without a screen lock) signs without asking. Throws OldKey for a key
-     * made for another time.
+     * without a screen lock) signs without asking in a debug build only: a
+     * release build of the same signature installed over it does not sign
+     * with it and throws OldKey, so the phone sets the group up again. Throws
+     * OldKey for a key made for another time, too.
      */
     fun loadOrCreateAuthorized(context: Context, alias: String, groupTag: String = "", authorize: (Signature?) -> Signature?): KeystoreSigner {
         val k = loadOrCreate(context, alias, groupTag)
         val info = info(k)
-        if (!info.isUserAuthenticationRequired) return k
+        if (!info.isUserAuthenticationRequired) {
+            if (isDebuggable(context)) return k
+            throw OldKey()
+        }
         if (isOld(info)) throw OldKey()
         return KeystoreSigner(k.privateKey, k.publicKeyDER, authorize, timed = info.userAuthenticationValidityDurationSeconds > 0)
     }
@@ -206,6 +215,8 @@ object Keys {
     private fun authenticate(b: KeyGenParameterSpec.Builder, eachTime: Boolean) {
         b.setUserAuthenticationRequired(true)
         b.setInvalidatedByBiometricEnrollment(false)
+        // Never on a locked phone, whatever authentication came before.
+        b.setUnlockedDeviceRequired(true)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val seconds = if (eachTime) 0 else KEEP_SECONDS
             b.setUserAuthenticationParameters(seconds, KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL)
@@ -246,6 +257,50 @@ object Keys {
     }
 
     @Suppress("DEPRECATION")
+    /**
+     * Whether this device guards its keys as a phone does (docs/apps.md,
+     * "Big screens"): its keys in secure hardware (StrongBox or the TEE) and
+     * a strong fingerprint or face sensor, enrolled or not yet. One rule for
+     * phones and tablets alike: such a device gets the phone's set; another
+     * one the computer's, and the app warns before it becomes the group's
+     * main device. Null when the Keystore cannot tell, which says nothing
+     * either way.
+     */
+    fun guardsLikeAPhone(context: Context): Boolean? = keyInHardware()?.let { it && strongBiometric(context) }
+
+    /**
+     * Whether the Keystore keeps keys in secure hardware: the member key
+     * where there is one, else a throwaway key made and removed at once,
+     * which leaves the member key to be made with its group's challenge.
+     */
+    private fun keyInHardware(): Boolean? = try {
+        val k = load(MEMBER) ?: generate(PROBE, auth = false, strongBox = false, challenge = null)
+        val i = try {
+            info(k)
+        } finally {
+            remove(PROBE)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            i.securityLevel == KeyProperties.SECURITY_LEVEL_TRUSTED_ENVIRONMENT || i.securityLevel == KeyProperties.SECURITY_LEVEL_STRONGBOX
+        } else {
+            @Suppress("DEPRECATION")
+            i.isInsideSecureHardware
+        }
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun strongBiometric(context: Context): Boolean {
+        val m = context.getSystemService(BiometricManager::class.java) ?: return false
+        val r = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            m.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+        } else {
+            @Suppress("DEPRECATION")
+            m.canAuthenticate()
+        }
+        return r == BiometricManager.BIOMETRIC_SUCCESS || r == BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED
+    }
+
     private fun hasBiometric(context: Context): Boolean =
         context.getSystemService(BiometricManager::class.java).canAuthenticate() == BiometricManager.BIOMETRIC_SUCCESS
 
@@ -272,13 +327,27 @@ class KeystoreSigner(
         val s = Signature.getInstance(algorithm)
         val authorize = authorize ?: return s.apply { initSign(privateKey) }
         if (!timed) return authorize(s.apply { initSign(privateKey) }) ?: error("the prompt returned no signature")
+        // The Keystore opens a timed key after any authentication of the
+        // user, the screen unlock too; the app asks itself at the start of
+        // each five minutes, so that a phone handed over unlocked signs
+        // nothing without its owner.
+        if (!window.isOpen(SystemClock.elapsedRealtime())) {
+            authorize(null)
+            window.opened(SystemClock.elapsedRealtime())
+        }
         try {
             s.initSign(privateKey)
         } catch (e: UserNotAuthenticatedException) {
             authorize(null)
+            window.opened(SystemClock.elapsedRealtime())
             s.initSign(privateKey)
         }
         return s
+    }
+
+    companion object {
+        /** The app's own five minutes after its prompt, for every timed key. */
+        val window = KeepWindow(Keys.KEEP_SECONDS * 1000L)
     }
 
     override fun signature(data: ByteArray): ByteArray = ready("SHA256withECDSA").run {
@@ -315,5 +384,21 @@ class KeystoreSigner(
     override fun signDigest(digest: ByteArray): ByteArray = ready("NONEwithECDSA").run {
         update(digest)
         sign()
+    }
+}
+
+/**
+ * The time after the app's own prompt within which a timed key signs
+ * without asking again: from the prompt, for keepMs, on a clock that
+ * never goes back (elapsedRealtime). Before the first prompt, after a
+ * restart of the app too, it is closed.
+ */
+class KeepWindow(private val keepMs: Long) {
+    @Volatile private var since: Long? = null
+
+    fun isOpen(now: Long): Boolean = since?.let { now >= it && now - it < keepMs } ?: false
+
+    fun opened(now: Long) {
+        since = now
     }
 }

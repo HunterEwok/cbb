@@ -15,6 +15,8 @@ final class ArrangeState: ObservableObject {
     /// The name prompt that is open.
     @Published var prompt: Prompt?
     @Published var name = ""
+    /// The device a tile's menu opened remote paste for (Home's sheet).
+    @Published var pasting: String?
 
     enum Prompt: Equatable {
         /// A new collection of these devices.
@@ -55,6 +57,8 @@ struct ArrangedDevices: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var arrange: ArrangeState
     @Environment(\.palette) private var palette
+    /// The narrowest a tile may be, as the text size grows.
+    @ScaledMetric(relativeTo: .body) private var tileWidth: CGFloat = 150
 
     var body: some View {
         content.sensoryFeedback(.selection, trigger: arrange.dragging)
@@ -77,7 +81,7 @@ struct ArrangedDevices: View {
                 }
             }
         } else {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: Tokens.spacingMedium)], spacing: Tokens.spacingMedium) {
+            LazyVGrid(columns: DeviceCollection.columns(tileWidth), spacing: Tokens.spacingMedium) {
                 ForEach(items) { item in
                     switch item {
                     case .device(let d):
@@ -173,6 +177,30 @@ struct ArrangeMenu: View {
         }
         switch ref {
         case .device(let id):
+            if model.isAdmin, let d = model.devices.first(where: { $0.id == id }), !d.isSelf {
+                // What the card offers first, a right-click away with a pointer.
+                if d.takesPaste {
+                    Button { arrange.pasting = id } label: {
+                        Label { Text("Paste") } icon: { Image(systemName: "keyboard") }
+                    }
+                }
+                if d.muted != nil {
+                    Button { Task { await model.setMuted(id, false) } } label: {
+                        Label { Text("Unmute") } icon: { Image(systemName: "speaker.wave.2") }
+                    }
+                } else if d.online {
+                    Menu {
+                        ForEach(PauseTime.allCases) { t in
+                            Button { Task { await model.setMuted(id, true, forMS: t.ms) } } label: {
+                                t == .ever ? Text("Until an admin unmutes it") : Text(t.title)
+                            }
+                        }
+                    } label: {
+                        Label { Text("Mute") } icon: { Image(systemName: "speaker.slash") }
+                    }
+                }
+                Divider()
+            }
             Menu {
                 ForEach(model.collections(apartFrom: id), id: \.id) { c in
                     Button { model.arrange(.into(device: id, collection: c.id)) } label: { Text(verbatim: c.name) }
@@ -370,6 +398,8 @@ struct CollectionPage: View {
     @Environment(\.palette) private var palette
     @Environment(\.dismiss) private var dismiss
     @AppStorage(DeviceLayout.key) private var layout = DeviceLayout.tiles
+    /// The narrowest a tile may be, as the text size grows.
+    @ScaledMetric(relativeTo: .body) private var tileWidth: CGFloat = 150
 
     var body: some View {
         ScrollView {
@@ -385,7 +415,7 @@ struct CollectionPage: View {
                             ArrangedTile(ref: .device(d.id), level: refs) { DeviceRow(device: d) }
                         }
                     } else {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: Tokens.spacingMedium)], spacing: Tokens.spacingMedium) {
+                        LazyVGrid(columns: DeviceCollection.columns(tileWidth), spacing: Tokens.spacingMedium) {
                             ForEach(devices) { d in
                                 ArrangedTile(ref: .device(d.id), level: refs) { DeviceTile(device: d) }
                             }

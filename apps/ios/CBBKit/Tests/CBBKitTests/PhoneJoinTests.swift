@@ -191,7 +191,7 @@ final class PhoneJoinTests: XCTestCase {
         let (sid, t0) = (sid, t0)
         let memberSide = Task {
             try await PairingMember.admit(over: m, code: "123456", memberCert: root.memberCert, joinerCert: l.cert, sessionID: sid,
-                                          memberAD: .init(device: root.device, group: root.tag)) { dev, _, _ in
+                                          memberAD: .init(device: root.device, group: root.tag), taken: { _ in false }) { dev, _, _ in
                 Pairing.Welcome(cert: try GroupCertificates.member(device: dev, publicKey: SoftwareSigner().publicKeyDER, ca: root.groupCA,
                                                                    caSigner: rootKey, now: t0), groupCA: root.groupCA)
             }
@@ -226,7 +226,7 @@ final class PhoneJoinTests: XCTestCase {
                                (Certs([l.cert, root.memberCert]), l.cert, "the joining device must send exactly one certificate")] {
             do {
                 _ = try await PairingMember.admit(over: t, code: "123456", memberCert: root.memberCert, joinerCert: cert, sessionID: sid,
-                                                  memberAD: .init(device: root.device, group: root.tag)) { _, _, _ in
+                                                  memberAD: .init(device: root.device, group: root.tag), taken: { _ in false }) { _, _, _ in
                     throw CancellationError()
                 }
                 XCTFail("admitted: \(why)")
@@ -293,6 +293,20 @@ final class PhoneJoinTests: XCTestCase {
         XCTAssertTrue(LocalAddresses.isHome(ipv6: "fd12:3456::1"))
         XCTAssertFalse(LocalAddresses.isHome(ipv6: "fe80::1%en0"))
         XCTAssertFalse(LocalAddresses.isHome(ipv6: "2001:db8::1"))
+        // Only an address in its one spelling is judged: a name, a sign, a
+        // leading zero, a missing or extra part and a zone are none.
+        for a in ["10.1.2.3.example.org", "example.org.10.1.2.3", "10.a.1.b.2.c.3", "010.1.2.3", "+10.1.2.3", "10.1.2",
+                  "10.1.2.3.4", "10.1.2.256", "10..2.3", " 10.1.2.3", "10.1.2.3 ", ""] {
+            XCTAssertFalse(LocalAddresses.isHome(ipv4: a), a)
+        }
+        for a in ["fd00::1", "FD12:3456::1", "fc00:0:0:0:0:0:0:1", "fd00::10.1.2.3"] { XCTAssertTrue(LocalAddresses.isHome(ipv6: a), a) }
+        for a in ["fd.example.org", "fd", "fcab", "fd00::1::2", "fd00:::1", "fd00::12345", "fd00::g", "::ffff:10.1.2.3",
+                  "fd00:0:0:0:0:0:0:0:1", "fd00:0:0:0:0:0:0", "fd00::010.1.2.3", "fd00::1 ", ""] {
+            XCTAssertFalse(LocalAddresses.isHome(ipv6: a), a)
+        }
+        XCTAssertFalse(JoinCode.isHome("10.1.2.3.example.org:8764"))
+        XCTAssertFalse(JoinCode.isHome("[fd.example.org]:8764"))
+        XCTAssertTrue(JoinCode.isHome("[fd00::5]:8764"))
         XCTAssertLessThanOrEqual(LocalAddresses.current().count, JoinCode.maxAddrs)
     }
 

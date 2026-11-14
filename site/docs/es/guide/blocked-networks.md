@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 93e712ad5209 -->
+<!-- source: 5a06c8a1fa53 -->
 # Redes que bloquean las VPN
 
 Fuera de casa, tus dispositivos llegan al hub por el túnel WireGuard del propio grupo. Algunas redes bloquean WireGuard: el Wi-Fi de hoteles y oficinas, algunos operadores móviles y países enteros que filtran las VPN. Copy Beyond Borders tiene dos formas de sortearlo, y un hub usa ambas salvo que las desactives; los dispositivos toman un cambio la próxima vez que se encuentran con el hub en casa.
@@ -26,7 +26,7 @@ Un hub habla AmneziaWG en cuanto lo es:
 sudo cbb global hub 203.0.113.7:8764
 ```
 
-Genera una sola vez, al azar, los ajustes del grupo y los mantiene. En una red donde no se bloquea nada, WireGuard normal es un poco más rápido:
+Genera al azar los ajustes del grupo y los cambia más o menos una vez al mes, avisando de antemano a los dispositivos de los siguientes. En una red donde no se bloquea nada, WireGuard normal es un poco más rápido:
 
 ```sh
 sudo cbb global hub -no-obfuscate -no-vless 203.0.113.7:8764

@@ -39,8 +39,7 @@ they look, so both apps are built to the same plan.
    key**. A phone always joins as a member; the root makes it an admin later from the
    phone's device page ("Make it an admin"), with the admin key its hellos offer
    (docs/protocol.md, section 10, "Admins"). On Aurora the settings and the language are in
-   the pull-down menu, as in every Silica app, and the Start screen also has **Join a group
-   as an admin**.
+   the pull-down menu, as in every Silica app.
 2. **Home**: how many devices are online, with the two switches beside it: the **house**
    (sync on this phone: a tap turns it off or on, touching and holding it turns it off for
    15 minutes, an hour, 8 hours or until turned on; off, the clipboard is this phone's own
@@ -176,7 +175,8 @@ they look, so both apps are built to the same plan.
    "Advanced settings", the admin PIN on Aurora ("The admin PIN on Aurora" below), leaving
    the group, and about (seven taps on the version show the
    switch "Show error details", which puts the error itself under each error message; it is
-   on in debug builds, and the launch argument or extra `ShowErrorDetails` sets it too).
+   on in debug builds, and the launch argument `ShowErrorDetails` sets it too; Android takes the
+   extra in debug builds only, since any app can start the activity with one).
    The advanced ones: why it does not sync (below), away from home (the hub, moving it to a
    computer, "Strict networks": two switches, for networks that block VPNs (AmneziaWG) and for
    networks that let only the web through (VLESS), the blind relay) and, for admins, the group ("Copy lifetime", "Security level": root,
@@ -296,26 +296,121 @@ forwarder show only with the advanced settings on, on every app.
 
 ## Big screens
 
-- **iPad** (the same app, universal): an iPad is a phone for the group. It joins as an
-  admin, or makes its own group, and its root key lives in its Secure Enclave. Its Home
-  shows the devices on **orbits** around it, or as tiles or a list (the "…" menu switches
-  them). Its centre is the sync button, the toolbar holds the sync button too, and a device
-  opens its details in a pane beside the devices, which a cross closes. With a keyboard,
-  Command-R sends or fetches, Command-N adds a device, Command-comma opens Settings from
-  the "…" menu, and Escape closes the details. An iPad pairs with no Apple Watch, so its
-  Settings leave the watch out.
+The layout follows the window's width, never the kind of device or its rights; the rights
+follow how the device keeps its key (docs/design.md: a key in a secure chip with strong
+biometrics gets a phone's set, else a computer's). An Android or HarmonyOS tablet whose key
+is in software gets the same big-screen layout with a computer's rights.
+
+- **iPad** (the same app, universal; `Views/PadHome.swift`): an iPad is a phone for the
+  group, with a phone's rights: it joins as an admin, or makes its own group, and its root
+  key lives in its Secure Enclave. On Start, under "Create a group", it says that the device
+  that makes the group holds its main key, best one always at hand, such as a phone. In a
+  regular-width window Home is a split view:
+  - **The sidebar** (280 to 400 points, 320 by default): the group's line, how many devices
+    are online with the two switches (the house and the globe, which go under the count when
+    the two do not fit); **Devices**: "All devices", "Needs attention" while a device does,
+    and each collection, each with its count (a collection's menu renames or ungroups it);
+    **Settings**: Appearance, Notifications, the recovery key (on the root), away from home
+    (the hub, moving it, Everywhere, the relay), the group's rules (for admins), why it does
+    not sync, and About with leaving the group. A part opens in the detail column; there is no
+    switch for the advanced settings, each has its own part. In portrait the sidebar folds
+    away behind its button, and "+" moves to the detail's toolbar.
+  - **The devices**: the alerts, then the section's devices as tiles (the default), a list or
+    orbits (the toolbar's view menu; the orbits only for all devices), with a search in the
+    toolbar. A tap chooses a device: its card stands at the trailing edge, 400 points wide
+    (growing with the text size, at most 520), and the chosen tile is outlined; when the window
+    leaves less than 360 points for the devices beside it, the card is the next page instead.
+    Another section closes the card.
+  - **The keyboard**: Command-1 to 9 open the sidebar's sections in its order, Command-comma
+    the settings, Command-N adds a device; the arrows choose the device before or after, as
+    they stand; Escape closes the card. Holding Command lists them.
+  - **The pointer**: a tile lifts under it; its menu (a right-click, or touch and hold) pastes
+    on the device and mutes or unmutes it for an admin, besides Arrange's moves.
+  - **Drag and drop**: text, a picture or files dropped on a tile of a device that takes remote
+    paste are pasted there, as from its card (an admin's); text or a picture dropped beside the
+    tiles goes to the group, as a copy on the iPad would.
+  - **A narrow window** (Slide Over, a third of the screen, a compact width in Stage Manager)
+    gets the phone's page, the card as the next page.
+  - Start and Join stand in a column at most 560 points wide. One window; the app is not
+    offered on a Mac or a Vision Pro as an iPad app (the Mac has its own). An iPad pairs with no
+    Apple Watch, so its Settings leave the watch out; nothing can paste on an iPad, as on an
+    iPhone.
 - **A foldable iPhone** (the iPhone duo): the outer screen is the phone's page. The inner
-  screen is a big screen like the iPad's: the orbits, the details beside them, and in
-  landscape the system moves the toolbar (sync, "+", the menu) to the strip at the right
-  edge. A phone's screen stays upright; a big one turns.
-- **Android tablets and foldables** do the same from 720 dp wide: the orbits (or tiles or a
-  list, which the view button switches), and a device's details in a pane beside them.
+  screen is a big screen like the iPad's: the sidebar, the devices and the card beside them,
+  and in landscape the system moves the toolbar to the strip at the right edge. A phone's screen stays upright; a big one turns.
+- **Android tablets, foldables and wide windows** (`TabletHome.kt`) follow the iPad from
+  600 dp wide (Material's medium width class): a tablet's half of a split screen at less gets
+  the phone's page.
+  - **The sidebar** (300 dp, a little wider with a larger font): the group's line with the two
+    switches; **Devices**: "All devices", "Needs attention" while a device does, each
+    collection, each with its count; **Settings**: Appearance, Notifications (with sending by
+    itself and the watch), the recovery key (on the root), away from home (the hub, the
+    relay), remote paste (what may paste here, Share's question and the lab), the group (the
+    copies' time, the admin keys, leaving), why it does not sync, and About with the update. A
+    part opens beside the sidebar; the phone's Settings page shows them all, the advanced ones
+    behind their switch. The sidebar stands while the window has room for it, 360 dp of devices
+    and the details (as in landscape); else it slides in from the edge behind ☰ (as in
+    portrait). A short line at its foot names the keys.
+  - **The devices**: the alerts, then the section's devices as tiles (the default), a list or
+    orbits (⋯; the orbits only for all devices; a collection's ⋯ also renames or ungroups it),
+    with + beside it on an admin. A tap chooses a device: its details stand at the trailing
+    edge, 400 dp wide (growing with the font, at most 520), and the chosen tile is outlined;
+    when the window leaves less than 360 dp for the devices beside them, the details are a
+    page of their own, which back closes. Another section closes them.
+  - **The keyboard**: Ctrl+1 to 9 open the sidebar's sections in its order, Ctrl+, the settings,
+    Ctrl+N adds a device, Ctrl+F finds one (once the search is offered); the arrows choose the
+    device before or after; Esc closes the details.
+  - **The pointer**: a right click on a tile (or a touch and hold, on a phone too) opens its
+    menu, which for an admin pastes on the device and mutes or unmutes it, besides Arrange's
+    moves.
+  - **Drag and drop**: text, a picture or files dropped on a tile of a device that takes remote
+    paste are pasted there (an admin's), as from its details; dropped beside the tiles they go
+    to the group, as Share sends them.
+  - **The rights** follow the keys, one rule for phones and tablets (`Keys.guardsLikeAPhone`):
+    the keys in secure hardware (StrongBox or the TEE) and a strong fingerprint or face sensor
+    make it a phone for the group; without one of them Start says, under "Create a group",
+    restoring with the recovery key and a handed-over group say, before it becomes the group's
+    main device, that it guards the group less well than a phone with both. A tablet that has
+    both says on Start, as an iPad does, that the main device is best one always at hand.
+
+- **Aurora tablets** (and an Aurora phone turned on its side, which is as wide), in
+  `MainPage.qml` by the page's width in Silica's units (`Theme.pixelRatio`): from 760 the
+  chosen device's card (`DeviceCard.qml`, the same card `DevicePage.qml` shows as a page)
+  stands at the trailing edge, 400 wide, with Close in its header and its pull-down menu, and
+  the chosen tile is lit; from 1060 the sidebar stands before the tiles too: "All devices",
+  "Needs attention" while a device does, each collection with its count, and Settings, which
+  opens as a page, since Aurora's Settings are one short page. Narrower, it is the phone's
+  page. Aurora gives an app no fingerprint (its keys wait for the app's own PIN), so making a
+  group and restoring one always say that the device guards the group less well than a phone
+  with both. No keyboard shortcuts or drag and drop: Silica has neither.
+
   Android draws the device icons itself (`DeviceGlyph`), on the same 24-unit grid as the
   system's line icons.
-- **HarmonyOS tablets and foldables** (a Mate X open, a MatePad) do the same from 720 vp wide:
-  the orbits, tiles or a list, which the "…" menu switches and the app keeps, and a device's
-  details in a pane beside them, the page a phone's screen opens (`DeviceDetail`). Folding
-  the phone closes the pane and goes back to the phone's page.
+- **HarmonyOS tablets and foldables** (a Mate X open, a MatePad) do the same from 720 vp wide
+  (`pages/Main.ets`): the orbits (only for all devices), tiles or a list, which the "…" menu
+  switches and the app keeps, and a device's details in a pane beside them, 400 vp, the page a
+  phone's screen opens (`DeviceDetail`), with the chosen tile outlined. Folding the phone closes
+  the pane and goes back to the phone's page.
+  - **The sidebar** (280 vp, ArkUI's `SideBarContainer`): the group's line; **Devices**: "All
+    devices", "Needs attention" while a device does, each collection, each with its count;
+    **Settings**: the language and the error details, notifications, the recovery key (on the
+    root) and this phone as the hub (each its own page), the group, the lab, why it does not
+    sync, and About; a part opens beside the sidebar (`components/SettingsBody.ets`, which the
+    phone's Settings page shows whole, the advanced parts behind their switch). It stands from
+    1040 vp (the sidebar, 360 of devices and the details); narrower it slides in behind ☰. A
+    short line at its foot names the keys. Another section closes the details.
+  - **The keyboard**: Ctrl+1 to 9 open the sidebar's rows in its order, Ctrl+, the settings,
+    Ctrl+N adds a device (an admin's scan), the arrows choose the device before or after, Esc
+    closes the details.
+  - **The pointer**: a right click on a tile opens its menu, which for an admin pastes on the
+    device and mutes or unmutes it, besides Arrange; a long press still arranges it.
+  - **Drag and drop**: text, a picture or files dropped on a tile of a device that takes remote
+    paste are pasted there (an admin's); dropped beside the tiles they go to the group.
+  - **The rights** follow the keys as on Android (`Keys.guardsLikeAPhone`): HUKS keeps them in
+    the TEE, so a fingerprint or face sensor at ATL3, enrolled or not yet, makes it a phone for
+    the group; without one Start under "Create a group", restoring and taking the group over say
+    that it guards the group less well than a phone with both, and a big screen that has one
+    says on Start that the main device is best one always at hand.
 
 ## Dynamic Island
 
@@ -336,8 +431,7 @@ in Settings, all on by default: a device joined or was removed, became an admin,
 or unfrozen, the group was taken over, and the hub does not answer through the tunnel for
 two minutes while away from home. The app compares the devices with what it saw last time
 (`GroupEvent`, `Notifier`), so it hears of an event while it runs and syncs. An iPhone app
-has no background sync: until it has push notifications, which need the Apple developer
-account, it asks iOS for background app refresh (`BackgroundRefresh`), and iOS runs it for a
+has no background sync: until it has push notifications (not built yet), it asks iOS for background app refresh (`BackgroundRefresh`), and iOS runs it for a
 few seconds now and then, at times it picks from how the phone is used. It then waits up to
 20 seconds for a computer, takes the records and notifies of what changed; it leaves the
 clipboard alone, which only the app in front may read. So an event may come within the
@@ -848,12 +942,20 @@ for Face ID (D-94, docs/protocol.md section 3):
   member key. The root or admin key sits in a
   second token of the app, the TEE's slot "APP", which the app initializes itself
   (`src/platform/keystore_tee.cpp`): its user PIN is the user's, its SO PIN starts as the same
-  PIN and becomes a random one, kept nowhere, once the PIN has been entered right. Another app
+  PIN and becomes a random one, kept nowhere, once the PIN has been entered right. Whether it
+  did is the token's to say, not the app's settings, which can be cleared while the token
+  stays: an SO PIN that no longer matches the user PIN counts as random. Another app
   sees neither token.
 - **When it asks.** Before the admin key is made or signs: making a group, or joining a
   group, which makes the admin key the member's hellos offer the root for its "Make an
   admin" (docs/protocol.md, section 10, "Admins"); the first time it sets the PIN (typed
-  twice, at least four digits). A user who cancels it joins as a member whose hellos offer
+  twice): at least six digits, and none easy to guess (`src/pinrule.h`: no repeats, runs or
+  short patterns such as 111111, 123456, 121212 or 112233, no five equal digits, two simple
+  pieces (111222, 123400), palindromes, counting pairs (131415), dates (DDMMYY, MMDDYY,
+  YYMMDD and their eight-digit forms) nor common keypad PINs: about one six-digit PIN in ten;
+  `tests/pinrule_test.cpp` checks it). A PIN set before this rule still opens the key, and a
+  token stopped halfway through its first PIN is finished with that PIN; a new or changed one
+  must pass it. A user who cancels it joins as a member whose hellos offer
   no key, and Settings' "Get ready to be an admin" makes it later. Then adding a device, an action on a device's
   page, the root's decision on an alert, the takeover and its finish. The app hands the PIN
   to the TEE and wipes it at once; the token then stays logged in for five minutes (as the iPhone app trusts one Face ID) after its
@@ -861,7 +963,9 @@ for Face ID (D-94, docs/protocol.md section 3):
   certificates go only while it is logged in. The dialog asks not to reuse the phone's unlock
   code. Settings change it ("Change the
   admin PIN"), after the current one.
-- **Wrong PINs.** The TEE counts them; the dialog says how many of the seven tries are left.
+- **Wrong PINs.** The TEE counts them; the dialog says how many of the seven tries are left,
+  from the token's flags (a wrong PIN tried, one try left) and the app's count between them;
+  when the app's count was lost, it says that some tries are used up, never a full seven.
   The seventh locks the token for good: nothing unlocks it, the phone stays in its group as a
   member, Settings say so, and an admin phone again needs CBB installed afresh and joined as a
   new device. A lost root is taken over by an admin phone or with the recovery key.
@@ -1023,7 +1127,7 @@ Rust core, which does the protocol, the pairing, sync, the member's view of the 
 tunnel. ArkTS and ArkUI make the interface; `libcbb_napi.so` gives it each C function of
 `ffi/include/cbb_core.h`, the ones that block or sign on a worker thread with a Promise. Its
 system in the protocol is `harmonyos`. It has the other phones' screens: Start (a new group,
-joining by the phone's QR code, as an admin, by an invitation, restoring), Home with the tiles
+joining by the phone's QR code, always as a member, or by an invitation, restoring), Home with the tiles
 or the list, a device's page with the admin's actions, adding a device by its QR code,
 invitations, the recovery key, the takeover, the arrangement and collections, and Settings
 with the error details, the notifications, the root's settings and, under the advanced

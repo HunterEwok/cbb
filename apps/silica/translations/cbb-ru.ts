@@ -268,6 +268,10 @@
 <context>
     <name>ChangePinDialog</name>
     <message>
+        <source>At least six digits, and not an easy one such as 123456 or 111111.</source>
+        <translation>Не короче шести цифр и не простой, вроде 123456 или 111111.</translation>
+    </message>
+    <message>
         <source>Change</source>
         <translation>Сменить</translation>
     </message>
@@ -369,14 +373,11 @@
     </message>
 </context>
 <context>
-    <name>DeviceItems</name>
+    <name>DeviceCard</name>
     <message>
-        <source>%1 of %2 online</source>
-        <translation>%1 из %2 в сети</translation>
+        <source>Close</source>
+        <translation>Закрыть</translation>
     </message>
-</context>
-<context>
-    <name>DevicePage</name>
     <message>
         <source>Device ID</source>
         <translation>ID устройства</translation>
@@ -503,6 +504,13 @@
     </message>
 </context>
 <context>
+    <name>DeviceItems</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 из %2 в сети</translation>
+    </message>
+</context>
+<context>
     <name>DeviceTile</name>
     <message>
         <source>Mute for 15 minutes</source>
@@ -544,10 +552,6 @@
         <source>Turn sync on</source>
         <translation>Включить синхронизацию</translation>
     </message>
-    <message>
-        <source>Unmute</source>
-        <translation>Включить</translation>
-    </message>
 </context>
 <context>
     <name>Errors</name>
@@ -558,6 +562,10 @@
     <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
         <translation>По адресу из кода ответило другое устройство. Отсканируйте код ещё раз.</translation>
+    </message>
+    <message>
+        <source>Choose a PIN of at least six digits that is not easy to guess.</source>
+        <translation>Выберите PIN не короче шести цифр, который трудно угадать.</translation>
     </message>
     <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
@@ -877,8 +885,8 @@
         <translation>Не этот</translation>
     </message>
     <message>
-        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. It works once, until %1.</source>
-        <translation>На новом телефоне откройте CBB, нажмите «Вступить по приглашению» и отсканируйте код. На компьютере выполните cbb pair -invite с его текстом. Приглашение работает один раз, до %1.</translation>
+        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite - and paste its text. It works once, until %1.</source>
+        <translation>На новом телефоне откройте CBB, нажмите «Вступить по приглашению» и отсканируйте код. На компьютере выполните cbb pair -invite - и вставьте его текст. Приглашение работает один раз, до %1.</translation>
     </message>
     <message>
         <source>Opening the invitation on the group's hub…</source>
@@ -1058,6 +1066,10 @@
         <translation>В сети %1 из %2</translation>
     </message>
     <message>
+        <source>All devices</source>
+        <translation>Все устройства</translation>
+    </message>
+    <message>
         <source>An admin muted this phone until %1: its copies do not reach the group.</source>
         <translation>Админ заглушил этот телефон до %1: его копии не доходят до группы.</translation>
     </message>
@@ -1120,6 +1132,10 @@
     <message>
         <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
         <translation>Сделайте второй телефон админом: добавьте его в группу, затем откройте его здесь и нажмите «Сделать админом». Нажмите, чтобы закрыть.</translation>
+    </message>
+    <message>
+        <source>Needs attention</source>
+        <translation>Требует внимания</translation>
     </message>
     <message>
         <source>New collection…</source>
@@ -1268,6 +1284,10 @@
         <translation>Корневой ключ группы создаётся в защищённом элементе телефона и никогда его не покидает.</translation>
     </message>
     <message>
+        <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
+        <translation>У этого устройства нет защищённого чипа для ключей или надёжного датчика отпечатка или лица: главным устройством группы оно защищает её хуже, чем телефон, у которого есть и то и другое.</translation>
+    </message>
+    <message>
         <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
         <translation>Этот телефон станет корнем группы: он добавляет остальные устройства по их QR-кодам и делает админами телефоны, которые об этом просят.</translation>
     </message>
@@ -1345,8 +1365,12 @@
         <translation>PIN администратора</translation>
     </message>
     <message>
-        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
-        <translation>Собственный PIN CBB, не короче четырёх цифр. Не используйте код разблокировки телефона. Защищённый модуль телефона проверяет его перед каждым действием администратора; семь неверных PIN навсегда блокируют ключ администратора, и разблокировать его нельзя.</translation>
+        <source>At least six digits, and not an easy one such as 123456 or 111111.</source>
+        <translation>Не короче шести цифр и не простой, вроде 123456 или 111111.</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least six digits and not an easy one such as 123456. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>Собственный PIN CBB, не короче шести цифр и не простой вроде 123456. Не используйте код разблокировки телефона. Защищённый модуль телефона проверяет его перед каждым действием администратора; семь неверных PIN навсегда блокируют ключ администратора, и разблокировать его нельзя.</translation>
     </message>
     <message>
         <source>Choose the admin PIN</source>
@@ -1383,6 +1407,10 @@
     <message>
         <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
         <translation>Неверный PIN. Осталась одна попытка: следующий неверный PIN навсегда заблокирует ключ администратора.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Some tries are used up; seven wrong PINs lock the admin key for good.</source>
+        <translation>Неверный PIN. Часть попыток уже потрачена; семь неверных PIN навсегда блокируют ключ администратора.</translation>
     </message>
     <message>
         <source>Wrong PIN. Tries left: %1.</source>
@@ -1484,6 +1512,10 @@
     <message>
         <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
         <translation>Группа восстановлена на этом телефоне. Он станет корнем группы, когда истечёт время ожидания, через %1 ч, если корень не отменит заявку.</translation>
+    </message>
+    <message>
+        <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
+        <translation>У этого устройства нет защищённого чипа для ключей или надёжного датчика отпечатка или лица: главным устройством группы оно защищает её хуже, чем телефон, у которого есть и то и другое.</translation>
     </message>
     <message>
         <source>This phone is the group's root now.</source>
@@ -1707,6 +1739,10 @@
     <message>
         <source>Version</source>
         <translation>Версия</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Some tries are used up; seven wrong PINs lock the admin key for good.</source>
+        <translation>Неверный PIN. Часть попыток уже потрачена; семь неверных PIN навсегда блокируют ключ администратора.</translation>
     </message>
     <message>
         <source>Wrong PIN. Tries left: %1.</source>

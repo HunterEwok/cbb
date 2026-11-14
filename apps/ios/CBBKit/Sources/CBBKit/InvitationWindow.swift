@@ -10,12 +10,23 @@ import Security
 /// address, where the phone's hub joins the connections of the invitation's
 /// guest tunnel, and runs each attempt with admit, one at a time. It admits
 /// one device once, until expires, and ends after three failed attempts;
-/// onEnd gets the admitted device, or why it ended without one.
+/// onEnd gets the admitted device, or why it ended without one. Another app
+/// on the phone can reach the loopback port too: a connection that
+/// fromGuest says the hub did not make for the invitation's guest is closed
+/// after the TLS handshake, before any pairing message, and neither counts
+/// nor keeps the window busy.
 public final class InvitationWindow: @unchecked Sendable {
     /// Why the window ended without a device.
     public enum Ended: Error, Equatable {
         case expired, tooManyAttempts, cancelled
     }
+
+    /// A connection the hub did not make for the guest, closed before any pairing message.
+    public struct NotFromGuest: Error {}
+
+    /// Whether the connection from this loopback port came through the
+    /// invitation's guest tunnel (HubGuest.dialed).
+    public typealias FromGuest = @Sendable (UInt16) -> Bool
 
     /// Failed attempts after which the window ends.
     public static let maxFailures = 3
@@ -24,6 +35,7 @@ public final class InvitationWindow: @unchecked Sendable {
 
     private let listener: TLSListener
     private let expires: Date
+    private let fromGuest: FromGuest
     private let admit: Admit
     private let onEnd: @Sendable (Result<PairingMember.Admitted, Error>) -> Void
     private let onError: @Sendable (Error) -> Void
@@ -38,10 +50,10 @@ public final class InvitationWindow: @unchecked Sendable {
     /// (PhoneGroup.admit with the invitation) over the connection, with
     /// the joiner's certificate and the session ID; onError gets why an
     /// attempt failed, for the log.
-    public init(identity: SecIdentity, expires: Date, admit: @escaping Admit,
+    public init(identity: SecIdentity, expires: Date, fromGuest: @escaping FromGuest, admit: @escaping Admit,
                 onEnd: @escaping @Sendable (Result<PairingMember.Admitted, Error>) -> Void,
                 onError: @escaping @Sendable (Error) -> Void = { _ in }) throws {
-        (self.expires, self.admit, self.onEnd, self.onError) = (expires, admit, onEnd, onError)
+        (self.expires, self.fromGuest, self.admit, self.onEnd, self.onError) = (expires, fromGuest, admit, onEnd, onError)
         listener = try TLSListener(alpn: Pairing.alpn, identity: identity, loopback: true) { !$0.isEmpty }
     }
 
@@ -70,6 +82,10 @@ public final class InvitationWindow: @unchecked Sendable {
         } catch {
             t.close()
             return onError(error)
+        }
+        guard let port = t.remotePort, fromGuest(port) else {
+            t.close()
+            return onError(NotFromGuest())
         }
         guard let joiner = t.peerCertificate, let sid = t.exportKeyingMaterial(label: Pairing.exporterLabel, length: 32) else {
             return t.close()

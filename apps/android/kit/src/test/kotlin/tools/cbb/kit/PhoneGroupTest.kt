@@ -226,7 +226,7 @@ class PhoneGroupTest {
         val l = Listener()
         val (m, j) = Pipe.pair()
         val member = Background {
-            PairingMember.admit(m, "123456", root.memberCert, l.cert, sid, Pairing.MemberAD(root.device, root.tag)) { dev, _, _ ->
+            PairingMember.admit(m, "123456", root.memberCert, l.cert, sid, Pairing.MemberAD(root.device, root.tag), taken = { false }) { dev, _, _ ->
                 Pairing.Welcome(GroupCertificates.member(dev, SoftwareSigner().publicKeyDER, root.groupCA, rootKey, t0), root.groupCA)
             }
         }
@@ -251,7 +251,7 @@ class PhoneGroupTest {
             Triple(two, l.cert, "the joining device must send exactly one certificate"),
         )) {
             val e = assertFailsWith<PairingMember.Failure> {
-                PairingMember.admit(t, "123456", root.memberCert, cert, sid, Pairing.MemberAD(root.device, root.tag)) { _, _, _ ->
+                PairingMember.admit(t, "123456", root.memberCert, cert, sid, Pairing.MemberAD(root.device, root.tag), taken = { false }) { _, _, _ ->
                     error("issued a welcome")
                 }
             }

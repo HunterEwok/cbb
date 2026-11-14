@@ -135,6 +135,35 @@ pub fn check_path(p: &str) -> Result<()> {
     if ok { Ok(()) } else { Err(bad()) }
 }
 
+/// The group's own part of the XHTTP path below the forwarder's path for
+/// the group's VLESS user ID id, as the forwarder makes it (internal/forward's
+/// groupPath, docs/protocol.md, section 13, "VLESS"): the first 16 bytes of
+/// SHA-256 over `cbb group path`, a zero byte and the ID, in unpadded
+/// base64url. A hub thus knows the path of its next ID before it registers
+/// it, and hands both to its clients ahead of time.
+pub fn group_path(id: &str) -> String {
+    use base64::Engine as _;
+    let mut b = Vec::from(&b"cbb group path\0"[..]);
+    b.extend_from_slice(id.as_bytes());
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(&crate::certs::sha256(&b)[..16])
+}
+
+/// An offer's VLESS settings v with the user ID id in place of theirs and
+/// the path's group part made for it ([group_path]): the settings a hub
+/// gives with its next key (docs/protocol.md, section 11, "The hub's key").
+/// None when v does not read or id is no user ID.
+pub fn with_id(v: &Value, id: &str) -> Option<Value> {
+    let link = Link::from_offer(v).ok()?;
+    parse_id(id).ok()?;
+    let rest = link.path.strip_prefix('/')?;
+    let base = rest.split_once('/').map_or(rest, |(base, _)| base);
+    let mut out = v.clone();
+    let o = out.as_object_mut()?;
+    o.insert("id".into(), Value::String(id.to_string()));
+    o.insert("path".into(), Value::String(format!("/{base}/{}", group_path(id))));
+    Some(out)
+}
+
 /// A VLESS user ID as internal/tunnel's CheckVLESSID takes it: a UUID of
 /// version 4 in lowercase.
 pub fn parse_id(s: &str) -> Result<[u8; 16]> {
@@ -493,6 +522,22 @@ mod tests {
             "path": "/AbC-12_xyz0123456/a-group-of-its-own",
             "id": "6f1c2b9e-3d4a-4f5b-8c7d-0e1f2a3b4c5d",
         })
+    }
+
+    #[test]
+    fn the_path_of_a_user_id() {
+        // The same as internal/forward's TestGroupPathKept.
+        assert_eq!(group_path("6f1c2b9e-3d4a-4f5b-8c7d-0e1f2a3b4c5d"), "FAf82MUKFMjUNz3SkIYXXw");
+        let next = with_id(&offer(), "0b6e7f10-2a3b-4c5d-9e8f-112233445566").unwrap();
+        assert_eq!(next["id"], "0b6e7f10-2a3b-4c5d-9e8f-112233445566");
+        assert_eq!(next["path"], "/AbC-12_xyz0123456/mefvDB5qwj9eeFnyKOOk4A");
+        assert_eq!((&next["endpoint"], &next["server_name"]), (&offer()["endpoint"], &offer()["server_name"]));
+        Link::from_offer(&next).unwrap();
+        let mut bare = offer();
+        bare["path"] = "/AbC-12_xyz0123456".into();
+        assert_eq!(with_id(&bare, "0b6e7f10-2a3b-4c5d-9e8f-112233445566").unwrap()["path"], next["path"]);
+        assert!(with_id(&offer(), "not an id").is_none());
+        assert!(with_id(&serde_json::json!({"transport": "grpc"}), "0b6e7f10-2a3b-4c5d-9e8f-112233445566").is_none());
     }
 
     #[test]

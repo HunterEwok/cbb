@@ -446,10 +446,22 @@ which shows the report as it would go. After the user allowed twice, the dialog 
 `bug_report` builds the report from what the app gives: what broke, the versions of CBB and the
 system, the device's model and architecture, the day, and CBB's own log, at most 300 lines of
 400 bytes, the oldest going first until the report fits in 160 KiB. Every field and line is
-filtered: addresses (IPv4, IPv6, MAC), e-mail addresses, long numbers (codes), long hex
-(device ids, fingerprints), base64 that looks random (keys, secrets, invitations), the user's
-name in home folders and every word of `names` are replaced. Clipboard texts never reach the
-log. The report is sealed to the robot's public key (`crate::seal`, HPKE with X-Wing,
+filtered: addresses (IPv4, IPv6, MAC, also inside a word such as `peer=...` or a URL), host
+names of the home network (`.local`, `.lan`, `.box` and the like), e-mail addresses, long numbers
+(codes), long hex (device ids, fingerprints), base64 that looks random (keys, secrets,
+invitations), the value of a name's field in `key=value`, `key:value` or `key: value` (`ssid`,
+`host`, `peer`, `server`, `device`, `user` and the like), to the field's end (a comma,
+semicolon, bracket or quote, or the line's end), an address after any key
+(`addr:...`), every word in a script other than Latin (the programs log in English, so such a word is
+the user's), the user's name in home folders and every word of `names`, in any case and as a
+host name (`Office PC` also as `office-pc`), are replaced. A panic's details keep only the kind
+of its message as the standard library words it (`index out of bounds`, `called
+Result::unwrap() on an Err value`), never the values after it, and "a panic" for a message the
+program wrote itself; its file, line and thread stay. Clipboard texts never reach the log.
+The filter works on free text by patterns, not on fields the log names: a name logged without
+one of those keys and in none of those forms (`ssid HomeNet`, a bare host name) still passes.
+What keeps it out is that the programs log names only in such fields and pass every device
+name they know in `names`; logging by field is left for a later version. The report is sealed to the robot's public key (`crate::seal`, HPKE with X-Wing,
 HKDF-SHA256 and ChaCha20-Poly1305, associated data `cbb bug report v1`), so the server stores
 what it cannot read; the robot opens it elsewhere. Until the robot's key is in the build,
 nothing is posted and `action` is `skip`.
@@ -472,8 +484,13 @@ On cbb.tools, nginx (`packaging/linux/nginx-bug.conf`, a server block of its own
 client address) passes each POST to `cbb-bug` (`member/src/bugd.rs`, `cbb-bug.service`) on a
 loopback port. It checks that the body is a sealed report, keeps it in a folder of the day and
 the break, and answers `fixed_in` from the robot's `fixed.json`. At most 20 reports of one break
-and version and 5000 in all are kept each day; the rest are answered as taken and dropped, so
-that no app sends them again. The robot opens the reports elsewhere with its secret:
+and version are kept each day; the rest are answered as taken and dropped, so that no app sends
+them again. Past 5000 reports in a day, or 2 GiB kept in all, it answers 503, and the apps keep
+their reports and send them later. One IPv4 address or IPv6 /64 has at most 100 reports kept a
+day and one IPv6 /48 at most 500, past which it answers 503 too, so no one source fills the day;
+nginx hands cbb-bug the prefix in a header, which it counts in memory for the day and never
+writes. A day's reports are removed after 30 days. nginx allows each IPv4 address and each
+IPv6 /64 six reports a minute. The robot opens the reports elsewhere with its secret:
 `cbb-bug keygen SECRET` makes the key once (the secret stays on the robot's computer, the public
 key goes into `cbb_core::bug::ROBOT_KEY_B64`), and `cbb-bug read SECRET FOLDER...` opens the
 reports copied from the server.

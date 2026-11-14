@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 93e712ad5209 -->
+<!-- source: 5a06c8a1fa53 -->
 # 封锁 VPN 的网络
 
 离家后，你的设备通过群组自己的 WireGuard 隧道连接中枢。有些网络会封锁 WireGuard：酒店和办公室的 Wi-Fi、部分移动运营商，以及整个过滤 VPN 的国家。Copy Beyond Borders 有两种绕开的办法，除非你关闭，中枢会同时使用这两种；设备会在下次回家与中枢碰面时获取更改。
@@ -26,7 +26,7 @@
 sudo cbb global hub 203.0.113.7:8764
 ```
 
-它会随机生成一次群组的设置并一直保留。在什么都不封锁的网络上，普通 WireGuard 稍快一些：
+它会随机生成群组的设置，大约每月更换一次，并提前把下一套设置告诉各设备。在什么都不封锁的网络上，普通 WireGuard 稍快一些：
 
 ```sh
 sudo cbb global hub -no-obfuscate -no-vless 203.0.113.7:8764

@@ -502,7 +502,13 @@ impl Admin<'_> {
     /// admin's powers unless body names them, and the root's record of its
     /// own device says it holds the root. The record goes into the set and
     /// to the group.
-    fn sign(&self, s: &Signing, mut b: Body) -> Result<Record> {
+    fn sign(&self, s: &Signing, b: Body) -> Result<Record> {
+        let _one = self.node.signing.lock().unwrap_or_else(|e| e.into_inner());
+        self.sign_locked(s, b)
+    }
+
+    /// As sign, with Node::signing already held.
+    fn sign_locked(&self, s: &Signing, mut b: Body) -> Result<Record> {
         let records = self.node.records();
         let r = {
             let rs = records.lock().unwrap();
@@ -541,6 +547,7 @@ impl Admin<'_> {
         make: impl FnOnce(&cbb_core::group::Records, &Signer, i64) -> cbb_core::error::Result<Record>,
     ) -> Result<Record> {
         let me = self.me();
+        let _one = self.node.signing.lock().unwrap_or_else(|e| e.into_inner());
         let records = self.node.records();
         let r = make(&records.lock().unwrap(), &Signer { ca: &s.ca, key: &*s.key, me: &me }, uptime::wall_ms())?;
         self.node.add_own_records(std::slice::from_ref(&r));
@@ -713,6 +720,9 @@ impl Admin<'_> {
         if self.root_device() != self.me() {
             return Ok(None);
         }
+        // The check and the record are one step: the evidence of two
+        // connections at once is recorded once.
+        let _one = self.node.signing.lock().unwrap_or_else(|e| e.into_inner());
         let Some(d) = self.node.devices().into_iter().find(|d| d.id == peer) else { return Ok(None) };
         if d.key != *key {
             return Ok(None); // not listed yet; it sends the evidence again when it next connects
@@ -748,7 +758,7 @@ impl Admin<'_> {
             forward_only: d.forward_only,
             ..Default::default()
         };
-        self.sign(&s, b).map_err(|e| e.context("recording what its attestation proves"))?;
+        self.sign_locked(&s, b).map_err(|e| e.context("recording what its attestation proves"))?;
         let why = if p.why.is_empty() { String::new() } else { format!(": {}", p.why) };
         Ok(Some(format!("cbb: the attestation of {} ({}) shows its keys {} ({kind}){why}", d.name, d.id, p.store)))
     }
@@ -1521,6 +1531,10 @@ impl Admin<'_> {
     /// the core (cbb_core::admit), and records the device once its Welcome
     /// is out. With admins, on the root only, a phone that offers an admin
     /// key becomes an admin. It returns the device's name.
+    ///
+    /// It dials at most the QR code's four addresses, and stops at the
+    /// first attempt that showed the device this member's CPace message:
+    /// that attempt tried the code, which serves one guess only.
     pub fn admit_by_qr(&self, code: &str, addrs: &[String], fingerprint: &str, admins: bool) -> Result<String> {
         let code = cbb_core::pair::normalize_code(code)?;
         if fingerprint.is_empty() {
@@ -1529,9 +1543,11 @@ impl Admin<'_> {
         let admitter = self.admitter(admins)?;
         let end = Instant::now() + PAIR_LIFETIME;
         let mut tried = Vec::new();
-        for addr in addrs {
-            match self.admit_at(&admitter, &code, addr, fingerprint, end) {
+        for addr in addrs.iter().take(cbb_core::pair::MAX_ADDRS) {
+            let mut started = false;
+            match self.admit_at(&admitter, &code, addr, fingerprint, end, &mut started) {
                 Ok(name) => return Ok(name),
+                Err(e) if started => return Err(e.context("could not admit the device that shows the QR code")),
                 Err(e) => tried.push(format!("{addr}: {}", e.for_log())),
             }
         }
@@ -1545,6 +1561,7 @@ impl Admin<'_> {
         addr: &str,
         fingerprint: &str,
         end: Instant,
+        started: &mut bool,
     ) -> Result<String> {
         let to: SocketAddr = addr.parse().map_err(|_| Error::msg("not an address and port"))?;
         if !crate::pair::home_address(to.ip()) {
@@ -1558,6 +1575,7 @@ impl Admin<'_> {
         let mut buf = vec![0u8; 16 << 10];
         loop {
             let step = adm.feed(&input, uptime::wall_ms());
+            *started |= adm.started();
             if !step.send.is_empty() {
                 sock.write_all(&step.send).context("cannot send to the device")?;
             }

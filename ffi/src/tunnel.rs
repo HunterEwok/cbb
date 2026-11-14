@@ -44,6 +44,11 @@
 //! - `guest_admitted` with `id` and `guest`: the window admitted the device,
 //!   whose connections now go to the member port, for a day at most;
 //!   `guest_close` with `id` and `guest` drops the guest;
+//! - `guest_dialed` with `id`, `guest` and `port`: `{"through"}`, whether
+//!   the connection that reached the app's pairing window from the loopback
+//!   port `port` is one the hub made for that guest. The window takes only
+//!   those: another app on the phone can reach its loopback port too, and
+//!   its attempts would count against the invitation;
 //! - `hub_set_records` with `id` and `records`: the group's authority
 //!   records the next registration with the forwarder carries;
 //! - `hub_set_project_ways` with `id` and `ways`: the hub's forwarder is
@@ -89,6 +94,15 @@
 //! first, and `names` the device ID each pseudonym of the group's other
 //! devices stands for; the events then name the devices by those IDs. An
 //! empty `credentials` goes back to the member certificate.
+//!
+//! `cbb_tunnel_hub_credentials` makes a hub's registration with the
+//! forwarder show the period's hubs' credential in place of the member
+//! certificate and the records (docs/protocol.md, section 18), as a
+//! computer's hub does, and register again at once, signing with the
+//! period's server key through a callback: `{"id", "public",
+//! "credentials"}`, where `public` is the server key's public point and
+//! `credentials` the hubs' credential, which must list the key. An empty
+//! `credentials` goes back to the member certificate.
 //!
 //! The answer is `{"ok": ...}` or `{"error": {"message", "details"}}`.
 
@@ -185,6 +199,12 @@ enum Request {
     GuestClose {
         id: u64,
         guest: u64,
+    },
+    GuestDialed {
+        id: u64,
+        guest: u64,
+        /// The port on the loopback address the connection came from.
+        port: u16,
     },
     HubSetRecords {
         id: u64,
@@ -425,6 +445,9 @@ struct RunningHub {
     /// The VLESS settings of the forwarder's last answer, kept across the
     /// hub's registrations.
     learned: Arc<Mutex<Option<Value>>>,
+    /// The hubs' credential its registration shows
+    /// (`cbb_tunnel_hub_credentials`), asked at each registration.
+    credential: Arc<Mutex<Option<forward::HubCredential>>>,
 }
 
 /// The guest tunnel of a remote invitation (docs/protocol.md, section 12):
@@ -508,6 +531,7 @@ impl RunningHub {
             psk: guest_psk,
             addr: hub::guest_addr(&public),
             until: Instant::now().checked_add(Duration::from_secs(lifetime)),
+            source: None,
         };
         let guest = NEXT.fetch_add(1, Ordering::SeqCst);
         self.guests
@@ -516,6 +540,14 @@ impl RunningHub {
             .insert(guest, Guest { peer, port: guest_port, admitted: false });
         self.set_peers()?;
         Ok(json!({ "guest": guest, "text": text, "secret": b64(&secret), "expires": expires }))
+    }
+
+    /// Whether the hub made the connection from the loopback port `port`
+    /// for the guest `guest`, while the guest's time lasts.
+    fn dialed_for(&self, guest: u64, port: u16) -> bool {
+        let Some(from) = self.hub.tunnel_addr(port) else { return false };
+        let Ok(g) = self.guests.lock() else { return false };
+        g.get(&guest).is_some_and(|g| g.peer.addr == from && g.peer.until.is_none_or(|u| u > Instant::now()))
     }
 
     /// Changes the guests, then gives the hub its peers again.
@@ -597,6 +629,10 @@ fn handle(request: &[u8]) -> Result<Value> {
             r.guests_then(|g| {
                 g.remove(&guest);
             })
+        }),
+        Request::GuestDialed { id, guest, port } => hubs(|t| {
+            let r = t.get(&id).ok_or_else(|| Error::msg(format!("there is no hub {id}")))?;
+            Ok(json!({ "through": r.dialed_for(guest, port) }))
         }),
         Request::HubStatus { id } => hubs(|t| {
             let r = t.get(&id).ok_or_else(|| Error::msg(format!("there is no hub {id}")))?;
@@ -724,6 +760,7 @@ fn hub_start(
                 log,
                 ways: Arc::new(Mutex::new(forward::Ways::default())),
                 learned: Arc::new(Mutex::new(None)),
+                credential: Arc::new(Mutex::new(None)),
             },
         );
         Ok(())
@@ -772,7 +809,11 @@ fn register_hub(request: &[u8], sign: SignFn, ctx: usize) -> Result<Value> {
             vless_id: req.vless_id,
             records: records.clone(),
             send: r.hub.sender(),
-            credential: None,
+            credential: Some({
+                let c = r.credential.clone();
+                let f: forward::CredentialFn = Arc::new(move || c.lock().ok()?.clone());
+                f
+            }),
             ways: r.ways.clone(),
             learned: r.learned.clone(),
         };
@@ -783,6 +824,53 @@ fn register_hub(request: &[u8], sign: SignFn, ctx: usize) -> Result<Value> {
     Ok(json!({}))
 }
 
+/// The hubs' credential for a hub's registration
+/// (`cbb_tunnel_hub_credentials`).
+#[derive(Deserialize)]
+struct HubCredentials {
+    id: u64,
+    #[serde(with = "certs::b64", default)]
+    public: Vec<u8>,
+    #[serde(default)]
+    credentials: Vec<Credential>,
+}
+
+/// Sets what a hub registers with (the module's comment).
+pub fn hub_credentials(request: &[u8], sign: SignFn, ctx: usize) -> Vec<u8> {
+    answer(set_hub_credentials(request, sign, ctx))
+}
+
+fn set_hub_credentials(request: &[u8], sign: SignFn, ctx: usize) -> Result<Value> {
+    let req: HubCredentials =
+        serde_json::from_slice(request).map_err(|e| Error::msg(format!("the hub's credentials do not decode: {e}")))?;
+    let cred = if req.credentials.is_empty() {
+        None
+    } else {
+        let spki = certs::p256_spki_of(&req.public);
+        if certs::p256_spki(&spki).is_none() {
+            return Err(Error::msg("the hub's server key is not a P-256 point"));
+        }
+        // The forwarder takes the hubs' credential only when it lists the
+        // key the hub shows; one that does not is refused here.
+        let hash = certs::sha256(&spki);
+        let lists = req
+            .credentials
+            .iter()
+            .any(|c| c.open().is_ok_and(|b| b.kind == cbb_core::credential::HUBS && b.hubs.contains(&hash)));
+        if !lists {
+            return Err(Error::msg("the hubs' credential does not list the hub's server key"));
+        }
+        let key: Arc<dyn cbb_member::identity::ExternalKey> = Arc::new(AppKey { public: req.public, sign, ctx });
+        let cert = certs::server_cert_by(&key.public(), &mut |tbs| cbb_member::identity::sign_external(&*key, tbs))?;
+        Some(forward::HubCredential { credentials: req.credentials, cert, key })
+    };
+    hubs(|t| {
+        let r = t.get(&req.id).ok_or_else(|| Error::msg(format!("there is no hub {}", req.id)))?;
+        *r.credential.lock().map_err(|_| Error::msg("the hub is broken"))? = cred;
+        Ok(json!({}))
+    })
+}
+
 fn peers(clients: &[Client]) -> Result<Vec<Peer>> {
     clients
         .iter()
@@ -791,7 +879,7 @@ fn peers(clients: &[Client]) -> Result<Vec<Peer>> {
             let psk =
                 c.psk.as_slice().try_into().map_err(|_| Error::msg("a client's preshared key is not 32 bytes"))?;
             let addr = tunnel::addr(&c.device).ok_or_else(|| Error::msg(format!("{} is not a device ID", c.device)))?;
-            Ok(Peer { key, psk, addr, until: None })
+            Ok(Peer { key, psk, addr, until: None, source: None })
         })
         .collect()
 }
@@ -993,6 +1081,41 @@ mod tests {
         ] {
             assert!(refused_with(relay_start(&req, no_sign, no_event, 0)), "{name}");
         }
+    }
+
+    /// The pairing window learns which connections the hub made for its
+    /// guest: one through the invitation's guest tunnel is, one another
+    /// program makes to the window's loopback port is not.
+    #[test]
+    fn the_window_tells_the_hubs_connections_from_others() {
+        use std::io::Write;
+        use std::net::{TcpListener, TcpStream};
+        let window = TcpListener::bind("127.0.0.1:0").unwrap();
+        let window_port = window.local_addr().unwrap().port();
+        let h = ok(json!({"op": "hub_start", "key": ok(json!({"op": "new_key"}))["key"].clone(),
+            "device": DeviceId::random().to_string(), "member_port": 1, "clients": [], "listen": "127.0.0.1:0"}));
+        let (hub, udp) = (h["id"].as_u64().unwrap(), h["udp_port"].as_u64().unwrap());
+        let group = "0123456789abcdef";
+        let inv = ok(json!({"op": "hub_invite", "id": hub, "group": group, "endpoints": [format!("127.0.0.1:{udp}")],
+            "lifetime": 600, "guest_port": window_port}));
+        let guest = inv["guest"].as_u64().unwrap();
+        let g = ok(json!({"op": "guest_start", "invite": inv["text"]}));
+        let mut through = TcpStream::connect(("127.0.0.1", g["port"].as_u64().unwrap() as u16)).unwrap();
+        through.write_all(b"hello").unwrap();
+        let (_in, from) = window.accept().unwrap();
+        let dialed = |port: u16, guest: u64| {
+            ok(json!({"op": "guest_dialed", "id": hub, "guest": guest, "port": port}))["through"].clone()
+        };
+        assert_eq!(dialed(from.port(), guest), true, "the hub's connection for its guest");
+        assert_eq!(dialed(from.port(), guest + 1000), false, "for another guest");
+        let other = TcpStream::connect(("127.0.0.1", window_port)).unwrap();
+        let (_in2, from2) = window.accept().unwrap();
+        assert_eq!(from2.port(), other.local_addr().unwrap().port());
+        assert_eq!(dialed(from2.port(), guest), false, "another program's connection");
+        ok(json!({"op": "guest_close", "id": hub, "guest": guest}));
+        assert_eq!(dialed(from.port(), guest), false, "a guest that is gone");
+        ok(json!({"op": "stop", "id": g["id"]}));
+        ok(json!({"op": "hub_stop", "id": hub}));
     }
 
     /// Stopping a tunnel ends a connection in use and closes its port.

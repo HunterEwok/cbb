@@ -58,7 +58,10 @@ struct JoinView: View {
             Button("Cancel") { model.cancelJoin() }
                 .buttonStyle(GlassButtonStyle())
         }
+        // A column a hand's width on a big screen, as a phone's.
+        .frame(maxWidth: Tokens.readableWidth)
         .padding(Tokens.spacingLarge)
+        .frame(maxWidth: .infinity)
         .task {
             if model.joiningInvite != nil { await model.joinByInvite() } else { await model.join() }
         }

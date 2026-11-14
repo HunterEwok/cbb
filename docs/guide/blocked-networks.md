@@ -34,8 +34,9 @@ A hub speaks AmneziaWG as soon as it is one:
 sudo cbb global hub 203.0.113.7:8764
 ```
 
-It makes the group's settings once, at random, and keeps them. On a network where nothing is
-blocked, plain WireGuard is a little faster:
+It makes the group's settings at random and changes them about once a month, telling the
+devices the next ones ahead of time. On a network where nothing is blocked, plain WireGuard
+is a little faster:
 
 ```sh
 sudo cbb global hub -no-obfuscate -no-vless 203.0.113.7:8764

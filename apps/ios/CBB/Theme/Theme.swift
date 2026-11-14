@@ -343,3 +343,9 @@ extension View {
         modifier(GlassCircle())
     }
 }
+
+extension Tokens {
+    /// The widest a column of text and buttons stands on a big screen, as
+    /// on the widest phone: the Start and Join screens.
+    static let readableWidth: CGFloat = 560
+}

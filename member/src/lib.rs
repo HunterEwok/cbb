@@ -213,8 +213,8 @@ Commands:
   pair -qr [-admin]       In a group: admit the new device that shows a code and waits;
                           type its code, or paste its QR code's text.
   pair -code [address]    Join with the code from cbb pair on the root or an admin.
-  pair -invite file       Join from afar with an invitation from cbb invite
-                          (its file, or its text cbb://invite#...).
+  pair -invite file|-     Join from afar with an invitation from cbb invite
+                          (its file, or with - its text pasted on standard input).
   invite [-for 1h] [-o file | -app FILE -answers FILE] [-hub DEVICE]
                           Invite a device from afar, on the root or an admin: shows a QR
                           code for the app and writes a file for a computer. Through the
@@ -346,6 +346,10 @@ pub fn main() {
                 "confirm-key" => confirm::register_cli(rest, &|q| {
                     request(&g, &control::Message::new(q, Vec::new())).map(|m| m.header)
                 }),
+                // Run by the installer as root.
+                "confirm-setup" => confirm::setup_cli(rest),
+                // Run by cbb itself as the user who ran it with sudo.
+                "own-command" => own_command_cli(rest),
                 "version" | "-version" | "--version" => {
                     // A build for tests only is never to be mistaken for a
                     // release: the time-scaled one's certificates last
@@ -451,6 +455,9 @@ const PAIR_USE: &str =
 
 fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     let mut name = host_name();
+    // -name and -caps as given, which a join through the running service
+    // takes in place of its own.
+    let (mut given_name, mut given_caps) = (None, None);
     // The service's own port, which its firewall rule opens (OpenWrt's
     // init script passes the one in /etc/config/cbb); out of a group the
     // service does not listen on it, so the phone finds cbb pair there.
@@ -464,8 +471,14 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
     while i < args.len() {
         let next = || args.get(i + 1).cloned().ok_or_else(|| Error::msg(tr!("{} needs a value", args[i])));
         match flag(&args[i]) {
-            Some("caps") if !for_next => caps = parse_caps(&next()?)?,
-            Some("name") => name = next()?,
+            Some("caps") if !for_next => {
+                caps = parse_caps(&next()?)?;
+                given_caps = Some(caps.clone());
+            }
+            Some("name") => {
+                name = next()?;
+                given_name = Some(name.clone());
+            }
             Some("port") => port = next()?.parse().context("the port is a number")?,
             Some("addr") => addrs.push(next()?),
             // -code [address:port], as Go's: the code from standard input,
@@ -496,10 +509,12 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
         Some(path) => Some(std::sync::Mutex::new(Some(open_app_file(path)?))),
         None => None,
     };
-    if invite.is_none() && code_addr.as_deref() == Some("") {
-        // As Go's joinWithCode: the service joins, by the window that mDNS
-        // finds, and keeps the identity it gets. With an address, cbb joins
-        // itself, into its state folder, before its service starts.
+    // As Go's joinWithCode: the service joins, by the window that mDNS finds
+    // or at the address given, and keeps the identity it gets, with its own
+    // -name and -caps unless cbb pair gives them. With an address and no
+    // service running, cbb joins itself, into its state folder, before its
+    // service starts.
+    if invite.is_none() && code_addr.as_ref().is_some_and(|a| a.is_empty() || service_answers(g)) {
         use std::io::IsTerminal;
         if std::io::stdin().is_terminal() {
             print!("{}", tr!("Pairing code: "));
@@ -508,7 +523,14 @@ fn join(g: &Global, args: &[String], for_next: bool) -> Result<()> {
         let mut line = String::new();
         std::io::stdin().read_line(&mut line).context("cannot read the code")?;
         let code = pair::normalize_code(line.trim())?;
-        let h = control::Header { op: "join".into(), code, ..Default::default() };
+        let h = control::Header {
+            op: "join".into(),
+            code,
+            address: code_addr.unwrap_or_default(),
+            name: given_name.unwrap_or_default(),
+            caps: given_caps,
+            ..Default::default()
+        };
         request(g, &control::Message::new(h, Vec::new()))?;
         println!("{}", tr!("Joined the group."));
         return Ok(());
@@ -719,13 +741,26 @@ pub(crate) fn watch_app_file(path: String) {
     });
 }
 
-/// Reads a remote invitation for cbb pair -invite, its file or its text
-/// (cbb://invite#..., as a scanned code gives it), and asks the user to
-/// agree that sync away from home goes on with the join; returns the path,
-/// empty for a text, and the invitation's text.
+/// Reads a remote invitation for cbb pair -invite, its file or with "-"
+/// its text (cbb://invite#..., as a scanned code gives it) on the first
+/// line of standard input, and asks the user to agree that sync away from
+/// home goes on with the join; returns the path, empty for a text, and the
+/// invitation's text. The text itself is never taken on the command line,
+/// where other users of the computer and the system's log see it.
 fn invite_consent(path: &str) -> Result<(String, String)> {
-    let (path, text) = if path.trim_start().starts_with(cbb_core::invite::PREFIX) {
-        (String::new(), path.to_string())
+    use std::io::IsTerminal;
+    let (path, text) = if path == "-" {
+        if std::io::stdin().is_terminal() {
+            print!("{}", tr!("Paste the invitation: "));
+            std::io::stdout().flush().ok();
+        }
+        let mut line = String::new();
+        std::io::stdin().read_line(&mut line).context("cannot read the invitation")?;
+        (String::new(), line.trim().to_string())
+    } else if path.trim_start().starts_with(cbb_core::invite::PREFIX) {
+        return Err(Error::msg(tr!(
+            "the invitation is a secret, so cbb takes it from its file or, with cbb pair -invite -, pasted on standard input, never on the command line"
+        )));
     } else {
         (path.to_string(), std::fs::read_to_string(path).context(format!("cannot read {path}"))?)
     };
@@ -959,6 +994,12 @@ fn hint(systemd: bool, systemctl: &str) -> String {
 }
 
 /// The member port of the running service, None when none answers.
+/// Whether a service answers on the control socket.
+fn service_answers(g: &Global) -> bool {
+    request(g, &control::Message::new(control::Header { op: "status".into(), ..Default::default() }, Vec::new()))
+        .is_ok()
+}
+
 fn service_port(g: &Global) -> Option<u16> {
     let m =
         request(g, &control::Message::new(control::Header { op: "status".into(), ..Default::default() }, Vec::new()))
@@ -977,8 +1018,26 @@ fn in_group(g: &Global) -> bool {
 pub(crate) fn request(g: &Global, m: &control::Message) -> Result<control::Message> {
     let mut m = m.clone();
     let conn = open(g, &mut m.header)?;
+    let res = send(conn, &m);
+    // Ending a mute another admin set is not this device's own matter: the
+    // service asks for the confirmation, which cbb gives and sends again.
+    match res {
+        Err(e)
+            if e.message() == confirm::UNAVAILABLE
+                && control::is_own_device_op(&m.header.op)
+                && m.header.auth.is_empty()
+                && confirm::supported() =>
+        {
+            confirm::prepare(&mut m.header, &|q| request(g, &control::Message::new(q, Vec::new())).map(|m| m.header))?;
+            send(connect(g)?, &m)
+        }
+        res => res,
+    }
+}
+
+fn send(conn: UnixStream, m: &control::Message) -> Result<control::Message> {
     let mut w = conn.try_clone().context("cannot reach the service")?;
-    control::write(&mut w, &m)?;
+    control::write(&mut w, m)?;
     let answer = control::Reader::new(conn).read()?.ok_or_else(|| Error::msg("the service closed the connection"))?;
     check(answer)
 }
@@ -1440,6 +1499,9 @@ fn cmd_action(g: &Global, args: &[String]) -> Result<()> {
             let h = control::Header { op: "action_remove".into(), name: name.clone(), ..Default::default() };
             let m = request(g, &control::Message::new(h, Vec::new()))?;
             grant(&m)?;
+            if !actions::PRESETS.contains(&name.as_str()) {
+                own_command(name, &[])?;
+            }
             println!("{}", tr!("{} is removed.", name));
             return Ok(());
         }
@@ -1493,8 +1555,57 @@ fn cmd_action(g: &Global, args: &[String]) -> Result<()> {
         }
         return Err(e.context(format!("giving the service the right to {}", a.name)));
     }
+    // The session's agent runs a command only when its user set it here.
+    if !a.command.is_empty() {
+        own_command(&a.name, &a.command)?;
+    }
     println!("{}: {}.", a.name, action_line(&a));
     Ok(())
+}
+
+/// Sets, or with none removes, this user's own command of the action name,
+/// which the agent of the user's session then runs.
+fn own_command(name: &str, command: &[String]) -> Result<()> {
+    let Some(dir) = actions::user_config_dir() else {
+        return Err(Error::msg(tr!(
+            "cannot find this user's settings folder, so the agent of the user's session would not run the command"
+        )));
+    };
+    // Under sudo the folder is another user's: cbb writes it as that user,
+    // never with root's rights.
+    #[cfg(unix)]
+    if let Some((uid, gid, home)) = actions::sudo_user() {
+        use std::os::unix::process::CommandExt;
+        let exe = std::env::current_exe().map_err(|e| Error::with("cannot find cbb", e))?;
+        let status = std::process::Command::new(exe)
+            .arg("own-command")
+            .arg(name)
+            .arg("--")
+            .args(command)
+            .env_clear()
+            .env("HOME", &home)
+            .env("PATH", "/usr/bin:/bin")
+            .current_dir("/")
+            .uid(uid)
+            .gid(gid)
+            .status()
+            .map_err(|e| Error::with("cannot run cbb as the user", e))?;
+        return if status.success() {
+            Ok(())
+        } else {
+            Err(Error::msg(tr!("cannot write the command in this user's settings folder")))
+        };
+    }
+    actions::set_own_command(&dir.join("cbb"), name, command)
+}
+
+/// cbb own-command NAME -- [COMMAND...]: what cbb runs as the user who ran
+/// it with sudo, to set (or with no command remove) the user's own command.
+fn own_command_cli(args: &[String]) -> Result<()> {
+    match args {
+        [name, sep, command @ ..] if sep == "--" && !name.is_empty() => own_command(name, command),
+        _ => Err(cli::usage("cbb own-command NAME -- [COMMAND...]")),
+    }
 }
 
 /// Writes or removes the polkit rule for the actions a status says are on;
@@ -1773,7 +1884,7 @@ fn cmd_update(g: &Global, args: &[String]) -> Result<()> {
         let healthy = |v: &str, within: Duration| update::wait_healthy(&status, v, within);
         let work =
             if root { work.clone() } else { std::env::temp_dir().join(format!("cbb-update-{}", std::process::id())) };
-        let _ = std::fs::create_dir_all(&work);
+        update::work_dir(&work)?;
         let link = ServiceLink(g);
         let u = update::Updater {
             work: work.clone(),

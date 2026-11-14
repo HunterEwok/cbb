@@ -147,7 +147,7 @@ fn keyboard_line(k: &Keyboard) -> String {
 }
 
 /// What cbb remote takes, as Go's remoteUsage.
-const REMOTE_USE: &str = "cbb remote [add [-appletv | -roku -consent] [-name NAME] ADDRESS | code CODE | cancel | remove TV | pastes TV on|off | type [-tv TV] [TEXT]]";
+const REMOTE_USE: &str = "cbb remote [add [-appletv | -roku -consent] [-name NAME] ADDRESS | code < CODE | cancel | remove TV | pastes TV on|off | type [-tv TV] [TEXT]]";
 
 /// cbb remote: shows the TVs this device is the remote of, pairs with one,
 /// sends the remote pastes to one, or types a text on one, as Go's
@@ -190,7 +190,21 @@ pub(crate) fn remote(g: &Global, args: &[String]) -> Result<()> {
                 h.value = "appletv".into();
             }
         }
-        ("code", [code]) => h.code = code.clone(),
+        // The TV's code from standard input, never the command line, as
+        // the other codes.
+        ("code", []) => {
+            use std::io::{IsTerminal, Write};
+            if std::io::stdin().is_terminal() {
+                print!("Code the TV shows: ");
+                std::io::stdout().flush().ok();
+            }
+            let mut line = String::new();
+            std::io::stdin().read_line(&mut line).context("cannot read the code")?;
+            h.code = line.trim().to_string();
+            if h.code.is_empty() {
+                return Err(usage(REMOTE_USE));
+            }
+        }
         ("remove", [tv]) => h.device = tv.clone(),
         ("pastes", [tv, on]) if on == "on" || on == "off" => (h.device, h.value) = (tv.clone(), on.clone()),
         ("type", r) if r.len() <= 1 => {
@@ -202,8 +216,8 @@ pub(crate) fn remote(g: &Global, args: &[String]) -> Result<()> {
     let m = request(g, &Message::new(h, payload))?;
     match verb.as_str() {
         "type" => println!("Typed."),
-        "add" if apple => println!("The Apple TV shows a PIN now: run cbb remote code PIN with it within two minutes."),
-        "add" if !roku => println!("The TV shows a code now: run cbb remote code CODE with it within two minutes."),
+        "add" if apple => println!("The Apple TV shows a PIN now: run cbb remote code and type it within two minutes."),
+        "add" if !roku => println!("The TV shows a code now: run cbb remote code and type it within two minutes."),
         _ => {
             let tvs: Vec<Tv> = m
                 .header

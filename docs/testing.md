@@ -193,6 +193,21 @@ A9 and U14 to U18).
   button's) contrast is measured on the screen's picture instead: its darkest and lightest
   pixels at least 4.5:1. The iPhone's Start screen scrolls rather than squeeze its texts. The
   audit looks only at what a person can reach.
+- The iPad (`PadUITests`, skipped on an iPhone): Home with a made-up group, which a debug
+  build starts with when launched with `-showcase` (`App/Showcase.swift`; nothing leaves the
+  app): the sidebar's sections, a tile's card beside the tiles, the arrows and Escape, a
+  settings part, Command-1, portrait, the card at the left in Arabic, and clipped text at the
+  largest size; each screen's picture is attached. Escape is sent as U+241B
+  (`XCUIKeyboardKey.simulatorEscape`): the simulator's keyboard has no key for `.escape`'s
+  "\u{1B}" and sends nothing for it.
+- In CI both run on GitHub's `xcode-27` image with Xcode 27.2 and the newest iOS, as on the
+  maintainers' Macs: Xcode 26.6's iOS 26.4 takes whole Devanagari and Chinese texts for clipped
+  (the clipped text check compares the first two and the last two letters' frames, which a
+  conjunct such as ग्स or a squeezed 「。」 at a line's end share).
+- The other big screens: on Android `TabletHomeTest` keeps the sidebar's sections across a
+  restart (their keys back to the same section); the HarmonyOS sidebar, keys and drops are
+  compiled and linted by `apps/harmony/check.sh`, and the Aurora layout by `qmllint`. None of
+  the three is yet run on a tablet.
 
 Screenshots are compared where a picture is the same on every machine that draws it: the
 tray window on Linux in the Noto fonts (`fonts-noto-core`, `fonts-noto-mono`,
@@ -346,6 +361,16 @@ these before the bench has run them.
 A failing test is a finding, never noise: find the cause before running it again. A test is
 never skipped, disabled or retried until green to make CI pass.
 
+## Known failures
+
+A step that fails for a reason outside the project, shown with evidence, is not skipped: it
+stays, wrapped in a strict expected failure (`XCTExpectFailure` with `isStrict`), so it is
+still run, it still fails the test the day it starts passing, and the tag `KNOWN-ISSUE(<release>)`
+finds it again (`git grep KNOWN-ISSUE`). What it checks is checked by hand until then. The owner
+decides each entry.
+
+No step is marked at the moment.
+
 ## Unstable tests
 
 A test that fails only now and then is a red test too, with a cause to find: a race in the
@@ -361,4 +386,4 @@ fix that removes the cause. The bench finds them too: `go run ./tools/bench -rep
 |---|---|---|---|
 | `TestSeveralHubs` | `internal/service` | about one run in six, 2026-11 | not yet found |
 | `TestAloneHubs` | `internal/service`, against the Rust service | about two runs in five in CI, 2026-11 | after the first hub stops, the client's tunnel connection to the second hub ends right after it comes up, and the copy made then is lost |
-| `TestWindow` | `apps/desktop`, Windows | rarely, 2026-11 | Chrome gave no DevTools port within 30 seconds; the test now prints Chrome's error output, to be read when it fails again |
+| `TestWindow` | `apps/desktop`, Windows and Linux | rarely: once on Linux in some 300 runs, 2026-11 | Chrome runs but gives no DevTools port within 30 seconds; on Linux its last line came 5 seconds after the start, after failed D-Bus calls to the desktop portal. The test now writes how long each start took to the job's summary and keeps the last 200 lines of Chrome's detailed log (`--v=1`), to be read when it fails again |

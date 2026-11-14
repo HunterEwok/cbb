@@ -318,6 +318,9 @@ fn save(r: &mut Reader<crate::sys::UnixStream>, dir: &Path, made: &mut Vec<PathB
             got += n;
         }
         f.sync_all().context(format!("cannot write {}", target.display()))?;
+        drop(f);
+        // From another device: the system checks it before it first opens.
+        crate::files::mark_download(&target)?;
     }
 }
 

@@ -133,11 +133,18 @@ impl Inner {
 
     /// Takes the devices' TLS connections.
     pub(super) fn accept_registrations(self: Arc<Self>, ln: TcpListener) {
+        let mut failed = super::server::AcceptErrors::default();
         for conn in ln.incoming() {
             if self.stopping() {
                 return;
             }
-            let Ok(conn) = conn else { continue };
+            let conn = match conn {
+                Ok(c) => c,
+                Err(e) => {
+                    failed.note(&self.cfg.log, "devices' connections", &e);
+                    continue;
+                }
+            };
             let from = addr_of(&conn);
             if !self.take_slot(from) {
                 let _ = conn.shutdown(Shutdown::Both);
@@ -164,7 +171,7 @@ impl Inner {
             }
         };
         // The device sends nothing more; reading tells when it goes.
-        let _ = raw.set_read_timeout(None);
+        tls.sock.clear();
         let mut buf = [0u8; 512];
         while !self.stopping() {
             match tls.read(&mut buf) {
@@ -182,19 +189,16 @@ impl Inner {
         self: &Arc<Self>,
         raw: &TcpStream,
         from: Option<IpAddr>,
-    ) -> Result<(Arc<Member>, rustls::StreamOwned<rustls::ServerConnection, TcpStream>)> {
+    ) -> Result<(Arc<Member>, rustls::StreamOwned<rustls::ServerConnection, wire::Deadline>)> {
         let wait = self.lock().setup_wait;
         let sock = raw.try_clone().map_err(|e| Error::msg(format!("relay: {e}")))?;
-        let _ = sock.set_read_timeout(Some(wait));
-        let _ = sock.set_write_timeout(Some(wait));
         let _ = sock.set_nodelay(true);
+        // One deadline for the whole setup: the handshake, the claim and the
+        // answer, however the device spaces its bytes.
+        let sock = wire::Deadline::new(sock, wait);
         let conn = rustls::ServerConnection::new(self.tls.clone()).map_err(|e| Error::msg(format!("relay: {e}")))?;
         let mut s = rustls::StreamOwned::new(conn, sock);
-        let deadline = std::time::Instant::now() + wait;
         while s.conn.is_handshaking() {
-            if std::time::Instant::now() >= deadline {
-                return Err(Error::msg("relay: the setup took too long"));
-            }
             s.conn.complete_io(&mut s.sock).map_err(|e| Error::msg(format!("relay: {e}")))?;
         }
         if s.conn.alpn_protocol() != Some(crate::relay::PROTOCOL) {
@@ -215,7 +219,7 @@ impl Inner {
         wire::write_frame(&mut s, &Challenge { e: e.as_bytes().to_vec(), roots: cred && !self.cfg.open }, MAX_CLAIM)?;
         let claim: Claim = serde_json::from_slice(&wire::read_frame(&mut s, MAX_CLAIM)?)
             .map_err(|_| Error::msg("relay: a claim that does not decode"))?;
-        let refuse = |s: &mut rustls::StreamOwned<rustls::ServerConnection, TcpStream>, msg: &str| {
+        let refuse = |s: &mut rustls::StreamOwned<rustls::ServerConnection, wire::Deadline>, msg: &str| {
             let _ = wire::write_frame(s, &Welcome { error: msg.to_string(), ..Welcome::default() }, MAX_CLAIM);
             Error::msg(msg.to_string())
         };
@@ -369,8 +373,8 @@ impl Inner {
             st.members.remove(&m.id);
             return Err(e);
         }
-        let _ = s.sock.set_write_timeout(None);
         let _ = s.sock.flush();
+        s.sock.clear();
         Ok((m, s))
     }
 }

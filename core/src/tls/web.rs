@@ -279,6 +279,18 @@ fn rsa_verify(padding: Padding, hash: Hash, key: &[u8], message: &[u8], sig: &[u
     if ok { Ok(()) } else { Err(InvalidSignature) }
 }
 
+/// Whether key is an RSA public key (PKCS #1 RSAPublicKey, DER) that
+/// verify_rsa_pkcs1_sha256 would take: a modulus of MIN_BITS to MAX_BITS
+/// and an odd exponent of 2 to 33 bits. A Windows Hello key is checked so
+/// when it is registered, rather than failing at each confirmation.
+pub fn rsa_public_key_ok(key: &[u8]) -> bool {
+    let Ok((n, e)) = rsa_key(key) else { return false };
+    (MIN_BITS..=MAX_BITS).contains(&bit_len(n))
+        && (2..=33).contains(&bit_len(e))
+        && e.last().is_some_and(|b| b & 1 == 1)
+        && n.last().is_some_and(|b| b & 1 == 1)
+}
+
 /// Whether sig is an RSASSA-PKCS1-v1_5 signature with SHA-256 of message by
 /// the RSA public key key (PKCS #1 RSAPublicKey, DER): how a Windows Hello
 /// key signs, which confirms an admin action on Windows (the lite member's
@@ -420,6 +432,7 @@ mod tests {
         bad[10] ^= 1;
         assert!(!verify_rsa_pkcs1_sha256(&key, msg, &bad));
         assert!(!verify_rsa_pkcs1_sha256(&key[1..], msg, &sig));
+        assert!(rsa_public_key_ok(&key));
     }
 
     fn algorithm(name: &str) -> &'static dyn SignatureVerificationAlgorithm {
@@ -518,5 +531,15 @@ mod tests {
         assert!(alg.verify_signature(&key(&n, &[1]), b"m", &[1; 256]).is_err());
         assert!(alg.verify_signature(&key(&n, &[1, 0, 1]), b"m", &[1; 255]).is_err());
         assert!(alg.verify_signature(&key(&n, &[1, 0, 1]), b"m", &n).is_err());
+        // The same rules when a Windows Hello key is registered.
+        assert!(rsa_public_key_ok(&key(&n, &[1, 0, 1])));
+        assert!(!rsa_public_key_ok(&key(&small, &[1, 0, 1])), "1024 bits");
+        assert!(!rsa_public_key_ok(&key(&n, &[1, 0, 0])), "an even exponent");
+        assert!(!rsa_public_key_ok(&key(&n, &[1])), "an exponent of 1");
+        let mut even = n.clone();
+        even[255] = 0x02;
+        assert!(!rsa_public_key_ok(&key(&even, &[1, 0, 1])), "an even modulus");
+        assert!(!rsa_public_key_ok(&key(&n, &[1, 0, 1])[1..]), "not DER");
+        assert!(!rsa_public_key_ok(&[]));
     }
 }

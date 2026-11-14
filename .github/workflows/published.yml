@@ -102,6 +102,91 @@ jobs:
           # shellcheck disable=SC2086 # $dry is one word or none
           git push $dry origin HEAD:main
 
+  docker:
+    # The image release.yml pushed as VERSION-unsigned gets its version, and
+    # latest unless it is a pre-release, only now: by the digest the signed
+    # release.json names, after release-sign verify checked it under the
+    # pinned roots. Pre-releases too.
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write # tag the image
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: tag the signed image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -o pipefail
+          rel="$RUNNER_TEMP/release"
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir "$rel"
+          for _ in $(seq 30); do
+            for f in keys.json stable.json; do
+              gh api -H "Accept: application/vnd.github.raw" "repos/$GITHUB_REPOSITORY/contents/$f?ref=channel" >"$rel/$f" || true
+            done
+            named=$(jq -r .body "$rel/stable.json" 2>/dev/null | base64 -d 2>/dev/null | jq -r .release 2>/dev/null || true)
+            [ "v$named" = "$GITHUB_REF_NAME" ] && break
+            sleep 20
+          done
+          go run ./tools/release-sign verify "$rel" | tee "$RUNNER_TEMP/verify.txt"
+          version=${GITHUB_REF_NAME#v}
+          # The signed manifest is of this tag's version, not another release's.
+          signed=$(head -n 1 "$RUNNER_TEMP/verify.txt" | cut -d ' ' -f 1)
+          if [ "$signed" != "$version" ]; then
+            echo "::error::the signed release.json is of $signed, the tag is $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+          want=$(sed -n 's/^docker //p' "$RUNNER_TEMP/verify.txt")
+          if [ -z "$want" ]; then
+            echo "::warning::the manifest names no Docker image; nothing is tagged"
+            exit 0
+          fi
+          case $want in
+          ghcr.io/hunterewok/cbb@sha256:*) ;;
+          *) echo "::error::the manifest names $want, not the project's image" >&2; exit 1 ;;
+          esac
+          image=${want%@*}
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          set -- -t "$image:$version"
+          # latest only moves forward, and never to a pre-release (any version
+          # with a "-", whatever the release says): a maintenance release of an
+          # older line gets its version, not latest.
+          case $version in
+          *-*) echo "latest stays: $version is a pre-release" ;;
+          *)
+            if inspected=$(docker buildx imagetools inspect "$image:latest" --format '{{json .Image}}' 2>"$RUNNER_TEMP/inspect.err"); then
+              current=$(printf '%s' "$inspected" |
+                jq -er 'if has("config") then .config.Labels["org.opencontainers.image.version"] else ([.[]][0].config.Labels["org.opencontainers.image.version"]) end')
+              case $current in
+              [0-9]*.[0-9]*.[0-9]*) ;;
+              *) echo "::error::the current latest names no version ($current)" >&2; exit 1 ;;
+              esac
+            elif grep -qi 'not found' "$RUNNER_TEMP/inspect.err"; then
+              current=
+            else
+              cat "$RUNNER_TEMP/inspect.err" >&2
+              echo "::error::cannot read the current latest" >&2
+              exit 1
+            fi
+            newest=$(printf '%s\n%s\n' "${current%%-*}" "$version" | sed '/^$/d' | sort -V | tail -n 1)
+            if [ -z "$current" ] || { [ "$newest" = "$version" ] && [ "$current" != "$version" ]; }; then
+              set -- "$@" -t "$image:latest"
+            else
+              echo "latest stays at $current, not older than $version"
+            fi
+            ;;
+          esac
+          docker buildx imagetools create "$@" "$want"
+          echo "tagged $want as $*"
+
   release-check:
     # The published release as a whole (the bench's I22): release-sign verify
     # checks the signed manifest against the files and SHA256SUMS, each file
@@ -109,6 +194,7 @@ jobs:
     # image ghcr.io serves under the version has the manifest's digest.
     # Pre-releases too.
     if: github.ref_type == 'tag'
+    needs: [docker]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -126,6 +212,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -o pipefail
           rel="$RUNNER_TEMP/release"
           gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir "$rel"
           # Releases, pre-releases too, go to the one channel, stable.

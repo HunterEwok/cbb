@@ -4,11 +4,12 @@
 // A device's details (docs/apps.md, Devices), the page Device and, on a big
 // screen, the pane beside Home's devices: its sync, and for an
 // admin its changes and commands: paste on it, rename, mute, freeze's thaw, make an admin (the root,
-// for a computer that offers an admin key), hand the group over (the root),
+// for a phone or a computer that offers an admin key), hand the group over (the root),
 // take the group over (an admin, from a lost root), remove. A removal by
 // the root is final, so the page asks first and says so.
 
 import { router } from '@kit.ArkUI';
+import { guardsLikeAPhone } from '../core/Keys';
 import { t } from '../core/Text';
 import { can, kind, line, mark, nameOf, role, status } from '../common/Devices';
 import { app } from '../model/AppModel';
@@ -18,7 +19,7 @@ import { BusyLine, ErrorText, PageTitle } from './Common';
 
 // Members take remote pastes, and the phones that type them on a keyboard
 // or into their own focus; an iPhone cannot.
-function takesPastes(d: DeviceInfo): boolean {
+export function takesPastes(d: DeviceInfo): boolean {
   return d.role === 'member' || (d.role === 'phone' && ['android', 'aurora', 'harmonyos'].includes(d.os ?? ''));
 }
 
@@ -168,14 +169,20 @@ export struct DeviceDetail {
               if (this.acts(this.device() as DeviceInfo)) {
                 if ((this.device() as DeviceInfo).root === true && !app.isRoot() && app.claimState.length === 0) {
                   this.action(t('device_take_over'), true, () => {
-                    this.confirm(t('device_take_over_confirm'), t('device_take_over'), () => {
+                    // Before this device becomes the group's main device: how well it guards the group.
+                    const weak = guardsLikeAPhone() ? '' : `\n\n${t('key_guard_weak')}`;
+                    this.confirm(t('device_take_over_confirm') + weak, t('device_take_over'), () => {
                       app.takeOver(this.deviceId);
                     });
                   })
                 }
-                if (app.isRoot() && can(this.device() as DeviceInfo, 'admin') && (this.device() as DeviceInfo).admin !== true) {
+                // The admin key comes from the device's hello: a computer's
+                // with the admin capability, or a phone's.
+                if (app.isRoot() && (this.device() as DeviceInfo).admin !== true &&
+                  ((this.device() as DeviceInfo).role === 'phone' || can(this.device() as DeviceInfo, 'admin'))) {
                   this.action(t('device_make_admin'), false, () => {
-                    this.confirm(t('device_make_admin_confirm'), t('device_make_admin'), () => {
+                    const phone = (this.device() as DeviceInfo).role === 'phone';
+                    this.confirm(t(phone ? 'device_make_admin_phone_confirm' : 'device_make_admin_confirm'), t('device_make_admin'), () => {
                       app.manage('make_admin', this.deviceId);
                     });
                   })

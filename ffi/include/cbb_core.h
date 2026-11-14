@@ -336,6 +336,16 @@ uint8_t *cbb_tunnel_relay(const uint8_t *request, size_t len, cbb_sign_fn sign, 
 uint8_t *cbb_tunnel_relay_credentials(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx,
                                       size_t *answer_len);
 
+/*
+ * Makes a hub of cbb_tunnel register with the forwarder with the period's
+ * hubs' credential, signed with the period's server key through sign and
+ * ctx, which stay valid until the hub stops or is given other credentials;
+ * an empty "credentials" goes back to the member certificate. The answer is
+ * as cbb_tunnel's.
+ */
+uint8_t *cbb_tunnel_hub_credentials(const uint8_t *request, size_t len, cbb_sign_fn sign, void *ctx,
+                                    size_t *answer_len);
+
 #ifdef __cplusplus
 }
 #endif

@@ -67,7 +67,7 @@ export class Admit {
     return text.trim().startsWith('cbb://join?');
   }
 
-  async admit(qr: string, member: Member, m: Membership, makeAdmin: boolean): Promise<void> {
+  async admit(qr: string, member: Member, m: Membership): Promise<void> {
     await this.close();
     this.error = '';
     this.device = '';
@@ -82,7 +82,7 @@ export class Admit {
       this.fail(key.failure as Failure);
       return;
     }
-    const request: Record<string, Object> = { 'qr': qr.trim(), 'public': key.ok.public, 'make_admin': makeAdmin };
+    const request: Record<string, Object> = { 'qr': qr.trim(), 'public': key.ok.public };
     if (!m.isRoot() && m.member.admin_ca !== undefined) {
       request['admin_ca'] = m.member.admin_ca;
     }

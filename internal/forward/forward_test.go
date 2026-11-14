@@ -1280,22 +1280,17 @@ func TestVLESSScansApart(t *testing.T) {
 	}
 }
 
-// A group's XHTTP path is the same after a restart, with the same key, and
-// another forwarder's key gives it another one.
+// TestGroupPathKept checks the group's own part of the XHTTP path: made
+// from its VLESS user ID, the same at each registration and after a
+// restart, and another for another ID. The values are the Rust core's
+// (vless::tests::the_path_of_a_user_id), so a hub knows the path of its
+// next ID.
 func TestGroupPathKept(t *testing.T) {
-	cert, _ := NewCert()
-	other, _ := NewCert()
-	path := func(c tls.Certificate) string {
-		f, err := Listen(Config{Listen: "127.0.0.1:0", Cert: c})
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer f.Close()
-		return f.groupPath("a group")
+	if p := tunnel.GroupPath("6f1c2b9e-3d4a-4f5b-8c7d-0e1f2a3b4c5d"); p != "FAf82MUKFMjUNz3SkIYXXw" || tunnel.CheckGroupPath(p) != nil {
+		t.Fatalf("path %q", p)
 	}
-	a, b, c := path(cert), path(cert), path(other)
-	if a != b || a == c || tunnel.CheckGroupPath(a) != nil {
-		t.Fatalf("paths %q, %q, %q", a, b, c)
+	if tunnel.GroupPath("0b6e7f10-2a3b-4c5d-9e8f-112233445566") != "mefvDB5qwj9eeFnyKOOk4A" {
+		t.Fatal("another ID")
 	}
 }
 

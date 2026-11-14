@@ -4,6 +4,7 @@ package tools.cbb
 
 import tools.cbb.kit.Member
 import tools.cbb.kit.PhoneHub
+import tools.cbb.kit.ServerCredentials
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -32,7 +33,11 @@ class HubOnPhoneTest {
             held = json
         }
 
+        /** The credentials the tunnel had when it registered. */
+        var credentialsAtRegister: Int? = null
+
         override fun register(endpoint: String, pin: String, chain: String, sign: (ByteArray) -> ByteArray, records: String, vlessID: String) {
+            credentialsAtRegister = credentials.size
             registered = listOf(endpoint, pin, chain)
             shown = records
             this.vlessID = vlessID
@@ -40,6 +45,12 @@ class HubOnPhoneTest {
 
         override fun setRecords(records: String) {
             shown = records
+        }
+
+        val credentials = CopyOnWriteArrayList<String>()
+
+        override fun setCredentials(serverKey: ByteArray, sign: (ByteArray) -> ByteArray, creds: String) {
+            credentials.add(creds)
         }
 
         var ways: String? = null
@@ -59,6 +70,7 @@ class HubOnPhoneTest {
                 override val secret = ByteArray(16)
                 override val expires = 0L
                 override fun admitted() {}
+                override fun dialed(port: Int) = true
                 override fun close() {}
             }
         }
@@ -169,6 +181,39 @@ class HubOnPhoneTest {
     }
 
     /** On with a forwarder: it offers the forwarder's endpoint, keeps the clients, and hands them and the records to the tunnel. */
+    /**
+     * The period's hubs' credential: set before the tunnel starts, it
+     * reaches the tunnel once it runs; the same again is no news, a new one
+     * reaches it, and none takes the hub back to its certificate.
+     */
+    @Test
+    fun registersWithTheHubsCredential() {
+        val tunnels = FakeTunnels()
+        val h = HubOnPhone(phone, tunnels, load = { null }, save = {})
+        h.turnOn("192.168.0.1 192.168.0.0/24")
+        h.setForwarder(HubState.Forwarder("203.0.113.9:8764", pin))
+        val one = ServerCredentials.Credential(byteArrayOf(1), byteArrayOf(2), byteArrayOf(3))
+        val two = ServerCredentials.Credential(byteArrayOf(4), byteArrayOf(5), byteArrayOf(6))
+        h.setCredentials(HubOnPhone.Credentials(byteArrayOf(9), { it }, listOf(one)))
+        h.start(group())
+        val t = tunnels.started.last()
+        assertEquals(1, t.credentials.size)
+        assertEquals("the tunnel registered before it had the credential", 1, t.credentialsAtRegister)
+        assertTrue(t.credentials[0], t.credentials[0].contains("\"body\""))
+        h.setCredentials(HubOnPhone.Credentials(byteArrayOf(9), { it }, listOf(one)))
+        assertEquals("the same credential went to the tunnel again", 1, t.credentials.size)
+        h.setCredentials(HubOnPhone.Credentials(byteArrayOf(9), { it }, listOf(two)))
+        assertEquals(2, t.credentials.size)
+        h.setCredentials(null)
+        assertEquals("", t.credentials.last())
+
+        // A new tunnel takes what is set now, and none is no news to it.
+        h.turnOff()
+        h.turnOn("192.168.0.1 192.168.0.0/24")
+        h.start(group())
+        assertTrue(tunnels.started.last().credentials.isEmpty())
+    }
+
     @Test
     fun servesWithAForwarder() {
         var saved: HubState? = null

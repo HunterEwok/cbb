@@ -133,9 +133,15 @@ func projectRelayFollows(ctx context.Context, r *Report, f *Fleet, timeout time.
 			}
 			nets = append(nets, n)
 		}
-		// The members trust the bench's release roots, from their start.
+		// The members trust the bench's release roots, from their start:
+		// copied in as root's file before the members meet any release (a
+		// file mounted from the host would be the bench user's, which cbb
+		// does not take).
 		for i := range members {
-			if members[i], err = f.AddWith(ctx, nets[i], []string{"-v", fd.roots + ":/feed/roots.pem:ro"}, "CBB_RELEASE_ROOTS=/feed/roots.pem"); err != nil {
+			if members[i], err = f.AddWith(ctx, nets[i], nil, "CBB_RELEASE_ROOTS=/feed/roots.pem"); err != nil {
+				return err
+			}
+			if err := fd.rootsTo(ctx, members[i]); err != nil {
 				return err
 			}
 		}

@@ -86,8 +86,9 @@ pub struct Join {
     code: String,
     clock: Clock,
     attempt: Option<Attempt>,
-    /// A remote invitation's secret, in place of the code.
-    secret: Option<Vec<u8>>,
+    /// A remote invitation's secret, in place of the code, and the group
+    /// it names, which the member must be of.
+    secret: Option<(Vec<u8>, String)>,
     /// The invitation's guest tunnel, whose loopback port the app dials.
     #[cfg(feature = "tunnel")]
     guest: Option<cbb_member::phone::GuestTunnel>,
@@ -271,7 +272,7 @@ impl Join {
             code: String::new(),
             clock: clock(),
             attempt: None,
-            secret: Some(inv.secret.clone()),
+            secret: Some((inv.secret.clone(), inv.group.clone())),
             guest: Some(guest),
             #[cfg(feature = "member")]
             announced: None,
@@ -304,7 +305,7 @@ impl Join {
             send: Vec<u8>,
         }
         let made = match &self.secret {
-            Some(secret) => Attempt::dialing_secret(&self.joiner, secret, &self.clock),
+            Some((secret, group)) => Attempt::dialing_secret(&self.joiner, secret, group, &self.clock),
             None => Attempt::listening(&self.joiner, &self.code, &self.clock),
         };
         answer(made.map(|mut a| {

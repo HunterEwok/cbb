@@ -1134,6 +1134,8 @@ jobs:
           rel="$RUNNER_TEMP/update"
           sh packaging/archive.sh "$RUNNER_TEMP/v061/cbb" linux amd64 "$rel"
           go run ./tools/release-sign drill -version 0.6.1 "$rel" "$RUNNER_TEMP/update.pem"
+          # cbb reads roots only from a file that root or its own user owns.
+          sudo chown root:root "$RUNNER_TEMP/update.pem"
           if CBB_RELEASE_DIR="$rel" cbb update -check 2>"$RUNNER_TEMP/err"; then echo "cbb update took a release the pinned roots did not sign" >&2; exit 1; fi
           grep -q 'keys.json' "$RUNNER_TEMP/err"
           export CBB_RELEASE_DIR="$rel" CBB_RELEASE_ROOTS="$RUNNER_TEMP/update.pem"
@@ -1155,6 +1157,7 @@ jobs:
           chmod 0755 "$RUNNER_TEMP/v062/cbb"
           sh packaging/archive.sh "$RUNNER_TEMP/v062/cbb" linux amd64 "$rel2"
           go run ./tools/release-sign drill -version 0.6.2 "$rel2" "$RUNNER_TEMP/update2.pem"
+          sudo chown root:root "$RUNNER_TEMP/update2.pem"
           if sudo CBB_RELEASE_DIR="$rel2" CBB_RELEASE_ROOTS="$RUNNER_TEMP/update2.pem" cbb update 2>"$RUNNER_TEMP/err"; then
             echo "cbb update kept a release whose service does not start" >&2
             exit 1
@@ -1724,7 +1727,11 @@ jobs:
       fail-fast: false
       matrix:
         device: [iPhone, iPad]
-    runs-on: macos-latest
+    # Xcode 27.2 and its newest iOS, as on the maintainers' Macs (docs/testing.md,
+    # "The apps' languages, accessibility and screenshots"): macos-latest has
+    # Xcode 26.6 at most, whose iOS 26.4 reports whole Devanagari and Chinese
+    # texts as clipped.
+    runs-on: xcode-27
     # The libraries and the build take about 15 minutes, and a slow runner
     # can spend 5 minutes booting a simulator for each of the retries
     # below. The languages' and accessibility's UI tests (ReadersUITests)
@@ -1734,24 +1741,41 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: the simulator boots while Rust builds
-        # A fresh runner's first boot spends minutes migrating its data; started
-        # here, the boot runs beside the Rust build, and test_on below finds the
-        # simulator up.
-        env:
-          DEVICE: ${{ matrix.device }}
-        run: |
-          # The first available iPhone or iPad simulator: the app is universal.
-          device=$(xcrun simctl list devices available -j | python3 -c '
-          import json, sys
-          devices = json.load(sys.stdin)["devices"]
-          print(next(d["udid"] for runtime, ds in devices.items() if "iOS" in runtime for d in ds if d["name"].startswith(sys.argv[1])))' "$DEVICE")
-          echo "SIMULATOR=$device" >>"$GITHUB_ENV"
-          xcrun simctl boot "$device" || true
+      - name: Xcode 27.2
+        run: sudo xcode-select -s /Applications/Xcode_27.2.app
       - name: the Rust build from this pull request's cache
         uses: ./.github/actions/rust-cache # zizmor: ignore[self-repository]
         with:
           name: ios-sim
+      - name: the simulator boots while Rust builds
+        # A fresh runner's first boot spends minutes migrating its data; started
+        # here, the boot runs beside the Rust build, and test_on below finds the
+        # simulator up. After the cache's key: the boot's disk work slowed the
+        # key's hashFiles past its 120 seconds on the xcode-27 image.
+        env:
+          DEVICE: ${{ matrix.device }}
+        run: |
+          # The same model as before on the newest iOS: an iPad Pro 13-inch,
+          # whose width holds the card beside the tiles in portrait, and the
+          # newest numbered iPhone Pro. The first iPad or iPhone in the list
+          # can be an iPad mini or another shape (seen on the xcode-27 image).
+          device=$(xcrun simctl list devices available -j | python3 -c '
+          import json, re, sys
+          devices = json.load(sys.stdin)["devices"]
+          def version(runtime):
+              return [int(n) for n in re.findall(r"\d+", runtime.rsplit(".", 1)[-1])]
+          model = {"iPad": r"iPad Pro 13-inch \(M(\d+)\)$", "iPhone": r"iPhone (\d+) Pro$"}[sys.argv[1]]
+          ios = sorted((r for r in devices if ".iOS-" in r), key=version, reverse=True)
+          for runtime in ios:
+              found = [(int(m.group(1)), d["udid"]) for d in devices[runtime] if (m := re.match(model, d["name"]))]
+              if found:
+                  print(max(found)[1])
+                  break
+          else:
+              sys.exit("no " + sys.argv[1] + " simulator: " + model)' "$DEVICE")
+          echo "simulator: $(xcrun simctl list devices | grep "$device")"
+          echo "SIMULATOR=$device" >>"$GITHUB_ENV"
+          xcrun simctl boot "$device" || true
       - name: build the Rust core, which the kit links
         # Only the simulator's library for this Mac's processor, which is all
         # the tests link; the phone core job builds every library of the
@@ -1820,8 +1844,12 @@ jobs:
                 -resultBundlePath "$RUNNER_TEMP/ios-$1.xcresult" \
                 "${sign[@]}" "${only[@]}" >"$log" 2>&1 &
               pid=$!
+              # Thirty minutes for the whole run: the iPad's UI tests alone
+              # take about 23 (every language's screens audited on the big
+              # screen), and a run killed before it ends loses its result
+              # bundle, pictures included.
               killed=
-              for second in $(seq 1200); do
+              for second in $(seq 1800); do
                 kill -0 "$pid" 2>/dev/null || break
                 if [ "$second" -ge 150 ] && ! grep -q "^Test Suite " "$log"; then killed=1; break; fi
                 sleep 1
@@ -1849,7 +1877,7 @@ jobs:
                 # long before the tail: show those lines first.
                 grep -E "error: |^Test Case .* failed" "$log" || true
                 tail -n 100 "$log"
-                [ -n "$killed" ] && echo "::error::the tests on $1 did not finish in 20 minutes"
+                [ -n "$killed" ] && echo "::error::the tests on $1 did not finish in 30 minutes"
                 return "$status"
               fi
               tail -n 30 "$log"
@@ -2840,6 +2868,8 @@ jobs:
           rel="$RUNNER_TEMP/update"
           sh packaging/archive.sh "$RUNNER_TEMP/alone-0.6.1/cbb" linux amd64 "$rel"
           go run ./tools/release-sign drill -version 0.6.1 "$rel" "$RUNNER_TEMP/update.pem"
+          # cbb reads roots only from a file that root or its own user owns.
+          sudo chown root:root "$RUNNER_TEMP/update.pem"
           # The pinned roots refuse the throwaway ones.
           if CBB_RELEASE_DIR="$rel" cbb update -check 2>"$RUNNER_TEMP/err"; then echo "cbb update took a release the pinned roots did not sign" >&2; exit 1; fi
           grep -q 'keys.json' "$RUNNER_TEMP/err"
@@ -2861,6 +2891,7 @@ jobs:
           chmod 0755 "$RUNNER_TEMP/alone-0.6.2/cbb"
           sh packaging/archive.sh "$RUNNER_TEMP/alone-0.6.2/cbb" linux amd64 "$rel2"
           go run ./tools/release-sign drill -version 0.6.2 "$rel2" "$RUNNER_TEMP/update2.pem"
+          sudo chown root:root "$RUNNER_TEMP/update2.pem"
           if sudo CBB_RELEASE_DIR="$rel2" CBB_RELEASE_ROOTS="$RUNNER_TEMP/update2.pem" cbb update 2>"$RUNNER_TEMP/err"; then
             echo "cbb update kept a release whose service does not start" >&2
             exit 1
@@ -3068,6 +3099,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: the admin PIN's rule (apps/silica/tests/pinrule_test.cpp)
+        run: |
+          c++ -std=c++17 -Wall -Wextra -Werror apps/silica/tests/pinrule_test.cpp -o "$RUNNER_TEMP/pinrule_test"
+          "$RUNNER_TEMP/pinrule_test"
       - name: room for the Platform SDK
         # The SDK takes about 10 GB; the runner's preinstalled toolchains
         # that this job does not use make room for it.

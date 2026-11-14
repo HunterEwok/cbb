@@ -361,6 +361,7 @@ fn once(cfg: &Arc<Config>, events: &Arc<dyn Events>, stop: &Arc<AtomicBool>) -> 
         next: Vec::new(),
         obfuscation: None,
         vless: None,
+        ..Default::default()
     };
     let log = {
         let events = events.clone();
@@ -649,10 +650,8 @@ impl Session {
         self.events.dial(&self.device(peer), ln.local_addr().map_err(io_err)?.port());
         let until = Instant::now() + DIAL_WAIT;
         let k = loop {
-            match ln.accept() {
-                Ok((k, _)) => break k,
-                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
-                Err(e) => return Err(io_err(e)),
+            if let Some(k) = accept_own(&ln, crate::tunnel::tcp_table).map_err(io_err)? {
+                break k;
             }
             if Instant::now() >= until || self.stop.load(Ordering::SeqCst) {
                 return Err(Error::msg(format!("the app did not take the connection to {}", self.device(peer))));
@@ -759,9 +758,68 @@ fn canonical_b64(s: &str, len: usize) -> bool {
     e.decode(s).is_ok_and(|b| b.len() == len && e.encode(&b) == s)
 }
 
+/// Takes a connection to ln, a loopback listener that does not block, when
+/// one of this process's user is waiting: the port is on the loopback, where
+/// every local user may connect, and another's connection is closed, so it
+/// neither takes the call nor ends the wait for the app's. table gives the
+/// kernel's tables of TCP sockets.
+fn accept_own(ln: &TcpListener, table: impl Fn() -> String) -> io::Result<Option<TcpStream>> {
+    let to = ln.local_addr().ok();
+    loop {
+        match ln.accept() {
+            Ok((k, from)) if crate::tunnel::own_user(&table(), from, to) => return Ok(Some(k)),
+            Ok((k, _)) => drop(k),
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => return Ok(None),
+            Err(e) => return Err(e),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The app's port for a dialed call takes this user's connection only.
+    #[test]
+    fn dialed_port_takes_its_own_user() {
+        let ln = TcpListener::bind("127.0.0.1:0").unwrap();
+        ln.set_nonblocking(true).unwrap();
+        assert!(accept_own(&ln, crate::tunnel::tcp_table).unwrap().is_none());
+        let c = TcpStream::connect(ln.local_addr().unwrap()).unwrap();
+        // Another user's connection, as the kernel's table would show it.
+        let hex = |a: SocketAddr| match a {
+            SocketAddr::V4(a) => format!("{:08X}:{:04X}", u32::from_ne_bytes(a.ip().octets()), a.port()),
+            _ => unreachable!(),
+        };
+        let (from, to) = (c.local_addr().unwrap(), ln.local_addr().unwrap());
+        let other = crate::sys::euid() + 1;
+        let table = move || {
+            format!(
+                "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n   0: {} {} 01 00000000:00000000 00:00000000 00000000 {other:5} 0 1 1\n",
+                hex(from),
+                hex(to)
+            )
+        };
+        // The stranger's connection is closed, never taken, and the wait goes on.
+        c.set_read_timeout(Some(Duration::from_millis(20))).unwrap();
+        let until = Instant::now() + Duration::from_secs(5);
+        loop {
+            assert!(accept_own(&ln, table).unwrap().is_none(), "a stranger's connection took the call");
+            if matches!((&c).read(&mut [0u8; 1]), Ok(0)) {
+                break;
+            }
+            assert!(Instant::now() < until, "a stranger's connection was not closed");
+        }
+        let _c2 = TcpStream::connect(ln.local_addr().unwrap()).unwrap();
+        let until = Instant::now() + Duration::from_secs(5);
+        loop {
+            if accept_own(&ln, crate::tunnel::tcp_table).unwrap().is_some() {
+                break;
+            }
+            assert!(Instant::now() < until, "this user's connection was not taken");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
 
     #[test]
     fn names_and_tickets() {

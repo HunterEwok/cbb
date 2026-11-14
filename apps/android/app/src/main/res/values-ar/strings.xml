@@ -34,6 +34,7 @@
     <string name="alert_stopped">المجموعة متوقفة: تتبادل أجهزتها سجلاتها فقط، دون حافظة، حتى يقرر جذر المجموعة.</string>
     <string name="alert_two_histories">وقّع %1$s سجلين بمفتاح واحد، كما يحدث مع مفتاح مسروق أو استعادة من نسخة احتياطية.</string>
     <string name="alert_unknown_devices">أجهزة غير معروفة هنا</string>
+    <string name="all_devices">كل الأجهزة</string>
     <string name="app_info">معلومات التطبيق</string>
     <string name="appearance">المظهر</string>
     <string name="arrange">ترتيب</string>
@@ -95,7 +96,9 @@
     <string name="copies">النسخ</string>
     <string name="copies_forward_only">يمرّرها، ولا يقرأ أيًّا منها</string>
     <string name="create_group">إنشاء مجموعة</string>
+    <string name="create_group_main_hint">الجهاز الذي ينشئ المجموعة يحفظ مفتاحها الرئيسي: الأفضل أن يكون جهازًا معك دائمًا، مثل هاتفك.</string>
     <string name="device_id">معرّف الجهاز</string>
+    <string name="devices">الأجهزة</string>
     <string name="error_action_refused">لم يشغّل الجهاز الإجراء.</string>
     <string name="error_arrangement">تبقى المربعات كما كانت: ذلك التغيير غير مناسب.</string>
     <string name="error_below_key_level">إعداد مفاتيح المشرفين في المجموعة لا يسمح لمفاتيح هذا الجهاز بأن تكون مشرفًا. غيّره في الإعدادات، مفاتيح المشرفين.</string>
@@ -162,6 +165,7 @@
     <string name="files_sent">أُرسل إلى الحواسيب، التي تجلبه الآن من هذا الهاتف.</string>
     <string name="filter_online">متصل</string>
     <string name="frozen">مجمّد</string>
+    <string name="group">المجموعة</string>
     <string name="group_hub">محور المجموعة</string>
     <string name="group_hub_in_use">محور المجموعة، قيد الاستخدام الآن</string>
     <string name="handed_body">سلّم الحاسوب الذي كان يحمل المجموعة إياها إلى هذا الهاتف. تولّها ليصبح هذا الهاتف جذر المجموعة؛ ويبقى الحاسوب في المجموعة.</string>
@@ -263,6 +267,7 @@
     <string name="join_title">الانضمام إلى مجموعة</string>
     <string name="join_tv">الانضمام إلى مجموعة هاتف</string>
     <string name="join_tv_hint">ينضم هذا التلفاز إلى مجموعة هاتفك: يعرض رمز QR، ويمسحه الهاتف.</string>
+    <string name="key_guard_weak">ليس لهذا الجهاز شريحة آمنة للمفاتيح أو مستشعر موثوق للبصمة أو للوجه: فهو كجهاز رئيسي للمجموعة يحميها أقل من هاتف لديه الاثنان.</string>
     <string name="key_level_body">أيّ الأجهزة يمكن أن تكون مشرفي المجموعة ومحاورها. المفاتيح في العتاد لا تغادر الجهاز أبدًا؛ ومن يحصل على مفتاح في ملف يمكنه نسخه. يبقى المشرفون الموجودون في المجموعة حتى تزيلهم.</string>
     <string name="key_level_files">المفاتيح في الملفات أيضًا</string>
     <string name="key_level_hardware">المفاتيح في العتاد</string>
@@ -342,6 +347,7 @@
     <string name="make_hub_reads">محور يقرأ النسخ</string>
     <string name="make_hub_refused">لم يصبح الحاسوب محورًا.</string>
     <string name="make_hub_title">جعل %1$s محورًا؟</string>
+    <string name="menu">القائمة</string>
     <string name="more">المزيد</string>
     <string name="move_earlier">نقل إلى الأمام</string>
     <string name="move_end">نقل إلى النهاية</string>
@@ -523,6 +529,7 @@
     <string name="share_files_title">إرسال إلى حواسيبك؟</string>
     <string name="share_forget">اسأل كل تطبيق من جديد</string>
     <string name="share_unknown_app">تطبيق</string>
+    <string name="shortcuts_hint">Ctrl+1 إلى 9 تفتح هذه الأقسام، وCtrl+N يضيف جهازًا، والأسهم تختار جهازًا، وEsc يغلق تفاصيله.</string>
     <string name="signature_n">التوقيع %1$d</string>
     <string name="signature_of">التوقيع %1$d من %2$d</string>
     <string name="source">الشيفرة المصدرية والترخيص (AGPL-3.0)</string>

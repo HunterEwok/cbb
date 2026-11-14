@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 1b77d3ce22fc -->
+<!-- source: 7d035f243dba -->
 # لوحات المفاتيح والتلفزيونات
 
 لمن يريد كتابة كلمة مرور طويلة أو رابط أو بحث في تلفزيون أو جهاز لوحي أو جهاز ألعاب أو حاسوب ليس عليه شيء من Copy Beyond Borders. يكتب أحد أجهزة مجموعتك النص هناك بوصفه لوحة مفاتيح أو جهاز التحكم عن بُعد للتلفزيون، عند نقرتك أو حين يرسل مشرف لصقًا عن بُعد.
@@ -62,14 +62,14 @@ echo 'the text' | sudo cbb keyboard type
 
 ```sh
 sudo cbb remote add -name living-room-tv living-room-tv.lan   # the TV shows a six-digit code
-sudo cbb remote code 123456              # within two minutes
+sudo cbb remote code                     # type 123456 within two minutes
 ```
 
 يقترن Apple TV بالطريقة نفسها، برمز PIN من أربعة أرقام يعرضه. على Apple TV، اضبط أولًا الإعدادات، ثم AirPlay وHomeKit، ثم السماح بالوصول على "الجميع على الشبكة نفسها": فمع "فقط الأشخاص الذين يشاركون هذا المنزل" يرفض كل اقتران.
 
 ```sh
 sudo cbb remote add -appletv -name lounge 192.168.1.30   # the Apple TV shows a four-digit PIN
-sudo cbb remote code 1234                # within two minutes
+sudo cbb remote code                     # type 1234 within two minutes
 ```
 
 ليس في Roku اقتران ولا تشفير: يعبر النص شبكتك المنزلية بصيغة HTTP عادية، لذلك لا يُضاف إلا حين تقول ذلك بـ `-consent`. على Roku اضبط أولًا الإعدادات، النظام، إعدادات النظام المتقدمة، التحكم بواسطة تطبيقات الجوال على مفعّل أو متساهل.

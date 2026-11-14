@@ -29,8 +29,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
     // TLS 1.3 with the exporter and ALPN: the app bundles conscrypt-android,
     // the tests use the JVM build, which has the same API.
-    compileOnly("org.conscrypt:conscrypt-openjdk-uber:2.8.0")
-    testImplementation("org.conscrypt:conscrypt-openjdk-uber:2.8.0")
+    compileOnly("org.conscrypt:conscrypt-openjdk-uber:2.9.0")
+    testImplementation("org.conscrypt:conscrypt-openjdk-uber:2.9.0")
     // The Rust core's C functions (Core.kt): the app bundles JNA's AAR with
     // its native parts, the tests use the JVM's jar.
     compileOnly("net.java.dev.jna:jna:5.19.1")

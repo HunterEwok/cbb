@@ -3,9 +3,11 @@
 
 // The phone's keys in HUKS (src/main/cpp/keys.cpp): the member key, and the
 // admin key, which asks for the user's face, fingerprint or PIN before each
-// signature through User Authentication Kit.
+// signature through User Authentication Kit; and whether the device guards
+// them as a phone does.
 
 import cbb from 'libcbb_napi.so';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { userAuth } from '@kit.UserAuthenticationKit';
 import { read, Result } from './Core';
 import { Errors } from './Errors';
@@ -54,4 +56,24 @@ export function setPrompt(title: string): void {
       }
     });
   });
+}
+
+// Whether this device guards its keys as a phone does (docs/apps.md, "Big
+// screens"): HUKS keeps them in the TEE, so it takes a fingerprint or face
+// sensor strong enough for ATL3, enrolled or not yet. One rule for phones
+// and tablets: such a device gets the phone's set; another one the
+// computer's, and the app says so before it becomes the group's main device.
+export function guardsLikeAPhone(): boolean {
+  const types: userAuth.UserAuthType[] = [userAuth.UserAuthType.FINGERPRINT, userAuth.UserAuthType.FACE];
+  for (const type of types) {
+    try {
+      userAuth.getAvailableStatus(type, userAuth.AuthTrustLevel.ATL3);
+      return true;
+    } catch (e) {
+      if ((e as BusinessError).code === userAuth.UserAuthResultCode.NOT_ENROLLED) {
+        return true;
+      }
+    }
+  }
+  return false;
 }

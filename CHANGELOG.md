@@ -22,10 +22,35 @@ made with 0.5 is set up again once. The details follow.
   failing when the whole grows more than 10% (docs/testing.md, "Firmware size").
 - Sealing is checked against the vector of draft-ietf-hpke-pq-05 for X-Wing with
   HKDF-SHA256 and ChaCha20-Poly1305, in Go and the Rust core.
+- The iPad has a Home of its own (docs/apps.md, "Big screens"): a sidebar with the group's
+  line and its switches, the devices' sections (all, needs attention, each collection) and the
+  settings' parts, the devices as tiles with the chosen one's card beside them, Command-1 to 9,
+  the arrows and Escape, a tile's menu that pastes and mutes, and text, pictures or files
+  dropped on a tile pasted on that device. A narrow window keeps the phone's page. The app is
+  no longer offered on a Mac or a Vision Pro as an iPad app.
+- Android tablets, foldables and wide windows get the iPad's Home: the sidebar (standing in
+  landscape, sliding in from the edge in portrait) with the devices' sections and the parts of
+  Settings, the tiles with the chosen device's details beside them, Ctrl+1 to 9, Ctrl+N,
+  Ctrl+F, the arrows and Esc, a right click for a tile's menu (which now also pastes on the
+  device and mutes it), and text, pictures or files dropped on a tile pasted there or beside
+  the tiles sent to the group. It starts from 600 dp instead of 720. An Android device
+  without its keys in secure hardware or without a strong fingerprint or face sensor says so
+  before it makes a group, restores one or takes one handed over.
+- The Aurora app on a tablet, or a phone turned on its side, shows the chosen device's card
+  beside the tiles, and on the widest screens a sidebar with all devices, the ones that need
+  attention, each collection and Settings. Making or restoring a group on Aurora says that
+  its keys, behind the app's PIN and no fingerprint, guard the group less well than a phone's.
+- HarmonyOS tablets and open foldables get the same Home: the sidebar (standing from 1040 vp,
+  sliding in behind ☰ below) with the devices' sections and the parts of Settings, the
+  chosen tile outlined beside its details, Ctrl+1 to 9, Ctrl+, Ctrl+N, the arrows and Esc, a
+  right click for a tile's menu, and drops on a tile pasted there or beside the tiles sent to
+  the group. A HarmonyOS device without a strong fingerprint or face sensor says so before it
+  makes a group, restores one or takes one over.
 - The app for HarmonyOS 5 and later (`apps/harmony`), in development: ArkTS around the same
   Rust core as the Aurora app, through a Node-API module (`libcbb_napi.so`), with the keys in
   HUKS and the admin key behind the user's face, fingerprint or PIN. It has the other phones'
-  screens: a new group, joining by QR code, as an admin or by an invitation, restoring, Home
+  screens: a new group, joining by QR code or by an invitation, always as a member (the root makes a phone an
+  admin later from its device page, with the admin key its hellos offer), restoring, Home
   with the tiles, the devices and the admin's actions, adding a device with Scan Kit,
   invitations, the recovery key and the takeover, the arrangement, the notifications, and
   why it does not sync; it sends with the system's Paste button and from the Share menu
@@ -98,11 +123,12 @@ made with 0.5 is set up again once. The details follow.
   of every app translated with its placeholders; screen reader names, contrast, large text and
   the keyboard; screenshot regressions of the tray window and the Android screens. Go's
   coverage floor is 80%, with new tests of cbb-helper's keyboard and TV remote.
-- The forwarder refuses the groups their operator lists after an abuse report:
+- The forwarder and the relay refuse the groups their operator lists after an abuse report:
   `refused-groups` next to the key (or `-refused FILE`), one group tag a line, read again
   within ten seconds of a change; a listed group is refused at registration and its devices
   already there are dropped, while every other group goes on. A broken list keeps the one
-  before. The terms of the public servers say so, in every language.
+  before, and so does a file missing at one reading only. The terms of the public servers say
+  so, in every language.
 - The monitor watches the traffic of cbb.tools: `cbb-traffic.timer` on the server publishes
   the totals of the last 24 hours at `/status/traffic.json`, and the monitor fails past 1 TB
   or when the file stops changing (docs/relay-budget.md, "Money and traffic").
@@ -1624,12 +1650,18 @@ made with 0.5 is set up again once. The details follow.
   period key in the Secure Enclave or the Keystore. Once the members' credential lists a
   phone's server key, the phone registers with a relay by the credentials too, under its
   pseudonym (`cbb_tunnel_relay_credentials`).
-- The hub takes a new WireGuard key for its clients with each period of the server
-  credentials (docs/protocol.md, section 11, "The hub's key"): its offers give the next key
-  three days ahead, then it serves with it and registers again with its forwarder, so the
-  forwarder cannot link the group's traffic from one month to the next by the hub's key. Go
-  members, the lite member and both phone apps try a hub with its next key too, so one that
-  was away when the hub moved on still reaches it.
+- The hub takes a new WireGuard key, new AmneziaWG settings and a new VLESS user ID for its
+  clients with each period of the server credentials (docs/protocol.md, section 11, "The
+  hub's key"): its offers always give the next ones ahead of time, and when a new period
+  comes the hub serves with them at once and registers again with its forwarder under it,
+  staying under the old period until then, so the forwarder cannot link the group's traffic
+  from one month to the next by any of these three (the hub's address and port, which it sees
+  with every packet, stay as the network gives them). The forwarder makes a group's XHTTP path
+  from its VLESS user ID, so the hub knows the next path too; a hub whose user ID the forwarder
+  already holds for another group takes a new one. The lite member and both phone apps try a
+  hub with its next key and settings too, so one that was away when the hub moved on still
+  reaches it; the phone kits take next settings only to the same forwarder, with the path made
+  for the next user ID, and obfuscation the tunnel accepts.
 - The test bench resets a Windows device itself: `uninstall.ps1 -Purge`, a check that it left
   nothing, and `install.ps1` from the build's zip, so a Windows VM needs no snapshot.
 - FreeBSD: release archives for amd64 and arm64, `get.sh` and an installer with an rc.d
@@ -1673,6 +1705,27 @@ made with 0.5 is set up again once. The details follow.
   `cbb.sh`.
 
 ### Changed
+- Members and phones read an address in one spelling before they order it or keep it as a
+  home address.
+- The phone apps hold their keys and data tighter. iPhone: "Sync clipboard" from Siri or a
+  shortcut and the Control Center switch run only on an unlocked phone, and the shortcut's
+  answer names the device a copy came from but not the copy; the root and admin keys sign
+  without asking only in the minutes after Face ID while the app stays at the front; the
+  group's file and the recovery sheet state their file protection. Android: the share sheet
+  and the clipboard read only what another app's provider hands over; the questions before
+  sending hide windows drawn over them and ignore taps through them; nothing of the app goes
+  into a backup or a transfer to a new phone; the Quick Settings tile asks to unlock first;
+  the launch extra `ShowErrorDetails` counts in debug builds only (the switch in Settings
+  stays); a release build does not sign with a group key that a debug build made without the
+  screen lock. A remote invitation's pairing window on a phone hub takes only the connections
+  its hub made for the invitation (docs/protocol.md, section 12). Aurora: the join QR code's
+  text reaches the log in debug builds only. The core's C functions all stop a panic, and
+  `cbb_qr_read` refuses a frame size that overflows before it reads the frame.
+- The Aurora app's admin PIN is at least six digits and none easy to guess (repeats, runs,
+  short patterns, palindromes, dates, common keypad PINs), checked as it is typed and by the key store;
+  a PIN set before still works. The admin token itself says whether its SO PIN was made
+  random, and the tries left come from its flags, so clearing the app's data neither stops
+  the PIN working nor shows a full seven tries.
 - `cbb` and `cbb-helper` build reproducibly: `packaging/build.sh` names the crates' sources
   from `/cargo`, the nightly workflow builds both twice in two folders and compares
   (`.github/reproducible.sh`), and `docs/own-build.md`, "Checking a release", says how
@@ -1731,6 +1784,37 @@ made with 0.5 is set up again once. The details follow.
   later), the member's hellos offer it, and the root's device page has "Make an admin" for
   phones; the member checks the admin CA of the root's admin message (`take_admin_ca`) before
   the app keeps it.
+- The hub and the open relay share their tunnels' connections: the hub holds at most 1024
+  at once and 8 for each client, half-open ones included, and the relay's tunnel holds the
+  devices' watches, their calls by group and by the address, network and provider each end
+  registered from, and connections being opened by the same sources; every client keeps its
+  first two connections whatever the others hold, and a connection the app ended is cut when
+  the client takes nothing of it for 10 s (docs/relay-budget.md). The relay raises its limit
+  of open files at start, holds no more tunnel connections than it allows and logs both;
+  its unit and the server compose file allow 65536. A hub checks a
+  handshake's `mac1` before its key exchange, asks for a cookie when many key exchanges come
+  at once, and shares them each second by network, wide network and provider, with a part
+  kept for its clients' rekeys, shared by address and network. A relay gives a registration's setup and each request one
+  deadline for the whole exchange. AmneziaWG junk stays within the settings' bounds.
+- A phone that is the group's hub registers with its forwarder by the period's hubs'
+  credential once that lists its server key, as a computer's hub does (`cbb_tunnel_hub_credentials`),
+  so the forwarder learns neither the phone nor the group; until then it registers with its
+  member certificate and the records.
+- A phone's port for a call it dialed through a relay takes connections of its own user only,
+  and the relay's tunnel port closes connections it did not make without holding up the
+  others.
+- Updates, bug reports and releases are hardened: the updater makes its work folder anew
+  unless it is its own and closed to others, and unpacks the archive as root's files; bug
+  reports filter more (addresses and host names inside a word, names in any case and as host
+  names, words in other scripts) and send a panic's kind and place without the values in its
+  message; `bug.cbb.tools` keeps 30 days of reports, answers 503 when full so the apps send
+  later, gives each IPv6 /64 and /48 a share of the day and limits each /64's rate; the Docker image gets its version, and `latest` only for a
+  newer release, after the release is signed with the offline key, and `release-sign publish` takes the image only
+  with the release workflow's attestation; OpenWrt's init script writes the interface list to
+  `/var/run/cbb.interfaces`; `get.ps1` downloads into a folder only administrators may change;
+  a kept revocation list of Android attestations still counts after a restart once it ran out;
+  test roots in `CBB_RELEASE_ROOTS` are taken only from a file others cannot change. The
+  cryptography page lists the sealed messages (HPKE with X-Wing) and their keys.
 - The README leads with what Copy Beyond Borders is in one sentence, sums up its status in
   three lines (the full table moved to docs/parity.md, "On real devices") and lists what it
   also does. The keyboards, the TV remotes, the Nano ESP32 and the ZX Spectrum Next are on
@@ -1812,11 +1896,29 @@ made with 0.5 is set up again once. The details follow.
   with the system's own prompt, checked by the service: Touch ID or the password on a Mac,
   polkit on Linux (with the fingerprint where it is set up), Windows Hello on Windows. One
   confirmation lasts five minutes for the group's everyday changes; making, leaving, taking
-  over or handing on a group, and making a device an admin, ask each time; muting or unmuting
-  the computer itself asks nothing. `cbb` run without `sudo` does the same, and the apps fall
-  back to the administrator's prompt where nothing else confirms. On Android one fingerprint,
-  face or screen lock now lets a new admin key sign for five minutes; the group's root key,
-  and keys made before, keep asking for each signature.
+  over or handing on a group, making a device an admin, admitting a device, joining a group,
+  a hub and sync away from home, taking remote pastes, and pairing a Bluetooth keyboard or a
+  TV's remote ask each time; muting the computer itself, or ending a mute it set, asks nothing
+  of the user surely at its screen. Each prompt names the action and its device,
+  a user has one prompt at a time, and a cancelled one makes the next wait. On a Mac each
+  action confirmed each time has a right of its own whose prompt the installer writes; on
+  Windows the service shows the action in the user's session, and the Windows Hello key signs
+  it. The installers
+  write the rights on a Mac and the polkit actions on Linux (`cbb confirm-setup`); on Windows
+  only an administrator of the PC confirms, checked at every confirmation, and
+  `cbb confirm-key -remove SID` removes a user's key. `cbb` run without `sudo` does the same,
+  and the apps fall back to the administrator's prompt where nothing else confirms. On
+  Android the app's own fingerprint, face or PIN prompt lets a new admin key sign for five
+  minutes, never on a locked phone; the group's root key, and keys made before, keep asking
+  for each signature.
+- `cbb pair -invite` takes the invitation from its file, or with `-` its text pasted on
+  standard input, never on the command line; `cbb remote code` reads the TV's code from
+  standard input.
+- A user's own quick action runs in the user's session only as that user set it:
+  `cbb action add` also writes the command to `own-actions.json` in the user's settings, as
+  that user also under `sudo`, and the agent refuses any other. Own actions added before need `cbb action add` again.
+- Files that `cbb paste -o` saves, and those the Mac app fetches for a remote paste, carry the
+  quarantine mark on a Mac and the Mark of the Web on Windows, as the Go member's did.
 - The release archives for Linux, FreeBSD, macOS and Windows carry `cbb` in Rust, with the Go
   programs `cbb-helper`, `cbb-forward` and `cbb-relay` beside it; the routers' MIPS archives carry
   `cbb` alone. The installers put the servers beside `cbb`, and `cbbw.exe` is the Rust program
@@ -2363,6 +2465,21 @@ made with 0.5 is set up again once. The details follow.
 - An admin phone pastes pictures and files on a device again: the iPhone and Android kits
   sign the paste command of kind `media` that names the group's copy, which they refused to
   build before.
+- Members given each other's addresses with `-peer` no longer reconnect to each other
+  several times a second: a member dialed a member it was connected to every second, and
+  when the member with the lower device ID did, its new connection replaced the old one on
+  the other side while it dropped the new one itself, so both ended. A member now remembers
+  which member it found at an address and leaves it alone while it is connected, and a
+  dialer keeps or drops its new connection by the same rule as the side that accepts it. A
+  member on one machine also took the address a dual-stack listener shows for 127.0.0.1
+  (`::ffff:127.0.0.1`) for one at home, so its dials to the loopback address replaced that
+  connection as a tunnel's would.
+- A root that got a member's key evidence over two connections at once signed two records
+  with the same number, which stopped the group as two histories of the root's key; a
+  member signs its records one at a time now.
+- `cbb pair -code ADDRESS` while the service runs joins through the service, as `cbb pair
+  -code` does, so the device takes the service's `-name` and capabilities (or those `cbb pair
+  -name` and `-caps` give); it joined by itself, under the computer's host name.
 - A hub that started serving in place of one above it ended its first clients' connections
   a moment later, when it made its key for the next period, and those clients then tried the
   hub above, which may be off, before it again. The hub makes those keys before it listens,
@@ -2373,6 +2490,31 @@ made with 0.5 is set up again once. The details follow.
   remote paste: its pages read a device's ID from a field the core's list does not have. An
   Aurora phone refuses a paste of pictures or files, which its Bluetooth keyboard cannot type,
   in place of typing the copy's ID.
+- Pairing and the member port hold up better on a busy home network: the member port
+  limits connections in their handshake per device as well as in all, and closes one that
+  sends nothing for 3 s; a pairing connection with no window open is answered after one small
+  frame; a pairing window counts only attempts that tried a code against its three, takes no
+  more guesses from one device once it is one short of closing, and lets an attempt that sends
+  nothing give way to the next; a device that listens to join takes no more attempts from a
+  device whose attempts keep ending without a code, gives a dialing member 10 s to prove the
+  code, and lets an attempt that proved nothing give way to the next (the Nano ESP32 has the
+  10 s too); a device's addresses count as one only within a global IPv6 /64, never the home
+  network's shared ones;
+  `cbb pair` with the six digits alone admits only when one device waits to join, and stops at
+  its first attempt; a device that joins by an invitation joins only the group the invitation
+  names (computers and phones); a connection that carries records only takes small frames;
+  commands run a few at a time per connection, and a command that fails badly frees its
+  place; the mDNS cache is checked ten times a second and starts again empty when it grows
+  past 1024 records or mDNS stops answering, pausing longer each time while that goes on; the
+  addresses of a connected member are kept as they are, new addresses never push out all
+  those known, and a goodbye by mDNS no longer stops dialing a device of the group
+  (docs/protocol.md, sections 4, 6 and 12).
+- A pairing code is drawn so that every code is as likely as any other; an admin key at
+  pairing must be new to the group's device keys, every root's key (the group CA's too) and
+  the recovery key; an admission
+  whose Welcome cannot be sent adds no device record.
+- The tray app runs `pkexec` and Windows PowerShell from the system's own folders, never by
+  their names; the service's `panic.json` is readable by the service alone.
 - A Rust `cbb` that started looking for its group by mDNS just after another device asked a
   member for its TXT record could find that member without one, take it for another group's
   and never dial it. It now asks the members for their records again, a little later each

@@ -5,6 +5,7 @@ package tunnel
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -76,6 +77,17 @@ func CheckGroupPath(p string) error {
 		return fmt.Errorf("tunnel: vless: %q is not a group's path", p)
 	}
 	return nil
+}
+
+// GroupPath returns the group's own part of the XHTTP path for its VLESS
+// user ID id (docs/protocol.md, section 13, "VLESS"): the first 16 bytes of
+// SHA-256 over "cbb group path", a zero byte and the ID, in unpadded
+// base64url. It is unknown to anyone who does not know the ID, and a hub
+// knows the path of its next ID before it registers it (section 11, "The
+// hub's key"); the Rust core's vless::group_path is the same.
+func GroupPath(id string) string {
+	sum := sha256.Sum256([]byte("cbb group path\x00" + id))
+	return base64.RawURLEncoding.EncodeToString(sum[:16])
 }
 
 // RegistrationPath returns the XHTTP path a hub registers on: p without the

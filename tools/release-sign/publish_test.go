@@ -23,8 +23,10 @@ type fakeGitHub struct {
 	dir      string
 	drafts   map[string]bool
 	attested bool
-	branch   bool
-	commits  int
+	// unattested are the subjects without the attestation.
+	unattested map[string]bool
+	branch     bool
+	commits    int
 }
 
 func newFakeGitHub(t *testing.T) *fakeGitHub {
@@ -104,7 +106,7 @@ func (g *fakeGitHub) run(args ...string) ([]byte, error) {
 		}
 		return nil, nil
 	case args[0] == "attestation":
-		if !g.attested {
+		if !g.attested || g.unattested[args[2]] {
 			return nil, errors.New("verification failed")
 		}
 		return nil, nil
@@ -360,6 +362,21 @@ func TestPublish(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(g.release("v0.6.2"), "release.json")); err == nil {
 		t.Error("uploaded after a failed attestation")
+	}
+	// Refused: an image the notes name without the release workflow's
+	// attestation, and a name that is not the project's image.
+	g.attested = true
+	img := "ghcr.io/hunterewok/cbb@sha256:" + strings.Repeat("ab", 32)
+	g.unattested = map[string]bool{"oci://" + img: true}
+	if pub("-version", "0.6.2") == nil {
+		t.Error("signed an image without its attestation")
+	}
+	g.unattested = nil
+	if pub("-version", "0.6.2", "-docker", "example.org/cbb@sha256:"+strings.Repeat("ab", 32)) == nil {
+		t.Error("signed another image")
+	}
+	if _, err := os.Stat(filepath.Join(g.release("v0.6.2"), "release.json")); err == nil {
+		t.Error("uploaded after a refused image")
 	}
 }
 

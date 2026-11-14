@@ -119,7 +119,7 @@ deletes them too.
 |---|---|---|---|
 | The service runs | `/etc/init.d/cbb status` | `service cbb status` | `systemctl status cbb` |
 | The group and the devices it sees | `cbb status` | `cbb status` | `cbb status` |
-| The interfaces it works on | `cat /var/run/cbb/interfaces` | `grep CBB_INTERFACES /var/log/messages` | `journalctl -u cbb \| grep CBB_INTERFACES` |
+| The interfaces it works on | `cat /var/run/cbb.interfaces` | `grep CBB_INTERFACES /var/log/messages` | `journalctl -u cbb \| grep CBB_INTERFACES` |
 | The firewall rules | `nft list ruleset \| grep cbb`; empty with only `lan`, which needs none | `pfctl -a cbb -s rules`, or `ipfw set 17 show` | as [the installer](../guide/install.md#the-firewall) reports them |
 | The log | `logread -e cbb` | `grep cbb /var/log/messages` | `journalctl -u cbb` |
 

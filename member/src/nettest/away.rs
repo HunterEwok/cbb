@@ -146,6 +146,7 @@ fn relay_server(g: &Group) -> (crate::relayd::server::Relay, String) {
         limits: Default::default(),
         log: Arc::new(|_| {}),
         verbose: false,
+        refused: None,
     })
     .unwrap();
     (s, pin)

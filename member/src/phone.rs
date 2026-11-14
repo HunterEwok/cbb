@@ -1285,7 +1285,7 @@ impl Commands {
         } else {
             node.engine.unmute();
         }
-        mute::save(&self.state_dir, &node.engine)?;
+        mute::save(&self.state_dir, &node.engine, by)?;
         (self.log)(&match (on, until) {
             (false, _) => format!("cbb: {by} ended the mute: this device's copies reach the group again"),
             (true, 0) => format!("cbb: {by} muted this device until an admin unmutes it"),

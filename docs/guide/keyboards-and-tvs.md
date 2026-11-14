@@ -89,7 +89,7 @@ An Android TV or a Google TV pairs once:
 
 ```sh
 sudo cbb remote add -name living-room-tv living-room-tv.lan   # the TV shows a six-digit code
-sudo cbb remote code 123456              # within two minutes
+sudo cbb remote code                     # type 123456 within two minutes
 ```
 
 An Apple TV pairs the same way, with the four-digit PIN it shows. On the Apple TV, set
@@ -98,7 +98,7 @@ Settings, AirPlay and HomeKit, Allow Access to "Everyone on the Same Network" fi
 
 ```sh
 sudo cbb remote add -appletv -name lounge 192.168.1.30   # the Apple TV shows a four-digit PIN
-sudo cbb remote code 1234                # within two minutes
+sudo cbb remote code                     # type 1234 within two minutes
 ```
 
 A Roku has no pairing and no encryption: the text crosses your home network as plain HTTP,

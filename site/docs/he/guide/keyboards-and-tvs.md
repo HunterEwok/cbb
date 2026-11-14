@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- source: 1b77d3ce22fc -->
+<!-- source: 7d035f243dba -->
 # מקלדות וטלוויזיות
 
 למי שרוצה להקליד סיסמה ארוכה, קישור או חיפוש בטלוויזיה, בטאבלט, בקונסולה או במחשב שאין בהם שום דבר של Copy Beyond Borders. מכשיר אחד בקבוצה שלכם מקליד שם את הטקסט כמקלדת או כשלט של הטלוויזיה, כשאתם מקישים או כשמנהל שולח הדבקה מרחוק.
@@ -62,14 +62,14 @@ Android TV או Google TV מותאמים פעם אחת:
 
 ```sh
 sudo cbb remote add -name living-room-tv living-room-tv.lan   # the TV shows a six-digit code
-sudo cbb remote code 123456              # within two minutes
+sudo cbb remote code                     # type 123456 within two minutes
 ```
 
 Apple TV מותאם באותה דרך, עם קוד PIN בן ארבע ספרות שהוא מציג. קודם, ב-Apple TV, הגדירו הגדרות, AirPlay ו-HomeKit, אפשר גישה ל"כל מי שנמצא באותה רשת": עם "רק אנשים שמשתפים את הבית הזה" הוא מסרב לכל התאמה.
 
 ```sh
 sudo cbb remote add -appletv -name lounge 192.168.1.30   # the Apple TV shows a four-digit PIN
-sudo cbb remote code 1234                # within two minutes
+sudo cbb remote code                     # type 1234 within two minutes
 ```
 
 ב-Roku אין התאמה ואין הצפנה: הטקסט עובר ברשת הביתית שלכם כ-HTTP גלוי, ולכן הוא מתווסף רק כשאתם אומרים זאת במפורש עם `-consent`. ב-Roku, הגדירו קודם הגדרות, מערכת, הגדרות מערכת מתקדמות, שליטה על ידי אפליקציות לנייד ל"מופעל" או ל"מתירני".

@@ -16,7 +16,8 @@ page only lists. Why each choice was made is in the [design](design.md) and the
 - One curve for signatures: NIST P-256 with ECDSA and SHA-256, everywhere, since the
   phones' secure hardware (the Secure Enclave, Android's Keystore and StrongBox) and TPM 2.0
   all offer it.
-- Curve25519 only where the protocol requires it: CPace's suite and WireGuard.
+- Curve25519 only where the protocol requires it: CPace's suite, WireGuard and X-Wing (with
+  ML-KEM-768) for sealed messages.
 - TLS 1.3 only (RFC 8446), never an earlier version, on every TCP connection.
 - Randomness from the operating system's generator only (`crypto/rand`, `getrandom`,
   `SecRandomCopyBytes`, `SecureRandom`).
@@ -42,19 +43,22 @@ page only lists. Why each choice was made is in the [design](design.md) and the
 | AmneziaWG's header protection | ChaCha20 over the message header, nonce from the padding | AmneziaWG | 11 |
 | VLESS over XHTTP | TLS 1.3 to the web server in front of the forwarder, its certificate from a public CA | Xray-core, rustls | 11, 13 |
 | Hardware key proofs | Android Key Attestation, TPM 2.0 quotes and credential activation | Android, TCG | 17 |
+| Sealed messages: each copy's key to each reader, commands to their device, bug reports to the robot | HPKE in base mode with X-Wing (ML-KEM-768 and X25519, KEM 0x647a), HKDF-SHA256 and ChaCha20-Poly1305, info `cbb seal v1`, associated data of each use | RFC 9180, draft-connolly-cfrg-xwing-kem, FIPS 203 | 4, 15 |
+| Copies end to end | a random 32-byte key per copy; HKDF-SHA256 derives the payload key (`cbb copy payload v1`) and the blob key (`cbb copy blob v1`); ChaCha20-Poly1305 seals the content under the header hash, and the blob in 64 KiB segments | RFC 5869, RFC 8439 | 4 |
 
 ## Libraries
 
 | Implementation | Libraries |
 |---|---|
-| `cbb-helper` and the forwarder | the Go standard library (`crypto/tls`, `crypto/ecdsa`, `crypto/ecdh`, `crypto/hkdf`, `crypto/sha256`), `golang.org/x/crypto` (ChaCha20, BLAKE2s), amneziawg-go (copied under `internal/third_party`), gVisor's netstack (a module) with wireguard-go's adapter for it (`internal/third_party/netstack`), go-tpm for the TPM, go-libpcsclite (PC/SC through pcscd) and the platforms' PC/SC for the recovery key on a YubiKey, Xray-core for VLESS |
-| `cbb`, the relay and the phones' member | RustCrypto (`p256`, `sha2`, `hmac`, `x25519-dalek`, `chacha20poly1305`, `aes-gcm`, `x509-cert`), rustls without its default provider, GotaTun for WireGuard with `ring-shim/` over RustCrypto |
+| `cbb-helper` and the forwarder | the Go standard library (`crypto/tls`, `crypto/ecdsa`, `crypto/ecdh`, `crypto/hkdf`, `crypto/sha256`, `crypto/hpke` for sealed messages), `golang.org/x/crypto` (ChaCha20, BLAKE2s), amneziawg-go (copied under `internal/third_party`), gVisor's netstack (a module) with wireguard-go's adapter for it (`internal/third_party/netstack`), go-tpm for the TPM, go-libpcsclite (PC/SC through pcscd) and the platforms' PC/SC for the recovery key on a YubiKey, Xray-core for VLESS |
+| `cbb`, the relay and the phones' member | RustCrypto (`p256`, `sha2`, `hmac`, `x25519-dalek`, `chacha20poly1305`, `aes-gcm`, `x509-cert`), the `hpke` crate with its X-Wing KEM for sealed messages (`core/src/seal.rs`), rustls without its default provider, GotaTun for WireGuard with `ring-shim/` over RustCrypto |
 | The iPhone kit | swift-crypto (CryptoKit's API, BoringSSL on Linux), the Security framework for the keychain and the Secure Enclave, Network.framework for TLS |
 | The Android kit | `java.security` and `javax.crypto`, the Android Keystore, its own X25519 and CPace in Kotlin (`Field25519.kt`, `CPace.kt`), checked against the Go code by the interop vectors |
+| The phones' sealed messages | the Rust core's (`core/src/seal.rs`) through `ffi/`, for copies and commands alike |
 | The phones' tunnel | `cbb`'s (`ffi/src/tunnel.rs`): GotaTun for WireGuard with `ring-shim/` over RustCrypto, rustls for VLESS with XHTTP |
 
-The interop vectors in `testdata/interop` pin the bytes of each signed object and of a
-CPace exchange, so the four implementations cannot drift apart ([testing](testing.md)).
+The interop vectors in `testdata/interop` pin the bytes of each signed object, of a
+CPace exchange and of sealed messages (`seal-go.json`, `seal-rust.json`), so the four implementations cannot drift apart ([testing](testing.md)).
 Two come from outside the project, so that the implementations cannot agree on a mistake:
 CPace is checked against the vectors of draft-irtf-cfrg-cpace-21, and sealing (HPKE with
 X-Wing, KEM `0x647a`) against the vector of draft-ietf-hpke-pq-05 for the same suite
@@ -75,6 +79,9 @@ X-Wing, KEM `0x647a`) against the vector of draft-ietf-hpke-pq-05 for the same s
 | Release and status keys | ECDSA P-256 | the maintainer | the maintainer's Secure Enclave, never CI | named in `keys.json`, at most 100 days per signature |
 | Pairing secrets | the six-digit code, CPace's scalars | for one attempt | memory only | the window, 5 minutes |
 | Invitation secret | at least 16 random bytes | the hub, for `cbb invite` | the invitation file (`.cbbinvite`, mode 0600) and the hub's memory | the invitation, 1 hour by default, at most 24 hours |
+| Key for sealed messages | X-Wing: a 32-byte secret, a 1216-byte public key that the root puts in the device record (`seal`, section 10) | each device that reads copies or takes commands | on a computer `seal.json` beside the identity, sealed by the TPM where there is one, else readable only by the service; the phone's protected app storage | until the device leaves the group |
+| A copy's key | 32 random bytes | the device that copies, for each copy | only sealed to each reader, in the copy's wraps | the copy |
+| The robot's key | X-Wing, as above | the maintainer (`cbb-bug keygen`) | the secret on the robot's computer, never on cbb.tools; the public key in the build (`ROBOT_KEY_B64`) | until replaced in a release |
 
 The lifetimes are in [limits](reference/limits.md#certificates-and-keys); where each system keeps the
 files is in [devices, ports and files](reference/devices.md). The key levels (which keys

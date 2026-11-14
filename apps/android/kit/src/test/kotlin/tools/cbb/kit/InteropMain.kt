@@ -227,6 +227,8 @@ private fun inviteWindow(secret: ByteArray, yes: Boolean) {
     }
     val window = InvitationWindow(
         memberKey.keyPair.private, group.memberCert, now.plusSeconds(60),
+        // Go's joiner dials the window itself, without a hub in between.
+        fromGuest = { true },
         admit = { t, joinerCert, sid -> group.admit(t, "", joinerCert, sid, caSigner, Instant.now(), invitation = invitation) },
         onEnd = { ended.add(it) },
         onError = { ended.add(Result.failure(it)) },

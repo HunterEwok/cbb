@@ -268,6 +268,10 @@
 <context>
     <name>ChangePinDialog</name>
     <message>
+        <source>At least six digits, and not an easy one such as 123456 or 111111.</source>
+        <translation>לפחות שש ספרות, ולא קוד קל כמו 123456 או 111111.</translation>
+    </message>
+    <message>
         <source>Change</source>
         <translation>שינוי</translation>
     </message>
@@ -369,14 +373,11 @@
     </message>
 </context>
 <context>
-    <name>DeviceItems</name>
+    <name>DeviceCard</name>
     <message>
-        <source>%1 of %2 online</source>
-        <translation>%1 מתוך %2 מחוברים</translation>
+        <source>Close</source>
+        <translation>סגירה</translation>
     </message>
-</context>
-<context>
-    <name>DevicePage</name>
     <message>
         <source>Device ID</source>
         <translation>מזהה מכשיר</translation>
@@ -503,6 +504,13 @@
     </message>
 </context>
 <context>
+    <name>DeviceItems</name>
+    <message>
+        <source>%1 of %2 online</source>
+        <translation>%1 מתוך %2 מחוברים</translation>
+    </message>
+</context>
+<context>
     <name>DeviceTile</name>
     <message>
         <source>Mute for 15 minutes</source>
@@ -544,10 +552,6 @@
         <source>Turn sync on</source>
         <translation>הפעלת הסנכרון</translation>
     </message>
-    <message>
-        <source>Unmute</source>
-        <translation>ביטול השתקה</translation>
-    </message>
 </context>
 <context>
     <name>Errors</name>
@@ -558,6 +562,10 @@
     <message>
         <source>Another device answered at the code's address. Scan the code again.</source>
         <translation>מכשיר אחר ענה בכתובת של הקוד. סרקו את הקוד שוב.</translation>
+    </message>
+    <message>
+        <source>Choose a PIN of at least six digits that is not easy to guess.</source>
+        <translation>בחרו PIN של שש ספרות לפחות שקשה לנחש.</translation>
     </message>
     <message>
         <source>Connect the phone to your home Wi-Fi to join a group.</source>
@@ -877,8 +885,8 @@
         <translation>לא זה</translation>
     </message>
     <message>
-        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite with its text. It works once, until %1.</source>
-        <translation>בטלפון חדש, פתחו את CBB, הקישו על הצטרפות בהזמנה וסרקו את הקוד. במחשב, הריצו cbb pair -invite עם הטקסט שלה. היא פועלת פעם אחת, עד %1.</translation>
+        <source>On a new phone, open CBB, tap Join with an invitation and scan the code. On a computer, run cbb pair -invite - and paste its text. It works once, until %1.</source>
+        <translation>בטלפון חדש, פתחו את CBB, הקישו על הצטרפות בהזמנה וסרקו את הקוד. במחשב, הריצו cbb pair -invite - והדביקו את הטקסט שלה. היא פועלת פעם אחת, עד %1.</translation>
     </message>
     <message>
         <source>Opening the invitation on the group's hub…</source>
@@ -1058,6 +1066,10 @@
         <translation>%1 מתוך %2 מחוברים</translation>
     </message>
     <message>
+        <source>All devices</source>
+        <translation>כל המכשירים</translation>
+    </message>
+    <message>
         <source>An admin muted this phone until %1: its copies do not reach the group.</source>
         <translation>מנהל השתיק את הטלפון הזה עד %1: העותקים שלו לא מגיעים לקבוצה.</translation>
     </message>
@@ -1120,6 +1132,10 @@
     <message>
         <source>Make a second phone an admin: add it to the group, then open it here and tap Make an admin. Tap to close.</source>
         <translation>הפכו טלפון שני למנהל: הוסיפו אותו לקבוצה, פתחו אותו כאן והקישו ״הפיכה למנהל״. הקישו לסגירה.</translation>
+    </message>
+    <message>
+        <source>Needs attention</source>
+        <translation>דורש תשומת לב</translation>
     </message>
     <message>
         <source>New collection…</source>
@@ -1268,6 +1284,10 @@
         <translation>מפתח השורש של הקבוצה נוצר ברכיב המאובטח של הטלפון ולעולם לא יוצא ממנו.</translation>
     </message>
     <message>
+        <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
+        <translation>למכשיר הזה אין שבב מאובטח למפתחות או חיישן אמין של טביעת אצבע או פנים: כמכשיר הראשי של הקבוצה הוא מגן עליה פחות טוב מטלפון שיש לו את שניהם.</translation>
+    </message>
+    <message>
         <source>This phone becomes the group's root: it adds the other devices by their QR codes and makes the phones that ask admins.</source>
         <translation>הטלפון הזה הופך לשורש של הקבוצה: הוא מוסיף את שאר המכשירים לפי קודי ה-QR שלהם והופך טלפונים שמבקשים לכך למנהלים.</translation>
     </message>
@@ -1345,8 +1365,12 @@
         <translation>PIN של מנהל</translation>
     </message>
     <message>
-        <source>CBB's own PIN, at least four digits. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
-        <translation>PIN משלו של CBB, לפחות ארבע ספרות. אל תשתמשו בקוד פתיחת הנעילה של הטלפון. הרכיב המאובטח של הטלפון בודק אותו לפני כל פעולת מנהל; שבעה קודים שגויים נועלים את מפתח המנהל לתמיד, ואיש אינו יכול לשחרר אותו.</translation>
+        <source>At least six digits, and not an easy one such as 123456 or 111111.</source>
+        <translation>לפחות שש ספרות, ולא קוד קל כמו 123456 או 111111.</translation>
+    </message>
+    <message>
+        <source>CBB's own PIN, at least six digits and not an easy one such as 123456. Do not use the phone's unlock code. The phone's secure element checks it before every admin action; seven wrong PINs lock the admin key for good, and no one can unlock it.</source>
+        <translation>PIN משלו של CBB, לפחות שש ספרות ולא קוד קל כמו 123456. אל תשתמשו בקוד פתיחת הנעילה של הטלפון. הרכיב המאובטח של הטלפון בודק אותו לפני כל פעולת מנהל; שבעה קודים שגויים נועלים את מפתח המנהל לתמיד, ואיש אינו יכול לשחרר אותו.</translation>
     </message>
     <message>
         <source>Choose the admin PIN</source>
@@ -1383,6 +1407,10 @@
     <message>
         <source>Wrong PIN. One try is left: the next wrong PIN locks the admin key for good.</source>
         <translation>PIN שגוי. נותר ניסיון אחד: ה-PIN השגוי הבא ינעל את מפתח המנהל לתמיד.</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Some tries are used up; seven wrong PINs lock the admin key for good.</source>
+        <translation>PIN שגוי. חלק מהניסיונות כבר נוצלו; שבעה קודים שגויים נועלים את מפתח המנהל לתמיד.</translation>
     </message>
     <message>
         <source>Wrong PIN. Tries left: %1.</source>
@@ -1484,6 +1512,10 @@
     <message>
         <source>The group is restored on this phone. It becomes the group's root when the waiting time ends, %1 h from now, unless the root cancels the claim.</source>
         <translation>הקבוצה שוחזרה בטלפון הזה. הוא יהפוך לשורש הקבוצה כשזמן ההמתנה יסתיים, בעוד %1 שעות, אלא אם השורש יבטל את הבקשה.</translation>
+    </message>
+    <message>
+        <source>This device has no secure key chip or no strong fingerprint or face sensor: as the group's main device it guards the group less well than a phone that has both.</source>
+        <translation>למכשיר הזה אין שבב מאובטח למפתחות או חיישן אמין של טביעת אצבע או פנים: כמכשיר הראשי של הקבוצה הוא מגן עליה פחות טוב מטלפון שיש לו את שניהם.</translation>
     </message>
     <message>
         <source>This phone is the group's root now.</source>
@@ -1707,6 +1739,10 @@
     <message>
         <source>Version</source>
         <translation>גרסה</translation>
+    </message>
+    <message>
+        <source>Wrong PIN. Some tries are used up; seven wrong PINs lock the admin key for good.</source>
+        <translation>PIN שגוי. חלק מהניסיונות כבר נוצלו; שבעה קודים שגויים נועלים את מפתח המנהל לתמיד.</translation>
     </message>
     <message>
         <source>Wrong PIN. Tries left: %1.</source>
