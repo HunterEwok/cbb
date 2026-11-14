@@ -618,10 +618,11 @@ programs to the core:
 - **Nothing is silent.** A record the rooms turned away is reported with `would_take`'s
   reason, and a full room with `room_of`, never as a generic failure; in debug mode the
   numbers (cap, units held, the record's units) are shown under the message.
-- **Offering again changes nothing.** `insert_all` of records the set already took leaves it
-  as it was. Being settled: today a second offer can still change what the rooms keep; the
-  test `records_that_move_the_tiers_end_equal_whatever_the_order` in
-  `core/tests/read_records.rs` states the wanted result.
+- **Offering again changes nothing.** An insert or `insert_all` answers as the rooms'
+  judgment of what is held with what came, and what is held is that judgment of itself, so
+  `insert_all` of records the set already holds leaves it as it was. One member's end may
+  depend on the order it got records in, for a key past its cap; members agree at the end of
+  their exchange, which is why the driver sends while the digests differ.
 
 #### Until the switch to the core (wave 5)
 

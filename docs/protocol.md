@@ -1898,9 +1898,14 @@ of its own. Any other key has no room and keeps nothing. A record body is at mos
 
 A key keeps the longest start of its own order (below), in whole records, within its cap less
 what the checkpoints that may count keep first of it ("Tiers inside the rooms" gives the caps).
-Nothing is remembered between two judgments: what a set holds is what the caps keep of it, a
-live set and the same set restarted answer every record alike, and two members that give each
-other what they hold end equal once they hold the same root records.
+Nothing is remembered between two judgments. With f the caps' judgment of a set of records:
+what a set holds is f of it; an insert answers as f of what is held and the new record; a live
+set and the same set restarted are equal and answer every record alike; two members that give
+each other what they hold end equal; and a key whose records never pass its cap loses none, in
+any order. What one member ends with may depend on the order it got records in, but only for a
+key past its cap: a record that does not fit stops its key's run, and once dropped it stops
+nothing (`core/tests/rooms.rs` pins such a case). That pairwise exchange among more members
+ends is checked by search, not proved.
 
 #### The order inside a room
 
@@ -2713,9 +2718,9 @@ Of two copies of one body left out before the evaluation (the first five reasons
 different reasons, the reason first in byte order is kept.
 
 Empty fields are left out, as in signed bodies, so two implementations agree when their
-states are the same bytes. The state does not depend on the order in which records arrived;
-the vectors give each set in every order of its records (up to 8 records; in random orders
-beyond) and check the same bytes.
+states are the same bytes. The state of a given set of records does not depend on the order
+in which they arrived; the vectors give each set in every order of its records (up to 8
+records; in random orders beyond) and check the same bytes.
 
 ### Exchange in the member protocol
 
