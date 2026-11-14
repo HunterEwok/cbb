@@ -10,6 +10,13 @@ use p256::elliptic_curve::sec1::ToSec1Point as _;
 
 use super::*;
 
+/// A wrong management key: the factory key with one byte changed.
+fn wrong_key(n: u8) -> Vec<u8> {
+    let mut k = super::super::factory_management_key().to_vec();
+    k[0] ^= n;
+    k
+}
+
 const PIN: &str = "123456";
 const GENERATE: u8 = 0x47;
 const PUT_DATA: u8 = 0xdb;
@@ -46,6 +53,9 @@ struct Yubi {
     /// A command that fails, without effect: its INS and, for PUT DATA,
     /// the object.
     fail: Option<(u8, Option<[u8; 3]>)>,
+    /// Once SET MANAGEMENT KEY failed, PUT DATA fails too.
+    fail_after_set: bool,
+    set_failed: bool,
     touches: u32,
     made: u8,
 }
@@ -73,7 +83,7 @@ impl Yubi {
             version: Some(version),
             slot: None,
             objects: HashMap::new(),
-            mgmt: (alg, FACTORY_KEY.to_vec(), true),
+            mgmt: (alg, super::super::factory_management_key().to_vec(), true),
             forced_policy: None,
             verified: false,
             authed: false,
@@ -81,6 +91,8 @@ impl Yubi {
             writes: Vec::new(),
             put: Vec::new(),
             fail: None,
+            fail_after_set: false,
+            set_failed: false,
             touches: 0,
             made: 1,
         }
@@ -164,13 +176,18 @@ impl Yubi {
                 }
                 let (tag, rest) = read_tlv(data, 0x5c).unwrap();
                 let tag: [u8; 3] = tag.try_into().unwrap();
-                if self.fail == Some((ins, Some(tag))) {
+                if self.fail == Some((ins, Some(tag))) || (self.fail_after_set && self.set_failed) {
                     return sw(0x6581);
                 }
                 self.writes.push(ins);
                 self.put.push(tag);
                 let (v, _) = read_tlv(rest, 0x53).unwrap();
-                self.objects.insert(tag, v.to_vec());
+                // An empty value deletes the object.
+                if v.is_empty() {
+                    self.objects.remove(&tag);
+                } else {
+                    self.objects.insert(tag, v.to_vec());
+                }
                 ok(vec![])
             }
             SET_KEY => {
@@ -178,6 +195,7 @@ impl Yubi {
                     return sw(0x6982);
                 }
                 if self.fail == Some((ins, None)) {
+                    self.set_failed = true;
                     return sw(0x6581);
                 }
                 assert_eq!((p1, p2), (0xff, 0xff), "no touch asked for the management key");
@@ -286,7 +304,7 @@ fn asks_for_a_changed_key_three_times_at_most() {
     let mut asked = Vec::new();
     let mut ask = |n: u8| {
         asked.push(n);
-        Some(Zeroizing::new(if n == 3 { key.clone() } else { vec![7u8; 24] }))
+        Some(Zeroizing::new(if n == 3 { key.clone() } else { wrong_key(7) }))
     };
     assert_eq!(
         seal(&mut c, PIN, &secret(), &mut ask, true).unwrap(),
@@ -346,19 +364,19 @@ fn every_stop_comes_before_any_write() {
         (
             "a PIN-derived management key",
             Box::new(|y| {
-                y.mgmt = (ALG_3DES, vec![5; 24], false);
+                y.mgmt = (ALG_3DES, wrong_key(5), false);
                 y.objects.insert(ADMIN_DATA, tlv(0x80, &[tlv(0x81, &[0x00]), tlv(0x82, &[9; 16])].concat()));
             }),
             PIN_DERIVED,
         ),
-        ("three wrong management keys", Box::new(|y| y.mgmt = (ALG_3DES, vec![5; 24], false)), KEY_TRIES),
+        ("three wrong management keys", Box::new(|y| y.mgmt = (ALG_3DES, wrong_key(5), false)), KEY_TRIES),
     ];
     for (name, setup, want) in cases {
         let mut y = Yubi::new([5, 4, 3]);
         setup(&mut y);
         let before = (y.slot.as_ref().map(|s| point(&s.key)), y.objects.clone());
         let (mut c, y) = card(y);
-        let mut wrong = |_: u8| Some(Zeroizing::new(vec![6u8; 24]));
+        let mut wrong = |_: u8| Some(Zeroizing::new(wrong_key(6)));
         // With consent to replace a factory key too: the stops come first.
         let consent = name != "three wrong management keys";
         let err = seal(&mut c, PIN, &secret(), &mut wrong, consent).unwrap_err().to_string();
@@ -457,7 +475,7 @@ fn protected_now(y: &std::sync::Arc<std::sync::Mutex<Yubi>>) {
     g.authed = false;
     let key = g.mgmt.1.clone();
     assert!(!g.mgmt.2, "the card still reports its factory key");
-    assert_ne!(key, FACTORY_KEY.to_vec(), "the key is the factory one");
+    assert_ne!(key, super::super::factory_management_key().to_vec(), "the key is the factory one");
     assert_eq!(g.objects[&PRINTED], tlv(0x88, &tlv(0x89, &key)), "PRINTED does not hold the new key");
     drop(g);
     let mut c = Shared(y.clone());
@@ -513,7 +531,7 @@ fn without_consent_the_factory_key_stays_and_the_warning_goes_back() {
     assert_eq!(sealed, Sealed { default_key: true, replaced: false, warning: Some(DEFAULT_KEY) });
     let g = y.lock().unwrap();
     assert_eq!(g.writes, vec![GENERATE, PUT_DATA]);
-    assert_eq!(g.mgmt, (ALG_AES192, FACTORY_KEY.to_vec(), true));
+    assert_eq!(g.mgmt, (ALG_AES192, super::super::factory_management_key().to_vec(), true));
     assert!(!g.objects.contains_key(&PRINTED) && !g.objects.contains_key(&ADMIN_DATA));
     assert_eq!(g.objects[&OTHER], vec![0x70, 3, 9, 9, 9]);
 }
@@ -543,7 +561,11 @@ fn a_change_that_fails_halfway_leaves_the_card_usable() {
         assert!(seal(&mut c, PIN, &secret(), &mut never, true).is_err(), "{fail:?}");
         {
             let mut g = y.lock().unwrap();
-            assert_eq!(g.mgmt, (ALG_AES192, FACTORY_KEY.to_vec(), true), "{fail:?}: the key changed");
+            assert_eq!(
+                g.mgmt,
+                (ALG_AES192, super::super::factory_management_key().to_vec(), true),
+                "{fail:?}: the key changed"
+            );
             assert!(g.slot.is_none() && !g.objects.contains_key(&yk::OBJECT), "{fail:?}: sealed after a failure");
             assert_eq!(g.objects[&OTHER], vec![0x70, 3, 9, 9, 9]);
             g.fail = None;
@@ -565,4 +587,38 @@ fn the_texts_for_the_caller_name_what_they_warn_of() {
     assert!(DEFAULT_KEY.contains("factory management key") && DEFAULT_KEY.contains("PIN"));
     assert!(DUPLICATES.contains("YubiKey") && DUPLICATES.contains("sheet"));
     assert!(PRINTED_TAKEN.contains("management key"));
+}
+
+#[test]
+fn the_factory_management_key_is_yubicos() {
+    let hex: String = super::super::factory_management_key().iter().map(|b| format!("{b:02x}")).collect();
+    assert_eq!(hex, "0102030405060708".repeat(3));
+}
+
+/// A failed SET MANAGEMENT KEY puts PRINTED and ADMIN DATA back as they
+/// were, absent or with another tool's fields; when that fails too, the
+/// error says so.
+#[test]
+fn a_failed_key_change_puts_the_protected_place_back() {
+    let other_admin = tlv(0x80, &[tlv(0x81, &[0x01]), tlv(0x83, &[1, 2, 3, 4])].concat());
+    for admin in [None, Some(other_admin)] {
+        let mut y = Yubi::new([5, 7, 2]);
+        if let Some(a) = &admin {
+            y.objects.insert(ADMIN_DATA, a.clone());
+        }
+        y.fail = Some((SET_KEY, None));
+        let (mut c, y) = card(y);
+        let err = seal(&mut c, PIN, &secret(), &mut never, true).unwrap_err().to_string();
+        assert!(!err.contains("could not put back"), "{err}");
+        let g = y.lock().unwrap();
+        assert!(!g.objects.contains_key(&PRINTED), "PRINTED left behind");
+        assert_eq!(g.objects.get(&ADMIN_DATA), admin.as_ref(), "ADMIN DATA not put back");
+        assert_eq!(g.mgmt, (ALG_AES192, super::super::factory_management_key().to_vec(), true));
+    }
+    let mut y = Yubi::new([5, 7, 2]);
+    y.fail = Some((SET_KEY, None));
+    y.fail_after_set = true;
+    let (mut c, _) = card(y);
+    let err = seal(&mut c, PIN, &secret(), &mut never, true).unwrap_err().to_string();
+    assert!(err.contains("could not put back"), "{err}");
 }
