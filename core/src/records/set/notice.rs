@@ -102,10 +102,7 @@ pub struct RemovalWarning {
 impl RecordSet {
     /// The fixed cap of the room key's records go to.
     fn cap_of(&self, key: &KeyHash) -> Option<u64> {
-        // Until the fixed caps are in: the ceiling under the level the
-        // last judgment left, which is what the rooms allow today.
-        let k = self.room_key(key);
-        Some(self.ceiling(&k)?.min(self.cut.level(self.second.contains(&k))))
+        self.cap(key)
     }
 
     /// The room of a key that may sign records (the root, an admin key, a
