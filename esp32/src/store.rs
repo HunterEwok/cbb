@@ -143,7 +143,9 @@ impl Store {
         let a = s.read_slot(0)?;
         let b = s.read_slot(1)?;
         let newest = store::load(&a, &b).map_err(|store::Newer| {
-            Error::msg("the saved settings are of a newer firmware: flash it again, or erase the settings to start anew")
+            Error::msg(
+                "the saved settings are of a newer firmware: flash it again, or erase the settings to start anew",
+            )
         })?;
         if let Some(n) = newest {
             s.newest = Some((n.slot, n.seq));
