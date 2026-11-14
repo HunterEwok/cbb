@@ -988,7 +988,9 @@ the admin socket is out of reach, and the service takes it once confirmed:
 - **Linux**: two polkit actions of the same names, `auth_admin_keep` and `auth_admin`, for
   the active session only, which the installer writes to `/usr/share/polkit-1/actions`
   (`cbb confirm-setup`), owned by the service's user (`org.freedesktop.policykit.owner`), so
-  that polkit answers the service about another user's process. The service runs `pkcheck`
+  that polkit answers the service about another user's process. A service running as root
+  writes them itself at start; one that is not root never tries, and logs at start when they
+  are not set up for its user. The service runs `pkcheck`
   for the calling process: its ID and user from the kernel, and the start time `cbb` sends in
   `auth`, which polkit checks against the process itself; a start time after the connection
   came is refused, so a process that took the ID of one that connected and left is never asked

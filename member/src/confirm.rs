@@ -379,8 +379,10 @@ pub fn install(log: &dyn Fn(&str), state: &std::path::Path) {
         log(&format!("cbb: the rights that confirm admin actions: {}", e.for_log()));
     }
     #[cfg(target_os = "linux")]
-    if let Err(e) = linux::install(std::path::Path::new(linux::ACTIONS_DIR), &linux::service_user()) {
-        log(&format!("cbb: the polkit actions that confirm admin actions: {}", e.for_log()));
+    if let Some(line) =
+        linux::start_setup(std::path::Path::new(linux::ACTIONS_DIR), &linux::service_user(), crate::sys::is_root())
+    {
+        log(&line);
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     let _ = log;
@@ -543,17 +545,38 @@ mod linux {
     pub const ACTIONS_DIR: &str = "/usr/share/polkit-1/actions";
     const FILE: &str = "tools.cbb.admin.policy";
 
+    /// Whether polkit reads the actions for the service's user `owner`
+    /// already, or there is no polkit.
+    pub fn installed(dir: &Path, owner: &str) -> bool {
+        !dir.is_dir() || std::fs::read_to_string(dir.join(FILE)).is_ok_and(|have| have == super::polkit_policy(owner))
+    }
+
+    /// The service's part at start, once: as root it writes the actions;
+    /// otherwise it cannot write the system's files, so it never tries
+    /// (the installer's cbb confirm-setup writes them as root) and only
+    /// says when they are missing. The line to log, if any.
+    pub fn start_setup(dir: &Path, owner: &str, root: bool) -> Option<String> {
+        if root {
+            return install(dir, owner)
+                .err()
+                .map(|e| format!("cbb: the polkit actions that confirm admin actions: {}", e.for_log()));
+        }
+        (!installed(dir, owner)).then(|| {
+            format!(
+                "cbb: the polkit actions that confirm admin actions are not set up for {owner} in {}, so admin actions need the administrator: a service that is not root does not write them; root runs cbb confirm-setup {owner}",
+                dir.join(FILE).display()
+            )
+        })
+    }
+
     /// Writes the actions where polkit reads them, unless they are there
     /// already; nothing on a system without polkit.
     pub fn install(dir: &Path, owner: &str) -> Result<()> {
-        if !dir.is_dir() {
+        if installed(dir, owner) {
             return Ok(());
         }
         let path = dir.join(FILE);
         let want = super::polkit_policy(owner);
-        if std::fs::read_to_string(&path).is_ok_and(|have| have == want) {
-            return Ok(());
-        }
         let tmp = dir.join(format!(".{FILE}.{}", std::process::id()));
         std::fs::write(&tmp, &want).context(format!("cannot write {}", tmp.display()))?;
         std::fs::rename(&tmp, &path).map_err(|e| {
@@ -1726,11 +1749,36 @@ mod tests {
         assert_eq!(linux::verdict(Some(1), "not authorized").unwrap_err().message(), UNAVAILABLE);
         let dir = std::env::temp_dir().join(format!("cbb-polkit-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
+        assert!(!linux::installed(&dir, "cbb"));
         linux::install(&dir, "cbb").unwrap();
+        assert!(linux::installed(&dir, "cbb") && !linux::installed(&dir, "other"));
         assert_eq!(std::fs::read_to_string(dir.join("tools.cbb.admin.policy")).unwrap(), polkit_policy("cbb"));
         linux::install(&dir, "cbb").unwrap();
         std::fs::remove_dir_all(&dir).unwrap();
+        assert!(linux::installed(&dir, "cbb"));
         linux::install(&dir, "cbb").unwrap();
+    }
+
+    /// At start a root service writes polkit's actions; one that is not
+    /// root never writes them, does not fail, and says once where they are
+    /// missing, and nothing when they are there or there is no polkit.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn polkit_at_start() {
+        let dir = std::env::temp_dir().join(format!("cbb-polkit-start-{}", std::process::id()));
+        let file = dir.join("tools.cbb.admin.policy");
+        std::fs::create_dir_all(&dir).unwrap();
+        let line = linux::start_setup(&dir, "cbb", false).unwrap();
+        assert!(line.contains(&file.display().to_string()) && line.contains("cbb confirm-setup cbb"), "{line}");
+        assert!(!file.exists() && std::fs::read_dir(&dir).unwrap().next().is_none());
+        assert_eq!(linux::start_setup(&dir, "cbb", true), None);
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), polkit_policy("cbb"));
+        assert_eq!(linux::start_setup(&dir, "cbb", false), None);
+        assert!(linux::start_setup(&dir, "other", false).is_some());
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), polkit_policy("cbb"));
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(linux::start_setup(&dir, "cbb", false), None);
+        assert_eq!(linux::start_setup(&dir, "cbb", true), None);
     }
 
     /// The service asks polkit only about a process that says when it
