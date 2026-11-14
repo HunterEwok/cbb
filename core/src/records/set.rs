@@ -1180,9 +1180,11 @@ impl RecordSet {
             // What the judgment turned away is offered again, one by one: a
             // checkpoint that waits may have a place aside only once the
             // rooms let its prev go, as when the two come apart.
+            // Not what was refused (a broken record is verified once).
+            let no: BTreeSet<RecordId> = refused.iter().map(|(id, _)| *id).collect();
             for _ in 0..REOFFER_ROUNDS {
                 let again: Vec<(Record, Option<Mark>)> =
-                    batch.iter().filter(|(r, _)| !self.contains(&r.id())).cloned().collect();
+                    batch.iter().filter(|(r, _)| !self.contains(&r.id()) && !no.contains(&r.id())).cloned().collect();
                 let before = self.digest();
                 let aside = self.kept_aside.len();
                 for (r, mark) in again {
