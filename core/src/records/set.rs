@@ -15,7 +15,9 @@ use super::{Kind, MAX_NOTICES, Mark, Record, Rule, keep};
 use crate::identity::ExternalKey;
 
 mod notice;
-pub use notice::{ChangeArriving, Offer, RemovalWarning, Room, TurnedAway};
+pub use notice::{
+    AckOwed, AdminSilent, ChangeArriving, Offer, RemovalWarning, Room, RootRoomWaiting, TurnedAway, WaitingRemoval,
+};
 
 /// The rooms judged over what a set holds (`RecordSet::judge`).
 struct Judged {
