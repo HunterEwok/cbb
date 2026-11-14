@@ -121,6 +121,11 @@ pub struct RecordSet {
     /// The roots after the first that the recovery chain put on the path:
     /// they have a root's room.
     promoted: BTreeSet<KeyHash>,
+    /// The path of roots, in order: the group's root first.
+    path: Vec<KeyHash>,
+    /// The admin keys that are no longer admins when the rooms were last
+    /// judged: they share what the others leave (`keep::keep_tiers`).
+    second: BTreeSet<KeyHash>,
     /// The newest recovery record's cut, by each root before the current
     /// one: such a root keeps only the records its list names, narrowed by
     /// the current root's first checkpoint once it counted (`compact`).
@@ -292,8 +297,9 @@ impl RecordSet {
     pub fn new(root: Key, recovery: Recovery) -> RecordSet {
         let keys = Keys::new(&root, &recovery);
         let group = group_id(&root, &recovery);
+        let root_hash = root.hash();
         RecordSet {
-            root_hash: root.hash(),
+            root_hash,
             root,
             recovery,
             group,
@@ -301,6 +307,8 @@ impl RecordSet {
             units: BTreeMap::new(),
             cut: keep::Cut::default(),
             promoted: BTreeSet::new(),
+            path: alloc::vec![root_hash],
+            second: BTreeSet::new(),
             cuts: BTreeMap::new(),
             lists: BTreeMap::new(),
             waiting: None,
@@ -754,7 +762,10 @@ impl RecordSet {
         }
         // An older checkpoint is judged by the rooms after it is stored:
         // one that counts is kept first there, whatever came before it.
-        if !twin && !first && !wanted && !item.older && self.cut.past(&item) && !waits(self) {
+        // A root record that may change who is an admin is judged by the
+        // rooms after it is stored too (`eval::not_live`).
+        let tiers = self.moves_tiers(&r, role);
+        if !twin && !first && !wanted && !item.older && !tiers && self.cut.past(&item) && !waits(self) {
             // Its key dropped a record before it: it would not be kept.
             return Ok(Added::NoRoom);
         }
@@ -778,7 +789,7 @@ impl RecordSet {
         if early {
             self.settle();
         }
-        if self.needs_cut(&signer) {
+        if tiers || self.needs_cut(&signer) {
             self.cut();
         }
         let settles = !self.gaps.is_empty()
@@ -1125,7 +1136,7 @@ impl RecordSet {
             &lists,
             |id, root, from, settle| eval::first_gap(&held, &self.checkpoints, settle, id, root, from),
         );
-        let promoted = chain.promoted();
+        let path = chain.path(&self.root_hash);
         let mut cuts = chain.cuts();
         self.waiting = chain.waiting;
         self.gaps = chain.gaps.clone();
@@ -1170,7 +1181,7 @@ impl RecordSet {
             .map(|c| c.record)
             .filter(|r| self.halted.is_none() && self.cuts.values().next().map(|c| c.record) != Some(*r));
         let before = change.and_then(|r| self.held(&r).map(|x| x.body().seq)).map(|seq| (seq, self.state_before(seq)));
-        self.keep_by(promoted, cuts);
+        self.keep_by(path, cuts);
         // What waited for a root the chain now applies is taken; what
         // waited for a root no waiting record names any more (one side of
         // a fork, or a record that is no longer valid) is dropped.
@@ -1240,9 +1251,11 @@ impl RecordSet {
 
     /// Keeps by the roots promoted and the cuts: when they changed, the
     /// keys are learned again and the set's count starts again.
-    fn keep_by(&mut self, promoted: BTreeSet<KeyHash>, cuts: BTreeMap<KeyHash, Cut>) {
-        if promoted != self.promoted || cuts != self.cuts {
+    fn keep_by(&mut self, path: Vec<KeyHash>, cuts: BTreeMap<KeyHash, Cut>) {
+        let promoted: BTreeSet<KeyHash> = path.iter().skip(1).copied().collect();
+        if promoted != self.promoted || cuts != self.cuts || path != self.path {
             self.promoted = promoted;
+            self.path = path;
             self.cuts = cuts;
             // What the newest list drops goes first: an admin key only a
             // dropped record named is then no key of the set.
@@ -1297,6 +1310,21 @@ impl RecordSet {
             .collect();
         let mut items = items;
         let newest = keep::newest_only(&mut items, &firsts);
+        // Who is no longer an admin is read from the root records alone,
+        // before the rooms judge (`eval::not_live`).
+        let (second, back) = eval::not_live(
+            &self.path,
+            &self.cuts,
+            self.records
+                .values()
+                .filter(|e| !eval::off_cut(&self.cuts, &e.record))
+                .map(|e| (&e.record, self.role_of(e))),
+        );
+        eval::takes_back_first(&mut items, &back);
+        if second != self.second {
+            self.cut = keep::Cut::default();
+            self.second = second;
+        }
         // A room's newest checkpoint changed: the order in it changed, so
         // the rooms are judged again from no cut.
         if newest != self.newest {
@@ -1305,7 +1333,8 @@ impl RecordSet {
         }
         let ceilings: BTreeMap<KeyHash, Option<u64>> =
             items.iter().map(|it| (it.signer, self.ceiling(&it.signer))).collect();
-        let (kept, cut) = keep::keep_with(&items, |k| ceilings.get(k).copied().flatten(), &self.cut, &pre);
+        let (kept, cut) =
+            keep::keep_tiers(&items, |k| ceilings.get(k).copied().flatten(), &self.cut, &pre, &self.second);
         self.cut = cut;
         let drop: Vec<RecordId> = self
             .records
@@ -1745,6 +1774,26 @@ impl RecordSet {
     /// units fit: the record is kept as it is only when its key dropped
     /// nothing, stays within the level, and the shares, dropped units
     /// included, still fit.
+    /// Whether a root's record may change who is an admin: a removal, or
+    /// a device record whose admin key differs from another root record's
+    /// of the same device (`eval::not_live`).
+    fn moves_tiers(&self, r: &Record, role: Role) -> bool {
+        if role != Role::Root {
+            return false;
+        }
+        match &r.body().kind {
+            Kind::Revoke(_) => true,
+            Kind::Device(d) => {
+                let a = d.admin.as_ref().map(Key::hash);
+                self.records.values().any(|e| {
+                    self.role_of(e) == Role::Root
+                        && matches!(&e.record.body().kind, Kind::Device(o) if o.id() == d.id() && o.admin.as_ref().map(Key::hash) != a)
+                })
+            }
+            _ => false,
+        }
+    }
+
     fn needs_cut(&self, signer: &KeyHash) -> bool {
         // By room: the cut roots share one.
         let mut by_room: BTreeMap<KeyHash, u64> = BTreeMap::new();
@@ -1759,22 +1808,23 @@ impl RecordSet {
             return self.ceiling(signer).is_none_or(|c| units(signer) > c) || total > keep::room();
         }
         let Some(ceiling) = self.ceiling(signer) else { return true };
-        let level = self.cut.level();
-        if units(signer) > level.min(ceiling) {
+        // Each key at its tier's level (`keep::keep_tiers`).
+        let level = |k: &KeyHash| self.cut.level(self.second.contains(k));
+        if units(signer) > level(signer).min(ceiling) {
             return true;
         }
         let mut demand = 0u64;
         for (k, u) in &by_room {
             if let Some(c) = self.ceiling(k) {
                 let total = u.saturating_add(self.cut.dropped(k).unwrap_or(0));
-                demand = demand.saturating_add(total.min(c).min(level));
+                demand = demand.saturating_add(total.min(c).min(level(k)));
             }
         }
         for (k, u) in self.cut.dropped_all() {
             if !by_room.contains_key(k)
                 && let Some(c) = self.ceiling(k)
             {
-                demand = demand.saturating_add(u.min(c).min(level));
+                demand = demand.saturating_add(u.min(c).min(level(k)));
             }
         }
         demand > keep::room()
@@ -3033,9 +3083,9 @@ impl RecordSet {
     /// checkpoint resets the set's count. The cut takes state's, which the
     /// current root's first checkpoint narrows.
     pub(super) fn compact(&mut self, state: &State) -> usize {
-        let promoted: BTreeSet<KeyHash> = state.roots.iter().skip(1).copied().collect();
+        let path = state.roots.clone();
         let cuts = eval::cuts_of(state.cut.as_ref());
-        self.keep_by(promoted, cuts);
+        self.keep_by(path, cuts);
         self.checkpoints = state
             .checkpoints
             .iter()

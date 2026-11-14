@@ -191,6 +191,8 @@ pub fn reserve() -> u64 {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Cut {
     level: u64,
+    /// The level of the keys that are no longer admins (`keep_tiers`).
+    level2: u64,
     /// For each key, the first record of its order it dropped and the
     /// units of the records dropped from there: nothing after it is kept,
     /// and the units still count in the key's demand.
@@ -204,7 +206,7 @@ fn top() -> u64 {
 
 impl Default for Cut {
     fn default() -> Cut {
-        Cut { level: top(), marks: BTreeMap::new() }
+        Cut { level: top(), level2: top(), marks: BTreeMap::new() }
     }
 }
 
@@ -214,9 +216,10 @@ impl Cut {
         self.marks.is_empty()
     }
 
-    /// The level the shares stand at.
-    pub fn level(&self) -> u64 {
-        self.level.min(top())
+    /// The level the shares stand at: the first tier's, or with second
+    /// the level of the keys that are no longer admins (`keep_tiers`).
+    pub fn level(&self, second: bool) -> u64 {
+        if second { self.level2.min(top()) } else { self.level.min(top()) }
     }
 
     /// The units key dropped, when it dropped any.
@@ -263,6 +266,22 @@ pub fn keep_with(
     cut: &Cut,
     pre: &BTreeMap<KeyHash, u64>,
 ) -> (BTreeSet<RecordId>, Cut) {
+    keep_tiers(items, ceiling_of, cut, pre, &BTreeSet::new())
+}
+
+/// keep_with in two tiers: the keys of `second` (admin keys that are no
+/// longer admins, `eval::not_live`) share only what the others leave, at a
+/// level of their own. The root's room, the cut roots' reserve and the
+/// live admin keys' rooms add up to the set's room, so among honest
+/// writers the first tier never squeezes, and no record of a key that is
+/// no longer an admin pushes out a live one's.
+pub fn keep_tiers(
+    items: &[Item],
+    ceiling_of: impl Fn(&KeyHash) -> Option<u64>,
+    cut: &Cut,
+    pre: &BTreeMap<KeyHash, u64>,
+    second: &BTreeSet<KeyHash>,
+) -> (BTreeSet<RecordId>, Cut) {
     let pre_of = |k: &KeyHash| pre.get(k).copied().unwrap_or(0);
     let room = room().saturating_sub(pre.values().fold(0u64, |a, u| a.saturating_add(*u)));
     let mut by_key: BTreeMap<KeyHash, Vec<&Item>> = BTreeMap::new();
@@ -289,25 +308,31 @@ pub fn keep_with(
             Key { hash, ceiling, items, total }
         })
         .collect();
-    let demand = |s: u64| {
-        keys.iter().fold(0u64, |d, k| d.saturating_add(s.saturating_sub(pre_of(&k.hash)).min(k.ceiling).min(k.total)))
+    let demand = |tier: bool, s: u64| {
+        keys.iter()
+            .filter(|k| second.contains(&k.hash) == tier)
+            .fold(0u64, |d, k| d.saturating_add(s.saturating_sub(pre_of(&k.hash)).min(k.ceiling).min(k.total)))
     };
-    let top = cut.level.min(top());
-    let level = if demand(top) <= room {
-        top
-    } else {
+    // The highest level at or below top at which the tier fits in room.
+    let fill = |tier: bool, top: u64, room: u64| {
+        if demand(tier, top) <= room {
+            return top;
+        }
         let (mut lo, mut hi) = (0u64, top);
         // demand(lo) fits (nothing at 0), demand(hi) does not.
         while hi.saturating_sub(lo) > 1 {
             let mid = lo.saturating_add(hi.saturating_sub(lo) / 2);
-            if demand(mid) <= room { lo = mid } else { hi = mid }
+            if demand(tier, mid) <= room { lo = mid } else { hi = mid }
         }
         lo
     };
+    let level = fill(false, cut.level.min(top()), room);
+    let level2 = fill(true, cut.level2.min(top()), room.saturating_sub(demand(false, level)));
     let mut kept = BTreeSet::new();
-    let mut next = Cut { level, marks: BTreeMap::new() };
+    let mut next = Cut { level, level2, marks: BTreeMap::new() };
     for k in &keys {
-        let cap = level.saturating_sub(pre_of(&k.hash)).min(k.ceiling);
+        let at = if second.contains(&k.hash) { level2 } else { level };
+        let cap = at.saturating_sub(pre_of(&k.hash)).min(k.ceiling);
         let mut used = 0u64;
         let mut first_out: Option<Pos> = None;
         let mut out_units = 0u64;

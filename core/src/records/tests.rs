@@ -2579,8 +2579,103 @@ mod differential {
         assert_eq!(m1.state(), m2.state());
     }
 
+    /// Fills a set in small rooms in the order of seed (0: as made),
+    /// offering everything again until nothing changes, checking after
+    /// every insert of the first round that its state is evaluate's of all
+    /// it holds and that it restores to itself.
+    fn small_rooms(g: &G, recs: &[Record], seed: u64) -> ([u8; 32], State) {
+        let order = if seed == 0 { recs.to_vec() } else { shuffled(recs, seed) };
+        let mut m = set_of(&g.root.key);
+        for round in 0..6 {
+            let before = m.digest();
+            for r in &order {
+                let _ = m.insert(r.clone());
+                for l in &g.lists {
+                    let _ = m.insert_list(l);
+                }
+                if round == 0 {
+                    // Of all it holds, what waits aside included: evaluate
+                    // keeps a waiting root's records apart as the set does.
+                    let all: Vec<Record> = m.ids().map(|id| m.get(id).unwrap().clone()).collect();
+                    assert_eq!(m.state(), state_with(&g.root.key, &all, &g.lists));
+                    restores(&m, seed);
+                }
+            }
+            if m.digest() == before {
+                break;
+            }
+        }
+        restores(&m, seed);
+        (m.digest(), m.state())
+    }
+
+    /// A sequence once found by the property below: while a change waits,
+    /// the set asks for the record after the first checkpoint it holds
+    /// aside, as evaluate of all it holds does.
+    #[test]
+    fn small_rooms_end_alike_after_a_change_with_a_first_record() {
+        let small = crate::records::keep::small::Small::new(14, 8, 5);
+        let steps = [(3, 0, 0), (0, 6, 0), (0, 0, 0), (0, 5, 4), (0, 6, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)];
+        let (g, recs) = build(&steps);
+        for r in &recs {
+            small.units(r.id(), 1 + u64::from(r.id().0[0] % 3));
+        }
+        assert_eq!(small_rooms(&g, &recs, 0), small_rooms(&g, &recs, 2_969_525_165_867_318_566));
+    }
+
+    /// A sequence once found by the property below: the level falls when
+    /// the admin keys' records come, the root's admissions go, and their
+    /// admins' records with them; in another order the level falls less.
+    /// The whole evaluation counts those admins' records in the shares.
+    #[test]
+    #[ignore = "the rooms after a dropped admission: open, see the records thread"]
+    fn small_rooms_end_alike_when_an_admission_goes() {
+        let small = crate::records::keep::small::Small::new(14, 8, 5);
+        let steps = [
+            (1, 0, 69),
+            (0, 2, 0),
+            (1, 8, 0),
+            (3, 1, 84),
+            (4, 7, 234),
+            (1, 7, 142),
+            (1, 1, 0),
+            (0, 7, 8),
+            (1, 0, 0),
+            (3, 0, 0),
+            (0, 4, 27),
+            (0, 3, 0),
+            (1, 0, 0),
+            (3, 0, 0),
+            (2, 6, 1),
+        ];
+        let (g, recs) = build(&steps);
+        for r in &recs {
+            small.units(r.id(), 1 + u64::from(r.id().0[0] % 3));
+        }
+        let (x, y) = (small_rooms(&g, &recs, 0), small_rooms(&g, &recs, 2_307_232_806_983_518_351));
+        assert_eq!(x, y);
+    }
+
     proptest! {
         #![proptest_config(ProptestConfig { cases: 96, failure_persistence: None, ..ProptestConfig::default() })]
+
+        /// In small rooms, where they bind: after every insert, in two
+        /// orders, the set's state is evaluate's of what it keeps, and a set
+        /// restored from what it saves alone is the same set; offered again
+        /// until nothing changes, the two orders end alike.
+        #[test]
+        #[ignore = "finds the rooms after a dropped admission: open, see the records thread"]
+        fn a_set_in_small_rooms_restores_after_every_insert(
+            steps in prop::collection::vec((0u8..5, 0u8..9, any::<u8>()), 4..30),
+            seed in 1u64..,
+        ) {
+            let small = crate::records::keep::small::Small::new(14, 8, 5);
+            let (g, recs) = build(&steps);
+            for r in &recs {
+                small.units(r.id(), 1 + u64::from(r.id().0[0] % 3));
+            }
+            prop_assert_eq!(small_rooms(&g, &recs, 0), small_rooms(&g, &recs, seed));
+        }
 
         /// A set's state is evaluate's state of the records it keeps, and
         /// of all the records, whatever the order and the compactions; two
@@ -3522,6 +3617,151 @@ fn checkpoints_that_never_count_leave_the_root_its_devices() {
     assert_eq!(now.devices.len(), 101);
     assert!(devices.iter().chain([&laptop]).all(|d| now.counting.contains(&d.id())));
     assert_eq!(restore(&set).state(), now);
+}
+
+/// The smallest honest group whose rooms overflow, at table A's shape in
+/// small units (the root 32, the reserve 32, 16 admin keys of 4): the root
+/// full, 16 live admins full, and admins the root removed whose devices
+/// still count, 8 full and one with a single unit, one past the room the
+/// empty reserve leaves. The keys that are no longer admins lose a record;
+/// the root's newest record, the 16th live admin's admission, stays, in
+/// any order and after a restart.
+#[test]
+fn removed_admins_records_give_way_to_live_admins() {
+    let small = crate::records::keep::small::Small::new(128, 32, 4);
+    let mut g = G::new();
+    let root = k("root");
+    let gone: Vec<(K, K)> = (0..9).map(|i| (k(&format!("old phone {i}")), k(&format!("old admin {i}")))).collect();
+    let mut devs = 0;
+    for (i, (phone, admin)) in gone.iter().enumerate() {
+        g.admin(phone, admin, POWER_ADMIT);
+        let n = if i == 8 { 1 } else { 4 };
+        for _ in 0..n {
+            g.device(admin, &k(&format!("dev {devs}")), "dev", |_| {});
+            devs += 1;
+        }
+    }
+    let keys: Vec<KeyHash> = gone.iter().flat_map(|(p, a)| [p.hash, a.hash]).collect();
+    g.root_rec(Kind::Revoke(removal(&keys, g.seen())));
+    let live: Vec<(K, K)> = (0..16).map(|i| (k(&format!("phone {i}")), k(&format!("admin {i}")))).collect();
+    let mut admissions = Vec::new();
+    while g.heads[&root.hash].0 < 32 - 16 {
+        g.root_rec(Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
+    }
+    for (phone, admin) in &live {
+        admissions.push(g.admin(phone, admin, POWER_ADMIT));
+    }
+    for (_, admin) in &live {
+        for _ in 0..4 {
+            g.device(admin, &k(&format!("dev {devs}")), "dev", |_| {});
+            devs += 1;
+        }
+    }
+    for r in &g.recs {
+        small.units(r.id(), 1);
+    }
+    let (recs, lists, boss) = (g.recs.clone(), g.lists.clone(), g.root.key.clone());
+    let whole = state_with(&boss, &recs, &lists);
+    let mut rev = recs.clone();
+    rev.reverse();
+    let mut sets = Vec::new();
+    for order in [recs.clone(), rev, shuffled(&recs, 7)] {
+        let set = set_with(&boss, &order, &lists);
+        let st = set.state();
+        let held: Vec<Record> = set.ids().filter_map(|id| set.get(id)).cloned().collect();
+        assert_eq!(st, state_with(&boss, &held, &lists));
+        assert!(admissions.iter().all(|a| set.contains(&a.id()) && st.counting.contains(&a.id())));
+        assert!(live.iter().all(|(_, a)| st.devices.iter().any(|d| d.admin == Some(a.hash))));
+        assert!(
+            recs.iter().filter(|r| live.iter().any(|(_, a)| a.hash == r.body().signer)).all(|r| set.contains(&r.id()))
+        );
+        assert!(recs.iter().any(|r| gone.iter().any(|(_, a)| a.hash == r.body().signer) && !set.contains(&r.id())));
+        let saved: Vec<Record> = set.in_dependency_order().into_iter().cloned().collect();
+        let back = RecordSet::restore(set.root().clone(), set.recovery().clone(), &saved, &lists);
+        assert_eq!(back.state(), st);
+        sets.push((set.digest(), st));
+    }
+    assert!(sets.windows(2).all(|w| w[0] == w[1]));
+    assert_eq!(sets[0].1.devices, whole.devices);
+    // Who is an admin and the rooms' pressure change in one insert: before
+    // the removal all 25 admin keys are admins as far as the rooms go (the
+    // first 16 live), after it the removed ones give way. Offered again,
+    // what the rooms turned away comes back, and a restart keeps it.
+    let removal = recs.iter().find(|r| matches!(r.body().kind, Kind::Revoke(_))).unwrap().clone();
+    let without: Vec<Record> = recs.iter().filter(|r| r.id() != removal.id()).cloned().collect();
+    for order in [without.clone(), shuffled(&without, 3)] {
+        let mut set = set_with(&boss, &order, &lists);
+        set.insert(removal.clone()).unwrap();
+        for _ in 0..3 {
+            set.insert_all(recs.clone());
+        }
+        assert_eq!((set.digest(), set.state()), sets[0]);
+        let saved: Vec<Record> = set.in_dependency_order().into_iter().cloned().collect();
+        let back = RecordSet::restore(set.root().clone(), set.recovery().clone(), &saved, &lists);
+        assert_eq!((back.digest(), back.state()), sets[0]);
+    }
+}
+
+/// The same with the cut roots' reserve full: the first root admitted the
+/// 16 live admins and removed one more admin key, a change of root lists
+/// all 32 of its records, and the new root fills its own room. One unit of
+/// the removed admin's is one past the room: it gives way, and nothing of
+/// the live admins, the reserve or the new root does, in any order.
+#[test]
+fn a_removed_admin_s_record_gives_way_when_the_reserve_is_full() {
+    let small = crate::records::keep::small::Small::new(128, 32, 4);
+    let mut g = G::new();
+    let root = k("root");
+    let (old_phone, old) = (k("old phone"), k("old admin"));
+    g.admin(&old_phone, &old, POWER_ADMIT);
+    let lone = g.device(&old, &k("old dev"), "dev", |_| {});
+    g.root_rec(Kind::Revoke(removal(&[old_phone.hash, old.hash], g.seen())));
+    let live: Vec<(K, K)> = (0..16).map(|i| (k(&format!("phone {i}")), k(&format!("admin {i}")))).collect();
+    let admissions: Vec<Record> = live.iter().map(|(p, a)| g.admin(p, a, POWER_ADMIT)).collect();
+    let mut n = 0;
+    while g.heads[&root.hash].0 < 32 {
+        g.device(&root, &k(&format!("root dev {n}")), "dev", |_| {});
+        n += 1;
+    }
+    let mut devs = 0;
+    for (_, admin) in &live {
+        for _ in 0..4 {
+            g.device(admin, &k(&format!("dev {devs}")), "dev", |_| {});
+            devs += 1;
+        }
+    }
+    let list: Vec<RecordId> = g.recs.iter().filter(|r| r.body().signer == root.hash).map(Record::id).collect();
+    assert_eq!(list.len(), 32);
+    let nr = k("new root");
+    g.change(&nr, &list);
+    while g.heads[&nr.hash].0 < 32 {
+        g.rec(&nr, Kind::Copies { incoming_ms: MIN_INCOMING_MS + g.heads[&nr.hash].0, seen: vec![] });
+    }
+    for r in &g.recs {
+        small.units(r.id(), 1);
+    }
+    let (recs, lists, boss) = (g.recs.clone(), g.lists.clone(), g.root.key.clone());
+    let whole = state_with(&boss, &recs, &lists);
+    assert!(admissions.iter().all(|a| whole.counting.contains(&a.id())), "{:?}", whole.roots);
+    let mut rev = recs.clone();
+    rev.reverse();
+    let mut sets = Vec::new();
+    for order in [recs.clone(), rev, shuffled(&recs, 11)] {
+        let set = set_with(&boss, &order, &lists);
+        let st = set.state();
+        let held: Vec<Record> = set.ids().filter_map(|id| set.get(id)).cloned().collect();
+        assert_eq!(st, state_with(&boss, &held, &lists));
+        assert!(!set.contains(&lone.id()));
+        let others = recs.iter().filter(|r| r.id() != lone.id() && r.body().signer != k("recovery").hash);
+        assert!(
+            others.clone().all(|r| set.contains(&r.id())),
+            "{:?}",
+            others.filter(|r| !set.contains(&r.id())).map(|r| r.body().seq).collect::<Vec<_>>()
+        );
+        assert!(admissions.iter().all(|a| st.counting.contains(&a.id())));
+        sets.push((set.digest(), st));
+    }
+    assert!(sets.windows(2).all(|w| w[0] == w[1]));
 }
 
 /// Two checkpoints of the root at one seq are its two histories: the
