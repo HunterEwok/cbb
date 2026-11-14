@@ -1919,8 +1919,6 @@ The recovery chain is kept outside the rooms.
 
 #### Tiers inside the rooms
 
-Being built: the code follows this text in the records thread's next head.
-
 There is no level. Each key has a fixed cap, read from the roster in the root's kept records
 alone: the current root `records::MAX_ROOT_RECORDS` (1536) units, the roots a change cut
 together `records::CUT_ROOTS_RESERVE` (1536), each live admin key `records::MAX_ADMIN_RECORDS`
@@ -1928,8 +1926,9 @@ together `records::CUT_ROOTS_RESERVE` (1536), each live admin key `records::MAX_
 `records::MAX_RECORDS` (7168) less the root's, the reserve's and the live admin keys' caps, and
 n is the number of keys that are no longer admins.
 
-Who is no longer an admin is read from the root records of the path that the set holds
-(`eval::not_live`; of a root that a change cut, only what its list names). An admin key that a
+Who is no longer an admin is read from the root records of the path that the roots' rooms keep
+(`eval::rooms`, `eval::not_live`; of a root that a change cut, only what its list names): the
+roots' caps hang on nothing else, so their rooms are judged first. An admin key that a
 root's record names is no longer an admin when a root's removal names it, when the newest root
 record of the device that named it names another key or none, or when it comes after the first
 `records::ADMIN_KEYS_MAX` (16) keys. The 16 are taken by the newest root record that names
@@ -1938,9 +1937,13 @@ come first in its room, and so does a root record that takes an admin key back, 
 never drop a record that decides who is an admin.
 
 The root's writer writes a checkpoint right after a root record that makes a key no longer an
-admin, so that what the state needs of that key (the devices it admitted, its removals) is kept
-first by the root. A record of such a key that the root did not hold when it wrote that
-checkpoint is lost while the key's cap is 0, as it is beside 16 live admin keys.
+admin, and after one that makes a new admin key (which lowers every cap of the keys no longer
+admins), so that what the root holds of those keys is kept first by its checkpoint. A record of
+such a key that the root did not hold when it wrote that checkpoint is lost while the key's cap
+is 0, as it is beside 16 live admin keys. A record of a key the root took back counts no more in
+the state whether it is held or not (the writer refuses a take-back that would put a device out),
+so a removal among them that is lost changes nothing: the device it names stays until someone
+removes it again.
 
 Being settled: a key an admin removed.
 
@@ -2012,9 +2015,19 @@ checkpoint and a change of root within their rooms.
 Only the current root writes a checkpoint. A checkpoint names the heads it settles and the
 records it keeps. An honest checkpoint keeps the root's own records under its head, so that it
 mends the root's chain where the rooms turned a record away; an older checkpoint of the root
-it keeps only as a record that counts; a root's removal counts for good while it is kept, and the writer leaves one
-out, with the records of the keys it names, only when every key it names is a plain device key
-whose admissions it holds below their signer's head. An admin key whose admission the rooms
+it keeps none (the new one carries their heads); a removal, the root's or an admin's, counts
+for good while it is kept, and the writer leaves one out, with the records of the keys it names,
+only when every key it names is a plain device key whose admissions it holds below their
+signer's head (a removal of a key never admitted stays: it bars the key). Of the root's own
+settings, hubs and copies records it keeps only the newest of each type, and of its records of
+one device the oldest and the newest, where the newest counts and names no admin key and those
+left out name the same key and no admin key; a resolve whose every target it leaves out goes
+too. The state is the same before and after, and what it leaves out sits below a head and is
+refused when offered again. These are the writer's choices: a member counts any checkpoint that
+keeps more. The root's writer stops its ordinary records where they would leave no room for
+its next checkpoint (a margin of a twenty-fourth of its ceiling below that is for removals,
+freezes and resolves), and writes that checkpoint first before a removal, freeze or resolve
+where one more would leave none. An admin key whose admission the rooms
 keep out is no key of the set. A waiting root's records, and records that a checkpoint of the
 current root above the counting one keeps, sit aside, outside the count, in any order, within
 one root's room; a member asks its peers for a missing record for
