@@ -6,27 +6,32 @@
 //! included, can push another key's records out by making many of its own.
 //!
 //! The room is counted in units: a record takes one unit for each 512
-//! bytes it starts (2 MiB over 4096 records). 4096 units hold at most 4096 records and 2 MiB.
+//! bytes it starts (3.5 MiB over 7168 units). 7168 units hold at most
+//! 7168 records and 3.5 MiB.
 //!
 //! Each key's records are taken in its own order: a root's removals,
 //! freezes and resolves first, by seq, so that nothing of the root's
-//! drops them, its checkpoints included; then its checkpoints, the newest
-//! first, so that a key at its ceiling can still checkpoint and free room;
-//! then the rest by seq, then ID (records of one seq with other IDs count
-//! against the same ceiling). Of a root a takeover followed only what the
+//! drops them, its checkpoints included; then its newest checkpoint, so
+//! that a key at its ceiling can still checkpoint and free room; then the
+//! rest by seq, then ID (records of one seq with other IDs count against
+//! the same ceiling); then its older checkpoints, the newest first, so
+//! that checkpoints that never count push none of its other records out
+//! (`newest_only`). Of a root a takeover followed only what the
 //! takeover lists is kept, within that root's ceiling (rule 32), and the
-//! recovery chain is kept outside the rooms (rule 33). The order is each record's own, never what
+//! recovery chain is kept outside the rooms (rule 33). The order is each
+//! record's own and which checkpoint is its key's newest, never anything
 //! else the set holds, so that a set that drops records as they come keeps
 //! what one that saw them all at once keeps. At level s a
 //! key keeps the longest start of that order within min(s, its ceiling)
 //! units. A key's demand at s is min(s, its ceiling, all its units); s is
-//! the highest level at which the demands fit in 4096 units. So a key whose
+//! the highest level at which the demands fit in 7168 units. So a key whose
 //! records take few units keeps them all whatever the others make: another
 //! key's records only lower the level down to the first key's own.
 //!
-//! The ceilings: the group's first root's 1024 units, and a root the
+//! The ceilings: the group's first root's 1536 units, and a root the
 //! member's evaluation put on the path (`RecordSet::compact`) the same;
-//! an admin key's 256. Any other key has no room and keeps nothing.
+//! the roots a takeover cut 1536 together (the reserve); an admin key's
+//! 256. Any other key has no room and keeps nothing.
 //!
 //! What is kept depends on the records alone, never on the order they came
 //! in. A member that drops records as they come remembers a little of what
@@ -161,7 +166,7 @@ pub fn units(size: usize) -> u64 {
     size.div_ceil(UNIT).max(1) as u64
 }
 
-/// A key's ceiling in units: a root's on the path 1024, an admin key's
+/// A key's ceiling in units: a root's on the path 1536, an admin key's
 /// 256.
 pub fn ceiling(root: bool) -> u64 {
     #[cfg(test)]
