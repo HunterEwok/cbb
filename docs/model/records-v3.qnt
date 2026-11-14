@@ -3059,6 +3059,8 @@ module records_v3 {
         not(r.kind == "revoke" and r.signer == g.signer and r.seq < g.seq and inLine(g.line, r.id))
           or st.get(m).recs.contains(r.id)
           or (cp != 0 and db.get(cp).signer == r.signer and db.get(cp).seq > r.seq and not(db.get(cp).keep.contains(r.id)))
+          // (A new root re-signed it: m holds a Z of the change that covers its keys; GAr.13004.)
+          or rs.exists(z => z.kit == "z" and tgt(r).subseteq(tgt(z)))
       }))
   })
 
