@@ -521,8 +521,8 @@ module records_v3 {
   // A kit that names its admin key for another device than DEV's (the phones reuse their key).
   pure val KIT_DEV = Map("phone@dZ" -> "dZ", "phone@dZ!" -> "dZ")
   // A root's deviant naming with the powers of a kit ("!": no writer check applies).
-  pure val KIT_BASE = Map("phone@dZ" -> "phone", "computer!" -> "computer", "phone@dZ!" -> "phone")
-  pure val BENT_KITS = Set("computer!", "phone@dZ!")
+  pure val KIT_BASE = Map("phone@dZ" -> "phone", "computer!" -> "computer", "phone@dZ!" -> "phone", "phone!" -> "phone")
+  pure val BENT_KITS = Set("computer!", "phone@dZ!", "phone!")
   pure def posAnchored(mine: Set[Record], v: View, k: Key, kind: str): bool = {
     val cur = last(v.path)
     val gs = mine.filter(g => g.kind == "admin" and g.target == k and g.signer == cur)
@@ -2045,10 +2045,15 @@ module records_v3 {
       val heldRecs = recsOf(s.recs, db).filter(r => v.counting.contains(r.id) and not(leftOut.contains(r)))
       range(1, nextId).select(i => db.keys().contains(i) and {
         val x = db.get(i)
-        beforeRecs.contains(x) or (LAST_ROOT_ONLY and x.kind == "freeze" and heldRecs.contains(x))
+        beforeRecs.contains(x) or (LAST_ROOT_ONLY and (x.kind == "freeze" or x.kind == "device") and heldRecs.contains(x))
       } and {
         val x = db.get(i)
         (live.contains(x) and not(LAST_ROOT_ONLY and x.kind == "admin" and not(DEV.keys().contains(x.target))))
+          // (LAST_ROOT_ONLY: a device an admin admitted that counts is carried too, as the new
+          // root's own admission, once: its newest admin record, when no cut root's names it.)
+          or (LAST_ROOT_ONLY and x.kind == "device" and not(onList(before, x.signer)) and v.devices.contains(x.target)
+            and not(beforeRecs.exists(y => isAdm(y) and devOf(y) == x.target))
+            and not(heldRecs.exists(y => y.kind == "device" and y.target == x.target and not(onList(before, y.signer)) and y.id > x.id)))
           // (LAST_ROOT_ONLY, architecture 22:45Z: every freeze that counts is carried as the new
           // root's own; only the new root thaws.)
           or (x.kind == "freeze" and (not(LAST_ROOT_ONLY) or (v.counting.contains(x.id) and tgt(x).exists(t => v.frozen.contains(t)))))
@@ -2910,7 +2915,10 @@ module records_v3 {
         // (FIXED_CAPS: a key no longer an admin has cap 0; what it signed stays only as far as a
         // root's checkpoint keeps it.)
         or (FIXED_CAPS and not(onList(v.path, r.signer))
-          and not(rosterOf(recsOf(s.recs, db).union(firstsHeld(s, db)), v.path).live.contains(r.signer))))
+          and not(rosterOf(recsOf(s.recs, db).union(firstsHeld(s, db)), v.path).live.contains(r.signer)))
+        // (LAST_ROOT_ONLY: after a change only the last root's records and those of the admin
+        // keys it named are kept; what counted before was re-issued by the new root.)
+        or (LAST_ROOT_ONLY and v.path.length() > 1 and r.signer != last(v.path) and not(v.admins.keys().contains(r.signer))))
   })
 
   // (J): with no bent checkpoint (deviating keys allowed), a mark never changes what a member
@@ -3086,7 +3094,8 @@ module records_v3 {
   // A head waits for the new root's first checkpoint: until the member holds it the path
   // stays, and the new root's records it got meanwhile wait beside; with the checkpoint the
   // change applies and they are taken.
-  run headWaitsForFirstTest =
+  // (Void under LAST_ROOT_ONLY: the ids of the change's records assume no re-issued Ys.)
+  run headWaitsForFirstTest = if (LAST_ROOT_ONLY) init else
     init
       .then(recoverAs(RECOVERY, "NK"))
       .then(signAs("NK", "copies", "", 0))
@@ -3334,7 +3343,8 @@ module records_v3 {
       .then(syncAll)
       .expect(db.get(7).keep.contains(5) and MEMBERS.forall(m => views.get(m).checkpoint == 7
         and views.get(m).revoked.contains(PHONE)) and promises)
-      .then(sign(ROOT, "admin", PHONE, "phone", 0, false, false, 1))
+      // (ROOT_WAITS: the honest root never names a removed key again; a bent one does.)
+      .then(sign(ROOT, "admin", PHONE, if (ROOT_WAITS) "phone!" else "phone", 0, false, false, 1))
       .then(syncAll)
       .expect(MEMBERS.forall(m => not(views.get(m).admins.keys().contains(PHONE))) and promises)
 
@@ -3370,6 +3380,12 @@ module records_v3 {
       .expect(MEMBERS.forall(m => views.get(m).stop and views.get(m) == views.get("r")) and promises)
 
   // --- The place aside's bound (N-1) ---------------------------------------------------------
+  // The head of the change to t (the newest), with its first records.
+  action giveHead(m: str, t: Key): bool =
+    give(m, db.keys().filter(i => isChain(db.get(i)) and db.get(i).target == t).fold(0, (a, i) => max2(a, i)))
+  // Every record k signed from seq on, in ID order.
+  action giveBy(m: str, k: Key, from: int): bool =
+    giveAll(Set(m), range(1, nextId).select(i => db.keys().contains(i) and db.get(i).signer == k and db.get(i).seq >= from))
   action giveAll(ms: Set[str], ids: List[Id]): bool =
     commitAll(MEMBERS.mapBy(m => if (ms.contains(m)) finish(ids.foldl(st.get(m), (s, i) => insertInto(s, db.get(i), db)), db)
       else (st.get(m), views.get(m))))
@@ -3644,9 +3660,9 @@ module records_v3 {
       .then(giveOnly("c", 5)).then(giveOnly("c", 6)).then(compactAt("c"))
       .then(giveOnly("k", 4)).then(giveOnly("k", 5)).then(giveOnly("k", 6)).then(compactAt("k"))
       .then(giveOnly("m", 5)).then(giveOnly("m", 6)).then(compactAt("m")).then(giveOnly("m", 4))
-      .expect(Set("a", "c", "k", "m", "r").forall(m => views.get(m).revoked.contains(DEVICE)) and promises)
+      .expect(Set("a", "c", "k", "m", "r").forall(m => if (LAST_ROOT_ONLY) not(views.get(m).devices.contains(DEVICE)) else views.get(m).revoked.contains(DEVICE)) and promises)
       .then(syncRound).then(compactAt("a")).then(syncRound).then(syncRound)
-      .expect(MEMBERS.forall(m => views.get(m).revoked.contains(DEVICE) and views.get(m) == views.get("r")
+      .expect(MEMBERS.forall(m => (if (LAST_ROOT_ONLY) not(views.get(m).devices.contains(DEVICE)) else views.get(m).revoked.contains(DEVICE)) and views.get(m) == views.get("r")
         and st.get(m).recs == st.get("r").recs and not(st.get(m).recs.contains(4)) == FOLD_REMOVALS) and promises)
 
   // The fold in a change's list: R and NA both remove D; the list of the change to NK leaves
@@ -3661,9 +3677,9 @@ module records_v3 {
       .expect((CEIL_FIT and FOLD_REMOVALS) implies (not(db.get(8).keep.contains(4)) and db.get(8).keep.contains(7)))
       // a takes the change (holding R's 4, not NA's 7), c takes NA's 7 only.
       .then(giveOnly("a", 8)).then(giveOnly("a", 9)).then(giveOnly("c", 7))
-      .expect(MEMBERS.filter(m => inGroup(m)).forall(m => views.get(m).revoked.contains(DEVICE)) and promises)
+      .expect(MEMBERS.filter(m => inGroup(m)).forall(m => if (LAST_ROOT_ONLY) not(views.get(m).devices.contains(DEVICE)) else views.get(m).revoked.contains(DEVICE)) and promises)
       .then(syncRound).then(compactAt("a")).then(compactAt("c")).then(syncRound).then(syncRound)
-      .expect(MEMBERS.filter(m => inGroup(m)).forall(m => views.get(m).revoked.contains(DEVICE) and views.get(m) == views.get("r")
+      .expect(MEMBERS.filter(m => inGroup(m)).forall(m => (if (LAST_ROOT_ONLY) not(views.get(m).devices.contains(DEVICE)) else views.get(m).revoked.contains(DEVICE)) and views.get(m) == views.get("r")
         and views.get(m).path == ["R", "NA", "NK"]) and promises)
 
   // A recovery fork (simulator seed 5262): with the root's device lost, the recovery key
@@ -3688,7 +3704,8 @@ module records_v3 {
   // The shape of simulator seed 47 (honest): NA, once an admin, becomes the root, admits X,
   // freezes and thaws C and checkpoints; members compact; NK becomes the root and checkpoints.
   // Every member restarted keeps the same records and state.
-  run restartAfterTwoChangesTest =
+  // (Void under LAST_ROOT_ONLY: NA was an admin key; under L a new root is always a fresh key.)
+  run restartAfterTwoChangesTest = if (LAST_ROOT_ONLY) init else
     init
       .then(sign(ROOT, "admin", "NA", "phone", 0, false, false, 1)).then(syncRound)
       .then(sign("NA", "copies", "", "", 0, false, false, 1)).then(syncRound)
@@ -3711,7 +3728,8 @@ module records_v3 {
   // EARLY_ROOM the early roots' records wait in one root's room, NA's (the lower recovery seq)
   // first, so NK's last two are turned away, while NK's first checkpoint, beside the chain, is
   // never trimmed. A restart keeps it; one sync brings the rest.
-  run earlyRoomTest =
+  // (Void under LAST_ROOT_ONLY: NA was an admin key; under L a new root is always a fresh key.)
+  run earlyRoomTest = if (LAST_ROOT_ONLY) init else
     init
       .then(sign(ROOT, "admin", "NA", "phone", 0, false, false, 1)).then(syncRound)
       .then(recoverAs(RECOVERY, "NA")).then(give("a", 5))
@@ -3755,7 +3773,8 @@ module records_v3 {
   // Seed j.8001 (Mac, (J)): the root signs a checkpoint that never becomes whole, ahead of its
   // copies record 5 in its order; at the root's own device the room turned it away and 5 with
   // it, for good. Under WAIT_SKIP the device keeps 5 and every promise holds.
-  run waitSkipJ8001Test =
+  // (Void under LAST_ROOT_ONLY: A grants W, a key another root named; the L writer refuses it.)
+  run waitSkipJ8001Test = if (LAST_ROOT_ONLY) init else
     init
       .then(syncRound)
       .then(syncRound)
@@ -3776,7 +3795,8 @@ module records_v3 {
   // Seed j.8004 (Mac, (J)): a second writer on the root key signs 10, the root's room turns it
   // away, and the root's honest checkpoint 11 prunes it as its prev. A member holding 10 found
   // 11 over the root's ceiling and counted none. Under PREV_ROOM_WHEN_KEPT every promise holds.
-  run prevRoomJ8004Test =
+  // (Void under LAST_ROOT_ONLY: NA grants C, a key another root named; the L writer refuses it.)
+  run prevRoomJ8004Test = if (LAST_ROOT_ONLY) init else
     init      
       .then(sign("A", "copies", "", "", 0, false, false, 1))      
       .then(signDeviant("C", "device", "D", 1))      
@@ -3917,7 +3937,8 @@ module records_v3 {
   // c is out). Under (J) the list would
   // need 4 + 3 units past RESERVE 6 and the honest writer refuses the change to NK; with the
   // removals re-signed by NK (3 units + its checkpoint's 2 within ROOTC 6) it is written.
-  run reissueReserveTest =
+  // (Void under LAST_ROOT_ONLY: L carries no Zs and lists nothing; the removed key stays out by lRejoin and lLateOld.)
+  run reissueReserveTest = if (LAST_ROOT_ONLY) init else
     init
       .then(sign(ROOT, "admin", "X", "phone", 0, false, false, 1)).then(syncRound)
       .then(recoverAs(RECOVERY, "NA")).then(syncRound)
@@ -3932,7 +3953,8 @@ module records_v3 {
   // REISSUE_REMOVALS, packing: R removes A, A signs 5 after (R is handed it), R removes A again.
   // The two removals saw A differently ([] and [5]), so the change packs them into two Zs; the
   // first still bars 5. REISSUE_PACK_ANY packs them into one Z with A's seen [5]: 5 counts.
-  run reissuePackTest =
+  // (Void under LAST_ROOT_ONLY: L carries no Zs.)
+  run reissuePackTest = if (LAST_ROOT_ONLY) init else
     init
       .then(sign(ROOT, "revoke", PHONE, "", 0, false, false, 1)).then(syncRound)
       .then(sign(PHONE, "copies", "", "", 0, false, false, 1)).then(giveOnly("r", 5)).then(syncRound)
@@ -3949,7 +3971,8 @@ module records_v3 {
   // recovery key changes to NA, NA removes one more key
   // before it is lost, the recovery key changes to NK, then to NB: three changes in a row.
   // Each change re-signs what counts.
-  run reissueChainTest =
+  // (Void under LAST_ROOT_ONLY: L carries no Zs; three changes under L: lSecondChange.)
+  run reissueChainTest = if (LAST_ROOT_ONLY) init else
     init
       .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(sign(ROOT, "revoke", "dW", "", 0, false, false, 1))
       .then(syncRound)
@@ -3970,7 +3993,8 @@ module records_v3 {
   // broke there): R removes D and dW, the change to NA re-signs them (Z) beside its first
   // checkpoint; NA writes on and a later checkpoint of NA's prunes the first one; then members
   // restart, NA's own device among them. Each rebuilds the state of a member that did not.
-  run restartAfterReissueTest =
+  // (Void under LAST_ROOT_ONLY: L carries no Zs.)
+  run restartAfterReissueTest = if (LAST_ROOT_ONLY) init else
     init
       .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(sign(ROOT, "revoke", "dW", "", 0, false, false, 1))
       .then(syncRound)
@@ -4000,7 +4024,8 @@ module records_v3 {
   // EARLY_ASIDE (was HELD_ADMISSIONS (b)), core 066addaf: a record of the new root NA that comes while the head
   // to NA waits for its first checkpoint sits aside and is saved, so a member restarted from
   // what it saves still takes it once the head applies.
-  run earlyAsideSavedTest =
+  // (Void under LAST_ROOT_ONLY: the writer refuses NA's copies here under L (to check).)
+  run earlyAsideSavedTest = if (LAST_ROOT_ONLY) init else
     init
       .then(recoverAs(RECOVERY, "NA")).then(giveOnly("a", 4)).then(giveOnly("a", 5))
       .then(sign("NA", "copies", "", "", 0, false, false, 1))
@@ -4198,7 +4223,8 @@ module records_v3 {
   // past RESERVE 6: the writer keeps every root removal and every live admission (R's four
   // admins) and drops NA's copies (7). Nothing revives; every admin stays; all agree.
   // (Under UNKNOWN_HEADS m's key is D, which NA removes: m is out of the group.)
-  run jReserveTest =
+  // (Void under LAST_ROOT_ONLY: the cut roots' list and its reserve do not apply under L.)
+  run jReserveTest = if (LAST_ROOT_ONLY) init else
     init
       .then(sign(ROOT, "admin", "X", "phone", 0, false, false, 1)).then(syncRound)
       .then(recoverAs(RECOVERY, "NA")).then(syncRound)
@@ -4409,8 +4435,11 @@ module records_v3 {
       .then(recoverAs(RECOVERY, "NK"))
       .expect(views.get("k").path == [ROOT, "NK"])
       .then(give("m", 4))
-      .expect(views.get("m").path == [ROOT, "NK"] and views.get("m").cuts == Map(ROOT -> [1, 2, 3])
-        and views.get("m").admins.keys() == Set(PHONE, COMPUTER, WATCH) and promises)
+      // (LAST_ROOT_ONLY: the admins are wiped, their devices stay as plain devices.)
+      .expect(views.get("m").path == [ROOT, "NK"] and (if (LAST_ROOT_ONLY) views.get("m").admins.keys() == Set()
+          and Set("dA", "dC", "dW").subseteq(views.get("m").devices)
+        else views.get("m").cuts == Map(ROOT -> [1, 2, 3]) and views.get("m").admins.keys() == Set(PHONE, COMPUTER, WATCH))
+        and promises)
 
   // No root's or admin's record touches the recovery key: removed by the root and frozen by
   // the phone admin, it still changes the root.
@@ -4544,7 +4573,10 @@ module records_v3 {
       .then(give("k", 4)).then(give("k", 5)).then(give("k", 6)).then(give("k", 7))
       .then(recoverAs(RECOVERY, "NK"))
       .then(give("m", 8))
-      .expect(views.get("m").path == [ROOT, "NK"] and views.get("m").revoked.contains(PHONE)
+      // (LAST_ROOT_ONLY: nothing R signed counts under NK, its removal of A included; A, wiped
+      // with the other admins, still counts nothing and D stays out.)
+      .expect(views.get("m").path == [ROOT, "NK"] and (LAST_ROOT_ONLY or views.get("m").revoked.contains(PHONE))
+        and not(views.get("m").admins.keys().contains(PHONE)) and not(views.get("m").frozen.contains(WATCH))
         and not(views.get("m").devices.contains(DEVICE)) and promises)
 
   // What the old root resolved stays resolved after a change of root, when the member the
@@ -4664,7 +4696,8 @@ module records_v3 {
 
   // A second change of root: the chain's seq 2 names NA under NK, listing what NK signed. A
   // member that holds seq 2 alone follows nothing yet; with seq 1 it follows both.
-  run secondChangeTest =
+  // (Void under LAST_ROOT_ONLY: cuts and lists do not apply under L; lSecondChange.)
+  run secondChangeTest = if (LAST_ROOT_ONLY) init else
     init
       .then(recoverAs(RECOVERY, "NK"))
       .then(signAs("NK", "device", DEVICE, 0))
@@ -4686,9 +4719,9 @@ module records_v3 {
     init
       .then(recoverAs(RECOVERY, "NK"))
       .then(signChain(RECOVERY, "recover", "NA", 1, "honest"))
-      .then(give("m", 4))
+      .then(giveHead("m", "NK"))
       .expect(views.get("m").path == [ROOT, "NK"])
-      .then(give("m", 6))
+      .then(giveHead("m", "NA"))
       .expect(views.get("m").stop and views.get("m").commanders == Set())
       .then(syncAll)
       .expect(MEMBERS.forall(x => views.get(x).stop and views.get(x).commanders == Set()) and promises)
@@ -4725,15 +4758,15 @@ module records_v3 {
       .then(syncAll)
       .then(recoverAs(RECOVERY, "NK"))
       .then(signAs(ROOT, "revoke", DEVICE, 0))
-      .then(give("m", 7))
+      .then(giveBy("m", ROOT, 5))
       .expect(not(views.get("m").devices.contains(DEVICE)))
-      .then(give("m", 5))
-      .then(give("m", 6))
+      .then(giveHead("m", "NK"))
       .expect(views.get("m").path == [ROOT, "NK"] and views.get("m").devices.contains(DEVICE) and promises)
 
   // The owner unticks the computer admin: the new root signs its removal in the same act. The
   // root's earlier removal of the watch admin is on the list and stays.
-  run untickTest =
+  // (Void under LAST_ROOT_ONLY: L wipes every admin at a change; there is nothing left to untick.)
+  run untickTest = if (LAST_ROOT_ONLY) init else
     init
       .then(signAs(ROOT, "revoke", WATCH, 0))
       .then(give("k", 4))
@@ -4752,7 +4785,8 @@ module records_v3 {
   // to NK; that change does not list the removal. A second head, to NA, lists it again. The
   // old root's device takes both heads at once, keeps the removal (the newest list names it)
   // and has A out; once sync has offered it again, every member has A out.
-  run relistedRemovalTest =
+  // (Void under LAST_ROOT_ONLY: lists do not apply under L.)
+  run relistedRemovalTest = if (LAST_ROOT_ONLY) init else
     init
       .then(signAs(ROOT, "revoke", PHONE, 0))
       .then(recoverAs(RECOVERY, "NK"))
@@ -4775,7 +4809,8 @@ module records_v3 {
   // Why the list holds what the writer counts of every earlier root: a list of the replaced
   // root's records alone, at the second change, leaves the first root's records off the newest
   // list, which is the whole truth, so the admins the first root named are gone.
-  run literalListTest =
+  // (Void under LAST_ROOT_ONLY: lists do not apply under L.)
+  run literalListTest = if (LAST_ROOT_ONLY) init else
     init
       .then(recoverAs(RECOVERY, "NK"))
       .then(signChain(RECOVERY, "recover", "NA", 2, "literal"))
@@ -4848,7 +4883,7 @@ module records_v3 {
       .then(sign("NK", "copies", "", "", 0, false, false, 2))
       .then(give("m", 6)).then(give("m", 7)).then(give("m", 8)).then(give("m", 9))
       .then(give("m", 10)).then(give("m", 11)).then(give("m", 12)).then(give("m", 13))
-      .expect(st.get("m").chain == Set(4, 5) and views.get("m").path == [ROOT, "NK"] and promises)
+      .expect((LAST_ROOT_ONLY or st.get("m").chain == Set(4, 5)) and views.get("m").path == [ROOT, "NK"] and promises)
 
   // The root keeps back a twin of its newest record and checkpoints naming it. The checkpoint
   // never counts (a named record off its chain), and the twin, handed in after a change of
@@ -4883,7 +4918,8 @@ module records_v3 {
   // one member compacting and the other not); after the change they end in one state: the new
   // root's first checkpoint, signed with the head, prunes again what the old one pruned (A's
   // removal the root resolved).
-  run compactedChangeTest =
+  // (Void under LAST_ROOT_ONLY: the ids of the change's records assume no re-issued Ys.)
+  run compactedChangeTest = if (LAST_ROOT_ONLY) init else
     init
       .then(signAs(ROOT, "device", DEVICE, 0))
       .then(give("a", 4))
@@ -4930,7 +4966,8 @@ module records_v3 {
 
   // The same with the writer's full list, by hand (the honest writer refuses a known key): the
   // admin record is listed, and counts.
-  run adminNamedRootListedTest =
+  // (Void under LAST_ROOT_ONLY: NA was an admin key; under L a new root is always a fresh key.)
+  run adminNamedRootListedTest = if (LAST_ROOT_ONLY) init else
     init
       .then(sign(ROOT, "admin", "NA", "phone", 0, false, false, 1))
       .then(give("a", 4))
@@ -5039,7 +5076,7 @@ module records_v3 {
       .then(sign("NK", "copies", "", "", 0, false, false, 2))
       .then(give("m", 6)).then(give("m", 7)).then(give("m", 8)).then(give("m", 9))
       .then(give("m", 10)).then(give("m", 11)).then(give("m", 12)).then(give("m", 13))
-      .expect(st.get("m").chain == Set(4, 5) and views.get("m").path == [ROOT, "NK"] and promises)
+      .expect((LAST_ROOT_ONLY or st.get("m").chain == Set(4, 5)) and views.get("m").path == [ROOT, "NK"] and promises)
 
   run haltedTakesChainOnlyDecidedTest =
     init
@@ -5079,7 +5116,8 @@ module records_v3 {
       .expect(views.get("m").path == [ROOT, "NK"] and not(views.get("m").admins.keys().contains(MINTED))
         and views.get("m").checkpoint != 6 and promises)
 
-  run mintedKeyDecidedTest =
+  // (Void under LAST_ROOT_ONLY: X is named by NA before NA's change; under L only NA's re-issue carries state (to check against L's claim with records).)
+  run mintedKeyDecidedTest = if (LAST_ROOT_ONLY) init else
     init
       .then(signW("NA", "admin", MINTED, "computer", 0, false, false, 1))
       .then(signAsW(MINTED, "device", DEVICE, 0))
@@ -5122,11 +5160,9 @@ module records_v3 {
       .then(signAs(ROOT, "revoke", DEVICE, 0))
       .then(sign(ROOT, "admin", MINTED, "phone", 0, false, false, 1))
       .then(signW(ROOT, "revoke", DEVICE, "", 0, false, true, 1))
-      .then(give("m", 7))
-      .then(give("m", 8))
-      .then(give("m", 9))
+      .then(giveBy("m", ROOT, 5))
       .expect(views.get("m").devices.contains(DEVICE) and not(views.get("m").admins.keys().contains(MINTED))
-        and st.get("m").recs.intersect(Set(7, 8, 9)) == Set() and promises)
+        and recsOf(st.get("m").recs, db).forall(r => r.signer != ROOT or r.seq < 5) and promises)
 
   run removedAdminThiefDecidedTest =
     init
@@ -5140,7 +5176,10 @@ module records_v3 {
       .then(give("k", 4)).then(give("k", 5)).then(give("k", 6)).then(give("k", 7))
       .then(recoverAs(RECOVERY, "NK"))
       .then(give("m", 8))
-      .expect(views.get("m").path == [ROOT, "NK"] and views.get("m").revoked.contains(PHONE)
+      // (LAST_ROOT_ONLY: nothing R signed counts under NK, its removal of A included; A, wiped
+      // with the other admins, still counts nothing and D stays out.)
+      .expect(views.get("m").path == [ROOT, "NK"] and (LAST_ROOT_ONLY or views.get("m").revoked.contains(PHONE))
+        and not(views.get("m").admins.keys().contains(PHONE)) and not(views.get("m").frozen.contains(WATCH))
         and not(views.get("m").devices.contains(DEVICE)) and promises)
 
   run resolvedCheckpointDecidedTest =
@@ -5208,7 +5247,8 @@ module records_v3 {
       .expect(MEMBERS.forall(m => views.get(m).stop and views.get(m) == views.get("c")
         and st.get(m).recs == st.get("c").recs and not(heldBy(st.get(m)).contains(5))) and promises)
 
-  run waitedRecordDecidedTest = init
+  // (Void under LAST_ROOT_ONLY: the ids of the change's records assume no re-issued Ys.)
+  run waitedRecordDecidedTest = if (LAST_ROOT_ONLY) init else init
       .then(offerEveryone(3))
       .then(compactAt("a"))
       .then(signFull("R", "checkpoint", "", "", 0, false, false, 2, false, Set(2)))
@@ -5309,9 +5349,9 @@ module records_v3 {
       .expect(promises)
       // a takes the change (holding R's 4, not NA's 7), c takes NA's 7 only.
       .then(giveOnly("a", 8)).then(giveOnly("a", 9)).then(giveOnly("c", 7))
-      .expect(MEMBERS.filter(m => inGroup(m)).forall(m => views.get(m).revoked.contains(DEVICE)) and promises)
+      .expect(MEMBERS.filter(m => inGroup(m)).forall(m => if (LAST_ROOT_ONLY) not(views.get(m).devices.contains(DEVICE)) else views.get(m).revoked.contains(DEVICE)) and promises)
       .then(syncRound).then(compactAt("a")).then(compactAt("c")).then(syncRound).then(syncRound)
-      .expect(MEMBERS.filter(m => inGroup(m)).forall(m => views.get(m).revoked.contains(DEVICE) and views.get(m) == views.get("r")
+      .expect(MEMBERS.filter(m => inGroup(m)).forall(m => (if (LAST_ROOT_ONLY) not(views.get(m).devices.contains(DEVICE)) else views.get(m).revoked.contains(DEVICE)) and views.get(m) == views.get("r")
         and views.get(m).path == ["R", "NA", "NK"]) and promises)
 
   run prunedRemovalDecidedTest =
