@@ -244,7 +244,7 @@ ends, the Go service described below is still the computers' member.
   and takes each record (`TestAloneRoot`). `cbb pair` opens a pairing window as Go's does: a
   six-digit code, `p=1` in its mDNS record, one attempt at a time, closed by three failed
   ones, after five minutes or once a device joined. Its member port then offers both ALPN
-  protocols, `cbb/3` and `cbb-pair/2`, and takes a joiner's single P-256 certificate; the
+  protocols, `cbb/4` and `cbb-pair/3`, and takes a joiner's single P-256 certificate; the
   negotiated protocol decides after the handshake whether the member chain is checked again
   or the core's admission plays the exchange with the joiner confirming first
   (`Admission::accept`, `TestAloneRootWindow`). With the capability `admin`, it is a computer's service
@@ -679,7 +679,7 @@ sync away from home, the admins, and remote paste.
   never earlier than the CA's start, so a Raspberry Pi that boots with a clock years behind
   real time still accepts them; expired certificates are rejected. The root and the admins
   admit new devices. TLS 1.3 only, with the ALPN protocol
-  `cbb/3`; a client checks that the server's certificate names the device it found in
+  `cbb/4`; a client checks that the server's certificate names the device it found in
   discovery.
 - **End of a CA's life**: certificates end no later than their CA. A member certificate that
   already ends with its CA is not renewed again; replacing a CA after 20 years works like
@@ -695,7 +695,7 @@ sync away from home, the admins, and remote paste.
   the user runs `cbb pair -code` and types the code (it is read from the terminal or standard input, never
   from the command line, where other users of the machine could read it). The new device
   connects to the member's port with
-  the ALPN protocol `cbb-pair/2` and presents a self-signed certificate for the key
+  the ALPN protocol `cbb-pair/3` and presents a self-signed certificate for the key
   it will keep. The two run the CPace password-authenticated key exchange
   (CPACE-X25519-SHA512) with the code, bound to the TLS session by an exporter and to both
   certificates, and confirm the key, the new device first. An attacker gets one guess per

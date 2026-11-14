@@ -66,10 +66,15 @@ use Later::{Absent, Bits, Refuse, Unusable};
 /// range reads as.
 pub static OPTIONAL: &[Optional] = &[
     // The Welcome.
+    o(&t::WELCOME, 2, Refuse, "absent means the records come in parts"),
     o(&t::WELCOME, 4, Absent, "keys statements also come by sync; none grants nothing"),
     o(&t::WELCOME, 6, Refuse, "a leaf's grant: what it obeys"),
     o(&t::WELCOME, 7, Absent, "server credentials also come with the next period; none reaches no server"),
     o(&t::WELCOME, 10, Refuse, "the recovery cut's list must be carried"),
+    o(&t::WELCOME, 12, Refuse, "the digest the joiner's set must have"),
+    o(&t::WELCOME, 13, Refuse, "absent would mean everything is here"),
+    o(&t::RECORDS, 2, Refuse, "records a peer sent: none would drop them"),
+    o(&t::RECORDS, 3, Refuse, "lists a peer sent: none would drop them"),
     o(&t::GRANT, 4, Refuse, "the grant's own reader decides"),
     o(&t::GRANT, 5, Refuse, "absent is the default life: an expiry"),
     // The invitation.

@@ -33,8 +33,16 @@ pub const FIELD_PAYLOAD_HASH: u16 = 5;
 /// The origin's signature.
 pub const FIELD_SIG: u16 = 6;
 
-/// The size of a whole wrap: X-Wing's encapsulated key, K and its tag.
+/// The size of a whole wrap to an X-Wing key: its encapsulated key, K and
+/// its tag. A wrap's length follows the algorithm of its reader's
+/// statement key, so one copy may hold wraps of several algorithms; a
+/// reader checks its own wrap's length only (`copies::open`).
 pub const WRAP_SIZE: usize = 1168;
+
+/// The shortest whole wrap: K and its tag after an encapsulation of at
+/// least one byte. Any longer one is hashed into `W` whatever its
+/// algorithm; others' wraps are bounded by the frame alone.
+pub const MIN_WRAP: usize = 32 + 16 + 1;
 
 /// The rule a copy of the wrong form breaks.
 pub const RULE_SHAPE: Rule = Rule::field("copy/shape");
@@ -112,12 +120,13 @@ pub fn blob_key(k: &[u8; 32], h: &[u8; 32]) -> [u8; 32] {
     hkdf(k, h, sig::LABEL_COPY_BLOB)
 }
 
-/// The hash of one wrap as `W` takes it: a whole wrap is hashed, a 32-byte
-/// element of a reduced copy is the hash already.
+/// The hash of one wrap as `W` takes it: a whole wrap, of whatever
+/// algorithm, is hashed; a 32-byte element of a reduced copy is the hash
+/// already; anything between is no wrap.
 fn wrap_hash(w: &[u8]) -> Result<[u8; 32], Rule> {
     match w.len() {
-        WRAP_SIZE => Ok(sha256(&[w])),
         32 => w.try_into().map_err(|_| RULE_SHAPE),
+        n if n >= MIN_WRAP => Ok(sha256(&[w])),
         _ => Err(RULE_SHAPE),
     }
 }

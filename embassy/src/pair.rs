@@ -115,7 +115,7 @@ impl Pairing {
         let (cfg, exporter) = tls::pair_server(&j.cert, &j.key, clock)?;
         let mut link = Link { session: Session::server(Arc::new(cfg))?, sock, buf: vec![0u8; 2048] };
         link.handshake().await.wrap("the TLS handshake failed")?;
-        if link.session.alpn_protocol() != Some(tls::PAIR_PROTOCOL) {
+        if !cbb_core::alpn::is_pair(link.session.alpn_protocol()) {
             return Err(Error::msg("the device does not offer pairing"));
         }
         let member_der = link

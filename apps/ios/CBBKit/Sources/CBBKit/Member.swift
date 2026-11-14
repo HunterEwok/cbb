@@ -8,7 +8,7 @@ import Foundation
 /// pings, records and goodbyes.
 public enum Member {
     /// The ALPN protocol of member connections.
-    public static let alpn = "cbb/3"
+    public static let alpn = "cbb/4"
     /// The feature of the hello (section 4, "Hello") that says the sender
     /// serves the content of media events, and how many names of the
     /// hello's features a receiver reads.

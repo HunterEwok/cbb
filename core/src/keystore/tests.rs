@@ -124,8 +124,37 @@ fn statements_are_read_row_by_row() {
     ));
     // An optional field is skipped.
     assert!(matches!(read_statement(&mk(1, gk.clone(), Some((300, Value::Uint(1))))), Ok(ReadStatement::Take(_))));
-    // Over 2 KiB of body.
-    let pad = alloc::vec![0u8; 1000];
+    // Further seal keys of later algorithms in the optional zone: skipped,
+    // and the statement seals to field 10's X-Wing key.
+    let mut e = Encoder::new();
+    e.array(1).array(2).uint(9).bytes(&[2; 1568]);
+    let seals = e.finish();
+    match read_statement(&mk(
+        1,
+        gk.clone(),
+        Some((crate::records::statement::FIELD_SEALS, crate::format::cbor::decode(&seals).unwrap())),
+    )) {
+        Ok(ReadStatement::Take(st)) => assert_eq!(st.body().seal.alg(), crate::records::key::ALG_XWING),
+        other => panic!("{other:?}"),
+    }
+    // A body of exactly 32 KiB is taken, one byte more is not.
+    let max = crate::records::statement::MAX_STATEMENT_BODY;
+    let sized = |n: usize| {
+        let mut len = n;
+        loop {
+            let pad = alloc::vec![0u8; len];
+            let env = mk(1, gk.clone(), Some((300, Value::Bytes(&pad))));
+            let body = crate::format::envelope::Envelope::parse_limited(&env, 2 * n).unwrap().body.len();
+            if body == n {
+                return env;
+            }
+            len = (len + n).checked_sub(body).unwrap();
+        }
+    };
+    assert!(matches!(read_statement(&sized(max)), Ok(ReadStatement::Take(_))));
+    assert_eq!(read_statement(&sized(max + 1)).err(), Some(Rule::ENV_SIZE));
+    // Over 32 KiB of body.
+    let pad = alloc::vec![0u8; max];
     assert_eq!(read_statement(&mk(1, gk.clone(), Some((300, Value::Bytes(&pad))))).err(), Some(Rule::ENV_SIZE));
     // time 0 written.
     assert_eq!(read_statement(&mk(1, gk, Some((6, Value::Uint(0))))).err(), Some(Rule::FORM_DEFAULT));

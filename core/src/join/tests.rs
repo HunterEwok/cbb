@@ -503,6 +503,41 @@ fn the_codes_match_their_vectors() {
     }
 }
 
+/// The Welcome's digest and tag against the vectors
+/// (`testdata/format/messages3.json`, "welcome_parts"), which gen.py writes
+/// and the Go check computes on its own.
+#[test]
+fn the_welcome_digest_and_tag_match_their_vectors() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/format/messages3.json");
+    let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let hex = |s: &serde_json::Value| -> Vec<u8> {
+        let s = s.as_str().unwrap();
+        (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+    };
+    let w = &v["welcome_parts"];
+    assert_eq!(w["digest_label"], welcome::LABEL_DIGEST);
+    assert_eq!(w["tag_key_label"], welcome::LABEL_TAG_KEY);
+    assert_eq!(w["tag_label"], welcome::LABEL_TAG);
+    let digests = w["digest"].as_array().unwrap();
+    assert!(digests.len() >= 3);
+    for c in digests {
+        let set: [u8; 32] = hex(&c["set_digest"]).try_into().unwrap();
+        let lists: Vec<Vec<u8>> = c["lists"].as_array().unwrap().iter().map(hex).collect();
+        let got = welcome::digest_from(&set, lists.iter().map(Vec::as_slice));
+        assert_eq!(crate::certs::hex(&got), c["digest"].as_str().unwrap(), "{}", c["name"]);
+    }
+    let tags = w["tag"].as_array().unwrap();
+    assert!(tags.len() >= 6);
+    for c in tags {
+        let (isk, body) = (hex(&c["isk"]), hex(&c["message"]));
+        let got = welcome::open(&body, &isk);
+        match c.get("rule") {
+            Some(rule) => assert_eq!(got.err().map(|r| r.name()), rule.as_str(), "{}", c["name"]),
+            None => assert_eq!(got.map(<[u8]>::to_vec), Ok(hex(&c["welcome"])), "{}", c["name"]),
+        }
+    }
+}
+
 #[test]
 fn an_offered_admin_key_is_new() {
     let g = G::new();
@@ -671,7 +706,7 @@ fn admit(g: &mut G, by_admin: bool, joiner: &K, name: &str) -> Welcome {
     let set = g.set();
     let st = set.state();
     let admitter = if by_admin { laptop.hash } else { k("phone").hash };
-    Welcome::build(&set, &st, &admitter, &joiner.hash, 1_793_000_000_000).unwrap()
+    built(&set, &st, &admitter, &joiner.hash)
 }
 
 #[test]
@@ -798,9 +833,11 @@ fn the_joiner_takes_two_changes_of_root() {
     let st = set.state();
     assert_eq!(st.roots, vec![g.root.hash, n1.hash, n2.hash]);
     assert!(st.device_by_key(&slate.hash).is_some());
-    let w = Welcome::build(&set, &st, &k("phone c").hash, &slate.hash, 1_793_000_000_000).unwrap();
+    let w = built(&set, &st, &k("phone c").hash, &slate.hash);
     let group = format::DeviceId(g.gid.0);
-    let back = Welcome::decode(&w.encode()).unwrap();
+    // Two changes of root are two lists: the set comes in parts.
+    assert!(w.parts > 0);
+    let back = w.clone();
     let r = back.check(&group, &point(&k("phone c")), &point(&slate), Joining::Ordinary, Way::Invited(&invitation()));
     let (mine, st) = r.unwrap_or_else(|e| panic!("{e:?}"));
     assert_eq!(st.roots, vec![g.root.hash, n1.hash, n2.hash]);
@@ -813,22 +850,31 @@ fn the_joiner_takes_two_changes_of_root() {
             .is_ok()
     );
     // Without the list the joiner does not apply the newest change: n1 is
-    // the root there, and n2's record of it does not count.
+    // the root there, and n2's record of it does not count. Left out by the
+    // way, the digest is not the Welcome's; left out by the admitter, whose
+    // digest says so, the joiner is not admitted.
+    let newest = back
+        .records
+        .iter()
+        .find_map(|r| match &r.body().kind {
+            Kind::Recovery { root, list, .. } if root.hash() == n2.hash => Some(*list),
+            _ => None,
+        })
+        .unwrap();
     let mut bare = back.clone();
-    bare.list = None;
-    assert_eq!(
-        bare.check(&group, &point(&k("phone c")), &point(&slate), Joining::Ordinary, Way::Invited(&invitation())).err(),
-        Some(welcome::Refusal::NotAdmitted)
-    );
-    // A list its heads do not name is damage.
+    bare.lists.retain(|l| crate::records::body::list_hash(l) != newest);
+    let ordinary = |w: &Welcome| {
+        w.check(&group, &point(&k("phone c")), &point(&slate), Joining::Ordinary, Way::Invited(&invitation())).err()
+    };
+    assert_eq!(ordinary(&bare), Some(welcome::Refusal::Digest));
+    redigest(&mut bare, g.empty().root(), g.empty().recovery());
+    assert_eq!(ordinary(&bare), Some(welcome::Refusal::NotAdmitted));
+    // A list its heads do not name is not held: the set is not the one sent.
     let mut wrong = back.clone();
-    wrong.list = Some(crate::records::List(vec![RecordId([3; 32])]).encode());
-    assert_eq!(
-        wrong
-            .check(&group, &point(&k("phone c")), &point(&slate), Joining::Ordinary, Way::Invited(&invitation()))
-            .err(),
-        Some(welcome::Refusal::Damaged)
-    );
+    wrong.lists.push(crate::records::List(vec![RecordId([3; 32])]).encode());
+    assert_eq!(ordinary(&wrong), Some(welcome::Refusal::Digest));
+    redigest(&mut wrong, g.empty().root(), g.empty().recovery());
+    assert_eq!(ordinary(&wrong), Some(welcome::Refusal::Digest));
 }
 
 /// A Welcome from a group with two heads at one seq: the joiner does not
@@ -863,7 +909,7 @@ fn the_joiner_sees_a_fork_in_its_welcome() {
     g.rec(&k("root n1"), Kind::device(d));
     let set = g.set();
     let st = set.state();
-    let w = Welcome::build(&set, &st, &k("phone b").hash, &tv.hash, 1_793_000_000_000).unwrap();
+    let w = built(&set, &st, &k("phone b").hash, &tv.hash);
     assert_eq!(w.records.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).count(), 2);
     let group = format::DeviceId(g.gid.0);
     assert_eq!(
@@ -910,6 +956,7 @@ fn the_joiner_does_not_join_over_a_head_it_cannot_read() {
     assert!(later.body().held);
     let mut w = w;
     w.records.insert(0, later);
+    redigest(&mut w, g.empty().root(), g.empty().recovery());
     let group = format::DeviceId(g.gid.0);
     assert_eq!(
         w.check(&group, &point(&k("laptop")), &point(&tv), Joining::Ordinary, Way::Invited(&invitation())).err(),
@@ -949,12 +996,12 @@ fn a_guarded_leaf_joins_by_the_newest_root_only() {
     let group = format::DeviceId(g.gid.0);
     let set = g.set();
     let st = set.state();
-    let w = Welcome::build(&set, &st, &k("phone a").hash, &lock.hash, 1_793_000_000_000).unwrap();
+    let w = built(&set, &st, &k("phone a").hash, &lock.hash);
     let (_, st) =
         w.check(&group, &point(&k("phone a")), &point(&lock), Joining::Guarded, Way::Invited(&invitation())).unwrap();
     assert_eq!(st.roots, vec![g.root.hash, n1.hash]);
     // The old root's phone is no admitter of it.
-    let w = Welcome::build(&set, &st, &k("phone").hash, &lock.hash, 1_793_000_000_000).unwrap();
+    let w = built(&set, &st, &k("phone").hash, &lock.hash);
     assert_eq!(
         w.check(&group, &point(&k("phone")), &point(&lock), Joining::Guarded, Way::Invited(&invitation())).err(),
         Some(welcome::Refusal::NotAdmitter)
@@ -1033,16 +1080,16 @@ fn the_joiner_takes_the_most_changes_of_root() {
     let set = g.set();
     let st = set.state();
     assert_eq!(st.roots.len() as u64, max + 1);
-    let w = Welcome::build(&set, &st, &pa.hash, &slate.hash, 1_793_000_000_000).unwrap();
+    let w = built(&set, &st, &pa.hash, &slate.hash);
     let heads = w.records.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).count();
     assert_eq!(heads as u64, max);
-    let bytes = w.encode();
+    let (sent, parts) = Welcome::build(&set, &st, &pa.hash, &slate.hash, 1_793_000_000_000).unwrap();
+    let bytes = sent.encode().len() + parts.iter().map(|p| welcome::part_message(p).len()).sum::<usize>();
     assert!(
-        bytes.len() <= crate::format::frame::LIMIT_PAIRING,
-        "a realistic Welcome stays under 1 MiB: {}",
-        bytes.len()
+        bytes <= crate::format::frame::LIMIT_PAIRING,
+        "a realistic Welcome and its parts stay under 1 MiB: {bytes}"
     );
-    let back = Welcome::decode(&bytes).unwrap();
+    let back = w;
     let group = format::DeviceId(g.gid.0);
     let (mine, st2) = back
         .check(&group, &point(&pa), &point(&slate), Joining::Ordinary, Way::Invited(&invitation()))
@@ -1594,12 +1641,46 @@ fn one_invitation_takes_few_waiting_places() {
     );
 }
 
-/// Under its budget a Welcome carries the recovery records and the list,
-/// the new root's first checkpoint, the removals that count and the two
-/// devices' records before anything else; when even those do not fit, no
-/// Welcome is built, nothing of them is cut.
+/// The Welcome a joiner ends with: built, and carried with its parts when
+/// it has any.
+fn built(set: &RecordSet, st: &State, admitter: &KeyHash, joiner: &KeyHash) -> Welcome {
+    let (w, parts) = Welcome::build(set, st, admitter, joiner, 1_793_000_000_000).unwrap();
+    if parts.is_empty() { w } else { carried(&w, &parts) }
+}
+
+/// A Welcome whose records were changed after it was built, with the
+/// digest of the set they make: what an admitter that sends them would
+/// have sent.
+fn redigest(w: &mut Welcome, root: &Key, recovery: &crate::records::Recovery) {
+    let mut set = RecordSet::new(root.clone(), recovery.clone());
+    let lists: Vec<&[u8]> = w.list.iter().chain(&w.lists).map(Vec::as_slice).collect();
+    set.take_part(&w.records, &lists);
+    set.take_part(&w.records, &lists);
+    w.digest = Some(welcome::digest_of(&set));
+}
+
+/// A Welcome and its parts as they travel and as the joiner takes them:
+/// message 67 sealed with the session's ISK and opened, each part as a
+/// `records` message into the assembly, the whole Welcome back.
+fn carried(w: &Welcome, parts: &[crate::records::sync::Part<'_>]) -> Welcome {
+    let isk = [0x15u8; 64];
+    let frame = welcome::message(&[0x7b; 64], &w.encode(), &isk).unwrap();
+    let opened = welcome::open(&frame[4..], &isk).unwrap();
+    let mut a = welcome::Assembly::new(Welcome::decode(opened).unwrap(), 1_000).unwrap();
+    assert_eq!(a.due(), parts.len() as u64);
+    for (i, p) in parts.iter().enumerate() {
+        a.take(&welcome::part_message(p), 1_000 + i as u64).unwrap();
+    }
+    a.finish().unwrap()
+}
+
+/// A Welcome whose set passes its budget sends it whole in parts: the
+/// recovery records and their lists, the new root's first checkpoint, the
+/// removals that count, the two devices' records and everything else;
+/// nothing is cut, and the joiner ends in the admitter's state. A set that
+/// fits rides in the Welcome with no part.
 #[test]
-fn a_welcome_carries_what_it_must_first() {
+fn a_welcome_too_wide_for_its_budget_comes_whole_in_parts() {
     let mut g = G::new();
     let (n1, tv, slate) = (k("root n1"), k("tv"), k("slate"));
     g.change(&n1);
@@ -1620,33 +1701,180 @@ fn a_welcome_carries_what_it_must_first() {
     let st = set.state();
     assert!(st.revoked.contains(&tv.hash));
     let admitter = k("phone b").hash;
-    let all = Welcome::build(&set, &st, &admitter, &slate.hash, 1).unwrap();
+    let (all, none) = Welcome::build(&set, &st, &admitter, &slate.hash, 1).unwrap();
+    assert!(none.is_empty() && all.parts == 0 && all.digest == Some(welcome::digest_of(&set)));
     let full: usize =
         all.records.iter().map(|r| r.envelope().len()).sum::<usize>() + all.list.as_ref().map_or(0, Vec::len);
-    let some = full - 30 * set.get(&filler[0]).unwrap().envelope().len();
-    let w = Welcome::build_within(&set, &st, &admitter, &slate.hash, 1, some).unwrap();
-    let has = |id: &RecordId| w.records.iter().any(|r| r.id() == *id);
-    let heads: Vec<RecordId> =
-        g.recs.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).map(Record::id).collect();
-    assert!(heads.iter().all(has) && w.list.is_some());
-    assert!(set.firsts().keys().all(has));
-    assert!(has(&removal.id()) && has(&own.id()));
-    assert!(filler.iter().filter(|id| has(id)).count() <= 10);
     let group = format::DeviceId(g.gid.0);
-    let (_, back) = Welcome::decode(&w.encode())
-        .unwrap()
-        .check(&group, &point(&k("phone b")), &point(&slate), Joining::Ordinary, Way::Invited(&invitation()))
-        .unwrap();
-    assert_eq!(back.roots, st.roots);
-    assert!(back.revoked.contains(&tv.hash));
-    // Too small for what it must carry: no Welcome.
-    assert_eq!(Welcome::build_within(&set, &st, &admitter, &slate.hash, 1, 600), Err(welcome::TooLarge));
+    for budget in [full - 30 * set.get(&filler[0]).unwrap().envelope().len(), 600] {
+        let (w, parts) = Welcome::build_within(&set, &st, &admitter, &slate.hash, 1, budget).unwrap();
+        assert!(!parts.is_empty() && w.parts == parts.len() as u64);
+        assert!(w.records.is_empty() && w.list.is_none() && w.digest == all.digest);
+        let whole = carried(&w, &parts);
+        let has = |id: &RecordId| whole.records.iter().any(|r| r.id() == *id);
+        let heads: Vec<RecordId> =
+            g.recs.iter().filter(|r| matches!(r.body().kind, Kind::Recovery { .. })).map(Record::id).collect();
+        assert!(heads.iter().all(has) && !whole.lists.is_empty());
+        assert!(has(&removal.id()) && has(&own.id()) && filler.iter().all(has));
+        let (mine, back) = whole
+            .check(&group, &point(&k("phone b")), &point(&slate), Joining::Ordinary, Way::Invited(&invitation()))
+            .unwrap();
+        assert_eq!(back, st);
+        assert_eq!(mine.digest(), set.digest());
+    }
 }
 
-/// A Welcome that leaves the rest to sync ends, after one sync of
-/// everything the admitter holds, in the admitter's state.
+/// A map's fields, as a test edits them.
+type Fields<'a> = Vec<(u16, crate::format::cbor::Value<'a>)>;
+
+/// Message 67's tag binds every byte of the Welcome to the session:
+/// a flipped byte, field 13 removed, field 12 changed, no tag, or a tag
+/// from another session's ISK, and the Welcome is not opened.
 #[test]
-fn a_welcome_that_leaves_the_rest_to_sync_ends_in_the_same_state() {
+fn the_welcome_tag_binds_every_byte() {
+    use crate::format::cbor::{self, Value};
+    let mut g = G::new();
+    let (n1, n2, slate) = (k("root n1"), k("root n2"), k("slate"));
+    g.change(&n1);
+    phone_admin(&mut g, &n1, &k("phone b"), &k("admin b"), true);
+    g.change(&n2);
+    phone_admin(&mut g, &n2, &k("phone c"), &k("admin c"), true);
+    let mut d = Device::new(slate.key.clone(), "slate", ROLE_MEMBER);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    g.rec(&n2, Kind::device(d));
+    let set = g.set();
+    let st = set.state();
+    let (w, parts) = Welcome::build(&set, &st, &k("phone c").hash, &slate.hash, 1).unwrap();
+    assert!(w.parts >= 1);
+    let (isk, other) = ([0x15u8; 64], [0x16u8; 64]);
+    let bytes = w.encode();
+    let good = welcome::message(&[0x7b; 64], &bytes, &isk).unwrap();
+    assert_eq!(welcome::open(&good[4..], &isk), Ok(&bytes[..]));
+    assert_eq!(welcome::open(&good[4..], &other), Err(welcome::RULE_TAG));
+    // The same tag over other bytes.
+    let tw = welcome::tag(&isk, &bytes).unwrap();
+    let with = |welcome: &[u8], tw: Option<&[u8]>| {
+        let mut m =
+            vec![(0, Value::Uint(T_WELCOME)), (2, Value::Bytes(&[0x7b; 64])), (3, cbor::decode(welcome).unwrap())];
+        if let Some(t) = tw {
+            m.push((4, Value::Bytes(t)));
+        }
+        crate::format::frame::write(&Value::Map(m))
+    };
+    let edited = |f: &dyn Fn(&mut Fields<'_>)| {
+        let v = cbor::decode(&bytes).unwrap();
+        let mut m = v.as_map().unwrap().to_vec();
+        f(&mut m);
+        Value::Map(m).encode()
+    };
+    let no_parts = edited(&|m| m.retain(|(k, _)| *k != 13));
+    let other_digest = edited(&|m| {
+        for (k, v) in m.iter_mut() {
+            if *k == 12 {
+                *v = Value::Bytes(&[9; 32]);
+            }
+        }
+    });
+    let mut flipped = bytes.clone();
+    let last = flipped.len() - 1;
+    flipped[last] ^= 1;
+    for (name, f) in [
+        ("field 13 removed", with(&no_parts, Some(&tw))),
+        ("field 12 changed", with(&other_digest, Some(&tw))),
+        ("no tag", with(&bytes, None)),
+    ] {
+        assert_eq!(welcome::open(&f[4..], &isk).err(), Some(welcome::RULE_TAG), "{name}");
+    }
+    if cbor::decode(&flipped).is_ok() {
+        assert_eq!(welcome::open(&with(&flipped, Some(&tw))[4..], &isk).err(), Some(welcome::RULE_TAG));
+    }
+    // The assembly: a part after the last, another message while parts are
+    // due, and parts that come late.
+    let decoded = Welcome::decode(&bytes).unwrap();
+    let first = welcome::part_message(&parts[0]);
+    let mut a = welcome::Assembly::new(decoded.clone(), 0).unwrap();
+    for (i, p) in parts.iter().enumerate() {
+        a.take(&welcome::part_message(p), i as u64).unwrap();
+    }
+    assert_eq!(a.take(&first, 10), Err(welcome::RULE_PARTS));
+    let mut a = welcome::Assembly::new(decoded.clone(), 0).unwrap();
+    let ping = crate::format::frame::write(&Value::Map(vec![(0, Value::Uint(3))]));
+    assert_eq!(a.take(&ping, 1), Err(welcome::RULE_PARTS));
+    let a = welcome::Assembly::new(decoded.clone(), 0).unwrap();
+    assert!(!a.late(welcome::PART_MS) && a.late(welcome::PART_MS + 1));
+    let mut a = welcome::Assembly::new(decoded.clone(), 0).unwrap();
+    assert_eq!(a.take(&first, welcome::PART_MS + 1), Err(welcome::RULE_LATE));
+    assert_eq!(welcome::Assembly::new(decoded, 0).unwrap().finish().err(), Some(welcome::RULE_PARTS));
+}
+
+/// A part whose recovery record carries another second signature: its ID
+/// and the digest stay the same, but its first signature does not cover
+/// it, so the set does not hold it and the joiner does not join.
+#[test]
+fn a_part_with_a_swapped_second_signature_is_refused() {
+    let mut g = G::new();
+    let (n1, n2, slate) = (k("root n1"), k("root n2"), k("slate"));
+    g.change(&n1);
+    phone_admin(&mut g, &n1, &k("phone b"), &k("admin b"), true);
+    g.change(&n2);
+    phone_admin(&mut g, &n2, &k("phone c"), &k("admin c"), true);
+    let mut d = Device::new(slate.key.clone(), "slate", ROLE_MEMBER);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    g.rec(&n2, Kind::device(d));
+    let set = g.set();
+    let st = set.state();
+    let group = format::DeviceId(g.gid.0);
+    let mut w = built(&set, &st, &k("phone c").hash, &slate.hash);
+    let heads: Vec<usize> = (0..w.records.len()).filter(|i| w.records[*i].sig2().is_some()).collect();
+    assert!(heads.len() >= 2);
+    let (a, b) = (&w.records[heads[0]], &w.records[heads[1]]);
+    let swapped = Record::decode(&crate::format::envelope::write(a.body_bytes(), a.sig(), b.sig2())).unwrap();
+    assert_eq!(swapped.id(), a.id());
+    w.records[heads[0]] = swapped;
+    assert_eq!(
+        w.check(&group, &point(&k("phone c")), &point(&slate), Joining::Ordinary, Way::Invited(&invitation())).err(),
+        Some(welcome::Refusal::Digest)
+    );
+}
+
+/// The rules between a Welcome's fields.
+#[test]
+fn a_welcome_keeps_its_fields_together() {
+    use crate::format::cbor::{self, Value};
+    let mut g = G::new();
+    let slate = k("slate");
+    let mut d = Device::new(slate.key.clone(), "slate", ROLE_MEMBER);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    g.rec_root(Kind::device(d));
+    let set = g.set();
+    let st = set.state();
+    let (w, _) = Welcome::build(&set, &st, &k("phone").hash, &slate.hash, 1).unwrap();
+    let bytes = w.encode();
+    let v = cbor::decode(&bytes).unwrap();
+    let edit = |f: &dyn Fn(&mut Fields<'_>)| {
+        let mut m = v.as_map().unwrap().to_vec();
+        f(&mut m);
+        m.sort_by_key(|(k, _)| *k);
+        Welcome::decode(&Value::Map(m).encode()).err()
+    };
+    assert_eq!(edit(&|_| {}), None);
+    assert_eq!(edit(&|m| m.push((13, Value::Uint(2)))), Some(welcome::RULE_PARTS), "parts beside the records");
+    assert_eq!(edit(&|m| m.retain(|(k, _)| *k != 2)), Some(welcome::RULE_SHAPE), "neither records nor parts");
+    assert_eq!(edit(&|m| m.retain(|(k, _)| *k != 12)), Some(welcome::RULE_DIGEST), "no digest");
+    let parts = |n: u64| {
+        edit(&|m| {
+            m.retain(|(k, _)| *k != 2 && *k != 10);
+            m.push((13, Value::Uint(n)));
+        })
+    };
+    assert_eq!(parts(64), None);
+    assert_eq!(parts(65).map(|r| r.name()), Some("welcome/parts"));
+}
+
+/// A Welcome in parts leaves nothing to sync: one sync of everything the
+/// admitter holds adds nothing and changes nothing.
+#[test]
+fn a_welcome_in_parts_leaves_nothing_to_sync() {
     let mut g = G::new();
     let (n1, slate) = (k("root n1"), k("slate"));
     g.change(&n1);
@@ -1660,22 +1888,18 @@ fn a_welcome_that_leaves_the_rest_to_sync_ends_in_the_same_state() {
     let set = g.set();
     let st = set.state();
     let admitter = k("phone b").hash;
-    let all = Welcome::build(&set, &st, &admitter, &slate.hash, 1).unwrap();
-    let full: usize =
-        all.records.iter().map(|r| r.envelope().len()).sum::<usize>() + all.list.as_ref().map_or(0, Vec::len);
-    let w = Welcome::build_within(&set, &st, &admitter, &slate.hash, 1, full - 20 * 200).unwrap();
-    assert!(w.records.len() < all.records.len());
+    let (w, parts) = Welcome::build_within(&set, &st, &admitter, &slate.hash, 1, 20 * 200).unwrap();
+    assert!(!parts.is_empty());
     let group = format::DeviceId(g.gid.0);
-    let (mut mine, _) = Welcome::decode(&w.encode())
-        .unwrap()
+    let (mut mine, _) = carried(&w, &parts)
         .check(&group, &point(&k("phone b")), &point(&slate), Joining::Ordinary, Way::Invited(&invitation()))
         .unwrap();
-    assert!(mine.len() < set.len());
-    // One sync: the admitter sends what it holds.
-    let (_, refused) = mine.insert_all(set.in_dependency_order().into_iter().cloned());
-    assert!(refused.is_empty(), "{refused:?}");
-    assert_eq!(mine.state(), st);
     assert_eq!(mine.len(), set.len());
+    // One sync: the admitter sends what it holds.
+    let (stored, refused) = mine.insert_all(set.in_dependency_order().into_iter().cloned());
+    assert!(refused.is_empty(), "{refused:?}");
+    assert_eq!(stored, 0);
+    assert_eq!(mine.state(), st);
 }
 
 /// Pairing frames: before the confirm every message takes the pairing
@@ -1710,8 +1934,8 @@ fn only_a_confirmed_welcome_takes_the_member_frame() {
 }
 
 /// The joiner's record comes with its signer's chain below it: a budget
-/// that cannot hold that chain gives no Welcome, not one the joiner would
-/// refuse.
+/// that cannot hold the set sends it in parts, which the joiner takes,
+/// never a Welcome it would refuse.
 #[test]
 fn a_welcome_carries_the_chain_of_the_joiners_record() {
     let mut g = G::new();
@@ -1725,14 +1949,17 @@ fn a_welcome_carries_the_chain_of_the_joiners_record() {
     let set = g.set();
     let st = set.state();
     let admitter = k("phone").hash;
-    let all = Welcome::build(&set, &st, &admitter, &slate.hash, 1).unwrap();
+    let (all, _) = Welcome::build(&set, &st, &admitter, &slate.hash, 1).unwrap();
     let full: usize =
         all.records.iter().map(|r| r.envelope().len()).sum::<usize>() + all.list.as_ref().map_or(0, Vec::len);
     let group = format::DeviceId(g.gid.0);
-    assert!(
-        all.check(&group, &point(&k("phone")), &point(&slate), Joining::Ordinary, Way::Invited(&invitation())).is_ok()
-    );
-    assert_eq!(Welcome::build_within(&set, &st, &admitter, &slate.hash, 1, full - 1), Err(welcome::TooLarge));
+    let check = |w: &Welcome| {
+        w.check(&group, &point(&k("phone")), &point(&slate), Joining::Ordinary, Way::Invited(&invitation())).map(|_| ())
+    };
+    assert!(check(&all).is_ok());
+    let (w, parts) = Welcome::build_within(&set, &st, &admitter, &slate.hash, 1, full - 1).unwrap();
+    assert!(!parts.is_empty());
+    assert!(check(&carried(&w, &parts)).is_ok());
 }
 
 /// Every gate on admitting asks one predicate (`State::stopped`): two
@@ -1790,6 +2017,7 @@ fn every_gate_asks_whether_the_group_is_stopped() {
     let tv = k("tv");
     let mut w = admit(&mut g, true, &tv, "tv");
     w.records.push(twin);
+    redigest(&mut w, g.empty().root(), g.empty().recovery());
     let group = format::DeviceId(g.gid.0);
     assert_eq!(
         w.check(&group, &point(&k("laptop")), &point(&tv), Joining::Ordinary, Way::Invited(&invitation())).err(),

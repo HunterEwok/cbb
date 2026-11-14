@@ -51,7 +51,7 @@ object Member {
     }
 
     /** The ALPN protocol of member connections. */
-    const val ALPN = "cbb/3"
+    const val ALPN = "cbb/4"
 
     /** The feature of the hello (section 4, "Hello") that says the sender serves the content of media events. */
     const val FEATURE_MEDIA = "media"

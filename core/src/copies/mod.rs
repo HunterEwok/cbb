@@ -373,6 +373,8 @@ pub fn open(c: &Checked<'_>, me: &DeviceId, store: &dyn KeyStore, state: &State)
     let Some(i) = c.readers.iter().position(|(d, _)| d == me) else { return Ok(Opened::NotForMe) };
     let (_, epoch) = c.readers.get(i).copied().ok_or(fcopy::RULE_SHAPE)?;
     let wrap = c.copy.wraps.get(i).copied().ok_or(fcopy::RULE_SHAPE)?;
+    // A reader checks its own wrap's length only, by the algorithm of its
+    // own statement key: X-Wing, the only one of 0.6.
     if wrap.len() != fcopy::WRAP_SIZE {
         return Err(fcopy::RULE_SHAPE);
     }

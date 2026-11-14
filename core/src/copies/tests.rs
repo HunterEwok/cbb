@@ -167,19 +167,21 @@ fn every_member_checks_the_origin_before_passing_a_copy_on() {
     let _ = &w.desktop;
 }
 
-/// A copy whose header commits to another key than the one its wraps
-/// carry: signed by the origin, so only the reader's check finds it.
-#[test]
-fn the_copy_key_is_bound_to_its_header() {
-    let w = World::new();
-    let state = w.g.state();
-    let rs = readers(&state, &w.sealing(), &Content::text("x", false), &w.id("phone"), &[], None);
-    let (k1, k2) = ([1u8; 32], [2u8; 32]);
+/// A copy sealed by hand: K under the header's `commit` of `commit_to`,
+/// each reader's wrap from `wrap` (given the reader, `h` and K), signed by
+/// the phone over what the wraps hash to.
+fn hand_sealed(
+    w: &World,
+    rs: &[Reader],
+    k1: &[u8; 32],
+    commit_to: &[u8; 32],
+    wrap: impl Fn(&Reader, &[u8; 32], &[u8; 32]) -> Vec<u8>,
+) -> Vec<u8> {
     let plain = Content::text("x", false).write().unwrap();
     let entries: Vec<Value<'_>> =
         rs.iter().map(|r| Value::Array(vec![Value::Bytes(&r.id.0), Value::Uint(r.epoch)])).collect();
     let origin = w.id("phone");
-    let commit = fcopy::commit(&k2);
+    let commit = fcopy::commit(commit_to);
     let hdr = Value::Map(vec![
         (1, Value::Bytes(&[9; 16])),
         (2, Value::Bytes(&origin.0)),
@@ -190,8 +192,8 @@ fn the_copy_key_is_bound_to_its_header() {
     .encode();
     let h = fcopy::header_hash(&hdr);
     let payload =
-        aead(&fcopy::payload_key(&k1, &h)).encrypt(&Nonce::default(), Payload { msg: &plain, aad: &h }).unwrap();
-    let wraps: Vec<Vec<u8>> = rs.iter().map(|r| crate::seal::seal(&r.seal, &h, &k1).unwrap()).collect();
+        aead(&fcopy::payload_key(k1, &h)).encrypt(&Nonce::default(), Payload { msg: &plain, aad: &h }).unwrap();
+    let wraps: Vec<Vec<u8>> = rs.iter().map(|r| wrap(r, &h, k1)).collect();
     let hashes: Vec<[u8; 32]> = wraps.iter().map(|x| sha256(&[x])).collect();
     let s = rkey::sign_es256(
         &w.phone,
@@ -199,15 +201,62 @@ fn the_copy_key_is_bound_to_its_header() {
         &fcopy::signed(&h, &fcopy::wraps_digest(&hashes), &sha256(&[&payload])),
     )
     .unwrap();
-    let v = Value::Map(vec![
+    Value::Map(vec![
         (1, Value::Bytes(&hdr)),
         (3, Value::Array(wraps.iter().map(|x| Value::Bytes(x)).collect())),
         (4, Value::Bytes(&payload)),
         (6, Value::Bytes(&s)),
-    ]);
+    ])
+    .encode()
+}
+
+/// A group that moves to another sealing algorithm device by device: one
+/// copy holds wraps of two lengths. Every member checks and passes it on,
+/// the X-Wing reader opens its own wrap, the leaf gets it reduced, and only
+/// the reader whose own wrap is not of its algorithm's length refuses it.
+#[test]
+fn a_copy_may_hold_wraps_of_several_algorithms() {
+    let w = World::new();
+    let state = w.g.state();
+    let kettle = w.id("kettle");
+    let rs = readers(&state, &w.sealing(), &Content::text("x", false), &w.id("phone"), &[kettle], None);
+    let later = w.id("desktop");
+    assert!(rs.iter().any(|r| r.id == later));
+    let k1 = [1u8; 32];
+    let copy = hand_sealed(&w, &rs, &k1, &k1, |r, h, k| {
+        if r.id == later { vec![7; 1500] } else { crate::seal::seal(&r.seal, h, k).unwrap() }
+    });
+    let v = cbor::decode(&copy).unwrap();
+    let c = check(&v, &state).unwrap();
+    assert_eq!(opened(open(&c, &w.id("laptop"), &w.stores["laptop"], &state).unwrap()).text.as_deref(), Some("x"));
+    assert_eq!(open(&c, &later, &w.stores["desktop"], &state), Err(fcopy::RULE_SHAPE));
+    let reduced = reduce(&c.copy, &c.readers, &kettle).unwrap();
+    let rv = cbor::decode(&reduced).unwrap();
+    let rc = check(&rv, &state).unwrap();
+    assert_eq!(opened(open(&rc, &kettle, &w.stores["kettle"], &state).unwrap()).text.as_deref(), Some("x"));
+    // A wrap too short to hold K and its tag, other than a hash, is no wrap.
+    for n in [0, 31, 33, fcopy::MIN_WRAP - 1] {
+        let copy = hand_sealed(&w, &rs, &k1, &k1, |r, h, k| {
+            if r.id == later { vec![7; n] } else { crate::seal::seal(&r.seal, h, k).unwrap() }
+        });
+        assert_eq!(check(&cbor::decode(&copy).unwrap(), &state).err(), Some(fcopy::RULE_SHAPE), "{n}");
+    }
+}
+
+/// A copy whose header commits to another key than the one its wraps
+/// carry: signed by the origin, so only the reader's check finds it.
+#[test]
+fn the_copy_key_is_bound_to_its_header() {
+    let w = World::new();
+    let state = w.g.state();
+    let rs = readers(&state, &w.sealing(), &Content::text("x", false), &w.id("phone"), &[], None);
+    let (k1, k2) = ([1u8; 32], [2u8; 32]);
+    let copy = hand_sealed(&w, &rs, &k1, &k2, |r, h, k| crate::seal::seal(&r.seal, h, k).unwrap());
+    let v = cbor::decode(&copy).unwrap();
     let c = check(&v, &state).unwrap();
     assert_eq!(open(&c, &w.id("laptop"), &w.stores["laptop"], &state), Err(fcopy::RULE_COMMIT));
     // One K under two headers gives two payload keys (A-75).
+    let h = c.copy.h;
     let h2 = fcopy::header_hash(b"another header");
     assert_ne!(fcopy::payload_key(&k1, &h), fcopy::payload_key(&k1, &h2));
     assert_ne!(fcopy::blob_key(&k1, &h), fcopy::blob_key(&k1, &h2));

@@ -16,6 +16,11 @@
 //! moves both sides. A set that grows linearly costs the same per record at
 //! every size.
 //!
+//! A time ratio is a weak gate: it flaps on a loaded runner. Records adds a
+//! test-only count of the records the set's scans visit, with its fix; the
+//! tests then gate on that count, and the times stay as printed
+//! information only.
+//!
 //! These tests fail today: insert scans the whole set for a key's twin at a
 //! seq, and walks every checkpoint's keep list. They are ignored, with the
 //! counts measured on 3bf589c1 in their messages, until the records' fix

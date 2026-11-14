@@ -6,7 +6,9 @@ package main
 import (
 	"bytes"
 	"crypto/elliptic"
+	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
@@ -16,6 +18,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 // The messages wave 3 numbers (messages3.json): each read by the profile,
@@ -219,6 +223,25 @@ func betweenRule(name string, m map[any]any) string {
 	if _, three := m[uint64(3)]; name == "welcome" && (three || m[uint64(8)] != nil) {
 		return "welcome/retired"
 	}
+	has := func(k uint64) bool { _, ok := m[k]; return ok }
+	// A Welcome's records ride in it or in parts, never both; a leaf's
+	// (with a grant) has neither digest nor parts, every other a digest.
+	if name == "welcome" {
+		switch {
+		case has(13) && (has(2) || has(10)):
+			return "welcome/parts"
+		case !has(13) && !has(2):
+			return "welcome/shape"
+		case has(6) && has(13):
+			return "welcome/parts"
+		case has(6) == has(12):
+			return "welcome/digest"
+		}
+	}
+	// A records message carries records, lists, or both.
+	if name == "records" && !has(2) && !has(3) {
+		return "records/shape"
+	}
 	return ""
 }
 
@@ -322,6 +345,20 @@ func checkMessages(dir string) {
 				Name, Member, Joiner, Invitation, Ci string
 			} `json:"channel_id"`
 		} `json:"codes"`
+		WelcomeParts struct {
+			DigestLabel string `json:"digest_label"`
+			KeyLabel    string `json:"tag_key_label"`
+			TagLabel    string `json:"tag_label"`
+			Digest      []struct {
+				Name      string   `json:"name"`
+				SetDigest string   `json:"set_digest"`
+				Lists     []string `json:"lists"`
+				Digest    string   `json:"digest"`
+			} `json:"digest"`
+			Tag []struct {
+				Name, Isk, Message, Welcome, Rule string
+			} `json:"tag"`
+		} `json:"welcome_parts"`
 	}
 	load(dir, "messages3.json", &f)
 	msgTables = f.Tables
@@ -463,6 +500,18 @@ func checkMessages(dir string) {
 		ci = append(ci, unhex(c.Invitation)...)
 		return c.Name, unhex(c.Invitation), hex.EncodeToString(ci) + "|" + c.Ci
 	})
+	count += checkWelcomeParts(f.WelcomeParts.DigestLabel, f.WelcomeParts.KeyLabel, f.WelcomeParts.TagLabel,
+		len(f.WelcomeParts.Digest), func(i int) (string, []byte, [][]byte, string) {
+			c := f.WelcomeParts.Digest[i]
+			var lists [][]byte
+			for _, l := range c.Lists {
+				lists = append(lists, unhex(l))
+			}
+			return c.Name, unhex(c.SetDigest), lists, c.Digest
+		}, len(f.WelcomeParts.Tag), func(i int) (string, []byte, []byte, string, string) {
+			c := f.WelcomeParts.Tag[i]
+			return c.Name, unhex(c.Isk), unhex(c.Message), c.Welcome, c.Rule
+		})
 	fmt.Printf("%-18s %d checked, %d of them by the invitation's rules between fields\n", "messages3.json", count, cross)
 }
 
@@ -572,4 +621,71 @@ func publicIP(a netip.Addr) bool {
 		return false
 	}
 	return true
+}
+
+// checkWelcomeParts checks the Welcome's digest and its tag Tw
+// (plans/second-builder/welcome-in-parts.md), each computed here: the
+// digest over a set's digest, the count of its lists and their hashes,
+// sorted; Tw = HMAC-SHA-512(HMAC-SHA-512(ISK, key label 0x00), tag label
+// 0x00 ‖ field 3's bytes as they stand in message 67).
+func checkWelcomeParts(digestLabel, keyLabel, tagLabel string, nDigest int,
+	digest func(int) (string, []byte, [][]byte, string), nTag int,
+	tag func(int) (string, []byte, []byte, string, string)) int {
+	if digestLabel != "cbb welcome digest v1" || keyLabel != "cbb welcome key v1" || tagLabel != "cbb welcome v1" {
+		fail("welcome parts: labels %q %q %q", digestLabel, keyLabel, tagLabel)
+	}
+	n := 0
+	if nDigest < 3 || nTag < 6 {
+		fail("welcome parts: %d digests, %d tags", nDigest, nTag)
+	}
+	for i := 0; i < nDigest; i++ {
+		name, set, lists, want := digest(i)
+		var hs [][]byte
+		for _, l := range lists {
+			h := sha256.Sum256(append([]byte("cbb recovery list v3\x00"), l...))
+			hs = append(hs, h[:])
+		}
+		sort.Slice(hs, func(a, b int) bool { return bytes.Compare(hs[a], hs[b]) < 0 })
+		h := sha256.New()
+		h.Write([]byte(digestLabel + "\x00"))
+		h.Write(set)
+		var count [4]byte
+		binary.BigEndian.PutUint32(count[:], uint32(len(hs)))
+		h.Write(count[:])
+		for _, x := range hs {
+			h.Write(x)
+		}
+		if got := hex.EncodeToString(h.Sum(nil)); got != want {
+			fail("welcome digest %s: %s, want %s", name, got, want)
+		}
+		n++
+	}
+	for i := 0; i < nTag; i++ {
+		name, isk, msg, welcome, rule := tag(i)
+		var m map[uint64]cbor.RawMessage
+		if err := cbor.Unmarshal(msg, &m); err != nil {
+			fail("welcome tag %s: %v", name, err)
+			continue
+		}
+		got := ""
+		w, tw := []byte(m[3]), []byte(nil)
+		if raw, ok := m[4]; ok {
+			if err := cbor.Unmarshal(raw, &tw); err != nil {
+				got = "pair/welcome/tw"
+			}
+		}
+		k := hmac.New(sha512.New, isk)
+		k.Write([]byte(keyLabel + "\x00"))
+		t := hmac.New(sha512.New, k.Sum(nil))
+		t.Write([]byte(tagLabel + "\x00"))
+		t.Write(w)
+		if got == "" && (tw == nil || !hmac.Equal(tw, t.Sum(nil))) {
+			got = "pair/welcome/tw"
+		}
+		if got != rule || (rule == "" && hex.EncodeToString(w) != welcome) {
+			fail("welcome tag %s: %q, want %q", name, got, rule)
+		}
+		n++
+	}
+	return n
 }

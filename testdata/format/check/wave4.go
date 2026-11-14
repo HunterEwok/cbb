@@ -847,7 +847,7 @@ func hubOrders(o map[any]any) string {
 // is refused. A second signer of a later version is taken on the first
 // signature alone.
 func statementVerdict(body []byte, m map[any]any) string {
-	if len(body) > 2048 {
+	if len(body) > 32768 {
 		return "env/size"
 	}
 	if t, ok := u(m, 1); !ok || t < 1 {

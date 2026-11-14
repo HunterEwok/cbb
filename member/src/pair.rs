@@ -91,7 +91,7 @@ fn run(
     tc.sock.set_read_timeout(Some(ATTEMPT_TIMEOUT)).context("the connection broke")?;
     tc.sock.set_write_timeout(Some(ATTEMPT_TIMEOUT)).context("the connection broke")?;
     tls::handshake(&mut tc.session, &tc.sock, "the TLS handshake failed")?;
-    if tc.session.alpn_protocol() != Some(tls::PAIR_PROTOCOL) {
+    if !cbb_core::alpn::is_pair(tc.session.alpn_protocol()) {
         return Err(Error::msg("the device does not offer pairing"));
     }
     let member_der = tc

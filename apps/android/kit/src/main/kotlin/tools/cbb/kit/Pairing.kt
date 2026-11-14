@@ -18,7 +18,7 @@ import java.util.Base64
  */
 object Pairing {
     /** The ALPN protocol of pairing connections. */
-    const val ALPN = "cbb-pair/2"
+    const val ALPN = "cbb-pair/3"
 
     /** The TLS exporter label for the CPace session ID. */
     const val EXPORTER_LABEL = "EXPERIMENTAL-cbb-pair-v2"

@@ -30,9 +30,6 @@ use crate::format::{KeyHash, Rule};
 use crate::identity::ExternalKey;
 use crate::records::Key;
 
-/// The ALPN protocol of pairing in 0.6.
-pub const PAIR_PROTOCOL: &[u8] = b"cbb-pair/3";
-
 /// The pairing messages (format 11.1).
 pub const T_START: u64 = 64;
 pub const T_REPLY: u64 = 65;
@@ -47,6 +44,13 @@ pub const T_INTRO: u64 = 8;
 /// takes the pairing limit (1 MiB); after it, the Welcome (message 67) may
 /// take the member limit (7 MiB) and every other message still the pairing
 /// limit. A Welcome before the confirm is refused whatever its size.
+///
+/// What is read of message 67 before its tag (`welcome::open`) is checked:
+/// this walk of the frame's CBOR, at most one member frame (7 MiB), into
+/// values whose arrays and maps are sized by the bytes left, never by the
+/// counts their heads announce, so the memory is linear in the frame's
+/// bytes. Nothing of field 3 is interpreted before the tag holds. The fuzz
+/// target `welcome_message` feeds it any bytes.
 pub fn read_pairing(frame: &[u8], confirmed: bool) -> Result<crate::format::frame::Message<'_>, Rule> {
     use crate::format::frame::{self, LIMIT_MEMBER, LIMIT_PAIRING};
     let m = frame::read(frame, if confirmed { LIMIT_MEMBER } else { LIMIT_PAIRING })?;

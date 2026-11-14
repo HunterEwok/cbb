@@ -77,3 +77,10 @@ path = "fuzz_targets/format.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "welcome_message"
+path = "fuzz_targets/welcome_message.rs"
+test = false
+doc = false
+bench = false

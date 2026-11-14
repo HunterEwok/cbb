@@ -65,7 +65,8 @@ kits), so a reader that fails in another way also shows as a difference.
   (`internal/group`), `FuzzRelayWire` (`internal/relay`), `FuzzForwardWire`
   (`internal/forward`) and `FuzzDecodeDIB` (`internal/pasteboard`), and the lite core's
   `cargo fuzz` targets in `core/fuzz` (`record_body`, `command`, `credential`,
-  `release`, `wire`, `vless`, and `api`, the core's entry point of [core-api.md](core-api.md)),
+  `release`, `wire`, `vless`, `format`, `welcome_message` (pairing's message 67 before its tag,
+  which no bytes may pass) and `api`, the core's entry point of [core-api.md](core-api.md)),
   seeded by `go run ./tools/difffuzz seeds`. `api` starts from requests for every operation,
   each case of `v2-records.json` among them, and checks that any bytes get one answer of the
   ABI, with `ok` or a listed error code, and that a request answered twice gets the same

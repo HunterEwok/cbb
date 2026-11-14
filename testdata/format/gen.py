@@ -1268,6 +1268,13 @@ def copy_vector():
     content = dec(pad_content({0: 1, 5: "hello"}))
     assert len(enc(content)) == 1024
     assert verify(LAPTOP.key, "cbb copy sig v2", h + W + P, sig)
+    # a group moving to another sealing algorithm device by device: the
+    # phone's wrap is of a later algorithm (1500 bytes), the others X-Wing's
+    pi = [r[0] for r in readers].index(PHONE.id16)
+    mixed_wraps = [fake("later wrap", 1500) if i == pi else w for i, w in enumerate(wraps)]
+    mixed_W = sha(b"".join(sha(w) for w in mixed_wraps))
+    mixed_sig = LAPTOP.sign("cbb copy sig v2", h + mixed_W + P)
+    mixed = {1: hb, 2: 15, 3: mixed_wraps, 4: payload, 6: mixed_sig}
     return {
         "name": "a text copy for three readers",
         "hdr_diag": diag(hdr), "hdr": hb.hex(), "h": h.hex(), "K": K.hex(), "commit": commit.hex(),
@@ -1275,11 +1282,17 @@ def copy_vector():
         "blob_key": hkdf(K, h, b"cbb copy blob v2").hex(),
         "W": W.hex(), "P": P.hex(), "sig": sig.hex(),
         "copy": enc(full).hex(), "reduced_copy_for_board": enc(reduced).hex(),
+        "mixed_copy": enc(mixed).hex(), "mixed_W": mixed_W.hex(),
+        "mixed_note": "wraps of two algorithms in one copy: a whole wrap of any length over 48 bytes is hashed into W; a reader checks its own wrap's length only",
         "refuse_copies": [
             {"name": name, "rule": rule, "copy": enc(c).hex()}
             for name, rule, c in [
                 ("three readers, no wraps", "copy/shape", {**full, 3: []}),
                 ("three readers, five wraps", "copy/shape", {**full, 3: wraps + wraps[:2]}),
+                ("a wrap of 48 bytes, too short for K and its tag", "copy/shape",
+                 {**full, 3: [fake("short wrap", 48) if i == pi else w for i, w in enumerate(wraps)]}),
+                ("a wrap of 33 bytes", "copy/shape",
+                 {**full, 3: [fake("short wrap", 33) if i == pi else w for i, w in enumerate(wraps)]}),
                 ("reuse in the header", "copy/reuse", {**full, 1: enc({**hdr, 7: [sha(b"copy")[:16], 1]})}),
                 ("unknown critical field in the header", "form/critical", {**full, 1: enc({**hdr, 200: 1})}),
                 ("a header of readers only", "copy/shape", {**full, 1: enc({4: readers})}),
@@ -1571,6 +1584,7 @@ TABLES = {
     "pair/welcome": [
         (2, "pair/welcome/tb", "bytes 1..64", True),
         (3, "pair/welcome/welcome", "map welcome", True),
+        (4, "pair/welcome/tw", "bytes 64", True),
     ],
     "pair/done": [
     ],
@@ -1579,14 +1593,20 @@ TABLES = {
     ],
     "welcome": [
         (1, "welcome/root", "key 1", True),
-        (2, "welcome/records", "array 1..8192 of envelope", True),
+        (2, "welcome/records", "array 1..8192 of envelope", False),
         (4, "welcome/keys", "array 1..256 of envelope", False),
         (5, "welcome/time", "uint 1..9223372036854775807", True),
         (6, "welcome/grant", "map welcome/grant", False),
         (7, "welcome/credentials", "array 1..259 of envelope", False),
         (9, "welcome/recovery", "key 1", True),
-        (10, "welcome/list", "bytes 1..34820", False),
+        (10, "welcome/list", "bytes 1..52228", False),
         (11, "welcome/recovery2", "key 4", True),
+        (12, "welcome/digest", "bytes 32", False),
+        (13, "welcome/parts", "uint 1..64", False),
+    ],
+    "records": [
+        (2, "records/records", "array 1..4096 of envelope", False),
+        (3, "records/lists", "array 1..64 of bytes 1..52228", False),
     ],
     "welcome/grant": [
         (2, "welcome/grant", "envelope", True),
@@ -1756,7 +1776,7 @@ TABLES = {
 }
 
 MESSAGE_TYPES = {
-    10: "result", 11: "member-credentials", 15: "tunnel", 16: "hubs", 17: "guest", 26: "waiting", 27: "dismiss",
+    5: "records", 10: "result", 11: "member-credentials", 15: "tunnel", 16: "hubs", 17: "guest", 26: "waiting", 27: "dismiss",
     64: "pair/start", 65: "pair/reply", 66: "pair/confirm", 67: "pair/welcome", 68: "pair/done",
     69: "pair/error", 80: "forward/challenge", 81: "forward/register", 82: "forward/registered",
     83: "server/error", 84: "forward/seen", 90: "relay/challenge", 91: "relay/register",
@@ -1923,6 +1943,20 @@ def between_rule(name, v):
     # Fields 3 (claim ages) and 8 (counted claims) of earlier drafts.
     if name == "welcome" and (3 in v or 8 in v):
         return "welcome/retired"
+    # A Welcome's records ride in it or in parts, never both; a leaf's has
+    # neither digest nor parts, every other has a digest.
+    if name == "welcome":
+        if 13 in v and (2 in v or 10 in v):
+            return "welcome/parts"
+        if 13 not in v and 2 not in v:
+            return "welcome/shape"
+        if 6 in v and 13 in v:
+            return "welcome/parts"
+        if (6 in v) == (12 in v):
+            return "welcome/digest"
+    # A records message carries records, lists, or both.
+    if name == "records" and 2 not in v and 3 not in v:
+        return "records/shape"
     return None
 
 
@@ -2065,7 +2099,7 @@ def future_vectors():
     obf = {1: 4, 2: 40, 3: 70, 4: [15, 20, 0, 0], 5: [[1000, 1100], [2000, 2100], [3000, 3100], [4000, 4100]]}
     hub = [X25519, fake("hub wg key", 32)]
     env = [enc({1: 1}), fake("sig", 64)]
-    welcome = {1: ROOT.key, 2: [env], 5: T0, 9: RECOVERY.key, 11: RECOVERY2.key}
+    welcome = {1: ROOT.key, 2: [env], 5: T0, 9: RECOVERY.key, 11: RECOVERY2.key, 12: fake("welcome digest", 32)}
     info = {1: "kitchen tablet", 4: 1}
     cases = []
 
@@ -2134,7 +2168,8 @@ def wave3_vectors(records_take):
     info = {1: "kitchen tablet", 2: 3, 4: 1, 9: fake("invite id", 16)}
     request = {1: fake("invite id", 16), 2: TABLET.key, 3: info, 4: 2, 5: 120000, 6: 2}
     envs = [bytes.fromhex(r["envelope"]) for r in records_take[:2]]
-    welcome = {1: ROOT.key, 2: [dec(e) for e in envs], 5: T0, 9: RECOVERY.key, 11: RECOVERY2.key}
+    welcome = {1: ROOT.key, 2: [dec(e) for e in envs], 5: T0, 9: RECOVERY.key, 11: RECOVERY2.key,
+               12: fake("welcome digest", 32)}
 
     def msg(name, m, note=None):
         assert check_message(m) is None, (name, check_message(m))
@@ -2165,7 +2200,24 @@ def wave3_vectors(records_take):
     msg("pair start", {0: 64, 2: fake("cpace ya", 32), 3: enc(info), 4: fake("code commitment", 32)})
     msg("pair reply", {0: 65, 2: fake("cpace yb", 32), 3: enc(adb), 4: fake("member nonce", 32)})
     msg("pair confirm", {0: 66, 2: fake("cpace ta", 32), 3: fake("joiner nonce", 32)})
-    msg("pair welcome", {0: 67, 2: fake("cpace tb", 32), 3: welcome}, "records: the first two of records.json")
+    msg("pair welcome", {0: 67, 2: fake("cpace tb", 32), 3: welcome, 4: fake("welcome tag", 64)},
+        "records: the first two of records.json; field 4 is the Welcome's tag, welcome_parts has real ones")
+    parts_welcome = {k: v for k, v in welcome.items() if k != 2}
+    msg("pair welcome with parts", {0: 67, 2: fake("cpace tb", 32), 3: {**parts_welcome, 13: 2},
+                                    4: fake("welcome tag", 64)}, "the records follow in two records messages")
+    bad("pair welcome without its tag", {0: 67, 2: fake("cpace tb", 32), 3: welcome}, "pair/welcome/tw")
+    mp("a Welcome with parts and records", "welcome", {**welcome, 13: 2}, "welcome/parts")
+    mp("a Welcome with parts and a list", "welcome", {**parts_welcome, 10: b"\x00" * 4, 13: 2}, "welcome/parts")
+    mp("a Welcome with neither records nor parts", "welcome", parts_welcome, "welcome/shape")
+    mp("a Welcome without a digest", "welcome", {k: v for k, v in welcome.items() if k != 12}, "welcome/digest")
+    mp("a Welcome with 65 parts", "welcome", {**parts_welcome, 13: 65}, "welcome/parts")
+    bad("pair welcome with a Welcome out of its rules", {0: 67, 2: fake("cpace tb", 32), 3: parts_welcome,
+                                                         4: fake("welcome tag", 64)}, "pair/welcome/welcome")
+    lst = enc([bytes.fromhex(records_take[0]["id"])])
+    msg("records with a list", {0: 5, 2: [dec(e) for e in envs], 3: [lst]})
+    msg("records: a list alone", {0: 5, 3: [lst]})
+    bad("records: neither records nor lists", {0: 5}, "records/shape")
+    bad("records: 65 lists", {0: 5, 3: [lst] * 65}, "records/lists")
     msg("pair done", {0: 68})
     msg("pair error: taken", {0: 69, 2: 8})
     msg("result with the hub's offer", {0: 10, 2: fake("command id", 16), 3: PHONE.id16, 4: 1, 6: offer})
@@ -2369,6 +2421,63 @@ def invitation_vectors():
     no("rights 16 and send", {**base, 4: {1: 1, 2: 18}}, "invite/profile", rights=2)
     no("a short secret", {**base, 2: fake("s", 16)}, "invite/shape")
     return take, refuse
+
+
+def welcome_parts_vectors():
+    """The Welcome's digest and its tag Tw (plans/second-builder/
+    welcome-in-parts.md): the digest over a set's digest and its lists'
+    hashes, sorted; Tw from CPace's ISK over field 3's bytes of message 67,
+    good and with each thing an attacker could change."""
+    def h(label):
+        return hashlib.sha256(label.encode()).digest()
+
+    def list_hash(b):
+        return sha(b"cbb recovery list v3\x00", b)
+
+    def digest(set_digest, lists):
+        hs = sorted(list_hash(l) for l in lists)
+        return sha(b"cbb welcome digest v1\x00", set_digest, len(hs).to_bytes(4, "big"), *hs)
+
+    def tag(isk, welcome):
+        kw = hmac.new(isk, b"cbb welcome key v1\x00", hashlib.sha512).digest()
+        return hmac.new(kw, b"cbb welcome v1\x00" + welcome, hashlib.sha512).digest()
+
+    ids = sorted(h("vector record %d" % i) for i in range(3))
+    set_digest = sha(b"cbb set v3\x00", *ids)
+    l1, l2 = enc(ids[:1]), enc(ids[1:])
+    digests = []
+    for name, lists in [("no list", []), ("one list", [l1]), ("two lists", [l1, l2]),
+                        ("two lists in the other order", [l2, l1])]:
+        digests.append({"name": name, "set_digest": set_digest.hex(), "lists": [l.hex() for l in lists],
+                        "digest": digest(set_digest, lists).hex()})
+    isk, other = sha(b"vector isk") * 2, sha(b"vector isk 2") * 2
+    d = digest(set_digest, [l1, l2])
+    welcome = {1: ROOT.key, 5: T0, 9: RECOVERY.key, 11: RECOVERY2.key, 12: d, 13: 2}
+    wb = enc(welcome)
+    tw = tag(isk, wb)
+    tb = fake("cpace tb", 64)
+
+    def m67(w, t):
+        m = {0: 67, 2: tb, 3: w}
+        if t is not None:
+            m[4] = t
+        return enc(m).hex()
+
+    flipped = {**welcome, 5: T0 + 1}
+    tags = [
+        {"name": "a good tag", "isk": isk.hex(), "message": m67(welcome, tw), "welcome": wb.hex()},
+        {"name": "a byte of field 3 changed (the time)", "isk": isk.hex(), "message": m67(flipped, tw),
+         "rule": "pair/welcome/tw"},
+        {"name": "field 13 removed", "isk": isk.hex(),
+         "message": m67({k: v for k, v in welcome.items() if k != 13}, tw), "rule": "pair/welcome/tw"},
+        {"name": "field 12 changed", "isk": isk.hex(), "message": m67({**welcome, 12: bytes(32)}, tw),
+         "rule": "pair/welcome/tw"},
+        {"name": "no tag", "isk": isk.hex(), "message": m67(welcome, None), "rule": "pair/welcome/tw"},
+        {"name": "a tag from another session's ISK", "isk": isk.hex(), "message": m67(welcome, tag(other, wb)),
+         "rule": "pair/welcome/tw"},
+    ]
+    return {"digest_label": "cbb welcome digest v1", "tag_key_label": "cbb welcome key v1",
+            "tag_label": "cbb welcome v1", "digest": digests, "tag": tags}
 
 
 def code_vectors():
@@ -2912,7 +3021,7 @@ def statement_rule(env_b):
     """A keys statement (section 5): "take", "hold" or the rule."""
     env = dec(env_b)
     body = env[0]
-    if len(body) > 2048:
+    if len(body) > 32768:
         return "env/size"
     m = dec(body)
     if not (isinstance(m.get(1), int) and m[1] >= 1):
@@ -3167,6 +3276,13 @@ def wave4_vectors():
         m = {1: 1, 2: GROUP, 3: LAPTOP.hash, 4: 9, 6: T0, 10: [XWING, fake("sig2 statement", 1216)], **extra}
         env, b, _ = envelope2("keys", LAPTOP, m)
         statements.append({"name": name, "verdict": statement_rule(env), "diag": diag(dec(b)), "envelope": env.hex()})
+    # further seal keys of later algorithms in the optional zone (field 256),
+    # which this version skips (the 32 KiB ceiling is tested in the core)
+    m = {1: 1, 2: GROUP, 3: LAPTOP.hash, 4: 7, 6: T0, 10: [XWING, fake("s8", 1216)],
+         256: [[9, fake("later seal 1", 1568)], [XWING, fake("later seal 2", 1216)]]}
+    env, b = envelope("keys", LAPTOP, m)
+    statements.append({"name": "further seal keys of later algorithms in the optional zone",
+                       "verdict": statement_rule(env), "diag": diag(m), "envelope": env.hex()})
     out["statements"] = statements
 
     # beacons
@@ -3273,6 +3389,7 @@ def main():
         "invitations": {"prefix": "cbb://join#", "take": it, "refuse": ir},
         "cards": {"label": LABELS["card"], "take": cdt, "refuse": cdr},
         "codes": code_vectors(),
+        "welcome_parts": welcome_parts_vectors(),
     }
     files["wave4.json"] = wave4_vectors()
     files["future.json"] = future_vectors()

@@ -186,7 +186,7 @@ pub enum ReadStatement {
 const STATEMENT_FIELDS: [u16; 6] = [1, 2, 3, 4, 6, 10];
 
 /// Reads a keys statement from its envelope (format section 5): its size
-/// (2 KiB of body), the envelope and the profile, the fields' rows, and the
+/// (32 KiB of body), the envelope and the profile, the fields' rows, and the
 /// signature's form. The signature is checked with the device's member key
 /// once the reader knows the device.
 pub fn read_statement(envelope: &[u8]) -> core::result::Result<ReadStatement, Rule> {
