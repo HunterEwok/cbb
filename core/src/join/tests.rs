@@ -2227,3 +2227,41 @@ fn a_join_in_parts_after_two_changes_and_a_pruning_checkpoint_ends_equal() {
     assert_eq!(stored, 0, "refused: {refused:?}");
     assert_eq!(mine.digest(), set.digest());
 }
+
+/// Intros at their bounds against the vectors (`testdata/format/messages3.json`,
+/// "intros"), whose verdicts gen.py computes on its own: the records and the
+/// recovery heads counted apart, the records' bytes, and too many envelopes
+/// refused before any is read.
+#[test]
+fn intros_match_their_vectors() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/format/messages3.json");
+    let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let hex = |s: &str| -> Vec<u8> {
+        (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap()).collect()
+    };
+    let cases = v["intros"].as_array().unwrap();
+    assert!(cases.len() >= 6);
+    for c in cases {
+        let mut envs = Vec::new();
+        for run in c["runs"].as_array().unwrap() {
+            let env = hex(run[0].as_str().unwrap());
+            for _ in 0..run[1].as_u64().unwrap() {
+                envs.push(env.clone());
+            }
+        }
+        // {0: 8, 2: [envelopes]}, each envelope already one CBOR item.
+        let mut msg = vec![0xa2, 0x00, 0x08, 0x02];
+        let n = envs.len();
+        if n < 24 {
+            msg.push(0x80 | n as u8);
+        } else {
+            msg.extend([0x98, u8::try_from(n).unwrap()]);
+        }
+        msg.extend(envs.concat());
+        let got = Intro::read(&msg).map(|i| i.records.len());
+        match c.get("rule") {
+            Some(rule) => assert_eq!(got.err().map(|r| r.name()), rule.as_str(), "{}", c["name"]),
+            None => assert_eq!(got, Ok(n), "{}", c["name"]),
+        }
+    }
+}

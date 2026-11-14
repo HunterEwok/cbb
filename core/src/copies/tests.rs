@@ -760,3 +760,25 @@ fn marks_keep_at_most_max_origins() {
     wide.written.insert(crate::records::key::DeviceId([0xff; 16]), Timestamp { wall: T0 as i64, logical: 0 });
     assert!(Marks::decode(&wide.encode()).is_err());
 }
+
+/// Freshness against the vectors (`testdata/format/copy.json`, "fresh"),
+/// which gen.py computes on its own: a copy past ALLOWANCE_MS ahead of the
+/// reader's clock, or past MAX_WALL, is ahead; the age a reader uses.
+#[test]
+fn freshness_matches_its_vectors() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../testdata/format/copy.json");
+    let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let cases = v["fresh"].as_array().unwrap();
+    assert!(cases.len() >= 7);
+    for c in cases {
+        let name = c["name"].as_str().unwrap();
+        let signed = crate::hlc::Timestamp { wall: c["wall"].as_i64().unwrap(), logical: 0 };
+        let now = c["now_ms"].as_u64();
+        let ahead = fresh::ahead(signed, now);
+        assert_eq!(if ahead { "ahead" } else { "new" }, c["verdict"].as_str().unwrap(), "{name}");
+        if let Some(want) = c["effective_age_ms"].as_u64() {
+            let got = fresh::effective_age(c["age_ms"].as_u64().unwrap(), signed, c["ttl_ms"].as_u64(), now);
+            assert_eq!(got, want, "{name}");
+        }
+    }
+}

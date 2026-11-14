@@ -179,20 +179,22 @@ func makeStrictVectors() strictVectors {
 		r("the earliest time", false, bytes.Replace(cmd(""), []byte(`"time_ms":1000`), []byte(`"time_ms":-9223372036854775808`), 1)),
 	}
 	part := func(p string) []byte {
-		return []byte(`{"size":3,"parts":[{"path":"d","dir":true` + p + `},{"path":"d/f","size":3,"sha256":"` + vecHash + `"}]}`)
+		return []byte(`{"parts":[{"dir":true,"path":"d"` + p + `},{"path":"d/f","sha256":"` + vecHash + `","size":3}],"size":3}`)
 	}
 	// file is a manifest of one file, whose size is written as size and
 	// all of whose parts together are total bytes.
 	file := func(total int, size string) []byte {
-		return []byte(fmt.Sprintf(`{"size":%d,"parts":[{"path":"f","size":%s,"sha256":"%s"}]}`, total, size, vecHash))
+		return []byte(fmt.Sprintf(`{"parts":[{"path":"f","sha256":"%s","size":%s}],"size":%d}`, vecHash, size, total))
 	}
 	// two is a manifest of two empty files at the paths a and b.
 	two := func(a, b string) []byte {
-		return []byte(`{"size":0,"parts":[{"path":"` + a + `","size":0,"sha256":"` + vecHash + `"},{"path":"` + b + `","size":0,"sha256":"` + vecHash + `"}]}`)
+		return []byte(`{"parts":[{"path":"` + a + `","sha256":"` + vecHash + `","size":0},{"path":"` + b + `","sha256":"` + vecHash + `","size":0}],"size":0}`)
 	}
+	// Manifests are written in their one form: keys in order, text as
+	// UTF-8 (docs/protocol.md, Conventions, "Signed bodies").
 	v.Manifests = []strictVector{
 		r("a folder", true, part("")),
-		r("a folder with a null hash", true, part(`,"sha256":null`)),
+		r("a folder with a null hash", false, part(`,"sha256":null`)),
 		r("a folder with an empty hash", false, part(`,"sha256":""`)),
 		r("a folder with a hash", false, part(`,"sha256":"`+vecHash+`"`)),
 		r("a folder with a size", false, part(`,"size":1`)),
@@ -204,9 +206,9 @@ func makeStrictVectors() strictVectors {
 		r("a file of negative zero with a fraction", false, file(0, "-0.0")),
 		r("a file of zero with a fraction", false, file(0, "0.0")),
 		r("a file of one with a fraction", false, file(1, "1.0")),
-		r("a manifest of negative zero bytes", false, []byte(`{"size":-0,"parts":[{"path":"f","size":0,"sha256":"`+vecHash+`"}]}`)),
-		r("a manifest of negative zero bytes with a folder", false, []byte(`{"size":-0,"parts":[{"path":"d","dir":true}]}`)),
-		r("a manifest of zero bytes with a folder", true, []byte(`{"size":0,"parts":[{"path":"d","dir":true}]}`)),
+		r("a manifest of negative zero bytes", false, []byte(`{"parts":[{"path":"f","sha256":"`+vecHash+`","size":0}],"size":-0}`)),
+		r("a manifest of negative zero bytes with a folder", false, []byte(`{"parts":[{"dir":true,"path":"d"}],"size":-0}`)),
+		r("a manifest of zero bytes with a folder", true, []byte(`{"parts":[{"dir":true,"path":"d"}],"size":0}`)),
 		// Paths compare byte for byte: names in NFC and NFD, or the Kelvin
 		// sign and K, are two paths, and a "/" that a combining mark follows
 		// still separates names.
@@ -223,7 +225,7 @@ func makeStrictVectors() strictVectors {
 		r("a name of 765 bytes that grows to 766", false, two(`COM0.`+strings.Repeat("a", 760), "f")),
 		r("a path of 16384 bytes that grows past it", false, two(strings.Repeat("COM0/", 3275)+strings.Repeat("f", 9), "g")),
 		r("a path of 16384 bytes that stays", true, two(strings.Repeat("COMX/", 3275)+strings.Repeat("f", 9), "g")),
-		r("a slash before a combining mark", true, []byte(`{"size":0,"parts":[{"path":"a","dir":true},{"path":"a/\u0301b","dir":true}]}`)),
+		r("a slash before a combining mark", true, []byte("{\"parts\":[{\"dir\":true,\"path\":\"a\"},{\"dir\":true,\"path\":\"a/\u0301b\"}],\"size\":0}")),
 	}
 	return v
 }
