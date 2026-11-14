@@ -2557,11 +2557,16 @@ impl RecordSet {
             if names(r).iter().any(|k| gone.contains(k)) {
                 continue;
             }
+            // The root's own older checkpoints never stay: this one carries
+            // their heads and takes their place, the counting one too, or
+            // each would keep all before it and the root's room would fill.
+            if r.body().signer == h && matches!(r.body().kind, Kind::Checkpoint { .. }) {
+                continue;
+            }
             // The root's own records under its head stay too: it signed
             // them, so its checkpoint mends its own chain where the rooms
-            // turned a record of it away. Its own older checkpoints do not:
-            // this one takes their place.
-            let own = r.body().signer == h && !matches!(r.body().kind, Kind::Checkpoint { .. });
+            // turned a record of it away.
+            let own = r.body().signer == h;
             if e.held || state.counting.contains(&id) || listed(r) || own {
                 keep.insert(id);
             }
