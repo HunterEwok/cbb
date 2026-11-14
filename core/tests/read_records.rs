@@ -747,6 +747,13 @@ fn checkpoints_in_a_row(rounds: u32, restart: bool) {
             let rm = cbb_core::records::body::Removal { keys: vec![gone], seen: Vec::new() };
             set.insert(g.sign(&root, Kind::Revoke(rm))).unwrap();
         }
+        // The admin's device acknowledges what it got, as an honest one
+        // does after each sync, so the checkpoint may let removals go.
+        let st = set.state();
+        let admin = k("admin a");
+        if set.ack_due(&st, &admin.hash) {
+            set.write_ack(&st, &admin, g.t).unwrap_or_else(|e| panic!("round {round}: {e:?}"));
+        }
         if restart && round == rounds / 2 {
             let records: Vec<Record> = set.in_dependency_order().into_iter().cloned().collect();
             let lists: Vec<Vec<u8>> = set.lists().map(<[u8]>::to_vec).collect();
@@ -872,6 +879,50 @@ fn fill_to_the_floor(set: &mut RecordSet, root: &K, t: &mut u64, admins: bool) -
     unreachable!()
 }
 
+/// The group's admin key acknowledges the removals it holds, as an honest
+/// admin's device does after a sync.
+fn acknowledge(set: &mut RecordSet, t: u64) {
+    let st = set.state();
+    let admin = k("admin a");
+    if set.ack_due(&st, &admin.hash) {
+        set.write_ack(&st, &admin, t).unwrap_or_else(|e| panic!("the acknowledgement: {e:?}"));
+    }
+}
+
+/// At the floor with an admin that never acknowledges: the checkpoint
+/// frees nothing the removals hold, the root still removes a device, takes
+/// the silent admin key back past the floor, and its next checkpoint frees
+/// the room.
+#[test]
+fn at_the_floor_a_lagging_admin_is_taken_back_and_the_room_freed() {
+    let (mut set, root, g) = root_with_dead_checkpoints(0, 0);
+    let mut t = g.t;
+    let n = fill_to_the_floor(&mut set, &root, &mut t, false);
+    let st = set.state();
+    assert!(set.checkpoint_due(&st, t));
+    checkpoint_counts(&mut set, &root, &mut t, "at the floor, the admin silent");
+    let st = set.state();
+    assert!(set.checkpoint_due(&st, t), "the waiting removals stay");
+    assert_eq!(set.unacknowledged(&st).get(&k("admin a").hash), Some(&n));
+    // A removal is never blocked.
+    let dk = k("removed at the floor");
+    t += 1000;
+    set.write_record(&st, &root, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)), t).unwrap_err();
+    let st = set.state();
+    let rm = cbb_core::records::body::Removal { keys: vec![k("a stranger at the floor").hash], seen: Vec::new() };
+    t += 1000;
+    set.write_record(&st, &root, Kind::Revoke(rm), t).unwrap();
+    let st = set.state();
+    t += 1000;
+    let back = set.take_back_lagging(&st, &root, &std::collections::BTreeMap::new(), t).unwrap();
+    assert_eq!(back.len(), 1, "the lagging admin key is taken back past the floor");
+    checkpoint_counts(&mut set, &root, &mut t, "after the take-back");
+    let st = set.state();
+    assert!(!set.checkpoint_due(&st, t), "the room is free again");
+    t += 1000;
+    set.write_record(&st, &root, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)), t).unwrap();
+}
+
 /// The root writes its checkpoint; it counts, and so does every record it
 /// keeps.
 fn checkpoint_counts(set: &mut RecordSet, root: &K, t: &mut u64, what: &str) {
@@ -906,6 +957,7 @@ fn at_the_floor_a_checkpoint_counts(restart: bool, admins: bool) {
         assert_eq!(set.state(), st);
         assert!(set.checkpoint_due(&st, t));
     }
+    acknowledge(&mut set, t);
     checkpoint_counts(&mut set, &root, &mut t, "at the floor");
     if !admins {
         let st = set.state();

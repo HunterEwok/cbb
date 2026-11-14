@@ -3484,10 +3484,14 @@ impl RecordSet {
         // The floor: the current root never writes itself out of its own
         // next checkpoint. After an ordinary record of it, its records and
         // the checkpoint it would then write stay root_floor_margin() below
-        // its ceiling; the margin is for its removals, freezes and
-        // resolves, which pass the floor, as a lost device is removed
+        // its ceiling; the margin is for its removals, freezes, resolves
+        // and take-backs, which pass the floor, as a lost device is removed
         // whatever the room says.
-        if state.roots.last() == Some(&h) && !eval::item(&r, Role::Root).early {
+        // Taking an admin key back passes the floor too: it is how the root
+        // frees removals its admins hold back (`take_back_lagging`).
+        let takes_back = matches!(&r.body().kind, Kind::Device(d)
+            if d.admin.is_none() && state.device_by_key(&d.key.hash()).is_some_and(|x| x.admin.is_some()));
+        if state.roots.last() == Some(&h) && !eval::item(&r, Role::Root).early && !takes_back {
             let used = trial.units.get(&h).copied().unwrap_or(0);
             let fits = trial
                 .checkpoint_units(&after, h, time_ms)
