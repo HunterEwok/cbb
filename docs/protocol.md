@@ -57,10 +57,115 @@ keep the group safe. Sentences in the plain present tense describe what the code
 repository does; another implementation may do it differently where nothing marked with
 these words depends on it.
 
-- **Peer, member.** A member is a device of the group with a member certificate: a
-  member with the role `member` (a computer, board or router with the service or the
-  firmware, section 4, "Capabilities"), or a phone with the app. A peer is
-  the other end of a connection.
+- **Peer, member.** A member is a device of the group: in 0.6 a device whose key the records
+  name (section 10), in 0.5 one with a member certificate. That is a member with the role
+  `member` (a computer, board or router with the service or the firmware, section 4,
+  "Capabilities"), or a phone with the app. A peer is the other end of a connection.
+- **CBOR (0.6).** Every message, record, statement, command, grant, credential and copy header
+  of 0.6 is one CBOR data item ([RFC 8949](https://www.rfc-editor.org/rfc/rfc8949)) in one
+  profile, which one reader in the core implements for every platform (`format::cbor`;
+  `cbb inspect` prints any item with its field names). Each rule has a name, which the vectors
+  cite:
+  - `cbor/negative`, `cbor/tag`, `cbor/simple`: major types 0 (unsigned integer), 2 (bytes), 3
+    (text), 4 (array) and 5 (map) only. There are no negative integers, no tags, no floats, and
+    no `false`, `true`, `null`, `undefined` or other simple values. A flag is the integer `1`,
+    present only when set.
+  - `cbor/indefinite`, `cbor/reserved`: definite lengths only; additional information 28 to 31
+    is refused.
+  - `cbor/shortest`: every integer, length and count in its shortest form (RFC 8949, section
+    4.2.1).
+  - `cbor/int-range`: integers from 0 to `format::cbor::MAX_INT` (9223372036854775807), so that
+    Go, Kotlin and Swift hold them in a signed 64-bit integer.
+  - `cbor/map-key`: map keys are unsigned integers from 0 to 65535, nothing else.
+  - `cbor/map-order`: map keys strictly increasing, so no key twice. For integers in shortest
+    form this is the bytewise order of RFC 8949's deterministic encoding.
+  - `cbor/utf8`: text is UTF-8 as RFC 3629 has it: no overlong forms, no surrogates, nothing
+    above U+10FFFF. Control characters are each field's matter.
+  - `cbor/depth`: arrays and maps nest at most `format::cbor::MAX_DEPTH` (8) deep: an item
+    inside 8 containers is the deepest.
+  - `cbor/count`: an array or map holds at most `format::cbor::MAX_COUNT` (65535) elements; a
+    field's row is usually stricter.
+  - `cbor/trailing`, `cbor/truncated`: the bytes are exactly one item, with nothing after it and
+    nothing cut. Every kind refuses trailing bytes this way.
+
+  With these rules every value has exactly one encoding, so a reader that checks them knows
+  that encoding what it read gives the bytes it got, without encoding again to compare. Writers
+  sort map keys by number.
+- **Fields (0.6).** Every object is a map whose keys are field numbers. Each row of a kind's
+  table gives a field's number, its CBOR type, whether it is needed, its values and its default.
+  Two rules hold for every object:
+  - `form/default`: a field whose value is its row's default is left out, and an object with it
+    is refused. An optional array or map with no elements, and an optional text or bytes that
+    are empty, are left out the same way. A needed field is always written, 0 included where its
+    row allows 0. So one value has one object.
+  - `form/type`: a field of another CBOR type than its row's, or out of its row's range, refuses
+    the object. The vectors cite the row as `records/<type>/<field>` and so on.
+
+  An array that a row calls *sorted* is sorted bytewise by each element's encoding (bytes of one
+  length by their bytewise order, an array element by its first element), each value once.
+- **Common values (0.6).**
+  - A **Key** is the array `[alg, pub]`: `alg` 1 ES256 (an uncompressed P-256 point of 65
+    bytes, signatures of 64 bytes `r ‖ s` with a low `s`), 2 X-Wing (1216
+    bytes, section 4, "Sealing"), 3 X25519 (32 bytes, WireGuard), 4 SLH-DSA-SHA2-128s
+    (32 bytes, the recovery key's second half). A key of the
+    wrong size or off its curve is `keys/es256`, `keys/xwing`, `keys/x25519` or
+    `keys/slh-dsa`; one that is not `[alg, pub]` is `keys/shape`.
+  - A **key hash** is the SHA-256 of a Key's encoding, 32 bytes. A **device ID** is the first 16
+    bytes of the key hash of the device's member key, so nobody can take another device's ID
+    without its key. A **group ID** is the first 16 bytes of the key hash of the group's first
+    root key.
+  - A **record ID** (and a statement's or credential's ID) is the SHA-256 of the body's bytes;
+    the signatures are not in it. A copy's, command's or invitation's ID is 16 random bytes.
+  - A **time** is Unix milliseconds, for display and for devices with clocks only: no rule of the
+    records reads it. A **duration** is milliseconds. A **hybrid time** is `[wall_ms, logical]`,
+    `logical` at most 2^32 − 1, and `[0, 0]` is refused.
+- **Signed objects (0.6).** A signed object travels as an envelope `[body, sig]`, or
+  `[body, sig, sig2]` exactly when the body names a second signer `signer2` (field 8)
+  (`format::envelope`). The body is the encoding of the object's map, as bytes, so that it is
+  signed and passed on unchanged; it is an item of the profile itself. `sig` is the ES256
+  signature of the body's `signer` (field 3) over the label of the object's kind, a zero byte and
+  the body, and beside a second signature over the body and that signature's SHA-256 too; the
+  label keeps a signature of one kind from being taken as another. The second signer signs
+  first, over the body alone, and its signature is at most `format::envelope::MAX_SIG2` (8192)
+  bytes, or `format::envelope::MAX_SIG2_HEAD` (32768) for a recovery head; it is not in the ID.
+  Rules: `env/shape` (another number of elements, a body or signature that is not bytes, `sig2`
+  without `signer2` or the reverse), `env/size` (a body over its kind's ceiling), `env/sig2` (a
+  second signature over its ceiling), `sig/size`, `sig/range`, `sig/low-s`, `sig/verify`.
+  An envelope whose first signature does not cover its second is `env/damaged`: dropped, neither
+  stored nor passed on. A receiver checks in this order: the envelope's size, the profile on the
+  envelope and the body, the body's fields against their rows, the signature, then the rules of
+  evaluation. A body that fails a step never reaches the next, so nobody verifies a signature
+  over a body that others read otherwise, and records are stored by ID only after their
+  signature checked.
+
+  Fields 0 to 9 of a signed body are common: 1 `type`, 2 `group`, 3 `signer` (a key hash, or a
+  Key in a server credential), 4 the signer's increasing number for the kind, 5 `prev` (records
+  only), 6 `time_ms`, 7 `expires_ms` (commands and credentials), 8 `signer2`; 0 and 9 are
+  reserved. Keys 10 to 255 are the **critical zone**: a reader that meets a key there that its
+  version does not define for the kind and type (or a `type` it does not know, or a Key of an
+  unknown `alg` where a key is wanted) holds a record or statement: it verifies and stores it,
+  passes it on unchanged and never applies it, the state lists it among the newer ones (at most
+  `records::MAX_NEWER` (16)) and the apps say to update. A command, grant or credential with one
+  is refused (`form/critical`). Keys 256 to 65535 are the **optional zone**: a reader skips a
+  key it does not know there, whatever its value, and the signature covers it. The records that
+  remove, freeze, claim, resolve or hand over are written with the fields of 0.6 alone, so that
+  every version from 0.6 on applies them.
+- **Frames (0.6).** Every channel of 0.6 carries the frames of section 4, "The member protocol
+  in 0.6": a 4-byte length on a grid, one CBOR map with its type in field 0 and its padding in
+  field 1, each channel with its own limit.
+- **Time.** Times on the wire are Unix milliseconds (`_ms`), and durations integer
+  milliseconds, unless a field says otherwise. Local durations (ages, windows, timeouts) are
+  measured on a clock that counts the time the machine sleeps and does not jump when the
+  wall clock is set (`CLOCK_BOOTTIME` on Linux, `CLOCK_MONOTONIC` on macOS; package
+  `uptime`); an implementation SHOULD do the same.
+- **Source.** Each section names the code that implements it, so that a reader can check a
+  detail there.
+
+#### Until the switch to the core (wave 5)
+
+The service in `member/`, `cbb-helper` and the apps still speak 0.5's JSON, which these
+conventions describe; wave 5 moves them to the CBOR above.
+
 - **JSON.** [RFC 8259](https://www.rfc-editor.org/rfc/rfc8259) objects. A receiver MUST
   ignore fields it does not know, unless a section says otherwise.
 - **Bytes.** Byte strings, in JSON and in the texts of this document (an invitation, a QR
@@ -165,13 +270,6 @@ these words depends on it.
   may follow on the connection (the member protocol after the relay's `ok`). Go's
   `internal/frame` implements them. Only the local control socket (section 8), which never
   leaves the machine, has framing of its own.
-- **Time.** Times on the wire are Unix milliseconds (`_ms`), and durations integer
-  milliseconds, unless a field says otherwise. Local durations (ages, windows, timeouts) are
-  measured on a clock that counts the time the machine sleeps and does not jump when the
-  wall clock is set (`CLOCK_BOOTTIME` on Linux, `CLOCK_MONOTONIC` on macOS; package
-  `uptime`); an implementation SHOULD do the same.
-- **Source.** Each section names the code that implements it, so that a reader can check a
-  detail there.
 
 ## 1. Identifiers, names and ports
 
