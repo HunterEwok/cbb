@@ -124,3 +124,110 @@ pub fn welcome_message(data: &[u8]) {
     let body = data.get(4..).unwrap_or_default();
     assert!(crate::join::welcome::open(body, &[7; 64]).is_err(), "a Welcome passed a tag nobody made");
 }
+
+/// The recovery sheet's text or QR code, as typed or scanned: no input
+/// panics, and one it takes is written again (`text`, and `qr` when it
+/// named its group) and reads back as the same secret and group.
+pub fn sheet(data: &[u8]) {
+    let Ok(input) = core::str::from_utf8(data) else { return };
+    let Ok(read) = crate::sheet::read(input) else { return };
+    let again = crate::sheet::read(&crate::sheet::text(&read.secret)).expect("a sheet written again does not read");
+    assert_eq!(*again.secret, *read.secret, "the sheet's text gives another secret");
+    if let Some(group) = read.group {
+        let qr = crate::sheet::read(&crate::sheet::qr(&read.secret, &group)).expect("a QR written again does not read");
+        assert_eq!((*qr.secret, qr.group), (*read.secret, Some(group)), "the QR gives another secret or group");
+    }
+}
+
+/// The hardware key's object (5FC121) as a card gives it back: no bytes
+/// panic; an object that reads is cbb's of this version, and opening it
+/// with any answer of the card either fails or gives 32 bytes, never a
+/// panic (the fuzzer cannot forge the AEAD's tag, so it fails).
+pub fn yubikey_object(data: &[u8]) {
+    let read = crate::sheet::yubikey::read(data);
+    if read.is_ok() {
+        assert!(crate::sheet::yubikey::is_ours(data), "read an object that is not ours");
+    }
+    let card = data.get(..65).unwrap_or_default();
+    let z = [7u8; 32];
+    if let Ok(secret) = crate::sheet::yubikey::open(&z, card, data) {
+        panic!("an object nobody sealed opened to {} bytes", secret.len());
+    }
+}
+
+/// The Welcome's assembly from message 67 and its `records` parts, in any
+/// order, repeated or cut. Input: 2 bytes of the Welcome's length, the
+/// Welcome (field 3 of message 67), then frames, each 1 byte of seconds
+/// since the one before and 3 bytes of length. No input panics; a part
+/// taken counts one down and keeps the parts' bytes within their ceiling;
+/// nothing is taken once none is due or once late; `finish` gives the
+/// Welcome only when every part came, after exactly the parts announced and
+/// with the Welcome's own records kept; and the same parts in the other order give the same
+/// records and lists.
+pub fn welcome_parts(data: &[u8]) {
+    use crate::join::welcome::{Assembly, MAX_PARTS_BYTES, Welcome};
+    let Some((head, rest)) = data.split_first_chunk::<2>() else { return };
+    let n = usize::from(u16::from_be_bytes(*head));
+    let Some((body, mut rest)) = (rest.len() >= n).then(|| rest.split_at(n)) else { return };
+    let Ok(welcome) = Welcome::decode(body) else { return };
+    let mut frames: Vec<(u64, &[u8])> = Vec::new();
+    while let Some((h, tail)) = rest.split_first_chunk::<4>() {
+        let len = usize::from(h[1]) << 16 | usize::from(h[2]) << 8 | usize::from(h[3]);
+        let Some(frame) = tail.get(..len) else { break };
+        frames.push((u64::from(h[0]).saturating_mul(1000), frame));
+        rest = tail.get(len..).unwrap_or_default();
+    }
+    let run = |order: &mut dyn Iterator<Item = &(u64, &[u8])>| -> Option<Welcome> {
+        let mut a = Assembly::new(welcome.clone(), 0).ok()?;
+        let (mut now, mut bytes, mut taken) = (0u64, 0usize, 0u64);
+        for (step, frame) in order {
+            now = now.saturating_add(*step);
+            let (due, late) = (a.due(), a.late(now));
+            match a.take(frame, now) {
+                Ok(()) => {
+                    assert!(due > 0 && !late, "a part taken when none was due or late");
+                    assert_eq!(a.due(), due.saturating_sub(1), "a part taken did not count one down");
+                    bytes = bytes.saturating_add(frame.len());
+                    taken = taken.saturating_add(1);
+                    assert!(bytes <= MAX_PARTS_BYTES, "the parts passed their bytes");
+                }
+                Err(_) => assert_eq!(a.due(), due, "a refused part changed what is due"),
+            }
+            if a.due() == 0 {
+                break;
+            }
+        }
+        let due = a.due();
+        let w = a.finish();
+        assert_eq!(w.is_ok(), due == 0, "finish with parts still due");
+        let w = w.ok()?;
+        assert_eq!(taken, welcome.parts, "finish after another number of parts than announced");
+        assert!(w.records.len() >= welcome.records.len() && w.lists.len() >= welcome.lists.len(), "parts lost records");
+        Some(w)
+    };
+    let forward = run(&mut frames.iter());
+    let backward = run(&mut frames.iter().rev());
+    if let (Some(f), Some(b)) = (forward, backward)
+        && frames.len() as u64 == welcome.parts
+    {
+        let ids = |w: &Welcome| {
+            let mut v: Vec<_> = w.records.iter().map(crate::records::Record::id).collect();
+            v.sort();
+            let mut l = w.lists.clone();
+            l.sort();
+            (v, l)
+        };
+        assert_eq!(ids(&f), ids(&b), "the parts in the other order give another Welcome");
+    }
+}
+
+/// Message 67's Welcome as a later version may write it (fields this
+/// version does not know, the digest and parts beside them): no bytes
+/// panic, and a Welcome that reads is written again in one form that reads
+/// back as itself.
+pub fn welcome_fields(data: &[u8]) {
+    let Ok(w) = crate::join::welcome::Welcome::decode(data) else { return };
+    let again = w.encode();
+    let back = crate::join::welcome::Welcome::decode(&again).expect("a Welcome written again does not read");
+    assert_eq!(back.encode(), again, "a Welcome written again changes");
+}

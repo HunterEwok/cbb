@@ -66,8 +66,13 @@ kits), so a reader that fails in another way also shows as a difference.
   (`internal/forward`) and `FuzzDecodeDIB` (`internal/pasteboard`), and the lite core's
   `cargo fuzz` targets in `core/fuzz` (`record_body`, `command`, `credential`,
   `release`, `wire`, `vless`, `format`, `welcome_message` (pairing's message 67 before its tag,
-  which no bytes may pass) and `api`, the core's entry point of [core-api.md](core-api.md)),
-  seeded by `go run ./tools/difffuzz seeds`. `api` starts from requests for every operation,
+  which no bytes may pass), `sheet` (the recovery sheet's text and QR code, each one taken
+  written again and read back the same), `yubikey_object` (the hardware key's object, which
+  nothing unsealed opens), `welcome_parts` (the Welcome's assembly from its parts in either
+  order, repeated or cut, finished only after the parts it announced), `welcome_fields`
+  (message 67's Welcome with fields of a later version, written again in one form) and `api`,
+  the core's entry point of [core-api.md](core-api.md)), seeded by
+  `go run ./tools/difffuzz seeds` (the 0.6 targets from the vectors of `testdata/format`). `api` starts from requests for every operation,
   each case of `v2-records.json` among them, and checks that any bytes get one answer of the
   ABI, with `ok` or a listed error code, and that a request answered twice gets the same
   answer. `vless` reads the forwarder's VLESS and XHTTP answers in pieces of every size and

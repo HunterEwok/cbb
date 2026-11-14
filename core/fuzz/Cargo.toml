@@ -84,3 +84,31 @@ path = "fuzz_targets/welcome_message.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "sheet"
+path = "fuzz_targets/sheet.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "yubikey_object"
+path = "fuzz_targets/yubikey_object.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "welcome_parts"
+path = "fuzz_targets/welcome_parts.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "welcome_fields"
+path = "fuzz_targets/welcome_fields.rs"
+test = false
+doc = false
+bench = false
