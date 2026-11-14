@@ -1887,9 +1887,8 @@ exactly what a member that saw them all at once keeps.
 
 #### The order inside a room
 
-Being settled: the order below is what the code holds today, and it is changing.
-
-Each key's records are taken in an order that depends on each record alone (`keep::Item::pos`):
+Each key's records are taken in an order that depends on each record alone and on which
+checkpoint is its key's newest, never on anything else the set holds (`keep::Item::pos`):
 
 1. a root's removals, freezes and resolves, by seq, so that nothing else of the root's drops
    them;
@@ -1916,11 +1915,20 @@ and never puts a device out.
 #### Two histories
 
 A key with two records at one seq has two histories. For an admin key, no secrets are sealed
-while it lasts. Two records of a root at one seq, whether or not their chains are whole here,
-stop the group until the recovery key changes the root: a member hands the proof (the pair)
-to the keys that a record of that root admits on either line, and to nobody else. A removal on
-a whole chain counts at or above the fork too, on either history, whoever signed it, so a key
-in two histories brings nothing back that it removed. Removals have no limit.
+while it lasts.
+
+Two records of a root at one seq halt the group, whether or not their chains are whole, on
+every member that holds both. A member whose counting checkpoint names the root's head at or
+above that seq and does not keep the record has settled the seq: it refuses one record of the
+pair alone, as settled, and stays as it is. When a peer hands it both, it holds the pair and
+halts too. A member that holds the pair keeps it outside the rooms, never prunes it, and hands
+it to every device of the group in sync. So members that meet end alike, and a pair that no
+member holds any more halts no one. The group stays halted until the recovery key changes the
+root. A removed peer is handed only the removals that name it, and of a pair of removals only
+the one with the smaller ID.
+
+A removal on a whole chain counts at or above the fork too, on either history, whoever signed
+it, so a key in two histories brings nothing back that it removed. Removals have no limit.
 
 #### A change of root
 
@@ -1962,7 +1970,9 @@ checkpoint and a change of root within their rooms.
 #### Checkpoints
 
 Only the current root writes a checkpoint. A checkpoint names the heads it settles and the
-records it keeps; a root's removal counts for good while it is kept, and the writer leaves one
+records it keeps. An honest checkpoint keeps the root's own records under its head, so that it
+mends the root's chain where the rooms turned a record away; an older checkpoint of the root
+it keeps only as a record that counts; a root's removal counts for good while it is kept, and the writer leaves one
 out, with the records of the keys it names, only when every key it names is a plain device key
 whose admissions it holds below their signer's head. An admin key whose admission the rooms
 keep out is no key of the set. A waiting root's records, and records that a checkpoint of the
