@@ -172,6 +172,9 @@ fn differs(live: &RecordSet) -> Option<String> {
 }
 
 /// Steps through one scenario, checking a restart after each.
+/// One step of a scenario: its name and what it gives the member.
+type Step = (String, Box<dyn Fn(&mut RecordSet)>);
+
 struct Run {
     steps: usize,
     found: Vec<String>,
@@ -195,8 +198,12 @@ fn sign_at(g: &G, by: &K, seq: u64, prev: Option<RecordId>, kind: Kind, time_ms:
 /// set: the same state, digest and records aside. The scenarios: a root
 /// with an admin, devices, removals and honest checkpoints; a root whose
 /// own checkpoints never count; a root's twin at a seq an honest
-/// checkpoint already pruned, given to the live set and to one restarted
-/// before it came. It covers 90 steps.
+/// checkpoint pruned (given to the live set and to one restarted before
+/// it came) in four shapes, one of them in two orders (they differ
+/// before sync and are equal and halted after); a change of root in two
+/// orders; admin keys made and unmade until the set is near its bytes.
+/// It covers 692 steps (116 with READ_RECORDS_QUICK, which skips the
+/// last scenario).
 #[test]
 #[ignore = "slow (a restore per step); run with --ignored --release"]
 fn a_restored_set_is_the_live_set_after_every_insert() {
@@ -313,6 +320,328 @@ fn a_restored_set_is_the_live_set_after_every_insert() {
             ));
         }
         run.check("twin", "the twin of device 0's pruned admission", &set);
+    }
+
+    // 4. A root's twin of a record below every head a held checkpoint
+    // names, in three shapes: of a pruned removal, of a kept admission,
+    // and of a record whose prev the checkpoint pruned. Each given to the
+    // live set, which settled the original, and to a member restarted
+    // before the twin came.
+    for shape in ["pruned removal", "kept admission", "prev pruned"] {
+        let (mut set, root, mut g) = root_with_dead_checkpoints(0, 0);
+        let mut at: BTreeMap<&str, (u64, Option<RecordId>)> = BTreeMap::new();
+        for i in 0..4u32 {
+            let before = g.heads.get(&root.hash).map(|(_, id)| *id);
+            let dk = k(&format!("narrow dev {i}"));
+            let r = g.sign(&root, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)));
+            if i == 2 {
+                at.insert("kept admission", (r.body().seq, before));
+            }
+            let _ = set.insert(r);
+        }
+        let before = g.heads.get(&root.hash).map(|(_, id)| *id);
+        let rm = g.sign(
+            &root,
+            Kind::Revoke(cbb_core::records::body::Removal { keys: vec![k("narrow dev 0").hash], seen: Vec::new() }),
+        );
+        at.insert("pruned removal", (rm.body().seq, before));
+        let rm_id = rm.id();
+        let _ = set.insert(rm);
+        let r = g.sign(&root, Kind::Copies { incoming_ms: MIN_INCOMING_MS + 1, seen: vec![] });
+        at.insert("prev pruned", (r.body().seq, Some(rm_id)));
+        let _ = set.insert(r);
+        for i in 4..6u32 {
+            let dk = k(&format!("narrow dev {i}"));
+            let r = g.sign(&root, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)));
+            let _ = set.insert(r);
+        }
+        let st = set.state();
+        match set.write_checkpoint(&st, &root, g.t + 1) {
+            Ok(cp) => {
+                g.heads.insert(root.hash, (cp.body().seq, cp.id()));
+                let _ = set.insert(cp);
+            }
+            Err(e) => {
+                run.found.push(format!("narrow twin ({shape}): no honest checkpoint: {e:?}"));
+                continue;
+            }
+        }
+        run.check("narrow twin", &format!("{shape}: checkpoint"), &set);
+        let held_original = set.contains(&rm_id);
+        let (seq, prev) = at[shape];
+        let other = k(&format!("narrow other {shape}"));
+        let twin = sign_at(&g, &root, seq, prev, Kind::device(Device::new(other.key.clone(), "other", ROLE_MEMBER)), 2);
+        let mut back = restarted(&set);
+        let got_back = back.insert(twin.clone()).map(|a| format!("{a:?}"));
+        let got = set.insert(twin).map(|a| format!("{a:?}"));
+        run.steps += 1;
+        println!(
+            "narrow twin ({shape}): removal held {held_original}; live {got:?} stop {:?}; restarted {got_back:?} stop {:?}",
+            set.state().stop,
+            back.state().stop
+        );
+        if back.state() != set.state() || back.digest() != set.digest() {
+            run.found.push(format!(
+                "step {}: narrow twin ({shape}), restarted before the twin came: stop {:?} live vs {:?} restarted",
+                run.steps,
+                set.state().stop,
+                back.state().stop
+            ));
+        }
+        run.check("narrow twin", &format!("{shape}: after the twin"), &set);
+    }
+
+    // 4b. The same records in two orders: A takes the root's records, the
+    // checkpoint, then the twin of the pruned removal; B takes the twin
+    // before the checkpoint. Then each gives the other all it holds.
+    {
+        let (mut a, root, mut g) = root_with_dead_checkpoints(0, 0);
+        let mut b = a.clone();
+        let mut recs: Vec<Record> = Vec::new();
+        for i in 0..4u32 {
+            let dk = k(&format!("order dev {i}"));
+            recs.push(g.sign(&root, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER))));
+        }
+        let before = g.heads.get(&root.hash).map(|(_, id)| *id);
+        let rm = g.sign(
+            &root,
+            Kind::Revoke(cbb_core::records::body::Removal { keys: vec![k("order dev 0").hash], seen: Vec::new() }),
+        );
+        let (rm_seq, rm_prev) = (rm.body().seq, before);
+        recs.push(rm);
+        recs.push(g.sign(&root, Kind::Copies { incoming_ms: MIN_INCOMING_MS + 1, seen: vec![] }));
+        for i in 4..6u32 {
+            let dk = k(&format!("order dev {i}"));
+            recs.push(g.sign(&root, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER))));
+        }
+        for r in &recs {
+            let _ = a.insert(r.clone());
+            let _ = b.insert(r.clone());
+        }
+        let st = a.state();
+        let cp = a.write_checkpoint(&st, &root, g.t + 1).expect("honest checkpoint");
+        let other = k("order other");
+        let twin =
+            sign_at(&g, &root, rm_seq, rm_prev, Kind::device(Device::new(other.key.clone(), "other", ROLE_MEMBER)), 2);
+        let a1 = a.insert(cp.clone()).map(|x| format!("{x:?}"));
+        let a2 = a.insert(twin.clone()).map(|x| format!("{x:?}"));
+        let b1 = b.insert(twin.clone()).map(|x| format!("{x:?}"));
+        let b2 = b.insert(cp.clone()).map(|x| format!("{x:?}"));
+        let show = |s: &RecordSet| {
+            let st = s.state();
+            format!(
+                "stop {:?}, checkpoint {}, devices {}, counting {}, records {}, digest {:02x?}",
+                st.stop,
+                st.checkpoint.is_some(),
+                st.devices.len(),
+                st.counting.len(),
+                s.len(),
+                &s.digest()[..4]
+            )
+        };
+        println!("order A (checkpoint, then twin): {a1:?}, {a2:?}; {}", show(&a));
+        println!("order B (twin, then checkpoint): {b1:?}, {b2:?}; {}", show(&b));
+        // What holds: a twin below A's counting checkpoint counts for no
+        // one there, so before they sync A and B differ (B halted, A not).
+        run.steps += 1;
+        if a.state() == b.state() || b.state().stop != cbb_core::records::eval::Stop::Full {
+            run.found.push(format!(
+                "step {}: the same records in two orders, before sync: expected A not halted and B halted; A {} / B {}",
+                run.steps,
+                show(&a),
+                show(&b)
+            ));
+        }
+        // Sync both ways: each gives the other every record it holds.
+        let from_b: Vec<Record> = b.in_dependency_order().into_iter().cloned().collect();
+        let from_a: Vec<Record> = a.in_dependency_order().into_iter().cloned().collect();
+        a.insert_all(from_b);
+        b.insert_all(from_a);
+        println!("after sync both ways: A {}; B {}", show(&a), show(&b));
+        run.steps += 1;
+        // After they sync both ways they are equal, and halted for good.
+        if a.state() != b.state() || a.digest() != b.digest() || a.state().stop != cbb_core::records::eval::Stop::Full {
+            run.found.push(format!("step {}: after sync both ways: A {} / B {}", run.steps, show(&a), show(&b)));
+        }
+    }
+
+    // 6. A change of root by the recovery key (ES256 and SLH-DSA), taken
+    // by a member in two orders with a restart checked after each step:
+    // head, list, first records; and first records, head, list. Then the
+    // new root admits a device.
+    {
+        let (mut set, root, mut g) = root_with_dead_checkpoints(0, 0);
+        for i in 0..8u32 {
+            let dk = k(&format!("change dev {i}"));
+            let r = g.sign(&root, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)));
+            let _ = set.insert(r);
+        }
+        let r = g.sign(
+            &root,
+            Kind::Revoke(cbb_core::records::body::Removal { keys: vec![k("change dev 1").hash], seen: Vec::new() }),
+        );
+        let _ = set.insert(r);
+        let st = set.state();
+        if let Ok(cp) = set.write_checkpoint(&st, &root, g.t + 1) {
+            g.heads.insert(root.hash, (cp.body().seq, cp.id()));
+            let _ = set.insert(cp);
+        }
+        let member = set.clone();
+        let rk = k("recovery");
+        let rk2 = cbb_core::records::pq::PqKey::from_seeds(&[0x31; 16], &[0x32; 16], &[0x33; 16]);
+        let new_root = k("change new root");
+        let phone = k("change new phone");
+        let st = set.state();
+        let mut writer = set.clone();
+        match writer.write_change(
+            &st,
+            &rk,
+            &rk2,
+            &new_root,
+            Device::new(phone.key.clone(), "phone", ROLE_PHONE),
+            &[],
+            false,
+            g.t + 1,
+        ) {
+            Err(e) => run.found.push(format!("change: write_change refused: {e:?}")),
+            Ok(w) => {
+                let list = w.list.encode();
+                for order in ["head, list, first", "first, head, list, first again"] {
+                    let mut m = member.clone();
+                    let mut steps: Vec<Step> = Vec::new();
+                    let head = w.record.clone();
+                    let l = list.clone();
+                    let firsts = w.first.clone();
+                    let head_step: Step = (
+                        "the head".into(),
+                        Box::new(move |m: &mut RecordSet| {
+                            let _ = m.insert(head.clone());
+                        }),
+                    );
+                    let list_step: Step = (
+                        "the list".into(),
+                        Box::new(move |m: &mut RecordSet| {
+                            let _ = m.insert_list(&l);
+                        }),
+                    );
+                    let first_steps: Vec<Step> = firsts
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, r)| {
+                            let s: Step = (
+                                format!("first record {i}"),
+                                Box::new(move |m: &mut RecordSet| {
+                                    let _ = m.insert(r.clone());
+                                }),
+                            );
+                            s
+                        })
+                        .collect();
+                    if order == "head, list, first" {
+                        steps.push(head_step);
+                        steps.push(list_step);
+                        steps.extend(first_steps);
+                    } else {
+                        // The first records before their head are refused
+                        // (no known signer); sync offers them again after.
+                        let again: Vec<Step> = w
+                            .first
+                            .iter()
+                            .cloned()
+                            .enumerate()
+                            .map(|(i, r)| {
+                                let s: Step = (
+                                    format!("first record {i} offered again"),
+                                    Box::new(move |m: &mut RecordSet| {
+                                        let _ = m.insert(r.clone());
+                                    }),
+                                );
+                                s
+                            })
+                            .collect();
+                        steps.extend(first_steps);
+                        steps.push(head_step);
+                        steps.push(list_step);
+                        steps.extend(again);
+                    }
+                    for (name, f) in &steps {
+                        f(&mut m);
+                        run.check(&format!("change ({order})"), name, &m);
+                    }
+                    let st = m.state();
+                    println!(
+                        "change ({order}): roots {}, stop {:?}, devices {}, waiting {}",
+                        st.roots.len(),
+                        st.stop,
+                        st.devices.len(),
+                        m.missing_list().is_some()
+                    );
+                    let dk = k(&format!("change after {order}"));
+                    match m.write_record(
+                        &st,
+                        &new_root,
+                        Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)),
+                        g.t + 5,
+                    ) {
+                        Ok(_) => run.check(&format!("change ({order})"), "the new root's device", &m),
+                        Err(e) => run.found.push(format!("change ({order}): the new root cannot admit: {e:?}")),
+                    }
+                }
+            }
+        }
+    }
+
+    // 5. Admin keys made and unmade one after another, each filling its
+    // room with removals of 256 keys (about 17 units each), until the
+    // keys that keep a room ask for more than the set's room and the
+    // level binds.
+    if std::env::var_os("READ_RECORDS_QUICK").is_none() {
+        let (mut set, root, mut g) = root_with_dead_checkpoints(0, 0);
+        let mut steps_here = 0usize;
+        let mut first_drop: Option<usize> = None;
+        'admins: for a in 0..32u32 {
+            let ak = k(&format!("ex admin {a}"));
+            let pk = k(&format!("ex admin phone {a}"));
+            let mut d = Device::new(pk.key.clone(), "admin", ROLE_PHONE);
+            d.rights = RIGHT_READ | RIGHT_SEND;
+            d.admin = Some(ak.key.clone());
+            d.powers = 0x1ff & !64;
+            let r = g.sign(&root, Kind::device(d));
+            let _ = set.insert(r);
+            steps_here += 1;
+            run.check("ex-admins", &format!("admin {a} made"), &set);
+            for n in 0..16u32 {
+                let mut keys: Vec<KeyHash> = (0..256u32)
+                    .map(|i| {
+                        KeyHash(cbb_core::certs::sha256(
+                            &[&a.to_le_bytes()[..], &n.to_le_bytes()[..], &i.to_le_bytes()[..]].concat(),
+                        ))
+                    })
+                    .collect();
+                keys.sort();
+                let r = g.sign(&ak, Kind::Revoke(cbb_core::records::body::Removal { keys, seen: Vec::new() }));
+                let id = r.id();
+                let _ = set.insert(r);
+                steps_here += 1;
+                if first_drop.is_none() && n < 15 && !set.contains(&id) {
+                    first_drop = Some(run.steps + 1);
+                }
+                run.check("ex-admins", &format!("admin {a} removal {n}"), &set);
+                if run.found.len() > 5 {
+                    break 'admins;
+                }
+            }
+            let r = g.sign(&root, Kind::device(Device::new(pk.key.clone(), "was admin", ROLE_PHONE)));
+            let _ = set.insert(r);
+            steps_here += 1;
+            run.check("ex-admins", &format!("admin {a} unmade"), &set);
+        }
+        println!(
+            "ex-admins: {steps_here} steps, first removal turned away at step {first_drop:?}, set {} records, {} of {} set bytes",
+            set.len(),
+            set.bytes(),
+            cbb_core::records::MAX_SET_BYTES
+        );
     }
 
     println!("{} steps checked; {} differ", run.steps, run.found.len());

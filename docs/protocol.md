@@ -1916,11 +1916,20 @@ and never puts a device out.
 #### Two histories
 
 A key with two records at one seq has two histories. For an admin key, no secrets are sealed
-while it lasts. Two records of a root at one seq, whether or not their chains are whole here,
-stop the group until the recovery key changes the root: a member hands the proof (the pair)
-to the keys that a record of that root admits on either line, and to nobody else. A removal on
-a whole chain counts at or above the fork too, on either history, whoever signed it, so a key
-in two histories brings nothing back that it removed. Removals have no limit.
+while it lasts.
+
+Two records of a root at one seq halt the group, whether or not their chains are whole, on
+every member that holds both. A member whose counting checkpoint names the root's head at or
+above that seq and does not keep the record has settled the seq: it refuses one record of the
+pair alone, as settled, and stays as it is. When a peer hands it both, it holds the pair and
+halts too. A member that holds the pair keeps it outside the rooms, never prunes it, and hands
+it to every device of the group in sync. So members that meet end alike, and a pair that no
+member holds any more halts no one. The group stays halted until the recovery key changes the
+root. A removed peer is handed only the removals that name it, and of a pair of removals only
+the one with the smaller ID.
+
+A removal on a whole chain counts at or above the fork too, on either history, whoever signed
+it, so a key in two histories brings nothing back that it removed. Removals have no limit.
 
 #### A change of root
 
