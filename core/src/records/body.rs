@@ -483,6 +483,19 @@ impl Body {
                 if !strictly_sorted(keep) {
                     return Err(field(t, "keep"));
                 }
+                // Its own key's head is the record just below it, its prev:
+                // present exactly when seq > 1, so a checkpoint always
+                // settles its own key's records below it, and no newer one
+                // takes back what an older one settled of it.
+                let own = heads.iter().find(|h| h.key == self.signer);
+                let follows = match (own, self.prev) {
+                    (Some(h), Some(prev)) => h.seq.checked_add(1) == Some(self.seq) && h.id == prev,
+                    (None, None) => self.seq == 1,
+                    _ => false,
+                };
+                if !follows {
+                    return Err(field(t, "own-prev"));
+                }
             }
             Kind::Hubs { hubs, seen } => {
                 let mut sorted = hubs.clone();

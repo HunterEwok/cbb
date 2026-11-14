@@ -545,8 +545,9 @@ def record_vectors():
     # listed (a fresh key leaves 12 out)
     admin_from = chain[ADMIN.name][0] + 1
     empty = enc([])
+    # a checkpoint's own head is its prev (present when its seq is above 1)
     _, admin_first, _ = add("first checkpoint of the admin key as the root", ADMIN, 9,
-                            {10: [[ROOT.hash, *chain[ROOT.name]]]})
+                            {10: srt([[ROOT.hash, *chain[ROOT.name]], [ADMIN.hash, *chain[ADMIN.name]]])})
     add("recovery head: an admin key becomes the root, its root records from seq %d" % admin_from, RECOVERY, 13,
         {10: ADMIN.key, 11: list_hash(empty), 12: admin_from, 13: sha(admin_first)},
         note="the admin's records below field 12 count only if listed; this list (lists[1]) is empty")
@@ -722,6 +723,11 @@ def record_vectors():
          {10: srt([[ADMIN.hash, 3, i1], [ROOT.hash, 90, i2]])}),
         ("checkpoint naming its own key above its seq", "records/checkpoint/own-head", 9,
          {10: srt([[ADMIN.hash, 3, i1], [ROOT.hash, 91, i2]])}),
+        # and its own head is the record just below it, its prev
+        ("checkpoint naming its own key below its prev", "records/checkpoint/own-prev", 9,
+         {10: srt([[ADMIN.hash, 3, i1], [ROOT.hash, 88, i2]]), 5: i2}),
+        ("checkpoint above seq 1 without its own head", "records/checkpoint/own-prev", 9,
+         {10: [[ADMIN.hash, 3, i1]], 5: i2}),
         ("hubs with one device twice", "records/hubs/hubs", 10, {10: [LAPTOP.id16, LAPTOP.id16], 11: [sa]}),
         ("device seen out of order", "records/device/seen", 1, {**{k: lap_m[k] for k in (10, 11, 12)}, 26: [sb, sa]}),
         ("thaw seen out of order", "records/thaw/seen", 4, {10: [i1], 11: [sb, sa]}),
