@@ -304,6 +304,11 @@ module records_v3 {
   // the set's marks whenever its counting checkpoint changed; the core's RecordSet::compact
   // resets the cut only when the checkpoint drops a record.
   pure val CUT_RESET_ON_DROP = false
+  // WHOLE_BY_SETTLER (records 11-13 23:35Z; the exhaustive-check thread's restart probe): a
+  // head's first records (first checkpoint, Zs) a later checkpoint of the new root settled
+  // count as held, so a member restarted from what it saves (which drops pruned first records)
+  // rebuilds the same chain. `firstPrunedTest`, promise-like check `savedStable`.
+  pure val WHOLE_BY_SETTLER = false
   // Records 11-13 21:12Z: the change re-signs the cut roots' counting removals as the new
   // root's first records (signChainG). REISSUE_DROP_ONLY: the mutation that leaves the old
   // removals off the list without the new ones; it must fail.
@@ -455,9 +460,19 @@ module records_v3 {
   // are its first records with the first checkpoint: the head counts as having its first only
   // with every Z too. The honest writer gives them the IDs between the head and the first.)
   pure def namesZ(h: Record, z: Record): bool = isChain(h) and z.kit == "z" and z.targetRec == h.id and z.signer == h.target
-  pure def hasFirst(r: Record, rs: Set[Record]): bool = r.first == 0 or (rs.exists(c => namesFirst(r, c))
+  pure def hasFirst(r: Record, rs: Set[Record]): bool = r.first == 0 or
+    (if (WHOLE_BY_SETTLER and r.first <= r.id + MAXREC)
+      (r.id + 1).to(r.first).forall(i => rs.exists(x => x.id == i and (namesFirst(r, x) or namesZ(r, x)))
+        or settledFirst(r, i, rs))
+    else (rs.exists(c => namesFirst(r, c))
     and (if (not(REISSUE_REMOVALS) or r.first > r.id + MAXREC) true
-      else (r.id + 1).to(r.first - 1).forall(i => rs.exists(z => z.id == i and namesZ(r, z)))))
+      else (r.id + 1).to(r.first - 1).forall(i => rs.exists(z => z.id == i and namesZ(r, z))))))
+  // (WHOLE_BY_SETTLER, records 11-13 23:35Z: a first record of head r, its first checkpoint or a
+  // Z, that a later checkpoint L of the new root settled counts as held: L has r's first on its
+  // line, its heads reach the record for the new root, and it does not keep it.)
+  pure def settledFirst(r: Record, i: Id, rs: Set[Record]): bool =
+    rs.exists(l => l.kind == "checkpoint" and l.signer == r.target and l.id != i and inLine(l.line, r.first)
+      and l.heads.keys().contains(r.target) and inLine(l.heads.get(r.target), i) and not(l.keep.contains(i)))
   // The chain a member follows among the recovery records rs: from seq 1, a valid record
   // whose previous ID is the member's tip extends it; a gap ends the chain. Any two records the
   // recovery key signed at one seq, at any depth, valid or not, are a fork: the member stops
@@ -583,7 +598,11 @@ module records_v3 {
   pure def rootsOf(path: List[Key]): Set[Key] = path.indices().map(i => path[i])
 
   // The chain, the path and the lists a set keeps by: those of the recovery records it holds.
-  pure def chainState(s: Store, db: Id -> Record): Chain = chainOfAll(recsOf(s.chain, db))
+  pure def chainState(s: Store, db: Id -> Record): Chain =
+    // (WHOLE_BY_SETTLER: the checkpoints the set got count toward a head's first records, so a
+    // settler counts before the set keeps it.)
+    chainOfAll(recsOf(s.chain, db).union(if (WHOLE_BY_SETTLER)
+      recsOf(s.got, db).filter(c => c.kind == "checkpoint" and not(isChain(c))) else Set()))
   pure def keptPath(s: Store, db: Id -> Record): List[Key] = pathCuts(chainState(s, db))._1
   pure def keptCuts(s: Store, db: Id -> Record): Key -> List[Id] = pathCuts(chainState(s, db))._2
   pure def orderOf(s: Store, db: Id -> Record): Order = { roots: rootsOf(keptPath(s, db)), cuts: keptCuts(s, db) }
@@ -766,7 +785,10 @@ module records_v3 {
     // beside the chain once its head is held. Either may apply the change.
     if (isChain(r)) applyChain({ ...s, chain: s.chain.union(Set(r.id)) }, db)
     else {
-      val isFirst = recsOf(s.chain, db).exists(h => namesFirst(h, r) or namesZ(h, r))
+      val isFirst = recsOf(s.chain, db).exists(h => namesFirst(h, r) or namesZ(h, r)
+        // (WHOLE_BY_SETTLER: a checkpoint of a held head's new root may settle its first
+        // records, so it applies the chain again like a first record.)
+        or (WHOLE_BY_SETTLER and isChain(h) and r.kind == "checkpoint" and r.signer == h.target))
       // A halted set (a fork of the recovery chain) takes recovery records only, a head's
       // first checkpoint among them.
       if (chainState(s, db).stop) (if (isFirst) applyChain(s, db) else s)
@@ -1190,7 +1212,9 @@ module records_v3 {
   // that checkpoint leaves out lies below its heads and is pruned, as in the core.)
   pure def firstsHeld(s: Store, db: Id -> Record): Set[Record] = {
     val side = recsOf(s.chain, db).filter(c => not(isChain(c)))
-    side.filter(c => c.kit != "z" or side.exists(f => f.kind == "checkpoint" and f.keep.contains(c.id)))
+    side.filter(c => c.kit != "z" or side.exists(f => f.kind == "checkpoint" and f.keep.contains(c.id))
+      // (WHOLE_BY_SETTLER: or a held checkpoint in the rooms keeps it.)
+      or (WHOLE_BY_SETTLER and recsOf(s.recs, db).exists(f => f.kind == "checkpoint" and f.keep.contains(c.id))))
   }
 
   // What a member given every record of got at once keeps, and its state.
@@ -1488,7 +1512,11 @@ module records_v3 {
     val own = headLine(db.keys().map(i => db.get(i)), target)
     val from = if (mode == "from1") 1 else own.length() + 1
     // "nocp": the head names a first checkpoint that is never released.
-    val withCp = mode != "nocp"
+    // (NEW_ROOT_ONLY: a change naming a root already on the path is void; no writer signs a
+    // first checkpoint for it (the core's write_change refuses the change; a deviant recovery
+    // key may sign the void head, and that is all the step writes, in every mode, so that old
+    // traces still replay).)
+    val withCp = mode != "nocp" and not(NEW_ROOT_ONLY and onList(before, target))
     // A list the core does not write is marked "deviant" (the kit of a chain record is read nowhere else).
     // (Ghost: the root removals the writer held, under "_rm" of the head's seen, which nothing
     // else reads; removedStayOut does not excuse a cut-off removal an honest writer held.)
@@ -1523,10 +1551,6 @@ module records_v3 {
       at >= 1,
       at <= ch.ids.length() + 1,
       cpId <= FIRST + MAXREC,
-      // (NEW_ROOT_ONLY: the new root key must be new to the path: no writer signs a first
-      // checkpoint for a root already on it. A deviant recovery key may still sign the void
-      // head alone, "nocp".)
-      not(NEW_ROOT_ONLY) or mode == "nocp" or not(onList(before, target)),
       // (REISSUE_REMOVALS: the writer's own check, as write_change's tests should assert: the
       // list names no removal a Z covers; listed twice it would take reserve for nothing.)
       not(REISSUE_REMOVALS) or mode != "honest" or keep.intersect(covered).size() == 0,
@@ -1538,7 +1562,10 @@ module records_v3 {
       // (J): the root removals and the live admissions fit the reserve (else the writer cannot
       // list them all and refuses).
       not(CEIL_FIT) or mode != "honest" or fixedUnits <= RESERVE,
-      commit(db3, if (withCp) cpId + 1 else cpId, h, if (withCp) insertInto(s1, c, db3) else s1),
+      // (Under NEW_ROOT_ONLY a void change leaves its first checkpoint's ID unused, so that old
+      // traces keep their IDs.)
+      commit(db3, if (withCp or (NEW_ROOT_ONLY and mode != "nocp" and onList(before, target))) cpId + 1 else cpId, h,
+        if (withCp) insertInto(s1, c, db3) else s1),
     }
   }
 
@@ -1596,8 +1623,11 @@ module records_v3 {
   // A newcomer: m starts again from what admitter x hands it, the recovery chain and its
   // records (rule 33, point 9).
   pure def welcomeStore(sx: Store, db: Id -> Record): Store = {
-    val withChain = sx.chain.fold(EMPTY, (s, i) => insertInto(s, db.get(i), db))
-    sx.recs.fold(pathed(withChain, db), (s, i) => insertInto(s, db.get(i), db))
+    // In ID order, which puts each record after the records that name its signer's key, as the
+    // core sends a set (in_dependency_order, section 4.9); a set's own fold order could offer a
+    // key's record before its admission, and the newcomer would drop it for good (k.10501).
+    val withChain = toList(sx.chain).foldl(EMPTY, (s, i) => insertInto(s, db.get(i), db))
+    toList(sx.recs).foldl(pathed(withChain, db), (s, i) => insertInto(s, db.get(i), db))
   }
   action welcomeNewcomer = nondet x = MEMBERS.exclude(Set("m")).oneOf() welcomeFrom(x)
   action welcomeFrom(x: str): bool = {
@@ -1614,9 +1644,12 @@ module records_v3 {
   }
 
   // Member m is offered record i.
-  action giveOnly(m: str, i: Id): bool = commit(db, nextId, m, insertInto(st.get(m), db.get(i), db))
+  // (An ID no record has, a void change's unused first checkpoint under NEW_ROOT_ONLY, offers
+  // nothing.)
+  action giveOnly(m: str, i: Id): bool =
+    commit(db, nextId, m, if (db.keys().contains(i)) insertInto(st.get(m), db.get(i), db) else st.get(m))
   // In the scenarios a head comes with its first checkpoint, when that was released.
-  action give(m: str, i: Id): bool = {
+  action give(m: str, i: Id): bool = if (not(db.keys().contains(i))) giveOnly(m, i) else {
     val r = db.get(i)
     val s1 = insertInto(st.get(m), r, db)
     // (REISSUE_REMOVALS: with the head's re-signed removals, its other first records.)
@@ -1639,6 +1672,23 @@ module records_v3 {
   // order, so what the old cut refused is judged under the new one (seed j.8004).
   pure val RESTART_KEEPS_CUT = false
   pure val RESTART_REOFFERS = true
+  // A restart from what the set saves alone (the exhaustive-check thread, 11-13 23:56Z, after
+  // the core's restore broke): the chain's heads, its first records unless a held checkpoint
+  // prunes them, then the rooms and the place aside; got and the cut are forgotten.
+  pure def savedChain(s: Store, db: Id -> Record): Set[Id] = {
+    val cps = recsOf(s.recs, db).filter(c => c.kind == "checkpoint")
+    s.chain.filter(i => isChain(db.get(i)) or not(cps.exists(c => prunedBy(c, db.get(i)))))
+  }
+  pure def rebuiltFromSaved(s: Store, db: Id -> Record): (Store, View) = {
+    val ch = savedChain(s, db)
+    val s1 = toList(ch).foldl(EMPTY, (x, i) => insertInto(x, db.get(i), db))
+    finish(toList(s.recs.union(s.wait).exclude(ch)).foldl(s1, (x, i) => insertInto(x, db.get(i), db)), db)
+  }
+  action restartSaved(m: str): bool = commit(db, nextId, m, rebuiltFromSaved(st.get(m), db)._1)
+  // Every member that is not halted shows, rebuilt from what it saves, the view it shows.
+  val savedStable = MEMBERS.forall(m => chainState(st.get(m), db).stop
+    or rebuiltFromSaved(st.get(m), db)._2 == views.get(m))
+
   action restart(m: str): bool = {
     val s0 = recut({ ...st.get(m), cut: if (RESTART_KEEPS_CUT) st.get(m).cut else NOCUT }, db)
     val s1 = if (RESTART_REOFFERS) range(1, nextId).select(i => s0.got.contains(i)).foldl(s0, (s, i) => insertInto(s, db.get(i), db)) else s0
@@ -1722,7 +1772,8 @@ module records_v3 {
     }
   }
   // Every member is offered one record at once: any record, or the newest.
-  action offerEveryone(i: Id): bool = commitAll(MEMBERS.mapBy(m => finish(insertInto(st.get(m), db.get(i), db), db)))
+  action offerEveryone(i: Id): bool = commitAll(MEMBERS.mapBy(m =>
+    finish(if (db.keys().contains(i)) insertInto(st.get(m), db.get(i), db) else st.get(m), db)))
   action broadcast = nondet i = db.keys().oneOf() offerEveryone(i)
   action broadcastNewest = offerEveryone(nextId - 1)
   // Sync with fairness: every member is offered, in ID order, every record some member holds.
@@ -3107,7 +3158,22 @@ module records_v3 {
       .expect(MEMBERS.filter(m => inGroup(m)).forall(m => views.get(m).path == ["R", "NA"]
         and Set(DEVICE, "dW").subseteq(views.get(m).revoked)
         and views.get(m).checkpoint == views.get("r").checkpoint
-        and st.get(m).recs == st.get("r").recs and st.get(m).cut.marks.keys() == Set()) and promises)
+        and st.get(m).recs == st.get("r").recs and st.get(m).cut.marks.keys() == Set()) and promises
+        and (WHOLE_BY_SETTLER implies savedStable))
+
+  // The exhaustive-check thread's probe (11-13 23:56Z): the change to NK re-signs R's removal
+  // of D (Z 7) beside its first checkpoint 8; NK's checkpoint 9 keeps 7 and prunes 8; then m
+  // restarts and c restarts from what it saves alone.
+  run firstPrunedTest =
+    init
+      .then(sign(PHONE, "device", DEVICE, "", 0, false, false, 1))
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(recoverAs(RECOVERY, "NK")).then(syncRound).then(syncRound)
+      .then(sign("NK", "checkpoint", "", "", 0, false, false, 2)).then(syncRound).then(syncRound)
+      .expect(savedStable)
+      .then(restart("m")).then(restartSaved("c"))
+      .expect(MEMBERS.filter(x => inGroup(x)).forall(x => views.get(x).path == ["R", "NK"]
+        and not(views.get(x).devices.contains(DEVICE))) and savedStable and promises)
 
   // The fold of an admin key's removals: R removes A, A signs on, R removes A again, and R's
   // checkpoint folds the first removal into the second. A's record after the first removal
