@@ -319,7 +319,7 @@ pub fn keep_tiers(
     let kept_at = |k: &Key, s: u64| {
         let cap = share(k, s);
         let n = k.sums.partition_point(|t| *t <= cap);
-        if n == 0 { 0 } else { k.sums[n - 1] }
+        n.checked_sub(1).and_then(|i| k.sums.get(i)).copied().unwrap_or(0)
     };
     let demand = |tier: bool, s: u64| {
         keys.iter().filter(|k| second.contains(&k.hash) == tier).fold(0u64, |d, k| d.saturating_add(kept_at(k, s)))
@@ -346,7 +346,7 @@ pub fn keep_tiers(
     for k in &keys {
         let at = if second.contains(&k.hash) { level2 } else { level };
         let n = k.sums.partition_point(|t| *t <= share(k, at));
-        kept.extend(k.items[..n].iter().map(|it| it.id));
+        kept.extend(k.items.iter().take(n).map(|it| it.id));
     }
     (kept, Cut { level, level2, marks: BTreeMap::new() })
 }
