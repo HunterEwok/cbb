@@ -563,3 +563,28 @@ group's roots' checkpoints, so that a set the checkpoint pruned is no rollback. 
 checked only after the check matched. The member shows the refusal with its details and does
 not use the records; the state of the group is not saved, since it comes from the records
 each time.
+
+## Entries of 0.6 that a driver calls
+
+The JSON operations above are 0.5's. The core of 0.6 has Rust entries that the programs call
+directly. The ones added for the recovery sheet, the YubiKey, pairing and the Welcome are below,
+each with the program that calls it once wave 5 moves the programs to the core. Today `ffi/`
+exposes none of them; the column "ffi" says what the kits will need. `member/` is the Rust
+service and command line, the kits are the phones' Swift and Kotlin kits, and the boards are
+`embassy/` and `esp32/`.
+
+| Entry | What it does | Called at wave 5 by | ffi |
+|---|---|---|---|
+| `sheet::text`, `sheet::qr` | the recovery sheet's text and QR code from the recovery key's secret and the group ID ([protocol.md](protocol.md), section 9) | the root's app when it makes the group; `member/` for `cbb` groups | to add |
+| `sheet::read` | reads what the person typed or scanned (at most `sheet::MAX_INPUT` (512) bytes) into a `sheet::Read`, or a `sheet::Reason` with its `message()` | the apps' and `member/`'s recovery screens | to add |
+| `sheet::check` | checks a read sheet against the group ID and the group's recovery key | the same, before any signing | to add |
+| `sheet::yubikey::seal`, `open`, `read`, `is_ours`, `ecdh`, `check` | the bytes of the YubiKey's recovery object: the object's layout, the seal and opening by ECDH with the card's key, and the check that the opened secret is the group's recovery key. The card itself is the caller's | `member/` (`member/src/piv/recovery.rs` calls it today); the phones over NFC | to add for the phones |
+| `tls::bykey::pairing_exporter` | the session's `join::PairExporter`, only from a finished handshake on `cbb-pair/3` | `member/` and the boards, which run the core's TLS | none: the core's TLS stays inside the core |
+| `join::PairExporter::exported_by_platform_tls` | the same from 32 bytes a platform's TLS exported with `EXPERIMENTAL-cbb-pair-v3` and an empty context; the caller states where they came from | the kits, whose TLSTransport runs pairing | to add, as the only way the kits make one |
+| `join::approve::MemberExchange::respond`, `confirm` | the member's CPace exchange with its password (`approve::Password`); `confirm` takes the joiner's Ta and gives an `Approved` only under an invitation's secret | every program that admits: `member/`, the kits | to add |
+| `join::invitation::home_code`, `Open::short_code` | the code the member shows, with its `approve::MemberShown` | the same | to add |
+| `join::approve::answered_at_home`, `join::invitation::Open::answered` | turn the person's "they match" on that code into an `Approved` | the same | to add |
+| `join::welcome::message` | message 67, made only with an `Approved` naming the exchange's session and joiner | the same | to add |
+| `join::welcome::Welcome::build`, `part_message` | the Welcome and the parts that follow it when the set does not fit one frame | the same | to add |
+| `join::welcome::Assembly` (`new`, `due`, `late`, `take`, `finish`) | the joiner takes the parts after message 67 within `join::welcome::MAX_PARTS_BYTES` and their time limits, then gives the whole Welcome to `Welcome::check` | every program that joins: `member/`, the kits, the boards | to add |
+| `bounds::BOUNDS` | every number of the format with its rule, refusal and the vector that reaches it ([protocol.md](protocol.md), section 19) | no driver; the tests and the docs check against it | none |
