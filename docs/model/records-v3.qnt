@@ -465,6 +465,12 @@ module records_v3 {
   }
   // An admin record for key a would grant it again: a was removed, or a root device record of
   // its device came after a record naming it (a take-back).
+  // LAST_ROOT_ONLY (candidate L, owner 11-14 21:17Z via architecture; on top of ROOT_WAITS and
+  // REISSUE_STATE): after a change of root evaluation counts only the last root's records and
+  // those of admin keys it named; nothing an earlier root or its admins signed counts. State
+  // carries over only as the new root's re-issue (Ys), admins wiped (their devices re-issued as
+  // plain devices); the writer never grants a key that was an admin key under another root.
+  pure val LAST_ROOT_ONLY = false
   pure def regrant(rs: Set[Record], a: Key): bool =
     rs.exists(v => v.kind == "revoke" and tgt(v).contains(a))
     or (DEV.keys().contains(a) and rs.exists(x => x.kind == "device" and ROOT_KEYS.contains(x.signer) and x.target == DEV.get(a)
@@ -1456,7 +1462,18 @@ module records_v3 {
       val lists = rs.union(ch.recs.foldl(Set(), (a, c) => a.union(Set(c)))).filter(c => c.kind == "checkpoint" or isChain(c))
       fullEvaluate0(rs.filter(r => r.kind != "device" or r.epoch >= d or lists.exists(c => c.keep.contains(r.id))), ch)
     }
+  // (LAST_ROOT_ONLY: after a change only the last root's records and those of the admin keys it
+  // named count; the recovery records stay.)
   pure def fullEvaluate0(rs: Set[Record], ch: Chain): View = {
+    val p = pathCuts(ch)._1
+    val cur = last(p)
+    if (not(LAST_ROOT_ONLY) or p.length() < 2) fullEvaluate1(rs, ch)
+    else {
+      val namedByCur = rs.filter(a => a.kind == "admin" and a.signer == cur).map(a => a.target)
+      fullEvaluate1(rs.filter(r => isChain(r) or r.signer == cur or namedByCur.contains(r.signer)), ch)
+    }
+  }
+  pure def fullEvaluate1(rs: Set[Record], ch: Chain): View = {
     val pc = pathCuts(ch)
     val cur = last(pc._1)
     val plain = epoch(rs, pc._1, pc._2, Set())
@@ -1689,6 +1706,8 @@ module records_v3 {
       // (ROOT_WAITS, code fact 11-14 21:04Z: the root never grants admin again to a key it
       // removed or took back; a returning device gets a new admin key.)
       not(ROOT_WAITS) or kit == "deviant" or kind != "admin" or not(regrant(mine, target)),
+      not(LAST_ROOT_ONLY) or kit == "deviant" or kind != "admin"
+        or not(db.keys().exists(i => db.get(i).kind == "admin" and db.get(i).target == target and db.get(i).signer != k)),
       // (FRESH_KEY: an honest writer admits only a key no record names yet.)
       not(FRESH_KEY) or kit == "deviant" or dk == "" or vh.devices.contains(dk)
         or not(db.keys().exists(i => devOf(db.get(i)) == dk)),
@@ -1917,7 +1936,8 @@ module records_v3 {
       val cps = beforeRecs.filter(x => x.kind == "copies")
       range(1, nextId).select(i => db.keys().contains(i) and beforeRecs.contains(db.get(i)) and {
         val x = db.get(i)
-        live.contains(x) or x.kind == "freeze"
+        (live.contains(x) and not(LAST_ROOT_ONLY and x.kind == "admin" and not(DEV.keys().contains(x.target))))
+          or (x.kind == "freeze" and not(LAST_ROOT_ONLY))
           or (x.kind == "copies" and cps.forall(y => y.signer != x.signer or y.seq <= x.seq))
       })
     }
@@ -1938,7 +1958,8 @@ module records_v3 {
         if (f < 0 and (REISSUE_PACK_ANY or gs[g].foldl(true, (ok, y) => ok and agree(db.get(y), x)))) g else f)
       if (j < 0) gs.append([i]) else gs.replaceAt(j, gs[j].append(i))
     })
-    val zIds = if (REISSUE_DROP_ONLY) [] else range(0, groups.length()).foldl([], (l, j) => l.append(nextId + 1 + j))
+    // (LAST_ROOT_ONLY: removals from before the change are not carried: no Zs.)
+    val zIds = if (REISSUE_DROP_ONLY or LAST_ROOT_ONLY) [] else range(0, groups.length()).foldl([], (l, j) => l.append(nextId + 1 + j))
     val remUnits = sumUnits(beforeRecs.filter(x => rootRemoval(x) and not(foldedRm.contains(x)) and not(covered.contains(x.id))))
     val fixedUnits = remUnits + sumUnits(live.filter(x => not(covered.contains(x.id))))
     val droppable = beforeRecs.filter(x => not(rootRemoval(x)) and not(live.contains(x)) and not(superseded.contains(x)))
@@ -1980,7 +2001,11 @@ module records_v3 {
     })
     val db2y = range(0, yIds.length()).foldl(db2, (d, j) => {
       val x = db.get(ySrc[j])
-      d.put(yIds[j], rec(yIds[j], target, own.concat(zIds).concat(yIds.slice(0, j + 1)), x.kind, x.target, x.kit, nextId,
+      // (LAST_ROOT_ONLY: admins are wiped at a change; an admin's device is re-issued as a plain
+      // device.)
+      val asDev = LAST_ROOT_ONLY and x.kind == "admin"
+      d.put(yIds[j], rec(yIds[j], target, own.concat(zIds).concat(yIds.slice(0, j + 1)),
+        if (asDev) "device" else x.kind, if (asDev) DEV.get(x.target) else x.target, if (asDev) "" else x.kit, nextId,
         x.seen, Map(), Set(), x.units))
     })
     val s1 = zIds.concat(yIds).foldl(insertInto(s, r, dbH), (x, i) => insertInto(x, db2y.get(i), db2y))
@@ -5453,7 +5478,7 @@ module records_v3 {
     if (c == 0) Set() else db.get(c).keep
   }
   def keepsRemovalOfD(k: Key): bool = lastCpKeep(k).exists(i => db.get(i).kind == "revoke" and tgt(db.get(i)).contains(DEVICE))
-  run wChangeRootTest = if (not(ROOT_WAITS) or not(wideW)) init else
+  run wChangeRootTest = if (not(ROOT_WAITS) or not(wideW) or LAST_ROOT_ONLY) init else
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
       .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
@@ -5533,7 +5558,7 @@ module records_v3 {
       .expect(MEMBERS.forall(m => not(views.get(m).devices.contains(DEVICE))) and promises)
   // A change of root while a removal waits: W never acked R's removal 5; the change to NA
   // writes NA's first checkpoint, which keeps the re-issued removal; D stays out.
-  run wChangeWaitingTest = if (not(ROOT_WAITS) or not(wideW)) init else
+  run wChangeWaitingTest = if (not(ROOT_WAITS) or not(wideW) or LAST_ROOT_ONLY) init else
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
       .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
@@ -5617,10 +5642,92 @@ module records_v3 {
       .then(syncRound).then(syncRound).then(compactAt("m")).then(syncRound)
       .expect(dOut)
 
+  // LAST_ROOT_ONLY (candidate L), on decided + ROOT_WAITS + REISSUE_STATE (+ROOT_RATIO,
+  // WIDE_ADMIN for room). The recovery record of the newest change.
+  def recId: int = db.keys().filter(i => db.get(i).kind == "recover").fold(0, (m, i) => max2(m, i))
+  def firstOfChange: int = if (recId == 0) 0 else db.get(recId).first
+  pure val onL = LAST_ROOT_ONLY and ROOT_WAITS and REISSUE_STATE and wideW
+  // 1. An old admin's admission (5) and removal (6) and the old root's grant (7) reach no one
+  // before the change; after it nothing of them counts: E out, D (re-issued) in, no admins.
+  run lLateOldTest = if (not(onL)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(PHONE, "device", "E", "", 0, false, false, 1))
+      .then(sign(PHONE, "revoke", DEVICE, "", 0, false, false, 1))
+      .then(sign(ROOT, "admin", MINTED, "phone", 0, false, false, 1))
+      .expect(not(st.get("k").got.contains(5)) and not(st.get("k").got.contains(7)))
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound).then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).path == [ROOT, "NA"] and views.get(m).devices.contains(DEVICE)
+        and not(views.get(m).devices.contains("E")) and views.get(m).admins.keys() == Set()
+        and not(views.get(m).revoked.contains(DEVICE))) and promises)
+  // 2. A member that holds the change but only part of the re-issue stays on R and counts R's
+  // group, whole; with all of it it moves to NA. Never empty, never mixed.
+  run lHalfReissueTest = if (not(onL)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(recoverAs(RECOVERY, "NA"))
+      .then(giveAll(Set("m"), [recId]))
+      .expect(views.get("m").path == [ROOT] and views.get("m").devices == Set("dA", "dC", "dW", DEVICE)
+        and views.get("m").admins.keys() == Set(PHONE, COMPUTER, WATCH))
+      .then(giveAll(Set("m"), range(recId + 1, recId + 3)))
+      .expect(views.get("m").path == [ROOT] and views.get("m").devices == Set("dA", "dC", "dW", DEVICE)
+        and views.get("m").admins.keys() == Set(PHONE, COMPUTER, WATCH))
+      .then(giveAll(Set("m"), range(recId + 3, firstOfChange + 1)))
+      .expect(views.get("m").path == [ROOT, "NA"] and views.get("m").devices == Set("dA", "dC", "dW", DEVICE)
+        and views.get("m").admins.keys() == Set())
+      .then(syncRound).then(syncRound)
+      .expect(promises)
+  // 3. A second change before the first re-issue spread.
+  run lSecondChangeTest = if (not(onL)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(recoverAs(RECOVERY, "NA"))
+      .then(recoverAs(RECOVERY, "NK"))
+      .then(syncRound).then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).path == [ROOT, "NA", "NK"] and views.get(m).devices.contains(DEVICE)
+        and views.get(m).admins.keys() == Set()) and promises)
+  // 4. A change while W lags on R's removal of D: D is not re-issued, so it is out; W's late
+  // ack changes nothing.
+  run lChangeWaitingTest = if (not(onL)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(PHONE, "ack", "", "", 0, false, false, 1)).then(sign(COMPUTER, "ack", "", "", 0, false, false, 1))
+      .then(syncRound)
+      // (W's ack, signed late, reaches the others only after the change; after it W's key is
+      // nothing and its writer cannot sign at all.)
+      .then(sign(WATCH, "ack", "", "", 0, false, false, 1))
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).path == [ROOT, "NA"]) and dOut
+        and MEMBERS.forall(m => views.get(m).admins.keys() == Set()))
+  // 5. A twin of the new root right after the change: who holds both halts, one state.
+  run lNewRootTwinTest = if (not(onL)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound).then(syncRound)
+      .then(sign("NA", "copies", "", "", 0, false, false, 1))
+      .then(signFull("NA", "copies", "", "", 0, false, true, 1, true, Set()))
+      .then(syncRound).then(giveAll(MEMBERS, [nextId - 1])).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).stop) and promises)
+  // 6. A device the new root did not re-issue (R removed it) is out, and joins again with
+  // the same key by the new root's admission.
+  run lRejoinTest = if (not(onL)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(recoverAs(RECOVERY, "NA")).then(syncRound).then(syncRound)
+      .expect(dOut)
+      .then(sign("NA", "device", DEVICE, "", 0, false, false, 1)).then(syncRound).then(syncRound)
+      // (m, the model's device admitted outside the records, is not re-issued either: no peer
+      // hands it anything after the change; it is not D's member.)
+      .expect(MEMBERS.exclude(Set("m")).forall(m => views.get(m).devices.contains(DEVICE)))
+      .expect(promises)
+
   // REISSUE_STATE: the change to NA re-issues R's live admissions (A, C, W and D) as NA's first
   // records 6 to 9; the list keeps none of R's records, the first checkpoint keeps the Ys, and
   // every member counts the same admins and devices under NA.
-  run reissueStateTest =
+  // (LAST_ROOT_ONLY wipes the admins: lLateOldTest.)
+  run reissueStateTest = if (LAST_ROOT_ONLY) init else
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
       .then(recoverAs(RECOVERY, "NA")).then(syncRound).then(syncRound)
