@@ -1896,13 +1896,11 @@ of its own. Any other key has no room and keeps nothing. A record body is at mos
 (262144), and a change's list names at most `records::LIST_MAX` (1536) IDs. A set has at most
 `records::MAX_DEVICES` (256) devices.
 
-At level s a key keeps the longest start of its own order (below) within min(s, its ceiling)
-units, and s is the highest level at which the keys' demands fit the room. So a key whose
-records take few units keeps them all, whatever the others make. The rooms are judged from the
-records the set holds and nothing else it did before: a record that comes is kept when the
-rooms over what is held and that record keep it, and a batch (`RecordSet::insert_all`) is
-judged once over what is held and the whole batch. Two members that give each other what they
-hold end with what the rooms keep of both.
+A key keeps the longest start of its own order (below), in whole records, within its cap less
+what the checkpoints that may count keep first of it ("Tiers inside the rooms" gives the caps).
+Nothing is remembered between two judgments: what a set holds is what the caps keep of it, a
+live set and the same set restarted answer every record alike, and two members that give each
+other what they hold end equal once they hold the same root records.
 
 #### The order inside a room
 
@@ -1921,23 +1919,28 @@ The recovery chain is kept outside the rooms.
 
 #### Tiers inside the rooms
 
-The admin keys that are no longer admins share what the others leave (`keep::keep_tiers`).
-Who they are is read from the root records of the path that the set holds, before the rooms
-are judged (`eval::not_live`; of a root that a change cut, only what its list names). An admin
-key that a root's record names is no longer an admin when a root's removal names it, when the
-newest root record of the device that named it names another key or none, or when it comes
-after the first `records::ADMIN_KEYS_MAX` (16) keys. The 16 are taken by the newest root
-record that names each key: its root's place on the path, then its seq, then the smaller ID.
+Being built: the code follows this text in the records thread's next head.
 
-The rooms never decide who is an admin. A root's removals come first in its room, and so does
-a root record that takes an admin key back, so the rooms keep every record that decides a tier.
-Members that hold different root records may see different tiers until they sync; once they
-hold the same root records they see the same tiers.
+There is no level. Each key has a fixed cap, read from the roster in the root's kept records
+alone: the current root `records::MAX_ROOT_RECORDS` (1536) units, the roots a change cut
+together `records::CUT_ROOTS_RESERVE` (1536), each live admin key `records::MAX_ADMIN_RECORDS`
+(256), and each key that is no longer an admin min(256, ⌊rest / n⌋), where rest is
+`records::MAX_RECORDS` (7168) less the root's, the reserve's and the live admin keys' caps, and
+n is the number of keys that are no longer admins.
 
-The first tier (the roots and the live admin keys) is judged at its level within the room, less
-what the checkpoints that may count keep first. The second tier is judged at its own level,
-within what the first tier's demand at its level leaves. Each tier's level is the highest at
-which its keys' demands fit, from what the set holds alone.
+Who is no longer an admin is read from the root records of the path that the set holds
+(`eval::not_live`; of a root that a change cut, only what its list names). An admin key that a
+root's record names is no longer an admin when a root's removal names it, when the newest root
+record of the device that named it names another key or none, or when it comes after the first
+`records::ADMIN_KEYS_MAX` (16) keys. The 16 are taken by the newest root record that names
+each key: its root's place on the path, then its seq, then the smaller ID. A root's removals
+come first in its room, and so does a root record that takes an admin key back, so the caps
+never drop a record that decides who is an admin.
+
+The root's writer writes a checkpoint right after a root record that makes a key no longer an
+admin, so that what the state needs of that key (the devices it admitted, its removals) is kept
+first by the root. A record of such a key that the root did not hold when it wrote that
+checkpoint is lost while the key's cap is 0, as it is beside 16 live admin keys.
 
 Being settled: a key an admin removed.
 
