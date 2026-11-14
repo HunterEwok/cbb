@@ -21,6 +21,8 @@ All notable changes to cbb are documented in this file. The format follows
   the rule that refuses one more. Tests keep it complete: every number of the format is in it,
   every bound is reached by a test and refused in the vectors, and the Go check reads the same
   table.
+- docs/protocol.md describes the 0.6 wire: its registries carry the table of bounds, and a test
+  checks the table and every bound the text names against the core's registry.
 - The Rust core wipes the secrets it holds when it lets them go, prints none in `Debug` or
   an error, and compares every mark and confirmation tag in constant time; the C library
   wipes each answer as it is given back (docs/core-api.md, "Secrets"). Timing tests of the

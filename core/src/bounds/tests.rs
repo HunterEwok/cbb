@@ -248,3 +248,74 @@ fn a_manifest_at_its_bounds() {
     assert!(err.contains("types"), "{err}");
     assert!(!types(MAX_TYPES).validate().unwrap_err().to_string().contains("more than"));
 }
+
+/// The registry as the table of docs/protocol.md's "Bounds" (between its
+/// markers).
+fn protocol_table() -> String {
+    let cell = |s: &str| s.replace('|', "\\|").replace('\n', " ");
+    let mut t = String::from("| Bound | Value | Class | Widest case | Refused as |\n|---|---|---|---|---|\n");
+    for b in BOUNDS {
+        let refusal = if b.refusal.is_empty() { String::new() } else { format!("`{}`", b.refusal) };
+        t.push_str(&format!(
+            "| `{}` | {} | {} | {} | {} |\n",
+            b.name,
+            b.value,
+            b.class.name(),
+            cell(b.widest),
+            refusal
+        ));
+    }
+    t
+}
+
+/// docs/protocol.md states the bounds as the registry has them: its table
+/// is the registry's, and every bound it names in its text (a registry
+/// name in backquotes, as `records::MAX_SEEN`) is in the registry, with
+/// the registry's value where a number in parentheses follows it.
+#[test]
+fn protocol_md_states_the_bounds() {
+    const BEGIN: &str = "<!-- bounds:begin -->\n";
+    const END: &str = "<!-- bounds:end -->";
+    let path = root().join("../docs/protocol.md");
+    let doc = std::fs::read_to_string(&path).unwrap();
+    let (Some(a), Some(z)) = (doc.find(BEGIN), doc.find(END)) else { panic!("docs/protocol.md has no bounds markers") };
+    let start = a + BEGIN.len();
+    let want = protocol_table();
+    if std::env::var_os("CBB_WRITE_BOUNDS").is_some() && doc[start..z] != want {
+        std::fs::write(&path, format!("{}{}{}", &doc[..start], want, &doc[z..])).unwrap();
+    }
+    let doc = std::fs::read_to_string(&path).unwrap();
+    let start = doc.find(BEGIN).unwrap() + BEGIN.len();
+    let z = doc.find(END).unwrap();
+    assert!(doc[start..z] == want, "docs/protocol.md's bounds table is not the registry: run with CBB_WRITE_BOUNDS=1");
+    // The text outside the table.
+    let text = format!("{}{}", &doc[..start], &doc[z..]);
+    let value: std::collections::BTreeMap<&str, u64> = BOUNDS.iter().map(|b| (b.name, b.value)).collect();
+    let mut wrong = Vec::new();
+    for (i, piece) in text.split('`').enumerate().skip(1).step_by(2) {
+        let looks = piece.contains("::")
+            && piece.rsplit("::").next().is_some_and(|last| {
+                last.starts_with(|c: char| c.is_ascii_uppercase())
+                    && last.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+            })
+            && piece.split("::").all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'));
+        if !looks {
+            continue;
+        }
+        let Some(&v) = value.get(piece) else {
+            wrong.push(format!("`{piece}` is not in the registry"));
+            continue;
+        };
+        // What follows the closing backquote: " (1 024)" or " (1024)".
+        let after = text.split('`').nth(i + 1).unwrap_or_default();
+        if let Some(rest) = after.strip_prefix(" (") {
+            let digits: String =
+                rest.chars().take_while(|c| c.is_ascii_digit() || *c == ' ').filter(char::is_ascii_digit).collect();
+            let closed = rest.trim_start_matches(|c: char| c.is_ascii_digit() || c == ' ').starts_with(')');
+            if !digits.is_empty() && closed && digits.parse::<u64>().ok() != Some(v) {
+                wrong.push(format!("`{piece}` ({digits}) is {v} in the registry"));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "docs/protocol.md: {wrong:#?}");
+}

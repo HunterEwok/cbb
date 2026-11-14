@@ -52,7 +52,7 @@ A variable set in the environment wins over the same name in the settings file.
 | `CBB_TEST_APPLETV_NAME` | `cbb-helper` | For tests only: the name an Apple TV announces by mDNS, which the helper then takes instead of browsing for it; empty for none. |
 | `CBB_TEST_BLUEZ` | cbb-helper on Linux | For tests only: the D-Bus address of a test's BlueZ (`bluetest`), which the Bluetooth keyboard registers with instead of the system bus. |
 | `CBB_WRITE_MUTANTS` | the core's tests (`cargo test -p cbb-core`) | For development only: `1` writes `testdata/format/wave4-mutants.json` again from what the readers say, instead of failing when the file no longer matches them. |
-| `CBB_WRITE_BOUNDS` | the core's tests (`cargo test -p cbb-core`) | For development only: any value writes `testdata/format/bounds.json` again from the registry of bounds (`core/src/bounds.rs`), instead of failing when the file no longer matches it. |
+| `CBB_WRITE_BOUNDS` | the core's tests (`cargo test -p cbb-core`) | For development only: any value writes `testdata/format/bounds.json` and the bounds table of `docs/protocol.md` again from the registry of bounds (`core/src/bounds.rs`), instead of failing when they no longer match it. |
 | `CBB_FORWARD_FLAGS` | `cbb-forward.service` | The flags of `cbb forward`, such as `-vless-xhttp vpn.example.org`. |
 | `CBB_RELAY_FLAGS` | `cbb-relay.service` | The flags of `cbb relay`: `-group TAG` or `-open`. |
 | `CBB_TRAFFIC_IFACE` | `site/deploy/cbb-traffic.sh` on cbb.tools | The network interface whose traffic counts for [the servers' budget](../relay-budget.md#money-and-traffic); unset, the default route's. |
