@@ -37,6 +37,8 @@ const PIN_REF: u8 = 0x80;
 /// most a few kilobytes.
 const MAX_ANSWER: usize = 16 << 10;
 
+pub mod recovery;
+
 pub const NO_CARD: &str = "no YubiKey found: plug it in, or hold it to the reader";
 pub const TWO_CARDS: &str = "two YubiKeys hold the recovery key: leave only one plugged in";
 pub const NO_KEY: &str = "this YubiKey holds no recovery key of the group: the root phone puts it in a retired PIV slot with its certificate, and a newer recovery key replaces the older one";

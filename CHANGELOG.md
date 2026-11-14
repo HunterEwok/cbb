@@ -11,6 +11,11 @@ All notable changes to cbb are documented in this file. The format follows
   4 lines of 16 characters with a check on each line and one on the whole sheet, so a typing
   mistake is told apart from a sheet of another group, and as a QR code with the Group ID;
   both carry a version, and a later one says the sheet needs a newer cbb.
+- The 0.6 recovery secret on a YubiKey 5 (firmware 5.3 or later): sealed to a P-256 key the
+  card makes in retired PIV slot 95, which needs the PIN and a touch for every use, and kept
+  in the PIN-protected object 5FC121 (`cbb_core::sheet::yubikey`, the card's commands in
+  `cbb`). cbb never overwrites anything on the card: a key or a value already in either place
+  stops it before the first write, and it never changes the card's management key.
 - The Rust core wipes the secrets it holds when it lets them go, prints none in `Debug` or
   an error, and compares every mark and confirmation tag in constant time; the C library
   wipes each answer as it is given back (docs/core-api.md, "Secrets"). Timing tests of the

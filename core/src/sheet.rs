@@ -311,17 +311,23 @@ pub fn check(read: &Read, group: &GroupId, recovery: &Recovery) -> Result<(), Re
     if read.group.as_ref().is_some_and(|g| g != group) {
         return Err(Reason::OtherGroup);
     }
-    let same = crate::records::pq::recovery_keys(&read.secret).is_ok_and(|(k1, k2)| {
-        use p256::elliptic_curve::sec1::ToSec1Point as _;
-        let p1 = k1.public_key().to_sec1_point(false).as_bytes().to_vec();
-        p1 == recovery.k1.public() && k2.public() == recovery.k2.public()
-    });
-    match (same, read.group.is_some()) {
+    match (check_keys(read, recovery), read.group.is_some()) {
         (true, _) => Ok(()),
         (false, true) => Err(Reason::Damaged),
         (false, false) => Err(Reason::OtherGroup),
     }
 }
+
+/// Whether K1 and K2 from the secret are the group's recovery keys.
+fn check_keys(read: &Read, recovery: &Recovery) -> bool {
+    crate::records::pq::recovery_keys(&read.secret).is_ok_and(|(k1, k2)| {
+        use p256::elliptic_curve::sec1::ToSec1Point as _;
+        let p1 = k1.public_key().to_sec1_point(false).as_bytes().to_vec();
+        p1 == recovery.k1.public() && k2.public() == recovery.k2.public()
+    })
+}
+
+pub mod yubikey;
 
 #[cfg(test)]
 mod tests;
