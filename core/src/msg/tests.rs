@@ -563,3 +563,74 @@ mod reading {
         }
     }
 }
+
+/// Bytes after a complete outermost item are a fact of the encoding: every
+/// kind refuses a body with 32 bytes after its map as `cbor/trailing`, the
+/// same rule for each. Each valid envelope of the vectors is written again
+/// around its body with the bytes added (the signature then fails too, but
+/// the encoding is read first); contents and orders get them at their end.
+#[test]
+fn every_kind_refuses_trailing_bytes_as_cbor_trailing() {
+    use crate::format::envelope::{self, Envelope};
+    let format = |name: &str| -> Json {
+        let path = std::format!("{}/../testdata/format/{name}", env!("CARGO_MANIFEST_DIR"));
+        serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
+    };
+    let rule = |r: Result<(), Rule>| r.err().map_or("taken", Rule::name);
+    let padded = |env: &[u8]| -> Vec<u8> {
+        let e = Envelope::parse(env).unwrap();
+        let mut body = e.body.to_vec();
+        body.extend([0u8; 32]);
+        envelope::write(&body, e.sig, e.sig2)
+    };
+    let mut got: Vec<(String, &'static str)> = Vec::new();
+    let mut each = |kind: &str, cases: &Json, field: &str, read: &dyn Fn(&[u8]) -> &'static str| {
+        let mut n = 0;
+        for c in cases.as_array().unwrap() {
+            if c.get("verdict").is_some_and(|v| v != "take") {
+                continue;
+            }
+            n += 1;
+            got.push((std::format!("{kind} {}", c["name"]), read(&unhex(&c[field]))));
+        }
+        assert!(n > 0, "{kind}: no valid case");
+    };
+    let records = format("records.json");
+    each("record", &records["take"], "envelope", &|e| match crate::records::Record::decode(&padded(e)) {
+        Err(r) if r.is("cbor/trailing") => "cbor/trailing",
+        Err(_) => "another rule",
+        Ok(_) => "taken",
+    });
+    each("statement", &format("statements.json")["take"], "envelope", &|e| {
+        rule(crate::keystore::read_statement(&padded(e)).map(|_| ()))
+    });
+    each("command", &format("commands.json")["take"], "envelope", &|e| {
+        rule(crate::commands::Command::read(&padded(e)).map(|_| ()))
+    });
+    each("credential", &format("credentials.json")["take"], "envelope", &|e| {
+        rule(crate::blind::credential::Credential::read(&padded(e)).map(|_| ()))
+    });
+    let v = load4();
+    each("command (wave 4)", &v["commands"], "envelope", &|e| {
+        rule(crate::commands::Command::read(&padded(e)).map(|_| ()))
+    });
+    each("statement (wave 4)", &v["statements"], "envelope", &|e| {
+        rule(crate::keystore::read_statement(&padded(e)).map(|_| ()))
+    });
+    each("beacon", &v["beacons"], "envelope", &|e| rule(crate::beacon::read(&padded(e)).map(|_| ())));
+    each("content", &v["contents"], "content", &|c| {
+        let mut b = c.to_vec();
+        b.extend([0u8; 32]);
+        rule(crate::content::Content::read(&b).map(|_| ()))
+    });
+    for o in v["orders"].as_array().unwrap().iter().filter(|o| o["verdict"] == "take") {
+        let mut b = unhex(&o["orders"]);
+        b.extend([0u8; 32]);
+        got.push((
+            std::format!("orders {}", o["name"]),
+            rule(crate::commands::orders::check(o["type"].as_u64().unwrap(), &b)),
+        ));
+    }
+    let wrong: Vec<&(String, &str)> = got.iter().filter(|(_, r)| *r != "cbor/trailing").collect();
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}

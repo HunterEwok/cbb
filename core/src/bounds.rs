@@ -129,7 +129,7 @@ pub const BOUNDS: &[Bound] = &[
         Frozen,
         "two integers of 33 bytes",
         "container/template",
-        &["vec:container.json:integer of 34 bytes"],
+        &["vec:container.json:integer of 34 bytes (73 in all, past 72)"],
     ),
     // Envelopes and second signatures.
     b(
@@ -193,9 +193,14 @@ pub const BOUNDS: &[Bound] = &[
         "copies::fresh::ALLOWANCE_MS",
         crate::copies::fresh::ALLOWANCE_MS,
         Frozen,
-        "an origin's clock 5 minutes ahead",
-        "copy/time",
-        &["a_copy_dated_ahead_stops_no_reader", "freshness_is_decided_from_signed_fields"],
+        "an origin's clock 5 minutes ahead; past it a copy is the verdict `ahead` (not written, not the newest), \
+         which depends on the reader's clock, so its vectors give the clock",
+        "ahead",
+        &[
+            "a_copy_dated_ahead_stops_no_reader",
+            "freshness_is_decided_from_signed_fields",
+            "freshness_matches_its_vectors",
+        ],
     ),
     b(
         "copies::fresh::MAX_SECRETS",
@@ -519,10 +524,11 @@ pub const BOUNDS: &[Bound] = &[
     b(
         "records::MAX_SEEN",
         crate::records::MAX_SEEN as u64,
-        Frozen,
-        "a `seen` list; not reached on the wire: 1024 entries of about 73 bytes pass MAX_BODY, which binds first",
+        Reader,
+        "a `seen` list; the body's bound comes first: 1024 of the smallest entries pass MAX_BODY, so the count \
+         is a reader's guard that already stands if a later version widens the body",
         "records/revoke/seen",
-        &["gap"],
+        &["the_body_binds_before_max_seen"],
     ),
     b(
         "records::body::MAX_RECOVERY",
@@ -747,7 +753,7 @@ pub const BOUNDS: &[Bound] = &[
         Frozen,
         "an intro's records",
         "intro/size",
-        &["an_intro_counts_the_recovery_heads_apart"],
+        &["an_intro_counts_the_recovery_heads_apart", "intros_match_their_vectors"],
     ),
     b(
         "join::intro::MAX_BYTES",
@@ -755,7 +761,7 @@ pub const BOUNDS: &[Bound] = &[
         Frozen,
         "an intro's records' bytes",
         "intro/size",
-        &["an_intro_counts_the_recovery_heads_apart"],
+        &["an_intro_counts_the_recovery_heads_apart", "intros_match_their_vectors"],
     ),
     b(
         "join::intro::MAX_HEADS",
@@ -763,7 +769,7 @@ pub const BOUNDS: &[Bound] = &[
         Frozen,
         "a head for each recovery seq and the first",
         "intro/size",
-        &["an_intro_counts_the_recovery_heads_apart"],
+        &["an_intro_counts_the_recovery_heads_apart", "intros_match_their_vectors"],
     ),
     b(
         "join::intro::MAX_PER_WINDOW",
@@ -955,20 +961,11 @@ pub const BOUNDS: &[Bound] = &[
 /// The bounds no test or vector reaches yet (their row says `gap`): the
 /// registry's test keeps this list exact, so a new bound cannot join it
 /// unseen and a gap closed leaves it.
-pub const UNREACHED: &[&str] = &["records::MAX_SEEN"];
+pub const UNREACHED: &[&str] = &[];
 
 /// The refusals of frozen and stated bounds that no vector shows yet, as
 /// `name: rule`; kept exact as [`UNREACHED`] is.
-pub const UNVECTORED: &[&str] = &[
-    "format::container::MAX_SIG: container/template",
-    "copies::fresh::ALLOWANCE_MS: copy/time",
-    "records::body::MAX_SERVERS: records/settings/servers",
-    "records::body::MIN_INCOMING_MS: records/copies/incoming_ms",
-    "records::body::MAX_INCOMING_MS: records/copies/incoming_ms",
-    "join::intro::MAX_RECORDS: intro/size",
-    "join::intro::MAX_BYTES: intro/size",
-    "join::intro::MAX_HEADS: intro/size",
-];
+pub const UNVECTORED: &[&str] = &[];
 
 /// Public numbers of the format modules that are not bounds, by name or
 /// name prefix, with the reason.

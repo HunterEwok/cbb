@@ -5480,3 +5480,36 @@ fn bodies_at_their_bounds() {
     let env = crate::format::envelope::write(&bytes, &[0x30; 70], None);
     assert!(Record::decode(&env).unwrap_err().is("env/size"));
 }
+
+/// MAX_SEEN is a reader's guard behind MAX_BODY: the body's bound binds
+/// first. A removal of one key with the smallest `seen` entries passes
+/// MAX_BODY long before MAX_SEEN, so the count already stands if a later
+/// version widens the body; and a list of MAX_SEEN + 1 entries is refused
+/// by its count whatever the body's bound.
+#[test]
+fn the_body_binds_before_max_seen() {
+    let g = G::new();
+    let root = k("root");
+    let seen = |n: usize| -> Vec<Seen> {
+        let mut v: Vec<Seen> = (0..n)
+            .map(|i| Seen { key: KeyHash(sha256(&(i as u64).to_be_bytes())), seq: 1, id: RecordId([0; 32]) })
+            .collect();
+        v.sort_by_key(|s| s.key);
+        v
+    };
+    let size =
+        |n: usize| g.body(&root, Kind::Revoke(Removal { keys: vec![KeyHash([9; 32])], seen: seen(n) })).encode().len();
+    // The most entries a body of MAX_BODY can hold, from the smallest entry.
+    let per = size(2) - size(1);
+    let fit = (MAX_BODY - size(0)) / per + 1;
+    assert!(size(fit) > MAX_BODY && fit < MAX_SEEN, "{fit} entries pass MAX_BODY");
+    assert!(
+        g.body(&root, Kind::Revoke(Removal { keys: vec![KeyHash([9; 32])], seen: seen(MAX_SEEN) })).check().is_ok()
+    );
+    assert!(
+        g.body(&root, Kind::Revoke(Removal { keys: vec![KeyHash([9; 32])], seen: seen(MAX_SEEN + 1) }))
+            .check()
+            .unwrap_err()
+            .is("records/revoke/seen")
+    );
+}

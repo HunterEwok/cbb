@@ -666,6 +666,7 @@ fn key_container() {
     for r in c["refuse"].as_array().unwrap() {
         if let Some(b) = r["cert"].as_str() {
             assert_eq!(container::read(&unhex(b)), Err(Rule::CONTAINER), "{}", s(r, "name"));
+            assert_eq!(s(r, "rule"), Rule::CONTAINER.name(), "{}", s(r, "name"));
         }
     }
     // The tolerant reader: any signature value in its form, the constant

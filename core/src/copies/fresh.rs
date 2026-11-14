@@ -130,6 +130,17 @@ pub fn effective_age(age_ms: u64, signed: Timestamp, ttl_ms: Option<u64>, now_ms
     age_ms.max(since)
 }
 
+/// Whether a copy signed at `signed` is [`Fresh::Ahead`] on the reader's
+/// clock (None without one): signed more than [`ALLOWANCE_MS`] ahead of
+/// it, or at a time no clock reaches.
+pub fn ahead(signed: Timestamp, now_ms: Option<u64>) -> bool {
+    match (now_ms, u64::try_from(signed.wall)) {
+        _ if !signed.valid() => true,
+        (Some(now), Ok(wall)) => wall > now.saturating_add(ALLOWANCE_MS),
+        _ => false,
+    }
+}
+
 fn ts_value(t: &Timestamp) -> Value<'static> {
     Value::Array(alloc::vec![Value::Uint(u64::try_from(t.wall).unwrap_or(0)), Value::Uint(u64::from(t.logical))])
 }
@@ -182,12 +193,7 @@ impl Marks {
     /// one) and its records. A secret is noted as seen whatever the verdict,
     /// unless it is [`Fresh::Ahead`].
     pub fn judge(&mut self, s: &Seen, now_ms: Option<u64>, state: &State) -> Fresh {
-        let ahead = match (now_ms, u64::try_from(s.signed.wall)) {
-            _ if !s.signed.valid() => true,
-            (Some(now), Ok(wall)) => wall > now.saturating_add(ALLOWANCE_MS),
-            _ => false,
-        };
-        if ahead {
+        if ahead(s.signed, now_ms) {
             return Fresh::Ahead;
         }
         let key = (s.origin, s.id);
