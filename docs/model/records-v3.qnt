@@ -4024,7 +4024,7 @@ module records_v3 {
   // EARLY_ASIDE (was HELD_ADMISSIONS (b)), core 066addaf: a record of the new root NA that comes while the head
   // to NA waits for its first checkpoint sits aside and is saved, so a member restarted from
   // what it saves still takes it once the head applies.
-  // (Void under LAST_ROOT_ONLY: the writer refuses NA's copies here under L (to check).)
+  // (Void under LAST_ROOT_ONLY: the ids of the change's records assume no re-issued Ys.)
   run earlyAsideSavedTest = if (LAST_ROOT_ONLY) init else
     init
       .then(recoverAs(RECOVERY, "NA")).then(giveOnly("a", 4)).then(giveOnly("a", 5))
@@ -5116,7 +5116,7 @@ module records_v3 {
       .expect(views.get("m").path == [ROOT, "NK"] and not(views.get("m").admins.keys().contains(MINTED))
         and views.get("m").checkpoint != 6 and promises)
 
-  // (Void under LAST_ROOT_ONLY: X is named by NA before NA's change; under L only NA's re-issue carries state (to check against L's claim with records).)
+  // (Void under LAST_ROOT_ONLY: the ids of the change's records assume no re-issued Ys.)
   run mintedKeyDecidedTest = if (LAST_ROOT_ONLY) init else
     init
       .then(signW("NA", "admin", MINTED, "computer", 0, false, false, 1))
