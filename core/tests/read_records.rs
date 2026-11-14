@@ -1933,3 +1933,109 @@ fn a_live_set_and_its_restart_answer_inserts_alike() {
         assert!(same(&back, &live), "live and restarted differ after an insert");
     }
 }
+
+/// What one member holds that another does not, before they sync, is only
+/// records of second-tier keys past their share: never a removal, a
+/// freeze, a resolve, a record of a root on the path, or a checkpoint that
+/// counts for either.
+fn only_second_tier_differs(a: &RecordSet, b: &RecordSet) -> Result<(), String> {
+    let (sa, sb) = (a.state(), b.state());
+    for (x, y, sx, sy) in [(a, b, &sa, &sb), (b, a, &sb, &sa)] {
+        for r in x.in_dependency_order() {
+            if y.contains(&r.id()) {
+                continue;
+            }
+            let body = r.body();
+            let what = match &body.kind {
+                Kind::Revoke(_) => Some("a removal"),
+                Kind::Freeze(_) => Some("a freeze"),
+                Kind::Resolve(_) => Some("a resolve"),
+                Kind::Checkpoint { .. } if sx.checkpoints.contains(&r.id()) || sy.checkpoints.contains(&r.id()) => {
+                    Some("a counted checkpoint")
+                }
+                _ if sx.roots.contains(&body.signer) || sy.roots.contains(&body.signer) => Some("a root's record"),
+                _ => None,
+            };
+            // A removal of a key no longer an admin is a second-tier
+            // record past its share: that difference is allowed.
+            let second = x.room_of(&body.signer).is_some_and(|r| r.tier == cbb_core::records::set::Tier::Second);
+            if let Some(what) = what
+                && !(second && matches!(body.kind, Kind::Revoke(_)))
+            {
+                return Err(format!("{what} (seq {}) held by one member only", body.seq));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Three members, each given the records one by one in its own order,
+/// sync in a fuzzed order of pairs: before sync they differ only in
+/// second-tier records past their share; the sync reaches one common set
+/// and stops, and syncing more changes nothing.
+#[test]
+#[ignore = "slow; run with --ignored --release --nocapture"]
+fn three_members_syncing_in_any_order_reach_one_set_and_stop() {
+    let m = moving_records("p");
+    let mut seed = 0x0bad_c0de_1234_5678u64;
+    let mut next = |n: u64| {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        seed % n
+    };
+    let trials: Vec<(u32, (&str, usize))> = (0..3).flat_map(|t| m.stages.iter().map(move |s| (t, *s))).collect();
+    for (trial, (stage, end)) in trials {
+        let stage = format!("{stage}, trial {trial}");
+        let records = &m.records[..end];
+        let lists: &[Vec<u8>] = if end == m.records.len() { &m.lists } else { &[] };
+        let mut members: Vec<RecordSet> = Vec::new();
+        for _ in 0..3 {
+            let mut v = records.to_vec();
+            for i in (1..v.len()).rev() {
+                v.swap(i, next(i as u64 + 1) as usize);
+            }
+            let mut one = new_set();
+            for _ in 0..5 {
+                for r in &v {
+                    let _ = one.insert(r.clone());
+                }
+                for l in lists {
+                    let _ = one.insert_list(l);
+                }
+            }
+            members.push(one);
+        }
+        for i in 0..3 {
+            for j in i + 1..3 {
+                if let Err(e) = only_second_tier_differs(&members[i], &members[j]) {
+                    panic!("{stage}: members {i} and {j} before sync: {e}");
+                }
+            }
+        }
+        let lens: Vec<usize> = members.iter().map(RecordSet::len).collect();
+        let mut steps = 0u32;
+        while !(same(&members[0], &members[1]) && same(&members[1], &members[2])) {
+            let i = next(3) as usize;
+            let j = (i + 1 + next(2) as usize) % 3;
+            let give: Vec<Record> = members[j].in_dependency_order().into_iter().cloned().collect();
+            let gl: Vec<Vec<u8>> = members[j].lists().map(<[u8]>::to_vec).collect();
+            offer(&mut members[i], &give, &gl);
+            steps += 1;
+            assert!(steps <= 60, "{stage}: no common set after 60 pairwise syncs");
+        }
+        // It stops: every pair syncs again and nothing changes.
+        let end_set = members[0].clone();
+        for i in 0..3 {
+            for j in 0..3 {
+                if i != j {
+                    let give: Vec<Record> = members[j].in_dependency_order().into_iter().cloned().collect();
+                    let gl: Vec<Vec<u8>> = members[j].lists().map(<[u8]>::to_vec).collect();
+                    offer(&mut members[i], &give, &gl);
+                }
+            }
+        }
+        assert!(members.iter().all(|x| same(x, &end_set)), "{stage}: syncing again changed a member");
+        println!("{stage}: before {lens:?}, one set of {} after {steps} pairwise syncs", end_set.len());
+    }
+}

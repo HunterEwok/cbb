@@ -1898,9 +1898,11 @@ of its own. Any other key has no room and keeps nothing. A record body is at mos
 
 At level s a key keeps the longest start of its own order (below) within min(s, its ceiling)
 units, and s is the highest level at which the keys' demands fit the room. So a key whose
-records take few units keeps them all, whatever the others make. A member that drops records
-as they come remembers the level and, for each key, the first record it dropped, so it keeps
-exactly what a member that saw them all at once keeps.
+records take few units keeps them all, whatever the others make. The rooms are judged from the
+records the set holds and nothing else it did before: a record that comes is kept when the
+rooms over what is held and that record keep it, and a batch (`RecordSet::insert_all`) is
+judged once over what is held and the whole batch. Two members that give each other what they
+hold end with what the rooms keep of both.
 
 #### The order inside a room
 
@@ -1919,7 +1921,25 @@ The recovery chain is kept outside the rooms.
 
 #### Tiers inside the rooms
 
-Being settled.
+The admin keys that are no longer admins share what the others leave (`keep::keep_tiers`).
+Who they are is read from the root records of the path that the set holds, before the rooms
+are judged (`eval::not_live`; of a root that a change cut, only what its list names). An admin
+key that a root's record names is no longer an admin when a root's removal names it, when the
+newest root record of the device that named it names another key or none, or when it comes
+after the first `records::ADMIN_KEYS_MAX` (16) keys. The 16 are taken by the newest root
+record that names each key: its root's place on the path, then its seq, then the smaller ID.
+
+The rooms never decide who is an admin. A root's removals come first in its room, and so does
+a root record that takes an admin key back, so the rooms keep every record that decides a tier.
+Members that hold different root records may see different tiers until they sync; once they
+hold the same root records they see the same tiers.
+
+The first tier (the roots and the live admin keys) is judged at its level within the room, less
+what the checkpoints that may count keep first. The second tier is judged at its own level,
+within what the first tier's demand at its level leaves. Each tier's level is the highest at
+which its keys' demands fit, from what the set holds alone.
+
+Being settled: a key an admin removed.
 
 #### What a writer refuses
 

@@ -64,8 +64,6 @@ const ALG_AES192: u8 = 0x0a;
 const ALG_AES256: u8 = 0x0c;
 /// The management key's slot.
 const SLOT_MGMT: u8 = 0x9b;
-/// The default management key, of either algorithm.
-const FACTORY_KEY: [u8; 24] = [1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8];
 /// Yubico's ADMIN DATA and PRINTED objects.
 const ADMIN_DATA: [u8; 3] = [0x5f, 0xff, 0x00];
 const PRINTED: [u8; 3] = [0x5f, 0xc1, 0x09];
@@ -256,7 +254,7 @@ fn authenticate(c: &mut dyn Card, alg: u8, key: &[u8]) -> Result<bool> {
 /// give up. Returns the key's algorithm when it is still the default.
 fn unlock(c: &mut dyn Card, ask: &mut dyn FnMut(u8) -> Option<Zeroizing<Vec<u8>>>) -> Result<Option<u8>> {
     match management(c)? {
-        Management::Default(alg) => match authenticate(c, alg, &FACTORY_KEY)? {
+        Management::Default(alg) => match authenticate(c, alg, &super::factory_management_key())? {
             true => Ok(Some(alg)),
             false => Err(Error::msg("the YubiKey turned down its default management key")),
         },
@@ -366,7 +364,9 @@ fn admin_data_protected(old: Option<&[u8]>) -> Result<Vec<u8>> {
 /// flag, then the key itself. Until the last write the card still answers
 /// to its factory key, which GET METADATA reports, so the key cbb reads
 /// from PRINTED is used only after the card took it; the last write is
-/// one command. Afterwards cbb authenticates again with the new key.
+/// one command. If it fails, PRINTED and ADMIN DATA are put back as they
+/// were (best effort; the error says when that fails too). Afterwards cbb
+/// authenticates again with the new key.
 /// Returns false, with nothing written, when PRINTED holds anything but a
 /// PIN-protected key of an earlier try.
 fn protect(c: &mut dyn Card, alg: u8) -> Result<bool> {
@@ -398,10 +398,23 @@ fn protect(c: &mut dyn Card, alg: u8) -> Result<bool> {
     };
     let mut key = Zeroizing::new(vec![0u8; len]);
     getrandom::fill(key.as_mut_slice()).map_err(|e| Error::msg(format!("no randomness: {e}")))?;
+    let old_printed = Zeroizing::new(get_data(c, &PRINTED)?);
     let printed = Zeroizing::new(tlv(0x88, &tlv(0x89, &key)));
     put_data(c, &PRINTED, &printed)?;
     put_data(c, &ADMIN_DATA, &admin_data_protected(admin.as_deref())?)?;
-    set_management_key(c, alg, &key)?;
+    if let Err(e) = set_management_key(c, alg, &key) {
+        // The card kept its factory key: PRINTED and ADMIN DATA go back to
+        // what they held, so that no other tool takes the card for
+        // PIN-protected. An empty value deletes an object.
+        let back = put_data(c, &PRINTED, old_printed.as_deref().unwrap_or(&[]))
+            .and_then(|()| put_data(c, &ADMIN_DATA, admin.as_deref().unwrap_or(&[])));
+        return Err(match back {
+            Ok(()) => e,
+            Err(b) => Error::msg(format!(
+                "{e}; the YubiKey keeps its factory management key, but cbb could not put back its PIN-protected key's place ({b}): another tool may take the card for PIN-protected and ask for the key, which is still the factory one"
+            )),
+        });
+    }
     if !authenticate(c, alg, &key)? {
         return Err(Error::msg("the YubiKey turned down the management key cbb just gave it"));
     }
