@@ -463,7 +463,9 @@ module records_v3 {
     named.map(x => x.target).filter(a =>
       not(counted.exists(v => v.kind == "revoke" and tgt(v).contains(a)))
       and not(DEV.keys().contains(a) and counted.exists(x => x.kind == "device" and ROOT_KEYS.contains(x.signer)
-        and x.target == DEV.get(a) and named.forall(n => n.target != a or n.id < x.id))))
+        and x.target == DEV.get(a) and named.forall(n => n.target != a or n.id < x.id)))
+      and not(TAKEN_FOR_GOOD and named.exists(n => n.target == a and counted.exists(x => ROOT_KEYS.contains(x.signer)
+        and devOf(x) == devOf(n) and x.id > n.id and not(x.kind == "admin" and x.target == a)))))
   }
   // An admin record for key a would grant it again: a was removed, or a root device record of
   // its device came after a record naming it (a take-back).
@@ -503,6 +505,24 @@ module records_v3 {
   // wait for an admin key named only by records of the removal's root above its seq (who holds
   // the grant holds the removal, the claim checked by grantHoldsRemoval).
   pure val GRANT_ABOVE = false
+  // CANCELLED (architecture 11-14 23:24Z): within one root a checkpoint never drops a root
+  // record naming an admin key, so the honest writer never forgets a taken-back key; the two
+  // switches below stay off, and the tfg tests keep the calibration: a deviant root's re-grant
+  // revives the key (out of scope).
+  // CP_DEV_ANY (a wrong reading of the core's keep, kept for the calibration): of a device's
+  // root records the honest checkpoint keeps only the oldest and the newest, admin namings
+  // included (off: only its plain device records are thinned).
+  pure val CP_DEV_ANY = false
+  // TAKEN_FOR_GOOD (architecture 11-14 23:06Z, W's third patch): (a) the root's checkpoint keeps,
+  // for each taken-back admin key, the root record that named it and the one that took it
+  // back; (b) an admin key that a newer root record of its device took back never counts
+  // again, on any device, whatever later record names it.
+  pure val TAKEN_FOR_GOOD = false
+  // A kit that names its admin key for another device than DEV's (the phones reuse their key).
+  pure val KIT_DEV = Map("phone@dZ" -> "dZ", "phone@dZ!" -> "dZ")
+  // A root's deviant naming with the powers of a kit ("!": no writer check applies).
+  pure val KIT_BASE = Map("phone@dZ" -> "phone", "computer!" -> "computer", "phone@dZ!" -> "phone")
+  pure val BENT_KITS = Set("computer!", "phone@dZ!")
   pure def posAnchored(mine: Set[Record], v: View, k: Key, kind: str): bool = {
     val cur = last(v.path)
     val gs = mine.filter(g => g.kind == "admin" and g.target == k and g.signer == cur)
@@ -556,6 +576,8 @@ module records_v3 {
 
   // The powers of the three sets the apps write; no set takes the group over (rule 33).
   pure def powersOf(kit: str): Set[str] =
+    if (KIT_BASE.keys().contains(kit)) powersOf0(KIT_BASE.get(kit)) else powersOf0(kit)
+  pure def powersOf0(kit: str): Set[str] =
     if (kit == "phone") Set("admit", "manage", "remove", "freeze", "hub", "removeAdmins", "thaw")
     else if (kit == "computer") Set("admit", "manage", "remove", "freeze", "hub")
     else if (kit == "watch") Set("remove", "freeze")
@@ -586,7 +608,8 @@ module records_v3 {
   // The keys a record names: target with its pair, and a packed removal's further keys.
   pure def tgt(r: Record): Set[Key] = r.also.fold(withPair(r.target), (a, k) => a.union(withPair(k)))
   pure def devOf(r: Record): Key =
-    if (r.kind == "admin" and DEV.keys().contains(r.target)) DEV.get(r.target) else if (r.kind == "device") r.target else ""
+    if (r.kind == "admin" and KIT_DEV.keys().contains(r.kit)) KIT_DEV.get(r.kit)
+    else if (r.kind == "admin" and DEV.keys().contains(r.target)) DEV.get(r.target) else if (r.kind == "device") r.target else ""
   pure def lineOf(m: Key -> List[Id], k: Key): List[Id] = if (m.keys().contains(k)) m.get(k) else []
   // x is on the chain that ends at the head of line, as far as a set can tell: on the line,
   // and every record above it up to the head is held (ids) or vouched for by a checkpoint
@@ -839,7 +862,11 @@ module records_v3 {
     val taken = adm.filter(r => r.kind == "admin" and r.target != nowOf(devOf(r))).map(r => r.target)
     val back = takenBy.map(d => newestOf(d).id)
     pure def admAt(k: Key): int = adm.filter(r => r.kind == "admin" and r.target == k).fold(0, (m, r) => max2(m, at(r)))
-    val cands = named.filter(k => not(removed.contains(k)) and (current.contains(k) or not(taken.contains(k))))
+    // (TAKEN_FOR_GOOD: a key a newer root record of its device took back is never live again.)
+    val forGood = if (not(TAKEN_FOR_GOOD)) Set() else adm.filter(n => n.kind == "admin"
+      and adm.exists(x => devOf(x) == devOf(n) and at(x) > at(n) and not(x.kind == "admin" and x.target == n.target))).map(n => n.target)
+    val cands = named.filter(k => not(removed.contains(k)) and not(forGood.contains(k))
+      and (current.contains(k) or not(taken.contains(k))))
     { named: named, live: cands.filter(k => cands.filter(j => admAt(j) < admAt(k)).size() < LIVE_MAX), back: back }
   }
   pure def keepTiers(items: Set[Record], path: List[Key], cur: Key, ord0: Order, pre: Key -> int,
@@ -1366,7 +1393,12 @@ module records_v3 {
         val naming = adminRecs.filter(r => r.target == k)
         about(DEV.get(k)).filter(r => not(r.kind == "admin" and r.target == k) and naming.forall(n => newer(r, n)))
       }
-    pure def current(k: Key): bool = adm.keys().contains(k) and replacers(k) == Set()
+    // (TAKEN_FOR_GOOD: every root record of a device newer than a record naming k there that
+    // names no k takes k back for good: it works as a removal of k, whatever names k later.)
+    pure def takeBacks(k: Key): Set[Record] = if (not(TAKEN_FOR_GOOD)) Set() else
+      adminRecs.filter(n => n.target == k).fold(Set(), (u, n) =>
+        u.union(about(devOf(n)).filter(x => not(x.kind == "admin" and x.target == k) and newer(x, n))))
+    pure def current(k: Key): bool = adm.keys().contains(k) and replacers(k) == Set() and takeBacks(k) == Set()
     // The admin record that admits a device no root recorded: each admin's first, the
     // smallest ID.
     pure def admittedBy(d: Key): Id = {
@@ -1423,7 +1455,7 @@ module records_v3 {
     val toLabel = rs.filter(r => isAdmin(r) and counted(r))
     val outFirst = toLabel.filter(b => not(permitted(b)) or (b.kind == "freeze" and rootThawed.contains(b.id))
       or rootActs.exists(a => cutsOff(a, b) and not(F7_SEEN_IGNORED and b.kind == "revoke" and forkAt(b.signer) < NONE))
-      or replacers(b.signer).exists(a => not(saw(a, b))))
+      or replacers(b.signer).union(takeBacks(b.signer)).exists(a => not(saw(a, b))))
     pure def attackers(b: Record): Set[Record] =
       toLabel.filter(a => not(outFirst.contains(a))
         and (cutsOff(a, b) or (b.kind == "freeze" and a.kind == "thaw" and a.targetRec == b.id)))
@@ -1759,8 +1791,8 @@ module records_v3 {
       SIGNERS.contains(k),
       // (ROOT_WAITS, code fact 11-14 21:04Z: the root never grants admin again to a key it
       // removed or took back; a returning device gets a new admin key.)
-      not(ROOT_WAITS) or kit == "deviant" or kind != "admin" or not(regrant(mine, target)),
-      not(LAST_ROOT_ONLY) or kit == "deviant" or kind != "admin"
+      not(ROOT_WAITS) or kit == "deviant" or BENT_KITS.contains(kit) or kind != "admin" or not(regrant(mine, target)),
+      not(LAST_ROOT_ONLY) or kit == "deviant" or BENT_KITS.contains(kit) or kind != "admin"
         or not(db.keys().exists(i => db.get(i).kind == "admin" and db.get(i).target == target and db.get(i).signer != k)),
       // (SEEN_POS: an honest admin signs a removal, freeze or thaw only above its own record whose
       // seen holds its grant; any other record of it holds the grant in its own seen.)
@@ -1825,9 +1857,19 @@ module records_v3 {
     val admGo = counted.filter(x => gone.exists(t => admissionsOf(Set(x), t) != Set()))
     val copiesGo = counted.filter(x => x.signer == k and x.kind == "copies"
       and counted.exists(y => y.signer == k and y.kind == "copies" and y.seq > x.seq))
-    val devGo = counted.filter(x => x.signer == k and x.kind == "device"
-      and counted.exists(y => y.signer == k and y.kind == "device" and y.target == x.target and y.seq < x.seq)
-      and counted.exists(y => y.signer == k and y.kind == "device" and y.target == x.target and y.seq > x.seq))
+    // (CP_DEV_ANY: a device's root records, admin namings included, but the oldest and the newest.
+    // TAKEN_FOR_GOOD: never a naming of a key taken back, nor the oldest record taking it back.)
+    pure def aboutK(x: Record): Set[Record] = counted.filter(y => y.signer == k and devOf(y) != "" and devOf(y) == devOf(x))
+    pure def takesBack(y: Record, n: Record): bool = devOf(y) == devOf(n) and y.seq > n.seq
+      and not(y.kind == "admin" and y.target == n.target)
+    val namingsBack = counted.filter(n => n.signer == k and n.kind == "admin" and aboutK(n).exists(y => takesBack(y, n)))
+    val firstBacks = namingsBack.map(n => aboutK(n).filter(y => takesBack(y, n)).fold(NONEREC, (b, y) =>
+      if (b == NONEREC or y.seq < b.seq) y else b))
+    val devGo = counted.filter(x => x.signer == k and (if (CP_DEV_ANY) devOf(x) != "" else x.kind == "device")
+      and (if (CP_DEV_ANY) aboutK(x).exists(y => y.seq < x.seq) and aboutK(x).exists(y => y.seq > x.seq)
+        else counted.exists(y => y.signer == k and y.kind == "device" and y.target == x.target and y.seq < x.seq)
+          and counted.exists(y => y.signer == k and y.kind == "device" and y.target == x.target and y.seq > x.seq))
+      and not(TAKEN_FOR_GOOD and (namingsBack.contains(x) or firstBacks.contains(x))))
     // (ROOT_WAITS: an admin's ack that a newer ack of its key supersedes goes.)
     val ackGo = if (not(ROOT_WAITS)) Set() else counted.filter(x => x.kind == "ack"
       and counted.exists(y => y.signer == x.signer and y.kind == "ack" and y.seq > x.seq))
@@ -6176,4 +6218,54 @@ module records_v3 {
         and ((REISSUE_STATE and REISSUE_REMOVALS) implies (db.get(5).keep == Set()
           and Set(6, 7, 8, 9).forall(i => db.get(i).signer == "NA" and db.get(i).targetRec == 5)
           and db.get(10).keep == Set(6, 7, 8, 9))))
+
+  // TAKEN_FOR_GOOD (architecture 11-14 23:06Z). X's device dX: a plain device record (4), R
+  // names X (5), R admits D (6); R takes X back (7, a device record of dX naming no admin),
+  // X, not yet holding 7, removes D (8, void: 7 did not see it). Without the switch every test
+  // below shows the revival (calibration); with it X counts for nothing and D stays.
+  pure val onT = CP_KEEP and ROOT_WAITS and wideW and not(SEEN_POS)
+  action tfgStart = init
+      .then(sign(ROOT, "device", "dX", "", 0, false, false, 1))
+      .then(sign(ROOT, "admin", MINTED, "computer", 0, false, false, 1))
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(ROOT, "device", "dX", "", 0, false, false, 1))
+      .then(sign(MINTED, "revoke", DEVICE, "", 0, false, false, 1))
+      .then(giveAll(MEMBERS, [7]))
+  val xOut = MEMBERS.forall(m => not(views.get(m).admins.keys().contains(MINTED)) and views.get(m).devices.contains(DEVICE))
+  val xBack = MEMBERS.exists(m => views.get(m).admins.keys().contains(MINTED) and not(views.get(m).devices.contains(DEVICE)))
+  // The deviant root names X again (9) right away, no checkpoint between.
+  run tfgDeviantTest = if (not(onT)) init else
+    tfgStart
+      .expect(xOut)
+      .then(signFull(ROOT, "admin", MINTED, "computer!", 0, false, false, 1, true, Set()))
+      .then(giveAll(MEMBERS, [9, 8])).then(syncRound).then(syncRound)
+      .expect(if (TAKEN_FOR_GOOD) xOut and promises else xBack)
+  // R checkpoints (9) and every member compacts: CP_DEV_ANY alone drops 5 (dX's middle root
+  // record), so R no longer holds that X was named and taken back, and names X again honestly
+  // (10); with the switch 5 and 7 stay and only a deviant naming is possible. 8 is sent again.
+  run tfgForgetTest = if (not(onT)) init else
+    tfgStart
+      .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2)).then(giveAll(MEMBERS, [9]))
+      .then(compactAt("r")).then(compactAt("a")).then(compactAt("c")).then(compactAt("k")).then(compactAt("m"))
+      .expect(xOut and (TAKEN_FOR_GOOD implies MEMBERS.forall(m => Set(5, 7).subseteq(st.get(m).recs)))
+        and ((CP_DEV_ANY and not(TAKEN_FOR_GOOD)) implies not(st.get("r").recs.contains(5))))
+      .then(if (TAKEN_FOR_GOOD or not(CP_DEV_ANY)) signFull(ROOT, "admin", MINTED, "computer!", 0, false, false, 1, true, Set())
+        else sign(ROOT, "admin", MINTED, "computer", 0, false, false, 1))
+      .then(giveAll(MEMBERS, [10, 8])).then(syncRound).then(syncRound)
+      .expect(if (TAKEN_FOR_GOOD) xOut and promises else xBack)
+  // Two members: c keeps every old record (never compacts), m joins from r after the checkpoint.
+  run tfgNewcomerTest = if (not(onT)) init else
+    tfgStart
+      .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2)).then(giveAll(MEMBERS, [9]))
+      .then(compactAt("r")).then(welcomeFrom("r"))
+      .then(signFull(ROOT, "admin", MINTED, "computer!", 0, false, false, 1, true, Set()))
+      .then(giveAll(MEMBERS, [10, 8])).then(syncRound).then(syncRound)
+      .expect(views.get("c").admins == views.get("m").admins and views.get("c").devices == views.get("m").devices
+        and (if (TAKEN_FOR_GOOD) xOut and promises else xBack))
+  // The deviant root names X again for another device (dZ).
+  run tfgOtherDeviceTest = if (not(onT)) init else
+    tfgStart
+      .then(signFull(ROOT, "admin", MINTED, "phone@dZ!", 0, false, false, 1, true, Set()))
+      .then(giveAll(MEMBERS, [9, 8])).then(syncRound).then(syncRound)
+      .expect(if (TAKEN_FOR_GOOD) xOut and promises else xBack)
 }
