@@ -2690,6 +2690,9 @@ module records_v3 {
   // (FIXED_CAPS, records b37218ee P1: what a set holds is what the rooms keep of it, asserted in
   // the core's debug builds.)
   val tiersPure = not(FIXED_CAPS) or MEMBERS.forall(m => recut(st.get(m), db).recs == st.get(m).recs)
+  // The invariant of the long random runs at the decided set: the promises and the decided
+  // switches' own promises.
+  val decidedInv = and { promises, tiersPure, cpFirstKeepsDevices, ownCpsNoCrowd }
 
   // --- Scenarios ---------------------------------------------------------------------------
 
