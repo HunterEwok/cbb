@@ -48,6 +48,7 @@ pub mod authority;
 pub mod beacon;
 pub mod benchtime;
 pub mod blind;
+pub mod bounds;
 pub mod bug;
 pub mod certs;
 pub mod clip;

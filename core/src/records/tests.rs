@@ -5307,3 +5307,51 @@ fn a_change_carries_the_newer_removal_alone() {
         assert!(s.revoked.contains(&t.hash) && s.device_by_key(&t.hash).is_none());
     }
 }
+
+/// Bodies at their bounds (the registry, `bounds.rs`): the keys of a
+/// removal, the servers of the settings and the incoming window read at
+/// their limits and not one past; a body over MAX_BODY is not read.
+#[test]
+fn bodies_at_their_bounds() {
+    let g = G::new();
+    let root = k("root");
+    let check = |g: &G, kind: Kind| g.body(&root, kind).check();
+    let keys = |n: usize| -> Vec<KeyHash> {
+        let mut v: Vec<KeyHash> = (0..n).map(|i| KeyHash(sha256(&(i as u64).to_be_bytes()))).collect();
+        v.sort();
+        v
+    };
+    assert!(check(&g, Kind::Revoke(Removal { keys: keys(MAX_KEYS), seen: vec![] })).is_ok());
+    assert!(
+        check(&g, Kind::Revoke(Removal { keys: keys(MAX_KEYS + 1), seen: vec![] }))
+            .unwrap_err()
+            .is("records/revoke/keys")
+    );
+    let copies = |ms: u64| Kind::Copies { incoming_ms: ms, seen: vec![] };
+    for ms in [MIN_INCOMING_MS, MAX_INCOMING_MS] {
+        assert!(check(&g, copies(ms)).is_ok(), "{ms}");
+    }
+    for ms in [MIN_INCOMING_MS - 1, MAX_INCOMING_MS + 1] {
+        assert!(check(&g, copies(ms)).unwrap_err().is("records/copies/incoming_ms"), "{ms}");
+    }
+    let server = |i: usize| Server {
+        kind: SERVER_FORWARDER,
+        endpoint: alloc::format!("fwd{i}.example.org:443"),
+        key: k(&alloc::format!("server {i}")).key.clone(),
+    };
+    let settings = |n: usize| Kind::settings(Settings { servers: (0..n).map(server).collect(), ..Settings::default() });
+    assert!(check(&g, settings(MAX_SERVERS)).is_ok());
+    assert!(check(&g, settings(MAX_SERVERS + 1)).unwrap_err().is("records/settings/servers"));
+    // A removal of 256 keys that saw 200 heads checks, and its body passes
+    // MAX_BODY: no reader takes it.
+    let seen: Vec<Seen> = keys(200).into_iter().map(|key| Seen { key, seq: 1, id: RecordId([3; 32]) }).collect();
+    let wide = Kind::Revoke(Removal { keys: keys(MAX_KEYS), seen });
+    assert!(check(&g, wide.clone()).is_ok());
+    let body = g.body(&root, wide);
+    let bytes = body.encode();
+    assert!(bytes.len() > MAX_BODY);
+    // The writer refuses to sign it; a reader refuses it by its size alone.
+    assert!(Record::sign(body, &root).is_err());
+    let env = crate::format::envelope::write(&bytes, &[0x30; 70], None);
+    assert!(Record::decode(&env).unwrap_err().is("env/size"));
+}

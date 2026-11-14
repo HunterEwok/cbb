@@ -26,7 +26,12 @@ pub const T_ROOTS: u64 = 24;
 /// (`records::statement::keys_messages`).
 pub static KEYS: Table = Table {
     shape: "keys-message/shape",
-    fields: &[f(2, "keys-message/list", Ty::Array { of: &Ty::Envelope, max: 256 }, true)],
+    fields: &[f(
+        2,
+        "keys-message/list",
+        Ty::Array { of: &Ty::Envelope, max: crate::records::statement::KEYS_PER_MESSAGE },
+        true,
+    )],
 };
 /// Message `command`: one command's envelope.
 pub static COMMAND: Table = Table { shape: "command/shape", fields: &[f(2, "command/envelope", Ty::Envelope, true)] };

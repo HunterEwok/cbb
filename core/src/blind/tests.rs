@@ -156,6 +156,22 @@ fn a_server_card() {
     assert!(!c.replaced_by(&next));
 }
 
+/// A card at its bound on keys (the registry, `bounds.rs`): MAX_KEYS read,
+/// one more does not; a body over MAX_BODY is not read at all.
+#[test]
+fn a_card_at_its_bounds() {
+    let mut ks: Vec<Vec<u8>> = (0..=card::MAX_KEYS).map(|i| k(&alloc::format!("server tls {i}")).public()).collect();
+    ks.sort();
+    let mut c = card();
+    c.keys = ks[..card::MAX_KEYS].to_vec();
+    assert_eq!(Card::read(&c.sign(&k("operator")).unwrap()).unwrap(), c);
+    c.keys = ks;
+    assert_eq!(Card::read(&c.sign(&k("operator")).unwrap()).err(), Some(card::RULE_KEYS));
+    let mut wide = card();
+    wide.name = "n".repeat(card::MAX_BODY);
+    assert_eq!(Card::read(&wide.sign(&k("operator")).unwrap()).err(), Some(Rule::ENV_SIZE));
+}
+
 #[test]
 fn each_server_its_own_face() {
     let mut faces = BTreeMap::new();

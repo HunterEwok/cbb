@@ -216,9 +216,9 @@ func envelope(b []byte, label string, signerKey func(map[any]any) ([]byte, error
 	if len(a) == 3 {
 		// sig2 is not fixed: a later algorithm's signature, up to 8 KiB, a
 		// recovery head's up to 32 KiB.
-		max := 8192
+		max := maxSig2
 		if head {
-			max = 32 * 1024
+			max = maxSig2Head
 		}
 		if s2, ok := a[2].([]byte); !ok {
 			return nil, nil, errors.New("env/shape")
@@ -1078,6 +1078,7 @@ func main() {
 
 	checkSets(dir)
 	checkSheet(dir)
+	checkBounds(dir)
 	checkMessages(dir)
 	checkWave4(dir)
 	checkFuture(dir)

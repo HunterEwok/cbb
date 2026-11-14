@@ -70,12 +70,10 @@ pub const MAX_PARTS: u64 = 64;
 /// parts pass it.
 pub const MAX_PARTS_BYTES: usize = {
     use crate::format::envelope::MAX_SIG2;
-    use crate::records::{
-        ENVELOPE_ALLOWANCE, LIST_MAX, MAX_CHECKPOINT_BODY, MAX_RECORDS, MAX_ROOT_RECORDS, MAX_SET_BYTES,
-    };
+    use crate::records::{ENVELOPE_ALLOWANCE, MAX_CHECKPOINT_BODY, MAX_RECORDS, MAX_ROOT_RECORDS, MAX_SET_BYTES};
     let waiting = MAX_ROOT_RECORDS * crate::records::keep::UNIT;
     let sig2s = (MAX_RECORDS + MAX_ROOT_RECORDS) * (MAX_SIG2 + 9);
-    let lists = crate::records::body::MAX_RECOVERY as usize * (4 + 34 * LIST_MAX);
+    let lists = crate::records::body::MAX_RECOVERY as usize * crate::bounds::LIST_FIELD;
     let heads = super::intro::MAX_HEADS * super::intro::HEAD_BYTES;
     let firsts = super::intro::MAX_HEADS * (MAX_CHECKPOINT_BODY + ENVELOPE_ALLOWANCE + MAX_SIG2);
     MAX_SET_BYTES + waiting + sig2s + lists + heads + firsts + (1 << 20)

@@ -589,3 +589,32 @@ fn a_signer_is_found_by_its_key_hash() {
     }
     assert!(keys.get(&k("stranger").hash).is_none());
 }
+
+/// The orders at their bounds (the registry, `bounds.rs`): a paste's text
+/// and a device command's arguments at the limit read, one byte more does
+/// not; a guarded leaf keeps at most MAX_NONCES numbers out.
+#[test]
+fn orders_and_nonces_at_their_bounds() {
+    let paste = |n: usize| {
+        let t = "x".repeat(n);
+        orders::check(COMMAND_PASTE, &orders(vec![(10, Value::Uint(1)), (12, Value::Uint(1)), (13, Value::Text(&t))]))
+    };
+    assert_eq!(paste(orders::MAX_PASTE_TEXT), Ok(()));
+    assert_eq!(paste(orders::MAX_PASTE_TEXT + 1), Err(orders::RULE_PASTE));
+    // One CBOR item of n bytes: a byte string's head and its bytes.
+    let args = |n: usize| {
+        let item = Value::Bytes(&vec![7u8; n - 3]).encode();
+        assert_eq!(item.len(), n);
+        orders::check(COMMAND_DEVICE, &orders(vec![(10, Value::Text("heat")), (11, Value::Bytes(&item))]))
+    };
+    assert_eq!(args(orders::MAX_ARGS), Ok(()));
+    assert_eq!(args(orders::MAX_ARGS + 1), Err(orders::RULE_DEVICE));
+    let mut nonces = crate::commands::Nonces::default();
+    let peers: Vec<crate::format::KeyHash> = (0..=MAX_NONCES as u8).map(|i| crate::format::KeyHash([i; 32])).collect();
+    let issued: Vec<[u8; 16]> = peers.iter().map(|p| nonces.issue(p).unwrap()).collect();
+    // The oldest gave way to the newest; the other MAX_NONCES are still out.
+    assert!(!nonces.take(&peers[0], &issued[0]));
+    for (p, n) in peers.iter().zip(&issued).skip(1) {
+        assert!(nonces.take(p, n));
+    }
+}

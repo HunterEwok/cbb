@@ -16,6 +16,11 @@ All notable changes to cbb are documented in this file. The format follows
   in the PIN-protected object 5FC121 (`cbb_core::sheet::yubikey`, the card's commands in
   `cbb`). cbb never overwrites anything on the card: a key or a value already in either place
   stops it before the first write, and it never changes the card's management key.
+- One table of the format's bounds (`cbb_core::bounds`, `testdata/format/bounds.json`): each
+  limit with its value, whether a later version may change it, the widest case it allows and
+  the rule that refuses one more. Tests keep it complete: every number of the format is in it,
+  every bound is reached by a test and refused in the vectors, and the Go check reads the same
+  table.
 - The Rust core wipes the secrets it holds when it lets them go, prints none in `Debug` or
   an error, and compares every mark and confirmation tag in constant time; the C library
   wipes each answer as it is given back (docs/core-api.md, "Secrets"). Timing tests of the

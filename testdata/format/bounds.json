@@ -1,0 +1,1102 @@
+{
+  "bounds": [
+    {
+      "class": "frozen",
+      "name": "format::cbor::MAX_DEPTH",
+      "reached": [
+        "vec:profile.json:nested to depth 9"
+      ],
+      "refusal": "cbor/depth",
+      "value": 8,
+      "widest": "an item inside 8 containers"
+    },
+    {
+      "class": "frozen",
+      "name": "format::cbor::MAX_COUNT",
+      "reached": [
+        "vec:profile.json:array of 65536"
+      ],
+      "refusal": "cbor/count",
+      "value": 65535,
+      "widest": "65 535 elements of one array or map"
+    },
+    {
+      "class": "frozen",
+      "name": "format::cbor::MAX_INT",
+      "reached": [
+        "vec:profile.json:uint 2^63"
+      ],
+      "refusal": "cbor/int-range",
+      "value": 9223372036854775807,
+      "widest": "2^63 − 1"
+    },
+    {
+      "class": "frozen",
+      "name": "format::frame::LIMIT_MEMBER",
+      "reached": [
+        "every_message_size_pads_to_one_frame"
+      ],
+      "refusal": "frame/grid",
+      "value": 7340032,
+      "widest": "message 67 or one part of a set, 448 · 16 KiB"
+    },
+    {
+      "class": "frozen",
+      "name": "format::frame::LIMIT_PAIRING",
+      "reached": [
+        "only_a_confirmed_welcome_takes_the_member_frame"
+      ],
+      "refusal": "frame/grid",
+      "value": 1048576,
+      "widest": "a pairing message before the code is confirmed"
+    },
+    {
+      "class": "frozen",
+      "name": "format::frame::LIMIT_LEAF",
+      "reached": [
+        "vec:frames.json:frame of 65 bytes"
+      ],
+      "refusal": "frame/grid",
+      "value": 16384,
+      "widest": "a leaf's widest message"
+    },
+    {
+      "class": "frozen",
+      "name": "format::container::MAX_SIG",
+      "reached": [
+        "vec:container.json:integer of 34 bytes"
+      ],
+      "refusal": "container/template",
+      "value": 72,
+      "widest": "two integers of 33 bytes"
+    },
+    {
+      "class": "frozen",
+      "name": "format::envelope::MAX_SIG2",
+      "reached": [
+        "vec:commands.json:a second signature of 8193 bytes",
+        "vec:records.json:second signature over 8192 bytes"
+      ],
+      "refusal": "env/sig2",
+      "value": 8192,
+      "widest": "ML-DSA-87 and a later algorithm"
+    },
+    {
+      "class": "frozen",
+      "name": "format::envelope::MAX_SIG2_HEAD",
+      "reached": [
+        "vec:records.json:recovery head whose second signature is over 32 KiB"
+      ],
+      "refusal": "env/sig2",
+      "value": 32768,
+      "widest": "K2's SLH-DSA-SHA2-128s, 7856 bytes, and a larger set"
+    },
+    {
+      "class": "frozen",
+      "name": "format::copy::WRAP_SIZE",
+      "reached": [
+        "a_copy_may_hold_wraps_of_several_algorithms"
+      ],
+      "refusal": "copy/shape",
+      "value": 1168,
+      "widest": "a wrap to an X-Wing key"
+    },
+    {
+      "class": "frozen",
+      "name": "format::copy::MIN_WRAP",
+      "reached": [
+        "vec:copy.json:a wrap of 48 bytes, too short for K and its tag"
+      ],
+      "refusal": "copy/shape",
+      "value": 49,
+      "widest": "K and its tag after one byte of encapsulation"
+    },
+    {
+      "class": "frozen",
+      "name": "format::copy::MAX_READERS",
+      "reached": [
+        "a_header_reads_at_most_max_readers"
+      ],
+      "refusal": "copy/readers",
+      "value": 256,
+      "widest": "every device of the widest group"
+    },
+    {
+      "class": "reader",
+      "name": "copies::MAX_RESEALS",
+      "reached": [
+        "a_copy_sealed_again_is_passed_to_the_asker_and_limited"
+      ],
+      "refusal": "reseal/limit",
+      "value": 2,
+      "widest": "two asks of one reader"
+    },
+    {
+      "class": "frozen",
+      "name": "copies::STATEMENT_MAX_AGE_MS",
+      "reached": [
+        "an_old_statement_is_not_sealed_to"
+      ],
+      "refusal": "",
+      "value": 3024000000,
+      "widest": "a device away for 35 days"
+    },
+    {
+      "class": "frozen",
+      "name": "copies::fresh::ALLOWANCE_MS",
+      "reached": [
+        "a_copy_dated_ahead_stops_no_reader",
+        "freshness_is_decided_from_signed_fields"
+      ],
+      "refusal": "copy/time",
+      "value": 300000,
+      "widest": "an origin's clock 5 minutes ahead"
+    },
+    {
+      "class": "reader",
+      "name": "copies::fresh::MAX_SECRETS",
+      "reached": [
+        "freshness_is_decided_from_signed_fields"
+      ],
+      "refusal": "",
+      "value": 1024,
+      "widest": "secrets listed by ID above the floor"
+    },
+    {
+      "class": "reader",
+      "name": "copies::fresh::MAX_ORIGINS",
+      "reached": [
+        "marks_keep_at_most_max_origins"
+      ],
+      "refusal": "",
+      "value": 1024,
+      "widest": "origins with a newest time"
+    },
+    {
+      "class": "frozen",
+      "name": "content::MAX_STATE",
+      "reached": [
+        "vec:wave4.json:state over 4 KiB"
+      ],
+      "refusal": "content/data",
+      "value": 4096,
+      "widest": "a device's state"
+    },
+    {
+      "class": "stated",
+      "name": "media::MAX_NAME",
+      "reached": [
+        "a_manifest_at_its_bounds"
+      ],
+      "refusal": "content/manifest",
+      "value": 765,
+      "widest": "a file name of 255 characters of 3 bytes"
+    },
+    {
+      "class": "stated",
+      "name": "media::MAX_PATH",
+      "reached": [
+        "a_manifest_at_its_bounds"
+      ],
+      "refusal": "content/manifest",
+      "value": 16384,
+      "widest": "one path"
+    },
+    {
+      "class": "stated",
+      "name": "media::MAX_PATHS",
+      "reached": [
+        "a_manifest_at_its_bounds"
+      ],
+      "refusal": "content/manifest",
+      "value": 2097152,
+      "widest": "every path of a manifest"
+    },
+    {
+      "class": "stated",
+      "name": "media::MAX_MEDIA",
+      "reached": [
+        "vec:wave4.json:files of more than 1 GiB"
+      ],
+      "refusal": "content/manifest",
+      "value": 1073741824,
+      "widest": "files of 1 GiB"
+    },
+    {
+      "class": "frozen",
+      "name": "media::MAX_PARTS",
+      "reached": [
+        "a_manifest_at_its_bounds"
+      ],
+      "refusal": "content/manifest",
+      "value": 10000,
+      "widest": "parts of a manifest"
+    },
+    {
+      "class": "frozen",
+      "name": "media::MAX_TYPES",
+      "reached": [
+        "a_manifest_at_its_bounds"
+      ],
+      "refusal": "content/manifest",
+      "value": 8,
+      "widest": "types of one media copy"
+    },
+    {
+      "class": "stated",
+      "name": "media::MAX_ALT_TEXT",
+      "reached": [
+        "a_media_text_at_its_bound"
+      ],
+      "refusal": "content/text",
+      "value": 262144,
+      "widest": "an image's text"
+    },
+    {
+      "class": "frozen",
+      "name": "commands::MAX_LIFETIME_MS",
+      "reached": [
+        "vec:commands.json:lifetime over 600 s"
+      ],
+      "refusal": "commands/expires",
+      "value": 600000,
+      "widest": "a later writer's command of 600 s"
+    },
+    {
+      "class": "stated",
+      "name": "commands::WRITE_LIFETIME_MS",
+      "reached": [
+        "vec:commands.json:lifetime of 600 s, from a later writer"
+      ],
+      "refusal": "",
+      "value": 30000,
+      "widest": "every 0.6 writer's command"
+    },
+    {
+      "class": "frozen",
+      "name": "commands::SKEW_MS",
+      "reached": [
+        "a_late_command_is_refused_back_with_its_rule"
+      ],
+      "refusal": "commands/time",
+      "value": 60000,
+      "widest": "a commander's clock a minute off"
+    },
+    {
+      "class": "frozen",
+      "name": "commands::MAX_BODY",
+      "reached": [
+        "vec:wave4.json:paste-off of 70 KiB"
+      ],
+      "refusal": "env/size",
+      "value": 65536,
+      "widest": "a command with its widest orders"
+    },
+    {
+      "class": "frozen",
+      "name": "commands::MAX_PASTE_BODY",
+      "reached": [
+        "vec:wave4.json:paste of 70 KiB"
+      ],
+      "refusal": "env/size",
+      "value": 2097152,
+      "widest": "a paste of 1 MiB of text"
+    },
+    {
+      "class": "reader",
+      "name": "commands::DEFAULT_LIFE_MS",
+      "reached": [
+        "a_leaf_obeys_its_grant"
+      ],
+      "refusal": "",
+      "value": 3024000000,
+      "widest": "a guarded leaf's grant that says nothing"
+    },
+    {
+      "class": "reader",
+      "name": "commands::MAX_NONCES",
+      "reached": [
+        "orders_and_nonces_at_their_bounds"
+      ],
+      "refusal": "commands/nonce",
+      "value": 16,
+      "widest": "one-time numbers out at once"
+    },
+    {
+      "class": "stated",
+      "name": "commands::orders::MAX_PASTE_TEXT",
+      "reached": [
+        "orders_and_nonces_at_their_bounds"
+      ],
+      "refusal": "orders/paste",
+      "value": 1048576,
+      "widest": "a paste's text"
+    },
+    {
+      "class": "stated",
+      "name": "commands::orders::MAX_TYPED_TEXT",
+      "reached": [
+        "vec:wave4.json:paste typed over 16 KiB"
+      ],
+      "refusal": "orders/paste",
+      "value": 16384,
+      "widest": "text typed out on a member"
+    },
+    {
+      "class": "stated",
+      "name": "commands::orders::MAX_MUTE_MS",
+      "reached": [
+        "vec:wave4.json:mute over 30 days"
+      ],
+      "refusal": "orders/mute",
+      "value": 2592000000,
+      "widest": "a mute of 30 days"
+    },
+    {
+      "class": "frozen",
+      "name": "commands::orders::MAX_ARGS",
+      "reached": [
+        "orders_and_nonces_at_their_bounds"
+      ],
+      "refusal": "orders/device",
+      "value": 4096,
+      "widest": "a device command's arguments"
+    },
+    {
+      "class": "frozen",
+      "name": "format::grant::MAX_GRANT",
+      "reached": [
+        "vec:grants.json:grant body over 4096 bytes"
+      ],
+      "refusal": "env/size",
+      "value": 4096,
+      "widest": "16 commanders, 16 readers and a later key's fields"
+    },
+    {
+      "class": "stated",
+      "name": "format::grant::MAX_LIFE_MS",
+      "reached": [
+        "vec:grants.json:guarded lifetime over 40 days"
+      ],
+      "refusal": "grants/life",
+      "value": 3456000000,
+      "widest": "a guarded grant of 40 days"
+    },
+    {
+      "class": "stated",
+      "name": "format::grant::MAX_READERS",
+      "reached": [
+        "vec:grants.json:seventeen readers"
+      ],
+      "refusal": "grants/readers",
+      "value": 16,
+      "widest": "a leaf's readers"
+    },
+    {
+      "class": "stated",
+      "name": "format::grant::MAX_COMMANDERS",
+      "reached": [
+        "vec:grants.json:seventeen commanders"
+      ],
+      "refusal": "grants/commanders",
+      "value": 16,
+      "widest": "a leaf's commanders"
+    },
+    {
+      "class": "stated",
+      "name": "format::grant::MAX_NEIGHBORS",
+      "reached": [
+        "vec:grants.json:nine neighbours"
+      ],
+      "refusal": "grants/neighbors",
+      "value": 8,
+      "widest": "a leaf's neighbours"
+    },
+    {
+      "class": "frozen",
+      "name": "format::grant::MAX_RECOVERY",
+      "reached": [
+        "vec:grants.json:grant made under recovery seq 65 (at most 64 heads)"
+      ],
+      "refusal": "grants/recovery",
+      "value": 64,
+      "widest": "the group's 64 recovery records"
+    },
+    {
+      "class": "frozen",
+      "name": "records::statement::MAX_STATEMENT_BODY",
+      "reached": [
+        "statements_are_read_row_by_row"
+      ],
+      "refusal": "env/size",
+      "value": 32768,
+      "widest": "X-Wing and the seal keys of later algorithms"
+    },
+    {
+      "class": "frozen",
+      "name": "records::statement::KEYS_PER_MESSAGE",
+      "reached": [
+        "statements_are_split_into_messages_that_fit_a_frame"
+      ],
+      "refusal": "keys-message/list",
+      "value": 256,
+      "widest": "a message `keys` of a full group"
+    },
+    {
+      "class": "frozen",
+      "name": "beacon::MAX_BEACON",
+      "reached": [
+        "vec:wave4.json:over 512 bytes"
+      ],
+      "refusal": "env/size",
+      "value": 512,
+      "widest": "a beacon body"
+    },
+    {
+      "class": "frozen",
+      "name": "beacon::MAX_COUNT",
+      "reached": [
+        "vec:wave4.json:count over a set"
+      ],
+      "refusal": "beacons/count",
+      "value": 7168,
+      "widest": "the records of a full set"
+    },
+    {
+      "class": "frozen",
+      "name": "beacon::ALLOWANCE_MS",
+      "reached": [
+        "one_admins_time_never_hides_anothers_evidence"
+      ],
+      "refusal": "beacons/time",
+      "value": 300000,
+      "widest": "a sender's clock 5 minutes ahead"
+    },
+    {
+      "class": "frozen",
+      "name": "beacon::MAX_AGE_MS",
+      "reached": [
+        "behind_follows_the_newest_checkpoint_and_the_age_of_a_beacon"
+      ],
+      "refusal": "beacons/time",
+      "value": 3024000000,
+      "widest": "a beacon as old as a statement"
+    },
+    {
+      "class": "frozen",
+      "name": "blind::card::MAX_BODY",
+      "reached": [
+        "a_card_at_its_bounds"
+      ],
+      "refusal": "env/size",
+      "value": 16384,
+      "widest": "a card"
+    },
+    {
+      "class": "frozen",
+      "name": "blind::card::MAX_ENDPOINTS",
+      "reached": [
+        "a_server_card"
+      ],
+      "refusal": "card/endpoints",
+      "value": 8,
+      "widest": "a server's endpoints"
+    },
+    {
+      "class": "frozen",
+      "name": "blind::card::MAX_KEYS",
+      "reached": [
+        "a_card_at_its_bounds"
+      ],
+      "refusal": "card/keys",
+      "value": 4,
+      "widest": "a server's keys"
+    },
+    {
+      "class": "frozen",
+      "name": "blind::credential::MAX_BODY",
+      "reached": [
+        "vec:credentials.json:a second signature of 8193 bytes"
+      ],
+      "refusal": "env/size",
+      "value": 16384,
+      "widest": "a credential"
+    },
+    {
+      "class": "frozen",
+      "name": "records::MAX_BODY",
+      "reached": [
+        "bodies_at_their_bounds"
+      ],
+      "refusal": "env/size",
+      "value": 16384,
+      "widest": "a record body"
+    },
+    {
+      "class": "frozen",
+      "name": "records::MAX_CHECKPOINT_BODY",
+      "reached": [
+        "a_checkpoint_over_its_ceiling_is_not_signed"
+      ],
+      "refusal": "env/size",
+      "value": 262144,
+      "widest": "a checkpoint naming a full set"
+    },
+    {
+      "class": "frozen",
+      "name": "records::MAX_SEQ",
+      "reached": [
+        "vec:records.json:seq 2^31"
+      ],
+      "refusal": "records/seq",
+      "value": 2147483647,
+      "widest": "2^31 − 1"
+    },
+    {
+      "class": "frozen",
+      "name": "records::MAX_SEEN",
+      "reached": [
+        "gap"
+      ],
+      "refusal": "records/revoke/seen",
+      "value": 1024,
+      "widest": "a `seen` list; not reached on the wire: 1024 entries of about 73 bytes pass MAX_BODY, which binds first"
+    },
+    {
+      "class": "stated",
+      "name": "records::body::MAX_RECOVERY",
+      "reached": [
+        "vec:records.json:recovery head at seq 65 (at most 64 for the group's life)",
+        "at_most_max_recovery_heads"
+      ],
+      "refusal": "records/recovery/seq",
+      "value": 64,
+      "widest": "64 recovery records for the group's life"
+    },
+    {
+      "class": "frozen",
+      "name": "records::body::MAX_KEYS",
+      "reached": [
+        "bodies_at_their_bounds"
+      ],
+      "refusal": "records/revoke/keys",
+      "value": 256,
+      "widest": "keys of a settings record"
+    },
+    {
+      "class": "stated",
+      "name": "records::body::MAX_HUBS",
+      "reached": [
+        "bodies"
+      ],
+      "refusal": "records/hubs/hubs",
+      "value": 16,
+      "widest": "hubs of a group"
+    },
+    {
+      "class": "stated",
+      "name": "records::body::MAX_SERVERS",
+      "reached": [
+        "bodies_at_their_bounds"
+      ],
+      "refusal": "records/settings/servers",
+      "value": 16,
+      "widest": "servers of a group"
+    },
+    {
+      "class": "frozen",
+      "name": "records::body::MIN_INCOMING_MS",
+      "reached": [
+        "bodies_at_their_bounds"
+      ],
+      "refusal": "records/copies/incoming_ms",
+      "value": 5000,
+      "widest": "the shortest incoming window"
+    },
+    {
+      "class": "frozen",
+      "name": "records::body::MAX_INCOMING_MS",
+      "reached": [
+        "bodies_at_their_bounds"
+      ],
+      "refusal": "records/copies/incoming_ms",
+      "value": 3600000,
+      "widest": "the longest incoming window"
+    },
+    {
+      "class": "stated",
+      "name": "records::ADMIN_KEYS_MAX",
+      "reached": [
+        "at_most_sixteen_admin_keys_count",
+        "the_admin_ceiling"
+      ],
+      "refusal": "",
+      "value": 16,
+      "widest": "the owner's cap of 16 admins"
+    },
+    {
+      "class": "stated",
+      "name": "records::MAX_DEVICES",
+      "reached": [
+        "the_widest_set_syncs_in_parts_that_each_fit_a_frame"
+      ],
+      "refusal": "",
+      "value": 256,
+      "widest": "256 devices with a device record"
+    },
+    {
+      "class": "frozen",
+      "name": "records::MAX_ROOT_RECORDS",
+      "reached": [
+        "the_ceilings_of_one_key",
+        "a_full_root_checkpoints_and_goes_on"
+      ],
+      "refusal": "",
+      "value": 1536,
+      "widest": "a full checkpoint, a second waiting one and the devices"
+    },
+    {
+      "class": "frozen",
+      "name": "records::MAX_ADMIN_RECORDS",
+      "reached": [
+        "the_ceilings_of_one_key",
+        "the_admin_ceiling"
+      ],
+      "refusal": "",
+      "value": 256,
+      "widest": "one admin's records"
+    },
+    {
+      "class": "frozen",
+      "name": "records::CUT_ROOTS_RESERVE",
+      "reached": [
+        "two_cut_roots_full_of_removals_and_the_recovery_key"
+      ],
+      "refusal": "",
+      "value": 1536,
+      "widest": "the roots before the current one"
+    },
+    {
+      "class": "frozen",
+      "name": "bounds::LIST_FIELD",
+      "reached": [
+        "the_list_field_holds_the_widest_list"
+      ],
+      "refusal": "records/lists",
+      "value": 52228,
+      "widest": "a change's list as a field of `records`"
+    },
+    {
+      "class": "frozen",
+      "name": "records::LIST_MAX",
+      "reached": [
+        "vec:messages3.json:records: 65 lists"
+      ],
+      "refusal": "records/lists",
+      "value": 1536,
+      "widest": "a change's list naming the whole reserve"
+    },
+    {
+      "class": "frozen",
+      "name": "records::MAX_RECORDS",
+      "reached": [
+        "set_at_a_ceiling",
+        "a_full_room_of_carried_records_and_three_changes"
+      ],
+      "refusal": "",
+      "value": 7168,
+      "widest": "the set's room in units of 512 bytes"
+    },
+    {
+      "class": "frozen",
+      "name": "records::MAX_SET_BYTES",
+      "reached": [
+        "set_at_a_ceiling"
+      ],
+      "refusal": "",
+      "value": 3670016,
+      "widest": "the room's bytes"
+    },
+    {
+      "class": "reader",
+      "name": "records::MAX_SET_SIG2_BYTES",
+      "reached": [
+        "records_waiting_for_their_pair_keep_within_their_bound"
+      ],
+      "refusal": "",
+      "value": 134217728,
+      "widest": "both rooms, a waiting root and the settled records, each twice signed"
+    },
+    {
+      "class": "frozen",
+      "name": "records::HEAD_SIG2_ALLOWANCE",
+      "reached": [
+        "a_head_needs_both_halves_of_the_recovery_key"
+      ],
+      "refusal": "",
+      "value": 33280,
+      "widest": "K2's signature on a head with its head"
+    },
+    {
+      "class": "frozen",
+      "name": "records::ENVELOPE_ALLOWANCE",
+      "reached": [
+        "the_ceilings_of_one_key"
+      ],
+      "refusal": "",
+      "value": 83,
+      "widest": "the envelope beyond a record's body"
+    },
+    {
+      "class": "frozen",
+      "name": "records::MAX_PATH",
+      "reached": [
+        "the_joiner_takes_the_most_changes_of_root"
+      ],
+      "refusal": "",
+      "value": 65,
+      "widest": "the first root and one per recovery record"
+    },
+    {
+      "class": "reader",
+      "name": "records::MAX_NEWER",
+      "reached": [
+        "limits_hold_for_any_signer"
+      ],
+      "refusal": "",
+      "value": 16,
+      "widest": "held records a state lists"
+    },
+    {
+      "class": "reader",
+      "name": "records::MAX_NOTICES",
+      "reached": [
+        "notices_are_bounded_alike_on_every_member"
+      ],
+      "refusal": "",
+      "value": 256,
+      "widest": "notices a set keeps"
+    },
+    {
+      "class": "reader",
+      "name": "records::eval::MAX_IGNORED",
+      "reached": [
+        "limits_hold_for_any_signer"
+      ],
+      "refusal": "",
+      "value": 64,
+      "widest": "records a state lists in ignored"
+    },
+    {
+      "class": "frozen",
+      "name": "records::set::REISSUE_KEPT_BACK",
+      "reached": [
+        "a_full_set_keeps_the_roots_removals"
+      ],
+      "refusal": "",
+      "value": 256,
+      "widest": "the new root's room left to its other first records"
+    },
+    {
+      "class": "reader",
+      "name": "records::set::MISSING_ROUNDS",
+      "reached": [
+        "a_checkpoint_goes_aside_only_when_the_rooms_turn_it_away"
+      ],
+      "refusal": "",
+      "value": 16,
+      "widest": "rounds a member asks for a missing record"
+    },
+    {
+      "class": "frozen",
+      "name": "records::sync::PART_RECORDS",
+      "reached": [
+        "the_widest_set_syncs_in_parts_that_each_fit_a_frame"
+      ],
+      "refusal": "records/records",
+      "value": 4096,
+      "widest": "record envelopes of one part"
+    },
+    {
+      "class": "frozen",
+      "name": "records::sync::HAVE_IDS",
+      "reached": [
+        "the_widest_set_syncs_in_parts_that_each_fit_a_frame"
+      ],
+      "refusal": "",
+      "value": 4096,
+      "widest": "IDs of one `have`"
+    },
+    {
+      "class": "frozen",
+      "name": "records::sync::PART_BYTES",
+      "reached": [
+        "the_widest_set_syncs_in_parts_that_each_fit_a_frame"
+      ],
+      "refusal": "",
+      "value": 7323648,
+      "widest": "a part's items in one frame"
+    },
+    {
+      "class": "frozen",
+      "name": "join::intro::MAX_RECORDS",
+      "reached": [
+        "an_intro_counts_the_recovery_heads_apart"
+      ],
+      "refusal": "intro/size",
+      "value": 32,
+      "widest": "an intro's records"
+    },
+    {
+      "class": "frozen",
+      "name": "join::intro::MAX_BYTES",
+      "reached": [
+        "an_intro_counts_the_recovery_heads_apart"
+      ],
+      "refusal": "intro/size",
+      "value": 16384,
+      "widest": "an intro's records' bytes"
+    },
+    {
+      "class": "frozen",
+      "name": "join::intro::MAX_HEADS",
+      "reached": [
+        "an_intro_counts_the_recovery_heads_apart"
+      ],
+      "refusal": "intro/size",
+      "value": 65,
+      "widest": "a head for each recovery seq and the first"
+    },
+    {
+      "class": "reader",
+      "name": "join::intro::MAX_PER_WINDOW",
+      "reached": [
+        "one_host_cannot_keep_intros_out"
+      ],
+      "refusal": "",
+      "value": 4,
+      "widest": "intros of one address in a window"
+    },
+    {
+      "class": "reader",
+      "name": "join::intro::MAX_PER_NETWORK",
+      "reached": [
+        "one_host_cannot_keep_intros_out"
+      ],
+      "refusal": "",
+      "value": 256,
+      "widest": "intros of one network in a window"
+    },
+    {
+      "class": "reader",
+      "name": "join::intro::WINDOW_MS",
+      "reached": [
+        "an_intro_is_checked_only_when_it_ends_in_its_sender"
+      ],
+      "refusal": "",
+      "value": 60000,
+      "widest": "the window"
+    },
+    {
+      "class": "reader",
+      "name": "join::intro::MAX_ADDRESSES",
+      "reached": [
+        "one_host_cannot_keep_intros_out"
+      ],
+      "refusal": "",
+      "value": 256,
+      "widest": "addresses a limiter tracks"
+    },
+    {
+      "class": "frozen",
+      "name": "join::invitation::MAX_ENDPOINTS",
+      "reached": [
+        "an_invitation_at_its_bounds"
+      ],
+      "refusal": "invite/path",
+      "value": 8,
+      "widest": "endpoints of one path"
+    },
+    {
+      "class": "frozen",
+      "name": "join::invitation::MAX_PATHS",
+      "reached": [
+        "an_invitation_at_its_bounds"
+      ],
+      "refusal": "invite/shape",
+      "value": 4,
+      "widest": "paths of an invitation"
+    },
+    {
+      "class": "reader",
+      "name": "join::invitation::MAX_FAILURES",
+      "reached": [
+        "an_open_invitation"
+      ],
+      "refusal": "",
+      "value": 3,
+      "widest": "failed attempts before an open invitation closes"
+    },
+    {
+      "class": "reader",
+      "name": "join::invitation::ATTEMPT_MS",
+      "reached": [
+        "a_late_message_of_an_earlier_attempt_changes_nothing"
+      ],
+      "refusal": "",
+      "value": 30000,
+      "widest": "the machine's steps of one attempt"
+    },
+    {
+      "class": "reader",
+      "name": "join::invitation::ANSWER_MS",
+      "reached": [
+        "the_short_code_opens_its_commitment"
+      ],
+      "refusal": "",
+      "value": 600000,
+      "widest": "the person comparing the codes"
+    },
+    {
+      "class": "frozen",
+      "name": "join::waiting::MAX_WAIT_MS",
+      "reached": [
+        "vec:messages3.json:waiting: held over a day"
+      ],
+      "refusal": "waiting/requests",
+      "value": 86400000,
+      "widest": "a request held a day"
+    },
+    {
+      "class": "frozen",
+      "name": "join::waiting::MAX_REQUESTS",
+      "reached": [
+        "a_request_waits_for_an_admin"
+      ],
+      "refusal": "waiting/requests",
+      "value": 16,
+      "widest": "requests by guest paths"
+    },
+    {
+      "class": "reader",
+      "name": "join::waiting::MAX_PER_INVITATION",
+      "reached": [
+        "one_invitation_takes_few_waiting_places"
+      ],
+      "refusal": "",
+      "value": 2,
+      "widest": "requests of one invitation"
+    },
+    {
+      "class": "frozen",
+      "name": "join::waiting::MAX_HOME",
+      "reached": [
+        "one_invitation_takes_few_waiting_places"
+      ],
+      "refusal": "waiting/requests",
+      "value": 32,
+      "widest": "requests from home"
+    },
+    {
+      "class": "frozen",
+      "name": "join::waiting::MAX_MESSAGE",
+      "reached": [
+        "vec:messages3.json:waiting: 49 requests"
+      ],
+      "refusal": "waiting/requests",
+      "value": 48,
+      "widest": "requests of one `waiting`"
+    },
+    {
+      "class": "frozen",
+      "name": "join::welcome::STATEMENTS_BUDGET",
+      "reached": [
+        "a_welcome_too_wide_for_its_budget_comes_whole_in_parts"
+      ],
+      "refusal": "",
+      "value": 2097152,
+      "widest": "a Welcome's statements and credentials"
+    },
+    {
+      "class": "frozen",
+      "name": "join::welcome::RECORDS_BUDGET",
+      "reached": [
+        "a_welcome_too_wide_for_its_budget_comes_whole_in_parts"
+      ],
+      "refusal": "",
+      "value": 5177344,
+      "widest": "a Welcome's records when the set rides in it"
+    },
+    {
+      "class": "frozen",
+      "name": "join::welcome::MAX_PARTS",
+      "reached": [
+        "vec:messages3.json:a Welcome with 65 parts"
+      ],
+      "refusal": "welcome/parts",
+      "value": 64,
+      "widest": "the widest set in about 14 parts"
+    },
+    {
+      "class": "frozen",
+      "name": "join::welcome::MAX_PARTS_BYTES",
+      "reached": [
+        "a_welcome_in_parts_leaves_nothing_to_sync"
+      ],
+      "refusal": "welcome/parts",
+      "value": 101039910,
+      "widest": "what for_peer gives a device at the widest"
+    },
+    {
+      "class": "reader",
+      "name": "join::welcome::PART_MS",
+      "reached": [
+        "a_welcome_in_parts_leaves_nothing_to_sync"
+      ],
+      "refusal": "welcome/late",
+      "value": 120000,
+      "widest": "a 7 MiB part at 0.49 Mbit/s"
+    },
+    {
+      "class": "reader",
+      "name": "join::welcome::PARTS_MS",
+      "reached": [
+        "the_welcome_tag_binds_every_byte"
+      ],
+      "refusal": "welcome/late",
+      "value": 1500000,
+      "widest": "the widest parts at 0.54 Mbit/s"
+    },
+    {
+      "class": "reader",
+      "name": "keystore::AHEAD_MS",
+      "reached": [
+        "a_clock_moved_back_and_forth_makes_one_epoch_a_week"
+      ],
+      "refusal": "",
+      "value": 86400000,
+      "widest": "a newest epoch a day ahead"
+    },
+    {
+      "class": "frozen",
+      "name": "store::HEADER",
+      "reached": [
+        "a_later_store_stops_an_earlier_program"
+      ],
+      "refusal": "",
+      "value": 12,
+      "widest": "a store frame's header"
+    },
+    {
+      "class": "reader",
+      "name": "sheet::MAX_INPUT",
+      "reached": [
+        "vec:sheet.json:63 characters"
+      ],
+      "refusal": "length",
+      "value": 512,
+      "widest": "a sheet typed with spaces and line ends"
+    }
+  ],
+  "note": "written by the core's bounds test (CBB_WRITE_BOUNDS=1) from core/src/bounds.rs; gen.py and the Go check compare their numbers with it"
+}
