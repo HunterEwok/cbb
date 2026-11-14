@@ -2570,7 +2570,8 @@ module records_v3 {
       ceil.keys().forall(k => legit.contains(k)),
       sumUnits(rs) <= ROOM,
       rs.map(r => r.signer).forall(k => ceil.keys().contains(k) and sumUnits(ofKey(rs, k)) <= ceil.get(k)),
-      (saturated(m) and not(chainState(s, db).stop)) implies others.forall(k =>
+      // (A member halted on a root fork takes nothing more: no share is owed to it; dec seed 11415.)
+      (saturated(m) and not(chainState(s, db).stop) and not(views.get(m).stop)) implies others.forall(k =>
         sumUnits(ofKey(rs, k)) + MAXU - 1 >= min2(shareOf(k), min2(ceil.get(k), sumUnits(ofKey(got.filter(r => storable(s, r, db)
           // Under "gapless" a record past a gap in what the set holds has no count.
           and (CUT_MODE != "gapless" or gapFree(s, r, recsOf(heldBy(s), db), db))), k))))),
@@ -4101,6 +4102,25 @@ module records_v3 {
       .then(syncRound)
       .expect(db.get(6).seen.get("A") == [4] and db.get(6).kit == "" and promises and cpFirstKeepsDevices
         and (CP_FIRST implies MEMBERS.forall(m => views.get(m).devices.contains(DEVICE))))
+  // dec seed 11415, minimised: a root fork at seq 3 halts c, m and r; a halted member takes
+  // nothing more and is owed no share of the room.
+  run forkHaltShareDecidedTest =
+    init
+      .then(signFull("R", "revoke", "C", "phone", 0, false, true, 1, true, Set()))
+      .then(offerEveryone(4))
+      .then(sign("A", "copies", "", "", 0, false, false, 2))
+      .then(signFull("R", "admin", "X", "phone", 0, false, true, 1, true, Set()))
+      .then(offerEveryone(6))
+      .then(sign("R", "copies", "", "", 0, false, false, 1))
+      .then(signCheckpointKeep("R", Set(6, 7, 99), "", 2))
+      .then(recoverAs(RECOVERY, "NA"))
+      .then(sign("R", "revoke", "D", "", 0, false, false, 1))
+      .then(signFull("NA", "checkpoint", "", "", 0, false, false, 2, false, Set(10)))
+      .then(recoverAs(RECOVERY, "NK"))
+      .then(sign("NA", "revoke", "A", "", 0, false, false, 1))
+      .then(signDeviant("X", "device", "D", 2))
+      .then(offerEveryone(18))
+      .expect(promises and MEMBERS.exists(m => views.get(m).stop))
   run recoveryChangesRootTest =
     init
       .then(recoverAs(RECOVERY, "NK"))
