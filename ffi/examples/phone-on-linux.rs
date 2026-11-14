@@ -694,7 +694,7 @@ mod card {
     use p256::ecdsa::SigningKey;
     use p256::ecdsa::signature::hazmat::PrehashSigner as _;
 
-    const KEY: [u8; 24] = [1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8];
+    use cbb_member::piv::DEFAULT_MANAGEMENT_KEY as KEY;
 
     #[derive(Default)]
     struct Session {
