@@ -195,7 +195,12 @@ fn signed(file: &str, by_key: bool) {
         let name = s(t, "name");
         let rule = s(t, "rule");
         let b = unhex(s(t, "envelope"));
-        let got = Envelope::parse(&b).and_then(|e| verify_signed(&e, &signer_point(&e), label));
+        // A server credential's ceiling is its reader's (`blind::credential`).
+        let parsed = match file {
+            "credentials.json" => Envelope::parse_limited(&b, crate::blind::credential::MAX_BODY),
+            _ => Envelope::parse(&b),
+        };
+        let got = parsed.and_then(|e| verify_signed(&e, &signer_point(&e), label));
         let format_level = ["cbor/", "env/", "sig/"].iter().any(|p| rule.starts_with(p));
         if format_level {
             assert_eq!(got.err().map(Rule::name), Some(rule), "{name}");

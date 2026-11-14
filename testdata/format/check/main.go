@@ -304,12 +304,22 @@ func formatRule(rule string) bool {
 	return false
 }
 
+// overCeiling gives env/size for a body past its kind's ceiling where the
+// envelope reader does not check it itself: a server credential's 16 KiB.
+func overCeiling(label string, body []byte, err error) error {
+	if err == nil && label == "cbb credential v2" && len(body) > 16384 {
+		return errors.New("env/size")
+	}
+	return err
+}
+
 func checkSigned(dir, file string, sk func(map[any]any) ([]byte, error)) {
 	var f signedFile
 	load(dir, file, &f)
 	ok, skipped := 0, 0
 	for _, t := range f.Take {
 		m, body, err := envelope(unhex(t.Envelope), f.Label, sk)
+		err = overCeiling(f.Label, body, err)
 		if t.Verdict == "hold" && err != nil && strings.Contains(err.Error(), "env/shape") {
 			// a body naming signer2 with two elements: held by the rules, refused here only by shape
 		}
@@ -358,7 +368,8 @@ func checkSigned(dir, file string, sk func(map[any]any) ([]byte, error)) {
 		ok++
 	}
 	for _, r := range f.Refuse {
-		m, _, err := envelope(unhex(r.Envelope), f.Label, sk)
+		m, rbody, err := envelope(unhex(r.Envelope), f.Label, sk)
+		err = overCeiling(f.Label, rbody, err)
 		if r.Rule == "records/checkpoint/own-head" {
 			if err != nil || ownHeadBefore(m) {
 				fail("%s / %s: its heads hold", file, r.Name)

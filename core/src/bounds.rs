@@ -501,7 +501,7 @@ pub const BOUNDS: &[Bound] = &[
         Frozen,
         "a credential",
         "env/size",
-        &["vec:credentials.json:a second signature of 8193 bytes"],
+        &["vec:credentials.json:a body of exactly 16 KiB", "vec:credentials.json:a body one byte over 16 KiB"],
     ),
     // Records.
     b(
