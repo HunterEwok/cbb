@@ -428,3 +428,25 @@ fn an_admin_that_fills_its_room_with_void_records_is_taken_back_by_the_person() 
     let st = set.state();
     assert!(!has(&st, &k("E")) && has(&st, &k("D")));
 }
+
+/// A removal that does not count waits for nobody: admin B's first record,
+/// a removal of D signed before it saw its grant (void), is kept but is
+/// no removal the admins must acknowledge, and the notices do not list it.
+#[test]
+fn a_void_removal_waits_for_nobody() {
+    let mut g = group("sv1");
+    let (b, pb) = (k("B"), k("PB"));
+    let st = g.set.state();
+    g.t += 1_000;
+    g.set.write_record(&st, &g.r1, Kind::device(admin_device(&pb, "PB", &b)), g.t).unwrap();
+    let mut chain = Chain::new();
+    g.t += 1_000;
+    let void = chain.sign_raw(&g.set, &b, Kind::Revoke(removal(&[&k("D")], vec![])), g.t);
+    let _ = g.set.insert(void.clone());
+    let st = g.set.state();
+    assert!(g.set.contains(&void.id()), "a void record is kept");
+    assert!(!st.counting.contains(&void.id()), "and does not count");
+    assert!(has(&st, &k("D")));
+    assert!(g.set.removals_waiting(&st).iter().all(|w| w.removal != void.id()), "a void removal waits for nobody");
+    assert!(g.set.unacknowledged(&st).values().all(|n| *n == 0), "{:?}", g.set.unacknowledged(&st));
+}
