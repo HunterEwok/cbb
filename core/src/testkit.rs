@@ -93,7 +93,7 @@ impl G {
         // does; a checkpoint or a change of root is signed as given.
         if !matches!(kind, Kind::Checkpoint { .. } | Kind::Recovery { .. }) {
             let st = self.set.state();
-            let r = self.set.write_record(&st, by, kind, time_ms).unwrap();
+            let r = self.set.write_record(&st, by, kind, time_ms).unwrap().pop().unwrap();
             self.heads.insert(by.hash, (r.body().seq, r.id()));
             return r;
         }

@@ -109,11 +109,22 @@ impl Group {
     }
 
     fn sign(&mut self, by: &str, kind: Kind) -> Record {
+        let roots: Vec<KeyHash> = ["R", "NK", "NA"].iter().map(|r| k(r).hash).collect();
         let by = k(by);
         let (seq, prev) = match self.heads.get(&by.hash) {
             Some((s, id)) => (s + 1, Some(*id)),
             None => (1, None),
         };
+        // As an honest admin's device: a key's first record names the
+        // roots' heads it holds, so what it signs stands on its grant line.
+        let mut kind = kind;
+        if seq == 1 && !roots.contains(&by.hash) {
+            let add: Vec<Seen> = roots
+                .iter()
+                .filter_map(|r| self.heads.get(r).map(|(s, id)| Seen { key: *r, seq: *s, id: *id }))
+                .collect();
+            add_seen(&mut kind, &add);
+        }
         let body = Body { group: self.group(), signer: by.hash, seq, prev, time_ms: 0, kind, held: false };
         self.push(Record::sign(body, &by).unwrap())
     }
@@ -267,20 +278,22 @@ fn stopped_for_good(s: &State) -> bool {
         && ["A", "C", "W"].iter().all(|n| !s.may_command(&k(n).hash))
 }
 
-/// recoveryChangesRootTest: the recovery key changes the root; a member
-/// that holds the head and its list follows it at once, and the admins
-/// the first root named stay.
+/// recoveryChangesRootTest, under L: the recovery key changes the root; a
+/// member that holds the head and the new root's first records follows it
+/// at once. The change names no list; the admins' devices stay as plain
+/// devices, and the admin keys, which published no spare, command no more.
 #[test]
 fn the_recovery_key_changes_the_root() {
     let mut g = Group::new();
     let w = g.change("NK");
-    assert_eq!(w.list.0.len(), 3);
+    assert!(w.list.0.is_empty());
     let s = g.member(&g.all()).state();
     assert_eq!(s.roots, roots(&["R", "NK"]));
     assert_eq!(s.changes.len(), 1);
     assert_eq!(s.changes[0].state, ChangeState::Effective);
-    assert!(["A", "C", "W", "NK"].iter().all(|n| s.may_command(&k(n).hash)));
-    assert!(!s.may_command(&k("R").hash));
+    assert!(s.may_command(&k("NK").hash));
+    assert!(["A", "C", "W", "R"].iter().all(|n| !s.may_command(&k(n).hash)));
+    assert!(["A phone", "C computer", "W watch"].iter().all(|m| has(&s, m)));
 }
 
 /// recoveryUntouchableTest: neither the root's removal nor the phone
@@ -387,10 +400,13 @@ fn a_removed_admins_thief_gains_nothing() {
     };
     check(&g.member(&g.all()).state());
     g.change("NK");
+    // L: after the change no admin of the first root commands, and what
+    // the removed key signed is not carried.
     let s = g.member(&g.all()).state();
     assert_eq!(s.roots, roots(&["R", "NK"]));
-    assert!(s.revoked.contains(&k("A").hash));
-    check(&s);
+    assert!(["A", "C", "W"].iter().all(|n| !s.may_command(&k(n).hash)));
+    assert!(!has(&s, "D"));
+    assert!(!s.devices.iter().any(|d| d.frozen));
 }
 
 /// oldRootResolveStaysTest: what the old root resolved stays resolved after
@@ -536,8 +552,10 @@ fn a_second_change_of_root() {
     assert_eq!(s.roots, roots(&["R"]));
     let s = g.member(&g.all()).state();
     assert_eq!(s.roots, roots(&["R", "NK", "NA"]));
-    assert!(has(&s, "D") && s.may_command(&k("A").hash));
-    assert!(w.list.0.len() > first.list.0.len());
+    // L: NA carries what NK counted (D), and the first root's admins
+    // command no more; neither change names a list.
+    assert!(has(&s, "D") && !s.may_command(&k("A").hash));
+    assert!(w.list.0.is_empty() && first.list.0.is_empty());
 }
 
 /// recoveryTwinStopsTest: two heads at one seq stop every member that
@@ -557,9 +575,8 @@ fn two_heads_at_one_seq_stop_the_group_for_good() {
 /// After a fork nothing commands and nothing acts, at seq 1 (where the
 /// path before the fork ends at the first root) and at depth: no root, no
 /// admin, no admission; a record the old root signs after does not make
-/// it command. The state shows the chain below the fork and what the list
-/// applied there names: at depth the first root's listed devices, at seq 1
-/// the first root alone.
+/// it command. The state counts the recovery chain below the fork and
+/// nothing else: it names the roots and no device.
 #[test]
 fn after_a_fork_nobody_commands() {
     use cbb_core::join::decide::{Signer, may_admit};
@@ -577,9 +594,7 @@ fn after_a_fork_nobody_commands() {
         }
         assert!(!may_admit(&s, &k(last).hash, Signer::Root, &k(last).hash), "depth {depth}");
         assert!(!may_admit(&s, &k("A phone").hash, Signer::Admin, &k(last).hash), "depth {depth}");
-        let shown = has(&s, "A phone") && has(&s, "C computer") && has(&s, "W watch");
-        assert_eq!(shown, depth == 2, "depth {depth}");
-        assert!(!has(&s, "D"), "depth {depth}");
+        assert!(s.devices.is_empty(), "depth {depth}");
     }
 }
 
@@ -624,20 +639,21 @@ fn a_member_that_took_the_thiefs_removal_follows_the_head() {
     assert!(has(&s, "D"));
 }
 
-/// untickTest: the owner unticks the computer admin: the new root signs
-/// its removal in the same act. The root's earlier removal of the watch
-/// admin is on the list and stays.
+/// untickTest, under L: the owner leaves out the computer admin: the new
+/// root does not re-issue its device and writes no removal. No admin of
+/// the first root commands after the change.
 #[test]
 fn the_owner_unticks_an_admin() {
     let mut g = Group::new();
     g.revoke("R", "W");
     let all: Vec<Record> = g.recs.clone();
-    g.change_from(&all.iter().collect::<Vec<_>>(), "NK", &["C"]);
+    let w = g.change_from(&all.iter().collect::<Vec<_>>(), "NK", &["C"]);
+    assert!(!w.first.iter().any(|r| matches!(r.body().kind, Kind::Revoke(_))));
     let s = g.member(&g.all()).state();
     assert_eq!(s.roots, roots(&["R", "NK"]));
-    assert!(s.may_command(&k("A").hash));
-    assert!(!s.may_command(&k("C").hash) && !s.may_command(&k("W").hash));
-    assert!(s.revoked.contains(&k("W").hash));
+    assert!(!has(&s, "C computer") && has(&s, "A phone"));
+    assert!(["A", "C", "W"].iter().all(|n| !s.may_command(&k(n).hash)));
+    assert!(s.revoked.is_empty());
 }
 
 /// literalListTest: why the list holds what the writer counts of every
@@ -769,4 +785,20 @@ fn compacting_on_the_roots_checkpoint_changes_nothing() {
         dropped += usize::from(!a.contains(&r.id()));
     }
     assert!(dropped > 0, "the room filled");
+}
+
+/// Adds to a record's seen the entries for keys it does not name yet.
+fn add_seen(kind: &mut Kind, add: &[Seen]) {
+    let seen = match kind {
+        Kind::Revoke(r) | Kind::Freeze(r) => &mut r.seen,
+        Kind::Thaw { seen, .. } | Kind::Hubs { seen, .. } | Kind::Copies { seen, .. } | Kind::Ack { seen, .. } => seen,
+        Kind::Device(d) => &mut d.seen,
+        _ => return,
+    };
+    for e in add {
+        if !seen.iter().any(|s| s.key == e.key) {
+            seen.push(*e);
+        }
+    }
+    seen.sort_by_key(|s| s.key);
 }

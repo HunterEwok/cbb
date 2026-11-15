@@ -600,6 +600,14 @@ def record_vectors():
         note="records/device/admin-rights: an admin never widens rights (here: hub); "
              "the form is valid, the evaluation counts it for nothing")
 
+    # an acknowledgement (type 14): an admin names the heads it holds, so
+    # that the root's checkpoint may let a removal go (section 10)
+    add("acknowledgement of the heads an admin holds", ADMIN, 14, {10: seen_of(ROOT, ROOT2)},
+        note="the form; the key was taken off above, so here it counts for nothing")
+    add("acknowledgement naming a spare admin key", ADMIN, 14,
+        {10: seen_of(ROOT, ROOT2), 11: Signer("admin spare").key},
+        note="field 11: a key the device made and signs nothing with; read, checked and kept, used by no rule yet")
+
     # refusals, built on the laptop record
     sig = ROOT.sign(LABELS["record"], lap_body)
     r, s = int.from_bytes(sig[:32], "big"), int.from_bytes(sig[32:], "big")
@@ -659,6 +667,8 @@ def record_vectors():
     m = dict(lap_m)
     m[10] = [XWING, fake("x", 1216)]
     bad_body("member key of a KEM algorithm", "records/device/key", m)
+    bad_body("acknowledgement with a spare key of a KEM algorithm", "records/ack/spare",
+             rec(ROOT, 90, 14, {10: [[ROOT.hash, 1, bytes(32)]], 11: [XWING, fake("x", 1216)]}))
     m = dict(lap_m)
     m[3] = ROOT.hash[:16]
     bad_body("signer of 16 bytes", "records/signer", m)
@@ -735,6 +745,10 @@ def record_vectors():
         ("hubs seen with one key twice", "records/hubs/seen", 10, {10: [LAPTOP.id16], 11: [sa, [sa[0], 3, i2]]}),
         ("copies seen entry without its record ID", "records/copies/seen", 8, {10: 30000, 11: [sa[:2]]}),
         ("copies without its seen", "records/copies/seen", 8, {10: 30000}),
+        ("acknowledgement without its seen", "records/ack/seen", 14, {}),
+        ("acknowledgement with an empty seen", "records/ack/seen", 14, {10: []}),
+        ("acknowledgement seen out of order", "records/ack/seen", 14, {10: [sb, sa]}),
+        ("acknowledgement seen entry without its record ID", "records/ack/seen", 14, {10: [sa[:2]]}),
     ]:
         bad_body(name, rule, rec(ROOT, 90, typ, fields))
     # the bounds of a copies record's incoming time and of settings'

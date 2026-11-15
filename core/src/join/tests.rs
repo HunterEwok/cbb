@@ -90,11 +90,23 @@ impl G {
         g
     }
 
-    fn rec(&mut self, by: &K, kind: Kind) -> Record {
+    fn rec(&mut self, by: &K, mut kind: Kind) -> Record {
         let (seq, prev) = match self.heads.get(&by.hash) {
             Some((s, id)) => (s + 1, Some(*id)),
             None => (1, None),
         };
+        // As an honest admin's device: a key's first record names the
+        // root's head, so what it signs stands on its grant line.
+        let root = k("root").hash;
+        if by.hash != root
+            && seq == 1
+            && let Some(&(rs, rid)) = self.heads.get(&root)
+            && let Kind::Device(d) = &mut kind
+            && !d.seen.iter().any(|x| x.key == root)
+        {
+            d.seen.push(crate::records::body::Seen { key: root, seq: rs, id: rid });
+            d.seen.sort_by_key(|x| x.key);
+        }
         let body = Body { group: self.gid, signer: by.hash, seq, prev, time_ms: 0, kind, held: false };
         let r = crate::testkit::sign_by(body, by);
         self.heads.insert(by.hash, (seq, r.id()));
@@ -120,7 +132,19 @@ impl G {
             s.insert_list(l).unwrap();
         }
         let (_, refused) = s.insert_all(self.recs.iter().cloned());
-        assert!(refused.is_empty(), "{refused:?}");
+        // L: after a change of root the admin keys of the roots before it
+        // are no keys of the set, and their records are refused as such;
+        // nothing else is refused.
+        let st = s.state();
+        let old_admin = |id: &crate::records::RecordId| {
+            self.recs.iter().find(|r| r.id() == *id).is_some_and(|r| {
+                st.roots.len() > 1 && !st.roots.contains(&r.body().signer) && !st.may_command(&r.body().signer)
+            })
+        };
+        assert!(
+            refused.iter().all(|(id, why)| *why == crate::records::set::Refused::UnknownSigner && old_admin(id)),
+            "{refused:?}"
+        );
         s
     }
 
@@ -860,8 +884,9 @@ fn the_joiner_takes_two_changes_of_root() {
     assert!(st.device_by_key(&slate.hash).is_some());
     let w = built(&set, &st, &k("phone c").hash, &slate.hash);
     let group = format::DeviceId(g.gid.0);
-    // Two changes of root are two lists: the set comes in parts.
-    assert!(w.parts > 0);
+    // L: both changes name the empty list, one list for both, so a set
+    // this small rides in the Welcome itself.
+    assert_eq!(w.parts, 0);
     let back = w.clone();
     let r = back.check(&group, &point(&k("phone c")), &point(&slate), Joining::Ordinary, Way::Invited(&invitation()));
     let (mine, st) = r.unwrap_or_else(|e| panic!("{e:?}"));
@@ -888,6 +913,10 @@ fn the_joiner_takes_two_changes_of_root() {
         .unwrap();
     let mut bare = back.clone();
     bare.lists.retain(|l| crate::records::body::list_hash(l) != newest);
+    // Inline, the list rides in field `list`.
+    if bare.list.as_ref().is_some_and(|l| crate::records::body::list_hash(l) == newest) {
+        bare.list = None;
+    }
     let ordinary = |w: &Welcome| {
         w.check(&group, &point(&k("phone c")), &point(&slate), Joining::Ordinary, Way::Invited(&invitation())).err()
     };
@@ -1769,7 +1798,8 @@ fn the_welcome_tag_binds_every_byte() {
     g.rec(&n2, Kind::device(d));
     let set = g.set();
     let st = set.state();
-    let (w, parts) = Welcome::build(&set, &st, &k("phone c").hash, &slate.hash, 1).unwrap();
+    // A small budget, so that the set comes in parts and field 13 is there.
+    let (w, parts) = Welcome::build_within(&set, &st, &k("phone c").hash, &slate.hash, 1, 1024).unwrap();
     assert!(w.parts >= 1);
     let (isk, other) = ([0x15u8; 64], [0x16u8; 64]);
     let bytes = w.encode();
@@ -2203,21 +2233,21 @@ fn an_invitation_at_its_bounds() {
 }
 
 /// A join in parts after two changes of root and a later checkpoint that
-/// prunes a record the first change carried forward (a removed device's
-/// admission by the first root): the joiner takes the Welcome and its
+/// prunes a record of the last root (a removed device's admission): the
+/// joiner takes the Welcome and its
 /// parts and ends with the admitter's set and state, and one sync of
 /// everything the admitter holds adds nothing.
 #[test]
 fn a_join_in_parts_after_two_changes_and_a_pruning_checkpoint_ends_equal() {
     let mut g = G::new();
     let (n1, n2, tv, slate) = (k("root n1"), k("root n2"), k("tv"), k("slate"));
-    let mut d = Device::new(tv.key.clone(), "tv", ROLE_MEMBER);
-    d.rights = RIGHT_READ;
-    let tv_admission = g.rec_root(Kind::device(d));
     g.change(&n1);
     phone_admin(&mut g, &n1, &k("phone b"), &k("admin b"), true);
     g.change(&n2);
     phone_admin(&mut g, &n2, &k("phone c"), &k("admin c"), true);
+    let mut d = Device::new(tv.key.clone(), "tv", ROLE_MEMBER);
+    d.rights = RIGHT_READ;
+    let tv_admission = g.rec(&n2, Kind::device(d));
     for i in 0..30u64 {
         g.rec(&n2, Kind::Copies { incoming_ms: 5_000 + i, seen: vec![] });
     }
@@ -2225,6 +2255,12 @@ fn a_join_in_parts_after_two_changes_and_a_pruning_checkpoint_ends_equal() {
     g.rec(&n2, Kind::Revoke(Removal { keys: vec![tv.hash], seen }));
     // The removal is not the root's head when it checkpoints.
     g.rec(&n2, Kind::Copies { incoming_ms: 9_000, seen: vec![] });
+    // Every live admin acknowledges the removal, so a checkpoint may let
+    // it go.
+    for a in [k("laptop admin"), k("admin b"), k("admin c")] {
+        let seen: Vec<_> = g.seen().into_iter().filter(|s| s.key != a.hash).collect();
+        g.rec(&a, Kind::Ack { seen, spare: None });
+    }
     // The current root's later checkpoint, as a member writes it.
     let before = g.set();
     assert!(before.contains(&tv_admission.id()));
@@ -2241,7 +2277,7 @@ fn a_join_in_parts_after_two_changes_and_a_pruning_checkpoint_ends_equal() {
     let st = set.state();
     assert_eq!(st.roots, vec![g.root.hash, n1.hash, n2.hash]);
     assert_eq!(st.checkpoint, Some(cp.id()));
-    assert!(!set.contains(&tv_admission.id()), "the later checkpoint pruned the first root's record");
+    assert!(!set.contains(&tv_admission.id()), "the later checkpoint pruned the removed device's admission");
     let admitter = k("phone c").hash;
     let (w, parts) = Welcome::build_within(&set, &st, &admitter, &slate.hash, 1, 20 * 200).unwrap();
     // The set rides in a part, not in the Welcome.

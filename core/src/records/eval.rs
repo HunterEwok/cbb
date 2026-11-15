@@ -70,10 +70,12 @@ impl Cut {
         self.keep.contains(r)
     }
 
-    /// Whether r counts as far as the cut goes: it is not covered, or
-    /// listed.
+    /// Whether r counts as far as the cut goes: it is not covered. Under L
+    /// ("the last root only") a record of a root before the current one,
+    /// or of the current root below `from`, counts for nothing, whatever
+    /// the list names: only the new root's own records carry the state.
     pub fn lets(&self, r: &Record) -> bool {
-        !self.covers(&r.body().signer, r.body().seq) || self.keep.contains(&r.id())
+        !self.covers(&r.body().signer, r.body().seq)
     }
 }
 
@@ -336,18 +338,14 @@ impl State {
     /// stopped for good; or a recovery record it cannot read, and is
     /// stopped until it is updated. Nothing in the state acts then: no root
     /// or admin commands, no device is admitted, no copy is sealed or
-    /// opened. The state stays readable, so the owner sees the devices when
-    /// making the next group, and the device still passes the recovery
-    /// records on.
+    /// opened. The device still passes the recovery records on.
     ///
-    /// What a halted state shows is computed from the recovery chain below
-    /// the fork (or below the record it cannot read) and the records the
-    /// newest list applied there names, and nothing else: the roots of
-    /// that chain, and the devices and removals those listed records make.
-    /// The last root's records that list does not name do not show; after
-    /// a fork at seq 1 the state is the first root and the recovery chain
-    /// alone. So every member that holds the proof shows the same, however
-    /// its records came, and `fork` names the seq and the two records.
+    /// A halted state counts the recovery chain below the fork (or below
+    /// the record it cannot read) and nothing else: it names the roots of
+    /// that chain and no device, admin or hub. So every member that holds
+    /// the proof shows the same, however its records came, and `fork`
+    /// names the seq and the two records. The app keeps the devices it
+    /// last showed for the screen that makes the next group.
     pub fn halted(&self) -> bool {
         self.update_needed || self.conflicts.iter().any(|c| c.kind == ConflictKind::Fork)
     }
@@ -1417,17 +1415,11 @@ pub(crate) fn evaluate_checked(
     // in the set (Chain::waiting_roots).
     let waiting = chain.waiting_roots(&group_root);
     let checked: Vec<Checked> = checked.into_iter().filter(|c| !waiting.contains_key(&c.r.body().signer)).collect();
-    // Halted: only the recovery chain and what the newest list applied
-    // below the fork names (State::halted).
-    let checked = if chain.halted() {
-        let listed = chain.cut.as_ref().map(|c| &c.keep);
-        checked
-            .into_iter()
-            .filter(|c| c.role == Role::Recovery || listed.is_some_and(|k| k.contains(&c.r.id())))
-            .collect()
-    } else {
-        checked
-    };
+    // Halted by a recovery fork: the group is stopped for good, and only
+    // the recovery chain counts at every member, whatever else it held
+    // (State::halted). No device, admin or hub is named.
+    let checked =
+        if chain.halted() { checked.into_iter().filter(|c| c.role == Role::Recovery).collect() } else { checked };
     let root_recs: Vec<&Record> = checked.iter().filter(|c| c.role == Role::Root && !c.held).map(|c| c.r).collect();
     let mut cuts = chain.cuts();
     let proven = by.proven;
@@ -1716,7 +1708,9 @@ impl Rec<'_> {
     fn seen_entry(&self, k: &KeyHash) -> Option<Seen> {
         match &self.b().kind {
             Kind::Revoke(r) | Kind::Freeze(r) => body::seen_entry(&r.seen, k),
-            Kind::Thaw { seen, .. } | Kind::Hubs { seen, .. } | Kind::Copies { seen, .. } => body::seen_entry(seen, k),
+            Kind::Thaw { seen, .. } | Kind::Hubs { seen, .. } | Kind::Copies { seen, .. } | Kind::Ack { seen, .. } => {
+                body::seen_entry(seen, k)
+            }
             Kind::Device(d) => body::seen_entry(&d.seen, k),
             _ => None,
         }
@@ -1971,6 +1965,8 @@ struct Epoch<'e, 'a> {
     /// with that record: what the key signed and the record saw still
     /// counts, the rest does not.
     superseded: BTreeMap<KeyHash, usize>,
+    /// The records of admin keys on their grant line (`find_grant_lines`).
+    granted: Vec<bool>,
 }
 
 #[allow(clippy::indexing_slicing, reason = "positions come from the records' own Vec")]
@@ -2006,6 +2002,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
             settings: Settings::default(),
             pairs: BTreeMap::new(),
             superseded: BTreeMap::new(),
+            granted: vec![false; n],
         };
         // Roots on the path first: their ceilings do not depend on the
         // settings, which are a root's record.
@@ -2026,6 +2023,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
             ep.chain(s);
         }
         ep.find_admins();
+        ep.find_grant_lines();
         ep.find_pairs();
         ep.admit_and_label();
         ep.collect();
@@ -2345,6 +2343,60 @@ impl<'e, 'a> Epoch<'e, 'a> {
         }
     }
 
+    /// The seen line (section 10, "Admin keys"): a record of an admin key
+    /// counts only on its grant line, where it, or a record below it on
+    /// its key's chain, either has a seen that holds a root record naming
+    /// the key (the root's key at that record's seq or above), or is a
+    /// record the checkpoint names (a head or a kept record), which its
+    /// writer names only where the key's records count. What an admin key
+    /// signed before it saw its own grant never counts; a record below the
+    /// line still links the chain above it.
+    fn find_grant_lines(&mut self) {
+        let mut naming: BTreeMap<KeyHash, Vec<(KeyHash, u64)>> = BTreeMap::new();
+        for i in self.all() {
+            if !self.root_record(i) {
+                continue;
+            }
+            if let Some(a) = self.r(i).dev().and_then(|d| d.admin.as_ref()).map(Key::hash) {
+                naming.entry(a).or_default().push((self.r(i).b().signer, self.r(i).b().seq));
+            }
+        }
+        let mut granted = vec![false; self.e.recs.len()];
+        for (a, names) in &naming {
+            let rs = self.of(a);
+            let by_id: BTreeMap<RecordId, usize> = rs.iter().map(|&i| (self.r(i).id, i)).collect();
+            let step = |i: usize| -> Result<bool, usize> {
+                let r = self.r(i);
+                // The entry names a record of that root this member holds
+                // on its counting line, by seq and ID (a made-up ID never
+                // counts; a root record not held yet waits).
+                let holds = |x: Seen| {
+                    self.e.by_id.get(&x.id).is_some_and(|&j| {
+                        self.root_record(j) && self.r(j).b().signer == x.key && self.r(j).b().seq == x.seq
+                    })
+                };
+                if self.e.anchors.contains(&r.id)
+                    || names.iter().any(|(root, seq)| r.seen_entry(root).is_some_and(|x| x.seq >= *seq && holds(x)))
+                {
+                    return Ok(true);
+                }
+                // A prev the checkpoint names stands for what it pruned.
+                if r.b().prev.as_ref().is_some_and(|p| self.e.anchors.contains(p)) {
+                    return Ok(true);
+                }
+                match r.b().prev.as_ref().and_then(|p| by_id.get(p)) {
+                    Some(&p) if r.b().seq > 1 => Err(p),
+                    _ => Ok(false),
+                }
+            };
+            let mut memo = BTreeMap::new();
+            for &i in rs {
+                granted[i] = walk(&mut memo, i, step);
+            }
+        }
+        self.granted = granted;
+    }
+
     fn powers(&self, admin: &KeyHash) -> u64 {
         self.admins.get(admin).map_or(0, |&i| match &self.r(i).b().kind {
             Kind::Device(d) => d.powers,
@@ -2503,7 +2555,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
     fn permitted(&self, i: usize) -> bool {
         let r = self.r(i);
         let a = &r.b().signer;
-        if r.held || !self.admins.contains_key(a) || self.capped[i] {
+        if r.held || !self.admins.contains_key(a) || self.capped[i] || !self.granted[i] {
             return false;
         }
         match &r.b().kind {
@@ -2545,6 +2597,8 @@ impl<'e, 'a> Epoch<'e, 'a> {
             Kind::Hubs { .. } => self.has(a, POWER_HUB),
             // Any admin sets how long incoming copies stay live.
             Kind::Copies { .. } => true,
+            // Any admin acknowledges what it holds; it changes no state.
+            Kind::Ack { .. } => true,
             _ => false,
         }
     }
@@ -2962,7 +3016,9 @@ impl<'e, 'a> Epoch<'e, 'a> {
             admin: None,
             powers: 0,
             commands: 0,
-            frozen: false,
+            // A freeze is on the device: its member key frozen, by a
+            // freeze of it or of its admin key (`collect` pairs them).
+            frozen: self.frozen.contains(&n.key.hash()),
             replaces: n.replaces,
             guarded,
             by_root,

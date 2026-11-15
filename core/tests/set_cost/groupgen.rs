@@ -374,8 +374,19 @@ fn build_with(spec: Spec, remove_holder: bool) -> Group {
             set.insert_list(l).expect("a change's list is taken");
         }
         let (_, refused) = set.insert_all(b.records.iter().cloned());
-        assert!(refused.is_empty(), "groupgen: records refused: {refused:?}");
         let state = set.state();
+        // L: after a change the admin keys of the roots before it are no
+        // keys of the set, and their records are refused as such; nothing
+        // else is.
+        let old_admin = |id: &cbb_core::records::RecordId| {
+            b.records.iter().find(|r| r.id() == *id).is_some_and(|r| {
+                state.roots.len() > 1 && !state.roots.contains(&r.body().signer) && !state.may_command(&r.body().signer)
+            })
+        };
+        assert!(
+            refused.iter().all(|(id, why)| *why == cbb_core::records::set::Refused::UnknownSigner && old_admin(id)),
+            "groupgen: records refused: {refused:?}"
+        );
         // A change written from a valid group never fails.
         let lost: Vec<KeyHash> = holder.take().into_iter().filter(|_| remove_holder).collect();
         #[allow(clippy::unwrap_used)]

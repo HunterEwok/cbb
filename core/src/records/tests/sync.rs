@@ -129,12 +129,19 @@ fn any_cut_between_parts_ends_equal() {
     let list = g.listing();
     g.change(&k("third root"), &list);
     g.device(&k("third root"), &k("watch"), "watch", |_| {});
+    // L: only the last root's records count after the change, so it
+    // admits enough to be cut into parts.
+    for i in 0..30 {
+        g.device(&k("third root"), &k(&format!("u{i}")), "u", |_| {});
+    }
     let sender = set_with(&g.root.key, &g.recs, &g.lists);
     let st = sender.state();
-    let peer = k("laptop").hash;
+    // A device of the last root (L: the earlier roots' devices are not
+    // devices any more, as no re-issue carried them here).
+    let peer = k("watch").hash;
     let records = sender.for_peer(&st, &peer);
     let lists = sender.lists_for_peer(&st, &peer);
-    assert_eq!(lists.len(), 2);
+    assert!(!lists.is_empty());
     for (n, bytes) in [(1, PART_BYTES), (3, PART_BYTES), (PART_RECORDS, 4096), (7, 20_000)] {
         let parts = sync::split(&records, &lists, n, bytes);
         assert!(parts.len() > 1);

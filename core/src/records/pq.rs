@@ -124,8 +124,8 @@ pub fn recovery_keys(secret: &[u8; 32]) -> Result<(p256::SecretKey, PqKey)> {
     h.update(secret);
     let mut d: [u8; 64] = h.finalize().into();
     let mut seeds = [[0u8; 16]; 3];
-    for (s, chunk) in seeds.iter_mut().zip(d.chunks_exact(16)) {
-        s.copy_from_slice(chunk);
+    for (s, chunk) in seeds.iter_mut().zip(d.as_chunks::<16>().0) {
+        *s = *chunk;
     }
     let k2 = PqKey::from_seeds(&seeds[0], &seeds[1], &seeds[2]);
     d.zeroize();

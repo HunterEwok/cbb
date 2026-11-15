@@ -250,9 +250,9 @@ fn an_admission_after_the_change_of_a_key_the_old_root_removed() {
 
 /// A change applies whole or not at all: a member that holds its head
 /// without the whole group (head alone; head and list; all but the first
-/// checkpoint) is a member that has not seen the head: the roots stay and
-/// the old removals bar, also after a restart. Once the rest comes, its
-/// state is the sender's.
+/// checkpoint; all but one re-issued device) is a member that has not
+/// seen the head: the roots stay and the old removals bar, also after a
+/// restart. Once the rest comes, its state is the sender's.
 #[test]
 fn a_change_cut_inside_its_group_applies_nothing() {
     let mut g = G::new();
@@ -267,13 +267,14 @@ fn a_change_cut_inside_its_group_applies_nothing() {
     }
     let before = g.recs.clone();
     let w = change(&mut g, &k("n1"), &k("p1")).unwrap();
-    assert!(w.first.iter().any(|r| matches!(r.body().kind, Kind::Revoke(_))), "no removal re-issued");
+    assert!(!w.first.iter().any(|r| matches!(r.body().kind, Kind::Revoke(_))), "no removal written");
     let sender = set_with(&g.root.key, &g.recs, &g.lists);
     let unseen = set_with(&g.root.key, &before, &[]).state();
     let list = w.list.encode();
     let n = w.first.len();
-    let z = w.first.iter().position(|r| matches!(r.body().kind, Kind::Revoke(_))).unwrap();
-    // usize::MAX: every first record but the re-issued removal.
+    let z =
+        w.first.iter().position(|r| matches!(&r.body().kind, Kind::Device(d) if d.key.hash() == xs[4].hash)).unwrap();
+    // usize::MAX: every first record but one re-issued device.
     for (firsts, with_list) in [(0, false), (0, true), (n - 1, true), (usize::MAX, true)] {
         let mut recs = before.clone();
         if firsts == usize::MAX {
@@ -309,10 +310,10 @@ fn a_change_cut_inside_its_group_applies_nothing() {
 
 /// The root removes an admin key, the key signs once more, and the root
 /// removes it again with the newer record seen. The two removals saw the
-/// key differently: the change re-issues them as two removals, and what
-/// the key signed after the first never counts, before the change or
-/// after. The second removal does not stand for the first in a
-/// checkpoint either.
+/// key differently, and what the key signed after the first never counts,
+/// before the change or after: the change writes no removal and does not
+/// re-issue what the removed key admitted after the first. The second
+/// removal does not stand for the first in a checkpoint either.
 #[test]
 fn two_removals_of_one_key_seen_apart() {
     let mut g = G::new();
@@ -346,9 +347,7 @@ fn two_removals_of_one_key_seen_apart() {
             _ => None,
         })
         .collect();
-    let listed = w.list.0.contains(&first.id());
-    let apart = zs.len() == 2 && zs.iter().any(|z| z.seen != seen);
-    assert!(listed || apart, "one removal stands for both: {zs:?}");
+    assert!(zs.is_empty(), "L: no removal is written at a change: {zs:?}");
     let s = g.state();
     assert!(s.device_by_key(&five.hash).is_none(), "counts after the change");
     let st = set_with(&g.root.key, &g.recs, &g.lists).state();

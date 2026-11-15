@@ -676,7 +676,7 @@
       ],
       "refusal": "",
       "value": 1536,
-      "widest": "the roots before the current one"
+      "widest": "headroom in the room: the roots before the current one keep 0"
     },
     {
       "class": "frozen",
@@ -696,7 +696,7 @@
       ],
       "refusal": "records/lists",
       "value": 1536,
-      "widest": "a change's list naming the whole reserve"
+      "widest": "a change's list in the format (the writer names none)"
     },
     {
       "class": "frozen",
@@ -791,13 +791,23 @@
     },
     {
       "class": "frozen",
-      "name": "records::set::REISSUE_KEPT_BACK",
+      "name": "records::set::UNKNOWN_PER_SEQ",
       "reached": [
-        "a_full_set_keeps_the_roots_removals"
+        "a_peer_it_does_not_know_brings_nothing_else"
       ],
       "refusal": "",
-      "value": 256,
-      "widest": "the new root's room left to its other first records"
+      "value": 2,
+      "widest": "recovery records of one seq taken from a peer the set does not know"
+    },
+    {
+      "class": "stated",
+      "name": "records::set::ADMIN_SILENCE_MS",
+      "reached": [
+        "a_silent_admin_is_taken_back_after_the_silence"
+      ],
+      "refusal": "",
+      "value": 3024000000,
+      "widest": "an admin's device silent for 35 days before the root takes its key back"
     },
     {
       "class": "reader",
@@ -1081,6 +1091,36 @@
       "refusal": "",
       "value": 86400000,
       "widest": "a newest epoch a day ahead"
+    },
+    {
+      "class": "frozen",
+      "name": "keystore::WEEK_MS",
+      "reached": [
+        "the_sealing_key_changes_once_a_week_and_the_old_one_stays_a_week"
+      ],
+      "refusal": "",
+      "value": 604800000,
+      "widest": "a sealing epoch, the newest for a week and kept a week after"
+    },
+    {
+      "class": "stated",
+      "name": "credential::PERIOD_RENEW_MS",
+      "reached": [
+        "periods_last_as_go_says"
+      ],
+      "refusal": "",
+      "value": 2592000000,
+      "widest": "a period 30 days old, when the root starts the next"
+    },
+    {
+      "class": "stated",
+      "name": "credential::PERIOD_LIFETIME_MS",
+      "reached": [
+        "periods_last_as_go_says"
+      ],
+      "refusal": "",
+      "value": 3024000000,
+      "widest": "a period lasting 35 days, its renewal and 5 days"
     },
     {
       "class": "frozen",

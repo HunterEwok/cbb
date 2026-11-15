@@ -5,7 +5,7 @@
 //! removal. Every call here reads the set (on a copy where it must judge
 //! the rooms); none changes what the set holds or how a record is judged.
 
-use alloc::collections::BTreeSet;
+use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -14,6 +14,9 @@ use super::super::eval::{self, Checked, Role, State};
 use super::super::key::{DeviceId, KeyHash, RecordId};
 use super::super::{Kind, Record};
 use super::{Added, RecordSet};
+
+/// A day in milliseconds, for the days the notices count.
+const DAY_MS: u64 = 86_400_000;
 
 /// A key's room: its fixed cap and what its records take now. The cap is
 /// the root's, the reserve of the roots a change cut, a live admin key's,
@@ -88,6 +91,78 @@ pub struct RemovalWarning {
     pub out: Vec<DeviceId>,
     /// The devices that would stay but no longer hold an admin key.
     pub no_longer_admin: Vec<DeviceId>,
+}
+
+/// A live admin key the root has not heard from for a while
+/// (`RecordSet::admins_silent`): the root takes it back after
+/// `ADMIN_SILENCE_MS` (`take_back_lagging`).
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct AdminSilent {
+    pub key: KeyHash,
+    /// The device that holds it.
+    pub device: DeviceId,
+    /// Since when the silence counts, on the root device's clock: when it
+    /// last received a record of the key, else when the root named it.
+    pub since_ms: u64,
+    /// Whole days left before the take-back is due; 0 when it is due now.
+    pub days_left: u64,
+    /// The removals this key has not acknowledged (`unacknowledged`).
+    pub holds_back: usize,
+}
+
+/// A counting removal some live admin key has not acknowledged yet
+/// (`RecordSet::removals_waiting`): a checkpoint keeps it until they do.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct WaitingRemoval {
+    pub removal: RecordId,
+    /// The keys it removes.
+    pub keys: Vec<KeyHash>,
+    /// The live admin keys that still owe an acknowledgement.
+    pub waits_for: Vec<KeyHash>,
+}
+
+/// The current root's room taken by removals that wait for
+/// acknowledgements (`RecordSet::root_room_waiting`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct RootRoomWaiting {
+    /// The root's room as `root_room` gives it.
+    pub room: Room,
+    /// How many of the root's own removals wait.
+    pub waiting: usize,
+    /// The units they take.
+    pub waiting_units: u64,
+}
+
+/// On an admin's own device: an acknowledgement is owed
+/// (`RecordSet::ack_owed`). A phone's admin key signs only after the
+/// person unlocks it, so the app shows this quietly and writes the
+/// acknowledgement with the next admin action the person takes, in the
+/// same unlock; it never asks out of nowhere.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct AckOwed {
+    pub key: KeyHash,
+    /// The removals that wait for this key.
+    pub removals: usize,
+    /// Whole days left before the root may take the key back for silence,
+    /// as far as this device can tell: from the key's last
+    /// acknowledgement that counts here, else from when the root named it.
+    /// The root's own clock decides.
+    pub days_left: u64,
+}
+
+/// A frozen admin key that holds removals back
+/// (`RecordSet::frozen_holding`). A frozen key cannot acknowledge, and the
+/// writer takes nobody back for a freeze: the app asks the person to thaw
+/// the key (it then acknowledges) or take it back (`take_back`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct FrozenHolding {
+    pub key: KeyHash,
+    /// The frozen device that holds it.
+    pub device: DeviceId,
+    /// The removals it has not acknowledged (`unacknowledged`).
+    pub removals: usize,
+    /// The current root's units among them (`unacknowledged_units`).
+    pub root_units: u64,
 }
 
 impl RecordSet {
@@ -203,5 +278,121 @@ impl RecordSet {
             }
         }
         warning
+    }
+
+    /// The live admin keys silent for at least `after_ms` at `now_ms`, the
+    /// longest silence first. `heard_ms` is when the root device last
+    /// received a record of each key, on its own clock (the app keeps it);
+    /// a key it never heard from counts from the root record that named it,
+    /// as `take_back_lagging` counts.
+    pub fn admins_silent(
+        &self,
+        state: &State,
+        heard_ms: &BTreeMap<KeyHash, u64>,
+        now_ms: u64,
+        after_ms: u64,
+    ) -> Vec<AdminSilent> {
+        let held = self.unacknowledged(state);
+        let mut out: Vec<AdminSilent> = state
+            .devices
+            .iter()
+            .filter_map(|d| {
+                let key = d.admin?;
+                let since_ms = heard_ms.get(&key).copied().or_else(|| self.named_at(state, &key))?;
+                let silent = now_ms.saturating_sub(since_ms);
+                (silent >= after_ms).then(|| AdminSilent {
+                    key,
+                    device: d.id,
+                    since_ms,
+                    days_left: super::ADMIN_SILENCE_MS.saturating_sub(silent).div_ceil(DAY_MS),
+                    holds_back: held.get(&key).copied().unwrap_or(0),
+                })
+            })
+            .collect();
+        out.sort_by_key(|s| (s.since_ms, s.key));
+        out
+    }
+
+    /// The counting removals that wait for acknowledgements (only those a
+    /// checkpoint could let go, `waiting`), with the live admin keys each
+    /// waits for, in the order of the set.
+    pub fn removals_waiting(&self, state: &State) -> Vec<WaitingRemoval> {
+        let admins = Self::live_admins(state);
+        self.waiting(state)
+            .into_iter()
+            .filter_map(|r| {
+                let b = r.body();
+                let Kind::Revoke(rm) = &b.kind else { return None };
+                let waits_for: Vec<KeyHash> = admins
+                    .iter()
+                    .filter(|a| **a != b.signer && !self.acked_by(state, a, &b.signer, b.seq))
+                    .copied()
+                    .collect();
+                (!waits_for.is_empty()).then(|| WaitingRemoval { removal: r.id(), keys: rm.keys.clone(), waits_for })
+            })
+            .collect()
+    }
+
+    /// The current root's removals that wait, when they take at least
+    /// `warn_at_percent` of its room; None below that, or with no root
+    /// room. The app says which admins must come online or be taken back
+    /// (`admins_silent`, `removals_waiting`).
+    pub fn root_room_waiting(&self, state: &State, warn_at_percent: u64) -> Option<RootRoomWaiting> {
+        let room = self.root_room(state)?;
+        let root = room.key;
+        let mut waiting = 0usize;
+        let mut waiting_units = 0u64;
+        for w in self.removals_waiting(state) {
+            let Some(r) = self.get(&w.removal) else { continue };
+            if r.body().signer == root {
+                waiting = waiting.saturating_add(1);
+                waiting_units = waiting_units.saturating_add(super::keep::units(
+                    r.body().encode().len().saturating_add(super::super::ENVELOPE_ALLOWANCE),
+                ));
+            }
+        }
+        (waiting > 0 && waiting_units.saturating_mul(100) >= room.cap.saturating_mul(warn_at_percent))
+            .then_some(RootRoomWaiting { room, waiting, waiting_units })
+    }
+
+    /// Whether admin key `own` owes an acknowledgement at `now_ms`, on its
+    /// own device: some removal waits for it (`ack_due`).
+    pub fn ack_owed(&self, state: &State, own: &KeyHash, now_ms: u64) -> Option<AckOwed> {
+        let removals = self.unacknowledged(state).get(own).copied().unwrap_or(0);
+        if removals == 0 {
+            return None;
+        }
+        let since = self.last_ack(state, own).map(|(_, t)| t).or_else(|| self.named_at(state, own))?;
+        let days_left = super::ADMIN_SILENCE_MS.saturating_sub(now_ms.saturating_sub(since)).div_ceil(DAY_MS);
+        Some(AckOwed { key: *own, removals, days_left })
+    }
+
+    /// The frozen admin keys that hold at least one removal back, the
+    /// most removals first. Nothing takes them back by itself while their
+    /// devices keep talking to the root; the person thaws or takes back.
+    pub fn frozen_holding(&self, state: &State) -> Vec<FrozenHolding> {
+        let frozen = Self::frozen_admins(state);
+        if frozen.is_empty() {
+            return Vec::new();
+        }
+        let held = self.unacknowledged(state);
+        let units = self.unacknowledged_units(state);
+        let mut out: Vec<FrozenHolding> = state
+            .devices
+            .iter()
+            .filter(|d| d.frozen)
+            .filter_map(|d| {
+                let key = d.admin?;
+                let removals = held.get(&key).copied().unwrap_or(0);
+                (removals > 0).then(|| FrozenHolding {
+                    key,
+                    device: d.id,
+                    removals,
+                    root_units: units.get(&key).copied().unwrap_or(0),
+                })
+            })
+            .collect();
+        out.sort_by_key(|f| (core::cmp::Reverse(f.removals), f.key));
+        out
     }
 }

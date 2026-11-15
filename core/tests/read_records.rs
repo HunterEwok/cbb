@@ -10,8 +10,9 @@
 use std::collections::BTreeMap;
 
 use cbb_core::identity::ExternalKey;
-use cbb_core::records::body::{Device, Head, MIN_INCOMING_MS, RIGHT_READ, RIGHT_SEND, ROLE_MEMBER, ROLE_PHONE};
+use cbb_core::records::body::{Device, Head, MIN_INCOMING_MS, RIGHT_READ, RIGHT_SEND, ROLE_MEMBER, ROLE_PHONE, Seen};
 use cbb_core::records::key::group_id;
+use cbb_core::records::set::TAKE_BACK_FIRST;
 use cbb_core::records::{Body, Key, KeyHash, Kind, Record, RecordId, RecordSet};
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner as _;
@@ -48,6 +49,32 @@ struct G {
 impl G {
     fn sign(&mut self, by: &K, kind: Kind) -> Record {
         let (seq, prev) = self.heads.get(&by.hash).map_or((1, None), |(s, id)| (s + 1, Some(*id)));
+        // As an honest admin's device: a key's first record names the
+        // roots' heads it holds, so what it signs stands on its grant line.
+        let mut kind = kind;
+        let roots: Vec<KeyHash> =
+            ["root", "change new root", "road root 2", "unfirst new root"].iter().map(|r| k(r).hash).collect();
+        if seq == 1 && !roots.contains(&by.hash) {
+            let seen = match &mut kind {
+                Kind::Revoke(r) | Kind::Freeze(r) => Some(&mut r.seen),
+                Kind::Thaw { seen, .. }
+                | Kind::Hubs { seen, .. }
+                | Kind::Copies { seen, .. }
+                | Kind::Ack { seen, .. } => Some(seen),
+                Kind::Device(d) => Some(&mut d.seen),
+                _ => None,
+            };
+            if let Some(seen) = seen {
+                for r in &roots {
+                    if let Some((s, id)) = self.heads.get(r)
+                        && !seen.iter().any(|x| x.key == *r)
+                    {
+                        seen.push(Seen { key: *r, seq: *s, id: *id });
+                    }
+                }
+                seen.sort_by_key(|x| x.key);
+            }
+        }
         self.t += 1000;
         let body = Body { group: self.gid, signer: by.hash, seq, prev, time_ms: self.t, kind, held: false };
         let r = Record::sign(body, by).unwrap();
@@ -747,6 +774,13 @@ fn checkpoints_in_a_row(rounds: u32, restart: bool) {
             let rm = cbb_core::records::body::Removal { keys: vec![gone], seen: Vec::new() };
             set.insert(g.sign(&root, Kind::Revoke(rm))).unwrap();
         }
+        // The admin's device acknowledges what it got, as an honest one
+        // does after each sync, so the checkpoint may let removals go.
+        let st = set.state();
+        let admin = k("admin a");
+        if set.ack_due(&st, &admin.hash) {
+            set.write_ack(&st, &admin, g.t).unwrap_or_else(|e| panic!("round {round}: {e:?}"));
+        }
         if restart && round == rounds / 2 {
             let records: Vec<Record> = set.in_dependency_order().into_iter().cloned().collect();
             let lists: Vec<Vec<u8>> = set.lists().map(<[u8]>::to_vec).collect();
@@ -859,7 +893,7 @@ fn fill_to_the_floor(set: &mut RecordSet, root: &K, t: &mut u64, admins: bool) -
         *t += 1000;
         if let Err(e) = set.write_record(&st, root, Kind::device(d), *t) {
             let e = format!("{e:?}");
-            assert!(e.contains("no room for its next checkpoint"), "device {i}: {e}");
+            assert!(e.contains("no room for its next checkpoint") || e.contains(TAKE_BACK_FIRST), "device {i}: {e}");
             return i;
         }
         let mut keys = if admins { vec![dk.hash, ak.hash] } else { vec![dk.hash] };
@@ -867,9 +901,77 @@ fn fill_to_the_floor(set: &mut RecordSet, root: &K, t: &mut u64, admins: bool) -
         let st = set.state();
         *t += 1000;
         let rm = cbb_core::records::body::Removal { keys, seen: Vec::new() };
-        set.write_record(&st, root, Kind::Revoke(rm), *t).unwrap_or_else(|e| panic!("removal {i}: {e:?}"));
+        if let Err(e) = set.write_record(&st, root, Kind::Revoke(rm), *t) {
+            // The way out's reserve (W): the silent admin holds every
+            // removal back, so the room fills to the reserve before the
+            // floor; the device just admitted stays.
+            assert!(format!("{e:?}").contains(TAKE_BACK_FIRST), "removal {i}: {e:?}");
+            return i;
+        }
     }
     unreachable!()
+}
+
+/// The group's admin key acknowledges the removals it holds, as an honest
+/// admin's device does after a sync.
+fn acknowledge(set: &mut RecordSet, t: u64) {
+    let st = set.state();
+    let admin = k("admin a");
+    if set.ack_due(&st, &admin.hash) {
+        set.write_ack(&st, &admin, t).unwrap_or_else(|e| panic!("the acknowledgement: {e:?}"));
+    }
+}
+
+/// The root at its floor while an admin is silent and holds every removal
+/// back, and nobody acts: the writer takes nobody back for the room; the
+/// root's ordinary records are refused with the floor's message, a
+/// removal still goes in. Then either the person takes the admin back,
+/// which passes the floor too, or the 35 days of silence pass and the
+/// writer does; either way the next checkpoint frees the room.
+#[test]
+fn at_the_floor_a_lagging_admin_is_taken_back_and_the_room_freed() {
+    let (mut set, root, g) = root_with_dead_checkpoints(0, 0);
+    let mut t = g.t;
+    let n = fill_to_the_floor(&mut set, &root, &mut t, false);
+    let st = set.state();
+    assert!(set.checkpoint_due(&st, t));
+    checkpoint_counts(&mut set, &root, &mut t, "at the floor, the admin silent");
+    let st = set.state();
+    let a = k("admin a").hash;
+    assert!(set.checkpoint_due(&st, t), "the waiting removals stay");
+    assert_eq!(set.unacknowledged(&st).get(&a), Some(&n));
+    assert!(set.unacknowledged_units(&st).get(&a).is_some_and(|u| *u >= n as u64));
+    let dk = k("removed at the floor");
+    t += 1000;
+    let err =
+        set.write_record(&st, &root, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)), t).unwrap_err();
+    assert!(format!("{err}").contains("write a checkpoint first"), "{err}");
+    // A removal is refused only for the way out's reserve (W), with its
+    // own text: the person takes the silent admin back first.
+    let st = set.state();
+    let rm = cbb_core::records::body::Removal { keys: vec![k("a stranger at the floor").hash], seen: Vec::new() };
+    t += 1000;
+    let err = set.write_record(&st, &root, Kind::Revoke(rm), t).unwrap_err();
+    assert!(format!("{err}").contains(TAKE_BACK_FIRST), "{err}");
+    let heard = std::collections::BTreeMap::from([(a, t)]);
+    let st = set.state();
+    t += 1000;
+    assert!(set.take_back_lagging(&st, &root, &heard, t).unwrap().is_empty(), "nobody by the room alone");
+    // The 35 days of silence free it with nobody acting.
+    let mut later = set.clone();
+    let mut t2 = t + cbb_core::records::set::ADMIN_SILENCE_MS;
+    let back = later.take_back_lagging(&st, &root, &heard, t2).unwrap();
+    assert_eq!(back.len(), 1, "the silent admin key is taken back past the floor");
+    checkpoint_counts(&mut later, &root, &mut t2, "after the silence");
+    let st2 = later.state();
+    assert!(!later.checkpoint_due(&st2, t2), "the room is free again");
+    // Or the person takes it back at once.
+    set.take_back(&st, &root, &a, t).unwrap();
+    checkpoint_counts(&mut set, &root, &mut t, "after the take-back");
+    let st = set.state();
+    assert!(!set.checkpoint_due(&st, t), "the room is free again");
+    t += 1000;
+    set.write_record(&st, &root, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)), t).unwrap();
 }
 
 /// The root writes its checkpoint; it counts, and so does every record it
@@ -906,6 +1008,7 @@ fn at_the_floor_a_checkpoint_counts(restart: bool, admins: bool) {
         assert_eq!(set.state(), st);
         assert!(set.checkpoint_due(&st, t));
     }
+    acknowledge(&mut set, t);
     checkpoint_counts(&mut set, &root, &mut t, "at the floor");
     if !admins {
         let st = set.state();
@@ -1237,7 +1340,7 @@ fn an_admin_admitted_after_an_admin_removal_is_in_the_first_tier() {
     assert!(set.state().revoked.contains(&admins[1].hash));
     let (c, r) = admit_admin(&mut g, &root, "b admin C");
     let st = set.state();
-    let written = set.write_record(&st, &root, r.body().kind.clone(), g.t + 1).unwrap();
+    let written = set.write_record(&st, &root, r.body().kind.clone(), g.t + 1).unwrap().pop().unwrap();
     assert!(set.contains(&written.id()));
     let mut ids = Vec::new();
     for n in 0..16u32 {
@@ -1815,9 +1918,12 @@ fn a_change_whose_first_checkpoint_never_comes_completes_alike_in_any_order() {
     synced.insert_all(given);
     println!("after sync with that peer: path {}", synced.state().roots.len());
     assert_eq!(synced.state().roots.len(), 2, "sync with a peer that took the change does not complete it");
+    // L: the change applies with the new root's whole first group (the
+    // re-issue the first checkpoint keeps), not with the checkpoint alone.
     let got = m.insert(first_cp.clone()).map(|a| format!("{a:?}"));
     println!("the first checkpoint at last: {got:?}; path {}", m.state().roots.len());
-    assert_eq!(m.state().roots.len(), 2, "the first checkpoint did not complete the change");
+    m.insert_all(w.first.clone());
+    assert_eq!(m.state().roots.len(), 2, "the first group did not complete the change");
     assert!(same(&restarted(&m), &m), "a restore after the change is not the live set");
 }
 
@@ -1844,7 +1950,7 @@ fn a_checkpoint_keeps_the_newest_of_what_the_root_set_again() {
     let mut write = |set: &mut RecordSet, kind: Kind| {
         let st = set.state();
         t += 1000;
-        set.write_record(&st, &root, kind, t).unwrap()
+        set.write_record(&st, &root, kind, t).unwrap().pop().unwrap()
     };
     let names: Vec<Record> = (0..30)
         .map(|i| write(&mut set, Kind::device(Device::new(dk.key.clone(), &format!("name {i}"), ROLE_MEMBER))))
@@ -1911,7 +2017,9 @@ fn an_admin_s_removals_go_at_the_root_s_checkpoint() {
             let st = set.state();
             t += 1000;
             match set.write_record(&st, &admin, kind, t) {
-                Ok(r) => written.push(r),
+                // The admin's own record (its first comes after the ack the
+                // writer adds, which is not one of its removals).
+                Ok(mut r) => written.extend(r.pop()),
                 Err(e) => {
                     refused = format!("{e:?}");
                     break 'fill;
@@ -1957,17 +2065,29 @@ fn removals_past_the_floor_write_the_checkpoint_first() {
     fill_to_the_floor(&mut set, &root, &mut t, true);
     let first = set.state().checkpoint;
     let mut checkpoints = std::collections::BTreeSet::new();
+    let mut taken_back = None;
     for i in 0..100u32 {
         let st = set.state();
         t += 1000;
         let rm = cbb_core::records::body::Removal { keys: vec![k(&format!("bench dev {i}")).hash], seen: Vec::new() };
-        set.write_record(&st, &root, Kind::Revoke(rm), t).unwrap_or_else(|e| panic!("removal {i}: {e:?}"));
+        if let Err(e) = set.write_record(&st, &root, Kind::Revoke(rm.clone()), t) {
+            // The way out's reserve (W): the silent admin holds these
+            // removals back; the person takes it back, and they go on.
+            assert!(format!("{e:?}").contains(TAKE_BACK_FIRST) && taken_back.is_none(), "removal {i}: {e:?}");
+            taken_back = Some(i);
+            t += 1000;
+            set.take_back(&st, &root, &k("admin a").hash, t).expect("the person takes the silent admin back");
+            let st = set.state();
+            t += 1000;
+            set.write_record(&st, &root, Kind::Revoke(rm), t).unwrap_or_else(|e| panic!("removal {i}: {e:?}"));
+        }
         let st = set.state();
         assert!(st.revoked.contains(&k(&format!("bench dev {i}")).hash) || st.checkpoint != first);
         assert!(st.device(&k(&format!("bench dev {i}")).key.device_id()).is_none(), "removal {i}");
         checkpoints.extend(st.checkpoint);
     }
     assert!(!checkpoints.is_empty(), "no checkpoint was written first");
+    println!("the way out's reserve asked for the take-back at removal {taken_back:?}");
     let st = set.state();
     assert!(st.devices.iter().all(|d| !d.name.starts_with("bench")));
     checkpoint_counts(&mut set, &root, &mut t, "after the removals");
@@ -2047,7 +2167,7 @@ fn a_take_back_writes_the_root_s_checkpoint_first() {
     let st = set.state();
     t += 1000;
     let back = Device::new(k("z admin 0 phone").key.clone(), "was admin", ROLE_PHONE);
-    let r = set.write_record(&st, &root, Kind::device(back), t).unwrap();
+    let r = set.write_record(&st, &root, Kind::device(back), t).unwrap().pop().unwrap();
     let st = set.state();
     let cp = set.get(&r.body().prev.unwrap()).unwrap().clone();
     assert!(matches!(cp.body().kind, Kind::Checkpoint { .. }), "no checkpoint right before the take-back");
@@ -2357,4 +2477,93 @@ fn a_key_no_longer_an_admin_beside_sixteen_live_admins_is_turned_away() {
     assert_eq!(why.room.key, ex.hash);
     assert!(why.room.full_for(why.units), "it would have fit: {why:?}");
     assert_eq!(why.room.cap, 0, "{why:?}");
+}
+
+/// A room's exact fit: a record of as many units as the room has left
+/// fits; one unit more does not.
+#[test]
+fn a_room_is_full_only_past_its_exact_fit() {
+    let room = cbb_core::records::set::Room { key: k("root").hash, cap: 10, used: 7 };
+    assert!(!room.full_for(3), "three units fit in the three left");
+    assert!(room.full_for(4), "four do not");
+    let full = cbb_core::records::set::Room { key: k("root").hash, cap: 10, used: 10 };
+    assert!(!full.full_for(0) && full.full_for(1));
+}
+
+/// A record that fits a room holding other records is kept and pushes
+/// nothing out: neither those records of its own room nor any other's.
+#[test]
+fn a_record_that_fits_beside_others_pushes_nothing_out() {
+    use cbb_core::records::set::Offer;
+    let (mut set, root, mut g) = root_with_dead_checkpoints(0, 0);
+    let admin = k("admin a");
+    for i in 0..3u32 {
+        let dk = k(&format!("beside dev {i}"));
+        set.insert(g.sign(&admin, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)))).unwrap();
+    }
+    let room = set.room_of(&admin.hash).expect("the admin's room");
+    assert!(room.used >= 3, "the admin's room holds its records: {room:?}");
+    let next = g.sign(&admin, Kind::device(Device::new(k("beside dev 3").key.clone(), "dev", ROLE_MEMBER)));
+    assert_eq!(set.would_take(&next), Some(Offer::Kept));
+    let by_root = g.sign(&root, Kind::device(Device::new(k("beside dev 4").key.clone(), "dev", ROLE_MEMBER)));
+    assert_eq!(set.would_take(&by_root), Some(Offer::Kept));
+}
+
+/// A root's removal comes first in its room: where the room is full of
+/// the root's ordinary records, it pushes out the last of them, and the
+/// offer names exactly those, none of another room.
+#[test]
+fn a_root_removal_in_a_full_room_names_what_it_pushes_out() {
+    use cbb_core::records::set::Offer;
+    let (mut set, root, mut g) = root_with_dead_checkpoints(0, 0);
+    let admin = k("admin a");
+    let theirs = g.sign(&admin, Kind::device(Device::new(k("full dev").key.clone(), "dev", ROLE_MEMBER)));
+    set.insert(theirs.clone()).unwrap();
+    // Wide ordinary root records until the root's room is full.
+    let mut n = 0u32;
+    loop {
+        let st = set.state();
+        let room = set.root_room(&st).unwrap();
+        if room.left() < 20 {
+            break;
+        }
+        let mut ids: Vec<RecordId> = (0..256u32)
+            .map(|i| RecordId(cbb_core::certs::sha256(&[&n.to_le_bytes()[..], &i.to_le_bytes()[..]].concat())))
+            .collect();
+        ids.sort();
+        let r = g.sign(&root, Kind::Thaw { ids, seen: Vec::new() });
+        assert!(set.insert(r).is_ok(), "thaw {n}");
+        n += 1;
+        assert!(n < 200, "the root's room never filled");
+    }
+    let rm = wide_removal(&mut g, &root, "full wide", 0);
+    let Some(Offer::PushesOut(out)) = set.would_take(&rm) else {
+        panic!("a root removal in a full room pushes the root's ordinary records out: {:?}", set.would_take(&rm))
+    };
+    assert!(!out.is_empty());
+    for id in &out {
+        let r = set.get(id).expect("held");
+        assert_eq!(r.body().signer, root.hash, "only records of the root's own room are named");
+        assert!(matches!(r.body().kind, Kind::Thaw { .. }), "only its ordinary records");
+    }
+    assert!(!out.contains(&theirs.id()));
+}
+
+/// The warning before the root removes one admin key does not name
+/// another admin's device that keeps its key.
+#[test]
+fn the_warning_names_only_the_admins_that_lose_their_key() {
+    let (mut set, root, mut g) = root_with_dead_checkpoints(0, 0);
+    let (b, pb) = (k("warn admin b"), k("warn phone b"));
+    let mut d = Device::new(pb.key.clone(), "admin", ROLE_PHONE);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    d.admin = Some(b.key.clone());
+    d.powers = 0x1ff & !64;
+    set.insert(g.sign(&root, Kind::device(d))).unwrap();
+    let st = set.state();
+    let warning = set.removal_warning(&st, &root.hash, &[k("admin a").hash], g.t + 1);
+    let pa = k("phone a").key.device_id();
+    assert!(warning.out.contains(&pa) || warning.no_longer_admin.contains(&pa), "{warning:?}");
+    assert!(!warning.no_longer_admin.contains(&pb.key.device_id()), "B keeps its key: {warning:?}");
+    assert!(!warning.out.contains(&pb.key.device_id()));
 }

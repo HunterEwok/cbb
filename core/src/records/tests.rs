@@ -147,6 +147,39 @@ impl G {
     }
 
     fn rec(&mut self, by: &K, kind: Kind) -> Record {
+        let kind = self.with_root_seen(by, kind);
+        let r = crate::testkit::sign_by(self.body(by, self.with_own_head(by, kind)), by);
+        self.push(r)
+    }
+
+    /// As an honest admin's device: the first record of a key that is not
+    /// the root's names the root's head in its seen, so that what the key
+    /// signs stands on its grant line (section 10, "Admin keys"). A test
+    /// that wants a record off the line signs it with `rec_as_is`.
+    fn with_root_seen(&self, by: &K, mut kind: Kind) -> Kind {
+        if by.hash == self.root.hash || self.heads.contains_key(&by.hash) {
+            return kind;
+        }
+        let Some(&(seq, id)) = self.heads.get(&self.root.hash) else { return kind };
+        let entry = Seen { key: self.root.hash, seq, id };
+        let seen = match &mut kind {
+            Kind::Revoke(r) | Kind::Freeze(r) => &mut r.seen,
+            Kind::Thaw { seen, .. } | Kind::Hubs { seen, .. } | Kind::Copies { seen, .. } | Kind::Ack { seen, .. } => {
+                seen
+            }
+            Kind::Device(d) => &mut d.seen,
+            _ => return kind,
+        };
+        if !seen.iter().any(|s| s.key == entry.key) {
+            seen.push(entry);
+            seen.sort_by_key(|s| s.key);
+        }
+        kind
+    }
+
+    /// A record of by exactly as given, without the root's head added.
+    #[allow(dead_code, reason = "for tests of records off the grant line")]
+    fn rec_as_is(&mut self, by: &K, kind: Kind) -> Record {
         let r = crate::testkit::sign_by(self.body(by, self.with_own_head(by, kind)), by);
         self.push(r)
     }
@@ -1021,7 +1054,29 @@ fn limits_hold_for_any_signer() {
         g.device(&x, &k(&format!("x {j}")), "flood", |_| {});
     }
     let flood: Vec<Record> = g.recs[quiet.len()..].to_vec();
-    // An honest change of root goes on beside it.
+    // Before any change: the group's removals hold, the devices admins
+    // admitted stay, and an admin still records.
+    for order in 0..2 {
+        let mut recs = g.recs.clone();
+        if order == 1 {
+            recs.reverse();
+        }
+        let mut set = set_of(&g.root.key.clone());
+        set.insert_all(recs);
+        assert!(set.len() < g.recs.len() && set.bytes() <= MAX_SET_BYTES);
+        let s = set.state();
+        assert!(s.revoked.contains(&x.hash) && s.counting.contains(&removal_of_x.id()));
+        for r in &admitted {
+            assert!(s.counting.contains(&r.id()));
+        }
+        assert!(flood.iter().all(|r| !s.counting.contains(&r.id())));
+        let mut g2 = G { root: k("root"), gid: g.gid, heads: g.heads.clone(), recs: Vec::new(), lists: Vec::new() };
+        let more = g2.device(&a, &k("one more"), "one more", |_| {});
+        assert_eq!(set.insert(more.clone()), Ok(Added::Stored));
+        assert!(set.state().counting.contains(&more.id()));
+    }
+    // An honest change of root goes on beside it, and takes effect: after
+    // it only the new root counts (L).
     let list = g.listing();
     let change = g.change(&k("t root"), &list);
     for order in 0..2 {
@@ -1036,10 +1091,6 @@ fn limits_hold_for_any_signer() {
         }
         assert!(set.len() < g.recs.len() && set.bytes() <= MAX_SET_BYTES);
         let s = set.state();
-        assert!(s.revoked.contains(&x.hash) && s.counting.contains(&removal_of_x.id()));
-        for r in &admitted {
-            assert!(s.counting.contains(&r.id()));
-        }
         assert!(flood.iter().all(|r| !s.counting.contains(&r.id())));
         // X holds no more than its own 256 units whatever it signs, and
         // the roots it names are no keys at all.
@@ -1055,11 +1106,7 @@ fn limits_hold_for_any_signer() {
         assert_eq!(units_of(&|h| roots.contains(h)), 0);
         assert_eq!(s.roots, vec![g.root.hash, k("t root").hash]);
         assert!(s.counting.contains(&change.id()));
-        // An admin still records.
-        let mut g2 = G { root: k("root"), gid: g.gid, heads: g.heads.clone(), recs: Vec::new(), lists: Vec::new() };
-        let more = g2.device(&a, &k("one more"), "one more", |_| {});
-        assert_eq!(set.insert(more.clone()), Ok(Added::Stored));
-        assert!(set.state().counting.contains(&more.id()));
+        assert!(!s.may_command(&a.hash) && admitted.iter().all(|r| !s.counting.contains(&r.id())));
     }
 }
 
@@ -2590,7 +2637,9 @@ mod differential {
         let m2 = agree(&g, &recs, 6, 1_319_781_888_007_025_613);
         assert_eq!(m1.digest(), m2.digest());
         assert_eq!(m1.state(), m2.state());
-        assert!(!m1.state().devices.is_empty());
+        // L: the changes applied, and what the first root signed after them
+        // counts for nothing.
+        assert!(m1.state().roots.len() > 1);
     }
 
     /// A sequence once found by the property below: what the set saves
@@ -3645,12 +3694,20 @@ fn full_size(name: &str) -> bool {
     on
 }
 
+mod ack;
 mod cap;
+mod change;
+mod change_over;
+mod change_spare;
 mod insert_cost;
 mod lost_root;
 mod recovery;
+mod root_pair;
+mod seen;
+mod sim1321;
 mod sync;
 mod traces;
+mod way_out;
 
 /// A checkpoint and the head below it that fills its key's room: the
 /// checkpoint prunes before the room is judged, so a member that took the
@@ -4085,20 +4142,17 @@ fn removed_admins_records_give_way_to_live_admins() {
     }
 }
 
-/// The same with the cut roots' reserve full: the first root admitted the
-/// 16 live admins and removed one more admin key, a change of root lists
-/// all 32 of its records, and the new root fills its own room. One unit of
-/// the removed admin's is one past the room: it gives way, and nothing of
-/// the live admins, the reserve or the new root does, in any order.
+/// After a change of root the roots before it and the admin keys they
+/// named have no room (L, "records L does not count have cap 0"): even
+/// with a list naming all of the first root's records, the set keeps none
+/// of the first root's or its admins' records, they count for nothing,
+/// and the new root's records all stay, in any order. Offered again by a
+/// peer, the old records change neither the set's bytes nor its state.
 #[test]
-fn a_removed_admin_s_record_gives_way_when_the_reserve_is_full() {
+fn old_roots_and_their_admins_take_no_room_after_a_change() {
     let small = crate::records::keep::small::Small::new(128, 32, 4);
     let mut g = G::new();
     let root = k("root");
-    let (old_phone, old) = (k("old phone"), k("old admin"));
-    g.admin(&old_phone, &old, POWER_ADMIT);
-    let lone = g.device(&old, &k("old dev"), "dev", |_| {});
-    g.root_rec(Kind::Revoke(removal(&[old_phone.hash, old.hash], g.seen())));
     let live: Vec<(K, K)> = (0..16).map(|i| (k(&format!("phone {i}")), k(&format!("admin {i}")))).collect();
     let admissions: Vec<Record> = live.iter().map(|(p, a)| g.admin(p, a, POWER_ADMIT)).collect();
     let mut n = 0;
@@ -4113,8 +4167,8 @@ fn a_removed_admin_s_record_gives_way_when_the_reserve_is_full() {
             devs += 1;
         }
     }
+    let old: Vec<Record> = g.recs.clone();
     let list: Vec<RecordId> = g.recs.iter().filter(|r| r.body().signer == root.hash).map(Record::id).collect();
-    assert_eq!(list.len(), 32);
     let nr = k("new root");
     g.change(&nr, &list);
     while g.heads[&nr.hash].0 < 32 {
@@ -4124,24 +4178,24 @@ fn a_removed_admin_s_record_gives_way_when_the_reserve_is_full() {
         small.units(r.id(), 1);
     }
     let (recs, lists, boss) = (g.recs.clone(), g.lists.clone(), g.root.key.clone());
-    let whole = state_with(&boss, &recs, &lists);
-    assert!(admissions.iter().all(|a| whole.counting.contains(&a.id())), "{:?}", whole.roots);
     let mut rev = recs.clone();
     rev.reverse();
     let mut sets = Vec::new();
     for order in [recs.clone(), rev, shuffled(&recs, 11)] {
-        let set = set_with(&boss, &order, &lists);
+        let mut set = set_with(&boss, &order, &lists);
         let st = set.state();
+        assert_eq!(st.roots.last(), Some(&nr.hash));
         let held: Vec<Record> = set.ids().filter_map(|id| set.get(id)).cloned().collect();
         assert_eq!(st, state_with(&boss, &held, &lists));
-        assert!(!set.contains(&lone.id()));
-        let others = recs.iter().filter(|r| r.id() != lone.id() && r.body().signer != k("recovery").hash);
-        assert!(
-            others.clone().all(|r| set.contains(&r.id())),
-            "{:?}",
-            others.filter(|r| !set.contains(&r.id())).map(|r| r.body().seq).collect::<Vec<_>>()
-        );
-        assert!(admissions.iter().all(|a| st.counting.contains(&a.id())));
+        assert!(old.iter().all(|r| !set.contains(&r.id())), "nothing of the first root or its admins stays");
+        assert!(old.iter().all(|r| !st.counting.contains(&r.id())));
+        assert!(recs.iter().filter(|r| r.body().signer == nr.hash).all(|r| set.contains(&r.id())));
+        assert!(admissions.iter().all(|a| !st.counting.contains(&a.id())));
+        assert!(live.iter().all(|(_, a)| !st.may_command(&a.hash)));
+        let (bytes, digest) = (set.bytes(), set.digest());
+        set.insert_all(old.iter().cloned());
+        assert_eq!((set.bytes(), set.digest()), (bytes, digest), "old records offered again are not kept");
+        assert_eq!(set.state(), st);
         sets.push((set.digest(), st));
     }
     assert!(sets.windows(2).all(|w| w[0] == w[1]));
@@ -4574,9 +4628,11 @@ fn records_waiting_for_their_pair_keep_within_their_bound() {
     assert_eq!(b.state().stop, Stop::Full);
 }
 
-/// A second admission of a key the root removed, which the root never
-/// saw, brings the device back after the prune; the member that dropped
-/// the removal tells it, and a new admission by the root is not told.
+/// An admission of a key the root removed, signed after the admin
+/// acknowledged the removal and never seen by the root, brings the device
+/// back after the prune; the member that dropped the removal tells it,
+/// and a new admission by the root is not told. (One the admin signed
+/// before acknowledging keeps the removal: `tests::ack`.)
 #[test]
 fn an_unseen_admission_after_a_prune_is_a_notice() {
     let mut g = G::new();
@@ -4585,9 +4641,11 @@ fn an_unseen_admission_after_a_prune_is_a_notice() {
     g.admin(&pa, &a, POWER_ADMIT);
     g.rec(&a, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
     g.device(&root, &k("d"), "d", |_| {});
-    let unseen = g.device(&a, &k("d"), "d", |_| {});
     g.root_rec(Kind::Revoke(removal(&[k("d").hash], Vec::new())));
     g.device(&root, &k("tv"), "tv", |_| {});
+    let seen: Vec<Seen> = g.seen().into_iter().filter(|s| s.key != a.hash).collect();
+    g.rec(&a, Kind::Ack { seen, spare: None });
+    let unseen = g.device(&a, &k("d"), "d", |_| {});
     let rootside: Vec<Record> = g.recs.iter().filter(|r| r.id() != unseen.id()).cloned().collect();
     let cp = root_checkpoint(&mut g, &rootside);
     let mut m = set_with(&g.root.key, &rootside, &g.lists);
@@ -5139,7 +5197,7 @@ fn point_of(x: &K) -> [u8; 65] {
 
 /// Two histories of the current root: a key one line admits, which the
 /// state lists nowhere, gets the proof (the lowest pair) and nothing else,
-/// the same after a restart; from it the member takes only what makes or
+/// as does a key no record names, the same after a restart; from it the member takes only what makes or
 /// completes a pair of the current root.
 #[test]
 fn a_key_one_line_admits_gets_the_pair_alone() {
@@ -5172,7 +5230,9 @@ fn a_key_one_line_admits_gets_the_pair_alone() {
         let given: Vec<RecordId> = set.for_peer(&st, &k("m5").hash).iter().map(|r| r.id()).collect();
         assert_eq!(given, pair, "{when}: the pair and nothing else");
         assert_eq!(crate::peer::standing(&st, &me, &point_of(&k("stranger"))), crate::peer::Standing::Unknown);
-        assert!(set.for_peer(&st, &k("stranger").hash).is_empty());
+        // A key no record names gets the same pair, which proves itself.
+        let to_stranger: Vec<RecordId> = set.for_peer(&st, &k("stranger").hash).iter().map(|r| r.id()).collect();
+        assert_eq!(to_stranger, pair, "{when}: a stranger gets the pair alone");
     }
     // m5, which holds one half, takes the other from m0 and halts alike.
     let upto: Vec<Record> = g.recs.clone();
@@ -5284,6 +5344,10 @@ fn a_key_an_admin_admits_in_a_root_fork_is_a_device_that_does_nothing() {
     let mut g = G::new();
     g.device(&k("root"), &k("m0"), "m0", |_| {});
     g.admin(&k("pa"), &k("a"), POWER_ADMIT);
+    // The admin acknowledges its grant before the root's fork: a seen
+    // entry for a root record at or above the fork stands on no counting
+    // line.
+    g.rec(&k("a"), Kind::Ack { seen: vec![], spare: None });
     let a = g.device(&k("root"), &k("m5"), "m5", |_| {});
     let a2 = root_twin(&g, &a, Kind::Copies { incoming_ms: 5_000, seen: vec![] });
     let m8 = g.device(&k("a"), &k("m8"), "m8", |_| {});
@@ -5511,14 +5575,22 @@ fn the_writer_writes_only_what_its_own_set_keeps_and_counts() {
     g.admin(&pa, &a, POWER_ADMIT);
     let mut set = set_with(&g.root.key, &g.recs, &g.lists);
     let mut seqs = Vec::new();
-    for i in 0..4 {
+    for i in 0..3 {
         let st = set.state();
         let d = Device::new(k(&format!("laptop {i}")).key.clone(), "laptop", ROLE_MEMBER);
-        let r = set.write_record(&st, &a, Kind::device(d), 0).unwrap();
+        let r = set.write_record(&st, &a, Kind::device(d), 0).unwrap().pop().unwrap();
         assert!(set.contains(&r.id()) && set.state().counting.contains(&r.id()), "record {i}");
         seqs.push(r.body().seq);
     }
-    assert_eq!(seqs, vec![1, 2, 3, 4], "each follows the key's head");
+    // The key's first record is its acknowledgement of the grant (seq 1).
+    assert!(
+        set.state()
+            .counting
+            .iter()
+            .filter_map(|id| set.get(id))
+            .any(|r| r.body().signer == a.hash && r.body().seq == 1 && matches!(r.body().kind, Kind::Ack { .. }))
+    );
+    assert_eq!(seqs, vec![2, 3, 4], "each follows the key's head");
     // The admin key's room (four units) is full: the next is refused and
     // the set is as it was.
     let (before, st) = (set.digest(), set.state());
@@ -5533,7 +5605,7 @@ fn the_writer_writes_only_what_its_own_set_keeps_and_counts() {
     assert!(set.write_record(&st, &g.root, cp, 0).is_err());
     assert_eq!(set.digest(), before);
     // The root still writes, at its own next seq.
-    let r = set.write_record(&st, &g.root, Kind::device(d), 0).unwrap();
+    let r = set.write_record(&st, &g.root, Kind::device(d), 0).unwrap().pop().unwrap();
     assert_eq!(r.body().seq, 2);
     assert!(set.state().counting.contains(&r.id()));
 }
@@ -5922,13 +5994,11 @@ fn at_most_sixteen_admin_keys_count() {
     assert!(s.devices.iter().any(|d| d.admin == Some(extra.hash)));
 }
 
-/// The roots before the current one keep, together, at most the cut
-/// roots' reserve, however many changes the path holds: two changes
-/// whose lists name every record of the roots before keep the first
-/// units of their removals and records within one reserve, the same in
-/// every order, and the set agrees with evaluate.
+/// The roots before the current one keep nothing (L): even two changes
+/// whose lists name every record of the roots before leave none of them
+/// in the set, the same in every order, and the set agrees with evaluate.
 #[test]
-fn the_cut_roots_share_one_reserve() {
+fn the_cut_roots_keep_nothing() {
     let mut g = G::new();
     let root = k("root");
     for i in 0..4 {
@@ -5960,7 +6030,7 @@ fn the_cut_roots_share_one_reserve() {
         let set = set_with(&g.root.key, &order, &g.lists);
         let st = set.state();
         assert_eq!(st.roots.last(), Some(&k("n2").hash), "order {seed}");
-        assert!(cut_units(&set) <= 6, "order {seed}: {} units of cut roots", cut_units(&set));
+        assert_eq!(cut_units(&set), 0, "order {seed}: records of cut roots kept");
         let held: Vec<Record> = set.ids().map(|id| set.get(id).unwrap().clone()).collect();
         assert_eq!(st, state_with(&g.root.key, &held, &g.lists), "order {seed}");
         seen.push(set.digest());
@@ -6014,11 +6084,11 @@ fn a_removal_a_newer_one_covers_folds() {
     assert!(singles.iter().all(|r| !list.0.contains(&r.id())));
 }
 
-/// The fold in a change's list: the root's removals of devices an admin
-/// admitted (named, so listed), the older ones covered by a newer one,
-/// are carried as the newer one alone, and the new root keeps them out.
+/// The root's removals of devices an admin admitted, an older one covered
+/// by a newer one: a change writes no list and no removal (L), and the
+/// removed devices are simply not re-issued.
 #[test]
-fn a_change_carries_the_newer_removal_alone() {
+fn a_change_reissues_no_removed_device() {
     let mut g = G::new();
     let (pa, a) = (k("phone a"), k("admin a"));
     g.admin(&pa, &a, POWER_ADMIT);
@@ -6034,12 +6104,9 @@ fn a_change_carries_the_newer_removal_alone() {
         Kind::Revoke(r) => r.seen.clone(),
         _ => unreachable!(),
     };
-    let cover = g.root_rec(Kind::Revoke(rm));
+    g.root_rec(Kind::Revoke(rm));
     let set = set_with(&g.root.key, &g.recs, &g.lists);
     let st = set.state();
-    let list = set.change_list(&st);
-    assert!(list.0.contains(&cover.id()));
-    assert!(!list.0.contains(&one.id()));
     let mut set = set;
     let w = set
         .write_change(
@@ -6063,8 +6130,11 @@ fn a_change_carries_the_newer_removal_alone() {
     let mut lists = g.lists.clone();
     lists.push(w.list.encode());
     let s = state_with(&g.root.key, &all, &lists);
+    assert!(w.list.0.is_empty() && !w.first.iter().any(|r| matches!(r.body().kind, Kind::Revoke(_))));
+    assert_eq!(s.roots.last(), Some(&k("n1").hash));
+    // L: the removed devices are not re-issued.
     for t in &ts {
-        assert!(s.revoked.contains(&t.hash) && s.device_by_key(&t.hash).is_none());
+        assert!(s.device_by_key(&t.hash).is_none());
     }
 }
 

@@ -26,6 +26,10 @@ pub const TYPE_CHECKPOINT: u64 = 9;
 pub const TYPE_HUBS: u64 = 10;
 /// A change of root, signed by the group's recovery key (rule 33).
 pub const TYPE_RECOVERY: u64 = 13;
+/// An admin key's acknowledgement of what it holds of other keys: `seen`
+/// (field 10), the heads it has; the root's checkpoint lets a removal go
+/// only once every live admin key has acknowledged it (section 10).
+pub const TYPE_ACK: u64 = 14;
 
 /// Types of earlier drafts that 0.6 refuses (`records/retired`): 5, the
 /// claim that waited a delay; 11, a root's record naming a recovery admin
@@ -184,6 +188,13 @@ pub enum Kind {
     Hubs {
         hubs: Vec<DeviceId>,
         seen: Vec<Seen>,
+    },
+    /// An admin key's acknowledgement: the heads it holds (`TYPE_ACK`),
+    /// and optionally a spare admin key its device made and signs nothing
+    /// with (field 11; read, checked and kept, used by no rule yet).
+    Ack {
+        seen: Vec<Seen>,
+        spare: Option<Key>,
     },
     /// A change of root, signed by the group's recovery key (rule 33):
     /// the new root, the hash of the list of earlier roots' records that
@@ -367,6 +378,7 @@ impl Kind {
             Kind::Copies { .. } => TYPE_COPIES,
             Kind::Checkpoint { .. } => TYPE_CHECKPOINT,
             Kind::Hubs { .. } => TYPE_HUBS,
+            Kind::Ack { .. } => TYPE_ACK,
             Kind::Recovery { .. } => TYPE_RECOVERY,
             Kind::Unknown(t) => *t,
         }
@@ -394,6 +406,7 @@ fn type_name(t: u64) -> &'static str {
         TYPE_COPIES => "copies",
         TYPE_CHECKPOINT => "checkpoint",
         TYPE_HUBS => "hubs",
+        TYPE_ACK => "ack",
         TYPE_RECOVERY => "recovery",
         _ => "unknown",
     }
@@ -506,6 +519,15 @@ impl Body {
                 }
                 check_seen(seen, t)?;
             }
+            Kind::Ack { seen, spare } => {
+                if seen.is_empty() {
+                    return Err(field(t, "seen"));
+                }
+                check_seen(seen, t)?;
+                if let Some(sp) = spare {
+                    held |= signer_key(sp, t, "spare")?;
+                }
+            }
             Kind::Recovery { root, from, signer2, .. } => {
                 held |= signer_key(root, t, "root")?;
                 // A root that is the recovery key ends the ranks.
@@ -585,6 +607,12 @@ impl Body {
                 m.push((10, Value::Array(hubs.iter().map(|d| Value::Bytes(&d.0)).collect())));
                 m.push((11, seen(s)));
             }
+            Kind::Ack { seen: s, spare } => {
+                m.push((10, seen(s)));
+                if let Some(sp) = spare {
+                    m.push((11, sp.to_value()));
+                }
+            }
             Kind::Recovery { root, list, from, first, signer2 } => {
                 m.push((8, Value::Bytes(&signer2.0)));
                 m.push((10, root.to_value()));
@@ -660,6 +688,14 @@ impl Body {
             TYPE_HUBS => {
                 let hubs = r.need_list(10, f("hubs"), |v| v.as_bytes().and_then(DeviceId::from_slice))?;
                 (Kind::Hubs { hubs, seen: read_seen(&r, f("seen"))? }, &[10, 11], &[])
+            }
+            TYPE_ACK => {
+                let seen = r.need_list(10, f("seen"), seen_entry_of)?;
+                let spare = match r.get(11) {
+                    Some(v) => Some(Key::read(v)?),
+                    None => None,
+                };
+                (Kind::Ack { seen, spare }, &[10, 11], &[])
             }
             TYPE_RECOVERY => {
                 let root = Key::read(r.need(10, f("root"))?)?;
