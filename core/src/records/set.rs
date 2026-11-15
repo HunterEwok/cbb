@@ -2995,7 +2995,12 @@ impl RecordSet {
     /// Whether admin key a holds a removal it has not acknowledged: its
     /// device then writes an acknowledgement (`write_ack`), once after
     /// the sync that brought it, so that acknowledgements never flood.
+    /// Never while the group is stopped, where the writer refuses every
+    /// record (`write_one`).
     pub fn ack_due(&self, state: &State, a: &KeyHash) -> bool {
+        if state.stop == eval::Stop::Full || state.halted() {
+            return false;
+        }
         self.unacknowledged(state).get(a).is_some_and(|n| *n > 0)
     }
 
