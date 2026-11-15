@@ -382,34 +382,49 @@ fn a_seen_on_a_pruned_root_record_still_counts_through_the_checkpoint() {
     assert_eq!(view(&restored.state()), view(&st));
 }
 
-/// Open until records says how it built it: an admin key whose room is
-/// filled with its own void records (signed after the grant, their seen
-/// below it): can it still write its first acknowledgement? The test
-/// records what happens.
+/// An admin key whose room is filled with its own void records (signed
+/// after the grant, their seen below it) locks itself out: its first
+/// acknowledgement finds no room (decided, no rule for it: only a deviant
+/// device pre-signs). The root's removal waits for it; the person takes A
+/// back, the other admin acknowledges, and the next checkpoint settles
+/// the removal. None of the void removals ever counts.
 #[test]
-#[ignore = "waits for the seen line; open: what the full room does to the first ack"]
-fn an_admin_whose_room_is_full_of_its_void_records_and_its_first_ack() {
+#[ignore = "waits for the seen line"]
+fn an_admin_that_fills_its_room_with_void_records_is_taken_back_by_the_person() {
     let (mut set, r, mut chain, mut t) = granted_after(&[]);
     let a = k("A");
     let below = seen_at(&set, &r.hash, 2);
-    let mut stored = 0usize;
     for i in 0..400u32 {
         t += 10;
         let x = chain.sign(&set, &a, Kind::Revoke(removal(&[&k("D")], vec![below])), t + u64::from(i));
-        if set.insert(x).is_ok() {
-            stored += 1;
-        }
+        let _ = set.insert(x);
     }
-    let used = set.room_of(&a.hash).map(|x| (x.used, x.cap));
+    assert!(has(&set.state(), &k("D")), "none of the void removals counts");
+    let st = set.state();
     t += 10_000;
+    let rm = set.write_removal(&st, &r, &[k("E").hash], t).unwrap();
+    let rm_id = rm.last().unwrap().id();
+    for x in rm {
+        set.insert(x).unwrap();
+    }
+    t += 1_000;
     let x = chain.sign(&set, &a, ack(&set, &r), t);
     let id = x.id();
-    let added = set.insert(x);
+    assert_eq!(set.insert(x), Ok(cbb_core::records::set::Added::NoRoom), "the first ack finds no room");
+    assert!(!set.state().counting.contains(&id));
+    t += 1_000;
+    let b_ack = chain.sign(&set, &k("B"), ack(&set, &r), t);
+    set.insert(b_ack).unwrap();
     let st = set.state();
-    println!(
-        "void records offered 400, stored {stored}; A's room {used:?}; first ack: {added:?}, held {}, counts {}",
-        set.contains(&id),
-        st.counting.contains(&id)
-    );
-    assert!(has(&st, &k("D")), "none of the void removals counts");
+    assert!(set.removals_waiting(&st).iter().any(|w| w.removal == rm_id && w.waits_for == vec![a.hash]));
+    t += 1_000;
+    set.take_back(&st, &r, &a.hash, t).unwrap();
+    let st = set.state();
+    t += 1_000;
+    let cp = set.write_checkpoint(&st, &r, t).unwrap();
+    let Kind::Checkpoint { keep, .. } = &cp.body().kind else { panic!() };
+    assert!(!keep.contains(&rm_id), "settled once A is taken back and B acknowledged");
+    set.insert(cp).unwrap();
+    let st = set.state();
+    assert!(!has(&st, &k("E")) && has(&st, &k("D")));
 }
