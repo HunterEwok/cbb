@@ -726,3 +726,118 @@ fn a_root_at_its_cap_can_still_take_the_silent_admin_back() {
         set.write_removal(&st, &root, &[x.hash], t).expect("and removes again");
     }
 }
+
+/// A group whose `n` admins never acknowledge, its root driven to its
+/// cap as in `a_root_at_its_cap_can_still_take_the_silent_admin_back`:
+/// ordinary records refused, then removals of devices admitted early
+/// until a removal is refused. Returns the set, the admin keys, the clock.
+fn at_the_cap(n: usize) -> (RecordSet, K, Vec<K>, u64) {
+    use cbb_core::records::body::{POWER_ADMIT, POWER_MANAGE, POWER_REMOVE};
+    let root = k("root");
+    let recovery = cbb_core::records::Recovery {
+        k1: k("recovery").key,
+        k2: cbb_core::records::pq::PqKey::from_seeds(&[0x31; 16], &[0x32; 16], &[0x33; 16]).key(),
+    };
+    let mut set = RecordSet::new(root.key.clone(), recovery);
+    let mut t = 1_000u64;
+    let st = set.state();
+    set.write_record(&st, &root, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] }, t).unwrap();
+    let admins: Vec<K> = (0..n).map(|i| k(&format!("lag admin {i}"))).collect();
+    for (i, a) in admins.iter().enumerate() {
+        let mut d = Device::new(k(&format!("lag phone {i}")).key.clone(), "a", ROLE_MEMBER);
+        d.rights = RIGHT_READ | RIGHT_SEND;
+        d.admin = Some(a.key.clone());
+        d.powers = POWER_ADMIT | POWER_MANAGE | POWER_REMOVE;
+        t += 1;
+        let st = set.state();
+        set.write_record(&st, &root, Kind::device(d), t).unwrap();
+    }
+    let spares: Vec<K> = (0..120).map(|i| k(&format!("lag spare {i}"))).collect();
+    for x in &spares {
+        let st = set.state();
+        t += 1;
+        set.write_record(&st, &root, device(x, "s", None), t).unwrap();
+    }
+    let mut i = 0u32;
+    loop {
+        assert!(i < 5_000);
+        let x = k(&format!("lag dev {i}"));
+        let st = set.state();
+        t += 1;
+        if set.write_record(&st, &root, device(&x, "d", None), t).is_err() {
+            let st = set.state();
+            match set.write_checkpoint(&st, &root, t) {
+                Ok(cp) => {
+                    set.insert(cp).unwrap();
+                    continue;
+                }
+                Err(_) => break,
+            }
+        }
+        let st = set.state();
+        t += 1;
+        let Ok(rs) = set.write_removal(&st, &root, &[x.hash], t) else { break };
+        for r in rs {
+            set.insert(r).unwrap();
+        }
+        i += 1;
+    }
+    for x in &spares {
+        let st = set.state();
+        t += 1;
+        let Ok(rs) = set.write_removal(&st, &root, &[x.hash], t) else { break };
+        for r in rs {
+            set.insert(r).unwrap();
+        }
+    }
+    (set, root, admins, t)
+}
+
+/// Two admins that never acknowledge, the root at its cap: the person
+/// takes the first back and the checkpoint still fits, but the settle
+/// stays blocked by the second; the second take-back and its checkpoint
+/// still fit, the removals settle, and the root removes again and writes
+/// ordinary records again.
+#[test]
+fn a_root_at_its_cap_can_take_back_two_laggards_and_recover() {
+    let (mut set, root, admins, mut t) = at_the_cap(2);
+    let st = set.state();
+    let room = set.root_room(&st).unwrap();
+    println!(
+        "two laggards at the cap: root room {}/{}, waiting {}",
+        room.used,
+        room.cap,
+        set.removals_waiting(&st).len()
+    );
+    t += 1;
+    set.take_back(&st, &root, &admins[0].hash, t).expect("the first take-back at the cap");
+    let st = set.state();
+    t += 1;
+    let cp = set.write_checkpoint(&st, &root, t).expect("the checkpoint after the first take-back");
+    set.insert(cp).unwrap();
+    let st = set.state();
+    let waiting = set.removals_waiting(&st);
+    assert!(!waiting.is_empty(), "the second laggard still holds the removals back");
+    assert!(waiting.iter().all(|w| w.waits_for == vec![admins[1].hash]));
+    t += 1;
+    set.take_back(&st, &root, &admins[1].hash, t).expect("the second take-back still fits");
+    let st = set.state();
+    t += 1;
+    let cp = set.write_checkpoint(&st, &root, t).expect("and the checkpoint that settles");
+    set.insert(cp).unwrap();
+    let st = set.state();
+    assert!(set.removals_waiting(&st).is_empty(), "settled");
+    assert!(st.devices.iter().all(|d| d.admin.is_none()));
+    let x = k("lag dev after");
+    t += 1;
+    set.write_record(&st, &root, device(&x, "d", None), t).expect("the root admits again");
+    let st = set.state();
+    t += 1;
+    for r in set.write_removal(&st, &root, &[x.hash], t).expect("and removes again") {
+        set.insert(r).unwrap();
+    }
+    let st = set.state();
+    t += 1;
+    set.write_record(&st, &root, Kind::Copies { incoming_ms: MIN_INCOMING_MS + 1, seen: vec![] }, t)
+        .expect("and writes ordinary records again");
+}
