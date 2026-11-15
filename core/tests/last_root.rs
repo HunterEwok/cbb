@@ -764,7 +764,6 @@ mod unknown_peer {
 /// key, writes the next change from a device that holds that head
 /// (sign N+1, no spares, never a fork), and every member reaches it.
 #[test]
-#[ignore = "disagreement with 61b698f8: CHANGE_WAITING refuses it"]
 fn a_change_whose_reissue_never_went_out_does_not_stop_the_group() {
     let g = group("l30");
     let mut gone = g.set.clone();
@@ -776,16 +775,18 @@ fn a_change_whose_reissue_never_went_out_does_not_stop_the_group() {
     assert_eq!(st.roots.last(), Some(&g.r1.hash), "the head alone does not apply");
     let r3 = k("l30 root 3");
     let p = Device::new(k("l30 P3").key.clone(), "new phone", ROLE_PHONE);
-    let next = member.write_change(&st, &k("recovery"), &rk2(), &r3, p, &[], false, g.t + 2_000);
+    let next = member.write_change_over_waiting(&st, &k("recovery"), &rk2(), &r3, p, &[], false, g.t + 2_000);
     let next = next.unwrap_or_else(|e| panic!("the person's next change from a member holding the head: {e}"));
     assert_eq!(next.record.body().seq, w.record.body().seq + 1, "N+1, on the head it holds");
     assert_eq!(member.state().roots.last(), Some(&r3.hash));
     assert!(member.state().fork.is_none(), "never a fork");
 }
 
-/// The same, today: every member that holds the head refuses a change
-/// (CHANGE_WAITING), and a change written on a device that never got the
-/// head takes the same seq, a fork that stops the group for good.
+/// Every member that holds the head refuses a plain change
+/// (CHANGE_WAITING; `write_change_over_waiting` is the way over it), and a
+/// change written on a device that never got the head takes the same seq:
+/// a fork that stops the group for good (accepted rule, architecture
+/// 05:42Z).
 #[test]
 fn today_a_change_whose_reissue_never_went_out_leaves_only_a_fork() {
     let g = group("l31");
@@ -915,4 +916,82 @@ fn an_old_admin_key_named_again_cannot_reach_its_old_records_from_a_new_chain() 
         assert!(!st.counting.contains(id), "a record A signed before the change counts: {id:?}");
     }
     println!("Y admitted on an old-root seen: {}", has(&st, &k("l41 Y")));
+}
+
+/// Change N (leaving E out) reaches the members without its re-issue; the
+/// person writes N+1 over it from a member (leaving nobody out). Then N's
+/// writer, alive after all, publishes N's re-issue. In both arrival orders
+/// and after a full sync, every member counts only N+1's re-issue: E is
+/// in, N's root and its records count nowhere, and all members agree.
+#[test]
+fn a_late_reissue_of_n_counts_nowhere_once_n_plus_one_exists() {
+    let g = group("l50");
+    let mut writer_n = g.set.clone();
+    let w = change(&mut writer_n, &k("l50 root 2"), &k("l50 P2"), &[k("E").hash], g.t + 1_000);
+    let lists_n: Vec<Vec<u8>> = writer_n.lists().map(<[u8]>::to_vec).collect();
+    let mut writer_n1 = g.set.clone();
+    offer(&mut writer_n1, &lists_n, std::slice::from_ref(&w.record));
+    let st = writer_n1.state();
+    let r3 = k("l50 root 3");
+    let p = Device::new(k("l50 P3").key.clone(), "new phone", ROLE_PHONE);
+    let n1 = writer_n1
+        .write_change_over_waiting(&st, &k("recovery"), &rk2(), &r3, p, &[], false, g.t + 2_000)
+        .expect("N+1 over a waiting N");
+    let want = view(&writer_n1.state());
+    assert_eq!(writer_n1.state().roots.last(), Some(&r3.hash));
+    assert!(has(&writer_n1.state(), &k("E")), "N+1 re-issues the state before N");
+    let n_first: Vec<_> = w.first.iter().map(|r| r.id()).collect();
+    let n1_records: Vec<Record> = writer_n1.in_dependency_order().into_iter().cloned().collect();
+    let n1_lists: Vec<Vec<u8>> = writer_n1.lists().map(<[u8]>::to_vec).collect();
+    let n_records: Vec<Record> = writer_n.in_dependency_order().into_iter().cloned().collect();
+    for (i, first_n) in [true, false].into_iter().enumerate() {
+        let mut m = g.set.clone();
+        if first_n {
+            offer(&mut m, &lists_n, &n_records);
+            offer(&mut m, &n1_lists, &n1_records);
+        } else {
+            offer(&mut m, &n1_lists, &n1_records);
+            offer(&mut m, &lists_n, &n_records);
+        }
+        let st = m.state();
+        assert_eq!(view(&st), want, "order {i}");
+        assert!(n_first.iter().all(|id| !st.counting.contains(id)), "order {i}: N's re-issue counts");
+        assert!(st.fork.is_none(), "order {i}");
+    }
+    // N's writer itself, after a full sync both ways with N+1's writer.
+    sync(&writer_n1, &mut writer_n);
+    sync(&writer_n, &mut writer_n1);
+    assert_eq!(view(&writer_n.state()), want, "N's writer after the sync");
+    assert_eq!(view(&writer_n1.state()), want, "N+1's writer after the sync");
+    assert!(n_first.iter().all(|id| !writer_n.state().counting.contains(id)));
+    let _ = n1;
+}
+
+/// A member that takes only what N+1's writer gives a peer (`for_peer`)
+/// ends equal to it.
+#[test]
+fn a_member_fed_by_for_peer_reaches_n_plus_one() {
+    let g = group("l51");
+    let mut writer_n = g.set.clone();
+    let w = change(&mut writer_n, &k("l51 root 2"), &k("l51 P2"), &[], g.t + 1_000);
+    let lists_n: Vec<Vec<u8>> = writer_n.lists().map(<[u8]>::to_vec).collect();
+    let mut writer_n1 = g.set.clone();
+    offer(&mut writer_n1, &lists_n, std::slice::from_ref(&w.record));
+    let st = writer_n1.state();
+    let p = Device::new(k("l51 P3").key.clone(), "new phone", ROLE_PHONE);
+    writer_n1
+        .write_change_over_waiting(&st, &k("recovery"), &rk2(), &k("l51 root 3"), p, &[], false, g.t + 2_000)
+        .expect("N+1 over a waiting N");
+    let st = writer_n1.state();
+    for peer in [k("D"), k("l51 stranger")] {
+        let given: Vec<Record> = writer_n1.for_peer(&st, &peer.hash).into_iter().cloned().collect();
+        let lists: Vec<Vec<u8>> = writer_n1.lists().map(<[u8]>::to_vec).collect();
+        let mut m = g.set.clone();
+        offer(&mut m, &lists, &given);
+        for _ in 0..3 {
+            let lists: Vec<&[u8]> = lists.iter().map(Vec::as_slice).collect();
+            let _ = m.insert_from_unknown(&given, &lists);
+        }
+        assert_eq!(view(&m.state()), view(&st), "fed for {:?}", peer.hash);
+    }
 }
