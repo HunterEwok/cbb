@@ -315,3 +315,35 @@ fn an_old_admin_key_named_again_counts_only_from_its_new_grant() {
     sync_all(&mut m, &g.recs, &g.lists);
     assert_eq!(m.state().devices, s.devices);
 }
+
+/// The writer fills a freeze's seen with the heads it holds: a freeze of
+/// an admin key written through `write_record` with no seen, by the root
+/// and by another admin, cuts none of the key's records, so the ack with
+/// the spare still counts and the change names the spare, frozen.
+#[test]
+fn a_freeze_written_with_no_seen_keeps_the_spare() {
+    for by_admin in [false, true] {
+        let mut g = group();
+        g.admin(&k("phone b"), &k("admin b"), POWER_FREEZE);
+        let ack = ack_with_spare(&mut g, &k("admin a"), &k("spare a"));
+        let by = if by_admin { k("admin b") } else { k("root") };
+        let mut set = set_with(&g.root.key, &g.recs, &g.lists);
+        let st = set.state();
+        let freeze = Kind::Freeze(removal(&[k("admin a").hash], vec![]));
+        let r = set.write_record(&st, &by, freeze, 0).unwrap();
+        let Kind::Freeze(rm) = &r.body().kind else { unreachable!() };
+        assert!(rm.seen.iter().any(|s| s.key == k("admin a").hash && s.seq >= ack.body().seq), "by admin {by_admin}");
+        for r in set.for_peer(&set.state(), &k("laptop").hash) {
+            if !g.recs.iter().any(|x| x.id() == r.id()) {
+                g.push(r.clone());
+            }
+        }
+        let s = g.state();
+        assert!(s.counting.contains(&r.id()), "by admin {by_admin}");
+        assert!(s.counting.contains(&ack.id()), "the ack stays: by admin {by_admin}");
+        assert!(s.device_by_key(&k("phone a").hash).is_some_and(|d| d.frozen), "by admin {by_admin}");
+        let w = write(&mut g, &k("n1"), &k("p1"), &[]);
+        assert_eq!(reissue_of(&w, &k("phone a")).admin, Some(k("spare a").key.clone()), "by admin {by_admin}");
+        assert!(g.state().device_by_key(&k("phone a").hash).is_some_and(|d| d.frozen), "by admin {by_admin}");
+    }
+}

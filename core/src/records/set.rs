@@ -3574,9 +3574,24 @@ impl RecordSet {
         &mut self,
         state: &State,
         signer: &dyn ExternalKey,
-        kind: Kind,
+        mut kind: Kind,
         time_ms: u64,
     ) -> crate::error::Result<Record> {
+        // A removal or a freeze cuts what the keys it names signed that
+        // its seen does not hold: the honest writer fills the seen with
+        // the heads it holds of those keys (and of their devices' other
+        // key), as `write_removal` does. A caller's seen may add to them,
+        // never shorten them: a short one would cut an admin's newest ack,
+        // and with it the spare a change names.
+        if let Kind::Revoke(rm) | Kind::Freeze(rm) = &mut kind {
+            let mut seen: BTreeMap<KeyHash, super::body::Seen> = rm.seen.iter().map(|s| (s.key, *s)).collect();
+            for h in self.heads_of(state, &rm.keys) {
+                if seen.get(&h.key).is_none_or(|o| o.seq < h.seq) {
+                    seen.insert(h.key, h);
+                }
+            }
+            rm.seen = seen.into_values().collect();
+        }
         if let Kind::Revoke(rm) = &kind
             && rm.keys.iter().any(|k| state.two_histories(k))
         {
