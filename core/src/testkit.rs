@@ -220,7 +220,12 @@ pub fn closed(set: &RecordSet) {
         }
         for (i, recs) in orders(given).iter().enumerate() {
             let fresh = RecordSet::restore(set.root().clone(), set.recovery().clone(), recs, &lists);
-            assert_eq!(fresh.state(), st, "a fresh member fed what the set gives {} reaches its state (order {i})", d.name);
+            assert_eq!(
+                fresh.state(),
+                st,
+                "a fresh member fed what the set gives {} reaches its state (order {i})",
+                d.name
+            );
         }
     }
 }
