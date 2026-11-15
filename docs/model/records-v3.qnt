@@ -486,6 +486,14 @@ module records_v3 {
   // counts under the root being replaced and never named before (S1), and keeps no admins
   // while it holds an earlier change not yet applied (S2). Spares: A, A1, A2 and C, C2, C3.
   pure val SPARE = false
+  // FINAL_CORE (architecture 11-15 08:18Z, the core at #530 5d16d0ad): the honest writer's rules
+  // the final head adds. (3) the spare comes from the admin's newest COUNTING ack (one without a
+  // spare withdraws it), a frozen admin keeps its spare and stays frozen across the change;
+  // (4) the honest writer fills a Freeze's and a Revoke's seen with every head it holds; (6) a
+  // new root may name an old admin key again (nothing the key signed before counts: SEEN_POS);
+  // (7) no ack is due while the writer's set is stopped; (1) the writer's reserve; (5) a change
+  // written over a waiting one.
+  pure val FINAL_CORE = false
   pure val SPARE_OF = Map("A" -> "A1", "A1" -> "A2", "C" -> "C2", "C2" -> "C3")
   pure def spareOf(k: Key): Key = if (SPARE and SPARE_OF.keys().contains(k)) SPARE_OF.get(k) else ""
   // SEEN_HOLDS_ROOT (with SPARE): an admin's record other than a removal, freeze or thaw counts
@@ -537,6 +545,11 @@ module records_v3 {
     val gs = counted.filter(n => n.kind == "admin" and n.target == a and ROOT_KEYS.contains(n.signer))
     GRANT_ABOVE and gs != Set() and gs.forall(n => n.signer == r.signer and n.seq > r.seq)
   }
+  // (FINAL_CORE: the live admin keys that hold back a removal by root k: no counting record of
+  // theirs has seen it.)
+  pure def holdersAt(counted: Set[Record], k: Key): Set[Key] =
+    liveAdmins(counted).filter(a => counted.exists(r => r.signer == k and r.kind == "revoke" and not(grantedAbove(counted, a, r))
+      and not(counted.exists(x => x.signer == a and lineOf(x.seen, r.signer).length() >= r.seq))))
   pure def ackedAll(counted: Set[Record], r: Record): bool =
     liveAdmins(counted).filter(a => not(grantedAbove(counted, a, r))).forall(a => counted.exists(x => x.signer == a and lineOf(x.seen, r.signer).length() >= r.seq))
   // An admission under FLAG (every admin and device record without it).
@@ -1765,7 +1778,9 @@ module records_v3 {
     val seen0 = SIGNERS.mapBy(x => if (x == k) base else headLine(mine, x))
     val seen1 = if (pretend) seen0.keys().mapBy(x => if (x != k and THIEVES.contains(x)) [] else seen0.get(x)) else seen0
     // A removal's seen names only the keys it takes, each with its pair (format 20.2).
-    val seen = if (kind == "revoke" or kind == "freeze") seen1.keys().filter(x => withPair(target).contains(x)).mapBy(x => seen1.get(x)) else seen1
+    // (FINAL_CORE: the honest writer fills it with every head it holds; a deviant one may not.)
+    val seen = if ((kind == "revoke" or kind == "freeze") and not(FINAL_CORE and kit != "deviant"))
+      seen1.keys().filter(x => withPair(target).contains(x)).mapBy(x => seen1.get(x)) else seen1
     val isCp = kind == "checkpoint"
     // A checkpoint keeps what its signer counts; one that keeps more is not the honest
     // writer's (kit "bent").
@@ -1803,7 +1818,8 @@ module records_v3 {
       // (ROOT_WAITS, code fact 11-14 21:04Z: the root never grants admin again to a key it
       // removed or took back; a returning device gets a new admin key.)
       not(ROOT_WAITS) or kit == "deviant" or BENT_KITS.contains(kit) or kind != "admin" or not(regrant(mine, target)),
-      not(LAST_ROOT_ONLY) or kit == "deviant" or BENT_KITS.contains(kit) or kind != "admin"
+      // (FINAL_CORE with SEEN_POS: allowed; nothing the key signed before the change counts.)
+      not(LAST_ROOT_ONLY) or (FINAL_CORE and SEEN_POS) or kit == "deviant" or BENT_KITS.contains(kit) or kind != "admin"
         or not(db.keys().exists(i => db.get(i).kind == "admin" and db.get(i).target == target and db.get(i).signer != k)),
       // (SEEN_POS: an honest admin signs a removal, freeze or thaw only above its own record whose
       // seen holds its grant; any other record of it holds the grant in its own seen.)
@@ -1837,6 +1853,16 @@ module records_v3 {
         or sumUnits(ofKey(recsOf(s.recs, db).union(Set(r3)).filter(x => not(isCp) or x == r3 or not(prunedBy(r, x))), k))
           <= (if (onList(vh.path, k)) ROOTC else ADMINC),
       not(keeps) or not(CEIL_FIT) or kind != "admin" or capFits(h, target),
+      // (FINAL_CORE (1), the writer's reserve: a root record other than a checkpoint, a take-back
+      // or a removal of only holder keys is refused unless room stays for a take-back of every
+      // live admin key holding a removal back and two checkpoints.)
+      not(FINAL_CORE) or not(ROOT_WAITS) or hidden or isChain(r) or kit == "deviant" or isCp or not(onList(vh.path, k))
+        or last(vh.path) != k or {
+          val hs = holdersAt(recsOf(vh.counting, db), k)
+          val exempt = (kind == "revoke" and tgt(r3).forall(t => hs.contains(t)))
+            or (kind == "device" and hs.exists(a => DEV.keys().contains(a) and DEV.get(a) == target))
+          exempt or sumUnits(ofKey(mine.union(Set(r3)), k)) + hs.size() + 2 * CP_UNITS <= ROOTC
+        },
       not(keeps) or not(WRITER_FLOOR) or kind != "admin" or learned(recsOf(s.recs, db), vh.path, vh.cuts)
         .union(Set(target)).size() <= MAX_ADMINS,
       commit(db2, nextId + 1, h, if (hidden) s else insertInto(s, r3, db2)),
@@ -1998,8 +2024,13 @@ module records_v3 {
     val s = st.get(h)
     val v = views.get(h)
     val ch = chainState(s, db)
-    val base = ch.ids.slice(0, at - 1)
-    val before = pathCutsOf(ch.recs.slice(0, at - 1))._1
+    // (FINAL_CORE (5), "_over" in leave: a change written over a waiting one. The writer holds
+    // a head N it has not applied; it writes N+1 after N, re-issuing the state before N, with
+    // no spares; N's root is never the new root.)
+    val over = FINAL_CORE and leave.contains("_over")
+    val raw = chainHeads(recsOf(s.chain, db))
+    val base = if (over) raw.ids.slice(0, at - 1) else ch.ids.slice(0, at - 1)
+    val before = if (over) pathCutsOf(ch.recs)._1 else pathCutsOf(ch.recs.slice(0, at - 1))._1
     val cur = last(before)
     val held = recsOf(s.recs, db).filter(r => onList(before, r.signer) or r.signer == target)
     val oldCp = if (v.checkpoint != 0 and db.get(v.checkpoint).signer == cur) db.get(v.checkpoint) else NONEREC
@@ -2017,7 +2048,13 @@ module records_v3 {
       .map(k => lastId(heads.get(k))).filter(i => onList(before, db.get(i).signer) and db.get(i).kind != "checkpoint")
     // (SPARE: the spare a counting ack of admin key a carries under the root being replaced,
     // never named before (S1); none while the writer has not applied the chain below (S2).)
-    def spareFor(a: Key): Key = {
+    def spareFor(a: Key): Key = if (over) "" else if (FINAL_CORE) {
+      // (FINAL_CORE: the newest counting ack decides; without a spare it withdraws; frozen or not.)
+      val acks = recsOf(v.counting, db).filter(y => y.kind == "ack" and y.signer == a)
+      val newest = acks.filter(y => acks.forall(o => o.seq <= y.seq)).fold("", (z, y) => y.target)
+      val fresh = newest != "" and not(db.keys().exists(i => db.get(i).kind == "admin" and db.get(i).target == newest))
+      if (not(SPARE) or v.path != before or not(fresh)) "" else newest
+    } else {
       val sps = recsOf(v.counting, db).filter(y => y.kind == "ack" and y.signer == a and y.target != "").map(y => y.target)
         .filter(t => not(db.keys().exists(i => db.get(i).kind == "admin" and db.get(i).target == t)))
       // (Never for a frozen admin.)
@@ -2150,9 +2187,12 @@ module records_v3 {
       val newKey = if (SPARE and sp != "") sp else if (NEWKEY.keys().contains(x.target)) NEWKEY.get(x.target) else x.target
       val asDev = LAST_ROOT_ONLY and x.kind == "admin" and not(kept)
       // (A carried freeze of a wiped admin freezes its device.)
-      val frzDev = LAST_ROOT_ONLY and x.kind == "freeze" and DEV.keys().contains(x.target)
+      // (FINAL_CORE: a frozen admin carried on its spare stays frozen: the freeze names the spare.)
+      val frzSp = FINAL_CORE and SPARE and LAST_ROOT_ONLY and x.kind == "freeze" and spareFor(x.target) != ""
+      val frzDev = LAST_ROOT_ONLY and x.kind == "freeze" and DEV.keys().contains(x.target) and not(frzSp)
       d.put(yIds[j], rec(yIds[j], target, own.concat(zIds).concat(yIds.slice(0, j + 1)),
-        if (asDev) "device" else x.kind, if (asDev or frzDev) DEV.get(x.target) else if (kept) newKey else x.target,
+        if (asDev) "device" else x.kind, if (asDev or frzDev) DEV.get(x.target) else if (kept) newKey
+          else if (frzSp) spareFor(x.target) else x.target,
         if (asDev) "" else x.kit, nextId,
         x.seen, Map(), Set(), x.units))
     })
@@ -2172,7 +2212,9 @@ module records_v3 {
     all {
       RKEYS.contains(k),
       at >= 1,
-      at <= ch.ids.length() + 1,
+      if (over) at == raw.ids.length() + 1 and raw.ids.length() > ch.ids.length()
+          and not(onList(pathCutsOf(raw.recs)._1, target))
+        else at <= ch.ids.length() + 1,
       cpId <= FIRST + MAXREC,
       // (LAST_ROOT_ONLY: every new root is a fresh key, never a former admin key.)
       not(LAST_ROOT_ONLY) or mode != "honest" or not(db.keys().exists(i => db.get(i).kind == "admin" and db.get(i).target == target)),
@@ -2243,9 +2285,19 @@ module records_v3 {
     sign(k, "device", t, "", 0, false, false, 1)
   // (ROOT_WAITS: a live admin key acknowledges what it holds.)
   action signAck = nondet k = Set(PHONE, COMPUTER, WATCH).union(if (SPARE) Set("A1", "A2", "C2", "C3") else Set()).oneOf()
-    all { ROOT_WAITS, ackS(k) }
+    all { ROOT_WAITS, if (FINAL_CORE and SPARE) any { ackS(k), ackBare(k) } else ackS(k) }
   // (SPARE: the ack carries the signer's spare.)
-  action ackS(k: Key): bool = sign(k, "ack", spareOf(k), "", 0, false, false, 1)
+  action ackS(k: Key): bool = all {
+    // (FINAL_CORE: no ack is due while the writer's set is stopped.)
+    not(FINAL_CORE) or not(views.get(HOLDER.get(k)).stop or chainState(st.get(HOLDER.get(k)), db).stop),
+    sign(k, "ack", spareOf(k), "", 0, false, false, 1),
+  }
+  // (FINAL_CORE: an ack without a spare, which withdraws the one before.)
+  action ackBare(k: Key): bool = all {
+    FINAL_CORE, SPARE,
+    not(views.get(HOLDER.get(k)).stop or chainState(st.get(HOLDER.get(k)), db).stop),
+    sign(k, "ack", "", "", 0, false, false, 1),
+  }
   action signCopies = nondet k = SIGNERS.oneOf() nondet u = Set(1, 2).oneOf() sign(k, "copies", "", "", 0, false, false, u)
   // Any recovery record at any place: a new root (or a key that was one, which is not
   // valid), any list.
@@ -2406,6 +2458,19 @@ module records_v3 {
       // (LAST_ROOT_ONLY: the person may untick devices.)
       nondet leave = (if (LAST_ROOT_ONLY) Set(Set(), Set(DEVICE), Set("dC")) else Set(Set())).oneOf()
       signChainGL(RECOVERY, "recover", t, ch.ids.length() + 1, "honest", Set(), leave),
+    }
+  }
+  // (FINAL_CORE (5), owner 06:22Z: the recovery holder, holding a change it has not applied,
+  // writes the next one over it.)
+  action signChangeOver = nondet t = Set("NA", "NK").oneOf() {
+    val ch = chainState(st.get("k"), db)
+    val raw = chainHeads(recsOf(st.get("k").chain, db))
+    all {
+      FINAL_CORE, LAST_ROOT_ONLY,
+      not(ch.stop),
+      raw.ids.length() > ch.ids.length(),
+      not(knownTo(st.get("k"), t, db)),
+      signChainGL(RECOVERY, "recover", t, raw.ids.length() + 1, "honest", Set(), Set("_over")),
     }
   }
   // A new root signs, for the next change to list or to fill the room.
@@ -2582,10 +2647,20 @@ module records_v3 {
   }
   def listedFrom(n: str, m: str): Set[Id] =
     if (LOST.contains(n) or LOST.contains(m)) Set()
-    else if (UNKNOWN_HEADS and not(counts(m, n) and counts(n, m))) headsOf(st.get(n))
+    else if (UNKNOWN_HEADS and not(counts(m, n) and counts(n, m))) headsOf(st.get(n)).union(pairFor(n, m))
     else if (not(SYNC_MEMBERS_ONLY) or counts(m, n)) listedTo(st.get(n), st.get(m), db)
     else if (NEWEST_HEAD_ANY and everKnew(m, n)) st.get(n).chain.filter(i => isChain(db.get(i)))
     else Set()
+  // (FINAL_CORE (2): a holder of both records of its last root's pair hands the pair, and only
+  // it, to any peer its state does not count as removed; the receiver takes it, above a gap
+  // too, and stops.)
+  def pairFor(n: str, m: str): Set[Id] = if (not(FINAL_CORE)) Set() else {
+    val sn = st.get(n)
+    val cur = last(views.get(n).path)
+    val rs = recsOf(sn.chain.union(sn.recs), db).filter(r => not(isChain(r)) and r.signer == cur)
+    val pair = rs.filter(r => rs.exists(o => o != r and o.seq == r.seq))
+    if (keysOfMember(m).exists(x => views.get(n).revoked.contains(x))) Set() else idsOf(pair)
+  }
   def fetchable(m: str): Set[Id] =
     MEMBERS.exclude(Set(m)).fold(Set(), (u, n) => u.union(listedFrom(n, m))).exclude(heldBy(st.get(m)))
   action fetch = nondet m = MEMBERS.oneOf() nondet i = db.keys().oneOf() all {
@@ -2618,7 +2693,7 @@ module records_v3 {
     compact, compact, syncRound, syncRound, oldRootThief, oldRootThief, oldRootThief, rootRemovesPhone,
     removedAdminThief, removedAdminThief, removedAdminThief, recoveryTwin, signRecover,
     signThaw, signAfterThaw, welcomeNewcomer, signHidden, signCheckpointNaming, signBent, restartAny,
-    restartAny, deviateAny, rootRemovesNoCp, signAck, signAck,
+    restartAny, deviateAny, rootRemovesNoCp, signAck, signAck, signChangeOver,
   }
   action restartAny = nondet m = MEMBERS.oneOf() restart(m)
   // A key publishes past what its own set keeps (a deviating writer, kit "deviant").
@@ -6324,8 +6399,10 @@ module records_v3 {
       .then(sign(COMPUTER, "freeze", WATCH, "", 0, false, false, 1)).then(syncRound)
       .expect(notM.forall(m => Set(PHONE, WATCH).subseteq(views.get(m).frozen)))
       .then(recoverAs(RECOVERY, "NA")).then(syncRound).then(syncRound)
-      .expect(notM.forall(m => views.get(m).path == [ROOT, "NA"] and Set("dA", "dW").subseteq(views.get(m).frozen)
-        and not(views.get(m).admins.keys().contains("A1"))) and promises)
+      // (FINAL_CORE: a frozen admin keeps its spare and stays frozen: A1 is an admin, frozen.)
+      .expect(notM.forall(m => views.get(m).path == [ROOT, "NA"] and (if (FINAL_CORE and SPARE)
+          views.get(m).admins.keys().contains("A1") and Set("A1", "dW").subseteq(views.get(m).frozen)
+        else Set("dA", "dW").subseteq(views.get(m).frozen) and not(views.get(m).admins.keys().contains("A1")))) and promises)
 
   // REISSUE_STATE: the change to NA re-issues R's live admissions (A, C, W and D) as NA's first
   // records 6 to 9; the list keeps none of R's records, the first checkpoint keeps the Ys, and
@@ -6598,7 +6675,8 @@ module records_v3 {
 
   // (mi2 search.14001, W.) An honest root's line passes MAXREC records; its newest checkpoint,
   // at seq 22, must still be tried as the counting one (it was skipped: cpWritable broke).
-  run longRootLineCpTest = if (not(ROOT_RATIO and ROOT_WAITS)) init else init
+  // (Not under FINAL_CORE: the writer's reserve refuses the long line's later records.)
+  run longRootLineCpTest = if (not(ROOT_RATIO and ROOT_WAITS) or FINAL_CORE) init else init
       .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2))
       .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2))
       .then(sign(ROOT, "device", "dW", "", 0, false, false, 1))
@@ -6678,6 +6756,31 @@ module records_v3 {
       .then(signChain(RECOVERY, "recover", "NA", 1, "honest"))
       .then(offerEveryone(nextId - 1))
       .expect(countsNewest and views.get("m").checkpoint == 0)
+
+  // FINAL_CORE (5). The recovery key writes a change to NK with no first records (NK waits);
+  // the holder then writes the next change, to NA, over it: every member follows NA, NK never
+  // counts.
+  run fcOverTest = if (not(onL and FINAL_CORE)) init else init
+      .then(signChain(RECOVERY, "recover", "NK", 1, "nocp"))
+      .then(signChangeOver)
+      .then(syncAll).then(syncAll)
+      .expect(MEMBERS.forall(m => last(views.get(m).path) == "NA" and views.get(m).devices.contains("dA")
+        and not(views.get(m).commanders.contains("NK"))) and decidedInv)
+
+  // FINAL_CORE (7). A stopped writer owes no ack: after a recovery twin halts the holder of A,
+  // A cannot ack.
+  run fcNoAckStoppedTest = if (not(onL and FINAL_CORE)) init else init
+      .then(signChain(RECOVERY, "recover", "NK", 1, "honest"))
+      .then(signChain(RECOVERY, "recover", "NA", 1, "honest"))
+      .then(syncAll)
+      .then(ackS(PHONE))
+      .fail()
+
+  // FINAL_CORE (4). The honest root's removal of W sees every head it holds, A's ack included.
+  run fcFullSeenTest = if (not(FINAL_CORE and ROOT_WAITS)) init else init
+      .then(ackS(PHONE)).then(syncAll)
+      .then(sign(ROOT, "revoke", WATCH, "", 0, false, false, 1))
+      .expect(db.get(nextId - 1).seen.keys().contains(PHONE) and lineOf(db.get(nextId - 1).seen, PHONE).length() == 1)
 
   run lReissueCountedTest = if (not(onL)) init else init
       .then(signFull(ROOT, "revoke", MINTED, "phone", 0, false, true, 1, true, Set()))
