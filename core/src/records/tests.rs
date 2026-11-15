@@ -3702,7 +3702,9 @@ mod change_spare;
 mod insert_cost;
 mod lost_root;
 mod recovery;
+mod root_pair;
 mod seen;
+mod sim1321;
 mod sync;
 mod traces;
 mod way_out;
@@ -5195,7 +5197,7 @@ fn point_of(x: &K) -> [u8; 65] {
 
 /// Two histories of the current root: a key one line admits, which the
 /// state lists nowhere, gets the proof (the lowest pair) and nothing else,
-/// the same after a restart; from it the member takes only what makes or
+/// as does a key no record names, the same after a restart; from it the member takes only what makes or
 /// completes a pair of the current root.
 #[test]
 fn a_key_one_line_admits_gets_the_pair_alone() {
@@ -5228,7 +5230,9 @@ fn a_key_one_line_admits_gets_the_pair_alone() {
         let given: Vec<RecordId> = set.for_peer(&st, &k("m5").hash).iter().map(|r| r.id()).collect();
         assert_eq!(given, pair, "{when}: the pair and nothing else");
         assert_eq!(crate::peer::standing(&st, &me, &point_of(&k("stranger"))), crate::peer::Standing::Unknown);
-        assert!(set.for_peer(&st, &k("stranger").hash).is_empty());
+        // A key no record names gets the same pair, which proves itself.
+        let to_stranger: Vec<RecordId> = set.for_peer(&st, &k("stranger").hash).iter().map(|r| r.id()).collect();
+        assert_eq!(to_stranger, pair, "{when}: a stranger gets the pair alone");
     }
     // m5, which holds one half, takes the other from m0 and halts alike.
     let upto: Vec<Record> = g.recs.clone();

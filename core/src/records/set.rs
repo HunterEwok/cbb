@@ -4477,10 +4477,24 @@ impl RecordSet {
         }
         // Any other key, one this set does not know (a sleeper whose only
         // peer is a replaced root's new phone, a device the person left
-        // out): the changes of root the set holds, the recovery records
-        // and each new root's records up to its first checkpoint, so that
-        // it can reach the last root (`insert_from_unknown`); nothing else.
-        self.changes()
+        // out, a device admitted on the other line of a root fork): the
+        // pair that proves the current root's fork, which proves itself,
+        // then the changes of root the set holds, the recovery records and
+        // each new root's records up to its first checkpoint, so that it
+        // can reach the last root (`insert_from_unknown`); nothing else.
+        let mut out = self.root_pair_records(state);
+        out.extend(self.changes());
+        out
+    }
+
+    /// The two records that prove the current root's fork
+    /// (`State::root_pair`), when the set holds both; else none.
+    fn root_pair_records(&self, state: &State) -> Vec<&Record> {
+        let Some((_, a, b)) = state.root_pair else { return Vec::new() };
+        match (self.held(&a), self.held(&b)) {
+            (Some(x), Some(y)) => alloc::vec![x, y],
+            _ => Vec::new(),
+        }
     }
 
     /// The changes of root the set holds: each recovery record, then the
@@ -4595,6 +4609,27 @@ impl RecordSet {
         self.insert_all(heads);
         for l in lists {
             let _ = self.insert_list(l);
+        }
+        // The pair that proves a fork of the root this set counts: two
+        // records of that root at one seq, the lowest such seq and its two
+        // smallest IDs, taken only both together and only as such a pair
+        // (one pair per root; nothing else of the root).
+        if let Some(root) = self.path.last().copied() {
+            let mut at: BTreeMap<u64, BTreeSet<RecordId>> = BTreeMap::new();
+            for r in
+                records.iter().filter(|r| r.body().group == self.group && r.body().signer == root && !r.body().held)
+            {
+                at.entry(r.body().seq).or_default().insert(r.id());
+            }
+            if let Some(pair) = at.values().find(|ids| ids.len() > 1) {
+                let pair: Vec<RecordId> = pair.iter().take(2).copied().collect();
+                let mut trial = self.clone();
+                trial.insert_all(records.iter().filter(|r| pair.contains(&r.id())).cloned());
+                let st = trial.state();
+                if st.root_pair.is_some_and(|(_, a, b)| pair.contains(&a) && pair.contains(&b)) {
+                    *self = trial;
+                }
+            }
         }
         // The roots a held recovery record names: those the chain put on
         // the path, and those whose record waits to apply.

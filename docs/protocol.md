@@ -1993,7 +1993,10 @@ every member that holds both. A member whose counting checkpoint names the root'
 above that seq and does not keep the record has settled the seq: it refuses one record of the
 pair alone, as settled, and stays as it is. When a peer hands it both, it holds the pair and
 halts too. A member that holds the pair keeps it outside the rooms, never prunes it, and hands
-it to every device of the group in sync. So members that meet end alike, and a pair that no
+it to every device of the group in sync, and to any other peer that is not a removed key (one
+admitted on the other history, one the records do not name): the pair proves itself, and such a
+peer gets it and nothing else. A member takes from a peer it does not know only a valid pair of
+the root it counts, one pair, never other records of that root. So members that meet end alike, and a pair that no
 member holds any more halts no one. The group stays halted until the recovery key changes the
 root. A removed peer is handed only the removals that name it, and of a pair of removals only
 the one with the smaller ID.
