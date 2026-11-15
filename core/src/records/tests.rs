@@ -147,6 +147,39 @@ impl G {
     }
 
     fn rec(&mut self, by: &K, kind: Kind) -> Record {
+        let kind = self.with_root_seen(by, kind);
+        let r = crate::testkit::sign_by(self.body(by, self.with_own_head(by, kind)), by);
+        self.push(r)
+    }
+
+    /// As an honest admin's device: the first record of a key that is not
+    /// the root's names the root's head in its seen, so that what the key
+    /// signs stands on its grant line (section 10, "Admin keys"). A test
+    /// that wants a record off the line signs it with `rec_as_is`.
+    fn with_root_seen(&self, by: &K, mut kind: Kind) -> Kind {
+        if by.hash == self.root.hash || self.heads.contains_key(&by.hash) {
+            return kind;
+        }
+        let Some(&(seq, id)) = self.heads.get(&self.root.hash) else { return kind };
+        let entry = Seen { key: self.root.hash, seq, id };
+        let seen = match &mut kind {
+            Kind::Revoke(r) | Kind::Freeze(r) => &mut r.seen,
+            Kind::Thaw { seen, .. } | Kind::Hubs { seen, .. } | Kind::Copies { seen, .. } | Kind::Ack { seen, .. } => {
+                seen
+            }
+            Kind::Device(d) => &mut d.seen,
+            _ => return kind,
+        };
+        if !seen.iter().any(|s| s.key == entry.key) {
+            seen.push(entry);
+            seen.sort_by_key(|s| s.key);
+        }
+        kind
+    }
+
+    /// A record of by exactly as given, without the root's head added.
+    #[allow(dead_code, reason = "for tests of records off the grant line")]
+    fn rec_as_is(&mut self, by: &K, kind: Kind) -> Record {
         let r = crate::testkit::sign_by(self.body(by, self.with_own_head(by, kind)), by);
         self.push(r)
     }
@@ -3650,8 +3683,10 @@ mod cap;
 mod insert_cost;
 mod lost_root;
 mod recovery;
+mod seen;
 mod sync;
 mod traces;
+mod way_out;
 
 /// A checkpoint and the head below it that fills its key's room: the
 /// checkpoint prunes before the room is judged, so a member that took the
@@ -5289,6 +5324,10 @@ fn a_key_an_admin_admits_in_a_root_fork_is_a_device_that_does_nothing() {
     let mut g = G::new();
     g.device(&k("root"), &k("m0"), "m0", |_| {});
     g.admin(&k("pa"), &k("a"), POWER_ADMIT);
+    // The admin acknowledges its grant before the root's fork: a seen
+    // entry for a root record at or above the fork stands on no counting
+    // line.
+    g.rec(&k("a"), Kind::Ack { seen: vec![], spare: None });
     let a = g.device(&k("root"), &k("m5"), "m5", |_| {});
     let a2 = root_twin(&g, &a, Kind::Copies { incoming_ms: 5_000, seen: vec![] });
     let m8 = g.device(&k("a"), &k("m8"), "m8", |_| {});
@@ -5516,14 +5555,22 @@ fn the_writer_writes_only_what_its_own_set_keeps_and_counts() {
     g.admin(&pa, &a, POWER_ADMIT);
     let mut set = set_with(&g.root.key, &g.recs, &g.lists);
     let mut seqs = Vec::new();
-    for i in 0..4 {
+    for i in 0..3 {
         let st = set.state();
         let d = Device::new(k(&format!("laptop {i}")).key.clone(), "laptop", ROLE_MEMBER);
         let r = set.write_record(&st, &a, Kind::device(d), 0).unwrap();
         assert!(set.contains(&r.id()) && set.state().counting.contains(&r.id()), "record {i}");
         seqs.push(r.body().seq);
     }
-    assert_eq!(seqs, vec![1, 2, 3, 4], "each follows the key's head");
+    // The key's first record is its acknowledgement of the grant (seq 1).
+    assert!(
+        set.state()
+            .counting
+            .iter()
+            .filter_map(|id| set.get(id))
+            .any(|r| r.body().signer == a.hash && r.body().seq == 1 && matches!(r.body().kind, Kind::Ack { .. }))
+    );
+    assert_eq!(seqs, vec![2, 3, 4], "each follows the key's head");
     // The admin key's room (four units) is full: the next is refused and
     // the set is as it was.
     let (before, st) = (set.digest(), set.state());

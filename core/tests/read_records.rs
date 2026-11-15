@@ -10,7 +10,7 @@
 use std::collections::BTreeMap;
 
 use cbb_core::identity::ExternalKey;
-use cbb_core::records::body::{Device, Head, MIN_INCOMING_MS, RIGHT_READ, RIGHT_SEND, ROLE_MEMBER, ROLE_PHONE};
+use cbb_core::records::body::{Device, Head, MIN_INCOMING_MS, RIGHT_READ, RIGHT_SEND, ROLE_MEMBER, ROLE_PHONE, Seen};
 use cbb_core::records::key::group_id;
 use cbb_core::records::{Body, Key, KeyHash, Kind, Record, RecordId, RecordSet};
 use p256::ecdsa::SigningKey;
@@ -48,6 +48,32 @@ struct G {
 impl G {
     fn sign(&mut self, by: &K, kind: Kind) -> Record {
         let (seq, prev) = self.heads.get(&by.hash).map_or((1, None), |(s, id)| (s + 1, Some(*id)));
+        // As an honest admin's device: a key's first record names the
+        // roots' heads it holds, so what it signs stands on its grant line.
+        let mut kind = kind;
+        let roots: Vec<KeyHash> =
+            ["root", "change new root", "road root 2", "unfirst new root"].iter().map(|r| k(r).hash).collect();
+        if seq == 1 && !roots.contains(&by.hash) {
+            let seen = match &mut kind {
+                Kind::Revoke(r) | Kind::Freeze(r) => Some(&mut r.seen),
+                Kind::Thaw { seen, .. }
+                | Kind::Hubs { seen, .. }
+                | Kind::Copies { seen, .. }
+                | Kind::Ack { seen, .. } => Some(seen),
+                Kind::Device(d) => Some(&mut d.seen),
+                _ => None,
+            };
+            if let Some(seen) = seen {
+                for r in &roots {
+                    if let Some((s, id)) = self.heads.get(r)
+                        && !seen.iter().any(|x| x.key == *r)
+                    {
+                        seen.push(Seen { key: *r, seq: *s, id: *id });
+                    }
+                }
+                seen.sort_by_key(|x| x.key);
+            }
+        }
         self.t += 1000;
         let body = Body { group: self.gid, signer: by.hash, seq, prev, time_ms: self.t, kind, held: false };
         let r = Record::sign(body, by).unwrap();

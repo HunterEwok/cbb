@@ -362,6 +362,11 @@ pub enum TakeBack {
 /// The writer's refusal to take back the current root's own key.
 pub const TAKE_BACK_ROOT: &str = "the current root's key is not taken back as an admin key";
 
+/// The writer's refusal of a root removal that would leave the person no
+/// room to take back the admin keys that hold removals back and write the
+/// checkpoint that settles them (`RecordSet::unacknowledged` names them).
+pub const TAKE_BACK_FIRST: &str = "take back the admin keys that hold removals back first";
+
 pub const REISSUE_KEPT_BACK: u64 = 256;
 
 /// Why the writer does not write a change of root while the set holds a
@@ -2710,7 +2715,24 @@ impl RecordSet {
 
     /// Whether admin key a has acknowledged signer's records up to seq: a
     /// record of a that counts names signer at seq or above in its seen.
+    ///
+    /// GRANT_ABOVE: a removal of the root signed below the root's oldest
+    /// record that names a needs no acknowledgement of a. A member that
+    /// counts that grant holds the root's chain below it, the removal
+    /// too, and the seen line voids whatever a signed before it saw its
+    /// grant.
     fn acked_by(&self, state: &State, a: &KeyHash, signer: &KeyHash, seq: u64) -> bool {
+        let granted_above = self
+            .records
+            .values()
+            .filter(|e| !e.held && e.record.body().signer == *signer && state.counting.contains(&e.record.id()))
+            .filter(|e| matches!(&e.record.body().kind, Kind::Device(d) if d.admin.as_ref().map(Key::hash) == Some(*a)))
+            .map(|e| e.record.body().seq)
+            .min()
+            .is_some_and(|named| seq < named);
+        if granted_above && state.roots.contains(signer) {
+            return true;
+        }
         self.records.values().filter(|e| !e.held && e.record.body().signer == *a).any(|e| {
             state.counting.contains(&e.record.id())
                 && seen_of(&e.record.body().kind).iter().any(|x| x.key == *signer && x.seq >= seq)
@@ -3349,6 +3371,23 @@ impl RecordSet {
         {
             return Err(crate::error::Error::msg(ADMIN_KEY_TAKEN_BACK));
         }
+        // The seen line: an admin key's first record after its grant
+        // counts is an acknowledgement, whose seen holds the root record
+        // that named it; what the key signs after stands on that line. It
+        // signs as an admin only once its state counts the grant.
+        let h = Key::es256(signer.public()).hash();
+        if !state.roots.contains(&h)
+            && Self::live_admins(state).contains(&h)
+            && !matches!(kind, Kind::Ack { .. })
+            && !self.records.values().any(|e| e.record.body().signer == h && state.counting.contains(&e.record.id()))
+        {
+            let mut trial = self.clone();
+            trial.write_ack(state, signer, time_ms)?;
+            let now = trial.state();
+            let r = trial.write_one(&now, signer, kind, time_ms)?;
+            *self = trial;
+            return Ok(r);
+        }
         self.write_one(state, signer, kind, time_ms)
     }
 
@@ -3424,8 +3463,54 @@ impl RecordSet {
                 rest = rest.get(n..).unwrap_or_default();
             }
         }
+        // The person keeps a way out from every state the writer reaches:
+        // after this removal the root can still take back every live admin
+        // key that holds removals back and write the checkpoint that then
+        // settles them. A removal of only such keys is itself that way out.
+        let holders: BTreeSet<KeyHash> = self.holders(state);
+        let only_holders = keys.iter().all(|k| {
+            holders.contains(k) || state.device_by_key(k).and_then(|d| d.admin).is_some_and(|a| holders.contains(&a))
+        });
+        if !only_holders && !trial.way_out(root, time_ms) {
+            return Err(Error::msg(TAKE_BACK_FIRST));
+        }
         *self = trial;
         Ok(out)
+    }
+
+    /// The live admin keys that hold a removal back: each has a counting
+    /// removal it has not acknowledged (`unacknowledged`).
+    fn holders(&self, state: &State) -> BTreeSet<KeyHash> {
+        self.unacknowledged(state).into_iter().filter(|(_, n)| *n > 0).map(|(a, _)| a).collect()
+    }
+
+    /// Whether the root can still take back, one by one, every admin key
+    /// that holds removals back, writing a checkpoint first where its room
+    /// asks for one, and then write the checkpoint that settles: tried on
+    /// a copy of the set, with the root's own key.
+    fn way_out(&self, root: &dyn ExternalKey, time_ms: u64) -> bool {
+        let mut t = self.clone();
+        let checkpoint = |t: &mut RecordSet| -> bool {
+            let st = t.state();
+            let Ok(cp) = t.write_checkpoint(&st, root, time_ms) else { return false };
+            let id = cp.id();
+            let _ = t.insert(cp);
+            t.state().counting.contains(&id)
+        };
+        let st = t.state();
+        for a in t.holders(&st) {
+            let st = t.state();
+            if t.take_back(&st, root, &a, time_ms).is_err() {
+                if !checkpoint(&mut t) {
+                    return false;
+                }
+                let st = t.state();
+                if t.take_back(&st, root, &a, time_ms).is_err() {
+                    return false;
+                }
+            }
+        }
+        checkpoint(&mut t)
     }
 
     fn write_one(
