@@ -676,7 +676,7 @@
       ],
       "refusal": "",
       "value": 1536,
-      "widest": "the roots before the current one"
+      "widest": "headroom in the room: the roots before the current one keep 0"
     },
     {
       "class": "frozen",
@@ -696,7 +696,7 @@
       ],
       "refusal": "records/lists",
       "value": 1536,
-      "widest": "a change's list naming the whole reserve"
+      "widest": "a change's list in the format (the writer names none)"
     },
     {
       "class": "frozen",
@@ -791,13 +791,13 @@
     },
     {
       "class": "frozen",
-      "name": "records::set::REISSUE_KEPT_BACK",
+      "name": "records::set::UNKNOWN_PER_SEQ",
       "reached": [
-        "a_full_set_keeps_the_roots_removals"
+        "a_peer_it_does_not_know_brings_nothing_else"
       ],
       "refusal": "",
-      "value": 256,
-      "widest": "the new root's room left to its other first records"
+      "value": 2,
+      "widest": "recovery records of one seq taken from a peer the set does not know"
     },
     {
       "class": "stated",

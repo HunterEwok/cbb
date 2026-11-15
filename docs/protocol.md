@@ -1888,11 +1888,12 @@ the rooms, and a recovery head's second signature is counted as
 `records::HEAD_SIG2_ALLOWANCE` (33280) bytes. The first signature covers the body and the
 SHA-256 of the second, so a second signature cannot be swapped on the way.
 
-Each key has a ceiling: the current root `records::MAX_ROOT_RECORDS` (1536) units, the roots
-before it together `records::CUT_ROOTS_RESERVE` (1536), and each admin key
-`records::MAX_ADMIN_RECORDS` (256), for at most `records::ADMIN_KEYS_MAX` (16) admin keys. The
-ceilings add up to the room exactly, so no key pushes out another key's records by making many
-of its own. Any other key has no room and keeps nothing. A record body is at most
+Each key has a ceiling: the current root `records::MAX_ROOT_RECORDS` (1536) units and each
+admin key it names `records::MAX_ADMIN_RECORDS` (256), for at most `records::ADMIN_KEYS_MAX` (16)
+admin keys. The roots before the current one, and the admin keys they named, have no room (cap
+0): after a change of root only the last root counts. The room keeps
+`records::CUT_ROOTS_RESERVE` (1536) units of headroom beside these ceilings, so no key pushes out
+another key's records by making many of its own. Any other key has no room and keeps nothing. A record body is at most
 `records::MAX_BODY` (16384) bytes, a checkpoint's at most `records::MAX_CHECKPOINT_BODY`
 (262144), and a change's list names at most `records::LIST_MAX` (1536) IDs. A set has at most
 `records::MAX_DEVICES` (256) devices.
@@ -1920,19 +1921,18 @@ checkpoint is its key's newest, never on anything else the set holds (`keep::Ite
    ceiling);
 4. the key's older checkpoints, the newest first.
 
-Of a root that a change cut, only what the change's list names is kept, within the reserve.
-The recovery chain is kept outside the rooms.
+Of a root that a change cut nothing is kept, listed or not, and such a record is turned away
+before its signature is verified. The recovery chain is kept outside the rooms.
 
 #### Tiers inside the rooms
 
 There is no level. Each key has a fixed cap, read from the roster in the root's kept records
-alone: the current root `records::MAX_ROOT_RECORDS` (1536) units, the roots a change cut
-together `records::CUT_ROOTS_RESERVE` (1536), and each live admin key `records::MAX_ADMIN_RECORDS`
-(256). A key that is no longer an admin has cap 0: what it signed stays only as far as a root's
+alone: the current root `records::MAX_ROOT_RECORDS` (1536) units, the roots a change cut 0,
+and each live admin key `records::MAX_ADMIN_RECORDS` (256). A key that is no longer an admin has cap 0: what it signed stays only as far as a root's
 checkpoint keeps it, and what a checkpoint keeps comes first in the rooms.
 
 Who is no longer an admin is read from the root records of the path that the roots' rooms keep
-(`eval::rooms`, `eval::not_live`; of a root that a change cut, only what its list names): the
+(`eval::rooms`, `eval::not_live`; of a root that a change cut, nothing): the
 roots' caps hang on nothing else, so their rooms are judged first. An admin key that a
 root's record names is no longer an admin when a root's removal names it, when the newest root
 record of the device that named it names another key or none, or when it comes after the first
@@ -2012,31 +2012,54 @@ given with the group, gives the path of roots before anything else; no root's or
 changes it. Each change hands the chain to the next recovery key, whose records start again at
 seq 1. Two recovery records at one step stop the group for good.
 
-A change names the new root and the hash of its list: the records of the roots it cuts that
-stay, which ride beside the head outside the rooms. It applies whole or not at all: the new
-root's first checkpoint keeps the re-issued removals, and with one of them missing the old
-removals it covers would stop barring with nothing in their place. A record of the change's
-group that the device lacks is settled by a later checkpoint (of the new root above the first,
-or of a root after it on the chain) that names a head at or above it and does not keep it; what
-that checkpoint keeps must be held too. A checkpoint that keeps what the change itself cuts
-settles nothing, since no honest root writes one. Until the group is whole the change waits,
-and the apps say that a change of root is arriving.
+After a change only three kinds of record count: the last root's on the path, those of the
+admin keys that root names, and the recovery chain ("the last root only"). Nothing signed by an
+earlier root, by its admins, or by the new root below the head's `from` counts, whatever the
+change's list names; the writer names an empty list, and every new root is a fresh key (the
+writer refuses a key that was an admin key: "the new root key was an admin key: a new root is
+always a new key"). A device that has not applied the change yet still counts the old root and
+its admins; once it applies, their records turn void.
 
-The writer of a change refuses a set that still waits for an earlier change's list ("a change
-of root is waiting here: sync with the group, then try again"), a group stopped for good, a
-65th change, a key that is not the group's recovery key, and a new root key the state already
-knows.
+A change applies whole or not at all: the new root's first checkpoint keeps every re-issued
+record (below), and the change waits until the device holds all of them (`eval::first_gap`), so
+a member never counts an empty group. A record of the change's group that the device lacks is
+settled by a later checkpoint (of the new root above the first, or of a root after it on the
+chain) that names a head at or above it and does not keep it; what that checkpoint keeps must
+be held too. Until the group is whole the change waits, and the apps say that a change of root
+is arriving.
 
-#### Re-issue and fold
+The writer of a change refuses a set that holds a recovery record it has not applied, whether it
+waits for its list or for the new root's records ("a change of root is waiting here: sync with
+the group, then try again"), a group stopped for good, a 65th change, a key that is not the
+group's recovery key, a new root key the state already knows, and a re-issue that does not fit
+the new root's room with room for its next checkpoint ("the change does not fit the new root's
+room: leave out some devices").
 
-A new root re-issues the counting removals of the roots the change cuts as removals of its own
-among its first records, each old removal whole in one new one with its `seen` entries, so the
-list carries none of them. All of them fit the new root's room less
-`records::set::REISSUE_KEPT_BACK` (256) units for its other first records; an old removal that
-does not fit rides in the list. A root's removal on the path folds into a newer one (a later
-root, else a higher seq) that names every key it names and saw the same of them; what it bars,
-the newer one bars. Removals are the only records that grow without bound, so the fold keeps a
-checkpoint and a change of root within their rooms.
+A group halted by two recovery records at one step counts the recovery chain below the fork and
+nothing else: it names the roots and no device; the app keeps what it last showed for the screen
+that makes the next group.
+
+#### Re-issue
+
+The new root carries the state over as its own first records: its device record (holds_root),
+the newest settings, the counting hubs record narrowed to the devices it carries, the copies
+record, a plain device record for every device the writer counts (an admin's device without its
+admin key or powers), and one freeze of the member key of each frozen device, which only the new
+root thaws. It writes no removal: a device removed before, or one the person leaves out, is
+simply not re-issued. Before signing, the app shows the person every device with what the change
+does to it (`RecordSet::change_preview`: stays, out, admin rights lost, admin kept with a spare
+key, frozen), and the person may leave devices out; the writer's own device cannot be left out.
+A device every admission of which sits below a head of a root's checkpoint that does not keep it
+is not carried. The new root's view at the change is the truth: an old root's removal the
+writer never received does not bind after the change, and the preview is the person's check.
+
+A peer whose key the set does not know (`peer::Standing::Unknown`), such as a replaced root's
+new phone meeting a sleeper, may give it the change: the sleeper takes from it only the
+recovery key's records (at most `records::set::UNKNOWN_PER_SEQ` (2) of a seq, none past
+`records::body::MAX_RECOVERY`), the lists they name, and the records of a root a held recovery
+record names, within that root's room (`RecordSet::insert_from_unknown`); it gives such a peer
+only the changes of root it holds (`RecordSet::for_peer`). Copies and commands are never taken
+from such a peer.
 
 #### Checkpoints
 
@@ -4736,9 +4759,9 @@ table, against the registry (`CBB_WRITE_BOUNDS=1` writes the table again).
 | `records::MAX_DEVICES` | 256 | stated | 256 devices with a device record |  |
 | `records::MAX_ROOT_RECORDS` | 1536 | frozen | a full checkpoint, a second waiting one and the devices |  |
 | `records::MAX_ADMIN_RECORDS` | 256 | frozen | one admin's records |  |
-| `records::CUT_ROOTS_RESERVE` | 1536 | frozen | the roots before the current one |  |
+| `records::CUT_ROOTS_RESERVE` | 1536 | frozen | headroom in the room: the roots before the current one keep 0 |  |
 | `bounds::LIST_FIELD` | 52228 | frozen | a change's list as a field of `records` | `records/lists` |
-| `records::LIST_MAX` | 1536 | frozen | a change's list naming the whole reserve | `records/lists` |
+| `records::LIST_MAX` | 1536 | frozen | a change's list in the format (the writer names none) | `records/lists` |
 | `records::MAX_RECORDS` | 7168 | frozen | the set's room in units of 512 bytes |  |
 | `records::MAX_SET_BYTES` | 3670016 | frozen | the room's bytes |  |
 | `records::MAX_SET_SIG2_BYTES` | 134217728 | reader | both rooms, a waiting root and the settled records, each twice signed |  |
@@ -4748,7 +4771,7 @@ table, against the registry (`CBB_WRITE_BOUNDS=1` writes the table again).
 | `records::MAX_NEWER` | 16 | reader | held records a state lists |  |
 | `records::MAX_NOTICES` | 256 | reader | notices a set keeps |  |
 | `records::eval::MAX_IGNORED` | 64 | reader | records a state lists in ignored |  |
-| `records::set::REISSUE_KEPT_BACK` | 256 | frozen | the new root's room left to its other first records |  |
+| `records::set::UNKNOWN_PER_SEQ` | 2 | frozen | recovery records of one seq taken from a peer the set does not know |  |
 | `records::set::ADMIN_SILENCE_MS` | 3024000000 | stated | an admin's device silent for 35 days before the root takes its key back |  |
 | `records::set::MISSING_ROUNDS` | 16 | reader | rounds a member asks for a missing record |  |
 | `records::sync::PART_RECORDS` | 4096 | frozen | record envelopes of one part | `records/records` |

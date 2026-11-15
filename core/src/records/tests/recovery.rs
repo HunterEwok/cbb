@@ -35,15 +35,15 @@ fn write(g: &mut G, from: &[Record], new_root: &K, member: &K, remove: &[KeyHash
     w
 }
 
-/// Whether a change carries the removal rm: in its list, or re-issued
-/// by the new root among its first records (keys and seen alike).
-fn carried(w: &Written, rm: &Record) -> bool {
-    let Kind::Revoke(x) = &rm.body().kind else { return false };
-    w.list.0.contains(&rm.id())
-        || w.first.iter().any(|z| {
-            matches!(&z.body().kind, Kind::Revoke(z) if x.keys.iter().all(|k| z.keys.contains(k))
-                && x.seen.iter().all(|s| z.seen.contains(s)))
-        })
+/// Whether the change re-issues member m as the new root's own plain
+/// device record among its first records (L + B).
+fn reissued(w: &Written, m: &K) -> bool {
+    w.first.iter().any(|r| matches!(&r.body().kind, Kind::Device(d) if d.key == m.key && !d.holds_root))
+}
+
+/// Whether the change writes any removal: under L it never does.
+fn writes_removal(w: &Written) -> bool {
+    w.first.iter().any(|r| matches!(r.body().kind, Kind::Revoke(_)))
 }
 
 /// A head at seq of the recovery key naming root, with prev and list as
@@ -166,8 +166,9 @@ fn a_head_the_device_cannot_read_stops_it_until_it_is_updated() {
 }
 
 /// A member that applied the old root's removals and checkpoints before
-/// the head takes the head over them: what the writer counted stays, its
-/// removals with it, and the new root's device is the root's.
+/// the head takes the head over them: what the writer counted is
+/// re-issued, a device removed before the change is not, and the new
+/// root's device is the root's.
 #[test]
 fn a_member_takes_the_head_over_the_old_roots_work() {
     let mut g = base();
@@ -180,8 +181,8 @@ fn a_member_takes_the_head_over_the_old_roots_work() {
     write(&mut g, &from, &k("n1"), &k("new phone"), &[k("old phone").hash]);
     let s = members_agree(&g);
     assert_eq!(s.roots, vec![k("root").hash, k("n1").hash]);
-    assert!(s.revoked.contains(&k("tv").hash), "the old root's removal stays a removal");
-    assert!(s.revoked.contains(&k("old phone").hash), "the old root's device was unticked");
+    assert!(!has(&s, &k("tv")), "removed before the change: not re-issued");
+    assert!(!has(&s, &k("old phone")), "the old root's device was left out");
     assert!(has(&s, &k("laptop")) && has(&s, &k("printer")));
     assert_eq!(s.root_device, Some(k("new phone").key.device_id()));
 }
@@ -208,9 +209,10 @@ fn a_removal_the_writer_lacks_becomes_a_notice() {
 }
 
 /// A thief with the old root's unlocked phone removed a device and
-/// admitted its own: the writer saw both, so the list carries both, and
-/// the owner's unticks remove the thief's device. The price written down:
-/// the device the thief removed stays removed.
+/// admitted its own: the writer saw both, so the device the thief removed
+/// is not re-issued, and the person leaves out the thief's device. The
+/// price written down: the device the thief removed stays out until it is
+/// admitted again.
 #[test]
 fn a_thiefs_removals_and_devices_on_a_member() {
     let mut g = base();
@@ -219,16 +221,15 @@ fn a_thiefs_removals_and_devices_on_a_member() {
     g.device(&k("root"), &k("thief"), "thief", |_| {});
     let from = g.recs.clone();
     let w = write(&mut g, &from, &k("n1"), &k("new phone"), &[k("thief").hash, k("old phone").hash]);
-    let rm = g.recs.iter().find(|r| matches!(&r.body().kind, Kind::Revoke(x) if x.keys == [k("laptop").hash])).unwrap();
-    assert!(carried(&w, rm), "the thief's removal is neither listed nor re-issued");
+    assert!(!writes_removal(&w) && !reissued(&w, &k("laptop")) && !reissued(&w, &k("thief")));
     let s = members_agree(&g);
-    assert!(s.revoked.contains(&k("thief").hash) && !has(&s, &k("thief")));
-    assert!(s.revoked.contains(&k("laptop").hash));
+    assert!(!has(&s, &k("thief")));
+    assert!(!has(&s, &k("laptop")));
     assert!(has(&s, &k("tv")) && has(&s, &k("new phone")));
 }
 
 /// A device the old root removed writes the change: it comes in as a new
-/// device under the new root, and its old key stays removed.
+/// device under the new root, and its old key is not re-issued.
 #[test]
 fn a_removed_device_writes_the_change() {
     let mut g = base();
@@ -237,15 +238,15 @@ fn a_removed_device_writes_the_change() {
     let from = g.recs.clone();
     write(&mut g, &from, &k("n1"), &k("phone again"), &[]);
     let s = members_agree(&g);
-    assert!(s.revoked.contains(&k("old phone").hash));
+    assert!(!has(&s, &k("old phone")));
     assert_eq!(s.root_device, Some(k("phone again").key.device_id()));
     assert!(s.may_command(&k("n1").hash) && !s.may_command(&k("root").hash));
 }
 
-/// A writer behind by an admin's removal: an admin's records are not
-/// listed, they count by themselves while the admin counts, so the
-/// removal counts on every member once it arrives, before or after the
-/// head.
+/// A writer behind by an admin's removal: the new root's view is the
+/// truth (L + B). The device the writer still counted is re-issued, the
+/// admin loses its rights at the change, and its removal counts at no
+/// member once the change applies, whenever it arrives.
 #[test]
 fn a_writer_behind_by_an_admin_removal() {
     let mut g = base();
@@ -255,24 +256,30 @@ fn a_writer_behind_by_an_admin_removal() {
     let from: Vec<Record> = g.recs.iter().filter(|r| r.id() != rv.id()).cloned().collect();
     write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
     let s = members_agree(&g);
-    assert!(s.revoked.contains(&k("tv").hash) && s.counting.contains(&rv.id()));
-    assert!(s.may_command(&k("admin a").hash));
+    assert!(has(&s, &k("tv")) && !s.counting.contains(&rv.id()));
+    assert!(!s.may_command(&k("admin a").hash));
 }
 
-/// A listed record only the writer holds: a member asks its peers for it
-/// and takes it from anyone, and it counts once it arrives and verifies.
+/// A re-issued record only the writer holds: a member that lacks it keeps
+/// the old state whole, asks its peers for it and takes it from anyone,
+/// and the change applies once it arrives and verifies.
 #[test]
-fn a_listed_record_only_the_writer_holds() {
+fn a_reissued_record_only_the_writer_holds() {
     let mut g = base();
-    let only = g.device(&k("root"), &k("watch"), "watch", |_| {});
+    g.device(&k("root"), &k("watch"), "watch", |_| {});
     let from = g.recs.clone();
-    write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
+    let w = write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
+    let only =
+        w.first.iter().find(|r| matches!(&r.body().kind, Kind::Device(d) if d.key == k("watch").key)).unwrap().clone();
     let without: Vec<Record> = g.recs.iter().filter(|r| r.id() != only.id()).cloned().collect();
     let mut m = set_with(&g.root.key, &without, &g.lists);
-    assert!(!has(&m.state(), &k("watch")));
-    assert!(m.missing(&m.state()).contains(&only.id()));
+    let st = m.state();
+    assert_eq!(st.roots.len(), 1, "pending: the old state, whole");
+    assert!(has(&st, &k("watch")));
+    assert!(m.missing(&st).contains(&only.id()));
     m.insert(only.clone()).unwrap();
     let s = m.state();
+    assert_eq!(s.roots.len(), 2);
     assert!(has(&s, &k("watch")) && s.counting.contains(&only.id()));
     assert!(!m.missing(&m.state()).contains(&only.id()));
 }
@@ -294,7 +301,10 @@ fn lists_naming_nothing_everything_or_ids_nobody_holds() {
     let list = g.listing();
     g.change(&k("n1"), &list);
     let s = members_agree(&g);
-    assert!(has(&s, &k("laptop")) && has(&s, &k("tv")) && has(&s, &k("old phone")));
+    // L: a list keeps nothing of the roots before; only the new root's
+    // re-issue would carry them, and this change has none.
+    assert!(!has(&s, &k("laptop")) && !has(&s, &k("tv")) && !has(&s, &k("old phone")));
+    assert_eq!(s.roots.len(), 2);
     // IDs nobody holds.
     let mut g = base();
     let mut list = g.listing();
@@ -302,14 +312,13 @@ fn lists_naming_nothing_everything_or_ids_nobody_holds() {
     list.push(ghost);
     g.change(&k("n1"), &list);
     let s = members_agree(&g);
-    assert!(has(&s, &k("laptop")));
+    assert!(!has(&s, &k("laptop")) && s.roots.len() == 2);
     let mut m = set_with(&g.root.key, &g.recs, &g.lists);
     let mut asked = 0;
     while m.missing(&m.state()).contains(&ghost) {
         asked += 1;
         assert!(asked <= 64, "asked for ever");
     }
-    assert!(asked > 0);
     // Bytes that do not read.
     let mut g = base();
     let junk = vec![0xff, 0x00, 0x01];
@@ -455,7 +464,7 @@ fn a_head_names_where_the_new_roots_records_start() {
     let s = members_agree(&g);
     assert_eq!(s.roots.last(), Some(&k("admin a").hash));
     assert!(!has(&s, &k("lamp")), "below from, not listed");
-    assert!(has(&s, &k("bulb")), "below from, listed");
+    assert!(!has(&s, &k("bulb")), "below from, listed: L counts nothing below from");
     assert!(has(&s, &k("kettle")), "from on, the root's own");
     // Written as 0 it is the default, and refused; above a seq, refused.
     let r = raw(
@@ -511,7 +520,7 @@ fn members_that_did_and_did_not_compact_end_equal() {
     let old = g.recs.clone();
     let w = write(&mut g, &old, &k("n1"), &k("new phone"), &[]);
     assert!(
-        matches!(&w.first.last().unwrap().body().kind, Kind::Checkpoint { heads, .. } if heads.iter().any(|h| h.key == a.hash))
+        matches!(&w.first.last().unwrap().body().kind, Kind::Checkpoint { heads, .. } if heads.iter().all(|h| h.key == k("n1").hash))
     );
     let want = g.state();
     assert!(!has(&want, &k("lamp")) && has(&want, &k("bulb")));
@@ -562,8 +571,9 @@ fn the_new_roots_first_checkpoint_closes_the_list() {
 
 /// The writer signs the new root's first records before the head: its
 /// device record (holds_root), a copy of the settings, a copy of the hubs
-/// unless dropped, and the removals the owner chose; the head names the
-/// list's hash. It refuses a key other than the group's recovery key.
+/// unless dropped, and every device but those the person leaves out, with
+/// no removal; the head names the list's hash. It refuses a key other
+/// than the group's recovery key.
 #[test]
 fn the_writer_signs_the_new_roots_first_records() {
     let mut g = base();
@@ -589,7 +599,8 @@ fn the_writer_signs_the_new_roots_first_records() {
     assert!(matches!(kinds[0], Kind::Device(d) if d.holds_root && d.key == k("new phone").key));
     assert!(kinds.iter().any(|k| matches!(k, Kind::Settings(s) if s.min_rules == 2)));
     assert!(kinds.iter().any(|k| matches!(k, Kind::Hubs { .. })));
-    assert!(kinds.iter().any(|kd| matches!(kd, Kind::Revoke(r) if r.keys == vec![k("old phone").hash])));
+    assert!(!kinds.iter().any(|kd| matches!(kd, Kind::Revoke(_))));
+    assert!(reissued(&w, &k("laptop")) && reissued(&w, &k("tv")) && !reissued(&w, &k("old phone")));
     assert!(w.first.iter().all(|r| r.body().signer == k("n1").hash));
     assert!(matches!(&w.record.body().kind, Kind::Recovery { list, .. } if *list == w.list.hash()));
     assert_eq!((w.record.body().seq, w.record.body().prev), (1, None));
@@ -756,8 +767,8 @@ fn a_fetch_proof_and_a_head_are_not_one_signature() {
     assert_eq!(head.verify_head(&rk()), Ok(false));
 }
 
-/// Two changes of root: the phone the first new root holds is not
-/// removed by the second, so it stays a device, listed and counting.
+/// Two changes of root: the phone the first new root holds is not left
+/// out by the second, so the second re-issues it and it counts.
 #[test]
 fn the_first_new_roots_phone_stays_after_a_second_change() {
     let mut g = base();
@@ -767,7 +778,7 @@ fn the_first_new_roots_phone_stays_after_a_second_change() {
     let all = g.recs.clone();
     let w2 = write(&mut g, &all, &k("n2"), &k("p2"), &[]);
     let p1 = w1.first.iter().find(|r| matches!(&r.body().kind, Kind::Device(d) if d.key == k("p1").key)).unwrap();
-    assert!(w2.list.0.contains(&p1.id()), "the second list names it");
+    assert!(reissued(&w2, &k("p1")) && p1.body().signer == k("n1").hash, "the second change re-issues it");
     let s = g.state();
     assert_eq!(s.roots.len(), 3);
     assert!(has(&s, &k("p1")) && has(&s, &k("p2")) && has(&s, &k("laptop")));
@@ -775,7 +786,7 @@ fn the_first_new_roots_phone_stays_after_a_second_change() {
 
 /// A writer whose set took the first new root's records before that
 /// root's head had its list keeps them aside and takes them when the list
-/// comes: its list names them, and after its change they still count. No
+/// comes: its change re-issues them, and after it they still count. No
 /// second round is needed. Before the list they count for nothing, and a
 /// writer refuses to write a change while a list is missing.
 #[test]
@@ -806,8 +817,7 @@ fn a_writer_that_took_one_round_keeps_what_came_early() {
     assert!(w1.first.iter().all(|r| set.contains(&r.id())));
     let w2 =
         set.write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("n2"), phone(&k("p2")), &[], false, 0).unwrap();
-    let p1 = w1.first.iter().find(|r| matches!(&r.body().kind, Kind::Device(d) if d.key == k("p1").key)).unwrap();
-    assert!(w2.list.0.contains(&p1.id()));
+    assert!(reissued(&w2, &k("p1")));
     for r in w2.first.iter().chain([&w2.record]) {
         g.push(r.clone());
     }
@@ -944,9 +954,10 @@ fn the_writer_waits_for_every_change_it_holds() {
     assert_eq!(refused(&g, &g.lists).as_deref(), Some(CHANGE_WAITING));
 }
 
-/// The owner's unticks carry what the writer saw: an unticked admin's
-/// work up to then stays (the device it admitted stays, the device it
-/// removed stays removed), and the admin commands no more.
+/// The person's leave-out list carries what the writer saw: a left-out
+/// admin's work up to then stays (the device it admitted is re-issued,
+/// the device it removed is not), its device is not carried, no removal
+/// is written, and the admin commands no more.
 #[test]
 fn an_untick_keeps_what_the_admin_did() {
     let mut g = base();
@@ -959,14 +970,11 @@ fn an_untick_keeps_what_the_admin_did() {
         let mut g = g.clone();
         let all = g.recs.clone();
         let w = write(&mut g, &all, &k("n1"), &k("p1"), &remove);
-        let rm = w.first.iter().find_map(|r| match &r.body().kind {
-            Kind::Revoke(rm) => Some(rm.clone()),
-            _ => None,
-        });
-        assert!(rm.is_some_and(|rm| !rm.seen.is_empty()));
+        assert!(!writes_removal(&w), "{remove:?}");
         let s = g.state();
         assert!(has(&s, &k("speaker")), "{remove:?}");
-        assert!(!has(&s, &k("tv")) && s.revoked.contains(&k("tv").hash), "{remove:?}");
+        assert!(!has(&s, &k("tv")), "{remove:?}");
+        assert!(!has(&s, &pb), "{remove:?}");
         assert!(!s.may_command(&b.hash), "{remove:?}");
     }
 }
@@ -1015,44 +1023,32 @@ fn a_change_lists_no_checkpoint() {
     assert_eq!(a.state().checkpoints, c.state().checkpoints);
 }
 
-/// A change's list carries every counting removal of the earlier roots,
-/// also of a key no record the writer holds names (the writer may lack its
-/// admission); of removals that name the same keys and saw the same, the
-/// newest alone (the fold).
+/// A change carries no removal (L): the writer's list is empty, it signs
+/// no removal, and a device the old root removed (however often) is
+/// simply not re-issued; removals of keys no record names change nothing.
+/// The new root admits the TV again, and a second change carries it.
 #[test]
-fn a_change_lists_every_removal_that_counts() {
+fn a_change_carries_no_removal() {
     let mut g = base();
-    let ghosts: Vec<RecordId> = (0..40u32)
-        .map(|i| g.root_rec(Kind::Revoke(removal(&[KeyHash(sha256(&i.to_be_bytes()))], vec![]))).id())
-        .collect();
+    for i in 0..40u32 {
+        g.root_rec(Kind::Revoke(removal(&[KeyHash(sha256(&i.to_be_bytes()))], vec![])));
+    }
     let tv = k("tv");
-    let of_tv: Vec<RecordId> = (0..300).map(|_| g.root_rec(Kind::Revoke(removal(&[tv.hash], vec![]))).id()).collect();
-    let list = g.listing();
-    let newest = *of_tv.last().unwrap();
-    assert!(of_tv.iter().all(|id| list.contains(id) == (*id == newest)));
-    assert!(ghosts.iter().all(|id| list.contains(id)));
-    g.change(&k("n1"), &list);
-    // The new root admits the tv again; a second change follows.
+    for _ in 0..30 {
+        g.root_rec(Kind::Revoke(removal(&[tv.hash], vec![])));
+    }
+    let all = g.recs.clone();
+    let w = write(&mut g, &all, &k("n1"), &k("p1"), &[]);
+    assert!(w.list.0.is_empty() && !writes_removal(&w));
+    assert!(!reissued(&w, &tv) && reissued(&w, &k("laptop")));
+    let s = members_agree(&g);
+    assert!(!has(&s, &tv) && has(&s, &k("laptop")) && s.revoked.is_empty());
     g.device(&k("n1"), &tv, "tv", |_| {});
-    let list = g.listing();
-    assert!(ghosts.iter().all(|id| list.contains(id)));
-    let listed: Vec<&RecordId> = of_tv.iter().filter(|id| list.contains(id)).collect();
-    assert_eq!(listed, vec![&newest]);
-    // Removals of different keys each keep their place, however many.
-    let mut g = base();
-    let devs: Vec<K> = (0..300).map(|i| k(&format!("dev {i}"))).collect();
-    let rms: Vec<RecordId> = devs
-        .iter()
-        .map(|d| {
-            g.device(&k("root"), d, "d", |_| {});
-            g.root_rec(Kind::Revoke(removal(&[d.hash], vec![]))).id()
-        })
-        .collect();
-    let list = g.listing();
-    g.change(&k("n1"), &list);
-    g.device(&k("n1"), &k("tv 2"), "tv", |_| {});
-    let list = g.listing();
-    assert!(rms.iter().all(|id| list.contains(id)));
+    let all = g.recs.clone();
+    let w = write(&mut g, &all, &k("n2"), &k("p2"), &[]);
+    assert!(w.list.0.is_empty() && !writes_removal(&w) && reissued(&w, &tv));
+    let s = members_agree(&g);
+    assert!(has(&s, &tv) && has(&s, &k("laptop")) && has(&s, &k("p1")));
 }
 
 /// While halted a set takes the recovery key's records and what the list
@@ -1095,12 +1091,11 @@ fn a_halted_member_shows_the_chain_below_the_fork() {
     }
 }
 
-/// After a fork at depth the state shows the roots below it and the
-/// devices and removals of the list applied there; the last root's own
-/// records do not show, its first records (its phone, the owner's
-/// unticks) among them.
+/// After a fork at depth the state shows the roots below it and no
+/// device: the group is stopped for good, and every member that holds the
+/// fork shows the same, whatever it held before.
 #[test]
-fn a_fork_at_depth_shows_the_list_below_it() {
+fn a_fork_at_depth_names_no_device() {
     let mut g = base();
     let from = g.recs.clone();
     write(&mut g, &from, &k("n1"), &k("new phone"), &[k("old phone").hash]);
@@ -1117,8 +1112,7 @@ fn a_fork_at_depth_shows_the_list_below_it() {
     assert!(s.halted());
     assert_eq!(s.fork.map(|f| f.0), Some(2));
     assert_eq!(s.roots, vec![k("root").hash, k("n1").hash]);
-    let devices: BTreeSet<KeyHash> = s.devices.iter().map(|d| d.key.hash()).collect();
-    assert_eq!(devices, BTreeSet::from([k("laptop").hash, k("tv").hash, k("old phone").hash]));
+    assert!(s.devices.is_empty() && s.hubs.is_empty() && s.revoked.is_empty());
     let mut all = g.recs.clone();
     all.push(twin);
     let fresh = set_with(&g.root.key, &all, &g.lists);
@@ -1151,7 +1145,7 @@ fn a_dropped_removal_brings_no_root_admission_back() {
         // or (an earlier root's) the writer never got it.
         let mut writer = set_of(&g.root.key);
         sync_all(&mut writer, &g.recs, &g.lists);
-        assert_eq!(writer.contains(&admitted.id()), earlier);
+        assert!(!writer.contains(&admitted.id()), "earlier {earlier}");
         let from: Vec<Record> =
             writer.in_dependency_order().into_iter().filter(|r| r.id() != admitted.id()).cloned().collect();
         let writer = set_with(&g.root.key, &from, &g.lists);
@@ -1292,8 +1286,7 @@ fn what_waits_syncs_with_the_rest() {
 
 /// A halted member restarted from what it saved (its records as it sends
 /// them, then its lists) holds and shows what it did before, in that
-/// order or reversed: after a fork at depth the list below it names the
-/// records of the root before, its device record at seq 1 among them.
+/// order or reversed: the recovery chain and no device.
 #[test]
 fn a_halted_set_restores_from_what_it_saved() {
     let mut g = base();
@@ -1310,7 +1303,7 @@ fn a_halted_set_restores_from_what_it_saved() {
     old.insert(twin).unwrap();
     let s = old.state();
     assert!(s.halted());
-    assert!(has(&s, &k("new phone")));
+    assert!(s.devices.is_empty());
     let saved: Vec<Record> = old.in_dependency_order().into_iter().cloned().collect();
     let lists: Vec<Vec<u8>> = old.lists().map(<[u8]>::to_vec).collect();
     let mut reversed = saved.clone();
@@ -1394,46 +1387,34 @@ fn records_of_a_late_chain_record_are_taken_when_it_joins() {
     let _ = w1;
 }
 
-/// A new root's first checkpoint over the 64 KiB a checkpoint once had
-/// (the whole list and what the old root's checkpoint kept of 256 devices'
-/// admins) is signed and taken, and the change applies.
+/// A full group's change: the new root re-issues 256 devices (some an
+/// admin admitted) with its settings, its first checkpoint keeps every one
+/// of them, and the change applies at a member that takes the records
+/// from scratch.
 #[test]
-fn a_large_first_checkpoint_applies() {
+fn a_full_groups_first_checkpoint_applies() {
     let mut g = base();
-    let admins: Vec<K> = (0..9).map(|i| k(&format!("admin {i}"))).collect();
-    let grants: Vec<Record> = admins
-        .iter()
-        .enumerate()
-        .map(|(i, a)| g.admin(&k(&format!("admin device {i}")), a, POWER_ADMIT | POWER_MANAGE))
-        .collect();
-    for a in &admins {
-        for _ in 0..240 {
-            g.rec(a, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
-        }
+    let (pa, a) = (k("phone a"), k("admin a"));
+    g.admin(&pa, &a, POWER_ADMIT | POWER_MANAGE);
+    g.root_rec(Kind::settings(Settings { shared: true, ..Settings::default() }));
+    for i in 0..40 {
+        g.device(&a, &k(&format!("by admin {i}")), "by admin", |_| {});
     }
-    for _ in 0..560 {
-        g.root_rec(Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] });
+    let mut i = 0;
+    while g.state().devices.len() < crate::records::MAX_DEVICES - 1 {
+        g.device(&k("root"), &k(&format!("by root {i}")), "by root", |_| {});
+        i += 1;
     }
-    let set = set_with(&g.root.key, &g.recs, &g.lists);
-    let mut keep: Vec<RecordId> = set
-        .ids()
-        .filter(|id| set.get(id).is_some_and(|r| admins.iter().any(|a| a.hash == r.body().signer)))
-        .copied()
-        .chain(grants.iter().map(Record::id))
-        .collect();
-    keep.sort();
-    let mut heads: Vec<Head> =
-        admins.iter().map(|a| Head { key: a.hash, seq: g.heads[&a.hash].0, id: g.heads[&a.hash].1 }).collect();
-    heads.sort_by_key(|h| h.key);
-    let cp = g.root_rec(Kind::Checkpoint { heads, keep });
     let from = g.recs.clone();
-    assert_eq!(set_with(&g.root.key, &from, &g.lists).state().checkpoint, Some(cp.id()));
     let w = write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
-    let first = w.first.last().unwrap();
-    assert!(first.body_bytes().len() > 64 << 10, "{}", first.body_bytes().len());
+    let Some(Kind::Checkpoint { keep, .. }) = w.first.last().map(|r| &r.body().kind) else { panic!() };
+    assert_eq!(keep.len(), w.first.len() - 2, "the first checkpoint keeps every first record but its head");
     let m = set_with(&g.root.key, &g.recs, &g.lists);
-    assert!(m.contains(&first.id()));
-    assert!(has(&m.state(), &k("new phone")));
+    let st = m.state();
+    assert_eq!(st.roots.last(), Some(&k("n1").hash));
+    assert_eq!(st.devices.len(), crate::records::MAX_DEVICES);
+    assert!(st.devices.iter().all(|d| d.by_root && d.admin.is_none()));
+    assert!(st.settings.shared);
 }
 
 /// A checkpoint over its ceiling is not signed.
@@ -1472,14 +1453,14 @@ fn a_halted_state_is_for_display_only() {
     m.insert(head_at(&g, 2, prev, &k("n9"), [9; 32])).unwrap();
     let s = m.state();
     assert!(s.halted());
-    assert!(s.device(&hub).is_some(), "the halted state still shows the devices");
+    assert!(s.devices.is_empty(), "a halted group names no device");
     for key in ["root", "n1", "n2"] {
         assert!(!s.may_command(&k(key).hash), "{key}");
     }
     let f = |h: KeyHash| crate::format::KeyHash(h.0);
     let n1 = f(k("n1").hash);
     assert!(!may_admit(&s, &n1, Signer::Root, &n1));
-    for d in &s.devices {
+    for d in &live.devices {
         assert!(!holder_may_send(&s, &d.id));
         assert!(!admin_may_take(&s, &d.id));
         let p: [u8; 65] = d.key.public().to_vec().try_into().unwrap();
@@ -1581,68 +1562,58 @@ fn many_admins() -> (G, Vec<K>) {
     (g, admins)
 }
 
-/// The removals of a writer's change name in `seen` only the keys they
-/// concern, the removed keys and their admin or member key: removing a
-/// plain device names none and weighs one unit, removing an admin's
-/// device names its admin key, and removing 256 keys of a group of 250
-/// devices made admins (of which 16, the cap, count) fits, in as many
-/// records as their bodies need.
+/// A change writes no removal (L + B): leaving out a plain device, an
+/// admin's device, or 256 keys of a group of 250 devices made admins (of
+/// which 16, the cap, count) writes none, and every device not left out
+/// is re-issued as a plain device.
 #[test]
-fn removals_name_only_the_keys_they_concern() {
+fn a_change_writes_no_removal_whatever_it_leaves_out() {
     let (g, admins) = many_admins();
     let set = set_with(&g.root.key, &g.recs, &g.lists);
     let st = set.state();
-    // Each from a writer that holds no change yet.
-    let removals = |remove: &[KeyHash]| -> Vec<Removal> {
-        let w = set
-            .clone()
+    let change = |leave_out: &[KeyHash]| -> Written {
+        set.clone()
             .write_change(
                 &st,
                 &k("recovery"),
                 crate::testkit::rk2(),
                 &k("n1"),
                 phone(&k("new phone")),
-                remove,
+                leave_out,
                 false,
                 0,
             )
-            .unwrap();
-        w.first
-            .iter()
-            .filter_map(|r| match &r.body().kind {
-                Kind::Revoke(rm) => {
-                    assert!(r.body_bytes().len() <= crate::records::MAX_BODY);
-                    if rm.seen.is_empty() && rm.keys.len() == 1 {
-                        assert_eq!(crate::records::keep::units(r.size()), 1);
-                    }
-                    Some(rm.clone())
-                }
-                _ => None,
-            })
-            .collect()
+            .unwrap()
     };
-    let plain = removals(&[k("laptop").hash]);
-    assert_eq!(plain.len(), 1);
-    assert!(plain[0].seen.is_empty());
-    let one = removals(&[k("admin device 7").hash]);
-    assert_eq!(one.len(), 1);
-    assert_eq!(one[0].seen.iter().map(|s| s.key).collect::<Vec<_>>(), vec![admins[7].hash]);
+    let devices = |w: &Written| w.first.iter().filter(|r| matches!(r.body().kind, Kind::Device(_))).count();
+    let all = st.devices.len();
+    let plain = change(&[k("laptop").hash]);
+    assert!(!writes_removal(&plain) && !reissued(&plain, &k("laptop")));
+    assert_eq!(devices(&plain), all);
+    let one = change(&[k("admin device 7").hash]);
+    assert!(!writes_removal(&one) && !reissued(&one, &k("admin device 7")));
+    let by_admin_key = change(&[admins[7].hash]);
+    assert!(!reissued(&by_admin_key, &k("admin device 7")), "left out by its admin key");
     let mut many: Vec<KeyHash> = (0..250).map(|i| k(&format!("admin device {i}")).hash).collect();
     many.extend([k("laptop").hash, k("tv").hash]);
     many.extend((0..4).map(|i| k(&format!("stranger {i}")).hash));
     assert_eq!(many.len(), 256);
-    let all = removals(&many);
-    assert!(!all.is_empty());
-    let mut named: Vec<KeyHash> = all.iter().flat_map(|rm| rm.keys.iter().copied()).collect();
-    named.sort();
-    many.sort();
-    assert_eq!(named, many);
+    let w = change(&many);
+    assert!(!writes_removal(&w));
+    assert!(w.first.iter().all(|r| match &r.body().kind {
+        Kind::Device(d) => d.holds_root || !many.contains(&d.key.hash()),
+        _ => true,
+    }));
+    assert!(w.first.iter().all(|r| match &r.body().kind {
+        Kind::Device(d) => d.admin.is_none(),
+        _ => true,
+    }));
 }
 
-/// A key a removal does not name is untouched: two members that held
-/// different heads of an admin key when the change was written, and then
-/// take the same records, end the same, and that key's newest record
-/// counts.
+/// An old admin's record the writer did not hold counts for nothing after
+/// the change: two members that held different heads of an admin key
+/// when the change was written, and then take the same records, end the
+/// same, and that key's newest record does not count.
 #[test]
 fn a_key_a_removal_does_not_name_is_untouched() {
     let (mut g, admins) = many_admins();
@@ -1659,7 +1630,7 @@ fn a_key_a_removal_does_not_name_is_untouched() {
     assert_eq!(a.digest(), b.digest());
     let s = a.state();
     assert_eq!(s, b.state());
-    assert!(s.counting.contains(&later.id()));
+    assert!(!s.counting.contains(&later.id()));
     assert!(!has(&s, &k("laptop")) && has(&s, &k("new phone")));
     let _ = w;
 }
@@ -1738,7 +1709,6 @@ fn a_checkpoint_keeping_what_the_change_cut_counts_nowhere() {
     let tv =
         g.recs.iter().find(|r| matches!(&r.body().kind, Kind::Device(d) if d.key.hash() == k("tv").hash)).unwrap().id();
     let list = g.listing();
-    assert!(list.contains(&tv));
     // Its first checkpoint keeps the list without the TV, and the lamp.
     let mut keep: Vec<RecordId> = list.iter().copied().filter(|id| *id != tv).chain([lamp.id()]).collect();
     keep.sort();
@@ -1760,11 +1730,13 @@ fn a_checkpoint_keeping_what_the_change_cut_counts_nowhere() {
     let all = state_with(&g.root.key, &g.recs, &g.lists);
     assert_eq!(unignored(all.clone()), unignored(state_with(&g.root.key, &without, &g.lists)));
     assert_eq!(all.roots.last(), Some(&k("admin a").hash));
-    assert!(has(&all, &k("tv")));
+    // L: nothing the first root signed counts after the change, listed
+    // or kept by the new root's checkpoint, at every member.
+    assert!(!has(&all, &k("tv")));
     for recs in [&g.recs, &without] {
         let mut m = set_of(&g.root.key);
         sync_all(&mut m, recs, &g.lists);
-        assert!(has(&m.state(), &k("tv")));
+        assert!(!has(&m.state(), &k("tv")));
     }
 }
 
@@ -1834,8 +1806,8 @@ fn notices_are_dismissed_and_kept_across_a_restart() {
     back.keep_notices(&saved, &dismissed);
     assert_eq!(back.notices(&back.state()), m.notices(&m.state()));
     assert_eq!(back.dismissed().collect::<Vec<_>>(), vec![&tv.id()]);
-    // A saved record that is no notice (a record the list names) is not taken.
-    let listed = g.recs.iter().find(|r| r.body().signer == g.root.hash && back.contains(&r.id())).unwrap();
+    // A saved record that is no notice (a record of the new root) is not taken.
+    let listed = g.recs.iter().find(|r| r.body().signer == k("n1").hash && back.contains(&r.id())).unwrap();
     back.keep_notices(core::slice::from_ref(listed), &[]);
     assert_eq!(back.notice_records().count(), 1);
 }
@@ -1861,7 +1833,9 @@ fn notices_are_bounded_alike_on_every_member() {
         }
         let mut m = set_of(&g.root.key);
         sync_all(&mut m, &recs, &g.lists);
-        let n: Vec<RecordId> = m.notices(&m.state()).into_iter().map(|(id, _)| id).collect();
+        // Kept, whether or not shown (L: a key not re-issued is out, not
+        // back, so its removal shows nothing).
+        let n: Vec<RecordId> = m.notice_records().map(Record::id).collect();
         assert_eq!(n.len(), MAX_NOTICES);
         kept.push(n);
     }
@@ -1872,8 +1846,8 @@ fn notices_are_bounded_alike_on_every_member() {
 }
 
 /// Two histories of the root halt the group until the recovery key
-/// changes the root; what either history removed stays removed after the
-/// change, and the group runs again.
+/// changes the root; what either history removed is not re-issued, and
+/// the group runs again.
 #[test]
 fn a_change_of_root_ends_two_histories_of_the_root() {
     let mut g = base();
@@ -1892,7 +1866,6 @@ fn a_change_of_root_ends_two_histories_of_the_root() {
     write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
     let s = state_with(&g.root.key, &g.recs, &g.lists);
     assert_eq!(s.stop, Stop::None);
-    assert!(s.revoked.contains(&k("laptop").hash) && s.revoked.contains(&k("tv").hash));
     assert!(!has(&s, &k("laptop")) && !has(&s, &k("tv")) && has(&s, &k("new phone")));
     for seed in 1..4 {
         let mut set = set_of(&g.root.key);
@@ -1946,43 +1919,39 @@ fn a_change_of_root_leaves_out_what_either_history_pruned() {
     lists.push(wr.list.encode());
     let s = state_with(&g.root.key, &after, &lists);
     assert_eq!(s.stop, Stop::None);
-    assert!(!has(&s, &k("d")) && has(&s, &k("e")) && has(&s, &k("tv")) && has(&s, &k("new phone")));
+    assert!(!has(&s, &k("d")), "d");
+    assert!(has(&s, &k("e")), "e: {:?}", s.devices.iter().map(|d| &d.name).collect::<Vec<_>>());
+    assert!(has(&s, &k("tv")) && has(&s, &k("new phone")));
     let mut m = set_of(&g.root.key);
     sync_all(&mut m, &after, &lists);
     assert!(!has(&m.state(), &k("d")));
 }
 
-/// After a change of root the new root's checkpoint prunes an earlier
-/// root's listed removal by the same rule as its own, and keeps what else
-/// the list carries.
+/// After a change of root an earlier root's removal is not carried: the
+/// device it removed is not re-issued, the new root's checkpoint keeps no
+/// record of the old root, and the old removal offered again changes
+/// nothing.
 #[test]
-fn the_new_roots_checkpoint_prunes_a_listed_removal() {
+fn an_earlier_roots_removal_is_not_carried() {
     let mut g = base();
-    let tv = g
-        .recs
-        .iter()
-        .find(|r| matches!(&r.body().kind, Kind::Device(d) if d.key.hash() == k("tv").hash))
-        .unwrap()
-        .clone();
     let rv = g.root_rec(Kind::Revoke(removal(&[k("tv").hash], g.seen())));
     let from = g.recs.clone();
     let w = write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
-    assert!(carried(&w, &rv));
+    assert!(!writes_removal(&w) && !reissued(&w, &k("tv")));
     let set = set_with(&g.root.key, &g.recs, &g.lists);
     let before = set.state();
-    assert!(before.revoked.contains(&k("tv").hash));
+    assert!(!has(&before, &k("tv")));
     let cp = set.write_checkpoint(&before, &k("n1"), 0).unwrap();
     let Kind::Checkpoint { keep, .. } = &cp.body().kind else { panic!() };
-    assert!(!keep.contains(&rv.id()) && !keep.contains(&tv.id()));
+    assert!(keep.iter().all(|id| set.get(id).is_some_and(|r| r.body().signer == k("n1").hash)));
     g.push(cp.clone());
     let mut m = set_with(&g.root.key, &g.recs, &g.lists);
     let s = m.state();
     assert!(s.checkpoints.contains(&cp.id()));
-    assert!(!s.revoked.contains(&k("tv").hash) && !has(&s, &k("tv")));
+    assert!(!has(&s, &k("tv")));
     assert!(has(&s, &k("laptop")) && has(&s, &k("old phone")) && has(&s, &k("new phone")));
-    assert!(!m.contains(&rv.id()) && !m.contains(&tv.id()));
-    assert_eq!(m.insert(rv), Ok(Added::NoRoom));
-    assert_eq!(unignored(s), unignored(state_with(&g.root.key, &g.recs, &g.lists)));
+    let _ = m.insert(rv);
+    assert_eq!(unignored(m.state()), unignored(s));
 }
 
 /// A device whose removal a checkpoint pruned on a member, that comes in
@@ -2068,75 +2037,42 @@ fn a_change_asked_twice_gives_back_its_head() {
     assert_eq!(again.record.id(), w.record.id());
 }
 
-/// Two heads at one seq above a head whose list names a root record a
-/// checkpoint had pruned: halted, the member takes that record again and
-/// shows what the list below the fork names, as a member that got all at
-/// once.
+/// Two members with different histories below a recovery fork show the
+/// same halted state and hold the same records: one applied a change and
+/// its new root's records, the other never took the change; both then
+/// take the two heads at one seq. Only the recovery chain is held, and no
+/// device is named.
 #[test]
-fn a_halted_member_takes_back_a_listed_record_a_checkpoint_pruned() {
-    let mut g = G::new();
-    let root = k("root");
-    let laptop = g.device(&root, &k("laptop"), "laptop", |_| {});
-    let tv = g.device(&root, &k("tv"), "tv", |_| {});
-    let (seq, id) = g.heads[&root.hash];
-    g.root_rec(Kind::Checkpoint { heads: vec![Head { key: root.hash, seq, id }], keep: vec![tv.id()] });
-    let list = List(vec![laptop.id()]);
-    g.lists.push(list.encode());
-    let head = g.rec(
-        &k("recovery"),
-        Kind::Recovery {
-            root: k("n1").key.clone(),
-            list: list.hash(),
-            from: 0,
-            first: RecordId([0xf1; 32]),
-            signer2: crate::testkit::rk2().key().hash(),
-        },
-    );
-    let a = head_at(&g, 2, Some(head.id()), &k("n2"), [2; 32]);
-    let b = head_at(&g, 2, Some(head.id()), &k("n3"), [3; 32]);
-    let mut all = g.recs.clone();
-    all.extend([a, b]);
-    let mut member = set_of(&g.root.key);
-    for r in &all {
-        let _ = member.insert(r.clone());
+fn halted_members_with_different_histories_end_equal() {
+    let mut g = base();
+    let from = g.recs.clone();
+    let w = write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
+    let mut applied = set_of(&g.root.key);
+    sync_all(&mut applied, &g.recs, &g.lists);
+    assert_eq!(applied.state().roots.len(), 2);
+    let mut never = set_of(&g.root.key);
+    let old: Vec<Record> = from.clone();
+    sync_all(&mut never, &old, &[]);
+    assert_eq!(never.state().roots.len(), 1);
+    let a = head_at(&g, 2, Some(w.record.id()), &k("n2"), [2; 32]);
+    let b = head_at(&g, 2, Some(w.record.id()), &k("n3"), [3; 32]);
+    for m in [&mut applied, &mut never] {
+        for r in [&w.record, &a, &b] {
+            let _ = m.insert(r.clone());
+        }
+        for r in &g.recs {
+            let _ = m.insert(r.clone());
+        }
+        for l in &g.lists {
+            let _ = m.insert_list(l);
+        }
     }
-    sync_all(&mut member, &all, &g.lists);
-    let s = member.state();
-    assert!(s.halted());
-    assert!(s.device_by_key(&k("laptop").hash).is_some());
-    let fresh = set_with(&g.root.key, &all, &g.lists);
-    assert_eq!(fresh.digest(), member.digest());
-    assert_eq!(fresh.state(), s);
-    assert_eq!(s.devices, state_with(&g.root.key, &all, &g.lists).devices);
-}
-
-/// The new root's checkpoint that narrowed the list counts no more once
-/// two heads at a later seq halt the group: the member takes back what the
-/// list names.
-#[test]
-fn a_halted_member_takes_back_what_the_new_roots_checkpoint_left_out() {
-    let mut g = G::new();
-    let root = k("root");
-    let n1 = k("n1");
-    let laptop = g.device(&root, &k("laptop"), "laptop", |_| {});
-    let list = g.listing();
-    let head = g.change(&n1, &list);
-    let (seq, id) = g.heads[&n1.hash];
-    g.rec(&n1, Kind::Checkpoint { heads: vec![Head { key: n1.hash, seq, id }], keep: vec![] });
-    let mut member = set_of(&g.root.key);
-    sync_all(&mut member, &g.recs, &g.lists);
-    assert!(!member.contains(&laptop.id()));
-    let a = head_at(&g, 2, Some(head.id()), &k("n2"), [2; 32]);
-    let b = head_at(&g, 2, Some(head.id()), &k("n3"), [3; 32]);
-    let mut all = g.recs.clone();
-    all.extend([a, b]);
-    sync_all(&mut member, &all, &g.lists);
-    let s = member.state();
-    assert!(s.halted());
-    assert!(member.contains(&laptop.id()) && s.device_by_key(&k("laptop").hash).is_some());
-    let fresh = set_with(&g.root.key, &all, &g.lists);
-    assert_eq!(fresh.digest(), member.digest());
-    assert_eq!(fresh.state(), s);
+    let (sa, sn) = (applied.state(), never.state());
+    assert!(sa.halted() && sn.halted());
+    assert!(sa.devices.is_empty() && sa.hubs.is_empty());
+    assert_eq!(sa, sn);
+    assert_eq!(applied.digest(), never.digest());
+    assert!(applied.in_dependency_order().iter().all(|r| r.body().signer == k("recovery").hash));
 }
 
 /// The writer holds its change before it gives it out: asked again at
@@ -2232,26 +2168,19 @@ fn a_change_of_root_reaches_a_member_from_a_key_one_line_admits() {
     assert_eq!(st.roots.last(), Some(&k("n1").hash));
 }
 
-/// A device the new root removes in a change of root gets, with its
-/// removal and the change that proves its signer, the change's list, so
-/// it waits for nothing.
+/// A device the person left out is no device after the change, and a
+/// peer still hands it the recovery chain, so that it can learn that the
+/// group went on without it.
 #[test]
-fn a_removed_device_gets_the_list_of_the_change_that_removed_it() {
+fn a_left_out_device_gets_the_recovery_chain() {
     let mut g = base();
     let before = g.recs.clone();
     let w = write(&mut g, &before, &k("n1"), &k("new phone"), &[k("laptop").hash]);
     let set = set_with(&g.root.key, &g.recs, &g.lists);
     let st = set.state();
-    assert!(st.revoked.contains(&k("laptop").hash));
-    let lists = set.lists_for_peer(&st, &k("laptop").hash);
-    assert_eq!(lists, [w.list.encode().as_slice()]);
-    let mut laptop = set_with(&g.root.key, &before, &[]);
-    laptop.insert_all(set.for_peer(&st, &k("laptop").hash).into_iter().cloned());
-    for l in lists {
-        laptop.insert_list(l).unwrap();
-    }
-    assert_eq!(laptop.missing_list(), None);
-    assert!(laptop.state().revoked.contains(&k("laptop").hash));
+    assert!(!has(&st, &k("laptop")) && !st.revoked.contains(&k("laptop").hash));
+    let sent: Vec<RecordId> = set.for_peer(&st, &k("laptop").hash).iter().map(|r| r.id()).collect();
+    assert!(sent.contains(&w.record.id()));
 }
 
 /// A head stands only with both halves of the recovery key: K1's signature
@@ -2354,22 +2283,33 @@ fn the_newest_heads_first_checkpoint_waits_whatever_else_does() {
             let _ = m.insert_list(l);
         }
     }
-    // A record of the newest head's group trimmed before its first
-    // checkpoint came is asked for again, and taken.
-    let asked = m.missing(&m.state());
-    let again: Vec<Record> = g.recs.iter().filter(|r| asked.contains(&r.id())).cloned().collect();
-    m.insert_all(again);
+    // The records of the newest head's group trimmed before its first
+    // checkpoint came are asked for again, one round after another as
+    // the walk down the group reaches each, and taken.
+    let mut rounds = 0;
+    loop {
+        let asked = m.missing(&m.state());
+        let again: Vec<Record> =
+            g.recs.iter().filter(|r| asked.contains(&r.id()) && !m.contains(&r.id())).cloned().collect();
+        if again.is_empty() {
+            break;
+        }
+        m.insert_all(again);
+        rounds += 1;
+        assert!(rounds <= w2.first.len(), "the group is asked for record by record at most");
+    }
     assert_eq!(m.state().roots, vec![k("root").hash, n1.hash, k("n2").hash]);
     let restored = RecordSet::restore(g.root.key.clone(), crate::testkit::recovery(), &order, &g.lists);
     assert_eq!(restored.state().roots, m.state().roots);
 }
 
-/// A change never leaves out a device that counts: when the removals and
-/// the device records that count pass what a change carries, the writer
-/// refuses and the set stays as it was; within it, every device stays.
+/// A change never drops a device that counts by itself: when the re-issue
+/// would not fit the new root's room (with room for its next checkpoint),
+/// the writer refuses and the set stays as it was; leaving out enough
+/// devices, it is written and every other device stays.
 #[test]
 fn a_change_carries_every_device_that_counts_or_is_not_written() {
-    let small = crate::records::keep::small::Small::new(40, 8, 4);
+    let small = crate::records::keep::small::Small::new(40, 11, 4);
     let mut g = base();
     let from = g.recs.clone();
     write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
@@ -2384,11 +2324,11 @@ fn a_change_carries_every_device_that_counts_or_is_not_written() {
     let st = set.state();
     let before = set.digest();
     let devices = st.devices.len();
-    assert!(devices > 8, "{devices} devices");
+    assert!(devices > 6, "{devices} devices");
     let err = set
         .write_change(&st, &k("recovery"), crate::testkit::rk2(), &k("n2"), phone(&k("phone 2")), &[], false, 0)
         .unwrap_err();
-    assert!(alloc::format!("{err}").contains("leave out devices"), "{err}");
+    assert_eq!(err.to_string(), crate::records::set::CHANGE_TOO_BIG);
     assert_eq!(set.digest(), before);
     // Removing enough of them, the change is written and keeps the rest.
     let gone = [k("e0").hash, k("e1").hash, k("tv").hash];

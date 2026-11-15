@@ -70,10 +70,12 @@ impl Cut {
         self.keep.contains(r)
     }
 
-    /// Whether r counts as far as the cut goes: it is not covered, or
-    /// listed.
+    /// Whether r counts as far as the cut goes: it is not covered. Under L
+    /// ("the last root only") a record of a root before the current one,
+    /// or of the current root below `from`, counts for nothing, whatever
+    /// the list names: only the new root's own records carry the state.
     pub fn lets(&self, r: &Record) -> bool {
-        !self.covers(&r.body().signer, r.body().seq) || self.keep.contains(&r.id())
+        !self.covers(&r.body().signer, r.body().seq)
     }
 }
 
@@ -336,18 +338,14 @@ impl State {
     /// stopped for good; or a recovery record it cannot read, and is
     /// stopped until it is updated. Nothing in the state acts then: no root
     /// or admin commands, no device is admitted, no copy is sealed or
-    /// opened. The state stays readable, so the owner sees the devices when
-    /// making the next group, and the device still passes the recovery
-    /// records on.
+    /// opened. The device still passes the recovery records on.
     ///
-    /// What a halted state shows is computed from the recovery chain below
-    /// the fork (or below the record it cannot read) and the records the
-    /// newest list applied there names, and nothing else: the roots of
-    /// that chain, and the devices and removals those listed records make.
-    /// The last root's records that list does not name do not show; after
-    /// a fork at seq 1 the state is the first root and the recovery chain
-    /// alone. So every member that holds the proof shows the same, however
-    /// its records came, and `fork` names the seq and the two records.
+    /// A halted state counts the recovery chain below the fork (or below
+    /// the record it cannot read) and nothing else: it names the roots of
+    /// that chain and no device, admin or hub. So every member that holds
+    /// the proof shows the same, however its records came, and `fork`
+    /// names the seq and the two records. The app keeps the devices it
+    /// last showed for the screen that makes the next group.
     pub fn halted(&self) -> bool {
         self.update_needed || self.conflicts.iter().any(|c| c.kind == ConflictKind::Fork)
     }
@@ -1417,17 +1415,11 @@ pub(crate) fn evaluate_checked(
     // in the set (Chain::waiting_roots).
     let waiting = chain.waiting_roots(&group_root);
     let checked: Vec<Checked> = checked.into_iter().filter(|c| !waiting.contains_key(&c.r.body().signer)).collect();
-    // Halted: only the recovery chain and what the newest list applied
-    // below the fork names (State::halted).
-    let checked = if chain.halted() {
-        let listed = chain.cut.as_ref().map(|c| &c.keep);
-        checked
-            .into_iter()
-            .filter(|c| c.role == Role::Recovery || listed.is_some_and(|k| k.contains(&c.r.id())))
-            .collect()
-    } else {
-        checked
-    };
+    // Halted by a recovery fork: the group is stopped for good, and only
+    // the recovery chain counts at every member, whatever else it held
+    // (State::halted). No device, admin or hub is named.
+    let checked =
+        if chain.halted() { checked.into_iter().filter(|c| c.role == Role::Recovery).collect() } else { checked };
     let root_recs: Vec<&Record> = checked.iter().filter(|c| c.role == Role::Root && !c.held).map(|c| c.r).collect();
     let mut cuts = chain.cuts();
     let proven = by.proven;
@@ -3024,7 +3016,9 @@ impl<'e, 'a> Epoch<'e, 'a> {
             admin: None,
             powers: 0,
             commands: 0,
-            frozen: false,
+            // A freeze is on the device: its member key frozen, by a
+            // freeze of it or of its admin key (`collect` pairs them).
+            frozen: self.frozen.contains(&n.key.hash()),
             replaces: n.replaces,
             guarded,
             by_root,
