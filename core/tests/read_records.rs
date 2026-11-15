@@ -2476,3 +2476,92 @@ fn a_key_no_longer_an_admin_beside_sixteen_live_admins_is_turned_away() {
     assert!(why.room.full_for(why.units), "it would have fit: {why:?}");
     assert_eq!(why.room.cap, 0, "{why:?}");
 }
+
+/// A room's exact fit: a record of as many units as the room has left
+/// fits; one unit more does not.
+#[test]
+fn a_room_is_full_only_past_its_exact_fit() {
+    let room = cbb_core::records::set::Room { key: k("root").hash, cap: 10, used: 7 };
+    assert!(!room.full_for(3), "three units fit in the three left");
+    assert!(room.full_for(4), "four do not");
+    let full = cbb_core::records::set::Room { key: k("root").hash, cap: 10, used: 10 };
+    assert!(!full.full_for(0) && full.full_for(1));
+}
+
+/// A record that fits a room holding other records is kept and pushes
+/// nothing out: neither those records of its own room nor any other's.
+#[test]
+fn a_record_that_fits_beside_others_pushes_nothing_out() {
+    use cbb_core::records::set::Offer;
+    let (mut set, root, mut g) = root_with_dead_checkpoints(0, 0);
+    let admin = k("admin a");
+    for i in 0..3u32 {
+        let dk = k(&format!("beside dev {i}"));
+        set.insert(g.sign(&admin, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)))).unwrap();
+    }
+    let room = set.room_of(&admin.hash).expect("the admin's room");
+    assert!(room.used >= 3, "the admin's room holds its records: {room:?}");
+    let next = g.sign(&admin, Kind::device(Device::new(k("beside dev 3").key.clone(), "dev", ROLE_MEMBER)));
+    assert_eq!(set.would_take(&next), Some(Offer::Kept));
+    let by_root = g.sign(&root, Kind::device(Device::new(k("beside dev 4").key.clone(), "dev", ROLE_MEMBER)));
+    assert_eq!(set.would_take(&by_root), Some(Offer::Kept));
+}
+
+/// A root's removal comes first in its room: where the room is full of
+/// the root's ordinary records, it pushes out the last of them, and the
+/// offer names exactly those, none of another room.
+#[test]
+fn a_root_removal_in_a_full_room_names_what_it_pushes_out() {
+    use cbb_core::records::set::Offer;
+    let (mut set, root, mut g) = root_with_dead_checkpoints(0, 0);
+    let admin = k("admin a");
+    let theirs = g.sign(&admin, Kind::device(Device::new(k("full dev").key.clone(), "dev", ROLE_MEMBER)));
+    set.insert(theirs.clone()).unwrap();
+    // Wide ordinary root records until the root's room is full.
+    let mut n = 0u32;
+    loop {
+        let st = set.state();
+        let room = set.root_room(&st).unwrap();
+        if room.left() < 20 {
+            break;
+        }
+        let mut ids: Vec<RecordId> = (0..256u32)
+            .map(|i| RecordId(cbb_core::certs::sha256(&[&n.to_le_bytes()[..], &i.to_le_bytes()[..]].concat())))
+            .collect();
+        ids.sort();
+        let r = g.sign(&root, Kind::Thaw { ids, seen: Vec::new() });
+        assert!(set.insert(r).is_ok(), "thaw {n}");
+        n += 1;
+        assert!(n < 200, "the root's room never filled");
+    }
+    let rm = wide_removal(&mut g, &root, "full wide", 0);
+    let Some(Offer::PushesOut(out)) = set.would_take(&rm) else {
+        panic!("a root removal in a full room pushes the root's ordinary records out: {:?}", set.would_take(&rm))
+    };
+    assert!(!out.is_empty());
+    for id in &out {
+        let r = set.get(id).expect("held");
+        assert_eq!(r.body().signer, root.hash, "only records of the root's own room are named");
+        assert!(matches!(r.body().kind, Kind::Thaw { .. }), "only its ordinary records");
+    }
+    assert!(!out.contains(&theirs.id()));
+}
+
+/// The warning before the root removes one admin key does not name
+/// another admin's device that keeps its key.
+#[test]
+fn the_warning_names_only_the_admins_that_lose_their_key() {
+    let (mut set, root, mut g) = root_with_dead_checkpoints(0, 0);
+    let (b, pb) = (k("warn admin b"), k("warn phone b"));
+    let mut d = Device::new(pb.key.clone(), "admin", ROLE_PHONE);
+    d.rights = RIGHT_READ | RIGHT_SEND;
+    d.admin = Some(b.key.clone());
+    d.powers = 0x1ff & !64;
+    set.insert(g.sign(&root, Kind::device(d))).unwrap();
+    let st = set.state();
+    let warning = set.removal_warning(&st, &root.hash, &[k("admin a").hash], g.t + 1);
+    let pa = k("phone a").key.device_id();
+    assert!(warning.out.contains(&pa) || warning.no_longer_admin.contains(&pa), "{warning:?}");
+    assert!(!warning.no_longer_admin.contains(&pb.key.device_id()), "B keeps its key: {warning:?}");
+    assert!(!warning.out.contains(&pb.key.device_id()));
+}
