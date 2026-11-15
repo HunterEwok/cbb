@@ -3281,7 +3281,8 @@ module records_v3 {
       .expect(if (NEWEST_ASIDE) MEMBERS.forall(m => views.get(m).checkpoint == 9) and promises
         else views.get("a").checkpoint == 0 and views.get("m").checkpoint == 7)
 
-  run prunedRemovalTest =
+  // (Void under ROOT_WAITS: the checkpoint settles a removal no admin has acked; W keeps it until every live admin acks (the settle path: wSh1, wSh2, wFrozenBlocks).)
+  run prunedRemovalTest = if (ROOT_WAITS) init else
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
       .then(signAs(ROOT, "revoke", DEVICE, 0))
@@ -4270,7 +4271,8 @@ module records_v3 {
       .expect(MEMBERS.forall(m => views.get(m).checkpoint == 5 and views.get(m).devices.contains(DEVICE)))
   // The root removes D and checkpoint 8 prunes the removal with the admission. Member a counts
   // 8; m holds 8 without the record 8 waits for. Today m still counts D; with F-12 it does not.
-  run f12HeldBackTest = f12Base
+  // (Void under ROOT_WAITS: the checkpoint settles a removal no admin has acked; W keeps it until every live admin acks (the settle path: wSh1, wSh2, wFrozenBlocks).)
+  run f12HeldBackTest = if (ROOT_WAITS) init else f12Base
       .then(signAs(ROOT, "revoke", DEVICE, 0))
       .then(signAs(ROOT, "copies", "", 0))
       .then(signAs(ROOT, "checkpoint", "", 0))
@@ -5214,7 +5216,8 @@ module records_v3 {
       .expect(MEMBERS.forall(m => views.get(m).path == [ROOT, "NK"] and not(views.get(m).stop)
         and views.get(m).commanders.contains("NK")) and promises)
 
-  run rootNamesPrunedGivenDecidedTest =
+  // (Void under ROOT_WAITS: the checkpoint settles a removal no admin has acked; W keeps it until every live admin acks (the settle path: wSh1, wSh2, wFrozenBlocks).)
+  run rootNamesPrunedGivenDecidedTest = if (ROOT_WAITS) init else
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
       .then(signAs(ROOT, "revoke", DEVICE, 0))
@@ -5228,7 +5231,8 @@ module records_v3 {
       .then(syncAll)
       .expect(MEMBERS.forall(m => views.get(m).checkpoint == 8 and views.get(m).devices.contains(DEVICE)) and promises)
 
-  run rootNamesPrunedDecidedTest =
+  // (Void under ROOT_WAITS: the checkpoint settles a removal no admin has acked; W keeps it until every live admin acks (the settle path: wSh1, wSh2, wFrozenBlocks).)
+  run rootNamesPrunedDecidedTest = if (ROOT_WAITS) init else
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
       .then(signAs(ROOT, "revoke", DEVICE, 0))
@@ -5363,7 +5367,8 @@ module records_v3 {
       .expect(MEMBERS.filter(m => inGroup(m)).forall(m => (if (LAST_ROOT_ONLY) not(views.get(m).devices.contains(DEVICE)) else views.get(m).revoked.contains(DEVICE)) and views.get(m) == views.get("r")
         and views.get(m).path == ["R", "NA", "NK"]) and promises)
 
-  run prunedRemovalDecidedTest =
+  // (Void under ROOT_WAITS: the checkpoint settles a removal no admin has acked; W keeps it until every live admin acks (the settle path: wSh1, wSh2, wFrozenBlocks).)
+  run prunedRemovalDecidedTest = if (ROOT_WAITS) init else
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
       .then(signAs(ROOT, "revoke", DEVICE, 0))
