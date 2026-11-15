@@ -667,3 +667,24 @@ fn a_member_that_takes_what_the_writer_gave_misses_nothing() {
         assert_eq!(ms.devices, writer.state().devices, "record {i}");
     }
 }
+
+/// No acknowledgement is due while the group is stopped, where the writer
+/// refuses it: a removal the admin has not acknowledged, then a root fork.
+#[test]
+fn no_ack_is_due_while_the_group_is_stopped() {
+    let mut g = G::new();
+    let (pa, a) = (k("phone a"), k("admin a"));
+    g.admin(&pa, &a, POWER_ADMIT | POWER_REMOVE);
+    g.device(&k("root"), &k("d"), "d", |_| {});
+    g.root_rec(Kind::Revoke(removal(&[k("d").hash], g.seen())));
+    let set = set_with(&g.root.key, &g.recs, &g.lists);
+    assert!(set.ack_due(&set.state(), &a.hash));
+    let r = g.root_rec(Kind::Copies { incoming_ms: 50_000, seen: vec![] });
+    let twin = root_twin(&g, &r, Kind::Copies { incoming_ms: 60_000, seen: vec![] });
+    g.recs.push(twin);
+    let mut set = set_with(&g.root.key, &g.recs, &g.lists);
+    let st = set.state();
+    assert_eq!(st.stop, crate::records::eval::Stop::Full);
+    assert!(set.write_ack(&st, &a, 0).is_err());
+    assert!(!set.ack_due(&st, &a.hash));
+}
