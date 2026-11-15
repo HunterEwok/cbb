@@ -3281,7 +3281,7 @@ module records_v3 {
       .expect(if (NEWEST_ASIDE) MEMBERS.forall(m => views.get(m).checkpoint == 9) and promises
         else views.get("a").checkpoint == 0 and views.get("m").checkpoint == 7)
 
-  // (Void under ROOT_WAITS: the checkpoint settles a removal no admin has acked; W keeps it until every live admin acks (the settle path: wSh1, wSh2, wFrozenBlocks).)
+  // (Void under ROOT_WAITS: the checkpoint settles a removal no admin has acked; W keeps it until every live admin acks; its W form, with the acks, is the test of the same name ending in W.)
   run prunedRemovalTest = if (ROOT_WAITS) init else
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
@@ -4271,7 +4271,7 @@ module records_v3 {
       .expect(MEMBERS.forall(m => views.get(m).checkpoint == 5 and views.get(m).devices.contains(DEVICE)))
   // The root removes D and checkpoint 8 prunes the removal with the admission. Member a counts
   // 8; m holds 8 without the record 8 waits for. Today m still counts D; with F-12 it does not.
-  // (Void under ROOT_WAITS: the checkpoint settles a removal no admin has acked; W keeps it until every live admin acks (the settle path: wSh1, wSh2, wFrozenBlocks).)
+  // (Void under ROOT_WAITS: the checkpoint settles a removal no admin has acked; W keeps it until every live admin acks; its W form, with the acks, is the test of the same name ending in W.)
   run f12HeldBackTest = if (ROOT_WAITS) init else f12Base
       .then(signAs(ROOT, "revoke", DEVICE, 0))
       .then(signAs(ROOT, "copies", "", 0))
@@ -5216,7 +5216,7 @@ module records_v3 {
       .expect(MEMBERS.forall(m => views.get(m).path == [ROOT, "NK"] and not(views.get(m).stop)
         and views.get(m).commanders.contains("NK")) and promises)
 
-  // (Void under ROOT_WAITS: the checkpoint settles a removal no admin has acked; W keeps it until every live admin acks (the settle path: wSh1, wSh2, wFrozenBlocks).)
+  // (Void under ROOT_WAITS: the checkpoint settles a removal no admin has acked; W keeps it until every live admin acks; its W form, with the acks, is the test of the same name ending in W.)
   run rootNamesPrunedGivenDecidedTest = if (ROOT_WAITS) init else
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
@@ -5231,7 +5231,7 @@ module records_v3 {
       .then(syncAll)
       .expect(MEMBERS.forall(m => views.get(m).checkpoint == 8 and views.get(m).devices.contains(DEVICE)) and promises)
 
-  // (Void under ROOT_WAITS: the checkpoint settles a removal no admin has acked; W keeps it until every live admin acks (the settle path: wSh1, wSh2, wFrozenBlocks).)
+  // (Void under ROOT_WAITS: the checkpoint settles a removal no admin has acked; W keeps it until every live admin acks; its W form, with the acks, is the test of the same name ending in W.)
   run rootNamesPrunedDecidedTest = if (ROOT_WAITS) init else
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
@@ -5367,7 +5367,7 @@ module records_v3 {
       .expect(MEMBERS.filter(m => inGroup(m)).forall(m => (if (LAST_ROOT_ONLY) not(views.get(m).devices.contains(DEVICE)) else views.get(m).revoked.contains(DEVICE)) and views.get(m) == views.get("r")
         and views.get(m).path == ["R", "NA", "NK"]) and promises)
 
-  // (Void under ROOT_WAITS: the checkpoint settles a removal no admin has acked; W keeps it until every live admin acks (the settle path: wSh1, wSh2, wFrozenBlocks).)
+  // (Void under ROOT_WAITS: the checkpoint settles a removal no admin has acked; W keeps it until every live admin acks; its W form, with the acks, is the test of the same name ending in W.)
   run prunedRemovalDecidedTest = if (ROOT_WAITS) init else
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
@@ -6357,4 +6357,80 @@ module records_v3 {
       .expect(db.get(rCp).keep.contains(4))
       .then(syncRound).then(syncRound)
       .expect(MEMBERS.forall(m => views.get(m).revoked.contains("dC")) and promises)
+
+  // W forms of the five tests void under ROOT_WAITS (architecture 11-15 00:24Z): every live
+  // admin acks the removal before the checkpoint, the settle happens, and the original claim
+  // follows. (Ids shift by the three acks: rCp is R's newest checkpoint.)
+  run prunedRemovalWTest = if (not(ROOT_WAITS)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
+      .then(signAs(ROOT, "revoke", DEVICE, 0))
+      .then(syncAll).then(acksAll).then(syncAll)
+      .then(signAs(ROOT, "copies", "", 0))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .then(syncAll)
+      .expect(db.get(rCp).keep.intersect(Set(4, 5)) == Set() and MEMBERS.forall(m => views.get(m).checkpoint == rCp
+        and not(st.get(m).recs.contains(4)) and not(st.get(m).recs.contains(5))
+        and not(views.get(m).devices.contains(DEVICE))) and promises)
+      .then(give("m", 4))
+      .then(give("m", 5))
+      .expect(not(st.get("m").recs.contains(4)) and not(st.get("m").recs.contains(5)) and promises)
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
+      .then(syncAll)
+      .expect(MEMBERS.forall(m => views.get(m).devices.contains(DEVICE)) and promises)
+  run prunedRemovalDecidedWTest = if (not(ROOT_WAITS)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
+      .then(signAs(ROOT, "revoke", DEVICE, 0))
+      .then(syncAll).then(acksAll).then(syncAll)
+      .then(signAs(ROOT, "copies", "", 0))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .then(syncAll)
+      .expect(db.get(rCp).keep.intersect(Set(4, 5)) == Set() and MEMBERS.forall(m => views.get(m).checkpoint == rCp
+        and not(views.get(m).devices.contains(DEVICE))) and promises)
+      .then(give("m", 4)).then(give("m", 5))
+      .expect(not(st.get("m").recs.contains(4)) and not(st.get("m").recs.contains(5)) and promises)
+      .then(signW(ROOT, "device", DEVICE, "", 0, false, false, 1))
+      .then(syncAll)
+      .expect(promises)
+  // f12: the acks reach r, a and c only; m holds the checkpoint without what it waits for.
+  run f12HeldBackWTest = if (not(ROOT_WAITS)) init else f12Base
+      .then(signAs(ROOT, "revoke", DEVICE, 0))
+      .then(giveAll(Set("a", "c"), [6])).then(acksAll).then(giveAll(Set("r"), [7, 8, 9]))
+      .then(signAs(ROOT, "copies", "", 0))
+      .then(signAs(ROOT, "checkpoint", "", 0))
+      .then(giveAll(Set("a"), [6, 7, 8, 9, 10, 11]))
+      .then(giveAll(Set("m"), [11]))
+      .expect(and { db.get(11).kind == "checkpoint", not(db.get(11).keep.contains(6)),
+        views.get("a").checkpoint == 11, not(views.get("a").devices.contains(DEVICE)),
+        views.get("m").checkpoint == 5, views.get("m").devices.contains(DEVICE) == not(F12),
+        heldBackCountsLess == F12 })
+      .then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).checkpoint == 11 and not(views.get(m).devices.contains(DEVICE))) and promises)
+  // The root's checkpoint prunes 4 and 5; a later one names 4 again (kept), so D counts.
+  run rootNamesPrunedDecidedWTest = if (not(ROOT_WAITS)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
+      .then(signAs(ROOT, "revoke", DEVICE, 0))
+      .then(syncAll).then(acksAll).then(syncAll)
+      .then(signAs(ROOT, "copies", "", 0))
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 1, false, Set()))
+      .then(giveAll(Set("a", "c", "m"), [9, 10]))
+      .expect(views.get("m").checkpoint == 10 and not(st.get("m").recs.contains(4)) and st.get("k").recs.contains(4))
+      .then(signFullW(ROOT, "checkpoint", "", "", 0, false, false, 1, false, Set(4)))
+      .then(syncAll).then(syncAll)
+      .expect(MEMBERS.forall(m => views.get(m).checkpoint == rCp and views.get(m).devices.contains(DEVICE)) and promises)
+  run rootNamesPrunedGivenDecidedWTest = if (not(ROOT_WAITS)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
+      .then(signAs(ROOT, "revoke", DEVICE, 0))
+      .then(syncAll).then(acksAll).then(syncAll)
+      .then(signAs(ROOT, "copies", "", 0))
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 1, false, Set()))
+      .then(syncAll)
+      .then(signFullW(ROOT, "checkpoint", "", "", 0, false, false, 1, false, Set(4)))
+      .then(syncAll)
+      .then(give("m", 4))
+      .then(syncAll)
+      .expect(MEMBERS.forall(m => views.get(m).checkpoint == rCp and views.get(m).devices.contains(DEVICE)) and promises)
 }
