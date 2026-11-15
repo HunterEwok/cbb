@@ -590,9 +590,7 @@ fn a_joiner_after_a_change_reaches_the_same_state() {
 /// The pre-signing query (e), as the owner decided it: it lists every
 /// device the writer would re-issue (stays / out / admin kept with a
 /// spare / admin rights lost / frozen), and the leave-out list is exactly
-/// what write_change leaves out. Written against placeholder names; the
-/// module is compiled once the query lands.
-#[cfg(any())]
+/// what write_change leaves out.
 mod query {
     use super::*;
     use cbb_core::records::set::Outcome;
@@ -649,19 +647,37 @@ mod query {
 /// Records from a peer this member does not know (L8, round 2): only
 /// recovery records are exchanged until a valid head extends the chain;
 /// then only that head's new root's records, within its room; never copies
-/// or commands. Written against placeholder names until records names the
-/// entry point reachable from core/tests; the module is compiled then.
-#[cfg(any())]
+/// or commands. Through `RecordSet::insert_from_unknown`.
 mod unknown_peer {
     use super::*;
-    use cbb_core::records::set::FromUnknown;
+
+    /// What an offer from an unknown peer did: whether the set's root
+    /// moved (the change applied), and how many of the offered records
+    /// (by ID) the set does not hold after it.
+    struct FromUnknown {
+        applied: bool,
+        refused: usize,
+    }
+
+    fn lists_of(set: &RecordSet) -> Vec<Vec<u8>> {
+        set.lists().map(<[u8]>::to_vec).collect()
+    }
+
+    fn from_unknown(set: &mut RecordSet, records: &[Record], lists: &[Vec<u8>]) -> FromUnknown {
+        let before = set.state().roots;
+        let lists: Vec<&[u8]> = lists.iter().map(Vec::as_slice).collect();
+        let _ = set.insert_from_unknown(records, &lists);
+        let ids: std::collections::BTreeSet<_> = records.iter().map(Record::id).collect();
+        let refused = ids.iter().filter(|id| !set.contains(id)).count();
+        FromUnknown { applied: set.state().roots != before, refused }
+    }
 
     /// L8.1: the replaced root phone alone brings a sleeper to the new root.
     #[test]
     fn the_new_phone_alone_brings_a_sleeper_to_the_new_root() {
         let (g, mut sleeper, _) = changed("u1", &[]);
         let offered: Vec<Record> = g.set.in_dependency_order().into_iter().cloned().collect();
-        let taken = sleeper.from_unknown(&offered);
+        let taken = from_unknown(&mut sleeper, &offered, &lists_of(&g.set));
         assert!(taken.applied, "head, re-issue and first checkpoint taken from an unknown peer");
         assert_eq!(view(&sleeper.state()), view(&g.set.state()));
     }
@@ -675,7 +691,7 @@ mod unknown_peer {
         let drop = w.first.iter().find(|r| matches!(r.body().kind, Kind::Device(_))).unwrap().id();
         let offered: Vec<Record> =
             g.set.in_dependency_order().into_iter().filter(|r| r.id() != drop).cloned().collect();
-        let _ = sleeper.from_unknown(&offered);
+        let _ = from_unknown(&mut sleeper, &offered, &lists_of(&g.set));
         assert_eq!(view(&sleeper.state()), old);
     }
 
@@ -690,13 +706,14 @@ mod unknown_peer {
         chain.follow(&sleeper, &g.r1);
         chain.follow(&sleeper, &k("A"));
         let mut junk = Vec::new();
+        let (a, nobody) = (k("A"), k("nobody"));
         for i in 0..50u32 {
             g.t += 10;
-            let by = [&g.r1, &k("A"), &k("nobody")][i as usize % 3];
+            let by = [&g.r1, &a, &nobody][i as usize % 3];
             junk.push(chain.sign(&sleeper, by, Kind::device(plain(&k(&format!("j{i}")), "j")), g.t));
         }
         let mut s = sleeper.clone();
-        let _ = s.from_unknown(&junk);
+        let _ = from_unknown(&mut s, &junk, &[]);
         assert_eq!((s.digest(), s.bytes()), before);
     }
 
@@ -707,8 +724,16 @@ mod unknown_peer {
         let (g, mut sleeper, _) = changed("u4", &[]);
         let mut other = group("u4");
         change(&mut other.set, &k("u4 root 2b"), &k("P2b"), &[], other.t + 1_000);
-        let _ = sleeper.from_unknown(&g.set.in_dependency_order().into_iter().cloned().collect::<Vec<_>>());
-        let _ = sleeper.from_unknown(&other.set.in_dependency_order().into_iter().cloned().collect::<Vec<_>>());
+        let _ = from_unknown(
+            &mut sleeper,
+            &g.set.in_dependency_order().into_iter().cloned().collect::<Vec<_>>(),
+            &lists_of(&g.set),
+        );
+        let _ = from_unknown(
+            &mut sleeper,
+            &other.set.in_dependency_order().into_iter().cloned().collect::<Vec<_>>(),
+            &lists_of(&other.set),
+        );
         assert!(sleeper.state().fork.is_some());
     }
 
@@ -717,9 +742,83 @@ mod unknown_peer {
     #[test]
     fn an_unknown_peer_is_held_to_the_recovery_chain_s_bounds() {
         let (g, mut sleeper, w) = changed("u6", &[]);
-        let mut offered = vec![w.record.clone(); 3];
+        // Three heads at one seq: three changes the recovery key signed on
+        // copies of the old set.
+        let mut offered = vec![w.record.clone()];
+        let mut lists = lists_of(&g.set);
+        for i in 0..2 {
+            let mut other = sleeper.clone();
+            let o = change(&mut other, &k(&format!("u6 root 2{i}")), &k(&format!("P2{i}")), &[], g.t + 1 + i as u64);
+            offered.push(o.record.clone());
+            lists.extend(lists_of(&other));
+        }
         offered.extend(g.set.in_dependency_order().into_iter().cloned());
-        let taken = sleeper.from_unknown(&offered);
+        let taken = from_unknown(&mut sleeper, &offered, &lists);
         assert!(taken.refused > 0);
     }
+}
+
+/// L, a change whose re-issue never went out: its writer's device is gone
+/// right after the recovery record and its list reached the members (the
+/// new root's first records never did). The person, holding the recovery
+/// key, writes the next change from a device that holds that head
+/// (sign N+1, no spares, never a fork), and every member reaches it.
+#[test]
+#[ignore = "disagreement with 61b698f8: CHANGE_WAITING refuses it"]
+fn a_change_whose_reissue_never_went_out_does_not_stop_the_group() {
+    let g = group("l30");
+    let mut gone = g.set.clone();
+    let w = change(&mut gone, &k("l30 root 2"), &k("l30 P2"), &[], g.t + 1_000);
+    let lists: Vec<Vec<u8>> = gone.lists().map(<[u8]>::to_vec).collect();
+    let mut member = g.set.clone();
+    offer(&mut member, &lists, std::slice::from_ref(&w.record));
+    let st = member.state();
+    assert_eq!(st.roots.last(), Some(&g.r1.hash), "the head alone does not apply");
+    let r3 = k("l30 root 3");
+    let p = Device::new(k("l30 P3").key.clone(), "new phone", ROLE_PHONE);
+    let next = member.write_change(&st, &k("recovery"), &rk2(), &r3, p, &[], false, g.t + 2_000);
+    let next = next.unwrap_or_else(|e| panic!("the person's next change from a member holding the head: {e}"));
+    assert_eq!(next.record.body().seq, w.record.body().seq + 1, "N+1, on the head it holds");
+    assert_eq!(member.state().roots.last(), Some(&r3.hash));
+    assert!(member.state().fork.is_none(), "never a fork");
+}
+
+/// The same, today: every member that holds the head refuses a change
+/// (CHANGE_WAITING), and a change written on a device that never got the
+/// head takes the same seq, a fork that stops the group for good.
+#[test]
+fn today_a_change_whose_reissue_never_went_out_leaves_only_a_fork() {
+    let g = group("l31");
+    let mut gone = g.set.clone();
+    let w = change(&mut gone, &k("l31 root 2"), &k("l31 P2"), &[], g.t + 1_000);
+    let lists: Vec<Vec<u8>> = gone.lists().map(<[u8]>::to_vec).collect();
+    let mut member = g.set.clone();
+    offer(&mut member, &lists, std::slice::from_ref(&w.record));
+    let st = member.state();
+    let p = Device::new(k("l31 P3").key.clone(), "new phone", ROLE_PHONE);
+    let refused = member.write_change(&st, &k("recovery"), &rk2(), &k("l31 root 3"), p, &[], false, g.t + 2_000);
+    println!(
+        "from a member holding the head: {:?}",
+        refused.as_ref().map(|w| w.record.body().seq).map_err(ToString::to_string)
+    );
+    assert!(refused.is_err());
+    // A device that never got the head: the old set as loaded.
+    let mut blind = g.set.clone();
+    let w2 = change(&mut blind, &k("l31 root 3b"), &k("l31 P3b"), &[], g.t + 3_000);
+    assert_eq!(w2.record.body().seq, w.record.body().seq, "the same seq as the head that went out");
+    sync(&blind, &mut member);
+    println!(
+        "after the blind change reaches the member: fork {:?}, roots {}",
+        member.state().fork.is_some(),
+        member.state().roots.len()
+    );
+    assert!(member.state().fork.is_some(), "two heads at one seq: the group stops for good");
+    let (st, bt) = (member.state(), blind.state());
+    assert!(st.devices.is_empty() && st.devices.iter().all(|d| d.admin.is_none()), "the halted state names no device");
+    sync(&member, &mut blind);
+    assert!(
+        blind.state().fork.is_some() && blind.state().devices.is_empty(),
+        "nor at the other side: {:?}",
+        bt.devices.len()
+    );
 }

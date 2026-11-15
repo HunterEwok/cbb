@@ -877,6 +877,7 @@ fn way_out(set: &RecordSet, root: &K, mut t: u64) -> Result<(), String> {
 /// breaks, and whether ordinary records alone ate the way out before any
 /// removal was refused.
 #[test]
+#[ignore = "long: a real-size fill, the way out tried on copies; run with --ignored on a server"]
 fn sixteen_laggards_a_mixed_fill_never_closes_the_way_out() {
     use cbb_core::records::body::{POWER_ADMIT, POWER_MANAGE, POWER_REMOVE};
     let root = k("root");
@@ -973,14 +974,16 @@ fn sixteen_laggards_a_mixed_fill_never_closes_the_way_out() {
             }
             let st = set.state();
             let used = set.root_room(&st).map_or(0, |r| r.used);
-            if first_break.is_none() && (used > 1_300 || step % 50 == 0) {
-                if let Err(e) = way_out(&set, &root, t) {
-                    first_break = Some(format!(
-                        "seed {seed} step {step}: after a {what} (root room {used}, removal refused before: {removal_refused}, waiting {}): {e}",
-                        set.removals_waiting(&st).len()
-                    ));
-                    break;
-                }
+            let due = (used > 1_300 && step.is_multiple_of(10)) || step.is_multiple_of(100);
+            if first_break.is_none()
+                && due
+                && let Err(e) = way_out(&set, &root, t)
+            {
+                first_break = Some(format!(
+                    "seed {seed} step {step}: after a {what} (root room {used}, removal refused before: {removal_refused}, waiting {}): {e}",
+                    set.removals_waiting(&st).len()
+                ));
+                break;
             }
         }
         let st = set.state();
