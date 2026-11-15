@@ -6783,18 +6783,25 @@ module records_v3 {
       .expect(db.get(nextId - 1).seen.keys().contains(PHONE) and lineOf(db.get(nextId - 1).seen, PHONE).length() == 1)
 
   // FINAL_CORE (2). The root pair to any peer not removed: after the change to NA the outside
-  // device m is counted by nobody (no re-issue names it) yet removed by nobody; NA forks with
-  // two records at one seq, and a, which holds both, hands m the pair with the heads; m takes
-  // it and halts. (Without FINAL_CORE m is handed the heads alone and stays live.)
+  // device m is counted by nobody (no re-issue names it) yet removed by nobody, so a hands it
+  // only heads. NA forks with two records at one seq (the twin published; a takes it and
+  // halts), and a now hands m the pair beside the heads. With HEADS_WITH_FIRSTS m applies the
+  // change, takes the pair of its own last root and halts (the pair also rides beside a's
+  // chain there: the model is wider than the core). Without it m stays on R, and a pair of a
+  // root that is not its last one is not taken (the core: "a pair of an old root: nothing").
   run fcPairTest = if (not(onL and FINAL_CORE and UNKNOWN_HEADS)) init else init
       .then(signChainGL(RECOVERY, "recover", "NA", 1, "honest", Set(), Set()))
       .then(syncRound).then(syncRound)
-      .expect(not(counts("a", "m")) and not(views.get("a").revoked.contains(MDEV)))
+      .expect(not(counts("a", "m")) and not(views.get("a").revoked.contains(MDEV)) and pairFor("a", "m") == Set())
       .then(sign("NA", "copies", "", "", 0, false, false, 2))
       .then(signFull("NA", "copies", "", "", 0, false, true, 2, true, Set()))
-      .expect(pairFor("a", "m").size() == 2)
+      .then(giveOnly("a", nextId - 1))
+      .expect(views.get("a").stop and pairFor("a", "m").size() == 2
+        and pairFor("a", "m").forall(i => db.get(i).signer == "NA" and db.get(i).seq == 5))
       .then(syncRound)
-      .expect(views.get("m").stop and pairFor("a", "m").forall(i => heldBy(st.get("m")).contains(i)))
+      .expect(if (HEADS_WITH_FIRSTS) views.get("m").stop and last(views.get("m").path) == "NA"
+          and pairFor("a", "m").forall(i => heldBy(st.get("m")).contains(i))
+        else not(views.get("m").stop) and views.get("m").path == [ROOT])
 
   run lReissueCountedTest = if (not(onL)) init else init
       .then(signFull(ROOT, "revoke", MINTED, "phone", 0, false, true, 1, true, Set()))
