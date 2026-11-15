@@ -2149,6 +2149,17 @@ RevL(l) == IF l = <<>> THEN <<>> ELSE RevL(Tail(l)) \o <<Head(l)>>
 FromHeld(l) == Finish(InsertAll(InsertAll(EMPTY, l, db), l, db), db)[2]
 \* FuncOfHeld: what a member keeps and sees equals the function of the records it holds
 \* (ascending order). Confluent: the same held set in ascending and descending order ends equal.
+\* FuncOfHeld and Confluent at once: the ascending rebuild is shared, and the broken one is printed.
+HeldAgree == \A m \in MEMBERS :
+    LET v == views[m]
+        l == ToList(HeldBy(st[m]))
+        a == FromHeld(l)
+    IN IF ~(v.stop \/ a = v) THEN PrintT(<<"VIOLATED", "FuncOfHeld", m>>) /\ FALSE
+       ELSE IF a # FromHeld(RevL(l)) THEN PrintT(<<"VIOLATED", "Confluent", m>>) /\ FALSE
+       ELSE TRUE
+\* All the named parts of PFParts in one pass (PFParts is built once per state, not once per part);
+\* the broken parts are printed by name.
+PFAll(names) == LET p == PFParts IN \A f \in names : p[f] \/ (PrintT(<<"VIOLATED", f>>) /\ FALSE)
 FuncOfHeld == \A m \in MEMBERS :
     LET v == views[m] IN v.stop \/ FromHeld(ToList(HeldBy(st[m]))) = v
 Confluent == \A m \in MEMBERS :

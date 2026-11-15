@@ -93,4 +93,7 @@ ProbeX(k) ==
         recsS |-> s.recs, cpS |-> vh.checkpoint, stop |-> vh.stop]
 ProbeInv == pc = 9 /\ FALSE => PrintT(<<"CPS", [i \in {j \in DOMAIN db : db[j].kind \in {"checkpoint", "revoke", "device"}} |-> <<db[i].signer, db[i].kind, db[i].target, db[i].keep>>]>>)
 
+PNAMES == {"PromisesCheap", "oneState", "converges", "convergesHonest", "removedStayOut", "oneChainOneState", "fairRoom", "compactedAgree", "honestNeverDropped", "noLiveOld", "deviceStays", "LReissueW", "LNoOldRevive", "removedStayOutAdm", "SpareFresh"}
+P_All == Started => PFAll(PNAMES)
+J45 == Started => HeldAgree
 ====

@@ -1,0 +1,13 @@
+# Starts that must break, and the part that must break ("*" = any). Every other start must
+# end with "No error has been found". Calibrations prove the check can see a fault; probes
+# prove a state is reachable (the invariant is the negation of what they look for); the price
+# probe shows the known cost of rule L.
+g30/P_g30GTSF *
+s31/P_s31SF *
+lo/P_leaveOutCal LeftOutStaysOut
+g30/P_g30GTSTP WSettledX
+w29/P_w29FrzTbP WSettledX
+w29/P_w29FrzThawP WSettledX
+s31f/P_s31FrzP1 FrzOnSpare
+s31f/P_s31FrzP2 SpareActs
+l-dir/P_l12RePrice LReissuePrice

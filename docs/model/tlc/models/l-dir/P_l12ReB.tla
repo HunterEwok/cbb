@@ -66,4 +66,7 @@ J3 == Started => SavedStable
 J4 == Started => FuncOfHeld
 J5 == Started => Confluent
 PathGrowsP == [][\A m \in MEMBERS : IsPrefix(views[m].path, views'[m].path) \/ ChainState(st'[m], db').stop]_<<vars, pc>>
+PNAMES == {"PromisesCheap", "oneState", "converges", "convergesHonest", "removedStayOut", "oneChainOneState", "fairRoom", "compactedAgree", "honestNeverDropped", "honestNoMarks", "deviceStays", "LReissueW", "LNoOldRevive", "removedStayOutAdm", "SpareFresh", "noLiveOld"}
+P_All == Started => PFAll(PNAMES)
+J45 == Started => HeldAgree
 ====

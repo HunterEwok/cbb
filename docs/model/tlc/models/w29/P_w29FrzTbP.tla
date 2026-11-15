@@ -100,4 +100,7 @@ ProbeX(k) ==
 ProbeInv == pc = 9 /\ FALSE => PrintT(<<"CPS", [i \in {j \in DOMAIN db : db[j].kind \in {"checkpoint", "revoke", "device"}} |-> <<db[i].signer, db[i].kind, db[i].target, db[i].keep>>]>>)
 
 NoDr == ~(pc = 9 /\ "D" \in views["r"].devices)
+PNAMES == {}
+P_All == Started => PFAll(PNAMES)
+J45 == Started => HeldAgree
 ====
