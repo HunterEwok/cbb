@@ -3080,7 +3080,8 @@ impl RecordSet {
         if seen.is_empty() {
             return Err(crate::error::Error::msg("there is nothing to acknowledge"));
         }
-        self.write_record(state, signer, Kind::Ack { seen, spare }, time_ms)
+        // An ack is a key's acknowledgement itself: the call adds it alone.
+        Self::only(self.write_record(state, signer, Kind::Ack { seen, spare }, time_ms)?)
     }
 
     /// The root's units each live admin key holds back: the sizes of the
@@ -3170,7 +3171,8 @@ impl RecordSet {
         let Some(kind) = self.take_back_kind(state, a) else {
             return Err(crate::error::Error::msg("no device holds this admin key"));
         };
-        self.write_record(state, root, kind, time_ms)
+        // The root's record goes alone: a root writes no acknowledgement.
+        Self::only(self.write_record(state, root, kind, time_ms)?)
     }
 
     /// The record `take_back` writes for admin key a: its device without
@@ -3587,13 +3589,33 @@ impl RecordSet {
     /// ordinary record of a group goes through it.
     /// A removal that names a key in two histories goes through
     /// `write_removal`, which keeps out what that key's removals bar.
+    ///
+    /// It gives back every record it added, in the order they go out: an
+    /// admin key's first record after its grant counts comes after the
+    /// acknowledgement the writer adds before it (the seen line), so that
+    /// a caller that sends exactly what it gets leaves no gap.
     pub fn write_record(
         &mut self,
         state: &State,
         signer: &dyn ExternalKey,
-        kind: Kind,
+        mut kind: Kind,
         time_ms: u64,
-    ) -> crate::error::Result<Record> {
+    ) -> crate::error::Result<Vec<Record>> {
+        // A removal or a freeze cuts what the keys it names signed that
+        // its seen does not hold: the honest writer fills the seen with
+        // the heads it holds of those keys (and of their devices' other
+        // key), as `write_removal` does. A caller's seen may add to them,
+        // never shorten them: a short one would cut an admin's newest ack,
+        // and with it the spare a change names.
+        if let Kind::Revoke(rm) | Kind::Freeze(rm) = &mut kind {
+            let mut seen: BTreeMap<KeyHash, super::body::Seen> = rm.seen.iter().map(|s| (s.key, *s)).collect();
+            for h in self.heads_of(state, &rm.keys) {
+                if seen.get(&h.key).is_none_or(|o| o.seq < h.seq) {
+                    seen.insert(h.key, h);
+                }
+            }
+            rm.seen = seen.into_values().collect();
+        }
         if let Kind::Revoke(rm) = &kind
             && rm.keys.iter().any(|k| state.two_histories(k))
         {
@@ -3616,13 +3638,21 @@ impl RecordSet {
             && !self.records.values().any(|e| e.record.body().signer == h && state.counting.contains(&e.record.id()))
         {
             let mut trial = self.clone();
-            trial.write_ack(state, signer, time_ms)?;
+            let ack = trial.write_ack(state, signer, time_ms)?;
             let now = trial.state();
             let r = trial.write_one(&now, signer, kind, time_ms)?;
             *self = trial;
-            return Ok(r);
+            return Ok(alloc::vec![ack, r]);
         }
-        self.write_one(state, signer, kind, time_ms)
+        Ok(alloc::vec![self.write_one(state, signer, kind, time_ms)?])
+    }
+
+    /// The one record a writer call added, where the call adds one.
+    fn only(mut v: Vec<Record>) -> crate::error::Result<Record> {
+        match (v.pop(), v.is_empty()) {
+            (Some(r), true) => Ok(r),
+            _ => Err(crate::error::Error::msg("the writer added other records than the one it gives back")),
+        }
     }
 
     /// The root removes keys, some of them in two histories (F-7): the

@@ -244,8 +244,9 @@ fn a_taken_back_key_of_a_removed_device_is_never_granted_again() {
         for i in 0..3 {
             t += 1000;
             let st = set.state();
-            let r = set.write_record(&st, &root, device(&k(&format!("after {i}")), "after", None), t).unwrap();
-            let _ = set.insert(r);
+            for r in set.write_record(&st, &root, device(&k(&format!("after {i}")), "after", None), t).unwrap() {
+                let _ = set.insert(r);
+            }
             t += 1000;
             let st = set.state();
             let cp = set.write_checkpoint(&st, &root, t).unwrap();
@@ -268,8 +269,10 @@ fn a_taken_back_key_of_a_removed_device_is_never_granted_again() {
                     "{named:?}: refused for another reason: {why}"
                 );
             }
-            Ok(r) => {
-                let _ = set.insert(r);
+            Ok(rs) => {
+                for r in rs {
+                    let _ = set.insert(r);
+                }
                 let _ = set.insert(x.clone());
                 let _ = set.insert(late.clone());
                 let back = has(&set.state(), &k("d"));
@@ -366,7 +369,7 @@ fn a_key_named_only_in_a_middle_record_stays_known() {
     let write = |set: &mut RecordSet, kind: Kind, t: &mut u64| {
         *t += 1000;
         let st = set.state();
-        let r = set.write_record(&st, &root, kind, *t).unwrap();
+        let r = set.write_record(&st, &root, kind, *t).unwrap().pop().unwrap();
         *t += 1000;
         let st = set.state();
         let cp = set.write_checkpoint(&st, &root, *t).unwrap();
