@@ -1401,6 +1401,42 @@ impl World {
         (newest.values().map(|(_, u)| u).sum(), newest.len())
     }
 
+    /// The live devices a halted writer leaves out of a change of root so
+    /// that the rest fit the new root's reserve: the newest admissions
+    /// first, never the writer itself.
+    fn leave_out(&self, w: usize, st: &State, remove: &[KeyHash], reserve: u64, max: usize) -> Vec<KeyHash> {
+        let set = &self.members[w].live.set;
+        let me = self.members[w].key.hash;
+        let at = |k: &KeyHash| st.roots.iter().position(|r| r == k).unwrap_or(0);
+        let mut newest: BTreeMap<KeyHash, (usize, u64)> = BTreeMap::new();
+        for r in set.ids().filter(|id| st.counting.contains(id)).filter_map(|id| set.get(id)) {
+            let b = r.body();
+            let Kind::Device(d) = &b.kind else { continue };
+            let h = d.key.hash();
+            if h == me || remove.contains(&h) {
+                continue;
+            }
+            let pos = (at(&b.signer), b.seq);
+            let e = newest.entry(h).or_insert(pos);
+            if pos > *e {
+                *e = pos;
+            }
+        }
+        let mut order: Vec<(KeyHash, (usize, u64))> = newest.into_iter().collect();
+        order.sort_by(|a, b| b.1.cmp(&a.1));
+        let mut all: Vec<KeyHash> = remove.to_vec();
+        let mut out = Vec::new();
+        for (h, _) in order {
+            let (units, n) = self.live_admissions(w, st, &all);
+            if units <= reserve && n <= max {
+                break;
+            }
+            all.push(h);
+            out.push(h);
+        }
+        out
+    }
+
     /// SIM_TRACE_CHANGE: a refused change of root's room, the roots'
     /// removals in the writer's set with their seen entries, and which of
     /// them a newer removal names.
@@ -1917,16 +1953,37 @@ impl World {
                 .collect();
             let unapplied = held.iter().any(|(_, id)| !chain.contains(id));
             let set = &mut self.members[w].live.set;
-            let written = match set.write_change(
-                &st,
-                &recovery,
-                crate::testkit::rk2(),
-                &new_root,
-                device,
-                &remove,
-                false,
-                now,
-            ) {
+            let mut attempt =
+                set.write_change(&st, &recovery, crate::testkit::rk2(), &new_root, device.clone(), &remove, false, now);
+            // Halted, the recovery key's holder ends the halt even where the
+            // live devices pass the new root's reserve: as a person would,
+            // they leave the devices that do not fit out and write again.
+            // The left-out devices count as removed, and the group must
+            // reject them from then on.
+            if halted
+                && let Err(e) = &attempt
+                && format!("{e:?}").contains(crate::records::set::CHANGE_TOO_BIG)
+            {
+                let (units, n) = self.live_admissions(w, &st, &remove);
+                let (reserve, max) = (crate::records::keep::reserve(), crate::records::LIST_MAX);
+                if units > reserve || n > max {
+                    let out = self.leave_out(w, &st, &remove, reserve, max);
+                    CHANGE_TOO_BIG.fetch_add(1, Ordering::Relaxed);
+                    self.note(format!("halted m{w} leaves {} devices out of a change that does not fit", out.len()));
+                    remove.extend(out);
+                    attempt = self.members[w].live.set.write_change(
+                        &st,
+                        &recovery,
+                        crate::testkit::rk2(),
+                        &new_root,
+                        device,
+                        &remove,
+                        false,
+                        now,
+                    );
+                }
+            }
+            let written = match attempt {
                 Ok(x) => x,
                 Err(e) if halted => return Err(format!("the recovery key could not end the halt on m{w}: {e:?}")),
                 Err(_) if unapplied => {

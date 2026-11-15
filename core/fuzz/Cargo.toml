@@ -17,6 +17,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 cbb-core = { path = "..", features = ["std", "fuzzing"] }
+p256 = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "ecdsa", "pkcs8"] }
 
 # Not a member of the top workspace.
 [workspace]
@@ -109,6 +110,20 @@ bench = false
 [[bin]]
 name = "welcome_fields"
 path = "fuzz_targets/welcome_fields.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "records_change"
+path = "fuzz_targets/records_change.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "records_order"
+path = "fuzz_targets/records_order.rs"
 test = false
 doc = false
 bench = false
