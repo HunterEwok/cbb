@@ -30,7 +30,6 @@ fn ack_with_spare(g: &mut Group, by: &K, spare: &K) {
 /// the new root names SA on PA; A is void. PA wakes, sees the record that
 /// named SA, and SA's removal counts.
 #[test]
-#[ignore = "waits for S"]
 fn the_spare_carries_an_admin_through_one_change() {
     let mut g = group("s1");
     let (a, sa) = (k("A"), k("SA"));
@@ -53,7 +52,6 @@ fn the_spare_carries_an_admin_through_one_change() {
 
 /// Only the newest counting acknowledgement's spare is named.
 #[test]
-#[ignore = "waits for S"]
 fn the_newest_ack_s_spare_is_named() {
     let mut g = group("s2");
     let a = k("A");
@@ -83,7 +81,6 @@ fn within_one_root_a_published_spare_is_an_ordinary_grant() {
 /// had already named as an admin key is not named again at the change
 /// (that admin's rights are lost; the person makes it an admin again).
 #[test]
-#[ignore = "waits for S"]
 fn a_spare_the_old_root_already_named_is_not_named_again() {
     let mut g = group("s4");
     let (a, sa) = (k("A"), k("SA"));
@@ -102,7 +99,6 @@ fn a_spare_the_old_root_already_named_is_not_named_again() {
 /// member key, another device's, another admin key, the old root, the
 /// recovery key) is never named; the change still goes through.
 #[test]
-#[ignore = "waits for S"]
 fn a_colliding_spare_is_never_named() {
     for (i, collide) in ["PA", "D", "B", "s5 root 1", "recovery"].into_iter().enumerate() {
         let mut g = group("s5");
@@ -162,7 +158,6 @@ fn a_spare_that_is_not_a_key_is_refused() {
 /// S2.1: the spare pre-signs (a removal of D, its seen holding only the
 /// old root) before the new root names it: void after the naming.
 #[test]
-#[ignore = "waits for S and the seen line"]
 fn what_a_spare_signed_before_its_naming_is_void() {
     let mut g = group("s8");
     let (a, sa) = (k("A"), k("SA"));
@@ -183,7 +178,6 @@ fn what_a_spare_signed_before_its_naming_is_void() {
 /// S3.1: a named spare that never signs is taken back for its silence,
 /// counted from the record that named it, on the root's clock.
 #[test]
-#[ignore = "waits for S"]
 fn a_spare_that_never_signs_falls_to_the_silence() {
     let mut g = group("s9");
     let (a, sa) = (k("A"), k("SA"));
@@ -207,7 +201,6 @@ fn a_spare_that_never_signs_falls_to_the_silence() {
 /// spare root 2 named (an admin key under an earlier root); PA stays a
 /// plain device.
 #[test]
-#[ignore = "waits for S"]
 fn an_admin_survives_one_change_asleep_not_two() {
     let mut g = group("s10");
     let (a, sa) = (k("A"), k("SA"));

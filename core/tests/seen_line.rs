@@ -78,7 +78,6 @@ fn ack(set: &cbb_core::records::RecordSet, r: &K) -> Kind {
 /// below the grant) count for nothing once the key is named and
 /// acknowledges above: D stays, B is not frozen, X is not a device.
 #[test]
-#[ignore = "waits for the seen line"]
 fn records_signed_before_the_grant_are_void() {
     let (mut set, r, mut chain, mut t) = granted_after(&[removal_of_d, freeze_of_b, admission_of_x]);
     t += 1_000;
@@ -100,7 +99,6 @@ fn records_signed_before_the_grant_are_void() {
 /// only (architecture 00:57Z): the root's room and B's are what they are
 /// without them.
 #[test]
-#[ignore = "waits for the seen line"]
 fn void_records_do_not_block_the_records_above() {
     let (mut set, r, mut chain, mut t) = granted_after(&[removal_of_d, freeze_of_b]);
     let a = k("A");
@@ -132,7 +130,6 @@ fn void_records_do_not_block_the_records_above() {
 /// A record whose seen holds the root, but at a seq below the grant (an
 /// older root record), is below the line even when signed after the grant.
 #[test]
-#[ignore = "waits for the seen line"]
 fn a_seen_below_the_grant_is_below_the_line() {
     let (mut set, r, mut chain, mut t) = granted_after(&[]);
     let a = k("A");
@@ -229,7 +226,6 @@ fn a_checkpoint_between_keeps_what_counted() {
 /// (My reading: the line is judged on a root record the member holds, else
 /// a made-up head would pass it; see the next case. Open question.)
 #[test]
-#[ignore = "waits for the seen line; open question: is the line judged on a held root record"]
 fn a_seen_on_a_root_record_not_held_waits() {
     let (mut set, r, mut chain, mut t) = granted_after(&[]);
     let a = k("A");
@@ -254,7 +250,6 @@ fn a_seen_on_a_root_record_not_held_waits() {
 /// named A waits for no acknowledgement of A (A could sign nothing then);
 /// a removal signed after the grant waits for A.
 #[test]
-#[ignore = "waits for the seen line (GRANT_ABOVE)"]
 fn a_root_removal_before_the_grant_waits_for_no_ack_of_that_key() {
     let r = k("seen root");
     let mut set = cbb_core::records::RecordSet::new(r.key.clone(), recovery());
@@ -296,7 +291,6 @@ fn a_root_removal_before_the_grant_waits_for_no_ack_of_that_key() {
 /// judged on the seq alone, this would pass it; it must not count, at a
 /// member holding every real root record.
 #[test]
-#[ignore = "waits for the seen line; open question: is the line judged on a held root record"]
 fn a_made_up_root_head_does_not_lift_a_record_above_the_line() {
     let made_up = |_: &cbb_core::records::RecordSet| {
         let fake = cbb_core::records::body::Seen {
@@ -317,7 +311,6 @@ fn a_made_up_root_head_does_not_lift_a_record_above_the_line() {
 /// writer, never at v1 or v2, so (b) never lifts them: they stay void
 /// before and after the checkpoint, at every member, and r3 counts.
 #[test]
-#[ignore = "waits for the seen line"]
 fn a_checkpoint_never_heads_an_admin_at_a_void_record() {
     let (mut set, r, mut chain, mut t) = granted_after(&[removal_of_d, freeze_of_b]);
     let x = k("A");
@@ -389,7 +382,6 @@ fn a_seen_on_a_pruned_root_record_still_counts_through_the_checkpoint() {
 /// back, the other admin acknowledges, and the next checkpoint settles
 /// the removal. None of the void removals ever counts.
 #[test]
-#[ignore = "waits for the seen line"]
 fn an_admin_that_fills_its_room_with_void_records_is_taken_back_by_the_person() {
     let (mut set, r, mut chain, mut t) = granted_after(&[]);
     let a = k("A");
@@ -448,5 +440,31 @@ fn a_void_removal_waits_for_nobody() {
     assert!(!st.counting.contains(&void.id()), "and does not count");
     assert!(has(&st, &k("D")));
     assert!(g.set.removals_waiting(&st).iter().all(|w| w.removal != void.id()), "a void removal waits for nobody");
+    assert!(g.set.unacknowledged(&st).values().all(|n| *n == 0), "{:?}", g.set.unacknowledged(&st));
+}
+
+/// A removal of a key that signed records that count is never settled,
+/// so it waits for nobody: here the current root names its own key as a
+/// plain device and then removes it; admin N owes no acknowledgement and
+/// the notices list nothing. (The clause "nothing k signed counts" of
+/// `settleable`, reached without a grant naming k.)
+#[test]
+fn a_removal_of_a_key_whose_records_count_waits_for_nobody() {
+    let mut g = group("sv2");
+    let r2 = k("sv2 root 2");
+    g.t += 1_000;
+    change(&mut g.set, &r2, &k("P2"), &[], g.t);
+    let st = g.set.state();
+    g.t += 1_000;
+    g.set.write_record(&st, &r2, Kind::device(admin_device(&k("PN"), "PN", &k("N"))), g.t).unwrap();
+    let st = g.set.state();
+    g.t += 1_000;
+    g.set.write_record(&st, &r2, Kind::device(plain(&r2, "the root's own key")), g.t).unwrap();
+    let st = g.set.state();
+    g.t += 1_000;
+    let rm = g.set.write_record(&st, &r2, Kind::Revoke(removal(&[&r2], vec![])), g.t).unwrap().pop().unwrap();
+    let st = g.set.state();
+    assert!(st.counting.contains(&rm.id()), "the removal counts");
+    assert!(g.set.removals_waiting(&st).iter().all(|w| w.removal != rm.id()), "but waits for nobody");
     assert!(g.set.unacknowledged(&st).values().all(|n| *n == 0), "{:?}", g.set.unacknowledged(&st));
 }

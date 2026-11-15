@@ -42,7 +42,6 @@ fn changed(tag: &str, leave_out: &[&K]) -> (Group, RecordSet, cbb_core::records:
 /// device; every field but the signer is the device's newest counting
 /// record's. A member that held the old state reaches the same.
 #[test]
-#[ignore = "waits for L + B"]
 fn after_a_change_only_the_new_root_counts() {
     let (g, mut member, _) = changed("l1", &[]);
     let before = member.state();
@@ -75,7 +74,6 @@ fn after_a_change_only_the_new_root_counts() {
 /// written for them; they count at no member after the change, even when
 /// an old root's or an old admin's record about them arrives later.
 #[test]
-#[ignore = "waits for L + B"]
 fn a_left_out_device_counts_nowhere_whatever_arrives_later() {
     let (mut g, mut member, w) = changed("l2", &[&k("D"), &k("F")]);
     assert!(w.first.iter().all(|r| !matches!(r.body().kind, Kind::Revoke(_))), "leaving out writes no removal");
@@ -111,7 +109,6 @@ fn a_left_out_device_counts_nowhere_whatever_arrives_later() {
 /// change count for nothing and are not kept: a flood of them leaves the
 /// set's bytes and state as they were.
 #[test]
-#[ignore = "waits for L + B"]
 fn old_records_after_the_change_are_not_kept() {
     let (mut g, member, _) = changed("l3", &[]);
     let before = (view(&g.set.state()), g.set.bytes(), g.set.len());
@@ -195,7 +192,6 @@ fn a_device_counting_only_through_a_void_record_is_not_reissued() {
 /// but not one re-issued record keeps the old state whole; once it
 /// arrives, the change applies.
 #[test]
-#[ignore = "waits for L + B"]
 fn the_change_applies_whole_or_not_at_all() {
     let (g, mut member, w) = changed("l6", &[]);
     let old = view(&member.state());
@@ -218,7 +214,6 @@ fn the_change_applies_whole_or_not_at_all() {
 /// still acts there (removes D, admits G); once the change applies, D is
 /// back (re-issued) and G is out.
 #[test]
-#[ignore = "waits for L + B"]
 fn what_an_old_admin_does_while_a_change_is_pending_turns_void() {
     let (mut g, mut member, w) = changed("l7", &[]);
     let a = k("A");
@@ -279,7 +274,6 @@ fn the_new_root_does_not_name_an_old_admin_key_again() {
 /// L3.3: the count of admin keys restarts with each root: the old root
 /// used 16, the new root names 16 fresh ones.
 #[test]
-#[ignore = "waits for L + B"]
 fn sixteen_fresh_admins_after_a_change() {
     let mut g = group("l10");
     for i in 1..16u32 {
@@ -304,7 +298,6 @@ fn sixteen_fresh_admins_after_a_change() {
 /// L3.4: after the change, the old admin signs a removal whose seen names
 /// the new root's records: still void, the new root never named it.
 #[test]
-#[ignore = "waits for L + B"]
 fn an_old_admin_s_record_after_the_change_is_void() {
     let (mut g, member, _) = changed("l11", &[]);
     let a = k("A");
@@ -370,7 +363,6 @@ fn a_full_group_fits_the_new_root_s_room() {
 /// an old admin's thaw after the change is void; the new root's thaw
 /// counts.
 #[test]
-#[ignore = "waits for L + B and S"]
 fn freezes_are_carried_and_only_the_new_root_thaws() {
     let mut g = group("l14");
     let (a, b, c) = (k("A"), k("B"), k("C"));
@@ -387,13 +379,15 @@ fn freezes_are_carried_and_only_the_new_root_thaws() {
         let ack = g.chain.sign(&g.set, x, Kind::Ack { seen, spare: Some(k(spare).key.clone()) }, g.t);
         g.set.insert(ack).unwrap();
     }
+    // Both freezes through the public call with no seen: the writer fills
+    // it with what the set holds, so it sees each frozen key's spare.
     let st = g.set.state();
     g.t += 1_000;
-    let seen = vec![head_of(&g.set, &g.r1.hash).unwrap()];
-    g.set.write_record(&st, &g.r1, Kind::Freeze(removal(&[&b], seen.clone())), g.t).unwrap();
+    g.set.write_record(&st, &g.r1, Kind::Freeze(removal(&[&b], vec![])), g.t).unwrap();
+    let st = g.set.state();
     g.t += 1_000;
-    let fc = g.chain.sign(&g.set, &a, Kind::Freeze(removal(&[&c], seen)), g.t);
-    g.set.insert(fc.clone()).unwrap();
+    let fc = g.set.write_record(&st, &a, Kind::Freeze(removal(&[&c], vec![])), g.t).unwrap().pop().unwrap();
+    g.chain.follow(&g.set, &a);
     assert!(frozen(&g.set.state(), &k("PB")), "the root froze B");
     assert!(frozen(&g.set.state(), &k("PC")), "A froze C: {:?}", g.set.state().ignored);
     g.t += 1_000;
@@ -425,7 +419,6 @@ fn freezes_are_carried_and_only_the_new_root_thaws() {
 /// spare, the spare is named, the device stays frozen, and the spare's
 /// records do not count until the new root thaws it.
 #[test]
-#[ignore = "waits for L + B and S"]
 fn a_frozen_admin_s_device_stays_frozen_with_or_without_a_spare() {
     let mut g = group("l20");
     let (b, c) = (k("B"), k("C"));
@@ -441,10 +434,10 @@ fn a_frozen_admin_s_device_stays_frozen_with_or_without_a_spare() {
     let seen = vec![head_of(&g.set, &g.r1.hash).unwrap()];
     let ack = g.chain.sign(&g.set, &c, Kind::Ack { seen: seen.clone(), spare: Some(k("SC").key.clone()) }, g.t);
     g.set.insert(ack).unwrap();
+    // Through the public call with no seen: the writer fills it.
     let st = g.set.state();
     g.t += 1_000;
-    let seen = vec![head_of(&g.set, &g.r1.hash).unwrap()];
-    g.set.write_record(&st, &g.r1, Kind::Freeze(removal(&[&b, &c], seen)), g.t).unwrap();
+    g.set.write_record(&st, &g.r1, Kind::Freeze(removal(&[&b, &c], vec![])), g.t).unwrap();
     assert!(frozen(&g.set.state(), &k("PB")) && frozen(&g.set.state(), &k("PC")));
     g.t += 1_000;
     let w = change(&mut g.set, &k("l20 root 2"), &k("P2"), &[], g.t);
@@ -482,7 +475,6 @@ fn a_frozen_admin_s_device_stays_frozen_with_or_without_a_spare() {
 /// old root removed counts nowhere after the change, and an ordinary
 /// admission under the new root admits it again, and it counts.
 #[test]
-#[ignore = "waits for L + B"]
 fn a_key_the_old_root_removed_is_admitted_again_only_by_a_new_admission() {
     let mut g = group("l21");
     let st = g.set.state();
@@ -512,7 +504,6 @@ fn a_key_the_old_root_removed_is_admitted_again_only_by_a_new_admission() {
 /// L5.4: a removal that waits for acknowledgements at the change: the
 /// device is not re-issued, and nothing of W's waits after the change.
 #[test]
-#[ignore = "waits for L + B"]
 fn a_removal_waiting_for_acks_is_settled_by_the_change() {
     let mut g = group("l15");
     let st = g.set.state();
