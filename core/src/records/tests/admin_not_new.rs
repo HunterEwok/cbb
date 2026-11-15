@@ -208,8 +208,7 @@ fn an_admins_device_that_takes_over_stays_a_device() {
     dev.powers = own.powers;
     dev.commands = own.commands;
     let nk = k("nk");
-    let wr: Written =
-        w.write_change(&st, &k("recovery"), crate::testkit::rk2(), &nk, dev, &[], false, 1_000).unwrap();
+    let wr: Written = w.write_change(&st, &k("recovery"), crate::testkit::rk2(), &nk, dev, &[], false, 1_000).unwrap();
     let Kind::Device(d) = &wr.first[0].body().kind else { panic!("the new root's own device first") };
     assert!(d.admin.is_none() && d.powers == 0 && d.commands == 0, "the own device keeps the removed admin key");
     let mut sent: Vec<Record> = wr.first.clone();
