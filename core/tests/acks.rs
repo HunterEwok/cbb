@@ -606,3 +606,123 @@ fn a_removal_of_an_admin_key_stays_when_its_signer_is_taken_back() {
         check(&back, &format!("mode {mode}, restored"));
     }
 }
+
+/// The root's room at its cap under W: an admin that never acknowledges
+/// holds every removal back; the root keeps admitting and removing
+/// devices, with checkpoints, until its writer refuses a removal. Then
+/// the take-back of the silent admin (by the person, or by the writer
+/// after its silence) still goes in, and after the next checkpoint the
+/// root removes again (docs/protocol.md: "its removals and take-backs
+/// still go in up to its cap, and the silence frees it").
+#[test]
+fn a_root_at_its_cap_can_still_take_the_silent_admin_back() {
+    use cbb_core::records::body::{POWER_ADMIT, POWER_MANAGE, POWER_REMOVE};
+    let root = k("root");
+    let recovery = cbb_core::records::Recovery {
+        k1: k("recovery").key,
+        k2: cbb_core::records::pq::PqKey::from_seeds(&[0x31; 16], &[0x32; 16], &[0x33; 16]).key(),
+    };
+    let (pa, a) = (k("cap phone a"), k("cap admin a"));
+    for by_person in [true, false] {
+        let mut set = RecordSet::new(root.key.clone(), recovery.clone());
+        let mut t = 1_000u64;
+        let mut d = Device::new(pa.key.clone(), "a", ROLE_MEMBER);
+        d.rights = RIGHT_READ | RIGHT_SEND;
+        d.admin = Some(a.key.clone());
+        d.powers = POWER_ADMIT | POWER_MANAGE | POWER_REMOVE;
+        for kind in [Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] }, Kind::device(d)] {
+            t += 1;
+            let st = set.state();
+            set.write_record(&st, &root, kind, t).unwrap();
+        }
+        // Spare devices admitted early, removed only once the root's
+        // ordinary records are refused, so that removals fill the margin.
+        let spares: Vec<K> = (0..120).map(|i| k(&format!("cap spare {i}"))).collect();
+        for x in &spares {
+            let st = set.state();
+            t += 1;
+            set.write_record(&st, &root, device(x, "s", None), t).unwrap();
+        }
+        let mut n = 0u32;
+        let refused = loop {
+            assert!(n < 5_000, "no refusal after {n} removals");
+            let x = k(&format!("cap dev {n}"));
+            let st = set.state();
+            t += 1;
+            if let Err(e) = set.write_record(&st, &root, device(&x, "d", None), t) {
+                let st = set.state();
+                match set.write_checkpoint(&st, &root, t) {
+                    Ok(cp) => {
+                        set.insert(cp).unwrap();
+                        continue;
+                    }
+                    Err(e2) => break format!("admission: {e:?}; checkpoint: {e2:?}"),
+                }
+            }
+            let st = set.state();
+            t += 1;
+            match set.write_removal(&st, &root, &[x.hash], t) {
+                Ok(rs) => {
+                    for r in rs {
+                        set.insert(r).unwrap();
+                    }
+                }
+                Err(e) => break format!("removal: {e:?}"),
+            }
+            n += 1;
+        };
+        let mut more = 0u32;
+        let mut stop = String::new();
+        for x in &spares {
+            let st = set.state();
+            t += 1;
+            match set.write_removal(&st, &root, &[x.hash], t) {
+                Ok(rs) => {
+                    for r in rs {
+                        set.insert(r).unwrap();
+                    }
+                    more += 1;
+                }
+                Err(e) => {
+                    stop = format!("{e:?}");
+                    break;
+                }
+            }
+        }
+        println!("by_person={by_person}: then {more} more removals of spares, stopped by: {stop}");
+        let st = set.state();
+        let room = set.root_room(&st).unwrap();
+        println!(
+            "by_person={by_person}: {n} removals, then refused ({refused}); root room {}/{}; waiting {}",
+            room.used,
+            room.cap,
+            set.removals_waiting(&st).len()
+        );
+        t += 1;
+        if by_person {
+            set.take_back(&st, &root, &a.hash, t).expect("the person takes the silent admin back at the cap");
+        } else {
+            let heard: BTreeMap<KeyHash, u64> = [(a.hash, 0)].into();
+            let back = set
+                .take_back_lagging(&st, &root, &heard, t + ADMIN_SILENCE_MS)
+                .expect("the writer's take-back at the cap");
+            assert_eq!(back.len(), 1, "the silent admin is taken back");
+            for (_, r) in back {
+                let _ = set.insert(r);
+            }
+        }
+        let st = set.state();
+        assert!(st.devices.iter().all(|d| d.admin.is_none()), "taken back");
+        t += ADMIN_SILENCE_MS + 1;
+        let cp = set.write_checkpoint(&st, &root, t).expect("a checkpoint after the take-back");
+        set.insert(cp).unwrap();
+        let st = set.state();
+        assert!(set.removals_waiting(&st).is_empty());
+        let x = k("cap dev after");
+        t += 1;
+        set.write_record(&st, &root, device(&x, "d", None), t).expect("the root admits again");
+        let st = set.state();
+        t += 1;
+        set.write_removal(&st, &root, &[x.hash], t).expect("and removes again");
+    }
+}
