@@ -33,7 +33,9 @@ fn meaning(s: &State) -> impl PartialEq + core::fmt::Debug {
 /// holds all along; the change to nk is written by a member without the
 /// removal (leaving d2 out when `leave_d2`); nk names a's key as an admin
 /// again, a acks and admits d3, nk checkpoints; then nk signs a checkpoint
-/// whose head for a is a's pre-change record number `bent_at`.
+/// whose head for a is a's pre-change record number `bent_at` (0 to 2),
+/// or (3) a record a signs after the change, before its grant, with a seen
+/// that names the new root below the record that names a again.
 fn check(leave_d2: bool, bent_at: usize) {
     let mut g = G::new();
     let root = k("root");
@@ -62,12 +64,35 @@ fn check(leave_d2: bool, bent_at: usize) {
     sent.push(wr.record.clone());
     let mut lists = g.lists.clone();
     lists.push(wr.list.encode());
-    let mut step = |sets: &mut [&mut RecordSet], sent: &[Record]| {
+    let step = |sets: &mut [&mut RecordSet], sent: &[Record]| {
         for s in sets.iter_mut() {
             feed(s, sent, &lists);
         }
     };
     step(&mut [&mut w, &mut kset, &mut aset], &sent);
+    // a heard the change, not its grant: void on the seen line.
+    let newest = w.ids().filter_map(|i| w.get(i)).filter(|r| r.body().signer == nk.hash).max_by_key(|r| r.body().seq);
+    let (seq, id) = newest.map(|r| (r.body().seq, r.id())).unwrap();
+    let mut d4 = Device::new(k("d4").key.clone(), "d4", ROLE_MEMBER);
+    d4.rights = RIGHT_READ | RIGHT_SEND;
+    d4.seen = vec![Seen { key: nk.hash, seq, id }];
+    let early = crate::testkit::sign_by(
+        crate::records::body::Body {
+            group: g.gid,
+            signer: a.hash,
+            seq: 1,
+            prev: None,
+            time_ms: 1_500,
+            kind: Kind::device(d4),
+            held: false,
+        },
+        &a,
+    );
+    if bent_at == 3 {
+        sent.push(early.clone());
+        step(&mut [&mut w, &mut kset, &mut aset], &sent);
+    }
+    let pre = [pre[0].clone(), pre[1].clone(), pre[2].clone(), early];
     let st = w.state();
     let mut dev = Device::new(k("phone a").key.clone(), "admin again", ROLE_MEMBER);
     dev.rights = RIGHT_READ | RIGHT_SEND;
@@ -78,17 +103,22 @@ fn check(leave_d2: bool, bent_at: usize) {
     let st = w.state();
     sent.push(w.write_checkpoint(&st, &nk, 3_000).unwrap());
     step(&mut [&mut w, &mut kset, &mut aset], &sent);
-    let st = aset.state();
-    sent.push(aset.write_ack(&st, &a, 4_000).unwrap());
-    step(&mut [&mut aset], &sent);
-    let st = aset.state();
-    sent.extend(
-        aset.write_record(&st, &a, Kind::device(Device::new(k("d3").key.clone(), "d3", ROLE_MEMBER)), 5_000).unwrap(),
-    );
-    step(&mut [&mut w, &mut kset, &mut aset], &sent);
-    let st = w.state();
-    sent.push(w.write_checkpoint(&st, &nk, 6_000).unwrap());
-    step(&mut [&mut w, &mut kset, &mut aset], &sent);
+    // The void record bent at stands before a's ack: the root bends the
+    // checkpoint while every member still holds it.
+    if bent_at != 3 {
+        let st = aset.state();
+        sent.push(aset.write_ack(&st, &a, 4_000).unwrap());
+        step(&mut [&mut aset], &sent);
+        let st = aset.state();
+        sent.extend(
+            aset.write_record(&st, &a, Kind::device(Device::new(k("d3").key.clone(), "d3", ROLE_MEMBER)), 5_000)
+                .unwrap(),
+        );
+        step(&mut [&mut w, &mut kset, &mut aset], &sent);
+        let st = w.state();
+        sent.push(w.write_checkpoint(&st, &nk, 6_000).unwrap());
+        step(&mut [&mut w, &mut kset, &mut aset], &sent);
+    }
     // The bent checkpoint: an honest one with a's head moved below the grant.
     let st = kset.state();
     let honest = kset.write_checkpoint(&st, &nk, 7_000).unwrap();
@@ -106,7 +136,7 @@ fn check(leave_d2: bool, bent_at: usize) {
     let every: Vec<Record> = all.iter().chain(sent.iter()).cloned().collect();
     feed(&mut kset, &every, &lists);
     let sk = kset.state();
-    assert!(pre.iter().all(|r| !sk.counting.contains(&r.id())), "nothing a signed before the change counts at k");
+    assert!(pre.iter().all(|r| !sk.counting.contains(&r.id())), "nothing a signed before its grant counts at k");
     assert!(sk.device_by_key(&dw.hash).is_some(), "the change left the removal out");
     let mut reversed = every.clone();
     reversed.reverse();
@@ -120,14 +150,14 @@ fn check(leave_d2: bool, bent_at: usize) {
 
 #[test]
 fn a_bent_anchor_below_the_admins_grant_names_nothing() {
-    for bent_at in 0..3 {
+    for bent_at in 0..4 {
         check(false, bent_at);
     }
 }
 
 #[test]
 fn a_bent_anchor_with_a_device_left_out_names_nothing() {
-    for bent_at in 0..3 {
+    for bent_at in 0..4 {
         check(true, bent_at);
     }
 }
