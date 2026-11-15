@@ -267,7 +267,12 @@ fn a_change_cut_inside_its_group_applies_nothing() {
     }
     let before = g.recs.clone();
     let w = change(&mut g, &k("n1"), &k("p1")).unwrap();
-    assert!(!w.first.iter().any(|r| matches!(r.body().kind, Kind::Revoke(_))), "no removal written");
+    // No removal of a device is written; the admin key that loses its
+    // rights is removed.
+    assert!(
+        w.first.iter().all(|r| !matches!(&r.body().kind, Kind::Revoke(rm) if rm.keys != vec![admin.hash])),
+        "no device removal written"
+    );
     let sender = set_with(&g.root.key, &g.recs, &g.lists);
     let unseen = set_with(&g.root.key, &before, &[]).state();
     let list = w.list.encode();
@@ -311,7 +316,7 @@ fn a_change_cut_inside_its_group_applies_nothing() {
 /// The root removes an admin key, the key signs once more, and the root
 /// removes it again with the newer record seen. The two removals saw the
 /// key differently, and what the key signed after the first never counts,
-/// before the change or after: the change writes no removal and does not
+/// before the change or after: the change removes the key whole and does not
 /// re-issue what the removed key admitted after the first. The second
 /// removal does not stand for the first in a checkpoint either.
 #[test]
@@ -347,7 +352,9 @@ fn two_removals_of_one_key_seen_apart() {
             _ => None,
         })
         .collect();
-    assert!(zs.is_empty(), "L: no removal is written at a change: {zs:?}");
+    // L: the earlier root's removals are not written again with their
+    // seen; the admin key that loses its rights is removed whole.
+    assert!(zs.iter().all(|rm| rm.seen.is_empty()), "{zs:?}");
     let s = g.state();
     assert!(s.device_by_key(&five.hash).is_none(), "counts after the change");
     let st = set_with(&g.root.key, &g.recs, &g.lists).state();
