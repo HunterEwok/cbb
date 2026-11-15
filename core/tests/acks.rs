@@ -477,3 +477,86 @@ fn a_freeze_by_an_admin_without_remove_admins_is_not_made_permanent() {
         "the root's writer took A's key back for good, a second after B (which may not remove admins) froze it"
     );
 }
+
+/// An admin's removal of another admin's key, when the removal's own
+/// signer is then taken back: admin 4 (which may remove admins) removes
+/// admin 5's key; the root takes admin 4 back (silence, or the person's
+/// choice), then writes checkpoints. The removal counts and stays, at the
+/// root and at a member restored from what the root saves; admin 5's key
+/// stays removed.
+#[test]
+fn a_removal_of_an_admin_key_stays_when_its_signer_is_taken_back() {
+    use cbb_core::records::body::{POWER_ADMIT, POWER_MANAGE, POWER_REMOVE, POWER_REMOVE_ADMINS, Removal};
+    for mode in 0..3 {
+        let by_silence = mode == 1;
+        let root = k("root");
+        let (p4, a4, p5, a5) = (k("phone 4"), k("admin 4"), k("phone 5"), k("admin 5"));
+        let recovery = cbb_core::records::Recovery {
+            k1: k("recovery").key,
+            k2: cbb_core::records::pq::PqKey::from_seeds(&[0x31; 16], &[0x32; 16], &[0x33; 16]).key(),
+        };
+        let mut set = RecordSet::new(root.key.clone(), recovery);
+        let mut t = 1000u64;
+        let admin = |p: &K, a: &K, powers: u64| {
+            let mut d = Device::new(p.key.clone(), "laptop", ROLE_MEMBER);
+            d.rights = RIGHT_READ | RIGHT_SEND;
+            d.admin = Some(a.key.clone());
+            d.powers = powers;
+            Kind::device(d)
+        };
+        for kind in [
+            Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] },
+            admin(&p4, &a4, POWER_ADMIT | POWER_MANAGE | POWER_REMOVE | POWER_REMOVE_ADMINS),
+            admin(&p5, &a5, POWER_ADMIT | POWER_MANAGE | POWER_REMOVE),
+        ] {
+            t += 1000;
+            let st = set.state();
+            set.write_record(&st, &root, kind, t).unwrap();
+        }
+        let mut chain = Chain { heads: BTreeMap::new() };
+        t += 1000;
+        let seen = vec![];
+        let rm = chain.sign(&set, &a4, Kind::Revoke(Removal { keys: vec![a5.hash], seen }), t);
+        set.insert(rm.clone()).unwrap();
+        let st = set.state();
+        assert!(st.counting.contains(&rm.id()) && st.revoked.contains(&a5.hash), "admin 4 removed admin 5's key");
+        if mode == 2 {
+            // The root removes admin 4's device and key instead.
+            t += 1000;
+            for r in set.write_removal(&st, &root, &[p4.hash, a4.hash], t).unwrap() {
+                let _ = set.insert(r);
+            }
+        } else if by_silence {
+            t += ADMIN_SILENCE_MS + 1000;
+            let back = set.take_back_lagging(&st, &root, &BTreeMap::from([(a4.hash, 0)]), t).unwrap();
+            assert_eq!(back.len(), 1, "admin 4 is taken back for silence");
+        } else {
+            t += 1000;
+            set.take_back(&st, &root, &a4.hash, t).unwrap();
+        }
+        let check = |set: &RecordSet, what: &str| {
+            let st = set.state();
+            assert!(st.device_by_key(&p4.hash).is_none_or(|d| d.admin.is_none()), "{what}: admin 4 is no admin");
+            assert!(set.contains(&rm.id()), "{what}: the removal is held");
+            assert!(st.counting.contains(&rm.id()), "{what}: the removal counts");
+            assert!(st.revoked.contains(&a5.hash), "{what}: admin 5's key stays removed");
+            assert!(st.device_by_key(&p5.hash).is_none_or(|d| d.admin != Some(a5.hash)), "{what}: admin 5 is no admin");
+        };
+        check(&set, &format!("mode {mode}, after the take-back"));
+        for i in 0..3 {
+            t += 1000;
+            let st = set.state();
+            set.write_record(&st, &root, device(&k(&format!("later {i}")), "later", None), t).unwrap();
+            t += 1000;
+            let st = set.state();
+            let cp = set.write_checkpoint(&st, &root, t).unwrap();
+            let _ = set.insert(cp);
+            check(&set, &format!("mode {mode}, checkpoint {i}"));
+        }
+        // A member restored from what the root saves.
+        let saved: Vec<Record> = set.marked(&[7; 32]).into_iter().map(|(r, _)| r.clone()).collect();
+        let lists: Vec<Vec<u8>> = set.lists().map(<[u8]>::to_vec).collect();
+        let back = RecordSet::restore(set.root().clone(), set.recovery().clone(), &saved, &lists);
+        check(&back, &format!("mode {mode}, restored"));
+    }
+}
