@@ -2051,7 +2051,9 @@ module records_v3 {
       val cps = beforeRecs.filter(x => x.kind == "copies")
       // (LAST_ROOT_ONLY: an admin's freeze that counts is carried too, as the new root's own.)
       val heldRecs = recsOf(s.recs, db).filter(r => v.counting.contains(r.id) and not(leftOut.contains(r)))
-      range(1, nextId).select(i => db.keys().contains(i) and {
+      // (LAST_ROOT_ONLY, mi2 Sr.13007: only records that count at the writer are carried; a cut
+      // root's admission whose removal no longer counts must not come back.)
+      range(1, nextId).select(i => db.keys().contains(i) and not(LAST_ROOT_ONLY and not(v.counting.contains(i))) and {
         val x = db.get(i)
         beforeRecs.contains(x) or (LAST_ROOT_ONLY and (x.kind == "freeze" or x.kind == "device") and heldRecs.contains(x))
       } and not(LAST_ROOT_ONLY and leave.exists(d => devOf(db.get(i)) == d
@@ -6442,6 +6444,27 @@ module records_v3 {
       .expect(MEMBERS.forall(m => views.get(m).checkpoint == rCp and views.get(m).devices.contains(DEVICE)) and promises)
   // LAST_ROOT_ONLY: the person unticks D and C's device at the change to NA: neither is
   // re-issued, so after the change both are out everywhere, and nothing C or D signed counts.
+  // (LAST_ROOT_ONLY, mi2 Sr.13007.) The old root removes A before the first change; at the second
+  // change the honest writer carries only what counts at it, so the old root's admission of A,
+  // whose removal stopped counting at the first change, does not come back as the new root's.
+  run lReissueCountedTest = if (not(onL)) init else init
+      .then(signFull(ROOT, "revoke", MINTED, "phone", 0, false, true, 1, true, Set()))
+      .then(sign(ROOT, "revoke", PHONE, "nocp", 0, false, false, 1))
+      .then(compactAt("m"))
+      .then(syncRound)
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 2, false, Set(1)))
+      .then(signCheckpointKeep("NA", Set(1, 2, 3), "", 2))
+      .then(signChain(RECOVERY, "recover", "NK", 1, "honest"))
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 2))
+      .then(restart("a"))
+      .then(sign("NK", "revoke", WATCH, "nocp", 0, false, false, 1))
+      .then(sign("NK", "checkpoint", "", "", 0, false, false, 2))
+      .then(signFull("NA", "revoke", COMPUTER, "phone", 0, false, true, 1, true, Set()))
+      .then(signChainGL(RECOVERY, "recover", "NA", chainState(st.get("k"), db).ids.length() + 1, "honest", Set(), Set()))
+      .then(sign(ROOT, "revoke", PHONE, "nocp", 0, false, false, 1))
+      .then(offerEveryone(nextId - 1))
+      .expect(and { decidedInv, removedStayOut })
+
   run lUntickTest = if (not(onL)) init else
     init
       .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
