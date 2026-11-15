@@ -55,7 +55,9 @@ fn check(leave_d2: bool, bent_at: usize) {
     let st = w.state();
     let out: Vec<KeyHash> = if leave_d2 { vec![k("d2").hash] } else { vec![] };
     let nk = k("nk");
-    let wr = w.write_change(&st, &k("recovery"), crate::testkit::rk2(), &nk, phone(&k("nk phone")), &out, false, 1_000).unwrap();
+    let wr = w
+        .write_change(&st, &k("recovery"), crate::testkit::rk2(), &nk, phone(&k("nk phone")), &out, false, 1_000)
+        .unwrap();
     let mut sent: Vec<Record> = wr.first.clone();
     sent.push(wr.record.clone());
     let mut lists = g.lists.clone();
@@ -80,7 +82,9 @@ fn check(leave_d2: bool, bent_at: usize) {
     sent.push(aset.write_ack(&st, &a, 4_000).unwrap());
     step(&mut [&mut aset], &sent);
     let st = aset.state();
-    sent.extend(aset.write_record(&st, &a, Kind::device(Device::new(k("d3").key.clone(), "d3", ROLE_MEMBER)), 5_000).unwrap());
+    sent.extend(
+        aset.write_record(&st, &a, Kind::device(Device::new(k("d3").key.clone(), "d3", ROLE_MEMBER)), 5_000).unwrap(),
+    );
     step(&mut [&mut w, &mut kset, &mut aset], &sent);
     let st = w.state();
     sent.push(w.write_checkpoint(&st, &nk, 6_000).unwrap());
