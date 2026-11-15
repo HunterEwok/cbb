@@ -1282,7 +1282,14 @@ module records_v3 {
     if (pc._1 == s.path and pc._2 == s.cuts) s
     else {
       // A change of root empties the place aside.
-      val s2 = { ...s, path: pc._1, cuts: pc._2, cut: NOCUT, wait: Set() }
+      // (Fuzz on 5b349120, Wd.13013: once a change cuts a root, the held proof of its fork is
+      // released: the pair leaves the chain's side, and what the list keeps of it is stored
+      // again like any record of a replaced root; the twin outside the list goes.)
+      val proofs = recsOf(s.chain, db).filter(r => not(isChain(r)) and onList(pc._1, r.signer) and r.signer != last(pc._1)
+        and recsOf(s.chain, db).exists(o => o != r and not(isChain(o)) and o.signer == r.signer and o.seq == r.seq))
+      val s1 = { ...s, chain: s.chain.exclude(idsOf(proofs)) }
+      val s2 = { ...s1, path: pc._1, cuts: pc._2, cut: NOCUT, wait: Set(),
+        recs: s1.recs.union(idsOf(proofs.filter(r => within(pc._2, r)))) }
       // (FIXED_CAPS, the held set judged as a whole: the early roots' records the set held aside
       // go into the rooms with the change they settled; else the settler leaves the aside when
       // its root joins the path, and the change it completed falls back.)
@@ -1568,10 +1575,13 @@ module records_v3 {
     // a newer one that does not count yet takes nothing from it.
     val cs = rs.filter(r => r.signer == cur and r.kind == "checkpoint" and within(plain.cuts, r) and r.seq < forkS
       and r.seq >= rootFloor(rs, ch, cur))
-    val v = range(0, MAXREC + 2).foldl((rs, Set(), plain), (acc, j) =>
+    // (From the highest seq any candidate has: a root's line may pass MAXREC records, search
+    // search.14001, where its newest checkpoint sat at seq 22 and was never tried.)
+    val topSeq = cs.fold(0, (m, x) => max2(m, x.seq))
+    val v = range(0, topSeq + 1).foldl((rs, Set(), plain), (acc, j) =>
       if (acc._3.checkpoint != 0) acc
       else {
-        val at = cs.filter(x => x.seq == MAXREC + 1 - j)
+        val at = cs.filter(x => x.seq == topSeq - j)
         val c = at.filter(x => at.forall(o => x.id <= o.id)).fold(0, (m, x) => x.id)
         applyCheckpoint(pc._1, pc._2, c, acc)
       })._3
@@ -6580,6 +6590,54 @@ module records_v3 {
       .then(signDeviant(ROOT, "copies", "", 1))
       .then(offerEveryone(14))
       .expect(decidedInv and not(syncedProto("a")))
+
+  // (mi2 search.14001, W.) An honest root's line passes MAXREC records; its newest checkpoint,
+  // at seq 22, must still be tried as the counting one (it was skipped: cpWritable broke).
+  run longRootLineCpTest = if (not(ROOT_RATIO and ROOT_WAITS)) init else init
+      .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2))
+      .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2))
+      .then(sign(ROOT, "device", "dW", "", 0, false, false, 1))
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1))
+      .then(sign(ROOT, "freeze", PHONE, "", 0, true, false, 1))
+      .then(giveOnly("c", 5))
+      .then(giveOnly("a", 5))
+      .then(giveOnly("a", 6))
+      .then(sign(ROOT, "thaw", "", "", 8, false, false, 1))
+      .then(sign(ROOT, "resolve", "", "", 3, false, false, 1))
+      .then(sign(ROOT, "device", "dC", "", 0, false, false, 1))
+      .then(sign(ROOT, "resolve", "", "", 7, false, false, 1))
+      .then(sign(COMPUTER, "device", DEVICE, "", 0, false, false, 1))
+      .then(giveOnly("c", 6))
+      .then(giveOnly("m", 5))
+      .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2))
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1))
+      .then(sign(ROOT, "resolve", "", "", 13, false, false, 1))
+      .then(sign(ROOT, "device", "dA", "", 0, false, false, 1))
+      .then(sign(ROOT, "revoke", "dA", "", 0, true, false, 1))
+      .then(sign(ROOT, "thaw", "", "", 8, false, false, 1))
+      .then(sign(ROOT, "admin", MINTED, "computer", 0, false, false, 1))
+      .then(giveOnly("k", 5))
+      .then(compactAt("k"))
+      .then(sign(ROOT, "thaw", "", "", 8, false, false, 1))
+      .then(giveOnly("k", 13))
+      .then(giveOnly("k", 11))
+      .then(sign(ROOT, "resolve", "", "", 16, false, false, 1))
+      .expect(cpWritable and not(rootRemovalRefused) and honestNeverDropped)
+
+  // (mi2 Wd.13013; fuzz on 5b349120.) Members that halted on R's fork pair before taking the
+  // change release the proof once a change cuts R: equal got, equal stores, as the holder that
+  // never kept the pair.
+  run cutRootProofReleasedTest = init
+      .then(offerEveryone(2))
+      .then(compactAt("c"))
+      .then(signChainGL(RECOVERY, "recover", "NK", chainState(st.get("k"), db).ids.length() + 1, "honest", Set(), Set()))
+      .then(offerEveryone(nextId - 1))
+      .then(signFull(ROOT, "admin", COMPUTER, "phone", 0, false, true, 1, true, Set()))
+      .then(offerEveryone(nextId - 1))
+      .then(signChainGL(RECOVERY, "recover", "NA", chainState(st.get("k"), db).ids.length() + 1, "honest", Set(), Set()))
+      .then(compactAt("m"))
+      .then(syncRound)
+      .expect(sameGotSameState and MEMBERS.forall(m => not(st.get(m).chain.contains(6))))
 
   run lReissueCountedTest = if (not(onL)) init else init
       .then(signFull(ROOT, "revoke", MINTED, "phone", 0, false, true, 1, true, Set()))
