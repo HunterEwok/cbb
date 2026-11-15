@@ -665,6 +665,7 @@ module records_v3 {
   pure def droppedAt(mine: Set[Record], counted: Set[Record]): Set[Id] = {
     val rms = counted.filter(r => rootRemoval(r)
       and tgt(r).forall(k => not(DEV.keys().contains(k)) and not(SIGNERS.contains(k))
+        and not(ROOT_WAITS and mine.exists(n => n.kind == "admin" and devOf(n) == k))
         and admitsOf(mine, k) != Set()
         and admitsOf(mine, k).forall(a => headLine(mine, a.signer) != a.line))
       and not(mine.exists(x => tgt(r).contains(x.signer)))
@@ -1845,7 +1846,10 @@ module records_v3 {
     pure def top(j: Key): int = counted.filter(y => y.signer == j).fold(0, (m, y) => max2(m, y.seq))
     // Settled plain device keys: not a signer, admitted by a held record under its signer's
     // head, nothing they signed held.
+    // (ROOT_WAITS, records 655fcdac: a removal of a device that had an admin key is kept for
+    // good and waits for nobody.)
     pure def plain(t: Key): bool = not(DEV.keys().contains(t)) and not(SIGNERS.contains(t))
+      and not(ROOT_WAITS and mine.exists(n => n.kind == "admin" and devOf(n) == t))
       and admitsOf(mine, t) != Set()
       and admitsOf(mine, t).forall(a => headLine(mine, a.signer) != a.line)
       and not(mine.exists(x => x.signer == t))
@@ -4563,16 +4567,18 @@ module records_v3 {
   // devices count nowhere, before or after a change of root.
   run removedAdminThiefTest =
     init
+      // (SEEN_POS: A acks first, so that its writer signs above an anchor.)
+      .then(if (SEEN_POS) ackS(PHONE) else syncRound).then(syncRound)
       .then(signAs(ROOT, "revoke", PHONE, 0))
       .then(sign(PHONE, "revoke", COMPUTER, "", 0, true, false, 1))
       .then(sign(PHONE, "freeze", WATCH, "", 0, true, false, 1))
       .then(sign(PHONE, "device", DEVICE, "", 0, true, false, 1))
-      .then(give("m", 4)).then(give("m", 5)).then(give("m", 6)).then(give("m", 7))
+      .then(giveBy("m", ROOT, 4)).then(giveBy("m", PHONE, 1))
       .expect(views.get("m").admins.keys() == Set(COMPUTER, WATCH) and not(views.get("m").devices.contains(DEVICE))
         and not(views.get("m").frozen.contains(WATCH)) and promises)
-      .then(give("k", 4)).then(give("k", 5)).then(give("k", 6)).then(give("k", 7))
+      .then(giveBy("k", ROOT, 4)).then(giveBy("k", PHONE, 1))
       .then(recoverAs(RECOVERY, "NK"))
-      .then(give("m", 8))
+      .then(giveHead("m", "NK"))
       // (LAST_ROOT_ONLY: nothing R signed counts under NK, its removal of A included; A, wiped
       // with the other admins, still counts nothing and D stays out.)
       .expect(views.get("m").path == [ROOT, "NK"] and (LAST_ROOT_ONLY or views.get("m").revoked.contains(PHONE))
@@ -5166,16 +5172,18 @@ module records_v3 {
 
   run removedAdminThiefDecidedTest =
     init
+      // (SEEN_POS: A acks first, so that its writer signs above an anchor.)
+      .then(if (SEEN_POS) ackS(PHONE) else syncRound).then(syncRound)
       .then(signAs(ROOT, "revoke", PHONE, 0))
       .then(sign(PHONE, "revoke", COMPUTER, "", 0, true, false, 1))
       .then(sign(PHONE, "freeze", WATCH, "", 0, true, false, 1))
       .then(signW(PHONE, "device", DEVICE, "", 0, true, false, 1))
-      .then(give("m", 4)).then(give("m", 5)).then(give("m", 6)).then(give("m", 7))
+      .then(giveBy("m", ROOT, 4)).then(giveBy("m", PHONE, 1))
       .expect(views.get("m").admins.keys() == Set(COMPUTER, WATCH) and not(views.get("m").devices.contains(DEVICE))
         and not(views.get("m").frozen.contains(WATCH)) and promises)
-      .then(give("k", 4)).then(give("k", 5)).then(give("k", 6)).then(give("k", 7))
+      .then(giveBy("k", ROOT, 4)).then(giveBy("k", PHONE, 1))
       .then(recoverAs(RECOVERY, "NK"))
-      .then(give("m", 8))
+      .then(giveHead("m", "NK"))
       // (LAST_ROOT_ONLY: nothing R signed counts under NK, its removal of A included; A, wiped
       // with the other admins, still counts nothing and D stays out.)
       .expect(views.get("m").path == [ROOT, "NK"] and (LAST_ROOT_ONLY or views.get("m").revoked.contains(PHONE))
@@ -6310,4 +6318,37 @@ module records_v3 {
       .then(signFull(ROOT, "admin", MINTED, "phone@dZ!", 0, false, false, 1, true, Set()))
       .then(giveAll(MEMBERS, [9, 8])).then(syncRound).then(syncRound)
       .expect(if (TAKEN_FOR_GOOD) xOut and promises else xBack)
+
+  // W (records b3d1df93, architecture 11-15 00:06Z): no automatic take-back of a frozen admin.
+  // C is frozen and R removes D; C's ack, signed while frozen, does not count, so the removal
+  // waits (the checkpoint keeps it) until R thaws C and C acks again; then it settles.
+  // (Silence, 35 days on the root's clock, and the person's take_back(a) are signDemote, a
+  // free root action in the model, which has no clock.)
+  val rCp = db.keys().filter(i => db.get(i).kind == "checkpoint" and db.get(i).signer == ROOT).fold(0, (a, i) => max2(a, i))
+  run wFrozenBlocksTest = if (not(ROOT_WAITS) or not(wideW)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(sign(ROOT, "freeze", COMPUTER, "", 0, false, false, 1))
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(ackS(PHONE)).then(ackS(WATCH)).then(ackS(COMPUTER)).then(syncRound)
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1)).then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(db.get(rCp).keep.contains(6))
+      .then(syncRound)
+      .expect(dOut and promises)
+      .then(sign(ROOT, "thaw", "", "", 5, false, false, 1)).then(syncRound)
+      .then(ackS(COMPUTER)).then(syncRound)
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1)).then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(not(db.get(rCp).keep.contains(6)))
+      .then(syncRound).then(syncRound)
+      .expect(dOut and promises)
+  // W point 3 (records 655fcdac): a removal of a device that had an admin key (dC, C's) is kept
+  // for good: every live admin acks, and still the checkpoint keeps it.
+  run wKeptForGoodTest = if (not(ROOT_WAITS) or not(wideW)) init else
+    init
+      .then(sign(ROOT, "revoke", "dC", "", 0, false, false, 1)).then(syncRound)
+      .then(ackS(PHONE)).then(ackS(WATCH)).then(syncRound)
+      .then(sign(ROOT, "copies", "", "", 0, false, false, 1)).then(signAs(ROOT, "checkpoint", "", 0))
+      .expect(db.get(rCp).keep.contains(4))
+      .then(syncRound).then(syncRound)
+      .expect(MEMBERS.forall(m => views.get(m).revoked.contains("dC")) and promises)
 }
