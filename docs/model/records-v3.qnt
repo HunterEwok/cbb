@@ -2350,6 +2350,26 @@ module records_v3 {
     signDevice, signDemote, signAdmin, signRevoke, signFreeze, signThaw, signResolve, signCheckpoint, signCopies,
     signAck, deliver, fetch, fetch, fetch, compact,
   }
+  // (Architecture 11-15 01:36Z, a search, not a promise: honest writers only, CP_FIRST, and the
+  // admin W never acknowledges, so under ROOT_WAITS its removals stay unsettled and named.)
+  action stepHonestQuiet = any {
+    signDevice, signDemote, signAdmin, signRevoke, signFreeze, signThaw, signResolve, signCheckpoint, signCopies,
+    all { ROOT_WAITS, nondet k = Set(PHONE, COMPUTER).union(if (SPARE) Set("A1", "A2", "C2", "C3") else Set()).oneOf() ackS(k) },
+    deliver, fetch, fetch, fetch, compact,
+  }
+  // Reached when the honest root, even after checkpointing first, has no room for one more
+  // removal (no margin, unlike rootCanRemove), or a member turns away a record it got.
+  def rootRemovalRefused: bool = ROOT_KEYS.exists(k => {
+    val h = HOLDER.get(k)
+    val s = if (WRITER_LAST_ROOT) withOwn(st.get(h), k, db) else st.get(h)
+    val v = if (WRITER_LAST_ROOT) storeView(s, db) else views.get(h)
+    val mine = recsOf(s.recs, db)
+    val counted = recsOf(v.counting, db).filter(x => x.kind != "checkpoint")
+    val kept = counted.filter(x => x.signer == k and rootKeep(counted, mine, k).contains(x.id))
+    not(v.stop) and last(v.path) == k and rootUnits(s, k) + 1 + CP_UNITS > ROOTC
+      and sumUnits(kept) + 1 + CP_UNITS > ROOTC
+  })
+  val honestRoomW = not(rootRemovalRefused) and cpWritable and honestNeverDropped
   // (HELD_ADMISSIONS (a), a check, not a promise: every admin key's record a member holds has
   // its admission held beside it.)
   val admissionHeld = MEMBERS.forall(m => views.get(m).stop or {
