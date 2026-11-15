@@ -1579,6 +1579,7 @@ fn set_with(root: &Key, recs: &[Record], lists: &[Vec<u8>]) -> RecordSet {
             let _ = set.insert_list(l);
         }
     }
+    crate::testkit::closed(&set);
     set
 }
 
@@ -3545,6 +3546,7 @@ fn sync_all(m: &mut RecordSet, recs: &[Record], lists: &[Vec<u8>]) {
         let st = m.state();
         m.compact(&st);
     }
+    crate::testkit::closed(m);
 }
 
 /// A checkpoint names its own key's head below itself.
@@ -3696,6 +3698,7 @@ fn full_size(name: &str) -> bool {
 
 mod ack;
 mod cap;
+mod case1326;
 mod change;
 mod change_over;
 mod change_spare;

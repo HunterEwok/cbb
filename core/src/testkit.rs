@@ -95,6 +95,7 @@ impl G {
             let st = self.set.state();
             let r = self.set.write_record(&st, by, kind, time_ms).unwrap().pop().unwrap();
             self.heads.insert(by.hash, (r.body().seq, r.id()));
+            closed(&self.set);
             return r;
         }
         let (seq, prev) = match self.heads.get(&by.hash) {
@@ -105,6 +106,7 @@ impl G {
         let r = Record::sign(body, by).unwrap();
         self.heads.insert(by.hash, (seq, r.id()));
         self.set.insert(r.clone()).unwrap();
+        closed(&self.set);
         r
     }
 
@@ -187,4 +189,22 @@ pub fn statement_of(env: &[u8]) -> Statement {
 /// The statements that count for the state's devices.
 pub fn sealing(state: &State, statements: &[&Statement]) -> BTreeMap<crate::records::DeviceId, Sealing> {
     statement::choose(state, statements.iter().copied())
+}
+
+/// What a set keeps is closed: restored from its own records and lists it
+/// is the same set, and a fresh member fed what it gives a device of the
+/// group reaches its state.
+pub fn closed(set: &RecordSet) {
+    let st = set.state();
+    let recs: Vec<Record> = set.in_dependency_order().into_iter().cloned().collect();
+    let lists: Vec<Vec<u8>> = set.lists().map(<[u8]>::to_vec).collect();
+    let back = RecordSet::restore(set.root().clone(), set.recovery().clone(), &recs, &lists);
+    assert_eq!(back.state(), st, "a set restored from its own records is the same set");
+    if let Some(d) = st.devices.first() {
+        let peer = d.key.hash();
+        let given: Vec<Record> = set.for_peer(&st, &peer).into_iter().cloned().collect();
+        let lists: Vec<Vec<u8>> = set.lists_for_peer(&st, &peer).into_iter().map(<[u8]>::to_vec).collect();
+        let fresh = RecordSet::restore(set.root().clone(), set.recovery().clone(), &given, &lists);
+        assert_eq!(fresh.state(), st, "a fresh member fed what the set gives reaches its state");
+    }
 }
