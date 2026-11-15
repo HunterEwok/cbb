@@ -448,13 +448,14 @@ fn a_removal_kept_for_good_waits_for_nobody() {
     assert!(keep.contains(&removal_of(&g, &pa)), "kept for good");
 }
 
-/// A frozen admin cannot acknowledge, and a thaw would bring back what it
-/// signed: when it holds a removal back, the root takes it back at once,
-/// whatever the room and the grace; the next checkpoint lets the removal
-/// go, and what the key signed before that the root never got counts for
-/// nothing.
+/// A frozen admin cannot acknowledge, so a removal it has not seen waits:
+/// the writer takes nobody back for it (a freeze by an admin that may not
+/// remove admins must not turn permanent); the app shows the key frozen
+/// and holding the removal back, and the person takes it back (or thaws
+/// it). Then the next checkpoint lets the removal go, and what the key
+/// signed before that the root never got counts for nothing.
 #[test]
-fn a_frozen_admin_that_holds_a_removal_back_is_taken_back() {
+fn a_frozen_admin_holds_a_removal_back_until_the_person_acts() {
     let (mut g, late, mut mine) = late_record(false);
     let root = k("root");
     let (pa, a) = (k("phone a"), k("admin a"));
@@ -463,20 +464,35 @@ fn a_frozen_admin_that_holds_a_removal_back_is_taken_back() {
     let mut set = set_with(&g.root.key, &mine, &g.lists);
     let st = set.state();
     assert!(st.device_by_key(&pa.hash).is_some_and(|d| d.frozen));
-    let written = set.take_back_lagging(&st, &root, &BTreeMap::new(), 0).unwrap();
-    assert_eq!(written.len(), 1);
-    assert_eq!(written[0].0, TakeBack::Frozen);
-    for (_, r) in written {
-        set.insert(r).unwrap();
-    }
+    assert!(RecordSet::frozen_admins(&st).contains(&a.hash));
+    assert_eq!(set.unacknowledged(&st).get(&a.hash), Some(&1));
+    let heard: BTreeMap<KeyHash, u64> = [(a.hash, 0)].into();
+    assert!(set.take_back_lagging(&st, &root, &heard, DAY_MS).unwrap().is_empty(), "nobody by the freeze alone");
+    let cp = set.write_checkpoint(&st, &root, DAY_MS).unwrap();
+    let Kind::Checkpoint { keep, .. } = &cp.body().kind else { panic!() };
+    assert!(keep.contains(&removal_of(&g, &k("d"))), "the settle waits for the frozen admin");
+    set.insert(cp).unwrap();
+    let st = set.state();
+    set.take_back(&st, &root, &a.hash, DAY_MS).unwrap();
     let st = set.state();
     assert!(st.device_by_key(&pa.hash).is_some_and(|d| d.admin.is_none()), "taken back");
-    let cp = set.write_checkpoint(&st, &root, 0).unwrap();
+    let cp = set.write_checkpoint(&st, &root, DAY_MS).unwrap();
     let Kind::Checkpoint { keep, .. } = &cp.body().kind else { panic!() };
     assert!(!keep.contains(&removal_of(&g, &k("d"))), "no live admin holds it back");
     set.insert(cp).unwrap();
     let _ = set.insert(late);
     assert!(!has(&set.state(), &k("d")), "the frozen key's late record counts for nothing");
+}
+
+/// The root's own key is never taken back as an admin key.
+#[test]
+fn the_root_s_own_key_is_not_taken_back() {
+    let (g, _, mine) = late_record(false);
+    let root = k("root");
+    let mut set = set_with(&g.root.key, &mine, &g.lists);
+    let st = set.state();
+    let err = set.take_back(&st, &root, &root.hash, 0).unwrap_err();
+    assert!(alloc::format!("{err}").contains(crate::records::set::TAKE_BACK_ROOT), "{err}");
 }
 
 /// A frozen admin that holds nothing back stays an admin, and its thaw
@@ -504,7 +520,8 @@ fn a_frozen_admin_with_nothing_waiting_stays_and_thaws() {
 
 /// Wide removals by one admin and a removal by another, half the admins
 /// acknowledge, a checkpoint, a take-back of one lagging admin
-/// (`silence`: for its silence; else for a freeze), and another
+/// (`silence`: by the writer for its silence; else frozen, by the
+/// person), and another
 /// checkpoint: removals whose signers are still live admins stay held and
 /// count while a live admin has not acknowledged them; once all have, a
 /// removal under its signer's head goes. An admin's removal of another
@@ -554,9 +571,18 @@ fn after_a_take_back_other_admins_removals_stay(silence: bool, remove_admins: bo
         heard.insert(lagging.1.hash, 0);
     }
     let back = set.take_back_lagging(&st, &root, &heard, ADMIN_SILENCE_MS).unwrap();
-    let why = if silence { TakeBack::Silence } else { TakeBack::Frozen };
-    assert_eq!(back.len(), 1);
-    assert!(back[0].0 == why && matches!(&back[0].1.body().kind, Kind::Device(d) if d.key.hash() == lagging.0.hash));
+    if silence {
+        assert_eq!(back.len(), 1);
+        assert!(
+            back[0].0 == TakeBack::Silence
+                && matches!(&back[0].1.body().kind, Kind::Device(d) if d.key.hash() == lagging.0.hash)
+        );
+    } else {
+        // Frozen: the writer waits for the person, who takes it back.
+        assert!(back.is_empty());
+        assert!(RecordSet::frozen_admins(&st).contains(&lagging.1.hash));
+        set.take_back(&st, &root, &lagging.1.hash, ADMIN_SILENCE_MS).unwrap();
+    }
     let st = set.state();
     let cp = set.write_checkpoint(&st, &root, ADMIN_SILENCE_MS).unwrap();
     set.insert(cp).unwrap();

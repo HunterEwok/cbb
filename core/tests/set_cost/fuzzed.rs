@@ -178,9 +178,8 @@ pub fn build(data: &[u8], big: bool) -> (G, u8) {
         withheld: Vec::new(),
     };
     let cfg = data.first().copied().unwrap_or(0);
-    let mut it = data.chunks_exact(4);
-    let _ = it.next();
-    for (n, c) in it.enumerate() {
+    let (chunks, _) = data.as_chunks::<4>();
+    for (n, c) in chunks.iter().skip(1).enumerate() {
         if n >= 48 {
             break;
         }

@@ -2034,10 +2034,12 @@ key but the removal's signer has an `ack` that counts whose `seen` holds that si
 above the removal's seq: an `ack` sits on its signer's whole chain, so the root then holds every
 admission that admin signed. An admin's device writes one `ack` after a sync brings a removal it
 has not acknowledged; the checkpoint keeps only each key's newest. The root's writer takes back
-by itself an admin key its device received nothing of for `records::set::ADMIN_SILENCE_MS`
-(35 days, on the root device's clock) and a frozen admin key that holds a removal back; a full
-room takes nobody back by itself: the app shows the root's units each admin key holds back and
-the person chooses whom to take back. A take-back is one record of the root, its checkpoint
+by itself only an admin key its device received nothing of for `records::set::ADMIN_SILENCE_MS`
+(35 days, on the root device's clock). A full room, or a frozen admin key (which cannot
+acknowledge while frozen) that holds removals back, takes nobody back by itself: the app shows
+what each admin key holds back, in removals and in the root's units, and which keys are frozen,
+and the person thaws the key or chooses whom to take back; a frozen key whose device is gone
+falls to the silence. The root's own key is never taken back as an admin key. A take-back is one record of the root, its checkpoint
 first, and passes the floor as a removal does; what that key signed and the root never got
 counts for nothing, and the writer never grants that key again: the device makes a new admin
 key. With nobody acting, a root whose admins hold removals back passes three quarters of its room

@@ -347,17 +347,19 @@ pub const ADMIN_KEY_TAKEN_BACK: &str =
     "this admin key was taken back: the device makes a new admin key before it is an admin again";
 
 /// Why the root's writer takes an admin key back by itself
-/// (`RecordSet::take_back_lagging`). A full room is not one: there the
-/// person chooses whom to take back (`RecordSet::take_back`), from what
-/// `unacknowledged_units` shows.
+/// (`RecordSet::take_back_lagging`). A full room and a frozen admin key
+/// that holds removals back are not reasons: there the person chooses,
+/// from what `unacknowledged`, `unacknowledged_units` and
+/// `frozen_admins` show, to thaw the key or take it back
+/// (`RecordSet::take_back`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TakeBack {
     /// The root received nothing of the key for ADMIN_SILENCE_MS.
     Silence,
-    /// The key is frozen, so it cannot acknowledge, and it held a removal
-    /// back.
-    Frozen,
 }
+
+/// The writer's refusal to take back the current root's own key.
+pub const TAKE_BACK_ROOT: &str = "the current root's key is not taken back as an admin key";
 
 pub const REISSUE_KEPT_BACK: u64 = 256;
 
@@ -2857,13 +2859,23 @@ impl RecordSet {
             .collect()
     }
 
-    /// The root's writer takes live admin keys back by itself, for two
-    /// reasons only: a key the root received nothing of for
+    /// The admin keys whose devices are frozen. A frozen key cannot
+    /// acknowledge while it is frozen, so a removal it has not seen waits;
+    /// the app shows it with `unacknowledged`, and the person thaws the
+    /// key or takes it back (`take_back`).
+    pub fn frozen_admins(state: &State) -> BTreeSet<KeyHash> {
+        state.devices.iter().filter(|d| d.frozen).filter_map(|d| d.admin).collect()
+    }
+
+    /// The root's writer takes live admin keys back by itself for one
+    /// reason only: a key the root received nothing of for
     /// ADMIN_SILENCE_MS (heard_ms: when the root device last received a
-    /// record of each key, on its own clock; time_ms, its now), and a
-    /// frozen key that holds a removal back. A full room takes nobody
-    /// back by itself: the person does (`take_back`). It returns each
-    /// record with its reason, none when nothing is due.
+    /// record of each key, on its own clock; time_ms, its now). A full
+    /// room and a frozen key that holds removals back take nobody back by
+    /// themselves: the person does (`take_back`), or thaws the key, which
+    /// then acknowledges; a frozen key whose device is gone falls to the
+    /// silence. It returns each record with its reason, none when nothing
+    /// is due.
     pub fn take_back_lagging(
         &mut self,
         state: &State,
@@ -2876,20 +2888,7 @@ impl RecordSet {
             return Ok(Vec::new());
         }
         let mut lagging: BTreeMap<KeyHash, TakeBack> = BTreeMap::new();
-        let waiting = self.waiting(state);
-        // A frozen admin key cannot acknowledge (its records do not count
-        // while it is frozen), and a thaw would bring back what it signed:
-        // when it holds a removal back, the root takes it back at once.
-        for d in state.devices.iter().filter(|d| d.frozen) {
-            if let Some(a) = d.admin
-                && waiting
-                    .iter()
-                    .any(|r| r.body().signer != a && !self.acked_by(state, &a, &r.body().signer, r.body().seq))
-            {
-                lagging.insert(a, TakeBack::Frozen);
-            }
-        }
-        for a in Self::live_admins(state) {
+        for a in Self::live_admins(state).into_iter().filter(|a| *a != h) {
             // A key the root device never heard from counts from the root
             // record that named it, on the root's own clock.
             let since = heard_ms.get(&a).copied().or_else(|| self.named_at(state, &a));
@@ -2921,6 +2920,9 @@ impl RecordSet {
         a: &KeyHash,
         time_ms: u64,
     ) -> crate::error::Result<Record> {
+        if state.roots.last() == Some(a) {
+            return Err(crate::error::Error::msg(TAKE_BACK_ROOT));
+        }
         let Some(d) = state.devices.iter().find(|d| d.admin == Some(*a)) else {
             return Err(crate::error::Error::msg("no device holds this admin key"));
         };
