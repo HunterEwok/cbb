@@ -1979,7 +1979,11 @@ module records_v3 {
   // "honest" with from 1 (the key's admin records taken as a root's).
   action signChain(k: Key, kind: str, target: Key, at: int, mode: str): bool = signChainG(k, kind, target, at, mode, Set())
   // "given": the list is exactly `given` (a deviating recovery key's choice).
-  action signChainG(k: Key, kind: str, target: Key, at: int, mode: str, given: Set[Id]): bool = {
+  action signChainG(k: Key, kind: str, target: Key, at: int, mode: str, given: Set[Id]): bool =
+    signChainGL(k, kind, target, at, mode, given, Set())
+  // (LAST_ROOT_ONLY, owner 11-15 00:05Z: the person confirms the list of devices at a change;
+  // the devices in `leave` (unticked) are not re-issued, so they never count after it.)
+  action signChainGL(k: Key, kind: str, target: Key, at: int, mode: str, given: Set[Id], leave: Set[Key]): bool = {
     val h = HOLDER.get(k)
     val s = st.get(h)
     val v = views.get(h)
@@ -2050,7 +2054,8 @@ module records_v3 {
       range(1, nextId).select(i => db.keys().contains(i) and {
         val x = db.get(i)
         beforeRecs.contains(x) or (LAST_ROOT_ONLY and (x.kind == "freeze" or x.kind == "device") and heldRecs.contains(x))
-      } and {
+      } and not(LAST_ROOT_ONLY and leave.exists(d => devOf(db.get(i)) == d
+        or (db.get(i).kind == "freeze" and DEV.keys().contains(db.get(i).target) and DEV.get(db.get(i).target) == d))) and {
         val x = db.get(i)
         (live.contains(x) and not(LAST_ROOT_ONLY and x.kind == "admin" and not(DEV.keys().contains(x.target))))
           // (LAST_ROOT_ONLY: a device an admin admitted that counts is carried too, as the new
@@ -2366,7 +2371,9 @@ module records_v3 {
       not(knownTo(st.get("k"), t, db)),
       // No change while the set holds a recovery record it has not applied (format 20.3).
       recsOf(st.get("k").got, db).filter(r => isChain(r)).forall(r => ch.ids.indices().exists(j => ch.ids[j] == r.id)),
-      signChain(RECOVERY, "recover", t, ch.ids.length() + 1, "honest"),
+      // (LAST_ROOT_ONLY: the person may untick devices.)
+      nondet leave = (if (LAST_ROOT_ONLY) Set(Set(), Set(DEVICE), Set("dC")) else Set(Set())).oneOf()
+      signChainGL(RECOVERY, "recover", t, ch.ids.length() + 1, "honest", Set(), leave),
     }
   }
   // A new root signs, for the next change to list or to fill the room.
@@ -6433,4 +6440,14 @@ module records_v3 {
       .then(give("m", 4))
       .then(syncAll)
       .expect(MEMBERS.forall(m => views.get(m).checkpoint == rCp and views.get(m).devices.contains(DEVICE)) and promises)
+  // LAST_ROOT_ONLY: the person unticks D and C's device at the change to NA: neither is
+  // re-issued, so after the change both are out everywhere, and nothing C or D signed counts.
+  run lUntickTest = if (not(onL)) init else
+    init
+      .then(sign(ROOT, "device", DEVICE, "", 0, false, false, 1)).then(syncRound)
+      .then(signChainGL(RECOVERY, "recover", "NA", 1, "honest", Set(), Set(DEVICE, "dC"))).then(syncRound).then(syncRound)
+      .expect(notM.forall(m => views.get(m).path == [ROOT, "NA"] and not(views.get(m).devices.contains(DEVICE))
+        and not(views.get(m).devices.contains("dC")) and views.get(m).devices.contains("dA")) and promises)
+      .then(sign(COMPUTER, "device", "E", "", 0, false, false, 1)).then(syncRound)
+      .expect(notM.forall(m => not(views.get(m).devices.contains("E"))) and promises)
 }
