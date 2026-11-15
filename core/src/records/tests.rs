@@ -3686,6 +3686,7 @@ mod recovery;
 mod seen;
 mod sync;
 mod traces;
+mod way_out;
 
 /// A checkpoint and the head below it that fills its key's room: the
 /// checkpoint prunes before the room is judged, so a member that took the

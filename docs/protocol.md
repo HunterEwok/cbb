@@ -2061,7 +2061,11 @@ first, and passes the floor as a removal does; what that key signed and the root
 counts for nothing, and the writer never grants that key again: the device makes a new admin
 key. With nobody acting, a root whose admins hold removals back passes three quarters of its room
 only after more than 440 removals inside the 35 days (16 admins, 256 devices); there its ordinary records are
-refused, its removals and take-backs still go in up to its cap, and the silence frees it. Of the root's own
+refused, and its removals still go in only while the person keeps a way out: after the removal the
+root can still take back every admin key that holds removals back, each with its checkpoint first
+where the room asks, and write the checkpoint that then settles them. A removal that would close
+that way is refused ("take back the admin keys that hold removals back first"), the app names
+those keys, and the take-backs and the silence free the room. Of the root's own
 settings, hubs and copies records it keeps only the newest of each type, and of its records of
 one device the oldest and the newest, where the newest counts and names no admin key and those
 left out name the same key and no admin key; a resolve whose every target it leaves out goes
