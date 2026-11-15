@@ -26,7 +26,8 @@ foreach ($l in Get-Content (Join-Path $here "models\expected.txt")) {
   $p = $l -split '\s+'
   $expected[$p[0]] = $p[1]
 }
-$claims = Join-Path $Work "claims"
+# Claims sit beside the queue, shared by all lanes (each lane has its own -Work).
+$claims = Join-Path (Split-Path -Parent (Resolve-Path $Queue).Path) "claims"
 New-Item -ItemType Directory -Force -Path $claims | Out-Null
 foreach ($item in (Get-Content $Queue | Where-Object { $_ -match '\S' })) {
   # Taking a start is creating its claim file; New-Item fails if another lane made it first.
