@@ -2758,6 +2758,16 @@ module records_v3 {
   val lastHead = db.keys().filter(i => isChain(db.get(i))).fold(0, (a, i) => max2(a, i))
   def writerHeld(m: str, r: Record): bool = recsOf(st.get(m).chain, db).exists(h => isChain(h) and h.kit == ""
     and h.seen.keys().contains("_rm") and h.seen.get("_rm").indices().exists(j => h.seen.get("_rm")[j] == r.id))
+  // (Architecture 11-15 01:56Z, dec.11440, scope: the core turns away a root's removal that
+  // does not fit beside what the counting checkpoint names, NoRoom, as the model does; only a
+  // root signer that skips its own checkpoint-first check gets there, the honest writer never
+  // did in the core at real sizes. Such a removal, signed by a writer that is not honest (a
+  // hidden record, or a kit other than the honest writer's) and no longer held, did not remove:
+  // it may count for a while on a member whose checkpoint was not yet whole, and leave when it is;
+  // excused only while its signer's records on the member leave it no room.)
+  def overfilled(m: str, r: Record): bool =
+    not(st.get(m).recs.contains(r.id)) and (r.off or not(r.kit == "" or r.kit == "warned"))
+      and sumUnits(ofKey(recsOf(st.get(m).recs, db), r.signer)) + r.units > ROOTC
   val removedStayOut = MEMBERS.forall(m => synced(m) implies {
     val v = views.get(m)
     // Removals by the roots on the member's path (a key that is a root elsewhere, not here,
@@ -2765,7 +2775,7 @@ module records_v3 {
     val removals = recsOf(st.get(m).got, db).filter(r => r.kind == "revoke" and onList(v.path, r.signer))
     v.stop or gone.get(m).forall(k =>
       removals.filter(r => tgt(r).contains(k)).forall(r => not(writerHeld(m, r))
-          and (cutOff(v, r) or (cutEarlier(m, r) and heldByNone(r))))
+          and (cutOff(v, r) or (cutEarlier(m, r) and heldByNone(r)) or overfilled(m, r)))
         or (not(v.admins.keys().contains(k)) and not(v.devices.contains(k)))
         or recsOf(v.counting, db).exists(x => admissionsOf(Set(x), k) != Set()
           and removals.forall(r => not(tgt(r).contains(k)) or x.id > r.id))
@@ -6467,6 +6477,32 @@ module records_v3 {
   // (LAST_ROOT_ONLY, mi2 Sr.13007.) The old root removes A before the first change; at the second
   // change the honest writer carries only what counts at it, so the old root's admission of A,
   // whose removal stopped counting at the first change, does not come back as the new root's.
+  // (mi2 dec.11440, architecture 11-15 01:56Z.) A root that skips checkpoint-first removes C
+  // when its counting checkpoint and what it names fill its room: C's removal counts on members
+  // whose checkpoint is not yet whole, and leaves when it is (the core: NoRoom). It did not
+  // remove, and removedStayOut excuses it (overfilled).
+  run overfilledRemovalTest = init
+      .then(offerEveryone(nextId - 1))
+      .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2))
+      .then(sign(ROOT, "revoke", PHONE, "", 0, false, false, 1))
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 2, false, Set(5)))
+      .then(offerEveryone(nextId - 1))
+      .then(signFull("NA", "revoke", PHONE, "phone", 0, false, false, 1, true, Set()))
+      .then(offerEveryone(nextId - 1)).then(offerEveryone(nextId - 1))
+      .then(signFull(ROOT, "revoke", COMPUTER, "phone", 0, false, false, 1, true, Set()))
+      .then(offerEveryone(nextId - 1))
+      .then(compactAt("k"))
+      .then(offerEveryone(nextId - 1))
+      .then(sign(PHONE, "revoke", DEVICE, "", 0, false, false, 1))
+      .then(signFull(ROOT, "admin", MINTED, "phone", 0, false, false, 1, true, Set()))
+      .then(sign(WATCH, "copies", "", "", 0, false, false, 1))
+      .then(offerEveryone(nextId - 1))
+      .then(restart("a"))
+      .then(signDeviant("NA", "copies", "", 2))
+      .then(sign(PHONE, "thaw", "", "", 11, false, false, 1))
+      .then(syncRound)
+      .expect(removedStayOut and not(st.get("c").recs.contains(8)) and gone.get("c").contains(COMPUTER))
+
   run lReissueCountedTest = if (not(onL)) init else init
       .then(signFull(ROOT, "revoke", MINTED, "phone", 0, false, true, 1, true, Set()))
       .then(sign(ROOT, "revoke", PHONE, "nocp", 0, false, false, 1))
