@@ -15,7 +15,7 @@
 mod pieces;
 
 use cbb_core::records::body::{Device, ROLE_PHONE, Removal, Seen};
-use cbb_core::records::set::CHANGE_WAITING;
+use cbb_core::records::set::{ADMIN_KEY_NOT_NEW, CHANGE_WAITING};
 use cbb_core::records::{Kind, Record, RecordSet};
 use pieces::*;
 
@@ -76,7 +76,13 @@ fn after_a_change_only_the_new_root_counts() {
 #[test]
 fn a_left_out_device_counts_nowhere_whatever_arrives_later() {
     let (mut g, mut member, w) = changed("l2", &[&k("D"), &k("F")]);
-    assert!(w.first.iter().all(|r| !matches!(r.body().kind, Kind::Revoke(_))), "leaving out writes no removal");
+    // The change removes only the admin keys that lose their rights
+    // (11-15 rule): never a device it leaves out.
+    let out = [k("D").hash, k("F").hash];
+    assert!(
+        w.first.iter().all(|r| !matches!(&r.body().kind, Kind::Revoke(rm) if rm.keys.iter().any(|h| out.contains(h)))),
+        "leaving out writes no removal of the device"
+    );
     let a = k("A");
     // Late records about D and F, by the old root and by the old admin.
     g.t += 1_000;
@@ -845,8 +851,18 @@ fn an_old_admin_key_named_again_makes_nothing_it_signed_before_count() {
     change(&mut g.set, &r2, &k("l40 P2"), &[], g.t);
     let st = g.set.state();
     g.t += 1_000;
-    g.set.write_record(&st, &r2, Kind::device(admin_device(&k("PA"), "PA", &a)), g.t).expect("named again (05:33Z)");
-    assert!(is_admin(&g.set.state(), &a));
+    // The writer refuses (11-15 rule: an admin key is new after a change);
+    // the attack goes on with the naming signed by hand.
+    let refused = g.set.write_record(&st, &r2, Kind::device(admin_device(&k("PA"), "PA", &a)), g.t);
+    assert!(
+        refused.as_ref().is_err_and(|e| format!("{e}").contains(ADMIN_KEY_NOT_NEW)),
+        "the writer names an old admin key again: {:?}",
+        refused.as_ref().map(|v| v.len())
+    );
+    g.chain.follow(&g.set, &r2);
+    let named = g.chain.sign(&g.set, &r2, Kind::device(admin_device(&k("PA"), "PA", &a)), g.t);
+    let _ = g.set.insert(named);
+    println!("a hand-signed naming of the removed key makes it an admin: {}", is_admin(&g.set.state(), &a));
     // The pre-signed record, offered now.
     let _ = g.set.insert(kept_back.clone());
     // A signs on its old chain, seeing the new root.
@@ -886,7 +902,15 @@ fn an_old_admin_key_named_again_cannot_reach_its_old_records_from_a_new_chain() 
     change(&mut g.set, &r2, &k("l41 P2"), &[], g.t);
     let st = g.set.state();
     g.t += 1_000;
-    g.set.write_record(&st, &r2, Kind::device(admin_device(&k("PA"), "PA", &a)), g.t).expect("named again (05:33Z)");
+    let refused = g.set.write_record(&st, &r2, Kind::device(admin_device(&k("PA"), "PA", &a)), g.t);
+    assert!(
+        refused.as_ref().is_err_and(|e| format!("{e}").contains(ADMIN_KEY_NOT_NEW)),
+        "the writer names an old admin key again: {:?}",
+        refused.as_ref().map(|v| v.len())
+    );
+    g.chain.follow(&g.set, &r2);
+    let named = g.chain.sign(&g.set, &r2, Kind::device(admin_device(&k("PA"), "PA", &a)), g.t);
+    let _ = g.set.insert(named);
     let mut fresh = Chain::new();
     g.t += 1_000;
     let seen = vec![head_of(&g.set, &r2.hash).unwrap()];

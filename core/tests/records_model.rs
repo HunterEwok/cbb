@@ -648,12 +648,19 @@ fn the_owner_unticks_an_admin() {
     g.revoke("R", "W");
     let all: Vec<Record> = g.recs.clone();
     let w = g.change_from(&all.iter().collect::<Vec<_>>(), "NK", &["C"]);
-    assert!(!w.first.iter().any(|r| matches!(r.body().kind, Kind::Revoke(_))));
+    // The change removes the first root's admin keys (11-15 rule: an
+    // admin key is new after a change), never a device key.
+    let admin_keys: Vec<KeyHash> = ["A", "C", "W"].iter().map(|n| k(n).hash).collect();
+    assert!(w.first.iter().all(|r| match &r.body().kind {
+        Kind::Revoke(rm) => rm.keys.iter().all(|h| admin_keys.contains(h)),
+        _ => true,
+    }));
     let s = g.member(&g.all()).state();
     assert_eq!(s.roots, roots(&["R", "NK"]));
     assert!(!has(&s, "C computer") && has(&s, "A phone"));
     assert!(["A", "C", "W"].iter().all(|n| !s.may_command(&k(n).hash)));
-    assert!(s.revoked.is_empty());
+    assert!(s.revoked.iter().all(|h| admin_keys.contains(h)), "only admin keys are removed");
+    assert!(["A", "C"].iter().all(|n| s.revoked.contains(&k(n).hash)), "the old admin keys are removed");
 }
 
 /// literalListTest: why the list holds what the writer counts of every

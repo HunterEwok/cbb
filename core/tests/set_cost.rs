@@ -225,9 +225,10 @@ fn the_measured_sets_are_the_named_ones() {
     let _alone = alone();
     let g = groupgen::build(groupgen::sizes(1)[2]);
     // 1678 since the change of root re-issues every device as the new
-    // root's own record (L + B); the measurements above were taken at the
-    // earlier 1375.
-    assert_eq!(g.records.len(), 1678);
+    // root's own record (L + B), 1680 since each change also removes the
+    // admin keys that lose their rights; the measurements above were
+    // taken at the earlier 1375.
+    assert_eq!(g.records.len(), 1680);
     for data in [
         &include_bytes!("../../testdata/records-cost/slow-1.bin")[..],
         &include_bytes!("../../testdata/records-cost/slow-2.bin")[..],
