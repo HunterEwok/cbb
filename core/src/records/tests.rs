@@ -3697,6 +3697,7 @@ fn full_size(name: &str) -> bool {
 mod ack;
 mod cap;
 mod change;
+mod change_over;
 mod change_spare;
 mod insert_cost;
 mod lost_root;

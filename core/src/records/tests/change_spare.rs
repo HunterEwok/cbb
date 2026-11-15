@@ -267,3 +267,51 @@ fn a_frozen_admins_device_keeps_its_spare_however_frozen() {
         assert_eq!(reissue_of(&w, &k("phone a")).admin, Some(k("spare a").key.clone()), "by admin {by_admin}");
     }
 }
+
+/// The new root names an earlier root's admin key A again (a device that
+/// kept its old admin key, against the kit's rule): none of A's records
+/// signed before the change counts, those the change carried, nor one the
+/// writer never held that arrives late; A's records count again only from
+/// its acknowledgement of the new grant on, chained on its old ones.
+#[test]
+fn an_old_admin_key_named_again_counts_only_from_its_new_grant() {
+    let mut g = group();
+    let tv = g.device(&k("admin a"), &k("tv"), "tv", |_| {});
+    // Signed before the change, held back from its writer.
+    let radio = g.device(&k("admin a"), &k("radio"), "radio", |_| {});
+    g.recs.retain(|r| r.id() != radio.id());
+    write(&mut g, &k("n1"), &k("p1"), &[]);
+    g.push(radio.clone());
+    let s = g.state();
+    assert!(!s.may_command(&k("admin a").hash));
+    assert!(s.device_by_key(&k("radio").hash).is_none());
+    // The writer names A again, and members take it.
+    let mut d = Device::new(k("phone a").key.clone(), "admin", ROLE_MEMBER);
+    d.admin = Some(k("admin a").key.clone());
+    d.powers = POWERS;
+    let mut set = set_with(&g.root.key, &g.recs, &g.lists);
+    let st = set.state();
+    let grant = set.write_record(&st, &k("n1"), Kind::device(d), 0).unwrap();
+    g.push(grant.clone());
+    let s = g.state();
+    assert!(s.counting.contains(&grant.id()) && s.may_command(&k("admin a").hash));
+    for r in [&tv, &radio] {
+        assert!(!s.counting.contains(&r.id()), "an old record of A counts");
+    }
+    assert!(s.device_by_key(&k("radio").hash).is_none());
+    assert!(s.device_by_key(&k("tv").hash).is_some(), "tv stands on n1's re-issue");
+    // A record of A that names only the old root in its seen, signed now,
+    // counts neither.
+    let old_seen = vec![g.seen_at(&k("root").hash, 1)];
+    let stale = g.rec_as_is(&k("admin a"), Kind::Ack { seen: old_seen, spare: None });
+    assert!(!g.state().counting.contains(&stale.id()));
+    // From its acknowledgement of n1's grant on, A's records count.
+    let ack = ack_seeing(&mut g, &k("admin a"), &k("n1"));
+    let lamp = g.device(&k("admin a"), &k("lamp"), "lamp", |_| {});
+    let s = g.state();
+    assert!(s.counting.contains(&ack.id()) && s.counting.contains(&lamp.id()));
+    assert!(s.device_by_key(&k("lamp").hash).is_some() && s.device_by_key(&k("radio").hash).is_none());
+    let mut m = set_of(&g.root.key);
+    sync_all(&mut m, &g.recs, &g.lists);
+    assert_eq!(m.state().devices, s.devices);
+}

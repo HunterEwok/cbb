@@ -15,6 +15,8 @@ All notable changes to cbb are documented in this file. The format follows
   root's new phone it does not know yet, which gives it nothing else.
 - An admin keeps its rights across a change of root while asleep, once: its acknowledgement
   carries a spare admin key, which the new root names in its place with the same powers.
+- A change of root can be written past one that is still arriving, when the person chooses not
+  to sync first: the newer change applies by itself, and the one still arriving never counts.
 - The 0.6 recovery sheet in the Rust core (`cbb_core::sheet`): the 32-byte recovery secret as
   4 lines of 16 characters with a check on each line and one on the whole sheet, so a typing
   mistake is told apart from a sheet of another group, and as a QR code with the Group ID;
