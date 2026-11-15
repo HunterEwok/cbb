@@ -1414,7 +1414,27 @@ pub(crate) fn evaluate_checked(
     // The records of a root only a waiting record names stay aside, as
     // in the set (Chain::waiting_roots).
     let waiting = chain.waiting_roots(&group_root);
-    let checked: Vec<Checked> = checked.into_iter().filter(|c| !waiting.contains_key(&c.r.body().signer)).collect();
+    // And the records of an admin key only a waiting root's records name,
+    // as the set keeps them aside with that root's (`early_admins`).
+    let names_admin = |c: &Checked<'_>| match &c.r.body().kind {
+        Kind::Device(d) => d.admin.as_ref().map(Key::hash),
+        _ => None,
+    };
+    let named_elsewhere: BTreeSet<KeyHash> = checked
+        .iter()
+        .filter(|c| !waiting.contains_key(&c.r.body().signer) && c.role != Role::Recovery)
+        .filter_map(names_admin)
+        .collect();
+    let waiting_admins: BTreeSet<KeyHash> = checked
+        .iter()
+        .filter(|c| waiting.contains_key(&c.r.body().signer))
+        .filter_map(names_admin)
+        .filter(|a| !named_elsewhere.contains(a) && !waiting.contains_key(a) && *a != group_root)
+        .collect();
+    let checked: Vec<Checked> = checked
+        .into_iter()
+        .filter(|c| !waiting.contains_key(&c.r.body().signer) && !waiting_admins.contains(&c.r.body().signer))
+        .collect();
     // Halted by a recovery fork: the group is stopped for good, and only
     // the recovery chain counts at every member, whatever else it held
     // (State::halted). No device, admin or hub is named.
