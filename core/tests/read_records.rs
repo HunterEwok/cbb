@@ -1331,7 +1331,7 @@ fn an_admin_admitted_after_an_admin_removal_is_in_the_first_tier() {
     assert!(set.state().revoked.contains(&admins[1].hash));
     let (c, r) = admit_admin(&mut g, &root, "b admin C");
     let st = set.state();
-    let written = set.write_record(&st, &root, r.body().kind.clone(), g.t + 1).unwrap();
+    let written = set.write_record(&st, &root, r.body().kind.clone(), g.t + 1).unwrap().pop().unwrap();
     assert!(set.contains(&written.id()));
     let mut ids = Vec::new();
     for n in 0..16u32 {
@@ -1941,7 +1941,7 @@ fn a_checkpoint_keeps_the_newest_of_what_the_root_set_again() {
     let mut write = |set: &mut RecordSet, kind: Kind| {
         let st = set.state();
         t += 1000;
-        set.write_record(&st, &root, kind, t).unwrap()
+        set.write_record(&st, &root, kind, t).unwrap().pop().unwrap()
     };
     let names: Vec<Record> = (0..30)
         .map(|i| write(&mut set, Kind::device(Device::new(dk.key.clone(), &format!("name {i}"), ROLE_MEMBER))))
@@ -2008,7 +2008,9 @@ fn an_admin_s_removals_go_at_the_root_s_checkpoint() {
             let st = set.state();
             t += 1000;
             match set.write_record(&st, &admin, kind, t) {
-                Ok(r) => written.push(r),
+                // The admin's own record (its first comes after the ack the
+                // writer adds, which is not one of its removals).
+                Ok(mut r) => written.extend(r.pop()),
                 Err(e) => {
                     refused = format!("{e:?}");
                     break 'fill;
@@ -2144,7 +2146,7 @@ fn a_take_back_writes_the_root_s_checkpoint_first() {
     let st = set.state();
     t += 1000;
     let back = Device::new(k("z admin 0 phone").key.clone(), "was admin", ROLE_PHONE);
-    let r = set.write_record(&st, &root, Kind::device(back), t).unwrap();
+    let r = set.write_record(&st, &root, Kind::device(back), t).unwrap().pop().unwrap();
     let st = set.state();
     let cp = set.get(&r.body().prev.unwrap()).unwrap().clone();
     assert!(matches!(cp.body().kind, Kind::Checkpoint { .. }), "no checkpoint right before the take-back");

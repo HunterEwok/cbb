@@ -340,7 +340,7 @@ fn a_taken_back_key_is_never_granted_again() {
     let st = set.state();
     let err = set.write_record(&st, &root, grant(&a), ADMIN_SILENCE_MS).unwrap_err();
     assert!(alloc::format!("{err}").contains(ADMIN_KEY_TAKEN_BACK), "{err}");
-    let r = set.write_record(&st, &root, grant(&a2), ADMIN_SILENCE_MS).unwrap();
+    let r = set.write_record(&st, &root, grant(&a2), ADMIN_SILENCE_MS).unwrap().pop().unwrap();
     let _ = set.insert(r);
     let st = set.state();
     assert!(st.device_by_key(&pa.hash).is_some_and(|d| d.admin == Some(a2.hash)));
@@ -637,4 +637,33 @@ fn after_a_silence_take_back_other_admins_removals_stay() {
 fn after_a_frozen_take_back_other_admins_removals_stay() {
     after_a_take_back_other_admins_removals_stay(false, false);
     after_a_take_back_other_admins_removals_stay(false, true);
+}
+
+/// The writer gives back every record it added, in the order they go out:
+/// an admin key's first record comes after the acknowledgement written
+/// before it, so a member that takes exactly what the writer gave misses
+/// nothing and counts both; a later record is given alone.
+#[test]
+fn a_member_that_takes_what_the_writer_gave_misses_nothing() {
+    let mut g = G::new();
+    let (pa, a) = (k("phone a"), k("admin a"));
+    g.admin(&pa, &a, POWER_ADMIT);
+    let mut writer = set_with(&g.root.key, &g.recs, &g.lists);
+    let mut member = set_with(&g.root.key, &g.recs, &g.lists);
+    for (i, alone) in [(0, false), (1, true)] {
+        let st = writer.state();
+        let d = Device::new(k(&format!("laptop {i}")).key.clone(), "laptop", ROLE_MEMBER);
+        let given = writer.write_record(&st, &a, Kind::device(d), 0).unwrap();
+        assert_eq!(given.len(), if alone { 1 } else { 2 }, "record {i}");
+        if !alone {
+            assert!(matches!(given[0].body().kind, Kind::Ack { .. }), "the ack goes first");
+        }
+        for r in &given {
+            member.insert(r.clone()).unwrap();
+        }
+        let ms = member.state();
+        assert!(member.missing(&ms).is_empty(), "record {i}");
+        assert!(given.iter().all(|r| ms.counting.contains(&r.id())), "record {i}");
+        assert_eq!(ms.devices, writer.state().devices, "record {i}");
+    }
 }

@@ -5574,7 +5574,7 @@ fn the_writer_writes_only_what_its_own_set_keeps_and_counts() {
     for i in 0..3 {
         let st = set.state();
         let d = Device::new(k(&format!("laptop {i}")).key.clone(), "laptop", ROLE_MEMBER);
-        let r = set.write_record(&st, &a, Kind::device(d), 0).unwrap();
+        let r = set.write_record(&st, &a, Kind::device(d), 0).unwrap().pop().unwrap();
         assert!(set.contains(&r.id()) && set.state().counting.contains(&r.id()), "record {i}");
         seqs.push(r.body().seq);
     }
@@ -5601,7 +5601,7 @@ fn the_writer_writes_only_what_its_own_set_keeps_and_counts() {
     assert!(set.write_record(&st, &g.root, cp, 0).is_err());
     assert_eq!(set.digest(), before);
     // The root still writes, at its own next seq.
-    let r = set.write_record(&st, &g.root, Kind::device(d), 0).unwrap();
+    let r = set.write_record(&st, &g.root, Kind::device(d), 0).unwrap().pop().unwrap();
     assert_eq!(r.body().seq, 2);
     assert!(set.state().counting.contains(&r.id()));
 }

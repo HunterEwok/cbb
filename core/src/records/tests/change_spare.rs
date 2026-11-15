@@ -291,7 +291,7 @@ fn an_old_admin_key_named_again_counts_only_from_its_new_grant() {
     d.powers = POWERS;
     let mut set = set_with(&g.root.key, &g.recs, &g.lists);
     let st = set.state();
-    let grant = set.write_record(&st, &k("n1"), Kind::device(d), 0).unwrap();
+    let grant = set.write_record(&st, &k("n1"), Kind::device(d), 0).unwrap().pop().unwrap();
     g.push(grant.clone());
     let s = g.state();
     assert!(s.counting.contains(&grant.id()) && s.may_command(&k("admin a").hash));
@@ -330,7 +330,7 @@ fn a_freeze_written_with_no_seen_keeps_the_spare() {
         let mut set = set_with(&g.root.key, &g.recs, &g.lists);
         let st = set.state();
         let freeze = Kind::Freeze(removal(&[k("admin a").hash], vec![]));
-        let r = set.write_record(&st, &by, freeze, 0).unwrap();
+        let r = set.write_record(&st, &by, freeze, 0).unwrap().pop().unwrap();
         let Kind::Freeze(rm) = &r.body().kind else { unreachable!() };
         assert!(rm.seen.iter().any(|s| s.key == k("admin a").hash && s.seq >= ack.body().seq), "by admin {by_admin}");
         for r in set.for_peer(&set.state(), &k("laptop").hash) {
