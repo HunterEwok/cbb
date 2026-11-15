@@ -1973,6 +1973,8 @@ struct Epoch<'e, 'a> {
     /// with that record: what the key signed and the record saw still
     /// counts, the rest does not.
     superseded: BTreeMap<KeyHash, usize>,
+    /// The records of admin keys on their grant line (`find_grant_lines`).
+    granted: Vec<bool>,
 }
 
 #[allow(clippy::indexing_slicing, reason = "positions come from the records' own Vec")]
@@ -2008,6 +2010,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
             settings: Settings::default(),
             pairs: BTreeMap::new(),
             superseded: BTreeMap::new(),
+            granted: vec![false; n],
         };
         // Roots on the path first: their ceilings do not depend on the
         // settings, which are a root's record.
@@ -2028,6 +2031,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
             ep.chain(s);
         }
         ep.find_admins();
+        ep.find_grant_lines();
         ep.find_pairs();
         ep.admit_and_label();
         ep.collect();
@@ -2347,6 +2351,60 @@ impl<'e, 'a> Epoch<'e, 'a> {
         }
     }
 
+    /// The seen line (section 10, "Admin keys"): a record of an admin key
+    /// counts only on its grant line, where it, or a record below it on
+    /// its key's chain, either has a seen that holds a root record naming
+    /// the key (the root's key at that record's seq or above), or is a
+    /// record the checkpoint names (a head or a kept record), which its
+    /// writer names only where the key's records count. What an admin key
+    /// signed before it saw its own grant never counts; a record below the
+    /// line still links the chain above it.
+    fn find_grant_lines(&mut self) {
+        let mut naming: BTreeMap<KeyHash, Vec<(KeyHash, u64)>> = BTreeMap::new();
+        for i in self.all() {
+            if !self.root_record(i) {
+                continue;
+            }
+            if let Some(a) = self.r(i).dev().and_then(|d| d.admin.as_ref()).map(Key::hash) {
+                naming.entry(a).or_default().push((self.r(i).b().signer, self.r(i).b().seq));
+            }
+        }
+        let mut granted = vec![false; self.e.recs.len()];
+        for (a, names) in &naming {
+            let rs = self.of(a);
+            let by_id: BTreeMap<RecordId, usize> = rs.iter().map(|&i| (self.r(i).id, i)).collect();
+            let step = |i: usize| -> Result<bool, usize> {
+                let r = self.r(i);
+                // The entry names a record of that root this member holds
+                // on its counting line, by seq and ID (a made-up ID never
+                // counts; a root record not held yet waits).
+                let holds = |x: Seen| {
+                    self.e.by_id.get(&x.id).is_some_and(|&j| {
+                        self.root_record(j) && self.r(j).b().signer == x.key && self.r(j).b().seq == x.seq
+                    })
+                };
+                if self.e.anchors.contains(&r.id)
+                    || names.iter().any(|(root, seq)| r.seen_entry(root).is_some_and(|x| x.seq >= *seq && holds(x)))
+                {
+                    return Ok(true);
+                }
+                // A prev the checkpoint names stands for what it pruned.
+                if r.b().prev.as_ref().is_some_and(|p| self.e.anchors.contains(p)) {
+                    return Ok(true);
+                }
+                match r.b().prev.as_ref().and_then(|p| by_id.get(p)) {
+                    Some(&p) if r.b().seq > 1 => Err(p),
+                    _ => Ok(false),
+                }
+            };
+            let mut memo = BTreeMap::new();
+            for &i in rs {
+                granted[i] = walk(&mut memo, i, step);
+            }
+        }
+        self.granted = granted;
+    }
+
     fn powers(&self, admin: &KeyHash) -> u64 {
         self.admins.get(admin).map_or(0, |&i| match &self.r(i).b().kind {
             Kind::Device(d) => d.powers,
@@ -2505,7 +2563,7 @@ impl<'e, 'a> Epoch<'e, 'a> {
     fn permitted(&self, i: usize) -> bool {
         let r = self.r(i);
         let a = &r.b().signer;
-        if r.held || !self.admins.contains_key(a) || self.capped[i] {
+        if r.held || !self.admins.contains_key(a) || self.capped[i] || !self.granted[i] {
             return false;
         }
         match &r.b().kind {

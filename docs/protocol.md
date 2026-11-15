@@ -1941,6 +1941,23 @@ each key: its root's place on the path, then its seq, then the smaller ID. A roo
 come first in its room, and so does a root record that takes an admin key back, so the caps
 never drop a record that decides who is an admin.
 
+**The seen line.** A record of an admin key counts only on its key's grant line: it, or a
+record below it on the key's chain, either has a `seen` entry that names a root record naming
+the key as an admin, or a later record of that root (the entry's `seq` at that record's `seq`
+or above, and its ID a record of that root the member holds on the root's counting line), or
+is a record the counting checkpoint names (a head or a kept record), or sits right above one.
+Any naming record will do, so a root's later update of the device never moves the line; the
+writer names an admin key's head only at its newest record that counts, so a checkpoint
+carries the line and never widens it. A seen entry for a root record the member does not hold
+yet waits for it; one for a root record at or above a fork of the root stands on no counting
+line. What a key signed before it saw its own grant is void: a void record is held, links
+`prev`, does not count, and is charged to its signer like any held record; a key whose room
+fills with its own void records has locked itself out and is taken back like any laggard. The
+honest writer signs as an admin only once its state counts the grant, and its first record
+then is an `ack` (`RecordSet::write_record`). So a root's removal signed below the root's
+oldest record that names a key needs no `ack` of that key (GRANT_ABOVE): a member that counts
+the grant holds the removal below it.
+
 Before a root record that makes an admin key no longer an admin (a removal that names the key
 or the key of a device that holds it, or a device record that takes the key back), the root's
 writer writes a checkpoint of the root first, then the record (`RecordSet::write_record`). That
@@ -2035,7 +2052,7 @@ above the removal's seq: an `ack` sits on its signer's whole chain, so the root 
 admission that admin signed. An admin's device writes one `ack` after a sync brings a removal it
 has not acknowledged; the checkpoint keeps only each key's newest. The root's writer takes back
 by itself only an admin key its device received nothing of for `records::set::ADMIN_SILENCE_MS`
-(35 days, on the root device's clock). A full room, or a frozen admin key (which cannot
+(35 days, on the root device's clock; only a key's records that count are heard). A full room, or a frozen admin key (which cannot
 acknowledge while frozen) that holds removals back, takes nobody back by itself: the app shows
 what each admin key holds back, in removals and in the root's units, and which keys are frozen,
 and the person thaws the key or chooses whom to take back; a frozen key whose device is gone

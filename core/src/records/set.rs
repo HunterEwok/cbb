@@ -2710,7 +2710,24 @@ impl RecordSet {
 
     /// Whether admin key a has acknowledged signer's records up to seq: a
     /// record of a that counts names signer at seq or above in its seen.
+    ///
+    /// GRANT_ABOVE: a removal of the root signed below the root's oldest
+    /// record that names a needs no acknowledgement of a. A member that
+    /// counts that grant holds the root's chain below it, the removal
+    /// too, and the seen line voids whatever a signed before it saw its
+    /// grant.
     fn acked_by(&self, state: &State, a: &KeyHash, signer: &KeyHash, seq: u64) -> bool {
+        let granted_above = self
+            .records
+            .values()
+            .filter(|e| !e.held && e.record.body().signer == *signer && state.counting.contains(&e.record.id()))
+            .filter(|e| matches!(&e.record.body().kind, Kind::Device(d) if d.admin.as_ref().map(Key::hash) == Some(*a)))
+            .map(|e| e.record.body().seq)
+            .min()
+            .is_some_and(|named| seq < named);
+        if granted_above && state.roots.contains(signer) {
+            return true;
+        }
         self.records.values().filter(|e| !e.held && e.record.body().signer == *a).any(|e| {
             state.counting.contains(&e.record.id())
                 && seen_of(&e.record.body().kind).iter().any(|x| x.key == *signer && x.seq >= seq)
@@ -3348,6 +3365,23 @@ impl RecordSet {
             && self.taken_back(state).contains(&a)
         {
             return Err(crate::error::Error::msg(ADMIN_KEY_TAKEN_BACK));
+        }
+        // The seen line: an admin key's first record after its grant
+        // counts is an acknowledgement, whose seen holds the root record
+        // that named it; what the key signs after stands on that line. It
+        // signs as an admin only once its state counts the grant.
+        let h = Key::es256(signer.public()).hash();
+        if !state.roots.contains(&h)
+            && Self::live_admins(state).contains(&h)
+            && !matches!(kind, Kind::Ack { .. })
+            && !self.records.values().any(|e| e.record.body().signer == h && state.counting.contains(&e.record.id()))
+        {
+            let mut trial = self.clone();
+            trial.write_ack(state, signer, time_ms)?;
+            let now = trial.state();
+            let r = trial.write_one(&now, signer, kind, time_ms)?;
+            *self = trial;
+            return Ok(r);
         }
         self.write_one(state, signer, kind, time_ms)
     }

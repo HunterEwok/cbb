@@ -109,11 +109,22 @@ impl Group {
     }
 
     fn sign(&mut self, by: &str, kind: Kind) -> Record {
+        let roots: Vec<KeyHash> = ["R", "NK", "NA"].iter().map(|r| k(r).hash).collect();
         let by = k(by);
         let (seq, prev) = match self.heads.get(&by.hash) {
             Some((s, id)) => (s + 1, Some(*id)),
             None => (1, None),
         };
+        // As an honest admin's device: a key's first record names the
+        // roots' heads it holds, so what it signs stands on its grant line.
+        let mut kind = kind;
+        if seq == 1 && !roots.contains(&by.hash) {
+            let add: Vec<Seen> = roots
+                .iter()
+                .filter_map(|r| self.heads.get(r).map(|(s, id)| Seen { key: *r, seq: *s, id: *id }))
+                .collect();
+            add_seen(&mut kind, &add);
+        }
         let body = Body { group: self.group(), signer: by.hash, seq, prev, time_ms: 0, kind, held: false };
         self.push(Record::sign(body, &by).unwrap())
     }
@@ -769,4 +780,20 @@ fn compacting_on_the_roots_checkpoint_changes_nothing() {
         dropped += usize::from(!a.contains(&r.id()));
     }
     assert!(dropped > 0, "the room filled");
+}
+
+/// Adds to a record's seen the entries for keys it does not name yet.
+fn add_seen(kind: &mut Kind, add: &[Seen]) {
+    let seen = match kind {
+        Kind::Revoke(r) | Kind::Freeze(r) => &mut r.seen,
+        Kind::Thaw { seen, .. } | Kind::Hubs { seen, .. } | Kind::Copies { seen, .. } | Kind::Ack { seen, .. } => seen,
+        Kind::Device(d) => &mut d.seen,
+        _ => return,
+    };
+    for e in add {
+        if !seen.iter().any(|s| s.key == e.key) {
+            seen.push(*e);
+        }
+    }
+    seen.sort_by_key(|s| s.key);
 }

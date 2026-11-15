@@ -90,11 +90,23 @@ impl G {
         g
     }
 
-    fn rec(&mut self, by: &K, kind: Kind) -> Record {
+    fn rec(&mut self, by: &K, mut kind: Kind) -> Record {
         let (seq, prev) = match self.heads.get(&by.hash) {
             Some((s, id)) => (s + 1, Some(*id)),
             None => (1, None),
         };
+        // As an honest admin's device: a key's first record names the
+        // root's head, so what it signs stands on its grant line.
+        let root = k("root").hash;
+        if by.hash != root
+            && seq == 1
+            && let Some(&(rs, rid)) = self.heads.get(&root)
+            && let Kind::Device(d) = &mut kind
+            && !d.seen.iter().any(|x| x.key == root)
+        {
+            d.seen.push(crate::records::body::Seen { key: root, seq: rs, id: rid });
+            d.seen.sort_by_key(|x| x.key);
+        }
         let body = Body { group: self.gid, signer: by.hash, seq, prev, time_ms: 0, kind, held: false };
         let r = crate::testkit::sign_by(body, by);
         self.heads.insert(by.hash, (seq, r.id()));
