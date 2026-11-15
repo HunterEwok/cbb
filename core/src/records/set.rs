@@ -2679,16 +2679,18 @@ impl RecordSet {
         if !Self::live_admins(state).contains(a) {
             return None;
         }
+        // The newest ack that counts decides: one without a spare
+        // withdraws the spare an older one published.
         let spare = self
             .records
             .values()
             .filter(|e| e.record.body().signer == *a && state.counting.contains(&e.record.id()))
             .filter_map(|e| match &e.record.body().kind {
-                Kind::Ack { spare: Some(sp), .. } => Some((e.record.body().seq, sp)),
+                Kind::Ack { spare, .. } => Some((e.record.body().seq, spare)),
                 _ => None,
             })
             .max_by_key(|(seq, _)| *seq)
-            .map(|(_, sp)| sp.clone())?;
+            .and_then(|(_, sp)| sp.clone())?;
         self.fresh_key(state, &spare.hash()).then_some(spare)
     }
 

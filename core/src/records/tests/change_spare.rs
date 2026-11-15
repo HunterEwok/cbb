@@ -190,3 +190,22 @@ fn the_writer_refuses_a_used_spare() {
     }
     assert!(set.write_ack_spare(&st, &k("admin a"), &k("fresh").key, 0).is_ok());
 }
+
+/// A newer counting ack without a spare withdraws the spare an older one
+/// published: the change names no spare, and the admin's device is carried
+/// plain.
+#[test]
+fn a_newer_ack_without_a_spare_withdraws_it() {
+    let mut g = group();
+    ack_with_spare(&mut g, &k("admin a"), &k("spare a"));
+    g.device(&k("root"), &k("tv"), "tv", |_| {});
+    let mut set = set_with(&g.root.key, &g.recs, &g.lists);
+    let st = set.state();
+    let r = set.write_ack(&st, &k("admin a"), 0).unwrap();
+    g.push(r);
+    let set = set_with(&g.root.key, &g.recs, &g.lists);
+    assert_eq!(set.spare_of(&set.state(), &k("admin a").hash), None);
+    let w = write(&mut g, &k("n1"), &k("p1"), &[]);
+    let d = reissue_of(&w, &k("phone a"));
+    assert!(d.admin.is_none() && d.powers == 0);
+}
