@@ -263,7 +263,7 @@ fn the_new_root_is_a_fresh_key() {
 
 /// L3.2: the new root does not name an old root's admin key again.
 #[test]
-#[ignore = "waits for L + B"]
+#[ignore = "rule changed by architecture 05:33Z: the core lets the new root name it (kit rule); see the attack test below"]
 fn the_new_root_does_not_name_an_old_admin_key_again() {
     let (mut g, _, _) = changed("l9", &[]);
     let r2 = k("l9 root 2");
@@ -821,4 +821,98 @@ fn today_a_change_whose_reissue_never_went_out_leaves_only_a_fork() {
         "nor at the other side: {:?}",
         bt.devices.len()
     );
+}
+
+/// The attack on architecture's 05:33Z rule (the new root may name an old
+/// admin key again): the new root names A again on PA, and A tries to make
+/// what it signed before the change count. A's old admission of F, a
+/// record A pre-signed before the change and offered after, a new record
+/// on A's old chain (its prev into the old records, its seen on the new
+/// root), and the new root's checkpoint naming A's head after that. None
+/// of A's records from before the change counts, and the pre-signed one
+/// admits nobody.
+#[test]
+fn an_old_admin_key_named_again_makes_nothing_it_signed_before_count() {
+    let mut g = group("l40");
+    let a = k("A");
+    // Before the change: A pre-signs an admission it keeps back.
+    g.t += 1_000;
+    let mut x = plain(&k("l40 X"), "X");
+    x.seen = vec![head_of(&g.set, &g.r1.hash).unwrap()];
+    let kept_back = g.chain.sign(&g.set, &a, Kind::device(x), g.t);
+    let old: Vec<_> = g
+        .set
+        .in_dependency_order()
+        .into_iter()
+        .filter(|r| r.body().signer == a.hash)
+        .map(|r| r.id())
+        .chain([kept_back.id()])
+        .collect();
+    g.t += 1_000;
+    let r2 = k("l40 root 2");
+    change(&mut g.set, &r2, &k("l40 P2"), &[], g.t);
+    let st = g.set.state();
+    g.t += 1_000;
+    g.set.write_record(&st, &r2, Kind::device(admin_device(&k("PA"), "PA", &a)), g.t).expect("named again (05:33Z)");
+    assert!(is_admin(&g.set.state(), &a));
+    // The pre-signed record, offered now.
+    let _ = g.set.insert(kept_back.clone());
+    // A signs on its old chain, seeing the new root.
+    g.t += 1_000;
+    let seen = vec![head_of(&g.set, &r2.hash).unwrap()];
+    let next = g.chain.sign_raw(&g.set, &a, Kind::Ack { seen, spare: None }, g.t);
+    let _ = g.set.insert(next.clone());
+    // The new root's checkpoint, then everything offered again.
+    let st = g.set.state();
+    g.t += 1_000;
+    if let Ok(cp) = g.set.write_checkpoint(&st, &r2, g.t) {
+        let _ = g.set.insert(cp);
+    }
+    let _ = g.set.insert(kept_back.clone());
+    let st = g.set.state();
+    for id in &old {
+        assert!(!st.counting.contains(id), "a record A signed before the change counts: {id:?}");
+    }
+    assert!(!has(&st, &k("l40 X")), "the pre-signed admission admits nobody");
+    println!("A's record on its old chain after the re-grant counts: {}", st.counting.contains(&next.id()));
+    same_in_every_order(&g.set, "old key named again");
+}
+
+/// The same attack from a fresh chain: after the re-grant A starts again
+/// at seq 1 (a second history beside its old one), and signs a record
+/// whose seen names only the old root. Neither lifts any record A signed
+/// before the change.
+#[test]
+fn an_old_admin_key_named_again_cannot_reach_its_old_records_from_a_new_chain() {
+    let mut g = group("l41");
+    let a = k("A");
+    let old: Vec<_> =
+        g.set.in_dependency_order().into_iter().filter(|r| r.body().signer == a.hash).map(|r| r.id()).collect();
+    let old_root_head = head_of(&g.set, &g.r1.hash).unwrap();
+    g.t += 1_000;
+    let r2 = k("l41 root 2");
+    change(&mut g.set, &r2, &k("l41 P2"), &[], g.t);
+    let st = g.set.state();
+    g.t += 1_000;
+    g.set.write_record(&st, &r2, Kind::device(admin_device(&k("PA"), "PA", &a)), g.t).expect("named again (05:33Z)");
+    let mut fresh = Chain::new();
+    g.t += 1_000;
+    let seen = vec![head_of(&g.set, &r2.hash).unwrap()];
+    let first = fresh.sign_raw(&g.set, &a, Kind::Ack { seen, spare: None }, g.t);
+    let _ = g.set.insert(first);
+    g.t += 1_000;
+    let mut y = plain(&k("l41 Y"), "Y");
+    y.seen = vec![old_root_head];
+    let on_old_seen = fresh.sign_raw(&g.set, &a, Kind::device(y), g.t);
+    let _ = g.set.insert(on_old_seen);
+    let st = g.set.state();
+    g.t += 1_000;
+    if let Ok(cp) = g.set.write_checkpoint(&st, &r2, g.t) {
+        let _ = g.set.insert(cp);
+    }
+    let st = g.set.state();
+    for id in &old {
+        assert!(!st.counting.contains(id), "a record A signed before the change counts: {id:?}");
+    }
+    println!("Y admitted on an old-root seen: {}", has(&st, &k("l41 Y")));
 }
