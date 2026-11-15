@@ -227,12 +227,12 @@ DroppedAt(mine, counted) ==
 SpareOf(k) == IF k = "C" THEN "C2" ELSE ""
 NONEREC == [id |-> 0, signer |-> "", seq |-> 0, line |-> <<>>, kind |-> "", target |-> "", kit |-> "",
             targetRec |-> 0, seen |-> EmptyFn, heads |-> EmptyFn, keep |-> {}, units |-> 0, first |-> 0,
-            off |-> FALSE, also |-> {}, ep |-> 0, upd |-> 0, wv |-> {}, wr |-> {}, spare |-> "", akit |-> ""]
+            off |-> FALSE, also |-> {}, ep |-> 0, upd |-> 0, wv |-> {}, wr |-> {}, spare |-> "", akit |-> "", lo |-> {}]
 
 Rec(id, signer, line, kind, target, kit, targetRec, seen, heads, keep, units) ==
     [id |-> id, signer |-> signer, seq |-> Len(line), line |-> line, kind |-> kind, target |-> target,
      kit |-> kit, targetRec |-> targetRec, seen |-> seen, heads |-> heads, keep |-> keep, units |-> units,
-     first |-> 0, off |-> FALSE, also |-> {}, ep |-> 0, upd |-> 0, wv |-> {}, wr |-> {}, spare |-> "", akit |-> ""]
+     first |-> 0, off |-> FALSE, also |-> {}, ep |-> 0, upd |-> 0, wv |-> {}, wr |-> {}, spare |-> "", akit |-> "", lo |-> {}]
 
 \* --- The recovery chain (rule 33) ------------------------------------------
 
@@ -1283,8 +1283,11 @@ SignChainC(k, kind, target, at, mode, given) ==
                           x \in {x \in cntV : x.kind = "copies" /\ x.signer \in DOMAIN v.admins /\ x.spare # ""
                                  /\ (\A o \in cntV : (o.kind = "copies" /\ o.signer = x.signer) => o.seq <= x.seq)
                                  /\ ~\E y \in RecsOf(s.got, db) : y.kind = "admin" /\ y.target = x.spare /\ y.signer \in ROOT_KEYS}}
+        \* (LEAVE_OUT: the honest writer leaves the devices the person names out of the change ("who stays",
+        \* owner 11-15 15:32Z); in the honest modes `given` is that set, empty unless SignChangeLO passes one.)
+        LO == IF mode \in {"honest", "honestnr"} THEN given ELSE {}
         reL == IF LAST_ROOT /\ mode \in {"honest", "honestnr"}
-               THEN AnyList({<<"device", d>> : d \in v.devices} \cup {<<"freeze", f>> : f \in v.frozen} \cup spareL)
+               THEN AnyList({<<"device", d>> : d \in v.devices \ LO} \cup {<<"freeze", f>> : f \in v.frozen} \cup spareL)
                ELSE <<>>
         nz == IF REISSUE_DROP_ONLY THEN 0 ELSE IF LAST_ROOT THEN Len(reL) ELSE Len(groups)
         zIds == [j \in 1..nz |-> nextId + j]
@@ -1305,7 +1308,7 @@ SignChainC(k, kind, target, at, mode, given) ==
         \* (NEW_ROOT_ONLY: a change naming a root already on the path writes its void head only.)
         withCp == mode # "nocp" /\ ~(NEW_ROOT_ONLY /\ OnList(before, target))
         r == [Rec(nextId, k, Append(base, nextId), kind, target, IF mode \in {"honest", "honestnr"} THEN "" ELSE "deviant",
-                  from, [x \in {"_rm"} |-> heldRm], EmptyFn, keep, 0) EXCEPT !.first = IF withCp THEN cpId ELSE NEVER]
+                  from, [x \in {"_rm"} |-> heldRm], EmptyFn, keep, 0) EXCEPT !.first = IF withCp THEN cpId ELSE NEVER, !.lo = LO]
         dbH == Put(db, nextId, r)
         MkZ0(j) ==
             LET xs == {db[i] : i \in Range(groups[j])}
@@ -1331,6 +1334,9 @@ SignChainC(k, kind, target, at, mode, given) ==
         db3 == IF withCp THEN Put(db2, cpId, c) ELSE db2
     IN [ok |-> /\ k = RECOVERY
                /\ at >= 1
+               \* (LEAVE_OUT: only devices that count at the writer, never the new root's own device.)
+               /\ LO \subseteq v.devices
+               /\ target \notin DOMAIN DEV \/ DEV[target] \notin LO
                /\ at <= Len(ch.ids) + 1
                /\ cpId <= LASTID
                \* (REISSUE_REMOVALS: the writer's own check: the list names no removal a Z covers.)
@@ -1407,8 +1413,11 @@ SignChainS(k, kind, target, at, mode, given) ==
                           x \in {x \in cntV : x.kind = "copies" /\ x.signer \in DOMAIN v.admins /\ x.spare # ""
                                  /\ (\A o \in cntV : (o.kind = "copies" /\ o.signer = x.signer) => o.seq <= x.seq)
                                  /\ ~\E y \in RecsOf(s.got, db) : y.kind = "admin" /\ y.target = x.spare /\ y.signer \in ROOT_KEYS}}
+        \* (LEAVE_OUT: the honest writer leaves the devices the person names out of the change ("who stays",
+        \* owner 11-15 15:32Z); in the honest modes `given` is that set, empty unless SignChangeLO passes one.)
+        LO == IF mode \in {"honest", "honestnr"} THEN given ELSE {}
         reL == IF LAST_ROOT /\ mode \in {"honest", "honestnr"}
-               THEN AnyList({<<"device", d>> : d \in v.devices} \cup {<<"freeze", f>> : f \in v.frozen} \cup spareL)
+               THEN AnyList({<<"device", d>> : d \in v.devices \ LO} \cup {<<"freeze", f>> : f \in v.frozen} \cup spareL)
                ELSE <<>>
         nz == IF REISSUE_DROP_ONLY THEN 0 ELSE IF LAST_ROOT THEN Len(reL) ELSE Len(groups)
         zIds == [j \in 1..nz |-> nextId + j]
@@ -1429,7 +1438,7 @@ SignChainS(k, kind, target, at, mode, given) ==
         \* (NEW_ROOT_ONLY: a change naming a root already on the path writes its void head only.)
         withCp == mode # "nocp" /\ ~(NEW_ROOT_ONLY /\ OnList(before, target))
         r == [Rec(nextId, k, Append(base, nextId), kind, target, IF mode \in {"honest", "honestnr"} THEN "" ELSE "deviant",
-                  from, [x \in {"_rm"} |-> heldRm], EmptyFn, keep, 0) EXCEPT !.first = IF withCp THEN cpId ELSE NEVER]
+                  from, [x \in {"_rm"} |-> heldRm], EmptyFn, keep, 0) EXCEPT !.first = IF withCp THEN cpId ELSE NEVER, !.lo = LO]
         dbH == Put(db, nextId, r)
         MkZ0(j) ==
             LET xs == {db[i] : i \in Range(groups[j])}
@@ -1494,6 +1503,14 @@ SignChangeSkip(t, mode) ==
     IN /\ SKIP_UNAPPLIED /\ ~Forked(RecsOf(ws.got, db)) /\ ~OnList(wv.path, t) /\ ~KnownTo(ws, t)
        /\ \A r \in {r \in RecsOf(ws.got, db) : IsChain(r)} : InLine(chH.ids, r.id)
        /\ SignChain(RECOVERY, "recover", t, Len(chH.ids) + 1, mode)
+\* (LEAVE_OUT: the honest change of root that leaves the devices `lo` out.)
+SignChangeLO(t, lo) ==
+    LET ws == WriterState(RECOVERY, "recover", t)
+        wv == WriterView(RECOVERY, "recover", t)
+        ch == ChainState(ws, db)
+    IN /\ ~ch.stop /\ ~OnList(wv.path, t) /\ ~KnownTo(ws, t)
+       /\ \A r \in {r \in RecsOf(ws.got, db) : IsChain(r)} : InLine(ch.ids, r.id)
+       /\ SignChainG(RECOVERY, "recover", t, Len(ch.ids) + 1, "honest", lo)
 RecoveryLive == \A t \in ROOT_KEYS \ {ROOT} : (ENABLED SignChangeG(t, "honestnr")) => ENABLED SignChangeG(t, "honest")
 \* The recovery key signs a second record at a seq its chain already has.
 RecoveryTwin(t, at) ==
@@ -1873,6 +1890,14 @@ PromisesFast ==
         \* counted in the writer's view when it signed the change, and that view held no counting removal for it.)
         LReissueW == ~LAST_ROOT \/ \A i \in DOMAIN db : (db[i].kit = "z" /\ db[i].kind = "device") =>
             db[i].target \in db[i].wv /\ db[i].target \notin db[i].wr
+        \* (LEAVE_OUT, owner 11-15: a device a change left out never counts again at a member on that change's
+        \* path, unless the current root, or an admin key it named, admits it afresh after the change.)
+        LeftOutStaysOut == \A m \in MEMBERS : ~views[m].stop =>
+            LET v == views[m]
+            IN \A h \in RecsOf(DOMAIN db, db) : (IsChain(h) /\ OnList(v.path, h.target)) =>
+                 \A d \in h.lo \cap v.devices : \E x \in RecsOf(v.counting, db) :
+                    AdmissionsOf({x}, d) # {} /\ x.id > h.id /\ x.kit # "z" /\ x.kit # "deviant"
+                    /\ (x.signer = Last(v.path) \/ \E n \in RecsOf(v.counting, db) : n.kind = "admin" /\ n.target = x.signer /\ n.signer = Last(v.path))
         \* (SPARE: along any member's path no key is named admin by two roots; a spare one root named is never
         \* named again by a later root on the same path. A recovery fork halts instead, so it is not judged here.)
         SpareFresh == ~SPARE \/ \A m \in MEMBERS : ~views[m].stop =>
@@ -1926,6 +1951,8 @@ PromisesFast ==
                     \* (scope, architecture 11-14: in code the current root's own device writes its records,
                     \* so a device whose admission that device never got is not promised.)
                     \/ x.id \notin st[HOLDER[Last(v.path)]].got
+                    \* (LEAVE_OUT: a device a later change on the path left out is out.)
+                    \/ \E h \in RecsOf(DOMAIN db, db) : IsChain(h) /\ x.target \in h.lo /\ OnList(v.path, h.target) /\ h.id > x.id
         oneChainOneState == \A m1, m2 \in MEMBERS :
             (st[m1].chain = st[m2].chain /\ st[m1].recs = st[m2].recs /\ st[m1].got = st[m2].got
                /\ sat[m1] /\ sat[m2]) => views[m1] = views[m2]
@@ -1971,7 +1998,7 @@ PromisesFast ==
                        /\ r.signer \in SecondOf(RecsOf(st[m].got, db), views[m].path, PathCuts(ChainState(st[m], db)).cuts))
         honestNoMarks == honestW => \A m \in MEMBERS : sp[m] => DOMAIN st[m].cut.marks = {}
     IN /\ PromisesCheap
-       /\ oneState /\ deviceStays /\ converges /\ convergesHonest /\ removedStayOut /\ oneChainOneState /\ LReissueW /\ LNoOldRevive /\ removedStayOutAdm /\ SpareFresh
+       /\ oneState /\ deviceStays /\ converges /\ convergesHonest /\ removedStayOut /\ oneChainOneState /\ LReissueW /\ LNoOldRevive /\ removedStayOutAdm /\ SpareFresh /\ LeftOutStaysOut
        /\ fairRoom /\ compactedAgree /\ honestNeverDropped /\ honestNoMarks /\ NoLiveOldRootWith(sp)
 
 PFParts ==
@@ -2004,6 +2031,14 @@ PFParts ==
         \* counted in the writer's view when it signed the change, and that view held no counting removal for it.)
         LReissueW == ~LAST_ROOT \/ \A i \in DOMAIN db : (db[i].kit = "z" /\ db[i].kind = "device") =>
             db[i].target \in db[i].wv /\ db[i].target \notin db[i].wr
+        \* (LEAVE_OUT, owner 11-15: a device a change left out never counts again at a member on that change's
+        \* path, unless the current root, or an admin key it named, admits it afresh after the change.)
+        LeftOutStaysOut == \A m \in MEMBERS : ~views[m].stop =>
+            LET v == views[m]
+            IN \A h \in RecsOf(DOMAIN db, db) : (IsChain(h) /\ OnList(v.path, h.target)) =>
+                 \A d \in h.lo \cap v.devices : \E x \in RecsOf(v.counting, db) :
+                    AdmissionsOf({x}, d) # {} /\ x.id > h.id /\ x.kit # "z" /\ x.kit # "deviant"
+                    /\ (x.signer = Last(v.path) \/ \E n \in RecsOf(v.counting, db) : n.kind = "admin" /\ n.target = x.signer /\ n.signer = Last(v.path))
         \* (SPARE: along any member's path no key is named admin by two roots; a spare one root named is never
         \* named again by a later root on the same path. A recovery fork halts instead, so it is not judged here.)
         SpareFresh == ~SPARE \/ \A m \in MEMBERS : ~views[m].stop =>
@@ -2057,6 +2092,8 @@ PFParts ==
                     \* (scope, architecture 11-14: in code the current root's own device writes its records,
                     \* so a device whose admission that device never got is not promised.)
                     \/ x.id \notin st[HOLDER[Last(v.path)]].got
+                    \* (LEAVE_OUT: a device a later change on the path left out is out.)
+                    \/ \E h \in RecsOf(DOMAIN db, db) : IsChain(h) /\ x.target \in h.lo /\ OnList(v.path, h.target) /\ h.id > x.id
         oneChainOneState == \A m1, m2 \in MEMBERS :
             (st[m1].chain = st[m2].chain /\ st[m1].recs = st[m2].recs /\ st[m1].got = st[m2].got
                /\ sat[m1] /\ sat[m2]) => views[m1] = views[m2]
@@ -2101,7 +2138,7 @@ PFParts ==
                    \/ (TWO_TIERS /\ TIER_MODE = "zero"
                        /\ r.signer \in SecondOf(RecsOf(st[m].got, db), views[m].path, PathCuts(ChainState(st[m], db)).cuts))
         honestNoMarks == honestW => \A m \in MEMBERS : sp[m] => DOMAIN st[m].cut.marks = {}
-    IN [PromisesCheap |-> PromisesCheap, oneState |-> oneState, converges |-> converges, convergesHonest |-> convergesHonest, removedStayOut |-> removedStayOut, oneChainOneState |-> oneChainOneState, fairRoom |-> fairRoom, compactedAgree |-> compactedAgree, honestNeverDropped |-> honestNeverDropped, honestNoMarks |-> honestNoMarks, deviceStays |-> deviceStays, LReissueW |-> LReissueW, LNoOldRevive |-> LNoOldRevive, removedStayOutAdm |-> removedStayOutAdm, SpareFresh |-> SpareFresh, LReissuePrice |-> LReissuePrice, noLiveOld |-> NoLiveOldRootWith(sp)]
+    IN [PromisesCheap |-> PromisesCheap, oneState |-> oneState, converges |-> converges, convergesHonest |-> convergesHonest, removedStayOut |-> removedStayOut, oneChainOneState |-> oneChainOneState, fairRoom |-> fairRoom, compactedAgree |-> compactedAgree, honestNeverDropped |-> honestNeverDropped, honestNoMarks |-> honestNoMarks, deviceStays |-> deviceStays, LReissueW |-> LReissueW, LNoOldRevive |-> LNoOldRevive, removedStayOutAdm |-> removedStayOutAdm, SpareFresh |-> SpareFresh, LeftOutStaysOut |-> LeftOutStaysOut, LReissuePrice |-> LReissuePrice, noLiveOld |-> NoLiveOldRootWith(sp)]
 
 
 
