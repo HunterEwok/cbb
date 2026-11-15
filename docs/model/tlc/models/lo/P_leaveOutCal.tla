@@ -1,6 +1,7 @@
 ---- MODULE P_leaveOutCal ----
 \* LEAVE_OUT (owner 11-15 17:08Z): the root admits device D; the recovery key changes the root to NK
-\* and leaves D out; calibration: NK then signs D as a re-issue (kit "z"), which LeftOutStaysOut must catch.
+\* and leaves D out; calibration: NK then signs D as a re-issue (kit "z"), which LeftOutStaysOut must catch
+\* (the cfg leaves LReissueW out: it catches the same record first).
 EXTENDS RecordsCore
 
 QSIGNERS == {"R", "A", "C", "C2", "W", "NA", "NK", "X"}
