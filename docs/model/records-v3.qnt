@@ -2743,7 +2743,12 @@ module records_v3 {
   // a newer one that is not whole takes nothing from the counting one.
   val countsNewest = MEMBERS.forall(m => {
     val v = views.get(m)
-    val rs = recsOf(st.get(m).recs, db)
+    // (LAST_ROOT_ONLY, mi2 Sr.13023: judged on what the evaluation reads, as fullEvaluate0 does:
+    // after a change only the last root's records and those of the admin keys it named.)
+    val rs0 = recsOf(st.get(m).recs, db)
+    val namedByCur = rs0.filter(a => a.kind == "admin" and a.signer == last(v.path)).map(a => a.target)
+    val rs = if (not(LAST_ROOT_ONLY) or v.path.length() < 2) rs0
+      else rs0.filter(r => isChain(r) or r.signer == last(v.path) or namedByCur.contains(r.signer))
     val cseq = if (v.checkpoint == 0) 0 else db.get(v.checkpoint).seq
     val floor = rootFloor(rs.union(firstsHeld(st.get(m), db)), chainState(st.get(m), db), last(v.path))
     // (A held root fork's pair, also one beside the rooms, bars the root's checkpoints at or
@@ -6638,6 +6643,41 @@ module records_v3 {
       .then(compactAt("m"))
       .then(syncRound)
       .expect(sameGotSameState and MEMBERS.forall(m => not(st.get(m).chain.contains(6))))
+
+  // (LAST_ROOT_ONLY, mi2 Sr.13023.) Member m follows NA and holds NA's checkpoint 21, which keeps
+  // R's removal 8; after the change the evaluation reads only NA's records, so 21 is not whole
+  // and does not count, and countsNewest must judge it the same way.
+  run lCountsNewestTest = if (not(onL)) init else init
+      .then(compactAt("c"))
+      .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2))
+      .then(ackS(PHONE))
+      .then(giveOnly("k", 5))
+      .then(signFull(ROOT, "revoke", MINTED, "phone", 0, false, false, 1, true, Set()))
+      .then(syncRound)
+      .then(ackS(PHONE))
+      .then(offerEveryone(nextId - 1))
+      .then(sign(ROOT, "revoke", MINTED, "nocp", 0, false, false, 1))
+      .then(offerEveryone(nextId - 1))
+      .then(signFull(ROOT, "checkpoint", "", "", 0, false, false, 2, false, Set(3)))
+      .then(signChain(RECOVERY, "recover", "NK", 1, "literal"))
+      .then(ackS(WATCH))
+      .then(ackS(PHONE))
+      .then(welcomeFrom("a"))
+      .then(offerEveryone(nextId - 1))
+      .then(syncRound)
+      .then(welcomeFrom("r"))
+      .then(compactAt("c"))
+      .then(sign("NK", "copies", "", "", 0, false, false, 2))
+      .then(giveOnly("r", 14))
+      .then(signDeviant(ROOT, "copies", "", 1))
+      .then(signChainGL(RECOVERY, "recover", "NA", chainState(st.get("k"), db).ids.length() + 1, "honest", Set(), Set()))
+      .then(offerEveryone(nextId - 1))
+      .then(offerEveryone(nextId - 1))
+      .then(giveOnly("m", 16))
+      .then(ackS(WATCH))
+      .then(signChain(RECOVERY, "recover", "NA", 1, "honest"))
+      .then(offerEveryone(nextId - 1))
+      .expect(countsNewest and views.get("m").checkpoint == 0)
 
   run lReissueCountedTest = if (not(onL)) init else init
       .then(signFull(ROOT, "revoke", MINTED, "phone", 0, false, true, 1, true, Set()))
