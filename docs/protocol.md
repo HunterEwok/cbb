@@ -2048,11 +2048,11 @@ admin key or powers), and one freeze of the member key of each frozen device, wh
 root thaws. It writes no removal: a device removed before, or one the person leaves out, is
 simply not re-issued. Before signing, the app shows the person every device with what the change
 does to it (`RecordSet::change_preview`: stays, out, admin rights lost, admin kept with a spare
-key, frozen), and the person may leave devices out; the writer's own device cannot be left out.
+key, frozen; a frozen admin's line says what happens to its rights and that it stays frozen), and the person may leave devices out; the writer's own device cannot be left out.
 A device every admission of which sits below a head of a root's checkpoint that does not keep it
 is not carried. An admin keeps its rights across a change asleep, once: the new root names it,
 with the powers it had, on the `spare` of the admin key's newest `ack` that counts under the root
-being replaced, when that spare is a key the group never used (`RecordSet::spare_of`); any other
+being replaced (a newest `ack` without one withdraws it), when that spare is a key the group never used (`RecordSet::spare_of`); any other
 admin's device is carried as a plain device. The device switches to the spare once the change
 applies, acknowledges its grant first, and publishes its next spare in an `ack`
 (`RecordSet::write_ack_spare`, which refuses a used key: "the spare key is not a new key"); it
