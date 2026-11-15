@@ -2033,11 +2033,16 @@ signer's head (a removal of a key never admitted stays: it bars the key), and ev
 key but the removal's signer has an `ack` that counts whose `seen` holds that signer at or
 above the removal's seq: an `ack` sits on its signer's whole chain, so the root then holds every
 admission that admin signed. An admin's device writes one `ack` after a sync brings a removal it
-has not acknowledged; the checkpoint keeps only each key's newest. The root takes back an admin
-key that holds a removal back once its room passes three quarters of its cap, and one its device
-received nothing of for `records::set::ADMIN_SILENCE_MS` (35 days, on the root device's clock),
-its checkpoint first; what that key signed and the root never got counts for nothing, and the
-writer never grants that key again: the device makes a new admin key. Of the root's own
+has not acknowledged; the checkpoint keeps only each key's newest. The root's writer takes back
+by itself an admin key its device received nothing of for `records::set::ADMIN_SILENCE_MS`
+(35 days, on the root device's clock) and a frozen admin key that holds a removal back; a full
+room takes nobody back by itself: the app shows the root's units each admin key holds back and
+the person chooses whom to take back. A take-back is one record of the root, its checkpoint
+first, and passes the floor as a removal does; what that key signed and the root never got
+counts for nothing, and the writer never grants that key again: the device makes a new admin
+key. With nobody acting, a root whose admins hold removals back passes three quarters of its room
+only after more than 440 removals inside the 35 days (16 admins, 256 devices); there its ordinary records are
+refused, its removals and take-backs still go in up to its cap, and the silence frees it. Of the root's own
 settings, hubs and copies records it keeps only the newest of each type, and of its records of
 one device the oldest and the newest, where the newest counts and names no admin key and those
 left out name the same key and no admin key; a resolve whose every target it leaves out goes
@@ -2045,7 +2050,7 @@ too. The state is the same before and after, and what it leaves out sits below a
 refused when offered again. These are the writer's choices: a member counts any checkpoint that
 keeps more. The root's writer stops its ordinary records where they would leave no room for
 its next checkpoint (a margin of a twenty-fourth of its ceiling below that is for removals,
-freezes and resolves), and writes that checkpoint first before a removal, freeze or resolve
+freezes, resolves and take-backs), and writes that checkpoint first before a removal, freeze or resolve
 where one more would leave none. An admin key whose admission the rooms
 keep out is no key of the set. A waiting root's records, and records that a checkpoint of the
 current root above the counting one keeps, sit aside, outside the count, in any order, within
@@ -4750,9 +4755,52 @@ table, against the registry (`CBB_WRITE_BOUNDS=1` writes the table again).
 | `join::welcome::PART_MS` | 120000 | reader | a 7 MiB part at 0.49 Mbit/s | `welcome/late` |
 | `join::welcome::PARTS_MS` | 1500000 | reader | the widest parts at 0.54 Mbit/s | `welcome/late` |
 | `keystore::AHEAD_MS` | 86400000 | reader | a newest epoch a day ahead |  |
+| `keystore::WEEK_MS` | 604800000 | frozen | a sealing epoch, the newest for a week and kept a week after |  |
+| `credential::PERIOD_RENEW_MS` | 2592000000 | stated | a period 30 days old, when the root starts the next |  |
+| `credential::PERIOD_LIFETIME_MS` | 3024000000 | stated | a period lasting 35 days, its renewal and 5 days |  |
 | `store::HEADER` | 12 | frozen | a store frame's header |  |
 | `sheet::MAX_INPUT` | 512 | reader | a sheet typed with spaces and line ends | `not_sheet` |
 <!-- bounds:end -->
+
+### Why the time constants have these values
+
+The core's clocks follow a few values, each chosen once (D-97):
+
+| Constant | Value | What follows it |
+|---|---|---|
+| `keystore::WEEK_MS` | a week | how long a sealing epoch is the newest, and how long the previous one is kept |
+| `credential::PERIOD_RENEW_MS` | 30 days | how old a period gets before the root starts the next |
+| `credential::PERIOD_LIFETIME_MS` | 35 days | how long a period lasts: the renewal plus 5 days |
+| `copies::STATEMENT_MAX_AGE_MS` | 35 days | how long a device may be away and still read and write; `beacon::MAX_AGE_MS` and `records::set::ADMIN_SILENCE_MS` follow it |
+
+**A week for the sealing keys.** MLS leaves the time between key updates to the application
+and says that "the right frequency is usually on the order of hours or days, not
+milliseconds" (RFC 9420, section 3.2). The Matrix specification recommends a week as the
+default for rotating a room's session (`rotation_period_ms`, "604800000 (a week) is the
+recommended default"; Client-Server API v1.19, `m.room.encryption`). A week is at the long end
+of that range, so a device that sleeps over a weekend still finds the key it last saw.
+
+**35 days for a silent device or admin.** The MLS architecture asks every application to
+define "a policy on how long to allow a member to stay in a group without updating its leaf
+keys before removing them" (RFC 9750, section 7), and recommends that applications "evict
+clients that are idle for too long" (section 8.2.2), since a client that stays offline may
+still hold old keying material. Ours is one 30-day period plus 5 days; the 5 days of slack are
+our own choice, so that a device that renews late in a period is not dropped at its end. As an
+example of practice, not a basis: Signal says "After linking a device, your phone has to come
+online at least once every 30 days. Otherwise, your linked devices will become unlinked." and
+"Linked devices will also become unlinked after 45 days of inactivity." (Signal Support,
+"Linked Devices").
+
+**Not 7 days for silence.** Silence equal to the key period would drop every device that
+missed one rotation out of the readers, so active devices that sleep for a week would leave
+the group weekly.
+
+**No early rotation on a removal or a change of root.** The group has no shared secret: each
+copy is sealed for each reader separately, and the readers come from the records that count
+(`copies::readers`, which also leaves out a device whose keys statement is older than
+`copies::STATEMENT_MAX_AGE_MS`), so a removed device or an old root's admin is no longer a reader of the
+next copy. MLS rotates its group secret on a removal because every member holds it; we have
+nothing of that kind to rotate.
 
 ## 20. Security considerations
 

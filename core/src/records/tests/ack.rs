@@ -183,20 +183,21 @@ fn sixteen_admins_each_hold_a_removal_back_until_they_acknowledge() {
     assert!(!keep.contains(&rv.id()), "all sixteen saw it");
 }
 
-/// A lagging admin and a full room: the root takes the admin key back
-/// (its checkpoint first), its next checkpoint lets the removal go, and
-/// the admin's record signed before, delivered after, counts for nothing.
+/// A lagging admin and a full room: the writer takes nobody back by
+/// itself; the app shows the root's units the admin holds back, the
+/// person takes the key back (the root's checkpoint first), the next
+/// checkpoint lets the removal go, and the admin's record signed before,
+/// delivered after, counts for nothing.
 #[test]
-fn a_lagging_admin_is_taken_back_when_the_room_needs_it() {
+fn the_person_takes_a_lagging_admin_back_when_the_room_fills() {
     let small = crate::records::keep::small::Small::new(64, 16, 8);
     let (g, late, mine) = late_record(true);
     let root = k("root");
+    let a = k("admin a");
     for r in &mine {
         small.units(r.id(), 1);
     }
     let mut set = set_with(&g.root.key, &mine, &g.lists);
-    let st = set.state();
-    assert!(set.take_back_lagging(&st, &root, &BTreeMap::new(), 0).unwrap().is_empty(), "the room has space");
     // Fill the root's room past three quarters.
     let mut g = g;
     let mut extra = Vec::new();
@@ -209,15 +210,16 @@ fn a_lagging_admin_is_taken_back_when_the_room_needs_it() {
         let _ = set.insert(r.clone());
     }
     let st = set.state();
-    let written = set.take_back_lagging(&st, &root, &BTreeMap::new(), 0).unwrap();
-    assert!(!written.is_empty() && written.iter().all(|(why, _)| *why == TakeBack::Room));
-    for (_, r) in &written {
-        small.units(r.id(), 1);
-    }
+    let heard: BTreeMap<KeyHash, u64> = [(a.hash, 0)].into();
+    assert!(set.take_back_lagging(&st, &root, &heard, DAY_MS).unwrap().is_empty(), "nobody by the room alone");
+    assert_eq!(set.unacknowledged_units(&st).get(&a.hash), Some(&1));
+    let r = set.take_back(&st, &root, &a.hash, DAY_MS).unwrap();
+    small.units(r.id(), 1);
     let st = set.state();
     assert!(st.device_by_key(&k("phone a").hash).is_some_and(|d| d.admin.is_none()), "taken back");
     assert!(has(&st, &k("x")), "what the admin admitted that counted stays");
-    let cp = set.write_checkpoint(&st, &root, 0).unwrap();
+    assert!(set.unacknowledged_units(&st).is_empty());
+    let cp = set.write_checkpoint(&st, &root, DAY_MS).unwrap();
     let Kind::Checkpoint { keep, .. } = &cp.body().kind else { panic!() };
     assert!(!keep.contains(&removal_of(&g, &k("d"))), "no live admin holds it back");
     set.insert(cp).unwrap();
@@ -344,4 +346,252 @@ fn a_taken_back_key_is_never_granted_again() {
     assert!(st.device_by_key(&pa.hash).is_some_and(|d| d.admin == Some(a2.hash)));
     let _ = set.insert(late);
     assert!(!has(&set.state(), &k("d")), "the old key's admission counts for nothing");
+}
+
+/// A taken-back key stays known to the honest writer however the device's
+/// records go: the checkpoint never drops a record that names an admin
+/// key, so the writer refuses the key again, for its device or another.
+#[test]
+fn a_taken_back_key_is_refused_after_checkpoints() {
+    let mut g = G::new();
+    let root = k("root");
+    let (pa, pb, a) = (k("phone a"), k("phone b"), k("admin a"));
+    g.device(&root, &pa, "phone a", |_| {});
+    g.device(&root, &pb, "phone b", |_| {});
+    let named = g.admin(&pa, &a, POWER_ADMIT | POWER_MANAGE | POWER_REMOVE);
+    let mut mine: Vec<Record> = g.recs.clone();
+    let mut set = set_with(&g.root.key, &mine, &g.lists);
+    let heard: BTreeMap<KeyHash, u64> = [(a.hash, 0)].into();
+    let st = set.state();
+    for (_, r) in set.take_back_lagging(&st, &root, &heard, ADMIN_SILENCE_MS).unwrap() {
+        mine.push(g.push(r));
+    }
+    for i in 0..3 {
+        mine.push(g.device(&root, &pa, &alloc::format!("phone a, renamed {i}"), |_| {}));
+        mine.push(root_checkpoint(&mut g, &mine));
+    }
+    let set = set_with(&g.root.key, &mine, &g.lists);
+    assert!(set.contains(&named.id()), "the record that named the key stays");
+    let grant = |member: &K| {
+        let mut d = Device::new(member.key.clone(), "admin", ROLE_MEMBER);
+        d.admin = Some(a.key.clone());
+        d.powers = POWER_ADMIT | POWER_MANAGE | POWER_REMOVE;
+        Kind::device(d)
+    };
+    let st = set.state();
+    for m in [&pa, &pb] {
+        let err = set.clone().write_record(&st, &root, grant(m), ADMIN_SILENCE_MS).unwrap_err();
+        assert!(alloc::format!("{err}").contains(ADMIN_KEY_TAKEN_BACK), "{err}");
+    }
+}
+
+/// What each admin holds back, in the root's units: an admin that
+/// acknowledged the first removal holds back only the second; one whose
+/// own record saw both holds back none; a removal an admin signed waits
+/// for the others but takes nothing of the root's room.
+#[test]
+fn each_admin_holds_back_the_root_s_units_it_has_not_seen() {
+    let mut g = G::new();
+    let root = k("root");
+    let (pa, a, pb, b) = (k("phone a"), k("admin a"), k("phone b"), k("admin b"));
+    g.admin(&pa, &a, POWER_ADMIT | POWER_REMOVE);
+    g.admin(&pb, &b, POWER_ADMIT);
+    for d in ["d1", "d2"] {
+        g.device(&root, &k(d), d, |_| {});
+    }
+    g.device(&a, &k("d3"), "d3", |_| {});
+    let mut set = set_with(&g.root.key, &g.recs.clone(), &g.lists);
+    let remove = |g: &mut G, set: &mut RecordSet, d: &str| {
+        let st = set.state();
+        for r in set.write_removal(&st, &root, &[k(d).hash], 0).unwrap() {
+            let r = g.push(r);
+            set.insert(r).unwrap();
+        }
+    };
+    remove(&mut g, &mut set, "d1");
+    let bk = ack(&mut g, &b);
+    set.insert(bk).unwrap();
+    remove(&mut g, &mut set, "d2");
+    let seen = g.seen();
+    let by_a = g.rec(&a, Kind::Revoke(removal(&[k("d3").hash], seen)));
+    set.insert(by_a).unwrap();
+    let st = set.state();
+    let units = set.unacknowledged_units(&st);
+    assert_eq!(units.get(&a.hash), Some(&0), "a's removal saw both of the root's");
+    assert_eq!(units.get(&b.hash), Some(&1));
+    assert_eq!(set.unacknowledged(&st).get(&b.hash), Some(&2), "the admin's removal waits for b too");
+}
+
+/// A removal of a device that has an admin key is kept for good, so it
+/// waits for no acknowledgement: it is not counted against the other
+/// admins, in removals or in units.
+#[test]
+fn a_removal_kept_for_good_waits_for_nobody() {
+    let mut g = G::new();
+    let root = k("root");
+    let (pa, a, pb, b) = (k("phone a"), k("admin a"), k("phone b"), k("admin b"));
+    g.admin(&pa, &a, POWER_ADMIT);
+    g.admin(&pb, &b, POWER_ADMIT);
+    let mut set = set_with(&g.root.key, &g.recs.clone(), &g.lists);
+    let st = set.state();
+    for r in set.write_removal(&st, &root, &[pa.hash], 0).unwrap() {
+        set.insert(g.push(r)).unwrap();
+    }
+    set.insert(g.device(&root, &k("tv"), "tv", |_| {})).unwrap();
+    let st = set.state();
+    assert!(st.revoked.contains(&pa.hash) && st.revoked.contains(&a.hash));
+    assert_eq!(set.unacknowledged(&st).get(&b.hash), Some(&0));
+    assert!(!set.ack_due(&st, &b.hash));
+    assert_eq!(set.unacknowledged_units(&st).get(&b.hash), Some(&0));
+    let cp = set.write_checkpoint(&st, &root, 0).unwrap();
+    let Kind::Checkpoint { keep, .. } = &cp.body().kind else { panic!() };
+    assert!(keep.contains(&removal_of(&g, &pa)), "kept for good");
+}
+
+/// A frozen admin cannot acknowledge, and a thaw would bring back what it
+/// signed: when it holds a removal back, the root takes it back at once,
+/// whatever the room and the grace; the next checkpoint lets the removal
+/// go, and what the key signed before that the root never got counts for
+/// nothing.
+#[test]
+fn a_frozen_admin_that_holds_a_removal_back_is_taken_back() {
+    let (mut g, late, mut mine) = late_record(false);
+    let root = k("root");
+    let (pa, a) = (k("phone a"), k("admin a"));
+    let seen = g.seen();
+    mine.push(g.root_rec(Kind::Freeze(removal(&[a.hash], seen))));
+    let mut set = set_with(&g.root.key, &mine, &g.lists);
+    let st = set.state();
+    assert!(st.device_by_key(&pa.hash).is_some_and(|d| d.frozen));
+    let written = set.take_back_lagging(&st, &root, &BTreeMap::new(), 0).unwrap();
+    assert_eq!(written.len(), 1);
+    assert_eq!(written[0].0, TakeBack::Frozen);
+    for (_, r) in written {
+        set.insert(r).unwrap();
+    }
+    let st = set.state();
+    assert!(st.device_by_key(&pa.hash).is_some_and(|d| d.admin.is_none()), "taken back");
+    let cp = set.write_checkpoint(&st, &root, 0).unwrap();
+    let Kind::Checkpoint { keep, .. } = &cp.body().kind else { panic!() };
+    assert!(!keep.contains(&removal_of(&g, &k("d"))), "no live admin holds it back");
+    set.insert(cp).unwrap();
+    let _ = set.insert(late);
+    assert!(!has(&set.state(), &k("d")), "the frozen key's late record counts for nothing");
+}
+
+/// A frozen admin that holds nothing back stays an admin, and its thaw
+/// gives it its rights back.
+#[test]
+fn a_frozen_admin_with_nothing_waiting_stays_and_thaws() {
+    let mut g = G::new();
+    let root = k("root");
+    let (pa, a) = (k("phone a"), k("admin a"));
+    g.admin(&pa, &a, POWER_ADMIT);
+    g.device(&a, &k("x"), "x", |_| {});
+    let seen = g.seen();
+    let f = g.root_rec(Kind::Freeze(removal(&[a.hash], seen)));
+    let mut set = set_with(&g.root.key, &g.recs.clone(), &g.lists);
+    let st = set.state();
+    assert!(st.device_by_key(&pa.hash).is_some_and(|d| d.frozen));
+    assert!(set.take_back_lagging(&st, &root, &BTreeMap::new(), DAY_MS).unwrap().is_empty());
+    let seen = g.seen();
+    let thaw = g.root_rec(Kind::Thaw { ids: vec![f.id()], seen });
+    set.insert(thaw).unwrap();
+    let st = set.state();
+    assert!(st.device_by_key(&pa.hash).is_some_and(|d| !d.frozen && d.admin == Some(a.hash)));
+    assert!(has(&st, &k("x")), "what it signed before the freeze is back");
+}
+
+/// Wide removals by one admin and a removal by another, half the admins
+/// acknowledge, a checkpoint, a take-back of one lagging admin
+/// (`silence`: for its silence; else for a freeze), and another
+/// checkpoint: removals whose signers are still live admins stay held and
+/// count while a live admin has not acknowledged them; once all have, a
+/// removal under its signer's head goes. An admin's removal
+/// of another admin's key never counted (only a root removes an admin
+/// key), so the checkpoints are free to leave it out.
+fn after_a_take_back_other_admins_removals_stay(silence: bool) {
+    let mut g = G::new();
+    let root = k("root");
+    let all = POWER_ADMIT | POWER_MANAGE | POWER_REMOVE;
+    let admins: Vec<(K, K)> =
+        (0..6).map(|i| (k(&alloc::format!("phone {i}")), k(&alloc::format!("admin {i}")))).collect();
+    for (p, a) in &admins {
+        g.admin(p, a, all);
+    }
+    let (a2, a4) = (&admins[2].1, &admins[4].1);
+    let wide: Vec<K> = (0..4).map(|i| k(&alloc::format!("wide {i}"))).collect();
+    for d in &wide {
+        g.device(a2, d, "wide", |_| {});
+    }
+    g.device(a4, &k("e"), "e", |_| {});
+    let seen = g.seen();
+    let r2 = g.rec(a2, Kind::Revoke(removal(&wide.iter().map(|d| d.hash).collect::<Vec<_>>(), seen)));
+    let seen = g.seen();
+    let r4 = g.rec(a4, Kind::Revoke(removal(&[k("e").hash], seen)));
+    let seen = g.seen();
+    let r45 = g.rec(a4, Kind::Revoke(removal(&[admins[5].1.hash], seen)));
+    for (_, a) in admins.iter().take(3) {
+        ack(&mut g, a);
+    }
+    let s0 = g.state();
+    assert!(s0.counting.contains(&r2.id()) && s0.counting.contains(&r4.id()));
+    assert!(
+        !s0.counting.contains(&r45.id()) && !s0.revoked.contains(&admins[5].1.hash),
+        "no admin removes an admin key"
+    );
+    let mut mine = g.recs.clone();
+    mine.push(root_checkpoint(&mut g, &mine));
+    let lagging = &admins[3];
+    if !silence {
+        let seen = g.seen();
+        mine.push(g.root_rec(Kind::Freeze(removal(&[lagging.1.hash], seen))));
+    }
+    let mut set = set_with(&g.root.key, &mine, &g.lists);
+    let st = set.state();
+    assert!(st.counting.contains(&r2.id()) && st.counting.contains(&r4.id()), "both wait after the first checkpoint");
+    let mut heard: BTreeMap<KeyHash, u64> = admins.iter().map(|(_, a)| (a.hash, ADMIN_SILENCE_MS)).collect();
+    if silence {
+        heard.insert(lagging.1.hash, 0);
+    }
+    let back = set.take_back_lagging(&st, &root, &heard, ADMIN_SILENCE_MS).unwrap();
+    let why = if silence { TakeBack::Silence } else { TakeBack::Frozen };
+    assert_eq!(back.len(), 1);
+    assert!(back[0].0 == why && matches!(&back[0].1.body().kind, Kind::Device(d) if d.key.hash() == lagging.0.hash));
+    let st = set.state();
+    let cp = set.write_checkpoint(&st, &root, ADMIN_SILENCE_MS).unwrap();
+    set.insert(cp).unwrap();
+    let st = set.state();
+    // Admin 5 has acknowledged neither; admin 4 saw admin 2's.
+    for r in [&r2, &r4] {
+        assert!(set.contains(&r.id()) && st.counting.contains(&r.id()), "a removal waits for live admins");
+    }
+    for d in wide.iter().chain([&k("e")]) {
+        assert!(st.revoked.contains(&d.hash));
+    }
+    // Once every live admin acknowledges, the next checkpoint lets both go.
+    for i in [0, 1, 2, 4, 5] {
+        let a = &admins[i].1;
+        let st = set.state();
+        if set.ack_due(&st, &a.hash) {
+            set.write_ack(&st, a, ADMIN_SILENCE_MS).unwrap();
+        }
+    }
+    let st = set.state();
+    assert!(set.unacknowledged(&st).values().all(|n| *n == 0), "{:?}", set.unacknowledged(&st));
+    let cp = set.write_checkpoint(&st, &root, ADMIN_SILENCE_MS).unwrap();
+    let Kind::Checkpoint { keep, .. } = &cp.body().kind else { panic!() };
+    assert!(!keep.contains(&r2.id()), "every live admin saw admin 2's removal");
+    let Kind::Checkpoint { heads, .. } = &cp.body().kind else { panic!() };
+    assert!(heads.iter().any(|h| h.id == r4.id()), "admin 4's removal stays as its head until it signs again");
+}
+
+#[test]
+fn after_a_silence_take_back_other_admins_removals_stay() {
+    after_a_take_back_other_admins_removals_stay(true);
+}
+
+#[test]
+fn after_a_frozen_take_back_other_admins_removals_stay() {
+    after_a_take_back_other_admins_removals_stay(false);
 }

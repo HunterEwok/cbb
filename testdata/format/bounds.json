@@ -1094,6 +1094,36 @@
     },
     {
       "class": "frozen",
+      "name": "keystore::WEEK_MS",
+      "reached": [
+        "the_sealing_key_changes_once_a_week_and_the_old_one_stays_a_week"
+      ],
+      "refusal": "",
+      "value": 604800000,
+      "widest": "a sealing epoch, the newest for a week and kept a week after"
+    },
+    {
+      "class": "stated",
+      "name": "credential::PERIOD_RENEW_MS",
+      "reached": [
+        "periods_last_as_go_says"
+      ],
+      "refusal": "",
+      "value": 2592000000,
+      "widest": "a period 30 days old, when the root starts the next"
+    },
+    {
+      "class": "stated",
+      "name": "credential::PERIOD_LIFETIME_MS",
+      "reached": [
+        "periods_last_as_go_says"
+      ],
+      "refusal": "",
+      "value": 3024000000,
+      "widest": "a period lasting 35 days, its renewal and 5 days"
+    },
+    {
+      "class": "frozen",
       "name": "store::HEADER",
       "reached": [
         "a_later_store_stops_an_earlier_program"
