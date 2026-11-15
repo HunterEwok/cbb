@@ -2035,6 +2035,15 @@ group's recovery key, a new root key the state already knows, and a re-issue tha
 the new root's room with room for its next checkpoint ("the change does not fit the new root's
 room: leave out some devices").
 
+When the person chooses not to sync first, the writer writes past a waiting change
+(`RecordSet::write_change_over_waiting`): the record follows the newest valid recovery record
+the set holds (N), as N+1, and re-issues what counts at the writer, the state before N, naming
+no spare (an admin's spare may be N's grant). Members apply N+1 over N without N's group: the
+newest record whose list and group are held applies, and its cut takes every root before it, so
+N's root and all it signs never count, even when they come later. N travels with N+1, as every
+recovery record the set holds does. Past a waiting change the writer still refuses a record it
+cannot read, one off the chain, and N's root as the new root.
+
 A group halted by two recovery records at one step counts the recovery chain below the fork and
 nothing else: it names the roots and no device; the app keeps what it last showed for the screen
 that makes the next group.

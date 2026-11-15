@@ -2454,6 +2454,75 @@ impl RecordSet {
         drop_hubs: bool,
         time_ms: u64,
     ) -> crate::error::Result<Written> {
+        self.write_change_with(state, recovery, recovery2, new_root, device, leave_out, drop_hubs, time_ms, false)
+    }
+
+    /// `write_change` past a change the set holds and has not applied
+    /// (`CHANGE_WAITING`): the person chose not to sync first, the head
+    /// of change N has come, its new root's records have not. The record
+    /// is N+1, after the newest valid head the set holds; it re-issues
+    /// what counts here, the state before N, and names no spare (an
+    /// admin's spare may be N's grant). Members apply N+1 over N without
+    /// N's group, and N's root and all it signs never count, even if N's
+    /// records come later: the newest head whose group is whole applies
+    /// and cuts every root before it. N travels with N+1 (`for_peer`
+    /// gives every head the set holds). It still refuses a group stopped
+    /// for good, a record this device cannot read, and a held recovery
+    /// record off the chain (a void one).
+    #[allow(clippy::too_many_arguments, reason = "the parts of one act")]
+    pub fn write_change_over_waiting(
+        &mut self,
+        state: &State,
+        recovery: &dyn ExternalKey,
+        recovery2: &super::pq::PqKey,
+        new_root: &dyn ExternalKey,
+        device: super::body::Device,
+        leave_out: &[KeyHash],
+        drop_hubs: bool,
+        time_ms: u64,
+    ) -> crate::error::Result<Written> {
+        self.write_change_with(state, recovery, recovery2, new_root, device, leave_out, drop_hubs, time_ms, true)
+    }
+
+    /// The valid heads past the applied chain the set holds, in order:
+    /// each names the one before it as prev. None when a held recovery
+    /// record past the chain is not one of them (a void one, or one off
+    /// the chain), where no record may follow.
+    fn heads_past_chain(&self, state: &State) -> Option<Vec<&Record>> {
+        let applied: BTreeSet<RecordId> = state.chain().into_iter().collect();
+        let mut rest: Vec<&Record> = self
+            .records
+            .values()
+            .filter(|e| e.role == Role::Recovery && !applied.contains(&e.record.id()))
+            .map(|e| &e.record)
+            .collect();
+        rest.sort_by_key(|r| r.body().seq);
+        let mut tip = state.chain().last().copied();
+        let mut path: Vec<KeyHash> = state.roots.clone();
+        for r in &rest {
+            let Kind::Recovery { root, .. } = &r.body().kind else { return None };
+            if r.body().prev != tip || r.body().held || path.contains(&root.hash()) {
+                return None;
+            }
+            path.push(root.hash());
+            tip = Some(r.id());
+        }
+        Some(rest)
+    }
+
+    #[allow(clippy::too_many_arguments, reason = "the parts of one act")]
+    fn write_change_with(
+        &mut self,
+        state: &State,
+        recovery: &dyn ExternalKey,
+        recovery2: &super::pq::PqKey,
+        new_root: &dyn ExternalKey,
+        device: super::body::Device,
+        leave_out: &[KeyHash],
+        drop_hubs: bool,
+        time_ms: u64,
+        over: bool,
+    ) -> crate::error::Result<Written> {
         use crate::error::Error;
         // Asked again for the same new root key (the screen seemed stuck,
         // the key was typed twice): the stored head is given back, never a
@@ -2474,9 +2543,22 @@ impl RecordSet {
         let unapplied = self.waiting.is_some()
             || state.update_needed
             || self.records.values().any(|e| e.role == Role::Recovery && !applied.contains(&e.record.id()));
-        if unapplied {
+        // Past a waiting change the record follows the newest valid head
+        // held; its roots are no new root's.
+        let past: Vec<Record> = if over && !state.update_needed {
+            self.heads_past_chain(state).ok_or_else(|| Error::msg(CHANGE_WAITING))?.into_iter().cloned().collect()
+        } else if unapplied {
             return Err(Error::msg(CHANGE_WAITING));
-        }
+        } else {
+            Vec::new()
+        };
+        let past_roots: Vec<KeyHash> = past
+            .iter()
+            .filter_map(|r| match &r.body().kind {
+                Kind::Recovery { root, .. } => Some(root.hash()),
+                _ => None,
+            })
+            .collect();
         if Key::es256(recovery.public()) != self.recovery.k1 || recovery2.key() != self.recovery.k2 {
             return Err(Error::msg("this is not the group's recovery key"));
         }
@@ -2499,6 +2581,8 @@ impl RecordSet {
             return Err(Error::msg(CHANGE_FORMER_ADMIN));
         }
         let known = self.keys.signer(&h).is_some()
+            || past_roots.contains(&h)
+            || self.early_roots.contains_key(&h)
             || state.revoked.contains(&h)
             || state.devices.iter().any(|d| d.key.hash() == h || d.admin == Some(h))
             || self.records.values().any(|e| e.record.body().signer == h);
@@ -2520,7 +2604,16 @@ impl RecordSet {
         // settings, hubs and copies, and every freeze. No removal is
         // written: a device left out, or removed before, is simply not
         // carried.
-        let carried = self.change_carries(state, &device_key, leave_out);
+        let mut carried = self.change_carries(state, &device_key, leave_out);
+        if !past.is_empty() {
+            // No spare past a waiting change: the device is carried plain.
+            for d in &mut carried {
+                if d.admin.take().is_some() {
+                    d.powers = 0;
+                    d.commands = 0;
+                }
+            }
+        }
         let list = List(Vec::new());
         let mut next = 1u64;
         let mut prev = None;
@@ -2600,7 +2693,7 @@ impl RecordSet {
             group: self.group,
             signer: self.recovery.hash(),
             seq,
-            prev: tip.last().copied(),
+            prev: past.last().map(Record::id).or(tip.last().copied()),
             time_ms,
             kind: Kind::Recovery {
                 root: root_key,
