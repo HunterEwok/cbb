@@ -43,7 +43,7 @@ fn granted_after(pre: &[fn(&cbb_core::records::RecordSet) -> Kind]) -> (cbb_core
     for make in pre {
         t += 1_000;
         let kind = make(&set);
-        early.push(chain.sign(&set, &a, kind, t));
+        early.push(chain.sign_raw(&set, &a, kind, t));
     }
     t += 1_000;
     let st = set.state();

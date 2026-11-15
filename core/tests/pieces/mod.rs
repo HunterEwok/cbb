@@ -68,7 +68,45 @@ impl Chain {
         }
     }
 
+    /// Signs as the honest writer does (see `honest`).
     pub fn sign(&mut self, set: &RecordSet, by: &K, kind: Kind, time_ms: u64) -> Record {
+        let kind = if self.heads.contains_key(&by.hash) { kind } else { Self::honest(set, kind) };
+        self.sign_raw(set, by, kind, time_ms)
+    }
+
+    /// As the honest writer signs: a key's first record carries, when its
+    /// own seen is empty, the current root's head the set holds, so that it
+    /// sits above the seen line.
+    pub fn honest(set: &RecordSet, kind: Kind) -> Kind {
+        let Some(root) = set.state().roots.last().copied() else { return kind };
+        let Some(head) = set
+            .in_dependency_order()
+            .into_iter()
+            .filter(|r| r.body().signer == root)
+            .max_by_key(|r| r.body().seq)
+            .map(|r| cbb_core::records::body::Seen { key: root, seq: r.body().seq, id: r.id() })
+        else {
+            return kind;
+        };
+        let fill = |seen: &mut Vec<cbb_core::records::body::Seen>| {
+            if seen.is_empty() {
+                seen.push(head);
+            }
+        };
+        let mut kind = kind;
+        match &mut kind {
+            Kind::Device(d) => fill(&mut d.seen),
+            Kind::Revoke(rm) | Kind::Freeze(rm) => fill(&mut rm.seen),
+            Kind::Thaw { seen, .. } | Kind::Copies { seen, .. } | Kind::Hubs { seen, .. } | Kind::Ack { seen, .. } => {
+                fill(seen)
+            }
+            _ => {}
+        }
+        kind
+    }
+
+    /// Signs exactly what it is given, as a deviant device may.
+    pub fn sign_raw(&mut self, set: &RecordSet, by: &K, kind: Kind, time_ms: u64) -> Record {
         let (seq, prev) = self.heads.get(&by.hash).map_or((1, None), |(s, id)| (s + 1, Some(*id)));
         let body = Body { group: set.group(), signer: by.hash, seq, prev, time_ms, kind, held: false };
         let r = Record::sign(body, by).unwrap();
