@@ -1948,7 +1948,12 @@ or above, and its ID a record of that root the member holds on the root's counti
 is a record the counting checkpoint names (a head or a kept record), or sits right above one.
 Any naming record will do, so a root's later update of the device never moves the line; the
 writer names an admin key's head only at its newest record that counts, so a checkpoint
-carries the line and never widens it. A seen entry for a root record the member does not hold
+carries the line and never widens it. After a change of root, a checkpoint's head or kept
+record, and a record right above one, carry the line only for a record whose `seen` names the
+current root at or above a record of it that names the key (held or pruned): what the key
+signed under an earlier root, or before it saw its new grant, stays void even when a root's
+checkpoint points at it, so a member that held that record all along and a fresh one given
+every record count the same. A seen entry for a root record the member does not hold
 yet waits for it; one for a root record at or above a fork of the root stands on no counting
 line. What a key signed before it saw its own grant is void: a void record is held, links
 `prev`, does not count, and is charged to its signer like any held record; a key whose room

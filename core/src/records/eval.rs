@@ -2395,13 +2395,24 @@ impl<'e, 'a> Epoch<'e, 'a> {
                         self.root_record(j) && self.r(j).b().signer == x.key && self.r(j).b().seq == x.seq
                     })
                 };
-                if self.e.anchors.contains(&r.id)
+                // After a change of root a checkpoint's anchor stands only
+                // for a record on the seen line of the current root's
+                // grant: its seen names the current root at or above a
+                // record of it that names the key, held or pruned. What
+                // the key signed before (an anchor a bent root points
+                // below the key's new grant) names nothing, at a member
+                // that held it all along and at a fresh one alike.
+                let now = self.path.len() <= 1
+                    || names
+                        .iter()
+                        .any(|(root, seq)| *root == self.cur && r.seen_entry(root).is_some_and(|x| x.seq >= *seq));
+                if now && self.e.anchors.contains(&r.id)
                     || names.iter().any(|(root, seq)| r.seen_entry(root).is_some_and(|x| x.seq >= *seq && holds(x)))
                 {
                     return Ok(true);
                 }
                 // A prev the checkpoint names stands for what it pruned.
-                if r.b().prev.as_ref().is_some_and(|p| self.e.anchors.contains(p)) {
+                if now && r.b().prev.as_ref().is_some_and(|p| self.e.anchors.contains(p)) {
                     return Ok(true);
                 }
                 match r.b().prev.as_ref().and_then(|p| by_id.get(p)) {

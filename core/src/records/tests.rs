@@ -3697,6 +3697,7 @@ fn full_size(name: &str) -> bool {
 }
 
 mod ack;
+mod bent_anchor;
 mod cap;
 mod case1326;
 mod change;
