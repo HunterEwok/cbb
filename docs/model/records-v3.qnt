@@ -3072,7 +3072,8 @@ module records_v3 {
           or st.get(m).recs.contains(r.id)
           or (cp != 0 and db.get(cp).signer == r.signer and db.get(cp).seq > r.seq and not(db.get(cp).keep.contains(r.id)))
           // (A new root re-signed it: m holds a Z of the change that covers its keys; GAr.13004.)
-          or rs.exists(z => z.kit == "z" and tgt(r).subseteq(tgt(z)))
+          // (Zs sit beside the chain, in chain, not in recs.)
+          or recsOf(st.get(m).recs.union(st.get(m).chain), db).exists(z => z.kit == "z" and tgt(r).subseteq(tgt(z)))
       }))
   })
 
