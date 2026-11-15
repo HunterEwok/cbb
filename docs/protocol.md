@@ -2004,7 +2004,11 @@ peer gets it and nothing else. A member takes from a peer it does not know only 
 the root it counts, one pair, never other records of that root. So members that meet end alike, and a pair that no
 member holds any more halts no one. The group stays halted until the recovery key changes the
 root. A removed peer is handed only the removals that name it, and of a pair of removals only
-the one with the smaller ID.
+the one with the smaller ID, with what proves each to a device that missed records while away:
+for an admin's removal its chain, the root's record that names the key, the changes of root,
+and the root's line the admin's records saw in their `seen`, from that entry down to seq 1 (or
+to the counting checkpoints where the line was pruned). It was a member when those were signed;
+it gets no copies and no other member's records.
 
 A removal on a whole chain counts at or above the fork too, on either history, whoever signed
 it, so a key in two histories brings nothing back that it removed. Removals have no limit.

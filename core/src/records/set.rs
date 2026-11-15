@@ -4630,6 +4630,40 @@ impl RecordSet {
                     }
                 }
             }
+            // And the root's line the seen of each admin record handed
+            // names (the removal, and its chain with the ack that saw the
+            // root): the root records from the entry down their prev
+            // chain, to seq 1 or, where the set pruned them, to the
+            // counting checkpoints (which then go too). The device was a
+            // member when
+            // they were signed: nothing it would not have held is told,
+            // and only root records at or below a seen entry go.
+            let entries: Vec<super::body::Seen> = ids
+                .iter()
+                .filter_map(|id| self.held(id))
+                .filter(|r| self.keys.is_admin(&r.body().signer))
+                .flat_map(|r| seen_of(&r.body().kind).iter().copied())
+                .filter(|x| state.roots.contains(&x.key))
+                .collect();
+            for x in entries {
+                let (mut next, mut seq) = (Some(x.id), x.seq.saturating_add(1));
+                while let Some(id) = next {
+                    match self.held(&id) {
+                        Some(y) if y.body().signer == x.key && y.body().seq < seq => {
+                            ids.insert(id);
+                            if y.body().seq <= 1 {
+                                break;
+                            }
+                            seq = y.body().seq;
+                            next = y.body().prev;
+                        }
+                        _ => {
+                            ids.extend(state.checkpoints.iter().copied());
+                            break;
+                        }
+                    }
+                }
+            }
             if out.iter().any(|r| r.body().signer != self.root_hash) {
                 ids.extend(self.records.values().filter(|e| e.role == Role::Recovery).map(|e| e.record.id()));
                 // Each new root's first checkpoint with its whole group: a

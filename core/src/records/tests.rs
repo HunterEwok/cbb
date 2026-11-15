@@ -3708,6 +3708,7 @@ mod early_admins;
 mod insert_cost;
 mod lost_root;
 mod recovery;
+mod removed_learns;
 mod root_pair;
 mod seen;
 mod sim1321;
