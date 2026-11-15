@@ -2676,8 +2676,18 @@ impl RecordSet {
             prev = Some(r.id());
             Ok(r)
         };
+        // Every admin key that loses its rights here (`change_removes`),
+        // the writer's own among them when its device was an admin: the
+        // new root's own device carries no such key, which the change
+        // removes (an admin's device taking the group over).
+        let gone = self.change_removes(state, &carried);
         let mut device = device;
         device.holds_root = true;
+        if device.admin.as_ref().is_some_and(|a| gone.contains(&a.hash()) || state.revoked.contains(&a.hash())) {
+            device.admin = None;
+            device.powers = 0;
+            device.commands = 0;
+        }
         let mut first = alloc::vec![sign(Kind::device(device))?];
         if state.settings != Settings::default() {
             first.push(sign(Kind::settings(state.settings.clone()))?);
@@ -2725,7 +2735,6 @@ impl RecordSet {
         // root's records are cut): a key is never an admin again after a
         // change, and its records never count. A spare the change names
         // stays.
-        let gone = self.change_removes(state, &carried);
         for keys in gone.chunks(super::body::MAX_KEYS) {
             first.push(sign(Kind::Revoke(super::body::Removal { keys: keys.to_vec(), seen: Vec::new() }))?);
         }

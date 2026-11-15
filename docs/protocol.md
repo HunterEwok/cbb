@@ -2073,7 +2073,9 @@ admin key or powers), and one freeze of the member key of each frozen device, wh
 root thaws. It removes no device: a device removed before, or one the person leaves out, is
 simply not re-issued. It writes one removal of keys, with an empty `seen`: every admin key that
 loses its rights in the change (every admin key of the path the writer knows, and those the
-current root's own change removed, but a spare the change names). So after a change an admin key
+current root's own change removed, but a spare the change names); the new root's own device record
+carries none of these keys, so an admin's device that takes the group over stays a plain device of
+the new root. So after a change an admin key
 is always a new key: the writer refuses to name a removed key as an admin ("this admin key was
 used before the change of root"), and a removed key's records never count. Before signing, the app shows the person every device with what the change
 does to it (`RecordSet::change_preview`: stays, out, admin rights lost, admin kept with a spare

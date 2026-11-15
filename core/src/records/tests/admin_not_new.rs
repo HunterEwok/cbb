@@ -190,3 +190,49 @@ fn a_change_with_sixteen_admins_fits() {
     assert_eq!(st.devices.len(), 18, "every device is carried, with the new root's own");
     crate::testkit::closed(&w);
 }
+
+/// An admin's device takes the group over: the person writes the change
+/// on phone a, whose device names admin a. The new root's own device is
+/// re-issued without the admin key the change removes, so the writer's
+/// device counts after the change, and every member agrees.
+#[test]
+fn an_admins_device_that_takes_over_stays_a_device() {
+    let (g, _) = group(1);
+    let mut w = set_with(&g.root.key, &g.recs, &g.lists);
+    let st = w.state();
+    let own = st.device_by_key(&k("phone a").hash).unwrap().clone();
+    assert_eq!(own.admin, Some(k("admin a").hash));
+    let mut dev = Device::new(own.key.clone(), &own.name, own.role);
+    dev.rights = own.rights;
+    dev.admin = Some(k("admin a").key.clone());
+    dev.powers = own.powers;
+    dev.commands = own.commands;
+    let nk = k("nk");
+    let wr: Written =
+        w.write_change(&st, &k("recovery"), crate::testkit::rk2(), &nk, dev, &[], false, 1_000).unwrap();
+    let Kind::Device(d) = &wr.first[0].body().kind else { panic!("the new root's own device first") };
+    assert!(d.admin.is_none() && d.powers == 0 && d.commands == 0, "the own device keeps the removed admin key");
+    let mut sent: Vec<Record> = wr.first.clone();
+    sent.push(wr.record.clone());
+    let mut lists = g.lists.clone();
+    lists.push(wr.list.encode());
+    feed(&mut w, &sent, &lists);
+    let s = w.state();
+    assert_eq!(s.roots.last(), Some(&nk.hash));
+    assert!(s.revoked.contains(&k("admin a").hash), "the old admin key is removed");
+    let me = s.device_by_key(&k("phone a").hash).expect("the writer's device counts after the change");
+    assert!(me.admin.is_none() && me.by_root);
+    assert!(!s.revoked.contains(&k("phone a").hash));
+    assert!(s.device_by_key(&k("d0").hash).is_some(), "a's admission is re-issued");
+    // A member that held the old state reaches the same.
+    let mut m = set_with(&g.root.key, &g.recs, &g.lists);
+    feed(&mut m, &sent, &lists);
+    assert_eq!(m.state().devices, s.devices);
+    crate::testkit::closed(&w);
+    // And the writer refuses to name the old key again on it.
+    let st = w.state();
+    match w.write_record(&st, &nk, admin_again(&k("phone a"), &k("admin a")), 2_000) {
+        Err(e) => refused(e),
+        Ok(_) => panic!("named the old admin key again"),
+    }
+}
