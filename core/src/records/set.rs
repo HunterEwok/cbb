@@ -375,6 +375,10 @@ pub const CHANGE_TOO_BIG: &str = "the change does not fit the new root's room: l
 /// root sits on its line.
 pub const CHANGE_FORMER_ADMIN: &str = "the new root key was an admin key: a new root is always a new key";
 
+/// The writer's refusal of a spare admin key the group has used (S): a
+/// spare is a fresh key.
+pub const SPARE_USED: &str = "the spare key is not a new key";
+
 /// The most recovery records of one seq a set takes from a peer it does
 /// not know (`RecordSet::insert_from_unknown`): two are a fork's proof.
 pub const UNKNOWN_PER_SEQ: usize = 2;
@@ -2633,7 +2637,16 @@ impl RecordSet {
             .devices
             .iter()
             .filter(|d| d.key.hash() != *own && !self.change_leaves_out(state, d, leave_out))
-            .map(|d| super::body::Device {
+            .map(|d| {
+                // S: an admin whose newest counting ack names a spare key
+                // keeps its rights under the new root on that key, with
+                // the powers it had; any other admin's device is carried
+                // as a plain device.
+                let spare = d.admin.and_then(|a| self.spare_of(state, &a));
+                let (powers, commands) = if spare.is_some() { (d.powers, d.commands) } else { (0, 0) };
+                (d, spare, powers, commands)
+            })
+            .map(|(d, spare, powers, commands)| super::body::Device {
                 key: d.key.clone(),
                 name: d.name.clone(),
                 role: d.role,
@@ -2643,15 +2656,59 @@ impl RecordSet {
                 os: d.os,
                 store: d.store,
                 proof: d.proof,
-                admin: None,
-                powers: 0,
-                commands: 0,
+                admin: spare,
+                powers,
+                commands,
                 holds_root: false,
                 replaces: d.replaces,
                 guarded: d.guarded,
                 seen: Vec::new(),
             })
             .collect()
+    }
+
+    /// The spare admin key a change of root names for admin key a (S): the
+    /// `spare` of a's newest ack that counts under the root being replaced
+    /// (S1: a spare is one-time and comes only from an ack that counts
+    /// now), when a is a live admin and the spare is a key the group has
+    /// never used (no root, recovery key, device or admin key, nor one a
+    /// record names as an admin key or that signed a record). An admin
+    /// asleep through two changes keeps nothing: its spare was named by
+    /// the first, and the second finds no ack under the root it replaces.
+    pub fn spare_of(&self, state: &State, a: &KeyHash) -> Option<Key> {
+        if !Self::live_admins(state).contains(a) {
+            return None;
+        }
+        let spare = self
+            .records
+            .values()
+            .filter(|e| e.record.body().signer == *a && state.counting.contains(&e.record.id()))
+            .filter_map(|e| match &e.record.body().kind {
+                Kind::Ack { spare: Some(sp), .. } => Some((e.record.body().seq, sp)),
+                _ => None,
+            })
+            .max_by_key(|(seq, _)| *seq)
+            .map(|(_, sp)| sp.clone())?;
+        self.fresh_key(state, &spare.hash()).then_some(spare)
+    }
+
+    /// Whether k is a key the group has never used: no root on the path or
+    /// waiting, not the recovery key, no device's member or admin key, no
+    /// key removed or taken back, none a held device record names as an
+    /// admin key, and none that signed a record the set holds.
+    fn fresh_key(&self, state: &State, k: &KeyHash) -> bool {
+        *k != self.recovery.hash()
+            && *k != self.root_hash
+            && !self.promoted.contains(k)
+            && !self.early_roots.contains_key(k)
+            && self.keys.signer(k).is_none()
+            && !state.revoked.contains(k)
+            && !state.devices.iter().any(|d| d.key.hash() == *k || d.admin == Some(*k))
+            && !self.records.values().any(|e| {
+                e.record.body().signer == *k
+                    || matches!(&e.record.body().kind, Kind::Device(d)
+                        if d.key.hash() == *k || d.admin.as_ref().is_some_and(|x| x.hash() == *k))
+            })
     }
 
     /// Whether a change of root leaves device d out: the person named it
@@ -2707,6 +2764,8 @@ impl RecordSet {
                     Outcome::Out
                 } else if d.frozen {
                     Outcome::Frozen
+                } else if d.admin.is_some_and(|a| self.spare_of(state, &a).is_some()) {
+                    Outcome::AdminKeptWithSpare
                 } else if d.admin.is_some() {
                     Outcome::AdminRightsLost
                 } else {
@@ -2881,6 +2940,34 @@ impl RecordSet {
     /// Writes admin key signer's acknowledgement: the heads it holds of the
     /// current root and of the other live admin keys.
     pub fn write_ack(&mut self, state: &State, signer: &dyn ExternalKey, time_ms: u64) -> crate::error::Result<Record> {
+        self.write_ack_with(state, signer, None, time_ms)
+    }
+
+    /// write_ack that also publishes a spare admin key (S): the public key
+    /// of a key the admin's device made and signs nothing with, which a
+    /// change of root names as the admin's key under the new root. The
+    /// device keeps the secret of every spare it published until a newer
+    /// ack of its own counts. It refuses a spare the group has used.
+    pub fn write_ack_spare(
+        &mut self,
+        state: &State,
+        signer: &dyn ExternalKey,
+        spare: &Key,
+        time_ms: u64,
+    ) -> crate::error::Result<Record> {
+        if *spare == Key::es256(signer.public()) || !self.fresh_key(state, &spare.hash()) {
+            return Err(crate::error::Error::msg(SPARE_USED));
+        }
+        self.write_ack_with(state, signer, Some(spare.clone()), time_ms)
+    }
+
+    fn write_ack_with(
+        &mut self,
+        state: &State,
+        signer: &dyn ExternalKey,
+        spare: Option<Key>,
+        time_ms: u64,
+    ) -> crate::error::Result<Record> {
         let me = Key::es256(signer.public()).hash();
         let admins = Self::live_admins(state);
         let root = state.roots.last().copied();
@@ -2888,7 +2975,7 @@ impl RecordSet {
         if seen.is_empty() {
             return Err(crate::error::Error::msg("there is nothing to acknowledge"));
         }
-        self.write_record(state, signer, Kind::Ack { seen, spare: None }, time_ms)
+        self.write_record(state, signer, Kind::Ack { seen, spare }, time_ms)
     }
 
     /// The root's units each live admin key holds back: the sizes of the

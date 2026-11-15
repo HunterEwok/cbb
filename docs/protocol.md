@@ -1872,7 +1872,7 @@ the order in which they came, and no rule reads a clock.
 | 7 | `settings`, 8 `copies`, 10 `hubs` | a root |
 | 9 | `checkpoint`: the heads it settles and the records it keeps | the current root |
 | 13 | `recovery`: a change of root | the group's recovery key |
-| 14 | `ack`: the heads an admin holds (`seen`, field 10, not empty), so that a removal may be settled ("Checkpoints") | an admin |
+| 14 | `ack`: the heads an admin holds (`seen`, field 10, not empty), so that a removal may be settled ("Checkpoints"), and optionally a spare admin key (`spare`, field 11, ES256) its device made and signs nothing with, which a change of root names ("Re-issue") | an admin |
 
 Types 5, 11 and 12 of earlier drafts are refused (`records/retired`): the root changes only by
 the recovery key.
@@ -2050,7 +2050,15 @@ simply not re-issued. Before signing, the app shows the person every device with
 does to it (`RecordSet::change_preview`: stays, out, admin rights lost, admin kept with a spare
 key, frozen), and the person may leave devices out; the writer's own device cannot be left out.
 A device every admission of which sits below a head of a root's checkpoint that does not keep it
-is not carried. The new root's view at the change is the truth: an old root's removal the
+is not carried. An admin keeps its rights across a change asleep, once: the new root names it,
+with the powers it had, on the `spare` of the admin key's newest `ack` that counts under the root
+being replaced, when that spare is a key the group never used (`RecordSet::spare_of`); any other
+admin's device is carried as a plain device. The device switches to the spare once the change
+applies, acknowledges its grant first, and publishes its next spare in an `ack`
+(`RecordSet::write_ack_spare`, which refuses a used key: "the spare key is not a new key"); it
+keeps the secret of every spare it published until a newer `ack` of its own counts. An admin
+asleep through two changes has no `ack` under the second's old root, and loses its rights. The
+new root's view at the change is the truth: an old root's removal the
 writer never received does not bind after the change, and the preview is the person's check.
 
 A peer whose key the set does not know (`peer::Standing::Unknown`), such as a replaced root's

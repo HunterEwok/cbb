@@ -13,6 +13,8 @@ All notable changes to cbb are documented in this file. The format follows
   copies and freezes), with no list and no removal. Before signing, the app can show every
   device with what the change does to it, and a sleeper can take the change from a replaced
   root's new phone it does not know yet, which gives it nothing else.
+- An admin keeps its rights across a change of root while asleep, once: its acknowledgement
+  carries a spare admin key, which the new root names in its place with the same powers.
 - The 0.6 recovery sheet in the Rust core (`cbb_core::sheet`): the 32-byte recovery secret as
   4 lines of 16 characters with a check on each line and one on the whole sheet, so a typing
   mistake is told apart from a sheet of another group, and as a QR code with the Group ID;
