@@ -363,11 +363,12 @@ fn a_full_group_fits_the_new_root_s_room() {
 }
 
 /// L4.5: the re-issue carries every counting freeze (the old root's and an
-/// old admin's) as the new root's own. A freeze names an admin key, so the
-/// frozen admins here are kept through their spares (S): the root froze
-/// B, admin A froze C; after the change PB and PC hold their spares and
-/// stay frozen; an old admin's thaw after the change is void; the new
-/// root's thaw counts.
+/// old admin's) as the new root's own freeze of the device's member key
+/// (a freeze is on the device, not on the admin key). Here the frozen
+/// admins are kept through their spares (S): the root froze B, admin A
+/// froze C; after the change PB and PC hold their spares and stay frozen;
+/// an old admin's thaw after the change is void; the new root's thaw
+/// counts.
 #[test]
 #[ignore = "waits for L + B and S"]
 fn freezes_are_carried_and_only_the_new_root_thaws() {
@@ -408,8 +409,8 @@ fn freezes_are_carried_and_only_the_new_root_thaws() {
     let r2_freeze = w
         .first
         .iter()
-        .find(|r| matches!(&r.body().kind, Kind::Freeze(f) if f.keys.contains(&k("SC").hash)))
-        .expect("C's freeze, on its spare, among the first records")
+        .find(|r| matches!(&r.body().kind, Kind::Freeze(f) if f.keys.contains(&k("PC").hash)))
+        .expect("PC's freeze, on its member key, among the first records")
         .id();
     let st = g.set.state();
     g.t += 1_000;
@@ -417,6 +418,95 @@ fn freezes_are_carried_and_only_the_new_root_thaws() {
     g.set.write_record(&st, &r2, Kind::Thaw { ids: vec![r2_freeze], seen: vec![] }, g.t).unwrap();
     assert!(!frozen(&g.set.state(), &k("PC")), "the new root thaws");
     assert!(frozen(&g.set.state(), &k("PB")), "and only what it names");
+}
+
+/// A frozen admin without a spare: at the change its device is re-issued
+/// as a plain device and stays frozen (only the new root thaws); with a
+/// spare, the spare is named, the device stays frozen, and the spare's
+/// records do not count until the new root thaws it.
+#[test]
+#[ignore = "waits for L + B and S"]
+fn a_frozen_admin_s_device_stays_frozen_with_or_without_a_spare() {
+    let mut g = group("l20");
+    let (b, c) = (k("B"), k("C"));
+    for (p, x) in [("PB", &b), ("PC", &c)] {
+        let st = g.set.state();
+        g.t += 1_000;
+        let mut d = admin_device(&k(p), p, x);
+        d.powers &= !cbb_core::records::body::POWER_REMOVE_ADMINS;
+        g.set.write_record(&st, &g.r1, Kind::device(d), g.t).unwrap();
+    }
+    // Only C publishes a spare.
+    g.t += 1_000;
+    let seen = vec![head_of(&g.set, &g.r1.hash).unwrap()];
+    let ack = g.chain.sign(&g.set, &c, Kind::Ack { seen: seen.clone(), spare: Some(k("SC").key.clone()) }, g.t);
+    g.set.insert(ack).unwrap();
+    let st = g.set.state();
+    g.t += 1_000;
+    let seen = vec![head_of(&g.set, &g.r1.hash).unwrap()];
+    g.set.write_record(&st, &g.r1, Kind::Freeze(removal(&[&b, &c], seen)), g.t).unwrap();
+    assert!(frozen(&g.set.state(), &k("PB")) && frozen(&g.set.state(), &k("PC")));
+    g.t += 1_000;
+    let w = change(&mut g.set, &k("l20 root 2"), &k("P2"), &[], g.t);
+    let r2 = k("l20 root 2");
+    let st = g.set.state();
+    assert_eq!(admin_of(&st, &k("PB")), None, "no spare: a plain device");
+    assert!(frozen(&st, &k("PB")), "and still frozen");
+    assert_eq!(admin_of(&st, &k("PC")), Some(k("SC").hash), "the spare is named");
+    assert!(frozen(&st, &k("PC")), "and the device still frozen");
+    let mut chain = Chain::new();
+    g.t += 1_000;
+    let seen = vec![head_of(&g.set, &r2.hash).unwrap()];
+    let rm = chain.sign(&g.set, &k("SC"), Kind::Revoke(removal(&[&k("E")], seen.clone())), g.t);
+    let _ = g.set.insert(rm.clone());
+    assert!(has(&g.set.state(), &k("E")), "a frozen device's spare signs nothing that counts");
+    let freeze = w
+        .first
+        .iter()
+        .find(|r| matches!(&r.body().kind, Kind::Freeze(f) if f.keys.contains(&k("PC").hash)))
+        .expect("PC's freeze among the first records")
+        .id();
+    let st = g.set.state();
+    g.t += 1_000;
+    g.set.write_record(&st, &r2, Kind::Thaw { ids: vec![freeze], seen: vec![] }, g.t).unwrap();
+    assert!(!frozen(&g.set.state(), &k("PC")));
+    g.t += 1_000;
+    let seen = vec![head_of(&g.set, &r2.hash).unwrap()];
+    let rm2 = chain.sign(&g.set, &k("SC"), Kind::Revoke(removal(&[&k("E")], seen)), g.t);
+    g.set.insert(rm2).unwrap();
+    assert!(!has(&g.set.state(), &k("E")), "after the thaw the spare's removal counts");
+    assert!(frozen(&g.set.state(), &k("PB")), "PB stays frozen");
+}
+
+/// L5.1, accepted behaviour (pinned so that nobody "fixes" it): a key the
+/// old root removed counts nowhere after the change, and an ordinary
+/// admission under the new root admits it again, and it counts.
+#[test]
+#[ignore = "waits for L + B"]
+fn a_key_the_old_root_removed_is_admitted_again_only_by_a_new_admission() {
+    let mut g = group("l21");
+    let st = g.set.state();
+    g.t += 1_000;
+    for r in g.set.write_removal(&st, &g.r1, &[k("D").hash], g.t).unwrap() {
+        g.set.insert(r).unwrap();
+    }
+    let mut member = g.set.clone();
+    g.t += 1_000;
+    change(&mut g.set, &k("l21 root 2"), &k("P2"), &[], g.t);
+    sync(&g.set, &mut member);
+    for (who, set) in [("writer", &g.set), ("member", &member)] {
+        assert!(!has(&set.state(), &k("D")), "{who}: removed before the change, counts nowhere");
+    }
+    let r2 = k("l21 root 2");
+    let st = g.set.state();
+    g.t += 1_000;
+    g.set
+        .write_record(&st, &r2, Kind::device(plain(&k("D"), "D again")), g.t)
+        .expect("an ordinary admission under the new root admits the key again");
+    sync(&g.set, &mut member);
+    for (who, set) in [("writer", &g.set), ("member", &member)] {
+        assert!(has(&set.state(), &k("D")), "{who}: admitted again");
+    }
 }
 
 /// L5.4: a removal that waits for acknowledgements at the change: the
