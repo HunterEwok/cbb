@@ -191,20 +191,36 @@ pub fn sealing(state: &State, statements: &[&Statement]) -> BTreeMap<crate::reco
     statement::choose(state, statements.iter().copied())
 }
 
-/// What a set keeps is closed: restored from its own records and lists it
-/// is the same set, and a fresh member fed what it gives a device of the
-/// group reaches its state.
+/// What a set keeps is closed: restored from its own records and lists,
+/// in dependency order, reversed and shuffled, it is the same set, and a
+/// fresh member fed what it gives each device of the group, in each of
+/// those orders, reaches its state.
 pub fn closed(set: &RecordSet) {
     let st = set.state();
-    let recs: Vec<Record> = set.in_dependency_order().into_iter().cloned().collect();
+    let orders = |recs: Vec<Record>| -> [Vec<Record>; 3] {
+        let mut reversed = recs.clone();
+        reversed.reverse();
+        let mut shuffled = recs.clone();
+        shuffled.sort_by_key(|r| sha256(&[r.id().0.as_slice(), b"closed"].concat()));
+        [recs, reversed, shuffled]
+    };
     let lists: Vec<Vec<u8>> = set.lists().map(<[u8]>::to_vec).collect();
-    let back = RecordSet::restore(set.root().clone(), set.recovery().clone(), &recs, &lists);
-    assert_eq!(back.state(), st, "a set restored from its own records is the same set");
-    if let Some(d) = st.devices.first() {
+    let own: Vec<Record> = set.in_dependency_order().into_iter().cloned().collect();
+    for (i, recs) in orders(own).iter().enumerate() {
+        let back = RecordSet::restore(set.root().clone(), set.recovery().clone(), recs, &lists);
+        assert_eq!(back.state(), st, "a set restored from its own records is the same set (order {i})");
+    }
+    let mut fed: alloc::collections::BTreeSet<(Vec<RecordId>, Vec<Vec<u8>>)> = alloc::collections::BTreeSet::new();
+    for d in &st.devices {
         let peer = d.key.hash();
         let given: Vec<Record> = set.for_peer(&st, &peer).into_iter().cloned().collect();
         let lists: Vec<Vec<u8>> = set.lists_for_peer(&st, &peer).into_iter().map(<[u8]>::to_vec).collect();
-        let fresh = RecordSet::restore(set.root().clone(), set.recovery().clone(), &given, &lists);
-        assert_eq!(fresh.state(), st, "a fresh member fed what the set gives reaches its state");
+        if !fed.insert((given.iter().map(Record::id).collect(), lists.clone())) {
+            continue;
+        }
+        for (i, recs) in orders(given).iter().enumerate() {
+            let fresh = RecordSet::restore(set.root().clone(), set.recovery().clone(), recs, &lists);
+            assert_eq!(fresh.state(), st, "a fresh member fed what the set gives {} reaches its state (order {i})", d.name);
+        }
     }
 }
