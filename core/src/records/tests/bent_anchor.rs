@@ -5,7 +5,8 @@
 //! root signs a checkpoint whose head for an admin key is one of that
 //! key's records from before the change of root: such an anchor names
 //! nothing, at a member that held the old record all along and at a fresh
-//! one given every record ever written.
+//! one given every record ever written. The change removes the key, so
+//! here the root names it again by hand, against the writer.
 
 use super::*;
 
@@ -22,6 +23,30 @@ fn feed(set: &mut RecordSet, recs: &[Record], lists: &[Vec<u8>]) {
             let _ = set.insert_list(l);
         }
     }
+}
+
+/// The newest record of signer in set: its seq and ID.
+fn head(set: &RecordSet, signer: &KeyHash) -> (u64, RecordId) {
+    set.ids()
+        .filter_map(|i| set.get(i))
+        .filter(|r| r.body().signer == *signer)
+        .max_by_key(|r| r.body().seq)
+        .map_or((0, RecordId::default()), |r| (r.body().seq, r.id()))
+}
+
+/// A record of by on its newest record in set, signed as given.
+fn by_hand(set: &RecordSet, by: &K, kind: Kind, time_ms: u64) -> Record {
+    let (seq, id) = head(set, &by.hash);
+    let body = crate::records::body::Body {
+        group: set.group(),
+        signer: by.hash,
+        seq: seq + 1,
+        prev: (seq > 0).then_some(id),
+        time_ms,
+        kind,
+        held: false,
+    };
+    crate::testkit::sign_by(body, by)
 }
 
 /// What two members must agree on.
@@ -98,7 +123,11 @@ fn check(leave_d2: bool, bent_at: usize) {
     dev.rights = RIGHT_READ | RIGHT_SEND;
     dev.admin = Some(a.key.clone());
     dev.powers = POWER_ADMIT | POWER_REMOVE | POWER_FREEZE;
-    sent.extend(w.write_record(&st, &nk, Kind::device(dev), 2_000).unwrap());
+    // The writer refuses the old key (the change removed it); a root that
+    // names it anyway signs by hand.
+    assert!(w.write_record(&st, &nk, Kind::device(dev.clone()), 2_000).is_err());
+    let _ = st;
+    sent.push(by_hand(&w, &nk, Kind::device(dev), 2_000));
     step(&mut [&mut w, &mut kset, &mut aset], &sent);
     let st = w.state();
     sent.push(w.write_checkpoint(&st, &nk, 3_000).unwrap());
@@ -106,14 +135,10 @@ fn check(leave_d2: bool, bent_at: usize) {
     // The void record bent at stands before a's ack: the root bends the
     // checkpoint while every member still holds it.
     if bent_at != 3 {
-        let st = aset.state();
-        sent.push(aset.write_ack(&st, &a, 4_000).unwrap());
+        let (seq, id) = head(&aset, &nk.hash);
+        sent.push(by_hand(&aset, &a, Kind::Ack { seen: vec![Seen { key: nk.hash, seq, id }], spare: None }, 4_000));
         step(&mut [&mut aset], &sent);
-        let st = aset.state();
-        sent.extend(
-            aset.write_record(&st, &a, Kind::device(Device::new(k("d3").key.clone(), "d3", ROLE_MEMBER)), 5_000)
-                .unwrap(),
-        );
+        sent.push(by_hand(&aset, &a, Kind::device(Device::new(k("d3").key.clone(), "d3", ROLE_MEMBER)), 5_000));
         step(&mut [&mut w, &mut kset, &mut aset], &sent);
         let st = w.state();
         sent.push(w.write_checkpoint(&st, &nk, 6_000).unwrap());

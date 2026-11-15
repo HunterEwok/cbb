@@ -379,6 +379,14 @@ pub const CHANGE_TOO_BIG: &str = "the change does not fit the new root's room: l
 /// root sits on its line.
 pub const CHANGE_FORMER_ADMIN: &str = "the new root key was an admin key: a new root is always a new key";
 
+/// The writer's refusal to name as an admin a key the group removed:
+/// every admin key that loses its rights in a change of root is removed
+/// by the new root's first records, so after a change an admin key is
+/// always a new key. Its new records would take the seqs of its old ones,
+/// and whether they count would hang on who still holds those.
+pub const ADMIN_KEY_NOT_NEW: &str =
+    "this admin key was used before the change of root: the device makes a new admin key before it is an admin again";
+
 /// The writer's refusal of a spare admin key the group has used (S): a
 /// spare is a fresh key.
 pub const SPARE_USED: &str = "the spare key is not a new key";
@@ -411,7 +419,7 @@ pub const MISSING_ROUNDS: u32 = 16;
 pub enum Outcome {
     /// Re-issued by the new root as it counts now.
     Stays,
-    /// Left out by the person: not re-issued, no removal written.
+    /// Left out by the person: not re-issued, no device removal written.
     Out,
     /// An admin whose spare key the new root names (S).
     AdminKeptWithSpare,
@@ -2645,9 +2653,9 @@ impl RecordSet {
         // L: after the change only the new root's records count, so the
         // new root re-issues as its own records what counts at its device
         // (B): every device but the ones the person leaves out, the newest
-        // settings, hubs and copies, and every freeze. No removal is
-        // written: a device left out, or removed before, is simply not
-        // carried.
+        // settings, hubs and copies, and every freeze. No device is
+        // removed: a device left out, or removed before, is simply not
+        // carried; only the admin keys that lose their rights are.
         let mut carried = self.change_carries(state, &device_key, leave_out);
         if !past.is_empty() {
             // No spare past a waiting change: the device is carried plain.
@@ -2712,6 +2720,15 @@ impl RecordSet {
         for key in frozen {
             first.push(sign(Kind::Freeze(super::body::Removal { keys: alloc::vec![key], seen: Vec::new() }))?);
         }
+        // Every admin key that loses its rights here is removed by the new
+        // root, with those an earlier change removed (under L the earlier
+        // root's records are cut): a key is never an admin again after a
+        // change, and its records never count. A spare the change names
+        // stays.
+        let gone = self.change_removes(state, &carried);
+        for keys in gone.chunks(super::body::MAX_KEYS) {
+            first.push(sign(Kind::Revoke(super::body::Removal { keys: keys.to_vec(), seen: Vec::new() }))?);
+        }
         // The new root's first checkpoint: its own head, keeping every
         // record before it, so that the change applies whole or not at
         // all (`eval::first_gap`).
@@ -2767,6 +2784,37 @@ impl RecordSet {
         // Its own records are no peer's.
         self.reached = !blind;
         Ok(Written { record, list, first, again: false, blind })
+    }
+
+    /// The admin keys a change of root removes, sorted: every admin key
+    /// of the path the writer knows (one a device of state names, or one
+    /// a root of the path names in a record the writer holds), with the
+    /// keys the current root's own change removed, but the spares the
+    /// change carries (S).
+    fn change_removes(&self, state: &State, carried: &[super::body::Device]) -> Vec<KeyHash> {
+        let spares: BTreeSet<KeyHash> = carried.iter().filter_map(|d| d.admin.as_ref().map(Key::hash)).collect();
+        let mut out: BTreeSet<KeyHash> = state.devices.iter().filter_map(|d| d.admin).collect();
+        let cur = state.roots.last().copied();
+        // The seq of the current root's first checkpoint, which ends its
+        // change's first records.
+        let first_seq = self.records.values().find_map(|e| match &e.record.body().kind {
+            Kind::Recovery { root, first, .. } if Some(root.hash()) == cur => {
+                self.records.get(first).map(|f| f.record.body().seq)
+            }
+            _ => None,
+        });
+        for e in self.records.values() {
+            let b = e.record.body();
+            match &b.kind {
+                Kind::Device(d) if state.roots.contains(&b.signer) => out.extend(d.admin.as_ref().map(Key::hash)),
+                Kind::Revoke(rm) if Some(b.signer) == cur && first_seq.is_some_and(|f| b.seq < f) => {
+                    out.extend(rm.keys.iter().copied());
+                }
+                _ => {}
+            }
+        }
+        out.retain(|k| !spares.contains(k) && !state.roots.contains(k) && *k != self.recovery.hash());
+        out.into_iter().collect()
     }
 
     /// The devices a change of root re-issues (B): every device of state
@@ -3672,6 +3720,12 @@ impl RecordSet {
         {
             return Err(crate::error::Error::msg(ADMIN_KEY_TAKEN_BACK));
         }
+        if let Kind::Device(d) = &kind
+            && let Some(a) = d.admin.as_ref().map(Key::hash)
+            && state.revoked.contains(&a)
+        {
+            return Err(crate::error::Error::msg(ADMIN_KEY_NOT_NEW));
+        }
         // The seen line: an admin key's first record after its grant
         // counts is an acknowledgement, whose seen holds the root record
         // that named it; what the key signs after stands on that line. It
@@ -4568,6 +4622,40 @@ impl RecordSet {
                             ids.insert(p);
                             seq = x.body().seq;
                             prev = x.body().prev;
+                        }
+                        _ => {
+                            ids.extend(state.checkpoints.iter().copied());
+                            break;
+                        }
+                    }
+                }
+            }
+            // And the root's line the seen of each admin record handed
+            // names (the removal, and its chain with the ack that saw the
+            // root): the root records from the entry down their prev
+            // chain, to seq 1 or, where the set pruned them, to the
+            // counting checkpoints (which then go too). The device was a
+            // member when
+            // they were signed: nothing it would not have held is told,
+            // and only root records at or below a seen entry go.
+            let entries: Vec<super::body::Seen> = ids
+                .iter()
+                .filter_map(|id| self.held(id))
+                .filter(|r| self.keys.is_admin(&r.body().signer))
+                .flat_map(|r| seen_of(&r.body().kind).iter().copied())
+                .filter(|x| state.roots.contains(&x.key))
+                .collect();
+            for x in entries {
+                let (mut next, mut seq) = (Some(x.id), x.seq.saturating_add(1));
+                while let Some(id) = next {
+                    match self.held(&id) {
+                        Some(y) if y.body().signer == x.key && y.body().seq < seq => {
+                            ids.insert(id);
+                            if y.body().seq <= 1 {
+                                break;
+                            }
+                            seq = y.body().seq;
+                            next = y.body().prev;
                         }
                         _ => {
                             ids.extend(state.checkpoints.iter().copied());

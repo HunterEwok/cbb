@@ -42,8 +42,17 @@ fn reissued(w: &Written, m: &K) -> bool {
 }
 
 /// Whether the change writes any removal: under L it never does.
-fn writes_removal(w: &Written) -> bool {
-    w.first.iter().any(|r| matches!(r.body().kind, Kind::Revoke(_)))
+/// Whether the change removes a key other than an admin key of recs: it
+/// removes only the admin keys that lose their rights.
+fn writes_removal(w: &Written, recs: &[Record]) -> bool {
+    let admins: Vec<KeyHash> = recs
+        .iter()
+        .filter_map(|r| match &r.body().kind {
+            Kind::Device(d) => d.admin.as_ref().map(Key::hash),
+            _ => None,
+        })
+        .collect();
+    w.first.iter().any(|r| matches!(&r.body().kind, Kind::Revoke(rm) if rm.keys.iter().any(|k| !admins.contains(k))))
 }
 
 /// A head at seq of the recovery key naming root, with prev and list as
@@ -221,7 +230,7 @@ fn a_thiefs_removals_and_devices_on_a_member() {
     g.device(&k("root"), &k("thief"), "thief", |_| {});
     let from = g.recs.clone();
     let w = write(&mut g, &from, &k("n1"), &k("new phone"), &[k("thief").hash, k("old phone").hash]);
-    assert!(!writes_removal(&w) && !reissued(&w, &k("laptop")) && !reissued(&w, &k("thief")));
+    assert!(!writes_removal(&w, &g.recs) && !reissued(&w, &k("laptop")) && !reissued(&w, &k("thief")));
     let s = members_agree(&g);
     assert!(!has(&s, &k("thief")));
     assert!(!has(&s, &k("laptop")));
@@ -970,7 +979,7 @@ fn an_untick_keeps_what_the_admin_did() {
         let mut g = g.clone();
         let all = g.recs.clone();
         let w = write(&mut g, &all, &k("n1"), &k("p1"), &remove);
-        assert!(!writes_removal(&w), "{remove:?}");
+        assert!(!writes_removal(&w, &g.recs), "{remove:?}");
         let s = g.state();
         assert!(has(&s, &k("speaker")), "{remove:?}");
         assert!(!has(&s, &k("tv")), "{remove:?}");
@@ -1039,14 +1048,14 @@ fn a_change_carries_no_removal() {
     }
     let all = g.recs.clone();
     let w = write(&mut g, &all, &k("n1"), &k("p1"), &[]);
-    assert!(w.list.0.is_empty() && !writes_removal(&w));
+    assert!(w.list.0.is_empty() && !writes_removal(&w, &g.recs));
     assert!(!reissued(&w, &tv) && reissued(&w, &k("laptop")));
     let s = members_agree(&g);
     assert!(!has(&s, &tv) && has(&s, &k("laptop")) && s.revoked.is_empty());
     g.device(&k("n1"), &tv, "tv", |_| {});
     let all = g.recs.clone();
     let w = write(&mut g, &all, &k("n2"), &k("p2"), &[]);
-    assert!(w.list.0.is_empty() && !writes_removal(&w) && reissued(&w, &tv));
+    assert!(w.list.0.is_empty() && !writes_removal(&w, &g.recs) && reissued(&w, &tv));
     let s = members_agree(&g);
     assert!(has(&s, &tv) && has(&s, &k("laptop")) && has(&s, &k("p1")));
 }
@@ -1588,10 +1597,10 @@ fn a_change_writes_no_removal_whatever_it_leaves_out() {
     let devices = |w: &Written| w.first.iter().filter(|r| matches!(r.body().kind, Kind::Device(_))).count();
     let all = st.devices.len();
     let plain = change(&[k("laptop").hash]);
-    assert!(!writes_removal(&plain) && !reissued(&plain, &k("laptop")));
+    assert!(!writes_removal(&plain, &g.recs) && !reissued(&plain, &k("laptop")));
     assert_eq!(devices(&plain), all);
     let one = change(&[k("admin device 7").hash]);
-    assert!(!writes_removal(&one) && !reissued(&one, &k("admin device 7")));
+    assert!(!writes_removal(&one, &g.recs) && !reissued(&one, &k("admin device 7")));
     let by_admin_key = change(&[admins[7].hash]);
     assert!(!reissued(&by_admin_key, &k("admin device 7")), "left out by its admin key");
     let mut many: Vec<KeyHash> = (0..250).map(|i| k(&format!("admin device {i}")).hash).collect();
@@ -1599,7 +1608,7 @@ fn a_change_writes_no_removal_whatever_it_leaves_out() {
     many.extend((0..4).map(|i| k(&format!("stranger {i}")).hash));
     assert_eq!(many.len(), 256);
     let w = change(&many);
-    assert!(!writes_removal(&w));
+    assert!(!writes_removal(&w, &g.recs));
     assert!(w.first.iter().all(|r| match &r.body().kind {
         Kind::Device(d) => d.holds_root || !many.contains(&d.key.hash()),
         _ => true,
@@ -1937,7 +1946,7 @@ fn an_earlier_roots_removal_is_not_carried() {
     let rv = g.root_rec(Kind::Revoke(removal(&[k("tv").hash], g.seen())));
     let from = g.recs.clone();
     let w = write(&mut g, &from, &k("n1"), &k("new phone"), &[]);
-    assert!(!writes_removal(&w) && !reissued(&w, &k("tv")));
+    assert!(!writes_removal(&w, &g.recs) && !reissued(&w, &k("tv")));
     let set = set_with(&g.root.key, &g.recs, &g.lists);
     let before = set.state();
     assert!(!has(&before, &k("tv")));

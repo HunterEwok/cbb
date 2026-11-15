@@ -3697,6 +3697,7 @@ fn full_size(name: &str) -> bool {
 }
 
 mod ack;
+mod admin_not_new;
 mod bent_anchor;
 mod cap;
 mod case1326;
@@ -3707,6 +3708,7 @@ mod early_admins;
 mod insert_cost;
 mod lost_root;
 mod recovery;
+mod removed_learns;
 mod root_pair;
 mod seen;
 mod sim1321;
@@ -6135,7 +6137,9 @@ fn a_change_reissues_no_removed_device() {
     let mut lists = g.lists.clone();
     lists.push(w.list.encode());
     let s = state_with(&g.root.key, &all, &lists);
-    assert!(w.list.0.is_empty() && !w.first.iter().any(|r| matches!(r.body().kind, Kind::Revoke(_))));
+    // The only removal is of the admin key that loses its rights.
+    assert!(w.list.0.is_empty());
+    assert!(w.first.iter().all(|r| !matches!(&r.body().kind, Kind::Revoke(rm) if rm.keys != vec![a.hash])));
     assert_eq!(s.roots.last(), Some(&k("n1").hash));
     // L: the removed devices are not re-issued.
     for t in &ts {

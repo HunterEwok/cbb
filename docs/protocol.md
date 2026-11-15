@@ -2004,7 +2004,11 @@ peer gets it and nothing else. A member takes from a peer it does not know only 
 the root it counts, one pair, never other records of that root. So members that meet end alike, and a pair that no
 member holds any more halts no one. The group stays halted until the recovery key changes the
 root. A removed peer is handed only the removals that name it, and of a pair of removals only
-the one with the smaller ID.
+the one with the smaller ID, with what proves each to a device that missed records while away:
+for an admin's removal its chain, the root's record that names the key, the changes of root,
+and the root's line the admin's records saw in their `seen`, from that entry down to seq 1 (or
+to the counting checkpoints where the line was pruned). It was a member when those were signed;
+it gets no copies and no other member's records.
 
 A removal on a whole chain counts at or above the fork too, on either history, whoever signed
 it, so a key in two histories brings nothing back that it removed. Removals have no limit.
@@ -2066,8 +2070,12 @@ The new root carries the state over as its own first records: its device record 
 the newest settings, the counting hubs record narrowed to the devices it carries, the copies
 record, a plain device record for every device the writer counts (an admin's device without its
 admin key or powers), and one freeze of the member key of each frozen device, which only the new
-root thaws. It writes no removal: a device removed before, or one the person leaves out, is
-simply not re-issued. Before signing, the app shows the person every device with what the change
+root thaws. It removes no device: a device removed before, or one the person leaves out, is
+simply not re-issued. It writes one removal of keys, with an empty `seen`: every admin key that
+loses its rights in the change (every admin key of the path the writer knows, and those the
+current root's own change removed, but a spare the change names). So after a change an admin key
+is always a new key: the writer refuses to name a removed key as an admin ("this admin key was
+used before the change of root"), and a removed key's records never count. Before signing, the app shows the person every device with what the change
 does to it (`RecordSet::change_preview`: stays, out, admin rights lost, admin kept with a spare
 key, frozen; a frozen admin's line says what happens to its rights and that it stays frozen), and the person may leave devices out; the writer's own device cannot be left out.
 A device every admission of which sits below a head of a root's checkpoint that does not keep it
