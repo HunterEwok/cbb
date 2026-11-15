@@ -95,8 +95,10 @@ fn records_signed_before_the_grant_are_void() {
 }
 
 /// The void records still link the chain: what A signs above its
-/// acknowledgement counts (E removed), and the void ones are not counted
-/// or charged to A's room.
+/// acknowledgement counts (G removed), and the void ones do not count.
+/// Void records are charged like any held record, to their signer's room
+/// only (architecture 00:57Z): the root's room and B's are what they are
+/// without them.
 #[test]
 #[ignore = "waits for the seen line"]
 fn void_records_do_not_block_the_records_above() {
@@ -118,10 +120,12 @@ fn void_records_do_not_block_the_records_above() {
     for id in &void {
         assert!(!st.counting.contains(id), "a void record does not count");
     }
-    // A's room holds only what counts: the acknowledgement and the
-    // removal, a unit each.
-    let charged = set.room_of(&a.hash).map(|room| room.used).unwrap_or(0);
-    assert!(charged <= 2, "the void records are not charged: A's room uses {charged} units");
+    let (twin, _, _, _) = granted_after(&[]);
+    let room = |s: &cbb_core::records::RecordSet, key: &K| s.room_of(&key.hash).map(|x| x.used).unwrap_or(0);
+    let (root_before, b_before) = (room(&twin, &r), room(&twin, &k("B")));
+    assert_eq!(room(&set, &r), root_before, "the root's room carries none of A's void records");
+    assert_eq!(room(&set, &k("B")), b_before, "nor does B's");
+    assert!(room(&set, &a) >= 4, "A pays for its own records, the void ones too: {}", room(&set, &a));
     same_in_every_order(&set, "void below, counting above");
 }
 
@@ -376,4 +380,36 @@ fn a_seen_on_a_pruned_root_record_still_counts_through_the_checkpoint() {
     let saved: Vec<_> = set.in_dependency_order().into_iter().cloned().collect();
     let restored = cbb_core::records::RecordSet::restore(set.root().clone(), set.recovery().clone(), &saved, &[]);
     assert_eq!(view(&restored.state()), view(&st));
+}
+
+/// Open until records says how it built it: an admin key whose room is
+/// filled with its own void records (signed after the grant, their seen
+/// below it): can it still write its first acknowledgement? The test
+/// records what happens.
+#[test]
+#[ignore = "waits for the seen line; open: what the full room does to the first ack"]
+fn an_admin_whose_room_is_full_of_its_void_records_and_its_first_ack() {
+    let (mut set, r, mut chain, mut t) = granted_after(&[]);
+    let a = k("A");
+    let below = seen_at(&set, &r.hash, 2);
+    let mut stored = 0usize;
+    for i in 0..400u32 {
+        t += 10;
+        let x = chain.sign(&set, &a, Kind::Revoke(removal(&[&k("D")], vec![below])), t + u64::from(i));
+        if set.insert(x).is_ok() {
+            stored += 1;
+        }
+    }
+    let used = set.room_of(&a.hash).map(|x| (x.used, x.cap));
+    t += 10_000;
+    let x = chain.sign(&set, &a, ack(&set, &r), t);
+    let id = x.id();
+    let added = set.insert(x);
+    let st = set.state();
+    println!(
+        "void records offered 400, stored {stored}; A's room {used:?}; first ack: {added:?}, held {}, counts {}",
+        set.contains(&id),
+        st.counting.contains(&id)
+    );
+    assert!(has(&st, &k("D")), "none of the void removals counts");
 }
