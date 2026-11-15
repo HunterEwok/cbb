@@ -224,14 +224,19 @@ fn large_checkpoints_cost_once() {
 fn the_measured_sets_are_the_named_ones() {
     let _alone = alone();
     let g = groupgen::build(groupgen::sizes(1)[2]);
-    assert_eq!(g.records.len(), 1375);
+    // 1678 since the change of root re-issues every device as the new
+    // root's own record (L + B); the measurements above were taken at the
+    // earlier 1375.
+    assert_eq!(g.records.len(), 1678);
     for data in [
         &include_bytes!("../../testdata/records-cost/slow-1.bin")[..],
         &include_bytes!("../../testdata/records-cost/slow-2.bin")[..],
     ] {
         let (big, _) = fuzzed::build(data, true);
         let (small, _) = fuzzed::build(data, false);
-        assert_eq!(big.recs.len(), 49);
+        // 48 under L + B (49 before): the input's changes of root now
+        // write the L re-issue, so its steps come out one record shorter.
+        assert_eq!(big.recs.len(), 48);
         let size = |g: &fuzzed::G| g.recs.iter().map(|r| r.envelope().len()).sum::<usize>();
         assert!(size(&big) > size(&small) + 1_500_000, "{} against {}", size(&big), size(&small));
     }

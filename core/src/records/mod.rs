@@ -203,8 +203,10 @@ pub const ADMIN_KEYS_MAX: usize = 16;
 pub const MAX_ROOT_RECORDS: usize = 1536;
 /// Records of one admin key, in units.
 pub const MAX_ADMIN_RECORDS: usize = 256;
-/// What the roots before the current one keep together, in units: what
-/// the newest change's list names, removals first.
+/// The bound of a change's list in the format, in units. Under L ("the
+/// last root only") a change writes an empty list and the roots before
+/// the current one keep nothing (`keep::reserve` is 0); the units stay
+/// in ROOM as headroom, so the set's room is unchanged.
 pub const CUT_ROOTS_RESERVE: usize = 1536;
 /// IDs a change's list names at most: everything the reserve can hold.
 /// The list rides beside its recovery record, outside the rooms.

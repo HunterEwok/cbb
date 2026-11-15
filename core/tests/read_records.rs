@@ -1909,9 +1909,12 @@ fn a_change_whose_first_checkpoint_never_comes_completes_alike_in_any_order() {
     synced.insert_all(given);
     println!("after sync with that peer: path {}", synced.state().roots.len());
     assert_eq!(synced.state().roots.len(), 2, "sync with a peer that took the change does not complete it");
+    // L: the change applies with the new root's whole first group (the
+    // re-issue the first checkpoint keeps), not with the checkpoint alone.
     let got = m.insert(first_cp.clone()).map(|a| format!("{a:?}"));
     println!("the first checkpoint at last: {got:?}; path {}", m.state().roots.len());
-    assert_eq!(m.state().roots.len(), 2, "the first checkpoint did not complete the change");
+    m.insert_all(w.first.clone());
+    assert_eq!(m.state().roots.len(), 2, "the first group did not complete the change");
     assert!(same(&restarted(&m), &m), "a restore after the change is not the live set");
 }
 

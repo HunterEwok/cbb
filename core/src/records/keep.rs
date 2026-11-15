@@ -42,7 +42,7 @@ use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::vec::Vec;
 
 use super::key::{KeyHash, RecordId};
-use super::{CUT_ROOTS_RESERVE, MAX_ADMIN_RECORDS, MAX_RECORDS, MAX_ROOT_RECORDS, MAX_SET_BYTES};
+use super::{MAX_ADMIN_RECORDS, MAX_RECORDS, MAX_ROOT_RECORDS, MAX_SET_BYTES};
 
 /// The bytes of one unit.
 pub const UNIT: usize = MAX_SET_BYTES / MAX_RECORDS;
@@ -175,15 +175,14 @@ pub fn ceiling(root: bool) -> u64 {
     if root { MAX_ROOT_RECORDS as u64 } else { MAX_ADMIN_RECORDS as u64 }
 }
 
-/// The units the roots before the current one keep together: as much as
-/// a root's ceiling (`CUT_ROOTS_RESERVE`), a test's small root ceiling
-/// with small rooms.
+/// The units the roots before the current one keep together: none. After
+/// a change of root only the last root's records, the admin keys it names
+/// and the recovery chain count (L, "the last root only"), so a cut root's
+/// record, listed or not, has no room: it is not charged and is dropped
+/// like a record of a key the set does not know. `CUT_ROOTS_RESERVE`
+/// stays only as the bound of a list's length in the format.
 pub fn reserve() -> u64 {
-    #[cfg(test)]
-    if let Some((_, r, _)) = small::ROOMS.with(core::cell::Cell::get) {
-        return r;
-    }
-    CUT_ROOTS_RESERVE as u64
+    0
 }
 
 /// The IDs of the records a set keeps. ceiling_of gives a key's ceiling
