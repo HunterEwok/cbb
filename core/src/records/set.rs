@@ -814,7 +814,17 @@ impl RecordSet {
             // second signature by the key holder) changes nothing.
             return Ok(Added::Known);
         }
-        let Some((key, role)) = self.keys.signer(&r.body().signer) else { return Err(Refused::UnknownSigner) };
+        let Some((key, role)) = self.keys.signer(&r.body().signer) else {
+            // An admin key a waiting root's records name: kept aside with
+            // them (a later checkpoint of that root may keep what it
+            // signed, and the change waits for that).
+            if self.halted.is_none()
+                && let Some(key) = self.early_admins(|h| !self.promoted.contains(h)).remove(&r.body().signer)
+            {
+                return self.insert_early_by(r, &key);
+            }
+            return Err(Refused::UnknownSigner);
+        };
         let key = key.clone();
         let signer = r.body().signer;
         if role != Role::Recovery && self.halted.as_ref().is_some_and(|keep| !keep.contains(&id)) {
@@ -1104,6 +1114,29 @@ impl RecordSet {
     fn insert_early(&mut self, r: Record) -> Result<Added, Refused> {
         let signer = r.body().signer;
         let Some((_, key)) = self.early_roots.get(&signer) else { return Err(Refused::UnknownSigner) };
+        let key = key.clone();
+        self.insert_early_by(r, &key)
+    }
+
+    /// The admin keys that device records set aside name, of the roots
+    /// `of` takes, with the key: their records are set aside too, and
+    /// taken with their root's when its change applies.
+    fn early_admins(&self, of: impl Fn(&KeyHash) -> bool) -> BTreeMap<KeyHash, Key> {
+        self.early
+            .values()
+            .filter(|r| self.early_roots.contains_key(&r.body().signer) || self.promoted.contains(&r.body().signer))
+            .filter(|r| of(&r.body().signer))
+            .filter_map(|r| match &r.body().kind {
+                Kind::Device(d) => d.admin.clone(),
+                _ => None,
+            })
+            .map(|k| (k.hash(), k))
+            .collect()
+    }
+
+    /// Sets r aside, verified by key: a waiting root's record, or one of
+    /// an admin key that root's records set aside name.
+    fn insert_early_by(&mut self, r: Record, key: &Key) -> Result<Added, Refused> {
         let id = r.id();
         if self.early.contains_key(&id) {
             return Ok(Added::Known);
@@ -1348,7 +1381,10 @@ impl RecordSet {
     ) -> bool {
         let mut progress = false;
         for (r, mark) in records {
-            if r.body().group == self.group && self.keys.signer(&r.body().signer).is_none() {
+            if r.body().group == self.group
+                && self.keys.signer(&r.body().signer).is_none()
+                && !self.early_admins(|h| !self.promoted.contains(h)).contains_key(&r.body().signer)
+            {
                 waiting.push((r, mark));
                 continue;
             }
@@ -1426,12 +1462,16 @@ impl RecordSet {
         // What waited for a root the chain now applies is taken; what
         // waited for a root no waiting record names any more (one side of
         // a fork, or a record that is no longer valid) is dropped.
+        let promoted_admins: BTreeSet<KeyHash> = self.early_admins(|h| self.promoted.contains(h)).into_keys().collect();
+        let waiting_admins: BTreeSet<KeyHash> =
+            self.early_admins(|h| self.early_roots.contains_key(h) && !self.promoted.contains(h)).into_keys().collect();
         let early = core::mem::take(&mut self.early);
-        let (now, still): (Vec<Record>, Vec<Record>) =
-            early.into_values().partition(|r| self.promoted.contains(&r.body().signer));
+        let (now, still): (Vec<Record>, Vec<Record>) = early
+            .into_values()
+            .partition(|r| self.promoted.contains(&r.body().signer) || promoted_admins.contains(&r.body().signer));
         self.early = still
             .into_iter()
-            .filter(|r| self.early_roots.contains_key(&r.body().signer))
+            .filter(|r| self.early_roots.contains_key(&r.body().signer) || waiting_admins.contains(&r.body().signer))
             .map(|r| (r.id(), r))
             .collect();
         // A key a waiting record now names as root (an admin's, say) has

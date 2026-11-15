@@ -2029,7 +2029,11 @@ a member never counts an empty group. A record of the change's group that the de
 settled by a later checkpoint (of the new root above the first, or of a root after it on the
 chain) that names a head at or above it and does not keep it; what that checkpoint keeps must
 be held too. Until the group is whole the change waits, and the apps say that a change of root
-is arriving.
+is arriving. While it waits, the new root's records wait aside, outside the count, and so do the
+records of an admin key that only those records name (such a checkpoint may keep one), verified
+by that key; within one root's room in all, the new root's own records first, so an admin never
+pushes them out. They are taken when the change applies and dropped with the new root when its
+change is no longer on the way (a fork at its step).
 
 The writer of a change refuses a set that holds a recovery record it has not applied, whether it
 waits for its list or for the new root's records ("a change of root is waiting here: sync with
