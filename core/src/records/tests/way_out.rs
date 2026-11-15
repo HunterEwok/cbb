@@ -27,6 +27,10 @@ impl Writer {
     }
 
     fn keep_new(&mut self) {
+        let st = self.set.state();
+        let slow: alloc::collections::BTreeSet<KeyHash> =
+            self.set.unacknowledged(&st).into_iter().filter(|(_, n)| *n > 0).map(|(a, _)| a).collect();
+        assert_eq!(self.set.holders(&st), slow, "holders() names the keys unacknowledged() counts");
         let have: alloc::collections::BTreeSet<RecordId> = self.made.iter().map(Record::id).collect();
         for r in self.set.in_dependency_order() {
             if !have.contains(&r.id()) {
@@ -176,4 +180,109 @@ fn a_root_whose_room_fills_can_still_take_one_laggard_back() {
 #[test]
 fn a_root_whose_room_fills_can_still_take_two_laggards_back() {
     the_person_takes_the_laggards_back_and_the_root_removes_again(2);
+}
+
+/// On a copy, the person's way out as the writers themselves take it:
+/// every admin key that holds removals back taken back (a checkpoint
+/// first where the room asks), then the checkpoint that settles; Ok when
+/// nothing waits after it.
+fn way_out_taken(w: &Writer) -> Result<(), String> {
+    let mut w = Writer { set: w.set.clone(), root: k("root"), t: w.t, made: Vec::new() };
+    let st = w.set.state();
+    let holders: Vec<KeyHash> = w.set.unacknowledged(&st).into_iter().filter(|(_, n)| *n > 0).map(|(a, _)| a).collect();
+    for a in holders {
+        w.act(&|set, st, root, t| set.take_back(st, root, &a, t).map(|_| ())).map_err(|e| format!("take-back: {e}"))?;
+    }
+    w.checkpoint()?;
+    let st = w.set.state();
+    let left = w.set.removals_waiting(&st).len();
+    if left == 0 { Ok(()) } else { Err(format!("{left} removals still wait")) }
+}
+
+/// Every root record keeps the way out, not only removals: sixteen admin
+/// keys that never acknowledge, and the root's records in a mixed order
+/// (seeded: removals, admissions kept to remove later, copies records,
+/// checkpoints alone and two in a row), whatever its writer takes.
+/// After every record the writer took, the person can still take all
+/// sixteen back and settle (`way_out_taken`); at the end a removal has
+/// been refused with its own text, and after the way out the root removes
+/// again.
+#[test]
+fn a_mixed_fill_with_sixteen_laggards_keeps_the_way_out_after_every_record() {
+    let _small = Small::new(8_192, 64, 16);
+    for seed in [1u64, 7] {
+        let mut w = Writer::new();
+        let admins: Vec<K> =
+            (0..crate::records::ADMIN_KEYS_MAX).map(|i| k(&alloc::format!("mixed admin {i}"))).collect();
+        for (i, a) in admins.iter().enumerate() {
+            let phone = k(&alloc::format!("mixed phone {i}"));
+            let key = a.key.clone();
+            w.act(&|set, st, root, t| {
+                let mut d = Device::new(phone.key.clone(), "phone", ROLE_PHONE);
+                d.admin = Some(key.clone());
+                d.powers = POWER_ADMIT | POWER_REMOVE;
+                set.write_record(st, root, Kind::device(d), t).map(|_| ())
+            })
+            .unwrap();
+        }
+        for a in &admins {
+            w.ack(a);
+        }
+        let mut rng = seed;
+        let mut roll = || {
+            rng ^= rng << 13;
+            rng ^= rng >> 7;
+            rng ^= rng << 17;
+            rng % 10
+        };
+        let mut live: alloc::collections::VecDeque<String> = alloc::collections::VecDeque::new();
+        let (mut refused, mut taken) = (false, 0usize);
+        for step in 0..600u32 {
+            let before = w.made.len();
+            let r = match roll() {
+                0 | 1 => {
+                    let ms = MIN_INCOMING_MS + u64::from(step);
+                    w.act(&|set, st, root, t| {
+                        set.write_record(st, root, Kind::Copies { incoming_ms: ms, seen: vec![] }, t).map(|_| ())
+                    })
+                }
+                2..=4 => {
+                    let name = alloc::format!("mixed dev {seed} {step}");
+                    let r = w.admit(&name);
+                    if r.is_ok() {
+                        live.push_back(name);
+                    }
+                    r
+                }
+                5..=7 => match live.pop_front() {
+                    Some(gone) => {
+                        let r = w.remove(&gone);
+                        if let Err(e) = &r {
+                            assert!(!e.contains("would pass its room"), "seed {seed} step {step}: {e}");
+                            refused |= e.contains(TAKE_BACK_FIRST);
+                            live.push_front(gone);
+                        }
+                        r
+                    }
+                    None => Ok(()),
+                },
+                8 => w.checkpoint(),
+                // Two in a row: the first stays as the second's anchor.
+                _ => w.checkpoint().and_then(|()| w.checkpoint()),
+            };
+            if r.is_ok() && w.made.len() > before {
+                taken += 1;
+                way_out_taken(&w).unwrap_or_else(|e| panic!("seed {seed} step {step}: the way out closed: {e}"));
+            }
+        }
+        assert!(refused, "seed {seed}: the room never filled ({taken} records)");
+        for a in &admins {
+            w.take_back(a).unwrap_or_else(|e| panic!("seed {seed}: the person takes every laggard back: {e}"));
+        }
+        w.checkpoint().expect("the checkpoint that settles");
+        let st = w.set.state();
+        assert!(w.set.removals_waiting(&st).is_empty());
+        let gone = live.pop_front().expect("a device to remove");
+        w.remove(&gone).expect("the root removes again");
+    }
 }

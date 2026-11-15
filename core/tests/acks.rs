@@ -841,3 +841,183 @@ fn a_root_at_its_cap_can_take_back_two_laggards_and_recover() {
     set.write_record(&st, &root, Kind::Copies { incoming_ms: MIN_INCOMING_MS + 1, seen: vec![] }, t)
         .expect("and writes ordinary records again");
 }
+
+/// From `set`, on a copy: the person takes back every live admin key that
+/// holds a removal back (a checkpoint first when the writer asks), then
+/// writes the checkpoint that settles. Ok when nothing waits after it.
+fn way_out(set: &RecordSet, root: &K, mut t: u64) -> Result<(), String> {
+    let mut s = set.clone();
+    let st = s.state();
+    let lagging: Vec<KeyHash> = s.unacknowledged(&st).into_iter().filter(|(_, n)| *n > 0).map(|(a, _)| a).collect();
+    for a in lagging {
+        t += 1;
+        let st = s.state();
+        if let Err(e) = s.take_back(&st, root, &a, t) {
+            let cp = s.write_checkpoint(&st, root, t).map_err(|e2| format!("take-back: {e:?}; checkpoint: {e2:?}"))?;
+            s.insert(cp).map_err(|e| format!("{e:?}"))?;
+            t += 1;
+            let st = s.state();
+            s.take_back(&st, root, &a, t).map_err(|e| format!("take-back after a checkpoint: {e:?}"))?;
+        }
+    }
+    let st = s.state();
+    t += 1;
+    let cp = s.write_checkpoint(&st, root, t).map_err(|e| format!("settling checkpoint: {e:?}"))?;
+    s.insert(cp).map_err(|e| format!("{e:?}"))?;
+    let st = s.state();
+    let left = s.removals_waiting(&st).len();
+    if left > 0 { Err(format!("{left} removals still wait")) } else { Ok(()) }
+}
+
+/// Sixteen admins that never acknowledge; the root writes ordinary
+/// records, admissions with removals, and checkpoints in a mixed order
+/// (seeded), as long as its writer takes any of them. Claim: at every
+/// point the person can still take back all of them and write the
+/// settling checkpoint (`way_out`). It reports where the claim first
+/// breaks, and whether ordinary records alone ate the way out before any
+/// removal was refused.
+#[test]
+fn sixteen_laggards_a_mixed_fill_never_closes_the_way_out() {
+    use cbb_core::records::body::{POWER_ADMIT, POWER_MANAGE, POWER_REMOVE};
+    let root = k("root");
+    let recovery = cbb_core::records::Recovery {
+        k1: k("recovery").key,
+        k2: cbb_core::records::pq::PqKey::from_seeds(&[0x31; 16], &[0x32; 16], &[0x33; 16]).key(),
+    };
+    let mut broken = Vec::new();
+    for seed in [1u64, 7, 23] {
+        let mut set = RecordSet::new(root.key.clone(), recovery.clone());
+        let mut t = 1_000u64;
+        let st = set.state();
+        set.write_record(&st, &root, Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] }, t).unwrap();
+        for i in 0..16 {
+            let mut d = Device::new(k(&format!("mix phone {i}")).key.clone(), "a", ROLE_MEMBER);
+            d.rights = RIGHT_READ | RIGHT_SEND;
+            d.admin = Some(k(&format!("mix admin {i}")).key.clone());
+            d.powers = POWER_ADMIT | POWER_MANAGE | POWER_REMOVE;
+            t += 1;
+            let st = set.state();
+            set.write_record(&st, &root, Kind::device(d), t).unwrap();
+        }
+        // Devices admitted early, to be removed later past the floor.
+        let mut early: Vec<K> = Vec::new();
+        let mut rng = seed;
+        let mut next = || {
+            rng ^= rng << 13;
+            rng ^= rng >> 7;
+            rng ^= rng << 17;
+            rng
+        };
+        let (mut removal_refused, mut first_break) = (false, None::<String>);
+        let mut idle = 0u32;
+        let mut step = 0u32;
+        while idle < 40 && step < 6_000 {
+            step += 1;
+            let roll = next() % 10;
+            let st = set.state();
+            t += 1;
+            let (what, ok) = match roll {
+                0..=2 => {
+                    let r = set.write_record(
+                        &st,
+                        &root,
+                        Kind::Copies { incoming_ms: MIN_INCOMING_MS + u64::from(step), seen: vec![] },
+                        t,
+                    );
+                    ("ordinary", r.is_ok())
+                }
+                3 => {
+                    let x = k(&format!("mix early {seed} {step}"));
+                    let r = set.write_record(&st, &root, device(&x, "e", None), t);
+                    if r.is_ok() {
+                        early.push(x);
+                    }
+                    ("admission kept", r.is_ok())
+                }
+                4..=7 => {
+                    let x = if roll == 7 && !early.is_empty() {
+                        early.remove(0)
+                    } else {
+                        let x = k(&format!("mix dev {seed} {step}"));
+                        if set.write_record(&st, &root, device(&x, "d", None), t).is_err() {
+                            idle += 1;
+                            continue;
+                        }
+                        x
+                    };
+                    let st = set.state();
+                    t += 1;
+                    match set.write_removal(&st, &root, &[x.hash], t) {
+                        Ok(rs) => {
+                            for r in rs {
+                                set.insert(r).unwrap();
+                            }
+                            ("removal", true)
+                        }
+                        Err(_) => {
+                            removal_refused = true;
+                            ("removal", false)
+                        }
+                    }
+                }
+                _ => match set.write_checkpoint(&st, &root, t) {
+                    Ok(cp) => ("checkpoint", set.insert(cp).is_ok()),
+                    Err(_) => ("checkpoint", false),
+                },
+            };
+            if ok {
+                idle = 0;
+            } else {
+                idle += 1;
+                continue;
+            }
+            let st = set.state();
+            let used = set.root_room(&st).map_or(0, |r| r.used);
+            if first_break.is_none() && (used > 1_300 || step % 50 == 0) {
+                if let Err(e) = way_out(&set, &root, t) {
+                    first_break = Some(format!(
+                        "seed {seed} step {step}: after a {what} (root room {used}, removal refused before: {removal_refused}, waiting {}): {e}",
+                        set.removals_waiting(&st).len()
+                    ));
+                    break;
+                }
+            }
+        }
+        let st = set.state();
+        println!(
+            "seed {seed}: {step} steps, root room {:?}, waiting {}, first break: {first_break:?}",
+            set.root_room(&st).map(|r| (r.used, r.cap)),
+            set.removals_waiting(&st).len()
+        );
+        if first_break.is_none() {
+            way_out(&set, &root, t).unwrap_or_else(|e| broken.push(format!("seed {seed} at the end: {e}")));
+        }
+        broken.extend(first_break);
+    }
+    assert!(broken.is_empty(), "the way out closed: {broken:#?}");
+}
+
+/// At the cap with two laggards, the root's removal that names a lagging
+/// admin's own key (its admin key, or its phone's member key) is itself
+/// part of the way out: it goes in, and the other laggard's take-back and
+/// the settling checkpoint still fit.
+#[test]
+fn at_the_cap_a_removal_naming_a_laggard_s_own_key_goes_in() {
+    for by_member_key in [false, true] {
+        let (mut set, root, admins, mut t) = at_the_cap(2);
+        let st = set.state();
+        let target = if by_member_key {
+            st.devices.iter().find(|d| d.admin == Some(admins[0].hash)).map(|d| d.key.hash()).unwrap()
+        } else {
+            admins[0].hash
+        };
+        t += 1;
+        for r in set
+            .write_removal(&st, &root, &[target], t)
+            .unwrap_or_else(|e| panic!("by_member_key={by_member_key}: the laggard's own removal at the cap: {e:?}"))
+        {
+            set.insert(r).unwrap();
+        }
+        way_out(&set, &root, t).unwrap_or_else(|e| panic!("by_member_key={by_member_key}: then the way out: {e}"));
+    }
+}

@@ -367,6 +367,10 @@ pub const TAKE_BACK_ROOT: &str = "the current root's key is not taken back as an
 /// checkpoint that settles them (`RecordSet::unacknowledged` names them).
 pub const TAKE_BACK_FIRST: &str = "take back the admin keys that hold removals back first";
 
+/// The bytes `way_out_fits` adds to the settling checkpoint per take-back:
+/// a head (key, seq, ID) and a kept ID, with their framing.
+const WAY_OUT_HEAD: usize = 32 + 9 + 32 + 2 + 32 + 2;
+
 pub const REISSUE_KEPT_BACK: u64 = 256;
 
 /// Why the writer does not write a change of root while the set holds a
@@ -2946,9 +2950,16 @@ impl RecordSet {
         if state.roots.last() == Some(a) {
             return Err(crate::error::Error::msg(TAKE_BACK_ROOT));
         }
-        let Some(d) = state.devices.iter().find(|d| d.admin == Some(*a)) else {
+        let Some(kind) = self.take_back_kind(state, a) else {
             return Err(crate::error::Error::msg("no device holds this admin key"));
         };
+        self.write_record(state, root, kind, time_ms)
+    }
+
+    /// The record `take_back` writes for admin key a: its device without
+    /// the key, seen at the key's head; None when no device holds it.
+    fn take_back_kind(&self, state: &State, a: &KeyHash) -> Option<Kind> {
+        let d = state.devices.iter().find(|d| d.admin == Some(*a))?;
         let mut back = super::body::Device::new(d.key.clone(), &d.name, d.role);
         back.rights = d.rights;
         back.skip = d.skip;
@@ -2959,7 +2970,7 @@ impl RecordSet {
         back.replaces = d.replaces;
         back.guarded = d.guarded;
         back.seen = self.heads_where(|k| k == a);
-        self.write_record(state, root, Kind::device(back), time_ms)
+        Some(Kind::device(back))
     }
 
     /// Writes the current root's checkpoint (section 10, "Checkpoints"):
@@ -3463,54 +3474,124 @@ impl RecordSet {
                 rest = rest.get(n..).unwrap_or_default();
             }
         }
-        // The person keeps a way out from every state the writer reaches:
-        // after this removal the root can still take back every live admin
-        // key that holds removals back and write the checkpoint that then
-        // settles them. A removal of only such keys is itself that way out.
-        let holders: BTreeSet<KeyHash> = self.holders(state);
-        let only_holders = keys.iter().all(|k| {
-            holders.contains(k) || state.device_by_key(k).and_then(|d| d.admin).is_some_and(|a| holders.contains(&a))
-        });
-        if !only_holders && !trial.way_out(root, time_ms) {
-            return Err(Error::msg(TAKE_BACK_FIRST));
-        }
+        // Each of these records kept the person's way out of a full room
+        // (`write_one_after`, `way_out_fits`).
         *self = trial;
         Ok(out)
     }
 
     /// The live admin keys that hold a removal back: each has a counting
-    /// removal it has not acknowledged (`unacknowledged`).
-    fn holders(&self, state: &State) -> BTreeSet<KeyHash> {
-        self.unacknowledged(state).into_iter().filter(|(_, n)| *n > 0).map(|(a, _)| a).collect()
-    }
-
-    /// Whether the root can still take back, one by one, every admin key
-    /// that holds removals back, writing a checkpoint first where its room
-    /// asks for one, and then write the checkpoint that settles: tried on
-    /// a copy of the set, with the root's own key.
-    fn way_out(&self, root: &dyn ExternalKey, time_ms: u64) -> bool {
-        let mut t = self.clone();
-        let checkpoint = |t: &mut RecordSet| -> bool {
-            let st = t.state();
-            let Ok(cp) = t.write_checkpoint(&st, root, time_ms) else { return false };
-            let id = cp.id();
-            let _ = t.insert(cp);
-            t.state().counting.contains(&id)
-        };
-        let st = t.state();
-        for a in t.holders(&st) {
-            let st = t.state();
-            if t.take_back(&st, root, &a, time_ms).is_err() {
-                if !checkpoint(&mut t) {
-                    return false;
+    /// removal it has not acknowledged. The same keys as `unacknowledged`
+    /// names with a count above zero (`waiting`, `settleable`, `acked_by`),
+    /// read in one pass over the records, since every record the current
+    /// root writes asks it (`way_out_fits`).
+    pub(crate) fn holders(&self, state: &State) -> BTreeSet<KeyHash> {
+        let live = Self::live_admins(state);
+        if live.is_empty() {
+            return BTreeSet::new();
+        }
+        let counts = |e: &&Entry| !e.held && state.counting.contains(&e.record.id());
+        // settleable: admitted, never with an admin key, signed nothing
+        // that counts.
+        let mut admitted: BTreeMap<KeyHash, bool> = BTreeMap::new();
+        let mut signed: BTreeSet<KeyHash> = BTreeSet::new();
+        // acked_by: the lowest seq of signer's counting grant of a, and
+        // the highest seq of signer that a's counting records saw.
+        let mut granted: BTreeMap<(KeyHash, KeyHash), u64> = BTreeMap::new();
+        let mut saw: BTreeMap<(KeyHash, KeyHash), u64> = BTreeMap::new();
+        for e in self.records.values().filter(|e| e.role != Role::Recovery) {
+            let b = e.record.body();
+            if let Kind::Device(d) = &b.kind {
+                let with_admin = d.admin.is_some();
+                for k in core::iter::once(d.key.hash()).chain(d.admin.as_ref().map(Key::hash)) {
+                    let w = admitted.entry(k).or_insert(false);
+                    *w |= with_admin;
                 }
-                let st = t.state();
-                if t.take_back(&st, root, &a, time_ms).is_err() {
-                    return false;
+            }
+            let counting = state.counting.contains(&e.record.id());
+            if counting {
+                signed.insert(b.signer);
+            }
+            if !counting || e.held {
+                continue;
+            }
+            if let Kind::Device(d) = &b.kind
+                && let Some(a) = d.admin.as_ref().map(Key::hash)
+            {
+                let g = granted.entry((b.signer, a)).or_insert(b.seq);
+                *g = (*g).min(b.seq);
+            }
+            if live.contains(&b.signer) {
+                for x in seen_of(&b.kind) {
+                    let m = saw.entry((b.signer, x.key)).or_insert(x.seq);
+                    *m = (*m).max(x.seq);
                 }
             }
         }
-        checkpoint(&mut t)
+        let settleable = |k: &KeyHash| admitted.get(k) == Some(&false) && !signed.contains(k);
+        let waiting: Vec<(KeyHash, u64)> = self
+            .records
+            .values()
+            .filter(|e| e.role != Role::Recovery)
+            .filter(counts)
+            .filter(|e| matches!(&e.record.body().kind, Kind::Revoke(rm) if rm.keys.iter().all(settleable)))
+            .map(|e| (e.record.body().signer, e.record.body().seq))
+            .collect();
+        let acked = |a: &KeyHash, signer: &KeyHash, seq: u64| {
+            let above = granted.get(&(*signer, *a)).is_some_and(|named| seq < *named);
+            (above && state.roots.contains(signer)) || saw.get(&(*a, *signer)).is_some_and(|m| *m >= seq)
+        };
+        live.into_iter().filter(|a| waiting.iter().any(|(s, q)| s != a && !acked(a, s, *q))).collect()
+    }
+
+    /// Whether the root's room still holds the person's way out after its
+    /// record (state and self are the set after it): a take-back of every
+    /// admin key that holds removals back and the checkpoint that then
+    /// settles them, on top of what the room holds now. Each take-back is
+    /// counted at its widest body (`MAX_SEQ`, a prev) with its envelope;
+    /// the checkpoint at the size the writer would sign now, with room for
+    /// one more head and kept ID per take-back, twice in place of the
+    /// root's checkpoints held now: each take-back writes one first
+    /// (`admins_going`), and a checkpoint's own head, the record before
+    /// it, stays as its anchor, so two may be held at once; one older
+    /// sits under the newest's head and goes. Computed from the state,
+    /// not tried on a copy; the tests check it against the writers.
+    /// `cp` gives the units of the checkpoint the root would write now
+    /// (`checkpoint_units`), read only when a key holds removals back.
+    fn way_out_fits(&self, state: &State, h: KeyHash, time_ms: u64, cp: &mut dyn FnMut() -> Option<u64>) -> bool {
+        let holders = self.holders(state);
+        let Some(ceiling) = self.ceiling(&h) else { return false };
+        // The root's checkpoints held now give way: of those the way
+        // writes, at most two are held at once (a checkpoint and the one
+        // right before it, its anchor; older ones sit under its head).
+        let held_cps: u64 = self
+            .records
+            .values()
+            .filter(|e| e.record.body().signer == h && matches!(e.record.body().kind, Kind::Checkpoint { .. }))
+            .map(|e| eval::item(&e.record, Role::Root).units)
+            .sum();
+        let mut need = self.units.get(&h).copied().unwrap_or(0).saturating_sub(held_cps);
+        for a in &holders {
+            let Some(kind) = self.take_back_kind(state, a) else { continue };
+            let widest = Body {
+                group: self.group,
+                signer: h,
+                seq: super::MAX_SEQ,
+                prev: Some(RecordId([0; 32])),
+                time_ms,
+                kind,
+                held: false,
+            };
+            need = need.saturating_add(keep::units(widest.encode().len().saturating_add(super::ENVELOPE_ALLOWANCE)));
+        }
+        if !holders.is_empty() {
+            let Some(cp) = cp() else { return false };
+            let one = cp.saturating_add(keep::units(WAY_OUT_HEAD.saturating_mul(holders.len())));
+            need = need.saturating_add(one.saturating_mul(2));
+        } else {
+            need = need.saturating_add(held_cps);
+        }
+        need <= ceiling
     }
 
     fn write_one(
@@ -3653,15 +3734,38 @@ impl RecordSet {
         // frees removals its admins hold back (`take_back`).
         let takes_back = matches!(&r.body().kind, Kind::Device(d)
             if d.admin.is_none() && state.device_by_key(&d.key.hash()).is_some_and(|x| x.admin.is_some()));
+        // The size of the checkpoint the root would write after the
+        // record, read once for the floor and the way out.
+        let mut cp_cache: Option<Option<u64>> = None;
+        let mut cp_after = || *cp_cache.get_or_insert_with(|| trial.checkpoint_units(&after, h, time_ms));
         if state.roots.last() == Some(&h) && !eval::item(&r, Role::Root).early && !takes_back {
             let used = trial.units.get(&h).copied().unwrap_or(0);
-            let fits = trial
-                .checkpoint_units(&after, h, time_ms)
-                .is_some_and(|cp| used.saturating_add(cp).saturating_add(root_floor_margin()) <= ceiling);
+            let fits =
+                cp_after().is_some_and(|cp| used.saturating_add(cp).saturating_add(root_floor_margin()) <= ceiling);
             if !fits {
                 return Err(Error::msg(
                     "the root's records would leave no room for its next checkpoint: write a checkpoint first",
                 ));
+            }
+        }
+        // The person's way out of a full room: after a record of the
+        // current root, other than a part of that way (a take-back, or a
+        // removal of only admin keys that hold removals back or their
+        // devices), the root can still take back every such key and write
+        // the checkpoint that settles (`way_out_fits`).
+        if state.roots.last() == Some(&h) && !takes_back {
+            let part_of_way = match &r.body().kind {
+                Kind::Revoke(rm) => {
+                    let holders = self.holders(state);
+                    rm.keys.iter().all(|k| {
+                        holders.contains(k)
+                            || state.device_by_key(k).and_then(|d| d.admin).is_some_and(|a| holders.contains(&a))
+                    })
+                }
+                _ => false,
+            };
+            if !part_of_way && !trial.way_out_fits(&after, h, time_ms, &mut cp_after) {
+                return Err(Error::msg(TAKE_BACK_FIRST));
             }
         }
         // An admission never puts out a device that counted (the cap takes
