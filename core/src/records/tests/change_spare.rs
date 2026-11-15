@@ -209,3 +209,61 @@ fn a_newer_ack_without_a_spare_withdraws_it() {
     let d = reissue_of(&w, &k("phone a"));
     assert!(d.admin.is_none() && d.powers == 0);
 }
+
+/// A frozen admin keeps its spare: the change names the spare with the
+/// powers it had and carries the freeze on the device, so nothing the
+/// spare signs acts until the new root thaws the device.
+#[test]
+fn a_frozen_admin_keeps_its_spare_and_stays_frozen() {
+    let mut g = group();
+    ack_with_spare(&mut g, &k("admin a"), &k("spare a"));
+    g.root_rec(Kind::Freeze(removal(&[k("admin a").hash], g.seen())));
+    let set = set_with(&g.root.key, &g.recs, &g.lists);
+    let st = set.state();
+    assert!(st.device_by_key(&k("phone a").hash).is_some_and(|d| d.frozen));
+    assert_eq!(set.spare_of(&st, &k("admin a").hash), Some(k("spare a").key.clone()));
+    // The query before the change says both: the rights stay on the spare,
+    // and the device stays frozen.
+    let line = set.change_preview(&st, &[]).into_iter().find(|x| x.device == k("phone a").key.device_id()).unwrap();
+    assert_eq!((line.outcome, line.frozen), (Outcome::AdminKeptWithSpare, true));
+    let w = write(&mut g, &k("n1"), &k("p1"), &[]);
+    let d = reissue_of(&w, &k("phone a"));
+    assert_eq!((d.admin, d.powers), (Some(k("spare a").key.clone()), POWERS));
+    let freeze = w
+        .first
+        .iter()
+        .find(|r| matches!(&r.body().kind, Kind::Freeze(rm) if rm.keys == vec![k("phone a").hash]))
+        .expect("the freeze is carried")
+        .id();
+    let s = g.state();
+    assert!(s.device_by_key(&k("phone a").hash).is_some_and(|d| d.frozen));
+    assert!(!s.may_command(&k("spare a").hash), "frozen: the spare acts only after the thaw");
+    let seen = g.seen();
+    g.rec(&k("n1"), Kind::Thaw { ids: vec![freeze], seen });
+    let s = g.state();
+    assert!(s.device_by_key(&k("phone a").hash).is_some_and(|d| !d.frozen));
+    assert!(s.may_command(&k("spare a").hash));
+}
+
+/// The same with the freeze on the device's member key, by the root and by
+/// another admin.
+#[test]
+fn a_frozen_admins_device_keeps_its_spare_however_frozen() {
+    for by_admin in [false, true] {
+        let mut g = group();
+        g.admin(&k("phone b"), &k("admin b"), POWER_FREEZE);
+        ack_with_spare(&mut g, &k("admin a"), &k("spare a"));
+        if by_admin {
+            let seen = g.seen();
+            g.rec(&k("admin b"), Kind::Freeze(removal(&[k("admin a").hash], seen)));
+        } else {
+            g.root_rec(Kind::Freeze(removal(&[k("phone a").hash], g.seen())));
+        }
+        let set = set_with(&g.root.key, &g.recs, &g.lists);
+        let st = set.state();
+        assert!(st.device_by_key(&k("phone a").hash).is_some_and(|d| d.frozen), "by admin {by_admin}");
+        assert_eq!(set.spare_of(&st, &k("admin a").hash), Some(k("spare a").key.clone()), "by admin {by_admin}");
+        let w = write(&mut g, &k("n1"), &k("p1"), &[]);
+        assert_eq!(reissue_of(&w, &k("phone a")).admin, Some(k("spare a").key.clone()), "by admin {by_admin}");
+    }
+}

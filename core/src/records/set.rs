@@ -413,7 +413,9 @@ pub enum Outcome {
     AdminKeptWithSpare,
     /// An admin that loses its rights: its device stays as a plain one.
     AdminRightsLost,
-    /// Frozen: re-issued with the new root's freeze, thawed only by it.
+    /// A frozen device that is no admin: re-issued with the new root's
+    /// freeze, thawed only by it. A frozen admin's line says what happens
+    /// to its rights, with `frozen` set.
     Frozen,
 }
 
@@ -422,6 +424,9 @@ pub enum Outcome {
 pub struct Preview {
     pub device: DeviceId,
     pub outcome: Outcome,
+    /// Re-issued with the new root's freeze: it acts only once the new
+    /// root thaws it (an admin's spare too).
+    pub frozen: bool,
 }
 
 /// What a change of root writes (rule 33): the recovery record, its list,
@@ -2764,16 +2769,17 @@ impl RecordSet {
             .map(|d| {
                 let outcome = if self.change_leaves_out(state, d, leave_out) {
                     Outcome::Out
-                } else if d.frozen {
-                    Outcome::Frozen
                 } else if d.admin.is_some_and(|a| self.spare_of(state, &a).is_some()) {
                     Outcome::AdminKeptWithSpare
                 } else if d.admin.is_some() {
                     Outcome::AdminRightsLost
+                } else if d.frozen {
+                    Outcome::Frozen
                 } else {
                     Outcome::Stays
                 };
-                Preview { device: d.id, outcome }
+                let frozen = outcome != Outcome::Out && d.frozen;
+                Preview { device: d.id, outcome, frozen }
             })
             .collect()
     }
