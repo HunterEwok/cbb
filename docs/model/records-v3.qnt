@@ -2546,8 +2546,12 @@ module records_v3 {
     UNKNOWN_HEADS and keysOfMember(m) != Set() and raw.recs.length() > 0 and {
       val h = raw.recs[raw.recs.length() - 1]
       val listed = recsOf(h.keep.filter(i => db.keys().contains(i)), db)
+      // (LAST_ROOT_ONLY, mi2 Sr.13015: the list's admissions no longer count after a change;
+      // only the new root's re-issues name a member, so a device the person unticked is left out.)
+      val reissued = db.keys().filter(i => db.get(i).signer == h.target and db.get(i).targetRec == h.id).map(i => db.get(i))
       val named = keysOfMember(m).exists(x => onList(pathCutsOf(raw.recs)._1, x)
-        or (admissionsOf(listed, x) != Set() and not(listed.exists(r => r.kind == "revoke" and tgt(r).contains(x)))))
+        or (not(LAST_ROOT_ONLY) and admissionsOf(listed, x) != Set() and not(listed.exists(r => r.kind == "revoke" and tgt(r).contains(x))))
+        or (LAST_ROOT_ONLY and admissionsOf(reissued, x) != Set()))
       // Once it applied every head, its own state decides (a new root's record may admit it).
       val ownCounts = raw.recs.length() == applied and keysOfMember(m).exists(x =>
         onList(v.path, x) or v.admins.keys().contains(x) or v.devices.contains(x))
@@ -2584,11 +2588,19 @@ module records_v3 {
     val order = range(1, nextId).select(i => fetchable(m).contains(i))
     finish(order.foldl(st.get(m), (s, i) => insertInto(s, db.get(i), db)), db)
   }))
-  // A member whose fetches would all leave it as it is.
-  def syncedProto(m: str): bool = fetchable(m).forall(i => {
-    val s2 = insertInto(st.get(m), db.get(i), db)
-    s2.recs == st.get(m).recs and s2.chain == st.get(m).chain and s2.wait == st.get(m).wait
-  })
+  // A member whose fetches would all leave it as it is: each alone, and all of them in one
+  // round (mi2 Lr.13016: a new root's first records are each refused alone, NA unknown, yet
+  // the round that takes them all applies the change).
+  def syncedProto(m: str): bool = and {
+    fetchable(m).forall(i => {
+      val s2 = insertInto(st.get(m), db.get(i), db)
+      s2.recs == st.get(m).recs and s2.chain == st.get(m).chain and s2.wait == st.get(m).wait
+    }),
+    {
+      val s2 = finish(range(1, nextId).select(i => fetchable(m).contains(i)).foldl(st.get(m), (s, i) => insertInto(s, db.get(i), db)), db)._1
+      s2.recs == st.get(m).recs and s2.chain == st.get(m).chain and s2.wait == st.get(m).wait
+    },
+  }
 
   action guided = any {
     step, signChange, signChange, signChange, signNewRoot, signNewRoot, signNewRoot, signCopies, signCheckpoint,
@@ -6481,7 +6493,8 @@ module records_v3 {
   // when its counting checkpoint and what it names fill its room: C's removal counts on members
   // whose checkpoint is not yet whole, and leaves when it is (the core: NoRoom). It did not
   // remove, and removedStayOut excuses it (overfilled).
-  run overfilledRemovalTest = init
+  // (At ROOTC 6 only: in a wider root room the removal fits.)
+  run overfilledRemovalTest = if (ROOTC != 6) init else init
       .then(offerEveryone(nextId - 1))
       .then(sign(ROOT, "checkpoint", "", "", 0, false, false, 2))
       .then(sign(ROOT, "revoke", PHONE, "", 0, false, false, 1))
@@ -6502,6 +6515,71 @@ module records_v3 {
       .then(sign(PHONE, "thaw", "", "", 11, false, false, 1))
       .then(syncRound)
       .expect(removedStayOut and not(st.get("c").recs.contains(8)) and gone.get("c").contains(COMPUTER))
+
+  // (LAST_ROOT_ONLY, mi2 Sr.13015.) The person unticks dC at the change to NK: member c is left
+  // out (no re-issue names it), so it may stay on NA's path though it holds NK's head.
+  run lUntickLeftOutTest = if (not(onL)) init else init
+      .then(ackS(PHONE))
+      .then(signChainGL(RECOVERY, "recover", "NA", chainState(st.get("k"), db).ids.length() + 1, "honest", Set(), Set()))
+      .then(ackS(PHONE))
+      .then(signCheckpointKeep("NA", Set(1, 10, 5, 6, 9, 99), WATCH, 2))
+      .then(syncRound)
+      .then(compactAt("r"))
+      .then(syncRound)
+      .then(signFull("NA", "checkpoint", "", "", 0, false, false, 2, false, Set(7)))
+      .then(syncRound)
+      .then(sign("NA", "device", "dA", "", 0, false, false, 1))
+      .then(sign("NA", "copies", "", "", 0, false, false, 2))
+      .then(welcomeFrom("r"))
+      .then(restart("r"))
+      .then(signFull(ROOT, "revoke", MINTED, "phone", 0, false, true, 1, true, Set()))
+      .then(offerEveryone(9))
+      .then(sign("NA", "checkpoint", "", "", 0, false, false, 2))
+      .then(offerEveryone(nextId - 1))
+      .then(sign("NA", "copies", "", "", 0, false, false, 2))
+      .then(restart("c"))
+      .then(compactAt("c"))
+      .then(signCheckpointKeep("NA", Set(10, 11, 12, 13, 15, 2, 3, 4, 7, 9, 99), COMPUTER, 1))
+      .then(offerEveryone(nextId - 1))
+      .then(syncRound)
+      .then(signChainGL(RECOVERY, "recover", "NK", chainState(st.get("k"), db).ids.length() + 1, "honest", Set(), Set("dC")))
+      .then(giveOnly("a", 19))
+      .then(sign("NK", "copies", "", "", 0, false, false, 2))
+      .then(signCheckpointKeep("NK", Set(1, 12, 16, 17, 19, 2, 21, 23, 3, 5, 6, 8), PHONE, 2))
+      .then(sign("NA", "copies", "", "", 0, false, false, 1))
+      .then(restart("c"))
+      .then(welcomeFrom("c"))
+      .then(giveOnly("k", 25))
+      .then(signChain(RECOVERY, "recover", "NA", 3, "none"))
+      .then(signFull("NK", "checkpoint", "", "", 0, false, false, 2, false, Set(20)))
+      .then(welcomeFrom("a"))
+      .then(sign("NK", "checkpoint", "", "", 0, false, false, 2))
+      .then(compactAt("m"))
+      .then(syncRound)
+      .expect(noLiveOldRoot and leftOut("c"))
+
+  // (LAST_ROOT_ONLY, mi2 Lr.13016.) After a second change, a member that holds the new head but
+  // not the new root's first records takes them all in one round; each alone is refused (the
+  // new root is not yet known), which is no reason to call it synced.
+  run lSecondChangeRoundTest = if (not(onL)) init else init
+      .then(signDeviant(PHONE, "device", DEVICE, 2))
+      .then(sign(WATCH, "copies", "", "", 0, false, false, 2))
+      .then(signChainGL(RECOVERY, "recover", "NK", chainState(st.get("k"), db).ids.length() + 1, "honest", Set(), Set(DEVICE)))
+      .then(restart("m"))
+      .then(sign("NK", "checkpoint", "", "", 0, false, false, 2))
+      .then(sign(ROOT, "revoke", DEVICE, "", 0, false, false, 1))
+      .then(syncRound)
+      .then(sign("NK", "copies", "", "", 0, false, false, 2))
+      .then(signChainGL(RECOVERY, "recover", "NA", chainState(st.get("k"), db).ids.length() + 1, "honest", Set(), Set()))
+      .then(giveOnly("c", 16))
+      .then(offerEveryone(nextId - 1))
+      .then(offerEveryone(nextId - 1))
+      .then(compactAt("c"))
+      .then(restart("k"))
+      .then(signCheckpointKeep(ROOT, Set(10, 11, 12, 13, 15, 16, 17, 3, 8, 9, 99), "", 2))
+      .then(signDeviant(ROOT, "copies", "", 1))
+      .then(offerEveryone(14))
+      .expect(decidedInv and not(syncedProto("a")))
 
   run lReissueCountedTest = if (not(onL)) init else init
       .then(signFull(ROOT, "revoke", MINTED, "phone", 0, false, true, 1, true, Set()))
