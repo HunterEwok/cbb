@@ -476,6 +476,14 @@ fn a_freeze_by_an_admin_without_remove_admins_is_not_made_permanent() {
         !a_back,
         "the root's writer took A's key back for good, a second after B (which may not remove admins) froze it"
     );
+    // The app tells the person instead: A is frozen and holds the removal back.
+    let held = set.frozen_holding(&st);
+    assert_eq!(held.len(), 1, "{held:?}");
+    assert_eq!((held[0].key, held[0].device, held[0].removals), (a.hash, pa.key.device_id(), 1));
+    assert!(held[0].root_units > 0, "the removal is the root's own");
+    let waits = set.removals_waiting(&st);
+    assert_eq!(waits.len(), 1);
+    assert!(waits[0].waits_for.contains(&a.hash));
 }
 
 /// An admin's removal of another admin's key, when the removal's own

@@ -150,6 +150,21 @@ pub struct AckOwed {
     pub days_left: u64,
 }
 
+/// A frozen admin key that holds removals back
+/// (`RecordSet::frozen_holding`). A frozen key cannot acknowledge, and the
+/// writer takes nobody back for a freeze: the app asks the person to thaw
+/// the key (it then acknowledges) or take it back (`take_back`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct FrozenHolding {
+    pub key: KeyHash,
+    /// The frozen device that holds it.
+    pub device: DeviceId,
+    /// The removals it has not acknowledged (`unacknowledged`).
+    pub removals: usize,
+    /// The current root's units among them (`unacknowledged_units`).
+    pub root_units: u64,
+}
+
 impl RecordSet {
     /// The fixed cap of the room key's records go to.
     fn cap_of(&self, key: &KeyHash) -> Option<u64> {
@@ -350,5 +365,34 @@ impl RecordSet {
         let since = self.last_ack(state, own).map(|(_, t)| t).or_else(|| self.named_at(state, own))?;
         let days_left = super::ADMIN_SILENCE_MS.saturating_sub(now_ms.saturating_sub(since)).div_ceil(DAY_MS);
         Some(AckOwed { key: *own, removals, days_left })
+    }
+
+    /// The frozen admin keys that hold at least one removal back, the
+    /// most removals first. Nothing takes them back by itself while their
+    /// devices keep talking to the root; the person thaws or takes back.
+    pub fn frozen_holding(&self, state: &State) -> Vec<FrozenHolding> {
+        let frozen = Self::frozen_admins(state);
+        if frozen.is_empty() {
+            return Vec::new();
+        }
+        let held = self.unacknowledged(state);
+        let units = self.unacknowledged_units(state);
+        let mut out: Vec<FrozenHolding> = state
+            .devices
+            .iter()
+            .filter(|d| d.frozen)
+            .filter_map(|d| {
+                let key = d.admin?;
+                let removals = held.get(&key).copied().unwrap_or(0);
+                (removals > 0).then(|| FrozenHolding {
+                    key,
+                    device: d.id,
+                    removals,
+                    root_units: units.get(&key).copied().unwrap_or(0),
+                })
+            })
+            .collect();
+        out.sort_by_key(|f| (core::cmp::Reverse(f.removals), f.key));
+        out
     }
 }

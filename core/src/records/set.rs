@@ -16,7 +16,8 @@ use crate::identity::ExternalKey;
 
 mod notice;
 pub use notice::{
-    AckOwed, AdminSilent, ChangeArriving, Offer, RemovalWarning, Room, RootRoomWaiting, TurnedAway, WaitingRemoval,
+    AckOwed, AdminSilent, ChangeArriving, FrozenHolding, Offer, RemovalWarning, Room, RootRoomWaiting, TurnedAway,
+    WaitingRemoval,
 };
 
 /// The rooms judged over what a set holds (`RecordSet::judge`).
