@@ -6782,6 +6782,20 @@ module records_v3 {
       .then(sign(ROOT, "revoke", WATCH, "", 0, false, false, 1))
       .expect(db.get(nextId - 1).seen.keys().contains(PHONE) and lineOf(db.get(nextId - 1).seen, PHONE).length() == 1)
 
+  // FINAL_CORE (2). The root pair to any peer not removed: after the change to NA the outside
+  // device m is counted by nobody (no re-issue names it) yet removed by nobody; NA forks with
+  // two records at one seq, and a, which holds both, hands m the pair with the heads; m takes
+  // it and halts. (Without FINAL_CORE m is handed the heads alone and stays live.)
+  run fcPairTest = if (not(onL and FINAL_CORE and UNKNOWN_HEADS)) init else init
+      .then(signChainGL(RECOVERY, "recover", "NA", 1, "honest", Set(), Set()))
+      .then(syncRound).then(syncRound)
+      .expect(not(counts("a", "m")) and not(views.get("a").revoked.contains(MDEV)))
+      .then(sign("NA", "copies", "", "", 0, false, false, 2))
+      .then(signFull("NA", "copies", "", "", 0, false, true, 2, true, Set()))
+      .expect(pairFor("a", "m").size() == 2)
+      .then(syncRound)
+      .expect(views.get("m").stop and pairFor("a", "m").forall(i => heldBy(st.get("m")).contains(i)))
+
   run lReissueCountedTest = if (not(onL)) init else init
       .then(signFull(ROOT, "revoke", MINTED, "phone", 0, false, true, 1, true, Set()))
       .then(sign(ROOT, "revoke", PHONE, "nocp", 0, false, false, 1))
