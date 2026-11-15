@@ -298,26 +298,22 @@ impl RecordSet {
         out
     }
 
-    /// The counting removals that wait for acknowledgements, with the live
-    /// admin keys each waits for, in the order of the set.
+    /// The counting removals that wait for acknowledgements (only those a
+    /// checkpoint could let go, `waiting`), with the live admin keys each
+    /// waits for, in the order of the set.
     pub fn removals_waiting(&self, state: &State) -> Vec<WaitingRemoval> {
         let admins = Self::live_admins(state);
-        self.records
-            .values()
-            .filter(|e| !e.held && state.counting.contains(&e.record.id()))
-            .filter_map(|e| {
-                let b = e.record.body();
+        self.waiting(state)
+            .into_iter()
+            .filter_map(|r| {
+                let b = r.body();
                 let Kind::Revoke(rm) = &b.kind else { return None };
                 let waits_for: Vec<KeyHash> = admins
                     .iter()
                     .filter(|a| **a != b.signer && !self.acked_by(state, a, &b.signer, b.seq))
                     .copied()
                     .collect();
-                (!waits_for.is_empty()).then(|| WaitingRemoval {
-                    removal: e.record.id(),
-                    keys: rm.keys.clone(),
-                    waits_for,
-                })
+                (!waits_for.is_empty()).then(|| WaitingRemoval { removal: r.id(), keys: rm.keys.clone(), waits_for })
             })
             .collect()
     }

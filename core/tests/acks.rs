@@ -424,3 +424,56 @@ fn the_notices_tell_what_waits_for_whom() {
     assert!(set.root_room_waiting(&st, 0).is_none());
     assert_eq!(set.in_dependency_order().len(), before.len() + 1, "the notices changed nothing");
 }
+
+/// A freeze is undone by a thaw; taking a key back is for good. Admin B
+/// may freeze admin A but may not remove admins. While A is frozen, the
+/// root removes a plain device; the writer's automatic take-back must not
+/// turn B's reversible freeze into A's permanent loss of its key.
+#[test]
+fn a_freeze_by_an_admin_without_remove_admins_is_not_made_permanent() {
+    use cbb_core::records::body::{POWER_ADMIT, POWER_FREEZE, POWER_MANAGE, POWER_REMOVE, Removal};
+    let root = k("root");
+    let (pa, a, pb, b) = (k("phone a"), k("admin a"), k("phone b"), k("admin b"));
+    let recovery = cbb_core::records::Recovery {
+        k1: k("recovery").key,
+        k2: cbb_core::records::pq::PqKey::from_seeds(&[0x31; 16], &[0x32; 16], &[0x33; 16]).key(),
+    };
+    let mut set = RecordSet::new(root.key.clone(), recovery);
+    let mut t = 1000u64;
+    let computer_admin = |p: &K, a: &K| {
+        let mut d = Device::new(p.key.clone(), "laptop", ROLE_MEMBER);
+        d.rights = RIGHT_READ | RIGHT_SEND;
+        d.admin = Some(a.key.clone());
+        d.powers = POWER_ADMIT | POWER_MANAGE | POWER_REMOVE | POWER_FREEZE;
+        Kind::device(d)
+    };
+    for kind in [
+        Kind::Copies { incoming_ms: MIN_INCOMING_MS, seen: vec![] },
+        computer_admin(&pa, &a),
+        computer_admin(&pb, &b),
+        device(&k("victim"), "victim", None),
+    ] {
+        t += 1000;
+        let st = set.state();
+        set.write_record(&st, &root, kind, t).unwrap();
+    }
+    let mut chain = Chain { heads: BTreeMap::new() };
+    t += 1000;
+    let freeze = chain.sign(&set, &b, Kind::Freeze(Removal { keys: vec![a.hash], seen: Vec::new() }), t);
+    set.insert(freeze).unwrap();
+    let st = set.state();
+    assert!(st.devices.iter().any(|d| d.admin == Some(a.hash) && d.frozen), "B froze A");
+    t += 1000;
+    for r in set.write_removal(&st, &root, &[k("victim").hash], t).unwrap() {
+        let _ = set.insert(r);
+    }
+    t += 1000;
+    let heard: BTreeMap<KeyHash, u64> = [(a.hash, t), (b.hash, t)].into();
+    let st = set.state();
+    let back = set.take_back_lagging(&st, &root, &heard, t).unwrap();
+    let a_back = back.iter().any(|(_, r)| matches!(&r.body().kind, Kind::Device(d) if d.key.hash() == pa.hash));
+    assert!(
+        !a_back,
+        "the root's writer took A's key back for good, a second after B (which may not remove admins) froze it"
+    );
+}
