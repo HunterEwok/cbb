@@ -2837,10 +2837,10 @@ impl RecordSet {
         Self::live_admins(state).iter().filter(|a| *a != signer).all(|a| self.acked_by(state, a, signer, seq))
     }
 
-    /// The counting removals each live admin key has not acknowledged,
-    /// by key: what waits for it in the rooms. Read-only, for the app
-    /// (which admin keys hold removals back, and how many).
-    pub fn unacknowledged(&self, state: &State) -> BTreeMap<KeyHash, usize> {
+    /// `unacknowledged` read through `waiting` and `acked_by`, one removal
+    /// and one key at a time: the tests check the one pass against it.
+    #[cfg(test)]
+    pub(crate) fn unacknowledged_by_parts(&self, state: &State) -> BTreeMap<KeyHash, usize> {
         let removals = self.waiting(state);
         Self::live_admins(state)
             .into_iter()
@@ -3404,13 +3404,19 @@ impl RecordSet {
     /// ordinary record of one unit (and its ID in the checkpoint, which may
     /// take one unit more) would reach its floor (`root_floor_margin` below
     /// its ceiling), where the writer takes only its removals, freezes and
-    /// resolves. True too when no checkpoint of it would fit.
+    /// resolves; or would pass the reserve that keeps the person's way out
+    /// (`way_out_fits`). True too when no checkpoint of it would fit.
     pub fn checkpoint_due(&self, state: &State, time_ms: u64) -> bool {
         let Some(h) = state.roots.last().copied() else { return false };
         let Some(ceiling) = self.ceiling(&h) else { return false };
         let used = self.units.get(&h).copied().unwrap_or(0);
-        self.checkpoint_units(state, h, time_ms)
-            .is_none_or(|cp| used.saturating_add(cp).saturating_add(root_floor_margin()).saturating_add(2) > ceiling)
+        let cp = self.checkpoint_units(state, h, time_ms);
+        let floor =
+            cp.is_none_or(|cp| used.saturating_add(cp).saturating_add(root_floor_margin()).saturating_add(2) > ceiling);
+        // Or the way out's reserve would refuse that record
+        // (`way_out_fits`): a checkpoint then frees what the admins have
+        // acknowledged, and the app shows whom to take back.
+        floor || self.way_out_need(state, h, time_ms, &mut || cp).is_none_or(|need| need.saturating_add(2) > ceiling)
     }
 
     /// The admin keys a record of kind by the current root makes no
@@ -3597,14 +3603,21 @@ impl RecordSet {
     }
 
     /// The live admin keys that hold a removal back: each has a counting
-    /// removal it has not acknowledged. The same keys as `unacknowledged`
-    /// names with a count above zero (`waiting`, `settleable`, `acked_by`),
-    /// read in one pass over the records, since every record the current
-    /// root writes asks it (`way_out_fits`).
+    /// removal it has not acknowledged (`unacknowledged`).
     pub(crate) fn holders(&self, state: &State) -> BTreeSet<KeyHash> {
+        self.unacknowledged(state).into_iter().filter(|(_, n)| *n > 0).map(|(a, _)| a).collect()
+    }
+
+    /// The counting removals each live admin key has not acknowledged,
+    /// by key: what waits for it in the rooms. Read-only, for the app
+    /// (which admin keys hold removals back, and how many), and asked by
+    /// every record the current root writes (`way_out_fits`). Read in one
+    /// pass over the records: what `waiting`, `settleable` and `acked_by`
+    /// read one by one (`unacknowledged_by_parts`, in tests, is that).
+    pub fn unacknowledged(&self, state: &State) -> BTreeMap<KeyHash, usize> {
         let live = Self::live_admins(state);
         if live.is_empty() {
-            return BTreeSet::new();
+            return BTreeMap::new();
         }
         let counts = |e: &&Entry| !e.held && state.counting.contains(&e.record.id());
         // settleable: admitted, never with an admin key, signed nothing
@@ -3657,7 +3670,14 @@ impl RecordSet {
             let above = granted.get(&(*signer, *a)).is_some_and(|named| seq < *named);
             (above && state.roots.contains(signer)) || saw.get(&(*a, *signer)).is_some_and(|m| *m >= seq)
         };
-        live.into_iter().filter(|a| waiting.iter().any(|(s, q)| s != a && !acked(a, s, *q))).collect()
+        let out: BTreeMap<KeyHash, usize> = live
+            .into_iter()
+            .map(|a| (a, waiting.iter().filter(|(s, q)| *s != a && !acked(&a, s, *q)).count()))
+            .collect();
+        // Every test of the core checks the one pass against the parts.
+        #[cfg(test)]
+        assert_eq!(out, self.unacknowledged_by_parts(state), "unacknowledged: the one pass and the parts differ");
+        out
     }
 
     /// Whether the root's room still holds the person's way out after its
@@ -3675,8 +3695,21 @@ impl RecordSet {
     /// `cp` gives the units of the checkpoint the root would write now
     /// (`checkpoint_units`), read only when a key holds removals back.
     fn way_out_fits(&self, state: &State, h: KeyHash, time_ms: u64, cp: &mut dyn FnMut() -> Option<u64>) -> bool {
-        let holders = self.holders(state);
         let Some(ceiling) = self.ceiling(&h) else { return false };
+        self.way_out_need(state, h, time_ms, cp).is_some_and(|need| need <= ceiling)
+    }
+
+    /// The units `way_out_fits` asks of the root's room: what it holds,
+    /// the take-backs and the two checkpoints. None when no checkpoint
+    /// could be written.
+    fn way_out_need(
+        &self,
+        state: &State,
+        h: KeyHash,
+        time_ms: u64,
+        cp: &mut dyn FnMut() -> Option<u64>,
+    ) -> Option<u64> {
+        let holders = self.holders(state);
         // The root's checkpoints held now give way: of those the way
         // writes, at most two are held at once (a checkpoint and the one
         // right before it, its anchor; older ones sit under its head).
@@ -3701,13 +3734,12 @@ impl RecordSet {
             need = need.saturating_add(keep::units(widest.encode().len().saturating_add(super::ENVELOPE_ALLOWANCE)));
         }
         if !holders.is_empty() {
-            let Some(cp) = cp() else { return false };
-            let one = cp.saturating_add(keep::units(WAY_OUT_HEAD.saturating_mul(holders.len())));
+            let one = cp()?.saturating_add(keep::units(WAY_OUT_HEAD.saturating_mul(holders.len())));
             need = need.saturating_add(one.saturating_mul(2));
         } else {
             need = need.saturating_add(held_cps);
         }
-        need <= ceiling
+        Some(need)
     }
 
     fn write_one(

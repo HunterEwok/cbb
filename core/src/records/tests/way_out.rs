@@ -28,9 +28,11 @@ impl Writer {
 
     fn keep_new(&mut self) {
         let st = self.set.state();
-        let slow: alloc::collections::BTreeSet<KeyHash> =
-            self.set.unacknowledged(&st).into_iter().filter(|(_, n)| *n > 0).map(|(a, _)| a).collect();
-        assert_eq!(self.set.holders(&st), slow, "holders() names the keys unacknowledged() counts");
+        assert_eq!(
+            self.set.unacknowledged(&st),
+            self.set.unacknowledged_by_parts(&st),
+            "the one pass counts what the parts count"
+        );
         let have: alloc::collections::BTreeSet<RecordId> = self.made.iter().map(Record::id).collect();
         for r in self.set.in_dependency_order() {
             if !have.contains(&r.id()) {

@@ -2097,7 +2097,9 @@ keeps a way out: after the record the root's room still holds a take-back of eve
 holds removals back, each at its widest, and twice the checkpoint the root would write then, with
 a head and a kept ID more per take-back (each take-back writes its checkpoint first, and a
 checkpoint keeps the record before it, perhaps the last checkpoint, as its anchor), in place of the
-root's checkpoints it holds. The writer reads this from the state, without trying it. A record that
+root's checkpoints it holds. Twice, since a checkpoint written right after another keeps that one
+as its anchor (its own head is the record before it), so two of the root's checkpoints can be held
+at once. The writer reads this from the state, without trying it, and `checkpoint_due` says so too. A record that
 would close that way is refused ("take back the admin keys that hold removals back first"), except
 a take-back and a removal of only such keys or their devices, which are that way; the app names
 those keys, and the take-backs and the silence free the room. Of the root's own

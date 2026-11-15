@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 use cbb_core::identity::ExternalKey;
 use cbb_core::records::body::{Device, Head, MIN_INCOMING_MS, RIGHT_READ, RIGHT_SEND, ROLE_MEMBER, ROLE_PHONE, Seen};
 use cbb_core::records::key::group_id;
+use cbb_core::records::set::TAKE_BACK_FIRST;
 use cbb_core::records::{Body, Key, KeyHash, Kind, Record, RecordId, RecordSet};
 use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner as _;
@@ -892,7 +893,7 @@ fn fill_to_the_floor(set: &mut RecordSet, root: &K, t: &mut u64, admins: bool) -
         *t += 1000;
         if let Err(e) = set.write_record(&st, root, Kind::device(d), *t) {
             let e = format!("{e:?}");
-            assert!(e.contains("no room for its next checkpoint"), "device {i}: {e}");
+            assert!(e.contains("no room for its next checkpoint") || e.contains(TAKE_BACK_FIRST), "device {i}: {e}");
             return i;
         }
         let mut keys = if admins { vec![dk.hash, ak.hash] } else { vec![dk.hash] };
@@ -900,7 +901,13 @@ fn fill_to_the_floor(set: &mut RecordSet, root: &K, t: &mut u64, admins: bool) -
         let st = set.state();
         *t += 1000;
         let rm = cbb_core::records::body::Removal { keys, seen: Vec::new() };
-        set.write_record(&st, root, Kind::Revoke(rm), *t).unwrap_or_else(|e| panic!("removal {i}: {e:?}"));
+        if let Err(e) = set.write_record(&st, root, Kind::Revoke(rm), *t) {
+            // The way out's reserve (W): the silent admin holds every
+            // removal back, so the room fills to the reserve before the
+            // floor; the device just admitted stays.
+            assert!(format!("{e:?}").contains(TAKE_BACK_FIRST), "removal {i}: {e:?}");
+            return i;
+        }
     }
     unreachable!()
 }
@@ -939,11 +946,13 @@ fn at_the_floor_a_lagging_admin_is_taken_back_and_the_room_freed() {
     let err =
         set.write_record(&st, &root, Kind::device(Device::new(dk.key.clone(), "dev", ROLE_MEMBER)), t).unwrap_err();
     assert!(format!("{err}").contains("write a checkpoint first"), "{err}");
-    // A removal is never blocked.
+    // A removal is refused only for the way out's reserve (W), with its
+    // own text: the person takes the silent admin back first.
     let st = set.state();
     let rm = cbb_core::records::body::Removal { keys: vec![k("a stranger at the floor").hash], seen: Vec::new() };
     t += 1000;
-    set.write_record(&st, &root, Kind::Revoke(rm), t).unwrap();
+    let err = set.write_record(&st, &root, Kind::Revoke(rm), t).unwrap_err();
+    assert!(format!("{err}").contains(TAKE_BACK_FIRST), "{err}");
     let heard = std::collections::BTreeMap::from([(a, t)]);
     let st = set.state();
     t += 1000;
@@ -2054,17 +2063,29 @@ fn removals_past_the_floor_write_the_checkpoint_first() {
     fill_to_the_floor(&mut set, &root, &mut t, true);
     let first = set.state().checkpoint;
     let mut checkpoints = std::collections::BTreeSet::new();
+    let mut taken_back = None;
     for i in 0..100u32 {
         let st = set.state();
         t += 1000;
         let rm = cbb_core::records::body::Removal { keys: vec![k(&format!("bench dev {i}")).hash], seen: Vec::new() };
-        set.write_record(&st, &root, Kind::Revoke(rm), t).unwrap_or_else(|e| panic!("removal {i}: {e:?}"));
+        if let Err(e) = set.write_record(&st, &root, Kind::Revoke(rm.clone()), t) {
+            // The way out's reserve (W): the silent admin holds these
+            // removals back; the person takes it back, and they go on.
+            assert!(format!("{e:?}").contains(TAKE_BACK_FIRST) && taken_back.is_none(), "removal {i}: {e:?}");
+            taken_back = Some(i);
+            t += 1000;
+            set.take_back(&st, &root, &k("admin a").hash, t).expect("the person takes the silent admin back");
+            let st = set.state();
+            t += 1000;
+            set.write_record(&st, &root, Kind::Revoke(rm), t).unwrap_or_else(|e| panic!("removal {i}: {e:?}"));
+        }
         let st = set.state();
         assert!(st.revoked.contains(&k(&format!("bench dev {i}")).hash) || st.checkpoint != first);
         assert!(st.device(&k(&format!("bench dev {i}")).key.device_id()).is_none(), "removal {i}");
         checkpoints.extend(st.checkpoint);
     }
     assert!(!checkpoints.is_empty(), "no checkpoint was written first");
+    println!("the way out's reserve asked for the take-back at removal {taken_back:?}");
     let st = set.state();
     assert!(st.devices.iter().all(|d| !d.name.starts_with("bench")));
     checkpoint_counts(&mut set, &root, &mut t, "after the removals");
