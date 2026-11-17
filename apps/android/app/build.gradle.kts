@@ -195,8 +195,8 @@ dependencies {
     testImplementation("androidx.test:core:1.7.0")
     testImplementation("androidx.test.ext:junit:1.3.0")
     // The screenshots (ScreenshotTest), drawn by Robolectric's native graphics.
-    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.77.0")
-    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.77.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.78.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.78.0")
 
     // The instrumented tests on an emulator (src/androidTest): the screens with Compose's
     // test rule, the system's own screens (notifications, the share sheet) with UI Automator.
