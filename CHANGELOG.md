@@ -36,6 +36,9 @@ made with 0.5 is set up again once. The details follow.
 - `member/` has its member connection of 0.6 (`member/src/mesh.rs`): members over TLS by key
   exchange records, keys statements, copies, commands and their results, built beside the
   connection of 0.5 until the service switches to it.
+- The core seals and opens a copy's blob of 0.6 (`copies::seal_media`, `copies::blob`): the
+  parts' bytes in segments of 64 KiB under the blob key, which comes from the copy key alone,
+  their size and SHA-256 signed in the copy's header and checked whole before they open.
 - `member/` keeps its clipboard state of 0.6 (`member/src/board.rs`): sync on or off, an
   admin's mute, its own copies going out once and the group's copies judged by the core's rule
   of incoming copies, standing where the clipboard engine of 0.5 stands until the switch.

@@ -785,3 +785,60 @@ fn freshness_matches_its_vectors() {
         }
     }
 }
+
+#[test]
+fn a_copy_with_a_blob_seals_and_opens_with_its_bytes() {
+    use crate::content::TYPE_MEDIA;
+    use crate::media::{Manifest, Part};
+    let w = World::new();
+    let state = w.g.state();
+    // A little over two segments, so the last one is padded.
+    let parts: Vec<u8> = (0..2 * blob::SEGMENT + 100).map(|i| (i % 251) as u8).collect();
+    let n = parts.len() as i64;
+    let manifest = Manifest {
+        size: n,
+        parts: vec![Part {
+            kind: "image/png".into(),
+            size: n,
+            sha256: Some(sha256(&[&parts]).to_vec()),
+            ..Default::default()
+        }],
+    };
+    let content = Content { kind: TYPE_MEDIA, manifest: Some(manifest), ..Content::default() };
+    let rs = readers(&state, &w.sealing(), &content, &w.id("phone"), &[], None);
+    let (copy, sealed) = seal_media(&w.phone, &rs, &made(1), &content, &parts).unwrap();
+    assert_eq!(sealed.len() as u64, blob::sealed_size(parts.len() as u64));
+    assert_eq!(blob::segments(sealed.len() as u64), Some(3));
+    let v = cbor::decode(&copy).unwrap();
+    let c = check(&v, &state).unwrap();
+    // Field 5 is signed: the blob's size and hash as sealed.
+    let header = c.blob().unwrap();
+    assert_eq!(header, (sealed.len() as u64, sha256(&[&sealed])));
+    let Opened::Content { content: got, blob_key } = open(&c, &w.id("laptop"), &w.stores["laptop"], &state).unwrap()
+    else {
+        panic!("not opened")
+    };
+    assert_eq!(got, content);
+    let key = blob_key.unwrap();
+    assert_eq!(blob::open(&key, header, n as u64, &sealed).unwrap(), parts);
+    // Each segment opens alone, as a fetch gets it.
+    let first = blob::open_segment(&key, 0, false, &sealed[..blob::SEALED_SEGMENT]).unwrap();
+    assert_eq!(first, parts[..blob::SEGMENT]);
+    // A changed byte, a segment out of place, a blob cut short or a wrong
+    // key do not open.
+    let mut bad = sealed.clone();
+    bad[10] ^= 1;
+    assert!(blob::open(&key, (header.0, sha256(&[&bad])), n as u64, &bad).is_err());
+    assert!(blob::open_segment(&key, 1, false, &sealed[..blob::SEALED_SEGMENT]).is_err());
+    let cut = &sealed[..2 * blob::SEALED_SEGMENT];
+    assert!(blob::open(&key, (cut.len() as u64, sha256(&[cut])), 2 * blob::SEGMENT as u64, cut).is_err());
+    assert!(blob::open(&[9; 32], header, n as u64, &sealed).is_err());
+    assert!(blob::open(&key, header, n as u64 - 1 - blob::SEGMENT as u64 * 2, &sealed).is_err());
+    // A text copy has no blob.
+    let text = seal(&w.phone, &rs, &made(2), &Content::text("x", false)).unwrap();
+    let tv = cbor::decode(&text).unwrap();
+    let tc = check(&tv, &state).unwrap();
+    assert_eq!(tc.blob(), None);
+    // The parts must be what the manifest says.
+    assert!(seal_media(&w.phone, &rs, &made(3), &content, &parts[1..]).is_err());
+}
