@@ -4,6 +4,7 @@
 package service
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"os/exec"
@@ -187,9 +188,68 @@ func TestRemovedWhileAway(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "the laptop has the removal", func() bool { return listed(laptop.devices(t)) == "laptop pi" })
+	if pi.on06() {
+		removedWhileAway06(t, &h, pi, laptop, deck)
+		return
+	}
 	deck = restartService(t, &h, deck)
 	waitUpTo(t, 30*time.Second, "the deck says it was removed", func() bool { return deck.status(t).Removed })
 	waitFor(t, "the removed deck keeps no connection", func() bool { return len(deck.status(t).Peers) == 0 })
+	if laptop.status(t).Removed || pi.status(t).Removed {
+		t.Error("a member the root did not remove says it was removed")
+	}
+}
+
+// removedWhileAway06 is TestRemovedWhileAway on the records of 0.6, by the
+// owner's rule: a removed device need not learn of its removal; the group
+// refuses it and gives it no device list. So the members refuse its hello
+// and keep no connection with it, no copy crosses either way, and it gets
+// no records: its set stays as it was, with the devices it knew.
+func removedWhileAway06(t *testing.T, h *hub, pi, laptop, deck *testService) {
+	t.Helper()
+	set := filepath.Join(deck.dir, "group.cbor")
+	before, err := os.ReadFile(set)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deck = restartService(t, h, deck)
+	deckID := deck.status(t).Device
+	if _, err := deck.do(t, control.Header{Op: control.OpCopy}, "from the removed deck"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pi.do(t, control.Header{Op: control.OpCopy}, "from pi after the removal"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the laptop has pi's copy", func() bool { return laptop.paste(t) == "from pi after the removal" })
+	// Long enough for discovery to find the deck and dial it more than once.
+	for end := time.Now().Add(10 * time.Second); time.Now().Before(end); time.Sleep(500 * time.Millisecond) {
+		if n := len(deck.status(t).Peers); n != 0 {
+			t.Fatalf("the removed deck has %d connections", n)
+		}
+		for _, s := range []*testService{pi, laptop} {
+			for _, p := range s.status(t).Peers {
+				if p.ID == deckID {
+					t.Fatalf("%s keeps a connection with the removed deck", s.name)
+				}
+			}
+			if s.paste(t) == "from the removed deck" {
+				t.Fatalf("%s took a copy from the removed deck", s.name)
+			}
+		}
+		if deck.paste(t) == "from pi after the removal" {
+			t.Fatal("the removed deck got the group's copy")
+		}
+	}
+	after, err := os.ReadFile(set)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Error("the removed deck got records from the group")
+	}
+	if got := listed(deck.devices(t)); got != "deck laptop pi" {
+		t.Errorf("the removed deck lists %q, the devices it knew before", got)
+	}
 	if laptop.status(t).Removed || pi.status(t).Removed {
 		t.Error("a member the root did not remove says it was removed")
 	}
