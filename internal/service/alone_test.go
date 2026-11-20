@@ -2035,9 +2035,9 @@ func udpRelay(t *testing.T, to int) *udpRelayPort {
 }
 
 // TestFFIPhoneRemoves has the root phone remove a computer it is connected
-// to, as the Android app's GroupTest.a8_renameAndRemove does: the removed
-// computer must hear it was removed, though the phone ends the connection
-// right after the records that remove it, and the other computer stays.
+// to, as the Android app's GroupTest.a8_renameAndRemove does: the group
+// drops the removed computer and gives it nothing more, and the other
+// computer stays.
 func TestFFIPhoneRemoves(t *testing.T) {
 	bin := os.Getenv("CBB_PHONE_ON_LINUX")
 	if bin == "" {
@@ -2097,9 +2097,31 @@ func TestFFIPhoneRemoves(t *testing.T) {
 	if got := manage(`{"action":"remove","device":"` + id + `"}`); !strings.Contains(got, `"ok"`) {
 		t.Fatalf("removing the computer: %s", got)
 	}
-	waitUpTo(t, 60*time.Second, "the second computer says it was removed", func() bool { return second.status(t).Removed })
-	if pc.status(t).Removed {
-		t.Fatal("the other computer says it was removed")
+	// By the group's rule a removed device need not learn it was removed
+	// (whether it sees it is not checked): the group refuses it and gives
+	// it nothing more, not even the device list (TestFFIPhoneRemovesAway).
+	online := func(s *testService) bool {
+		return slices.ContainsFunc(s.status(t).Peers, func(p control.Device) bool { return p.Online })
+	}
+	waitUpTo(t, 60*time.Second, "the group drops the removed computer", func() bool { return !online(second) })
+	fmt.Fprintln(in, "COPY after the removal")
+	waitFor(t, "the other computer has the phone's copy", func() bool { return pc.paste(t) == "after the removal" })
+	if second.paste(t) == "after the removal" {
+		t.Fatal("the phone's copy reached the removed computer")
+	}
+	if got := manage(`{"action":"rename","device":"` + pcID + `","name":"bench-pc"}`); !strings.Contains(got, `"ok"`) {
+		t.Fatalf("renaming the other computer: %s", got)
+	}
+	waitFor(t, "the other computer has its new name", func() bool {
+		return slices.ContainsFunc(pc.devices(t), func(d control.Device) bool { return d.Name == "bench-pc" })
+	})
+	for _, d := range second.devices(t) {
+		if d.Name == "bench-pc" {
+			t.Fatal("the removed computer got the records written after its removal")
+		}
+	}
+	if pc.status(t).Removed || !online(pc) {
+		t.Fatal("the other computer left the group with the removed one")
 	}
 }
 
