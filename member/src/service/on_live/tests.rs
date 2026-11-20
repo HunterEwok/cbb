@@ -93,23 +93,20 @@ fn a_group_of_0_6_runs_the_clipboard_status_and_devices() {
     la.close();
 }
 
-/// The client's side of a pairing: answers yes to the code it is shown,
-/// and gives that code and the final answer.
-fn client(conn: UnixStream) -> std::thread::JoinHandle<(String, Message)> {
+/// The client's side of a pairing: reads the service's answers to the
+/// last, and gives the tries it was told failed and that last answer.
+fn client(conn: UnixStream) -> std::thread::JoinHandle<(usize, Message)> {
     std::thread::spawn(move || {
-        let mut w = conn.try_clone().unwrap();
         let mut r = control::Reader::new(conn);
-        let mut code = String::new();
+        let mut failed = 0;
         loop {
             let m = r.read().unwrap().unwrap();
             assert!(m.header.error.is_empty(), "{}", m.header.error);
             if m.header.done {
-                return (code, m);
+                return (failed, m);
             }
-            if !m.header.code.is_empty() {
-                code.clone_from(&m.header.code);
-                let yes = Header { op: "answer".into(), consent: true, ..Default::default() };
-                control::write(&mut w, &Message::new(yes, Vec::new())).unwrap();
+            if m.header.refused {
+                failed += 1;
             }
         }
     })
@@ -130,7 +127,8 @@ fn a_computer_pairs_with_the_window_of_a_new_group() {
     let la = a.start_live(&config(&da, Vec::new())).unwrap();
     let port = a.port.lock().unwrap().unwrap();
 
-    // The window: opened, then the code, then the device's name.
+    // The window: opened with its six digits, a failed try, then the
+    // device's name.
     let (a_cli, a_srv) = UnixStream::pair().unwrap();
     let opened = {
         let mut r = control::Reader::new(a_cli.try_clone().unwrap());
@@ -141,23 +139,54 @@ fn a_computer_pairs_with_the_window_of_a_new_group() {
         });
         r.read().unwrap().unwrap()
     };
-    assert!(opened.header.code.is_empty() && opened.header.expires > 0);
+    let digits = opened.header.code.clone();
+    assert!(cbb_core::join::invitation::home_secret(&digits).is_some(), "six digits");
+    assert_eq!(opened.header.kind, crate::admit_cli::HOME_WINDOW);
+    assert!(opened.header.expires > 0);
     until("the window to open", || la.window_open());
+    // Its mDNS announcement names its ID, and the QR code carries it with
+    // the digits and the member key.
+    let id = crate::discovery::Peers::window_id(&*la);
+    assert_eq!(id.len(), 32);
+    if !opened.header.invite.is_empty() {
+        let link = cbb_core::join::invitation::WindowLink::parse(&opened.header.invite).unwrap();
+        assert_eq!(
+            (cbb_core::certs::hex(&link.id), &link.digits, link.fp),
+            (id.clone(), &digits, la.mesh.own().hash())
+        );
+    }
     let at_a = client(a_cli);
+    let link = |digits: &str| {
+        cbb_core::join::invitation::WindowLink {
+            addrs: vec![format!("127.0.0.1:{port}")],
+            fp: la.mesh.own().hash(),
+            id: cbb_core::join::invitation::hex_bytes(&id).unwrap(),
+            digits: digits.to_string(),
+        }
+        .text()
+    };
 
     let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|l| eprintln!("{l}"));
     let c = Service::new(&config(&dc, Vec::new()), log, false);
-    let (c_cli, c_srv) = UnixStream::pair().unwrap();
-    let at_c = client(c_cli);
-    let join =
-        Header { op: "join".into(), address: format!("127.0.0.1:{port}"), name: "laptop".into(), ..Default::default() };
-    let mut out = c_srv.try_clone().unwrap();
-    c.live_join(&Message::new(join, Vec::new()), control::Reader::new(c_srv), &mut out).unwrap();
-    drop(out);
+    let join = |code: String| {
+        let (c_cli, c_srv) = UnixStream::pair().unwrap();
+        let h = Header { op: "join".into(), code, name: "laptop".into(), ..Default::default() };
+        let mut out = c_srv.try_clone().unwrap();
+        let got = c.live_join(&Message::new(h, Vec::new()), control::Reader::new(c_srv), &mut out);
+        drop(c_cli);
+        got
+    };
+    // Wrong digits: refused, the window stays open and says so.
+    let wrong = if digits == "000000" { "000001" } else { "000000" };
+    let e = join(link(wrong)).unwrap_err();
+    assert!(e.message().contains("not the window's"), "{}", e.for_log());
+    assert!(!in_group(&dc));
+    assert!(la.window_open());
+    // The window's digits.
+    join(link(&digits)).unwrap();
 
-    let (code_c, _) = at_c.join().unwrap();
-    let (code_a, done) = at_a.join().unwrap();
-    assert_eq!(code_a, code_c);
+    let (failed, done) = at_a.join().unwrap();
+    assert_eq!(failed, 1, "the window told of the wrong try");
     assert_eq!(done.header.name, "laptop");
     assert!(in_group(&dc));
     until("the record", || la.mesh.state().devices.iter().any(|d| d.name == "laptop"));

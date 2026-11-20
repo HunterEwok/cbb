@@ -983,6 +983,36 @@
       "widest": "failed attempts before an open invitation closes"
     },
     {
+      "class": "frozen",
+      "name": "join::invitation::HOME_DIGITS",
+      "reached": [
+        "a_home_window_has_six_digits"
+      ],
+      "refusal": "",
+      "value": 6,
+      "widest": "the digits of a home window's code, CPace's password"
+    },
+    {
+      "class": "reader",
+      "name": "join::invitation::MAX_WINDOW_ADDRS",
+      "reached": [
+        "a_window_link_reads_back"
+      ],
+      "refusal": "",
+      "value": 4,
+      "widest": "addresses in a home window's QR code"
+    },
+    {
+      "class": "reader",
+      "name": "join::invitation::MAX_WINDOW_TEXT",
+      "reached": [
+        "a_window_link_reads_back"
+      ],
+      "refusal": "",
+      "value": 512,
+      "widest": "the text of a home window's QR code"
+    },
+    {
       "class": "reader",
       "name": "join::invitation::ATTEMPT_MS",
       "reached": [
@@ -991,16 +1021,6 @@
       "refusal": "",
       "value": 30000,
       "widest": "the machine's steps of one attempt"
-    },
-    {
-      "class": "reader",
-      "name": "join::invitation::ANSWER_MS",
-      "reached": [
-        "the_short_code_opens_its_commitment"
-      ],
-      "refusal": "",
-      "value": 600000,
-      "widest": "the person comparing the codes"
     },
     {
       "class": "frozen",

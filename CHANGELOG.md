@@ -57,8 +57,8 @@ made with 0.5 is set up again once. The details follow.
   `release`, `entries`, `get`, `missing`, `reach`, `evidence`) and the new message `want`
   (t 30), by which a member asks a peer for the records and the list its set names and lacks.
 - The core runs one pairing session of 0.6 at each end (`join::session`): the joiner's and the
-  member's steps from message 64 to the Welcome and message 68, at home with both persons'
-  answers or by an invitation, for `member/` and the phones alike; `member/` runs it over the
+  member's steps from message 64 to the Welcome and message 68, by an invitation (a QR code's,
+  or a home window's six digits), for `member/` and the phones alike; `member/` runs it over the
   core's TLS of `cbb-pair/3` (`member/src/join.rs`), ready for the service's switch to 0.6.
 - `member/` keeps its sealing keys of 0.6 by epoch in `epochs.json`, each sealed under the
   device's local key, holds the group's keys statements and passes them on in message `keys`,
@@ -102,6 +102,15 @@ made with 0.5 is set up again once. The details follow.
   8 bytes of the group ID.
 - `cbb keys` sets the group's key level on the records of 0.6, on its root, whose own keys
   must meet it, and names the admins and hubs below it; status shows the level.
+- `cbb admin` makes a computer an admin on the records of 0.6 with the admin key it offered,
+  with its proof over the pairing session, when it paired with the root, which keeps the key
+  by device (`offered.json`); the computer need not be connected, and one that another admin
+  admitted is told to pair with the root first (docs/decisions.md, D-118). A group whose root
+  keeps its key in a file starts at the key level `files`; a member with the cap `hub` may be
+  one of the main hubs: the root gives it the right when it admits it, or when it names it a
+  hub after an admin admitted it. On a group of 0.6 a frozen admin computer is
+  told so, the root's device is not renamed, removed or frozen by an admin, and freezing twice
+  or thawing what is not frozen is an error, as before.
 - A computer's pairing window of 0.6 announces `f`, the hex of its member key's hash, beside
   `p=1` by mDNS, as a phone's window does, so that a new device that browses for it dials the
   one window and checks its key (docs/protocol.md, section 3).
@@ -1938,6 +1947,24 @@ made with 0.5 is set up again once. The details follow.
   `cbb.sh`.
 
 ### Changed
+- On the records of 0.6 the group's root changes only with its recovery key: `cbb takeover`,
+  `cbb takeover -delay` and `cbb handover` answer so and point to `cbb recovery`
+  (docs/decisions.md, D-117).
+- `cbb recovery` on a group of 0.6 makes this computer the group's root at once with the
+  recovery sheet: a change of root (rule 33) with a new root key, after which the service
+  restarts to sign with that key. Every device stays but those named with `-leave NAME`, such
+  as a lost root, which the group then refuses; it shows who stays and asks once first. The recovery key on a YubiKey answers
+  that it is not on the records of 0.6 yet.
+- At home a new device dials the admin's pairing window; one that waits for the group to dial
+  it is gone in 0.6, and `cbb pair -qr` on a group of 0.6 says to open the window with
+  `cbb pair` instead (docs/decisions.md, D-119).
+- A home pairing of 0.6 is a home window: an invitation that lives only at the admin, with a
+  random ID and six random digits from which its secret comes. The admin shows the digits and a
+  QR code that carries them with the ID; the new device scans it, or finds the window by mDNS
+  and takes the digits its person types. The digits are CPace's password, so nobody compares
+  codes on two screens; a wrong digit spends one of three tries, and one success closes the
+  window. Messages 64, 65 and 66 carry CPace alone: the short code's commitment and nonces are
+  retired and refused (docs/decisions.md, D-120; docs/protocol.md, "Pairing in 0.6").
 - The member protocol is `cbb/4` and pairing `cbb-pair/3`, named once in the Rust core
   (`cbb_core::alpn`) and taken by the Go service and both phone kits. A device offers every
   name it speaks, the highest first; a peer's unknown names are ignored, and a device with no
@@ -2707,6 +2734,12 @@ made with 0.5 is set up again once. The details follow.
   records file, and no code path treats any member as a holder of the group's key.
 
 ### Fixed
+- On the records of 0.6 a record that an admin writes reaches the root on a connection the two
+  keep: the admin sends its `have` again whenever its set changed since its last one, as the
+  root sends no new hello when only the admin wrote.
+- On the records of 0.6 a change of root reaches a member on a connection it keeps: on a
+  `have` the member asks for the list the change waits for and what its records name, as it
+  does on a `hello`, which a peer that wrote nothing new does not send.
 - A Linux service that does not run as root no longer tries to write polkit's actions in
   `/usr/share/polkit-1/actions` at every start and log the refusal: it leaves them to the
   installer (`cbb confirm-setup`) and says once, at start, when they are not set up for its

@@ -266,6 +266,11 @@ impl Mesh {
         (self.log)(s)
     }
 
+    /// The state directory the group is kept in.
+    pub fn dir(&self) -> &Path {
+        &self.dir
+    }
+
     /// This device's own keys.
     pub fn own(&self) -> &Own {
         &self.own

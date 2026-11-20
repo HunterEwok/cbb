@@ -18,6 +18,8 @@ use crate::own::Own;
 use crate::roster::{self, id_text};
 use crate::writers;
 use cbb_core::records::body::{MAX_INCOMING_MS, MIN_INCOMING_MS};
+use cbb_core::secret::Zeroizing;
+use p256::pkcs8::EncodePrivateKey as _;
 
 /// How often this device's sealing keys are checked for a new epoch.
 const ROTATE_EVERY: Duration = Duration::from_secs(3600);
@@ -215,7 +217,7 @@ impl Service {
             removed: mine.is_none(),
             frozen: mine.is_some_and(|d| d.frozen),
             media: Some(self.media_status()),
-            key_level: match st.settings.key_level {
+            key_level: match st.settings.level() {
                 cbb_core::records::body::LEVEL_PROVEN => "proven",
                 cbb_core::records::body::LEVEL_FILES => "files",
                 _ => "hardware",
@@ -246,7 +248,12 @@ impl Service {
             version: VERSION.into(),
             ..Default::default()
         };
-        roster::devices(&live.mesh.state(), &me, &live.mesh.hellos(), uptime::wall_ms())
+        roster::devices(
+            &live.mesh.set().lock().unwrap_or_else(std::sync::PoisonError::into_inner),
+            &me,
+            &live.mesh.hellos(),
+            uptime::wall_ms(),
+        )
     }
 
     /// Writes records with this device's root or admin key, and names the
@@ -293,6 +300,12 @@ impl Service {
     /// needs no group, which the service answers as ever.
     pub(super) fn live_request(&self, live: &Arc<Live>, m: &Message) -> Option<Result<Message>> {
         let h = &m.header;
+        if matches!(h.op.as_str(), control::op::TAKEOVER_DELAY | control::op::TAKE_OVER | control::op::HAND_OVER) {
+            return Some(Err(Error::msg(ROOT_BY_RECOVERY)));
+        }
+        if h.op == "pair" && !(h.code.is_empty() && h.addrs.is_empty() && h.fingerprint.is_empty()) {
+            return Some(Err(Error::msg(LISTENING_JOINER_GONE)));
+        }
         if let Some(why) = refusal(live, h) {
             return Some(Err(Error::msg(why)));
         }
@@ -338,8 +351,10 @@ impl Service {
                 }
                 // A computer freezes only admins: an ordinary device is
                 // removed.
-                if let Ok(d) = writers::find(&live.mesh.state(), &h.device)
+                let st = live.mesh.state();
+                if let Ok(d) = writers::find(&st, &h.device)
                     && d.admin.is_none()
+                    && Some(d.id) != st.root_device
                 {
                     return Some(Err(Error::msg(format!(
                         "{} is no admin computer; only those are frozen, and an ordinary device is removed with cbb remove",
@@ -364,6 +379,8 @@ impl Service {
             }
             "incoming" => self.live_incoming(live, &h.value),
             control::op::KEY_LEVEL => self.live_key_level(live, &h.value),
+            control::op::MAKE_ADMIN => self.live_make_admin(live, h),
+            control::op::RECOVER => self.live_recover(live, h, &m.payload),
             control::op::LEAVE => self.live_leave(live),
             control::op::NEW => Err(Error::msg("this device is already in a group; cbb status shows it")),
             op if !MOVING.contains(&op) => return None,
@@ -464,7 +481,9 @@ impl Service {
         };
         crate::admin::level_allows(value, root_store, "this device, the group's root,", "", true)?;
         let now = uptime::wall_ms().max(0) as u64;
-        live.mesh.write(|set, k| writers::set_settings(set, k, |s| s.key_level = level, now))?;
+        // The default, hardware, is written as no level at all (format 4.5).
+        let kept = if level == LEVEL_HARDWARE { 0 } else { level };
+        live.mesh.write(|set, k| writers::set_settings(set, k, |s| s.key_level = kept, now))?;
         (self.log)(&format!("cbb: the group's key level is {value} now"));
         let st = live.mesh.state();
         let me = live.mesh.device();
@@ -477,6 +496,115 @@ impl Service {
             .map(|d| d.name)
             .collect();
         Ok(control::reply(Header { below, done: true, ..Default::default() }, Vec::new()))
+    }
+
+    /// cbb admin: makes a device an admin, on the group's root, with the
+    /// admin key it offered when it paired with the root (offered.rs).
+    fn live_make_admin(&self, live: &Live, h: &Header) -> Result<Message> {
+        use cbb_core::records::body::{CAP_ADMIN, ROLE_PHONE, STORE_ROOTLESS};
+        let st = live.mesh.state();
+        let d = writers::find(&st, &h.device)?.clone();
+        if d.id == live.mesh.device() {
+            return Err(Error::msg("this device is the group's root, which is more than an admin"));
+        }
+        if d.role != ROLE_PHONE && d.caps & CAP_ADMIN == 0 {
+            return Err(Error::msg(format!(
+                "{} cannot hold an admin key; only a phone or a member with the cap admin can be an admin",
+                d.name
+            )));
+        }
+        if d.admin.is_some() {
+            return Err(Error::msg(format!("{} is already an admin", d.name)));
+        }
+        if d.store == STORE_ROOTLESS {
+            return Err(Error::msg(format!(
+                "{} is installed without root, so every program of its user can read its keys; such a device is never an admin (D-79)",
+                d.name
+            )));
+        }
+        let Some(point) = crate::offered::get(&self.state_dir, &id_text(&d.id))? else {
+            return Err(Error::msg(format!(
+                "{} offered this device no admin key when it joined (another admin admitted it, or it cannot be one then): pair this device with the root to make it an admin",
+                d.name
+            )));
+        };
+        let shown = self.live_devices(live).into_iter().find(|x| x.id == id_text(&d.id));
+        let store = shown.map(|x| x.store).unwrap_or_default();
+        let level = self.live_status(live).key_level;
+        crate::admin::level_allows(
+            &level,
+            &store,
+            &d.name,
+            &format!("run cbb admin -allow-file-key {}", h.device),
+            h.allow_file_key,
+        )?;
+        let now = uptime::wall_ms().max(0) as u64;
+        let (d, _) = live.mesh.write(|set, k| writers::make_admin(set, k, &h.device, &point, now))?;
+        (self.log)(&format!("cbb: made {} ({}) an admin of the group", d.name, id_text(&d.id)));
+        Ok(control::reply(Header { name: d.name, done: true, ..Default::default() }, Vec::new()))
+    }
+
+    /// cbb recovery: this device becomes the group's root with the
+    /// recovery key typed from the sheet (rule 33). It makes a new root key,
+    /// writes the change of root with both halves of the recovery key, and
+    /// restarts, so that the member signs with the new key; the recovery
+    /// key is not kept.
+    fn live_recover(&self, live: &Live, h: &Header, payload: &[u8]) -> Result<Message> {
+        let st = live.mesh.state();
+        let own = live.mesh.own();
+        if own.root.as_ref().is_some_and(|k| st.roots.last() == Some(&cbb_core::records::Key::es256(k.public()).hash()))
+        {
+            return Err(Error::msg("this device is the group's root already"));
+        }
+        if h.name == "yubikey" {
+            return Err(not_yet("a recovery key on a YubiKey"));
+        }
+        let text = Zeroizing::new(String::from_utf8_lossy(payload).into_owned());
+        let read = cbb_core::sheet::read(&text).map_err(|r| Error::msg(r.message()))?;
+        let set = live.mesh.set();
+        let recovery = set.lock().unwrap_or_else(std::sync::PoisonError::into_inner).recovery().clone();
+        cbb_core::sheet::check(&read, &st.group, &recovery).map_err(|r| Error::msg(r.message()))?;
+        let (k1, k2) = cbb_core::records::pq::recovery_keys(&read.secret)
+            .map_err(|e| e.context("cannot make the recovery key from the sheet"))?;
+        let pkcs8 = Zeroizing::new(
+            p256::ecdsa::SigningKey::from(k1)
+                .to_pkcs8_der()
+                .map_err(|_| Error::msg("cannot encode the recovery key"))?
+                .as_bytes()
+                .to_vec(),
+        );
+        let k1 = cbb_core::identity::FileKey::new(&pkcs8)?;
+        // Who does not stay: by name or ID, never this device.
+        let mut leave_out = Vec::new();
+        for name in &h.leave {
+            let d = writers::find(&st, name)?;
+            if d.id == live.mesh.device() {
+                return Err(Error::msg("this device becomes the root: it stays in the group"));
+            }
+            leave_out.extend(writers::keys_of(d));
+        }
+        let mut own = Own::load(&self.state_dir)?;
+        let root = own.make(&self.state_dir, crate::own::Which::Root)?;
+        let now = uptime::wall_ms().max(0) as u64;
+        {
+            let mut set = set.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            writers::recover(&mut set, &k1, &k2, &*root, &live.mesh.device(), &leave_out, now)?;
+        }
+        live.mesh.changed()?;
+        let left = if h.leave.is_empty() {
+            "every device stays (cbb remove takes out a lost one)".to_string()
+        } else {
+            format!("these left the group: {}", h.leave.join(", "))
+        };
+        (self.log)(&format!(
+            "cbb: this device is the group's root now, by the group's recovery key; {left}; it restarts to sign with its new root key"
+        ));
+        std::thread::spawn(|| {
+            std::thread::sleep(RESTART_AFTER);
+            super::RESTART.store(true, Ordering::SeqCst);
+            STOP.store(true, Ordering::SeqCst);
+        });
+        Ok(control::reply(Header { done: true, ..Default::default() }, Vec::new()))
     }
 
     /// cbb incoming: how long a copy from another device stays live.
@@ -504,7 +632,7 @@ impl Service {
             let others: Vec<String> = st.devices.iter().filter(|d| d.id != me).map(|d| d.name.clone()).collect();
             if !others.is_empty() {
                 return Err(Error::msg(format!(
-                    "this device is the group's root, and the group has other devices ({}): remove them first, or hand the group over to an admin (not on the records of 0.6 yet)",
+                    "this device is the group's root, and the group has other devices ({}): remove them first",
                     others.join(", ")
                 )));
             }
@@ -526,17 +654,6 @@ impl Service {
     }
 }
 
-/// Asks the person at cbb pair whether the other device shows the same
-/// code: the code goes to the client, and its answer (`answer`, with
-/// consent for yes) comes back; a client that hangs up says no.
-fn ask_client(out: &mut UnixStream, r: &mut control::Reader<UnixStream>, code: &str) -> bool {
-    let h = Header { code: code.to_string(), ..Default::default() };
-    if control::write(out, &control::partial(h)).is_err() {
-        return false;
-    }
-    matches!(r.read(), Ok(Some(m)) if m.header.op == "answer" && m.header.consent)
-}
-
 /// Closes a pairing window of the member of 0.6 when dropped.
 struct LiveWindow<'a> {
     svc: &'a Service,
@@ -546,20 +663,23 @@ struct LiveWindow<'a> {
 impl Drop for LiveWindow<'_> {
     fn drop(&mut self) {
         self.live.mesh.on_pair(None);
-        self.live.set_window_open(false);
+        self.live.set_window(None);
         *self.svc.pairing.lock().unwrap() = None;
     }
 }
 
 impl Service {
-    /// cbb pair on the root or an admin of a group of 0.6: a pairing window
-    /// on the member port for one device, for five minutes. The answers:
-    /// the window opened; the code to compare once a device pairs, which
-    /// the client answers; the device's name once it is in the group.
+    /// cbb pair on the root or an admin of a group of 0.6: a home window on
+    /// the member port for one device, for five minutes (docs/protocol.md,
+    /// "Pairing in 0.6"). The answers: the window opened, with its six
+    /// digits (`code`), its QR code's text (`invite`) and an address; a
+    /// partial `refused` with why for each device that failed (a wrong
+    /// code spends one of three tries); the device's name once it is in
+    /// the group. The third failure closes the window.
     pub(super) fn live_pair_window(
         &self,
         live: &Arc<Live>,
-        mut r: control::Reader<UnixStream>,
+        _r: control::Reader<UnixStream>,
         out: &mut UnixStream,
     ) -> Result<()> {
         if writers::signer(live.mesh.own(), &live.mesh.state()).is_none() {
@@ -579,15 +699,36 @@ impl Service {
         if let Some(n) = live.networks() {
             n.learn_all();
         }
+        let now = || crate::uptime::wall_ms().max(0) as u64;
+        let (mut open, digits) = crate::admitting::home_window(now(), window::LIFETIME);
         let (tx, rx) = mpsc::sync_channel(1);
         live.mesh.on_pair(Some(Box::new(move |sock, s, x| {
             // One device at a time; another is dropped.
             let _ = tx.try_send((sock, s, x));
         })));
-        live.set_window_open(true);
+        live.set_window(Some(open.invitation.id));
         let port = *self.port.lock().unwrap();
-        let address = port.and_then(|p| crate::pair::qr_addresses(p).into_iter().next()).unwrap_or_default();
-        let opened = Header { expires: window::LIFETIME.as_secs() as i64, address, ..Default::default() };
+        let addrs = port.map(crate::pair::qr_addresses).unwrap_or_default();
+        // A computer with no home address still gives its link, for this
+        // computer's own joiners; it shows no QR code (no `address`).
+        let link_addrs = match (addrs.is_empty(), port) {
+            (true, Some(p)) => vec![std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, p)).to_string()],
+            _ => addrs.iter().take(cbb_core::join::invitation::MAX_WINDOW_ADDRS).cloned().collect(),
+        };
+        let link = cbb_core::join::invitation::WindowLink {
+            addrs: link_addrs,
+            fp: live.mesh.own().hash(),
+            id: open.invitation.id,
+            digits: digits.clone(),
+        };
+        let opened = Header {
+            kind: crate::admit_cli::HOME_WINDOW.into(),
+            expires: window::LIFETIME.as_secs() as i64,
+            address: addrs.first().cloned().unwrap_or_default(),
+            code: digits,
+            invite: if link.addrs.is_empty() { String::new() } else { link.text() },
+            ..Default::default()
+        };
         control::write(out, &control::partial(opened))?;
         let end = Instant::now() + window::LIFETIME;
         loop {
@@ -596,29 +737,39 @@ impl Service {
                 return Err(Error::msg("the pairing window closed: no device paired within 5 minutes"));
             }
             match rx.recv_timeout(left.min(Duration::from_secs(1))) {
-                Ok((sock, s, x)) => {
-                    let info =
-                        crate::admitting::at_home(&live.mesh, sock, s, x, &mut |code| ask_client(out, &mut r, code))?;
-                    (self.log)(&format!("cbb: {} joined the group", info.name));
-                    let done = Header { name: info.name, done: true, ..Default::default() };
-                    return control::write(out, &control::reply(done, Vec::new()));
-                }
+                Ok((sock, s, x)) => match crate::admitting::at_home(&live.mesh, sock, s, x, &mut open) {
+                    Ok(info) => {
+                        (self.log)(&format!("cbb: {} joined the group", info.name));
+                        let done = Header { name: info.name, done: true, ..Default::default() };
+                        return control::write(out, &control::reply(done, Vec::new()));
+                    }
+                    Err(e) => {
+                        (self.log)(&format!("cbb: a device did not pair: {}", e.for_log()));
+                        if let Err(closed) = open.may_use(cbb_core::join::invitation::Network::Home, now()) {
+                            let why = match closed {
+                                cbb_core::join::PairError::TooMany => {
+                                    "the pairing window closed after three failed tries: run cbb pair again for a new code"
+                                }
+                                _ => "the pairing window closed",
+                            };
+                            return Err(e.context(why));
+                        }
+                        let tried = Header { refused: true, detail: e.for_log(), ..Default::default() };
+                        control::write(out, &control::partial(tried))?;
+                    }
+                },
                 Err(RecvTimeoutError::Timeout) if !STOP.load(Ordering::SeqCst) => {}
                 Err(_) => return Err(Error::msg("the service is stopping")),
             }
         }
     }
 
-    /// cbb pair -code on a computer in no group: joins the group of 0.6 whose
-    /// pairing window mDNS finds, or at the address given. The answers: the
-    /// code to compare, which the client answers, then done; the service
-    /// starts in the group it kept.
-    pub(super) fn live_join(
-        &self,
-        m: &Message,
-        mut r: control::Reader<UnixStream>,
-        out: &mut UnixStream,
-    ) -> Result<()> {
+    /// cbb pair -code on a computer in no group: joins the group of 0.6 by
+    /// its home window. `code` is the window's six digits, with the window
+    /// found by mDNS (at `address` when given), or the window's QR code
+    /// text, which names its addresses, ID and member key. Answers done;
+    /// the service starts in the group it kept.
+    pub(super) fn live_join(&self, m: &Message, _r: control::Reader<UnixStream>, out: &mut UnixStream) -> Result<()> {
         let h = &m.header;
         if in_group(&self.state_dir) || matches!(Identity::load(&self.state_dir), Ok(Some(_))) {
             return Err(Error::msg("this device is already in a group"));
@@ -635,17 +786,14 @@ impl Service {
             os: cbb_core::format::print::os_number(crate::admin::os_name()),
             caps: roster::caps_number(&caps),
         };
-        let addrs = if h.address.is_empty() {
-            crate::discovery::find_pairing(crate::discovery::PAIRING_BROWSE)?
-        } else {
-            let a = crate::resolve(&h.address)?;
-            *self.joined_at.lock().unwrap() = Some(a);
-            vec![a]
-        };
+        let at = if h.address.is_empty() { None } else { Some(crate::resolve(&h.address)?) };
+        let (addrs, invitation, fp) = crate::joining::window_of(&h.code, at)?;
         let mut last = Error::msg("no address to dial");
         for a in addrs {
-            match crate::joining::at_home(&self.state_dir, a, &me, &mut |code| ask_client(out, &mut r, code)) {
+            match crate::joining::at_home(&self.state_dir, a, &me, invitation.clone(), fp) {
                 Ok(_) => {
+                    // The new member dials first the address it joined at.
+                    *self.joined_at.lock().unwrap() = Some(a);
                     (self.log)(&format!("cbb: joined a group of 0.6 as {name}"));
                     return control::write(
                         out,
@@ -653,7 +801,7 @@ impl Service {
                     );
                 }
                 // Another address of the same window, only when this one
-                // did not answer: once a session ran, the codes were shown.
+                // did not answer: once a session ran, it spent a try.
                 Err(e) if e.message().starts_with("cannot reach") => last = e,
                 Err(e) => return Err(e),
             }
@@ -668,25 +816,35 @@ mod tests;
 /// The service's operations that need a group and have not moved to the
 /// records of 0.6 yet; any other the service answers as ever (an unknown
 /// one with why).
-const MOVING: &[&str] = &[
-    "away",
-    "entries",
-    "entries_get",
-    "release",
-    "release_want",
-    "release_held",
-    "update_way",
-    control::op::MAKE_ADMIN,
-    control::op::TAKEOVER_DELAY,
-    control::op::TAKE_OVER,
-    control::op::RECOVER,
-    control::op::HAND_OVER,
-    "invite",
-];
+const MOVING: &[&str] =
+    &["away", "entries", "entries_get", "release", "release_want", "release_held", "update_way", "invite"];
 
 const NOT_ADMIN: &str =
     "only an admin can change the devices list: the group's root, an admin it made (cbb admin), or an admin phone";
 const NOT_COMMANDER: &str = "only an admin pastes on another device, runs its actions or turns either off: the group's root, an admin it made (cbb admin), or an admin phone";
+/// What a handover, a claim and a claim's delay answer on the records of
+/// 0.6, where the root changes only with the group's recovery key (rule
+/// 33; docs/decisions.md).
+pub(super) const ROOT_BY_RECOVERY: &str = "the group's root changes only with its recovery key on the records of 0.6 (cbb recovery); a handover and a claim's delay are gone";
+
+/// Why a frozen admin computer is refused what an admin does.
+const FROZEN: &str = "another admin froze this computer's admin key: it changes nothing until the group's root or an admin phone unfreezes it";
+
+/// Whether h writes the group's records, or commands another device
+/// (other), as only an admin does.
+fn writes(h: &Header, other: bool) -> bool {
+    match h.op.as_str() {
+        "rename" | "remove" | "freeze" | "thaw" | "resolve" | "hubs" => true,
+        "incoming" => !h.value.is_empty(),
+        "mute" | "unmute" | "sync" | "away" | "action_on" | "actions_off" | "paste_receive" | "paste_on" => other,
+        _ => false,
+    }
+}
+
+/// What cbb pair -qr answers on the records of 0.6: a device that waits
+/// for the group to dial it is gone (D-119).
+pub(super) const LISTENING_JOINER_GONE: &str = "on the records of 0.6 no device waits for the group to dial it, so a QR code or a code from the new device admits nothing: open a pairing window here with cbb pair, and the new device dials it (cbb pair -code on a computer, the QR code of the window on a phone)";
+
 /// Why a device that is no admin, or not the group's root, is refused.
 pub(super) const NOT_ADMITTER: &str = "this device is in a group already (cbb status lists it); only the group's root or an admin adds devices, and this device is neither";
 
@@ -698,15 +856,18 @@ fn refusal(live: &Live, h: &Header) -> Option<&'static str> {
     let root =
         own.root.as_ref().is_some_and(|k| st.roots.last() == Some(&cbb_core::records::Key::es256(k.public()).hash()));
     let admin = writers::signer(own, &st).is_some();
+    // An admin key the records name, but frozen.
+    let frozen = own.admin.as_ref().is_some_and(|k| {
+        let h = cbb_core::records::Key::es256(k.public()).hash();
+        st.devices.iter().any(|d| d.admin == Some(h) && d.frozen)
+    });
     let other = !h.device.is_empty() && !self_named(live, &h.device);
     let why = match h.op.as_str() {
         "make_admin" if !root => {
             "only the group's root makes admins: run cbb admin on the computer that created the group, or use \"Make it an admin\" on the root phone"
         }
         "key_level" if !root => "only the group's root sets the key level",
-        "takeover_delay" if !root => "only the group's root sets how long a claim waits",
-        "hand_over" if !root => "only the group's root hands the group over",
-        "take_over" if !admin => "only an admin takes the group over; this device is none",
+        _ if !admin && frozen && writes(h, other) => FROZEN,
         "rename" | "remove" | "freeze" | "thaw" | "resolve" if !admin => NOT_ADMIN,
         "incoming" if !admin && !h.value.is_empty() => {
             "only the group's root or an admin sets how long an incoming copy stays live"

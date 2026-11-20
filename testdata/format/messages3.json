@@ -33,12 +33,6 @@
     "rule": "pair/start/ada",
     "type": "bytes 1..16384",
     "needed": true
-   },
-   {
-    "n": 4,
-    "rule": "pair/start/commitment",
-    "type": "bytes 32",
-    "needed": true
    }
   ],
   "pair/reply": [
@@ -53,12 +47,6 @@
     "rule": "pair/reply/adb",
     "type": "bytes 1..1024",
     "needed": true
-   },
-   {
-    "n": 4,
-    "rule": "pair/reply/nonce",
-    "type": "bytes 32",
-    "needed": true
    }
   ],
   "pair/confirm": [
@@ -66,12 +54,6 @@
     "n": 2,
     "rule": "pair/confirm/ta",
     "type": "bytes 1..64",
-    "needed": true
-   },
-   {
-    "n": 3,
-    "rule": "pair/confirm/nonce",
-    "type": "bytes 32",
     "needed": true
    }
   ],
@@ -907,17 +889,17 @@
   {
    "name": "pair start",
    "t": 64,
-   "message": "a4001840025820541845d84dbb13939265b406f6de5c4acf72683f06191af3f63927541c826d5b035827a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de0045820a68111d1bfb0d34b1e40a4b48f6665ce15eb40c5ad699f53ce307b244d7d75e9"
+   "message": "a3001840025820541845d84dbb13939265b406f6de5c4acf72683f06191af3f63927541c826d5b035827a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de0"
   },
   {
    "name": "pair reply",
    "t": 65,
-   "message": "a4001841025820d023d2a00bf35cfae4516e43f8f759e96eca5f246873a34fca49e3da4d6a6c6c035833a3015089cb7e6367ac75d7c5f7dc4322205bb90250a07a039a5387421d2de006983c7bb11b036c45776f6b27732070686f6e6504582009239b19ee440c2521e1c316623763e20deaac05436d13b4cdf46b8c72f2a0b1"
+   "message": "a3001841025820d023d2a00bf35cfae4516e43f8f759e96eca5f246873a34fca49e3da4d6a6c6c035833a3015089cb7e6367ac75d7c5f7dc4322205bb90250a07a039a5387421d2de006983c7bb11b036c45776f6b27732070686f6e65"
   },
   {
    "name": "pair confirm",
    "t": 66,
-   "message": "a300184202582043543103ef34fb91f0b0b863a4904a02d8b081dfe0b3a773a6db612fd53d072a03582020c08bd01d3585529435621ef2c186c3dec2c4e995338fcc9e373369646f86ea"
+   "message": "a200184202582043543103ef34fb91f0b0b863a4904a02d8b081dfe0b3a773a6db612fd53d072a"
   },
   {
    "name": "pair welcome",
@@ -1156,14 +1138,24 @@
    "message": "a20018450200"
   },
   {
-   "name": "pair start without the code's commitment",
-   "rule": "pair/start/commitment",
-   "message": "a3001840025820541845d84dbb13939265b406f6de5c4acf72683f06191af3f63927541c826d5b035827a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de0"
+   "name": "pair start without its Info",
+   "rule": "pair/start/ada",
+   "message": "a2001840025820541845d84dbb13939265b406f6de5c4acf72683f06191af3f63927541c826d5b"
   },
   {
-   "name": "pair confirm with a short nonce",
-   "rule": "pair/confirm/nonce",
-   "message": "a300184202582043543103ef34fb91f0b0b863a4904a02d8b081dfe0b3a773a6db612fd53d072a03581f20c08bd01d3585529435621ef2c186c3dec2c4e995338fcc9e373369646f86"
+   "name": "pair start with a code commitment (field 4, retired)",
+   "rule": "pair/start/retired",
+   "message": "a4001840025820541845d84dbb13939265b406f6de5c4acf72683f06191af3f63927541c826d5b035827a4016e6b69746368656e207461626c6574020304010950272c9b26a15f54cb1c227c493c496de0045820a68111d1bfb0d34b1e40a4b48f6665ce15eb40c5ad699f53ce307b244d7d75e9"
+  },
+  {
+   "name": "pair reply with a nonce (field 4, retired)",
+   "rule": "pair/reply/retired",
+   "message": "a4001841025820d023d2a00bf35cfae4516e43f8f759e96eca5f246873a34fca49e3da4d6a6c6c035833a3015089cb7e6367ac75d7c5f7dc4322205bb90250a07a039a5387421d2de006983c7bb11b036c45776f6b27732070686f6e6504582009239b19ee440c2521e1c316623763e20deaac05436d13b4cdf46b8c72f2a0b1"
+  },
+  {
+   "name": "pair confirm with a nonce (field 3, retired)",
+   "rule": "pair/confirm/retired",
+   "message": "a300184202582043543103ef34fb91f0b0b863a4904a02d8b081dfe0b3a773a6db612fd53d072a03582020c08bd01d3585529435621ef2c186c3dec2c4e995338fcc9e373369646f86ea"
   },
   {
    "name": "relay online: names out of order",
@@ -1898,50 +1890,58 @@
   ]
  },
  "codes": {
-  "short_code_label": "cbb short code v3",
+  "home_code_label": "cbb pair home code v1",
   "channel_prefix": "cbb pair channel v3",
-  "no_invitation": "00000000000000000000000000000000",
-  "no_secret": "0000000000000000000000000000000000000000000000000000000000000000",
-  "short_code": [
+  "home_secret": [
    {
-    "name": "an invitation",
-    "exporter": "17d99927afc937005b296fad0cde16c3a115ce1d2b50d09901ca4871f71527d6",
-    "nj": "c51ef40a4f0f38cdc39c4364b59e2c516b225e80f3ef783acfbd9dd2184833b3",
-    "nm": "2518b684c596099a5b011941878671528b76519efe3f8c6bfb75a2ed928217c3",
-    "invitation": "41ae9daa27bdce27129416d54cdd4e42",
-    "code": "861197"
+    "name": "six digits",
+    "digits": "042917",
+    "secret": "6c05257e455999179d4a3e13146f484e9bf3f6287c1792668a913017efb963a5"
    },
    {
-    "name": "another invitation ID, one bit apart",
-    "exporter": "17d99927afc937005b296fad0cde16c3a115ce1d2b50d09901ca4871f71527d6",
-    "nj": "c51ef40a4f0f38cdc39c4364b59e2c516b225e80f3ef783acfbd9dd2184833b3",
-    "nm": "2518b684c596099a5b011941878671528b76519efe3f8c6bfb75a2ed928217c3",
-    "invitation": "40ae9daa27bdce27129416d54cdd4e42",
-    "code": "857538"
+    "name": "one digit apart",
+    "digits": "042918",
+    "secret": "42ee56ebeffd5529a5f5310c5ded996e6a6beb5e75d23f7edde7806f5ea3c9bd"
    },
    {
-    "name": "at home without an invitation",
-    "exporter": "17d99927afc937005b296fad0cde16c3a115ce1d2b50d09901ca4871f71527d6",
-    "nj": "c51ef40a4f0f38cdc39c4364b59e2c516b225e80f3ef783acfbd9dd2184833b3",
-    "nm": "2518b684c596099a5b011941878671528b76519efe3f8c6bfb75a2ed928217c3",
-    "invitation": "00000000000000000000000000000000",
-    "code": "964863"
+    "name": "all zeros",
+    "digits": "000000",
+    "secret": "a76799cb2d59c156629d4379a95eb3bcca66920ec91006784fe0fa1ab5a5bac6"
    },
    {
-    "name": "the nonces swapped",
-    "exporter": "17d99927afc937005b296fad0cde16c3a115ce1d2b50d09901ca4871f71527d6",
-    "nj": "2518b684c596099a5b011941878671528b76519efe3f8c6bfb75a2ed928217c3",
-    "nm": "c51ef40a4f0f38cdc39c4364b59e2c516b225e80f3ef783acfbd9dd2184833b3",
-    "invitation": "41ae9daa27bdce27129416d54cdd4e42",
-    "code": "858827"
+    "name": "all nines",
+    "digits": "999999",
+    "secret": "06758a50abb976c481ab0d57dcd26fc2ff25af9963f3f9f7f84d8f30a59f8982"
    },
    {
-    "name": "another session",
-    "exporter": "dc319823f66d170608049e7be32907a9255b089da442e1c08d1c7cfdea7ffad6",
-    "nj": "c51ef40a4f0f38cdc39c4364b59e2c516b225e80f3ef783acfbd9dd2184833b3",
-    "nm": "2518b684c596099a5b011941878671528b76519efe3f8c6bfb75a2ed928217c3",
-    "invitation": "41ae9daa27bdce27129416d54cdd4e42",
-    "code": "688932"
+    "name": "five digits",
+    "digits": "04291",
+    "error": "not six digits"
+   },
+   {
+    "name": "seven digits",
+    "digits": "0429170",
+    "error": "not six digits"
+   },
+   {
+    "name": "a letter",
+    "digits": "04291a",
+    "error": "not six digits"
+   },
+   {
+    "name": "a space",
+    "digits": "042 17",
+    "error": "not six digits"
+   },
+   {
+    "name": "full-width digits",
+    "digits": "０４２９１７",
+    "error": "not six digits"
+   },
+   {
+    "name": "nothing",
+    "digits": "",
+    "error": "not six digits"
    }
   ],
   "channel_id": [
@@ -1960,44 +1960,11 @@
     "ci": "6362622070616972206368616e6e656c20763300c2d7bf88433548096ef034517b51abbbe031994042ba7b3b4176d745ef0dedfe8ba406934518282d540c1ec1a8c5146fce3f533dd75415c7e74175918434885340ae9daa27bdce27129416d54cdd4e42"
    },
    {
-    "name": "at home without an invitation",
-    "member": "c2d7bf88433548096ef034517b51abbbe031994042ba7b3b4176d745ef0dedfe",
-    "joiner": "8ba406934518282d540c1ec1a8c5146fce3f533dd75415c7e741759184348853",
-    "invitation": "00000000000000000000000000000000",
-    "ci": "6362622070616972206368616e6e656c20763300c2d7bf88433548096ef034517b51abbbe031994042ba7b3b4176d745ef0dedfe8ba406934518282d540c1ec1a8c5146fce3f533dd75415c7e74175918434885300000000000000000000000000000000"
-   },
-   {
     "name": "the keys swapped",
     "member": "8ba406934518282d540c1ec1a8c5146fce3f533dd75415c7e741759184348853",
     "joiner": "c2d7bf88433548096ef034517b51abbbe031994042ba7b3b4176d745ef0dedfe",
     "invitation": "41ae9daa27bdce27129416d54cdd4e42",
     "ci": "6362622070616972206368616e6e656c207633008ba406934518282d540c1ec1a8c5146fce3f533dd75415c7e741759184348853c2d7bf88433548096ef034517b51abbbe031994042ba7b3b4176d745ef0dedfe41ae9daa27bdce27129416d54cdd4e42"
-   }
-  ],
-  "passwords": [
-   {
-    "name": "at home without an invitation",
-    "invitation": "00000000000000000000000000000000",
-    "password": "0000000000000000000000000000000000000000000000000000000000000000",
-    "keyed": false
-   },
-   {
-    "name": "an invitation",
-    "invitation": "41ae9daa27bdce27129416d54cdd4e42",
-    "password": "7adcd98f682f379687195b038655efca03b62adce9f23da455f2fe72c0e37fa7",
-    "keyed": true
-   },
-   {
-    "name": "an invitation ID with the zero password",
-    "invitation": "41ae9daa27bdce27129416d54cdd4e42",
-    "password": "0000000000000000000000000000000000000000000000000000000000000000",
-    "error": "refused"
-   },
-   {
-    "name": "a secret with the ID of none",
-    "invitation": "00000000000000000000000000000000",
-    "password": "7adcd98f682f379687195b038655efca03b62adce9f23da455f2fe72c0e37fa7",
-    "error": "refused"
    }
   ]
  },

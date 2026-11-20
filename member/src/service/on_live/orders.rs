@@ -32,14 +32,12 @@ fn signed(st: &State, key: &KeyHash) -> Signed {
         .iter()
         .find(|d| d.key.hash() == *key || d.admin.as_ref() == Some(key))
         .or_else(|| if root { st.root_device.and_then(|r| st.devices.iter().find(|d| d.id == r)) } else { None });
-    let devs = roster::devices(st, &roster::Me::default(), &HashMap::new(), 0);
-    let shown = d.and_then(|d| devs.iter().find(|x| x.id == id_text(&d.id)));
     Signed {
         id: d.map(|d| id_text(&d.id)).unwrap_or_default(),
         name: d.map(|d| d.name.clone()).unwrap_or_default(),
         root,
-        role: shown.map(|x| x.role.clone()).unwrap_or_default(),
-        store: shown.map(|x| x.store.clone()).unwrap_or_default(),
+        role: d.map(|d| roster::role_name(d.role).to_string()).unwrap_or_default(),
+        store: d.map(|d| roster::store_name(d.store).to_string()).unwrap_or_default(),
     }
 }
 

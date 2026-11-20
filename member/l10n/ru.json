@@ -160,5 +160,9 @@
  "A change of the group's root is arriving: CBB asks the other devices for it.": "Приходит смена корня группы: CBB запрашивает её у других устройств.",
  "The group's records wait for records no device has offered.": "Записи группы ждут записей, которые не предложило ни одно устройство.",
  "Connect the group's root, which has them.": "Подключите корень группы: у него они есть.",
- "Copies wait for their senders' records: {}.": "Копии ждут записей своих отправителей: {}."
+ "Copies wait for their senders' records: {}.": "Копии ждут записей своих отправителей: {}.",
+ "This device is the group's root now, by its recovery key, and every device stays in the group; cbb remove takes out a lost one. The service restarts to sign with its new root key.": "Теперь это устройство — корень группы по её ключу восстановления, и все устройства остаются в группе; cbb remove убирает потерянное. Служба перезапускается, чтобы подписывать новым корневым ключом.",
+ "Stays in the group: {}": "Остаются в группе: {}",
+ "Leaves the group: {}": "Покидают группу: {}",
+ "Make this computer the group's root, with these devices? [y/N] ": "Сделать этот компьютер корнем группы с этими устройствами? [y/N] "
 }

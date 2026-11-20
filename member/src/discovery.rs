@@ -77,6 +77,13 @@ pub trait Peers: Send + Sync + 'static {
     fn window_fingerprint(&self) -> String {
         String::new()
     }
+    /// What a home window announces as `i` beside `p=1`: the hex of its ID,
+    /// by which the new device finds the window whose six digits its person
+    /// types (docs/protocol.md, "Pairing in 0.6"); never the digits. Empty
+    /// for none.
+    fn window_id(&self) -> String {
+        String::new()
+    }
     /// Discovery found the device on the home network, or lost it.
     fn found(&self, id: &DeviceId, here: bool);
     /// The devices of the group as their IDs show, sorted.
@@ -184,13 +191,13 @@ pub fn announce_joiner(id: &DeviceId, port: u16, fingerprint: &str) -> Option<An
     Some(Announcement(daemon))
 }
 
-/// Announces a phone's open pairing window of 0.6 (docs/protocol.md,
-/// section 6, "The window and who dials"): the phone's device ID, as
-/// text, as the
-/// instance, its member port, and TXT `v=1`, `g=<tag>`, `p=1` and its TLS
-/// key's fingerprint `f`, for a joiner without a camera. Dropping the
+/// Announces a phone's open home window of 0.6 (docs/protocol.md,
+/// "Pairing in 0.6"): the phone's device ID, as text, as the instance, its
+/// member port, and TXT `v=1`, `g=<tag>`, `p=1`, the hash of its member key
+/// `f` and the window's ID `i` (hex), never the digits, for a joiner
+/// without a camera, as a computer's window is announced. Dropping the
 /// announcement sends the goodbyes.
-pub fn announce_window(id: &str, port: u16, tag: &str, fingerprint: &str) -> Option<Announcement> {
+pub fn announce_window(id: &str, port: u16, tag: &str, fingerprint: &str, window_id: &str) -> Option<Announcement> {
     let daemon = mdns_sd::ServiceDaemon::new().ok()?;
     let _ = daemon.disable_interface(vec![mdns_sd::IfKind::LoopbackV4, mdns_sd::IfKind::LoopbackV6]);
     let only = interfaces::only();
@@ -198,14 +205,14 @@ pub fn announce_window(id: &str, port: u16, tag: &str, fingerprint: &str) -> Opt
         let _ = daemon.disable_interface(mdns_sd::IfKind::All);
         let _ = daemon.enable_interface(only.iter().map(|n| mdns_sd::IfKind::Name(n.clone())).collect::<Vec<_>>());
     }
-    let txt = [("v", "1"), ("g", tag), ("p", "1"), ("f", fingerprint)];
+    let txt = [("v", "1"), ("g", tag), ("p", "1"), ("f", fingerprint), ("i", window_id)];
     let info =
         mdns_sd::ServiceInfo::new(SERVICE, id, &format!("cb-{id}.local."), "", port, &txt[..]).ok()?.enable_addr_auto();
     daemon.register(info).ok()?;
     Some(Announcement(daemon))
 }
 
-/// An announcement of announce_joiner: dropping it shuts the mDNS daemon
+/// An announcement of announce_joiner or announce_window: dropping it shuts the mDNS daemon
 /// down, which sends the goodbyes.
 pub struct Announcement(mdns_sd::ServiceDaemon);
 
@@ -224,6 +231,7 @@ const PAIRING_SETTLE: Duration = Duration::from_secs(2);
 /// `p=1`), for a device that joins with a code alone: browsed for up to
 /// wait, then a moment more for the others; an error when none is found.
 /// More than one window is refused, as in Go: the code fits only one.
+/// A home window of 0.6 is found by [`find_window`].
 pub fn find_pairing(wait: Duration) -> crate::error::Result<Vec<SocketAddr>> {
     use crate::error::Error;
     let open = browse_txt(wait, |info| (info.get_property_val_str("p") == Some("1")).then_some(()))?;
@@ -239,28 +247,51 @@ pub fn find_pairing(wait: Duration) -> crate::error::Result<Vec<SocketAddr>> {
     }
 }
 
-/// The one member that announces an open pairing window of 0.6 with its
-/// key's fingerprint (TXT `p=1` and `f`), with its addresses, for a phone
-/// without a camera that joins (docs/protocol.md, section 6, "The window
-/// and who dials"). More than one is refused: the person compares the code
-/// with one screen.
-pub fn find_window(wait: Duration) -> crate::error::Result<(Vec<SocketAddr>, String)> {
+/// A home window that mDNS finds (TXT `p=1` with `i`, docs/protocol.md,
+/// "Pairing in 0.6"): its addresses, its ID and the hash of the member's
+/// key (`f`), which the joiner checks the TLS key by.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Window {
+    pub addrs: Vec<SocketAddr>,
+    pub id: [u8; 16],
+    pub fp: Option<cbb_core::format::KeyHash>,
+}
+
+/// The home window to join with six digits: browsed for up to wait, then
+/// a moment more for the others. `at`, when given, is the address cbb pair
+/// -code was given: the window that announces it. More than one window is
+/// refused: the digits fit one, and each other would be one more guess.
+pub fn find_window(wait: Duration, at: Option<SocketAddr>) -> crate::error::Result<Window> {
+    use cbb_core::join::invitation::hex_bytes;
+
     use crate::error::Error;
     let open = browse_txt(wait, |info| {
-        let fp = info.get_property_val_str("f").filter(|f| !f.is_empty())?;
-        (info.get_property_val_str("p") == Some("1")).then(|| fp.to_string())
+        let id = info.get_property_val_str("i").and_then(hex_bytes::<16>)?;
+        let fp = info.get_property_val_str("f").and_then(hex_bytes::<32>).map(cbb_core::format::KeyHash);
+        (info.get_property_val_str("p") == Some("1")).then_some((id, fp))
     })?;
-    let mut open: Vec<_> = open.into_values().collect();
-    match open.len() {
-        0 => {
-            Err(Error::msg("no device with an open pairing window found; open Add a device on the group's phone first"))
-        }
+    let mut found: Vec<Window> = open
+        .into_values()
+        .map(|(addrs, (id, fp))| Window { addrs, id, fp })
+        .filter(|w| at.is_none_or(|a| w.addrs.iter().any(|x| x.ip().to_canonical() == a.ip().to_canonical())))
+        .collect();
+    match found.len() {
+        0 if at.is_some() => Err(Error::msg(
+            "no pairing window announces itself at that address; give the link of the window's QR code instead (cbb pair -code 'cbb://pair?...')",
+        )),
+        0 => Err(Error::msg(
+            "no member with an open pairing window found; run cbb pair on the group's root or an admin, or give its address",
+        )),
         1 => {
-            let (mut addrs, fp) = open.remove(0);
-            addrs.truncate(4);
-            Ok((addrs, fp))
+            let mut w = found.remove(0);
+            if let Some(a) = at {
+                w.addrs = vec![a];
+            }
+            Ok(w)
         }
-        n => Err(Error::msg(format!("{n} devices announce a pairing window; close all but one and try again"))),
+        n => Err(Error::msg(format!(
+            "{n} devices announce a pairing window; give the address that cbb pair showed, or the link of its QR code"
+        ))),
     }
 }
 
@@ -1112,6 +1143,7 @@ fn browse_with<P: Peers>(
         // records, which mdns-sd takes for another device's and renames this
         // one ("ID (2)"), which nobody finds by its ID.
         let fp = if window { node.window_fingerprint() } else { String::new() };
+        let wid = if window { node.window_id() } else { String::new() };
         let mut txt = vec![("v", "1"), ("g", tag)];
         if !dials && !as_phone {
             txt.push(("r", "listen"));
@@ -1120,6 +1152,9 @@ fn browse_with<P: Peers>(
             txt.push(("p", "1"));
             if !fp.is_empty() {
                 txt.push(("f", &fp));
+            }
+            if !wid.is_empty() {
+                txt.push(("i", &wid));
             }
         }
         let host = format!("{}.", me.host_name());

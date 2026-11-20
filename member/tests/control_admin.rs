@@ -13,7 +13,7 @@ mod common;
 use std::time::Duration;
 
 use common::*;
-use serde_json::json;
+use serde_json::{Value, json};
 
 fn has(e: &str, part: &str) {
     assert!(e.contains(part), "{e:?} does not say {part:?}");
@@ -64,11 +64,11 @@ fn a_member_is_no_admin() {
         (json!({"op": "resolve"}), "only an admin can change the devices list"),
         (json!({"op": "make_admin", "device": "root"}), "only the group's root makes admins"),
         (json!({"op": "key_level", "value": "files"}), "only the group's root sets the key level"),
-        (json!({"op": "takeover_delay", "value": "1h"}), "only the group's root sets how long a claim waits"),
+        (json!({"op": "takeover_delay", "value": "1h"}), "changes only with its recovery key"),
         (json!({"op": "incoming", "value": "1m"}), "only the group's root or an admin sets"),
         (json!({"op": "hubs", "hubs": ["root"]}), "only the group's root or an admin that may be a hub"),
-        (json!({"op": "hand_over", "device": "root"}), "only the group's root hands the group over"),
-        (json!({"op": "take_over", "device": "root"}), "only an admin takes the group over"),
+        (json!({"op": "hand_over", "device": "root"}), "changes only with its recovery key"),
+        (json!({"op": "take_over", "device": "root"}), "changes only with its recovery key"),
         (json!({"op": "mute", "device": "root"}), "only an admin mutes a device"),
         (json!({"op": "unmute", "device": "root"}), "only an admin mutes a device"),
         (json!({"op": "sync", "on": false, "device": "root"}), "only an admin turns another device's sync"),
@@ -106,9 +106,11 @@ fn the_roots_settings() {
     assert!(m.h["below"].as_array().is_none_or(Vec::is_empty), "{:?}", m.h);
     assert_eq!(root.status()["key_level"], "files");
 
-    has(&root.err(true, json!({"op": "takeover_delay", "value": "200h"})), "from 0s to 168h");
-    has(&root.err(true, json!({"op": "takeover_delay", "value": "soon"})), "from 0s to 168h");
-    root.ok(true, json!({"op": "takeover_delay", "value": "1h30m"}));
+    // A claim's delay is gone on the records of 0.6: the root changes only
+    // with the recovery key (rule 33).
+    for value in ["200h", "soon", "1h30m"] {
+        has(&root.err(true, json!({"op": "takeover_delay", "value": value})), "changes only with its recovery key");
+    }
 
     has(&root.err(true, json!({"op": "incoming", "value": "1s"})), "from 5s to 1h");
     has(&root.err(true, json!({"op": "incoming", "value": "2h"})), "from 5s to 1h");
@@ -131,7 +133,7 @@ fn makes_an_admin_and_hands_the_group_over() {
     // Its keys are in a file: only with the user's consent.
     has(&root.err(true, json!({"op": "make_admin", "device": "desk"})), "allow-file-key");
     has(&root.err(true, json!({"op": "make_admin", "device": "root"})), "more than an admin");
-    has(&root.err(true, json!({"op": "hand_over", "device": "desk"})), "is no admin");
+    has(&root.err(true, json!({"op": "hand_over", "device": "desk"})), "changes only with its recovery key");
     let m = root.ok(true, json!({"op": "make_admin", "device": "desk", "allow_file_key": true}));
     assert_eq!(m.s("name"), "desk");
     has(&root.err(true, json!({"op": "make_admin", "device": "desk", "allow_file_key": true})), "already an admin");
@@ -159,10 +161,10 @@ fn makes_an_admin_and_hands_the_group_over() {
     // the root or take over a device that is not the root.
     has(&desk.err(true, json!({"op": "rename", "device": "root", "name": "x"})), "only the group's root renames");
     has(&desk.err(true, json!({"op": "remove", "device": "root"})), "holds the group's root");
-    has(&desk.err(true, json!({"op": "take_over", "device": "lap"})), "not the group's root");
+    has(&desk.err(true, json!({"op": "take_over", "device": "lap"})), "changes only with its recovery key");
     has(&desk.err(true, json!({"op": "make_admin", "device": "lap"})), "only the group's root makes admins");
     has(&desk.err(true, json!({"op": "freeze", "device": "root"})), "which nobody freezes");
-    has(&desk.err(true, json!({"op": "hand_over", "device": "lap"})), "only the group's root hands");
+    has(&desk.err(true, json!({"op": "hand_over", "device": "lap"})), "changes only with its recovery key");
 
     // Frozen, it signs nothing; the root unfreezes it.
     let m = root.ok(true, json!({"op": "freeze", "device": "desk"}));
@@ -176,35 +178,19 @@ fn makes_an_admin_and_hands_the_group_over() {
     has(&root.err(true, json!({"op": "thaw", "device": "desk"})), "is not frozen");
     desk.wait("desk learns it is unfrozen", |st| st["frozen"] != true);
 
-    // Handed over, desk's claim takes effect at once: it is the root, and
-    // its device record says so.
-    let m = root.ok(true, json!({"op": "hand_over", "device": "desk"}));
-    assert_eq!(m.s("name"), "desk");
-    // A claim counts as handed over only when made after the handover
-    // reached the admin: a record the root signs after it shows it has.
-    root.ok(true, json!({"op": "incoming", "value": "45s"}));
-    desk.wait("desk holds the handover", |st| st["incoming_ms"] == 45_000);
-    wait_for(
-        "desk takes the group over",
-        || desk.ask(true, json!({"op": "take_over", "device": "root"}), b"").error().is_empty().then_some(()),
-        || desk.log(),
-    );
-    wait_for(
-        "desk becomes the root",
-        || desk.devices().into_iter().find(|d| d["self"] == true && d["root"] == true),
-        || desk.log(),
-    );
-    // As the root it makes admins, and the old root can no longer.
-    has(&desk.err(true, json!({"op": "take_over", "device": "desk"})), "root already");
-    root.wait("the old root learns desk took the group over", |st| st["taken_over_by"] == "desk");
+    // No handover or claim on the records of 0.6: the root changes only
+    // with the recovery key (rule 33).
+    has(&root.err(true, json!({"op": "hand_over", "device": "desk"})), "changes only with its recovery key");
+    has(&desk.err(true, json!({"op": "take_over", "device": "root"})), "changes only with its recovery key");
 }
 
-/// An admin takes the group over from its lost root, after the delay the
-/// root set.
+/// An admin does not take the group over from its lost root on the records
+/// of 0.6, whatever delay: the root changes only with the recovery key
+/// (rule 33).
 #[test]
-fn an_admin_takes_the_group_over() {
+fn an_admin_does_not_take_the_group_over() {
     let mut g = group(&["root", "desk", "lap"]);
-    g[0].ok(true, json!({"op": "takeover_delay", "value": "0s"}));
+    has(&g[0].err(true, json!({"op": "takeover_delay", "value": "0s"})), "changes only with its recovery key");
     wait_for(
         "the root makes desk an admin",
         || {
@@ -236,28 +222,11 @@ fn an_admin_takes_the_group_over() {
     );
     g[0].stop();
     let desk = &g[1];
-    let m = desk.ok(true, json!({"op": "take_over", "device": "root"}));
-    assert_eq!(m.s("name"), "root");
-    wait_for(
-        "desk becomes the root",
-        || desk.devices().into_iter().find(|d| d["id"] == desk_id.as_str() && d["root"] == true),
-        || desk.log(),
-    );
-    has(&desk.err(true, json!({"op": "take_over", "device": "desk"})), "root already");
-    // The old root is no longer listed.
-    assert!(desk.find("root").is_none(), "{:?}", desk.devices());
-    // The other admin, which knew only the old root's address, meets the
-    // new root, gets an admin CA from it, and signs on.
-    let desk_addr = desk.addr();
-    g[2].restart(&["-peer", &desk_addr], &[]);
-    let (desk, lap) = (&g[1], &g[2]);
-    lap.wait_peer("desk");
-    wait_for(
-        "lap signs under the new root",
-        || lap.ask(true, json!({"op": "incoming", "value": "40s"}), b"").error().is_empty().then_some(()),
-        || lap.log(),
-    );
-    desk.wait("the new root takes lap's setting", |st| st["incoming_ms"] == 40_000);
+    has(&desk.err(true, json!({"op": "take_over", "device": "root"})), "changes only with its recovery key");
+    // The lost root is still the group's root, as desk's records say.
+    assert!(desk.devices().into_iter().any(|d| d["name"] == "root" && d["root"] == true), "{:?}", desk.devices());
+    assert!(desk.devices().into_iter().any(|d| d["id"] == desk_id.as_str() && d["root"] != true));
+    let _ = &mut g;
 }
 
 /// Commands a root sends a member: mute, sync, remote paste, quick actions,
@@ -314,34 +283,39 @@ fn commands_reach_a_member() {
     root.ok(true, json!({"op": "away", "name": "off", "device": "desk"}));
 }
 
-/// One pairing at a time, a join only outside a group, a join's code
-/// checked before it dials.
+/// One pairing at a time, a join only outside a group; a home window
+/// takes a wrong code as one of its three tries and tells the window, and
+/// the third closes it.
 #[test]
 fn pairing_one_at_a_time() {
     let root = Svc::start("root", &[], &[]);
     // Outside a group nothing admits.
     assert!(!root.err(true, json!({"op": "pair"})).is_empty());
     root.new_group();
-    let (mut wconn, mut r) = root.open(true, &json!({"op": "pair"}), b"");
-    let opened = read(&mut r).unwrap();
-    assert_eq!(opened.h["expires"], 300);
+    let (wconn, mut r, digits, link) = root.window(false);
     has(&root.err(true, json!({"op": "pair"})), "already open");
-    has(&root.err(true, json!({"op": "join", "address": "127.0.0.1:9"})), "already in a group");
+    has(&root.err(true, json!({"op": "join", "address": "127.0.0.1:9", "code": "123456"})), "already in a group");
     let other = Svc::start("other", &[], &[]);
-    // The joiner declines the code it is shown: the pairing ends on both
-    // sides, and the window with it.
-    let (mut jconn, mut jr) = other.open(true, &json!({"op": "join", "address": root.addr()}), b"");
-    let at_joiner = read(&mut jr).unwrap_or_else(|| panic!("no code at the joiner:\n{}", other.log()));
-    let at_window = read(&mut r).unwrap_or_else(|| panic!("no code at the window:\n{}", root.log()));
-    assert_eq!(at_joiner.s("code"), at_window.s("code"));
-    send(&mut jconn, &json!({"op": "answer", "consent": false}), b"");
-    send(&mut wconn, &json!({"op": "answer", "consent": true}), b"");
-    let end = read(&mut jr).expect("the join's end");
-    assert!(!end.error().is_empty(), "{:?}", end.h);
-    let end = read(&mut r).expect("the window's end");
-    assert!(!end.error().is_empty(), "{:?}", end.h);
+    // Not six digits: refused before anything is dialed.
+    has(&other.err(true, json!({"op": "join", "code": "12345", "address": root.addr()})), "six digits");
+    // Wrong digits, three times: each refused at the joiner and told at
+    // the window; the third closes the window.
+    let wrong = if digits == "000000" { "000001" } else { "000000" };
+    let wrong_link = link.replace(&format!("c={digits}"), &format!("c={wrong}"));
+    for n in 1..=3 {
+        has(&other.err(true, json!({"op": "join", "code": wrong_link})), "not the window's");
+        let told = read(&mut r).unwrap_or_else(|| panic!("the window said nothing:\n{}", root.log()));
+        if n < 3 {
+            assert!(told.error().is_empty() && told.h["refused"] == true, "{:?}", told.h);
+        } else {
+            has(told.error(), "three failed tries");
+        }
+    }
+    // Closed: even the right digits find no window.
+    has(&other.err(true, json!({"op": "join", "code": link})), "no pairing window open");
+    assert!(other.status()["group"].is_null(), "{}", other.log());
     drop((wconn, r));
-    // Once the client hung up the window closes, and another opens.
+    // Another window opens.
     wait_for(
         "the window closes",
         || {
@@ -352,60 +326,51 @@ fn pairing_one_at_a_time() {
         },
         || root.log(),
     );
-    assert!(other.status()["group"].is_null(), "{}", other.log());
     // A join to a port where nobody listens fails at once.
-    let e = other.err(true, json!({"op": "join", "address": "127.0.0.1:9"}));
+    let e = other.err(true, json!({"op": "join", "address": "127.0.0.1:9", "code": link}));
     has(&e, "127.0.0.1:9");
 }
 
-/// Admission by the joiner's QR code: the joiner listens, and the admin
-/// dials it with the code, the addresses and the fingerprint it shows.
+/// Admission by the joiner's QR code is gone on the records of 0.6: no
+/// device waits for the group to dial it, and the root says to open a
+/// pairing window, which the new device dials (D-119).
 #[test]
-fn admits_by_qr_code() {
+fn a_qr_admission_is_gone() {
     let root = Svc::start("root", &[], &[]);
     root.new_group();
-    let desk = Svc::start("desk", &["-peer", &root.addr()], &[]);
-    let code = "482915";
-    let (_conn, mut r) = desk.open(true, &json!({"op": "join", "code": code, "listen": true, "expires": 60}), b"");
-    let shown = read(&mut r).unwrap();
-    assert!(shown.error().is_empty(), "{:?}", shown.h);
-    let fp = shown.s("fingerprint").to_string();
-    assert!(!fp.is_empty(), "{:?}", shown.h);
-    // A container may have no private address for the QR code: the join
-    // then ends with why, as the second answer.
-    let Some(addr) = shown.h["addrs"].as_array().and_then(|a| a.first()).and_then(|a| a.as_str()).map(String::from)
-    else {
-        let why = read(&mut r).expect("why the join ended");
-        has(why.error(), "no address on the home network");
-        eprintln!("admits_by_qr_code: no private address here, so only the refusal is checked");
-        return;
-    };
-    let e = root.err(true, json!({"op": "pair", "code": "000001", "addrs": [addr], "fingerprint": fp}));
-    assert!(!e.is_empty());
-    let m = root.ok(true, json!({"op": "pair", "code": code, "addrs": [addr], "fingerprint": fp}));
-    assert_eq!(m.s("name"), "desk");
-    let done = read(&mut r).unwrap();
-    assert!(done.error().is_empty() && done.done(), "{:?}", done.h);
-    root.wait_peer("desk");
+    let e = root.err(true, json!({"op": "pair", "code": "482915", "addrs": ["192.168.1.2:9"], "fingerprint": "fp"}));
+    has(&e, "open a pairing window here with cbb pair");
+    // A code alone, which once looked for the device that shows it.
+    has(&root.err(true, json!({"op": "pair", "code": "482915"})), "open a pairing window here with cbb pair");
+    // The window itself still opens.
+    let (_c, mut r) = root.open(true, &json!({"op": "pair"}), b"");
+    let opened = read(&mut r).unwrap();
+    assert!(opened.error().is_empty(), "{:?}", opened.h);
 }
 
-/// What the root refuses of a QR code, and of a recovery, and an admin
-/// for a device that is not connected.
+/// What the root answers of a QR code and refuses of a recovery; and that on the
+/// records of 0.6 it makes a device that is not connected an admin, as the
+/// device's record carries the admin key it offered when it paired.
 #[test]
 fn refuses_bad_admissions_and_recoveries() {
     let mut g = group(&["root", "desk"]);
     let root = &g[0];
+    // No device waits for the group to dial it on 0.6 (D-119): whatever
+    // the QR code says, the root points to its pairing window.
     let qr = |addrs: serde_json::Value, fp: &str| {
         root.err(true, json!({"op": "pair", "code": "482915", "addrs": addrs, "fingerprint": fp}))
     };
-    has(&qr(json!(["192.168.1.2:9"]), ""), "no certificate fingerprint");
-    has(&qr(json!(["nonsense"]), "fp"), "not an address and port");
-    has(&qr(json!(["127.0.0.1:9"]), "fp"), "cannot connect");
-    has(&qr(json!(["8.8.8.8:9"]), "fp"), "not on the home network");
-    assert!(
-        !root
-            .err(true, json!({"op": "pair", "code": "48", "addrs": ["192.168.1.2:9"], "fingerprint": "fp"}))
-            .is_empty()
+    for (addrs, fp) in [
+        (json!(["192.168.1.2:9"]), ""),
+        (json!(["nonsense"]), "fp"),
+        (json!(["127.0.0.1:9"]), "fp"),
+        (json!(["8.8.8.8:9"]), "fp"),
+    ] {
+        has(&qr(addrs, fp), "no device waits for the group to dial it");
+    }
+    has(
+        &root.err(true, json!({"op": "pair", "code": "48", "addrs": ["192.168.1.2:9"], "fingerprint": "fp"})),
+        "no device waits for the group to dial it",
     );
     // The root claims nothing; a member has no recovery key to claim with.
     has(&root.err_with(true, json!({"op": "recover"}), b"words"), "root already");
@@ -413,7 +378,7 @@ fn refuses_bad_admissions_and_recoveries() {
     assert!(!e.is_empty());
     let e = g[1].err_with(true, json!({"op": "recover", "name": "yubikey"}), b"123456");
     assert!(!e.is_empty());
-    // Stopped, desk cannot get its admin CA.
+    // Stopped, desk still becomes an admin: no admin CA travels on 0.6.
     g[1].stop();
     let root = &g[0];
     wait_for(
@@ -421,8 +386,90 @@ fn refuses_bad_admissions_and_recoveries() {
         || root.status()["peers"].as_array().is_none_or(|p| p.is_empty()).then_some(()),
         || root.log(),
     );
-    has(&root.err(true, json!({"op": "make_admin", "device": "desk", "allow_file_key": true})), "is not connected");
+    let m = root.ok(true, json!({"op": "make_admin", "device": "desk", "allow_file_key": true}));
+    assert_eq!(m.s("name"), "desk");
     let _ = &mut g;
+}
+
+/// The root is lost: another computer becomes the root with the group's
+/// recovery sheet (rule 33), restarts to sign with its new root key, and
+/// the group's other devices stay.
+#[test]
+fn recovers_the_group_with_its_sheet() {
+    let mut root = Svc::start("root", &[], &[]);
+    let made = root.ok(true, json!({"op": "new"}));
+    let sheet: Value = serde_json::from_slice(&made.payload).unwrap();
+    let sheet = sheet["sheet"].as_str().unwrap().to_string();
+    root.port();
+    let mut desk = Svc::start("desk", &["-peer", &root.addr()], &[]);
+    assert_eq!(root.admit(&desk, false), "desk");
+    let lap = Svc::start("lap", &["-peer", &root.addr()], &[]);
+    assert_eq!(root.admit(&lap, false), "lap");
+    desk.wait("desk learns of lap", |_| desk.find("lap").is_some());
+    root.stop();
+
+    // A sheet that is not one, and a key of a sheet with a line changed,
+    // claim nothing.
+    assert!(!desk.err_with(true, json!({"op": "recover"}), b"not a recovery sheet").is_empty());
+    let mut broken = sheet.clone().into_bytes();
+    let at = broken.iter().position(u8::is_ascii_alphanumeric).unwrap();
+    broken[at] = if broken[at] == b'A' { b'B' } else { b'A' };
+    assert!(!desk.err_with(true, json!({"op": "recover"}), &broken).is_empty());
+
+    desk.ok_with(true, json!({"op": "recover"}), sheet.as_bytes());
+    // It restarts by itself to sign with the new key; as systemd would,
+    // the test starts it again.
+    desk.wait_exit(Duration::from_secs(30));
+    desk.restart(&["-peer", &lap.addr()], &[]);
+    let me = desk.find("desk").unwrap();
+    assert_eq!(me["root"], true, "{me}");
+    assert_ne!(desk.find("root").unwrap()["root"], true);
+    // As the root it signs: it names how long a copy stays live, and lap,
+    // which stayed in the group, takes it.
+    has(&desk.err_with(true, json!({"op": "recover"}), sheet.as_bytes()), "root already");
+    desk.ok(true, json!({"op": "incoming", "value": "45s"}));
+    lap.wait("lap takes the new root's setting", |st| st["incoming_ms"] == 45_000);
+}
+
+/// A stolen root is left out when another computer recovers the group:
+/// the group drops it, and once it runs again no member lets it in.
+#[test]
+fn recovers_without_the_lost_root() {
+    let mut root = Svc::start("root", &[], &[]);
+    let made = root.ok(true, json!({"op": "new"}));
+    let sheet: Value = serde_json::from_slice(&made.payload).unwrap();
+    let sheet = sheet["sheet"].as_str().unwrap().to_string();
+    root.port();
+    let mut desk = Svc::start("desk", &["-peer", &root.addr()], &[]);
+    assert_eq!(root.admit(&desk, false), "desk");
+    let lap = Svc::start("lap", &["-peer", &root.addr()], &[]);
+    assert_eq!(root.admit(&lap, false), "lap");
+    desk.wait("desk learns of lap", |_| desk.find("lap").is_some());
+    root.stop();
+
+    // This device stays: it becomes the root.
+    has(&desk.err_with(true, json!({"op": "recover", "leave": ["desk"]}), sheet.as_bytes()), "it stays");
+    has(&desk.err_with(true, json!({"op": "recover", "leave": ["nobody"]}), sheet.as_bytes()), "no device");
+    desk.ok_with(true, json!({"op": "recover", "leave": ["root"]}), sheet.as_bytes());
+    desk.wait_exit(Duration::from_secs(30));
+    desk.restart(&["-peer", &lap.addr()], &[]);
+    assert!(desk.find("root").is_none(), "{:?}", desk.devices());
+    assert_eq!(desk.find("desk").unwrap()["root"], true);
+    lap.wait("lap learns the old root left", |_| lap.find("root").is_none());
+
+    // The old root runs again: neither member lets it in.
+    root.restart(&["-peer", &desk.addr(), "-peer", &lap.addr()], &[]);
+    for _ in 0..25 {
+        for m in [&desk, &lap] {
+            let peers = m.status()["peers"].clone();
+            assert!(
+                peers.as_array().is_none_or(|p| p.iter().all(|x| x["name"] != "root")),
+                "{} let the old root in: {peers}",
+                m.name
+            );
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
 }
 
 /// Leaving: the root only alone; a member leaves and its service stops,
@@ -444,13 +491,21 @@ fn leaves_the_group() {
     assert!(!g[0].state().join("identity.json").exists());
 }
 
-/// A device that joins finds no window when none is open, and pairs once
-/// one is.
+/// A device that joins by another window's link is refused before any
+/// code: the member's key is not the one the link names; it pairs once
+/// this member's window is open. (A closed window: pairing_one_at_a_time.)
 #[test]
 fn a_closed_window_refuses_the_joiner() {
     let root = Svc::start("root", &[], &[]);
     root.new_group();
     let other = Svc::start("other", &[], &[]);
-    has(&other.err(true, json!({"op": "join", "address": root.addr()})), "no pairing window open");
+    // Another group's window link, with this root's address.
+    let elsewhere = Svc::start("elsewhere", &[], &[]);
+    elsewhere.new_group();
+    let (_wconn, _r, _, link) = elsewhere.window(false);
+    let mut l = cbb_core::join::invitation::WindowLink::parse(&link).unwrap();
+    l.addrs = vec![root.addr()];
+    let link = l.text();
+    has(&other.err(true, json!({"op": "join", "code": link})), "is not the window's member");
     assert_eq!(root.admit(&other, false), "other");
 }

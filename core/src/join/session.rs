@@ -5,15 +5,13 @@
 //! 11.1): the joiner's and the member's steps from message 64 to message
 //! 68, inside a TLS session of `cbb-pair/3` that the caller runs (the
 //! core's own, `tls::bykey`, or the platform's on a phone). The caller
-//! passes each frame that arrives and sends the frames each step gives;
-//! the person's answer to a shown code comes through `answered`.
+//! passes each frame that arrives and sends the frames each step gives.
 //!
 //! The steps only put this module's pieces in their order: CPace with the
 //! channel identifier over both TLS keys and the invitation's ID
 //! ([`super::channel_id`]), its session identifier the session's pairing
 //! exporter, its associated data the joiner's Info (`ADa`) and the
-//! member's `ADb`; the short code's commitment and nonces
-//! ([`super::invitation`]); message 67 made only with an approval of this
+//! member's `ADb`; message 67 made only with an approval of this
 //! session and this joiner ([`super::approve`]) and read only once its tag
 //! holds ([`super::welcome::open`]); the Welcome's parts assembled
 //! ([`super::welcome::Assembly`]) and the whole checked
@@ -21,11 +19,12 @@
 //! [`super::read_pairing`]: before the confirm at the pairing limit, and a
 //! Welcome before it refused.
 //!
-//! Two ways bind the member: an invitation's secret, whose verified `Ta`
-//! approves message 67 by itself, and the pairing at home without an
-//! invitation, where both ends show the code and only each person's "they
-//! match" lets the session go on (the member's before it sends message 67,
-//! the joiner's before it takes it).
+//! One way binds both ends: an invitation's secret, a QR code's long one or
+//! a home window's from its six digits ([`Invitation::home`]). The joiner's
+//! verified `Ta` approves message 67 at the member, and the member's
+//! verified `Tb` lets the joiner take it. At a home window that `Tb` is
+//! also the joiner's proof of the member in this session
+//! ([`JoinerSession::proven`]), a guarded leaf's only way to be bound again.
 
 use alloc::boxed::Box;
 use alloc::string::String;
@@ -36,13 +35,11 @@ use crate::format::{Alg, DeviceId, Key, KeyHash, frame};
 use crate::records::{GroupId, RecordSet, State};
 use crate::third_party::cpace;
 
-use super::approve::{self, Approved, MemberExchange, MemberShown, Password};
+use super::approve::{Approved, MemberExchange};
 use super::info::Info;
-use super::invitation::{self, Invitation, JoinerAttempts, JoinerCode, Matched, Network, Open, Shown};
+use super::invitation::{Invitation, JoinerAttempts, Network, Open, Proven};
 use super::welcome::{self, Assembly, Joining, Way, Welcome};
-use super::{
-    NO_INVITATION, NO_SECRET, PairError, PairExporter, T_CONFIRM, T_DONE, T_ERROR, T_REPLY, T_START, T_WELCOME,
-};
+use super::{PairError, PairExporter, T_CONFIRM, T_DONE, T_ERROR, T_REPLY, T_START, T_WELCOME};
 
 /// What the member's `ADb` says, which the joiner shows before CPace ends
 /// ("you are joining …").
@@ -108,10 +105,6 @@ fn bytes<'a>(m: &crate::format::frame::Message<'a>, n: u16) -> Result<&'a [u8], 
     }
 }
 
-fn b32(m: &crate::format::frame::Message<'_>, n: u16) -> Result<[u8; 32], PairError> {
-    bytes(m, n)?.try_into().map_err(|_| PairError::Refused)
-}
-
 fn hash(point: &[u8; 65]) -> KeyHash {
     Key::new(Alg::Es256, point).hash()
 }
@@ -122,14 +115,11 @@ enum JoinerStep {
     /// Message 64 went; message 65 is due.
     Reply {
         cpace: cpace::State,
-        code: JoinerCode,
     },
-    /// Message 66 went; the code is shown, message 67 is due (and, at
-    /// home, the person's answer).
+    /// Message 66 went; message 67 is due.
     Welcome {
         cpace: cpace::State,
         isk: crate::secret::Zeroizing<Vec<u8>>,
-        shown: Option<Shown>,
     },
     /// Message 67 came with parts to follow.
     Parts {
@@ -143,19 +133,18 @@ pub struct JoinerSession {
     exporter: PairExporter,
     own: [u8; 65],
     member: [u8; 65],
-    invitation: Option<Invitation>,
+    invitation: Invitation,
     joining: Joining,
     adb: Option<Adb>,
-    matched: Option<Matched>,
+    proven: Option<Proven>,
     step: JoinerStep,
 }
 
-/// What the joiner's message 65 gave: message 66 to send, the code to show
-/// at home (none by an invitation) and what the member said it is.
+/// What the joiner's message 65 gave: message 66 to send and what the
+/// member said it is.
 #[derive(Debug)]
 pub struct Replied {
     pub send: Vec<u8>,
-    pub code: Option<String>,
     pub adb: Adb,
 }
 
@@ -178,39 +167,36 @@ pub struct Admitted {
 
 impl JoinerSession {
     /// Starts a session the person started (`attempts` counts it): `info`
-    /// is what the joiner says of itself (`invite` set from the invitation
-    /// it joins by), `own` and `member` the TLS keys of both ends, and
-    /// `exporter` the session's pairing exporter. Gives message 64.
+    /// is what the joiner says of itself (`invite` set here from the
+    /// invitation it joins by), `own` and `member` the TLS keys of both
+    /// ends, and `exporter` the session's pairing exporter. Gives message
+    /// 64. An invitation with an ID of zero bytes is refused: no invitation
+    /// has one (`invite/shape`).
     pub fn start(
         attempts: &mut JoinerAttempts,
         mut info: Info,
-        invitation: Option<Invitation>,
+        invitation: Invitation,
         joining: Joining,
         own: [u8; 65],
         member: [u8; 65],
         exporter: PairExporter,
     ) -> Result<(JoinerSession, Vec<u8>), PairError> {
-        let (id, secret) = match &invitation {
-            Some(i) if i.id == NO_INVITATION => return Err(PairError::Refused),
-            Some(i) => (i.id, i.secret),
-            None => (NO_INVITATION, NO_SECRET),
-        };
-        info.invite = invitation.as_ref().map(|i| i.id);
+        if invitation.id == [0; 16] {
+            return Err(PairError::Refused);
+        }
+        info.invite = Some(invitation.id);
         let ada = info.encode();
-        let (code, commitment) = attempts.start()?;
-        let ci = super::channel_id(&hash(&member), &hash(&own), &id);
+        attempts.start()?;
+        let ci = super::channel_id(&hash(&member), &hash(&own), &invitation.id);
         let (cpace, ya) = cpace::start(&cpace::Config {
             role: cpace::Role::Initiator,
-            password: &secret,
+            password: &invitation.secret,
             channel_id: &ci,
             session_id: exporter.bytes(),
             ad: &ada,
         })
         .map_err(|_| PairError::Refused)?;
-        let send = write(
-            T_START,
-            alloc::vec![(2, Value::Bytes(&ya)), (3, Value::Bytes(&ada)), (4, Value::Bytes(&commitment))],
-        );
+        let send = write(T_START, alloc::vec![(2, Value::Bytes(&ya)), (3, Value::Bytes(&ada))]);
         let s = JoinerSession {
             exporter,
             own,
@@ -218,68 +204,45 @@ impl JoinerSession {
             invitation,
             joining,
             adb: None,
-            matched: None,
-            step: JoinerStep::Reply { cpace, code },
+            proven: None,
+            step: JoinerStep::Reply { cpace },
         };
         Ok((s, send))
     }
 
-    /// Takes message 65: gives message 66, and at home the code to show.
-    pub fn reply(&mut self, attempts: &mut JoinerAttempts, frame: &[u8]) -> Result<Replied, PairError> {
-        let JoinerStep::Reply { mut cpace, code } = core::mem::replace(&mut self.step, JoinerStep::Over) else {
+    /// Takes message 65: gives message 66.
+    pub fn reply(&mut self, frame: &[u8]) -> Result<Replied, PairError> {
+        let JoinerStep::Reply { mut cpace } = core::mem::replace(&mut self.step, JoinerStep::Over) else {
             return Err(PairError::Refused);
         };
         let m = read(frame, false, T_REPLY)?;
-        let (yb, adb_bytes, nonce_m) = (bytes(&m, 2)?, bytes(&m, 3)?, b32(&m, 4)?);
+        let (yb, adb_bytes) = (bytes(&m, 2)?, bytes(&m, 3)?);
         let adb = Adb::decode(adb_bytes)?;
         let isk = crate::secret::Zeroizing::new(cpace.finish(yb, adb_bytes).map_err(|_| PairError::Refused)?.to_vec());
         let ta = cpace.tag().ok_or(PairError::Refused)?;
-        let local = Key::new(Alg::Es256, &self.own).device_id();
-        let (shown_code, nj, shown) =
-            attempts.open(code, &self.exporter, &nonce_m, self.invitation.as_ref(), local, &self.member)?;
-        let send = write(T_CONFIRM, alloc::vec![(2, Value::Bytes(&ta)), (3, Value::Bytes(&nj))]);
-        let at_home = self.invitation.is_none();
-        if !at_home {
-            // By an invitation its secret binds the member: nothing to ask.
-            attempts.gave_up();
-        }
+        let send = write(T_CONFIRM, alloc::vec![(2, Value::Bytes(&ta))]);
         self.adb = Some(adb.clone());
-        self.step = JoinerStep::Welcome { cpace, isk, shown: at_home.then_some(shown) };
-        Ok(Replied { send, code: at_home.then_some(shown_code), adb })
+        self.step = JoinerStep::Welcome { cpace, isk };
+        Ok(Replied { send, adb })
     }
 
-    /// The person answered the code shown at home. "They do not match"
-    /// ends the session ([`PairError::Declined`]: send message 69 with it).
-    pub fn answered(&mut self, attempts: &mut JoinerAttempts, matched: bool) -> Result<(), PairError> {
-        let JoinerStep::Welcome { shown, .. } = &mut self.step else { return Err(PairError::Refused) };
-        let Some(shown) = shown.take() else { return Err(PairError::Refused) };
-        match attempts.answered(shown, matched) {
-            Some(m) => {
-                self.matched = Some(m);
-                Ok(())
-            }
-            None => {
-                self.step = JoinerStep::Over;
-                Err(PairError::Declined)
-            }
-        }
-    }
-
-    /// Whether the joiner waits for its person's answer.
-    pub fn asks(&self) -> bool {
-        matches!(&self.step, JoinerStep::Welcome { shown: Some(_), .. })
+    /// At a home window, once the member's `Tb` verified under the
+    /// window's secret in this session (message 67 taken): the proof of
+    /// that member in this session ([`Proven`]), given once. None by any
+    /// other invitation, and before `Tb` verified.
+    pub fn proven(&mut self) -> Option<Proven> {
+        self.proven.take()
     }
 
     /// Takes message 67, then each part that follows it.
     pub fn take(&mut self, frame: &[u8], now_ms: u64) -> Result<Joined, PairError> {
         match core::mem::replace(&mut self.step, JoinerStep::Over) {
-            JoinerStep::Welcome { cpace, isk, shown } => {
-                // At home the Welcome is taken only after "they match".
-                if shown.is_some() || (self.invitation.is_none() && self.matched.is_none()) {
-                    return Err(PairError::Refused);
-                }
+            JoinerStep::Welcome { cpace, isk } => {
                 let m = read(frame, true, T_WELCOME)?;
                 cpace.verify(bytes(&m, 2)?).map_err(|_| PairError::WrongCode)?;
+                // Tb verified: the member holds the secret, in this session.
+                let local = Key::new(Alg::Es256, &self.own).device_id();
+                self.proven = Proven::new(&self.invitation, local, &self.exporter, &self.member);
                 let body = frame.get(4..).ok_or(PairError::Refused)?;
                 let w = welcome::open(body, &isk).map_err(|_| PairError::Refused)?;
                 let w = Welcome::decode(w).map_err(|_| PairError::Refused)?;
@@ -304,13 +267,9 @@ impl JoinerSession {
 
     fn check(&mut self, w: Welcome) -> Result<Joined, PairError> {
         let adb = self.adb.as_ref().ok_or(PairError::Refused)?;
-        let way = match (&self.invitation, self.matched.take()) {
-            (Some(i), _) => Way::Invited(i),
-            (None, Some(matched)) => Way::Home { matched, exporter: &self.exporter },
-            (None, None) => return Err(PairError::Refused),
-        };
-        let (set, state) =
-            w.check(&adb.group, &self.member, &self.own, self.joining, way).map_err(|_| PairError::Refused)?;
+        let (set, state) = w
+            .check(&adb.group, &self.member, &self.own, self.joining, Way::Invited(&self.invitation))
+            .map_err(|_| PairError::Refused)?;
         Ok(Joined::Done(Box::new(Admitted { set, state, welcome: w, send: write(T_DONE, Vec::new()) })))
     }
 }
@@ -323,14 +282,11 @@ enum MemberStep {
     /// Message 65 went; message 66 is due.
     Confirm {
         ex: MemberExchange,
-        commitment: [u8; 32],
-        nonce: [u8; 32],
     },
-    /// The joiner's Ta verified: message 67 waits for an approval.
+    /// The joiner's Ta verified: message 67 may go.
     Approve {
         ex: MemberExchange,
-        approved: Option<Approved>,
-        shown: Option<MemberShown>,
+        approved: Approved,
     },
     /// Message 67 went; message 68 is due.
     Done,
@@ -343,17 +299,10 @@ pub struct MemberSession {
     own: [u8; 65],
     joiner: [u8; 65],
     adb: Adb,
-    /// The invitation's attempt, on an open invitation.
+    /// The invitation's attempt.
     attempt: Option<u64>,
     info: Option<Info>,
     step: MemberStep,
-}
-
-/// What message 66 gave: at home the code to show and ask about; by an
-/// invitation nothing to ask (the joiner's Ta approved message 67).
-#[derive(Debug)]
-pub struct Confirmed {
-    pub code: Option<String>,
 }
 
 impl MemberSession {
@@ -364,15 +313,19 @@ impl MemberSession {
         MemberSession { exporter, own, joiner, adb, attempt: None, info: None, step: MemberStep::Start }
     }
 
+    /// Whether the joiner's Info offers an admin key whose proof holds
+    /// over this session's exporter (`crate::join::verify_admin_pop`);
+    /// false when it offers none or its Info has not come.
+    pub fn admin_pop_holds(&self) -> bool {
+        match self.info().map(|i| (i.admin_key(), i.admin_pop.as_ref())) {
+            Some((Some(k), Some(p))) => super::verify_admin_pop(&k, &self.exporter, p),
+            _ => false,
+        }
+    }
+
     /// The joiner's Info, once message 64 came.
     pub fn info(&self) -> Option<&Info> {
         self.info.as_ref()
-    }
-
-    /// Takes message 64 at home without an invitation: gives message 65.
-    pub fn start_home(&mut self, frame: &[u8]) -> Result<Vec<u8>, PairError> {
-        let nonce = invitation::not_zero(crate::certs::random_bytes);
-        self.start(frame, Password::Home, nonce)
     }
 
     /// Takes message 64 on an open invitation, from a joiner on network at
@@ -384,9 +337,12 @@ impl MemberSession {
         frame: &[u8],
         now_ms: u64,
     ) -> Result<Vec<u8>, PairError> {
+        if !matches!(self.step, MemberStep::Start) {
+            return Err(PairError::Refused);
+        }
         let m = read(frame, false, T_START)?;
-        let commitment = b32(&m, 4)?;
-        let info = Info::decode(bytes(&m, 3)?).map_err(|_| PairError::Refused)?;
+        let (ya, ada) = (bytes(&m, 2)?, bytes(&m, 3)?);
+        let info = Info::decode(ada).map_err(|_| PairError::Refused)?;
         if info.invite != Some(open.invitation.id) {
             return Err(PairError::Refused);
         }
@@ -397,89 +353,39 @@ impl MemberSession {
             return Err(PairError::Refused);
         }
         let number = open.begin(network, now_ms)?;
-        let nonce = open.reply(number, commitment, now_ms)?;
         self.attempt = Some(number);
-        let invitation = open.invitation.clone();
-        self.start(frame, Password::Invitation(&invitation), nonce)
-    }
-
-    fn start(&mut self, frame: &[u8], password: Password<'_>, nonce: [u8; 32]) -> Result<Vec<u8>, PairError> {
-        if !matches!(self.step, MemberStep::Start) {
-            return Err(PairError::Refused);
-        }
-        let m = read(frame, false, T_START)?;
-        let (ya, ada, commitment) = (bytes(&m, 2)?, bytes(&m, 3)?, b32(&m, 4)?);
-        let info = Info::decode(ada).map_err(|_| PairError::Refused)?;
-        if matches!(password, Password::Home) && info.invite.is_some() {
-            return Err(PairError::Refused);
-        }
         let adb = self.adb.encode();
         let (ex, yb) =
-            MemberExchange::respond(password, &hash(&self.own), &self.joiner, &self.exporter, &adb, ya, ada)?;
+            MemberExchange::respond(&open.invitation, &hash(&self.own), &self.joiner, &self.exporter, &adb, ya, ada)
+                .inspect_err(|_| open.end(number, false, now_ms))?;
         self.info = Some(info);
-        self.step = MemberStep::Confirm { ex, commitment, nonce };
-        Ok(write(T_REPLY, alloc::vec![(2, Value::Bytes(&yb)), (3, Value::Bytes(&adb)), (4, Value::Bytes(&nonce))]))
+        self.step = MemberStep::Confirm { ex };
+        Ok(write(T_REPLY, alloc::vec![(2, Value::Bytes(&yb)), (3, Value::Bytes(&adb))]))
     }
 
     /// Takes message 66. A Ta that does not verify is
-    /// [`PairError::WrongCode`] and ends the session.
-    pub fn confirm(&mut self, frame: &[u8], open: Option<&mut Open>, now_ms: u64) -> Result<Confirmed, PairError> {
-        let MemberStep::Confirm { mut ex, commitment, nonce } = core::mem::replace(&mut self.step, MemberStep::Over)
-        else {
+    /// [`PairError::WrongCode`]: the session ends, its attempt stays
+    /// counted as failed ([`Open::begin`]), and nothing is written.
+    pub fn confirm(&mut self, frame: &[u8], open: &mut Open, now_ms: u64) -> Result<(), PairError> {
+        let MemberStep::Confirm { mut ex } = core::mem::replace(&mut self.step, MemberStep::Over) else {
             return Err(PairError::Refused);
         };
-        let m = read(frame, false, T_CONFIRM)?;
-        let (ta, nj) = (bytes(&m, 2)?, b32(&m, 3)?);
-        let by_secret = match ex.confirm(ta) {
-            Ok(b) => b,
-            Err(e) => {
-                // A Ta that does not verify ends the invitation's attempt.
-                if let (Some(n), Some(o)) = (self.attempt, open) {
-                    o.end(n, false, now_ms);
-                }
-                return Err(e);
+        let ended = |e: PairError, attempt: Option<u64>, open: &mut Open| {
+            if let Some(n) = attempt {
+                open.end(n, false, now_ms);
             }
+            e
         };
-        match (self.attempt, open, by_secret) {
-            // An invitation's secret: the verified Ta approves.
-            (Some(_), Some(_), Some(approved)) => {
-                self.step = MemberStep::Approve { ex, approved: Some(approved), shown: None };
-                Ok(Confirmed { code: None })
-            }
-            // At home: the code, and the person's answer to come.
-            (None, None, None) => {
-                let (code, shown) = invitation::home_code(&commitment, &self.exporter, &nj, &nonce, &self.joiner)?;
-                self.step = MemberStep::Approve { ex, approved: None, shown: Some(shown) };
-                Ok(Confirmed { code: Some(code) })
-            }
-            (Some(n), Some(o), None) => {
-                o.end(n, false, now_ms);
-                Err(PairError::Refused)
-            }
-            _ => Err(PairError::Refused),
-        }
-    }
-
-    /// The member's person answered the code shown at home. "They do not
-    /// match" ends the session ([`PairError::Declined`]).
-    pub fn answered(&mut self, matched: bool) -> Result<(), PairError> {
-        let MemberStep::Approve { approved, shown, .. } = &mut self.step else { return Err(PairError::Refused) };
-        let Some(s) = shown.take() else { return Err(PairError::Refused) };
-        match approve::answered_at_home(s, matched) {
-            Some(a) => {
-                *approved = Some(a);
-                Ok(())
-            }
-            None => {
-                self.step = MemberStep::Over;
-                Err(PairError::Declined)
-            }
-        }
+        let m = read(frame, false, T_CONFIRM).map_err(|e| ended(e, self.attempt, open))?;
+        let ta = bytes(&m, 2).map_err(|e| ended(e, self.attempt, open))?;
+        let approved = ex.confirm(ta).map_err(|e| ended(e, self.attempt, open))?;
+        self.step = MemberStep::Approve { ex, approved };
+        Ok(())
     }
 
     /// Whether message 67 may go: the session is approved.
     pub fn approved(&self) -> bool {
-        matches!(&self.step, MemberStep::Approve { approved: Some(_), .. })
+        matches!(&self.step, MemberStep::Approve { .. })
     }
 
     /// Message 67 with the Welcome the caller built (its set already holds
@@ -489,9 +395,7 @@ impl MemberSession {
         w: &Welcome,
         parts: &[crate::records::sync::Part<'_>],
     ) -> Result<Vec<Vec<u8>>, PairError> {
-        let MemberStep::Approve { ex, approved: Some(approved), .. } =
-            core::mem::replace(&mut self.step, MemberStep::Over)
-        else {
+        let MemberStep::Approve { ex, approved } = core::mem::replace(&mut self.step, MemberStep::Over) else {
             return Err(PairError::Refused);
         };
         let mut out = alloc::vec![welcome::message(ex, approved, &w.encode())?];
@@ -500,16 +404,15 @@ impl MemberSession {
         Ok(out)
     }
 
-    /// Takes message 68: the joiner kept its identity. On an open
-    /// invitation the attempt ends welcomed.
-    pub fn done(&mut self, frame: &[u8], open: Option<&mut Open>, now_ms: u64) -> Result<(), PairError> {
+    /// Takes message 68: the joiner kept its identity. The attempt ends
+    /// welcomed, which closes the invitation ([`Open::end`]).
+    pub fn done(&mut self, frame: &[u8], open: &mut Open, now_ms: u64) -> Result<(), PairError> {
         if !matches!(self.step, MemberStep::Done) {
             return Err(PairError::Refused);
         }
         read(frame, false, T_DONE)?;
-        if let (Some(n), Some(o)) = (self.attempt, open) {
-            o.end(n, true, now_ms);
-            o.used = true;
+        if let Some(n) = self.attempt {
+            open.end(n, true, now_ms);
         }
         self.step = MemberStep::Over;
         Ok(())

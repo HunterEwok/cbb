@@ -56,8 +56,11 @@ fn a_phone_pairs_at_home_on_the_member_port() {
     let (tx, rx) = mpsc::channel();
     let tx = Mutex::new(tx);
     let d2 = desk.clone();
+    let (window, digits) = home_window(crate::uptime::wall_ms() as u64, Duration::from_secs(300));
+    let typed = Invitation::typed(window.invitation.id, &digits).unwrap();
+    let window = Mutex::new(window);
     desk.on_pair(Some(Box::new(move |sock, s, x| {
-        let r = at_home(&d2, sock, s, x, &mut |_| true);
+        let r = at_home(&d2, sock, s, x, &mut window.lock().unwrap());
         let _ = tx.lock().unwrap().send(r.map(|i| i.name));
     })));
     let d3 = desk.clone();
@@ -89,14 +92,14 @@ fn a_phone_pairs_at_home_on_the_member_port() {
     let j = Joiner {
         attempts: &mut attempts,
         info: Info::new("phone", 5, ROLE_PHONE),
-        invitation: None,
+        invitation: typed,
         joining: Joining::Ordinary,
         own: point,
         member,
         exporter,
     };
     let now = || crate::uptime::wall_ms() as u64;
-    let joined = join::joiner(&mut stream, j, &mut |_| true, &now, &mut |_| Ok(())).unwrap();
+    let joined = join::joiner(&mut stream, j, &now, &mut |_| Ok(())).unwrap();
     assert_eq!(rx.recv_timeout(Duration::from_secs(10)).unwrap().unwrap(), "phone");
     let st = desk.state();
     let d = st.device_by_key(&Key::es256(point.to_vec()).hash()).expect("the phone is in the group");

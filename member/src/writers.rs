@@ -10,7 +10,7 @@
 //! (`admin`) stands until the service switches.
 
 use cbb_core::identity::ExternalKey;
-use cbb_core::records::body::{Device, Kind, RIGHT_HUB, Removal, Settings};
+use cbb_core::records::body::{CAP_HUB, Device, Kind, RIGHT_HUB, ROLE_MEMBER, Removal, Settings};
 use cbb_core::records::eval::DeviceState;
 use cbb_core::records::{DeviceId, Key, Record, RecordId, RecordSet, State};
 
@@ -79,7 +79,7 @@ fn device_record(set: &RecordSet, state: &State, id: &DeviceId) -> Option<Device
 
 /// The keys of a device that a removal or a freeze names: its member key,
 /// and its admin key when it holds one.
-fn keys_of(d: &DeviceState) -> Vec<cbb_core::records::KeyHash> {
+pub(crate) fn keys_of(d: &DeviceState) -> Vec<cbb_core::records::KeyHash> {
     let mut keys = vec![d.key.hash()];
     keys.extend(d.admin);
     keys.sort();
@@ -96,7 +96,10 @@ pub fn remove(
     let st = set.state();
     let d = find(&st, target)?.clone();
     if Some(d.id) == st.root_device {
-        return Err(Error::msg("the root's device is not removed: the group changes its root instead"));
+        return Err(Error::msg(format!(
+            "{} holds the group's root, which is not removed: the root changes only with its recovery key (cbb recovery)",
+            d.name
+        )));
     }
     let keys = keys_of(&d);
     let out =
@@ -125,8 +128,14 @@ pub fn freeze(
 ) -> Result<(DeviceState, Vec<Record>)> {
     let st = set.state();
     let d = find(&st, target)?.clone();
-    if on == d.frozen {
-        return Ok((d, Vec::new()));
+    if Some(d.id) == st.root_device {
+        return Err(Error::msg(format!("{} holds the group's root, which nobody freezes", d.name)));
+    }
+    if on && d.frozen {
+        return Err(Error::msg(format!("{} is frozen already", d.name)));
+    }
+    if !on && !d.frozen {
+        return Err(Error::msg(format!("{} is not frozen", d.name)));
     }
     let keys = keys_of(&d);
     let kind = if on {
@@ -181,11 +190,79 @@ pub fn rename(
     if st.devices.iter().any(|o| o.id != d.id && o.name == name) {
         return Err(Error::msg(format!("another device is called {name}")));
     }
+    // A device record that names an admin key, or of a watch, counts only
+    // from the root's key, and so does the root's own device's.
+    let by_root = st.roots.last() == Some(&Key::es256(signer.public()).hash());
+    if !by_root && (d.admin.is_some() || d.role == cbb_core::records::body::ROLE_WATCH || Some(d.id) == st.root_device)
+    {
+        return Err(Error::msg(format!(
+            "only the group's root renames {}: it is an admin or a watch, or the root's own device",
+            d.name
+        )));
+    }
     let mut rec = device_record(set, &st, &d.id).ok_or_else(|| Error::msg("the device's record is not here"))?;
     rec.name = name.to_string();
     rec.seen = Vec::new();
     let out = set.write_record(&st, signer, Kind::device(rec), now_ms);
     Ok((d, out.map_err(|e| Error::msg(format!("cannot rename the device: {e}")))?))
+}
+
+/// Makes a device an admin with the admin key it offered when it paired
+/// (`admin`, a P-256 point): its record again, naming the key with the
+/// powers and commands of its kind (a phone's or a computer's).
+pub fn make_admin(
+    set: &mut RecordSet,
+    signer: &dyn ExternalKey,
+    target: &str,
+    admin: &[u8],
+    now_ms: u64,
+) -> Result<(DeviceState, Vec<Record>)> {
+    use cbb_core::records::body::{AdminKind, ROLE_PHONE};
+    let st = set.state();
+    let d = find(&st, target)?.clone();
+    let key = Key::es256(admin.to_vec());
+    let hash = key.hash();
+    let taken = st.devices.iter().any(|o| o.key.hash() == hash || o.admin == Some(hash)) || st.roots.contains(&hash);
+    if taken {
+        return Err(Error::msg(format!("the admin key that {} offered belongs to another key of the group", d.name)));
+    }
+    let mut rec = device_record(set, &st, &d.id).ok_or_else(|| Error::msg("the device's record is not here"))?;
+    let kind = if d.role == ROLE_PHONE { AdminKind::Phone } else { AdminKind::Computer };
+    let (powers, commands) = kind.grants();
+    rec.admin = Some(key);
+    rec.powers = powers;
+    rec.commands = commands;
+    rec.seen = Vec::new();
+    let out = set.write_record(&st, signer, Kind::device(rec), now_ms);
+    Ok((d, out.map_err(|e| Error::msg(format!("cannot make the device an admin: {e}")))?))
+}
+
+/// Makes this device (me) the group's root with the group's recovery key
+/// (rule 33): the change of root, signed by both halves of the recovery
+/// key, naming new_root, with this device's record again as the root's
+/// own (its admin key, if it had one, goes: a change of root takes every
+/// admin key back). Every other device stays; leave_out names the keys
+/// that do not. Gives what was written, for the set's owner to save.
+pub fn recover(
+    set: &mut RecordSet,
+    recovery: &dyn ExternalKey,
+    recovery2: &cbb_core::records::pq::PqKey,
+    new_root: &dyn ExternalKey,
+    me: &DeviceId,
+    leave_out: &[cbb_core::records::KeyHash],
+    now_ms: u64,
+) -> Result<cbb_core::records::set::Written> {
+    use cbb_core::records::body::{RIGHT_READ, RIGHT_SECRETS, RIGHT_SEND};
+    let st = set.state();
+    let mut rec = device_record(set, &st, me).ok_or_else(|| Error::msg("this device's record is not here"))?;
+    rec.holds_root = true;
+    rec.admin = None;
+    rec.powers = 0;
+    rec.commands = 0;
+    rec.rights |= RIGHT_READ | RIGHT_SEND | RIGHT_SECRETS;
+    rec.seen = Vec::new();
+    set.write_change(&st, recovery, recovery2, new_root, rec, leave_out, false, now_ms)
+        .map_err(|e| Error::msg(format!("cannot make this device the group's root: {e}")))
 }
 
 /// Sets how long a copy from another device stays live on each member.
@@ -203,20 +280,49 @@ pub fn set_incoming(
 /// Names the group's hubs, by the devices a person names, each with the
 /// right to be a hub; none clears it.
 pub fn set_hubs(set: &mut RecordSet, signer: &dyn ExternalKey, targets: &[String], now_ms: u64) -> Result<Vec<Record>> {
+    use cbb_core::records::body::MAX_HUBS;
+    if targets.is_empty() || targets.len() > MAX_HUBS {
+        return Err(Error::msg(format!("name 1 to {MAX_HUBS} hubs")));
+    }
     let st = set.state();
+    let by_root = st.roots.last() == Some(&Key::es256(signer.public()).hash());
     let mut hubs = Vec::with_capacity(targets.len());
+    let mut grant = Vec::new();
     for t in targets {
         let d = find(&st, t)?;
+        if hubs.contains(&d.id) {
+            return Err(Error::msg(format!("{} is named twice", d.name)));
+        }
         // Only a device whose record gives it the right counts as a hub.
+        // The root gives it to a member with the cap hub that an admin
+        // admitted, which could not (it grants base rights only).
         if d.rights & RIGHT_HUB == 0 {
-            return Err(Error::msg(format!("{} may not be a hub: its record does not give it the right", d.name)));
+            if !(by_root && d.role == ROLE_MEMBER && d.caps & CAP_HUB != 0) {
+                return Err(Error::msg(format!("{} may not be a hub: its record does not give it the right", d.name)));
+            }
+            grant.push(d.id);
         }
         hubs.push(d.id);
     }
+    let mut out = Vec::new();
+    for id in grant {
+        let st = set.state();
+        let mut rec = device_record(set, &st, &id).ok_or_else(|| Error::msg("the device's record is not here"))?;
+        rec.rights |= RIGHT_HUB;
+        rec.seen = Vec::new();
+        out.extend(
+            set.write_record(&st, signer, Kind::device(rec), now_ms)
+                .map_err(|e| Error::msg(format!("cannot let the device be a hub: {e}")))?,
+        );
+    }
     hubs.sort();
     hubs.dedup();
-    set.write_record(&st, signer, Kind::Hubs { hubs, seen: Vec::new() }, now_ms)
-        .map_err(|e| Error::msg(format!("cannot name the hubs: {e}")))
+    let st = set.state();
+    out.extend(
+        set.write_record(&st, signer, Kind::Hubs { hubs, seen: Vec::new() }, now_ms)
+            .map_err(|e| Error::msg(format!("cannot name the hubs: {e}")))?,
+    );
+    Ok(out)
 }
 
 /// Changes the group's settings from what they are now.

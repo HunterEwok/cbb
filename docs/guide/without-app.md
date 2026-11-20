@@ -30,9 +30,10 @@ On the root:
 sudo cbb pair
 ```
 
-It opens a pairing window and waits. On the new computer run `sudo cbb pair -code`: it finds
-the window on the home network, and both computers show a six-digit code. Type `yes` on each
-when the codes are the same. The new computer joins within seconds.
+It opens a pairing window, shows a six-digit code and waits. On the new computer run
+`sudo cbb pair -code` and type that code: it finds the window on the home network and joins
+within seconds. A wrong code spends one of three tries; the window closes after the third, or
+once a computer joined.
 
 Each computer then syncs, as in the [quick start](quickstart.md#4-copy-on-one-paste-on-another).
 
@@ -50,10 +51,11 @@ Enclave. A computer without either keeps it in a file, so `cbb admin` asks for `
 whoever copies that file acts as an admin until another admin removes the computer, so make
 an admin only of a computer you keep safe.
 
-If the root is lost or broken, the admin takes the group over, and every other device stays:
+If the root is lost or broken, another computer becomes the root with the group's recovery
+sheet, and every other device stays:
 
 ```sh
-sudo cbb takeover NAME       # on the admin; NAME is the lost root
+sudo cbb recovery            # then type the recovery key from the sheet
 ```
 
 More in [if a device is lost or stolen](lost-device.md).

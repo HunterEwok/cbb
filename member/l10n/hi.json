@@ -160,5 +160,9 @@
  "A change of the group's root is arriving: CBB asks the other devices for it.": "समूह के रूट का बदलाव आ रहा है: CBB इसे दूसरे डिवाइसों से माँग रहा है।",
  "The group's records wait for records no device has offered.": "समूह के रिकॉर्ड ऐसे रिकॉर्ड की प्रतीक्षा में हैं जो किसी डिवाइस ने नहीं दिए।",
  "Connect the group's root, which has them.": "समूह के रूट को जोड़ें, जिसके पास वे हैं।",
- "Copies wait for their senders' records: {}.": "प्रतियाँ अपने भेजने वालों के रिकॉर्ड की प्रतीक्षा में हैं: {}।"
+ "Copies wait for their senders' records: {}.": "प्रतियाँ अपने भेजने वालों के रिकॉर्ड की प्रतीक्षा में हैं: {}।",
+ "This device is the group's root now, by its recovery key, and every device stays in the group; cbb remove takes out a lost one. The service restarts to sign with its new root key.": "समूह की रिकवरी कुंजी से यह डिवाइस अब समूह का रूट है, और हर डिवाइस समूह में बना रहता है; cbb remove खोए हुए डिवाइस को हटाता है। सेवा नई रूट कुंजी से हस्ताक्षर करने के लिए फिर से शुरू होती है।",
+ "Stays in the group: {}": "समूह में बने रहते हैं: {}",
+ "Leaves the group: {}": "समूह छोड़ते हैं: {}",
+ "Make this computer the group's root, with these devices? [y/N] ": "इन डिवाइसों के साथ इस कंप्यूटर को समूह का रूट बनाएँ? [y/N] "
 }

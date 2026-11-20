@@ -160,5 +160,9 @@
  "A change of the group's root is arriving: CBB asks the other devices for it.": "Está llegando un cambio de la raíz del grupo: CBB lo pide a los demás dispositivos.",
  "The group's records wait for records no device has offered.": "Los registros del grupo esperan registros que ningún dispositivo ha ofrecido.",
  "Connect the group's root, which has them.": "Conecta la raíz del grupo, que los tiene.",
- "Copies wait for their senders' records: {}.": "Hay copias que esperan los registros de sus remitentes: {}."
+ "Copies wait for their senders' records: {}.": "Hay copias que esperan los registros de sus remitentes: {}.",
+ "This device is the group's root now, by its recovery key, and every device stays in the group; cbb remove takes out a lost one. The service restarts to sign with its new root key.": "Este dispositivo es ahora la raíz del grupo, por su clave de recuperación, y todos los dispositivos siguen en el grupo; cbb remove quita uno perdido. El servicio se reinicia para firmar con su nueva clave raíz.",
+ "Stays in the group: {}": "Siguen en el grupo: {}",
+ "Leaves the group: {}": "Dejan el grupo: {}",
+ "Make this computer the group's root, with these devices? [y/N] ": "¿Hacer de este ordenador la raíz del grupo, con estos dispositivos? [y/N] "
 }
