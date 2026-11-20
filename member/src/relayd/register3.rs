@@ -73,7 +73,7 @@ impl Listed {
 
 /// The credentials a device showed, checked: the hubs' and the members'.
 #[derive(Debug)]
-pub(super) struct Shows {
+pub(crate) struct Shows {
     pub hubs: Credential,
     pub members: Credential,
 }
@@ -85,7 +85,7 @@ pub(super) struct Shows {
 /// or an admin the hubs' credential lists; a period credential, when one
 /// is shown, whose key signed the hubs'; on a relay with a list, a period
 /// of a group on it, signed by its root, whose key the device names.
-pub(super) fn check(
+pub(crate) fn check(
     envs: &[Vec<u8>],
     leaf: &[u8; 32],
     root: Option<&[u8]>,
@@ -176,9 +176,7 @@ impl Inner {
         if mac.verify_slice(&claim.proof).is_err() {
             return Err(refuse(&mut s, "the device does not hold that WireGuard key"));
         }
-        let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX));
+        let now_ms = u64::try_from(crate::uptime::wall_ms()).unwrap_or(0);
         let listed = (!self.cfg.open).then_some(self.listed.as_slice());
         let shows = match check(&claim.credentials, &leaf, claim.root.as_deref(), listed, now_ms) {
             Ok(x) => x,

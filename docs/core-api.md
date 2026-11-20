@@ -352,15 +352,15 @@ clients, its remote invitations with a guest tunnel to the pairing window), for 
 joined by an invitation (`guest_start` with the `invite`, which answers the guest tunnel's
 `id` and loopback `port` to the hub's member port, for its first hello), and their status;
 `cbb_tunnel_register` registers the phone's hub with the group's forwarder (inside VLESS with
-XHTTP when the forwarder's TCP port does not answer, as the Go hub does) and
-`cbb_tunnel_relay` links the phone to the blind relay, both signing their TLS with the member
-key through the same callback, the relay's link telling the app through an events' callback
-which connections it joined; `cbb_tunnel_relay_credentials` makes the link register with the
-group's server credentials (docs/protocol.md, section 18), signed with the period's server key
-through another callback. `TestRustPhoneTunnel`, `TestRustPhoneHub`, `TestRustPhoneHubInvite`,
-`TestRustPhoneHubForwarder`, `TestRustPhoneHubOverXHTTP`, `TestRustPhoneRelay` and
-`TestRustPhoneRelayCredentials` run them
-against Go's hub, clients, forwarder and relay through the example `tunnel-on-linux`.
+XHTTP when the forwarder's TCP port does not answer, as the Go hub does) and signs its TLS with the member key through a callback; `cbb_tunnel_relay` links the phone to the
+blind relay by `cbb-relay/3`, telling the app through an events' callback which connections it
+joined, and registers once `cbb_tunnel_relay_credentials` gives it the period's server
+credentials of 0.6 (`cbb_core::blind::credential`), signed with the period's server key through
+a callback. `TestRustPhoneTunnel`, `TestRustPhoneHub`, `TestRustPhoneHubInvite`,
+`TestRustPhoneHubForwarder` and `TestRustPhoneHubOverXHTTP` run them against Go's hub, clients
+and forwarder through the example `tunnel-on-linux`; `two_phones_meet_at_the_relay`
+(ffi/src/tunnel/relay_tests.rs) runs two relay links through the C functions against the relay
+of `cbb relay` in the same process.
 
 The Go programs (`cbb-helper`, `cbb-forward` and the tests) do not link the core: they run
 Go's own `internal/authority`, `internal/clip` and `internal/group`, which the interop

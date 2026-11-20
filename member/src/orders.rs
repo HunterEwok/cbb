@@ -40,8 +40,6 @@ pub struct Hub {
     pub forwarder: Option<(String, [u8; 32])>,
     /// Up to eight endpoints it is reached at.
     pub endpoints: Vec<String>,
-    /// The clients it serves: device ID, key and pre-shared key.
-    pub clients: Vec<([u8; 16], [u8; 32], [u8; 32])>,
     /// Stop being a hub (alone).
     pub stop: bool,
 }
@@ -131,15 +129,6 @@ impl Order {
                     if !h.endpoints.is_empty() {
                         f.push((11, Value::Array(h.endpoints.iter().map(|e| Value::Text(e)).collect())));
                     }
-                    if !h.clients.is_empty() {
-                        let mut clients: Vec<Value<'_>> = h
-                            .clients
-                            .iter()
-                            .map(|(id, k, p)| Value::Array(vec![Value::Bytes(id), Value::Bytes(k), Value::Bytes(p)]))
-                            .collect();
-                        clients.sort_by_key(Value::encode);
-                        f.push((12, Value::Array(clients)));
-                    }
                 }
             }
             Order::Paste { way, enter, what } => {
@@ -195,18 +184,7 @@ impl Order {
                     .and_then(Value::as_array)
                     .map(|a| a.iter().filter_map(|e| e.as_text().map(str::to_string)).collect())
                     .unwrap_or_default();
-                let mut clients = Vec::new();
-                for c in m.get(12).and_then(Value::as_array).unwrap_or_default() {
-                    match c.as_array() {
-                        Some([id, k, p]) => clients.push((
-                            fixed(id).ok_or_else(bad)?,
-                            fixed(k).ok_or_else(bad)?,
-                            fixed(p).ok_or_else(bad)?,
-                        )),
-                        _ => return Err(bad()),
-                    }
-                }
-                Order::Hub(Hub { forwarder, endpoints, clients, stop: uint(m, 13) == Some(1) })
+                Order::Hub(Hub { forwarder, endpoints, stop: uint(m, 13) == Some(1) })
             }
             COMMAND_PASTE => {
                 let m = need()?;
@@ -253,7 +231,6 @@ mod tests {
             Order::Hub(Hub {
                 forwarder: Some(("fwd.example:443".into(), [3; 32])),
                 endpoints: vec!["10.0.0.2:7600".into()],
-                clients: vec![([2; 16], [4; 32], [5; 32]), ([1; 16], [6; 32], [7; 32])],
                 stop: false,
             }),
             Order::Paste { way: Way::Type, enter: true, what: What::Text("ls".into()) },
@@ -270,14 +247,7 @@ mod tests {
         ];
         for o in all {
             let b = o.orders().unwrap();
-            let mut back = Order::read(o.kind(), b.as_deref()).unwrap();
-            if let (Order::Hub(h), Order::Hub(w)) = (&mut back, &o) {
-                // Clients go sorted.
-                let mut want = w.clients.clone();
-                want.sort();
-                assert_eq!(h.clients, want);
-                h.clients = w.clients.clone();
-            }
+            let back = Order::read(o.kind(), b.as_deref()).unwrap();
             assert_eq!(back, o);
         }
     }

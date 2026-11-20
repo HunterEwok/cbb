@@ -156,50 +156,46 @@ fn relay_header(addr: &str, key: &str, consent: bool) -> Header {
     Header { op: "relay".into(), relay: addr.into(), relay_key: key.into(), consent, ..Header::default() }
 }
 
-/// Two devices meet their group at a relay: each registers, sees the
-/// other online, and one connects to the other through the relay; both
-/// say so in their status. Turning sync away from home off ends it.
+/// A device of a group on the records of 0.5 asks to meet its group at a
+/// relay: the request must give a relay that answers, its key and the
+/// person's consent. A relay of 0.6 takes a device by the period's server
+/// credentials alone, which such a group does not have, so the link waits
+/// and the status says why. Two devices meeting through the relay are
+/// tried on the records of 0.6 (relay::net_tests). Turning sync away from
+/// home off ends it.
 #[test]
-fn two_devices_meet_at_a_relay() {
+fn a_group_of_0_5_waits_at_a_relay() {
     let g = Group::new(2);
     let (s, pin) = relay_server(&g);
-    let (a, b) = (g.node(0), g.node(1));
-    let (away_a, away_b) = (away_of(&g, &a, 0), away_of(&g, &b, 1));
+    let a = g.node(0);
+    let away_a = away_of(&g, &a, 0);
     let addr = s.addr().to_string();
     // What the request must give.
     assert!(away_a.meet_at(&a.node, &relay_header("nowhere", &pin, true)).is_err());
     assert!(away_a.meet_at(&a.node, &relay_header(&addr, "bad", true)).is_err());
     let e = away_a.meet_at(&a.node, &relay_header(&addr, &pin, false)).unwrap_err();
     assert!(e.to_string().contains("a relay learns"), "{e}");
-    for (away, n) in [(&away_a, &a), (&away_b, &b)] {
-        let keys = away.meet_at(&n.node, &relay_header(&addr, &pin, true)).unwrap();
-        n.node.set_tunnel_key(Some(keys));
-    }
+    let keys = away_a.meet_at(&a.node, &relay_header(&addr, &pin, true)).unwrap();
+    a.node.set_tunnel_key(Some(keys));
     let st = away_a.status(&a.node).unwrap();
     assert!(st.relay.is_some_and(|r| !r.connected && r.error.contains("not running")));
-    let runners: Vec<_> = [(away_a.clone(), a.node.clone()), (away_b.clone(), b.node.clone())]
-        .into_iter()
-        .map(|(aw, n)| std::thread::spawn(move || aw.run(n)))
-        .collect();
+    let runner = {
+        let (aw, n) = (away_a.clone(), a.node.clone());
+        std::thread::spawn(move || aw.run(n))
+    };
     assert!(
-        wait_for(Duration::from_secs(40), || a.node.connected(&g.devs[1].id) && b.node.connected(&g.devs[0].id)),
-        "{:?}\n{:?}",
-        a.logs.lock().unwrap(),
-        b.logs.lock().unwrap()
+        wait_for(Duration::from_secs(20), || away_a
+            .status(&a.node)
+            .and_then(|s| s.relay)
+            .is_some_and(|r| !r.connected && r.error.contains("do not list this device"))),
+        "{:?}",
+        away_a.status(&a.node)
     );
-    let st = away_a.status(&a.node).unwrap();
-    let r = st.relay.unwrap();
-    assert!(r.connected && r.online == vec![g.id(1)], "{r:?}");
-    assert!(wait_for(Duration::from_secs(5), || away_a.status(&a.node).unwrap().through
-        || away_b.status(&b.node).unwrap().through));
-    assert!(a.logged("connected to the relay at"));
+    assert_eq!(s.stats().1, 0, "nothing registered");
     away_a.turn_off().unwrap();
     assert!(away_a.status(&a.node).is_none());
     a.node.close();
-    b.node.close();
-    for r in runners {
-        let _ = r.join();
-    }
+    let _ = runner.join();
 }
 
 /// The relay refuses a group it does not serve; the status says why in

@@ -58,12 +58,6 @@ pub(super) struct Meeting {
     /// Dropped first: the link stops before its listener.
     _relay: Relay,
     report: Arc<Mutex<Report>>,
-    records: Arc<Mutex<Vec<Value>>>,
-    /// What it registers with in place of the member certificate once the
-    /// group's credentials list this device, and the credentials' changes
-    /// it was made at.
-    credentials: Arc<Mutex<Option<Arc<relay::Credentialed>>>>,
-    credentials_at: usize,
     /// The pins it started with, and for the project's relay the error it
     /// last looked for another address after, and when.
     pins: Vec<String>,
@@ -216,24 +210,15 @@ impl Away {
     /// group's records as they are now, and stops it when the state names
     /// none; reports whether the device meets the group at a relay.
     pub(super) fn meet(&self, node: &Arc<Node>, st: Option<&State>) -> bool {
-        let Some((st, at)) = st.and_then(|s| s.relay.clone().map(|r| (s, r))) else {
+        let Some(at) = st.and_then(|s| s.relay.clone()) else {
             self.meeting.lock().unwrap().take();
             return false;
         };
-        let records = node_records(node);
-        let creds = self.credentials.lock().unwrap().clone();
         let mut m = self.meeting.lock().unwrap();
         // The project's relay is known by the newest keys.json: a new one
         // with other pins starts the link again.
         let pins = if at.project { project_pins(node) } else { vec![at.pin.clone()] };
         if let Some(cur) = m.as_mut().filter(|cur| cur.at == at && cur.pins == pins) {
-            *cur.records.lock().unwrap() = records;
-            // The group's credentials changed: it registers with them when
-            // they list this device.
-            if let Some(c) = creds.filter(|c| c.changes() != cur.credentials_at) {
-                cur.credentials_at = c.changes();
-                *cur.credentials.lock().unwrap() = c.relay(node).map(Arc::new);
-            }
             let error = cur.report.lock().unwrap().error.clone();
             let mut failed = None;
             match error {
@@ -256,39 +241,25 @@ impl Away {
             (self.log)("cbb: sync away from home: the project's relay's keys changed; registering with it again");
         }
         m.take();
-        match self.start_meeting(node, st, at, pins, records) {
+        match self.start_meeting(node, at, pins) {
             Ok(started) => *m = Some(started),
             Err(e) => self.fail(&e),
         }
         true
     }
 
-    fn start_meeting(
-        &self,
-        node: &Arc<Node>,
-        st: &State,
-        at: Forwarder,
-        pins: Vec<String>,
-        records: Vec<Value>,
-    ) -> Result<Meeting> {
-        let Shown { key, chain } = shown(node)?;
+    fn start_meeting(&self, node: &Arc<Node>, at: Forwarder, pins: Vec<String>) -> Result<Meeting> {
         let calls = Arc::new(Mutex::new(VecDeque::new()));
         let listener = self.listen(node, caller_check(calls.clone()))?;
         let report = Arc::new(Mutex::new(Report::default()));
-        let records = Arc::new(Mutex::new(records));
-        let creds = self.credentials.lock().unwrap().clone();
-        let credentials_at = creds.as_ref().map_or(0, |c| c.changes());
-        let credentials = Arc::new(Mutex::new(creds.and_then(|c| c.relay(node)).map(Arc::new)));
+        // A relay of 0.6 takes a device by the period's server credentials
+        // alone, which a group on the records of 0.5 does not have: the
+        // link waits, and says so.
         let cfg = relay::Config {
             endpoint: at.endpoint,
             pins: pins.iter().map(|p| pin_of(p)).collect::<Result<_>>()?,
-            chain,
-            key,
-            device: self.me.to_string(),
-            wg_key: st.private_key()?,
-            records: records.clone(),
             member_port: listener.addr.port(),
-            credentials: credentials.clone(),
+            credentials: Arc::new(Mutex::new(None)),
         };
         let events = Arc::new(Events {
             node: node.clone(),
@@ -298,17 +269,7 @@ impl Away {
             log: self.log.clone(),
         });
         let relay = Relay::start(cfg, events);
-        Ok(Meeting {
-            at,
-            _relay: relay,
-            report,
-            records,
-            credentials,
-            credentials_at,
-            pins,
-            tried: None,
-            _listener: listener,
-        })
+        Ok(Meeting { at, _relay: relay, report, pins, tried: None, _listener: listener })
     }
 
     /// After the link to the project's relay failed, as Go's
@@ -515,7 +476,7 @@ fn pin_of(pin: &str) -> Result<[u8; 32]> {
 /// A short message for status of why the device is not connected to its
 /// relay, as Go's relayProblem; the whole error goes to the detail.
 fn problem(msg: &str, project: bool) -> String {
-    if msg.contains("refused the registration") {
+    if msg.contains("refused the registration") || msg.contains("do not list this device") {
         msg.to_string()
     } else if project && msg.contains("not the one given") {
         "the project's relay has a key this device does not know yet; a newer signed list brings it".to_string()

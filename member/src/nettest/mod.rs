@@ -18,6 +18,7 @@ use cbb_core::identity::{self, ExternalKey, FileKey};
 use cbb_core::issue;
 use serde_json::Value;
 
+pub mod blind;
 pub mod forwarder;
 mod ipv6;
 mod props;

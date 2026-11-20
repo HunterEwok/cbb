@@ -514,6 +514,8 @@ pub(crate) struct Registrar {
     what: &'static str,
     /// Set up: a read that times out returns at once.
     waiting: bool,
+    /// Its frames are the format's, on its grid (`cbb-relay/3`), not JSON.
+    grid: bool,
 }
 
 impl Registrar {
@@ -563,7 +565,23 @@ impl Registrar {
         if s.conn.alpn_protocol() != Some(protocol) {
             return Err(Error::msg(format!("the {what} does not speak the registration protocol")));
         }
-        Ok(Registrar { s, inbox: Vec::new(), what, waiting: false })
+        Ok(Registrar { s, inbox: Vec::new(), what, waiting: false, grid: false })
+    }
+
+    /// The same registration, whose frames are the format's, each one
+    /// message whose length is on the format's grid.
+    pub(crate) fn on_grid(mut self) -> Registrar {
+        self.grid = true;
+        self
+    }
+
+    /// Sends a whole frame as it is.
+    pub(crate) fn send(&mut self, frame: &[u8]) -> Result<()> {
+        let what = self.what;
+        self.s
+            .write_all(frame)
+            .and_then(|()| self.s.flush())
+            .map_err(|e| Error::msg(format!("registering with the {what}: {e}")))
     }
 
     /// A key from the registration's TLS under label.
@@ -606,7 +624,12 @@ impl Registrar {
         let mut buf = [0u8; 4096];
         loop {
             if let Some(head) = self.inbox.get(..4).and_then(|h| <[u8; 4]>::try_from(h).ok()) {
-                let n = crate::wire::frame_len(head, MAX_FRAME)?;
+                let n = if self.grid {
+                    cbb_core::format::frame::length(head, MAX_FRAME)
+                        .map_err(|r| Error::msg(format!("the {}'s frame breaks {r}", self.what)))?
+                } else {
+                    crate::wire::frame_len(head, MAX_FRAME)?
+                };
                 if self.inbox.len() >= 4 + n {
                     let f = self.inbox[4..4 + n].to_vec();
                     self.inbox.drain(..4 + n);

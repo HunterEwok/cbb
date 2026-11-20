@@ -512,47 +512,4 @@ impl Credentials {
             }
         }
     }
-
-    #[cfg(feature = "tunnel")]
-    /// What this device registers with on its relay when the period's
-    /// members' credential lists its server key (docs/protocol.md, section
-    /// 18), as Go's relayCredentials; None otherwise, and it registers with
-    /// its member certificate and the records.
-    pub fn relay(&self, node: &Node) -> Option<crate::relay::Credentialed> {
-        let now = uptime::wall_ms();
-        let root = root_of(node, &self.group_ca);
-        let st = self.store.lock().unwrap().clone();
-        let (pc, p) = st.period(&root)?;
-        if now >= p.expires_ms || !self.keys.lock().unwrap().has(SERVER_KEY, &p.tag) {
-            return None;
-        }
-        let sk = self.keys.lock().unwrap().get(SERVER_KEY, &p.tag).ok()?;
-        let (hc, _) = st.hubs()?;
-        let (mc, mb) = st.members()?;
-        if !mb.members.contains(&certs::sha256(&spki(&*sk))) {
-            return None;
-        }
-        let rs = node.records();
-        let rs = rs.lock().unwrap();
-        let mut roots = vec![self.group_ca.der.clone()];
-        roots.extend(rs.roots().into_iter().map(|c| c.der));
-        let devs = rs.devices();
-        drop(rs);
-        let me = node.identity().id.clone();
-        let names: std::collections::HashMap<String, String> = st
-            .servers()
-            .into_iter()
-            .filter_map(|(m, k)| {
-                let d = devs.iter().find(|d| !d.frozen && d.keys.contains(&m))?;
-                (d.id != me.as_str()).then(|| (credential::pseudonym(&k), d.id.clone()))
-            })
-            .collect();
-        match crate::relay::Credentialed::new(sk, vec![hc, mc, pc], roots, names, now) {
-            Ok(c) => Some(c),
-            Err(e) => {
-                (self.log)(&format!("cbb: the credentials for the relay: {}", e.for_log()));
-                None
-            }
-        }
-    }
 }

@@ -20,6 +20,12 @@ made with 0.5 is set up again once. The details follow.
   certificate of the server key alone, the format's messages and the period's server
   credentials only, so it sees no record and no device ID; `-group` names a group of 0.6 by its
   root and recovery keys. Devices of 0.5 keep `cbb-relay/2` until 0.7.
+- A device's link to the relay (`member/src/relay.rs`, and the phones' `cbb_tunnel_relay`)
+  registers by `cbb-relay/3` only, with its server key for the period and the period's server
+  credentials (`faces::ForRelay` on a computer), a fresh WireGuard key each time; until the
+  members' credential lists the device it waits and says why. `relay_start` no longer takes a
+  member certificate, device ID, tunnel key or records, `relay_set_records` is gone, and
+  `cbb_tunnel_relay_credentials` takes the period's server credentials of 0.6.
 - A member of 0.6 keeps the group's server credentials (`member/src/faces.rs`): the root
   starts each period with a fresh tag and period key, every member signs its own server key
   for it, derived from a secret of its own, the root lists the hubs, admins and members, and

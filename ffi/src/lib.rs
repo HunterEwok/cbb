@@ -885,14 +885,15 @@ pub unsafe extern "C" fn cbb_tunnel_register(
 }
 
 /// Links the phone to the group's blind relay (src/tunnel.rs tells the
-/// request and the events), signing its TLS with the member key through
-/// `sign` and telling the app through `event`, both with `ctx`; the answer
-/// is as `cbb_tunnel`'s, `{"id"}` for the `relay_...` requests.
+/// request and the events), telling the app through `event` with `ctx`;
+/// the link signs only with the server key `cbb_tunnel_relay_credentials`
+/// gives, so `sign` is not called. The answer is as `cbb_tunnel`'s,
+/// `{"id"}` for the `relay_...` requests.
 ///
 /// # Safety
 ///
-/// As `cbb_tunnel`; `sign` and `event` must stay callable with `ctx`, from
-/// any thread, until `relay_stop` returns.
+/// As `cbb_tunnel`; `event` must stay callable with `ctx`, from any
+/// thread, until `relay_stop` returns.
 #[cfg(feature = "tunnel")]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cbb_tunnel_relay(
@@ -911,8 +912,8 @@ pub unsafe extern "C" fn cbb_tunnel_relay(
     to_c(guard::answer(|| tunnel::relay_start(req, sign, event, ctx as usize)), answer_len)
 }
 
-/// Makes a relay link of `cbb_tunnel_relay` register with the group's
-/// server credentials (src/tunnel.rs tells the request), signing with the
+/// Gives a relay link of `cbb_tunnel_relay` the group's server credentials
+/// it registers with (src/tunnel.rs tells the request), signing with the
 /// period's server key through `sign` and `ctx`; the answer is as
 /// `cbb_tunnel`'s.
 ///

@@ -279,6 +279,56 @@ impl Kept {
     }
 }
 
+/// What a device shows a relay of 0.6: its server key for the period, the
+/// hubs' and the members' credentials, the period credential and the
+/// root's key that signed it (for a relay with a list of groups), and the
+/// device ID each pseudonym of the group's other devices stands for (the
+/// pseudonym in standard base64, the ID in hex).
+pub struct ForRelay {
+    pub key: ServerKey,
+    pub credentials: Vec<Vec<u8>>,
+    pub period: Vec<u8>,
+    pub root: Vec<u8>,
+    pub names: std::collections::HashMap<String, String>,
+}
+
+impl Kept {
+    /// What the device of member key `me` shows a relay: None until the
+    /// period counts, has not expired and its members' credential lists
+    /// the device's server key.
+    pub fn for_relay(&self, state: &State, me: &KeyHash, secret: &[u8; 32], now_ms: u64) -> Option<ForRelay> {
+        let (period, hubs, members) = (self.period.as_ref()?, self.hubs.as_ref()?, self.members.as_ref()?);
+        if [period, hubs, members].iter().any(|h| !h.c.live(now_ms)) {
+            return None;
+        }
+        let (scalar, point) = alias::server_key(secret, &period.c.tag?);
+        if !members.c.members.contains(&hash_of(&point).0) || member_of(state, me).is_none() {
+            return None;
+        }
+        let names = self
+            .servers
+            .iter()
+            .filter(|(k, _)| *k != me)
+            .filter_map(|(k, h)| {
+                let d = member_of(state, k)?;
+                let name = hash_of(h.c.key.as_deref()?).0;
+                members.c.members.contains(&name).then(|| (b64(&name), cbb_core::certs::hex(&d.id.0)))
+            })
+            .collect();
+        Some(ForRelay {
+            key: ServerKey::from_scalar(&scalar).ok()?,
+            credentials: vec![hubs.env.clone(), members.env.clone()],
+            period: period.env.clone(),
+            root: period.c.signer.clone(),
+            names,
+        })
+    }
+}
+
+fn b64(b: &[u8]) -> String {
+    base64::Engine::encode(&base64::engine::general_purpose::STANDARD, b)
+}
+
 /// What signs on this device: its member key, the root's key when it holds
 /// the current root, and its server secret.
 pub struct Signers<'a> {
@@ -374,6 +424,13 @@ impl Faces {
     /// This device's server secret.
     pub fn secret(&self) -> &[u8; 32] {
         &self.secret
+    }
+
+    /// What this device, of member key `member`, shows a relay of 0.6
+    /// (`cbb-relay/3`) at now_ms, once the period's members' credential
+    /// lists its server key; None before.
+    pub fn for_relay(&self, state: &State, member: &[u8], now_ms: u64) -> Option<ForRelay> {
+        self.kept.lock().unwrap().for_relay(state, &hash_of(member), &self.secret, now_ms)
     }
 
     fn save(&self, kept: &Kept) {
