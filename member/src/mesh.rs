@@ -34,6 +34,7 @@ use cbb_core::records::{DeviceId, Key, RecordSet, State};
 use cbb_core::tls::bykey;
 
 use crate::commands::{self, Book};
+use crate::content::Store;
 use crate::entries::Entries;
 use crate::epochs::FileStore;
 use crate::error::{Error, Result};
@@ -57,8 +58,21 @@ pub const MARKS_FILE: &str = "marks.cbor";
 /// How long a command's sender waits for its result.
 pub const RESULT_WAIT: Duration = Duration::from_secs(30);
 
+/// New content a peer's copy brought.
+#[derive(Clone, Debug)]
+pub struct Arrived {
+    pub content: Content,
+    pub origin: DeviceId,
+    /// Its age by the core's judgement of freshness.
+    pub age_ms: u64,
+    /// Its blob of images or files, to fetch (`Mesh::fetch`) and open.
+    pub blob: Option<sealed::Blob>,
+    /// The member it came from, which holds its blob when it has one.
+    pub from: DeviceId,
+}
+
 /// New content a peer's copy brought, for the clipboard's engine.
-pub type OnCopy = Box<dyn Fn(&Content, &DeviceId, u64) + Send + Sync>;
+pub type OnCopy = Box<dyn Fn(&Arrived) + Send + Sync>;
 /// A command taken here, for the caller to carry out; an error is
 /// answered as failed.
 pub type OnCommand = Box<dyn Fn(&commands::Taken) -> Result<()> + Send + Sync>;
@@ -90,6 +104,10 @@ pub struct Mesh {
     marks: Mutex<Marks>,
     kept: Mutex<HashMap<[u8; 16], copies::Kept>>,
     seen: Mutex<Seen>,
+    /// The sealed blobs this member made or fetched, which it serves.
+    content: Arc<Store>,
+    /// The fetches running, by blob.
+    fetches: Mutex<HashMap<[u8; 32], SyncSender<media::Got>>>,
     conns: Mutex<HashMap<DeviceId, Arc<Conn>>>,
     clock: Clock,
     hello: RwLock<Hello>,
@@ -212,6 +230,8 @@ impl Mesh {
             set: Arc::new(Mutex::new(set)),
             kept: Mutex::new(HashMap::new()),
             seen: Mutex::new((HashSet::new(), VecDeque::new())),
+            content: Arc::new(Store::open(dir)),
+            fetches: Mutex::new(HashMap::new()),
             conns: Mutex::new(HashMap::new()),
             clock,
             hello: RwLock::new(Hello::default()),
@@ -548,8 +568,12 @@ impl Mesh {
         let mut x = Exchange::new(self.own.hash(), point);
         let mut reader = Reader { c: &conn, buf: Vec::new() };
         let end = loop {
-            let msg = match link::read_frame(&mut reader) {
-                Ok(m) => m,
+            let msg = match media::read_any(&mut reader) {
+                Ok(media::In::Msg(m)) => m,
+                Ok(media::In::Chunk(c)) => {
+                    self.take_chunk(c);
+                    continue;
+                }
                 Err(e) => break e,
             };
             if let Err(e) = self.take(&conn, &mut x, &msg) {
@@ -614,6 +638,11 @@ impl Mesh {
                 Ok(())
             }
             Some(copies::T_RESEAL) => self.take_reseal(conn, msg),
+            Some(m::T_GET) => self.take_get(conn, msg),
+            Some(m::T_MISSING) => {
+                self.take_missing(msg);
+                Ok(())
+            }
             // A tunnel offer or a hub share only from a device that may be
             // a hub, by the records, not by what its hello claims.
             Some(t @ (cbb_core::msg::tables::T_TUNNEL | cbb_core::msg::tables::T_HUBS))
@@ -685,14 +714,14 @@ impl Mesh {
             self.broadcast(&f, Some(&conn.peer));
         }
         match taken {
-            Taken::New { content, origin, signed, age_ms } => {
+            Taken::New { content, origin, signed, age_ms, blob } => {
                 {
                     let mut marks = self.marks.lock().unwrap();
                     marks.wrote(&origin, signed);
                     let _ = crate::files::write_atomic(&self.dir.join(MARKS_FILE), &marks.encode(), 0o600);
                 }
                 if let Some(f) = &*self.on_copy.read().unwrap() {
-                    f(&content, &origin, age_ms);
+                    f(&Arrived { content: *content, origin, age_ms, blob, from: conn.peer });
                 }
             }
             Taken::Reseal(f) => {
@@ -715,8 +744,12 @@ impl Mesh {
         let sealing = self.statements.lock().unwrap().sealing(&state);
         let readers = copies::readers(&state, &sealing, &kept.content, &self.device(), &[], None);
         let Some(r) = readers.into_iter().find(|r| r.id == conn.peer) else { return Ok(()) };
-        let copy = copies::seal(&*self.own.member, &[r], &kept.made, &kept.content)
-            .map_err(|e| e.context("cannot seal the copy again"))?;
+        // A copy with a blob keeps its copy key, so that its blob opens.
+        let copy = match &kept.k {
+            Some(k) => copies::seal_keyed(&*self.own.member, &[r], &kept.made, &kept.content, k),
+            None => copies::seal(&*self.own.member, &[r], &kept.made, &kept.content),
+        }
+        .map_err(|e| e.context("cannot seal the copy again"))?;
         let f = copies::message(&copy).map_err(|r| Error::msg(format!("the copy breaks {r}")))?;
         let _ = conn.tx.try_send(f);
         Ok(())
@@ -837,6 +870,8 @@ fn copy_id(msg: &[u8]) -> Option<[u8; 16]> {
     let c = cbb_core::format::copy::Copy::from_value(v.get(2)?).ok()?;
     c.header.get(1).and_then(Value::as_bytes).and_then(|b| b.try_into().ok())
 }
+
+mod media;
 
 #[cfg(test)]
 mod tests;

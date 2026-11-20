@@ -12,6 +12,8 @@ use p256::ecdsa::SigningKey;
 use p256::ecdsa::signature::hazmat::PrehashSigner as _;
 
 use super::*;
+use crate::content::Source;
+use cbb_core::media::Part;
 
 struct K(SigningKey);
 
@@ -124,8 +126,8 @@ fn a_copy_reaches_the_other_member() {
     let (a, b) = two("copy");
     let (tx, rx) = mpsc::channel();
     let tx = Mutex::new(tx);
-    a.on_copy(Box::new(move |c, origin, _| {
-        let _ = tx.lock().unwrap().send((c.clone(), *origin));
+    a.on_copy(Box::new(move |c| {
+        let _ = tx.lock().unwrap().send((c.content.clone(), c.origin));
     }));
     connect(&a, &b);
     until("the statements", || b.statements.lock().unwrap().sealing(&b.state()).contains_key(&a.device()));
@@ -134,6 +136,42 @@ fn a_copy_reaches_the_other_member() {
     let (got, origin) = rx.recv_timeout(Duration::from_secs(10)).unwrap();
     assert_eq!(got, content);
     assert_eq!(origin, b.device());
+    a.close();
+    b.close();
+}
+
+#[test]
+fn a_copy_with_images_brings_its_blob_and_it_opens() {
+    use cbb_core::content::TYPE_MEDIA;
+    let (a, b) = two("media");
+    let (tx, rx) = mpsc::channel();
+    let tx = Mutex::new(tx);
+    a.on_copy(Box::new(move |c| {
+        let _ = tx.lock().unwrap().send(c.clone());
+    }));
+    connect(&a, &b);
+    until("the statements", || b.statements.lock().unwrap().sealing(&b.state()).contains_key(&a.device()));
+    // Over a megabyte: more than one get, several chunks and segments.
+    let png: Vec<u8> = (0..(1 << 20) + 70_000).map(|i| (i % 253) as u8).collect();
+    let content = Content { kind: TYPE_MEDIA, text: Some("a picture".into()), ..Content::default() };
+    let parts = vec![(Part { kind: "image/png".into(), ..Part::default() }, Source::Bytes(png.clone()))];
+    assert!(b.copy_media(&content, parts).unwrap());
+    let got = rx.recv_timeout(Duration::from_secs(10)).unwrap();
+    assert_eq!((got.origin, got.from), (b.device(), b.device()));
+    let blob = got.blob.expect("a blob");
+    let manifest = got.content.manifest.clone().unwrap();
+    assert_eq!(manifest.size, png.len() as i64);
+    // Over the limit, it is not fetched.
+    assert!(a.fetch(&blob, &got.from, 1000).is_err());
+    a.fetch(&blob, &got.from, 100 << 20).unwrap();
+    assert_eq!(a.content.held(&blob.sha256), Some(blob.size));
+    let out = a.dir.join("opened");
+    let placed = a.open_media(Some(&blob), &manifest, &out).unwrap();
+    assert_eq!(std::fs::read(&placed[0].1).unwrap(), png);
+    // A blob nobody holds is missing.
+    let gone = sealed::Blob { sha256: [9; 32], ..blob };
+    let err = a.fetch(&gone, &got.from, 100 << 20).unwrap_err();
+    assert!(err.to_string().contains("does not hold"), "{err}");
     a.close();
     b.close();
 }

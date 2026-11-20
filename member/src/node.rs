@@ -25,7 +25,7 @@ use crate::certs::{Cert, DeviceId, Usage};
 use cbb_core::copy::{self, Content, Sealed};
 
 use crate::clip::{Engine, Event, Hello, Kind, Outcome, SealFn, Via};
-use crate::content::{Source, Store};
+use crate::content::{BlobKey, Source, Store};
 use crate::entries::{self, Entries};
 use crate::error::{Context, Error, Result};
 use crate::identity::Identity;
@@ -1087,7 +1087,7 @@ impl Node {
     pub fn send_media(&self, text: &str, parts: Vec<(Part, Source)>, via: Via) -> Result<Event> {
         let store = self.content.as_ref().ok_or_else(|| Error::msg("this member keeps no images or files"))?;
         let key = copy::new_key();
-        let (manifest, blob) = store.seal(parts, &key)?;
+        let (manifest, blob) = store.seal(parts, BlobKey::Copy(&key))?;
         let (ev, out) = self.engine.send_media(text, manifest, via, key, blob)?;
         self.forward(&ev, None);
         if out.write {
@@ -1101,7 +1101,7 @@ impl Node {
     pub fn copied_media(&self, text: &str, parts: Vec<(Part, Source)>, via: Via) -> Result<Option<Event>> {
         let store = self.content.as_ref().ok_or_else(|| Error::msg("this member keeps no images or files"))?;
         let key = copy::new_key();
-        let (manifest, blob) = store.seal(parts, &key)?;
+        let (manifest, blob) = store.seal(parts, BlobKey::Copy(&key))?;
         let ev = self.engine.copied_media(text, manifest, via, key, blob)?;
         if let Some(ev) = &ev {
             self.forward(ev, None);
@@ -1281,7 +1281,7 @@ impl Node {
         let m = ev.media.as_ref().ok_or_else(|| Error::msg("the copy holds no images or files"))?;
         let key = ev.key.as_ref().ok_or_else(|| Error::msg("the copy is not sealed to this phone"))?;
         let sum = ev.sealed.as_ref().and_then(|s| s.blob.as_ref()).map(|b| b.sha256.as_slice());
-        store.open_into(sum, m, key, out)
+        store.open_into(sum, m, BlobKey::Copy(key), out)
     }
 
     /// Queues a message for the group's hubs connected: the members

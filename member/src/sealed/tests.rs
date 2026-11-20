@@ -88,7 +88,7 @@ fn a_copy_reaches_the_other_reader_once() {
     let mut marks = fresh::Marks::default();
     let taken = take(&frame[4..], &K::new(3).id(), &state, &sb, &mut marks, LIFE, Some(NOW + 10)).unwrap();
     let Taken::New { content: got, origin, signed, .. } = taken else { panic!("{taken:?}") };
-    assert_eq!(got, content);
+    assert_eq!(*got, content);
     assert_eq!(origin, K::new(2).id());
     marks.wrote(&origin, signed);
     // The same copy again is not newer.

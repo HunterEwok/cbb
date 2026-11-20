@@ -160,6 +160,29 @@ pub fn make(
     time: Timestamp,
     now_ms: Option<u64>,
 ) -> Result<Option<(Vec<u8>, copies::Kept)>> {
+    make_with(member, state, statements, content, time, now_ms, None)
+}
+
+/// A copy's sealed blob, sealed under the blob key of `k`: its size and
+/// SHA-256 go into the header, and the copy is sealed under `k`.
+#[derive(Clone, Copy)]
+pub struct SealedBlob {
+    pub k: [u8; 32],
+    pub size: u64,
+    pub sha256: [u8; 32],
+}
+
+/// [`make`] of a copy with images or files, whose blob, when it has one,
+/// is sealed already.
+pub fn make_with(
+    member: &dyn ExternalKey,
+    state: &State,
+    statements: &Statements,
+    content: &Content,
+    time: Timestamp,
+    now_ms: Option<u64>,
+    blob: Option<SealedBlob>,
+) -> Result<Option<(Vec<u8>, copies::Kept)>> {
     let me = cbb_core::records::Key::es256(member.public()).device_id();
     let sealing = statements.sealing(state);
     let readers = copies::readers(state, &sealing, content, &me, &[], now_ms);
@@ -168,10 +191,17 @@ pub fn make(
     }
     let mut id = [0u8; 16];
     getrandom::fill(&mut id).map_err(|_| Error::msg("the system has no randomness"))?;
-    let made = Made { id, time, blob: None };
-    let copy = copies::seal(member, &readers, &made, content).map_err(|e| e.context("cannot seal the copy"))?;
+    let made = Made { id, time, blob: blob.map(|b| (b.size, b.sha256)) };
+    let (copy, kept) = match blob {
+        Some(b) => (
+            copies::seal_keyed(member, &readers, &made, content, &b.k),
+            copies::Kept::keyed(made, content.clone(), &readers, b.k),
+        ),
+        None => (copies::seal(member, &readers, &made, content), copies::Kept::new(made, content.clone(), &readers)),
+    };
+    let copy = copy.map_err(|e| e.context("cannot seal the copy"))?;
     let frame = copies::message(&copy).map_err(|r| Error::msg(format!("the copy breaks {r}")))?;
-    Ok(Some((frame, copies::Kept::new(made, content.clone(), &readers))))
+    Ok(Some((frame, kept)))
 }
 
 /// The lifetimes a copy is judged by: the group's lifetime of secrets and
@@ -182,13 +212,22 @@ pub struct Lifetimes {
     pub incoming_ms: u64,
 }
 
+/// A copy's blob as its header and its opened key name it: what a fetch
+/// asks the group for and what opens it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Blob {
+    pub size: u64,
+    pub sha256: [u8; 32],
+    pub key: [u8; 32],
+}
+
 /// What became of a copy that arrived.
 #[derive(Debug)]
 pub enum Taken {
     /// New content for this device: the caller applies the rule of
     /// incoming copies with its age, then calls `Marks::wrote` when it
     /// writes it.
-    New { content: Content, origin: DeviceId, signed: Timestamp, age_ms: u64 },
+    New { content: Box<Content>, origin: DeviceId, signed: Timestamp, age_ms: u64, blob: Option<Blob> },
     /// Opened, but not newer than what was written here, a secret seen
     /// before, or signed ahead of this clock.
     Old(fresh::Fresh),
@@ -225,10 +264,11 @@ pub fn take(
     let c = copies::check(copy, state).map_err(|r| Error::msg(format!("the copy breaks {r}")))?;
     let opened = copies::open(&c, me, store, state).map_err(|r| Error::msg(format!("the copy breaks {r}")))?;
     Ok(match opened {
-        Opened::Content { content, .. } => {
+        Opened::Content { content, blob_key } => {
             let seen = fresh::Seen::of(&c, &content, lifetimes.secret_ms, lifetimes.incoming_ms);
+            let blob = c.blob().zip(blob_key).map(|((size, sha256), key)| Blob { size, sha256, key });
             match marks.judge(&seen, now_ms, state) {
-                fresh::Fresh::New { age_ms } => Taken::New { content, origin: c.origin, signed: c.time, age_ms },
+                fresh::Fresh::New { age_ms } => Taken::New { content: Box::new(content), origin: c.origin, signed: c.time, age_ms, blob },
                 old => Taken::Old(old),
             }
         }
