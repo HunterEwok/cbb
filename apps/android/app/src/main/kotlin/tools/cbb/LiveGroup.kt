@@ -20,6 +20,9 @@ import tools.cbb.kit.EntriesFile
 import tools.cbb.kit.Core
 import tools.cbb.kit.CoreMember
 import tools.cbb.kit.CorePairing
+import tools.cbb.kit.ChangePreview
+import tools.cbb.kit.Notice
+import tools.cbb.kit.RecoveryInput
 import tools.cbb.kit.Discovery
 import tools.cbb.kit.FoundMember
 import tools.cbb.kit.FrameTransport
@@ -2319,6 +2322,52 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      * takes effect at once, so this phone becomes the root right after. The
      * computer that was the root stays in the group.
      */
+    // The group in 0.6 (docs/apps.md, "Notices" and "Changing the main device").
+
+    /** A change of the group's root the member told of: the devices' names, from and to. */
+    data class RootChange(val from: String, val to: String, val seq: Long)
+
+    /** The change of root the member told of last, until the person saw it. */
+    @Volatile var rootChanged: RootChange? = null
+        private set
+
+    /** The member's notices about the group; empty while no member runs. */
+    val notices: List<Notice> get() = currentNode?.let { n -> runCatching { n.notices() }.onFailure { Log.w(TAG, "reading the notices", it) }.getOrNull() }.orEmpty()
+
+    /** Hides a notice that may be hidden. */
+    fun dismissNotice(id: String) {
+        val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
+        n.dismiss(id)
+    }
+
+    fun rootChangeSeen() {
+        rootChanged = null
+    }
+
+    /** A device's name as the group's devices show it, else its ID. */
+    private fun nameOf(id: String): String = devices.firstOrNull { it.id == id }?.name ?: id
+
+    /** The "who stays" list the core writes for a change of root with the recovery key, leaveOut unticked. */
+    fun changePreview(recovery: RecoveryInput, leaveOut: List<String>): ChangePreview {
+        val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
+        return n.changePreview(recovery, leaveOut)
+    }
+
+    /**
+     * Moves the group's root to this phone (docs/design.md, "Changing the root"): a new root
+     * key in the Keystore behind the fingerprint or the screen lock, and the member signs the
+     * change with the recovery key and the new root's first records with that key; leaveOut
+     * are removed in the same act.
+     */
+    suspend fun changeRoot(recovery: RecoveryInput, leaveOut: List<String>, overWaiting: Boolean) {
+        val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
+        val g = withContext(Dispatchers.IO) { copyOfState() } ?: throw Failure(Failure.Kind.UNREACHABLE)
+        withContext(Dispatchers.IO) {
+            val root = newRootKey(g.tag, R.string.reason_change_root)
+            n.changeRoot(recovery, leaveOut, root.publicKeyDER, root::signDigest, overWaiting = overWaiting)
+        }
+    }
+
     suspend fun takeHandedGroup() {
         val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
         withContext(Dispatchers.IO) { copyOfState() }?.checkHandedOver() ?: return
@@ -2613,9 +2662,20 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
                 Thread({ restartSync() }, "restart").start()
             }
             is CoreMember.Event.Identity -> Log.i(TAG, "the node holds a renewed certificate or new roots; the group's file keeps its own")
-            is CoreMember.Event.State -> Log.i(TAG, "the group's state changed: stop ${e.state.stop}, ${e.state.devices.size} devices")
-            is CoreMember.Event.NoticeAdded -> Log.i(TAG, "a notice about the group: ${e.notice.kind}")
-            is CoreMember.Event.RootChanged -> Log.w(TAG, "the group's root changed from ${e.from} to ${e.to} (step ${e.seq})")
+            is CoreMember.Event.State -> {
+                Log.i(TAG, "the group's state changed: stop ${e.state.stop}, ${e.state.devices.size} devices")
+                onRecords?.invoke()
+            }
+            is CoreMember.Event.NoticeAdded -> {
+                Log.i(TAG, "a notice about the group: ${e.notice.kind}")
+                onRecords?.invoke()
+            }
+            // Every device shows it until the person saw it, and nobody turns it off.
+            is CoreMember.Event.RootChanged -> {
+                Log.w(TAG, "the group's root changed from ${e.from} to ${e.to} (step ${e.seq})")
+                rootChanged = RootChange(nameOf(e.from), nameOf(e.to), e.seq)
+                onRecords?.invoke()
+            }
             is CoreMember.Event.NeedKey -> Log.i(TAG, "the node asks for a ${e.kind} key")
             is CoreMember.Event.KeyDone -> Log.i(TAG, "the node no longer needs a key")
             is CoreMember.Event.Message -> when (val m = e.message) {

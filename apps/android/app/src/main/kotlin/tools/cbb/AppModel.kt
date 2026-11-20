@@ -15,6 +15,9 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import tools.cbb.kit.GroupAlert
+import tools.cbb.kit.ChangePreview
+import tools.cbb.kit.Notice
+import tools.cbb.kit.RecoveryInput
 import tools.cbb.kit.Arrangement
 import tools.cbb.kit.BugReports
 import tools.cbb.kit.Core
@@ -139,6 +142,14 @@ class AppModel(private val app: Context) {
 
     /** What the group's records stop and what ends it. */
     var alerts by mutableStateOf<List<GroupAlert>>(emptyList())
+        private set
+
+    /** The member's notices about the group (docs/apps.md, "Notices"), on Home. */
+    var notices by mutableStateOf<List<Notice>>(emptyList())
+        private set
+
+    /** The group's root changed, until the person saw it (docs/apps.md, "Changing the main device"). */
+    var rootChanged by mutableStateOf<LiveGroup.RootChange?>(null)
         private set
 
     var theme by mutableStateOf(settings.theme)
@@ -593,6 +604,8 @@ class AppModel(private val app: Context) {
         val (root, a) = withContext(Dispatchers.IO) { group.isRoot to group.alerts }
         isRoot = root
         alerts = a
+        notices = withContext(Dispatchers.IO) { group.notices }
+        rootChanged = group.rootChanged
         handedOver = withContext(Dispatchers.IO) { group.handedOver }
         removed = withContext(Dispatchers.IO) { group.removed }
         recoveryMade = if (root) withContext(Dispatchers.IO) { group.recoveryMade } else null
@@ -961,6 +974,50 @@ class AppModel(private val app: Context) {
             describe(e)
         }
         update()
+    }
+
+    /** Hides a notice that may be hidden. */
+    suspend fun dismiss(notice: Notice) {
+        try {
+            withContext(Dispatchers.IO) { group.dismissNotice(notice.id) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            message = describe(e)
+        }
+        update()
+    }
+
+    /** The person saw that the group's root changed. */
+    fun rootChangeSeen() {
+        group.rootChangeSeen()
+        rootChanged = null
+    }
+
+    /** The "who stays" list of a change of root with the recovery key, leaveOut unticked; null after a failure, which [message] says. */
+    suspend fun changePreview(recovery: RecoveryInput, leaveOut: List<String>): ChangePreview? = try {
+        withContext(Dispatchers.IO) { group.changePreview(recovery, leaveOut) }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        message = describe(e)
+        null
+    }
+
+    /** Makes this phone the group's root with the recovery key, after the fingerprint or the screen lock; whether it did. */
+    suspend fun changeRoot(recovery: RecoveryInput, leaveOut: List<String>, overWaiting: Boolean): Boolean {
+        var done = false
+        message = try {
+            group.changeRoot(recovery, leaveOut, overWaiting)
+            done = true
+            Note(R.string.root_changed_here)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            describe(e)
+        }
+        update()
+        return done
     }
 
     /** Takes the group the root handed to this phone (cbb handover), after the fingerprint or the screen lock. */

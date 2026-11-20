@@ -23,9 +23,9 @@ made with 0.5 is set up again once. The details follow.
   the 0.6 records: two admins in conflict, two histories of the root, a recovery key used twice,
   a change of root arriving, a stuck checkpoint, a device that disagrees about the root, no
   secrets or nothing sent here, and a copy waiting for its sender.
-- The iPhone app shows the member's notices about the group on Home, moves the group's main
-  device to the phone with the recovery key and the "who stays" list the core writes, and
-  shows on every device that the main device changed, with "This wasn't me"
+- The iPhone and Android apps show the member's notices about the group on Home, move the
+  group's main device to the phone with the recovery key and the "who stays" list the core
+  writes, and show on every device that the main device changed, with "This wasn't me"
   ([phone apps](docs/apps.md), "Changing the main device").
 - A model of the record rules of 0.6 in Quint, written from the rules rather than the code
   (`docs/model/records-v3.qnt`); its scenarios run on the core in

@@ -669,6 +669,7 @@ internal fun ColumnScope.SettingsContent(model: AppModel, part: SettingsPart?) {
             if (WatchLink.available && home && model.devices.any { it.isSelf && it.isRoot }) WatchSection(model)
         }
         if (shows(SettingsPart.RECOVERY) && home && model.isRoot) RecoverySection(model)
+        if (shows(SettingsPart.RECOVERY) && home && !model.isRoot) ChangeRootSection(model)
         if (part == null && home) {
             Row(
                 Modifier.fillMaxWidth().card().focusRing().clickable(role = Role.Switch) {

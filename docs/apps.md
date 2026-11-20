@@ -268,7 +268,9 @@ rights, stays frozen until the new main device unfreezes it, removed, or removed
 The person only unticks devices; each unticked device is removed in the same act, and the old
 main device starts unticked. When another change is already on its way and its records have
 not all arrived, the list says so, and the change is written over it only after the person
-turns that on. Face ID confirms the change; it cannot be undone.
+turns that on. Face ID on the iPhone, the fingerprint or the screen lock on Android, confirms
+the change; it cannot be undone. On Android the window keeps out of screenshots while the key
+is on it.
 
 Every device of the group then shows, until the person has seen it, that the main device
 changed, which device it is now and which it replaces, with "This wasn't me". That button
