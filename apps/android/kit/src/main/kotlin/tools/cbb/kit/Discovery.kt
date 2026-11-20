@@ -51,6 +51,14 @@ object Discovery {
     fun joinerTXT(fingerprint: String): Map<String, String> = mapOf("v" to "1", "j" to "1", "f" to fingerprint)
 
     /**
+     * The TXT of a member's pairing window of 0.6 while it is open: the
+     * group's tag, p=1 and the fingerprint the window's QR code names, so
+     * a device without a camera finds it (docs/protocol.md, sections 3 and
+     * 6, "The window and who dials").
+     */
+    fun windowTXT(group: String, fingerprint: String): Map<String, String> = mapOf("v" to "1", "g" to group, "p" to "1", "f" to fingerprint)
+
+    /**
      * The members to dial: those browsing found, and the devices of the
      * group with a known address that it did not find, as a member in
      * another subnet, which mDNS does not reach (docs/protocol.md, section 9).

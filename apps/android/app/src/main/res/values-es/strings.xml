@@ -98,6 +98,9 @@
     <string name="claim_cancelled">La reclamación está cancelada. Los demás dispositivos se enteran en cuanto se conectan.</string>
     <string name="close">Cerrar</string>
     <string name="close_tip">Cerrar el consejo</string>
+    <string name="code_differ">No coinciden</string>
+    <string name="code_match">Coinciden</string>
+    <string name="code_question">¿La otra pantalla muestra este código?</string>
     <string name="collection_drag_here">Arrastra dispositivos aquí</string>
     <string name="collection_empty">Arrastra dispositivos aquí, o añádelos con Mover a colección en el menú de un dispositivo.</string>
     <string name="collection_into">Mover a colección</string>
@@ -278,10 +281,13 @@
     <string name="invite_share">Compartir la invitación</string>
     <string name="invite_title">Invitar a un dispositivo lejano</string>
     <string name="invite_too_many">La invitación se cerró tras tres intentos fallidos. Crea una nueva.</string>
+    <string name="join_asks">Uniéndose al grupo de %1$s.</string>
+    <string name="join_go">Unirse</string>
     <string name="join_group">Unirse a un grupo</string>
     <string name="join_hint">En un teléfono del grupo, toca + y escanea este código. En un ordenador del grupo, toca + y escribe los números. Mantén esta pantalla abierta.</string>
     <string name="join_hint_tv">En tu teléfono, abre CBB, toca + y escanea este código. Mantén esta pantalla abierta.</string>
     <string name="join_qr_label">Código QR para unirse al grupo</string>
+    <string name="join_scan_hint">En un teléfono del grupo, toca + y escanea el código que muestra. Mantén ambos teléfonos en la misma red.</string>
     <string name="join_title">Unirse a un grupo</string>
     <string name="join_tv">Unirse al grupo de un teléfono</string>
     <string name="join_tv_hint">Este televisor se une al grupo de tu teléfono: muestra un código QR y el teléfono lo escanea.</string>
@@ -385,6 +391,7 @@
     <string name="no_computers">No hay ordenadores conectados.</string>
     <string name="no_devices_match">Ningún dispositivo coincide.</string>
     <string name="not_a_code">No es un código QR de CBB.</string>
+    <string name="not_a_window_code">Este no es el código QR de una ventana de emparejamiento. En un teléfono del grupo, toca + para mostrar uno.</string>
     <string name="not_ready_yet">El dispositivo aún no está listo. Reintentando (%1$d)…</string>
     <string name="nothing_new">Nada nuevo que enviar ni obtener.</string>
     <string name="notice_ack_owed">Este teléfono tiene una eliminación que confirmar; lo hace con tu próxima acción de administrador.</string>
@@ -719,6 +726,10 @@
     <string name="why_unreached_t">Los dispositivos de casa no pueden conectarse a este: %1$s.</string>
     <string name="why_update_t">CBB %1$s está disponible.</string>
     <string name="widget_description">Un toque envía a tus ordenadores lo que copió este teléfono.</string>
+    <string name="window_asks">%1$s pide unirse.</string>
+    <string name="window_hint">En el teléfono nuevo, abre CBB, toca Unirse a un grupo y escanea este código. Un ordenador nuevo encuentra esta ventana por sí solo al unirse. Mantén esta pantalla abierta.</string>
+    <string name="window_joined">El dispositivo se unió al grupo.</string>
+    <string name="window_waiting">Esperando al dispositivo nuevo…</string>
     <string name="yubikey_go">Continuar</string>
     <string name="yubikey_hold">Mantén la YubiKey en la parte trasera del teléfono hasta que desaparezca este mensaje.</string>
     <string name="yubikey_hold_again">Grupo encontrado. Acerca de nuevo la YubiKey al teléfono para firmar la reclamación.</string>

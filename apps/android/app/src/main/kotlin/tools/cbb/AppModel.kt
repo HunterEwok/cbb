@@ -485,6 +485,105 @@ class AppModel(private val app: Context) {
         }
     }
 
+    // Pairing on 0.6: the window and the joiner
+
+    /** The recovery sheet of the group of 0.6 this phone just made, shown once until the person says it is kept. */
+    var newSheet by mutableStateOf<Core.RecoverySheet?>(null)
+
+    /** The open window's QR code, while "Add a device" shows it. */
+    var windowQr by mutableStateOf<String?>(null)
+        private set
+
+    /** The device whose code waits for the person's answer, on either end. */
+    var pairAsk by mutableStateOf<LiveGroup.WindowAsk?>(null)
+        private set
+
+    private var pairAnswer: CompletableDeferred<Boolean>? = null
+
+    /** Whether "Add a device" opens a window of 0.6: a phone without a group makes one, a group of 0.5 keeps its scanner. */
+    val pairsOn06: Boolean get() = !group.hasGroup || group.isV06
+
+    /** Asks the person whether the code both screens show matches, for up to 5 minutes. */
+    private suspend fun askCode(a: LiveGroup.WindowAsk): Boolean = withContext(Dispatchers.Main) {
+        val d = CompletableDeferred<Boolean>()
+        pairAnswer = d
+        pairAsk = a
+        val yes = withTimeoutOrNull(CONFIRM_MS) { d.await() } ?: false
+        pairAsk = null
+        yes
+    }
+
+    /** The person's answer about the code. */
+    fun answerCode(yes: Boolean) {
+        pairAnswer?.complete(yes)
+        pairAnswer = null
+    }
+
+    /**
+     * "Add a device" on 0.6: makes the group first on a phone without one
+     * (its recovery sheet shows over the window), then opens the window
+     * until a device joins. "Add a device" runs it as its effect, so leaving
+     * it closes the window. Answers whether a device joined.
+     */
+    suspend fun addByWindow(): Boolean {
+        message = null
+        try {
+            if (!group.hasGroup) {
+                busy = true
+                newSheet = group.newGroup06()
+                busy = false
+                update()
+                phase = Phase.HOME
+            }
+            val name = group.openWindow({ qr -> main.post { windowQr = qr } }, ::askCode)
+            message = Note(R.string.window_joined)
+            Log.i(TAG, "$name joined through this phone's window")
+            update()
+            return true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            message = describe(e)
+            return false
+        } finally {
+            busy = false
+            windowQr = null
+            pairAsk = null
+            pairAnswer?.complete(false)
+            pairAnswer = null
+        }
+    }
+
+    /**
+     * Joins a group of 0.6 by a window's scanned or pasted QR code: the
+     * code both screens show waits for the person's answer, then the app
+     * goes Home. The join screen runs it, so leaving the screen cancels it.
+     */
+    suspend fun joinByWindow(qr: String): Boolean {
+        if (!qr.trim().startsWith(WINDOW_QR)) {
+            message = Note(R.string.not_a_window_code, error = true)
+            return false
+        }
+        message = null
+        busy = true
+        try {
+            group.joinByWindow(qr.trim(), ::askCode)
+            update()
+            phase = Phase.HOME
+            return true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            message = describe(e)
+            return false
+        } finally {
+            busy = false
+            pairAsk = null
+            pairAnswer?.complete(false)
+            pairAnswer = null
+        }
+    }
+
     /** Leaves the join screen without joining. */
     fun cancelJoin() {
         joinCode = null
@@ -1376,6 +1475,9 @@ class AppModel(private val app: Context) {
 
         /** How long the user may take to confirm a device that used an invitation (docs/protocol.md, section 12). */
         const val CONFIRM_MS = 5 * 60_000L
+
+        /** How the QR code of a pairing window of 0.6 starts (docs/protocol.md, section 7, "The window's QR code"). */
+        const val WINDOW_QR = "cbb://pair?"
 
         /** How the QR code of a recovery sheet starts (docs/protocol.md, section 10, "The recovery key"). */
         const val RECOVERY_QR = "cbb://recover?"

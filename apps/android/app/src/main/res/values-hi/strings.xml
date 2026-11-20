@@ -98,6 +98,9 @@
     <string name="claim_cancelled">दावा रद्द हो गया। बाकी डिवाइसों को जुड़ते ही इसका पता चलता है।</string>
     <string name="close">बंद करें</string>
     <string name="close_tip">सुझाव बंद करें</string>
+    <string name="code_differ">मेल नहीं खाते</string>
+    <string name="code_match">मेल खाते हैं</string>
+    <string name="code_question">क्या दूसरी स्क्रीन पर यही कोड दिख रहा है?</string>
     <string name="collection_drag_here">डिवाइस यहाँ खींचें</string>
     <string name="collection_empty">डिवाइस यहाँ खींचें, या डिवाइस के मेनू में संग्रह में ले जाएँ से जोड़ें।</string>
     <string name="collection_into">संग्रह में ले जाएँ</string>
@@ -278,10 +281,13 @@
     <string name="invite_share">आमंत्रण साझा करें</string>
     <string name="invite_title">दूर के डिवाइस को आमंत्रित करें</string>
     <string name="invite_too_many">तीन विफल प्रयासों के बाद आमंत्रण बंद हो गया। नया बनाएँ।</string>
+    <string name="join_asks">%1$s के समूह से जुड़ रहे हैं।</string>
+    <string name="join_go">जुड़ें</string>
     <string name="join_group">समूह से जुड़ें</string>
     <string name="join_hint">समूह के किसी फ़ोन पर, + टैप करें और यह कोड स्कैन करें। समूह के किसी कंप्यूटर पर, + टैप करें और अंक लिखें। यह स्क्रीन खुली रखें।</string>
     <string name="join_hint_tv">अपने फ़ोन पर CBB खोलें, + टैप करें और यह कोड स्कैन करें। यह स्क्रीन खुली रखें।</string>
     <string name="join_qr_label">समूह से जुड़ने का QR कोड</string>
+    <string name="join_scan_hint">समूह के किसी फ़ोन पर + टैप करें और जो कोड वह दिखाए उसे स्कैन करें। दोनों फ़ोन एक ही नेटवर्क पर रखें।</string>
     <string name="join_title">समूह से जुड़ें</string>
     <string name="join_tv">किसी फ़ोन के समूह से जुड़ें</string>
     <string name="join_tv_hint">यह टीवी आपके फ़ोन के समूह से जुड़ता है: यह एक QR कोड दिखाता है, और फ़ोन उसे स्कैन करता है।</string>
@@ -385,6 +391,7 @@
     <string name="no_computers">कोई कंप्यूटर जुड़ा नहीं है।</string>
     <string name="no_devices_match">कोई डिवाइस मेल नहीं खाता।</string>
     <string name="not_a_code">यह CBB का QR कोड नहीं है।</string>
+    <string name="not_a_window_code">यह पेयरिंग विंडो का QR कोड नहीं है। समूह के किसी फ़ोन पर + टैप करके एक दिखाएँ।</string>
     <string name="not_ready_yet">डिवाइस अभी तैयार नहीं है। फिर से कोशिश की जा रही है (%1$d)…</string>
     <string name="nothing_new">भेजने या लाने के लिए कुछ नया नहीं।</string>
     <string name="notice_ack_owed">इस फ़ोन को एक हटाने की पुष्टि करनी है; यह आपकी अगली एडमिन कार्रवाई के साथ होगी।</string>
@@ -719,6 +726,10 @@
     <string name="why_unreached_t">घर के डिवाइस इससे नहीं जुड़ पा रहे: %1$s।</string>
     <string name="why_update_t">CBB %1$s उपलब्ध है।</string>
     <string name="widget_description">एक टैप इस फ़ोन की कॉपी आपके कंप्यूटरों पर भेज देता है।</string>
+    <string name="window_asks">%1$s जुड़ना चाहता है।</string>
+    <string name="window_hint">नए फ़ोन पर CBB खोलें, समूह से जुड़ें पर टैप करें और यह कोड स्कैन करें। नया कंप्यूटर जुड़ते समय यह विंडो अपने-आप ढूँढ लेता है। यह स्क्रीन खुली रखें।</string>
+    <string name="window_joined">डिवाइस समूह से जुड़ गया।</string>
+    <string name="window_waiting">नए डिवाइस का इंतज़ार…</string>
     <string name="yubikey_go">जारी रखें</string>
     <string name="yubikey_hold">जब तक यह संदेश न जाए, YubiKey को फ़ोन के पीछे लगाए रखें।</string>
     <string name="yubikey_hold_again">समूह मिल गया। दावे पर हस्ताक्षर के लिए YubiKey को फ़ोन से फिर लगाएँ।</string>

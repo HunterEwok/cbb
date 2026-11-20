@@ -394,6 +394,9 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      */
     val isAdmin: Boolean get() = synchronized(lock) { state?.isAdmin ?: true }
 
+    /** Whether the group is on the records of 0.6. */
+    val isV06: Boolean get() = synchronized(lock) { state?.isV06 ?: false }
+
     /** Whether this phone holds the group's root, which ends conflicts. */
     val isRoot: Boolean get() = synchronized(lock) { state?.isRoot ?: false }
 
@@ -408,6 +411,7 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         get() {
             // The node is asked outside the lock.
             val (g, n) = synchronized(lock) { (state ?: return emptyList()) to node }
+            if (g.isV06) return devices06(g, n)
             val peers = n?.let { runCatching { it.peers() }.getOrNull() }.orEmpty()
             val online = peers.map { it.device }.toSet()
             val reached = peers.flatMap { it.reach }.toSet() - online
@@ -453,6 +457,139 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
         }
 
     val computers: List<Device> get() = devices.filter { !it.isSelf }
+
+    // The group of 0.6
+
+    /**
+     * The devices of a group of 0.6, as its member's state names them
+     * (CoreMember.group), with what the connected ones' hellos say; it
+     * notes whether the state names this phone an admin.
+     */
+    private fun devices06(g: PhoneGroup, n: CoreMember?): List<Device> {
+        val gs = n?.let { runCatching { it.group() }.onFailure { e -> Log.w(TAG, "the member's group", e) }.getOrNull() } ?: return emptyList()
+        g.admin06 = gs.me.admin
+        val peers = runCatching { n.peers() }.getOrNull().orEmpty().associateBy { it.device }
+        val now = System.currentTimeMillis()
+        return gs.devices.map {
+            val p = peers[it.device]
+            val self = it.device == g.device
+            Device(
+                id = it.device, name = it.name, online = self || p != null, role = if (it.role == "computer") "member" else it.role,
+                os = it.os.ifEmpty { null }, isSelf = self, admin = it.admin, isRoot = it.device == gs.rootDevice,
+                keysInFile = p?.keyStore == KitRecords.FILE, frozen = it.frozen,
+                device = if (self) ownDevice.cleaned else p?.info, mode = if (self) syncMode else p?.mode?.ifEmpty { null },
+                actions = p?.actions.orEmpty(), hub = if (it.hub) HubMark.HUB else null,
+                muted = Hold.of(if (self) mutedUntilMS else p?.mutedUntil(now)),
+                syncOff = if (self) syncOffUntilMS?.let(Hold::of) else null,
+            )
+        }
+    }
+
+    /**
+     * Makes a group of 0.6 on this phone (docs/apps.md, "Making a group"):
+     * a new root key, the core writes this phone's record under it and keeps
+     * the set where the member runs, and the member starts. Answers the
+     * recovery sheet, which the app shows once and keeps nowhere.
+     */
+    suspend fun newGroup06(): Core.RecoverySheet {
+        check(!hasGroup) { "this phone is in a group already" }
+        if (activity == null) throw Failure(Failure.Kind.NO_SCREEN)
+        return withContext(Dispatchers.IO) {
+            val root = newRootKey("", R.string.reason_add, Prompts(1))
+            val member = memberSigner()
+            nodeDir.mkdirs()
+            val made = CorePairing.newGroup06(
+                nodeDir, PhoneGroup.validName(deviceName), "android", KitRecords.HARDWARE, root.publicKeyDER, member.publicKeyDER, root::signDigest,
+            )
+            adopt(PhoneGroup.of06(made.device, made.group, root = true))
+            Core.RecoverySheet(made.recoveryQR, made.recoveryText.flatMap { it.split(" ") }.joinToString("-"), ByteArray(0))
+        }
+    }
+
+    /** A device that dialed this phone's window: what it says of itself, and the code both screens show. */
+    data class WindowAsk(val name: String, val os: String, val code: String)
+
+    /**
+     * Opens this phone's pairing window on a group of 0.6 (docs/protocol.md,
+     * section 6, "The window and who dials"): the member port listens, the
+     * window is announced by NSD, shown gets the QR code, and for each device
+     * that dials ask gets the person's answer about the code. Returns the
+     * name of the device that joined; the window closes when it does, when
+     * its time is up, or when the caller is cancelled.
+     */
+    suspend fun openWindow(shown: (String) -> Unit, ask: suspend (WindowAsk) -> Boolean): String {
+        val g = synchronized(lock) { state } ?: throw Failure(Failure.Kind.NO_GROUP)
+        if (!g.isV06 || !g.isAdmin) throw Failure(Failure.Kind.NO_GROUP)
+        val n = currentNode ?: throw Failure(Failure.Kind.UNREACHABLE)
+        val signer = caSigner(R.string.reason_add, prompts = Prompts(1))
+        val (w, port) = withContext(Dispatchers.IO) {
+            val port = listen(n, CoreMember.Listen.HOME) ?: throw Failure(Failure.Kind.UNREACHABLE)
+            val hosts = LocalAddresses.current()
+            if (hosts.isEmpty()) throw Failure(Failure.Kind.NO_NETWORK)
+            CorePairing.Window(n, signer.publicKeyDER, hosts, sign = signer::signDigest) to port
+        }
+        val announced = NsdPublisher(context, g.device, port, Discovery.windowTXT(g.tag, w.fingerprint))
+        announced.start()
+        try {
+            shown(w.qr)
+            var version = 0L
+            while (true) {
+                val st = withContext(Dispatchers.IO) { w.next(version, 1000) }
+                version = st.version
+                when (st.state) {
+                    "joining" -> st.request?.let { r -> w.answer(ask(WindowAsk(r.name, r.os, r.code))) }
+                    "done" -> {
+                        hubWork.execute(::hubRecords)
+                        return st.name
+                    }
+                    "closed" -> throw Failure(Failure.Kind.TIMED_OUT)
+                    "failed" -> st.failure?.let { Log.w(TAG, "a device did not join through the window", it) }
+                }
+            }
+        } finally {
+            withContext(NonCancellable + Dispatchers.IO) {
+                w.close()
+                announced.stop()
+            }
+        }
+    }
+
+    /**
+     * Joins a group of 0.6 by a window's QR code (empty for the one window
+     * NSD finds): this phone dials, ask gets the person's answer about the
+     * code both screens show, and the member starts on the group it keeps.
+     */
+    suspend fun joinByWindow(qr: String, ask: suspend (WindowAsk) -> Boolean) {
+        if (hasGroup) return
+        val j = withContext(Dispatchers.IO) {
+            val member = memberSigner()
+            nodeDir.mkdirs()
+            CorePairing.Joiner(nodeDir.path, qr, PhoneGroup.validName(deviceName), "android", member.publicKeyDER, member::signDigest)
+        }
+        try {
+            var version = 0L
+            while (true) {
+                val st = withContext(Dispatchers.IO) { j.next(version, 1000) }
+                version = st.version
+                when (st.state) {
+                    "joining" -> st.shown?.let { s -> j.answer(ask(WindowAsk(s.name, "", s.code))) }
+                    "done" -> {
+                        withContext(Dispatchers.IO) {
+                            synchronized(lock) {
+                                newDeviceMode()
+                                state = PhoneGroup.of06(st.device, st.group, root = false).also { it.save(file) }
+                            }
+                            startSync()
+                        }
+                        return
+                    }
+                    "failed" -> throw st.failure ?: Failure(Failure.Kind.UNREACHABLE)
+                }
+            }
+        } finally {
+            withContext(NonCancellable + Dispatchers.IO) { j.close() }
+        }
+    }
 
     /** Sync away from home on this phone: null without a group. */
     val awayFromHome: AwayFromHome? get() = synchronized(lock) { away }
@@ -1428,7 +1565,8 @@ class LiveGroup(private val context: Context, private val file: File = defaultFi
      */
     fun leave() {
         val g = synchronized(lock) { state } ?: throw Failure(Failure.Kind.NO_GROUP)
-        if (g.isRoot && g.devices.any { it.id != g.device && it.role != "watch" }) throw Failure(Failure.Kind.ROOT_LEAVES)
+        val others = if (g.isV06) devices.filter { !it.isSelf }.map { it.role } else g.devices.filter { it.id != g.device }.map { it.role }
+        if (g.isRoot && others.any { it != "watch" }) throw Failure(Failure.Kind.ROOT_LEAVES)
         synchronized(lock) { away.also { away = null } }?.stop()
         hubWork.submit {
             stopHub()

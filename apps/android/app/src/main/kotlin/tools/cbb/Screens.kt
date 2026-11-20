@@ -266,6 +266,11 @@ private fun JoinScreen(model: AppModel) {
         JoinByInviteScreen(model)
         return
     }
+    // On 0.6 the new phone dials a window (docs/protocol.md, section 6, "The window and who dials").
+    if (model.pairsOn06) {
+        JoinByWindowScreen(model)
+        return
+    }
     val palette = LocalPalette.current
     LaunchedEffect(Unit) { model.join() }
     BackHandler { model.cancelJoin() }
@@ -532,6 +537,10 @@ internal fun Confirm(title: String, body: String, action: String, dismiss: () ->
  */
 @Composable
 internal fun AddDeviceScreen(model: AppModel, restore: Boolean = false, close: () -> Unit) {
+    if (!restore && model.pairsOn06) {
+        WindowScreen(model, close)
+        return
+    }
     val palette = LocalPalette.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()

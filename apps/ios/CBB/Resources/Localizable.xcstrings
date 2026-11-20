@@ -5938,6 +5938,52 @@
         }
       }
     },
+    "Does the other screen show this code?": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هل تعرض الشاشة الأخرى هذا الرمز؟"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿La otra pantalla muestra este código?"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "האם המסך השני מציג את הקוד הזה?"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "क्या दूसरी स्क्रीन पर यही कोड दिख रहा है?"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На другом экране этот же код?"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Je, skrini nyingine inaonyesha msimbo huu?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "另一块屏幕显示的是这个代码吗？"
+          }
+        }
+      }
+    },
     "Done": {
       "localizations": {
         "ar": {
@@ -13804,6 +13850,52 @@
         }
       }
     },
+    "On a phone of the group, tap + and scan the code it shows. Keep both phones on the same network.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "على هاتف من المجموعة، اضغط + وامسح الرمز الذي يعرضه. أبقِ الهاتفين على الشبكة نفسها."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En un teléfono del grupo, toca + y escanea el código que muestra. Mantén ambos teléfonos en la misma red."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בטלפון של הקבוצה, הקישו על + וסרקו את הקוד שהוא מציג. השאירו את שני הטלפונים באותה רשת."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "समूह के किसी फ़ोन पर + टैप करें और जो कोड वह दिखाए उसे स्कैन करें। दोनों फ़ोन एक ही नेटवर्क पर रखें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На телефоне группы нажмите + и отсканируйте показанный код. Оба телефона должны быть в одной сети."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kwenye simu ya kikundi, gusa + na uchanganue msimbo inaoonyesha. Weka simu zote mbili kwenye mtandao mmoja."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在群组中的手机上点 +，然后扫描它显示的代码。让两部手机连在同一网络上。"
+          }
+        }
+      }
+    },
     "On a phone of the group, tap + and scan this code. On a computer of the group, tap + and type the numbers. Keep this screen open.": {
       "localizations": {
         "ar": {
@@ -13984,6 +14076,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "在群组的主设备上，于其提醒中作出决定。"
+          }
+        }
+      }
+    },
+    "On the new phone, open CBB, tap Join a group and scan this code. A new computer finds this window by itself when it joins. Keep this screen open.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "على الهاتف الجديد، افتح CBB واضغط الانضمام إلى مجموعة وامسح هذا الرمز. يجد الحاسوب الجديد هذه النافذة بنفسه عند انضمامه. أبقِ هذه الشاشة مفتوحة."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En el teléfono nuevo, abre CBB, toca Unirse a un grupo y escanea este código. Un ordenador nuevo encuentra esta ventana por sí solo al unirse. Mantén esta pantalla abierta."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "בטלפון החדש, פתחו את CBB, הקישו על הצטרפות לקבוצה וסרקו את הקוד הזה. מחשב חדש מוצא את החלון הזה בעצמו כשהוא מצטרף. השאירו את המסך הזה פתוח."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "नए फ़ोन पर CBB खोलें, समूह से जुड़ें पर टैप करें और यह कोड स्कैन करें। नया कंप्यूटर जुड़ते समय यह विंडो अपने-आप ढूँढ लेता है। यह स्क्रीन खुली रखें।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На новом телефоне откройте CBB, нажмите «Присоединиться к группе» и отсканируйте этот код. Новый компьютер найдёт это окно сам, когда будет присоединяться. Не закрывайте этот экран."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kwenye simu mpya, fungua CBB, gusa Jiunge na kikundi na uchanganue msimbo huu. Kompyuta mpya hupata dirisha hili yenyewe inapojiunga. Acha skrini hii wazi."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在新手机上打开 CBB，点“加入群组”并扫描这个二维码。新电脑加入时会自己找到这个窗口。请保持此屏幕打开。"
           }
         }
       }
@@ -22590,6 +22728,52 @@
         }
       }
     },
+    "The device joined the group.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انضم الجهاز إلى المجموعة."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El dispositivo se unió al grupo."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "המכשיר הצטרף לקבוצה."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "डिवाइस समूह से जुड़ गया।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Устройство присоединилось к группе."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kifaa kimejiunga na kikundi."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设备已加入群组。"
+          }
+        }
+      }
+    },
     "The device joined the group; it appears in the list once it connects.": {
       "localizations": {
         "ar": {
@@ -25534,6 +25718,98 @@
         }
       }
     },
+    "They don't match": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير متطابقين"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No coinciden"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "לא תואמים"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "मेल नहीं खाते"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не совпадают"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hazilingani"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不一致"
+          }
+        }
+      }
+    },
+    "They match": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "متطابقان"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coinciden"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "תואמים"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "मेल खाते हैं"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Совпадают"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zinalingana"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一致"
+          }
+        }
+      }
+    },
     "This YubiKey has no free slot for the key.": {
       "localizations": {
         "ar": {
@@ -26680,6 +26956,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "这不是 YubiKey。请将 YubiKey 贴近手机。"
+          }
+        }
+      }
+    },
+    "This is not the QR code of a pairing window. On a phone of the group, tap + to show one.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا ليس رمز QR لنافذة إقران. على هاتف من المجموعة، اضغط + لعرض واحد."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este no es el código QR de una ventana de emparejamiento. En un teléfono del grupo, toca + para mostrar uno."
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "זה לא קוד QR של חלון צימוד. בטלפון של הקבוצה, הקישו על + כדי להציג אחד."
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "यह पेयरिंग विंडो का QR कोड नहीं है। समूह के किसी फ़ोन पर + टैप करके एक दिखाएँ।"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это не QR-код окна сопряжения. На телефоне группы нажмите +, чтобы показать его."
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Huu si msimbo wa QR wa dirisha la kuoanisha. Kwenye simu ya kikundi, gusa + ili kuonyesha mmoja."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这不是配对窗口的二维码。请在群组中的手机上点 + 来显示一个。"
           }
         }
       }
@@ -29854,6 +30176,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在等待中心节点：在家中靠近群组的电脑时打开一次应用。"
+          }
+        }
+      }
+    },
+    "Waiting for the new device…": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "في انتظار الجهاز الجديد…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esperando al dispositivo nuevo…"
+          }
+        },
+        "he": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ממתינים למכשיר החדש…"
+          }
+        },
+        "hi": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "नए डिवाइस का इंतज़ार…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ожидание нового устройства…"
+          }
+        },
+        "sw": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inasubiri kifaa kipya…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在等待新设备…"
           }
         }
       }

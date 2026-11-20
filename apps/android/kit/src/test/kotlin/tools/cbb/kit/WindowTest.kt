@@ -83,6 +83,19 @@ class WindowTest {
     }
 
     @Test
+    fun aGroupOf06KeepsItsIDsAndNoCertificates() {
+        val g = PhoneGroup.of06("0a".repeat(16), "1b".repeat(16), root = false)
+        g.admin06 = true
+        val f = File(top, "group.json")
+        g.save(f)
+        val back = assertNotNull(PhoneGroup.load(f))
+        assertTrue(back.isV06 && back.isAdmin && !back.isRoot)
+        assertEquals("1b".repeat(8), back.tag)
+        assertEquals("0a".repeat(16), back.device)
+        assertTrue(back.devices.isEmpty(), "the member keeps the set")
+    }
+
+    @Test
     fun aJoinerRefusesACodeThatIsNoWindows() {
         val k = SoftwareSigner()
         assertFailsWith<CorePairing.Failure> {

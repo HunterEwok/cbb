@@ -98,6 +98,9 @@
     <string name="claim_cancelled">أُلغيت المطالبة. تعلم بها الأجهزة الأخرى فور اتصالها.</string>
     <string name="close">إغلاق</string>
     <string name="close_tip">إغلاق التلميح</string>
+    <string name="code_differ">غير متطابقين</string>
+    <string name="code_match">متطابقان</string>
+    <string name="code_question">هل تعرض الشاشة الأخرى هذا الرمز؟</string>
     <string name="collection_drag_here">اسحب الأجهزة إلى هنا</string>
     <string name="collection_empty">اسحب الأجهزة إلى هنا، أو أضفها بـ«نقل إلى مجموعة فرعية» في قائمة الجهاز.</string>
     <string name="collection_into">نقل إلى مجموعة عرض</string>
@@ -278,10 +281,13 @@
     <string name="invite_share">مشاركة الدعوة</string>
     <string name="invite_title">دعوة جهاز بعيد</string>
     <string name="invite_too_many">أُغلقت الدعوة بعد ثلاث محاولات فاشلة. أنشئ دعوة جديدة.</string>
+    <string name="join_asks">جارٍ الانضمام إلى مجموعة %1$s.</string>
+    <string name="join_go">انضمام</string>
     <string name="join_group">الانضمام إلى مجموعة</string>
     <string name="join_hint">على هاتف من المجموعة، اضغط + وامسح هذا الرمز. على حاسوب من المجموعة، اضغط + واكتب الأرقام. أبقِ هذه الشاشة مفتوحة.</string>
     <string name="join_hint_tv">على هاتفك، افتح CBB، واضغط + وامسح هذا الرمز. أبقِ هذه الشاشة مفتوحة.</string>
     <string name="join_qr_label">رمز QR للانضمام إلى المجموعة</string>
+    <string name="join_scan_hint">على هاتف من المجموعة، اضغط + وامسح الرمز الذي يعرضه. أبقِ الهاتفين على الشبكة نفسها.</string>
     <string name="join_title">الانضمام إلى مجموعة</string>
     <string name="join_tv">الانضمام إلى مجموعة هاتف</string>
     <string name="join_tv_hint">ينضم هذا التلفاز إلى مجموعة هاتفك: يعرض رمز QR، ويمسحه الهاتف.</string>
@@ -385,6 +391,7 @@
     <string name="no_computers">لا توجد حواسيب متصلة.</string>
     <string name="no_devices_match">لا توجد أجهزة مطابقة.</string>
     <string name="not_a_code">ليس رمز QR خاصًا بـ CBB.</string>
+    <string name="not_a_window_code">هذا ليس رمز QR لنافذة إقران. على هاتف من المجموعة، اضغط + لعرض واحد.</string>
     <string name="not_ready_yet">الجهاز ليس جاهزًا بعد. جارٍ المحاولة مرة أخرى (%1$d)…</string>
     <string name="nothing_new">لا جديد للإرسال أو الجلب.</string>
     <string name="notice_ack_owed">لدى هذا الهاتف إزالة ليؤكدها؛ وسيفعل ذلك مع إجرائك التالي كمشرف.</string>
@@ -719,6 +726,10 @@
     <string name="why_unreached_t">لا تستطيع الأجهزة في المنزل الاتصال بهذا الجهاز: %1$s.</string>
     <string name="why_update_t">يتوفر CBB %1$s.</string>
     <string name="widget_description">ضغطة واحدة ترسل ما نسخه هذا الهاتف إلى حواسيبك.</string>
+    <string name="window_asks">يطلب %1$s الانضمام.</string>
+    <string name="window_hint">على الهاتف الجديد، افتح CBB واضغط الانضمام إلى مجموعة وامسح هذا الرمز. يجد الحاسوب الجديد هذه النافذة بنفسه عند انضمامه. أبقِ هذه الشاشة مفتوحة.</string>
+    <string name="window_joined">انضم الجهاز إلى المجموعة.</string>
+    <string name="window_waiting">في انتظار الجهاز الجديد…</string>
     <string name="yubikey_go">متابعة</string>
     <string name="yubikey_hold">أبقِ YubiKey على ظهر الهاتف حتى تختفي هذه الرسالة.</string>
     <string name="yubikey_hold_again">عُثر على المجموعة. قرّب YubiKey من الهاتف مرة أخرى لتوقيع المطالبة.</string>

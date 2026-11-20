@@ -98,6 +98,9 @@
     <string name="claim_cancelled">Заявка отменена. Остальные устройства узнают об этом, как только подключатся.</string>
     <string name="close">Закрыть</string>
     <string name="close_tip">Закрыть подсказку</string>
+    <string name="code_differ">Не совпадают</string>
+    <string name="code_match">Совпадают</string>
+    <string name="code_question">На другом экране этот же код?</string>
     <string name="collection_drag_here">Перетащите сюда устройства</string>
     <string name="collection_empty">Перетащите сюда устройства или добавьте их пунктом «В коллекцию» в меню устройства.</string>
     <string name="collection_into">В коллекцию</string>
@@ -278,10 +281,13 @@
     <string name="invite_share">Отправить приглашение</string>
     <string name="invite_title">Пригласить устройство издалека</string>
     <string name="invite_too_many">Приглашение закрыто после трёх неудачных попыток. Создайте новое.</string>
+    <string name="join_asks">Присоединение к группе устройства %1$s.</string>
+    <string name="join_go">Вступить</string>
     <string name="join_group">Войти в группу</string>
     <string name="join_hint">На телефоне группы нажмите + и отсканируйте этот код. На компьютере группы нажмите + и введите цифры. Не закрывайте этот экран.</string>
     <string name="join_hint_tv">На телефоне откройте CBB, нажмите + и отсканируйте этот код. Не закрывайте этот экран.</string>
     <string name="join_qr_label">QR-код для входа в группу</string>
+    <string name="join_scan_hint">На телефоне группы нажмите + и отсканируйте показанный код. Оба телефона должны быть в одной сети.</string>
     <string name="join_title">Войти в группу</string>
     <string name="join_tv">Войти в группу телефона</string>
     <string name="join_tv_hint">Телевизор входит в группу вашего телефона: он показывает QR-код, а телефон его сканирует.</string>
@@ -385,6 +391,7 @@
     <string name="no_computers">Компьютеры не подключены.</string>
     <string name="no_devices_match">Подходящих устройств нет.</string>
     <string name="not_a_code">Это не QR-код CBB.</string>
+    <string name="not_a_window_code">Это не QR-код окна сопряжения. На телефоне группы нажмите +, чтобы показать его.</string>
     <string name="not_ready_yet">Устройство ещё не готово. Пробую снова (%1$d)…</string>
     <string name="nothing_new">Нечего отправить или получить.</string>
     <string name="notice_ack_owed">Этому телефону нужно подтвердить удаление; он сделает это при вашем следующем действии администратора.</string>
@@ -719,6 +726,10 @@
     <string name="why_unreached_t">Устройства дома не могут подключиться к этому: %1$s.</string>
     <string name="why_update_t">Доступна CBB %1$s.</string>
     <string name="widget_description">Одно касание отправляет скопированное на телефоне на ваши компьютеры.</string>
+    <string name="window_asks">%1$s просит присоединиться.</string>
+    <string name="window_hint">На новом телефоне откройте CBB, нажмите «Присоединиться к группе» и отсканируйте этот код. Новый компьютер найдёт это окно сам, когда будет присоединяться. Не закрывайте этот экран.</string>
+    <string name="window_joined">Устройство присоединилось к группе.</string>
+    <string name="window_waiting">Ожидание нового устройства…</string>
     <string name="yubikey_go">Продолжить</string>
     <string name="yubikey_hold">Приложите YubiKey к задней стороне телефона и держите, пока это сообщение не исчезнет.</string>
     <string name="yubikey_hold_again">Группа найдена. Приложите YubiKey к телефону ещё раз, чтобы подписать заявку.</string>
