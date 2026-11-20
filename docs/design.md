@@ -1662,7 +1662,9 @@ relay, or a hub.
   ([the servers' budget](relay-budget.md)). An open relay forgets a group once its last
   device leaves.
 - Each device turns it on with `cbb global relay ADDRESS -key KEY`, in place of a hub, after
-  the user agrees; the key is the pin of the relay's own key, as with the forwarder.
+  the user agrees; the key is the pin of the relay's own key, as with the forwarder. In a
+  group of 0.6 the root runs it once and signs the relay in the group's settings (field 15,
+  D-121), and every device takes it from the records and shows the relay a face of its own.
 - A device registers with the certificate of its server key for the period and the period's
   credentials (D-67, D-75, protocol.md, section 18), and proves it holds a fresh WireGuard
   key. The relay then gives it a tunnel, a preshared key and a tunnel address of the relay's

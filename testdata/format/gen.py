@@ -514,8 +514,14 @@ def record_vectors():
     add("board admitted by an admin, base rights", ADMIN, 1,
         {10: BOARD.key, 11: "Kettle", 12: 4, 13: 0b0011, 17: 10},
         note="an ordinary leaf: any admin with admit admits it, and it obeys the group's admins")
+    # the group's servers: [kind, endpoint, pin of the TLS key], each kind
+    # and endpoint once; 0.6 writes relays (kind 2), and a reader keeps a
+    # kind it does not know and passes over it, here kind 9 on a relay's
+    # endpoint, which is another server (D-121)
     add("settings", ROOT, 7, {14: 1,
-                              15: [[1, "forward.cbb.tools:8764", OPERATOR.key]]})
+                              15: [[2, "relay.example.org:8765", hashlib.sha256(b"relay pin").digest()],
+                                   [2, "relay2.example.org:443", hashlib.sha256(b"relay 2 pin").digest()],
+                                   [9, "relay.example.org:8765", hashlib.sha256(b"later").digest()]]})
     add("copies", ADMIN, 8, {10: 30000, 11: seen_of(ROOT)})
     # hubs keep the user's order (not sorted), each once
     add("hubs", ROOT, 10, {10: sorted([LAPTOP.id16, PHONE.id16], reverse=True), 11: seen_of(ADMIN)})
@@ -756,10 +762,16 @@ def record_vectors():
     for name, ms in [("copies incoming_ms one below its least", BOUND["records::body::MIN_INCOMING_MS"] - 1),
                      ("copies incoming_ms one past its most", BOUND["records::body::MAX_INCOMING_MS"] + 1)]:
         bad_body(name, "records/copies/incoming_ms", rec(ROOT, 90, 8, {10: ms, 11: [sa]}))
-    servers = [[1, f"fwd{i}.example.org:443", Signer(f"server {i}").key]
+    servers = [[2, f"relay{i}.example.org:443", hashlib.sha256(b"server %d" % i).digest()]
                for i in range(BOUND["records::body::MAX_SERVERS"] + 1)]
     bad_body("settings with one server past its most", "records/settings/servers",
              rec(ROOT, 90, 7, {15: servers}))
+    for name, srv in [("settings with one server twice", [servers[0], [2, servers[0][1], hashlib.sha256(b"other").digest()]]),
+                      ("settings with a server's key in place of its pin", [[2, "relay.example.org:8765", OPERATOR.key]]),
+                      ("settings with a pin of 31 bytes", [[2, "relay.example.org:8765", bytes(31)]]),
+                      ("settings with a server of kind 0", [[0, "relay.example.org:8765", hashlib.sha256(b"relay pin").digest()]]),
+                      ("settings with an empty endpoint", [[2, "", hashlib.sha256(b"relay pin").digest()]])]:
+        bad_body(name, "records/settings/servers", rec(ROOT, 90, 7, {15: srv}))
     # what rule 33 retired (format 0.6 freezes): the claim, the root's
     # recovery record and the handover; the takeover power; settings'
     # takeover delay

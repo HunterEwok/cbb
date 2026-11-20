@@ -449,12 +449,14 @@ impl Mesh {
     }
 
     /// Brings the server credentials up to date as far as this device can
-    /// (`Faces::refresh`), a face for each of the group's servers, and
+    /// (`Faces::refresh`), a face for each of the group's servers (the
+    /// project's and the group's own relays, `faces::group_servers`), and
     /// sends what it signed to every peer.
     pub fn refresh_faces(&self, state: &State) {
         let root = self.own.root.as_deref().filter(|r| state.is_root(&Key::es256(r.public()).hash()));
         let s = Signers { member: &*self.own.member, root, secret: self.faces.secret() };
-        let servers = crate::faces::project_servers(self.entries().as_deref(), crate::uptime::wall_ms());
+        let project = crate::faces::project_servers(self.entries().as_deref(), crate::uptime::wall_ms());
+        let servers = crate::faces::group_servers(state, project);
         match self.faces.refresh(state, &s, &servers) {
             Ok(signed) => {
                 for (server, envs) in signed {

@@ -206,3 +206,70 @@ fn a_computer_pairs_with_the_window_of_a_new_group() {
     lc.close();
     la.close();
 }
+
+/// cbb global relay on the group's root signs the relay in the group's
+/// settings (D-121), and the group shows it a face; `default` leaves the
+/// project's alone. A device that is not the root is refused.
+#[test]
+fn the_root_sets_the_groups_relay() {
+    use cbb_core::records::body::{SERVER_RELAY, Server};
+    let base = std::env::temp_dir().join(format!("cbb-svc-relay-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    std::fs::create_dir_all(&base).unwrap();
+    let me = crate::founding::Me { name: "desk", os: 1, caps: cbb_core::records::body::CAP_ADMIN };
+    crate::founding::found_with(&base, &me, uptime::wall_ms() as u64, &|| None).unwrap();
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|_| {});
+    let a = Service::new(&config(&base, Vec::new()), log, false);
+    let la = a.start_live(&config(&base, Vec::new())).unwrap();
+    let pin = [9u8; 32];
+    let key = {
+        use base64::Engine as _;
+        base64::engine::general_purpose::STANDARD.encode(pin)
+    };
+    let relay = |addr: &str, key: &str, consent: bool| {
+        ask(&a, "away", |h| {
+            (h.name, h.relay, h.relay_key, h.consent) = ("relay".into(), addr.into(), key.into(), consent);
+        })
+    };
+
+    let e = relay("203.0.113.9:8764", &key, false).unwrap_err();
+    assert!(e.message().contains("a relay learns"), "{}", e.message());
+    let e = relay("203.0.113.9:8764", "short", true).unwrap_err();
+    assert!(e.message().contains("not a relay's key"), "{}", e.message());
+    let e = relay("203.0.113.9", &key, true).unwrap_err();
+    assert!(e.message().contains("with a port"), "{}", e.message());
+    assert!(la.mesh.state().settings.servers.is_empty());
+
+    let m = relay("203.0.113.9:8764", &key, true).unwrap();
+    assert_eq!(m.header.relay, "203.0.113.9:8764");
+    let want = vec![Server { kind: SERVER_RELAY, endpoint: "203.0.113.9:8764".into(), pin }];
+    assert_eq!(la.mesh.state().settings.servers, want);
+    #[cfg(feature = "tunnel")]
+    {
+        let face = crate::faces::Server { pin, address: "203.0.113.9:8764".into() };
+        la.mesh.refresh_faces(&la.mesh.state());
+        assert!(la.mesh.faces().servers().contains(&face), "a face for the group's relay");
+    }
+    // Another relay takes its place.
+    relay("198.51.100.7:8764", &key, true).unwrap();
+    let st = la.mesh.state();
+    assert_eq!(st.settings.servers.len(), 1);
+    assert_eq!(st.settings.servers[0].endpoint, "198.51.100.7:8764");
+    // The project's relay: the group's own go.
+    let m = relay("cbb.tools:8765", "default", true).unwrap();
+    assert!(m.header.relay.is_empty());
+    assert!(la.mesh.state().settings.servers.is_empty());
+    la.close();
+
+    // A device that holds neither the root key nor an admin key.
+    let (da, _db) = two_dirs("svc-relay");
+    let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|_| {});
+    let b = Service::new(&config(&da, Vec::new()), log, false);
+    let lb = b.start_live(&config(&da, Vec::new())).unwrap();
+    let e = ask(&b, "away", |h| {
+        (h.name, h.relay, h.relay_key, h.consent) = ("relay".into(), "203.0.113.9:8764".into(), key.clone(), true);
+    })
+    .unwrap_err();
+    assert!(e.message().contains("only the group's root sets the group's relay"), "{}", e.message());
+    lb.close();
+}

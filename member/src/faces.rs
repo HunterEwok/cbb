@@ -794,6 +794,26 @@ pub fn project_servers(entries: Option<&crate::entries::Entries>, now_ms: i64) -
     out
 }
 
+/// The servers a group of 0.6 shows a face to: the project's
+/// (`project_servers`), then the relays of its own that the root set in the
+/// group's settings (format 4.5, field 15; D-121), each pin and address
+/// once. The project's come first: a member keeps at most [`MAX_FACES`],
+/// and a hub registers with the project's forwarder.
+pub fn group_servers(state: &State, project: Vec<Server>) -> Vec<Server> {
+    let mut out = project;
+    if cfg!(not(feature = "tunnel")) {
+        // Without sync away from home a group meets no server.
+        return out;
+    }
+    for s in state.settings.servers.iter().filter(|s| s.kind == cbb_core::records::body::SERVER_RELAY) {
+        let server = Server { pin: s.pin, address: s.endpoint.clone() };
+        if !out.contains(&server) {
+            out.push(server);
+        }
+    }
+    out
+}
+
 /// Without sync away from home a group meets no server.
 #[cfg(not(feature = "tunnel"))]
 pub fn project_servers(_: Option<&crate::entries::Entries>, _: i64) -> Vec<Server> {

@@ -49,6 +49,17 @@ made with 0.5 is set up again once. The details follow.
   in the address's one written form.
 - The list of refused groups (`refused-groups` of `cbb forward` and `cbb relay`) names a
   period of 0.6 by its tag of 32 hex characters (`period TAG`).
+- Draft format: field 15 of a `settings` record, the group's servers, is now at most 16
+  `[kind, endpoint, pin]` (the pin of the server's TLS key in place of the key), each kind and
+  endpoint once; a kind not known is kept and passed over. The user's own relay becomes this
+  group setting, which the root signs (D-121). The core, gen.py's vectors (with refusals of a
+  server twice, a key in place of a pin, a short pin, kind 0 and an empty endpoint) and the Go
+  check agree; FROZEN (draft) is written again.
+- In a group of 0.6, `cbb global relay` on the root signs the group's relay in its settings,
+  in place of the relays named before (`default` leaves the project's alone), and every member
+  shows the group's relays a face after the project's servers. A device that is not the root
+  is refused; an admin asking the root, and meeting at the relay, are still moving to 0.6. A
+  settings record the core API writes keeps the group's servers.
 - A member of 0.6 keeps the group's server credentials (`member/src/faces.rs`): the root
   starts each period with a fresh tag and period key, every member signs its own server key
   for it, derived from a secret of its own, the root lists the hubs, admins and members, and

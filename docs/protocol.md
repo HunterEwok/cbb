@@ -1949,6 +1949,15 @@ the order in which they came, and no rule reads a clock.
 Types 5, 11 and 12 of earlier drafts are refused (`records/retired`): the root changes only by
 the recovery key.
 
+A `settings` record's field 15, `servers`, is the group's own servers, which the root signs so
+that every device takes them from the records (D-61, D-121): at most
+`records::body::MAX_SERVERS` (16) entries `[kind, endpoint, pin]`, `kind` 1 forwarder, 2 relay,
+3 push (reserved), `endpoint` text `host:port` of 1 to 255 bytes, `pin` the 32-byte SHA-256 of
+the server's TLS key (Conventions, "Fingerprints"), each `kind` and `endpoint` once
+(`records/settings/servers`). 0.6 writes relays alone, set by `cbb global relay` on the root
+(an admin asks the root); the forwarders come signed in the hub order. A reader keeps an entry
+of a kind it does not know and passes over it.
+
 #### Rooms and units
 
 A set's room is `records::MAX_RECORDS` (7168) units of 512 bytes, and
@@ -3839,7 +3848,13 @@ can change its key or move without a release and without the user:
 - Status shows a short reason while it fails, the whole error as its detail.
 
 A relay of the user's own is kept as it was given: a new key means `cbb global relay` with the
-new key on every device.
+new key on every device. In a group of 0.6 it is the group's setting instead (the `settings`
+record's `servers`, section 10): the root's service, on the `away` request with `name` `relay`
+and `consent`, signs a new `settings` record whose relays (kind 2) are the one given, keeping
+the entries of other kinds, or none for `relay_key` `default`; its answer names the relay in
+`relay` (empty for the project's). A device that is not the root is refused; an admin's
+request to the root has not moved yet (`NotYet`). Every device makes a face for each relay
+the settings name (`faces::group_servers`), after the project's servers.
 
 ### Registration
 

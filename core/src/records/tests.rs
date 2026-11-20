@@ -6174,13 +6174,23 @@ fn bodies_at_their_bounds() {
         assert!(check(&g, copies(ms)).unwrap_err().is("records/copies/incoming_ms"), "{ms}");
     }
     let server = |i: usize| Server {
-        kind: SERVER_FORWARDER,
-        endpoint: alloc::format!("fwd{i}.example.org:443"),
-        key: k(&alloc::format!("server {i}")).key.clone(),
+        kind: SERVER_RELAY,
+        endpoint: alloc::format!("relay{i}.example.org:443"),
+        pin: [i as u8; 32],
     };
     let settings = |n: usize| Kind::settings(Settings { servers: (0..n).map(server).collect(), ..Settings::default() });
     assert!(check(&g, settings(MAX_SERVERS)).is_ok());
     assert!(check(&g, settings(MAX_SERVERS + 1)).unwrap_err().is("records/settings/servers"));
+    // Each kind and address once; the same address under another kind, or
+    // a kind this version does not know, is taken.
+    let with = |servers: Vec<Server>| Kind::settings(Settings { servers, ..Settings::default() });
+    let twice = with(vec![server(1), Server { pin: [9; 32], ..server(1) }]);
+    assert!(check(&g, twice).unwrap_err().is("records/settings/servers"));
+    let kinds = with(vec![server(1), Server { kind: SERVER_FORWARDER, ..server(1) }, Server { kind: 99, ..server(2) }]);
+    assert!(check(&g, kinds).is_ok());
+    for bad in [Server { kind: 0, ..server(1) }, Server { endpoint: String::new(), ..server(1) }] {
+        assert!(check(&g, with(vec![bad])).unwrap_err().is("records/settings/servers"));
+    }
     // A removal of 256 keys that saw 200 heads checks, and its body passes
     // MAX_BODY: no reader takes it.
     let seen: Vec<Seen> = keys(200).into_iter().map(|key| Seen { key, seq: 1, id: RecordId([3; 32]) }).collect();

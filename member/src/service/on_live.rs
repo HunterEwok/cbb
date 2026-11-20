@@ -476,6 +476,7 @@ impl Service {
             control::op::RECOVER => self.live_recover(live, h, &m.payload),
             control::op::LEAVE => self.live_leave(live),
             control::op::NEW => Err(Error::msg("this device is already in a group; cbb status shows it")),
+            "away" if h.name == "relay" => self.live_relay(live, h),
             op if !MOVING.contains(&op) => return None,
             op => Err(not_yet(&format!("the operation {op:?}"))),
         };
@@ -589,6 +590,82 @@ impl Service {
             .map(|d| d.name)
             .collect();
         Ok(control::reply(Header { below, done: true, ..Default::default() }, Vec::new()))
+    }
+
+    /// cbb global relay: the group's own relay, which the root signs in the
+    /// group's settings (format 4.5, field 15; D-121), so that every device
+    /// takes it from there and shows it a face (`faces::group_servers`).
+    /// It takes the place of the relays the settings named; `default`, the
+    /// project's relay, leaves the group with the project's alone. An admin
+    /// asks the root, which has not moved to the records of 0.6 yet.
+    fn live_relay(&self, live: &Live, h: &Header) -> Result<Message> {
+        use cbb_core::records::body::{SERVER_RELAY, Server};
+        if !h.consent {
+            return Err(Error::msg(
+                "a relay learns which devices of the group talk, when and how much, and their addresses; run cbb global relay and read what it says",
+            ));
+        }
+        let st = live.mesh.state();
+        let own = live.mesh.own();
+        let root = own
+            .root
+            .as_ref()
+            .is_some_and(|k| st.roots.last() == Some(&cbb_core::records::Key::es256(k.public()).hash()));
+        if !root {
+            if writers::signer(own, &st).is_some() {
+                return Err(not_yet("an admin asking the group's root for a relay"));
+            }
+            return Err(Error::msg(
+                "only the group's root sets the group's relay: run cbb global relay on the computer that created the group",
+            ));
+        }
+        let relay = if h.relay_key == "default" {
+            None
+        } else {
+            let endpoint = match h.relay.parse::<std::net::SocketAddr>() {
+                Ok(ep) if ep.port() != 0 => ep.to_string(),
+                _ => {
+                    return Err(Error::msg(format!(
+                        "{:?} is not the relay's address with a port, such as 203.0.113.9:8764",
+                        h.relay
+                    )));
+                }
+            };
+            use base64::Engine as _;
+            let b64 = base64::engine::general_purpose::STANDARD;
+            let pin = b64
+                .decode(&h.relay_key)
+                .ok()
+                .filter(|b| b64.encode(b) == h.relay_key)
+                .and_then(|b| <[u8; 32]>::try_from(b).ok())
+                .ok_or_else(|| {
+                    Error::msg(format!(
+                        "{:?} is not a relay's key; cbb relay prints it, 44 characters of base64",
+                        h.relay_key
+                    ))
+                })?;
+            Some(Server { kind: SERVER_RELAY, endpoint, pin })
+        };
+        let now = uptime::wall_ms().max(0) as u64;
+        live.mesh.write(|set, k| {
+            writers::set_settings(
+                set,
+                k,
+                |s| {
+                    s.servers.retain(|v| v.kind != SERVER_RELAY);
+                    s.servers.extend(relay.clone());
+                },
+                now,
+            )
+        })?;
+        (self.log)(&match &relay {
+            Some(r) => format!("cbb: the group's relay is {} now", r.endpoint),
+            None => "cbb: the group meets at the project's relay alone now".to_string(),
+        });
+        Ok(control::reply(
+            Header { relay: relay.map(|r| r.endpoint).unwrap_or_default(), done: true, ..Default::default() },
+            Vec::new(),
+        ))
     }
 
     /// cbb admin: makes a device an admin, on the group's root, with the

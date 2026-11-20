@@ -424,6 +424,18 @@ pub(crate) fn global(g: &Global, args: &[String]) -> Result<()> {
         }
         print!("{}", away_text(&net, st.away.as_ref()));
     }
+    if verb == "relay" && m.header.status.is_none() {
+        // A group on the records of 0.6: the root signed the relay in the
+        // group's settings, and every device takes it from there.
+        if m.header.relay.is_empty() {
+            println!("The group meets at the project's relay alone now.");
+        } else {
+            println!(
+                "The group's relay is {} now; every device of the group takes it from the group's settings.",
+                m.header.relay
+            );
+        }
+    }
     if h.name == "hub-off" {
         println!("This device is no hub of the group any more.");
     } else if verb == "hub" {
